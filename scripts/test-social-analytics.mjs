@@ -27,10 +27,12 @@ const mediaLabSource = readFileSync(new URL("../app/js/medialab.js", import.meta
 assert.match(contentHubSource, /social-analytics\.js/);
 assert.match(contentHubSource, /parseAnalyticsReport/);
 assert.match(contentHubSource, /Social media analytics/, "Analytics must be framed as social media analytics, not workspace analytics.");
-assert.match(contentHubSource, /Connect your social accounts to start analytics/, "Empty state must tell the user to connect social accounts.");
+assert.match(contentHubSource, /Connect your social accounts to start the live feed/, "Empty state must tell the user to connect social accounts for a live feed.");
 assert.match(contentHubSource, /Local uploads are not counted here/, "Local media must not be treated as social analytics.");
-assert.match(contentHubSource, /Import platform report/);
-assert.match(contentHubSource, /Manual fallback · CSV · TSV · JSON/);
+assert.match(contentHubSource, /Sync live feed/);
+assert.match(contentHubSource, /OAuth apps ready/);
+assert.doesNotMatch(contentHubSource, /Import platform report/);
+assert.doesNotMatch(contentHubSource, /Manual fallback · CSV · TSV · JSON/);
 assert.match(contentHubSource, /an-channel-line/);
 assert.match(contentHubSource, /an-coverage-ring/);
 assert.match(contentHubSource, /officialchicagoshots/, "Social handles should default to Jordan's ChicagoShots handle.");
@@ -45,4 +47,5 @@ assert.match(mediaLabSource, /Editable handle or profile URL/, "Media settings m
 assert.match(mediaLabSource, /cross-posting remain locked until OAuth\/API authorization/, "Profile handles must not imply cross-posting is authorized.");
 assert.match(mediaLabSource, /requestSocialOAuthStart/, "Social connection buttons must use the backend OAuth-start route.");
 assert.match(mediaLabSource, /\/phantom-ai\/ops\/social-oauth\/start/, "OAuth login should not be a hard-coded provider guess in the browser.");
+assert.doesNotMatch(mediaLabSource, /Opened normal login only/, "Failed OAuth start must not fall back to a normal browser login.");
 console.log("Social analytics import checks passed.");

@@ -9,20 +9,20 @@ import {
   freshEditState, applyFilterPreset, renderBaseFrame,
   addBokehSpot, removeBokehSpotNear, removeBokehSpotAt, nearestBokehSpot, moveBokehSpot, resizeBokehSpot,
   setBokehMask, freshTextStyle, TEXT_FONTS, TEXT_PRESETS, applyTextPreset,
-} from "./imagefilters.js?v=phantom-live-20260714-252";
-import { getRembgStatus, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260714-252";
-import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260714-252";
-import { parseAnalyticsReport } from "./social-analytics.js?v=phantom-live-20260714-252";
+} from "./imagefilters.js?v=phantom-live-20260714-253";
+import { getRembgStatus, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260714-253";
+import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260714-253";
+import { parseAnalyticsReport } from "./social-analytics.js?v=phantom-live-20260714-253";
 import {
   freshComposition, compositionSnapshot, restoreComposition, addImageLayer, replaceImageLayerSource, addTextLayer, addColorLayer,
   duplicateLayer, removeSelectedLayers, moveLayerOrder, selectedLayers, selectLayer, selectAllLayers,
   loadCompositionImages, renderComposition, drawCompositionOverlay, drawDetectedSubjectOverlay, canvasPoint, hitTestLayer, hitTestResizeHandle,
   setCanvasPreset, zoomComposition, canvasPointToLayer, layerPointToCanvas,
   imageEditSnapshot, restoreImageEditSnapshot, pushEditorSnapshot,
-} from "./content-editor.js?v=phantom-live-20260714-252";
+} from "./content-editor.js?v=phantom-live-20260714-253";
 import {
   currentTenantId, currentWs, session, store, visible, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem, wsName,
-} from "./store.js?v=phantom-live-20260714-252";
+} from "./store.js?v=phantom-live-20260714-253";
 
 const CH_KEY = "pf.contenthub.v2";
 const CH_REMOVED_KEY = "pf.contenthub.removed.v1";
@@ -3495,12 +3495,12 @@ function accountAnalyticsRow(row, esc) {
     ? (syncFailed ? syncOutcome.error : "Official read-only analytics are ready.")
     : oauthReady
       ? "OAuth app credentials exist; finish account authorization before stats appear."
-      : "Connect the official platform account or import a platform export. Phantom will not count uploaded files as social performance.";
+      : "This channel needs the PhantomForce OAuth app configured before live analytics or posting approval can run.";
   const primaryAction = canSync
     ? `<button class="btn btn-primary" type="button" data-an-sync="${account.id}">${analyticsConnectorState.loading ? "Syncing…" : live ? "Sync now" : "Start live sync"}</button>`
     : oauthReady
       ? `<button class="btn btn-primary" type="button" data-an-oauth="${account.id}">Connect account</button>`
-      : `<button class="btn btn-ghost" type="button" data-open-ws="settings" data-open-settings-tab="media">Set up API</button>`;
+      : `<button class="btn btn-ghost" type="button" data-open-ws="settings" data-open-settings-tab="media">Set up OAuth</button>`;
   return `<article class="an-channel-row ${feed ? "is-live" : "is-missing"}">
     <div class="an-channel-id"><span class="ch-dot" style="background:${account.color}"></span><span><b>${esc(account.name)}</b><i>${esc(account.handle || account.loginIdentity || "profile saved")}</i></span></div>
     ${feed ? `<div class="an-channel-metrics">
@@ -3509,7 +3509,6 @@ function accountAnalyticsRow(row, esc) {
     : `<div class="an-channel-empty${syncFailed ? " is-sync-error" : ""}"><b>${esc(sourceState)}</b><span>${esc(sourceCopy)}</span></div>`}
     <div class="an-channel-actions">
       ${primaryAction}
-      <details class="an-import-backup"><summary aria-label="More data options">More</summary><small>Manual fallback · CSV · TSV · JSON</small><label class="btn btn-ghost">${feed && !live ? "Replace report" : "Import platform report"}<input type="file" accept=".csv,.tsv,.json,text/csv,text/tab-separated-values,application/json" data-an-import="${account.id}" hidden></label></details>
       ${feed ? `<button class="btn btn-ghost" type="button" data-an-clear="${account.id}">Clear data</button>` : ""}
     </div>
   </article>`;
@@ -3579,8 +3578,8 @@ export function renderAnalytics(el, opts = {}, renderOptions = {}) {
   const feedRows = displayAccounts.map((account) => ({ account, feed: analyticsFeedForAccount(account) }));
   const liveRows = feedRows.filter((row) => row.feed);
   const liveApiRows = liveRows.filter((row) => row.account.connectMode === "live-api");
-  const reportRows = liveRows.filter((row) => row.account.connectMode === "report-import");
   const configuredCount = analyticsConnectorState.connectors.filter((connector) => connector.configured).length;
+  const oauthReadyCount = analyticsConnectorState.connectors.filter((connector) => connector.oauthConfigured).length;
   const totals = analyticsTotals(liveRows);
   const hasLiveMetrics = liveRows.length > 0;
   const chartRows = feedRows;
@@ -3590,26 +3589,26 @@ export function renderAnalytics(el, opts = {}, renderOptions = {}) {
       <section class="an-hero">
         <div>
           <p class="ch-eyebrow">Social media analytics</p>
-          <h3>${hasLiveMetrics ? (liveApiRows.length ? "Official social analytics are reporting." : "Imported platform reports are loaded.") : "Connect your social accounts to start analytics."}</h3>
-          <p>${hasLiveMetrics ? "This page only shows platform analytics from official API syncs or imported exports. Local media files and drafts stay in Media Lab/Content Hub." : "Connect YouTube, Instagram, Facebook, TikTok, X, LinkedIn, or Pinterest for real platform metrics. If a platform is not connected yet, import its official report as a temporary fallback."}</p>
+          <h3>${hasLiveMetrics ? "Official social analytics are reporting." : "Connect your social accounts to start the live feed."}</h3>
+          <p>${hasLiveMetrics ? "This page shows live platform analytics from authorized social accounts. Local media files, drafts, and uploads are not counted as social performance." : "Authorize YouTube, Instagram, Facebook, TikTok, X, LinkedIn, or Pinterest once. PhantomForce stores the account token server-side, syncs real metrics, and keeps posting approval-gated."}</p>
         </div>
       </section>
       <section class="an-toolbar" aria-label="Live analytics actions">
         <div class="an-hero-actions">
-          ${configuredCount ? `<button class="btn btn-primary" type="button" data-an-sync-all>${analyticsConnectorState.loading ? "Syncing…" : "Sync live data"}</button>` : `<button class="btn btn-ghost" type="button" data-open-ws="settings" data-open-settings-tab="media">Connect social APIs</button>`}
-          <span class="an-src">${svgIc("up")} ${liveApiRows.length}/${displayAccounts.length} live social · ${reportRows.length} imported report${reportRows.length === 1 ? "" : "s"} · ${configuredCount}/${displayAccounts.length} API ready</span>
+          ${configuredCount ? `<button class="btn btn-primary" type="button" data-an-sync-all>${analyticsConnectorState.loading ? "Syncing…" : "Sync live feed"}</button>` : `<button class="btn btn-primary" type="button" data-open-ws="settings" data-open-settings-tab="media">Connect social accounts</button>`}
+          <span class="an-src">${svgIc("up")} ${liveApiRows.length}/${displayAccounts.length} live social · ${configuredCount}/${displayAccounts.length} accounts authorized · ${oauthReadyCount}/${displayAccounts.length} OAuth apps ready</span>
         </div>
       </section>
       ${analyticsNotice || analyticsConnectorState.error ? `<div class="an-flash">${esc(analyticsNotice || analyticsConnectorState.error)}</div>` : ""}
       <div class="ch-kpis an-kpis">
         ${hasLiveMetrics
           ? `${kpi("Reach", K(totals.reach), "reported reach")}${kpi("Views", K(totals.impressions), "views + impressions")}${kpi("Engagement", K(totals.engagement), "likes + comments + shares")}${kpi("Followers", K(totals.followers), "latest reported total")}`
-          : `${kpi("Live channels", `0/${displayAccounts.length}`, "official API reporting")}${kpi("API ready", K(configuredCount), "configured connections")}${kpi("Reports", K(reportRows.length), "manual imports")}${kpi("Next step", "Connect", "choose a platform below")}`}
+          : `${kpi("Live channels", `0/${displayAccounts.length}`, "official OAuth reporting")}${kpi("OAuth apps", K(oauthReadyCount), "server apps ready")}${kpi("Authorized", K(configuredCount), "accounts connected")}${kpi("Next step", "Connect", "choose a platform below")}`}
       </div>
       <div class="an-visual-grid">
         <section class="ch-card an-trend-card">
           <div class="ch-card-h"><div><p class="ch-eyebrow">Performance trend</p><h3>Reach and views</h3></div><span class="an-live-label">${hasLiveMetrics ? "Platform data" : "Waiting for social data"}</span></div>
-          ${analyticsChart(chartRows, { title: "No social analytics connected yet", body: "Connect a social account or import an official platform export. Local uploads are not counted here." })}
+          ${analyticsChart(chartRows, { title: "No social analytics connected yet", body: "Connect a social account and live platform data will fill this chart. Local uploads are not counted here." })}
         </section>
         <section class="ch-card an-coverage-card">
           <p class="ch-eyebrow">Data coverage</p>

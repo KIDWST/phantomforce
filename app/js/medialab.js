@@ -6,20 +6,20 @@
  * instead of sending people out to another product.
  */
 
-import { currentTenantId, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260714-252";
+import { currentTenantId, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260714-253";
 import {
   PLATFORMS, registerContentAsset, loadSocialAccounts, saveSocialAccounts, socialStatus,
   loadContentAssets, saveContentAssets, contentAssetDisplayUrl, hydrateContentAssetUrl,
-} from "./contenthub.js?v=phantom-live-20260714-252";
-import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260714-252";
+} from "./contenthub.js?v=phantom-live-20260714-253";
+import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260714-253";
 import {
   addImageLayer, addTextLayer, cloneImageEditState, compositionSnapshot, duplicateLayer,
   freshComposition, hitTestLayer, loadCompositionImages, moveLayerOrder, pushEditorSnapshot,
   removeSelectedLayers, renderComposition, restoreComposition, selectLayer, selectedLayers,
-} from "./content-editor.js?v=phantom-live-20260714-252";
-import { loadImageForEditing, exportCanvas, requestAiEdit, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260714-252";
-import { mountVideoEditor } from "./videocut.js?v=phantom-live-20260714-252";
-import { assetsAvailable, assetBlobUrl, listAssets, recordAssetUsage, saveToAssetCloud, listLocalAssets, refreshLocalAssets, localAssetBlobUrl } from "./orgs.js?v=phantom-live-20260714-252";
+} from "./content-editor.js?v=phantom-live-20260714-253";
+import { loadImageForEditing, exportCanvas, requestAiEdit, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260714-253";
+import { mountVideoEditor } from "./videocut.js?v=phantom-live-20260714-253";
+import { assetsAvailable, assetBlobUrl, listAssets, recordAssetUsage, saveToAssetCloud, listLocalAssets, refreshLocalAssets, localAssetBlobUrl } from "./orgs.js?v=phantom-live-20260714-253";
 
 const CFG_KEY = "pf.medialab.v1";
 const EDIT_INTENT_KEY = "pf.medialab.editIntent.v1";
@@ -3502,12 +3502,8 @@ export function renderMediaSettings(el, opts = {}) {
         account.lastConnectAt = new Date().toISOString();
         socialNotice = `${account.name} OAuth opened for @${oauth.handle || account.handle || "officialchicagoshots"}. Complete the provider login, then Analytics can sync after the server stores the token.`;
       } catch (error) {
-        requestHermesExtensionProfileLink(account.id);
-        window.open(socialLoginTarget(account), "_blank", "noopener,noreferrer");
-        account.connectMode = "browser-bridge";
-        account.lastConnectAt = new Date().toISOString();
-        socialNotice = `${account.name} OAuth is not ready yet: ${error?.message || "missing credentials"}. Opened normal login only so the public handle can still be saved; no live stats or cross-posting were authorized.`;
-        startSocialBridgePolling(account.id);
+        account.connectMode = account.handle ? "manual-confirmed" : "manual";
+        socialNotice = `${account.name} OAuth is not ready yet: ${error?.message || "missing server OAuth app credentials"}. A normal browser login is not enough for analytics or posting; connect must happen through PhantomForce OAuth.`;
       }
       saveAndRender();
     };

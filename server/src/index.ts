@@ -467,6 +467,10 @@ function customizationTenantForSession(session: AccessSession, requestedTenantId
   return safeCustomizationTenantId(session.clientId, `client-${session.id}`);
 }
 
+function socialWorkspaceForSession(session: AccessSession) {
+  return session.orgId || session.clientId || (session.canManageAccess ? "phantomforce-owner" : `session-${session.id}`);
+}
+
 function customizationEntitlements(session: AccessSession, tenantId: string): CustomizationEntitlements {
   const workspace = getWorkspaceAccess(tenantId);
   const modules = new Set((workspace?.decision.modules ?? []).map((module) => module.trim().toLowerCase()));
@@ -6127,11 +6131,13 @@ app.get("/phantom-ai/ops/finance-connector/status", async (request, reply) => {
 app.get("/phantom-ai/ops/social-analytics/status", async (request, reply) => {
   const session = requireAdminAccessSession(request, reply);
   if (!session) return reply;
+  const workspaceKey = socialWorkspaceForSession(session);
   return {
     ok: true,
     session,
     read_only: true,
-    social_analytics: getSocialAnalyticsConnectorStatus(),
+    workspace_key: workspaceKey,
+    social_analytics: getSocialAnalyticsConnectorStatus(workspaceKey),
   };
 });
 
@@ -6143,18 +6149,20 @@ app.post("/phantom-ai/ops/social-oauth/start", async (request, reply) => {
     return reply.code(400).send({ ok: false, error: "Unsupported social platform." });
   }
   try {
+    const workspaceKey = socialWorkspaceForSession(session);
     return {
       ok: true,
       session,
+      workspace_key: workspaceKey,
       external_send: false,
       approval_executed: false,
-      oauth: createSocialOAuthStart(body.platform),
+      oauth: createSocialOAuthStart(body.platform, workspaceKey),
     };
   } catch (error) {
     return reply.code(409).send({
       ok: false,
       error: error instanceof Error ? error.message.slice(0, 400) : "OAuth start is not configured.",
-      connector: getSocialAnalyticsConnectorStatus().connectors.find((item) => item.id === body.platform),
+      connector: getSocialAnalyticsConnectorStatus(socialWorkspaceForSession(session)).connectors.find((item) => item.id === body.platform),
     });
   }
 });
@@ -6201,7 +6209,8 @@ app.post("/phantom-ai/ops/social-analytics/sync", async (request, reply) => {
   if (!session) return reply;
   const parsed = SocialAnalyticsSyncSchema.safeParse(request.body ?? {});
   if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
-  const status = getSocialAnalyticsConnectorStatus();
+  const workspaceKey = socialWorkspaceForSession(session);
+  const status = getSocialAnalyticsConnectorStatus(workspaceKey);
   const connector = status.connectors.find((item) => item.id === parsed.data.platform);
   if (!connector?.configured) {
     return reply.code(409).send({
@@ -6211,8 +6220,8 @@ app.post("/phantom-ai/ops/social-analytics/sync", async (request, reply) => {
     });
   }
   try {
-    const analytics = await syncSocialAnalytics(parsed.data.platform);
-    return { ok: true, session, read_only: true, analytics };
+    const analytics = await syncSocialAnalytics(parsed.data.platform, fetch, workspaceKey);
+    return { ok: true, session, workspace_key: workspaceKey, read_only: true, analytics };
   } catch (error) {
     return reply.code(502).send({
       ok: false,

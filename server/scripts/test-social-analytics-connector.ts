@@ -138,6 +138,68 @@ try {
   assert(metaConnected.linkedInstagramBusiness?.businessAccountId === "ig-1", "Meta callback must save the linked Instagram business account.");
   assert(!JSON.stringify(metaConnected).includes("page-token"), "Meta callback response must not expose page tokens.");
 
+  process.env.TIKTOK_CLIENT_KEY = "tiktok-client";
+  process.env.TIKTOK_CLIENT_SECRET = "tiktok-secret";
+  const tiktokOauth = createSocialOAuthStart("tiktok");
+  assert(tiktokOauth.authorizationUrl.startsWith("https://www.tiktok.com/v2/auth/authorize/?"), "TikTok OAuth must use the official authorization endpoint.");
+  const tiktokFetch = async (input: string | URL | Request) => {
+    const url = String(input);
+    if (url === "https://open.tiktokapis.com/v2/oauth/token/") {
+      return new Response(JSON.stringify({ access_token: "stored-tiktok-token", refresh_token: "tt-refresh", expires_in: 3600, open_id: "tt-open-id" }), { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+    if (url.includes("open.tiktokapis.com/v2/user/info/")) {
+      return new Response(JSON.stringify({ data: { user: { open_id: "tt-open-id", display_name: "ChicagoShots", username: "officialchicagoshots" } } }), { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+    throw new Error(`Unexpected TikTok URL ${url}`);
+  };
+  const tiktokConnected = await completeSocialOAuthCallback({ state: tiktokOauth.state, code: "tt-code" }, tiktokFetch as typeof fetch);
+  assert(tiktokConnected.connected?.hasAccessToken === true, "TikTok callback must store the account token.");
+  assert(tiktokConnected.connected?.accountHandle === "officialchicagoshots", "TikTok callback must save the account handle.");
+  assert(!JSON.stringify(tiktokConnected).includes("stored-tiktok-token"), "TikTok callback response must not expose saved tokens.");
+
+  process.env.X_CLIENT_ID = "x-client";
+  process.env.X_CLIENT_SECRET = "x-secret";
+  const xOauth2 = createSocialOAuthStart("x");
+  assert(xOauth2.authorizationUrl.startsWith("https://x.com/i/oauth2/authorize?"), "X OAuth must use the official OAuth 2 authorization endpoint.");
+  assert(!xOauth2.authorizationUrl.includes("configure-server-generated-pkce"), "X OAuth must use a real server-generated PKCE challenge.");
+  const xCallbackFetch = async (input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input);
+    if (url === "https://api.x.com/2/oauth2/token") {
+      const body = String(init?.body || "");
+      assert(body.includes("code_verifier="), "X token exchange must include the saved PKCE verifier.");
+      return new Response(JSON.stringify({ access_token: "stored-x-token", refresh_token: "x-refresh", expires_in: 3600 }), { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+    if (url === "https://api.x.com/2/users/me?user.fields=username,name,public_metrics") {
+      return new Response(JSON.stringify({ data: { id: "x-user", name: "ChicagoShots", username: "officialchicagoshots" } }), { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+    throw new Error(`Unexpected X callback URL ${url}`);
+  };
+  const xConnected = await completeSocialOAuthCallback({ state: xOauth2.state, code: "x-code" }, xCallbackFetch as typeof fetch);
+  assert(xConnected.connected?.accountHandle === "officialchicagoshots", "X callback must save the account handle.");
+  assert(!JSON.stringify(xConnected).includes("stored-x-token"), "X callback response must not expose saved tokens.");
+
+  process.env.LINKEDIN_CLIENT_ID = "li-client";
+  process.env.LINKEDIN_CLIENT_SECRET = "li-secret";
+  const linkedinOauth = createSocialOAuthStart("linkedin");
+  assert(linkedinOauth.authorizationUrl.startsWith("https://www.linkedin.com/oauth/v2/authorization?"), "LinkedIn OAuth must use the official authorization endpoint.");
+  assert(linkedinOauth.authorizationUrl.includes("openid+profile"), "LinkedIn OAuth must request profile identity so Phantom can label the connection.");
+  const linkedinFetch = async (input: string | URL | Request) => {
+    const url = String(input);
+    if (url === "https://www.linkedin.com/oauth/v2/accessToken") {
+      return new Response(JSON.stringify({ access_token: "stored-linkedin-token", expires_in: 3600 }), { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+    if (url === "https://api.linkedin.com/v2/userinfo") {
+      return new Response(JSON.stringify({ sub: "li-user", name: "ChicagoShots" }), { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+    if (url.includes("/rest/organizationAcls?")) {
+      return new Response(JSON.stringify({ elements: [{ organization: "urn:li:organization:12345" }] }), { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+    throw new Error(`Unexpected LinkedIn URL ${url}`);
+  };
+  const linkedinConnected = await completeSocialOAuthCallback({ state: linkedinOauth.state, code: "li-code" }, linkedinFetch as typeof fetch);
+  assert(linkedinConnected.connected?.accountId === "12345", "LinkedIn callback must save the authorized organization when available.");
+  assert(!JSON.stringify(linkedinConnected).includes("stored-linkedin-token"), "LinkedIn callback response must not expose saved tokens.");
+
   process.env.PINTEREST_CLIENT_ID = "pin-client";
   process.env.PINTEREST_CLIENT_SECRET = "pin-secret";
   const pinOauth = createSocialOAuthStart("pinterest");
@@ -162,8 +224,11 @@ try {
   assert(!JSON.stringify(pinConnected).includes("stored-pinterest-token"), "Pinterest callback response must not expose saved tokens.");
   const pinStatus = getSocialAnalyticsConnectorStatus().connectors.find((connector) => connector.id === "pinterest");
   assert(pinStatus?.configured === true, "Pinterest must report configured after the OAuth callback stores its token.");
+  const isolatedPinStatus = getSocialAnalyticsConnectorStatus("client-other").connectors.find((connector) => connector.id === "pinterest");
+  assert(isolatedPinStatus?.configured === false, "Stored social OAuth tokens must be scoped to one workspace, not global.");
+  assert(getSocialAnalyticsConnectorStatus("client-other").tokenStore.workspaceKey === "client-other", "Token store status must reveal the active workspace key without exposing tokens.");
 
-  console.log(JSON.stringify({ ok: true, provider: snapshot.provider, views: snapshot.impressions, followers: snapshot.followers, xFollowers: xSnapshot.followers, oauthCallback: true, metaPageLinked: true, pinterestCallback: true, credentialsExposed: false }));
+  console.log(JSON.stringify({ ok: true, provider: snapshot.provider, views: snapshot.impressions, followers: snapshot.followers, xFollowers: xSnapshot.followers, oauthCallback: true, metaPageLinked: true, pinterestCallback: true, workspaceScoped: true, credentialsExposed: false }));
 } finally {
   for (const key of keys) {
     if (original[key] === undefined) delete process.env[key];
