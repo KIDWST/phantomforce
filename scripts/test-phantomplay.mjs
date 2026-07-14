@@ -121,6 +121,11 @@ assert.match(penaltyKick, /function meterPower\(\)\{[^}]*getBoundingClientRect/u
 assert.doesNotMatch(penaltyKick, /getComputedStyle\(meter\)\.transform\.split/u, "Penalty Kick must not use raw CSS transform pixels for shot timing.");
 assert.match(penaltyKick, /else start\(\)/u, "Penalty Kick must let keyboard users start from the opening overlay.");
 assert.match(games[gameSlugs.indexOf("rift-frenzy")], /rival|school|boost|eat|bigger/u, "Rift Frenzy must play as a modern fish arena, not a static old mini-game.");
+assert.match(games[gameSlugs.indexOf("rift-frenzy")], /const steer=1-Math\.pow\(\.72,dt\/16\)/u, "Rift Frenzy movement must use frame-stable steering instead of overcorrecting.");
+assert.match(games[gameSlugs.indexOf("rift-frenzy")], /friction=target\.active\|\|ax\|\|ay\?1:Math\.pow\(\.9,dt\/16\)/u, "Rift Frenzy must coast cleanly instead of drifting forever.");
+assert.match(games[gameSlugs.indexOf("rift-frenzy")], /player\.vx=\(player\.vx\+\(ax\/len\*speed-player\.vx\)\*steer\)\*friction/u, "Rift Frenzy horizontal control must interpolate toward input safely.");
+assert.match(games[gameSlugs.indexOf("rift-frenzy")], /for\(let i=0;i<24;i\+\+\)spawnFish\(true\)/u, "Rift Frenzy must start with enough edible fish to be playable immediately.");
+assert.match(games[gameSlugs.indexOf("rift-frenzy")], /target\.boost=false/u, "Rift Frenzy touch boost must release when touch ends.");
 assert.match(games[gameSlugs.indexOf("serpent-surge")], /storm|boost|rival|serpent|trail/u, "Serpent Surge must play as a modern snake arena, not a static old mini-game.");
 assert.match(phantomRumble, /defend:\['q','Q','e','E'\]/u, "Phantom Rumble P1 must expose Q/E as guard/parry buttons.");
 assert.match(phantomRumble, /Hold guard before contact to parry/u, "Phantom Rumble must explain guard/parry plainly.");

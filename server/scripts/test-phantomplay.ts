@@ -37,6 +37,7 @@ try {
   }
   assert(initial.catalog.every((game) => game.kind === "built_in"), "No fake community releases should be seeded.");
   assert(initial.catalog.find((game) => game.id === "neon-drift")?.version === "1.2.4", "Neon Drift should ship the faster arcade tuning.");
+  assert(initial.catalog.find((game) => game.id === "rift-frenzy")?.version === "1.0.5", "Rift Frenzy should ship the playable steering and food tuning.");
   assert(initial.access.canSubmitGames === false, "The snapshot should honor the plan submission decision.");
 
   await play.updatePhantomPlayProfile(playerA, { gameId: "neon-drift", favorite: true, preferences: { contentRating: "everyone", allowCommunityGames: true } });
