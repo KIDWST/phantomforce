@@ -2,16 +2,16 @@
    stays untouched for backward compatibility. Everything respects
    prefers-reduced-motion and the PhantomForce terminal palette. */
 
-.pp2-shell{--pp2-bg:#05070a;--pp2-panel:#081109;--pp2-line:#1d3a28;--pp2-green:#4ade80;--pp2-green-dim:#22c55e;--pp2-text:#d8f3e2;--pp2-mut:#7ca890;max-width:1240px;margin:0 auto;padding:18px 18px 80px;color:var(--pp2-text);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.pp2-shell{--pp2-bg:#05070a;--pp2-panel:#081109;--pp2-line:#1d3a28;--pp2-green:#4ade80;--pp2-green-dim:#22c55e;--pp2-text:#d8f3e2;--pp2-mut:#7ca890;max-width:1600px;margin:0 auto;padding:14px 18px 80px;color:var(--pp2-text);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
 .pp2-kicker{font-size:11px;letter-spacing:3px;color:var(--pp2-green-dim);margin:0 0 4px}
-.pp2-top{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:14px}
-.pp2-top h1{margin:0;font-size:34px;color:#baffdb;text-shadow:0 0 26px #22c55e44;letter-spacing:1px}
+.pp2-top{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:10px;padding:13px 15px;border:1px solid var(--pp2-line);border-radius:16px;background:linear-gradient(120deg,#07130d,#030a07)}
+.pp2-top h1{margin:0;font-size:27px;color:#baffdb;text-shadow:0 0 26px #22c55e44;letter-spacing:1px}
 .pp2-top span{color:var(--pp2-mut);font-size:13px}
 .pp2-top-right{display:flex;gap:10px;align-items:center}
 .pp2-access{padding:7px 13px;border-radius:999px;border:1px solid var(--pp2-line);font-size:12px}
 .pp2-access.is-on{color:var(--pp2-green)}
 .pp2-access.is-off{color:#f87171;border-color:#f8717155}
-.pp2-tabs{display:flex;gap:6px;flex-wrap:wrap;border-bottom:1px solid var(--pp2-line);padding-bottom:10px;margin-bottom:18px}
+.pp2-tabs{display:flex;gap:6px;flex-wrap:wrap;border-bottom:1px solid var(--pp2-line);padding-bottom:10px;margin-bottom:14px}
 .pp2-tabs button{border:1px solid transparent;border-radius:10px;background:transparent;color:var(--pp2-mut);padding:9px 16px;font:700 13px ui-monospace;cursor:pointer;transition:all .15s}
 .pp2-tabs button:hover{color:var(--pp2-text);background:#0a1a10}
 .pp2-tabs button.is-active{color:#031208;background:var(--pp2-green);box-shadow:0 0 22px #22c55e55}
@@ -22,6 +22,9 @@
 .pp2-lead h2{margin:0 0 4px;font-size:24px;color:#baffdb}
 .pp2-lead p{margin:0;color:var(--pp2-mut);max-width:640px;line-height:1.5;font-size:13px}
 .pp2-fine{color:var(--pp2-mut);font-size:12px;line-height:1.5}
+.pp2-play-header{display:flex;align-items:center;justify-content:space-between;gap:14px;margin:0 0 10px;padding:15px 16px;border:1px solid var(--pp2-line);border-radius:18px;background:radial-gradient(circle at 20% 0,#12351f 0,#07130c 42%,#030906 100%)}
+.pp2-play-header h2{margin:0;font-size:30px;color:#eafff4;letter-spacing:.5px}
+.pp2-play-header>span{display:inline-flex;align-items:center;min-height:32px;padding:6px 12px;border:1px solid #2cff9b55;border-radius:999px;background:#0b2415;color:var(--pp2-green);font:800 12px ui-monospace}
 
 /* hero */
 .pp2-hero{display:grid;grid-template-columns:1.1fr 1fr;gap:22px;align-items:center;border:1px solid var(--pp2-line);border-radius:18px;background:linear-gradient(120deg,#08150d,#04100a 60%,#02180e);padding:22px;margin-bottom:22px;overflow:hidden;position:relative}
@@ -37,7 +40,7 @@
 .pp2-row h2{margin:0;font-size:17px;color:#a9ffce;letter-spacing:1px}
 .pp2-row header p{margin:0;color:var(--pp2-mut);font-size:12px}
 .pp2-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px}
-.pp2-grid-wide{grid-template-columns:repeat(auto-fill,minmax(250px,1fr))}
+.pp2-grid-wide{grid-template-columns:repeat(auto-fill,minmax(240px,1fr))}
 .pp2-card{border:1px solid var(--pp2-line);border-radius:14px;background:var(--pp2-panel);overflow:hidden;cursor:pointer;transition:transform .18s,box-shadow .18s,border-color .18s}
 .pp2-card:hover{transform:translateY(-3px);border-color:#2cff9b66;box-shadow:0 12px 34px #00000088,0 0 24px #22c55e22}
 .pp2-art{position:relative;aspect-ratio:16/9;background:#03120a;display:grid;place-items:center;overflow:hidden}
@@ -113,6 +116,11 @@
 .pp2-cats{display:flex;gap:6px;flex-wrap:wrap}
 .pp2-cats button{border:1px solid var(--pp2-line);border-radius:999px;background:transparent;color:var(--pp2-mut);padding:6px 14px;font:700 11px ui-monospace;cursor:pointer}
 .pp2-cats button.is-active{background:#0f2c1b;color:var(--pp2-green);border-color:#2cff9b55}
+.pp2-solo,.pp2-library,.pp2-friends,.pp2-workspace,.pp2-devhub{display:grid;gap:12px}
+.pp2-solo>.pp2-cats{margin-bottom:2px}
+.pp2-room-panel{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px}
+.pp2-room-panel h3,.pp2-room-panel p{margin:0}
+.pp2-room-panel .pp2-play{white-space:nowrap}
 
 /* dev hub */
 .pp2-table-wrap{overflow-x:auto}
@@ -194,7 +202,7 @@
 .pp2-spotlight h2{margin:2px 0 8px;color:#baffdb}
 .pp2-spotlight p{color:var(--pp2-mut);font-size:13px;line-height:1.5;max-width:640px}
 
-@media(max-width:880px){.pp2-cols{grid-template-columns:1fr}.pp2-hero{grid-template-columns:1fr}.pp2-detail-hero{grid-template-columns:1fr}}
+@media(max-width:880px){.pp2-cols{grid-template-columns:1fr}.pp2-hero{grid-template-columns:1fr}.pp2-detail-hero{grid-template-columns:1fr}.pp2-room-panel{grid-template-columns:1fr}.pp2-room-panel .pp2-play{width:100%}}
 
 /* Game Rating Exposure + guardian lock (inside pp2-settings) */
 .pp2-rating-exposure{border-top:1px solid var(--pp2-line);padding-top:14px;display:grid;gap:8px}
@@ -206,17 +214,5 @@
 .pp2-guardian-pin-row{display:flex;gap:8px}
 .pp2-guardian-pin-row input{flex:1;min-width:0}
 
-/* Toddler Space — its own destination, no chat/voice/matchmaking/links */
-.pp2-shell-toddler .pp2-tabs{margin-bottom:8px}
-.pp2-toddler-space{display:grid;gap:18px}
-.pp2-toddler-hero{border:1px solid var(--pp2-line);border-radius:18px;background:linear-gradient(120deg,#08150d,#04100a 60%,#02180e);padding:24px;text-align:center}
-.pp2-toddler-hero h2{margin:4px 0 8px;font-size:clamp(24px,3.4vw,34px);color:#baffdb}
-.pp2-toddler-hero p:not(.pp2-kicker){margin:0 auto;max-width:560px;color:var(--pp2-mut);font-size:13px;line-height:1.6}
-.pp2-toddler-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px}
-.pp2-toddler-card{display:flex;flex-direction:column;align-items:center;gap:10px;padding:16px;border:2px solid var(--pp2-line);border-radius:20px;background:var(--pp2-panel);cursor:pointer;min-height:180px}
-.pp2-toddler-card:hover,.pp2-toddler-card:focus-visible{border-color:var(--pp2-green);outline:none;transform:translateY(-2px)}
-.pp2-toddler-art{width:100%;aspect-ratio:1/1;border-radius:14px;overflow:hidden;background:#03120a;display:grid;place-items:center}
-.pp2-toddler-art img{width:100%;height:100%;object-fit:cover;display:block}
-.pp2-toddler-title{font-size:16px;font-weight:800;color:var(--pp2-text);text-align:center}
-@media(max-width:767px){.pp2-rating-toggles{grid-template-columns:1fr}.pp2-toddler-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:767px){.pp2-shell{padding:10px 12px 92px}.pp2-top{align-items:flex-start}.pp2-top h1{font-size:23px}.pp2-top-right{width:100%;justify-content:space-between}.pp2-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.pp2-tabs button{padding:9px 7px;font-size:11px}.pp2-play-header{align-items:flex-start;padding:13px}.pp2-play-header h2{font-size:24px}.pp2-grid,.pp2-grid-wide{grid-template-columns:1fr}.pp2-cats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.pp2-cats button{min-height:38px}.pp2-rating-toggles{grid-template-columns:1fr}.pp2-player header{align-items:flex-start;gap:8px;flex-direction:column}.pp2-player header>div:last-child{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;width:100%}.pp2-player header button{margin:0;padding:7px 6px;font-size:10px}.pp2-player footer{font-size:10px;gap:8px;overflow:hidden}}
 @media(prefers-reduced-motion:reduce){.pp2-card,.pp2-card:hover,.pp2-art img,.pp2-play,.pp2-wish{transition:none;transform:none}.pp2-skeleton .pp2-art,.pp2-skeleton .pp2-card-body i{animation:none}.pp2-stage-loading i{animation-duration:2s}}

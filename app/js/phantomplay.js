@@ -1,12 +1,13 @@
 import {
   currentTenantId, isAdmin, isOwnerOperator, session,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260714-250";
+} from "./store.js?v=phantom-live-20260714-251";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 const FALLBACK_KEY = "pf.phantomplay.offline.v1";
 const DEV_SUPPORT_KEY = "pf.phantomplay.developerSupport.v1";
 const CATEGORIES = ["All", "Arcade", "Puzzle", "Focus", "Strategy", "Sports", "Creative"];
+const GAME_SORTS = ["All", "Solo", "Multiplayer", "Toddler", ...CATEGORIES.filter((category) => category !== "All")];
 // "Game Rating Exposure" — mirrors server PhantomPlayRating (phantomplay.ts).
 // Order matches ratingRank there (gentlest first).
 const RATING_TIERS = [["toddler", "Toddler"], ["everyone", "Everyone"], ["everyone10", "Everyone 10+"], ["teen", "Teen"], ["mature", "Mature"]];
@@ -69,7 +70,7 @@ const BUILT_INS = [
 ];
 
 const ui = {
-  tab: "home",
+  tab: "library",
   loading: true,
   error: "",
   notice: "",
@@ -325,6 +326,16 @@ function savedDateLabel(value) {
   return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
+const multiplayerGame = (game) => game.localMultiplayer || game.onlineMultiplayer || game.multiplayerDescriptor || game.tags?.some((tag) => /multiplayer|friends|party|duel|arena|io/i.test(tag)) || ["phantom-rumble"].includes(game.id);
+const toddlerPick = (game) => game.contentRating === "toddler" || ["focus-stack", "signal-match", "sudoku-signal"].includes(game.id);
+function sortGames(games, sort = ui.category) {
+  if (sort === "Solo") return games.filter((game) => !multiplayerGame(game));
+  if (sort === "Multiplayer") return games.filter(multiplayerGame);
+  if (sort === "Toddler") return games.filter(toddlerPick);
+  if (CATEGORIES.includes(sort) && sort !== "All") return games.filter((game) => game.category === sort);
+  return games;
+}
+
 function gameCard(game, variant = "") {
   const favorite = ui.snapshot.favorites.includes(game.id);
   const history = historyFor(game.id);
@@ -400,39 +411,17 @@ function renderLeaderboard() {
 
 function filteredCatalog() {
   const query = ui.query.toLowerCase();
-  return ui.snapshot.catalog.filter((game) => (ui.category === "All" || game.category === ui.category) && (!query || `${game.title} ${game.summary} ${developerNameFor(game)} ${game.tags.join(" ")}`.toLowerCase().includes(query)));
+  return sortGames(ui.snapshot.catalog).filter((game) => !query || `${game.title} ${game.summary} ${developerNameFor(game)} ${game.tags.join(" ")}`.toLowerCase().includes(query));
 }
 
 function renderLibrary() {
   const games = filteredCatalog();
-  return `<section class="pp-library"><div class="pp-library-tools"><label>${icon("search")}<input type="search" data-pp-search value="${esc(ui.query)}" placeholder="Search playable builds, categories, builders…"/></label><div class="pp-categories">${CATEGORIES.map((category) => `<button type="button" class="${ui.category === category ? "is-active" : ""}" data-pp-category="${esc(category)}">${esc(category)}</button>`).join("")}</div></div>${games.length ? `<div class="pp-game-grid pp-game-grid-full">${games.map((game) => gameCard(game)).join("")}</div>` : empty("No matching builds", "Try a different search or category.")}</section>`;
+  return `<section class="pp-library"><div class="pp-play-header"><div><p class="pp-kicker">PLAY NOW</p><h2>Games</h2></div><span>${games.length} ready</span></div><div class="pp-library-tools"><label>${icon("search")}<input type="search" data-pp-search value="${esc(ui.query)}" placeholder="Search games, modes, categories, creators…"/></label><div class="pp-categories">${GAME_SORTS.map((category) => `<button type="button" class="${ui.category === category ? "is-active" : ""}" data-pp-category="${esc(category)}">${esc(category)}</button>`).join("")}</div></div>${games.length ? `<div class="pp-game-grid pp-game-grid-full">${games.map((game) => gameCard(game)).join("")}</div>` : empty("No matching builds", "Try a different search or category.")}</section>`;
 }
 
 function renderFavorites() {
   const games = ui.snapshot.catalog.filter((game) => ui.snapshot.favorites.includes(game.id));
   return games.length ? `<div class="pp-game-grid pp-game-grid-full">${games.map((game) => gameCard(game)).join("")}</div>` : empty("No favorites yet", "Tap the heart on any game to save it here.");
-}
-
-// Toddler Space: its own destination, not a filter chip in the Play Lab
-// grid. Only toddler-tier games, big single-purpose cards, and nothing else
-// on the page — no favorites, no support/dev links, no rooms, no search.
-function toddlerCard(game) {
-  return `<button type="button" class="pp-toddler-card" data-pp-toddler-play="${esc(game.id)}">
-    <span class="pp-toddler-art"><img src="${esc(thumbnailFor(game))}" alt="" loading="lazy"/></span>
-    <span class="pp-toddler-title">${esc(game.title)}</span>
-  </button>`;
-}
-
-function renderToddlerSpace() {
-  const games = ui.snapshot.catalog.filter((game) => game.contentRating === "toddler");
-  return `<div class="pp-toddler-space">
-    <section class="pp-toddler-hero">
-      <p class="pp-kicker">TODDLER SPACE</p>
-      <h2>Big buttons. Just tap to play.</h2>
-      <p>A simplified area for the youngest players: only Toddler-rated games, no chat, no voice, no multiplayer rooms, and no links off this screen.</p>
-    </section>
-    ${games.length ? `<div class="pp-toddler-grid">${games.map(toddlerCard).join("")}</div>` : empty("No toddler games yet", "Games rated Toddler will appear here automatically once they are published.")}
-  </div>`;
 }
 
 // Connection status derived purely from lastSeenAt age — no separate
@@ -669,17 +658,16 @@ function render() {
     return;
   }
   const snapshot = ui.snapshot || offlineState();
-  const tabs = [["home", "Sandbox"], ["library", "Play Lab"], ["together", "Multiplayer"], ["favorites", "Saved"], ["toddler", "Toddler Space"], ["developer", "Dev Rooms"], ...(snapshot.access.canModerate ? [["admin", "Safety Review"]] : [])];
-  const isToddlerTab = ui.tab === "toddler";
-  const content = ui.tab === "library" ? renderLibrary() : ui.tab === "together" ? renderTogether() : ui.tab === "favorites" ? renderFavorites() : isToddlerTab ? renderToddlerSpace() : ui.tab === "developer" ? renderDeveloper() : ui.tab === "admin" ? renderAdmin() : renderHome();
-  mountedRoot.innerHTML = `<div class="pp-shell ${isToddlerTab ? "pp-shell-toddler" : ""}">
-    <header class="pp-top"><div><p class="pp-kicker">PHANTOMFORCE GAME SANDBOX</p><h1>PhantomPlay</h1><span>Play, build, test, and return to work sharper.</span></div><div><span class="pp-access ${snapshot.access.enabled ? "is-ready" : "is-blocked"}">${snapshot.access.enabled ? esc(playTimeLabel(snapshot.access.remainingMinutesToday)) : "Plan restricted"}</span>${isToddlerTab ? "" : `<button class="pp-settings-button" data-pp-settings aria-label="Play settings">${icon("settings")}</button>`}</div></header>
+  const tabs = [["library", "Games"], ["together", "Multiplayer"], ["favorites", "Saved"], ["developer", "Developers"], ...(snapshot.access.canModerate ? [["admin", "Safety Review"]] : [])];
+  const content = ui.tab === "together" ? renderTogether() : ui.tab === "favorites" ? renderFavorites() : ui.tab === "developer" ? renderDeveloper() : ui.tab === "admin" ? renderAdmin() : renderLibrary();
+  mountedRoot.innerHTML = `<div class="pp-shell">
+    <header class="pp-top"><div><p class="pp-kicker">PHANTOMFORCE GAME SANDBOX</p><h1>PhantomPlay</h1><span>Play, build, test, and return to work sharper.</span></div><div><span class="pp-access ${snapshot.access.enabled ? "is-ready" : "is-blocked"}">${snapshot.access.enabled ? esc(playTimeLabel(snapshot.access.remainingMinutesToday)) : "Plan restricted"}</span><button class="pp-settings-button" data-pp-settings aria-label="Play settings">${icon("settings")}</button></div></header>
     ${ui.offline ? `<div class="pp-banner is-offline"><b>Offline mode</b><span>Built-in games still work. Favorites and progress will sync after the server returns.</span><button data-pp-retry>Retry</button></div>` : ""}
     ${ui.error && !ui.offline ? `<div class="pp-banner is-error"><b>PhantomPlay needs attention</b><span>${esc(ui.error)}</span><button data-pp-retry>Retry</button></div>` : ""}
     ${ui.notice ? `<div class="pp-banner is-notice"><b>Creator support</b><span>${esc(ui.notice)}</span><button data-pp-clear-notice>OK</button></div>` : ""}
     <nav class="pp-tabs" aria-label="PhantomPlay sections">${tabs.map(([id, label]) => `<button type="button" class="${ui.tab === id ? "is-active" : ""}" data-pp-tab="${id}">${esc(label)}</button>`).join("")}</nav>
     <main class="pp-content">${snapshot.access.enabled ? content : empty("PhantomPlay is unavailable", "This optional workspace module is separate from core PhantomForce operations. Ask a workspace owner to enable access if your team uses it.")}</main>
-    ${isToddlerTab ? "" : settingsMarkup()}${playerMarkup()}
+    ${settingsMarkup()}${playerMarkup()}
   </div>`;
   bind();
   syncRoomPolling();
@@ -1167,7 +1155,6 @@ function bind() {
   mountedRoot.querySelectorAll("[data-pp-room-ready]").forEach((button) => button.onclick = () => toggleRoomReady(button.dataset.ppRoomReady, button.dataset.ppReadyNext === "1"));
   mountedRoot.querySelectorAll("[data-pp-room-botfill]").forEach((input) => input.onchange = () => updateHostControls(input.dataset.ppRoomBotfill, { allowBotFill: input.checked }));
   mountedRoot.querySelectorAll("[data-pp-room-maxhumans]").forEach((input) => input.onchange = () => updateHostControls(input.dataset.ppRoomMaxhumans, { maxHumans: Number(input.value) || 1 }));
-  mountedRoot.querySelectorAll("[data-pp-toddler-play]").forEach((button) => button.onclick = () => launch(button.dataset.ppToddlerPlay));
   mountedRoot.querySelectorAll("[data-pp-rating-toggle]").forEach((input) => input.onchange = () => {
     const next = [...mountedRoot.querySelectorAll("[data-pp-rating-toggle]:checked")].map((el) => el.dataset.ppRatingToggle);
     applyRatingExposure(next);
