@@ -1,5 +1,5 @@
 /* PhantomPlay V2 — the platform experience shell.
-   Home / Solo / Friends / Workspace / Library / Dev Hub (+ Admin) over the
+   Home / Solo / Friends / Workspace / Library / Developers (+ Admin) over the
    V1 APIs (/api/phantomplay/*) plus the V2 platform layer
    (/api/phantomplay/v2/*). V1's phantomplay.js is untouched; main.js mounts
    this module instead. Every V2 surface degrades honestly: if the V2 routes
@@ -13,6 +13,7 @@ import {
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
 const FALLBACK_KEY = "pf.phantomplay.offline.v1";
+const DEV_SUPPORT_KEY = "pf.phantomplay.developerSupport.v1";
 const CATEGORIES = ["All", "Arcade", "Puzzle", "Focus", "Strategy", "Sports", "Creative"];
 const STATUSES = [["online", "Online"], ["away", "Away"], ["busy", "Busy"], ["invisible", "Invisible"]];
 
@@ -26,6 +27,7 @@ const ui = {
   statusChoice: "online", friendTarget: "",
   analytics: null, leaderboardGameId: "", leaderboard: null,
   policyDraft: null, policyMessage: "", assistMessage: "",
+  selectedDeveloperId: "", developerMessage: "",
 };
 
 let mountedRoot = null, playClock = null, playTickAt = 0, heartbeatClock = null, messageBound = false, keyboardBound = false;
@@ -145,6 +147,115 @@ function empty(title, copy) {
 function v2Note(copy) {
   return `<div class="pp2-banner"><b>Social is offline</b><span>${esc(copy)}</span></div>`;
 }
+function slugifyDeveloper(value) {
+  return String(value || "developer").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 72) || "developer";
+}
+function loadDeveloperSupport() {
+  try {
+    const parsed = JSON.parse(workspaceStorageGetItem(DEV_SUPPORT_KEY) || "{}");
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch { return {}; }
+}
+function saveDeveloperSupport(records) {
+  workspaceStorageSetItem(DEV_SUPPORT_KEY, JSON.stringify(records || {}));
+}
+function developerAvatarFor(developer) {
+  const game = developer?.games?.find((item) => item.thumbnail) || developer?.games?.[0];
+  return game?.developerAvatar || game?.thumbnail || "";
+}
+function devScoreFor(developer, support = {}) {
+  const games = Array.isArray(developer.games) ? developer.games : [];
+  const base = 64;
+  const gameScore = Math.min(16, games.length * 3);
+  const featuredScore = Math.min(10, Number(developer.featuredCount || 0) * 2);
+  const communityScore = Math.min(6, Number(developer.communityCount || 0) * 2);
+  const supportScore = Math.min(8, Number(support.supportCount || 0) * 2);
+  const noteScore = Math.min(4, Array.isArray(support.notes) ? support.notes.length : 0);
+  return Math.max(0, Math.min(100, base + gameScore + featuredScore + communityScore + supportScore + noteScore));
+}
+function developerDirectory() {
+  const directory = new Map();
+  for (const game of ui.snapshot?.catalog || []) {
+    const name = game.developer || "Tak";
+    const id = slugifyDeveloper(name);
+    if (!directory.has(id)) directory.set(id, { id, name, games: [], categories: new Set(), featuredCount: 0, communityCount: 0 });
+    const entry = directory.get(id);
+    entry.games.push(game);
+    if (game.category) entry.categories.add(game.category);
+    if (game.featured) entry.featuredCount += 1;
+    if (game.kind === "community") entry.communityCount += 1;
+  }
+  const supportRecords = loadDeveloperSupport();
+  return [...directory.values()].map((developer) => {
+    const support = supportRecords[developer.id] || {};
+    const normalized = {
+      ...developer,
+      categories: [...developer.categories].sort(),
+      supportCount: Number(support.supportCount || 0),
+      donationIntentCount: Number(support.donationIntentCount || 0),
+      notes: Array.isArray(support.notes) ? support.notes : [],
+      supported: Boolean(support.supportedAt),
+      avatar: developerAvatarFor(developer),
+    };
+    return { ...normalized, score: devScoreFor(normalized, support) };
+  }).sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
+}
+function selectedDeveloper() {
+  return developerDirectory().find((developer) => developer.id === ui.selectedDeveloperId) || null;
+}
+function dateLabel(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+function developerCard(developer) {
+  const previews = developer.games.slice(0, 4);
+  return `<article class="pp2-dev-card" data-pp2-open-dev="${esc(developer.id)}">
+    <header>
+      <div class="pp2-dev-avatar">${developer.avatar ? `<img src="${esc(developer.avatar)}" alt="" loading="lazy"/>` : `<span>${esc(developer.name.slice(0, 1))}</span>`}</div>
+      <div><p class="pp2-kicker">DEVELOPER</p><h3>${esc(developer.name)}</h3><span>${developer.games.length} game${developer.games.length === 1 ? "" : "s"} in PhantomPlay</span></div>
+      <strong class="pp2-dev-score"><b>${developer.score}</b><span>Dev score</span></strong>
+    </header>
+    <p>${esc(developer.categories.join(" / ") || "PhantomPlay")} creator with ${developer.featuredCount} featured build${developer.featuredCount === 1 ? "" : "s"} and ${developer.supportCount} local support mark${developer.supportCount === 1 ? "" : "s"}.</p>
+    <div class="pp2-dev-tags">${developer.categories.map((category) => `<span>${esc(category)}</span>`).join("")}</div>
+    <div class="pp2-dev-thumbs">${previews.map((game) => `<span title="${esc(game.title)}">${art(game)}</span>`).join("")}</div>
+    <button type="button" class="pp2-ghost" data-pp2-open-dev="${esc(developer.id)}">View profile</button>
+  </article>`;
+}
+function renderDeveloperProfile(developer) {
+  const notes = developer.notes.length ? developer.notes.map((note) => `<li><span>${esc(dateLabel(note.at))}</span><p>${esc(note.text)}</p></li>`).join("") : `<li class="is-empty"><p>No private dev notes yet.</p></li>`;
+  return `<div class="pp2-dev-profile">
+    <button type="button" class="pp2-ghost" data-pp2-dev-back>Back to developers</button>
+    <section class="pp2-panel pp2-dev-hero">
+      <div class="pp2-dev-avatar is-large">${developer.avatar ? `<img src="${esc(developer.avatar)}" alt="" loading="lazy"/>` : `<span>${esc(developer.name.slice(0, 1))}</span>`}</div>
+      <div><p class="pp2-kicker">DEVELOPER PROFILE</p><h2>${esc(developer.name)}</h2><p>${developer.games.length} playable game${developer.games.length === 1 ? "" : "s"} · ${esc(developer.categories.join(" / ") || "PhantomPlay")}</p></div>
+      <strong class="pp2-dev-score is-large"><b>${developer.score}</b><span>Dev score</span></strong>
+    </section>
+    <section class="pp2-dev-stats">
+      <span><b>${developer.games.length}</b><i>Games</i></span>
+      <span><b>${developer.featuredCount}</b><i>Featured</i></span>
+      <span><b>${developer.supportCount}</b><i>Support</i></span>
+      <span><b>${developer.donationIntentCount}</b><i>Collab intent</i></span>
+    </section>
+    <section class="pp2-panel pp2-dev-actions">
+      <button type="button" class="pp2-play" data-pp2-support-dev="${esc(developer.id)}">${developer.supported ? "Supported" : "Support developer"}</button>
+      <button type="button" class="pp2-ghost" data-pp2-donate-dev="${esc(developer.id)}">Mark donate / collab intent</button>
+      <p class="pp2-fine">This records private local intent only. No payment, outreach, or external service starts here.</p>
+    </section>
+    ${ui.developerMessage ? `<div class="pp2-banner"><b>Developer note</b><span>${esc(ui.developerMessage)}</span><button type="button" data-pp2-dev-message-clear>Clear</button></div>` : ""}
+    <section class="pp2-panel pp2-dev-notes">
+      <h3>Private notes</h3>
+      <textarea data-pp2-dev-note="${esc(developer.id)}" rows="3" maxlength="800" placeholder="Leave yourself a note about this developer, their games, or support ideas."></textarea>
+      <button type="button" class="pp2-ghost" data-pp2-save-dev-note="${esc(developer.id)}">Save private note</button>
+      <ul>${notes}</ul>
+    </section>
+    <section class="pp2-row pp2-dev-games">
+      <header><h2>Games by ${esc(developer.name)}</h2><p>Every playable PhantomPlay build currently available for this developer.</p></header>
+      <div class="pp2-grid pp2-grid-wide">${developer.games.map((game) => card(game)).join("")}</div>
+    </section>
+  </div>`;
+}
 
 /* ---- HOME ---- */
 function mapIds(rows, key = "gameId") { return (rows || []).map((item) => gameById(item[key])).filter(Boolean); }
@@ -168,7 +279,7 @@ function renderHome() {
     ${d ? row("New community releases", mapIds(d.newReleases)) : ""}
     ${row("Featured", featured)}
     ${ui.v2Offline ? v2Note("Discovery, reviews, friends, and wishlists need the PhantomForce server. Built-in games and saves still work.") : ""}
-    <section class="pp2-spotlight"><div><p class="pp2-kicker">DEVELOPER SPOTLIGHT</p><h2>${esc(ui.snapshot.developerSpotlight)}</h2><p>Publish a game to PhantomPlay and PhantomForce becomes your publishing team — analytics, patch notes, art and campaign briefs, all in the Dev Hub.</p><button class="pp2-ghost" data-pp2-tab="developer">Open Dev Hub</button></div></section>
+    <section class="pp2-spotlight"><div><p class="pp2-kicker">DEVELOPER SPOTLIGHT</p><h2>${esc(ui.snapshot.developerSpotlight)}</h2><p>Browse developers, see every game they have in PhantomPlay, and keep private support notes without turning play into a marketplace.</p><button class="pp2-ghost" data-pp2-tab="developer">Open Developers</button></div></section>
   </div>`;
 }
 
@@ -259,7 +370,7 @@ function renderLibrary() {
   </div>`;
 }
 
-/* ---- DEV HUB ---- */
+/* ---- DEVELOPERS ---- */
 const ASSIST_BRIEFS = {
   icon: (game) => `Design a square game icon for "${game.title}" — ${game.summary} Terminal-inspired, dark background (#05070a), phosphor green accents, no text, crisp at 64px.`,
   trailer: (game) => `Cut a 20-second gameplay trailer for "${game.title}". ${game.summary} Dark terminal aesthetic, fast cuts, end card with the title in monospace green on black.`,
@@ -267,24 +378,25 @@ const ASSIST_BRIEFS = {
   social: (game) => `Draft 3 short social posts announcing "${game.title}" on PhantomPlay — one playful, one feature-focused, one for game developers. Include the hook: ${game.summary}`,
   patch: (game) => `Write patch notes for the next release of "${game.title}" from these raw notes: [paste your changes]. Keep them player-facing, grouped by Added/Changed/Fixed.`,
 };
-function renderDeveloper() {
+function developerBuilderTools() {
   const snapshot = ui.snapshot;
-  if (!snapshot.access.canSubmitGames) return empty("Dev Hub is plan-gated", "This account can play games but cannot publish releases. Owners can enable game submissions per plan.");
+  if (!snapshot.access.canSubmitGames) return `<section class="pp2-panel pp2-builder-tools"><h3>Release tools locked</h3><p class="pp2-fine">This account can browse and support developers. Owners can enable build submissions per plan.</p></section>`;
   const editing = snapshot.submissions.find((item) => item.id === ui.editingSubmissionId) || null;
   const analytics = ui.analytics;
   const assistGames = [...snapshot.submissions.map((s) => ({ id: `community:${s.id}`, title: s.title, summary: s.summary, category: s.category })), ...(isAdmin() ? snapshot.catalog.filter((g) => g.kind === "built_in") : [])];
-  return `<div class="pp2-devhub">
-    <section class="pp2-lead"><h2>Dev Hub</h2><p>Publish to PhantomPlay and let PhantomForce act as your publishing team. Analytics below are computed from real play sessions — no vanity numbers.</p></section>
-    <section class="pp2-panel"><h3>Analytics</h3>
+  return `<details class="pp2-panel pp2-builder-tools">
+    <summary>Release tools for builders</summary>
+    <p class="pp2-fine">Use these when a developer is actually preparing a build. The main Developers tab stays focused on profiles, games, support, and notes.</p>
+    <section class="pp2-subpanel"><h3>Release analytics</h3>
       ${ui.v2Offline ? v2Note("Analytics need the PhantomForce server.") : analytics ? (analytics.games.length ? `<div class="pp2-table-wrap"><table class="pp2-table"><thead><tr><th>Game</th><th>Plays</th><th>Players</th><th>DAU</th><th>MAU</th><th>Hours</th><th>Avg session</th><th>Returning</th><th>Rating</th><th>Wishlists</th></tr></thead><tbody>${analytics.games.map((row) => `<tr><td>${esc(row.title)}</td><td>${row.plays}</td><td>${row.players}</td><td>${row.dau}</td><td>${row.mau}</td><td>${row.totalHours}</td><td>${row.avgSessionMinutes}m</td><td>${row.returningPlayers}</td><td>${row.averageRating ?? "—"} (${row.reviewCount})</td><td>${row.wishlists}</td></tr>`).join("")}</tbody></table></div>` : empty("No analytics yet", "Numbers appear once your published games are played.")) : `<button type="button" class="pp2-ghost" data-pp2-load-analytics>Load analytics</button>`}
     </section>
-    <section class="pp2-panel"><h3>Publishing assists</h3>
+    <section class="pp2-subpanel"><h3>Creative assists</h3>
       <p class="pp2-fine">Each button copies a production-ready brief to your clipboard — paste it into Media Lab (art, trailers), Content Hub (posts), or Phantom chat (copy, patch notes). Honest by design: nothing is generated behind your back.</p>
       ${assistGames.length ? `<div class="pp2-assist"><select data-pp2-assist-game>${assistGames.map((game) => `<option value="${esc(game.id)}">${esc(game.title)}</option>`).join("")}</select>
       <div class="pp2-assist-buttons">${Object.entries({ icon: "Icon brief", trailer: "Trailer brief", copy: "Store copy brief", social: "Social posts brief", patch: "Patch notes brief" }).map(([key, label]) => `<button type="button" class="pp2-ghost" data-pp2-assist="${key}">${label}</button>`).join("")}</div></div>
       ${ui.assistMessage ? `<p class="pp2-fine">${esc(ui.assistMessage)}</p>` : ""}` : empty("No games yet", "Save a submission below and the assists unlock.")}
     </section>
-    <section class="pp2-panel"><h3>${editing ? "Update release" : "New submission"}</h3>
+    <section class="pp2-subpanel"><h3>${editing ? "Update release" : "Draft build"}</h3>
       <form class="pp2-submit" data-pp2-submit>
         <input type="hidden" name="submissionId" value="${esc(editing?.id || "")}"/>
         <div class="pp2-form-grid">
@@ -307,9 +419,19 @@ function renderDeveloper() {
         <p data-pp2-form-message class="pp2-fine"></p>
       </form>
     </section>
-    <section class="pp2-panel"><h3>Your releases</h3>
+    <section class="pp2-subpanel"><h3>Your releases</h3>
       ${snapshot.submissions.length ? snapshot.submissions.map((item) => `<div class="pp2-sub"><header><b>${esc(item.title || "Untitled")}</b><span class="is-${esc(item.status)}">${esc(item.status.replaceAll("_", " "))}</span></header><p>${esc(item.summary || "")}</p><footer><span>v${esc(item.version)} · ${item.versions.length} versions</span>${["draft", "changes_requested", "rejected"].includes(item.status) ? `<button type="button" class="pp2-ghost" data-pp2-edit="${esc(item.id)}">Edit</button>` : ""}</footer>${item.moderationNote ? `<blockquote>${esc(item.moderationNote)}</blockquote>` : ""}</div>`).join("") : empty("No releases yet", "Save a draft or submit a finished game for review.")}
     </section>
+  </details>`;
+}
+function renderDeveloper() {
+  const developers = developerDirectory();
+  const developer = selectedDeveloper();
+  if (developer) return renderDeveloperProfile(developer);
+  return `<div class="pp2-developers">
+    <section class="pp2-lead"><div><h2>Developers</h2><p>Browse every PhantomPlay developer, inspect their games, track Dev score, and keep private support or collaboration notes.</p></div><span class="pp2-access is-on">${developers.length} developer${developers.length === 1 ? "" : "s"}</span></section>
+    ${developers.length ? `<div class="pp2-dev-list">${developers.map(developerCard).join("")}</div>` : empty("No developers yet", "Playable games will create developer profiles automatically.")}
+    ${developerBuilderTools()}
   </div>`;
 }
 
@@ -380,7 +502,7 @@ function render() {
   document.body.classList.toggle("phantomplay-playing", !!ui.player);
   if (ui.loading && !ui.snapshot) { mountedRoot.innerHTML = `<div class="pp2-shell">${skeletonRow("PhantomPlay")}</div>`; return; }
   const snapshot = ui.snapshot || offlineState();
-  const tabs = [["home", "Home"], ["solo", "Solo"], ["friends", "Friends"], ["workspace", "Workspace"], ["library", "Library"], ["developer", "Dev Hub"], ...(snapshot.access.canModerate ? [["admin", "Admin"]] : [])];
+  const tabs = [["home", "Home"], ["solo", "Solo"], ["friends", "Friends"], ["workspace", "Workspace"], ["library", "Library"], ["developer", "Developers"], ...(snapshot.access.canModerate ? [["admin", "Admin"]] : [])];
   const view = { home: renderHome, solo: renderSolo, friends: renderFriends, workspace: renderWorkspace, library: renderLibrary, developer: renderDeveloper, admin: renderAdmin }[ui.tab] || renderHome;
   mountedRoot.innerHTML = `<div class="pp2-shell">
     <header class="pp2-top"><div><p class="pp2-kicker">PHANTOMFORCE ENTERTAINMENT</p><h1>PhantomPlay</h1><span>Work hard. Take a real break. Come back sharper.</span></div>
@@ -554,6 +676,43 @@ async function updatePreferences() {
     await hydrate();
   } catch (error) { ui.error = error.message; render(); }
 }
+function supportDeveloper(id) {
+  const records = loadDeveloperSupport();
+  const record = records[id] || {};
+  if (record.supportedAt) {
+    ui.developerMessage = "Support was already marked for this developer.";
+    render();
+    return;
+  }
+  records[id] = { ...record, supportedAt: new Date().toISOString(), supportCount: Number(record.supportCount || 0) + 1 };
+  saveDeveloperSupport(records);
+  ui.developerMessage = "Support saved locally for this developer.";
+  render();
+}
+function logDeveloperDonationIntent(id) {
+  const records = loadDeveloperSupport();
+  const record = records[id] || {};
+  records[id] = { ...record, donationIntentAt: new Date().toISOString(), donationIntentCount: Number(record.donationIntentCount || 0) + 1 };
+  saveDeveloperSupport(records);
+  ui.developerMessage = "Donation or collaboration interest saved locally. No payment was started.";
+  render();
+}
+function saveDeveloperNote(id) {
+  const field = mountedRoot.querySelector(`[data-pp2-dev-note="${CSS.escape(id)}"]`);
+  const text = String(field?.value || "").trim();
+  if (!text) {
+    ui.developerMessage = "Write a note before saving it.";
+    render();
+    return;
+  }
+  const records = loadDeveloperSupport();
+  const record = records[id] || {};
+  const notes = Array.isArray(record.notes) ? record.notes : [];
+  records[id] = { ...record, notes: [{ text: text.slice(0, 800), at: new Date().toISOString() }, ...notes].slice(0, 25) };
+  saveDeveloperSupport(records);
+  ui.developerMessage = "Private developer note saved locally.";
+  render();
+}
 
 /* ---- bind ---- */
 function bind() {
@@ -590,6 +749,12 @@ function bind() {
   on("[data-pp2-cancel-edit]", "click", () => { ui.editingSubmissionId = null; render(); });
   on("[data-pp2-load-analytics]", "click", loadAnalytics);
   mountedRoot.querySelectorAll("[data-pp2-assist]").forEach((b) => b.onclick = () => copyAssist(b.dataset.pp2Assist));
+  mountedRoot.querySelectorAll("[data-pp2-open-dev]").forEach((b) => b.onclick = (e) => { e.stopPropagation(); ui.selectedDeveloperId = b.dataset.pp2OpenDev; ui.developerMessage = ""; render(); });
+  on("[data-pp2-dev-back]", "click", () => { ui.selectedDeveloperId = ""; ui.developerMessage = ""; render(); });
+  on("[data-pp2-dev-message-clear]", "click", () => { ui.developerMessage = ""; render(); });
+  mountedRoot.querySelectorAll("[data-pp2-support-dev]").forEach((b) => b.onclick = () => supportDeveloper(b.dataset.pp2SupportDev));
+  mountedRoot.querySelectorAll("[data-pp2-donate-dev]").forEach((b) => b.onclick = () => logDeveloperDonationIntent(b.dataset.pp2DonateDev));
+  mountedRoot.querySelectorAll("[data-pp2-save-dev-note]").forEach((b) => b.onclick = () => saveDeveloperNote(b.dataset.pp2SaveDevNote));
   on("[data-pp2-policy-edit]", "click", () => { ui.policyDraft = { ...ui.v2.policy, approvedGameIds: [...ui.v2.policy.approvedGameIds] }; render(); });
   on("[data-pp2-policy-cancel]", "click", () => { ui.policyDraft = null; render(); });
   const policyForm = mountedRoot.querySelector("[data-pp2-policy-form]");
