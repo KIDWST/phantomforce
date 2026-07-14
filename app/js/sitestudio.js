@@ -2,13 +2,14 @@
 
 import {
   store, uid, visible, currentWs, wsName, pushActivity, ago, fmtMoney,
-} from "./store.js?v=phantom-live-20260714-003";
+} from "./store.js?v=phantom-live-20260714-004";
 import {
   esc, baseSiteDraft, ensureSiteDesign, ensureSiteStore, applyWebsitePrompt, renderWebsitePreview,
-} from "./workspaces.js?v=phantom-live-20260714-003";
+  SITE_TEMPLATES, applySiteTemplate, cadenceSuffix,
+} from "./workspaces.js?v=phantom-live-20260714-004";
 import {
   isDatabaseSession, requestServerPublish, fetchServerRun,
-} from "./orgs.js?v=phantom-live-20260714-003";
+} from "./orgs.js?v=phantom-live-20260714-004";
 
 const siteUi = {
   activeSiteId: null, device: "desktop", selectedSection: -1,
@@ -159,9 +160,24 @@ function cartTotal(site) {
   return cartItems(site).reduce((sum, item) => sum + (Number(item.product.price || 0) * item.qty), 0);
 }
 
+function cadenceOptions(selected) {
+  return [["one_time", "One time"], ["monthly", "Monthly"], ["yearly", "Yearly"]]
+    .map(([value, label]) => `<option value="${value}" ${selected === value || (value === "one_time" && !["monthly", "yearly"].includes(selected)) ? "selected" : ""}>${label}</option>`).join("");
+}
+
+function typeOptions(selected) {
+  return `<option value="physical" ${selected === "digital" ? "" : "selected"}>Physical — ships</option>
+    <option value="digital" ${selected === "digital" ? "selected" : ""}>Digital — link/email</option>`;
+}
+
+function orderItemCount(order) {
+  return (order.items || []).reduce((sum, item) => sum + Math.max(0, Number(item.qty || 0)), 0);
+}
+
 function productEditorMarkup(site) {
   const products = productsFor(site);
-  const orders = ensureSiteStore(site).orders.slice(0, 5);
+  const allOrders = ensureSiteStore(site).orders;
+  const orders = allOrders.slice(0, 5);
   return `
     <aside class="ss-store-console" aria-label="Store editor">
       <header>
@@ -171,7 +187,8 @@ function productEditorMarkup(site) {
       <form class="ss-product-add" data-ss-product-add>
         <input name="name" placeholder="Product or service" aria-label="Product name" required />
         <div><input name="price" type="number" min="0" step="0.01" placeholder="Price" aria-label="Price" required />
-          <select name="cadence" aria-label="Billing"><option value="one_time">One time</option><option value="monthly">Monthly</option></select></div>
+          <select name="cadence" aria-label="Billing">${cadenceOptions("one_time")}</select></div>
+        <select name="type" aria-label="Fulfillment">${typeOptions("physical")}</select>
         <input name="desc" placeholder="Short description" aria-label="Product description" />
         <button class="btn btn-primary" type="submit">Add product</button>
       </form>
@@ -181,14 +198,22 @@ function productEditorMarkup(site) {
             <button type="button" class="ss-product-delete" data-ss-product-delete="${esc(product.id)}" aria-label="Remove ${esc(product.name)}">×</button>
             <input name="name" value="${esc(product.name)}" aria-label="Product name" />
             <div><input name="price" type="number" min="0" step="0.01" value="${esc(product.price)}" aria-label="Price" />
-              <select name="cadence" aria-label="Billing"><option value="one_time" ${product.cadence !== "monthly" ? "selected" : ""}>One time</option><option value="monthly" ${product.cadence === "monthly" ? "selected" : ""}>Monthly</option></select></div>
+              <select name="cadence" aria-label="Billing">${cadenceOptions(product.cadence)}</select></div>
+            <select name="type" aria-label="Fulfillment" data-ss-product-type="${esc(product.id)}">${typeOptions(product.type)}</select>
             <input name="desc" value="${esc(product.desc || "")}" aria-label="Description" />
+            ${product.type === "digital" ? `
+            <div class="ss-delivery-fields">
+              <small>Digital delivery — shown on the buyer's receipt</small>
+              <input name="delivery_url" value="${esc(product.delivery_url || "")}" placeholder="Delivery link (download or license portal)" aria-label="Delivery link" />
+              <input name="delivery_note" value="${esc(product.delivery_note || "")}" placeholder="Delivery note (e.g. license key emailed within minutes)" aria-label="Delivery note" />
+            </div>` : ""}
             <button class="btn btn-quiet" type="button" data-ss-product-save="${esc(product.id)}">Save</button>
           </article>`).join("") || `<p class="ss-store-empty">No placeholder products. Add the first real offer above.</p>`}
       </div>
       <section class="ss-test-orders">
-        <div><b>Test orders</b><span>${orders.length}</span></div>
-        ${orders.map((order) => `<p><b>${esc(order.receipt)}</b><span>${fmtMoney(order.total)} · ${ago(order.at)}</span></p>`).join("") || `<small>Place a test order to prove the cart and checkout.</small>`}
+        <div><b>Test orders</b><span>${allOrders.length}</span></div>
+        ${orders.map((order) => `<p><b>${esc(order.receipt)}</b><span>${orderItemCount(order)} item${orderItemCount(order) === 1 ? "" : "s"} · ${fmtMoney(order.total)} · ${ago(order.at)} · test — no charge</span></p>`).join("") || `<small>Place a test order to prove the cart and checkout.</small>`}
+        ${allOrders.length > orders.length ? `<small>Showing the latest ${orders.length} of ${allOrders.length} test orders.</small>` : ""}
       </section>
     </aside>`;
 }
@@ -200,8 +225,9 @@ function cartMarkup(site) {
       <header><div><p>Store test</p><h3>Your cart</h3></div><button type="button" data-ss-cart-close aria-label="Close cart">×</button></header>
       <div class="ss-cart-items">
         ${items.map(({ product, qty }) => `<article>
-          <div><b>${esc(product.name)}</b><span>${fmtMoney(product.price)}${product.cadence === "monthly" ? " / month" : ""}</span></div>
-          <div class="ss-cart-qty"><button type="button" data-ss-cart-dec="${esc(product.id)}">−</button><b>${qty}</b><button type="button" data-ss-cart-inc="${esc(product.id)}">+</button><button type="button" data-ss-cart-remove="${esc(product.id)}">Remove</button></div>
+          <div><b>${esc(product.name)}</b><span>${fmtMoney(product.price)}${cadenceSuffix(product.cadence)}</span></div>
+          ${product.type === "digital" ? `<i class="ss-digital-tag">Digital download · no shipping</i>` : ""}
+          <div class="ss-cart-qty"><button type="button" data-ss-cart-dec="${esc(product.id)}" aria-label="Decrease quantity">−</button><b>${qty}</b><button type="button" data-ss-cart-inc="${esc(product.id)}" aria-label="Increase quantity">+</button><button type="button" data-ss-cart-remove="${esc(product.id)}">Remove</button></div>
         </article>`).join("") || `<p class="ss-store-empty">Your cart is empty. Add a product from the preview.</p>`}
       </div>
       <footer><span>Total</span><b>${fmtMoney(cartTotal(site))}</b></footer>
@@ -212,19 +238,48 @@ function cartMarkup(site) {
 
 function checkoutMarkup(site) {
   const items = cartItems(site);
+  /* digital-only orders skip shipping entirely — email is the delivery
+     address. Any physical item brings the shipping block back. */
+  const needsShipping = items.some(({ product }) => product.type !== "digital");
   return `
     <div class="ss-checkout-backdrop" data-ss-checkout-backdrop>
       <section class="ss-checkout" role="dialog" aria-modal="true" aria-labelledby="ss-checkout-title">
         <header><div><p>Safe store proof</p><h3 id="ss-checkout-title">Test checkout</h3></div><button type="button" data-ss-checkout-close aria-label="Close checkout">×</button></header>
-        <div class="ss-checkout-summary">${items.map(({ product, qty }) => `<p><span>${qty} × ${esc(product.name)}</span><b>${fmtMoney(product.price * qty)}</b></p>`).join("")}</div>
+        <div class="ss-checkout-summary">${items.map(({ product, qty }) => `<p><span>${qty} × ${esc(product.name)}${product.type === "digital" ? " (digital)" : ""}</span><b>${fmtMoney(product.price * qty)}</b></p>`).join("")}</div>
         <form data-ss-checkout-form>
           <label>Name<input name="name" autocomplete="name" required placeholder="Jordan West" /></label>
           <label>Email<input name="email" type="email" autocomplete="email" required placeholder="you@example.com" /></label>
+          ${needsShipping ? `
+          <div class="ss-checkout-shipping">
+            <span>Shipping</span>
+            <label>Address<input name="address" autocomplete="street-address" required placeholder="Street address" /></label>
+            <label>City<input name="city" autocomplete="address-level2" required placeholder="City" /></label>
+            <label>Postal code<input name="postal" autocomplete="postal-code" required placeholder="Postal code" /></label>
+          </div>` : `
+          <p class="ss-checkout-digital">Digital order — nothing ships. Delivery details appear on your receipt and go to the email above.</p>`}
           <div class="ss-checkout-total"><span>Total</span><b>${fmtMoney(cartTotal(site))}</b></div>
+          <p class="ss-testmode-chip" role="note">Test mode — no real charge</p>
           <button class="btn btn-primary" type="submit">Place test order</button>
           <small>This verifies the storefront flow only. No payment is collected or sent anywhere.</small>
         </form>
       </section>
+    </div>`;
+}
+
+function confirmationMarkup(confirmation) {
+  const digital = Array.isArray(confirmation.digital) ? confirmation.digital : [];
+  return `
+    <div class="ss-order-confirmation is-receipt" role="status">
+      <div class="ss-receipt-head">
+        <b>Test order confirmed · ${esc(confirmation.receipt)}</b>
+        <span class="ss-testmode-chip">Test mode — no real charge</span>
+      </div>
+      <span>${fmtMoney(confirmation.total)} · receipt sent to ${esc(confirmation.email || "the checkout email")} · No payment was charged.</span>
+      ${digital.length ? `
+      <div class="ss-receipt-delivery">
+        <b>Your digital delivery</b>
+        ${digital.map((item) => `<p><b>${esc(item.name)}</b>${item.delivery_url ? ` — <a href="${esc(item.delivery_url)}" target="_blank" rel="noopener">access link</a>` : ""}${item.delivery_note ? ` — ${esc(item.delivery_note)}` : (item.delivery_url ? "" : " — the store owner will email your access details.")}</p>`).join("")}
+      </div>` : ""}
     </div>`;
 }
 
@@ -276,6 +331,10 @@ function emptyMarkup() {
         <form class="ss-simple-prompt" data-ss-prompt-form>
           <textarea data-ss-prompt rows="8" placeholder="Describe the website. Include the domain if you have one."></textarea>
           <button class="btn btn-primary" type="submit">Build website</button>
+          <div class="ss-template-row">
+            <p>Or start from a ready-to-sell store:</p>
+            ${Object.values(SITE_TEMPLATES).map((template) => `<button class="btn btn-quiet" type="button" data-ss-template="${esc(template.id)}">${esc(template.label)}</button>`).join("")}
+          </div>
         </form>
       </div>
     </section>`;
@@ -373,7 +432,7 @@ function shellMarkup(active, sites, products) {
         <button class="btn btn-primary" type="submit">Update website</button>
       </form>
 
-      ${siteUi.confirmation ? `<div class="ss-order-confirmation"><b>Test order confirmed</b><span>${esc(siteUi.confirmation)} · No payment was charged.</span></div>` : ""}
+      ${siteUi.confirmation ? confirmationMarkup(siteUi.confirmation) : ""}
 
       <p class="ss-simple-status">Last edited ${ago(active.updated || new Date().toISOString())}</p>
       ${siteUi.checkoutOpen ? checkoutMarkup(active) : ""}
@@ -410,6 +469,23 @@ export function renderSiteStudio(el) {
 
   el.querySelectorAll("[data-ss-site]").forEach((button) => {
     button.onclick = () => { siteUi.activeSiteId = button.dataset.ssSite; siteUi.cartOpen = false; siteUi.checkoutOpen = false; siteUi.confirmation = null; rerender(); };
+  });
+
+  el.querySelectorAll("[data-ss-template]").forEach((button) => {
+    button.onclick = () => {
+      const templateId = button.dataset.ssTemplate;
+      const site = active || createWebsite("");
+      snapshotSite(site, `apply ${templateId} starter`);
+      if (!applySiteTemplate(site, templateId)) return;
+      siteUi.activeSiteId = site.id;
+      siteUi.panel = "store";
+      siteUi.cartOpen = false;
+      siteUi.checkoutOpen = false;
+      siteUi.confirmation = null;
+      pushActivity("Websites", `applied the ${templateId} store starter to ${site.title}.`, site.ws);
+      store.save();
+      rerender();
+    };
   });
 
   el.querySelectorAll("[data-act='ss-new-site']").forEach((button) => {
@@ -489,9 +565,11 @@ export function renderSiteStudio(el) {
     const price = Number(data.get("price"));
     if (!name || !Number.isFinite(price) || price < 0) return;
     snapshotSite(active, `add product ${name}`);
+    const cadence = ["monthly", "yearly"].includes(data.get("cadence")) ? data.get("cadence") : "one_time";
     active.catalog.push({
-      id: uid("prod"), name: name.slice(0, 64), price,
-      cadence: data.get("cadence") === "monthly" ? "monthly" : "one_time",
+      id: uid("prod"), name: name.slice(0, 64), price, cadence,
+      type: data.get("type") === "digital" ? "digital" : "physical",
+      delivery_url: "", delivery_note: "",
       desc: String(data.get("desc") || "").trim().slice(0, 180), visible: true,
     });
     active.kind = "Store";
@@ -504,23 +582,34 @@ export function renderSiteStudio(el) {
     store.save(); rerender();
   };
 
+  const saveProductRow = (productId, row) => {
+    if (!active || !row) return;
+    const product = active.catalog.find((item) => item.id === productId);
+    if (!product) return;
+    const name = row.querySelector("[name='name']")?.value.trim();
+    const price = Number(row.querySelector("[name='price']")?.value);
+    if (!name || !Number.isFinite(price) || price < 0) return;
+    snapshotSite(active, `edit product ${product.name}`);
+    product.name = name.slice(0, 64);
+    product.price = price;
+    const cadence = row.querySelector("[name='cadence']")?.value;
+    product.cadence = ["monthly", "yearly"].includes(cadence) ? cadence : "one_time";
+    product.type = row.querySelector("[name='type']")?.value === "digital" ? "digital" : "physical";
+    product.desc = row.querySelector("[name='desc']")?.value.trim().slice(0, 180) || "";
+    if (product.type === "digital") {
+      product.delivery_url = row.querySelector("[name='delivery_url']")?.value.trim().slice(0, 600) ?? product.delivery_url ?? "";
+      product.delivery_note = row.querySelector("[name='delivery_note']")?.value.trim().slice(0, 300) ?? product.delivery_note ?? "";
+    }
+    active.updated = new Date().toISOString();
+    store.save(); rerender();
+  };
   el.querySelectorAll("[data-ss-product-save]").forEach((button) => {
-    button.onclick = () => {
-      if (!active) return;
-      const product = active.catalog.find((item) => item.id === button.dataset.ssProductSave);
-      const row = button.closest("[data-ss-product-row]");
-      if (!product || !row) return;
-      const name = row.querySelector("[name='name']")?.value.trim();
-      const price = Number(row.querySelector("[name='price']")?.value);
-      if (!name || !Number.isFinite(price) || price < 0) return;
-      snapshotSite(active, `edit product ${product.name}`);
-      product.name = name.slice(0, 64);
-      product.price = price;
-      product.cadence = row.querySelector("[name='cadence']")?.value === "monthly" ? "monthly" : "one_time";
-      product.desc = row.querySelector("[name='desc']")?.value.trim().slice(0, 180) || "";
-      active.updated = new Date().toISOString();
-      store.save(); rerender();
-    };
+    button.onclick = () => saveProductRow(button.dataset.ssProductSave, button.closest("[data-ss-product-row]"));
+  });
+  /* flipping Physical ↔ Digital saves the row immediately so the delivery
+     fields appear/disappear without a separate Save click */
+  el.querySelectorAll("[data-ss-product-type]").forEach((select) => {
+    select.onchange = () => saveProductRow(select.dataset.ssProductType, select.closest("[data-ss-product-row]"));
   });
 
   el.querySelectorAll("[data-ss-product-delete]").forEach((button) => {
@@ -550,7 +639,10 @@ export function renderSiteStudio(el) {
   el.querySelectorAll("[data-ss-cart-close]").forEach((button) => { button.onclick = () => { siteUi.cartOpen = false; rerender(); }; });
   const updateCart = (id, next) => {
     if (!active) return;
-    if (next <= 0) delete active.store.cart[id]; else active.store.cart[id] = next;
+    /* quantities are whole numbers, clamped 0–99 — NaN or absurd values from
+       stale state can no longer wedge the total */
+    const qty = Math.min(99, Math.max(0, Math.floor(Number(next) || 0)));
+    if (qty <= 0) delete active.store.cart[id]; else active.store.cart[id] = qty;
     store.save(); rerender();
   };
   el.querySelectorAll("[data-ss-cart-inc]").forEach((button) => { button.onclick = () => updateCart(button.dataset.ssCartInc, Number(active?.store.cart[button.dataset.ssCartInc] || 0) + 1); });
@@ -558,24 +650,47 @@ export function renderSiteStudio(el) {
   el.querySelectorAll("[data-ss-cart-remove]").forEach((button) => { button.onclick = () => updateCart(button.dataset.ssCartRemove, 0); });
   el.querySelectorAll("[data-ss-checkout-open]").forEach((button) => { button.onclick = () => { siteUi.checkoutOpen = true; siteUi.cartOpen = false; rerender(); }; });
   el.querySelectorAll("[data-ss-checkout-close]").forEach((button) => { button.onclick = () => { siteUi.checkoutOpen = false; rerender(); }; });
+  /* clicking the dimmed backdrop closes the checkout, like every other modal */
+  const checkoutBackdrop = el.querySelector("[data-ss-checkout-backdrop]");
+  if (checkoutBackdrop) checkoutBackdrop.onclick = (event) => {
+    if (event.target === checkoutBackdrop) { siteUi.checkoutOpen = false; rerender(); }
+  };
 
   const checkoutForm = el.querySelector("[data-ss-checkout-form]");
   if (checkoutForm && active) checkoutForm.onsubmit = (event) => {
     event.preventDefault();
     const items = cartItems(active);
-    if (!items.length) return;
+    if (!items.length) { siteUi.checkoutOpen = false; rerender(); return; }
     const data = new FormData(checkoutForm);
+    const needsShipping = items.some(({ product }) => product.type !== "digital");
+    const email = String(data.get("email") || "").trim();
     const receipt = `PF-TEST-${Date.now().toString(36).toUpperCase()}`;
     active.store.orders.unshift({
-      id: uid("order"), receipt, at: new Date().toISOString(), status: "test_confirmed",
-      customer: { name: String(data.get("name") || "").trim(), email: String(data.get("email") || "").trim() },
-      items: items.map(({ product, qty }) => ({ productId: product.id, name: product.name, price: product.price, cadence: product.cadence, qty })),
+      id: uid("order"), receipt, at: new Date().toISOString(), status: "test_confirmed", testMode: true,
+      customer: { name: String(data.get("name") || "").trim(), email },
+      /* digital-only orders carry no shipping — email is the delivery address */
+      shipping: needsShipping ? {
+        address: String(data.get("address") || "").trim(),
+        city: String(data.get("city") || "").trim(),
+        postal: String(data.get("postal") || "").trim(),
+      } : null,
+      items: items.map(({ product, qty }) => ({
+        productId: product.id, name: product.name, price: product.price, cadence: product.cadence, qty,
+        type: product.type === "digital" ? "digital" : "physical",
+        delivery_url: product.type === "digital" ? (product.delivery_url || "") : "",
+        delivery_note: product.type === "digital" ? (product.delivery_note || "") : "",
+      })),
       total: cartTotal(active),
     });
     active.store.cart = {};
     active.updated = new Date().toISOString();
     siteUi.checkoutOpen = false;
-    siteUi.confirmation = receipt;
+    siteUi.confirmation = {
+      receipt,
+      email,
+      total: active.store.orders[0].total,
+      digital: active.store.orders[0].items.filter((item) => item.type === "digital"),
+    };
     pushActivity("Websites", `completed test checkout ${receipt} on ${active.title}; no payment was charged.`, active.ws);
     store.save(); rerender();
   };

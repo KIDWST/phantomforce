@@ -11,9 +11,9 @@ import {
   PACKAGES, RETAINERS, VACATION_POLICY, fmtMoney, statusLabel, daysUntil, memoryStats, chatHistoryStats,
   ctx, session, loadPhantomLoop, savePhantomLoop, loopProviderName, modelDisplayLabel,
   getPhantomLaneTarget, loadPhantomLaneConfig, workspaceStorageGetItem, wsName,
-} from "./store.js?v=phantom-live-20260714-003";
-import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260714-003";
-import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260714-003";
+} from "./store.js?v=phantom-live-20260714-004";
+import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260714-004";
+import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260714-004";
 const classifyPhantomIntent = (text) => deriveActionContract(classifyRaw(text));
 
 /* Cross-surface handoff: chat tells the Websites page which project to focus
@@ -386,7 +386,7 @@ const PHANTOMFORCE_PROSPECT_SEGMENTS = Object.freeze([
     title: "Ops-heavy small teams",
     triggers: /\b(workforce|ops|operations|startup|crypto|saas|internal|team|employees?)\b/i,
     value: 2600,
-    why: "They need a command center for tasks, approvals, client setup, employee work, and reporting.",
+    why: "They need a command center for tasks, approvals, organization setup, employee work, and reporting.",
     next: "Qualify the handoff points, approval gates, and reports they currently track manually.",
     safeStep: "Frame this as an internal ops audit before suggesting software changes.",
   },

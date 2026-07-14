@@ -5842,11 +5842,19 @@ const SiteSnapshotSchema = z.object({
     theme: z.string().max(40).optional(),
     style: z.string().max(40).optional(),
   }).default({}),
+  /* optional real section content keyed by lowercased section name (store
+     templates fill this so published pages carry actual copy) */
+  copy: z.record(z.string().min(1).max(60), z.string().max(4000)).optional(),
   products: z.array(z.object({
     id: z.string().min(1).max(120).regex(/^[a-z0-9_-]+$/i),
     name: z.string().min(1).max(100),
     price: z.number().min(0).max(10_000_000),
-    cadence: z.enum(["one_time", "monthly"]).default("one_time"),
+    cadence: z.enum(["one_time", "monthly", "yearly"]).default("one_time"),
+    /* digital products skip shipping at checkout and carry delivery details
+       for the receipt; every pre-existing product defaults to physical */
+    type: z.enum(["physical", "digital"]).default("physical"),
+    delivery_url: z.string().max(600).default(""),
+    delivery_note: z.string().max(500).default(""),
     desc: z.string().max(500).default(""),
     visible: z.boolean().default(true),
   })).max(50).default([]),

@@ -9,10 +9,10 @@ import {
   PACKAGES, RETAINERS, FINANCE_CATEGORIES, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS, CHAT_HISTORY_RETENTION_DAYS,
   addMemory, toggleMemoryRemember, forgetMemory, forgetChatHistory, memoryStats, memoryRetention, chatHistoryStats, chatHistoryRetention,
   session,
-} from "./store.js?v=phantom-live-20260714-003";
+} from "./store.js?v=phantom-live-20260714-004";
 import {
   isDatabaseSession, canManageActiveOrg, fetchServerApprovals, decideServerRun,
-} from "./orgs.js?v=phantom-live-20260714-003";
+} from "./orgs.js?v=phantom-live-20260714-004";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -667,6 +667,13 @@ export function ensureSiteDesign(site) {
 export function ensureSiteStore(site) {
   if (!site) return null;
   site.catalog = Array.isArray(site.catalog) ? site.catalog : [];
+  /* products carry a fulfillment type. Everything that existed before this
+     field is physical — digital is opt-in and unlocks delivery details. */
+  site.catalog.forEach((product) => {
+    product.type = product.type === "digital" ? "digital" : "physical";
+    product.delivery_url = typeof product.delivery_url === "string" ? product.delivery_url : "";
+    product.delivery_note = typeof product.delivery_note === "string" ? product.delivery_note : "";
+  });
   site.store = {
     enabled: site.kind === "Store" || !!site.design?.storeEnabled,
     currency: "USD",
@@ -733,6 +740,107 @@ function firstSentence(value) {
   return String(value || "").split(/[.!?]/)[0].trim();
 }
 
+/* one place for the "/ month" · "/ year" price suffix — the store now sells
+   yearly plans (Termina Pro), so every price renderer shares this. */
+export function cadenceSuffix(cadence) {
+  return cadence === "monthly" ? " / month" : cadence === "yearly" ? " / year" : "";
+}
+
+/* ---------------- store starters ----------------
+   Real, ready-to-sell page presets the prompt flow can drop in whole. The
+   first one sells Termina — our terminal organizer and AI prompter — as a
+   genuine digital product: no lorem, digital fulfillment, honest test-mode
+   checkout until payments are connected. */
+export const SITE_TEMPLATES = {
+  termina: {
+    id: "termina",
+    label: "Termina — terminal organizer & AI prompter",
+    title: "Termina — store",
+    kind: "Store",
+    sections: ["Hero", "Organize sessions", "AI prompt composer", "Works in every shell", "Pricing", "FAQ", "Store", "Checkout"],
+    design: {
+      brand: "Termina",
+      headline: "Your terminal, organized. Your prompts, on tap.",
+      subhead: "Termina keeps every project's shells, tabs, and AI prompts one keystroke away — stop losing sessions, stop retyping prompts, start shipping.",
+      offer: "Termina Personal — $29 once, yours forever. Termina Pro — $79/year with sync and shared prompt libraries.",
+      cta: "Get Termina",
+      theme: "neon",
+      style: "product",
+      storeEnabled: true,
+    },
+    copy: {
+      "organize sessions": [
+        "Group tabs by project, not by accident. Termina saves every window, tab, and working directory as a named session — close your laptop mid-deploy and reopen exactly where you left off.",
+        "Pin the sessions you live in, search the ones you forgot, and jump between client work with a single shortcut. No more twelve identical tabs named zsh.",
+      ].join("\n"),
+      "ai prompt composer": [
+        "Stop retyping the same prompts into a chat window. The composer keeps your best prompts as reusable templates with variables — pipe in the current directory, the last command, or the text you just selected.",
+        "Send it to the model you already pay for, review the answer next to your shell, and paste the command back in without leaving the keyboard.",
+      ].join("\n"),
+      "works in every shell": [
+        "bash, zsh, fish, PowerShell — Termina sits above your shell, not inside it. Your keybindings, sessions, and prompt templates follow you across machines, and everything works over SSH.",
+        "Nothing to install on the server, no plugins to break on update. If your shell runs, Termina organizes it.",
+      ].join("\n"),
+      pricing: [
+        "Termina Personal — $29, one-time. One license for one human, every 1.x update included, all core features: sessions, the prompt composer, and cross-shell support.",
+        "Termina Pro — $79 per year. Everything in Personal, plus synced sessions across machines, shared prompt libraries for your team, and priority support.",
+      ].join("\n"),
+      faq: [
+        "Is this a subscription?",
+        "Personal is a one-time purchase — pay once, keep it. Pro renews yearly, and if you stop renewing you keep everything Personal includes.",
+        "How is Termina delivered?",
+        "It's a digital download. Your license key and download link are emailed to the address you use at checkout — no shipping, nothing physical.",
+        "Which platforms are supported?",
+        "macOS, Windows, and Linux. One license covers all three.",
+        "Can I use my own AI provider?",
+        "Yes — bring your own API key. Your prompts go straight to your provider; Termina never proxies them through our servers.",
+      ].join("\n"),
+    },
+    products: [
+      {
+        name: "Termina Personal",
+        price: 29,
+        cadence: "one_time",
+        type: "digital",
+        desc: "One-time license for one person. Sessions, prompt composer, every shell — all 1.x updates included.",
+        delivery_url: "",
+        delivery_note: "Digital delivery: your Termina license key and download link (macOS, Windows, Linux) are emailed to your checkout address within a few minutes.",
+      },
+      {
+        name: "Termina Pro",
+        price: 79,
+        cadence: "yearly",
+        type: "digital",
+        desc: "Everything in Personal, plus synced sessions across machines, shared team prompt libraries, and priority support.",
+        delivery_url: "",
+        delivery_note: "Digital delivery: your Termina Pro license key and download link are emailed to your checkout address within a few minutes.",
+      },
+    ],
+  },
+};
+
+export function applySiteTemplate(site, templateId) {
+  const template = SITE_TEMPLATES[String(templateId || "").toLowerCase()];
+  if (!site || !template) return false;
+  site.title = template.title;
+  site.kind = template.kind;
+  site.sections = [...template.sections];
+  site.design = { ...ensureSiteDesign(site), ...template.design };
+  site.copy = { ...(template.copy || {}) };
+  /* keep product ids stable across re-applies so carts don't orphan */
+  const existing = new Map((site.catalog || []).map((product) => [String(product.name || "").toLowerCase(), product]));
+  site.catalog = template.products.map((product) => ({
+    id: existing.get(product.name.toLowerCase())?.id || uid("prod"),
+    visible: true,
+    ...product,
+  }));
+  ensureSiteStore(site);
+  site.store.enabled = true;
+  site.templateId = template.id;
+  site.updated = new Date().toISOString();
+  return true;
+}
+
 export function applyWebsitePrompt(site, promptText) {
   const prompt = String(promptText || "").trim();
   if (!site || !prompt) return "Tell Phantom what to change first.";
@@ -749,6 +857,18 @@ export function applyWebsitePrompt(site, promptText) {
     .trim();
   const afterTo = trimToClause(prompt.match(/\b(?:to|as|called)\s+(.{3,120})$/i)?.[1]);
   let changed = "";
+
+  /* store starters: naming a template ("sell termina", "use the termina
+     starter") drops in the whole ready-to-sell page — real copy, pricing,
+     digital products, honest test-mode checkout. */
+  for (const template of Object.values(SITE_TEMPLATES)) {
+    /* never re-apply over a site already built from this template — later
+       prompts that merely mention it must edit, not clobber */
+    if (site.templateId !== template.id && new RegExp(`\\b${template.id}\\b`, "i").test(prompt)) {
+      applySiteTemplate(site, template.id);
+      return `Applied the ${template.label} starter: hero, feature sections, pricing, FAQ, and ${template.products.length} digital products wired for test checkout.`;
+    }
+  }
 
   const sections = requestedSections(prompt);
   if (sections.length) {
@@ -861,9 +981,18 @@ export function renderWebsitePreview(site, products, opts = {}) {
      highlights and gets its own toolbar — plain preview callers omit it and
      get inert chips, exactly as before */
   const selectable = Number.isInteger(opts.selected);
+  /* the badge counts only items that are still purchasable — quantities left
+     behind by deleted/hidden products used to inflate it */
+  const cartSource = opts.cart || siteStore.cart || {};
+  const cartBadge = listedProducts.reduce((sum, product) => sum + Math.max(0, Number(cartSource[product.id] || 0)), 0);
+  /* section copy: templates (and future prompt work) fill site.copy keyed by
+     lowercased section name — render it as real page content, not chips */
+  const copyBlocks = sections
+    .map((section) => ({ section, text: site.copy?.[section.toLowerCase()] }))
+    .filter((entry) => typeof entry.text === "string" && entry.text.trim());
   return `
     <div class="site-live-preview theme-${esc(theme)}">
-      <div class="site-browser-bar"><span></span><span></span><span></span><b>${esc(design.existingUrl || `${design.brand.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.com`)}</b><small>Editable preview</small>${showProducts ? `<button type="button" class="site-cart-button" data-ss-cart-open>Cart <b>${Object.values(opts.cart || siteStore.cart || {}).reduce((sum, qty) => sum + Number(qty || 0), 0)}</b></button>` : ""}</div>
+      <div class="site-browser-bar"><span></span><span></span><span></span><b>${esc(design.existingUrl || `${design.brand.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.com`)}</b><small>Editable preview</small>${showProducts ? `<button type="button" class="site-cart-button" data-ss-cart-open>Cart <b>${cartBadge}</b></button>` : ""}</div>
       <div class="site-preview-hero ${design.heroImage ? "has-media" : ""}">
         <div>
           <p>${esc(design.brand)}</p>
@@ -880,6 +1009,14 @@ export function renderWebsitePreview(site, products, opts = {}) {
           ? `<button type="button" class="site-preview-section ${opts.selected === index ? "is-selected" : ""}" data-ss-sec="${index}">${esc(section)}</button>`
           : `<span>${esc(section)}</span>`).join("")}
       </div>
+      ${copyBlocks.length ? `
+      <div class="ss-copy-blocks">
+        ${copyBlocks.map(({ section, text }) => `
+          <section class="ss-copy-block">
+            <h4>${esc(section)}</h4>
+            ${String(text).split(/\n+/).map((line) => `<p>${esc(line)}</p>`).join("")}
+          </section>`).join("")}
+      </div>` : ""}
       ${gallery.length ? `
         <div class="site-preview-gallery">
           ${gallery.map((g) => g.type === "video"
@@ -892,7 +1029,8 @@ export function renderWebsitePreview(site, products, opts = {}) {
             <article>
               ${p.imageUrl ? `<div class="site-preview-product-media"><img src="${esc(p.imageUrl)}" alt=""/></div>` : ""}
               <b>${esc(p.name)}</b>
-              <em>${fmtMoney(p.price)}${p.cadence === "monthly" ? " / month" : ""}</em>
+              <em>${fmtMoney(p.price)}${cadenceSuffix(p.cadence)}</em>
+              ${p.type === "digital" ? `<i class="ss-digital-tag">Digital download · no shipping</i>` : ""}
               <small>${esc(p.desc || "Ready for your details.")}</small>
               ${opts.interactive ? `<button type="button" data-ss-cart-add="${esc(p.id)}">Add to cart</button>` : ""}
             </article>`).join("") : `<div class="site-preview-products-empty"><b>Your store is ready for products.</b><span>Add the first item in the Store editor.</span></div>`}
@@ -1371,7 +1509,7 @@ function renderMemory(el, rerender) {
       if (!brainPanel.open || brainPanel.dataset.mounted) return;
       brainPanel.dataset.mounted = "1";
       const mount = brainPanel.querySelector("[data-memory-brain-mount]");
-      import("./brain.js?v=phantom-live-20260714-003")
+      import("./brain.js?v=phantom-live-20260714-004")
         .then((mod) => { if (mount && mount.isConnected) mod.renderPhantomBrain(mount); })
         .catch(() => { if (mount) mount.innerHTML = `<p class="ws-note">The brain panel could not load. Check that the backend on the admin PC is running, then reopen this section.</p>`; });
     });

@@ -297,7 +297,7 @@ export const TOOL_SPINE = [
     mode: "active",
     status: "online",
     role: "Compiles context, receipts, redaction notes, and useful memory for Phantom AI.",
-    ownerControl: "Business Manager memory is on. Client workspaces keep their own separate memory unless you connect them.",
+    ownerControl: "Business Manager memory is on. Organization workspaces keep their own separate memory unless you connect them.",
     activity: "compiled owner context, redacted receipts, and memory hints for Phantom AI.",
     path: "Private backend",
     visibleToClients: false,
