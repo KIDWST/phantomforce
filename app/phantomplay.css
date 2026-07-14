@@ -980,3 +980,51 @@ body.phantomplay-playing{overflow:hidden}.workspace-page:has(.pp-player) .worksp
 .pp-player-error-actions{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:14px}
 .pp-player-error-actions button,.pp-player-error-actions a{border:1px solid rgba(66,245,164,.35);border-radius:999px;padding:10px 18px;background:#03110c;color:#caffdf;font-weight:800;font-size:13px;cursor:pointer;text-decoration:none}
 .pp-player-error-actions [data-pp-error-retry]{background:#42f5a4;color:#02110b;border-color:#42f5a4}
+
+/* Game Rating Exposure + guardian lock (in-panel, appended to pp-settings) */
+.pp-rating-exposure{margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
+.pp-rating-exposure h3{margin:0 0 4px;font-size:13px;color:var(--neon)}
+.pp-rating-exposure>p{margin:0 0 10px;color:var(--dim);font-size:10.5px;line-height:1.5}
+.pp-rating-exposure>label{display:grid;gap:5px;margin:9px 0;color:var(--dim);font-size:10px}
+.pp-rating-exposure>label select,.pp-rating-exposure input[type=password]{padding:9px;border:1px solid var(--line);border-radius:8px;background:#020807;color:var(--ink);font:700 12px "Space Grotesk",system-ui,sans-serif}
+.pp-rating-toggles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 12px;margin:8px 0}
+.pp-rating-presets{display:flex;flex-wrap:wrap;gap:7px;margin:10px 0}
+.pp-rating-presets button{min-height:32px;padding:7px 11px;border:1px solid var(--line);border-radius:999px;background:#07110e;color:var(--ink);font:800 9px "DM Mono",monospace;text-transform:uppercase;cursor:pointer}
+.pp-rating-presets button:hover{border-color:#41ffa188;color:var(--neon)}
+.pp-guardian-lock{margin-top:12px;padding:11px;border:1px solid #41ffa129;border-radius:10px;background:#41ffa10a}
+.pp-guardian-lock>p{margin:6px 0;color:var(--dim);font-size:10px;line-height:1.5}
+.pp-guardian-pin-row{display:flex;gap:8px;margin-top:6px}
+.pp-guardian-pin-row input{flex:1;min-width:0}
+.pp-guardian-pin-row button{min-height:36px;padding:0 14px;border:1px solid #41ffa14d;border-radius:8px;background:var(--neon);color:#04130c;font-weight:800;cursor:pointer}
+.pp-guardian-note{margin:8px 0 0;color:var(--warn);font-size:10.5px;line-height:1.5}
+
+/* Toddler Space — its own destination, no chat/voice/matchmaking/links */
+.pp-shell-toddler .pp-tabs{margin-bottom:6px}
+.pp-toddler-space{display:grid;gap:18px}
+.pp-toddler-hero{padding:22px;border:1px solid #41ffa13d;border-radius:16px;background:linear-gradient(130deg,#04150f,#020706);text-align:center}
+.pp-toddler-hero h2{margin:4px 0 8px;font-size:clamp(24px,3.4vw,34px)}
+.pp-toddler-hero>p:not(.pp-kicker){margin:0 auto;max-width:560px;color:#a8c5b8;font-size:13px;line-height:1.6}
+.pp-toddler-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px}
+.pp-toddler-card{display:flex;flex-direction:column;align-items:center;gap:10px;padding:16px;border:2px solid #41ffa13d;border-radius:20px;background:#020907;cursor:pointer;min-height:180px}
+.pp-toddler-card:hover,.pp-toddler-card:focus-visible{border-color:var(--neon);outline:none;transform:translateY(-2px)}
+.pp-toddler-art{width:100%;aspect-ratio:1/1;border-radius:14px;overflow:hidden;background:#0a1a12}
+.pp-toddler-art img{width:100%;height:100%;object-fit:cover;display:block}
+.pp-toddler-title{font-size:16px;font-weight:800;color:var(--ink);text-align:center}
+
+/* Room roster: ready toggle, connection status, host controls, bot slots */
+.pp-roster-row{display:inline-flex;flex-wrap:wrap;align-items:center;gap:7px}
+.pp-conn-dot{padding:3px 8px;border-radius:999px;font:800 8px "DM Mono",monospace;text-transform:uppercase;border:1px solid var(--line)}
+.pp-conn-dot.is-live{color:var(--neon);border-color:#41ffa14d;background:#41ffa10e}
+.pp-conn-dot.is-pending{color:#ffd166;border-color:#ffd16644;background:#ffd16612}
+.pp-conn-dot.is-away,.pp-conn-dot.is-left{color:var(--dim)}
+.pp-ready-toggle,.pp-ready-badge{padding:4px 10px;border-radius:999px;font:800 9px "DM Mono",monospace;text-transform:uppercase}
+.pp-ready-toggle{border:1px solid var(--line);background:#07110e;color:var(--ink);cursor:pointer}
+.pp-ready-toggle.is-ready,.pp-ready-badge.is-ready{border-color:#41ffa14d;color:var(--neon);background:#41ffa10e}
+.pp-ready-badge{border:1px solid var(--line);color:var(--dim)}
+.pp-room-hostctl{display:flex;flex-wrap:wrap;align-items:center;gap:14px;margin-top:4px;padding:9px 10px;border:1px solid var(--line);border-radius:9px;background:#020807}
+.pp-room-hostctl.is-readonly span{color:var(--dim);font-size:11px}
+.pp-room-hostctl label{display:flex;align-items:center;gap:7px;color:var(--dim);font-size:10px;text-transform:uppercase}
+.pp-room-hostctl input[type=number]{width:56px;padding:5px 7px;border:1px solid var(--line);border-radius:6px;background:#010504;color:var(--ink)}
+.pp-room-botslots{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+.pp-bot-chip{padding:4px 9px;border:1px dashed var(--line);border-radius:999px;color:var(--dim);font:700 9px "DM Mono",monospace;text-transform:uppercase}
+@media(max-width:767px){.pp-rating-toggles{grid-template-columns:1fr}.pp-toddler-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}

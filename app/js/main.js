@@ -31,11 +31,11 @@ import {
 } from "./orgs.js?v=phantom-live-20260714-002";
 import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260714-002";
 import { assetsAvailable } from "./orgs.js?v=phantom-live-20260714-002";
-import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260714-002";
+import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260714-003";
 // PhantomPlay V2 platform shell (Home/Solo/Friends/Workspace/Dev Hub) - opt-in
 // while it hardens: set localStorage "pf.phantomplay.v2" = "1" (the V2 shell has
 // a "Classic view" button to switch back). Classic stays the default experience.
-import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260714-002";
+import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260714-003";
 const phantomPlayV2Opted = () => { try { return localStorage.getItem("pf.phantomplay.v2") === "1"; } catch { return false; } };
 import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260714-002";
 import {

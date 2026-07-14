@@ -195,4 +195,28 @@
 .pp2-spotlight p{color:var(--pp2-mut);font-size:13px;line-height:1.5;max-width:640px}
 
 @media(max-width:880px){.pp2-cols{grid-template-columns:1fr}.pp2-hero{grid-template-columns:1fr}.pp2-detail-hero{grid-template-columns:1fr}}
+
+/* Game Rating Exposure + guardian lock (inside pp2-settings) */
+.pp2-rating-exposure{border-top:1px solid var(--pp2-line);padding-top:14px;display:grid;gap:8px}
+.pp2-rating-exposure h3{margin:0;font-size:13px;letter-spacing:1px;color:var(--pp2-green)}
+.pp2-rating-exposure input[type=password]{background:#03120a;border:1px solid var(--pp2-line);border-radius:8px;color:var(--pp2-text);padding:8px 10px;font:inherit}
+.pp2-rating-toggles{display:grid;grid-template-columns:1fr 1fr;gap:4px 10px}
+.pp2-rating-presets{display:flex;flex-wrap:wrap;gap:6px}
+.pp2-guardian-lock{border:1px solid var(--pp2-line);border-radius:10px;padding:10px;display:grid;gap:6px;background:#03120a}
+.pp2-guardian-pin-row{display:flex;gap:8px}
+.pp2-guardian-pin-row input{flex:1;min-width:0}
+
+/* Toddler Space — its own destination, no chat/voice/matchmaking/links */
+.pp2-shell-toddler .pp2-tabs{margin-bottom:8px}
+.pp2-toddler-space{display:grid;gap:18px}
+.pp2-toddler-hero{border:1px solid var(--pp2-line);border-radius:18px;background:linear-gradient(120deg,#08150d,#04100a 60%,#02180e);padding:24px;text-align:center}
+.pp2-toddler-hero h2{margin:4px 0 8px;font-size:clamp(24px,3.4vw,34px);color:#baffdb}
+.pp2-toddler-hero p:not(.pp2-kicker){margin:0 auto;max-width:560px;color:var(--pp2-mut);font-size:13px;line-height:1.6}
+.pp2-toddler-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px}
+.pp2-toddler-card{display:flex;flex-direction:column;align-items:center;gap:10px;padding:16px;border:2px solid var(--pp2-line);border-radius:20px;background:var(--pp2-panel);cursor:pointer;min-height:180px}
+.pp2-toddler-card:hover,.pp2-toddler-card:focus-visible{border-color:var(--pp2-green);outline:none;transform:translateY(-2px)}
+.pp2-toddler-art{width:100%;aspect-ratio:1/1;border-radius:14px;overflow:hidden;background:#03120a;display:grid;place-items:center}
+.pp2-toddler-art img{width:100%;height:100%;object-fit:cover;display:block}
+.pp2-toddler-title{font-size:16px;font-weight:800;color:var(--pp2-text);text-align:center}
+@media(max-width:767px){.pp2-rating-toggles{grid-template-columns:1fr}.pp2-toddler-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(prefers-reduced-motion:reduce){.pp2-card,.pp2-card:hover,.pp2-art img,.pp2-play,.pp2-wish{transition:none;transform:none}.pp2-skeleton .pp2-art,.pp2-skeleton .pp2-card-body i{animation:none}.pp2-stage-loading i{animation-duration:2s}}

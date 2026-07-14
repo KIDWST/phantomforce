@@ -230,19 +230,24 @@ import {
   updateVacationModeSettings,
 } from "./phantom-ai/vacation-mode.js";
 import {
+  applyPhantomPlayRatingOverride,
   createPhantomPlayRoom,
   createPhantomPlaySubmission,
+  getPhantomPlayRatingChangeHistory,
   getPhantomPlayRoom,
   getPhantomPlaySnapshot,
   getPhantomPlayStoreStatus,
   joinPhantomPlayRoom,
   leavePhantomPlayRoom,
   moderatePhantomPlaySubmission,
+  setPhantomPlayRoomReady,
   startPhantomPlaySession,
   updatePhantomPlayProfile,
+  updatePhantomPlayRoomMatchState,
   updatePhantomPlaySession,
   updatePhantomPlaySubmission,
 } from "./phantom-ai/phantomplay.js";
+import { registerPhantomPlayFlagshipGames } from "./phantom-ai/phantomplay-flagship.js";
 import {
   getPhantomPlayDeveloperAnalytics,
   getPhantomPlayDiscovery,
@@ -4287,6 +4292,63 @@ app.post("/api/phantomplay/rooms/:code/leave", async (request, reply) => {
   return result ? { ok: true, session, ...result } : reply.code(404).send({ ok: false, error: "Private room was not found." });
 });
 
+// No existing rate-limit helper/pattern was found anywhere else in this repo
+// (no @fastify/rate-limit dependency, no in-memory limiter precedent) to
+// reuse, so this is a small self-contained in-memory fixed-window limiter
+// scoped ONLY to the match-state PATCH route below, since that route is
+// expected to be called frequently by design (host push + participant poll).
+const phantomPlayMatchStateHits = new Map<string, { count: number; windowStartMs: number }>();
+const PHANTOMPLAY_MATCH_STATE_WINDOW_MS = 2_000;
+const PHANTOMPLAY_MATCH_STATE_MAX_PER_WINDOW = 10;
+function phantomPlayMatchStateRateLimited(key: string): boolean {
+  const nowMs = Date.now();
+  if (phantomPlayMatchStateHits.size > 5_000) {
+    for (const [mapKey, entry] of phantomPlayMatchStateHits) {
+      if (nowMs - entry.windowStartMs >= PHANTOMPLAY_MATCH_STATE_WINDOW_MS) phantomPlayMatchStateHits.delete(mapKey);
+    }
+  }
+  const entry = phantomPlayMatchStateHits.get(key);
+  if (!entry || nowMs - entry.windowStartMs >= PHANTOMPLAY_MATCH_STATE_WINDOW_MS) {
+    phantomPlayMatchStateHits.set(key, { count: 1, windowStartMs: nowMs });
+    return false;
+  }
+  entry.count += 1;
+  return entry.count > PHANTOMPLAY_MATCH_STATE_MAX_PER_WINDOW;
+}
+
+// V1 polling-based sync: the host PATCHes matchState here and every other
+// participant polls GET /api/phantomplay/rooms/:code on a short client
+// interval to observe it. A future WebSocket/SSE push transport can replace
+// this polling mechanism later without changing this route's request or
+// response contract.
+app.patch("/api/phantomplay/rooms/:code/match-state", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const params = request.params as { code?: string };
+  const rateLimitKey = `${session.orgId || session.clientId || session.id || "anon"}::${session.userId || session.id || "anon"}::${params.code || ""}`;
+  if (phantomPlayMatchStateRateLimited(rateLimitKey)) {
+    return reply.code(429).header("Retry-After", "2").send({ ok: false, error: "Too many match-state updates. Slow down and try again shortly." });
+  }
+  try {
+    const result = await updatePhantomPlayRoomMatchState(session, { ...((request.body ?? {}) as Record<string, unknown>), code: params.code });
+    return result ? { ok: true, session, ...result } : reply.code(404).send({ ok: false, error: "Private room was not found." });
+  } catch (error) {
+    return reply.code(403).send({ ok: false, error: error instanceof Error ? error.message : "Match-state update was blocked." });
+  }
+});
+
+app.patch("/api/phantomplay/rooms/:code/ready", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const params = request.params as { code?: string };
+  try {
+    const result = await setPhantomPlayRoomReady(session, { ...((request.body ?? {}) as Record<string, unknown>), code: params.code });
+    return result ? { ok: true, session, ...result } : reply.code(404).send({ ok: false, error: "Private room was not found." });
+  } catch (error) {
+    return reply.code(403).send({ ok: false, error: error instanceof Error ? error.message : "Ready state update was blocked." });
+  }
+});
+
 app.post("/api/phantomplay/submissions", async (request, reply) => {
   const session = requireAccessSession(request, reply);
   if (!session) return reply;
@@ -4329,12 +4391,42 @@ app.post("/api/phantomplay/submissions/:id/moderate", async (request, reply) => 
   }
 });
 
+// Admin/guardian override of a game's rating/descriptors, or of another
+// profile's Game Rating Exposure (allowedRatings) / profileType /
+// guardian-lock enabled flag. Gated the same way submission moderation is
+// above (requireAdminAccessSession) — platform/workspace admin authority
+// only; a profile's own self-service rating-exposure changes go through
+// PATCH /api/phantomplay/profile instead, which enforces the guardian PIN.
+app.post("/api/phantomplay/admin/rating-override", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+  if (!session) return reply;
+  try {
+    return { ok: true, session, ...(await applyPhantomPlayRatingOverride(session, (request.body ?? {}) as Record<string, unknown>)) };
+  } catch (error) {
+    return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : "Rating override could not be saved." });
+  }
+});
+
+app.get("/api/phantomplay/admin/rating-history", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+  if (!session) return reply;
+  const query = (request.query ?? {}) as { limit?: unknown };
+  const limit = Number(query.limit);
+  return { ok: true, session, history: await getPhantomPlayRatingChangeHistory(Number.isFinite(limit) ? limit : 200) };
+});
+
 /* ---- PhantomPlay V2: platform layer (social, community, workspace, dev hub) ----
    Additive routes over ./phantom-ai/phantomplay-v2.ts. V1 routes above are
    untouched. PHANTOMFORCE_PHANTOMPLAY_V2_ENABLED=false turns all of this off
    (including V2 game registration) and V1 behaves exactly as before. */
 
 if (phantomPlayV2Enabled()) registerPhantomPlayV2Games();
+
+// ---- PhantomPlay Flagship Five: 5 deeper games registered additively on top
+// of V1's catalog array, same push-not-edit pattern as V2 above. Metadata
+// only lands here in a later step (PHANTOMPLAY_FLAGSHIP_GAMES is empty for
+// now) — the call site is wired now so registration order is settled.
+registerPhantomPlayFlagshipGames();
 
 function phantomPlayV2Gate(reply: FastifyReply) {
   if (phantomPlayV2Enabled()) return true;
