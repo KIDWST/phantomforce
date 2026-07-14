@@ -6,13 +6,13 @@ import {
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260714-256";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260714-256";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260714-256";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260714-256";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260714-256";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260714-256";
-import { mountManagedGrowthReport } from "./managedgrowth.js?v=phantom-live-20260714-256";
+} from "./store.js?v=phantom-live-20260714-258";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260714-258";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260714-258";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260714-258";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260714-258";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260714-258";
+import { mountManagedGrowthReport } from "./managedgrowth.js?v=phantom-live-20260714-258";
 import {
   cachedOrganizationPulse,
   loadOrganizationPulse,
@@ -20,43 +20,43 @@ import {
   pulseAttentionItems,
   pulsePendingApprovalCount,
   shouldRefreshOrganizationPulse,
-} from "./organizationpulse.js?v=phantom-live-20260714-256";
+} from "./organizationpulse.js?v=phantom-live-20260714-258";
 import {
   cachedServerRecords,
   loadServerRecords,
   serverRecordsAvailable,
   shouldRefreshServerRecords,
-} from "./serverrecords.js?v=phantom-live-20260714-256";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260714-256";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260714-256";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260714-256";
-import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260714-256";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260714-256";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260714-256";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260714-256";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260714-256";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260714-256";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260714-256";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260714-256";
-import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260714-256";
-import { mountAmbient } from "./ambient.js?v=phantom-live-20260714-256";
-import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260714-256";
-import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260714-256";
-import { renderPlanner } from "./planner.js?v=phantom-live-20260714-256";
+} from "./serverrecords.js?v=phantom-live-20260714-258";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260714-258";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260714-258";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260714-258";
+import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260714-258";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260714-258";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260714-258";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260714-258";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260714-258";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260714-258";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260714-258";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260714-258";
+import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260714-258";
+import { mountAmbient } from "./ambient.js?v=phantom-live-20260714-258";
+import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260714-258";
+import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260714-258";
+import { renderPlanner } from "./planner.js?v=phantom-live-20260714-258";
 import {
-  fetchAuthConfig, databaseLogin, databaseLogout, switchOrg, fetchAuthMe, fetchEntitlementsSummary,
-} from "./orgs.js?v=phantom-live-20260714-256";
-import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260714-256";
-import { assetsAvailable } from "./orgs.js?v=phantom-live-20260714-256";
-import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260714-256";
-import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260714-256";
+  fetchAuthConfig, databaseLogin, databaseSignup, databaseLogout, switchOrg, fetchAuthMe, fetchEntitlementsSummary,
+} from "./orgs.js?v=phantom-live-20260714-258";
+import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260714-258";
+import { assetsAvailable } from "./orgs.js?v=phantom-live-20260714-258";
+import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260714-258";
+import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260714-258";
 const phantomPlayV2Opted = () => { try { return localStorage.getItem("pf.phantomplay.v2") === "1"; } catch { return false; } };
-import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260714-256";
+import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260714-258";
 import {
   customizeNavigation,
   loadOrganizationCustomization,
-} from "./customization.js?v=phantom-live-20260714-256";
-import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260714-256";
+} from "./customization.js?v=phantom-live-20260714-258";
+import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260714-258";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -367,9 +367,53 @@ function maybeUpgradeGateToDatabaseLogin(card, options = {}) {
     const note = customerApp
       ? "Use the email tied to your business workspace. Platform admin accounts belong on admin.phantomforce.online."
       : "Invited to a business? Accept your invitation first, then sign in here.";
+    const signupHtml = customerApp ? `
+      <form class="owner-login" data-db-signup>
+        <label>
+          <span>Your name</span>
+          <input type="text" data-signup-name name="pf-signup-name" autocomplete="name" placeholder="Jordan" />
+        </label>
+        <label>
+          <span>Workspace name</span>
+          <input type="text" data-signup-workspace name="pf-signup-workspace" autocomplete="organization" placeholder="Your business or studio" required />
+        </label>
+        <label>
+          <span>Email</span>
+          <input type="email" data-signup-email name="pf-signup-email" autocomplete="email" autocapitalize="none" spellcheck="false" placeholder="you@business.com" required />
+        </label>
+        <label>
+          <span>Password</span>
+          <input type="password" data-signup-password name="pf-signup-password" autocomplete="new-password" placeholder="At least 8 characters" required />
+        </label>
+        <div class="gate-options" role="radiogroup" aria-label="Workspace type">
+          <label class="gate-opt">
+            <input type="radio" name="workspaceProfile" value="business" checked />
+            <b>Business</b>
+            <i>Leads, sites, media, analytics, automations, and approvals.</i>
+          </label>
+          <label class="gate-opt">
+            <input type="radio" name="workspaceProfile" value="creator" />
+            <b>Creator</b>
+            <i>Media Lab, Content Hub, sites, analytics, and publishing.</i>
+          </label>
+          <label class="gate-opt">
+            <input type="radio" name="workspaceProfile" value="developer" />
+            <b>Developer</b>
+            <i>Planner and PhantomPlay only by default. Bring your own APIs.</i>
+          </label>
+        </div>
+        <button class="gate-opt gate-submit" type="submit">
+          <span class="gate-opt-icon">+</span>
+          <b>Create Workspace</b>
+          <i>No shared admin data, keys, subscriptions, or silent local installs.</i>
+        </button>
+        <p class="gate-error" data-signup-error hidden></p>
+      </form>
+      <p class="gate-note">Already have an account? Sign in below.</p>` : "";
     card.innerHTML = `
-      <p class="gate-kicker">PHANTOMFORCE · SIGN IN</p>
-      <h1>${heading}</h1>
+      <p class="gate-kicker">PHANTOMFORCE · ${customerApp ? "CREATE WORKSPACE" : "SIGN IN"}</p>
+      <h1>${customerApp ? "Tell PhantomForce what you are." : heading}</h1>
+      ${signupHtml}
       <form class="owner-login" data-db-login>
         <label>
           <span>Email</span>
@@ -388,6 +432,7 @@ function maybeUpgradeGateToDatabaseLogin(card, options = {}) {
       </form>
       <p class="gate-note">${note}</p>`;
     const form = card.querySelector("[data-db-login]");
+    const signupForm = card.querySelector("[data-db-signup]");
     const emailInput = card.querySelector("[data-db-email]");
     const passwordInput = card.querySelector("[data-db-password]");
     const error = card.querySelector("[data-db-error]");
@@ -402,6 +447,32 @@ function maybeUpgradeGateToDatabaseLogin(card, options = {}) {
       if (emailInput) emailInput.value = "";
       if (passwordInput) passwordInput.value = "";
     }, 50);
+    if (signupForm) {
+      const signupError = card.querySelector("[data-signup-error]");
+      signupForm.onsubmit = async (event) => {
+        event.preventDefault();
+        signupError.hidden = true;
+        signupForm.classList.add("is-loading");
+        try {
+          const nextSession = await databaseSignup({
+            name: card.querySelector("[data-signup-name]")?.value.trim() || "",
+            workspaceName: card.querySelector("[data-signup-workspace]")?.value.trim() || "",
+            email: card.querySelector("[data-signup-email]")?.value.trim() || "",
+            password: card.querySelector("[data-signup-password]")?.value || "",
+            workspaceProfile: signupForm.querySelector("input[name='workspaceProfile']:checked")?.value || "business",
+          });
+          ctx.session = nextSession;
+          enterPhantom();
+        } catch (err) {
+          session.clear();
+          ctx.session = null;
+          signupError.textContent = err?.message || "Workspace creation failed.";
+          signupError.hidden = false;
+        } finally {
+          signupForm.classList.remove("is-loading");
+        }
+      };
+    }
     form.onsubmit = async (event) => {
       event.preventDefault();
       error.hidden = true;
@@ -1208,7 +1279,7 @@ const MODES = {
   admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260714-256";
+const POSE_VERSION = "phantom-live-20260714-258";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;

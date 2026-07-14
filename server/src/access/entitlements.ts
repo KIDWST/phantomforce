@@ -64,6 +64,22 @@ export type PlanDefinition = {
    packaging are a business decision, not invented here. */
 export const PLAN_DEFINITIONS: PlanDefinition[] = [
   {
+    key: "free",
+    name: "Free Preview",
+    description: "Try the workspace with small limits before choosing a paid plan.",
+    isInternal: false,
+    trialDays: 0,
+    graceDays: 0,
+    features: {
+      chat: true, mediaLab: true, websites: true, websitePublishing: false, customDomains: false,
+      vacationMode: false, phantomPlay: true, competitorIntelligence: false, aggressiveIntelligence: false, advancedWorkflows: false, assetPacks: false, agentRuns: true, modelTier: "standard",
+    },
+    limits: {
+      seats: 1, businesses: 1, mediaCreditsPerMonth: 5, chatRequestsPerDay: 20,
+      agentRunsPerDay: 3, storageMb: 128, sitesPerOrg: 1, phantomPlayMinutesPerDay: 15, gameSubmissions: 0, competitorProfiles: 0, competitorSignals: 0,
+    },
+  },
+  {
     key: "starter",
     name: "Starter",
     description: "Entry plan for a single small business.",

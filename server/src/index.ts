@@ -68,6 +68,7 @@ import {
   listOrgMembers,
   listOrganizationsForSession,
   loginWithPassword,
+  registerWorkspaceAccount,
   removeMember,
   resolveDatabaseSession,
   revokeDatabaseSession,
@@ -1400,6 +1401,51 @@ app.get("/session", async (request, reply) => {
 const DatabaseLoginSchema = z.object({
   email: z.string().email().max(200),
   password: z.string().min(1).max(200),
+});
+
+const DatabaseSignupSchema = z.object({
+  email: z.string().email().max(200),
+  password: z.string().min(8).max(200),
+  name: z.string().max(120).optional(),
+  workspaceName: z.string().min(2).max(120),
+  workspaceProfile: z.enum(["business", "creator", "developer"]).default("business"),
+});
+
+app.post("/auth/signup", async (request, reply) => {
+  const authConfiguration = getAccessAuthConfiguration();
+  if (!authConfiguration.databaseAuthEnabled) {
+    return reply.code(403).send({ ok: false, error: "Database auth is disabled.", auth: authConfiguration });
+  }
+  const parsed = DatabaseSignupSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  const result = await registerWorkspaceAccount(parsed.data);
+  if (!result.ok) {
+    const status = result.error === "account_exists" ? 409 : 400;
+    return reply.code(status).send({ ok: false, error: result.error });
+  }
+  const publicHost = requestPublicHost(request);
+  if (!canUseSessionOnPublicHost(publicHost, result.session)) {
+    await revokeDatabaseSession(result.session.authSessionId);
+    return reply.code(403).send({
+      ok: false,
+      error: "This account is not available on this public host.",
+      host: publicHost || "local",
+    });
+  }
+  const token = mintDatabaseSessionToken(result.session.id);
+  if (!token) return reply.code(500).send({ ok: false, error: "Token minting unavailable." });
+  return {
+    ok: true,
+    ...token,
+    session: result.session,
+    org: result.org,
+    workspaceProfile: {
+      id: result.profile.id,
+      label: result.profile.label,
+      workspaceName: result.profile.workspaceName,
+      homeModuleId: result.profile.homeModuleId,
+    },
+  };
 });
 
 app.post("/auth/login", async (request, reply) => {

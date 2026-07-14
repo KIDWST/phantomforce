@@ -374,6 +374,9 @@ code { font: 500 0.92em "DM Mono", monospace; color: var(--neon); }
   color: var(--text); font: 600 1.05rem/1.2 var(--font); outline: none; padding: 18px 20px;
 }
 .owner-login input:focus { border-color: rgba(65, 255, 161, 0.8); box-shadow: 0 0 0 4px rgba(65, 255, 161, 0.08), 0 0 42px rgba(0, 255, 135, 0.15); }
+.owner-login .gate-options { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.owner-login .gate-options .gate-opt { text-transform: none; letter-spacing: 0; line-height: 1.25; }
+.owner-login .gate-options input[type="radio"] { width: 16px; height: 16px; margin: 0 0 4px; padding: 0; box-shadow: none; accent-color: var(--neon); }
 .gate-submit { width: 100%; text-align: left; }
 .owner-login.is-loading { opacity: 0.72; pointer-events: none; }
 .gate-error { margin: 0; border: 1px solid rgba(255, 80, 80, 0.28); border-radius: 16px; background: rgba(255, 60, 60, 0.08); color: #ffb7b7; padding: 12px 14px; }

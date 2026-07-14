@@ -7,7 +7,7 @@
       if (location.protocol === "http:" && location.hostname.indexOf("phantomforce.online") !== -1) {
         location.replace("https://" + location.host + location.pathname + location.search + location.hash);
       }
-      window.PHANTOM_BUILD = "phantom-live-20260714-256";
+      window.PHANTOM_BUILD = "phantom-live-20260714-258";
       if ("serviceWorker" in navigator) {
         navigator.serviceWorker
           .getRegistrations()
@@ -23,7 +23,7 @@
     </script>
     <title>PhantomForce — AI Operations Console</title>
     <meta name="description" content="PhantomForce — your AI business operating system." />
-    <meta name="phantom-build" content="phantom-live-20260714-256" />
+    <meta name="phantom-build" content="phantom-live-20260714-258" />
     <meta name="robots" content="noindex" />
     <meta name="theme-color" content="#02060a" />
     <style>
@@ -102,15 +102,15 @@
 
 
     </style>
-    <link rel="icon" type="image/png" href="/app/assets/brand-phantom-favicon.png?v=phantom-live-20260714-256" />
+    <link rel="icon" type="image/png" href="/app/assets/brand-phantom-favicon.png?v=phantom-live-20260714-258" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/app/phantom.css?v=phantom-live-20260714-256" />
-    <link rel="stylesheet" href="/app/orggraph.css?v=phantom-live-20260714-256" />
-    <link rel="stylesheet" href="/app/phantomplay.css?v=phantom-live-20260714-256" />
-    <link rel="stylesheet" href="/app/phantomplay-v2.css?v=phantom-live-20260714-256" />
-    <link rel="stylesheet" href="/app/competitor-intelligence.css?v=phantom-live-20260714-256" />
+    <link rel="stylesheet" href="/app/phantom.css?v=phantom-live-20260714-258" />
+    <link rel="stylesheet" href="/app/orggraph.css?v=phantom-live-20260714-258" />
+    <link rel="stylesheet" href="/app/phantomplay.css?v=phantom-live-20260714-258" />
+    <link rel="stylesheet" href="/app/phantomplay-v2.css?v=phantom-live-20260714-258" />
+    <link rel="stylesheet" href="/app/competitor-intelligence.css?v=phantom-live-20260714-258" />
   </head>
   <body>
     <div class="bg-grid" aria-hidden="true"></div>
@@ -143,7 +143,7 @@
     <div class="phantom" data-phantom hidden>
       <header class="mobile-admin-homebar" aria-label="Mobile admin home">
         <button class="mobile-admin-brand" data-mobile-home type="button" aria-label="Open Dashboard">
-          <img class="brand-ghost" src="/app/assets/brand-phantom.png?v=phantom-live-20260714-256" alt="" aria-hidden="true" />
+          <img class="brand-ghost" src="/app/assets/brand-phantom.png?v=phantom-live-20260714-258" alt="" aria-hidden="true" />
           <span>
             <b>PhantomForce</b>
             <i>Business</i>
@@ -166,7 +166,7 @@
       <!-- ---------- sidebar ---------- -->
       <aside class="sidebar" aria-label="Primary">
         <div class="side-brand">
-          <img class="brand-ghost" src="/app/assets/brand-phantom.png?v=phantom-live-20260714-256" alt="" aria-hidden="true" />
+          <img class="brand-ghost" src="/app/assets/brand-phantom.png?v=phantom-live-20260714-258" alt="" aria-hidden="true" />
           <span class="side-brand-text">
             <b>PHANTOMFORCE</b>
             <i>BUSINESS MANAGER</i>
@@ -253,7 +253,7 @@
                   <img
                     class="phantom-mode-pose"
                     data-mode-pose
-                    src="/app/assets/poses/chin.webp?v=phantom-live-20260714-256"
+                    src="/app/assets/poses/chin.webp?v=phantom-live-20260714-258"
                     alt="Phantom listening"
                     decoding="async"
                     fetchpriority="high"
@@ -291,141 +291,10 @@
 
     <div class="boot-fallback" data-boot-fallback role="status" aria-label="Booting Phantom AI">
       <div class="boot-mark-wrap" aria-hidden="true">
-        <canvas class="boot-mark" data-boot-mark width="360" height="360"></canvas>
+        <img class="boot-mark" data-boot-mark src="/app/assets/brand-phantom.png?v=phantom-live-20260714-258" alt="" decoding="async" />
       </div>
       <p class="boot-word" aria-hidden="true">PHANTOMFORCE</p>
     </div>
-    <script type="module">
-      // the boot logo is the phantom HIMSELF. A hand-drawn phantom paints from
-      // the VERY FIRST frame with zero imports (nothing that can fail), then the
-      // real character engine takes over the moment it loads. If the engine
-      // module or its draw ever breaks on this machine, the hand-drawn phantom
-      // simply keeps the stage — the boot mark can never be an empty ring.
-      (() => {
-        const canvas = document.querySelector("[data-boot-mark]");
-        const wrap = canvas && canvas.closest(".boot-fallback");
-        if (!canvas || !wrap) return;
-        const ctx = canvas.getContext("2d");
-        const S = canvas.width;
-        const t0 = performance.now();
-        let engine = null, engineAt = 0, engineDead = false;
-
-        const drawPhantom = (t, alpha) => {
-          const s = S * 0.30, cx = S / 2, cy = S * 0.54;
-          const a = Math.min(1, t / 0.8) * alpha;
-          if (a <= 0) return;
-          const bob = Math.sin(t * 1.9) * s * 0.04;
-          ctx.save();
-          ctx.translate(cx, cy + bob);
-          ctx.globalAlpha = a;
-          const hem = (i) => Math.sin(t * 2.3 + i * 2.1) * 0.05;
-          const body = () => {
-            ctx.beginPath();
-            ctx.moveTo(-0.62 * s, 0.30 * s);
-            ctx.bezierCurveTo(-0.72 * s, -0.42 * s, -0.44 * s, -0.98 * s, 0, -0.98 * s);
-            ctx.bezierCurveTo(0.44 * s, -0.98 * s, 0.72 * s, -0.42 * s, 0.62 * s, 0.30 * s);
-            for (let i = 0; i < 5; i++) {
-              const x1 = (0.62 - i * 0.248) * s, x2 = (0.62 - (i + 1) * 0.248) * s;
-              ctx.quadraticCurveTo((x1 + x2) / 2, (0.30 + 0.15 + hem(i)) * s, x2, (0.30 + hem(i + 0.5) * 0.4) * s);
-            }
-            ctx.closePath();
-          };
-          // floor puddle — the projector he lives over
-          ctx.globalCompositeOperation = "lighter";
-          const pg = ctx.createRadialGradient(0, 0.62 * s, 0, 0, 0.62 * s, 0.72 * s);
-          pg.addColorStop(0, "rgba(47,191,122,0.30)");
-          pg.addColorStop(1, "rgba(47,191,122,0)");
-          ctx.fillStyle = pg;
-          ctx.beginPath(); ctx.ellipse(0, 0.62 * s, 0.72 * s, 0.20 * s, 0, 0, Math.PI * 2); ctx.fill();
-          // void body with mint rim glow
-          ctx.globalCompositeOperation = "source-over";
-          body();
-          ctx.fillStyle = "rgba(1,8,6,0.94)";
-          ctx.shadowColor = "rgba(90,255,180,0.85)";
-          ctx.shadowBlur = s * 0.20;
-          ctx.fill();
-          ctx.shadowBlur = 0;
-          ctx.globalCompositeOperation = "lighter";
-          body();
-          ctx.strokeStyle = "rgba(120,255,200,0.35)";
-          ctx.lineWidth = Math.max(1, s * 0.02);
-          ctx.stroke();
-          // spirit particles drifting through the body
-          for (let i = 0; i < 44; i++) {
-            const rx = Math.sin(i * 12.9898) * 0.56, ry = Math.sin(i * 78.233) * 0.6 - 0.34;
-            const tw = 0.35 + 0.55 * Math.abs(Math.sin(t * 2.1 + i * 1.7));
-            ctx.fillStyle = `rgba(150,255,210,${0.16 + tw * 0.4})`;
-            const d = 1 + tw * 1.6;
-            ctx.fillRect(rx * s + Math.sin(t * 1.3 + i) * 2, ry * s + Math.cos(t * 1.1 + i * 2) * 2, d, d);
-          }
-          // eyes: bright mint leaves, dark pupils, tiny glints
-          for (const side of [-1, 1]) {
-            const ex = side * 0.24 * s, ey = -0.08 * s, ew = 0.15 * s, eh2 = 0.105 * s;
-            const eg = ctx.createRadialGradient(ex, ey, 0, ex, ey, ew);
-            eg.addColorStop(0, "rgba(238,255,248,0.96)");
-            eg.addColorStop(0.6, "rgba(150,255,210,0.85)");
-            eg.addColorStop(1, "rgba(150,255,210,0.1)");
-            ctx.fillStyle = eg;
-            ctx.beginPath();
-            ctx.moveTo(ex - ew, ey);
-            ctx.quadraticCurveTo(ex, ey - eh2 * 1.8, ex + ew, ey);
-            ctx.quadraticCurveTo(ex, ey + eh2 * 1.15, ex - ew, ey);
-            ctx.fill();
-            ctx.globalCompositeOperation = "source-over";
-            ctx.fillStyle = "rgba(2,12,9,0.9)";
-            ctx.beginPath(); ctx.ellipse(ex, ey, eh2 * 0.55, eh2 * 0.65, 0, 0, Math.PI * 2); ctx.fill();
-            ctx.fillStyle = "rgba(240,255,250,0.9)";
-            ctx.beginPath(); ctx.arc(ex - eh2 * 0.18, ey - eh2 * 0.22, Math.max(0.7, eh2 * 0.14), 0, Math.PI * 2); ctx.fill();
-            ctx.globalCompositeOperation = "lighter";
-          }
-          ctx.restore();
-        };
-
-        const frame = (now) => {
-          if (!canvas.isConnected || getComputedStyle(wrap).display === "none") return;   // app is up — stop
-          const t = (now - t0) * 0.001;
-          ctx.setTransform(1, 0, 0, 1, 0, 0);
-          ctx.clearRect(0, 0, S, S);
-          let live = false;
-          if (engine && !engineDead) {
-            const et = t - engineAt;
-            if (et < 0.5) drawPhantom(t, 1 - et / 0.5);   // crossfade into the engine
-            try {
-              engine.draw(ctx, {
-                t: et, dt: 0.016, cx: S / 2, cy: S * 0.56, scale: S * 0.27,
-                mood: "idle", emotion: "content", startupOnly: et < 2.4,
-                pulse: 0, px: 0, py: 0, moodAge: 2,
-              });
-              live = true;
-            } catch { engineDead = true; ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, S, S); }
-          }
-          if (!live) drawPhantom(t, 1);
-          requestAnimationFrame(frame);
-        };
-        requestAnimationFrame(frame);
-
-        // load the real engine with whatever build id THIS page shipped with —
-        // never a hardcoded version that can drift out of sync with the box
-        (async () => {
-          try {
-            const src = document.querySelector('script[src*="js/main.js"]')?.getAttribute("src") || "";
-            const q = window.PHANTOM_BUILD ? `?v=${window.PHANTOM_BUILD}`
-              : src.includes("?") ? src.slice(src.indexOf("?")) : "";
-            const mod = await import(`./js/character.js${q}`).catch(() => import("./js/character.js"));
-            const chr = mod.createPhantomCharacter({ small: true });
-            // dry-run off-screen: a broken engine must never blank a visible frame
-            const probe = document.createElement("canvas");
-            probe.width = probe.height = 64;
-            chr.draw(probe.getContext("2d"), {
-              t: 0.01, dt: 0.016, cx: 32, cy: 36, scale: 17,
-              mood: "idle", emotion: "content", startupOnly: true, pulse: 0, px: 0, py: 0, moodAge: 2,
-            });
-            engineAt = (performance.now() - t0) * 0.001;
-            engine = chr;
-          } catch { /* hand-drawn phantom keeps the stage */ }
-        })();
-      })();
-    </script>
 
     <!-- ⌘K command palette -->
     <div class="cmdk" data-cmdk hidden>
@@ -449,6 +318,6 @@
     <!-- workspace overlays mount here, above the blurred console -->
     <div class="overlay-root" data-overlay-root></div>
 
-    <script type="module" src="/app/js/main.js?v=phantom-live-20260714-256"></script>
+    <script type="module" src="/app/js/main.js?v=phantom-live-20260714-258"></script>
   </body>
 </html>

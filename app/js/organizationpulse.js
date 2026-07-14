@@ -1,4 +1,4 @@
-import { currentTenantId, session } from "./store.js?v=phantom-live-20260714-256";
+import { currentTenantId, session } from "./store.js?v=phantom-live-20260714-258";
 
 const PULSE_TTL_MS = 45_000;
 

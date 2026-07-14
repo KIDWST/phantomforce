@@ -3,6 +3,8 @@ import { z } from "zod";
 import { PLATFORM_MODULES } from "./module-registry.js";
 
 export const BrandModeSchema = z.enum(["standard", "co_branded", "white_label", "internal_phantomforce"]);
+export const WorkspaceProfileSchema = z.enum(["business", "creator", "developer"]);
+export const BrainStorageModeSchema = z.enum(["web_only", "optional_local", "external_provider"]);
 export const HexColorSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/, "Use a six-digit hex color such as #41ffa1.");
 export const ApprovedFontSchema = z.enum(["Space Grotesk", "Inter", "DM Sans", "IBM Plex Sans", "Source Sans 3"]);
 export const SurfaceStyleSchema = z.enum(["glass", "solid", "soft"]);
@@ -126,6 +128,12 @@ export const OrganizationPolicySchema = z.object({
   requireApprovalForOutbound: z.literal(true).default(true),
   requireApprovalForDestructive: z.literal(true).default(true),
   approvalThreshold: z.enum(["all_external", "medium_and_up", "high_and_up"]).default("all_external"),
+  workspaceProfile: WorkspaceProfileSchema.default("business"),
+  brainStorageMode: BrainStorageModeSchema.default("web_only"),
+  localBrainInstall: z.enum(["never_silent", "optional_prompt"]).default("never_silent"),
+  apiCredentialPolicy: z.literal("tenant_owned_only").default("tenant_owned_only"),
+  subscriptionPolicy: z.literal("tenant_owned_only").default("tenant_owned_only"),
+  historyPolicy: z.enum(["workspace_scoped", "provider_managed_when_connected"]).default("workspace_scoped"),
 }).strict();
 
 export const OrganizationConfigurationSchema = z.object({

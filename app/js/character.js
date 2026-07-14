@@ -17,16 +17,14 @@
    The painted poses already contain the character's face. Do not draw a
    second procedural face over them unless a future asset explicitly sets
    face.live = true after preprocessing erases the baked face. Procedural
-   fallback mode still owns the fully live face: blinks, winks, talks, and
-   follows the cursor. Body: breath, float, sway, squash & stretch,
-   materialize-from-the-ring.
+   fallback mode is curtain-only legacy code and must never be shown to users.
 
    3D hologram pass: pose art is still the source of truth, but the renderer
    gives it physical volume with perspective yaw, a rear glow shell, a rotated
    floor ring, and parallax response from pointer/phone motion.
 
-   Procedural mode: the hand-built particle phantom, used until artwork
-   loads or if it fails. Shared by the landing page and the admin console. */
+   Painted pose art is the only user-visible Phantom. If artwork is still
+   loading or fails, the renderer waits instead of exposing the old fallback. */
 
 const GA = 2.399963229728653;
 const TAU = Math.PI * 2;
@@ -865,6 +863,7 @@ export function createPhantomCharacter({ small = false, preload = [], settled = 
 
   /* ========================== PROCEDURAL MODE ========================== */
   const drawProcedural = (ctx2, o, S) => {
+    return;
     const { t, cx, cy, scale, mood, pulse, px } = o;
     const emotion = S.emo || o.emotion;      // felt emotion (governed)
     const accent = ACCENTS[emotion] || ACCENTS.calm;
@@ -1109,7 +1108,6 @@ export function createPhantomCharacter({ small = false, preload = [], settled = 
     }
     if (poseBlend < 1) poseBlend = Math.min(1, poseBlend + S.dt / 0.45);
     if (POSES[curPose].art || POSES.conjure.art) drawSprite(ctx2, o, S);
-    else drawProcedural(ctx2, o, S);
     return { pose: curPose, want, emo: S.emo, bridge: gov.bridge && gov.bridge.stage, cv: gov.cv };
   };
 

@@ -22,6 +22,12 @@ import type { MembershipRole, PrismaClient } from "@prisma/client";
 import { assignOrgPlan, getOrgEntitlements, syncPlanCatalog } from "./entitlements.js";
 import { prisma } from "./prisma-runtime.js";
 import type { AccessSession } from "./session.js";
+import { defaultOrganizationConfiguration } from "../customization/customization-service.js";
+import { persistConfiguration } from "../customization/customization-store.js";
+import {
+  workspaceProfileFor,
+  type WorkspaceProfileId,
+} from "../customization/workspace-profiles.js";
 
 function scrypt(password: string, salt: Buffer, keyLength: number, options: { N: number; r: number; p: number }) {
   return new Promise<Buffer>((resolve, reject) => {
@@ -316,6 +322,101 @@ export async function createOrganization(input: { name: string; actor: DatabaseS
     payload: { name: org.name, createdBy: input.actor.userId },
   });
   return org;
+}
+
+export async function registerWorkspaceAccount(input: {
+  email: string;
+  password: string;
+  name?: string;
+  workspaceName: string;
+  workspaceProfile: WorkspaceProfileId;
+}) {
+  const db = requirePrisma();
+  const email = input.email.trim().toLowerCase();
+  const workspaceName = input.workspaceName.trim().slice(0, 120);
+  const profile = workspaceProfileFor(input.workspaceProfile);
+  if (!workspaceName || workspaceName.length < 2) return { ok: false as const, error: "workspace_name_required" };
+  await syncPlanCatalog();
+  const passwordHash = await hashPassword(input.password);
+  const existing = await db.user.findUnique({ where: { email }, select: { id: true } });
+  if (existing) return { ok: false as const, error: "account_exists" };
+
+  const created = await db.$transaction(async (tx) => {
+    const org = await tx.org.create({ data: { name: workspaceName } });
+    const user = await tx.user.create({
+      data: {
+        email,
+        name: input.name?.trim().slice(0, 120) || null,
+        passwordHash,
+        activeOrgId: org.id,
+        isSuperAdmin: false,
+      },
+    });
+    await tx.membership.create({ data: { userId: user.id, orgId: org.id, role: "owner" } });
+    const authSession = await tx.authSession.create({
+      data: {
+        userId: user.id,
+        activeOrgId: org.id,
+        expiresAt: new Date(Date.now() + SESSION_TTL_MS),
+      },
+    });
+    await tx.auditEvent.create({
+      data: {
+        orgId: org.id,
+        actor: email,
+        eventType: "workspace.created",
+        targetType: "org",
+        targetId: org.id,
+        payload: {
+          workspaceProfile: profile.id,
+          workspaceName,
+          createdBy: user.id,
+          apiCredentialPolicy: profile.apiCredentialPolicy,
+          subscriptionPolicy: profile.subscriptionPolicy,
+          brainStorageMode: profile.brainStorageMode,
+          localBrainInstall: profile.localBrainInstall,
+        },
+        prevHash: null,
+        hash: stableHash({
+          orgId: org.id,
+          actor: email,
+          eventType: "workspace.created",
+          targetType: "org",
+          targetId: org.id,
+          workspaceProfile: profile.id,
+        }),
+      },
+    });
+    return { org, user, authSession };
+  });
+
+  await assignOrgPlan({
+    orgId: created.org.id,
+    planKey: "free",
+    status: "active",
+    note: `Self-serve ${profile.id} workspace signup`,
+  });
+
+  const profileConfiguration = defaultOrganizationConfiguration(created.org.id, email, profile.id);
+  const configuration = {
+    ...profileConfiguration,
+    brand: {
+      ...profileConfiguration.brand,
+      organizationName: workspaceName,
+      workspaceName: profile.workspaceName,
+    },
+  };
+  await persistConfiguration({
+    configuration,
+    summary: `Created ${profile.label} workspace defaults`,
+    actor: email,
+    eventType: "created",
+  });
+
+  const session = await buildSessionDetails(created.authSession.id);
+  if (!session) return { ok: false as const, error: "session_create_failed" };
+  sessionCache.set(created.authSession.id, { session, expiresAt: Date.now() + SESSION_CACHE_TTL_MS });
+  return { ok: true as const, session, org: { id: created.org.id, name: created.org.name }, profile };
 }
 
 export async function listOrgMembers(orgId: string) {

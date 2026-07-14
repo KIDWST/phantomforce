@@ -90,8 +90,8 @@ assert.match(css, /\.pp-dev-list/u, "Developer directory cards must be styled.")
 assert.match(css, /\.pp-dev-profile/u, "Developer profile views must be styled.");
 assert.match(css, /\.pp-dev-notes/u, "Developer notes must be styled.");
 assert.match(css, /\.pp-game-body\{[\s\S]*display:flex;[\s\S]*flex-direction:column/u, "PhantomPlay game cards must keep text in a real flex body instead of a squeezing action grid.");
-assert.match(css, /\.pp-game-body>p\{[\s\S]*-webkit-line-clamp:3/u, "PhantomPlay summaries must clamp instead of wrapping into tall one-word columns.");
-assert.match(css, /\.pp-play\{[\s\S]*width:min\(168px,100%\)/u, "PhantomPlay action buttons must not steal the whole card width.");
+assert.match(css, /\.pp-game-body>p\{[\s\S]*-webkit-line-clamp:2/u, "PhantomPlay summaries must clamp tightly instead of wrapping into tall one-word columns.");
+assert.match(css, /\.pp-play\{[\s\S]*align-self:stretch;[\s\S]*width:100%/u, "Compact PhantomPlay action buttons must fill the card width for a stable click target.");
 assert.match(cssV2, /\.pp2-dev-list/u, "V2 developer directory cards must be styled.");
 assert.match(cssV2, /\.pp2-dev-profile/u, "V2 developer profile views must be styled.");
 assert.match(cssV2, /\.pp2-dev-notes/u, "V2 developer notes must be styled.");

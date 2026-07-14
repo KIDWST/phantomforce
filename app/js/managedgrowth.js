@@ -1,4 +1,4 @@
-import { currentTenantId, session } from "./store.js?v=phantom-live-20260714-256";
+import { currentTenantId, session } from "./store.js?v=phantom-live-20260714-258";
 
 function esc(value = "") {
   return String(value)

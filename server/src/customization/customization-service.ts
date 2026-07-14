@@ -12,6 +12,10 @@ import {
   readCustomizationDocument,
   type ConfigurationVersion,
 } from "./customization-store.js";
+import {
+  workspaceProfileFor,
+  type WorkspaceProfileId,
+} from "./workspace-profiles.js";
 
 const RESERVED_FIELD_IDS = new Set([
   "id", "tenant_id", "tenantid", "org_id", "orgid", "user_id", "userid", "permission", "permissions",
@@ -27,16 +31,19 @@ export type CustomizationEntitlements = {
 
 export type ValidationIssue = { path: string; message: string; severity: "error" | "warning" };
 
-export function defaultOrganizationConfiguration(tenantId: string, actor = "system"): OrganizationConfiguration {
+export function defaultOrganizationConfiguration(tenantId: string, actor = "system", profileId: WorkspaceProfileId = "business"): OrganizationConfiguration {
   const now = new Date().toISOString();
+  const internal = tenantId === "phantomforce-owner" || tenantId === "phantomforce";
+  const profile = internal ? workspaceProfileFor("business") : workspaceProfileFor(profileId);
+  const enabledModules = new Set(internal ? PLATFORM_MODULES.map((module) => module.id) : profile.enabledModules);
   return OrganizationConfigurationSchema.parse({
     schemaVersion: 1,
     tenantId,
     version: 1,
     brand: {
-      mode: tenantId === "phantomforce-owner" || tenantId === "phantomforce" ? "internal_phantomforce" : "standard",
-      organizationName: tenantId === "phantomforce-owner" || tenantId === "phantomforce" ? "PhantomForce" : "My Business",
-      workspaceName: "Dashboard",
+      mode: internal ? "internal_phantomforce" : "standard",
+      organizationName: internal ? "PhantomForce" : "My Business",
+      workspaceName: internal ? "Dashboard" : profile.workspaceName,
       poweredByPhantomForce: true,
     },
     theme: {},
@@ -44,13 +51,13 @@ export function defaultOrganizationConfiguration(tenantId: string, actor = "syst
     modules: PLATFORM_MODULES.map((module, order) => ({
       id: module.id,
       label: module.displayName,
-      enabled: module.id !== "developer" || tenantId === "phantomforce-owner" || tenantId === "phantomforce",
+      enabled: module.required || enabledModules.has(module.id),
       order,
       roles: module.allowedRoles.includes("platform_owner")
         ? ["owner"]
         : module.allowedRoles,
     })),
-    navigation: {},
+    navigation: { homeModuleId: profile.homeModuleId },
     assistant: {},
     dashboards: [{ id: "owner_home", name: "Dashboard", scope: "owner", widgets: [
       { id: "daily_brief", type: "ai_briefing", title: "Daily brief", source: "phantom.briefing" },
@@ -60,7 +67,14 @@ export function defaultOrganizationConfiguration(tenantId: string, actor = "syst
     forms: [],
     workflows: [],
     extensions: [],
-    policies: {},
+    policies: {
+      workspaceProfile: internal ? "business" : profile.id,
+      brainStorageMode: internal ? "optional_local" : profile.brainStorageMode,
+      localBrainInstall: profile.localBrainInstall,
+      apiCredentialPolicy: profile.apiCredentialPolicy,
+      subscriptionPolicy: profile.subscriptionPolicy,
+      historyPolicy: profile.historyPolicy,
+    },
     updatedAt: now,
     updatedBy: actor,
   });
@@ -144,6 +158,19 @@ export function validateOrganizationConfiguration(configuration: OrganizationCon
     if ((action.type === "connector_action" || action.type === "notify") && !action.requiresApproval) issues.push({ path: `workflows.${workflow.id}`, message: "External connector and notification actions must remain approval-gated.", severity: "error" });
   }
   if (!configuration.policies.requireApprovalForOutbound || !configuration.policies.requireApprovalForDestructive) issues.push({ path: "policies", message: "Organization configuration cannot weaken platform approval enforcement.", severity: "error" });
+  if (!["never_silent", "optional_prompt"].includes(configuration.policies.localBrainInstall)) issues.push({ path: "policies.localBrainInstall", message: "Local brain setup must never install silently; users must explicitly opt in.", severity: "error" });
+  if (configuration.policies.apiCredentialPolicy !== "tenant_owned_only") issues.push({ path: "policies.apiCredentialPolicy", message: "Workspace API credentials must be owned by that tenant only.", severity: "error" });
+  if (configuration.policies.subscriptionPolicy !== "tenant_owned_only") issues.push({ path: "policies.subscriptionPolicy", message: "Workspace subscriptions must be owned by that tenant only.", severity: "error" });
+  if (configuration.policies.workspaceProfile === "developer") {
+    const blocked = ["crm", "clientsetup", "media", "sites", "money", "intelligence", "analytics", "automation", "vacation"];
+    for (const moduleId of blocked) {
+      if (configuration.modules.find((module) => module.id === moduleId)?.enabled) {
+        issues.push({ path: `modules.${moduleId}`, message: "Developer workspaces can only enable developer-focused modules by default.", severity: "error" });
+      }
+    }
+    if (configuration.policies.brainStorageMode !== "external_provider") issues.push({ path: "policies.brainStorageMode", message: "Developer workspaces should rely on connected provider history instead of duplicating a local brain.", severity: "error" });
+    if (configuration.policies.historyPolicy !== "provider_managed_when_connected") issues.push({ path: "policies.historyPolicy", message: "Developer history should be provider-managed when a connected subscription already tracks it.", severity: "error" });
+  }
 
   if (luminance(configuration.theme.primary) < 0.12 && configuration.theme.colorMode !== "light") issues.push({ path: "theme.primary", message: "The primary color is too dark to remain readable on the dark workspace.", severity: "warning" });
   return issues;

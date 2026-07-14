@@ -6,7 +6,7 @@
    when the backend doesn't advertise database auth, none of these
    surfaces render and the app behaves exactly as before. */
 
-import { ctx, session } from "./store.js?v=phantom-live-20260714-256";
+import { ctx, session } from "./store.js?v=phantom-live-20260714-258";
 
 export const isDatabaseSession = () => !!ctx.session?.database;
 export const activeOrgId = () => (isDatabaseSession() ? ctx.session.orgId || null : null);
@@ -69,6 +69,23 @@ export async function databaseLogin(email, password) {
   const { ok, status, json } = await api("/auth/login", { method: "POST", body: { email, password } });
   if (!ok) {
     throw new Error(status === 401 ? "Invalid email or password." : String(json?.error || `Login failed (${status}).`));
+  }
+  const local = localSessionFromServer(json);
+  session.set(local);
+  ctx.session = { ...local, token: undefined };
+  return ctx.session;
+}
+
+export async function databaseSignup({ email, password, name, workspaceName, workspaceProfile }) {
+  const { ok, status, json } = await api("/auth/signup", {
+    method: "POST",
+    body: { email, password, name, workspaceName, workspaceProfile },
+  });
+  if (!ok) {
+    const message = status === 409
+      ? "That email already has a workspace. Sign in instead."
+      : String(json?.error || `Workspace creation failed (${status}).`);
+    throw new Error(message);
   }
   const local = localSessionFromServer(json);
   session.set(local);

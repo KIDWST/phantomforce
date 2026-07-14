@@ -1,4 +1,4 @@
-import { currentTenantId, session } from "./store.js?v=phantom-live-20260714-256";
+import { currentTenantId, session } from "./store.js?v=phantom-live-20260714-258";
 
 let activeConfiguration = null;
 let activeEntitlements = null;
@@ -85,7 +85,16 @@ function defaultConfiguration(tenantId = currentTenantId()) {
     forms: [],
     workflows: [],
     extensions: [],
-    policies: { requireApprovalForOutbound: true, requireApprovalForDestructive: true },
+    policies: {
+      requireApprovalForOutbound: true,
+      requireApprovalForDestructive: true,
+      workspaceProfile: "business",
+      brainStorageMode: internal ? "optional_local" : "web_only",
+      localBrainInstall: "never_silent",
+      apiCredentialPolicy: "tenant_owned_only",
+      subscriptionPolicy: "tenant_owned_only",
+      historyPolicy: "workspace_scoped",
+    },
     updatedAt: new Date().toISOString(),
     updatedBy: "local-fallback",
     localFallback: true,

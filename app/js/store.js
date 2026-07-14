@@ -1105,7 +1105,11 @@ const cleanTenantSegment = (value) => String(value || "phantomforce")
   .replace(/[^a-zA-Z0-9_.:-]+/g, "-")
   .replace(/^-+|-+$/g, "")
   .slice(0, 80) || "phantomforce";
-export const currentTenantId = () => cleanTenantSegment(workspaceMeta(currentWs())?.id || currentWs());
+export const currentTenantId = () => cleanTenantSegment(
+  ctx.session?.database && !ctx.session?.canManageAccess && ctx.session?.orgId
+    ? ctx.session.orgId
+    : workspaceMeta(currentWs())?.id || currentWs(),
+);
 export const setWorkspace = (id) => {
   if (!isAdmin()) return false;
   const target = workspaceExists(id) ? id : "phantomforce";
