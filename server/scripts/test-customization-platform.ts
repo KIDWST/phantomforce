@@ -82,6 +82,19 @@ try {
   assert.equal(rolledBack.configuration.version, 3);
   assert.equal(rolledBack.configuration.modules.find((module) => module.id === "crm")?.label, "Clients");
 
+  // Legacy label repair: a stored config that renamed a module "Client Setup"
+  // (published by earlier tooling; lives in data, not code) must come back
+  // with the canonical module name at read time.
+  const legacyPublish = await publishConfigurationChange({
+    tenantId: "alpha-org", actor: "owner-alpha", entitlements: noPremium, root,
+    patch: { modules: rolledBack.configuration.modules.map((module) => module.id === "crm" ? { ...module, label: "Client Setup" } : module) },
+    summary: "Simulate a legacy client-setup label",
+    expectedVersion: 3,
+  });
+  assert.equal(legacyPublish.configuration.version, 4);
+  const repaired = await getOrganizationConfiguration("alpha-org", "owner-alpha", root);
+  assert.equal(repaired.configuration.modules.find((module) => module.id === "crm")?.label, "Clients", "Legacy 'Client Setup' labels must be repaired to the canonical module name on read.");
+
   console.log(JSON.stringify({
     ok: true,
     tests: [

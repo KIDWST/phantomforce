@@ -163,9 +163,25 @@ export function validateOrganizationConfiguration(configuration: OrganizationCon
   return issues;
 }
 
+/* Legacy label repair for already-published configurations: earlier tooling
+   published module labels like "Client Setup" for org-internal configuration.
+   Those labels live in stored config documents, not code, so they survive
+   every code deploy — normalize them back to the canonical module names at
+   read time. */
+const LEGACY_MODULE_LABELS = /^client ?set ?up$/i;
+function repairLegacyModuleLabels(configuration: OrganizationConfiguration): OrganizationConfiguration {
+  let repaired = false;
+  const modules = configuration.modules.map((module) => {
+    if (!LEGACY_MODULE_LABELS.test(String(module.label || "").trim())) return module;
+    repaired = true;
+    return { ...module, label: MODULE_BY_ID.get(module.id)?.displayName || "Organization" };
+  });
+  return repaired ? { ...configuration, modules } : configuration;
+}
+
 export async function getOrganizationConfiguration(tenantId: string, actor: string, root?: string) {
   const document = await readCustomizationDocument(tenantId, root);
-  if (document) return { configuration: OrganizationConfigurationSchema.parse(document.current), versions: document.versions, audit: document.audit };
+  if (document) return { configuration: repairLegacyModuleLabels(OrganizationConfigurationSchema.parse(document.current)), versions: document.versions, audit: document.audit };
   const configuration = defaultOrganizationConfiguration(tenantId, actor);
   const persisted = await persistConfiguration({ configuration, summary: "Created organization defaults", actor, eventType: "created", root });
   return { configuration, versions: persisted.document.versions, audit: persisted.document.audit };
