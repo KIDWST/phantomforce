@@ -1,7 +1,7 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:; connect-src 'none'; media-src 'none'; frame-src 'none'"><title>Phantom Rumble</title><style>
-*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#05070a;color:#eafff3;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#05070a;color:#eafff3;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;touch-action:none;user-select:none;-webkit-user-select:none;overscroll-behavior:none;-webkit-tap-highlight-color:transparent}
 body{display:grid;place-items:center;background:radial-gradient(circle at 50% 15%,#0b2c1d 0,#04110b 45%,#010504 80%)}
-canvas{width:100%;height:100%;display:block}
+canvas{width:100%;height:100%;display:block;outline:0}
 .overlay{position:fixed;inset:0;display:grid;place-items:center;background:#010504cc;z-index:5}
 .overlay[hidden]{display:none!important}
 .overlay>div{text-align:center;padding:26px;max-width:560px}
@@ -23,18 +23,23 @@ body.paused .pause{display:grid}
 .hud .fighter-card s{text-decoration:none;font-size:12px;letter-spacing:3px}
 .hud .meter{display:block;height:5px;border-radius:99px;background:#0f271a;margin-top:6px;overflow:hidden}
 .hud .meter i{display:block;height:100%;width:0%;border-radius:99px;transition:width .2s}
-.touch{position:fixed;inset:auto 0 90px;display:none;justify-content:space-between;padding:0 4vw;z-index:4}
-.touch div{display:flex;gap:10px}
-.touch button{width:64px;height:64px;border-radius:50%;border:1px solid #2cff9b66;background:#04140ccc;color:#7dffbd;font:700 11px ui-monospace}
+.hud .meter.guard{height:3px;background:#0b1512;margin-top:4px}
+.hud .meter.guard i{background:#6ee7b7}
+.touch{position:fixed;inset:auto 0 max(84px,calc(68px + env(safe-area-inset-bottom)));display:none;justify-content:space-between;gap:14px;padding:0 max(12px,4vw);z-index:4;pointer-events:none}
+.touch div{display:flex;gap:10px;align-items:center;flex-wrap:wrap;pointer-events:auto}
+.touch button{width:68px;height:68px;border-radius:50%;border:1px solid #2cff9b66;background:#04140ce6;color:#7dffbd;font:800 10px ui-monospace;box-shadow:0 0 16px #22c55e22;touch-action:none}
+.touch button[data-t="shield"]{border-color:#5eead466;color:#a7f3d0}
+.touch button[data-t="dodge"]{border-color:#f0abfc66;color:#f5d0fe}
 @media(pointer:coarse){.touch{display:flex}}
-@media(max-width:640px){.overlay h1{font-size:34px}}
+@media(max-width:760px){.hud{bottom:max(8px,env(safe-area-inset-bottom));gap:6px}.hud .fighter-card{min-width:82px;padding:6px 7px;border-radius:10px}.hud .fighter-card i{font-size:9px}.hud .fighter-card b{font-size:16px}.hud .fighter-card s{font-size:10px;letter-spacing:1px}.touch{inset:auto 0 max(74px,calc(58px + env(safe-area-inset-bottom)));padding:0 10px}.touch button{width:58px;height:58px;font-size:9px}}
+@media(max-width:640px){.overlay h1{font-size:34px}.overlay>div{padding:18px}.overlay .keys{display:block}.overlay .keys span{display:block;margin:8px 0}}
 </style></head><body>
 <canvas></canvas>
-<div class="hud" data-hud hidden></div>
-<div class="touch" data-touch hidden><div><button data-t="left">◀</button><button data-t="right">▶</button></div><div><button data-t="jump">JUMP</button><button data-t="strike">HIT<br>HOLD</button></div></div>
+<div class="hud" data-hud data-score="0" hidden></div>
+<div class="touch" data-touch hidden><div><button data-t="left">◀</button><button data-t="right">▶</button></div><div><button data-t="shield">SHIELD</button><button data-t="dodge">DODGE</button><button data-t="jump">JUMP</button><button data-t="strike">HIT<br>HOLD</button></div></div>
 <div class="overlay" data-setup><div>
   <h1>PHANTOM RUMBLE</h1>
-  <p>Knock the other phantoms off the arena. Damage raises their percent — the higher it climbs, the further they fly. Last phantom standing takes the rumble.</p>
+  <p>Knock the other phantoms off the arena. Damage raises their percent — the higher it climbs, the further they fly. Guard, dodge, ledge-save, and punish like a real platform fighter.</p>
   <p class="pb" data-pb hidden></p>
   <div class="modes">
     <button data-mode="duel"><b>DUEL</b>you vs one bot</button>
@@ -42,8 +47,8 @@ body.paused .pause{display:grid}
     <button data-mode="rumble"><b>RUMBLE</b>2 players + 2 bots</button>
     <button data-mode="botbrawl"><b>BOT BRAWL</b>you vs three bots</button>
   </div>
-  <div class="keys"><span><b>P1</b> WASD move · W jump · <b>SPACE tap/hold</b> (or F hit · G smash)</span><span><b>P2</b> Arrows · ↑ jump · <b>ENTER tap/hold</b> (or K hit · L smash)</span></div>
-  <p style="font-size:12px;color:#557d68">One button, three moves: tap for a quick peck, hold for a charged smash — and a FULL hold with a full meter unleashes PHANTOM BURST. Deal damage to fill the meter. Hunt the rare drops: ◐ portal rift · ↯ gravity flip · ◔ chrono field · ▲ titan mode · ☄ meteor storm · ≋ stage quake · ∞ rift warp · ⁂ shadow clones. Plus ♥ heal · ✦ power hit · ◉ bomb.</p>
+  <div class="keys"><span><b>P1</b> WASD move · W jump · Shift guard · Q dodge · <b>SPACE tap/hold</b> (or F hit · G smash)</span><span><b>P2</b> Arrows · ↑ jump · I guard · O dodge · <b>ENTER tap/hold</b> (or K hit · L smash)</span></div>
+  <p style="font-size:12px;color:#557d68">Tap for a quick peck, hold for a charged smash, full hold with a full meter for PHANTOM BURST. Perfect guard parries greedy hits. Ledge-save keeps close KOs playable. Hunt the rare drops: ◐ portal rift · ↯ gravity flip · ◔ chrono field · ▲ titan mode · ☄ meteor storm · ≋ stage quake · ∞ rift warp · ⁂ shadow clones. Plus ♥ heal · ✦ power hit · ◉ bomb.</p>
 </div></div>
 <div class="overlay pause" data-pauseoverlay><div><h1>PAUSED</h1><p>The rumble is frozen. Resume from the player bar above.</p></div></div>
 <div class="overlay" data-end hidden><div>
@@ -56,7 +61,7 @@ body.paused .pause{display:grid}
 const host=(type,data={})=>parent.postMessage({source:'phantomplay-game',type,...data},'*');
 const canvas=document.querySelector('canvas'),ctx=canvas.getContext('2d');
 const hudEl=document.querySelector('[data-hud]'),setupEl=document.querySelector('[data-setup]'),endEl=document.querySelector('[data-end]');
-let W=0,H=0,DPR=1;
+let W=0,H=0,DPR=1,camera={x:.5,y:.58,z:1};
 function size(){DPR=Math.min(2,devicePixelRatio||1);W=canvas.width=Math.max(640,innerWidth*DPR);H=canvas.height=Math.max(420,innerHeight*DPR)}
 addEventListener('resize',size);size();
 
@@ -85,6 +90,7 @@ function makeFighter(slot,human){
   return {slot,human,name:PALETTE[slot].name,color:PALETTE[slot].c,glow:PALETTE[slot].glow,
     x:spawn.x,y:spawn.y,vx:0,vy:0,face:slot%2?-1:1,pct:0,stocks:3,
     grounded:false,jumps:2,stun:0,invuln:2,charge:0,power:false,dead:false,
+    shield:1,shieldHeld:false,shieldBroken:0,parry:0,dodge:0,dodgeCd:0,ledge:0,ledgeSide:0,
     attackCd:0,anim:0,flash:0,spin:0,special:0,titan:0,portalCd:0,clones:0,cloneTick:0,trail:[],ai:{dir:1,timer:0,jumpCd:0},lastTap:{key:'',at:0}};
 }
 function startMatch(selected){
@@ -93,7 +99,7 @@ function startMatch(selected){
   const count=mode==='duel'?2:mode==='versus'?2:4;
   fighters=[];
   for(let i=0;i<count;i++)fighters.push(makeFighter(i,i<humans));
-  pickups=[];particles=[];popups=[];koFx=null;hitstop=0;matchKos=[0,0,0,0];pickupTimer=6;over=false;running=true;paused=false;
+  pickups=[];particles=[];popups=[];koFx=null;hitstop=0;matchKos=[0,0,0,0];pickupTimer=6;over=false;running=true;paused=false;camera={x:.5,y:.58,z:1};
   portals=null;warpT=0;quakeT=0;gravFx={t:0,owner:-1};chronoFx={t:0,owner:-1};meteorFx={t:0,owner:-1};rocks=[];meteorSpawn=0;
   for(let i=0;i<PLATS.length;i++)Object.assign(PLATS[i],PLATS_BASE[i]);STAGE.w=STAGE_W_BASE;
   setupEl.hidden=true;endEl.hidden=true;hudEl.hidden=false;
@@ -103,8 +109,8 @@ function startMatch(selected){
 }
 
 /* ---------- input ---------- */
-const P1={left:['a','A'],right:['d','D'],jump:['w','W'],down:['s','S'],strike:[' '],light:['f','F'],heavy:['g','G']};
-const P2={left:['ArrowLeft'],right:['ArrowRight'],jump:['ArrowUp'],down:['ArrowDown'],strike:['Enter'],light:['k','K'],heavy:['l','L']};
+const P1={left:['a','A'],right:['d','D'],jump:['w','W'],down:['s','S'],strike:[' '],light:['f','F'],heavy:['g','G'],shield:['Shift'],dodge:['q','Q']};
+const P2={left:['ArrowLeft'],right:['ArrowRight'],jump:['ArrowUp'],down:['ArrowDown'],strike:['Enter'],light:['k','K'],heavy:['l','L'],shield:['i','I'],dodge:['o','O']};
 const keys=new Set();
 function padFor(f){return f.slot===0?P1:P2}
 addEventListener('keydown',e=>{
@@ -112,6 +118,8 @@ addEventListener('keydown',e=>{
   for(const f of fighters){
     if(!f.human||f.dead||f.stun>0||!running||paused)continue;
     const pad=padFor(f);
+    if(pad.shield.includes(e.key)){e.preventDefault?.();raiseShield(f)}
+    if(pad.dodge.includes(e.key)){e.preventDefault?.();dodge(f)}
     if(pad.strike.includes(e.key)||pad.heavy.includes(e.key)){e.preventDefault?.();f.charge=Math.max(f.charge,.01)}
     if(pad.light.includes(e.key))attack(f,false);
     if(pad.jump.includes(e.key))jump(f);
@@ -134,6 +142,7 @@ addEventListener('keyup',e=>{
   for(const f of fighters){
     if(!f.human)continue;
     const pad=padFor(f);
+    if(pad.shield.includes(e.key))f.shieldHeld=false;
     if(pad.strike.includes(e.key)||pad.heavy.includes(e.key))releaseStrike(f);
   }
 });
@@ -147,9 +156,9 @@ for(const b of document.querySelectorAll('[data-t]')){
   const act=b.dataset.t;
   b.onpointerdown=ev=>{ev.preventDefault();const f=fighters[0];if(!f||!f.human||f.dead||paused||!running)return;
     if(act==='left')touchState.left=true;else if(act==='right')touchState.right=true;
-    else if(act==='jump')jump(f);else if(act==='strike')f.charge=Math.max(f.charge,.01);};
-  b.onpointerup=()=>{if(act==='left')touchState.left=false;if(act==='right')touchState.right=false;if(act==='strike')releaseStrike(fighters[0])};
-  b.onpointercancel=b.onpointerup;
+    else if(act==='jump')jump(f);else if(act==='shield')raiseShield(f);else if(act==='dodge')dodge(f);else if(act==='strike')f.charge=Math.max(f.charge,.01);};
+  b.onpointerup=()=>{if(act==='left')touchState.left=false;if(act==='right')touchState.right=false;if(act==='shield'&&fighters[0])fighters[0].shieldHeld=false;if(act==='strike')releaseStrike(fighters[0])};
+  b.onpointercancel=b.onpointerleave=b.onpointerup;
 }
 function heldDir(f){
   const pad=padFor(f);
@@ -161,7 +170,20 @@ function heldDir(f){
 }
 
 /* ---------- combat ---------- */
+function raiseShield(f){
+  if(!f||f.dead||f.stun>0||f.shieldBroken>0||f.dodge>0||f.shield<=.04)return;
+  f.shieldHeld=true;f.parry=.14;f.charge=0;
+}
+function dodge(f){
+  if(!f||f.dead||f.stun>0||f.dodgeCd>0||f.shieldBroken>0)return;
+  const dir=heldDir(f)||f.face||1;
+  f.shieldHeld=false;f.charge=0;f.dodge=.32;f.dodgeCd=1.05;f.invuln=Math.max(f.invuln,.24);
+  f.vx+=dir*.016;if(!f.grounded)f.vy-=.005;
+  spawnBurst(f.x,f.y,f.glow,9);
+  popups.push({x:f.x,y:f.y-.08,text:'DODGE',color:'#f5d0fe',life:.45,t:0});
+}
 function jump(f){
+  if(f.ledge>0){f.ledge=0;f.vy=-.024;f.vx+=-f.ledgeSide*.012;f.jumps=1;f.invuln=Math.max(f.invuln,.22);spawnBurst(f.x,f.y,f.glow,7);return}
   if(f.jumps<=0)return;
   f.vy=-.026;f.jumps-=1;f.grounded=false;spawnBurst(f.x,f.y+.02,f.glow,5);
 }
@@ -177,6 +199,18 @@ function attack(f,heavy,chargeAmt=0){
     if(t===f||t.dead||t.invuln>0)continue;
     const dx=t.x-f.x,dy=t.y-f.y;
     if(Math.abs(dy)<(titan?.11:.08)&&dx*f.face>-.015&&Math.abs(dx)<reach){
+      const blocking=t.shieldHeld&&t.shield>0&&t.shieldBroken<=0&&t.stun<=0;
+      if(blocking){
+        const parried=t.parry>0;
+        t.shield=Math.max(0,t.shield-(heavy?.3:.16)*cboost);
+        t.vx+=f.face*(heavy?.006:.003);f.vx-=f.face*.0025;shake=Math.min(1,shake+(heavy?.32:.16));
+        spawnBurst(t.x,t.y,parried?'#ffffff':'#5eead4',parried?16:8);
+        popups.push({x:t.x,y:t.y-.08,text:parried?'PARRY':'BLOCK',color:parried?'#ffffff':'#5eead4',life:.62,t:0,big:parried});
+        if(parried){f.stun=Math.max(f.stun,.34);f.attackCd=Math.max(f.attackCd,.38);if(!reduced)hitstop=Math.max(hitstop,.055)}
+        if(t.shield<=0){t.shieldBroken=1.35;t.stun=Math.max(t.stun,.55);t.shieldHeld=false;popups.push({x:t.x,y:t.y-.12,text:'BREAK',color:'#f87171',life:.8,t:0,big:true});spawnBurst(t.x,t.y,'#f87171',18)}
+        updateHud();
+        continue;
+      }
       const dmg=Math.round((heavy?14:6)*power*(titan?1.6:1)*cboost);
       t.pct=Math.min(300,t.pct+dmg);
       let kb=(heavy?.014:.007)*(1+t.pct/60)*power*(titan?1.7:1)*cboost;
