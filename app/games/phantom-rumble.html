@@ -21,6 +21,8 @@ body.paused .pause{display:grid}
 .hud .fighter-card i{font-style:normal;display:block;font-size:11px;letter-spacing:1px;opacity:.85}
 .hud .fighter-card b{font-size:22px;display:block;margin:2px 0}
 .hud .fighter-card s{text-decoration:none;font-size:12px;letter-spacing:3px}
+.hud .meter{display:block;height:5px;border-radius:99px;background:#0f271a;margin-top:6px;overflow:hidden}
+.hud .meter i{display:block;height:100%;width:0%;border-radius:99px;transition:width .2s}
 .touch{position:fixed;inset:auto 0 90px;display:none;justify-content:space-between;padding:0 4vw;z-index:4}
 .touch div{display:flex;gap:10px}
 .touch button{width:64px;height:64px;border-radius:50%;border:1px solid #2cff9b66;background:#04140ccc;color:#7dffbd;font:700 11px ui-monospace}
@@ -29,7 +31,7 @@ body.paused .pause{display:grid}
 </style></head><body>
 <canvas></canvas>
 <div class="hud" data-hud hidden></div>
-<div class="touch" data-touch hidden><div><button data-t="left">◀</button><button data-t="right">▶</button></div><div><button data-t="jump">JUMP</button><button data-t="light">HIT</button><button data-t="heavy">SMASH</button></div></div>
+<div class="touch" data-touch hidden><div><button data-t="left">◀</button><button data-t="right">▶</button></div><div><button data-t="jump">JUMP</button><button data-t="light">HIT</button><button data-t="heavy">SMASH</button><button data-t="special">⚡</button></div></div>
 <div class="overlay" data-setup><div>
   <h1>PHANTOM RUMBLE</h1>
   <p>Knock the other phantoms off the arena. Damage raises their percent — the higher it climbs, the further they fly. Last phantom standing takes the rumble.</p>
@@ -40,8 +42,8 @@ body.paused .pause{display:grid}
     <button data-mode="rumble"><b>RUMBLE</b>2 players + 2 bots</button>
     <button data-mode="botbrawl"><b>BOT BRAWL</b>you vs three bots</button>
   </div>
-  <div class="keys"><span><b>P1</b> WASD move · W jump · F hit · G smash</span><span><b>P2</b> Arrows · ↑ jump · K hit · L smash</span></div>
-  <p style="font-size:12px;color:#557d68">Double-tap a direction to dash. Two jumps each. Grab the pickups: ♥ heals · ✦ powers your next hit · ◉ is a pulse bomb.</p>
+  <div class="keys"><span><b>P1</b> WASD · W jump · F hit · G smash · <b>SPACE burst</b></span><span><b>P2</b> Arrows · ↑ jump · K hit · L smash · <b>ENTER burst</b></span></div>
+  <p style="font-size:12px;color:#557d68">Deal damage to charge your PHANTOM BURST meter — unleash it to blast everyone near you. Hunt the rare drops: ◐ portal rift · ↯ gravity flip · ◔ chrono field · ▲ titan mode · ☄ meteor storm · ≋ stage quake · ∞ rift warp. Plus ♥ heal · ✦ power hit · ◉ bomb.</p>
 </div></div>
 <div class="overlay pause" data-pauseoverlay><div><h1>PAUSED</h1><p>The rumble is frozen. Resume from the player bar above.</p></div></div>
 <div class="overlay" data-end hidden><div>
@@ -68,16 +70,22 @@ const STAGE={x:.5,y:.72,w:.56,h:.045};
 const PLATS=[{x:.32,y:.5,w:.16,h:.02},{x:.68,y:.5,w:.16,h:.02}];
 const BLAST={left:-.18,right:1.18,top:-.3,bottom:1.25};
 const SPAWNS=[{x:.32,y:.4},{x:.68,y:.4},{x:.42,y:.62},{x:.58,y:.62}];
+/* STAGE QUAKE morph targets — the arena physically rearranges mid-match */
+const PLATS_BASE=[{x:.32,y:.5,w:.16},{x:.68,y:.5,w:.16}];
+const PLATS_ALT=[{x:.5,y:.38,w:.2},{x:.5,y:.6,w:.12}];
+const STAGE_W_BASE=.56,STAGE_W_ALT=.4;
 
 /* ---------- fighters ---------- */
 const PALETTE=[{name:'EMBER',c:'#4ade80',glow:'#22c55e'},{name:'CIPHER',c:'#5eead4',glow:'#14b8a6'},{name:'HEX',c:'#f0abfc',glow:'#d946ef'},{name:'VOLT',c:'#fde047',glow:'#eab308'}];
 let fighters=[],pickups=[],particles=[],mode='',running=false,paused=false,over=false,last=0,shake=0,slowmo=0,pickupTimer=6,reduced=false,matchKos=[0,0,0,0],hitstop=0,popups=[],koFx=null;
+/* reality-bending power state */
+let portals=null,warpT=0,quakeT=0,gravFx={t:0,owner:-1},chronoFx={t:0,owner:-1},meteorFx={t:0,owner:-1},rocks=[],meteorSpawn=0;
 function makeFighter(slot,human){
   const spawn=SPAWNS[slot];
   return {slot,human,name:PALETTE[slot].name,color:PALETTE[slot].c,glow:PALETTE[slot].glow,
     x:spawn.x,y:spawn.y,vx:0,vy:0,face:slot%2?-1:1,pct:0,stocks:3,
     grounded:false,jumps:2,stun:0,invuln:2,charge:0,power:false,dead:false,
-    attackCd:0,anim:0,flash:0,spin:0,trail:[],ai:{dir:1,timer:0,jumpCd:0},lastTap:{key:'',at:0}};
+    attackCd:0,anim:0,flash:0,spin:0,special:0,titan:0,portalCd:0,trail:[],ai:{dir:1,timer:0,jumpCd:0},lastTap:{key:'',at:0}};
 }
 function startMatch(selected){
   mode=selected;
@@ -86,14 +94,16 @@ function startMatch(selected){
   fighters=[];
   for(let i=0;i<count;i++)fighters.push(makeFighter(i,i<humans));
   pickups=[];particles=[];popups=[];koFx=null;hitstop=0;matchKos=[0,0,0,0];pickupTimer=6;over=false;running=true;paused=false;
+  portals=null;warpT=0;quakeT=0;gravFx={t:0,owner:-1};chronoFx={t:0,owner:-1};meteorFx={t:0,owner:-1};rocks=[];meteorSpawn=0;
+  for(let i=0;i<PLATS.length;i++)Object.assign(PLATS[i],PLATS_BASE[i]);STAGE.w=STAGE_W_BASE;
   setupEl.hidden=true;endEl.hidden=true;hudEl.hidden=false;
   document.querySelector('[data-touch]').hidden=fighters.some(f=>f.human&&f.slot===0)?false:true;
   buildHud();last=performance.now();requestAnimationFrame(loop);
 }
 
 /* ---------- input ---------- */
-const P1={left:['a','A'],right:['d','D'],jump:['w','W'],light:['f','F'],heavy:['g','G'],down:['s','S']};
-const P2={left:['ArrowLeft'],right:['ArrowRight'],jump:['ArrowUp'],light:['k','K'],heavy:['l','L'],down:['ArrowDown']};
+const P1={left:['a','A'],right:['d','D'],jump:['w','W'],light:['f','F'],heavy:['g','G'],down:['s','S'],special:[' ']};
+const P2={left:['ArrowLeft'],right:['ArrowRight'],jump:['ArrowUp'],light:['k','K'],heavy:['l','L'],down:['ArrowDown'],special:['Enter']};
 const keys=new Set();
 function padFor(f){return f.slot===0?P1:P2}
 addEventListener('keydown',e=>{
@@ -101,6 +111,7 @@ addEventListener('keydown',e=>{
   for(const f of fighters){
     if(!f.human||f.dead||f.stun>0||!running||paused)continue;
     const pad=padFor(f);
+    if(pad.special.includes(e.key)){e.preventDefault?.();useSpecial(f)}
     if(pad.jump.includes(e.key))jump(f);
     if(pad.light.includes(e.key))attack(f,false);
     if(pad.heavy.includes(e.key))f.charge=.01;
@@ -126,7 +137,7 @@ for(const b of document.querySelectorAll('[data-t]')){
   const act=b.dataset.t;
   b.onpointerdown=ev=>{ev.preventDefault();const f=fighters[0];if(!f||!f.human||f.dead||paused||!running)return;
     if(act==='left')touchState.left=true;else if(act==='right')touchState.right=true;
-    else if(act==='jump')jump(f);else if(act==='light')attack(f,false);else if(act==='heavy')attack(f,true);};
+    else if(act==='jump')jump(f);else if(act==='light')attack(f,false);else if(act==='heavy')attack(f,true);else if(act==='special')useSpecial(f);};
   b.onpointerup=()=>{if(act==='left')touchState.left=false;if(act==='right')touchState.right=false};
   b.onpointercancel=b.onpointerup;
 }
@@ -147,16 +158,19 @@ function jump(f){
 function attack(f,heavy){
   if(f.attackCd>0)return;
   f.attackCd=heavy?.55:.28;f.anim=heavy?.3:.18;
-  const reach=heavy?.085:.06;
+  const titan=f.titan>0;
+  const reach=(heavy?.085:.06)*(titan?1.6:1);
   const power=f.power?2:1;
   if(f.power){f.power=false;spawnBurst(f.x,f.y,'#ffffff',14)}
   for(const t of fighters){
     if(t===f||t.dead||t.invuln>0)continue;
     const dx=t.x-f.x,dy=t.y-f.y;
-    if(Math.abs(dy)<.08&&dx*f.face>-.015&&Math.abs(dx)<reach){
-      const dmg=(heavy?14:6)*power;
+    if(Math.abs(dy)<(titan?.11:.08)&&dx*f.face>-.015&&Math.abs(dx)<reach){
+      const dmg=Math.round((heavy?14:6)*power*(titan?1.6:1));
       t.pct=Math.min(300,t.pct+dmg);
-      const kb=(heavy?.014:.007)*(1+t.pct/60)*power;
+      let kb=(heavy?.014:.007)*(1+t.pct/60)*power*(titan?1.7:1);
+      if(t.titan>0)kb*=.5;
+      f.special=Math.min(1,f.special+(heavy?.22:.11));
       t.vx=f.face*kb;t.vy=-kb*.75;t.stun=heavy?.42:.22;t.grounded=false;
       t.flash=.22;if(!reduced)hitstop=Math.max(hitstop,heavy?.085:.045);
       popups.push({x:t.x,y:t.y-.07,text:String(Math.round(dmg)),color:heavy?'#ffffff':t.glow,life:.75,t:0,big:heavy});
@@ -168,11 +182,33 @@ function attack(f,heavy){
   }
 }
 
-/* ---------- pickups: ♥ heal · ✦ spark core · ◉ pulse bomb ---------- */
+/* ---------- SPECIAL: PHANTOM BURST (SPACE / ENTER when the meter is full) ---------- */
+function announce(text,color){popups.push({x:.5,y:.15,text,color,life:1.4,t:0,big:true})}
+function useSpecial(f){
+  if(!f||f.special<1||f.dead||f.stun>0)return;
+  f.special=0;f.invuln=Math.max(f.invuln,1);
+  shake=1;if(!reduced)hitstop=Math.max(hitstop,.12);
+  koFx={x:Math.max(.08,Math.min(.92,f.x)),y:Math.max(.1,Math.min(.86,f.y)),t:0,life:.6,color:f.color};
+  spawnBurst(f.x,f.y,'#ffffff',26);spawnBurst(f.x,f.y,f.glow,20);
+  announce(`${f.name} PHANTOM BURST`,f.color);
+  for(const t of fighters){
+    if(t===f||t.dead)continue;
+    const dx=t.x-f.x,dy=(t.y-f.y)*.9,dist=Math.hypot(dx,dy);
+    if(dist<.34){
+      t.pct=Math.min(300,t.pct+18);
+      const kb=.024*(1+t.pct/70);
+      t.vx=(dx/(dist||.01))*kb;t.vy=-Math.abs(kb)*.8;t.stun=.55;t.grounded=false;t.flash=.3;
+      popups.push({x:t.x,y:t.y-.07,text:'18',color:'#ffffff',life:.8,t:0,big:true});
+    }
+  }
+  updateHud();
+}
+
+/* ---------- pickups: ♥ heal · ✦ spark core · ◉ pulse bomb + reality benders ---------- */
 function spawnPickup(){
-  const kinds=['heart','spark','bomb'];
+  const kinds=['heart','heart','spark','spark','bomb','bomb','portal','gravity','chrono','titan','meteor','quake','warp'];
   const kind=kinds[Math.floor(Math.random()*kinds.length)];
-  const spot=Math.random()<.5?{x:.28+Math.random()*.44,y:STAGE.y-.05}:{x:PLATS[Math.floor(Math.random()*2)].x,y:.42};
+  const spot=Math.random()<.5?{x:.28+Math.random()*.44,y:STAGE.y-.05}:{x:PLATS[Math.floor(Math.random()*2)].x,y:PLATS[0].y-.08};
   pickups.push({kind,x:spot.x,y:spot.y,age:0,fuse:kind==='bomb'?0:null});
 }
 function grabPickups(f){
@@ -183,6 +219,13 @@ function grabPickups(f){
       if(p.kind==='heart'){f.pct=Math.max(0,f.pct-30);spawnBurst(f.x,f.y,'#f87171',10)}
       if(p.kind==='spark'){f.power=true;spawnBurst(f.x,f.y,'#ffffff',10)}
       if(p.kind==='bomb'){p.taken=false;p.fuse=.9;p.owner=f.slot}
+      if(p.kind==='portal'){portals={a:{x:.13+Math.random()*.14,y:.34+Math.random()*.2},b:{x:.72+Math.random()*.14,y:.34+Math.random()*.2},t:0,life:12};announce('PORTAL RIFT OPEN','#a78bfa');spawnBurst(f.x,f.y,'#a78bfa',14)}
+      if(p.kind==='gravity'){gravFx={t:4.5,owner:f.slot};announce('GRAVITY FLIPPED','#c084fc');spawnBurst(f.x,f.y,'#c084fc',14);shake=Math.min(1,shake+.5)}
+      if(p.kind==='chrono'){chronoFx={t:4,owner:f.slot};announce(`${f.name} BENDS TIME`,'#38bdf8');spawnBurst(f.x,f.y,'#38bdf8',14)}
+      if(p.kind==='titan'){f.titan=6;announce(`${f.name} GOES TITAN`,'#fb7185');spawnBurst(f.x,f.y,'#fb7185',18);shake=1}
+      if(p.kind==='meteor'){meteorFx={t:5,owner:f.slot};meteorSpawn=0;announce('METEOR STORM','#fb923c');spawnBurst(f.x,f.y,'#fb923c',14)}
+      if(p.kind==='quake'){quakeT=9;announce('STAGE QUAKE','#facc15');spawnBurst(f.x,f.y,'#facc15',14);shake=1}
+      if(p.kind==='warp'){warpT=6;announce('RIFT WARP','#e879f9');spawnBurst(f.x,f.y,'#e879f9',14)}
       updateHud();
     }
   }
@@ -226,6 +269,7 @@ function botThink(f,dt){
     f.ai.dir=target.x>f.x?1:-1;
     if(f.ai.timer<=0){
       f.ai.timer=.18+Math.random()*.3;
+      if(f.special>=1&&Math.abs(foe.x-f.x)<.16&&Math.abs(foe.y-f.y)<.14)useSpecial(f);
       if(Math.abs(foe.x-f.x)<.07&&Math.abs(foe.y-f.y)<.08){f.face=f.ai.dir;attack(f,Math.random()<.3)}
       if(foe.y<f.y-.12&&f.grounded&&f.ai.jumpCd<=0){jump(f);f.ai.jumpCd=.6}
     }
@@ -238,6 +282,9 @@ function land(f,top){f.y=top;f.vy=0;f.grounded=true;f.jumps=2}
 function step(f,dt){
   if(f.dead)return;
   f.invuln=Math.max(0,f.invuln-dt);f.stun=Math.max(0,f.stun-dt);f.attackCd=Math.max(0,f.attackCd-dt);f.anim=Math.max(0,f.anim-dt);f.flash=Math.max(0,f.flash-dt);
+  f.titan=Math.max(0,f.titan-dt);f.portalCd=Math.max(0,f.portalCd-dt);
+  const prevSpecial=f.special;f.special=Math.min(1,f.special+dt*.02);
+  if(prevSpecial<1&&f.special>=1){popups.push({x:f.x,y:f.y-.1,text:'BURST READY',color:f.color,life:.9,t:0});updateHud()}
   if(f.stun>0&&!f.grounded&&!reduced)f.spin+=(f.vx>=0?1:-1)*dt*11;else f.spin*=Math.max(0,1-dt*9);
   if(Math.abs(f.spin)<.02)f.spin=0;
   if(f.charge>0)f.charge=Math.min(1,f.charge+dt);
@@ -251,8 +298,20 @@ function step(f,dt){
     }else botThink(f,dt);
   }
   f.vx*=f.grounded?.82:.94;
-  f.vy=Math.min(.05,f.vy+.0011*(dt*60));
+  const grav=(gravFx.t>0&&f.slot!==gravFx.owner)?-.0009:.0011;
+  f.vy=Math.max(-.05,Math.min(.05,f.vy+grav*(dt*60)));
   f.x+=f.vx*(dt*60);f.y+=f.vy*(dt*60);
+  if(portals&&f.portalCd<=0){
+    for(const [from,to] of [[portals.a,portals.b],[portals.b,portals.a]]){
+      if(Math.abs(f.x-from.x)<.045&&Math.abs(f.y-from.y)<.08){
+        spawnBurst(f.x,f.y,'#a78bfa',12);
+        f.x=to.x;f.y=to.y;f.portalCd=.9;
+        spawnBurst(f.x,f.y,'#a78bfa',12);
+        if(!reduced)hitstop=Math.max(hitstop,.03);
+        break;
+      }
+    }
+  }
   f.grounded=false;
   const surfaces=[STAGE,...PLATS];
   for(const s of surfaces){
@@ -307,14 +366,15 @@ function stepParticles(dt){
 
 /* ---------- HUD ---------- */
 function buildHud(){
-  hudEl.innerHTML=fighters.map(f=>`<div class="fighter-card" style="border-color:${f.color}55"><i style="color:${f.color}">${f.name}${f.human?'':' · BOT'}</i><b data-pct="${f.slot}" style="color:${f.color}">0%</b><s data-stocks="${f.slot}" style="color:${f.color}">●●●</s></div>`).join('');
+  hudEl.innerHTML=fighters.map(f=>`<div class="fighter-card" style="border-color:${f.color}55"><i style="color:${f.color}">${f.name}${f.human?'':' · BOT'}</i><b data-pct="${f.slot}" style="color:${f.color}">0%</b><s data-stocks="${f.slot}" style="color:${f.color}">●●●</s><span class="meter"><i data-meter="${f.slot}" style="background:${f.color}"></i></span></div>`).join('');
   updateHud();
 }
 function updateHud(){
   for(const f of fighters){
-    const pct=hudEl.querySelector(`[data-pct="${f.slot}"]`),st=hudEl.querySelector(`[data-stocks="${f.slot}"]`);
+    const pct=hudEl.querySelector(`[data-pct="${f.slot}"]`),st=hudEl.querySelector(`[data-stocks="${f.slot}"]`),m=hudEl.querySelector(`[data-meter="${f.slot}"]`);
     if(pct)pct.textContent=`${Math.round(f.pct)}%`;
     if(st)st.textContent=f.dead?'OUT':'●'.repeat(Math.max(0,f.stocks));
+    if(m){m.style.width=`${Math.round(f.special*100)}%`;m.style.background=f.special>=1?'#ffffff':f.color;m.style.boxShadow=f.special>=1?'0 0 10px #ffffff':'none'}
   }
 }
 
@@ -340,6 +400,7 @@ function drawFighter(f,t){
   ctx.save();
   ctx.translate(bx,cy);
   if(f.spin)ctx.rotate(f.spin);
+  if(f.titan>0){const gs=1+.65*Math.min(1,f.titan>5.5?(6-f.titan)*2:f.titan<0.5?f.titan*2:1);ctx.scale(gs,gs)}
   const spd=Math.hypot(f.vx,f.vy);
   if(spd>.018&&!f.grounded&&!reduced){const ang=Math.atan2(f.vy,f.vx);const st=Math.min(.35,(spd-.018)*14);ctx.rotate(ang);ctx.scale(1+st,1-st*.55);ctx.rotate(-ang)}
   ctx.translate(-bx,-cy);
@@ -409,21 +470,31 @@ function drawPickup(p,t){
   if(p.kind==='heart'){ctx.shadowColor='#f87171';ctx.fillStyle='#f87171';ctx.font=`${16*DPR}px ui-monospace`;ctx.fillText('♥',bx-8*DPR,by)}
   if(p.kind==='spark'){ctx.shadowColor='#fff';ctx.fillStyle='#fff';ctx.font=`${16*DPR}px ui-monospace`;ctx.fillText('✦',bx-8*DPR,by)}
   if(p.kind==='bomb'){ctx.shadowColor='#fb923c';ctx.fillStyle=p.fuse!==null&&p.fuse>0?(Math.floor(p.fuse*10)%2?'#fb923c':'#fff'):'#fb923c';ctx.font=`${16*DPR}px ui-monospace`;ctx.fillText('◉',bx-8*DPR,by)}
+  const RARE={portal:['◐','#a78bfa'],gravity:['↯','#c084fc'],chrono:['◔','#38bdf8'],titan:['▲','#fb7185'],meteor:['☄','#fb923c'],quake:['≋','#facc15'],warp:['∞','#e879f9']};
+  if(RARE[p.kind]){const [g,col]=RARE[p.kind];ctx.shadowBlur=22*DPR;ctx.shadowColor=col;ctx.fillStyle=col;ctx.font=`${19*DPR}px ui-monospace`;ctx.fillText(g,bx-9*DPR,by);if(!reduced){ctx.strokeStyle=col;ctx.globalAlpha=.4+.3*Math.sin(t*.008);ctx.lineWidth=1.5*DPR;ctx.beginPath();ctx.arc(bx,by-6*DPR,14*DPR,0,Math.PI*2);ctx.stroke();ctx.globalAlpha=1}}
   ctx.shadowBlur=0;
 }
 function draw(t){
   ctx.clearRect(0,0,W,H);
   ctx.save();
   if(shake>0&&!reduced)ctx.translate((Math.random()-.5)*shake*14*DPR,(Math.random()-.5)*shake*14*DPR);
+  /* RIFT WARP: the whole arena bends */
+  if(warpT>0&&!reduced){ctx.translate(W/2,H/2);ctx.rotate(Math.sin(t*.0016)*.07*Math.min(1,warpT));const sc=1+Math.sin(t*.0021)*.045;ctx.scale(sc,sc);ctx.translate(-W/2,-H/2)}
   ctx.strokeStyle='#183626';ctx.lineWidth=1*DPR;
   for(let i=0;i<=10;i++){ctx.globalAlpha=.35;ctx.beginPath();ctx.moveTo(W*i/10,0);ctx.lineTo(W*i/10,H);ctx.stroke();ctx.beginPath();ctx.moveTo(0,H*i/10);ctx.lineTo(W,H*i/10);ctx.stroke()}
   ctx.globalAlpha=1;
   drawStage();
+  if(portals){const fade=portals.life-portals.t<1.2?(portals.life-portals.t)/1.2:1;for(const [pt,ph] of [[portals.a,0],[portals.b,Math.PI]]){const cx2=px(pt.x),cy2=py(pt.y);for(let i=0;i<3;i++){ctx.strokeStyle=i%2?'#a78bfa':'#e9d5ff';ctx.lineWidth=2.5*DPR;ctx.globalAlpha=(0.8-i*.2)*fade;ctx.beginPath();ctx.ellipse(cx2,cy2,(9+i*6)*DPR,(19+i*8)*DPR,(reduced?0:Math.sin(t*.002+ph))+i*.7,0,Math.PI*2);ctx.stroke()}ctx.globalAlpha=1}}
+  for(const r of rocks){ctx.shadowBlur=18*DPR;ctx.shadowColor='#fb923c';ctx.fillStyle='#fbbf24';ctx.beginPath();ctx.arc(px(r.x),py(r.y),.018*W,0,Math.PI*2);ctx.fill();ctx.fillStyle='#7c2d12';ctx.beginPath();ctx.arc(px(r.x)-.005*W,py(r.y)-.008*H,.007*W,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0}
   for(const p of pickups)drawPickup(p,t);
   for(const f of fighters)drawFighter(f,t);
   for(const p of particles){ctx.globalAlpha=Math.max(0,p.life);ctx.fillStyle=p.color;ctx.save();ctx.translate(px(p.x),py(p.y));ctx.rotate(p.life*5+p.vx*400);ctx.beginPath();ctx.ellipse(0,0,3.6*DPR,1.4*DPR,0,0,Math.PI*2);ctx.fill();ctx.restore()}
   for(const p of popups){const k=Math.min(1,p.t*9);ctx.globalAlpha=Math.max(0,1-(p.t/p.life)*(p.t/p.life));ctx.fillStyle=p.color;ctx.font=`900 ${Math.round((p.big?21:15)*k+6)*DPR}px ui-monospace,monospace`;ctx.textAlign='center';ctx.shadowBlur=10*DPR;ctx.shadowColor=p.color;ctx.fillText(p.text,px(p.x),py(p.y));ctx.shadowBlur=0}
   if(koFx){const q=koFx.t/koFx.life;ctx.globalAlpha=Math.max(0,1-q);ctx.strokeStyle=koFx.color;ctx.lineWidth=Math.max(1,4*DPR*(1-q));ctx.beginPath();ctx.arc(px(koFx.x),py(koFx.y),(q*150+18)*DPR,0,Math.PI*2);ctx.stroke();ctx.fillStyle='#ffffff';ctx.font=`900 ${Math.round(48-16*q)*DPR}px ui-monospace,monospace`;ctx.textAlign='center';ctx.shadowBlur=24*DPR;ctx.shadowColor=koFx.color;ctx.globalAlpha=Math.max(0,.95-q);ctx.fillText('KO!',px(koFx.x),py(koFx.y)-26*DPR);ctx.shadowBlur=0}
+  /* active-effect tints */
+  if(gravFx.t>0){ctx.globalAlpha=1;ctx.fillStyle='#c084fc14';ctx.fillRect(0,0,W,H)}
+  if(chronoFx.t>0){ctx.fillStyle='#38bdf814';ctx.fillRect(0,0,W,H)}
+  if(warpT>0){ctx.fillStyle='#e879f90d';ctx.fillRect(0,0,W,H)}
   ctx.globalAlpha=1;ctx.restore();
 }
 
@@ -436,10 +507,45 @@ function loop(t){
   if(slowmo>0){slowmo=Math.max(0,slowmo-dt);dt*=.35}
   shake=Math.max(0,shake-dt*3);
   pickupTimer-=dt;
-  if(pickupTimer<=0){pickupTimer=7+Math.random()*5;if(pickups.length<3)spawnPickup()}
+  if(pickupTimer<=0){pickupTimer=6+Math.random()*4;if(pickups.length<3)spawnPickup()}
   for(const p of pickups)p.age+=dt;
   tickBombs(dt);
-  for(const f of fighters)step(f,dt);
+  /* reality-bender timers */
+  warpT=Math.max(0,warpT-dt);gravFx.t=Math.max(0,gravFx.t-dt);chronoFx.t=Math.max(0,chronoFx.t-dt);
+  if(portals){portals.t+=dt;if(portals.t>portals.life)portals=null}
+  if(meteorFx.t>0){
+    meteorFx.t=Math.max(0,meteorFx.t-dt);meteorSpawn-=dt;
+    if(meteorSpawn<=0){meteorSpawn=.26;rocks.push({x:.05+Math.random()*.9,y:-.08,vx:(Math.random()-.5)*.004,vy:.011+Math.random()*.006})}
+  }
+  for(const r of rocks){
+    r.x+=r.vx*(dt*60);r.y+=r.vy*(dt*60);
+    if(!reduced&&Math.random()<.5)particles.push({x:r.x,y:r.y-.02,vx:(Math.random()-.5)*.004,vy:-.004,life:.3,color:'#fb923c'});
+    for(const t2 of fighters){
+      if(t2.dead||t2.invuln>0||t2.slot===meteorFx.owner)continue;
+      if(Math.abs(t2.x-r.x)<.05&&Math.abs(t2.y-r.y)<.07){
+        r.hit=true;t2.pct=Math.min(300,t2.pct+16);
+        const kb=.014*(1+t2.pct/60);
+        t2.vx=(t2.x-r.x>=0?1:-1)*kb;t2.vy=-kb*.6;t2.stun=.35;t2.grounded=false;t2.flash=.22;
+        popups.push({x:t2.x,y:t2.y-.07,text:'16',color:'#fb923c',life:.7,t:0});
+        shake=Math.min(1,shake+.4);
+      }
+    }
+    if(!r.hit&&r.y>STAGE.y-.03&&Math.abs(r.x-STAGE.x)<STAGE.w/2){r.hit=true;spawnBurst(r.x,STAGE.y-.03,'#fb923c',10);shake=Math.min(1,shake+.2)}
+  }
+  rocks=rocks.filter(r=>!r.hit&&r.y<1.25);
+  if(quakeT>0){
+    quakeT=Math.max(0,quakeT-dt);
+    const m=Math.max(0,Math.min(1,Math.min(9-quakeT,quakeT)));
+    for(let i=0;i<PLATS.length;i++){
+      PLATS[i].x=PLATS_BASE[i].x+(PLATS_ALT[i].x-PLATS_BASE[i].x)*m;
+      PLATS[i].y=PLATS_BASE[i].y+(PLATS_ALT[i].y-PLATS_BASE[i].y)*m;
+      PLATS[i].w=PLATS_BASE[i].w+(PLATS_ALT[i].w-PLATS_BASE[i].w)*m;
+    }
+    STAGE.w=STAGE_W_BASE+(STAGE_W_ALT-STAGE_W_BASE)*m;
+    if(!reduced)shake=Math.max(shake,.12);
+    if(quakeT===0){for(let i=0;i<PLATS.length;i++)Object.assign(PLATS[i],PLATS_BASE[i]);STAGE.w=STAGE_W_BASE}
+  }
+  for(const f of fighters)step(f,(chronoFx.t>0&&f.slot!==chronoFx.owner)?dt*.35:dt);
   stepParticles(dt);
   for(const p of popups){p.t+=dt;p.y-=dt*.07}
   popups=popups.filter(p=>p.t<p.life);
