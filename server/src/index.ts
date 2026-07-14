@@ -46,6 +46,7 @@ import {
   getAccessSession,
   issueAccessSessionToken,
   listAccessSessions,
+  mintAccessSessionToken,
   mintDatabaseSessionToken,
   readBearerToken,
   requireAdminAccessSession,
@@ -75,6 +76,18 @@ import {
   switchActiveOrg,
   updateMemberRole,
 } from "./access/user-accounts.js";
+import {
+  LOCAL_CUSTOMER_SESSION_PREFIX,
+  completeLocalCustomerPasswordReset,
+  initializeLocalCustomerAuthState,
+  localCustomerAuthEnabled,
+  localCustomerAuthStorePath,
+  loginLocalCustomer,
+  registerLocalCustomer,
+  requestLocalCustomerPasswordReset,
+  resolveLocalCustomerSession,
+  revokeLocalCustomerSession,
+} from "./access/local-customer-accounts.js";
 import {
   assignOrgPlan,
   checkSeatLimit,
@@ -113,6 +126,7 @@ import {
   canUseSessionOnPublicHost,
   filterSessionsForPublicHost,
   publicHostFromHeaders,
+  publicHostScope,
   PUBLIC_WEB_ORIGINS,
 } from "./access/public-hosts.js";
 import {
@@ -178,7 +192,9 @@ import {
   completeSocialOAuthCallback,
   createSocialOAuthStart,
   getSocialAnalyticsConnectorStatus,
+  getSocialOAuthSetupStatus,
   isSocialAnalyticsPlatform,
+  saveSocialOAuthSetup,
   syncSocialAnalytics,
 } from "./connectors/social-analytics-connector.js";
 import {
@@ -456,6 +472,12 @@ const WorkspaceModuleUpdateBodySchema = z.object({
 const SocialAnalyticsSyncSchema = z.object({
   platform: z.enum(["youtube", "instagram", "facebook", "tiktok", "x", "linkedin", "pinterest"]),
 });
+const SocialOAuthSetupSaveSchema = z.object({
+  platform: z.enum(["youtube", "instagram", "facebook", "tiktok", "x", "linkedin", "pinterest"]),
+  clientId: z.string().trim().max(500).optional(),
+  clientSecret: z.string().trim().max(1000).optional(),
+  redirectUri: z.string().trim().url().max(500).optional(),
+});
 
 function safeCustomizationTenantId(value: unknown, fallback: string) {
   if (typeof value !== "string") return fallback;
@@ -539,15 +561,23 @@ await app.register(cors, {
   allowedHeaders: ["Content-Type", AUTHORIZATION_HEADER, SESSION_HEADER],
 });
 
-/* Database-auth sessions resolve from Postgres per request. This hook runs
-   BEFORE the paywall so the paywall sees the real entitlement-bearing
-   session. Signature and expiry are verified before any DB lookup. */
+/* Database-auth sessions resolve from Postgres per request. Local customer
+   sessions resolve from the private on-disk fallback store when Postgres is
+   absent. This hook runs BEFORE the paywall so the paywall sees the real
+   entitlement-bearing session. Signature and expiry are verified before any
+   lookup. */
 app.addHook("preHandler", async (request) => {
-  if (!databaseAuthEnabledForSessions()) return;
   const sid = verifyAccessSessionTokenSid(readBearerToken(request));
-  if (!sid || !sid.startsWith(DB_SESSION_PREFIX)) return;
-  const session = await resolveDatabaseSession(sid);
-  if (session) attachDatabaseSession(request, session);
+  if (!sid) return;
+  if (sid.startsWith(DB_SESSION_PREFIX) && databaseAuthEnabledForSessions()) {
+    const session = await resolveDatabaseSession(sid);
+    if (session) attachDatabaseSession(request, session);
+    return;
+  }
+  if (sid.startsWith(LOCAL_CUSTOMER_SESSION_PREFIX) && localCustomerAuthEnabled()) {
+    const session = await resolveLocalCustomerSession(sid);
+    if (session) attachDatabaseSession(request, session);
+  }
 });
 
 // Un-bypassable paywall: free/anonymous sessions may view but not mutate.
@@ -752,6 +782,7 @@ try {
   await initializeClientAccessState();
   await initializeAccessIdentityState();
   await initializeDatabaseAuthState();
+  await initializeLocalCustomerAuthState();
   await initializeAccessWorkflowState();
   await rehydrateAgentRuns();
   /* the publish executor talks to Postgres — register only when configured */
@@ -1079,11 +1110,20 @@ app.get("/downloads/*", async (request, reply) => {
 app.get("/sessions", async (request) => {
   const authConfiguration = getAccessAuthConfiguration();
   const publicHost = requestPublicHost(request);
+  const localCustomerEnabled = localCustomerAuthEnabled();
 
   return {
     ok: true,
     auth: {
       ...authConfiguration,
+      customerAuthEnabled: authConfiguration.databaseAuthEnabled || localCustomerEnabled,
+      localCustomerAuthEnabled: localCustomerEnabled,
+      customerLoginEndpoint: authConfiguration.databaseAuthEnabled || localCustomerEnabled ? "/auth/login" : undefined,
+      customerRegisterEndpoint: localCustomerEnabled ? "/auth/register" : undefined,
+      customerPasswordResetRequestEndpoint: localCustomerEnabled ? "/auth/password-reset/request" : undefined,
+      customerPasswordResetCompleteEndpoint: localCustomerEnabled ? "/auth/password-reset/complete" : undefined,
+      localCustomerStoreConfigured: localCustomerEnabled,
+      localCustomerStorePath: localCustomerEnabled && publicHostScope(publicHost) === "local" ? localCustomerAuthStorePath() : undefined,
     },
     sessions: authConfiguration.ownerProductionAuthEnabled
       ? []
@@ -1202,11 +1242,58 @@ const DatabaseLoginSchema = z.object({
   email: z.string().email().max(200),
   password: z.string().min(1).max(200),
 });
+const CustomerRegisterSchema = z.object({
+  email: z.string().email().max(200),
+  password: z.string().min(8).max(200),
+  name: z.string().trim().max(120).optional(),
+  businessName: z.string().trim().max(120).optional(),
+});
+const CustomerPasswordResetRequestSchema = z.object({
+  email: z.string().email().max(200),
+});
+const CustomerPasswordResetCompleteSchema = z.object({
+  token: z.string().trim().min(20).max(240),
+  password: z.string().min(8).max(200),
+});
+
+function customerAuthForbiddenOnHost(request: FastifyRequest) {
+  return publicHostScope(requestPublicHost(request)) === "admin";
+}
+
+function localCustomerTokenResponse(session: AccessSession) {
+  const token = mintAccessSessionToken(session.id);
+  return token ? { ok: true as const, ...token, session, authMode: "local-customer", database: false } : undefined;
+}
 
 app.post("/auth/login", async (request, reply) => {
   const authConfiguration = getAccessAuthConfiguration();
   if (!authConfiguration.databaseAuthEnabled) {
-    return reply.code(403).send({ ok: false, error: "Database auth is disabled.", auth: authConfiguration });
+    if (!localCustomerAuthEnabled()) {
+      return reply.code(403).send({
+        ok: false,
+        error: "Customer account login is not enabled on this backend.",
+        auth: authConfiguration,
+      });
+    }
+    if (customerAuthForbiddenOnHost(request)) {
+      return reply.code(403).send({
+        ok: false,
+        error: "Customer accounts cannot sign in on admin.phantomforce.online.",
+      });
+    }
+    const parsed = DatabaseLoginSchema.safeParse(request.body ?? {});
+    if (!parsed.success) {
+      return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+    }
+    const session = await loginLocalCustomer(parsed.data.email, parsed.data.password);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Invalid email or password." });
+    }
+    const token = localCustomerTokenResponse(session);
+    if (!token) {
+      return reply.code(500).send({ ok: false, error: "Token minting unavailable." });
+    }
+    return token;
   }
   const parsed = DatabaseLoginSchema.safeParse(request.body ?? {});
   if (!parsed.success) {
@@ -1233,9 +1320,77 @@ app.post("/auth/login", async (request, reply) => {
   return { ok: true, ...token, session };
 });
 
+app.post("/auth/register", async (request, reply) => {
+  if (!localCustomerAuthEnabled()) {
+    return reply.code(403).send({ ok: false, error: "Customer account creation is not enabled on this backend." });
+  }
+  if (customerAuthForbiddenOnHost(request)) {
+    return reply.code(403).send({ ok: false, error: "Customer accounts cannot be created on admin.phantomforce.online." });
+  }
+  const parsed = CustomerRegisterSchema.safeParse(request.body ?? {});
+  if (!parsed.success) {
+    return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  }
+  const result = await registerLocalCustomer(parsed.data);
+  if (!result.ok) {
+    return reply.code(result.error === "account_already_exists" ? 409 : 403).send({ ok: false, error: result.error });
+  }
+  const token = localCustomerTokenResponse(result.session);
+  if (!token) {
+    return reply.code(500).send({ ok: false, error: "Token minting unavailable." });
+  }
+  return token;
+});
+
+app.post("/auth/password-reset/request", async (request, reply) => {
+  if (!localCustomerAuthEnabled()) {
+    return reply.code(403).send({ ok: false, error: "Customer password reset is not enabled on this backend." });
+  }
+  if (customerAuthForbiddenOnHost(request)) {
+    return reply.code(403).send({ ok: false, error: "Customer password reset cannot run on admin.phantomforce.online." });
+  }
+  const parsed = CustomerPasswordResetRequestSchema.safeParse(request.body ?? {});
+  if (!parsed.success) {
+    return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  }
+  const result = await requestLocalCustomerPasswordReset(parsed.data.email);
+  if (!result.ok) {
+    return reply.code(403).send({ ok: false, error: result.error });
+  }
+  return {
+    ok: true,
+    message: "If that account exists, a reset path is now available.",
+    resetToken: result.resetToken,
+    expiresAt: result.expiresAt,
+    tokenReturnedForTestOnly: Boolean(result.resetToken),
+  };
+});
+
+app.post("/auth/password-reset/complete", async (request, reply) => {
+  if (!localCustomerAuthEnabled()) {
+    return reply.code(403).send({ ok: false, error: "Customer password reset is not enabled on this backend." });
+  }
+  if (customerAuthForbiddenOnHost(request)) {
+    return reply.code(403).send({ ok: false, error: "Customer password reset cannot run on admin.phantomforce.online." });
+  }
+  const parsed = CustomerPasswordResetCompleteSchema.safeParse(request.body ?? {});
+  if (!parsed.success) {
+    return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  }
+  const result = await completeLocalCustomerPasswordReset(parsed.data.token, parsed.data.password);
+  if (!result.ok) {
+    return reply.code(400).send({ ok: false, error: result.error });
+  }
+  return { ok: true };
+});
+
 app.post("/auth/logout", async (request, reply) => {
   const session = requireAccessSession(request, reply);
   if (!session) return reply;
+  if (session.id.startsWith(LOCAL_CUSTOMER_SESSION_PREFIX)) {
+    await revokeLocalCustomerSession(session.id);
+    return { ok: true, revoked: true };
+  }
   const dbSession = asDatabaseSession(session);
   if (!dbSession) {
     return { ok: true, note: "Stateless session tokens expire on their own; nothing to revoke server-side." };
@@ -1249,7 +1404,7 @@ app.get("/auth/me", async (request, reply) => {
   if (!session) return reply;
   const dbSession = asDatabaseSession(session);
   if (!dbSession) {
-    return { ok: true, session, database: false };
+    return { ok: true, session, database: false, localCustomer: session.id.startsWith(LOCAL_CUSTOMER_SESSION_PREFIX) };
   }
   const entitlements = dbSession.orgId ? await getOrgEntitlements(dbSession.orgId).catch(() => null) : null;
   return {
@@ -6163,6 +6318,39 @@ app.post("/phantom-ai/ops/social-oauth/start", async (request, reply) => {
       ok: false,
       error: error instanceof Error ? error.message.slice(0, 400) : "OAuth start is not configured.",
       connector: getSocialAnalyticsConnectorStatus(socialWorkspaceForSession(session)).connectors.find((item) => item.id === body.platform),
+    });
+  }
+});
+
+app.get("/phantom-ai/ops/social-oauth/setup", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+  if (!session) return reply;
+  return {
+    ok: true,
+    session,
+    setup: getSocialOAuthSetupStatus(),
+  };
+});
+
+app.post("/phantom-ai/ops/social-oauth/setup", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+  if (!session) return reply;
+  const parsed = SocialOAuthSetupSaveSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  try {
+    return {
+      ok: true,
+      session,
+      external_send: false,
+      approval_executed: false,
+      setup: saveSocialOAuthSetup(parsed.data),
+      social_analytics: getSocialAnalyticsConnectorStatus(socialWorkspaceForSession(session)),
+    };
+  } catch (error) {
+    return reply.code(400).send({
+      ok: false,
+      error: error instanceof Error ? error.message.slice(0, 400) : "Social OAuth setup could not be saved.",
+      setup: getSocialOAuthSetupStatus(),
     });
   }
 });

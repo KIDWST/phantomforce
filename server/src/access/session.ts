@@ -444,12 +444,20 @@ export function issueAccessSessionToken(sessionId: string, options?: { ownerKey?
     return undefined;
   }
 
+  const token = mintAccessSessionToken(session.id);
+  return token ? { ...token, session } : undefined;
+}
+
+/* Generic signed access token minting for server-resolved sessions. Database
+   auth and local customer auth share the same signed bearer format; only the
+   sid resolver differs. */
+export function mintAccessSessionToken(sid: string) {
   const issuedAt = Date.now();
   const expiresAtMs = issuedAt + tokenTtlMs;
   const payloadSegment = Buffer.from(
     JSON.stringify({
       v: 1,
-      sid: session.id,
+      sid,
       iat: issuedAt,
       exp: expiresAtMs,
     }),
@@ -459,7 +467,6 @@ export function issueAccessSessionToken(sessionId: string, options?: { ownerKey?
     tokenType: "Bearer" as const,
     token: `${payloadSegment}.${signTokenSegment(payloadSegment)}`,
     expiresAt: new Date(expiresAtMs).toISOString(),
-    session,
   };
 }
 
@@ -540,16 +547,7 @@ export function databaseAuthEnabledForSessions() {
    Postgres on each request instead of the in-memory list. */
 export function mintDatabaseSessionToken(sid: string) {
   if (!enableDatabaseAuth) return undefined;
-  const issuedAt = Date.now();
-  const expiresAtMs = issuedAt + tokenTtlMs;
-  const payloadSegment = Buffer.from(
-    JSON.stringify({ v: 1, sid, iat: issuedAt, exp: expiresAtMs }),
-  ).toString("base64url");
-  return {
-    tokenType: "Bearer" as const,
-    token: `${payloadSegment}.${signTokenSegment(payloadSegment)}`,
-    expiresAt: new Date(expiresAtMs).toISOString(),
-  };
+  return mintAccessSessionToken(sid);
 }
 
 export function resolveAccessSession(request: FastifyRequest) {

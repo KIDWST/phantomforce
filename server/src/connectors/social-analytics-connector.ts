@@ -1,4 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 
 import {
   DEFAULT_SOCIAL_WORKSPACE,
@@ -62,6 +64,56 @@ const metaOauthConfigured = () => Boolean(env("META_APP_ID") && env("META_APP_SE
 const socialPlatforms = ["youtube", "instagram", "facebook", "tiktok", "x", "linkedin", "pinterest"] as const;
 const base64Url = (input: Buffer) => input.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 const basicAuth = (clientId: string, clientSecret: string) => `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`;
+
+type SocialOAuthSetupProvider = {
+  id: SocialAnalyticsPlatform;
+  idEnv: string;
+  secretEnv: string;
+  idLabel: string;
+  secretLabel: string;
+};
+
+const OAUTH_SETUP_PROVIDERS: SocialOAuthSetupProvider[] = [
+  { id: "youtube", idEnv: "GOOGLE_OAUTH_CLIENT_ID", secretEnv: "GOOGLE_OAUTH_CLIENT_SECRET", idLabel: "Google client ID", secretLabel: "Google client secret" },
+  { id: "instagram", idEnv: "META_APP_ID", secretEnv: "META_APP_SECRET", idLabel: "Meta app ID", secretLabel: "Meta app secret" },
+  { id: "facebook", idEnv: "META_APP_ID", secretEnv: "META_APP_SECRET", idLabel: "Meta app ID", secretLabel: "Meta app secret" },
+  { id: "tiktok", idEnv: "TIKTOK_CLIENT_KEY", secretEnv: "TIKTOK_CLIENT_SECRET", idLabel: "TikTok client key", secretLabel: "TikTok client secret" },
+  { id: "x", idEnv: "X_CLIENT_ID", secretEnv: "X_CLIENT_SECRET", idLabel: "X client ID", secretLabel: "X client secret" },
+  { id: "linkedin", idEnv: "LINKEDIN_CLIENT_ID", secretEnv: "LINKEDIN_CLIENT_SECRET", idLabel: "LinkedIn client ID", secretLabel: "LinkedIn client secret" },
+  { id: "pinterest", idEnv: "PINTEREST_CLIENT_ID", secretEnv: "PINTEREST_CLIENT_SECRET", idLabel: "Pinterest client ID", secretLabel: "Pinterest client secret" },
+];
+
+const serverEnvPath = () => resolve(process.env.PHANTOMFORCE_ENV_FILE || process.cwd(), ".env");
+
+function quoteEnvValue(value: string) {
+  return JSON.stringify(value);
+}
+
+function upsertEnvValues(values: Record<string, string>) {
+  const path = serverEnvPath();
+  mkdirSync(dirname(path), { recursive: true });
+  const existing = existsSync(path) ? readFileSync(path, "utf8") : "";
+  const lines = existing ? existing.split(/\r?\n/) : [];
+  const used = new Set<string>();
+  const next = lines.map((line) => {
+    const match = line.match(/^(\s*)([A-Z0-9_]+)(\s*=).*/);
+    if (!match) return line;
+    const name = match[2];
+    if (!(name in values)) return line;
+    used.add(name);
+    return `${match[1]}${name}${match[3]}${quoteEnvValue(values[name])}`;
+  });
+  const missing = Object.entries(values).filter(([name]) => !used.has(name));
+  if (missing.length) {
+    if (next.length && next[next.length - 1] !== "") next.push("");
+    next.push("# PhantomForce social OAuth app credentials");
+    for (const [name, value] of missing) next.push(`${name}=${quoteEnvValue(value)}`);
+  }
+  const tmp = `${path}.${process.pid}.tmp`;
+  writeFileSync(tmp, `${next.join("\n").replace(/\n+$/u, "")}\n`, "utf8");
+  renameSync(tmp, path);
+  Object.assign(process.env, values);
+}
 
 const stored = (platform: SocialAnalyticsPlatform, key: string, workspaceKey = DEFAULT_SOCIAL_WORKSPACE) => {
   const connection = getStoredSocialConnection(platform, workspaceKey);
@@ -193,6 +245,68 @@ export function getSocialAnalyticsConnectorStatus(workspaceKey = DEFAULT_SOCIAL_
     crossPostingRequiresApproval: true,
     tokenStore: socialConnectionStoreStatus(scope),
   };
+}
+
+export function getSocialOAuthSetupStatus() {
+  const redirectUri = requiredOAuthRedirectUri("youtube");
+  const providers = OAUTH_SETUP_PROVIDERS.map((setup) => {
+    const connector = CONNECTORS.find((item) => item.id === setup.id);
+    const idSet = Boolean(env(setup.idEnv));
+    const secretSet = Boolean(env(setup.secretEnv));
+    return {
+      id: setup.id,
+      name: connector?.name || setup.id,
+      provider: connector?.provider || setup.id,
+      oauthConfigured: Boolean(connector?.oauthConfigured()),
+      idEnv: setup.idEnv,
+      secretEnv: setup.secretEnv,
+      idLabel: setup.idLabel,
+      secretLabel: setup.secretLabel,
+      idSet,
+      secretSet,
+      missing: [
+        ...(idSet ? [] : [setup.idEnv]),
+        ...(secretSet ? [] : [setup.secretEnv]),
+      ],
+      scopes: connector?.scopes || [],
+      callbackUrl: requiredOAuthRedirectUri(setup.id),
+    };
+  });
+  const uniqueProviders = providers.filter((provider, index, all) => (
+    provider.id !== "facebook" || !all.some((item, itemIndex) => itemIndex < index && item.id === "instagram")
+  ));
+  return {
+    ok: true as const,
+    envFile: serverEnvPath(),
+    redirectUri,
+    recommendedRedirectUri: `${ADMIN_PUBLIC_URL}/phantom-ai/ops/social-oauth/callback`,
+    providers: uniqueProviders,
+    readyCount: uniqueProviders.filter((provider) => provider.oauthConfigured).length,
+    totalCount: uniqueProviders.length,
+    secretsExposed: false,
+  };
+}
+
+export function saveSocialOAuthSetup(input: {
+  platform?: unknown;
+  clientId?: unknown;
+  clientSecret?: unknown;
+  redirectUri?: unknown;
+}) {
+  const platform = text(input.platform).toLowerCase() as SocialAnalyticsPlatform;
+  if (!isSocialAnalyticsPlatform(platform)) throw new Error("Choose a supported social platform.");
+  const setup = OAUTH_SETUP_PROVIDERS.find((item) => item.id === platform);
+  if (!setup) throw new Error("That social platform does not have an OAuth setup profile.");
+  const values: Record<string, string> = {};
+  const clientId = text(input.clientId);
+  const clientSecret = text(input.clientSecret);
+  const redirectUri = text(input.redirectUri);
+  if (clientId) values[setup.idEnv] = clientId;
+  if (clientSecret) values[setup.secretEnv] = clientSecret;
+  if (redirectUri) values.SOCIAL_OAUTH_REDIRECT_URI = redirectUri;
+  if (!Object.keys(values).length) throw new Error("Paste at least one OAuth app value before saving.");
+  upsertEnvValues(values);
+  return getSocialOAuthSetupStatus();
 }
 
 export function isSocialAnalyticsPlatform(value: unknown): value is SocialAnalyticsPlatform {

@@ -720,7 +720,7 @@ export function resolveSession() {
     session.clear();
     return null;
   }
-  if (saved && isClientPublicHost() && (!saved.database || saved.canManageAccess || saved.isSuperAdmin)) {
+  if (saved && isClientPublicHost() && ((!saved.database && !saved.localCustomer) || saved.canManageAccess || saved.isSuperAdmin)) {
     session.clear();
     return null;
   }

@@ -27,7 +27,8 @@ import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260714-256";
 import { mountAmbient } from "./ambient.js?v=phantom-live-20260714-256";
 import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260714-256";
 import {
-  fetchAuthConfig, databaseLogin, databaseLogout, switchOrg, fetchAuthMe, fetchEntitlementsSummary,
+  fetchAuthConfig, databaseLogin, databaseLogout, customerRegister, requestCustomerPasswordReset,
+  completeCustomerPasswordReset, switchOrg, fetchAuthMe, fetchEntitlementsSummary,
 } from "./orgs.js?v=phantom-live-20260714-256";
 import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260714-256";
 import { assetsAvailable } from "./orgs.js?v=phantom-live-20260714-256";
@@ -273,7 +274,8 @@ function maybeUpgradeGateToDatabaseLogin(card, options = {}) {
   const { customerApp = false, required = false } = options;
   fetchAuthConfig().then((auth) => {
     if (gate.hidden) return;
-    if (!auth?.databaseAuthEnabled) {
+    const customerAuthEnabled = !!(auth?.databaseAuthEnabled || auth?.customerAuthEnabled);
+    if (!customerAuthEnabled) {
       if (required) renderCustomerAuthBlocked(card);
       return;
     }
@@ -285,10 +287,13 @@ function maybeUpgradeGateToDatabaseLogin(card, options = {}) {
     const note = customerApp
       ? "Use the email tied to your business workspace. Platform admin accounts belong on admin.phantomforce.online."
       : "Invited to a business? Accept your invitation first, then sign in here.";
+    const canRegister = !!auth?.customerRegisterEndpoint;
+    const canReset = !!auth?.customerPasswordResetRequestEndpoint && !!auth?.customerPasswordResetCompleteEndpoint;
+    const accountActions = [canRegister ? `<button type="button" class="gate-link" data-auth-mode="register">Create account</button>` : "", canReset ? `<button type="button" class="gate-link" data-auth-mode="reset">Forgot password</button>` : ""].filter(Boolean).join("");
     card.innerHTML = `
       <p class="gate-kicker">PHANTOMFORCE · SIGN IN</p>
       <h1>${heading}</h1>
-      <form class="owner-login" data-db-login>
+      <form class="owner-login" data-db-login data-auth-panel="login">
         <label>
           <span>Email</span>
           <input type="email" data-db-email autocomplete="username" placeholder="you@business.com" autofocus required />
@@ -304,9 +309,74 @@ function maybeUpgradeGateToDatabaseLogin(card, options = {}) {
         </button>
         <p class="gate-error" data-db-error hidden></p>
       </form>
+      ${canRegister ? `
+        <form class="owner-login gate-auth-panel" data-register-account data-auth-panel="register" hidden>
+          <label>
+            <span>Your name</span>
+            <input type="text" data-register-name autocomplete="name" placeholder="Business owner name" />
+          </label>
+          <label>
+            <span>Business</span>
+            <input type="text" data-register-business autocomplete="organization" placeholder="Business name" />
+          </label>
+          <label>
+            <span>Email</span>
+            <input type="email" data-register-email autocomplete="username" placeholder="you@business.com" required />
+          </label>
+          <label>
+            <span>Password</span>
+            <input type="password" data-register-password autocomplete="new-password" placeholder="Create password" required />
+          </label>
+          <button class="gate-opt gate-submit" type="submit">
+            <span class="gate-opt-icon">＋</span>
+            <b>Create Workspace</b>
+            <i>Creates a customer workspace only. Admin remains locked to Jordan.</i>
+          </button>
+          <p class="gate-error" data-register-error hidden></p>
+        </form>` : ""}
+      ${canReset ? `
+        <form class="owner-login gate-auth-panel" data-reset-request data-auth-panel="reset" hidden>
+          <label>
+            <span>Account email</span>
+            <input type="email" data-reset-email autocomplete="username" placeholder="you@business.com" required />
+          </label>
+          <button class="gate-opt gate-submit" type="submit">
+            <span class="gate-opt-icon">↺</span>
+            <b>Start Password Reset</b>
+            <i>Creates a reset path for this customer workspace. No admin access is granted.</i>
+          </button>
+          <p class="gate-success" data-reset-status hidden></p>
+          <p class="gate-error" data-reset-error hidden></p>
+        </form>
+        <form class="owner-login gate-auth-panel" data-reset-complete data-auth-panel="reset-complete" hidden>
+          <label>
+            <span>Reset token</span>
+            <input type="password" data-reset-token autocomplete="one-time-code" placeholder="Reset token" required />
+          </label>
+          <label>
+            <span>New password</span>
+            <input type="password" data-reset-new-password autocomplete="new-password" placeholder="New password" required />
+          </label>
+          <button class="gate-opt gate-submit" type="submit">
+            <span class="gate-opt-icon">✓</span>
+            <b>Set New Password</b>
+            <i>After reset, sign in with the new customer password.</i>
+          </button>
+          <p class="gate-error" data-reset-complete-error hidden></p>
+        </form>` : ""}
+      ${accountActions ? `<div class="gate-auth-actions">${accountActions}<button type="button" class="gate-link" data-auth-mode="login" hidden>Back to sign in</button></div>` : ""}
       <p class="gate-note">${note}</p>`;
     const form = card.querySelector("[data-db-login]");
     const error = card.querySelector("[data-db-error]");
+    const authPanels = Array.from(card.querySelectorAll("[data-auth-panel]"));
+    const modeButtons = Array.from(card.querySelectorAll("[data-auth-mode]"));
+    const setAuthMode = (mode) => {
+      authPanels.forEach((panel) => { panel.hidden = panel.dataset.authPanel !== mode; });
+      modeButtons.forEach((button) => { button.hidden = button.dataset.authMode === mode; });
+      const input = card.querySelector(`[data-auth-panel="${mode}"] input`);
+      if (input) setTimeout(() => focusWithoutScroll(input), 40);
+    };
+    modeButtons.forEach((button) => { button.onclick = () => setAuthMode(button.dataset.authMode); });
     form.onsubmit = async (event) => {
       event.preventDefault();
       error.hidden = true;
@@ -333,6 +403,89 @@ function maybeUpgradeGateToDatabaseLogin(card, options = {}) {
         form.classList.remove("is-loading");
       }
     };
+    const registerForm = card.querySelector("[data-register-account]");
+    if (registerForm) {
+      const registerError = card.querySelector("[data-register-error]");
+      registerForm.onsubmit = async (event) => {
+        event.preventDefault();
+        registerError.hidden = true;
+        registerForm.classList.add("is-loading");
+        try {
+          const nextSession = await customerRegister({
+            name: card.querySelector("[data-register-name]").value.trim(),
+            businessName: card.querySelector("[data-register-business]").value.trim(),
+            email: card.querySelector("[data-register-email]").value.trim(),
+            password: card.querySelector("[data-register-password]").value,
+          });
+          if (customerApp && (nextSession?.canManageAccess || nextSession?.isSuperAdmin)) {
+            await databaseLogout();
+            session.clear();
+            ctx.session = null;
+            throw new Error("Platform admin accounts must use admin.phantomforce.online.");
+          }
+          ctx.session = nextSession;
+          enterPhantom();
+        } catch (err) {
+          session.clear();
+          ctx.session = null;
+          registerError.textContent = err?.message || "Account creation failed.";
+          registerError.hidden = false;
+        } finally {
+          registerForm.classList.remove("is-loading");
+        }
+      };
+    }
+    const resetForm = card.querySelector("[data-reset-request]");
+    if (resetForm) {
+      const resetError = card.querySelector("[data-reset-error]");
+      const resetStatus = card.querySelector("[data-reset-status]");
+      resetForm.onsubmit = async (event) => {
+        event.preventDefault();
+        resetError.hidden = true;
+        resetStatus.hidden = true;
+        resetForm.classList.add("is-loading");
+        try {
+          const result = await requestCustomerPasswordReset(card.querySelector("[data-reset-email]").value.trim());
+          resetStatus.textContent = result?.resetToken
+            ? "Reset token created for this test workspace. Enter a new password to finish."
+            : "Reset request recorded. Use the configured delivery/admin queue to finish.";
+          resetStatus.hidden = false;
+          if (result?.resetToken) {
+            const tokenInput = card.querySelector("[data-reset-token]");
+            if (tokenInput) tokenInput.value = result.resetToken;
+            setAuthMode("reset-complete");
+          }
+        } catch (err) {
+          resetError.textContent = err?.message || "Reset request failed.";
+          resetError.hidden = false;
+        } finally {
+          resetForm.classList.remove("is-loading");
+        }
+      };
+    }
+    const resetCompleteForm = card.querySelector("[data-reset-complete]");
+    if (resetCompleteForm) {
+      const resetCompleteError = card.querySelector("[data-reset-complete-error]");
+      resetCompleteForm.onsubmit = async (event) => {
+        event.preventDefault();
+        resetCompleteError.hidden = true;
+        resetCompleteForm.classList.add("is-loading");
+        try {
+          await completeCustomerPasswordReset(
+            card.querySelector("[data-reset-token]").value.trim(),
+            card.querySelector("[data-reset-new-password]").value,
+          );
+          setAuthMode("login");
+          error.textContent = "Password reset complete. Sign in with the new password.";
+          error.hidden = false;
+        } catch (err) {
+          resetCompleteError.textContent = err?.message || "Password reset failed.";
+          resetCompleteError.hidden = false;
+        } finally {
+          resetCompleteForm.classList.remove("is-loading");
+        }
+      };
+    }
   }).catch(() => {
     if (required && !gate.hidden) renderCustomerAuthBlocked(card, "The account system is not reachable. Start the backend, then sign in again.");
   });

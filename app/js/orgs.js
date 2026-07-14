@@ -47,6 +47,7 @@ export async function fetchAuthConfig() {
    is enforced server-side per request. */
 function localSessionFromServer(payload) {
   const s = payload.session || {};
+  const localCustomer = payload.authMode === "local-customer" || String(s.id || "").startsWith("local:");
   const managesOrg = s.isSuperAdmin || ["owner", "admin"].includes(s.orgRole || "");
   return {
     role: managesOrg ? "admin" : "employee",
@@ -55,7 +56,8 @@ function localSessionFromServer(payload) {
     ws: "phantomforce",
     sessionId: s.id,
     canManageAccess: !!s.canManageAccess,
-    database: true,
+    database: !localCustomer,
+    localCustomer,
     email: s.email || "",
     orgId: s.orgId || null,
     orgRole: s.orgRole || null,
@@ -74,6 +76,35 @@ export async function databaseLogin(email, password) {
   session.set(local);
   ctx.session = { ...local, token: undefined };
   return ctx.session;
+}
+
+export async function customerRegister({ email, password, name, businessName }) {
+  const { ok, status, json } = await api("/auth/register", {
+    method: "POST",
+    body: { email, password, name, businessName },
+  });
+  if (!ok) {
+    throw new Error(status === 409 ? "That email already has a workspace." : String(json?.error || `Account creation failed (${status}).`));
+  }
+  const local = localSessionFromServer(json);
+  session.set(local);
+  ctx.session = { ...local, token: undefined };
+  return ctx.session;
+}
+
+export async function requestCustomerPasswordReset(email) {
+  const { ok, status, json } = await api("/auth/password-reset/request", { method: "POST", body: { email } });
+  if (!ok) throw new Error(String(json?.error || `Reset request failed (${status}).`));
+  return json;
+}
+
+export async function completeCustomerPasswordReset(token, password) {
+  const { ok, status, json } = await api("/auth/password-reset/complete", {
+    method: "POST",
+    body: { token, password },
+  });
+  if (!ok) throw new Error(String(json?.error || `Password reset failed (${status}).`));
+  return json;
 }
 
 export async function databaseLogout() {
@@ -104,6 +135,7 @@ export async function switchOrg(orgId) {
 }
 
 export async function fetchEntitlementsSummary() {
+  if (ctx.session?.localCustomer) return null;
   const orgId = activeOrgId();
   if (!orgId) return null;
   const { ok, json } = await api(`/orgs/${encodeURIComponent(orgId)}/entitlements`);
@@ -213,7 +245,7 @@ export async function fetchServerSites() {
    <img>/<video> must load bytes as blob URLs (assetBlobUrl) — the server
    requires Authorization on every asset route. */
 
-export const assetsAvailable = () => isDatabaseSession() && !!activeOrgId();
+export const assetsAvailable = () => isDatabaseSession() && !ctx.session?.localCustomer && !!activeOrgId();
 
 export async function uploadAsset(dataUrl, name, opts = {}) {
   const orgId = activeOrgId();

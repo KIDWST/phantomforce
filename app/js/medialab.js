@@ -193,6 +193,12 @@ let socialOAuthState = {
   error: "",
   connectors: [],
 };
+let socialOAuthSetupState = {
+  loaded: false,
+  loading: false,
+  error: "",
+  setup: null,
+};
 
 function cleanSocialHandle(value = "") {
   return String(value || "")
@@ -268,6 +274,40 @@ async function refreshSocialOAuthStatus({ force = false } = {}) {
   }
   rerenderMediaSettings();
   return socialOAuthState;
+}
+async function refreshSocialOAuthSetup({ force = false } = {}) {
+  if (socialOAuthSetupState.loading || (socialOAuthSetupState.loaded && !force)) return socialOAuthSetupState;
+  socialOAuthSetupState = { ...socialOAuthSetupState, loading: true, error: "" };
+  try {
+    const response = await fetch("/phantom-ai/ops/social-oauth/setup", {
+      headers: socialAuthHeaders(),
+    });
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(String(json?.error || `OAuth setup check failed (${response.status}).`));
+    socialOAuthSetupState = { loaded: true, loading: false, error: "", setup: json.setup || null };
+  } catch (error) {
+    socialOAuthSetupState = {
+      ...socialOAuthSetupState,
+      loaded: true,
+      loading: false,
+      error: error?.message || "OAuth app setup could not be checked.",
+    };
+  }
+  rerenderMediaSettings();
+  return socialOAuthSetupState;
+}
+async function saveSocialOAuthAppSetup(payload = {}) {
+  const response = await fetch("/phantom-ai/ops/social-oauth/setup", {
+    method: "POST",
+    headers: socialAuthHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify(payload),
+  });
+  const json = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(String(json?.error || `OAuth setup save failed (${response.status}).`));
+  socialOAuthSetupState = { loaded: true, loading: false, error: "", setup: json.setup || null };
+  socialOAuthState.loaded = false;
+  await refreshSocialOAuthStatus({ force: true });
+  return json;
 }
 function socialConnectorFor(platform) {
   return socialOAuthState.connectors.find((connector) => connector.id === platform) || null;
@@ -3569,12 +3609,44 @@ function downloadAsset(a) {
    owner-only surface area — it lives exclusively in the Developer tab
    (main.js buildDevPrograms). This tab never re-exposes it. */
 
+function socialOAuthSetupPanel(esc) {
+  const setup = socialOAuthSetupState.setup;
+  const providers = Array.isArray(setup?.providers) ? setup.providers : [];
+  const callbackUrl = setup?.recommendedRedirectUri || setup?.redirectUri || "https://admin.phantomforce.online/phantom-ai/ops/social-oauth/callback";
+  const providerOptions = providers.length
+    ? providers.map((provider) => `<option value="${esc(provider.id)}">${esc(provider.name)}${provider.id === "instagram" ? " + Facebook" : ""}</option>`).join("")
+    : PLATFORMS.map((platform) => `<option value="${esc(platform.id)}">${esc(platform.name)}</option>`).join("");
+  const providerRows = providers.length
+    ? providers.map((provider) => `<span class="${provider.oauthConfigured ? "is-ready" : "is-missing"}">${esc(provider.name)}${provider.id === "instagram" ? " + Facebook" : ""} · ${provider.oauthConfigured ? "ready" : "needs app"}</span>`).join("")
+    : `<span>Checking provider app setup…</span>`;
+  return `<details class="set-oauth-apps" open>
+    <summary>
+      <span>OAuth apps</span>
+      <b>${esc(String(setup?.readyCount ?? 0))}/${esc(String(setup?.totalCount ?? providers.length || PLATFORMS.length))} ready</b>
+    </summary>
+    <p>Set each platform app once. After this, any business user just clicks Connect account and approves in their signed-in browser. Secrets stay server-side.</p>
+    ${socialOAuthSetupState.error ? `<div class="set-social-notice">${esc(socialOAuthSetupState.error)}</div>` : ""}
+    <label class="set-oauth-callback">
+      <span>Callback URL for provider consoles</span>
+      <input readonly value="${esc(callbackUrl)}" data-oauth-callback />
+    </label>
+    <div class="set-oauth-provider-row">${providerRows}</div>
+    <form class="set-oauth-form" data-oauth-setup-form>
+      <select data-oauth-platform>${providerOptions}</select>
+      <input data-oauth-client-id autocomplete="off" placeholder="Client ID / App ID / Client key" />
+      <input data-oauth-client-secret autocomplete="off" placeholder="Client secret / App secret" type="password" />
+      <button class="btn btn-primary" type="submit">${socialOAuthSetupState.loading ? "Checking…" : "Save app"}</button>
+    </form>
+  </details>`;
+}
+
 export function renderMediaSettings(el, opts = {}) {
   mediaSettingsMount = el;
   mediaSettingsOpts = opts;
   ensureHermesExtensionListener();
   ensureSocialOAuthCompletionListener();
   if (!socialOAuthState.loaded && !socialOAuthState.loading) void refreshSocialOAuthStatus();
+  if (!socialOAuthSetupState.loaded && !socialOAuthSetupState.loading) void refreshSocialOAuthSetup();
   const esc = opts.esc || ((s) => String(s));
   const cfg = loadCfg();
   const socialAccounts = loadSocialAccounts();
@@ -3617,6 +3689,7 @@ export function renderMediaSettings(el, opts = {}) {
         </div>
         ${socialNotice ? `<div class="set-social-notice">${esc(socialNotice)}</div>` : ""}
         ${socialOAuthState.error ? `<div class="set-social-notice">OAuth status check: ${esc(socialOAuthState.error)}</div>` : ""}
+        ${socialOAuthSetupPanel(esc)}
         <div class="set-social-grid">
           ${socialAccounts.map((account) => socialCard(account, esc)).join("")}
         </div>
@@ -3627,6 +3700,29 @@ export function renderMediaSettings(el, opts = {}) {
   el.querySelectorAll("[data-route]").forEach((s) => s.onchange = () => { cfg.routing[s.dataset.route] = s.value; saveCfg(cfg); });
   el.querySelectorAll("[data-set-quality] button").forEach((b) => b.onclick = () => { genState.quality = b.dataset.v || "standard"; renderMediaSettings(el, opts); });
   const ap = el.querySelector("[data-set-approval]"); ap.onchange = () => { cfg.requireApproval = ap.checked; saveCfg(cfg); };
+  const callbackInput = el.querySelector("[data-oauth-callback]");
+  if (callbackInput) callbackInput.onclick = () => { callbackInput.select(); navigator.clipboard?.writeText(callbackInput.value).catch(() => {}); };
+  const oauthSetupForm = el.querySelector("[data-oauth-setup-form]");
+  if (oauthSetupForm) oauthSetupForm.onsubmit = async (event) => {
+    event.preventDefault();
+    const platform = oauthSetupForm.querySelector("[data-oauth-platform]")?.value || "";
+    const clientId = oauthSetupForm.querySelector("[data-oauth-client-id]")?.value.trim() || "";
+    const clientSecret = oauthSetupForm.querySelector("[data-oauth-client-secret]")?.value.trim() || "";
+    const redirectUri = callbackInput?.value || "";
+    if (!clientId && !clientSecret) {
+      socialNotice = "Paste the provider app ID or secret before saving.";
+      renderMediaSettings(el, opts);
+      return;
+    }
+    try {
+      socialNotice = `Saving ${platform} OAuth app setup…`;
+      await saveSocialOAuthAppSetup({ platform, clientId, clientSecret, redirectUri });
+      socialNotice = `${platform} OAuth app saved. Connect the account from its channel card.`;
+    } catch (error) {
+      socialNotice = error?.message || "OAuth app setup could not be saved.";
+    }
+    renderMediaSettings(el, opts);
+  };
 
   // social account linking stays local and never reads browser cookies/tokens.
   // OAuth/API tokens must stay server-side; this UI only captures editable public identity.
