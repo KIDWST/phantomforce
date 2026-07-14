@@ -285,18 +285,23 @@ body.phantomplay-playing{overflow:hidden}.workspace-page:has(.pp-player) .worksp
   background:rgba(65,255,161,.1);
 }
 .pp-game-body{
-  grid-template-columns:minmax(0,1fr) auto;
-  align-content:center;
-  padding:14px;
+  display:flex;
+  flex-direction:column;
+  min-width:0;
+  gap:9px;
+  align-content:normal;
+  padding:14px 14px 13px;
 }
-.pp-game-body>div:first-child,
-.pp-game-body>p,
-.pp-game-meta,
-.pp-progress{
-  grid-column:1;
+.pp-game-title{
+  min-width:0;
+  padding-right:42px;
 }
 .pp-game-body h3{
+  max-width:100%;
   font:900 18px "Space Grotesk",system-ui,sans-serif;
+  line-height:1.08;
+  overflow-wrap:normal;
+  word-break:normal;
 }
 .pp-game-developer{
   display:flex!important;
@@ -320,21 +325,27 @@ body.phantomplay-playing{overflow:hidden}.workspace-page:has(.pp-player) .worksp
 .pp-game-body>p{
   min-height:0;
   max-width:620px;
+  overflow:hidden;
+  display:-webkit-box;
+  -webkit-line-clamp:3;
+  -webkit-box-orient:vertical;
+  overflow-wrap:normal;
+  word-break:normal;
   color:#aac7ba;
 }
 .pp-favorite{
-  position:static;
-  grid-column:2;
-  grid-row:1;
+  position:absolute;
+  top:12px;
+  right:12px;
   width:32px;
   height:32px;
   border-radius:4px;
 }
 .pp-play{
-  grid-column:2;
-  grid-row:2 / span 3;
-  align-self:stretch;
-  width:126px;
+  align-self:flex-end;
+  width:min(168px,100%);
+  margin-top:auto;
+  white-space:nowrap;
 }
 .pp-spotlight,
 .pp-room-hero,
@@ -803,12 +814,10 @@ body.phantomplay-playing{overflow:hidden}.workspace-page:has(.pp-player) .worksp
     min-height:164px;
   }
   .pp-game-body{
-    grid-template-columns:1fr 34px;
     padding:11px;
   }
   .pp-play{
-    grid-column:1 / -1;
-    grid-row:auto;
+    align-self:stretch;
     width:100%;
     min-height:36px;
   }
