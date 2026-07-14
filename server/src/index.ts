@@ -131,7 +131,7 @@ import { paywallPreHandler } from "./access/paywall-guard.js";
 import { getPaywallDecision } from "./access/paywall.js";
 import { listSubscriptions, setSubscription } from "./access/subscription-store.js";
 import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
-import { createReadStream } from "node:fs";
+import { createReadStream, existsSync } from "node:fs";
 import { appendFile, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
@@ -1384,7 +1384,10 @@ type LocalAssetIndex = {
   assets: LocalAssetRecord[];
 };
 
-const LOCAL_ASSET_DEFAULT_ROOT = "G:\\Motionarray download";
+/* Probed in order when PHANTOMFORCE_LOCAL_ASSET_ROOT is unset — the owner's
+   folder is "G:\Motionarray download here"; the shorter name is kept as a
+   fallback for boxes that predate the rename. */
+const LOCAL_ASSET_DEFAULT_ROOTS = ["G:\\Motionarray download here", "G:\\Motionarray download"];
 const LOCAL_ASSET_MANAGER_DIR = "_PhantomForce_Asset_Manager";
 const LOCAL_ASSET_MANIFEST = join(LOCAL_ASSET_MANAGER_DIR, "PhantomForce_Ready", "phantomforce_motionarray_manifest.json");
 const LOCAL_ASSET_CACHE = join(LOCAL_ASSET_MANAGER_DIR, "PhantomForce_Ready", "phantomforce-local-asset-cache.json");
@@ -1417,7 +1420,9 @@ let localAssetIndexCache: { key: string; at: number; index: LocalAssetIndex } | 
 
 function localAssetRoot() {
   const configured = String(process.env.PHANTOMFORCE_LOCAL_ASSET_ROOT || "").trim();
-  return resolve(configured || LOCAL_ASSET_DEFAULT_ROOT);
+  if (configured) return resolve(configured);
+  const found = LOCAL_ASSET_DEFAULT_ROOTS.find((candidate) => existsSync(candidate));
+  return resolve(found || LOCAL_ASSET_DEFAULT_ROOTS[0]);
 }
 
 /* The label shown in the product. Never the folder basename: that leaks
