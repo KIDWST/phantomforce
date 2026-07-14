@@ -1,19 +1,66 @@
 /* PhantomForce Phantom — black glass, neon command console.
    One visual system for admin and client; full-width on desktop, clean on phone. */
 
+/* ============================  DESIGN TOKENS  ============================
+   Single source of truth for the shell's visual system (phase 1 revamp).
+   Color values below are the canonical dark theme; validated org themes
+   (html[data-org-*] below) override the same custom properties — they may
+   re-tint the workspace but never invent new semantics.
+   ========================================================================= */
 :root {
-  --neon: #41ffa1;
-  --neon-2: #1ef0ff;
-  --risk: #ff4d63;
-  --warn: #ffd166;
-  --ink: #eafff2;
-  --dim: #6f9a83;
-  --dim-2: #48705c;
-  --bg: #02060a;
-  --glass: rgba(6, 18, 13, 0.66);
-  --glass-2: rgba(4, 12, 9, 0.5);
-  --line: rgba(65, 255, 161, 0.16);
-  --line-strong: rgba(65, 255, 161, 0.34);
+  /* -- color: accent + status ------------------------------------------ */
+  --neon: #41ffa1;        /* primary accent (mint) — actions, live, active */
+  --neon-2: #1ef0ff;      /* secondary accent (cyan) — code, telemetry */
+  --risk: #ff4d63;        /* danger / destructive */
+  --bad: var(--risk);     /* legacy alias kept for older modules */
+  --warn: #ffd166;        /* caution / waiting-on-you */
+
+  /* -- color: surfaces + text (canonical dark values) ------------------- */
+  --bg: #05080d;                            /* page background */
+  --ink: #eef5f2;                           /* primary text */
+  --dim: #8ba0a6;                           /* secondary text */
+  --dim-2: #5f757b;                         /* tertiary text / faint meta */
+  --glass: rgba(17, 23, 31, 0.66);          /* raised translucent surface */
+  --glass-2: rgba(12, 17, 24, 0.5);         /* recessed translucent surface */
+  --line: rgba(150, 176, 190, 0.11);        /* hairline borders */
+  --line-strong: rgba(120, 220, 180, 0.24); /* emphasized borders */
+  --card-grad: linear-gradient(180deg, rgba(28, 36, 46, 0.55), rgba(12, 17, 24, 0.62));
+  --accent-soft: rgba(65, 255, 161, 0.10);  /* soft mint wash for fills */
+  --text: var(--ink);                       /* legacy alias (gate inputs) */
+
+  /* -- spacing scale ----------------------------------------------------- */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+
+  /* -- radius scale ------------------------------------------------------ */
+  --r-sm: 8px;   /* chips, kbd, small controls */
+  --r-md: 12px;  /* buttons, inputs, pills, list rows */
+  --r-lg: 18px;  /* cards, panels, menus */
+
+  /* -- type scale -------------------------------------------------------- */
+  --fs-xs: 10px;    /* eyebrows / kickers (mono, tracked, uppercase) */
+  --fs-sm: 12px;    /* meta, captions */
+  --fs-md: 13.5px;  /* body */
+  --fs-lg: 16px;    /* card titles */
+  --fs-xl: 22px;    /* page titles */
+  --font-sans: "Space Grotesk", system-ui, sans-serif;
+  --font-mono: "DM Mono", ui-monospace, monospace;
+  --font: var(--font-sans);                 /* legacy alias (gate inputs) */
+
+  /* -- elevation / shadow ------------------------------------------------ */
+  --edge-hi: inset 0 1px 0 rgba(255, 255, 255, 0.055); /* top edge highlight */
+  --depth-1: 0 1px 2px rgba(0, 0, 0, 0.32), 0 10px 26px -12px rgba(0, 0, 0, 0.6);
+  --depth-2: 0 2px 5px rgba(0, 0, 0, 0.4), 0 20px 46px -18px rgba(0, 0, 0, 0.7);
+  --glow-1: 0 0 26px rgba(65, 255, 161, 0.07);         /* faint mint aura */
+
+  /* -- controls + focus -------------------------------------------------- */
+  --ctl-h: 44px;                                 /* shared topbar control height */
+  --focus-ring: 2px solid rgba(65, 255, 161, 0.65);
+
   --phantom-keyboard-offset: 0px;
 }
 
@@ -2734,7 +2781,7 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 /* ---------------- sidebar ---------------- */
 .sidebar {
   flex: 0 0 214px; width: 214px; position: sticky; top: 0; align-self: flex-start;
-  height: 100vh; display: flex; flex-direction: column; gap: 10px; padding: 14px 10px;
+  height: 100vh; display: flex; flex-direction: column; gap: var(--sp-3); padding: var(--sp-4) var(--sp-3);
   border-right: 1px solid var(--line);
   background: linear-gradient(180deg, rgba(6, 18, 13, 0.7), rgba(2, 8, 10, 0.6));
   -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
@@ -2747,8 +2794,8 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 .side-nav { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-height: 0; }
 .nav-item {
   display: flex; align-items: center; gap: 9px; width: 100%; text-align: left; cursor: pointer;
-  min-height: 38px; padding: 7px 9px; border-radius: 10px; border: 1px solid transparent; background: none;
-  color: var(--dim); font: 600 12.25px "Space Grotesk", sans-serif;
+  min-height: 38px; padding: var(--sp-2) 10px; border-radius: var(--r-md); border: 1px solid transparent; background: none;
+  color: var(--dim); font: 600 12.25px var(--font-sans);
   transition: background 0.18s, color 0.18s, border-color 0.18s;
 }
 .nav-item .ic { width: 15px; height: 15px; flex: 0 0 15px; }
@@ -2758,21 +2805,23 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   margin-top: auto;
   position: relative;
 }
+/* the bottom zone starts with a single clean hairline — one divider,
+   consistent inset, no glow gradient competing with the active state */
 .nav-item:not(.nav-item-bottom) + .nav-item-bottom::before {
   content: "";
   position: absolute;
-  left: 10px;
-  right: 10px;
-  top: -6px;
+  left: var(--sp-2);
+  right: var(--sp-2);
+  top: -7px;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(65,255,161,0.22), transparent);
+  background: var(--line-strong);
 }
+/* bottom-zone items keep the exact same height/rhythm as the main list —
+   the quieter ink is what marks them as tucked away, not a different size */
 .nav-item-bottom {
   background: rgba(255,255,255,0.018);
   color: rgba(210, 235, 222, 0.72);
-  min-height: 34px;
-  padding-top: 6px;
-  padding-bottom: 6px;
+  min-height: 38px;
 }
 .nav-item-quiet {
   opacity: 0.78;
@@ -2847,16 +2896,16 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
    the clock is allowed to shrink/truncate; clock, notifications, and the
    user menu are pinned and never compress. */
 .topbar2 {
-  display: flex; align-items: center; gap: 14px; flex-wrap: nowrap;
+  display: flex; align-items: center; gap: var(--sp-3); flex-wrap: nowrap;
   width: 100%; min-width: 0;
-  padding: 14px clamp(16px, 2vw, 26px); border-bottom: 1px solid var(--line);
+  padding: var(--sp-3) clamp(16px, 2vw, 26px); border-bottom: 1px solid var(--line);
   background: linear-gradient(180deg, rgba(3, 10, 8, 0.7), rgba(3, 10, 8, 0.3));
   position: sticky; top: 0; z-index: 20;
   -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
 }
 /* Browser zoom changes the effective CSS width, so every left-side topbar
    group must be allowed to shrink before it crashes into clock/user controls. */
-.status-pills { display: flex; gap: 10px; flex-wrap: nowrap; align-items: center; min-width: 0; flex: 1 1 0; }
+.status-pills { display: flex; gap: var(--sp-2); flex-wrap: nowrap; align-items: stretch; min-width: 0; flex: 1 1 0; }
 .topbar-actions {
   display: flex;
   align-items: center;
@@ -2868,7 +2917,9 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 }
 .topbar-actions .cmdk-open { flex: 0 1 240px; }
 .topbar-actions .topbar-clock { margin-left: clamp(6px, 0.8vw, 18px); }
-.pill { display: flex; flex-direction: column; gap: 2px; padding: 7px 13px; border: 1px solid var(--line); border-radius: 12px; background: var(--glass); min-width: 0; }
+/* every pill shares one height with the rest of the topbar controls; the
+   value line truncates (see .pill-v-text) instead of stretching the row */
+.pill { display: flex; flex-direction: column; justify-content: center; gap: 2px; min-height: var(--ctl-h); padding: 5px var(--sp-3); border: 1px solid var(--line); border-radius: var(--r-md); background: var(--glass); min-width: 0; }
 .status-pills .pill { flex: 0 1 178px; }
 .pill-link { cursor: pointer; transition: border-color 0.15s, background 0.15s; }
 .pill-link:hover, .pill-link:focus-visible { border-color: var(--line-strong); background: rgba(65,255,161,0.08); outline: none; }
@@ -2882,10 +2933,10 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 .pill-warn .pill-v { color: var(--warn); }
 .pill-warn .dot { background: var(--warn); box-shadow: 0 0 8px var(--warn); }
 .pill-v .lock { font-size: 11px; }
-.ws-switch { display: inline-flex; min-width: 0; flex: 0 1 180px; }
+.ws-switch { display: inline-flex; align-items: stretch; min-width: 0; flex: 0 1 180px; }
 .ws-switch select {
-  appearance: none; -webkit-appearance: none; cursor: pointer; max-width: 170px;
-  padding: 8px 30px 8px 13px; border-radius: 12px; font-size: 12.5px;
+  appearance: none; -webkit-appearance: none; cursor: pointer; max-width: 170px; min-height: var(--ctl-h);
+  padding: 8px 30px 8px 13px; border-radius: var(--r-md); font-size: 12.5px;
   border: 1px solid var(--line); background: rgba(4, 14, 10, 0.9); color: var(--ink);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   background-image: linear-gradient(45deg, transparent 50%, var(--neon) 50%), linear-gradient(135deg, var(--neon) 50%, transparent 50%);
@@ -2898,12 +2949,12 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 .topbar-clock i { font: 400 11px "DM Mono", monospace; font-style: normal; color: var(--dim); }
 .user-menu-wrap { position: relative; display: inline-flex; align-items: center; flex-shrink: 0; }
 .topbar-user {
-  display: flex; align-items: center; gap: 10px; padding: 6px 12px 6px 8px; cursor: pointer;
-  border: 1px solid var(--line); border-radius: 14px; background: var(--glass); color: var(--ink);
+  display: flex; align-items: center; gap: 10px; min-height: var(--ctl-h); padding: 5px 12px 5px 6px; cursor: pointer;
+  border: 1px solid var(--line); border-radius: var(--r-md); background: var(--glass); color: var(--ink);
   transition: border-color 0.2s;
 }
 .topbar-user:hover, .topbar-user.is-open { border-color: var(--line-strong); background: rgba(65, 255, 161, 0.06); }
-.user-avatar { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; font: 700 12px "DM Mono", monospace; color: #04160d; background: linear-gradient(120deg, var(--neon), #15d97f); }
+.user-avatar { width: 32px; height: 32px; border-radius: var(--r-sm); display: grid; place-items: center; font: 700 12px var(--font-mono); color: #04160d; background: linear-gradient(120deg, var(--neon), #15d97f); }
 .user-meta { display: flex; flex-direction: column; line-height: 1.2; }
 .user-meta b { font-size: 13px; font-weight: 600; }
 .user-meta i { font-size: 10.5px; font-style: normal; color: var(--dim); }
@@ -2955,10 +3006,13 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 .user-menu-org b { font-size: 12.5px; font-weight: 600; }
 .user-menu-org span { font-size: 10.5px; color: var(--dim); text-transform: capitalize; }
 
-/* ---------------- console grid ---------------- */
-.console { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 330px); gap: clamp(10px, 1vw, 16px); padding: clamp(16px, 1.6vw, 22px); align-items: start; }
-.console-center { min-width: 0; display: flex; flex-direction: column; gap: clamp(16px, 1.8vw, 22px); }
-.console-rail { display: flex; flex-direction: column; gap: 16px; }
+/* ---------------- console grid (dashboard) ----------------
+   The dashboard reads top-to-bottom: greeting + command hero first, the
+   attention strip next, then one tight two-column grid of the real widgets
+   (today's plan, mission queue, quick actions). No side rail. */
+.console { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-4); padding: clamp(16px, 1.6vw, 22px); align-items: start; align-content: start; width: 100%; max-width: 1220px; margin-inline: auto; }
+.console-center { min-width: 0; display: flex; flex-direction: column; gap: var(--sp-4); }
+.console-rail { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-4); align-items: stretch; }
 
 /* Dashboard (chat + inline map) is a single screen, never a scrolling page —
    it should end at the bottom of the map bar. Scoped to plain .console (not
@@ -2967,15 +3021,11 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
    sidebar/topbar/ticker stay put rather than the whole page moving. */
 .app-main:has(> .console:not(.console-workspace)) { height: 100dvh; overflow: hidden; }
 .app-main:has(> .console:not(.console-workspace)) .console { min-height: 0; overflow-y: auto; align-content: start; }
-/* The right rail's cards (plan/desktop-context/queue/quick-actions) don't
-   shrink with viewport height the way the chat does, so on shorter screens
-   they can end up taller than the chat+map column. Contain any overflow to
-   the rail itself rather than letting it push the console (and the map
-   underneath the chat) out of view. */
+/* The widget grid now flows below the hero inside the console's own scroll
+   area, so it needs no height cap of its own. */
 .app-main:has(> .console:not(.console-workspace)) .console-rail {
-  max-height: calc(100vh - 157px);
-  overflow-y: auto;
-  overflow-x: hidden;
+  max-height: none;
+  overflow: visible;
 }
 .console-workspace {
   display: block;
@@ -3096,8 +3146,8 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
     padding-bottom: clamp(24px, 4vh, 56px);
   }
 }
-.section-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; }
-.section-head h2 { margin: 0; font: 600 12px "Space Grotesk", sans-serif; letter-spacing: 0.16em; text-transform: uppercase; color: #d7f3e4; }
+.section-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: var(--sp-3); }
+.section-head h2 { margin: 0; font: 600 12px var(--font-sans); letter-spacing: 0.16em; text-transform: uppercase; color: #d7f3e4; }
 .section-link { background: none; border: 0; cursor: pointer; color: var(--neon); font-size: 12px; display: inline-flex; align-items: center; gap: 5px; }
 .section-link:hover { text-decoration: underline; }
 
@@ -3456,7 +3506,7 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 
 
 /* ---------------- rail cards ---------------- */
-.plan-card, .queue-card, .quick-card { border: 1px solid var(--line); border-radius: 20px; padding: 18px; background: var(--glass); }
+.plan-card, .queue-card, .quick-card { border: 1px solid var(--line); border-radius: var(--r-lg); padding: var(--sp-4); background: var(--glass); }
 .plan-inner { display: flex; align-items: center; gap: 14px; width: 100%; background: none; border: 0; cursor: pointer; text-align: left; }
 .plan-donut { width: 72px; height: 72px; flex: 0 0 auto; }
 .plan-track { fill: none; stroke: rgba(65, 255, 161, 0.12); stroke-width: 7; }
@@ -3831,7 +3881,7 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 /* topbar search pill */
 .cmdk-open {
   display: inline-flex; align-items: center; gap: 9px; cursor: pointer; flex: 0 1 240px; min-width: 0; max-width: 300px;
-  padding: 8px 10px 8px 13px; border: 1px solid var(--line); border-radius: 12px; background: rgba(0,0,0,0.28); color: var(--dim);
+  min-height: var(--ctl-h); padding: 8px 10px 8px 13px; border: 1px solid var(--line); border-radius: var(--r-md); background: rgba(0,0,0,0.28); color: var(--dim);
   transition: border-color 0.2s, background 0.2s;
 }
 .cmdk-open:hover { border-color: var(--line-strong); background: rgba(65,255,161,0.05); }
@@ -3842,7 +3892,7 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 
 /* notifications */
 .notif-wrap { position: relative; flex-shrink: 0; }
-.notif-btn { position: relative; width: 40px; height: 40px; display: grid; place-items: center; cursor: pointer; border: 1px solid var(--line); border-radius: 12px; background: var(--glass); color: #cfeeda; transition: border-color 0.2s, background 0.2s; }
+.notif-btn { position: relative; width: var(--ctl-h); height: var(--ctl-h); display: grid; place-items: center; cursor: pointer; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--glass); color: #cfeeda; transition: border-color 0.2s, background 0.2s; }
 .notif-btn:hover { border-color: var(--line-strong); background: rgba(65,255,161,0.06); }
 .notif-btn .ic { width: 18px; height: 18px; }
 .notif-dot { position: absolute; top: -5px; right: -5px; min-width: 17px; height: 17px; padding: 0 4px; display: grid; place-items: center; border-radius: 999px; background: var(--warn); color: #1a1400; font: 700 9.5px "DM Mono", monospace; box-shadow: 0 0 10px rgba(255,209,102,0.6); }
@@ -3924,10 +3974,10 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 @media (max-width: 1220px) { .pill-k { display: none; } .status-pills { gap: 7px; } .pill { padding: 8px 10px; } }
 @media (max-width: 1040px) {
   .desktop-context-top { flex: 0 0 230px; min-width: 230px; }
-  .dc-mini-shell { grid-template-columns: 38px minmax(0, 1fr) auto; gap: 7px; padding-inline: 6px; }
-  .dc-mini-thumb { width: 36px; height: 36px; border-radius: 11px; }
+  .dc-mini-shell { grid-template-columns: 32px minmax(0, 1fr) auto; gap: 7px; padding-inline: 6px; }
+  .dc-mini-thumb { width: 30px; height: 30px; border-radius: var(--r-sm); }
   .dc-mini-controls { gap: 3px; }
-  .dc-mini-controls button { width: 27px; height: 27px; border-radius: 9px; }
+  .dc-mini-controls button { width: 26px; height: 26px; border-radius: var(--r-sm); }
 }
 @media (max-width: 720px) {
   .cmdk-open { min-width: 44px; max-width: 44px; padding: 8px; justify-content: center; }
@@ -6643,21 +6693,8 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 }
 
 /* ================= PREMIUM MATERIAL REFINEMENT ================= */
-:root {
-  --bg: #05080d;
-  --glass: rgba(17, 23, 31, 0.66);
-  --glass-2: rgba(12, 17, 24, 0.5);
-  --line: rgba(150, 176, 190, 0.11);
-  --line-strong: rgba(120, 220, 180, 0.24);
-  --ink: #eef5f2;
-  --dim: #8ba0a6;
-  --dim-2: #5f757b;
-  --card-grad: linear-gradient(180deg, rgba(28, 36, 46, 0.55), rgba(12, 17, 24, 0.62));
-  --edge-hi: inset 0 1px 0 rgba(255, 255, 255, 0.055);
-  --depth-1: 0 1px 2px rgba(0, 0, 0, 0.32), 0 10px 26px -12px rgba(0, 0, 0, 0.6);
-  --depth-2: 0 2px 5px rgba(0, 0, 0, 0.4), 0 20px 46px -18px rgba(0, 0, 0, 0.7);
-  --accent-soft: rgba(65, 255, 161, 0.10);
-}
+/* The material color/elevation values that used to be re-declared here were
+   normalized into the DESIGN TOKENS :root block at the top of this file. */
 
 .bg-glow {
   background:
@@ -6690,11 +6727,13 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
   border-bottom: 1px solid var(--line);
 }
 
-.phantom .nav-item { border-radius: 11px; letter-spacing: 0.005em; }
+.phantom .nav-item { border-radius: var(--r-md); letter-spacing: 0.005em; }
 .phantom .nav-item:hover { background: rgba(255, 255, 255, 0.035); color: var(--ink); }
+/* active = mint-washed row + left accent bar + mint icon: unmistakable at a
+   glance and clearly distinct from hover's plain white wash */
 .phantom .nav-item.is-active {
   position: relative;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.012));
+  background: linear-gradient(90deg, rgba(65, 255, 161, 0.13), rgba(65, 255, 161, 0.03) 78%);
   color: #f2fffa;
   font-weight: 600;
   box-shadow: var(--edge-hi), 0 2px 10px rgba(0, 0, 0, 0.34);
@@ -6837,8 +6876,8 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
   letter-spacing: 0.14em;
 }
 
-.plan-card, .queue-card, .quick-card, .desktop-context-card { border-radius: 18px; }
-.desktop-context-card { padding: 15px; display: grid; gap: 11px; overflow: hidden; }
+.plan-card, .queue-card, .quick-card, .desktop-context-card { border-radius: var(--r-lg); }
+.desktop-context-card { padding: var(--sp-4); display: grid; gap: 11px; overflow: hidden; }
 .dc-head, .dc-tab, .dc-tab-actions, .dc-status, .dc-state { display: flex; align-items: center; gap: 8px; }
 .dc-head { justify-content: space-between; }
 .dc-head p { margin: 0 0 3px; font: 700 9px "DM Mono", monospace; letter-spacing: 0.18em; text-transform: uppercase; color: var(--neon-2); }
@@ -6870,34 +6909,36 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .dc-empty { border: 1px dashed rgba(65,255,161,0.18); border-radius: 13px; padding: 12px; display: grid; gap: 3px; color: var(--dim); font-size: 12px; }
 .dc-empty b { color: #eafff2; }
 .dc-safe { margin: 0; color: var(--dim-2); font-size: 10.5px; line-height: 1.35; }
+/* the topbar media bridge stays one control-height tall — a tight strip,
+   not a card competing with the pills next to it */
 .desktop-context-top {
   flex: 0 1 390px;
   min-width: 260px;
   max-width: 430px;
   padding: 0;
-  border-radius: 16px;
+  border-radius: var(--r-md);
   overflow: hidden;
   align-self: stretch;
 }
 .dc-mini-shell {
-  min-height: 52px;
+  min-height: var(--ctl-h);
   height: 100%;
   display: grid;
-  grid-template-columns: 42px minmax(0, 1fr) auto;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 10px;
-  padding: 6px 8px 6px 7px;
+  gap: var(--sp-2);
+  padding: 5px 8px 5px 6px;
   background:
     radial-gradient(circle at 15% 45%, rgba(65,255,161,0.14), transparent 45%),
     linear-gradient(135deg, rgba(7,24,18,0.88), rgba(4,9,12,0.78));
 }
 .dc-mini-thumb {
-  width: 40px;
-  height: 40px;
+  width: 34px;
+  height: 34px;
   display: grid;
   place-items: center;
   border: 1px solid rgba(65,255,161,0.28);
-  border-radius: 12px;
+  border-radius: var(--r-sm);
   background: rgba(0,0,0,0.32);
   color: var(--neon);
   overflow: hidden;
@@ -6931,14 +6972,14 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
   font: 800 13px "Space Grotesk", sans-serif;
   letter-spacing: -0.01em;
 }
-.dc-mini-controls { display: inline-flex; align-items: center; gap: 5px; }
+.dc-mini-controls { display: inline-flex; align-items: center; gap: var(--sp-1); }
 .dc-mini-controls button {
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
   display: grid;
   place-items: center;
   border: 1px solid rgba(65,255,161,0.18);
-  border-radius: 10px;
+  border-radius: var(--r-sm);
   background: rgba(0,0,0,0.26);
   color: #dcfff0;
   cursor: pointer;
@@ -7664,12 +7705,19 @@ body.phantomplay-playing .buddy-say {
 
 /* ---- global finish: scrollbars, selection, focus ---- */
 ::selection { background: rgba(65, 255, 161, 0.28); color: #f2fffa; }
+/* app-wide thin, themed scrollbars */
 * { scrollbar-width: thin; scrollbar-color: rgba(120, 150, 145, 0.28) transparent; }
 *::-webkit-scrollbar { width: 9px; height: 9px; }
 *::-webkit-scrollbar-track { background: transparent; }
 *::-webkit-scrollbar-thumb { background: rgba(120, 150, 145, 0.22); border-radius: 99px; border: 2px solid transparent; background-clip: padding-box; }
 *::-webkit-scrollbar-thumb:hover { background: rgba(120, 200, 170, 0.4); border: 2px solid transparent; background-clip: padding-box; }
-:where(button, input, select, textarea, a):focus-visible { outline: 2px solid rgba(65, 255, 161, 0.65); outline-offset: 2px; border-radius: 6px; }
+/* ONE focus treatment for the whole app: every button, input, link, nav item,
+   and role=button pill shares the same token ring (see --focus-ring). */
+:where(button, [role="button"], input, select, textarea, a, summary, [tabindex]:not([tabindex="-1"])):focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
 
 /* ---- gate aligned with the material system ---- */
 .gate-card {
@@ -12456,4 +12504,118 @@ body .phantom .workspace-page :where(
 }
 @media (prefers-reduced-motion: reduce) {
   .vc-clip, .vc * { transition: none !important; }
+}
+
+/* ============================================================================ */
+/* ==========  PHASE 1 REVAMP — dashboard lead, attention strip, rhythm  ====== */
+/* ============================================================================ */
+
+/* ---- one eyebrow style: every small tracked label in the shell/dashboard
+        shares the same mono treatment instead of five near-misses ---- */
+.section-head h2,
+.pill-k,
+.dc-head p,
+.attention-head p,
+.side-plan-kicker {
+  font: 600 var(--fs-xs) / 1.25 var(--font-mono);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+
+/* ---- attention strip: what needs Jordan, right under the greeting ---- */
+.attention-strip {
+  display: grid;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--card-grad);
+  box-shadow: var(--edge-hi), var(--depth-1);
+}
+.attention-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+}
+.attention-head p { margin: 0; display: inline-flex; align-items: center; gap: var(--sp-2); }
+.attention-count {
+  min-width: 18px;
+  text-align: center;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font: 600 var(--fs-xs) / 1.4 var(--font-mono);
+  letter-spacing: 0.04em;
+  color: #1a1400;
+  background: var(--warn);
+}
+.attention-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: var(--sp-2);
+}
+.attention-chip {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-width: 0;
+  min-height: 52px;
+  padding: var(--sp-2) var(--sp-3);
+  text-align: left;
+  cursor: pointer;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: rgba(255, 255, 255, 0.018);
+  color: var(--ink);
+  transition: border-color 0.2s ease, background 0.2s ease, transform 0.18s ease;
+}
+.attention-chip:hover { border-color: var(--line-strong); background: rgba(255, 255, 255, 0.045); transform: translateY(-1px); }
+.attention-ic {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--r-sm);
+  color: var(--neon);
+  background: var(--accent-soft);
+}
+.attention-chip.is-warn .attention-ic { color: var(--warn); background: rgba(255, 209, 102, 0.1); }
+.attention-copy { flex: 1; min-width: 0; display: grid; gap: 1px; }
+.attention-copy b { font-size: var(--fs-sm); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.attention-copy i { font-size: 11px; font-style: normal; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---- dashboard widget grid: aligned card rhythm, quick actions span ---- */
+.console:not(.console-workspace) .hero2 { width: 100%; }
+.console:not(.console-workspace) .quick-card { grid-column: 1 / -1; }
+.console:not(.console-workspace) .quick-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: var(--sp-2);
+}
+@media (max-width: 720px) {
+  .console:not(.console-workspace) .quick-list { grid-template-columns: 1fr; }
+}
+
+/* the phone dashboard stays a single-viewport command console — the bell
+   already carries the same attention items there */
+@media (max-width: 767px) {
+  .phantom:has(.app-main > .console:not(.console-workspace)) .attention-strip { display: none !important; }
+}
+
+/* ---- reduced motion: the shell + dashboard hold still ---- */
+@media (prefers-reduced-motion: reduce) {
+  .pill-v .dot,
+  .ticker-tag,
+  .nav-pill.is-on,
+  .dc-mini-thumb.is-working,
+  .speakline-hero::before,
+  .phantom.booted .console-center > *,
+  .phantom.booted .console-rail > * { animation: none !important; }
+  .attention-chip,
+  .attention-chip:hover,
+  .cmd-send:hover,
+  .dc-mini-controls button:hover:not(:disabled) { transition: none; transform: none; }
+  .console-rail > *:hover { transform: none; }
 }
