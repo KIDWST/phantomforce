@@ -125,5 +125,7 @@ assert.match(phantomRumble, /Hold guard before contact to parry/u, "Phantom Rumb
 assert.match(phantomRumble, /function blockHit[\s\S]*return true/u, "Phantom Rumble must have real block/parry hit logic.");
 assert.match(phantomRumble, /blockHit\(t,f\.x,heavy\)\)continue/u, "Phantom Rumble attacks must skip damage and knockback when guard/parry catches the hit.");
 assert.match(phantomRumble, /data-t="guard"/u, "Phantom Rumble mobile controls must include a visible guard button.");
+assert.match(phantomRumble, /<button data-menu><b>MAIN MENU<\/b>choose mode<\/button><button data-again><b>PLAY AGAIN<\/b>same mode<\/button>/u, "Phantom Rumble victory screen must lead with Main Menu, not Rematch.");
+assert.doesNotMatch(phantomRumble, /<b>REMATCH<\/b>/u, "Phantom Rumble end screen must not call the post-victory action Rematch.");
 
 console.log("PhantomPlay frontend and game safety checks passed.");
