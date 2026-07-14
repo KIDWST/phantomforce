@@ -6,6 +6,15 @@
 
 ## Source of truth
 - The canonical repo is **`github.com/KIDWST/phantomforce`**, branch **`main`**.
+- The Windows machine currently serving **`admin.phantomforce.online`** and
+  **`127.0.0.1:5177`** serves directly from:
+  `C:\Users\jorda\Documents\Codex\worktrees\phantomforce-live-social-analytics-20260712`.
+  Before telling the owner a UI change is live, verify `/health` reports that root
+  and that your change exists in the served `/app/index.html` or `/app/js/main.js`.
+- Do **not** make owner-facing admin UI edits in another local worktree and assume
+  they are live. If you must work elsewhere, commit, push to `main`, then run
+  `ops/admin-live/Sync-AdminMain.ps1` from the served worktree or point the admin
+  server at the intended repo root.
 - If your checkout has no `origin`, it's an isolated clone — wire it up before trusting local state:
   ```bash
   git remote add origin https://github.com/KIDWST/phantomforce.git
@@ -18,6 +27,11 @@
   still fine if you prefer review, but it is no longer required.
 
 ## Recent, merged & live (newest first)
+- **Scoped social OAuth + live analytics prep (2026-07-14)** — social analytics is
+  now live-feed first, with workspace-scoped stored connections and callback
+  support for TikTok, X, and LinkedIn in addition to the existing providers. The
+  admin app build is `phantom-live-20260714-253`. Provider app credentials are
+  still required before real accounts can authorize.
 - **Competitor Intelligence + optional Aggressive Mode (2026-07-12)** —
   tenant-scoped public-signal evidence, labeled weak-signal inferences,
   aggregated audience-gap mining, originality-risk checks, bounded market
@@ -64,7 +78,7 @@
   (`app/index.html`, `app/phantom.css`, `app/js/main.js`).
 - **Living Phantom character** — `app/js/character.js`: 11 painted poses, emotional
   inertia (`governMood`), hologram depth. Shared by admin + public site.
-- Current cache-bust build id: **`phantom-live-20260713-239`**.
+- Current cache-bust build id: **`phantom-live-20260714-253`**.
 
 ## Repo map
 - `app/` — the **admin console** (`admin.phantomforce.online`). `index.html`,
