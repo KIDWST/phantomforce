@@ -15,6 +15,21 @@ body.phantomplay-playing{overflow:hidden}.workspace-page:has(.pp-player) .worksp
 @media(max-width:767px){.pp-shell{min-height:0}.pp-top{align-items:start}.pp-top h1{font-size:27px}.pp-top>div>span{font-size:11px}.pp-access{font-size:8px}.pp-tabs{margin:0 -4px;padding:10px 0}.pp-tabs button{flex:1;min-width:max-content;padding:8px 10px}.pp-content{padding-bottom:calc(96px + env(safe-area-inset-bottom))}.pp-hero{min-height:330px;display:block}.pp-hero>div{padding:24px 19px 170px}.pp-hero h1{font-size:31px;line-height:1.06}.pp-hero>div>p:not(.pp-kicker){font-size:13px;margin:11px 0 17px}.pp-hero>img{position:absolute;z-index:1;right:-24px;bottom:-18px;width:230px;height:205px;opacity:.42}.pp-hero>div>div{position:relative;z-index:2}.pp-primary,.pp-secondary{min-height:44px}.pp-hero .pp-primary{min-width:210px;white-space:nowrap}.pp-quick-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.pp-quick-stats span{border-bottom:1px solid var(--line)}.pp-quick-stats span:nth-child(2){border-right:0}.pp-quick-stats span:nth-child(3),.pp-quick-stats span:nth-child(4){border-bottom:0}.pp-game-grid,.pp-game-grid-full{grid-template-columns:1fr}.pp-game{display:grid;grid-template-columns:120px minmax(0,1fr)}.pp-game-art{height:100%;min-height:190px}.pp-game-body>p{min-height:0}.pp-spotlight{grid-template-columns:110px 1fr}.pp-spotlight img{height:160px}.pp-spotlight>div{padding:15px}.pp-dev-guide{grid-template-columns:1fr;padding:18px}.pp-dev-guide h2{font-size:23px}.pp-form-row{grid-template-columns:1fr}.pp-form-actions{flex-direction:column}.pp-settings{top:auto;right:10px;bottom:calc(78px + env(safe-area-inset-bottom));left:10px;width:auto}.pp-player{inset:max(58px,calc(env(safe-area-inset-top) + 44px)) 0 0;height:auto;max-height:none;border:0;border-radius:0;padding-bottom:env(safe-area-inset-bottom)}.pp-player>header{gap:7px;padding:7px 8px}.pp-player>header img{width:32px;height:32px}.pp-player>header i{max-width:34vw;font-size:8px}.pp-player-actions{gap:5px!important}.pp-player>header button{min-height:36px;padding:6px 9px;font-size:11px}.pp-player>header [data-pp-player-fullscreen]{display:none}.pp-player>footer{justify-content:center;min-height:31px;font-size:8px;overflow:hidden}.pp-player>footer span{white-space:nowrap}.pp-player>footer span:first-child,.pp-player>footer span:last-child{display:none}.pp-banner{grid-template-columns:1fr auto}.pp-banner b{grid-column:1/-1}.pp-banner span{font-size:10px}.pp-moderate{grid-template-columns:1fr}.pp-moderate input[type=text],.pp-moderate label,.pp-moderate>div{grid-column:1/-1}}
 @media(prefers-reduced-motion:reduce){.pp-game,.pp-player-loading i,.pp-loading i{transition:none;animation:none}}
 
+/* PhantomPlay must always scroll the final row fully above desktop docks,
+   browser chrome, and the Windows taskbar. The classic skin can still render
+   on some profiles, so keep this independent from the V2 shell. */
+.workspace-page[data-workspace-page="phantomplay"]:not(:has(.pp-player)):not(:has(.pp2-player)) .workspace-page-body{
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  padding-bottom:calc(140px + env(safe-area-inset-bottom,0px))!important;
+}
+@media(min-width:768px){
+  .workspace-page[data-workspace-page="phantomplay"] .pp-shell{
+    min-height:max-content;
+    padding-bottom:calc(110px + env(safe-area-inset-bottom,0px));
+  }
+}
+
 /* PhantomPlay console skin */
 .pp-shell{
   --pp-console-bg:#010504;

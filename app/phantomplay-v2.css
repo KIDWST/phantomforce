@@ -238,3 +238,18 @@
 
 @media(max-width:880px){.pp2-cols{grid-template-columns:1fr}.pp2-hero{grid-template-columns:1fr}.pp2-detail-hero{grid-template-columns:1fr}.pp2-dev-hero{grid-template-columns:1fr}.pp2-dev-stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(prefers-reduced-motion:reduce){.pp2-card,.pp2-card:hover,.pp2-art img,.pp2-play,.pp2-wish{transition:none;transform:none}.pp2-skeleton .pp2-art,.pp2-skeleton .pp2-card-body i{animation:none}.pp2-stage-loading i{animation-duration:2s}}
+
+/* V2 gets the same bottom runway as classic PhantomPlay. The scroll container
+   lives on the workspace body, so the app needs extra real content height,
+   not just visual margin. */
+@media(min-width:768px){
+  .workspace-page[data-workspace-page="phantomplay"] .pp2-shell{
+    min-height:max-content;
+    padding-bottom:calc(110px + env(safe-area-inset-bottom,0px));
+  }
+}
+.workspace-page[data-workspace-page="phantomplay"]:not(:has(.pp2-player)):not(:has(.pp-player)) .workspace-page-body{
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  padding-bottom:calc(140px + env(safe-area-inset-bottom,0px))!important;
+}
