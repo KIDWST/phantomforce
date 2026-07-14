@@ -239,6 +239,7 @@ import {
   moderatePhantomPlaySubmission,
   startPhantomPlaySession,
   updatePhantomPlayProfile,
+  updatePhantomPlayRoomMatch,
   updatePhantomPlaySession,
   updatePhantomPlaySubmission,
 } from "./phantom-ai/phantomplay.js";
@@ -4036,6 +4037,18 @@ app.post("/api/phantomplay/rooms/:code/leave", async (request, reply) => {
   const params = request.params as { code?: string };
   const result = await leavePhantomPlayRoom(session, { ...((request.body ?? {}) as Record<string, unknown>), code: params.code });
   return result ? { ok: true, session, ...result } : reply.code(404).send({ ok: false, error: "Private room was not found." });
+});
+
+app.post("/api/phantomplay/rooms/:code/match", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const params = request.params as { code?: string };
+  try {
+    const result = await updatePhantomPlayRoomMatch(session, { ...((request.body ?? {}) as Record<string, unknown>), code: params.code });
+    return result ? { ok: true, session, ...result } : reply.code(404).send({ ok: false, error: "Private room was not found." });
+  } catch (error) {
+    return reply.code(403).send({ ok: false, error: error instanceof Error ? error.message : "Match relay was blocked." });
+  }
 });
 
 app.post("/api/phantomplay/submissions", async (request, reply) => {

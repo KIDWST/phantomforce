@@ -7,7 +7,7 @@ const module = read("../app/js/phantomplay.js");
 const index = read("../app/index.html");
 const css = read("../app/phantomplay.css");
 const staticServer = read("../ops/admin-live/admin-static-server.mjs");
-const gameSlugs = ["neon-drift", "signal-match", "focus-stack", "word-weld", "reflex-grid", "penalty-kick", "rift-frenzy", "serpent-surge"];
+const gameSlugs = ["neon-drift", "signal-match", "focus-stack", "word-weld", "reflex-grid", "penalty-kick", "rift-frenzy", "serpent-surge", "crown-circuit"];
 const games = gameSlugs.map((name) => read(`../app/games/${name}.html`));
 const neonDrift = games[gameSlugs.indexOf("neon-drift")];
 const penaltyKick = games[gameSlugs.indexOf("penalty-kick")];
@@ -31,6 +31,8 @@ assert.match(module, /same workspace/u, "Private rooms must be scoped to the sig
 assert.match(module, /No direct inbound device ports/u, "Wireless play must not require exposing player devices.");
 assert.match(module, /Classroom mode only allows Everyone-rated games/u, "School rooms must have an Everyone-rated content boundary.");
 assert.match(module, /\/api\/phantomplay\/rooms/u, "The play-together UI must use the authenticated PhantomPlay room API.");
+assert.match(module, /\/api\/phantomplay\/rooms\/\$\{encodeURIComponent\(code\)\}\/match/u, "Room games must be able to relay match actions through PhantomPlay.");
+assert.match(module, /match-state/u, "The player shell must pass room match state into multiplayer games.");
 assert.match(module, /Edit build/u, "Builders must be able to revise builds.");
 assert.match(module, /function developerDirectory/u, "The Dev Rooms tab must be backed by a developer directory derived from catalog data.");
 assert.match(module, /Dev score/u, "Developer profiles must expose a visible Dev score.");
@@ -98,5 +100,11 @@ assert.doesNotMatch(penaltyKick, /getComputedStyle\(meter\)\.transform\.split/u,
 assert.match(penaltyKick, /else start\(\)/u, "Penalty Kick must let keyboard users start from the opening overlay.");
 assert.match(games[gameSlugs.indexOf("rift-frenzy")], /rival|school|boost|eat|bigger/u, "Rift Frenzy must play as a modern fish arena, not a static old mini-game.");
 assert.match(games[gameSlugs.indexOf("serpent-surge")], /storm|boost|rival|serpent|trail/u, "Serpent Surge must play as a modern snake arena, not a static old mini-game.");
+const crownCircuit = games[gameSlugs.indexOf("crown-circuit")];
+assert.match(module, /id:\s*"crown-circuit"[\s\S]*multiplayerOnly:\s*true/u, "Crown Circuit must be registered as multiplayer-only.");
+assert.match(crownCircuit, /STRICTLY MULTIPLAYER|No solo mode/u, "Crown Circuit must not present a solo mode.");
+assert.match(crownCircuit, /P1 uses 1-4[\s\S]*P2 uses 7-0/u, "Crown Circuit must expose local two-player keyboard controls.");
+assert.match(crownCircuit, /match-action[\s\S]*match-state/u, "Crown Circuit must support PhantomPlay room relay messages.");
+assert.doesNotMatch(crownCircuit, /AI opponent|startDuel|botTakeTurn|botChooseShot/i, "Crown Circuit must not include bot-opponent code.");
 
 console.log("PhantomPlay frontend and game safety checks passed.");

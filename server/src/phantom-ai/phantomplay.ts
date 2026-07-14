@@ -65,7 +65,7 @@ export const PHANTOMPLAY_ENGINE = {
   version: "2.0-large-map",
   saveStateBytes: 262_144,
   largeMap: { chunkSize: 1024, maxLoadedChunks: 64, streaming: true },
-  protocols: ["ready", "score", "progress", "complete", "paused", "exit", "settings", "save-state", "load-state"],
+  protocols: ["ready", "score", "progress", "complete", "paused", "exit", "settings", "save-state", "load-state", "match-action", "match-state"],
 } as const;
 const artUrl = (file: string) => `/app/assets/phantomplay/${file}?v=${PHANTOMPLAY_ART_VERSION}`;
 const TAK_AVATAR = artUrl("tak-avatar.webp");
@@ -79,6 +79,7 @@ const GAME_ART_BY_SLUG: Record<string, string> = {
   "penalty-kick": artUrl("penalty-kick-cover.webp"),
   "rift-frenzy": artUrl("neon-drift-cover.webp"),
   "serpent-surge": artUrl("reflex-grid-cover.webp"),
+  "crown-circuit": artUrl("reflex-grid-cover.webp"),
 };
 const CATEGORY_ART: Record<string, string> = {
   Arcade: GAME_ART_BY_SLUG["neon-drift"],
@@ -342,6 +343,31 @@ export const PHANTOMPLAY_BUILT_IN_GAMES: PhantomPlayGame[] = [
     progressSupport: true,
     scoreSupport: true,
     engine: { tier: "arena-large-map", minVersion: PHANTOMPLAY_ENGINE.version },
+  },
+  {
+    id: "crown-circuit",
+    title: "Crown Circuit",
+    summary: "A two-player-only lane card battle with towers, elixir, counters, and sudden death.",
+    description: "A strictly multiplayer tower duel: two players draft from four unit cards, spend elixir, choose lanes, break towers, and win the crown. No solo mode, no bots, no fake opponents - local keyboard duels or PhantomPlay private rooms only.",
+    category: "Strategy",
+    tags: ["multiplayer-only", "tower duel", "cards", "lanes", "keyboard", "rooms"],
+    contentRating: "everyone",
+    developer: TAK_CREATOR,
+    developerAvatar: TAK_AVATAR,
+    kind: "built_in",
+    launchUrl: "/app/games/crown-circuit.html?v=1.0.0",
+    thumbnail: GAME_ART_BY_SLUG["crown-circuit"],
+    featured: true,
+    version: "1.0.0",
+    controls: "Local: P1 uses 1-4 then Q/W/E. P2 uses 7-0 then I/O/P. Online: create a PhantomPlay room, join with two players, then launch.",
+    progressSupport: false,
+    scoreSupport: true,
+    multiplayerOnly: true,
+    localMultiplayer: true,
+    onlineMultiplayer: true,
+    minPlayers: 2,
+    maxPlayers: 2,
+    engine: { tier: "arena-multiplayer-relay", minVersion: PHANTOMPLAY_ENGINE.version },
   },
   {
     id: "color-rush", title: "Color Rush", summary: "Catch only the target color as the tiles fall faster.",
@@ -733,6 +759,17 @@ function safePlayState(value: unknown): PlaySession["state"] {
   return state;
 }
 
+function safeMatchPayload(value: unknown): PhantomPlayMatchAction["payload"] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const payload: PhantomPlayMatchAction["payload"] = {};
+  for (const [key, raw] of Object.entries(value as Record<string, unknown>).slice(0, 24)) {
+    const cleanKey = clean(key, 60);
+    if (!cleanKey) continue;
+    payload[cleanKey] = typeof raw === "string" ? clean(raw, 240) : typeof raw === "number" ? clamp(raw, -1_000_000, 1_000_000) : typeof raw === "boolean" || raw === null ? raw : null;
+  }
+  return payload;
+}
+
 export async function getPhantomPlaySnapshot(session: AccessSession, options: { tenantId?: unknown; entitled?: boolean; dailyMinuteLimit?: number; canSubmitGames?: boolean } = {}) {
   const tenantId = tenantIdFor(session, options.tenantId);
   const actorId = actorIdFor(session);
@@ -836,9 +873,10 @@ export async function createPhantomPlayRoom(session: AccessSession, input: Recor
   if (!game) throw new Error("Choose an available PhantomPlay game for this room.");
   const mode: PhantomPlayRoomMode = input.mode === "friends" ? "friends" : "classroom";
   if (mode === "classroom" && game.contentRating !== "everyone") throw new Error("Classroom rooms can only use Everyone-rated games.");
-  const maxLimit = mode === "classroom" ? 30 : 8;
+  const maxLimit = Math.min(mode === "classroom" ? 30 : 8, game.maxPlayers || 30);
   const requestedMax = Number(input.maxPlayers);
-  const maxPlayers = Number.isFinite(requestedMax) ? Math.floor(clamp(requestedMax, 2, maxLimit)) : (mode === "classroom" ? 12 : 6);
+  const defaultMax = game.multiplayerOnly ? Math.max(2, Math.min(2, maxLimit)) : (mode === "classroom" ? 12 : 6);
+  const maxPlayers = Number.isFinite(requestedMax) ? Math.floor(clamp(requestedMax, 2, maxLimit)) : defaultMax;
   const timestamp = now();
   pruneRooms(store);
   const room: PhantomPlayRoom = {
@@ -870,6 +908,41 @@ export async function createPhantomPlayRoom(session: AccessSession, input: Recor
     },
   };
   store.rooms.unshift(room);
+  await writeStore(store);
+  return { room: roomView(room) };
+}
+
+export async function updatePhantomPlayRoomMatch(session: AccessSession, input: Record<string, unknown>) {
+  const tenantId = tenantIdFor(session, input.tenantId);
+  const actorId = actorIdFor(session);
+  const store = await readStore();
+  const room = findRoom(store, tenantId, input.code);
+  if (!room) return null;
+  if (roomStatus(room) !== "open") throw new Error("This private room is not open.");
+  const participant = room.participants.find((item) => item.actorId === actorId && item.status === "online");
+  if (!participant && !session.canManageAccess) return null;
+  const gameId = clean(input.gameId || room.gameId, 180);
+  if (gameId !== room.gameId) throw new Error("Match action game does not match the room game.");
+  const timestamp = now();
+  const match = room.match && room.match.gameId === room.gameId
+    ? room.match
+    : { gameId: room.gameId, seq: 0, updatedAt: timestamp, actions: [] };
+  const actionInput = input.action && typeof input.action === "object" && !Array.isArray(input.action) ? input.action as Record<string, unknown> : {};
+  const type = clean(actionInput.type || "input", 50) || "input";
+  match.seq += 1;
+  match.updatedAt = timestamp;
+  match.actions.push({
+    id: `match-action-${randomUUID()}`,
+    seq: match.seq,
+    actorId,
+    label: participant?.label || actorLabelFor(session),
+    type,
+    payload: safeMatchPayload(actionInput.payload),
+    createdAt: timestamp,
+  });
+  match.actions = match.actions.slice(-240);
+  room.match = match;
+  room.updatedAt = timestamp;
   await writeStore(store);
   return { room: roomView(room) };
 }

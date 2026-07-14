@@ -11,7 +11,7 @@ const PHANTOMPLAY_ENGINE = {
   version: "2.0-large-map",
   saveStateBytes: 262144,
   largeMap: { chunkSize: 1024, maxLoadedChunks: 64, streaming: true },
-  protocols: ["ready", "score", "progress", "complete", "paused", "exit", "settings", "save-state", "load-state"],
+  protocols: ["ready", "score", "progress", "complete", "paused", "exit", "settings", "save-state", "load-state", "match-action", "match-state"],
 };
 const PHANTOMPLAY_ART_VERSION = "phantomplay-art-20260712";
 const artUrl = (file) => `/app/assets/phantomplay/${file}?v=${PHANTOMPLAY_ART_VERSION}`;

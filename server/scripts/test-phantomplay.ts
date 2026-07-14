@@ -15,6 +15,7 @@ process.env.PHANTOMFORCE_SERVER_LISTEN = "false";
 process.env.PHANTOMFORCE_SERVER_LOGGER = "false";
 process.env.PHANTOMFORCE_AUTH_PROVIDER = "demo";
 process.env.PHANTOMFORCE_ENABLE_DEMO_AUTH = "true";
+process.env.PHANTOMFORCE_SKIP_SERVER_DOTENV = "true";
 
 const owner: AccessSession = { id: "owner", userId: "owner-user", label: "Owner Studio", role: "admin", canManageAccess: true, orgId: "org-owner", orgRole: "owner", isSuperAdmin: true };
 const playerA: AccessSession = { id: "player-a", userId: "player-a", label: "Player A", role: "client", canManageAccess: false, orgId: "org-a", orgRole: "member" };
@@ -27,13 +28,15 @@ try {
   const play = await import("../src/phantom-ai/phantomplay.js");
 
   const initial = await play.getPhantomPlaySnapshot(playerA, { entitled: true, dailyMinuteLimit: 30, canSubmitGames: false });
-  assert(initial.catalog.length === 20, "Twenty real built-in games should ship (8 trunk originals + 12 adopted from origin/main).");
+  assert(initial.catalog.length === 21, "Twenty-one real built-in games should ship, including the multiplayer-only Crown Circuit.");
   assert(play.PHANTOMPLAY_ENGINE.version === "2.0-large-map" && play.PHANTOMPLAY_ENGINE.saveStateBytes >= 262_144, "PhantomPlay should expose a large-map-capable engine profile.");
   assert(initial.engine?.largeMap?.streaming === true, "Snapshots should publish large-map engine capabilities to the player shell.");
   const builtInIds = new Set(initial.catalog.map((game) => game.id));
-  for (const gameId of ["neon-drift", "signal-match", "focus-stack", "word-weld", "reflex-grid", "penalty-kick", "rift-frenzy", "serpent-surge"]) {
+  for (const gameId of ["neon-drift", "signal-match", "focus-stack", "word-weld", "reflex-grid", "penalty-kick", "rift-frenzy", "serpent-surge", "crown-circuit"]) {
     assert(builtInIds.has(gameId), `${gameId} should ship as an owned built-in game.`);
   }
+  const crownCircuit = initial.catalog.find((game) => game.id === "crown-circuit");
+  assert(crownCircuit?.multiplayerOnly === true && crownCircuit.localMultiplayer === true && crownCircuit.onlineMultiplayer === true, "Crown Circuit should be explicitly multiplayer-only with local and room play.");
   assert(initial.catalog.every((game) => game.kind === "built_in"), "No fake community releases should be seeded.");
   assert(initial.catalog.find((game) => game.id === "neon-drift")?.version === "1.2.3", "Neon Drift should ship the faster arcade tuning.");
   assert(initial.access.canSubmitGames === false, "The snapshot should honor the plan submission decision.");
@@ -68,6 +71,12 @@ try {
   const outsiderView = await play.getPhantomPlayRoom(outsider, { code: privateRoom.room.code });
   assert(outsiderView === null, "Room codes must not work across tenant boundaries.");
   await play.leavePhantomPlayRoom(classmateB, { code: privateRoom.room.code });
+
+  const crownRoom = await play.createPhantomPlayRoom(classmateA, { gameId: "crown-circuit", mode: "friends", maxPlayers: 8 }, { entitled: true });
+  assert(crownRoom.room.maxPlayers === 2, "Crown Circuit rooms must cap at two players.");
+  await play.joinPhantomPlayRoom(classmateB, { code: crownRoom.room.code }, { entitled: true });
+  const matchUpdate = await play.updatePhantomPlayRoomMatch(classmateA, { code: crownRoom.room.code, gameId: "crown-circuit", action: { type: "deploy", payload: { side: "blue", lane: 1, cardIndex: 2 } } });
+  assert(matchUpdate?.room.match?.actions.length === 1 && matchUpdate.room.match.actions[0].type === "deploy", "Crown Circuit room actions should relay through durable match state.");
 
   let invalidRejected = false;
   try { await play.createPhantomPlaySubmission(owner, { title: "Bad", submit: true }); } catch { invalidRejected = true; }
@@ -170,7 +179,7 @@ try {
   assert(clientModeration.statusCode === 403, "The moderation route must reject client sessions.");
   await app.close();
 
-  console.log(JSON.stringify({ ok: true, builtInGames: initial.catalog.length, arenaBuiltIns: ["rift-frenzy", "serpent-surge"], savedScore: saved?.score, tenantIsolation: true, privateRooms: true, privateUrlRejected, versionCount: updated?.submission.versions.length, moderationBlocked: playerModerationBlocked, routeAuth: true, communityApproval: true, disabledRemoved: true, timeLimitBlocked: limitBlocked }));
+  console.log(JSON.stringify({ ok: true, builtInGames: initial.catalog.length, arenaBuiltIns: ["rift-frenzy", "serpent-surge", "crown-circuit"], savedScore: saved?.score, tenantIsolation: true, privateRooms: true, privateUrlRejected, versionCount: updated?.submission.versions.length, moderationBlocked: playerModerationBlocked, routeAuth: true, communityApproval: true, disabledRemoved: true, timeLimitBlocked: limitBlocked }));
 } finally {
   await rm(root, { recursive: true, force: true });
 }
