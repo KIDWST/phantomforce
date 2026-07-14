@@ -1,0 +1,1006 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'none'; img-src data:; media-src 'none'; frame-src 'none'">
+<title>Keyboardist On Tour</title>
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#0b0716;color:#f5ecff;font-family:system-ui,-apple-system,Segoe UI,sans-serif;touch-action:manipulation;user-select:none;overscroll-behavior:none;-webkit-tap-highlight-color:transparent}
+  body{background:radial-gradient(circle at 50% -10%,#241236,#0b0716 62%)}
+  #app{position:fixed;inset:0;display:flex;flex-direction:column}
+  .scr{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:max(14px,env(safe-area-inset-top)) 16px max(14px,env(safe-area-inset-bottom));overflow:auto}
+  .scr[hidden]{display:none}
+  .kicker{letter-spacing:.14em;font-size:11px;font-weight:800;color:#ff2fb0;text-transform:uppercase;margin:0}
+  h1{margin:0;font-size:clamp(28px,6vw,44px);background:linear-gradient(90deg,#ff2fb0,#ffd23f);-webkit-background-clip:text;background-clip:text;color:transparent;letter-spacing:.01em}
+  h2{margin:0;font-size:22px;color:#f5ecff}
+  p.sub{margin:0;color:#b8a6d9;font-size:13px;text-align:center;max-width:520px}
+  .panel{width:min(560px,94vw);background:#150c26cc;border:1px solid #ff2fb033;border-radius:16px;padding:18px;display:flex;flex-direction:column;gap:12px;box-shadow:0 10px 40px #00000055}
+  .row{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+  button{font:inherit;cursor:pointer;touch-action:manipulation}
+  .btn{min-height:46px;padding:10px 18px;border-radius:999px;border:1px solid #ff2fb055;background:#1d1030;color:#f5ecff;font-weight:800;letter-spacing:.02em;transition:transform .12s,background .15s}
+  .btn:hover,.btn:focus-visible{transform:translateY(-1px);background:#2a1543}
+  .btn.primary{background:linear-gradient(90deg,#ff2fb0,#b93cff);border-color:transparent;color:#fff}
+  .btn.gold{background:linear-gradient(90deg,#ffd23f,#ff9f3f);border-color:transparent;color:#241236}
+  .btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
+  .btn.small{min-height:36px;padding:6px 12px;font-size:12px}
+  .venues{display:grid;gap:10px;width:min(560px,94vw)}
+  .venue{display:flex;align-items:center;gap:12px;background:#150c26cc;border:1px solid #ff2fb033;border-radius:14px;padding:12px 14px}
+  .venue.locked{opacity:.45}
+  .venue .swatch{width:44px;height:44px;border-radius:12px;flex:0 0 auto;display:grid;place-items:center;font-size:20px;font-weight:900}
+  .venue .meta{flex:1;min-width:0}
+  .venue .meta b{display:block;font-size:15px}
+  .venue .meta span{display:block;font-size:11px;color:#b8a6d9}
+  .stars{color:#ffd23f;font-size:13px;letter-spacing:1px}
+  .field{display:flex;flex-direction:column;gap:6px;width:100%}
+  .field label{font-size:11px;color:#b8a6d9;text-transform:uppercase;letter-spacing:.08em;display:flex;justify-content:space-between}
+  input[type=range]{width:100%;accent-color:#ff2fb0}
+  select{width:100%;min-height:40px;border-radius:10px;border:1px solid #ff2fb055;background:#1d1030;color:#f5ecff;padding:6px 10px;font:inherit}
+  .switch{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13px}
+  .switch input{width:38px;height:22px;accent-color:#ff2fb0}
+  .keyrow{display:flex;align-items:center;gap:10px;justify-content:space-between;background:#0f081c;border-radius:10px;padding:8px 10px}
+  .keyrow .chip{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;font-weight:900;font-size:13px;flex:0 0 auto}
+  .keyrow .key{font-family:ui-monospace,monospace;background:#241236;padding:4px 8px;border-radius:6px;min-width:56px;text-align:center}
+  .tabs{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
+  .tabs button.active{background:#2a1543;border-color:#ff2fb0}
+  /* gameplay */
+  #playScreen{padding:0;justify-content:flex-start}
+  .hud{width:100%;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 14px;flex:0 0 auto}
+  .hud .id{display:flex;flex-direction:column}
+  .hud .id b{font-size:12px;color:#ffd23f}
+  .hud .id span{font-size:10px;color:#b8a6d9}
+  .stat{display:flex;gap:14px;align-items:baseline}
+  .stat b{font-size:22px}
+  .stat span{font-size:10px;color:#b8a6d9;text-transform:uppercase}
+  .rival{font-size:11px;color:#b98bff}
+  .stage-wrap{flex:1;min-height:0;width:100%;display:flex;align-items:stretch;justify-content:center;padding:0 8px 8px}
+  canvas{width:100%;max-width:640px;height:100%;background:#08040f;border-radius:14px;border:1px solid #ff2fb033;touch-action:none}
+  .judg{position:absolute;left:50%;top:38%;transform:translate(-50%,-50%);font-weight:900;font-size:28px;pointer-events:none;opacity:0;transition:opacity .1s}
+  .judg.show{opacity:1;transition:none}
+  .overlay{position:absolute;inset:0;background:#050208e8;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;text-align:center;padding:20px}
+  .overlay[hidden]{display:none}
+  .grade{font-size:76px;font-weight:900;line-height:1;background:linear-gradient(90deg,#ffd23f,#ff2fb0);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .breakdown{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;width:min(500px,92vw)}
+  .breakdown div{background:#150c26;border-radius:10px;padding:8px 4px;text-align:center}
+  .breakdown div b{display:block;font-size:18px}
+  .breakdown div span{font-size:10px;color:#b8a6d9}
+  .toast{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);background:#150c26ee;border:1px solid #ff2fb055;padding:8px 16px;border-radius:999px;font-size:12px;z-index:20;pointer-events:none;opacity:0;transition:opacity .25s}
+  .toast.show{opacity:1}
+  .countdown-num{font-size:96px;font-weight:900;color:#ffd23f}
+  .roster{display:flex;flex-direction:column;gap:6px;width:min(480px,92vw)}
+  .roster .p{display:flex;justify-content:space-between;background:#150c26;border-radius:10px;padding:8px 12px;font-size:13px}
+  .roster .p .ready{color:#7cff6b}
+  .roster .p .notready{color:#b8a6d9}
+  .battle{display:flex;flex-direction:column;gap:6px;width:min(480px,92vw)}
+  .battle .row2{display:flex;justify-content:space-between;background:#150c26;border-radius:10px;padding:8px 12px;font-size:13px}
+  .note{font-size:11px;color:#8a7aa8;max-width:480px;text-align:center}
+  .tut-step{width:min(520px,92vw);background:#150c26;border:1px solid #ff2fb055;border-radius:16px;padding:20px;display:flex;flex-direction:column;gap:12px}
+  .tut-step .dots{display:flex;gap:6px;justify-content:center}
+  .tut-step .dots span{width:6px;height:6px;border-radius:50%;background:#2a1543}
+  .tut-step .dots span.on{background:#ff2fb0}
+  @media(prefers-reduced-motion:reduce){.btn,.venue{transition:none}}
+  .reduced .judg,.reduced .btn{transition:none}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <section class="scr" id="menuScreen" data-screen="menu">
+    <p class="kicker">PhantomPlay Original</p>
+    <h1>Keyboardist On Tour</h1>
+    <p class="sub">Hit every Pulse on the Threshold line, keep your Streak alive, and take an original synth act across three venues. All music below is synthesized live in your browser — no commercial tracks involved.</p>
+    <div class="panel">
+      <div class="row">
+        <button class="btn primary" data-go="venues">Start Tour</button>
+        <button class="btn gold" data-go="soundcheck">Soundcheck (Practice)</button>
+      </div>
+      <div class="row">
+        <button class="btn" data-go="settings">Settings</button>
+        <button class="btn" data-tutorial>How To Play</button>
+      </div>
+      <div id="duelMenuNote" class="note" hidden>This session is running inside a PhantomPlay room. Open <b>Tour Duel</b> to sync up with the room.</div>
+      <button class="btn primary" id="duelEnterBtn" data-go="duel-lobby" hidden>Enter Tour Duel</button>
+    </div>
+  </section>
+
+  <section class="scr" id="venuesScreen" data-screen="venues" hidden>
+    <p class="kicker">Setlist</p>
+    <h2>Pick a venue</h2>
+    <div class="venues" id="venueList"></div>
+    <div class="panel">
+      <div class="switch"><span>Play against Session Player (AI rival)</span><input type="checkbox" id="botToggle" checked></div>
+      <div class="field"><label>Session Player difficulty<span id="botDiffLbl">Normal</span></label><select id="botDiffSelect"><option value="0.55">Easy</option><option value="0.75" selected>Normal</option><option value="0.92">Hard</option></select></div>
+      <div class="row"><button class="btn" data-go="menu">Back</button></div>
+    </div>
+  </section>
+
+  <section class="scr" id="soundcheckScreen" data-screen="soundcheck" hidden>
+    <p class="kicker">Soundcheck</p>
+    <h2>Practice mode</h2>
+    <p class="sub">Practice runs never touch your Tour progress or best scores — just you, the click, and adjustable note speed.</p>
+    <div class="panel">
+      <div class="field"><label>Track<span></span></label><select id="scTrackSelect"></select></div>
+      <div class="field"><label>Note speed<span id="scSpeedLbl">1.0x</span></label><input type="range" id="scSpeedRange" min="0.6" max="2.5" step="0.05" value="1"></div>
+      <div class="row"><button class="btn primary" data-sc-start>Start soundcheck</button><button class="btn" data-go="menu">Back</button></div>
+    </div>
+  </section>
+
+  <section class="scr" id="settingsScreen" data-screen="settings" hidden>
+    <p class="kicker">Settings</p>
+    <h2>Rig setup</h2>
+    <div class="panel">
+      <div class="field"><label>Volume<span id="volLbl">80%</span></label><input type="range" id="volRange" min="0" max="1" step="0.01" value="0.8"></div>
+      <div class="switch"><span>Colorblind-safe palette</span><input type="checkbox" id="cbToggle"></div>
+      <div class="switch"><span>Reduce motion (extra, on top of platform setting)</span><input type="checkbox" id="rmToggle"></div>
+      <div class="field"><label>Note speed<span id="settSpeedLbl">1.0x</span></label><input type="range" id="settSpeedRange" min="0.6" max="2.5" step="0.05" value="1"></div>
+    </div>
+    <div class="panel">
+      <div class="tabs"><button class="btn small active" data-keyset="4">4-Channel keys</button><button class="btn small" data-keyset="5">5-Channel keys (Arena)</button></div>
+      <div id="keyRows"></div>
+      <div class="row"><button class="btn small" data-reset-keys>Reset to defaults</button></div>
+    </div>
+    <div class="row"><button class="btn" data-go="menu">Back</button></div>
+  </section>
+
+  <section class="scr" id="tutorialScreen" data-screen="tutorial" hidden>
+    <div class="tut-step">
+      <h2 id="tutTitle"></h2>
+      <p class="sub" id="tutBody" style="text-align:left"></p>
+      <div class="dots" id="tutDots"></div>
+      <div class="row"><button class="btn" data-tut-skip>Skip</button><button class="btn primary" data-tut-next>Next</button></div>
+    </div>
+  </section>
+
+  <section class="scr" id="duelLobbyScreen" data-screen="duel-lobby" hidden>
+    <p class="kicker">Tour Duel</p>
+    <h2>Room lobby</h2>
+    <p class="sub" id="duelLobbyStatus">Detecting this room's host…</p>
+    <div class="roster" id="duelRoster"></div>
+    <div class="panel" id="duelHostPanel" hidden>
+      <div class="field"><label>Song for the room<span></span></label><select id="duelTrackSelect"></select></div>
+      <div class="row"><button class="btn primary" data-duel-start>Start Duel Countdown</button></div>
+    </div>
+    <p class="note">Live score comparison during a Duel is host-relayed: the room host's score updates for everyone, and every player still gets a full, accurate results screen of their own run at the end.</p>
+    <div class="row"><button class="btn" data-go="menu">Leave duel</button></div>
+  </section>
+
+  <section class="scr" id="playScreen" data-screen="play" hidden>
+    <div class="hud">
+      <div class="id"><b id="hudTrack">—</b><span id="hudMode">Tour</span></div>
+      <div class="stat"><div><b id="hudScore">0</b><span>Score</span></div><div><b id="hudStreak">0</b><span>Streak</span></div><div><b id="hudAcc">100%</b><span>Acc</span></div></div>
+      <button class="btn small" data-pause>Pause</button>
+    </div>
+    <div class="rival" id="rivalLine" hidden></div>
+    <div class="stage-wrap"><div style="position:relative;width:100%;max-width:640px;height:100%">
+      <canvas id="stage"></canvas>
+      <div class="judg" id="judgText"></div>
+    </div></div>
+    <div class="overlay" id="pauseOverlay" hidden>
+      <h2>Paused</h2>
+      <div class="field" style="width:min(320px,80vw)"><label>Volume<span id="pVolLbl">80%</span></label><input type="range" id="pVolRange" min="0" max="1" step="0.01" value="0.8"></div>
+      <div class="row"><button class="btn primary" data-resume>Resume</button><button class="btn" data-quit>Quit to menu</button></div>
+    </div>
+    <div class="overlay" id="countdownOverlay" hidden><div class="countdown-num" id="countdownNum">3</div><p class="sub" id="countdownSub"></p></div>
+  </section>
+
+  <section class="scr" id="resultsScreen" data-screen="results" hidden>
+    <p class="kicker" id="resKicker">Set complete</p>
+    <div class="grade" id="resGrade">S</div>
+    <div class="stat" style="gap:24px"><div><b id="resScore">0</b><span>Score</span></div><div><b id="resAcc">0%</b><span>Accuracy</span></div><div><b id="resCombo">0</b><span>Max streak</span></div></div>
+    <div class="stars" id="resStars">★★★</div>
+    <div class="breakdown" id="resBreakdown"></div>
+    <div class="battle" id="resBattle" hidden></div>
+    <div class="row" id="resActions"></div>
+  </section>
+
+</div>
+<div class="toast" id="toast"></div>
+<script>
+(function(){
+"use strict";
+var host=function(type,data){ data=data||{}; var msg={source:'phantomplay-game',type:type}; for(var k in data) msg[k]=data[k]; parent.postMessage(msg,'*'); };
+
+/* ---------------------------------------------------------------------
+   CHART FORMAT (documented so real licensed songs can be added later
+   without touching any game code — this is the "song ingestion" system):
+
+   {
+     id: string,            // unique track id
+     title: string,
+     artist: string,        // must say "original placeholder" until a
+                             // licensed replacement is ingested
+     bpm: number,
+     offsetMs: number,      // ms of silence before the first note
+     lanes: number,         // 4 or 5 today, up to MAX_LANES=5
+     lengthMs: number,      // total track length in ms
+     notes: [ { t: number, lane: number } ... ]   // t = ms from track
+                                                    // start, lane = 0-based
+                                                    // channel index
+   }
+
+   `hold` (ms) is reserved on the note object for a future sustained-note
+   type but is NOT implemented by this engine version — every note here is
+   a tap. An admin tool can hand this exact JSON shape (bpm/offset/lanes/
+   notes[]) straight into TRACKS below (or a future server-side catalog)
+   to add a real licensed song with zero code changes to the timing/
+   judging/rendering engine.
+--------------------------------------------------------------------- */
+
+var MAX_LANES=5;
+var GLYPHS=['●','◆','▲','■','★'];
+var COLORS_STD=['#ff2fb0','#33e0ff','#ffd23f','#7cff6b','#b98bff'];
+var COLORS_CB=['#E69F00','#56B4E9','#009E73','#F0E442','#CC79A7'];
+var DEFAULT_KEYS4=['KeyD','KeyF','KeyJ','KeyK'];
+var DEFAULT_KEYS5=['KeyD','KeyF','Space','KeyJ','KeyK'];
+var KEY_LABEL={KeyD:'D',KeyF:'F',KeyJ:'J',KeyK:'K',Space:'SPACE',KeyS:'S',KeyL:'L',KeyA:'A',KeyG:'G',KeyH:'H'};
+
+function step16(bpm){ return 60000/bpm/4; }
+function chartFromBars(id,title,artist,bpm,lanes,offsetMs,bars){
+  var st=step16(bpm), notes=[], barStart=offsetMs;
+  for(var b=0;b<bars.length;b++){
+    var bar=bars[b];
+    for(var i=0;i<bar.length;i++){ notes.push({t:Math.round(barStart+bar[i][0]*st), lane:bar[i][1]}); }
+    barStart+=16*st;
+  }
+  notes.sort(function(a,b){return a.t-b.t;});
+  return {id:id,title:title,artist:artist,bpm:bpm,lanes:lanes,offsetMs:offsetMs,lengthMs:Math.round(barStart)+2500,notes:notes};
+}
+
+// ---- Track 1: Neon Warehouse (128bpm, 4 channels) ----
+var nw_m1=[[0,0],[4,2],[8,1],[12,3]];
+var nw_m2=[[0,0],[2,2],[4,1],[6,3],[8,0],[10,2],[12,1],[14,3]];
+var nw_m3=[[0,0],[4,1],[8,0],[12,2]];
+var nw_m4=[[0,0],[2,1],[4,2],[6,3],[8,0],[10,1],[12,2],[14,3]];
+var nw_m5=[[0,0],[6,1],[8,2],[12,3]];
+var NEON_WAREHOUSE=chartFromBars('neon-warehouse','Neon Warehouse Set','PhantomPlay Session Band (original placeholder)',128,4,2200,
+  [nw_m1,nw_m1,nw_m2,nw_m3,nw_m2,nw_m3,nw_m4,nw_m2,nw_m4,nw_m2,nw_m5,nw_m3,nw_m2,nw_m4,nw_m1,nw_m1]);
+
+// ---- Track 2: Rooftop Static (100bpm, 4 channels) ----
+var rs_n1=[[0,0],[8,2]];
+var rs_n2=[[0,0],[4,1],[8,2],[12,3]];
+var rs_n3=[[0,0],[8,1],[10,2]];
+var rs_n4=[[0,0],[2,1],[6,2],[8,3],[12,0],[14,1]];
+var ROOFTOP_STATIC=chartFromBars('rooftop-static','Rooftop Static Set','PhantomPlay Session Band (original placeholder)',100,4,2200,
+  [rs_n1,rs_n1,rs_n2,rs_n1,rs_n3,rs_n2,rs_n1,rs_n4,rs_n2,rs_n3,rs_n1,rs_n2,rs_n4,rs_n1]);
+
+// ---- Track 3: Arena Overdrive (150bpm, 5 channels) ----
+var ao_p1=[[0,0],[2,2],[4,4],[6,1],[8,3],[10,0],[12,2],[14,4]];
+var ao_p2=[[0,0],[2,1],[4,2],[6,3],[8,4],[10,0],[12,1],[14,2]];
+var ao_p3=[[0,4],[2,3],[4,2],[6,1],[8,0],[10,4],[12,3],[14,2]];
+var ao_p4=[[0,0],[1,2],[4,4],[5,1],[8,3],[9,0],[12,2],[13,4]];
+var ARENA_OVERDRIVE=chartFromBars('arena-overdrive','Arena Overdrive Set','PhantomPlay Session Band (original placeholder)',150,5,2200,
+  [ao_p1,ao_p1,ao_p2,ao_p3,ao_p2,ao_p3,ao_p4,ao_p2,ao_p4,ao_p3,ao_p1,ao_p2,ao_p4,ao_p3,ao_p1,ao_p1,ao_p2,ao_p4]);
+
+var TRACKS=[NEON_WAREHOUSE,ROOFTOP_STATIC,ARENA_OVERDRIVE];
+function trackById(id){ for(var i=0;i<TRACKS.length;i++) if(TRACKS[i].id===id) return TRACKS[i]; return null; }
+
+// Backing-loop patterns (independent of the note chart — just the beat
+// this track's synth band is playing under the Pulses).
+var BACKING={
+  'neon-warehouse':{ kick:[0,8], hat:[0,2,4,6,8,10,12,14], bass:[[0,98],[6,98],[8,73.4],[14,82.4]], stab:[[0,[220,277,329]],[8,[196,246,294]]] },
+  'rooftop-static':{ kick:[0], hat:[4,12], bass:[[0,82.4],[8,73.4]], stab:[[0,[164,207,246]]] },
+  'arena-overdrive':{ kick:[0,4,8,12], hat:[0,2,4,6,8,10,12,14], bass:[[0,110],[4,110],[8,82.4],[12,98]], stab:[[0,[220,277,349]],[8,[246,311,370]]] }
+};
+
+// ---- Judging ----
+var WIN_PERFECT=35, WIN_GREAT=70, WIN_GOOD=120, WIN_OK=180;
+var GRADE_SCORE={PERFECT:1000,GREAT:700,GOOD:400,OK:150,MISS:0};
+var GRADE_WEIGHT={PERFECT:1,GREAT:0.8,GOOD:0.5,OK:0.2,MISS:0};
+function classify(diffMs){
+  var d=Math.abs(diffMs);
+  if(d<=WIN_PERFECT) return 'PERFECT';
+  if(d<=WIN_GREAT) return 'GREAT';
+  if(d<=WIN_GOOD) return 'GOOD';
+  if(d<=WIN_OK) return 'OK';
+  return 'MISS';
+}
+function multiplierFor(streak){ if(streak>=80) return 3; if(streak>=50) return 2.5; if(streak>=25) return 2; if(streak>=10) return 1.5; return 1; }
+function letterGrade(acc){ if(acc>=97) return 'S'; if(acc>=90) return 'A'; if(acc>=75) return 'B'; if(acc>=55) return 'C'; return 'D'; }
+function starsFor(letter){ return {S:3,A:3,B:2,C:1,D:1}[letter]||1; }
+
+// ---- Persistent state ----
+var DEFAULTS={
+  v:1,
+  progression:{ completed:[], best:{} }, // best[trackId] = {score,accuracy,grade,combo}
+  settings:{ volume:0.8, colorblind:false, reducedMotionLocal:false, noteSpeed:1.0 },
+  keyBindings4:DEFAULT_KEYS4.slice(),
+  keyBindings5:DEFAULT_KEYS5.slice(),
+  tutorialSeen:false
+};
+function cloneDefaults(){ return JSON.parse(JSON.stringify(DEFAULTS)); }
+var G=cloneDefaults();
+var hostSound=true, hostReducedMotion=false;
+function effectiveReducedMotion(){ return hostReducedMotion || G.settings.reducedMotionLocal; }
+function effectiveVolume(){ return hostSound ? G.settings.volume : 0; }
+
+function mergeState(state){
+  if(!state || typeof state!=='object') return;
+  try{
+    if(state.progression && typeof state.progression==='object'){
+      if(Array.isArray(state.progression.completed)) G.progression.completed=state.progression.completed.filter(function(x){return typeof x==='string';});
+      if(state.progression.best && typeof state.progression.best==='object') G.progression.best=state.progression.best;
+    }
+    if(state.settings && typeof state.settings==='object'){
+      if(typeof state.settings.volume==='number') G.settings.volume=Math.max(0,Math.min(1,state.settings.volume));
+      if(typeof state.settings.colorblind==='boolean') G.settings.colorblind=state.settings.colorblind;
+      if(typeof state.settings.reducedMotionLocal==='boolean') G.settings.reducedMotionLocal=state.settings.reducedMotionLocal;
+      if(typeof state.settings.noteSpeed==='number') G.settings.noteSpeed=Math.max(0.6,Math.min(2.5,state.settings.noteSpeed));
+    }
+    if(Array.isArray(state.keyBindings4) && state.keyBindings4.length===4) G.keyBindings4=state.keyBindings4.slice();
+    if(Array.isArray(state.keyBindings5) && state.keyBindings5.length===5) G.keyBindings5=state.keyBindings5.slice();
+    if(typeof state.tutorialSeen==='boolean') G.tutorialSeen=state.tutorialSeen;
+  }catch(e){ /* corrupt/foreign state — keep whatever local defaults we have */ }
+}
+function serializeState(){
+  return { v:1, progression:G.progression, settings:G.settings, keyBindings4:G.keyBindings4, keyBindings5:G.keyBindings5, tutorialSeen:G.tutorialSeen };
+}
+var saveTimer=null;
+function persistSoon(scoreForHost){
+  clearTimeout(saveTimer);
+  saveTimer=setTimeout(function(){
+    var progressPct=Math.round((G.progression.completed.length/TRACKS.length)*100);
+    host('progress',{score:scoreForHost||0, progress:progressPct, state:serializeState()});
+  },250);
+}
+try{ var LS=window.localStorage.getItem('kot.mirror'); if(LS) mergeState(JSON.parse(LS)); }catch(e){}
+function mirrorLocal(){ try{ window.localStorage.setItem('kot.mirror', JSON.stringify(serializeState())); }catch(e){} }
+
+// ---- Audio engine (Web Audio API, fully synthesized, no media files) ----
+var actx=null, masterGain=null, noiseBuffer=null;
+function ensureAudio(){
+  if(actx) return;
+  var AC=window.AudioContext||window.webkitAudioContext;
+  if(!AC) return;
+  actx=new AC();
+  masterGain=actx.createGain();
+  masterGain.gain.value=effectiveVolume();
+  masterGain.connect(actx.destination);
+  var len=actx.sampleRate*0.3;
+  noiseBuffer=actx.createBuffer(1,len,actx.sampleRate);
+  var data=noiseBuffer.getChannelData(0);
+  for(var i=0;i<len;i++) data[i]=Math.random()*2-1;
+}
+function updateMasterGain(){ if(masterGain) masterGain.gain.setTargetAtTime(effectiveVolume(), actx.currentTime, 0.05); }
+function pluck(freq, t, dur, gainMul){
+  if(!actx) return;
+  var o=actx.createOscillator(), g=actx.createGain();
+  o.type='sine'; o.frequency.setValueAtTime(freq, t);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.5*(gainMul||1), t+0.012);
+  g.gain.exponentialRampToValueAtTime(0.0001, t+dur);
+  o.connect(g); g.connect(masterGain);
+  o.start(t); o.stop(t+dur+0.02);
+}
+function hitBlip(gradeName){
+  if(!actx) return;
+  var t=actx.currentTime;
+  var freqByGrade={PERFECT:880,GREAT:740,GOOD:600,OK:480,MISS:180};
+  pluck(freqByGrade[gradeName]||500, t, gradeName==='MISS'?0.09:0.16, gradeName==='MISS'?0.5:1);
+}
+function kickSound(t){
+  if(!actx) return;
+  var o=actx.createOscillator(), g=actx.createGain();
+  o.type='sine'; o.frequency.setValueAtTime(140,t); o.frequency.exponentialRampToValueAtTime(45,t+0.14);
+  g.gain.setValueAtTime(0.9,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.16);
+  o.connect(g); g.connect(masterGain); o.start(t); o.stop(t+0.18);
+}
+function hatSound(t){
+  if(!actx||!noiseBuffer) return;
+  var src=actx.createBufferSource(); src.buffer=noiseBuffer;
+  var hp=actx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=7000;
+  var g=actx.createGain(); g.gain.setValueAtTime(0.22,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.045);
+  src.connect(hp); hp.connect(g); g.connect(masterGain); src.start(t); src.stop(t+0.05);
+}
+function bassSound(t,freq){
+  if(!actx) return;
+  var o=actx.createOscillator(), g=actx.createGain();
+  o.type='sawtooth'; o.frequency.setValueAtTime(freq,t);
+  var f=actx.createBiquadFilter(); f.type='lowpass'; f.frequency.value=420;
+  g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.35,t+0.02); g.gain.exponentialRampToValueAtTime(0.0001,t+0.28);
+  o.connect(f); f.connect(g); g.connect(masterGain); o.start(t); o.stop(t+0.3);
+}
+function stabSound(t,freqs){
+  if(!actx) return;
+  for(var i=0;i<freqs.length;i++){
+    var o=actx.createOscillator(), g=actx.createGain();
+    o.type='triangle'; o.frequency.setValueAtTime(freqs[i],t);
+    g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.14,t+0.03); g.gain.exponentialRampToValueAtTime(0.0001,t+0.5);
+    o.connect(g); g.connect(masterGain); o.start(t); o.stop(t+0.55);
+  }
+}
+
+// Lookahead sequencer for the backing loop — classic setInterval + small
+// lookahead window pattern (avoids relying on setTimeout timing directly).
+var seq={ timer:null, nextTime:0, step:0, stepDur:0.15, pattern:null };
+function startBacking(track){
+  if(!actx) return;
+  var pat=BACKING[track.id]||BACKING['neon-warehouse'];
+  seq.pattern=pat; seq.stepDur=60/track.bpm/4; seq.step=0; seq.nextTime=actx.currentTime+0.05;
+  clearInterval(seq.timer);
+  seq.timer=setInterval(function(){
+    if(!actx || actx.state!=='running') return;
+    while(seq.nextTime < actx.currentTime+0.12){
+      var s=seq.step%16;
+      if(seq.pattern.kick.indexOf(s)>=0) kickSound(seq.nextTime);
+      if(seq.pattern.hat.indexOf(s)>=0) hatSound(seq.nextTime);
+      for(var bi=0;bi<seq.pattern.bass.length;bi++){ if(seq.pattern.bass[bi][0]===s) bassSound(seq.nextTime, seq.pattern.bass[bi][1]); }
+      if(seq.pattern.stab){ for(var si=0;si<seq.pattern.stab.length;si++){ if(seq.pattern.stab[si][0]===s) stabSound(seq.nextTime, seq.pattern.stab[si][1]); } }
+      seq.nextTime+=seq.stepDur; seq.step++;
+    }
+  },25);
+}
+function stopBacking(){ clearInterval(seq.timer); seq.timer=null; }
+
+// ---- Screen management ----
+var SCREENS=['menu','venues','soundcheck','settings','tutorial','duel-lobby','play','results'];
+function showScreen(name){
+  for(var i=0;i<SCREENS.length;i++){
+    var el=document.querySelector('[data-screen="'+SCREENS[i]+'"]');
+    if(el) el.hidden = (SCREENS[i]!==name);
+  }
+}
+var toastTimer=null;
+function toast(msg){
+  var el=document.getElementById('toast');
+  el.textContent=msg; el.classList.add('show');
+  clearTimeout(toastTimer); toastTimer=setTimeout(function(){ el.classList.remove('show'); },1800);
+}
+
+// ---- Tutorial ----
+var TUT_STEPS=[
+  {t:'Welcome to the tour', b:'Pulses fall down each Channel. Press that Channel\'s key exactly as the Pulse crosses the glowing Threshold line near the bottom.'},
+  {t:'Your Channels', b:'Default keys are D, F, J, K (the Arena Overdrive venue adds a 5th channel on Space). Every Channel has its own color AND its own shape/glyph, so the game stays readable if you are colorblind.'},
+  {t:'Judgment & Streak', b:'Timing is graded Perfect, Great, Good, OK, or Miss. Chaining hits builds your Streak, which raises a score multiplier — a Miss resets the Streak but not your run.'},
+  {t:'Pause & customize', b:'Press P or Esc any time to pause. Settings lets you remap every key, adjust volume, flip on a colorblind-safe palette, and reduce motion.'},
+  {t:'Modes', b:'Tour mode unlocks new venues as you finish each one. Soundcheck is practice with adjustable note speed and never touches your Tour saves. Session Player is an AI rival you can race in solo play. Tour Duel syncs a countdown with everyone in a PhantomPlay room.'}
+];
+var tutStep=0, tutReturnScreen='menu';
+function openTutorial(returnScreen){
+  tutStep=0; tutReturnScreen=returnScreen||'menu';
+  renderTutStep(); showScreen('tutorial');
+}
+function renderTutStep(){
+  var s=TUT_STEPS[tutStep];
+  document.getElementById('tutTitle').textContent=s.t;
+  document.getElementById('tutBody').textContent=s.b;
+  var dots=document.getElementById('tutDots'); dots.innerHTML='';
+  for(var i=0;i<TUT_STEPS.length;i++){ var d=document.createElement('span'); if(i===tutStep) d.className='on'; dots.appendChild(d); }
+  document.querySelector('[data-tut-next]').textContent = (tutStep===TUT_STEPS.length-1) ? 'Let\'s go' : 'Next';
+}
+function finishTutorial(){
+  G.tutorialSeen=true; mirrorLocal(); persistSoon(0);
+  showScreen(tutReturnScreen==='tutorial'?'menu':tutReturnScreen);
+}
+
+// ---- Venue list rendering ----
+function isUnlocked(idx){ return idx===0 || G.progression.completed.indexOf(TRACKS[idx-1].id)>=0; }
+function renderVenues(){
+  var list=document.getElementById('venueList'); list.innerHTML='';
+  for(var i=0;i<TRACKS.length;i++){
+    (function(i){
+    var tr=TRACKS[i]; var unlocked=isUnlocked(i);
+    var best=G.progression.best[tr.id];
+    var div=document.createElement('div'); div.className='venue'+(unlocked?'':' locked');
+    var sw=document.createElement('div'); sw.className='swatch'; sw.style.background=colorFor(i%laneCountFor(tr)); sw.style.color='#0b0716'; sw.textContent=tr.lanes;
+    var meta=document.createElement('div'); meta.className='meta';
+    var b=document.createElement('b'); b.textContent=tr.title;
+    var span=document.createElement('span'); span.textContent=tr.bpm+' BPM · '+tr.lanes+' channels'+(unlocked?'':' · locked until previous venue is cleared');
+    meta.appendChild(b); meta.appendChild(span);
+    if(best){ var stars=document.createElement('div'); stars.className='stars'; stars.textContent=repeat('★',best.stars)+repeat('☆',3-best.stars)+'  '+best.grade+' · '+best.score; meta.appendChild(stars); }
+    div.appendChild(sw); div.appendChild(meta);
+    var playBtn=document.createElement('button'); playBtn.className='btn small primary'; playBtn.textContent='Play'; playBtn.disabled=!unlocked;
+    playBtn.onclick=function(){
+      var useBot=document.getElementById('botToggle').checked;
+      var skill=Number(document.getElementById('botDiffSelect').value);
+      startTrack(tr, {practice:false, bot:useBot, botSkill:skill});
+    };
+    div.appendChild(playBtn);
+    list.appendChild(div);
+    })(i);
+  }
+}
+function repeat(ch,n){ var s=''; for(var i=0;i<Math.max(0,n);i++) s+=ch; return s; }
+function colorFor(lane){ return (G.settings.colorblind?COLORS_CB:COLORS_STD)[lane%5]; }
+
+// ---- Soundcheck setup ----
+function renderSoundcheckSetup(){
+  var sel=document.getElementById('scTrackSelect'); sel.innerHTML='';
+  for(var i=0;i<TRACKS.length;i++){ var o=document.createElement('option'); o.value=TRACKS[i].id; o.textContent=TRACKS[i].title; sel.appendChild(o); }
+  document.getElementById('scSpeedRange').value=G.settings.noteSpeed;
+  document.getElementById('scSpeedLbl').textContent=G.settings.noteSpeed.toFixed(2)+'x';
+}
+
+// ---- Settings screen ----
+var keysetTab='4';
+function renderSettings(){
+  document.getElementById('volRange').value=G.settings.volume;
+  document.getElementById('volLbl').textContent=Math.round(G.settings.volume*100)+'%';
+  document.getElementById('cbToggle').checked=G.settings.colorblind;
+  document.getElementById('rmToggle').checked=G.settings.reducedMotionLocal;
+  document.getElementById('settSpeedRange').value=G.settings.noteSpeed;
+  document.getElementById('settSpeedLbl').textContent=G.settings.noteSpeed.toFixed(2)+'x';
+  renderKeyRows();
+}
+function renderKeyRows(){
+  var wrap=document.getElementById('keyRows'); wrap.innerHTML='';
+  var count=keysetTab==='4'?4:5;
+  var arr=keysetTab==='4'?G.keyBindings4:G.keyBindings5;
+  for(var i=0;i<count;i++){
+    (function(i){
+    var row=document.createElement('div'); row.className='keyrow';
+    var chip=document.createElement('span'); chip.className='chip'; chip.style.background=colorFor(i); chip.style.color='#0b0716'; chip.textContent=GLYPHS[i];
+    var lab=document.createElement('span'); lab.style.flex='1'; lab.textContent='Channel '+(i+1);
+    var key=document.createElement('span'); key.className='key'; key.textContent=KEY_LABEL[arr[i]]||arr[i];
+    var rb=document.createElement('button'); rb.className='btn small'; rb.textContent='Rebind';
+    rb.onclick=function(){ captureRebind(keysetTab,i,rb); };
+    row.appendChild(chip); row.appendChild(lab); row.appendChild(key); row.appendChild(rb);
+    wrap.appendChild(row);
+    })(i);
+  }
+}
+var rebindListener=null;
+function captureRebind(keyset,idx,btn){
+  if(rebindListener) return;
+  var oldLabel=btn.textContent; btn.textContent='Press a key…';
+  rebindListener=function(e){
+    e.preventDefault();
+    var arr=keyset==='4'?G.keyBindings4:G.keyBindings5;
+    var code=e.code;
+    var swapIdx=arr.indexOf(code);
+    if(swapIdx>=0 && swapIdx!==idx){ var tmp=arr[swapIdx]; arr[swapIdx]=arr[idx]; arr[idx]=tmp; }
+    else { arr[idx]=code; }
+    window.removeEventListener('keydown',rebindListener,true);
+    rebindListener=null;
+    renderKeyRows(); mirrorLocal(); persistSoon(0);
+  };
+  window.addEventListener('keydown',rebindListener,true);
+}
+
+// ---- Session (core gameplay) ----
+var SESS=null; // active session
+function laneCountFor(track){ return track.lanes; }
+function keysFor(track){ return track.lanes===5?G.keyBindings5:G.keyBindings4; }
+
+function startTrack(track, opts){
+  ensureAudio(); if(actx && actx.state==='suspended') actx.resume();
+  opts=opts||{};
+  var lanes=laneCountFor(track);
+  var laneQueues=[]; for(var l=0;l<lanes;l++) laneQueues.push([]);
+  for(var i=0;i<track.notes.length;i++){ laneQueues[track.notes[i].lane].push({t:track.notes[i].t, judged:false}); }
+  var totalNotes=track.notes.length;
+  SESS={
+    track:track, lanes:lanes, laneQueues:laneQueues, totalNotes:totalNotes,
+    practice: !!opts.practice, duel: !!opts.duel,
+    noteSpeed: opts.practice ? Number(document.getElementById('scSpeedRange').value) : G.settings.noteSpeed,
+    startPerf: performance.now(), pausedMs:0, pauseStartedAt:0, paused:false,
+    score:0, streak:0, maxStreak:0, weightSum:0, judgedCount:0,
+    counts:{PERFECT:0,GREAT:0,GOOD:0,OK:0,MISS:0},
+    finished:false,
+    bot: opts.bot ? { skill:opts.botSkill||0.75, queues:cloneQueues(laneQueues), score:0, streak:0 } : null,
+    raf:0
+  };
+  document.getElementById('hudTrack').textContent=track.title;
+  document.getElementById('hudMode').textContent = opts.practice?'Soundcheck':(opts.duel?'Tour Duel':'Tour');
+  document.getElementById('rivalLine').hidden = !SESS.bot;
+  showScreen('play');
+  setupCanvas();
+  startBacking(track);
+  requestAnimationFrame(gameLoop);
+}
+function cloneQueues(qs){ var out=[]; for(var i=0;i<qs.length;i++){ var arr=[]; for(var j=0;j<qs[i].length;j++) arr.push({t:qs[i][j].t,judged:false}); out.push(arr); } return out; }
+
+function nowMs(){ return performance.now()-SESS.startPerf-SESS.pausedMs; }
+
+function judgeHit(lane, judgeTime){
+  var q=SESS.laneQueues[lane];
+  var best=-1, bestDiff=1e9;
+  for(var i=0;i<q.length;i++){
+    if(q[i].judged) continue;
+    var diff=judgeTime-q[i].t;
+    if(Math.abs(diff)<Math.abs(bestDiff)){ bestDiff=diff; best=i; }
+    if(diff< -WIN_OK) break; // notes are time-sorted per lane; no earlier candidate needed
+  }
+  if(best<0 || Math.abs(bestDiff)>WIN_OK) { flashLane(lane); return; }
+  var g=classify(bestDiff);
+  q[best].judged=true;
+  applyJudgment(g);
+  hitBlip(g);
+  popupJudgment(g, lane);
+}
+function applyJudgment(g){
+  SESS.judgedCount++;
+  SESS.weightSum+=GRADE_WEIGHT[g];
+  SESS.counts[g]++;
+  if(g==='MISS'){ SESS.streak=0; }
+  else { SESS.streak++; SESS.maxStreak=Math.max(SESS.maxStreak,SESS.streak); }
+  var mult=multiplierFor(SESS.streak);
+  SESS.score+=Math.round(GRADE_SCORE[g]*mult);
+  updateHud();
+}
+function updateHud(){
+  document.getElementById('hudScore').textContent=SESS.score;
+  document.getElementById('hudStreak').textContent=SESS.streak;
+  var acc=SESS.judgedCount? (SESS.weightSum/SESS.judgedCount*100) : 100;
+  document.getElementById('hudAcc').textContent=Math.round(acc)+'%';
+  if(SESS.bot){ document.getElementById('rivalLine').textContent='Session Player: '+SESS.bot.score+' pts (streak '+SESS.bot.streak+')'; }
+}
+var judgTimer=null;
+function popupJudgment(g,lane){
+  var el=document.getElementById('judgText');
+  el.textContent=g; el.style.color=g==='MISS'?'#ff5f5f':colorFor(lane);
+  el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
+  clearTimeout(judgTimer); judgTimer=setTimeout(function(){ el.classList.remove('show'); },260);
+}
+function flashLane(lane){ /* empty press near no note — no penalty, just a subtle no-op */ }
+
+function botTick(t){
+  if(!SESS.bot) return;
+  for(var lane=0;lane<SESS.lanes;lane++){
+    var q=SESS.bot.queues[lane];
+    for(var i=0;i<q.length;i++){
+      if(q[i].judged) continue;
+      if(t>=q[i].t){
+        q[i].judged=true;
+        var offset=botOffsetMs(SESS.bot.skill);
+        var g=classify(offset);
+        if(g==='MISS'){ SESS.bot.streak=0; } else { SESS.bot.streak++; }
+        var mult=multiplierFor(SESS.bot.streak);
+        SESS.bot.score+=Math.round(GRADE_SCORE[g]*mult);
+        continue;
+      }
+      break;
+    }
+  }
+}
+function botOffsetMs(skill){
+  var spread=260*(1-skill)+15;
+  var u=0,v=0; while(u===0)u=Math.random(); while(v===0)v=Math.random();
+  var g=Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);
+  return g*spread*0.4;
+}
+
+function autoMiss(t){
+  for(var lane=0;lane<SESS.lanes;lane++){
+    var q=SESS.laneQueues[lane];
+    for(var i=0;i<q.length;i++){
+      if(q[i].judged) continue;
+      if(t > q[i].t+WIN_OK){ q[i].judged=true; applyJudgment('MISS'); popupJudgment('MISS',lane); continue; }
+      break;
+    }
+  }
+}
+
+// ---- Canvas rendering ----
+var cv, cx, dpr=1;
+function setupCanvas(){
+  cv=document.getElementById('stage'); cx=cv.getContext('2d');
+  resizeCanvas();
+  window.addEventListener('resize', resizeCanvas);
+}
+function resizeCanvas(){
+  if(!cv) return;
+  dpr=Math.max(1,Math.min(2,window.devicePixelRatio||1));
+  var rect=cv.getBoundingClientRect();
+  cv.width=Math.max(240,rect.width)*dpr; cv.height=Math.max(240,rect.height)*dpr;
+}
+function drawStage(t){
+  if(!cx) return;
+  var w=cv.width, h=cv.height;
+  cx.clearRect(0,0,w,h);
+  var lanes=SESS.lanes, laneW=w/lanes;
+  var topY=h*0.06, threshY=h*0.82;
+  cx.strokeStyle='#ff2fb055'; cx.lineWidth=2*dpr;
+  for(var l=1;l<lanes;l++){ cx.beginPath(); cx.moveTo(l*laneW,0); cx.lineTo(l*laneW,h); cx.stroke(); }
+  cx.fillStyle='#ffffff22';
+  cx.fillRect(0,threshY-2*dpr,w,4*dpr);
+  cx.fillStyle='#ffd23f';
+  cx.fillRect(0,threshY-1*dpr,w,2*dpr);
+  var travelMs=1800/Math.max(0.4,SESS.noteSpeed);
+  for(var lane=0;lane<lanes;lane++){
+    var q=SESS.laneQueues[lane];
+    for(var i=0;i<q.length;i++){
+      var n=q[i];
+      if(n.judged) continue;
+      var f=(t-(n.t-travelMs))/travelMs;
+      if(f< -0.05 || f>1.15) continue;
+      var y=topY+f*(threshY-topY);
+      var cxp=lane*laneW+laneW/2;
+      var r=Math.min(laneW*0.32, 30*dpr);
+      cx.fillStyle=colorFor(lane)+'cc';
+      cx.beginPath(); cx.arc(cxp,y,r,0,Math.PI*2); cx.fill();
+      cx.fillStyle='#0b0716';
+      cx.font=(r*1.1)+'px system-ui, sans-serif';
+      cx.textAlign='center'; cx.textBaseline='middle';
+      cx.fillText(GLYPHS[lane], cxp, y+1*dpr);
+    }
+    // key indicator at threshold
+    cx.fillStyle='#150c26aa';
+    var kx=lane*laneW+laneW/2;
+    cx.beginPath(); cx.arc(kx,threshY,Math.min(laneW*0.36,34*dpr),0,Math.PI*2); cx.fill();
+    cx.strokeStyle=colorFor(lane); cx.lineWidth=2*dpr;
+    cx.beginPath(); cx.arc(kx,threshY,Math.min(laneW*0.36,34*dpr),0,Math.PI*2); cx.stroke();
+    cx.fillStyle=colorFor(lane);
+    cx.font=(14*dpr)+'px ui-monospace, monospace';
+    cx.fillText(KEY_LABEL[keysFor(SESS.track)[lane]]||'?', kx, threshY);
+  }
+}
+
+function gameLoop(){
+  if(!SESS || SESS.finished) return;
+  if(SESS.paused){ SESS.raf=requestAnimationFrame(gameLoop); return; }
+  var t=nowMs();
+  autoMiss(t);
+  botTick(t);
+  drawStage(t);
+  updateHud();
+  if(t > SESS.track.lengthMs){ endTrack(); return; }
+  SESS.raf=requestAnimationFrame(gameLoop);
+}
+
+function endTrack(){
+  SESS.finished=true;
+  stopBacking();
+  cancelAnimationFrame(SESS.raf);
+  var acc=SESS.judgedCount? (SESS.weightSum/SESS.judgedCount*100) : 0;
+  var grade=letterGrade(acc);
+  var stars=starsFor(grade);
+  var result={score:SESS.score, accuracy:Math.round(acc*10)/10, grade:grade, stars:stars, maxStreak:SESS.maxStreak, counts:SESS.counts};
+  if(!SESS.practice){
+    var prev=G.progression.best[SESS.track.id];
+    if(!prev || result.score>prev.score) G.progression.best[SESS.track.id]=result;
+    if(G.progression.completed.indexOf(SESS.track.id)<0) G.progression.completed.push(SESS.track.id);
+    mirrorLocal();
+    var allDone=G.progression.completed.length>=TRACKS.length;
+    if(allDone) host('complete',{score:result.score, progress:100, state:serializeState()});
+    else persistSoon(result.score);
+  }
+  showResults(result);
+}
+
+function showResults(result){
+  document.getElementById('resKicker').textContent = SESS.practice?'Soundcheck complete (not saved to Tour)':(SESS.duel?'Duel set complete':'Set complete');
+  document.getElementById('resGrade').textContent=result.grade;
+  document.getElementById('resScore').textContent=result.score;
+  document.getElementById('resAcc').textContent=result.accuracy+'%';
+  document.getElementById('resCombo').textContent=result.maxStreak;
+  document.getElementById('resStars').textContent = SESS.practice? '' : (repeat('★',result.stars)+repeat('☆',3-result.stars));
+  var bd=document.getElementById('resBreakdown'); bd.innerHTML='';
+  ['PERFECT','GREAT','GOOD','OK','MISS'].forEach(function(g){
+    var d=document.createElement('div'); var b=document.createElement('b'); b.textContent=result.counts[g]; var s=document.createElement('span'); s.textContent=g;
+    d.appendChild(b); d.appendChild(s); bd.appendChild(d);
+  });
+  var battle=document.getElementById('resBattle');
+  battle.innerHTML=''; battle.hidden=true;
+  if(SESS.bot){
+    battle.hidden=false;
+    var r1=document.createElement('div'); r1.className='row2';
+    r1.innerHTML='<span>You</span><b>'+result.score+'</b>';
+    var r2=document.createElement('div'); r2.className='row2';
+    r2.innerHTML='<span>Session Player</span><b>'+SESS.bot.score+'</b>';
+    battle.appendChild(r1); battle.appendChild(r2);
+    var banner=document.createElement('p'); banner.className='sub';
+    banner.textContent = result.score>SESS.bot.score ? 'You beat the Session Player!' : (result.score<SESS.bot.score ? 'The Session Player edged you out this set.' : 'Dead even — a tie set!');
+    battle.appendChild(banner);
+  } else if(SESS.duel){
+    battle.hidden=false;
+    var note=document.createElement('p'); note.className='note';
+    note.textContent='Battle Board (host-reported scores from this room):';
+    battle.appendChild(note);
+    var scores=(DUEL.matchState && DUEL.matchState.scores) || {};
+    var any=false;
+    for(var k in scores){ any=true; var row=document.createElement('div'); row.className='row2';
+      var label=(k===DUEL.localClientId)?'You':(k===DUEL.hostClientId?'Host':'Player '+k.slice(-4));
+      row.innerHTML='<span>'+label+'</span><b>'+(scores[k].score||0)+'</b>'; battle.appendChild(row);
+    }
+    if(!any){ var e=document.createElement('p'); e.className='note'; e.textContent='No shared scores landed yet — every player still gets this exact results screen for their own run.'; battle.appendChild(e); }
+  }
+  var actions=document.getElementById('resActions'); actions.innerHTML='';
+  function mkBtn(label,cls,fn){ var b=document.createElement('button'); b.className='btn '+(cls||''); b.textContent=label; b.onclick=fn; return b; }
+  if(SESS.duel){
+    actions.appendChild(mkBtn('Back to duel lobby','primary',function(){ showScreen('duel-lobby'); renderDuelLobby(); }));
+  } else {
+    actions.appendChild(mkBtn('Play again','primary',function(){ startTrack(SESS.track,{practice:SESS.practice,bot:!!SESS.bot,botSkill:SESS.bot?SESS.bot.skill:0}); }));
+    actions.appendChild(mkBtn('Back to '+(SESS.practice?'soundcheck':'venues'),'',function(){ showScreen(SESS.practice?'soundcheck':'venues'); renderVenues(); }));
+  }
+  actions.appendChild(mkBtn('Main menu','',function(){ showScreen('menu'); }));
+  showScreen('results');
+}
+
+// ---- Pause ----
+function setPaused(p){
+  if(!SESS) return;
+  if(p===SESS.paused) return;
+  SESS.paused=p;
+  document.getElementById('pauseOverlay').hidden=!p;
+  if(p){ SESS.pauseStartedAt=performance.now(); if(actx) actx.suspend(); host('paused',{paused:true}); }
+  else { SESS.pausedMs += performance.now()-SESS.pauseStartedAt; if(actx) actx.resume(); host('paused',{paused:false}); }
+}
+
+// ---- Duel (room multiplayer via match-state / match-action) ----
+var DUEL={ active:false, localClientId:'c_'+Math.random().toString(36).slice(2,10), isHost:null, matchState:null, readyStates:{}, participants:[], hostClientId:null, resolveDeadline:0, countdownTimer:null };
+function onMatchState(data){
+  DUEL.active=true;
+  DUEL.matchState=data.matchState||{};
+  DUEL.readyStates=data.readyStates||{};
+  DUEL.participants=data.participants||[];
+  document.getElementById('duelEnterBtn').hidden=false;
+  document.getElementById('duelMenuNote').hidden=false;
+  if(DUEL.isHost===null){
+    if(!DUEL.resolveDeadline) DUEL.resolveDeadline=Date.now()+4200;
+    if(DUEL.matchState.hostProbeFrom===DUEL.localClientId){ DUEL.isHost=true; DUEL.hostClientId=DUEL.localClientId; }
+    else if(DUEL.matchState.hostProbeFrom){ DUEL.isHost=false; DUEL.hostClientId=DUEL.matchState.hostProbeFrom; }
+    else if(Date.now()>DUEL.resolveDeadline){ DUEL.isHost=false; }
+    else {
+      host('match-action',{action:{hostProbeFrom:DUEL.localClientId}, mode:'merge'});
+    }
+  }
+  if(document.querySelector('[data-screen="duel-lobby"]') && !document.querySelector('[data-screen="duel-lobby"]').hidden) renderDuelLobby();
+  handleDuelPhase();
+}
+function renderDuelLobby(){
+  var status=document.getElementById('duelLobbyStatus');
+  if(DUEL.isHost===null) status.textContent='Detecting this room\'s host…';
+  else if(DUEL.isHost) status.textContent='You are the room host — pick a song and start when ready.';
+  else status.textContent='Waiting on the room host to pick a song and start the countdown.';
+  var roster=document.getElementById('duelRoster'); roster.innerHTML='';
+  DUEL.participants.forEach(function(p){
+    var ready = DUEL.readyStates[p.actorId]===true;
+    var row=document.createElement('div'); row.className='p';
+    row.innerHTML='<span>'+escapeHtml(p.label||'Player')+(p.role==='host'?' (host)':'')+'</span><span class="'+(ready?'ready':'notready')+'">'+(ready?'Ready':'Not ready')+'</span>';
+    roster.appendChild(row);
+  });
+  var hostPanel=document.getElementById('duelHostPanel');
+  hostPanel.hidden = !DUEL.isHost;
+  if(DUEL.isHost){
+    var sel=document.getElementById('duelTrackSelect');
+    if(!sel.dataset.filled){ TRACKS.forEach(function(tr){ var o=document.createElement('option'); o.value=tr.id; o.textContent=tr.title; sel.appendChild(o); }); sel.dataset.filled='1'; }
+  }
+}
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+function handleDuelPhase(){
+  var ms=DUEL.matchState||{};
+  if(ms.phase==='countdown' && ms.startAt){
+    startDuelCountdown(ms.trackId, ms.startAt);
+  }
+  // Note: a client that reloads/joins mid-song (phase 'playing' with no
+  // local session running) is not caught up to the in-progress song —
+  // deliberately not implemented; see knownIssues in the build report.
+}
+function startDuelCountdown(trackId, startAt){
+  if(DUEL._countdownFor===startAt) return;
+  DUEL._countdownFor=startAt;
+  var track=trackById(trackId); if(!track) return;
+  showScreen('play');
+  document.getElementById('countdownOverlay').hidden=false;
+  document.getElementById('hudTrack').textContent=track.title;
+  document.getElementById('hudMode').textContent='Tour Duel';
+  document.getElementById('rivalLine').hidden=true;
+  setupCanvas();
+  clearInterval(DUEL.countdownTimer);
+  DUEL.countdownTimer=setInterval(function(){
+    var remain=startAt-Date.now();
+    if(remain<=0){
+      clearInterval(DUEL.countdownTimer);
+      document.getElementById('countdownOverlay').hidden=true;
+      ensureAudio(); if(actx && actx.state==='suspended') actx.resume();
+      startTrack(track,{duel:true});
+      startDuelScoreReporting();
+      if(DUEL.isHost) host('match-action',{action:{phase:'playing'}, mode:'merge'});
+      return;
+    }
+    document.getElementById('countdownNum').textContent=Math.max(1,Math.ceil(remain/1000));
+    document.getElementById('countdownSub').textContent=track.title+' — get ready';
+  },100);
+}
+var duelReportTimer=null;
+function startDuelScoreReporting(){
+  clearInterval(duelReportTimer);
+  duelReportTimer=setInterval(function(){
+    if(!DUEL.isHost || !SESS || SESS.duel!==true) return;
+    var scores=(DUEL.matchState && DUEL.matchState.scores) || {};
+    var next={}; for(var k in scores) next[k]=scores[k];
+    next[DUEL.localClientId]={score:SESS.score, accuracy: SESS.judgedCount? Math.round(SESS.weightSum/SESS.judgedCount*1000)/10 : 0, streak:SESS.streak};
+    host('match-action',{action:{scores:next}, mode:'merge'});
+    if(SESS.finished) clearInterval(duelReportTimer);
+  },2000);
+}
+
+// ---- Input ----
+window.addEventListener('keydown',function(e){
+  if(rebindListener) return; // remap capture takes priority
+  if(!document.querySelector('[data-screen="play"]').hidden){
+    var keys=SESS?keysFor(SESS.track):DEFAULT_KEYS4;
+    var lane=keys.indexOf(e.code);
+    if(lane>=0){ e.preventDefault(); if(SESS && !SESS.paused && !SESS.finished) judgeHit(lane, nowMs()); return; }
+    if(e.code==='KeyP'||e.code==='Escape'){ e.preventDefault(); if(SESS) setPaused(!SESS.paused); }
+  }
+});
+document.addEventListener('visibilitychange',function(){ if(document.hidden && SESS && !SESS.paused && !document.querySelector('[data-screen="play"]').hidden) setPaused(true); });
+
+// ---- Wiring ----
+document.querySelectorAll('[data-go]').forEach(function(btn){
+  btn.addEventListener('click',function(){
+    var target=btn.getAttribute('data-go');
+    if(target==='venues') renderVenues();
+    if(target==='soundcheck') renderSoundcheckSetup();
+    if(target==='settings') renderSettings();
+    if(target==='duel-lobby') renderDuelLobby();
+    showScreen(target);
+  });
+});
+document.querySelectorAll('[data-tutorial]').forEach(function(b){ b.addEventListener('click',function(){ openTutorial('menu'); }); });
+document.querySelector('[data-tut-skip]').addEventListener('click', finishTutorial);
+document.querySelector('[data-tut-next]').addEventListener('click',function(){
+  if(tutStep<TUT_STEPS.length-1){ tutStep++; renderTutStep(); } else { finishTutorial(); }
+});
+document.querySelector('[data-sc-start]').addEventListener('click',function(){
+  var id=document.getElementById('scTrackSelect').value;
+  var track=trackById(id);
+  G.settings.noteSpeed=Number(document.getElementById('scSpeedRange').value);
+  mirrorLocal(); persistSoon(0);
+  startTrack(track,{practice:true});
+});
+document.getElementById('scSpeedRange').addEventListener('input',function(){ document.getElementById('scSpeedLbl').textContent=Number(this.value).toFixed(2)+'x'; });
+document.getElementById('settSpeedRange').addEventListener('input',function(){ G.settings.noteSpeed=Number(this.value); document.getElementById('settSpeedLbl').textContent=G.settings.noteSpeed.toFixed(2)+'x'; mirrorLocal(); persistSoon(0); });
+document.getElementById('volRange').addEventListener('input',function(){ G.settings.volume=Number(this.value); document.getElementById('volLbl').textContent=Math.round(G.settings.volume*100)+'%'; updateMasterGain(); mirrorLocal(); persistSoon(0); });
+document.getElementById('cbToggle').addEventListener('change',function(){ G.settings.colorblind=this.checked; mirrorLocal(); persistSoon(0); });
+document.getElementById('rmToggle').addEventListener('change',function(){ G.settings.reducedMotionLocal=this.checked; document.body.classList.toggle('reduced', effectiveReducedMotion()); mirrorLocal(); persistSoon(0); });
+document.querySelectorAll('[data-keyset]').forEach(function(b){ b.addEventListener('click',function(){ keysetTab=b.getAttribute('data-keyset'); document.querySelectorAll('[data-keyset]').forEach(function(x){x.classList.remove('active');}); b.classList.add('active'); renderKeyRows(); }); });
+document.querySelector('[data-reset-keys]').addEventListener('click',function(){ if(keysetTab==='4') G.keyBindings4=DEFAULT_KEYS4.slice(); else G.keyBindings5=DEFAULT_KEYS5.slice(); renderKeyRows(); mirrorLocal(); persistSoon(0); });
+document.getElementById('botToggle').addEventListener('change',function(){});
+document.getElementById('botDiffSelect').addEventListener('change',function(){ document.getElementById('botDiffLbl').textContent=this.options[this.selectedIndex].text; });
+document.querySelector('[data-pause]').addEventListener('click',function(){ if(SESS) setPaused(true); });
+document.querySelector('[data-resume]').addEventListener('click',function(){ if(SESS) setPaused(false); });
+document.querySelector('[data-quit]').addEventListener('click',function(){
+  stopBacking(); if(SESS) { SESS.finished=true; cancelAnimationFrame(SESS.raf); }
+  document.getElementById('pauseOverlay').hidden=true;
+  showScreen('menu');
+});
+document.querySelector('[data-duel-start]').addEventListener('click',function(){
+  if(!DUEL.isHost) return;
+  var trackId=document.getElementById('duelTrackSelect').value;
+  var startAt=Date.now()+4000;
+  host('match-action',{action:{phase:'countdown', trackId:trackId, startAt:startAt, hostProbeFrom:DUEL.localClientId}, mode:'merge'});
+});
+document.getElementById('pVolRange').addEventListener('input',function(){ G.settings.volume=Number(this.value); document.getElementById('pVolLbl').textContent=Math.round(G.settings.volume*100)+'%'; updateMasterGain(); mirrorLocal(); persistSoon(0); });
+
+// ---- Host protocol ----
+window.addEventListener('message', function(event){
+  if(!event.data || event.data.source!=='phantomplay-host') return;
+  var type=event.data.type;
+  if(type==='settings'){
+    hostSound = event.data.sound!==false;
+    hostReducedMotion = !!event.data.reducedMotion;
+    document.body.classList.toggle('reduced', effectiveReducedMotion());
+    updateMasterGain();
+  } else if(type==='pause'){
+    if(SESS) setPaused(true);
+  } else if(type==='resume'){
+    if(SESS) setPaused(false);
+  } else if(type==='exit'){
+    if(SESS) setPaused(true);
+  } else if(type==='restart'){
+    var wasActive = SESS && !SESS.finished;
+    var trackToReplay = wasActive ? SESS.track : null;
+    var replayOpts = wasActive ? { practice: SESS.practice, duel: SESS.duel, bot: !!SESS.bot, botSkill: SESS.bot ? SESS.bot.skill : undefined } : null;
+    stopBacking(); if(SESS){ SESS.finished=true; cancelAnimationFrame(SESS.raf); }
+    if(trackToReplay){ startTrack(trackToReplay, replayOpts); } else { showScreen('menu'); }
+  } else if(type==='restore' || type==='load-state'){
+    mergeState(event.data.state);
+    mirrorLocal();
+  } else if(type==='save-state'){
+    host('progress',{score: SESS?SESS.score:0, progress:Math.round((G.progression.completed.length/TRACKS.length)*100), state:serializeState()});
+  } else if(type==='match-state'){
+    onMatchState(event.data);
+  }
+});
+
+// ---- Boot ----
+document.body.classList.toggle('reduced', effectiveReducedMotion());
+if(!G.tutorialSeen){ openTutorial('tutorial'); } else { showScreen('menu'); }
+host('ready');
+})();
+</script>
+</body>
+</html>

@@ -4,9 +4,9 @@
    draftable actions, and one blocking question max. External actions stay
    approval-gated. */
 
-import { store, visible, currentWs, wsName, pushActivity, session, currentTenantId } from "./store.js?v=phantom-live-20260713-247";
-import { createCrmProspectBuildout, isCrmProspectBuildout } from "./command.js?v=phantom-live-20260713-247";
-import { persistCrmProspectLanes } from "./crmpipeline.js?v=phantom-live-20260713-247";
+import { store, visible, currentWs, wsName, pushActivity, session, currentTenantId } from "./store.js?v=phantom-live-20260714-249";
+import { createCrmProspectBuildout, isCrmProspectBuildout } from "./command.js?v=phantom-live-20260714-249";
+import { persistCrmProspectLanes } from "./crmpipeline.js?v=phantom-live-20260714-249";
 
 const esc = (value = "") => String(value)
   .replaceAll("&", "&amp;")

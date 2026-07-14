@@ -260,6 +260,7 @@ import {
   updatePhantomPlayWorkspacePolicy,
   upsertPhantomPlayReview,
 } from "./phantom-ai/phantomplay-v2.js";
+import { registerPhantomPlayFlagshipGames } from "./phantom-ai/phantomplay-flagship.js";
 import {
   auditCompetitorIntelligenceRequest,
   createAudienceTheme,
@@ -4084,6 +4085,7 @@ app.post("/api/phantomplay/submissions/:id/moderate", async (request, reply) => 
    (including V2 game registration) and V1 behaves exactly as before. */
 
 if (phantomPlayV2Enabled()) registerPhantomPlayV2Games();
+registerPhantomPlayFlagshipGames();
 
 function phantomPlayV2Gate(reply: FastifyReply) {
   if (phantomPlayV2Enabled()) return true;

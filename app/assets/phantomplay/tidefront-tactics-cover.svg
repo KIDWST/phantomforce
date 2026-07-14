@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675">
+  <title>Tidefront Tactics — PhantomPlay cover placeholder</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#03080f"/>
+      <stop offset="100%" stop-color="#0e1c2a"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="675" fill="url(#bg)"/>
+  <path d="M0 480 Q 300 440 600 480 T 1200 480 V 675 H 0 Z" fill="#0b1420"/>
+  <path d="M0 480 Q 300 440 600 480 T 1200 480" stroke="#39d8c0" stroke-width="3" fill="none" opacity="0.7"/>
+  <g>
+    <ellipse cx="420" cy="440" rx="46" ry="16" fill="#f6ad3c"/>
+    <polygon points="420,400 420,440 460,440" fill="#a685ff"/>
+    <ellipse cx="760" cy="450" rx="46" ry="16" fill="#ff6f91"/>
+    <polygon points="760,410 760,450 800,450" fill="#39d8c0"/>
+  </g>
+  <text x="600" y="560" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="50" font-weight="700" fill="#eaf6f4" letter-spacing="2">Tidefront Tactics</text>
+  <text x="600" y="602" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="20" fill="#7fa39a" letter-spacing="1">PhantomPlay cover placeholder</text>
+</svg>

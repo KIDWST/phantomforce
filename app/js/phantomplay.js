@@ -1,7 +1,7 @@
 import {
   currentTenantId, isAdmin, isOwnerOperator, session,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260713-247";
+} from "./store.js?v=phantom-live-20260714-249";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 const FALLBACK_KEY = "pf.phantomplay.offline.v1";
@@ -52,7 +52,7 @@ const ui = {
   offline: false,
   query: "",
   category: "All",
-  roomMode: "classroom",
+  roomMode: "friends",
   roomGameId: "",
   roomMessage: "",
   roomBusy: false,
@@ -307,7 +307,7 @@ function renderHome() {
         <div class="pp-console-actions">
           <button class="pp-primary" data-pp-play="${esc(activeGameId)}">${icon("play")} Run quick session</button>
           <button class="pp-secondary" data-pp-tab="library">Open play lab</button>
-          <button class="pp-secondary" data-pp-tab="together">Start playtest room</button>
+          <button class="pp-secondary" data-pp-tab="together">Play with friends</button>
         </div>
       </div>
       <div class="pp-console-panel" aria-hidden="true">
@@ -362,7 +362,7 @@ function renderTogether() {
   const selectedGameId = classroomGames.some((game) => game.id === ui.roomGameId) ? ui.roomGameId : (classroomGames[0]?.id || "");
   return `<div class="pp-together" data-pp-private-rooms>
     <section class="pp-room-hero">
-      <div><p class="pp-kicker">PLAYTEST ROOMS</p><h2>Test builds with friends, classmates, or collaborators without becoming a public game portal.</h2><p>Rooms use signed-in PhantomForce access, a short-lived join code, and the existing game sandbox. Built-in games keep their no-internet rule; the app only brokers room membership and progress state.</p></div>
+      <div><p class="pp-kicker">MULTIPLAYER</p><h2>Play together with friends in this workspace.</h2><p>Create a private room, invite a few friends with a short-lived join code, and jump into a real match together. Built-in games keep their no-internet rule; the app only relays room membership and progress state.</p></div>
       <div class="pp-room-principles"><span>No public discovery</span><span>No direct inbound device ports</span><span>No room chat or voice</span><span>Same workspace only</span></div>
     </section>
     <section class="pp-room-layout">
@@ -383,10 +383,10 @@ function renderTogether() {
     </section>
     ${ui.roomMessage ? `<div class="pp-banner ${ui.roomMessage.startsWith("Blocked") ? "is-error" : "is-offline"}"><b>Private room status</b><span>${esc(ui.roomMessage)}</span><button type="button" data-pp-room-clear>Clear</button></div>` : ""}
     <section class="pp-room-safety">
-      <div><p class="pp-kicker">SANDBOX DEFAULTS</p><h3>Built for private playtests first.</h3><p>Admin-controlled rooms, short codes, Everyone-rated classroom games, no public friends search, and no external game network calls from built-ins.</p></div>
+      <div><p class="pp-kicker">SAFE BY DEFAULT</p><h3>Private rooms, workspace-only.</h3><p>Short join codes, no public discovery, classroom mode restricts to Everyone-rated games automatically, and every built-in game still makes zero external network calls of its own — the app relays room and progress state, nothing more.</p></div>
       <ul><li>Signed-in same-tenant join policy</li><li>Room invite expires after 90 minutes</li><li>Roster only; no private messaging</li><li>Games still run in script-only iframes</li></ul>
     </section>
-    <section class="pp-section"><div class="pp-section-head"><div><h2>Active playtest rooms</h2><p>Only rooms you host or have joined are shown here.</p></div><span>${rooms.length} visible</span></div>${rooms.length ? `<div class="pp-room-grid">${rooms.map(roomCard).join("")}</div>` : empty("No playtest rooms yet", "Create a room or join with a code to test together.")}</section>
+    <section class="pp-section"><div class="pp-section-head"><div><h2>Your multiplayer rooms</h2><p>Only rooms you host or have joined are shown here.</p></div><span>${rooms.length} visible</span></div>${rooms.length ? `<div class="pp-room-grid">${rooms.map(roomCard).join("")}</div>` : empty("No rooms yet", "Create a room or join with a code to start playing together.")}</section>
   </div>`;
 }
 
@@ -497,7 +497,7 @@ function render() {
     return;
   }
   const snapshot = ui.snapshot || offlineState();
-  const tabs = [["home", "Sandbox"], ["library", "Play Lab"], ["together", "Playtest Rooms"], ["favorites", "Saved"], ["developer", "Dev Rooms"], ...(snapshot.access.canModerate ? [["admin", "Safety Review"]] : [])];
+  const tabs = [["home", "Sandbox"], ["library", "Play Lab"], ["together", "Multiplayer"], ["favorites", "Saved"], ["developer", "Dev Rooms"], ...(snapshot.access.canModerate ? [["admin", "Safety Review"]] : [])];
   const content = ui.tab === "library" ? renderLibrary() : ui.tab === "together" ? renderTogether() : ui.tab === "favorites" ? renderFavorites() : ui.tab === "developer" ? renderDeveloper() : ui.tab === "admin" ? renderAdmin() : renderHome();
   mountedRoot.innerHTML = `<div class="pp-shell">
     <header class="pp-top"><div><p class="pp-kicker">PHANTOMFORCE GAME SANDBOX</p><h1>PhantomPlay</h1><span>Play, build, test, and return to work sharper.</span></div><div><span class="pp-access ${snapshot.access.enabled ? "is-ready" : "is-blocked"}">${snapshot.access.enabled ? esc(playTimeLabel(snapshot.access.remainingMinutesToday)) : "Plan restricted"}</span><button class="pp-settings-button" data-pp-settings aria-label="Play settings">${icon("settings")}</button></div></header>

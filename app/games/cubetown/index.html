@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self'; img-src data:; connect-src 'none'; media-src 'none'; frame-src 'none'">
+<title>CubeTown</title>
+<style>
+:root{
+  --bg-deep:#180f28; --bg-panel:#241a3aee; --bg-panel-solid:#241a3a; --line:#ff966233;
+  --coral:#ff9466; --coral-soft:#ffb890; --mint:#5be3b5; --gold:#ffcf6b; --violet:#c792ea; --aqua:#4fd1e8;
+  --text:#fbe9d8; --text-dim:#c0addd; --danger:#ff6b81;
+}
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:var(--bg-deep);color:var(--text);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;-webkit-tap-highlight-color:transparent;user-select:none}
+button{font-family:inherit;cursor:pointer}
+#stage{position:fixed;inset:0;display:block;width:100%;height:100%}
+
+/* ---- HUD ---- */
+.hud{position:fixed;inset:0;pointer-events:none;z-index:3}
+.hud>*{pointer-events:auto}
+.hud-top{position:absolute;top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:flex-start;padding:10px 12px;gap:8px}
+.hud-clock{background:var(--bg-panel);border:1px solid var(--line);border-radius:12px;padding:8px 12px;min-width:150px}
+.hud-clock b{display:block;font-size:14px;color:var(--gold);letter-spacing:1px}
+.hud-clock span{font-size:11px;color:var(--text-dim)}
+.spark-wrap{margin-top:6px;height:8px;border-radius:5px;background:#00000055;overflow:hidden;border:1px solid var(--line)}
+.spark-fill{height:100%;background:linear-gradient(90deg,var(--coral),var(--mint));width:70%;transition:width .4s}
+.hud-res{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
+.chip{display:flex;align-items:center;gap:4px;background:#00000044;border-radius:8px;padding:2px 7px;font-size:11px;border:1px solid var(--line)}
+.chip i{width:9px;height:9px;border-radius:3px;display:inline-block}
+.i-grain{background:var(--gold)}.i-shale{background:#9bb3d6}.i-loom{background:var(--violet)}.i-fish{background:var(--aqua)}
+.hud-actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;max-width:56vw}
+.hud-actions button{background:var(--bg-panel);border:1px solid var(--line);color:var(--text);border-radius:10px;padding:8px 10px;font-size:11px;font-weight:700;letter-spacing:.5px}
+.hud-actions button:hover{background:#33244f}
+.hud-actions button.is-on{border-color:var(--mint);color:var(--mint)}
+.hud-bottom{position:absolute;bottom:0;left:0;right:0;display:flex;flex-direction:column;align-items:center;gap:10px;padding:0 10px 14px}
+.context-btn{background:linear-gradient(180deg,var(--coral),#e06f3f);color:#2a1608;border:none;border-radius:16px;padding:13px 26px;font-weight:800;font-size:14px;letter-spacing:.5px;box-shadow:0 6px 18px #ff946640;display:none}
+.context-btn.is-visible{display:inline-block}
+.dpad{display:none;gap:8px;align-items:center}
+.dpad .pad{display:grid;grid-template-columns:repeat(3,44px);grid-template-rows:repeat(3,44px);gap:4px}
+.dpad button{background:var(--bg-panel);border:1px solid var(--line);color:var(--text);border-radius:10px;font-size:14px}
+@media(pointer:coarse){.dpad{display:flex}}
+.toast{position:absolute;left:50%;top:64px;transform:translateX(-50%);background:var(--bg-panel);border:1px solid var(--mint);color:var(--text);padding:8px 14px;border-radius:10px;font-size:12px;max-width:70vw;text-align:center;opacity:0;transition:opacity .25s;z-index:9}
+.toast.is-visible{opacity:1}
+
+/* ---- Panels ---- */
+.panel{position:fixed;inset:0;display:none;place-items:center;background:#0b0716b8;z-index:6;padding:16px}
+.panel.is-open{display:grid}
+.card{background:var(--bg-panel-solid);border:1px solid var(--line);border-radius:18px;padding:18px 20px;max-width:min(640px,94vw);max-height:88vh;overflow:auto;box-shadow:0 20px 60px #00000066}
+.card h2{margin:0 0 4px;font-size:19px;color:var(--coral-soft);letter-spacing:.5px}
+.card p.sub{margin:0 0 14px;color:var(--text-dim);font-size:12px;line-height:1.5}
+.card .close{position:sticky;top:0;float:right;background:none;border:none;color:var(--text-dim);font-size:20px;line-height:1}
+.grid-pieces{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px;margin-top:8px}
+.piece-btn{background:#00000033;border:1px solid var(--line);border-radius:12px;padding:8px 6px;color:var(--text);text-align:center;font-size:11px;display:flex;flex-direction:column;align-items:center;gap:4px}
+.piece-btn.is-selected{border-color:var(--mint);box-shadow:0 0 0 1px var(--mint) inset}
+.piece-btn.is-locked{opacity:.4;cursor:not-allowed}
+.piece-swatch{width:34px;height:22px;border-radius:4px}
+.piece-cost{color:var(--text-dim);font-size:10px}
+.build-tools{display:flex;gap:8px;margin:10px 0;flex-wrap:wrap}
+.build-tools button{background:#00000033;border:1px solid var(--line);border-radius:9px;padding:7px 12px;color:var(--text);font-size:11px;font-weight:700}
+.build-tools button.is-on{border-color:var(--coral);color:var(--coral-soft)}
+.inv-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-top:10px}
+.inv-item{background:#00000033;border:1px solid var(--line);border-radius:10px;padding:9px 11px;display:flex;justify-content:space-between;align-items:center;font-size:12px}
+.inv-item button{background:var(--mint);border:none;color:#08221a;border-radius:7px;padding:4px 9px;font-size:10px;font-weight:800}
+.swatch-row{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 14px}
+.swatch{width:38px;height:38px;border-radius:50%;border:2px solid #ffffff22;position:relative}
+.swatch.is-selected{border-color:var(--text)}
+.swatch.is-locked{opacity:.35}
+.swatch.is-locked::after{content:'🔒';position:absolute;inset:0;display:grid;place-items:center;font-size:12px}
+.dlg-name{color:var(--gold);font-weight:800;font-size:15px}
+.dlg-body{margin:10px 0;font-size:13px;line-height:1.6;color:var(--text)}
+.dlg-quest{background:#00000033;border-radius:10px;padding:9px 11px;font-size:12px;margin:8px 0}
+.dlg-actions{display:flex;gap:8px;margin-top:12px}
+.dlg-actions button{flex:1;background:var(--coral);border:none;color:#2a1608;font-weight:800;border-radius:10px;padding:9px}
+.dlg-actions button.secondary{background:#00000033;color:var(--text)}
+.fish-bar{position:relative;height:26px;background:#00000055;border-radius:13px;border:1px solid var(--line);margin:16px 0;overflow:hidden}
+.fish-zone{position:absolute;top:0;bottom:0;background:#5be3b555;border-left:2px solid var(--mint);border-right:2px solid var(--mint)}
+.fish-marker{position:absolute;top:-4px;bottom:-4px;width:6px;background:var(--gold);border-radius:3px}
+.stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.stat-box{background:#00000033;border-radius:10px;padding:10px;text-align:center}
+.stat-box b{display:block;font-size:20px;color:var(--mint)}
+.stat-box span{font-size:10px;color:var(--text-dim)}
+.roster-row{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--line);font-size:12px}
+.badge{background:#00000044;border-radius:7px;padding:3px 8px;font-size:10px;color:var(--text-dim)}
+.badge.you{color:var(--mint);border:1px solid var(--mint)}
+.field-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:10px 0}
+input[type=range]{width:150px}
+.tut-step{display:none}
+.tut-step.is-active{display:block}
+.tut-dots{display:flex;gap:5px;justify-content:center;margin-top:14px}
+.tut-dots i{width:6px;height:6px;border-radius:50%;background:#ffffff33;display:block}
+.tut-dots i.is-active{background:var(--mint)}
+.pill-toggle{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}
+.pill-toggle button{flex:1;min-width:90px;background:#00000033;border:1px solid var(--line);border-radius:9px;padding:8px;font-size:11px;color:var(--text)}
+.pill-toggle button.is-on{border-color:var(--mint);color:var(--mint);background:#5be3b51a}
+.small-note{font-size:11px;color:var(--text-dim);line-height:1.5;margin-top:8px}
+::-webkit-scrollbar{width:8px}::-webkit-scrollbar-thumb{background:#ffffff22;border-radius:4px}
+@media(prefers-reduced-motion:reduce){.spark-fill{transition:none}}
+</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+
+<div class="hud">
+  <div class="hud-top">
+    <div class="hud-clock">
+      <b data-ct-clock>Day 1 · 6:00</b>
+      <span data-ct-clock-note>Dawn</span>
+      <div class="spark-wrap"><div class="spark-fill" data-ct-spark></div></div>
+      <div class="hud-res">
+        <span class="chip"><i class="i-grain"></i><b data-ct-res-grain>0</b></span>
+        <span class="chip"><i class="i-shale"></i><b data-ct-res-shale>0</b></span>
+        <span class="chip"><i class="i-loom"></i><b data-ct-res-loom>0</b></span>
+        <span class="chip"><i class="i-fish"></i><b data-ct-res-fish>0</b></span>
+      </div>
+    </div>
+    <div class="hud-actions">
+      <button type="button" data-ct-open="build">Build</button>
+      <button type="button" data-ct-open="inventory">Inventory</button>
+      <button type="button" data-ct-open="customize">Customize</button>
+      <button type="button" data-ct-open="together" data-ct-together-btn hidden>Together</button>
+      <button type="button" data-ct-open="report">Report</button>
+      <button type="button" data-ct-open="settings">Settings</button>
+      <button type="button" data-ct-open="tutorial">Help</button>
+      <button type="button" data-ct-pause>Pause</button>
+    </div>
+  </div>
+  <div class="hud-bottom">
+    <div class="toast" data-ct-toast></div>
+    <button type="button" class="context-btn" data-ct-context>Gather</button>
+    <div class="dpad">
+      <div class="pad">
+        <span></span><button data-ct-move="up">▲</button><span></span>
+        <button data-ct-move="left">◀</button><button data-ct-move="act">●</button><button data-ct-move="right">▶</button>
+        <span></span><button data-ct-move="down">▼</button><span></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="panel" data-ct-panel="build">
+  <div class="card">
+    <button class="close" data-ct-close>×</button>
+    <h2>Build</h2>
+    <p class="sub">Place blocks on open grass. Everything snaps to the plot grid.</p>
+    <div class="build-tools">
+      <button type="button" class="is-on" data-ct-buildmode="place">Place</button>
+      <button type="button" data-ct-buildmode="demolish">Demolish</button>
+      <button type="button" data-ct-rotate>Rotate ⟳</button>
+    </div>
+    <div class="grid-pieces" data-ct-piece-list></div>
+    <p class="small-note" data-ct-build-note></p>
+  </div>
+</div>
+
+<div class="panel" data-ct-panel="inventory">
+  <div class="card">
+    <button class="close" data-ct-close>×</button>
+    <h2>Inventory</h2>
+    <p class="sub">Cooked dishes restore Spark. Everything else is used for building and quests.</p>
+    <div class="inv-list" data-ct-inv-list></div>
+  </div>
+</div>
+
+<div class="panel" data-ct-panel="customize">
+  <div class="card">
+    <button class="close" data-ct-close>×</button>
+    <h2>Customize</h2>
+    <p class="sub">Unlock new looks by finishing resident quests.</p>
+    <b style="font-size:11px;color:var(--text-dim)">HUE</b>
+    <div class="swatch-row" data-ct-hue-row></div>
+    <b style="font-size:11px;color:var(--text-dim)">TOPPER</b>
+    <div class="swatch-row" data-ct-topper-row></div>
+    <b style="font-size:11px;color:var(--text-dim)">TRIM</b>
+    <div class="swatch-row" data-ct-trim-row></div>
+  </div>
+</div>
+
+<div class="panel" data-ct-panel="dialogue">
+  <div class="card">
+    <button class="close" data-ct-close>×</button>
+    <div class="dlg-name" data-ct-dlg-name></div>
+    <div class="dlg-body" data-ct-dlg-body></div>
+    <div class="dlg-quest" data-ct-dlg-quest hidden></div>
+    <div class="dlg-actions">
+      <button type="button" data-ct-dlg-turnin hidden>Hand over</button>
+      <button type="button" class="secondary" data-ct-close>Bye for now</button>
+    </div>
+  </div>
+</div>
+
+<div class="panel" data-ct-panel="fishing">
+  <div class="card">
+    <h2>Driftfish waters</h2>
+    <p class="sub">Tap or press Space when the marker crosses the glowing zone.</p>
+    <div class="fish-bar"><div class="fish-zone" data-ct-fish-zone></div><div class="fish-marker" data-ct-fish-marker></div></div>
+    <div class="dlg-actions">
+      <button type="button" data-ct-fish-catch>Catch!</button>
+      <button type="button" class="secondary" data-ct-fish-leave>Leave the water</button>
+    </div>
+  </div>
+</div>
+
+<div class="panel" data-ct-panel="together">
+  <div class="card">
+    <button class="close" data-ct-close>×</button>
+    <h2>Together</h2>
+    <p class="sub" data-ct-together-sub></p>
+    <div data-ct-roster></div>
+    <div data-ct-host-controls hidden>
+      <b style="font-size:11px;color:var(--text-dim)">GUEST BUILDING</b>
+      <div class="pill-toggle" data-ct-open-building>
+        <button type="button" data-ct-ob="host_only">Visitors only</button>
+        <button type="button" data-ct-ob="everyone">Builders welcome</button>
+      </div>
+    </div>
+    <p class="small-note">Everyone in this room can gather, fish, cook, and chat with residents together. Only the room Host's placements become the permanent shared town for everyone else — guest placements stay local previews on this device, and never remove or overwrite anything the Host protects. This is a live limit of the current PhantomPlay room protocol (only the room host can write shared match-state), not a CubeTown restriction.</p>
+  </div>
+</div>
+
+<div class="panel" data-ct-panel="report">
+  <div class="card">
+    <button class="close" data-ct-close>×</button>
+    <h2 data-ct-report-title>Town Report</h2>
+    <p class="sub" data-ct-report-sub></p>
+    <div class="stat-grid">
+      <div class="stat-box"><b data-ct-stat-day>1</b><span>Days lived</span></div>
+      <div class="stat-box"><b data-ct-stat-built>0</b><span>Pieces built</span></div>
+      <div class="stat-box"><b data-ct-stat-fish>0</b><span>Driftfish caught</span></div>
+      <div class="stat-box"><b data-ct-stat-dish>0</b><span>Dishes cooked</span></div>
+      <div class="stat-box"><b data-ct-stat-quests>0/3</b><span>Quests done</span></div>
+      <div class="stat-box"><b data-ct-stat-score>0</b><span>Town score</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="panel" data-ct-panel="settings">
+  <div class="card">
+    <button class="close" data-ct-close>×</button>
+    <h2>Settings</h2>
+    <div class="field-row"><span>Sound volume</span><input type="range" min="0" max="100" value="70" data-ct-volume></div>
+    <div class="field-row"><span>Mute</span><input type="checkbox" data-ct-mute></div>
+    <div class="field-row"><span>Reduce motion</span><input type="checkbox" data-ct-reduced></div>
+    <div class="field-row"><span>Replay tutorial</span><button type="button" data-ct-replay-tutorial>Replay</button></div>
+    <p class="small-note">Reduce motion also follows the PhantomPlay host's accessibility setting automatically.</p>
+  </div>
+</div>
+
+<div class="panel" data-ct-panel="tutorial">
+  <div class="card">
+    <button class="close" data-ct-close data-ct-tut-skip>×</button>
+    <h2>Welcome to CubeTown</h2>
+    <div data-ct-tut-steps></div>
+    <div class="dlg-actions">
+      <button type="button" class="secondary" data-ct-tut-skip>Skip</button>
+      <button type="button" data-ct-tut-next>Next</button>
+    </div>
+    <div class="tut-dots" data-ct-tut-dots></div>
+  </div>
+</div>
+
+<div class="panel" data-ct-panel="pause">
+  <div class="card" style="text-align:center">
+    <h2>Paused</h2>
+    <p class="sub">CubeTown is frozen. Resume from the player bar above, or the button below.</p>
+    <button type="button" data-ct-resume style="background:var(--coral);border:none;color:#2a1608;font-weight:800;border-radius:10px;padding:10px 18px">Resume</button>
+  </div>
+</div>
+
+<script src="./cubetown.js"></script>
+</body>
+</html>
