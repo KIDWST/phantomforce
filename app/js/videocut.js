@@ -937,5 +937,5 @@ export function mountVideoEditor(host, opts = {}) {
   renderAddRow();
   renderAll();
   raf = requestAnimationFrame(tick);
-  return { destroy };
+  return { destroy, addClip: (kind, url, title) => addClip(kind, url, title, false) };
 }

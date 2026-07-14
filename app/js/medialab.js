@@ -6,20 +6,20 @@
  * instead of sending people out to another product.
  */
 
-import { currentTenantId, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260714-255";
+import { currentTenantId, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260714-256";
 import {
   PLATFORMS, registerContentAsset, loadSocialAccounts, saveSocialAccounts, socialStatus,
   loadContentAssets, saveContentAssets, contentAssetDisplayUrl, hydrateContentAssetUrl,
-} from "./contenthub.js?v=phantom-live-20260714-255";
-import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260714-255";
+} from "./contenthub.js?v=phantom-live-20260714-256";
+import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260714-256";
 import {
   addImageLayer, addTextLayer, cloneImageEditState, compositionSnapshot, duplicateLayer,
   freshComposition, hitTestLayer, loadCompositionImages, moveLayerOrder, pushEditorSnapshot,
   removeSelectedLayers, renderComposition, restoreComposition, selectLayer, selectedLayers,
-} from "./content-editor.js?v=phantom-live-20260714-255";
-import { loadImageForEditing, exportCanvas, requestAiEdit, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260714-255";
-import { mountVideoEditor } from "./videocut.js?v=phantom-live-20260714-255";
-import { assetsAvailable, assetBlobUrl, listAssets, recordAssetUsage, saveToAssetCloud, listLocalAssets, refreshLocalAssets, localAssetBlobUrl } from "./orgs.js?v=phantom-live-20260714-255";
+} from "./content-editor.js?v=phantom-live-20260714-256";
+import { loadImageForEditing, exportCanvas, requestAiEdit, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260714-256";
+import { mountVideoEditor } from "./videocut.js?v=phantom-live-20260714-256";
+import { assetsAvailable, assetBlobUrl, listAssets, recordAssetUsage, saveToAssetCloud, listLocalAssets, refreshLocalAssets, localAssetBlobUrl } from "./orgs.js?v=phantom-live-20260714-256";
 
 const CFG_KEY = "pf.medialab.v1";
 const EDIT_INTENT_KEY = "pf.medialab.editIntent.v1";
@@ -1234,6 +1234,10 @@ const LOCAL_ASSETS_CACHE_MAX_ENTRIES = 24;
 const LOCAL_ASSETS_CACHE_BUDGET = 50_000; // ~50KB of serialized listings
 let localAssetsFetchSeq = 0;
 let localAssetsDrawerSynced = false; // one background refresh per drawer open
+/* the Edit tab shows local assets inline (no separate drawer needed to start
+   editing) — filtered to whatever the current editor context wants */
+let mlInlineAssetsSyncedKind = null;
+let mlLastEditId = undefined;
 
 function localAssetsCacheKey() {
   return `${localAssetsState.kind}::${String(localAssetsState.search || "").trim().toLowerCase()}`;
@@ -1285,6 +1289,7 @@ export function renderMediaStudio(el, opts = {}) {
   const cfg = loadCfg();
   if (session.tab === "briefs") session.tab = "pending";
   if (activeDrawer !== "assets") localAssetsDrawerSynced = false;
+  if (session.tab !== "edit") mlInlineAssetsSyncedKind = null;
   /* while a local-asset drag is live, the tab buttons stand in as drop targets
      for surfaces that only exist on their own tab */
   const tabDropAttrs = (id) => {
@@ -1376,6 +1381,46 @@ function localAssetCardHtml(asset, esc) {
         ${canUse ? `<button type="button" data-ml-local-use="${esc(asset.id)}">Edit</button><button type="button" data-ml-local-ref="${esc(asset.id)}">Ref</button>` : `<em>Indexed</em>`}
       </div>
     </article>`;
+}
+/* ---- Edit tab: local assets inline, no separate drawer to open first.
+   `kind` narrows to what the current editor context can use ("image" while
+   editing a photo, "video" for PhantomCut, "all" on the chooser screen). */
+function ensureInlineAssetsSynced(root, opts, kind) {
+  if (mlInlineAssetsSyncedKind === kind) return;
+  mlInlineAssetsSyncedKind = kind;
+  localAssetsState.kind = kind;
+  loadLocalAssetsForDrawer(root, opts);
+}
+function editInlineAssetsHtml(esc, kind) {
+  const s = localAssetsState;
+  const rows = (s.assets || []).filter((a) => kind === "all" || a.kind === kind);
+  const noun = kind === "video" ? "video" : kind === "image" ? "image" : "media";
+  return `
+    <div class="ml-inline-local" data-ml-inline-local>
+      <div class="ml-inline-local-head">
+        <b>${svgIc("image")} From your local library</b>
+        <input class="ml-text-in ml-inline-local-search" data-ml-inline-local-search placeholder="Search local ${noun}..." value="${esc(s.search)}"/>
+      </div>
+      ${s.loading && !rows.length
+        ? `<div class="ml-local-empty">Scanning local assets...</div>`
+        : rows.length
+          ? `<div class="ml-local-assets ml-inline-assets">${rows.slice(0, 10).map((a) => localAssetCardHtml(a, esc)).join("")}</div>`
+          : `<div class="ml-local-empty">No local ${noun} assets indexed yet${s.message ? ` — ${esc(s.message)}` : "."}</div>`}
+    </div>`;
+}
+function wireInlineLocalAssets(container, root, opts) {
+  hydrateLocalAssetThumbs(container);
+  const search = container.querySelector("[data-ml-inline-local-search]");
+  if (search) {
+    let timer = null;
+    search.oninput = () => {
+      localAssetsState.search = search.value;
+      clearTimeout(timer);
+      timer = setTimeout(() => loadLocalAssetsForDrawer(root, opts, true), 250);
+    };
+  }
+  container.querySelectorAll("[data-ml-local-use]").forEach((b) => b.onclick = () => useLocalAsset(b.dataset.mlLocalUse, "edit", root, opts));
+  container.querySelectorAll("[data-ml-local-ref]").forEach((b) => b.onclick = () => useLocalAsset(b.dataset.mlLocalRef, "ref", root, opts));
 }
 function templatesDrawerHtml(esc) {
   const visible = MEDIA_PRESETS.filter((p) => p.modality === genState.modality);
@@ -1509,8 +1554,12 @@ async function loadLocalAssetsForDrawer(el, opts, refresh = false) {
   localAssetsState.loaded = true;
   applyLocalAssetsResult(result);
   if (result.ok !== false) localAssetsCachePut(cacheKey, result);
-  // background refresh repaints only when the data actually changed
-  if (activeDrawer === "assets" && localAssetsState.viewHash !== localAssetsSnapshotHash()) paintLocalAssets(el, opts);
+  // background refresh repaints only when the data actually changed, and only
+  // while something is actually showing it — the drawer or the Edit tab's
+  // inline picker (which has no separate "open" state to gate on)
+  const visible = activeDrawer === "assets"
+    || (session.tab === "edit" && (!session.editMode || (session.editMode === "photo" && !session.edit)));
+  if (visible && localAssetsState.viewHash !== localAssetsSnapshotHash()) paintLocalAssets(el, opts);
 }
 async function useLocalAsset(assetId, mode, el, opts) {
   const asset = localAssetsState.assets.find((item) => item.id === assetId);
@@ -2888,10 +2937,17 @@ function editModeBar(active, esc) {
 }
 function renderEdit(body, cfg, opts, root) {
   const esc = opts.esc || ((s) => String(s));
-  /* external entry points (drag & drop, Media Pool "Edit", Content Hub) set
-     session.edit with an image — that's an explicit photo-editing intent */
-  if (session.edit && !session.editMode) session.editMode = "photo";
+  /* external entry points (drag & drop, Media Pool "Edit", Content Hub, local
+     asset picks) set session.edit — decypher photo vs. video from what was
+     actually picked instead of always assuming photo, and only re-sync once
+     per new asset so re-renders don't fight a mode the admin already changed */
+  const isNewEdit = !!session.edit && session.edit.id !== mlLastEditId;
+  if (isNewEdit) {
+    mlLastEditId = session.edit.id;
+    session.editMode = session.edit.type === "video" ? "video" : "photo";
+  }
   if (!session.editMode) {
+    ensureInlineAssetsSynced(root, opts, "all");
     body.innerHTML = `<div class="ml-edit-choose" role="group" aria-label="Choose an editor">
       <button type="button" class="ml-choose-card" data-ml-choose="photo">
         ${svgIc("image")}
@@ -2903,29 +2959,39 @@ function renderEdit(body, cfg, opts, root) {
         <b>Video</b>
         <i>PhantomCut: build a cut from photos, clips, or both — Ken Burns, crossfades, titles, music, and a real export.</i>
       </button>
-    </div>`;
+    </div>
+    <p class="ml-inline-local-hint">Or jump straight in — pick anything below and Phantom opens the right editor for it.</p>
+    ${editInlineAssetsHtml(esc, "all")}`;
     body.querySelectorAll("[data-ml-choose]").forEach((btn) => btn.onclick = () => {
       session.editMode = btn.dataset.mlChoose;
       renderMediaStudio(root, opts);
     });
+    wireInlineLocalAssets(body, root, opts);
     return;
   }
   if (session.editMode === "video") {
     body.innerHTML = editModeBar("video", esc);
-    body.appendChild(ensureVideoEditor(opts));
+    const host = ensureVideoEditor(opts);
+    if (isNewEdit && session.edit?.type === "video" && session.edit.url) {
+      vcMounted?.addClip?.("video", session.edit.url, session.edit.id || "Local video");
+    }
+    body.appendChild(host);
     body.querySelector("[data-ml-edit-back]").onclick = () => { session.editMode = null; renderMediaStudio(root, opts); };
     return;
   }
   if (!session.edit) {
+    ensureInlineAssetsSynced(root, opts, "image");
     body.innerHTML = `${editModeBar("photo", esc)}<div class="ml-empty" data-ml-dropzone="edit" data-ml-dropzone-label="Drop to open in editor">${svgIc("edit")}<b>Pick something to edit</b><i>Generate an image, choose one from Media Pool, or upload.</i>
       <div class="ml-edit-pick"><button class="ml-generate ml-inline" data-ml-upload>${svgIc("upload")} Upload an image</button>
       ${session.assets[0] ? `<button class="ml-generate ml-inline ml-ghost" data-ml-fromlib>Use latest generation</button>` : ""}</div>
-      <input type="file" accept="image/*" data-ml-editfile hidden /></div>`;
+      <input type="file" accept="image/*" data-ml-editfile hidden /></div>
+      ${editInlineAssetsHtml(esc, "image")}`;
     body.querySelector("[data-ml-edit-back]").onclick = () => { session.editMode = null; renderMediaStudio(root, opts); };
     const f = body.querySelector("[data-ml-editfile]");
     body.querySelector("[data-ml-upload]").onclick = () => f.click();
     f.onchange = () => readImage(f.files[0], (url) => { session.edit = { url, type: "image", id: `up-${Date.now()}` }; resetEdit(); renderMediaStudio(root, opts); });
     const fl = body.querySelector("[data-ml-fromlib]"); if (fl) fl.onclick = () => { const a = session.assets[0]; session.edit = { url: a.url, type: a.type, id: a.id }; resetEdit(); renderMediaStudio(root, opts); };
+    wireInlineLocalAssets(body, root, opts);
     return;
   }
   const bSpots = editState.bokeh?.spots || [];
