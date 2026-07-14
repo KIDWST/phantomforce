@@ -176,7 +176,7 @@ export const PHANTOMPLAY_BUILT_IN_GAMES: PhantomPlayGame[] = [
     developer: "Tak",
     developerAvatar: TAK_AVATAR,
     kind: "built_in",
-    launchUrl: "/app/games/neon-drift.html?v=1.2.3",
+    launchUrl: "/app/games/neon-drift.html?v=1.3.0",
     thumbnail: GAME_ART_BY_SLUG["neon-drift"],
     featured: true,
     version: "1.2.3",
