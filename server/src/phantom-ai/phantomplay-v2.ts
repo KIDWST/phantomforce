@@ -65,7 +65,7 @@ const cover = (label: string, glyph: string, hue: string) =>
 // (Snake, 2048, minesweeper, and typing already exist on main as
 // circuit-serpent, tower-tactics, signal-sweeper, and type-storm.)
 export const PHANTOMPLAY_V2_GAMES: PhantomPlayGame[] = [
-  { id: "phantom-rumble", title: "Phantom Rumble", summary: "A premium local platform fighter with guard, parry, dodge, ledge-save recovery, bots, drops, and touch controls.", description: "A full PhantomPlay platform fighter: up to four players or bots brawl across a dynamic arena with percent knockback, double jumps, charge smashes, Phantom Burst, guard/parry, dodge, ledge-save recovery, camera focus, and reality-bending drops. Local keyboard and mobile touch play are both supported without external networking.", category: "Arcade", tags: ["platform fighter", "multiplayer", "action", "local", "touch"], contentRating: "everyone", developer: "Tak", kind: "built_in", launchUrl: "/app/games/phantom-rumble.html?v=2.2.0", thumbnail: cover("PHANTOM RUMBLE", "⚔", "#4ade80"), featured: true, version: "2.2.0", controls: "P1: WASD, Shift guard, Q dodge, Space tap/hold. P2: arrows, I guard, O dodge, Enter tap/hold. Touch controls on mobile.", progressSupport: true, scoreSupport: true },
+  { id: "phantom-rumble", title: "Phantom Rumble", summary: "A premium local platform fighter with guard, parry, dodge, ledge-save recovery, bots, drops, and touch controls.", description: "A full PhantomPlay platform fighter: up to four players or bots brawl across a dynamic arena with percent knockback, double jumps, charge smashes, Phantom Burst, guard/parry, dodge, ledge-save recovery, camera focus, and reality-bending drops. Local keyboard and mobile touch play are both supported without external networking.", category: "Arcade", tags: ["platform fighter", "multiplayer", "action", "local", "touch"], contentRating: "everyone", developer: "Tak", kind: "built_in", launchUrl: "/app/games/phantom-rumble.html?v=2.2.1", thumbnail: cover("PHANTOM RUMBLE", "⚔", "#4ade80"), featured: true, version: "2.2.1", controls: "P1: WASD, Shift guard, Q dodge, Space tap/hold. P2: arrows, I guard, O dodge, Enter tap/hold. Touch controls on mobile.", progressSupport: true, scoreSupport: true },
   { id: "sudoku-signal", title: "Sudoku Signal", summary: "Generated sudoku with pencil marks — resumes exactly where you stopped.", description: "Every puzzle is generated with a unique solution. Three difficulties, conflict highlighting, pencil marks, and full cloud resume.", category: "Focus", tags: ["logic", "calm", "resume"], contentRating: "everyone", developer: "Tak", kind: "built_in", launchUrl: "/app/games/sudoku-signal.html?v=1.0.0", thumbnail: cover("SUDOKU SIGNAL", "⌗", "#a7f3d0"), featured: false, version: "1.0.0", controls: "Arrows + 1-9, or tap + number pad", progressSupport: true, scoreSupport: true },
 ];
 
@@ -451,8 +451,9 @@ export async function getPhantomPlayResumeState(session: AccessSession, gameId: 
   const v1 = await readV1Store();
   const profile = v1.profiles[profileKey(tenantId, actorId)];
   if (!profile) return { gameId, state: null };
-  const latest = (profile.sessions || []).filter((item) => item.gameId === gameId && item.state && Object.keys(item.state).length).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
-  return { gameId, state: latest?.state || null, progress: latest?.progress ?? null, updatedAt: latest?.updatedAt || null };
+  const latest = (profile.sessions || []).filter((item) => item.gameId === gameId).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
+  const canResume = !!latest && !latest.endedAt && latest.progress > 0 && latest.progress < 100 && !!latest.state && Object.keys(latest.state).length > 0;
+  return { gameId, state: canResume ? latest.state : null, progress: latest?.progress ?? null, updatedAt: latest?.updatedAt || null };
 }
 
 // ---- developer analytics ---------------------------------------------------------------------

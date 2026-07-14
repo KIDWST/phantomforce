@@ -50,7 +50,7 @@ body.paused .pause{display:grid}
   <div class="keys"><span><b>P1</b> WASD move · W jump · Shift guard · Q dodge · <b>SPACE tap/hold</b> (or F hit · G smash)</span><span><b>P2</b> Arrows · ↑ jump · I guard · O dodge · <b>ENTER tap/hold</b> (or K hit · L smash)</span></div>
   <p style="font-size:12px;color:#557d68">Tap for a quick peck, hold for a charged smash, full hold with a full meter for PHANTOM BURST. Perfect guard parries greedy hits. Ledge-save keeps close KOs playable. Hunt the rare drops: ◐ portal rift · ↯ gravity flip · ◔ chrono field · ▲ titan mode · ☄ meteor storm · ≋ stage quake · ∞ rift warp · ⁂ shadow clones. Plus ♥ heal · ✦ power hit · ◉ bomb.</p>
 </div></div>
-<div class="overlay pause" data-pauseoverlay><div><h1>PAUSED</h1><p>The rumble is frozen. Resume from the player bar above.</p></div></div>
+<div class="overlay pause" data-pauseoverlay hidden><div><h1>PAUSED</h1><p>The rumble is frozen. Resume from the player bar above.</p></div></div>
 <div class="overlay" data-end hidden><div>
   <h1 data-endtitle>VICTORY</h1>
   <p data-endcopy></p>
@@ -60,7 +60,7 @@ body.paused .pause{display:grid}
 'use strict';
 const host=(type,data={})=>parent.postMessage({source:'phantomplay-game',type,...data},'*');
 const canvas=document.querySelector('canvas'),ctx=canvas.getContext('2d');
-const hudEl=document.querySelector('[data-hud]'),setupEl=document.querySelector('[data-setup]'),endEl=document.querySelector('[data-end]');
+const hudEl=document.querySelector('[data-hud]'),setupEl=document.querySelector('[data-setup]'),endEl=document.querySelector('[data-end]'),pauseEl=document.querySelector('[data-pauseoverlay]'),touchEl=document.querySelector('[data-touch]');
 let W=0,H=0,DPR=1,camera={x:.5,y:.58,z:1};
 function size(){DPR=Math.min(2,devicePixelRatio||1);W=canvas.width=Math.max(640,innerWidth*DPR);H=canvas.height=Math.max(420,innerHeight*DPR)}
 addEventListener('resize',size);size();
@@ -85,6 +85,11 @@ const PALETTE=[{name:'EMBER',c:'#4ade80',glow:'#22c55e'},{name:'CIPHER',c:'#5eea
 let fighters=[],pickups=[],particles=[],mode='',running=false,paused=false,over=false,last=0,shake=0,slowmo=0,pickupTimer=6,reduced=false,matchKos=[0,0,0,0],hitstop=0,popups=[],koFx=null;
 /* reality-bending power state */
 let portals=null,warpT=0,quakeT=0,gravFx={t:0,owner:-1},chronoFx={t:0,owner:-1},meteorFx={t:0,owner:-1},rocks=[],meteorSpawn=0;
+function showMenu(){
+  running=false;paused=false;over=false;document.body.classList.remove('paused');
+  setupEl.hidden=false;endEl.hidden=true;pauseEl.hidden=true;hudEl.hidden=true;touchEl.hidden=true;
+  showPb();draw(performance.now());
+}
 function makeFighter(slot,human){
   const spawn=SPAWNS[slot];
   return {slot,human,name:PALETTE[slot].name,color:PALETTE[slot].c,glow:PALETTE[slot].glow,
@@ -100,10 +105,11 @@ function startMatch(selected){
   fighters=[];
   for(let i=0;i<count;i++)fighters.push(makeFighter(i,i<humans));
   pickups=[];particles=[];popups=[];koFx=null;hitstop=0;matchKos=[0,0,0,0];pickupTimer=6;over=false;running=true;paused=false;camera={x:.5,y:.58,z:1};
+  document.body.classList.remove('paused');pauseEl.hidden=true;
   portals=null;warpT=0;quakeT=0;gravFx={t:0,owner:-1};chronoFx={t:0,owner:-1};meteorFx={t:0,owner:-1};rocks=[];meteorSpawn=0;
   for(let i=0;i<PLATS.length;i++)Object.assign(PLATS[i],PLATS_BASE[i]);STAGE.w=STAGE_W_BASE;
   setupEl.hidden=true;endEl.hidden=true;hudEl.hidden=false;
-  document.querySelector('[data-touch]').hidden=fighters.some(f=>f.human&&f.slot===0)?false:true;
+  touchEl.hidden=fighters.some(f=>f.human&&f.slot===0)?false:true;
   buildHud();last=performance.now();requestAnimationFrame(loop);
   startMusic();audio?.actx?.resume?.().catch?.(()=>{});setMusicVolume();
 }
@@ -431,7 +437,7 @@ function ko(f){
   if(alive.length<=1)endMatch(alive[0]||null);
 }
 function endMatch(winner){
-  running=false;over=true;stats.matches+=1;
+  running=false;paused=false;over=true;document.body.classList.remove('paused');pauseEl.hidden=true;stats.matches+=1;
   const humanWon=winner&&winner.human;
   if(humanWon)stats.wins+=1;
   const humanKos=Math.max(matchKos[0],fighters[1]&&fighters[1].human?matchKos[1]:0);
@@ -441,7 +447,7 @@ function endMatch(winner){
   host('complete',{score,progress:100,state:{wins:stats.wins,matches:stats.matches,bestKos:stats.bestKos}});
   document.querySelector('[data-endtitle]').textContent=winner?(winner.human?`${winner.name} WINS`:`${winner.name} (BOT) WINS`):'DRAW';
   document.querySelector('[data-endcopy]').textContent=winner?`${matchKos[winner.slot]} KOs this match. Session: ${stats.wins}/${stats.matches} rumbles won.`:`Everyone fell. Session: ${stats.wins}/${stats.matches} rumbles won.`;
-  endEl.hidden=false;hudEl.hidden=true;document.querySelector('[data-touch]').hidden=true;
+  endEl.hidden=false;setupEl.hidden=true;hudEl.hidden=true;touchEl.hidden=true;
   setMusicVolume();
 }
 
@@ -685,7 +691,7 @@ function loop(t){
 /* ---------- overlays ---------- */
 for(const b of document.querySelectorAll('[data-mode]'))b.onclick=()=>startMatch(b.dataset.mode);
 document.querySelector('[data-again]').onclick=()=>startMatch(mode);
-document.querySelector('[data-menu]').onclick=()=>{endEl.hidden=true;setupEl.hidden=false;showPb()};
+document.querySelector('[data-menu]').onclick=showMenu;
 function showPb(){
   const pb=document.querySelector('[data-pb]');
   if(stats.matches>0){pb.hidden=false;pb.textContent=`SESSION · ${stats.wins}/${stats.matches} WON · BEST ${stats.bestKos} KOs`}
@@ -734,7 +740,7 @@ function setMusicVolume(){
 /* ---------- host protocol ---------- */
 function setPaused(value){
   if(!running||over)return;
-  paused=value;document.body.classList.toggle('paused',paused);
+  paused=value;document.body.classList.toggle('paused',paused);pauseEl.hidden=!paused;
   setMusicVolume();
   host('paused',{paused});
 }
@@ -744,16 +750,16 @@ addEventListener('message',event=>{
   if(d.type==='settings'){reduced=!!d.reducedMotion;soundOn=d.sound!==false;setMusicVolume()}
   if(event.data.type==='pause')setPaused(true);
   if(event.data.type==='resume')setPaused(false);
-  if(event.data.type==='exit'){running=false;paused=false;document.body.classList.remove('paused');document.querySelector('[data-touch]').hidden=true;setMusicVolume()}
-  if(event.data.type==='restart'){if(mode)startMatch(mode);else{setupEl.hidden=false;endEl.hidden=true}}
+  if(event.data.type==='exit'){showMenu();setMusicVolume()}
+  if(event.data.type==='restart'){if(mode)startMatch(mode);else showMenu()}
   if(d.type==='restore'&&d.state&&typeof d.state==='object'){
     const s=d.state;
     stats={wins:Math.max(0,Number(s.wins)||0),matches:Math.max(0,Number(s.matches)||0),bestKos:Math.max(0,Number(s.bestKos)||0)};
-    showPb();
+    if(!running)showMenu();else showPb();
   }
 });
 document.addEventListener('visibilitychange',()=>{if(document.hidden)setPaused(true)});
 setInterval(()=>{if(running&&!over)pushState(Math.min(99,Math.round(fighters.reduce((sum,t)=>sum+(3-t.stocks),0)/(fighters.length*3)*100)))},8000);
-draw(0);
+showMenu();
 host('ready');
 </script></body></html>

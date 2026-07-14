@@ -5,11 +5,11 @@
    the field. Live stats from the store; every node opens its workspace.
    Two layouts: wide wave spine and phone snake. Reduced motion → static. */
 
-import { store, visible, moneyView, fmtMoney } from "./store.js?v=phantom-live-20260714-255";
+import { store, visible, moneyView, fmtMoney } from "./store.js?v=phantom-live-20260714-256";
 import {
   cachedOrganizationPulse,
   organizationPulseAvailable,
-} from "./organizationpulse.js?v=phantom-live-20260714-255";
+} from "./organizationpulse.js?v=phantom-live-20260714-256";
 
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const NARROW_AT = 620;
