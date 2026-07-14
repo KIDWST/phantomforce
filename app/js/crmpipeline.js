@@ -1,9 +1,19 @@
 import { currentTenantId, session } from "./store.js?v=phantom-live-20260714-249";
 
+export const CRM_REFRESH_SIGNAL_KEY = "pf.crm.refresh.v1";
+
 const authHeaders = (json = false) => {
   const token = session.token();
   return { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(json ? { "Content-Type": "application/json" } : {}) };
 };
+
+export function signalCrmRefresh(reason = "crm-updated") {
+  try { globalThis.sessionStorage?.setItem(CRM_REFRESH_SIGNAL_KEY, `${Date.now()}:${reason}`); } catch {}
+}
+
+export function crmRefreshSignal() {
+  try { return globalThis.sessionStorage?.getItem(CRM_REFRESH_SIGNAL_KEY) || ""; } catch { return ""; }
+}
 
 async function api(path, options = {}) {
   const response = await fetch(path, { ...options, headers: { ...authHeaders(Boolean(options.body)), ...(options.headers || {}) } });

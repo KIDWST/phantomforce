@@ -15,6 +15,7 @@ import {
 } from "./orgs.js?v=phantom-live-20260714-249";
 import {
   createCrmLead as createServerCrmLead,
+  crmRefreshSignal,
   crmServerAvailable,
   deleteCrmLead as deleteServerCrmLead,
   loadCrmLeads,
@@ -58,7 +59,7 @@ const LOCAL_CORE_WORKERS = [
   { name: "Safety Guard", note: "Approval and security rules loaded" },
 ];
 const MEMORY_DAY = 86400000;
-const crmRuntime = { state: "idle", tenant: "", leads: [], canWrite: false, error: "" };
+const crmRuntime = { state: "idle", tenant: "", leads: [], canWrite: false, error: "", refreshSignal: "" };
 const proposalRuntime = { state: "idle", tenant: "", proposals: [], canWrite: false, error: "" };
 const approvalRuntime = { state: "idle", tenant: "", approvals: [], canWrite: false, canDecide: false, error: "" };
 
@@ -97,19 +98,22 @@ function applyCrmPayload(payload) {
 
 function ensureCrmRuntime(rerender) {
   const tenant = currentTenantId();
+  const refreshSignal = crmRefreshSignal();
+  const refreshRequested = Boolean(refreshSignal && crmRuntime.refreshSignal !== refreshSignal);
   if (!crmServerAvailable()) {
     crmRuntime.state = "local";
     crmRuntime.tenant = tenant;
     crmRuntime.leads = [];
     crmRuntime.canWrite = false;
+    crmRuntime.refreshSignal = refreshSignal;
     return;
   }
-  if ((crmRuntime.state === "ready" || crmRuntime.state === "loading") && crmRuntime.tenant === tenant) return;
+  if ((crmRuntime.state === "ready" || crmRuntime.state === "loading") && crmRuntime.tenant === tenant && !refreshRequested) return;
   crmRuntime.state = "loading";
   crmRuntime.tenant = tenant;
   crmRuntime.error = "";
   loadCrmLeads()
-    .then((payload) => { applyCrmPayload(payload); rerender?.(); })
+    .then((payload) => { applyCrmPayload(payload); crmRuntime.refreshSignal = refreshSignal || crmRuntime.refreshSignal; rerender?.(); })
     .catch((error) => {
       crmRuntime.state = "error";
       crmRuntime.error = error?.message || "Server CRM is unavailable.";
