@@ -299,7 +299,7 @@ function drawFaceFeatures(ctx2, s, F) {
   ctx2.shadowBlur = 0;
 }
 
-export function createPhantomCharacter({ small = false, preload = [] } = {}) {
+export function createPhantomCharacter({ small = false, preload = [], settled = false } = {}) {
   /* ---- the pose library: the artwork in six real stances.
      Files are preprocessed offline (black -> true alpha, webp), so loading
      is cheap. Landmarks are fractions of each image: figure axis (cx),
@@ -401,7 +401,7 @@ export function createPhantomCharacter({ small = false, preload = [] } = {}) {
     L: { hx: -0.84, hy: -0.14, vhx: 0, vhy: 0 },
   };
   let blinkT = 2.5, dartT = 2, dartX = 0, dartY = 0;
-  let born = -1, wink = 0, ringBoost = 0, swayBias = 0, flameHold = 1;
+  let born = settled ? -2.4 : null, wink = 0, ringBoost = 0, swayBias = 0, flameHold = 1;
   let showSeq = [], showT = 0;
   let impulseT = 5, browBump = 0, sighAmt = 0, sighT = 9, glitchNow = 0;
   const gov = { cv: 0.2, cvv: 0, ca: 0.25, expr: "calm", dwell: 1, bridge: null };
@@ -413,7 +413,7 @@ export function createPhantomCharacter({ small = false, preload = [] } = {}) {
     const moodAge = Number.isFinite(o.moodAge) ? Math.max(0, o.moodAge) : t;
     const startupOnly = o.startupOnly !== false;
     const actionT = mood === "talking" ? moodAge : t;
-    if (born < 0) born = t;
+    if (born == null) born = t;
     const age = t - born;
     const reveal = Math.min(1, age / 2.2);
     const settled = reveal >= 1;

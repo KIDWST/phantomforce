@@ -9,10 +9,10 @@ import {
   PACKAGES, RETAINERS, FINANCE_CATEGORIES, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS, CHAT_HISTORY_RETENTION_DAYS,
   addMemory, toggleMemoryRemember, forgetMemory, forgetChatHistory, memoryStats, memoryRetention, chatHistoryStats, chatHistoryRetention,
   session, currentTenantId,
-} from "./store.js?v=phantom-live-20260714-249";
+} from "./store.js?v=phantom-live-20260714-253";
 import {
   isDatabaseSession, canManageActiveOrg, fetchServerApprovals, decideServerRun,
-} from "./orgs.js?v=phantom-live-20260714-249";
+} from "./orgs.js?v=phantom-live-20260714-253";
 import {
   createCrmLead as createServerCrmLead,
   crmRefreshSignal,
@@ -20,21 +20,21 @@ import {
   deleteCrmLead as deleteServerCrmLead,
   loadCrmLeads,
   updateCrmLead as updateServerCrmLead,
-} from "./crmpipeline.js?v=phantom-live-20260714-249";
+} from "./crmpipeline.js?v=phantom-live-20260714-253";
 import {
   createProposal as createServerProposal,
   deleteProposal as deleteServerProposal,
   loadProposals,
   proposalServerAvailable,
   updateProposal as updateServerProposal,
-} from "./proposalpipeline.js?v=phantom-live-20260714-249";
+} from "./proposalpipeline.js?v=phantom-live-20260714-253";
 import {
   approvalServerAvailable,
   createWorkspaceApproval as createServerWorkspaceApproval,
   decideWorkspaceApproval as decideServerWorkspaceApproval,
   deleteWorkspaceApproval as deleteServerWorkspaceApproval,
   loadWorkspaceApprovals,
-} from "./approvalpipeline.js?v=phantom-live-20260714-249";
+} from "./approvalpipeline.js?v=phantom-live-20260714-253";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -1543,7 +1543,7 @@ function renderMemory(el, rerender) {
       if (!brainPanel.open || brainPanel.dataset.mounted) return;
       brainPanel.dataset.mounted = "1";
       const mount = brainPanel.querySelector("[data-memory-brain-mount]");
-      import("./brain.js?v=phantom-live-20260714-249")
+      import("./brain.js?v=phantom-live-20260714-253")
         .then((mod) => { if (mount && mount.isConnected) mod.renderPhantomBrain(mount); })
         .catch(() => { if (mount) mount.innerHTML = `<p class="ws-note">This panel could not load. Try again in a moment.</p>`; });
     });

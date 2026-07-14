@@ -43,6 +43,7 @@ export type PhantomPlayGame = {
   tags: string[];
   contentRating: PhantomPlayRating;
   developer: string;
+  developerId?: string;
   developerAvatar?: string;
   kind: "built_in" | "community";
   launchUrl: string;
@@ -288,19 +289,19 @@ export const PHANTOMPLAY_BUILT_IN_GAMES: PhantomPlayGame[] = [
   {
     id: "penalty-kick",
     title: "Penalty Kick",
-    summary: "Pick your lane, time the strike, and beat the keeper.",
-    description: "A touch-friendly sports timing game with five shots, visible score, keeper reads, and saved score.",
+    summary: "Pick your lane, hit the green zone, and beat the keeper.",
+    description: "A readable, touch-friendly sports timing game with five shots, tap-to-aim lanes, visible timing feedback, keeper reads, and a clean final whistle.",
     category: "Sports",
     tags: ["sports", "timing", "soccer", "touch"],
     contentRating: "everyone",
     developer: "Tak",
     developerAvatar: TAK_AVATAR,
     kind: "built_in",
-    launchUrl: "/app/games/penalty-kick.html?v=1.0.1",
+    launchUrl: "/app/games/penalty-kick.html?v=1.0.2",
     thumbnail: GAME_ART_BY_SLUG["penalty-kick"],
-    featured: false,
-    version: "1.0.1",
-    controls: "Choose a lane, then tap shoot at the sweet spot",
+    featured: true,
+    version: "1.0.2",
+    controls: "Tap a lane or use arrows. Shoot when the meter says LOCKED.",
     progressSupport: true,
     scoreSupport: true,
   },
@@ -635,6 +636,7 @@ function communityGames(store: PhantomPlayStore): PhantomPlayGame[] {
     tags: item.tags,
     contentRating: item.contentRating,
     developer: item.developerName,
+    developerId: item.developerId,
     kind: "community",
     launchUrl: item.launchUrl,
     thumbnail: item.screenshots[0] || "/app/assets/poses/mode-dark-ask.webp",

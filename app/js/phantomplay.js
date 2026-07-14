@@ -1,7 +1,7 @@
 import {
   currentTenantId, isAdmin, isOwnerOperator, session,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260714-249";
+} from "./store.js?v=phantom-live-20260714-253";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 const FALLBACK_KEY = "pf.phantomplay.offline.v1";
@@ -43,7 +43,7 @@ const BUILT_INS = [
   { id: "focus-stack", title: "Focus Stack", summary: "Drop each layer cleanly and build the tallest signal tower.", description: "A focused timing run with a visible score, proper start, pause, restart, and resize-safe play field.", category: "Focus", tags: ["timing", "focus", "quick"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/focus-stack.html?v=1.1.1", thumbnail: GAME_ART_BY_SLUG["focus-stack"], featured: false, version: "1.1.1", controls: "Space, Enter, click, or tap", progressSupport: true, scoreSupport: true },
   { id: "word-weld", title: "Word Weld", summary: "Build as many words as you can from one shifting signal rack.", description: "A quick word-building game with tap, keyboard, score, timer, and clean reset controls.", category: "Creative", tags: ["word", "creative", "quick", "touch"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/word-weld.html?v=1.0.0", thumbnail: GAME_ART_BY_SLUG["word-weld"], featured: true, version: "1.0.0", controls: "Keyboard, tap letters, Enter to submit", progressSupport: true, scoreSupport: true },
   { id: "reflex-grid", title: "Reflex Grid", summary: "Hit the live cells before the grid burns out.", description: "A fast aim-and-reaction grid for short focus breaks, with mistakes, streaks, and a real finish.", category: "Strategy", tags: ["reaction", "strategy", "touch", "aim"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/reflex-grid.html?v=1.0.0", thumbnail: GAME_ART_BY_SLUG["reflex-grid"], featured: true, version: "1.0.0", controls: "Click, tap, or use number keys", progressSupport: true, scoreSupport: true },
-  { id: "penalty-kick", title: "Penalty Kick", summary: "Pick your lane, time the strike, and beat the keeper.", description: "A touch-friendly sports timing game with five shots, visible score, keeper reads, and saved score.", category: "Sports", tags: ["sports", "timing", "soccer", "touch"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/penalty-kick.html?v=1.0.1", thumbnail: GAME_ART_BY_SLUG["penalty-kick"], featured: false, version: "1.0.1", controls: "Choose a lane, then tap shoot at the sweet spot", progressSupport: true, scoreSupport: true },
+  { id: "penalty-kick", title: "Penalty Kick", summary: "Pick your lane, hit the green zone, and beat the keeper.", description: "A readable, touch-friendly sports timing game with five shots, tap-to-aim lanes, visible timing feedback, keeper reads, and a clean final whistle.", category: "Sports", tags: ["sports", "timing", "soccer", "touch"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/penalty-kick.html?v=1.0.2", thumbnail: GAME_ART_BY_SLUG["penalty-kick"], featured: true, version: "1.0.2", controls: "Tap a lane or use arrows. Shoot when the meter says LOCKED.", progressSupport: true, scoreSupport: true },
   { id: "rift-frenzy", title: "Rift Frenzy", summary: "Grow from reef bait to apex hunter in a neon multiplayer-style fish arena.", description: "A modern eat-smaller-fish arena with rival schools, growth stages, boost windows, danger reads, and touch-friendly movement. It feels like a live arena even when running as a safe built-in sandbox.", category: "Arcade", tags: ["fish", "arena", "growth", "io", "touch"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/rift-frenzy.html?v=1.0.4", thumbnail: GAME_ART_BY_SLUG["rift-frenzy"], featured: true, version: "1.0.4", controls: "Move with WASD/arrow keys or touch-drag. Eat smaller fish, avoid bigger rivals, boost with Space.", progressSupport: true, scoreSupport: true, engine: { tier: "arena-large-map", minVersion: PHANTOMPLAY_ENGINE.version } },
   { id: "serpent-surge", title: "Serpent Surge", summary: "A fast snake arena with rivals, pickups, cutoffs, boost trails, and storm pressure.", description: "A PhantomPlay take on snake arena games: orbit energy, grow long, bait rival serpents, use boost carefully, and survive a closing storm ring without any external networking.", category: "Strategy", tags: ["snake", "arena", "io", "survival", "touch"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/serpent-surge.html?v=1.0.4", thumbnail: GAME_ART_BY_SLUG["serpent-surge"], featured: true, version: "1.0.4", controls: "Steer with mouse, touch, WASD, or arrows. Hold Space or touch pressure to boost.", progressSupport: true, scoreSupport: true, engine: { tier: "arena-large-map", minVersion: PHANTOMPLAY_ENGINE.version } },
   { id: "crown-circuit", title: "Crown Circuit", summary: "A two-player-only lane card battle with towers, elixir, counters, and sudden death.", description: "A strictly multiplayer tower duel: two players draft from four unit cards, spend elixir, choose lanes, break towers, and win the crown. No solo mode, no bots, no fake opponents - local keyboard duels or PhantomPlay private rooms only.", category: "Strategy", tags: ["multiplayer-only", "tower duel", "cards", "lanes", "keyboard", "rooms"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/crown-circuit.html?v=1.0.0", thumbnail: GAME_ART_BY_SLUG["crown-circuit"], featured: true, version: "1.0.0", controls: "Local: P1 uses 1-4 then Q/W/E. P2 uses 7-0 then I/O/P. Online: create a PhantomPlay room, join with two players, then launch.", progressSupport: false, scoreSupport: true, multiplayerOnly: true, localMultiplayer: true, onlineMultiplayer: true, minPlayers: 2, maxPlayers: 2, engine: { tier: "arena-multiplayer-relay", minVersion: PHANTOMPLAY_ENGINE.version } },
@@ -113,6 +113,32 @@ function thumbnailFor(game) {
 
 function developerNameFor(game) {
   return game?.kind === "built_in" || artSlugFor(game) || game?.developer === "Phantom Labs" ? "Tak" : (game?.developer || "Tak");
+}
+
+function firstPresent(...values) {
+  return values.find((value) => String(value ?? "").trim()) ?? "";
+}
+
+function stableKeyPart(value) {
+  const text = String(value ?? "").normalize("NFKC").trim().toLowerCase();
+  let hash = 0;
+  for (const char of text) hash = ((hash * 31) + (char.codePointAt(0) || 0)) >>> 0;
+  return `${slugifyDeveloper(text)}-${hash.toString(36)}`;
+}
+
+function genericDeveloperName(value) {
+  const name = String(value ?? "").normalize("NFKC").trim().toLowerCase();
+  return !name || name === "developer" || name === "phantom labs";
+}
+
+function developerIdentityFor(game) {
+  const displayName = developerNameFor(game);
+  if (game?.kind === "built_in" || displayName.toLowerCase() === "tak") return { id: "developer:tak", name: "Tak" };
+  const explicitId = firstPresent(game?.developerId, game?.developer_id, game?.ownerId, game?.owner_id, game?.accountId, game?.authorId, game?.submittedById);
+  if (explicitId) return { id: `developer:${stableKeyPart(explicitId)}`, name: displayName };
+  const gameIdentity = firstPresent(game?.id, game?.submissionId, game?.title, displayName);
+  if (game?.kind === "community" || genericDeveloperName(displayName)) return { id: `community:${stableKeyPart(gameIdentity)}`, name: displayName };
+  return { id: `developer:${stableKeyPart(displayName)}`, name: displayName };
 }
 
 function normalizeGame(game) {
@@ -239,8 +265,7 @@ function developerDirectory() {
   const supportRecords = loadDeveloperSupport();
   const directory = new Map();
   for (const game of ui.snapshot?.catalog || []) {
-    const name = developerNameFor(game);
-    const id = slugifyDeveloper(name);
+    const { id, name } = developerIdentityFor(game);
     const entry = directory.get(id) || { id, name, avatar: "", games: [], categories: new Set(), featuredCount: 0 };
     entry.avatar ||= developerAvatarFor(game);
     entry.games.push(game);
@@ -745,7 +770,9 @@ function onGameMessage(event) {
     if (state) state.textContent = ui.playerPaused ? "Paused" : "Playing";
   }
   if (event.data.type === "score" || event.data.type === "progress" || event.data.type === "complete") {
-    const detail = { score: Number(event.data.score) || undefined, progress: event.data.type === "complete" ? 100 : Number(event.data.progress) || undefined, state: event.data.state };
+    const scoreValue = Number(event.data.score);
+    const progressValue = Number(event.data.progress);
+    const detail = { score: Number.isFinite(scoreValue) ? scoreValue : undefined, progress: event.data.type === "complete" ? 100 : Number.isFinite(progressValue) ? progressValue : undefined, state: event.data.state };
     const score = mountedRoot.querySelector("[data-pp-live-score]");
     if (score && detail.score !== undefined) score.textContent = `Score ${detail.score}`;
     persistPlay(event.data.type === "complete", detail);
@@ -833,7 +860,12 @@ function saveDeveloperNote(devId, text) {
 }
 
 function bind() {
-  mountedRoot.querySelectorAll("[data-pp-tab]").forEach((button) => button.onclick = () => { ui.tab = button.dataset.ppTab; render(); });
+  mountedRoot.querySelectorAll("[data-pp-tab]").forEach((button) => button.onclick = () => {
+    ui.selectedDeveloperId = "";
+    ui.developerMessage = "";
+    ui.tab = button.dataset.ppTab;
+    render();
+  });
   mountedRoot.querySelectorAll("[data-pp-play]").forEach((button) => button.onclick = () => launch(button.dataset.ppPlay));
   mountedRoot.querySelectorAll("[data-pp-favorite]").forEach((button) => button.onclick = (event) => { event.stopPropagation(); updateFavorite(button.dataset.ppFavorite); });
   mountedRoot.querySelectorAll("[data-pp-category]").forEach((button) => button.onclick = () => { ui.category = button.dataset.ppCategory; render(); });

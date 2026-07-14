@@ -9,7 +9,7 @@
 import {
   currentTenantId, isAdmin, session,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260714-249";
+} from "./store.js?v=phantom-live-20260714-253";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
 const FALLBACK_KEY = "pf.phantomplay.offline.v1";
@@ -49,9 +49,10 @@ const OFFLINE_GAMES = [
   ["neon-drift", "Neon Drift", "Arcade", "/app/games/neon-drift.html"],
   ["signal-match", "Signal Match", "Puzzle", "/app/games/signal-match.html"],
   ["focus-stack", "Focus Stack", "Focus", "/app/games/focus-stack.html"],
+  ["penalty-kick", "Penalty Kick", "Sports", "/app/games/penalty-kick.html?v=1.0.2"],
   ["phantom-rumble", "Phantom Rumble", "Arcade", "/app/games/phantom-rumble.html?v=2.2.0"],
   ["sudoku-signal", "Sudoku Signal", "Focus", "/app/games/sudoku-signal.html"],
-].map(([id, title, category, launchUrl]) => ({ id, title, summary: id === "phantom-rumble" ? "Premium local platform fighter with guard, parry, dodge, ledge-save recovery, bots, drops, and touch controls." : "Offline built-in game.", description: "", category, tags: [], contentRating: "everyone", developer: "Tak", kind: "built_in", launchUrl, thumbnail: "", featured: id === "phantom-rumble", version: id === "phantom-rumble" ? "2.2.0" : "1.0.0", controls: id === "phantom-rumble" ? "Keyboard or mobile touch controls." : "", progressSupport: true, scoreSupport: true }));
+].map(([id, title, category, launchUrl]) => ({ id, title, summary: id === "phantom-rumble" ? "Premium local platform fighter with guard, parry, dodge, ledge-save recovery, bots, drops, and touch controls." : id === "penalty-kick" ? "Tap a lane, hit the green zone, and beat the keeper." : "Offline built-in game.", description: "", category, tags: [], contentRating: "everyone", developer: "Tak", kind: "built_in", launchUrl, thumbnail: "", featured: id === "phantom-rumble" || id === "penalty-kick", version: id === "phantom-rumble" ? "2.2.0" : id === "penalty-kick" ? "1.0.2" : "1.0.0", controls: id === "phantom-rumble" ? "Keyboard or mobile touch controls." : id === "penalty-kick" ? "Tap lanes or use arrows, then shoot on LOCKED." : "", progressSupport: true, scoreSupport: true }));
 
 function offlineState() {
   let saved = {};
@@ -150,6 +151,28 @@ function v2Note(copy) {
 function slugifyDeveloper(value) {
   return String(value || "developer").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 72) || "developer";
 }
+function firstPresent(...values) {
+  return values.find((value) => String(value ?? "").trim()) ?? "";
+}
+function stableKeyPart(value) {
+  const text = String(value ?? "").normalize("NFKC").trim().toLowerCase();
+  let hash = 0;
+  for (const char of text) hash = ((hash * 31) + (char.codePointAt(0) || 0)) >>> 0;
+  return `${slugifyDeveloper(text)}-${hash.toString(36)}`;
+}
+function genericDeveloperName(value) {
+  const name = String(value ?? "").normalize("NFKC").trim().toLowerCase();
+  return !name || name === "developer" || name === "phantom labs";
+}
+function developerIdentityFor(game) {
+  const displayName = String(game?.developer || "Developer").trim() || "Developer";
+  if (game?.kind === "built_in" || displayName.toLowerCase() === "tak") return { id: "developer:tak", name: "Tak" };
+  const explicitId = firstPresent(game?.developerId, game?.developer_id, game?.ownerId, game?.owner_id, game?.accountId, game?.authorId, game?.submittedById);
+  if (explicitId) return { id: `developer:${stableKeyPart(explicitId)}`, name: displayName };
+  const gameIdentity = firstPresent(game?.id, game?.submissionId, game?.title, displayName);
+  if (game?.kind === "community" || genericDeveloperName(displayName)) return { id: `community:${stableKeyPart(gameIdentity)}`, name: displayName };
+  return { id: `developer:${stableKeyPart(displayName)}`, name: displayName };
+}
 function loadDeveloperSupport() {
   try {
     const parsed = JSON.parse(workspaceStorageGetItem(DEV_SUPPORT_KEY) || "{}");
@@ -176,8 +199,7 @@ function devScoreFor(developer, support = {}) {
 function developerDirectory() {
   const directory = new Map();
   for (const game of ui.snapshot?.catalog || []) {
-    const name = game.developer || "Tak";
-    const id = slugifyDeveloper(name);
+    const { id, name } = developerIdentityFor(game);
     if (!directory.has(id)) directory.set(id, { id, name, games: [], categories: new Set(), featuredCount: 0, communityCount: 0 });
     const entry = directory.get(id);
     entry.games.push(game);
@@ -589,7 +611,9 @@ function onGameMessage(event) {
     if (button) button.textContent = ui.playerPaused ? "Resume" : "Pause";
   }
   if (event.data.type === "score" || event.data.type === "progress" || event.data.type === "complete") {
-    const detail = { score: Number(event.data.score) || undefined, progress: event.data.type === "complete" ? 100 : Number(event.data.progress) || undefined, state: event.data.state };
+    const scoreValue = Number(event.data.score);
+    const progressValue = Number(event.data.progress);
+    const detail = { score: Number.isFinite(scoreValue) ? scoreValue : undefined, progress: event.data.type === "complete" ? 100 : Number.isFinite(progressValue) ? progressValue : undefined, state: event.data.state };
     const live = mountedRoot.querySelector("[data-pp2-live-score]");
     if (live && detail.score !== undefined) live.textContent = `Score ${detail.score}`;
     persistPlay(event.data.type === "complete", detail);
@@ -717,7 +741,13 @@ function saveDeveloperNote(id) {
 /* ---- bind ---- */
 function bind() {
   const on = (selector, event, handler) => mountedRoot.querySelectorAll(selector).forEach((el) => el.addEventListener(event, handler));
-  mountedRoot.querySelectorAll("[data-pp2-tab]").forEach((b) => b.onclick = () => { ui.tab = b.dataset.pp2Tab; if (ui.tab === "developer" && !ui.analytics && !ui.v2Offline) loadAnalytics(); render(); });
+  mountedRoot.querySelectorAll("[data-pp2-tab]").forEach((b) => b.onclick = () => {
+    ui.selectedDeveloperId = "";
+    ui.developerMessage = "";
+    ui.tab = b.dataset.pp2Tab;
+    if (ui.tab === "developer" && !ui.analytics && !ui.v2Offline) loadAnalytics();
+    render();
+  });
   mountedRoot.querySelectorAll("[data-pp2-play]").forEach((b) => b.onclick = (e) => { e.stopPropagation(); launch(b.dataset.pp2Play); });
   mountedRoot.querySelectorAll("[data-pp2-open]").forEach((b) => b.addEventListener("click", (e) => { if (e.target.closest("[data-pp2-play],[data-pp2-wish]")) return; openDetail(b.dataset.pp2Open); }));
   mountedRoot.querySelectorAll("[data-pp2-wish]").forEach((b) => b.onclick = (e) => { e.stopPropagation(); toggleWishlist(b.dataset.pp2Wish); });

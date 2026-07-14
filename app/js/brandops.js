@@ -8,11 +8,11 @@
    user-created automation records. No internal lanes or fabricated
    records are shown. */
 
-import { store, uid, visible, pushActivity, ago, currentWs, session, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260714-249";
+import { store, uid, visible, pushActivity, ago, currentWs, session, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260714-253";
 import {
   DAILY_IDEA_AUTOMATION_ID, dailyIdeaState, refreshDailyIdeas, saveDailyIdeaAutomation,
   DAILY_IDEA_CHANNELS, DAILY_IDEA_CONTENT_TYPES, DAILY_IDEA_FOCUS, DAILY_IDEA_STYLES,
-} from "./content-ideas.js?v=phantom-live-20260714-249";
+} from "./content-ideas.js?v=phantom-live-20260714-253";
 
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
@@ -208,14 +208,19 @@ function dailyIdeaEditPanel(config, missingProfile) {
 
 function customAutomationEditPanel(a, pendingApproval, allowedDuringVacation) {
   const st = AGENT_STATE[a.status] || AGENT_STATE.idle;
+  const bundleJobs = Array.isArray(a.jobs) && a.jobs.length
+    ? `<div class="au-bundle-jobs"><b>Bundled work</b>${a.jobs.map((job) => `<span>${esc(job)}</span>`).join("")}</div>`
+    : "";
   return `<div class="au-edit-panel" data-au-edit-panel="${esc(a.id)}">
     <div class="au-edit-grid">
       <label>Name<input data-au-edit-name="${esc(a.id)}" value="${esc(a.name)}" /></label>
-      <label>Status<input value="${esc(st.label)}" disabled /></label>
+      <label>Status<input value="${esc(st.label)}${a.safeMode ? ` · ${esc(a.safeMode)}` : ""}" disabled /></label>
       <label class="au-config-wide">Mission<textarea data-au-edit-mission="${esc(a.id)}">${esc(a.mission || a.role || "")}</textarea></label>
       <label>Source<input value="${esc(a.source || "Dashboard")}" disabled /></label>
+      <label>Cadence<input value="${esc(a.cadence || "Manual / event-triggered")}" disabled /></label>
       <label>Updated<input value="${esc(ago(a.updatedAt))}" disabled /></label>
     </div>
+    ${bundleJobs}
     <div class="au-config-actions">
       <button class="btn btn-primary" data-au-save-agent="${esc(a.id)}" type="button">Save changes</button>
       ${pendingApproval ? `<button class="btn btn-quiet" data-open-ws="approvals" type="button">Review approval</button>` : ""}
@@ -265,10 +270,10 @@ function configuredAutomationTab(agents) {
         html: `<div class="au-automation-block">
         ${automationRow({
           id: a.id,
-          kicker: a.source || "User-created automation",
+          kicker: a.family ? `${a.source || "Automation"} · ${a.family}` : a.source || "User-created automation",
           name: a.name,
           summary: a.mission || a.role || "",
-          meta: `Updated ${ago(a.updatedAt)} · ${allowedDuringVacation ? "Vacation allowed" : "Vacation blocked"}`,
+          meta: `${a.cadence || `Updated ${ago(a.updatedAt)}`} · ${(a.jobs || []).length ? `${a.jobs.length} checks` : allowedDuringVacation ? "Vacation allowed" : "Vacation blocked"}`,
           enabled: a.status === "active",
           disabled,
           expanded,

@@ -1,4 +1,4 @@
-import { currentTenantId, session } from "./store.js?v=phantom-live-20260714-251";
+import { currentTenantId, session } from "./store.js?v=phantom-live-20260714-253";
 
 let activeConfiguration = null;
 let activeEntitlements = null;
@@ -12,17 +12,18 @@ const PLATFORM_MODULES = [
   ["media", "Media Lab", true, ["owner", "admin", "manager", "member"]],
   ["sites", "Websites", true, ["owner", "admin", "manager", "member"]],
   ["money", "Accounting", true, ["owner", "admin", "manager"]],
+  ["planner", "Planner", true, ["owner", "admin", "manager", "member"]],
   ["phantomplay", "PhantomPlay", true, ["owner", "admin", "manager", "member", "client"]],
-  ["intelligence", "Competitor Intelligence", true, ["owner", "admin", "manager"]],
-  ["analytics", "Analytics", true, ["owner", "admin", "manager"]],
   ["memory", "Memory", true, ["owner", "admin", "manager"]],
   ["automation", "Automations", true, ["owner", "admin", "manager"]],
   ["approvals", "Approvals", false, ["owner", "admin", "manager", "member"]],
   ["workers", "Workforce", true, ["owner", "admin", "manager"]],
+  ["intelligence", "Competitor Intelligence", true, ["owner", "admin", "manager"]],
+  ["analytics", "Analytics", true, ["owner", "admin", "manager"]],
   ["vacation", "Away Mode", true, ["owner", "admin"]],
   ["customize", "Workspace Studio", false, ["owner", "admin"]],
-  ["settings", "Settings", false, ["owner", "admin", "manager", "member", "client"]],
   ["developer", "Developer", false, ["owner"]],
+  ["settings", "Settings", false, ["owner", "admin", "manager", "member", "client"]],
 ];
 const DEFAULT_ENTITLEMENTS = { coBranded: false, whiteLabel: false, internalPhantomForce: true, localFallback: true };
 const authHeaders = (json = false) => {
@@ -116,20 +117,31 @@ export function applyOrganizationCustomization(configuration = activeConfigurati
   if (configuration.brand.logoUrl) document.querySelectorAll(".brand-ghost").forEach((image) => { image.src = configuration.brand.logoUrl; });
 }
 
-export function customizeNavigation(baseItems, role = "owner") {
-  if (!activeConfiguration) return baseItems;
-  const states = new Map(activeConfiguration.modules.map((module) => [module.id, module]));
+function customizeNavigationForConfiguration(baseItems, configuration, role = "owner") {
+  if (!configuration) return baseItems;
+  const states = new Map(configuration.modules.map((module) => [module.id, module]));
   return baseItems
     .filter((item) => {
       const state = states.get(item.id);
       if (!state) return true;
       return state.enabled && state.roles.includes(role);
     })
-    .map((item) => {
+    .map((item, index) => {
       const state = states.get(item.id);
-      return state ? { ...item, label: state.label, customizationOrder: state.order } : item;
+      const customizationOrder = item.bottom ? index : (state?.order ?? index);
+      return state ? { ...item, label: state.label, baseOrder: index, customizationOrder } : { ...item, baseOrder: index, customizationOrder };
     })
-    .sort((left, right) => (left.customizationOrder ?? 999) - (right.customizationOrder ?? 999));
+    .sort((left, right) => (left.bottom ? 1 : 0) - (right.bottom ? 1 : 0)
+      || (left.customizationOrder ?? 999) - (right.customizationOrder ?? 999)
+      || (left.baseOrder ?? 999) - (right.baseOrder ?? 999));
+}
+
+export function customizeNavigation(baseItems, role = "owner") {
+  return customizeNavigationForConfiguration(baseItems, activeConfiguration, role);
+}
+
+export function previewCustomizedNavigation(baseItems, configuration, role = "owner") {
+  return customizeNavigationForConfiguration(baseItems, configuration, role);
 }
 
 export async function loadOrganizationCustomization({ onApplied } = {}) {

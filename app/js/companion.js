@@ -3,7 +3,7 @@
    It uses the real character engine for blinking, eye tracking, and moods,
    respects reduced motion, and keeps every status dot paired with text. */
 
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260714-249";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260714-253";
 
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -236,13 +236,16 @@ export function mountCompanion(headEl, opts = {}) {
   el.canvas.style.width = `${SIZE}px`;
   el.canvas.style.height = `${SIZE}px`;
   ctx2 = el.canvas.getContext("2d");
-  character = createPhantomCharacter({ small: true });
+  character = createPhantomCharacter({ small: true, settled: true });
 
   window.addEventListener("pointermove", (e) => { pointer = { x: e.clientX, y: e.clientY }; }, { passive: true });
   el.modeChip.addEventListener("click", () => requestLoopMode(mode === "loop" ? "chat" : "loop"));
   el.settingsBtn.addEventListener("click", (event) => {
     event.stopPropagation();
     toggleSettings();
+  });
+  el.canvas.addEventListener("animationend", (event) => {
+    if (event.animationName === "pcPop") el.canvas.classList.remove("pc-pop");
   });
   el.menuLoop?.addEventListener("click", () => {
     requestLoopMode(mode === "loop" ? "chat" : "loop");
@@ -256,6 +259,7 @@ export function mountCompanion(headEl, opts = {}) {
   });
 
   setCompanionMode(mode);
+  setCompanionState(mode === "loop" ? "building" : "idle");
   if (reduceMotion) paintOnce();
   else loop();
 }

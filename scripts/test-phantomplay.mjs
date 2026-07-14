@@ -9,6 +9,7 @@ const index = read("../app/index.html");
 const css = read("../app/phantomplay.css");
 const cssV2 = read("../app/phantomplay-v2.css");
 const staticServer = read("../ops/admin-live/admin-static-server.mjs");
+const phantomplayServer = read("../server/src/phantom-ai/phantomplay.ts");
 const gameSlugs = ["neon-drift", "phantom-rumble", "signal-match", "focus-stack", "word-weld", "reflex-grid", "penalty-kick", "rift-frenzy", "serpent-surge", "crown-circuit"];
 const games = gameSlugs.map((name) => read(`../app/games/${name}.html`));
 const neonDrift = games[gameSlugs.indexOf("neon-drift")];
@@ -38,6 +39,10 @@ assert.match(module, /\/api\/phantomplay\/rooms\/\$\{encodeURIComponent\(code\)\
 assert.match(module, /match-state/u, "The player shell must pass room match state into multiplayer games.");
 assert.match(module, /Edit build/u, "Builders must be able to revise builds.");
 assert.match(module, /function developerDirectory/u, "The Dev Rooms tab must be backed by a developer directory derived from catalog data.");
+assert.match(module, /function developerIdentityFor/u, "Developer profiles must use a stable identity helper, not raw display names.");
+assert.match(module, /developerId|developer_id/u, "Developer profiles must prefer server-issued developer ids when present.");
+assert.match(module, /community:\$\{stableKeyPart\(gameIdentity\)\}/u, "Community developers without stable ids must not collapse into one shared profile.");
+assert.match(module, /\[data-pp-tab\][\s\S]*selectedDeveloperId = ""[\s\S]*developerMessage = ""/u, "Top-level PhantomPlay tab navigation must reset stale developer profile state.");
 assert.match(module, /Dev score/u, "Developer profiles must expose a visible Dev score.");
 assert.match(module, /data-pp-open-dev/u, "Developer cards must open profile views.");
 assert.match(module, /data-pp-support-dev/u, "Developer profiles must allow local support marks.");
@@ -47,6 +52,10 @@ const renderDeveloperSource = module.match(/function renderDeveloper\(\) \{([\s\
 assert.ok(renderDeveloperSource, "renderDeveloper must exist.");
 assert.doesNotMatch(renderDeveloperSource, /data-pp-submit-form|New submission|DEVELOPER DISTRIBUTION|marketplace|storefront/u, "The Dev Rooms tab must render the sandbox directory/profile flow, not the old submission form or marketplace copy.");
 assert.match(moduleV2, /function developerDirectory/u, "The V2 Developers tab must be backed by a developer directory derived from catalog data.");
+assert.match(moduleV2, /function developerIdentityFor/u, "V2 developer profiles must use a stable identity helper, not raw display names.");
+assert.match(moduleV2, /developerId|developer_id/u, "V2 developer profiles must prefer server-issued developer ids when present.");
+assert.match(moduleV2, /community:\$\{stableKeyPart\(gameIdentity\)\}/u, "V2 community developers without stable ids must not collapse into one shared profile.");
+assert.match(moduleV2, /\[data-pp2-tab\][\s\S]*selectedDeveloperId = ""[\s\S]*developerMessage = ""/u, "Top-level V2 tab navigation must reset stale developer profile state.");
 assert.match(moduleV2, /Dev score/u, "V2 developer profiles must expose a visible Dev score.");
 assert.match(moduleV2, /data-pp2-open-dev/u, "V2 developer cards must open profile views.");
 assert.match(moduleV2, /data-pp2-support-dev/u, "V2 developer profiles must allow local support marks.");
@@ -70,6 +79,8 @@ assert.match(module, /saveStateBytes:\s*262144/u, "The engine must support large
 assert.match(module, /largeMap:\s*\{/u, "The engine must advertise large-map support.");
 assert.match(module, /engine:\s*engineFor/u, "Game settings must include engine capabilities.");
 assert.match(module, /frame\.focus/u, "The active game frame must receive keyboard focus.");
+assert.match(module, /const scoreValue = Number\(event\.data\.score\);[\s\S]*Number\.isFinite\(scoreValue\) \? scoreValue : undefined/u, "The PhantomPlay shell must preserve zero scores from games.");
+assert.match(moduleV2, /const scoreValue = Number\(event\.data\.score\);[\s\S]*Number\.isFinite\(scoreValue\) \? scoreValue : undefined/u, "The PhantomPlay V2 shell must preserve zero scores from games.");
 for (const slug of gameSlugs) {
   assert.match(module, new RegExp(`id:\\s*"${slug}"`, "u"), `${slug} must be registered in the frontend built-in catalog.`);
   assert.match(module, new RegExp(`/app/games/${slug}\\.html`, "u"), `${slug} must have a playable launch URL.`);
@@ -84,6 +95,8 @@ assert.match(cssV2, /\.pp2-dev-notes/u, "V2 developer notes must be styled.");
 assert.match(css, /\.pp-player-exit/u, "The player needs a stage-level exit control over the game iframe.");
 assert.match(css, /workspace-page:has\(\.pp-player\)[^{]*\.workspace-page-body\{[^}]*transform:none!important/u, "The game player must escape the animated page containing block.");
 assert.match(staticServer, /urlPath\.startsWith\("\/api\/phantomplay"\)/u, "The live admin server must proxy PhantomPlay API routes.");
+assert.match(phantomplayServer, /developerId\?: string/u, "Approved community games must carry developerId into the catalog contract.");
+assert.match(phantomplayServer, /developerId:\s*item\.developerId/u, "The server must not drop developerId when submissions become playable games.");
 
 const buildIds = new Set(appFiles.flatMap((source) => source.match(/phantom-live-\d{8}-\d+/gu) || []));
 assert.equal(buildIds.size, 1, `The PhantomPlay module graph must use one build ID, found: ${[...buildIds].join(", ")}`);
@@ -121,6 +134,11 @@ assert.match(penaltyKick, /\.field\{[^}]*height:100%;[^}]*min-height:280px/u, "P
 assert.match(penaltyKick, /function meterPower\(\)\{[^}]*getBoundingClientRect/u, "Penalty Kick must calculate shot timing from live meter geometry.");
 assert.doesNotMatch(penaltyKick, /getComputedStyle\(meter\)\.transform\.split/u, "Penalty Kick must not use raw CSS transform pixels for shot timing.");
 assert.match(penaltyKick, /else start\(\)/u, "Penalty Kick must let keyboard users start from the opening overlay.");
+assert.match(module, /id:\s*"penalty-kick"[\s\S]*launchUrl:\s*"\/app\/games\/penalty-kick\.html\?v=1\.0\.2"[\s\S]*featured:\s*true/u, "Penalty Kick must launch the fixed playable build and be visible in the ready strip.");
+assert.match(penaltyKick, /field\.addEventListener\('pointerdown',chooseLaneFromPoint\)/u, "Penalty Kick must let touch and pointer users choose a lane from the field.");
+assert.match(penaltyKick, /shootButton\.disabled=busy\|\|paused\|\|!started/u, "Penalty Kick must disable shooting while blocked, paused, or not started.");
+assert.match(penaltyKick, /function finishShot\([^)]*\)\{[\s\S]*shots--;busy=false;render\(\);[\s\S]*if\(shots<=0\)\{started=false;render\(\);startEl\.hidden=false/u, "Penalty Kick must update the final-shot HUD before showing the final whistle.");
+assert.match(penaltyKick, /power>=\.28&&power<=\.72/u, "Penalty Kick must use a forgiving green-zone window so the game is playable.");
 assert.match(games[gameSlugs.indexOf("rift-frenzy")], /rival|school|boost|eat|bigger/u, "Rift Frenzy must play as a modern fish arena, not a static old mini-game.");
 assert.match(games[gameSlugs.indexOf("serpent-surge")], /storm|boost|rival|serpent|trail/u, "Serpent Surge must play as a modern snake arena, not a static old mini-game.");
 const phantomRumbleScript = phantomRumble.match(/<script>([\s\S]*?)<\/script>/u)?.[1] || "";

@@ -446,6 +446,149 @@ function financeSeed() {
   };
 }
 
+export const STOCK_AUTOMATION_BUNDLES = [
+  {
+    id: "phantomforce-daily-operating-brief",
+    name: "Daily Operating Brief",
+    cadence: "Daily at 7:30 AM",
+    family: "Planner",
+    mission: "Prepare a morning owner brief with today's approvals, overdue follow-ups, open tasks, finance flags, and the highest-leverage next move.",
+    jobs: ["Approval queue review", "Overdue CRM follow-ups", "Open task triage", "Accounting exceptions", "Priority recommendation"],
+  },
+  {
+    id: "phantomforce-weekly-scans",
+    name: "PhantomForce Weekly Scans",
+    cadence: "Weekly Monday morning",
+    family: "Security",
+    mission: "Run the weekly safety scan bundle across app health, exposed routes, stale credentials, security notes, and connector readiness without sending or deleting anything.",
+    jobs: ["App health scan", "Security route check", "Credential age review", "Connector status check", "Owner-only findings brief"],
+  },
+  {
+    id: "phantomforce-crm-sync-hygiene",
+    name: "CRM Sync and Hygiene",
+    cadence: "Daily",
+    family: "CRM",
+    mission: "Review client and lead records for missing next steps, stale statuses, duplicate-looking contacts, and follow-up gaps before they become lost business.",
+    jobs: ["New lead intake check", "Follow-up gap scan", "Duplicate contact review", "Next-action assignment", "CRM push/pull preparation"],
+  },
+  {
+    id: "phantomforce-accounting-review",
+    name: "Accounting Transaction Review",
+    cadence: "Weekdays",
+    family: "Accounting",
+    mission: "Prepare accounting health checks from manual, bank, or card transaction sources: uncategorized spend, cash movement, missing receipts, and unusual activity.",
+    jobs: ["Bank/card connector check", "Manual ledger review", "Uncategorized transaction queue", "Receipt reminder prep", "Cash movement summary"],
+  },
+  {
+    id: "phantomforce-calendar-prep",
+    name: "Calendar and Scheduling Prep",
+    cadence: "Daily",
+    family: "Scheduling",
+    mission: "Prepare the day around meetings, deadlines, travel buffers, follow-ups, and focus windows so the owner sees conflicts before they cause friction.",
+    jobs: ["Calendar connector check", "Conflict scan", "Focus window suggestion", "Meeting prep notes", "Follow-up reminders"],
+  },
+  {
+    id: "phantomforce-content-publisher-prep",
+    name: "Content Publisher Prep",
+    cadence: "Daily",
+    family: "Creator",
+    mission: "Prepare publish-ready content opportunities, draft queue gaps, asset reminders, and scheduled post checks for creator and business workflows.",
+    jobs: ["Draft queue review", "Asset readiness scan", "Posting gap check", "Idea bank refresh", "Approval-safe publish prep"],
+  },
+  {
+    id: "phantomforce-website-domain-watch",
+    name: "Website and Domain Watch",
+    cadence: "Weekly",
+    family: "Websites",
+    mission: "Check site drafts, connected domains, stale pages, missing policy sections, and forms that need attention before a business website goes stale.",
+    jobs: ["Domain inventory", "Site draft status", "Form readiness", "Policy page check", "Change prompt suggestions"],
+  },
+  {
+    id: "phantomforce-memory-vault-hygiene",
+    name: "Memory Vault Hygiene",
+    cadence: "Every 3 days",
+    family: "Memory",
+    mission: "Separate durable memories from temporary history, flag low-value saved notes, and keep private context useful without hoarding trivial chat.",
+    jobs: ["Saved memory review", "Temporary history expiry", "Duplicate memory check", "Sensitive text scan", "Useful-context summary"],
+  },
+  {
+    id: "phantomforce-approval-risk-gate",
+    name: "Approval Risk Gate",
+    cadence: "Always watching",
+    family: "Approvals",
+    mission: "Watch prepared work for send, publish, spend, delete, deploy, or external-contact risk and keep those actions approval-gated.",
+    jobs: ["Approval-required action scan", "External send check", "Spend/deploy/delete gate", "Pending approval aging", "Owner-ready decision summary"],
+  },
+  {
+    id: "phantomforce-growth-intelligence-pulse",
+    name: "Growth Intelligence Pulse",
+    cadence: "Weekly",
+    family: "Intelligence",
+    mission: "Prepare competitor, offer, trend, customer, and market signals so the planner can suggest sharper business moves without waiting for manual input.",
+    jobs: ["Competitor watch", "Offer trend notes", "Customer segment hints", "Market signal brief", "Next experiment suggestion"],
+  },
+];
+
+function stockAutomationForWorkspace(bundle, ws) {
+  const now = new Date().toISOString();
+  return {
+    id: `stock-${ws}-${bundle.id}`,
+    ws,
+    kind: "automation",
+    source: "Stock automation",
+    stock: true,
+    stockBundleId: bundle.id,
+    family: bundle.family,
+    cadence: bundle.cadence,
+    name: bundle.name,
+    mission: bundle.mission,
+    jobs: [...bundle.jobs],
+    status: "active",
+    allowedDuringVacation: true,
+    requiresApprovalDuringVacation: true,
+    safeMode: "read-only-prep",
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+function ensureStockAutomations(agents = [], workspaces = REQUIRED_WORKSPACES) {
+  const list = Array.isArray(agents) ? [...agents] : [];
+  const byId = new Set(list.map((agent) => agent?.id).filter(Boolean));
+  for (const workspace of workspaces) {
+    const ws = workspace.id;
+    for (const bundle of STOCK_AUTOMATION_BUNDLES) {
+      const id = `stock-${ws}-${bundle.id}`;
+      if (!byId.has(id)) {
+        list.push(stockAutomationForWorkspace(bundle, ws));
+        byId.add(id);
+      }
+    }
+  }
+  return list.map((agent) => {
+    if (!agent?.stockBundleId) return agent;
+    const bundle = STOCK_AUTOMATION_BUNDLES.find((item) => item.id === agent.stockBundleId);
+    if (!bundle) return agent;
+    return {
+      ...agent,
+      kind: "automation",
+      source: agent.source || "Stock automation",
+      stock: true,
+      family: agent.family || bundle.family,
+      cadence: agent.cadence || bundle.cadence,
+      name: agent.name || bundle.name,
+      mission: agent.mission || bundle.mission,
+      jobs: Array.isArray(agent.jobs) && agent.jobs.length ? agent.jobs : [...bundle.jobs],
+      status: agent.status || "active",
+      allowedDuringVacation: agent.allowedDuringVacation !== false,
+      requiresApprovalDuringVacation: true,
+      safeMode: agent.safeMode || "read-only-prep",
+      createdAt: agent.createdAt || new Date().toISOString(),
+      updatedAt: agent.updatedAt || agent.createdAt || new Date().toISOString(),
+    };
+  });
+}
+
 function normalizeFinance(finance) {
   const input = finance && typeof finance === "object" ? finance : financeSeed();
   const connectors = FINANCE_CONNECTORS.map((connector) => ({
@@ -634,7 +777,7 @@ function seed() {
     finance: financeSeed(),
     security: [],
     approvals: [],
-    agents: [],
+    agents: ensureStockAutomations([]),
     vacationRuns: [],
     memory: [],
     chatHistory: [],
@@ -669,7 +812,7 @@ function normalizeData(data) {
   d.finance = normalizeFinance(d.finance);
   d.security = Array.isArray(d.security) ? d.security : [];
   d.approvals = Array.isArray(d.approvals) ? d.approvals : [];
-  d.agents = Array.isArray(d.agents) ? d.agents : [];
+  d.agents = ensureStockAutomations(Array.isArray(d.agents) ? d.agents : [], d.workspaces);
   d.vacationRuns = Array.isArray(d.vacationRuns) ? d.vacationRuns : [];
   d.memory = pruneMemory(Array.isArray(d.memory) ? d.memory : []);
   d.chatHistory = pruneChatHistory(Array.isArray(d.chatHistory) ? d.chatHistory : []);
