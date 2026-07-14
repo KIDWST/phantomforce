@@ -6,18 +6,19 @@
  * instead of sending people out to another product.
  */
 
-import { currentTenantId, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260713-006";
+import { currentTenantId, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260714-001";
 import {
   PLATFORMS, registerContentAsset, loadSocialAccounts, saveSocialAccounts, socialStatus,
-} from "./contenthub.js?v=phantom-live-20260713-006";
-import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260713-006";
+  loadContentAssets, saveContentAssets, contentAssetDisplayUrl, hydrateContentAssetUrl,
+} from "./contenthub.js?v=phantom-live-20260714-001";
+import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260714-001";
 import {
   addImageLayer, addTextLayer, cloneImageEditState, compositionSnapshot, duplicateLayer,
   freshComposition, hitTestLayer, loadCompositionImages, moveLayerOrder, pushEditorSnapshot,
   removeSelectedLayers, renderComposition, restoreComposition, selectLayer, selectedLayers,
-} from "./content-editor.js?v=phantom-live-20260713-006";
-import { loadImageForEditing, exportCanvas, requestAiEdit, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260713-006";
-import { assetsAvailable, assetBlobUrl, listAssets, recordAssetUsage, saveToAssetCloud, listLocalAssets, refreshLocalAssets, localAssetBlobUrl } from "./orgs.js?v=phantom-live-20260713-006";
+} from "./content-editor.js?v=phantom-live-20260714-001";
+import { loadImageForEditing, exportCanvas, requestAiEdit, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260714-001";
+import { assetsAvailable, assetBlobUrl, listAssets, recordAssetUsage, saveToAssetCloud, listLocalAssets, refreshLocalAssets, localAssetBlobUrl } from "./orgs.js?v=phantom-live-20260714-001";
 
 const CFG_KEY = "pf.medialab.v1";
 const EDIT_INTENT_KEY = "pf.medialab.editIntent.v1";
@@ -1078,6 +1079,9 @@ function previewAsset(req, i, context = {}) {
    STUDIO
    ========================================================================= */
 let session = { assets: [], tab: "generate", edit: null };
+/* pool size for the tab badge — kept from register/render results so the
+   topbar never has to parse the (potentially multi-MB) pool store itself */
+let mlPoolCount = 0;
 
 function consumeEditIntent(opts = {}) {
   let intent = null;
@@ -1209,7 +1213,7 @@ export function renderMediaStudio(el, opts = {}) {
     <div class="ml">
       <div class="ml-topbar">
         <nav class="ml-tabs" role="tablist" aria-label="Media Lab views">
-          ${NAV_TABS.map(([id, label]) => `<button class="ml-tab ${session.tab === id && !activeDrawer ? "is-active" : ""}" role="tab" aria-selected="${session.tab === id && !activeDrawer}" data-ml-tab="${id}"${tabDropAttrs(id)}>${label}${id === "library" && session.assets.length ? ` · ${session.assets.length}` : ""}</button>`).join("")}
+          ${NAV_TABS.map(([id, label]) => `<button class="ml-tab ${session.tab === id && !activeDrawer ? "is-active" : ""}" role="tab" aria-selected="${session.tab === id && !activeDrawer}" data-ml-tab="${id}"${tabDropAttrs(id)}>${label}${id === "library" && mlPoolCount ? ` · ${mlPoolCount}` : ""}${id === "pending" && pendingJobs.length ? ` · ${pendingJobs.length}` : ""}</button>`).join("")}
         </nav>
         <button class="ml-asset-open ${activeDrawer === "assets" ? "is-active" : ""}" data-ml-drawer-open="assets" type="button">${svgIc("image")} Assets</button>
         <button class="ml-settings-gear ${activeDrawer === "settings" ? "is-active" : ""}" data-ml-open-local-settings type="button" title="Media Lab settings" aria-label="Media Lab settings">${svgIc("gear")}</button>
@@ -1228,10 +1232,7 @@ export function renderMediaStudio(el, opts = {}) {
   if (session.tab === "generate") renderGenerate(body, cfg, opts, el);
   else if (session.tab === "pending") (opts.renderPending ? opts.renderPending(body) : renderPending(body));
   else if (session.tab === "edit") renderEdit(body, cfg, opts, el);
-  else if (session.tab === "library") {
-    session.tab = "generate";
-    renderGenerate(body, cfg, opts, el);
-  }
+  else if (session.tab === "library") renderMediaPool(body, cfg, opts, el);
 }
 
 /* ---- drawers: Templates / History / Engine / Settings — local Media Lab only ---- */
@@ -1917,6 +1918,7 @@ function saveMediaPoolSource(asset, extra = {}) {
       live: !!extra.live,
       createdAt: asset.at || Date.now(),
     });
+    if (result?.stats) mlPoolCount = result.stats.count;
     return result.stats;
   } catch {
     return null;
@@ -2230,6 +2232,15 @@ async function runGenerate(body, cfg, opts, root, esc) {
       session.assets.unshift(asset);
     });
     session.assets = session.assets.slice(0, 60);
+    /* Completed renders belong in Media Pool automatically — pending while
+       rendering, in the pool the moment they land. Queued drafts and
+       failed-render sketches stay out so the pool only holds real media. */
+    if (out.live) {
+      created.forEach((asset) => {
+        asset.saved = true;
+        saveMediaPoolSource(asset);
+      });
+    }
     lastRenderIssue = out.live || out.queued
       ? null
       : { reason: out.fallbackReason || "unreachable", detail: out.fallbackDetail || "", lane: out.fallbackLane || "", at: Date.now() };
@@ -2241,7 +2252,7 @@ async function runGenerate(body, cfg, opts, root, esc) {
     if (opts.notify) {
       const why = out.live || out.queued ? "" : explainMediaFailure(out.fallbackReason, out.fallbackDetail, out.fallbackLane);
       const status = out.live
-        ? "generated"
+        ? "generated and saved to Media Pool:"
         : out.queued
           ? "queued in Media Lab — final review is waiting for"
           : `render failed (${out.fallbackReason || "unreachable"})${why ? ` — ${why};` : " —"} sketched the request locally for`;
@@ -2276,24 +2287,120 @@ function tileAction(act, id, cfg, opts, root, esc, body) {
 }
 
 /* ---- Library ---- */
-function renderLibrary(body, opts, root) {
+/* ---- Media Pool: the workspace's persistent, publish-ready media ----
+   Backed by the same store Content Hub publishes from (loadContentAssets),
+   so anything visible here is selectable in Publish — one pool, no split
+   truth. Pending renders show at the top and flip into the grid the moment
+   they complete (runGenerate auto-saves live results). */
+function poolAgeLabel(createdAt) {
+  const mins = Math.max(1, Math.round((Date.now() - createdAt) / 60000));
+  if (mins < 60) return `${mins}m ago`;
+  if (mins < 1440) return `${Math.round(mins / 60)}h ago`;
+  return `${Math.round(mins / 1440)}d ago`;
+}
+function poolPendingStrip(esc) {
+  if (!pendingJobs.length) return "";
+  return `<section class="ml-pool-pending" aria-label="Renders in progress">
+    ${pendingJobs.map((job) => `
+      <article class="ml-pool-pending-card">
+        <span class="ml-rec is-live"><i aria-hidden="true"></i>Rendering</span>
+        <b>${esc((job.prompt || "Untitled request").slice(0, 80))}</b>
+        <i>${esc(job.modality)} · ${esc(job.aspect)} · started ${poolAgeLabel(job.startedAt)}</i>
+      </article>`).join("")}
+  </section>`;
+}
+function poolTileHtml(asset, esc) {
+  const url = contentAssetDisplayUrl(asset);
+  const media = url
+    ? (asset.type === "video"
+      ? `<video src="${esc(url)}" muted playsinline preload="metadata"></video>`
+      : `<img src="${esc(url)}" alt="${esc(asset.title)}" loading="lazy"/>`)
+    : `<span class="ml-pool-thumb-empty">${asset.syncedId ? "Loading preview…" : "Preview unavailable"}</span>`;
+  return `<article class="ml-pool-card" data-pool-id="${esc(asset.id)}">
+    <figure class="ml-pool-thumb" data-pool-media="${esc(asset.id)}">${media}</figure>
+    <div class="ml-pool-meta">
+      <b>${esc(asset.title.slice(0, 60))}</b>
+      <i>${esc(asset.source || "Media Lab")} · ${esc(asset.type)} · ${poolAgeLabel(asset.createdAt)} · ${asset.syncedId ? "backed up" : "this device"}</i>
+    </div>
+    <div class="ml-pool-actions">
+      <button class="ml-pool-act is-primary" data-pool-act="publish" data-id="${esc(asset.id)}">${svgIc("hub")} Publish</button>
+      ${asset.type === "image" ? `<button class="ml-pool-act" data-pool-act="edit" data-id="${esc(asset.id)}">${svgIc("edit")} Edit</button>` : ""}
+      ${asset.type === "image" ? `<button class="ml-pool-act" data-pool-act="ref" data-id="${esc(asset.id)}" title="Use as generation reference">${svgIc("image")} Ref</button>` : ""}
+      <button class="ml-pool-act" data-pool-act="download" data-id="${esc(asset.id)}" title="Download">${svgIc("download")}</button>
+      <button class="ml-pool-act is-danger" data-pool-act="remove" data-id="${esc(asset.id)}" title="Remove from Media Pool">${svgIc("close")}</button>
+    </div>
+  </article>`;
+}
+async function poolAssetUrl(asset, opts) {
+  const url = contentAssetDisplayUrl(asset) || await hydrateContentAssetUrl(asset);
+  if (!url && opts.notify) opts.notify("Media Pool", "That media has no preview on this device and no backup to pull from.");
+  return url;
+}
+function renderMediaPool(body, cfg, opts, root) {
   const esc = opts.esc || ((s) => String(s));
-  const assets = session.assets;
-  body.innerHTML = assets.length
-    ? `<div class="ml-grid ml-grid-lib">${assets.map((a) => tileHtml(a, esc)).join("")}</div>`
-    : `<div class="ml-empty">${svgIc("image")}<b>No assets yet</b><i>Everything you generate or edit lands in this one pool for the session.</i></div>`;
-  body.querySelectorAll("[data-tile-act]").forEach((b) => b.onclick = () => {
-    const a = assets.find((x) => x.id === b.dataset.id); if (!a) return;
-    if (b.dataset.tileAct === "download") downloadAsset(a);
-    else if (b.dataset.tileAct === "edit") { session.edit = { url: a.url, type: a.type, id: a.id }; session.tab = "edit"; renderMediaStudio(root, opts); }
-    else if (b.dataset.tileAct === "ref") { genState.ref = a.url; session.tab = "generate"; renderMediaStudio(root, opts); }
-    else if (b.dataset.tileAct === "remove") {
-      session.assets = session.assets.filter((x) => x.id !== b.dataset.id);
-      if (session.edit?.id === b.dataset.id) session.edit = null;
-      if (opts.notify) opts.notify("Media Factory", "removed a local media asset.");
+  const assets = loadContentAssets();
+  mlPoolCount = assets.length;
+  body.innerHTML = `
+    ${poolPendingStrip(esc)}
+    ${assets.length
+      ? `<div class="ml-pool-grid">${assets.map((a) => poolTileHtml(a, esc)).join("")}</div>`
+      : `<div class="ml-empty" data-ml-dropzone="edit" data-ml-dropzone-label="Drop to add media">${svgIc("image")}<b>Media Pool is empty</b><i>Generate in Create — finished renders land here automatically and stay for ${30} days. Publish, edit, or reuse them any time.</i></div>`}`;
+  body.querySelectorAll("[data-pool-act]").forEach((btn) => btn.onclick = async () => {
+    const asset = loadContentAssets().find((item) => item.id === btn.dataset.id);
+    if (!asset) return;
+    const act = btn.dataset.poolAct;
+    if (act === "publish") {
+      try {
+        workspaceStorageSetItem(CONTENT_HUB_OPEN_TAB_KEY, "publish");
+        workspaceStorageSetItem(CONTENT_HUB_OPEN_ASSET_KEY, asset.id);
+      } catch {}
+      opts.openWorkspace?.("content");
+      return;
+    }
+    if (act === "download") {
+      const url = await poolAssetUrl(asset, opts);
+      if (url) downloadAsset({ ...asset, url });
+      return;
+    }
+    if (act === "edit") {
+      const url = await poolAssetUrl(asset, opts);
+      if (!url) return;
+      session.edit = { url, type: asset.type, id: asset.id };
+      session.tab = "edit";
       renderMediaStudio(root, opts);
+      return;
+    }
+    if (act === "ref") {
+      const url = await poolAssetUrl(asset, opts);
+      if (!url) return;
+      genState.ref = url;
+      session.tab = "generate";
+      renderMediaStudio(root, opts);
+      return;
+    }
+    if (act === "remove") {
+      saveContentAssets(loadContentAssets().filter((item) => item.id !== asset.id));
+      if (opts.notify) opts.notify("Media Pool", "removed the media from Media Pool.");
+      renderMediaPool(body, cfg, opts, root);
     }
   });
+  /* pull trimmed previews back from the sync backend and patch tiles in place */
+  (async () => {
+    for (const asset of assets.filter((a) => !contentAssetDisplayUrl(a) && a.syncedId)) {
+      const url = await hydrateContentAssetUrl(asset);
+      const slot = body.querySelector(`[data-pool-media="${CSS.escape(asset.id)}"]`);
+      if (!url || !slot || !slot.isConnected) continue;
+      slot.innerHTML = asset.type === "video"
+        ? `<video src="${esc(url)}" muted playsinline preload="metadata"></video>`
+        : `<img src="${esc(url)}" alt="${esc(asset.title)}" loading="lazy"/>`;
+    }
+  })();
+  /* keep the pending strip honest while renders finish in the background */
+  if (pendingJobs.length) {
+    setTimeout(() => {
+      if (session.tab === "library" && body.isConnected) renderMediaPool(body, cfg, opts, root);
+    }, 5000);
+  }
 }
 
 /* ---- Edit (real client-side canvas editor) ---- */
@@ -2530,7 +2637,7 @@ function rowMatchesAssetSearch(row) {
   return `${row.title || ""} ${row.source || ""} ${row.prompt || ""}`.toLowerCase().includes(query);
 }
 function editorAssetRows() {
-  const local = session.assets
+  const sessionRows = session.assets
     .filter((asset) => asset.type === "image" && asset.url)
     .map((asset) => ({
       id: asset.id,
@@ -2540,6 +2647,18 @@ function editorAssetRows() {
       sourceType: "local",
       prompt: asset.meta?.prompt || "",
     }));
+  /* the persistent pool, not just this session's renders */
+  const poolRows = loadContentAssets()
+    .filter((asset) => asset.type === "image" && contentAssetDisplayUrl(asset))
+    .map((asset) => ({
+      id: asset.id,
+      title: asset.title || "Media Pool image",
+      url: contentAssetDisplayUrl(asset),
+      source: "Media Pool",
+      sourceType: "local",
+      prompt: asset.prompt || "",
+    }));
+  const local = [...sessionRows, ...poolRows];
   const cloud = (mlAssetCache.assets || [])
     .filter((asset) => asset.kind === "image" && asset.previewUrl)
     .map((asset) => ({

@@ -9,20 +9,20 @@ import {
   freshEditState, applyFilterPreset, renderBaseFrame,
   addBokehSpot, removeBokehSpotNear, removeBokehSpotAt, nearestBokehSpot, moveBokehSpot, resizeBokehSpot,
   setBokehMask, freshTextStyle, TEXT_FONTS, TEXT_PRESETS, applyTextPreset,
-} from "./imagefilters.js?v=phantom-live-20260713-006";
-import { getRembgStatus, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260713-006";
-import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260713-006";
-import { parseAnalyticsReport } from "./social-analytics.js?v=phantom-live-20260713-006";
+} from "./imagefilters.js?v=phantom-live-20260714-001";
+import { getRembgStatus, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260714-001";
+import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260714-001";
+import { parseAnalyticsReport } from "./social-analytics.js?v=phantom-live-20260714-001";
 import {
   freshComposition, compositionSnapshot, restoreComposition, addImageLayer, replaceImageLayerSource, addTextLayer, addColorLayer,
   duplicateLayer, removeSelectedLayers, moveLayerOrder, selectedLayers, selectLayer, selectAllLayers,
   loadCompositionImages, renderComposition, drawCompositionOverlay, drawDetectedSubjectOverlay, canvasPoint, hitTestLayer, hitTestResizeHandle,
   setCanvasPreset, zoomComposition, canvasPointToLayer, layerPointToCanvas,
   imageEditSnapshot, restoreImageEditSnapshot, pushEditorSnapshot,
-} from "./content-editor.js?v=phantom-live-20260713-006";
+} from "./content-editor.js?v=phantom-live-20260714-001";
 import {
   currentTenantId, currentWs, session, store, visible, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem, wsName,
-} from "./store.js?v=phantom-live-20260713-006";
+} from "./store.js?v=phantom-live-20260714-001";
 
 const CH_KEY = "pf.contenthub.v2";
 const CH_REMOVED_KEY = "pf.contenthub.removed.v1";
@@ -344,13 +344,39 @@ export function saveContentAssets(items = []) {
   }
   return clean;
 }
+/* In-memory bridge for oversized media: the persisted copy drops data URLs
+   over the inline budget, so previews for those assets come from this cache
+   (seeded at save time) or get re-fetched from the sync backend on demand.
+   Without this, a big render "saves" but can never be seen again. */
+const contentAssetUrlCache = new Map();
+export function contentAssetDisplayUrl(asset) {
+  if (!asset) return "";
+  return asset.url || contentAssetUrlCache.get(asset.id) || "";
+}
+export async function hydrateContentAssetUrl(asset) {
+  const known = contentAssetDisplayUrl(asset);
+  if (known || !asset?.syncedId) return known;
+  const result = await fetchSyncedAssetFile(asset.syncedId);
+  if (result.ok && result.dataUrl) {
+    contentAssetUrlCache.set(asset.id, result.dataUrl);
+    return result.dataUrl;
+  }
+  return "";
+}
+
 export function registerContentAsset(asset, options = {}) {
   const normalized = normalizeContentAsset(asset);
   const current = loadContentAssets().filter((item) => item.id !== normalized.id);
   const saved = saveContentAssets([normalized, ...current]);
   const finalAsset = saved.find((item) => item.id === normalized.id) || normalized;
-  if (!options.skipSync && !finalAsset.syncedId && finalAsset.url && finalAsset.url.startsWith("data:")) {
-    queueAssetSync(finalAsset.id);
+  /* Sync from the ORIGINAL url, not the stored one — normalization trims
+     oversized data URLs to "", so the biggest renders were never backed up
+     and their previews were unrecoverable. */
+  const originalUrl = typeof asset.url === "string" && asset.url.startsWith("data:") ? asset.url : "";
+  if (originalUrl && !finalAsset.url) contentAssetUrlCache.set(finalAsset.id, originalUrl);
+  const uploadUrl = finalAsset.url && finalAsset.url.startsWith("data:") ? finalAsset.url : originalUrl;
+  if (!options.skipSync && !finalAsset.syncedId && uploadUrl) {
+    queueAssetSync(finalAsset.id, uploadUrl);
   }
   return { asset: finalAsset, stats: contentAssetStats(saved) };
 }
@@ -363,10 +389,11 @@ export function registerContentAsset(asset, options = {}) {
    and syncing is a best-effort convenience, not a requirement to keep
    working. syncedId marks an asset as already backed up so it's never
    re-uploaded on every re-render. */
-async function queueAssetSync(assetId) {
+async function queueAssetSync(assetId, urlOverride = "") {
   const asset = loadContentAssets().find((item) => item.id === assetId);
-  if (!asset || asset.syncedId || !asset.url || !asset.url.startsWith("data:")) return;
-  const result = await syncAssetUpload(asset.url, asset.title);
+  const uploadUrl = (asset?.url && asset.url.startsWith("data:") ? asset.url : "") || urlOverride;
+  if (!asset || asset.syncedId || !uploadUrl || !uploadUrl.startsWith("data:")) return;
+  const result = await syncAssetUpload(uploadUrl, asset.title);
   if (!result.ok) return;
   const fresh = loadContentAssets();
   const target = fresh.find((item) => item.id === assetId);
@@ -718,7 +745,7 @@ export function renderContentHub(el, opts = {}) {
   const data = loadContent();
   const mediaAssets = loadContentAssets();
   if (requestedAssetId) {
-    const requestedAsset = mediaAssets.find((asset) => asset.id === requestedAssetId && asset.type === "image" && asset.url);
+    const requestedAsset = mediaAssets.find((asset) => asset.id === requestedAssetId && (asset.url || contentAssetUrlCache.get(asset.id) || asset.syncedId));
     if (requestedAsset) {
       savePublishState({ ...loadPublishState(), sourceKey: `asset:${requestedAsset.id}` });
       chState.tab = "publish";
@@ -754,6 +781,27 @@ export function renderContentHub(el, opts = {}) {
   else if (t === "drafts") renderDraftQueue(body, data, esc, el, opts);
   else if (t === "calendar") renderContentPlanner(body, data, esc, el, opts);
   if (chLightbox) wireLightbox(el, opts);
+  hydrateTrimmedMedia(el, esc);
+}
+
+/* Swap "loading preview from backup…" placeholders for the real media by
+   pulling each oversized asset back from the sync backend. Patches the DOM
+   in place so an async fetch never fights a fresh render. */
+async function hydrateTrimmedMedia(el, esc) {
+  const slots = [...el.querySelectorAll("[data-ch-hydrate-asset]")];
+  if (!slots.length) return;
+  const assets = loadContentAssets();
+  for (const slot of slots) {
+    const asset = assets.find((item) => item.id === slot.dataset.chHydrateAsset);
+    if (!asset) continue;
+    const url = await hydrateContentAssetUrl(asset);
+    if (!url || !slot.isConnected) continue;
+    const holder = document.createElement("span");
+    holder.innerHTML = asset.type === "video"
+      ? `<video src="${esc(url)}" muted playsinline preload="metadata"></video><span class="ch-post-play">▶</span>`
+      : `<img src="${esc(url)}" alt="${esc(asset.title)}" loading="lazy"/>`;
+    slot.replaceWith(...holder.childNodes);
+  }
 }
 
 function kpi(label, value, sub, tone) {
@@ -939,7 +987,7 @@ function renderContentPlanner(body, data, esc, root, opts) {
   wirePostCards(body, data, esc, root, opts);
 }
 function publishSources(data, assets) {
-  const assetRows = assets.slice(0, 10).map((asset) => ({
+  const assetRows = assets.slice(0, 24).map((asset) => ({
     key: `asset:${asset.id}`,
     kind: "asset",
     asset,
@@ -972,12 +1020,16 @@ function sourceMediaMarkup(source, esc, size = "large") {
   if (!source) return `<span class="ch-pub-media-empty">Choose or upload media</span>`;
   if (source.kind === "asset") {
     const asset = source.asset;
-    if (asset.url) {
+    const url = contentAssetDisplayUrl(asset);
+    if (url) {
       return asset.type === "video"
-        ? `<video src="${esc(asset.url)}" muted playsinline preload="metadata"></video><span class="ch-post-play">▶</span>`
-        : `<img src="${esc(asset.url)}" alt="${esc(asset.title)}" loading="lazy"/>`;
+        ? `<video src="${esc(url)}" muted playsinline preload="metadata"></video><span class="ch-post-play">▶</span>`
+        : `<img src="${esc(url)}" alt="${esc(asset.title)}" loading="lazy"/>`;
     }
-    return `<span class="ch-pub-media-empty" style="${assetBg(asset)}">${size === "tiny" ? "media" : "media saved · preview loading"}</span>`;
+    if (asset.syncedId) {
+      return `<span class="ch-pub-media-empty" style="${assetBg(asset)}" data-ch-hydrate-asset="${esc(asset.id)}" data-ch-hydrate-type="${esc(asset.type)}" data-ch-hydrate-title="${esc(asset.title)}">${size === "tiny" ? "media" : "loading preview from backup…"}</span>`;
+    }
+    return `<span class="ch-pub-media-empty" style="${assetBg(asset)}">${size === "tiny" ? "media" : "preview unavailable on this device"}</span>`;
   }
   if (source.post) {
     return `<span class="ch-pub-media-empty" style="${thumb(source.post)}"><span class="ch-post-plat" style="background:${plat(source.post.platform).color}">${PGLYPH[source.post.platform] || "●"}</span>${isVideo(source.post.type) ? `<span class="ch-post-play">▶</span>` : ""}</span>`;

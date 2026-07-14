@@ -4501,6 +4501,30 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
   align-content: start;
   overflow: auto;
 }
+
+/* ---- Media Pool tab: persistent, publish-ready media ---- */
+.ml-pool-pending { display: grid; gap: 10px; margin-bottom: 16px; }
+.ml-pool-pending-card { display: grid; gap: 4px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 14px; background: linear-gradient(135deg, rgba(65,255,161,0.09), rgba(4,12,9,0.94)); }
+.ml-pool-pending-card b { font-size: 13px; color: var(--ink); }
+.ml-pool-pending-card i { font: 500 10.5px "DM Mono", monospace; color: var(--dim); font-style: normal; letter-spacing: 0.04em; }
+.ml-pool-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 14px; align-content: start; }
+.ml-pool-card { display: grid; grid-template-rows: auto auto auto; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: #050b09; }
+.ml-pool-thumb { margin: 0; aspect-ratio: 4 / 3; background: #030906; display: grid; place-items: center; overflow: hidden; }
+.ml-pool-thumb img, .ml-pool-thumb video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ml-pool-thumb-empty { font: 500 10.5px "DM Mono", monospace; color: var(--dim); letter-spacing: 0.06em; text-transform: uppercase; }
+.ml-pool-meta { display: grid; gap: 3px; padding: 10px 12px 6px; }
+.ml-pool-meta b { font-size: 12.5px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ml-pool-meta i { font: 500 10px "DM Mono", monospace; color: var(--dim); font-style: normal; letter-spacing: 0.04em; }
+.ml-pool-actions { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 12px 12px; }
+.ml-pool-act { display: inline-flex; align-items: center; gap: 5px; padding: 6px 10px; border-radius: 9px; border: 1px solid var(--line); background: rgba(9,20,15,0.85); color: var(--ink); font: 600 11px "Space Grotesk", sans-serif; cursor: pointer; transition: border-color 0.15s ease, background 0.15s ease; }
+.ml-pool-act:hover { border-color: var(--neon); }
+.ml-pool-act.is-primary { background: linear-gradient(135deg, rgba(65,255,161,0.22), rgba(9,20,15,0.9)); border-color: rgba(65,255,161,0.5); }
+.ml-pool-act.is-danger:hover { border-color: var(--warn); color: var(--warn); }
+.ml-pool-act svg { width: 13px; height: 13px; }
+@media (max-width: 767px) {
+  .ml-pool-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+  .ml-pool-actions { padding: 6px 10px 10px; }
+}
 .ml-stage-grid { position: relative; z-index: 2; align-content: start; }
 .ml-stage-grid .ml-skel:first-child { grid-column: 1 / -1; aspect-ratio: 16 / 9; }
 .ml-stage-grid .ml-tile:first-child { grid-column: 1 / -1; aspect-ratio: auto; }

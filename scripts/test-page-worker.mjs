@@ -50,7 +50,7 @@ assert.match(worker, /button\.disabled = true/u, "Submitting a page prompt must 
 assert.match(worker, /data-page-worker-form/u, "Worker prompt form must be bindable.");
 assert.match(worker, /opts\.notify/u, "Worker prompt should log/notify without executing external actions.");
 
-assert.match(main, /import \{ pageWorkerHtml, mountPageWorkers \} from "\.\/pageworker\.js\?v=phantom-live-20260713-\d+"/u, "main.js must import the current page worker module.");
+assert.match(main, /import \{ pageWorkerHtml, mountPageWorkers \} from "\.\/pageworker\.js\?v=phantom-live-\d{8}-\d+"/u, "main.js must import the current page worker module.");
 assert.match(main, /\$\{pageWorkerHtml\(key, def\)\}/u, "Workspace pages must mount the worker prompt.");
 assert.match(main, /mountPageWorkers\(root, mediaOpts\(\)\)/u, "Workspace pages must bind worker prompt events.");
 assert.match(main, /mountPageWorkers\(overlayRoot, mediaOpts\(\)\)/u, "Overlay pages must bind worker prompt events.");
@@ -60,7 +60,7 @@ assert.match(css, /\.page-worker-output\.is-thinking/u, "Backend thinking state 
 assert.match(css, /\.page-worker-backend-result/u, "Backend answer must have visible result styling.");
 assert.match(css, /\.page-worker-output li::before/u, "Plain-English step bullets must be styled.");
 assert.match(css, /\.page-worker-action-result/u, "Local page actions must have visible result styling.");
-assert.match(index, /phantom-live-20260713-\d+/u, "Index cache id must exist for the app bundle.");
+assert.match(index, /phantom-live-\d{8}-\d+/u, "Index cache id must exist for the app bundle.");
 
 function installMemoryStorage(name) {
   if (globalThis[name]) return;
