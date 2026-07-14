@@ -42,7 +42,7 @@ body.paused .pause{display:grid}
     <button data-mode="rumble"><b>RUMBLE</b>2 players + 2 bots</button>
     <button data-mode="botbrawl"><b>BOT BRAWL</b>you vs three bots</button>
   </div>
-  <div class="keys"><span><b>P1</b> WASD move · W jump · <b>SPACE: tap to hit, hold to smash</b></span><span><b>P2</b> Arrows · ↑ jump · <b>ENTER: tap to hit, hold to smash</b></span></div>
+  <div class="keys"><span><b>P1</b> WASD move · W jump · <b>SPACE tap/hold</b> (or F hit · G smash)</span><span><b>P2</b> Arrows · ↑ jump · <b>ENTER tap/hold</b> (or K hit · L smash)</span></div>
   <p style="font-size:12px;color:#557d68">One button, three moves: tap for a quick peck, hold for a charged smash — and a FULL hold with a full meter unleashes PHANTOM BURST. Deal damage to fill the meter. Hunt the rare drops: ◐ portal rift · ↯ gravity flip · ◔ chrono field · ▲ titan mode · ☄ meteor storm · ≋ stage quake · ∞ rift warp · ⁂ shadow clones. Plus ♥ heal · ✦ power hit · ◉ bomb.</p>
 </div></div>
 <div class="overlay pause" data-pauseoverlay><div><h1>PAUSED</h1><p>The rumble is frozen. Resume from the player bar above.</p></div></div>
@@ -103,8 +103,8 @@ function startMatch(selected){
 }
 
 /* ---------- input ---------- */
-const P1={left:['a','A'],right:['d','D'],jump:['w','W'],down:['s','S'],strike:[' ']};
-const P2={left:['ArrowLeft'],right:['ArrowRight'],jump:['ArrowUp'],down:['ArrowDown'],strike:['Enter']};
+const P1={left:['a','A'],right:['d','D'],jump:['w','W'],down:['s','S'],strike:[' '],light:['f','F'],heavy:['g','G']};
+const P2={left:['ArrowLeft'],right:['ArrowRight'],jump:['ArrowUp'],down:['ArrowDown'],strike:['Enter'],light:['k','K'],heavy:['l','L']};
 const keys=new Set();
 function padFor(f){return f.slot===0?P1:P2}
 addEventListener('keydown',e=>{
@@ -112,7 +112,8 @@ addEventListener('keydown',e=>{
   for(const f of fighters){
     if(!f.human||f.dead||f.stun>0||!running||paused)continue;
     const pad=padFor(f);
-    if(pad.strike.includes(e.key)){e.preventDefault?.();f.charge=Math.max(f.charge,.01)}
+    if(pad.strike.includes(e.key)||pad.heavy.includes(e.key)){e.preventDefault?.();f.charge=Math.max(f.charge,.01)}
+    if(pad.light.includes(e.key))attack(f,false);
     if(pad.jump.includes(e.key))jump(f);
     if(pad.left.includes(e.key))tapDash(f,-1,e.key);
     if(pad.right.includes(e.key))tapDash(f,1,e.key);
@@ -133,7 +134,7 @@ addEventListener('keyup',e=>{
   for(const f of fighters){
     if(!f.human)continue;
     const pad=padFor(f);
-    if(pad.strike.includes(e.key))releaseStrike(f);
+    if(pad.strike.includes(e.key)||pad.heavy.includes(e.key))releaseStrike(f);
   }
 });
 function tapDash(f,dir,key){
@@ -330,9 +331,13 @@ function step(f,dt){
     }else botThink(f,dt);
   }
   f.vx*=f.grounded?.82:.94;
-  const grav=(gravFx.t>0&&f.slot!==gravFx.owner)?-.0009:.0011;
+  const flipped=gravFx.t>0&&f.slot!==gravFx.owner;
+  const grav=flipped?-.0007:.0011;
   f.vy=Math.max(-.05,Math.min(.05,f.vy+grav*(dt*60)));
   f.x+=f.vx*(dt*60);f.y+=f.vy*(dt*60);
+  /* flipped fighters bonk an invisible ceiling instead of dying off the top —
+     displaced and exposed, never insta-KO'd by the flip itself */
+  if(flipped&&f.y<.09){f.y=.09;if(f.vy<0){f.vy=0;if(!reduced&&Math.random()<.2)spawnBurst(f.x,.07,'#c084fc',3)}}
   if(portals&&f.portalCd<=0){
     for(const [from,to] of [[portals.a,portals.b],[portals.b,portals.a]]){
       if(Math.abs(f.x-from.x)<.045&&Math.abs(f.y-from.y)<.08){
@@ -638,13 +643,13 @@ function startMusic(){
     actx.decodeAudioData(bytes.buffer).then(buf=>{
       const src=actx.createBufferSource();src.buffer=buf;src.loop=true;src.playbackRate.value=1.12;
       const pre=actx.createGain();pre.gain.value=1;src.connect(pre);
-      const dry=actx.createGain();dry.gain.value=.8;pre.connect(dry);dry.connect(audio.master);
-      const delay=actx.createDelay(1);delay.delayTime.value=.28;
-      const fb=actx.createGain();fb.gain.value=.32;
-      const dWet=actx.createGain();dWet.gain.value=.22;
+      const dry=actx.createGain();dry.gain.value=.96;pre.connect(dry);dry.connect(audio.master);
+      const delay=actx.createDelay(1);delay.delayTime.value=.26;
+      const fb=actx.createGain();fb.gain.value=.18;
+      const dWet=actx.createGain();dWet.gain.value=.08;
       pre.connect(delay);delay.connect(fb);fb.connect(delay);delay.connect(dWet);dWet.connect(audio.master);
-      const conv=actx.createConvolver();conv.buffer=makeImpulse(actx,2.2,3);
-      const rWet=actx.createGain();rWet.gain.value=.3;
+      const conv=actx.createConvolver();conv.buffer=makeImpulse(actx,1.4,3.5);
+      const rWet=actx.createGain();rWet.gain.value=.1;
       pre.connect(conv);conv.connect(rWet);rWet.connect(audio.master);
       src.start(0);audio.src=src;audio.ready=true;setMusicVolume();
     }).catch(()=>{audio=null});
