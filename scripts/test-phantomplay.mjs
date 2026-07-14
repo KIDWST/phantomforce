@@ -22,6 +22,14 @@ assert.match(read("../app/js/customization.js"), /canAccessConfiguredModule[\s\S
 assert.match(main, /sessionId:\s*kind === "admin" \? "admin-jordan" : "client-sports-demo"/u, "Local UI tests must obtain a real protected demo session when the local backend is available.");
 assert.match(index, /phantomplay\.css\?v=phantom-live-/u, "The dedicated PhantomPlay stylesheet must be loaded.");
 assert.match(index, /phantomplay-v2\.css\?v=phantom-live-/u, "The PhantomPlay V2 stylesheet must be loaded.");
+assert.match(module, /tab:\s*"library"/u, "Default PhantomPlay must open straight to the game library.");
+assert.match(module, /const GAME_SORTS = \["All", "Solo", "Multiplayer", "Toddler"/u, "Default PhantomPlay must keep Toddler as a sort chip.");
+assert.match(module, /const tabs = \[\["library", "Games"\], \["together", "Multiplayer"\], \["favorites", "Saved"\]/u, "Default PhantomPlay tabs must start with Games, Multiplayer, and Saved.");
+assert.match(module, /function sortGames\(games, sort = ui\.category\)[\s\S]*sort === "Toddler"[\s\S]*toddlerPick/u, "Default PhantomPlay must sort toddler-friendly games through the sorter.");
+assert.match(module, /return sortGames\(ui\.snapshot\.catalog\)\.filter/u, "Default PhantomPlay search must reuse the same sort pipeline as Games.");
+assert.doesNotMatch(module, /renderToddlerSpace|pp-shell-toddler|pp-toddler-space|data-pp-toddler-play/u, "Default PhantomPlay must not keep a separate Toddler Space page.");
+assert.match(css, /\.pp-play-header/u, "Default PhantomPlay game-first library header must be styled.");
+assert.doesNotMatch(css, /Toddler Space|pp-toddler-space|pp-shell-toddler/u, "Default PhantomPlay stylesheet must not preserve a separate Toddler Space destination.");
 assert.match(v2Module, /tab:\s*"solo"/u, "PhantomPlay V2 must open straight to games, not a marketing/home screen.");
 assert.match(v2Module, /const GAME_SORTS = \["All", "Solo", "Multiplayer", "Toddler"/u, "Toddler must be a sort chip, not a separate destination.");
 assert.match(v2Module, /const tabs = \[\["solo", "Games"\], \["friends", "Multiplayer"\], \["library", "Library"\]/u, "V2 top tabs must start with Games, Multiplayer, and Library.");
