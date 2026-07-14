@@ -6,20 +6,20 @@
  * instead of sending people out to another product.
  */
 
-import { currentTenantId, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260714-256";
+import { currentTenantId, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260714-257";
 import {
   PLATFORMS, registerContentAsset, loadSocialAccounts, saveSocialAccounts, socialStatus,
   loadContentAssets, saveContentAssets, contentAssetDisplayUrl, hydrateContentAssetUrl,
-} from "./contenthub.js?v=phantom-live-20260714-256";
-import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260714-256";
+} from "./contenthub.js?v=phantom-live-20260714-257";
+import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260714-257";
 import {
   addImageLayer, addTextLayer, cloneImageEditState, compositionSnapshot, duplicateLayer,
   freshComposition, hitTestLayer, loadCompositionImages, moveLayerOrder, pushEditorSnapshot,
   removeSelectedLayers, renderComposition, restoreComposition, selectLayer, selectedLayers,
-} from "./content-editor.js?v=phantom-live-20260714-256";
-import { loadImageForEditing, exportCanvas, requestAiEdit, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260714-256";
-import { mountVideoEditor } from "./videocut.js?v=phantom-live-20260714-256";
-import { assetsAvailable, assetBlobUrl, listAssets, recordAssetUsage, saveToAssetCloud, listLocalAssets, refreshLocalAssets, localAssetBlobUrl } from "./orgs.js?v=phantom-live-20260714-256";
+} from "./content-editor.js?v=phantom-live-20260714-257";
+import { loadImageForEditing, exportCanvas, requestAiEdit, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260714-257";
+import { mountVideoEditor } from "./videocut.js?v=phantom-live-20260714-257";
+import { assetsAvailable, assetBlobUrl, listAssets, recordAssetUsage, saveToAssetCloud, listLocalAssets, refreshLocalAssets, localAssetBlobUrl } from "./orgs.js?v=phantom-live-20260714-257";
 
 const CFG_KEY = "pf.medialab.v1";
 const EDIT_INTENT_KEY = "pf.medialab.editIntent.v1";
@@ -2949,6 +2949,83 @@ function handleVideoExport(result, opts) {
     opts.notify?.("PhantomCut", `exported "${title}" — too large to keep in Media Pool, so it downloaded to your device instead.`);
   }
 }
+/* PhantomCut's own "Generate with AI" entry point — the same pipeline Create
+   uses (approval gate, live-vs-preview honesty, Media Pool save), scoped to
+   one clip so it can hand straight back to the timeline instead of routing
+   the admin out to the Create tab. Returns {url,type,title} or null. */
+async function generateInlineClip(cfg, opts, prompt, modality) {
+  const trimmed = String(prompt || "").trim();
+  if (!trimmed) return null;
+  const laneId = normalizeLaneId(PRIMARY_MEDIA_LANE);
+  const health = await checkEngineHealth(cfg).catch(() => engineHealth);
+  const spendLane = !!(health.media?.[laneId] || health.engine?.cliFallbackEnabled);
+  let approved = true;
+  if (spendLane && cfg.requireApproval) {
+    approved = window.confirm("This will use Media Lab credits. Approve render?");
+    if (!approved) {
+      opts.notify?.("PhantomCut", "Generation cancelled — nothing was charged.");
+      return null;
+    }
+  }
+  const duration = 6;
+  const req = {
+    modality, provider: laneId, model: "",
+    prompt: trimmed, negative: "", style: "Cinematic", preset: "Custom",
+    approved, creditWarningShown: spendLane,
+    ref: null, params: { aspect: "16:9", count: 1, quality: "standard", duration },
+  };
+  try {
+    const out = await generate(cfg, req);
+    if (out.approvalRequired) {
+      opts.notify?.("PhantomCut", out.message || "This render needs your approval before it can use credits.");
+      return null;
+    }
+    if (!out.assets?.length) {
+      opts.notify?.("PhantomCut", "Generation didn't return any media — try a different prompt.");
+      return null;
+    }
+    const stamp = Date.now();
+    const title = `${modality === "video" ? "Generated video" : "Generated image"} for PhantomCut`;
+    const asset = {
+      id: `gen-${stamp}-0`,
+      ...out.assets[0],
+      fromGen: true,
+      at: stamp,
+      meta: { ...(out.assets[0].meta || {}), title, prompt: out.spec?.original_prompt || trimmed, provider: laneId, model: out.spec?.model, style: "Cinematic", live: out.live },
+    };
+    session.assets.unshift(asset);
+    session.assets = session.assets.slice(0, 60);
+    if (out.live) {
+      asset.saved = true;
+      saveMediaPoolSource(asset);
+      cfg.credits = Math.max(0, cfg.credits - (modality === "video" ? duration * 4 : 3));
+      saveCfg(cfg);
+    }
+    logJob(out.live ? "ok" : "warn", out.live ? `PhantomCut generated a ${modality}` : "PhantomCut render didn't complete — sketched locally");
+    opts.notify?.("PhantomCut", out.live
+      ? `Generated and added to your timeline: "${trimmed.slice(0, 40)}".`
+      : `Render didn't finish live — added a local preview for "${trimmed.slice(0, 40)}".`);
+    return { url: asset.url, type: asset.type, title };
+  } catch {
+    opts.notify?.("PhantomCut", "Generation failed — try again in a moment.");
+    return null;
+  }
+}
+/* Local-disk assets, ready for PhantomCut's own picker — same registry the
+   Edit tab's inline library uses, so the editor never needs a separate tab
+   to reach what's already on this PC. */
+async function localItemsForVideoEditor(kind) {
+  try {
+    const result = await listLocalAssets({ kind: kind === "all" ? "all" : kind, limit: 40 });
+    if (result?.ok === false) return [];
+    return (result.assets || [])
+      .filter((asset) => asset.kind === "image" || asset.kind === "video")
+      .filter((asset) => !!asset.has_preview || !!asset.previewable)
+      .map((asset) => ({ id: asset.id, kind: asset.kind, title: asset.title || asset.name || "Local file" }));
+  } catch {
+    return [];
+  }
+}
 function ensureVideoEditor(opts) {
   if (!vcHost) {
     vcHost = document.createElement("div");
@@ -2962,6 +3039,9 @@ function ensureVideoEditor(opts) {
       sources: {
         poolImages: () => poolMediaRows("image"),
         poolVideos: () => poolMediaRows("video"),
+        listLocal: (kind) => localItemsForVideoEditor(kind),
+        localBlobUrl: (id) => localAssetBlobUrl(id),
+        generateClip: (prompt, modality) => generateInlineClip(loadCfg(), opts, prompt, modality),
       },
       onExported: (result) => handleVideoExport(result, opts),
     });
@@ -3622,7 +3702,7 @@ function socialOAuthSetupPanel(esc) {
   return `<details class="set-oauth-apps" open>
     <summary>
       <span>OAuth apps</span>
-      <b>${esc(String(setup?.readyCount ?? 0))}/${esc(String(setup?.totalCount ?? providers.length || PLATFORMS.length))} ready</b>
+      <b>${esc(String(setup?.readyCount ?? 0))}/${esc(String(setup?.totalCount ?? (providers.length || PLATFORMS.length)))} ready</b>
     </summary>
     <p>Set each platform app once. After this, any business user just clicks Connect account and approves in their signed-in browser. Secrets stay server-side.</p>
     ${socialOAuthSetupState.error ? `<div class="set-social-notice">${esc(socialOAuthSetupState.error)}</div>` : ""}
