@@ -34,6 +34,10 @@ assert.doesNotMatch(main, /confirm\("Sign out of PhantomForce\?"\)/u, "Sign out 
 assert.doesNotMatch(main, /phantomforcesupport@gmail\.com/u, "Owner login must not expose or prefill a real owner email.");
 assert.match(main, /name="pf-access-identity" autocomplete="new-password"[\s\S]*placeholder="you@yourcompany\.com"/u, "Owner email field must use neutral anti-autofill attributes.");
 assert.match(main, /emailInput\) emailInput\.value = "";/u, "Owner email field must be cleared after render to defeat browser prefill.");
+assert.match(main, /data-db-email name="pf-workspace-identity" autocomplete="new-password"[\s\S]*readonly/u, "Customer workspace email login must use neutral anti-autofill attributes.");
+assert.match(main, /data-db-password name="phantomforce-workspace-password" autocomplete="new-password"[\s\S]*readonly/u, "Customer workspace password login must use neutral anti-autofill attributes.");
+assert.match(main, /const emailInput = card\.querySelector\("\[data-db-email\]"\);[\s\S]*const passwordInput = card\.querySelector\("\[data-db-password\]"\);[\s\S]*input\.value = "";[\s\S]*input\.removeAttribute\("readonly"\);[\s\S]*if \(emailInput\) emailInput\.value = "";[\s\S]*if \(passwordInput\) passwordInput\.value = "";/u, "Customer workspace login fields must clear after render and unlock only on user interaction.");
+assert.doesNotMatch(main, /data-db-email autocomplete="username"|data-db-password autocomplete="current-password"/u, "Customer login must not invite silent browser credential refill after logout.");
 assert.doesNotMatch(`${main}\n${store}`, /admin PC|Hermes\/backend|server\\?\.env|PHANTOMFORCE_OWNER_LOGIN_KEY/u, "Browser login/auth copy must not expose backend internals.");
 
 assert.match(orgs, /const managesOrg = s\.isSuperAdmin \|\| \["owner", "admin"\]\.includes\(s\.orgRole \|\| ""\)/u, "Only org owners/admins may map to Business Manager.");

@@ -372,11 +372,11 @@ function maybeUpgradeGateToDatabaseLogin(card, options = {}) {
       <form class="owner-login" data-db-login>
         <label>
           <span>Email</span>
-          <input type="email" data-db-email autocomplete="username" placeholder="you@business.com" autofocus required />
+          <input type="email" data-db-email name="pf-workspace-identity" autocomplete="new-password" autocapitalize="none" spellcheck="false" placeholder="you@business.com" autofocus required readonly />
         </label>
         <label>
           <span>Password</span>
-          <input type="password" data-db-password autocomplete="current-password" placeholder="Password" required />
+          <input type="password" data-db-password name="phantomforce-workspace-password" autocomplete="new-password" placeholder="Password" required readonly />
         </label>
         <button class="gate-opt gate-submit" type="submit">
           <span class="gate-opt-icon">⌘</span>
@@ -387,15 +387,28 @@ function maybeUpgradeGateToDatabaseLogin(card, options = {}) {
       </form>
       <p class="gate-note">${note}</p>`;
     const form = card.querySelector("[data-db-login]");
+    const emailInput = card.querySelector("[data-db-email]");
+    const passwordInput = card.querySelector("[data-db-password]");
     const error = card.querySelector("[data-db-error]");
+    [emailInput, passwordInput].forEach((input) => {
+      if (!input) return;
+      input.value = "";
+      const unlock = () => input.removeAttribute("readonly");
+      input.addEventListener("pointerdown", unlock, { once: true });
+      input.addEventListener("focus", unlock, { once: true });
+    });
+    setTimeout(() => {
+      if (emailInput) emailInput.value = "";
+      if (passwordInput) passwordInput.value = "";
+    }, 50);
     form.onsubmit = async (event) => {
       event.preventDefault();
       error.hidden = true;
       form.classList.add("is-loading");
       try {
         const nextSession = await databaseLogin(
-          card.querySelector("[data-db-email]").value.trim(),
-          card.querySelector("[data-db-password]").value,
+          emailInput.value.trim(),
+          passwordInput.value,
         );
         if (customerApp && (nextSession?.canManageAccess || nextSession?.isSuperAdmin)) {
           await databaseLogout();
