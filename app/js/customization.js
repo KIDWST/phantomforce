@@ -1,4 +1,4 @@
-import { currentTenantId, session } from "./store.js?v=phantom-live-20260714-249";
+import { currentTenantId, session } from "./store.js?v=phantom-live-20260714-251";
 
 let activeConfiguration = null;
 let activeEntitlements = null;
@@ -172,8 +172,13 @@ function configurationPatch(configuration) {
 }
 
 function issueMarkup(issues = []) {
-  if (!issues.length) return `<p class="cust-ok">Ready to preview. No validation problems found.</p>`;
+  if (!issues.length) return `<p class="cust-ok">Ready to publish. Preview is optional.</p>`;
   return `<div class="cust-issues">${issues.map((issue) => `<p class="is-${esc(issue.severity)}"><b>${esc(issue.severity)}</b>${esc(issue.message)}</p>`).join("")}</div>`;
+}
+
+function invalidatePreview(state) {
+  state.preview = null;
+  state.pendingPatch = null;
 }
 
 function moduleCards(draft) {
@@ -203,7 +208,7 @@ function renderStudio(el, state, opts) {
   const whiteLabelAllowed = activeEntitlements?.whiteLabel;
   el.innerHTML = `<div class="customization-studio">
     <section class="cust-hero">
-      <div><p class="cust-kicker">WORKSPACE STUDIO</p><h2>Make PhantomForce fit this business.</h2><p>Change the workspace above the security boundary. Preview first, publish when it looks right, and restore any earlier version.</p></div>
+      <div><p class="cust-kicker">WORKSPACE STUDIO</p><h2>Make PhantomForce fit this business.</h2><p>Change the workspace above the security boundary. Preview if useful, publish directly when ready, and restore any earlier version.</p></div>
       <div class="cust-scope"><span>Editing</span><b>${esc(draft.brand.organizationName)}</b><i>Version ${draft.version} · Powered by PhantomForce</i></div>
     </section>
     ${draft.localFallback ? `<div class="cust-message">Workspace Studio is using local defaults while the backend reconnects. Modules are available now; publishing waits for the server.</div>` : ""}
@@ -231,7 +236,7 @@ function renderStudio(el, state, opts) {
       </section>
       <section class="cust-panel"><div class="cust-panel-head"><div><p class="cust-kicker">VERSION HISTORY</p><h3>Every publish is reversible.</h3></div></div><div data-cust-versions>${versionsMarkup()}</div></section>
     </div>
-    <section class="cust-publish"><div><p class="cust-kicker">CHANGE REVIEW</p><h3>${preview ? `Preview version ${preview.proposedVersion}` : "Preview before publishing"}</h3>${issueMarkup(preview?.issues)}</div><div class="cust-publish-actions"><button class="cust-secondary" type="button" data-cust-preview ${busy ? "disabled" : ""}>Preview changes</button><button class="cust-primary" type="button" data-cust-publish ${!preview?.valid || busy ? "disabled" : ""}>Publish workspace</button></div></section>
+    <section class="cust-publish"><div><p class="cust-kicker">CHANGE REVIEW</p><h3>${preview ? `Preview version ${preview.proposedVersion}` : "Ready to publish"}</h3>${issueMarkup(preview?.issues)}</div><div class="cust-publish-actions"><button class="cust-secondary" type="button" data-cust-preview ${busy ? "disabled" : ""}>Preview changes</button><button class="cust-primary" type="button" data-cust-publish ${busy || draft.localFallback ? "disabled" : ""}>Publish workspace</button></div></section>
   </div>`;
   bindStudio(el, state, opts);
 }
@@ -262,12 +267,12 @@ function bindStudio(el, state, opts) {
   el.querySelectorAll("[data-cust-field]").forEach((input) => {
     input.onchange = () => {
       setPath(state.draft, input.dataset.custField, input.value);
-      state.preview = null;
+      invalidatePreview(state);
       if (input.type === "color") applyOrganizationCustomization(state.draft);
     };
   });
-  el.querySelectorAll("[data-cust-module-label]").forEach((input) => { input.onchange = () => { const module = state.draft.modules.find((item) => item.id === input.dataset.custModuleLabel); if (module) module.label = input.value; state.preview = null; }; });
-  el.querySelectorAll("[data-cust-module-enabled]").forEach((input) => { input.onchange = () => { const module = state.draft.modules.find((item) => item.id === input.dataset.custModuleEnabled); if (module) module.enabled = input.checked; state.preview = null; }; });
+  el.querySelectorAll("[data-cust-module-label]").forEach((input) => { input.onchange = () => { const module = state.draft.modules.find((item) => item.id === input.dataset.custModuleLabel); if (module) module.label = input.value; invalidatePreview(state); }; });
+  el.querySelectorAll("[data-cust-module-enabled]").forEach((input) => { input.onchange = () => { const module = state.draft.modules.find((item) => item.id === input.dataset.custModuleEnabled); if (module) module.enabled = input.checked; invalidatePreview(state); }; });
   el.querySelector("[data-cust-object-form]")?.addEventListener("submit", (event) => {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
@@ -276,10 +281,10 @@ function bindStudio(el, state, opts) {
     const id = plural.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 40);
     if (!id) return;
     state.draft.customObjects.push({ id, singularLabel: singular, pluralLabel: plural, icon: "db", fields: parseObjectFields(data.get("fields")), rolePermissions: { owner: ["view", "create", "edit", "delete", "export"], admin: ["view", "create", "edit"] } });
-    state.preview = null;
+    invalidatePreview(state);
     renderStudio(el, state, opts);
   });
-  el.querySelectorAll("[data-cust-remove-object]").forEach((button) => { button.onclick = () => { state.draft.customObjects = state.draft.customObjects.filter((object) => object.id !== button.dataset.custRemoveObject); state.preview = null; renderStudio(el, state, opts); }; });
+  el.querySelectorAll("[data-cust-remove-object]").forEach((button) => { button.onclick = () => { state.draft.customObjects = state.draft.customObjects.filter((object) => object.id !== button.dataset.custRemoveObject); invalidatePreview(state); renderStudio(el, state, opts); }; });
   const runPreview = async (patch = configurationPatch(state.draft)) => {
     state.busy = true; state.message = "Checking the workspace change…"; renderStudio(el, state, opts);
     try {
@@ -290,10 +295,10 @@ function bindStudio(el, state, opts) {
   };
   el.querySelector("[data-cust-preview]")?.addEventListener("click", () => runPreview());
   el.querySelector("[data-cust-publish]")?.addEventListener("click", async () => {
-    if (!state.preview?.valid) return;
-    state.busy = true; state.message = "Publishing this organization version…"; renderStudio(el, state, opts);
+    const patch = state.pendingPatch || configurationPatch(state.draft);
+    state.busy = true; state.message = state.preview?.valid ? "Publishing this organization version…" : "Publishing directly. Phantom will validate it on the way in…"; renderStudio(el, state, opts);
     try {
-      const payload = await api("/phantom-ai/customization/publish", { method: "POST", body: JSON.stringify({ tenant_id: currentTenantId(), patch: state.pendingPatch || configurationPatch(state.draft), expected_version: activeConfiguration.version, summary: "Published from Workspace Studio" }) });
+      const payload = await api("/phantom-ai/customization/publish", { method: "POST", body: JSON.stringify({ tenant_id: currentTenantId(), patch, expected_version: activeConfiguration.version, summary: "Published from Workspace Studio" }) });
       activeConfiguration = payload.result.configuration; state.draft = clone(activeConfiguration); state.preview = null; state.pendingPatch = null; state.message = `Version ${activeConfiguration.version} is live for this organization.`; applyOrganizationCustomization(activeConfiguration); await fetchVersions(); if (typeof opts.onApplied === "function") opts.onApplied(activeConfiguration);
     } catch (error) { state.message = error.message; }
     state.busy = false; renderStudio(el, state, opts);
@@ -305,11 +310,11 @@ function bindStudio(el, state, opts) {
     catch (error) { state.message = error.message; }
     state.busy = false; renderStudio(el, state, opts);
   });
-  el.querySelectorAll("[data-cust-rollback]").forEach((button) => { button.onclick = async () => { state.busy = true; state.message = `Restoring version ${button.dataset.custRollback}…`; renderStudio(el, state, opts); try { const payload = await api("/phantom-ai/customization/rollback", { method: "POST", body: JSON.stringify({ tenant_id: currentTenantId(), version: Number(button.dataset.custRollback) }) }); activeConfiguration = payload.result.configuration; state.draft = clone(activeConfiguration); state.preview = null; applyOrganizationCustomization(activeConfiguration); await fetchVersions(); state.message = `Restored as version ${activeConfiguration.version}.`; if (typeof opts.onApplied === "function") opts.onApplied(activeConfiguration); } catch (error) { state.message = error.message; } state.busy = false; renderStudio(el, state, opts); }; });
+  el.querySelectorAll("[data-cust-rollback]").forEach((button) => { button.onclick = async () => { state.busy = true; state.message = `Restoring version ${button.dataset.custRollback}…`; renderStudio(el, state, opts); try { const payload = await api("/phantom-ai/customization/rollback", { method: "POST", body: JSON.stringify({ tenant_id: currentTenantId(), version: Number(button.dataset.custRollback) }) }); activeConfiguration = payload.result.configuration; state.draft = clone(activeConfiguration); invalidatePreview(state); applyOrganizationCustomization(activeConfiguration); await fetchVersions(); state.message = `Restored as version ${activeConfiguration.version}.`; if (typeof opts.onApplied === "function") opts.onApplied(activeConfiguration); } catch (error) { state.message = error.message; } state.busy = false; renderStudio(el, state, opts); }; });
   el.querySelector("[data-cust-defaults]")?.addEventListener("click", async () => {
     if (!window.confirm("Restore the PhantomForce workspace layout? Organization records and files will stay intact.")) return;
     state.busy = true; state.message = "Restoring safe defaults…"; renderStudio(el, state, opts);
-    try { const payload = await api("/phantom-ai/customization/reset", { method: "POST", body: JSON.stringify({ tenant_id: currentTenantId() }) }); activeConfiguration = payload.result.configuration; state.draft = clone(activeConfiguration); state.preview = null; applyOrganizationCustomization(activeConfiguration); await fetchVersions(); state.message = "PhantomForce defaults restored. Organization data was not deleted."; if (typeof opts.onApplied === "function") opts.onApplied(activeConfiguration); } catch (error) { state.message = error.message; }
+    try { const payload = await api("/phantom-ai/customization/reset", { method: "POST", body: JSON.stringify({ tenant_id: currentTenantId() }) }); activeConfiguration = payload.result.configuration; state.draft = clone(activeConfiguration); invalidatePreview(state); applyOrganizationCustomization(activeConfiguration); await fetchVersions(); state.message = "PhantomForce defaults restored. Organization data was not deleted."; if (typeof opts.onApplied === "function") opts.onApplied(activeConfiguration); } catch (error) { state.message = error.message; }
     state.busy = false; renderStudio(el, state, opts);
   });
 }
