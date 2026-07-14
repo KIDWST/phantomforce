@@ -1,7 +1,7 @@
 import {
   currentTenantId, isAdmin, isOwnerOperator, session,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260714-004";
+} from "./store.js?v=phantom-live-20260714-005";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 const FALLBACK_KEY = "pf.phantomplay.offline.v1";
@@ -36,7 +36,7 @@ const PHANTOMPLAY_ENGINE = {
   largeMap: { chunkSize: 1024, maxLoadedChunks: 64, streaming: true },
   protocols: ["ready", "score", "progress", "complete", "paused", "exit", "settings", "save-state", "load-state"],
 };
-const PHANTOMPLAY_ART_VERSION = "phantomplay-art-20260712";
+const PHANTOMPLAY_ART_VERSION = "phantomplay-art-20260714";
 const artUrl = (file) => `/app/assets/phantomplay/${file}?v=${PHANTOMPLAY_ART_VERSION}`;
 const TAK_AVATAR = artUrl("tak-avatar.webp");
 const GAME_ART_BY_SLUG = {
