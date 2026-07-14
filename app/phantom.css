@@ -10463,10 +10463,63 @@ details.ch-lb-section .ch-lb-slider:last-child, details.ch-lb-section .ch-lb-chi
   }
 
   .phantom.is-command-focused .mobile-bottom-nav,
-  body.phantom-keyboard-active .mobile-bottom-nav {
+body.phantom-keyboard-active .mobile-bottom-nav {
     opacity: 0;
     transform: translateY(120%);
     pointer-events: none;
+  }
+}
+
+/* Phone nav unification: use the same expandable sidebar shell that works on
+   tablet/half-screen. The old bottom dock made the phone feel like a separate
+   stale app and hid Settings / Developer / Away Mode away from the bottom
+   utility group. */
+@media (max-width: 767px) {
+  .mobile-admin-homebar {
+    padding-left: 74px !important;
+  }
+
+  .sidebar {
+    display: flex !important;
+    top: calc(env(safe-area-inset-top, 0px) + 9px) !important;
+    left: 12px !important;
+    z-index: 130 !important;
+  }
+
+  .sidebar.is-expanded {
+    width: min(304px, calc(100vw - 24px)) !important;
+    height: calc(100dvh - env(safe-area-inset-top, 0px) - 22px) !important;
+    max-height: calc(100dvh - env(safe-area-inset-top, 0px) - 22px) !important;
+  }
+
+  .mobile-bottom-nav {
+    display: none !important;
+  }
+
+  .app-main {
+    padding-bottom: calc(22px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  .console,
+  .console-workspace {
+    padding-bottom: calc(26px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  .workspace-page {
+    margin-bottom: calc(18px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  .workspace-page-body {
+    padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  .phantom.is-command-focused .app-main {
+    padding-bottom: calc(150px + var(--phantom-keyboard-offset) + env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  .phantom.is-command-focused .console,
+  .phantom.is-command-focused .console-workspace {
+    padding-bottom: calc(158px + var(--phantom-keyboard-offset) + env(safe-area-inset-bottom, 0px)) !important;
   }
 }
 
