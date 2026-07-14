@@ -11,6 +11,7 @@ const gameSlugs = ["neon-drift", "signal-match", "focus-stack", "word-weld", "re
 const games = gameSlugs.map((name) => read(`../app/games/${name}.html`));
 const neonDrift = games[gameSlugs.indexOf("neon-drift")];
 const penaltyKick = games[gameSlugs.indexOf("penalty-kick")];
+const phantomRumble = read("../app/games/phantom-rumble.html");
 const appFiles = [index, main, module, ...games];
 
 assert.match(main, /id:\s*"phantomplay"[\s\S]*label:\s*"PhantomPlay"/u, "PhantomPlay must be in the native navigation.");
@@ -99,5 +100,10 @@ assert.doesNotMatch(penaltyKick, /getComputedStyle\(meter\)\.transform\.split/u,
 assert.match(penaltyKick, /else start\(\)/u, "Penalty Kick must let keyboard users start from the opening overlay.");
 assert.match(games[gameSlugs.indexOf("rift-frenzy")], /rival|school|boost|eat|bigger/u, "Rift Frenzy must play as a modern fish arena, not a static old mini-game.");
 assert.match(games[gameSlugs.indexOf("serpent-surge")], /storm|boost|rival|serpent|trail/u, "Serpent Surge must play as a modern snake arena, not a static old mini-game.");
+assert.match(phantomRumble, /defend:\['q','Q','e','E'\]/u, "Phantom Rumble P1 must expose Q/E as guard/parry buttons.");
+assert.match(phantomRumble, /Hold guard before contact to parry/u, "Phantom Rumble must explain guard/parry plainly.");
+assert.match(phantomRumble, /function blockHit[\s\S]*return true/u, "Phantom Rumble must have real block/parry hit logic.");
+assert.match(phantomRumble, /blockHit\(t,f\.x,heavy\)\)continue/u, "Phantom Rumble attacks must skip damage and knockback when guard/parry catches the hit.");
+assert.match(phantomRumble, /data-t="guard"/u, "Phantom Rumble mobile controls must include a visible guard button.");
 
 console.log("PhantomPlay frontend and game safety checks passed.");
