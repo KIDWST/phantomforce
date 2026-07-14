@@ -5068,6 +5068,43 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .settings { display: flex; flex-direction: column; gap: 22px; }
 .set-section { border: 1px solid var(--line); border-radius: 18px; padding: 20px; background: var(--glass); }
 .set-section h3 { margin: 0 0 6px; font-size: 16px; }
+
+/* ---- Organization: people, roles, and module access ---- */
+.org-members { display: grid; gap: 10px; }
+.org-member { display: grid; grid-template-columns: 40px minmax(0, 1fr) minmax(180px, auto) 34px; gap: 12px; align-items: center; padding: 12px 14px; border: 1px solid var(--line); border-radius: 14px; background: #050b09; }
+.org-avatar { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, rgba(65,255,161,0.28), rgba(9,20,15,0.9)); color: var(--ink); font: 700 13px "Space Grotesk", sans-serif; }
+.org-member-id { display: grid; gap: 2px; min-width: 0; }
+.org-member-id b { font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.org-member-id i { font: 500 10.5px "DM Mono", monospace; font-style: normal; color: var(--dim); letter-spacing: 0.03em; }
+.org-role-pick { display: grid; gap: 3px; }
+.org-role-pick select { padding: 7px 10px; border-radius: 10px; border: 1px solid var(--line); background: rgba(0,0,0,0.3); color: var(--ink); font: 600 12px "Space Grotesk", sans-serif; }
+.org-role-pick i { font-style: normal; font-size: 10px; color: var(--dim); }
+.org-remove { width: 30px; height: 30px; border-radius: 9px; border: 1px solid var(--line); background: transparent; color: var(--dim); cursor: pointer; }
+.org-remove:hover { border-color: var(--warn); color: var(--warn); }
+.org-invite { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.org-invite input[type="email"] { flex: 1 1 240px; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line); background: rgba(0,0,0,0.3); color: var(--ink); font: 500 13px "Space Grotesk", sans-serif; }
+.org-invite select { padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line); background: rgba(0,0,0,0.3); color: var(--ink); font: 600 12px "Space Grotesk", sans-serif; }
+.org-invite-list { display: grid; gap: 8px; }
+.org-invite-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 14px; border: 1px dashed var(--line); border-radius: 12px; }
+.org-invite-row span { display: grid; gap: 2px; }
+.org-invite-row b { font-size: 13px; }
+.org-invite-row i { font: 500 10.5px "DM Mono", monospace; font-style: normal; color: var(--dim); }
+.org-matrix-wrap { overflow-x: auto; margin-bottom: 12px; }
+.org-matrix { border-collapse: collapse; width: 100%; min-width: 560px; }
+.org-matrix th, .org-matrix td { padding: 8px 10px; border-bottom: 1px solid var(--line); text-align: center; font-size: 12px; }
+.org-matrix th:first-child, .org-matrix td:first-child { text-align: left; }
+.org-matrix th { font: 700 10px "DM Mono", monospace; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); }
+.org-matrix td b { font-size: 12.5px; }
+.org-matrix td i { display: block; font: 500 9.5px "DM Mono", monospace; font-style: normal; color: var(--warn); }
+.org-matrix tr.is-off td { opacity: 0.55; }
+.org-matrix input[type="checkbox"] { accent-color: var(--neon); width: 15px; height: 15px; }
+.org-message { margin: 8px 0 0; font-size: 12.5px; color: var(--neon); }
+.org-message.is-error { color: var(--warn); }
+.org-db-note h4 { margin: 0 0 6px; }
+@media (max-width: 767px) {
+  .org-member { grid-template-columns: 36px minmax(0, 1fr) 34px; }
+  .org-member .org-role-pick { grid-column: 2 / -1; }
+}
 .set-note { margin: 0 0 16px; font-size: 12.5px; line-height: 1.55; color: var(--dim); max-width: 720px; }
 .settings-operator { gap: 18px; }
 .set-eyebrow {
