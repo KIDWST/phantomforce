@@ -61,7 +61,7 @@ const tenantQuery = () => `tenant_id=${encodeURIComponent(currentTenantId())}`;
 
 /* ---- offline fallback (built-ins only, local saves) ---- */
 const OFFLINE_GAMES = [
-  ["neon-drift", "Neon Drift", "Arcade", "/app/games/neon-drift.html"],
+  ["neon-drift", "Neon Drift", "Arcade", "/app/games/neon-drift.html?v=1.2.4"],
   ["signal-match", "Signal Match", "Puzzle", "/app/games/signal-match.html"],
   ["focus-stack", "Focus Stack", "Focus", "/app/games/focus-stack.html"],
   ["phantom-rumble", "Phantom Rumble", "Arcade", "/app/games/phantom-rumble.html?v=1.1.0"],

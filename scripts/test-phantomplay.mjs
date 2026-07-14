@@ -107,8 +107,10 @@ for (const game of games) {
 
 assert.match(games[0], /\.start\[hidden\][^{]*\{display:none\}/u, "Neon Drift's start overlay must actually leave the play field.");
 assert.match(neonDrift, /invuln/u, "Neon Drift must give the ship a short grace window after damage.");
-assert.match(neonDrift, /maxSpeed=\.0018/u, "Neon Drift ship speed must stay tuned for fast arcade responsiveness.");
-assert.match(neonDrift, /accel=\.0000084\*W/u, "Neon Drift needs punchier acceleration.");
+assert.match(neonDrift, /maxSpeed=\.0032/u, "Neon Drift ship speed must stay tuned for fast arcade responsiveness.");
+assert.match(neonDrift, /accel=\.000055\*W/u, "Neon Drift needs punchier acceleration.");
+assert.match(neonDrift, /drag=Math\.pow\(\.91,dt\/16\)/u, "Neon Drift must keep enough glide to feel fast.");
+assert.match(neonDrift, /player\.vx\+=\(tx-player\.x\)\*\.00054\*W/u, "Neon Drift touch-drag must chase faster on mobile.");
 assert.match(neonDrift, /Math\.max\(130,390-wave\*18\)/u, "Neon Drift waves should spawn quickly enough to stay exciting.");
 assert.match(neonDrift, /t\*\.000055/u, "Neon Drift background motion should feel fast enough.");
 assert.match(neonDrift, /e\.y>1\.12\)\{e\.dead=true\}/u, "Escaped enemies should leave the field without damaging the player.");
