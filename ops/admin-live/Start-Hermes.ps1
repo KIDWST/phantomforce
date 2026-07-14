@@ -22,6 +22,36 @@ function Get-ListeningPids {
   } | Sort-Object -Unique
 }
 
+function Read-DotEnvFile {
+  param([string]$Path)
+
+  $values = @{}
+  if (!(Test-Path -LiteralPath $Path)) {
+    return $values
+  }
+
+  foreach ($line in Get-Content -LiteralPath $Path) {
+    if ($line -match '^\s*$' -or $line -match '^\s*#') {
+      continue
+    }
+    if ($line -notmatch '^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$') {
+      continue
+    }
+
+    $key = $Matches[1]
+    $value = $Matches[2].Trim()
+    if (
+      ($value.StartsWith('"') -and $value.EndsWith('"')) -or
+      ($value.StartsWith("'") -and $value.EndsWith("'"))
+    ) {
+      $value = $value.Substring(1, $value.Length - 2)
+    }
+    $values[$key] = $value
+  }
+
+  return $values
+}
+
 $repo = (Resolve-Path $RepoRoot).Path
 $serverDir = Join-Path $repo "server"
 if (!(Test-Path -LiteralPath (Join-Path $serverDir "src\index.ts"))) {
@@ -30,6 +60,7 @@ if (!(Test-Path -LiteralPath (Join-Path $serverDir "src\index.ts"))) {
 if (!(Test-Path -LiteralPath (Join-Path $serverDir ".env"))) {
   Write-Warning "server\.env not found - Hermes may fail closed on auth config. See docs\ADMIN_RECOVERY.md."
 }
+$serverEnvPath = Join-Path $serverDir ".env"
 
 $node = (Get-Command node -ErrorAction Stop).Source
 $stateDir = Join-Path $env:LOCALAPPDATA "PhantomForce\admin-live"
@@ -70,6 +101,12 @@ $procArgs = @("--import", ([System.Uri]$tsxLoader).AbsoluteUri, "src\index.ts")
 
 $oldCommit = $env:PHANTOMFORCE_BUILD_COMMIT
 $oldPort = $env:PORT
+$serverEnv = Read-DotEnvFile -Path $serverEnvPath
+$oldServerEnv = @{}
+foreach ($name in $serverEnv.Keys) {
+  $oldServerEnv[$name] = [Environment]::GetEnvironmentVariable($name, "Process")
+  [Environment]::SetEnvironmentVariable($name, [string]$serverEnv[$name], "Process")
+}
 $env:PHANTOMFORCE_BUILD_COMMIT = $Commit
 $env:PORT = [string]$Port
 try {
@@ -77,6 +114,9 @@ try {
 } finally {
   $env:PHANTOMFORCE_BUILD_COMMIT = $oldCommit
   $env:PORT = $oldPort
+  foreach ($name in $oldServerEnv.Keys) {
+    [Environment]::SetEnvironmentVariable($name, $oldServerEnv[$name], "Process")
+  }
 }
 Set-Content -LiteralPath (Join-Path $stateDir "hermes.pid") -Value ([string]$proc.Id) -Encoding ascii
 
