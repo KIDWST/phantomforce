@@ -7,6 +7,29 @@ const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&":
 const FALLBACK_KEY = "pf.phantomplay.offline.v1";
 const DEV_SUPPORT_KEY = "pf.phantomplay.developerSupport.v1";
 const CATEGORIES = ["All", "Arcade", "Puzzle", "Focus", "Strategy", "Sports", "Creative"];
+// "Game Rating Exposure" — mirrors server PhantomPlayRating (phantomplay.ts).
+// Order matches ratingRank there (gentlest first).
+const RATING_TIERS = [["toddler", "Toddler"], ["everyone", "Everyone"], ["everyone10", "Everyone 10+"], ["teen", "Teen"], ["mature", "Mature"]];
+const ALL_RATING_VALUES = RATING_TIERS.map(([value]) => value);
+// Mirrors defaultAllowedRatings() in server/src/phantom-ai/phantomplay.ts —
+// kept in sync by hand since preferences.allowedRatings has no server-side
+// "give me the default for my type" endpoint of its own.
+function defaultAllowedRatingsFor(profileType) {
+  if (profileType === "toddler") return ["toddler", "everyone"];
+  if (profileType === "child") return ["toddler", "everyone", "everyone10", "teen"];
+  return [...ALL_RATING_VALUES];
+}
+function ratingExposurePreset(kind, profileType) {
+  if (kind === "my-age") return defaultAllowedRatingsFor(profileType);
+  if (kind === "family") return ["toddler", "everyone", "everyone10"];
+  return [...ALL_RATING_VALUES];
+}
+const ROOM_POLL_MS = 1750;
+// Every Nth poll tick, re-send the participant's own current ready value
+// unchanged as a liveness "touch" — the room store only bumps lastSeenAt on
+// join/leave/ready, so this keeps the connection-status indicator accurate
+// without a dedicated heartbeat route.
+const ROOM_POLL_TOUCH_EVERY = 10;
 const PHANTOMPLAY_ENGINE = {
   version: "2.0-large-map",
   saveStateBytes: 262144,
@@ -65,6 +88,8 @@ const ui = {
   editingSubmissionId: null,
   selectedDeveloperId: "",
   developerMessage: "",
+  guardianMessage: "",
+  ratingBusy: false,
 };
 
 let mountedRoot = null;
@@ -74,6 +99,24 @@ let playTickAt = 0;
 let messageBound = false;
 let keyboardBound = false;
 let playerClosing = false;
+let roomPollTimer = null;
+let roomPollTicks = 0;
+// Pre-existing dead reference fixed in passing: closePlayer()/onGameMessage()
+// already called clearTimeout(readyWatchdog) and launch() already called
+// armReadyWatchdog(), but neither the variable nor the function existed
+// anywhere in this file (a ReferenceError on every launch()). Restored the
+// evident original intent: if a game never posts "ready", surface an error
+// instead of leaving the loading spinner up forever.
+let readyWatchdog = null;
+function armReadyWatchdog() {
+  clearTimeout(readyWatchdog);
+  readyWatchdog = setTimeout(() => {
+    if (ui.player && !ui.playerReady) {
+      ui.error = "This game did not respond. Try restarting or closing it.";
+      render();
+    }
+  }, 12000);
+}
 
 function slugifyGame(value) {
   return String(value ?? "")
@@ -154,7 +197,9 @@ function offlineState() {
     favorites: Array.isArray(saved.favorites) ? saved.favorites : [],
     history: Array.isArray(saved.history) ? saved.history : [],
     leaderboards: { overall: [], byGame: [] },
-    preferences: { contentRating: "teen", sound: saved.sound !== false, reducedMotion: !!saved.reducedMotion, allowCommunityGames: true },
+    preferences: { contentRating: "teen", allowedRatings: [...ALL_RATING_VALUES], sound: saved.sound !== false, reducedMotion: !!saved.reducedMotion, allowCommunityGames: true },
+    profileType: "adult",
+    guardianLock: { enabled: false },
     engine: PHANTOMPLAY_ENGINE,
     rooms: [],
     submissions: [],
@@ -368,9 +413,76 @@ function renderFavorites() {
   return games.length ? `<div class="pp-game-grid pp-game-grid-full">${games.map((game) => gameCard(game)).join("")}</div>` : empty("No favorites yet", "Tap the heart on any game to save it here.");
 }
 
+// Toddler Space: its own destination, not a filter chip in the Play Lab
+// grid. Only toddler-tier games, big single-purpose cards, and nothing else
+// on the page — no favorites, no support/dev links, no rooms, no search.
+function toddlerCard(game) {
+  return `<button type="button" class="pp-toddler-card" data-pp-toddler-play="${esc(game.id)}">
+    <span class="pp-toddler-art"><img src="${esc(thumbnailFor(game))}" alt="" loading="lazy"/></span>
+    <span class="pp-toddler-title">${esc(game.title)}</span>
+  </button>`;
+}
+
+function renderToddlerSpace() {
+  const games = ui.snapshot.catalog.filter((game) => game.contentRating === "toddler");
+  return `<div class="pp-toddler-space">
+    <section class="pp-toddler-hero">
+      <p class="pp-kicker">TODDLER SPACE</p>
+      <h2>Big buttons. Just tap to play.</h2>
+      <p>A simplified area for the youngest players: only Toddler-rated games, no chat, no voice, no multiplayer rooms, and no links off this screen.</p>
+    </section>
+    ${games.length ? `<div class="pp-toddler-grid">${games.map(toddlerCard).join("")}</div>` : empty("No toddler games yet", "Games rated Toddler will appear here automatically once they are published.")}
+  </div>`;
+}
+
+// Connection status derived purely from lastSeenAt age — no separate
+// heartbeat route. "Just now" = updated in the last 20s (join/leave/ready or
+// the polling loop's periodic ready-touch). "Reconnecting" = stale but still
+// inside the room's own reconnectGraceSeconds. "Away" = stale beyond that.
+function connectionStatusFor(participant, room) {
+  if (participant.status === "left") return { label: "Left", cls: "is-left" };
+  const lastSeenMs = Date.parse(participant.lastSeenAt || participant.joinedAt || 0);
+  const ageSeconds = Number.isFinite(lastSeenMs) ? Math.max(0, (Date.now() - lastSeenMs) / 1000) : Infinity;
+  const grace = Number(room.reconnectGraceSeconds) || 45;
+  if (ageSeconds < 20) return { label: "Just now", cls: "is-live" };
+  if (ageSeconds < grace) return { label: "Reconnecting", cls: "is-pending" };
+  return { label: "Away", cls: "is-away" };
+}
+
 function roomRoster(room) {
   const participants = Array.isArray(room.participants) ? room.participants : [];
-  return participants.length ? participants.map((participant) => `<span class="${participant.status === "online" ? "is-online" : ""}"><b>${esc(participant.label || "Player")}</b><i>${esc(participant.role === "host" ? "host" : participant.status)}</i></span>`).join("") : "<em>No players joined yet.</em>";
+  if (!participants.length) return "<em>No players joined yet.</em>";
+  return participants.map((participant) => {
+    const ready = room.readyStates?.[participant.actorId] === true;
+    const isMe = participant.actorId === ui.snapshot.actorId;
+    const conn = connectionStatusFor(participant, room);
+    return `<span class="pp-roster-row ${participant.status === "online" ? "is-online" : ""}">
+      <b>${esc(participant.label || "Player")}</b>
+      <i>${esc(participant.role === "host" ? "host" : participant.status)}</i>
+      <em class="pp-conn-dot ${conn.cls}" title="Connection: ${esc(conn.label)}">${esc(conn.label)}</em>
+      ${isMe
+        ? `<button type="button" class="pp-ready-toggle ${ready ? "is-ready" : ""}" data-pp-room-ready="${esc(room.code)}" data-pp-ready-next="${ready ? "0" : "1"}">${ready ? "Ready ✓" : "Set ready"}</button>`
+        : `<span class="pp-ready-badge ${ready ? "is-ready" : ""}">${ready ? "Ready" : "Not ready"}</span>`}
+    </span>`;
+  }).join("");
+}
+
+function hostControlsMarkup(room) {
+  const isHost = room.hostActorId === ui.snapshot.actorId;
+  const controls = room.hostControls || { allowBotFill: false, maxHumans: room.maxPlayers };
+  if (!isHost) {
+    return `<div class="pp-room-hostctl is-readonly"><span>Bot fill ${controls.allowBotFill ? "on" : "off"}</span><span>Max humans ${esc(controls.maxHumans)}</span></div>`;
+  }
+  return `<div class="pp-room-hostctl">
+    <label class="pp-switch"><input type="checkbox" data-pp-room-botfill="${esc(room.code)}" ${controls.allowBotFill ? "checked" : ""}/><span></span>Allow bot fill</label>
+    <label>Max humans<input type="number" min="1" max="${esc(room.maxPlayers)}" value="${esc(controls.maxHumans)}" data-pp-room-maxhumans="${esc(room.code)}"/></label>
+  </div>`;
+}
+
+function botSlotsMarkup(room) {
+  const slots = Array.isArray(room.botSlots) ? room.botSlots : [];
+  if (!slots.length) return "";
+  return `<div class="pp-room-botslots">${slots.map((slot) => `<span class="pp-bot-chip">Bot · ${esc(slot.difficulty || "standard")}</span>`).join("")}</div>`;
 }
 
 function roomCard(room) {
@@ -378,7 +490,9 @@ function roomCard(room) {
     <header><div><p class="pp-kicker">${room.mode === "classroom" ? "CLASSROOM ROOM" : "FRIENDS ROOM"}</p><h3>${esc(room.gameTitle)}</h3></div><strong>${esc(room.code)}</strong></header>
     <p>Workspace-only room. Share the short code with people who are signed into the same workspace.</p>
     <div class="pp-room-roster">${roomRoster(room)}</div>
-    <div class="pp-room-actions"><button type="button" class="pp-primary" data-pp-room-play="${esc(room.gameId)}">${icon("play")} Launch game</button><button type="button" class="pp-secondary" data-pp-copy-room="${esc(room.code)}">Copy code</button><button type="button" class="pp-secondary" data-pp-room-leave="${esc(room.code)}">Leave</button></div>
+    ${hostControlsMarkup(room)}
+    ${botSlotsMarkup(room)}
+    <div class="pp-room-actions"><button type="button" class="pp-primary" data-pp-room-play="${esc(room.gameId)}" data-pp-room-code="${esc(room.code)}">${icon("play")} Launch game</button><button type="button" class="pp-secondary" data-pp-copy-room="${esc(room.code)}">Copy code</button><button type="button" class="pp-secondary" data-pp-room-leave="${esc(room.code)}">Leave</button></div>
   </article>`;
 }
 
@@ -499,9 +613,41 @@ function renderAdmin() {
   return `<section class="pp-admin"><div class="pp-section-head"><div><h2>Sandbox safety review</h2><p>Approve only playable builds that pass the PhantomPlay security, content, and quality checklist.</p></div><span>${ui.snapshot.submissions.length} builds</span></div><div class="pp-submission-list">${ui.snapshot.submissions.length ? ui.snapshot.submissions.map((item) => submissionCard(item, true)).join("") : empty("Queue clear", "No developer builds are waiting.")}</div></section>`;
 }
 
+// Game Rating Exposure — per-tier toggles + presets, calling PATCH
+// /api/phantomplay/profile ({preferences:{allowedRatings}}, guardianPin?)
+// per server/src/phantom-ai/phantomplay.ts updatePhantomPlayProfile. A
+// guardian PIN field appears whenever this profile has an enabled guardian
+// lock and isn't an adult profile — the server enforces the PIN; the client
+// only needs to collect and forward it.
+function ratingExposureMarkup() {
+  const snapshot = ui.snapshot;
+  const allowed = new Set(Array.isArray(snapshot.preferences.allowedRatings) ? snapshot.preferences.allowedRatings : ALL_RATING_VALUES);
+  const profileType = snapshot.profileType || "adult";
+  const guardianEnabled = !!snapshot.guardianLock?.enabled;
+  const needsPin = guardianEnabled && profileType !== "adult";
+  return `<div class="pp-rating-exposure">
+    <h3>Game Rating Exposure</h3>
+    <p>Choose exactly which content tiers can appear in this profile's catalog.</p>
+    ${needsPin ? `<label>Guardian PIN<input type="password" inputmode="numeric" maxlength="32" data-pp-exposure-pin placeholder="Required to change exposure"/></label>` : ""}
+    <div class="pp-rating-toggles">${RATING_TIERS.map(([value, label]) => `<label class="pp-switch"><input type="checkbox" data-pp-rating-toggle="${value}" ${allowed.has(value) ? "checked" : ""} ${ui.ratingBusy ? "disabled" : ""}/><span></span>${esc(label)}</label>`).join("")}</div>
+    <div class="pp-rating-presets">
+      <button type="button" data-pp-rating-preset="my-age" ${ui.ratingBusy ? "disabled" : ""}>My age</button>
+      <button type="button" data-pp-rating-preset="family" ${ui.ratingBusy ? "disabled" : ""}>Family Friendly Only</button>
+      <button type="button" data-pp-rating-preset="all" ${ui.ratingBusy ? "disabled" : ""}>Show All Allowed Ratings</button>
+    </div>
+    <label>Profile type<select data-pp-profile-type><option value="adult" ${profileType === "adult" ? "selected" : ""}>Adult</option><option value="child" ${profileType === "child" ? "selected" : ""}>Child</option><option value="toddler" ${profileType === "toddler" ? "selected" : ""}>Toddler</option></select></label>
+    <div class="pp-guardian-lock">
+      <label class="pp-switch"><input type="checkbox" data-pp-guardian-enabled ${guardianEnabled ? "checked" : ""}/><span></span>Guardian PIN lock</label>
+      <p>When on, a PIN is required to widen this profile's rating exposure or change its profile type.</p>
+      <div class="pp-guardian-pin-row"><input type="password" inputmode="numeric" maxlength="32" data-pp-guardian-pin-input placeholder="${guardianEnabled ? "Current PIN, to change" : "Set a PIN (4+ digits)"}"/><button type="button" data-pp-guardian-save>Save</button></div>
+    </div>
+    ${ui.guardianMessage ? `<p class="pp-guardian-note">${esc(ui.guardianMessage)}</p>` : ""}
+  </div>`;
+}
+
 function settingsMarkup() {
   const p = ui.snapshot.preferences;
-  return `<aside class="pp-settings ${ui.settingsOpen ? "is-open" : ""}" ${ui.settingsOpen ? "" : "hidden"}><header><div><p class="pp-kicker">PLAY SETTINGS</p><h2>Your break, your limits.</h2></div><button data-pp-settings-close aria-label="Close settings">×</button></header><label>Content allowed<select data-pp-pref="contentRating"><option value="everyone" ${p.contentRating === "everyone" ? "selected" : ""}>Everyone</option><option value="teen" ${p.contentRating === "teen" ? "selected" : ""}>Teen</option><option value="mature" ${p.contentRating === "mature" ? "selected" : ""}>Mature</option></select></label><label class="pp-switch"><input type="checkbox" data-pp-pref="sound" ${p.sound ? "checked" : ""}/><span></span>Sound</label><label class="pp-switch"><input type="checkbox" data-pp-pref="reducedMotion" ${p.reducedMotion ? "checked" : ""}/><span></span>Reduce motion</label><label class="pp-switch"><input type="checkbox" data-pp-pref="allowCommunityGames" ${p.allowCommunityGames ? "checked" : ""}/><span></span>Show reviewed prototypes</label><p>PhantomPlay never changes your work, agents, files, or business data while you play.</p></aside>`;
+  return `<aside class="pp-settings ${ui.settingsOpen ? "is-open" : ""}" ${ui.settingsOpen ? "" : "hidden"}><header><div><p class="pp-kicker">PLAY SETTINGS</p><h2>Your break, your limits.</h2></div><button data-pp-settings-close aria-label="Close settings">×</button></header><label>Content allowed<select data-pp-pref="contentRating"><option value="everyone" ${p.contentRating === "everyone" ? "selected" : ""}>Everyone</option><option value="teen" ${p.contentRating === "teen" ? "selected" : ""}>Teen</option><option value="mature" ${p.contentRating === "mature" ? "selected" : ""}>Mature</option></select></label><label class="pp-switch"><input type="checkbox" data-pp-pref="sound" ${p.sound ? "checked" : ""}/><span></span>Sound</label><label class="pp-switch"><input type="checkbox" data-pp-pref="reducedMotion" ${p.reducedMotion ? "checked" : ""}/><span></span>Reduce motion</label><label class="pp-switch"><input type="checkbox" data-pp-pref="allowCommunityGames" ${p.allowCommunityGames ? "checked" : ""}/><span></span>Show reviewed prototypes</label>${ratingExposureMarkup()}<p>PhantomPlay never changes your work, agents, files, or business data while you play.</p></aside>`;
 }
 
 function engineFor(game) {
@@ -523,18 +669,20 @@ function render() {
     return;
   }
   const snapshot = ui.snapshot || offlineState();
-  const tabs = [["home", "Sandbox"], ["library", "Play Lab"], ["together", "Playtest Rooms"], ["favorites", "Saved"], ["developer", "Dev Rooms"], ...(snapshot.access.canModerate ? [["admin", "Safety Review"]] : [])];
-  const content = ui.tab === "library" ? renderLibrary() : ui.tab === "together" ? renderTogether() : ui.tab === "favorites" ? renderFavorites() : ui.tab === "developer" ? renderDeveloper() : ui.tab === "admin" ? renderAdmin() : renderHome();
-  mountedRoot.innerHTML = `<div class="pp-shell">
-    <header class="pp-top"><div><p class="pp-kicker">PHANTOMFORCE GAME SANDBOX</p><h1>PhantomPlay</h1><span>Play, build, test, and return to work sharper.</span></div><div><span class="pp-access ${snapshot.access.enabled ? "is-ready" : "is-blocked"}">${snapshot.access.enabled ? esc(playTimeLabel(snapshot.access.remainingMinutesToday)) : "Plan restricted"}</span><button class="pp-settings-button" data-pp-settings aria-label="Play settings">${icon("settings")}</button></div></header>
+  const tabs = [["home", "Sandbox"], ["library", "Play Lab"], ["together", "Playtest Rooms"], ["favorites", "Saved"], ["toddler", "Toddler Space"], ["developer", "Dev Rooms"], ...(snapshot.access.canModerate ? [["admin", "Safety Review"]] : [])];
+  const isToddlerTab = ui.tab === "toddler";
+  const content = ui.tab === "library" ? renderLibrary() : ui.tab === "together" ? renderTogether() : ui.tab === "favorites" ? renderFavorites() : isToddlerTab ? renderToddlerSpace() : ui.tab === "developer" ? renderDeveloper() : ui.tab === "admin" ? renderAdmin() : renderHome();
+  mountedRoot.innerHTML = `<div class="pp-shell ${isToddlerTab ? "pp-shell-toddler" : ""}">
+    <header class="pp-top"><div><p class="pp-kicker">PHANTOMFORCE GAME SANDBOX</p><h1>PhantomPlay</h1><span>Play, build, test, and return to work sharper.</span></div><div><span class="pp-access ${snapshot.access.enabled ? "is-ready" : "is-blocked"}">${snapshot.access.enabled ? esc(playTimeLabel(snapshot.access.remainingMinutesToday)) : "Plan restricted"}</span>${isToddlerTab ? "" : `<button class="pp-settings-button" data-pp-settings aria-label="Play settings">${icon("settings")}</button>`}</div></header>
     ${ui.offline ? `<div class="pp-banner is-offline"><b>Offline mode</b><span>Built-in games still work. Favorites and progress will sync after the server returns.</span><button data-pp-retry>Retry</button></div>` : ""}
     ${ui.error && !ui.offline ? `<div class="pp-banner is-error"><b>PhantomPlay needs attention</b><span>${esc(ui.error)}</span><button data-pp-retry>Retry</button></div>` : ""}
     ${ui.notice ? `<div class="pp-banner is-notice"><b>Creator support</b><span>${esc(ui.notice)}</span><button data-pp-clear-notice>OK</button></div>` : ""}
     <nav class="pp-tabs" aria-label="PhantomPlay sections">${tabs.map(([id, label]) => `<button type="button" class="${ui.tab === id ? "is-active" : ""}" data-pp-tab="${id}">${esc(label)}</button>`).join("")}</nav>
     <main class="pp-content">${snapshot.access.enabled ? content : empty("PhantomPlay is unavailable", "This optional workspace module is separate from core PhantomForce operations. Ask a workspace owner to enable access if your team uses it.")}</main>
-    ${settingsMarkup()}${playerMarkup()}
+    ${isToddlerTab ? "" : settingsMarkup()}${playerMarkup()}
   </div>`;
   bind();
+  syncRoomPolling();
 }
 
 async function updateFavorite(gameId) {
@@ -555,18 +703,76 @@ async function updatePreferences() {
   } catch (error) { ui.error = error.message; render(); }
 }
 
+// PATCH /api/phantomplay/profile with an optional guardianPin — the same
+// shape/route updatePhantomPlayProfile (server) already accepts. A guardian
+// PIN is only ever read from the DOM at call time (never cached in `ui`), so
+// each attempt requires re-entering it.
+function guardianPinFromDom() {
+  return mountedRoot?.querySelector("[data-pp-exposure-pin]")?.value.trim() || undefined;
+}
+
+async function applyRatingExposure(nextRatings) {
+  if (ui.offline) { ui.guardianMessage = "Rating exposure needs the PhantomForce server."; render(); return; }
+  ui.ratingBusy = true;
+  render();
+  try {
+    const payload = await api("/api/phantomplay/profile", { method: "PATCH", body: JSON.stringify({ tenantId: currentTenantId(), preferences: { allowedRatings: nextRatings }, guardianPin: guardianPinFromDom() }) });
+    ui.snapshot.preferences = payload.preferences;
+    ui.guardianMessage = "";
+  } catch (error) {
+    ui.guardianMessage = error.message;
+  } finally {
+    ui.ratingBusy = false;
+    render();
+  }
+}
+
+async function applyProfileType(nextType) {
+  if (ui.offline) { ui.guardianMessage = "Profile type needs the PhantomForce server."; render(); return; }
+  ui.ratingBusy = true;
+  render();
+  try {
+    const payload = await api("/api/phantomplay/profile", { method: "PATCH", body: JSON.stringify({ tenantId: currentTenantId(), profileType: nextType, guardianPin: guardianPinFromDom() }) });
+    ui.snapshot.profileType = payload.profileType;
+    ui.snapshot.preferences = payload.preferences;
+    ui.guardianMessage = "";
+  } catch (error) {
+    ui.guardianMessage = error.message;
+  } finally {
+    ui.ratingBusy = false;
+    render();
+  }
+}
+
+async function saveGuardianLock() {
+  const checkbox = mountedRoot?.querySelector("[data-pp-guardian-enabled]");
+  const pinInput = mountedRoot?.querySelector("[data-pp-guardian-pin-input]");
+  const nextEnabled = !!checkbox?.checked;
+  const pin = pinInput?.value.trim() || "";
+  if (nextEnabled && pin && pin.length < 4) { ui.guardianMessage = "Choose a PIN with at least 4 digits."; render(); return; }
+  if (ui.offline) { ui.guardianMessage = "Guardian lock needs the PhantomForce server."; render(); return; }
+  try {
+    const payload = await api("/api/phantomplay/profile", { method: "PATCH", body: JSON.stringify({ tenantId: currentTenantId(), guardianLock: { enabled: nextEnabled, pin: pin || undefined }, guardianPin: guardianPinFromDom() }) });
+    ui.snapshot.guardianLock = payload.guardianLock;
+    ui.guardianMessage = nextEnabled ? "Guardian PIN saved." : "Guardian PIN lock turned off.";
+  } catch (error) {
+    ui.guardianMessage = error.message;
+  }
+  render();
+}
+
 function offlinePlay(game) {
   const play = { id: `offline-${Date.now()}`, gameId: game.id, startedAt: new Date().toISOString(), seconds: 0, score: null, progress: historyFor(game.id)?.progress || 0 };
   return { game, play };
 }
 
-async function launch(gameId) {
+async function launch(gameId, opts = {}) {
   if (!gameId) return;
   const game = ui.snapshot.catalog.find((item) => item.id === gameId);
   if (!game?.launchUrl) { ui.error = "This game is not available to play yet."; render(); return; }
   try {
     const result = ui.offline ? offlinePlay(game) : await api("/api/phantomplay/plays", { method: "POST", body: JSON.stringify({ tenantId: currentTenantId(), gameId }) });
-    ui.player = { game: result.game || game, play: result.play };
+    ui.player = { game: result.game || game, play: result.play, roomCode: opts.roomCode || null };
     ui.playerReady = false;
     ui.playerPaused = false;
     playTickAt = Date.now();
@@ -574,6 +780,97 @@ async function launch(gameId) {
     startClock();
     armReadyWatchdog();
   } catch (error) { ui.error = error.message; render(); }
+}
+
+// ---- Private rooms: live sync ----
+// Rooms used to refresh only via a full hydrate() after create/join/leave.
+// Now those actions apply the room the server already handed back directly
+// (no extra round trip), and this polling loop is the ongoing live-sync
+// mechanism — it keeps roster/ready-states/matchState current for as long as
+// a room view (the "together" tab, or an active room-launched game) is open.
+function roomsViewOpen() {
+  return ui.tab === "together" || !!ui.player?.roomCode;
+}
+
+function activeRoomCodes() {
+  const fromList = (ui.snapshot?.rooms || []).map((room) => room.code).filter(Boolean);
+  const fromPlayer = ui.player?.roomCode ? [ui.player.roomCode] : [];
+  return [...new Set([...fromList, ...fromPlayer])];
+}
+
+function upsertRoom(room) {
+  if (!room || !ui.snapshot) return;
+  const idx = ui.snapshot.rooms.findIndex((item) => item.code === room.code);
+  if (idx >= 0) ui.snapshot.rooms[idx] = room; else ui.snapshot.rooms.unshift(room);
+}
+
+async function pollRooms() {
+  if (!roomsViewOpen() || ui.offline) { stopRoomPolling(); return; }
+  roomPollTicks += 1;
+  const codes = activeRoomCodes();
+  if (!codes.length) return;
+  let listChanged = false;
+  for (const code of codes) {
+    let room;
+    try {
+      const result = await api(`/api/phantomplay/rooms/${encodeURIComponent(code)}?tenant_id=${encodeURIComponent(currentTenantId())}`);
+      room = result.room;
+    } catch {
+      continue; // transient poll failure — try again next tick
+    }
+    if (!room) continue;
+    const previous = ui.snapshot.rooms.find((item) => item.code === code);
+    const changed = JSON.stringify(previous) !== JSON.stringify(room);
+    upsertRoom(room);
+    if (changed) {
+      if (!ui.player) listChanged = true;
+      if (ui.player?.roomCode === code) pushMatchStateToGame(room);
+    }
+    if (roomPollTicks % ROOM_POLL_TOUCH_EVERY === 0) {
+      const myReady = room.readyStates?.[ui.snapshot.actorId] === true;
+      api(`/api/phantomplay/rooms/${encodeURIComponent(code)}/ready`, { method: "PATCH", body: JSON.stringify({ tenantId: currentTenantId(), ready: myReady }) }).catch(() => {});
+    }
+  }
+  // Never call render() while a game iframe is mounted — it would rebuild
+  // the <iframe> element and reload the game. Only the roster/room-list
+  // view (no iframe present) is safe to re-render from the poll.
+  if (listChanged && ui.tab === "together" && !ui.player) render();
+}
+
+function startRoomPolling() {
+  if (roomPollTimer) return;
+  roomPollTicks = 0;
+  roomPollTimer = setInterval(pollRooms, ROOM_POLL_MS);
+}
+
+function stopRoomPolling() {
+  clearInterval(roomPollTimer);
+  roomPollTimer = null;
+}
+
+function syncRoomPolling() {
+  if (roomsViewOpen() && !ui.offline) startRoomPolling();
+  else stopRoomPolling();
+}
+
+async function toggleRoomReady(code, ready) {
+  try {
+    const result = await api(`/api/phantomplay/rooms/${encodeURIComponent(code)}/ready`, { method: "PATCH", body: JSON.stringify({ tenantId: currentTenantId(), ready }) });
+    upsertRoom(result.room);
+  } catch (error) {
+    ui.roomMessage = `Blocked: ${error.message}`;
+  }
+  render();
+}
+
+async function updateHostControls(code, patch) {
+  try {
+    const result = await api(`/api/phantomplay/rooms/${encodeURIComponent(code)}/match-state`, { method: "PATCH", body: JSON.stringify({ tenantId: currentTenantId(), hostControls: patch }) });
+    upsertRoom(result.room);
+  } catch (error) {
+    ui.roomMessage = `Blocked: ${error.message}`;
+  }
+  render();
 }
 
 async function createPrivateRoom(form) {
@@ -586,10 +883,9 @@ async function createPrivateRoom(form) {
     ui.roomMode = result.room?.mode || ui.roomMode;
     ui.roomGameId = result.room?.gameId || ui.roomGameId;
     ui.roomMessage = `Room ${result.room?.code || ""} is ready. Share the code only with signed-in people in this workspace.`;
-    await hydrate();
+    upsertRoom(result.room);
   } catch (error) {
     ui.roomMessage = `Blocked: ${error.message}`;
-    render();
   } finally {
     ui.roomBusy = false;
     render();
@@ -606,10 +902,9 @@ async function joinPrivateRoom(form) {
   try {
     const result = await api(`/api/phantomplay/rooms/${encodeURIComponent(code)}/join`, { method: "POST", body: JSON.stringify({ tenantId: currentTenantId() }) });
     ui.roomMessage = `Joined room ${result.room?.code || code}. Launch the game when your group is ready.`;
-    await hydrate();
+    upsertRoom(result.room);
   } catch (error) {
     ui.roomMessage = `Blocked: ${error.message}`;
-    render();
   } finally {
     ui.roomBusy = false;
     render();
@@ -618,13 +913,14 @@ async function joinPrivateRoom(form) {
 
 async function leavePrivateRoom(code) {
   try {
-    await api(`/api/phantomplay/rooms/${encodeURIComponent(code)}/leave`, { method: "POST", body: JSON.stringify({ tenantId: currentTenantId() }) });
+    const result = await api(`/api/phantomplay/rooms/${encodeURIComponent(code)}/leave`, { method: "POST", body: JSON.stringify({ tenantId: currentTenantId() }) });
     ui.roomMessage = `Left room ${code}.`;
-    await hydrate();
+    upsertRoom(result.room);
+    if (ui.player?.roomCode === code) ui.player.roomCode = null;
   } catch (error) {
     ui.roomMessage = `Blocked: ${error.message}`;
-    render();
   }
+  render();
 }
 
 function startClock() {
@@ -661,10 +957,53 @@ async function closePlayer() {
   render();
 }
 
-function postToGame(type, options = {}) {
+// `data` may include `focus: false` to skip stealing focus (e.g. a
+// background match-state push); every other key is spread onto the posted
+// message as-is.
+function postToGame(type, data = {}) {
+  const { focus, ...payload } = data;
   const frame = mountedRoot?.querySelector("[data-pp-frame]");
-  frame?.contentWindow?.postMessage({ source: "phantomplay-host", type, engine: ui.player ? engineFor(ui.player.game) : PHANTOMPLAY_ENGINE }, "*");
-  if (options.focus !== false) frame?.focus?.({ preventScroll: true });
+  frame?.contentWindow?.postMessage({ source: "phantomplay-host", type, engine: ui.player ? engineFor(ui.player.game) : PHANTOMPLAY_ENGINE, ...payload }, "*");
+  if (focus !== false) frame?.focus?.({ preventScroll: true });
+}
+
+// host -> game "match-state": the host pushes the latest polled matchState +
+// readyStates + botSlots (+ hostControls, for a game that wants to react to
+// bot-fill/maxHumans) down to the active iframe whenever the room changes.
+function pushMatchStateToGame(room) {
+  if (!ui.player) return;
+  postToGame("match-state", {
+    matchState: room.matchState ?? null,
+    readyStates: room.readyStates || {},
+    botSlots: room.botSlots || [],
+    hostControls: room.hostControls || null,
+    participants: room.participants || [],
+    focus: false,
+  });
+}
+
+// game -> host "match-action": a game reports a player's local action. Only
+// the current room host may write authoritative matchState server-side
+// (updatePhantomPlayRoomMatchState enforces this), so a non-host participant's
+// action has no transport to reach the true host today — it is intentionally
+// dropped here rather than attempted-and-rejected on every keystroke. Games
+// built against this contract should treat matchState (pushed back down via
+// "match-state") as the source of truth, not their own local action echo.
+async function handleMatchAction(action, mode) {
+  const roomCode = ui.player?.roomCode;
+  if (!roomCode) return;
+  const room = ui.snapshot.rooms.find((item) => item.code === roomCode);
+  if (!room || room.hostActorId !== ui.snapshot.actorId) return;
+  try {
+    const result = await api(`/api/phantomplay/rooms/${encodeURIComponent(roomCode)}/match-state`, { method: "PATCH", body: JSON.stringify({ tenantId: currentTenantId(), matchState: action, mode: mode === "replace" ? "replace" : "merge" }) });
+    if (result.room) {
+      upsertRoom(result.room);
+      pushMatchStateToGame(result.room);
+    }
+  } catch {
+    // Rate-limited (max 10 match-state writes / 2s / room) or transiently
+    // blocked — the next poll tick resyncs authoritative state either way.
+  }
 }
 
 function togglePlayerPause() {
@@ -702,6 +1041,10 @@ function onGameMessage(event) {
     mountedRoot.querySelector(".pp-player-loading")?.setAttribute("hidden", "");
     frame.contentWindow?.postMessage({ source: "phantomplay-host", type: "settings", sound: ui.snapshot.preferences.sound, reducedMotion: ui.snapshot.preferences.reducedMotion, engine: engineFor(ui.player.game) }, "*");
     frame.focus?.({ preventScroll: true });
+    if (ui.player.roomCode) {
+      const room = ui.snapshot.rooms.find((item) => item.code === ui.player.roomCode);
+      if (room) pushMatchStateToGame(room);
+    }
   }
   if (event.data.type === "paused") {
     ui.playerPaused = !!event.data.paused;
@@ -715,6 +1058,9 @@ function onGameMessage(event) {
     const score = mountedRoot.querySelector("[data-pp-live-score]");
     if (score && detail.score !== undefined) score.textContent = `Score ${detail.score}`;
     persistPlay(event.data.type === "complete", detail);
+  }
+  if (event.data.type === "match-action") {
+    handleMatchAction(event.data.action, event.data.mode);
   }
 }
 
@@ -816,8 +1162,19 @@ function bind() {
   mountedRoot.querySelector("[data-pp-join-room-form]")?.addEventListener("submit", (event) => { event.preventDefault(); joinPrivateRoom(event.currentTarget); });
   mountedRoot.querySelector("[data-pp-room-clear]")?.addEventListener("click", () => { ui.roomMessage = ""; render(); });
   mountedRoot.querySelectorAll("[data-pp-copy-room]").forEach((button) => button.onclick = async () => { try { await navigator.clipboard?.writeText(button.dataset.ppCopyRoom || ""); ui.roomMessage = `Room ${button.dataset.ppCopyRoom} code copied locally.`; } catch { ui.roomMessage = `Room code: ${button.dataset.ppCopyRoom}`; } render(); });
-  mountedRoot.querySelectorAll("[data-pp-room-play]").forEach((button) => button.onclick = () => launch(button.dataset.ppRoomPlay));
+  mountedRoot.querySelectorAll("[data-pp-room-play]").forEach((button) => button.onclick = () => launch(button.dataset.ppRoomPlay, { roomCode: button.dataset.ppRoomCode }));
   mountedRoot.querySelectorAll("[data-pp-room-leave]").forEach((button) => button.onclick = () => leavePrivateRoom(button.dataset.ppRoomLeave));
+  mountedRoot.querySelectorAll("[data-pp-room-ready]").forEach((button) => button.onclick = () => toggleRoomReady(button.dataset.ppRoomReady, button.dataset.ppReadyNext === "1"));
+  mountedRoot.querySelectorAll("[data-pp-room-botfill]").forEach((input) => input.onchange = () => updateHostControls(input.dataset.ppRoomBotfill, { allowBotFill: input.checked }));
+  mountedRoot.querySelectorAll("[data-pp-room-maxhumans]").forEach((input) => input.onchange = () => updateHostControls(input.dataset.ppRoomMaxhumans, { maxHumans: Number(input.value) || 1 }));
+  mountedRoot.querySelectorAll("[data-pp-toddler-play]").forEach((button) => button.onclick = () => launch(button.dataset.ppToddlerPlay));
+  mountedRoot.querySelectorAll("[data-pp-rating-toggle]").forEach((input) => input.onchange = () => {
+    const next = [...mountedRoot.querySelectorAll("[data-pp-rating-toggle]:checked")].map((el) => el.dataset.ppRatingToggle);
+    applyRatingExposure(next);
+  });
+  mountedRoot.querySelectorAll("[data-pp-rating-preset]").forEach((button) => button.onclick = () => applyRatingExposure(ratingExposurePreset(button.dataset.ppRatingPreset, ui.snapshot.profileType || "adult")));
+  mountedRoot.querySelector("[data-pp-profile-type]")?.addEventListener("change", (event) => applyProfileType(event.target.value));
+  mountedRoot.querySelector("[data-pp-guardian-save]")?.addEventListener("click", saveGuardianLock);
   mountedRoot.querySelectorAll("[data-pp-open-dev]").forEach((button) => button.onclick = () => { ui.selectedDeveloperId = button.dataset.ppOpenDev; ui.developerMessage = ""; render(); });
   mountedRoot.querySelector("[data-pp-dev-back]")?.addEventListener("click", () => { ui.selectedDeveloperId = ""; ui.developerMessage = ""; render(); });
   mountedRoot.querySelector("[data-pp-dev-message-clear]")?.addEventListener("click", () => { ui.developerMessage = ""; render(); });
@@ -856,5 +1213,5 @@ export function renderPhantomPlay(root, opts = {}) {
   }
   render();
   hydrate();
-  return () => { clearInterval(playClock); document.body.classList.remove("phantomplay-playing"); mountedRoot = null; mountedOpts = null; };
+  return () => { clearInterval(playClock); stopRoomPolling(); document.body.classList.remove("phantomplay-playing"); mountedRoot = null; mountedOpts = null; };
 }

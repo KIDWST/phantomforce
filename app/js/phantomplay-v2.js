@@ -15,6 +15,21 @@ const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "
 const FALLBACK_KEY = "pf.phantomplay.offline.v1";
 const CATEGORIES = ["All", "Arcade", "Puzzle", "Focus", "Strategy", "Sports", "Creative"];
 const STATUSES = [["online", "Online"], ["away", "Away"], ["busy", "Busy"], ["invisible", "Invisible"]];
+// "Game Rating Exposure" — mirrors server PhantomPlayRating (phantomplay.ts).
+// Kept in sync by hand with defaultAllowedRatings() there; no server "give me
+// the default for my type" endpoint exists.
+const RATING_TIERS = [["toddler", "Toddler"], ["everyone", "Everyone"], ["everyone10", "Everyone 10+"], ["teen", "Teen"], ["mature", "Mature"]];
+const ALL_RATING_VALUES = RATING_TIERS.map(([value]) => value);
+function defaultAllowedRatingsFor(profileType) {
+  if (profileType === "toddler") return ["toddler", "everyone"];
+  if (profileType === "child") return ["toddler", "everyone", "everyone10", "teen"];
+  return [...ALL_RATING_VALUES];
+}
+function ratingExposurePreset(kind, profileType) {
+  if (kind === "my-age") return defaultAllowedRatingsFor(profileType);
+  if (kind === "family") return ["toddler", "everyone", "everyone10"];
+  return [...ALL_RATING_VALUES];
+}
 
 const ui = {
   tab: "home", loading: true, error: "", offline: false,
@@ -26,6 +41,7 @@ const ui = {
   statusChoice: "online", friendTarget: "",
   analytics: null, leaderboardGameId: "", leaderboard: null,
   policyDraft: null, policyMessage: "", assistMessage: "",
+  guardianMessage: "", ratingBusy: false,
 };
 
 let mountedRoot = null, playClock = null, playTickAt = 0, heartbeatClock = null, messageBound = false, keyboardBound = false;
@@ -58,7 +74,8 @@ function offlineState() {
     tenantId: currentTenantId(), actorId: "offline",
     access: { enabled: true, reason: "offline_built_ins", dailyMinuteLimit: 60, usedMinutesToday: 0, remainingMinutesToday: 60, canSubmitGames: false, canModerate: false },
     catalog: OFFLINE_GAMES, favorites: Array.isArray(saved.favorites) ? saved.favorites : [], history: Array.isArray(saved.history) ? saved.history : [],
-    preferences: { contentRating: "teen", sound: saved.sound !== false, reducedMotion: !!saved.reducedMotion, allowCommunityGames: true },
+    preferences: { contentRating: "teen", allowedRatings: [...ALL_RATING_VALUES], sound: saved.sound !== false, reducedMotion: !!saved.reducedMotion, allowCommunityGames: true },
+    profileType: "adult", guardianLock: { enabled: false },
     submissions: [], developerSpotlight: "Tak", approvedCommunityCount: 0,
   };
 }
@@ -179,6 +196,24 @@ function renderSolo() {
     <section class="pp2-lead"><h2>Solo</h2><p>Offline-capable games with cloud progress. Close anything mid-run — Terminal 2048 and Sudoku Signal restore the exact board on any device.</p></section>
     <div class="pp2-cats">${CATEGORIES.map((cat) => `<button type="button" class="${ui.category === cat ? "is-active" : ""}" data-pp2-cat="${esc(cat)}">${esc(cat)}</button>`).join("")}</div>
     ${games.length ? `<div class="pp2-grid pp2-grid-wide">${games.map((game) => card(game)).join("")}</div>` : empty("Nothing in this category", "Try another category.")}
+  </div>`;
+}
+
+/* ---- TODDLER SPACE ---- */
+// Its own destination, not a filter chip mixed into Solo/Library. Only
+// Toddler-rated games, big single-purpose cards, nothing else on the page —
+// no chat, no voice, no matchmaking, no external/outbound links.
+function toddlerCard(game) {
+  return `<button type="button" class="pp2-toddler-card" data-pp2-play="${esc(game.id)}">
+    <span class="pp2-toddler-art">${art(game)}</span>
+    <span class="pp2-toddler-title">${esc(game.title)}</span>
+  </button>`;
+}
+function renderToddlerSpace() {
+  const games = ui.snapshot.catalog.filter((game) => game.contentRating === "toddler");
+  return `<div class="pp2-toddler-space">
+    <section class="pp2-toddler-hero"><p class="pp2-kicker">TODDLER SPACE</p><h2>Big buttons. Just tap to play.</h2><p>Only Toddler-rated games live here — no chat, no voice, no multiplayer rooms, and no links off this screen.</p></section>
+    ${games.length ? `<div class="pp2-toddler-grid">${games.map(toddlerCard).join("")}</div>` : empty("No toddler games yet", "Games rated Toddler will appear here automatically once they are published.")}
   </div>`;
 }
 
@@ -363,7 +398,38 @@ function settingsMarkup() {
     <label class="pp2-check"><input type="checkbox" data-pp2-pref="sound" ${p.sound ? "checked" : ""}/> Sound</label>
     <label class="pp2-check"><input type="checkbox" data-pp2-pref="reducedMotion" ${p.reducedMotion ? "checked" : ""}/> Reduce motion</label>
     <label class="pp2-check"><input type="checkbox" data-pp2-pref="allowCommunityGames" ${p.allowCommunityGames ? "checked" : ""}/> Show community games</label>
+    ${ratingExposureMarkup()}
     <p class="pp2-fine">PhantomPlay never touches your work, agents, files, or business data.</p></aside>`;
+}
+
+// Game Rating Exposure — mirrors the V1 panel exactly against the same
+// PATCH /api/phantomplay/profile route (updatePhantomPlayProfile). A
+// guardian PIN field appears whenever this profile has an enabled guardian
+// lock and isn't an adult profile; the server enforces the PIN.
+function ratingExposureMarkup() {
+  const snapshot = ui.snapshot;
+  const allowed = new Set(Array.isArray(snapshot.preferences.allowedRatings) ? snapshot.preferences.allowedRatings : ALL_RATING_VALUES);
+  const profileType = snapshot.profileType || "adult";
+  const guardianEnabled = !!snapshot.guardianLock?.enabled;
+  const needsPin = guardianEnabled && profileType !== "adult";
+  return `<div class="pp2-rating-exposure">
+    <h3>Game Rating Exposure</h3>
+    <p class="pp2-fine">Choose exactly which content tiers can appear in this profile's catalog.</p>
+    ${needsPin ? `<label>Guardian PIN<input type="password" inputmode="numeric" maxlength="32" data-pp2-exposure-pin placeholder="Required to change exposure"/></label>` : ""}
+    <div class="pp2-rating-toggles">${RATING_TIERS.map(([value, label]) => `<label class="pp2-check"><input type="checkbox" data-pp2-rating-toggle="${value}" ${allowed.has(value) ? "checked" : ""} ${ui.ratingBusy ? "disabled" : ""}/> ${esc(label)}</label>`).join("")}</div>
+    <div class="pp2-rating-presets">
+      <button type="button" class="pp2-ghost" data-pp2-rating-preset="my-age" ${ui.ratingBusy ? "disabled" : ""}>My age</button>
+      <button type="button" class="pp2-ghost" data-pp2-rating-preset="family" ${ui.ratingBusy ? "disabled" : ""}>Family Friendly Only</button>
+      <button type="button" class="pp2-ghost" data-pp2-rating-preset="all" ${ui.ratingBusy ? "disabled" : ""}>Show All Allowed Ratings</button>
+    </div>
+    <label>Profile type<select data-pp2-profile-type><option value="adult" ${profileType === "adult" ? "selected" : ""}>Adult</option><option value="child" ${profileType === "child" ? "selected" : ""}>Child</option><option value="toddler" ${profileType === "toddler" ? "selected" : ""}>Toddler</option></select></label>
+    <div class="pp2-guardian-lock">
+      <label class="pp2-check"><input type="checkbox" data-pp2-guardian-enabled ${guardianEnabled ? "checked" : ""}/> Guardian PIN lock</label>
+      <p class="pp2-fine">When on, a PIN is required to widen this profile's rating exposure or change its profile type.</p>
+      <div class="pp2-guardian-pin-row"><input type="password" inputmode="numeric" maxlength="32" data-pp2-guardian-pin-input placeholder="${guardianEnabled ? "Current PIN, to change" : "Set a PIN (4+ digits)"}"/><button type="button" class="pp2-play" data-pp2-guardian-save>Save</button></div>
+    </div>
+    ${ui.guardianMessage ? `<p class="pp2-fine">${esc(ui.guardianMessage)}</p>` : ""}
+  </div>`;
 }
 function playerMarkup() {
   if (!ui.player) return "";
@@ -380,16 +446,17 @@ function render() {
   document.body.classList.toggle("phantomplay-playing", !!ui.player);
   if (ui.loading && !ui.snapshot) { mountedRoot.innerHTML = `<div class="pp2-shell">${skeletonRow("PhantomPlay")}</div>`; return; }
   const snapshot = ui.snapshot || offlineState();
-  const tabs = [["home", "Home"], ["solo", "Solo"], ["friends", "Friends"], ["workspace", "Workspace"], ["library", "Library"], ["developer", "Dev Hub"], ...(snapshot.access.canModerate ? [["admin", "Admin"]] : [])];
-  const view = { home: renderHome, solo: renderSolo, friends: renderFriends, workspace: renderWorkspace, library: renderLibrary, developer: renderDeveloper, admin: renderAdmin }[ui.tab] || renderHome;
-  mountedRoot.innerHTML = `<div class="pp2-shell">
+  const tabs = [["home", "Home"], ["solo", "Solo"], ["friends", "Friends"], ["workspace", "Workspace"], ["library", "Library"], ["toddler", "Toddler Space"], ["developer", "Dev Hub"], ...(snapshot.access.canModerate ? [["admin", "Admin"]] : [])];
+  const isToddlerTab = ui.tab === "toddler";
+  const view = { home: renderHome, solo: renderSolo, friends: renderFriends, workspace: renderWorkspace, library: renderLibrary, toddler: renderToddlerSpace, developer: renderDeveloper, admin: renderAdmin }[ui.tab] || renderHome;
+  mountedRoot.innerHTML = `<div class="pp2-shell ${isToddlerTab ? "pp2-shell-toddler" : ""}">
     <header class="pp2-top"><div><p class="pp2-kicker">PHANTOMFORCE ENTERTAINMENT</p><h1>PhantomPlay</h1><span>Work hard. Take a real break. Come back sharper.</span></div>
-      <div class="pp2-top-right"><span class="pp2-access ${snapshot.access.enabled ? "is-on" : "is-off"}">${snapshot.access.enabled ? esc(playTimeLabel(snapshot.access.remainingMinutesToday)) : "Plan restricted"}</span><button class="pp2-ghost" data-pp2-settings aria-label="Play settings">Settings</button><button class="pp2-ghost" data-pp2-classic title="Return to the classic PhantomPlay experience">Classic view</button></div></header>
+      <div class="pp2-top-right"><span class="pp2-access ${snapshot.access.enabled ? "is-on" : "is-off"}">${snapshot.access.enabled ? esc(playTimeLabel(snapshot.access.remainingMinutesToday)) : "Plan restricted"}</span>${isToddlerTab ? "" : `<button class="pp2-ghost" data-pp2-settings aria-label="Play settings">Settings</button>`}<button class="pp2-ghost" data-pp2-classic title="Return to the classic PhantomPlay experience">Classic view</button></div></header>
     ${ui.offline ? `<div class="pp2-banner"><b>Offline mode</b><span>Built-in games still work; saves sync when the server returns.</span><button data-pp2-retry>Retry</button></div>` : ""}
     ${ui.error && !ui.offline ? `<div class="pp2-banner is-error"><b>PhantomPlay needs attention</b><span>${esc(ui.error)}</span><button data-pp2-retry>Retry</button></div>` : ""}
     <nav class="pp2-tabs" aria-label="PhantomPlay experiences">${tabs.map(([id, label]) => `<button type="button" class="${ui.tab === id ? "is-active" : ""}" data-pp2-tab="${id}">${esc(label)}</button>`).join("")}</nav>
     <main class="pp2-content">${snapshot.access.enabled ? view() : empty("PhantomPlay is unavailable", "Ask your business owner to enable PhantomPlay for this plan.")}</main>
-    ${renderDetail()}${settingsMarkup()}${playerMarkup()}
+    ${isToddlerTab ? "" : `${renderDetail()}${settingsMarkup()}`}${playerMarkup()}
   </div>`;
   bind();
 }
@@ -555,6 +622,47 @@ async function updatePreferences() {
   } catch (error) { ui.error = error.message; render(); }
 }
 
+// A guardian PIN is only ever read from the DOM at call time (never cached
+// in `ui`), so each attempt requires re-entering it.
+function guardianPinFromDom() {
+  return mountedRoot?.querySelector("[data-pp2-exposure-pin]")?.value.trim() || undefined;
+}
+async function applyRatingExposure(nextRatings) {
+  if (ui.offline) { ui.guardianMessage = "Rating exposure needs the PhantomForce server."; render(); return; }
+  ui.ratingBusy = true; render();
+  try {
+    const payload = await api("/api/phantomplay/profile", { method: "PATCH", body: JSON.stringify({ tenantId: currentTenantId(), preferences: { allowedRatings: nextRatings }, guardianPin: guardianPinFromDom() }) });
+    ui.snapshot.preferences = payload.preferences;
+    ui.guardianMessage = "";
+  } catch (error) { ui.guardianMessage = error.message; }
+  finally { ui.ratingBusy = false; render(); }
+}
+async function applyProfileType(nextType) {
+  if (ui.offline) { ui.guardianMessage = "Profile type needs the PhantomForce server."; render(); return; }
+  ui.ratingBusy = true; render();
+  try {
+    const payload = await api("/api/phantomplay/profile", { method: "PATCH", body: JSON.stringify({ tenantId: currentTenantId(), profileType: nextType, guardianPin: guardianPinFromDom() }) });
+    ui.snapshot.profileType = payload.profileType;
+    ui.snapshot.preferences = payload.preferences;
+    ui.guardianMessage = "";
+  } catch (error) { ui.guardianMessage = error.message; }
+  finally { ui.ratingBusy = false; render(); }
+}
+async function saveGuardianLock() {
+  const checkbox = mountedRoot?.querySelector("[data-pp2-guardian-enabled]");
+  const pinInput = mountedRoot?.querySelector("[data-pp2-guardian-pin-input]");
+  const nextEnabled = !!checkbox?.checked;
+  const pin = pinInput?.value.trim() || "";
+  if (nextEnabled && pin && pin.length < 4) { ui.guardianMessage = "Choose a PIN with at least 4 digits."; render(); return; }
+  if (ui.offline) { ui.guardianMessage = "Guardian lock needs the PhantomForce server."; render(); return; }
+  try {
+    const payload = await api("/api/phantomplay/profile", { method: "PATCH", body: JSON.stringify({ tenantId: currentTenantId(), guardianLock: { enabled: nextEnabled, pin: pin || undefined }, guardianPin: guardianPinFromDom() }) });
+    ui.snapshot.guardianLock = payload.guardianLock;
+    ui.guardianMessage = nextEnabled ? "Guardian PIN saved." : "Guardian PIN lock turned off.";
+  } catch (error) { ui.guardianMessage = error.message; }
+  render();
+}
+
 /* ---- bind ---- */
 function bind() {
   const on = (selector, event, handler) => mountedRoot.querySelectorAll(selector).forEach((el) => el.addEventListener(event, handler));
@@ -569,6 +677,13 @@ function bind() {
   on("[data-pp2-settings]", "click", () => { ui.settingsOpen = true; render(); });
   on("[data-pp2-settings-close]", "click", () => { ui.settingsOpen = false; render(); });
   mountedRoot.querySelectorAll("[data-pp2-pref]").forEach((input) => input.onchange = () => { ui.snapshot.preferences[input.dataset.pp2Pref] = input.type === "checkbox" ? input.checked : input.value; updatePreferences(); });
+  mountedRoot.querySelectorAll("[data-pp2-rating-toggle]").forEach((input) => input.onchange = () => {
+    const next = [...mountedRoot.querySelectorAll("[data-pp2-rating-toggle]:checked")].map((el) => el.dataset.pp2RatingToggle);
+    applyRatingExposure(next);
+  });
+  mountedRoot.querySelectorAll("[data-pp2-rating-preset]").forEach((b) => b.onclick = () => applyRatingExposure(ratingExposurePreset(b.dataset.pp2RatingPreset, ui.snapshot.profileType || "adult")));
+  on("[data-pp2-profile-type]", "change", (e) => applyProfileType(e.target.value));
+  on("[data-pp2-guardian-save]", "click", saveGuardianLock);
   on("[data-pp2-status]", "change", (e) => { ui.statusChoice = e.target.value; heartbeat(); });
   mountedRoot.querySelectorAll("[data-pp2-befriend]").forEach((b) => b.onclick = () => friendAction(b.dataset.pp2Befriend, "request"));
   mountedRoot.querySelectorAll("[data-pp2-accept]").forEach((b) => b.onclick = () => friendAction(b.dataset.pp2Accept, "accept"));

@@ -1,0 +1,1348 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:; connect-src 'none'; media-src 'none'; frame-src 'none'"><title>Kingdom Breakers</title>
+<style>
+/* Kingdom Breakers — original visual identity: charcoal-indigo battlefield,
+   copper/amber siege-engine accent, teal readouts, ember-red danger state.
+   No external fonts/images — system-ui + canvas-drawn art only. */
+*{box-sizing:border-box}
+:root{
+  --bg0:#0a0d13; --bg1:#121826; --panel:#161d2c; --panel2:#1d2538;
+  --line:#2a3350; --copper:#f0a24a; --copper-dim:#c97f2f; --teal:#3fe0c5;
+  --ember:#ff5d5d; --gold:#ffd479; --ink:#eef2fb; --ink-dim:#9aa7c7;
+}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:var(--bg0);color:var(--ink);
+  font-family:system-ui,-apple-system,"Segoe UI",sans-serif;-webkit-tap-highlight-color:transparent;user-select:none}
+body{position:fixed;inset:0}
+#stage{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
+
+.screen{position:absolute;inset:0;display:grid;place-items:center;background:radial-gradient(circle at 50% 20%,#182238 0%,#0a0d13 70%);
+  padding:16px;z-index:20;overflow:auto}
+.screen[hidden]{display:none}
+.kicker{margin:0 0 6px;font:800 11px/1 ui-monospace,monospace;letter-spacing:2px;color:var(--teal);text-transform:uppercase}
+h1{margin:0 0 6px;font-size:clamp(28px,7vw,44px);letter-spacing:1px;color:var(--gold);text-shadow:0 0 26px #f0a24a55}
+h2{margin:0 0 10px;color:var(--gold);font-size:22px}
+.tag{margin:0 0 18px;color:var(--ink-dim);font-size:14px;line-height:1.5;max-width:440px}
+
+.boot-card{text-align:center}
+.boot-spin{width:34px;height:34px;margin:18px auto 0;border-radius:50%;border:3px solid #ffffff22;
+  border-top-color:var(--copper);animation:spin 0.9s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.menu-card,.map-card,.tutorial-card,.pause-card,.results-card,.party-card{
+  width:min(560px,94vw);max-height:94vh;overflow:auto;background:linear-gradient(180deg,var(--panel),var(--bg1));
+  border:1px solid var(--line);border-radius:18px;padding:26px 24px;text-align:center;box-shadow:0 20px 60px #00000066}
+.menu-actions{display:flex;flex-direction:column;gap:10px;margin:6px 0 18px}
+.btn{border:1px solid var(--line);background:var(--panel2);color:var(--ink);border-radius:12px;padding:12px 16px;
+  font:700 14px system-ui;cursor:pointer;display:flex;flex-direction:column;gap:2px;align-items:flex-start;text-align:left;width:100%}
+.btn span{font-weight:500;font-size:12px;color:var(--ink-dim)}
+.btn:hover{border-color:var(--copper)}
+.btn:active{transform:scale(.98)}
+.btn-primary{background:linear-gradient(180deg,var(--copper),var(--copper-dim));border-color:var(--copper);color:#25150a}
+.btn-primary span{color:#3a2411}
+.btn-text{background:transparent;border:0;color:var(--ink-dim);font:700 13px system-ui;cursor:pointer;padding:8px}
+.btn-back{background:transparent;border:0;color:var(--teal);font:700 13px system-ui;cursor:pointer}
+.menu-footer{display:flex;flex-direction:column;gap:10px;border-top:1px solid var(--line);padding-top:14px;margin-top:4px}
+.volume-row{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13px;color:var(--ink-dim)}
+.volume-row input[type=range]{flex:1;accent-color:var(--copper)}
+.switch-row{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--ink-dim);justify-content:flex-start}
+.switch-row input{accent-color:var(--teal);width:18px;height:18px}
+
+.map-card header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.map-card header h2{margin:0}
+.map-card header span{font:700 12px ui-monospace,monospace;color:var(--gold)}
+.level-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.level-tile{border:1px solid var(--line);background:var(--panel2);border-radius:14px;padding:14px;text-align:left;cursor:pointer;color:var(--ink)}
+.level-tile b{display:block;font-size:15px;margin-bottom:2px}
+.level-tile small{color:var(--ink-dim);display:block;margin-bottom:8px;font-size:11px}
+.level-tile .stars{color:#4a5578;font-size:15px;letter-spacing:2px}
+.level-tile .stars.has1 span:nth-child(1),.level-tile .stars.has2 span:nth-child(-n+2),.level-tile .stars.has3 span{color:var(--gold)}
+.level-tile.locked{opacity:.4;cursor:not-allowed}
+.level-tile.boss{border-color:var(--ember);background:linear-gradient(180deg,#2a1420,#1d1120)}
+.level-tile.boss b{color:var(--ember)}
+
+.tutorial-card{text-align:left}
+#tutorialBody h3{margin:0 0 6px;color:var(--gold)}
+#tutorialBody p{color:var(--ink-dim);font-size:14px;line-height:1.55;margin:0 0 10px}
+#tutorialBody .tut-visual{height:110px;border-radius:12px;background:var(--panel2);border:1px solid var(--line);
+  display:grid;place-items:center;font-size:38px;margin-bottom:12px}
+.tutorial-actions{display:flex;justify-content:space-between;align-items:center;margin-top:14px}
+
+.pause-card .btn,.results-actions .btn{margin-top:8px;align-items:center;text-align:center}
+.stars-row{font-size:40px;letter-spacing:8px;color:#3a4362;margin:8px 0 14px}
+.stars-row.s1 span:nth-child(1),.stars-row.s2 span:nth-child(-n+2),.stars-row.s3 span{color:var(--gold);text-shadow:0 0 18px #ffd47988}
+.results-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:0 0 12px;text-align:left}
+.results-stats div{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+.results-stats div b{display:block;font-size:17px;color:var(--gold)}
+.results-stats div span{font-size:11px;color:var(--ink-dim)}
+.results-note{font-size:12px;color:var(--ink-dim);margin:0 0 10px;line-height:1.5}
+.results-actions{display:flex;flex-direction:column}
+
+.party-roster{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin:10px 0}
+.party-roster span{background:var(--panel2);border:1px solid var(--line);border-radius:999px;padding:4px 10px;font-size:12px}
+.party-board{display:flex;flex-direction:column;gap:6px;margin:12px 0;text-align:left}
+.party-board .row{display:flex;justify-content:space-between;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:8px 12px;font-size:13px}
+.party-board .row b{color:var(--gold)}
+.party-note{font-size:11px;color:var(--ink-dim);line-height:1.5}
+#btnPartyStart{margin-top:6px}
+
+.hud{position:absolute;inset:0;pointer-events:none;z-index:10;display:flex;flex-direction:column;justify-content:space-between}
+.hud[hidden]{display:none}
+.hud-top{display:flex;align-items:center;gap:10px;padding:10px 12px;pointer-events:auto}
+.hud-btn{width:38px;height:38px;border-radius:10px;border:1px solid var(--line);background:#0c1220cc;color:var(--ink);font-size:15px;cursor:pointer}
+.hud-title{flex:1;background:#0c1220cc;border:1px solid var(--line);border-radius:10px;padding:6px 12px;display:flex;flex-direction:column;line-height:1.2}
+.hud-title b{font-size:13px;color:var(--gold)}
+.hud-title span{font-size:11px;color:var(--ink-dim)}
+.hud-mid{display:flex;gap:10px;align-items:center;padding:0 12px;pointer-events:none}
+.meter{position:relative;flex:1;height:26px;background:#0c1220cc;border:1px solid var(--line);border-radius:999px;overflow:hidden}
+.meter i{position:absolute;inset:0 auto 0 0;background:linear-gradient(90deg,var(--copper-dim),var(--copper));display:block;transition:width .25s}
+.meter span{position:relative;z-index:1;display:flex;height:100%;align-items:center;justify-content:center;gap:5px;font-size:11px;color:var(--ink)}
+.warden-status{background:#0c1220cc;border:1px solid var(--teal);border-radius:999px;padding:4px 10px;font-size:12px;display:flex;align-items:center;gap:5px;color:var(--teal);white-space:nowrap}
+.warden-status.harmed{border-color:var(--ember);color:var(--ember)}
+.clock{background:#0c1220cc;border:1px solid var(--line);border-radius:999px;padding:4px 10px;font-size:12px;display:flex;gap:5px}
+.hud-bottom{display:flex;justify-content:center;padding:10px 12px 16px;pointer-events:auto}
+.ammo-rack{display:flex;gap:8px;background:#0c1220cc;border:1px solid var(--line);border-radius:14px;padding:6px}
+.ammo-btn{border:1px solid transparent;background:transparent;color:var(--ink-dim);border-radius:10px;padding:8px 12px;font:700 11px system-ui;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;min-width:64px}
+.ammo-btn b{font-size:16px}
+.ammo-btn.active{background:var(--panel2);border-color:var(--copper);color:var(--copper)}
+.ammo-btn:disabled{opacity:.35;cursor:not-allowed}
+
+.aim-readout{position:absolute;z-index:11;pointer-events:none;background:#0c1220dd;border:1px solid var(--copper);border-radius:10px;padding:4px 10px;text-align:center;transform:translate(-50%,-120%)}
+.aim-readout[hidden]{display:none}
+.aim-readout b{display:block;color:var(--copper);font-size:14px}
+.aim-readout span{font-size:9px;color:var(--ink-dim);letter-spacing:1px}
+
+.toast{position:absolute;left:50%;top:14px;transform:translateX(-50%);z-index:30;background:#0c1220ee;border:1px solid var(--teal);color:var(--teal);border-radius:999px;padding:8px 16px;font-size:12px;font-weight:700;pointer-events:none}
+.toast[hidden]{display:none}
+.toast.warn{border-color:var(--ember);color:var(--ember)}
+
+body.reduced .boot-spin{animation:none}
+body.reduced .meter i{transition:none}
+
+@media(max-width:420px){
+  .level-grid{grid-template-columns:1fr}
+  .hud-title{display:none}
+  .ammo-btn{min-width:52px;padding:6px 8px}
+}
+@media(max-height:520px){
+  .screen{padding:8px}
+  .menu-card,.map-card,.tutorial-card,.pause-card,.results-card,.party-card{padding:16px}
+}
+</style>
+</head><body>
+
+<canvas id="stage" aria-label="Siege battlefield"></canvas>
+
+<div id="hud" class="hud" hidden>
+  <div class="hud-top">
+    <button type="button" id="btnPause" class="hud-btn" aria-label="Pause">II</button>
+    <div class="hud-title"><b id="hudLevelName">Level</b><span id="hudSub">Breach the hold</span></div>
+    <button type="button" id="btnMute" class="hud-btn" aria-label="Toggle sound">🔊</button>
+  </div>
+  <div class="hud-mid">
+    <div class="meter breach-meter" aria-label="Breach percent"><i id="breachFill" style="width:0%"></i><span>Breach <b id="breachPct">0%</b></span></div>
+    <div class="warden-status" id="wardenStatus" hidden><span id="wardenIcon">🛡</span><b id="wardenLabel">Wardens safe</b></div>
+    <div class="clock" id="clockWrap" hidden><span>⏱</span><b id="clockLabel">0:00</b></div>
+  </div>
+  <div class="hud-bottom"><div class="ammo-rack" id="ammoRack" role="group" aria-label="Choose ammunition"></div></div>
+</div>
+
+<div id="aimReadout" class="aim-readout" hidden><b id="aimPower">0%</b><span>PULL</span></div>
+
+<div id="screenBoot" class="screen boot">
+  <div class="boot-card">
+    <p class="kicker">PHANTOMPLAY ORIGINAL SIEGE</p>
+    <h1>KINGDOM BREAKERS</h1>
+    <p class="tag">Aim your engine. Break the hold. Mind the Wardens.</p>
+    <div class="boot-spin"></div>
+  </div>
+</div>
+
+<div id="screenMenu" class="screen" hidden>
+  <div class="menu-card">
+    <p class="kicker">PHANTOMPLAY ORIGINAL SIEGE</p>
+    <h1>KINGDOM BREAKERS</h1>
+    <p class="tag">Break six holds. Save the Wardens. Topple the Warlord's Anvil.</p>
+    <div class="menu-actions">
+      <button type="button" class="btn btn-primary" data-action="campaign">Siege Campaign<span id="campaignSub">Start at Rustwatch Post</span></button>
+      <button type="button" class="btn" data-action="duel">Duel vs Bot<span>Alternating-turn 1v1 breach battle</span></button>
+      <button type="button" class="btn" data-action="tutorial">How to Siege<span>Replay the tutorial</span></button>
+    </div>
+    <div class="menu-footer">
+      <label class="volume-row">Volume <input type="range" id="volumeSlider" min="0" max="100" value="70"></label>
+      <label class="switch-row"><input type="checkbox" id="reducedMotionToggle"><span>Reduced motion</span></label>
+    </div>
+  </div>
+</div>
+
+<div id="screenMap" class="screen" hidden>
+  <div class="map-card">
+    <header><button type="button" class="btn-back" data-action="back-menu">← Menu</button><h2>Siege Campaign</h2><span id="mapStars">0 / 18 ★</span></header>
+    <div class="level-grid" id="levelGrid"></div>
+  </div>
+</div>
+
+<div id="screenTutorial" class="screen" hidden>
+  <div class="tutorial-card">
+    <div id="tutorialBody"></div>
+    <div class="tutorial-actions">
+      <button type="button" class="btn-text" id="btnTutorialSkip">Skip</button>
+      <button type="button" class="btn btn-primary" id="btnTutorialNext" style="width:auto">Next</button>
+    </div>
+  </div>
+</div>
+
+<div id="screenPause" class="screen" hidden>
+  <div class="pause-card">
+    <h2>Siege Paused</h2>
+    <button type="button" class="btn btn-primary" data-action="resume">Resume</button>
+    <button type="button" class="btn" data-action="restart-level">Restart hold</button>
+    <button type="button" class="btn" data-action="quit-level">Quit to map</button>
+  </div>
+</div>
+
+<div id="screenResults" class="screen" hidden>
+  <div class="results-card">
+    <h2 id="resultsTitle">Hold Breached</h2>
+    <div class="stars-row" id="resultsStars"><span>☆</span><span>☆</span><span>☆</span></div>
+    <div class="results-stats" id="resultsStats"></div>
+    <p class="results-note" id="resultsNote"></p>
+    <div class="results-actions" id="resultsActions"></div>
+  </div>
+</div>
+
+<div id="screenParty" class="screen" hidden>
+  <div class="party-card">
+    <p class="kicker">SIEGE PARTY</p>
+    <h2 id="partyHeadline">Waiting on the host…</h2>
+    <div class="party-roster" id="partyRoster"></div>
+    <div class="party-board" id="partyBoard"></div>
+    <p class="party-note" id="partyNote">This room's shared feed reflects the host's siege. Every player's own result is saved to their PhantomPlay history and the global leaderboard.</p>
+    <button type="button" class="btn btn-primary" id="btnPartyStart" hidden>Start Siege</button>
+  </div>
+</div>
+
+<div id="toast" class="toast" hidden></div>
+
+<script>
+'use strict';
+/* =========================================================================
+   KINGDOM BREAKERS — original physics siege game for PhantomPlay.
+   Sections: host bridge / dom / constants / state / rng+structure /
+   physics / particles / scoring / rendering / input+aim / audio /
+   campaign flow / duel flow / siege-party (room multiplayer) flow /
+   host<->game protocol wiring / main loop / bootstrap.
+   ========================================================================= */
+
+/* ---------- 1. host bridge ---------- */
+const host=(type,data={})=>parent.postMessage({source:'phantomplay-game',type,...data},'*');
+
+/* ---------- 2. dom refs ---------- */
+const canvas=document.getElementById('stage'), ctx=canvas.getContext('2d');
+const hud=document.getElementById('hud');
+const btnPause=document.getElementById('btnPause'), btnMute=document.getElementById('btnMute');
+const hudLevelName=document.getElementById('hudLevelName'), hudSub=document.getElementById('hudSub');
+const breachFill=document.getElementById('breachFill'), breachPct=document.getElementById('breachPct');
+const wardenStatus=document.getElementById('wardenStatus'), wardenIcon=document.getElementById('wardenIcon'), wardenLabel=document.getElementById('wardenLabel');
+const clockWrap=document.getElementById('clockWrap'), clockLabel=document.getElementById('clockLabel');
+const ammoRack=document.getElementById('ammoRack');
+const aimReadout=document.getElementById('aimReadout'), aimPower=document.getElementById('aimPower');
+const toastEl=document.getElementById('toast');
+const campaignSub=document.getElementById('campaignSub');
+const volumeSlider=document.getElementById('volumeSlider'), reducedMotionToggle=document.getElementById('reducedMotionToggle');
+const levelGrid=document.getElementById('levelGrid'), mapStars=document.getElementById('mapStars');
+const tutorialBody=document.getElementById('tutorialBody'), btnTutorialNext=document.getElementById('btnTutorialNext'), btnTutorialSkip=document.getElementById('btnTutorialSkip');
+const resultsTitle=document.getElementById('resultsTitle'), resultsStars=document.getElementById('resultsStars'), resultsStats=document.getElementById('resultsStats'), resultsNote=document.getElementById('resultsNote'), resultsActions=document.getElementById('resultsActions');
+const partyHeadline=document.getElementById('partyHeadline'), partyRoster=document.getElementById('partyRoster'), partyBoard=document.getElementById('partyBoard'), btnPartyStart=document.getElementById('btnPartyStart');
+const screens={
+  boot:document.getElementById('screenBoot'), menu:document.getElementById('screenMenu'), map:document.getElementById('screenMap'),
+  tutorial:document.getElementById('screenTutorial'), pause:document.getElementById('screenPause'), results:document.getElementById('screenResults'),
+  party:document.getElementById('screenParty'),
+};
+
+/* ---------- 3. constants ---------- */
+const WORLD_W=1600, WORLD_H=900, GRAVITY=2600;
+
+const MATERIALS={
+  stone:{hp:42,mass:3.0,color:'#8a93ab',dark:'#5c6480'},
+  timber:{hp:24,mass:1.4,color:'#b9803f',dark:'#7d5527'},
+  ironclad:{hp:70,mass:3.6,color:'#5c7fa8',dark:'#33445e'},
+  core:{hp:170,mass:5.5,color:'#b78bff',dark:'#6a4a9c'},
+};
+
+const AMMO={
+  stonefall:{key:'stonefall',label:'Stonefall Orb',glyph:'●',color:'#ffb454',minSpeed:800,maxSpeed:1480,gravityScale:1.05,damage:34,splash:0,pierce:0,impulse:900,radius:13},
+  splinter:{key:'splinter',label:'Splinter Lance',glyph:'➤',color:'#3fe0c5',minSpeed:1050,maxSpeed:1900,gravityScale:0.58,damage:15,splash:0,pierce:3,impulse:260,radius:8},
+  ember:{key:'ember',label:'Emberburst Charge',glyph:'✺',color:'#ff6a5d',minSpeed:720,maxSpeed:1320,gravityScale:0.92,damage:24,splash:180,pierce:0,impulse:520,radius:11},
+};
+const AMMO_ORDER=['stonefall','splinter','ember'];
+
+const LEVELS=[
+  {key:'rustwatch',   name:'Rustwatch Post',      sub:'A crumbling watchtower guarding the marsh road.',       cols:4, rows:4, blockW:76, blockH:54, wardenCount:0, ironcladFrom:0, budget:{stonefall:4,splinter:3,ember:2}},
+  {key:'cinderdock',  name:'Cinderdock Hold',     sub:'A dockside granary stacked three stories high.',        cols:5, rows:5, blockW:70, blockH:50, wardenCount:1, ironcladFrom:0, budget:{stonefall:5,splinter:4,ember:2}},
+  {key:'graywall',    name:'Graywall Keep',       sub:'Iron-banded walls ring the old garrison.',              cols:6, rows:5, blockW:64, blockH:48, wardenCount:1, ironcladFrom:2, budget:{stonefall:5,splinter:5,ember:3}},
+  {key:'emberfall',   name:'Emberfall Bastion',   sub:'Wardens shelter on the ramparts — breach with care.',   cols:6, rows:6, blockW:62, blockH:46, wardenCount:2, ironcladFrom:2, budget:{stonefall:6,splinter:5,ember:3}},
+  {key:'thornspire',  name:'Thornspire Citadel',  sub:'Twin towers lashed together by an iron gate.',          cols:7, rows:6, blockW:56, blockH:44, wardenCount:2, ironcladFrom:3, budget:{stonefall:6,splinter:6,ember:4}},
+  {key:'warlord',     name:"Warlord's Anvil",     sub:'The Warlord Core beats behind a wall of ironclad.',     cols:8, rows:7, blockW:52, blockH:42, wardenCount:3, ironcladFrom:3, budget:{stonefall:8,splinter:6,ember:5}, boss:true},
+];
+const DUEL_DEF={key:'duel-arena', name:'Duel Arena', sub:'', cols:6, rows:6, blockW:60, blockH:44, wardenCount:1, ironcladFrom:2, budget:{stonefall:3,splinter:3,ember:2}};
+const PARTY_DEF={key:'siege-party', name:'Siege Party Arena', sub:'', cols:6, rows:6, blockW:60, blockH:44, wardenCount:1, ironcladFrom:2, budget:{stonefall:5,splinter:4,ember:3}};
+const PARTY_WINDOW_MS=90000;
+
+const TUTORIAL_SLIDES=[
+  {icon:'🎯', h:'Aim your engine', p:'Press and drag anywhere on the field. The direction and distance from your siege engine set the angle and power — drag far for a long, flat shot; drag short and high for a lob.'},
+  {icon:'🧨', h:'Three kinds of ammunition', p:'Stonefall Orb hits hard once. Splinter Lance pierces through several blocks in a line. Emberburst Charge explodes and damages everything nearby. Switch with the ammo rack or keys 1/2/3.'},
+  {icon:'🛡', h:'Protect the Wardens', p:'Small Wardens shelter on some ledges. A direct hit — or destroying the block they stand on — costs your safety bonus, even if the hold still falls.'},
+  {icon:'⭐', h:'Earn your stars', p:'Stars come from breach percentage, ammo left over, and keeping every Warden safe. Knock out the glowing keystone block for a slow-motion final blow.'},
+];
+
+/* ---------- 4. mutable state ---------- */
+let screenState='boot';
+let level=null, projectiles=[], particles=[];
+let pools={player:{},bot:{}};
+let shotsFired=0, wardensHarmedCount=0, damageBy={player:0,bot:0}, wardensHarmedBy={player:0,bot:0};
+let currentAmmo='stonefall', runCompletedFlag=false, activeShooter='player', settleWaitMs=0;
+let mode='campaign', currentLevelIndex=0, duel=null;
+let slowMo={active:false,t:0,dur:0}, slowMoFocus=null, shake=0;
+let dragging=false, aim={angle:-0.9,power:0};
+let paused=false, hostPaused=false;
+let hostSoundPref=true, localMuted=false, volume=70, reducedMotion=false;
+let campaignState={levels:{}, tutorialSeen:false, duels:{played:0,wins:0}};
+let tutorialIdx=0;
+let projIdCounter=0;
+let DPR=1, cScale=1, offX=0, offY=0;
+let lastTs=0;
+
+/* siege party (room multiplayer) state */
+let inRoom=false, isHost=false, hostNonce=Math.random().toString(36).slice(2,10);
+let lastMatchState=null, roomParticipants=[], roomReadyStates={}, roomBotSlots=[], roomHostControls=null;
+let partyStartedLocally=false, partyResultSent=false, partyStartsAt=0, partyEndsAt=0;
+let lastActionAt=0;
+
+/* audio */
+let actx=null, masterGain=null;
+
+/* ---------- 5. rng + structure ---------- */
+function hashSeed(str){
+  let h=1779033703^str.length;
+  for(let i=0;i<str.length;i++){ h=Math.imul(h^str.charCodeAt(i),3432918353); h=(h<<13)|(h>>>19); }
+  h=Math.imul(h^(h>>>16),2246822507); h=Math.imul(h^(h>>>13),3266489909); h^=h>>>16;
+  return h>>>0;
+}
+function mulberry32(a){
+  return function(){
+    a|=0; a=a+0x6D2B79F5|0;
+    let t=Math.imul(a^a>>>15,1|a);
+    t=t+Math.imul(t^t>>>7,61|t)^t;
+    return ((t^t>>>14)>>>0)/4294967296;
+  };
+}
+function shuffleInPlace(arr,rng){ for(let i=arr.length-1;i>0;i--){ const j=Math.floor(rng()*(i+1)); const tmp=arr[i]; arr[i]=arr[j]; arr[j]=tmp; } return arr; }
+function clamp(v,lo,hi){ return Math.max(lo,Math.min(hi,v)); }
+function escapeHtml(s){ return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+function materialForRow(r, rows, ironcladFrom){
+  const fromTop=rows-1-r;
+  if(fromTop<2) return 'timber';
+  if(fromTop<2+ironcladFrom) return 'ironclad';
+  return 'stone';
+}
+
+function buildStructure(levelDef, seed){
+  const rng=mulberry32(seed);
+  const cols=levelDef.cols, rows=levelDef.rows, blockW=levelDef.blockW, blockH=levelDef.blockH;
+  const groundY=WORLD_H-130;
+  const structW=cols*blockW;
+  const baseX=WORLD_W-structW-140;
+  const grid=[]; const blocks=[]; let counter=0;
+  for(let r=0;r<rows;r++){
+    grid[r]=[];
+    for(let c=0;c<cols;c++){
+      let keep=true;
+      if(r===rows-1 && (c===0||c===cols-1) && rng()<0.5) keep=false;
+      if(cols>=6 && r>=rows-2 && (c===0||c===cols-1)) keep=false;
+      if(!keep){ grid[r][c]=null; continue; }
+      const material=materialForRow(r,rows,levelDef.ironcladFrom);
+      const spec=MATERIALS[material];
+      const b={
+        id:'b'+(counter++), row:r, col:c, material,
+        x: baseX+c*blockW+blockW/2, y: groundY-r*blockH-blockH/2,
+        w: blockW*0.92, h: blockH*0.92, vx:0, vy:0, angle:0, angVel:0,
+        hp: spec.hp, maxHp: spec.hp, mass: spec.mass,
+        alive:true, resting:true, hitFlash:0, isKeystone:false,
+      };
+      grid[r][c]=b; blocks.push(b);
+    }
+  }
+  let keystone=null;
+  const cc=Math.floor(cols/2);
+  if(levelDef.boss){
+    outer1: for(let r=rows-1;r>=0;r--){
+      for(const c of [cc,cc-1,cc+1,cc-2,cc+2]){
+        if(c<0||c>=cols) continue;
+        if(grid[r][c]){ keystone=grid[r][c]; break outer1; }
+      }
+    }
+    if(keystone){ keystone.material='core'; keystone.hp=MATERIALS.core.hp; keystone.maxHp=MATERIALS.core.hp; keystone.mass=MATERIALS.core.mass; }
+  } else {
+    outer2: for(let r=rows-1;r>=0;r--){
+      for(const c of [cc,cc-1,cc+1,cc-2,cc+2,cc-3,cc+3]){
+        if(c<0||c>=cols) continue;
+        if(grid[r][c]){ keystone=grid[r][c]; break outer2; }
+      }
+    }
+  }
+  if(keystone) keystone.isKeystone=true;
+  const candidates=blocks.filter(b=>b!==keystone && !(grid[b.row+1] && grid[b.row+1][b.col]));
+  shuffleInPlace(candidates, rng);
+  const wardens=[];
+  for(let i=0;i<levelDef.wardenCount && i<candidates.length;i++){
+    const b=candidates[i];
+    wardens.push({id:'w'+i, blockId:b.id, x:b.x, y:b.y-b.h/2-16, radius:15, alive:true, harmed:false});
+  }
+  const totalMaxHp=blocks.reduce((s,b)=>s+b.maxHp,0);
+  return {blocks, wardens, grid, groundY, baseX, blockW, blockH, cols, rows, totalMaxHp, keystoneId: keystone?keystone.id:null};
+}
+
+/* ---------- 6. physics ---------- */
+function engineX(){ return 150; }
+function engineY(){ return level?level.groundY-34:WORLD_H-160; }
+
+function startRun(levelDef, seed, runMode){
+  level=buildStructure(levelDef, seed);
+  projectiles=[]; particles=[];
+  pools={player:Object.assign({},levelDef.budget), bot:Object.assign({},levelDef.budget)};
+  shotsFired=0; wardensHarmedCount=0;
+  damageBy={player:0,bot:0}; wardensHarmedBy={player:0,bot:0};
+  currentAmmo=AMMO_ORDER.find(k=>pools.player[k]>0)||'stonefall';
+  runCompletedFlag=false; slowMo={active:false,t:0,dur:0}; slowMoFocus=null; shake=0;
+  mode=runMode; activeShooter='player'; settleWaitMs=0;
+  refreshHud();
+}
+
+function applyDamage(block,dmg,impX,impY){
+  if(!block.alive) return;
+  const actualDmg=Math.min(block.hp,dmg);
+  block.hp-=dmg; block.hitFlash=1;
+  damageBy[activeShooter]=(damageBy[activeShooter]||0)+actualDmg;
+  block.vx+=impX/block.mass; block.vy+=impY/block.mass; block.resting=false;
+  playImpact();
+  if(block.hp<=0) destroyBlock(block);
+}
+
+function destroyBlock(block){
+  if(!block.alive) return;
+  block.alive=false;
+  spawnDebris(block);
+  playCrumble();
+  for(const w of level.wardens){
+    if(w.blockId===block.id && w.alive && !w.harmed){
+      w.harmed=true; wardensHarmedCount++; wardensHarmedBy[activeShooter]=(wardensHarmedBy[activeShooter]||0)+1;
+      spawnWardenAlert(w); playWardenAlarm();
+    }
+  }
+  if(block.isKeystone) triggerSlowMo();
+}
+
+function triggerSlowMo(){
+  if(reducedMotion){ toast(mode==='duel'?'Structure critical!':'The hold breaks!'); return; }
+  slowMoFocus={x:block_lastKeystoneX(), y:block_lastKeystoneY()};
+  slowMo={active:true,t:0,dur:1.35};
+  shake=Math.max(shake,18);
+  playRumble();
+}
+function block_lastKeystoneX(){ const ks=level.blocks.find(b=>b.id===level.keystoneId); return ks?ks.x:WORLD_W*0.7; }
+function block_lastKeystoneY(){ const ks=level.blocks.find(b=>b.id===level.keystoneId); return ks?ks.y:WORLD_H*0.5; }
+
+function checkWardenHit(x,y,radius){
+  for(const w of level.wardens){
+    if(!w.alive || w.harmed) continue;
+    if(Math.hypot(w.x-x,w.y-y) <= radius+w.radius){
+      w.harmed=true; wardensHarmedCount++; wardensHarmedBy[activeShooter]=(wardensHarmedBy[activeShooter]||0)+1;
+      spawnWardenAlert(w); playWardenAlarm();
+    }
+  }
+}
+
+function fireProjectile(ammoKey, angle, power, shooter){
+  const spec=AMMO[ammoKey];
+  const speed=spec.minSpeed+power*(spec.maxSpeed-spec.minSpeed);
+  const p={ id:'p'+(projIdCounter++), kind:ammoKey, shooter, x:engineX(), y:engineY(),
+    vx:Math.cos(angle)*speed, vy:Math.sin(angle)*speed, alive:true, pierceLeft:spec.pierce, hitIds:new Set(), trail:[] };
+  projectiles.push(p);
+  playLaunch(ammoKey);
+  return p;
+}
+
+function stepProjectile(p,dt){
+  const spec=AMMO[p.kind];
+  p.trail.push({x:p.x,y:p.y}); if(p.trail.length>14) p.trail.shift();
+  p.vy+=GRAVITY*spec.gravityScale*dt;
+  p.x+=p.vx*dt; p.y+=p.vy*dt;
+  activeShooter=p.shooter;
+  for(const w of level.wardens){
+    if(w.alive && !w.harmed && Math.hypot(w.x-p.x,w.y-p.y) <= spec.radius+w.radius){
+      resolveProjectileHit(p, null); return;
+    }
+  }
+  for(const b of level.blocks){
+    if(!b.alive || p.hitIds.has(b.id)) continue;
+    if(Math.abs(p.x-b.x) <= b.w/2+spec.radius && Math.abs(p.y-b.y) <= b.h/2+spec.radius){
+      resolveProjectileHit(p,b); if(!p.alive) return;
+    }
+  }
+  if(p.y > level.groundY+40){ resolveProjectileHit(p,null); return; }
+  if(p.x<-80 || p.x>WORLD_W+80 || p.y<-400){ p.alive=false; }
+}
+
+function resolveProjectileHit(p, block){
+  const spec=AMMO[p.kind];
+  activeShooter=p.shooter;
+  spawnImpactSpark(p.x,p.y,spec.color);
+  if(p.kind==='ember'){
+    for(const b of level.blocks){
+      if(!b.alive) continue;
+      const d=Math.hypot(b.x-p.x,b.y-p.y);
+      if(d<=spec.splash){
+        const falloff=1-d/spec.splash;
+        const dmg=Math.round(spec.damage*falloff*falloff+spec.damage*0.15);
+        const dx=(b.x-p.x)||1, dy=(b.y-p.y)||-1, len=Math.hypot(dx,dy)||1;
+        applyDamage(b, dmg, dx/len*spec.impulse*falloff, dy/len*spec.impulse*falloff-140);
+      }
+    }
+    checkWardenHit(p.x,p.y,spec.splash);
+    spawnExplosion(p.x,p.y); playExplosion(); shake=Math.max(shake,10);
+    p.alive=false; return;
+  }
+  if(block){
+    applyDamage(block, spec.damage, p.vx*spec.impulse/900, p.vy*spec.impulse/900 - 60);
+    p.hitIds.add(block.id);
+  }
+  checkWardenHit(p.x,p.y,spec.radius);
+  if(p.kind==='splinter' && p.pierceLeft>0 && block){
+    p.pierceLeft--; p.vx*=0.74; p.vy*=0.74; shake=Math.max(shake,4);
+  } else {
+    p.alive=false; shake=Math.max(shake, block?7:3);
+  }
+}
+
+function hasSupport(b){
+  // Use the level's full (pre-shrink) grid cell size, not the block's own
+  // rendered w/h (blocks are drawn ~8% smaller than their grid cell for
+  // visual spacing) — mixing the two produced an inconsistent, blockH-
+  // dependent epsilon that let taller blocks (e.g. Rustwatch Post's 54u
+  // blocks) read as unsupported on frame one and touched off a slow,
+  // never-settling sink across the whole structure.
+  const cellW=level.blockW, cellH=level.blockH;
+  const floor=level.groundY-cellH/2;
+  if(b.y>=floor-6) return true;
+  for(const o of level.blocks){
+    if(o===b||!o.alive) continue;
+    if(Math.abs(o.x-b.x) < cellW*0.7){
+      const gap=(b.y+cellH/2)-(o.y-cellH/2);
+      if(gap>-8 && gap<12) return true;
+    }
+  }
+  return false;
+}
+function updateRest(b){
+  if(b.resting){ if(!hasSupport(b)) b.resting=false; return; }
+  // A generous velocity gate (rather than a near-zero one) so a block that
+  // has genuine support but is still shedding a little collision jitter
+  // settles within a frame or two instead of chattering indefinitely —
+  // at these speeds the visible drift is sub-pixel at 60fps anyway.
+  if(Math.abs(b.vx)<22 && Math.abs(b.vy)<22 && hasSupport(b)){ b.resting=true; b.vx=0; b.vy=0; b.angVel=0; }
+}
+function resolveBlockCollisions(){
+  const alive=level.blocks.filter(b=>b.alive);
+  for(let i=0;i<alive.length;i++){
+    for(let j=i+1;j<alive.length;j++){
+      const a=alive[i], b=alive[j];
+      // Two blocks that are BOTH already asleep never need resolving against
+      // each other — skipping this pair (rather than re-testing overlap
+      // every frame) is what lets a settled structure stay perfectly still
+      // instead of a stray sub-pixel overlap re-triggering "not resting"
+      // on neighbors forever.
+      if(a.resting && b.resting) continue;
+      const dx=b.x-a.x, dy=b.y-a.y;
+      const ox=(a.w+b.w)/2-Math.abs(dx), oy=(a.h+b.h)/2-Math.abs(dy);
+      // Ignore sliver overlaps from float drift — only a real (>1.5u)
+      // penetration is worth separating.
+      if(ox>1.5 && oy>1.5){
+        const totalMass=a.mass+b.mass;
+        if(ox<oy){
+          const push=ox/2*(dx>=0?1:-1);
+          a.x-=push*(b.mass/totalMass); b.x+=push*(a.mass/totalMass);
+          const rel=b.vx-a.vx;
+          a.vx+=rel*0.12*(b.mass/totalMass); b.vx-=rel*0.12*(a.mass/totalMass);
+          a.resting=false; b.resting=false;
+        } else {
+          const push=oy/2;
+          if(dy>=0){ a.y-=push*(b.mass/totalMass); b.y+=push*(a.mass/totalMass); if(a.vy>0) a.vy*=0.2; }
+          else { b.y-=push*(a.mass/totalMass); a.y+=push*(b.mass/totalMass); if(b.vy>0) b.vy*=0.2; }
+          a.resting=false; b.resting=false;
+        }
+      }
+    }
+  }
+}
+function stepWarden(w){
+  if(!w.alive || !w.blockId) return;
+  const b=level.blocks.find(x=>x.id===w.blockId);
+  if(b && b.alive){ w.x=b.x; w.y=b.y-b.h/2-w.radius; }
+}
+function stepPhysics(dt){
+  for(const p of projectiles){ if(p.alive) stepProjectile(p,dt); }
+  projectiles=projectiles.filter(p=>p.alive);
+  for(const b of level.blocks){
+    if(!b.alive) continue;
+    updateRest(b);
+    if(!b.resting){
+      b.vy+=GRAVITY*dt*0.62;
+      b.x+=b.vx*dt; b.y+=b.vy*dt;
+      b.angVel*=0.96; b.angle+=b.angVel*dt; b.vx*=0.995;
+    }
+  }
+  resolveBlockCollisions();
+  for(const b of level.blocks){
+    if(!b.alive) continue;
+    const floor=level.groundY-b.h/2;
+    if(b.y>floor){ if(b.vy>40) shake=Math.max(shake,Math.min(6,b.vy/220)); b.y=floor; b.vy=0; b.vx*=0.82; if(Math.abs(b.vx)<3) b.vx=0; b.angVel*=0.7; }
+    if(b.hitFlash>0) b.hitFlash=Math.max(0,b.hitFlash-dt*3);
+  }
+  for(const w of level.wardens) stepWarden(w);
+  stepParticles(dt);
+}
+function allSettled(){
+  if(projectiles.length) return false;
+  for(const b of level.blocks) if(b.alive && !b.resting) return false;
+  return true;
+}
+function ammoExhausted(pool){ return AMMO_ORDER.every(k=>(pool[k]||0)<=0); }
+
+/* ---------- 7. particles ---------- */
+function spawnDebris(block){
+  const m=MATERIALS[block.material]; const n=reducedMotion?3:8;
+  for(let i=0;i<n;i++) particles.push({x:block.x+(Math.random()-0.5)*block.w*0.6,y:block.y+(Math.random()-0.5)*block.h*0.6,
+    vx:(Math.random()-0.5)*420,vy:-Math.random()*380-60,life:0.9+Math.random()*0.5,maxLife:1.2,size:5+Math.random()*6,color:m.color,kind:'chip'});
+}
+function spawnImpactSpark(x,y,color){
+  const n=reducedMotion?2:6;
+  for(let i=0;i<n;i++) particles.push({x,y,vx:(Math.random()-0.5)*300,vy:(Math.random()-0.5)*300,life:0.35,maxLife:0.35,size:3,color,kind:'spark'});
+}
+function spawnExplosion(x,y){
+  const n=reducedMotion?6:22;
+  for(let i=0;i<n;i++){
+    const a=Math.random()*Math.PI*2, sp=140+Math.random()*380;
+    particles.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,life:0.55,maxLife:0.55,size:4+Math.random()*5,color:i%2?'#ffb454':'#ff6a5d',kind:'spark'});
+  }
+}
+function spawnWardenAlert(w){ particles.push({x:w.x,y:w.y-20,life:1,maxLife:1,vx:0,vy:-40,size:0,color:'#ff5d5d',kind:'text',text:'!'}); }
+function stepParticles(dt){
+  for(const pt of particles){ pt.life-=dt; if(pt.kind!=='text') pt.vy+=GRAVITY*0.5*dt; pt.x+=pt.vx*dt; pt.y+=pt.vy*dt; }
+  particles=particles.filter(pt=>pt.life>0);
+}
+
+/* ---------- 8. scoring (pure, shared by campaign / duel / party) ---------- */
+function damagePctNow(){
+  if(!level || !level.totalMaxHp) return 0;
+  let dead=0; for(const b of level.blocks) if(!b.alive) dead+=b.maxHp;
+  return dead/level.totalMaxHp*100;
+}
+function starsFor(pct,wardensHarmed){
+  if(wardensHarmed>0) return pct>=30?1:0;
+  let s=0; if(pct>=30) s=1; if(pct>=62) s=2; if(pct>=88) s=3; return s;
+}
+function scoreForRun({pct,stars,wardensHarmed,shotsRemaining,keystoneDown}){
+  const score=Math.round(pct*12)+stars*180+shotsRemaining*35+(keystoneDown?150:0)-wardensHarmed*220;
+  return Math.max(0,score);
+}
+
+/* ---------- 9. rendering ---------- */
+function resize(){
+  DPR=Math.min(2,window.devicePixelRatio||1);
+  const w=innerWidth, h=innerHeight;
+  canvas.width=Math.round(w*DPR); canvas.height=Math.round(h*DPR);
+  canvas.style.width=w+'px'; canvas.style.height=h+'px';
+  cScale=Math.min(w/WORLD_W, h/WORLD_H);
+  offX=(w-WORLD_W*cScale)/2; offY=(h-WORLD_H*cScale)/2;
+}
+function screenToWorld(clientX,clientY){
+  const rect=canvas.getBoundingClientRect();
+  const sx=clientX-rect.left, sy=clientY-rect.top;
+  return {x:(sx-offX)/cScale, y:(sy-offY)/cScale};
+}
+function worldToScreen(x,y){
+  const rect=canvas.getBoundingClientRect();
+  return {x: rect.left+offX+x*cScale, y: rect.top+offY+y*cScale};
+}
+function roundRect(x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
+}
+function drawSky(){
+  const g=ctx.createLinearGradient(0,0,0,WORLD_H);
+  const boss = mode==='campaign' && LEVELS[currentLevelIndex] && LEVELS[currentLevelIndex].boss;
+  if(boss){ g.addColorStop(0,'#2a1420'); g.addColorStop(1,'#0a0d13'); }
+  else { g.addColorStop(0,'#182238'); g.addColorStop(0.6,'#101828'); g.addColorStop(1,'#0a0d13'); }
+  ctx.fillStyle=g; ctx.fillRect(0,0,WORLD_W,WORLD_H);
+  ctx.fillStyle='rgba(255,255,255,0.06)';
+  for(let i=0;i<6;i++){ ctx.beginPath(); ctx.arc(90+i*260, 70+((i*57)%50), 2.2, 0, Math.PI*2); ctx.fill(); }
+  ctx.fillStyle='#0d1424';
+  ctx.beginPath(); ctx.moveTo(0,560);
+  for(let x=0;x<=WORLD_W;x+=80) ctx.lineTo(x, 560-Math.sin(x*0.008)*40-((x%240)/240)*30);
+  ctx.lineTo(WORLD_W,700); ctx.lineTo(0,700); ctx.closePath(); ctx.fill();
+}
+function drawGround(){
+  const y=level.groundY;
+  ctx.fillStyle='#161c2c'; ctx.fillRect(0,y,WORLD_W,WORLD_H-y);
+  ctx.fillStyle='#20293e'; ctx.fillRect(0,y,WORLD_W,6);
+}
+function drawEngine(){
+  const ex=engineX(), ey=engineY();
+  ctx.save(); ctx.translate(ex,ey);
+  ctx.fillStyle='#3a2a18'; ctx.beginPath(); ctx.moveTo(-34,40); ctx.lineTo(34,40); ctx.lineTo(18,0); ctx.lineTo(-18,0); ctx.closePath(); ctx.fill();
+  const armAngle = dragging ? aim.angle : -0.9;
+  ctx.save(); ctx.rotate(armAngle+Math.PI/2);
+  ctx.fillStyle='#c97f2f'; ctx.fillRect(-6,-58,12,64);
+  ctx.fillStyle='#ffb454'; ctx.beginPath(); ctx.arc(0,-58,10,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+  ctx.restore();
+}
+function drawBlocks(){
+  for(const b of level.blocks){
+    if(!b.alive) continue;
+    const m=MATERIALS[b.material];
+    ctx.save(); ctx.translate(b.x,b.y); ctx.rotate(b.angle);
+    ctx.fillStyle=m.color; roundRect(-b.w/2,-b.h/2,b.w,b.h,6); ctx.fill();
+    ctx.strokeStyle=m.dark; ctx.lineWidth=3; roundRect(-b.w/2,-b.h/2,b.w,b.h,6); ctx.stroke();
+    if(b.hp<b.maxHp*0.6){
+      ctx.strokeStyle='rgba(0,0,0,0.35)'; ctx.lineWidth=2; ctx.beginPath();
+      ctx.moveTo(-b.w*0.2,-b.h*0.3); ctx.lineTo(b.w*0.1,0.05*b.h); ctx.lineTo(-b.w*0.05,b.h*0.35); ctx.stroke();
+    }
+    if(b.hitFlash>0){ ctx.fillStyle=`rgba(255,255,255,${b.hitFlash*0.5})`; roundRect(-b.w/2,-b.h/2,b.w,b.h,6); ctx.fill(); }
+    if(b.isKeystone){ ctx.fillStyle='#ffe9a8'; ctx.beginPath(); ctx.arc(0,-b.h/2-10,5,0,Math.PI*2); ctx.fill(); }
+    ctx.restore();
+  }
+}
+function drawWardens(){
+  for(const w of level.wardens){
+    ctx.save(); ctx.translate(w.x,w.y); ctx.globalAlpha = w.harmed?0.35:1;
+    ctx.fillStyle = w.harmed? '#5c6480' : '#3fe0c5';
+    ctx.beginPath(); ctx.arc(0,0,w.radius,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#0a0d13'; ctx.beginPath(); ctx.arc(-4,-2,1.6,0,Math.PI*2); ctx.arc(4,-2,1.6,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+  ctx.globalAlpha=1;
+}
+function drawProjectiles(){
+  for(const p of projectiles){
+    const spec=AMMO[p.kind];
+    for(let i=0;i<p.trail.length;i++){
+      const t=p.trail[i]; ctx.globalAlpha=(i/p.trail.length)*0.4;
+      ctx.fillStyle=spec.color; ctx.beginPath(); ctx.arc(t.x,t.y,spec.radius*0.6,0,Math.PI*2); ctx.fill();
+    }
+    ctx.globalAlpha=1; ctx.fillStyle=spec.color; ctx.beginPath(); ctx.arc(p.x,p.y,spec.radius,0,Math.PI*2); ctx.fill();
+  }
+}
+function drawParticles(){
+  for(const pt of particles){
+    const a=Math.max(0,pt.life/pt.maxLife); ctx.globalAlpha=a;
+    if(pt.kind==='text'){ ctx.fillStyle=pt.color; ctx.font='700 20px system-ui'; ctx.fillText(pt.text,pt.x-4,pt.y); }
+    else { ctx.fillStyle=pt.color; ctx.beginPath(); ctx.arc(pt.x,pt.y,pt.size*a,0,Math.PI*2); ctx.fill(); }
+  }
+  ctx.globalAlpha=1;
+}
+function drawTrajectoryPreview(){
+  const pred=predictTrajectory(currentAmmo, aim.angle, aim.power, 160);
+  ctx.strokeStyle=AMMO[currentAmmo].color; ctx.lineWidth=3; ctx.setLineDash([6,8]); ctx.globalAlpha=0.7;
+  ctx.beginPath();
+  pred.points.forEach((pt,i)=>{ if(i%2) return; if(i===0) ctx.moveTo(pt.x,pt.y); else ctx.lineTo(pt.x,pt.y); });
+  ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha=1;
+}
+function draw(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.save();
+  ctx.scale(DPR,DPR);
+  let sx=0,sy=0;
+  if(shake>0.3 && !reducedMotion){ sx=(Math.random()-0.5)*shake; sy=(Math.random()-0.5)*shake; }
+  ctx.translate(offX+sx, offY+sy);
+  ctx.scale(cScale,cScale);
+  if(slowMo.active && slowMoFocus && !reducedMotion){
+    const p=clamp(slowMo.t/slowMo.dur,0,1);
+    const zoom=1+0.28*Math.sin(p*Math.PI);
+    ctx.translate(slowMoFocus.x, slowMoFocus.y); ctx.scale(zoom,zoom); ctx.translate(-slowMoFocus.x,-slowMoFocus.y);
+  }
+  drawSky();
+  if(level){
+    drawGround(); drawEngine(); drawBlocks(); drawWardens(); drawProjectiles(); drawParticles();
+    if(dragging) drawTrajectoryPreview();
+  }
+  ctx.restore();
+  if(slowMo.active && !reducedMotion){ ctx.save(); ctx.fillStyle='rgba(20,10,40,0.18)'; ctx.fillRect(0,0,canvas.width,canvas.height); ctx.restore(); }
+}
+
+/* ---------- 10. trajectory prediction (shared: aim preview + bot AI) ---------- */
+function predictTrajectory(ammoKey, angle, power, maxSteps){
+  maxSteps = maxSteps||240;
+  const spec=AMMO[ammoKey];
+  const speed=spec.minSpeed+power*(spec.maxSpeed-spec.minSpeed);
+  let x=engineX(), y=engineY(), vx=Math.cos(angle)*speed, vy=Math.sin(angle)*speed;
+  const dt=1/60; const pts=[{x,y}];
+  for(let i=0;i<maxSteps;i++){
+    vy+=GRAVITY*spec.gravityScale*dt; x+=vx*dt; y+=vy*dt;
+    pts.push({x,y});
+    for(const b of level.blocks){
+      if(!b.alive) continue;
+      if(Math.abs(x-b.x)<=b.w/2+spec.radius && Math.abs(y-b.y)<=b.h/2+spec.radius) return {points:pts, hitX:x, hitY:y, blockId:b.id};
+    }
+    if(y>level.groundY+30) return {points:pts, hitX:x, hitY:level.groundY, blockId:null};
+    if(x>WORLD_W+80 || x<-80) return {points:pts, hitX:x, hitY:y, blockId:null, offscreen:true};
+  }
+  return {points:pts, hitX:x, hitY:y, blockId:null};
+}
+
+/* ---------- 11. input + aim ---------- */
+function canAim(){
+  if(screenState!=='play' || paused || hostPaused || slowMo.active) return false;
+  if((pools.player[currentAmmo]||0)<=0) return false;
+  if(mode==='duel' && duel && duel.turn!=='player') return false;
+  if(mode==='party' && Date.now()<partyStartsAt) return false;
+  return true;
+}
+function updateDragFromEvent(e){
+  const w=screenToWorld(e.clientX,e.clientY);
+  const ex=engineX(), ey=engineY();
+  const dx=w.x-ex, dy=w.y-ey;
+  let ang=Math.atan2(dy,dx);
+  ang=clamp(ang, -Math.PI*0.47, -Math.PI*0.03);
+  const dist=Math.hypot(dx,dy);
+  const power=clamp(dist/520, 0.08, 1);
+  aim={angle:ang,power};
+  showAimReadout(e.clientX,e.clientY,power);
+  playDrawTension(power);
+}
+function commitShot(){
+  hideAimReadout();
+  if(aim.power<0.14) return;
+  if((pools.player[currentAmmo]||0)<=0) return;
+  pools.player[currentAmmo]--; shotsFired++;
+  fireProjectile(currentAmmo, aim.angle, aim.power, 'player');
+  if((pools.player[currentAmmo]||0)<=0) currentAmmo = AMMO_ORDER.find(k=>pools.player[k]>0) || currentAmmo;
+  refreshHud();
+  if(mode==='campaign' || mode==='party') sendProgress();
+  if(mode==='duel'){ duel.playerShots--; scheduleDuelHandoff(); }
+}
+canvas.addEventListener('pointerdown', e=>{
+  ensureAudio();
+  if(!canAim()) return;
+  dragging=true;
+  try{ canvas.setPointerCapture(e.pointerId); }catch{}
+  updateDragFromEvent(e);
+});
+canvas.addEventListener('pointermove', e=>{ if(dragging) updateDragFromEvent(e); });
+canvas.addEventListener('pointerup', ()=>{ if(dragging){ dragging=false; commitShot(); } });
+canvas.addEventListener('pointercancel', ()=>{ dragging=false; hideAimReadout(); });
+function showAimReadout(clientX,clientY,power){ aimReadout.hidden=false; aimPower.textContent=Math.round(power*100)+'%'; aimReadout.style.left=clientX+'px'; aimReadout.style.top=(clientY-24)+'px'; }
+function hideAimReadout(){ aimReadout.hidden=true; }
+let readoutFadeTimer=0;
+function showAimReadoutWorld(){
+  const s=worldToScreen(engineX()+Math.cos(aim.angle)*160, engineY()+Math.sin(aim.angle)*160);
+  showAimReadout(s.x,s.y,aim.power);
+  clearTimeout(readoutFadeTimer); readoutFadeTimer=setTimeout(hideAimReadout,900);
+}
+addEventListener('keydown', e=>{
+  if(screenState!=='play') return;
+  if(e.key==='1') selectAmmo('stonefall');
+  else if(e.key==='2') selectAmmo('splinter');
+  else if(e.key==='3') selectAmmo('ember');
+  else if(e.key==='ArrowUp'){ aim.power=clamp(aim.power+0.04,0.1,1); showAimReadoutWorld(); }
+  else if(e.key==='ArrowDown'){ aim.power=clamp(aim.power-0.04,0.1,1); showAimReadoutWorld(); }
+  else if(e.key==='ArrowLeft'){ aim.angle=clamp(aim.angle-0.03,-Math.PI*0.47,-Math.PI*0.03); showAimReadoutWorld(); }
+  else if(e.key==='ArrowRight'){ aim.angle=clamp(aim.angle+0.03,-Math.PI*0.47,-Math.PI*0.03); showAimReadoutWorld(); }
+  else if((e.key===' '||e.key==='Enter') && canAim()){ e.preventDefault(); commitShot(); }
+  else if(e.key==='p'||e.key==='P') togglePauseLocal();
+});
+function selectAmmo(key){ if((pools.player[key]||0)<=0) return; currentAmmo=key; refreshHud(); playUiClick(); }
+
+/* ---------- 12. audio (Web Audio API, synthesized only) ---------- */
+function ensureAudio(){
+  if(!actx){ try{ actx=new (window.AudioContext||window.webkitAudioContext)(); masterGain=actx.createGain(); masterGain.gain.value=0.9; masterGain.connect(actx.destination); }catch{} }
+  if(actx && actx.state==='suspended') actx.resume().catch(()=>{});
+}
+function gainNow(){ return (hostSoundPref && !localMuted) ? volume/100 : 0; }
+function tone(freq,dur,type,peak,glideTo){
+  if(!actx) return;
+  const g=actx.createGain(), o=actx.createOscillator();
+  o.type=type||'sine'; o.frequency.setValueAtTime(freq, actx.currentTime);
+  if(glideTo) o.frequency.exponentialRampToValueAtTime(glideTo, actx.currentTime+dur);
+  const peakGain=Math.max(0.0001,peak*gainNow());
+  g.gain.setValueAtTime(0.0001, actx.currentTime);
+  g.gain.exponentialRampToValueAtTime(peakGain, actx.currentTime+0.015);
+  g.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime+dur);
+  o.connect(g).connect(masterGain); o.start(); o.stop(actx.currentTime+dur+0.02);
+}
+function noiseBurst(dur,freq,peak){
+  if(!actx) return;
+  const n=Math.floor(actx.sampleRate*dur); const buf=actx.createBuffer(1,n,actx.sampleRate);
+  const d=buf.getChannelData(0); for(let i=0;i<n;i++) d[i]=(Math.random()*2-1)*(1-i/n);
+  const src=actx.createBufferSource(); src.buffer=buf;
+  const filt=actx.createBiquadFilter(); filt.type='lowpass'; filt.frequency.value=freq;
+  const g=actx.createGain(); g.gain.value=peak*gainNow();
+  src.connect(filt).connect(g).connect(masterGain); src.start();
+}
+function playUiClick(){ tone(520,0.08,'square',0.05); }
+function playLaunch(kind){
+  if(kind==='stonefall') tone(160,0.22,'sawtooth',0.09,90);
+  else if(kind==='splinter') tone(720,0.14,'triangle',0.07,1200);
+  else tone(300,0.2,'sawtooth',0.08,140);
+}
+let _drawT=0;
+function playDrawTension(power){ const now=performance.now(); if(now-_drawT<140) return; _drawT=now; tone(90+power*160,0.06,'triangle',0.025); }
+function playImpact(){ noiseBurst(0.12,900,0.16); tone(120,0.1,'square',0.06); }
+function playCrumble(){ noiseBurst(0.28,500,0.14); }
+function playExplosion(){ noiseBurst(0.4,700,0.22); tone(70,0.3,'sawtooth',0.12,40); }
+function playRumble(){ noiseBurst(0.9,220,0.18); tone(50,0.9,'sine',0.1,30); }
+function playWardenAlarm(){ tone(880,0.14,'square',0.08); setTimeout(()=>tone(660,0.16,'square',0.08),120); }
+function playResultSting(stars){ const notes=[440,554,659,880]; for(let i=0;i<=stars;i++) setTimeout(()=>tone(notes[i]||880,0.22,'triangle',0.08),i*110); }
+function playAmbientStart(){ tone(220,0.3,'sine',0.03,260); }
+function refreshMuteIcon(){ btnMute.textContent=(hostSoundPref && !localMuted)?'🔊':'🔇'; }
+
+/* ---------- 13. hud + screens ---------- */
+function refreshHud(){
+  const pct=level?Math.min(99,Math.round(damagePctNow())):0;
+  breachFill.style.width=pct+'%'; breachPct.textContent=pct+'%';
+  ammoRack.innerHTML='';
+  for(const key of AMMO_ORDER){
+    const spec=AMMO[key];
+    const btn=document.createElement('button');
+    btn.type='button'; btn.className='ammo-btn'+(key===currentAmmo?' active':'');
+    btn.disabled=(pools.player[key]||0)<=0;
+    btn.innerHTML=`<b>${spec.glyph}</b><span>${pools.player[key]||0}</span>`;
+    btn.setAttribute('aria-label', spec.label+', '+(pools.player[key]||0)+' left');
+    btn.addEventListener('click',()=>selectAmmo(key));
+    ammoRack.appendChild(btn);
+  }
+  const anyWardens = level && level.wardens.length>0;
+  wardenStatus.hidden=!anyWardens;
+  if(anyWardens){
+    const harmed=level.wardens.some(w=>w.harmed);
+    wardenStatus.classList.toggle('harmed',harmed);
+    wardenLabel.textContent = harmed? 'Wardens harmed':'Wardens safe';
+    wardenIcon.textContent = harmed? '⚠':'🛡';
+  }
+}
+function showScreen(name){
+  for(const k in screens) screens[k].hidden = (k!==name);
+  hud.hidden = (name!=='play');
+  aimReadout.hidden = true;
+  screenState=name;
+}
+function toast(msg,warn){
+  toastEl.textContent=msg; toastEl.hidden=false; toastEl.classList.toggle('warn',!!warn);
+  clearTimeout(toast._t); toast._t=setTimeout(()=>{ toastEl.hidden=true; },2200);
+}
+function formatClock(ms){ const s=Math.ceil(ms/1000); return Math.floor(s/60)+':'+String(s%60).padStart(2,'0'); }
+
+function nextUnlockedLevelLabel(){
+  for(const lv of LEVELS){ if(!(campaignState.levels[lv.key]||{}).cleared) return 'Continue at '+lv.name; }
+  return 'Campaign cleared — refight any hold';
+}
+function openMenu(){ campaignSub.textContent=nextUnlockedLevelLabel(); showScreen('menu'); }
+function openMap(){
+  levelGrid.innerHTML='';
+  let totalStars=0;
+  LEVELS.forEach((lv,i)=>{
+    const saved=campaignState.levels[lv.key]||{stars:0,cleared:false};
+    totalStars+=saved.stars;
+    const unlocked = i===0 || (campaignState.levels[LEVELS[i-1].key]||{}).cleared;
+    const tile=document.createElement('button');
+    tile.type='button'; tile.className='level-tile'+(lv.boss?' boss':'')+(unlocked?'':' locked');
+    tile.disabled=!unlocked;
+    tile.innerHTML=`<b>${i+1}. ${escapeHtml(lv.name)}</b><small>${escapeHtml(lv.sub)}</small><span class="stars has${saved.stars}"><span>★</span><span>★</span><span>★</span></span>`;
+    if(unlocked) tile.addEventListener('click', ()=>startCampaignLevel(i));
+    levelGrid.appendChild(tile);
+  });
+  mapStars.textContent = totalStars+' / '+(LEVELS.length*3)+' ★';
+  showScreen('map');
+}
+function startCampaignLevel(i){
+  currentLevelIndex=i;
+  const lv=LEVELS[i];
+  startRun(lv, hashSeed(lv.key), 'campaign');
+  hudLevelName.textContent=(i+1)+'. '+lv.name;
+  hudSub.textContent=lv.sub;
+  clockWrap.hidden=true;
+  showScreen_playFallback();
+  playAmbientStart();
+}
+// 'play' has no dedicated overlay screen (the canvas itself is the play
+// surface) — showScreen_playFallback hides every overlay and shows the HUD.
+function showScreen_playFallback(){
+  for(const k in screens) screens[k].hidden = true;
+  hud.hidden = false; aimReadout.hidden = true; screenState='play';
+}
+
+function buildResultActions(){
+  const lv=LEVELS[currentLevelIndex];
+  const acts=[];
+  const cleared=(campaignState.levels[lv.key]||{}).cleared;
+  const nextIdx=currentLevelIndex+1;
+  if(cleared && nextIdx<LEVELS.length) acts.push({label:'Next Hold →', primary:true, handler:()=>startCampaignLevel(nextIdx)});
+  acts.push({label:'Retry Hold', primary:!cleared, handler:()=>startCampaignLevel(currentLevelIndex)});
+  acts.push({label:'Campaign Map', primary:false, handler:openMap});
+  return acts;
+}
+function showResults(cfg){
+  resultsTitle.textContent=cfg.title;
+  resultsStars.className='stars-row s'+cfg.stars;
+  resultsStars.innerHTML='<span>★</span><span>★</span><span>★</span>';
+  resultsStats.innerHTML=`<div><b>${Math.round(cfg.pct)}%</b><span>Breach</span></div><div><b>${cfg.score}</b><span>Score</span></div><div><b>${cfg.shotsRemaining}</b><span>Ammo left</span></div><div><b>${cfg.wardensHarmed?cfg.wardensHarmed+' lost':'All safe'}</b><span>Wardens</span></div>`;
+  resultsNote.textContent=cfg.note||'';
+  resultsActions.innerHTML='';
+  for(const a of cfg.actions){
+    const b=document.createElement('button'); b.type='button'; b.className='btn'+(a.primary?' btn-primary':'');
+    b.textContent=a.label; b.addEventListener('click',a.handler); resultsActions.appendChild(b);
+  }
+  showScreen('results'); playResultSting(cfg.stars);
+}
+function saveCampaign(){
+  host('progress',{progress: campaignProgressPct(), state:{campaign:JSON.stringify(campaignState)}});
+}
+function campaignProgressPct(){
+  const cleared=LEVELS.filter(lv=>(campaignState.levels[lv.key]||{}).cleared).length;
+  return Math.min(99, Math.round(cleared/LEVELS.length*100));
+}
+function sendProgress(){
+  const pct=damagePctNow();
+  host('progress',{progress:Math.min(99,Math.round(pct)), score: scoreForRun({pct,stars:starsFor(pct,wardensHarmedCount),wardensHarmed:wardensHarmedCount,shotsRemaining:AMMO_ORDER.reduce((s,k)=>s+(pools.player[k]||0),0),keystoneDown:false}), state:{campaign:JSON.stringify(campaignState)}});
+}
+
+function checkRunEnd(dtMs){
+  if(mode==='campaign' || mode==='party'){
+    if(ammoExhausted(pools.player) && allSettled()){
+      settleWaitMs+=dtMs;
+      if(settleWaitMs>250){ if(mode==='campaign') finishSoloRun(); else finishPartyRun(); }
+    } else settleWaitMs=0;
+  }
+}
+function finishSoloRun(){
+  if(runCompletedFlag) return; runCompletedFlag=true;
+  const pct=damagePctNow();
+  const wardensHarmed=wardensHarmedCount;
+  const shotsRemaining=AMMO_ORDER.reduce((s,k)=>s+(pools.player[k]||0),0);
+  const keystoneDown = !!(level.keystoneId && !level.blocks.find(b=>b.id===level.keystoneId && b.alive));
+  const stars=starsFor(pct,wardensHarmed);
+  const score=scoreForRun({pct,stars,wardensHarmed,shotsRemaining,keystoneDown});
+  const lv=LEVELS[currentLevelIndex];
+  const prev=campaignState.levels[lv.key]||{stars:0,bestScore:0,cleared:false};
+  campaignState.levels[lv.key]={stars:Math.max(prev.stars,stars), bestScore:Math.max(prev.bestScore,score), cleared:true};
+  host('complete',{score,progress:100,state:{campaign:JSON.stringify(campaignState)}});
+  showResults({
+    title: lv.boss ? (stars>0?'Warlord Toppled':'The Anvil Holds') : (stars>0?'Hold Breached':'Siege Repelled'),
+    stars, pct, wardensHarmed, shotsRemaining, score,
+    note: wardensHarmed? 'A Warden was lost — protect them for the safety bonus next time.' : (stars===3?'Flawless breach.':'Push damage higher or spare every Warden for full marks.'),
+    actions: buildResultActions(),
+  });
+}
+
+/* ---------- 14. duel vs bot ---------- */
+function sumBudget(b){ return Object.values(b).reduce((s,n)=>s+n,0); }
+function startDuel(){
+  const seed=(Date.now()^Math.floor(Math.random()*1e9))>>>0;
+  startRun(DUEL_DEF, seed, 'duel');
+  duel={turn:'player', playerShots:sumBudget(DUEL_DEF.budget), botShots:sumBudget(DUEL_DEF.budget), ended:false};
+  hudLevelName.textContent='Duel Arena'; hudSub.textContent='Your turn — aim and fire';
+  clockWrap.hidden=true;
+  showScreen_playFallback();
+  playAmbientStart();
+}
+function botPickTarget(){
+  const alive=level.blocks.filter(b=>b.alive);
+  if(!alive.length) return {x:level.baseX+200,y:level.groundY-100};
+  const keystone=alive.find(b=>b.isKeystone);
+  const safe=alive.filter(b=>!level.wardens.some(w=>w.alive && !w.harmed && w.blockId===b.id));
+  const pool=safe.length?safe:alive;
+  if(keystone && Math.random()<0.45 && safe.includes(keystone)) return {x:keystone.x,y:keystone.y};
+  const pick=pool[Math.floor(Math.random()*pool.length)];
+  return {x:pick.x,y:pick.y};
+}
+function botPickAmmo(){
+  const avail=AMMO_ORDER.filter(k=>(pools.bot[k]||0)>0);
+  if(!avail.length) return null;
+  return avail[Math.floor(Math.random()*avail.length)];
+}
+function botChooseShot(){
+  const ammoKey=botPickAmmo();
+  if(!ammoKey) return null;
+  const target=botPickTarget();
+  let best=null;
+  for(let pw=0.35; pw<=1.001; pw+=0.09){
+    for(let deg=12; deg<=76; deg+=6){
+      const ang=-deg*Math.PI/180;
+      const pred=predictTrajectory(ammoKey,ang,pw,220);
+      const d=Math.hypot(pred.hitX-target.x,pred.hitY-target.y);
+      if(!best||d<best.d) best={power:pw,angle:ang,d};
+    }
+  }
+  const skill=0.72, jitter=(1-skill)*0.16;
+  return {ammoKey, angle:best.angle+(Math.random()-0.5)*jitter, power:clamp(best.power+(Math.random()-0.5)*jitter,0.12,1)};
+}
+function duelShouldEnd(){
+  const pDone=(duel.playerShots<=0) || !AMMO_ORDER.some(k=>pools.player[k]>0);
+  const bDone=(duel.botShots<=0) || !AMMO_ORDER.some(k=>pools.bot[k]>0);
+  return damagePctNow()>=97 || (pDone && bDone);
+}
+function waitUntilSettled(cb){
+  const check=()=>{ if(allSettled() && !slowMo.active) cb(); else setTimeout(check,120); };
+  check();
+}
+function botTakeTurn(){
+  const shot=botChooseShot();
+  if(!shot){ duel.turn='player'; hudSub.textContent='Your turn — aim and fire'; return; }
+  pools.bot[shot.ammoKey]--; duel.botShots--;
+  fireProjectile(shot.ammoKey, shot.angle, shot.power, 'bot');
+  waitUntilSettled(()=>{
+    if(duelShouldEnd()){ finishDuel(); return; }
+    duel.turn='player'; hudSub.textContent='Your turn — aim and fire';
+  });
+}
+function scheduleDuelHandoff(){
+  duel.turn='bot'; hudSub.textContent="Bot's turn…"; refreshHud();
+  waitUntilSettled(()=>{
+    if(duelShouldEnd()){ finishDuel(); return; }
+    if(duel.botShots<=0 || !AMMO_ORDER.some(k=>pools.bot[k]>0)){ duel.turn='player'; hudSub.textContent='Your turn — aim and fire'; return; }
+    setTimeout(botTakeTurn,500);
+  });
+}
+function finishDuel(){
+  if(runCompletedFlag) return; runCompletedFlag=true; duel.ended=true;
+  const totalHp=level.totalMaxHp||1;
+  const playerPct=clamp(damageBy.player/totalHp*100,0,100);
+  const botPct=clamp(damageBy.bot/totalHp*100,0,100);
+  const keystoneDown=!!(level.keystoneId && !level.blocks.find(b=>b.id===level.keystoneId && b.alive));
+  const pStars=starsFor(playerPct, wardensHarmedBy.player);
+  const pScore=scoreForRun({pct:playerPct, stars:pStars, wardensHarmed:wardensHarmedBy.player, shotsRemaining:0, keystoneDown});
+  const bScore=scoreForRun({pct:botPct, stars:starsFor(botPct,wardensHarmedBy.bot), wardensHarmed:wardensHarmedBy.bot, shotsRemaining:0, keystoneDown});
+  const outcome = pScore>bScore?'Victory':pScore<bScore?'Defeat':'Draw';
+  campaignState.duels={played:(campaignState.duels&&campaignState.duels.played||0)+1, wins:(campaignState.duels&&campaignState.duels.wins||0)+(outcome==='Victory'?1:0)};
+  host('complete',{score:pScore, progress:100, state:{campaign:JSON.stringify(campaignState)}});
+  showResults({
+    title: outcome==='Victory'?'Duel Won':outcome==='Defeat'?'Duel Lost':'Duel Drawn',
+    stars:pStars, pct:playerPct, wardensHarmed:wardensHarmedBy.player, shotsRemaining:0, score:pScore,
+    note:`Bot dealt ${Math.round(botPct)}% breach (score ${bScore}).${wardensHarmedBy.bot?' The bot cost a Warden too.':''}`,
+    actions:[{label:'Rematch', primary:true, handler:startDuel},{label:'Menu', primary:false, handler:openMenu}],
+  });
+}
+
+/* ---------- 15. siege party (room multiplayer via match-state / match-action) ---------- */
+function sendMatchAction(action, modeArg){
+  const t=Date.now();
+  if(t-lastActionAt<220){ setTimeout(()=>sendMatchAction(action,modeArg), 220-(t-lastActionAt)); return; }
+  lastActionAt=Date.now();
+  host('match-action',{action, mode: modeArg==='replace'?'replace':'merge'});
+}
+function enterPartyLobby(){
+  showScreen('party');
+  partyHeadline.textContent='Waiting on the host…';
+  renderPartyLobby();
+  sendMatchAction({hostProbe:hostNonce});
+}
+function renderPartyLobby(){
+  const rosterHtml = roomParticipants.map(p=>{
+    const ready = roomReadyStates[p.actorId] ? ' ✓' : '';
+    return `<span>${escapeHtml(p.label||'Player')}${p.role==='host'?' · host':''}${ready}</span>`;
+  }).join('') + roomBotSlots.map(s=>`<span>Bot · ${escapeHtml(s.difficulty||'standard')}</span>`).join('');
+  partyRoster.innerHTML = rosterHtml || '<span>Just you, so far</span>';
+  const ms=lastMatchState||{};
+  const board=ms.board||{};
+  partyBoard.innerHTML = Object.keys(board).length
+    ? Object.entries(board).map(([k,v])=>`<div class="row"><span>${escapeHtml((v&&v.label)||k)}</span><b>${Math.round((v&&v.pct)||0)}% · ${(v&&v.score)||0}</b></div>`).join('')
+    : '<div class="row"><span>No results yet</span><b>—</b></div>';
+  if(ms.phase==='active'){
+    partyHeadline.textContent = isHost? 'Siege underway — good luck!' : 'The siege is underway!';
+    btnPartyStart.hidden=true;
+    if(!partyStartedLocally) beginPartyRun(ms);
+  } else if(isHost){
+    partyHeadline.textContent='You are hosting — start when your group is ready.';
+    btnPartyStart.hidden=false;
+  } else {
+    partyHeadline.textContent='Waiting for the host to start the siege…';
+    btnPartyStart.hidden=true;
+  }
+}
+btnPartyStart.addEventListener('click', ()=>{
+  ensureAudio();
+  const seed=Math.floor(Math.random()*1e9);
+  const now=Date.now();
+  sendMatchAction({phase:'active', seed, ammoBudget:PARTY_DEF.budget, startedAt: now+3000, endsAt: now+3000+PARTY_WINDOW_MS, board:{}, hostProbe:hostNonce}, 'merge');
+  if(roomHostControls && roomHostControls.allowBotFill && roomBotSlots.length) queueBotSlotResults();
+});
+function queueBotSlotResults(){
+  setTimeout(()=>{
+    const rng=mulberry32(hashSeed('bots'+Date.now()));
+    const ms=lastMatchState||{};
+    const board=Object.assign({}, ms.board);
+    for(const slot of roomBotSlots){
+      const skill = slot.difficulty==='hard'?0.8: slot.difficulty==='easy'?0.4:0.6;
+      const pct=clamp(30+skill*55+(rng()-0.5)*20,10,97);
+      const wardensHarmed = rng()<(1-skill)*0.3 ? 1:0;
+      const stars=starsFor(pct,wardensHarmed);
+      const score=scoreForRun({pct,stars,wardensHarmed,shotsRemaining:0,keystoneDown:pct>85});
+      board['bot:'+slot.slotId]={label:'Bot · '+(slot.difficulty||'standard'), pct, score, wardensHarmed};
+    }
+    sendMatchAction({board}, 'merge');
+  }, 4000);
+}
+function beginPartyRun(ms){
+  partyStartedLocally=true; partyResultSent=false;
+  partyStartsAt=ms.startedAt||Date.now(); partyEndsAt=ms.endsAt||(Date.now()+PARTY_WINDOW_MS);
+  const budget=ms.ammoBudget||PARTY_DEF.budget;
+  startRun(Object.assign({},PARTY_DEF,{budget}), ms.seed||1, 'party');
+  hudLevelName.textContent='Siege Party'; hudSub.textContent='Break as much as you can before time runs out';
+  clockWrap.hidden=false;
+  showScreen_playFallback();
+  playAmbientStart();
+}
+function finishPartyRun(){
+  if(partyResultSent) return; partyResultSent=true; runCompletedFlag=true;
+  const pct=damagePctNow();
+  const wardensHarmed=wardensHarmedCount;
+  const shotsRemaining=AMMO_ORDER.reduce((s,k)=>s+(pools.player[k]||0),0);
+  const keystoneDown=!!(level.keystoneId && !level.blocks.find(b=>b.id===level.keystoneId && b.alive));
+  const stars=starsFor(pct,wardensHarmed);
+  const score=scoreForRun({pct,stars,wardensHarmed,shotsRemaining,keystoneDown});
+  host('complete',{score,progress:100,state:{campaign:JSON.stringify(campaignState)}});
+  if(isHost){
+    const ms=lastMatchState||{};
+    const board=Object.assign({}, ms.board, {host:{label:'Host (you)', pct, score, wardensHarmed}});
+    sendMatchAction({board}, 'merge');
+  }
+  showResults({
+    title:'Siege Complete', stars, pct, wardensHarmed, shotsRemaining, score,
+    note:"Your result is saved to your PhantomPlay history and the global leaderboard. This room's live feed only carries the host's run in this build — see Known Issues.",
+    actions:[{label:'Back to Lobby', primary:true, handler:()=>{ partyStartedLocally=false; showScreen('party'); renderPartyLobby(); }},{label:'Menu', primary:false, handler:openMenu}],
+  });
+}
+
+/* ---------- 16. host <-> game protocol wiring ---------- */
+function applySettings(d){
+  hostSoundPref = d.sound!==false;
+  reducedMotion = !!d.reducedMotion;
+  reducedMotionToggle.checked = reducedMotion;
+  document.body.classList.toggle('reduced', reducedMotion);
+  refreshMuteIcon();
+}
+function applyRestore(state){
+  if(!state) return;
+  try{
+    const raw = state.campaign && typeof state.campaign==='string' ? JSON.parse(state.campaign) : null;
+    if(raw && typeof raw==='object') campaignState=Object.assign({levels:{},tutorialSeen:false,duels:{played:0,wins:0}}, raw);
+  }catch{}
+  if(screenState==='menu') campaignSub.textContent=nextUnlockedLevelLabel();
+}
+function setPausedByHost(v){ hostPaused=v; syncPauseUi(); }
+function togglePauseLocal(){
+  if(screenState!=='play' && screenState!=='pause') return;
+  paused=!paused; host('paused',{paused}); syncPauseUi();
+}
+function resumeLocal(){ paused=false; host('paused',{paused:false}); syncPauseUi(); }
+function syncPauseUi(){
+  const shouldPause = paused || hostPaused;
+  if(shouldPause && screenState==='play'){ showScreen('pause'); }
+  else if(!shouldPause && screenState==='pause'){ showScreen_playFallback(); }
+}
+function handleHostRestart(){
+  if(mode==='campaign' && (screenState==='play'||screenState==='pause')) startCampaignLevel(currentLevelIndex);
+  else if(mode==='duel' && (screenState==='play'||screenState==='pause')) startDuel();
+  paused=false; hostPaused=false;
+}
+function handleHostExit(){ try{ saveCampaign(); }catch{} }
+function applyMatchState(d){
+  const wasInRoom=inRoom;
+  inRoom=true;
+  roomParticipants=d.participants||[]; roomReadyStates=d.readyStates||{}; roomBotSlots=d.botSlots||[]; roomHostControls=d.hostControls||null;
+  const ms=d.matchState||{};
+  lastMatchState=ms;
+  if(ms.hostProbe===hostNonce) isHost=true;
+  // A room only ever reaches this game because it was launched FROM that
+  // room, so in practice this first message lands while still on the boot
+  // screen — but route defensively off any screen the very first time we
+  // learn we're in a room, rather than only from boot/menu, so a slower
+  // first poll can never strand the player on an unrelated screen.
+  if(!wasInRoom || screenState==='boot' || screenState==='menu') enterPartyLobby();
+  else if(screenState==='party') renderPartyLobby();
+  else if(mode==='party' && ms.phase==='active' && !partyStartedLocally) beginPartyRun(ms);
+}
+addEventListener('message', e=>{
+  const d=e.data; if(!d || d.source!=='phantomplay-host') return;
+  if(d.type==='settings') applySettings(d);
+  else if(d.type==='pause') setPausedByHost(true);
+  else if(d.type==='resume') setPausedByHost(false);
+  else if(d.type==='restart') handleHostRestart();
+  else if(d.type==='exit') handleHostExit();
+  else if(d.type==='restore') applyRestore(d.state);
+  else if(d.type==='match-state') applyMatchState(d);
+});
+document.addEventListener('visibilitychange', ()=>{
+  if(document.hidden && screenState==='play' && !paused){ paused=true; host('paused',{paused:true}); syncPauseUi(); }
+});
+
+/* ---------- 17. menu / tutorial / pause wiring ---------- */
+function renderTutorialSlide(){
+  const s=TUTORIAL_SLIDES[tutorialIdx];
+  tutorialBody.innerHTML=`<div class="tut-visual">${s.icon}</div><h3>${escapeHtml(s.h)}</h3><p>${escapeHtml(s.p)}</p>`;
+  btnTutorialNext.textContent = tutorialIdx===TUTORIAL_SLIDES.length-1 ? 'Start Siege' : 'Next';
+}
+function openTutorial(){ tutorialIdx=0; renderTutorialSlide(); showScreen('tutorial'); }
+function closeTutorial(){ campaignState.tutorialSeen=true; saveCampaign(); openMenu(); }
+btnTutorialNext.addEventListener('click', ()=>{
+  if(tutorialIdx<TUTORIAL_SLIDES.length-1){ tutorialIdx++; renderTutorialSlide(); } else closeTutorial();
+});
+btnTutorialSkip.addEventListener('click', closeTutorial);
+
+function handleAction(action){
+  ensureAudio();
+  if(action==='campaign') openMap();
+  else if(action==='duel') startDuel();
+  else if(action==='tutorial') openTutorial();
+  else if(action==='back-menu') openMenu();
+  else if(action==='resume') resumeLocal();
+  else if(action==='restart-level'){ if(mode==='campaign') startCampaignLevel(currentLevelIndex); else if(mode==='duel') startDuel(); paused=false; hostPaused=false; }
+  else if(action==='quit-level'){ paused=false; hostPaused=false; if(mode==='campaign') openMap(); else openMenu(); }
+}
+document.querySelectorAll('[data-action]').forEach(el=>{ el.addEventListener('click', ()=>handleAction(el.dataset.action)); });
+btnPause.addEventListener('click', togglePauseLocal);
+btnMute.addEventListener('click', ()=>{ ensureAudio(); localMuted=!localMuted; refreshMuteIcon(); });
+volumeSlider.addEventListener('input', e=>{ volume=+e.target.value; });
+reducedMotionToggle.addEventListener('change', e=>{ reducedMotion=e.target.checked; document.body.classList.toggle('reduced',reducedMotion); });
+
+/* ---------- 18. main loop ---------- */
+function loop(ts){
+  requestAnimationFrame(loop);
+  if(!lastTs) lastTs=ts;
+  const dtMs=Math.min(48, ts-lastTs); lastTs=ts;
+  const dt=dtMs/1000;
+  shake=Math.max(0, shake-dt*40);
+  if(screenState==='play' && !paused && !hostPaused){
+    let timeScale=1;
+    if(slowMo.active){ slowMo.t+=dt; timeScale=0.12; if(slowMo.t>=slowMo.dur) slowMo.active=false; }
+    if(level) stepPhysics(dt*timeScale);
+    if(mode==='party' && partyStartedLocally){
+      clockLabel.textContent=formatClock(Math.max(0,partyEndsAt-Date.now()));
+      if(Date.now()>=partyEndsAt && !partyResultSent) finishPartyRun();
+    }
+    checkRunEnd(dtMs);
+  }
+  draw();
+}
+
+/* ---------- 19. bootstrap ---------- */
+addEventListener('resize', resize);
+resize();
+requestAnimationFrame(loop);
+host('ready');
+setTimeout(()=>{
+  if(inRoom) return;
+  if(!campaignState.tutorialSeen) openTutorial(); else openMenu();
+}, 500);
+</script>
+</body></html>
