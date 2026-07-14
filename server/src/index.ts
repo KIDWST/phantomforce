@@ -6170,6 +6170,12 @@ app.post("/phantom-ai/ops/social-oauth/start", async (request, reply) => {
 app.get("/phantom-ai/ops/social-oauth/callback", async (request, reply) => {
   try {
     const result = await completeSocialOAuthCallback((request.query ?? {}) as Record<string, unknown>);
+    const eventPayload = JSON.stringify({
+      protocol: "phantomforce.social-oauth.v1",
+      type: "connected",
+      platform: result.platform,
+      connectedAt: new Date().toISOString(),
+    }).replace(/</g, "\\u003c");
     return reply.type("text/html; charset=utf-8").send(`<!doctype html>
 <html lang="en">
   <head>
@@ -6187,8 +6193,13 @@ app.get("/phantom-ai/ops/social-oauth/callback", async (request, reply) => {
     <main>
       <p style="letter-spacing:.24em;text-transform:uppercase;color:#45ffad;font-weight:800;">Connection saved</p>
       <h1>${String(result.platform).replace(/</g, "&lt;")} is connected to PhantomForce.</h1>
-      <p>Return to the admin app and press <code>Sync analytics</code>. Tokens were stored locally and were not printed in this page.</p>
-      <script>setTimeout(() => { try { window.close(); } catch {} }, 1800);</script>
+      <p>Return to the admin app. PhantomForce is refreshing the social connection and can sync live analytics now. Tokens were stored server-side and were not printed in this page.</p>
+      <script>
+        const eventPayload = ${eventPayload};
+        try { window.opener && window.opener.postMessage(eventPayload, window.location.origin); } catch {}
+        try { localStorage.setItem("pf.social.oauth.last", JSON.stringify(eventPayload)); } catch {}
+        setTimeout(() => { try { window.close(); } catch {} }, 1400);
+      </script>
     </main>
   </body>
 </html>`);

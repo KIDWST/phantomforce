@@ -9,20 +9,20 @@ import {
   freshEditState, applyFilterPreset, renderBaseFrame,
   addBokehSpot, removeBokehSpotNear, removeBokehSpotAt, nearestBokehSpot, moveBokehSpot, resizeBokehSpot,
   setBokehMask, freshTextStyle, TEXT_FONTS, TEXT_PRESETS, applyTextPreset,
-} from "./imagefilters.js?v=phantom-live-20260714-254";
-import { getRembgStatus, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260714-254";
-import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260714-254";
-import { parseAnalyticsReport } from "./social-analytics.js?v=phantom-live-20260714-254";
+} from "./imagefilters.js?v=phantom-live-20260714-255";
+import { getRembgStatus, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260714-255";
+import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260714-255";
+import { parseAnalyticsReport } from "./social-analytics.js?v=phantom-live-20260714-255";
 import {
   freshComposition, compositionSnapshot, restoreComposition, addImageLayer, replaceImageLayerSource, addTextLayer, addColorLayer,
   duplicateLayer, removeSelectedLayers, moveLayerOrder, selectedLayers, selectLayer, selectAllLayers,
   loadCompositionImages, renderComposition, drawCompositionOverlay, drawDetectedSubjectOverlay, canvasPoint, hitTestLayer, hitTestResizeHandle,
   setCanvasPreset, zoomComposition, canvasPointToLayer, layerPointToCanvas,
   imageEditSnapshot, restoreImageEditSnapshot, pushEditorSnapshot,
-} from "./content-editor.js?v=phantom-live-20260714-254";
+} from "./content-editor.js?v=phantom-live-20260714-255";
 import {
   currentTenantId, currentWs, session, store, visible, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem, wsName,
-} from "./store.js?v=phantom-live-20260714-254";
+} from "./store.js?v=phantom-live-20260714-255";
 
 const CH_KEY = "pf.contenthub.v2";
 const CH_REMOVED_KEY = "pf.contenthub.removed.v1";
@@ -3478,6 +3478,38 @@ function analyticsCoverage(feedRows = []) {
   </div>`;
 }
 let analyticsNotice = "";
+let analyticsMount = null;
+let analyticsOpts = {};
+let socialOAuthListenerReady = false;
+
+function handleSocialOAuthComplete(payload = {}) {
+  const platform = String(payload.platform || "").toLowerCase();
+  if (!platform) return;
+  analyticsNotice = `${connectorStatus(platform)?.name || platform} connected. Syncing live analytics…`;
+  analyticsConnectorState.loaded = false;
+  if (!analyticsMount?.isConnected) return;
+  const accounts = loadSocialAccounts();
+  void refreshLiveAnalytics(analyticsMount, accounts, analyticsOpts, { force: true, platform });
+}
+function parseSocialOAuthPayload(value) {
+  if (!value) return null;
+  if (typeof value === "object") return value;
+  try { return JSON.parse(String(value)); } catch { return null; }
+}
+function ensureSocialOAuthListener() {
+  if (socialOAuthListenerReady || typeof window === "undefined") return;
+  socialOAuthListenerReady = true;
+  window.addEventListener("message", (event) => {
+    if (event.origin !== window.location.origin) return;
+    const data = parseSocialOAuthPayload(event.data);
+    if (data?.protocol === "phantomforce.social-oauth.v1" && data.type === "connected") handleSocialOAuthComplete(data);
+  });
+  window.addEventListener("storage", (event) => {
+    if (event.key !== "pf.social.oauth.last") return;
+    const data = parseSocialOAuthPayload(event.newValue);
+    if (data?.protocol === "phantomforce.social-oauth.v1" && data.type === "connected") handleSocialOAuthComplete(data);
+  });
+}
 function accountAnalyticsRow(row, esc) {
   const account = row.account;
   const feed = row.feed;
@@ -3531,7 +3563,7 @@ function wireAnalyticsActions(el, accounts, opts) {
       const authUrl = response?.oauth?.authorizationUrl || response?.oauth?.url;
       if (authUrl) {
         window.open(authUrl, "_blank", "noopener,noreferrer");
-        analyticsNotice = `${connectorStatus(platform)?.name || platform} sign-in opened. Come back here after approving the account.`;
+        analyticsNotice = `${connectorStatus(platform)?.name || platform} sign-in opened. Approve it once; PhantomForce will refresh this page when the callback returns.`;
       } else {
         analyticsNotice = "That platform did not return a sign-in link.";
       }
@@ -3572,6 +3604,9 @@ function wireAnalyticsActions(el, accounts, opts) {
   });
 }
 export function renderAnalytics(el, opts = {}, renderOptions = {}) {
+  analyticsMount = el;
+  analyticsOpts = opts;
+  ensureSocialOAuthListener();
   const esc = opts.esc || ((s) => String(s));
   const accounts = loadSocialAccounts();
   const displayAccounts = accounts.filter((account) => LIVE_ANALYTICS_PLATFORMS.has(account.id));
