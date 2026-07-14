@@ -55,9 +55,9 @@ $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoi
 $principal = New-ScheduledTaskPrincipal -UserId ([System.Security.Principal.WindowsIdentity]::GetCurrent().Name) -LogonType Interactive -RunLevel Limited
 
 try {
-  Register-ScheduledTask -TaskName "PhantomForce Admin Live Server" -Action $startAction -Trigger $startTrigger -Settings $settings -Principal $principal -Description "Starts the local static admin server for admin.phantomforce.online." -Force | Out-Null
-  Register-ScheduledTask -TaskName "PhantomForce Hermes API" -Action $hermesAction -Trigger $hermesTrigger -Settings $settings -Principal $principal -Description "Starts the Hermes API backend (5190) so new server routes go live." -Force | Out-Null
-  Register-ScheduledTask -TaskName "PhantomForce Admin Main Sync" -Action $syncAction -Trigger $syncTrigger -Settings $settings -Principal $principal -Description "Fast-forwards PhantomForce main and restarts the UI + Hermes so the admin site follows GitHub." -Force | Out-Null
+  Register-ScheduledTask -TaskName "PhantomForce Admin Live Server" -Action $startAction -Trigger $startTrigger -Settings $settings -Principal $principal -Description "Starts the local static admin server for admin.phantomforce.online." -Force -ErrorAction Stop | Out-Null
+  Register-ScheduledTask -TaskName "PhantomForce Hermes API" -Action $hermesAction -Trigger $hermesTrigger -Settings $settings -Principal $principal -Description "Starts the Hermes API backend (5190) so new server routes go live." -Force -ErrorAction Stop | Out-Null
+  Register-ScheduledTask -TaskName "PhantomForce Admin Main Sync" -Action $syncAction -Trigger $syncTrigger -Settings $settings -Principal $principal -Description "Fast-forwards PhantomForce main and restarts the UI + Hermes so the admin site follows GitHub." -Force -ErrorAction Stop | Out-Null
 } catch {
   $watchScript = Join-Path $PSScriptRoot "Watch-AdminMain.ps1"
   $vbs = Join-Path $stateDir "start-admin-live-watch.vbs"
