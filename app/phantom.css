@@ -11838,21 +11838,34 @@ body .phantom .workspace-page :where(
   }
 }
 
-/* Build staleness banner (admin-only, written by the sync watchdog) */
+/* Build sync banner (admin-only, written by the sync watchdog) */
 .build-stale-banner {
   position: fixed; top: 0; left: 0; right: 0; z-index: 400;
   display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
   padding: 10px 14px;
-  background: linear-gradient(90deg, rgba(85,58,8,0.96), rgba(40,26,4,0.96));
-  border-bottom: 1px solid rgba(255,197,80,0.5);
-  color: #ffe9bd; font-size: 13px;
+  background: linear-gradient(90deg, rgba(5,70,45,0.96), rgba(3,26,20,0.96));
+  border-bottom: 1px solid rgba(65,255,161,0.45);
+  color: #d9fff0; font-size: 13px;
 }
-.build-stale-banner b { color: #ffd375; font-size: 13px; }
-.build-stale-banner span { flex: 1; min-width: 200px; color: #e8d3a4; }
+.build-stale-banner.is-refreshing {
+  background: linear-gradient(90deg, rgba(85,58,8,0.96), rgba(40,26,4,0.96));
+  border-bottom-color: rgba(255,197,80,0.5);
+  color: #ffe9bd;
+}
+.build-stale-banner.is-blocked {
+  background: linear-gradient(90deg, rgba(86,15,26,0.96), rgba(35,7,13,0.96));
+  border-bottom-color: rgba(255,126,144,0.55);
+  color: #ffd7dc;
+}
+.build-stale-banner b { color: #41ffa1; font-size: 13px; }
+.build-stale-banner.is-refreshing b { color: #ffd375; }
+.build-stale-banner.is-blocked b { color: #ff9eaa; }
+.build-stale-banner span { flex: 1; min-width: 200px; color: currentColor; opacity: .88; }
 .build-stale-banner button {
-  border: 1px solid rgba(255,211,117,0.4); border-radius: 8px;
-  width: 28px; height: 28px; background: transparent; color: #ffd375;
+  border: 1px solid currentColor; border-radius: 8px;
+  width: 28px; height: 28px; background: transparent; color: currentColor;
   font-size: 16px; cursor: pointer;
+  opacity: .72;
 }
 
 /* ============================== PAGE WORKER PROMPTS ============================== */

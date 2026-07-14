@@ -1,4 +1,4 @@
-import { currentTenantId, session } from "./store.js?v=phantom-live-20260714-253";
+import { currentTenantId, session } from "./store.js?v=phantom-live-20260714-254";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 const TABS = [["radar", "Radar"], ["competitors", "Competitors"], ["sources", "Sources & settings"]];

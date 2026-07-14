@@ -45,7 +45,10 @@ assert.match(contentHubSource, /analyticsConnectorState\.error = force \? messag
 assert.doesNotMatch(contentHubSource, /OAuth is required before real stats appear/, "Analytics should not make the page look empty before OAuth is configured.");
 assert.match(mediaLabSource, /Editable handle or profile URL/, "Media settings must let Jordan change handles per channel.");
 assert.match(mediaLabSource, /cross-posting remain locked until OAuth\/API authorization/, "Profile handles must not imply cross-posting is authorized.");
+assert.match(mediaLabSource, /refreshSocialOAuthStatus/, "Media settings must preload backend OAuth readiness instead of discovering it only after clicks.");
+assert.match(mediaLabSource, /OAuth app ready for authorization/, "Media settings should show when a provider app is ready for real OAuth.");
+assert.match(mediaLabSource, /OAuth setup needed/, "Media settings should clearly show missing provider app setup.");
 assert.match(mediaLabSource, /requestSocialOAuthStart/, "Social connection buttons must use the backend OAuth-start route.");
 assert.match(mediaLabSource, /\/phantom-ai\/ops\/social-oauth\/start/, "OAuth login should not be a hard-coded provider guess in the browser.");
 assert.doesNotMatch(mediaLabSource, /Opened normal login only/, "Failed OAuth start must not fall back to a normal browser login.");
-console.log("Social analytics import checks passed.");
+console.log("Social analytics live OAuth checks passed.");

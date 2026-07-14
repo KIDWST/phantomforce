@@ -30,7 +30,7 @@
 - **Scoped social OAuth + live analytics prep (2026-07-14)** — social analytics is
   now live-feed first, with workspace-scoped stored connections and callback
   support for TikTok, X, and LinkedIn in addition to the existing providers. The
-  admin app build is `phantom-live-20260714-253`. Provider app credentials are
+  admin app build is `phantom-live-20260714-254`. Provider app credentials are
   still required before real accounts can authorize.
 - **Competitor Intelligence + optional Aggressive Mode (2026-07-12)** —
   tenant-scoped public-signal evidence, labeled weak-signal inferences,
@@ -78,7 +78,7 @@
   (`app/index.html`, `app/phantom.css`, `app/js/main.js`).
 - **Living Phantom character** — `app/js/character.js`: 11 painted poses, emotional
   inertia (`governMood`), hologram depth. Shared by admin + public site.
-- Current cache-bust build id: **`phantom-live-20260714-253`**.
+- Current cache-bust build id: **`phantom-live-20260714-254`**.
 
 ## Repo map
 - `app/` — the **admin console** (`admin.phantomforce.online`). `index.html`,

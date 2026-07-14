@@ -6,20 +6,20 @@
  * instead of sending people out to another product.
  */
 
-import { currentTenantId, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260714-253";
+import { currentTenantId, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260714-254";
 import {
   PLATFORMS, registerContentAsset, loadSocialAccounts, saveSocialAccounts, socialStatus,
   loadContentAssets, saveContentAssets, contentAssetDisplayUrl, hydrateContentAssetUrl,
-} from "./contenthub.js?v=phantom-live-20260714-253";
-import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260714-253";
+} from "./contenthub.js?v=phantom-live-20260714-254";
+import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260714-254";
 import {
   addImageLayer, addTextLayer, cloneImageEditState, compositionSnapshot, duplicateLayer,
   freshComposition, hitTestLayer, loadCompositionImages, moveLayerOrder, pushEditorSnapshot,
   removeSelectedLayers, renderComposition, restoreComposition, selectLayer, selectedLayers,
-} from "./content-editor.js?v=phantom-live-20260714-253";
-import { loadImageForEditing, exportCanvas, requestAiEdit, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260714-253";
-import { mountVideoEditor } from "./videocut.js?v=phantom-live-20260714-253";
-import { assetsAvailable, assetBlobUrl, listAssets, recordAssetUsage, saveToAssetCloud, listLocalAssets, refreshLocalAssets, localAssetBlobUrl } from "./orgs.js?v=phantom-live-20260714-253";
+} from "./content-editor.js?v=phantom-live-20260714-254";
+import { loadImageForEditing, exportCanvas, requestAiEdit, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260714-254";
+import { mountVideoEditor } from "./videocut.js?v=phantom-live-20260714-254";
+import { assetsAvailable, assetBlobUrl, listAssets, recordAssetUsage, saveToAssetCloud, listLocalAssets, refreshLocalAssets, localAssetBlobUrl } from "./orgs.js?v=phantom-live-20260714-254";
 
 const CFG_KEY = "pf.medialab.v1";
 const EDIT_INTENT_KEY = "pf.medialab.editIntent.v1";
@@ -186,6 +186,12 @@ let mediaSettingsMount = null;
 let mediaSettingsOpts = {};
 let hermesExtensionListenerReady = false;
 let socialBridgePollTimer = 0;
+let socialOAuthState = {
+  loaded: false,
+  loading: false,
+  error: "",
+  connectors: [],
+};
 
 function cleanSocialHandle(value = "") {
   return String(value || "")
@@ -236,7 +242,40 @@ async function requestSocialOAuthStart(platform) {
   if (!json?.oauth?.authorizationUrl) throw new Error("OAuth start did not return an authorization URL.");
   return json.oauth;
 }
+async function refreshSocialOAuthStatus({ force = false } = {}) {
+  if (socialOAuthState.loading || (socialOAuthState.loaded && !force)) return socialOAuthState;
+  socialOAuthState = { ...socialOAuthState, loading: true, error: "" };
+  try {
+    const response = await fetch("/phantom-ai/ops/social-analytics/status", {
+      headers: socialAuthHeaders(),
+    });
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(String(json?.error || `OAuth status failed (${response.status}).`));
+    socialOAuthState = {
+      loaded: true,
+      loading: false,
+      error: "",
+      connectors: Array.isArray(json?.social_analytics?.connectors) ? json.social_analytics.connectors : [],
+    };
+  } catch (error) {
+    socialOAuthState = {
+      ...socialOAuthState,
+      loaded: true,
+      loading: false,
+      error: error?.message || "OAuth status could not be checked.",
+    };
+  }
+  rerenderMediaSettings();
+  return socialOAuthState;
+}
+function socialConnectorFor(platform) {
+  return socialOAuthState.connectors.find((connector) => connector.id === platform) || null;
+}
 function socialStatusLabel(account) {
+  const connector = socialConnectorFor(account.id);
+  if (connector?.configured) return "live authorized";
+  if (connector?.oauthConfigured) return "OAuth ready";
+  if (socialOAuthState.loading) return "checking OAuth";
   const st = socialStatus(account);
   if (account.connectMode === "live-api" && account.analytics?.live) return "live OAuth";
   if (st === "linked") return "profile saved";
@@ -245,6 +284,10 @@ function socialStatusLabel(account) {
   return "not saved";
 }
 function socialPostingState(account) {
+  const connector = socialConnectorFor(account.id);
+  if (connector?.configured) return "live feed ready";
+  if (connector?.oauthConfigured) return "authorize account";
+  if (socialOAuthState.loading) return "checking setup";
   const st = socialStatus(account);
   if (account.connectMode === "live-api" && account.analytics?.live) return "live data";
   if (account.analytics) return "report imported";
@@ -254,8 +297,12 @@ function socialPostingState(account) {
   return "not configured";
 }
 function socialActionLabel(account) {
+  const connector = socialConnectorFor(account.id);
   if (account.connectMode === "live-api" && account.analytics?.live) return `Refresh ${account.name}`;
-  return `Connect ${account.name} OAuth`;
+  if (connector?.configured) return `Reconnect ${account.name}`;
+  if (connector?.oauthConfigured) return `Connect ${account.name}`;
+  if (socialOAuthState.loading) return "Checking…";
+  return "OAuth setup needed";
 }
 function clampHermesText(value = "", limit = 180) {
   const text = String(value || "").replace(/\s+/g, " ").trim();
@@ -3425,10 +3472,13 @@ export function renderMediaSettings(el, opts = {}) {
   mediaSettingsMount = el;
   mediaSettingsOpts = opts;
   ensureHermesExtensionListener();
+  if (!socialOAuthState.loaded && !socialOAuthState.loading) void refreshSocialOAuthStatus();
   const esc = opts.esc || ((s) => String(s));
   const cfg = loadCfg();
   const socialAccounts = loadSocialAccounts();
   const linkedCount = socialAccounts.filter((account) => socialStatus(account) === "linked" || account.handle).length;
+  const oauthReadyCount = socialOAuthState.connectors.filter((connector) => connector.oauthConfigured).length;
+  const authorizedCount = socialOAuthState.connectors.filter((connector) => connector.configured).length;
   const routeRow = (modality, label) => {
     const provs = providersFor(cfg, modality === "enhance" ? "enhance" : modality);
     return `<label class="set-route"><span>${label}</span>
@@ -3461,9 +3511,10 @@ export function renderMediaSettings(el, opts = {}) {
             <h3>Social profiles</h3>
             <p class="set-note">Every channel defaults to officialchicagoshots and stays editable. Real analytics and cross-posting require OAuth/API authorization; profile handles alone never create fake stats or external posts.</p>
           </div>
-          <span class="set-safe-pill">${linkedCount}/${socialAccounts.length} saved</span>
+          <span class="set-safe-pill">${authorizedCount}/${socialAccounts.length} live · ${oauthReadyCount}/${socialAccounts.length} ready</span>
         </div>
         ${socialNotice ? `<div class="set-social-notice">${esc(socialNotice)}</div>` : ""}
+        ${socialOAuthState.error ? `<div class="set-social-notice">OAuth status check: ${esc(socialOAuthState.error)}</div>` : ""}
         <div class="set-social-grid">
           ${socialAccounts.map((account) => socialCard(account, esc)).join("")}
         </div>
@@ -3496,14 +3547,15 @@ export function renderMediaSettings(el, opts = {}) {
     if (open) open.onclick = async () => {
       open.disabled = true;
       try {
+        if (!socialOAuthState.loaded) await refreshSocialOAuthStatus({ force: true });
         const oauth = await requestSocialOAuthStart(account.id);
         window.open(oauth.authorizationUrl, "_blank", "noopener,noreferrer");
         account.connectMode = "oauth-started";
         account.lastConnectAt = new Date().toISOString();
-        socialNotice = `${account.name} OAuth opened for @${oauth.handle || account.handle || "officialchicagoshots"}. Complete the provider login, then Analytics can sync after the server stores the token.`;
+        socialNotice = `${account.name} authorization opened. Use your signed-in browser account, approve PhantomForce, then return here and sync Analytics.`;
       } catch (error) {
         account.connectMode = account.handle ? "manual-confirmed" : "manual";
-        socialNotice = `${account.name} OAuth is not ready yet: ${error?.message || "missing server OAuth app credentials"}. A normal browser login is not enough for analytics or posting; connect must happen through PhantomForce OAuth.`;
+        socialNotice = `${account.name} needs the PhantomForce OAuth app configured before account authorization can start. A normal browser login is not enough for analytics or posting.`;
       }
       saveAndRender();
     };
@@ -3529,14 +3581,22 @@ export function renderMediaSettings(el, opts = {}) {
 
 function socialCard(account, esc) {
   const status = socialStatus(account);
+  const connector = socialConnectorFor(account.id);
   const profile = socialProfileTarget(account);
-  const lastConnect = status === "linked"
+  const lastConnect = connector?.configured
+    ? `Authorized account: ${connector.savedConnection?.accountHandle || connector.savedConnection?.accountName || connector.handle || account.name}`
+    : connector?.oauthConfigured
+      ? "OAuth app ready. Connect the account once."
+      : status === "linked"
     ? (profile ? `Saved profile: ${profile}` : "Profile saved locally")
   : status === "pending"
       ? "Confirm your handle below once you're signed in, or clear this to start over."
       : account.handle
         ? `Default handle ready: ${account.handle}`
         : "Save a public handle or profile URL";
+  const oauthDetail = connector
+    ? `<div class="set-social-hermes-proof">${svgIc(connector.configured ? "check" : connector.oauthConfigured ? "lock" : "spark")} ${esc(connector.configured ? "Live analytics authorized" : connector.oauthConfigured ? "OAuth app ready for authorization" : "OAuth app setup needed")}</div>`
+    : socialOAuthState.loading ? `<div class="set-social-hermes-proof">${svgIc("refresh")} Checking OAuth setup…</div>` : "";
   const hermesProof = account.hermesProof
     ? `<div class="set-social-hermes-proof">${svgIc("spark")} Saved profile · ${esc(account.hermesProof.displayName || account.hermesProof.handle || account.name)}</div>`
     : "";
@@ -3550,6 +3610,7 @@ function socialCard(account, esc) {
       <span>Analytics status</span>
       <b>${esc(socialPostingState(account))}</b>
     </div>
+    ${oauthDetail}
     ${hermesProof}
     <div class="set-social-actions">
       <button class="set-social-open set-social-action set-social-signin" data-social-open type="button">${esc(socialActionLabel(account))}</button>
