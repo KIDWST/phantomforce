@@ -138,7 +138,32 @@ try {
   assert(metaConnected.linkedInstagramBusiness?.businessAccountId === "ig-1", "Meta callback must save the linked Instagram business account.");
   assert(!JSON.stringify(metaConnected).includes("page-token"), "Meta callback response must not expose page tokens.");
 
-  console.log(JSON.stringify({ ok: true, provider: snapshot.provider, views: snapshot.impressions, followers: snapshot.followers, xFollowers: xSnapshot.followers, oauthCallback: true, metaPageLinked: true, credentialsExposed: false }));
+  process.env.PINTEREST_CLIENT_ID = "pin-client";
+  process.env.PINTEREST_CLIENT_SECRET = "pin-secret";
+  const pinOauth = createSocialOAuthStart("pinterest");
+  assert(pinOauth.authorizationUrl.startsWith("https://www.pinterest.com/oauth/?"), "Pinterest OAuth must use the official authorization endpoint.");
+  const pinFetch = async (input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input);
+    if (url === "https://api.pinterest.com/v5/oauth/token") {
+      const auth = String((init?.headers as Record<string, string>)?.Authorization || "");
+      assert(auth === `Basic ${Buffer.from("pin-client:pin-secret").toString("base64")}`, "Pinterest token exchange must authenticate with HTTP Basic app credentials.");
+      const body = String(init?.body || "");
+      assert(body.includes("grant_type=authorization_code") && body.includes("code=pin-code"), "Pinterest token exchange must send the authorization code.");
+      return new Response(JSON.stringify({ access_token: "stored-pinterest-token", refresh_token: "pin-refresh", expires_in: 3600 }), { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+    if (url === "https://api.pinterest.com/v5/user_account") {
+      return new Response(JSON.stringify({ id: "pin-user-1", username: "officialchicagoshots", business_name: "ChicagoShots" }), { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+    throw new Error(`Unexpected Pinterest URL ${url}`);
+  };
+  const pinConnected = await completeSocialOAuthCallback({ state: pinOauth.state, code: "pin-code" }, pinFetch as typeof fetch);
+  assert(pinConnected.connected?.hasAccessToken === true, "Pinterest callback must store the account token.");
+  assert(pinConnected.connected?.accountHandle === "officialchicagoshots", "Pinterest callback must save the account handle.");
+  assert(!JSON.stringify(pinConnected).includes("stored-pinterest-token"), "Pinterest callback response must not expose saved tokens.");
+  const pinStatus = getSocialAnalyticsConnectorStatus().connectors.find((connector) => connector.id === "pinterest");
+  assert(pinStatus?.configured === true, "Pinterest must report configured after the OAuth callback stores its token.");
+
+  console.log(JSON.stringify({ ok: true, provider: snapshot.provider, views: snapshot.impressions, followers: snapshot.followers, xFollowers: xSnapshot.followers, oauthCallback: true, metaPageLinked: true, pinterestCallback: true, credentialsExposed: false }));
 } finally {
   for (const key of keys) {
     if (original[key] === undefined) delete process.env[key];

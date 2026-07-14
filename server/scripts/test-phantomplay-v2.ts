@@ -131,7 +131,16 @@ try {
   });
   assert(moduleEnable.statusCode === 200, "Enabling the PhantomPlay workspace module should succeed.");
   const v1Route = await app.inject({ method: "GET", url: "/api/phantomplay?tenant_id=client-sports-demo", headers: { Authorization: `Bearer ${ownerToken}` } });
-  assert(v1Route.statusCode === 200 && v1Route.json().catalog.length === after, "The V1 catalog route should now include registered V2 games.");
+  /* Server startup registers additional built-ins (flagship games) into the
+     same catalog array, so compare against the LIVE registered set — a
+     frozen pre-import count goes stale the moment startup adds a game. */
+  const registeredIds = new Set(v1.PHANTOMPLAY_BUILT_IN_GAMES.map((game) => game.id));
+  const servedIds = new Set((v1Route.json().catalog as Array<{ id: string }>).map((game) => game.id));
+  assert(v1Route.statusCode === 200 && servedIds.size === registeredIds.size && [...registeredIds].every((id) => servedIds.has(id)), "The V1 catalog route should serve exactly the registered built-in set.");
+  assert(v2.PHANTOMPLAY_V2_GAMES.every((game) => servedIds.has(game.id)), "The V1 catalog route should include the registered V2 games.");
+  for (const flagshipId of ["cubetown", "skyguard-arena", "keyboardist-on-tour", "tidefront-tactics", "kingdom-breakers"]) {
+    assert(servedIds.has(flagshipId), `The V1 catalog route should include flagship game ${flagshipId}.`);
+  }
   const gamePageRoute = await app.inject({ method: "GET", url: "/api/phantomplay/v2/games/phantom-rumble", headers: { Authorization: `Bearer ${ownerToken}` } });
   assert(gamePageRoute.statusCode === 200 && gamePageRoute.json().game.id === "phantom-rumble", "Game-page route should resolve V2 games.");
   const policyForbidden = await app.inject({ method: "PATCH", url: "/api/phantomplay/v2/workspace-policy", payload: { dailyMinuteLimit: 10 } });
