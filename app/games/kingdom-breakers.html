@@ -525,29 +525,48 @@ function resolveProjectileHit(p, block){
 }
 
 function hasSupport(b){
-  const floor=level.groundY-b.h/2;
-  if(b.y>=floor-2) return true;
+  // Use the level's full (pre-shrink) grid cell size, not the block's own
+  // rendered w/h (blocks are drawn ~8% smaller than their grid cell for
+  // visual spacing) — mixing the two produced an inconsistent, blockH-
+  // dependent epsilon that let taller blocks (e.g. Rustwatch Post's 54u
+  // blocks) read as unsupported on frame one and touched off a slow,
+  // never-settling sink across the whole structure.
+  const cellW=level.blockW, cellH=level.blockH;
+  const floor=level.groundY-cellH/2;
+  if(b.y>=floor-6) return true;
   for(const o of level.blocks){
     if(o===b||!o.alive) continue;
-    if(Math.abs(o.x-b.x) < (o.w+b.w)/2-6){
-      const gap=(b.y+b.h/2)-(o.y-o.h/2);
-      if(gap>-6 && gap<10) return true;
+    if(Math.abs(o.x-b.x) < cellW*0.7){
+      const gap=(b.y+cellH/2)-(o.y-cellH/2);
+      if(gap>-8 && gap<12) return true;
     }
   }
   return false;
 }
 function updateRest(b){
   if(b.resting){ if(!hasSupport(b)) b.resting=false; return; }
-  if(Math.abs(b.vx)<3 && Math.abs(b.vy)<3 && hasSupport(b)){ b.resting=true; b.vx=0; b.vy=0; b.angVel=0; }
+  // A generous velocity gate (rather than a near-zero one) so a block that
+  // has genuine support but is still shedding a little collision jitter
+  // settles within a frame or two instead of chattering indefinitely —
+  // at these speeds the visible drift is sub-pixel at 60fps anyway.
+  if(Math.abs(b.vx)<22 && Math.abs(b.vy)<22 && hasSupport(b)){ b.resting=true; b.vx=0; b.vy=0; b.angVel=0; }
 }
 function resolveBlockCollisions(){
   const alive=level.blocks.filter(b=>b.alive);
   for(let i=0;i<alive.length;i++){
     for(let j=i+1;j<alive.length;j++){
       const a=alive[i], b=alive[j];
+      // Two blocks that are BOTH already asleep never need resolving against
+      // each other — skipping this pair (rather than re-testing overlap
+      // every frame) is what lets a settled structure stay perfectly still
+      // instead of a stray sub-pixel overlap re-triggering "not resting"
+      // on neighbors forever.
+      if(a.resting && b.resting) continue;
       const dx=b.x-a.x, dy=b.y-a.y;
       const ox=(a.w+b.w)/2-Math.abs(dx), oy=(a.h+b.h)/2-Math.abs(dy);
-      if(ox>0 && oy>0){
+      // Ignore sliver overlaps from float drift — only a real (>1.5u)
+      // penetration is worth separating.
+      if(ox>1.5 && oy>1.5){
         const totalMass=a.mass+b.mass;
         if(ox<oy){
           const push=ox/2*(dx>=0?1:-1);
@@ -1238,12 +1257,18 @@ function handleHostRestart(){
 }
 function handleHostExit(){ try{ saveCampaign(); }catch{} }
 function applyMatchState(d){
+  const wasInRoom=inRoom;
   inRoom=true;
   roomParticipants=d.participants||[]; roomReadyStates=d.readyStates||{}; roomBotSlots=d.botSlots||[]; roomHostControls=d.hostControls||null;
   const ms=d.matchState||{};
   lastMatchState=ms;
   if(ms.hostProbe===hostNonce) isHost=true;
-  if(screenState==='boot' || screenState==='menu') enterPartyLobby();
+  // A room only ever reaches this game because it was launched FROM that
+  // room, so in practice this first message lands while still on the boot
+  // screen — but route defensively off any screen the very first time we
+  // learn we're in a room, rather than only from boot/menu, so a slower
+  // first poll can never strand the player on an unrelated screen.
+  if(!wasInRoom || screenState==='boot' || screenState==='menu') enterPartyLobby();
   else if(screenState==='party') renderPartyLobby();
   else if(mode==='party' && ms.phase==='active' && !partyStartedLocally) beginPartyRun(ms);
 }

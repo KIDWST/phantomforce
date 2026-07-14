@@ -19,14 +19,13 @@
 
 import { PHANTOMPLAY_BUILT_IN_GAMES, PHANTOMPLAY_ENGINE, type PhantomPlayGame } from "./phantomplay.js";
 
-// 4 of the 5 planned flagship games are built and ready to ship (Kingdom
-// Breakers is still in progress elsewhere and is intentionally NOT listed
-// here — no placeholder entry for it). Each entry's launchUrl points at the
-// real on-disk file verified under app/games/. thumbnail points at an
-// original placeholder SVG cover under app/assets/phantomplay/ (none of
-// these four had existing cover art in that folder, so a simple on-brand
-// placeholder was generated per game rather than referencing a nonexistent
-// asset or borrowing another game's unrelated cover).
+// All 5 planned flagship games are now built and ready to ship. Each entry's
+// launchUrl points at the real on-disk file verified under app/games/.
+// thumbnail points at an original placeholder SVG cover under
+// app/assets/phantomplay/ (a simple on-brand placeholder generated per game
+// rather than referencing a nonexistent asset or borrowing another game's
+// unrelated cover — kingdom-breakers-cover.svg already existed on disk when
+// this entry was added and follows the same pattern as the other four).
 export const PHANTOMPLAY_FLAGSHIP_GAMES: PhantomPlayGame[] = [
   {
     id: "cubetown",
@@ -111,6 +110,27 @@ export const PHANTOMPLAY_FLAGSHIP_GAMES: PhantomPlayGame[] = [
     featured: true,
     version: "1.0.0",
     controls: "Arrow keys to adjust angle/power, Space to fire, 1/2/3 to switch tools, Escape to pause. Drag on the battlefield to aim, or use the on-screen touchpad on mobile.",
+    progressSupport: true,
+    scoreSupport: true,
+  },
+  {
+    id: "kingdom-breakers",
+    title: "Kingdom Breakers",
+    summary: "Aim your siege engine, break the hold's blocks apart, and keep every Warden safe.",
+    description: "A physics-based siege/destruction game: drag to aim and fire one of three ammunition types — hard-hitting Stonefall Orbs, piercing Splinter Lances, or splash-damage Emberburst Charges — at a rigid-body-simulated fortress built from stone, timber, and ironclad blocks. Clear a 6-hold Siege Campaign ending at the ironclad-cored Warlord's Anvil boss, fight an alternating-turn Duel vs a bot rival, or join a Siege Party room where everyone breaches their own copy of the same fortress against a shared clock. Stars come from breach percentage, ammo conserved, and keeping every Warden un-harmed; knocking out a hold's glowing keystone block triggers a slow-motion final blow.",
+    category: "Strategy",
+    tags: ["siege", "destruction", "physics", "artillery", "campaign", "pvp", "touch"],
+    contentRating: "everyone10",
+    contentDescriptors: ["cartoon_action", "mild_destruction", "competitive_play"],
+    multiplayerDescriptor: "Siege Party: cross-network relay rooms, host-probe race establishes host authority; everyone breaches their own copy of the fortress against a shared timer, but the shared live board currently only carries the host's own run (each player's result still saves individually to their own PhantomPlay history/leaderboard) — see known issues.",
+    chatDescriptor: "No player chat or voice",
+    developer: "PhantomPlay Studio",
+    kind: "built_in",
+    launchUrl: "/app/games/kingdom-breakers.html?v=1.0.0",
+    thumbnail: "/app/assets/phantomplay/kingdom-breakers-cover.svg?v=1.0.0",
+    featured: true,
+    version: "1.0.0",
+    controls: "Press and drag anywhere on the field to aim — direction and distance from the siege engine set angle and power — then release to fire. Tap the ammo rack or press 1/2/3 to switch ammunition, Space/Enter fires while aiming, arrow keys nudge angle and power, and P (or the on-screen button) pauses. Touch and mouse/pointer input work the same way.",
     progressSupport: true,
     scoreSupport: true,
   },
