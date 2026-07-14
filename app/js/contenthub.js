@@ -9,20 +9,20 @@ import {
   freshEditState, applyFilterPreset, renderBaseFrame,
   addBokehSpot, removeBokehSpotNear, removeBokehSpotAt, nearestBokehSpot, moveBokehSpot, resizeBokehSpot,
   setBokehMask, freshTextStyle, TEXT_FONTS, TEXT_PRESETS, applyTextPreset,
-} from "./imagefilters.js?v=phantom-live-20260714-003";
-import { getRembgStatus, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260714-003";
-import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260714-003";
-import { parseAnalyticsReport } from "./social-analytics.js?v=phantom-live-20260714-003";
+} from "./imagefilters.js?v=phantom-live-20260714-004";
+import { getRembgStatus, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260714-004";
+import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260714-004";
+import { parseAnalyticsReport } from "./social-analytics.js?v=phantom-live-20260714-004";
 import {
   freshComposition, compositionSnapshot, restoreComposition, addImageLayer, replaceImageLayerSource, addTextLayer, addColorLayer,
   duplicateLayer, removeSelectedLayers, moveLayerOrder, selectedLayers, selectLayer, selectAllLayers,
   loadCompositionImages, renderComposition, drawCompositionOverlay, drawDetectedSubjectOverlay, canvasPoint, hitTestLayer, hitTestResizeHandle,
   setCanvasPreset, zoomComposition, canvasPointToLayer, layerPointToCanvas,
   imageEditSnapshot, restoreImageEditSnapshot, pushEditorSnapshot,
-} from "./content-editor.js?v=phantom-live-20260714-003";
+} from "./content-editor.js?v=phantom-live-20260714-004";
 import {
   currentTenantId, currentWs, session, store, visible, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem, wsName,
-} from "./store.js?v=phantom-live-20260714-003";
+} from "./store.js?v=phantom-live-20260714-004";
 
 const CH_KEY = "pf.contenthub.v2";
 const CH_REMOVED_KEY = "pf.contenthub.removed.v1";
@@ -3300,6 +3300,8 @@ const analyticsConnectorState = {
   loading: false,
   connectors: [],
   error: "",
+  /* per-platform sync outcome: { state: "synced"|"error", error, syncedAt } */
+  sync: {},
 };
 function analyticsAuthHeaders(extra = {}) {
   const token = typeof session?.token === "function" ? session.token() : "";
@@ -3337,6 +3339,7 @@ async function syncLiveAnalyticsAccount(account, accounts) {
   account.officialConnectState = "connected";
   account.lastConnectAt = response.analytics?.syncedAt || new Date().toISOString();
   saveSocialAccounts(accounts);
+  analyticsConnectorState.sync[account.id] = { state: "synced", error: "", syncedAt: account.lastConnectAt };
   return account.analytics;
 }
 async function refreshLiveAnalytics(el, accounts, opts, { force = false, platform = "" } = {}) {
@@ -3352,16 +3355,40 @@ async function refreshLiveAnalytics(el, accounts, opts, { force = false, platfor
       analyticsConnectorState.loaded = true;
     }
     const ready = analyticsConnectorState.connectors.filter((connector) => connector.configured && (!platform || connector.id === platform));
+    const failed = [];
+    let syncedCount = 0;
     for (const connector of ready) {
       const account = accounts.find((row) => row.id === connector.id);
-      if (!account || (!force && liveAnalyticsIsFresh(account))) continue;
-      await syncLiveAnalyticsAccount(account, accounts);
+      if (!account) continue;
+      if (!force && liveAnalyticsIsFresh(account)) {
+        analyticsConnectorState.sync[connector.id] = { state: "synced", error: "", syncedAt: account.analytics?.syncedAt || "" };
+        continue;
+      }
+      try {
+        await syncLiveAnalyticsAccount(account, accounts);
+        syncedCount += 1;
+      } catch (error) {
+        /* One channel failing must never hide another channel's live data:
+           record the server's exact failure per platform and keep going. */
+        analyticsConnectorState.sync[connector.id] = {
+          state: "error",
+          error: error?.message || "The platform analytics sync failed.",
+          syncedAt: account.analytics?.syncedAt || "",
+        };
+        failed.push(connector.name || connector.id);
+      }
     }
     if (force && platform && !ready.length) {
       const connector = connectorStatus(platform);
       throw new Error(connector?.reason || "Connect this channel in Settings before syncing live data.");
     }
-    if (force) analyticsNotice = ready.length ? "Live platform data synced." : "No live social connector is configured yet.";
+    if (force) {
+      analyticsNotice = !ready.length
+        ? "No live social connector is configured yet."
+        : failed.length
+          ? `${syncedCount ? `${syncedCount} channel${syncedCount === 1 ? "" : "s"} synced. ` : ""}${failed.join(", ")} did not sync — the exact platform error is shown on each channel below.`
+          : "Live platform data synced.";
+    }
   } catch (error) {
     const message = error?.message || "Live analytics could not be reached.";
     analyticsConnectorState.error = force ? message : "";
@@ -3459,9 +3486,13 @@ function accountAnalyticsRow(row, esc) {
   const live = account.connectMode === "live-api" && !!feed;
   const canSync = !!connector?.configured;
   const oauthReady = !!connector?.oauthConfigured;
-  const sourceState = canSync ? "Ready to sync" : oauthReady ? "Authorize account" : saved ? "Profile saved, analytics not connected" : account.handle ? "Handle saved, analytics not connected" : "Needs social connection";
+  const syncOutcome = analyticsConnectorState.sync[account.id] || null;
+  const syncFailed = syncOutcome?.state === "error";
+  const sourceState = canSync
+    ? (syncFailed ? "Live sync failed" : "Ready to sync")
+    : oauthReady ? "Authorize account" : saved ? "Profile saved, analytics not connected" : account.handle ? "Handle saved, analytics not connected" : "Needs social connection";
   const sourceCopy = canSync
-    ? "Official read-only analytics are ready."
+    ? (syncFailed ? syncOutcome.error : "Official read-only analytics are ready.")
     : oauthReady
       ? "OAuth app credentials exist; finish account authorization before stats appear."
       : "Connect the official platform account or import a platform export. Phantom will not count uploaded files as social performance.";
@@ -3474,8 +3505,8 @@ function accountAnalyticsRow(row, esc) {
     <div class="an-channel-id"><span class="ch-dot" style="background:${account.color}"></span><span><b>${esc(account.name)}</b><i>${esc(account.handle || account.loginIdentity || "profile saved")}</i></span></div>
     ${feed ? `<div class="an-channel-metrics">
       <span><b>${K(feed.reach)}</b>reach</span><span><b>${K(feed.impressions)}</b>views</span><span><b>${K(feed.engagement)}</b>engagement</span><span><b>${K(feed.followers)}</b>followers</span>
-    </div><div class="an-channel-source"><b>${live ? "Live · " : "Report · "}${esc(feed.source)}</b><i>${feed.syncedAt ? esc(ago(feed.syncedAt)) : "current"}</i></div>`
-    : `<div class="an-channel-empty"><b>${esc(sourceState)}</b><span>${esc(sourceCopy)}</span></div>`}
+    </div><div class="an-channel-source"><b>${live ? "Live · " : "Report · "}${esc(feed.source)}</b><i>${feed.syncedAt ? `Synced ${esc(ago(feed.syncedAt))}` : "current"}</i>${syncFailed ? `<em class="an-sync-error">${esc(syncOutcome.error)}</em>` : ""}</div>`
+    : `<div class="an-channel-empty${syncFailed ? " is-sync-error" : ""}"><b>${esc(sourceState)}</b><span>${esc(sourceCopy)}</span></div>`}
     <div class="an-channel-actions">
       ${primaryAction}
       <details class="an-import-backup"><summary aria-label="More data options">More</summary><small>Manual fallback · CSV · TSV · JSON</small><label class="btn btn-ghost">${feed && !live ? "Replace report" : "Import platform report"}<input type="file" accept=".csv,.tsv,.json,text/csv,text/tab-separated-values,application/json" data-an-import="${account.id}" hidden></label></details>
@@ -3562,6 +3593,8 @@ export function renderAnalytics(el, opts = {}, renderOptions = {}) {
           <h3>${hasLiveMetrics ? (liveApiRows.length ? "Official social analytics are reporting." : "Imported platform reports are loaded.") : "Connect your social accounts to start analytics."}</h3>
           <p>${hasLiveMetrics ? "This page only shows platform analytics from official API syncs or imported exports. Local media files and drafts stay in Media Lab/Content Hub." : "Connect YouTube, Instagram, Facebook, TikTok, X, LinkedIn, or Pinterest for real platform metrics. If a platform is not connected yet, import its official report as a temporary fallback."}</p>
         </div>
+      </section>
+      <section class="an-toolbar" aria-label="Live analytics actions">
         <div class="an-hero-actions">
           ${configuredCount ? `<button class="btn btn-primary" type="button" data-an-sync-all>${analyticsConnectorState.loading ? "Syncing…" : "Sync live data"}</button>` : `<button class="btn btn-ghost" type="button" data-open-ws="settings" data-open-settings-tab="media">Connect social APIs</button>`}
           <span class="an-src">${svgIc("up")} ${liveApiRows.length}/${displayAccounts.length} live social · ${reportRows.length} imported report${reportRows.length === 1 ? "" : "s"} · ${configuredCount}/${displayAccounts.length} API ready</span>

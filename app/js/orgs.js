@@ -6,7 +6,7 @@
    when the backend doesn't advertise database auth, none of these
    surfaces render and the app behaves exactly as before. */
 
-import { ctx, session } from "./store.js?v=phantom-live-20260714-003";
+import { ctx, session } from "./store.js?v=phantom-live-20260714-004";
 
 export const isDatabaseSession = () => !!ctx.session?.database;
 export const activeOrgId = () => (isDatabaseSession() ? ctx.session.orgId || null : null);
@@ -157,11 +157,22 @@ export async function requestServerPublish(site) {
       theme: site.design?.theme || undefined,
       style: site.design?.style || undefined,
     },
+    /* template/section copy travels with the build so the published page
+       carries the real content, not just section names */
+    copy: site.copy && typeof site.copy === "object"
+      ? Object.fromEntries(Object.entries(site.copy)
+          .filter(([key, value]) => typeof value === "string" && value.trim())
+          .slice(0, 12)
+          .map(([key, value]) => [String(key).slice(0, 60), String(value).slice(0, 4000)]))
+      : undefined,
     products: (site.catalog || []).map((product) => ({
       id: product.id,
       name: product.name,
       price: Number(product.price || 0),
-      cadence: product.cadence === "monthly" ? "monthly" : "one_time",
+      cadence: ["monthly", "yearly"].includes(product.cadence) ? product.cadence : "one_time",
+      type: product.type === "digital" ? "digital" : "physical",
+      delivery_url: product.type === "digital" ? String(product.delivery_url || "").slice(0, 600) : "",
+      delivery_note: product.type === "digital" ? String(product.delivery_note || "").slice(0, 500) : "",
       desc: product.desc || "",
       visible: product.visible !== false,
     })),
