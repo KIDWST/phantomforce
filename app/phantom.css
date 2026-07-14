@@ -3982,6 +3982,84 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
   .dc-mini-controls { gap: 3px; }
   .dc-mini-controls button { width: 26px; height: 26px; border-radius: var(--r-sm); }
 }
+@media (min-width: 901px) and (max-width: 1450px) {
+  .topbar2 {
+    gap: 8px;
+    padding-inline: 12px;
+  }
+  .status-pills {
+    flex: 0 1 auto;
+    max-width: min(35vw, 430px);
+  }
+  .status-pills .pill:not(.ws-switch) { display: none; }
+  .status-pills .ws-switch {
+    flex: 0 1 150px;
+    max-width: 150px;
+  }
+  .desktop-context-top {
+    position: relative;
+    flex: 0 0 54px;
+    min-width: 54px;
+    max-width: 54px;
+    height: var(--ctl-h);
+    align-self: center;
+    overflow: visible;
+  }
+  .desktop-context-top .dc-mini-shell {
+    width: 54px;
+    min-width: 54px;
+    height: var(--ctl-h);
+    grid-template-columns: 36px;
+    gap: 0;
+    padding: 5px 8px;
+    border-radius: var(--r-md);
+    cursor: pointer;
+    box-shadow: var(--edge-hi), 0 10px 34px rgba(0, 0, 0, 0.28);
+  }
+  .desktop-context-top .dc-mini-copy,
+  .desktop-context-top .dc-mini-controls { display: none; }
+  .desktop-context-top .dc-mini-shell.is-expanded {
+    position: absolute;
+    z-index: 95;
+    top: calc(100% + 8px);
+    left: 0;
+    width: min(390px, calc(100vw - 30px));
+    min-width: min(390px, calc(100vw - 30px));
+    grid-template-columns: 36px minmax(0, 1fr) auto;
+    gap: 8px;
+    overflow: visible;
+    border: 1px solid rgba(65, 255, 161, 0.26);
+    background:
+      radial-gradient(circle at 10% 45%, rgba(65,255,161,0.18), transparent 45%),
+      linear-gradient(135deg, rgba(7,24,18,0.98), rgba(4,9,12,0.94));
+    box-shadow: var(--edge-hi), 0 22px 70px rgba(0, 0, 0, 0.55), 0 0 30px rgba(65, 255, 161, 0.10);
+  }
+  .desktop-context-top .dc-mini-shell.is-expanded .dc-mini-copy {
+    display: grid;
+  }
+  .desktop-context-top .dc-mini-shell.is-expanded .dc-mini-controls {
+    display: inline-flex;
+  }
+  .topbar-actions {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .topbar-actions .cmdk-open {
+    flex: 0 1 180px;
+    min-width: 44px;
+  }
+}
+@media (min-width: 901px) and (max-width: 1180px) {
+  .status-pills { display: none; }
+  .topbar-actions .topbar-clock { margin-left: 0; }
+  .topbar-user {
+    width: 48px;
+    padding: 5px;
+    justify-content: center;
+  }
+  .topbar-user .user-meta,
+  .topbar-user .user-caret { display: none; }
+}
 @media (max-width: 720px) {
   .cmdk-open { min-width: 44px; max-width: 44px; padding: 8px; justify-content: center; }
   .cmdk-open-kbd { display: none; }
