@@ -156,6 +156,15 @@ assert.match(phantomRumble, /function raiseShield\(f\)/u, "Phantom Rumble must i
 assert.match(phantomRumble, /function dodge\(f\)/u, "Phantom Rumble must implement dodge input.");
 assert.match(phantomRumble, /function tryLedgeGrab\(f,s\)/u, "Phantom Rumble must implement ledge recovery.");
 assert.match(phantomRumble, /data-shield="\$\{f\.slot\}"/u, "Phantom Rumble HUD must show guard meter state.");
+assert.match(module, /id:\s*"phantom-rumble"[\s\S]*phantom-rumble\.html\?v=2\.2\.2[\s\S]*version:\s*"2\.2\.2"/u, "Classic PhantomPlay must launch the cache-busted Phantom Rumble 2.2.2 build.");
+assert.match(moduleV2, /"phantom-rumble",\s*"Phantom Rumble"[\s\S]*phantom-rumble\.html\?v=2\.2\.2[\s\S]*version:\s*id === "phantom-rumble" \? "2\.2\.2"/u, "V2 PhantomPlay must launch the cache-busted Phantom Rumble 2.2.2 build.");
+assert.match(phantomRumble, /const VALID_MODES=new Set\(\['duel','versus','rumble','botbrawl'\]\)/u, "Phantom Rumble must validate rematch/start modes before starting a match.");
+assert.match(phantomRumble, /function resetMatchState\(\)\{[\s\S]*fighters=\[\];pickups=\[\];particles=\[\];popups=\[\];[\s\S]*STAGE\.w=STAGE_W_BASE;[\s\S]*camera=\{x:\.5,y:\.58,z:1\};/u, "Phantom Rumble must reset stale fighters, effects, platforms, and camera before returning to the menu.");
+assert.match(phantomRumble, /function showMenu\(\)\{[\s\S]*mode='';resetMatchState\(\);/u, "Phantom Rumble menu returns must clear stale match mode and state.");
+assert.match(phantomRumble, /if\(!VALID_MODES\.has\(selected\)\)\{showMenu\(\);return\}/u, "Phantom Rumble must reject invalid start modes instead of entering a broken run.");
+assert.match(phantomRumble, /data-again[\s\S]*VALID_MODES\.has\(mode\)\?startMatch\(mode\):showMenu\(\)/u, "Phantom Rumble rematch must fall back to the arena menu when the prior mode is stale.");
+assert.match(phantomRumble, /d\.type==='restore'[\s\S]*Number\(d\.progress\)>=100\|\|over\|\|!endEl\.hidden[\s\S]*showMenu\(\);return/u, "Phantom Rumble must not restore a completed or ended match back into a stuck arena.");
+assert.match(phantomRumble, /addEventListener\('pageshow',event=>\{if\(event\.persisted\|\|over\|\|!running\|\|!endEl\.hidden\)showMenu\(\)\}\)/u, "Phantom Rumble must reset stale browser-page restores to the arena menu.");
 const crownCircuit = games[gameSlugs.indexOf("crown-circuit")];
 assert.match(module, /id:\s*"crown-circuit"[\s\S]*multiplayerOnly:\s*true/u, "Crown Circuit must be registered as multiplayer-only.");
 assert.match(crownCircuit, /STRICTLY MULTIPLAYER|No solo mode/u, "Crown Circuit must not present a solo mode.");

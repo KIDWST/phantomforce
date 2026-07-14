@@ -79,14 +79,23 @@ const SPAWNS=[{x:.32,y:.4},{x:.68,y:.4},{x:.42,y:.62},{x:.58,y:.62}];
 const PLATS_BASE=[{x:.32,y:.5,w:.16},{x:.68,y:.5,w:.16}];
 const PLATS_ALT=[{x:.5,y:.38,w:.2},{x:.5,y:.6,w:.12}];
 const STAGE_W_BASE=.56,STAGE_W_ALT=.4;
+const VALID_MODES=new Set(['duel','versus','rumble','botbrawl']);
 
 /* ---------- fighters ---------- */
 const PALETTE=[{name:'EMBER',c:'#4ade80',glow:'#22c55e'},{name:'CIPHER',c:'#5eead4',glow:'#14b8a6'},{name:'HEX',c:'#f0abfc',glow:'#d946ef'},{name:'VOLT',c:'#fde047',glow:'#eab308'}];
 let fighters=[],pickups=[],particles=[],mode='',running=false,paused=false,over=false,last=0,shake=0,slowmo=0,pickupTimer=6,reduced=false,matchKos=[0,0,0,0],hitstop=0,popups=[],koFx=null;
 /* reality-bending power state */
 let portals=null,warpT=0,quakeT=0,gravFx={t:0,owner:-1},chronoFx={t:0,owner:-1},meteorFx={t:0,owner:-1},rocks=[],meteorSpawn=0;
+function resetMatchState(){
+  fighters=[];pickups=[];particles=[];popups=[];koFx=null;hitstop=0;matchKos=[0,0,0,0];pickupTimer=6;shake=0;slowmo=0;
+  portals=null;warpT=0;quakeT=0;gravFx={t:0,owner:-1};chronoFx={t:0,owner:-1};meteorFx={t:0,owner:-1};rocks=[];meteorSpawn=0;
+  for(let i=0;i<PLATS.length;i++)Object.assign(PLATS[i],PLATS_BASE[i]);STAGE.w=STAGE_W_BASE;
+  camera={x:.5,y:.58,z:1};
+}
 function showMenu(){
-  running=false;paused=false;over=false;document.body.classList.remove('paused');
+  running=false;paused=false;over=false;mode='';resetMatchState();document.body.classList.remove('paused');
+  document.querySelector('[data-endtitle]').textContent='VICTORY';
+  document.querySelector('[data-endcopy]').textContent='';
   setupEl.hidden=false;endEl.hidden=true;pauseEl.hidden=true;hudEl.hidden=true;touchEl.hidden=true;
   showPb();draw(performance.now());
 }
@@ -99,6 +108,7 @@ function makeFighter(slot,human){
     attackCd:0,anim:0,flash:0,spin:0,special:0,titan:0,portalCd:0,clones:0,cloneTick:0,trail:[],ai:{dir:1,timer:0,jumpCd:0},lastTap:{key:'',at:0}};
 }
 function startMatch(selected){
+  if(!VALID_MODES.has(selected)){showMenu();return}
   mode=selected;
   const humans=mode==='versus'||mode==='rumble'?2:1;
   const count=mode==='duel'?2:mode==='versus'?2:4;
@@ -690,7 +700,7 @@ function loop(t){
 
 /* ---------- overlays ---------- */
 for(const b of document.querySelectorAll('[data-mode]'))b.onclick=()=>startMatch(b.dataset.mode);
-document.querySelector('[data-again]').onclick=()=>startMatch(mode);
+document.querySelector('[data-again]').onclick=()=>VALID_MODES.has(mode)?startMatch(mode):showMenu();
 document.querySelector('[data-menu]').onclick=showMenu;
 function showPb(){
   const pb=document.querySelector('[data-pb]');
@@ -755,10 +765,12 @@ addEventListener('message',event=>{
   if(d.type==='restore'&&d.state&&typeof d.state==='object'){
     const s=d.state;
     stats={wins:Math.max(0,Number(s.wins)||0),matches:Math.max(0,Number(s.matches)||0),bestKos:Math.max(0,Number(s.bestKos)||0)};
+    if(Number(d.progress)>=100||over||!endEl.hidden){showMenu();return}
     if(!running)showMenu();else showPb();
   }
 });
 document.addEventListener('visibilitychange',()=>{if(document.hidden)setPaused(true)});
+addEventListener('pageshow',event=>{if(event.persisted||over||!running||!endEl.hidden)showMenu()});
 setInterval(()=>{if(running&&!over)pushState(Math.min(99,Math.round(fighters.reduce((sum,t)=>sum+(3-t.stocks),0)/(fighters.length*3)*100)))},8000);
 showMenu();
 host('ready');

@@ -50,9 +50,9 @@ const OFFLINE_GAMES = [
   ["signal-match", "Signal Match", "Puzzle", "/app/games/signal-match.html"],
   ["focus-stack", "Focus Stack", "Focus", "/app/games/focus-stack.html"],
   ["penalty-kick", "Penalty Kick", "Sports", "/app/games/penalty-kick.html?v=1.0.2"],
-  ["phantom-rumble", "Phantom Rumble", "Arcade", "/app/games/phantom-rumble.html?v=2.2.1"],
+  ["phantom-rumble", "Phantom Rumble", "Arcade", "/app/games/phantom-rumble.html?v=2.2.2"],
   ["sudoku-signal", "Sudoku Signal", "Focus", "/app/games/sudoku-signal.html"],
-].map(([id, title, category, launchUrl]) => ({ id, title, summary: id === "phantom-rumble" ? "Premium local platform fighter with guard, parry, dodge, ledge-save recovery, bots, drops, and touch controls." : id === "penalty-kick" ? "Tap a lane, hit the green zone, and beat the keeper." : "Offline built-in game.", description: "", category, tags: [], contentRating: "everyone", developer: "Tak", kind: "built_in", launchUrl, thumbnail: "", featured: id === "phantom-rumble" || id === "penalty-kick", version: id === "phantom-rumble" ? "2.2.1" : id === "penalty-kick" ? "1.0.2" : "1.0.0", controls: id === "phantom-rumble" ? "Keyboard or mobile touch controls." : id === "penalty-kick" ? "Tap lanes or use arrows, then shoot on LOCKED." : "", progressSupport: true, scoreSupport: true }));
+].map(([id, title, category, launchUrl]) => ({ id, title, summary: id === "phantom-rumble" ? "Premium local platform fighter with guard, parry, dodge, ledge-save recovery, bots, drops, and touch controls." : id === "penalty-kick" ? "Tap a lane, hit the green zone, and beat the keeper." : "Offline built-in game.", description: "", category, tags: [], contentRating: "everyone", developer: "Tak", kind: "built_in", launchUrl, thumbnail: "", featured: id === "phantom-rumble" || id === "penalty-kick", version: id === "phantom-rumble" ? "2.2.2" : id === "penalty-kick" ? "1.0.2" : "1.0.0", controls: id === "phantom-rumble" ? "Keyboard or mobile touch controls." : id === "penalty-kick" ? "Tap lanes or use arrows, then shoot on LOCKED." : "", progressSupport: true, scoreSupport: true }));
 
 function offlineState() {
   let saved = {};
