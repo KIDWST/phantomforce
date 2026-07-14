@@ -9,8 +9,8 @@ button{font-family:inherit;cursor:pointer}
 .hidden{display:none!important}
 #ui{position:absolute;inset:0;pointer-events:none}
 #ui .clickable{pointer-events:auto}
-.screen{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:16px;pointer-events:auto}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:22px 26px;max-width:560px;width:100%;max-height:92vh;overflow:auto;box-shadow:0 20px 60px #000a}
+.screen{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:16px;pointer-events:none}
+.card{pointer-events:auto;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:22px 26px;max-width:560px;width:100%;max-height:92vh;overflow:auto;box-shadow:0 20px 60px #000a}
 h1.title{margin:0 0 2px;font-size:clamp(26px,5vw,40px);color:var(--amber);letter-spacing:1px;text-shadow:0 0 22px #f6ad3c44}
 .sub{color:var(--dim);margin:0 0 16px;line-height:1.5;font-size:13px}
 .row{display:flex;gap:10px;flex-wrap:wrap}
@@ -54,7 +54,7 @@ h1.title{margin:0 0 2px;font-size:clamp(26px,5vw,40px);color:var(--amber);letter
 .iconbtn{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:9px;padding:8px 10px;font-size:14px;line-height:1}
 .banner{position:absolute;top:44px;left:50%;transform:translateX(-50%);background:#0e1c2ad9;border:1px solid var(--line);border-radius:10px;padding:6px 16px;font-size:12px;color:var(--amber);pointer-events:none;white-space:nowrap;max-width:88vw;overflow:hidden;text-overflow:ellipsis}
 .turntimer{position:absolute;top:78px;left:50%;transform:translateX(-50%);font-size:10px;color:var(--dim);pointer-events:none}
-.log{position:absolute;left:12px;bottom:76px;max-width:280px;font-size:10px;color:var(--dim);background:#0b1420cc;border:1px solid var(--line);border-radius:8px;padding:6px 9px;pointer-events:none}
+.log{position:absolute;left:12px;bottom:76px;max-width:280px;font-size:10px;color:var(--dim);background:#0b1420cc;border:1px solid var(--line);border-radius:8px;padding:6px 9px;pointer-events:none;white-space:pre-line;line-height:1.5}
 .touchpad{position:absolute;right:12px;bottom:90px;display:none;flex-direction:column;gap:6px;pointer-events:auto}
 .touchpad button{width:46px;height:46px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--ink);font-size:16px}
 @media(pointer:coarse){.touchpad{display:flex}}
@@ -188,7 +188,7 @@ h1.title{margin:0 0 2px;font-size:clamp(26px,5vw,40px);color:var(--amber);letter
       <p class="sub" data-result-body>—</p>
       <div class="row">
         <button class="btn clickable" data-result-again><b>Rematch</b></button>
-        <button class="btn ghost clickable" data-result-menu><b>Fleet Menu</b></button>
+        <button class="btn ghost clickable" data-result-menu><b data-result-menu-label>Main Menu</b></button>
       </div>
     </div>
   </div>
@@ -306,7 +306,7 @@ const TUT_STEPS=[
   {t:'Aim & Power',b:'Use ◀ ▶ to set your angle and ▲ ▼ to set power (or drag on the water to aim like a slingshot, or drag the readouts on touch). Watch the dotted preview arc.'},
   {t:'Mind the Windrose',b:'The wind gauge shows direction and strength each turn. A strong tailwind carries your shot further — a headwind cuts it short. It changes every round.'},
   {t:'Three Tools',b:'◎ Brine Mortar is your reliable everyday shot. ⚓ Anchor Charge hits much harder and digs deeper but needs 2 turns to recharge. ↝ Tide Tether repositions your Skiff instead of firing — handy for dodging or reaching cover.'},
-  {t:'Terrain Breaks',b:'Every hit carves a crater into the islands. Dig out an enemy\\'s footing and their Skiff will drop — or bury your own escape route by accident, so plan shots carefully.'},
+  {t:'Terrain Breaks',b:'Every hit carves a crater into the islands. Dig out the ground under an enemy Skiff and it will drop — or bury your own escape route by accident, so plan shots carefully.'},
   {t:'Ready to Sail',b:'Try the Campaign for a short story with a boss fight, or Skirmish for a quick 1v1 or 3-way melee against bots. Good hunting, Captain.'},
 ];
 
@@ -333,6 +333,7 @@ const G={
   projectile:null,
   particles:[],
   battleActive:false,
+  actionLock:false,
   paused:false,
   reduced:false,
   soundOn:true,
@@ -412,7 +413,7 @@ function startBattleFromRoster(roster,mapId,seed){
   G.battleActive=true;G.paused=false;
   G.logs=[];pushLog('The fleet takes position at '+G.mapDef.name+'.');
   beginTurn();
-  showScreen(G.mode==='room'?'room':null);
+  showScreen(null);
   document.querySelector('[data-hud]').classList.remove('hidden');
   document.querySelector('[data-seatstrip]').classList.remove('hidden');
   document.querySelector('[data-log]').classList.remove('hidden');
@@ -422,6 +423,8 @@ function startBattleFromRoster(roster,mapId,seed){
 function currentSeat(){return G.seats.find(s=>s.id===G.turnSeat)}
 function aliveSeats(){return G.seats.filter(s=>s.alive)}
 function beginTurn(){
+  if(!G.battleActive)return;
+  if(G.paused){setTimeout(beginTurn,300);return}
   const order=G.turnOrder.filter(id=>G.seats.find(s=>s.id===id&&s.alive));
   if(order.length<=1){return endBattle()}
   // advance pointer to next alive seat
@@ -436,6 +439,7 @@ function beginTurn(){
   G.wind=clamp(G.wind+(Math.random()*2-1)*G.mapDef.wind*0.6,-G.mapDef.wind,G.mapDef.wind);
   G.aimAngle=45;G.aimPower=50;G.tool='mortar';
   G.turnTimeLeft=22;
+  G.actionLock=false;
   const seat=currentSeat();
   if(seat){for(const k in seat.cd)if(seat.cd[k]>0)seat.cd[k]--}
   updateBanner();
@@ -466,7 +470,7 @@ function updateHudReadouts(){
   });
   const seat=currentSeat();
   const humanTurn=seat&&!seat.isBot&&(G.mode!=='room'||G.room.isHelm);
-  document.querySelector('[data-fire]').disabled=!humanTurn||!!G.projectile;
+  document.querySelector('[data-fire]').disabled=!humanTurn||!!G.projectile||G.actionLock;
   document.querySelectorAll('.hud-row .toolbtn,[data-fire]').forEach(b=>b.style.pointerEvents=humanTurn?'auto':'none');
   document.querySelector('[data-turntimer]').textContent=humanTurn?('Turn clock: '+Math.ceil(G.turnTimeLeft)+'s'):'';
   document.querySelector('[data-turntimer]').classList.toggle('hidden',!humanTurn);
@@ -476,6 +480,7 @@ function renderSeatStrip(){
   el.innerHTML=G.seats.map(s=>`<div class="seatcard ${s.alive?'':'dead'} ${s.id===G.turnSeat?'turn':''}" style="--sc:${s.color}"><div class="nm" style="color:${s.color}">${esc(s.label)}${s.boss?' 👑':''}</div><div class="hpbar"><div class="hpfill" style="width:${Math.max(0,s.hp/s.maxHp*100)}%;background:${s.color}"></div></div></div>`).join('');
 }
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function verbFires(seat){return seat&&seat.label==='You'?'fire':'fires'}
 
 /* ===================== physics ===================== */
 function shotVelocity(angleDeg,power){
@@ -483,10 +488,9 @@ function shotVelocity(angleDeg,power){
   const v=POWER_MIN_V+POWER_V_RANGE*(power/100);
   return {vx:v*Math.cos(rad),vy:-v*Math.sin(rad)};
 }
-function predictLanding(angleDeg,power,x0,y0,windAccel){
+function predictLanding(angleDeg,power,x0,y0,windAccel,targetY){
   const {vx,vy}=shotVelocity(angleDeg,power);
-  const targetY=0.6; // heuristic flat reference for AI search
-  const a=0.5*GRAVITY,b=vy,c=y0-targetY;
+  const a=0.5*GRAVITY,b=vy,c=y0-(targetY===undefined?0.6:targetY);
   const disc=b*b-4*a*c;
   if(disc<0)return {x:x0+vx*0.5,t:0.5};
   const t=(-b+Math.sqrt(disc))/(2*a);
@@ -495,9 +499,10 @@ function predictLanding(angleDeg,power,x0,y0,windAccel){
   return {x,t:tt};
 }
 function fireShot(seat,toolKey,angle,power){
-  if(!seat||!seat.alive||G.projectile)return;
+  if(!seat||!seat.alive||G.projectile||G.actionLock)return;
   const tool=TOOLS[toolKey];
   if(toolKey!=='mortar'&&seat.cd[toolKey]>0)return;
+  G.actionLock=true;
   seat.shotsFired++;G.save.shotsFired++;
   if(tool.utility){
     // Tide Tether: reposition, does not fire a projectile
@@ -505,7 +510,7 @@ function fireShot(seat,toolKey,angle,power){
     const nx=clamp(seat.x+dir*0.10*(0.5+Math.random()*0.5),0.05,0.95);
     seat.x=nx;seat.cd.tether=TOOLS.tether.cooldown;
     sfx.tether();
-    pushLog(seat.label+' fires the Tide Tether and repositions.');
+    pushLog(seat.label+' '+verbFires(seat)+' the Tide Tether and repositions.');
     spawnBurst(px(seat.x),py(terrainYAt(seat.x))-14*DPR,'#8fd8ff',G.reduced?4:12);
     finishAction(seat);
     return;
@@ -515,7 +520,7 @@ function fireShot(seat,toolKey,angle,power){
   G.projectile={x:seat.x,y:y0,vx:vx*tool.speedMul,vy,ownerId:seat.id,tool:toolKey,trail:[],t:0};
   if(toolKey==='anchor')seat.cd.anchor=TOOLS.anchor.cooldown;
   sfx.fire(power);
-  pushLog(seat.label+' fires the '+tool.name+'.');
+  pushLog(seat.label+' '+verbFires(seat)+' the '+tool.name+'.');
   updateHudReadouts();
 }
 function stepProjectile(dt){
@@ -551,16 +556,10 @@ function resolveImpact(x,y,toolKey,ownerId,directHit){
       s.hp=Math.max(0,s.hp-dmg);
       anyHit=true;
       sfx.hit();
-      pushLog((owner?owner.label:'Someone')+' hits '+s.label+' for '+dmg+'.');
+      pushLog(owner===s?(owner.label+' is caught in its own blast for '+dmg+'.'):((owner?owner.label:'Someone')+' hits '+s.label+' for '+dmg+'.'));
       if(owner&&s!==owner){owner.shotsHit++;G.save.shotsHit++}
       if(s.hp<=0&&s.alive){s.alive=false;if(owner&&owner!==s)owner.kills++;pushLog(s.label+' is out of the fight!')}
     }
-  }
-  // settle any seat whose ground dropped out from under them
-  for(const s of G.seats){
-    if(!s.alive)continue;
-    const gy=terrainYAt(s.x);
-    if(gy>s._lastGround+0.001||s._lastGround===undefined){/*noop, tracked below*/}
   }
   if(!anyHit)pushLog('The shot lands on open ground.');
   renderSeatStrip();
@@ -594,7 +593,7 @@ function botTakeTurn(seat){
   for(let i=0;i<diff.searchN;i++){
     const angle=10+Math.random()*160;
     const power=30+Math.random()*70;
-    const {x}=predictLanding(angle,power,seat.x,terrainYAt(seat.x)-0.018,G.wind*TOOLS[toolKey].speedMul);
+    const {x}=predictLanding(angle,power,seat.x,terrainYAt(seat.x)-0.018,G.wind*TOOLS[toolKey].speedMul,terrainYAt(target.x));
     const d=Math.abs(x-target.x);
     if(!best||d<best.d)best={angle,power,d};
   }
@@ -611,7 +610,7 @@ function botTakeTurn(seat){
 /* ===================== turn timer / input ===================== */
 function humanCanAct(){
   const seat=currentSeat();
-  if(!seat||!seat.alive||seat.isBot||!G.battleActive||G.paused||G.projectile)return false;
+  if(!seat||!seat.alive||seat.isBot||!G.battleActive||G.paused||G.projectile||G.actionLock)return false;
   if(G.mode==='room'&&!G.room.isHelm)return false;
   return true;
 }
@@ -822,6 +821,7 @@ function endBattle(){
   document.querySelector('[data-hud]').classList.add('hidden');
   document.querySelector('[data-banner]').classList.add('hidden');
   document.querySelector('[data-turntimer]').classList.add('hidden');
+  document.querySelector('[data-result-menu-label]').textContent=G.mode==='room'?'Fleet Room':'Main Menu';
   showScreen('results');
   persist(true,score);
   pushRoomStateIfHelm(true);
@@ -862,11 +862,19 @@ function onHostMatchState(data){
     }
   }
   G.room.matchState=ms;
-  if(G.screen==='menu'&&!G.battleActive)showScreen('room');
-  if(G.screen==='room')renderRoom();
-  // spectator mirroring
-  if(!G.room.isHelm&&ms&&ms.phase==='battle'){
-    mirrorSpectate(ms);
+  if(G.room.isHelm){
+    if(G.screen==='menu'&&!G.battleActive)showScreen('room');
+    if(G.screen==='room')renderRoom();
+  }else{
+    // Spectator: mirror the Helm's live battle, or fall back to the roster/
+    // ready-check lobby view whenever there is no battle in progress.
+    if(ms&&ms.phase==='battle'){
+      mirrorSpectate(ms);
+    }else{
+      G.battleActive=false;
+      document.querySelector('[data-hud]').classList.add('hidden');
+      if(G.screen!=='settings')showScreen('room');
+    }
   }
 }
 function sendMatchAction(action){host('match-action',{action,mode:'replace'})}
@@ -887,8 +895,8 @@ function renderRoom(){
     return;
   }
   if(G.room.isHelm){
-    status.textContent='You hold the Helm — you pilot this Fleet Room\\'s battle. Everyone else in the room watches live.';
-    note.textContent='Remote guest devices can watch the battle and the ready-check roster in real time, but only the Helm device fires shots — the platform\\'s room relay only accepts match updates from the room\\'s original host today, so guest input can\\'t reach the shared battle yet.';
+    status.textContent='You hold the Helm — you pilot this Fleet Room battle. Everyone else in the room watches live.';
+    note.textContent='Remote guest devices can watch the battle and the ready-check roster in real time, but only the Helm device fires shots — the platform room relay only accepts match updates from the original room host today, so guest input cannot reach the shared battle yet.';
     const ms=G.room.matchState;
     if(!ms||ms.phase!=='battle'){
       controls.innerHTML=`<button class="btn clickable" data-room-sail><b>Set Sail</b><i>Start the fleet battle (fills empty seats with bots)</i></button>`;
@@ -899,14 +907,17 @@ function renderRoom(){
     }
   }else{
     status.textContent='You are viewing this Fleet Room as a spectator.';
-    note.textContent='Only the room\\'s Helm (its original host) pilots the battle today — this is a platform-level limit (the room system only lets the host write shared match state), not a bug in this game. You still see the battle live and the ready-check roster.';
+    note.textContent='Only the room Helm (its original host) pilots the battle today — this is a platform-level limit (the room system only lets the host write shared match state), not a bug in this game. You still see the battle live and the ready-check roster.';
     controls.innerHTML='';
   }
 }
 function startRoomBattle(){
   G.mode='room';
   const humans=G.room.participants.filter(p=>p.status==='online');
-  const roster=humans.slice(0,3).map((p,i)=>({id:'p'+i,label:p.label||('Captain '+(i+1)),isBot:false}));
+  // participants[0] is always the room's original host (server-enforced ordering),
+  // which is who this device is once helmConfirmed — so seat 0 is "you" here,
+  // matching the id endBattle() looks for to score/attribute the local player.
+  const roster=humans.slice(0,3).map((p,i)=>({id:i===0?'you':'mate'+i,label:p.label||('Captain '+(i+1)),isBot:false}));
   while(roster.length<Math.max(2,Math.min(3,roster.length+1)))roster.push({id:'bot'+roster.length,label:BOT_NAMES[roster.length%BOT_NAMES.length],isBot:true,difficulty:'medium'});
   const mapId=MAPS[Math.floor(Math.random()*3)].id;
   startBattleFromRoster(roster,mapId,Date.now()>>>0);
@@ -934,20 +945,21 @@ function mirrorSpectate(ms){
   G.seats=ms.seats||[];
   G.wind=ms.wind||0;
   G.turnSeat=ms.turnSeatId;
-  G.battleActive=ms.phase==='battle';
+  G.battleActive=true;
+  if(G.screen!=='settings')showScreen(null);
+  document.querySelector('[data-hud]').classList.add('hidden');
+  document.querySelector('[data-seatstrip]').classList.remove('hidden');
+  document.querySelector('[data-log]').classList.remove('hidden');
+  document.querySelector('[data-banner]').classList.remove('hidden');
+  renderSeatStrip();
   if(ms.lastLog&&ms.lastLog!==G.room.lastSeenLog){
     G.room.lastSeenLog=ms.lastLog;
     pushLog(ms.lastLog);
-    document.querySelector('[data-hud]').classList.add('hidden');
-    document.querySelector('[data-seatstrip]').classList.remove('hidden');
-    document.querySelector('[data-log]').classList.remove('hidden');
-    document.querySelector('[data-banner]').classList.remove('hidden');
-    document.querySelector('[data-banner]').textContent='Spectating: '+ms.lastLog;
-    renderSeatStrip();
   }
-  if(ms.phase==='results'){
-    G.room.rematchArmed=false;
-  }
+  const seat=currentSeat();
+  const banner=document.querySelector('[data-banner]');
+  banner.textContent=seat?('Spectating — '+seat.label+'\'s turn'):'Spectating the Fleet Room';
+  banner.style.color=seat?seat.color:'';
 }
 
 /* ===================== save / progression ===================== */

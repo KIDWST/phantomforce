@@ -482,7 +482,7 @@ function renderVenues(){
     var tr=TRACKS[i]; var unlocked=isUnlocked(i);
     var best=G.progression.best[tr.id];
     var div=document.createElement('div'); div.className='venue'+(unlocked?'':' locked');
-    var sw=document.createElement('div'); sw.className='swatch'; sw.style.background=colorFor(0); sw.style.color='#0b0716'; sw.textContent=tr.lanes;
+    var sw=document.createElement('div'); sw.className='swatch'; sw.style.background=colorFor(i%laneCountFor(tr)); sw.style.color='#0b0716'; sw.textContent=tr.lanes;
     var meta=document.createElement('div'); meta.className='meta';
     var b=document.createElement('b'); b.textContent=tr.title;
     var span=document.createElement('span'); span.textContent=tr.bpm+' BPM · '+tr.lanes+' channels'+(unlocked?'':' · locked until previous venue is cleared');
@@ -886,6 +886,7 @@ function startDuelCountdown(trackId, startAt){
       ensureAudio(); if(actx && actx.state==='suspended') actx.resume();
       startTrack(track,{duel:true});
       startDuelScoreReporting();
+      if(DUEL.isHost) host('match-action',{action:{phase:'playing'}, mode:'merge'});
       return;
     }
     document.getElementById('countdownNum').textContent=Math.max(1,Math.ceil(remain/1000));
@@ -980,9 +981,11 @@ window.addEventListener('message', function(event){
   } else if(type==='exit'){
     if(SESS) setPaused(true);
   } else if(type==='restart'){
+    var wasActive = SESS && !SESS.finished;
+    var trackToReplay = wasActive ? SESS.track : null;
+    var replayOpts = wasActive ? { practice: SESS.practice, duel: SESS.duel, bot: !!SESS.bot, botSkill: SESS.bot ? SESS.bot.skill : undefined } : null;
     stopBacking(); if(SESS){ SESS.finished=true; cancelAnimationFrame(SESS.raf); }
-    G=cloneDefaults(); mirrorLocal();
-    showScreen('menu');
+    if(trackToReplay){ startTrack(trackToReplay, replayOpts); } else { showScreen('menu'); }
   } else if(type==='restore' || type==='load-state'){
     mergeState(event.data.state);
     mirrorLocal();

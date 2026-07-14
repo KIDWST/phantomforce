@@ -299,6 +299,7 @@
     if (!inBounds(gx, gy)) return false;
     const t = terrain[gy][gx];
     if (t !== 'grass') return false;
+    if (gx === state.player.gx && gy === state.player.gy) return false;
     if (townPieceAt(gx, gy, state.town)) return false;
     if (mp.active && !mp.amIHost && townPieceAt(gx, gy, mp.sharedTown)) return false;
     return true;
@@ -312,10 +313,14 @@
   // ---------------------------------------------------------------------
   const audio = { ctx: null, volume: 0.7, mute: false, unlocked: false };
   function unlockAudio() {
-    if (audio.unlocked) return;
+    if (audio.unlocked) {
+      if (audio.ctx && audio.ctx.state === 'suspended') audio.ctx.resume().catch(() => {});
+      return;
+    }
     audio.unlocked = true;
     try {
       audio.ctx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audio.ctx.state === 'suspended') audio.ctx.resume().catch(() => {});
     } catch (e) { audio.ctx = null; }
   }
   function masterGain() {
@@ -377,6 +382,7 @@
   function closePanels() {
     $all('.panel').forEach((p) => p.classList.remove('is-open'));
     rt.build.placing = false;
+    if (rt.fishing.open) { rt.fishing.open = false; if (fishRaf) cancelAnimationFrame(fishRaf); }
   }
   function anyPanelOpen() {
     return $all('.panel.is-open').length > 0;
@@ -400,10 +406,10 @@
       const type = b.dataset.ctPick;
       if (!canAfford(PALETTE_BY_TYPE[type].cost)) { toast('Not enough resources for that yet.'); return; }
       if (mp.active && !mp.amIHost && mp.openBuilding === 'host_only') { toast('The host has building locked for visitors right now.'); return; }
+      closePanels();
       rt.build.selected = type;
       rt.build.tool = 'place';
       rt.build.placing = true;
-      closePanels();
       toast(`Placing ${PALETTE_BY_TYPE[type].label} — tap an open tile. Esc cancels.`);
     });
     updateBuildNote();
@@ -631,6 +637,7 @@
     return s.built * 5 + s.questsCompleted * 60 + s.fishCaught * 4 + s.dishesCooked * 5 + (state.day - 1) * 10;
   }
   function computeProgress() {
+    if (state.completedMilestone) return 100;
     const questPart = (state.stats.questsCompleted / 3) * 70;
     const buildPart = Math.min(state.stats.built, 15) / 15 * 30;
     return Math.min(99, Math.round(questPart + buildPart));
@@ -988,12 +995,12 @@
       ctx.restore();
     }
   }
-  function drawPiece(piece, dim) {
+  function drawPiece(piece, unsynced) {
     const def = PALETTE_BY_TYPE[piece.type];
     if (!def) return;
     const s = tileToScreen(piece.gx, piece.gy);
     const hgt = def.blocking ? rt.tileH * (piece.type === 'wall' || piece.type === 'hearth' || piece.type === 'bed' || piece.type === 'chest' ? 1.5 : 1.0) : rt.tileH * 0.18;
-    const color = dim ? shade(def.color, 0.6) : def.color;
+    const color = def.color;
     if (def.blocking) {
       drawBlock(s.x, s.y, rt.tileW * 0.82, rt.tileH * 0.82, hgt, shade(color, 1.15), shade(color, 0.72), shade(color, 0.52));
     } else {
@@ -1003,11 +1010,16 @@
       ctx.save(); ctx.globalAlpha = 0.5; ctx.fillStyle = '#ffe6a3';
       ctx.beginPath(); ctx.arc(s.x, s.y - hgt - rt.tileH * 0.4, rt.tileH * 1.1, 0, Math.PI * 2); ctx.fill(); ctx.restore();
     }
+    if (unsynced) {
+      // Marks a guest's own local-only placement that hasn't (and, under the
+      // current room protocol, structurally can't) sync out to the shared town.
+      ctx.save(); ctx.fillStyle = '#ffcf6b'; ctx.globalAlpha = 0.9;
+      ctx.beginPath(); ctx.arc(s.x, s.y - hgt - rt.tileH * 1.3, 3 * rt.dpr, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    }
   }
-  function drawCharacter(px, py, hue, topper, trim, label, mini) {
+  function drawCharacter(px, py, hueColor, topper, trimColor, label, mini) {
     const scale = mini ? 0.72 : 1;
-    const hueColor = (HUES.find((h) => h.key === hue) || HUES[0]).color;
-    const trimColor = (TRIMS.find((t) => t.key === trim) || TRIMS[0]).color;
     const bw = rt.tileW * 0.42 * scale, bh = rt.tileH * 1.3 * scale;
     ctx.save();
     ctx.globalAlpha = 0.28;
@@ -1068,8 +1080,11 @@
     }
     const town = currentTown();
     for (const p of town) {
-      const isShared = mp.active && !mp.amIHost && mp.sharedTown.includes(p);
-      drawables.push({ depth: p.gx + p.gy + 0.4, kind: 'piece', piece: p, dim: false, shared: isShared });
+      // A guest's own placements (state.town) never sync out to the shared
+      // room town under the current host-authoritative match-state protocol
+      // (see scheduleTownSync/onMatchState) — tag them so that's visible.
+      const guestLocal = mp.active && !mp.amIHost && state.town.includes(p);
+      drawables.push({ depth: p.gx + p.gy + 0.4, kind: 'piece', piece: p, guestLocal });
     }
     for (const npc of npcs) drawables.push({ depth: npc.gx + npc.gy + 0.5, kind: 'npc', npc });
     drawables.push({ depth: rt.playerToX + rt.playerToY + 0.6, kind: 'player' });
@@ -1078,26 +1093,22 @@
     // terrain must be drawn strictly first regardless of interleave for correctness of base layer
     for (const d of drawables) if (d.kind === 'terrain') drawTerrainTile(d.gx, d.gy, terrain[d.gy][d.gx]);
     for (const d of drawables) {
-      if (d.kind === 'piece') drawPiece(d.piece, false);
+      if (d.kind === 'piece') drawPiece(d.piece, d.guestLocal);
       else if (d.kind === 'npc') {
         const n = d.npc;
-        drawCharacter(n.screenPx, n.screenPy, hueKeyFromColor(n.hue), 'none', 'soft', n.name.split(' ')[0]);
+        drawCharacter(n.screenPx, n.screenPy, n.hue, 'none', 'rgba(255,255,255,0.35)', n.name.split(' ')[0]);
       } else if (d.kind === 'player') {
-        drawCharacter(rt.playerPx, rt.playerPy, state.player.hue, state.player.topper, state.player.trim, null);
+        drawCharacter(rt.playerPx, rt.playerPy, hueColorOf(state.player.hue), state.player.topper, trimColorOf(state.player.trim), null);
       }
     }
 
     // build placement ghost
     if (rt.build.placing && rt.build.hoverTile) {
-      const def = PALETTE_BY_TYPE[rt.build.selected];
       const ok = isBuildableGround(rt.build.hoverTile.x, rt.build.hoverTile.y);
       const s = tileToScreen(rt.build.hoverTile.x, rt.build.hoverTile.y);
       ctx.save(); ctx.globalAlpha = 0.55;
       drawDiamond(s.x, s.y, rt.tileW, rt.tileH, ok ? '#5be3b5' : '#ff6b81', null);
       ctx.restore();
-    }
-    if (rt.build.tool === 'demolish' && rt.build.open === false && rt.build.hoverTile) {
-      // no-op placeholder for symmetry; demolish highlight handled on tap directly
     }
 
     // gather/cook progress ring
@@ -1130,14 +1141,8 @@
     ctx.stroke();
     ctx.restore();
   }
-  const HUE_BY_COLOR_CACHE = {};
-  function hueKeyFromColor(color) {
-    if (HUE_BY_COLOR_CACHE[color]) return HUE_BY_COLOR_CACHE[color];
-    let best = HUES[0].key;
-    for (const h of HUES) if (h.color.toLowerCase() === color.toLowerCase()) best = h.key;
-    HUE_BY_COLOR_CACHE[color] = best;
-    return best;
-  }
+  function hueColorOf(key) { return (HUES.find((h) => h.key === key) || HUES[0]).color; }
+  function trimColorOf(key) { return (TRIMS.find((t) => t.key === key) || TRIMS[0]).color; }
 
   // ---------------------------------------------------------------------
   // Main loop
@@ -1263,6 +1268,13 @@
       for (const cat of ['hue', 'topper', 'trim']) if (Array.isArray(s.cosmeticsUnlocked[cat])) state.cosmeticsUnlocked[cat] = Array.from(new Set([...state.cosmeticsUnlocked[cat], ...s.cosmeticsUnlocked[cat].filter((x) => typeof x === 'string')]));
     }
     state.tutorialSeen = !!s.tutorialSeen;
+    if (state.tutorialSeen) {
+      // A restore/load-state arriving after the first-launch tutorial auto-
+      // opened (it opens 200ms after boot if a brand-new save looks unseen)
+      // should close it rather than leave a returning player staring at it.
+      const tp = document.querySelector('[data-ct-panel="tutorial"]');
+      if (tp) tp.classList.remove('is-open');
+    }
     if (s.stats && typeof s.stats === 'object') {
       for (const k of Object.keys(state.stats)) if (Number.isFinite(s.stats[k])) state.stats[k] = s.stats[k];
     }
@@ -1418,10 +1430,13 @@
   // ---------------------------------------------------------------------
   function boot() {
     size();
+    try { rt.reducedMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) { rt.reducedMotion = false; }
+    el.reduced.checked = rt.reducedMotion;
     newGame((Math.random() * 1e9) >>> 0);
     rt.playerToX = state.player.gx; rt.playerToY = state.player.gy;
     rt.playerFromX = rt.playerToX; rt.playerFromY = rt.playerToY; rt.moveT = 1;
     updateHud();
+    draw();
     requestAnimationFrame(loop);
     setInterval(() => { updateHud(); }, 1000);
     if (!state.tutorialSeen) setTimeout(() => openPanel('tutorial'), 200);
