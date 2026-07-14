@@ -52,6 +52,7 @@ assert.match(crmProspects, /client\\s\+base[\s\S]*consider[\s\S]*could\\s\+use/u
 assert.match(crmProspects, /find\|add\|search\|discover\|research\|scout\|source\|identify/u, "Global CRM prospect routing must understand find/add/discover client language.");
 assert.match(skipPages, /"settings"[\s\S]*"developer"[\s\S]*"activity"/u, "System/admin pages should skip page worker prompts.");
 assert.match(skipPages, /"sites"[\s\S]*"media"[\s\S]*"content"/u, "Native prompt-first surfaces must not duplicate the top page worker prompt.");
+assert.match(skipPages, /"leads"/u, "Clients must use the dedicated CRM prompter instead of rendering a duplicate generic page worker.");
 assert.doesNotMatch(skipPages, /"assets"|"intelligence"|"vacation"|"phantomplay"/u, "Pages without a main AI prompter should keep the page outcome prompt available.");
 assert.match(worker, /fetch\("\/phantom-ai\/chat"/u, "Page outcome prompts must call the Phantom AI backend.");
 assert.match(worker, /module_data: pageContextModules/u, "Backend page prompts must send page context modules.");
@@ -71,12 +72,13 @@ assert.match(worker, /Before we proceed, answer this:/u, "Blocking questions mus
 assert.match(worker, /button\.disabled = true/u, "Submitting a page prompt must disable the button while the backend runs.");
 assert.match(worker, /data-page-worker-form/u, "Worker prompt form must be bindable.");
 assert.match(worker, /opts\.notify/u, "Worker prompt should log/notify without executing external actions.");
-assert.match(worker, /export function pageWorkerHtml\(pageId, def = \{\}\) \{[\s\S]*return "";/u, "Page-level worker bars must stay removed from all pages; Phantom pet is the entry point now.");
+assert.match(worker, /export function pageWorkerHtml\(pageId, def = \{\}\) \{[\s\S]*return legacyPageWorkerHtml\(pageId, def\);/u, "Page-level worker bars must render on pages without a native prompt-first flow.");
+assert.doesNotMatch(worker, /export function pageWorkerHtml\(pageId, def = \{\}\) \{\s*void pageId;\s*void def;\s*return "";\s*\}/u, "Page-level worker bars must not be silently disabled.");
 
 assert.match(main, /import \{ pageWorkerHtml, mountPageWorkers \} from "\.\/pageworker\.js\?v=phantom-live-\d{8}-\d+"/u, "main.js must import the current page worker module.");
-assert.match(main, /\$\{pageWorkerHtml\(key, def\)\}/u, "Workspace pages still call the worker renderer, which must return no visible top bar.");
-assert.match(main, /mountPageWorkers\(root, mediaOpts\(\)\)/u, "Workspace page-worker binding can remain harmless while no forms render.");
-assert.match(main, /mountPageWorkers\(overlayRoot, mediaOpts\(\)\)/u, "Overlay page-worker binding can remain harmless while no forms render.");
+assert.match(main, /\$\{pageWorkerHtml\(key, def\)\}/u, "Workspace pages must call the worker renderer so page-specific prompts can appear.");
+assert.match(main, /mountPageWorkers\(root, mediaOpts\(\)\)/u, "Workspace page-worker binding must attach visible prompt forms.");
+assert.match(main, /mountPageWorkers\(overlayRoot, mediaOpts\(\)\)/u, "Overlay page-worker binding must attach visible prompt forms.");
 
 assert.match(css, /\.page-worker\b/u, "Page worker styles must exist.");
 assert.match(css, /\.page-worker-output\.is-thinking/u, "Backend thinking state must have visible styling.");

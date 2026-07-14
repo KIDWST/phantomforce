@@ -129,6 +129,7 @@ const SKIP_PAGES = new Set([
   "sites",
   "media",
   "content",
+  "leads",
 ]);
 
 const BACKEND_TIMEOUT_MS = 45000;
@@ -145,9 +146,8 @@ function workerFor(pageId) {
 }
 
 export function pageWorkerHtml(pageId, def = {}) {
-  void pageId;
-  void def;
-  return "";
+  if (SKIP_PAGES.has(pageId) || def.ownerOnly) return "";
+  return legacyPageWorkerHtml(pageId, def);
 }
 
 function legacyPageWorkerHtml(pageId, def = {}) {
