@@ -6,19 +6,20 @@
  * instead of sending people out to another product.
  */
 
-import { currentTenantId, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260714-001";
+import { currentTenantId, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260714-002";
 import {
   PLATFORMS, registerContentAsset, loadSocialAccounts, saveSocialAccounts, socialStatus,
   loadContentAssets, saveContentAssets, contentAssetDisplayUrl, hydrateContentAssetUrl,
-} from "./contenthub.js?v=phantom-live-20260714-001";
-import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260714-001";
+} from "./contenthub.js?v=phantom-live-20260714-002";
+import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260714-002";
 import {
   addImageLayer, addTextLayer, cloneImageEditState, compositionSnapshot, duplicateLayer,
   freshComposition, hitTestLayer, loadCompositionImages, moveLayerOrder, pushEditorSnapshot,
   removeSelectedLayers, renderComposition, restoreComposition, selectLayer, selectedLayers,
-} from "./content-editor.js?v=phantom-live-20260714-001";
-import { loadImageForEditing, exportCanvas, requestAiEdit, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260714-001";
-import { assetsAvailable, assetBlobUrl, listAssets, recordAssetUsage, saveToAssetCloud, listLocalAssets, refreshLocalAssets, localAssetBlobUrl } from "./orgs.js?v=phantom-live-20260714-001";
+} from "./content-editor.js?v=phantom-live-20260714-002";
+import { loadImageForEditing, exportCanvas, requestAiEdit, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260714-002";
+import { mountVideoEditor } from "./videocut.js?v=phantom-live-20260714-002";
+import { assetsAvailable, assetBlobUrl, listAssets, recordAssetUsage, saveToAssetCloud, listLocalAssets, refreshLocalAssets, localAssetBlobUrl } from "./orgs.js?v=phantom-live-20260714-002";
 
 const CFG_KEY = "pf.medialab.v1";
 const EDIT_INTENT_KEY = "pf.medialab.editIntent.v1";
@@ -1078,7 +1079,7 @@ function previewAsset(req, i, context = {}) {
 /* =========================================================================
    STUDIO
    ========================================================================= */
-let session = { assets: [], tab: "generate", edit: null };
+let session = { assets: [], tab: "generate", edit: null, editMode: null };
 /* pool size for the tab badge — kept from register/render results so the
    topbar never has to parse the (potentially multi-MB) pool store itself */
 let mlPoolCount = 0;
@@ -2742,13 +2743,103 @@ async function loadEditorAssetCache(root, opts, force = false) {
   }
   if (root?.isConnected) renderMediaStudio(root, opts);
 }
+/* ---- PhantomCut mount: one persistent host so the project (clips, music,
+   settings) survives tab and workspace switches within the session ---- */
+let vcHost = null;
+let vcMounted = null;
+function poolMediaRows(kind) {
+  const sess = session.assets
+    .filter((a) => a.type === kind && a.url)
+    .map((a) => ({ id: a.id, title: a.meta?.title || a.meta?.prompt || "Session render", url: a.url }));
+  const pool = loadContentAssets()
+    .filter((a) => a.type === kind)
+    .map((a) => ({ id: a.id, title: a.title, url: contentAssetDisplayUrl(a) }))
+    .filter((row) => row.url);
+  const seen = new Set();
+  return [...sess, ...pool].filter((row) => !seen.has(row.url) && seen.add(row.url));
+}
+function handleVideoExport(result, opts) {
+  const title = result.title || "PhantomCut edit";
+  if (result.dataUrl) {
+    const registered = registerContentAsset({
+      id: `cut-${Date.now()}`,
+      type: "video",
+      title,
+      prompt: "Edited in PhantomCut.",
+      source: "Media Pool",
+      url: result.dataUrl,
+      duration: result.duration,
+      saved: true,
+      createdAt: Date.now(),
+    });
+    if (registered?.stats) mlPoolCount = registered.stats.count;
+    opts.notify?.("PhantomCut", `exported "${title}" and saved it to Media Pool.`);
+  } else {
+    opts.notify?.("PhantomCut", `exported "${title}" — too large to keep in Media Pool, so it downloaded to your device instead.`);
+  }
+}
+function ensureVideoEditor(opts) {
+  if (!vcHost) {
+    vcHost = document.createElement("div");
+    vcHost.className = "ml-videocut-host";
+  }
+  if (!vcMounted) {
+    vcMounted = mountVideoEditor(vcHost, {
+      esc: opts.esc || ((s) => String(s)),
+      notify: opts.notify,
+      aspect: "16:9",
+      sources: {
+        poolImages: () => poolMediaRows("image"),
+        poolVideos: () => poolMediaRows("video"),
+      },
+      onExported: (result) => handleVideoExport(result, opts),
+    });
+  }
+  return vcHost;
+}
+
+function editModeBar(active, esc) {
+  return `<div class="ml-edit-mode-bar">
+    <button type="button" data-ml-edit-back title="Back to editor choice">⟵ Editors</button>
+    <span>${active === "video" ? "PhantomCut · video editor" : "Photo editor"}</span>
+  </div>`;
+}
 function renderEdit(body, cfg, opts, root) {
   const esc = opts.esc || ((s) => String(s));
+  /* external entry points (drag & drop, Media Pool "Edit", Content Hub) set
+     session.edit with an image — that's an explicit photo-editing intent */
+  if (session.edit && !session.editMode) session.editMode = "photo";
+  if (!session.editMode) {
+    body.innerHTML = `<div class="ml-edit-choose" role="group" aria-label="Choose an editor">
+      <button type="button" class="ml-choose-card" data-ml-choose="photo">
+        ${svgIc("image")}
+        <b>Photo</b>
+        <i>Retouch, filters, layers, background removal, and AI cleanup. Start from Media Pool, a new render, or a file.</i>
+      </button>
+      <button type="button" class="ml-choose-card" data-ml-choose="video">
+        ${svgIc("film")}
+        <b>Video</b>
+        <i>PhantomCut: build a cut from photos, clips, or both — Ken Burns, crossfades, titles, music, and a real export.</i>
+      </button>
+    </div>`;
+    body.querySelectorAll("[data-ml-choose]").forEach((btn) => btn.onclick = () => {
+      session.editMode = btn.dataset.mlChoose;
+      renderMediaStudio(root, opts);
+    });
+    return;
+  }
+  if (session.editMode === "video") {
+    body.innerHTML = editModeBar("video", esc);
+    body.appendChild(ensureVideoEditor(opts));
+    body.querySelector("[data-ml-edit-back]").onclick = () => { session.editMode = null; renderMediaStudio(root, opts); };
+    return;
+  }
   if (!session.edit) {
-    body.innerHTML = `<div class="ml-empty" data-ml-dropzone="edit" data-ml-dropzone-label="Drop to open in editor">${svgIc("edit")}<b>Pick something to edit</b><i>Generate an image, choose one from Media Pool, or upload.</i>
+    body.innerHTML = `${editModeBar("photo", esc)}<div class="ml-empty" data-ml-dropzone="edit" data-ml-dropzone-label="Drop to open in editor">${svgIc("edit")}<b>Pick something to edit</b><i>Generate an image, choose one from Media Pool, or upload.</i>
       <div class="ml-edit-pick"><button class="ml-generate ml-inline" data-ml-upload>${svgIc("upload")} Upload an image</button>
       ${session.assets[0] ? `<button class="ml-generate ml-inline ml-ghost" data-ml-fromlib>Use latest generation</button>` : ""}</div>
       <input type="file" accept="image/*" data-ml-editfile hidden /></div>`;
+    body.querySelector("[data-ml-edit-back]").onclick = () => { session.editMode = null; renderMediaStudio(root, opts); };
     const f = body.querySelector("[data-ml-editfile]");
     body.querySelector("[data-ml-upload]").onclick = () => f.click();
     f.onchange = () => readImage(f.files[0], (url) => { session.edit = { url, type: "image", id: `up-${Date.now()}` }; resetEdit(); renderMediaStudio(root, opts); });
@@ -2772,7 +2863,7 @@ function renderEdit(body, cfg, opts, root) {
         <div class="ch-lb-pick-hint" data-ml-pick-hint hidden>${svgIc("spark")} Click to add focus, right-click a spot to remove it</div>
       </div>
       <div class="ml-tools">
-        <div class="ml-edit-title"><div><span>Image editor</span><b>Make it ready to use.</b></div><button class="ml-tutorial-btn" type="button" data-ml-tutorial title="Help">?</button></div>
+        <div class="ml-edit-title"><div><span><button type="button" class="ml-edit-back-inline" data-ml-edit-back title="Back to editor choice">⟵</button> Image editor</span><b>Make it ready to use.</b></div><button class="ml-tutorial-btn" type="button" data-ml-tutorial title="Help">?</button></div>
         ${mlShowTutorial ? tutorialMarkup() : ""}
         <div class="ml-quick-fixes">
           <button type="button" data-ml-clean>${svgIc("spark")} Clean up</button>
@@ -2923,6 +3014,7 @@ function renderEdit(body, cfg, opts, root) {
   window.addEventListener("resize", mlEditResizeHandler);
   // wire tools
   body.querySelector("[data-ml-tutorial]")?.addEventListener("click", () => { mlShowTutorial = !mlShowTutorial; renderMediaStudio(root, opts); });
+  body.querySelector("[data-ml-edit-back]")?.addEventListener("click", () => { session.editMode = null; renderMediaStudio(root, opts); });
   updateEditHistoryControls(body);
   body.querySelector("[data-ml-undo]")?.addEventListener("click", () => {
     if (!mlEditHistory.length) return;
