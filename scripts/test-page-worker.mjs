@@ -61,11 +61,12 @@ assert.match(worker, /Before we proceed, answer this:/u, "Blocking questions mus
 assert.match(worker, /button\.disabled = true/u, "Submitting a page prompt must disable the button while the backend runs.");
 assert.match(worker, /data-page-worker-form/u, "Worker prompt form must be bindable.");
 assert.match(worker, /opts\.notify/u, "Worker prompt should log/notify without executing external actions.");
+assert.match(worker, /export function pageWorkerHtml\(pageId, def = \{\}\) \{[\s\S]*return "";/u, "Page-level worker bars must stay removed from all pages; Phantom pet is the entry point now.");
 
 assert.match(main, /import \{ pageWorkerHtml, mountPageWorkers \} from "\.\/pageworker\.js\?v=phantom-live-\d{8}-\d+"/u, "main.js must import the current page worker module.");
-assert.match(main, /\$\{pageWorkerHtml\(key, def\)\}/u, "Workspace pages must mount the worker prompt.");
-assert.match(main, /mountPageWorkers\(root, mediaOpts\(\)\)/u, "Workspace pages must bind worker prompt events.");
-assert.match(main, /mountPageWorkers\(overlayRoot, mediaOpts\(\)\)/u, "Overlay pages must bind worker prompt events.");
+assert.match(main, /\$\{pageWorkerHtml\(key, def\)\}/u, "Workspace pages still call the worker renderer, which must return no visible top bar.");
+assert.match(main, /mountPageWorkers\(root, mediaOpts\(\)\)/u, "Workspace page-worker binding can remain harmless while no forms render.");
+assert.match(main, /mountPageWorkers\(overlayRoot, mediaOpts\(\)\)/u, "Overlay page-worker binding can remain harmless while no forms render.");
 
 assert.match(css, /\.page-worker\b/u, "Page worker styles must exist.");
 assert.match(css, /\.page-worker-output\.is-thinking/u, "Backend thinking state must have visible styling.");

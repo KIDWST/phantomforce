@@ -2,7 +2,7 @@
    One sidebar-docked Phantom system: preference-aware, drag-safe, always
    returns home, and tied to real chat/notification states. */
 
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260714-249";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260714-252";
 import {
   COMPANION_EVENT,
   clearCompanionSessionHide,
@@ -10,7 +10,7 @@ import {
   isCompanionHiddenForSession,
   loadCompanionPrefs,
   updateCompanionPrefs,
-} from "./companion-preferences.js?v=phantom-live-20260714-249";
+} from "./companion-preferences.js?v=phantom-live-20260714-252";
 
 const reduceMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
 const LEGACY_DOCK_KEY = "pf.buddy.docked.v1";
@@ -73,6 +73,12 @@ export function mountBuddy() {
   controller = createBuddyController();
   controller.applyPreferences(loadCompanionPrefs());
   window.addEventListener(COMPANION_EVENT, (event) => controller?.applyPreferences(event.detail || loadCompanionPrefs()));
+  window.addEventListener("keydown", (event) => {
+    if (event.ctrlKey && event.altKey && !event.metaKey && (event.key === "s" || event.key === "S")) {
+      event.preventDefault();
+      controller?.spawnAsk();
+    }
+  });
 }
 
 function createBuddyController() {
@@ -313,6 +319,7 @@ function createBuddyController() {
     canvas = layer.querySelector("[data-buddy-canvas]");
     sayEl = layer.querySelector("[data-buddy-say]");
     menu = layer.querySelector("[data-buddy-menu]");
+    document.body.appendChild(menu);
     ctx2 = canvas.getContext("2d");
     character = createPhantomCharacter({ small: true });
     revealed = false;
@@ -330,6 +337,7 @@ function createBuddyController() {
       eventAbort = null;
     }
     if (layer) layer.remove();
+    if (menu) menu.remove();
     layer = canvas = sayEl = menu = ctx2 = character = null;
     revealed = false;
     revealAt = 0;
@@ -517,6 +525,23 @@ function createBuddyController() {
     say("Ready.", 1600);
   }
 
+  function spawnAsk() {
+    clearCompanionSessionHide();
+    prefs = updateCompanionPrefs({
+      enabled: true,
+      visible: true,
+      startDocked: true,
+      dockLocation: "sidebar",
+      speechEnabled: true,
+    });
+    applyPreferences(prefs);
+    dock();
+    setTimeout(() => {
+      focusChat();
+      say("Ask me from anywhere.", 2200);
+    }, 0);
+  }
+
   function openSurface(id) {
     const button = document.querySelector(`[data-nav-id="${id}"]`);
     if (button) {
@@ -539,10 +564,8 @@ function createBuddyController() {
     const anchorX = Number.isFinite(clientX) ? clientX : x + buddyWidth / 2;
     const anchorY = Number.isFinite(clientY) ? clientY : y - buddyHeight / 2;
     const gutter = 10;
-    const sidebar = sidebarRect();
-    const prefersRightOfSidebar = prefs.dockLocation === "sidebar" && sidebar.width > 120;
-    const rawLeft = prefersRightOfSidebar ? sidebar.left + sidebar.width + gutter : anchorX;
-    const rawTop = prefersRightOfSidebar ? anchorY - rect.height + 18 : anchorY;
+    const rawLeft = anchorX + gutter;
+    const rawTop = anchorY + gutter;
     const left = Math.max(gutter, Math.min(window.innerWidth - rect.width - gutter, rawLeft));
     const top = Math.max(gutter, Math.min(window.innerHeight - rect.height - gutter, rawTop));
     menu.style.left = `${left}px`;
@@ -815,5 +838,5 @@ function createBuddyController() {
     requestAnimationFrame(frame);
   }
 
-  return { applyPreferences, react };
+  return { applyPreferences, react, spawnAsk };
 }
