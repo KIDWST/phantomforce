@@ -76,14 +76,16 @@ export async function databaseLogin(email, password) {
   return ctx.session;
 }
 
-export async function databaseSignup({ email, password, name, workspaceName, workspaceProfile }) {
+export async function databaseSignup({ email, password, name, workspaceName, workspaceBrief, workspaceProfile }) {
   const { ok, status, json } = await api("/auth/signup", {
     method: "POST",
-    body: { email, password, name, workspaceName, workspaceProfile },
+    body: { email, password, name, workspaceName, workspaceBrief, workspaceProfile },
   });
   if (!ok) {
     const message = status === 409
       ? "That email already has a workspace. Sign in instead."
+      : json?.error === "workspace_brief_required"
+        ? "Tell PhantomForce what this workspace does before creating it."
       : String(json?.error || `Workspace creation failed (${status}).`);
     throw new Error(message);
   }

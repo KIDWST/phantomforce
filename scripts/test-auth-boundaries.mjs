@@ -51,5 +51,10 @@ assert.match(publicHosts, /export const CLIENT_PUBLIC_HOST = "app\.phantomforce\
 assert.match(publicHosts, /if \(scope === "admin"\) return session\.canManageAccess/u, "The admin host must only allow platform/admin access sessions.");
 assert.match(publicHosts, /if \(scope === "client"\) return !session\.canManageAccess/u, "The customer host must reject platform/admin access sessions.");
 assert.match(server, /const publicHost = requestPublicHost\(request\);\s*if \(!canUseSessionOnPublicHost\(publicHost, session\)\) \{\s*await revokeDatabaseSession\(session\.authSessionId\);/u, "Database login must enforce the public-host boundary and revoke refused sessions.");
+assert.match(server, /function requireManualBrainEditor\(session: AccessSession, reply: FastifyReply\)/u, "Manual brain editing must have an explicit platform-only guard.");
+assert.match(server, /if \(session\.canManageAccess\) return true;/u, "Manual brain editing must remain limited to platform-access sessions.");
+assert.match(server, /app\.post\("\/phantom-ai\/brain\/memories"[\s\S]*if \(!requireManualBrainEditor\(session, reply\)\) return reply;/u, "Customer sessions must not create manual brain memories.");
+assert.match(server, /app\.patch\("\/phantom-ai\/brain\/memories\/:id"[\s\S]*if \(!requireManualBrainEditor\(session, reply\)\) return reply;/u, "Customer sessions must not edit manual brain memories.");
+assert.match(server, /app\.delete\("\/phantom-ai\/brain\/memories\/:id"[\s\S]*if \(!requireManualBrainEditor\(session, reply\)\) return reply;/u, "Customer sessions must not delete manual brain memories.");
 
 console.log("Auth boundary checks passed.");

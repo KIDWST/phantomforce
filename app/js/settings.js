@@ -3,7 +3,8 @@
 
 import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260714-258";
 import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260714-258";
-import { loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260714-258";
+import { loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260714-258";
+import { activeOrgId, canManageActiveOrg } from "./orgs.js?v=phantom-live-20260714-258";
 import { DEFAULT_COMPANION_PREFS, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260714-258";
 
 const AI_SETTINGS_KEY = "pf.operator.settings.v1";
@@ -13,6 +14,7 @@ const SETTINGS_TABS = [
   { id: "model", label: "Model", category: "AI Brain" },
   { id: "loop", label: "Loop routing", category: "AI Brain" },
   { id: "chat", label: "Chat behavior", category: "AI Brain" },
+  { id: "connections", label: "Provider connections", category: "AI Brain" },
   { id: "workspace", label: "Workspace Studio", category: "Workspace" },
   { id: "companion", label: "Companion", category: "Workspace" },
   { id: "media", label: "Media & social", category: "Media" },
@@ -225,6 +227,69 @@ function renderSafetySummary(settings) {
       <span><b>Autopilot</b><i>${settings.autopilotScope === "safe_repeat" ? "Safe repeat work only" : "Manual only"}</i></span>
       <span><b>Boundary</b><i>${esc(externalLabel)}</i></span>
     </div>`;
+}
+
+async function providerConnectionApi(path, options = {}) {
+  const token = session.token();
+  const response = await fetch(path, {
+    ...options,
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(options.body ? { "Content-Type": "application/json" } : {}),
+      ...(options.headers || {}),
+    },
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || payload?.ok === false) throw new Error(payload?.error || `Connection request failed (${response.status}).`);
+  return payload;
+}
+
+function renderProviderConnectionsTab(state = {}) {
+  const orgId = activeOrgId();
+  if (!orgId || !canManageActiveOrg()) {
+    return `<div class="set-section"><p class="set-eyebrow">Tenant-owned providers</p><h3>Connect inside a workspace</h3><p class="set-note">Provider and subscription references are available to database workspace owners/admins only.</p></div>`;
+  }
+  const rows = Array.isArray(state.connections) ? state.connections : [];
+  return `
+    <div class="set-section">
+      <p class="set-eyebrow">Tenant-owned providers</p>
+      <h3>Bring your own APIs and subscriptions</h3>
+      <p class="set-note">Save references to accounts you own. Do not paste raw API keys here; PhantomForce stores reference names only and never exposes platform owner credentials to this workspace.</p>
+      ${state.error ? `<p class="gate-error">${esc(state.error)}</p>` : ""}
+      ${state.notice ? `<p class="brain-notice">${esc(state.notice)}</p>` : ""}
+      <form class="set-control-grid" data-provider-connection-form>
+        <label class="set-control"><span>Provider</span><input name="provider" placeholder="openrouter, anthropic, openai, local" required /></label>
+        <label class="set-control"><span>Credential reference</span><input name="credentialReference" placeholder="vault item or provider account label" /></label>
+        <label class="set-control"><span>Subscription reference</span><input name="subscriptionReference" placeholder="billing account or team subscription label" /></label>
+        <label class="set-control"><span>History</span>
+          <select name="historyMode">
+            <option value="provider_managed">Provider manages history</option>
+            <option value="workspace_scoped">Workspace-scoped history</option>
+            <option value="none">Do not keep history</option>
+          </select>
+        </label>
+        <label class="set-control"><span>Note</span><input name="note" placeholder="How this workspace is allowed to use it" /></label>
+        <button class="btn btn-primary" type="submit">Save reference</button>
+      </form>
+    </div>
+    <div class="set-section">
+      <p class="set-eyebrow">Saved references</p>
+      <div class="brain-list">
+        ${rows.length ? rows.map((item) => `
+          <div class="brain-kv">
+            <span>${esc(item.provider)} · ${esc(item.historyMode)}</span>
+            <b>${esc(item.credentialReference || "No credential reference")}</b>
+            <i>${esc(item.subscriptionReference || "No subscription reference")} · secrets stored: no</i>
+          </div>`).join("") : `<p class="set-note">No tenant-owned provider references saved yet.</p>`}
+      </div>
+    </div>`;
+}
+
+async function loadProviderConnectionsState() {
+  const orgId = activeOrgId();
+  if (!orgId || !canManageActiveOrg()) return { connections: [] };
+  const payload = await providerConnectionApi(`/orgs/${encodeURIComponent(orgId)}/provider-connections`);
+  return { connections: payload.connections || [] };
 }
 
 function saveMiniAndRender(el, opts, settings) {
@@ -610,6 +675,7 @@ export function renderOperatorSettings(el, opts = {}) {
     model: () => renderModelTab(settings, activeProvider, activeModel),
     loop: () => renderLoopAdvancedSection(),
     chat: () => renderChatBehaviorTab(settings),
+    connections: () => opts.providerConnectionState ? renderProviderConnectionsTab(opts.providerConnectionState) : `<div class="set-section"><p class="set-eyebrow">Tenant-owned providers</p><h3>Loading connections...</h3></div>`,
     workspace: () => `<div id="${workspaceMountId}" class="set-workspace-mount"></div>`,
     companion: () => renderCompanionTab(),
     media: () => `<div id="${mediaMountId}"></div>`,
@@ -637,14 +703,47 @@ export function renderOperatorSettings(el, opts = {}) {
   el.querySelectorAll("[data-set-tab]").forEach((button) => {
     button.onclick = () => {
       saveSettingsTab(button.dataset.setTab);
-      renderOperatorSettings(el, opts);
+      renderOperatorSettings(el, { ...opts, providerConnectionState: undefined });
     };
   });
+
+  if (activeTab === "connections" && !opts.providerConnectionState) {
+    loadProviderConnectionsState()
+      .then((state) => renderOperatorSettings(el, { ...opts, initialTab: "connections", providerConnectionState: state }))
+      .catch((error) => renderOperatorSettings(el, { ...opts, initialTab: "connections", providerConnectionState: { connections: [], error: error.message } }));
+    return;
+  }
 
   const saveAndRender = () => {
     saveOperatorSettings(settings);
     renderOperatorSettings(el, opts);
   };
+
+  const providerConnectionForm = el.querySelector("[data-provider-connection-form]");
+  if (providerConnectionForm) {
+    providerConnectionForm.onsubmit = async (event) => {
+      event.preventDefault();
+      const orgId = activeOrgId();
+      const data = new FormData(providerConnectionForm);
+      try {
+        await providerConnectionApi(`/orgs/${encodeURIComponent(orgId)}/provider-connections`, {
+          method: "POST",
+          body: JSON.stringify({
+            provider: String(data.get("provider") || ""),
+            credentialReference: String(data.get("credentialReference") || ""),
+            subscriptionReference: String(data.get("subscriptionReference") || ""),
+            historyMode: String(data.get("historyMode") || "provider_managed"),
+            note: String(data.get("note") || ""),
+          }),
+        });
+        const state = await loadProviderConnectionsState();
+        renderOperatorSettings(el, { ...opts, initialTab: "connections", providerConnectionState: { ...state, notice: "Provider reference saved for this workspace." } });
+      } catch (error) {
+        const state = await loadProviderConnectionsState().catch(() => ({ connections: [] }));
+        renderOperatorSettings(el, { ...opts, initialTab: "connections", providerConnectionState: { ...state, error: error.message } });
+      }
+    };
+  }
 
   el.querySelectorAll("[data-ai-provider]").forEach((button) => {
     button.onclick = () => {

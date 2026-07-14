@@ -131,6 +131,10 @@ import { buildDeploymentModelStatus } from "./access/deployment-model.js";
 import { paywallPreHandler } from "./access/paywall-guard.js";
 import { getPaywallDecision } from "./access/paywall.js";
 import { listSubscriptions, setSubscription } from "./access/subscription-store.js";
+import {
+  listTenantProviderConnections,
+  saveTenantProviderConnection,
+} from "./access/tenant-provider-connections.js";
 import { randomUUID, timingSafeEqual } from "node:crypto";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -1408,6 +1412,7 @@ const DatabaseSignupSchema = z.object({
   password: z.string().min(8).max(200),
   name: z.string().max(120).optional(),
   workspaceName: z.string().min(2).max(120),
+  workspaceBrief: z.string().trim().min(12).max(600),
   workspaceProfile: z.enum(["business", "creator", "developer"]).default("business"),
 });
 
@@ -1417,7 +1422,11 @@ app.post("/auth/signup", async (request, reply) => {
     return reply.code(403).send({ ok: false, error: "Database auth is disabled.", auth: authConfiguration });
   }
   const parsed = DatabaseSignupSchema.safeParse(request.body ?? {});
-  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  if (!parsed.success) {
+    const fieldErrors = parsed.error.flatten().fieldErrors;
+    if (fieldErrors.workspaceBrief?.length) return reply.code(400).send({ ok: false, error: "workspace_brief_required" });
+    return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  }
   const result = await registerWorkspaceAccount(parsed.data);
   if (!result.ok) {
     const status = result.error === "account_exists" ? 409 : 400;
@@ -1705,6 +1714,42 @@ app.get("/orgs/:orgId/entitlements", async (request, reply) => {
   const dbSession = requireOrgMember(request, reply, orgId);
   if (!dbSession) return reply;
   return { ok: true, ...(await getUsageSummary(orgId)) };
+});
+
+const TenantProviderConnectionSchema = z.object({
+  provider: z.string().trim().min(2).max(60),
+  credentialReference: z.string().trim().max(180).optional(),
+  subscriptionReference: z.string().trim().max(180).optional(),
+  historyMode: z.enum(["provider_managed", "workspace_scoped", "none"]).default("provider_managed"),
+  note: z.string().trim().max(240).optional(),
+});
+
+app.get("/orgs/:orgId/provider-connections", async (request, reply) => {
+  const { orgId } = request.params as { orgId: string };
+  const dbSession = requireOrgManager(request, reply, orgId);
+  if (!dbSession) return reply;
+  return {
+    ok: true,
+    connections: await listTenantProviderConnections(orgId),
+    secret_storage: "not_in_browser",
+    tenant_owned_only: true,
+  };
+});
+
+app.post("/orgs/:orgId/provider-connections", async (request, reply) => {
+  const { orgId } = request.params as { orgId: string };
+  const dbSession = requireOrgManager(request, reply, orgId);
+  if (!dbSession) return reply;
+  const parsed = TenantProviderConnectionSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  const result = await saveTenantProviderConnection({ orgId, ...parsed.data });
+  if (!result.ok) return reply.code(400).send({ ok: false, error: result.error });
+  return {
+    ok: true,
+    connection: result.connection,
+    secret_stored: false,
+    tenant_owned_only: true,
+  };
 });
 
 app.get("/admin/plans", async (request, reply) => {
@@ -2378,6 +2423,18 @@ function brainScopeProofForSession(session: AccessSession, carrier?: { tenant_id
       : "client_tenant_only",
     tenant_override_blocked: !session.canManageAccess && Boolean(requestedTenantId && requestedTenantId !== tenantId),
   };
+}
+
+function requireManualBrainEditor(session: AccessSession, reply: FastifyReply) {
+  if (session.canManageAccess) return true;
+  reply.code(403).send({
+    ok: false,
+    error: "Manual brain editing is reserved for the platform owner workspace. Customer workspaces use scoped web memory and provider-managed history.",
+    provider_called: false,
+    network_call_performed: false,
+    external_action_executed: false,
+  });
+  return false;
 }
 
 function buildBrainContextModule(brainContext: Awaited<ReturnType<typeof composeBrainContext>>): ContextModuleData {
@@ -5072,6 +5129,7 @@ app.post("/phantom-ai/brain/memories", async (request, reply) => {
   if (!session) {
     return reply;
   }
+  if (!requireManualBrainEditor(session, reply)) return reply;
 
   const parsed = BrainMemoryCreateSchema.safeParse(request.body ?? {});
   if (!parsed.success) {
@@ -5099,6 +5157,7 @@ app.patch("/phantom-ai/brain/memories/:id", async (request, reply) => {
   if (!session) {
     return reply;
   }
+  if (!requireManualBrainEditor(session, reply)) return reply;
 
   const parsed = BrainMemoryPatchSchema.safeParse(request.body ?? {});
   if (!parsed.success) {
@@ -5139,6 +5198,7 @@ app.delete("/phantom-ai/brain/memories/:id", async (request, reply) => {
   if (!session) {
     return reply;
   }
+  if (!requireManualBrainEditor(session, reply)) return reply;
 
   const params = request.params as { id: string };
   const query = (request.query ?? {}) as { tenant_id?: unknown };

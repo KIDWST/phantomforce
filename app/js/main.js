@@ -378,6 +378,10 @@ function maybeUpgradeGateToDatabaseLogin(card, options = {}) {
           <input type="text" data-signup-workspace name="pf-signup-workspace" autocomplete="organization" placeholder="Your business or studio" required />
         </label>
         <label>
+          <span>What are you?</span>
+          <textarea data-signup-brief name="pf-signup-brief" rows="3" minlength="12" maxlength="600" placeholder="Example: a Chicago sports photo brand selling event galleries, prints, and social clips." required></textarea>
+        </label>
+        <label>
           <span>Email</span>
           <input type="email" data-signup-email name="pf-signup-email" autocomplete="email" autocapitalize="none" spellcheck="false" placeholder="you@business.com" required />
         </label>
@@ -457,6 +461,7 @@ function maybeUpgradeGateToDatabaseLogin(card, options = {}) {
           const nextSession = await databaseSignup({
             name: card.querySelector("[data-signup-name]")?.value.trim() || "",
             workspaceName: card.querySelector("[data-signup-workspace]")?.value.trim() || "",
+            workspaceBrief: card.querySelector("[data-signup-brief]")?.value.trim() || "",
             email: card.querySelector("[data-signup-email]")?.value.trim() || "",
             password: card.querySelector("[data-signup-password]")?.value || "",
             workspaceProfile: signupForm.querySelector("input[name='workspaceProfile']:checked")?.value || "business",
