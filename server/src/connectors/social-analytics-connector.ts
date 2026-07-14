@@ -303,10 +303,10 @@ function tokenExpiry(expiresIn: unknown) {
   return seconds > 0 ? new Date(Date.now() + seconds * 1000).toISOString() : undefined;
 }
 
-async function exchangeToken(fetcher: typeof fetch, url: string, body: URLSearchParams) {
+async function exchangeToken(fetcher: typeof fetch, url: string, body: URLSearchParams, headers: Record<string, string> = {}) {
   const response = await fetcher(url, {
     method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    headers: { "Content-Type": "application/x-www-form-urlencoded", ...headers },
     body,
   });
   const payload = await response.json().catch(() => null);
@@ -418,6 +418,36 @@ export async function completeSocialOAuthCallback(query: Record<string, unknown>
       metadata: { source: "meta_page_instagram_business_connection" },
     }) : null;
     return { platform, connected: platform === "instagram" ? instagram || facebook : facebook, linkedFacebookPage: facebook, linkedInstagramBusiness: instagram };
+  }
+
+  if (platform === "pinterest") {
+    /* Pinterest v5 token exchange authenticates the app with HTTP Basic
+       (client_id:client_secret), not form fields. */
+    const clientId = env("PINTEREST_CLIENT_ID");
+    const clientSecret = env("PINTEREST_CLIENT_SECRET");
+    if (!clientId || !clientSecret) throw new Error("Pinterest OAuth needs PINTEREST_CLIENT_ID and PINTEREST_CLIENT_SECRET in server/.env.");
+    const payload = await exchangeToken(
+      fetcher,
+      "https://api.pinterest.com/v5/oauth/token",
+      new URLSearchParams({ grant_type: "authorization_code", code, redirect_uri: redirectUri }),
+      { Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}` },
+    );
+    const accessToken = text(payload?.access_token);
+    if (!accessToken) throw new Error("Pinterest did not return an access token.");
+    const profile = await requestJson(fetcher, "https://api.pinterest.com/v5/user_account", {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    const saved = saveStoredSocialConnection("pinterest", {
+      provider: "Pinterest API",
+      accessToken,
+      refreshToken: text(payload?.refresh_token) || undefined,
+      expiresAt: tokenExpiry(payload?.expires_in),
+      accountId: text(profile?.id),
+      accountName: text(profile?.business_name || profile?.username),
+      accountHandle: cleanHandle(profile?.username || defaultHandle),
+      scopes: CONNECTORS.find((connector) => connector.id === "pinterest")?.scopes,
+    });
+    return { platform, connected: saved };
   }
 
   throw new Error(`${platform} OAuth callback storage is not implemented yet. Use Settings with an official token for this channel.`);
