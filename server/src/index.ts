@@ -166,6 +166,7 @@ import { buildHermesInteractionMemoryPreview } from "./phantom-ai/hermes-interac
 import { recallHermesInteractionMemory } from "./phantom-ai/hermes-interaction-recall.js";
 import { buildOpsDashboardContext } from "./phantom-ai/ops-context.js";
 import { buildAgentWorkforceStatus } from "./phantom-ai/agent-workforce.js";
+import { buildInstantChatFallbackReply } from "./phantom-ai/instant-chat-fallback.js";
 import {
   AgentActionRequestSchema,
   getAgentActionDefinitions,
@@ -7093,6 +7094,9 @@ app.post("/phantom-ai/chat", async (request, reply) => {
       "network_call_performed" in modelResult ? Boolean(modelResult.network_call_performed) : providerCalled;
     const requestBodyPrepared = "request_body_prepared" in modelResult ? Boolean(modelResult.request_body_prepared) : false;
     const allProvidersFailed = instantChat.allFailed;
+    const instantLocalFallback = allProvidersFailed
+      ? buildInstantChatFallbackReply(normalized.user_request, normalized.business_name)
+      : null;
 
     return {
       ok: true,
@@ -7102,12 +7106,10 @@ app.post("/phantom-ai/chat", async (request, reply) => {
       admin_model_label: respondingLabel,
       admin_model_requested_lane: publicAdminPhantomAiModelLane(adminModelLane),
       admin_execution_mode: adminExecutionMode,
-      model_id: "model_id" in modelResult ? modelResult.model_id : respondingProviderId,
+      model_id: instantLocalFallback?.model_id ?? ("model_id" in modelResult ? modelResult.model_id : respondingProviderId),
       message: {
         role: "assistant",
-        content: allProvidersFailed
-          ? buildAdminPhantomAiAllProvidersFailedMessage()
-          : resultOutput,
+        content: instantLocalFallback?.output_text ?? resultOutput,
       },
       private_brain:
         respondingProviderId === "codex_cli" && "provider_id" in modelResult && modelResult.provider_id === "codex_cli"
@@ -7124,16 +7126,18 @@ app.post("/phantom-ai/chat", async (request, reply) => {
             }
           : null,
       fallback: {
-        used: false,
+        used: Boolean(instantLocalFallback),
         all_failed: allProvidersFailed,
         requested_provider: adminPhantomAiProviderLabel(instantChat.primaryProviderId),
         responding_provider: respondingLabel,
         attempts: instantChat.attempts,
+        local_instant_fallback_used: Boolean(instantLocalFallback),
       },
+      instant_local_fallback: instantLocalFallback,
       hermes: {
         context_used: false,
         ledger_written: false,
-        provider_route: respondingProviderRoute,
+        provider_route: instantLocalFallback ? "local" : respondingProviderRoute,
         route_tier: "instant",
         recalled_memory_count: 0,
       },
@@ -7174,7 +7178,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
         routeTier: adminRouteTier,
         maxProviderMs,
       }),
-      result_status: resultStatus,
+      result_status: instantLocalFallback?.status ?? resultStatus,
     };
   }
 
