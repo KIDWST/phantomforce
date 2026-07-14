@@ -6,7 +6,7 @@
 
 import { store, visible, currentWs, wsName, pushActivity, session, currentTenantId } from "./store.js?v=phantom-live-20260714-249";
 import { createCrmProspectBuildout, isCrmProspectBuildout } from "./command.js?v=phantom-live-20260714-249";
-import { persistCrmProspectLanes } from "./crmpipeline.js?v=phantom-live-20260714-249";
+import { persistCrmProspectLanes, signalCrmRefresh } from "./crmpipeline.js?v=phantom-live-20260714-249";
 
 const esc = (value = "") => String(value)
   .replaceAll("&", "&amp;")
@@ -417,6 +417,7 @@ async function persistPageAction(pageAction, prompt) {
     pageAction.title = "Prospect lanes saved";
     pageAction.summary = `${saved} draft prospect lane${saved === 1 ? "" : "s"} saved to server CRM.`;
     pageAction.notes.unshift("Server CRM saved the draft lanes for this workspace.");
+    signalCrmRefresh("prospect-lanes-saved");
   } catch (error) {
     pageAction.serverPersisted = false;
     pageAction.notes.push(`Server CRM save failed, so the local draft lanes stayed visible: ${error?.message || "unknown error"}`);

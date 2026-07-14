@@ -112,6 +112,7 @@ function ensureCrmRuntime(rerender) {
   crmRuntime.state = "loading";
   crmRuntime.tenant = tenant;
   crmRuntime.error = "";
+  crmRuntime.refreshSignal = refreshSignal || crmRuntime.refreshSignal;
   loadCrmLeads()
     .then((payload) => { applyCrmPayload(payload); crmRuntime.refreshSignal = refreshSignal || crmRuntime.refreshSignal; rerender?.(); })
     .catch((error) => {

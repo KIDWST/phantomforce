@@ -41,12 +41,18 @@ must(files.staticServer, /urlPath\.startsWith\("\/api\/crm"\)/u, "Static server 
 for (const exported of ["loadCrmLeads", "createCrmLead", "updateCrmLead", "deleteCrmLead", "persistCrmProspectLanes"]) {
   must(files.client, new RegExp(`export async function ${exported}`, "u"), `Client API must export ${exported}.`);
 }
+for (const exported of ["signalCrmRefresh", "crmRefreshSignal"]) {
+  must(files.client, new RegExp(`export function ${exported}`, "u"), `Client API must export ${exported}.`);
+}
+must(files.client, /CRM_REFRESH_SIGNAL_KEY/u, "CRM client must expose a refresh signal key for cross-page CRM updates.");
 
 must(files.workspaces, /Server CRM saved/u, "Clients page must display server CRM state.");
 must(files.workspaces, /loadCrmLeads/u, "Clients page must load server CRM leads.");
+must(files.workspaces, /crmRefreshSignal[\s\S]*refreshRequested[\s\S]*loadCrmLeads/u, "Clients page must reload stale server CRM snapshots after a prompter save.");
 must(files.workspaces, /createServerCrmLead/u, "Clients page must create server CRM leads.");
 must(files.workspaces, /updateServerCrmLead/u, "Clients page must update server CRM leads.");
 must(files.pageworker, /persistCrmProspectLanes/u, "Clients page prompter must persist prospect lanes.");
+must(files.pageworker, /persistCrmProspectLanes[\s\S]*signalCrmRefresh/u, "Clients page prompter must signal the board to refresh after server persistence.");
 must(files.pageworker, /Server CRM saved the draft lanes/u, "Prompter result must report server CRM persistence.");
 must(files.audit, /PERSIST-CRM-PIPELINE/u, "Structured audit must report CRM pipeline persistence.");
 must(files.packageJson, /test:crm-pipeline/u, "Root package must expose the CRM pipeline regression test.");
