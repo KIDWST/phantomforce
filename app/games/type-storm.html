@@ -45,6 +45,8 @@
     'use strict';
     const host=(type,data={})=>parent.postMessage({source:'phantomplay-game',type,...data},'*');
     const WORDS=['able','about','above','acorn','actor','adapt','after','again','agent','alarm','alert','alien','alpha','amber','angle','ankle','apple','arch','area','arrow','atlas','atom','audio','autumn','award','axis','badge','baker','basic','basket','beach','beacon','begin','bell','below','bench','berry','binary','bird','black','blade','blaze','block','bloom','blue','board','bonus','boost','bottle','brain','brave','bread','break','brick','bridge','bright','bring','brook','brush','buffer','build','cabin','cable','cache','camera','candle','canyon','carbon','cargo','castle','cedar','chain','chair','chalk','charm','chart','chase','check','chess','chief','chord','cider','cipher','circle','city','claim','clean','clear','clever','cliff','climb','clock','cloud','clover','coast','cobalt','code','coin','comet','coral','cosmic','count','cover','crane','crater','creek','crisp','cross','crown','curve','cycle','daisy','dance','dark','dawn','decode','delta','denim','depth','desert','design','digit','dome','door','draft','dragon','dream','drift','drive','drop','dusk','dust','eagle','early','earth','echo','edge','eight','elbow','ember','empty','energy','engine','enter','equal','event','exact','exit','extra','fable','falcon','fast','fern','field','film','final','fire','first','five','flame','flash','fleet','flint','float','floor','flow','fluid','flux','focus','fold','forest','forge','form','forum','found','four','frame','fresh','frost','fruit','galaxy','game','gamma','garden','gate','gear','giant','gift','glass','gleam','glide','globe','glow','gold','grain','grand','grape','graph','grass','green'];
+    const HARD_WORDS=['backstage','blackout','breakpoint','campaign','checksum','deadline','dispatch','download','feedback','framework','frequency','keyboard','launcher','midnight','operator','playlist','protocol','shortcut','signalize','starfield','subsystem','terminal','timeline','workflow','zeppelin'];
+    const STORM_STRINGS=['fasdjkl','jksdlfk','zxcmop','asdfjkl','qwerasdf','mkkcsik','skczaom','fjdkals','zxcjklm','asdfghjk','jklsdfaa','codexrun','stormkey','neonrush'];
     const cvs=document.querySelector('canvas'),ctx=cvs.getContext('2d'),kbd=document.querySelector('.kbd');
     const startEl=document.querySelector('.start'),pauseEl=document.querySelector('.pause'),resultEl=document.querySelector('.result');
     const hintEl=document.querySelector('.hint');
@@ -80,20 +82,26 @@
       document.querySelector('[data-combo]').textContent=streak;
       document.querySelector('[data-shields]').textContent=shields>0?'⬢'.repeat(shields):'—';
     }
+    function chooseText(){
+      if(elapsed>42&&Math.random()<0.42)return STORM_STRINGS[Math.floor(Math.random()*STORM_STRINGS.length)];
+      if(elapsed>18&&Math.random()<0.48)return HARD_WORDS[Math.floor(Math.random()*HARD_WORDS.length)];
+      return WORDS[Math.floor(Math.random()*WORDS.length)];
+    }
     function spawn(){
-      if(falling.length>=10)return;
-      const text=WORDS[Math.floor(Math.random()*WORDS.length)];
+      const maxFalling=elapsed>55?16:elapsed>28?14:12;
+      if(falling.length>=maxFalling)return;
+      const text=chooseText();
       if(falling.some(w=>w.text===text))return;
       ctx.font=FONT;
       const width=ctx.measureText(text).width;
-      const base=Math.min(120,30+elapsed*1.25);
+      const base=Math.min(245,54+elapsed*3.15+streak*1.8);
       let x=8+Math.random()*Math.max(1,cw-16-width);
       for(let tries=0;tries<4;tries++){
         const clash=falling.some(w=>w.y<60&&x<w.x+w.width+18&&x+width+18>w.x);
         if(!clash)break;
         x=8+Math.random()*Math.max(1,cw-16-width);
       }
-      falling.push({text,matched:0,x,y:-14,width,speed:base*(0.85+Math.random()*0.3)});
+      falling.push({text,matched:0,x,y:-14,width,speed:base*(0.9+Math.random()*0.42)});
     }
     function startRun(){
       falling=[];active=null;
@@ -153,8 +161,12 @@
       elapsed+=dt;
       if(flash>0)flash=Math.max(0,flash-dt);
       spawnT-=dt;
-      const interval=Math.max(0.65,2.2-elapsed*0.028);
-      if(spawnT<=0){spawn();spawnT=interval}
+      const interval=Math.max(0.34,1.45-elapsed*0.018-streak*0.01);
+      if(spawnT<=0){
+        spawn();
+        if(elapsed>24&&Math.random()<Math.min(0.72,0.18+elapsed*.008))spawn();
+        spawnT=interval*(0.82+Math.random()*0.32);
+      }
       for(const w of [...falling]){
         w.y+=w.speed*dt;
         if(w.y>=baseY){loseShield(w);if(phase!=='playing')return}
