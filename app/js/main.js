@@ -1493,6 +1493,29 @@ function renderNotifs() {
     : `<div class="notif-empty">You're all caught up.</div>`);
 }
 
+/* ============================ attention strip ============================ */
+/* The dashboard leads with the same attentionItems() the bell uses — the
+   strip sits directly under the greeting so nothing waiting on the owner
+   can hide behind a menu. It renders nothing (stays hidden) when clean. */
+function renderAttentionStrip() {
+  const strip = $("[data-attention-strip]");
+  if (!strip) return;
+  const items = attentionItems().slice(0, 4);
+  strip.hidden = items.length === 0;
+  if (!items.length) { strip.innerHTML = ""; return; }
+  strip.innerHTML = `
+    <div class="attention-head">
+      <p>Needs your attention <span class="attention-count">${items.length}</span></p>
+    </div>
+    <div class="attention-row">
+      ${items.map((it) => `
+        <button class="attention-chip is-${esc(it.tone)}" data-open-ws="${esc(it.open)}" type="button">
+          <span class="attention-ic">${svg(it.icon)}</span>
+          <span class="attention-copy"><b>${esc(it.title)}</b><i>${esc(it.sub)}</i></span>
+        </button>`).join("")}
+    </div>`;
+}
+
 /* ============================ ⌘K command palette ============================ */
 let cmdkOpen = false, cmdkIdx = 0, cmdkItems = [];
 function fuzzy(q, text) {
@@ -1644,10 +1667,11 @@ function renderConsole() {
   renderPlanMeta();
   renderUser();
   renderNotifs();
-  /* Fire-and-forget: pull server truth for the bell, then repaint the badge
-     (and the open menu) once it lands. Failures change nothing. */
+  renderAttentionStrip();
+  /* Fire-and-forget: pull server truth for the bell + attention strip, then
+     repaint both once it lands. Failures change nothing. */
   const pulseBefore = serverPulseAt;
-  fetchServerAttention().then(() => { if (serverPulseAt !== pulseBefore) renderNotifs(); }).catch(() => {});
+  fetchServerAttention().then(() => { if (serverPulseAt !== pulseBefore) { renderNotifs(); renderAttentionStrip(); } }).catch(() => {});
   renderHero();
   renderChips();
   renderModePose(activeMode);
@@ -3155,7 +3179,7 @@ async function boot() {
   store.onChange(() => {
     if (!phantom.hidden) {
       if (activePageId) { renderConsole(); return; }
-      renderNav(); renderStatusPills(); renderNotifs();
+      renderNav(); renderStatusPills(); renderNotifs(); renderAttentionStrip();
       renderFlowMap(); renderFlowCompactSummary(); renderPlan(); renderQueue();
     }
   });
