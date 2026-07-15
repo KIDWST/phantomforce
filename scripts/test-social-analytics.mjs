@@ -34,6 +34,8 @@ assert.match(contentHubSource, /Manual fallback · CSV · TSV · JSON/);
 assert.match(contentHubSource, /an-channel-line/);
 assert.match(contentHubSource, /an-coverage-ring/);
 assert.match(contentHubSource, /officialchicagoshots/, "Social handles should default to Jordan's ChicagoShots handle.");
+assert.match(contentHubSource, /function normalizeSocialAccount\(base, saved = \{\}\)/, "Saved social profile rows must be normalized before analytics uses them.");
+assert.match(contentHubSource, /if \(!String\(merged\.handle \|\| ""\)\.trim\(\)\) merged\.handle = fallbackHandle;/, "Blank saved social handles must fall back to officialchicagoshots instead of hiding the handle.");
 assert.match(contentHubSource, /LIVE_ANALYTICS_PLATFORMS = new Set\(PLATFORMS\.map/, "Analytics should show every social channel, not only the original four.");
 assert.match(contentHubSource, /data-an-oauth/, "Analytics rows should start official account authorization when OAuth is ready.");
 assert.doesNotMatch(contentHubSource, /Workspace analytics are live\. Platform APIs are optional/, "Analytics must not present local workspace activity as social analytics.");

@@ -99,11 +99,17 @@ function defaultSocialAccounts() {
     enabled: false, connectMode: "manual", officialConnectState: "not_configured", lastConnectAt: "",
   }));
 }
+function normalizeSocialAccount(base, saved = {}) {
+  const merged = { ...base, ...(saved || {}) };
+  const fallbackHandle = base.handle || plat(base.id).handle || "officialchicagoshots";
+  if (!String(merged.handle || "").trim()) merged.handle = fallbackHandle;
+  return merged;
+}
 export function loadSocialAccounts() {
   let saved = [];
   try { saved = JSON.parse(workspaceStorageGetItem(SOCIAL_KEY) || "[]"); } catch {}
   const rows = Array.isArray(saved) ? saved : [];
-  return defaultSocialAccounts().map((base) => ({ ...base, ...(rows.find((row) => row && row.id === base.id) || {}) }));
+  return defaultSocialAccounts().map((base) => normalizeSocialAccount(base, rows.find((row) => row && row.id === base.id)));
 }
 export function saveSocialAccounts(accounts) {
   try { workspaceStorageSetItem(SOCIAL_KEY, JSON.stringify(accounts)); } catch {}
