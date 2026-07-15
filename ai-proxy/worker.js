@@ -111,16 +111,37 @@ const mediaConfigured = (env) => Object.fromEntries(
     .filter(([id]) => id !== "higgsfield")
     .map(([id, p]) => [id, !!env[p.keyEnv]]),
 );
+const SECRET_MIN_CHARS = 24;
+function configuredVisitorSecret(env) {
+  const secret = String(env.PF_VISITOR_SECRET ?? "").trim();
+  return secret.length >= SECRET_MIN_CHARS ? secret : "";
+}
+function configuredMediaAdminKey(env) {
+  const secret = String(env.PF_MEDIA_ADMIN_KEY ?? "").trim();
+  return secret.length >= SECRET_MIN_CHARS ? secret : "";
+}
+function constantTimeEqual(a, b) {
+  const left = String(a ?? "");
+  const right = String(b ?? "");
+  let diff = left.length ^ right.length;
+  const max = Math.max(left.length, right.length);
+  for (let i = 0; i < max; i += 1) diff |= (left.charCodeAt(i) || 0) ^ (right.charCodeAt(i) || 0);
+  return diff === 0;
+}
 
 async function handleGenerate(request, env, headers) {
-  if (env.PF_MEDIA_ADMIN_KEY) {
-    if (request.headers.get("x-admin-key") !== env.PF_MEDIA_ADMIN_KEY) return json({ error: "forbidden" }, 403, headers);
-  }
   let payload;
   try { payload = await request.json(); } catch { return json({ error: "bad_request" }, 400, headers); }
   const prov = MEDIA_PROVIDERS[String(payload.provider || "").toLowerCase()];
   if (!prov) return json({ error: "unknown_provider" }, 200, headers);
-  const key = env[prov.keyEnv] || request.headers.get("x-provider-key") || "";
+  const envKey = env[prov.keyEnv] || "";
+  const requestKey = request.headers.get("x-provider-key") || "";
+  if (envKey) {
+    const adminKey = configuredMediaAdminKey(env);
+    if (!adminKey) return json({ error: "media_admin_key_unconfigured" }, 503, headers);
+    if (!constantTimeEqual(request.headers.get("x-admin-key"), adminKey)) return json({ error: "forbidden" }, 403, headers);
+  }
+  const key = envKey || requestKey;
   if (!key) return json({ error: "unconfigured", provider: payload.provider }, 200, headers);
   const req = {
     modality: ["video", "edit"].includes(payload.modality) ? payload.modality : "image", model: String(payload.model || ""),
@@ -241,7 +262,15 @@ export default {
     if (request.method === "OPTIONS") return new Response(null, { headers });
     const pathname = new URL(request.url).pathname;
     if (request.method === "GET" && pathname === "/health") {
-      return json({ ok: true, configured, provider, model, media: mediaConfigured(env) }, 200, headers);
+      return json({
+        ok: true,
+        configured,
+        provider,
+        model,
+        media: mediaConfigured(env),
+        visitor_secret_configured: !!configuredVisitorSecret(env),
+        media_admin_key_configured: !!configuredMediaAdminKey(env),
+      }, 200, headers);
     }
     if (request.method !== "POST") return json({ error: "method" }, 405, headers);
     if (pathname === "/generate") return handleGenerate(request, env, headers);
@@ -254,7 +283,13 @@ export default {
     const subnet = ip.includes(":") ? ip.split(":").slice(0, 4).join(":") : ip.split(".").slice(0, 3).join(".");
     const day = new Date().toISOString().slice(0, 10);
     const hour = new Date().toISOString().slice(0, 13);
-    const secret = env.PF_VISITOR_SECRET || "pf-visitor-fallback";
+    const secret = configuredVisitorSecret(env);
+    if (!secret) {
+      return json({
+        error: "visitor_secret_unconfigured",
+        message: "Public AI chat is unavailable until visitor signing is configured.",
+      }, 503, headers);
+    }
     const sign = async (id) => {
       const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
       const mac = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(id));

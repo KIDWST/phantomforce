@@ -31,6 +31,7 @@
     "test:managed-growth-report": "node scripts/test-managed-growth-report.mjs && npm run test:managed-growth-report --workspace @phantomforce/server",
     "test:organization-pulse": "node scripts/test-organization-pulse.mjs",
     "test:flowmap": "node scripts/test-flowmap.mjs",
+    "test:ai-proxy-worker-security": "node scripts/test-ai-proxy-worker-security.mjs",
     "test:phantomplay": "node scripts/test-phantomplay.mjs && npm run test:phantomplay --workspace @phantomforce/server",
     "test:competitor-intelligence": "node scripts/test-competitor-intelligence.mjs && npm run test:competitor-intelligence --workspace @phantomforce/server",
     "test:workspace-site-builder": "node scripts/test-workspace-site-builder.mjs",
