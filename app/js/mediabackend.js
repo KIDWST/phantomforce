@@ -99,7 +99,7 @@ export async function exportCanvas(canvas, repaintFn, format = "image/png", qual
   const srcUrl = canvas._img?.src;
   const rescued = srcUrl ? await rescueTaintedImage(srcUrl) : null;
   if (!rescued) return first;
-  repaintFn(rescued);
+  await repaintFn(rescued);
   return safeCanvasDataUrl(canvas, format, quality);
 }
 

@@ -2381,15 +2381,19 @@ function renderEdit(body, cfg, opts, root) {
   const canvas = body.querySelector("[data-ml-canvas]");
   const markerLayer = body.querySelector("[data-ml-bokeh-markers]");
   loadEditorAssetCache(root, opts);
+  const renderEditorCanvas = async (img = canvas._img) => {
+    if (!img) return false;
+    ensureEditorComposition();
+    await loadCompositionImages(mlComposition, loadImageForEditing);
+    if (!canvas.isConnected || canvas._img !== img) return false;
+    renderComposition(canvas, img, editState, mlComposition, mlLayerEffects);
+    fitEditorCanvas(canvas);
+    positionMarkers();
+    return true;
+  };
   const repaint = () => {
     if (!canvas._img) return;
-    ensureEditorComposition();
-    loadCompositionImages(mlComposition, loadImageForEditing).finally(() => {
-      if (!canvas.isConnected || !canvas._img) return;
-      renderComposition(canvas, canvas._img, editState, mlComposition, mlLayerEffects);
-      fitEditorCanvas(canvas);
-      positionMarkers();
-    });
+    renderEditorCanvas(canvas._img).catch(() => {});
   };
   const refreshEditor = () => { syncSliders(body); repaint(); updateEditHistoryControls(body); };
   const positionMarkers = () => {
@@ -2403,6 +2407,16 @@ function renderEdit(body, cfg, opts, root) {
       el.style.top = `${canvasRect.top - markerRect.top + spots[i].y * canvasRect.height}px`;
     });
   };
+  async function repaintWithImg(img) {
+    canvas._img = img;
+    await renderEditorCanvas(img);
+  }
+  async function exportCurrentEdit(format = "image/png", quality) {
+    if (!canvas._img) return { ok: false, error: "This image is still loading. Try again in a moment." };
+    const rendered = await renderEditorCanvas(canvas._img);
+    if (!rendered) return { ok: false, error: "This image changed while rendering. Try again in a moment." };
+    return exportCanvas(canvas, repaintWithImg, format, quality);
+  }
   if (window.ResizeObserver) {
     const fitObserver = new ResizeObserver(() => {
       if (!canvas.isConnected) { fitObserver.disconnect(); return; }
@@ -2428,6 +2442,7 @@ function renderEdit(body, cfg, opts, root) {
         mlEditLoadError = null;
         editState.loadedUrl = targetUrl;
         mlLayerEffects.base = editState;
+        canvas._img = img;
         repaint();
       })
       .catch((error) => {
@@ -2497,7 +2512,7 @@ function renderEdit(body, cfg, opts, root) {
     const button = event.currentTarget;
     if (!canvas._img) return;
     button.disabled = true; button.textContent = "Removing…";
-    const exported = await exportCanvas(canvas, (img) => { canvas._img = img; repaint(); }, "image/png");
+    const exported = await exportCurrentEdit("image/png");
     const result = exported.ok ? await requestRemoveBackground(exported.url) : { ok: false, message: exported.error };
     if (result.ok) {
       rememberEdit();
@@ -2728,7 +2743,7 @@ function renderEdit(body, cfg, opts, root) {
     const prompt = buildEditPrompt(q);
     runai.disabled = true; runai.textContent = "…";
     rememberEdit();
-    const exported = await exportCanvas(canvas, (img) => { canvas._img = img; repaint(); }, "image/png");
+    const exported = await exportCurrentEdit("image/png");
     const aspect = canvas.width / Math.max(1, canvas.height) > 1.55 ? "16:9" : canvas.width / Math.max(1, canvas.height) < 0.7 ? "9:16" : canvas.width / Math.max(1, canvas.height) < 0.9 ? "4:5" : "1:1";
     const result = exported.ok ? await requestAiEdit({ dataUrl: exported.url, prompt, provider: "cinematic", aspect }) : { ok: false, message: exported.error };
     if (result.ok && result.url) {
@@ -2747,9 +2762,8 @@ function renderEdit(body, cfg, opts, root) {
   if (language) language.onchange = () => { editState.promptLanguage = language.value; };
   body.querySelector("[data-ml-resetedit]").onclick = () => { resetEdit(); renderMediaStudio(root, opts); };
   body.querySelector("[data-ml-changeedit]").onclick = () => { session.edit = null; mlBokehPicking = false; renderMediaStudio(root, opts); };
-  const repaintWithImg = (img) => { canvas._img = img; repaint(); };
   const duplicateCurrentEdit = async () => {
-    const exported = await exportCanvas(canvas, repaintWithImg, "image/webp", 0.9);
+    const exported = await exportCurrentEdit("image/webp", 0.9);
     if (!exported.ok) { opts.notify?.("Media Factory", `Couldn't duplicate this image: ${exported.error}`); return; }
     const at = Date.now();
     const asset = { id: `dup-${at}`, type: "image", url: exported.url, saved: true, at, meta: { edited: true, prompt: editState.text || "Duplicated image" } };
@@ -2760,7 +2774,7 @@ function renderEdit(body, cfg, opts, root) {
   };
   body.querySelectorAll("[data-ml-duplicate-edit]").forEach((button) => button.onclick = duplicateCurrentEdit);
   body.querySelector("[data-ml-savedit]").onclick = async () => {
-    const exported = await exportCanvas(canvas, repaintWithImg, "image/webp", 0.9);
+    const exported = await exportCurrentEdit("image/webp", 0.9);
     if (!exported.ok) { if (opts.notify) opts.notify("Media Factory", `Couldn't save this edit: ${exported.error}`); return; }
     const at = Date.now();
     const asset = { id: `edit-${at}`, type: "image", url: exported.url, saved: true, at, meta: { edited: true, prompt: editState.text || "Edited image" } };
@@ -2774,7 +2788,7 @@ function renderEdit(body, cfg, opts, root) {
     if (opts.notify) opts.notify("Media Factory", "saved an edited image to Media Pool.");
   };
   body.querySelector("[data-ml-dledit]").onclick = async () => {
-    const exported = await exportCanvas(canvas, repaintWithImg, "image/webp", 0.92);
+    const exported = await exportCurrentEdit("image/webp", 0.92);
     if (!exported.ok) { if (opts.notify) opts.notify("Media Factory", `Couldn't download this edit: ${exported.error}`); return; }
     downloadAsset({ url: exported.url, type: "image", id: "edit" });
   };

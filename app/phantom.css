@@ -4730,7 +4730,7 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
     flex: 1 1 auto;
     min-height: 0;
     height: 100%;
-    max-height: 100%;
+    max-height: min(100%, calc(100dvh - 220px));
     overflow: hidden;
     grid-template-columns: minmax(360px, 1fr) clamp(320px, 22vw, 380px);
     gap: clamp(10px, 1vw, 16px);
@@ -4745,7 +4745,7 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
     align-self: stretch;
     min-height: 0;
     height: 100%;
-    max-height: none;
+    max-height: min(100%, calc(100dvh - 220px));
     padding: clamp(10px, 1vw, 16px);
   }
 
@@ -4759,10 +4759,14 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
     align-self: stretch;
     min-height: 0;
     height: 100%;
-    max-height: 100%;
+    max-height: min(100%, calc(100dvh - 220px));
     overflow-y: auto;
     overflow-x: hidden;
     padding-right: 6px;
+    padding-bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+    -webkit-overflow-scrolling: touch;
     scrollbar-width: thin;
     scrollbar-color: rgba(65,255,161,0.38) rgba(0,0,0,0.2);
   }
