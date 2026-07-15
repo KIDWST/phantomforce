@@ -424,9 +424,14 @@ export async function getPhantomPlayDiscovery(session: AccessSession, options: {
   const catalog = fullCatalog(v1.submissions);
   const profiles = tenantProfiles(v1.profiles, tenantId);
   const weekCutoff = Date.now() - 7 * 86400_000;
+  // All-time counts drive "trending" and the catalog's default sort key
+  // (most-played first); the 7-day window is kept separately for
+  // hiddenGems, where "low recent plays" is the point of the metric.
   const playCounts = new Map<string, number>();
+  const weekPlayCounts = new Map<string, number>();
   for (const profile of profiles) for (const item of profile.sessions || []) {
-    if (Date.parse(item.startedAt) >= weekCutoff) playCounts.set(item.gameId, (playCounts.get(item.gameId) || 0) + 1);
+    playCounts.set(item.gameId, (playCounts.get(item.gameId) || 0) + 1);
+    if (Date.parse(item.startedAt) >= weekCutoff) weekPlayCounts.set(item.gameId, (weekPlayCounts.get(item.gameId) || 0) + 1);
   }
   const avg = (gameId: string) => ratingSummary(store.reviews, tenantId, gameId);
   const known = (id: string) => catalog.some((game) => game.id === id);
@@ -437,8 +442,11 @@ export async function getPhantomPlayDiscovery(session: AccessSession, options: {
     .map((entry) => ({ gameId: entry.gameId, actorId: entry.actorId, label: entry.label }));
   return {
     trending: [...playCounts.entries()].filter(([id]) => known(id)).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([gameId, plays]) => ({ gameId, plays })),
+    // Default catalog/library sort key: most-played first, all-time. Games
+    // with no recorded plays keep catalog order, appended after played ones.
+    catalogOrder: [...catalog].sort((a, b) => (playCounts.get(b.id) || 0) - (playCounts.get(a.id) || 0)).map((game) => game.id),
     topRated: catalog.map((game) => ({ gameId: game.id, ...avg(game.id) })).filter((row) => row.reviewCount >= 2 && (row.averageRating ?? 0) >= 3.5).sort((a, b) => (b.averageRating ?? 0) - (a.averageRating ?? 0)).slice(0, 6).map(({ gameId, averageRating }) => ({ gameId, averageRating })),
-    hiddenGems: catalog.map((game) => ({ gameId: game.id, plays: playCounts.get(game.id) || 0, ...avg(game.id) })).filter((row) => (row.averageRating ?? 0) >= 4 && row.plays < 10).slice(0, 6).map(({ gameId, averageRating }) => ({ gameId, averageRating })),
+    hiddenGems: catalog.map((game) => ({ gameId: game.id, plays: weekPlayCounts.get(game.id) || 0, ...avg(game.id) })).filter((row) => (row.averageRating ?? 0) >= 4 && row.plays < 10).slice(0, 6).map(({ gameId, averageRating }) => ({ gameId, averageRating })),
     newReleases: v1.submissions.filter((item) => item.status === "approved").sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 6).map((item) => ({ gameId: `community:${item.id}` })),
     friendsPlaying,
   };

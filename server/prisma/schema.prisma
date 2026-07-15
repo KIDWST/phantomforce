@@ -121,6 +121,22 @@ model User {
   decisions    Approval[]   @relation("ApprovalDecider")
   authSessions AuthSession[]
   sentInvitations Invitation[] @relation("InvitationInviter")
+  playerHandle PlayerHandle?
+}
+
+/* Global PhantomPlay identity: one real-person handle per database-auth User,
+   used only for the cross-tenant leaderboard surface. Deliberately exposes
+   nothing beyond {username, globalScore, rank} to other tenants -- see
+   docs/superpowers/specs/2026-07-15-phantomplay-global-leaderboard-design.md. */
+model PlayerHandle {
+  id          String   @id @default(uuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  username    String
+  usernameKey String   @unique
+  globalScore Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 /* Server-side login session for the database auth provider. Revocation is

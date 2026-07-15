@@ -261,6 +261,12 @@ import {
   updatePhantomStoreTool,
 } from "./phantom-ai/phantomstore.js";
 import {
+  claimPhantomPlayHandle,
+  getPhantomPlayGlobalLeaderboard,
+  getPhantomPlayHandle,
+  recomputeGlobalScoreForUser,
+} from "./phantom-ai/phantomplay-handle.js";
+import {
   getPhantomPlayDeveloperAnalytics,
   getPhantomPlayDiscovery,
   getPhantomPlayGamePage,
@@ -4154,7 +4160,13 @@ app.patch("/api/phantomplay/plays/:id", async (request, reply) => {
   const session = requireAccessSession(request, reply);
   if (!session) return reply;
   const params = request.params as { id?: string };
-  const play = params.id ? await updatePhantomPlaySession(session, params.id.slice(0, 180), (request.body ?? {}) as Record<string, unknown>) : null;
+  const body = (request.body ?? {}) as Record<string, unknown>;
+  const play = params.id ? await updatePhantomPlaySession(session, params.id.slice(0, 180), body) : null;
+  if (play && body.score !== undefined && session.userId) {
+    // Best-effort: keep the global leaderboard's denormalized score cache in
+    // sync. Never fails the play-session response if this falls behind.
+    recomputeGlobalScoreForUser(session.userId).catch(() => undefined);
+  }
   return play ? { ok: true, session, play } : reply.code(404).send({ ok: false, error: "Play session was not found." });
 });
 
@@ -4442,6 +4454,39 @@ app.patch("/api/phantomplay/v2/workspace-policy", async (request, reply) => {
   if (!isWorkspaceAdmin) return reply.code(403).send({ ok: false, error: "Workspace policy requires an admin or owner role." });
   try { return { ok: true, ...(await updatePhantomPlayWorkspacePolicy(session, body)) }; }
   catch (error) { return phantomPlayV2Error(reply, error); }
+});
+
+/* ---- PhantomPlay global leaderboard (docs/superpowers/specs/2026-07-15-
+   phantomplay-global-leaderboard-design.md). The only cross-tenant-visible
+   surface in the app: getPhantomPlayGlobalLeaderboard strictly returns
+   { rank, username, globalScore } and nothing else -- see that module's
+   header comment before changing what it returns. Handles require a
+   database-auth account (session.userId); legacy demo/session accounts get a
+   clear 400 rather than a silent no-op. */
+app.get("/api/phantomplay/handle", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  if (!phantomPlayV2Gate(reply)) return reply;
+  return { ok: true, ...(await getPhantomPlayHandle(session)) };
+});
+
+app.post("/api/phantomplay/handle", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  if (!phantomPlayV2Gate(reply)) return reply;
+  try {
+    return { ok: true, ...(await claimPhantomPlayHandle(session, (request.body ?? {}) as Record<string, unknown>)) };
+  } catch (error) {
+    const statusCode = (error as { statusCode?: number }).statusCode ?? 400;
+    return reply.code(statusCode).send({ ok: false, error: error instanceof Error ? error.message : "That handle could not be claimed." });
+  }
+});
+
+app.get("/api/phantomplay/leaderboard/global", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  if (!phantomPlayV2Gate(reply)) return reply;
+  return { ok: true, ...(await getPhantomPlayGlobalLeaderboard(session)) };
 });
 
 /* ============================================================================
