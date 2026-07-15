@@ -11,6 +11,9 @@
   `C:\Users\jorda\Documents\Codex\worktrees\phantomforce-live-social-analytics-20260712`.
   Before telling the owner a UI change is live, verify `/health` reports that root
   and that your change exists in the served `/app/index.html` or `/app/js/main.js`.
+- If the owner says changes are not appearing, assume another agent edited a stale
+  sibling worktree first. Run `/health`, compare the `root`, and port the diff into
+  the served checkout before doing more design work.
 - Do **not** make owner-facing admin UI edits in another local worktree and assume
   they are live. If you must work elsewhere, commit, push to `main`, then run
   `ops/admin-live/Sync-AdminMain.ps1` from the served worktree or point the admin
@@ -78,7 +81,7 @@
   (`app/index.html`, `app/phantom.css`, `app/js/main.js`).
 - **Living Phantom character** — `app/js/character.js`: 11 painted poses, emotional
   inertia (`governMood`), hologram depth. Shared by admin + public site.
-- Current cache-bust build id: **`phantom-live-20260714-256`**.
+- Current cache-bust build id: **`phantom-live-20260714-258`**.
 
 ## Repo map
 - `app/` — the **admin console** (`admin.phantomforce.online`). `index.html`,
