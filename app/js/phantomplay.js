@@ -6,7 +6,8 @@ import {
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 const FALLBACK_KEY = "pf.phantomplay.offline.v1";
 const DEV_SUPPORT_KEY = "pf.phantomplay.developerSupport.v1";
-const CATEGORIES = ["All", "Arcade", "Puzzle", "Focus", "Strategy", "Sports", "Creative"];
+const CATEGORIES = ["All", "Arcade", "Puzzle", "Focus", "Strategy", "Sports", "Creative", "Kids"];
+const KIDS_GAME_IDS = new Set(["reflex-grid", "rift-frenzy", "serpent-surge", "color-rush", "circuit-serpent"]);
 const PHANTOMPLAY_ENGINE = {
   version: "2.0-large-map",
   saveStateBytes: 262144,
@@ -37,15 +38,15 @@ const CATEGORY_ART = {
   Creative: GAME_ART_BY_SLUG["word-weld"],
 };
 const BUILT_INS = [
-  { id: "neon-drift", title: "Neon Drift", summary: "Auto-fire spaceship shooter with waves, powerups, and shield saves.", description: "A real arcade shooter: move with WASD/arrow keys or touch-drag, fire nonstop, collect rapid fire, spread shot, shield, magnet, and repair powerups, then push deeper into harder waves.", category: "Arcade", tags: ["shooter", "powerups", "arcade", "touch"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/neon-drift.html?v=1.2.3", thumbnail: GAME_ART_BY_SLUG["neon-drift"], featured: true, version: "1.2.3", controls: "WASD/arrow keys to fly. Auto-fire is always on. Touch and drag on mobile.", progressSupport: true, scoreSupport: true, engine: { tier: "arcade-large-map", minVersion: PHANTOMPLAY_ENGINE.version } },
-  { id: "phantom-rumble", title: "Phantom Rumble", summary: "A premium local platform fighter with guard, parry, dodge, ledge-save recovery, bots, drops, and touch controls.", description: "A full PhantomPlay platform fighter: up to four players or bots brawl across a dynamic arena with percent knockback, double jumps, charge smashes, Phantom Burst, guard/parry, dodge, ledge-save recovery, camera focus, and reality-bending drops. Local keyboard and mobile touch play are both supported without external networking.", category: "Arcade", tags: ["platform fighter", "multiplayer", "action", "local", "touch"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/phantom-rumble.html?v=2.2.2", thumbnail: GAME_ART_BY_SLUG["phantom-rumble"], featured: true, version: "2.2.2", controls: "P1: WASD, Shift guard, Q dodge, Space tap/hold. P2: arrows, I guard, O dodge, Enter tap/hold. Touch controls on mobile.", progressSupport: true, scoreSupport: true, localMultiplayer: true, minPlayers: 1, maxPlayers: 4, engine: { tier: "arena-large-map", minVersion: PHANTOMPLAY_ENGINE.version } },
+  { id: "neon-drift", title: "Neon Drift", summary: "Auto-fire spaceship shooter with waves, powerups, and shield saves.", description: "A real arcade shooter: fly fast, fire nonstop, collect rapid fire, spread shot, shield, magnet, and repair powerups, then push deeper into harder waves.", category: "Arcade", tags: ["shooter", "powerups", "arcade", "touch"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/neon-drift.html?v=1.3.0", thumbnail: GAME_ART_BY_SLUG["neon-drift"], featured: true, version: "1.3.0", controls: "WASD/arrow keys to fly. Auto-fire is always on.", progressSupport: true, scoreSupport: true, engine: { tier: "arcade-large-map", minVersion: PHANTOMPLAY_ENGINE.version } },
+  { id: "phantom-rumble", title: "Phantom Rumble", summary: "A premium local platform fighter with guard, parry, dodge, ledge-save recovery, bots, drops, and touch controls.", description: "A full PhantomPlay platform fighter: up to four players or bots brawl across a dynamic arena with percent knockback, double jumps, charge smashes, Phantom Burst, guard/parry, dodge, ledge-save recovery, camera focus, and reality-bending drops. Local keyboard and mobile touch play are both supported without external networking.", category: "Arcade", tags: ["platform fighter", "multiplayer", "action", "local", "touch"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/phantom-rumble.html?v=2.2.3", thumbnail: GAME_ART_BY_SLUG["phantom-rumble"], featured: true, version: "2.2.3", controls: "P1: WASD, Shift guard, Q dodge, Space tap/hold. P2: arrows, I guard, O dodge, Enter tap/hold. Touch controls on mobile.", progressSupport: true, scoreSupport: true, localMultiplayer: true, minPlayers: 1, maxPlayers: 4, engine: { tier: "arena-large-map", minVersion: PHANTOMPLAY_ENGINE.version } },
   { id: "signal-match", title: "Signal Match", summary: "Find every matching signal with the fewest turns.", description: "A responsive memory grid with clear score, feedback, pause, restart, touch, and keyboard support.", category: "Puzzle", tags: ["memory", "calm", "puzzle"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/signal-match.html?v=1.1.1", thumbnail: GAME_ART_BY_SLUG["signal-match"], featured: true, version: "1.1.1", controls: "Click, tap, or use Tab + Enter", progressSupport: true, scoreSupport: true },
   { id: "focus-stack", title: "Focus Stack", summary: "Drop each layer cleanly and build the tallest signal tower.", description: "A focused timing run with a visible score, proper start, pause, restart, and resize-safe play field.", category: "Focus", tags: ["timing", "focus", "quick"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/focus-stack.html?v=1.1.1", thumbnail: GAME_ART_BY_SLUG["focus-stack"], featured: false, version: "1.1.1", controls: "Space, Enter, click, or tap", progressSupport: true, scoreSupport: true },
   { id: "word-weld", title: "Word Weld", summary: "Build as many words as you can from one shifting signal rack.", description: "A quick word-building game with tap, keyboard, score, timer, and clean reset controls.", category: "Creative", tags: ["word", "creative", "quick", "touch"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/word-weld.html?v=1.0.0", thumbnail: GAME_ART_BY_SLUG["word-weld"], featured: true, version: "1.0.0", controls: "Keyboard, tap letters, Enter to submit", progressSupport: true, scoreSupport: true },
-  { id: "reflex-grid", title: "Reflex Grid", summary: "Hit the live cells before the grid burns out.", description: "A fast aim-and-reaction grid for short focus breaks, with mistakes, streaks, and a real finish.", category: "Strategy", tags: ["reaction", "strategy", "touch", "aim"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/reflex-grid.html?v=1.0.0", thumbnail: GAME_ART_BY_SLUG["reflex-grid"], featured: true, version: "1.0.0", controls: "Click, tap, or use number keys", progressSupport: true, scoreSupport: true },
+  { id: "reflex-grid", title: "Reflex Grid", summary: "Hit the live cells before the grid burns out.", description: "A fast aim-and-reaction grid for short focus breaks, with mistakes, streaks, and a real finish.", category: "Kids", tags: ["reaction", "strategy", "touch", "aim", "kids"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/reflex-grid.html?v=1.0.0", thumbnail: GAME_ART_BY_SLUG["reflex-grid"], featured: false, version: "1.0.0", controls: "Click, tap, or use number keys", progressSupport: true, scoreSupport: true },
   { id: "penalty-kick", title: "Penalty Kick", summary: "Pick your lane, hit the green zone, and beat the keeper.", description: "A readable, touch-friendly sports timing game with five shots, tap-to-aim lanes, visible timing feedback, keeper reads, and a clean final whistle.", category: "Sports", tags: ["sports", "timing", "soccer", "touch"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/penalty-kick.html?v=1.0.2", thumbnail: GAME_ART_BY_SLUG["penalty-kick"], featured: true, version: "1.0.2", controls: "Tap a lane or use arrows. Shoot when the meter says LOCKED.", progressSupport: true, scoreSupport: true },
-  { id: "rift-frenzy", title: "Rift Frenzy", summary: "Grow from reef bait to apex hunter in a neon multiplayer-style fish arena.", description: "A modern eat-smaller-fish arena with rival schools, growth stages, boost windows, danger reads, and touch-friendly movement. It feels like a live arena even when running as a safe built-in sandbox.", category: "Arcade", tags: ["fish", "arena", "growth", "io", "touch"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/rift-frenzy.html?v=1.0.4", thumbnail: GAME_ART_BY_SLUG["rift-frenzy"], featured: true, version: "1.0.4", controls: "Move with WASD/arrow keys or touch-drag. Eat smaller fish, avoid bigger rivals, boost with Space.", progressSupport: true, scoreSupport: true, engine: { tier: "arena-large-map", minVersion: PHANTOMPLAY_ENGINE.version } },
-  { id: "serpent-surge", title: "Serpent Surge", summary: "A fast snake arena with rivals, pickups, cutoffs, boost trails, and storm pressure.", description: "A PhantomPlay take on snake arena games: orbit energy, grow long, bait rival serpents, use boost carefully, and survive a closing storm ring without any external networking.", category: "Strategy", tags: ["snake", "arena", "io", "survival", "touch"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/serpent-surge.html?v=1.0.4", thumbnail: GAME_ART_BY_SLUG["serpent-surge"], featured: true, version: "1.0.4", controls: "Steer with mouse, touch, WASD, or arrows. Hold Space or touch pressure to boost.", progressSupport: true, scoreSupport: true, engine: { tier: "arena-large-map", minVersion: PHANTOMPLAY_ENGINE.version } },
+  { id: "rift-frenzy", title: "Rift Frenzy", summary: "Grow from reef bait to apex hunter in a neon multiplayer-style fish arena.", description: "A modern eat-smaller-fish arena with rival schools, growth stages, boost windows, danger reads, and touch-friendly movement. It feels like a live arena even when running as a safe built-in sandbox.", category: "Kids", tags: ["fish", "arena", "growth", "io", "touch", "kids"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/rift-frenzy.html?v=1.0.4", thumbnail: GAME_ART_BY_SLUG["rift-frenzy"], featured: false, version: "1.0.4", controls: "Move with WASD/arrow keys or touch-drag. Eat smaller fish, avoid bigger rivals, boost with Space.", progressSupport: true, scoreSupport: true, engine: { tier: "arena-large-map", minVersion: PHANTOMPLAY_ENGINE.version } },
+  { id: "serpent-surge", title: "Serpent Surge", summary: "A fast snake arena with rivals, pickups, cutoffs, boost trails, and storm pressure.", description: "A PhantomPlay take on snake arena games: orbit energy, grow long, bait rival serpents, use boost carefully, and survive a closing storm ring without any external networking.", category: "Kids", tags: ["snake", "arena", "io", "survival", "touch", "kids"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/serpent-surge.html?v=1.0.4", thumbnail: GAME_ART_BY_SLUG["serpent-surge"], featured: false, version: "1.0.4", controls: "Steer with mouse, touch, WASD, or arrows. Hold Space or touch pressure to boost.", progressSupport: true, scoreSupport: true, engine: { tier: "arena-large-map", minVersion: PHANTOMPLAY_ENGINE.version } },
   { id: "crown-circuit", title: "Crown Circuit", summary: "A two-player-only lane card battle with towers, elixir, counters, and sudden death.", description: "A strictly multiplayer tower duel: two players draft from four unit cards, spend elixir, choose lanes, break towers, and win the crown. No solo mode, no bots, no fake opponents - local keyboard duels or PhantomPlay private rooms only.", category: "Strategy", tags: ["multiplayer-only", "tower duel", "cards", "lanes", "keyboard", "rooms"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/crown-circuit.html?v=1.0.0", thumbnail: GAME_ART_BY_SLUG["crown-circuit"], featured: true, version: "1.0.0", controls: "Local: P1 uses 1-4 then Q/W/E. P2 uses 7-0 then I/O/P. Online: create a PhantomPlay room, join with two players, then launch.", progressSupport: false, scoreSupport: true, multiplayerOnly: true, localMultiplayer: true, onlineMultiplayer: true, minPlayers: 2, maxPlayers: 2, engine: { tier: "arena-multiplayer-relay", minVersion: PHANTOMPLAY_ENGINE.version } },
 ];
 
@@ -242,6 +243,14 @@ function historyFor(gameId) {
   return ui.snapshot?.history?.find((item) => item.gameId === gameId) || null;
 }
 
+function isKidsGame(game) {
+  return game?.category === "Kids" || KIDS_GAME_IDS.has(game?.id);
+}
+
+function visibleByCategory(game) {
+  return ui.category === "Kids" ? isKidsGame(game) : ui.category === "All" ? !isKidsGame(game) : game.category === ui.category && !isKidsGame(game);
+}
+
 function playTimeLabel(value, compact = false) {
   return Number(value) >= 10000 ? (compact ? "Unlimited" : "Unlimited play") : `${Number(value) || 0}${compact ? "" : " min left"}`;
 }
@@ -323,11 +332,12 @@ function gameRows(games, title, copy = "") {
 }
 
 function renderHome() {
-  const featured = ui.snapshot.catalog.filter((game) => game.featured);
-  const recent = ui.snapshot.history.map((item) => ui.snapshot.catalog.find((game) => game.id === item.gameId)).filter(Boolean).slice(0, 4);
-  const continuing = ui.snapshot.history.filter((item) => item.canContinue).map((item) => ui.snapshot.catalog.find((game) => game.id === item.gameId)).filter(Boolean).slice(0, 4);
+  const visibleCatalog = ui.snapshot.catalog.filter((game) => !isKidsGame(game));
+  const featured = visibleCatalog.filter((game) => game.featured);
+  const recent = ui.snapshot.history.map((item) => visibleCatalog.find((game) => game.id === item.gameId)).filter(Boolean).slice(0, 4);
+  const continuing = ui.snapshot.history.filter((item) => item.canContinue).map((item) => visibleCatalog.find((game) => game.id === item.gameId)).filter(Boolean).slice(0, 4);
   const community = ui.snapshot.catalog.filter((game) => game.kind === "community").slice(0, 4);
-  const activeGameId = featured[0]?.id || ui.snapshot.catalog[0]?.id || "";
+  const activeGameId = featured[0]?.id || visibleCatalog[0]?.id || "";
   return `<div class="pp-home">
     <section class="pp-hero">
       <div class="pp-console-copy">
@@ -359,7 +369,7 @@ function renderHome() {
 
 function filteredCatalog() {
   const query = ui.query.toLowerCase();
-  return ui.snapshot.catalog.filter((game) => (ui.category === "All" || game.category === ui.category) && (!query || `${game.title} ${game.summary} ${developerNameFor(game)} ${game.tags.join(" ")}`.toLowerCase().includes(query)));
+  return ui.snapshot.catalog.filter((game) => visibleByCategory(game) && (!query || `${game.title} ${game.summary} ${developerNameFor(game)} ${game.tags.join(" ")}`.toLowerCase().includes(query)));
 }
 
 function renderLibrary() {
@@ -368,7 +378,7 @@ function renderLibrary() {
 }
 
 function renderFavorites() {
-  const games = ui.snapshot.catalog.filter((game) => ui.snapshot.favorites.includes(game.id));
+  const games = ui.snapshot.catalog.filter((game) => ui.snapshot.favorites.includes(game.id) && !isKidsGame(game));
   return games.length ? `<div class="pp-game-grid pp-game-grid-full">${games.map((game) => gameCard(game)).join("")}</div>` : empty("No favorites yet", "Tap the heart on any game to save it here.");
 }
 
@@ -388,7 +398,7 @@ function roomCard(room) {
 
 function renderTogether() {
   const rooms = Array.isArray(ui.snapshot.rooms) ? ui.snapshot.rooms : [];
-  const classroomGames = ui.snapshot.catalog.filter((game) => ui.roomMode !== "classroom" || game.contentRating === "everyone");
+  const classroomGames = ui.snapshot.catalog.filter((game) => ui.roomMode === "classroom" ? game.contentRating === "everyone" : !isKidsGame(game));
   const selectedGameId = classroomGames.some((game) => game.id === ui.roomGameId) ? ui.roomGameId : (classroomGames[0]?.id || "");
   return `<div class="pp-together" data-pp-private-rooms>
     <section class="pp-room-hero">

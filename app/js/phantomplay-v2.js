@@ -14,7 +14,8 @@ import {
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
 const FALLBACK_KEY = "pf.phantomplay.offline.v1";
 const DEV_SUPPORT_KEY = "pf.phantomplay.developerSupport.v1";
-const CATEGORIES = ["All", "Arcade", "Puzzle", "Focus", "Strategy", "Sports", "Creative"];
+const CATEGORIES = ["All", "Arcade", "Puzzle", "Focus", "Strategy", "Sports", "Creative", "Kids"];
+const KIDS_GAME_IDS = new Set(["reflex-grid", "rift-frenzy", "serpent-surge", "color-rush", "circuit-serpent"]);
 const STATUSES = [["online", "Online"], ["away", "Away"], ["busy", "Busy"], ["invisible", "Invisible"]];
 
 const ui = {
@@ -50,9 +51,9 @@ const OFFLINE_GAMES = [
   ["signal-match", "Signal Match", "Puzzle", "/app/games/signal-match.html"],
   ["focus-stack", "Focus Stack", "Focus", "/app/games/focus-stack.html"],
   ["penalty-kick", "Penalty Kick", "Sports", "/app/games/penalty-kick.html?v=1.0.2"],
-  ["phantom-rumble", "Phantom Rumble", "Arcade", "/app/games/phantom-rumble.html?v=2.2.2"],
+  ["phantom-rumble", "Phantom Rumble", "Arcade", "/app/games/phantom-rumble.html?v=2.2.3"],
   ["sudoku-signal", "Sudoku Signal", "Focus", "/app/games/sudoku-signal.html"],
-].map(([id, title, category, launchUrl]) => ({ id, title, summary: id === "phantom-rumble" ? "Premium local platform fighter with guard, parry, dodge, ledge-save recovery, bots, drops, and touch controls." : id === "penalty-kick" ? "Tap a lane, hit the green zone, and beat the keeper." : "Offline built-in game.", description: "", category, tags: [], contentRating: "everyone", developer: "Tak", kind: "built_in", launchUrl, thumbnail: "", featured: id === "phantom-rumble" || id === "penalty-kick", version: id === "phantom-rumble" ? "2.2.2" : id === "penalty-kick" ? "1.0.2" : "1.0.0", controls: id === "phantom-rumble" ? "Keyboard or mobile touch controls." : id === "penalty-kick" ? "Tap lanes or use arrows, then shoot on LOCKED." : "", progressSupport: true, scoreSupport: true }));
+].map(([id, title, category, launchUrl]) => ({ id, title, summary: id === "phantom-rumble" ? "Premium local platform fighter with guard, parry, dodge, ledge-save recovery, bots, drops, and touch controls." : id === "penalty-kick" ? "Tap a lane, hit the green zone, and beat the keeper." : "Offline built-in game.", description: "", category, tags: [], contentRating: "everyone", developer: "Tak", kind: "built_in", launchUrl, thumbnail: "", featured: id === "phantom-rumble" || id === "penalty-kick", version: id === "phantom-rumble" ? "2.2.3" : id === "penalty-kick" ? "1.0.2" : "1.0.0", controls: id === "phantom-rumble" ? "Keyboard or mobile touch controls." : id === "penalty-kick" ? "Tap lanes or use arrows, then shoot on LOCKED." : "", progressSupport: true, scoreSupport: true }));
 
 function offlineState() {
   let saved = {};
@@ -108,6 +109,12 @@ async function heartbeat() {
 const gameById = (id) => ui.snapshot?.catalog?.find((game) => game.id === id) || null;
 const historyFor = (gameId) => ui.snapshot?.history?.find((item) => item.gameId === gameId) || null;
 const wishlisted = (gameId) => !!ui.v2?.wishlist?.includes(gameId);
+function isKidsGame(game) {
+  return game?.category === "Kids" || KIDS_GAME_IDS.has(game?.id);
+}
+function visibleByCategory(game) {
+  return ui.category === "Kids" ? isKidsGame(game) : ui.category === "All" ? !isKidsGame(game) : game.category === ui.category && !isKidsGame(game);
+}
 function stars(value, interactive = false) {
   const rating = Math.round(Number(value) || 0);
   return `<span class="pp2-stars${interactive ? " is-input" : ""}">${[1, 2, 3, 4, 5].map((n) => `<button type="button" ${interactive ? `data-pp2-star="${n}"` : "disabled"} class="${n <= rating ? "is-on" : ""}">★</button>`).join("")}</span>`;
@@ -285,12 +292,13 @@ function renderDeveloperProfile(developer) {
 }
 
 /* ---- HOME ---- */
-function mapIds(rows, key = "gameId") { return (rows || []).map((item) => gameById(item[key])).filter(Boolean); }
+function mapIds(rows, key = "gameId") { return (rows || []).map((item) => gameById(item[key])).filter((game) => game && !isKidsGame(game)); }
 function renderHome() {
   if (ui.loading) return `${skeletonRow("Featured")}${skeletonRow("Trending this week")}`;
-  const featured = ui.snapshot.catalog.filter((game) => game.featured);
-  const hero = gameById("phantom-rumble") || featured[0] || ui.snapshot.catalog[0];
-  const continuing = ui.snapshot.history.filter((item) => item.canContinue).map((item) => gameById(item.gameId)).filter(Boolean).slice(0, 4);
+  const visibleCatalog = ui.snapshot.catalog.filter((game) => !isKidsGame(game));
+  const featured = visibleCatalog.filter((game) => game.featured);
+  const hero = gameById("phantom-rumble") || featured[0] || visibleCatalog[0];
+  const continuing = ui.snapshot.history.filter((item) => item.canContinue).map((item) => gameById(item.gameId)).filter((game) => game && !isKidsGame(game)).slice(0, 4);
   const d = ui.discovery;
   const ratingNotes = {};
   for (const item of [...(d?.topRated || []), ...(d?.hiddenGems || [])]) if (item.averageRating) ratingNotes[item.gameId] = `${item.averageRating}★`;
@@ -312,7 +320,7 @@ function renderHome() {
 
 /* ---- SOLO ---- */
 function renderSolo() {
-  const games = ui.snapshot.catalog.filter((game) => game.kind === "built_in" && (ui.category === "All" || game.category === ui.category));
+  const games = ui.snapshot.catalog.filter((game) => game.kind === "built_in" && visibleByCategory(game));
   return `<div class="pp2-solo">
     <section class="pp2-lead"><h2>Solo</h2><p>Offline-capable games with cloud progress. Close anything mid-run — Terminal 2048 and Sudoku Signal restore the exact board on any device.</p></section>
     <div class="pp2-cats">${CATEGORIES.map((cat) => `<button type="button" class="${ui.category === cat ? "is-active" : ""}" data-pp2-cat="${esc(cat)}">${esc(cat)}</button>`).join("")}</div>
@@ -387,7 +395,7 @@ function renderWorkspace() {
 /* ---- LIBRARY ---- */
 function filteredCatalog() {
   const query = ui.query.toLowerCase();
-  return ui.snapshot.catalog.filter((game) => (ui.category === "All" || game.category === ui.category) && (!query || `${game.title} ${game.summary} ${game.developer} ${game.tags.join(" ")}`.toLowerCase().includes(query)));
+  return ui.snapshot.catalog.filter((game) => visibleByCategory(game) && (!query || `${game.title} ${game.summary} ${game.developer} ${game.tags.join(" ")}`.toLowerCase().includes(query)));
 }
 function renderLibrary() {
   const games = filteredCatalog();

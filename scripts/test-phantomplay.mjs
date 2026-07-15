@@ -14,8 +14,15 @@ const gameSlugs = ["neon-drift", "phantom-rumble", "signal-match", "focus-stack"
 const games = gameSlugs.map((name) => read(`../app/games/${name}.html`));
 const neonDrift = games[gameSlugs.indexOf("neon-drift")];
 const phantomRumble = games[gameSlugs.indexOf("phantom-rumble")];
+const phantomRumbleBotThink = phantomRumble.match(/function botThink\(f,dt\)\{[\s\S]*?\r?\nfunction step\(f,dt\)\{/u)?.[0] || "";
 const penaltyKick = games[gameSlugs.indexOf("penalty-kick")];
 const appFiles = [index, main, module, ...games];
+function catalogBlock(source, id) {
+  const escaped = id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = source.match(new RegExp(`\\{\\s*\\n\\s*id:\\s*"${escaped}"[\\s\\S]*?\\n\\s*\\},`, "u")) || source.match(new RegExp(`\\{\\s*id:\\s*"${escaped}"[^\\n]*\\},?`, "u"));
+  assert.ok(match, `${id} catalog row must be inspectable.`);
+  return match[0];
+}
 
 assert.match(main, /id:\s*"phantomplay"[\s\S]*label:\s*"PhantomPlay"/u, "PhantomPlay must be in the native navigation.");
 assert.match(main, /renderPhantomPlay/u, "The workspace must use the PhantomPlay renderer.");
@@ -63,6 +70,26 @@ assert.match(moduleV2, /data-pp2-donate-dev/u, "V2 developer profiles must allow
 assert.match(moduleV2, /data-pp2-save-dev-note/u, "V2 developer profiles must support private dev notes.");
 assert.match(moduleV2, /\["developer", "Developers"\]/u, "The V2 tab label must be Developers, not Dev Hub.");
 assert.doesNotMatch(moduleV2, /\["developer", "Dev Hub"\]|Open Dev Hub|Dev Hub is plan-gated/u, "The V2 Developers tab must not present the old Dev Hub gate or label.");
+for (const source of [module, moduleV2]) {
+  assert.match(source, /"Kids"/u, "PhantomPlay must label the child-focused category as Kids.");
+  assert.match(source, /KIDS_GAME_IDS[\s\S]*reflex-grid[\s\S]*rift-frenzy[\s\S]*serpent-surge[\s\S]*color-rush[\s\S]*circuit-serpent/u, "The Kids-only games must be explicitly grouped together.");
+  assert.match(source, /ui\.category === "Kids" \? isKidsGame\(game\) : ui\.category === "All" \? !isKidsGame\(game\)/u, "All/default browsing must hide Kids games until the Kids category is clicked.");
+  assert.doesNotMatch(source, /toddlar|toddler/i, "The category must never be labeled toddler/toddlar.");
+}
+for (const id of ["reflex-grid", "rift-frenzy", "serpent-surge"]) {
+  const block = catalogBlock(module, id);
+  assert.match(block, /category:\s*"Kids"/u, `${id} must be Kids-only in the classic shell.`);
+  assert.match(block, /featured:\s*false/u, `${id} must not be featured in the classic shell.`);
+}
+for (const id of ["reflex-grid", "rift-frenzy", "serpent-surge", "color-rush", "circuit-serpent"]) {
+  const block = catalogBlock(phantomplayServer, id);
+  assert.match(block, /category:\s*"Kids"/u, `${id} must be Kids-only in the server catalog.`);
+  assert.match(block, /featured:\s*false/u, `${id} must not be featured in the server catalog.`);
+}
+const penaltyKickServerBlock = catalogBlock(phantomplayServer, "penalty-kick");
+assert.match(penaltyKickServerBlock, /category:\s*"Sports"/u, "Penalty Kick must stay in Sports.");
+assert.match(penaltyKickServerBlock, /featured:\s*true/u, "Penalty Kick must stay visible as a featured sports game.");
+assert.match(module, /ui\.roomMode === "classroom" \? game\.contentRating === "everyone" : !isKidsGame\(game\)/u, "Classroom rooms must include Kids games while friend rooms keep them out of default multiplayer.");
 const renderDeveloperV2Source = moduleV2.match(/function renderDeveloper\(\) \{([\s\S]*?)\n\/\* ---- ADMIN ---- \*\//u)?.[1] || "";
 assert.ok(renderDeveloperV2Source, "V2 renderDeveloper must exist.");
 assert.match(renderDeveloperV2Source, /pp2-dev-list|renderDeveloperProfile|developerBuilderTools/u, "V2 renderDeveloper must render the directory/profile flow before secondary builder tools.");
@@ -127,6 +154,7 @@ assert.match(games[0], /\.start\[hidden\][^{]*\{display:none\}/u, "Neon Drift's 
 assert.match(neonDrift, /invuln/u, "Neon Drift must give the ship a short grace window after damage.");
 assert.match(neonDrift, /maxSpeed=\.0018/u, "Neon Drift ship speed must stay tuned for fast arcade responsiveness.");
 assert.match(neonDrift, /accel=\.0000084\*W/u, "Neon Drift needs punchier acceleration.");
+assert.doesNotMatch(neonDrift, /DRAG TO FLY|Touch and drag on mobile|touch-drag/u, "Neon Drift mobile controls must stay invisible and avoid obvious touch instructions.");
 assert.match(neonDrift, /Math\.max\(130,390-wave\*18\)/u, "Neon Drift waves should spawn quickly enough to stay exciting.");
 assert.match(neonDrift, /t\*\.000055/u, "Neon Drift background motion should feel fast enough.");
 assert.match(neonDrift, /e\.y>1\.12\)\{e\.dead=true\}/u, "Escaped enemies should leave the field without damaging the player.");
@@ -155,9 +183,15 @@ assert.match(phantomRumble, /data-t="shield"[\s\S]*data-t="dodge"/u, "Phantom Ru
 assert.match(phantomRumble, /function raiseShield\(f\)/u, "Phantom Rumble must implement shield input.");
 assert.match(phantomRumble, /function dodge\(f\)/u, "Phantom Rumble must implement dodge input.");
 assert.match(phantomRumble, /function tryLedgeGrab\(f,s\)/u, "Phantom Rumble must implement ledge recovery.");
+assert.match(phantomRumble, /ledgeCooldown:0/u, "Phantom Rumble fighters must track a ledge cooldown.");
+assert.match(phantomRumble, /if\(f\.ledge>0\)\{[\s\S]*f\.ledgeCooldown=\.75[\s\S]*f\.x\+=-side\*\.02[\s\S]*return/u, "Phantom Rumble ledge jumps must push fighters away from the ledge and prevent immediate re-grabs.");
+assert.match(phantomRumble, /if\(f\.ledge>0\|\|f\.ledgeCooldown>0\|\|f\.vy<0/u, "Phantom Rumble ledge grabs must respect cooldown lockout.");
+assert.match(phantomRumble, /function step\(f,dt\)\{[\s\S]*if\(f\.ledge>0\)\{[\s\S]*!f\.human[\s\S]*jump\(f\)[\s\S]*f\.ai\.jumpCd=\.55/u, "Phantom Rumble bots must auto-recover from ledge inside the physics step before ledge freeze returns.");
+assert.ok(phantomRumbleBotThink, "Phantom Rumble botThink source must be inspectable.");
+assert.doesNotMatch(phantomRumbleBotThink, /if\(f\.ledge>0\)/u, "Phantom Rumble bot ledge recovery must not live in an unreachable botThink branch.");
 assert.match(phantomRumble, /data-shield="\$\{f\.slot\}"/u, "Phantom Rumble HUD must show guard meter state.");
-assert.match(module, /id:\s*"phantom-rumble"[\s\S]*phantom-rumble\.html\?v=2\.2\.2[\s\S]*version:\s*"2\.2\.2"/u, "Classic PhantomPlay must launch the cache-busted Phantom Rumble 2.2.2 build.");
-assert.match(moduleV2, /"phantom-rumble",\s*"Phantom Rumble"[\s\S]*phantom-rumble\.html\?v=2\.2\.2[\s\S]*version:\s*id === "phantom-rumble" \? "2\.2\.2"/u, "V2 PhantomPlay must launch the cache-busted Phantom Rumble 2.2.2 build.");
+assert.match(module, /id:\s*"phantom-rumble"[\s\S]*phantom-rumble\.html\?v=2\.2\.3[\s\S]*version:\s*"2\.2\.3"/u, "Classic PhantomPlay must launch the cache-busted Phantom Rumble 2.2.3 build.");
+assert.match(moduleV2, /"phantom-rumble",\s*"Phantom Rumble"[\s\S]*phantom-rumble\.html\?v=2\.2\.3[\s\S]*version:\s*id === "phantom-rumble" \? "2\.2\.3"/u, "V2 PhantomPlay must launch the cache-busted Phantom Rumble 2.2.3 build.");
 assert.match(phantomRumble, /const VALID_MODES=new Set\(\['duel','versus','rumble','botbrawl'\]\)/u, "Phantom Rumble must validate rematch/start modes before starting a match.");
 assert.match(phantomRumble, /function resetMatchState\(\)\{[\s\S]*fighters=\[\];pickups=\[\];particles=\[\];popups=\[\];[\s\S]*STAGE\.w=STAGE_W_BASE;[\s\S]*camera=\{x:\.5,y:\.58,z:1\};/u, "Phantom Rumble must reset stale fighters, effects, platforms, and camera before returning to the menu.");
 assert.match(phantomRumble, /function showMenu\(\)\{[\s\S]*mode='';resetMatchState\(\);/u, "Phantom Rumble menu returns must clear stale match mode and state.");
