@@ -1839,7 +1839,14 @@ function renderMoney(el, rerender) {
     "view-receipt": async (id) => {
       try {
         const response = await financeApi(`/phantom-ai/ops/finance/receipt/${id}`);
-        if (response.image) window.open(response.image, "_blank", "noopener,noreferrer");
+        if (!response.image) return;
+        // Chromium blocks renderer-initiated top-frame navigation to data:
+        // URLs, which silently no-ops window.open(dataUrl). Converting to a
+        // Blob object URL first sidesteps that restriction entirely.
+        const blob = await (await fetch(response.image)).blob();
+        const objectUrl = URL.createObjectURL(blob);
+        window.open(objectUrl, "_blank", "noopener,noreferrer");
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
       } catch (error) {
         pushActivity("Accounting Ledger", `Couldn't open that receipt: ${error?.message || "unknown error"}.`, ws);
       }
