@@ -831,12 +831,15 @@
   // Tutorial
   // ---------------------------------------------------------------------
   const TUTORIAL_STEPS = [
-    'Move around your plot with WASD / arrow keys, or the on-screen pad on touch devices.',
+    'Move around the expanded island with WASD / arrow keys, or the on-screen pad on touch devices.',
+    'Open Quest Log when you need direction. The full playthrough is residents → shrine trials → Prism Gate.',
     'Walk next to a Grove, Quarry, or Reed patch and press the glowing action button to gather Grain, Shale, or Loom.',
     'Open Build to spend resources on floors, walls, furniture, and a Hearth. Pick a piece, then tap an open tile to place it — Demolish removes your own pieces for half the cost back.',
+    'Find shrine blocks around the edges of the map. Each one has a short pattern trial that rewards Lumen, Relics, or story progress.',
     'Visit the pond and press the action button to fish for Driftfish. Tap Catch when the marker crosses the glowing zone.',
     'Cook at a Hearth to turn resources into dishes that refill your Spark meter. Spark drifts down slowly over time — it’s a gentle nudge, never a fail state.',
-    'Talk to Miro, Tally, and Bo around town. Each has one quest that unlocks a new look in Customize.',
+    'Talk to the residents around town. Each has a quest that unlocks looks, Keystones, or adventure rewards.',
+    'When four Keystones and a Relic are yours, walk to the north Prism Gate and open the finale.',
     'CubeTown saves through PhantomPlay automatically, and you can invite up to two friends to visit your town together from the Together panel.',
   ];
   function renderTutorial() {
@@ -1038,7 +1041,7 @@
     npcs = buildNpcRuntime();
     state.player.gx = clamp(state.player.gx, 0, GRID - 1);
     state.player.gy = clamp(state.player.gy, 0, GRID - 1);
-    if (isBlockedTile(state.player.gx, state.player.gy)) { state.player.gx = 4; state.player.gy = 4; }
+    if (isBlockedTile(state.player.gx, state.player.gy)) { state.player.gx = 8; state.player.gy = 8; }
     rt.playerToX = state.player.gx; rt.playerToY = state.player.gy; rt.moveT = 1;
   }
   function onMatchState(d) {
