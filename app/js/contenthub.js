@@ -3341,7 +3341,7 @@ function accountAnalyticsRow(row, esc) {
     ? `<button class="btn btn-primary" type="button" data-an-sync="${account.id}">${analyticsConnectorState.loading ? "Syncing…" : live ? "Sync now" : "Start live sync"}</button>`
     : oauthReady
       ? `<button class="btn btn-primary" type="button" data-an-oauth="${account.id}">Connect account</button>`
-      : `<button class="btn btn-ghost" type="button" data-open-ws="settings" data-open-settings-tab="media">Set up API</button>`;
+      : `<button class="btn btn-ghost" type="button" data-open-ws="settingsmedia">Set up API</button>`;
   return `<article class="an-channel-row ${feed ? "is-live" : "is-missing"}">
     <div class="an-channel-id"><span class="ch-dot" style="background:${account.color}"></span><span><b>${esc(account.name)}</b><i>${esc(account.handle || account.loginIdentity || "profile saved")}</i></span></div>
     ${feed ? `<div class="an-channel-metrics">
@@ -3435,7 +3435,7 @@ export function renderAnalytics(el, opts = {}, renderOptions = {}) {
           <p>${hasLiveMetrics ? "This page only shows platform analytics from official API syncs or imported exports. Local media files and drafts stay in Media Lab/Content Hub." : "Connect YouTube, Instagram, Facebook, TikTok, X, LinkedIn, or Pinterest for real platform metrics. If a platform is not connected yet, import its official report as a temporary fallback."}</p>
         </div>
         <div class="an-hero-actions">
-          ${configuredCount ? `<button class="btn btn-primary" type="button" data-an-sync-all>${analyticsConnectorState.loading ? "Syncing…" : "Sync live data"}</button>` : `<button class="btn btn-ghost" type="button" data-open-ws="settings" data-open-settings-tab="media">Connect social APIs</button>`}
+          ${configuredCount ? `<button class="btn btn-primary" type="button" data-an-sync-all>${analyticsConnectorState.loading ? "Syncing…" : "Sync live data"}</button>` : `<button class="btn btn-ghost" type="button" data-open-ws="settingsmedia">Connect social APIs</button>`}
           <span class="an-src">${svgIc("up")} ${liveApiRows.length}/${displayAccounts.length} live social · ${reportRows.length} imported report${reportRows.length === 1 ? "" : "s"} · ${configuredCount}/${displayAccounts.length} API ready</span>
         </div>
       </section>
