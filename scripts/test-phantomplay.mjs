@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import vm from "node:vm";
 
 const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
 const main = read("../app/js/main.js");
@@ -16,6 +17,9 @@ const neonDrift = games[gameSlugs.indexOf("neon-drift")];
 const phantomRumble = games[gameSlugs.indexOf("phantom-rumble")];
 const phantomRumbleBotThink = phantomRumble.match(/function botThink\(f,dt\)\{[\s\S]*?\r?\nfunction step\(f,dt\)\{/u)?.[0] || "";
 const penaltyKick = games[gameSlugs.indexOf("penalty-kick")];
+const skyguardHtml = read("../app/games/skyguard-arena/index.html");
+const skyguardJs = read("../app/games/skyguard-arena/game.js");
+const skyguardCss = read("../app/games/skyguard-arena/style.css");
 const appFiles = [index, main, module, ...games];
 function catalogBlock(source, id) {
   const escaped = id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -205,5 +209,52 @@ assert.match(crownCircuit, /STRICTLY MULTIPLAYER|No solo mode/u, "Crown Circuit 
 assert.match(crownCircuit, /P1 uses 1-4[\s\S]*P2 uses 7-0/u, "Crown Circuit must expose local two-player keyboard controls.");
 assert.match(crownCircuit, /match-action[\s\S]*match-state/u, "Crown Circuit must support PhantomPlay room relay messages.");
 assert.doesNotMatch(crownCircuit, /AI opponent|startDuel|botTakeTurn|botChooseShot/i, "Crown Circuit must not include bot-opponent code.");
+assert.match(skyguardHtml, /connect-src 'none'/u, "Skyguard Arena must keep network access disabled in its CSP.");
+assert.match(skyguardHtml, /img-src 'self' data:/u, "Skyguard Arena must only allow local/data images.");
+assert.match(skyguardHtml, /data-ready-store/u, "Skyguard Arena must include the pre-battle market surface.");
+assert.match(skyguardHtml, /1v1 Star Duel/u, "Skyguard Arena must lead with the duel mode.");
+assert.doesNotMatch(skyguardHtml, /data-loadout|sg-loadout/u, "Skyguard Arena must not ship inert loadout markup.");
+assert.doesNotMatch(`${skyguardHtml}\n${skyguardJs}`, /https?:\/\//u, "Skyguard Arena must not call external services.");
+assert.match(skyguardJs, /const CURRENCY = 'Stardust'/u, "Skyguard Arena must use the Stardust economy label consistently.");
+assert.doesNotMatch(skyguardJs, /LOADOUT_SIZE|LOADOUT_CARDS/u, "Skyguard Arena must not keep unused loadout constants.");
+assert.match(skyguardJs, /PREBATTLE_OFFERS[\s\S]*shipMachine[\s\S]*starHarvester[\s\S]*trialHero/u, "Skyguard Arena must offer machine, economy, and hero pre-battle choices.");
+assert.match(skyguardJs, /MIDGAME_BUYS[\s\S]*shipMachine[\s\S]*starHarvester[\s\S]*trialHero/u, "Skyguard Arena must expose midgame perk buys in the dock.");
+assert.match(skyguardJs, /function duelReadyMode/u, "Skyguard Arena must centralize duel-only mode checks.");
+assert.match(skyguardJs, /id === 'shipMachine' && !duelReadyMode\(\)/u, "Skyguard Arena must block solo-mode Ship Machine purchases.");
+assert.match(skyguardJs, /if \(shopTab === 'sends' && !duelReady\) shopTab = 'towers'/u, "Skyguard Arena must hide the Sends tab outside duel-ready modes.");
+assert.match(skyguardJs, /runCompleted = false; myResult = null; running = true; paused = true/u, "Skyguard Arena must pause at the pre-battle market before launching the lane.");
+assert.match(skyguardJs, /function launchFromReadyStore\(\)[\s\S]*paused = false;[\s\S]*beginPrep\(1\.5\)/u, "Skyguard Arena must start the lane only after the market launch/skip action.");
+assert.match(skyguardJs, /function launchFromReadyStore\(\)[\s\S]*preBattleOpen = false;[\s\S]*renderPressureDock\(\)/u, "Skyguard Arena must re-render Surrender after the pre-battle market launches.");
+assert.match(skyguardJs, /function dispatchPressure[\s\S]*applyPressureToBot[\s\S]*matchAction/u, "Skyguard Arena pressure sends must support local bot practice and room relay.");
+assert.match(skyguardJs, /function tickBattlePerks[\s\S]*shipMachineTimer[\s\S]*dispatchPressure\('swarm'/u, "Skyguard Arena Ship Machine must create real timed pressure.");
+assert.match(skyguardJs, /function tickBattlePerks[\s\S]*!duelReadyMode\(\)/u, "Skyguard Arena Ship Machine must use the shared duel-ready mode guard.");
+assert.match(skyguardJs, /function renderPressureDock\(\)[\s\S]*running && duelReadyMode\(\)[\s\S]*data-pressure="surrender"[\s\S]*addEventListener\('click', surrender\)/u, "Skyguard Arena must keep one-click Surrender visible in duel-ready modes.");
+assert.match(skyguardJs, /function renderPressureDock\(\)[\s\S]*!preBattleOpen/u, "Skyguard Arena must hide Surrender while the pre-battle market is open.");
+assert.match(skyguardJs, /function drawHero\(\)[\s\S]*Vega/u, "Skyguard Arena must render the hero helper when active.");
+assert.match(skyguardJs, /Endless Duel Prep run/u, "Skyguard Arena result copy must use the renamed Endless Duel Prep label.");
+assert.match(skyguardJs, /campaign: 'Solo Route'[\s\S]*skirmish: '1v1 Star Duel'[\s\S]*battle: 'Room Duel'/u, "Skyguard Arena result copy must match the renamed mode labels.");
+assert.match(skyguardCss, /\.sg-ready-store/u, "Skyguard Arena pre-battle market must be styled.");
+assert.match(skyguardCss, /\.sg-shop-tabs/u, "Skyguard Arena dock shop tabs must be styled.");
+const skyguardShopConstants = skyguardJs.match(/const CURRENCY = 'Stardust';[\s\S]*?const PRESSURE_SENDS = \[[\s\S]*?\];/u)?.[0] || "";
+const skyguardHelpersStart = skyguardJs.indexOf("function duelReadyMode");
+const skyguardHelpersEnd = skyguardJs.indexOf("function perkOwned");
+const skyguardShopHelpers = skyguardHelpersStart >= 0 && skyguardHelpersEnd > skyguardHelpersStart
+  ? skyguardJs.slice(skyguardHelpersStart, skyguardHelpersEnd)
+  : "";
+assert.ok(skyguardShopConstants && skyguardShopHelpers, "Skyguard shop helper source must be executable in tests.");
+const skyguardShopModel = vm.runInNewContext(`${skyguardShopConstants}\n${skyguardShopHelpers}\n({
+  campaignPrebattle: availablePrebattleOffers('campaign').map((item) => item.id),
+  skirmishPrebattle: availablePrebattleOffers('skirmish').map((item) => item.id),
+  endlessMidgame: availableMidgameBuys('endless').map((item) => item.id),
+  battleMidgame: availableMidgameBuys('battle').map((item) => item.id),
+  sendsSolo: duelReadyMode('campaign'),
+  sendsDuel: duelReadyMode('battle')
+})`);
+assert.deepEqual([...skyguardShopModel.campaignPrebattle], ["starHarvester", "trialHero"], "Solo pre-battle shop must hide duel-only Ship Machine.");
+assert.ok(skyguardShopModel.skirmishPrebattle.includes("shipMachine"), "Duel pre-battle shop must keep Ship Machine available.");
+assert.deepEqual([...skyguardShopModel.endlessMidgame], ["starHarvester", "trialHero"], "Solo midgame shop must hide duel-only Ship Machine.");
+assert.ok(skyguardShopModel.battleMidgame.includes("shipMachine"), "Duel midgame shop must keep Ship Machine available.");
+assert.equal(skyguardShopModel.sendsSolo, false, "Solo modes must not expose pressure sends.");
+assert.equal(skyguardShopModel.sendsDuel, true, "Duel modes must expose pressure sends.");
 
 console.log("PhantomPlay frontend and game safety checks passed.");

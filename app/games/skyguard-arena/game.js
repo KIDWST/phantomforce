@@ -76,6 +76,21 @@ const DEFENDERS = {
 };
 const DEFENDER_ORDER = ['glare', 'arc', 'frost', 'vane'];
 const UNLOCK_RANK = { glare: 1, arc: 1, frost: 2, vane: 3 };
+const CURRENCY = 'Stardust';
+const PREBATTLE_OFFERS = [
+  { id: 'shipMachine', title: 'Ship Machine', tag: 'AUTO SEND', cost: 50, have: 'x1', art: 'ship', copy: 'Launches Spark Drone pressure for you every cycle so your rival never gets a quiet lane.' },
+  { id: 'starHarvester', title: 'Star Harvester', tag: 'ECON', cost: 50, have: 'x1', art: 'harvester', copy: `Pulls extra ${CURRENCY} after every cleared wave and keeps your build moving.` },
+  { id: 'trialHero', title: 'Try Hero Vega', tag: 'HERO', cost: 0, have: '6/6', art: 'hero', copy: 'Adds Vega Starborn to this battle: a free orbit hero with a piercing beam and lane aura.' },
+];
+const MIDGAME_BUYS = [
+  { id: 'shipMachine', title: 'Ship Machine', cost: 125, art: 'ship', copy: 'Auto-sends Spark Drones every cycle.' },
+  { id: 'starHarvester', title: 'Star Harvester', cost: 110, art: 'harvester', copy: `Adds bonus ${CURRENCY} after every wave.` },
+  { id: 'trialHero', title: 'Hire Vega', cost: 180, art: 'hero', copy: 'Hero beam joins the lane instantly.' },
+];
+const PRESSURE_SENDS = [
+  { id: 'swarm', title: 'Spark Drones', cost: 35, mult: 'x5', tag: 'FAST', copy: 'Cheap pressure ships that force early defenses.' },
+  { id: 'overload', title: 'Jam Probe', cost: 60, mult: 'x2', tag: 'TACTIC', copy: 'Disrupts the rival lane and punishes weak timing.' },
+];
 
 const ENEMIES = {
   driftling: { hp: 16, speed: 0.085, armor: 0, bounty: 4, color: '#7c88c9', r: 9, label: 'Driftling' },
@@ -123,6 +138,7 @@ const waveBanner = $('[data-wave-banner]'), bossBanner = $('[data-boss-banner]')
 const dockDefenders = $('[data-dock-defenders]'), dockSelected = $('[data-dock-selected]'), dockPressure = $('[data-dock-pressure]');
 const commanderBtn = $('[data-commander-btn]'), commanderFill = $('[data-commander-fill]');
 const opponentPanel = $('[data-opponent-panel]'), oppName = $('[data-opp-name]'), oppLives = $('[data-opp-lives]'), oppWave = $('[data-opp-wave]'), oppStatus = $('[data-opp-status]'), oppBar = $('[data-opp-bar]'), oppNote = $('[data-opp-note]');
+const readyStore = $('[data-ready-store]'), readyOptions = $('[data-ready-options]'), readyBank = $('[data-ready-bank]');
 const toastEl = $('[data-toast]');
 const overlayPause = $('[data-overlay-pause]'), overlaySettings = $('[data-overlay-settings]'), overlayResults = $('[data-overlay-results]');
 const resultsTitle = $('[data-results-title]'), resultsSub = $('[data-results-sub]'), resultsGrid = $('[data-results-grid]'), rematchBtn = $('[data-results-rematch]');
@@ -136,6 +152,40 @@ function toast(msg) {
   toastEl.textContent = msg; toastEl.hidden = false;
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => { toastEl.hidden = true; }, 2600);
+}
+function priceLabel(cost) { return cost > 0 ? `${cost} ${CURRENCY}` : 'Trial'; }
+function buyIcon(kind) {
+  return `<span class="sg-buy-art sg-buy-${esc(kind)}" aria-hidden="true"><i></i></span>`;
+}
+function duelReadyMode(value = mode) { return value === 'skirmish' || value === 'battle'; }
+function availablePrebattleOffers(value = mode) {
+  return PREBATTLE_OFFERS.filter((offer) => offer.id !== 'shipMachine' || duelReadyMode(value));
+}
+function availableMidgameBuys(value = mode) {
+  return MIDGAME_BUYS.filter((buy) => buy.id !== 'shipMachine' || duelReadyMode(value));
+}
+function perkOwned(id) {
+  if (id === 'shipMachine') return battlePerks.shipMachine;
+  if (id === 'starHarvester') return battlePerks.starHarvester;
+  if (id === 'trialHero') return battlePerks.hero;
+  return false;
+}
+function activateHero() {
+  battlePerks.hero = true;
+  hero = { name: 'Vega Starborn', cooldown: 0.25, pulse: 0, x: 0.50 * REF_W, y: 0.50 * REF_H };
+}
+function buyPerk(id, cost, fromReadyStore) {
+  if (perkOwned(id)) { toast('Already active for this battle.'); return; }
+  if (id === 'shipMachine' && !duelReadyMode()) { toast('Ship Machine is for duel pressure.'); return; }
+  if (gold < cost) { toast(`Need more ${CURRENCY}.`); return; }
+  gold -= cost;
+  if (id === 'shipMachine') { battlePerks.shipMachine = true; shipMachineTimer = 4; toast('Ship Machine online.'); }
+  if (id === 'starHarvester') { battlePerks.starHarvester = true; toast('Star Harvester online.'); }
+  if (id === 'trialHero') { activateHero(); toast('Vega joined your lane.'); }
+  sfx('upgrade');
+  updateHud();
+  if (fromReadyStore) renderReadyStore();
+  renderDock();
 }
 
 // ---------------------------------------------------------------------
@@ -258,6 +308,11 @@ let commanderActive = false, commanderCooldown = 0, commanderTimer = 0;
 const COMMANDER_COOLDOWN = 25, COMMANDER_DURATION = 6;
 let pressureCooldown = 0;
 let bot = null;
+let shopTab = 'towers';
+let preBattleOpen = false;
+let battlePerks = { shipMachine: false, starHarvester: false, hero: false };
+let shipMachineTimer = 0;
+let hero = null;
 let _uid = 1; function uid() { return _uid++; }
 
 function newBot(difficulty) {
@@ -400,8 +455,10 @@ function scheduleWave(n) {
   updateHud();
 }
 function handleWaveCleared() {
-  const bonus = 20 + wave * 5;
+  const harvesterBonus = battlePerks.starHarvester ? 24 + Math.min(26, wave * 3) : 0;
+  const bonus = 20 + wave * 5 + harvesterBonus;
   gold += bonus; score += wave * 30;
+  if (harvesterBonus) toast(`Star Harvester +${harvesterBonus} ${CURRENCY}.`);
   sfx('wave');
   reportProgress();
   if (mode === 'battle') maybeBroadcastHostStatus(false);
@@ -454,6 +511,54 @@ function fire(s, stats, target) {
     target.slowFactor = Math.max(target.slowFactor || 0, stats.slow);
   }
 }
+function fireHero(target) {
+  if (!hero || !target) return;
+  const dmg = 20 + Math.min(28, wave * 2);
+  dealDamage(target, dmg, 1);
+  target.slowUntil = Math.max(target.slowUntil || 0, simTime + 0.55);
+  target.slowFactor = Math.max(target.slowFactor || 0, 0.18);
+  particles.push({ type: 'tracer', x1: hero.x, y1: hero.y, x2: target.x, y2: target.y, color: '#ffe86b', life: 0.16, age: 0 });
+  hero.pulse = 0.28;
+  tone(980, 0.055, 'triangle', 0.22);
+}
+function tickHero(dt) {
+  if (!hero) return;
+  hero.cooldown -= dt;
+  hero.pulse = Math.max(0, hero.pulse - dt);
+  if (hero.cooldown > 0) return;
+  let target = null, bestT = -1;
+  for (const e of enemies) {
+    if (!e.alive) continue;
+    const d = Math.hypot(e.x - hero.x, e.y - hero.y);
+    if (d <= 240 && e.t > bestT) { target = e; bestT = e.t; }
+  }
+  if (target) fireHero(target);
+  hero.cooldown = 0.72;
+}
+function dispatchPressure(kind, label) {
+  if (mode === 'skirmish') { applyPressureToBot(kind); toast(`${label || 'Pressure'} sent to Rival AI.`); return; }
+  if (mode === 'battle') {
+    const entrySeq = ((battle.duel && battle.duel.pressureLog) || []).length + 1;
+    const entry = { seq: entrySeq, type: kind, from: battle.amIHost ? 'host' : 'guest', at: Date.now() };
+    if (battle.amIHost) {
+      const log = [...((battle.duel && battle.duel.pressureLog) || []), entry].slice(-24);
+      pushDuelState({ pressureLog: log });
+      toast(`${label || 'Pressure'} sent to your opponent.`);
+    } else {
+      matchAction({ duel: { ...(battle.duel || {}), pressureLog: [...((battle.duel && battle.duel.pressureLog) || []), entry] } }, 'merge');
+      toast('Sent — delivery depends on room sync.');
+    }
+  }
+}
+function tickBattlePerks(dt) {
+  tickHero(dt);
+  if (!battlePerks.shipMachine || !duelReadyMode()) return;
+  shipMachineTimer -= dt;
+  if (shipMachineTimer > 0) return;
+  shipMachineTimer = 14;
+  sfx('pressure-send');
+  dispatchPressure('swarm', 'Ship Machine');
+}
 let simTime = 0;
 function tick(dt) {
   simTime += dt;
@@ -462,6 +567,7 @@ function tick(dt) {
   if (pressureCooldown > 0) pressureCooldown = Math.max(0, pressureCooldown - dt);
   if (spireFlash > 0) spireFlash = Math.max(0, spireFlash - dt);
   updateParticles(dt);
+  tickBattlePerks(dt);
 
   if (prepRemaining > 0) {
     prepRemaining -= dt;
@@ -520,23 +626,28 @@ function updateParticles(dt) {
 // ---------------------------------------------------------------------
 function startRun(m) {
   mode = m;
-  gold = m === 'endless' ? 180 : 150;
+  gold = (m === 'skirmish' || m === 'battle') ? 260 : 220;
   lives = maxLives = 20;
   wave = 0; score = 0; killCount = 0;
   sentinels = []; enemies = []; particles = [];
   spawnQueue = []; waveActive = false; prepRemaining = 0;
   commanderActive = false; commanderCooldown = 0; commanderTimer = 0; pressureCooldown = 0;
   selectedSlot = -1; placingDef = null;
-  runCompleted = false; myResult = null; running = true; paused = false;
+  shopTab = 'towers';
+  battlePerks = { shipMachine: false, starHarvester: false, hero: false };
+  shipMachineTimer = 0; hero = null;
+  preBattleOpen = true;
+  lastDockGold = -1; lastDockCooldownLocked = null; lastDockPerkKey = '';
+  runCompleted = false; myResult = null; running = true; paused = true;
   totalWaves = m === 'endless' ? Infinity : CAMPAIGN_WAVES.length;
   bot = (m === 'skirmish') ? newBot('standard') : null;
-  hud.mode.textContent = { campaign: 'Campaign', endless: 'Endless Watch', skirmish: 'Skirmish vs Bot', battle: 'Room Duel' }[m] || m;
+  hud.mode.textContent = { campaign: 'Solo Route', endless: 'Endless Duel Prep', skirmish: '1v1 Star Duel', battle: 'Room Duel' }[m] || m;
   opponentPanel.hidden = !(m === 'skirmish' || m === 'battle');
   overlayResults.hidden = true; overlayPause.hidden = true;
   showScreen('game');
   requestAnimationFrame(resizeCanvas);
-  renderDock(); renderDockSelected(); renderPressureDock(); updateHud(); renderOpponentPanel();
-  beginPrep(2.5);
+  readyStore.hidden = false;
+  renderDock(); renderDockSelected(); renderPressureDock(); updateHud(); renderOpponentPanel(); renderReadyStore();
   host('progress', { score: 0, progress: 0 });
 }
 function reportProgress() {
@@ -569,15 +680,59 @@ function surrender() {
 }
 function returnToMenu() {
   running = false; paused = false;
+  preBattleOpen = false;
+  if (readyStore) readyStore.hidden = true;
   overlayPause.hidden = true; overlayResults.hidden = true;
   showScreen('menu');
   renderMenuMeta();
 }
+function renderReadyStore() {
+  if (!readyOptions || !readyBank) return;
+  readyBank.textContent = String(gold);
+  const offers = availablePrebattleOffers();
+  readyOptions.innerHTML = offers.length ? offers.map((offer) => {
+    const owned = perkOwned(offer.id);
+    const affordable = gold >= offer.cost;
+    const disabled = owned || !affordable;
+    return `<article class="sg-ready-option ${owned ? 'is-owned' : ''}">
+      <div class="sg-ready-art">${buyIcon(offer.art)}</div>
+      <div class="sg-ready-have">You have: <b>${esc(owned ? 'ACTIVE' : offer.have)}</b></div>
+      <h3>${esc(offer.title)}</h3>
+      <p>${esc(offer.copy)}</p>
+      <button type="button" data-prebuy="${esc(offer.id)}" ${disabled ? 'disabled' : ''}>
+        <span>${esc(owned ? 'Active' : priceLabel(offer.cost))}</span>
+      </button>
+    </article>`;
+  }).join('') : `<article class="sg-ready-option sg-ready-empty">
+      <div class="sg-ready-art">${buyIcon('ship')}</div>
+      <div class="sg-ready-have">No market cards</div>
+      <h3>Skip the shop</h3>
+      <p>This mode has no optional pre-battle buys. Start clean and spend in battle.</p>
+    </article>`;
+  readyOptions.querySelectorAll('[data-prebuy]').forEach((btn) => {
+    const offer = offers.find((item) => item.id === btn.dataset.prebuy);
+    btn.onclick = () => offer && buyPerk(offer.id, offer.cost, true);
+  });
+}
+function launchFromReadyStore() {
+  if (!preBattleOpen) return;
+  preBattleOpen = false;
+  readyStore.hidden = true;
+  paused = false;
+  sfx('wave');
+  beginPrep(1.5);
+  renderPressureDock();
+  updateHud();
+}
+$('[data-ready-start]').addEventListener('click', launchFromReadyStore);
+$('[data-ready-skip]').addEventListener('click', launchFromReadyStore);
 
 // ---------------------------------------------------------------------
 // 11. HUD / dock rendering
 // ---------------------------------------------------------------------
 let lastDockGold = -1;
+let lastDockCooldownLocked = null;
+let lastDockPerkKey = '';
 function updateHud() {
   hud.gold.textContent = String(gold);
   hud.wave.textContent = mode === 'endless' ? `${wave}` : `${Math.min(wave, totalWaves)}/${totalWaves}`;
@@ -591,25 +746,75 @@ function updateHud() {
   // The dock's afford/lock state depends on `gold`, which changes every
   // tick (kills, bounties, spends) — only rebuild its DOM when the value
   // actually moved, instead of every animation frame.
-  if (gold !== lastDockGold) {
+  const cooldownLocked = pressureCooldown > 0;
+  const perkKey = `${shopTab}|${battlePerks.shipMachine ? 1 : 0}${battlePerks.starHarvester ? 1 : 0}${battlePerks.hero ? 1 : 0}`;
+  if (gold !== lastDockGold || cooldownLocked !== lastDockCooldownLocked || perkKey !== lastDockPerkKey) {
     lastDockGold = gold;
+    lastDockCooldownLocked = cooldownLocked;
+    lastDockPerkKey = perkKey;
     renderDock();
     if (selectedSlot >= 0) renderDockSelected();
   }
 }
 function renderDock() {
   const unlocked = unlockedSet();
-  dockDefenders.innerHTML = DEFENDER_ORDER.map((id) => {
-    const def = DEFENDERS[id];
-    const isUnlocked = unlocked.has(id);
-    const affordable = gold >= def.cost;
-    const disabled = !isUnlocked || !affordable;
-    const sub = isUnlocked ? `${def.cost} Glint` : `Rank ${UNLOCK_RANK[id]} required`;
-    return `<button type="button" class="sg-def-card ${placingDef === id ? 'is-selected' : ''}" data-def="${id}" ${disabled ? 'disabled' : ''}><span class="sg-def-icon def-${id}"></span><b>${esc(def.name)}</b><span>${esc(sub)}</span></button>`;
-  }).join('');
+  const duelReady = duelReadyMode();
+  if (shopTab === 'sends' && !duelReady) shopTab = 'towers';
+  const tabs = [
+    ['towers', 'Towers'],
+    ...(duelReady ? [['sends', 'Sends']] : []),
+    ['boosts', 'Machines + Hero'],
+  ];
+  let cards = '';
+  if (shopTab === 'towers') {
+    cards = DEFENDER_ORDER.map((id) => {
+      const def = DEFENDERS[id];
+      const isUnlocked = unlocked.has(id);
+      const affordable = gold >= def.cost;
+      const disabled = !isUnlocked || !affordable;
+      const sub = isUnlocked ? priceLabel(def.cost) : `Rank ${UNLOCK_RANK[id]}`;
+      return `<button type="button" class="sg-def-card sg-shop-card ${placingDef === id ? 'is-selected' : ''}" data-def="${id}" ${disabled ? 'disabled' : ''}>
+        <span class="sg-def-icon def-${id}"></span>
+        <b>${esc(def.name)}</b>
+        <span>${esc(sub)}</span>
+      </button>`;
+    }).join('');
+  } else if (shopTab === 'sends') {
+    cards = PRESSURE_SENDS.map((send) => {
+      const disabled = !duelReady || gold < send.cost || pressureCooldown > 0;
+      return `<button type="button" class="sg-send-card sg-shop-card" data-pressure="${esc(send.id)}" ${disabled ? 'disabled' : ''}>
+        <span class="sg-send-mult">${esc(send.mult)}</span>
+        <b>${esc(send.title)}</b>
+        <i>${esc(priceLabel(send.cost))}</i>
+        <small>${esc(send.copy)}</small>
+      </button>`;
+    }).join('');
+  } else {
+    const buys = availableMidgameBuys();
+    cards = buys.length ? buys.map((buy) => {
+      const owned = perkOwned(buy.id);
+      const disabled = owned || gold < buy.cost;
+      return `<button type="button" class="sg-boost-card sg-shop-card ${owned ? 'is-owned' : ''}" data-boost="${esc(buy.id)}" ${disabled ? 'disabled' : ''}>
+        ${buyIcon(buy.art)}
+        <b>${esc(buy.title)}</b>
+        <i>${esc(owned ? 'Active' : priceLabel(buy.cost))}</i>
+        <small>${esc(buy.copy)}</small>
+      </button>`;
+    }).join('') : `<div class="sg-empty-card sg-shop-card"><b>No machines loaded</b><span>Bring a machine or hero card next run.</span></div>`;
+  }
+  dockDefenders.innerHTML = `<div class="sg-shop-shell">
+    <div class="sg-shop-tabs">${tabs.map(([key, label]) => `<button type="button" data-shop-tab="${key}" class="${shopTab === key ? 'is-on' : ''}">${esc(label)}</button>`).join('')}</div>
+    <div class="sg-shop-cards">${cards}</div>
+  </div>`;
+  dockDefenders.querySelectorAll('[data-shop-tab]').forEach((btn) => btn.onclick = () => { shopTab = btn.dataset.shopTab; renderDock(); });
   dockDefenders.querySelectorAll('[data-def]').forEach((btn) => btn.onclick = () => {
     placingDef = placingDef === btn.dataset.def ? null : btn.dataset.def;
     renderDock();
+  });
+  dockDefenders.querySelectorAll('[data-pressure]').forEach((btn) => btn.onclick = () => onPressureClick(btn.dataset.pressure));
+  dockDefenders.querySelectorAll('[data-boost]').forEach((btn) => {
+    const buy = MIDGAME_BUYS.find((item) => item.id === btn.dataset.boost);
+    btn.onclick = () => buy && buyPerk(buy.id, buy.cost, false);
   });
 }
 function renderDockSelected() {
@@ -619,7 +824,7 @@ function renderDockSelected() {
   const maxTier = def.tiers.length - 1;
   dockSelected.hidden = false;
   dockSelected.innerHTML = `<b>${esc(def.name)} · T${s.tier + 1}</b>
-    ${s.tier < maxTier ? `<button type="button" data-upgrade ${gold < def.upgradeCost ? 'disabled' : ''}>Upgrade (${def.upgradeCost})</button>` : '<span>Max tier</span>'}
+    ${s.tier < maxTier ? `<button type="button" data-upgrade ${gold < def.upgradeCost ? 'disabled' : ''}>Upgrade (${priceLabel(def.upgradeCost)})</button>` : '<span>Max tier</span>'}
     <button type="button" data-sell>Sell (+${Math.round((s.spent || 0) * 0.6)})</button>
     <button type="button" data-deselect>Close</button>`;
   dockSelected.querySelector('[data-upgrade]')?.addEventListener('click', upgradeSelected);
@@ -627,35 +832,20 @@ function renderDockSelected() {
   dockSelected.querySelector('[data-deselect]')?.addEventListener('click', () => selectSlot(-1));
 }
 function renderPressureDock() {
-  const show = running && (mode === 'battle' || mode === 'skirmish');
+  const show = running && duelReadyMode() && !preBattleOpen;
   dockPressure.hidden = !show;
-  if (!show) return;
-  dockPressure.innerHTML = `
-    <button type="button" class="sg-pressure-btn" data-pressure="swarm" ${gold < 40 || pressureCooldown > 0 ? 'disabled' : ''}>Swarm Ping · 40</button>
-    <button type="button" class="sg-pressure-btn" data-pressure="overload" ${gold < 60 || pressureCooldown > 0 ? 'disabled' : ''}>Jam Signal · 60</button>
-    <button type="button" class="sg-pressure-btn" data-pressure="surrender">Surrender</button>`;
-  dockPressure.querySelectorAll('[data-pressure]').forEach((b) => b.onclick = () => onPressureClick(b.dataset.pressure));
+  dockPressure.innerHTML = show ? `<button type="button" class="sg-surrender-card" data-pressure="surrender">Surrender</button>` : '';
+  dockPressure.querySelector('[data-pressure="surrender"]')?.addEventListener('click', surrender);
 }
 function onPressureClick(kind) {
   if (kind === 'surrender') { surrender(); return; }
-  const costs = { swarm: 40, overload: 60 };
-  const cost = costs[kind];
+  const send = PRESSURE_SENDS.find((item) => item.id === kind);
+  if (!send) return;
+  const cost = send.cost;
   if (gold < cost || pressureCooldown > 0) return;
   gold -= cost; pressureCooldown = 6;
   sfx('pressure-send'); updateHud();
-  if (mode === 'skirmish') { applyPressureToBot(kind); toast('Sent to Rival AI.'); return; }
-  if (mode === 'battle') {
-    const entrySeq = ((battle.duel && battle.duel.pressureLog) || []).length + 1;
-    const entry = { seq: entrySeq, type: kind, from: battle.amIHost ? 'host' : 'guest', at: Date.now() };
-    if (battle.amIHost) {
-      const log = [...((battle.duel && battle.duel.pressureLog) || []), entry].slice(-24);
-      pushDuelState({ pressureLog: log });
-      toast('Pressure sent to your opponent.');
-    } else {
-      matchAction({ duel: { ...(battle.duel || {}), pressureLog: [...((battle.duel && battle.duel.pressureLog) || []), entry] } }, 'merge');
-      toast('Sent — delivery depends on room sync.');
-    }
-  }
+  dispatchPressure(kind, send.title);
 }
 function renderOpponentPanel() {
   if (mode === 'skirmish') {
@@ -718,7 +908,7 @@ function selectSlot(i) { selectedSlot = i; renderDockSelected(); }
 function tryPlace(slotIndex) {
   const def = DEFENDERS[placingDef];
   if (!unlockedSet().has(placingDef)) { toast('Locked — reach the required Command Rank.'); return; }
-  if (gold < def.cost) { toast('Not enough Glint.'); return; }
+  if (gold < def.cost) { toast(`Not enough ${CURRENCY}.`); return; }
   gold -= def.cost;
   sentinels.push({ id: uid(), defId: placingDef, tier: 0, slotIndex, cooldown: 0, spent: def.cost });
   sfx('place'); placingDef = null;
@@ -729,7 +919,7 @@ function upgradeSelected() {
   if (!s) return;
   const def = DEFENDERS[s.defId];
   if (s.tier >= def.tiers.length - 1) return;
-  if (gold < def.upgradeCost) { toast('Not enough Glint.'); return; }
+  if (gold < def.upgradeCost) { toast(`Not enough ${CURRENCY}.`); return; }
   gold -= def.upgradeCost; s.tier += 1; s.spent = (s.spent || 0) + def.upgradeCost;
   sfx('upgrade'); updateHud(); renderDockSelected();
 }
@@ -768,7 +958,7 @@ function drawShape(cx, cy, r, shape, color) {
 function draw() {
   ctx.clearRect(0, 0, cssW, cssH);
   drawBackground();
-  drawPath(); drawSlots(); drawSpire(); drawSentinels(); drawEnemies(); drawParticlesOnCanvas();
+  drawPath(); drawSlots(); drawSpire(); drawHero(); drawSentinels(); drawEnemies(); drawParticlesOnCanvas();
   if (spireFlash > 0) { ctx.fillStyle = `rgba(255,77,141,${spireFlash * 0.35})`; ctx.fillRect(0, 0, cssW, cssH); }
 }
 function drawBackground() {
@@ -919,6 +1109,35 @@ function drawSentinels() {
     if (s.tier === 1) { ctx.strokeStyle = '#fff8'; ctx.lineWidth = 1.4 * scale; ctx.beginPath(); ctx.arc(px, py - 4 * scale, 18 * scale, 0, Math.PI * 2); ctx.stroke(); }
   }
 }
+function drawHero() {
+  if (!hero) return;
+  const [px, py] = toPx(hero.x, hero.y);
+  const pulse = 1 + Math.sin(simTime * 3) * 0.045 + hero.pulse * 0.9;
+  ctx.save();
+  ctx.translate(px, py);
+  ctx.shadowColor = '#ffe86b';
+  ctx.shadowBlur = 28 * scale;
+  ctx.fillStyle = '#10183a';
+  ctx.strokeStyle = '#ffe86b';
+  ctx.lineWidth = 2.6 * scale;
+  ctx.beginPath();
+  ctx.arc(0, 0, 28 * scale * pulse, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = '#ffe86b';
+  ctx.beginPath();
+  ctx.moveTo(0, -20 * scale);
+  ctx.lineTo(17 * scale, 10 * scale);
+  ctx.lineTo(0, 4 * scale);
+  ctx.lineTo(-17 * scale, 10 * scale);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = '#fff7bd';
+  ctx.beginPath();
+  ctx.arc(0, -5 * scale, 5 * scale, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
 function drawTowerBase(x, y, color, tier) {
   ctx.save();
   ctx.translate(x, y);
@@ -1030,8 +1249,8 @@ $('[data-menu-btn]').addEventListener('click', () => returnToMenu());
 
 function showResults({ kind, xpGain, rankedUp, surrendered }) {
   const won = kind === 'victory';
-  resultsTitle.textContent = won ? (mode === 'battle' ? 'Duel won' : 'Route held') : (mode === 'battle' ? 'Duel lost' : (surrendered ? 'Surrendered' : 'Spire fallen'));
-  resultsSub.textContent = mode === 'endless' ? `Endless run — reached wave ${wave}.` : `${{ campaign: 'Campaign', skirmish: 'Skirmish', battle: 'Room Duel' }[mode] || mode} run finished.`;
+  resultsTitle.textContent = won ? (mode === 'battle' ? 'Duel won' : 'Route held') : (mode === 'battle' ? 'Duel lost' : (surrendered ? 'Surrendered' : 'Core fallen'));
+  resultsSub.textContent = mode === 'endless' ? `Endless Duel Prep run — reached wave ${wave}.` : `${{ campaign: 'Solo Route', skirmish: '1v1 Star Duel', battle: 'Room Duel' }[mode] || mode} run finished.`;
   const stats = [
     ['Waves survived', String(mode === 'endless' ? Math.max(0, wave - 1) : Math.min(wave, totalWaves))],
     ['Enemies defeated', String(killCount)],
@@ -1098,13 +1317,13 @@ $('[data-settings-close]').addEventListener('click', () => { overlaySettings.hid
 // 17. Tutorial
 // ---------------------------------------------------------------------
 const TUTORIAL_STEPS = [
-  { h: 'Welcome, Skyguard', p: 'Driftbreaker raids follow the Skyline Route toward your Anchor Spire. Place Sentinels along the corridor to break them before they arrive.' },
-  { h: 'Glint economy', p: 'Defeating raiders and clearing waves earns Glint. Spend it placing new Sentinels and upgrading the ones you already have.' },
-  { h: 'Four Sentinels', p: 'Glare Cannon hits fast and single-target. Arc Diffuser splashes a small area. Frost Prism slows a raider down. Vane Sniper hits hard at long range and cuts through armor.' },
-  { h: 'Upgrades', p: 'Tap a placed Sentinel to see its Tier 2 upgrade — more damage, more range, and a stronger effect for a one-time Glint cost.' },
-  { h: 'Overcharge Pulse', p: "Your commander ability boosts every Sentinel's damage and fire rate for a few seconds. Use it on a tough wave, then wait out its cooldown." },
-  { h: 'Hold the Spire', p: 'Every raider that reaches the end drains your Spire’s integrity. Lose it all and the route falls. Clear every wave, including the boss, to win a Campaign run.' },
-  { h: 'Duels', p: 'Skirmish and Room Duel add an opposing lane. Spend Glint on Pressure Powers to hit your rival’s lane while defending your own.' },
+  { h: 'Welcome, Skyguard', p: 'This is a 1v1 star-lane battle. Build your defense, send pressure to the rival lane, and protect your core longer than they protect theirs.' },
+  { h: `${CURRENCY} economy`, p: `Defeating raiders and clearing waves earns ${CURRENCY}. Spend it on towers, sends, machines, upgrades, or a hero.` },
+  { h: 'Pre-battle market', p: 'Before launch, buy a Ship Machine, Star Harvester, or trial hero. These are real battle helpers, not cosmetic buttons.' },
+  { h: 'Tower shop', p: 'Glare Cannon hits fast. Arc Diffuser splashes. Frost Prism slows. Vane Sniper deletes tough ships from long range.' },
+  { h: 'Sends win duels', p: 'Spark Drones and Jam Probes pressure the enemy lane. The Ship Machine keeps sending automatically once it is online.' },
+  { h: 'Heroes and boosts', p: 'Vega Starborn fires from the center lane. Overcharge Pulse boosts every tower for a short, dangerous window.' },
+  { h: 'Outlast the rival', p: 'Every raider that reaches the end drains your core. Lose it all and the lane falls. In duels, their lane is trying to survive the same storm.' },
 ];
 let tutorialStep = 0, tutorialReturn = 'menu';
 function openTutorial(returnTo) { tutorialReturn = returnTo || 'menu'; tutorialStep = 0; renderTutorial(); showScreen('tutorial'); }
