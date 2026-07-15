@@ -363,28 +363,59 @@ async function executeTool(tool: ToolCall) {
 
 function directToolFromPrompt(prompt: string): ToolCall | null {
   const text = prompt.trim();
-  const lower = text.toLowerCase();
-  const commandPrefixes = ["/run ", "run command:", "run cmd:", "execute command:", "execute:"];
+  const commandMatch = text.match(/^(?:\/run\s+|run command:\s*|run cmd:\s*|execute command:\s*|execute:\s*)([\s\S]*)$/i);
+  if (commandMatch) return { tool: "run_command", cmd: commandMatch[1].trim() };
 
-  for (const prefix of commandPrefixes) {
-    if (lower.startsWith(prefix)) {
-      return { tool: "run_command", cmd: text.slice(prefix.length).trim() };
-    }
-  }
+  const listMatch = text.match(/^\/list\s+([\s\S]*)$/i);
+  if (listMatch) return { tool: "list_dir", path: listMatch[1].trim() };
 
-  if (lower.startsWith("/list ")) {
-    return { tool: "list_dir", path: text.slice(6).trim() };
-  }
+  const readMatch = text.match(/^\/read\s+([\s\S]*)$/i);
+  if (readMatch) return { tool: "read_file", path: readMatch[1].trim() };
 
-  if (lower.startsWith("/read ")) {
-    return { tool: "read_file", path: text.slice(6).trim() };
-  }
-
-  if (lower.startsWith("/search ")) {
-    return { tool: "search_files", query: text.slice(8).trim(), path: repoRoot };
-  }
+  const searchMatch = text.match(/^\/search\s+([\s\S]*)$/i);
+  if (searchMatch) return { tool: "search_files", query: searchMatch[1].trim(), path: repoRoot };
 
   return null;
+}
+
+function deterministicToolSummary(tool: ToolCall, toolResult: unknown) {
+  const result = toolResult && typeof toolResult === "object" ? toolResult as Record<string, unknown> : {};
+  if (tool.tool === "approval_required") {
+    return `Approval required: ${truncate(String(result.reason ?? tool.reason ?? "Review needed."), 700)}`;
+  }
+
+  if (result.blocked) {
+    return `Operator ${tool.tool} was blocked: ${truncate(String(result.reason ?? "No reason provided."), 700)}`;
+  }
+
+  if (tool.tool === "run_command") {
+    const code = result.exit_code ?? "unknown";
+    const stdout = truncate(String(result.stdout ?? ""), 1400).trim();
+    const stderr = truncate(String(result.stderr ?? ""), 800).trim();
+    return [
+      `Operator ran command with exit code ${code}.`,
+      stdout ? `stdout:\n${stdout}` : "stdout: (empty)",
+      stderr ? `stderr:\n${stderr}` : "",
+    ].filter(Boolean).join("\n");
+  }
+
+  if (tool.tool === "write_file") {
+    return `Operator wrote file ${truncate(String(result.path ?? tool.path), 500)} (${result.bytes ?? 0} bytes, receipt ${result.receipt ?? "n/a"}).`;
+  }
+
+  if (tool.tool === "read_file") {
+    return `Operator read ${truncate(String(result.path ?? tool.path), 500)} (${result.bytes ?? 0} bytes${result.truncated ? ", truncated" : ""}).`;
+  }
+
+  if (tool.tool === "list_dir") {
+    return `Operator listed ${truncate(String(result.path ?? tool.path ?? "directory"), 500)} (${result.count ?? 0} shown of ${result.total ?? 0}).`;
+  }
+
+  if (tool.tool === "search_files") {
+    return `Operator searched ${truncate(String(result.path ?? tool.path ?? "workspace"), 500)} for "${truncate(tool.query, 160)}".\n${truncate(String(result.output ?? ""), 1600)}`;
+  }
+
+  return `Operator completed ${(tool as { tool?: string }).tool ?? "tool"}.`;
 }
 
 export async function runCodexOperatorChat(
@@ -482,33 +513,35 @@ export async function runCodexOperatorChat(
     const executableToolCall =
       toolCall.tool === "run_command" && !toolCall.cwd && input.cwd ? { ...toolCall, cwd: input.cwd } : toolCall;
     const toolResult = await executeTool(executableToolCall);
-    const summary = await callOperatorModel(
-      [
-        {
-          role: "system",
-          content:
-            "You are Phantom AI admin operator. Summarize only what actually happened from the tool result. If blocked, say exactly why. Keep it concise and useful.",
-        },
-        {
-          role: "user",
-          content: [
-            `Original request: ${redactSensitiveText(input.userMessage).slice(0, 1800)}`,
-            `Tool call: ${truncate(JSON.stringify(executableToolCall), 1600)}`,
-            `Tool result: ${truncate(JSON.stringify(toolResult), MAX_TOOL_RESULT_CHARS)}`,
-          ].join("\n\n"),
-        },
-      ],
-      { env, fetchImpl: options.fetchImpl, maxTokens: 650 },
-    );
+    const summary = directTool
+      ? deterministicToolSummary(executableToolCall, toolResult)
+      : await callOperatorModel(
+          [
+            {
+              role: "system",
+              content:
+                "You are Phantom AI admin operator. Summarize only what actually happened from the tool result. If blocked, say exactly why. Keep it concise and useful.",
+            },
+            {
+              role: "user",
+              content: [
+                `Original request: ${redactSensitiveText(input.userMessage).slice(0, 1800)}`,
+                `Tool call: ${truncate(JSON.stringify(executableToolCall), 1600)}`,
+                `Tool result: ${truncate(JSON.stringify(toolResult), MAX_TOOL_RESULT_CHARS)}`,
+              ].join("\n\n"),
+            },
+          ],
+          { env, fetchImpl: options.fetchImpl, maxTokens: 650 },
+        );
 
     return {
       provider_id: OPENROUTER_GLM_PROVIDER_ID,
       model_id: OPENROUTER_GLM_52_MODEL_ID,
       status: "called",
       output_text: summary,
-      provider_called: true,
-      network_call_performed: true,
-      request_body_prepared: true,
+      provider_called: providerCalled,
+      network_call_performed: networkCallPerformed,
+      request_body_prepared: !directTool,
       tool_requested: true,
       tool_executed: executableToolCall.tool !== "approval_required" && !(toolResult as { blocked?: unknown }).blocked,
       tool_name: executableToolCall.tool,

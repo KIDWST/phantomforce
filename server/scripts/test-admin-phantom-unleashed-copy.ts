@@ -25,6 +25,18 @@ const appWorkspaces = await readFile(
   new URL("../../app/js/workspaces.js", import.meta.url),
   "utf8",
 );
+const appSettings = await readFile(
+  new URL("../../app/js/settings.js", import.meta.url),
+  "utf8",
+);
+const appIntentRouter = await readFile(
+  new URL("../../app/js/intent-router.js", import.meta.url),
+  "utf8",
+);
+const appPageWorker = await readFile(
+  new URL("../../app/js/pageworker.js", import.meta.url),
+  "utf8",
+);
 const appIndex = await readFile(
   new URL("../../app/index.html", import.meta.url),
   "utf8",
@@ -41,7 +53,7 @@ const openrouterTransport = await readFile(
   new URL("../src/phantom-ai/providers/openrouter-live-transport.ts", import.meta.url),
   "utf8",
 );
-const publicAppBundle = [appIndex, appCommand, appMain, appStore, appWorkspaces].join("\n");
+const publicAppBundle = [appIndex, appCommand, appMain, appStore, appWorkspaces, appSettings, appIntentRouter, appPageWorker].join("\n");
 
 assert(!codexTransport.includes("This chat run is read-only"), "Codex lane must not tell admin Phantom it is read-only.");
 assert(codexTransport.includes("Phantom is an admin command cockpit"), "Private brain lane must frame Phantom as an admin command cockpit.");

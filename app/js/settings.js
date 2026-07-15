@@ -44,11 +44,11 @@ const PROVIDERS = [
     models: ["claude-cli", "claude-sonnet", "claude-opus"],
   },
   {
-    id: "codex",
-    name: "Codex",
-    short: "CX",
+    id: "private",
+    name: "Private Brain",
+    short: "PB",
     role: "Code, files, debugging, and implementation",
-    models: ["codex-default", "codex-high", "codex-fast"],
+    models: ["private-default", "private-high", "private-fast"],
   },
   {
     id: "openrouter",
@@ -75,11 +75,11 @@ const PROVIDER_MODES = [
 const DEFAULT_SETTINGS = {
   provider: "claude",
   providerMode: "smart",
-  selectedProviders: ["claude", "codex", "openrouter", "local"],
+  selectedProviders: ["claude", "private", "openrouter", "local"],
   brainMode: "api",
   models: {
     claude: "claude-cli",
-    codex: "codex-default",
+    private: "private-default",
     openrouter: "openrouter-auto",
     local: "local-auto",
   },
@@ -144,7 +144,7 @@ function normalizeSettings(value) {
   if (providerMode === "single") selectedProviders = [provider];
   if (!selectedProviders.length) selectedProviders = [provider];
   if (providerMode === "multiple" && selectedProviders.length < 2) {
-    selectedProviders.push(selectedProviders[0] === "claude" ? "codex" : "claude");
+    selectedProviders.push(selectedProviders[0] === "claude" ? "private" : "claude");
   }
   const preferredProvider = selectedProviders.includes(provider) ? provider : selectedProviders[0];
   return {
@@ -769,7 +769,7 @@ export function renderOperatorSettings(el, opts = {}) {
       if (settings.providerMode === "smart") settings.selectedProviders = PROVIDERS.map((provider) => provider.id);
       if (settings.providerMode === "single") settings.selectedProviders = [settings.provider];
       if (settings.providerMode === "multiple" && settings.selectedProviders.length < 2) {
-        settings.selectedProviders = [settings.provider, settings.provider === "claude" ? "codex" : "claude"];
+        settings.selectedProviders = [settings.provider, settings.provider === "claude" ? "private" : "claude"];
       }
       saveAndRender();
     };

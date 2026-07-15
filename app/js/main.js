@@ -2431,13 +2431,14 @@ async function fetchProviderManagerStatus() {
 
 function providerManagerMarkup(manager) {
   if (!manager?.providers?.length) return `<p class="dev-provider-empty">Provider state is waiting for the local backend.</p>`;
-  const labels = { codex_cli: "Codex", claude_cli: "Claude", openrouter_glm: "OpenRouter", local_ollama: "Local" };
   return `<div class="dev-provider-monitor">
     ${manager.providers.map((provider) => {
       const tone = provider.status === "online" ? "on" : provider.status === "offline" ? "off" : "warn";
+      const displayId = provider.display_id || provider.id || "provider";
+      const displayName = provider.display_name || displayId;
       return `<article class="dev-provider-row dev-tone-${tone}">
         <span class="dev-state-pill dev-tone-${tone}">${devDot()}${esc(provider.status)}</span>
-        <div><b>${esc(labels[provider.provider_id] || provider.provider_id)}</b><i>${provider.preferred ? "Preferred" : manager.active_provider_id === provider.provider_id ? "Active fallback" : "Standby"}</i></div>
+        <div><b>${esc(displayName)}</b><i>${provider.preferred ? "Preferred" : manager.active_provider_display_id === displayId ? "Active fallback" : "Standby"}</i></div>
         <span><b>${provider.latency_ms == null ? "—" : `${provider.latency_ms}ms`}</b><i>Latency</i></span>
         <span><b>${esc(provider.quota || "unknown")}</b><i>Quota</i></span>
         <span><b>${provider.last_success_at ? esc(ago(provider.last_success_at)) : "—"}</b><i>Last success</i></span>

@@ -347,6 +347,7 @@ import {
   getWindowsMediaStatus,
   isWindowsMediaCommand,
 } from "./phantom-ai/windows-media-session.js";
+import { runCodexOperatorChat } from "./phantom-ai/codex-operator.js";
 import { callClaudeCliChat } from "./phantom-ai/providers/claude-cli-transport.js";
 import { callCodexCliChat } from "./phantom-ai/providers/codex-cli-transport.js";
 import { callLocalOllamaChat } from "./phantom-ai/providers/local-ollama-transport.js";
@@ -354,6 +355,7 @@ import { callOpenRouterGlm52 } from "./phantom-ai/providers/openrouter-live-tran
 import {
   adminProviderAttemptOrder,
   getAdminProviderManagerStatus,
+  getPublicAdminProviderManagerStatus,
   recordAdminProviderFailure,
   recordAdminProviderSuccess,
   startAdminProviderHealthMonitor,
@@ -2473,6 +2475,7 @@ type AdminPhantomAiRouteTier = "instant" | "standard" | "deep";
 function parseAdminPhantomAiModelLane(value: unknown): AdminPhantomAiModelLane {
   if (value === "glm_5_2" || value === "openrouter_glm" || value === "glm") return "glm_5_2";
   if (value === "claude_cli" || value === "claude") return "claude_cli";
+  if (value === "private_brain" || value === "private" || value === "operator") return "codex";
   return "codex";
 }
 
@@ -2503,6 +2506,10 @@ function parseAllowProviderFallback(value: unknown, routeTier: AdminPhantomAiRou
   return routeTier !== "instant";
 }
 
+function isExplicitAdminOperatorPrompt(value: string) {
+  return /^(?:\/(?:run|list|read|search)\s+|run command:\s*|run cmd:\s*|execute command:\s*|execute:\s*)/i.test(value.trim());
+}
+
 function adminPhantomAiModelLabel(lane: AdminPhantomAiModelLane) {
   if (lane === "glm_5_2") return "Local GLM";
   if (lane === "claude_cli") return "Claude CLI";
@@ -2528,7 +2535,10 @@ type AdminPhantomAiProviderId = AdminProviderId;
 
 function parseAllowedAdminProviders(value: unknown): AdminPhantomAiProviderId[] | undefined {
   if (!Array.isArray(value)) return undefined;
-  const providers = Array.from(new Set(value.filter((item: unknown): item is AdminPhantomAiProviderId =>
+  const providers = Array.from(new Set(value.map((item: unknown) => {
+    if (item === "private_brain" || item === "private") return "codex_cli";
+    return item;
+  }).filter((item: unknown): item is AdminPhantomAiProviderId =>
     item === "codex_cli" || item === "claude_cli" || item === "openrouter_glm" || item === "local_ollama")));
   return providers.length ? providers : undefined;
 }
@@ -2546,7 +2556,7 @@ function adminPhantomAiLaneForProviderId(providerId: AdminPhantomAiProviderId): 
 }
 
 function adminPhantomAiProviderLabel(providerId: AdminPhantomAiProviderId) {
-  if (providerId === "codex_cli") return "Private Brain (Codex)";
+  if (providerId === "codex_cli") return "Private Brain";
   if (providerId === "claude_cli") return "Claude CLI";
   if (providerId === "openrouter_glm") return "OpenRouter GLM 5.2";
   return "Local GLM (Ollama)";
@@ -3209,7 +3219,7 @@ app.get("/phantom-ai/provider-status", async (request, reply) => {
     session,
     status: {
       ...providerStatus,
-      provider_manager: getAdminProviderManagerStatus(),
+      provider_manager: getPublicAdminProviderManagerStatus(),
       hermes: {
         ...providerStatus.hermes,
         ledger_path: ledgerStatus.ledgerPath,
@@ -7172,6 +7182,108 @@ app.post("/phantom-ai/chat", async (request, reply) => {
 
   if (privacyFirstLocationReply) {
     return privacyFirstLocationReply;
+  }
+
+  if (session.canManageAccess && adminModelLane === "codex" && isExplicitAdminOperatorPrompt(normalized.user_request)) {
+    const operatorResult = await runCodexOperatorChat({
+      requestId: normalized.request_id,
+      businessName: normalized.business_name,
+      userMessage: normalized.user_request,
+      compactContext: "Explicit admin operator command. Return a receipt for the local action only.",
+      approvalRequired: false,
+      cwd: process.cwd(),
+    });
+    const ledgerRecord: HermesLedgerRecord = {
+      timestamp: new Date().toISOString(),
+      tenant_id: normalized.tenant_id,
+      business_name: normalized.business_name,
+      actor_user_id: normalized.actor_user_id,
+      actor_role: normalized.actor_role,
+      request_id: normalized.request_id,
+      task_type: normalized.task_type,
+      sensitivity_level: normalized.sensitivity_level,
+      provider_route: "router",
+      model_id: "phantom-private-brain",
+      context_chars: 0,
+      estimated_tokens: 0,
+      estimated_cost_usd: null,
+      user_request_summary: redactSensitiveText(normalized.user_request).replace(/\s+/g, " ").slice(0, 240),
+      result_summary: redactSensitiveText(
+        operatorResult.tool_executed
+          ? `Private Brain executed ${operatorResult.tool_name ?? "operator tool"} and returned a receipt.`
+          : `Private Brain operator did not execute: ${operatorResult.error_message ?? operatorResult.status}`,
+      ).slice(0, 360),
+      approval_required: false,
+      approval_status: "not_required",
+      risks: [],
+      next_action: operatorResult.tool_executed
+        ? "Review the private operator receipt in Phantom AI."
+        : "Review the private operator lane error and retry if appropriate.",
+      agent_run_id: `phantom-ai-admin-codex-${normalized.request_id}`,
+      parent_task_id: normalized.request_id,
+    };
+    await appendHermesLedgerRecord(ledgerRecord);
+
+    return {
+      ok: true,
+      session,
+      provider_choice: "phantom",
+      admin_model_lane: "private_brain",
+      admin_model_label: adminPhantomAiModelLabel("codex"),
+      admin_model_requested_lane: "private_brain",
+      admin_execution_mode: adminExecutionMode,
+      model_id: "phantom-private-brain",
+      message: {
+        role: "assistant",
+        content: operatorResult.output_text,
+      },
+      operator: {
+        status: operatorResult.status,
+        admin_only: operatorResult.admin_only,
+        localhost_only: operatorResult.localhost_only,
+        tool_requested: operatorResult.tool_requested,
+        tool_executed: operatorResult.tool_executed,
+        tool_name: operatorResult.tool_name,
+        tool_result: operatorResult.tool_result,
+      },
+      private_brain: {
+        status: operatorResult.status,
+        model_id: "phantom-private-brain",
+        admin_only: operatorResult.admin_only,
+        localhost_only: operatorResult.localhost_only,
+        approval_executed: operatorResult.approval_executed,
+        external_action_executed: operatorResult.external_action_executed,
+        queue_written: operatorResult.queue_written,
+        ledger_written: true,
+      },
+      fallback: {
+        used: false,
+        all_failed: false,
+        requested_provider: adminPhantomAiProviderLabel("codex_cli"),
+        responding_provider: adminPhantomAiProviderLabel("codex_cli"),
+        attempts: [{ provider_id: "codex_cli", status: operatorResult.status, error_message: operatorResult.error_message }],
+      },
+      hermes: {
+        context_used: false,
+        ledger_written: true,
+        provider_route: "private_brain",
+        recalled_memory_count: 0,
+      },
+      memory_scope: buildMemoryScopeProof(normalized),
+      memory_context: {
+        scope: normalized.memory_scope,
+        recalled_memory_count: 0,
+        compact_context_chars: 0,
+        redaction: "not_used_for_explicit_operator_command",
+      },
+      ledger_record: redactHermesLedgerRecord(ledgerRecord),
+      provider_request_body_created: operatorResult.request_body_prepared,
+      live_provider_called: operatorResult.provider_called,
+      network_call_performed: operatorResult.network_call_performed,
+      approval_executed: false,
+      queue_written: false,
+      external_action_executed: false,
+    };
   }
 
   if (session.canManageAccess && adminRouteTier === "instant" && isInstantAdminChatSafe(normalized)) {

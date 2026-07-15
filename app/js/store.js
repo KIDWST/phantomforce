@@ -107,7 +107,7 @@ const EXPLICIT_MEMORY_SAVE_PATTERN = /\b(?:remember(?: this| that)?|save (?:this
 const FUTURE_RULE_PATTERN = /\b(?:from now on|going forward|in the future|every time|next time|do it this way next time|never do this again|always (?:use|do|keep|show|write|respond|route|ask|make)|never (?:use|do|show|write|respond|route|ask|make))\b/i;
 const STABLE_PREFERENCE_PATTERN = /\b(?:(?:my|our) (?:default|preference|preferred (?:style|format|workflow|model|tool|tone)) (?:is|should be)|(?:i|we) prefer\b|(?:my|our) (?:business|company|brand|workflow|process) (?:is|uses?|requires?)\b|we use\b)/i;
 const ONE_OFF_REQUEST_PATTERN = /\b(?:fix|change|update|remove|add|build|create|generate|move|open|close|check|look at|why (?:is|does|did|was)|what happened|isn't working|not working|still broken|still offline)\b/i;
-const FAILED_INTERACTION_PATTERN = /(?:did not complete (?:this )?(?:phantom )?chat request|private brain error|command failed|run-codex\.ps1|powershell\.exe|appdata\\local\\temp|request failed before a usable answer|provider (?:is )?(?:unavailable|offline)|transport error|timed? out|stack trace|exit code\s*\d+)/i;
+const FAILED_INTERACTION_PATTERN = /(?:did not complete (?:this )?(?:phantom )?chat request|private brain error|command failed|run-[a-z-]+\.ps1|powershell\.exe|appdata\\local\\temp|request failed before a usable answer|provider (?:is )?(?:unavailable|offline)|transport error|timed? out|stack trace|exit code\s*\d+)/i;
 const FAILED_HISTORY_REPLY = "Request failed before a usable answer was produced.";
 
 export function sanitizeMemoryText(value = "") {
@@ -1473,7 +1473,7 @@ const MODEL_DISPLAY_LABELS = {
   "claude-sonnet-5": "Balanced", "claude-opus-4-8": "Deep", "claude-haiku-4-5": "Fast",
   "glm-5": "Standard", "openrouter-auto": "Auto-routed",
   "claude-cli": "Claude default", "claude-sonnet": "Sonnet", "claude-opus": "Opus",
-  "codex-default": "Codex default", "codex-high": "High reasoning", "codex-fast": "Fast",
+  "private-default": "Private default", "private-high": "High reasoning", "private-fast": "Fast",
   "z-ai/glm-5.2": "GLM 5.2", "local-auto": "Automatic local", "local-glm": "Local GLM",
   "llama3": "Fast", "mistral": "Balanced", "custom-local": "Custom",
   "custom": "Custom",
@@ -1486,13 +1486,13 @@ export const modelDisplayLabel = (id) => MODEL_DISPLAY_LABELS[id] || id;
 const PHANTOM_LANE_KEY = "pf.phantomlanes.v1";
 export const PHANTOM_LANES = [
   { id: "claude", name: "Phantom Reasoning", role: "Strategy, copy, review", defaultTarget: "claude_cli" },
-  { id: "codex", name: "Phantom Code", role: "Code, repo work, implementation", defaultTarget: "codex" },
+  { id: "private", name: "Phantom Private", role: "Code, repo work, implementation", defaultTarget: "private_brain" },
   { id: "openrouter", name: "Phantom Router", role: "Flexible cloud routing", defaultTarget: "glm_5_2" },
   { id: "local", name: "Phantom Local", role: "Private/local-first work", defaultTarget: "glm_5_2" },
 ];
 export const PHANTOM_LANE_TARGETS = [
   { id: "claude_cli", name: "Claude CLI", provider: "phantom", models: ["claude-cli", "claude-sonnet", "claude-opus"] },
-  { id: "codex", name: "Codex / Private Operator", provider: "phantom", models: ["codex-default", "codex-high", "codex-fast"] },
+  { id: "private_brain", name: "Private Operator", provider: "phantom", models: ["private-default", "private-high", "private-fast"] },
   { id: "glm_5_2", name: "GLM / OpenRouter Route", provider: "openrouter_glm", models: ["z-ai/glm-5.2", "openrouter-auto", "local-glm"] },
 ];
 export function phantomLaneTargetName(id) {

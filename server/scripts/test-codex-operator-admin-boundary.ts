@@ -66,7 +66,7 @@ try {
     {
       requestId: "operator-command-test",
       businessName: "PhantomForce",
-      userMessage: "/run Write-Output phantom-admin-shell-ok",
+      userMessage: "/run\tWrite-Output phantom-admin-shell-ok",
       compactContext: "test context",
       approvalRequired: false,
       cwd: process.cwd(),
@@ -130,8 +130,8 @@ try {
     },
     payload: JSON.stringify({
       provider: "phantom",
-      admin_model: "codex",
-      message: "/run Write-Output admin-route-shell-ok",
+      admin_model: "private_brain",
+      message: "/run\tWrite-Output admin-route-shell-ok",
       request_id: "admin-route-codex-test",
     }),
   });
@@ -182,7 +182,7 @@ try {
     },
     payload: JSON.stringify({
       provider: "phantom",
-      admin_model: "codex",
+      admin_model: "private_brain",
       message: `/run Set-Content -Path "${clientProofPath}" -Value "client executed"`,
     }),
   });

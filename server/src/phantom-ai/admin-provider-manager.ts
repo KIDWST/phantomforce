@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { promisify } from "node:util";
 
 export type AdminProviderId = "codex_cli" | "claude_cli" | "openrouter_glm" | "local_ollama";
+export type PublicAdminProviderId = "private" | "claude" | "openrouter" | "local";
 export type AdminProviderAvailability = "unknown" | "online" | "offline" | "checking";
 export type AdminProviderQuota = "unknown" | "available" | "exhausted";
 
@@ -17,6 +18,23 @@ export type AdminProviderState = {
   last_success_at: string | null;
   last_failure_at: string | null;
   consecutive_failures: number;
+  detail: string;
+};
+
+export type PublicAdminProviderState = Pick<
+  AdminProviderState,
+  | "status"
+  | "preferred"
+  | "availability"
+  | "quota"
+  | "latency_ms"
+  | "last_health_at"
+  | "last_success_at"
+  | "last_failure_at"
+  | "consecutive_failures"
+> & {
+  display_id: PublicAdminProviderId;
+  display_name: string;
   detail: string;
 };
 
@@ -57,6 +75,38 @@ function safeDetail(value: unknown) {
 
 function quotaFromFailure(detail: string): AdminProviderQuota {
   return /usage limit|quota|insufficient credits|rate limit|too many requests|429/i.test(detail) ? "exhausted" : "unknown";
+}
+
+function publicProviderMeta(providerId: AdminProviderId): { display_id: PublicAdminProviderId; display_name: string } {
+  if (providerId === "codex_cli") return { display_id: "private", display_name: "Private" };
+  if (providerId === "claude_cli") return { display_id: "claude", display_name: "Claude" };
+  if (providerId === "openrouter_glm") return { display_id: "openrouter", display_name: "OpenRouter" };
+  return { display_id: "local", display_name: "Local" };
+}
+
+function publicProviderDetail(state: AdminProviderState) {
+  if (state.status === "checking") return "Checking availability.";
+  if (state.status === "online") return "Ready.";
+  if (state.quota === "exhausted") return "Quota cooldown active.";
+  if (state.status === "offline") return "Unavailable; Phantom will use another allowed route.";
+  return "Waiting for first health check.";
+}
+
+function publicProviderState(providerId: AdminProviderId): PublicAdminProviderState {
+  const state = registry.get(providerId)!;
+  return {
+    ...publicProviderMeta(providerId),
+    status: state.status,
+    preferred: state.preferred,
+    availability: state.availability,
+    quota: state.quota,
+    latency_ms: state.latency_ms,
+    last_health_at: state.last_health_at,
+    last_success_at: state.last_success_at,
+    last_failure_at: state.last_failure_at,
+    consecutive_failures: state.consecutive_failures,
+    detail: publicProviderDetail(state),
+  };
 }
 
 function setPreferred(providerId: AdminProviderId) {
@@ -204,6 +254,16 @@ export function getAdminProviderManagerStatus() {
     health_interval_ms: providerHealthIntervalMs(),
     background_monitor_running: monitorTimer !== null,
     providers: PROVIDER_PRIORITY.map((providerId) => ({ ...registry.get(providerId)! })),
+  };
+}
+
+export function getPublicAdminProviderManagerStatus() {
+  return {
+    active_provider_display_id: publicProviderMeta(activeProviderId).display_id,
+    preferred_provider_display_id: publicProviderMeta(PROVIDER_PRIORITY.find((id) => registry.get(id)?.preferred) ?? PROVIDER_PRIORITY[0]).display_id,
+    health_interval_ms: providerHealthIntervalMs(),
+    background_monitor_running: monitorTimer !== null,
+    providers: PROVIDER_PRIORITY.map((providerId) => publicProviderState(providerId)),
   };
 }
 

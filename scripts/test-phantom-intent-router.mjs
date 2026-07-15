@@ -64,7 +64,7 @@ const cases = {
     "add a task: update the profile card",
     "make this a todo",
     "turn this into a task",
-    "assign Codex a task to inspect the navbar",
+    "assign Phantom a task to inspect the navbar",
     "track this as high priority",
     "put this on my task list",
   ],
@@ -250,7 +250,7 @@ const instantQuestion = await handleSmartCommand("what's your favorite food?");
 assert.equal(instantQuestion.say, "I'd pick tacos.");
 assert.equal(capturedChatBody.route_tier, "instant");
 assert.equal(capturedChatBody.requested_model, "gpt-5.5-instant");
-assert.deepEqual(capturedChatBody.allowed_providers, ["codex_cli"]);
+assert.deepEqual(capturedChatBody.allowed_providers, ["private_brain"]);
 assert.equal(capturedChatBody.allow_provider_fallback, false);
 assert.ok(capturedChatBody.max_provider_ms <= 5000, "instant questions should cap provider time tightly");
 globalThis.fetch = originalFetch;
