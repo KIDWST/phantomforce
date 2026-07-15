@@ -12816,3 +12816,97 @@ body .phantom .workspace-page :where(
   .dc-mini-controls button:hover:not(:disabled) { transition: none; transform: none; }
   .console-rail > *:hover { transform: none; }
 }
+
+/* ==========================================================================
+   NAV AUTHORITY — keep the admin shell from falling back to the old phone app.
+   Earlier blocks still describe the retired bottom dock for older surfaces; this
+   final block is intentionally last so phone/tablet/half-screen all use the
+   same expandable sidebar, with utility items pinned at the bottom.
+   ========================================================================== */
+@media (max-width: 900px) {
+  .phantom {
+    display: block;
+    min-height: 100dvh;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .mobile-admin-homebar {
+    display: flex !important;
+    padding-left: 78px !important;
+  }
+
+  .mobile-bottom-nav {
+    display: none !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+  }
+
+  .sidebar {
+    display: flex !important;
+    position: fixed !important;
+    top: calc(env(safe-area-inset-top, 0px) + 9px) !important;
+    left: 12px !important;
+    z-index: 130 !important;
+    width: 54px !important;
+    max-width: calc(100vw - 24px) !important;
+    height: 54px !important;
+    max-height: 54px !important;
+    padding: 7px !important;
+    overflow: hidden !important;
+  }
+
+  .sidebar:not(.is-expanded) .side-brand,
+  .sidebar:not(.is-expanded) .side-nav,
+  .sidebar:not(.is-expanded) .side-nav-bottom,
+  .sidebar:not(.is-expanded) .side-plan {
+    display: none !important;
+  }
+
+  .sidebar.is-expanded {
+    width: min(304px, calc(100vw - 24px)) !important;
+    height: calc(100dvh - env(safe-area-inset-top, 0px) - 22px) !important;
+    max-height: calc(100dvh - env(safe-area-inset-top, 0px) - 22px) !important;
+    padding: 12px !important;
+    gap: 12px !important;
+    overflow-y: auto !important;
+  }
+
+  .sidebar.is-expanded .side-brand {
+    display: flex !important;
+    flex: 0 0 auto;
+  }
+
+  .sidebar.is-expanded .side-nav-main {
+    display: flex !important;
+    flex: 1 1 auto !important;
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  .sidebar.is-expanded .side-nav-bottom {
+    display: flex !important;
+    flex: 0 0 auto !important;
+    margin-top: auto !important;
+    padding-top: 10px !important;
+    border-top: 1px solid var(--line-strong) !important;
+  }
+
+  .sidebar.is-expanded .nav-item {
+    display: flex !important;
+    width: 100%;
+  }
+
+  .sidebar.is-expanded .nav-item span {
+    display: inline !important;
+  }
+
+  .app-main {
+    padding-bottom: calc(22px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  .console,
+  .console-workspace,
+  .workspace-page-body {
+    padding-bottom: calc(28px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+}
