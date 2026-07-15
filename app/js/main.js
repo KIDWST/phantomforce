@@ -3082,7 +3082,7 @@ function renderWorkspacePage(id, pushHash = true) {
   const body = $("[data-workspace-page-body]", root);
   const rerender = () => {
     if (def.custom) def.render(body);
-    else { def.render(body, rerender); if (key === "phantom") wirePhantomConsole(body); }
+    else { def.render(body, rerender, mediaOpts()); if (key === "phantom") wirePhantomConsole(body); }
     mountPageWorkers(root, mediaOpts());
   };
   rerender();
@@ -3129,7 +3129,7 @@ function openWorkspace(id, pushHash = true) {
   const body = $("[data-overlay-body]", overlayRoot);
   const rerender = () => {
     if (def.custom) def.render(body);
-    else { def.render(body, rerender); if (key === "phantom") wirePhantomConsole(body); }
+    else { def.render(body, rerender, mediaOpts()); if (key === "phantom") wirePhantomConsole(body); }
     mountPageWorkers(overlayRoot, mediaOpts());
   };
   rerender();

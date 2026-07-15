@@ -11996,6 +11996,21 @@ body .phantom .pc .pc-caption {
   .page-worker-gate b { white-space: normal; }
 }
 
+/* Compact per-client AI task box — a single lane card is far narrower than
+   the full-width page-worker sections above, so this reuses their form/
+   output styling but collapses the two-column layout to one. */
+.client-ai-task {
+  grid-template-columns: 1fr;
+  gap: 8px;
+  margin: 8px 0 0;
+  padding: 10px;
+  border-radius: 14px;
+}
+.client-ai-task .page-worker-copy span { max-width: none; font-size: 11px; }
+.client-ai-task .page-worker-form textarea { min-height: 40px; padding: 10px 78px 10px 12px; font-size: 12px; }
+.client-ai-task .page-worker-form button { right: 6px; bottom: 6px; min-height: 28px; padding: 0 12px; font-size: 10px; }
+.client-ai-task .page-worker-output { padding: 9px 10px; font-size: 12px; }
+
 /* ======================= Website + store creator flow ======================= */
 .ss-modebar {
   display: inline-flex; align-items: center; gap: 4px; padding: 4px;

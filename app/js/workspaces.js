@@ -24,6 +24,8 @@ import {
   updateCrmLead as updateServerCrmLead,
 } from "./crmpipeline.js?v=phantom-live-20260714-258";
 import { createCrmProspectBuildout, isCrmProspectBuildout } from "./crmprospects.js?v=phantom-live-20260714-258";
+import { classifyClientTaskIntent, CLIENT_TASK_INTENTS, SUPPORTED_CLIENT_TASK_INTENTS, buildClientMediaAssetDraft, buildClientApprovalDraft } from "./client-tasks.js?v=phantom-live-20260714-258";
+import { registerContentAsset } from "./contenthub.js?v=phantom-live-20260714-258";
 import {
   createProposal as createServerProposal,
   deleteProposal as deleteServerProposal,
@@ -64,6 +66,14 @@ const LOCAL_CORE_WORKERS = [
 const MEMORY_DAY = 86400000;
 const crmRuntime = { state: "idle", tenant: "", leads: [], canWrite: false, error: "", writeError: "", refreshSignal: "" };
 const crmPromptUi = { busy: false, message: "", status: "" };
+/* Per-client AI task box state, keyed by lead id — each client card gets its
+   own open/busy/result state so asking Phantom to do something for one
+   client never clobbers another card's in-flight task or last result. */
+const clientTaskUi = new Map();
+function clientTaskState(leadId) {
+  if (!clientTaskUi.has(leadId)) clientTaskUi.set(leadId, { open: false, busy: false, message: "", status: "" });
+  return clientTaskUi.get(leadId);
+}
 const proposalRuntime = { state: "idle", tenant: "", proposals: [], canWrite: false, error: "" };
 const approvalRuntime = { state: "idle", tenant: "", approvals: [], canWrite: false, canDecide: false, error: "" };
 
@@ -317,8 +327,97 @@ async function copyText(el, text) {
   setTimeout(() => { el.textContent = prev; }, 1400);
 }
 
+/* -------- Clients AI task box: per-client natural-language actions --------
+   Distinct from the page-level "find and add CRM prospects" prompt above —
+   this one is scoped to a single existing client card and maps the request
+   to a real backend action (Media Lab job, Content Hub publish) instead of
+   leaving it as a dead text box. See client-tasks.js for the intent
+   classifier and the exact contract each intent hands off to. */
+function clientAiTaskHtml(lead) {
+  const ui = clientTaskState(lead.id);
+  if (!ui.open) return "";
+  const hint = SUPPORTED_CLIENT_TASK_INTENTS.map((item) => `“${item.example}”`).join(" · ");
+  return `
+    <section class="page-worker client-ai-task" data-client-ai-task data-id="${lead.id}">
+      <div class="page-worker-copy">
+        <span>Ask for this client only. Supported today: ${esc(hint)}. Media requests queue a Media Lab job; publish/schedule requests go to Approvals — nothing ever ships without you.</span>
+      </div>
+      <form class="page-worker-form" data-client-ai-form data-id="${lead.id}">
+        <textarea data-client-ai-input rows="1" placeholder="Example: make this client a promo reel for Instagram" aria-label="Ask Phantom to do something for ${esc(lead.name)}"></textarea>
+        <button type="submit" ${ui.busy ? "disabled" : ""}>${ui.busy ? "Working" : "Run"}</button>
+      </form>
+      ${ui.message ? `<div class="page-worker-output ${esc(ui.status || "")}" data-client-ai-result><p>${esc(ui.message)}</p></div>` : ""}
+    </section>`;
+}
+
+async function runClientTask(lead, rawPrompt, rerender, opts = {}) {
+  const ui = clientTaskState(lead.id);
+  const analysis = classifyClientTaskIntent(rawPrompt);
+  if (analysis.intent === CLIENT_TASK_INTENTS.EMPTY) {
+    ui.status = "is-error";
+    ui.message = "Tell me what to do for this client — a media request or a publish/schedule request.";
+    ui.busy = false;
+    rerender();
+    return;
+  }
+  ui.busy = true;
+  ui.status = "is-thinking";
+  ui.message = "Phantom is routing this to the right module.";
+  rerender();
+  try {
+    if (analysis.intent === CLIENT_TASK_INTENTS.MEDIA_JOB) {
+      const draft = buildClientMediaAssetDraft(lead, analysis);
+      const { asset } = registerContentAsset(draft, { skipSync: true });
+      ui.status = "is-done";
+      ui.message = `Queued "${asset.title}" in the Content Hub asset library (tagged for Media Lab, no fake output generated). Open Media Lab from the sidebar to actually generate it.`;
+      pushActivity("Clients AI", `queued a Media Lab job for ${lead.company || lead.name}: ${analysis.prompt}`, lead.ws);
+      store.save();
+      ui.busy = false;
+      rerender();
+      opts.openWorkspace?.("media");
+      opts.notify?.("Clients AI", `Queued "${asset.title}" for ${lead.company || lead.name} — open Media Lab to generate it.`);
+    } else if (analysis.intent === CLIENT_TASK_INTENTS.CONTENT_PUBLISH) {
+      const draft = buildClientApprovalDraft(lead, analysis);
+      const result = await queueWorkspaceApproval(draft, rerender, {
+        agent: "Clients AI",
+        message: `queued a publish approval for ${lead.company || lead.name}: ${analysis.prompt}`,
+      });
+      ui.status = "is-done";
+      ui.message = result.serverBacked
+        ? "Added to the server Approval Queue. Nothing publishes until you approve it there."
+        : "Added to the local Approval Queue. Nothing publishes until you approve it there.";
+      ui.busy = false;
+      rerender();
+    } else {
+      ui.status = "is-error";
+      ui.message = `I can't route that yet. Today this box only handles: ${SUPPORTED_CLIENT_TASK_INTENTS.map((item) => item.label).join(" and ")}. Try naming a format (reel, video, photo) or a publish/schedule verb.`;
+      ui.busy = false;
+      rerender();
+    }
+  } catch (error) {
+    ui.status = "is-error";
+    ui.message = `That didn't complete: ${error?.message || "unknown error"}`;
+    ui.busy = false;
+    rerender();
+  }
+}
+
+function wireClientAiTasks(el, rerender, opts) {
+  el.querySelectorAll("[data-client-ai-form]").forEach((form) => {
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const id = form.dataset.id;
+      const lead = visibleCrmLeads(usingServerCrm()).find((l) => l.id === id) || store.state.leads.find((l) => l.id === id);
+      const input = form.querySelector("[data-client-ai-input]");
+      const rawPrompt = String(input?.value || "").trim();
+      if (!lead) return;
+      await runClientTask(lead, rawPrompt, rerender, opts);
+    });
+  });
+}
+
 /* =============================== LEADS =============================== */
-function renderLeads(el, rerender) {
+function renderLeads(el, rerender, opts = {}) {
   ensureCrmRuntime(rerender);
   const serverBacked = usingServerCrm();
   const leads = visibleCrmLeads(serverBacked);
@@ -369,12 +468,15 @@ function renderLeads(el, rerender) {
                 ${l.status === "proposal" ? `<button class="btn btn-good" data-act="won" data-id="${l.id}">Mark won</button><button class="btn btn-quiet" data-act="lost" data-id="${l.id}">Mark lost</button>` : ""}
                 ${l.status === "won" ? `<button class="btn" data-act="review" data-id="${l.id}">Prepare review request</button>` : ""}
                 ${l.status === "lost" ? `<button class="btn btn-quiet" data-act="revive" data-id="${l.id}">Re-open</button>` : ""}
+                <button class="btn btn-quiet" data-act="ai-toggle" data-id="${l.id}">${clientTaskState(l.id).open ? "Hide Phantom task" : "Ask Phantom"}</button>
               </div>
+              ${clientAiTaskHtml(l)}
             </article>`).join("") || `<div class="lane-empty">—</div>`}
         </div>`;
       }).join("")}
     </div>`;
   const find = (id) => (serverBacked ? visibleCrmLeads(true) : store.state.leads).find((l) => l.id === id);
+  wireClientAiTasks(el, rerender, opts);
   const promptForm = el.querySelector("[data-client-crm-form]");
   promptForm?.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -467,6 +569,11 @@ function renderLeads(el, rerender) {
     return true;
   };
   bindActions(el, {
+    "ai-toggle": (id) => {
+      const ui = clientTaskState(id);
+      ui.open = !ui.open;
+      rerender();
+    },
     add: async () => {
       const name = prompt("Lead name (person or business):");
       if (!name) return;
@@ -3222,6 +3329,7 @@ function applyApprovalSideEffects(a, approved, opts = {}) {
     if (a.type === "publish-page") { const s = store.state.sites.find((x) => x.id === a.ref); if (s) s.status = "approved-to-publish"; }
     if (a.type === "media-generation") { const m = store.state.media.find((x) => x.id === a.ref); if (m) m.status = "generation-approved"; }
     if (a.type === "booking") { const b = store.state.bookings.find((x) => x.id === a.ref); if (b) b.status = "approved"; }
+    if (a.type === "publish-client-content") { const l = store.state.leads.find((x) => x.id === a.ref); if (l) l.next = "Publish approved — ready to post from Content Hub"; }
     if (a.type === "automation") {
       const agent = store.state.agents.find((x) => x.id === a.ref);
       if (agent) { agent.status = "active"; agent.updatedAt = new Date().toISOString(); }
