@@ -3,6 +3,9 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 
 import type { AccessSession } from "../src/access/session.js";
+import { persistApprovalQueuePreview } from "../src/phantom-ai/approval-queue.js";
+import { previewModelRouterFoundation } from "../src/phantom-ai/model-router.js";
+import type { ModelRouterRequest } from "../src/phantom-ai/types.js";
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(`ASSERTION FAILED: ${message}`);
@@ -11,7 +14,13 @@ function assert(condition: unknown, message: string): asserts condition {
 const root = await mkdtemp(join(tmpdir(), "phantom-vacation-"));
 process.env.PHANTOMFORCE_VACATION_MODE_PATH = join(root, "vacation.json");
 process.env.PHANTOMFORCE_HERMES_LEDGER_PATH = join(root, "ledger.jsonl");
-process.env.PHANTOMFORCE_APPROVAL_QUEUE_PATH = join(root, "approvals.jsonl");
+// NOTE: the approval-queue reader/writer (server/src/phantom-ai/approval-queue.ts)
+// actually keys off PHANTOM_HERMES_APPROVAL_QUEUE_PATH / _TRANSITIONS_PATH, not a
+// PHANTOMFORCE_-prefixed name — without these, /api/vacation-mode/approvals/*
+// routes silently fall back to this repo's real default queue file instead of
+// this test's temp dir.
+process.env.PHANTOM_HERMES_APPROVAL_QUEUE_PATH = join(root, "approvals.jsonl");
+process.env.PHANTOM_HERMES_APPROVAL_TRANSITIONS_PATH = join(root, "approval-transitions.jsonl");
 process.env.PHANTOMFORCE_OWNER_OPERATOR_CREDITS = "12";
 process.env.PHANTOMFORCE_HUMAN_OPERATOR_ENABLED = "true";
 process.env.NODE_ENV = "development";
@@ -20,6 +29,9 @@ process.env.PHANTOMFORCE_SERVER_LOGGER = "false";
 process.env.PHANTOMFORCE_AUTH_PROVIDER = "demo";
 process.env.PHANTOMFORCE_ENABLE_DEMO_AUTH = "true";
 process.env.PHANTOMFORCE_SKIP_SERVER_DOTENV = "true";
+// Demo client sessions have no real subscription; grant write so the
+// cross-tenant approval-decision test below exercises POST, not the paywall.
+process.env.PHANTOM_FREE_WRITE = "true";
 
 const session: AccessSession = { id: "owner-admin", label: "Owner", role: "admin", canManageAccess: true };
 
@@ -68,6 +80,57 @@ try {
   const clientBody = clientRoute.json() as { operatorWallet: { included: number }; readiness: Array<{ id: string; detail: string }> };
   assert(clientBody.operatorWallet.included === 0, "Client credits should be isolated from owner credits.");
   assert(clientBody.readiness.some((item) => item.id === "workspace" && item.detail.includes("isolated")), "Client workspace should report isolation.");
+
+  /* Regression for a cross-tenant IDOR: the shared Hermes approval queue file has
+     no per-tenant partition, so /api/vacation-mode/approvals/:id/decision must
+     itself refuse to transition another tenant's queued approval. */
+  const otherClientToken = await login("client-chicagoshots");
+  const fabricatedRequest: ModelRouterRequest = {
+    tenant_id: "client-chicagoshots",
+    business_name: "ChicagoShots",
+    actor_user_id: "client-chicagoshots",
+    actor_role: "business_owner",
+    request_id: "vacation-isolation-test-001",
+    task_type: "delete_client_record",
+    sensitivity_level: "high",
+    user_request: "Delete a client record.",
+    business_summary: "Cross-tenant vacation-mode approval isolation proof.",
+    module_data: [],
+  };
+  const fabricatedPreview = previewModelRouterFoundation(fabricatedRequest, { env: { PHANTOM_MODEL_ROUTER_MODE: "mock" } });
+  const fabricatedWrite = await persistApprovalQueuePreview(fabricatedPreview.approval_request, {
+    queuePath: process.env.PHANTOM_HERMES_APPROVAL_QUEUE_PATH,
+  });
+  const otherTenantQueueId = fabricatedWrite.record?.queue_id;
+  assert(Boolean(otherTenantQueueId), "Fabricated ChicagoShots approval should get a queue id.");
+
+  const crossTenantDecision = await app.inject({
+    method: "POST",
+    url: `/api/vacation-mode/approvals/${otherTenantQueueId}/decision`,
+    headers: { Authorization: `Bearer ${clientToken}` },
+    payload: { decision: "approve" },
+  });
+  assert(
+    crossTenantDecision.statusCode === 404,
+    `A client of one org must not be able to decide another org's queued approval (got ${crossTenantDecision.statusCode}).`,
+  );
+
+  const sameTenantDecision = await app.inject({
+    method: "POST",
+    url: `/api/vacation-mode/approvals/${otherTenantQueueId}/decision`,
+    headers: { Authorization: `Bearer ${otherClientToken}` },
+    payload: { decision: "approve" },
+  });
+  assert(sameTenantDecision.statusCode === 200, "The owning tenant should still be able to decide its own queued approval.");
+
+  const ownerDecision = await app.inject({
+    method: "POST",
+    url: `/api/vacation-mode/approvals/${otherTenantQueueId}/decision`,
+    headers: { Authorization: `Bearer ${ownerToken}` },
+    payload: { decision: "snooze" },
+  });
+  assert(ownerDecision.statusCode === 200, "The platform owner must retain cross-tenant review access.");
+
   await app.close();
 
   console.log(JSON.stringify({

@@ -464,6 +464,12 @@ export async function appendApprovalQueueTransition(options: {
   note?: string;
   queuePath?: string;
   transitionsPath?: string;
+  /* Callers outside the platform-admin approval queue (which is meant to see
+     every tenant) must pass the caller's own tenant id here. Without it, any
+     authenticated session could transition another tenant's approval record
+     just by guessing/enumerating its queue_id — the queue file itself has no
+     per-tenant partition, so this check is the only tenant boundary. */
+  expectedTenantId?: string;
 }): Promise<ApprovalQueueTransitionWriteResult | null> {
   const queue = await readApprovalQueueWithTransitions({
     queuePath: options.queuePath,
@@ -473,6 +479,10 @@ export async function appendApprovalQueueTransition(options: {
   const existingRecord = queue.records.find((record) => record.queue_id === options.queueId);
 
   if (!existingRecord) {
+    return null;
+  }
+
+  if (options.expectedTenantId && existingRecord.approval.tenant_context.tenant_id !== options.expectedTenantId) {
     return null;
   }
 

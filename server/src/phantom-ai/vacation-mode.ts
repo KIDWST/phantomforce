@@ -545,7 +545,16 @@ export async function decideVacationApproval(session: AccessSession, approvalId:
     return { approval: local, execution_disabled: true };
   }
   const statusMap: Record<VacationApprovalDecision, ApprovalQueueTransitionStatus> = { approve: "reviewed", reject: "dismissed", snooze: "needs_changes" };
-  const transition = await appendApprovalQueueTransition({ queueId: approvalId, toStatus: statusMap[decision], requestedBy: { actor_user_id: session.id, actor_role: session.canManageAccess ? "platform_admin" : "business_owner" }, note: text(note || `Away Mode ${decision}. No automatic execution.`, 500) });
+  const transition = await appendApprovalQueueTransition({
+    queueId: approvalId,
+    toStatus: statusMap[decision],
+    requestedBy: { actor_user_id: session.id, actor_role: session.canManageAccess ? "platform_admin" : "business_owner" },
+    note: text(note || `Away Mode ${decision}. No automatic execution.`, 500),
+    /* Non-admin sessions may only decide on their own workspace's queued approvals —
+       the shared queue file has no tenant partition, so without this a member of
+       any org could transition another org's approval by supplying its queue_id. */
+    expectedTenantId: session.canManageAccess ? undefined : state.workspaceId,
+  });
   return transition ? { transition, execution_disabled: true } : null;
 }
 
