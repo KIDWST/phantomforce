@@ -60,11 +60,19 @@ assert.match(mediaSrc, /const isEditorTypingTarget = \(target\)[\s\S]*input, tex
 assert.match(mediaSrc, /const undoPhotoEdit = \(\) =>[\s\S]*restoreEdit\(mlEditHistory\.pop\(\)\)/u, "Media Lab must expose undo through the shared editor shortcut path.");
 assert.match(mediaSrc, /const redoPhotoEdit = \(\) =>[\s\S]*restoreEdit\(mlEditFuture\.pop\(\)\)/u, "Media Lab must expose redo through the shared editor shortcut path.");
 assert.match(mediaSrc, /const duplicateActiveLayer = \(\) =>[\s\S]*duplicateLayer\(mlComposition,\s*active\.id\)/u, "Media Lab must expose layer duplication through the shared shortcut path.");
+assert.match(mediaSrc, /let mlLayerClipboard = \[\]/u, "Media Lab must keep an editor layer clipboard.");
+assert.match(mediaSrc, /const copySelectedEditableLayers = \(\) =>[\s\S]*selectedLayers\(mlComposition\)\.filter\(\(layer\) => layer\.id !== "base"[\s\S]*mlLayerClipboard = targets\.map/u, "Media Lab must support copying selected non-base layers.");
+assert.match(mediaSrc, /const pasteLayerClipboard = \(\) =>[\s\S]*rememberEdit\(\)[\s\S]*mlComposition\.layers\.push\(copy\)[\s\S]*mlComposition\.selectedIds = pastedIds/u, "Media Lab must support pasting copied layers back into the editable stack.");
+assert.match(mediaSrc, /cloneImageEditState\(item\.effect,\s*\{ includeMask: false \}\)/u, "Pasted Media Lab image layers must keep their per-layer edit effects.");
 assert.match(mediaSrc, /const deleteSelectedEditableLayers = \(\) =>[\s\S]*removeSelectedLayers\(mlComposition\)/u, "Media Lab must expose selected-layer deletion through the shared shortcut path.");
 assert.match(mediaSrc, /const nudgeSelectedLayers = \(dx,\s*dy\) =>[\s\S]*layer\.x = Math\.max\(0,\s*Math\.min\(1[\s\S]*layer\.y = Math\.max\(0,\s*Math\.min\(1/u, "Media Lab must support arrow-key layer nudging with canvas-safe bounds.");
 assert.match(mediaSrc, /document\.addEventListener\("keydown",\s*mlEditKeyHandler\)/u, "Media Lab must wire the photo editor keyboard handler.");
+assert.match(mediaSrc, /key === "c"\)[\s\S]*copySelectedEditableLayers\(\)/u, "Ctrl/Cmd+C must copy selected layers.");
+assert.match(mediaSrc, /key === "v"\)[\s\S]*pasteLayerClipboard\(\)/u, "Ctrl/Cmd+V must paste copied layers.");
 assert.match(mediaSrc, /key === "arrowleft"[\s\S]*nudgeSelectedLayers\(event\.shiftKey \? -0\.025 : -0\.005/u, "Arrow keys must nudge selected layers, with Shift for larger moves.");
 assert.match(mediaSrc, /data-ml-layer-lock="\$\{esc\(layer\.id\)\}"/u, "Media Lab layer rows must expose lock/unlock controls.");
+assert.match(mediaSrc, /data-ml-layer-copy/u, "Media Lab layer actions must expose Copy.");
+assert.match(mediaSrc, /data-ml-layer-paste/u, "Media Lab layer actions must expose Paste.");
 assert.match(mediaSrc, /layer\.locked \? "is-locked" : ""/u, "Locked Media Lab layers must render a visible locked state.");
 assert.match(mediaSrc, /layer\.locked \|\| realIndex <= 0 \? "disabled"/u, "Locked layers must not be movable down.");
 assert.match(mediaSrc, /layer\.locked \|\| realIndex >= mlComposition\.layers\.length - 1 \? "disabled"/u, "Locked layers must not be movable up.");
@@ -96,6 +104,7 @@ assert.match(cssSrc, /\.ml-layer-row\[draggable="true"\]/u, "Draggable layer row
 assert.match(cssSrc, /\.ml-layer-row\.is-drop-target/u, "Layer drag/drop must show a visible drop target");
 assert.match(cssSrc, /\.ml-layer-row\.is-locked\s*\{/u, "Locked layer rows need a visible locked state");
 assert.match(cssSrc, /\.ml-layer-transform-actions\s*\{/u, "Layer transform actions need compact editor styling");
+assert.match(cssSrc, /\.ml-layer-actions\s*\{[\s\S]*grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(76px,\s*1fr\)\)/u, "Layer action controls must wrap cleanly as editor actions grow.");
 assert.match(cssSrc, /\.ml-layer-text-grid\s*\{/u, "Text layer controls need a compact inspector grid");
 assert.match(cssSrc, /\.ml-layer-toggle-row button\.is-on/u, "Text layer toggles need a visible enabled state");
 assert.match(cssSrc, /\.ml-grid-lib\s*\{[\s\S]*grid-template-columns:\s*repeat\(auto-fill,\s*minmax\(170px,\s*220px\)\)/u, "Media Pool must use capped thumbnail columns instead of stretching a few assets across the screen");

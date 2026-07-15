@@ -13,6 +13,9 @@ const gameSlugs = ["neon-drift", "signal-match", "focus-stack", "word-weld", "re
 const games = gameSlugs.map((name) => read(`../app/games/${name}.html`));
 const neonDrift = games[gameSlugs.indexOf("neon-drift")];
 const phantomRumble = read("../app/games/phantom-rumble.html");
+const cubeTown = read("../app/games/cubetown/cubetown.js");
+const cubeTownIndex = read("../app/games/cubetown/index.html");
+const flagshipCatalog = read("../server/src/phantom-ai/phantomplay-flagship.ts");
 const appFiles = [index, main, module, v2Module, ...games];
 
 assert.match(main, /id:\s*"phantomplay"[\s\S]*label:\s*"PhantomPlay"/u, "PhantomPlay must be in the native navigation.");
@@ -95,6 +98,13 @@ assert.match(css, /workspace-page:has\(\.pp-player\)[^{]*\.workspace-page-body\{
 assert.match(css, /@media\(max-width:767px\)[\s\S]*\.pp-player\{[\s\S]*grid-template-rows:auto minmax\(0,1fr\)/u, "Phone player chrome must leave the game as the main row.");
 assert.match(css, /@media\(max-width:767px\)[\s\S]*\.pp-player>footer\{[\s\S]*display:none/u, "Phone player sessions must hide the footer while a game is open.");
 assert.match(staticServer, /urlPath\.startsWith\("\/api\/phantomplay"\)/u, "The live admin server must proxy PhantomPlay API routes.");
+assert.match(cubeTown, /const GRID = 17/u, "CubeTown must stay expanded beyond the original small grid.");
+assert.match(cubeTown, /const NPC_DEFS = \[[\s\S]*Ori the Archivist/u, "CubeTown must include the larger resident cast.");
+assert.match(cubeTown, /const TRIAL_DEFS = \[[\s\S]*Spire Heart Trial/u, "CubeTown must include shrine trials for the adventure playthrough.");
+assert.match(cubeTown, /function openGate\(\)/u, "CubeTown must include the Prism Gate finale.");
+assert.match(cubeTownIndex, /data-ct-open="questlog"/u, "CubeTown must expose a Quest Log for the larger playthrough.");
+assert.match(cubeTownIndex, /data-ct-panel="trial"/u, "CubeTown must expose a playable shrine trial panel.");
+assert.match(flagshipCatalog, /id:\s*"cubetown"[\s\S]*version:\s*"1\.1\.0"/u, "CubeTown catalog metadata must advertise the expanded version.");
 
 const buildIds = new Set(appFiles.flatMap((source) => source.match(/phantom-live-\d{8}-\d+/gu) || []));
 assert.equal(buildIds.size, 1, `The PhantomPlay module graph must use one build ID, found: ${[...buildIds].join(", ")}`);

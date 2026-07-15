@@ -1,5 +1,5 @@
 'use strict';
-/* CubeTown — a cozy geometric-block life-sim/building game for PhantomPlay.
+/* CubeTown — a cozy geometric-block adventure/building game for PhantomPlay.
  * Original visual identity: "Lumen Blocks" — warm coral/plum/mint palette,
  * soft rounded isometric blocks. Not Minecraft, not Sims: single-tile
  * blocks, no crafting-grid, no simulated needs beyond one gentle "Spark"
@@ -153,7 +153,7 @@
 
   // ---------------------------------------------------------------------
   // Deterministic RNG + terrain generation (seed lives in save data, the
-  // 81-tile terrain grid itself never needs to be persisted).
+  // larger terrain grid itself never needs to be persisted).
   // ---------------------------------------------------------------------
   function mulberry32(seed) {
     let a = seed >>> 0;

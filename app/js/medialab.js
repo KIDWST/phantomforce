@@ -3363,6 +3363,39 @@ function renderEdit(body, cfg, opts, root) {
     renderMediaStudio(root, opts);
     return true;
   };
+  const copySelectedEditableLayers = () => {
+    const targets = selectedLayers(mlComposition).filter((layer) => layer.id !== "base");
+    if (!targets.length) return false;
+    mlLayerClipboard = targets.map((layer) => ({
+      layer: { ...layer },
+      effect: mlLayerEffects[layer.id] ? cloneImageEditState(mlLayerEffects[layer.id], { includeMask: false }) : null,
+    }));
+    updateEditHistoryControls(body);
+    return true;
+  };
+  const pasteLayerClipboard = () => {
+    if (!mlLayerClipboard.length) return false;
+    rememberEdit();
+    const stamp = Date.now().toString(36);
+    const pastedIds = [];
+    mlLayerClipboard.forEach((item, index) => {
+      const source = item.layer || {};
+      const copy = {
+        ...source,
+        id: `${source.type || "layer"}-paste-${stamp}-${index}`,
+        name: `${source.name || layerKindLabel(source)} copy`,
+        locked: false,
+        x: Math.max(0, Math.min(1, (Number(source.x) || 0.5) + 0.035 * (index + 1))),
+        y: Math.max(0, Math.min(1, (Number(source.y) || 0.5) + 0.035 * (index + 1))),
+      };
+      mlComposition.layers.push(copy);
+      if (item.effect) mlLayerEffects[copy.id] = cloneImageEditState(item.effect, { includeMask: false });
+      pastedIds.push(copy.id);
+    });
+    mlComposition.selectedIds = pastedIds;
+    renderMediaStudio(root, opts);
+    return true;
+  };
   const deleteSelectedEditableLayers = () => {
     const editable = selectedLayers(mlComposition).some((layer) => layer.id !== "base" && !layer.locked);
     if (!editable) return false;
@@ -3459,6 +3492,8 @@ function renderEdit(body, cfg, opts, root) {
     let handled = false;
     if ((event.ctrlKey || event.metaKey) && !event.shiftKey && key === "z") handled = undoPhotoEdit();
     else if (((event.ctrlKey || event.metaKey) && key === "y") || ((event.ctrlKey || event.metaKey) && event.shiftKey && key === "z")) handled = redoPhotoEdit();
+    else if ((event.ctrlKey || event.metaKey) && key === "c") handled = copySelectedEditableLayers();
+    else if ((event.ctrlKey || event.metaKey) && key === "v") handled = pasteLayerClipboard();
     else if ((event.ctrlKey || event.metaKey) && key === "d") handled = duplicateActiveLayer();
     else if (key === "backspace" || key === "delete") handled = deleteSelectedEditableLayers();
     else if (key === "arrowleft") handled = nudgeSelectedLayers(event.shiftKey ? -0.025 : -0.005, 0);
@@ -3708,6 +3743,12 @@ function renderEdit(body, cfg, opts, root) {
     rememberEdit();
     addTextLayer(mlComposition, "Your headline");
     renderMediaStudio(root, opts);
+  });
+  body.querySelector("[data-ml-layer-copy]")?.addEventListener("click", () => {
+    if (copySelectedEditableLayers()) renderMediaStudio(root, opts);
+  });
+  body.querySelector("[data-ml-layer-paste]")?.addEventListener("click", () => {
+    pasteLayerClipboard();
   });
   body.querySelector("[data-ml-layer-duplicate]")?.addEventListener("click", () => {
     duplicateActiveLayer();
