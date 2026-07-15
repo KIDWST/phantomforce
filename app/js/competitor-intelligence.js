@@ -1,4 +1,4 @@
-import { currentTenantId, session } from "./store.js?v=phantom-live-20260715-275";
+import { currentTenantId, session } from "./store.js?v=phantom-live-20260715-276";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 const TABS = [["radar", "Radar"], ["competitors", "Competitors"], ["sources", "Sources & settings"]];
@@ -69,6 +69,10 @@ function hashValue(value) {
 function momentumLabel(value) {
   const labels = { gaining: "UP", vulnerable: "DOWN", mixed: "MIXED", quiet: "QUIET", unwatched: "UNWATCHED" };
   return labels[value] || "WATCH";
+}
+function threatLabel(value) {
+  const labels = { high: "High threat", medium: "Moderate threat", watch: "Lower threat" };
+  return labels[value] || "Moderate threat";
 }
 function directThreat(item) {
   const text = `${item.name || ""} ${item.domain || ""} ${item.category || ""}`.toLowerCase();
@@ -154,7 +158,10 @@ function marketBoard() {
   if (!board.length) return `<section class="ci-market-empty">${empty("Add the business map", ui.snapshot.scout?.status === "needs_context" ? "Fill in PhantomForce's offer, audience, and service area so Phantom can show the first competitor map." : "Track a competitor, then add public evidence for live rankings.", '<button class="ci-secondary" data-ci-tab="sources">Open sources & settings</button>')}</section>`;
   return `<section class="ci-market-board">${board.map((item) => {
     const starter = item.sourceState === "starter";
-    return `<article class="is-${esc(item.momentum)} ${starter ? "is-starter" : ""}" data-ci-card="${esc(item.competitorId)}"><header><span class="ci-symbol">${esc(item.symbol)}</span><div><p>${esc(item.category)} · ${esc(item.domain)}</p><h3>${esc(item.name)}</h3></div><b>${Number(item.score || 0)}</b></header><div class="ci-ticker"><span>${starter ? "BASELINE" : esc(momentumLabel(item.momentum))}</span><i style="width:${Math.max(6, Math.min(100, Number(item.score || 0)))}%"></i></div><p class="ci-proof">${esc(sourceStateLabel(item))}${item.lastSignalAt ? ` · last signal ${fmtDate(item.lastSignalAt)}` : ""}</p><p>${esc(item.tip)}</p><div class="ci-watch-tags">${(item.watch || []).slice(0, 3).map((tag) => `<span>${esc(tag)}</span>`).join("")}</div>${starter ? `<button class="ci-primary" data-ci-track-starter="${esc(item.competitorId)}">Track + compare</button>` : item.signalCount ? `<button class="ci-secondary" data-ci-fuse="${esc(item.competitorId)}">Refresh estimate</button>` : `<button class="ci-secondary" data-ci-tab="sources">Add source</button>`}</article>`;
+    const bodyHtml = starter
+      ? `<div class="ci-threat-row"><span class="ci-threat-pill is-${esc(item.threat || "watch")}">${esc(threatLabel(item.threat))}</span></div>${item.whatItIs ? `<p class="ci-whatitis">${esc(item.whatItIs)}</p>` : ""}<p class="ci-edge"><b>Your edge:</b> ${esc(item.edge || item.tip)}</p>`
+      : `<div class="ci-ticker"><span>${esc(momentumLabel(item.momentum))}</span><i style="width:${Math.max(6, Math.min(100, Number(item.score || 0)))}%"></i></div><p>${esc(item.tip)}</p>`;
+    return `<article class="is-${esc(item.momentum)} ${starter ? "is-starter" : ""}" data-ci-card="${esc(item.competitorId)}"><header><span class="ci-symbol">${esc(item.symbol)}</span><div><p>${esc(item.category)} · ${esc(item.domain)}</p><h3>${esc(item.name)}</h3></div><b>${Number(item.score || 0)}</b></header>${bodyHtml}<p class="ci-proof">${esc(sourceStateLabel(item))}${item.lastSignalAt ? ` · last signal ${fmtDate(item.lastSignalAt)}` : ""}</p><div class="ci-watch-tags">${(item.watch || []).slice(0, 3).map((tag) => `<span>${esc(tag)}</span>`).join("")}</div>${starter ? `<button class="ci-primary" data-ci-track-starter="${esc(item.competitorId)}">Track + compare</button>` : item.signalCount ? `<button class="ci-secondary" data-ci-fuse="${esc(item.competitorId)}">Refresh estimate</button>` : `<button class="ci-secondary" data-ci-tab="sources">Add source</button>`}</article>`;
   }).join("")}</section>`;
 }
 function opportunityRail() {
