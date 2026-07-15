@@ -282,7 +282,14 @@ body.phantomplay-playing{overflow:hidden}.workspace-page:has(.pp-player) .worksp
   grid-template-columns:repeat(auto-fit,minmax(420px,1fr));
   gap:8px;
 }
-.pp-game{
+/* Compact "console" card — the curated home rows (Continue playing, Ready
+   to play, etc.) only. The full browsable grid (.pp-game-grid-full: Games
+   tab, Favorites, a developer's game list) keeps the spacious card defined
+   earlier in this file; without this scope both rules shared the bare
+   .pp-game class at equal specificity and this one, being later in the
+   file, silently won everywhere — squeezing the full grid's title and
+   description into a sliver-width column. */
+.pp-game-grid:not(.pp-game-grid-full) .pp-game{
   display:grid;
   grid-template-columns:minmax(184px,.48fr) minmax(0,1fr);
   border-color:rgba(65,255,161,.2);
@@ -290,23 +297,23 @@ body.phantomplay-playing{overflow:hidden}.workspace-page:has(.pp-player) .worksp
   background:linear-gradient(180deg,#04100d,#020807);
   box-shadow:inset 0 1px rgba(255,255,255,.025);
 }
-.pp-game:hover{
+.pp-game-grid:not(.pp-game-grid-full) .pp-game:hover{
   transform:none;
   border-color:var(--pp-console-line-strong);
   background:linear-gradient(180deg,#061910,#020807);
 }
-.pp-game-art{
+.pp-game-grid:not(.pp-game-grid-full) .pp-game-art{
   height:100%;
   min-height:176px;
   border-right:1px solid rgba(65,255,161,.16);
   background:#010504;
 }
-.pp-game-art::after{
+.pp-game-grid:not(.pp-game-grid-full) .pp-game-art::after{
   background:
     linear-gradient(180deg,rgba(1,5,4,0) 34%,rgba(1,5,4,.72) 100%),
     radial-gradient(circle at 50% 42%,rgba(65,255,161,.08),transparent 64%);
 }
-.pp-game-art img{
+.pp-game-grid:not(.pp-game-grid-full) .pp-game-art img{
   object-fit:cover;
   transform:scale(1.03);
   opacity:.96;
@@ -316,18 +323,18 @@ body.phantomplay-playing{overflow:hidden}.workspace-page:has(.pp-player) .worksp
   border-radius:3px;
   background:rgba(65,255,161,.1);
 }
-.pp-game-body{
+.pp-game-grid:not(.pp-game-grid-full) .pp-game-body{
   grid-template-columns:minmax(0,1fr) auto;
   align-content:center;
   padding:14px;
 }
-.pp-game-body>div:first-child,
-.pp-game-body>p,
-.pp-game-meta,
-.pp-progress{
+.pp-game-grid:not(.pp-game-grid-full) .pp-game-body>div:first-child,
+.pp-game-grid:not(.pp-game-grid-full) .pp-game-body>p,
+.pp-game-grid:not(.pp-game-grid-full) .pp-game-meta,
+.pp-game-grid:not(.pp-game-grid-full) .pp-progress{
   grid-column:1;
 }
-.pp-game-body h3{
+.pp-game-grid:not(.pp-game-grid-full) .pp-game-body h3{
   font:900 18px "Space Grotesk",system-ui,sans-serif;
 }
 .pp-game-developer{
@@ -349,12 +356,12 @@ body.phantomplay-playing{overflow:hidden}.workspace-page:has(.pp-player) .worksp
   text-overflow:ellipsis;
   white-space:nowrap;
 }
-.pp-game-body>p{
+.pp-game-grid:not(.pp-game-grid-full) .pp-game-body>p{
   min-height:0;
   max-width:620px;
   color:#aac7ba;
 }
-.pp-favorite{
+.pp-game-grid:not(.pp-game-grid-full) .pp-favorite{
   position:static;
   grid-column:2;
   grid-row:1;
@@ -362,7 +369,7 @@ body.phantomplay-playing{overflow:hidden}.workspace-page:has(.pp-player) .worksp
   height:32px;
   border-radius:4px;
 }
-.pp-play{
+.pp-game-grid:not(.pp-game-grid-full) .pp-play{
   grid-column:2;
   grid-row:2 / span 3;
   align-self:stretch;
@@ -828,17 +835,17 @@ body.phantomplay-playing{overflow:hidden}.workspace-page:has(.pp-player) .worksp
   .pp-quick-stats span{
     min-width:0;
   }
-  .pp-game{
+  .pp-game-grid:not(.pp-game-grid-full) .pp-game{
     grid-template-columns:112px minmax(0,1fr);
   }
-  .pp-game-art{
+  .pp-game-grid:not(.pp-game-grid-full) .pp-game-art{
     min-height:164px;
   }
-  .pp-game-body{
+  .pp-game-grid:not(.pp-game-grid-full) .pp-game-body{
     grid-template-columns:1fr 34px;
     padding:11px;
   }
-  .pp-play{
+  .pp-game-grid:not(.pp-game-grid-full) .pp-play{
     grid-column:1 / -1;
     grid-row:auto;
     width:100%;

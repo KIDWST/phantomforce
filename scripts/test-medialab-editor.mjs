@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-const { freshEditState } = await import("../app/js/imagefilters.js?v=phantom-live-20260714-258");
-const { cloneImageEditState } = await import("../app/js/content-editor.js?v=phantom-live-20260714-258");
+const { freshEditState } = await import("../app/js/imagefilters.js?v=phantom-live-20260714-267");
+const { cloneImageEditState } = await import("../app/js/content-editor.js?v=phantom-live-20260714-267");
 
 const source = freshEditState();
 source.paint = {
