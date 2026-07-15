@@ -598,8 +598,8 @@ export const PHANTOMPLAY_BUILT_IN_GAMES: PhantomPlayGame[] = [
   {
     id: "type-storm",
     title: "Type Storm",
-    summary: "Vertical word-rain typing: words actually fall, streaks glow, and the ramp stays readable.",
-    description: "A revamped typing storm where words rain downward in vertical columns. Type the highlighted letters, chase combos, and survive a readable-but-serious speed ramp.",
+    summary: "Lock a falling word by typing its first letter — everything else keeps raining down.",
+    description: "A typing sprint with 200 words. Lock a word and it freezes while you finish it; every other word keeps falling, so triage fast. Chase gold Thunder Words for a shield heal and a big bonus. Three shields, no mercy.",
     category: "Focus",
     tags: ["typing", "word-rain", "speed", "keyboard", "words"],
     contentRating: "everyone",

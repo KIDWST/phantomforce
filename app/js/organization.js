@@ -9,7 +9,12 @@
  * to a local mock.
  */
 
-import { currentTenantId, session } from "./store.js?v=phantom-live-20260715-276";
+import { currentTenantId, session, isAdmin, isOwnerOperator } from "./store.js?v=phantom-live-20260715-278";
+import { canManageActiveOrg } from "./orgs.js?v=phantom-live-20260715-278";
+
+/* Owner/admin only — legacy local-admin sessions (isAdmin/isOwnerOperator)
+   and real database org sessions (canManageActiveOrg) both count. */
+const canManageClients = () => isAdmin() || isOwnerOperator() || canManageActiveOrg();
 
 const ROLES = [
   { id: "owner", label: "Owner", blurb: "Everything, including billing and this page." },
@@ -21,6 +26,12 @@ const ROLES = [
 /* Membership roles the database accepts today (manager is a module-visibility
    role, not yet a membership role — shown in the matrix, not the dropdown). */
 const MEMBERSHIP_ROLES = ["owner", "admin", "member", "client"];
+/* Required modules (module-registry.ts required:true) — access, approvals,
+   and recovery. Owner can't uncheck their own access to these from the
+   matrix: it's how an owner finds their way back if they lock down
+   everything else, and there's no recovery path if they lock themselves
+   out of it too. */
+const OWNER_LOCKED_MODULES = new Set(["dashboard", "approvals", "settings"]);
 
 const orgState = {
   loading: false,
@@ -31,11 +42,30 @@ const orgState = {
   members: [],
   invitations: [],
   configVersion: 0,
+  orgType: "business",
   modules: [],
   matrixDirty: false,
   message: "",
   busy: false,
 };
+
+const ORG_TYPES = [
+  { id: "dev_only", label: "Dev Only", blurb: "Sandbox for building and testing — every module unlocked, safe to break." },
+  { id: "business", label: "Business", blurb: "A normal single-business operator. The standard setup." },
+  { id: "full_force", label: "Full Force", blurb: "Multi-business/agency operator running every module at once." },
+];
+
+function orgTypeMarkup(esc) {
+  return `
+    <div class="org-type-picker">
+      ${ORG_TYPES.map((type) => `
+        <button class="org-type-option ${orgState.orgType === type.id ? "is-active" : ""}" type="button" data-org-type="${type.id}">
+          <b>${esc(type.label)}</b>
+          <i>${esc(type.blurb)}</i>
+        </button>`).join("")}
+    </div>
+    <p class="set-note">Switching to Dev Only or Full Force unlocks every module for this organization. It never turns modules off for you — switch back to Business and your setup stays as you left it.</p>`;
+}
 
 function authHeaders(json = false) {
   const token = session.token();
@@ -81,6 +111,7 @@ async function loadOrganization() {
   try {
     const configPayload = await api(`/phantom-ai/customization/config?tenant_id=${encodeURIComponent(currentTenantId())}`);
     orgState.configVersion = configPayload.configuration?.version || 0;
+    orgState.orgType = configPayload.configuration?.orgType || "business";
     orgState.modules = (configPayload.configuration?.modules || []).map((module) => ({
       id: module.id,
       label: module.label,
@@ -153,7 +184,7 @@ function matrixMarkup(esc) {
           ${orgState.modules.map((module) => `
             <tr class="${module.enabled ? "" : "is-off"}">
               <td><b>${esc(module.label)}</b>${module.enabled ? "" : `<i>module off</i>`}</td>
-              ${ROLES.map((role) => `<td><input type="checkbox" data-org-matrix="${esc(module.id)}:${role.id}" ${module.roles.includes(role.id) ? "checked" : ""} ${module.id === "settings" && role.id === "owner" ? "disabled" : ""} /></td>`).join("")}
+              ${ROLES.map((role) => `<td><input type="checkbox" data-org-matrix="${esc(module.id)}:${role.id}" ${module.roles.includes(role.id) ? "checked" : ""} ${OWNER_LOCKED_MODULES.has(module.id) && role.id === "owner" ? "disabled" : ""} /></td>`).join("")}
             </tr>`).join("")}
         </tbody>
       </table>
@@ -182,6 +213,21 @@ export function renderOrganizationPanel(el, opts = {}) {
       ${orgState.message ? `<p class="org-message">${esc(orgState.message)}</p>` : ""}
       ${orgState.error ? `<p class="org-message is-error">${esc(orgState.error)}</p>` : ""}
     </div>
+
+    ${canManageClients() ? `
+    <div class="set-section org-clients-card">
+      <p class="set-eyebrow">Client setup</p>
+      <h4>Clients &amp; CRM</h4>
+      <p class="set-note">Contacts, leads, pipeline, and follow-up — owner/admin business back office, not a surface every teammate needs parked in the sidebar. Opens as its own page.</p>
+      <button class="btn btn-primary" type="button" data-open-ws="leads">Open Clients</button>
+    </div>` : ""}
+
+    ${canManageClients() ? `
+    <div class="set-section org-type-card">
+      <p class="set-eyebrow">Organization setup</p>
+      <h4>How is this organization set up?</h4>
+      ${orgTypeMarkup(esc)}
+    </div>` : ""}
 
     ${orgState.needsDatabase ? `
       <div class="set-section org-db-note">
@@ -257,6 +303,18 @@ export function renderOrganizationPanel(el, opts = {}) {
       () => api(`/orgs/${encodeURIComponent(orgState.org.id)}/invitations/${encodeURIComponent(button.dataset.orgRevoke)}/revoke`, { method: "POST" }),
       "Invitation revoked.",
     );
+  });
+
+  el.querySelectorAll("[data-org-type]").forEach((button) => button.onclick = () => {
+    const orgType = button.dataset.orgType;
+    if (orgType === orgState.orgType) return;
+    const label = ORG_TYPES.find((type) => type.id === orgType)?.label || orgType;
+    withBusy(async () => {
+      const tenant = currentTenantId();
+      const patch = { orgType };
+      await api("/phantom-ai/customization/publish", { method: "POST", body: JSON.stringify({ tenant_id: tenant, patch, expected_version: orgState.configVersion, summary: `Organization set up as ${label}` }) });
+      orgState.orgType = orgType;
+    }, `Organization set up as ${label}.`);
   });
 
   el.querySelectorAll("[data-org-matrix]").forEach((input) => input.onchange = () => {

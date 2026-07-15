@@ -6,44 +6,44 @@ import {
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260715-276";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260715-276";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260715-276";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260715-276";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260715-276";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260715-276";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260715-276";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260715-276";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260715-276";
-import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260715-276";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260715-276";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260715-276";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260715-276";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260715-276";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260715-276";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260715-276";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260715-276";
-import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260715-276";
-import { mountAmbient } from "./ambient.js?v=phantom-live-20260715-276";
-import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260715-276";
+} from "./store.js?v=phantom-live-20260715-278";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260715-278";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260715-278";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260715-278";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260715-278";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260715-278";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260715-278";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260715-278";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260715-278";
+import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260715-278";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260715-278";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260715-278";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260715-278";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260715-278";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260715-278";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260715-278";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260715-278";
+import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260715-278";
+import { mountAmbient } from "./ambient.js?v=phantom-live-20260715-278";
+import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260715-278";
 import {
   fetchAuthConfig, databaseLogin, databaseLogout, customerRegister, requestCustomerPasswordReset,
   completeCustomerPasswordReset, switchOrg, fetchAuthMe, fetchEntitlementsSummary,
-} from "./orgs.js?v=phantom-live-20260715-276";
-import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260715-276";
-import { assetsAvailable } from "./orgs.js?v=phantom-live-20260715-276";
-import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260715-276";
+} from "./orgs.js?v=phantom-live-20260715-278";
+import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260715-278";
+import { assetsAvailable } from "./orgs.js?v=phantom-live-20260715-278";
+import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260715-278";
 // PhantomPlay V2 platform shell (Home/Solo/Friends/Workspace/Dev Hub) - opt-in
 // while it hardens: set localStorage "pf.phantomplay.v2" = "1" (the V2 shell has
 // a "Classic view" button to switch back). Classic stays the default experience.
-import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260715-276";
+import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260715-278";
 const phantomPlayV2Opted = () => { try { return localStorage.getItem("pf.phantomplay.v2") === "1"; } catch { return false; } };
-import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260715-276";
+import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260715-278";
 import {
   customizeNavigation,
   loadOrganizationCustomization,
-} from "./customization.js?v=phantom-live-20260715-276";
-import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260715-276";
+} from "./customization.js?v=phantom-live-20260715-278";
+import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260715-278";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -273,9 +273,17 @@ function maybeUpgradeGateToDatabaseLogin(card, options = {}) {
   const { customerApp = false, required = false } = options;
   fetchAuthConfig().then((auth) => {
     if (gate.hidden) return;
-    const customerAuthEnabled = !!(auth?.databaseAuthEnabled || auth?.customerAuthEnabled);
+    const customerAuthEnabled = !!auth?.customerAuthEnabled;
     if (!customerAuthEnabled) {
-      if (required) renderCustomerAuthBlocked(card);
+      if (required) {
+        /* Postgres auth is configured but unreachable right now — say so
+           plainly instead of "not enabled", which reads as misconfigured
+           forever rather than temporarily down. */
+        const configuredButDown = auth?.databaseAuthEnabled && auth?.databaseReachable === false;
+        renderCustomerAuthBlocked(card, configuredButDown
+          ? "The account system is temporarily unavailable. We're on it — please try again shortly."
+          : undefined);
+      }
       return;
     }
     const heading = customerApp ? "Sign in to your workspace." : "Sign in to your business.";
@@ -493,7 +501,7 @@ function maybeUpgradeGateToDatabaseLogin(card, options = {}) {
 /* ============================ sidebar nav ============================ */
 const BASE_NAV = [
   { id: "dashboard",  label: "Dashboard",    icon: "grid",  view: "main" },
-  { id: "crm",        label: "Leads",        icon: "users", ws: "leads" },
+  { id: "intelligence", label: "Competitor Intel", icon: "chart", ws: "intelligence" },
   { id: "media",      label: "Media Lab",    icon: "media", ws: "media" },
   { id: "assets",     label: "Asset Cloud",  icon: "media", ws: "assets", dbOnly: true },
   { id: "sites",      label: "Websites",     icon: "site",  ws: "sites" },
@@ -501,7 +509,13 @@ const BASE_NAV = [
   { id: "automation", label: "Automations",  icon: "auto",  ws: "automation" },
   { id: "approvals",  label: "Approvals",    icon: "check", ws: "approvals", badge: true },
   { id: "workers",    label: "Workforce",    icon: "users", ws: "workforce" },
-  { id: "intelligence", label: "Competitor Intel", icon: "chart", ws: "intelligence" },
+  /* Clients (CRM) is owner/admin business-back-office material, not a
+     surface every teammate needs a permanent sidebar slot for — it opens
+     from Settings > Organization instead (data-open-ws="leads" there).
+     navHidden keeps goNav()/openWorkspace()/deep links and the
+     proposals/reviews/bookings parent-highlighting all working; it only
+     drops the item from the rendered nav list. */
+  { id: "crm",        label: "Clients",      icon: "users", ws: "leads", navHidden: true },
   { id: "analytics",  label: "Analytics",    icon: "chart", ws: "analytics" },
   { id: "memory",     label: "Memory",       icon: "brain", ws: "memory", navZone: "bottom", quiet: true },
   { id: "settings",   label: "Settings",     icon: "cog",   ws: "settings", navZone: "bottom" },
@@ -553,7 +567,7 @@ function navFeatureDisabled(item) {
 
 function orderedNavItems() {
   return NAV
-    .filter(canAccessSurface)
+    .filter((item) => !item.navHidden && canAccessSurface(item))
     .map((item) => ({ ...item, navDisabled: navFeatureDisabled(item) }))
     /* Bottom-zone utilities are structural, not just sorted labels. Workspace
        customization can rearrange business modules, but it must never strand
@@ -964,7 +978,7 @@ async function signOut() {
 
 /* ============================ account + plan ============================ */
 const ACCOUNT_PLAN = {
-  name: "Elite Plan",
+  name: "Elite",
   price: "Best plan",
   renewalOffsetDays: 30,
   paymentState: "Owner billing ready",
@@ -972,16 +986,16 @@ const ACCOUNT_PLAN = {
 };
 const ACCOUNT_TIERS = [
   {
-    id: "starter",
-    name: "Starter",
-    price: "$750/mo",
+    id: "free",
+    name: "Free",
+    price: "Free",
     badge: "Launch",
     copy: "Business Manager foundation: command surface, approvals, and one focused workspace.",
     features: ["Business command center", "Client pipeline", "Manual offer workflow"],
   },
   {
     id: "pro",
-    name: "Pro Plan",
+    name: "Pro",
     price: "$2,500/mo",
     badge: "Growth",
     copy: "Operator-grade system for growth: creator workflow, Media Lab, accounting visibility, and owner controls.",
@@ -989,7 +1003,7 @@ const ACCOUNT_TIERS = [
   },
   {
     id: "elite",
-    name: "Elite Plan",
+    name: "Elite",
     price: "Custom",
     badge: "Current",
     current: true,
@@ -1230,7 +1244,7 @@ const MODES = {
   admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260715-276";
+const POSE_VERSION = "phantom-live-20260715-278";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;

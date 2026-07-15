@@ -1,7 +1,8 @@
-import { currentTenantId, session } from "./store.js?v=phantom-live-20260715-276";
+import { currentTenantId, session } from "./store.js?v=phantom-live-20260715-278";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 const TABS = [["radar", "Radar"], ["competitors", "Competitors"], ["sources", "Sources & settings"]];
+const RADAR_WIDGETS = [["board", "Competitor board"], ["pressure", "Category pressure"], ["opportunities", "Opportunities"], ["estimates", "Latest estimates"]];
 const SIGNAL_LABELS = {
   website_copy: "Website copy", pricing_page: "Pricing page", landing_page: "Landing page", indexed_page: "New indexed page",
   public_ad: "Public ad", ad_volume: "Ad volume", social_cadence: "Social cadence", content_format: "Content format",
@@ -12,7 +13,7 @@ const SIGNAL_LABELS = {
 };
 const GAP_TYPES = [["question", "Ignored question"], ["complaint", "Weakly handled complaint"], ["pricing", "Pricing confusion"], ["feature", "Desired feature"], ["trust", "Trust concern"], ["segment", "Underserved segment"], ["objection", "Purchase objection"]];
 const EVENT_TYPES = ["Price increase", "Product discontinuation", "Negative feedback spike", "New feature launch", "Rebrand", "Service outage", "Geographic expansion", "Audience shift", "Major campaign", "New subscription tier", "Policy change", "Public limitation"];
-const ui = { tab: "radar", loading: true, error: "", notice: "", snapshot: null, signalQuery: "", competitorFilter: "all", editingProfile: false, busy: "", selectedCompetitor: "" };
+const ui = { tab: "radar", radarWidget: "board", loading: true, error: "", notice: "", snapshot: null, signalQuery: "", competitorFilter: "all", editingProfile: false, busy: "", selectedCompetitor: "" };
 let root = null;
 
 function authHeaders(json = false) {
@@ -69,6 +70,10 @@ function hashValue(value) {
 function momentumLabel(value) {
   const labels = { gaining: "UP", vulnerable: "DOWN", mixed: "MIXED", quiet: "QUIET", unwatched: "UNWATCHED" };
   return labels[value] || "WATCH";
+}
+function threatLabel(value) {
+  const labels = { high: "High threat", medium: "Moderate threat", watch: "Lower threat" };
+  return labels[value] || "Moderate threat";
 }
 function directThreat(item) {
   const text = `${item.name || ""} ${item.domain || ""} ${item.category || ""}`.toLowerCase();
@@ -139,9 +144,6 @@ function marketMap() {
         </button>`;
       }).join("")}
     </div>
-    <div class="ci-market-leaders">
-      ${board.slice(0, 5).map((item) => `<button type="button" data-ci-focus-competitor="${esc(item.competitorId)}"><span>${esc(item.name)}</span><b>${Number(item.score || 0)}</b><i>${esc(item.sourceState === "starter" ? "baseline" : momentumLabel(item.momentum))}</i></button>`).join("")}
-    </div>
   </section>`;
 }
 function clusterBars() {
@@ -154,7 +156,10 @@ function marketBoard() {
   if (!board.length) return `<section class="ci-market-empty">${empty("Add the business map", ui.snapshot.scout?.status === "needs_context" ? "Fill in PhantomForce's offer, audience, and service area so Phantom can show the first competitor map." : "Track a competitor, then add public evidence for live rankings.", '<button class="ci-secondary" data-ci-tab="sources">Open sources & settings</button>')}</section>`;
   return `<section class="ci-market-board">${board.map((item) => {
     const starter = item.sourceState === "starter";
-    return `<article class="is-${esc(item.momentum)} ${starter ? "is-starter" : ""}" data-ci-card="${esc(item.competitorId)}"><header><span class="ci-symbol">${esc(item.symbol)}</span><div><p>${esc(item.category)} · ${esc(item.domain)}</p><h3>${esc(item.name)}</h3></div><b>${Number(item.score || 0)}</b></header><div class="ci-ticker"><span>${starter ? "BASELINE" : esc(momentumLabel(item.momentum))}</span><i style="width:${Math.max(6, Math.min(100, Number(item.score || 0)))}%"></i></div><p class="ci-proof">${esc(sourceStateLabel(item))}${item.lastSignalAt ? ` · last signal ${fmtDate(item.lastSignalAt)}` : ""}</p><p>${esc(item.tip)}</p><div class="ci-watch-tags">${(item.watch || []).slice(0, 3).map((tag) => `<span>${esc(tag)}</span>`).join("")}</div>${starter ? `<button class="ci-primary" data-ci-track-starter="${esc(item.competitorId)}">Track + compare</button>` : item.signalCount ? `<button class="ci-secondary" data-ci-fuse="${esc(item.competitorId)}">Refresh estimate</button>` : `<button class="ci-secondary" data-ci-tab="sources">Add source</button>`}</article>`;
+    const bodyHtml = starter
+      ? `<div class="ci-threat-row"><span class="ci-threat-pill is-${esc(item.threat || "watch")}">${esc(threatLabel(item.threat))}</span></div>${item.whatItIs ? `<p class="ci-whatitis">${esc(item.whatItIs)}</p>` : ""}<p class="ci-edge"><b>Your edge:</b> ${esc(item.edge || item.tip)}</p>`
+      : `<div class="ci-ticker"><span>${esc(momentumLabel(item.momentum))}</span><i style="width:${Math.max(6, Math.min(100, Number(item.score || 0)))}%"></i></div><p>${esc(item.tip)}</p>`;
+    return `<article class="is-${esc(item.momentum)} ${starter ? "is-starter" : ""}" data-ci-card="${esc(item.competitorId)}"><header><span class="ci-symbol">${esc(item.symbol)}</span><div><p>${esc(item.category)} · ${esc(item.domain)}</p><h3>${esc(item.name)}</h3></div><b>${Number(item.score || 0)}</b></header>${bodyHtml}<p class="ci-proof">${esc(sourceStateLabel(item))}${item.lastSignalAt ? ` · last signal ${fmtDate(item.lastSignalAt)}` : ""}</p><div class="ci-watch-tags">${(item.watch || []).slice(0, 3).map((tag) => `<span>${esc(tag)}</span>`).join("")}</div>${starter ? `<button class="ci-primary" data-ci-track-starter="${esc(item.competitorId)}">Track + compare</button>` : item.signalCount ? `<button class="ci-secondary" data-ci-fuse="${esc(item.competitorId)}">Refresh estimate</button>` : `<button class="ci-secondary" data-ci-tab="sources">Add source</button>`}</article>`;
   }).join("")}</section>`;
 }
 function opportunityRail() {
@@ -166,15 +171,26 @@ function opportunityRail() {
 function inferenceCard(item) {
   return `<article class="ci-inference"><header><div>${statusPill("ESTIMATE", "neutral")} ${statusPill(item.confidence.toUpperCase(), item.confidence === "high" ? "good" : item.confidence === "medium" ? "warn" : "neutral")}</div><time>${fmtDate(item.createdAt)}</time></header><p class="ci-overline">${esc(competitorName(item.competitorId))} · ${esc(item.area.replaceAll("_", " "))}</p><h3>${esc(item.estimate)}</h3><details><summary>Evidence and reasoning</summary><div class="ci-detail-grid"><div><h4>Supporting signals</h4><ul>${item.supportingSignals.map((signal) => `<li><a href="${esc(signal.source)}" target="_blank" rel="noopener noreferrer">${esc(signal.title)}</a><small>${fmtDate(signal.date)}</small></li>`).join("")}</ul></div><div><h4>Alternative explanations</h4><ul>${item.alternativeExplanations.map((text) => `<li>${esc(text)}</li>`).join("")}</ul></div><div><h4>Recommended verification</h4><ul>${item.recommendedVerification.map((text) => `<li>${esc(text)}</li>`).join("")}</ul></div><div><h4>Safe response options</h4><ul>${item.safeResponseOptions.map((text) => `<li>${esc(text)}</li>`).join("")}</ul></div></div></details><footer><span>Confidence score</span><div><i style="width:${Math.round(item.confidenceScore * 100)}%"></i></div><b>${Math.round(item.confidenceScore * 100)}%</b></footer></article>`;
 }
+function radarWidgetPanel() {
+  const s = ui.snapshot;
+  const widget = RADAR_WIDGETS.some(([id]) => id === ui.radarWidget) ? ui.radarWidget : "board";
+  if (widget === "pressure") return clusterBars() || empty("No category pressure yet", "Track competitors across categories so Phantom can compare pressure once signals come in.");
+  if (widget === "opportunities") return opportunityRail();
+  if (widget === "estimates") {
+    const latest = s.inferences.slice(0, 6);
+    return latest.length ? `<div class="ci-inference-list">${latest.map(inferenceCard).join("")}</div>` : empty("No live estimates yet", "Starter competitors are modeled baselines. Track a competitor and add dated public signals before Phantom labels movement.", '<button class="ci-primary" data-ci-tab="sources">Add public source</button>');
+  }
+  return marketBoard();
+}
 function radar() {
   const s = ui.snapshot;
   const auto = s.autoScout || {};
-  const latest = s.inferences.slice(0, 4);
+  const widget = RADAR_WIDGETS.some(([id]) => id === ui.radarWidget) ? ui.radarWidget : "board";
   return `${viewHead("MARKET RADAR", auto.headline || "Where the market is moving")}
     <div class="ci-context"><b>${esc(contextLine())}</b>${auto.sourceNote ? `<span>${esc(auto.sourceNote)}</span>` : ""}</div>
-    ${metrics()}${marketMap()}${clusterBars()}
-    <section class="ci-radar-grid"><div><h4 class="ci-sub">Market board</h4>${marketBoard()}</div><aside class="ci-rail"><h4 class="ci-sub">Top opportunities</h4>${opportunityRail()}</aside></section>
-    <h4 class="ci-sub">Latest estimates</h4><div class="ci-inference-list">${latest.length ? latest.map(inferenceCard).join("") : empty("No live estimates yet", "Starter competitors are modeled baselines. Track a competitor and add dated public signals before Phantom labels movement.", '<button class="ci-primary" data-ci-tab="sources">Add public source</button>')}</div>`;
+    ${metrics()}${marketMap()}
+    <nav class="ci-radar-widgets" aria-label="Competitor views">${RADAR_WIDGETS.map(([id, label]) => `<button type="button" class="${widget === id ? "is-active" : ""}" data-ci-widget="${id}">${label}</button>`).join("")}</nav>
+    <section class="ci-radar-panel">${radarWidgetPanel()}</section>`;
 }
 
 /* ---------------------------- Competitors view ---------------------------- */
@@ -319,6 +335,7 @@ function bindForm(selector, path, success, transform = (value) => value) {
 }
 function bind() {
   root.querySelectorAll("[data-ci-tab]").forEach((button) => button.addEventListener("click", () => { ui.tab = button.dataset.ciTab; ui.notice = ""; ui.error = ""; render(); root.scrollIntoView({ behavior: "smooth", block: "start" }); }));
+  root.querySelectorAll("[data-ci-widget]").forEach((button) => button.addEventListener("click", () => { ui.radarWidget = button.dataset.ciWidget; render(); }));
   root.querySelector("[data-ci-retry]")?.addEventListener("click", () => refresh());
   root.querySelector("[data-ci-mode]")?.addEventListener("click", () => run("/api/competitor-intelligence/mode", { enabled: !ui.snapshot.settings.aggressiveMode }, ui.snapshot.settings.aggressiveMode ? "Standard mode restored." : "Aggressive Intelligence Mode activated."));
   root.querySelectorAll("[data-ci-fuse]").forEach((button) => button.addEventListener("click", () => run("/api/competitor-intelligence/fuse", { competitorId: button.dataset.ciFuse }, "Public signals fused into labeled estimates.")));

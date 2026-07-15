@@ -2,7 +2,10 @@ param(
   [string]$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path,
   [int]$Port = 5177,
   [int]$HermesPort = 5190,
-  [int]$EveryMinutes = 15
+  # 15 minutes meant up to 15 minutes of downtime if either process crashed
+  # between syncs — the health check itself is two cheap HTTP GETs plus a
+  # git fetch, so there's no real cost to checking far more often.
+  [int]$EveryMinutes = 3
 )
 
 $ErrorActionPreference = "Stop"

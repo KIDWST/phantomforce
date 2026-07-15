@@ -43,6 +43,7 @@ export function defaultOrganizationConfiguration(tenantId: string, actor = "syst
     schemaVersion: 1,
     tenantId,
     version: 1,
+    orgType: tenantId === "phantomforce-owner" || tenantId === "phantomforce" ? "dev_only" : "business",
     brand: {
       mode: tenantId === "phantomforce-owner" || tenantId === "phantomforce" ? "internal_phantomforce" : "standard",
       organizationName: tenantId === "phantomforce-owner" || tenantId === "phantomforce" ? "PhantomForce" : "My Business",
@@ -80,8 +81,20 @@ export function defaultOrganizationConfiguration(tenantId: string, actor = "syst
   });
 }
 
+/* dev_only and full_force are "unlock everything" setups — switching into
+   either one turns on whatever optional modules are still off. This is
+   one-directional on purpose: switching back to business never turns
+   anything off behind the owner, since that would silently yank access
+   someone may already depend on. Idempotent, so it's safe to run on every
+   merge regardless of whether orgType actually changed this patch. */
+function applyOrgTypeModuleDefaults(configuration: OrganizationConfiguration): OrganizationConfiguration {
+  if (configuration.orgType === "business") return configuration;
+  const modules = configuration.modules.map((module) => (module.enabled ? module : { ...module, enabled: true }));
+  return { ...configuration, modules };
+}
+
 function mergeConfiguration(current: OrganizationConfiguration, patch: ConfigurationPatch, actor: string) {
-  return {
+  const merged = {
     ...current,
     ...patch,
     brand: { ...current.brand, ...(patch.brand ?? {}) },
@@ -94,6 +107,7 @@ function mergeConfiguration(current: OrganizationConfiguration, patch: Configura
     updatedAt: new Date().toISOString(),
     updatedBy: actor,
   };
+  return applyOrgTypeModuleDefaults(merged);
 }
 
 function hexRgb(hex: string) {
@@ -119,6 +133,11 @@ export function validateOrganizationConfiguration(configuration: OrganizationCon
   for (const requiredId of REQUIRED_MODULE_IDS) {
     const module = configuration.modules.find((candidate) => candidate.id === requiredId);
     if (!module?.enabled) issues.push({ path: `modules.${requiredId}`, message: `${MODULE_BY_ID.get(requiredId)?.displayName ?? requiredId} is required for access, approval, or recovery.`, severity: "error" });
+    /* Enabled isn't enough — if owner's own role gets unchecked for a
+       required module (dashboard, approvals, settings), the owner has no
+       way back in. The matrix UI already disables this checkbox; this is
+       the server-side backstop for direct API calls. */
+    if (module && !module.roles.includes("owner")) issues.push({ path: `modules.${requiredId}.roles`, message: `${MODULE_BY_ID.get(requiredId)?.displayName ?? requiredId} must stay open to the owner role — there'd be no way back in otherwise.`, severity: "error" });
   }
   for (const module of configuration.modules) {
     const definition = MODULE_BY_ID.get(module.id);
@@ -184,6 +203,15 @@ function repairStoredConfiguration(configuration: OrganizationConfiguration): Or
       if (!LEGACY_MODULE_LABELS.test(String(module.label || "").trim())) return module;
       repaired = true;
       return { ...module, label: MODULE_BY_ID.get(module.id)?.displayName || module.id };
+    })
+    /* Clients (crm) moved from a general team tool to owner/admin business
+       back office — narrow any config still carrying the older, wider
+       manager/member roles down to the current registry default. */
+    .map((module) => {
+      if (module.id !== "crm") return module;
+      if (!module.roles.some((role) => role === "manager" || role === "member")) return module;
+      repaired = true;
+      return { ...module, roles: module.roles.filter((role) => role === "owner" || role === "admin") };
     });
   const present = new Set(modules.map((module) => module.id));
   let order = modules.length;

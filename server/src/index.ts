@@ -88,6 +88,7 @@ import {
   resolveLocalCustomerSession,
   revokeLocalCustomerSession,
 } from "./access/local-customer-accounts.js";
+import { isDatabaseConnectivityError, isDatabaseReachable } from "./access/prisma-runtime.js";
 import {
   assignOrgPlan,
   checkSeatLimit,
@@ -455,6 +456,24 @@ const app = Fastify({
   logger: process.env.PHANTOMFORCE_SERVER_LOGGER === "false" ? false : true,
 });
 
+/* Fastify catches errors thrown inside route handlers and turns them into
+   responses — this is the safety net for everything else: a stray
+   fire-and-forget async call, an unawaited promise in a background task,
+   anything outside a request's try/catch. Without it, Node's default
+   behavior is to crash the whole process, taking every route down with it
+   until the Windows watchdog (Sync-AdminMain.ps1) notices and restarts it.
+   unhandledRejection alone doesn't leave Node in a known-bad state, so it's
+   safe to just log and keep serving. uncaughtException can, per Node's own
+   guidance, so this logs and exits — the watchdog brings it back clean
+   rather than the process limping along corrupted. */
+process.on("unhandledRejection", (reason) => {
+  app.log.error({ err: reason }, "Unhandled promise rejection — logged, server keeps running.");
+});
+process.on("uncaughtException", (error) => {
+  app.log.error(error, "Uncaught exception — logging and exiting so the watchdog restarts cleanly.");
+  process.exit(1);
+});
+
 const CustomizationTenantQuerySchema = z.object({ tenant_id: z.string().trim().max(80).optional() });
 const CustomizationPreviewBodySchema = z.object({ tenant_id: z.string().trim().max(80).optional(), patch: z.unknown() });
 const CustomizationPublishBodySchema = CustomizationPreviewBodySchema.extend({ summary: z.string().trim().max(240).optional(), expected_version: z.number().int().positive().optional() });
@@ -798,18 +817,45 @@ async function callPhantomCut(pathname: string, init?: RequestInit): Promise<Pha
   }
 }
 
-try {
-  assertAccessAuthConfiguration();
-  await initializeClientAccessState();
-  await initializeAccessIdentityState();
-  await initializeDatabaseAuthState();
-  await initializeLocalCustomerAuthState();
-  await initializeAccessWorkflowState();
-  await rehydrateAgentRuns();
-  /* the publish executor talks to Postgres — register only when configured */
-  if (process.env.DATABASE_URL) {
-    registerPublishingExecutor();
+/* A configured-but-momentarily-unreachable Postgres (container race on boot,
+   a brief network blip, DB mid-restart) used to hard-crash the entire
+   process on the first attempt — every DB-dependent route, and every route
+   that isn't, went down with it. Retrying with backoff absorbs that without
+   touching the deliberate fail-closed behavior for a genuinely broken
+   config: after these attempts are exhausted, startup still fails exactly
+   as before. */
+const ACCESS_STATE_STARTUP_BACKOFF_MS = [2000, 4000, 8000];
+
+async function initializeAccessStateWithRetry() {
+  const totalAttempts = ACCESS_STATE_STARTUP_BACKOFF_MS.length + 1;
+  for (let attempt = 1; attempt <= totalAttempts; attempt++) {
+    try {
+      assertAccessAuthConfiguration();
+      await initializeClientAccessState();
+      await initializeAccessIdentityState();
+      await initializeDatabaseAuthState();
+      await initializeLocalCustomerAuthState();
+      await initializeAccessWorkflowState();
+      await rehydrateAgentRuns();
+      /* the publish executor talks to Postgres — register only when configured */
+      if (process.env.DATABASE_URL) {
+        registerPublishingExecutor();
+      }
+      return;
+    } catch (error) {
+      const backoffMs = ACCESS_STATE_STARTUP_BACKOFF_MS[attempt - 1];
+      if (backoffMs === undefined) throw error;
+      app.log.warn(
+        error,
+        `PhantomForce server startup: access state init failed (attempt ${attempt}/${totalAttempts}), retrying in ${backoffMs}ms.`,
+      );
+      await new Promise((resolve) => setTimeout(resolve, backoffMs));
+    }
   }
+}
+
+try {
+  await initializeAccessStateWithRetry();
 } catch (error) {
   app.log.error(error, "PhantomForce server startup failed while loading access state.");
   await app.close();
@@ -1133,15 +1179,23 @@ app.get("/sessions", async (request) => {
   const publicHost = requestPublicHost(request);
   const scope = publicHostScope(publicHost);
   const localCustomerEnabled = localCustomerAuthEnabled();
-  const customerAccountActionsEnabled = scope !== "admin" && localCustomerEnabled;
+  /* authProvider="database" only means Postgres auth is configured, not that
+     Postgres is actually reachable right now. Ping it (cached, short timeout)
+     so a broken DATABASE_URL doesn't render a login form that fails on
+     submit. */
+  const databaseReachable = authConfiguration.databaseAuthEnabled ? await isDatabaseReachable() : false;
+  const databaseLoginUsable = authConfiguration.databaseAuthEnabled && databaseReachable;
+  // Admin-scoped hosts never offer customer self-registration/reset flows.
+  const customerAccountActionsEnabled = scope !== "admin" && (databaseLoginUsable || localCustomerEnabled);
 
   return {
     ok: true,
     auth: {
       ...authConfiguration,
-      customerAuthEnabled: authConfiguration.databaseAuthEnabled || localCustomerEnabled,
+      databaseReachable,
+      customerAuthEnabled: databaseLoginUsable || localCustomerEnabled,
       localCustomerAuthEnabled: localCustomerEnabled,
-      customerLoginEndpoint: scope !== "admin" && (authConfiguration.databaseAuthEnabled || localCustomerEnabled) ? "/auth/login" : undefined,
+      customerLoginEndpoint: scope !== "admin" && (databaseLoginUsable || localCustomerEnabled) ? "/auth/login" : undefined,
       customerRegisterEndpoint: customerAccountActionsEnabled ? "/auth/register" : undefined,
       customerPasswordResetRequestEndpoint: customerAccountActionsEnabled ? "/auth/password-reset/request" : undefined,
       customerPasswordResetCompleteEndpoint: customerAccountActionsEnabled ? "/auth/password-reset/complete" : undefined,
@@ -1322,7 +1376,18 @@ app.post("/auth/login", async (request, reply) => {
   if (!parsed.success) {
     return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
   }
-  const session = await loginWithPassword(parsed.data.email, parsed.data.password);
+  let session;
+  try {
+    session = await loginWithPassword(parsed.data.email, parsed.data.password);
+  } catch (error) {
+    if (isDatabaseConnectivityError(error)) {
+      return reply.code(503).send({
+        ok: false,
+        error: "The account system is temporarily unavailable. Please try again in a moment.",
+      });
+    }
+    throw error;
+  }
   if (!session) {
     /* uniform delay-free refusal; no user-exists oracle */
     return reply.code(401).send({ ok: false, error: "Invalid email or password." });

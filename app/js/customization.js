@@ -1,4 +1,4 @@
-import { currentTenantId, session } from "./store.js?v=phantom-live-20260715-276";
+import { currentTenantId, session } from "./store.js?v=phantom-live-20260715-278";
 
 let activeConfiguration = null;
 let activeEntitlements = null;
@@ -12,16 +12,9 @@ const CANONICAL_MODULES = {
     forceEnabled: true,
   },
 };
-const LEGACY_CRM_LABELS = /^(clients?|client ?set ?up)$/i;
-
 function normalizedModuleState(module, moduleId) {
   const canonical = CANONICAL_MODULES[moduleId];
-  if (!canonical) {
-    if (moduleId === "crm" && LEGACY_CRM_LABELS.test(String(module?.label || "").trim())) {
-      return { ...module, label: "Leads" };
-    }
-    return module;
-  }
+  if (!canonical) return module;
   const roles = Array.from(new Set([...(module?.roles || []), ...canonical.roles]));
   return {
     ...(module || { id: moduleId, order: undefined, accessMode: "entire_organization" }),
@@ -33,12 +26,12 @@ function normalizedModuleState(module, moduleId) {
 
 const PLATFORM_MODULES = [
   ["dashboard", "Dashboard", true, ["owner", "admin", "manager", "member", "client"]],
-  ["crm", "Leads", true, ["owner", "admin", "manager", "member"]],
+  ["intelligence", "Competitor Intelligence", true, ["owner", "admin", "manager"]],
   ["media", "Media Lab", true, ["owner", "admin", "manager", "member"]],
   ["sites", "Websites", true, ["owner", "admin", "manager", "member"]],
   ["money", "Accounting", true, ["owner", "admin", "manager"]],
   ["phantomplay", "PhantomPlay", true, ["owner", "admin", "manager", "member", "client"]],
-  ["intelligence", "Competitor Intelligence", true, ["owner", "admin", "manager"]],
+  ["crm", "Clients", true, ["owner", "admin"]],
   ["analytics", "Analytics", true, ["owner", "admin", "manager"]],
   ["memory", "Memory", true, ["owner", "admin", "manager"]],
   ["automation", "Automations", true, ["owner", "admin", "manager"]],
@@ -78,6 +71,7 @@ function defaultConfiguration(tenantId = currentTenantId()) {
     schemaVersion: 1,
     tenantId,
     version: 1,
+    orgType: internal ? "dev_only" : "business",
     brand: {
       mode: internal ? "internal_phantomforce" : "standard",
       organizationName: internal ? "PhantomForce" : "My Business",
