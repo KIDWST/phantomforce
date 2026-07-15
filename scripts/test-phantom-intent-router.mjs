@@ -218,6 +218,20 @@ assert.equal(smartGreeting.hermes || null, null, "greetings should stay local");
 assert.equal(store.state.tasks.length, 0, "smart greetings should not create tasks");
 
 const originalFetch = globalThis.fetch;
+globalThis.fetch = async (url) => {
+  assert.match(String(url), /\/phantom-ai\/runs$/, "chat-started run should call the run engine");
+  return {
+    ok: false,
+    status: 403,
+    json: async () => ({ ok: false, error: "upgrade_required" }),
+  };
+};
+const blockedServerRun = await handleSmartCommand("run a business snapshot");
+globalThis.fetch = originalFetch;
+assert.match(blockedServerRun.say, /couldn't start that run/i, "rejected server runs must be reported honestly");
+assert.match(blockedServerRun.say, /isn't authorized|not authorized/i, "403 server run denials should stay user-safe.");
+assert.doesNotMatch(blockedServerRun.say, /upgrade_required|Authorization bearer|Missing or invalid Authorization/i, "chat-started server runs must not leak backend auth/error codes.");
+
 let capturedChatBody = null;
 globalThis.fetch = async (url, init) => {
   assert.match(String(url), /\/phantom-ai\/chat$/, "instant questions should use the chat backend");
@@ -390,6 +404,10 @@ assert.equal(vacationGo.intent.primaryIntent, "vacation_mode");
 assert.match(vacationGo.say, /armed|approval/i, "confirmed vacation mode shows an approval-gated run");
 assert.ok(store.state.agents.length > agentsBefore, "confirmed vacation mode creates a run record");
 assert.ok(store.state.approvals.length > approvalsBefore, "the vacation run is approval-gated in the queue");
+
+const commandSourceForRunErrors = readFileSync(new URL("../app/js/command.js", import.meta.url), "utf8");
+assert.match(commandSourceForRunErrors, /friendlyRunStartError[\s\S]*status === 401 \|\| status === 403/u, "Chat-started server runs must hide raw 401/403 auth and entitlement transport errors.");
+assert.doesNotMatch(commandSourceForRunErrors, /String\(payload\?\.error \|\| `the run engine answered/u, "Chat-started server runs must not pass raw backend errors directly to the user.");
 
 const risky = handleCommand("publish it");
 assert.equal(risky.intent.primaryIntent, "approval_request");

@@ -10,7 +10,7 @@ import {
   store, uid, visible, currentWs, currentTenantId, isAdmin, isOwnerOperator, pushActivity, moneyView, todaysPlan,
   PACKAGES, RETAINERS, VACATION_POLICY, fmtMoney, statusLabel, daysUntil, memoryStats, chatHistoryStats,
   ctx, session, loadPhantomLoop, savePhantomLoop, loopProviderName, modelDisplayLabel,
-  getPhantomLaneTarget, loadPhantomLaneConfig, workspaceStorageGetItem, wsName,
+  getPhantomLaneTarget, loadPhantomLaneConfig, workspaceStorageGetItem, wsName, friendlyBackendError,
 } from "./store.js?v=phantom-live-20260714-258";
 import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260714-258";
 import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260714-258";
@@ -1254,6 +1254,10 @@ function routeCommand(raw, settings) {
    If the backend can't be reached or refuses, the reply says so — nothing is
    ever shown as "running" unless the server says it is. */
 const TERMINAL_RUN_STATES = new Set(["completed", "failed", "cancelled"]);
+function friendlyRunStartError(status, message) {
+  if (status === 401 || status === 403) return "this session isn't authorized on the run engine";
+  return friendlyBackendError(status, message, { authMessage: "sign in to start server agent runs", fallbackPrefix: "the run engine answered" }).replace(/[.]+$/u, "");
+}
 async function runAgentFromChat(text, intent) {
   if (!isAdmin()) {
     return {
@@ -1277,9 +1281,7 @@ async function runAgentFromChat(text, intent) {
     });
     const payload = await res.json().catch(() => ({}));
     if (!res.ok || !payload?.ok || !payload.run) {
-      const why = res.status === 401 || res.status === 403
-        ? "this session isn't authorized on the run engine"
-        : String(payload?.error || `the run engine answered ${res.status}`);
+      const why = friendlyRunStartError(res.status, payload?.error);
       return {
         say: `I couldn't start that run — ${why}. Nothing executed and nothing is pretending to run.`,
         cards: [], open: null,
