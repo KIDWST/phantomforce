@@ -3,7 +3,7 @@
    no payments, no provider calls happen from here — records move through
    draft → approval → *-ready states and stop there until a connector exists. */
 
-const DB_KEY = "pf.phantom.v4";
+const DB_KEY = "pf.phantom.v5";
 const SESSION_KEY = "pf.session.v3";
 const DAY = 86400000;
 
@@ -99,8 +99,8 @@ function seed() {
     { id: "slither-io", ws: "phantomforce", name: "Slither.io", genre: "Arcade", audience: "general", active: true, plays30d: 812, status: "live" },
     { id: "phantom-rumble", ws: "phantomforce", name: "Phantom Rumble", genre: "Battle Arena", audience: "general", active: true, plays30d: 1204, status: "live" },
     { id: "neon-drift", ws: "phantomforce", name: "Neon Drift", genre: "Arcade Shooter", audience: "general", active: true, plays30d: 956, status: "live" },
-    { id: "kingdom-breakers", ws: "phantomforce", name: "Kingdom Breakers", genre: "PvP Siege", audience: "general", active: true, plays30d: 640, status: "live" },
-    { id: "phantom-ages", ws: "phantomforce", name: "Phantom Ages", genre: "Strategy", audience: "general", active: true, plays30d: 0, status: "new" },
+    { id: "kingdom-breakers", ws: "phantomforce", name: "Kingdom Breakers", genre: "PvP Siege", audience: "general", active: true, plays30d: 640, status: "live", playUrl: "games/kingdom-breakers-fix/index.html", playLabel: "▶ Weapon fix demo" },
+    { id: "phantom-ages", ws: "phantomforce", name: "Phantom Ages", genre: "Strategy", audience: "general", active: true, plays30d: 0, status: "new", playUrl: "games/phantom-ages/index.html", playLabel: "▶ Play now" },
     { id: "penalty-kick", ws: "phantomforce", name: "Penalty Kick", genre: "Sports", audience: "general", active: false, plays30d: 12, status: "retired" },
     { id: "shape-sorter-jr", ws: "phantomforce", name: "Shape Sorter Jr.", genre: "Puzzle", audience: "kids", active: true, plays30d: 340, status: "live" },
     { id: "counting-critters", ws: "phantomforce", name: "Counting Critters", genre: "Educational", audience: "kids", active: true, plays30d: 285, status: "live" },
@@ -156,7 +156,7 @@ function seed() {
     { id: uid("act"), ws: "chicagoshots", who: "Booking Coordinator", text: "confirmed the Halsted shoot for Monday 9am.", at: days(-0.6) },
   ];
 
-  return { version: 4, workspaces, leads, proposals, reviews, bookings, media, sites, products, games, storeItems, security, approvals, agents, activity };
+  return { version: 5, workspaces, leads, proposals, reviews, bookings, media, sites, products, games, storeItems, security, approvals, agents, activity };
 }
 
 /* ---------------- store ---------------- */
@@ -165,7 +165,7 @@ function load() {
     const raw = localStorage.getItem(DB_KEY);
     if (raw) {
       const d = JSON.parse(raw);
-      if (d && d.version === 4) return d;
+      if (d && d.version === 5) return d;
     }
   } catch {}
   return seed();

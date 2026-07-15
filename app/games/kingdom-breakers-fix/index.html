@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Kingdom Breakers — Weapon Fix Demo</title>
+    <style>
+      :root { color-scheme: dark; --lime: #41ffa1; --cyan: #1ef0ff; --gold: #ffe08a; }
+      body { margin: 0; min-height: 100vh; background: #02060a; color: #eafff4; font-family: "Space Grotesk", system-ui, sans-serif; display: flex; justify-content: center; padding: 24px; }
+      .wrap { width: min(900px, 100%); }
+      h1 { font-size: 18px; margin: 0 0 4px; }
+      p.sub { color: rgba(234,255,244,.55); font-size: 13px; margin-top: 0; }
+      .lane { position: relative; height: 220px; border: 1px solid rgba(65,255,161,.25); border-radius: 14px; background: #060c10; overflow: hidden; margin-top: 16px; }
+      .lane-ground { position: absolute; left: 0; right: 0; bottom: 30px; height: 1px; background: rgba(255,255,255,.08); }
+      .obstacle { position: absolute; bottom: 30px; width: 70px; display: flex; flex-direction: column; align-items: center; }
+      .obstacle-box { width: 54px; height: 54px; border-radius: 8px; background: rgba(255,90,110,.12); border: 1px solid rgba(255,90,110,.5); display: flex; align-items: center; justify-content: center; font-size: 11px; text-align: center; padding: 4px; }
+      .obstacle-box.cleared { background: rgba(65,255,161,.1); border-color: rgba(65,255,161,.5); opacity: .4; }
+      .obstacle-hpbar { width: 54px; height: 5px; border-radius: 4px; background: rgba(255,255,255,.1); margin-top: 4px; overflow: hidden; }
+      .obstacle-hpfill { height: 100%; background: linear-gradient(90deg, var(--lime), var(--cyan)); transition: width .1s linear; }
+      .player { position: absolute; bottom: 30px; width: 16px; height: 16px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 12px var(--gold); transition: left .1s linear; }
+      .status { margin-top: 14px; font: 600 13px "DM Mono", monospace; color: var(--cyan); }
+      .btn { margin-top: 14px; padding: 10px 18px; border-radius: 10px; border: 1px solid rgba(65,255,161,.4); background: rgba(65,255,161,.1); color: #eafff4; cursor: pointer; font: 700 13px inherit; }
+      .btn:hover { background: rgba(65,255,161,.2); }
+      .note { margin-top: 16px; padding: 12px 14px; border-radius: 10px; background: rgba(30,240,255,.06); border: 1px solid rgba(30,240,255,.25); font-size: 12px; color: rgba(234,255,244,.7); }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>Kingdom Breakers — Weapon Fix Demo</h1>
+      <p class="sub">The tier-1 starting weapon (range 60, 8 dmg, 2 shots/sec) pushing through a real defense line. Same math already proven in <code>weaponProgression.test.js</code> — this just makes it visible.</p>
+      <div class="lane" data-lane>
+        <div class="lane-ground"></div>
+        <div class="player" data-player></div>
+      </div>
+      <p class="status" data-status>Ready.</p>
+      <button class="btn" data-start>▶ Run the push</button>
+      <div class="note">This is a reference demo proving the tier-1 weapon config CAN reach the castle — not a fix applied to your live Kingdom Breakers. Port the same numbers (range/damage/fire-rate vs. the real castle's HP/regen) into the real game once you have access to those values.</div>
+    </div>
+    <script src="game.js"></script>
+  </body>
+</html>

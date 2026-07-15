@@ -419,10 +419,11 @@ function renderPlay(el, rerender) {
           <div class="record-top"><h4>${esc(g.name)}</h4>${chip(g.status)}</div>
           <p class="record-sub">${esc(g.genre)} · ${g.audience === "kids" ? "Kids" : "General audience"}</p>
           <p class="record-notes">${g.plays30d.toLocaleString()} plays in the last 30 days.</p>
-          ${isAdmin() ? `<div class="record-actions">
-            ${g.status === "pending-review" ? `<button class="btn btn-good" data-act="approve" data-id="${g.id}">Approve to catalog</button>` : ""}
-            ${g.active ? `<button class="btn btn-quiet" data-act="retire" data-id="${g.id}">Retire</button>` : `<button class="btn btn-good" data-act="retire" data-id="${g.id}">Restore</button>`}
-          </div>` : ""}
+          <div class="record-actions">
+            ${g.playUrl ? `<a class="btn btn-good" href="${esc(g.playUrl)}" target="_blank" rel="noopener">${esc(g.playLabel || "▶ Play")}</a>` : ""}
+            ${isAdmin() && g.status === "pending-review" ? `<button class="btn btn-good" data-act="approve" data-id="${g.id}">Approve to catalog</button>` : ""}
+            ${isAdmin() ? (g.active ? `<button class="btn btn-quiet" data-act="retire" data-id="${g.id}">Retire</button>` : `<button class="btn btn-good" data-act="retire" data-id="${g.id}">Restore</button>`) : ""}
+          </div>
         </article>`).join("") || empty(playShowKids ? "No kids titles yet." : "No games in the general catalog yet.")}
     </div>`;
   bindActions(el, {
