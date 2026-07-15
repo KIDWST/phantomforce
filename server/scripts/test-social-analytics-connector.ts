@@ -4,6 +4,7 @@ import {
   getSocialAnalyticsConnectorStatus,
   syncSocialAnalytics,
 } from "../src/connectors/social-analytics-connector.js";
+import { getStoredSocialConnection, saveStoredSocialConnection } from "../src/connectors/social-connection-store.js";
 import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -249,6 +250,45 @@ try {
   const pinterestConnected = await completeSocialOAuthCallback({ state: pinterestOauth.state, code: "pin-code" }, pinterestFetch as typeof fetch);
   assert(pinterestConnected.connected?.accountHandle === "officialchicagoshots", "Pinterest OAuth callback must store the connected username.");
   assert(!JSON.stringify(pinterestConnected).includes("pinterest-token"), "Pinterest callback response must not expose tokens.");
+
+  // The earlier X test block set a static bearer token, which syncX prefers
+  // over a stored OAuth token. Clear it so this block actually exercises the
+  // stored-token refresh path instead of silently reusing the static one.
+  delete process.env.X_BEARER_TOKEN;
+  delete process.env.TWITTER_BEARER_TOKEN;
+  const beforeRefresh = getStoredSocialConnection("x");
+  assert(beforeRefresh?.accessToken, "X connection must already be stored before testing refresh.");
+  saveStoredSocialConnection("x", {
+    provider: beforeRefresh!.provider,
+    accessToken: "x-expired-token",
+    refreshToken: "x-refresh",
+    expiresAt: new Date(Date.now() - 60_000).toISOString(),
+    accountId: beforeRefresh!.accountId,
+    accountName: beforeRefresh!.accountName,
+    accountHandle: beforeRefresh!.accountHandle,
+    scopes: beforeRefresh!.scopes,
+  });
+  let refreshTokenCallSeen = false;
+  const xRefreshFetch = async (input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input);
+    if (url === "https://api.x.com/2/oauth2/token") {
+      refreshTokenCallSeen = true;
+      assert(String(init?.body || "").includes("grant_type=refresh_token"), "X refresh must use the refresh_token grant.");
+      assert(String(init?.body || "").includes("refresh_token=x-refresh"), "X refresh must send the stored refresh token.");
+      return new Response(JSON.stringify({ access_token: "x-refreshed-token", refresh_token: "x-refresh-2", expires_in: 7200 }), { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+    if (url.includes("/2/users/by/username/")) {
+      assert((init?.headers as Record<string, string> | undefined)?.Authorization === "Bearer x-refreshed-token", "X sync must call the platform with the freshly refreshed token, not the expired one.");
+      return new Response(JSON.stringify({ data: { username: "officialchicagoshots", public_metrics: { followers_count: 4000, tweet_count: 90 } } }), { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+    throw new Error(`Unexpected X refresh-flow URL ${url}`);
+  };
+  const refreshedSnapshot = await syncSocialAnalytics("x", xRefreshFetch as typeof fetch);
+  assert(refreshTokenCallSeen, "Expiring X token must trigger a refresh_token exchange before syncing.");
+  assert(refreshedSnapshot.followers === 4000, "X sync must return data fetched with the refreshed token.");
+  const afterRefresh = getStoredSocialConnection("x");
+  assert(afterRefresh?.accessToken === "x-refreshed-token", "Refreshed access token must be persisted to the store.");
+  assert(afterRefresh?.refreshToken === "x-refresh-2", "Rotated refresh token must be persisted to the store.");
 
   const finalStatus = getSocialAnalyticsConnectorStatus();
   assert(finalStatus.connectors.every((connector) => connector.configured), "All seven channels should be configured after OAuth/storage proofs.");

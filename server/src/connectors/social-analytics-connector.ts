@@ -580,9 +580,108 @@ async function requestJson(
   }
 }
 
+type RefreshedToken = { accessToken: string; refreshToken?: string; expiresIn?: unknown };
+type RefreshHandler = (fetcher: typeof fetch, refreshToken: string) => Promise<RefreshedToken>;
+
+async function refreshGoogleToken(fetcher: typeof fetch, refreshToken: string): Promise<RefreshedToken> {
+  const payload = await exchangeToken(fetcher, "https://oauth2.googleapis.com/token", new URLSearchParams({
+    client_id: firstEnv("YOUTUBE_OAUTH_CLIENT_ID", "GOOGLE_OAUTH_CLIENT_ID"),
+    client_secret: firstEnv("YOUTUBE_OAUTH_CLIENT_SECRET", "GOOGLE_OAUTH_CLIENT_SECRET"),
+    refresh_token: refreshToken,
+    grant_type: "refresh_token",
+  }));
+  return { accessToken: text(payload?.access_token), expiresIn: payload?.expires_in };
+}
+
+async function refreshTikTokToken(fetcher: typeof fetch, refreshToken: string): Promise<RefreshedToken> {
+  const payload = await exchangeToken(fetcher, "https://open.tiktokapis.com/v2/oauth/token/", new URLSearchParams({
+    client_key: env("TIKTOK_CLIENT_KEY"),
+    client_secret: env("TIKTOK_CLIENT_SECRET"),
+    refresh_token: refreshToken,
+    grant_type: "refresh_token",
+  }));
+  return { accessToken: text(payload?.access_token), refreshToken: text(payload?.refresh_token) || undefined, expiresIn: payload?.expires_in };
+}
+
+async function refreshXToken(fetcher: typeof fetch, refreshToken: string): Promise<RefreshedToken> {
+  const payload = await exchangeToken(fetcher, "https://api.x.com/2/oauth2/token", new URLSearchParams({
+    refresh_token: refreshToken,
+    grant_type: "refresh_token",
+    client_id: env("X_CLIENT_ID"),
+  }), { Authorization: basicAuth(env("X_CLIENT_ID"), env("X_CLIENT_SECRET")) });
+  return { accessToken: text(payload?.access_token), refreshToken: text(payload?.refresh_token) || undefined, expiresIn: payload?.expires_in };
+}
+
+async function refreshLinkedInToken(fetcher: typeof fetch, refreshToken: string): Promise<RefreshedToken> {
+  const payload = await exchangeToken(fetcher, "https://www.linkedin.com/oauth/v2/accessToken", new URLSearchParams({
+    grant_type: "refresh_token",
+    refresh_token: refreshToken,
+    client_id: env("LINKEDIN_CLIENT_ID"),
+    client_secret: env("LINKEDIN_CLIENT_SECRET"),
+  }));
+  return { accessToken: text(payload?.access_token), refreshToken: text(payload?.refresh_token) || undefined, expiresIn: payload?.expires_in };
+}
+
+async function refreshPinterestToken(fetcher: typeof fetch, refreshToken: string): Promise<RefreshedToken> {
+  const payload = await exchangeToken(fetcher, "https://api.pinterest.com/v5/oauth/token", new URLSearchParams({
+    grant_type: "refresh_token",
+    refresh_token: refreshToken,
+  }), { Authorization: basicAuth(env("PINTEREST_CLIENT_ID"), env("PINTEREST_CLIENT_SECRET")) });
+  return { accessToken: text(payload?.access_token), refreshToken: text(payload?.refresh_token) || undefined, expiresIn: payload?.expires_in };
+}
+
+// Meta (Instagram/Facebook) page tokens are minted from a long-lived user token
+// exchange rather than a standard OAuth refresh_token grant, so they are
+// intentionally excluded here; they need a re-authorization instead of a refresh.
+const REFRESH_HANDLERS: Partial<Record<SocialAnalyticsPlatform, RefreshHandler>> = {
+  youtube: refreshGoogleToken,
+  tiktok: refreshTikTokToken,
+  x: refreshXToken,
+  linkedin: refreshLinkedInToken,
+  pinterest: refreshPinterestToken,
+};
+
+function isExpiringSoon(expiresAt?: string) {
+  if (!expiresAt) return false;
+  const expiry = Date.parse(expiresAt);
+  if (!Number.isFinite(expiry)) return false;
+  return expiry - Date.now() < 2 * 60_000;
+}
+
+async function ensureFreshAccessToken(platform: SocialAnalyticsPlatform, fetcher: typeof fetch): Promise<string> {
+  const connection = getStoredSocialConnection(platform);
+  if (!connection?.accessToken) return "";
+  if (!connection.refreshToken || !isExpiringSoon(connection.expiresAt)) return connection.accessToken;
+  const handler = REFRESH_HANDLERS[platform];
+  if (!handler) return connection.accessToken;
+  try {
+    const refreshed = await handler(fetcher, connection.refreshToken);
+    if (!refreshed.accessToken) return connection.accessToken;
+    saveStoredSocialConnection(platform, {
+      provider: connection.provider,
+      accessToken: refreshed.accessToken,
+      refreshToken: refreshed.refreshToken || connection.refreshToken,
+      expiresAt: tokenExpiry(refreshed.expiresIn) || connection.expiresAt,
+      accountId: connection.accountId,
+      accountName: connection.accountName,
+      accountHandle: connection.accountHandle,
+      pageId: connection.pageId,
+      pageName: connection.pageName,
+      businessAccountId: connection.businessAccountId,
+      scopes: connection.scopes,
+      metadata: connection.metadata,
+    });
+    return refreshed.accessToken;
+  } catch {
+    // Refresh failed; fall back to the existing token so the caller gets the
+    // provider's real "unauthorized" error instead of a masked refresh error.
+    return connection.accessToken;
+  }
+}
+
 async function syncYouTube(fetcher: typeof fetch): Promise<SocialAnalyticsSnapshot> {
   const apiKey = env("YOUTUBE_API_KEY");
-  const accessToken = firstStored("youtube", "accessToken");
+  const accessToken = apiKey ? firstStored("youtube", "accessToken") : await ensureFreshAccessToken("youtube", fetcher);
   const channelId = env("YOUTUBE_CHANNEL_ID") || firstStored("youtube", "accountId");
   const handle = cleanHandle(env("YOUTUBE_CHANNEL_HANDLE") || firstStored("youtube", "accountHandle"));
   if ((!apiKey && !accessToken) || (!channelId && !handle && !accessToken)) throw new Error("YouTube is not connected.");
@@ -702,7 +801,7 @@ async function syncFacebook(fetcher: typeof fetch): Promise<SocialAnalyticsSnaps
 }
 
 async function syncTikTok(fetcher: typeof fetch): Promise<SocialAnalyticsSnapshot> {
-  const token = env("TIKTOK_ACCESS_TOKEN") || firstStored("tiktok", "accessToken");
+  const token = env("TIKTOK_ACCESS_TOKEN") || await ensureFreshAccessToken("tiktok", fetcher);
   if (!token) throw new Error("TikTok is not connected.");
   const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
   const user = await requestJson(fetcher, "https://open.tiktokapis.com/v2/user/info/?fields=display_name,follower_count,likes_count,video_count", { headers });
@@ -736,7 +835,7 @@ async function syncTikTok(fetcher: typeof fetch): Promise<SocialAnalyticsSnapsho
 }
 
 async function syncX(fetcher: typeof fetch): Promise<SocialAnalyticsSnapshot> {
-  const token = firstEnv("X_BEARER_TOKEN", "TWITTER_BEARER_TOKEN") || firstStored("x", "accessToken");
+  const token = firstEnv("X_BEARER_TOKEN", "TWITTER_BEARER_TOKEN") || await ensureFreshAccessToken("x", fetcher);
   const username = cleanHandle(firstEnv("X_USERNAME", "X_HANDLE", "TWITTER_USERNAME") || firstStored("x", "accountHandle", "accountName")) || defaultHandle;
   if (!token || !username) throw new Error("X is not connected.");
   const headers = { Authorization: `Bearer ${token}` };
@@ -764,7 +863,7 @@ async function syncX(fetcher: typeof fetch): Promise<SocialAnalyticsSnapshot> {
 }
 
 async function syncLinkedIn(fetcher: typeof fetch): Promise<SocialAnalyticsSnapshot> {
-  const token = env("LINKEDIN_ACCESS_TOKEN") || firstStored("linkedin", "accessToken");
+  const token = env("LINKEDIN_ACCESS_TOKEN") || await ensureFreshAccessToken("linkedin", fetcher);
   const organizationId = env("LINKEDIN_ORGANIZATION_ID") || firstStored("linkedin", "accountId");
   if (!token || !organizationId) throw new Error("LinkedIn is not connected.");
   const organizationUrn = organizationId.startsWith("urn:li:organization:")
@@ -809,7 +908,7 @@ async function syncLinkedIn(fetcher: typeof fetch): Promise<SocialAnalyticsSnaps
 }
 
 async function syncPinterest(fetcher: typeof fetch): Promise<SocialAnalyticsSnapshot> {
-  const token = env("PINTEREST_ACCESS_TOKEN") || firstStored("pinterest", "accessToken");
+  const token = env("PINTEREST_ACCESS_TOKEN") || await ensureFreshAccessToken("pinterest", fetcher);
   if (!token) throw new Error("Pinterest is not connected.");
   const headers = { Authorization: `Bearer ${token}` };
   const profile = await requestJson(fetcher, "https://api.pinterest.com/v5/user_account", { headers });
