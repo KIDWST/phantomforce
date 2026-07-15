@@ -4,6 +4,26 @@
 > touch files. Multiple agents work this repo in parallel; this note keeps us from
 > clobbering each other. Update the "Recent, merged & live" list when you land work.
 
+## PhantomForce continuous quality mission
+
+Before website, admin-app, onboarding, pricing, PhantomPlay, or product-navigation
+work, read:
+
+- `docs/quality/CONTINUOUS_QUALITY_PROGRAM.md`
+- `docs/quality/SITE_INVENTORY.md`
+- `docs/quality/QUALITY_BACKLOG.md`
+- `docs/quality/NEXT_CYCLE.md`
+
+PhantomForce is not considered permanently complete. Work in finite, verified
+quality cycles: discover surfaces, exercise real journeys, record evidence, fix
+the highest-impact verified issue batch, run relevant checks, inspect browser
+behavior for UI changes, update the quality docs, and leave an exact next-cycle
+checkpoint.
+
+Do not perform speculative redesign churn merely to stay active. Do not merge,
+push, deploy, sync live admin, change billing/auth behavior, or execute external
+actions without explicit authorization and targeted regression coverage.
+
 ## Source of truth
 - The canonical repo is **`github.com/KIDWST/phantomforce`**, branch **`main`**.
 - If your checkout has no `origin`, it's an isolated clone — wire it up before trusting local state:

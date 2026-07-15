@@ -1,0 +1,67 @@
+{
+  "updatedAt": "2026-07-14",
+  "sources": [
+    "AGENTS.md",
+    "README.md",
+    "app/js/main.js",
+    "server/src/index.ts",
+    "run-evidence/first-real-run-20260714-153002",
+    "Headless Edge smoke 1440x1000 and 375x812 on 2026-07-14"
+  ],
+  "publicRoutes": [
+    { "route": "/", "auth": "none", "purpose": "public landing page", "lastAudit": "2026-07-14", "knownProblems": ["needs full product clarity and SEO audit"] },
+    { "route": "/index.html", "auth": "none", "purpose": "public landing bundle", "lastAudit": "2026-07-14", "knownProblems": ["same as /"] },
+    { "route": "/404.html", "auth": "none", "purpose": "static not-found page", "lastAudit": "2026-07-14", "knownProblems": ["not runtime-verified this cycle"] },
+    { "route": "/robots.txt", "auth": "none", "purpose": "crawler rules", "lastAudit": "2026-07-14", "knownProblems": [] },
+    { "route": "/sitemap.xml", "auth": "none", "purpose": "search route inventory", "lastAudit": "2026-07-14", "knownProblems": ["likely under-covers current public surface"] }
+  ],
+  "appRoutes": [
+    { "route": "/app", "auth": "session-dependent", "purpose": "redirect to admin app", "lastAudit": "2026-07-14" },
+    { "route": "/app/index.html", "auth": "owner/admin/client depending host", "purpose": "PhantomForce app shell", "lastAudit": "2026-07-14", "verifiedStates": ["desktop split sidebar", "mobile bottom nav shell"] },
+    { "route": "#/ws/:workspace", "auth": "workspace-dependent", "purpose": "workspace deep link", "lastAudit": "2026-07-14" },
+    { "route": "#/page/:workspace", "auth": "workspace-dependent", "purpose": "workspace page deep link", "lastAudit": "2026-07-14" }
+  ],
+  "navigation": [
+    { "id": "dashboard", "label": "Dashboard", "group": "top", "purpose": "operating summary" },
+    { "id": "crm", "label": "Clients", "group": "top", "purpose": "CRM pipeline" },
+    { "id": "clientsetup", "label": "Client Setup", "group": "top", "purpose": "workspace/client setup" },
+    { "id": "media", "label": "Media Lab", "group": "top", "purpose": "media creation and editing" },
+    { "id": "sites", "label": "Websites", "group": "top", "purpose": "website builder" },
+    { "id": "money", "label": "Accounting", "group": "top", "purpose": "accounting and finance tracking" },
+    { "id": "planner", "label": "Planner", "group": "top", "purpose": "AI planning and prep queue" },
+    { "id": "phantomplay", "label": "PhantomPlay", "group": "top", "purpose": "game launch/configuration" },
+    { "id": "memory", "label": "Memory", "group": "bottom", "purpose": "durable memory and temporary history" },
+    { "id": "automation", "label": "Automations", "group": "bottom", "purpose": "scheduled jobs and bundles" },
+    { "id": "approvals", "label": "Approvals", "group": "bottom", "purpose": "review queue" },
+    { "id": "workers", "label": "Workforce", "group": "bottom", "purpose": "worker map" },
+    { "id": "intelligence", "label": "Competitor Intelligence", "group": "bottom", "purpose": "market scout" },
+    { "id": "analytics", "label": "Analytics", "group": "bottom", "purpose": "content/social analytics" },
+    { "id": "vacation", "label": "Away Mode", "group": "bottom", "purpose": "coverage mode" },
+    { "id": "developer", "label": "Developer", "group": "bottom", "purpose": "developer/admin diagnostics" },
+    { "id": "settings", "label": "Settings", "group": "bottom", "purpose": "configuration" }
+  ],
+  "serverRouteGroups": [
+    { "group": "auth", "examples": ["/auth/owner-login", "/auth/login", "/auth/logout", "/auth/me", "/auth/switch-org"], "coverage": "partial" },
+    { "group": "orgs", "examples": ["/orgs", "/orgs/:orgId/members", "/orgs/:orgId/invitations", "/orgs/:orgId/entitlements"], "coverage": "partial" },
+    { "group": "crm", "examples": ["/api/crm/leads", "/api/crm/prospect-lanes"], "coverage": "runtime exercised" },
+    { "group": "clientSetup", "examples": ["/api/client-setup", "/api/client-setup/slots/:slotId"], "coverage": "runtime exercised" },
+    { "group": "proposals", "examples": ["/api/proposals", "/api/proposals/:proposalId"], "coverage": "runtime exercised" },
+    { "group": "approvals", "examples": ["/api/workspace-approvals", "/phantom-ai/approvals/queue"], "coverage": "runtime exercised for workspace approvals" },
+    { "group": "phantomAI", "examples": ["/phantom-ai/chat", "/phantom-ai/provider-status", "/phantom-ai/ops/status"], "coverage": "partial" },
+    { "group": "automation", "examples": ["/phantom-ai/automations", "/phantom-ai/automations/:id/run"], "coverage": "runtime exercised" },
+    { "group": "security", "examples": ["/phantom-ai/security/scan/status", "/phantom-ai/security/scan/preview"], "coverage": "runtime exercised" },
+    { "group": "media", "examples": ["/phantom-ai/media-lab/creative/status", "/phantom-ai/media-lab/rembg/status", "/phantom-ai/content/assets"], "coverage": "partial" },
+    { "group": "phantomplay", "examples": ["/api/phantomplay", "/api/phantomplay/v2", "/api/phantomplay/v2/leaderboard/:gameId"], "coverage": "runtime exercised" },
+    { "group": "sites", "examples": ["/orgs/:orgId/sites", "/orgs/:orgId/sites/builds", "/public/sites/:siteId"], "coverage": "tests exist, not runtime exercised this cycle" },
+    { "group": "billing", "examples": ["/billing/status/read-only", "/billing/subscription/status"], "coverage": "static inventory only" }
+  ],
+  "coverageGaps": [
+    "mobile viewport matrix",
+    "keyboard-only interaction",
+    "screen-reader output",
+    "DB-auth org isolation browser proof",
+    "public pricing/product clarity",
+    "404/deep-link/browser-history audit",
+    "performance measurements"
+  ]
+}
