@@ -9,20 +9,20 @@ import {
   freshEditState, applyFilterPreset, renderBaseFrame,
   addBokehSpot, removeBokehSpotNear, removeBokehSpotAt, nearestBokehSpot, moveBokehSpot, resizeBokehSpot,
   setBokehMask, freshTextStyle, TEXT_FONTS, TEXT_PRESETS, applyTextPreset,
-} from "./imagefilters.js?v=phantom-live-20260714-262";
-import { getRembgStatus, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260714-262";
-import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260714-262";
-import { parseAnalyticsReport } from "./social-analytics.js?v=phantom-live-20260714-262";
+} from "./imagefilters.js?v=phantom-live-20260714-263";
+import { getRembgStatus, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260714-263";
+import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260714-263";
+import { parseAnalyticsReport } from "./social-analytics.js?v=phantom-live-20260714-263";
 import {
   freshComposition, compositionSnapshot, restoreComposition, addImageLayer, replaceImageLayerSource, addTextLayer, addColorLayer,
   duplicateLayer, removeSelectedLayers, moveLayerOrder, selectedLayers, selectLayer, selectAllLayers,
   loadCompositionImages, renderComposition, drawCompositionOverlay, drawDetectedSubjectOverlay, canvasPoint, hitTestLayer, hitTestResizeHandle,
   setCanvasPreset, zoomComposition, canvasPointToLayer, layerPointToCanvas,
   imageEditSnapshot, restoreImageEditSnapshot, pushEditorSnapshot,
-} from "./content-editor.js?v=phantom-live-20260714-262";
+} from "./content-editor.js?v=phantom-live-20260714-263";
 import {
   currentTenantId, currentWs, ctx, session, store, visible, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem, wsName,
-} from "./store.js?v=phantom-live-20260714-262";
+} from "./store.js?v=phantom-live-20260714-263";
 
 const CH_KEY = "pf.contenthub.v2";
 const CH_REMOVED_KEY = "pf.contenthub.removed.v1";
@@ -3303,6 +3303,12 @@ const analyticsConnectorState = {
   /* per-platform sync outcome: { state: "synced"|"error", error, syncedAt } */
   sync: {},
 };
+const analyticsOAuthSetupState = {
+  loaded: false,
+  loading: false,
+  setup: null,
+  error: "",
+};
 function analyticsAuthHeaders(extra = {}) {
   const token = typeof session?.token === "function" ? session.token() : "";
   return { ...extra, ...(token ? { Authorization: `Bearer ${token}` } : {}) };
@@ -3323,6 +3329,36 @@ async function analyticsApi(path, { method = "GET", body } = {}) {
 }
 function connectorStatus(platformId) {
   return analyticsConnectorState.connectors.find((connector) => connector.id === platformId) || null;
+}
+async function refreshAnalyticsOAuthSetup({ force = false } = {}) {
+  if (analyticsOAuthSetupState.loading) return analyticsOAuthSetupState.setup;
+  if (analyticsOAuthSetupState.loaded && !force) return analyticsOAuthSetupState.setup;
+  analyticsOAuthSetupState.loading = true;
+  analyticsOAuthSetupState.error = "";
+  try {
+    const response = await analyticsApi("/phantom-ai/ops/social-oauth/setup");
+    analyticsOAuthSetupState.setup = response?.setup || null;
+    analyticsOAuthSetupState.loaded = true;
+  } catch (error) {
+    analyticsOAuthSetupState.error = error?.message || "OAuth provider setup could not be checked.";
+  } finally {
+    analyticsOAuthSetupState.loading = false;
+  }
+  return analyticsOAuthSetupState.setup;
+}
+async function saveAnalyticsOAuthAppSetup({ platform, clientId, clientSecret, redirectUri }) {
+  const response = await analyticsApi("/phantom-ai/ops/social-oauth/setup", {
+    method: "POST",
+    body: { platform, clientId, clientSecret, redirectUri },
+  });
+  analyticsOAuthSetupState.setup = response?.setup || null;
+  analyticsOAuthSetupState.loaded = true;
+  analyticsConnectorState.connectors = Array.isArray(response?.social_analytics?.connectors)
+    ? response.social_analytics.connectors
+    : analyticsConnectorState.connectors;
+  analyticsConnectorState.loaded = false;
+  await refreshAnalyticsConnectorStatus();
+  return response;
 }
 function liveAnalyticsIsFresh(account = {}) {
   const synced = Date.parse(account?.analytics?.syncedAt || "");
@@ -3659,7 +3695,45 @@ function analyticsReadinessCopy({ hasLiveMetrics, configuredCount, oauthReadyCou
   };
 }
 
-function analyticsReadinessPanel({ displayAccounts, liveApiRows, configuredCount, oauthReadyCount, hasLiveMetrics }) {
+function analyticsOAuthSetupInline(esc) {
+  if (!canManageSocialOAuthApps()) return "";
+  const setup = analyticsOAuthSetupState.setup || {};
+  const providers = Array.isArray(setup.providers) ? setup.providers : [];
+  const callbackUrl = setup.recommendedRedirectUri || setup.redirectUri || "https://admin.phantomforce.online/phantom-ai/ops/social-oauth/callback";
+  const missing = providers.filter((provider) => !provider.oauthConfigured);
+  const ready = providers.filter((provider) => provider.oauthConfigured);
+  const providerOptions = (providers.length ? providers : PLATFORMS)
+    .map((provider) => `<option value="${esc(provider.id)}">${esc(provider.name)}${provider.id === "instagram" ? " + Facebook" : ""}</option>`)
+    .join("");
+  const statusText = analyticsOAuthSetupState.loading
+    ? "Checking provider apps..."
+    : `${ready.length}/${providers.length || PLATFORMS.length} provider apps ready`;
+  return `<details class="an-oauth-setup" ${missing.length || analyticsOAuthSetupState.error ? "open" : ""}>
+    <summary>
+      <span>${svgIc("lock")} Provider app setup</span>
+      <b>${esc(statusText)}</b>
+    </summary>
+    <p>Set the platform app once. After that, any business user can click Connect account and approve with their signed-in browser. Posting permissions stay approval-gated.</p>
+    ${analyticsOAuthSetupState.error ? `<div class="an-flash">${esc(analyticsOAuthSetupState.error)}</div>` : ""}
+    <label class="an-oauth-callback">
+      <span>Use this callback URL in each provider console</span>
+      <input readonly value="${esc(callbackUrl)}" data-an-oauth-callback />
+    </label>
+    <div class="an-oauth-providers">
+      ${providers.length
+        ? providers.map((provider) => `<span class="${provider.oauthConfigured ? "is-ready" : "is-missing"}">${esc(provider.name)}${provider.id === "instagram" ? " + Facebook" : ""}</span>`).join("")
+        : `<span class="is-missing">Provider status loading</span>`}
+    </div>
+    <form class="an-oauth-form" data-an-oauth-setup-form>
+      <select data-an-oauth-platform>${providerOptions}</select>
+      <input data-an-oauth-client-id autocomplete="off" placeholder="Client ID / App ID / Client key" />
+      <input data-an-oauth-client-secret autocomplete="off" placeholder="Client secret / App secret" type="password" />
+      <button class="btn btn-primary" type="submit">${analyticsOAuthSetupState.loading ? "Saving..." : "Save app"}</button>
+    </form>
+  </details>`;
+}
+
+function analyticsReadinessPanel({ displayAccounts, liveApiRows, configuredCount, oauthReadyCount, hasLiveMetrics, esc }) {
   const totalCount = displayAccounts.length || 1;
   const copy = analyticsReadinessCopy({ hasLiveMetrics, configuredCount, oauthReadyCount, totalCount });
   const missingApps = analyticsConnectorState.connectors
@@ -3685,6 +3759,7 @@ function analyticsReadinessPanel({ displayAccounts, liveApiRows, configuredCount
       <span class="${liveApiRows.length ? "is-done" : configuredCount ? "is-next" : ""}"><b>${liveApiRows.length}/${totalCount}</b><i>live feeds</i><em>real metrics reporting</em></span>
     </div>
     <div class="an-readiness-action">${copy.action}</div>
+    ${oauthReadyCount < totalCount ? analyticsOAuthSetupInline(esc) : ""}
   </section>`;
 }
 
@@ -3749,6 +3824,36 @@ function wireAnalyticsActions(el, accounts, opts) {
   el.querySelectorAll("[data-an-scroll-sources]").forEach((button) => button.onclick = () => {
     el.querySelector("[data-an-sources]")?.scrollIntoView({ behavior: "smooth", block: "start" });
   });
+  const callbackInput = el.querySelector("[data-an-oauth-callback]");
+  if (callbackInput) callbackInput.onclick = () => {
+    callbackInput.select();
+    navigator.clipboard?.writeText(callbackInput.value).catch(() => {});
+  };
+  const setupForm = el.querySelector("[data-an-oauth-setup-form]");
+  if (setupForm) setupForm.onsubmit = async (event) => {
+    event.preventDefault();
+    const platform = setupForm.querySelector("[data-an-oauth-platform]")?.value || "";
+    const clientId = setupForm.querySelector("[data-an-oauth-client-id]")?.value.trim() || "";
+    const clientSecret = setupForm.querySelector("[data-an-oauth-client-secret]")?.value.trim() || "";
+    const redirectUri = callbackInput?.value || "";
+    if (!clientId && !clientSecret) {
+      analyticsNotice = "Paste the provider app ID or secret before saving.";
+      renderAnalytics(el, opts, { skipAutoRefresh: true });
+      return;
+    }
+    try {
+      analyticsOAuthSetupState.loading = true;
+      analyticsNotice = `Saving ${platform} provider app...`;
+      renderAnalytics(el, opts, { skipAutoRefresh: true });
+      await saveAnalyticsOAuthAppSetup({ platform, clientId, clientSecret, redirectUri });
+      analyticsNotice = `${platform} provider app saved. Connect the account below with the signed-in browser.`;
+    } catch (error) {
+      analyticsNotice = error?.message || "Provider app setup could not be saved.";
+    } finally {
+      analyticsOAuthSetupState.loading = false;
+      renderAnalytics(el, opts, { skipAutoRefresh: true });
+    }
+  };
 }
 export function renderAnalytics(el, opts = {}, renderOptions = {}) {
   analyticsMount = el;
@@ -3756,6 +3861,11 @@ export function renderAnalytics(el, opts = {}, renderOptions = {}) {
   ensureSocialOAuthListener();
   const esc = opts.esc || ((s) => String(s));
   const accounts = loadSocialAccounts();
+  if (canManageSocialOAuthApps() && !analyticsOAuthSetupState.loaded && !analyticsOAuthSetupState.loading) {
+    void refreshAnalyticsOAuthSetup().then(() => {
+      if (el?.isConnected) renderAnalytics(el, opts, { skipAutoRefresh: true });
+    });
+  }
   const displayAccounts = accounts.filter((account) => LIVE_ANALYTICS_PLATFORMS.has(account.id));
   const feedRows = displayAccounts.map((account) => ({ account, feed: analyticsFeedForAccount(account) }));
   const liveRows = feedRows.filter((row) => row.feed);
@@ -3782,7 +3892,7 @@ export function renderAnalytics(el, opts = {}, renderOptions = {}) {
         </div>
       </section>
       ${analyticsNotice || analyticsConnectorState.error ? `<div class="an-flash">${esc(analyticsNotice || analyticsConnectorState.error)}</div>` : ""}
-      ${analyticsReadinessPanel({ displayAccounts, liveApiRows, configuredCount, oauthReadyCount, hasLiveMetrics })}
+      ${analyticsReadinessPanel({ displayAccounts, liveApiRows, configuredCount, oauthReadyCount, hasLiveMetrics, esc })}
       <div class="ch-kpis an-kpis">
         ${hasLiveMetrics
           ? `${kpi("Reach", K(totals.reach), "reported reach")}${kpi("Views", K(totals.impressions), "views + impressions")}${kpi("Engagement", K(totals.engagement), "likes + comments + shares")}${kpi("Followers", K(totals.followers), "latest reported total")}`

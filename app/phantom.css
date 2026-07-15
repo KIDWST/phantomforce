@@ -11760,6 +11760,97 @@ body .phantom .pc .pc-caption {
     linear-gradient(135deg, rgba(3, 24, 17, 0.86), rgba(2, 8, 10, 0.92));
   box-shadow: var(--edge-hi), 0 18px 44px rgba(0, 0, 0, 0.24);
 }
+.an-readiness .an-oauth-setup {
+  grid-column: 1 / -1;
+  margin-top: 2px;
+  padding: 12px;
+  border: 1px solid rgba(255, 209, 102, 0.22);
+  border-radius: var(--r-md);
+  background: rgba(0, 0, 0, 0.22);
+}
+.an-oauth-setup summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+  list-style: none;
+}
+.an-oauth-setup summary::-webkit-details-marker { display: none; }
+.an-oauth-setup summary span,
+.an-oauth-setup summary b {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--ink);
+  font: 800 12px/1 var(--font-mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.an-oauth-setup summary b { color: var(--warn); }
+.an-oauth-setup p {
+  max-width: 820px;
+  margin: 10px 0;
+  color: var(--dim);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.an-oauth-callback {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0;
+}
+.an-oauth-callback span {
+  color: var(--dim);
+  font: 800 10px/1 var(--font-mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.an-oauth-callback input,
+.an-oauth-form input,
+.an-oauth-form select {
+  width: 100%;
+  min-width: 0;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: rgba(0, 0, 0, 0.3);
+  color: var(--ink);
+  outline: none;
+}
+.an-oauth-callback input:focus,
+.an-oauth-form input:focus,
+.an-oauth-form select:focus { border-color: rgba(65, 255, 161, 0.45); }
+.an-oauth-providers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0 12px;
+}
+.an-oauth-providers span {
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--dim);
+  font: 800 10px/1 var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.an-oauth-providers .is-ready {
+  border-color: rgba(65, 255, 161, 0.32);
+  color: var(--neon);
+  background: rgba(65, 255, 161, 0.08);
+}
+.an-oauth-providers .is-missing {
+  border-color: rgba(255, 209, 102, 0.26);
+  color: var(--warn);
+  background: rgba(255, 209, 102, 0.05);
+}
+.an-oauth-form {
+  display: grid;
+  grid-template-columns: minmax(160px, 0.75fr) minmax(180px, 1fr) minmax(180px, 1fr) auto;
+  gap: 8px;
+}
 .an-readiness.is-blocked {
   border-color: rgba(255, 209, 102, 0.26);
   background:
@@ -11830,6 +11921,9 @@ body .phantom .pc .pc-caption {
   .an-readiness-steps { grid-template-columns: 1fr; }
   .an-readiness-action { justify-content: stretch; }
   .an-readiness-action .btn { width: 100%; min-height: 44px; }
+  .an-oauth-setup summary { align-items: flex-start; flex-direction: column; }
+  .an-oauth-form { grid-template-columns: 1fr; }
+  .an-oauth-form .btn { min-height: 44px; }
 }
 
 /* Final workspace cleanup: tab content starts with action, not repeated title blocks. */
