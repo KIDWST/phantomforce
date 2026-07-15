@@ -134,10 +134,21 @@ button{font-family:inherit}
 .sg-def-icon.def-arc{background:var(--sg-rose);clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%)}
 .sg-def-icon.def-frost{background:var(--sg-cyan);clip-path:polygon(50% 0,100% 100%,0 100%)}
 .sg-def-icon.def-vane{background:var(--sg-violet);clip-path:polygon(50% 0,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%)}
+.sg-def-icon.def-flak{background:#ff7b3d;clip-path:polygon(8% 20%,50% 0,92% 20%,92% 80%,50% 100%,8% 80%)}
+.sg-def-icon.def-null{background:var(--sg-good);clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%)}
+.sg-def-icon.def-drone{background:#5da8ff;border-radius:7px}
+.sg-def-icon.def-drone:after{content:"";position:absolute;inset:7px 3px;border-top:4px solid #061022;border-bottom:4px solid #061022}
+.sg-def-icon.def-gravity{background:#d46bff;border-radius:50%}
+.sg-def-icon.def-gravity:after{content:"";position:absolute;inset:-5px;border:2px solid currentColor;border-radius:50%;opacity:.75}
 
-.sg-dock-selected{background:#0f1436;border:1px solid var(--sg-amber);border-radius:10px;padding:6px 10px;font-size:11px;display:flex;gap:8px;align-items:center;color:var(--sg-ink-dim)}
+.sg-dock-selected{background:#0f1436;border:1px solid var(--sg-amber);border-radius:10px;padding:8px 10px;font-size:11px;display:flex;gap:8px;align-items:center;color:var(--sg-ink-dim);flex-wrap:wrap;max-width:460px}
 .sg-dock-selected b{color:var(--sg-ink)}
 .sg-dock-selected button{border:1px solid var(--sg-line);background:#151b40;color:var(--sg-ink);border-radius:8px;padding:5px 9px;cursor:pointer;font-size:11px}
+.sg-dock-selected button:disabled{opacity:.45;cursor:not-allowed}
+.sg-path-grid{display:grid;grid-template-columns:repeat(3,minmax(92px,1fr));gap:6px;width:100%}
+.sg-path-grid button{display:flex;flex-direction:column;gap:3px;text-align:left;background:#0a1630;border-color:#2baeff66}
+.sg-path-grid button b{font-size:10px;color:#eef1ff}
+.sg-path-grid button span{font-size:9px;color:var(--sg-ink-dim)}
 
 .sg-dock-commander{margin-left:auto}
 .sg-commander-btn{position:relative;overflow:hidden;min-width:210px;height:78px;border:1px solid var(--sg-violet);background:linear-gradient(135deg,#351164,#120729);color:#f0d9ff;border-radius:16px;padding:10px 22px;font-weight:900;font-size:15px;cursor:pointer;text-transform:uppercase;box-shadow:0 0 34px #b25cff80,inset 0 0 32px #b25cff24}
@@ -145,9 +156,20 @@ button{font-family:inherit}
 .sg-commander-btn i{position:absolute;left:0;bottom:0;top:0;background:#8a6bff33;width:0%}
 .sg-commander-btn span{position:relative;z-index:1}
 
-.sg-dock-pressure{display:flex;gap:6px;flex-wrap:wrap}
+.sg-dock-pressure{display:flex;gap:6px;flex-wrap:wrap;min-width:min(520px,100%);max-width:720px}
 .sg-pressure-btn{border:1px solid var(--sg-rose);background:#2c0a1a;color:var(--sg-rose);border-radius:9px;padding:8px 10px;font-size:11px;font-weight:700;cursor:pointer}
 .sg-pressure-btn:disabled{opacity:.4;cursor:not-allowed}
+.sg-send-tabs{width:100%;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.sg-send-tabs button{border:1px solid var(--sg-line);border-radius:999px;background:#0f1436;color:var(--sg-ink);font-size:10px;font-weight:800;padding:6px 10px;cursor:pointer}
+.sg-send-tabs button.is-on{border-color:var(--sg-cyan);background:#082750;color:var(--sg-cyan)}
+.sg-send-tabs span{margin-left:auto;color:var(--sg-amber);font-size:10px;font-weight:900}
+.sg-send-list{display:flex;gap:6px;flex-wrap:wrap;width:100%}
+.sg-send-card{display:grid;grid-template-columns:minmax(104px,1fr) auto auto;gap:5px;align-items:center;border:1px solid #2baeff55;border-radius:10px;background:#061225f2;padding:7px 8px;min-width:210px}
+.sg-send-card b{font-size:11px;color:var(--sg-ink)}
+.sg-send-card span{font-size:9px;color:var(--sg-ink-dim);grid-column:1}
+.sg-send-card button{border:1px solid var(--sg-cyan);background:#082750;color:#bdeeff;border-radius:8px;padding:5px 8px;font-size:10px;font-weight:900;cursor:pointer;grid-row:1 / span 2}
+.sg-send-card button:disabled{opacity:.42;cursor:not-allowed}
+.sg-send-preview{width:100%;margin:0;color:var(--sg-ink-dim);font-size:10px;line-height:1.35}
 
 /* ---------- overlays ---------- */
 .sg-overlay{position:absolute;inset:0;display:grid;place-items:center;background:#04050ee6;padding:16px;z-index:20}

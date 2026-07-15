@@ -65,43 +65,177 @@ function pointAtT(t) {
 }
 
 const DEFENDERS = {
-  glare: { id: 'glare', name: 'Glare Cannon', cost: 50, upgradeCost: 45, color: '#ffb84d', shape: 'circle',
-    tiers: [{ dmg: 6, rof: 3.2, range: 108 }, { dmg: 11, rof: 4.0, range: 124 }] },
-  arc: { id: 'arc', name: 'Arc Diffuser', cost: 85, upgradeCost: 65, color: '#ff4d8d', shape: 'hex',
-    tiers: [{ dmg: 5, rof: 1.1, range: 100, splash: 44 }, { dmg: 9, rof: 1.3, range: 112, splash: 58 }] },
-  frost: { id: 'frost', name: 'Frost Prism', cost: 70, upgradeCost: 55, color: '#4ddbff', shape: 'tri',
-    tiers: [{ dmg: 1, rof: 1.0, range: 126, slow: 0.35, slowDur: 1.6 }, { dmg: 2, rof: 1.2, range: 145, slow: 0.55, slowDur: 2.0 }] },
-  vane: { id: 'vane', name: 'Vane Sniper', cost: 130, upgradeCost: 95, color: '#8a6bff', shape: 'star',
-    tiers: [{ dmg: 42, rof: 0.55, range: 210, pierce: 2 }, { dmg: 68, rof: 0.65, range: 230, pierce: 4 }] },
+  glare: { id: 'glare', name: 'Glare Cannon', cost: 50, color: '#ffb84d', shape: 'circle', role: 'single target',
+    base: { dmg: 6, rof: 3.2, range: 108, pierce: 0 } },
+  arc: { id: 'arc', name: 'Arc Diffuser', cost: 85, color: '#ff4d8d', shape: 'hex', role: 'chains and shields',
+    base: { dmg: 5, rof: 1.1, range: 100, splash: 44 } },
+  frost: { id: 'frost', name: 'Frost Prism', cost: 70, color: '#4ddbff', shape: 'tri', role: 'slow and control',
+    base: { dmg: 1, rof: 1.0, range: 126, slow: 0.35, slowDur: 1.6 } },
+  vane: { id: 'vane', name: 'Vane Sniper', cost: 130, color: '#8a6bff', shape: 'star', role: 'elite killer',
+    base: { dmg: 42, rof: 0.55, range: 210, pierce: 2 } },
+  flak: { id: 'flak', name: 'Flak Bastion', cost: 95, color: '#ff7b3d', shape: 'square', role: 'anti-swarm',
+    base: { dmg: 8, rof: 1.7, range: 112, splash: 54, swarmBonus: 1.9 } },
+  null: { id: 'null', name: 'Null Beacon', cost: 110, color: '#5be6a0', shape: 'diamond', role: 'detection',
+    base: { dmg: 3, rof: 1.0, range: 132, detect: true, shieldBreak: 10, disrupt: 0.28 } },
+  drone: { id: 'drone', name: 'Drone Foundry', cost: 125, color: '#5da8ff', shape: 'hangar', role: 'interceptors',
+    base: { dmg: 7, rof: 2.2, range: 148, drone: true, swarmBonus: 1.25 } },
+  gravity: { id: 'gravity', name: 'Gravity Well', cost: 170, color: '#d46bff', shape: 'well', role: 'route control',
+    base: { dmg: 2, rof: 0.72, range: 138, slow: 0.28, slowDur: 1.8, pull: 0.018, phaseBreak: true } },
 };
-const DEFENDER_ORDER = ['glare', 'arc', 'frost', 'vane'];
-const UNLOCK_RANK = { glare: 1, arc: 1, frost: 2, vane: 3 };
+const DEFENDER_ORDER = ['glare', 'arc', 'frost', 'vane', 'flak', 'null', 'drone', 'gravity'];
+const UNLOCK_RANK = { glare: 1, arc: 1, frost: 1, vane: 1, flak: 2, null: 2, drone: 3, gravity: 4 };
+
+const UPGRADE_PATHS = {
+  glare: {
+    solar: { name: 'Solar Lance', ultimate: 'Helios Lance', costs: [70, 115, 170, 245],
+      steps: [
+        { label: 'Focus Lens', dmgMul: 1.45, rangeAdd: 18, pierceAdd: 2 },
+        { label: 'Fusion Ray', dmgMul: 1.35, pierceAdd: 3 },
+        { label: 'Sunpiercer', dmgMul: 1.5, rangeAdd: 18, pierceAdd: 4 },
+        { label: 'Helios Lance', dmgMul: 1.7, rangeAdd: 28, pierceAdd: 8, beam: true },
+      ] },
+    nova: { name: 'Nova Battery', ultimate: 'Starstorm Battery', costs: [65, 105, 155, 225],
+      steps: [
+        { label: 'Twin Emitters', rofMul: 1.35 },
+        { label: 'Scatter Burst', rofMul: 1.2, splashAdd: 26 },
+        { label: 'Quad Array', rofMul: 1.35, splashAdd: 18 },
+        { label: 'Starstorm Battery', rofMul: 1.55, splashAdd: 30, barrage: true },
+      ] },
+    reactor: { name: 'Radiant Reactor', ultimate: 'Dawn Engine', costs: [60, 95, 145, 210],
+      steps: [
+        { label: 'Hot Core', dmgMul: 1.15, overchargeGain: 0.4 },
+        { label: 'Energy Relay', rangeAdd: 16, supportAura: 0.1 },
+        { label: 'Radiant Field', supportAura: 0.16, overchargeGain: 0.8 },
+        { label: 'Dawn Engine', supportAura: 0.24, overchargeGain: 1.5, dawn: true },
+      ] },
+  },
+  arc: {
+    chain: { name: 'Chain Storm', ultimate: 'Thunderweb', costs: [75, 120, 175, 250],
+      steps: [
+        { label: 'Extended Arc', chain: 1, rangeAdd: 8 },
+        { label: 'Forked Current', chain: 2, dmgMul: 1.15 },
+        { label: 'Rolling Voltage', chain: 3, dmgMul: 1.2 },
+        { label: 'Thunderweb', chain: 5, dmgMul: 1.35, stormField: true },
+      ] },
+    emp: { name: 'EMP Command', ultimate: 'Blackout Core', costs: [70, 110, 160, 235],
+      steps: [
+        { label: 'Shield Breaker', shieldBreak: 18 },
+        { label: 'Ion Lock', shieldBreak: 24, disrupt: 0.22 },
+        { label: 'System Crash', shieldBreak: 34, disrupt: 0.32 },
+        { label: 'Blackout Core', shieldBreak: 60, disrupt: 0.55, blackout: true },
+      ] },
+    grid: { name: 'Tempest Grid', ultimate: 'Tempest Nexus', costs: [70, 115, 170, 245],
+      steps: [
+        { label: 'Static Residue', splashAdd: 16 },
+        { label: 'Arc Mines', splashAdd: 22, slow: 0.16, slowDur: 0.8 },
+        { label: 'Storm Field', splashAdd: 32, slow: 0.22, slowDur: 1.2 },
+        { label: 'Tempest Nexus', splashAdd: 48, slow: 0.28, slowDur: 1.6, stormField: true },
+      ] },
+  },
+  frost: {
+    zero: { name: 'Absolute Zero', ultimate: 'Absolute Zero', costs: [65, 105, 155, 225],
+      steps: [
+        { label: 'Cold Lens', slow: 0.5, slowDur: 2.1 },
+        { label: 'Deep Freeze', slow: 0.62, slowDur: 2.8 },
+        { label: 'Cryostasis', slow: 0.75, slowDur: 3.4, freeze: true },
+        { label: 'Absolute Zero', slow: 0.88, slowDur: 4.2, freeze: true, iceHalo: true },
+      ] },
+    shatter: { name: 'Crystal Shatter', ultimate: 'Avalanche Prism', costs: [70, 110, 165, 235],
+      steps: [
+        { label: 'Brittle Beam', vuln: 0.18 },
+        { label: 'Ice Fracture', vuln: 0.28, dmgMul: 1.4 },
+        { label: 'Chain Shatter', vuln: 0.38, splashAdd: 18 },
+        { label: 'Avalanche Prism', vuln: 0.55, splashAdd: 38, avalanche: true },
+      ] },
+    vortex: { name: 'Cryo Vortex', ultimate: 'Singularity Ice', costs: [75, 120, 180, 260],
+      steps: [
+        { label: 'Wide Halo', rangeAdd: 18 },
+        { label: 'Frozen Current', pull: 0.008, slow: 0.45 },
+        { label: 'Polar Vortex', pull: 0.014, rangeAdd: 18 },
+        { label: 'Singularity Ice', pull: 0.026, rangeAdd: 28, iceHalo: true },
+      ] },
+  },
+  vane: {
+    rail: { name: 'Rail Verdict', ultimate: 'Judgment Rail', costs: [90, 145, 215, 310],
+      steps: [
+        { label: 'Dense Rounds', dmgMul: 1.28, pierceAdd: 2 },
+        { label: 'Hypervelocity', dmgMul: 1.42, pierceAdd: 3 },
+        { label: 'Hullbreaker', dmgMul: 1.58, pierceAdd: 4 },
+        { label: 'Judgment Rail', dmgMul: 1.9, pierceAdd: 8, beam: true },
+      ] },
+    hunter: { name: 'Hunter Protocol', ultimate: 'Apex Hunter', costs: [85, 135, 205, 290],
+      steps: [
+        { label: 'Tracking Suite', detect: true, rofMul: 1.16 },
+        { label: 'Cloak Sensor', detect: true, eliteBonus: 1.45 },
+        { label: 'Execution Matrix', detect: true, execute: 0.18 },
+        { label: 'Apex Hunter', detect: true, eliteBonus: 1.8, execute: 0.28 },
+      ] },
+    orbital: { name: 'Orbital Mark', ultimate: 'Orbital Verdict', costs: [80, 125, 190, 275],
+      steps: [
+        { label: 'Target Painter', mark: 0.18 },
+        { label: 'Shared Lock', mark: 0.28, rangeAdd: 14 },
+        { label: 'Vulnerability Scan', mark: 0.38 },
+        { label: 'Orbital Verdict', mark: 0.55, orbital: true },
+      ] },
+  },
+};
 
 const ENEMIES = {
-  driftling: { hp: 16, speed: 0.085, armor: 0, bounty: 4, color: '#7c88c9', r: 9, label: 'Driftling' },
-  skiff: { hp: 10, speed: 0.145, armor: 0, bounty: 5, color: '#ff8fb4', r: 7, label: 'Skiff Raider' },
-  bulwark: { hp: 60, speed: 0.05, armor: 3, bounty: 12, color: '#c98b4a', r: 12, label: 'Bulwark Hauler' },
-  colossus: { hp: 950, speed: 0.032, armor: 6, bounty: 180, color: '#ff4d8d', r: 22, label: 'Voidmaw Colossus', boss: true },
+  driftling: { hp: 16, speed: 0.085, armor: 0, bounty: 4, color: '#7c88c9', r: 9, label: 'Driftling', tags: ['swarm'] },
+  skiff: { hp: 10, speed: 0.145, armor: 0, bounty: 5, color: '#ff8fb4', r: 7, label: 'Skiff Raider', tags: ['fast'] },
+  spark: { hp: 9, speed: 0.155, armor: 0, bounty: 3, color: '#7dd3fc', r: 6, label: 'Spark Drone', tags: ['swarm', 'fast'] },
+  needle: { hp: 14, speed: 0.18, armor: 0, bounty: 5, color: '#ff8fb4', r: 7, label: 'Needlewing', tags: ['fast'] },
+  bulwark: { hp: 70, speed: 0.052, armor: 4, bounty: 13, color: '#c98b4a', r: 12, label: 'Bulwark', tags: ['armor'] },
+  prism: { hp: 36, speed: 0.075, armor: 1, shield: 42, shieldRegen: 4, bounty: 12, color: '#6fdfff', r: 10, label: 'Prism Skiff', tags: ['shield'] },
+  ghost: { hp: 26, speed: 0.11, armor: 0, cloak: true, bounty: 14, color: '#b25cff', r: 10, label: 'Ghost Manta', tags: ['cloak'] },
+  splitter: { hp: 38, speed: 0.082, armor: 0, splitTo: 'spark', splitCount: 3, bounty: 12, color: '#f97316', r: 11, label: 'Splitter Pod', tags: ['swarm', 'carrier'] },
+  repair: { hp: 52, speed: 0.058, armor: 1, repairAura: 11, bounty: 18, color: '#5be6a0', r: 12, label: 'Repair Frigate', tags: ['support'] },
+  jammer: { hp: 48, speed: 0.064, armor: 1, jammer: 0.34, bounty: 18, color: '#fb7185', r: 12, label: 'Jammer Corvette', tags: ['support'] },
+  phase: { hp: 30, speed: 0.12, armor: 0, phase: true, bounty: 16, color: '#a78bfa', r: 9, label: 'Phase Skimmer', tags: ['phase', 'fast'] },
+  carrier: { hp: 135, speed: 0.042, armor: 2, carrier: true, bounty: 32, color: '#38bdf8', r: 16, label: 'Drone Carrier', tags: ['carrier', 'support'] },
+  leviathan: { hp: 280, speed: 0.028, armor: 7, controlResist: 0.55, bounty: 52, color: '#f59e0b', r: 20, label: 'Leviathan Barge', tags: ['armor', 'boss'] },
+  colossus: { hp: 950, speed: 0.032, armor: 6, bounty: 180, color: '#ff4d8d', r: 22, label: 'Voidmaw Colossus', boss: true, tags: ['boss', 'armor'] },
+  dreadnought: { hp: 1450, speed: 0.024, armor: 8, shield: 220, shieldRegen: 7, bounty: 260, color: '#ff4d8d', r: 27, label: 'Dreadnought', boss: true, dreadnought: true, tags: ['boss', 'armor', 'shield', 'carrier', 'support'] },
+};
+
+const SENDS = {
+  spark: { id: 'spark', name: 'Spark Drones', kind: 'fleet', cost: 35, reactor: 3, type: 'spark', count: 8, gap: 180, tags: ['Swarm', 'Fast'] },
+  needle: { id: 'needle', name: 'Needlewing Rush', kind: 'fleet', cost: 45, reactor: 4, type: 'needle', count: 5, gap: 240, tags: ['Fast'] },
+  bulwark: { id: 'bulwark', name: 'Bulwark Line', kind: 'fleet', cost: 60, reactor: 5, type: 'bulwark', count: 3, gap: 520, tags: ['Armor'] },
+  prism: { id: 'prism', name: 'Prism Skiffs', kind: 'fleet', cost: 70, reactor: 6, type: 'prism', count: 3, gap: 460, tags: ['Shield'] },
+  splitter: { id: 'splitter', name: 'Splitter Pods', kind: 'fleet', cost: 75, reactor: 6, type: 'splitter', count: 3, gap: 520, tags: ['Swarm', 'Carrier'] },
+  ghost: { id: 'ghost', name: 'Ghost Mantas', kind: 'tactical', cost: 95, cooldown: 11, type: 'ghost', count: 4, gap: 420, tags: ['Cloak'] },
+  repair: { id: 'repair', name: 'Repair Frigate', kind: 'tactical', cost: 105, cooldown: 12, type: 'repair', count: 1, gap: 0, escort: ['bulwark', 'bulwark'], formation: 'Iron Convoy', tags: ['Support'] },
+  jammer: { id: 'jammer', name: 'Jammer Corvette', kind: 'tactical', cost: 110, cooldown: 12, type: 'jammer', count: 1, gap: 0, escort: ['ghost', 'ghost'], formation: 'Silent Running', tags: ['Support', 'Cloak'] },
+  phase: { id: 'phase', name: 'Phase Skimmers', kind: 'tactical', cost: 115, cooldown: 13, type: 'phase', count: 4, gap: 360, tags: ['Phase'] },
+  carrier: { id: 'carrier', name: 'Drone Carrier', kind: 'tactical', cost: 150, cooldown: 16, type: 'carrier', count: 1, gap: 0, escort: ['phase', 'phase'], formation: 'Carrier Strike', tags: ['Carrier'] },
+  dreadnought: { id: 'dreadnought', name: 'Dreadnought', kind: 'tactical', cost: 240, cooldown: 28, type: 'dreadnought', count: 1, gap: 0, formation: 'Dreadnought breach', tags: ['Boss'] },
 };
 
 const CAMPAIGN_WAVES = [
-  [{ type: 'driftling', count: 8, gap: 700 }],
-  [{ type: 'driftling', count: 10, gap: 600 }, { type: 'skiff', count: 4, gap: 500, delay: 2000 }],
-  [{ type: 'skiff', count: 8, gap: 500 }, { type: 'driftling', count: 6, gap: 650, delay: 1000 }],
-  [{ type: 'bulwark', count: 4, gap: 1100 }, { type: 'driftling', count: 8, gap: 550, delay: 800 }],
-  [{ type: 'skiff', count: 10, gap: 480 }, { type: 'bulwark', count: 4, gap: 1200, delay: 1500 }],
-  [{ type: 'bulwark', count: 6, gap: 1000 }, { type: 'skiff', count: 10, gap: 450, delay: 900 }, { type: 'driftling', count: 6, gap: 600, delay: 1800 }],
-  [{ type: 'bulwark', count: 8, gap: 900 }, { type: 'skiff', count: 14, gap: 400, delay: 1200 }],
-  [{ type: 'colossus', count: 1, gap: 0 }, { type: 'driftling', count: 10, gap: 500, delay: 600 }],
+  [{ type: 'spark', count: 10, gap: 520 }],
+  [{ type: 'needle', count: 8, gap: 470 }, { type: 'driftling', count: 8, gap: 560, delay: 1600 }],
+  [{ type: 'prism', count: 4, gap: 760 }, { type: 'spark', count: 12, gap: 380, delay: 900 }],
+  [{ type: 'bulwark', count: 5, gap: 920 }, { type: 'splitter', count: 3, gap: 820, delay: 1200 }],
+  [{ type: 'ghost', count: 5, gap: 620 }, { type: 'repair', count: 2, gap: 1200, delay: 1500 }, { type: 'needle', count: 8, gap: 420, delay: 2400 }],
+  [{ type: 'jammer', count: 2, gap: 1600 }, { type: 'prism', count: 5, gap: 720, delay: 500 }, { type: 'phase', count: 5, gap: 520, delay: 1800 }],
+  [{ type: 'carrier', count: 1, gap: 0 }, { type: 'bulwark', count: 7, gap: 760, delay: 900 }, { type: 'ghost', count: 4, gap: 560, delay: 2200 }],
+  [{ type: 'dreadnought', count: 1, gap: 0 }, { type: 'splitter', count: 5, gap: 580, delay: 900 }, { type: 'repair', count: 2, gap: 1100, delay: 1800 }],
 ];
 function endlessWave(n) {
   const tier = Math.floor((n - 1) / 3);
   const hpMul = 1 + tier * 0.22;
   const countMul = 1 + Math.floor(tier / 2) * 0.5;
-  const entries = [{ type: 'driftling', count: Math.round((6 + tier * 2) * countMul), gap: Math.max(260, 650 - tier * 30) }];
-  if (n >= 2) entries.push({ type: 'skiff', count: Math.round((3 + tier * 2) * countMul), gap: Math.max(220, 520 - tier * 25), delay: 800 });
-  if (n >= 4) entries.push({ type: 'bulwark', count: Math.round((2 + tier) * countMul), gap: 900, delay: 1400 });
-  if (n % 6 === 0) entries.push({ type: 'colossus', count: 1, gap: 0, delay: 400 });
+  const entries = [{ type: 'spark', count: Math.round((8 + tier * 2) * countMul), gap: Math.max(220, 560 - tier * 28) }];
+  if (n >= 2) entries.push({ type: 'needle', count: Math.round((3 + tier * 2) * countMul), gap: Math.max(190, 470 - tier * 24), delay: 700 });
+  if (n >= 3) entries.push({ type: 'prism', count: Math.round((2 + tier) * countMul), gap: 720, delay: 1200 });
+  if (n >= 4) entries.push({ type: 'bulwark', count: Math.round((2 + tier) * countMul), gap: 860, delay: 1400 });
+  if (n >= 5 && n % 2 === 1) entries.push({ type: 'ghost', count: Math.round(2 + tier * 0.6), gap: 600, delay: 1600 });
+  if (n >= 6 && n % 3 === 0) entries.push({ type: 'repair', count: 1 + Math.floor(tier / 2), gap: 1300, delay: 1800 });
+  if (n >= 7 && n % 4 === 0) entries.push({ type: 'jammer', count: 1 + Math.floor(tier / 3), gap: 1500, delay: 1900 });
+  if (n >= 8 && n % 5 === 0) entries.push({ type: 'carrier', count: 1, gap: 0, delay: 1100 });
+  if (n % 10 === 0) entries.push({ type: 'dreadnought', count: 1, gap: 0, delay: 400 });
+  else if (n % 6 === 0) entries.push({ type: 'colossus', count: 1, gap: 0, delay: 400 });
   return { entries, hpMul };
 }
 
@@ -256,7 +390,8 @@ let prepRemaining = 0;
 let selectedSlot = -1, placingDef = null;
 let commanderActive = false, commanderCooldown = 0, commanderTimer = 0;
 const COMMANDER_COOLDOWN = 25, COMMANDER_DURATION = 6;
-let pressureCooldown = 0;
+let pressureCooldown = 0, sendTab = 'fleet', reactorOutput = 0, reactorBank = 0, sendCombo = [];
+let sendCooldowns = {};
 let bot = null;
 let _uid = 1; function uid() { return _uid++; }
 
@@ -275,20 +410,53 @@ function botAdvanceWave(theBot, waveNo, isBoss) {
   theBot.gold += 40 + waveNo * 6;
   if (theBot.lives <= 0) { theBot.alive = false; theBot.result = 'defeated'; }
   if (mode === 'skirmish' && running && Math.random() < 0.4) {
-    const kind = Math.random() < 0.5 ? 'swarm' : 'overload';
+    const pool = waveNo >= 6 ? ['spark', 'needle', 'bulwark', 'prism', 'ghost', 'jammer'] : ['spark', 'needle', 'bulwark'];
+    const kind = pool[Math.floor(Math.random() * pool.length)];
     applyPressureToPlayer(kind, true);
   }
 }
+function sendPower(send) {
+  if (!send) return 0;
+  const base = ENEMIES[send.type] || ENEMIES.spark;
+  return Math.round((base.hp / 18 + base.speed * 28 + base.armor * 2 + (base.shield || 0) / 18 + (base.boss ? 18 : 0) + (base.cloak ? 6 : 0) + (base.jammer ? 8 : 0) + (base.repairAura ? 7 : 0)) * Math.max(1, send.count || 1));
+}
+function formationLine(send) {
+  if (send?.formation) return send.formation;
+  const recent = sendCombo.slice(-3).map((s) => s.id);
+  if (recent.includes('bulwark') && recent.includes('repair')) return 'Iron Convoy';
+  if (recent.includes('ghost') && recent.includes('jammer')) return 'Silent Running';
+  if (recent.includes('splitter') && recent.includes('needle')) return 'Fracture Rush';
+  if (recent.includes('carrier') && recent.includes('phase')) return 'Carrier Strike';
+  if (recent.includes('bulwark') && recent.includes('dreadnought')) return 'Siege Column';
+  return '';
+}
+function queueEnemySend(send, hpMul) {
+  if (!send) return;
+  const start = waveClockMs + 450;
+  const types = [];
+  for (let i = 0; i < (send.count || 1); i++) types.push(send.type);
+  for (const t of (send.escort || [])) types.push(t);
+  types.forEach((type, i) => spawnQueue.push({ time: start + i * (send.gap || 260), type, hpMul: hpMul || 1 }));
+  spawnQueue.sort((a, b) => a.time - b.time);
+  waveActive = true;
+}
 function applyPressureToBot(kind) {
   if (!bot || !bot.alive) return;
-  if (kind === 'swarm') { bot.lives = Math.max(0, bot.lives - 2); if (bot.lives <= 0) { bot.alive = false; bot.result = 'defeated'; } }
-  if (kind === 'overload') bot.jamStacks = (bot.jamStacks || 0) + 1;
+  const send = SENDS[kind];
+  if (!send) return;
+  const pressure = Math.max(1, Math.round(sendPower(send) / 18));
+  bot.lives = Math.max(0, bot.lives - pressure);
+  if (send.tags?.includes('Support')) bot.jamStacks = (bot.jamStacks || 0) + 1;
+  if (bot.lives <= 0) { bot.alive = false; bot.result = 'defeated'; }
 }
 function applyPressureToPlayer(kind, fromBot) {
-  if (kind === 'swarm') spawnEnemy('skiff', 1);
-  if (kind === 'overload') commanderCooldown = Math.min(COMMANDER_COOLDOWN + 8, commanderCooldown + 8);
+  const send = SENDS[kind];
+  if (!send) return;
+  queueEnemySend(send, 1 + wave * 0.025);
+  if (send.tags?.includes('Support')) commanderCooldown = Math.min(COMMANDER_COOLDOWN + 6, commanderCooldown + 4);
   sfx('pressure-hit');
-  toast(fromBot ? 'Rival AI hit your lane with a pressure power!' : 'Your opponent hit your lane with a pressure power!');
+  const line = formationLine(send);
+  toast(fromBot ? `Rival AI sent ${send.name}.` : `${line ? line + ' - ' : ''}${send.name} entering your lane.`);
 }
 
 // ---------------------------------------------------------------------
@@ -368,15 +536,66 @@ window.addEventListener('resize', resizeCanvas);
 // ---------------------------------------------------------------------
 // 9. Simulation
 // ---------------------------------------------------------------------
-function currentStats(s) { return DEFENDERS[s.defId].tiers[s.tier]; }
-function dealDamage(enemy, dmg, pierce) {
+function pathFor(s) { return s && s.path ? UPGRADE_PATHS[s.defId]?.[s.path] : null; }
+function pathLevel(s) { return Math.max(0, Math.min(4, Number(s?.pathLevel) || 0)); }
+function pathLabel(s) {
+  const p = pathFor(s); const level = pathLevel(s);
+  if (!p || level <= 0) return 'Core T1';
+  return level >= 4 ? p.ultimate : p.steps[level - 1].label;
+}
+function applyStep(stats, step) {
+  if (!step) return;
+  if (step.dmgMul) stats.dmg *= step.dmgMul;
+  if (step.rofMul) stats.rof *= step.rofMul;
+  if (step.rangeAdd) stats.range += step.rangeAdd;
+  if (step.pierceAdd) stats.pierce = (stats.pierce || 0) + step.pierceAdd;
+  if (step.splashAdd) stats.splash = (stats.splash || 0) + step.splashAdd;
+  for (const key of ['slow', 'slowDur', 'detect', 'shieldBreak', 'disrupt', 'pull', 'vuln', 'mark', 'chain', 'freeze', 'beam', 'barrage', 'dawn', 'supportAura', 'stormField', 'blackout', 'iceHalo', 'avalanche', 'orbital', 'eliteBonus', 'execute', 'phaseBreak']) {
+    if (step[key] !== undefined) {
+      if (typeof step[key] === 'number' && typeof stats[key] === 'number' && key !== 'slow' && key !== 'slowDur') stats[key] += step[key];
+      else stats[key] = step[key];
+    }
+  }
+}
+function currentStats(s) {
+  const def = DEFENDERS[s.defId];
+  const stats = { ...def.base };
+  const p = pathFor(s);
+  for (let i = 0; p && i < pathLevel(s); i++) applyStep(stats, p.steps[i]);
+  stats.dmg = Math.max(1, Math.round(stats.dmg * 10) / 10);
+  stats.rof = Math.max(0.15, Math.round(stats.rof * 100) / 100);
+  stats.range = Math.round(stats.range);
+  return stats;
+}
+function enemyHas(enemy, tag) { return (enemy.tags || []).includes(tag); }
+function dealDamage(enemy, dmg, pierce, stats) {
+  let amount = dmg;
+  if (enemy.vulnerableUntil > simTime) amount *= 1 + (enemy.vulnerableFactor || 0);
+  if (enemy.markedUntil > simTime) amount *= 1 + (enemy.markedFactor || 0);
+  if (stats?.swarmBonus && enemyHas(enemy, 'swarm')) amount *= stats.swarmBonus;
+  if (stats?.eliteBonus && (enemy.boss || enemyHas(enemy, 'support') || enemyHas(enemy, 'cloak') || enemyHas(enemy, 'phase'))) amount *= stats.eliteBonus;
+  if (stats?.execute && enemy.hp / enemy.maxHp < stats.execute) amount *= 3.4;
+  if (enemy.shield > 0) {
+    const shieldDamage = amount + (stats?.shieldBreak || 0);
+    enemy.shield = Math.max(0, enemy.shield - shieldDamage);
+    if (enemy.shield > 0) return;
+    amount = Math.max(1, shieldDamage * 0.25);
+  }
   const armor = Math.max(0, enemy.armor - (pierce || 0));
-  enemy.hp -= Math.max(1, dmg - armor);
+  enemy.hp -= Math.max(1, amount - armor);
 }
 function spawnEnemy(type, hpMul) {
   const base = ENEMIES[type]; if (!base) return;
   const p = pointAtT(0);
-  enemies.push({ id: uid(), type, hp: base.hp * (hpMul || 1), maxHp: base.hp * (hpMul || 1), armor: base.armor, bounty: base.bounty, speed: base.speed, t: 0, x: p.x, y: p.y, alive: true, boss: !!base.boss, slowUntil: 0, slowFactor: 0 });
+  enemies.push({
+    id: uid(), type, hp: base.hp * (hpMul || 1), maxHp: base.hp * (hpMul || 1), armor: base.armor, bounty: base.bounty,
+    speed: base.speed, t: 0, x: p.x, y: p.y, alive: true, boss: !!base.boss, slowUntil: 0, slowFactor: 0,
+    shield: base.shield || 0, maxShield: base.shield || 0, shieldRegen: base.shieldRegen || 0, tags: base.tags || [],
+    cloak: !!base.cloak, phase: !!base.phase, nextPhaseAt: base.phase ? simTime + 1.6 : 0, phasedUntil: 0,
+    repairAura: base.repairAura || 0, jammer: base.jammer || 0, carrier: !!base.carrier, carrierTimer: base.carrier ? 2.5 : 0,
+    splitTo: base.splitTo || null, splitCount: base.splitCount || 0, dreadnought: !!base.dreadnought, modules: base.dreadnought ? { shield: true, hangar: true, jammer: true } : null,
+    controlResist: base.controlResist || 0, vulnerableUntil: 0, vulnerableFactor: 0, markedUntil: 0, markedFactor: 0, revealedUntil: 0, disruptedUntil: 0,
+  });
 }
 function loadWave(entries, hpMul) {
   spawnQueue = [];
@@ -392,8 +611,9 @@ function scheduleWave(n) {
   let entries, hpMul = 1, isBoss = false;
   if (mode === 'endless') { const w = endlessWave(n); entries = w.entries; hpMul = w.hpMul; }
   else { const idx = n - 1; if (idx >= CAMPAIGN_WAVES.length) return; entries = CAMPAIGN_WAVES[idx]; }
-  isBoss = entries.some((e) => e.type === 'colossus');
+  isBoss = entries.some((e) => ENEMIES[e.type]?.boss);
   waveBanner.hidden = isBoss; bossBanner.hidden = !isBoss;
+  if (isBoss) bossBanner.textContent = entries.some((e) => e.type === 'dreadnought') ? 'BOSS SIGNAL - DREADNOUGHT' : 'BOSS SIGNAL - VOIDMAW COLOSSUS';
   if (isBoss) sfx('boss');
   if (!isBoss) { waveBanner.textContent = `Wave ${n}${mode !== 'endless' ? '/' + totalWaves : ''} inbound`; waveBanner.hidden = false; }
   loadWave(entries, hpMul);
@@ -425,33 +645,118 @@ function leak(e) {
 }
 let spireFlash = 0;
 function flashSpireHit() { spireFlash = 0.35; }
+function tickEnemyAbilities(dt) {
+  for (const e of enemies) {
+    if (!e.alive) continue;
+    if (e.shieldRegen && e.shield < e.maxShield && e.disruptedUntil <= simTime) e.shield = Math.min(e.maxShield, e.shield + e.shieldRegen * dt);
+    if (e.phase && e.nextPhaseAt <= simTime && e.disruptedUntil <= simTime) {
+      e.phasedUntil = simTime + 0.85;
+      e.nextPhaseAt = simTime + 3.2;
+    }
+    if (e.repairAura && e.disruptedUntil <= simTime) {
+      for (const other of enemies) {
+        if (other === e || !other.alive || other.hp >= other.maxHp) continue;
+        if (Math.hypot(other.x - e.x, other.y - e.y) <= 82) other.hp = Math.min(other.maxHp, other.hp + e.repairAura * dt);
+      }
+    }
+    if (e.carrier && e.disruptedUntil <= simTime) {
+      e.carrierTimer -= dt;
+      if (e.carrierTimer <= 0) {
+        e.carrierTimer = e.dreadnought && e.modules && e.modules.hangar ? 1.6 : 2.7;
+        const p = pointAtT(Math.max(0, e.t - 0.025));
+        const base = ENEMIES.spark;
+        enemies.push({ id: uid(), type: 'spark', hp: base.hp, maxHp: base.hp, armor: base.armor, bounty: 1, speed: base.speed, t: Math.max(0, e.t - 0.025), x: p.x, y: p.y, alive: true, boss: false, slowUntil: 0, slowFactor: 0, shield: 0, maxShield: 0, tags: base.tags || [] });
+      }
+    }
+  }
+}
+function sentinelJamFactor(s) {
+  const [sx, sy] = SLOT_PX[s.slotIndex];
+  let factor = 1;
+  for (const e of enemies) {
+    if (!e.alive || !e.jammer || e.disruptedUntil > simTime) continue;
+    if (Math.hypot(e.x - sx, e.y - sy) <= 150) factor *= Math.max(0.45, 1 - e.jammer);
+  }
+  return factor;
+}
+function killEnemy(e) {
+  if (!e.alive) return;
+  e.alive = false;
+  if (e.splitTo && e.splitCount) {
+    const base = ENEMIES[e.splitTo];
+    for (let i = 0; i < e.splitCount; i++) {
+      const p = pointAtT(Math.max(0, e.t - i * 0.006));
+      enemies.push({ id: uid(), type: e.splitTo, hp: base.hp, maxHp: base.hp, armor: base.armor, bounty: base.bounty, speed: base.speed * (1 + i * 0.03), t: Math.max(0, e.t - i * 0.006), x: p.x, y: p.y, alive: true, boss: false, slowUntil: 0, slowFactor: 0, shield: 0, maxShield: 0, tags: base.tags || [] });
+    }
+  }
+  gold += e.bounty; score += e.bounty * 2 + (e.boss ? 100 : 0); killCount++;
+  sfx('death'); spawnBurst(e.x, e.y, ENEMIES[e.type].color);
+}
 
 function findTarget(s, stats) {
   const [sx, sy] = SLOT_PX[s.slotIndex];
   let best = null, bestT = -1;
   for (const e of enemies) {
     if (!e.alive) continue;
+    if (e.cloak && e.revealedUntil <= simTime && !stats.detect) continue;
+    if (e.phasedUntil > simTime && !stats.phaseBreak) continue;
     const d = Math.hypot(e.x - sx, e.y - sy);
     if (d <= stats.range && e.t > bestT) { best = e; bestT = e.t; }
   }
   return best;
 }
+function chainTargets(origin, target, count, radius) {
+  const hits = [];
+  let cursor = target;
+  for (let i = 0; i < count; i++) {
+    let next = null, best = Infinity;
+    for (const e of enemies) {
+      if (!e.alive || e === target || hits.includes(e)) continue;
+      const d = Math.hypot(e.x - cursor.x, e.y - cursor.y);
+      if (d < best && d <= radius) { best = d; next = e; }
+    }
+    if (!next) break;
+    hits.push(next); cursor = next;
+  }
+  return hits;
+}
 function fire(s, stats, target) {
   const [sx, sy] = SLOT_PX[s.slotIndex];
   const boostDmg = commanderActive ? 1.6 : 1;
   const dmg = stats.dmg * boostDmg;
-  dealDamage(target, dmg, stats.pierce || 0);
-  particles.push({ type: 'tracer', x1: sx, y1: sy, x2: target.x, y2: target.y, color: DEFENDERS[s.defId].color, life: 0.12, age: 0 });
+  if (stats.detect) target.revealedUntil = Math.max(target.revealedUntil || 0, simTime + 3.5);
+  if (stats.disrupt) target.disruptedUntil = Math.max(target.disruptedUntil || 0, simTime + 2.2 + stats.disrupt);
+  if (stats.vuln) { target.vulnerableUntil = Math.max(target.vulnerableUntil || 0, simTime + 2.4); target.vulnerableFactor = Math.max(target.vulnerableFactor || 0, stats.vuln); }
+  if (stats.mark) { target.markedUntil = Math.max(target.markedUntil || 0, simTime + 3.4); target.markedFactor = Math.max(target.markedFactor || 0, stats.mark); }
+  if (stats.pull && !target.boss) target.t = Math.max(0, target.t - stats.pull * (1 - (target.controlResist || 0)));
+  dealDamage(target, dmg, stats.pierce || 0, stats);
+  particles.push({ type: stats.beam ? 'beam' : 'tracer', x1: sx, y1: sy, x2: target.x, y2: target.y, color: DEFENDERS[s.defId].color, life: stats.beam ? 0.2 : 0.12, age: 0 });
   fireSfxFor(s.defId);
+  if (stats.chain) {
+    let falloff = 0.72;
+    for (const e of chainTargets(s, target, stats.chain, 92 + (stats.stormField ? 45 : 0))) {
+      dealDamage(e, dmg * falloff, stats.pierce || 0, stats);
+      particles.push({ type: 'tracer', x1: target.x, y1: target.y, x2: e.x, y2: e.y, color: DEFENDERS[s.defId].color, life: 0.16, age: 0 });
+      falloff *= 0.78;
+    }
+  }
   if (stats.splash) {
     for (const e of enemies) {
       if (e === target || !e.alive) continue;
-      if (Math.hypot(e.x - target.x, e.y - target.y) <= stats.splash) dealDamage(e, dmg * 0.7, 0);
+      if (Math.hypot(e.x - target.x, e.y - target.y) <= stats.splash) dealDamage(e, dmg * 0.7, 0, stats);
     }
   }
   if (stats.slow) {
     target.slowUntil = simTime + stats.slowDur;
     target.slowFactor = Math.max(target.slowFactor || 0, stats.slow);
+    if (stats.freeze && target.slowFactor >= 0.72) target.slowUntil = Math.max(target.slowUntil, simTime + stats.slowDur + 1);
+  }
+  if (stats.avalanche && target.hp <= 0) {
+    for (const e of enemies) if (e !== target && e.alive && Math.hypot(e.x - target.x, e.y - target.y) <= 76) dealDamage(e, dmg * 1.1, 0, stats);
+  }
+  if (stats.orbital && target.markedUntil > simTime) {
+    target.orbitalHits = (target.orbitalHits || 0) + 1;
+    if (target.orbitalHits % 3 === 0) dealDamage(target, dmg * 2.2, stats.pierce || 0, stats);
   }
 }
 let simTime = 0;
@@ -460,6 +765,11 @@ function tick(dt) {
   if (commanderCooldown > 0) commanderCooldown = Math.max(0, commanderCooldown - dt);
   if (commanderActive) { commanderTimer -= dt; if (commanderTimer <= 0) commanderActive = false; }
   if (pressureCooldown > 0) pressureCooldown = Math.max(0, pressureCooldown - dt);
+  for (const id in sendCooldowns) sendCooldowns[id] = Math.max(0, (sendCooldowns[id] || 0) - dt);
+  if (reactorOutput > 0) {
+    reactorBank += reactorOutput * dt / 9;
+    if (reactorBank >= 1) { const payout = Math.floor(reactorBank); gold += payout; reactorBank -= payout; }
+  }
   if (spireFlash > 0) spireFlash = Math.max(0, spireFlash - dt);
   updateParticles(dt);
 
@@ -477,9 +787,11 @@ function tick(dt) {
     const item = spawnQueue.shift();
     spawnEnemy(item.type, item.hpMul);
   }
+  tickEnemyAbilities(dt);
   for (const e of enemies) {
     if (!e.alive) continue;
-    const speedMul = e.slowUntil > simTime ? Math.max(0.15, 1 - e.slowFactor) : 1;
+    const resist = e.controlResist || 0;
+    const speedMul = e.slowUntil > simTime ? Math.max(0.15, 1 - (e.slowFactor || 0) * (1 - resist)) : 1;
     e.t += e.speed * speedMul * dt;
     if (e.t >= 1) { leak(e); continue; }
     const p = pointAtT(e.t); e.x = p.x; e.y = p.y;
@@ -492,10 +804,10 @@ function tick(dt) {
     const target = findTarget(s, stats);
     if (!target) continue;
     fire(s, stats, target);
-    const rofMul = commanderActive ? 1.4 : 1;
+    const rofMul = (commanderActive ? 1.4 : 1) * sentinelJamFactor(s);
     s.cooldown = 1 / (stats.rof * rofMul);
   }
-  for (const e of enemies) if (e.hp <= 0 && e.alive) { e.alive = false; gold += e.bounty; score += e.bounty * 2 + (e.boss ? 100 : 0); killCount++; sfx('death'); spawnBurst(e.x, e.y, ENEMIES[e.type].color); }
+  for (const e of enemies) if (e.hp <= 0 && e.alive) killEnemy(e);
   enemies = enemies.filter((e) => e.alive);
   updateHud();
 
@@ -526,6 +838,7 @@ function startRun(m) {
   sentinels = []; enemies = []; particles = [];
   spawnQueue = []; waveActive = false; prepRemaining = 0;
   commanderActive = false; commanderCooldown = 0; commanderTimer = 0; pressureCooldown = 0;
+  sendTab = 'fleet'; reactorOutput = 0; reactorBank = 0; sendCooldowns = {}; sendCombo = [];
   selectedSlot = -1; placingDef = null;
   runCompleted = false; myResult = null; running = true; paused = false;
   totalWaves = m === 'endless' ? Infinity : CAMPAIGN_WAVES.length;
@@ -604,7 +917,7 @@ function renderDock() {
     const isUnlocked = unlocked.has(id);
     const affordable = gold >= def.cost;
     const disabled = !isUnlocked || !affordable;
-    const sub = isUnlocked ? `${def.cost} Glint` : `Rank ${UNLOCK_RANK[id]} required`;
+    const sub = isUnlocked ? `${def.cost} Glint · ${def.role}` : `Rank ${UNLOCK_RANK[id]} required`;
     return `<button type="button" class="sg-def-card ${placingDef === id ? 'is-selected' : ''}" data-def="${id}" ${disabled ? 'disabled' : ''}><span class="sg-def-icon def-${id}"></span><b>${esc(def.name)}</b><span>${esc(sub)}</span></button>`;
   }).join('');
   dockDefenders.querySelectorAll('[data-def]').forEach((btn) => btn.onclick = () => {
@@ -616,13 +929,24 @@ function renderDockSelected() {
   const s = sentinels.find((x) => x.slotIndex === selectedSlot);
   if (!s) { dockSelected.hidden = true; return; }
   const def = DEFENDERS[s.defId];
-  const maxTier = def.tiers.length - 1;
+  const stats = currentStats(s);
+  const p = pathFor(s);
+  const level = pathLevel(s);
+  const paths = UPGRADE_PATHS[s.defId] || {};
+  const nextCost = p && level < 4 ? p.costs[level] : null;
   dockSelected.hidden = false;
-  dockSelected.innerHTML = `<b>${esc(def.name)} · T${s.tier + 1}</b>
-    ${s.tier < maxTier ? `<button type="button" data-upgrade ${gold < def.upgradeCost ? 'disabled' : ''}>Upgrade (${def.upgradeCost})</button>` : '<span>Max tier</span>'}
+  const pathChoices = !p && Object.entries(paths).length ? `<div class="sg-path-grid">${Object.entries(paths).map(([id, path]) => {
+    const cost = path.costs[0];
+    return `<button type="button" data-upgrade-path="${esc(id)}" ${gold < cost ? 'disabled' : ''}><b>${esc(path.name)}</b><span>${esc(path.steps[0].label)} · ${cost}</span></button>`;
+  }).join('')}</div>` : '';
+  const upgradeBtn = p ? (level < 4 ? `<button type="button" data-upgrade ${gold < nextCost ? 'disabled' : ''}>${esc(p.steps[level].label)} (${nextCost})</button>` : `<span>${esc(p.ultimate)} online</span>`) : '';
+  dockSelected.innerHTML = `<b>${esc(def.name)} · ${esc(pathLabel(s))}</b>
+    <span>Dmg ${Math.round(stats.dmg)} · Rng ${stats.range} · Rate ${stats.rof}/s</span>
+    ${pathChoices || upgradeBtn}
     <button type="button" data-sell>Sell (+${Math.round((s.spent || 0) * 0.6)})</button>
     <button type="button" data-deselect>Close</button>`;
-  dockSelected.querySelector('[data-upgrade]')?.addEventListener('click', upgradeSelected);
+  dockSelected.querySelector('[data-upgrade]')?.addEventListener('click', () => upgradeSelected());
+  dockSelected.querySelectorAll('[data-upgrade-path]').forEach((btn) => btn.addEventListener('click', () => upgradeSelected(btn.dataset.upgradePath)));
   dockSelected.querySelector('[data-sell]')?.addEventListener('click', sellSelected);
   dockSelected.querySelector('[data-deselect]')?.addEventListener('click', () => selectSlot(-1));
 }
@@ -630,30 +954,59 @@ function renderPressureDock() {
   const show = running && (mode === 'battle' || mode === 'skirmish');
   dockPressure.hidden = !show;
   if (!show) return;
+  const sends = Object.values(SENDS).filter((s) => s.kind === sendTab);
   dockPressure.innerHTML = `
-    <button type="button" class="sg-pressure-btn" data-pressure="swarm" ${gold < 40 || pressureCooldown > 0 ? 'disabled' : ''}>Swarm Ping · 40</button>
-    <button type="button" class="sg-pressure-btn" data-pressure="overload" ${gold < 60 || pressureCooldown > 0 ? 'disabled' : ''}>Jam Signal · 60</button>
-    <button type="button" class="sg-pressure-btn" data-pressure="surrender">Surrender</button>`;
-  dockPressure.querySelectorAll('[data-pressure]').forEach((b) => b.onclick = () => onPressureClick(b.dataset.pressure));
+    <div class="sg-send-tabs">
+      <button type="button" data-send-tab="fleet" class="${sendTab === 'fleet' ? 'is-on' : ''}">Fleet Sends</button>
+      <button type="button" data-send-tab="tactical" class="${sendTab === 'tactical' ? 'is-on' : ''}">Tactical Sends</button>
+      <span>Reactor +${reactorOutput}/cycle</span>
+    </div>
+    <div class="sg-send-list">
+      ${sends.map((send) => {
+        const cd = Math.ceil(sendCooldowns[send.id] || 0);
+        const disabled = gold < send.cost || cd > 0;
+        return `<div class="sg-send-card">
+          <b>${esc(send.name)}</b><span>${esc(send.tags.join(' / '))}${send.reactor ? ` · +${send.reactor} reactor` : ''}</span>
+          <button type="button" data-send="${send.id}" ${disabled ? 'disabled' : ''}>${cd ? cd + 's' : send.cost}</button>
+          ${send.kind === 'fleet' ? `<button type="button" data-send-burst="${send.id}" ${gold < send.cost * 5 ? 'disabled' : ''}>x5</button>` : ''}
+        </div>`;
+      }).join('')}
+      <button type="button" class="sg-pressure-btn" data-pressure="surrender">Surrender</button>
+    </div>
+    <p class="sg-send-preview">${sendCombo.length ? `Last formation: ${esc(formationLine(sendCombo[sendCombo.length - 1]) || sendCombo[sendCombo.length - 1].name)} · arrival ~3s` : 'Fleet sends raise Reactor Output. Tactical sends exploit a weak defense.'}</p>`;
+  dockPressure.querySelectorAll('[data-send-tab]').forEach((b) => b.onclick = () => { sendTab = b.dataset.sendTab; renderPressureDock(); });
+  dockPressure.querySelectorAll('[data-send]').forEach((b) => b.onclick = () => onSendClick(b.dataset.send, 1));
+  dockPressure.querySelectorAll('[data-send-burst]').forEach((b) => b.onclick = () => onSendClick(b.dataset.sendBurst, 5));
+  dockPressure.querySelector('[data-pressure="surrender"]')?.addEventListener('click', surrender);
 }
-function onPressureClick(kind) {
-  if (kind === 'surrender') { surrender(); return; }
-  const costs = { swarm: 40, overload: 60 };
-  const cost = costs[kind];
-  if (gold < cost || pressureCooldown > 0) return;
-  gold -= cost; pressureCooldown = 6;
+function onSendClick(kind, amount) {
+  const send = SENDS[kind]; if (!send) return;
+  const count = Math.max(1, amount || 1);
+  const cost = send.cost * count;
+  if (gold < cost || (sendCooldowns[kind] || 0) > 0) return;
+  gold -= cost;
+  if (send.kind === 'fleet') reactorOutput += (send.reactor || 0) * count;
+  if (send.kind === 'tactical') sendCooldowns[kind] = send.cooldown || 10;
+  for (let i = 0; i < count; i++) sendCombo.push(send);
+  sendCombo = sendCombo.slice(-5);
   sfx('pressure-send'); updateHud();
-  if (mode === 'skirmish') { applyPressureToBot(kind); toast('Sent to Rival AI.'); return; }
+  const line = formationLine(send);
+  if (mode === 'skirmish') {
+    for (let i = 0; i < count; i++) applyPressureToBot(kind);
+    toast(`${line ? line + ' - ' : ''}${send.name} sent to Rival AI.`);
+    return;
+  }
   if (mode === 'battle') {
-    const entrySeq = ((battle.duel && battle.duel.pressureLog) || []).length + 1;
-    const entry = { seq: entrySeq, type: kind, from: battle.amIHost ? 'host' : 'guest', at: Date.now() };
+    const existing = ((battle.duel && battle.duel.pressureLog) || []);
+    const newEntries = [];
+    for (let i = 0; i < count; i++) newEntries.push({ seq: existing.length + newEntries.length + 1, type: kind, from: battle.amIHost ? 'host' : 'guest', at: Date.now() + i });
     if (battle.amIHost) {
-      const log = [...((battle.duel && battle.duel.pressureLog) || []), entry].slice(-24);
+      const log = [...existing, ...newEntries].slice(-32);
       pushDuelState({ pressureLog: log });
-      toast('Pressure sent to your opponent.');
+      toast(`${line ? line + ' - ' : ''}${send.name} sent to your opponent.`);
     } else {
-      matchAction({ duel: { ...(battle.duel || {}), pressureLog: [...((battle.duel && battle.duel.pressureLog) || []), entry] } }, 'merge');
-      toast('Sent — delivery depends on room sync.');
+      matchAction({ duel: { ...(battle.duel || {}), pressureLog: [...existing, ...newEntries] } }, 'merge');
+      toast(`${send.name} queued — delivery depends on room sync.`);
     }
   }
 }
@@ -720,17 +1073,25 @@ function tryPlace(slotIndex) {
   if (!unlockedSet().has(placingDef)) { toast('Locked — reach the required Command Rank.'); return; }
   if (gold < def.cost) { toast('Not enough Glint.'); return; }
   gold -= def.cost;
-  sentinels.push({ id: uid(), defId: placingDef, tier: 0, slotIndex, cooldown: 0, spent: def.cost });
+  sentinels.push({ id: uid(), defId: placingDef, path: null, pathLevel: 0, slotIndex, cooldown: 0, spent: def.cost });
   sfx('place'); placingDef = null;
   updateHud(); renderDock(); selectSlot(slotIndex);
 }
-function upgradeSelected() {
+function upgradeSelected(pathId) {
   const s = sentinels.find((x) => x.slotIndex === selectedSlot);
   if (!s) return;
-  const def = DEFENDERS[s.defId];
-  if (s.tier >= def.tiers.length - 1) return;
-  if (gold < def.upgradeCost) { toast('Not enough Glint.'); return; }
-  gold -= def.upgradeCost; s.tier += 1; s.spent = (s.spent || 0) + def.upgradeCost;
+  const paths = UPGRADE_PATHS[s.defId] || {};
+  if (!s.path) {
+    if (!pathId || !paths[pathId]) return;
+    s.path = pathId;
+  }
+  const p = pathFor(s);
+  const level = pathLevel(s);
+  if (!p || level >= 4) return;
+  const cost = p.costs[level];
+  if (gold < cost) { toast('Not enough Glint.'); return; }
+  gold -= cost; s.pathLevel = level + 1; s.spent = (s.spent || 0) + cost;
+  if (s.pathLevel >= 4) spawnBurst(SLOT_PX[s.slotIndex][0], SLOT_PX[s.slotIndex][1], DEFENDERS[s.defId].color);
   sfx('upgrade'); updateHud(); renderDockSelected();
 }
 function sellSelected() {
@@ -763,6 +1124,9 @@ function drawShape(cx, cy, r, shape, color) {
   else if (shape === 'tri') { ctx.moveTo(cx, cy - r); ctx.lineTo(cx + r, cy + r * 0.8); ctx.lineTo(cx - r, cy + r * 0.8); ctx.closePath(); }
   else if (shape === 'star') { for (let i = 0; i < 10; i++) { const a = Math.PI / 5 * i - Math.PI / 2; const rr = i % 2 === 0 ? r : r * 0.45; const px = cx + rr * Math.cos(a), py = cy + rr * Math.sin(a); i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py); } ctx.closePath(); }
   else if (shape === 'square') { ctx.rect(cx - r, cy - r, r * 2, r * 2); }
+  else if (shape === 'diamond') { ctx.moveTo(cx, cy - r); ctx.lineTo(cx + r, cy); ctx.lineTo(cx, cy + r); ctx.lineTo(cx - r, cy); ctx.closePath(); }
+  else if (shape === 'hangar') { ctx.roundRect(cx - r * 1.15, cy - r * 0.78, r * 2.3, r * 1.56, r * 0.32); }
+  else if (shape === 'well') { ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.moveTo(cx + r * 1.45, cy); ctx.arc(cx, cy, r * 1.45, 0, Math.PI * 2); }
   ctx.fill();
 }
 function draw() {
@@ -905,19 +1269,45 @@ function drawSentinels() {
     const [x, y] = SLOT_PX[s.slotIndex];
     const [px, py] = toPx(x, y);
     const def = DEFENDERS[s.defId];
+    const level = pathLevel(s);
+    const path = pathFor(s);
     if (s.slotIndex === selectedSlot) {
       const stats = currentStats(s);
       ctx.beginPath(); ctx.arc(px, py, stats.range * scale, 0, Math.PI * 2);
       ctx.strokeStyle = def.color + '55'; ctx.lineWidth = 1.2 * scale; ctx.stroke();
     }
-    drawTowerBase(px, py, def.color, s.tier);
+    drawTowerBase(px, py, def.color, level);
     ctx.save();
     ctx.shadowColor = def.color;
-    ctx.shadowBlur = 20 * scale;
-    drawShape(px, py - 4 * scale, (s.tier === 1 ? 15 : 12) * scale, def.shape, def.color);
+    ctx.shadowBlur = (20 + level * 4) * scale;
+    drawShape(px, py - 4 * scale, (12 + level * 2.4) * scale, def.shape, def.color);
     ctx.restore();
-    if (s.tier === 1) { ctx.strokeStyle = '#fff8'; ctx.lineWidth = 1.4 * scale; ctx.beginPath(); ctx.arc(px, py - 4 * scale, 18 * scale, 0, Math.PI * 2); ctx.stroke(); }
+    if (level > 0) {
+      ctx.strokeStyle = level >= 4 ? '#fff' : '#fff8'; ctx.lineWidth = (1.2 + level * 0.25) * scale;
+      for (let i = 0; i < Math.min(3, level); i++) { ctx.beginPath(); ctx.arc(px, py - 4 * scale, (18 + i * 6) * scale, 0, Math.PI * 2); ctx.stroke(); }
+    }
+    if (level >= 4 && path) drawUltimateAura(px, py, def.color, path.ultimate);
   }
+}
+function drawUltimateAura(x, y, color, label) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(simTime * 0.8);
+  ctx.strokeStyle = color;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 24 * scale;
+  ctx.lineWidth = 2 * scale;
+  for (let i = 0; i < 3; i++) {
+    ctx.beginPath();
+    ctx.ellipse(0, 0, (32 + i * 8) * scale, (13 + i * 4) * scale, i * Math.PI / 3, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.rotate(-simTime * 1.6);
+  ctx.fillStyle = '#fff';
+  ctx.font = `${8 * scale}px ui-monospace,monospace`;
+  ctx.textAlign = 'center';
+  ctx.fillText(label.split(' ')[0].toUpperCase(), 0, -31 * scale);
+  ctx.restore();
 }
 function drawTowerBase(x, y, color, tier) {
   ctx.save();
@@ -930,14 +1320,14 @@ function drawTowerBase(x, y, color, tier) {
   ctx.beginPath();
   for (let i = 0; i < 8; i++) {
     const a = Math.PI / 4 * i + Math.PI / 8;
-    const r = (tier ? 27 : 23) * scale;
+    const r = (tier ? 25 + tier * 2 : 23) * scale;
     const px = Math.cos(a) * r, py = Math.sin(a) * r * 0.78;
     i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
   }
   ctx.closePath(); ctx.fill(); ctx.stroke();
   ctx.shadowBlur = 0;
   ctx.strokeStyle = '#ffffff33';
-  ctx.beginPath(); ctx.arc(0, 0, (tier ? 18 : 15) * scale, 0, Math.PI * 2); ctx.stroke();
+  ctx.beginPath(); ctx.arc(0, 0, (tier ? 16 + tier * 2 : 15) * scale, 0, Math.PI * 2); ctx.stroke();
   ctx.restore();
 }
 function drawEnemies() {
@@ -946,11 +1336,25 @@ function drawEnemies() {
     const info = ENEMIES[e.type];
     const r = (info.r + (e.boss ? 6 : 0)) * scale;
     const slowed = e.slowUntil > simTime;
-    drawEnemyShip(e, x, y, r, slowed ? '#20c8ff' : info.color);
+    const phased = e.phasedUntil > simTime;
+    const color = e.cloak && e.revealedUntil <= simTime ? '#7c3aed' : slowed ? '#20c8ff' : phased ? '#e9d5ff' : info.color;
+    ctx.globalAlpha = e.cloak && e.revealedUntil <= simTime ? 0.38 : phased ? 0.5 : 1;
+    drawEnemyShip(e, x, y, r, color);
+    ctx.globalAlpha = 1;
     if (e.boss) { ctx.strokeStyle = '#ff563dcc'; ctx.lineWidth = 2 * scale; ctx.shadowColor = '#ff563d'; ctx.shadowBlur = 18 * scale; ctx.beginPath(); ctx.arc(x, y, r + 12 * scale, 0, Math.PI * 2); ctx.stroke(); ctx.shadowBlur = 0; }
+    if (e.shield > 0) { ctx.strokeStyle = '#6fdfffcc'; ctx.lineWidth = 2 * scale; ctx.shadowColor = '#6fdfff'; ctx.shadowBlur = 12 * scale; ctx.beginPath(); ctx.arc(x, y, r + 7 * scale, 0, Math.PI * 2 * Math.max(0.06, e.shield / Math.max(1, e.maxShield))); ctx.stroke(); ctx.shadowBlur = 0; }
+    if (e.repairAura && e.disruptedUntil <= simTime) { ctx.strokeStyle = '#5be6a055'; ctx.beginPath(); ctx.arc(x, y, 34 * scale, 0, Math.PI * 2); ctx.stroke(); }
+    if (e.jammer && e.disruptedUntil <= simTime) { ctx.strokeStyle = '#fb718555'; ctx.beginPath(); ctx.arc(x, y, 42 * scale, 0, Math.PI * 2); ctx.stroke(); }
+    if (e.markedUntil > simTime) { ctx.strokeStyle = '#ffffffcc'; ctx.lineWidth = 1.5 * scale; ctx.beginPath(); ctx.arc(x, y, r + 15 * scale, 0, Math.PI * 2); ctx.stroke(); }
     const w = 22 * scale, ratio = Math.max(0, e.hp / e.maxHp);
     ctx.fillStyle = '#1a2050'; ctx.fillRect(x - w / 2, y - r - 8 * scale, w, 3 * scale);
     ctx.fillStyle = ratio > 0.4 ? '#5be6a0' : '#ff5c6c'; ctx.fillRect(x - w / 2, y - r - 8 * scale, w * ratio, 3 * scale);
+    if (e.tags && e.tags.length && r > 9 * scale) {
+      ctx.fillStyle = '#dbeafe';
+      ctx.font = `${7 * scale}px ui-monospace,monospace`;
+      ctx.textAlign = 'center';
+      ctx.fillText(e.tags[0].slice(0, 3).toUpperCase(), x, y + r + 10 * scale);
+    }
   }
 }
 function drawEnemyShip(e, x, y, r, color) {
@@ -982,11 +1386,12 @@ function drawParticlesOnCanvas() {
   for (const p of particles) {
     const t = Math.max(0, 1 - p.age / p.life);
     ctx.globalAlpha = t;
-    if (p.type === 'tracer') {
+    if (p.type === 'tracer' || p.type === 'beam') {
       const [x1, y1] = toPx(p.x1, p.y1), [x2, y2] = toPx(p.x2, p.y2);
       ctx.shadowColor = p.color; ctx.shadowBlur = 18 * scale;
-      ctx.strokeStyle = p.color; ctx.lineWidth = 3.5 * scale;
+      ctx.strokeStyle = p.color; ctx.lineWidth = (p.type === 'beam' ? 8 : 3.5) * scale;
       ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+      if (p.type === 'beam') { ctx.strokeStyle = '#fff'; ctx.lineWidth = 2 * scale; ctx.stroke(); }
       ctx.shadowBlur = 0;
     } else {
       const [x, y] = toPx(p.x, p.y);
@@ -1100,11 +1505,12 @@ $('[data-settings-close]').addEventListener('click', () => { overlaySettings.hid
 const TUTORIAL_STEPS = [
   { h: 'Welcome, Skyguard', p: 'Driftbreaker raids follow the Skyline Route toward your Anchor Spire. Place Sentinels along the corridor to break them before they arrive.' },
   { h: 'Glint economy', p: 'Defeating raiders and clearing waves earns Glint. Spend it placing new Sentinels and upgrading the ones you already have.' },
-  { h: 'Four Sentinels', p: 'Glare Cannon hits fast and single-target. Arc Diffuser splashes a small area. Frost Prism slows a raider down. Vane Sniper hits hard at long range and cuts through armor.' },
-  { h: 'Upgrades', p: 'Tap a placed Sentinel to see its Tier 2 upgrade — more damage, more range, and a stronger effect for a one-time Glint cost.' },
+  { h: 'Eight Sentinels', p: 'Glare, Arc, Frost, Vane, Flak, Null, Drone, and Gravity each answer a different fleet problem: armor, shields, swarms, cloak, support, phase, bosses, or control.' },
+  { h: 'Upgrade paths', p: 'Tap a placed Sentinel and choose a path. The original four Sentinels each have three identities and a final Tier-5 visual evolution.' },
+  { h: 'Fleet pressure', p: 'Skirmish and Room Duel add Fleet and Tactical sends. Fleet sends pressure the opponent and increase Reactor Output; Tactical sends exploit a weakness at the right moment.' },
   { h: 'Overcharge Pulse', p: "Your commander ability boosts every Sentinel's damage and fire rate for a few seconds. Use it on a tough wave, then wait out its cooldown." },
   { h: 'Hold the Spire', p: 'Every raider that reaches the end drains your Spire’s integrity. Lose it all and the route falls. Clear every wave, including the boss, to win a Campaign run.' },
-  { h: 'Duels', p: 'Skirmish and Room Duel add an opposing lane. Spend Glint on Pressure Powers to hit your rival’s lane while defending your own.' },
+  { h: 'Named formations', p: 'Certain sends combine into formations like Iron Convoy, Silent Running, Fracture Rush, Carrier Strike, and Siege Column.' },
 ];
 let tutorialStep = 0, tutorialReturn = 'menu';
 function openTutorial(returnTo) { tutorialReturn = returnTo || 'menu'; tutorialStep = 0; renderTutorial(); showScreen('tutorial'); }
