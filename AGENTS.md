@@ -11,6 +11,12 @@
   `C:\Users\jorda\Documents\Codex\worktrees\phantomforce-live-social-analytics-20260712`.
   Before telling the owner a UI change is live, verify `/health` reports that root
   and that your change exists in the served `/app/index.html` or `/app/js/main.js`.
+- The Windows remote-stack watchdog also starts the admin services. Its host files
+  live outside this repo at:
+  `C:\Users\jorda\Documents\PhantomForce-Infrastructure\windows-host-pangolin-ai`.
+  If `127.0.0.1:5177/health` ever reports `phantomforce-main-trunk-20260706`,
+  update `Start-PhantomForce-RemoteStack.ps1` and `ecosystem.config.js` there before
+  doing more UI work; that stale watchdog can otherwise resurrect the old admin app.
 - If the owner says changes are not appearing, assume another agent edited a stale
   sibling worktree first. Run `/health`, compare the `root`, and port the diff into
   the served checkout before doing more design work.
@@ -97,7 +103,7 @@
   (`app/index.html`, `app/phantom.css`, `app/js/main.js`).
 - **Living Phantom character** — `app/js/character.js`: 11 painted poses, emotional
   inertia (`governMood`), hologram depth. Shared by admin + public site.
-- Current cache-bust build id: **`phantom-live-20260714-267`**.
+- Current cache-bust build id: **`phantom-live-20260714-271`**.
 
 ## Repo map
 - `app/` — the **admin console** (`admin.phantomforce.online`). `index.html`,
