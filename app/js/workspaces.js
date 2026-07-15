@@ -1447,9 +1447,16 @@ function parseFrequencyFieldValue(value) {
 }
 function renderExpenseTextDraft(draft) {
   if (draft.kind === "recurring_rule") {
+    const preview = generateDueOccurrences(
+      { frequency: draft.frequency, intervalDays: draft.intervalDays, startDate: draft.startDate, endDate: null, lastGeneratedDate: null, status: "active" },
+      todayInput(),
+    );
+    const previewTotal = draft.direction === "expense" ? -draft.amount * preview.occurrences.length : draft.amount * preview.occurrences.length;
     return `
       <article class="finance-draft-card" data-draft-kind="recurring_rule">
-        <p class="finance-draft-title">Recurring: ${esc(draft.description)}</p>
+        <p class="finance-draft-title">${esc(draft.description)}</p>
+        <label><span>Description</span><input type="text" name="description" value="${esc(draft.description)}" required /></label>
+        <p class="finance-draft-note">${preview.occurrences.length} occurrence${preview.occurrences.length === 1 ? "" : "s"} since ${esc(fmtDate(draft.startDate))} will be added now · ${moneySigned(previewTotal)} total${preview.capped ? " (first 500 shown; more backfills automatically)" : ""}</p>
         <label><span>Amount</span><input type="number" name="amount" step="0.01" value="${draft.amount}" required /></label>
         <label><span>Direction</span><select name="direction"><option value="income" ${draft.direction === "income" ? "selected" : ""}>Cash in</option><option value="expense" ${draft.direction === "expense" ? "selected" : ""}>Cash out</option></select></label>
         <label><span>Category</span><select name="category">${financeDraftCategoryOptions(draft.categoryGuess)}</select></label>
@@ -1471,6 +1478,7 @@ function renderExpenseTextDraft(draft) {
   return `
     <article class="finance-draft-card" data-draft-kind="transaction">
       <p class="finance-draft-title">${esc(draft.description)}</p>
+      <label><span>Description</span><input type="text" name="description" value="${esc(draft.description)}" required /></label>
       <label><span>Amount</span><input type="number" name="amount" step="0.01" value="${draft.amount}" required /></label>
       <label><span>Direction</span><select name="direction"><option value="income" ${draft.direction === "income" ? "selected" : ""}>Cash in</option><option value="expense" ${draft.direction === "expense" ? "selected" : ""}>Cash out</option></select></label>
       <label><span>Category</span><select name="category">${financeDraftCategoryOptions(draft.categoryGuess)}</select></label>
@@ -1595,6 +1603,7 @@ function renderMoney(el, rerender) {
               <div>
                 <b>${esc(tx.description)}</b>
                 <i>${esc(tx.account)} · ${esc(tx.category)} · ${esc(tx.source)}</i>
+                ${tx.receiptAssetId ? `<button class="btn btn-quiet finance-row-receipt" type="button" data-act="view-receipt" data-id="${esc(tx.receiptAssetId)}">Receipt</button>` : ""}
               </div>
               <strong>${moneySigned(tx.amount)}</strong>
               <button class="record-x" data-act="delete-tx" data-id="${esc(tx.id)}" type="button" aria-label="Delete transaction">×</button>
@@ -1740,7 +1749,7 @@ function renderMoney(el, rerender) {
         financeNow().recurringRules.unshift({
           id: uid("rule"),
           ws: draftWs,
-          description: fields.description || article.querySelector(".finance-draft-title")?.textContent || "Recurring transaction",
+          description: fields.description || "Recurring transaction",
           amount,
           direction: fields.direction === "income" ? "income" : "expense",
           category: fields.category || "Uncategorized",
@@ -1826,6 +1835,14 @@ function renderMoney(el, rerender) {
       const rows = m.transactions.map((tx) => [tx.date, tx.description, tx.amount, tx.category, tx.account, tx.source]
         .map((cell) => `"${String(cell ?? "").replace(/"/g, '""')}"`).join(","));
       copyText(btn, [header, ...rows].join("\n"));
+    },
+    "view-receipt": async (id) => {
+      try {
+        const response = await financeApi(`/phantom-ai/ops/finance/receipt/${id}`);
+        if (response.image) window.open(response.image, "_blank", "noopener,noreferrer");
+      } catch (error) {
+        pushActivity("Accounting Ledger", `Couldn't open that receipt: ${error?.message || "unknown error"}.`, ws);
+      }
     },
   });
 }
