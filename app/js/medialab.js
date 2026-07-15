@@ -6,20 +6,20 @@
  * instead of sending people out to another product.
  */
 
-import { currentTenantId, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260714-259";
+import { currentTenantId, ctx, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260714-260";
 import {
   PLATFORMS, registerContentAsset, loadSocialAccounts, saveSocialAccounts, socialStatus,
   loadContentAssets, saveContentAssets, contentAssetDisplayUrl, hydrateContentAssetUrl,
-} from "./contenthub.js?v=phantom-live-20260714-259";
-import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260714-259";
+} from "./contenthub.js?v=phantom-live-20260714-260";
+import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260714-260";
 import {
   addImageLayer, addTextLayer, cloneImageEditState, compositionSnapshot, duplicateLayer,
   freshComposition, hitTestLayer, loadCompositionImages, moveLayerOrder, pushEditorSnapshot,
   removeSelectedLayers, renderComposition, restoreComposition, selectLayer, selectedLayers,
-} from "./content-editor.js?v=phantom-live-20260714-259";
-import { loadImageForEditing, exportCanvas, requestAiEdit, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260714-259";
-import { mountVideoEditor } from "./videocut.js?v=phantom-live-20260714-259";
-import { assetsAvailable, assetBlobUrl, listAssets, recordAssetUsage, saveToAssetCloud, listLocalAssets, refreshLocalAssets, localAssetBlobUrl } from "./orgs.js?v=phantom-live-20260714-259";
+} from "./content-editor.js?v=phantom-live-20260714-260";
+import { loadImageForEditing, exportCanvas, requestAiEdit, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260714-260";
+import { mountVideoEditor } from "./videocut.js?v=phantom-live-20260714-260";
+import { assetsAvailable, assetBlobUrl, listAssets, recordAssetUsage, saveToAssetCloud, listLocalAssets, refreshLocalAssets, localAssetBlobUrl } from "./orgs.js?v=phantom-live-20260714-260";
 
 const CFG_KEY = "pf.medialab.v1";
 const EDIT_INTENT_KEY = "pf.medialab.editIntent.v1";
@@ -3767,13 +3767,31 @@ function socialOAuthSetupPanel(esc) {
   </details>`;
 }
 
+function canManageSocialOAuthApps() {
+  const active = ctx?.session || {};
+  return Boolean(active.canManageAccess || active.isSuperAdmin);
+}
+
+function socialOAuthManagedPanel(esc) {
+  const readyCount = socialOAuthState.connectors.filter((connector) => connector.oauthConfigured).length;
+  const totalCount = socialOAuthState.connectors.length || PLATFORMS.length;
+  return `<details class="set-oauth-apps set-oauth-managed" open>
+    <summary>
+      <span>Account connection</span>
+      <b>${esc(String(readyCount))}/${esc(String(totalCount))} provider apps ready</b>
+    </summary>
+    <p>Choose a channel below and connect it with the signed-in browser. PhantomForce keeps the platform app credentials server-side, stores account tokens server-side, and keeps posting approval-gated.</p>
+  </details>`;
+}
+
 export function renderMediaSettings(el, opts = {}) {
   mediaSettingsMount = el;
   mediaSettingsOpts = opts;
   ensureHermesExtensionListener();
   ensureSocialOAuthCompletionListener();
+  const canManageApps = canManageSocialOAuthApps();
   if (!socialOAuthState.loaded && !socialOAuthState.loading) void refreshSocialOAuthStatus();
-  if (!socialOAuthSetupState.loaded && !socialOAuthSetupState.loading) void refreshSocialOAuthSetup();
+  if (canManageApps && !socialOAuthSetupState.loaded && !socialOAuthSetupState.loading) void refreshSocialOAuthSetup();
   const esc = opts.esc || ((s) => String(s));
   const cfg = loadCfg();
   const socialAccounts = loadSocialAccounts();
@@ -3816,7 +3834,7 @@ export function renderMediaSettings(el, opts = {}) {
         </div>
         ${socialNotice ? `<div class="set-social-notice">${esc(socialNotice)}</div>` : ""}
         ${socialOAuthState.error ? `<div class="set-social-notice">OAuth status check: ${esc(socialOAuthState.error)}</div>` : ""}
-        ${socialOAuthSetupPanel(esc)}
+        ${canManageApps ? socialOAuthSetupPanel(esc) : socialOAuthManagedPanel(esc)}
         <div class="set-social-grid">
           ${socialAccounts.map((account) => socialCard(account, esc)).join("")}
         </div>

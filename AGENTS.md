@@ -30,6 +30,11 @@
   still fine if you prefer review, but it is no longer required.
 
 ## Recent, merged & live (newest first)
+- **Org-owner social connections (2026-07-14)** — build
+  `phantom-live-20260714-260`. Social analytics status, OAuth account start,
+  and live sync are now workspace-manager routes, so database-auth org
+  owners/admins can connect their own social accounts. Provider app credential
+  setup remains platform-owner only.
 - **Social OAuth refresh loop (2026-07-14)** — build
   `phantom-live-20260714-259`. Analytics and Media & Social settings now poll and
   refresh after a provider OAuth sign-in, so connected accounts move into live
@@ -85,7 +90,7 @@
   (`app/index.html`, `app/phantom.css`, `app/js/main.js`).
 - **Living Phantom character** — `app/js/character.js`: 11 painted poses, emotional
   inertia (`governMood`), hologram depth. Shared by admin + public site.
-- Current cache-bust build id: **`phantom-live-20260714-259`**.
+- Current cache-bust build id: **`phantom-live-20260714-260`**.
 
 ## Repo map
 - `app/` — the **admin console** (`admin.phantomforce.online`). `index.html`,

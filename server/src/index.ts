@@ -493,6 +493,27 @@ function socialWorkspaceForSession(session: AccessSession) {
   return session.orgId || session.clientId || (session.canManageAccess ? "phantomforce-owner" : `session-${session.id}`);
 }
 
+function canManageSocialWorkspace(session: AccessSession) {
+  if (session.canManageAccess || session.isSuperAdmin) return true;
+  const dbSession = asDatabaseSession(session);
+  const workspaceKey = socialWorkspaceForSession(session);
+  return Boolean(dbSession && workspaceKey && canManageOrg(dbSession, workspaceKey));
+}
+
+function requireSocialWorkspaceManager(request: FastifyRequest, reply: FastifyReply) {
+  const session = requireAccessSession(request, reply);
+  if (!session) return undefined;
+  if (!canManageSocialWorkspace(session)) {
+    reply.code(403).send({
+      ok: false,
+      error: "Connecting social accounts requires workspace owner or admin access.",
+      session,
+    });
+    return undefined;
+  }
+  return session;
+}
+
 function customizationEntitlements(session: AccessSession, tenantId: string): CustomizationEntitlements {
   const workspace = getWorkspaceAccess(tenantId);
   const modules = new Set((workspace?.decision.modules ?? []).map((module) => module.trim().toLowerCase()));
@@ -6284,7 +6305,7 @@ app.get("/phantom-ai/ops/finance-connector/status", async (request, reply) => {
 });
 
 app.get("/phantom-ai/ops/social-analytics/status", async (request, reply) => {
-  const session = requireAdminAccessSession(request, reply);
+  const session = requireSocialWorkspaceManager(request, reply);
   if (!session) return reply;
   const workspaceKey = socialWorkspaceForSession(session);
   return {
@@ -6297,7 +6318,7 @@ app.get("/phantom-ai/ops/social-analytics/status", async (request, reply) => {
 });
 
 app.post("/phantom-ai/ops/social-oauth/start", async (request, reply) => {
-  const session = requireAdminAccessSession(request, reply);
+  const session = requireSocialWorkspaceManager(request, reply);
   if (!session) return reply;
   const body = (request.body ?? {}) as { platform?: unknown };
   if (!isSocialAnalyticsPlatform(body.platform)) {
@@ -6404,7 +6425,7 @@ app.get("/phantom-ai/ops/social-oauth/callback", async (request, reply) => {
 });
 
 app.post("/phantom-ai/ops/social-analytics/sync", async (request, reply) => {
-  const session = requireAdminAccessSession(request, reply);
+  const session = requireSocialWorkspaceManager(request, reply);
   if (!session) return reply;
   const parsed = SocialAnalyticsSyncSchema.safeParse(request.body ?? {});
   if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
