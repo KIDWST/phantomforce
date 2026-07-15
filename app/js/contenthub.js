@@ -723,7 +723,8 @@ export function renderContentHub(el, opts = {}) {
   try {
     const requestedTab = workspaceStorageGetItem(CH_OPEN_TAB_KEY, { migrateGlobal: false });
     if (requestedTab === "production") chState.tab = "drafts";
-    else if (requestedTab && ["library", "ideas", "drafts", "publish", "calendar"].includes(requestedTab)) chState.tab = requestedTab;
+    else if (requestedTab === "library") chState.tab = "publish";
+    else if (requestedTab && ["ideas", "drafts", "publish", "calendar"].includes(requestedTab)) chState.tab = requestedTab;
     if (requestedTab) workspaceStorageRemoveItem(CH_OPEN_TAB_KEY);
     requestedAssetId = workspaceStorageGetItem(CH_OPEN_ASSET_KEY, { migrateGlobal: false }) || "";
     if (requestedAssetId) workspaceStorageRemoveItem(CH_OPEN_ASSET_KEY);
@@ -743,8 +744,8 @@ export function renderContentHub(el, opts = {}) {
   const ideas = activeIdeas();
   const scheduled = data.posts.filter((p) => p.status === "scheduled" && !isRemoved(`schedule:${p.id}`)).length;
   const publishDrafts = loadPublishDrafts();
-  if (!["library", "ideas", "drafts", "publish", "calendar"].includes(chState.tab)) chState.tab = "publish";
-  const tabs = [["library", "Library"], ["ideas", "Ideas"], ["drafts", "Drafts"], ["publish", "Publish"], ["calendar", "Planner"]];
+  if (!["ideas", "drafts", "publish", "calendar"].includes(chState.tab)) chState.tab = "publish";
+  const tabs = [["ideas", "Ideas"], ["drafts", "Drafts"], ["publish", "Publish"], ["calendar", "Planner"]];
   el.innerHTML = `
     <div class="ch">
       <section class="ch-workbar">
@@ -763,8 +764,7 @@ export function renderContentHub(el, opts = {}) {
   pullSyncedAssetsOnce(el, opts);
   const body = el.querySelector("[data-ch-body]");
   const t = chState.tab;
-  if (t === "library") renderContentLibrary(body, data, esc, el, opts);
-  else if (t === "ideas") renderCreatorIdeas(body, data, esc, el, opts);
+  if (t === "ideas") renderCreatorIdeas(body, data, esc, el, opts);
   else if (t === "publish") renderPostPublish(body, data, esc, el, opts);
   else if (t === "drafts") renderDraftQueue(body, data, esc, el, opts);
   else if (t === "calendar") renderContentPlanner(body, data, esc, el, opts);
@@ -1450,7 +1450,6 @@ function renderContentLibrary(body, data, esc, root, opts) {
   const selectedPosts = selected.filter((item) => item.kind === "post").length;
   const allItemsCount = allLibraryItems(data, assets).length;
   body.innerHTML = `
-    <div class="ch-chips" data-ch-type>${CONTENT_TYPE_FILTERS.map(([id, l]) => `<button class="ch-chip ${chState.ctype === id ? "is-on" : ""}" data-v="${id}">${esc(l)}</button>`).join("")}</div>
     <section class="ch-card ch-created-media">
       <div class="ch-card-h ch-library-head">
         <div>
