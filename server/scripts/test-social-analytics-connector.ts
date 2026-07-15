@@ -138,7 +138,122 @@ try {
   assert(metaConnected.linkedInstagramBusiness?.businessAccountId === "ig-1", "Meta callback must save the linked Instagram business account.");
   assert(!JSON.stringify(metaConnected).includes("page-token"), "Meta callback response must not expose page tokens.");
 
-  console.log(JSON.stringify({ ok: true, provider: snapshot.provider, views: snapshot.impressions, followers: snapshot.followers, xFollowers: xSnapshot.followers, oauthCallback: true, metaPageLinked: true, credentialsExposed: false }));
+  process.env.TIKTOK_CLIENT_KEY = "tiktok-key";
+  process.env.TIKTOK_CLIENT_SECRET = "tiktok-secret";
+  const badTikTokOauth = createSocialOAuthStart("tiktok");
+  const badTikTokFetch = async (input: string | URL | Request) => {
+    const url = String(input);
+    if (url === "https://open.tiktokapis.com/v2/oauth/token/") {
+      return new Response(JSON.stringify({ access_token: "bad-tiktok-token", expires_in: 3600 }), { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+    return new Response(JSON.stringify({ error: { message: "profile unavailable" } }), { status: 500, headers: { "Content-Type": "application/json" } });
+  };
+  let badTikTokRejected = false;
+  try { await completeSocialOAuthCallback({ state: badTikTokOauth.state, code: "tt-bad" }, badTikTokFetch as typeof fetch); } catch { badTikTokRejected = true; }
+  assert(badTikTokRejected, "TikTok OAuth must reject if the connected account identity cannot be confirmed.");
+  const tiktokOauth = createSocialOAuthStart("tiktok");
+  const tiktokFetch = async (input: string | URL | Request) => {
+    const url = String(input);
+    if (url === "https://open.tiktokapis.com/v2/oauth/token/") {
+      return new Response(JSON.stringify({ access_token: "tiktok-token", refresh_token: "tiktok-refresh", expires_in: 3600, open_id: "tt-open" }), { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+    if (url.includes("/v2/user/info/")) {
+      return new Response(JSON.stringify({ data: { user: { open_id: "tt-open", display_name: "ChicagoShots", username: "officialchicagoshots" } } }), { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+    throw new Error(`Unexpected TikTok URL ${url}`);
+  };
+  const tiktokConnected = await completeSocialOAuthCallback({ state: tiktokOauth.state, code: "tt-code" }, tiktokFetch as typeof fetch);
+  assert(tiktokConnected.connected?.hasAccessToken === true, "TikTok OAuth callback must store a token.");
+  assert(tiktokConnected.connected?.accountHandle === "officialchicagoshots", "TikTok OAuth callback must store the connected handle.");
+  assert(!JSON.stringify(tiktokConnected).includes("tiktok-token"), "TikTok callback response must not expose tokens.");
+
+  process.env.X_CLIENT_ID = "x-client";
+  process.env.X_CLIENT_SECRET = "x-secret";
+  const badXOauth = createSocialOAuthStart("x");
+  const badXOauthFetch = async (input: string | URL | Request) => {
+    const url = String(input);
+    if (url === "https://api.x.com/2/oauth2/token") {
+      return new Response(JSON.stringify({ access_token: "bad-x-token", expires_in: 3600 }), { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+    if (url.includes("/2/users/me")) {
+      return new Response(JSON.stringify({ data: {} }), { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+    throw new Error(`Unexpected bad X OAuth URL ${url}`);
+  };
+  let badXRejected = false;
+  try { await completeSocialOAuthCallback({ state: badXOauth.state, code: "x-bad" }, badXOauthFetch as typeof fetch); } catch { badXRejected = true; }
+  assert(badXRejected, "X OAuth must reject if the connected account identity cannot be confirmed.");
+  const xOauth = createSocialOAuthStart("x");
+  assert(xOauth.authorizationUrl.includes("code_challenge="), "X OAuth must include a generated PKCE challenge.");
+  assert(!xOauth.authorizationUrl.includes("configure-server-generated-pkce"), "X OAuth must not use the old PKCE placeholder.");
+  const xOauthFetch = async (input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input);
+    if (url === "https://api.x.com/2/oauth2/token") {
+      assert(String(init?.body || "").includes("code_verifier="), "X token exchange must include the saved PKCE verifier.");
+      return new Response(JSON.stringify({ access_token: "x-oauth-token", refresh_token: "x-refresh", expires_in: 3600 }), { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+    if (url.includes("/2/users/me")) {
+      return new Response(JSON.stringify({ data: { id: "x-user", name: "ChicagoShots", username: "officialchicagoshots", public_metrics: { followers_count: 3210 } } }), { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+    throw new Error(`Unexpected X OAuth URL ${url}`);
+  };
+  const xConnected = await completeSocialOAuthCallback({ state: xOauth.state, code: "x-code" }, xOauthFetch as typeof fetch);
+  assert(xConnected.connected?.accountHandle === "officialchicagoshots", "X OAuth callback must save the connected username.");
+  assert(!JSON.stringify(xConnected).includes("x-oauth-token"), "X callback response must not expose tokens.");
+
+  process.env.LINKEDIN_CLIENT_ID = "linkedin-client";
+  process.env.LINKEDIN_CLIENT_SECRET = "linkedin-secret";
+  const linkedinOauth = createSocialOAuthStart("linkedin");
+  assert(!linkedinOauth.authorizationUrl.includes("code_challenge="), "LinkedIn OAuth must not send PKCE unless a verifier is stored for token exchange.");
+  const linkedinFetch = async (input: string | URL | Request) => {
+    const url = String(input);
+    if (url === "https://www.linkedin.com/oauth/v2/accessToken") {
+      return new Response(JSON.stringify({ access_token: "linkedin-token", refresh_token: "linkedin-refresh", expires_in: 3600 }), { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+    if (url.includes("/v2/organizationAcls")) {
+      return new Response(JSON.stringify({ elements: [{ "organization~": { id: "12345", localizedName: "ChicagoShots", vanityName: "officialchicagoshots" } }] }), { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+    throw new Error(`Unexpected LinkedIn URL ${url}`);
+  };
+  const linkedinConnected = await completeSocialOAuthCallback({ state: linkedinOauth.state, code: "li-code" }, linkedinFetch as typeof fetch);
+  assert(linkedinConnected.connected?.accountId === "12345", "LinkedIn OAuth callback must store an organization id.");
+  assert(!JSON.stringify(linkedinConnected).includes("linkedin-token"), "LinkedIn callback response must not expose tokens.");
+
+  process.env.PINTEREST_CLIENT_ID = "pinterest-client";
+  process.env.PINTEREST_CLIENT_SECRET = "pinterest-secret";
+  const badPinterestOauth = createSocialOAuthStart("pinterest");
+  assert(badPinterestOauth.authorizationUrl.includes("code_challenge="), "Pinterest OAuth must include a generated PKCE challenge.");
+  let badPinterestRejected = false;
+  const badPinterestFetch = async (input: string | URL | Request) => {
+    const url = String(input);
+    if (url === "https://api.pinterest.com/v5/oauth/token") {
+      return new Response(JSON.stringify({ access_token: "bad-pinterest-token", expires_in: 3600 }), { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+    return new Response(JSON.stringify({ error: { message: "profile unavailable" } }), { status: 500, headers: { "Content-Type": "application/json" } });
+  };
+  try { await completeSocialOAuthCallback({ state: badPinterestOauth.state, code: "pin-bad" }, badPinterestFetch as typeof fetch); } catch { badPinterestRejected = true; }
+  assert(badPinterestRejected, "Pinterest OAuth must reject if the connected account identity cannot be confirmed.");
+  const pinterestOauth = createSocialOAuthStart("pinterest");
+  assert(pinterestOauth.authorizationUrl.includes("code_challenge="), "Pinterest OAuth must include PKCE on every start.");
+  const pinterestFetch = async (input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input);
+    if (url === "https://api.pinterest.com/v5/oauth/token") {
+      assert(String(init?.body || "").includes("code_verifier="), "Pinterest token exchange must include the saved PKCE verifier.");
+      return new Response(JSON.stringify({ access_token: "pinterest-token", refresh_token: "pinterest-refresh", expires_in: 3600 }), { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+    if (url === "https://api.pinterest.com/v5/user_account") {
+      return new Response(JSON.stringify({ username: "officialchicagoshots", account_id: "pin-account", business_name: "ChicagoShots" }), { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+    throw new Error(`Unexpected Pinterest URL ${url}`);
+  };
+  const pinterestConnected = await completeSocialOAuthCallback({ state: pinterestOauth.state, code: "pin-code" }, pinterestFetch as typeof fetch);
+  assert(pinterestConnected.connected?.accountHandle === "officialchicagoshots", "Pinterest OAuth callback must store the connected username.");
+  assert(!JSON.stringify(pinterestConnected).includes("pinterest-token"), "Pinterest callback response must not expose tokens.");
+
+  const finalStatus = getSocialAnalyticsConnectorStatus();
+  assert(finalStatus.connectors.every((connector) => connector.configured), "All seven channels should be configured after OAuth/storage proofs.");
+
+  console.log(JSON.stringify({ ok: true, provider: snapshot.provider, views: snapshot.impressions, followers: snapshot.followers, xFollowers: xSnapshot.followers, oauthCallback: true, metaPageLinked: true, allOAuthCallbacksStored: true, credentialsExposed: false }));
 } finally {
   for (const key of keys) {
     if (original[key] === undefined) delete process.env[key];

@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 
 import {
   consumePendingSocialOAuthState,
@@ -58,6 +58,9 @@ const firstEnv = (...names: string[]) => names.map(env).find(Boolean) || "";
 const defaultHandle = "officialchicagoshots";
 const metaOauthConfigured = () => Boolean(env("META_APP_ID") && env("META_APP_SECRET"));
 const socialPlatforms = ["youtube", "instagram", "facebook", "tiktok", "x", "linkedin", "pinterest"] as const;
+const basicAuth = (user: string, password: string) => `Basic ${Buffer.from(`${user}:${password}`).toString("base64")}`;
+const pkceVerifier = () => randomBytes(32).toString("base64url");
+const pkceChallenge = (verifier: string) => createHash("sha256").update(verifier).digest("base64url");
 
 const stored = (platform: SocialAnalyticsPlatform, key: string) => {
   const connection = getStoredSocialConnection(platform);
@@ -227,7 +230,8 @@ export function createSocialOAuthStart(platform: SocialAnalyticsPlatform) {
     throw new Error(`${connector.name} OAuth needs ${platform.toUpperCase()}_OAUTH_REDIRECT_URI or SOCIAL_OAUTH_REDIRECT_URI.`);
   }
   const state = oauthState(platform);
-  savePendingSocialOAuthState(state, platform);
+  const codeVerifier = platform === "x" || platform === "pinterest" ? pkceVerifier() : "";
+  savePendingSocialOAuthState(state, platform, codeVerifier ? { codeVerifier } : {});
   const scopes = scopeValue(platform, connector.scopes);
   let authorizationUrl = "";
   if (platform === "youtube") {
@@ -263,7 +267,7 @@ export function createSocialOAuthStart(platform: SocialAnalyticsPlatform) {
       response_type: "code",
       scope: scopes,
       state,
-      code_challenge: env("X_OAUTH_CODE_CHALLENGE") || "configure-server-generated-pkce",
+      code_challenge: pkceChallenge(codeVerifier),
       code_challenge_method: "S256",
     })}`;
   } else if (platform === "linkedin") {
@@ -281,6 +285,8 @@ export function createSocialOAuthStart(platform: SocialAnalyticsPlatform) {
       response_type: "code",
       scope: scopes,
       state,
+      code_challenge: pkceChallenge(codeVerifier),
+      code_challenge_method: "S256",
     })}`;
   }
 
@@ -303,10 +309,15 @@ function tokenExpiry(expiresIn: unknown) {
   return seconds > 0 ? new Date(Date.now() + seconds * 1000).toISOString() : undefined;
 }
 
-async function exchangeToken(fetcher: typeof fetch, url: string, body: URLSearchParams) {
+async function exchangeToken(
+  fetcher: typeof fetch,
+  url: string,
+  body: URLSearchParams,
+  headers: Record<string, string> = {},
+) {
   const response = await fetcher(url, {
     method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    headers: { "Content-Type": "application/x-www-form-urlencoded", ...headers },
     body,
   });
   const payload = await response.json().catch(() => null);
@@ -418,6 +429,131 @@ export async function completeSocialOAuthCallback(query: Record<string, unknown>
       metadata: { source: "meta_page_instagram_business_connection" },
     }) : null;
     return { platform, connected: platform === "instagram" ? instagram || facebook : facebook, linkedFacebookPage: facebook, linkedInstagramBusiness: instagram };
+  }
+
+  if (platform === "tiktok") {
+    const payload = await exchangeToken(fetcher, "https://open.tiktokapis.com/v2/oauth/token/", new URLSearchParams({
+      client_key: env("TIKTOK_CLIENT_KEY"),
+      client_secret: env("TIKTOK_CLIENT_SECRET"),
+      code,
+      grant_type: "authorization_code",
+      redirect_uri: redirectUri,
+    }));
+    const accessToken = text(payload?.access_token);
+    if (!accessToken) throw new Error("TikTok did not return an access token.");
+    const profile = await requestJson(
+      fetcher,
+      "https://open.tiktokapis.com/v2/user/info/?fields=open_id,union_id,display_name,username",
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+    );
+    const user = profile?.data?.user || {};
+    if (!text(user?.open_id || payload?.open_id)) throw new Error("TikTok did not return a user identity.");
+    const saved = saveStoredSocialConnection("tiktok", {
+      provider: "TikTok Display API",
+      accessToken,
+      refreshToken: text(payload?.refresh_token) || undefined,
+      expiresAt: tokenExpiry(payload?.expires_in),
+      accountId: text(user?.open_id || payload?.open_id),
+      accountName: text(user?.display_name),
+      accountHandle: cleanHandle(user?.username || user?.display_name || defaultHandle),
+      scopes: CONNECTORS.find((connector) => connector.id === "tiktok")?.scopes,
+    });
+    return { platform, connected: saved };
+  }
+
+  if (platform === "x") {
+    if (!pending.codeVerifier) throw new Error("X OAuth callback is missing its PKCE verifier. Start the connection again.");
+    const payload = await exchangeToken(fetcher, "https://api.x.com/2/oauth2/token", new URLSearchParams({
+      client_id: env("X_CLIENT_ID"),
+      code,
+      grant_type: "authorization_code",
+      redirect_uri: redirectUri,
+      code_verifier: pending.codeVerifier,
+    }), { Authorization: basicAuth(env("X_CLIENT_ID"), env("X_CLIENT_SECRET")) });
+    const accessToken = text(payload?.access_token);
+    if (!accessToken) throw new Error("X did not return an access token.");
+    const profile = await requestJson(fetcher, "https://api.x.com/2/users/me?user.fields=username,name,public_metrics", {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    const user = profile?.data || {};
+    const xHandle = cleanHandle(user?.username);
+    if (!text(user?.id) || !xHandle) throw new Error("X did not return a user identity.");
+    const saved = saveStoredSocialConnection("x", {
+      provider: "X API v2",
+      accessToken,
+      refreshToken: text(payload?.refresh_token) || undefined,
+      expiresAt: tokenExpiry(payload?.expires_in),
+      accountId: text(user?.id),
+      accountName: text(user?.name),
+      accountHandle: xHandle,
+      scopes: CONNECTORS.find((connector) => connector.id === "x")?.scopes,
+    });
+    return { platform, connected: saved };
+  }
+
+  if (platform === "linkedin") {
+    const payload = await exchangeToken(fetcher, "https://www.linkedin.com/oauth/v2/accessToken", new URLSearchParams({
+      client_id: env("LINKEDIN_CLIENT_ID"),
+      client_secret: env("LINKEDIN_CLIENT_SECRET"),
+      code,
+      grant_type: "authorization_code",
+      redirect_uri: redirectUri,
+    }));
+    const accessToken = text(payload?.access_token);
+    if (!accessToken) throw new Error("LinkedIn did not return an access token.");
+    let organizationId = env("LINKEDIN_ORGANIZATION_ID");
+    let organizationName = env("LINKEDIN_ORGANIZATION_NAME") || "LinkedIn organization";
+    let organizationHandle = cleanHandle(env("LINKEDIN_HANDLE") || defaultHandle);
+    if (!organizationId) {
+      const orgs = await requestJson(fetcher, "https://api.linkedin.com/v2/organizationAcls?q=roleAssignee&role=ADMINISTRATOR&state=APPROVED&projection=(elements*(organization~(id,localizedName,vanityName)))", {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      const organization = orgs?.elements?.[0]?.["organization~"] || {};
+      organizationId = text(organization?.id);
+      organizationName = text(organization?.localizedName) || organizationName;
+      organizationHandle = cleanHandle(organization?.vanityName || organizationName || organizationHandle);
+    }
+    if (!organizationId) {
+      throw new Error("LinkedIn connected, but no organization account was returned. Add LINKEDIN_ORGANIZATION_ID before syncing company analytics.");
+    }
+    const saved = saveStoredSocialConnection("linkedin", {
+      provider: "LinkedIn Marketing API",
+      accessToken,
+      refreshToken: text(payload?.refresh_token) || undefined,
+      expiresAt: tokenExpiry(payload?.expires_in),
+      accountId: organizationId,
+      accountName: organizationName,
+      accountHandle: organizationHandle,
+      scopes: CONNECTORS.find((connector) => connector.id === "linkedin")?.scopes,
+    });
+    return { platform, connected: saved };
+  }
+
+  if (platform === "pinterest") {
+    if (!pending.codeVerifier) throw new Error("Pinterest OAuth callback is missing its PKCE verifier. Start the connection again.");
+    const payload = await exchangeToken(fetcher, "https://api.pinterest.com/v5/oauth/token", new URLSearchParams({
+      code,
+      grant_type: "authorization_code",
+      redirect_uri: redirectUri,
+      code_verifier: pending.codeVerifier,
+    }), { Authorization: basicAuth(env("PINTEREST_CLIENT_ID"), env("PINTEREST_CLIENT_SECRET")) });
+    const accessToken = text(payload?.access_token);
+    if (!accessToken) throw new Error("Pinterest did not return an access token.");
+    const profile = await requestJson(fetcher, "https://api.pinterest.com/v5/user_account", {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!text(profile?.username || profile?.account_id || profile?.id)) throw new Error("Pinterest did not return an account identity.");
+    const saved = saveStoredSocialConnection("pinterest", {
+      provider: "Pinterest API v5",
+      accessToken,
+      refreshToken: text(payload?.refresh_token) || undefined,
+      expiresAt: tokenExpiry(payload?.expires_in),
+      accountId: text(profile?.username || profile?.account_id || profile?.id),
+      accountName: text(profile?.business_name || profile?.username),
+      accountHandle: cleanHandle(profile?.username || defaultHandle),
+      scopes: CONNECTORS.find((connector) => connector.id === "pinterest")?.scopes,
+    });
+    return { platform, connected: saved };
   }
 
   throw new Error(`${platform} OAuth callback storage is not implemented yet. Use Settings with an official token for this channel.`);

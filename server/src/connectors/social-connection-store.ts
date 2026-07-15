@@ -24,6 +24,7 @@ type StoredConnection = {
 type PendingOAuthState = {
   platform: SocialAnalyticsPlatform;
   createdAt: string;
+  codeVerifier?: string;
 };
 
 type SocialConnectionStore = {
@@ -87,9 +88,13 @@ export function saveStoredSocialConnection(platform: SocialAnalyticsPlatform, da
   return redactedConnection(store.connections[platform]);
 }
 
-export function savePendingSocialOAuthState(state: string, platform: SocialAnalyticsPlatform) {
+export function savePendingSocialOAuthState(
+  state: string,
+  platform: SocialAnalyticsPlatform,
+  data: { codeVerifier?: string } = {},
+) {
   const store = readStore();
-  store.pendingStates[state] = { platform, createdAt: new Date().toISOString() };
+  store.pendingStates[state] = { platform, createdAt: new Date().toISOString(), ...data };
   writeStore(store);
 }
 
