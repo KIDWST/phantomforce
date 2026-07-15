@@ -10938,6 +10938,8 @@ body.mission-control-on .console {
 .mc-setup label { display: grid; gap: 6px; color: var(--dim); font-size: 12px; }
 .mc-setup textarea { min-height: 96px; resize: vertical; }
 .mc-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; }
+.mc-setup label.mc-check { display: flex; flex-direction: row; align-items: center; gap: 8px; line-height: 1.4; }
+.mc-setup label.mc-check input { width: auto; flex: 0 0 auto; }
 @media (prefers-reduced-motion: reduce) {
   .mission-control,
   .mission-control::after,

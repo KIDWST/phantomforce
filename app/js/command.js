@@ -11,10 +11,10 @@ import {
   PACKAGES, RETAINERS, VACATION_POLICY, fmtMoney, statusLabel, daysUntil, memoryStats, chatHistoryStats,
   ctx, session, loadPhantomLoop, savePhantomLoop, loopProviderName, modelDisplayLabel,
   getPhantomLaneTarget, loadPhantomLaneConfig, workspaceStorageGetItem, wsName, friendlyBackendError,
-} from "./store.js?v=phantom-live-20260715-3";
-import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260715-3";
-import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260715-3";
-import { createCrmProspectBuildout, isCrmProspectBuildout } from "./crmprospects.js?v=phantom-live-20260715-3";
+} from "./store.js?v=phantom-live-20260715-4";
+import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260715-4";
+import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260715-4";
+import { createCrmProspectBuildout, isCrmProspectBuildout } from "./crmprospects.js?v=phantom-live-20260715-4";
 const classifyPhantomIntent = (text) => deriveActionContract(classifyRaw(text));
 
 /* Cross-surface handoff: chat tells the Websites page which project to focus

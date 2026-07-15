@@ -267,6 +267,16 @@ import {
   recomputeGlobalScoreForUser,
 } from "./phantom-ai/phantomplay-handle.js";
 import {
+  confirmMissionStart,
+  createMissionApproval,
+  decomposeMissionObjective,
+  getMission,
+  getMissionReport,
+  missionWorkerAction,
+  synthesizeMission,
+  terminaHealth,
+} from "./phantom-ai/termina-bridge.js";
+import {
   getPhantomPlayDeveloperAnalytics,
   getPhantomPlayDiscovery,
   getPhantomPlayGamePage,
@@ -4487,6 +4497,98 @@ app.get("/api/phantomplay/leaderboard/global", async (request, reply) => {
   if (!session) return reply;
   if (!phantomPlayV2Gate(reply)) return reply;
   return { ok: true, ...(await getPhantomPlayGlobalLeaderboard(session)) };
+});
+
+/* ---- Termina Mission Bridge (vertical slice) ----
+   docs/superpowers/specs/2026-07-15-termina-mission-bridge-design.md.
+   Owner-facing only (mirrors the CLI/Termina view in missioncontrol.js,
+   already admin-gated client-side) -- this executes real commands via
+   Termina's PTY worker sessions, so every route here requires a platform
+   admin session, not just any signed-in session. */
+function terminaError(reply: FastifyReply, error: unknown) {
+  return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : "Termina request failed." });
+}
+
+app.get("/phantom-ai/termina/health", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+  if (!session) return reply;
+  return { ok: true, ...(await terminaHealth()) };
+});
+
+app.post("/phantom-ai/missions/decompose", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+  if (!session) return reply;
+  const body = (request.body ?? {}) as { objective?: unknown };
+  try {
+    const plan = await decomposeMissionObjective(String(body.objective ?? ""));
+    return { ok: true, ...plan };
+  } catch (error) { return terminaError(reply, error); }
+});
+
+app.post("/phantom-ai/missions", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+  if (!session) return reply;
+  const body = (request.body ?? {}) as { objective?: unknown; missionName?: unknown; roles?: unknown };
+  const objective = String(body.objective ?? "").trim();
+  const roles = Array.isArray(body.roles) ? body.roles : [];
+  if (!objective || !roles.length) return reply.code(400).send({ ok: false, error: "An objective and decomposed roles are required -- call decompose first." });
+  // This only records a pending approval; it does not start any workers or
+  // execute anything yet. See POST .../approvals/:id/confirm.
+  const approval = createMissionApproval({
+    requestedByLabel: session.label,
+    missionName: String(body.missionName ?? "Untitled mission").trim() || "Untitled mission",
+    objective,
+    roles: roles as never,
+  });
+  return { ok: true, ...approval };
+});
+
+app.post("/phantom-ai/missions/approvals/:id/confirm", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+  if (!session) return reply;
+  const params = request.params as { id?: string };
+  try {
+    const mission = params.id ? await confirmMissionStart(params.id) : null;
+    return mission ? { ok: true, mission } : reply.code(404).send({ ok: false, error: "Mission approval was not found." });
+  } catch (error) { return terminaError(reply, error); }
+});
+
+app.get("/phantom-ai/missions/:id", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+  if (!session) return reply;
+  const params = request.params as { id?: string };
+  try {
+    return { ok: true, ...(await getMission(String(params.id))) };
+  } catch (error) { return terminaError(reply, error); }
+});
+
+app.post("/phantom-ai/missions/:id/workers/:workerId/:action", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+  if (!session) return reply;
+  const params = request.params as { id?: string; workerId?: string; action?: string };
+  if (params.action !== "stop" && params.action !== "retry") return reply.code(400).send({ ok: false, error: "Action must be stop or retry." });
+  try {
+    const worker = await missionWorkerAction(String(params.id), String(params.workerId), params.action);
+    return { ok: true, worker };
+  } catch (error) { return terminaError(reply, error); }
+});
+
+app.post("/phantom-ai/missions/:id/synthesize", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+  if (!session) return reply;
+  const params = request.params as { id?: string };
+  try {
+    return { ok: true, ...(await synthesizeMission(String(params.id))) };
+  } catch (error) { return terminaError(reply, error); }
+});
+
+app.get("/phantom-ai/missions/:id/report", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+  if (!session) return reply;
+  const params = request.params as { id?: string };
+  try {
+    return { ok: true, ...(await getMissionReport(String(params.id))) };
+  } catch (error) { return terminaError(reply, error); }
 });
 
 /* ============================================================================
