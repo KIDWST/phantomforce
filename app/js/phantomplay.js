@@ -362,8 +362,8 @@ function renderHome() {
     ${continuing.length ? gameRows(continuing, "Continue playing", "Pick up from your last saved point.") : ""}
     ${gameRows(featured, "Ready to play", "Fast, polished builds selected for the play lab.")}
     ${recent.length ? gameRows(recent, "Recently played") : ""}
-    ${gameRows(community, "Shared prototypes", "Reviewed builds from dev rooms appear here when they are safe to test.")}
-    <section class="pp-spotlight"><img src="${esc(TAK_AVATAR)}" alt=""/><div><p class="pp-kicker">SANDBOX BUILDER SPOTLIGHT</p><h2>${esc(ui.snapshot.developerSpotlight)}</h2><p>PhantomPlay is for creators who want a private build room, playtest feedback, version notes, and a clean path to ship later.</p><button class="pp-secondary" data-pp-tab="developer">Open dev rooms</button></div></section>
+    ${gameRows(community, "Shared prototypes", "Reviewed builds from developers appear here when they are safe to test.")}
+    <section class="pp-spotlight"><img src="${esc(TAK_AVATAR)}" alt=""/><div><p class="pp-kicker">DEVELOPER SPOTLIGHT</p><h2>${esc(ui.snapshot.developerSpotlight)}</h2><p>PhantomPlay is for creators who want a private build room, playtest feedback, version notes, and a clean path to ship later.</p><button class="pp-secondary" data-pp-tab="developer">Open Developers</button></div></section>
   </div>`;
 }
 
@@ -444,7 +444,7 @@ function developerCard(developer) {
   return `<article class="pp-dev-card">
     <header>
       <img src="${esc(developer.avatar || TAK_AVATAR)}" alt="" loading="lazy"/>
-      <div><p class="pp-kicker">DEV ROOM</p><h3>${esc(developer.name)}</h3><span>${developer.games.length} playable build${developer.games.length === 1 ? "" : "s"}</span></div>
+      <div><p class="pp-kicker">DEVELOPER</p><h3>${esc(developer.name)}</h3><span>${developer.games.length} playable build${developer.games.length === 1 ? "" : "s"}</span></div>
       <strong><b>${developer.score}</b><span>Dev score</span></strong>
     </header>
     <div class="pp-dev-thumbs">${previewGames.map((game) => `<img src="${esc(thumbnailFor(game))}" alt="" loading="lazy"/>`).join("")}</div>
@@ -458,10 +458,10 @@ function renderDeveloperProfile(developer) {
   const notes = developer.notes.length ? developer.notes.map((note) => `<li><span>${esc(savedDateLabel(note.at))}</span><p>${esc(note.text)}</p></li>`).join("") : `<li class="is-empty"><p>No private dev notes yet.</p></li>`;
   return `<div class="pp-developer">
     <section class="pp-dev-profile">
-      <button type="button" class="pp-secondary pp-dev-back" data-pp-dev-back>← Dev Rooms</button>
+      <button type="button" class="pp-secondary pp-dev-back" data-pp-dev-back>← Developers</button>
       <header>
         <img src="${esc(developer.avatar || TAK_AVATAR)}" alt="" loading="lazy"/>
-        <div><p class="pp-kicker">DEV ROOM</p><h2>${esc(developer.name)}</h2><span>${developer.games.length} playable build${developer.games.length === 1 ? "" : "s"} · ${developer.categories.join(" / ") || "PhantomPlay"}</span></div>
+        <div><p class="pp-kicker">DEVELOPER PROFILE</p><h2>${esc(developer.name)}</h2><span>${developer.games.length} playable build${developer.games.length === 1 ? "" : "s"} · ${developer.categories.join(" / ") || "PhantomPlay"}</span></div>
         <strong><b>${developer.score}</b><span>Dev score</span></strong>
       </header>
       <div class="pp-dev-stats">
@@ -498,12 +498,12 @@ function renderDeveloper() {
   if (developer) return renderDeveloperProfile(developer);
   return `<div class="pp-developer">
     <section class="pp-dev-guide">
-      <div><p class="pp-kicker">DEV ROOMS</p><h2>A private sandbox for people making games.</h2><p>Open builder rooms, test playable prototypes, leave private notes, track versions, and decide what is ready to share. PhantomPlay is where the game gets sharper before it goes anywhere public.</p></div>
+      <div><p class="pp-kicker">DEVELOPERS</p><h2>Browse the people building PhantomPlay games.</h2><p>Open developer profiles, test playable prototypes, leave private notes, track versions, and decide what is ready to support or share. PhantomPlay is where the game gets sharper before it goes anywhere public.</p></div>
       <ul><li>Dev score is based on build quality signals</li><li>Profiles show reviewed playable prototypes</li><li>Support and collaboration intent stay local</li><li>No public payments or public profiles</li></ul>
     </section>
     <section class="pp-dev-directory">
-      <div class="pp-section-head"><div><h2>Dev Rooms</h2><p>Ranked by build quality, playtest history, and lab-ready prototypes.</p></div><span>${developers.length} rooms</span></div>
-      ${developers.length ? `<div class="pp-dev-list">${developers.map(developerCard).join("")}</div>` : empty("No dev rooms yet", "Reviewed builds will create dev rooms automatically.")}
+      <div class="pp-section-head"><div><h2>Developers</h2><p>Ranked by build quality, playtest history, and lab-ready prototypes.</p></div><span>${developers.length} developer${developers.length === 1 ? "" : "s"}</span></div>
+      ${developers.length ? `<div class="pp-dev-list">${developers.map(developerCard).join("")}</div>` : empty("No developers yet", "Reviewed builds will create developer profiles automatically.")}
     </section>
   </div>`;
 }
@@ -538,7 +538,7 @@ function render() {
     return;
   }
   const snapshot = ui.snapshot || offlineState();
-  const tabs = [["home", "Sandbox"], ["library", "Play Lab"], ["together", "Multiplayer"], ["favorites", "Saved"], ["developer", "Dev Rooms"], ...(snapshot.access.canModerate ? [["admin", "Safety Review"]] : [])];
+  const tabs = [["home", "Sandbox"], ["library", "Play Lab"], ["together", "Multiplayer"], ["favorites", "Saved"], ["developer", "Developers"], ...(snapshot.access.canModerate ? [["admin", "Safety Review"]] : [])];
   const content = ui.tab === "library" ? renderLibrary() : ui.tab === "together" ? renderTogether() : ui.tab === "favorites" ? renderFavorites() : ui.tab === "developer" ? renderDeveloper() : ui.tab === "admin" ? renderAdmin() : renderHome();
   mountedRoot.innerHTML = `<div class="pp-shell">
     <header class="pp-top"><div><p class="pp-kicker">PHANTOMFORCE GAME SANDBOX</p><h1>PhantomPlay</h1><span>Play, build, test, and return to work sharper.</span></div><div><span class="pp-access ${snapshot.access.enabled ? "is-ready" : "is-blocked"}">${snapshot.access.enabled ? esc(playTimeLabel(snapshot.access.remainingMinutesToday)) : "Plan restricted"}</span><button class="pp-settings-button" data-pp-settings aria-label="Play settings">${icon("settings")}</button></div></header>

@@ -49,7 +49,7 @@ assert.match(module, /\/api\/phantomplay\/rooms/u, "The play-together UI must us
 assert.match(module, /\/api\/phantomplay\/rooms\/\$\{encodeURIComponent\(code\)\}\/match/u, "Room games must be able to relay match actions through PhantomPlay.");
 assert.match(module, /match-state/u, "The player shell must pass room match state into multiplayer games.");
 assert.match(module, /Edit build/u, "Builders must be able to revise builds.");
-assert.match(module, /function developerDirectory/u, "The Dev Rooms tab must be backed by a developer directory derived from catalog data.");
+assert.match(module, /function developerDirectory/u, "The Developers tab must be backed by a developer directory derived from catalog data.");
 assert.match(module, /function developerIdentityFor/u, "Developer profiles must use a stable identity helper, not raw display names.");
 assert.match(module, /developerId|developer_id/u, "Developer profiles must prefer server-issued developer ids when present.");
 assert.match(module, /community:\$\{stableKeyPart\(gameIdentity\)\}/u, "Community developers without stable ids must not collapse into one shared profile.");
@@ -59,9 +59,12 @@ assert.match(module, /data-pp-open-dev/u, "Developer cards must open profile vie
 assert.match(module, /data-pp-support-dev/u, "Developer profiles must allow local support marks.");
 assert.match(module, /data-pp-donate-dev/u, "Developer profiles must allow local collaboration intent without starting payments.");
 assert.match(module, /data-pp-save-dev-note/u, "Developer profiles must support private dev notes.");
+assert.match(module, /\["developer", "Developers"\]/u, "The classic PhantomPlay tab label must be Developers, not Dev Rooms.");
+assert.match(module, /Browse the people building PhantomPlay games/u, "The classic Developers view must present a developer directory, not a submission room.");
+assert.doesNotMatch(module, /\["developer", "Dev Rooms"\]|Open dev rooms|← Dev Rooms|<h2>Dev Rooms<\/h2>|No dev rooms yet/u, "The classic Developers view must not keep old Dev Rooms tab copy.");
 const renderDeveloperSource = module.match(/function renderDeveloper\(\) \{([\s\S]*?)\nfunction renderAdmin/u)?.[1] || "";
 assert.ok(renderDeveloperSource, "renderDeveloper must exist.");
-assert.doesNotMatch(renderDeveloperSource, /data-pp-submit-form|New submission|DEVELOPER DISTRIBUTION|marketplace|storefront/u, "The Dev Rooms tab must render the sandbox directory/profile flow, not the old submission form or marketplace copy.");
+assert.doesNotMatch(renderDeveloperSource, /data-pp-submit-form|New submission|DEVELOPER DISTRIBUTION|marketplace|storefront/u, "The Developers tab must render the sandbox directory/profile flow, not the old submission form or marketplace copy.");
 assert.match(moduleV2, /function developerDirectory/u, "The V2 Developers tab must be backed by a developer directory derived from catalog data.");
 assert.match(moduleV2, /function developerIdentityFor/u, "V2 developer profiles must use a stable identity helper, not raw display names.");
 assert.match(moduleV2, /developerId|developer_id/u, "V2 developer profiles must prefer server-issued developer ids when present.");
