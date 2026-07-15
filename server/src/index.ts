@@ -47,6 +47,7 @@ import {
   issueAccessSessionToken,
   listAccessSessions,
   mintDatabaseSessionToken,
+  OWNER_SESSION_ID,
   readBearerToken,
   requireAdminAccessSession,
   requireAccessSession,
@@ -1302,20 +1303,27 @@ app.get("/sessions", async (request) => {
 async function handleSessionLogin(request: FastifyRequest, reply: FastifyReply) {
   const authConfiguration = getAccessAuthConfiguration();
 
-  if (!authConfiguration.sessionLoginEnabled) {
-    return reply.code(403).send({
-      ok: false,
-      error: "Session login is disabled.",
-      auth: authConfiguration,
-    });
-  }
-
   const parsed = AccessLoginSchema.safeParse(request.body);
 
   if (!parsed.success) {
     return reply.code(400).send({
       ok: false,
       error: parsed.error.flatten(),
+    });
+  }
+
+  /* Under the database auth provider, sessionLoginEnabled is false (it only
+     covers the legacy in-memory providers below) — but the admin gate still
+     posts email+password to this same endpoint for the platform super-admin,
+     so that specific shape must be allowed through before the legacy gate. */
+  const isDatabaseOwnerLoginAttempt =
+    authConfiguration.databaseAuthEnabled && parsed.data.sessionId === OWNER_SESSION_ID && Boolean(parsed.data.password);
+
+  if (!authConfiguration.sessionLoginEnabled && !isDatabaseOwnerLoginAttempt) {
+    return reply.code(403).send({
+      ok: false,
+      error: "Session login is disabled.",
+      auth: authConfiguration,
     });
   }
 
@@ -1329,6 +1337,34 @@ async function handleSessionLogin(request: FastifyRequest, reply: FastifyReply) 
       host: publicHost || "local",
       sessions: filterSessionsForPublicHost(publicHost, listAccessSessions()),
     });
+  }
+
+  /* Owner-production's in-memory owner key doesn't apply under database
+     auth — the platform super-admin must be verified against the real
+     Postgres user instead. Only isSuperAdmin users may authenticate here;
+     ordinary org members/owners still sign in through /auth/login. */
+  if (isDatabaseOwnerLoginAttempt && parsed.data.password) {
+    const dbSession = parsed.data.email ? await loginWithPassword(parsed.data.email, parsed.data.password) : undefined;
+    if (!dbSession || !dbSession.isSuperAdmin) {
+      return reply.code(401).send({
+        ok: false,
+        error: "Invalid owner email or password.",
+        sessions: [],
+      });
+    }
+    if (!canUseSessionOnPublicHost(publicHost, dbSession)) {
+      await revokeDatabaseSession(dbSession.authSessionId);
+      return reply.code(403).send({
+        ok: false,
+        error: "This session is not available on this public host.",
+        host: publicHost || "local",
+      });
+    }
+    const dbToken = mintDatabaseSessionToken(dbSession.id);
+    if (!dbToken) {
+      return reply.code(500).send({ ok: false, error: "Token minting unavailable." });
+    }
+    return { ok: true, ...dbToken, session: dbSession };
   }
 
   let ownerKeyForToken = parsed.data.ownerKey;
