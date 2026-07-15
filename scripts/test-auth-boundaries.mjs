@@ -91,4 +91,86 @@ assert.match(server, /app\.post\("\/phantom-ai\/brain\/memories"[\s\S]*if \(!req
 assert.match(server, /app\.patch\("\/phantom-ai\/brain\/memories\/:id"[\s\S]*if \(!requireManualBrainEditor\(session, reply\)\) return reply;/u, "Customer sessions must not edit manual brain memories.");
 assert.match(server, /app\.delete\("\/phantom-ai\/brain\/memories\/:id"[\s\S]*if \(!requireManualBrainEditor\(session, reply\)\) return reply;/u, "Customer sessions must not delete manual brain memories.");
 
+const localStore = new Map();
+const sessionStore = new Map();
+const storageApi = (map) => ({
+  getItem: (key) => map.get(key) ?? null,
+  setItem: (key, value) => { map.set(key, String(value)); },
+  removeItem: (key) => { map.delete(key); },
+});
+
+let currentUrl = new URL("https://app.phantomforce.online/app/index.html");
+function installLocation(href) {
+  currentUrl = new URL(href);
+  globalThis.location = {
+    get href() { return currentUrl.href; },
+    get hostname() { return currentUrl.hostname; },
+    get search() { return currentUrl.search; },
+    get pathname() { return currentUrl.pathname; },
+    get hash() { return currentUrl.hash; },
+    replace(next) { currentUrl = new URL(next, currentUrl.href); },
+  };
+}
+
+globalThis.localStorage = storageApi(localStore);
+globalThis.sessionStorage = storageApi(sessionStore);
+globalThis.window = { dispatchEvent() {} };
+globalThis.history = {
+  replaceState(_state, _title, next) { currentUrl = new URL(next, currentUrl.origin); },
+};
+globalThis.CustomEvent = class CustomEvent {
+  constructor(type, init = {}) {
+    this.type = type;
+    this.detail = init.detail;
+  }
+};
+
+const {
+  ADMIN_PUBLIC_HOST,
+  CLIENT_PUBLIC_HOST,
+  resolveSession,
+  session: browserSession,
+} = await import(`../app/js/store.js?auth-boundaries=${Date.now()}`);
+
+installLocation(`https://${CLIENT_PUBLIC_HOST}/app/index.html`);
+browserSession.set({
+  database: true,
+  role: "admin",
+  name: "Workspace Owner",
+  orgId: "org-client",
+  orgRole: "owner",
+  canManageAccess: false,
+  token: "client-db-token",
+});
+assert.equal(JSON.parse(localStore.get("pf.session.v3")).token, undefined, "Bearer tokens must not be written to durable localStorage.");
+assert.equal(browserSession.token(), "client-db-token", "The current tab should keep the live bearer token after a real login.");
+assert.equal(resolveSession()?.database, true, "Customer app should restore a valid database customer session.");
+
+browserSession.clear();
+installLocation(`https://${CLIENT_PUBLIC_HOST}/app/index.html?session=client`);
+assert.equal(resolveSession(), null, "Logout marker must block query-session shortcut re-entry on the customer app.");
+assert.equal(new URL(globalThis.location.href).searchParams.has("session"), false, "Blocked shortcut re-entry must strip the session query from the URL.");
+assert.equal(browserSession.token(), "", "Logout must clear the live bearer token.");
+
+browserSession.set({ role: "admin", name: "Local Admin", ws: "phantomforce", canManageAccess: true });
+installLocation(`https://${CLIENT_PUBLIC_HOST}/app/index.html`);
+assert.equal(resolveSession(), null, "Customer app must reject a non-database/admin local session mirror.");
+assert.equal(browserSession.get(), null, "Rejecting an admin mirror must clear the saved browser session.");
+
+browserSession.set({
+  database: true,
+  role: "admin",
+  name: "Platform Admin",
+  canManageAccess: true,
+  isSuperAdmin: true,
+  token: "platform-token",
+});
+installLocation(`https://${CLIENT_PUBLIC_HOST}/app/index.html`);
+assert.equal(resolveSession(), null, "Customer app must reject a database platform-admin session even when a token exists.");
+assert.equal(browserSession.token(), "", "Rejecting a platform-admin session on the customer app must clear its bearer token.");
+
+browserSession.set({ role: "admin", name: "Admin Without Token", canManageAccess: true });
+installLocation(`https://${ADMIN_PUBLIC_HOST}/app/index.html`);
+assert.equal(resolveSession(), null, "Admin host must not restore an admin session without a live bearer token.");
+
 console.log("Auth boundary checks passed.");
