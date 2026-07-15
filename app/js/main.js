@@ -6,13 +6,13 @@ import {
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260715-1";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260715-1";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260715-1";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260715-1";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260715-1";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260715-1";
-import { mountManagedGrowthReport } from "./managedgrowth.js?v=phantom-live-20260715-1";
+} from "./store.js?v=phantom-live-20260715-2";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260715-2";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260715-2";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260715-2";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260715-2";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260715-2";
+import { mountManagedGrowthReport } from "./managedgrowth.js?v=phantom-live-20260715-2";
 import {
   cachedOrganizationPulse,
   loadOrganizationPulse,
@@ -20,44 +20,44 @@ import {
   pulseAttentionItems,
   pulsePendingApprovalCount,
   shouldRefreshOrganizationPulse,
-} from "./organizationpulse.js?v=phantom-live-20260715-1";
+} from "./organizationpulse.js?v=phantom-live-20260715-2";
 import {
   cachedServerRecords,
   loadServerRecords,
   serverRecordsAvailable,
   shouldRefreshServerRecords,
-} from "./serverrecords.js?v=phantom-live-20260715-1";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260715-1";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260715-1";
-import { mountPhantomWire } from "./agentops.js?v=phantom-live-20260715-1";
-import { mountPhantomAI } from "./phantomai.js?v=phantom-live-20260715-1";
-import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260715-1";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260715-1";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260715-1";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260715-1";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260715-1";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260715-1";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260715-1";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260715-1";
-import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260715-1";
-import { mountAmbient } from "./ambient.js?v=phantom-live-20260715-1";
-import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260715-1";
-import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260715-1";
-import { renderPlanner } from "./planner.js?v=phantom-live-20260715-1";
+} from "./serverrecords.js?v=phantom-live-20260715-2";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260715-2";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260715-2";
+import { mountPhantomWire } from "./agentops.js?v=phantom-live-20260715-2";
+import { mountPhantomAI } from "./phantomai.js?v=phantom-live-20260715-2";
+import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260715-2";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260715-2";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260715-2";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260715-2";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260715-2";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260715-2";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260715-2";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260715-2";
+import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260715-2";
+import { mountAmbient } from "./ambient.js?v=phantom-live-20260715-2";
+import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260715-2";
+import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260715-2";
+import { renderPlanner } from "./planner.js?v=phantom-live-20260715-2";
 import {
   fetchAuthConfig, databaseLogin, databaseSignup, databaseLogout, switchOrg, fetchAuthMe, fetchEntitlementsSummary,
-} from "./orgs.js?v=phantom-live-20260715-1";
-import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260715-1";
-import { assetsAvailable } from "./orgs.js?v=phantom-live-20260715-1";
-import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260715-1";
-import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260715-1";
+} from "./orgs.js?v=phantom-live-20260715-2";
+import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260715-2";
+import { assetsAvailable } from "./orgs.js?v=phantom-live-20260715-2";
+import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260715-2";
+import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260715-2";
 const phantomPlayV2Opted = () => { try { return localStorage.getItem("pf.phantomplay.v2") === "1"; } catch { return false; } };
-import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260715-1";
+import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260715-2";
 import {
   customizeNavigation,
   loadOrganizationCustomization,
-} from "./customization.js?v=phantom-live-20260715-1";
-import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260715-1";
+} from "./customization.js?v=phantom-live-20260715-2";
+import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260715-2";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -1056,33 +1056,16 @@ const ACCOUNT_PLAN = {
   paymentState: "Owner billing ready",
   workspaceLimit: "Owner workspace",
 };
-const ACCOUNT_TIERS = [
-  {
-    id: "starter",
-    name: "Starter",
-    price: "$750/mo",
-    badge: "Launch",
-    copy: "Business Manager foundation: command surface, approvals, and one focused workspace.",
-    features: ["Business command center", "Client pipeline", "Manual offer workflow"],
-  },
-  {
-    id: "pro",
-    name: "Pro Plan",
-    price: "$2,500/mo",
-    badge: "Growth",
-    copy: "Operator-grade system for growth: creator workflow, Media Lab, accounting visibility, and owner controls.",
-    features: ["Phantom AI operator", "Creator Hub + Media Lab", "Accounting-aware ops"],
-  },
-  {
-    id: "elite",
-    name: "Elite Plan",
-    price: "Custom",
-    badge: "Current",
-    current: true,
-    copy: "The full business operating suite: deeper loop routing, multi-workspace control, automations, and launch support.",
-    features: ["Advanced loop routing", "Multi-workspace command", "Business automation planning", "Launch support"],
-  },
-];
+/* Real plan tiers (free/starter/professional/elite/enterprise) exist and are
+   enforced server-side (server/src/access/entitlements.ts) but are assigned
+   manually by the operator — there is no self-serve checkout. livePlan holds
+   the real fetched plan for database-backed accounts once hydrateLivePlan()
+   resolves; until then (or for local/demo accounts with no backend at all)
+   every plan display falls back to the static ACCOUNT_PLAN placeholder. */
+let livePlan = null;
+function activePlanView() {
+  return livePlan || ACCOUNT_PLAN;
+}
 let accountNotice = "";
 
 function accountOwnerName() {
@@ -1105,7 +1088,8 @@ function phantomLoopUnavailableMessage() {
   return "Phantom Loop needs a target model picked first — open chat settings to choose one.";
 }
 function accountRenewalLabel() {
-  return new Date(Date.now() + ACCOUNT_PLAN.renewalOffsetDays * 864e5).toLocaleDateString([], { month: "long", day: "numeric", year: "numeric" });
+  const offset = activePlanView().renewalOffsetDays ?? ACCOUNT_PLAN.renewalOffsetDays;
+  return new Date(Date.now() + offset * 864e5).toLocaleDateString([], { month: "long", day: "numeric", year: "numeric" });
 }
 function accountStatusMeta() {
   const attention = store.state.security.some((s) => s.posture && s.posture !== "clean");
@@ -1137,7 +1121,7 @@ function renderAccountMenu() {
     <button class="user-menu-plan" data-user-menu-action="account" type="button">
       <span>
         <i>Current plan</i>
-        <b>${esc(ACCOUNT_PLAN.name)}</b>
+        <b>${esc(activePlanView().name)}</b>
         <em>Renewal: ${esc(renewal)}</em>
       </span>
       <strong>Manage →</strong>
@@ -1188,8 +1172,28 @@ async function hydrateLivePlan(body) {
     return;
   }
   const ent = summary.entitlements;
+  livePlan = {
+    name: ent.planName,
+    price: ent.canWrite ? "Assigned by operator" : "Restricted",
+    renewalOffsetDays: ACCOUNT_PLAN.renewalOffsetDays,
+    paymentState: `${ent.effectiveStatus}${ent.canWrite ? "" : " — writes disabled"} · no self-serve billing yet`,
+    workspaceLimit: `${summary.seats.used}/${summary.seats.limit} seats`,
+  };
   const chip = body.querySelector(".account-plan-chip");
   if (chip) chip.innerHTML = `<span>${esc(ent.planName)}</span><b>${esc(ent.effectiveStatus)}</b>`;
+  const currentCard = body.querySelector(".account-current");
+  if (currentCard) {
+    const h4 = currentCard.querySelector("h4");
+    if (h4) h4.textContent = ent.planName;
+    const facts = currentCard.querySelector(".account-facts");
+    if (facts) {
+      facts.innerHTML = `
+        <span><b>Renewal</b>${esc(accountRenewalLabel())}</span>
+        <span><b>Billing</b>${esc(livePlan.paymentState)}</span>
+        <span><b>Access</b>${esc(livePlan.workspaceLimit)}</span>`;
+    }
+  }
+  renderPlanMeta();
   mount.innerHTML = `
     <article class="account-card">
       <p class="account-card-k">Live plan (server)</p>
@@ -1220,19 +1224,19 @@ function renderAccountPlan(body) {
           <p class="account-status account-status-${status.tone}"><span aria-hidden="true"></span>${esc(status.label)}</p>
         </div>
         <div class="account-plan-chip">
-          <span>${esc(ACCOUNT_PLAN.name)}</span>
-          <b>${esc(ACCOUNT_PLAN.price)}</b>
+          <span>${esc(activePlanView().name)}</span>
+          <b>${esc(activePlanView().price)}</b>
         </div>
       </section>
       <section class="account-grid">
         <article class="account-card account-current">
           <p class="account-card-k">Current plan</p>
-          <h4>${esc(ACCOUNT_PLAN.name)}</h4>
+          <h4>${esc(activePlanView().name)}</h4>
           <p>${esc(status.detail)}</p>
           <div class="account-facts">
             <span><b>Renewal</b>${esc(renewal)}</span>
-            <span><b>Billing</b>${esc(ACCOUNT_PLAN.paymentState)}</span>
-            <span><b>Access</b>${esc(ACCOUNT_PLAN.workspaceLimit)}</span>
+            <span><b>Billing</b>${esc(activePlanView().paymentState)}</span>
+            <span><b>Access</b>${esc(activePlanView().workspaceLimit)}</span>
           </div>
         </article>
         <article class="account-card account-payment">
@@ -1261,22 +1265,15 @@ function renderAccountPlan(body) {
       <section class="account-section">
         <div class="set-sec-head">
           <div>
-            <p class="account-card-k">Plan tiers</p>
-            <h3>Choose the operating level</h3>
+            <p class="account-card-k">Plan management</p>
+            <h3>Change your plan</h3>
           </div>
         </div>
-        <div class="account-tiers">
-          ${ACCOUNT_TIERS.map((tier) => `
-            <article class="account-tier ${tier.current ? "is-current" : ""}">
-              <span class="account-tier-badge">${esc(tier.badge)}</span>
-              <h4>${esc(tier.name)}</h4>
-              <b>${esc(tier.price)}</b>
-              <p>${esc(tier.copy)}</p>
-              <ul>${tier.features.map((feature) => `<li>${esc(feature)}</li>`).join("")}</ul>
-              <button class="btn ${tier.current ? "btn-good" : "btn-primary"}" data-account-action="${tier.current ? "current" : `plan-${tier.id}`}">
-                ${tier.current ? "Current plan" : `Request ${esc(tier.name)}`}
-              </button>
-            </article>`).join("")}
+        <div class="account-billing-list">
+          <span><b>How plans work</b><i>Plans are assigned manually by the PhantomForce operator — there is no self-serve checkout yet.</i></span>
+        </div>
+        <div class="account-actions">
+          <button class="btn btn-primary" data-account-action="request-plan-change">Request a different plan</button>
         </div>
       </section>
       <section class="account-section account-cancel">
@@ -1296,6 +1293,7 @@ function renderAccountPlan(body) {
         invoice: "Manual invoice request",
         current: "Current plan review",
         cancel: "Cancellation request",
+        "request-plan-change": "Plan change request",
       }[action] || `${btn.textContent.trim()} request`;
       accountNotice = `${label} prepared for owner review. No billing, cancellation, payment, or access change was executed.`;
       pushActivity("Account", accountNotice);
@@ -1316,7 +1314,7 @@ const MODES = {
   admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260715-1";
+const POSE_VERSION = "phantom-live-20260715-2";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -1822,7 +1820,7 @@ function renderPlanMeta() {
     statusEl.className = `side-profile-status is-${status.tone}`;
     statusEl.innerHTML = `<span class="side-profile-dot" aria-hidden="true"></span>${esc(status.label)}`;
   }
-  if (planEl) planEl.textContent = ACCOUNT_PLAN.name;
+  if (planEl) planEl.textContent = activePlanView().name;
   if (el) el.textContent = `Renewal: ${renew}`;
 }
 
