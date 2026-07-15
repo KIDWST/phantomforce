@@ -1,11 +1,11 @@
 /* PhantomForce admin settings.
    Local UI preferences only: no provider calls, sends, uploads, or billing. */
 
-import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260715-272";
-import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260715-272";
-import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260715-272";
-import { currentTenantId, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260715-272";
-import { DEFAULT_COMPANION_PREFS, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260715-272";
+import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260715-273";
+import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260715-273";
+import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260715-273";
+import { currentTenantId, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260715-273";
+import { DEFAULT_COMPANION_PREFS, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260715-273";
 
 const AI_SETTINGS_KEY = "pf.operator.settings.v1";
 const SETTINGS_TAB_KEY = "pf.settings.tab.v1";

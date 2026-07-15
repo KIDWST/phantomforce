@@ -3,6 +3,12 @@ import { z } from "zod";
 import { PLATFORM_MODULES } from "./module-registry.js";
 
 export const BrandModeSchema = z.enum(["standard", "co_branded", "white_label", "internal_phantomforce"]);
+/* How the owner set this organization up to be used, not who can see it:
+   dev_only = a development/testing sandbox (every module unlocked, safe to
+   break); business = a normal single-business operator (the default, no
+   forced changes); full_force = a multi-business/agency operator running
+   every module at once. */
+export const OrgTypeSchema = z.enum(["dev_only", "business", "full_force"]);
 export const HexColorSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/, "Use a six-digit hex color such as #41ffa1.");
 export const ApprovedFontSchema = z.enum(["Space Grotesk", "Inter", "DM Sans", "IBM Plex Sans", "Source Sans 3"]);
 export const SurfaceStyleSchema = z.enum(["glass", "solid", "soft"]);
@@ -136,6 +142,7 @@ export const OrganizationConfigurationSchema = z.object({
   schemaVersion: z.literal(1),
   tenantId: z.string().trim().min(1).max(80),
   version: z.number().int().min(1),
+  orgType: OrgTypeSchema.default("business"),
   brand: OrganizationBrandSchema,
   theme: OrganizationThemeSchema,
   terminology: z.record(SafeLabelSchema).default({}),
@@ -153,6 +160,7 @@ export const OrganizationConfigurationSchema = z.object({
 });
 
 export const ConfigurationPatchSchema = z.object({
+  orgType: OrgTypeSchema.optional(),
   brand: OrganizationBrandSchema.partial().optional(),
   theme: OrganizationThemeSchema.partial().optional(),
   terminology: z.record(SafeLabelSchema).optional(),

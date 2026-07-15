@@ -43,6 +43,7 @@ export function defaultOrganizationConfiguration(tenantId: string, actor = "syst
     schemaVersion: 1,
     tenantId,
     version: 1,
+    orgType: tenantId === "phantomforce-owner" || tenantId === "phantomforce" ? "dev_only" : "business",
     brand: {
       mode: tenantId === "phantomforce-owner" || tenantId === "phantomforce" ? "internal_phantomforce" : "standard",
       organizationName: tenantId === "phantomforce-owner" || tenantId === "phantomforce" ? "PhantomForce" : "My Business",
@@ -80,8 +81,20 @@ export function defaultOrganizationConfiguration(tenantId: string, actor = "syst
   });
 }
 
+/* dev_only and full_force are "unlock everything" setups — switching into
+   either one turns on whatever optional modules are still off. This is
+   one-directional on purpose: switching back to business never turns
+   anything off behind the owner, since that would silently yank access
+   someone may already depend on. Idempotent, so it's safe to run on every
+   merge regardless of whether orgType actually changed this patch. */
+function applyOrgTypeModuleDefaults(configuration: OrganizationConfiguration): OrganizationConfiguration {
+  if (configuration.orgType === "business") return configuration;
+  const modules = configuration.modules.map((module) => (module.enabled ? module : { ...module, enabled: true }));
+  return { ...configuration, modules };
+}
+
 function mergeConfiguration(current: OrganizationConfiguration, patch: ConfigurationPatch, actor: string) {
-  return {
+  const merged = {
     ...current,
     ...patch,
     brand: { ...current.brand, ...(patch.brand ?? {}) },
@@ -94,6 +107,7 @@ function mergeConfiguration(current: OrganizationConfiguration, patch: Configura
     updatedAt: new Date().toISOString(),
     updatedBy: actor,
   };
+  return applyOrgTypeModuleDefaults(merged);
 }
 
 function hexRgb(hex: string) {

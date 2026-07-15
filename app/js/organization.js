@@ -9,8 +9,8 @@
  * to a local mock.
  */
 
-import { currentTenantId, session, isAdmin, isOwnerOperator } from "./store.js?v=phantom-live-20260715-272";
-import { canManageActiveOrg } from "./orgs.js?v=phantom-live-20260715-272";
+import { currentTenantId, session, isAdmin, isOwnerOperator } from "./store.js?v=phantom-live-20260715-273";
+import { canManageActiveOrg } from "./orgs.js?v=phantom-live-20260715-273";
 
 /* Owner/admin only — legacy local-admin sessions (isAdmin/isOwnerOperator)
    and real database org sessions (canManageActiveOrg) both count. */
@@ -36,11 +36,30 @@ const orgState = {
   members: [],
   invitations: [],
   configVersion: 0,
+  orgType: "business",
   modules: [],
   matrixDirty: false,
   message: "",
   busy: false,
 };
+
+const ORG_TYPES = [
+  { id: "dev_only", label: "Dev Only", blurb: "Sandbox for building and testing — every module unlocked, safe to break." },
+  { id: "business", label: "Business", blurb: "A normal single-business operator. The standard setup." },
+  { id: "full_force", label: "Full Force", blurb: "Multi-business/agency operator running every module at once." },
+];
+
+function orgTypeMarkup(esc) {
+  return `
+    <div class="org-type-picker">
+      ${ORG_TYPES.map((type) => `
+        <button class="org-type-option ${orgState.orgType === type.id ? "is-active" : ""}" type="button" data-org-type="${type.id}">
+          <b>${esc(type.label)}</b>
+          <i>${esc(type.blurb)}</i>
+        </button>`).join("")}
+    </div>
+    <p class="set-note">Switching to Dev Only or Full Force unlocks every module for this organization. It never turns modules off for you — switch back to Business and your setup stays as you left it.</p>`;
+}
 
 function authHeaders(json = false) {
   const token = session.token();
@@ -86,6 +105,7 @@ async function loadOrganization() {
   try {
     const configPayload = await api(`/phantom-ai/customization/config?tenant_id=${encodeURIComponent(currentTenantId())}`);
     orgState.configVersion = configPayload.configuration?.version || 0;
+    orgState.orgType = configPayload.configuration?.orgType || "business";
     orgState.modules = (configPayload.configuration?.modules || []).map((module) => ({
       id: module.id,
       label: module.label,
@@ -196,6 +216,13 @@ export function renderOrganizationPanel(el, opts = {}) {
       <button class="btn btn-primary" type="button" data-open-ws="leads">Open Clients</button>
     </div>` : ""}
 
+    ${canManageClients() ? `
+    <div class="set-section org-type-card">
+      <p class="set-eyebrow">Organization setup</p>
+      <h4>How is this organization set up?</h4>
+      ${orgTypeMarkup(esc)}
+    </div>` : ""}
+
     ${orgState.needsDatabase ? `
       <div class="set-section org-db-note">
         <h4>People management needs the database connection</h4>
@@ -270,6 +297,18 @@ export function renderOrganizationPanel(el, opts = {}) {
       () => api(`/orgs/${encodeURIComponent(orgState.org.id)}/invitations/${encodeURIComponent(button.dataset.orgRevoke)}/revoke`, { method: "POST" }),
       "Invitation revoked.",
     );
+  });
+
+  el.querySelectorAll("[data-org-type]").forEach((button) => button.onclick = () => {
+    const orgType = button.dataset.orgType;
+    if (orgType === orgState.orgType) return;
+    const label = ORG_TYPES.find((type) => type.id === orgType)?.label || orgType;
+    withBusy(async () => {
+      const tenant = currentTenantId();
+      const patch = { orgType };
+      await api("/phantom-ai/customization/publish", { method: "POST", body: JSON.stringify({ tenant_id: tenant, patch, expected_version: orgState.configVersion, summary: `Organization set up as ${label}` }) });
+      orgState.orgType = orgType;
+    }, `Organization set up as ${label}.`);
   });
 
   el.querySelectorAll("[data-org-matrix]").forEach((input) => input.onchange = () => {

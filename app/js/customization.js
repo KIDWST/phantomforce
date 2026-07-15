@@ -1,4 +1,4 @@
-import { currentTenantId, session } from "./store.js?v=phantom-live-20260715-272";
+import { currentTenantId, session } from "./store.js?v=phantom-live-20260715-273";
 
 let activeConfiguration = null;
 let activeEntitlements = null;
@@ -72,6 +72,7 @@ function defaultConfiguration(tenantId = currentTenantId()) {
     schemaVersion: 1,
     tenantId,
     version: 1,
+    orgType: internal ? "dev_only" : "business",
     brand: {
       mode: internal ? "internal_phantomforce" : "standard",
       organizationName: internal ? "PhantomForce" : "My Business",
