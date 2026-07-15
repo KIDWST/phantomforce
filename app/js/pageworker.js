@@ -4,8 +4,8 @@
    draftable actions, and one blocking question max. External actions stay
    approval-gated. */
 
-import { store, visible, currentWs, wsName, pushActivity, session, currentTenantId } from "./store.js?v=phantom-live-20260715-278";
-import { createCrmProspectBuildout, isCrmProspectBuildout } from "./command.js?v=phantom-live-20260715-278";
+import { store, visible, currentWs, wsName, pushActivity, session, currentTenantId } from "./store.js?v=phantom-live-20260715-279";
+import { createCrmProspectBuildout, isCrmProspectBuildout } from "./command.js?v=phantom-live-20260715-279";
 
 const esc = (value = "") => String(value)
   .replaceAll("&", "&amp;")
@@ -126,6 +126,7 @@ const SKIP_PAGES = new Set([
   "sites",
   "media",
   "content",
+  "leads",
 ]);
 
 const BACKEND_TIMEOUT_MS = 45000;

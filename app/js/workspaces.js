@@ -9,10 +9,10 @@ import {
   PACKAGES, RETAINERS, FINANCE_CATEGORIES, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS, CHAT_HISTORY_RETENTION_DAYS,
   addMemory, toggleMemoryRemember, forgetMemory, forgetChatHistory, memoryStats, memoryRetention, chatHistoryStats, chatHistoryRetention,
   session,
-} from "./store.js?v=phantom-live-20260715-278";
+} from "./store.js?v=phantom-live-20260715-279";
 import {
   isDatabaseSession, canManageActiveOrg, fetchServerApprovals, decideServerRun,
-} from "./orgs.js?v=phantom-live-20260715-278";
+} from "./orgs.js?v=phantom-live-20260715-279";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -265,7 +265,7 @@ function renderLeads(el, rerender) {
   el.innerHTML = `
     <section class="lead-intel">
       <div>
-        <p>Prospect intelligence</p>
+        <p>AI add</p>
         <h3>Build the prospect list.</h3>
         <span>Tell Phantom who to find. It creates prospect cards, qualification steps, and approval-safe outreach angles.</span>
       </div>
@@ -277,7 +277,7 @@ function renderLeads(el, rerender) {
     ${leadsUi.notice ? `<div class="lead-intel-result">${esc(leadsUi.notice)}</div>` : ""}
     <div class="ws-toolbar">
       <p class="ws-note">Every lead moves draft → approval → send-ready. Nothing goes out without you.</p>
-      <button class="btn btn-primary" data-act="add">+ Capture prospect</button>
+      <button class="btn btn-primary" data-act="add">+ Manual</button>
     </div>
     <div class="lane-row">
       ${lanes.map(([k, label]) => {
@@ -1509,7 +1509,7 @@ function renderMemory(el, rerender) {
       if (!brainPanel.open || brainPanel.dataset.mounted) return;
       brainPanel.dataset.mounted = "1";
       const mount = brainPanel.querySelector("[data-memory-brain-mount]");
-      import("./brain.js?v=phantom-live-20260715-278")
+      import("./brain.js?v=phantom-live-20260715-279")
         .then((mod) => { if (mount && mount.isConnected) mod.renderPhantomBrain(mount); })
         .catch(() => { if (mount) mount.innerHTML = `<p class="ws-note">The brain panel could not load. Check that the backend on the admin PC is running, then reopen this section.</p>`; });
     });
