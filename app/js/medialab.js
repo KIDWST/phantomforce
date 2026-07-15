@@ -6,20 +6,20 @@
  * instead of sending people out to another product.
  */
 
-import { currentTenantId, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260714-258";
+import { currentTenantId, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260714-259";
 import {
   PLATFORMS, registerContentAsset, loadSocialAccounts, saveSocialAccounts, socialStatus,
   loadContentAssets, saveContentAssets, contentAssetDisplayUrl, hydrateContentAssetUrl,
-} from "./contenthub.js?v=phantom-live-20260714-258";
-import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260714-258";
+} from "./contenthub.js?v=phantom-live-20260714-259";
+import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260714-259";
 import {
   addImageLayer, addTextLayer, cloneImageEditState, compositionSnapshot, duplicateLayer,
   freshComposition, hitTestLayer, loadCompositionImages, moveLayerOrder, pushEditorSnapshot,
   removeSelectedLayers, renderComposition, restoreComposition, selectLayer, selectedLayers,
-} from "./content-editor.js?v=phantom-live-20260714-258";
-import { loadImageForEditing, exportCanvas, requestAiEdit, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260714-258";
-import { mountVideoEditor } from "./videocut.js?v=phantom-live-20260714-258";
-import { assetsAvailable, assetBlobUrl, listAssets, recordAssetUsage, saveToAssetCloud, listLocalAssets, refreshLocalAssets, localAssetBlobUrl } from "./orgs.js?v=phantom-live-20260714-258";
+} from "./content-editor.js?v=phantom-live-20260714-259";
+import { loadImageForEditing, exportCanvas, requestAiEdit, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260714-259";
+import { mountVideoEditor } from "./videocut.js?v=phantom-live-20260714-259";
+import { assetsAvailable, assetBlobUrl, listAssets, recordAssetUsage, saveToAssetCloud, listLocalAssets, refreshLocalAssets, localAssetBlobUrl } from "./orgs.js?v=phantom-live-20260714-259";
 
 const CFG_KEY = "pf.medialab.v1";
 const EDIT_INTENT_KEY = "pf.medialab.editIntent.v1";
@@ -187,6 +187,7 @@ let mediaSettingsOpts = {};
 let hermesExtensionListenerReady = false;
 let socialOAuthListenerReady = false;
 let socialBridgePollTimer = 0;
+let socialOAuthPollTimer = 0;
 let socialOAuthState = {
   loaded: false,
   loading: false,
@@ -320,6 +321,7 @@ function parseSocialOAuthPayload(value) {
 function handleSocialOAuthComplete(payload = {}) {
   const platform = String(payload.platform || "").toLowerCase();
   if (!platform) return;
+  stopSocialOAuthAuthorizationPolling();
   const accounts = loadSocialAccounts();
   const account = accounts.find((row) => row.id === platform);
   if (account) {
@@ -331,6 +333,42 @@ function handleSocialOAuthComplete(payload = {}) {
   socialNotice = `${socialAccountName(platform)} connected. Refreshing live authorization state…`;
   socialOAuthState.loaded = false;
   void refreshSocialOAuthStatus({ force: true });
+}
+function stopSocialOAuthAuthorizationPolling() {
+  if (socialOAuthPollTimer) clearInterval(socialOAuthPollTimer);
+  socialOAuthPollTimer = 0;
+}
+function startSocialOAuthAuthorizationPolling(platform = "") {
+  if (typeof window === "undefined" || !platform) return;
+  stopSocialOAuthAuthorizationPolling();
+  let attempts = 0;
+  const tick = async () => {
+    attempts += 1;
+    if (!mediaSettingsMount?.isConnected || attempts > 45) {
+      stopSocialOAuthAuthorizationPolling();
+      return;
+    }
+    await refreshSocialOAuthStatus({ force: true });
+    const connector = socialConnectorFor(platform);
+    if (connector?.configured) {
+      const accounts = loadSocialAccounts();
+      const account = accounts.find((row) => row.id === platform);
+      if (account) {
+        account.enabled = true;
+        account.connectMode = "oauth-connected";
+        account.lastConnectAt = new Date().toISOString();
+        saveSocialAccounts(accounts);
+      }
+      socialNotice = `${connector.name || socialAccountName(platform)} connected. Live analytics can sync now. Posting still stays approval-gated.`;
+      stopSocialOAuthAuthorizationPolling();
+      rerenderMediaSettings();
+    } else if (attempts === 45) {
+      socialNotice = `${connector?.name || socialAccountName(platform)} sign-in is still pending. Finish provider approval, then return here.`;
+      rerenderMediaSettings();
+    }
+  };
+  setTimeout(tick, 1400);
+  socialOAuthPollTimer = setInterval(tick, 3500);
 }
 function ensureSocialOAuthCompletionListener() {
   if (socialOAuthListenerReady || typeof window === "undefined") return;
@@ -344,6 +382,15 @@ function ensureSocialOAuthCompletionListener() {
     if (event.key !== "pf.social.oauth.last") return;
     const data = parseSocialOAuthPayload(event.newValue);
     if (data?.protocol === "phantomforce.social-oauth.v1" && data.type === "connected") handleSocialOAuthComplete(data);
+  });
+  const refreshWhenReturned = () => {
+    if (!mediaSettingsMount?.isConnected) return;
+    void refreshSocialOAuthStatus({ force: true });
+    void refreshSocialOAuthSetup({ force: true });
+  };
+  window.addEventListener("focus", refreshWhenReturned);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) refreshWhenReturned();
   });
 }
 function socialStatusLabel(account) {
@@ -3831,6 +3878,7 @@ export function renderMediaSettings(el, opts = {}) {
         account.connectMode = "oauth-started";
         account.lastConnectAt = new Date().toISOString();
         socialNotice = `${account.name} authorization opened. Approve it once; PhantomForce refreshes this panel when the callback returns.`;
+        startSocialOAuthAuthorizationPolling(account.id);
       } catch (error) {
         account.connectMode = account.handle ? "manual-confirmed" : "manual";
         socialNotice = `${account.name} needs the PhantomForce OAuth app configured before account authorization can start. A normal browser login is not enough for analytics or posting.`;
