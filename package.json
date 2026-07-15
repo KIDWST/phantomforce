@@ -16,6 +16,7 @@
     "test:settings-connections": "node scripts/test-settings-connections.mjs",
     "test:memory": "node scripts/test-memory-retention.mjs",
     "test:automation-workspace": "node scripts/test-automation-workspace.mjs",
+    "test:vacation-mode-ui": "node scripts/test-vacation-mode-ui.mjs",
     "test:ai-planner": "node scripts/test-ai-planner.mjs",
     "test:chat-companion": "node scripts/test-chat-companion.mjs",
     "test:instant-chat-fallback": "npm run test:instant-chat-fallback --workspace @phantomforce/server",

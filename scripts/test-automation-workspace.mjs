@@ -32,6 +32,11 @@ assert.match(
   /renderAutomation\(el, opts = \{\}\)[\s\S]*Configured automations live here/u,
   "Automation should describe itself as configured automations, not brand memory.",
 );
+assert.match(
+  brandops,
+  /friendlyBackendError[\s\S]*Sign in to load automation jobs[\s\S]*Sign in to load the run engine/u,
+  "Automation must hide raw auth transport errors for scheduled jobs and agent runs.",
+);
 assert.match(css, /Automation workspace — Configured\/Recipes\/Logs\/Safety/u, "Automation CSS should describe the four automation tabs.");
 assert.match(packageJson, /test:automation-workspace/u, "Root package must expose the Automation workspace regression test.");
 

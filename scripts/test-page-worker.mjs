@@ -40,6 +40,7 @@ assert.match(workspaces, /createCrmProspectBuildout\(prompt\)/u, "Visible Client
 assert.match(workspaces, /persistCrmProspectLanes\(lanes, rawPrompt\)/u, "Visible Clients page prompter must persist created lanes to server CRM when signed in.");
 assert.match(workspaces, /signalCrmRefresh\("client-crm-prompt-saved"\)/u, "Visible Clients page prompter must refresh the board after saving lanes.");
 assert.match(workspaces, /No outreach, uploads, public exposure, or fake contact details/u, "Visible Clients page prompter must report safe CRM-only behavior.");
+assert.match(workspaces, /friendlyBackendError[\s\S]*Sign in to load Workforce status/u, "Workforce status must hide raw auth transport errors.");
 assert.match(worker, /runPageAction\(pageId, prompt\)[\s\S]*renderThinking\(out, pageId, prompt, pageAction\)[\s\S]*askBackendForPageOutcome/u, "Clients CRM creation must happen before the slower backend report.");
 assert.match(worker, /currentWorkerOutput/u, "Page worker output must survive the Clients page repaint after CRM cards are saved.");
 assert.match(worker, /snapshotWorkerOutput[\s\S]*restorePageWorkerOutput[\s\S]*opts\.openWorkspace\?\.\(pageId\)[\s\S]*restorePageWorkerOutput\(pageId, outputSnapshot\)/u, "Clients page refresh must restore the rendered page-worker result after CRM cards are saved.");

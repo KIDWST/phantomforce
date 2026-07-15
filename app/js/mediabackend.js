@@ -14,7 +14,7 @@
    2. ai-proxy (ai-proxy/server.mjs) — the lighter self-hosted proxy, useful
       for local/dev setups that don't run the full server. */
 
-import { currentTenantId, session, workspaceStorageGetItem } from "./store.js?v=phantom-live-20260714-258";
+import { currentTenantId, friendlyBackendError, session, workspaceStorageGetItem } from "./store.js?v=phantom-live-20260714-258";
 import { safeCanvasDataUrl } from "./imagefilters.js?v=phantom-live-20260714-258";
 
 function authHeaders(extra = {}) {
@@ -247,7 +247,7 @@ export async function syncAssetUpload(dataUrl, filename) {
     }, 30000);
     const d = await r.json().catch(() => null);
     if (r.ok && d && d.ok && d.asset) return { ok: true, asset: d.asset };
-    return { ok: false, error: (d && d.error) || `Sync failed (${r.status}).` };
+    return { ok: false, error: friendlyBackendError(r.status, d?.error, { authMessage: "Sign in to sync Media Pool assets.", fallbackPrefix: "Sync failed" }) };
   } catch {
     return { ok: false, error: "Could not reach the sync backend." };
   }
@@ -258,7 +258,7 @@ export async function listSyncedAssets() {
     const r = await fetchWithTimeout(`/phantom-ai/content/assets?tenant_id=${encodeURIComponent(currentTenantId())}`, { headers: authHeaders() }, 12000);
     const d = await r.json().catch(() => null);
     if (r.ok && d && d.ok && Array.isArray(d.assets)) return { ok: true, assets: d.assets };
-    return { ok: false, error: (d && d.error) || `Request failed (${r.status}).`, assets: [] };
+    return { ok: false, error: friendlyBackendError(r.status, d?.error, { authMessage: "Sign in to load synced Media Pool assets." }), assets: [] };
   } catch {
     return { ok: false, error: "Could not reach the sync backend.", assets: [] };
   }
@@ -269,7 +269,7 @@ export async function fetchSyncedAssetFile(id) {
     const r = await fetchWithTimeout(`/phantom-ai/content/assets/${encodeURIComponent(id)}/file?tenant_id=${encodeURIComponent(currentTenantId())}`, { headers: authHeaders() }, 20000);
     const d = await r.json().catch(() => null);
     if (r.ok && d && d.ok && d.image) return { ok: true, dataUrl: d.image, asset: d.asset };
-    return { ok: false, error: (d && d.error) || `Request failed (${r.status}).` };
+    return { ok: false, error: friendlyBackendError(r.status, d?.error, { authMessage: "Sign in to load this Media Pool asset." }) };
   } catch {
     return { ok: false, error: "Could not reach the sync backend." };
   }

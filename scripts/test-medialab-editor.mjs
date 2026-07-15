@@ -41,6 +41,7 @@ assert.match(mediaSrc, /async function exportCurrentEdit[\s\S]*await renderEdito
 assert.match(mediaSrc, /canvas\._img\s*=\s*img;[\s\S]*repaint\(\)/u, "loaded edit images must be assigned to the canvas before first repaint");
 assert.match(mediaSrc, /canvas\._img !== img/u, "async editor renders must not overwrite the canvas after the selected image changes");
 assert.match(backendSrc, /await repaintFn\(rescued\)/, "tainted-canvas rescue must wait for repaint before retrying export");
+assert.match(backendSrc, /friendlyBackendError[\s\S]*Sign in to sync Media Pool assets[\s\S]*Sign in to load synced Media Pool assets[\s\S]*Sign in to load this Media Pool asset/u, "Media backend sync helpers must hide raw auth transport errors.");
 assert.match(mediaSrc, /updateEditHistoryControls\(body\)/, "undo/redo controls must refresh without a full remount");
 assert.match(mediaSrc, /freshComposition\(\)/, "Media Lab edit must keep a real layer composition, not a flattened Canva-style editor");
 assert.match(mediaSrc, /data-ml-layer-order/, "Media Lab edit must expose layer up/down controls");

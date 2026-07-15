@@ -8,7 +8,7 @@
    user-created automation records. No internal lanes or fabricated
    records are shown. */
 
-import { store, uid, visible, pushActivity, ago, currentWs, session, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260714-258";
+import { friendlyBackendError, store, uid, visible, pushActivity, ago, currentWs, session, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260714-258";
 import {
   DAILY_IDEA_AUTOMATION_ID, dailyIdeaState, refreshDailyIdeas, saveDailyIdeaAutomation,
   DAILY_IDEA_CHANNELS, DAILY_IDEA_CONTENT_TYPES, DAILY_IDEA_FOCUS, DAILY_IDEA_STYLES,
@@ -32,12 +32,16 @@ function authHeaders(extra = {}) {
   return { ...extra, ...(token ? { Authorization: `Bearer ${token}` } : {}) };
 }
 
+function automationEngineError(status, message, authMessage = "Sign in to load automation jobs.") {
+  return friendlyBackendError(status, message, { authMessage, fallbackPrefix: "Request failed" });
+}
+
 async function fetchAutopilotJobs() {
   try {
     const r = await fetch("/phantom-ai/automations", { headers: authHeaders() });
     const d = await r.json().catch(() => null);
     if (r.ok && d && d.ok) return { ok: true, jobs: d.jobs };
-    return { ok: false, error: (d && d.error) || `Request failed (${r.status}).` };
+    return { ok: false, error: automationEngineError(r.status, d?.error) };
   } catch {
     return { ok: false, error: "Could not reach the automation engine." };
   }
@@ -51,7 +55,7 @@ async function toggleAutopilotJob(id, enabled) {
       body: JSON.stringify({ enabled }),
     });
     const d = await r.json().catch(() => null);
-    return r.ok && d && d.ok ? { ok: true } : { ok: false, error: (d && d.error) || `Request failed (${r.status}).` };
+    return r.ok && d && d.ok ? { ok: true } : { ok: false, error: automationEngineError(r.status, d?.error, "Sign in to manage automation jobs.") };
   } catch {
     return { ok: false, error: "Could not reach the automation engine." };
   }
@@ -61,7 +65,7 @@ async function runAutopilotJobNow(id) {
   try {
     const r = await fetch(`/phantom-ai/automations/${encodeURIComponent(id)}/run`, { method: "POST", headers: authHeaders() });
     const d = await r.json().catch(() => null);
-    return r.ok && d && d.ok ? { ok: true } : { ok: false, error: (d && d.error) || `Request failed (${r.status}).` };
+    return r.ok && d && d.ok ? { ok: true } : { ok: false, error: automationEngineError(r.status, d?.error, "Sign in to manage automation jobs.") };
   } catch {
     return { ok: false, error: "Could not reach the automation engine." };
   }
@@ -439,7 +443,8 @@ async function fetchAgentRunsData() {
       return { ok: true, operations: ops.operations, runs: runsPayload.runs };
     }
     const status = !opsRes.ok ? opsRes.status : runsRes.status;
-    return { ok: false, error: status === 401 || status === 403 ? "This session isn't authorized for the run engine." : `Run engine request failed (${status}).` };
+    const message = !opsRes.ok ? ops?.error : runsPayload?.error;
+    return { ok: false, error: friendlyBackendError(status, message, { authMessage: "Sign in to load the run engine.", fallbackPrefix: "Run engine request failed" }) };
   } catch {
     return { ok: false, error: "Could not reach the run engine." };
   }
@@ -533,7 +538,7 @@ function wireAgentRunsPanel(el, notify, paint) {
         });
         const d = await r.json().catch(() => null);
         if (r.ok && d?.ok) notify("Agent runs", `Started ${d.run.title} (${d.run.id}).`);
-        else notify("Agent runs", `Couldn't start the run: ${(d && d.error) || `request failed (${r.status})`}.`);
+        else notify("Agent runs", `Couldn't start the run: ${friendlyBackendError(r.status, d?.error, { authMessage: "Sign in to start agent runs.", fallbackPrefix: "Run request failed" })}.`);
       } catch {
         notify("Agent runs", "Couldn't reach the run engine.");
       }

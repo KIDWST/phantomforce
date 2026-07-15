@@ -8,7 +8,7 @@ import {
   moneyView, fmtMoney, fmtDate, fmtDateTime, ago, daysUntil, statusLabel,
   PACKAGES, RETAINERS, FINANCE_CATEGORIES, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS, CHAT_HISTORY_RETENTION_DAYS,
   addMemory, toggleMemoryRemember, forgetMemory, forgetChatHistory, memoryStats, memoryRetention, chatHistoryStats, chatHistoryRetention,
-  session, currentTenantId,
+  session, currentTenantId, friendlyBackendError,
 } from "./store.js?v=phantom-live-20260714-258";
 import {
   isDatabaseSession, canManageActiveOrg, fetchServerApprovals, decideServerRun,
@@ -78,7 +78,7 @@ async function loadWorkerRuntime() {
     });
     const payload = await response.json().catch(() => null);
     if (!response.ok || !payload?.ok || !payload.workforce) {
-      throw new Error(payload?.error?.message || payload?.error || `Worker status failed (${response.status}).`);
+      throw new Error(friendlyBackendError(response.status, payload?.error?.message || payload?.error, { authMessage: "Sign in to load Workforce status.", fallbackPrefix: "Worker status failed" }));
     }
     workerRuntime.workforce = payload.workforce;
     workerRuntime.state = "ready";

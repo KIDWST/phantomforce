@@ -1,4 +1,4 @@
-import { session as accessSession, ago } from "./store.js?v=phantom-live-20260714-258";
+import { session as accessSession, ago, friendlyBackendError } from "./store.js?v=phantom-live-20260714-258";
 
 const esc = (value = "") => String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 const cacheKey = "pf.vacation.statusCache.v2";
@@ -15,7 +15,7 @@ async function api(path, options = {}) {
   const response = await fetch(path, { ...options, headers: authHeaders({ ...(options.body ? { "Content-Type": "application/json" } : {}), ...(options.headers || {}) }) });
   const data = await response.json().catch(() => ({}));
   if (!response.ok || data.ok === false) {
-    const error = new Error(data.error || data.message || `Away Mode request failed (${response.status})`);
+    const error = new Error(friendlyBackendError(response.status, data.error || data.message, { authMessage: "Sign in with your owner account to use Away Mode.", fallbackPrefix: "Away Mode request failed" }));
     error.status = response.status;
     throw error;
   }
