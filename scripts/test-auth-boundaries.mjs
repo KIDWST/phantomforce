@@ -30,9 +30,10 @@ assert.match(main, /url\.searchParams\.delete\("session"\)/u, "Logout must remov
 assert.match(orgs, /const managesOrg = s\.isSuperAdmin \|\| \["owner", "admin"\]\.includes\(s\.orgRole \|\| ""\)/u, "Only org owners/admins may map to Business Manager.");
 assert.doesNotMatch(orgs, /\["owner", "admin", "member"\]\.includes\(s\.orgRole/u, "Plain org members must not map to Business Manager.");
 
-assert.doesNotMatch(index, /Jordan . full command across clients/u, "The customer-facing gate must not describe Business Manager as Jordan's account.");
-assert.match(index, /Business owner or workspace admin/u, "Business Manager copy must describe customer owners/admins.");
-assert.match(index, /Jordan and PhantomForce platform admins use admin\.phantomforce\.online/u, "The static gate must separate Jordan/admin from customer app users.");
+assert.doesNotMatch(index, /Business owner or workspace admin/u, "The public gate must not blur full admin access with customer workspace admins.");
+assert.match(index, /Full Force owner\/admin access/u, "Business Manager copy must make admin full-Force access explicit.");
+assert.match(index, /Admin is never a client workspace selector/u, "The static gate must state that admin always opens full Force.");
+assert.match(main, /Admin always opens full Force, not a customer workspace/u, "Live admin login must clarify that admin is full Force, not workspace-scoped.");
 
 assert.match(publicHosts, /export const CLIENT_PUBLIC_HOST = "app\.phantomforce\.online"/u, "The server public-host boundary must know the customer app host.");
 assert.match(publicHosts, /if \(scope === "admin"\) return session\.canManageAccess/u, "The admin host must only allow platform/admin access sessions.");

@@ -164,11 +164,11 @@ function showGate() {
         <button class="gate-opt gate-submit" type="submit">
           <span class="gate-opt-icon">⌘</span>
           <b>Launch Business Manager</b>
-          <i>Owner account required. This host opens the full operating layer.</i>
+          <i>Owner/admin account required. Admin always opens full Force, not a customer workspace.</i>
         </button>
         <p class="gate-error" data-owner-error hidden></p>
       </form>
-      <p class="gate-note">The private gateway protects this route. PhantomForce owns the visible login and session.</p>`;
+      <p class="gate-note">The private gateway protects this route. Sign-in lands in the PhantomForce HQ workspace with full operator access across clients, modules, approvals, and routing.</p>`;
     const form = card.querySelector("[data-owner-login]");
     const emailInput = card.querySelector("[data-owner-email]");
     const passwordInput = card.querySelector("[data-owner-password]");
