@@ -8,15 +8,15 @@
   <style>
     *{box-sizing:border-box}
     html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#020806;color:#effff6;font-family:system-ui,sans-serif;user-select:none}
-    body{display:grid;grid-template-rows:auto minmax(0,1fr) auto;padding:max(10px,env(safe-area-inset-top)) 12px max(10px,env(safe-area-inset-bottom));background:radial-gradient(circle at 50% 0,#0f3628,#020806 60%)}
+    body{display:grid;grid-template-rows:auto minmax(0,1fr) auto;padding:max(10px,env(safe-area-inset-top)) 12px max(10px,env(safe-area-inset-bottom));background:radial-gradient(circle at 50% 0,#154332,#020806 58%),linear-gradient(180deg,#071b14,#010403)}
     .hud{display:flex;justify-content:space-between;align-items:center;gap:10px;width:min(760px,100%);margin:0 auto;padding:2px 4px}
     .hud span{display:block;color:#8ba99a;font:700 10px ui-monospace,monospace;letter-spacing:.14em}
     .hud b{color:#63ffad;font-size:24px;font-variant-numeric:tabular-nums}
     .hud .shields b{color:#41ffa1;letter-spacing:3px}
     .stage{position:relative;width:min(760px,100%);margin:0 auto;min-height:0}
-    canvas{display:block;width:100%;height:100%;border:1px solid #42ff9a3d;border-radius:14px;background:#03110c;touch-action:none}
+    canvas{display:block;width:100%;height:100%;border:1px solid #42ff9a57;border-radius:18px;background:linear-gradient(180deg,#071a14,#020806);box-shadow:inset 0 0 80px #41ffa10f,0 18px 70px #0008;touch-action:none}
     .kbd{position:fixed;bottom:0;left:0;width:2px;height:2px;opacity:0;border:0;padding:0;background:transparent;color:transparent;caret-color:transparent}
-    .hint{width:min(760px,100%);margin:8px auto 0;min-height:44px;padding:10px 16px;border:1px solid #4dffa36b;border-radius:999px;background:#03110ce8;color:#caffdf;font-weight:800;font-size:13px;cursor:pointer}
+    .hint{width:min(760px,100%);margin:8px auto 0;min-height:44px;padding:10px 16px;border:1px solid #4dffa36b;border-radius:999px;background:#03110ce8;color:#caffdf;font-weight:800;font-size:13px;cursor:pointer;box-shadow:0 0 26px #41ffa11d}
     .hint:active{background:#41ffa124}
     .overlay{position:fixed;z-index:6;inset:0;display:grid;place-items:center;background:#010504dc;backdrop-filter:blur(4px)}
     .overlay[hidden]{display:none}
@@ -36,9 +36,9 @@
     <div class="shields"><span>SHIELDS</span><b data-shields>&#11041;&#11041;&#11041;</b></div>
   </header>
   <div class="stage"><canvas aria-label="Type Storm play field"></canvas></div>
-  <button class="hint" type="button">&#9000; Tap to open keyboard &mdash; type falling words before they land</button>
+  <button class="hint" type="button">&#9000; Tap to open keyboard &mdash; lock onto vertical word-rain before it hits the baseline</button>
   <input class="kbd" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" aria-hidden="true" tabindex="-1">
-  <div class="overlay start"><div><h1>Type Storm</h1><p>Words rain toward the baseline. Type a word's letters in order to lock on and destroy it. A word that lands breaks one of your 3 shields.</p><button type="button">Start</button></div></div>
+  <div class="overlay start"><div><h1>Type Storm</h1><p>Words fall like neon rain. Type a column from top to bottom to vaporize it. It starts readable, then the storm earns its name.</p><button type="button">Start</button></div></div>
   <div class="overlay pause" hidden><div><h1>Paused</h1><p>The storm is holding its breath.</p><button type="button">Resume</button></div></div>
   <div class="overlay result" hidden><div><h1>Shields down</h1><p class="big" data-final></p><p data-detail></p><button type="button">Play again</button></div></div>
   <script>
@@ -88,20 +88,22 @@
       return WORDS[Math.floor(Math.random()*WORDS.length)];
     }
     function spawn(){
-      const maxFalling=elapsed>55?16:elapsed>28?14:12;
+      const maxFalling=elapsed>60?13:elapsed>30?10:7;
       if(falling.length>=maxFalling)return;
       const text=chooseText();
       if(falling.some(w=>w.text===text))return;
       ctx.font=FONT;
-      const width=ctx.measureText(text).width;
-      const base=Math.min(245,54+elapsed*3.15+streak*1.8);
+      const letters=text.toUpperCase().split('');
+      const width=Math.max(34,...letters.map((letter)=>ctx.measureText(letter).width+20));
+      const height=letters.length*22+12;
+      const base=Math.min(178,38+elapsed*2.05+streak*1.1);
       let x=8+Math.random()*Math.max(1,cw-16-width);
       for(let tries=0;tries<4;tries++){
-        const clash=falling.some(w=>w.y<60&&x<w.x+w.width+18&&x+width+18>w.x);
+        const clash=falling.some(w=>w.y<80&&x<w.x+w.width+22&&x+width+22>w.x);
         if(!clash)break;
         x=8+Math.random()*Math.max(1,cw-16-width);
       }
-      falling.push({text,matched:0,x,y:-14,width,speed:base*(0.9+Math.random()*0.42)});
+      falling.push({text,matched:0,x,y:-height,width,height,speed:base*(0.86+Math.random()*0.34)});
     }
     function startRun(){
       falling=[];active=null;
@@ -169,13 +171,19 @@
       }
       for(const w of [...falling]){
         w.y+=w.speed*dt;
-        if(w.y>=baseY){loseShield(w);if(phase!=='playing')return}
+        if(w.y+(w.height||24)>=baseY){loseShield(w);if(phase!=='playing')return}
       }
     }
     function draw(){
       ctx.clearRect(0,0,cw,ch);
       ctx.strokeStyle='#36ff9414';ctx.lineWidth=1;
       for(let y=30;y<ch;y+=44){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(cw,y);ctx.stroke()}
+      const stormAlpha=Math.min(0.28,0.08+elapsed*0.002);
+      ctx.fillStyle=`rgba(65,255,161,${stormAlpha})`;
+      for(let i=0;i<36;i++){
+        const x=(i*83+elapsed*18)%cw;
+        ctx.fillRect(x,((i*137+elapsed*58)%(ch+80))-80,1,26+(i%5)*5);
+      }
       ctx.strokeStyle=flash>0?'#effff6':'#41ffa1';
       ctx.lineWidth=2;
       if(!reduced){ctx.shadowColor='#41ffa1';ctx.shadowBlur=flash>0?22:10}
@@ -188,18 +196,22 @@
         const isActive=w===active;
         if(isActive){
           ctx.fillStyle='#0b3424';
-          if(!reduced){ctx.shadowColor='#41ffa1';ctx.shadowBlur=14}
+          if(!reduced){ctx.shadowColor='#41ffa1';ctx.shadowBlur=18}
           ctx.beginPath();
-          if(ctx.roundRect)ctx.roundRect(w.x-7,w.y-19,w.width+14,27,8);
-          else ctx.rect(w.x-7,w.y-19,w.width+14,27);
+          if(ctx.roundRect)ctx.roundRect(w.x-10,w.y-20,w.width+20,(w.height||30)+18,12);
+          else ctx.rect(w.x-10,w.y-20,w.width+20,(w.height||30)+18);
           ctx.fill();ctx.shadowBlur=0;
           ctx.strokeStyle='#58ffa8';ctx.lineWidth=1;ctx.stroke();
         }
-        const pre=w.text.slice(0,w.matched),rest=w.text.slice(w.matched);
-        ctx.fillStyle='#58ffa8';
-        ctx.fillText(pre,w.x,w.y);
-        ctx.fillStyle=isActive?'#effff6':'#a9c5b7';
-        ctx.fillText(rest,w.x+ctx.measureText(pre).width,w.y);
+        const letters=w.text.toUpperCase().split('');
+        const lineH=22;
+        for(let i=0;i<letters.length;i++){
+          const y=w.y+i*lineH;
+          ctx.fillStyle=i<w.matched?'#58ffa8':isActive?'#effff6':'#a9c5b7';
+          if(i===w.matched&&isActive&&!reduced){ctx.shadowColor='#58ffa8';ctx.shadowBlur=12}
+          ctx.fillText(letters[i],w.x+Math.max(0,(w.width-ctx.measureText(letters[i]).width)/2),y);
+          ctx.shadowBlur=0;
+        }
       }
     }
     function loop(t){
@@ -231,15 +243,16 @@
     cvs.addEventListener('pointerdown',()=>{if(phase==='playing')kbd.focus({preventScroll:true})});
     addEventListener('resize',fit);
     document.addEventListener('visibilitychange',()=>{if(document.hidden&&phase==='playing'&&!paused)setPaused(true)});
-    addEventListener('message',e=>{
-      if(e.data?.source!=='phantomplay-host')return;
-      if(e.data.type==='settings'){
-        if('sound' in e.data)soundOn=!!e.data.sound;
-        if('reducedMotion' in e.data){reduced=!!e.data.reducedMotion;document.body.classList.toggle('reduced',reduced)}
+    addEventListener('message',event=>{
+      if(event.data?.source!=='phantomplay-host')return;
+      if(event.data.type==='settings'){
+        if('sound' in event.data)soundOn=!!event.data.sound;
+        if('reducedMotion' in event.data){reduced=!!event.data.reducedMotion;document.body.classList.toggle('reduced',reduced)}
       }
-      if(e.data.type==='pause')setPaused(true);
-      if(e.data.type==='resume')setPaused(false);
-      if(e.data.type==='restart')startRun();
+      if(event.data.type==='pause')setPaused(true);
+      if(event.data.type==='resume')setPaused(false);
+      if(event.data.type==='exit')setPaused(true);
+      if(event.data.type==='restart')startRun();
     });
     startEl.querySelector('button').onclick=startRun;
     pauseEl.querySelector('button').onclick=()=>setPaused(false);

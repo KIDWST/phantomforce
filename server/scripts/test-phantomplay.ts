@@ -28,13 +28,19 @@ try {
   const play = await import("../src/phantom-ai/phantomplay.js");
 
   const initial = await play.getPhantomPlaySnapshot(playerA, { entitled: true, dailyMinuteLimit: 30, canSubmitGames: false });
-  assert(initial.catalog.length === 20, "The full built-in game catalog (8 flagship + 12 classic) should ship.");
+  assert(initial.catalog.length === 16, "The curated built-in game catalog should ship without retired weak games.");
   assert(play.PHANTOMPLAY_ENGINE.version === "2.0-large-map" && play.PHANTOMPLAY_ENGINE.saveStateBytes >= 262_144, "PhantomPlay should expose a large-map-capable engine profile.");
   assert(initial.engine?.largeMap?.streaming === true, "Snapshots should publish large-map engine capabilities to the player shell.");
   const builtInIds = new Set(initial.catalog.map((game) => game.id));
-  for (const gameId of ["neon-drift", "signal-match", "focus-stack", "word-weld", "reflex-grid", "penalty-kick", "rift-frenzy", "serpent-surge"]) {
+  for (const gameId of ["neon-drift", "signal-match", "focus-stack", "word-weld", "reflex-grid", "rift-frenzy", "serpent-surge", "pixel-bloom", "type-storm"]) {
     assert(builtInIds.has(gameId), `${gameId} should ship as an owned built-in game.`);
   }
+  for (const retiredId of ["penalty-kick", "breath-pacer", "court-vision", "logic-lights"]) {
+    assert(!builtInIds.has(retiredId), `${retiredId} should be retired from the playable catalog.`);
+  }
+  assert(initial.catalog.find((game) => game.id === "word-weld")?.version === "2.0.0", "Word Weld should ship the daily puzzle and buddy-duel revamp.");
+  assert(initial.catalog.find((game) => game.id === "pixel-bloom")?.contentRating === "toddler", "Pixel Bloom should sit in the toddler-friendly sort.");
+  assert(initial.catalog.find((game) => game.id === "type-storm")?.version === "1.1.0", "Type Storm should ship the vertical word-rain revamp.");
   assert(initial.catalog.every((game) => game.kind === "built_in"), "No fake community releases should be seeded.");
   assert(initial.catalog.find((game) => game.id === "neon-drift")?.version === "1.2.4", "Neon Drift should ship the faster arcade tuning.");
   assert(initial.catalog.find((game) => game.id === "rift-frenzy")?.version === "1.0.5", "Rift Frenzy should ship the playable steering and food tuning.");

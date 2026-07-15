@@ -13,7 +13,7 @@ import {
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
 const FALLBACK_KEY = "pf.phantomplay.offline.v1";
-const CATEGORIES = ["All", "Arcade", "Puzzle", "Focus", "Strategy", "Sports", "Creative"];
+const CATEGORIES = ["All", "Arcade", "Puzzle", "Focus", "Strategy", "Creative"];
 const GAME_SORTS = ["All", "Solo", "Multiplayer", "Toddler", ...CATEGORIES.filter((cat) => cat !== "All")];
 const STATUSES = [["online", "Online"], ["away", "Away"], ["busy", "Busy"], ["invisible", "Invisible"]];
 // "Game Rating Exposure" — mirrors server PhantomPlayRating (phantomplay.ts).
@@ -124,7 +124,7 @@ const gameById = (id) => ui.snapshot?.catalog?.find((game) => game.id === id) ||
 const historyFor = (gameId) => ui.snapshot?.history?.find((item) => item.gameId === gameId) || null;
 const wishlisted = (gameId) => !!ui.v2?.wishlist?.includes(gameId);
 const multiplayerGame = (game) => game.localMultiplayer || game.onlineMultiplayer || game.tags?.some((tag) => /multiplayer|friends|party|duel/i.test(tag)) || ["phantom-rumble"].includes(game.id);
-const toddlerPick = (game) => game.contentRating === "toddler" || ["focus-stack", "signal-match", "sudoku-signal"].includes(game.id);
+const toddlerPick = (game) => game.contentRating === "toddler" || ["focus-stack", "signal-match", "sudoku-signal", "pixel-bloom"].includes(game.id);
 const builtInGames = () => ui.snapshot.catalog.filter((game) => game.kind === "built_in");
 const visibleMultiplayerGames = () => ui.snapshot.catalog.filter(multiplayerGame);
 function sortGames(games, sort = ui.category) {

@@ -2,14 +2,14 @@
 *{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#020806;color:#effff6;font-family:system-ui,sans-serif}body{display:grid;place-items:center;padding:14px;background:radial-gradient(circle at 50% 18%,#0f342a,#020806 66%)}main{width:min(560px,100%);text-align:center}h1{margin:0 0 2px;color:#58ffa8;font-size:32px}.sub{color:#8ba99a;margin:0 0 10px;font-size:13px}.hud{display:flex;justify-content:center;gap:20px;margin-bottom:10px}.hud div{min-width:80px}.hud span{display:block;color:#8ba99a;font:700 11px ui-monospace;letter-spacing:.5px}.hud b{color:#63ffad;font-size:22px}.wrap{position:relative;width:min(88vw,440px);margin:0 auto}canvas{width:100%;display:block;border:1px solid #41ffa133;border-radius:14px;background:#03110c;touch-action:none;cursor:crosshair}.msg{min-height:20px;margin-top:10px;color:#a9c5b7;font-size:13px}.bar{height:8px;border-radius:999px;background:#0b3424;margin:10px auto 0;overflow:hidden}.bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,#41ffa1,#7dffc0);transition:width .3s}.done .msg{color:#7dffc0;font-weight:800}@media(max-width:400px){h1{font-size:26px}}</style></head><body><main><h1>Pixel Bloom</h1><p class="sub">Tap the grid to bloom a mandala. Arrow keys move, Space blooms. Fill the canvas.</p><div class="hud"><div><span>FILLED</span><b data-fill>0%</b></div><div><span>SCORE</span><b data-score>0</b></div><div><span>COMBO</span><b data-combo>0</b></div></div><div class="wrap"><canvas></canvas></div><div class="bar"><i data-bar></i></div><div class="msg" data-msg>Breathe out. Place a bloom anywhere.</div></main><script>
 const host=(type,data={})=>parent.postMessage({source:'phantomplay-game',type,...data},'*'),c=document.querySelector('canvas'),g=c.getContext('2d');
 const N=16,TARGET=60;// grid NxN, fill target %
-let cell=[],hue=[],DPR,px,cur={x:Math.floor(N/2),y:Math.floor(N/2)},score=0,combo=0,filledCount=0,hueBase=140,done=false,reduced=false,raf=0;
+let cell=[],hue=[],DPR,px,cur={x:Math.floor(N/2),y:Math.floor(N/2)},score=0,combo=0,filledCount=0,hueBase=140,done=false,reduced=false,paused=false,raf=0;
 const fillEl=document.querySelector('[data-fill]'),scoreEl=document.querySelector('[data-score]'),comboEl=document.querySelector('[data-combo]'),msgEl=document.querySelector('[data-msg]'),barEl=document.querySelector('[data-bar]');
 function reset(){cell=Array.from({length:N},()=>Array(N).fill(0));hue=Array.from({length:N},()=>Array(N).fill(0));score=0;combo=0;filledCount=0;done=false;document.body.classList.remove('done');cur={x:Math.floor(N/2),y:Math.floor(N/2)};update();host('progress',{score:0,progress:0})}
 function size(){DPR=Math.min(2,devicePixelRatio||1);const w=c.clientWidth||440;c.width=w*DPR;c.height=w*DPR;px=w/N;g.setTransform(DPR,0,0,DPR,0,0)}
 function pct(){return filledCount/(N*N)*100}
 function fillCell(x,y,h){if(x<0||y<0||x>=N||y>=N)return;if(!cell[x][y])filledCount++;cell[x][y]=1;hue[x][y]=h}
 function hasFilledNeighbor(x,y){const d=[[1,0],[-1,0],[0,1],[0,-1]];return d.some(([dx,dy])=>{const nx=x+dx,ny=y+dy;return nx>=0&&ny>=0&&nx<N&&ny<N&&cell[nx][ny]})}
-function bloom(x,y){if(done||x<0||y<0||x>=N||y>=N)return;
+function bloom(x,y){if(done||paused||x<0||y<0||x>=N||y>=N)return;
 const wasNeighbor=hasFilledNeighbor(x,y),already=cell[x][y];
 hueBase=(hueBase+18)%360;const h=hueBase;
 // diamond petal shape around (x,y), mirrored 4-fold across both axes
@@ -46,6 +46,7 @@ else if(e.code==='Space'||e.code==='Enter')bloom(cur.x,cur.y);
 else handled=false;
 if(handled)e.preventDefault()});
 addEventListener('resize',size);
-addEventListener('message',e=>{if(e.data?.source==='phantomplay-host'&&e.data.type==='settings')reduced=!!e.data.reducedMotion});
+function setPaused(next){paused=next;host('paused',{paused})}
+addEventListener('message',event=>{if(event.data?.source!=='phantomplay-host')return;if(event.data.type==='pause')setPaused(true);if(event.data.type==='resume')setPaused(false);if(event.data.type==='exit')setPaused(true);if(event.data.type==='restart')reset();if(event.data.type==='settings')reduced=!!event.data.reducedMotion});
 size();reset();raf=requestAnimationFrame(draw);host('ready');
 </script></body></html>

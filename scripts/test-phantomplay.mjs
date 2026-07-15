@@ -9,10 +9,9 @@ const index = read("../app/index.html");
 const css = read("../app/phantomplay.css");
 const v2Css = read("../app/phantomplay-v2.css");
 const staticServer = read("../ops/admin-live/admin-static-server.mjs");
-const gameSlugs = ["neon-drift", "signal-match", "focus-stack", "word-weld", "reflex-grid", "penalty-kick", "rift-frenzy", "serpent-surge"];
+const gameSlugs = ["neon-drift", "signal-match", "focus-stack", "word-weld", "reflex-grid", "rift-frenzy", "serpent-surge", "pixel-bloom", "type-storm"];
 const games = gameSlugs.map((name) => read(`../app/games/${name}.html`));
 const neonDrift = games[gameSlugs.indexOf("neon-drift")];
-const penaltyKick = games[gameSlugs.indexOf("penalty-kick")];
 const phantomRumble = read("../app/games/phantom-rumble.html");
 const appFiles = [index, main, module, v2Module, ...games];
 
@@ -26,6 +25,7 @@ assert.match(module, /tab:\s*"library"/u, "Default PhantomPlay must open straigh
 assert.match(module, /const GAME_SORTS = \["All", "Solo", "Multiplayer", "Toddler"/u, "Default PhantomPlay must keep Toddler as a sort chip.");
 assert.match(module, /const tabs = \[\["library", "Games"\], \["together", "Multiplayer"\], \["favorites", "Saved"\]/u, "Default PhantomPlay tabs must start with Games, Multiplayer, and Saved.");
 assert.match(module, /function sortGames\(games, sort = ui\.category\)[\s\S]*sort === "Toddler"[\s\S]*toddlerPick/u, "Default PhantomPlay must sort toddler-friendly games through the sorter.");
+assert.match(module, /toddlerPick[\s\S]*pixel-bloom/u, "Default PhantomPlay must move Pixel Bloom into the Toddler sort.");
 assert.match(module, /return sortGames\(ui\.snapshot\.catalog\)\.filter/u, "Default PhantomPlay search must reuse the same sort pipeline as Games.");
 assert.doesNotMatch(module, /renderToddlerSpace|pp-shell-toddler|pp-toddler-space|data-pp-toddler-play/u, "Default PhantomPlay must not keep a separate Toddler Space page.");
 assert.match(css, /\.pp-play-header/u, "Default PhantomPlay game-first library header must be styled.");
@@ -34,6 +34,7 @@ assert.match(v2Module, /tab:\s*"solo"/u, "PhantomPlay V2 must open straight to g
 assert.match(v2Module, /const GAME_SORTS = \["All", "Solo", "Multiplayer", "Toddler"/u, "Toddler must be a sort chip, not a separate destination.");
 assert.match(v2Module, /const tabs = \[\["solo", "Games"\], \["friends", "Multiplayer"\], \["library", "Library"\]/u, "V2 top tabs must start with Games, Multiplayer, and Library.");
 assert.match(v2Module, /function sortGames\(games, sort = ui\.category\)[\s\S]*sort === "Toddler"[\s\S]*toddlerPick/u, "V2 must sort toddler-friendly games through the sorter.");
+assert.match(v2Module, /toddlerPick[\s\S]*pixel-bloom/u, "V2 must move Pixel Bloom into the Toddler sort.");
 assert.match(v2Module, /return sortGames\(ui\.snapshot\.catalog\)\.filter/u, "V2 library search must reuse the same sort pipeline as the Games tab.");
 assert.doesNotMatch(v2Module, /renderToddlerSpace|pp2-shell-toddler|pp2-toddler-space/u, "V2 must not bring back a separate Toddler Space page.");
 assert.match(v2Css, /\.pp2-play-header/u, "V2 game-first landing header must be styled.");
@@ -117,10 +118,9 @@ assert.match(neonDrift, /t\*\.000055/u, "Neon Drift background motion should fee
 assert.match(neonDrift, /e\.y>1\.12\)\{e\.dead=true\}/u, "Escaped enemies should leave the field without damaging the player.");
 assert.doesNotMatch(neonDrift, /e\.y>1\.08\)\{e\.dead=true;damage\(\)\}/u, "Escaped enemies must not cause invisible hull damage.");
 assert.doesNotMatch(games[2], /function size\(\)\{[^}]*reset\(\)/u, "Focus Stack must not erase a run when the mobile viewport resizes.");
-assert.match(penaltyKick, /\.field\{[^}]*height:100%;[^}]*min-height:280px/u, "Penalty Kick must reserve a real playable field instead of collapsing around absolute children.");
-assert.match(penaltyKick, /function meterPower\(\)\{[^}]*getBoundingClientRect/u, "Penalty Kick must calculate shot timing from live meter geometry.");
-assert.doesNotMatch(penaltyKick, /getComputedStyle\(meter\)\.transform\.split/u, "Penalty Kick must not use raw CSS transform pixels for shot timing.");
-assert.match(penaltyKick, /else start\(\)/u, "Penalty Kick must let keyboard users start from the opening overlay.");
+assert.match(games[gameSlugs.indexOf("word-weld")], /Daily Weld|Buddy Duel|pf\.wordweld|function grade\(word\)|dayKey/u, "Word Weld must be the daily Wordle-inspired puzzle with buddy-duel support.");
+assert.match(games[gameSlugs.indexOf("type-storm")], /vertical word-rain|stormAlpha|letters=w\.text\.toUpperCase\(\)\.split|w\.height/u, "Type Storm must render as vertical falling word rain, not a flat old typing list.");
+assert.match(games[gameSlugs.indexOf("pixel-bloom")], /no timer|no pressure|source:'phantomplay-game'/u, "Pixel Bloom must remain a gentle toddler-friendly built-in.");
 assert.match(games[gameSlugs.indexOf("rift-frenzy")], /rival|school|boost|eat|bigger/u, "Rift Frenzy must play as a modern fish arena, not a static old mini-game.");
 assert.match(games[gameSlugs.indexOf("rift-frenzy")], /const steer=1-Math\.pow\(\.72,dt\/16\)/u, "Rift Frenzy movement must use frame-stable steering instead of overcorrecting.");
 assert.match(games[gameSlugs.indexOf("rift-frenzy")], /friction=target\.active\|\|ax\|\|ay\?1:Math\.pow\(\.9,dt\/16\)/u, "Rift Frenzy must coast cleanly instead of drifting forever.");
