@@ -9,7 +9,12 @@
  * to a local mock.
  */
 
-import { currentTenantId, session } from "./store.js?v=phantom-live-20260714-269";
+import { currentTenantId, session, isAdmin, isOwnerOperator } from "./store.js?v=phantom-live-20260715-270";
+import { canManageActiveOrg } from "./orgs.js?v=phantom-live-20260715-270";
+
+/* Owner/admin only — legacy local-admin sessions (isAdmin/isOwnerOperator)
+   and real database org sessions (canManageActiveOrg) both count. */
+const canManageClients = () => isAdmin() || isOwnerOperator() || canManageActiveOrg();
 
 const ROLES = [
   { id: "owner", label: "Owner", blurb: "Everything, including billing and this page." },
@@ -182,6 +187,14 @@ export function renderOrganizationPanel(el, opts = {}) {
       ${orgState.message ? `<p class="org-message">${esc(orgState.message)}</p>` : ""}
       ${orgState.error ? `<p class="org-message is-error">${esc(orgState.error)}</p>` : ""}
     </div>
+
+    ${canManageClients() ? `
+    <div class="set-section org-clients-card">
+      <p class="set-eyebrow">Client setup</p>
+      <h4>Clients &amp; CRM</h4>
+      <p class="set-note">Contacts, leads, pipeline, and follow-up — owner/admin business back office, not a surface every teammate needs parked in the sidebar. Opens as its own page.</p>
+      <button class="btn btn-primary" type="button" data-open-ws="leads">Open Clients</button>
+    </div>` : ""}
 
     ${orgState.needsDatabase ? `
       <div class="set-section org-db-note">

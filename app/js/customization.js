@@ -1,4 +1,4 @@
-import { currentTenantId, session } from "./store.js?v=phantom-live-20260714-269";
+import { currentTenantId, session } from "./store.js?v=phantom-live-20260715-270";
 
 let activeConfiguration = null;
 let activeEntitlements = null;
@@ -27,12 +27,12 @@ function normalizedModuleState(module, moduleId) {
 
 const PLATFORM_MODULES = [
   ["dashboard", "Dashboard", true, ["owner", "admin", "manager", "member", "client"]],
-  ["crm", "Clients", true, ["owner", "admin", "manager", "member"]],
+  ["intelligence", "Competitor Intelligence", true, ["owner", "admin", "manager"]],
   ["media", "Media Lab", true, ["owner", "admin", "manager", "member"]],
   ["sites", "Websites", true, ["owner", "admin", "manager", "member"]],
   ["money", "Accounting", true, ["owner", "admin", "manager"]],
   ["phantomplay", "PhantomPlay", true, ["owner", "admin", "manager", "member", "client"]],
-  ["intelligence", "Competitor Intelligence", true, ["owner", "admin", "manager"]],
+  ["crm", "Clients", true, ["owner", "admin"]],
   ["analytics", "Analytics", true, ["owner", "admin", "manager"]],
   ["memory", "Memory", true, ["owner", "admin", "manager"]],
   ["automation", "Automations", true, ["owner", "admin", "manager"]],

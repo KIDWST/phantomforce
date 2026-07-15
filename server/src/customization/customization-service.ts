@@ -184,6 +184,15 @@ function repairStoredConfiguration(configuration: OrganizationConfiguration): Or
       if (!LEGACY_MODULE_LABELS.test(String(module.label || "").trim())) return module;
       repaired = true;
       return { ...module, label: MODULE_BY_ID.get(module.id)?.displayName || module.id };
+    })
+    /* Clients (crm) moved from a general team tool to owner/admin business
+       back office — narrow any config still carrying the older, wider
+       manager/member roles down to the current registry default. */
+    .map((module) => {
+      if (module.id !== "crm") return module;
+      if (!module.roles.some((role) => role === "manager" || role === "member")) return module;
+      repaired = true;
+      return { ...module, roles: module.roles.filter((role) => role === "owner" || role === "admin") };
     });
   const present = new Set(modules.map((module) => module.id));
   let order = modules.length;
