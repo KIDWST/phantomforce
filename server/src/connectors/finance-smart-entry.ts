@@ -128,3 +128,94 @@ export function parseExpenseText(
     },
   };
 }
+
+export type ReceiptDraft = {
+  vendor: string;
+  amount: number;
+  direction: "income" | "expense";
+  date: string;
+  categoryGuess: string;
+  confidence: "high" | "medium" | "low";
+};
+
+const RECEIPT_MODEL_ID = "z-ai/glm-5.2";
+const RECEIPT_EXTRACTION_PROMPT =
+  'Read this receipt image and return ONLY a JSON object (no prose, no markdown fences) with exactly these keys: ' +
+  '{"vendor": string, "amount": number, "direction": "income" or "expense", "date": "YYYY-MM-DD", "categoryGuess": string, "confidence": "high" or "medium" or "low"}. ' +
+  'Use "expense" unless the receipt is clearly a refund or payment received. If you cannot read a field confidently, make your best guess and set confidence to "low".';
+
+function liveProvidersEnabled(env: NodeJS.ProcessEnv): boolean {
+  return env.PHANTOM_LIVE_PROVIDERS_ENABLED === "true" && env.PHANTOM_OPENROUTER_TRANSPORT_ENABLED === "true";
+}
+
+function parseReceiptModelOutput(content: string): ReceiptDraft | null {
+  try {
+    const parsed = JSON.parse(content.trim().replace(/^```json\s*|```$/g, ""));
+    const amount = Number(parsed.amount);
+    if (!Number.isFinite(amount) || amount <= 0) return null;
+    return {
+      vendor: String(parsed.vendor || "Unknown vendor").slice(0, 160),
+      amount,
+      direction: parsed.direction === "income" ? "income" : "expense",
+      date: /^\d{4}-\d{2}-\d{2}$/.test(parsed.date) ? parsed.date : new Date().toISOString().slice(0, 10),
+      categoryGuess: String(parsed.categoryGuess || "Uncategorized").slice(0, 80),
+      confidence: parsed.confidence === "high" || parsed.confidence === "low" ? parsed.confidence : "medium",
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function parseReceiptImage(
+  dataUrl: string,
+  options: { fetcher?: typeof fetch; env?: NodeJS.ProcessEnv } = {},
+): Promise<{ available: true; draft: ReceiptDraft } | { available: false; reason: string }> {
+  const env = options.env ?? process.env;
+  if (!liveProvidersEnabled(env)) {
+    return { available: false, reason: "AI parsing isn't enabled yet. Fill in the details manually below." };
+  }
+  const apiKey = env.OPENROUTER_API_KEY;
+  if (!apiKey) {
+    return { available: false, reason: "AI parsing isn't configured yet. Fill in the details manually below." };
+  }
+
+  const fetcher = options.fetcher ?? fetch;
+  try {
+    const response = await fetcher("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: RECEIPT_MODEL_ID,
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "text", text: RECEIPT_EXTRACTION_PROMPT },
+              { type: "image_url", image_url: { url: dataUrl } },
+            ],
+          },
+        ],
+        max_tokens: 300,
+        temperature: 0,
+      }),
+    });
+    if (!response.ok) {
+      return { available: false, reason: `The AI provider returned an error (HTTP ${response.status}). Fill in the details manually below.` };
+    }
+    const payload = await response.json().catch(() => null) as { choices?: Array<{ message?: { content?: string } }> } | null;
+    const content = payload?.choices?.[0]?.message?.content;
+    if (!content) {
+      return { available: false, reason: "The AI provider returned an empty response. Fill in the details manually below." };
+    }
+    const draft = parseReceiptModelOutput(content);
+    if (!draft) {
+      return { available: false, reason: "Couldn't read structured data from that receipt. Fill in the details manually below." };
+    }
+    return { available: true, draft };
+  } catch {
+    return { available: false, reason: "Couldn't reach the AI provider. Fill in the details manually below." };
+  }
+}

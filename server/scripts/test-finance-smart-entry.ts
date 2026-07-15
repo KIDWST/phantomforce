@@ -63,4 +63,45 @@ const { parseExpenseText } = await import("../src/connectors/finance-smart-entry
   if (result.ok && result.draft.kind === "recurring_rule") assert(result.draft.frequency === "biweekly");
 }
 
-console.log(JSON.stringify({ ok: true, suite: "finance-smart-entry-text" }));
+const { parseReceiptImage } = await import("../src/connectors/finance-smart-entry.js");
+
+// AI parsing disabled (flags off) must degrade gracefully, not throw
+{
+  const result = await parseReceiptImage("data:image/png;base64,AAAA", {
+    env: { PHANTOM_LIVE_PROVIDERS_ENABLED: "false", PHANTOM_OPENROUTER_TRANSPORT_ENABLED: "true", OPENROUTER_API_KEY: "test-key" } as NodeJS.ProcessEnv,
+  });
+  assert(result.available === false, "receipt parsing must report unavailable when live providers are disabled");
+}
+
+// AI parsing enabled: a mocked OpenRouter response must produce a structured draft
+{
+  const mockFetch = (async (input: string | URL | Request) => {
+    const url = String(input);
+    assert(url === "https://openrouter.ai/api/v1/chat/completions", "must call the OpenRouter chat completions endpoint");
+    return new Response(JSON.stringify({
+      choices: [{ message: { content: JSON.stringify({ vendor: "Home Depot", amount: 84.12, direction: "expense", date: "2026-07-14", categoryGuess: "Equipment", confidence: "high" }) } }],
+    }), { status: 200, headers: { "Content-Type": "application/json" } });
+  }) as typeof fetch;
+
+  const result = await parseReceiptImage("data:image/png;base64,AAAA", {
+    fetcher: mockFetch,
+    env: { PHANTOM_LIVE_PROVIDERS_ENABLED: "true", PHANTOM_OPENROUTER_TRANSPORT_ENABLED: "true", OPENROUTER_API_KEY: "test-key" } as NodeJS.ProcessEnv,
+  });
+  assert(result.available === true, "receipt parsing must succeed with providers enabled and a valid mock response");
+  if (result.available) {
+    assert(result.draft.vendor === "Home Depot");
+    assert(result.draft.amount === 84.12);
+  }
+}
+
+// A malformed provider response must degrade to unavailable, not throw
+{
+  const brokenFetch = (async () => new Response("not json", { status: 200 })) as typeof fetch;
+  const result = await parseReceiptImage("data:image/png;base64,AAAA", {
+    fetcher: brokenFetch,
+    env: { PHANTOM_LIVE_PROVIDERS_ENABLED: "true", PHANTOM_OPENROUTER_TRANSPORT_ENABLED: "true", OPENROUTER_API_KEY: "test-key" } as NodeJS.ProcessEnv,
+  });
+  assert(result.available === false, "a malformed provider response must degrade to unavailable rather than throw");
+}
+
+console.log(JSON.stringify({ ok: true, suite: "finance-smart-entry" }));
