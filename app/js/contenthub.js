@@ -9,20 +9,20 @@ import {
   freshEditState, applyFilterPreset, renderBaseFrame,
   addBokehSpot, removeBokehSpotNear, removeBokehSpotAt, nearestBokehSpot, moveBokehSpot, resizeBokehSpot,
   setBokehMask, freshTextStyle, TEXT_FONTS, TEXT_PRESETS, applyTextPreset,
-} from "./imagefilters.js?v=phantom-live-20260715-274";
-import { getRembgStatus, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260715-274";
-import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260715-274";
-import { parseAnalyticsReport } from "./social-analytics.js?v=phantom-live-20260715-274";
+} from "./imagefilters.js?v=phantom-live-20260715-275";
+import { getRembgStatus, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260715-275";
+import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260715-275";
+import { parseAnalyticsReport } from "./social-analytics.js?v=phantom-live-20260715-275";
 import {
   freshComposition, compositionSnapshot, restoreComposition, addImageLayer, replaceImageLayerSource, addTextLayer, addColorLayer,
   duplicateLayer, removeSelectedLayers, moveLayerOrder, selectedLayers, selectLayer, selectAllLayers,
   loadCompositionImages, renderComposition, drawCompositionOverlay, drawDetectedSubjectOverlay, canvasPoint, hitTestLayer, hitTestResizeHandle,
   setCanvasPreset, zoomComposition, canvasPointToLayer, layerPointToCanvas,
   imageEditSnapshot, restoreImageEditSnapshot, pushEditorSnapshot,
-} from "./content-editor.js?v=phantom-live-20260715-274";
+} from "./content-editor.js?v=phantom-live-20260715-275";
 import {
   currentTenantId, currentWs, ctx, session, store, visible, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem, wsName,
-} from "./store.js?v=phantom-live-20260715-274";
+} from "./store.js?v=phantom-live-20260715-275";
 
 const CH_KEY = "pf.contenthub.v2";
 const CH_REMOVED_KEY = "pf.contenthub.removed.v1";
@@ -3643,7 +3643,9 @@ function accountAnalyticsRow(row, esc) {
     ? `<button class="btn btn-primary" type="button" data-an-sync="${account.id}">${analyticsConnectorState.loading ? "Syncing…" : live ? "Sync now" : "Start live sync"}</button>`
     : oauthReady
       ? `<button class="btn btn-primary" type="button" data-an-oauth="${account.id}">Connect account</button>`
-      : `<button class="btn btn-ghost" type="button" data-open-ws="settings" data-open-settings-tab="media">Set up OAuth</button>`;
+      : canManageSocialOAuthApps()
+        ? `<button class="btn btn-ghost" type="button" data-an-show-oauth-setup="${account.id}">Set up app</button>`
+        : `<button class="btn btn-ghost" type="button" disabled>Owner setup needed</button>`;
   return `<article class="an-channel-row ${feed ? "is-live" : "is-missing"}">
     <div class="an-channel-id"><span class="ch-dot" style="background:${account.color}"></span><span><b>${esc(account.name)}</b><i>${esc(account.handle || account.loginIdentity || "profile saved")}</i></span></div>
     ${feed ? `<div class="an-channel-metrics">
@@ -3691,10 +3693,10 @@ function analyticsReadinessCopy({ hasLiveMetrics, configuredCount, oauthReadyCou
     tone: "blocked",
     title: "Provider apps need setup first.",
     body: canManageSocialOAuthApps()
-      ? "Add the platform app credentials once in Settings. After that every org can connect accounts through OAuth."
+      ? "Add the platform app credentials once below. After that every org can connect accounts through OAuth."
       : "PhantomForce needs platform OAuth apps configured before this workspace can authorize social accounts.",
     action: canManageSocialOAuthApps()
-      ? `<button class="btn btn-primary" type="button" data-open-ws="settings" data-open-settings-tab="media">Set up provider apps</button>`
+      ? `<button class="btn btn-primary" type="button" data-an-show-oauth-setup>Set up provider apps</button>`
       : `<button class="btn btn-ghost" type="button" disabled>Waiting on platform setup</button>`,
   };
 }
@@ -3714,7 +3716,7 @@ function analyticsOAuthSetupInline(esc) {
     : `${ready.length}/${providers.length || PLATFORMS.length} provider apps ready`;
   const selectedProvider = missing[0] || providers[0] || null;
   const selectedScopes = Array.isArray(selectedProvider?.scopes) ? selectedProvider.scopes : [];
-  return `<details class="an-oauth-setup" ${missing.length || analyticsOAuthSetupState.error ? "open" : ""}>
+  return `<details class="an-oauth-setup" data-an-oauth-setup ${missing.length || analyticsOAuthSetupState.error ? "open" : ""}>
     <summary>
       <span>${svgIc("lock")} Provider app setup</span>
       <b>${esc(statusText)}</b>
@@ -3809,7 +3811,15 @@ function wireAnalyticsActions(el, accounts, opts) {
         analyticsNotice = "That platform did not return a sign-in link.";
       }
     } catch (error) {
-      analyticsNotice = error?.message || "The account connection could not start.";
+      const connector = connectorStatus(platform);
+      analyticsNotice = connector?.oauthConfigured
+        ? (error?.message || "The account connection could not start.")
+        : `${connector?.name || platform} needs its provider app saved first. Open the setup panel below, paste the app credentials, then connect the account with this browser.`;
+      const setupPanel = el.querySelector("[data-an-oauth-setup]");
+      if (setupPanel) {
+        setupPanel.open = true;
+        setupPanel.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
     } finally {
       renderAnalytics(el, opts);
     }
@@ -3845,6 +3855,19 @@ function wireAnalyticsActions(el, accounts, opts) {
   });
   el.querySelectorAll("[data-an-scroll-sources]").forEach((button) => button.onclick = () => {
     el.querySelector("[data-an-sources]")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+  el.querySelectorAll("[data-an-show-oauth-setup]").forEach((button) => button.onclick = () => {
+    const panel = el.querySelector("[data-an-oauth-setup]");
+    if (!panel) {
+      analyticsNotice = "Provider app setup is owner-only. Ask the workspace owner to save the platform app first.";
+      renderAnalytics(el, opts, { skipAutoRefresh: true });
+      return;
+    }
+    panel.open = true;
+    const platform = button.dataset.anShowOauthSetup || "";
+    const select = panel.querySelector("[data-an-oauth-platform]");
+    if (platform && select) select.value = platform === "facebook" ? "instagram" : platform;
+    panel.scrollIntoView({ behavior: "smooth", block: "center" });
   });
   const callbackInput = el.querySelector("[data-an-oauth-callback]");
   if (callbackInput) callbackInput.onclick = () => {

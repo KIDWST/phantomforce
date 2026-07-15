@@ -1181,11 +1181,30 @@ export function mountVideoEditor(host, opts = {}) {
   });
   refs.exportBtn.addEventListener("click", startExport);
   q("[data-vc-export-cancel]").addEventListener("click", () => stopRecorder(true));
+  const isTypingTarget = (target) => !!(target && target.closest && target.closest("input, textarea, select, button, [contenteditable]"));
   const onKey = (e) => {
-    if (e.code !== "Space" || exportRun || !root.isConnected) return;
-    if (e.target && e.target.closest && e.target.closest("input, textarea, select, button, [contenteditable]")) return;
-    e.preventDefault();
-    togglePlay();
+    if (exportRun || !root.isConnected || isTypingTarget(e.target)) return;
+    const clip = selectedClip();
+    const key = String(e.key || "").toLowerCase();
+    if (e.code === "Space") {
+      e.preventDefault();
+      togglePlay();
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && key === "d") {
+      e.preventDefault();
+      if (clip) duplicateClip(clip);
+      return;
+    }
+    if ((key === "backspace" || key === "delete") && clip) {
+      e.preventDefault();
+      removeClip(clip);
+      return;
+    }
+    if (key === "s" && clip) {
+      e.preventDefault();
+      splitClipAtPlayhead(clip);
+    }
   };
   document.addEventListener("keydown", onKey);
 

@@ -4890,6 +4890,12 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 }
 .ml-layer-row.is-selected { border-color: rgba(65,255,161,.56); background: rgba(65,255,161,.09); box-shadow: inset 3px 0 var(--neon); }
 .ml-layer-row.is-off { opacity: .58; }
+.ml-layer-row.is-locked {
+  border-style: dashed;
+  border-color: rgba(255, 209, 102, .32);
+  background: rgba(255, 209, 102, .055);
+}
+.ml-layer-row.is-locked .ml-layer-name i { color: var(--warn); }
 .ml-layer-name {
   width: auto;
   display: flex;

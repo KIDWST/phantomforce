@@ -6337,10 +6337,18 @@ app.post("/phantom-ai/ops/social-oauth/start", async (request, reply) => {
       oauth: createSocialOAuthStart(body.platform, workspaceKey),
     };
   } catch (error) {
+    const socialStatus = getSocialAnalyticsConnectorStatus(socialWorkspaceForSession(session));
+    const connector = socialStatus.connectors.find((item) => item.id === body.platform);
+    const preflight = socialStatus.oauthPreflight.platforms.find((item) => item.id === body.platform);
     return reply.code(409).send({
       ok: false,
       error: error instanceof Error ? error.message.slice(0, 400) : "OAuth start is not configured.",
-      connector: getSocialAnalyticsConnectorStatus(socialWorkspaceForSession(session)).connectors.find((item) => item.id === body.platform),
+      setupRequired: connector ? !connector.oauthConfigured : true,
+      nextAction: preflight?.nextAction || "setup_provider_app",
+      nextLabel: preflight?.nextLabel || "Set up provider app",
+      nextDetail: preflight?.nextDetail || "Add the provider app credentials first, then connect this account with the signed-in browser.",
+      connector,
+      oauthPreflight: socialStatus.oauthPreflight,
     });
   }
 });

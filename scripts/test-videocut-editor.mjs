@@ -28,6 +28,11 @@ assert.match(videoSrc, /timelineEl\.addEventListener\("drop"[\s\S]*moveClipToInd
 assert.match(videoSrc, /data-vc-dup/u, "Timeline cards must expose a duplicate action.");
 assert.match(videoSrc, /e\.target\.closest\("\[data-vc-dup\]"\)[\s\S]*duplicateClip\(clip\)/u, "The duplicate button must clone the selected timeline clip.");
 assert.match(videoSrc, /if \(clip\.owned\) clip\.owned = false[\s\S]*owned:\s*false/u, "Duplicating local object URL clips must keep the URL alive without double-revoking it.");
+assert.match(videoSrc, /const isTypingTarget = \(target\) => !!\(target[\s\S]*input, textarea, select, button, \[contenteditable\]/u, "PhantomCut keyboard shortcuts must ignore form fields.");
+assert.match(videoSrc, /if \(e\.code === "Space"\)[\s\S]*togglePlay\(\)/u, "Space must remain the preview play/pause shortcut.");
+assert.match(videoSrc, /\(e\.ctrlKey \|\| e\.metaKey\) && key === "d"[\s\S]*duplicateClip\(clip\)/u, "Ctrl/Cmd+D must duplicate the selected clip.");
+assert.match(videoSrc, /key === "backspace" \|\| key === "delete"[\s\S]*removeClip\(clip\)/u, "Delete and Backspace must remove the selected clip.");
+assert.match(videoSrc, /key === "s" && clip[\s\S]*splitClipAtPlayhead\(clip\)/u, "S must split the selected clip at the playhead.");
 assert.match(cssSrc, /\.vc-ins-tools\s*\{/u, "The split control needs a dedicated inspector layout.");
 assert.match(cssSrc, /\.vc-ins-tools button:disabled/u, "Disabled split controls must have a visible unavailable state.");
 assert.match(cssSrc, /\.vc-clip\[draggable="true"\]\s*\{[\s\S]*cursor:\s*grab/u, "Draggable clips need a grab cursor.");

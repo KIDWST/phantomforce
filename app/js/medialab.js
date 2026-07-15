@@ -6,21 +6,21 @@
  * instead of sending people out to another product.
  */
 
-import { currentTenantId, ctx, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260715-274";
+import { currentTenantId, ctx, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260715-275";
 import {
   PLATFORMS, registerContentAsset, loadSocialAccounts, saveSocialAccounts, socialStatus,
   loadContentAssets, saveContentAssets, contentAssetDisplayUrl, hydrateContentAssetUrl,
-} from "./contenthub.js?v=phantom-live-20260715-274";
-import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260715-274";
+} from "./contenthub.js?v=phantom-live-20260715-275";
+import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260715-275";
 import {
   addImageLayer, addTextLayer, cloneImageEditState, compositionSnapshot, duplicateLayer,
   canvasPoint, drawCompositionOverlay, freshComposition, hitTestLayer, hitTestResizeHandle,
   loadCompositionImages, moveLayerOrder, pushEditorSnapshot, removeSelectedLayers,
   renderComposition, restoreComposition, selectLayer, selectedLayers,
-} from "./content-editor.js?v=phantom-live-20260715-274";
-import { loadImageForEditing, exportCanvas, requestAiEdit, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260715-274";
-import { mountVideoEditor } from "./videocut.js?v=phantom-live-20260715-274";
-import { assetsAvailable, assetBlobUrl, listAssets, recordAssetUsage, saveToAssetCloud, listLocalAssets, refreshLocalAssets, localAssetBlobUrl } from "./orgs.js?v=phantom-live-20260715-274";
+} from "./content-editor.js?v=phantom-live-20260715-275";
+import { loadImageForEditing, exportCanvas, requestAiEdit, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260715-275";
+import { mountVideoEditor } from "./videocut.js?v=phantom-live-20260715-275";
+import { assetsAvailable, assetBlobUrl, listAssets, recordAssetUsage, saveToAssetCloud, listLocalAssets, refreshLocalAssets, localAssetBlobUrl } from "./orgs.js?v=phantom-live-20260715-275";
 
 const CFG_KEY = "pf.medialab.v1";
 const EDIT_INTENT_KEY = "pf.medialab.editIntent.v1";
@@ -2631,6 +2631,7 @@ let editState = { ...freshEditState(), loadedUrl: null };
 let mlComposition = freshComposition();
 let mlLayerEffects = { base: editState };
 let mlEditResizeHandler = null;
+let mlEditKeyHandler = null;
 let mlBokehPicking = false;
 let mlShowTutorial = false;
 let mlEditLoadError = null;
@@ -2824,6 +2825,7 @@ function selectedLayerPanelHtml(esc) {
   ensureEditorComposition();
   const active = selectedEditLayer();
   const canDelete = active && active.id !== "base" && !active.locked;
+  const activeLocked = !!active?.locked;
   return `
     <details class="ml-edit-section" open>
       <summary><span>Layers</span><b>${mlComposition.layers.length}</b></summary>
@@ -2837,45 +2839,46 @@ function selectedLayerPanelHtml(esc) {
           ${[...mlComposition.layers].reverse().map((layer) => {
             const realIndex = mlComposition.layers.findIndex((item) => item.id === layer.id);
             const selected = mlComposition.selectedIds.includes(layer.id);
-            return `<div class="ml-layer-row ${selected ? "is-selected" : ""} ${layer.visible === false ? "is-off" : ""}" data-ml-layer-row="${esc(layer.id)}">
+            return `<div class="ml-layer-row ${selected ? "is-selected" : ""} ${layer.visible === false ? "is-off" : ""} ${layer.locked ? "is-locked" : ""}" data-ml-layer-row="${esc(layer.id)}">
               <button type="button" data-ml-layer-visible="${esc(layer.id)}" title="${layer.visible === false ? "Show layer" : "Hide layer"}">${layer.visible === false ? "○" : "●"}</button>
               <button type="button" class="ml-layer-name" data-ml-layer-select="${esc(layer.id)}"><b>${esc(layer.name || layerKindLabel(layer))}</b><i>${esc(layerKindLabel(layer))}</i></button>
               <span class="ml-layer-row-actions">
-                <button type="button" data-ml-layer-order="-1" data-layer-id="${esc(layer.id)}" ${realIndex <= 0 ? "disabled" : ""} title="Move down">↓</button>
-                <button type="button" data-ml-layer-order="1" data-layer-id="${esc(layer.id)}" ${realIndex >= mlComposition.layers.length - 1 ? "disabled" : ""} title="Move up">↑</button>
+                <button type="button" data-ml-layer-lock="${esc(layer.id)}" title="${layer.locked ? "Unlock layer" : "Lock layer"}">${layer.locked ? "🔒" : "🔓"}</button>
+                <button type="button" data-ml-layer-order="-1" data-layer-id="${esc(layer.id)}" ${layer.locked || realIndex <= 0 ? "disabled" : ""} title="Move down">↓</button>
+                <button type="button" data-ml-layer-order="1" data-layer-id="${esc(layer.id)}" ${layer.locked || realIndex >= mlComposition.layers.length - 1 ? "disabled" : ""} title="Move up">↑</button>
               </span>
             </div>`;
           }).join("")}
         </div>
         ${active ? `<div class="ml-layer-inspector">
-          <div class="ml-layer-inspector-head"><b>${esc(active.name || layerKindLabel(active))}</b><span>${esc(layerKindLabel(active))}</span></div>
-          <label class="ml-layer-field"><span>Name</span><input data-ml-layer-field="name" value="${esc(active.name || "")}" ${active.id === "base" ? "" : ""}/></label>
-          <label class="ml-slider"><span>X <b data-layer-out="x">${Math.round(active.x * 100)}</b></span><input type="range" min="0" max="100" value="${Math.round(active.x * 100)}" data-ml-layer-prop="x"/></label>
-          <label class="ml-slider"><span>Y <b data-layer-out="y">${Math.round(active.y * 100)}</b></span><input type="range" min="0" max="100" value="${Math.round(active.y * 100)}" data-ml-layer-prop="y"/></label>
-          <label class="ml-slider"><span>Width <b data-layer-out="w">${Math.round(active.w * 100)}</b></span><input type="range" min="5" max="200" value="${Math.round(active.w * 100)}" data-ml-layer-prop="w"/></label>
-          <label class="ml-slider"><span>Height <b data-layer-out="h">${Math.round(active.h * 100)}</b></span><input type="range" min="5" max="200" value="${Math.round(active.h * 100)}" data-ml-layer-prop="h"/></label>
-          <label class="ml-slider"><span>Opacity <b data-layer-out="opacity">${Math.round((active.opacity ?? 1) * 100)}</b></span><input type="range" min="0" max="100" value="${Math.round((active.opacity ?? 1) * 100)}" data-ml-layer-prop="opacity"/></label>
-          <label class="ml-slider"><span>Rotate <b data-layer-out="rotation">${Math.round(active.rotation || 0)}</b></span><input type="range" min="-180" max="180" value="${Math.round(active.rotation || 0)}" data-ml-layer-prop="rotation"/></label>
-          ${active.type === "image" || active.type === "base" ? `<label class="ml-layer-field"><span>Fit</span><select data-ml-layer-field="fit">
+          <div class="ml-layer-inspector-head"><b>${esc(active.name || layerKindLabel(active))}</b><span>${activeLocked ? "Locked" : esc(layerKindLabel(active))}</span></div>
+          <label class="ml-layer-field"><span>Name</span><input data-ml-layer-field="name" value="${esc(active.name || "")}" ${activeLocked ? "disabled" : ""}/></label>
+          <label class="ml-slider"><span>X <b data-layer-out="x">${Math.round(active.x * 100)}</b></span><input type="range" min="0" max="100" value="${Math.round(active.x * 100)}" data-ml-layer-prop="x" ${activeLocked ? "disabled" : ""}/></label>
+          <label class="ml-slider"><span>Y <b data-layer-out="y">${Math.round(active.y * 100)}</b></span><input type="range" min="0" max="100" value="${Math.round(active.y * 100)}" data-ml-layer-prop="y" ${activeLocked ? "disabled" : ""}/></label>
+          <label class="ml-slider"><span>Width <b data-layer-out="w">${Math.round(active.w * 100)}</b></span><input type="range" min="5" max="200" value="${Math.round(active.w * 100)}" data-ml-layer-prop="w" ${activeLocked ? "disabled" : ""}/></label>
+          <label class="ml-slider"><span>Height <b data-layer-out="h">${Math.round(active.h * 100)}</b></span><input type="range" min="5" max="200" value="${Math.round(active.h * 100)}" data-ml-layer-prop="h" ${activeLocked ? "disabled" : ""}/></label>
+          <label class="ml-slider"><span>Opacity <b data-layer-out="opacity">${Math.round((active.opacity ?? 1) * 100)}</b></span><input type="range" min="0" max="100" value="${Math.round((active.opacity ?? 1) * 100)}" data-ml-layer-prop="opacity" ${activeLocked ? "disabled" : ""}/></label>
+          <label class="ml-slider"><span>Rotate <b data-layer-out="rotation">${Math.round(active.rotation || 0)}</b></span><input type="range" min="-180" max="180" value="${Math.round(active.rotation || 0)}" data-ml-layer-prop="rotation" ${activeLocked ? "disabled" : ""}/></label>
+          ${active.type === "image" || active.type === "base" ? `<label class="ml-layer-field"><span>Fit</span><select data-ml-layer-field="fit" ${activeLocked ? "disabled" : ""}>
             <option value="cover" ${active.fit === "cover" ? "selected" : ""}>Cover frame</option>
             <option value="contain" ${active.fit === "contain" ? "selected" : ""}>Contain full image</option>
           </select></label>` : ""}
-          ${active.type === "text" ? `<label class="ml-layer-field"><span>Text</span><textarea rows="3" data-ml-layer-field="text">${esc(active.text || "")}</textarea></label>
-            <label class="ml-slider"><span>Type size <b data-layer-out="fontSize">${Math.round(active.fontSize || 8)}</b></span><input type="range" min="3" max="18" value="${Math.round(active.fontSize || 8)}" data-ml-layer-prop="fontSize"/></label>
+          ${active.type === "text" ? `<label class="ml-layer-field"><span>Text</span><textarea rows="3" data-ml-layer-field="text" ${activeLocked ? "disabled" : ""}>${esc(active.text || "")}</textarea></label>
+            <label class="ml-slider"><span>Type size <b data-layer-out="fontSize">${Math.round(active.fontSize || 8)}</b></span><input type="range" min="3" max="18" value="${Math.round(active.fontSize || 8)}" data-ml-layer-prop="fontSize" ${activeLocked ? "disabled" : ""}/></label>
             <div class="ml-layer-text-grid">
-              <label class="ml-layer-field"><span>Font</span><select data-ml-layer-field="font">
+              <label class="ml-layer-field"><span>Font</span><select data-ml-layer-field="font" ${activeLocked ? "disabled" : ""}>
                 ${["Space Grotesk", "DM Sans", "Inter", "Georgia", "Arial Black"].map((font) => `<option value="${esc(font)}" ${(active.font || "Space Grotesk") === font ? "selected" : ""}>${esc(font)}</option>`).join("")}
               </select></label>
-              <label class="ml-layer-field"><span>Align</span><select data-ml-layer-field="align">
+              <label class="ml-layer-field"><span>Align</span><select data-ml-layer-field="align" ${activeLocked ? "disabled" : ""}>
                 ${["left", "center", "right"].map((align) => `<option value="${esc(align)}" ${(active.align || "center") === align ? "selected" : ""}>${esc(align)}</option>`).join("")}
               </select></label>
-              <label class="ml-layer-field"><span>Text color</span><input type="color" data-ml-layer-field="color" value="${esc(active.color || "#ffffff")}"/></label>
-              <label class="ml-layer-field"><span>Box color</span><input type="color" data-ml-layer-field="background" value="${esc(active.background || "#000000")}"/></label>
+              <label class="ml-layer-field"><span>Text color</span><input type="color" data-ml-layer-field="color" value="${esc(active.color || "#ffffff")}" ${activeLocked ? "disabled" : ""}/></label>
+              <label class="ml-layer-field"><span>Box color</span><input type="color" data-ml-layer-field="background" value="${esc(active.background || "#000000")}" ${activeLocked ? "disabled" : ""}/></label>
             </div>
-            <label class="ml-slider"><span>Box opacity <b data-layer-out="backgroundOpacity">${Math.round((active.backgroundOpacity || 0) * 100)}</b></span><input type="range" min="0" max="100" value="${Math.round((active.backgroundOpacity || 0) * 100)}" data-ml-layer-prop="backgroundOpacity"/></label>
+            <label class="ml-slider"><span>Box opacity <b data-layer-out="backgroundOpacity">${Math.round((active.backgroundOpacity || 0) * 100)}</b></span><input type="range" min="0" max="100" value="${Math.round((active.backgroundOpacity || 0) * 100)}" data-ml-layer-prop="backgroundOpacity" ${activeLocked ? "disabled" : ""}/></label>
             <div class="ml-layer-toggle-row">
-              <button type="button" class="${active.bold ? "is-on" : ""}" data-ml-layer-toggle="bold">Bold</button>
-              <button type="button" class="${active.shadow ? "is-on" : ""}" data-ml-layer-toggle="shadow">Shadow</button>
+              <button type="button" class="${active.bold ? "is-on" : ""}" data-ml-layer-toggle="bold" ${activeLocked ? "disabled" : ""}>Bold</button>
+              <button type="button" class="${active.shadow ? "is-on" : ""}" data-ml-layer-toggle="shadow" ${activeLocked ? "disabled" : ""}>Shadow</button>
             </div>` : ""}
         </div>` : ""}
       </div>
@@ -3314,6 +3317,49 @@ function renderEdit(body, cfg, opts, root) {
     });
   };
   const refreshEditor = () => { syncSliders(body); repaint(); updateEditHistoryControls(body); };
+  const isEditorTypingTarget = (target) => !!(target && target.closest && target.closest("input, textarea, select, button, [contenteditable]"));
+  const undoPhotoEdit = () => {
+    if (!mlEditHistory.length) return false;
+    mlEditFuture.push(fullEditorSnapshot());
+    restoreEdit(mlEditHistory.pop());
+    refreshEditor();
+    return true;
+  };
+  const redoPhotoEdit = () => {
+    if (!mlEditFuture.length) return false;
+    mlEditHistory.push(fullEditorSnapshot());
+    restoreEdit(mlEditFuture.pop());
+    refreshEditor();
+    return true;
+  };
+  const duplicateActiveLayer = () => {
+    const active = selectedEditLayer();
+    if (!active || active.id === "base") return false;
+    rememberEdit();
+    const copy = duplicateLayer(mlComposition, active.id);
+    if (copy && mlLayerEffects[active.id]) mlLayerEffects[copy.id] = cloneImageEditState(mlLayerEffects[active.id]);
+    renderMediaStudio(root, opts);
+    return true;
+  };
+  const deleteSelectedEditableLayers = () => {
+    const editable = selectedLayers(mlComposition).some((layer) => layer.id !== "base" && !layer.locked);
+    if (!editable) return false;
+    rememberEdit();
+    removeSelectedLayers(mlComposition);
+    renderMediaStudio(root, opts);
+    return true;
+  };
+  const nudgeSelectedLayers = (dx, dy) => {
+    const targets = selectedLayers(mlComposition).filter((layer) => layer.id !== "base" && !layer.locked);
+    if (!targets.length) return false;
+    rememberEdit();
+    targets.forEach((layer) => {
+      layer.x = Math.max(0, Math.min(1, (Number(layer.x) || 0) + dx));
+      layer.y = Math.max(0, Math.min(1, (Number(layer.y) || 0) + dy));
+    });
+    repaint();
+    return true;
+  };
   const positionMarkers = () => {
     if (!markerLayer) return;
     const spots = editState.bokeh?.spots || [];
@@ -3361,22 +3407,33 @@ function renderEdit(body, cfg, opts, root) {
   if (mlEditResizeHandler) window.removeEventListener("resize", mlEditResizeHandler);
   mlEditResizeHandler = () => positionMarkers();
   window.addEventListener("resize", mlEditResizeHandler);
+  if (mlEditKeyHandler) document.removeEventListener("keydown", mlEditKeyHandler);
+  mlEditKeyHandler = (event) => {
+    if (!body.isConnected || !session.edit || session.editMode !== "photo") {
+      document.removeEventListener("keydown", mlEditKeyHandler);
+      mlEditKeyHandler = null;
+      return;
+    }
+    if (isEditorTypingTarget(event.target)) return;
+    const key = String(event.key || "").toLowerCase();
+    let handled = false;
+    if ((event.ctrlKey || event.metaKey) && !event.shiftKey && key === "z") handled = undoPhotoEdit();
+    else if (((event.ctrlKey || event.metaKey) && key === "y") || ((event.ctrlKey || event.metaKey) && event.shiftKey && key === "z")) handled = redoPhotoEdit();
+    else if ((event.ctrlKey || event.metaKey) && key === "d") handled = duplicateActiveLayer();
+    else if (key === "backspace" || key === "delete") handled = deleteSelectedEditableLayers();
+    else if (key === "arrowleft") handled = nudgeSelectedLayers(event.shiftKey ? -0.025 : -0.005, 0);
+    else if (key === "arrowright") handled = nudgeSelectedLayers(event.shiftKey ? 0.025 : 0.005, 0);
+    else if (key === "arrowup") handled = nudgeSelectedLayers(0, event.shiftKey ? -0.025 : -0.005);
+    else if (key === "arrowdown") handled = nudgeSelectedLayers(0, event.shiftKey ? 0.025 : 0.005);
+    if (handled) event.preventDefault();
+  };
+  document.addEventListener("keydown", mlEditKeyHandler);
   // wire tools
   body.querySelector("[data-ml-tutorial]")?.addEventListener("click", () => { mlShowTutorial = !mlShowTutorial; renderMediaStudio(root, opts); });
   body.querySelector("[data-ml-edit-back]")?.addEventListener("click", () => { session.editMode = null; renderMediaStudio(root, opts); });
   updateEditHistoryControls(body);
-  body.querySelector("[data-ml-undo]")?.addEventListener("click", () => {
-    if (!mlEditHistory.length) return;
-    mlEditFuture.push(fullEditorSnapshot());
-    restoreEdit(mlEditHistory.pop());
-    refreshEditor();
-  });
-  body.querySelector("[data-ml-redo]")?.addEventListener("click", () => {
-    if (!mlEditFuture.length) return;
-    mlEditHistory.push(fullEditorSnapshot());
-    restoreEdit(mlEditFuture.pop());
-    refreshEditor();
-  });
+  body.querySelector("[data-ml-undo]")?.addEventListener("click", undoPhotoEdit);
+  body.querySelector("[data-ml-redo]")?.addEventListener("click", redoPhotoEdit);
   const before = body.querySelector("[data-ml-before]");
   const showBefore = () => { if (canvas._img) paintEdit(canvas, canvas._img, { ...freshEditState(), loadedUrl: editState.loadedUrl }); fitEditorCanvas(canvas); };
   if (before) {
@@ -3534,6 +3591,12 @@ function renderEdit(body, cfg, opts, root) {
     if (layer) layer.visible = layer.visible === false;
     renderMediaStudio(root, opts);
   });
+  body.querySelectorAll("[data-ml-layer-lock]").forEach((button) => button.onclick = () => {
+    rememberEdit();
+    const layer = mlComposition.layers.find((item) => item.id === button.dataset.mlLayerLock);
+    if (layer) layer.locked = !layer.locked;
+    renderMediaStudio(root, opts);
+  });
   body.querySelectorAll("[data-ml-layer-order]").forEach((button) => button.onclick = () => {
     rememberEdit();
     moveLayerOrder(mlComposition, button.dataset.layerId, Number(button.dataset.mlLayerOrder));
@@ -3545,17 +3608,10 @@ function renderEdit(body, cfg, opts, root) {
     renderMediaStudio(root, opts);
   });
   body.querySelector("[data-ml-layer-duplicate]")?.addEventListener("click", () => {
-    const active = selectedEditLayer();
-    if (!active || active.id === "base") return;
-    rememberEdit();
-    const copy = duplicateLayer(mlComposition, active.id);
-    if (copy && mlLayerEffects[active.id]) mlLayerEffects[copy.id] = cloneImageEditState(mlLayerEffects[active.id]);
-    renderMediaStudio(root, opts);
+    duplicateActiveLayer();
   });
   body.querySelector("[data-ml-layer-delete]")?.addEventListener("click", () => {
-    rememberEdit();
-    removeSelectedLayers(mlComposition);
-    renderMediaStudio(root, opts);
+    deleteSelectedEditableLayers();
   });
   body.querySelectorAll("[data-ml-layer-prop]").forEach((input) => {
     input.onpointerdown = () => rememberEdit();
