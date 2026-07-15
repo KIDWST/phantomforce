@@ -223,8 +223,11 @@ export function getSocialAnalyticsConnectorStatus(workspaceKey = DEFAULT_SOCIAL_
     defaultHandle: connector.defaultHandle,
     handle: connector.handle(scope),
     scopes: connector.scopes,
+    analyticsScopes: connector.scopes.filter((scope) => /read|readonly|analytics|insights|basic|profile|openid|list|user\.info/i.test(scope)),
+    postingScopes: connector.scopes.filter((scope) => /write|upload|publish|posts|manage_posts/i.test(scope)),
     crossPostCapable: connector.scopes.some((scope) => /write|upload|publish|posts/i.test(scope)),
-    readOnly: true,
+    analyticsReadOnly: true,
+    postingRequiresApproval: true,
     required: connector.required,
     savedConnection: redactedConnection(getStoredSocialConnection(connector.id, scope)),
     reason: connector.configured(scope)
@@ -243,6 +246,7 @@ export function getSocialAnalyticsConnectorStatus(workspaceKey = DEFAULT_SOCIAL_
     importFallbackAvailable: true,
     defaultHandle,
     crossPostingRequiresApproval: true,
+    postingMode: "approval_gated" as const,
     tokenStore: socialConnectionStoreStatus(scope),
   };
 }

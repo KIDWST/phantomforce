@@ -2,6 +2,8 @@ import {
   completeSocialOAuthCallback,
   createSocialOAuthStart,
   getSocialAnalyticsConnectorStatus,
+  getSocialOAuthSetupStatus,
+  saveSocialOAuthSetup,
   syncSocialAnalytics,
 } from "../src/connectors/social-analytics-connector.js";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -29,10 +31,13 @@ const keys = [
 ];
 const original = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
 const originalDataDir = process.env.PHANTOMFORCE_SOCIAL_DATA_DIR;
+const originalEnvFile = process.env.PHANTOMFORCE_ENV_FILE;
 const tempSocialDir = mkdtempSync(join(tmpdir(), "phantom-social-test-"));
+const tempEnvDir = mkdtempSync(join(tmpdir(), "phantom-social-env-test-"));
 
 try {
   process.env.PHANTOMFORCE_SOCIAL_DATA_DIR = tempSocialDir;
+  process.env.PHANTOMFORCE_ENV_FILE = tempEnvDir;
   keys.forEach((key) => delete process.env[key]);
   const empty = getSocialAnalyticsConnectorStatus();
   assert(empty.live === false, "Unconfigured connector status must not claim live data.");
@@ -40,6 +45,27 @@ try {
   assert(empty.connectors.length === 7, "Every supported social channel must appear in connector status.");
   assert(empty.connectors.every((item) => item.handle === "officialchicagoshots"), "Default handles should be officialchicagoshots.");
   assert(empty.crossPostingRequiresApproval === true, "Cross-posting must remain approval-gated.");
+  assert(empty.postingMode === "approval_gated", "Social posting must be explicitly approval-gated.");
+  assert(empty.connectors.every((item) => item.analyticsReadOnly === true), "Social analytics sync must stay read-only.");
+  assert(empty.connectors.every((item) => item.postingRequiresApproval === true), "Posting-capable connections must still require approval.");
+  assert(empty.connectors.find((item) => item.id === "youtube")?.postingScopes.includes("youtube.upload"), "YouTube OAuth must request upload scope for future approval-gated posting.");
+  assert(empty.connectors.find((item) => item.id === "instagram")?.postingScopes.includes("instagram_content_publish"), "Instagram OAuth must request publish scope for future approval-gated posting.");
+  assert(empty.connectors.find((item) => item.id === "facebook")?.postingScopes.includes("pages_manage_posts"), "Facebook OAuth must request page posting scope for future approval-gated posting.");
+  assert(empty.connectors.find((item) => item.id === "tiktok")?.postingScopes.includes("video.publish"), "TikTok OAuth must request publish scope for future approval-gated posting.");
+
+  const setupEmpty = getSocialOAuthSetupStatus();
+  assert(setupEmpty.readyCount === 0, "Provider app setup must start unconfigured when no env credentials exist.");
+  assert(setupEmpty.providers.length === 6, "Setup status should collapse Meta into one Instagram/Facebook provider app row.");
+  assert(setupEmpty.providers.every((provider) => provider.oauthConfigured === false), "Provider setup status must not pretend apps are ready.");
+
+  const savedSetup = saveSocialOAuthSetup({
+    platform: "youtube",
+    clientId: "google-client-from-ui",
+    clientSecret: "google-secret-from-ui",
+    redirectUri: "http://127.0.0.1:5190/phantom-ai/ops/social-oauth/callback",
+  });
+  assert(savedSetup.readyCount === 1, "Saving a provider app should make it ready for account OAuth.");
+  assert(!JSON.stringify(savedSetup).includes("google-secret-from-ui"), "Provider app setup response must not expose saved client secrets.");
 
   process.env.YOUTUBE_API_KEY = "test-only-key";
   process.env.YOUTUBE_CHANNEL_ID = "channel-1";
@@ -236,5 +262,8 @@ try {
   }
   if (originalDataDir === undefined) delete process.env.PHANTOMFORCE_SOCIAL_DATA_DIR;
   else process.env.PHANTOMFORCE_SOCIAL_DATA_DIR = originalDataDir;
+  if (originalEnvFile === undefined) delete process.env.PHANTOMFORCE_ENV_FILE;
+  else process.env.PHANTOMFORCE_ENV_FILE = originalEnvFile;
   rmSync(tempSocialDir, { recursive: true, force: true });
+  rmSync(tempEnvDir, { recursive: true, force: true });
 }
