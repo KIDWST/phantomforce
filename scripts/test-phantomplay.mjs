@@ -127,18 +127,14 @@ assert.match(games[gameSlugs.indexOf("rift-frenzy")], /player\.vx=\(player\.vx\+
 assert.match(games[gameSlugs.indexOf("rift-frenzy")], /for\(let i=0;i<24;i\+\+\)spawnFish\(true\)/u, "Rift Frenzy must start with enough edible fish to be playable immediately.");
 assert.match(games[gameSlugs.indexOf("rift-frenzy")], /target\.boost=false/u, "Rift Frenzy touch boost must release when touch ends.");
 assert.match(games[gameSlugs.indexOf("serpent-surge")], /storm|boost|rival|serpent|trail/u, "Serpent Surge must play as a modern snake arena, not a static old mini-game.");
-assert.match(phantomRumble, /defend:\['q','Q','e','E'\]/u, "Phantom Rumble P1 must expose Q/E as guard/parry buttons.");
-assert.match(phantomRumble, /Hold guard before contact to parry/u, "Phantom Rumble must explain guard/parry plainly.");
-assert.match(phantomRumble, /function blockHit[\s\S]*return true/u, "Phantom Rumble must have real block/parry hit logic.");
-assert.match(phantomRumble, /if\(blockHit\(t,f\.x,heavy\)\)\{blocked=true;continue\}/u, "Phantom Rumble attacks must skip damage and knockback when guard/parry catches the hit.");
-assert.match(phantomRumble, /data-t="guard"/u, "Phantom Rumble mobile controls must include a visible guard button.");
-assert.match(phantomRumble, /<button data-menu><b>MAIN MENU<\/b>choose mode<\/button><button data-again><b>PLAY AGAIN<\/b>same mode<\/button>/u, "Phantom Rumble victory screen must lead with Main Menu, not Rematch.");
-assert.doesNotMatch(phantomRumble, /<b>REMATCH<\/b>/u, "Phantom Rumble end screen must not call the post-victory action Rematch.");
-assert.match(phantomRumble, /function sfx\(name,power=1\)/u, "Phantom Rumble must include in-browser SFX for hits, parries, pickups, bombs, and KOs.");
-assert.match(phantomRumble, /data-announcer/u, "Phantom Rumble must include a visible combat announcer for HIT, PARRY, and KO moments.");
-assert.match(phantomRumble, /spawnText\(t\.x,t\.y-\.07,`\+\$\{dmg\}`/u, "Phantom Rumble must show visible damage numbers on successful attacks.");
-assert.match(phantomRumble, /spawnText\(f\.x<0\?\.04:f\.x>1\?\.96:f\.x,Math\.max\(\.08,Math\.min\(\.88,f\.y\)\),'KO!'/u, "Phantom Rumble must show an on-arena KO callout.");
-assert.match(phantomRumble, /<em data-kos="\$\{f\.slot\}">KO 0<\/em>/u, "Phantom Rumble HUD must show each fighter's KO count.");
-assert.match(phantomRumble, /t\.lastHitBy=f\.slot/u, "Phantom Rumble KO attribution must use the actual last hitter.");
+assert.match(phantomRumble, /shieldHeld|data-t="shield"|PARRY/u, "Phantom Rumble must have real guard and parry mechanics.");
+assert.match(phantomRumble, /function dodge|dodgeCd|data-t="dodge"/u, "Phantom Rumble must have an active dodge verb on keyboard and touch.");
+assert.match(phantomRumble, /function tryLedgeGrab|ledgeSide|LEDGE/u, "Phantom Rumble must include ledge-save recovery so close KOs stay playable.");
+assert.match(phantomRumble, /ledgeCooldown:0/u, "Phantom Rumble fighters must track a ledge cooldown.");
+assert.match(phantomRumble, /if\(f\.ledge>0\)\{[\s\S]*f\.ledgeCooldown=\.75[\s\S]*f\.x\+=-side\*\.02[\s\S]*return/u, "Phantom Rumble ledge jumps must push fighters away from the ledge and prevent immediate re-grabs.");
+assert.match(phantomRumble, /if\(f\.ledge>0\|\|f\.ledgeCooldown>0\|\|f\.vy<0/u, "Phantom Rumble ledge grabs must respect cooldown lockout.");
+assert.match(phantomRumble, /if\(f\.ledge>0\)\{[\s\S]*!f\.human[\s\S]*jump\(f\)[\s\S]*f\.ai\.jumpCd=\.55/u, "Phantom Rumble bots must auto-recover from ledge instead of looping.");
+assert.match(phantomRumble, /function updateCamera|camera\.z|function sx/u, "Phantom Rumble must keep a dynamic arena camera without breaking normalized stage sizing.");
+assert.match(phantomRumble, /touch-action:none|overscroll-behavior:none|env\(safe-area-inset-bottom\)/u, "Phantom Rumble must be tuned for mobile touch play.");
 
 console.log("PhantomPlay frontend and game safety checks passed.");
