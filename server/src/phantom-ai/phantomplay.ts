@@ -59,6 +59,10 @@ export type PhantomPlayGame = {
   onlineMultiplayer?: boolean;
   minPlayers?: number;
   maxPlayers?: number;
+  /** Soft-disable: omitted or true = visible in the catalog as normal. Set to
+      false to pull a game from discovery without deleting its record or any
+      player progress/history tied to its id. */
+  active?: boolean;
 };
 
 const PHANTOMPLAY_ART_VERSION = "phantomplay-art-20260712";
@@ -299,11 +303,12 @@ export const PHANTOMPLAY_BUILT_IN_GAMES: PhantomPlayGame[] = [
     kind: "built_in",
     launchUrl: "/app/games/penalty-kick.html?v=1.0.3",
     thumbnail: GAME_ART_BY_SLUG["penalty-kick"],
-    featured: true,
+    featured: false,
     version: "1.0.3",
     controls: "Tap a lane or use arrows. Shoot when the meter says LOCKED.",
     progressSupport: true,
     scoreSupport: true,
+    active: false,
   },
   {
     id: "rift-frenzy",
@@ -650,7 +655,9 @@ function communityGames(store: PhantomPlayStore): PhantomPlayGame[] {
 
 function catalogFor(store: PhantomPlayStore, profile: PlayerProfile) {
   const all = [...PHANTOMPLAY_BUILT_IN_GAMES, ...(profile.preferences.allowCommunityGames ? communityGames(store) : [])].map(normalizeGameArt);
-  return all.filter((game) => ratingRank[game.contentRating] <= ratingRank[profile.preferences.contentRating]);
+  return all
+    .filter((game) => game.active !== false)
+    .filter((game) => ratingRank[game.contentRating] <= ratingRank[profile.preferences.contentRating]);
 }
 
 function historySummary(profile: PlayerProfile) {
