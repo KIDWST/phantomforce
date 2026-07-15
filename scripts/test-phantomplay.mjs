@@ -130,9 +130,15 @@ assert.match(games[gameSlugs.indexOf("serpent-surge")], /storm|boost|rival|serpe
 assert.match(phantomRumble, /defend:\['q','Q','e','E'\]/u, "Phantom Rumble P1 must expose Q/E as guard/parry buttons.");
 assert.match(phantomRumble, /Hold guard before contact to parry/u, "Phantom Rumble must explain guard/parry plainly.");
 assert.match(phantomRumble, /function blockHit[\s\S]*return true/u, "Phantom Rumble must have real block/parry hit logic.");
-assert.match(phantomRumble, /blockHit\(t,f\.x,heavy\)\)continue/u, "Phantom Rumble attacks must skip damage and knockback when guard/parry catches the hit.");
+assert.match(phantomRumble, /if\(blockHit\(t,f\.x,heavy\)\)\{blocked=true;continue\}/u, "Phantom Rumble attacks must skip damage and knockback when guard/parry catches the hit.");
 assert.match(phantomRumble, /data-t="guard"/u, "Phantom Rumble mobile controls must include a visible guard button.");
 assert.match(phantomRumble, /<button data-menu><b>MAIN MENU<\/b>choose mode<\/button><button data-again><b>PLAY AGAIN<\/b>same mode<\/button>/u, "Phantom Rumble victory screen must lead with Main Menu, not Rematch.");
 assert.doesNotMatch(phantomRumble, /<b>REMATCH<\/b>/u, "Phantom Rumble end screen must not call the post-victory action Rematch.");
+assert.match(phantomRumble, /function sfx\(name,power=1\)/u, "Phantom Rumble must include in-browser SFX for hits, parries, pickups, bombs, and KOs.");
+assert.match(phantomRumble, /data-announcer/u, "Phantom Rumble must include a visible combat announcer for HIT, PARRY, and KO moments.");
+assert.match(phantomRumble, /spawnText\(t\.x,t\.y-\.07,`\+\$\{dmg\}`/u, "Phantom Rumble must show visible damage numbers on successful attacks.");
+assert.match(phantomRumble, /spawnText\(f\.x<0\?\.04:f\.x>1\?\.96:f\.x,Math\.max\(\.08,Math\.min\(\.88,f\.y\)\),'KO!'/u, "Phantom Rumble must show an on-arena KO callout.");
+assert.match(phantomRumble, /<em data-kos="\$\{f\.slot\}">KO 0<\/em>/u, "Phantom Rumble HUD must show each fighter's KO count.");
+assert.match(phantomRumble, /t\.lastHitBy=f\.slot/u, "Phantom Rumble KO attribution must use the actual last hitter.");
 
 console.log("PhantomPlay frontend and game safety checks passed.");

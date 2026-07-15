@@ -330,7 +330,7 @@ function botThink(f,dt){
 function land(f,top){f.y=top;f.vy=0;f.grounded=true;f.jumps=2}
 function step(f,dt){
   if(f.dead)return;
-  f.invuln=Math.max(0,f.invuln-dt);f.stun=Math.max(0,f.stun-dt);f.attackCd=Math.max(0,f.attackCd-dt);f.anim=Math.max(0,f.anim-dt);f.guardFlash=Math.max(0,f.guardFlash-dt);
+  f.invuln=Math.max(0,f.invuln-dt);f.stun=Math.max(0,f.stun-dt);f.attackCd=Math.max(0,f.attackCd-dt);f.anim=Math.max(0,f.anim-dt);f.flash=Math.max(0,f.flash-dt);f.guardFlash=Math.max(0,f.guardFlash-dt);
   if(defending(f)){f.vx*=.72;f.charge=0}else f.shield=Math.min(1,f.shield+dt*.32);
   if(f.charge>0)f.charge=Math.min(1,f.charge+dt);
   if(f.stun<=0){
@@ -361,10 +361,14 @@ function step(f,dt){
 function ko(f){
   f.stocks-=1;shake=1;slowmo=reduced?0:.35;
   spawnBurst(f.x<0?.02:f.x>1?.98:f.x,Math.max(.05,Math.min(.95,f.y)),f.glow,30);
-  const killer=fighters.find(t=>!t.dead&&t!==f&&Math.abs(t.x-f.x)<.4);
+  spawnText(f.x<0?.04:f.x>1?.96:f.x,Math.max(.08,Math.min(.88,f.y)),'KO!','#fb7185',1.05,1.55);
+  const recentHit=performance.now()-(f.lastHitAt||0)<9000;
+  const killer=(recentHit&&fighters.find(t=>t.slot===f.lastHitBy&&!t.dead&&t!==f))||fighters.find(t=>!t.dead&&t!==f&&Math.abs(t.x-f.x)<.4);
   if(killer)matchKos[killer.slot]+=1;
+  announce('KO!',killer?`${killer.name} launched ${f.name}`:`${f.name} is out`,'ko',1050);
+  sfx('ko');
   if(f.stocks<=0){f.dead=true}
-  else{const spawn=SPAWNS[f.slot];f.x=spawn.x;f.y=spawn.y;f.vx=0;f.vy=0;f.pct=0;f.invuln=2;f.jumps=2;f.stun=0}
+  else{const spawn=SPAWNS[f.slot];f.x=spawn.x;f.y=spawn.y;f.vx=0;f.vy=0;f.pct=0;f.invuln=2;f.jumps=2;f.stun=0;f.flash=0;f.lastHitBy=null;f.lastHitAt=0}
   updateHud();
   const alive=fighters.filter(t=>!t.dead);
   const lost=fighters.reduce((sum,t)=>sum+(3-t.stocks),0);
@@ -382,6 +386,7 @@ function endMatch(winner){
   host('complete',{score,progress:100,state:{wins:stats.wins,matches:stats.matches,bestKos:stats.bestKos}});
   document.querySelector('[data-endtitle]').textContent=winner?(winner.human?`${winner.name} WINS`:`${winner.name} (BOT) WINS`):'DRAW';
   document.querySelector('[data-endcopy]').textContent=winner?`${matchKos[winner.slot]} KOs this match. Session: ${stats.wins}/${stats.matches} rumbles won.`:`Everyone fell. Session: ${stats.wins}/${stats.matches} rumbles won.`;
+  sfx(humanWon?'victory':'defeat');
   endEl.hidden=false;hudEl.hidden=true;document.querySelector('[data-touch]').hidden=true;
 }
 
@@ -390,6 +395,9 @@ function spawnBurst(x,y,color,n){
   if(reduced)n=Math.min(4,n);
   for(let i=0;i<n;i++)particles.push({x,y,vx:(Math.random()-.5)*.02,vy:(Math.random()-.7)*.02,life:.5+Math.random()*.4,color});
 }
+function spawnText(x,y,text,color='#ffffff',life=.7,scale=1){
+  particles.push({x,y,vx:(Math.random()-.5)*.002,vy:-.006-life*.002,life,text,color,scale});
+}
 function stepParticles(dt){
   for(const p of particles){p.x+=p.vx*(dt*60);p.y+=p.vy*(dt*60);p.vy+=.0006*(dt*60);p.life-=dt}
   particles=particles.filter(p=>p.life>0);
@@ -397,14 +405,16 @@ function stepParticles(dt){
 
 /* ---------- HUD ---------- */
 function buildHud(){
-  hudEl.innerHTML=fighters.map(f=>`<div class="fighter-card" style="border-color:${f.color}55"><i style="color:${f.color}">${f.name}${f.human?'':' · BOT'}</i><b data-pct="${f.slot}" style="color:${f.color}">0%</b><s data-stocks="${f.slot}" style="color:${f.color}">●●●</s><span class="guard-meter"><i data-shield="${f.slot}"></i></span></div>`).join('');
+  hudEl.innerHTML=fighters.map(f=>`<div class="fighter-card" data-card="${f.slot}" style="border-color:${f.color}55"><i style="color:${f.color}">${f.name}${f.human?'':' · BOT'}</i><b data-pct="${f.slot}" style="color:${f.color}">0%</b><s data-stocks="${f.slot}" style="color:${f.color}">●●●</s><em data-kos="${f.slot}">KO 0</em><span class="guard-meter"><i data-shield="${f.slot}"></i></span></div>`).join('');
   updateHud();
 }
 function updateHud(){
   for(const f of fighters){
-    const pct=hudEl.querySelector(`[data-pct="${f.slot}"]`),st=hudEl.querySelector(`[data-stocks="${f.slot}"]`),shield=hudEl.querySelector(`[data-shield="${f.slot}"]`);
+    const card=hudEl.querySelector(`[data-card="${f.slot}"]`),pct=hudEl.querySelector(`[data-pct="${f.slot}"]`),st=hudEl.querySelector(`[data-stocks="${f.slot}"]`),kos=hudEl.querySelector(`[data-kos="${f.slot}"]`),shield=hudEl.querySelector(`[data-shield="${f.slot}"]`);
+    if(card)card.classList.toggle('is-hit',f.flash>0);
     if(pct)pct.textContent=`${Math.round(f.pct)}%`;
     if(st)st.textContent=f.dead?'OUT':'●'.repeat(Math.max(0,f.stocks));
+    if(kos)kos.textContent=`KO ${matchKos[f.slot]||0}`;
     if(shield){shield.style.width=`${Math.round(f.shield*100)}%`;shield.style.background=defending(f)||f.guardFlash>0?'#ffffff':'#5eead4'}
   }
 }
@@ -426,6 +436,9 @@ function drawFighter(f,t){
   ctx.globalAlpha=f.invuln>0?.45+.3*Math.sin(t*.02):1;
   ctx.shadowBlur=22*DPR;ctx.shadowColor=f.glow;
   const bx=px(f.x),by=py(f.y);
+  if(f.flash>0){
+    ctx.globalAlpha=.45;ctx.fillStyle='#ffffff';ctx.beginPath();ctx.arc(bx,by-14*DPR,(24+f.flash*38)*DPR,0,Math.PI*2);ctx.fill();ctx.globalAlpha=f.invuln>0?.45+.3*Math.sin(t*.02):1;
+  }
   ctx.fillStyle=f.color;
   ctx.beginPath();
   ctx.arc(bx,by-16*DPR,11*DPR,Math.PI,0);
@@ -439,6 +452,7 @@ function drawFighter(f,t){
   if(f.charge>0){ctx.globalAlpha=.7;ctx.strokeStyle='#fff';ctx.lineWidth=2*DPR;ctx.beginPath();ctx.arc(bx,by-14*DPR,(16+f.charge*10)*DPR,0,Math.PI*2*f.charge);ctx.stroke()}
   if(f.power){ctx.globalAlpha=.8;ctx.fillStyle='#ffffff';ctx.beginPath();ctx.arc(bx,by-34*DPR,3*DPR,0,Math.PI*2);ctx.fill()}
   if(defending(f)||f.guardFlash>0){ctx.globalAlpha=defending(f) ? .38 : .7;ctx.strokeStyle=defending(f)?'#5eead4':'#ffffff';ctx.lineWidth=3*DPR;ctx.shadowBlur=18*DPR;ctx.shadowColor=ctx.strokeStyle;ctx.beginPath();ctx.arc(bx,by-13*DPR,22*DPR,0,Math.PI*2);ctx.stroke();ctx.shadowBlur=0}
+  ctx.globalAlpha=.95;ctx.shadowBlur=10*DPR;ctx.shadowColor=f.pct>=100?'#fb7185':f.glow;ctx.fillStyle=f.pct>=100?'#fb7185':f.color;ctx.font=`800 ${Math.max(13,15*DPR)}px ui-monospace`;ctx.textAlign='center';ctx.fillText(`${Math.round(f.pct)}%`,bx,by-45*DPR);ctx.textAlign='left';ctx.shadowBlur=0;
   ctx.globalAlpha=1;
 }
 function drawPickup(p,t){
@@ -460,7 +474,11 @@ function draw(t){
   drawStage();
   for(const p of pickups)drawPickup(p,t);
   for(const f of fighters)drawFighter(f,t);
-  for(const p of particles){ctx.globalAlpha=Math.max(0,p.life);ctx.fillStyle=p.color;ctx.fillRect(px(p.x),py(p.y),3*DPR,3*DPR)}
+  for(const p of particles){
+    ctx.globalAlpha=Math.max(0,Math.min(1,p.life*1.6));ctx.fillStyle=p.color;
+    if(p.text){ctx.shadowBlur=12*DPR;ctx.shadowColor=p.color;ctx.font=`900 ${Math.max(14,18*(p.scale||1)*DPR)}px ui-monospace`;ctx.textAlign='center';ctx.fillText(p.text,px(p.x),py(p.y));ctx.textAlign='left';ctx.shadowBlur=0}
+    else ctx.fillRect(px(p.x),py(p.y),3*DPR,3*DPR)
+  }
   ctx.globalAlpha=1;ctx.restore();
 }
 
