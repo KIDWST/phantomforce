@@ -10,6 +10,7 @@ const store = read("../app/js/store.js");
 const server = read("../server/src/index.ts");
 const sessionAccess = read("../server/src/access/session.ts");
 const publicHosts = read("../server/src/access/public-hosts.ts");
+const staticServer = read("../ops/admin-live/admin-static-server.mjs");
 
 assert.match(store, /export const CLIENT_PUBLIC_HOST = "app\.phantomforce\.online"/u, "The customer app host must be explicit in the browser session layer.");
 assert.match(store, /export const isClientPublicHost = \(\) => location\.hostname === CLIENT_PUBLIC_HOST/u, "The browser must detect the customer app host.");
@@ -30,6 +31,8 @@ assert.match(store, /function clearSessionShortcutFromUrl\(\) \{[\s\S]*url\.sear
 assert.match(store, /if \(key && localStorage\.getItem\(SESSION_ENDED_KEY\)\) \{[\s\S]*clearSessionShortcutFromUrl\(\);[\s\S]*return null;/u, "A logout marker must block query-session shortcut re-entry.");
 
 assert.match(main, /if \(isClientPublicHost\(\)\) \{\s*renderCustomerAuthLoading\(card\);\s*maybeUpgradeGateToDatabaseLogin\(card, \{ customerApp: true, required: true \}\);\s*return;\s*\}/u, "app.phantomforce.online must render required real-account auth instead of role buttons.");
+assert.match(main, /if \(isLiveAdminHost\(\)\) \{\s*renderOwnerLoginGate\(card\);\s*return;\s*\}/u, "admin.phantomforce.online must render only the owner login and return before any customer auth panel can mount.");
+assert.doesNotMatch(main.match(/if \(isLiveAdminHost\(\)\) \{([\s\S]*?)\n  \}\n\n  if \(isClientPublicHost\(\)/u)?.[1] || "", /maybeUpgradeGateToDatabaseLogin|data-auth-mode="register"|Forgot password|Create account/u, "Admin login must not include or upgrade to customer create-account/password-reset controls.");
 assert.match(main, /if \(isLocalDevHost\(\)\) \{\s*renderLocalAuthLoading\(card\);\s*maybeUpgradeGateToDatabaseLogin\(card, \{ localDev: true, allowLocalFallback: true \}\);\s*return;\s*\}/u, "Local QA must check the configured auth backend before showing shortcut entry.");
 assert.match(main, /const CUSTOMER_ONBOARDING_VERSION = "2026-07-14-customer-identity-v1";/u, "Customer onboarding must have an explicit versioned completion key.");
 assert.match(main, /function clearOverlayOnly\(\) \{\s*if \(customerOnboardingLocked\(\)\) return;/u, "First-run customer onboarding must survive normal nav/route overlay clearing.");
@@ -78,6 +81,7 @@ assert.match(publicHosts, /const directHost = normalizePublicHost\(firstHeader\(
 assert.doesNotMatch(publicHosts, /firstHeader\(headers\["x-forwarded-host"\]\) \?\?\s*firstHeader\(headers\["x-original-host"\]\) \?\?\s*firstHeader\(headers\.host\)/u, "Forwarded host headers must not outrank the direct Host header.");
 assert.match(publicHosts, /if \(scope === "admin"\) return session\.canManageAccess/u, "The admin host must only allow platform/admin access sessions.");
 assert.match(publicHosts, /if \(scope === "client"\) return !session\.canManageAccess/u, "The customer host must reject platform/admin access sessions.");
+assert.match(staticServer, /headers\["x-forwarded-host"\] = originalHost;[\s\S]*headers\["x-original-host"\] = originalHost;/u, "The admin static proxy must preserve the original public host so Hermes can enforce admin/app auth boundaries.");
 assert.match(sessionAccess, /import \{ canUseSessionOnPublicHost, filterSessionsForPublicHost, publicHostFromHeaders \} from "\.\/public-hosts\.js";/u, "Every authenticated request must be able to enforce the public-host boundary.");
 assert.match(sessionAccess, /const publicHost = publicHostFromHeaders\(request\.headers as Record<string, unknown>\);[\s\S]*if \(!canUseSessionOnPublicHost\(publicHost, session\)\) \{[\s\S]*This session is not available on this public host/u, "Authenticated requests must reject tokens used on the wrong public host, not only during login.");
 assert.match(server, /const publicHost = requestPublicHost\(request\);\s*if \(!canUseSessionOnPublicHost\(publicHost, session\)\) \{\s*await revokeDatabaseSession\(session\.authSessionId\);/u, "Database login must enforce the public-host boundary and revoke refused sessions.");

@@ -150,6 +150,11 @@ async function readRequestBody(req, limit = 6_000_000) {
 async function proxyToApi(req, res) {
   const target = `${apiOrigin}${req.url || "/"}`;
   const headers = { ...req.headers };
+  const originalHost = req.headers.host;
+  if (originalHost) {
+    headers["x-forwarded-host"] = originalHost;
+    headers["x-original-host"] = originalHost;
+  }
   delete headers.host;
   delete headers["content-length"];
 

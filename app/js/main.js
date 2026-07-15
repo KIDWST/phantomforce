@@ -299,7 +299,6 @@ function showGate() {
   const card = gate.querySelector(".gate-card");
   if (isLiveAdminHost()) {
     renderOwnerLoginGate(card);
-    maybeUpgradeGateToDatabaseLogin(card);
     return;
   }
 
