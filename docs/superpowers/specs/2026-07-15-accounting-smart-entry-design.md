@@ -21,8 +21,24 @@ photo, or type a plain-English line like "$500 every week since April."
   `app/js/store.js`. This feature adds two *stateless* AI-parsing endpoints
   and one small *file-storage* endpoint (for receipt images only) — it does
   not move the ledger itself server-side.
-- No OCR/vision model choice beyond what the app already uses (OpenRouter via
-  `server/src/phantom-ai/model-router.ts`). No new provider integration.
+- No changes to `server/src/phantom-ai/model-router.ts` or
+  `providers/openrouter-adapter.ts`. **Correction from the original draft:**
+  those are a hardcoded dry-run skeleton for a separate, larger, in-progress
+  "Phantom AI operator" initiative — `openrouter-adapter.ts` returns
+  `live_call_allowed: false` / `network_client_implemented: false`
+  unconditionally, regardless of env config, per its own comments ("adapter
+  is skeleton-only," "Do not fund OpenRouter yet"). There is today no
+  working live AI call anywhere in the admin server to reuse. However,
+  `server/.env` already has a real `OPENROUTER_API_KEY` and both
+  `PHANTOM_LIVE_PROVIDERS_ENABLED=true` and
+  `PHANTOM_OPENROUTER_TRANSPORT_ENABLED=true` — i.e. live AI spend is
+  already opted into at the config level; the gap is purely that no HTTP
+  call was ever implemented. `finance-smart-entry.ts` therefore makes its
+  own small, direct `POST https://openrouter.ai/api/v1/chat/completions`
+  call, gated on those same two env flags (fails closed with a friendly
+  "AI parsing isn't enabled yet" error if either is off, exactly as the
+  Error Handling section already specified) — it does not touch or extend
+  the separate, still-unfinished Phantom AI operator governance layer.
 
 ## Architecture
 
@@ -80,14 +96,23 @@ started as a photo, a typed sentence, or the existing manual form.
 
 **Server (new files, mirroring existing connector/module patterns):**
 
-- `server/src/connectors/finance-smart-entry.ts` — the two parse functions
-  (`parseReceiptImage`, `parseExpenseText`), both calling the existing
-  model-router with a structured-output request. Financial data already
-  matches the router's `HIGH_SENSITIVITY_PATTERN`, so these calls
-  automatically inherit the existing "no live provider calls until
-  explicitly enabled, no cheap third-party worker models for sensitive data"
-  gating — no new safety logic needed here, just correct routing through the
-  existing chokepoint.
+- `server/src/connectors/finance-smart-entry.ts` — two independent parse
+  functions:
+  - `parseExpenseText(text)` — **fully deterministic, no AI call.** Regex +
+    date-math extracts amount, direction (in/out keywords, defaulting to
+    "out"), a recurrence phrase ("every week/month", "biweekly"), and a
+    "since <month>" start date. This is more reliable and instant for
+    structured phrases like "$500 every week since April" than an LLM call
+    would be, and needs no provider at all.
+  - `parseReceiptImage(dataUrl)` — the one part of this feature that
+    genuinely needs a vision model (photos are unstructured). Makes a
+    direct, minimal `POST https://openrouter.ai/api/v1/chat/completions`
+    call (own small fetch wrapper, not routed through
+    `model-router.ts`/`openrouter-adapter.ts` — see Non-goals), gated on
+    `PHANTOM_LIVE_PROVIDERS_ENABLED` and
+    `PHANTOM_OPENROUTER_TRANSPORT_ENABLED` both being `"true"`; returns the
+    "AI parsing isn't enabled yet" error path (see Error Handling) if
+    either is off.
 - `server/src/connectors/receipt-asset-storage.ts` — local-disk storage for
   receipt images only, modeled directly on
   `content-asset-storage.ts`'s provider interface and disk layout
