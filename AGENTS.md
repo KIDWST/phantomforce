@@ -14,6 +14,13 @@
 - If the owner says changes are not appearing, assume another agent edited a stale
   sibling worktree first. Run `/health`, compare the `root`, and port the diff into
   the served checkout before doing more design work.
+- Before telling the owner "this is live" or before debugging a stale-looking admin
+  UI, run the source doctor from the served checkout:
+  ```powershell
+  powershell -NoProfile -ExecutionPolicy Bypass -File ops\admin-live\Test-LiveAdminSource.ps1
+  ```
+  It checks branch, `origin/main`, sync manifest, live build id, local service
+  health, Hermes commit, sidebar utility pinning, and stale sibling worktrees.
 - Do **not** make owner-facing admin UI edits in another local worktree and assume
   they are live. If you must work elsewhere, commit, push to `main`, then run
   `ops/admin-live/Sync-AdminMain.ps1` from the served worktree or point the admin
