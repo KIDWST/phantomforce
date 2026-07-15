@@ -86,6 +86,8 @@ assert.match(css, /\.pp-dev-profile/u, "Developer profile views must be styled."
 assert.match(css, /\.pp-dev-notes/u, "Developer notes must be styled.");
 assert.match(css, /\.pp-player-exit/u, "The player needs a stage-level exit control over the game iframe.");
 assert.match(css, /workspace-page:has\(\.pp-player\)[^{]*\.workspace-page-body\{[^}]*transform:none!important/u, "The game player must escape the animated page containing block.");
+assert.match(css, /@media\(max-width:767px\)[\s\S]*\.pp-player\{[\s\S]*grid-template-rows:auto minmax\(0,1fr\)/u, "Phone player chrome must leave the game as the main row.");
+assert.match(css, /@media\(max-width:767px\)[\s\S]*\.pp-player>footer\{[\s\S]*display:none/u, "Phone player sessions must hide the footer while a game is open.");
 assert.match(staticServer, /urlPath\.startsWith\("\/api\/phantomplay"\)/u, "The live admin server must proxy PhantomPlay API routes.");
 
 const buildIds = new Set(appFiles.flatMap((source) => source.match(/phantom-live-\d{8}-\d+/gu) || []));
@@ -112,7 +114,8 @@ assert.match(neonDrift, /maxSpeed=\.0032/u, "Neon Drift ship speed must stay tun
 assert.match(neonDrift, /accel=\.000055\*W/u, "Neon Drift needs punchier acceleration.");
 assert.match(neonDrift, /drag=Math\.pow\(\.91,dt\/16\)/u, "Neon Drift must keep enough glide to feel fast.");
 assert.match(neonDrift, /player\.vx\+=\(tx-player\.x\)\*\.00054\*W/u, "Neon Drift touch-drag must chase faster on mobile.");
-assert.doesNotMatch(neonDrift, /DRAG TO FLY|Touch and drag on mobile|touch-drag/u, "Neon Drift mobile controls must stay invisible and avoid obvious touch instructions.");
+assert.match(neonDrift, /c\.addEventListener\('pointerdown'[\s\S]*touchMove\(event\)/u, "Neon Drift must steer directly from the play field on touch screens.");
+assert.doesNotMatch(neonDrift, /data-touch|class="touch"|class="pad"|DRAG TO FLY|drag to move|Drag to move|Touch and drag on mobile|touch-drag/u, "Neon Drift mobile controls must not render duplicate touch pads or obvious touch instructions.");
 assert.match(neonDrift, /Math\.max\(130,390-wave\*18\)/u, "Neon Drift waves should spawn quickly enough to stay exciting.");
 assert.match(neonDrift, /t\*\.000055/u, "Neon Drift background motion should feel fast enough.");
 assert.match(neonDrift, /e\.y>1\.12\)\{e\.dead=true\}/u, "Escaped enemies should leave the field without damaging the player.");

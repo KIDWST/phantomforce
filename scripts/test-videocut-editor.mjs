@@ -6,6 +6,8 @@ const cssSrc = readFileSync(new URL("../app/phantom.css", import.meta.url), "utf
 
 assert.match(videoSrc, /function splitPointForClip\(clip\)/u, "PhantomCut must calculate whether the playhead can split the selected clip.");
 assert.match(videoSrc, /function splitClipAtPlayhead\(clip\)/u, "PhantomCut must implement a real split-at-playhead action.");
+assert.match(videoSrc, /function moveClipToIndex\(clip,\s*targetIndex\)/u, "PhantomCut must let timeline clips move directly to a dropped index.");
+assert.match(videoSrc, /function duplicateClip\(clip\)/u, "PhantomCut must support duplicating a timeline clip without re-importing it.");
 assert.match(videoSrc, /function containRect\(mw,\s*mh,\s*cw,\s*ch\)/u, "PhantomCut must be able to fit full media inside the export frame.");
 assert.match(videoSrc, /function drawContainedMediaFrame\(source,\s*mw,\s*mh,\s*W,\s*H\)/u, "PhantomCut fit mode must render a full-media frame with a backdrop.");
 assert.match(videoSrc, /fit:\s*"cover"/u, "New PhantomCut clips must default to social-video fill framing.");
@@ -14,11 +16,23 @@ assert.match(videoSrc, /clip\.fit === "contain"[\s\S]*drawContainedMediaFrame\(e
 assert.match(videoSrc, /clip\.duration = split\.local[\s\S]*copy\.duration = Math\.max\(0\.5,\s*originalDuration - split\.local\)/u, "Splitting a photo clip must create two timeline durations.");
 assert.match(videoSrc, /const cut = clip\.in \+ split\.local[\s\S]*copy\.in = cut[\s\S]*copy\.out = clip\.out[\s\S]*clip\.out = cut/u, "Splitting a video clip must divide in/out trim ranges.");
 assert.match(videoSrc, /if \(clip\.owned\) clip\.owned = false/u, "Splitting a local object URL must not let one half revoke the other half's media.");
+assert.match(videoSrc, /const requestedIn = Number\(clip\.in\) \|\| 0[\s\S]*const requestedOut = Number\(clip\.out\) \|\| 0[\s\S]*clip\.in = clamp\(requestedIn[\s\S]*clip\.out = requestedOut > clip\.in/u, "Loading duplicated or split video clips must preserve pre-set trim ranges.");
 assert.match(videoSrc, /data-vc-ins-split/u, "PhantomCut inspector must expose a Split at playhead control.");
 assert.match(videoSrc, /splitPointForClip\(clip\)[\s\S]*Move the playhead inside this clip/u, "The split control must explain why it is unavailable.");
 assert.match(videoSrc, /data-vc-ins-fit/u, "PhantomCut inspector must expose per-clip framing controls.");
 assert.match(videoSrc, /clip\.fit = e\.target\.value === "contain" \? "contain" : "cover"/u, "Framing controls must update the selected clip fit mode.");
+assert.match(videoSrc, /draggable="true"[\s\S]*Timeline clip \$\{idx \+ 1\}/u, "Timeline clips must expose native drag affordance for reordering.");
+assert.match(videoSrc, /timelineEl\.addEventListener\("dragstart"[\s\S]*card\.classList\.add\("is-dragging"\)/u, "Timeline drag start must mark the active clip.");
+assert.match(videoSrc, /timelineEl\.addEventListener\("dragover"[\s\S]*is-drop-before[\s\S]*is-drop-after/u, "Timeline drag-over must show before/after drop states.");
+assert.match(videoSrc, /timelineEl\.addEventListener\("drop"[\s\S]*moveClipToIndex\(dragged,\s*to\)/u, "Dropping a clip must reorder the timeline.");
+assert.match(videoSrc, /data-vc-dup/u, "Timeline cards must expose a duplicate action.");
+assert.match(videoSrc, /e\.target\.closest\("\[data-vc-dup\]"\)[\s\S]*duplicateClip\(clip\)/u, "The duplicate button must clone the selected timeline clip.");
+assert.match(videoSrc, /if \(clip\.owned\) clip\.owned = false[\s\S]*owned:\s*false/u, "Duplicating local object URL clips must keep the URL alive without double-revoking it.");
 assert.match(cssSrc, /\.vc-ins-tools\s*\{/u, "The split control needs a dedicated inspector layout.");
 assert.match(cssSrc, /\.vc-ins-tools button:disabled/u, "Disabled split controls must have a visible unavailable state.");
+assert.match(cssSrc, /\.vc-clip\[draggable="true"\]\s*\{[\s\S]*cursor:\s*grab/u, "Draggable clips need a grab cursor.");
+assert.match(cssSrc, /\.vc-clip\.is-dragging\s*\{[\s\S]*cursor:\s*grabbing/u, "The active dragged clip must visibly change state.");
+assert.match(cssSrc, /\.vc-clip\.is-drop-before::before/u, "Drop-before timeline targets need a visible insertion rail.");
+assert.match(cssSrc, /\.vc-clip\.is-drop-after::after/u, "Drop-after timeline targets need a visible insertion rail.");
 
 console.log("PhantomCut editor checks passed");

@@ -12878,6 +12878,28 @@ body .phantom .workspace-page :where(
   border: 1px solid var(--line); border-radius: 14px; background: #050b09;
   transition: border-color 0.15s, box-shadow 0.15s;
 }
+.vc-clip[draggable="true"] { cursor: grab; }
+.vc-clip.is-dragging {
+  opacity: 0.48;
+  cursor: grabbing;
+  border-color: rgba(65, 255, 161, 0.72);
+  box-shadow: 0 0 22px rgba(65, 255, 161, 0.2);
+}
+.vc-clip.is-drop-before::before,
+.vc-clip.is-drop-after::after {
+  content: "";
+  position: absolute;
+  z-index: 3;
+  top: 8px;
+  bottom: 8px;
+  width: 4px;
+  border-radius: 999px;
+  background: var(--neon);
+  box-shadow: 0 0 18px rgba(65, 255, 161, 0.75);
+  pointer-events: none;
+}
+.vc-clip.is-drop-before::before { left: -8px; }
+.vc-clip.is-drop-after::after { right: -8px; }
 .vc-clip:hover { border-color: var(--line-strong); }
 .vc-clip.is-selected { border-color: var(--neon); box-shadow: 0 0 16px rgba(65, 255, 161, 0.18); }
 .vc-clip.is-error { border-color: rgba(255, 77, 99, 0.5); }

@@ -296,9 +296,11 @@ export function mountVideoEditor(host, opts = {}) {
       readVideoDuration(v, (dur) => {
         if (destroyed) return;
         if (!dur) { clip.ready = "error"; renderAll(); return; }
+        const requestedIn = Number(clip.in) || 0;
+        const requestedOut = Number(clip.out) || 0;
         clip.srcDuration = dur;
-        clip.in = 0;
-        clip.out = dur;
+        clip.in = clamp(requestedIn, 0, Math.max(0, dur - 0.05));
+        clip.out = requestedOut > clip.in ? clamp(requestedOut, clip.in + 0.05, dur) : dur;
         clip.ready = "ready";
         captureVideoThumb(clip);
         renderTimeline(); updateMeta();
@@ -355,6 +357,29 @@ export function mountVideoEditor(host, opts = {}) {
     state.selectedId = clip.id;
     renderAll();
     return true;
+  }
+  function duplicateClip(clip) {
+    if (!clip || state.clips.length >= MAX_CLIPS) {
+      notify("PhantomCut", `Timeline is full — ${MAX_CLIPS} clips max.`);
+      return null;
+    }
+    const index = state.clips.indexOf(clip);
+    if (index < 0) return null;
+    if (clip.owned) clip.owned = false;
+    const copy = {
+      ...clip,
+      id: `vc${++clipSeq}-${Date.now().toString(36)}-copy`,
+      title: `${clip.title || "Clip"} copy`.slice(0, 80),
+      ready: "loading",
+      el: null,
+      owned: false,
+    };
+    state.clips.splice(index + 1, 0, copy);
+    state.selectedId = copy.id;
+    if (copy.kind === "photo") loadPhoto(copy); else loadVideo(copy);
+    renderAll();
+    notify("PhantomCut", "Duplicated clip.");
+    return copy;
   }
   function splitClipAtPlayhead(clip) {
     if (!clip || state.clips.length >= MAX_CLIPS) {
@@ -946,6 +971,7 @@ export function mountVideoEditor(host, opts = {}) {
         <div class="vc-clip-actions">
           <button type="button" data-vc-move="-1" ${idx === 0 ? "disabled" : ""} aria-label="Move earlier">◀</button>
           <button type="button" data-vc-move="1" ${idx === state.clips.length - 1 ? "disabled" : ""} aria-label="Move later">▶</button>
+          <button type="button" data-vc-dup aria-label="Duplicate clip">⧉</button>
           <button type="button" data-vc-del aria-label="Remove clip">✕</button>
         </div>
       </article>`;
@@ -969,6 +995,7 @@ export function mountVideoEditor(host, opts = {}) {
     if (!clip) return;
     const move = e.target.closest("[data-vc-move]");
     if (move) { moveClip(clip, Number(move.dataset.vcMove)); return; }
+    if (e.target.closest("[data-vc-dup]")) { duplicateClip(clip); return; }
     if (e.target.closest("[data-vc-del]")) { removeClip(clip); return; }
     if (state.selectedId !== clip.id) { state.selectedId = clip.id; renderTimeline(); renderInspector(); }
   });

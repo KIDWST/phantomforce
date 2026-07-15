@@ -16,6 +16,8 @@ git log -1 --oneline
 
 If `/health` reports a different `root`, do not claim the change is live. Fix the served root or move the change into this checkout first.
 
+Do not edit sibling PhantomForce worktrees for owner-facing admin UI unless the owner explicitly asked for that branch. There are many stale experimental worktrees on this PC, and changes made there will not appear on `admin.phantomforce.online`.
+
 Sidebar rule:
 - Main business modules live in the upper sidebar.
 - Utility/operator modules stay separated at the bottom: `Memory`, `Settings`, `Developer`, `Away Mode`, and optional tucked tools.
