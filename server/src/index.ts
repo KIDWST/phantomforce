@@ -179,6 +179,8 @@ import {
 } from "./phantom-ai/agent-actions.js";
 import { getSalesConnectorStatus } from "./connectors/sales-connector.js";
 import { getFinanceConnectorStatus } from "./connectors/finance-connector.js";
+import { parseExpenseText, parseReceiptImage } from "./connectors/finance-smart-entry.js";
+import { getReceiptAssetStorageProvider } from "./connectors/receipt-asset-storage.js";
 import {
   completeSocialOAuthCallback,
   createSocialOAuthStart,
@@ -5875,6 +5877,68 @@ app.get("/phantom-ai/ops/finance-connector/status", async (request, reply) => {
   }
 
   return { ok: true, session, read_only: true, finance_connector: getFinanceConnectorStatus() };
+});
+
+const FinanceExpenseTextSchema = z.object({
+  text: z.string().trim().min(1).max(400),
+});
+
+app.post("/phantom-ai/ops/finance/parse-expense-text", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+  if (!session) return reply;
+
+  const parsed = FinanceExpenseTextSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+
+  const result = parseExpenseText(parsed.data.text);
+  if (!result.ok) return reply.code(422).send({ ok: false, error: result.error });
+
+  return { ok: true, session, read_only: true, draft: result.draft };
+});
+
+const FinanceReceiptSchema = z.object({
+  image: z.string().trim().min(1).max(20_000_000),
+  filename: z.string().trim().max(160).optional(),
+});
+
+app.post("/phantom-ai/ops/finance/parse-receipt", { bodyLimit: 16 * 1024 * 1024 }, async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+  if (!session) return reply;
+
+  const parsed = FinanceReceiptSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+
+  const storageProvider = getReceiptAssetStorageProvider();
+  const stored = await storageProvider.putAsset({
+    ownerScope: session.id,
+    dataUrl: parsed.data.image,
+    originalName: parsed.data.filename,
+  });
+  const assetId = stored.ok ? stored.asset.id : null;
+
+  const aiResult = await parseReceiptImage(parsed.data.image);
+
+  return {
+    ok: true,
+    session,
+    read_only: true,
+    assetId,
+    aiAvailable: aiResult.available,
+    draft: aiResult.available ? aiResult.draft : null,
+    reason: aiResult.available ? undefined : aiResult.reason,
+  };
+});
+
+app.get("/phantom-ai/ops/finance/receipt/:assetId", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+  if (!session) return reply;
+
+  const { assetId } = request.params as { assetId: string };
+  const storageProvider = getReceiptAssetStorageProvider();
+  const result = await storageProvider.getAssetFile(assetId, session.id);
+  if (!result.ok) return reply.code(404).send({ ok: false, error: result.error });
+
+  return { ok: true, session, image: result.dataUrl, asset: result.asset };
 });
 
 app.get("/phantom-ai/ops/social-analytics/status", async (request, reply) => {
