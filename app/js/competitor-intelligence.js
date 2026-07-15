@@ -61,7 +61,7 @@ function statusPill(label, tone = "good") { return `<span class="ci-pill is-${to
 function empty(title, text, action = "") { return `<div class="ci-empty"><span>◇</span><h3>${esc(title)}</h3><p>${esc(text)}</p>${action}</div>`; }
 function message() { return `${ui.error ? `<div class="ci-message is-error">${esc(ui.error)}</div>` : ""}${ui.notice ? `<div class="ci-message is-success">${esc(ui.notice)}</div>` : ""}`; }
 function scoutStatusLabel(status) {
-  return ({ needs_context: "Needs business map", auto_analyzing: "Auto-scouting", analyzing: "Auto-scouting", ready_to_discover: "Starter map active", active: "Public scout active", watching: "Watching live sources", source_ready: "Source ready" }[status]) || "Public scout active";
+  return ({ needs_context: "Starter map active", auto_analyzing: "Auto-scouting", analyzing: "Auto-scouting", ready_to_discover: "Starter map active", active: "Public scout active", watching: "Watching live sources", source_ready: "Source ready" }[status]) || "Public scout active";
 }
 function laneTone(status) { return status === "watching" ? "watching" : status === "source_ready" ? "source-ready" : status === "needs_context" ? "needs-context" : "analyzing"; }
 function hashValue(value) {
@@ -162,7 +162,7 @@ function modeCard() {
 }
 function metrics() {
   const m = ui.snapshot.metrics;
-  return `<section class="ci-metrics"><article><b>${m.competitors}</b><span>Tracked competitors</span></article><article><b>${m.starterCompetitors || 0}</b><span>Starter map</span></article><article><b>${m.signals}</b><span>Public signals</span></article><article><b>${m.marketMovers || 0}</b><span>Live movers</span></article><article><b>${m.activeScoutLanes || 0}</b><span>Scout lanes</span></article><article class="${m.blockedRequests ? "is-alert" : ""}"><b>${m.blockedRequests}</b><span>Blocked requests</span></article></section>`;
+  return `<section class="ci-metrics"><article><b>${m.competitors}</b><span>Tracked competitors</span></article><article><b>${m.starterCompetitors || 0}</b><span>Starter map</span></article><article><b>${m.signals}</b><span>Public signals</span></article><article><b>${m.marketMovers || 0}</b><span>Live movers</span></article><article><b>${m.sourceLanes || m.activeScoutLanes || 0}</b><span>Source lanes</span></article><article class="${m.blockedRequests ? "is-alert" : ""}"><b>${m.blockedRequests}</b><span>Blocked requests</span></article></section>`;
 }
 function hostFrom(url) { try { return new URL(url).hostname.replace(/^www\./u, ""); } catch { return "public source"; } }
 function contextValue(field) { return ui.snapshot?.scout?.context?.[field] || ""; }
@@ -205,10 +205,13 @@ function scoutLaneCard(lane) {
     <code>${esc(lane.nextAction || lane.query)}</code>
   </article>`;
 }
+function sourceLaneDrawer(scout) {
+  return `<details class="ci-source-drawer"><summary>Source lanes Phantom is checking <span>${(scout.lanes || []).length}</span></summary><div class="ci-scout-lanes">${(scout.lanes || []).map(scoutLaneCard).join("")}</div></details>`;
+}
 function scoutPanel() {
   const scout = ui.snapshot.scout || {};
   const needs = scout.status === "needs_context";
-  return `<section class="ci-scout ${needs ? "needs-context" : "is-ready"}"><div class="ci-scout-copy"><p class="ci-kicker">ON-DEMAND MARKET SCOUT</p><h2>${needs ? "Phantom needs the business map." : "Phantom is auto-scouting."}</h2><p>${esc(scout.briefing || "Public-source scouting is active.")}</p>${scout.missing?.length ? `<div class="ci-missing">${scout.missing.map((item) => `<span>${esc(item)}</span>`).join("")}</div>` : ""}</div>${needs ? scoutForm() : `${autoScoutReport()}<details class="ci-source-drawer"><summary>Source lanes Phantom is checking <span>${(scout.lanes || []).length}</span></summary><div class="ci-scout-lanes">${(scout.lanes || []).map(scoutLaneCard).join("")}</div></details>`}</section>`;
+  return `<section class="ci-scout ${needs ? "needs-context" : "is-ready"}"><div class="ci-scout-copy"><p class="ci-kicker">ON-DEMAND MARKET SCOUT</p><h2>${needs ? "Phantom has the starter map." : "Phantom is auto-scouting."}</h2><p>${esc(scout.briefing || "Public-source scouting is active.")}</p>${scout.missing?.length ? `<div class="ci-missing">${scout.missing.map((item) => `<span>${esc(item)}</span>`).join("")}</div>` : ""}</div>${needs ? `<div class="ci-scout-stack">${autoScoutReport()}${scoutForm()}${sourceLaneDrawer(scout)}</div>` : `${autoScoutReport()}${sourceLaneDrawer(scout)}`}</section>`;
 }
 function marketBoard() {
   const board = ui.snapshot.marketBoard || [];

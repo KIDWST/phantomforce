@@ -20,6 +20,9 @@ assert.match(module, /directThreat|is-threat-|Red = direct competitor/u, "The ma
 assert.match(module, /ci-map-heat|heatSpots/u, "The market map must render a heat-map layer, not just dots.");
 assert.match(module, /MARKET INDEX|Track \+ compare/u, "The overview must show a useful starter competitor index with a track action.");
 assert.match(module, /AUTO SCOUT REPORT|ci-auto-scout|ci-auto-bars|ci-auto-compare/u, "Customer Intelligence must render automatic comparison graphics, not static readiness cards.");
+assert.match(module, /needs \? `<div class="ci-scout-stack">\$\{autoScoutReport\(\)\}\$\{scoutForm\(\)\}\$\{sourceLaneDrawer\(scout\)\}/u, "Fresh Customer Intelligence must show the starter auto-scout report and source lanes before manual setup.");
+assert.match(module, /function scoutLaneCard[\s\S]*candidateCompetitors[\s\S]*sourceTargets[\s\S]*nextAction/u, "Source lane cards must expose candidates, source targets, and next actions.");
+assert.match(module, /function sourceLaneDrawer[\s\S]*map\(scoutLaneCard\)/u, "Source lane drawer must render the detailed lane cards.");
 assert.match(module, /candidateCompetitors|sourceTargets|nextAction/u, "Scout lanes must show what Phantom is already checking and what to do next.");
 assert.match(module, /data-ci-fuse/u, "Signal fusion must be interactive.");
 assert.match(module, /aggregated theme/u, "Audience gaps must require aggregation.");
@@ -33,6 +36,7 @@ assert.match(service, /buildMarketBoard|updateMarketScoutContext/u, "The service
 assert.match(service, /AutoScoutReport|buildAutoScoutReport|phantomAngleFor|sourceTargetsForBoardItem/u, "The service must generate automatic scout comparisons, source targets, and response angles.");
 assert.match(service, /STARTER_COMPETITORS[\s\S]*ChatGPT[\s\S]*Claude[\s\S]*HubSpot[\s\S]*HighLevel[\s\S]*Zapier[\s\S]*Hootsuite/u, "The service must seed PhantomForce-relevant starter competitors.");
 assert.match(service, /marketBoardMode|starterCompetitors/u, "The snapshot must distinguish starter competitors from live tracked competitors.");
+assert.match(service, /sourceLanes:\s*scout\.lanes\.length/u, "Fresh snapshots must count source lanes so the page does not look inert.");
 assert.match(css, /ci-auto-scout|ci-auto-bars|ciBarLoad/u, "Automatic market intelligence graphics must be styled and animated.");
 assert.match(css, /ci-market-map|ci-map-node|ciMapSpin|ci-sparkline/u, "The competitor map must be graphic, animated, and trend-oriented.");
 assert.match(css, /ci-map-stage\{[^}]*overflow:hidden/u, "The competitor map stage must clip internally instead of hanging off the page.");

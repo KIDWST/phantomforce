@@ -405,7 +405,7 @@ function buildScout(state: TenantState) {
     missing,
     lastRunAt: state.settings.lastScoutRunAt,
     briefing: !ready
-      ? "Phantom needs the business, offer, audience, and service area before it can build a useful competitor map."
+      ? "Phantom is showing the starter competitor map now. Add your offer, audience, and service area to personalize source lanes and live rankings."
       : competitors
         ? "Phantom is ranking known competitors by public-signal momentum and turning gaps into safe response ideas."
         : "Phantom is already comparing the starter market map, source targets, and response opportunities. Add dated public sources when you want live movement labels.",
@@ -538,6 +538,7 @@ export async function getCompetitorIntelligenceSnapshot(session: AccessSession, 
       blockedRequests: state.audit.filter((entry) => entry.result === "blocked").length,
       marketMovers: marketBoard.filter((entry) => entry.momentum === "gaining" || entry.momentum === "vulnerable").length,
       activeScoutLanes: scout.lanes.filter((entry) => entry.status !== "needs_context").length,
+      sourceLanes: scout.lanes.length,
     },
   };
 }
