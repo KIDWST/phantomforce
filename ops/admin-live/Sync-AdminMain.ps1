@@ -128,7 +128,16 @@ try {
       $serverFile = Join-Path $PSScriptRoot "admin-static-server.mjs"
       $diskHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $serverFile).Hash.Substring(0, 16).ToLower()
       $runningHash = [string]$health.source_hash
-      if ($runningHash -ne $diskHash) {
+      $runningRoot = ""
+      try {
+        if ($health.root) { $runningRoot = (Resolve-Path ([string]$health.root) -ErrorAction Stop).Path }
+      } catch {
+        $runningRoot = [string]$health.root
+      }
+      if ($runningRoot -and $runningRoot -ne $RepoRoot) {
+        Write-SyncLog "Admin static server is rooted at '$runningRoot' instead of '$RepoRoot'; restarting."
+        $needRestart = $true
+      } elseif ($runningHash -ne $diskHash) {
         $busy = 0
         try { $busy = [int]$health.jobs_running } catch { $busy = 0 }
         if ($busy -gt 0) {
