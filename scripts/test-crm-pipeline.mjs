@@ -64,7 +64,7 @@ must(files.pageworker, /Server CRM saved the draft lanes/u, "Prompter result mus
 must(files.crmProspects, /createCrmProspectBuildout/u, "CRM prospect builder must be shared for page-specific prompters.");
 must(files.workspaces, /data-client-crm-form/u, "Clients page must expose a visible prompt-to-CRM form.");
 must(files.workspaces, /persistCrmProspectLanes\(lanes, rawPrompt\)/u, "Visible Clients page prompt must persist CRM lanes when the server session can write.");
-must(files.workspaces, /ready in the New lane/u, "Visible Clients page prompt must tell the user where the CRM cards appeared.");
+must(files.workspaces, /ready in the New column/u, "Visible Clients page prompt must tell the user where the CRM cards appeared.");
 must(files.workspaces, /Server save failed, so the draft lanes stay visible locally/u, "Visible Clients page prompt must not report total failure when local CRM lane creation succeeded.");
 must(files.workspaces, /catch \(error\) \{[\s\S]*crmRuntime\.writeError = error\?\.message \|\| "Server CRM save failed\.";[\s\S]*persistenceNote = "Server save failed, so the draft lanes stay visible locally\."/u, "Visible Clients page prompt must keep server CRM mode active when only prompt persistence fails.");
 must(files.workspaces, /No outreach, uploads, public exposure, or fake contact details/u, "Visible Clients page prompt must disclose CRM-only safe behavior.");

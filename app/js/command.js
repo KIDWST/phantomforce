@@ -989,7 +989,7 @@ function routeCommand(raw, settings) {
       ));
     }
     return {
-      say: `${buildout.created.length ? "Done" : "Already mapped"} - ${createdNames.length || laneNames.length} CRM prospect lane${(createdNames.length || laneNames.length) === 1 ? "" : "s"} ready for review: ${names}. I did not invent contact details, claim live relationships, or message anyone. Next: tell Phantom to create a task for the first lane you want qualified.`,
+      say: `${buildout.created.length ? "Done" : "Already mapped"} - ${createdNames.length || laneNames.length} CRM prospect card${(createdNames.length || laneNames.length) === 1 ? "" : "s"} ready in Clients: ${names}. I did not invent contact details, claim live relationships, or message anyone. Next: tell Phantom to create a task for the first card you want qualified.`,
       cards,
       open: "leads",
       intent,

@@ -337,11 +337,11 @@ function renderLeads(el, rerender) {
     <section class="page-worker client-crm-worker" data-client-crm-worker>
       <div class="page-worker-copy">
         <p>Client intelligence</p>
-        <h3>Find and add CRM prospects.</h3>
-        <span>Tell Phantom who to find: schools, creators, gyms, service companies, warm prospects, or everyone. It creates draft CRM lanes only.</span>
+        <h3>Find and add CRM prospect cards.</h3>
+        <span>Tell Phantom who to find: schools, creators, owners, service companies, warm prospects, or everyone. It creates safe draft CRM cards and no fake contacts.</span>
       </div>
       <form class="page-worker-form" data-client-crm-form>
-        <textarea data-client-crm-input rows="1" placeholder="Example: add creators, businesses, schools, and everyone who could use PhantomForce..." aria-label="Find and add CRM prospects"></textarea>
+        <textarea data-client-crm-input rows="1" placeholder="Example: add creators, businesses, schools, and everyone who could use PhantomForce..." aria-label="Find and add CRM prospect cards"></textarea>
         <button type="submit" ${crmPromptUi.busy ? "disabled" : ""}>${crmPromptUi.busy ? "Thinking" : "Run"}</button>
       </form>
       ${crmPromptUi.message ? `<div class="page-worker-output ${esc(crmPromptUi.status || "")}" data-client-crm-result><p>${esc(crmPromptUi.message)}</p></div>` : ""}
@@ -389,7 +389,7 @@ function renderLeads(el, rerender) {
     const prompt = isCrmProspectBuildout(rawPrompt) ? rawPrompt : `find and add CRM prospects for ${rawPrompt}`;
     crmPromptUi.busy = true;
     crmPromptUi.status = "is-thinking";
-    crmPromptUi.message = "Phantom is mapping safe prospect lanes and refusing to invent fake contact details.";
+    crmPromptUi.message = "Phantom is creating safe CRM prospect cards and refusing to invent fake contact details.";
     rerender();
     try {
       const buildout = createCrmProspectBuildout(prompt);
@@ -413,7 +413,7 @@ function renderLeads(el, rerender) {
       }
       const names = (lanes.length ? lanes : buildout.segments).map((item) => item.company || item.name || item.title).join(", ");
       crmPromptUi.status = "is-done";
-      crmPromptUi.message = `${saved} draft CRM prospect lane${saved === 1 ? "" : "s"} ready in the New lane: ${names}. ${persistenceNote} No outreach, uploads, public exposure, or fake contact details were created.`;
+      crmPromptUi.message = `${saved} draft CRM prospect card${saved === 1 ? "" : "s"} ready in the New column: ${names}. ${persistenceNote} No outreach, uploads, public exposure, or fake contact details were created.`;
       pushActivity("Client Intelligence", `created CRM prospect lanes from a Clients page prompt: ${names}.`);
       store.save();
       crmPromptUi.busy = false;

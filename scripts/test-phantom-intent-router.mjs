@@ -319,6 +319,28 @@ assert.ok(store.state.leads.some((lead) => /warm|referral/i.test(`${lead.name} $
 store.state.leads = [];
 store.state.tasks = [];
 
+crmFetchCalled = false;
+globalThis.fetch = async () => {
+  crmFetchCalled = true;
+  throw new Error("Messy CRM requests should not call the backend");
+};
+const messyClientsCrm = await handleSmartCommand("put companies, organizations, owners, and schools that need our business command center into the clients page");
+globalThis.fetch = originalFetch;
+assert.equal(crmFetchCalled, false, "Messy CRM requests should stay deterministic and local");
+assert.equal(messyClientsCrm.open, "leads", "Messy CRM requests should open the Clients pipeline");
+assert.ok(store.state.leads.length >= 3, "Messy CRM request should create several prospect cards");
+assert.ok(store.state.leads.some((lead) => /local service|business/i.test(`${lead.name} ${lead.notes}`)), "messy CRM request should represent owner/company prospects");
+assert.ok(store.state.leads.some((lead) => /school|education/i.test(`${lead.name} ${lead.notes}`)), "messy CRM request should represent school prospects");
+assert.ok(store.state.leads.some((lead) => /ops-heavy|command center|operations/i.test(`${lead.name} ${lead.notes}`)), "messy CRM request should represent command-center prospects");
+assert.match(messyClientsCrm.say, /CRM prospect card.*Clients/i, "Messy CRM proof should say cards are ready in Clients");
+store.state.leads = [];
+store.state.tasks = [];
+
+const unrelatedClientReport = handleCommand("create a report for the client team");
+assert.notEqual(unrelatedClientReport.open, "leads", "Unrelated client-team work should not open the Clients CRM pipeline");
+assert.equal(store.state.leads.length, 0, "Unrelated client-team work should not create CRM prospect cards");
+store.state.tasks = [];
+
 const complaint = handleCommand("i hate this dashboard, it feels annoying");
 assert.equal(store.state.tasks.length, 0, "complaints should not create tasks");
 assert.match(complaint.say, /task|talk/i, "feedback should offer, not act");

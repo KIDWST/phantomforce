@@ -134,5 +134,26 @@ assert.ok(store.state.leads.some((lead) => /warm|referral/i.test(`${lead.name} $
 assert.ok(store.state.leads.every((lead) => /No external outreach|contact details|live relationship claims/i.test(lead.notes)), "CRM cards must not invent live contacts or outreach claims.");
 assert.ok(store.state.tasks.some((task) => /Qualify PhantomForce CRM prospect map/i.test(task.title)), "Clients page prompt should create a qualification task.");
 assert.match(pageAction.summary, /ready in Clients/i, "Clients page action should report visible CRM results.");
+store.state.leads = [];
+store.state.tasks = [];
+
+const messyPageAction = runPageAction(
+  "leads",
+  "turn owners and organizations who need us into CRM cards for the Clients page: schools, creative teams, local companies",
+);
+
+assert.equal(fetchCalled, false, "Messy Clients page CRM action should still avoid backend fetch.");
+assert.equal(messyPageAction?.type, "prospect-buildout", "Messy Clients prompt should execute the CRM prospect buildout action.");
+assert.ok(store.state.leads.length >= 3, "Messy Clients page prompt should create several CRM prospect cards.");
+assert.ok(store.state.leads.some((lead) => /creator|creative/i.test(`${lead.name} ${lead.notes}`)), "Messy Clients page prompt should include creative prospects.");
+assert.ok(store.state.leads.some((lead) => /school|education/i.test(`${lead.name} ${lead.notes}`)), "Messy Clients page prompt should include school prospects.");
+assert.ok(store.state.leads.some((lead) => /local service|business/i.test(`${lead.name} ${lead.notes}`)), "Messy Clients page prompt should include local owner/company prospects.");
+assert.match(messyPageAction.summary, /CRM card.*ready in Clients/i, "Messy Clients page action should report visible CRM cards.");
+store.state.leads = [];
+store.state.tasks = [];
+
+const unrelatedClientAction = runPageAction("leads", "create a report for the client team");
+assert.equal(unrelatedClientAction, null, "Unrelated client-team work should not become a CRM prospect buildout.");
+assert.equal(store.state.leads.length, 0, "Unrelated client-team page work should not create CRM prospect cards.");
 
 console.log("Page worker prompt checks passed.");

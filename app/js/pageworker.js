@@ -188,8 +188,9 @@ const RISKY = /\b(send|publish|post|deploy|delete|charge|spend|email|dm|message|
 const URGENT = /\b(now|today|asap|tonight|this week|urgent|quick|fast|same day|immediately)\b/i;
 const MONEY = /\$[\d,]+|\b\d+\s?(?:dollars|bucks|usd)\b/i;
 const URL = /\bhttps?:\/\/[^\s]+|\b[a-z0-9-]+\.(?:com|online|net|org|co)\b/i;
-const CRM_PAGE_ACTION_VERB = /\b(add|find|search|discover|source|scout|research|identify|update|fill|populate|build|load|start|create|generate|make|map|draft|list)\b/i;
-const CRM_PAGE_AUDIENCE = /\b(clients?|leads?|prospects?|contacts?|customers?|small business(?:es)?|business(?:es)?|creators?|schools?|education|gyms?|coaches?|trainers?|service compan(?:y|ies)|contractors?|home services?|restaurants?|bars?|venues?|clubs?|teams?|professional services?|warm prospects?|everyone)\b/i;
+const CRM_PAGE_ACTION_VERB = /\b(add|find|search|discover|source|scout|research|identify|update|fill|populate|build|load|start|create|generate|make|map|draft|list|convert|turn|put|bring)\b/i;
+const CRM_PAGE_AUDIENCE = /\b(clients?|leads?|prospects?|contacts?|customers?|accounts?|buyers?|companies|organizations?|orgs?|owners?|founders?|decision makers?|small business(?:es)?|business(?:es)?|creators?|creative teams?|schools?|districts?|education|gyms?|coaches?|trainers?|service compan(?:y|ies)|contractors?|home services?|restaurants?|bars?|venues?|clubs?|teams?|professional services?|warm prospects?|everyone)\b/i;
+const CRM_PAGE_BUILDOUT_CUE = /\b(crm|clients?\s+(?:tab|page|pipeline|list|base)|prospects?|lead\s+(?:base|list)|find|add|source|scout|discover|research|who|interested|could\s+use|would\s+need|need\s+(?:us|phantomforce)|business command center|managed growth|everyone)\b/i;
 
 function tokenize(value = "") {
   return String(value).toLowerCase().match(/[a-z0-9]{3,}/g)?.filter((word) => !STOP_WORDS.has(word)) || [];
@@ -382,8 +383,8 @@ function isLeadsProspectPrompt(pageId, prompt = "") {
   if (pageId !== "leads") return false;
   const text = String(prompt || "");
   return isCrmProspectBuildout(text)
-    || (CRM_PAGE_ACTION_VERB.test(text) && CRM_PAGE_AUDIENCE.test(text))
-    || (/\b(who|companies|businesses|people|organizations)\b[\s\S]{0,80}\b(interested|could\s+use|would\s+need|could\s+buy|could\s+hire|need\s+phantomforce)\b/i.test(text));
+    || (CRM_PAGE_ACTION_VERB.test(text) && CRM_PAGE_AUDIENCE.test(text) && CRM_PAGE_BUILDOUT_CUE.test(text))
+    || (/\b(who|companies|businesses|people|organizations|accounts|owners|founders|decision makers)\b[\s\S]{0,100}\b(interested|could\s+use|would\s+need|could\s+buy|could\s+hire|need\s+(?:us|phantomforce)|business command center|managed growth)\b/i.test(text));
 }
 
 export function runPageAction(pageId, prompt) {
@@ -399,12 +400,12 @@ export function runPageAction(pageId, prompt) {
   return {
     type: "prospect-buildout",
     title: buildout.created.length ? "Prospect lanes created" : "Prospect lanes already mapped",
-    summary: `${createdNames.length || laneNames.length} draft lane${(createdNames.length || laneNames.length) === 1 ? "" : "s"} ready in Clients: ${names}.`,
+    summary: `${createdNames.length || laneNames.length} draft CRM card${(createdNames.length || laneNames.length) === 1 ? "" : "s"} ready in Clients: ${names}.`,
     leads: buildout.leads || buildout.created,
     notes: [
       "No outreach, upload, deploy, or public action happened.",
       "No fake contact details were generated.",
-      "Next: qualify one lane with public/CRM research before adding real business names.",
+      "Next: qualify one card with public/CRM research before adding real business names.",
     ],
     refreshWorkspace: true,
   };
@@ -421,7 +422,7 @@ async function persistPageAction(pageAction, prompt) {
     const saved = Array.isArray(payload.leads) ? payload.leads.length : pageAction.leads.length;
     pageAction.serverPersisted = true;
     pageAction.title = "Prospect lanes saved";
-    pageAction.summary = `${saved} draft prospect lane${saved === 1 ? "" : "s"} saved to server CRM.`;
+    pageAction.summary = `${saved} draft CRM card${saved === 1 ? "" : "s"} saved to server CRM.`;
     pageAction.notes.unshift("Server CRM saved the draft lanes for this workspace.");
     signalCrmRefresh("prospect-lanes-saved");
   } catch (error) {
