@@ -20,6 +20,8 @@ assert.match(module, /directThreat|is-threat-|Red = direct competitor/u, "The ma
 assert.match(module, /ci-map-heat|heatSpots/u, "The market map must render a heat-map layer, not just dots.");
 assert.match(module, /MARKET INDEX|Track \+ compare/u, "The overview must show a useful starter competitor index with a track action.");
 assert.match(module, /AUTO SCOUT REPORT|ci-auto-scout|ci-auto-bars|ci-auto-compare/u, "Customer Intelligence must render automatic comparison graphics, not static readiness cards.");
+assert.match(module, /friendlyIntelligenceError[\s\S]*Sign in to load Competitor Intelligence/u, "Customer Intelligence must hide raw auth transport errors behind a clean sign-in message.");
+assert.match(module, /authorization bearer/i, "Customer Intelligence must explicitly map bearer-token failures instead of displaying them.");
 assert.match(module, /needs \? `<div class="ci-scout-stack">\$\{autoScoutReport\(\)\}\$\{scoutForm\(\)\}\$\{sourceLaneDrawer\(scout\)\}/u, "Fresh Customer Intelligence must show the starter auto-scout report and source lanes before manual setup.");
 assert.match(module, /function scoutLaneCard[\s\S]*candidateCompetitors[\s\S]*sourceTargets[\s\S]*nextAction/u, "Source lane cards must expose candidates, source targets, and next actions.");
 assert.match(module, /function sourceLaneDrawer[\s\S]*map\(scoutLaneCard\)/u, "Source lane drawer must render the detailed lane cards.");

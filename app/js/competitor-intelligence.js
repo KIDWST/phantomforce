@@ -23,10 +23,15 @@ function authHeaders(json = false) {
   const token = session.token();
   return { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(json ? { "Content-Type": "application/json" } : {}) };
 }
+function friendlyIntelligenceError(status, message = "") {
+  const text = String(message || "");
+  if (status === 401 || /authorization bearer/i.test(text)) return "Sign in to load Competitor Intelligence.";
+  return text || `Intelligence request failed (${status}).`;
+}
 async function api(path, options = {}) {
   const response = await fetch(path, { ...options, headers: { ...authHeaders(Boolean(options.body)), ...(options.headers || {}) } });
   const payload = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(payload?.error || `Intelligence request failed (${response.status}).`);
+  if (!response.ok) throw new Error(friendlyIntelligenceError(response.status, payload?.error));
   return payload;
 }
 async function refresh(silent = false) {
