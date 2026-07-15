@@ -3,7 +3,7 @@
    dashboard. Termina can be wired underneath later; until then this uses
    PhantomForce-managed sessions and is explicit about that fallback. */
 
-import { currentWs, wsName, pushActivity, store, isAdmin } from "./store.js?v=phantom-live-20260715-274";
+import { currentWs, wsName, pushActivity, store, isAdmin } from "./store.js?v=phantom-live-20260715-275";
 
 const KEY = "pf.mission-control.v1";
 const WORKERS = [
