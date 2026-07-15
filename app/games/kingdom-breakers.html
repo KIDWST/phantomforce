@@ -260,6 +260,7 @@ const screens={
 
 /* ---------- 3. constants ---------- */
 const WORLD_W=1600, WORLD_H=900, GRAVITY=2600;
+const PROJECTILE_TRACE_STEP=8;
 
 const MATERIALS={
   stone:{hp:42,mass:3.0,color:'#8a93ab',dark:'#5c6480'},
@@ -269,9 +270,9 @@ const MATERIALS={
 };
 
 const AMMO={
-  stonefall:{key:'stonefall',label:'Stonefall Orb',glyph:'●',color:'#ffb454',minSpeed:800,maxSpeed:1480,gravityScale:1.05,damage:34,splash:0,pierce:0,impulse:900,radius:13},
-  splinter:{key:'splinter',label:'Splinter Lance',glyph:'➤',color:'#3fe0c5',minSpeed:1050,maxSpeed:1900,gravityScale:0.58,damage:15,splash:0,pierce:3,impulse:260,radius:8},
-  ember:{key:'ember',label:'Emberburst Charge',glyph:'✺',color:'#ff6a5d',minSpeed:720,maxSpeed:1320,gravityScale:0.92,damage:24,splash:180,pierce:0,impulse:520,radius:11},
+  stonefall:{key:'stonefall',label:'Stonefall Orb',glyph:'●',color:'#ffb454',minSpeed:1050,maxSpeed:2250,gravityScale:0.86,damage:36,splash:0,pierce:0,impulse:980,radius:13},
+  splinter:{key:'splinter',label:'Splinter Lance',glyph:'➤',color:'#3fe0c5',minSpeed:1250,maxSpeed:2600,gravityScale:0.42,damage:16,splash:0,pierce:4,impulse:300,radius:8},
+  ember:{key:'ember',label:'Emberburst Charge',glyph:'✺',color:'#ff6a5d',minSpeed:1000,maxSpeed:2150,gravityScale:0.74,damage:26,splash:190,pierce:0,impulse:560,radius:11},
 };
 const AMMO_ORDER=['stonefall','splinter','ember'];
 
@@ -472,24 +473,34 @@ function fireProjectile(ammoKey, angle, power, shooter){
   return p;
 }
 
+function projectileTraceHit(p,spec,x0,y0,x1,y1){
+  const dist=Math.hypot(x1-x0,y1-y0);
+  const steps=Math.max(1, Math.ceil(dist/Math.max(PROJECTILE_TRACE_STEP, spec.radius*0.7)));
+  for(let i=1;i<=steps;i++){
+    const t=i/steps;
+    const x=x0+(x1-x0)*t;
+    const y=y0+(y1-y0)*t;
+    for(const w of level.wardens){
+      if(w.alive && !w.harmed && Math.hypot(w.x-x,w.y-y) <= spec.radius+w.radius) return {x,y,block:null};
+    }
+    for(const b of level.blocks){
+      if(!b.alive || p.hitIds.has(b.id)) continue;
+      if(Math.abs(x-b.x) <= b.w/2+spec.radius && Math.abs(y-b.y) <= b.h/2+spec.radius) return {x,y,block:b};
+    }
+    if(y > level.groundY+40) return {x,y:level.groundY+40,block:null};
+  }
+  return null;
+}
+
 function stepProjectile(p,dt){
   const spec=AMMO[p.kind];
   p.trail.push({x:p.x,y:p.y}); if(p.trail.length>14) p.trail.shift();
+  const x0=p.x, y0=p.y;
   p.vy+=GRAVITY*spec.gravityScale*dt;
   p.x+=p.vx*dt; p.y+=p.vy*dt;
   activeShooter=p.shooter;
-  for(const w of level.wardens){
-    if(w.alive && !w.harmed && Math.hypot(w.x-p.x,w.y-p.y) <= spec.radius+w.radius){
-      resolveProjectileHit(p, null); return;
-    }
-  }
-  for(const b of level.blocks){
-    if(!b.alive || p.hitIds.has(b.id)) continue;
-    if(Math.abs(p.x-b.x) <= b.w/2+spec.radius && Math.abs(p.y-b.y) <= b.h/2+spec.radius){
-      resolveProjectileHit(p,b); if(!p.alive) return;
-    }
-  }
-  if(p.y > level.groundY+40){ resolveProjectileHit(p,null); return; }
+  const hit=projectileTraceHit(p,spec,x0,y0,p.x,p.y);
+  if(hit){ p.x=hit.x; p.y=hit.y; resolveProjectileHit(p,hit.block); return; }
   if(p.x<-80 || p.x>WORLD_W+80 || p.y<-400){ p.alive=false; }
 }
 
@@ -788,12 +799,13 @@ function predictTrajectory(ammoKey, angle, power, maxSteps){
   let x=engineX(), y=engineY(), vx=Math.cos(angle)*speed, vy=Math.sin(angle)*speed;
   const dt=1/60; const pts=[{x,y}];
   for(let i=0;i<maxSteps;i++){
+    const x0=x, y0=y;
     vy+=GRAVITY*spec.gravityScale*dt; x+=vx*dt; y+=vy*dt;
     pts.push({x,y});
-    for(const b of level.blocks){
-      if(!b.alive) continue;
-      if(Math.abs(x-b.x)<=b.w/2+spec.radius && Math.abs(y-b.y)<=b.h/2+spec.radius) return {points:pts, hitX:x, hitY:y, blockId:b.id};
-    }
+    const ghost={hitIds:new Set()};
+    const hit=projectileTraceHit(ghost,spec,x0,y0,x,y);
+    if(hit && hit.block) return {points:pts, hitX:hit.x, hitY:hit.y, blockId:hit.block.id};
+    if(hit && !hit.block) return {points:pts, hitX:hit.x, hitY:hit.y, blockId:null};
     if(y>level.groundY+30) return {points:pts, hitX:x, hitY:level.groundY, blockId:null};
     if(x>WORLD_W+80 || x<-80) return {points:pts, hitX:x, hitY:y, blockId:null, offscreen:true};
   }
