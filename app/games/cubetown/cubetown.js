@@ -60,13 +60,18 @@
     reduced: $('[data-ct-reduced]'),
     tutSteps: $('[data-ct-tut-steps]'),
     tutDots: $('[data-ct-tut-dots]'),
+    questLog: $('[data-ct-quest-log]'),
+    trialName: $('[data-ct-trial-name]'),
+    trialBody: $('[data-ct-trial-body]'),
+    trialSeq: $('[data-ct-trial-seq]'),
+    trialInput: $('[data-ct-trial-input]'),
   };
 
   // ---------------------------------------------------------------------
   // Constants: world, resources, palette, npcs, cosmetics
   // ---------------------------------------------------------------------
-  const GRID = 9;
-  const CORE = { x0: 3, x1: 5, y0: 3, y1: 5 }; // always-grass buildable core
+  const GRID = 17;
+  const CORE = { x0: 7, x1: 9, y0: 7, y1: 9 }; // always-grass buildable core
   const DAY_LENGTH_MS = 5 * 60 * 1000; // one full in-game day per 5 real minutes
   const SPARK_DECAY_EVERY_MS = 45000;
   const SPARK_DECAY_AMOUNT = 2;
@@ -102,12 +107,19 @@
     { key: 'gold', label: 'Gold', color: '#ffd54f', lockedBy: 'miro' },
     { key: 'violet', label: 'Violet', color: '#c792ea', lockedBy: 'tally' },
     { key: 'aqua', label: 'Aqua', color: '#4fd1e8', lockedBy: 'bo' },
+    { key: 'ember', label: 'Ember', color: '#ff6b4a', lockedBy: 'runa' },
+    { key: 'moss', label: 'Moss', color: '#78d36f', lockedBy: 'ivy' },
+    { key: 'moon', label: 'Moon', color: '#b8c8ff', lockedBy: 'nova' },
+    { key: 'void', label: 'Void', color: '#2b213f', lockedBy: 'ori' },
   ];
   const TOPPERS = [
     { key: 'none', label: 'None', lockedBy: null },
     { key: 'cap', label: 'Cap', lockedBy: null },
     { key: 'bloom', label: 'Bloom', lockedBy: 'tally' },
     { key: 'halo', label: 'Halo', lockedBy: 'bo' },
+    { key: 'crest', label: 'Crest', lockedBy: 'fenn' },
+    { key: 'leaf', label: 'Leaf', lockedBy: 'ivy' },
+    { key: 'crown', label: 'Crown', lockedBy: 'elder' },
   ];
   const TRIMS = [
     { key: 'soft', label: 'Soft', color: '#ffffff55', lockedBy: null },
@@ -116,10 +128,24 @@
   ];
 
   const NPC_DEFS = [
-    { id: 'miro', name: 'Miro the Mason', hue: '#f2a65a', resourceType: 'quarry', quest: { need: { shale: 5 }, unlockHue: 'gold', unlockTopper: null, text: 'Bring me 5 Shale and I’ll square off your plot foundations for good.' } },
-    { id: 'tally', name: 'Tally the Weaver', hue: '#c792ea', resourceType: 'reed', quest: { need: { loom: 4 }, unlockHue: 'violet', unlockTopper: 'bloom', text: 'Four bundles of Loom would finish my loom-frame. Worth a nice hat, I promise.' } },
-    { id: 'bo', name: 'Bo the Angler', hue: '#4fd1e8', resourceType: 'water', quest: { need: { driftfish: 3 }, unlockHue: 'aqua', unlockTopper: 'halo', text: 'Catch me 3 Driftfish and I’ll teach you my chowder recipe.' } },
+    { id: 'miro', name: 'Miro the Mason', hue: '#f2a65a', resourceType: 'quarry', quest: { need: { shale: 5 }, unlockHue: 'gold', unlockTopper: null, reward: { keystone: 1 }, text: 'Bring me 5 Shale and I’ll square off your plot foundations for good. I found a Sun Keystone in the old blockworks.' } },
+    { id: 'tally', name: 'Tally the Weaver', hue: '#c792ea', resourceType: 'reed', quest: { need: { loom: 4 }, unlockHue: 'violet', unlockTopper: 'bloom', reward: { keystone: 1 }, text: 'Four bundles of Loom would finish my loom-frame. Worth a nice hat, and I hid a Moon Keystone in the thread box.' } },
+    { id: 'bo', name: 'Bo the Angler', hue: '#4fd1e8', resourceType: 'water', quest: { need: { driftfish: 3 }, unlockHue: 'aqua', unlockTopper: 'halo', reward: { keystone: 1 }, text: 'Catch me 3 Driftfish and I’ll teach you my chowder recipe. The Tide Keystone likes a good meal.' } },
+    { id: 'runa', name: 'Runa the Ranger', hue: '#ff6b4a', resourceType: 'grove', quest: { need: { grain: 8 }, unlockHue: 'ember', unlockTopper: null, reward: { lumen: 1 }, text: 'The north trail is wider than it looks. Bring 8 Grain and I’ll mark the safe bends on your map.' } },
+    { id: 'ivy', name: 'Ivy the Gardener', hue: '#78d36f', resourceType: 'reed', quest: { need: { grain: 5, loom: 3 }, unlockHue: 'moss', unlockTopper: 'leaf', reward: { lumen: 1 }, text: 'The town needs gardens before it needs walls. Bring 5 Grain and 3 Loom and I’ll wake the meadow path.' } },
+    { id: 'fenn', name: 'Fenn the Gatekeeper', hue: '#9bb3d6', resourceType: 'shrine', quest: { need: { lumen: 2 }, unlockHue: null, unlockTopper: 'crest', reward: { keystone: 1 }, text: 'Clear two shrine trials and bring me 2 Lumen. Then I’ll hand over the Star Keystone for the Prism Gate.' } },
+    { id: 'nova', name: 'Nova the Cartographer', hue: '#b8c8ff', resourceType: 'shrine', quest: { need: { driftfish: 5, lumen: 1 }, unlockHue: 'moon', unlockTopper: null, reward: { relic: 1 }, text: 'I’m mapping the tide ruins. Bring 5 Driftfish and 1 Lumen and I’ll give you a relic compass.' } },
+    { id: 'ori', name: 'Ori the Archivist', hue: '#8f7fff', resourceType: 'gate', quest: { need: { relic: 1, keystone: 4 }, unlockHue: 'void', unlockTopper: 'crown', reward: { relic: 1 }, text: 'When four Keystones and one Relic are yours, come back. The Prism Gate only opens for a town that helped its people.' } },
   ];
+
+  const TRIAL_DEFS = [
+    { id: 'grove', name: 'Grove Echo Trial', tile: { x: 2, y: 3 }, seq: ['up', 'right', 'down'], reward: { lumen: 1 }, text: 'Repeat the old trail rhythm to calm the grove shrine.' },
+    { id: 'quarry', name: 'Quarry Switch Trial', tile: { x: 14, y: 3 }, seq: ['left', 'up', 'right', 'right'], reward: { lumen: 1 }, text: 'Strike the switches in order before the stone hum fades.' },
+    { id: 'tide', name: 'Tide Lantern Trial', tile: { x: 2, y: 13 }, seq: ['down', 'right', 'up', 'left'], reward: { lumen: 1 }, text: 'Guide the lantern around the tide line without breaking the glow.' },
+    { id: 'spire', name: 'Spire Heart Trial', tile: { x: 14, y: 13 }, seq: ['up', 'left', 'down', 'right', 'up'], reward: { lumen: 1, relic: 1 }, text: 'Match the full heart-pattern to wake the path toward the Prism Gate.' },
+  ];
+  const TRIAL_BY_ID = Object.fromEntries(TRIAL_DEFS.map((trial) => [trial.id, trial]));
+  const GATE_TILE = { x: 8, y: 1 };
 
   // ---------------------------------------------------------------------
   // Deterministic RNG + terrain generation (seed lives in save data, the
@@ -136,25 +162,41 @@
   }
   function isCore(x, y) { return x >= CORE.x0 && x <= CORE.x1 && y >= CORE.y0 && y <= CORE.y1; }
   function inBounds(x, y) { return x >= 0 && y >= 0 && x < GRID && y < GRID; }
+  function isLandmark(x, y) {
+    return (x === GATE_TILE.x && y === GATE_TILE.y) || TRIAL_DEFS.some((trial) => trial.tile.x === x && trial.tile.y === y);
+  }
   function genTerrain(seed) {
     const rnd = mulberry32(seed);
     const grid = [];
     for (let y = 0; y < GRID; y++) grid.push(new Array(GRID).fill('grass'));
-    const corners = [{ x: 0, y: 0 }, { x: GRID - 3, y: 0 }, { x: 0, y: GRID - 3 }, { x: GRID - 3, y: GRID - 3 }];
-    const pc = corners[Math.floor(rnd() * corners.length)];
-    for (let dy = 0; dy < 3; dy++) for (let dx = 0; dx < 3; dx++) {
-      if (rnd() < 0.72) { const x = pc.x + dx, y = pc.y + dy; if (!isCore(x, y)) grid[y][x] = 'water'; }
+    const ponds = [
+      { x: 1, y: 9, w: 4, h: 5, chance: 0.74 },
+      { x: 12, y: 6, w: 4, h: 4, chance: 0.58 },
+    ];
+    for (const pond of ponds) for (let dy = 0; dy < pond.h; dy++) for (let dx = 0; dx < pond.w; dx++) {
+      const x = pond.x + dx, y = pond.y + dy;
+      if (rnd() < pond.chance && !isCore(x, y) && !isLandmark(x, y)) grid[y][x] = 'water';
     }
     function scatter(type, count) {
       let placed = 0, guard = 0;
       while (placed < count && guard < 500) {
         guard++;
         const x = Math.floor(rnd() * GRID), y = Math.floor(rnd() * GRID);
-        if (isCore(x, y) || grid[y][x] !== 'grass') continue;
+        if (isCore(x, y) || isLandmark(x, y) || grid[y][x] !== 'grass') continue;
         grid[y][x] = type; placed++;
       }
     }
-    scatter('grove', 8); scatter('quarry', 6); scatter('reed', 6);
+    scatter('grove', 22); scatter('quarry', 18); scatter('reed', 18);
+    for (const trial of TRIAL_DEFS) {
+      grid[trial.tile.y][trial.tile.x] = 'shrine';
+      for (const n of neighbors4(trial.tile.x, trial.tile.y)) if (inBounds(n.x, n.y) && !isCore(n.x, n.y)) grid[n.y][n.x] = 'grass';
+    }
+    grid[GATE_TILE.y][GATE_TILE.x] = 'gate';
+    for (const n of neighbors4(GATE_TILE.x, GATE_TILE.y)) if (inBounds(n.x, n.y)) grid[n.y][n.x] = 'grass';
+    for (let i = 2; i <= 14; i += 2) {
+      if (grid[8][i] === 'grass') grid[8][i] = 'trail';
+      if (grid[i][8] === 'grass') grid[i][8] = 'trail';
+    }
     return grid;
   }
   function findFirstOfType(terrain, type) {

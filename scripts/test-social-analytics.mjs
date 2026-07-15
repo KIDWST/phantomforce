@@ -42,6 +42,8 @@ assert.match(contentHubSource, /LIVE_ANALYTICS_PLATFORMS = new Set\(PLATFORMS\.m
 assert.match(contentHubSource, /data-an-oauth/, "Analytics rows should start official account authorization when OAuth is ready.");
 assert.match(contentHubSource, /data-an-show-oauth-setup/, "Missing provider apps should open inline OAuth setup instead of sending users to a hidden settings page.");
 assert.match(contentHubSource, /data-an-oauth-setup/, "Analytics must keep the provider app setup panel inline on the page.");
+assert.match(contentHubSource, /data-an-oauth-launchpad/, "Analytics must show a clear OAuth launchpad for app setup, signed-in account connect, and live sync.");
+assert.match(contentHubSource, /Connect with the signed-in browser/, "Analytics setup must make signed-in browser OAuth obvious.");
 assert.doesNotMatch(contentHubSource, /data-open-ws="settings" data-open-settings-tab="media">Set up provider apps/, "Analytics setup must not bounce users to Settings to configure social OAuth.");
 assert.doesNotMatch(contentHubSource, /data-open-ws="settings" data-open-settings-tab="media">Set up OAuth/, "Per-channel setup must stay inline on Analytics.");
 assert.match(contentHubSource, /phantomforce\.social-oauth\.v1/, "Analytics must listen for OAuth callback completion.");

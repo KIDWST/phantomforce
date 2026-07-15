@@ -9,20 +9,20 @@ import {
   freshEditState, applyFilterPreset, renderBaseFrame,
   addBokehSpot, removeBokehSpotNear, removeBokehSpotAt, nearestBokehSpot, moveBokehSpot, resizeBokehSpot,
   setBokehMask, freshTextStyle, TEXT_FONTS, TEXT_PRESETS, applyTextPreset,
-} from "./imagefilters.js?v=phantom-live-20260715-275";
-import { getRembgStatus, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260715-275";
-import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260715-275";
-import { parseAnalyticsReport } from "./social-analytics.js?v=phantom-live-20260715-275";
+} from "./imagefilters.js?v=phantom-live-20260715-276";
+import { getRembgStatus, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260715-276";
+import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260715-276";
+import { parseAnalyticsReport } from "./social-analytics.js?v=phantom-live-20260715-276";
 import {
   freshComposition, compositionSnapshot, restoreComposition, addImageLayer, replaceImageLayerSource, addTextLayer, addColorLayer,
   duplicateLayer, removeSelectedLayers, moveLayerOrder, selectedLayers, selectLayer, selectAllLayers,
   loadCompositionImages, renderComposition, drawCompositionOverlay, drawDetectedSubjectOverlay, canvasPoint, hitTestLayer, hitTestResizeHandle,
   setCanvasPreset, zoomComposition, canvasPointToLayer, layerPointToCanvas,
   imageEditSnapshot, restoreImageEditSnapshot, pushEditorSnapshot,
-} from "./content-editor.js?v=phantom-live-20260715-275";
+} from "./content-editor.js?v=phantom-live-20260715-276";
 import {
   currentTenantId, currentWs, ctx, session, store, visible, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem, wsName,
-} from "./store.js?v=phantom-live-20260715-275";
+} from "./store.js?v=phantom-live-20260715-276";
 
 const CH_KEY = "pf.contenthub.v2";
 const CH_REMOVED_KEY = "pf.contenthub.removed.v1";
@@ -3749,6 +3749,70 @@ function analyticsOAuthSetupInline(esc) {
   </details>`;
 }
 
+function analyticsOAuthLaunchpad({ displayAccounts, configuredCount, oauthReadyCount, liveApiRows, esc }) {
+  const preflight = analyticsConnectorState.preflight || {};
+  const platforms = Array.isArray(preflight.platforms) ? preflight.platforms : [];
+  const stage = liveApiRows.length
+    ? "sync"
+    : configuredCount
+      ? "sync"
+      : oauthReadyCount
+        ? "connect"
+        : "setup";
+  const title = stage === "sync"
+    ? "Live accounts are ready to sync."
+    : stage === "connect"
+      ? "Connect with the signed-in browser."
+      : "Set up provider apps once.";
+  const body = stage === "sync"
+    ? "Authorized account tokens are stored server-side. Pull official metrics whenever you need a fresh report."
+    : stage === "connect"
+      ? "Click a channel below while you are already signed into that social account. PhantomForce never reads browser cookies; it only receives the provider OAuth callback."
+      : "Add each platform app ID and secret once. Then every workspace can connect their own social accounts from the browser.";
+  return `<section class="an-oauth-launchpad" data-an-oauth-launchpad>
+    <div class="an-oauth-launch-head">
+      <div>
+        <p class="ch-eyebrow">OAuth launchpad</p>
+        <h3>${esc(title)}</h3>
+        <p>${esc(body)}</p>
+      </div>
+      <div class="an-oauth-progress" aria-label="OAuth progress">
+        <span class="${oauthReadyCount ? "is-done" : "is-next"}"><b>1</b><i>App</i></span>
+        <span class="${configuredCount ? "is-done" : oauthReadyCount ? "is-next" : ""}"><b>2</b><i>Account</i></span>
+        <span class="${liveApiRows.length ? "is-done" : configuredCount ? "is-next" : ""}"><b>3</b><i>Feed</i></span>
+      </div>
+    </div>
+    <div class="an-oauth-platform-grid">
+      ${displayAccounts.map((account) => {
+        const connector = connectorStatus(account.id) || {};
+        const step = platforms.find((item) => item.id === account.id) || {};
+        const live = !!analyticsFeedForAccount(account) && account.connectMode === "live-api";
+        const authorized = !!connector.configured;
+        const appReady = !!connector.oauthConfigured;
+        const action = authorized
+          ? `<button class="btn btn-primary" type="button" data-an-sync="${account.id}">Sync</button>`
+          : appReady
+            ? `<button class="btn btn-primary" type="button" data-an-oauth="${account.id}">Connect</button>`
+            : canManageSocialOAuthApps()
+              ? `<button class="btn btn-ghost" type="button" data-an-show-oauth-setup="${account.id}">Set up app</button>`
+              : `<button class="btn btn-ghost" type="button" disabled>Owner setup</button>`;
+        const label = live
+          ? "live feed"
+          : authorized
+            ? "authorized"
+            : appReady
+              ? "ready for OAuth"
+              : "needs app";
+        return `<article class="an-oauth-platform ${live ? "is-live" : authorized ? "is-authorized" : appReady ? "is-ready" : "is-missing"}">
+          <div><span class="ch-dot" style="background:${account.color}"></span><b>${esc(account.name)}</b><i>${esc(label)}</i></div>
+          <p>${esc(step.nextDetail || connector.reason || "Set up OAuth to unlock official analytics.")}</p>
+          ${action}
+        </article>`;
+      }).join("")}
+    </div>
+  </section>`;
+}
+
 function analyticsReadinessPanel({ displayAccounts, liveApiRows, configuredCount, oauthReadyCount, hasLiveMetrics, esc }) {
   const totalCount = displayAccounts.length || 1;
   const copy = analyticsReadinessCopy({ hasLiveMetrics, configuredCount, oauthReadyCount, totalCount });
@@ -3938,6 +4002,7 @@ export function renderAnalytics(el, opts = {}, renderOptions = {}) {
       </section>
       ${analyticsNotice || analyticsConnectorState.error ? `<div class="an-flash">${esc(analyticsNotice || analyticsConnectorState.error)}</div>` : ""}
       ${analyticsReadinessPanel({ displayAccounts, liveApiRows, configuredCount, oauthReadyCount, hasLiveMetrics, esc })}
+      ${analyticsOAuthLaunchpad({ displayAccounts, configuredCount, oauthReadyCount, liveApiRows, esc })}
       <div class="ch-kpis an-kpis">
         ${hasLiveMetrics
           ? `${kpi("Reach", K(totals.reach), "reported reach")}${kpi("Views", K(totals.impressions), "views + impressions")}${kpi("Engagement", K(totals.engagement), "likes + comments + shares")}${kpi("Followers", K(totals.followers), "latest reported total")}`

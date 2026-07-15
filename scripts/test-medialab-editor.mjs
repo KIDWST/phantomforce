@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 const { freshEditState } = await import("../app/js/imagefilters.js?v=phantom-live-20260714-267");
-const { cloneImageEditState } = await import("../app/js/content-editor.js?v=phantom-live-20260714-267");
+const { cloneImageEditState, freshComposition, addImageLayer, addTextLayer, addColorLayer, moveLayerToIndex } = await import("../app/js/content-editor.js?v=phantom-live-20260714-267");
 
 const source = freshEditState();
 source.paint = {
@@ -26,8 +26,20 @@ const restored = cloneImageEditState(snapshot);
 restored.paint.strokes[0].points[0].y = 0.88;
 assert.equal(snapshot.paint.strokes[0].points[0].y, 0.3, "redo snapshots must not share nested point objects");
 
+const composition = freshComposition();
+const imageLayer = addImageLayer(composition, "memory://asset.webp");
+const textLayer = addTextLayer(composition, "Launch");
+const colorLayer = addColorLayer(composition, "#04120c");
+for (const layer of [composition.layers.find((item) => item.id === "base"), imageLayer, textLayer, colorLayer]) {
+  assert.equal(layer.blend, "source-over", `${layer.type} layers must default to normal blend mode`);
+}
+assert.equal(moveLayerToIndex(composition, imageLayer.id, 0), true, "layer drag helper must move a layer to a direct stack index");
+assert.equal(composition.layers[0].id, imageLayer.id, "move-to-index must update the render stack order");
+assert.deepEqual(composition.selectedIds, [imageLayer.id], "move-to-index must keep the moved layer selected");
+
 const mediaSrc = readFileSync(new URL("../app/js/medialab.js", import.meta.url), "utf8");
 const cssSrc = readFileSync(new URL("../app/phantom.css", import.meta.url), "utf8");
+const editorSrc = readFileSync(new URL("../app/js/content-editor.js", import.meta.url), "utf8");
 
 assert.match(mediaSrc, /ctx\.globalCompositeOperation\s*=\s*erase\s*\?\s*"destination-out"/, "eraser must use destination-out compositing");
 assert.match(mediaSrc, /ctx\.globalAlpha\s*=\s*erase\s*\?\s*1\s*:/, "eraser must cut fully transparent pixels");
@@ -35,6 +47,10 @@ assert.match(mediaSrc, /opacity:\s*mlPaintMode === "erase"\s*\?\s*100\s*:/, "new
 assert.match(mediaSrc, /updateEditHistoryControls\(body\)/, "undo/redo controls must refresh without a full remount");
 assert.match(mediaSrc, /freshComposition\(\)/, "Media Lab edit must keep a real layer composition, not a flattened Canva-style editor");
 assert.match(mediaSrc, /data-ml-layer-order/, "Media Lab edit must expose layer up/down controls");
+assert.match(mediaSrc, /draggable="\$\{layer\.locked \? "false" : "true"\}"/u, "Media Lab layer rows must be draggable unless locked");
+assert.match(mediaSrc, /data-ml-layer-index="\$\{realIndex\}"/u, "Media Lab layer rows must carry their real stack index for drag/drop ordering");
+assert.match(mediaSrc, /dataTransfer\?\.setData\("text\/x-phantom-layer",\s*layer\.id\)/u, "Media Lab layer drag must write the dragged layer id.");
+assert.match(mediaSrc, /moveLayerToIndex\(mlComposition,\s*draggedId,\s*targetIndex\)/u, "Media Lab layer drop must reorder through the shared move-to-index helper.");
 assert.match(mediaSrc, /addImageLayer\(mlComposition,\s*row\.url/u, "Asset Cloud selections must add image layers instead of replacing the current image");
 assert.match(mediaSrc, /data-ml-layer-overlay/u, "Media Lab edit must draw a selectable transform overlay over the image canvas");
 assert.match(mediaSrc, /hitTestResizeHandle\(mlComposition,\s*point,\s*canvas/u, "Media Lab edit must support direct corner-handle resizing on the canvas");
@@ -54,6 +70,10 @@ assert.match(mediaSrc, /layer\.locked \|\| realIndex <= 0 \? "disabled"/u, "Lock
 assert.match(mediaSrc, /layer\.locked \|\| realIndex >= mlComposition\.layers\.length - 1 \? "disabled"/u, "Locked layers must not be movable up.");
 assert.match(mediaSrc, /activeLocked \? "disabled" : ""/u, "Locked selected layers must disable inspector controls.");
 assert.match(mediaSrc, /body\.querySelectorAll\("\[data-ml-layer-lock\]"\)[\s\S]*layer\.locked = !layer\.locked/u, "Media Lab must wire the lock/unlock layer toggle.");
+assert.match(mediaSrc, /data-ml-layer-field="blend"/u, "Media Lab layers must expose blend mode controls in the inspector.");
+assert.match(mediaSrc, /"multiply",\s*"Multiply"[\s\S]*"screen",\s*"Screen"[\s\S]*"overlay",\s*"Overlay"/u, "Media Lab blend mode controls must include standard compositing modes.");
+assert.match(editorSrc, /const BLEND_MODES = new Set\(\["source-over", "multiply", "screen", "overlay", "soft-light"/u, "Layer renderer must whitelist supported blend modes.");
+assert.match(editorSrc, /ctx\.globalCompositeOperation = blendMode\(layer\.blend\)/u, "Layer renderer must apply per-layer blend modes to the export canvas.");
 assert.match(mediaSrc, /data-ml-layer-prop="fontSize"/u, "Text layers must expose type-size controls in the Media Lab inspector");
 assert.match(mediaSrc, /data-ml-layer-field="color"/u, "Text layers must expose foreground color controls in the Media Lab inspector");
 assert.match(mediaSrc, /data-ml-layer-toggle="shadow"/u, "Text layers must expose shadow toggles in the Media Lab inspector");
@@ -63,6 +83,8 @@ assert.doesNotMatch(mediaSrc, /data-ml-duplicate-edit>Duplicate image/, "Media L
 assert.match(cssSrc, /\.ml-canvas\s*\{[\s\S]*background-image:/, "transparent erased pixels need a visible checkerboard backdrop");
 assert.match(cssSrc, /\.ml-layer-overlay\.is-active\s*\{[\s\S]*pointer-events:\s*auto/u, "Media Lab transform overlay must receive pointer events in Select mode");
 assert.match(cssSrc, /\.ml-layer-row\.is-selected/u, "Layer rows need a visible selected state");
+assert.match(cssSrc, /\.ml-layer-row\[draggable="true"\]/u, "Draggable layer rows need a visible grab affordance");
+assert.match(cssSrc, /\.ml-layer-row\.is-drop-target/u, "Layer drag/drop must show a visible drop target");
 assert.match(cssSrc, /\.ml-layer-row\.is-locked\s*\{/u, "Locked layer rows need a visible locked state");
 assert.match(cssSrc, /\.ml-layer-text-grid\s*\{/u, "Text layer controls need a compact inspector grid");
 assert.match(cssSrc, /\.ml-layer-toggle-row button\.is-on/u, "Text layer toggles need a visible enabled state");

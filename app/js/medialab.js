@@ -6,21 +6,21 @@
  * instead of sending people out to another product.
  */
 
-import { currentTenantId, ctx, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260715-275";
+import { currentTenantId, ctx, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260715-276";
 import {
   PLATFORMS, registerContentAsset, loadSocialAccounts, saveSocialAccounts, socialStatus,
   loadContentAssets, saveContentAssets, contentAssetDisplayUrl, hydrateContentAssetUrl,
-} from "./contenthub.js?v=phantom-live-20260715-275";
-import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260715-275";
+} from "./contenthub.js?v=phantom-live-20260715-276";
+import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260715-276";
 import {
   addImageLayer, addTextLayer, cloneImageEditState, compositionSnapshot, duplicateLayer,
   canvasPoint, drawCompositionOverlay, freshComposition, hitTestLayer, hitTestResizeHandle,
-  loadCompositionImages, moveLayerOrder, pushEditorSnapshot, removeSelectedLayers,
+  loadCompositionImages, moveLayerOrder, moveLayerToIndex, pushEditorSnapshot, removeSelectedLayers,
   renderComposition, restoreComposition, selectLayer, selectedLayers,
-} from "./content-editor.js?v=phantom-live-20260715-275";
-import { loadImageForEditing, exportCanvas, requestAiEdit, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260715-275";
-import { mountVideoEditor } from "./videocut.js?v=phantom-live-20260715-275";
-import { assetsAvailable, assetBlobUrl, listAssets, recordAssetUsage, saveToAssetCloud, listLocalAssets, refreshLocalAssets, localAssetBlobUrl } from "./orgs.js?v=phantom-live-20260715-275";
+} from "./content-editor.js?v=phantom-live-20260715-276";
+import { loadImageForEditing, exportCanvas, requestAiEdit, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260715-276";
+import { mountVideoEditor } from "./videocut.js?v=phantom-live-20260715-276";
+import { assetsAvailable, assetBlobUrl, listAssets, recordAssetUsage, saveToAssetCloud, listLocalAssets, refreshLocalAssets, localAssetBlobUrl } from "./orgs.js?v=phantom-live-20260715-276";
 
 const CFG_KEY = "pf.medialab.v1";
 const EDIT_INTENT_KEY = "pf.medialab.editIntent.v1";
@@ -2839,7 +2839,7 @@ function selectedLayerPanelHtml(esc) {
           ${[...mlComposition.layers].reverse().map((layer) => {
             const realIndex = mlComposition.layers.findIndex((item) => item.id === layer.id);
             const selected = mlComposition.selectedIds.includes(layer.id);
-            return `<div class="ml-layer-row ${selected ? "is-selected" : ""} ${layer.visible === false ? "is-off" : ""} ${layer.locked ? "is-locked" : ""}" data-ml-layer-row="${esc(layer.id)}">
+            return `<div class="ml-layer-row ${selected ? "is-selected" : ""} ${layer.visible === false ? "is-off" : ""} ${layer.locked ? "is-locked" : ""}" data-ml-layer-row="${esc(layer.id)}" data-ml-layer-index="${realIndex}" draggable="${layer.locked ? "false" : "true"}">
               <button type="button" data-ml-layer-visible="${esc(layer.id)}" title="${layer.visible === false ? "Show layer" : "Hide layer"}">${layer.visible === false ? "○" : "●"}</button>
               <button type="button" class="ml-layer-name" data-ml-layer-select="${esc(layer.id)}"><b>${esc(layer.name || layerKindLabel(layer))}</b><i>${esc(layerKindLabel(layer))}</i></button>
               <span class="ml-layer-row-actions">
@@ -2858,6 +2858,19 @@ function selectedLayerPanelHtml(esc) {
           <label class="ml-slider"><span>Width <b data-layer-out="w">${Math.round(active.w * 100)}</b></span><input type="range" min="5" max="200" value="${Math.round(active.w * 100)}" data-ml-layer-prop="w" ${activeLocked ? "disabled" : ""}/></label>
           <label class="ml-slider"><span>Height <b data-layer-out="h">${Math.round(active.h * 100)}</b></span><input type="range" min="5" max="200" value="${Math.round(active.h * 100)}" data-ml-layer-prop="h" ${activeLocked ? "disabled" : ""}/></label>
           <label class="ml-slider"><span>Opacity <b data-layer-out="opacity">${Math.round((active.opacity ?? 1) * 100)}</b></span><input type="range" min="0" max="100" value="${Math.round((active.opacity ?? 1) * 100)}" data-ml-layer-prop="opacity" ${activeLocked ? "disabled" : ""}/></label>
+          <label class="ml-layer-field"><span>Blend</span><select data-ml-layer-field="blend" ${activeLocked ? "disabled" : ""}>
+            ${[
+              ["source-over", "Normal"],
+              ["multiply", "Multiply"],
+              ["screen", "Screen"],
+              ["overlay", "Overlay"],
+              ["soft-light", "Soft light"],
+              ["hard-light", "Hard light"],
+              ["color-dodge", "Color dodge"],
+              ["color-burn", "Color burn"],
+              ["luminosity", "Luminosity"],
+            ].map(([value, label]) => `<option value="${esc(value)}" ${(active.blend || "source-over") === value ? "selected" : ""}>${esc(label)}</option>`).join("")}
+          </select></label>
           <label class="ml-slider"><span>Rotate <b data-layer-out="rotation">${Math.round(active.rotation || 0)}</b></span><input type="range" min="-180" max="180" value="${Math.round(active.rotation || 0)}" data-ml-layer-prop="rotation" ${activeLocked ? "disabled" : ""}/></label>
           ${active.type === "image" || active.type === "base" ? `<label class="ml-layer-field"><span>Fit</span><select data-ml-layer-field="fit" ${activeLocked ? "disabled" : ""}>
             <option value="cover" ${active.fit === "cover" ? "selected" : ""}>Cover frame</option>
@@ -3601,6 +3614,41 @@ function renderEdit(body, cfg, opts, root) {
     rememberEdit();
     moveLayerOrder(mlComposition, button.dataset.layerId, Number(button.dataset.mlLayerOrder));
     renderMediaStudio(root, opts);
+  });
+  const clearLayerDropState = () => body.querySelectorAll("[data-ml-layer-row]").forEach((row) => row.classList.remove("is-dragging", "is-drop-target"));
+  body.querySelectorAll("[data-ml-layer-row]").forEach((row) => {
+    row.addEventListener("dragstart", (event) => {
+      const layer = mlComposition.layers.find((item) => item.id === row.dataset.mlLayerRow);
+      if (!layer || layer.locked) {
+        event.preventDefault();
+        return;
+      }
+      row.classList.add("is-dragging");
+      event.dataTransfer?.setData("text/x-phantom-layer", layer.id);
+      if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+    });
+    row.addEventListener("dragover", (event) => {
+      const draggedId = event.dataTransfer?.getData("text/x-phantom-layer") || "";
+      if (!draggedId || draggedId === row.dataset.mlLayerRow) return;
+      event.preventDefault();
+      body.querySelectorAll("[data-ml-layer-row].is-drop-target").forEach((item) => item.classList.remove("is-drop-target"));
+      row.classList.add("is-drop-target");
+      if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+    });
+    row.addEventListener("dragleave", () => row.classList.remove("is-drop-target"));
+    row.addEventListener("dragend", clearLayerDropState);
+    row.addEventListener("drop", (event) => {
+      const draggedId = event.dataTransfer?.getData("text/x-phantom-layer") || "";
+      const targetIndex = Number(row.dataset.mlLayerIndex);
+      clearLayerDropState();
+      if (!draggedId || draggedId === row.dataset.mlLayerRow) return;
+      event.preventDefault();
+      const dragged = mlComposition.layers.find((item) => item.id === draggedId);
+      if (!dragged || dragged.locked) return;
+      rememberEdit();
+      moveLayerToIndex(mlComposition, draggedId, targetIndex);
+      renderMediaStudio(root, opts);
+    });
   });
   body.querySelector("[data-ml-layer-add-text]")?.addEventListener("click", () => {
     rememberEdit();

@@ -9,9 +9,11 @@
 import {
   currentTenantId, isAdmin, session,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260715-275";
+} from "./store.js?v=phantom-live-20260715-276";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+const mobilePlaySurface = () => typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;
+const controlsCopy = (game) => mobilePlaySurface() ? "" : String(game?.controls || "").trim();
 const FALLBACK_KEY = "pf.phantomplay.offline.v1";
 const CATEGORIES = ["All", "Arcade", "Puzzle", "Focus", "Strategy", "Creative"];
 const GAME_SORTS = ["All", "Solo", "Multiplayer", "Toddler", ...CATEGORIES.filter((cat) => cat !== "All")];
@@ -66,7 +68,7 @@ const OFFLINE_GAMES = [
   ["focus-stack", "Focus Stack", "Focus", "/app/games/focus-stack.html"],
   ["phantom-rumble", "Phantom Rumble", "Arcade", "/app/games/phantom-rumble.html?v=2.2.3"],
   ["sudoku-signal", "Sudoku Signal", "Focus", "/app/games/sudoku-signal.html"],
-].map(([id, title, category, launchUrl]) => ({ id, title, summary: id === "phantom-rumble" ? "Premium local platform fighter with guard, parry, dodge, ledge-save recovery, bots, drops, and touch controls." : "Offline built-in game.", description: "", category, tags: [], contentRating: "everyone", developer: "Tak", kind: "built_in", launchUrl, thumbnail: "", featured: id === "phantom-rumble", version: id === "phantom-rumble" ? "2.2.3" : "1.0.0", controls: id === "phantom-rumble" ? "Keyboard or mobile touch controls." : "", progressSupport: true, scoreSupport: true }));
+].map(([id, title, category, launchUrl]) => ({ id, title, summary: id === "phantom-rumble" ? "Premium local platform fighter with guard, parry, dodge, ledge-save recovery, bots, and local multiplayer." : "Offline built-in game.", description: "", category, tags: [], contentRating: "everyone", developer: "Tak", kind: "built_in", launchUrl, thumbnail: "", featured: id === "phantom-rumble", version: id === "phantom-rumble" ? "2.2.3" : "1.0.0", controls: id === "phantom-rumble" ? "Keyboard controls." : "", progressSupport: true, scoreSupport: true }));
 
 function offlineState() {
   let saved = {};
@@ -369,7 +371,7 @@ function renderDetail() {
       <button type="button" class="pp2-ghost ${page?.developerFollowed ? "is-on" : ""}" data-pp2-follow="${esc(game.developer)}" ${ui.v2Offline ? "disabled" : ""}>${page?.developerFollowed ? "Following" : "Follow"} ${esc(game.developer)}</button></div></div></div>
     ${page ? `<div class="pp2-detail-stats"><span><b>${page.stats.players}</b>players</span><span><b>${page.stats.plays}</b>plays</span><span><b>${page.stats.totalHours}</b>hours</span><span><b>${page.stats.averageRating ?? "—"}</b>${page.stats.reviewCount} reviews</span><span><b>${page.stats.bestScore || "—"}</b>top score</span></div>` : ui.detailBusy ? `<p class="pp2-fine">Loading stats…</p>` : ui.v2Offline ? v2Note("Stats and reviews need the PhantomForce server.") : ""}
     <p class="pp2-detail-desc">${esc(game.description)}</p>
-    <p class="pp2-fine">Controls: ${esc(game.controls || "Keyboard and touch")}</p>
+    ${controlsCopy(game) ? `<p class="pp2-fine">Controls: ${esc(controlsCopy(game))}</p>` : ""}
     ${page ? `<div class="pp2-cols">
       <section><h3>Reviews</h3>
         <form data-pp2-review class="pp2-review-form">${stars(draft.rating || my?.rating || 0, true)}<textarea name="text" rows="2" maxlength="1200" placeholder="${my ? "Update your review…" : "What did you think?"}">${esc(draft.text || my?.text || "")}</textarea><button type="submit" class="pp2-play">${my ? "Update review" : "Post review"}</button><span data-pp2-review-msg class="pp2-fine"></span></form>
@@ -429,7 +431,8 @@ function ratingExposureMarkup() {
 function playerMarkup() {
   if (!ui.player) return "";
   const { game, play } = ui.player;
-  return `<div class="pp2-player" role="dialog" aria-modal="true" aria-label="Playing ${esc(game.title)}"><header><div><b>${esc(game.title)}</b><i>${esc(game.controls || "")}</i></div><div><button data-pp2-player-restart>Restart</button><button data-pp2-player-pause>${ui.playerPaused ? "Resume" : "Pause"}</button><button data-pp2-player-full>Full screen</button><button data-pp2-player-close aria-label="Close">×</button></div></header>
+  const controls = controlsCopy(game);
+  return `<div class="pp2-player" role="dialog" aria-modal="true" aria-label="Playing ${esc(game.title)}"><header><div><b>${esc(game.title)}</b>${controls ? `<i>${esc(controls)}</i>` : ""}</div><div><button data-pp2-player-restart>Restart</button><button data-pp2-player-pause>${ui.playerPaused ? "Resume" : "Pause"}</button><button data-pp2-player-full>Full screen</button><button data-pp2-player-close aria-label="Close">×</button></div></header>
     <div class="pp2-stage"><div class="pp2-stage-loading" ${ui.playerReady ? "hidden" : ""}><i></i><b>Loading ${esc(game.title)}…</b><span>Opening in a private sandbox.</span></div>
     <iframe src="${esc(game.launchUrl)}" title="${esc(game.title)}" sandbox="allow-scripts" referrerpolicy="no-referrer" allow="fullscreen" data-pp2-frame></iframe></div>
     <footer><span>Session ${esc(String(play.id).slice(-8))}</span><span data-pp2-live-score>Score —</span><span>${ui.resume?.state ? "Resume state loaded" : "Progress saves automatically"}</span></footer></div>`;

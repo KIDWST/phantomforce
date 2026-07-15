@@ -1,4 +1,4 @@
-import { freshEditState, freshTextStyle, paintEdit } from "./imagefilters.js?v=phantom-live-20260715-275";
+import { freshEditState, freshTextStyle, paintEdit } from "./imagefilters.js?v=phantom-live-20260715-276";
 
 let layerSequence = 0;
 
@@ -9,6 +9,11 @@ function id(prefix = "layer") {
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, Number(value) || 0));
+}
+
+const BLEND_MODES = new Set(["source-over", "multiply", "screen", "overlay", "soft-light", "hard-light", "color-dodge", "color-burn", "luminosity"]);
+function blendMode(value) {
+  return BLEND_MODES.has(value) ? value : "source-over";
 }
 
 export function cloneImageEditState(source = {}, opts = {}) {
@@ -77,6 +82,7 @@ export function freshComposition() {
       h: 1,
       rotation: 0,
       opacity: 1,
+      blend: "source-over",
       fit: "cover",
     }],
     selectedIds: ["base"],
@@ -123,6 +129,7 @@ export function addImageLayer(composition, src, name = "Image layer", { backgrou
     h: background ? 1 : 0.52,
     rotation: 0,
     opacity: 1,
+    blend: "source-over",
     fit: background ? "cover" : "contain",
   };
   const baseIndex = composition.layers.findIndex((item) => item.id === "base");
@@ -156,6 +163,7 @@ export function addTextLayer(composition, text = "Your headline") {
     h: 0.18,
     rotation: 0,
     opacity: 1,
+    blend: "source-over",
     font: "Space Grotesk",
     fontSize: 8,
     color: "#ffffff",
@@ -184,6 +192,7 @@ export function addColorLayer(composition, color = "#10251c") {
     h: 1,
     rotation: 0,
     opacity: 1,
+    blend: "source-over",
     radius: 0,
   };
   const baseIndex = composition.layers.findIndex((item) => item.id === "base");
@@ -218,6 +227,17 @@ export function moveLayerOrder(composition, layerId, direction) {
   if (next === index) return false;
   const [layer] = composition.layers.splice(index, 1);
   composition.layers.splice(next, 0, layer);
+  return true;
+}
+
+export function moveLayerToIndex(composition, layerId, targetIndex) {
+  const index = composition.layers.findIndex((layer) => layer.id === layerId);
+  if (index < 0) return false;
+  const next = clamp(Math.round(Number(targetIndex) || 0), 0, composition.layers.length - 1);
+  if (next === index) return false;
+  const [layer] = composition.layers.splice(index, 1);
+  composition.layers.splice(next, 0, layer);
+  composition.selectedIds = [layer.id];
   return true;
 }
 
@@ -335,6 +355,7 @@ export function renderComposition(canvas, baseImage, editState, composition, lay
     const boxH = Math.max(1, layer.h * canvas.height);
     ctx.save();
     ctx.globalAlpha = clamp(layer.opacity ?? 1, 0, 1);
+    ctx.globalCompositeOperation = blendMode(layer.blend);
     ctx.translate(layer.x * canvas.width, layer.y * canvas.height);
     ctx.rotate((Number(layer.rotation || 0) * Math.PI) / 180);
     if (layer.type === "base") drawImageFit(ctx, base, -boxW / 2, -boxH / 2, boxW, boxH, layer.fit || "cover");

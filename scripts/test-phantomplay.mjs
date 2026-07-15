@@ -22,6 +22,12 @@ assert.match(main, /sessionId:\s*kind === "admin" \? "admin-jordan" : "client-sp
 assert.match(index, /phantomplay\.css\?v=phantom-live-/u, "The dedicated PhantomPlay stylesheet must be loaded.");
 assert.match(index, /phantomplay-v2\.css\?v=phantom-live-/u, "The PhantomPlay V2 stylesheet must be loaded.");
 assert.match(module, /tab:\s*"library"/u, "Default PhantomPlay must open straight to the game library.");
+assert.match(module, /const mobilePlaySurface/u, "Default PhantomPlay must detect mobile play surfaces.");
+assert.match(module, /const controlsCopy[\s\S]*mobilePlaySurface\(\) \? ""/u, "Default PhantomPlay must hide redundant controls copy on touch-first play surfaces.");
+assert.match(v2Module, /const mobilePlaySurface/u, "PhantomPlay V2 must detect mobile play surfaces.");
+assert.match(v2Module, /const controlsCopy[\s\S]*mobilePlaySurface\(\) \? ""/u, "PhantomPlay V2 must hide redundant controls copy on touch-first play surfaces.");
+assert.doesNotMatch(module, /touch-drag|touch pressure|mobile touch controls/u, "Catalog/player copy must not print obvious touch instructions.");
+assert.doesNotMatch(v2Module, /touch-drag|touch pressure|mobile touch controls/u, "V2 catalog/player copy must not print obvious touch instructions.");
 assert.match(module, /const GAME_SORTS = \["All", "Solo", "Multiplayer", "Toddler"/u, "Default PhantomPlay must keep Toddler as a sort chip.");
 assert.match(module, /const tabs = \[\["library", "Games"\], \["together", "Multiplayer"\], \["favorites", "Saved"\]/u, "Default PhantomPlay tabs must start with Games, Multiplayer, and Saved.");
 assert.match(module, /function sortGames\(games, sort = ui\.category\)[\s\S]*sort === "Toddler"[\s\S]*toddlerPick/u, "Default PhantomPlay must sort toddler-friendly games through the sorter.");
