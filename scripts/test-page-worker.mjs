@@ -30,7 +30,7 @@ assert.match(worker, /leads:\s*\{[\s\S]*Build the prospect list/u, "Leads page m
 assert.match(worker, /createCrmProspectBuildout/u, "Leads worker must reuse the CRM prospect buildout instead of duplicating lead logic.");
 assert.match(worker, /CRM_PAGE_ACTION_VERB[\s\S]*find[\s\S]*discover[\s\S]*source[\s\S]*identify/u, "Leads page prompt must understand find/discover/source client requests.");
 assert.match(worker, /CRM_PAGE_AUDIENCE[\s\S]*gyms\?[\s\S]*coaches\?[\s\S]*service compan/u, "Leads page prompt must understand real prospect categories, not only the word CRM.");
-assert.match(worker, /runPageAction\(pageId, prompt\)[\s\S]*renderThinking\(out, pageId, prompt, pageAction\)[\s\S]*askBackendForPageOutcome/u, "Clients CRM creation must happen before the slower backend report.");
+assert.match(worker, /runPageAction\(pageId, prompt\)[\s\S]*renderThinking\(out, pageId, prompt, pageAction\)[\s\S]*askBackendForPageOutcome/u, "Leads CRM creation must happen before the slower backend report.");
 assert.match(worker, /currentWorkerOutput/u, "Page worker output must survive the Leads page repaint after CRM cards are saved.");
 assert.match(worker, /No fake contact details were generated/u, "Leads worker must not hallucinate contact details.");
 assert.match(command, /client\\s\+base[\s\S]*consider[\s\S]*could\\s\+use/u, "Client-base prospect phrasing must route into CRM prospect buildout.");

@@ -475,7 +475,7 @@ const JOB_DEFINITIONS: AutomationJobDefinition[] = [
         summary: ready
           ? `Outreach prep ready: choose ${Math.min(batchSize, contactCount)} of ${contactCount} contact(s), draft personalized touches, send nothing.`
           : "Outreach prep is on, but there are no contacts yet. It will prepare 10-20 daily drafts once CRM/contact data exists.",
-        next_action: ready ? "Open Clients or tell Phantom the offer to draft today's outreach packet." : "Add/import contacts and tell Phantom the business offer.",
+        next_action: ready ? "Open Leads or tell Phantom the offer to draft today's outreach packet." : "Add/import contacts and tell Phantom the business offer.",
         risks: ["Any email, social DM, SMS, or CRM write must be owner-approved before execution."],
       };
     },

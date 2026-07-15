@@ -166,12 +166,12 @@ export function validateOrganizationConfiguration(configuration: OrganizationCon
 /* Stored-configuration repair: published config documents outlive the code
    that wrote them, so they fossilize — module ids that no longer exist
    ("content"/Creator Hub), registry modules that hadn't shipped yet
-   (phantomplay, intelligence), and legacy labels ("Client Setup",
+   (phantomplay, intelligence), and legacy labels ("Clients", "Client Setup",
    "Business HQ"). A fossil config breaks every workspace-modules change,
    because validation round-trips the full stored list and rejects the
    unknown id. Repair at read time: drop unknown modules, append missing
    registry modules with platform defaults, and restore canonical labels. */
-const LEGACY_MODULE_LABELS = /^(client ?set ?up|business hq)$/i;
+const LEGACY_MODULE_LABELS = /^(clients?|client ?set ?up|business hq)$/i;
 function repairStoredConfiguration(configuration: OrganizationConfiguration): OrganizationConfiguration {
   let repaired = false;
   const modules = configuration.modules

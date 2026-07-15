@@ -269,7 +269,7 @@ function renderStudio(el, state, opts) {
     ${draft.localFallback ? `<div class="cust-message">Workspace Studio is using local defaults while the backend reconnects. Modules are available now; publishing waits for the server.</div>` : ""}
     ${message ? `<div class="cust-message">${esc(message)}</div>` : ""}
     <section class="cust-ai">
-      <div><p class="cust-kicker">ASK PHANTOM</p><h3>Describe the workspace you want.</h3><p>Try “Change Clients to Athletes,” “Use #22ee88,” or “Make the assistant more professional.”</p></div>
+      <div><p class="cust-kicker">ASK PHANTOM</p><h3>Describe the workspace you want.</h3><p>Try “Change Leads to Athletes,” “Use #22ee88,” or “Make the assistant more professional.”</p></div>
       <form data-cust-ai-form><textarea name="message" rows="2" maxlength="1200" placeholder="Make this workspace feel like a football recruiting platform…"></textarea><button class="cust-primary" ${busy ? "disabled" : ""}>Create preview</button></form>
     </section>
     <div class="cust-grid">
