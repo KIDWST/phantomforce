@@ -36,9 +36,9 @@
     <div class="shields"><span>SHIELDS</span><b data-shields>&#11041;&#11041;&#11041;</b></div>
   </header>
   <div class="stage"><canvas aria-label="Type Storm play field"></canvas></div>
-  <button class="hint" type="button">&#9000; Tap to open keyboard &mdash; type falling words before they land</button>
+  <button class="hint" type="button">&#9000; Tap to open keyboard &mdash; type a word's first letter to lock it, then finish it</button>
   <input class="kbd" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" aria-hidden="true" tabindex="-1">
-  <div class="overlay start"><div><h1>Type Storm</h1><p>Words rain toward the baseline. Type a word's letters in order to lock on and destroy it. A word that lands breaks one of your 3 shields.</p><button type="button">Start</button></div></div>
+  <div class="overlay start"><div><h1>Type Storm</h1><p>Words drop fast. Type a word's first letter to lock on &mdash; a locked word freezes in place while you finish it, safe from the storm. Everything else keeps falling, so lock quick and clear the field. Watch for gold &#9889; Thunder Words: they never stop falling and never cost a shield, but finish one and you heal a shield and bank a big bonus.</p><button type="button">Start</button></div></div>
   <div class="overlay pause" hidden><div><h1>Paused</h1><p>The storm is holding its breath.</p><button type="button">Resume</button></div></div>
   <div class="overlay result" hidden><div><h1>Shields down</h1><p class="big" data-final></p><p data-detail></p><button type="button">Play again</button></div></div>
   <script>
@@ -54,7 +54,7 @@
     let cw=320,ch=480,baseY=420;
     let falling=[],active=null,phase='start',paused=false,completed=false;
     let score=0,shields=3,wordsDestroyed=0,streak=0,bestCombo=0,elapsed=0,spawnT=0,flash=0;
-    let last=0,soundOn=true,reduced=false,audio=null;
+    let last=0,soundOn=true,reduced=false,audio=null,thunderT=0,thunderFlash=0;
 
     function beep(freq,dur=0.05,gain=0.03){
       if(!soundOn)return;
@@ -87,25 +87,46 @@
       if(elapsed>18&&Math.random()<0.48)return HARD_WORDS[Math.floor(Math.random()*HARD_WORDS.length)];
       return WORDS[Math.floor(Math.random()*WORDS.length)];
     }
+    function findSpot(width,leftMargin=8){
+      const min=leftMargin;
+      let x=min+Math.random()*Math.max(1,cw-8-min-width);
+      for(let tries=0;tries<4;tries++){
+        const clash=falling.some(w=>w.y<60&&x<w.x+w.width+18&&x+width+18>w.x);
+        if(!clash)break;
+        x=min+Math.random()*Math.max(1,cw-8-min-width);
+      }
+      return x;
+    }
     function spawn(){
-      const maxFalling=elapsed>55?16:elapsed>28?14:12;
+      const maxFalling=elapsed>50?18:elapsed>25?15:12;
       if(falling.length>=maxFalling)return;
       const text=chooseText();
       if(falling.some(w=>w.text===text))return;
       ctx.font=FONT;
       const width=ctx.measureText(text).width;
-      const base=Math.min(245,54+elapsed*3.15+streak*1.8);
-      let x=8+Math.random()*Math.max(1,cw-16-width);
-      for(let tries=0;tries<4;tries++){
-        const clash=falling.some(w=>w.y<60&&x<w.x+w.width+18&&x+width+18>w.x);
-        if(!clash)break;
-        x=8+Math.random()*Math.max(1,cw-16-width);
-      }
-      falling.push({text,matched:0,x,y:-14,width,speed:base*(0.9+Math.random()*0.42)});
+      /* Fast base fall from the very start — the pressure is "lock it
+         quickly", not "watch it slowly arrive". Once locked, a word freezes,
+         so raw fall speed no longer punishes mid-typing the way it used to. */
+      const base=Math.min(290,88+elapsed*3.6+streak*1.6);
+      const x=findSpot(width);
+      falling.push({text,matched:0,x,y:-14,width,speed:base*(0.9+Math.random()*0.42),isThunder:false});
+    }
+    function spawnThunder(){
+      const pool=WORDS.filter(w=>w.length<=6);
+      const text=pool[Math.floor(Math.random()*pool.length)]||WORDS[0];
+      ctx.font=FONT;
+      const width=ctx.measureText(text).width;
+      const x=findSpot(width,22);
+      /* Thunder words never freeze and never cost a shield — pure risk/
+         reward. They fall hard and fast on purpose. */
+      falling.push({text,matched:0,x,y:-14,width,speed:340+Math.random()*60,isThunder:true});
+      thunderFlash=0.4;
+      beep(880,0.12,0.05);
     }
     function startRun(){
       falling=[];active=null;
-      score=0;shields=3;wordsDestroyed=0;streak=0;bestCombo=0;elapsed=0;spawnT=1.2;flash=0;completed=false;
+      score=0;shields=3;wordsDestroyed=0;streak=0;bestCombo=0;elapsed=0;spawnT=0.9;flash=0;completed=false;
+      thunderT=9+Math.random()*4;thunderFlash=0;
       phase='playing';paused=false;
       startEl.hidden=true;pauseEl.hidden=true;resultEl.hidden=true;
       updateHud();
@@ -128,6 +149,14 @@
       falling=falling.filter(w=>w!==word);
       if(active===word)active=null;
       wordsDestroyed++;
+      if(word.isThunder){
+        score+=word.text.length*10+150;
+        shields=Math.min(3,shields+1);
+        streak++;bestCombo=Math.max(bestCombo,streak);
+        updateHud();beep(1040,0.16,0.055);beep(1320,0.1,0.04);
+        host('score',{score,progress:Math.min(99,wordsDestroyed*3),state:{words:wordsDestroyed,bestCombo}});
+        return;
+      }
       const bonus=Math.min(50,streak*5);
       score+=word.text.length*5+bonus;
       streak++;bestCombo=Math.max(bestCombo,streak);
@@ -152,6 +181,10 @@
     function loseShield(word){
       falling=falling.filter(w=>w!==word);
       if(active===word)active=null;
+      if(word.isThunder){
+        beep(200,0.12,0.03);
+        return;
+      }
       shields--;streak=0;flash=0.5;
       updateHud();beep(110,0.3,0.05);
       if(shields<=0){gameOver();return}
@@ -160,14 +193,24 @@
     function update(dt){
       elapsed+=dt;
       if(flash>0)flash=Math.max(0,flash-dt);
+      if(thunderFlash>0)thunderFlash=Math.max(0,thunderFlash-dt);
       spawnT-=dt;
-      const interval=Math.max(0.34,1.45-elapsed*0.018-streak*0.01);
+      const interval=Math.max(0.28,1.1-elapsed*0.013-streak*0.008);
       if(spawnT<=0){
         spawn();
-        if(elapsed>24&&Math.random()<Math.min(0.72,0.18+elapsed*.008))spawn();
+        if(elapsed>20&&Math.random()<Math.min(0.72,0.22+elapsed*.008))spawn();
         spawnT=interval*(0.82+Math.random()*0.32);
       }
+      thunderT-=dt;
+      if(thunderT<=0&&elapsed>6){
+        spawnThunder();
+        thunderT=13+Math.random()*7;
+      }
       for(const w of [...falling]){
+        /* A locked word freezes — the fall is only a threat while you're
+           deciding what to type next, not while you're mid-word. Thunder
+           words are the exception: they're a pure race, lock or not. */
+        if(w===active&&!w.isThunder)continue;
         w.y+=w.speed*dt;
         if(w.y>=baseY){loseShield(w);if(phase!=='playing')return}
       }
@@ -184,11 +227,22 @@
       ctx.fillStyle='#5f8371';ctx.font='700 10px ui-monospace,monospace';ctx.textAlign='left';
       ctx.fillText('BASELINE',8,baseY+16);
       ctx.font=FONT;
+      const pulse=reduced?0:0.5+0.5*Math.sin(elapsed*4.4);
       for(const w of falling){
         const isActive=w===active;
-        if(isActive){
+        if(w.isThunder){
+          ctx.fillStyle='#3a2e05';
+          if(!reduced){ctx.shadowColor='#ffe066';ctx.shadowBlur=isActive?18:10}
+          ctx.beginPath();
+          if(ctx.roundRect)ctx.roundRect(w.x-7,w.y-19,w.width+14,27,8);
+          else ctx.rect(w.x-7,w.y-19,w.width+14,27);
+          ctx.fill();ctx.shadowBlur=0;
+          ctx.strokeStyle='#ffe066';ctx.lineWidth=isActive?2:1;ctx.stroke();
+        }else if(isActive){
+          /* Locked and frozen — a calm, breathing glow instead of a static
+             box, so it reads as "held safe" rather than "stuck". */
           ctx.fillStyle='#0b3424';
-          if(!reduced){ctx.shadowColor='#41ffa1';ctx.shadowBlur=14}
+          if(!reduced){ctx.shadowColor='#41ffa1';ctx.shadowBlur=10+pulse*10}
           ctx.beginPath();
           if(ctx.roundRect)ctx.roundRect(w.x-7,w.y-19,w.width+14,27,8);
           else ctx.rect(w.x-7,w.y-19,w.width+14,27);
@@ -196,10 +250,19 @@
           ctx.strokeStyle='#58ffa8';ctx.lineWidth=1;ctx.stroke();
         }
         const pre=w.text.slice(0,w.matched),rest=w.text.slice(w.matched);
-        ctx.fillStyle='#58ffa8';
+        ctx.fillStyle=w.isThunder?'#fff3b0':'#58ffa8';
         ctx.fillText(pre,w.x,w.y);
-        ctx.fillStyle=isActive?'#effff6':'#a9c5b7';
+        ctx.fillStyle=w.isThunder?(isActive?'#fff9db':'#ffe066'):(isActive?'#effff6':'#a9c5b7');
         ctx.fillText(rest,w.x+ctx.measureText(pre).width,w.y);
+        if(w.isThunder){
+          ctx.fillStyle='#ffe066';ctx.font='700 14px ui-monospace,monospace';
+          ctx.fillText('⚡',w.x-16,w.y);
+          ctx.font=FONT;
+        }
+      }
+      if(thunderFlash>0){
+        ctx.fillStyle=`rgba(255,224,102,${thunderFlash*0.12})`;
+        ctx.fillRect(0,0,cw,ch);
       }
     }
     function loop(t){
