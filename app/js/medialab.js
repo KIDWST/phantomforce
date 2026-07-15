@@ -6,20 +6,21 @@
  * instead of sending people out to another product.
  */
 
-import { currentTenantId, ctx, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260714-272";
+import { currentTenantId, ctx, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260714-273";
 import {
   PLATFORMS, registerContentAsset, loadSocialAccounts, saveSocialAccounts, socialStatus,
   loadContentAssets, saveContentAssets, contentAssetDisplayUrl, hydrateContentAssetUrl,
-} from "./contenthub.js?v=phantom-live-20260714-272";
-import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260714-272";
+} from "./contenthub.js?v=phantom-live-20260714-273";
+import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260714-273";
 import {
   addImageLayer, addTextLayer, cloneImageEditState, compositionSnapshot, duplicateLayer,
-  freshComposition, hitTestLayer, loadCompositionImages, moveLayerOrder, pushEditorSnapshot,
-  removeSelectedLayers, renderComposition, restoreComposition, selectLayer, selectedLayers,
-} from "./content-editor.js?v=phantom-live-20260714-272";
-import { loadImageForEditing, exportCanvas, requestAiEdit, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260714-272";
-import { mountVideoEditor } from "./videocut.js?v=phantom-live-20260714-272";
-import { assetsAvailable, assetBlobUrl, listAssets, recordAssetUsage, saveToAssetCloud, listLocalAssets, refreshLocalAssets, localAssetBlobUrl } from "./orgs.js?v=phantom-live-20260714-272";
+  canvasPoint, drawCompositionOverlay, freshComposition, hitTestLayer, hitTestResizeHandle,
+  loadCompositionImages, moveLayerOrder, pushEditorSnapshot, removeSelectedLayers,
+  renderComposition, restoreComposition, selectLayer, selectedLayers,
+} from "./content-editor.js?v=phantom-live-20260714-273";
+import { loadImageForEditing, exportCanvas, requestAiEdit, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260714-273";
+import { mountVideoEditor } from "./videocut.js?v=phantom-live-20260714-273";
+import { assetsAvailable, assetBlobUrl, listAssets, recordAssetUsage, saveToAssetCloud, listLocalAssets, refreshLocalAssets, localAssetBlobUrl } from "./orgs.js?v=phantom-live-20260714-273";
 
 const CFG_KEY = "pf.medialab.v1";
 const EDIT_INTENT_KEY = "pf.medialab.editIntent.v1";
@@ -2736,6 +2737,13 @@ function fitEditorCanvas(canvas) {
   const scale = Math.min(availableW / canvas.width, availableH / canvas.height, 1.5);
   canvas.style.width = `${Math.max(1, Math.floor(canvas.width * scale))}px`;
   canvas.style.height = `${Math.max(1, Math.floor(canvas.height * scale))}px`;
+  const overlay = wrap.querySelector("[data-ml-layer-overlay]");
+  if (overlay) {
+    overlay.width = canvas.width;
+    overlay.height = canvas.height;
+    overlay.style.width = canvas.style.width;
+    overlay.style.height = canvas.style.height;
+  }
 }
 function paintActiveCanvas(canvas, img, state = editState) {
   paintEdit(canvas, img, state);
@@ -2848,7 +2856,27 @@ function selectedLayerPanelHtml(esc) {
           <label class="ml-slider"><span>Height <b data-layer-out="h">${Math.round(active.h * 100)}</b></span><input type="range" min="5" max="200" value="${Math.round(active.h * 100)}" data-ml-layer-prop="h"/></label>
           <label class="ml-slider"><span>Opacity <b data-layer-out="opacity">${Math.round((active.opacity ?? 1) * 100)}</b></span><input type="range" min="0" max="100" value="${Math.round((active.opacity ?? 1) * 100)}" data-ml-layer-prop="opacity"/></label>
           <label class="ml-slider"><span>Rotate <b data-layer-out="rotation">${Math.round(active.rotation || 0)}</b></span><input type="range" min="-180" max="180" value="${Math.round(active.rotation || 0)}" data-ml-layer-prop="rotation"/></label>
-          ${active.type === "text" ? `<label class="ml-layer-field"><span>Text</span><textarea rows="3" data-ml-layer-field="text">${esc(active.text || "")}</textarea></label>` : ""}
+          ${active.type === "image" || active.type === "base" ? `<label class="ml-layer-field"><span>Fit</span><select data-ml-layer-field="fit">
+            <option value="cover" ${active.fit === "cover" ? "selected" : ""}>Cover frame</option>
+            <option value="contain" ${active.fit === "contain" ? "selected" : ""}>Contain full image</option>
+          </select></label>` : ""}
+          ${active.type === "text" ? `<label class="ml-layer-field"><span>Text</span><textarea rows="3" data-ml-layer-field="text">${esc(active.text || "")}</textarea></label>
+            <label class="ml-slider"><span>Type size <b data-layer-out="fontSize">${Math.round(active.fontSize || 8)}</b></span><input type="range" min="3" max="18" value="${Math.round(active.fontSize || 8)}" data-ml-layer-prop="fontSize"/></label>
+            <div class="ml-layer-text-grid">
+              <label class="ml-layer-field"><span>Font</span><select data-ml-layer-field="font">
+                ${["Space Grotesk", "DM Sans", "Inter", "Georgia", "Arial Black"].map((font) => `<option value="${esc(font)}" ${(active.font || "Space Grotesk") === font ? "selected" : ""}>${esc(font)}</option>`).join("")}
+              </select></label>
+              <label class="ml-layer-field"><span>Align</span><select data-ml-layer-field="align">
+                ${["left", "center", "right"].map((align) => `<option value="${esc(align)}" ${(active.align || "center") === align ? "selected" : ""}>${esc(align)}</option>`).join("")}
+              </select></label>
+              <label class="ml-layer-field"><span>Text color</span><input type="color" data-ml-layer-field="color" value="${esc(active.color || "#ffffff")}"/></label>
+              <label class="ml-layer-field"><span>Box color</span><input type="color" data-ml-layer-field="background" value="${esc(active.background || "#000000")}"/></label>
+            </div>
+            <label class="ml-slider"><span>Box opacity <b data-layer-out="backgroundOpacity">${Math.round((active.backgroundOpacity || 0) * 100)}</b></span><input type="range" min="0" max="100" value="${Math.round((active.backgroundOpacity || 0) * 100)}" data-ml-layer-prop="backgroundOpacity"/></label>
+            <div class="ml-layer-toggle-row">
+              <button type="button" class="${active.bold ? "is-on" : ""}" data-ml-layer-toggle="bold">Bold</button>
+              <button type="button" class="${active.shadow ? "is-on" : ""}" data-ml-layer-toggle="shadow">Shadow</button>
+            </div>` : ""}
         </div>` : ""}
       </div>
     </details>`;
@@ -3177,6 +3205,7 @@ function renderEdit(body, cfg, opts, root) {
           <button type="button" data-ml-before title="Hold to see original">Before</button>
         </div>
         <canvas class="ml-canvas ${mlPaintMode !== "select" ? "is-painting" : ""}" data-ml-canvas></canvas>
+        <canvas class="ml-layer-overlay ${mlPaintMode === "select" && !mlBokehPicking ? "is-active" : ""}" data-ml-layer-overlay aria-hidden="true"></canvas>
         <div class="ch-lb-bokeh-markers" data-ml-bokeh-markers></div>
         <div class="ch-lb-pick-hint" data-ml-pick-hint hidden>${svgIc("spark")} Click to add focus, right-click a spot to remove it</div>
       </div>
@@ -3270,6 +3299,7 @@ function renderEdit(body, cfg, opts, root) {
       </div>
     </div>`;
   const canvas = body.querySelector("[data-ml-canvas]");
+  const overlay = body.querySelector("[data-ml-layer-overlay]");
   const markerLayer = body.querySelector("[data-ml-bokeh-markers]");
   loadEditorAssetCache(root, opts);
   const repaint = () => {
@@ -3279,6 +3309,7 @@ function renderEdit(body, cfg, opts, root) {
       if (!canvas.isConnected || !canvas._img) return;
       renderComposition(canvas, canvas._img, editState, mlComposition, mlLayerEffects);
       fitEditorCanvas(canvas);
+      if (overlay) drawCompositionOverlay(overlay, canvas, mlComposition);
       positionMarkers();
     });
   };
@@ -3533,7 +3564,7 @@ function renderEdit(body, cfg, opts, root) {
       if (!layer) return;
       const key = input.dataset.mlLayerProp;
       const raw = Number(input.value);
-      layer[key] = ["x", "y", "w", "h", "opacity"].includes(key) ? raw / 100 : raw;
+      layer[key] = ["x", "y", "w", "h", "opacity", "backgroundOpacity"].includes(key) ? raw / 100 : raw;
       const out = body.querySelector(`[data-layer-out="${key}"]`);
       if (out) out.textContent = input.value;
       repaint();
@@ -3547,34 +3578,59 @@ function renderEdit(body, cfg, opts, root) {
       repaint();
     };
   });
-  canvas.onpointerdown = (event) => {
+  body.querySelectorAll("[data-ml-layer-toggle]").forEach((button) => {
+    button.onclick = () => {
+      const layer = selectedEditLayer();
+      if (!layer) return;
+      rememberEdit();
+      const key = button.dataset.mlLayerToggle;
+      layer[key] = !layer[key];
+      button.classList.toggle("is-on", !!layer[key]);
+      repaint();
+    };
+  });
+  if (overlay) overlay.onpointerdown = (event) => {
     if (mlPaintMode === "select" && !mlBokehPicking) {
-      const point = { ...canvasEditPoint(event, canvas), px: canvasEditPoint(event, canvas).x * canvas.width, py: canvasEditPoint(event, canvas).y * canvas.height };
-      const hit = hitTestLayer(mlComposition, point, canvas);
+      const point = canvasPoint(event, canvas);
+      const rect = canvas.getBoundingClientRect();
+      const handle = hitTestResizeHandle(mlComposition, point, canvas, rect.width / Math.max(1, canvas.width));
+      const hit = handle?.layer || hitTestLayer(mlComposition, point, canvas);
       if (hit) {
         event.preventDefault();
         rememberEdit();
-        selectLayer(mlComposition, hit.id, event.shiftKey || event.ctrlKey || event.metaKey);
+        selectLayer(mlComposition, hit.id, !handle && (event.shiftKey || event.ctrlKey || event.metaKey));
         const targets = selectedLayers(mlComposition).filter((layer) => !layer.locked);
-        const starts = targets.map((layer) => ({ layer, x: layer.x, y: layer.y }));
+        const starts = targets.map((layer) => ({ layer, x: layer.x, y: layer.y, w: layer.w, h: layer.h }));
         const start = point;
-        canvas.setPointerCapture?.(event.pointerId);
-        canvas.onpointermove = (moveEvent) => {
-          const p = { ...canvasEditPoint(moveEvent, canvas), px: canvasEditPoint(moveEvent, canvas).x * canvas.width, py: canvasEditPoint(moveEvent, canvas).y * canvas.height };
-          const dx = (p.px - start.px) / Math.max(1, canvas.width);
-          const dy = (p.py - start.py) / Math.max(1, canvas.height);
-          starts.forEach((item) => { item.layer.x = Math.max(0, Math.min(1, item.x + dx)); item.layer.y = Math.max(0, Math.min(1, item.y + dy)); });
+        overlay.setPointerCapture?.(event.pointerId);
+        overlay.classList.add("is-dragging");
+        overlay.onpointermove = (moveEvent) => {
+          const p = canvasPoint(moveEvent, canvas);
+          const dx = p.x - start.x;
+          const dy = p.y - start.y;
+          if (handle && starts.length === 1) {
+            const item = starts[0];
+            item.layer.w = Math.max(0.05, item.w + dx * (handle.index === 0 || handle.index === 3 ? -2 : 2));
+            item.layer.h = Math.max(0.05, item.h + dy * (handle.index === 0 || handle.index === 1 ? -2 : 2));
+          } else {
+            starts.forEach((item) => {
+              item.layer.x = Math.max(0, Math.min(1, item.x + dx));
+              item.layer.y = Math.max(0, Math.min(1, item.y + dy));
+            });
+          }
           repaint();
         };
-        canvas.onpointerup = canvas.onpointercancel = () => {
-          canvas.onpointermove = null;
-          canvas.onpointerup = null;
-          canvas.onpointercancel = null;
+        overlay.onpointerup = overlay.onpointercancel = () => {
+          overlay.classList.remove("is-dragging");
+          overlay.onpointermove = null;
+          overlay.onpointerup = null;
+          overlay.onpointercancel = null;
           renderMediaStudio(root, opts);
         };
       }
-      return;
     }
+  };
+  canvas.onpointerdown = (event) => {
     if (mlPaintMode === "select" || mlBokehPicking) return;
     event.preventDefault();
     rememberEdit();

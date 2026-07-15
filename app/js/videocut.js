@@ -38,6 +38,11 @@ function coverRect(mw, mh, cw, ch) {
   const sw = cw / scale, sh = ch / scale;
   return [(mw - sw) / 2, (mh - sh) / 2, sw, sh];
 }
+function containRect(mw, mh, cw, ch) {
+  const scale = Math.min(cw / Math.max(1, mw), ch / Math.max(1, mh));
+  const dw = mw * scale, dh = mh * scale;
+  return [(cw - dw) / 2, (ch - dh) / 2, dw, dh];
+}
 /* MediaRecorder-made webm reports Infinity until it has been seeked past the
    end once — pool videos often come from that path, so probe before trusting. */
 function readVideoDuration(el, done) {
@@ -187,6 +192,15 @@ export function mountVideoEditor(host, opts = {}) {
       return seg;
     });
   }
+  const segmentForClip = (clip) => segments().find((seg) => seg.clip === clip) || null;
+  function splitPointForClip(clip) {
+    const seg = segmentForClip(clip);
+    if (!seg) return null;
+    const local = clamp(state.playhead - seg.start, 0, seg.dur);
+    const minTail = clip.kind === "video" ? 0.15 : 0.5;
+    if (local <= minTail || seg.dur - local <= minTail) return null;
+    return { seg, local };
+  }
   const totalDuration = () => state.clips.reduce((t, c) => t + clipDuration(c), 0);
 
   /* ---------------- audio graph ---------------- */
@@ -249,6 +263,7 @@ export function mountVideoEditor(host, opts = {}) {
       title: String(title || (kind === "photo" ? "Photo" : "Video")).slice(0, 80),
       ready: "loading", thumb: "", el: null,
       transition: "none", text: "", textPos: "bottom",
+      fit: "cover",
       duration: 3, kenBurns: false,               // photo
       in: 0, out: 0, srcDuration: 0, mute: false, // video
       w: 0, h: 0,
@@ -329,6 +344,63 @@ export function mountVideoEditor(host, opts = {}) {
     state.clips.splice(i, 1);
     state.clips.splice(j, 0, clip);
     renderAll();
+  }
+  function moveClipToIndex(clip, targetIndex) {
+    const from = state.clips.indexOf(clip);
+    if (from < 0) return false;
+    const bounded = clamp(Number(targetIndex) || 0, 0, state.clips.length - 1);
+    if (from === bounded) return false;
+    state.clips.splice(from, 1);
+    state.clips.splice(bounded, 0, clip);
+    state.selectedId = clip.id;
+    renderAll();
+    return true;
+  }
+  function splitClipAtPlayhead(clip) {
+    if (!clip || state.clips.length >= MAX_CLIPS) {
+      notify("PhantomCut", `Timeline is full — ${MAX_CLIPS} clips max.`);
+      return;
+    }
+    const split = splitPointForClip(clip);
+    if (!split) {
+      notify("PhantomCut", "Move the playhead inside the clip before splitting.");
+      return;
+    }
+    const index = state.clips.indexOf(clip);
+    if (index < 0) return;
+    const copy = {
+      ...clip,
+      id: `vc${++clipSeq}-${Date.now().toString(36)}-split`,
+      title: `${clip.title} cut`,
+      ready: "loading",
+      thumb: "",
+      el: null,
+      owned: false,
+      transition: "none",
+    };
+    if (clip.owned) clip.owned = false;
+    if (clip.kind === "photo") {
+      const originalDuration = clipDuration(clip);
+      clip.duration = split.local;
+      copy.duration = Math.max(0.5, originalDuration - split.local);
+      state.clips.splice(index + 1, 0, copy);
+      loadPhoto(copy);
+    } else {
+      if (clip.ready !== "ready") {
+        notify("PhantomCut", "This video is still loading, so it cannot be split yet.");
+        return;
+      }
+      const cut = clip.in + split.local;
+      copy.in = cut;
+      copy.out = clip.out;
+      clip.out = cut;
+      state.clips.splice(index + 1, 0, copy);
+      loadVideo(copy);
+    }
+    state.selectedId = copy.id;
+    state.playhead = split.seg.start + split.local;
+    renderAll();
+    notify("PhantomCut", "Split clip at the playhead.");
   }
   function handleFiles(list) {
     for (const f of Array.from(list || [])) {
@@ -482,6 +554,17 @@ export function mountVideoEditor(host, opts = {}) {
     ctx.fillText(txt, W / 2, clip.textPos === "center" ? H / 2 : H * 0.88, W * 0.92);
     ctx.restore();
   }
+  function drawContainedMediaFrame(source, mw, mh, W, H) {
+    const [sx, sy, sw, sh] = coverRect(mw, mh, W, H);
+    const [dx, dy, dw, dh] = containRect(mw, mh, W, H);
+    ctx.save();
+    ctx.filter = `blur(${Math.max(8, Math.round(Math.min(W, H) * 0.028))}px) brightness(0.72) saturate(1.08)`;
+    ctx.drawImage(source, sx, sy, sw, sh, -W * 0.035, -H * 0.035, W * 1.07, H * 1.07);
+    ctx.restore();
+    ctx.fillStyle = "rgba(0,0,0,.22)";
+    ctx.fillRect(0, 0, W, H);
+    ctx.drawImage(source, 0, 0, mw, mh, dx, dy, dw, dh);
+  }
   function drawClipFrame(clip, local, alpha) {
     const W = cv.width, H = cv.height;
     ctx.save();
@@ -489,6 +572,12 @@ export function mountVideoEditor(host, opts = {}) {
     if (clip.ready !== "ready") {
       drawPlaceholder(clip);
     } else if (clip.kind === "photo") {
+      if (clip.fit === "contain") {
+        try { drawContainedMediaFrame(clip.el, clip.w, clip.h, W, H); } catch {}
+        ctx.restore();
+        drawTextOverlay(clip, alpha);
+        return;
+      }
       const [sx, sy, sw, sh] = coverRect(clip.w, clip.h, W, H);
       let rx = sx, ry = sy, rw = sw, rh = sh;
       if (clip.kenBurns) {
@@ -505,8 +594,13 @@ export function mountVideoEditor(host, opts = {}) {
     } else {
       const el = clip.el;
       if (el.readyState >= 2 && el.videoWidth) {
-        const [sx, sy, sw, sh] = coverRect(el.videoWidth, el.videoHeight, W, H);
-        try { ctx.drawImage(el, sx, sy, sw, sh, 0, 0, W, H); } catch {}
+        try {
+          if (clip.fit === "contain") drawContainedMediaFrame(el, el.videoWidth, el.videoHeight, W, H);
+          else {
+            const [sx, sy, sw, sh] = coverRect(el.videoWidth, el.videoHeight, W, H);
+            ctx.drawImage(el, sx, sy, sw, sh, 0, 0, W, H);
+          }
+        } catch {}
       }
     }
     ctx.restore();
@@ -839,7 +933,7 @@ export function mountVideoEditor(host, opts = {}) {
   /* ---------------- UI: timeline ---------------- */
   function clipCardHtml(clip, idx) {
     return `
-      <article class="vc-clip${clip.id === state.selectedId ? " is-selected" : ""}${clip.ready === "error" ? " is-error" : ""}" data-vc-clip="${esc(clip.id)}">
+      <article class="vc-clip${clip.id === state.selectedId ? " is-selected" : ""}${clip.ready === "error" ? " is-error" : ""}" data-vc-clip="${esc(clip.id)}" draggable="true" aria-label="Timeline clip ${idx + 1}: ${esc(clip.title)}">
         ${idx > 0 && clip.transition === "fade" ? `<span class="vc-clip-fade" title="0.5s crossfade from the previous clip">fade</span>` : ""}
         <div class="vc-clip-thumb">
           ${clip.thumb ? `<img src="${esc(clip.thumb)}" alt=""/>` : `<span class="vc-clip-thumb-blank">${clip.ready === "loading" ? "…" : "—"}</span>`}
@@ -867,6 +961,7 @@ export function mountVideoEditor(host, opts = {}) {
     }
     timelineEl.innerHTML = state.clips.map((c, i) => clipCardHtml(c, i)).join("");
   }
+  let draggingClipId = "";
   timelineEl.addEventListener("click", (e) => {
     const card = e.target.closest("[data-vc-clip]");
     if (!card) return;
@@ -876,6 +971,43 @@ export function mountVideoEditor(host, opts = {}) {
     if (move) { moveClip(clip, Number(move.dataset.vcMove)); return; }
     if (e.target.closest("[data-vc-del]")) { removeClip(clip); return; }
     if (state.selectedId !== clip.id) { state.selectedId = clip.id; renderTimeline(); renderInspector(); }
+  });
+  timelineEl.addEventListener("dragstart", (e) => {
+    const card = e.target.closest("[data-vc-clip]");
+    if (!card || e.target.closest("button")) return;
+    draggingClipId = card.dataset.vcClip || "";
+    card.classList.add("is-dragging");
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", draggingClipId);
+  });
+  timelineEl.addEventListener("dragover", (e) => {
+    if (!draggingClipId) return;
+    const card = e.target.closest("[data-vc-clip]");
+    if (!card || card.dataset.vcClip === draggingClipId) return;
+    e.preventDefault();
+    const rect = card.getBoundingClientRect();
+    const after = e.clientX > rect.left + rect.width / 2;
+    timelineEl.querySelectorAll(".vc-clip.is-drop-before,.vc-clip.is-drop-after").forEach((el) => el.classList.remove("is-drop-before", "is-drop-after"));
+    card.classList.add(after ? "is-drop-after" : "is-drop-before");
+    e.dataTransfer.dropEffect = "move";
+  });
+  timelineEl.addEventListener("drop", (e) => {
+    const card = e.target.closest("[data-vc-clip]");
+    const dragged = state.clips.find((clip) => clip.id === (e.dataTransfer.getData("text/plain") || draggingClipId));
+    if (!card || !dragged || card.dataset.vcClip === dragged.id) return;
+    e.preventDefault();
+    const target = state.clips.find((clip) => clip.id === card.dataset.vcClip);
+    if (!target) return;
+    const rect = card.getBoundingClientRect();
+    const after = e.clientX > rect.left + rect.width / 2;
+    const from = state.clips.indexOf(dragged);
+    let to = state.clips.indexOf(target) + (after ? 1 : 0);
+    if (from >= 0 && from < to) to -= 1;
+    moveClipToIndex(dragged, to);
+  });
+  timelineEl.addEventListener("dragend", () => {
+    draggingClipId = "";
+    timelineEl.querySelectorAll(".vc-clip.is-dragging,.vc-clip.is-drop-before,.vc-clip.is-drop-after").forEach((el) => el.classList.remove("is-dragging", "is-drop-before", "is-drop-after"));
   });
 
   /* ---------------- UI: inspector ---------------- */
@@ -892,6 +1024,7 @@ export function mountVideoEditor(host, opts = {}) {
       return;
     }
     const idx = state.clips.indexOf(clip);
+    const splitReady = !!splitPointForClip(clip);
     const kindPanel = clip.kind === "photo" ? `
       <section class="vc-ins-section">
         <span class="vc-microlabel">Duration</span>
@@ -925,6 +1058,10 @@ export function mountVideoEditor(host, opts = {}) {
           <span class="vc-microlabel">Clip ${idx + 1} · ${clip.kind === "photo" ? "photo" : "video"}</span>
           <b class="vc-ins-title">${esc(clip.title)}</b>
           ${clip.ready === "error" ? `<i class="vc-ins-note vc-ins-error">This media failed to load — it renders as a blank slate in the cut.</i>` : ""}
+          <div class="vc-ins-tools">
+            <button type="button" data-vc-ins-split ${splitReady ? "" : "disabled"}>Split at playhead</button>
+            <i>${splitReady ? "Cuts this clip into two timeline pieces." : "Move the playhead inside this clip to split it."}</i>
+          </div>
         </section>
         <section class="vc-ins-section">
           <span class="vc-microlabel">Transition in</span>
@@ -933,6 +1070,14 @@ export function mountVideoEditor(host, opts = {}) {
             <option value="fade" ${clip.transition === "fade" ? "selected" : ""}>Crossfade · 0.5s</option>
           </select>
           ${idx === 0 ? `<i class="vc-ins-note">The first clip has nothing to fade from.</i>` : ""}
+        </section>
+        <section class="vc-ins-section">
+          <span class="vc-microlabel">Framing</span>
+          <select class="vc-select" data-vc-ins-fit>
+            <option value="cover" ${clip.fit !== "contain" ? "selected" : ""}>Fill frame · crop edges</option>
+            <option value="contain" ${clip.fit === "contain" ? "selected" : ""}>Fit full media · blurred backdrop</option>
+          </select>
+          <i class="vc-ins-note">${clip.fit === "contain" ? "Shows the whole source without cropping." : "Fills the export frame like a social video."}</i>
         </section>
         ${kindPanel}
         <section class="vc-ins-section">
@@ -945,9 +1090,15 @@ export function mountVideoEditor(host, opts = {}) {
         </section>
       </div>`;
     const iq = (sel) => inspectorEl.querySelector(sel);
+    iq("[data-vc-ins-split]")?.addEventListener("click", () => splitClipAtPlayhead(clip));
     iq("[data-vc-ins-transition]")?.addEventListener("change", (e) => {
       clip.transition = e.target.value === "fade" ? "fade" : "none";
       renderTimeline(); updateMeta();
+    });
+    iq("[data-vc-ins-fit]")?.addEventListener("change", (e) => {
+      clip.fit = e.target.value === "contain" ? "contain" : "cover";
+      drawFrame(state.playhead);
+      renderInspector();
     });
     // slider drags update readouts in place — a re-render mid-drag would drop the thumb
     iq("[data-vc-ins-duration]")?.addEventListener("input", (e) => {

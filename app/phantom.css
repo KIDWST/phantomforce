@@ -4723,6 +4723,20 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
   background-size: 18px 18px;
   box-shadow: 0 20px 50px rgba(0,0,0,0.5);
 }
+.ml-layer-overlay {
+  position: absolute;
+  z-index: 3;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  max-width: 100%;
+  max-height: 58vh;
+  border-radius: 8px;
+  pointer-events: none;
+}
+.ml-layer-overlay.is-active { pointer-events: auto; cursor: grab; }
+.ml-layer-overlay.is-active:hover { cursor: grab; }
+.ml-layer-overlay.is-dragging { cursor: grabbing; }
 .ml-canvas.is-picking { cursor: crosshair; outline: 2px dashed rgba(65,255,161,0.65); outline-offset: 4px; }
 .ml-canvas.is-painting { cursor: crosshair; }
 .ml-edit-topbar {
@@ -4904,6 +4918,7 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .ml-layer-inspector-head span { color: var(--neon); font: 600 var(--fs-xs) var(--font-mono); letter-spacing: 0.14em; text-transform: uppercase; }
 .ml-layer-field { display: grid; gap: 5px; margin-bottom: 9px; color: var(--dim); font-size: 10px; }
 .ml-layer-field input,
+.ml-layer-field select,
 .ml-layer-field textarea {
   width: 100%;
   min-width: 0;
@@ -4914,6 +4929,31 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
   padding: var(--sp-2) var(--sp-3);
   resize: vertical;
   font: 500 11px "Space Grotesk", sans-serif;
+}
+.ml-layer-field input[type="color"] { min-height: 36px; padding: 4px; }
+.ml-layer-text-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.ml-layer-toggle-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.ml-layer-toggle-row button {
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(65,255,161,.055);
+  color: var(--dim);
+  cursor: pointer;
+  font: 800 11px "Space Grotesk", sans-serif;
+}
+.ml-layer-toggle-row button.is-on {
+  color: #03110c;
+  border-color: rgba(65,255,161,.7);
+  background: var(--neon);
 }
 .ml-paint-controls { display: grid; gap: 9px; }
 .ml-paint-controls .ml-field { margin: 0; }
@@ -12877,6 +12917,19 @@ body .phantom .workspace-page :where(
 .vc-ins-title { color: var(--ink); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .vc-ins-note { color: var(--dim); font-size: 11px; font-style: normal; line-height: 1.45; }
 .vc-ins-error { color: var(--risk); }
+.vc-ins-tools { display: grid; gap: 5px; }
+.vc-ins-tools button {
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(65, 255, 161, 0.08);
+  color: var(--ink);
+  cursor: pointer;
+  font: 800 11px "Space Grotesk", sans-serif;
+}
+.vc-ins-tools button:hover:not(:disabled) { border-color: var(--neon); background: rgba(65, 255, 161, 0.16); }
+.vc-ins-tools button:disabled { opacity: 0.44; cursor: not-allowed; }
+.vc-ins-tools i { color: var(--dim); font-size: 10.5px; font-style: normal; line-height: 1.35; }
 .vc-ins-slider { display: flex; align-items: center; gap: 9px; }
 .vc-ins-slider b { flex: 0 0 26px; color: var(--dim); font: 700 10px "DM Mono", monospace; text-transform: uppercase; }
 .vc-ins-slider input { flex: 1; min-width: 0; }
