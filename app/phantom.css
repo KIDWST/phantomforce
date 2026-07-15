@@ -5047,6 +5047,23 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .ml-layer-inspector-head { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 9px; }
 .ml-layer-inspector-head b { color: #f0fff7; font-size: 12px; }
 .ml-layer-inspector-head span { color: var(--neon); font: 600 var(--fs-xs) var(--font-mono); letter-spacing: 0.14em; text-transform: uppercase; }
+.ml-layer-transform-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin: 0 0 10px;
+}
+.ml-layer-transform-actions button {
+  min-height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: rgba(65,255,161,.06);
+  color: #dfffee;
+  cursor: pointer;
+  font: 800 10px "Space Grotesk", sans-serif;
+}
+.ml-layer-transform-actions button:hover { border-color: rgba(65,255,161,.48); background: rgba(65,255,161,.13); color: var(--ink); }
+.ml-layer-transform-actions button:disabled { opacity: .38; cursor: default; }
 .ml-layer-field { display: grid; gap: 5px; margin-bottom: 9px; color: var(--dim); font-size: 10px; }
 .ml-layer-field input,
 .ml-layer-field select,

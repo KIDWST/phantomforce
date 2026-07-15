@@ -2852,6 +2852,11 @@ function selectedLayerPanelHtml(esc) {
         </div>
         ${active ? `<div class="ml-layer-inspector">
           <div class="ml-layer-inspector-head"><b>${esc(active.name || layerKindLabel(active))}</b><span>${activeLocked ? "Locked" : esc(layerKindLabel(active))}</span></div>
+          <div class="ml-layer-transform-actions">
+            <button type="button" data-ml-layer-center ${activeLocked ? "disabled" : ""}>Center</button>
+            <button type="button" data-ml-layer-fit-canvas ${activeLocked ? "disabled" : ""}>Fill canvas</button>
+            <button type="button" data-ml-layer-reset-transform ${activeLocked ? "disabled" : ""}>Reset</button>
+          </div>
           <label class="ml-layer-field"><span>Name</span><input data-ml-layer-field="name" value="${esc(active.name || "")}" ${activeLocked ? "disabled" : ""}/></label>
           <label class="ml-slider"><span>X <b data-layer-out="x">${Math.round(active.x * 100)}</b></span><input type="range" min="0" max="100" value="${Math.round(active.x * 100)}" data-ml-layer-prop="x" ${activeLocked ? "disabled" : ""}/></label>
           <label class="ml-slider"><span>Y <b data-layer-out="y">${Math.round(active.y * 100)}</b></span><input type="range" min="0" max="100" value="${Math.round(active.y * 100)}" data-ml-layer-prop="y" ${activeLocked ? "disabled" : ""}/></label>
@@ -3373,6 +3378,24 @@ function renderEdit(body, cfg, opts, root) {
     repaint();
     return true;
   };
+  const resetLayerTransformDefaults = (layer) => {
+    layer.x = 0.5;
+    layer.y = 0.5;
+    layer.rotation = 0;
+    layer.opacity = 1;
+    layer.blend = "source-over";
+    if (layer.type === "text") {
+      layer.w = 0.78;
+      layer.h = 0.18;
+    } else if (layer.type === "image") {
+      layer.w = 0.52;
+      layer.h = 0.52;
+      layer.fit = "contain";
+    } else {
+      layer.w = 1;
+      layer.h = 1;
+    }
+  };
   const positionMarkers = () => {
     if (!markerLayer) return;
     const spots = editState.bokeh?.spots || [];
@@ -3613,6 +3636,33 @@ function renderEdit(body, cfg, opts, root) {
   body.querySelectorAll("[data-ml-layer-order]").forEach((button) => button.onclick = () => {
     rememberEdit();
     moveLayerOrder(mlComposition, button.dataset.layerId, Number(button.dataset.mlLayerOrder));
+    renderMediaStudio(root, opts);
+  });
+  body.querySelector("[data-ml-layer-center]")?.addEventListener("click", () => {
+    const layer = selectedEditLayer();
+    if (!layer || layer.locked) return;
+    rememberEdit();
+    layer.x = 0.5;
+    layer.y = 0.5;
+    renderMediaStudio(root, opts);
+  });
+  body.querySelector("[data-ml-layer-fit-canvas]")?.addEventListener("click", () => {
+    const layer = selectedEditLayer();
+    if (!layer || layer.locked) return;
+    rememberEdit();
+    layer.x = 0.5;
+    layer.y = 0.5;
+    layer.w = 1;
+    layer.h = 1;
+    layer.rotation = 0;
+    if (layer.type === "image" || layer.type === "base") layer.fit = "cover";
+    renderMediaStudio(root, opts);
+  });
+  body.querySelector("[data-ml-layer-reset-transform]")?.addEventListener("click", () => {
+    const layer = selectedEditLayer();
+    if (!layer || layer.locked) return;
+    rememberEdit();
+    resetLayerTransformDefaults(layer);
     renderMediaStudio(root, opts);
   });
   const clearLayerDropState = () => body.querySelectorAll("[data-ml-layer-row]").forEach((row) => row.classList.remove("is-dragging", "is-drop-target"));

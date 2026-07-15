@@ -433,6 +433,7 @@
     if (name === 'customize') renderCustomizePanel();
     if (name === 'together') renderTogetherPanel();
     if (name === 'report') renderReportPanel(false);
+    if (name === 'questlog') renderQuestLogPanel();
     if (name === 'tutorial') { rt.tutorial.step = 0; renderTutorial(); }
   }
   function closePanels() {
@@ -577,14 +578,8 @@
   };
   function checkAllQuestsMilestone() {
     const done = Object.values(state.quests).every((q) => q.done);
-    if (done && !state.completedMilestone) {
-      state.completedMilestone = true;
-      unlockCosmetic('trim', 'prism');
-      const score = computeScore();
-      host('score', { score });
-      host('complete', { score, progress: 100, state: captureState() });
-      toast('Founding Day! Every resident quest is complete.');
-      setTimeout(() => renderReportPanel(true), 400);
+    if (done && !state.adventure?.gateOpen && !state.completedMilestone) {
+      toast('Every resident is with you. Take the Keystones to the Prism Gate.');
     }
   }
   function openCookPrompt() {
@@ -672,6 +667,88 @@
   }
 
   // ---------------------------------------------------------------------
+  // Shrine trials / Prism Gate adventure layer
+  // ---------------------------------------------------------------------
+  const DIR_LABEL = { up: '▲', down: '▼', left: '◀', right: '▶' };
+  function openTrial(trial) {
+    if (!trial) return;
+    const done = state.adventure?.trials?.[trial.id]?.done;
+    rt.trial = { trial, input: [] };
+    el.trialName.textContent = done ? `${trial.name} cleared` : trial.name;
+    el.trialBody.textContent = done
+      ? 'The shrine is calm now. Its Lumen is already part of your town story.'
+      : trial.text;
+    el.trialSeq.innerHTML = trial.seq.map((dir) => `<span>${DIR_LABEL[dir]}</span>`).join('');
+    el.trialInput.innerHTML = done
+      ? '<p class="small-note">You already solved this shrine.</p>'
+      : ['up', 'left', 'right', 'down'].map((dir) => `<button type="button" data-ct-trial-dir="${dir}">${DIR_LABEL[dir]}</button>`).join('');
+    openPanel('trial');
+    $all('[data-ct-trial-dir]').forEach((button) => button.onclick = () => trialStep(button.dataset.ctTrialDir));
+  }
+  function trialStep(dir) {
+    if (!rt.trial) return;
+    const { trial, input } = rt.trial;
+    input.push(dir);
+    const expected = trial.seq.slice(0, input.length).join('|');
+    if (input.join('|') !== expected) {
+      rt.trial.input = [];
+      state.spark = clamp(state.spark - 5, 0, 100);
+      sfx.fishMiss();
+      toast('Wrong pattern — the shrine resets. Watch the arrows and try again.');
+      updateHud();
+      return;
+    }
+    el.trialInput.querySelectorAll('button').forEach((button, index) => {
+      button.classList.toggle('is-on', index < input.length);
+    });
+    if (input.length < trial.seq.length) return;
+    if (!state.adventure.trials[trial.id]) state.adventure.trials[trial.id] = { done: false };
+    if (!state.adventure.trials[trial.id].done) {
+      state.adventure.trials[trial.id].done = true;
+      for (const [k, v] of Object.entries(trial.reward || {})) state.inventory[k] = (state.inventory[k] || 0) + v;
+      state.stats.trialsCleared = (state.stats.trialsCleared || 0) + 1;
+      state.spark = clamp(state.spark + 10, 0, 100);
+      sfx.quest();
+      spawnParticles(trial.tile.x, trial.tile.y, '#5be3b5');
+      toast(`${trial.name} cleared — Lumen recovered.`);
+    }
+    closePanels();
+    updateHud();
+    schedulePush();
+  }
+  function openGate() {
+    if (state.adventure?.gateOpen) {
+      renderReportPanel(true);
+      return;
+    }
+    const hasKeys = (state.inventory.keystone || 0) >= 4;
+    const hasRelic = (state.inventory.relic || 0) >= 1;
+    if (!hasKeys || !hasRelic) {
+      el.dlgName.textContent = 'Prism Gate';
+      el.dlgBody.textContent = 'The gate hums, but it needs four Keystones and one Relic. Help the residents, clear shrines, and return when the town story is ready.';
+      el.dlgQuest.hidden = false;
+      el.dlgQuest.textContent = `Needed: 4 Keystones and 1 Relic — you have ${state.inventory.keystone || 0} Keystones and ${state.inventory.relic || 0} Relic.`;
+      el.dlgTurnin.hidden = true;
+      openPanel('dialogue');
+      return;
+    }
+    state.adventure.gateOpen = true;
+    state.stats.gatesOpened = (state.stats.gatesOpened || 0) + 1;
+    state.completedMilestone = true;
+    unlockCosmetic('trim', 'prism');
+    unlockCosmetic('topper', 'crown');
+    state.spark = 100;
+    const score = computeScore();
+    sfx.quest();
+    host('score', { score });
+    host('complete', { score, progress: 100, state: captureState() });
+    toast('The Prism Gate opens. CubeTown is awake.');
+    updateHud();
+    schedulePush();
+    setTimeout(() => renderReportPanel(true), 450);
+  }
+
+  // ---------------------------------------------------------------------
   // Together / multiplayer panel
   // ---------------------------------------------------------------------
   function renderTogetherPanel() {
@@ -691,26 +768,63 @@
   // ---------------------------------------------------------------------
   // Report / results panel
   // ---------------------------------------------------------------------
+  function questDoneCount() {
+    return NPC_DEFS.filter((npc) => state.quests?.[npc.id]?.done).length;
+  }
+  function trialDoneCount() {
+    return TRIAL_DEFS.filter((trial) => state.adventure?.trials?.[trial.id]?.done).length;
+  }
   function computeScore() {
     const s = state.stats;
-    return s.built * 5 + s.questsCompleted * 60 + s.fishCaught * 4 + s.dishesCooked * 5 + (state.day - 1) * 10;
+    return s.built * 5 + questDoneCount() * 55 + trialDoneCount() * 35 + (s.gatesOpened || 0) * 180 + s.fishCaught * 4 + s.dishesCooked * 5 + (state.day - 1) * 10;
   }
   function computeProgress() {
     if (state.completedMilestone) return 100;
-    const questPart = (state.stats.questsCompleted / 3) * 70;
-    const buildPart = Math.min(state.stats.built, 15) / 15 * 30;
-    return Math.min(99, Math.round(questPart + buildPart));
+    const questPart = (questDoneCount() / NPC_DEFS.length) * 48;
+    const trialPart = (trialDoneCount() / TRIAL_DEFS.length) * 24;
+    const buildPart = Math.min(state.stats.built, 24) / 24 * 18;
+    const gatePart = state.adventure?.gateOpen ? 10 : 0;
+    return Math.min(99, Math.round(questPart + trialPart + buildPart + gatePart));
   }
   function renderReportPanel(milestone) {
-    el.reportTitle.textContent = milestone ? 'Founding Day!' : 'Town Report';
-    el.reportSub.textContent = milestone ? 'Every resident’s quest is complete. CubeTown keeps going — build as long as you like.' : `Day ${state.day}, ${formatClock(state.minutes)}.`;
+    const qDone = questDoneCount();
+    const tDone = trialDoneCount();
+    el.reportTitle.textContent = milestone ? 'Prism Gate Opened!' : 'Town Report';
+    el.reportSub.textContent = milestone ? 'The full CubeTown playthrough is complete. Keep building, fishing, and hosting friends as long as you like.' : `Day ${state.day}, ${formatClock(state.minutes)} · ${qDone}/${NPC_DEFS.length} resident arcs · ${tDone}/${TRIAL_DEFS.length} shrine trials.`;
     el.statDay.textContent = state.day;
     el.statBuilt.textContent = state.stats.built;
     el.statFish.textContent = state.stats.fishCaught;
     el.statDish.textContent = state.stats.dishesCooked;
-    el.statQuests.textContent = `${state.stats.questsCompleted}/3`;
+    el.statQuests.textContent = `${qDone}/${NPC_DEFS.length}`;
     el.statScore.textContent = computeScore();
     openPanel('report');
+  }
+  function renderQuestLogPanel() {
+    const rewardLine = (reward) => reward ? Object.entries(reward).map(([k, v]) => `${v} ${RES_LABELS[k] || k}`).join(', ') : 'Town trust';
+    const questRows = NPC_DEFS.map((npc) => {
+      const done = state.quests?.[npc.id]?.done;
+      const need = Object.entries(npc.quest.need).map(([k, v]) => `${v} ${RES_LABELS[k] || k}`).join(', ');
+      return `<div class="quest-row ${done ? 'is-done' : ''}">
+        <b>${done ? '✓' : '□'} ${escapeHtml(npc.name)}</b>
+        <span>${escapeHtml(need)} → ${escapeHtml(rewardLine(npc.quest.reward))}</span>
+      </div>`;
+    }).join('');
+    const trialRows = TRIAL_DEFS.map((trial) => {
+      const done = state.adventure?.trials?.[trial.id]?.done;
+      return `<div class="quest-row ${done ? 'is-done' : ''}">
+        <b>${done ? '✓' : '□'} ${escapeHtml(trial.name)}</b>
+        <span>${trial.seq.map((dir) => DIR_LABEL[dir]).join(' ')} → ${escapeHtml(rewardLine(trial.reward))}</span>
+      </div>`;
+    }).join('');
+    const gateReady = (state.inventory.keystone || 0) >= 4 && (state.inventory.relic || 0) >= 1;
+    el.questLog.innerHTML = `
+      <section class="quest-chapter">
+        <h3>Chapter ${state.adventure?.gateOpen ? 'Complete' : gateReady ? 'Final' : 'I'} · The Prism Gate</h3>
+        <p>${state.adventure?.gateOpen ? 'The Prism Gate is open. CubeTown is awake.' : gateReady ? 'You have the pieces. Walk to the north gate and open it.' : 'Help residents, clear shrine trials, recover four Keystones, and bring one Relic to the north gate.'}</p>
+      </section>
+      <section class="quest-chapter"><h3>Residents</h3>${questRows}</section>
+      <section class="quest-chapter"><h3>Shrine Trials</h3>${trialRows}</section>
+      <section class="quest-chapter"><h3>Inventory Clues</h3><p>${state.inventory.keystone || 0}/4 Keystones · ${state.inventory.lumen || 0} Lumen · ${state.inventory.relic || 0}/1 Relic · ${state.stats.built || 0} pieces built</p></section>`;
   }
 
   // ---------------------------------------------------------------------

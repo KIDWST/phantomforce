@@ -74,6 +74,12 @@ assert.match(mediaSrc, /data-ml-layer-field="blend"/u, "Media Lab layers must ex
 assert.match(mediaSrc, /"multiply",\s*"Multiply"[\s\S]*"screen",\s*"Screen"[\s\S]*"overlay",\s*"Overlay"/u, "Media Lab blend mode controls must include standard compositing modes.");
 assert.match(editorSrc, /const BLEND_MODES = new Set\(\["source-over", "multiply", "screen", "overlay", "soft-light"/u, "Layer renderer must whitelist supported blend modes.");
 assert.match(editorSrc, /ctx\.globalCompositeOperation = blendMode\(layer\.blend\)/u, "Layer renderer must apply per-layer blend modes to the export canvas.");
+assert.match(mediaSrc, /data-ml-layer-center/u, "Media Lab layer inspector must expose a one-click center action.");
+assert.match(mediaSrc, /data-ml-layer-fit-canvas/u, "Media Lab layer inspector must expose a one-click fill-canvas action.");
+assert.match(mediaSrc, /data-ml-layer-reset-transform/u, "Media Lab layer inspector must expose a one-click transform reset action.");
+assert.match(mediaSrc, /const resetLayerTransformDefaults = \(layer\) =>[\s\S]*layer\.blend = "source-over"[\s\S]*layer\.type === "text"[\s\S]*layer\.type === "image"/u, "Media Lab transform reset must restore sensible per-layer defaults.");
+assert.match(mediaSrc, /querySelector\("\[data-ml-layer-center\]"\)[\s\S]*layer\.x = 0\.5[\s\S]*layer\.y = 0\.5/u, "Media Lab center action must recenter the selected layer.");
+assert.match(mediaSrc, /querySelector\("\[data-ml-layer-fit-canvas\]"\)[\s\S]*layer\.w = 1[\s\S]*layer\.h = 1[\s\S]*layer\.fit = "cover"/u, "Media Lab fill-canvas action must expand image/base layers to the canvas.");
 assert.match(mediaSrc, /data-ml-layer-prop="fontSize"/u, "Text layers must expose type-size controls in the Media Lab inspector");
 assert.match(mediaSrc, /data-ml-layer-field="color"/u, "Text layers must expose foreground color controls in the Media Lab inspector");
 assert.match(mediaSrc, /data-ml-layer-toggle="shadow"/u, "Text layers must expose shadow toggles in the Media Lab inspector");
@@ -86,6 +92,7 @@ assert.match(cssSrc, /\.ml-layer-row\.is-selected/u, "Layer rows need a visible 
 assert.match(cssSrc, /\.ml-layer-row\[draggable="true"\]/u, "Draggable layer rows need a visible grab affordance");
 assert.match(cssSrc, /\.ml-layer-row\.is-drop-target/u, "Layer drag/drop must show a visible drop target");
 assert.match(cssSrc, /\.ml-layer-row\.is-locked\s*\{/u, "Locked layer rows need a visible locked state");
+assert.match(cssSrc, /\.ml-layer-transform-actions\s*\{/u, "Layer transform actions need compact editor styling");
 assert.match(cssSrc, /\.ml-layer-text-grid\s*\{/u, "Text layer controls need a compact inspector grid");
 assert.match(cssSrc, /\.ml-layer-toggle-row button\.is-on/u, "Text layer toggles need a visible enabled state");
 assert.match(cssSrc, /\.ml-grid-lib\s*\{[\s\S]*grid-template-columns:\s*repeat\(auto-fill,\s*minmax\(170px,\s*220px\)\)/u, "Media Pool must use capped thumbnail columns instead of stretching a few assets across the screen");
