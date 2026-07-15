@@ -3299,6 +3299,7 @@ const analyticsConnectorState = {
   loaded: false,
   loading: false,
   connectors: [],
+  preflight: null,
   error: "",
   /* per-platform sync outcome: { state: "synced"|"error", error, syncedAt } */
   sync: {},
@@ -3356,6 +3357,7 @@ async function saveAnalyticsOAuthAppSetup({ platform, clientId, clientSecret, re
   analyticsConnectorState.connectors = Array.isArray(response?.social_analytics?.connectors)
     ? response.social_analytics.connectors
     : analyticsConnectorState.connectors;
+  analyticsConnectorState.preflight = response?.social_analytics?.oauthPreflight || analyticsConnectorState.preflight;
   analyticsConnectorState.loaded = false;
   await refreshAnalyticsConnectorStatus();
   return response;
@@ -3388,6 +3390,7 @@ async function refreshLiveAnalytics(el, accounts, opts, { force = false, platfor
       analyticsConnectorState.connectors = Array.isArray(response?.social_analytics?.connectors)
         ? response.social_analytics.connectors
         : [];
+      analyticsConnectorState.preflight = response?.social_analytics?.oauthPreflight || null;
       analyticsConnectorState.loaded = true;
     }
     const ready = analyticsConnectorState.connectors.filter((connector) => connector.configured && (!platform || connector.id === platform));
@@ -3524,6 +3527,7 @@ async function refreshAnalyticsConnectorStatus() {
   analyticsConnectorState.connectors = Array.isArray(response?.social_analytics?.connectors)
     ? response.social_analytics.connectors
     : [];
+  analyticsConnectorState.preflight = response?.social_analytics?.oauthPreflight || null;
   analyticsConnectorState.loaded = true;
   return analyticsConnectorState.connectors;
 }
@@ -3757,11 +3761,19 @@ function analyticsReadinessPanel({ displayAccounts, liveApiRows, configuredCount
   const providerNote = oauthReadyCount
     ? `Ready: ${readyApps.join(", ")}${analyticsConnectorState.connectors.filter((c) => c.oauthConfigured).length > readyApps.length ? "…" : ""}`
     : `Missing: ${missingApps.join(", ") || "provider apps"}`;
+  const preflight = analyticsConnectorState.preflight || {};
+  const nextLabel = preflight.nextGlobalLabel || (liveApiRows.length ? "Sync live feed" : oauthReadyCount ? "Connect accounts" : "Set up provider apps");
+  const nextDetail = preflight.nextGlobalAction === "connect_signed_in_account"
+    ? "Use your signed-in browser once per channel. PhantomForce stores the token on the server and never reads browser cookies."
+    : preflight.nextGlobalAction === "sync_live_feed"
+      ? "Authorized accounts are ready for official read-only metrics sync."
+      : "Provider apps are the one-time unlock before any business can use signed-in OAuth.";
   return `<section class="an-readiness is-${copy.tone}" aria-label="Social live feed readiness">
     <div class="an-readiness-main">
       <p class="ch-eyebrow">Live feed setup</p>
       <h3>${copy.title}</h3>
       <p>${copy.body}</p>
+      <p class="an-next-step"><b>Next:</b> ${esc(nextLabel)} · ${esc(nextDetail)}</p>
     </div>
     <div class="an-readiness-steps">
       <span class="${oauthReadyCount ? "is-done" : "is-next"}"><b>${oauthReadyCount}/${totalCount}</b><i>provider apps</i><em>${providerNote}</em></span>

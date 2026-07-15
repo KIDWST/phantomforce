@@ -11901,6 +11901,15 @@ body .phantom .pc .pc-caption {
 .an-readiness-main { min-width: 0; }
 .an-readiness-main h3 { margin: 2px 0 5px; font-size: clamp(18px, 1.7vw, 24px); }
 .an-readiness-main p:not(.ch-eyebrow) { margin: 0; color: var(--dim); font-size: 12.5px; line-height: 1.45; max-width: 760px; }
+.an-readiness-main .an-next-step {
+  margin-top: 9px !important;
+  padding: 8px 10px;
+  border: 1px solid rgba(65, 255, 161, 0.16);
+  border-radius: 12px;
+  background: rgba(65, 255, 161, 0.055);
+  color: #c8f7df !important;
+}
+.an-readiness-main .an-next-step b { color: var(--neon); }
 .an-readiness-steps {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

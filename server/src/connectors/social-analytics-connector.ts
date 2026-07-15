@@ -51,6 +51,27 @@ type ConnectorDefinition = {
   scopes: string[];
 };
 
+type SocialAnalyticsConnectorStatusRow = {
+  id: SocialAnalyticsPlatform;
+  name: string;
+  provider: string;
+  configured: boolean;
+  live: boolean;
+  oauthConfigured: boolean;
+  oauthRequired: string[];
+  defaultHandle: string;
+  handle: string;
+  scopes: string[];
+  analyticsScopes: string[];
+  postingScopes: string[];
+  crossPostCapable: boolean;
+  analyticsReadOnly: boolean;
+  postingRequiresApproval: boolean;
+  required: string[];
+  savedConnection: ReturnType<typeof redactedConnection>;
+  reason: string;
+};
+
 const text = (value: unknown) => String(value ?? "").trim();
 const number = (value: unknown) => {
   const parsed = Number(value ?? 0);
@@ -213,7 +234,7 @@ const CONNECTORS: ConnectorDefinition[] = [
 
 export function getSocialAnalyticsConnectorStatus(workspaceKey = DEFAULT_SOCIAL_WORKSPACE) {
   const scope = safeSocialWorkspaceKey(workspaceKey);
-  const connectors = CONNECTORS.map((connector) => ({
+  const connectors: SocialAnalyticsConnectorStatusRow[] = CONNECTORS.map((connector) => ({
     id: connector.id,
     name: connector.name,
     provider: connector.provider,
@@ -243,12 +264,95 @@ export function getSocialAnalyticsConnectorStatus(workspaceKey = DEFAULT_SOCIAL_
     anyLive: connectors.some((connector) => connector.live),
     allRequiredLive: connectors.every((connector) => connector.live),
     connectors,
+    oauthPreflight: buildSocialOAuthPreflight(scope, connectors),
     secretsExposed: false,
     importFallbackAvailable: true,
     defaultHandle,
     crossPostingRequiresApproval: true,
     postingMode: "approval_gated" as const,
     tokenStore: socialConnectionStoreStatus(scope),
+  };
+}
+
+function setupProfileForPlatform(platform: SocialAnalyticsPlatform) {
+  return OAUTH_SETUP_PROVIDERS.find((setup) => setup.id === platform)
+    || (platform === "facebook" ? OAUTH_SETUP_PROVIDERS.find((setup) => setup.id === "instagram") : undefined);
+}
+
+function nextOAuthAction(connector: SocialAnalyticsConnectorStatusRow) {
+  if (connector.configured) return {
+    step: "sync_live_feed",
+    label: "Sync live feed",
+    detail: "The account is authorized. Pull official read-only metrics now.",
+  };
+  if (connector.oauthConfigured) return {
+    step: "connect_signed_in_account",
+    label: "Connect account",
+    detail: "Open the provider OAuth screen in the signed-in browser and approve this workspace.",
+  };
+  return {
+    step: "setup_provider_app",
+    label: "Set up provider app",
+    detail: "Add this platform app's client ID and secret once. Then every workspace can authorize accounts with OAuth.",
+  };
+}
+
+function buildSocialOAuthPreflight(
+  workspaceKey: string,
+  connectors: SocialAnalyticsConnectorStatusRow[],
+) {
+  const platforms = connectors.map((connector) => {
+    const setup = setupProfileForPlatform(connector.id);
+    const next = nextOAuthAction(connector);
+    return {
+      id: connector.id,
+      name: connector.name,
+      provider: connector.provider,
+      oauthAppReady: connector.oauthConfigured,
+      accountAuthorized: connector.configured,
+      liveSyncReady: connector.configured,
+      canStartOAuth: connector.oauthConfigured && !connector.configured,
+      canSync: connector.configured,
+      nextAction: next.step,
+      nextLabel: next.label,
+      nextDetail: next.detail,
+      callbackUrl: requiredOAuthRedirectUri(connector.id),
+      consoleUrl: setup?.consoleUrl || "",
+      missingAppEnv: setup ? [
+        ...(env(setup.idEnv) ? [] : [setup.idEnv]),
+        ...(env(setup.secretEnv) ? [] : [setup.secretEnv]),
+      ] : [],
+      analyticsScopes: connector.analyticsScopes,
+      postingScopes: connector.postingScopes,
+      postingRequiresApproval: true,
+    };
+  });
+  const oauthAppReadyCount = platforms.filter((platform) => platform.oauthAppReady).length;
+  const accountAuthorizedCount = platforms.filter((platform) => platform.accountAuthorized).length;
+  const liveSyncReadyCount = platforms.filter((platform) => platform.liveSyncReady).length;
+  return {
+    workspaceKey,
+    signedInBrowserOAuth: true,
+    browserSessionRead: false,
+    secretsExposed: false,
+    redirectUri: requiredOAuthRedirectUri("youtube"),
+    recommendedRedirectUri: `${ADMIN_PUBLIC_URL}/phantom-ai/ops/social-oauth/callback`,
+    oauthAppReadyCount,
+    accountAuthorizedCount,
+    liveSyncReadyCount,
+    totalCount: platforms.length,
+    postingMode: "approval_gated" as const,
+    nextGlobalAction: liveSyncReadyCount
+      ? "sync_live_feed"
+      : oauthAppReadyCount
+        ? "connect_signed_in_account"
+        : "setup_provider_apps",
+    nextGlobalLabel: liveSyncReadyCount
+      ? "Sync live feed"
+      : oauthAppReadyCount
+        ? "Connect accounts"
+        : "Set up provider apps",
+    platforms,
   };
 }
 
