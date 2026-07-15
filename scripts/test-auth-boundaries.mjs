@@ -26,6 +26,8 @@ assert.match(store, /const \{ token: _token, \.\.\.safeSession \} = s \|\| \{\};
 assert.match(store, /if \(liveSessionToken\) return liveSessionToken;/u, "Authenticated API clients must read the volatile token before falling back to sessionStorage.");
 assert.match(store, /liveSessionToken = "";\s*try \{\s*localStorage\.removeItem\(SESSION_KEY\);/u, "Logout must clear the volatile bearer token before clearing browser storage.");
 assert.match(store, /localStorage\.setItem\(SESSION_ENDED_KEY, String\(Date\.now\(\)\)\);/u, "Logout must mark the browser as explicitly signed out.");
+assert.match(store, /function clearSessionShortcutFromUrl\(\) \{[\s\S]*url\.searchParams\.delete\("session"\);[\s\S]*history\.replaceState\(null, "", `\$\{url\.pathname\}\$\{url\.search\}\$\{url\.hash\}`\);/u, "Logout/session guards must be able to strip query-session shortcuts from the URL.");
+assert.match(store, /if \(key && localStorage\.getItem\(SESSION_ENDED_KEY\)\) \{[\s\S]*clearSessionShortcutFromUrl\(\);[\s\S]*return null;/u, "A logout marker must block query-session shortcut re-entry.");
 
 assert.match(main, /if \(isClientPublicHost\(\)\) \{\s*renderCustomerAuthLoading\(card\);\s*maybeUpgradeGateToDatabaseLogin\(card, \{ customerApp: true, required: true \}\);\s*return;\s*\}/u, "app.phantomforce.online must render required real-account auth instead of role buttons.");
 assert.match(main, /if \(isLocalDevHost\(\)\) \{\s*renderLocalAuthLoading\(card\);\s*maybeUpgradeGateToDatabaseLogin\(card, \{ localDev: true, allowLocalFallback: true \}\);\s*return;\s*\}/u, "Local QA must check the configured auth backend before showing shortcut entry.");

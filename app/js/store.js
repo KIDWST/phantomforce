@@ -887,11 +887,9 @@ export const session = {
   },
   clear() {
     liveSessionToken = "";
-    try {
-      localStorage.removeItem(SESSION_KEY);
-      sessionStorage.removeItem(LIVE_TOKEN_KEY);
-      localStorage.setItem(SESSION_ENDED_KEY, String(Date.now()));
-    } catch {}
+    try { localStorage.removeItem(SESSION_KEY); } catch {}
+    try { sessionStorage.removeItem(LIVE_TOKEN_KEY); } catch {}
+    try { localStorage.setItem(SESSION_ENDED_KEY, String(Date.now())); } catch {}
   },
 };
 
@@ -905,6 +903,15 @@ export const isLiveAdminHost = () => location.hostname === ADMIN_PUBLIC_HOST;
 export const isClientPublicHost = () => location.hostname === CLIENT_PUBLIC_HOST;
 export const isStaticPublicHost = () => PUBLIC_PAGES_HOSTS.has(location.hostname);
 export const isLocalDevHost = () => LOCAL_DEV_HOSTS.has(location.hostname);
+
+function clearSessionShortcutFromUrl() {
+  try {
+    const url = new URL(location.href);
+    if (!url.searchParams.has("session")) return;
+    url.searchParams.delete("session");
+    history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+  } catch {}
+}
 
 export function liveAdminUrl() {
   const url = new URL(`https://${ADMIN_PUBLIC_HOST}/app/index.html`);
@@ -926,6 +933,12 @@ export function resolveSession() {
 
   const q = new URLSearchParams(location.search);
   const key = (q.get("session") || "").toLowerCase();
+  try {
+    if (key && localStorage.getItem(SESSION_ENDED_KEY)) {
+      clearSessionShortcutFromUrl();
+      return null;
+    }
+  } catch {}
   const allowLocalSessionShortcut = isLocalDevHost();
   if (key === OWNER_SESSION_ID) {
     if (isStaticPublicHost()) {
