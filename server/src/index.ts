@@ -253,6 +253,14 @@ import {
   updatePhantomPlaySubmission,
 } from "./phantom-ai/phantomplay.js";
 import {
+  getPhantomStoreSnapshot,
+  getPhantomStoreStatus,
+  moderatePhantomStoreTool,
+  recordPhantomStoreInstallClick,
+  submitPhantomStoreTool,
+  updatePhantomStoreTool,
+} from "./phantom-ai/phantomstore.js";
+import {
   getPhantomPlayDeveloperAnalytics,
   getPhantomPlayDiscovery,
   getPhantomPlayGamePage,
@@ -4242,6 +4250,60 @@ app.post("/api/phantomplay/submissions/:id/moderate", async (request, reply) => 
   } catch (error) {
     return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : "Moderation decision could not be saved." });
   }
+});
+
+app.get("/api/phantomstore", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const query = (request.query ?? {}) as { tenant_id?: unknown };
+  return {
+    ok: true,
+    session,
+    ...(await getPhantomStoreSnapshot(session, { tenantId: query.tenant_id })),
+    storage: session.canManageAccess ? await getPhantomStoreStatus() : undefined,
+  };
+});
+
+app.post("/api/phantomstore/tools", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  try {
+    return { ok: true, session, ...(await submitPhantomStoreTool(session, (request.body ?? {}) as Record<string, unknown>)) };
+  } catch (error) {
+    return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : "Tool submission could not be saved." });
+  }
+});
+
+app.patch("/api/phantomstore/tools/:id", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const params = request.params as { id?: string };
+  try {
+    const result = params.id ? await updatePhantomStoreTool(session, params.id.slice(0, 180), (request.body ?? {}) as Record<string, unknown>) : null;
+    return result ? { ok: true, session, ...result } : reply.code(404).send({ ok: false, error: "Tool was not found." });
+  } catch (error) {
+    return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : "Tool update could not be saved." });
+  }
+});
+
+app.post("/api/phantomstore/tools/:id/moderate", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+  if (!session) return reply;
+  const params = request.params as { id?: string };
+  try {
+    const tool = params.id ? await moderatePhantomStoreTool(session, params.id.slice(0, 180), (request.body ?? {}) as Record<string, unknown>) : null;
+    return tool ? { ok: true, session, tool } : reply.code(404).send({ ok: false, error: "Tool was not found." });
+  } catch (error) {
+    return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : "Moderation decision could not be saved." });
+  }
+});
+
+app.post("/api/phantomstore/tools/:id/install", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const params = request.params as { id?: string };
+  const result = params.id ? await recordPhantomStoreInstallClick(session, params.id.slice(0, 180)) : null;
+  return result ? { ok: true, session, ...result } : reply.code(404).send({ ok: false, error: "Tool was not found." });
 });
 
 /* ---- PhantomPlay V2: platform layer (social, community, workspace, dev hub) ----
