@@ -2,7 +2,18 @@ $ErrorActionPreference = "Stop"
 $PSNativeCommandUseErrorActionPreference = $false
 
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..\..")).Path
-$serverPort = if ($env:PHANTOMFORCE_TEST_SERVER_PORT) { [int]$env:PHANTOMFORCE_TEST_SERVER_PORT } else { 5293 }
+
+function Get-FreeTcpPort {
+  $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 0)
+  $listener.Start()
+  try {
+    return [int]$listener.LocalEndpoint.Port
+  } finally {
+    $listener.Stop()
+  }
+}
+
+$serverPort = if ($env:PHANTOMFORCE_TEST_SERVER_PORT) { [int]$env:PHANTOMFORCE_TEST_SERVER_PORT } else { Get-FreeTcpPort }
 $serverUrl = "http://127.0.0.1:$serverPort"
 
 $strongSecret = "owner-production-test-secret-with-more-than-32-characters-1234567890"
@@ -45,6 +56,7 @@ function Base-Env([hashtable]$overrides) {
     HOST = "127.0.0.1"
     PHANTOMFORCE_AUTH_PROVIDER = "owner-production"
     PHANTOMFORCE_ENABLE_DEMO_AUTH = "false"
+    PHANTOMFORCE_SKIP_SERVER_DOTENV = "true"
     PHANTOMFORCE_ACCESS_REPOSITORY = "json-file"
     PHANTOMFORCE_SESSION_SECRET = $strongSecret
     PHANTOMFORCE_OWNER_EMAIL = $ownerEmail

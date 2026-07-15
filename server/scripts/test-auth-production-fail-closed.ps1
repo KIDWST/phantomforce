@@ -2,7 +2,18 @@ $ErrorActionPreference = "Stop"
 $PSNativeCommandUseErrorActionPreference = $false
 
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..\..")).Path
-$serverPort = if ($env:PHANTOMFORCE_TEST_SERVER_PORT) { [int]$env:PHANTOMFORCE_TEST_SERVER_PORT } else { 5292 }
+
+function Get-FreeTcpPort {
+  $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 0)
+  $listener.Start()
+  try {
+    return [int]$listener.LocalEndpoint.Port
+  } finally {
+    $listener.Stop()
+  }
+}
+
+$serverPort = if ($env:PHANTOMFORCE_TEST_SERVER_PORT) { [int]$env:PHANTOMFORCE_TEST_SERVER_PORT } else { Get-FreeTcpPort }
 $serverUrl = "http://127.0.0.1:$serverPort"
 
 Push-Location $repoRoot
@@ -18,6 +29,7 @@ try {
     HOST = "127.0.0.1"
     PHANTOMFORCE_AUTH_PROVIDER = "demo"
     PHANTOMFORCE_ENABLE_DEMO_AUTH = "true"
+    PHANTOMFORCE_SKIP_SERVER_DOTENV = "true"
     PHANTOMFORCE_SESSION_SECRET = "phantomforce-production-test-secret-with-enough-length"
     PHANTOMFORCE_SERVER_LOGGER = "false"
   }
