@@ -48,16 +48,23 @@ try {
   assert(empty.postingMode === "approval_gated", "Social posting must be explicitly approval-gated.");
   assert(empty.connectors.every((item) => item.analyticsReadOnly === true), "Social analytics sync must stay read-only.");
   assert(empty.connectors.every((item) => item.postingRequiresApproval === true), "Posting-capable connections must still require approval.");
-  assert(empty.connectors.every((item) => item.crossPostCapable === false), "Analytics OAuth must not mark social channels as posting-capable.");
-  assert(empty.connectors.every((item) => item.postingScopes.length === 0), "Analytics OAuth must not request upload, publish, write, or posting scopes.");
-  assert(!JSON.stringify(empty.connectors).match(/upload|publish|manage_posts|tweet\.write|pins:write/), "Analytics connector status must remain read-only.");
+  assert(empty.connectors.find((item) => item.id === "youtube")?.postingScopes.includes("youtube.upload"), "YouTube OAuth must request upload scope for future approval-gated posting.");
+  assert(empty.connectors.find((item) => item.id === "instagram")?.postingScopes.includes("instagram_content_publish"), "Instagram OAuth must request publish scope for future approval-gated posting.");
+  assert(empty.connectors.find((item) => item.id === "facebook")?.postingScopes.includes("pages_manage_posts"), "Facebook OAuth must request page posting scope for future approval-gated posting.");
+  assert(empty.connectors.find((item) => item.id === "tiktok")?.postingScopes.includes("video.publish"), "TikTok OAuth must request publish scope for future approval-gated posting.");
+  assert(empty.oauthPreflight.signedInBrowserOAuth === true, "Preflight must advertise the signed-in browser OAuth path.");
+  assert(empty.oauthPreflight.browserSessionRead === false, "Preflight must not imply PhantomForce reads browser cookies or sessions.");
+  assert(empty.oauthPreflight.secretsExposed === false, "Preflight must never expose provider app secrets.");
+  assert(empty.oauthPreflight.nextGlobalAction === "setup_provider_apps", "Missing provider apps must point to provider app setup first.");
+  assert(empty.oauthPreflight.platforms.every((item) => item.postingRequiresApproval === true), "Posting-capable OAuth preflight must remain approval-gated.");
+  assert(empty.oauthPreflight.platforms.find((item) => item.id === "youtube")?.missingAppEnv.includes("GOOGLE_OAUTH_CLIENT_ID"), "YouTube preflight should identify missing Google client id.");
 
   const setupEmpty = getSocialOAuthSetupStatus();
   assert(setupEmpty.readyCount === 0, "Provider app setup must start unconfigured when no env credentials exist.");
   assert(setupEmpty.providers.length === 6, "Setup status should collapse Meta into one Instagram/Facebook provider app row.");
   assert(setupEmpty.providers.every((provider) => provider.oauthConfigured === false), "Provider setup status must not pretend apps are ready.");
   assert(setupEmpty.providers.every((provider) => /^https:\/\//.test(provider.consoleUrl)), "Every provider setup row should include a safe console URL.");
-  assert(!JSON.stringify(setupEmpty.providers).match(/upload|publish|manage_posts|tweet\.write|pins:write/), "Provider setup rows must not request posting scopes for analytics sync.");
+  assert(setupEmpty.providers.find((provider) => provider.id === "instagram")?.scopes.includes("instagram_content_publish"), "Meta setup row must show posting-capable Instagram scope.");
 
   const savedSetup = saveSocialOAuthSetup({
     platform: "youtube",
@@ -73,6 +80,7 @@ try {
   const configured = getSocialAnalyticsConnectorStatus();
   assert(configured.connectors.find((item) => item.id === "youtube")?.live === true, "YouTube should be ready when both server references exist.");
   assert(!JSON.stringify(configured).includes("test-only-key"), "Status must never expose credentials.");
+  assert(configured.oauthPreflight.platforms.find((item) => item.id === "youtube")?.nextAction === "sync_live_feed", "Authorized YouTube preflight should move to live sync.");
 
   const mockFetch = async (input: string | URL | Request) => {
     const url = String(input);
@@ -140,6 +148,8 @@ try {
   const connected = await completeSocialOAuthCallback({ state: oauth.state, code: "code-123" }, oauthFetch as typeof fetch);
   assert(connected.connected?.hasAccessToken === true, "OAuth callback must store an account token without exposing it.");
   assert(!JSON.stringify(connected).includes("stored-youtube-token"), "OAuth callback response must not expose saved tokens.");
+  const postOauthStatus = getSocialAnalyticsConnectorStatus();
+  assert(postOauthStatus.oauthPreflight.accountAuthorizedCount >= 1, "After OAuth callback, preflight must count the authorized account.");
 
   process.env.META_APP_ID = "meta-app";
   process.env.META_APP_SECRET = "meta-secret";

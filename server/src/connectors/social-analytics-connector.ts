@@ -156,7 +156,7 @@ const CONNECTORS: ConnectorDefinition[] = [
     oauthRequired: ["GOOGLE_OAUTH_CLIENT_ID", "GOOGLE_OAUTH_CLIENT_SECRET", "YouTube analytics scopes"],
     defaultHandle,
     handle: (workspaceKey = DEFAULT_SOCIAL_WORKSPACE) => cleanHandle(firstEnv("YOUTUBE_CHANNEL_HANDLE", "SOCIAL_YOUTUBE_HANDLE") || firstStored("youtube", workspaceKey, "accountHandle", "accountName")) || defaultHandle,
-    scopes: ["youtube.readonly", "yt-analytics.readonly"],
+    scopes: ["youtube.readonly", "yt-analytics.readonly", "youtube.upload"],
   },
   {
     id: "instagram",
@@ -168,7 +168,7 @@ const CONNECTORS: ConnectorDefinition[] = [
     oauthRequired: ["META_APP_ID", "META_APP_SECRET", "Instagram Business analytics permissions"],
     defaultHandle,
     handle: (workspaceKey = DEFAULT_SOCIAL_WORKSPACE) => cleanHandle(firstEnv("INSTAGRAM_HANDLE", "SOCIAL_INSTAGRAM_HANDLE") || firstStored("instagram", workspaceKey, "accountHandle", "accountName")) || defaultHandle,
-    scopes: ["instagram_basic", "instagram_manage_insights", "pages_show_list", "pages_read_engagement", "read_insights"],
+    scopes: ["instagram_basic", "instagram_manage_insights", "instagram_content_publish", "pages_show_list", "pages_read_engagement", "read_insights"],
   },
   {
     id: "facebook",
@@ -180,7 +180,7 @@ const CONNECTORS: ConnectorDefinition[] = [
     oauthRequired: ["META_APP_ID", "META_APP_SECRET", "Facebook Page analytics permissions"],
     defaultHandle,
     handle: (workspaceKey = DEFAULT_SOCIAL_WORKSPACE) => cleanHandle(firstEnv("FACEBOOK_PAGE_HANDLE", "SOCIAL_FACEBOOK_HANDLE") || firstStored("facebook", workspaceKey, "accountHandle", "pageName", "accountName")) || defaultHandle,
-    scopes: ["pages_show_list", "pages_read_engagement", "read_insights"],
+    scopes: ["pages_show_list", "pages_read_engagement", "read_insights", "pages_manage_posts"],
   },
   {
     id: "tiktok",
@@ -192,7 +192,7 @@ const CONNECTORS: ConnectorDefinition[] = [
     oauthRequired: ["TIKTOK_CLIENT_KEY", "TIKTOK_CLIENT_SECRET", "TikTok read-only analytics scopes"],
     defaultHandle,
     handle: (workspaceKey = DEFAULT_SOCIAL_WORKSPACE) => cleanHandle(firstEnv("TIKTOK_HANDLE", "SOCIAL_TIKTOK_HANDLE") || firstStored("tiktok", workspaceKey, "accountHandle", "accountName")) || defaultHandle,
-    scopes: ["user.info.basic", "video.list"],
+    scopes: ["user.info.basic", "video.list", "video.upload", "video.publish"],
   },
   {
     id: "x",
@@ -204,7 +204,7 @@ const CONNECTORS: ConnectorDefinition[] = [
     oauthRequired: ["X_CLIENT_ID", "X_CLIENT_SECRET", "X OAuth scopes"],
     defaultHandle,
     handle: (workspaceKey = DEFAULT_SOCIAL_WORKSPACE) => cleanHandle(firstEnv("X_USERNAME", "X_HANDLE", "TWITTER_USERNAME", "SOCIAL_X_HANDLE") || firstStored("x", workspaceKey, "accountHandle", "accountName")) || defaultHandle,
-    scopes: ["tweet.read", "users.read", "offline.access"],
+    scopes: ["tweet.read", "users.read", "offline.access", "tweet.write"],
   },
   {
     id: "linkedin",
@@ -228,7 +228,7 @@ const CONNECTORS: ConnectorDefinition[] = [
     oauthRequired: ["PINTEREST_CLIENT_ID", "PINTEREST_CLIENT_SECRET", "Pinterest OAuth scopes"],
     defaultHandle,
     handle: (workspaceKey = DEFAULT_SOCIAL_WORKSPACE) => cleanHandle(firstEnv("PINTEREST_HANDLE", "SOCIAL_PINTEREST_HANDLE") || firstStored("pinterest", workspaceKey, "accountHandle", "accountName")) || defaultHandle,
-    scopes: ["user_accounts:read", "boards:read", "pins:read"],
+    scopes: ["user_accounts:read", "boards:read", "pins:read", "pins:write"],
   },
 ];
 

@@ -9,7 +9,7 @@
  * to a local mock.
  */
 
-import { currentTenantId, session } from "./store.js?v=phantom-live-20260714-267";
+import { currentTenantId, session } from "./store.js?v=phantom-live-20260714-268";
 
 const ROLES = [
   { id: "owner", label: "Owner", blurb: "Everything, including billing and this page." },
