@@ -456,6 +456,24 @@ const app = Fastify({
   logger: process.env.PHANTOMFORCE_SERVER_LOGGER === "false" ? false : true,
 });
 
+/* Fastify catches errors thrown inside route handlers and turns them into
+   responses — this is the safety net for everything else: a stray
+   fire-and-forget async call, an unawaited promise in a background task,
+   anything outside a request's try/catch. Without it, Node's default
+   behavior is to crash the whole process, taking every route down with it
+   until the Windows watchdog (Sync-AdminMain.ps1) notices and restarts it.
+   unhandledRejection alone doesn't leave Node in a known-bad state, so it's
+   safe to just log and keep serving. uncaughtException can, per Node's own
+   guidance, so this logs and exits — the watchdog brings it back clean
+   rather than the process limping along corrupted. */
+process.on("unhandledRejection", (reason) => {
+  app.log.error({ err: reason }, "Unhandled promise rejection — logged, server keeps running.");
+});
+process.on("uncaughtException", (error) => {
+  app.log.error(error, "Uncaught exception — logging and exiting so the watchdog restarts cleanly.");
+  process.exit(1);
+});
+
 const CustomizationTenantQuerySchema = z.object({ tenant_id: z.string().trim().max(80).optional() });
 const CustomizationPreviewBodySchema = z.object({ tenant_id: z.string().trim().max(80).optional(), patch: z.unknown() });
 const CustomizationPublishBodySchema = CustomizationPreviewBodySchema.extend({ summary: z.string().trim().max(240).optional(), expected_version: z.number().int().positive().optional() });
