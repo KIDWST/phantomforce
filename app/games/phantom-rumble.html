@@ -39,7 +39,7 @@ body.paused .pause{display:grid}
 <div class="touch" data-touch hidden><div><button data-t="left">◀</button><button data-t="right">▶</button></div><div><button data-t="shield">SHIELD</button><button data-t="dodge">DODGE</button><button data-t="jump">JUMP</button><button data-t="strike">HIT<br>HOLD</button></div></div>
 <div class="overlay" data-setup><div>
   <h1>PHANTOM RUMBLE</h1>
-  <p>Knock the other phantoms off the arena. Damage raises their percent — the higher it climbs, the further they fly. Guard, dodge, ledge-save, and punish like a real platform fighter.</p>
+  <p>Knock the other phantoms off the arena. Damage raises their percent — the higher it climbs, the further they fly. Guard, dodge, and punish like a real platform fighter.</p>
   <p class="pb" data-pb hidden></p>
   <div class="modes">
     <button data-mode="duel"><b>DUEL</b>you vs one bot</button>
@@ -104,7 +104,7 @@ function makeFighter(slot,human){
   return {slot,human,name:PALETTE[slot].name,color:PALETTE[slot].c,glow:PALETTE[slot].glow,
     x:spawn.x,y:spawn.y,vx:0,vy:0,face:slot%2?-1:1,pct:0,stocks:3,
     grounded:false,jumps:2,stun:0,invuln:2,charge:0,power:false,dead:false,
-    shield:1,shieldHeld:false,shieldBroken:0,parry:0,dodge:0,dodgeCd:0,ledge:0,ledgeSide:0,ledgeCooldown:0,
+    shield:1,shieldHeld:false,shieldBroken:0,parry:0,dodge:0,dodgeCd:0,
     attackCd:0,anim:0,flash:0,spin:0,special:0,titan:0,portalCd:0,clones:0,cloneTick:0,trail:[],ai:{dir:1,timer:0,jumpCd:0},lastTap:{key:'',at:0}};
 }
 function startMatch(selected){
@@ -199,12 +199,6 @@ function dodge(f){
   popups.push({x:f.x,y:f.y-.08,text:'DODGE',color:'#f5d0fe',life:.45,t:0});
 }
 function jump(f){
-  if(f.ledge>0){
-    const side=f.ledgeSide||0;
-    f.ledge=0;f.ledgeCooldown=.75;f.x+=-side*.02;f.vy=-.024;f.vx+=-side*.014;f.face=-side||f.face;f.jumps=1;f.invuln=Math.max(f.invuln,.22);
-    spawnBurst(f.x,f.y,f.glow,7);
-    return
-  }
   if(f.jumps<=0)return;
   f.vy=-.026;f.jumps-=1;f.grounded=false;spawnBurst(f.x,f.y+.02,f.glow,5);
 }
@@ -323,11 +317,6 @@ function tickBombs(dt){
 /* ---------- bots ---------- */
 function botThink(f,dt){
   f.ai.timer-=dt;f.ai.jumpCd-=dt;
-  if(f.ledge>0){
-    f.ai.dir=-(f.ledgeSide||0)||1;
-    if(f.ai.jumpCd<=0||f.ledge<.38){jump(f);f.ai.jumpCd=.55}
-    return;
-  }
   const foes=fighters.filter(t=>t!==f&&!t.dead);
   if(!foes.length)return;
   const foe=foes.reduce((a,b)=>Math.abs(a.x-f.x)<Math.abs(b.x-f.x)?a:b);
@@ -351,31 +340,16 @@ function botThink(f,dt){
 
 /* ---------- physics + rounds ---------- */
 function land(f,top){f.y=top;f.vy=0;f.grounded=true;f.jumps=2}
-function tryLedgeGrab(f,s){
-  if(f.ledge>0||f.ledgeCooldown>0||f.vy<0||f.stun>0||f.dead||f.grounded)return false;
-  const top=s.y-s.h/2,left=s.x-s.w/2,right=s.x+s.w/2;
-  const inY=f.y>top-.015&&f.y<top+.095;
-  const side=Math.abs(f.x-left)<.026?-1:Math.abs(f.x-right)<.026?1:0;
-  if(!side||!inY)return false;
-  f.x=side<0?left:right;f.y=top+.016;f.vx=0;f.vy=0;f.ledge=.58;f.ledgeSide=side;f.ledgeCooldown=.1;f.grounded=false;f.jumps=1;f.invuln=Math.max(f.invuln,.3);f.shieldHeld=false;
-  spawnBurst(f.x,f.y,f.glow,7);
-  popups.push({x:f.x,y:f.y-.075,text:'LEDGE',color:f.color,life:.5,t:0});
-  return true;
-}
 function step(f,dt){
   if(f.dead)return;
   f.invuln=Math.max(0,f.invuln-dt);f.stun=Math.max(0,f.stun-dt);f.attackCd=Math.max(0,f.attackCd-dt);f.anim=Math.max(0,f.anim-dt);f.flash=Math.max(0,f.flash-dt);
   f.titan=Math.max(0,f.titan-dt);f.portalCd=Math.max(0,f.portalCd-dt);f.clones=Math.max(0,f.clones-dt);
-  f.parry=Math.max(0,f.parry-dt);f.dodge=Math.max(0,f.dodge-dt);f.dodgeCd=Math.max(0,f.dodgeCd-dt);f.shieldBroken=Math.max(0,f.shieldBroken-dt);f.ledge=Math.max(0,f.ledge-dt);f.ledgeCooldown=Math.max(0,f.ledgeCooldown-dt);
+  f.parry=Math.max(0,f.parry-dt);f.dodge=Math.max(0,f.dodge-dt);f.dodgeCd=Math.max(0,f.dodgeCd-dt);f.shieldBroken=Math.max(0,f.shieldBroken-dt);
   if(f.shieldBroken>0)f.shieldHeld=false;
   if(f.shieldHeld&&f.shield>0&&f.stun<=0){
     f.shield=Math.max(0,f.shield-dt*.12);f.vx*=.72;f.charge=0;
     if(f.shield<=0){f.shieldBroken=1.35;f.stun=Math.max(f.stun,.55);f.shieldHeld=false;announce(`${f.name} SHIELD BREAK`,'#f87171');spawnBurst(f.x,f.y,'#f87171',18);updateHud()}
   }else f.shield=Math.min(1,f.shield+dt*.2);
-  if(f.ledge>0){
-    if(!f.human&&f.stun<=0&&f.ai.jumpCd<=0){f.ai.dir=-(f.ledgeSide||0)||1;jump(f);f.ai.jumpCd=.55}
-    if(f.ledge>0){f.vx=0;f.vy=0;return}
-  }
   /* shadow clones strike everyone around their master: front, behind, above */
   if(f.clones>0){
     f.cloneTick-=dt;
@@ -439,7 +413,6 @@ function step(f,dt){
       if(!dropping){if(f.vy>.022)spawnBurst(f.x,top,'#9ca3af',5);land(f,top)}
     }
   }
-  if(!f.grounded&&f.vy>=0){for(const s of surfaces){if(tryLedgeGrab(f,s))break}}
   if(!reduced){f.trail.unshift({x:f.x,y:f.y});f.trail=f.trail.slice(0,f.stun>0?14:8)}
   grabPickups(f);
   if(f.x<BLAST.left||f.x>BLAST.right||f.y>BLAST.bottom||f.y<BLAST.top)ko(f);
