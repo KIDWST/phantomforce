@@ -1166,7 +1166,7 @@
     const f = (v) => clamp(Math.round(v * amt), 0, 255);
     return `rgb(${f(c.r)},${f(c.g)},${f(c.b)})`;
   }
-  const TERRAIN_COLOR = { grass: '#3a6b4a', grove: '#2f7a4d', quarry: '#7b7f8c', reed: '#7fae59', water: '#3f8ec9' };
+  const TERRAIN_COLOR = { grass: '#3a6b4a', trail: '#9f7f58', grove: '#2f7a4d', quarry: '#7b7f8c', reed: '#7fae59', water: '#3f8ec9', shrine: '#5b4aa8', gate: '#2f2448' };
   function drawTerrainTile(gx, gy, t) {
     const s = tileToScreen(gx, gy);
     const top = TERRAIN_COLOR[t] || TERRAIN_COLOR.grass;
@@ -1177,6 +1177,25 @@
     if (t === 'water') {
       ctx.save(); ctx.globalAlpha = 0.35 + 0.1 * Math.sin(performance.now() / 500 + gx + gy);
       drawDiamond(s.x, s.y, rt.tileW * 0.7, rt.tileH * 0.7, '#bfe9ff', null);
+      ctx.restore();
+    }
+    if (t === 'shrine') {
+      const trial = trialAt(gx, gy);
+      const done = trial && state.adventure?.trials?.[trial.id]?.done;
+      drawBlock(s.x, s.y, rt.tileW * 0.58, rt.tileH * 0.58, rt.tileH * 1.55, done ? '#5be3b5' : '#c792ea', '#34255b', '#211638');
+      ctx.save();
+      ctx.globalAlpha = done ? 0.35 : 0.55 + 0.15 * Math.sin(performance.now() / 360 + gx);
+      ctx.fillStyle = done ? '#5be3b5' : '#ffcf6b';
+      ctx.beginPath(); ctx.arc(s.x, s.y - rt.tileH * 1.95, rt.tileH * 0.28, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    }
+    if (t === 'gate') {
+      const open = state.adventure?.gateOpen;
+      drawBlock(s.x, s.y, rt.tileW * 0.88, rt.tileH * 0.88, rt.tileH * 2.0, open ? '#5be3b5' : '#3d345f', '#221936', '#130d22');
+      ctx.save();
+      ctx.strokeStyle = open ? '#fbe9d8' : '#ffcf6b';
+      ctx.lineWidth = 2 * rt.dpr;
+      ctx.beginPath(); ctx.arc(s.x, s.y - rt.tileH * 2.25, rt.tileH * 0.52, 0, Math.PI * 2); ctx.stroke();
       ctx.restore();
     }
   }
@@ -1235,6 +1254,15 @@
     } else if (topper === 'halo') {
       ctx.strokeStyle = '#ffe27a'; ctx.lineWidth = 2.5 * rt.dpr;
       ctx.beginPath(); ctx.ellipse(bx, headTopY - headSize * 0.15, headSize * 0.4, headSize * 0.14, 0, 0, Math.PI * 2); ctx.stroke();
+    } else if (topper === 'crest') {
+      ctx.fillStyle = '#ffcf6b';
+      ctx.beginPath(); ctx.moveTo(bx - headSize * 0.38, headTopY + headSize * 0.08); ctx.lineTo(bx - headSize * 0.12, headTopY - headSize * 0.38); ctx.lineTo(bx + headSize * 0.12, headTopY + headSize * 0.08); ctx.lineTo(bx + headSize * 0.38, headTopY - headSize * 0.3); ctx.lineTo(bx + headSize * 0.3, headTopY + headSize * 0.18); ctx.lineTo(bx - headSize * 0.38, headTopY + headSize * 0.18); ctx.closePath(); ctx.fill();
+    } else if (topper === 'leaf') {
+      ctx.fillStyle = '#78d36f';
+      ctx.beginPath(); ctx.ellipse(bx, headTopY - headSize * 0.12, headSize * 0.34, headSize * 0.16, -0.55, 0, Math.PI * 2); ctx.fill();
+    } else if (topper === 'crown') {
+      ctx.fillStyle = '#ffd54f';
+      ctx.beginPath(); ctx.moveTo(bx - headSize * 0.46, headTopY + headSize * 0.16); ctx.lineTo(bx - headSize * 0.28, headTopY - headSize * 0.28); ctx.lineTo(bx, headTopY + headSize * 0.04); ctx.lineTo(bx + headSize * 0.28, headTopY - headSize * 0.28); ctx.lineTo(bx + headSize * 0.46, headTopY + headSize * 0.16); ctx.closePath(); ctx.fill();
     }
     if (label) {
       ctx.fillStyle = '#fbe9d8'; ctx.font = `700 ${11 * rt.dpr}px ui-monospace,monospace`; ctx.textAlign = 'center';
@@ -1411,7 +1439,7 @@
     return JSON.parse(JSON.stringify({
       version: state.version, seed: state.seed, day: state.day, minutes: state.minutes,
       player: state.player, inventory: state.inventory, spark: state.spark, town: state.town,
-      quests: state.quests, cosmeticsUnlocked: state.cosmeticsUnlocked, tutorialSeen: state.tutorialSeen,
+      quests: state.quests, adventure: state.adventure, cosmeticsUnlocked: state.cosmeticsUnlocked, tutorialSeen: state.tutorialSeen,
       stats: state.stats, completedMilestone: state.completedMilestone,
     }));
   }
@@ -1449,6 +1477,17 @@
     if (s.quests && typeof s.quests === 'object') {
       for (const k of Object.keys(state.quests)) if (s.quests[k] && typeof s.quests[k] === 'object') state.quests[k].done = !!s.quests[k].done;
     }
+    const defaultAdventure = defaultAdventureState();
+    state.adventure = state.adventure || defaultAdventure;
+    if (s.adventure && typeof s.adventure === 'object') {
+      state.adventure.gateOpen = !!s.adventure.gateOpen;
+      if (s.adventure.trials && typeof s.adventure.trials === 'object') {
+        for (const trial of TRIAL_DEFS) {
+          if (!state.adventure.trials[trial.id]) state.adventure.trials[trial.id] = { done: false };
+          state.adventure.trials[trial.id].done = !!s.adventure.trials[trial.id]?.done;
+        }
+      }
+    }
     if (s.cosmeticsUnlocked && typeof s.cosmeticsUnlocked === 'object') {
       for (const cat of ['hue', 'topper', 'trim']) if (Array.isArray(s.cosmeticsUnlocked[cat])) state.cosmeticsUnlocked[cat] = Array.from(new Set([...state.cosmeticsUnlocked[cat], ...s.cosmeticsUnlocked[cat].filter((x) => typeof x === 'string')]));
     }
@@ -1463,7 +1502,7 @@
     if (s.stats && typeof s.stats === 'object') {
       for (const k of Object.keys(state.stats)) if (Number.isFinite(s.stats[k])) state.stats[k] = s.stats[k];
     }
-    state.completedMilestone = !!s.completedMilestone;
+    state.completedMilestone = !!(s.completedMilestone && state.adventure.gateOpen);
     npcs = buildNpcRuntime();
     for (const npc of npcs) npc.quest.done = state.quests[npc.id] ? state.quests[npc.id].done : false;
     rt.playerToX = state.player.gx; rt.playerToY = state.player.gy;
