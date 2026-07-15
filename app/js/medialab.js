@@ -2641,6 +2641,7 @@ let mlPaintMode = "select";
 let mlPaintColor = "#41ffa1";
 let mlAssetCache = { tenant: "", loading: false, loaded: false, assets: [], error: "" };
 let mlAssetPicker = { search: "", source: "all" };
+let mlLayerClipboard = [];
 
 function cloneEditState(source = editState) {
   return cloneImageEditState(source);
@@ -2825,6 +2826,7 @@ function selectedLayerPanelHtml(esc) {
   ensureEditorComposition();
   const active = selectedEditLayer();
   const canDelete = active && active.id !== "base" && !active.locked;
+  const canCopy = selectedLayers(mlComposition).some((layer) => layer.id !== "base");
   const activeLocked = !!active?.locked;
   return `
     <details class="ml-edit-section" open>
@@ -2832,6 +2834,8 @@ function selectedLayerPanelHtml(esc) {
       <div class="ml-edit-section-body">
         <div class="ml-layer-actions">
           <button type="button" data-ml-layer-add-text>${svgIc("edit")} Text</button>
+          <button type="button" data-ml-layer-copy ${canCopy ? "" : "disabled"}>${svgIc("copy")} Copy</button>
+          <button type="button" data-ml-layer-paste ${mlLayerClipboard.length ? "" : "disabled"}>Paste</button>
           <button type="button" data-ml-layer-duplicate ${canDelete ? "" : "disabled"}>${svgIc("copy")} Duplicate</button>
           <button type="button" data-ml-layer-delete ${canDelete ? "" : "disabled"}>${svgIc("close")} Delete</button>
         </div>
@@ -3725,9 +3729,21 @@ function renderEdit(body, cfg, opts, root) {
     };
   });
   body.querySelectorAll("[data-ml-layer-field]").forEach((field) => {
+    let fieldRemembered = false;
+    const rememberLayerFieldEdit = () => {
+      if (fieldRemembered) return;
+      const layer = selectedEditLayer();
+      if (!layer || layer.locked) return;
+      fieldRemembered = true;
+      rememberEdit();
+      updateEditHistoryControls(body);
+    };
+    field.onfocus = rememberLayerFieldEdit;
+    field.onpointerdown = rememberLayerFieldEdit;
     field.onchange = field.oninput = () => {
       const layer = selectedEditLayer();
-      if (!layer) return;
+      if (!layer || layer.locked) return;
+      rememberLayerFieldEdit();
       layer[field.dataset.mlLayerField] = field.value;
       repaint();
     };

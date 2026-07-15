@@ -84,6 +84,9 @@ assert.match(mediaSrc, /data-ml-layer-prop="fontSize"/u, "Text layers must expos
 assert.match(mediaSrc, /data-ml-layer-field="color"/u, "Text layers must expose foreground color controls in the Media Lab inspector");
 assert.match(mediaSrc, /data-ml-layer-toggle="shadow"/u, "Text layers must expose shadow toggles in the Media Lab inspector");
 assert.match(mediaSrc, /data-ml-layer-field="fit"/u, "Image layers must expose contain/cover fit controls in the Media Lab inspector");
+assert.match(mediaSrc, /let fieldRemembered = false[\s\S]*const rememberLayerFieldEdit = \(\) =>[\s\S]*rememberEdit\(\)[\s\S]*updateEditHistoryControls\(body\)/u, "Layer field edits must create an undo checkpoint.");
+assert.match(mediaSrc, /field\.onfocus = rememberLayerFieldEdit[\s\S]*field\.onpointerdown = rememberLayerFieldEdit/u, "Layer field edits must remember history before typing, selecting, or color picking.");
+assert.match(mediaSrc, /if \(!layer \|\| layer\.locked\) return;[\s\S]*layer\[field\.dataset\.mlLayerField\] = field\.value/u, "Layer field handlers must not mutate locked layers.");
 assert.match(mediaSrc, /renderComposition\(canvas,\s*canvas\._img,\s*editState,\s*mlComposition,\s*mlLayerEffects\)/u, "Save/download canvas must render the composed layer stack");
 assert.doesNotMatch(mediaSrc, /data-ml-duplicate-edit>Duplicate image/, "Media Lab should not show a flattened duplicate-image action in the editor footer");
 assert.match(cssSrc, /\.ml-canvas\s*\{[\s\S]*background-image:/, "transparent erased pixels need a visible checkerboard backdrop");
