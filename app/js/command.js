@@ -1115,7 +1115,7 @@ function routeCommand(raw, settings) {
       "Prospect lane",
       segment.title,
       segment.next,
-      [openAction("Open Clients", "leads")],
+      [openAction("Open Leads", "leads")],
       "Source: Phantom AI prospect map",
     ));
     if (buildout.task) {

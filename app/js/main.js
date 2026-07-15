@@ -493,7 +493,7 @@ function maybeUpgradeGateToDatabaseLogin(card, options = {}) {
 /* ============================ sidebar nav ============================ */
 const BASE_NAV = [
   { id: "dashboard",  label: "Dashboard",    icon: "grid",  view: "main" },
-  { id: "crm",        label: "Clients",      icon: "users", ws: "leads" },
+  { id: "crm",        label: "Leads",        icon: "users", ws: "leads" },
   { id: "media",      label: "Media Lab",    icon: "media", ws: "media" },
   { id: "assets",     label: "Asset Cloud",  icon: "media", ws: "assets", dbOnly: true },
   { id: "sites",      label: "Websites",     icon: "site",  ws: "sites" },
@@ -517,7 +517,7 @@ let navEntitlements = { loaded: false, features: null, limits: null };
    horizontally scrollable strip instead of a vertical list. */
 const MOBILE_LABEL_OVERRIDES = {
   dashboard: "Home",
-  crm: "Clients",
+  crm: "Leads",
   money: "Accounting",
   sites: "Sites",
   media: "Media",

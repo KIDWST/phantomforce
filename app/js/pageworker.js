@@ -72,8 +72,8 @@ const PAGE_WORKERS = {
     action: "Review workspace memory",
   },
   leads: {
-    eyebrow: "Client intelligence",
-    title: "Build the client base.",
+    eyebrow: "Lead intelligence",
+    title: "Build the prospect list.",
     placeholder: "Tell Phantom who to find and add: schools, gyms, creators, service companies, warm prospects...",
     helper: "Phantom converts this page prompt into CRM prospect cards, qualification tasks, and approval-safe next moves.",
     action: "Find + add CRM prospects",
@@ -321,7 +321,7 @@ function actionDrafts(pageId, prompt, intent) {
       "Suggest the smallest durable memory update instead of saving every chat line.",
     ],
     leads: [
-      "Immediately create local CRM prospect cards in Clients when the prompt asks to find or add a client base.",
+      "Immediately create local CRM prospect cards in Leads when the prompt asks to find or add a prospect list.",
       "Do not invent names, phone numbers, emails, or live relationships.",
       "Queue qualification and public/CRM enrichment as the next step before outreach.",
     ],
@@ -376,7 +376,7 @@ export function runPageAction(pageId, prompt) {
   const buildout = createCrmProspectBuildout(
     /\b(client|lead|crm|pipeline|prospect|contact)\b/i.test(prompt)
       ? prompt
-      : `start a client base prospect list for ${prompt}`,
+      : `start a prospect list for ${prompt}`,
   );
   const createdNames = buildout.created.map((lead) => lead.name);
   const laneNames = buildout.segments.map((segment) => segment.title);
@@ -384,7 +384,7 @@ export function runPageAction(pageId, prompt) {
   return {
     type: "prospect-buildout",
     title: buildout.created.length ? "Prospect lanes created" : "Prospect lanes already mapped",
-    summary: `${createdNames.length || laneNames.length} draft lane${(createdNames.length || laneNames.length) === 1 ? "" : "s"} ready in Clients: ${names}.`,
+    summary: `${createdNames.length || laneNames.length} draft lane${(createdNames.length || laneNames.length) === 1 ? "" : "s"} ready in Leads: ${names}.`,
     notes: [
       "No outreach, upload, deploy, or public action happened.",
       "No fake contact details were generated.",
@@ -544,7 +544,7 @@ function backendPrompt(pageId, prompt, analysis) {
   const worker = workerFor(pageId);
   const pageContract = pageId === "leads"
     ? [
-      "Clients page contract: this prompter's job is to find and add CRM-safe prospect lanes, then explain how to qualify them.",
+      "Leads page contract: this prompter's job is to find and add CRM-safe prospect lanes, then explain how to qualify them.",
       "If the prompt asks for clients, leads, prospects, audiences, schools, creators, gyms, service companies, or warm prospects, treat it as a CRM/prospect buildout.",
       "Do not invent real names, emails, phone numbers, private contacts, or claim outreach. The local action creates draft lanes and a qualification task only.",
     ]

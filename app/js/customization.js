@@ -27,7 +27,7 @@ function normalizedModuleState(module, moduleId) {
 
 const PLATFORM_MODULES = [
   ["dashboard", "Dashboard", true, ["owner", "admin", "manager", "member", "client"]],
-  ["crm", "Clients", true, ["owner", "admin", "manager", "member"]],
+  ["crm", "Leads", true, ["owner", "admin", "manager", "member"]],
   ["media", "Media Lab", true, ["owner", "admin", "manager", "member"]],
   ["sites", "Websites", true, ["owner", "admin", "manager", "member"]],
   ["money", "Accounting", true, ["owner", "admin", "manager"]],

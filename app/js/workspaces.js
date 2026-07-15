@@ -252,7 +252,7 @@ function createProspectsFromPrompt(prompt) {
   });
   if (created.length) {
     store.state.leads.unshift(...created);
-    pushActivity("Lead Hunter", `built ${created.length} prospect card${created.length === 1 ? "" : "s"} from the Clients prompt. Outreach is draft-only until approved.`, ws);
+    pushActivity("Lead Hunter", `built ${created.length} prospect card${created.length === 1 ? "" : "s"} from the Leads prompt. Outreach is draft-only until approved.`, ws);
   }
   return { created, skipped };
 }
@@ -265,8 +265,8 @@ function renderLeads(el, rerender) {
   el.innerHTML = `
     <section class="lead-intel">
       <div>
-        <p>Client intelligence</p>
-        <h3>Build the client base.</h3>
+        <p>Prospect intelligence</p>
+        <h3>Build the prospect list.</h3>
         <span>Tell Phantom who to find. It creates prospect cards, qualification steps, and approval-safe outreach angles.</span>
       </div>
       <form class="lead-intel-form" data-lead-form>
@@ -277,7 +277,7 @@ function renderLeads(el, rerender) {
     ${leadsUi.notice ? `<div class="lead-intel-result">${esc(leadsUi.notice)}</div>` : ""}
     <div class="ws-toolbar">
       <p class="ws-note">Every lead moves draft → approval → send-ready. Nothing goes out without you.</p>
-      <button class="btn btn-primary" data-act="add">+ Capture lead</button>
+      <button class="btn btn-primary" data-act="add">+ Capture prospect</button>
     </div>
     <div class="lane-row">
       ${lanes.map(([k, label]) => {
@@ -351,7 +351,7 @@ function renderLeads(el, rerender) {
       pushActivity("Proposal Forge", `opened a ${pkg.name} draft for ${l.company}.`, l.ws);
       store.save(); rerender();
     },
-    won: (id) => { const l = find(id); l.status = "won"; l.next = "Kick off delivery"; const p = store.state.proposals.find((x) => x.id === l.proposalId); if (p) p.status = "won"; pushActivity("Client Pipeline", `marked ${l.company} as won.`, l.ws); store.save(); rerender(); },
+    won: (id) => { const l = find(id); l.status = "won"; l.next = "Kick off delivery"; const p = store.state.proposals.find((x) => x.id === l.proposalId); if (p) p.status = "won"; pushActivity("Lead Pipeline", `marked ${l.company} as won.`, l.ws); store.save(); rerender(); },
     lost: (id) => { const l = find(id); l.status = "lost"; l.next = "Re-engage in 90 days"; const p = store.state.proposals.find((x) => x.id === l.proposalId); if (p) p.status = "lost"; store.save(); rerender(); },
     revive: (id) => { const l = find(id); l.status = "follow-up"; l.next = "Warm re-engage with a proof point"; store.save(); rerender(); },
     review: (id) => {
@@ -3219,7 +3219,7 @@ function renderPhantom(el) {
 /* ============================ REGISTRY ============================ */
 export const WORKSPACE_DEFS = {
   phantom: { title: "Phantom AI", kicker: "Business command surface", render: renderPhantom },
-  leads: { title: "Client Pipeline", kicker: "Lead desk & follow-up intelligence", render: renderLeads },
+  leads: { title: "Lead Pipeline", kicker: "Prospect desk & follow-up intelligence", render: renderLeads },
   proposals: { title: "Offer Desk", kicker: "Quotes, scopes, and deal math", render: renderProposals },
   reviews: { title: "Review Desk", kicker: "Reputation engine", render: renderReviews },
   bookings: { title: "Bookings", kicker: "Schedule desk", render: renderBookings },
@@ -3252,7 +3252,7 @@ export function missionWidgets() {
   const neuralCellCount = workerRoster.filter((worker) => worker.worker_type === "cell").length;
 
   const w = [
-    { id: "leads", icon: "◉", title: "Client Pipeline", stat: `${openLeads.length} open`, sub: dueLeads.length ? `${dueLeads.length} due today` : "pipeline current", alert: dueLeads.length > 0 },
+    { id: "leads", icon: "◉", title: "Lead Pipeline", stat: `${openLeads.length} open`, sub: dueLeads.length ? `${dueLeads.length} due today` : "pipeline current", alert: dueLeads.length > 0 },
     { id: "proposals", icon: "◆", title: "Offer Desk", stat: `${m.open.length} live`, sub: `${fmtMoney(m.pipeline)} potential`, alert: false },
     { id: "media", icon: "▶", title: "Creator Studio", stat: `${pendingMedia.length} pending`, sub: `${generatedMedia.length} generated`, alert: false },
     { id: "sites", icon: "▦", title: "Site Portfolio", stat: `${pages.length} site${pages.length === 1 ? "" : "s"}`, sub: `${pages.filter((p) => p.domain || p.url || p.design?.existingUrl).length} domain${pages.filter((p) => p.domain || p.url || p.design?.existingUrl).length === 1 ? "" : "s"}`, alert: false },

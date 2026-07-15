@@ -290,7 +290,7 @@ globalThis.fetch = async () => {
 const crmBuildout = await handleSmartCommand("update our clients crm with clients who you think would be interested in phantomforce. your phantom workforce.. creators, businesses, schools, everyone. Just add to our CRM/clients tab");
 globalThis.fetch = originalFetch;
 assert.equal(crmFetchCalled, false, "CRM prospect buildout should stay on the deterministic local path");
-assert.equal(crmBuildout.open, "leads", "CRM prospect buildout should open the Clients pipeline");
+assert.equal(crmBuildout.open, "leads", "CRM prospect buildout should open the Leads pipeline");
 assert.ok(store.state.leads.length >= 4, "CRM prospect buildout should create multiple prospect lanes");
 assert.ok(store.state.leads.some((lead) => /creator/i.test(`${lead.name} ${lead.notes}`)), "creator prospects should be represented");
 assert.ok(store.state.leads.some((lead) => /school|education/i.test(`${lead.name} ${lead.notes}`)), "school prospects should be represented");
@@ -307,7 +307,7 @@ globalThis.fetch = async () => {
 const crmFindAndAdd = await handleSmartCommand("find and add clients who could use PhantomForce: gyms, schools, creators, service companies, and warm prospects");
 globalThis.fetch = originalFetch;
 assert.equal(crmFetchCalled, false, "Find-and-add CRM requests should stay on the deterministic local path");
-assert.equal(crmFindAndAdd.open, "leads", "Find-and-add CRM requests should open the Clients pipeline");
+assert.equal(crmFindAndAdd.open, "leads", "Find-and-add CRM requests should open the Leads pipeline");
 assert.ok(store.state.leads.length >= 4, "Find-and-add CRM request should create multiple prospect lanes");
 assert.ok(store.state.leads.some((lead) => /creator/i.test(`${lead.name} ${lead.notes}`)), "find/add request should represent creator prospects");
 assert.ok(store.state.leads.some((lead) => /school|education/i.test(`${lead.name} ${lead.notes}`)), "find/add request should represent school prospects");
