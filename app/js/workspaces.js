@@ -394,6 +394,99 @@ function renderSites(el, rerender) {
   });
 }
 
+/* ========================= PLAY (PhantomPlay) ========================= */
+/* Platform-wide game catalog — not scoped per client workspace, every
+   account browses the same catalog. Kids-tagged titles stay out of the
+   default view until the Kids filter is switched on; pending-review
+   submissions stay hidden from non-admin accounts until an admin
+   approves them into the live catalog. */
+let playShowKids = false;
+function renderPlay(el, rerender) {
+  const all = store.state.games;
+  const base = isAdmin() ? all : all.filter((g) => g.active && g.status !== "pending-review");
+  const list = base.filter((g) => (playShowKids ? g.audience === "kids" : g.audience !== "kids"));
+  el.innerHTML = `
+    <div class="ws-toolbar">
+      <p class="ws-note">PhantomPlay: every game Phantom hosts. Kids titles never mix into the general catalog by accident — they only show up when the Kids filter is on.</p>
+      <span>
+        <button class="btn ${playShowKids ? "btn-quiet" : "btn-primary"}" data-act="toggle-kids">${playShowKids ? "◂ Back to all games" : "Kids filter"}</button>
+        ${isAdmin() ? `<button class="btn" data-act="submit">+ Submit a game</button>` : ""}
+      </span>
+    </div>
+    <div class="card-grid">
+      ${list.map((g) => `
+        <article class="record">
+          <div class="record-top"><h4>${esc(g.name)}</h4>${chip(g.status)}</div>
+          <p class="record-sub">${esc(g.genre)} · ${g.audience === "kids" ? "Kids" : "General audience"}</p>
+          <p class="record-notes">${g.plays30d.toLocaleString()} plays in the last 30 days.</p>
+          ${isAdmin() ? `<div class="record-actions">
+            ${g.status === "pending-review" ? `<button class="btn btn-good" data-act="approve" data-id="${g.id}">Approve to catalog</button>` : ""}
+            ${g.active ? `<button class="btn btn-quiet" data-act="retire" data-id="${g.id}">Retire</button>` : `<button class="btn btn-good" data-act="retire" data-id="${g.id}">Restore</button>`}
+          </div>` : ""}
+        </article>`).join("") || empty(playShowKids ? "No kids titles yet." : "No games in the general catalog yet.")}
+    </div>`;
+  bindActions(el, {
+    "toggle-kids": () => { playShowKids = !playShowKids; rerender(); },
+    submit: () => {
+      const name = prompt("Game title:");
+      if (!name) return;
+      store.state.games.unshift({ id: uid("game"), ws: "phantomforce", name: name.trim(), genre: "Submitted", audience: "general", active: true, plays30d: 0, status: "pending-review" });
+      pushActivity("PhantomPlay Intake", `received a new game submission: ${name.trim()}.`);
+      store.save(); rerender();
+    },
+    approve: (id) => { const g = store.state.games.find((x) => x.id === id); g.status = "live"; pushActivity("PhantomPlay Intake", `approved ${g.name} to the live catalog.`); store.save(); rerender(); },
+    retire: (id) => { const g = store.state.games.find((x) => x.id === id); g.active = !g.active; g.status = g.active ? "live" : "retired"; store.save(); rerender(); },
+  });
+}
+
+/* ========================= STORE (PhantomStore) ========================= */
+/* PhantomForce's own product marketplace — templates, account add-ons,
+   PhantomPlay dev boosts. Distinct from "Site & Store Studio" (renderSites
+   above), which builds a CLIENT's storefront — this one is ours. */
+function renderStore(el, rerender) {
+  const items = store.state.storeItems;
+  el.innerHTML = `
+    <div class="ws-toolbar">
+      <p class="ws-note">PhantomStore: PhantomForce's own marketplace — templates, add-ons, and PhantomPlay boosts. Checkout stays "not wired" until a payment connector exists, same rule as everywhere else.</p>
+    </div>
+    <div class="card-grid">
+      ${items.map((p) => `
+        <article class="record">
+          <div class="record-top"><h4>${esc(p.name)}</h4><b class="record-price">${fmtMoney(p.price)}</b></div>
+          <p class="record-sub">${esc(p.category)} · ${chip(p.status)}</p>
+          <p class="record-notes">${esc(p.desc)}</p>
+          <p class="record-sub">${p.sales30d} sold in the last 30 days · checkout not wired</p>
+          ${isAdmin() ? `<div class="record-actions">
+            ${p.status === "draft" ? `<button class="btn btn-good" data-act="publish" data-id="${p.id}">Publish to store</button>` : `<button class="btn btn-quiet" data-act="unpublish" data-id="${p.id}">Unpublish</button>`}
+          </div>` : ""}
+        </article>`).join("")}
+      ${isAdmin() ? `<article class="record record-ghostcard">
+        <h4>+ Add store item</h4>
+        <div class="mini-form">
+          <input type="text" data-item-name placeholder="Name" />
+          <input type="number" data-item-price placeholder="Price" min="0" />
+          <input type="text" data-item-cat placeholder="Category — Templates / Add-on / Support" />
+          <textarea data-item-desc placeholder="Short description" rows="2"></textarea>
+          <button class="btn btn-primary" data-act="add-item">Add to store</button>
+        </div>
+      </article>` : ""}
+    </div>`;
+  bindActions(el, {
+    publish: (id) => { const p = store.state.storeItems.find((x) => x.id === id); p.status = "live"; pushActivity("PhantomStore", `published ${p.name}.`); store.save(); rerender(); },
+    unpublish: (id) => { const p = store.state.storeItems.find((x) => x.id === id); p.status = "draft"; store.save(); rerender(); },
+    "add-item": () => {
+      const name = el.querySelector("[data-item-name]")?.value.trim();
+      const price = Number(el.querySelector("[data-item-price]")?.value || 0);
+      const cat = el.querySelector("[data-item-cat]")?.value.trim() || "Add-on";
+      const desc = el.querySelector("[data-item-desc]")?.value.trim() || "";
+      if (!name) return;
+      store.state.storeItems.unshift({ id: uid("store"), ws: "phantomforce", name, price, category: cat, desc, status: "draft", sales30d: 0 });
+      pushActivity("PhantomStore", `added ${name} to the marketplace.`);
+      store.save(); rerender();
+    },
+  });
+}
+
 /* ============================== PROTECT ============================== */
 function renderProtect(el, rerender) {
   const secs = visible(store.state.security);
@@ -593,6 +686,8 @@ export const WORKSPACE_DEFS = {
   bookings: { title: "Bookings", kicker: "Schedule desk", render: renderBookings },
   media: { title: "Media Lab", kicker: "Production Phantom", render: renderMedia },
   sites: { title: "Site & Store Studio", kicker: "Build surface", render: renderSites },
+  play: { title: "Play", kicker: "PhantomPlay catalog", render: renderPlay },
+  store: { title: "Store", kicker: "PhantomStore marketplace", render: renderStore },
   protect: { title: "Protect", kicker: "Security watch", render: renderProtect },
   money: { title: "Money", kicker: "Revenue Phantom", render: renderMoney },
   workforce: { title: "Workforce", kicker: "Your AI team", render: renderWorkforce },
@@ -613,12 +708,17 @@ export function missionWidgets() {
   const revs = visible(store.state.reviews).filter((r) => r.status !== "published-ready");
   const bks = visible(store.state.bookings).filter((b) => b.status !== "confirmed");
   const activeAgents = store.state.agents.filter((a) => a.status === "active").length;
+  const liveGames = store.state.games.filter((g) => g.active && g.status !== "pending-review").length;
+  const pendingGames = store.state.games.filter((g) => g.status === "pending-review").length;
+  const liveStoreItems = store.state.storeItems.filter((p) => p.status === "live").length;
 
   const w = [
     { id: "leads", icon: "◉", title: "Handle Leads", stat: `${openLeads.length} open`, sub: dueLeads.length ? `${dueLeads.length} due today` : "pipeline current", alert: dueLeads.length > 0 },
     { id: "proposals", icon: "◆", title: "Build Quotes", stat: `${m.open.length} live`, sub: `${fmtMoney(m.pipeline)} open`, alert: false },
     { id: "media", icon: "▶", title: "Media Lab", stat: `${briefs.length} ready`, sub: "briefs & generation", alert: false },
     { id: "sites", icon: "▦", title: "Site & Store Studio", stat: `${pages.length} builds`, sub: pages.some((p) => p.status === "publish-ready") ? "1+ publish-ready" : "drafting", alert: false },
+    { id: "play", icon: "▣", title: "Play", stat: `${liveGames} live`, sub: pendingGames ? `${pendingGames} pending review` : "PhantomPlay catalog", alert: isAdmin() && pendingGames > 0 },
+    { id: "store", icon: "▤", title: "Store", stat: `${liveStoreItems} live`, sub: "PhantomStore marketplace", alert: false },
     { id: "reviews", icon: "★", title: "Review Desk", stat: `${revs.length} in pipe`, sub: "request → publish", alert: false },
     { id: "bookings", icon: "◷", title: "Bookings", stat: `${bks.length} pending`, sub: "drafts & confirmations", alert: false },
     { id: "protect", icon: "⬡", title: "Run Security Check", stat: sec ? (sec.posture === "clean" ? "clean" : "attention") : "—", sub: sec ? `next scan ${daysUntil(sec.nextScan)}d` : "", alert: sec?.posture !== "clean" },

@@ -3,7 +3,7 @@
    no payments, no provider calls happen from here — records move through
    draft → approval → *-ready states and stop there until a connector exists. */
 
-const DB_KEY = "pf.phantom.v3";
+const DB_KEY = "pf.phantom.v4";
 const SESSION_KEY = "pf.session.v3";
 const DAY = 86400000;
 
@@ -90,6 +90,32 @@ function seed() {
     { id: "prod-shoot", ws: "chicagoshots", name: "Listing video — single property", price: 450, category: "Service", desc: "Shoot + edit + vertical cut, 72-hour turnaround.", fulfillment: "Scheduled via Booking Coordinator", checkout: "invoice-ready", publish: "publish-ready" },
   ];
 
+  /* PhantomPlay: Phantom's game catalog, platform-wide (not scoped to one
+     client workspace — every account sees the same catalog). Kids-tagged
+     titles stay out of the default view until the Kids filter is on;
+     pending-review submissions stay hidden from non-admin accounts until
+     approved. */
+  const games = [
+    { id: "slither-io", ws: "phantomforce", name: "Slither.io", genre: "Arcade", audience: "general", active: true, plays30d: 812, status: "live" },
+    { id: "phantom-rumble", ws: "phantomforce", name: "Phantom Rumble", genre: "Battle Arena", audience: "general", active: true, plays30d: 1204, status: "live" },
+    { id: "neon-drift", ws: "phantomforce", name: "Neon Drift", genre: "Arcade Shooter", audience: "general", active: true, plays30d: 956, status: "live" },
+    { id: "kingdom-breakers", ws: "phantomforce", name: "Kingdom Breakers", genre: "PvP Siege", audience: "general", active: true, plays30d: 640, status: "live" },
+    { id: "phantom-ages", ws: "phantomforce", name: "Phantom Ages", genre: "Strategy", audience: "general", active: true, plays30d: 0, status: "new" },
+    { id: "penalty-kick", ws: "phantomforce", name: "Penalty Kick", genre: "Sports", audience: "general", active: false, plays30d: 12, status: "retired" },
+    { id: "shape-sorter-jr", ws: "phantomforce", name: "Shape Sorter Jr.", genre: "Puzzle", audience: "kids", active: true, plays30d: 340, status: "live" },
+    { id: "counting-critters", ws: "phantomforce", name: "Counting Critters", genre: "Educational", audience: "kids", active: true, plays30d: 285, status: "live" },
+  ];
+
+  /* PhantomStore: PhantomForce's own product marketplace — templates,
+     account add-ons, PhantomPlay dev boosts. Distinct from the "Site &
+     Store Studio" workspace, which builds a CLIENT's own storefront. */
+  const storeItems = [
+    { id: "store-template-launch", ws: "phantomforce", name: "Launch Page Template Pack", price: 49, category: "Templates", desc: "5 conversion-tested landing page templates, drop-in ready.", status: "live", sales30d: 18 },
+    { id: "store-workforce-seat", ws: "phantomforce", name: "Extra Workforce Seat", price: 99, category: "Add-on", desc: "One additional AI desk on your account, billed monthly.", status: "live", sales30d: 6 },
+    { id: "store-dev-boost", ws: "phantomforce", name: "PhantomPlay Dev Boost", price: 29, category: "PhantomPlay", desc: "Priority review-queue placement for your submitted game.", status: "live", sales30d: 11 },
+    { id: "store-priority-support", ws: "phantomforce", name: "Priority Support", price: 39, category: "Support", desc: "Skip the queue — same-day human response on any ticket.", status: "draft", sales30d: 0 },
+  ];
+
   const security = [
     { id: "sec-pf", ws: "phantomforce", lastScan: days(-11), nextScan: days(19), proofId: "PF-SCAN-2026-06", posture: "clean", findings: [{ level: "ok", text: "No malware or exposed data found across monitored surfaces." }, { level: "warn", text: "2 admin passwords pass 180-day rotation window in 24 days." }, { level: "ok", text: "Domain + DNS posture unchanged since last scan." }], accounts: 6, rotationDue: days(24), phishing: "low", breachCheck: "Runs on password change or reset" },
     { id: "sec-cs", ws: "chicagoshots", lastScan: days(-11), nextScan: days(19), proofId: "CS-SCAN-2026-06", posture: "clean", findings: [{ level: "ok", text: "Brand accounts clean. No credential reuse detected in tracked set." }], accounts: 3, rotationDue: days(51), phishing: "low", breachCheck: "Runs on password change or reset" },
@@ -130,7 +156,7 @@ function seed() {
     { id: uid("act"), ws: "chicagoshots", who: "Booking Coordinator", text: "confirmed the Halsted shoot for Monday 9am.", at: days(-0.6) },
   ];
 
-  return { version: 3, workspaces, leads, proposals, reviews, bookings, media, sites, products, security, approvals, agents, activity };
+  return { version: 4, workspaces, leads, proposals, reviews, bookings, media, sites, products, games, storeItems, security, approvals, agents, activity };
 }
 
 /* ---------------- store ---------------- */
@@ -139,7 +165,7 @@ function load() {
     const raw = localStorage.getItem(DB_KEY);
     if (raw) {
       const d = JSON.parse(raw);
-      if (d && d.version === 3) return d;
+      if (d && d.version === 4) return d;
     }
   } catch {}
   return seed();
@@ -253,5 +279,6 @@ export const STATUS_LABEL = {
   "brief-ready": "Brief ready", "generation-approved": "Generation approved", "delivered": "Delivered",
   "publish-ready": "Publish-ready", "approved-to-publish": "Approved to publish", "published-ready": "Published-ready",
   "received": "Received", "pending": "Pending", "declined": "Declined", "not-wired": "Not wired", "invoice-ready": "Invoice-ready",
+  "live": "Live", "pending-review": "Pending review", "retired": "Retired",
 };
 export const statusLabel = (s) => STATUS_LABEL[s] || s;

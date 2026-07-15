@@ -293,10 +293,10 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   font: 500 10px "DM Mono", monospace; letter-spacing: 0.07em; text-transform: uppercase; white-space: nowrap;
   border: 1px solid rgba(234, 255, 242, 0.18); color: #b9d2c2; background: rgba(255, 255, 255, 0.03);
 }
-.chip-won, .chip-approved, .chip-active, .chip-delivered, .chip-published-ready, .chip-confirmed, .chip-received, .chip-invoice-ready, .chip-generation-approved, .chip-approved-to-publish {
+.chip-won, .chip-approved, .chip-active, .chip-delivered, .chip-published-ready, .chip-confirmed, .chip-received, .chip-invoice-ready, .chip-generation-approved, .chip-approved-to-publish, .chip-live {
   border-color: rgba(65, 255, 161, 0.5); color: var(--neon); background: rgba(65, 255, 161, 0.08);
 }
-.chip-sent-ready, .chip-publish-ready, .chip-brief-ready, .chip-pending, .chip-waiting, .chip-needs-approval, .chip-standby, .chip-sent {
+.chip-sent-ready, .chip-publish-ready, .chip-brief-ready, .chip-pending, .chip-waiting, .chip-needs-approval, .chip-standby, .chip-sent, .chip-pending-review {
   border-color: rgba(255, 209, 102, 0.5); color: var(--warn); background: rgba(255, 209, 102, 0.07);
 }
 .chip-lost, .chip-declined, .chip-blocked, .chip-not-wired {
