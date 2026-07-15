@@ -48,17 +48,16 @@ try {
   assert(empty.postingMode === "approval_gated", "Social posting must be explicitly approval-gated.");
   assert(empty.connectors.every((item) => item.analyticsReadOnly === true), "Social analytics sync must stay read-only.");
   assert(empty.connectors.every((item) => item.postingRequiresApproval === true), "Posting-capable connections must still require approval.");
-  assert(empty.connectors.find((item) => item.id === "youtube")?.postingScopes.includes("youtube.upload"), "YouTube OAuth must request upload scope for future approval-gated posting.");
-  assert(empty.connectors.find((item) => item.id === "instagram")?.postingScopes.includes("instagram_content_publish"), "Instagram OAuth must request publish scope for future approval-gated posting.");
-  assert(empty.connectors.find((item) => item.id === "facebook")?.postingScopes.includes("pages_manage_posts"), "Facebook OAuth must request page posting scope for future approval-gated posting.");
-  assert(empty.connectors.find((item) => item.id === "tiktok")?.postingScopes.includes("video.publish"), "TikTok OAuth must request publish scope for future approval-gated posting.");
+  assert(empty.connectors.every((item) => item.crossPostCapable === false), "Analytics OAuth must not mark social channels as posting-capable.");
+  assert(empty.connectors.every((item) => item.postingScopes.length === 0), "Analytics OAuth must not request upload, publish, write, or posting scopes.");
+  assert(!JSON.stringify(empty.connectors).match(/upload|publish|manage_posts|tweet\.write|pins:write/), "Analytics connector status must remain read-only.");
 
   const setupEmpty = getSocialOAuthSetupStatus();
   assert(setupEmpty.readyCount === 0, "Provider app setup must start unconfigured when no env credentials exist.");
   assert(setupEmpty.providers.length === 6, "Setup status should collapse Meta into one Instagram/Facebook provider app row.");
   assert(setupEmpty.providers.every((provider) => provider.oauthConfigured === false), "Provider setup status must not pretend apps are ready.");
   assert(setupEmpty.providers.every((provider) => /^https:\/\//.test(provider.consoleUrl)), "Every provider setup row should include a safe console URL.");
-  assert(setupEmpty.providers.find((provider) => provider.id === "instagram")?.scopes.includes("instagram_content_publish"), "Meta setup row must show posting-capable Instagram scope.");
+  assert(!JSON.stringify(setupEmpty.providers).match(/upload|publish|manage_posts|tweet\.write|pins:write/), "Provider setup rows must not request posting scopes for analytics sync.");
 
   const savedSetup = saveSocialOAuthSetup({
     platform: "youtube",
