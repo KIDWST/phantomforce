@@ -71,6 +71,7 @@ export const FINANCE_CONNECTORS = [
   { id: "card", type: "credit-card", name: "Credit card", provider: "Plaid", status: "not-connected" },
   { id: "manual", type: "manual", name: "Manual ledger", provider: "Local entry / CSV", status: "ready" },
 ];
+export const FINANCE_RECURRENCE_FREQUENCIES = ["weekly", "biweekly", "monthly", "custom-days"];
 
 /* ---------------- local memory ---------------- */
 export const MEMORY_RETENTION_DAYS = 30;
@@ -454,6 +455,7 @@ function financeSeed() {
     accounts: [],
     transactions: [],
     connectors: FINANCE_CONNECTORS,
+    recurringRules: [],
   };
 }
 
@@ -629,9 +631,29 @@ function normalizeFinance(finance) {
       externalId: tx.externalId || null,
       notes: String(tx.notes || "").slice(0, 300),
       createdAt: tx.createdAt || new Date().toISOString(),
+      receiptAssetId: tx.receiptAssetId || null,
+      recurringRuleId: tx.recurringRuleId || null,
+      aiAssisted: Boolean(tx.aiAssisted),
     };
   }).filter((tx) => tx.amount !== 0) : [];
-  return { accounts, transactions, connectors };
+  const recurringRules = Array.isArray(input.recurringRules) ? input.recurringRules.map((rule) => ({
+    id: rule.id || uid("rule"),
+    ws: rule.ws || "phantomforce",
+    description: String(rule.description || "Recurring transaction").slice(0, 160),
+    amount: Math.abs(Number(rule.amount) || 0),
+    direction: rule.direction === "income" ? "income" : "expense",
+    category: FINANCE_CATEGORIES.includes(rule.category) ? rule.category : "Uncategorized",
+    account: String(rule.account || "Manual ledger").slice(0, 80),
+    frequency: FINANCE_RECURRENCE_FREQUENCIES.includes(rule.frequency) ? rule.frequency : "monthly",
+    intervalDays: rule.frequency === "custom-days" ? Math.max(1, Number(rule.intervalDays) || 1) : null,
+    startDate: rule.startDate || new Date().toISOString().slice(0, 10),
+    endDate: rule.endDate || null,
+    status: rule.status === "paused" ? "paused" : "active",
+    lastGeneratedDate: rule.lastGeneratedDate || null,
+    createdAt: rule.createdAt || new Date().toISOString(),
+    source: rule.source === "ai-parsed" ? "ai-parsed" : "manual",
+  })) : [];
+  return { accounts, transactions, connectors, recurringRules };
 }
 
 // Normalizes in place and always returns the same object identity for a given
@@ -639,7 +661,18 @@ function normalizeFinance(finance) {
 // closures; handing back a fresh object on every call orphaned those closures
 // and silently dropped writes (added transactions disappeared on save).
 function ensureFinance() {
-  const normalized = normalizeFinance(store.state.finance);
+  let financeInput = store.state.finance;
+  // If finance is null, try to reload from localStorage
+  if (!financeInput || typeof financeInput !== "object") {
+    try {
+      const raw = localStorage.getItem(DB_KEY);
+      if (raw) {
+        const d = JSON.parse(raw);
+        if (d && d.version === 4) financeInput = d.finance;
+      }
+    } catch {}
+  }
+  const normalized = normalizeFinance(financeInput);
   const current = store.state.finance;
   if (!current || typeof current !== "object") {
     store.state.finance = normalized;
@@ -648,6 +681,7 @@ function ensureFinance() {
   current.accounts = normalized.accounts;
   current.transactions = normalized.transactions;
   current.connectors = normalized.connectors;
+  current.recurringRules = normalized.recurringRules;
   return current;
 }
 
@@ -1371,6 +1405,7 @@ export function moneyView() {
     transactions,
     accounts,
     connectors: finance.connectors,
+    recurringRules: finance.recurringRules,
     cashIn,
     cashOut,
     netCash,
