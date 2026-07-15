@@ -6,6 +6,7 @@
 const DB_KEY = "pf.phantom.v4";
 const SESSION_KEY = "pf.session.v3";
 const LIVE_TOKEN_KEY = "pf.live.sessionToken.v1";
+const SESSION_ENDED_KEY = "pf.session.ended.v1";
 const DAY = 86400000;
 
 export const uid = (p = "id") => `${p}-${Math.random().toString(36).slice(2, 8)}${(Date.now() % 100000).toString(36)}`;
@@ -860,12 +861,16 @@ let liveSessionToken = "";
 
 export const session = {
   get() {
+    try {
+      if (localStorage.getItem(SESSION_ENDED_KEY)) return null;
+    } catch {}
     try { return JSON.parse(localStorage.getItem(SESSION_KEY) || "null"); } catch { return null; }
   },
   set(s) {
     const token = s?.token || "";
     if (token) liveSessionToken = token;
     try {
+      localStorage.removeItem(SESSION_ENDED_KEY);
       const { token: _token, ...safeSession } = s || {};
       localStorage.setItem(SESSION_KEY, JSON.stringify(safeSession));
       if (token) sessionStorage.setItem(LIVE_TOKEN_KEY, token);
@@ -885,6 +890,7 @@ export const session = {
     try {
       localStorage.removeItem(SESSION_KEY);
       sessionStorage.removeItem(LIVE_TOKEN_KEY);
+      localStorage.setItem(SESSION_ENDED_KEY, String(Date.now()));
     } catch {}
   },
 };

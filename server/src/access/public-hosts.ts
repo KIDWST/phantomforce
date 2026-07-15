@@ -27,20 +27,26 @@ function firstHeader(value: unknown) {
   return typeof value === "string" ? value : undefined;
 }
 
+function recognizedPublicHost(value: string | undefined) {
+  const normalized = normalizePublicHost(value);
+  if (normalized === ADMIN_PUBLIC_HOST || normalized === CLIENT_PUBLIC_HOST) return normalized;
+  return "";
+}
+
 export function publicHostFromHeaders(headers: Record<string, unknown>) {
-  const routedHost = normalizePublicHost(
-    firstHeader(headers["x-forwarded-host"]) ??
-      firstHeader(headers["x-original-host"]) ??
-      firstHeader(headers.host),
+  const directHost = normalizePublicHost(firstHeader(headers.host));
+  const forwardedHost = normalizePublicHost(
+    firstHeader(headers["x-forwarded-host"]) ?? firstHeader(headers["x-original-host"]),
   );
-  if (routedHost) return routedHost;
+  const trustedPublicHost = recognizedPublicHost(directHost) || recognizedPublicHost(forwardedHost);
+  if (trustedPublicHost) return trustedPublicHost;
 
   const origin = firstHeader(headers.origin);
-  if (!origin) return "";
+  if (!origin) return directHost || forwardedHost;
   try {
-    return normalizePublicHost(new URL(origin).host);
+    return recognizedPublicHost(new URL(origin).host) || directHost || forwardedHost || normalizePublicHost(new URL(origin).host);
   } catch {
-    return normalizePublicHost(origin);
+    return recognizedPublicHost(origin) || directHost || forwardedHost || normalizePublicHost(origin);
   }
 }
 

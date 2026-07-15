@@ -4,7 +4,7 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 
 import { isSubscriptionActive } from "./subscription-store.js";
-import { filterSessionsForPublicHost, publicHostFromHeaders } from "./public-hosts.js";
+import { canUseSessionOnPublicHost, filterSessionsForPublicHost, publicHostFromHeaders } from "./public-hosts.js";
 
 export const SESSION_HEADER = "x-phantomforce-session";
 export const AUTHORIZATION_HEADER = "Authorization";
@@ -577,10 +577,9 @@ export function resolveAccessSession(request: FastifyRequest) {
 
 export function requireAccessSession(request: FastifyRequest, reply: FastifyReply) {
   const session = resolveAccessSession(request);
+  const publicHost = publicHostFromHeaders(request.headers as Record<string, unknown>);
 
   if (!session) {
-    const publicHost = publicHostFromHeaders(request.headers as Record<string, unknown>);
-
     reply.code(401).send({
       ok: false,
       error: `Missing or invalid ${AUTHORIZATION_HEADER} bearer token.`,
@@ -590,6 +589,15 @@ export function requireAccessSession(request: FastifyRequest, reply: FastifyRepl
           ? "/auth/demo-login"
           : "/auth/session-login",
       sessions: filterSessionsForPublicHost(publicHost, listAccessSessions()),
+    });
+    return undefined;
+  }
+
+  if (!canUseSessionOnPublicHost(publicHost, session)) {
+    reply.code(403).send({
+      ok: false,
+      error: "This session is not available on this public host.",
+      host: publicHost || "local",
     });
     return undefined;
   }

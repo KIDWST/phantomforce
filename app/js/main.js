@@ -1016,6 +1016,36 @@ async function signOut() {
   }
 }
 
+async function verifyDatabaseBootSession(candidate) {
+  if (!candidate?.database) return candidate;
+  const me = await fetchAuthMe().catch(() => null);
+  if (!me?.ok || !me.database || !me.user) {
+    session.clear();
+    return null;
+  }
+  if (isClientPublicHost() && me.user.isSuperAdmin) {
+    session.clear();
+    return null;
+  }
+  const activeOrg = me.activeOrg || {};
+  const orgRole = activeOrg.role || null;
+  const managesOrg = !!me.user.isSuperAdmin || ["owner", "admin"].includes(orgRole || "");
+  const verified = {
+    ...candidate,
+    role: managesOrg ? "admin" : "employee",
+    name: me.user.name || candidate.name || me.user.email || "Operator",
+    label: me.user.name || candidate.label || "",
+    email: me.user.email || candidate.email || "",
+    orgId: activeOrg.id || null,
+    orgRole,
+    memberships: Array.isArray(me.memberships) ? me.memberships : candidate.memberships || [],
+    isSuperAdmin: !!me.user.isSuperAdmin,
+    canManageAccess: !!me.user.isSuperAdmin,
+  };
+  session.set(verified);
+  return verified;
+}
+
 /* ============================ account + plan ============================ */
 const ACCOUNT_PLAN = {
   name: "Elite Plan",
@@ -3289,7 +3319,8 @@ function enterPhantom() {
 }
 
 async function boot() {
-  ctx.session = isLiveAdminHost() ? await verifyLiveSession() : resolveSession();
+  const resolvedSession = isLiveAdminHost() ? await verifyLiveSession() : resolveSession();
+  ctx.session = await verifyDatabaseBootSession(resolvedSession);
   wireDeck();
   store.onChange(() => {
     if (!phantom.hidden) {

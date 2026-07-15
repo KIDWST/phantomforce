@@ -8,6 +8,7 @@ const main = read("../app/js/main.js");
 const orgs = read("../app/js/orgs.js");
 const store = read("../app/js/store.js");
 const server = read("../server/src/index.ts");
+const sessionAccess = read("../server/src/access/session.ts");
 const publicHosts = read("../server/src/access/public-hosts.ts");
 
 assert.match(store, /export const CLIENT_PUBLIC_HOST = "app\.phantomforce\.online"/u, "The customer app host must be explicit in the browser session layer.");
@@ -18,9 +19,13 @@ assert.match(store, /if \(saved\?\.database && !token\) \{\s*session\.clear\(\);
 assert.match(store, /isClientPublicHost\(\) && \(!saved\.database \|\| saved\.canManageAccess \|\| saved\.isSuperAdmin\)/u, "The customer app must reject local/admin/super-admin session mirrors.");
 assert.match(store, /let liveSessionToken = "";/u, "The current tab must retain a volatile bearer token when browser sessionStorage is unavailable.");
 assert.match(store, /const token = s\?\.token \|\| "";\s*if \(token\) liveSessionToken = token;/u, "Session set must capture the live token before writing browser storage.");
+assert.match(store, /const SESSION_ENDED_KEY = "pf\.session\.ended\.v1"/u, "Logout must leave a local ended-session marker.");
+assert.match(store, /if \(localStorage\.getItem\(SESSION_ENDED_KEY\)\) return null;/u, "A logout marker must block accidental restored local sessions.");
+assert.match(store, /localStorage\.removeItem\(SESSION_ENDED_KEY\);[\s\S]*const \{ token: _token, \.\.\.safeSession \} = s \|\| \{\};/u, "A real login/session set must clear the logout marker.");
 assert.match(store, /const \{ token: _token, \.\.\.safeSession \} = s \|\| \{\};\s*localStorage\.setItem\(SESSION_KEY, JSON\.stringify\(safeSession\)\);/u, "Durable local session storage must continue stripping bearer tokens.");
 assert.match(store, /if \(liveSessionToken\) return liveSessionToken;/u, "Authenticated API clients must read the volatile token before falling back to sessionStorage.");
 assert.match(store, /liveSessionToken = "";\s*try \{\s*localStorage\.removeItem\(SESSION_KEY\);/u, "Logout must clear the volatile bearer token before clearing browser storage.");
+assert.match(store, /localStorage\.setItem\(SESSION_ENDED_KEY, String\(Date\.now\(\)\)\);/u, "Logout must mark the browser as explicitly signed out.");
 
 assert.match(main, /if \(isClientPublicHost\(\)\) \{\s*renderCustomerAuthLoading\(card\);\s*maybeUpgradeGateToDatabaseLogin\(card, \{ customerApp: true, required: true \}\);\s*return;\s*\}/u, "app.phantomforce.online must render required real-account auth instead of role buttons.");
 assert.match(main, /if \(isLocalDevHost\(\)\) \{\s*renderLocalAuthLoading\(card\);\s*maybeUpgradeGateToDatabaseLogin\(card, \{ localDev: true, allowLocalFallback: true \}\);\s*return;\s*\}/u, "Local QA must check the configured auth backend before showing shortcut entry.");
@@ -30,6 +35,11 @@ assert.match(main, /function renderCustomerAuthBlocked\(card, message = "Custome
 assert.match(main, /Platform admin accounts must use admin\.phantomforce\.online/u, "Customer app must direct platform admin accounts away from app.phantomforce.online.");
 assert.match(main, /try \{\s*if \(databaseSession\) await databaseLogout\(\);\s*\} finally \{\s*session\.clear\(\);/u, "Logout must always clear local access even if database revocation fails.");
 assert.match(main, /url\.searchParams\.delete\("session"\)/u, "Logout must remove local session shortcuts from the URL.");
+assert.match(main, /async function verifyDatabaseBootSession\(candidate\) \{[\s\S]*const me = await fetchAuthMe\(\)\.catch\(\(\) => null\);[\s\S]*if \(!me\?\.ok \|\| !me\.database \|\| !me\.user\) \{[\s\S]*session\.clear\(\);[\s\S]*if \(isClientPublicHost\(\) && me\.user\.isSuperAdmin\) \{/u, "Database session boot restore must verify the server session before opening the shell.");
+assert.match(main, /const orgRole = activeOrg\.role \|\| null;/u, "Verified database boot restore must not trust stale local orgRole values.");
+assert.match(main, /orgId: activeOrg\.id \|\| null,/u, "Verified database boot restore must not trust stale local orgId values.");
+assert.doesNotMatch(main, /activeOrg\.role \|\| candidate\.orgRole|activeOrg\.id \|\| candidate\.orgId/u, "Server-verified restore must prefer server active org truth over the local session mirror.");
+assert.match(main, /const resolvedSession = isLiveAdminHost\(\) \? await verifyLiveSession\(\) : resolveSession\(\);\s*ctx\.session = await verifyDatabaseBootSession\(resolvedSession\);/u, "Boot must route saved database sessions through server verification.");
 assert.doesNotMatch(main, /confirm\("Sign out of PhantomForce\?"\)/u, "Sign out should not be blocked by a native confirmation before clearing access.");
 assert.doesNotMatch(main, /phantomforcesupport@gmail\.com/u, "Owner login must not expose or prefill a real owner email.");
 assert.match(main, /name="pf-access-identity" autocomplete="new-password"[\s\S]*placeholder="you@yourcompany\.com"/u, "Owner email field must use neutral anti-autofill attributes.");
@@ -48,8 +58,13 @@ assert.match(index, /Business owner or workspace admin/u, "Business Manager copy
 assert.match(index, /Jordan and PhantomForce platform admins use admin\.phantomforce\.online/u, "The static gate must separate Jordan/admin from customer app users.");
 
 assert.match(publicHosts, /export const CLIENT_PUBLIC_HOST = "app\.phantomforce\.online"/u, "The server public-host boundary must know the customer app host.");
+assert.match(publicHosts, /function recognizedPublicHost\(value: string \| undefined\)/u, "Public-host detection must explicitly recognize only PhantomForce public hosts.");
+assert.match(publicHosts, /const directHost = normalizePublicHost\(firstHeader\(headers\.host\)\);[\s\S]*const forwardedHost = normalizePublicHost\([\s\S]*const trustedPublicHost = recognizedPublicHost\(directHost\) \|\| recognizedPublicHost\(forwardedHost\);/u, "The real Host header must win over forwarded headers when it is a recognized PhantomForce public host.");
+assert.doesNotMatch(publicHosts, /firstHeader\(headers\["x-forwarded-host"\]\) \?\?\s*firstHeader\(headers\["x-original-host"\]\) \?\?\s*firstHeader\(headers\.host\)/u, "Forwarded host headers must not outrank the direct Host header.");
 assert.match(publicHosts, /if \(scope === "admin"\) return session\.canManageAccess/u, "The admin host must only allow platform/admin access sessions.");
 assert.match(publicHosts, /if \(scope === "client"\) return !session\.canManageAccess/u, "The customer host must reject platform/admin access sessions.");
+assert.match(sessionAccess, /import \{ canUseSessionOnPublicHost, filterSessionsForPublicHost, publicHostFromHeaders \} from "\.\/public-hosts\.js";/u, "Every authenticated request must be able to enforce the public-host boundary.");
+assert.match(sessionAccess, /const publicHost = publicHostFromHeaders\(request\.headers as Record<string, unknown>\);[\s\S]*if \(!canUseSessionOnPublicHost\(publicHost, session\)\) \{[\s\S]*This session is not available on this public host/u, "Authenticated requests must reject tokens used on the wrong public host, not only during login.");
 assert.match(server, /const publicHost = requestPublicHost\(request\);\s*if \(!canUseSessionOnPublicHost\(publicHost, session\)\) \{\s*await revokeDatabaseSession\(session\.authSessionId\);/u, "Database login must enforce the public-host boundary and revoke refused sessions.");
 assert.match(server, /function requireManualBrainEditor\(session: AccessSession, reply: FastifyReply\)/u, "Manual brain editing must have an explicit platform-only guard.");
 assert.match(server, /if \(session\.canManageAccess\) return true;/u, "Manual brain editing must remain limited to platform-access sessions.");
