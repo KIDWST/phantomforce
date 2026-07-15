@@ -5595,6 +5595,14 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
   background: rgba(65,255,161,0.07);
 }
 .set-oauth-apps p { margin: 10px 0; color: var(--dim); font-size: 12.5px; line-height: 1.45; max-width: 880px; }
+.set-oauth-apps .set-social-next {
+  color: #dcffeb;
+  border: 1px solid rgba(65,255,161,0.18);
+  border-radius: 12px;
+  padding: 9px 10px;
+  background: rgba(65,255,161,0.065);
+}
+.set-oauth-apps .set-social-next b { color: var(--neon); }
 .set-oauth-callback { display: grid; gap: 6px; margin: 10px 0; }
 .set-oauth-callback span {
   color: var(--dim); font: 800 9.5px "DM Mono", monospace; letter-spacing: 0.1em; text-transform: uppercase;

@@ -6,20 +6,20 @@
  * instead of sending people out to another product.
  */
 
-import { currentTenantId, ctx, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260714-268";
+import { currentTenantId, ctx, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260714-269";
 import {
   PLATFORMS, registerContentAsset, loadSocialAccounts, saveSocialAccounts, socialStatus,
   loadContentAssets, saveContentAssets, contentAssetDisplayUrl, hydrateContentAssetUrl,
-} from "./contenthub.js?v=phantom-live-20260714-268";
-import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260714-268";
+} from "./contenthub.js?v=phantom-live-20260714-269";
+import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260714-269";
 import {
   addImageLayer, addTextLayer, cloneImageEditState, compositionSnapshot, duplicateLayer,
   freshComposition, hitTestLayer, loadCompositionImages, moveLayerOrder, pushEditorSnapshot,
   removeSelectedLayers, renderComposition, restoreComposition, selectLayer, selectedLayers,
-} from "./content-editor.js?v=phantom-live-20260714-268";
-import { loadImageForEditing, exportCanvas, requestAiEdit, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260714-268";
-import { mountVideoEditor } from "./videocut.js?v=phantom-live-20260714-268";
-import { assetsAvailable, assetBlobUrl, listAssets, recordAssetUsage, saveToAssetCloud, listLocalAssets, refreshLocalAssets, localAssetBlobUrl } from "./orgs.js?v=phantom-live-20260714-268";
+} from "./content-editor.js?v=phantom-live-20260714-269";
+import { loadImageForEditing, exportCanvas, requestAiEdit, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260714-269";
+import { mountVideoEditor } from "./videocut.js?v=phantom-live-20260714-269";
+import { assetsAvailable, assetBlobUrl, listAssets, recordAssetUsage, saveToAssetCloud, listLocalAssets, refreshLocalAssets, localAssetBlobUrl } from "./orgs.js?v=phantom-live-20260714-269";
 
 const CFG_KEY = "pf.medialab.v1";
 const EDIT_INTENT_KEY = "pf.medialab.editIntent.v1";
@@ -193,6 +193,7 @@ let socialOAuthState = {
   loading: false,
   error: "",
   connectors: [],
+  preflight: null,
 };
 let socialOAuthSetupState = {
   loaded: false,
@@ -264,6 +265,7 @@ async function refreshSocialOAuthStatus({ force = false } = {}) {
       loading: false,
       error: "",
       connectors: Array.isArray(json?.social_analytics?.connectors) ? json.social_analytics.connectors : [],
+      preflight: json?.social_analytics?.oauthPreflight || null,
     };
   } catch (error) {
     socialOAuthState = {
@@ -306,6 +308,7 @@ async function saveSocialOAuthAppSetup(payload = {}) {
   const json = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(String(json?.error || `OAuth setup save failed (${response.status}).`));
   socialOAuthSetupState = { loaded: true, loading: false, error: "", setup: json.setup || null };
+  socialOAuthState.preflight = json?.social_analytics?.oauthPreflight || socialOAuthState.preflight;
   socialOAuthState.loaded = false;
   await refreshSocialOAuthStatus({ force: true });
   return json;
@@ -407,8 +410,8 @@ function socialStatusLabel(account) {
 }
 function socialPostingState(account) {
   const connector = socialConnectorFor(account.id);
-  if (connector?.configured) return "live feed ready";
-  if (connector?.oauthConfigured) return "authorize account";
+  if (connector?.configured) return "live feed + posting gated";
+  if (connector?.oauthConfigured) return "connect signed-in account";
   if (socialOAuthState.loading) return "checking setup";
   const st = socialStatus(account);
   if (account.connectMode === "live-api" && account.analytics?.live) return "live data";
@@ -420,7 +423,7 @@ function socialPostingState(account) {
 }
 function socialActionLabel(account) {
   const connector = socialConnectorFor(account.id);
-  if (account.connectMode === "live-api" && account.analytics?.live) return `Refresh ${account.name}`;
+  if (account.connectMode === "live-api" && account.analytics?.live) return `Sync ${account.name}`;
   if (connector?.configured) return `Reconnect ${account.name}`;
   if (connector?.oauthConfigured) return `Connect ${account.name}`;
   if (socialOAuthState.loading) return "Checking…";
@@ -3740,6 +3743,13 @@ function socialOAuthSetupPanel(esc) {
   const setup = socialOAuthSetupState.setup;
   const providers = Array.isArray(setup?.providers) ? setup.providers : [];
   const callbackUrl = setup?.recommendedRedirectUri || setup?.redirectUri || "https://admin.phantomforce.online/phantom-ai/ops/social-oauth/callback";
+  const preflight = socialOAuthState.preflight || {};
+  const nextLabel = preflight.nextGlobalLabel || "Set up provider apps";
+  const nextDetail = preflight.nextGlobalAction === "connect_signed_in_account"
+    ? "Provider apps are saved. Connect each account with the browser that is already signed in."
+    : preflight.nextGlobalAction === "sync_live_feed"
+      ? "Accounts are authorized. Sync live metrics from the official platform APIs."
+      : "Create the provider app credentials once, then every workspace can connect accounts with OAuth.";
   const providerOptions = providers.length
     ? providers.map((provider) => `<option value="${esc(provider.id)}">${esc(provider.name)}${provider.id === "instagram" ? " + Facebook" : ""}</option>`).join("")
     : PLATFORMS.map((platform) => `<option value="${esc(platform.id)}">${esc(platform.name)}</option>`).join("");
@@ -3752,6 +3762,7 @@ function socialOAuthSetupPanel(esc) {
       <b>${esc(String(setup?.readyCount ?? 0))}/${esc(String(setup?.totalCount ?? (providers.length || PLATFORMS.length)))} ready</b>
     </summary>
     <p>Set each platform app once. After this, any business user just clicks Connect account and approves in their signed-in browser. Secrets stay server-side.</p>
+    <p class="set-social-next"><b>Next:</b> ${esc(nextLabel)} · ${esc(nextDetail)}</p>
     ${socialOAuthSetupState.error ? `<div class="set-social-notice">${esc(socialOAuthSetupState.error)}</div>` : ""}
     <label class="set-oauth-callback">
       <span>Callback URL for provider consoles</span>
@@ -3774,13 +3785,22 @@ function canManageSocialOAuthApps() {
 
 function socialOAuthManagedPanel(esc) {
   const readyCount = socialOAuthState.connectors.filter((connector) => connector.oauthConfigured).length;
+  const authorizedCount = socialOAuthState.connectors.filter((connector) => connector.configured).length;
   const totalCount = socialOAuthState.connectors.length || PLATFORMS.length;
+  const preflight = socialOAuthState.preflight || {};
+  const nextLabel = preflight.nextGlobalLabel || (authorizedCount ? "Sync live feed" : readyCount ? "Connect accounts" : "Provider setup waiting");
+  const nextDetail = preflight.nextGlobalAction === "sync_live_feed"
+    ? "Authorized accounts can now pull official metrics."
+    : preflight.nextGlobalAction === "connect_signed_in_account"
+      ? "Use the browser account you are already signed into; PhantomForce stores the resulting token server-side."
+      : "The platform app must be configured by the owner before account OAuth can begin.";
   return `<details class="set-oauth-apps set-oauth-managed" open>
     <summary>
       <span>Account connection</span>
-      <b>${esc(String(readyCount))}/${esc(String(totalCount))} provider apps ready</b>
+      <b>${esc(String(authorizedCount))}/${esc(String(totalCount))} accounts authorized</b>
     </summary>
     <p>Choose a channel below and connect it with the signed-in browser. PhantomForce keeps the platform app credentials server-side, stores account tokens server-side, and keeps posting approval-gated.</p>
+    <p class="set-social-next"><b>Next:</b> ${esc(nextLabel)} · ${esc(nextDetail)} ${readyCount ? `(${readyCount}/${totalCount} provider apps ready)` : ""}</p>
   </details>`;
 }
 
