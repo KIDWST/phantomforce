@@ -111,6 +111,7 @@ assert.match(neonDrift, /maxSpeed=\.0032/u, "Neon Drift ship speed must stay tun
 assert.match(neonDrift, /accel=\.000055\*W/u, "Neon Drift needs punchier acceleration.");
 assert.match(neonDrift, /drag=Math\.pow\(\.91,dt\/16\)/u, "Neon Drift must keep enough glide to feel fast.");
 assert.match(neonDrift, /player\.vx\+=\(tx-player\.x\)\*\.00054\*W/u, "Neon Drift touch-drag must chase faster on mobile.");
+assert.doesNotMatch(neonDrift, /DRAG TO FLY|Touch and drag on mobile|touch-drag/u, "Neon Drift mobile controls must stay invisible and avoid obvious touch instructions.");
 assert.match(neonDrift, /Math\.max\(130,390-wave\*18\)/u, "Neon Drift waves should spawn quickly enough to stay exciting.");
 assert.match(neonDrift, /t\*\.000055/u, "Neon Drift background motion should feel fast enough.");
 assert.match(neonDrift, /e\.y>1\.12\)\{e\.dead=true\}/u, "Escaped enemies should leave the field without damaging the player.");
