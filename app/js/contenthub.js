@@ -9,20 +9,20 @@ import {
   freshEditState, applyFilterPreset, renderBaseFrame,
   addBokehSpot, removeBokehSpotNear, removeBokehSpotAt, nearestBokehSpot, moveBokehSpot, resizeBokehSpot,
   setBokehMask, freshTextStyle, TEXT_FONTS, TEXT_PRESETS, applyTextPreset,
-} from "./imagefilters.js?v=phantom-live-20260714-261";
-import { getRembgStatus, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260714-261";
-import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260714-261";
-import { parseAnalyticsReport } from "./social-analytics.js?v=phantom-live-20260714-261";
+} from "./imagefilters.js?v=phantom-live-20260714-262";
+import { getRembgStatus, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260714-262";
+import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260714-262";
+import { parseAnalyticsReport } from "./social-analytics.js?v=phantom-live-20260714-262";
 import {
   freshComposition, compositionSnapshot, restoreComposition, addImageLayer, replaceImageLayerSource, addTextLayer, addColorLayer,
   duplicateLayer, removeSelectedLayers, moveLayerOrder, selectedLayers, selectLayer, selectAllLayers,
   loadCompositionImages, renderComposition, drawCompositionOverlay, drawDetectedSubjectOverlay, canvasPoint, hitTestLayer, hitTestResizeHandle,
   setCanvasPreset, zoomComposition, canvasPointToLayer, layerPointToCanvas,
   imageEditSnapshot, restoreImageEditSnapshot, pushEditorSnapshot,
-} from "./content-editor.js?v=phantom-live-20260714-261";
+} from "./content-editor.js?v=phantom-live-20260714-262";
 import {
-  currentTenantId, currentWs, session, store, visible, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem, wsName,
-} from "./store.js?v=phantom-live-20260714-261";
+  currentTenantId, currentWs, ctx, session, store, visible, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem, wsName,
+} from "./store.js?v=phantom-live-20260714-262";
 
 const CH_KEY = "pf.contenthub.v2";
 const CH_REMOVED_KEY = "pf.contenthub.removed.v1";
@@ -3616,6 +3616,78 @@ function accountAnalyticsRow(row, esc) {
     </div>
   </article>`;
 }
+
+function canManageSocialOAuthApps() {
+  const active = ctx?.session || {};
+  return Boolean(active.canManageAccess || active.isSuperAdmin);
+}
+
+function analyticsReadinessCopy({ hasLiveMetrics, configuredCount, oauthReadyCount, totalCount }) {
+  if (hasLiveMetrics) {
+    return {
+      tone: "live",
+      title: "Live feed is on.",
+      body: "Official platform metrics are syncing from authorized social accounts. Posting still stays approval-gated.",
+      action: `<button class="btn btn-primary" type="button" data-an-sync-all>${analyticsConnectorState.loading ? "Syncing…" : "Sync live feed"}</button>`,
+    };
+  }
+  if (configuredCount) {
+    return {
+      tone: "ready",
+      title: "Accounts are authorized. Sync the feed.",
+      body: "PhantomForce has server-side account tokens. Pull the latest platform metrics now.",
+      action: `<button class="btn btn-primary" type="button" data-an-sync-all>${analyticsConnectorState.loading ? "Syncing…" : "Sync live feed"}</button>`,
+    };
+  }
+  if (oauthReadyCount) {
+    return {
+      tone: "ready",
+      title: "Provider apps are ready. Connect accounts.",
+      body: "Use the signed-in browser buttons below once per channel. PhantomForce stores tokens server-side and keeps outbound posting gated.",
+      action: `<button class="btn btn-primary" type="button" data-an-scroll-sources>Connect accounts</button>`,
+    };
+  }
+  return {
+    tone: "blocked",
+    title: "Provider apps need setup first.",
+    body: canManageSocialOAuthApps()
+      ? "Add the platform app credentials once in Settings. After that every org can connect accounts through OAuth."
+      : "PhantomForce needs platform OAuth apps configured before this workspace can authorize social accounts.",
+    action: canManageSocialOAuthApps()
+      ? `<button class="btn btn-primary" type="button" data-open-ws="settings" data-open-settings-tab="media">Set up provider apps</button>`
+      : `<button class="btn btn-ghost" type="button" disabled>Waiting on platform setup</button>`,
+  };
+}
+
+function analyticsReadinessPanel({ displayAccounts, liveApiRows, configuredCount, oauthReadyCount, hasLiveMetrics }) {
+  const totalCount = displayAccounts.length || 1;
+  const copy = analyticsReadinessCopy({ hasLiveMetrics, configuredCount, oauthReadyCount, totalCount });
+  const missingApps = analyticsConnectorState.connectors
+    .filter((connector) => !connector.oauthConfigured)
+    .map((connector) => connector.name)
+    .slice(0, 4);
+  const readyApps = analyticsConnectorState.connectors
+    .filter((connector) => connector.oauthConfigured)
+    .map((connector) => connector.name)
+    .slice(0, 4);
+  const providerNote = oauthReadyCount
+    ? `Ready: ${readyApps.join(", ")}${analyticsConnectorState.connectors.filter((c) => c.oauthConfigured).length > readyApps.length ? "…" : ""}`
+    : `Missing: ${missingApps.join(", ") || "provider apps"}`;
+  return `<section class="an-readiness is-${copy.tone}" aria-label="Social live feed readiness">
+    <div class="an-readiness-main">
+      <p class="ch-eyebrow">Live feed setup</p>
+      <h3>${copy.title}</h3>
+      <p>${copy.body}</p>
+    </div>
+    <div class="an-readiness-steps">
+      <span class="${oauthReadyCount ? "is-done" : "is-next"}"><b>${oauthReadyCount}/${totalCount}</b><i>provider apps</i><em>${providerNote}</em></span>
+      <span class="${configuredCount ? "is-done" : oauthReadyCount ? "is-next" : ""}"><b>${configuredCount}/${totalCount}</b><i>accounts authorized</i><em>signed-in browser OAuth</em></span>
+      <span class="${liveApiRows.length ? "is-done" : configuredCount ? "is-next" : ""}"><b>${liveApiRows.length}/${totalCount}</b><i>live feeds</i><em>real metrics reporting</em></span>
+    </div>
+    <div class="an-readiness-action">${copy.action}</div>
+  </section>`;
+}
+
 function wireAnalyticsActions(el, accounts, opts) {
   el.querySelectorAll("[data-an-sync]").forEach((button) => button.onclick = async () => {
     button.disabled = true;
@@ -3674,6 +3746,9 @@ function wireAnalyticsActions(el, accounts, opts) {
     analyticsNotice = `${account.name} analytics were cleared. The saved profile was not removed.`;
     renderAnalytics(el, opts);
   });
+  el.querySelectorAll("[data-an-scroll-sources]").forEach((button) => button.onclick = () => {
+    el.querySelector("[data-an-sources]")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
 }
 export function renderAnalytics(el, opts = {}, renderOptions = {}) {
   analyticsMount = el;
@@ -3702,11 +3777,12 @@ export function renderAnalytics(el, opts = {}, renderOptions = {}) {
       </section>
       <section class="an-toolbar" aria-label="Live analytics actions">
         <div class="an-hero-actions">
-          ${configuredCount ? `<button class="btn btn-primary" type="button" data-an-sync-all>${analyticsConnectorState.loading ? "Syncing…" : "Sync live feed"}</button>` : `<button class="btn btn-primary" type="button" data-open-ws="settings" data-open-settings-tab="media">Connect social accounts</button>`}
+          ${analyticsReadinessCopy({ hasLiveMetrics, configuredCount, oauthReadyCount, totalCount: displayAccounts.length || 1 }).action}
           <span class="an-src">${svgIc("up")} ${liveApiRows.length}/${displayAccounts.length} live social · ${configuredCount}/${displayAccounts.length} accounts authorized · ${oauthReadyCount}/${displayAccounts.length} OAuth apps ready</span>
         </div>
       </section>
       ${analyticsNotice || analyticsConnectorState.error ? `<div class="an-flash">${esc(analyticsNotice || analyticsConnectorState.error)}</div>` : ""}
+      ${analyticsReadinessPanel({ displayAccounts, liveApiRows, configuredCount, oauthReadyCount, hasLiveMetrics })}
       <div class="ch-kpis an-kpis">
         ${hasLiveMetrics
           ? `${kpi("Reach", K(totals.reach), "reported reach")}${kpi("Views", K(totals.impressions), "views + impressions")}${kpi("Engagement", K(totals.engagement), "likes + comments + shares")}${kpi("Followers", K(totals.followers), "latest reported total")}`
@@ -3726,7 +3802,7 @@ export function renderAnalytics(el, opts = {}, renderOptions = {}) {
         <div class="ch-card-h"><div><p class="ch-eyebrow">Channel comparison</p><h3>Engagement by platform</h3></div></div>
         <div class="ch-bars">${hasLiveMetrics ? feedRows.map((row) => `<div class="ch-bar-row"><span class="ch-bar-lab"><i class="ch-dot" style="background:${row.account.color}"></i>${esc(row.account.name)}</span><span class="ch-bar-track"><span class="ch-bar-fill" style="width:${Math.round((row.feed?.engagement || 0) / maxEngagement * 100)}%;background:${row.account.color}"></span></span><b class="ch-bar-val">${K(row.feed?.engagement || 0)}</b></div>`).join("") : `<div class="an-empty-note"><b>No platform engagement yet.</b><span>Once a channel is connected, this becomes your clean cross-platform comparison.</span></div>`}</div>
       </section>
-      <div class="an-section-head"><div><p class="ch-eyebrow">Sources</p><h3>Social account connections</h3></div><span>Official read-only reach/follower sync</span></div>
+      <div class="an-section-head" data-an-sources><div><p class="ch-eyebrow">Sources</p><h3>Social account connections</h3></div><span>Official OAuth reach/follower sync</span></div>
       <section class="an-channel-list" aria-label="Social analytics channels">
         ${feedRows.map((row) => accountAnalyticsRow(row, esc)).join("")}
       </section>
