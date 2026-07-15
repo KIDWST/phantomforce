@@ -75,6 +75,43 @@ const joined = `${files.store}\n${files.server}\n${files.client}\n${files.worksp
 assert.doesNotMatch(joined, /provider_called:\s*true|outbound_action_executed:\s*true|public_exposure_changed:\s*true/iu, "CRM pipeline must not perform external/provider/public actions.");
 assert.doesNotMatch(files.store, /fake email|fake phone|invent real/iu, "CRM store must not seed fake contact details.");
 
+globalThis.localStorage = {
+  data: new Map(),
+  getItem(key) { return this.data.has(key) ? this.data.get(key) : null; },
+  setItem(key, value) { this.data.set(key, String(value)); },
+  removeItem(key) { this.data.delete(key); },
+};
+globalThis.window = { dispatchEvent() {} };
+globalThis.CustomEvent = class CustomEvent {
+  constructor(type, init = {}) {
+    this.type = type;
+    this.detail = init.detail;
+  }
+};
+
+const crmProspectModule = await import(new URL("../app/js/crmprospects.js?v=crm-pipeline-runtime-test", import.meta.url));
+const storeModule = await import(new URL("../app/js/store.js?v=phantom-live-20260714-258", import.meta.url));
+const screenshotStylePrompt = "update our clients crm with clients who you think would be interested in phantomforce. your phantom workforce.. creators, businesses, schools, everyone. Just add to our CRM/clients tab";
+assert.equal(crmProspectModule.isCrmProspectBuildout(screenshotStylePrompt), true, "Clients page prompt must recognize natural CRM buildout requests.");
+const requestedSegments = crmProspectModule.requestedProspectSegments(screenshotStylePrompt).map((segment) => segment.id);
+assert.deepEqual(requestedSegments, [
+  "creators-media",
+  "local-service",
+  "schools-education",
+  "professional-services",
+  "sports-clubs",
+  "ops-heavy-teams",
+  "warm-network",
+], "Clients page prompt must expand 'everyone' into every PhantomForce prospect lane.");
+const buildout = crmProspectModule.createCrmProspectBuildout(screenshotStylePrompt);
+assert.equal(buildout.created.length, requestedSegments.length, "CRM prospect buildout must create a card for every requested segment.");
+assert.equal(storeModule.store.state.leads.length, requestedSegments.length, "CRM prospect buildout must add the cards to the visible local CRM state.");
+assert.ok(buildout.task?.title.includes("Qualify PhantomForce CRM prospect map"), "CRM prospect buildout must create the follow-up qualification task.");
+assert.ok(buildout.leads.every((lead) => lead.status === "new" && lead.source === "Phantom AI prospect map"), "Prompt-created CRM cards must land in the New column with the safe prospect-map source.");
+assert.ok(buildout.leads.some((lead) => /Creators/.test(lead.company)), "Prompt-created CRM cards must include creators/media.");
+assert.ok(buildout.leads.some((lead) => /Schools/.test(lead.company)), "Prompt-created CRM cards must include schools/education.");
+assert.ok(buildout.leads.every((lead) => /No external outreach, contact details, or live relationship claims were added/u.test(lead.notes)), "Prompt-created CRM cards must disclose safe CRM-only behavior.");
+
 console.log(JSON.stringify({
   ok: true,
   product: "CRM pipeline server persistence",
