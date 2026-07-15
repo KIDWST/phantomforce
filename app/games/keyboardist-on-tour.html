@@ -39,11 +39,6 @@
   select{width:100%;min-height:40px;border-radius:10px;border:1px solid #ff2fb055;background:#1d1030;color:#f5ecff;padding:6px 10px;font:inherit}
   .switch{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13px}
   .switch input{width:38px;height:22px;accent-color:#ff2fb0}
-  .keyrow{display:flex;align-items:center;gap:10px;justify-content:space-between;background:#0f081c;border-radius:10px;padding:8px 10px}
-  .keyrow .chip{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;font-weight:900;font-size:13px;flex:0 0 auto}
-  .keyrow .key{font-family:ui-monospace,monospace;background:#241236;padding:4px 8px;border-radius:6px;min-width:56px;text-align:center}
-  .tabs{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
-  .tabs button.active{background:#2a1543;border-color:#ff2fb0}
   /* gameplay */
   #playScreen{padding:0;justify-content:flex-start}
   .hud{width:100%;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 14px;flex:0 0 auto}
@@ -89,7 +84,7 @@
   <section class="scr" id="menuScreen" data-screen="menu">
     <p class="kicker">PhantomPlay Original</p>
     <h1>Keyboardist On Tour</h1>
-    <p class="sub">Hit every Pulse on the Threshold line, keep your Streak alive, and take an original synth act across three venues. All music below is synthesized live in your browser — no commercial tracks involved.</p>
+    <p class="sub">One Pulse falls at a time — and it can be any letter on your keyboard, A to Z. Press the exact key shown when it crosses the Threshold line, keep your Streak alive, and take an original synth act across three venues while you learn the whole keyboard. All music below is synthesized live in your browser — no commercial tracks involved.</p>
     <div class="panel">
       <div class="row">
         <button class="btn primary" data-go="venues">Start Tour</button>
@@ -134,11 +129,6 @@
       <div class="switch"><span>Colorblind-safe palette</span><input type="checkbox" id="cbToggle"></div>
       <div class="switch"><span>Reduce motion (extra, on top of platform setting)</span><input type="checkbox" id="rmToggle"></div>
       <div class="field"><label>Note speed<span id="settSpeedLbl">1.0x</span></label><input type="range" id="settSpeedRange" min="0.6" max="2.5" step="0.05" value="1"></div>
-    </div>
-    <div class="panel">
-      <div class="tabs"><button class="btn small active" data-keyset="4">4-Channel keys</button><button class="btn small" data-keyset="5">5-Channel keys (Arena)</button></div>
-      <div id="keyRows"></div>
-      <div class="row"><button class="btn small" data-reset-keys>Reset to defaults</button></div>
     </div>
     <div class="row"><button class="btn" data-go="menu">Back</button></div>
   </section>
@@ -212,11 +202,12 @@ var host=function(type,data){ data=data||{}; var msg={source:'phantomplay-game',
                              // licensed replacement is ingested
      bpm: number,
      offsetMs: number,      // ms of silence before the first note
-     lanes: number,         // 4/5 channel rhythm charts, or wider pro typing charts
+     lanes: number,         // always 1 — a single stream, any A-Z key
      lengthMs: number,      // total track length in ms
-     notes: [ { t: number, lane: number } ... ]   // t = ms from track
-                                                    // start, lane = 0-based
-                                                    // channel index
+     notes: [ { t: number, lane: number, code: string, label: string } ... ]
+                            // t = ms from track start, lane is always 0,
+                            // code = KeyboardEvent.code ("KeyQ"), label =
+                            // the on-screen letter ("Q")
    }
 
    `hold` (ms) is reserved on the note object for a future sustained-note
@@ -227,77 +218,72 @@ var host=function(type,data){ data=data||{}; var msg={source:'phantomplay-game',
    judging/rendering engine.
 --------------------------------------------------------------------- */
 
-var MAX_LANES=11;
-var GLYPHS=['●','◆','▲','■','★','✦','✚','✷','✹','✺','✶'];
 var COLORS_STD=['#ff2fb0','#33e0ff','#ffd23f','#7cff6b','#b98bff','#ff7a3d','#49ffcc','#ff5470','#8cff4a','#79a8ff','#f5ecff'];
 var COLORS_CB=['#E69F00','#56B4E9','#009E73','#F0E442','#CC79A7','#0072B2','#D55E00','#999999','#00A087','#7E6148','#FFFFFF'];
-var DEFAULT_KEYS4=['KeyD','KeyF','KeyJ','KeyK'];
-var DEFAULT_KEYS5=['KeyD','KeyF','Space','KeyJ','KeyK'];
-var TYPE_KEYS=['KeyA','KeyS','KeyD','KeyF','KeyJ','KeyK','KeyL','KeyC','KeyZ','KeyM','KeyO'];
-var KEY_LABEL={KeyA:'A',KeyS:'S',KeyD:'D',KeyF:'F',KeyJ:'J',KeyK:'K',KeyL:'L',KeyC:'C',KeyZ:'Z',KeyM:'M',KeyO:'O',Space:'SPACE',KeyG:'G',KeyH:'H'};
+// Standard touch-typing hand split, used to color-code every falling key
+// and the on-screen keyboard map so the game teaches finger placement,
+// not just "which key" — left hand covers the left ~half of the board.
+var LEFT_HAND_LETTERS='QWERTASDFGZXCVB';
+function codeForLetter(ch){ return 'Key'+ch.toUpperCase(); }
+function handColor(letter){ return colorFor(LEFT_HAND_LETTERS.indexOf(letter)>=0?0:1); }
+// Physical QWERTY rows, staggered like a real keyboard — drawn every frame
+// as a mini on-screen map so the game teaches WHERE each key lives, not
+// just which one to press.
+var KB_ROWS=['QWERTYUIOP','ASDFGHJKL','ZXCVBNM'];
 
 function step16(bpm){ return 60000/bpm/4; }
-function chartFromBars(id,title,artist,bpm,lanes,offsetMs,bars){
-  var st=step16(bpm), notes=[], barStart=offsetMs;
-  for(var b=0;b<bars.length;b++){
-    var bar=bars[b];
-    for(var i=0;i<bar.length;i++){ notes.push({t:Math.round(barStart+bar[i][0]*st), lane:bar[i][1]}); }
-    barStart+=16*st;
-  }
-  notes.sort(function(a,b){return a.t-b.t;});
-  return {id:id,title:title,artist:artist,bpm:bpm,lanes:lanes,offsetMs:offsetMs,lengthMs:Math.round(barStart)+2500,notes:notes};
-}
-function typingChartFromPhrases(id,title,artist,bpm,offsetMs,phrases){
-  var step=step16(bpm), notes=[], t=offsetMs;
-  var laneByChar={};
-  for(var i=0;i<TYPE_KEYS.length;i++){ laneByChar[KEY_LABEL[TYPE_KEYS[i]].toLowerCase()]={lane:i,code:TYPE_KEYS[i],label:KEY_LABEL[TYPE_KEYS[i]]}; }
+/* Builds a single-stream chart: every character in `phrases` becomes one
+   note carrying its own keyboard code/label (lane is always 0 — there is
+   only one Pulse in flight at a time, and it can be any of A-Z). This is
+   the whole game now: no fixed 4/5-key channel mapping, just the full
+   keyboard. `paceMul` widens/tightens the gap between letters on top of
+   the bpm-derived step, giving each venue its own feel independent of
+   tempo alone. */
+function soloChartFromPhrases(id,title,artist,bpm,offsetMs,phrases,paceMul){
+  var step=step16(bpm)*(paceMul||1), notes=[], t=offsetMs;
   for(var p=0;p<phrases.length;p++){
     var phrase=phrases[p].toLowerCase();
     for(var c=0;c<phrase.length;c++){
       var ch=phrase[c];
       if(ch===' '){ t+=step*2; continue; }
-      var hit=laneByChar[ch];
-      if(hit){ notes.push({t:Math.round(t),lane:hit.lane,code:hit.code,label:hit.label}); }
-      t+=step*(c%5===4?0.7:0.95);
+      if(ch<'a'||ch>'z'){ continue; }
+      notes.push({t:Math.round(t), lane:0, code:codeForLetter(ch), label:ch.toUpperCase()});
+      t+=step*(c%5===4?0.72:0.98);
     }
     t+=step*4;
   }
   notes.sort(function(a,b){return a.t-b.t;});
-  return {id:id,title:title,artist:artist,bpm:bpm,lanes:TYPE_KEYS.length,keys:TYPE_KEYS.slice(),offsetMs:offsetMs,lengthMs:Math.round(t)+3000,notes:notes,strictTyping:true};
+  return {id:id,title:title,artist:artist,bpm:bpm,lanes:1,offsetMs:offsetMs,lengthMs:Math.round(t)+3000,notes:notes};
 }
 
-// ---- Track 1: Neon Warehouse (128bpm, 4 channels) ----
-var nw_m1=[[0,0],[4,2],[8,1],[12,3]];
-var nw_m2=[[0,0],[2,2],[4,1],[6,3],[8,0],[10,2],[12,1],[14,3]];
-var nw_m3=[[0,0],[4,1],[8,0],[12,2]];
-var nw_m4=[[0,0],[2,1],[4,2],[6,3],[8,0],[10,1],[12,2],[14,3]];
-var nw_m5=[[0,0],[6,1],[8,2],[12,3]];
-var NEON_WAREHOUSE=chartFromBars('neon-warehouse','Neon Warehouse Set','PhantomPlay Session Band (original placeholder)',128,4,2200,
-  [nw_m1,nw_m1,nw_m2,nw_m3,nw_m2,nw_m3,nw_m4,nw_m2,nw_m4,nw_m2,nw_m5,nw_m3,nw_m2,nw_m4,nw_m1,nw_m1]);
+// Every venue's phrase list is a true pangram (or several) — every one of
+// the 26 letters shows up over the course of the set. paceMul tightens
+// letter-to-letter spacing venue over venue so the tour gets harder
+// independent of bpm alone.
+// ---- Track 1: Neon Warehouse (128bpm) — intro venue, generously paced ----
+// Hunting any of 26 keys is harder than a fixed 4-key lane even before
+// tempo enters into it, so paceMul widens the gap well past what the bpm
+// alone would give — first-timers get real time to find each key.
+var NEON_WAREHOUSE=soloChartFromPhrases('neon-warehouse','Neon Warehouse Set','PhantomPlay Session Band (original placeholder)',128,2200,[
+  'the quick brown fox jumps over the lazy dog',
+  'pack my box with five dozen liquid jugs',
+  'the quick brown fox jumps over the lazy dog'
+],1.6);
 
-// ---- Track 2: Rooftop Static (100bpm, 4 channels) ----
-var rs_n1=[[0,0],[8,2]];
-var rs_n2=[[0,0],[4,1],[8,2],[12,3]];
-var rs_n3=[[0,0],[8,1],[10,2]];
-var rs_n4=[[0,0],[2,1],[6,2],[8,3],[12,0],[14,1]];
-var ROOFTOP_STATIC=chartFromBars('rooftop-static','Rooftop Static Set','PhantomPlay Session Band (original placeholder)',100,4,2200,
-  [rs_n1,rs_n1,rs_n2,rs_n1,rs_n3,rs_n2,rs_n1,rs_n4,rs_n2,rs_n3,rs_n1,rs_n2,rs_n4,rs_n1]);
+// ---- Track 2: Rooftop Static (100bpm) — a modest step up from venue 1 ----
+var ROOFTOP_STATIC=soloChartFromPhrases('rooftop-static','Rooftop Static Set','PhantomPlay Session Band (original placeholder)',100,2200,[
+  'waltz bad nymph for quick jigs vex',
+  'five quacking zephyrs jolt my wax bed',
+  'waltz bad nymph for quick jigs vex'
+],1.15);
 
-// ---- Track 3: Arena Overdrive (strict pro typing chart) ----
-var ARENA_OVERDRIVE=typingChartFromPhrases('arena-overdrive','Arena Overdrive Typing Solo','PhantomPlay Session Band (original placeholder)',156,1900,[
-  'jskcza mo',
-  'fasd j ksdlfk',
-  'm kkcsik',
-  'asdf jkl czo',
-  'fjas kdlo mz',
-  'jj kk cc zz mm oo',
-  'fasdjk ksdlfk',
-  'mocaz jskf ldk',
-  'asdf jklc zmo',
-  'kkcsik mofasd',
-  'jskcza mo fasd',
-  'ksdlfk m kkcsik'
-]);
+// ---- Track 3: Arena Overdrive (fastest, tightest spacing — the finale) ----
+var ARENA_OVERDRIVE=soloChartFromPhrases('arena-overdrive','Arena Overdrive Typing Solo','PhantomPlay Session Band (original placeholder)',156,1900,[
+  'jinxed wizards pluck ivy from the big quilt',
+  'the five boxing wizards jump quickly',
+  'pack my box with five dozen liquid jugs',
+  'jinxed wizards pluck ivy from the big quilt'
+],1.0);
 
 var TRACKS=[NEON_WAREHOUSE,ROOFTOP_STATIC,ARENA_OVERDRIVE];
 function trackById(id){ for(var i=0;i<TRACKS.length;i++) if(TRACKS[i].id===id) return TRACKS[i]; return null; }
@@ -331,8 +317,6 @@ var DEFAULTS={
   v:1,
   progression:{ completed:[], best:{} }, // best[trackId] = {score,accuracy,grade,combo}
   settings:{ volume:0.8, colorblind:false, reducedMotionLocal:false, noteSpeed:1.0 },
-  keyBindings4:DEFAULT_KEYS4.slice(),
-  keyBindings5:DEFAULT_KEYS5.slice(),
   tutorialSeen:false
 };
 function cloneDefaults(){ return JSON.parse(JSON.stringify(DEFAULTS)); }
@@ -354,13 +338,11 @@ function mergeState(state){
       if(typeof state.settings.reducedMotionLocal==='boolean') G.settings.reducedMotionLocal=state.settings.reducedMotionLocal;
       if(typeof state.settings.noteSpeed==='number') G.settings.noteSpeed=Math.max(0.6,Math.min(2.5,state.settings.noteSpeed));
     }
-    if(Array.isArray(state.keyBindings4) && state.keyBindings4.length===4) G.keyBindings4=state.keyBindings4.slice();
-    if(Array.isArray(state.keyBindings5) && state.keyBindings5.length===5) G.keyBindings5=state.keyBindings5.slice();
     if(typeof state.tutorialSeen==='boolean') G.tutorialSeen=state.tutorialSeen;
   }catch(e){ /* corrupt/foreign state — keep whatever local defaults we have */ }
 }
 function serializeState(){
-  return { v:1, progression:G.progression, settings:G.settings, keyBindings4:G.keyBindings4, keyBindings5:G.keyBindings5, tutorialSeen:G.tutorialSeen };
+  return { v:1, progression:G.progression, settings:G.settings, tutorialSeen:G.tutorialSeen };
 }
 var saveTimer=null;
 function persistSoon(scoreForHost){
@@ -476,10 +458,10 @@ function toast(msg){
 
 // ---- Tutorial ----
 var TUT_STEPS=[
-  {t:'Welcome to the tour', b:'Pulses fall down each Channel. Press that Channel\'s key exactly as the Pulse crosses the glowing Threshold line near the bottom.'},
-  {t:'Your Channels', b:'Default keys are D, F, J, K (the Arena Overdrive venue adds a 5th channel on Space). Every Channel has its own color AND its own shape/glyph, so the game stays readable if you are colorblind.'},
-  {t:'Judgment & Streak', b:'Timing is graded Perfect, Great, Good, OK, or Miss. Chaining hits builds your Streak, which raises a score multiplier — a Miss resets the Streak but not your run.'},
-  {t:'Pause & customize', b:'Press P or Esc any time to pause. Settings lets you remap every key, adjust volume, flip on a colorblind-safe palette, and reduce motion.'},
+  {t:'Welcome to the tour', b:'One Pulse falls at a time — and it can be any letter on your keyboard, A to Z. There is no fixed set of 4 keys; the whole keyboard is in play.'},
+  {t:'Your keyboard', b:'Watch the big falling letter and the on-screen keyboard map below it, then press that exact key when the Pulse crosses the glowing Threshold line. Left-hand and right-hand keys are color-coded so you build real touch-typing muscle memory as you play.'},
+  {t:'Judgment & Streak', b:'Timing is graded Perfect, Great, Good, OK, or Miss. Pressing the wrong key for a Pulse also counts as a Miss. Chaining hits builds your Streak, which raises a score multiplier — a Miss resets the Streak but not your run.'},
+  {t:'Pause & customize', b:'Press Esc any time to pause. Settings lets you adjust volume, flip on a colorblind-safe palette, and reduce motion.'},
   {t:'Modes', b:'Tour mode unlocks new venues as you finish each one. Soundcheck is practice with adjustable note speed and never touches your Tour saves. Session Player is an AI rival you can race in solo play. Tour Duel syncs a countdown with everyone in a PhantomPlay room.'}
 ];
 var tutStep=0, tutReturnScreen='menu';
@@ -509,10 +491,10 @@ function renderVenues(){
     var tr=TRACKS[i]; var unlocked=isUnlocked(i);
     var best=G.progression.best[tr.id];
     var div=document.createElement('div'); div.className='venue'+(unlocked?'':' locked');
-    var sw=document.createElement('div'); sw.className='swatch'; sw.style.background=colorFor(i%laneCountFor(tr)); sw.style.color='#0b0716'; sw.textContent=tr.lanes;
+    var sw=document.createElement('div'); sw.className='swatch'; sw.style.background=colorFor(i); sw.style.color='#0b0716'; sw.textContent='⌨';
     var meta=document.createElement('div'); meta.className='meta';
     var b=document.createElement('b'); b.textContent=tr.title;
-    var span=document.createElement('span'); span.textContent=tr.bpm+' BPM · '+tr.lanes+' channels'+(unlocked?'':' · locked until previous venue is cleared');
+    var span=document.createElement('span'); span.textContent=tr.bpm+' BPM · full keyboard, A-Z'+(unlocked?'':' · locked until previous venue is cleared');
     meta.appendChild(b); meta.appendChild(span);
     if(best){ var stars=document.createElement('div'); stars.className='stars'; stars.textContent=repeat('★',best.stars)+repeat('☆',3-best.stars)+'  '+best.grade+' · '+best.score; meta.appendChild(stars); }
     div.appendChild(sw); div.appendChild(meta);
@@ -539,7 +521,6 @@ function renderSoundcheckSetup(){
 }
 
 // ---- Settings screen ----
-var keysetTab='4';
 function renderSettings(){
   document.getElementById('volRange').value=G.settings.volume;
   document.getElementById('volLbl').textContent=Math.round(G.settings.volume*100)+'%';
@@ -547,47 +528,11 @@ function renderSettings(){
   document.getElementById('rmToggle').checked=G.settings.reducedMotionLocal;
   document.getElementById('settSpeedRange').value=G.settings.noteSpeed;
   document.getElementById('settSpeedLbl').textContent=G.settings.noteSpeed.toFixed(2)+'x';
-  renderKeyRows();
-}
-function renderKeyRows(){
-  var wrap=document.getElementById('keyRows'); wrap.innerHTML='';
-  var count=keysetTab==='4'?4:5;
-  var arr=keysetTab==='4'?G.keyBindings4:G.keyBindings5;
-  for(var i=0;i<count;i++){
-    (function(i){
-    var row=document.createElement('div'); row.className='keyrow';
-    var chip=document.createElement('span'); chip.className='chip'; chip.style.background=colorFor(i); chip.style.color='#0b0716'; chip.textContent=GLYPHS[i];
-    var lab=document.createElement('span'); lab.style.flex='1'; lab.textContent='Channel '+(i+1);
-    var key=document.createElement('span'); key.className='key'; key.textContent=KEY_LABEL[arr[i]]||arr[i];
-    var rb=document.createElement('button'); rb.className='btn small'; rb.textContent='Rebind';
-    rb.onclick=function(){ captureRebind(keysetTab,i,rb); };
-    row.appendChild(chip); row.appendChild(lab); row.appendChild(key); row.appendChild(rb);
-    wrap.appendChild(row);
-    })(i);
-  }
-}
-var rebindListener=null;
-function captureRebind(keyset,idx,btn){
-  if(rebindListener) return;
-  var oldLabel=btn.textContent; btn.textContent='Press a key…';
-  rebindListener=function(e){
-    e.preventDefault();
-    var arr=keyset==='4'?G.keyBindings4:G.keyBindings5;
-    var code=e.code;
-    var swapIdx=arr.indexOf(code);
-    if(swapIdx>=0 && swapIdx!==idx){ var tmp=arr[swapIdx]; arr[swapIdx]=arr[idx]; arr[idx]=tmp; }
-    else { arr[idx]=code; }
-    window.removeEventListener('keydown',rebindListener,true);
-    rebindListener=null;
-    renderKeyRows(); mirrorLocal(); persistSoon(0);
-  };
-  window.addEventListener('keydown',rebindListener,true);
 }
 
 // ---- Session (core gameplay) ----
 var SESS=null; // active session
 function laneCountFor(track){ return track.lanes; }
-function keysFor(track){ return Array.isArray(track.keys) && track.keys.length ? track.keys : (track.lanes===5?G.keyBindings5:G.keyBindings4); }
 
 function startTrack(track, opts){
   ensureAudio(); if(actx && actx.state==='suspended') actx.resume();
@@ -608,7 +553,7 @@ function startTrack(track, opts){
     score:0, streak:0, maxStreak:0, weightSum:0, judgedCount:0,
     counts:{PERFECT:0,GREAT:0,GOOD:0,OK:0,MISS:0},
     finished:false,
-    bot: opts.bot ? { skill:opts.botSkill||0.75, queues:cloneQueues(laneQueues), score:0, streak:0 } : null,
+    bot: opts.bot ? { skill:opts.botSkill||0.75, queue:cloneQueue(laneQueues[0]), score:0, streak:0 } : null,
     raf:0
   };
   document.getElementById('hudTrack').textContent=track.title;
@@ -619,25 +564,40 @@ function startTrack(track, opts){
   startBacking(track);
   requestAnimationFrame(gameLoop);
 }
-function cloneQueues(qs){ var out=[]; for(var i=0;i<qs.length;i++){ var arr=[]; for(var j=0;j<qs[i].length;j++) arr.push({t:qs[i][j].t,judged:false,label:qs[i][j].label,code:qs[i][j].code}); out.push(arr); } return out; }
+function cloneQueue(q){ var arr=[]; for(var j=0;j<q.length;j++) arr.push({t:q[j].t,judged:false,label:q[j].label,code:q[j].code}); return arr; }
 
 function nowMs(){ return performance.now()-SESS.startPerf-SESS.pausedMs; }
 
-function judgeHit(lane, judgeTime){
-  var q=SESS.laneQueues[lane];
-  var best=-1, bestDiff=1e9;
+/* Judges one physical keydown against the single note stream. A press
+   only ever resolves ONE note: first choice is the nearest unjudged note
+   whose code matches the key actually pressed (so tightly-spaced letters
+   near the same instant still resolve correctly); if nothing due matches
+   the pressed key, the nearest due note is judged a Miss instead — wrong
+   key for this beat, same as a whiff. Presses with no note due at all
+   (nothing within the OK window) are ignored rather than punished. */
+function judgeKeyPress(code, judgeTime){
+  var q=SESS.laneQueues[0];
+  var matchIdx=-1, matchDiff=1e9, nearestIdx=-1, nearestDiff=1e9;
   for(var i=0;i<q.length;i++){
     if(q[i].judged) continue;
     var diff=judgeTime-q[i].t;
-    if(Math.abs(diff)<Math.abs(bestDiff)){ bestDiff=diff; best=i; }
-    if(diff< -WIN_OK) break; // notes are time-sorted per lane; no earlier candidate needed
+    if(Math.abs(diff)>WIN_OK) continue;
+    if(Math.abs(diff)<Math.abs(nearestDiff)){ nearestDiff=diff; nearestIdx=i; }
+    if(q[i].code===code && Math.abs(diff)<Math.abs(matchDiff)){ matchDiff=diff; matchIdx=i; }
   }
-  if(best<0 || Math.abs(bestDiff)>WIN_OK) { flashLane(lane); return; }
-  var g=classify(bestDiff);
-  q[best].judged=true;
-  applyJudgment(g);
-  hitBlip(g);
-  popupJudgment(g, lane);
+  if(matchIdx>=0){
+    var g=classify(matchDiff);
+    q[matchIdx].judged=true;
+    applyJudgment(g);
+    hitBlip(g);
+    popupJudgment(g, q[matchIdx].label);
+    return;
+  }
+  if(nearestIdx>=0){
+    q[nearestIdx].judged=true;
+    applyJudgment('MISS');
+    popupJudgment('MISS', q[nearestIdx].label);
+  }
 }
 function applyJudgment(g){
   SESS.judgedCount++;
@@ -657,36 +617,28 @@ function updateHud(){
   if(SESS.bot){ document.getElementById('rivalLine').textContent='Session Player: '+SESS.bot.score+' pts (streak '+SESS.bot.streak+')'; }
 }
 var judgTimer=null;
-function popupJudgment(g,lane){
+function popupJudgment(g,letter){
   var el=document.getElementById('judgText');
-  el.textContent=g; el.style.color=g==='MISS'?'#ff5f5f':colorFor(lane);
+  el.textContent=g; el.style.color=g==='MISS'?'#ff5f5f':handColor(letter);
   el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
   clearTimeout(judgTimer); judgTimer=setTimeout(function(){ el.classList.remove('show'); },260);
-}
-function flashLane(lane){
-  if(SESS && SESS.track && SESS.track.strictTyping){
-    applyJudgment('MISS');
-    popupJudgment('MISS',lane);
-  }
 }
 
 function botTick(t){
   if(!SESS.bot) return;
-  for(var lane=0;lane<SESS.lanes;lane++){
-    var q=SESS.bot.queues[lane];
-    for(var i=0;i<q.length;i++){
-      if(q[i].judged) continue;
-      if(t>=q[i].t){
-        q[i].judged=true;
-        var offset=botOffsetMs(SESS.bot.skill);
-        var g=classify(offset);
-        if(g==='MISS'){ SESS.bot.streak=0; } else { SESS.bot.streak++; }
-        var mult=multiplierFor(SESS.bot.streak);
-        SESS.bot.score+=Math.round(GRADE_SCORE[g]*mult);
-        continue;
-      }
-      break;
+  var q=SESS.bot.queue;
+  for(var i=0;i<q.length;i++){
+    if(q[i].judged) continue;
+    if(t>=q[i].t){
+      q[i].judged=true;
+      var offset=botOffsetMs(SESS.bot.skill);
+      var g=classify(offset);
+      if(g==='MISS'){ SESS.bot.streak=0; } else { SESS.bot.streak++; }
+      var mult=multiplierFor(SESS.bot.streak);
+      SESS.bot.score+=Math.round(GRADE_SCORE[g]*mult);
+      continue;
     }
+    break;
   }
 }
 function botOffsetMs(skill){
@@ -697,13 +649,11 @@ function botOffsetMs(skill){
 }
 
 function autoMiss(t){
-  for(var lane=0;lane<SESS.lanes;lane++){
-    var q=SESS.laneQueues[lane];
-    for(var i=0;i<q.length;i++){
-      if(q[i].judged) continue;
-      if(t > q[i].t+WIN_OK){ q[i].judged=true; applyJudgment('MISS'); popupJudgment('MISS',lane); continue; }
-      break;
-    }
+  var q=SESS.laneQueues[0];
+  for(var i=0;i<q.length;i++){
+    if(q[i].judged) continue;
+    if(t > q[i].t+WIN_OK){ q[i].judged=true; applyJudgment('MISS'); popupJudgment('MISS', q[i].label); continue; }
+    break;
   }
 }
 
@@ -724,56 +674,89 @@ function drawStage(t){
   if(!cx) return;
   var w=cv.width, h=cv.height;
   cx.clearRect(0,0,w,h);
-  var lanes=SESS.lanes, laneW=w/lanes;
-  var topY=h*0.06, threshY=h*0.82;
-  cx.strokeStyle='#ff2fb055'; cx.lineWidth=2*dpr;
-  for(var l=1;l<lanes;l++){ cx.beginPath(); cx.moveTo(l*laneW,0); cx.lineTo(l*laneW,h); cx.stroke(); }
+  var midX=w/2;
+  var mapH=h*0.24, topY=h*0.06, threshY=h*0.7;
   cx.fillStyle='#ffffff22';
   cx.fillRect(0,threshY-2*dpr,w,4*dpr);
   cx.fillStyle='#ffd23f';
   cx.fillRect(0,threshY-1*dpr,w,2*dpr);
-  if(SESS.track.strictTyping){
-    var upcoming=[];
-    for(var ul=0;ul<lanes;ul++){
-      var uq=SESS.laneQueues[ul];
-      for(var ui=0;ui<uq.length;ui++){
-        if(!uq[ui].judged && uq[ui].t>=t-80 && uq[ui].t<=t+2600) upcoming.push(uq[ui]);
-      }
-    }
-    upcoming.sort(function(a,b){return a.t-b.t;});
-    cx.fillStyle='#ffffffcc';
-    cx.font=(14*dpr)+'px ui-monospace, monospace';
-    cx.textAlign='center'; cx.textBaseline='top';
-    cx.fillText('TYPE ON BEAT: '+upcoming.slice(0,20).map(function(n){return n.label||'?';}).join(' '),w/2,12*dpr);
+
+  var q=SESS.laneQueues[0];
+  var upcoming=[];
+  for(var ui=0;ui<q.length;ui++){
+    if(!q[ui].judged && q[ui].t>=t-80 && q[ui].t<=t+2600) upcoming.push(q[ui]);
   }
+  upcoming.sort(function(a,b){return a.t-b.t;});
+  cx.fillStyle='#ffffffcc';
+  cx.font=(14*dpr)+'px ui-monospace, monospace';
+  cx.textAlign='center'; cx.textBaseline='top';
+  cx.fillText('TYPE ON BEAT: '+upcoming.slice(0,20).map(function(n){return n.label;}).join(' '),midX,12*dpr);
+
   var travelMs=1800/Math.max(0.4,SESS.noteSpeed);
-  for(var lane=0;lane<lanes;lane++){
-    var q=SESS.laneQueues[lane];
-    for(var i=0;i<q.length;i++){
-      var n=q[i];
-      if(n.judged) continue;
-      var f=(t-(n.t-travelMs))/travelMs;
-      if(f< -0.05 || f>1.15) continue;
-      var y=topY+f*(threshY-topY);
-      var cxp=lane*laneW+laneW/2;
-      var r=Math.min(laneW*0.32, 30*dpr);
-      cx.fillStyle=colorFor(lane)+'cc';
-      cx.beginPath(); cx.arc(cxp,y,r,0,Math.PI*2); cx.fill();
-      cx.fillStyle='#0b0716';
-      cx.font=(r*1.1)+'px system-ui, sans-serif';
-      cx.textAlign='center'; cx.textBaseline='middle';
-      cx.fillText(n.label||GLYPHS[lane%GLYPHS.length], cxp, y+1*dpr);
-    }
-    // key indicator at threshold
-    cx.fillStyle='#150c26aa';
-    var kx=lane*laneW+laneW/2;
-    cx.beginPath(); cx.arc(kx,threshY,Math.min(laneW*0.36,34*dpr),0,Math.PI*2); cx.fill();
-    cx.strokeStyle=colorFor(lane); cx.lineWidth=2*dpr;
-    cx.beginPath(); cx.arc(kx,threshY,Math.min(laneW*0.36,34*dpr),0,Math.PI*2); cx.stroke();
-    cx.fillStyle=colorFor(lane);
-    cx.font=(14*dpr)+'px ui-monospace, monospace';
-    cx.fillText(KEY_LABEL[keysFor(SESS.track)[lane]]||'?', kx, threshY);
+  for(var i=0;i<q.length;i++){
+    var n=q[i];
+    if(n.judged) continue;
+    var f=(t-(n.t-travelMs))/travelMs;
+    if(f< -0.05 || f>1.15) continue;
+    var y=topY+f*(threshY-topY);
+    var r=Math.min(w*0.1, 34*dpr);
+    cx.fillStyle=handColor(n.label)+'cc';
+    cx.beginPath(); cx.arc(midX,y,r,0,Math.PI*2); cx.fill();
+    cx.fillStyle='#0b0716';
+    cx.font=(r*1.1)+'px system-ui, sans-serif';
+    cx.textAlign='center'; cx.textBaseline='middle';
+    cx.fillText(n.label, midX, y+1*dpr);
   }
+  // Threshold indicator — shows the next key due, big, right on the line.
+  var nextLabel=upcoming.length?upcoming[0].label:'';
+  cx.fillStyle='#150c26aa';
+  cx.beginPath(); cx.arc(midX,threshY,Math.min(w*0.11,38*dpr),0,Math.PI*2); cx.fill();
+  if(nextLabel){
+    cx.strokeStyle=handColor(nextLabel); cx.lineWidth=2*dpr;
+    cx.beginPath(); cx.arc(midX,threshY,Math.min(w*0.11,38*dpr),0,Math.PI*2); cx.stroke();
+    cx.fillStyle=handColor(nextLabel);
+    cx.font=(20*dpr)+'px ui-monospace, monospace';
+    cx.textAlign='center'; cx.textBaseline='middle';
+    cx.fillText(nextLabel, midX, threshY);
+  }
+  drawKeyboardMap(h-mapH, mapH, w, nextLabel);
+}
+/* Compact, staggered QWERTY map drawn every frame — this is the "teach
+   all keys" payoff: every key's real position lights up in its hand
+   color, and the next key due glows so players learn where it lives on
+   a real keyboard, not just its letter. */
+function drawKeyboardMap(mapY, mapH, w, activeLetter){
+  var rowH=mapH/3.4, keyW=Math.min(w/12, rowH*1.35);
+  for(var r=0;r<KB_ROWS.length;r++){
+    var row=KB_ROWS[r];
+    var indent=r*keyW*0.5;
+    var rowW=row.length*keyW;
+    var startX=(w-rowW)/2+indent*0.4;
+    var y=mapY+r*rowH*1.05+rowH/2;
+    for(var i=0;i<row.length;i++){
+      var letter=row[i];
+      var x=startX+i*keyW+keyW/2;
+      var active=letter===activeLetter;
+      var col=handColor(letter);
+      cx.fillStyle=active?col:'#150c26cc';
+      cx.strokeStyle=col; cx.lineWidth=(active?2.4:1.4)*dpr;
+      roundRect(x-keyW*0.42,y-rowH*0.42,keyW*0.84,rowH*0.84,6*dpr);
+      cx.fill(); cx.stroke();
+      cx.fillStyle=active?'#0b0716':col;
+      cx.font=(active?13:11)*dpr+'px ui-monospace, monospace';
+      cx.textAlign='center'; cx.textBaseline='middle';
+      cx.fillText(letter, x, y+0.5*dpr);
+    }
+  }
+}
+function roundRect(x,y,w,h,r){
+  cx.beginPath();
+  cx.moveTo(x+r,y);
+  cx.arcTo(x+w,y,x+w,y+h,r);
+  cx.arcTo(x+w,y+h,x,y+h,r);
+  cx.arcTo(x,y+h,x,y,r);
+  cx.arcTo(x,y,x+w,y,r);
+  cx.closePath();
 }
 
 function gameLoop(){
@@ -957,13 +940,13 @@ function startDuelScoreReporting(){
 }
 
 // ---- Input ----
+// Every A-Z key is a live target now (P included), so pause is Escape-only
+// — there is no safe reserved letter left to double as a pause shortcut.
+// The on-screen Pause button still covers the mouse/touch case.
 window.addEventListener('keydown',function(e){
-  if(rebindListener) return; // remap capture takes priority
   if(!document.querySelector('[data-screen="play"]').hidden){
-    var keys=SESS?keysFor(SESS.track):DEFAULT_KEYS4;
-    var lane=keys.indexOf(e.code);
-    if(lane>=0){ e.preventDefault(); if(SESS && !SESS.paused && !SESS.finished) judgeHit(lane, nowMs()); return; }
-    if(e.code==='KeyP'||e.code==='Escape'){ e.preventDefault(); if(SESS) setPaused(!SESS.paused); }
+    if(/^Key[A-Z]$/.test(e.code)){ e.preventDefault(); if(SESS && !SESS.paused && !SESS.finished) judgeKeyPress(e.code, nowMs()); return; }
+    if(e.code==='Escape'){ e.preventDefault(); if(SESS) setPaused(!SESS.paused); }
   }
 });
 document.addEventListener('visibilitychange',function(){ if(document.hidden && SESS && !SESS.paused && !document.querySelector('[data-screen="play"]').hidden) setPaused(true); });
@@ -996,8 +979,6 @@ document.getElementById('settSpeedRange').addEventListener('input',function(){ G
 document.getElementById('volRange').addEventListener('input',function(){ G.settings.volume=Number(this.value); document.getElementById('volLbl').textContent=Math.round(G.settings.volume*100)+'%'; updateMasterGain(); mirrorLocal(); persistSoon(0); });
 document.getElementById('cbToggle').addEventListener('change',function(){ G.settings.colorblind=this.checked; mirrorLocal(); persistSoon(0); });
 document.getElementById('rmToggle').addEventListener('change',function(){ G.settings.reducedMotionLocal=this.checked; document.body.classList.toggle('reduced', effectiveReducedMotion()); mirrorLocal(); persistSoon(0); });
-document.querySelectorAll('[data-keyset]').forEach(function(b){ b.addEventListener('click',function(){ keysetTab=b.getAttribute('data-keyset'); document.querySelectorAll('[data-keyset]').forEach(function(x){x.classList.remove('active');}); b.classList.add('active'); renderKeyRows(); }); });
-document.querySelector('[data-reset-keys]').addEventListener('click',function(){ if(keysetTab==='4') G.keyBindings4=DEFAULT_KEYS4.slice(); else G.keyBindings5=DEFAULT_KEYS5.slice(); renderKeyRows(); mirrorLocal(); persistSoon(0); });
 document.getElementById('botToggle').addEventListener('change',function(){});
 document.getElementById('botDiffSelect').addEventListener('change',function(){ document.getElementById('botDiffLbl').textContent=this.options[this.selectedIndex].text; });
 document.querySelector('[data-pause]').addEventListener('click',function(){ if(SESS) setPaused(true); });
