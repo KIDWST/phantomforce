@@ -146,6 +146,10 @@
   ];
   const TRIAL_BY_ID = Object.fromEntries(TRIAL_DEFS.map((trial) => [trial.id, trial]));
   const GATE_TILE = { x: 8, y: 1 };
+  const NPC_HOME_POINTS = [
+    { x: 6, y: 6 }, { x: 10, y: 6 }, { x: 6, y: 10 }, { x: 10, y: 10 },
+    { x: 3, y: 7 }, { x: 13, y: 7 }, { x: 4, y: 13 }, { x: 12, y: 13 },
+  ];
 
   // ---------------------------------------------------------------------
   // Deterministic RNG + terrain generation (seed lives in save data, the
@@ -212,10 +216,10 @@
         if (inBounds(nx, ny) && terrain[ny][nx] === 'grass') return { x: nx, y: ny };
       }
     }
-    return { x: 4, y: 4 };
+    return { x: 8, y: 8 };
   }
   function adjacentGrassTo(terrain, tile) {
-    if (!tile) return { x: 4, y: 4 };
+    if (!tile) return { x: 8, y: 8 };
     const opts = [{ x: tile.x + 1, y: tile.y }, { x: tile.x - 1, y: tile.y }, { x: tile.x, y: tile.y + 1 }, { x: tile.x, y: tile.y - 1 }];
     for (const o of opts) if (inBounds(o.x, o.y) && terrain[o.y][o.x] === 'grass') return o;
     return nearestGrass(terrain, tile.x, tile.y);
@@ -249,6 +253,7 @@
     fishing: { open: false, zoneStart: 0.4, zoneWidth: 0.22, marker: 0, dir: 1, speed: 0.55 },
     build: { open: false, tool: 'place', selected: null, rotation: 0, placing: false },
     tutorial: { step: 0 },
+    trial: null, // {trial,input:[]}
   };
 
   const mp = {
@@ -258,22 +263,29 @@
   };
 
   function defaultQuestState() {
-    return { miro: { done: false }, tally: { done: false }, bo: { done: false } };
+    return Object.fromEntries(NPC_DEFS.map((npc) => [npc.id, { done: false }]));
+  }
+  function defaultAdventureState() {
+    return {
+      gateOpen: false,
+      trials: Object.fromEntries(TRIAL_DEFS.map((trial) => [trial.id, { done: false }])),
+    };
   }
   function newGame(seed) {
     state = {
-      version: 1,
+      version: 2,
       seed: seed >>> 0,
       day: 1,
       minutes: 400, // ~6:40am
-      player: { gx: 4, gy: 4, hue: 'coral', topper: 'none', trim: 'soft', name: 'Resident' },
-      inventory: { grain: 3, shale: 2, loom: 1, driftfish: 0, cake: 0, skewer: 0, chowder: 0 },
+      player: { gx: 8, gy: 8, hue: 'coral', topper: 'none', trim: 'soft', name: 'Resident' },
+      inventory: { grain: 3, shale: 2, loom: 1, driftfish: 0, lumen: 0, keystone: 0, relic: 0, cake: 0, skewer: 0, chowder: 0 },
       spark: 78,
       town: [], // {id,type,gx,gy,rot}
       quests: defaultQuestState(),
+      adventure: defaultAdventureState(),
       cosmeticsUnlocked: { hue: ['coral', 'mint', 'slate', 'sand'], topper: ['none', 'cap'], trim: ['soft', 'bold'] },
       tutorialSeen: false,
-      stats: { gathered: 0, built: 0, demolished: 0, fishCaught: 0, fishTried: 0, dishesCooked: 0, questsCompleted: 0, secondsPlayed: 0 },
+      stats: { gathered: 0, built: 0, demolished: 0, fishCaught: 0, fishTried: 0, dishesCooked: 0, questsCompleted: 0, trialsCleared: 0, gatesOpened: 0, secondsPlayed: 0 },
       completedMilestone: false,
     };
     terrain = genTerrain(state.seed);
@@ -284,8 +296,9 @@
     return NPC_DEFS.map((def, i) => {
       const resTile = findFirstOfType(terrain, def.resourceType);
       const workplace = adjacentGrassTo(terrain, resTile);
-      const home = nearestGrass(terrain, 2 + i * 2, i % 2 === 0 ? 2 : 6);
-      const square = nearestGrass(terrain, 4, 3);
+      const homeHint = NPC_HOME_POINTS[i % NPC_HOME_POINTS.length];
+      const home = nearestGrass(terrain, homeHint.x, homeHint.y);
+      const square = nearestGrass(terrain, 8, 7);
       const quest = state.quests[def.id] || { done: false };
       const gx = home.x, gy = home.y;
       return {
@@ -332,7 +345,8 @@
   function isBlockedTile(gx, gy) {
     if (!inBounds(gx, gy)) return true;
     const t = terrain[gy][gx];
-    if (t === 'water' || t === 'grove' || t === 'quarry' || t === 'reed') return true;
+    if (t === 'water' || t === 'grove' || t === 'quarry' || t === 'reed' || t === 'shrine') return true;
+    if (t === 'gate' && !state.adventure?.gateOpen) return true;
     const piece = townPieceAt(gx, gy, currentTown());
     if (piece && PALETTE_BY_TYPE[piece.type] && PALETTE_BY_TYPE[piece.type].blocking) return true;
     return false;
@@ -466,7 +480,7 @@
   // Inventory panel
   // ---------------------------------------------------------------------
   const FOOD_TYPES = { cake: 'Grove Cake', skewer: 'Ember Skewer', chowder: 'Tide Chowder' };
-  const RES_LABELS = { grain: 'Grain', shale: 'Shale', loom: 'Loom', driftfish: 'Driftfish' };
+  const RES_LABELS = { grain: 'Grain', shale: 'Shale', loom: 'Loom', driftfish: 'Driftfish', lumen: 'Lumen', keystone: 'Keystone', relic: 'Relic' };
   function renderInventoryPanel() {
     const rows = [];
     for (const [k, label] of Object.entries(RES_LABELS)) rows.push({ key: k, label, count: state.inventory[k] || 0, food: false });
@@ -529,9 +543,10 @@
     } else {
       el.dlgBody.textContent = def.text;
       const needTxt = Object.entries(def.need).map(([k, v]) => `${v} ${RES_LABELS[k] || k}`).join(', ');
+      const rewardTxt = def.reward ? ` Reward: ${Object.entries(def.reward).map(([k, v]) => `${v} ${RES_LABELS[k] || k}`).join(', ')}.` : '';
       const haveOk = questReady(def.need);
       el.dlgQuest.hidden = false;
-      el.dlgQuest.textContent = `Needs: ${needTxt} — you have ${Object.entries(def.need).map(([k]) => state.inventory[k] || 0).join('/')}.`;
+      el.dlgQuest.textContent = `Needs: ${needTxt} — you have ${Object.entries(def.need).map(([k]) => state.inventory[k] || 0).join('/')}.${rewardTxt}`;
       el.dlgTurnin.hidden = !haveOk;
     }
     openPanel('dialogue');
@@ -546,7 +561,9 @@
     if (!questReady(def.need)) return;
     for (const [k, v] of Object.entries(def.need)) state.inventory[k] -= v;
     npc.quest.done = true;
+    if (!state.quests[npc.id]) state.quests[npc.id] = { done: false };
     state.quests[npc.id].done = true;
+    if (def.reward) for (const [k, v] of Object.entries(def.reward)) state.inventory[k] = (state.inventory[k] || 0) + v;
     if (def.unlockHue) unlockCosmetic('hue', def.unlockHue);
     if (def.unlockTopper) unlockCosmetic('topper', def.unlockTopper);
     state.stats.questsCompleted += 1;
@@ -770,9 +787,19 @@
   // Gathering / interaction detection
   // ---------------------------------------------------------------------
   const NODE_RESOURCE = { grove: 'grain', quarry: 'shale', reed: 'loom' };
+  function trialAt(gx, gy) {
+    return TRIAL_DEFS.find((trial) => trial.tile.x === gx && trial.tile.y === gy) || null;
+  }
   function findInteraction() {
     const p = state.player;
     if (rt.cooking) return { kind: 'cooking' };
+    // adventure landmark adjacent?
+    for (const n of neighbors4(p.gx, p.gy)) {
+      if (!inBounds(n.x, n.y)) continue;
+      const t = terrain[n.y][n.x];
+      if (t === 'shrine') return { kind: 'trial', trial: trialAt(n.x, n.y) };
+      if (t === 'gate') return { kind: 'gate' };
+    }
     // resource node adjacent?
     for (const n of neighbors4(p.gx, p.gy)) {
       if (!inBounds(n.x, n.y)) continue;
@@ -794,7 +821,7 @@
     }
     return null;
   }
-  const CONTEXT_LABEL = { gather: 'Gather', fish: 'Fish', cook: 'Cook', sleep: 'Sleep', talk: 'Talk' };
+  const CONTEXT_LABEL = { gather: 'Gather', fish: 'Fish', cook: 'Cook', sleep: 'Sleep', talk: 'Talk', trial: 'Trial', gate: 'Gate' };
   function doContextAction() {
     if (rt.build.placing) return; // handled via canvas tap while placing
     const it = findInteraction();
@@ -804,6 +831,8 @@
     else if (it.kind === 'cook') openCookPrompt();
     else if (it.kind === 'sleep') doSleep();
     else if (it.kind === 'talk') openNpcDialogue(it.npc);
+    else if (it.kind === 'trial') openTrial(it.trial);
+    else if (it.kind === 'gate') openGate();
   }
   function doGather(resource) {
     if (rt.gathering) return;
