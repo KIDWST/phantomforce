@@ -9,8 +9,8 @@
  * to a local mock.
  */
 
-import { currentTenantId, session, isAdmin, isOwnerOperator } from "./store.js?v=phantom-live-20260715-273";
-import { canManageActiveOrg } from "./orgs.js?v=phantom-live-20260715-273";
+import { currentTenantId, session, isAdmin, isOwnerOperator } from "./store.js?v=phantom-live-20260715-274";
+import { canManageActiveOrg } from "./orgs.js?v=phantom-live-20260715-274";
 
 /* Owner/admin only — legacy local-admin sessions (isAdmin/isOwnerOperator)
    and real database org sessions (canManageActiveOrg) both count. */
@@ -26,6 +26,12 @@ const ROLES = [
 /* Membership roles the database accepts today (manager is a module-visibility
    role, not yet a membership role — shown in the matrix, not the dropdown). */
 const MEMBERSHIP_ROLES = ["owner", "admin", "member", "client"];
+/* Required modules (module-registry.ts required:true) — access, approvals,
+   and recovery. Owner can't uncheck their own access to these from the
+   matrix: it's how an owner finds their way back if they lock down
+   everything else, and there's no recovery path if they lock themselves
+   out of it too. */
+const OWNER_LOCKED_MODULES = new Set(["dashboard", "approvals", "settings"]);
 
 const orgState = {
   loading: false,
@@ -178,7 +184,7 @@ function matrixMarkup(esc) {
           ${orgState.modules.map((module) => `
             <tr class="${module.enabled ? "" : "is-off"}">
               <td><b>${esc(module.label)}</b>${module.enabled ? "" : `<i>module off</i>`}</td>
-              ${ROLES.map((role) => `<td><input type="checkbox" data-org-matrix="${esc(module.id)}:${role.id}" ${module.roles.includes(role.id) ? "checked" : ""} ${module.id === "settings" && role.id === "owner" ? "disabled" : ""} /></td>`).join("")}
+              ${ROLES.map((role) => `<td><input type="checkbox" data-org-matrix="${esc(module.id)}:${role.id}" ${module.roles.includes(role.id) ? "checked" : ""} ${OWNER_LOCKED_MODULES.has(module.id) && role.id === "owner" ? "disabled" : ""} /></td>`).join("")}
             </tr>`).join("")}
         </tbody>
       </table>

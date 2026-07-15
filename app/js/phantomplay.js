@@ -1,7 +1,7 @@
 import {
   currentTenantId, isAdmin, isOwnerOperator, session,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260715-273";
+} from "./store.js?v=phantom-live-20260715-274";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 const FALLBACK_KEY = "pf.phantomplay.offline.v1";

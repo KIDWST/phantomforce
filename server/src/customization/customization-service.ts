@@ -133,6 +133,11 @@ export function validateOrganizationConfiguration(configuration: OrganizationCon
   for (const requiredId of REQUIRED_MODULE_IDS) {
     const module = configuration.modules.find((candidate) => candidate.id === requiredId);
     if (!module?.enabled) issues.push({ path: `modules.${requiredId}`, message: `${MODULE_BY_ID.get(requiredId)?.displayName ?? requiredId} is required for access, approval, or recovery.`, severity: "error" });
+    /* Enabled isn't enough — if owner's own role gets unchecked for a
+       required module (dashboard, approvals, settings), the owner has no
+       way back in. The matrix UI already disables this checkbox; this is
+       the server-side backstop for direct API calls. */
+    if (module && !module.roles.includes("owner")) issues.push({ path: `modules.${requiredId}.roles`, message: `${MODULE_BY_ID.get(requiredId)?.displayName ?? requiredId} must stay open to the owner role — there'd be no way back in otherwise.`, severity: "error" });
   }
   for (const module of configuration.modules) {
     const definition = MODULE_BY_ID.get(module.id);
