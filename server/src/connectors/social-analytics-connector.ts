@@ -71,16 +71,17 @@ type SocialOAuthSetupProvider = {
   secretEnv: string;
   idLabel: string;
   secretLabel: string;
+  consoleUrl: string;
 };
 
 const OAUTH_SETUP_PROVIDERS: SocialOAuthSetupProvider[] = [
-  { id: "youtube", idEnv: "GOOGLE_OAUTH_CLIENT_ID", secretEnv: "GOOGLE_OAUTH_CLIENT_SECRET", idLabel: "Google client ID", secretLabel: "Google client secret" },
-  { id: "instagram", idEnv: "META_APP_ID", secretEnv: "META_APP_SECRET", idLabel: "Meta app ID", secretLabel: "Meta app secret" },
-  { id: "facebook", idEnv: "META_APP_ID", secretEnv: "META_APP_SECRET", idLabel: "Meta app ID", secretLabel: "Meta app secret" },
-  { id: "tiktok", idEnv: "TIKTOK_CLIENT_KEY", secretEnv: "TIKTOK_CLIENT_SECRET", idLabel: "TikTok client key", secretLabel: "TikTok client secret" },
-  { id: "x", idEnv: "X_CLIENT_ID", secretEnv: "X_CLIENT_SECRET", idLabel: "X client ID", secretLabel: "X client secret" },
-  { id: "linkedin", idEnv: "LINKEDIN_CLIENT_ID", secretEnv: "LINKEDIN_CLIENT_SECRET", idLabel: "LinkedIn client ID", secretLabel: "LinkedIn client secret" },
-  { id: "pinterest", idEnv: "PINTEREST_CLIENT_ID", secretEnv: "PINTEREST_CLIENT_SECRET", idLabel: "Pinterest client ID", secretLabel: "Pinterest client secret" },
+  { id: "youtube", idEnv: "GOOGLE_OAUTH_CLIENT_ID", secretEnv: "GOOGLE_OAUTH_CLIENT_SECRET", idLabel: "Google client ID", secretLabel: "Google client secret", consoleUrl: "https://console.cloud.google.com/apis/credentials" },
+  { id: "instagram", idEnv: "META_APP_ID", secretEnv: "META_APP_SECRET", idLabel: "Meta app ID", secretLabel: "Meta app secret", consoleUrl: "https://developers.facebook.com/apps/" },
+  { id: "facebook", idEnv: "META_APP_ID", secretEnv: "META_APP_SECRET", idLabel: "Meta app ID", secretLabel: "Meta app secret", consoleUrl: "https://developers.facebook.com/apps/" },
+  { id: "tiktok", idEnv: "TIKTOK_CLIENT_KEY", secretEnv: "TIKTOK_CLIENT_SECRET", idLabel: "TikTok client key", secretLabel: "TikTok client secret", consoleUrl: "https://developers.tiktok.com/apps/" },
+  { id: "x", idEnv: "X_CLIENT_ID", secretEnv: "X_CLIENT_SECRET", idLabel: "X client ID", secretLabel: "X client secret", consoleUrl: "https://developer.x.com/en/portal/dashboard" },
+  { id: "linkedin", idEnv: "LINKEDIN_CLIENT_ID", secretEnv: "LINKEDIN_CLIENT_SECRET", idLabel: "LinkedIn client ID", secretLabel: "LinkedIn client secret", consoleUrl: "https://www.linkedin.com/developers/apps" },
+  { id: "pinterest", idEnv: "PINTEREST_CLIENT_ID", secretEnv: "PINTEREST_CLIENT_SECRET", idLabel: "Pinterest client ID", secretLabel: "Pinterest client secret", consoleUrl: "https://developers.pinterest.com/apps/" },
 ];
 
 const serverEnvPath = () => resolve(process.env.PHANTOMFORCE_ENV_FILE || process.cwd(), ".env");
@@ -266,6 +267,7 @@ export function getSocialOAuthSetupStatus() {
       secretEnv: setup.secretEnv,
       idLabel: setup.idLabel,
       secretLabel: setup.secretLabel,
+      consoleUrl: setup.consoleUrl,
       idSet,
       secretSet,
       missing: [

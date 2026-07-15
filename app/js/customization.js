@@ -1,4 +1,4 @@
-import { currentTenantId, session } from "./store.js?v=phantom-live-20260714-264";
+import { currentTenantId, session } from "./store.js?v=phantom-live-20260714-266";
 
 let activeConfiguration = null;
 let activeEntitlements = null;
@@ -43,6 +43,7 @@ const PLATFORM_MODULES = [
   ["settings", "Settings", false, ["owner", "admin", "manager", "member", "client"]],
   ["developer", "Developer", false, ["owner"]],
 ];
+const STRUCTURAL_NAV_MODULES = new Set(["memory", "settings", "developer", "vacation"]);
 const DEFAULT_ENTITLEMENTS = { coBranded: false, whiteLabel: false, internalPhantomForce: true, localFallback: true };
 const authHeaders = (json = false) => {
   const token = session.token();
@@ -173,12 +174,16 @@ export function customizeNavigation(baseItems, role = "owner") {
   const states = new Map(activeConfiguration.modules.map((module) => [module.id, module]));
   return baseItems
     .filter((item) => {
+      if (STRUCTURAL_NAV_MODULES.has(item.id)) return true;
       const state = normalizedModuleState(states.get(item.id), item.id);
       if (!state) return true;
       return canAccessConfiguredModule(item.id, role);
     })
     .map((item) => {
       const state = normalizedModuleState(states.get(item.id), item.id);
+      if (STRUCTURAL_NAV_MODULES.has(item.id)) {
+        return { ...item, label: item.label, customizationOrder: undefined, navZone: "bottom" };
+      }
       /* Dashboard is the platform home. Older org customizations may still
          carry "Business HQ"; keep the new product language stable here. */
       if (item.id === "dashboard") return { ...item, label: item.label, customizationOrder: state?.order };

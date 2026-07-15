@@ -57,6 +57,8 @@ try {
   assert(setupEmpty.readyCount === 0, "Provider app setup must start unconfigured when no env credentials exist.");
   assert(setupEmpty.providers.length === 6, "Setup status should collapse Meta into one Instagram/Facebook provider app row.");
   assert(setupEmpty.providers.every((provider) => provider.oauthConfigured === false), "Provider setup status must not pretend apps are ready.");
+  assert(setupEmpty.providers.every((provider) => /^https:\/\//.test(provider.consoleUrl)), "Every provider setup row should include a safe console URL.");
+  assert(setupEmpty.providers.find((provider) => provider.id === "instagram")?.scopes.includes("instagram_content_publish"), "Meta setup row must show posting-capable Instagram scope.");
 
   const savedSetup = saveSocialOAuthSetup({
     platform: "youtube",

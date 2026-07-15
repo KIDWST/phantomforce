@@ -9,20 +9,20 @@ import {
   freshEditState, applyFilterPreset, renderBaseFrame,
   addBokehSpot, removeBokehSpotNear, removeBokehSpotAt, nearestBokehSpot, moveBokehSpot, resizeBokehSpot,
   setBokehMask, freshTextStyle, TEXT_FONTS, TEXT_PRESETS, applyTextPreset,
-} from "./imagefilters.js?v=phantom-live-20260714-264";
-import { getRembgStatus, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260714-264";
-import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260714-264";
-import { parseAnalyticsReport } from "./social-analytics.js?v=phantom-live-20260714-264";
+} from "./imagefilters.js?v=phantom-live-20260714-266";
+import { getRembgStatus, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260714-266";
+import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260714-266";
+import { parseAnalyticsReport } from "./social-analytics.js?v=phantom-live-20260714-266";
 import {
   freshComposition, compositionSnapshot, restoreComposition, addImageLayer, replaceImageLayerSource, addTextLayer, addColorLayer,
   duplicateLayer, removeSelectedLayers, moveLayerOrder, selectedLayers, selectLayer, selectAllLayers,
   loadCompositionImages, renderComposition, drawCompositionOverlay, drawDetectedSubjectOverlay, canvasPoint, hitTestLayer, hitTestResizeHandle,
   setCanvasPreset, zoomComposition, canvasPointToLayer, layerPointToCanvas,
   imageEditSnapshot, restoreImageEditSnapshot, pushEditorSnapshot,
-} from "./content-editor.js?v=phantom-live-20260714-264";
+} from "./content-editor.js?v=phantom-live-20260714-266";
 import {
   currentTenantId, currentWs, ctx, session, store, visible, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem, wsName,
-} from "./store.js?v=phantom-live-20260714-264";
+} from "./store.js?v=phantom-live-20260714-266";
 
 const CH_KEY = "pf.contenthub.v2";
 const CH_REMOVED_KEY = "pf.contenthub.removed.v1";
@@ -3708,6 +3708,8 @@ function analyticsOAuthSetupInline(esc) {
   const statusText = analyticsOAuthSetupState.loading
     ? "Checking provider apps..."
     : `${ready.length}/${providers.length || PLATFORMS.length} provider apps ready`;
+  const selectedProvider = missing[0] || providers[0] || null;
+  const selectedScopes = Array.isArray(selectedProvider?.scopes) ? selectedProvider.scopes : [];
   return `<details class="an-oauth-setup" ${missing.length || analyticsOAuthSetupState.error ? "open" : ""}>
     <summary>
       <span>${svgIc("lock")} Provider app setup</span>
@@ -3721,9 +3723,17 @@ function analyticsOAuthSetupInline(esc) {
     </label>
     <div class="an-oauth-providers">
       ${providers.length
-        ? providers.map((provider) => `<span class="${provider.oauthConfigured ? "is-ready" : "is-missing"}">${esc(provider.name)}${provider.id === "instagram" ? " + Facebook" : ""}</span>`).join("")
+        ? providers.map((provider) => `<span class="${provider.oauthConfigured ? "is-ready" : "is-missing"}" title="${esc((provider.scopes || []).join(", "))}">${esc(provider.name)}${provider.id === "instagram" ? " + Facebook" : ""}</span>`).join("")
         : `<span class="is-missing">Provider status loading</span>`}
     </div>
+    ${selectedProvider ? `<div class="an-oauth-scope-card">
+      <div>
+        <b>${esc(selectedProvider.name)} setup</b>
+        <span>${esc(selectedProvider.idLabel || "Client ID")} + ${esc(selectedProvider.secretLabel || "Client secret")}</span>
+      </div>
+      ${selectedProvider.consoleUrl ? `<a class="btn btn-ghost" href="${esc(selectedProvider.consoleUrl)}" target="_blank" rel="noopener">Open provider console</a>` : ""}
+      <p>${selectedScopes.map((scope) => `<code>${esc(scope)}</code>`).join("")}</p>
+    </div>` : ""}
     <form class="an-oauth-form" data-an-oauth-setup-form>
       <select data-an-oauth-platform>${providerOptions}</select>
       <input data-an-oauth-client-id autocomplete="off" placeholder="Client ID / App ID / Client key" />
