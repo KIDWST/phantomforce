@@ -37,8 +37,23 @@ assert.match(
 );
 assert.match(
   companion,
-  /animationend[\s\S]*pcPop[\s\S]*classList\.remove\("pc-pop"\)/u,
+  /function clearAvatarPop\(\)[\s\S]*classList\.remove\("pc-pop"\)/u,
+  "The one-shot avatar pop class should have a shared cleanup function.",
+);
+assert.match(
+  companion,
+  /animationend[\s\S]*pcPop[\s\S]*clearAvatarPop\(\)/u,
   "The one-shot avatar pop class should be removed after it finishes.",
+);
+assert.match(
+  companion,
+  /function triggerAvatarPop\(\)[\s\S]*setTimeout\(clearAvatarPop,\s*520\)/u,
+  "The avatar pop class needs a timeout cleanup fallback when animationend is missed.",
+);
+assert.match(
+  companion,
+  /el\.canvas\.addEventListener\("click"[\s\S]*event\.stopPropagation\(\)[\s\S]*pulse = Math\.max\(pulse,\s*0\.18\)/u,
+  "Clicking the chatbox Phantom should be a smooth pulse only, not a state or intro reset.",
 );
 assert.doesNotMatch(
   companion,

@@ -39,6 +39,21 @@ let onModeChange = null;
 let canUseLoop = () => true;
 let onLoopUnavailable = null;
 let renderSettingsPanel = null;
+let popCleanupTimer = 0;
+
+function clearAvatarPop() {
+  clearTimeout(popCleanupTimer);
+  el?.canvas?.classList.remove("pc-pop");
+}
+
+function triggerAvatarPop() {
+  if (reduceMotion || !el?.canvas) return;
+  el.canvas.classList.remove("pc-pop");
+  void el.canvas.offsetWidth;
+  el.canvas.classList.add("pc-pop");
+  clearTimeout(popCleanupTimer);
+  popCleanupTimer = setTimeout(clearAvatarPop, 520);
+}
 
 export function setCompanionState(state, caption) {
   const def = PRESENCE_STATES[state] || PRESENCE_STATES.idle;
@@ -47,11 +62,7 @@ export function setCompanionState(state, caption) {
     prevDef = PRESENCE_STATES[current] || PRESENCE_STATES.idle;
     stateChangedAt = performance.now();
     // squash-and-stretch: a small anticipatory pop on every mood change
-    if (!reduceMotion && el?.canvas) {
-      el.canvas.classList.remove("pc-pop");
-      void el.canvas.offsetWidth;
-      el.canvas.classList.add("pc-pop");
-    }
+    triggerAvatarPop();
   }
   current = nextKey;
   if (!el) return;
@@ -245,7 +256,12 @@ export function mountCompanion(headEl, opts = {}) {
     toggleSettings();
   });
   el.canvas.addEventListener("animationend", (event) => {
-    if (event.animationName === "pcPop") el.canvas.classList.remove("pc-pop");
+    if (event.animationName === "pcPop") clearAvatarPop();
+  });
+  el.canvas.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    pulse = Math.max(pulse, 0.18);
   });
   el.menuLoop?.addEventListener("click", () => {
     requestLoopMode(mode === "loop" ? "chat" : "loop");
