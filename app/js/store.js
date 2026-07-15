@@ -661,18 +661,7 @@ function normalizeFinance(finance) {
 // closures; handing back a fresh object on every call orphaned those closures
 // and silently dropped writes (added transactions disappeared on save).
 function ensureFinance() {
-  let financeInput = store.state.finance;
-  // If finance is null, try to reload from localStorage
-  if (!financeInput || typeof financeInput !== "object") {
-    try {
-      const raw = localStorage.getItem(DB_KEY);
-      if (raw) {
-        const d = JSON.parse(raw);
-        if (d && d.version === 4) financeInput = d.finance;
-      }
-    } catch {}
-  }
-  const normalized = normalizeFinance(financeInput);
+  const normalized = normalizeFinance(store.state.finance);
   const current = store.state.finance;
   if (!current || typeof current !== "object") {
     store.state.finance = normalized;

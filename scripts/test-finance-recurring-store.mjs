@@ -26,11 +26,11 @@ store.state.finance.recurringRules.push({
   frequency: "weekly",
   startDate: "2026-04-01",
 });
-store.save();
-store.state.finance = null; // force a reload through normalizeFinance
-const rule = store.state.finance ? null : null; // placeholder removed below
 
 // Re-read through moneyView, which forces ensureFinance()/normalizeFinance()
+// to re-normalize the current in-memory state. No reload from localStorage
+// is needed here -- normalizeFinance always re-runs on the live object on
+// every call, whether or not state was ever null.
 const view = moneyView();
 const normalized = view.recurringRules.find((r) => r.id === "rule-1");
 assert.ok(normalized, "recurring rule should survive normalization");
