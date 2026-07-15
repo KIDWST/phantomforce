@@ -1431,6 +1431,20 @@ function financeDraftCategoryOptions(guess) {
   return financeCategoryOptions(selected);
 }
 
+function frequencyFieldValue(draft) {
+  if (draft.frequency === "custom-days") {
+    if (draft.intervalDays === 1) return "custom-1";
+    if (draft.intervalDays === 2) return "custom-2";
+    return "custom-60";
+  }
+  return draft.frequency;
+}
+function parseFrequencyFieldValue(value) {
+  if (value === "custom-1") return { frequency: "custom-days", intervalDays: 1 };
+  if (value === "custom-2") return { frequency: "custom-days", intervalDays: 2 };
+  if (value === "custom-60") return { frequency: "custom-days", intervalDays: 60 };
+  return { frequency: value, intervalDays: null };
+}
 function renderExpenseTextDraft(draft) {
   if (draft.kind === "recurring_rule") {
     return `
@@ -1440,9 +1454,12 @@ function renderExpenseTextDraft(draft) {
         <label><span>Direction</span><select name="direction"><option value="income" ${draft.direction === "income" ? "selected" : ""}>Cash in</option><option value="expense" ${draft.direction === "expense" ? "selected" : ""}>Cash out</option></select></label>
         <label><span>Category</span><select name="category">${financeDraftCategoryOptions(draft.categoryGuess)}</select></label>
         <label><span>Frequency</span><select name="frequency">
-          <option value="weekly" ${draft.frequency === "weekly" ? "selected" : ""}>Weekly</option>
-          <option value="biweekly" ${draft.frequency === "biweekly" ? "selected" : ""}>Every 2 weeks</option>
-          <option value="monthly" ${draft.frequency === "monthly" ? "selected" : ""}>Monthly</option>
+          <option value="custom-1" ${frequencyFieldValue(draft) === "custom-1" ? "selected" : ""}>Daily</option>
+          <option value="custom-2" ${frequencyFieldValue(draft) === "custom-2" ? "selected" : ""}>Every 2 days</option>
+          <option value="weekly" ${frequencyFieldValue(draft) === "weekly" ? "selected" : ""}>Weekly</option>
+          <option value="biweekly" ${frequencyFieldValue(draft) === "biweekly" ? "selected" : ""}>Every 2 weeks</option>
+          <option value="monthly" ${frequencyFieldValue(draft) === "monthly" ? "selected" : ""}>Monthly</option>
+          <option value="custom-60" ${frequencyFieldValue(draft) === "custom-60" ? "selected" : ""}>Every 2 months</option>
         </select></label>
         <label><span>Starts</span><input type="date" name="startDate" value="${draft.startDate}" required /></label>
         <div class="finance-draft-actions">
@@ -1719,6 +1736,7 @@ function renderMoney(el, rerender) {
       const signedAmount = fields.direction === "expense" ? -amount : amount;
       const account = ensureAccount("Manual ledger");
       if (kind === "recurring_rule") {
+        const parsedFrequency = parseFrequencyFieldValue(fields.frequency || "monthly");
         financeNow().recurringRules.unshift({
           id: uid("rule"),
           ws: draftWs,
@@ -1727,8 +1745,8 @@ function renderMoney(el, rerender) {
           direction: fields.direction === "income" ? "income" : "expense",
           category: fields.category || "Uncategorized",
           account,
-          frequency: fields.frequency || "monthly",
-          intervalDays: null,
+          frequency: parsedFrequency.frequency,
+          intervalDays: parsedFrequency.intervalDays,
           startDate: fields.startDate || todayInput(),
           endDate: null,
           status: "active",
