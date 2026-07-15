@@ -62,7 +62,7 @@ const LOCAL_CORE_WORKERS = [
   { name: "Safety Guard", note: "Approval and security rules loaded" },
 ];
 const MEMORY_DAY = 86400000;
-const crmRuntime = { state: "idle", tenant: "", leads: [], canWrite: false, error: "", refreshSignal: "" };
+const crmRuntime = { state: "idle", tenant: "", leads: [], canWrite: false, error: "", writeError: "", refreshSignal: "" };
 const crmPromptUi = { busy: false, message: "", status: "" };
 const proposalRuntime = { state: "idle", tenant: "", proposals: [], canWrite: false, error: "" };
 const approvalRuntime = { state: "idle", tenant: "", approvals: [], canWrite: false, canDecide: false, error: "" };
@@ -97,6 +97,7 @@ function applyCrmPayload(payload) {
   crmRuntime.leads = document.leads;
   crmRuntime.canWrite = payload.can_write !== false;
   crmRuntime.error = "";
+  crmRuntime.writeError = "";
   return true;
 }
 
@@ -128,6 +129,27 @@ function ensureCrmRuntime(rerender) {
 
 function usingServerCrm() {
   return crmRuntime.state === "ready" && crmRuntime.tenant === currentTenantId();
+}
+
+function crmLeadDedupeKey(lead) {
+  return [lead?.company || lead?.name, lead?.source, lead?.segment]
+    .map((part) => String(part || "").trim().toLowerCase())
+    .join("::");
+}
+
+function localCrmPromptDrafts() {
+  return visible(store.state.leads)
+    .filter((lead) => lead?.serverBacked !== true && lead?.source === "Phantom AI prospect map");
+}
+
+function visibleCrmLeads(serverBacked) {
+  if (!serverBacked) return visible(store.state.leads);
+  const serverLeads = Array.isArray(crmRuntime.leads) ? crmRuntime.leads : [];
+  const seen = new Set(serverLeads.map(crmLeadDedupeKey));
+  const localDrafts = localCrmPromptDrafts()
+    .filter((lead) => !seen.has(crmLeadDedupeKey(lead)))
+    .map((lead) => ({ ...lead, localDraftOnly: true }));
+  return [...localDrafts, ...serverLeads];
 }
 
 function leadRecord(input) {
@@ -299,9 +321,10 @@ async function copyText(el, text) {
 function renderLeads(el, rerender) {
   ensureCrmRuntime(rerender);
   const serverBacked = usingServerCrm();
-  const leads = serverBacked ? crmRuntime.leads : visible(store.state.leads);
+  const leads = visibleCrmLeads(serverBacked);
+  const localDraftCount = serverBacked ? leads.filter((lead) => lead.localDraftOnly).length : 0;
   const crmStatus = serverBacked
-    ? "Server CRM saved"
+    ? `Server CRM saved${localDraftCount ? ` · ${localDraftCount} local draft${localDraftCount === 1 ? "" : "s"} awaiting server save` : ""}${crmRuntime.writeError ? ` · Last save warning: ${crmRuntime.writeError}` : ""}`
     : crmRuntime.state === "loading"
       ? "Syncing server CRM..."
       : crmRuntime.state === "error"
@@ -337,6 +360,7 @@ function renderLeads(el, rerender) {
               ${wsTag(l.ws)}
               <h4>${esc(l.name)}</h4>
               <p class="record-sub">${esc(l.company)} · ${esc(l.source)} · ${fmtMoney(l.value)}</p>
+              ${l.localDraftOnly ? `<p class="record-sub">Local draft visible now · server save pending</p>` : ""}
               <p class="record-next">▸ ${esc(l.next)}${["new", "follow-up"].includes(l.status) ? ` <i>(${daysUntil(l.due) <= 0 ? "due today" : "in " + daysUntil(l.due) + "d"})</i>` : ""}</p>
               <p class="record-notes">${esc(l.notes)}</p>
               <div class="record-actions">
@@ -350,7 +374,7 @@ function renderLeads(el, rerender) {
         </div>`;
       }).join("")}
     </div>`;
-  const find = (id) => (serverBacked ? crmRuntime.leads : store.state.leads).find((l) => l.id === id);
+  const find = (id) => (serverBacked ? visibleCrmLeads(true) : store.state.leads).find((l) => l.id === id);
   const promptForm = el.querySelector("[data-client-crm-form]");
   promptForm?.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -371,15 +395,25 @@ function renderLeads(el, rerender) {
       const buildout = createCrmProspectBuildout(prompt);
       const lanes = buildout.leads || buildout.created;
       let saved = lanes.length;
+      let persistenceNote = "Saved locally first.";
       if (crmServerAvailable() && crmRuntime.canWrite && lanes.length) {
-        const payload = await persistCrmProspectLanes(lanes, rawPrompt);
-        applyCrmPayload(payload);
-        saved = Array.isArray(payload.leads) ? payload.leads.length : saved;
-        signalCrmRefresh("client-crm-prompt-saved");
+        try {
+          const payload = await persistCrmProspectLanes(lanes, rawPrompt);
+          applyCrmPayload(payload);
+          saved = Array.isArray(payload.leads) ? payload.leads.length : saved;
+          persistenceNote = "Server CRM saved them too.";
+          crmRuntime.writeError = "";
+          signalCrmRefresh("client-crm-prompt-saved");
+        } catch (error) {
+          crmRuntime.writeError = error?.message || "Server CRM save failed.";
+          persistenceNote = "Server save failed, so the draft lanes stay visible locally.";
+        }
+      } else if (serverBacked && !crmRuntime.canWrite) {
+        persistenceNote = "You can see the local draft, but this account cannot write server CRM yet.";
       }
       const names = (lanes.length ? lanes : buildout.segments).map((item) => item.company || item.name || item.title).join(", ");
       crmPromptUi.status = "is-done";
-      crmPromptUi.message = `${saved} draft CRM prospect lane${saved === 1 ? "" : "s"} ready: ${names}. No outreach, uploads, public exposure, or fake contact details were created.`;
+      crmPromptUi.message = `${saved} draft CRM prospect lane${saved === 1 ? "" : "s"} ready in the New lane: ${names}. ${persistenceNote} No outreach, uploads, public exposure, or fake contact details were created.`;
       pushActivity("Client Intelligence", `created CRM prospect lanes from a Clients page prompt: ${names}.`);
       store.save();
       crmPromptUi.busy = false;
@@ -393,7 +427,7 @@ function renderLeads(el, rerender) {
   });
   const updateLead = async (lead, patch) => {
     if (!lead) return;
-    if (serverBacked && crmRuntime.canWrite) {
+    if (serverBacked && crmRuntime.canWrite && !lead.localDraftOnly) {
       try {
         const payload = await updateServerCrmLead(lead.id, patch);
         applyCrmPayload(payload);
@@ -406,7 +440,8 @@ function renderLeads(el, rerender) {
         return;
       }
     }
-    Object.assign(lead, patch);
+    const localLead = store.state.leads.find((item) => item.id === lead.id) || lead;
+    Object.assign(localLead, patch);
     store.save();
     rerender();
   };
@@ -455,7 +490,7 @@ function renderLeads(el, rerender) {
     remove: async (id) => {
       const l = find(id);
       if (!l) return;
-      if (serverBacked && crmRuntime.canWrite) {
+      if (serverBacked && crmRuntime.canWrite && !l.localDraftOnly) {
         try {
           const payload = await deleteServerCrmLead(id);
           applyCrmPayload(payload);
