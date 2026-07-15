@@ -9,20 +9,20 @@ import {
   freshEditState, applyFilterPreset, renderBaseFrame,
   addBokehSpot, removeBokehSpotNear, removeBokehSpotAt, nearestBokehSpot, moveBokehSpot, resizeBokehSpot,
   setBokehMask, freshTextStyle, TEXT_FONTS, TEXT_PRESETS, applyTextPreset,
-} from "./imagefilters.js?v=phantom-live-20260714-258";
-import { getRembgStatus, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260714-258";
-import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260714-258";
-import { parseAnalyticsReport } from "./social-analytics.js?v=phantom-live-20260714-258";
+} from "./imagefilters.js?v=phantom-live-20260715-1";
+import { getRembgStatus, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260715-1";
+import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260715-1";
+import { parseAnalyticsReport } from "./social-analytics.js?v=phantom-live-20260715-1";
 import {
   freshComposition, compositionSnapshot, restoreComposition, addImageLayer, replaceImageLayerSource, addTextLayer, addColorLayer,
   duplicateLayer, removeSelectedLayers, moveLayerOrder, selectedLayers, selectLayer, selectAllLayers,
   loadCompositionImages, renderComposition, drawCompositionOverlay, drawDetectedSubjectOverlay, canvasPoint, hitTestLayer, hitTestResizeHandle,
   setCanvasPreset, zoomComposition, canvasPointToLayer, layerPointToCanvas,
   imageEditSnapshot, restoreImageEditSnapshot, pushEditorSnapshot,
-} from "./content-editor.js?v=phantom-live-20260714-258";
+} from "./content-editor.js?v=phantom-live-20260715-1";
 import {
   currentTenantId, currentWs, session, store, visible, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem, wsName,
-} from "./store.js?v=phantom-live-20260714-258";
+} from "./store.js?v=phantom-live-20260715-1";
 
 const CH_KEY = "pf.contenthub.v2";
 const CH_REMOVED_KEY = "pf.contenthub.removed.v1";
@@ -234,7 +234,7 @@ function genPosts() {
     const hue = Math.floor(rng() * 360);
     posts.push({
       id: `post-${i}`, platform: p.id, type, caption: CAPTIONS[i % CAPTIONS.length],
-      publishedAt, status: scheduled ? "scheduled" : "published", hue,
+      publishedAt, status: scheduled ? "scheduled" : "published", hue, isDemo: true,
       hashtags: tags, mentions: [],
       metrics: { reach, impressions, likes, comments, shares, saves, views, watchAvg: watch, clicks, followersGained, engagementRate: +(100 * (likes + comments + shares + saves) / Math.max(1, reach)).toFixed(1), reactions },
       comments: cmts,
@@ -301,6 +301,8 @@ function normalizeContentAsset(input = {}) {
     updatedAt: Number(input.updatedAt || 0) || 0,
     bytes: dataBytes(url),
     syncedId: String(input.syncedId || ""),
+    clientId: String(input.clientId || ""),
+    clientName: String(input.clientName || ""),
   };
 }
 function pruneContentAssets(items = []) {
@@ -360,6 +362,15 @@ export function registerContentAsset(asset, options = {}) {
   }
   return { asset: finalAsset, stats: contentAssetStats(saved) };
 }
+/* Lets the Clients module (or anything else) show "content queued/created
+   for this client" without owning the Content Hub asset store itself —
+   pass the clientId used when the asset was registered via
+   registerContentAsset({ ..., clientId, clientName }). */
+export function assetsForClient(clientId) {
+  const id = String(clientId || "");
+  if (!id) return [];
+  return loadContentAssets().filter((asset) => asset.clientId === id);
+}
 
 /* ---------------- cross-device sync (backs up to the real server) ----------------
    Fire-and-forget: a new/edited photo saves locally first (instant, works
@@ -392,9 +403,7 @@ function syncCreatorTenant() {
     if (chLbKeyHandler) { document.removeEventListener("keydown", chLbKeyHandler); chLbKeyHandler = null; }
     if (chLibraryKeyHandler) { document.removeEventListener("keydown", chLibraryKeyHandler); chLibraryKeyHandler = null; }
     chState.tab = "publish";
-    chState.platform = "all";
     chState.ctype = "all";
-    chState.eng = "likes";
   }
   chRenderedTenant = tenant;
 }
@@ -699,7 +708,7 @@ function svgIc(k) {
 /* =========================================================================
    Creator Hub
    ========================================================================= */
-const chState = { tab: "publish", platform: "all", ctype: "all", eng: "likes" };
+const chState = { tab: "publish", ctype: "all" };
 const CONTENT_TYPE_FILTERS = [["all", "All"], ["reel", "Reels"], ["video", "Video"], ["carousel", "Carousels"], ["text", "Posts"], ["image", "Images"]];
 const chSelection = new Set();
 let chLightbox = null;
@@ -714,8 +723,7 @@ export function renderContentHub(el, opts = {}) {
   try {
     const requestedTab = workspaceStorageGetItem(CH_OPEN_TAB_KEY, { migrateGlobal: false });
     if (requestedTab === "production") chState.tab = "drafts";
-    else if (requestedTab === "library") chState.tab = "publish";
-    else if (requestedTab && ["ideas", "drafts", "publish", "calendar"].includes(requestedTab)) chState.tab = requestedTab;
+    else if (requestedTab && ["library", "ideas", "drafts", "publish", "calendar"].includes(requestedTab)) chState.tab = requestedTab;
     if (requestedTab) workspaceStorageRemoveItem(CH_OPEN_TAB_KEY);
     requestedAssetId = workspaceStorageGetItem(CH_OPEN_ASSET_KEY, { migrateGlobal: false }) || "";
     if (requestedAssetId) workspaceStorageRemoveItem(CH_OPEN_ASSET_KEY);
@@ -735,8 +743,8 @@ export function renderContentHub(el, opts = {}) {
   const ideas = activeIdeas();
   const scheduled = data.posts.filter((p) => p.status === "scheduled" && !isRemoved(`schedule:${p.id}`)).length;
   const publishDrafts = loadPublishDrafts();
-  if (!["ideas", "drafts", "publish", "calendar"].includes(chState.tab)) chState.tab = "publish";
-  const tabs = [["ideas", "Ideas"], ["drafts", "Drafts"], ["publish", "Publish"], ["calendar", "Planner"]];
+  if (!["library", "ideas", "drafts", "publish", "calendar"].includes(chState.tab)) chState.tab = "publish";
+  const tabs = [["library", "Library"], ["ideas", "Ideas"], ["drafts", "Drafts"], ["publish", "Publish"], ["calendar", "Planner"]];
   el.innerHTML = `
     <div class="ch">
       <section class="ch-workbar">
@@ -755,7 +763,8 @@ export function renderContentHub(el, opts = {}) {
   pullSyncedAssetsOnce(el, opts);
   const body = el.querySelector("[data-ch-body]");
   const t = chState.tab;
-  if (t === "ideas") renderCreatorIdeas(body, data, esc, el, opts);
+  if (t === "library") renderContentLibrary(body, data, esc, el, opts);
+  else if (t === "ideas") renderCreatorIdeas(body, data, esc, el, opts);
   else if (t === "publish") renderPostPublish(body, data, esc, el, opts);
   else if (t === "drafts") renderDraftQueue(body, data, esc, el, opts);
   else if (t === "calendar") renderContentPlanner(body, data, esc, el, opts);
@@ -826,25 +835,51 @@ function renderCreatorIdeas(body, data, esc, root, opts) {
   wireRemovals(body, opts, root);
 }
 function renderDraftQueue(body, data, esc, root, opts) {
-  const drafts = activeIdeas().slice(1, 5).filter((idea) => !isRemoved(`draft:${idea.id}`));
+  const drafts = loadPublishDrafts().filter((draft) => draft.status === "draft");
   body.innerHTML = `
     <div class="ch-card">
-      <div class="ch-card-h"><h3>Draft queue</h3><span class="ch-src">Safe drafts move on autopilot; risky claims stop for review</span></div>
+      <div class="ch-card-h"><h3>Draft queue</h3><span class="ch-src">Posts saved from Publish, or drafted from an idea, waiting to be scheduled or sent</span></div>
       <div class="ch-draft-list">
-        ${drafts.length ? drafts.map((idea, i) => `<article class="ch-draft ch-removable">
-          ${removeButton(`draft:${idea.id}`, `Remove ${idea.title} draft`)}
+        ${drafts.length ? drafts.map((draft, i) => `<article class="ch-draft">
           <span class="ch-draft-step">${i + 1}</span>
           <div>
-            <h4>${esc(idea.title)}</h4>
-            <p>${esc(idea.angle)}</p>
-            <div class="ch-draft-meta"><span>${esc(idea.format)}</span><span>Autopilot copy pass</span><span>Asset direction</span></div>
+            <h4>${esc(draft.sourceTitle || "Manual post")}</h4>
+            <p>${esc((draft.caption || "").slice(0, 150))}${(draft.caption || "").length > 150 ? "..." : ""}</p>
+            <div class="ch-draft-meta"><span>${draft.platforms.map((id) => esc(plat(id).name)).join(" · ")}</span><span>${esc(TYPES[draft.sourceType] || draft.sourceType || "text")}</span><span>Saved ${ago(new Date(draft.createdAt).toISOString())}</span></div>
           </div>
-          <button class="btn" data-ch-action="approve-draft" data-idea-id="${idea.id}">Prepare autopilot</button>
-        </article>`).join("") : `<p class="empty-line">No draft items are waiting. Removed items stay local to this browser.</p>`}
+          <div class="ch-action-row">
+            <button class="btn" data-ch-draft-continue="${draft.id}">Continue in Publish</button>
+            <button class="btn btn-quiet" data-ch-draft-delete="${draft.id}">Delete</button>
+          </div>
+        </article>`).join("") : `<p class="empty-line">No saved drafts yet. Save a draft from Publish, or click "Draft from this" on an idea, to queue it here.</p>`}
       </div>
     </div>`;
-  wireCreatorActions(body, opts, root);
-  wireRemovals(body, opts, root);
+  wireDraftQueue(body, root, opts);
+}
+function wireDraftQueue(body, root, opts) {
+  body.querySelectorAll("[data-ch-draft-continue]").forEach((btn) => btn.addEventListener("click", () => {
+    const draft = loadPublishDrafts().find((d) => d.id === btn.dataset.chDraftContinue);
+    if (!draft) return;
+    savePublishState({
+      ...loadPublishState(),
+      platforms: draft.platforms,
+      sourceKey: draft.sourceKey,
+      postType: draft.postType,
+      brief: draft.brief,
+      tone: draft.tone,
+      cta: draft.cta,
+      caption: draft.caption,
+      scheduleAt: localDateTimeValue(),
+    });
+    chState.tab = "publish";
+    opts.notify?.("Creator Hub", "Loaded this draft into Publish. Schedule it or post it now.");
+    if (root) renderContentHub(root, opts);
+  }));
+  body.querySelectorAll("[data-ch-draft-delete]").forEach((btn) => btn.addEventListener("click", () => {
+    savePublishDrafts(loadPublishDrafts().filter((d) => d.id !== btn.dataset.chDraftDelete));
+    opts.notify?.("Creator Hub", "Deleted the draft. No live post was touched.");
+    if (root) renderContentHub(root, opts);
+  }));
 }
 function loadPlannerItems() {
   try {
@@ -872,7 +907,7 @@ function plannerTime(value) {
 function plannerRows(data) {
   const own = loadPlannerItems().map((item) => ({ ...item, source: "planner", removable: true }));
   const content = data.posts
-    .filter((post) => post.status === "scheduled" && !isRemoved(`schedule:${post.id}`))
+    .filter((post) => post.status === "scheduled" && !post.isDemo && !isRemoved(`schedule:${post.id}`))
     .map((post) => ({ id: `content:${post.id}`, postId: post.id, title: post.caption, kind: "content", startsAt: post.publishedAt, source: plat(post.platform).name, detail: TYPES[post.type] || post.type, removable: false }));
   return [...own, ...content].sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt));
 }
@@ -963,7 +998,7 @@ function publishSources(data, assets) {
       kind: "post",
       post,
       title: post.caption,
-      sub: `${plat(post.platform).name} · ${TYPES[post.type] || post.type}`,
+      sub: `${plat(post.platform).name} · ${TYPES[post.type] || post.type}${post.isDemo ? " · Sample idea" : ""}`,
       copy: post.caption,
       type: post.type,
       hue: post.hue || 155,
@@ -1415,6 +1450,7 @@ function renderContentLibrary(body, data, esc, root, opts) {
   const selectedPosts = selected.filter((item) => item.kind === "post").length;
   const allItemsCount = allLibraryItems(data, assets).length;
   body.innerHTML = `
+    <div class="ch-chips" data-ch-type>${CONTENT_TYPE_FILTERS.map(([id, l]) => `<button class="ch-chip ${chState.ctype === id ? "is-on" : ""}" data-v="${id}">${esc(l)}</button>`).join("")}</div>
     <section class="ch-card ch-created-media">
       <div class="ch-card-h ch-library-head">
         <div>
@@ -1467,7 +1503,7 @@ function contentAssetCard(asset, esc) {
   const meta = asset.type === "video" ? "Media Lab video" : "Media Lab image";
   const key = selectionKey("asset", asset.id);
   const selected = chSelection.has(key);
-  const flags = [asset.saved ? "saved" : "", asset.batchLabel ? asset.batchLabel : "", asset.aiEditPlan ? "AI edit plan" : ""].filter(Boolean);
+  const flags = [asset.saved ? "saved" : "", asset.clientName ? `for ${asset.clientName}` : "", asset.batchLabel ? asset.batchLabel : "", asset.aiEditPlan ? "AI edit plan" : ""].filter(Boolean);
   return `<article class="ch-asset-card ch-selectable ${selected ? "is-selected" : ""}" data-ch-select-item="${esc(key)}" data-ch-asset-id="${esc(asset.id)}" title="${hasUrl ? "Click to open" : ""}">
     <button class="ch-remove ch-asset-x" data-ch-delete-asset="${esc(asset.id)}" aria-label="Remove ${esc(asset.title)}" title="Remove ${esc(asset.title)}" type="button">x</button>
     <span class="ch-select-box" data-ch-select-hit aria-hidden="true">${selected ? "✓" : ""}</span>
@@ -3007,11 +3043,15 @@ function wireLibraryActions(body, data, assets, shownAssets, shownPosts, esc, ro
   });
 }
 function wireCreatorActions(body, opts, root) {
-  body.querySelectorAll("[data-ch-action]").forEach((btn) => btn.addEventListener("click", () => {
+  body.querySelectorAll("[data-ch-action='draft']").forEach((btn) => btn.addEventListener("click", () => {
     const idea = activeIdeas().find((row) => row.id === btn.dataset.ideaId) || savedIdeas().find((row) => row.id === btn.dataset.ideaId) || activeIdeas()[Number(btn.dataset.ideaI || 0)];
     if (!idea) return;
-    const action = btn.dataset.chAction === "approve-draft" ? "Draft prep reviewed" : "Draft prep started";
-    opts.notify?.("Creator Hub", `${action} for ${idea.title}. Safe preparation can continue automatically; no live post was sent.`);
+    const base = loadPublishState();
+    const state = { ...base, platforms: normalizePlatformIds(idea.platforms, base.platforms), brief: idea.angle || idea.title, caption: "" };
+    const draft = buildPublishDraft(state, { title: idea.title, copy: idea.angle, kind: "text", type: "text", hue: 155 }, "draft");
+    savePublishDrafts([draft, ...loadPublishDrafts()]);
+    opts.notify?.("Creator Hub", `Drafted "${idea.title}". Continue it from the Drafts tab.`);
+    chState.tab = "drafts";
     if (root) renderContentHub(root, opts);
   }));
   body.querySelectorAll("[data-ch-idea-save]").forEach((btn) => btn.addEventListener("click", () => {
@@ -3038,127 +3078,6 @@ function wireCreatorActions(body, opts, root) {
     if (root) renderContentHub(root, opts);
   });
 }
-function renderOverview(body, data, esc, root, opts) {
-  const a = analyze(data.posts);
-  const maxP = Math.max(1, ...a.byPlatform.map((p) => p.reach));
-  body.innerHTML = `
-    <div class="ch-kpis">
-      ${kpi("Total reach", K(a.totals.reach), `${K(a.totals.impressions)} impressions`)}
-      ${kpi("Engagement", K(a.totals.engagement), `${a.totals.engagementRate}% rate`)}
-      ${kpi("Likes", K(a.totals.likes), `${K(a.totals.comments)} comments`)}
-      ${kpi("Video views", K(a.totals.views), "reels · shorts · video")}
-      ${kpi("Followers gained", "+" + K(a.totals.followers), "last 45 days", "good")}
-    </div>
-    <div class="ch-cols">
-      <div class="ch-card">
-        <div class="ch-card-h"><h3>Reach by platform</h3></div>
-        <div class="ch-bars">
-          ${a.byPlatform.map((p) => `<div class="ch-bar-row"><span class="ch-bar-lab"><i class="ch-dot" style="background:${p.color}"></i>${esc(p.name)}</span>
-            <span class="ch-bar-track"><span class="ch-bar-fill" style="width:${Math.round(100 * p.reach / maxP)}%;background:${p.color}"></span></span>
-            <b class="ch-bar-val">${K(p.reach)}</b></div>`).join("")}
-        </div>
-      </div>
-      <div class="ch-card">
-        <div class="ch-card-h"><h3>Content mix</h3></div>
-        <div class="ch-mix">
-          ${a.byType.map((t) => `<div class="ch-mix-row"><span>${esc(t.label)}</span><span class="ch-mix-bar"><span style="width:${Math.round(100 * t.count / a.totals.posts)}%"></span></span><b>${t.count}</b></div>`).join("")}
-        </div>
-      </div>
-    </div>
-    <div class="ch-card">
-      <div class="ch-card-h"><h3>Top posts</h3><span class="ch-src">by engagement</span></div>
-      <div class="ch-grid">${a.topPosts.map((p) => postCard(p, esc)).join("")}</div>
-    </div>`;
-  wirePostCards(body, data, esc, root, opts);
-}
-
-function renderPlatforms(body, data, esc, root, opts) {
-  const counts = {}; data.posts.forEach((p) => counts[p.platform] = (counts[p.platform] || 0) + 1);
-  const chips = [["all", "All", data.posts.length]].concat(PLATFORMS.filter((p) => counts[p.id]).map((p) => [p.id, p.name, counts[p.id]]));
-  if (!chips.find((c) => c[0] === chState.platform)) chState.platform = "all";
-  const rows = data.posts.filter((p) => chState.platform === "all" || p.platform === chState.platform);
-  const sub = chState.platform === "all" ? null : platStrip(rows, esc);
-  body.innerHTML = `
-    <div class="ch-chips" data-ch-plat>
-      ${chips.map(([id, l, n]) => `<button class="ch-chip ${chState.platform === id ? "is-on" : ""}" data-v="${id}">${id !== "all" ? `<i class="ch-dot" style="background:${plat(id).color}"></i>` : ""}${esc(l)} <em>${n}</em></button>`).join("")}
-    </div>
-    ${sub || ""}
-    <div class="ch-grid ch-grid-lg">${rows.map((p) => postCard(p, esc)).join("") || `<p class="empty-line">No posts on this platform.</p>`}</div>`;
-  body.querySelectorAll("[data-ch-plat] button").forEach((b) => b.onclick = () => { chState.platform = b.dataset.v; renderContentHub(root, opts); });
-  wirePostCards(body, data, esc, root, opts);
-}
-function platStrip(rows, esc) {
-  const pub = rows.filter((r) => r.status === "published");
-  const s = (f) => pub.reduce((a, x) => a + f(x.metrics), 0);
-  const p = plat(rows[0].platform);
-  return `<div class="ch-platstrip" style="--pc:${p.color}">
-    ${kpi("Reach", K(s((m) => m.reach)), p.handle)}
-    ${kpi("Likes", K(s((m) => m.likes)), "")}
-    ${kpi("Comments", K(s((m) => m.comments)), "")}
-    ${kpi("Shares", K(s((m) => m.shares)), "")}
-    ${kpi("Saves", K(s((m) => m.saves)), "")}
-    ${kpi("Followers", "+" + K(s((m) => m.followersGained)), "")}
-  </div>`;
-}
-
-function renderContentTypes(body, data, esc, root, opts) {
-  const groups = [["all", "All"], ["image", "Images"], ["carousel", "Carousels"], ["reel", "Reels"], ["short", "Shorts"], ["video", "Videos"], ["story", "Stories"], ["text", "Posts"], ["article", "Articles"]];
-  const counts = {}; data.posts.forEach((p) => counts[p.type] = (counts[p.type] || 0) + 1);
-  const avail = groups.filter(([id]) => id === "all" || counts[id]);
-  if (!avail.find((c) => c[0] === chState.ctype)) chState.ctype = "all";
-  const rows = data.posts.filter((p) => chState.ctype === "all" || p.type === chState.ctype);
-  body.innerHTML = `
-    <div class="ch-chips" data-ch-type>
-      ${avail.map(([id, l]) => `<button class="ch-chip ${chState.ctype === id ? "is-on" : ""}" data-v="${id}">${esc(l)} <em>${id === "all" ? data.posts.length : counts[id]}</em></button>`).join("")}
-    </div>
-    <div class="ch-grid ch-grid-lg">${rows.map((p) => postCard(p, esc)).join("")}</div>`;
-  body.querySelectorAll("[data-ch-type] button").forEach((b) => b.onclick = () => { chState.ctype = b.dataset.v; renderContentHub(root, opts); });
-  wirePostCards(body, data, esc, root, opts);
-}
-
-function renderEngagement(body, data, esc, root, opts) {
-  const tabs = [["likes", "Likes"], ["comments", "Comments"], ["reactions", "Reactions"], ["shares", "Shares & saves"]];
-  if (!tabs.find((t) => t[0] === chState.eng)) chState.eng = "likes";
-  const pub = data.posts.filter((p) => p.status === "published");
-  let inner = "";
-  if (chState.eng === "likes") {
-    const rows = pub.slice().sort((a, b) => b.metrics.likes - a.metrics.likes);
-    inner = `<div class="ch-table"><div class="ch-tr ch-th"><span>Post</span><span>Platform</span><span>${svgIc("heart")} Likes</span><span>Rate</span></div>
-      ${rows.map((p) => `<button class="ch-tr" data-ch-open="${p.id}"><span class="ch-tr-post"><i class="ch-tr-thumb" style="${thumb(p)}"></i>${esc(p.caption)}</span>
-        <span><i class="ch-dot" style="background:${plat(p.platform).color}"></i>${plat(p.platform).name}</span><span class="ch-num">${K(p.metrics.likes)}</span><span class="ch-num">${p.metrics.engagementRate}%</span></button>`).join("")}</div>`;
-  } else if (chState.eng === "comments") {
-    const stream = [];
-    pub.forEach((p) => p.comments.forEach((c) => stream.push({ ...c, post: p })));
-    stream.sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
-    inner = `<div class="ch-comments">${stream.slice(0, 40).map((c) => `<div class="ch-comment ch-s-${c.sentiment}">
-      <span class="ch-c-av">${esc(c.user[0].toUpperCase())}</span>
-      <span class="ch-c-body"><b>@${esc(c.user)} <span class="ch-c-sent">${c.sentiment === "pos" ? "positive" : c.sentiment === "neg" ? "critical" : "neutral"}</span></b>
-        <span class="ch-c-text">${esc(c.text)}</span>
-        <span class="ch-c-meta"><i class="ch-dot" style="background:${plat(c.post.platform).color}"></i>${plat(c.post.platform).name} · ${esc(c.post.caption.slice(0, 28))}… · ${ago(c.at)} · ${svgIc("heart")} ${c.likes}</span></span></div>`).join("")}</div>`;
-  } else if (chState.eng === "reactions") {
-    const R = { like: 0, love: 0, haha: 0, wow: 0, sad: 0, angry: 0 };
-    pub.forEach((p) => { if (p.metrics.reactions) for (const k in R) R[k] += p.metrics.reactions[k]; });
-    const total = Object.values(R).reduce((a, b) => a + b, 0) || 1;
-    const EMO = { like: "👍", love: "❤️", haha: "😂", wow: "😮", sad: "😢", angry: "😠" };
-    inner = `<div class="ch-react">${Object.entries(R).map(([k, v]) => `<div class="ch-react-row"><span class="ch-react-emo">${EMO[k]}</span><span class="ch-react-lab">${k}</span>
-      <span class="ch-bar-track"><span class="ch-bar-fill" style="width:${Math.round(100 * v / total)}%"></span></span><b>${K(v)}</b></div>`).join("")}
-      <p class="ch-src">Reactions from Facebook & LinkedIn posts. Others report likes only.</p></div>`;
-  } else {
-    const rows = pub.slice().sort((a, b) => (b.metrics.shares + b.metrics.saves) - (a.metrics.shares + a.metrics.saves));
-    inner = `<div class="ch-table"><div class="ch-tr ch-th"><span>Post</span><span>Platform</span><span>${svgIc("share")} Shares</span><span>${svgIc("save")} Saves</span></div>
-      ${rows.map((p) => `<button class="ch-tr" data-ch-open="${p.id}"><span class="ch-tr-post"><i class="ch-tr-thumb" style="${thumb(p)}"></i>${esc(p.caption)}</span>
-        <span><i class="ch-dot" style="background:${plat(p.platform).color}"></i>${plat(p.platform).name}</span><span class="ch-num">${K(p.metrics.shares)}</span><span class="ch-num">${K(p.metrics.saves)}</span></button>`).join("")}</div>`;
-  }
-  body.innerHTML = `<div class="ch-chips" data-ch-eng>${tabs.map(([id, l]) => `<button class="ch-chip ${chState.eng === id ? "is-on" : ""}" data-v="${id}">${l}</button>`).join("")}</div>${inner}`;
-  body.querySelectorAll("[data-ch-eng] button").forEach((b) => b.onclick = () => { chState.eng = b.dataset.v; renderContentHub(root, opts); });
-  wirePostCards(body, data, esc, root, opts);
-}
-
-function renderScheduled(body, data, esc) {
-  const rows = data.posts.filter((p) => p.status === "scheduled" && !isRemoved(`schedule:${p.id}`)).sort((a, b) => Date.parse(a.publishedAt) - Date.parse(b.publishedAt));
-  body.innerHTML = rows.length ? `<div class="ch-grid ch-grid-lg">${rows.map((p) => postCard(p, esc)).join("")}</div>` : `<p class="empty-line">Nothing scheduled. Create a post in Publish and schedule it here.</p>`;
-}
-
 function postCard(p, esc, options = {}) {
   const P = plat(p.platform);
   const key = selectionKey("post", p.id);
