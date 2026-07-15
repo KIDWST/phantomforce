@@ -964,6 +964,13 @@ body.phantomplay-playing{overflow:hidden}.workspace-page:has(.pp-player) .worksp
   .pp-game{
     grid-template-columns:minmax(108px,34%) minmax(0,1fr);
   }
+  .pp-hero>img{
+    right:0;
+    bottom:0;
+    width:min(46vw,154px);
+    height:min(42vw,138px);
+    max-width:100%;
+  }
   .pp-game-art img{
     transform:none;
     object-position:center;
