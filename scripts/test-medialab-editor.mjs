@@ -30,6 +30,7 @@ const mediaSrc = readFileSync(new URL("../app/js/medialab.js", import.meta.url),
 const backendSrc = readFileSync(new URL("../app/js/mediabackend.js", import.meta.url), "utf8");
 const editorSrc = readFileSync(new URL("../app/js/content-editor.js", import.meta.url), "utf8");
 const cssSrc = readFileSync(new URL("../app/phantom.css", import.meta.url), "utf8");
+const mediaPoolGridBlock = cssSrc.match(/\.ml-grid-lib\s*\{[^}]*\}/u)?.[0] || "";
 
 assert.match(mediaSrc, /ctx\.globalCompositeOperation\s*=\s*erase\s*\?\s*"destination-out"/, "eraser must use destination-out compositing");
 assert.match(mediaSrc, /ctx\.globalAlpha\s*=\s*erase\s*\?\s*1\s*:/, "eraser must cut fully transparent pixels");
@@ -48,9 +49,11 @@ assert.match(mediaSrc, /renderComposition\(canvas,\s*img,\s*editState,\s*mlCompo
 assert.doesNotMatch(mediaSrc, /data-ml-duplicate-edit>Duplicate image/, "Media Lab should not show a flattened duplicate-image action in the editor footer");
 assert.match(cssSrc, /\.ml-canvas\s*\{[\s\S]*background-image:/, "transparent erased pixels need a visible checkerboard backdrop");
 assert.match(cssSrc, /\.ml-layer-row\.is-selected/u, "Layer rows need a visible selected state");
-assert.match(cssSrc, /\.ml-grid-lib\s*\{[\s\S]*grid-template-columns:\s*repeat\(auto-fill,\s*minmax\(170px,\s*220px\)\)/u, "Media Pool must use capped thumbnail columns instead of stretching a few assets across the screen");
-assert.match(cssSrc, /\.ml-grid-lib\s+\.ml-tile\s*\{[\s\S]*max-width:\s*220px[\s\S]*aspect-ratio:\s*4\s*\/\s*5/u, "Media Pool tiles must stay library-sized");
+assert.ok(mediaPoolGridBlock, "Media Pool grid CSS block must be present");
+assert.match(mediaPoolGridBlock, /grid-template-columns:\s*repeat\(auto-fill,\s*minmax\(150px,\s*190px\)\)[\s\S]*padding-bottom:\s*14px/u, "Media Pool must use capped thumbnail columns instead of stretching a few assets across the screen");
+assert.match(cssSrc, /\.ml-grid-lib\s+\.ml-tile\s*\{[\s\S]*max-width:\s*190px[\s\S]*aspect-ratio:\s*4\s*\/\s*5/u, "Media Pool tiles must stay library-sized");
 assert.match(cssSrc, /\.ml-grid-lib\s+\.ml-tile\s+img\s*\{[\s\S]*object-fit:\s*contain/u, "Media Pool images must fit inside thumbnails without cropping huge previews");
+assert.doesNotMatch(mediaPoolGridBlock, /overflow:\s*auto/u, "Media Pool grid must not add a second scrollbar inside the Media Lab body scroll area");
 assert.match(cssSrc, /\.ml-body:has\(\.ml-grid-lib\)\s*\{[\s\S]*overflow:\s*auto/u, "Media Pool needs its own scroll area inside the fixed Media Lab shell");
 assert.match(cssSrc, /\.workspace-page\[data-workspace-page="media"\]\s+\.workspace-page-body\s*\{[\s\S]*overflow:\s*auto/u, "Media Lab page body must scroll when controls extend below the viewport");
 assert.match(cssSrc, /\.workspace-page\[data-workspace-page="media"\]\s+\.workspace-page-body\s*\{[\s\S]*padding-bottom:\s*calc\(96px/u, "Media Lab needs bottom scroll padding so hidden lower controls stay reachable");

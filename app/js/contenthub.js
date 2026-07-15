@@ -734,7 +734,7 @@ export function renderContentHub(el, opts = {}) {
   el.innerHTML = `
     <div class="ch">
       <section class="ch-workbar">
-        <div><h3>Creator Hub</h3><span>${esc(wsName(currentWs()))} · ${esc(tabs.find(([id]) => id === chState.tab)?.[1] || "Publish")}</span></div>
+        <div><h3>Publish Studio</h3><span>${esc(wsName(currentWs()))} · ${esc(tabs.find(([id]) => id === chState.tab)?.[1] || "Publish")}</span></div>
         <div class="ch-tenant-actions"><span class="ch-tenant-pill">Isolated workspace</span><button class="btn btn-primary" data-open-ws="media">Open Media Pool</button></div>
       </section>
       <div class="ch-tabs">

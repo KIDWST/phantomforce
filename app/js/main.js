@@ -2953,7 +2953,7 @@ function renderMediaLabSuite(body, initialTab = "create") {
           </div>
           <nav class="media-suite-tabs" role="tablist" aria-label="Media Lab sections">
             <button class="${activeTab === "create" ? "is-active" : ""}" data-media-suite-tab="create" type="button" role="tab" aria-selected="${activeTab === "create"}">${svg("media")} Create & Edit</button>
-            <button class="${activeTab === "content" ? "is-active" : ""}" data-media-suite-tab="content" type="button" role="tab" aria-selected="${activeTab === "content"}">${svg("doc")} Content Hub</button>
+            <button class="${activeTab === "content" ? "is-active" : ""}" data-media-suite-tab="content" type="button" role="tab" aria-selected="${activeTab === "content"}">${svg("doc")} Publish</button>
           </nav>
         </header>
         <div class="media-suite-body" data-media-suite-body></div>
@@ -2985,7 +2985,7 @@ function renderAnalyticsSuite(body) {
 const CUSTOM = {
   media: { title: "Media Lab", kicker: "Create, organize, and publish", custom: true, wide: true, render: (body) => renderMediaLabSuite(body, "create") },
   sites: { title: "Websites", kicker: "Websites by domain", custom: true, wide: true, render: (body) => renderSiteStudio(body, mediaOpts()) },
-  content: { title: "Media Lab", kicker: "Content Hub inside Media Lab", custom: true, wide: true, render: (body) => renderMediaLabSuite(body, "content") },
+  content: { title: "Media Lab", kicker: "Publish studio inside Media Lab", custom: true, wide: true, render: (body) => renderMediaLabSuite(body, "content") },
   assets: { title: "Asset Cloud", kicker: "Your business's creative memory", custom: true, wide: true, render: (body) => renderAssetCloud(body) },
   phantomplay: { title: "PhantomPlay", kicker: "Intentional downtime and approved games", custom: true, wide: true, render: (body) => (phantomPlayV2Opted() ? renderPhantomPlayV2 : renderPhantomPlay)(body, mediaOpts()) },
   intelligence: { title: "Competitor Intelligence", kicker: "Public signals, labeled estimates, and original responses", custom: true, wide: true, render: (body) => renderCompetitorIntelligence(body, mediaOpts()) },
