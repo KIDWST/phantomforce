@@ -1,4 +1,4 @@
-import { currentTenantId, friendlyBackendError, session } from "./store.js?v=phantom-live-20260715-2";
+import { currentTenantId, friendlyBackendError, session } from "./store.js?v=phantom-live-20260715-3";
 
 let activeConfiguration = null;
 let activeEntitlements = null;

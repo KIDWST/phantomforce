@@ -9,7 +9,7 @@
 import {
   currentTenantId, friendlyBackendError, isAdmin, session,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260715-2";
+} from "./store.js?v=phantom-live-20260715-3";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
 const FALLBACK_KEY = "pf.phantomplay.offline.v1";
@@ -29,6 +29,9 @@ const ui = {
   analytics: null, leaderboardGameId: "", leaderboard: null,
   policyDraft: null, policyMessage: "", assistMessage: "",
   selectedDeveloperId: "", developerMessage: "",
+  // Global player handle + cross-tenant leaderboard (docs/superpowers/specs/
+  // 2026-07-15-phantomplay-global-leaderboard-design.md).
+  handle: null, handleDismissed: false, handleMessage: "", globalBoard: null,
 };
 
 let mountedRoot = null, playClock = null, playTickAt = 0, heartbeatClock = null, messageBound = false, keyboardBound = false;
@@ -92,6 +95,12 @@ async function hydrate() {
     const [v2, discovery] = await Promise.all([api(`/api/phantomplay/v2?${tenantQuery()}`), api(`/api/phantomplay/v2/discovery?${tenantQuery()}`)]);
     ui.v2 = v2; ui.discovery = discovery; ui.v2Offline = false;
   } catch { ui.v2 = null; ui.discovery = null; ui.v2Offline = true; }
+  if (!ui.v2Offline) {
+    try {
+      const [handle, globalBoard] = await Promise.all([api("/api/phantomplay/handle"), api("/api/phantomplay/leaderboard/global")]);
+      ui.handle = handle; ui.globalBoard = globalBoard;
+    } catch { ui.handle = null; ui.globalBoard = null; }
+  } else { ui.handle = null; ui.globalBoard = null; }
   ui.loading = false;
   render();
 }
@@ -292,6 +301,28 @@ function renderDeveloperProfile(developer) {
 
 /* ---- HOME ---- */
 function mapIds(rows, key = "gameId") { return (rows || []).map((item) => gameById(item[key])).filter((game) => game && !isKidsGame(game)); }
+function bestPlayerHero() {
+  const board = ui.globalBoard;
+  if (!board?.top?.length) return "";
+  const leader = board.top[0];
+  return `<section class="pp2-panel pp2-best-player">
+    <div><p class="pp2-kicker">BEST PLAYER</p><h2>${esc(leader.username)}</h2><span>${leader.globalScore.toLocaleString()} global points</span></div>
+    <ol class="pp2-board">${board.top.map((row) => `<li class="${board.self && row.rank === board.self.rank && row.username === board.self.username ? "is-you" : ""}"><b>#${row.rank}</b><span>${esc(row.username)}</span><em>${row.globalScore.toLocaleString()}</em></li>`).join("")}</ol>
+    ${board.self && !board.top.some((row) => row.rank === board.self.rank) ? `<p class="pp2-fine">Your rank: #${board.self.rank} · ${esc(board.self.username)} · ${board.self.globalScore.toLocaleString()} points</p>` : ""}
+  </section>`;
+}
+function communityRankings() {
+  const board = ui.globalBoard;
+  const developers = developerDirectory().slice(0, 5);
+  if (!board?.top?.length && !developers.length) return "";
+  return `<section class="pp2-row pp2-community-rankings">
+    <header><h2>Community Rankings</h2><p>Top players across every PhantomForce business, alongside PhantomPlay's top developers. Two different scoreboards, shown together.</p></header>
+    <div class="pp2-cols">
+      <div><h3>Top players</h3>${board?.top?.length ? `<ol class="pp2-board">${board.top.map((row) => `<li><b>#${row.rank}</b><span>${esc(row.username)}</span><em>${row.globalScore.toLocaleString()}</em></li>`).join("")}</ol>` : empty("No ranked players yet", "Claim a handle and set a score to appear here.")}</div>
+      <div><h3>Top developers</h3>${developers.length ? `<ol class="pp2-board">${developers.map((developer) => `<li><b>${developer.score}</b><span>${esc(developer.name)}</span><em>${developer.games.length} game${developer.games.length === 1 ? "" : "s"}</em></li>`).join("")}</ol>` : empty("No developers yet", "Playable games will create developer profiles automatically.")}</div>
+    </div>
+  </section>`;
+}
 function renderHome() {
   if (ui.loading) return `${skeletonRow("Featured")}${skeletonRow("Trending this week")}`;
   const visibleCatalog = ui.snapshot.catalog.filter((game) => !isKidsGame(game));
@@ -305,6 +336,7 @@ function renderHome() {
   for (const item of d?.friendsPlaying || []) friendNotes[item.gameId] = `${item.label} is playing`;
   return `<div class="pp2-home">
     ${hero ? `<section class="pp2-hero"><div class="pp2-hero-art">${art(hero)}</div><div class="pp2-hero-copy"><p class="pp2-kicker">FEATURED</p><h1>${esc(hero.title)}</h1><p>${esc(hero.summary)}</p><div><button class="pp2-play" data-pp2-play="${esc(hero.id)}">Play now</button><button class="pp2-ghost" data-pp2-open="${esc(hero.id)}">Game page</button></div></div></section>` : ""}
+    ${bestPlayerHero()}
     ${row("Continue playing", continuing, "Pick up exactly where you left off — saves follow your profile.")}
     ${d ? row("Friends playing now", mapIds(d.friendsPlaying), "", friendNotes) : ""}
     ${d ? row("Trending this week", mapIds(d.trending), "Ranked by real plays across this workspace.") : ""}
@@ -313,6 +345,7 @@ function renderHome() {
     ${d ? row("New community releases", mapIds(d.newReleases)) : ""}
     ${row("Featured", featured)}
     ${ui.v2Offline ? v2Note("Discovery, reviews, friends, and wishlists need the PhantomForce server. Built-in games and saves still work.") : ""}
+    ${communityRankings()}
     <section class="pp2-spotlight"><div><p class="pp2-kicker">DEVELOPER SPOTLIGHT</p><h2>${esc(ui.snapshot.developerSpotlight)}</h2><p>Browse developers, see every game they have in PhantomPlay, and keep private support notes without turning play into a marketplace.</p><button class="pp2-ghost" data-pp2-tab="developer">Open Developers</button></div></section>
   </div>`;
 }
@@ -394,7 +427,14 @@ function renderWorkspace() {
 /* ---- LIBRARY ---- */
 function filteredCatalog() {
   const query = ui.query.toLowerCase();
-  return ui.snapshot.catalog.filter((game) => visibleByCategory(game) && (!query || `${game.title} ${game.summary} ${game.developer} ${game.tags.join(" ")}`.toLowerCase().includes(query)));
+  const games = ui.snapshot.catalog.filter((game) => visibleByCategory(game) && (!query || `${game.title} ${game.summary} ${game.developer} ${game.tags.join(" ")}`.toLowerCase().includes(query)));
+  // Default sort: most-played first (all-time), per the discovery service's
+  // catalogOrder. Games missing from it (no discovery data yet) keep their
+  // original catalog order, appended after every ranked game.
+  const order = ui.discovery?.catalogOrder;
+  if (!order?.length) return games;
+  const rank = new Map(order.map((id, index) => [id, index]));
+  return [...games].sort((a, b) => (rank.get(a.id) ?? order.length) - (rank.get(b.id) ?? order.length));
 }
 function renderLibrary() {
   const games = filteredCatalog();
@@ -510,6 +550,38 @@ function renderDetail() {
   </article></div>`;
 }
 
+/* ---- GLOBAL HANDLE PROMPT ---- */
+// One-time username picker: shows once per session (or until claimed/dismissed)
+// when GET /api/phantomplay/handle says hasHandle:false. Legacy demo/session
+// accounts get a clear error on submit rather than the prompt being hidden
+// outright, since the server can't tell "no handle yet" from "can't have one"
+// without the account existing to check.
+function handlePromptMarkup() {
+  if (ui.v2Offline || ui.handleDismissed || !ui.handle || ui.handle.hasHandle) return "";
+  return `<div class="pp2-detail-backdrop" data-pp2-handle-backdrop><article class="pp2-detail pp2-handle-prompt" role="dialog" aria-modal="true" aria-label="Pick your PhantomPlay username">
+    <button type="button" class="pp2-detail-close" data-pp2-handle-dismiss aria-label="Close">×</button>
+    <p class="pp2-kicker">PHANTOMPLAY IDENTITY</p>
+    <h2>Pick your player name</h2>
+    <p>This is the name shown on PhantomPlay's global leaderboard, across every PhantomForce business — never your business name or email.</p>
+    <form data-pp2-claim-handle>
+      <label>Username<input type="text" name="username" maxlength="20" minlength="3" pattern="[a-zA-Z0-9_]{3,20}" placeholder="3-20 letters, numbers, underscores" required/></label>
+      ${ui.handleMessage ? `<p class="pp2-fine">${esc(ui.handleMessage)}</p>` : ""}
+      <div><button type="submit" class="pp2-play">Claim username</button><button type="button" class="pp2-ghost" data-pp2-handle-dismiss>Not now</button></div>
+    </form>
+  </article></div>`;
+}
+async function claimHandle(form) {
+  const username = new FormData(form).get("username");
+  ui.handleMessage = "Saving…"; render();
+  try {
+    ui.handle = await api("/api/phantomplay/handle", { method: "POST", body: JSON.stringify({ username }) });
+    ui.handleMessage = "";
+    const board = await api("/api/phantomplay/leaderboard/global").catch(() => null);
+    if (board) ui.globalBoard = board;
+  } catch (error) { ui.handleMessage = error.message; }
+  render();
+}
+
 /* ---- SETTINGS / PLAYER ---- */
 function settingsMarkup() {
   if (!ui.settingsOpen) return "";
@@ -545,7 +617,7 @@ function render() {
     ${ui.error && !ui.offline ? `<div class="pp2-banner is-error"><b>PhantomPlay needs attention</b><span>${esc(ui.error)}</span><button data-pp2-retry>Retry</button></div>` : ""}
     <nav class="pp2-tabs" aria-label="PhantomPlay experiences">${tabs.map(([id, label]) => `<button type="button" class="${ui.tab === id ? "is-active" : ""}" data-pp2-tab="${id}">${esc(label)}</button>`).join("")}</nav>
     <main class="pp2-content">${snapshot.access.enabled ? view() : empty("PhantomPlay is unavailable", "Ask your business owner to enable PhantomPlay for this plan.")}</main>
-    ${renderDetail()}${settingsMarkup()}${playerMarkup()}
+    ${renderDetail()}${settingsMarkup()}${playerMarkup()}${handlePromptMarkup()}
   </div>`;
   bind();
 }
@@ -777,6 +849,10 @@ function bind() {
   mountedRoot.querySelectorAll("[data-pp2-unfriend]").forEach((b) => b.onclick = () => friendAction(b.dataset.pp2Unfriend, "remove"));
   on("[data-pp2-close-detail]", "click", (e) => { if (e.target === e.currentTarget) { ui.detailId = null; ui.detail = null; render(); } });
   on("[data-pp2-close-detail-btn]", "click", () => { ui.detailId = null; ui.detail = null; render(); });
+  on("[data-pp2-handle-backdrop]", "click", (e) => { if (e.target === e.currentTarget) { ui.handleDismissed = true; ui.handleMessage = ""; render(); } });
+  mountedRoot.querySelectorAll("[data-pp2-handle-dismiss]").forEach((b) => b.onclick = () => { ui.handleDismissed = true; ui.handleMessage = ""; render(); });
+  const claimForm = mountedRoot.querySelector("[data-pp2-claim-handle]");
+  if (claimForm) claimForm.onsubmit = (e) => { e.preventDefault(); claimHandle(claimForm); };
   mountedRoot.querySelectorAll("[data-pp2-star]").forEach((b) => b.onclick = () => { ui.reviewDraft.rating = Number(b.dataset.pp2Star); ui.reviewDraft.text = mountedRoot.querySelector("[data-pp2-review] textarea")?.value || ""; render(); });
   const reviewForm = mountedRoot.querySelector("[data-pp2-review]");
   if (reviewForm) reviewForm.onsubmit = (e) => { e.preventDefault(); submitReview(reviewForm); };

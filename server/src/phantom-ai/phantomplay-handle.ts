@@ -150,7 +150,12 @@ export async function claimPhantomPlayHandle(session: AccessSession, input: Reco
 }
 
 export async function getPhantomPlayGlobalLeaderboard(session: AccessSession) {
-  const db = requirePrisma();
+  // An empty leaderboard is a valid, honest state during the ongoing
+  // database-auth migration (see the design doc's non-goals) -- unlike
+  // claimPhantomPlayHandle, a read here should degrade quietly rather than
+  // 500 on every page load while Prisma repository mode isn't configured.
+  const db = prisma;
+  if (!db) return { top: [], self: null };
   const ranked = await db.playerHandle.findMany({ orderBy: [{ globalScore: "desc" }, { createdAt: "asc" }] });
   const top5 = ranked.slice(0, 5).map((row, index) => ({ rank: index + 1, username: row.username, globalScore: row.globalScore }));
   const userId = session.userId;

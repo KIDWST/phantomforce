@@ -1,4 +1,4 @@
-import { currentTenantId, friendlyBackendError, session } from "./store.js?v=phantom-live-20260715-2";
+import { currentTenantId, friendlyBackendError, session } from "./store.js?v=phantom-live-20260715-3";
 
 const PULSE_TTL_MS = 45_000;
 
