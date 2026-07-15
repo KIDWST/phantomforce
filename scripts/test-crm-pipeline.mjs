@@ -7,6 +7,7 @@ const read = (path) => readFileSync(new URL(path, root), "utf8");
 const files = {
   store: read("server/src/crm/crm-pipeline-store.ts"),
   server: read("server/src/index.ts"),
+  coreClient: read("app/js/store.js"),
   client: read("app/js/crmpipeline.js"),
   workspaces: read("app/js/workspaces.js"),
   pageworker: read("app/js/pageworker.js"),
@@ -46,6 +47,8 @@ for (const exported of ["signalCrmRefresh", "crmRefreshSignal"]) {
   must(files.client, new RegExp(`export function ${exported}`, "u"), `Client API must export ${exported}.`);
 }
 must(files.client, /CRM_REFRESH_SIGNAL_KEY/u, "CRM client must expose a refresh signal key for cross-page CRM updates.");
+must(files.coreClient, /export function friendlyBackendError/u, "Shared client core must expose a friendly backend error formatter.");
+must(files.client, /friendlyBackendError[\s\S]*Sign in to load server-backed CRM/u, "CRM client must hide raw auth transport errors behind a clean sign-in message.");
 
 must(files.workspaces, /Server CRM saved/u, "Clients page must display server CRM state.");
 must(files.workspaces, /loadCrmLeads/u, "Clients page must load server CRM leads.");
@@ -91,6 +94,16 @@ globalThis.CustomEvent = class CustomEvent {
 
 const crmProspectModule = await import(new URL("../app/js/crmprospects.js?v=crm-pipeline-runtime-test", import.meta.url));
 const storeModule = await import(new URL("../app/js/store.js?v=phantom-live-20260714-258", import.meta.url));
+assert.equal(
+  storeModule.friendlyBackendError(401, "Missing or invalid Authorization bearer token.", { authMessage: "Sign in to load server-backed CRM." }),
+  "Sign in to load server-backed CRM.",
+  "Shared friendly error formatter must not leak raw bearer-token failures.",
+);
+assert.equal(
+  storeModule.friendlyBackendError(422, "Lead name is required.", { authMessage: "Sign in to load server-backed CRM." }),
+  "Lead name is required.",
+  "Shared friendly error formatter must preserve non-auth validation messages.",
+);
 const screenshotStylePrompt = "update our clients crm with clients who you think would be interested in phantomforce. your phantom workforce.. creators, businesses, schools, everyone. Just add to our CRM/clients tab";
 assert.equal(crmProspectModule.isCrmProspectBuildout(screenshotStylePrompt), true, "Clients page prompt must recognize natural CRM buildout requests.");
 const requestedSegments = crmProspectModule.requestedProspectSegments(screenshotStylePrompt).map((segment) => segment.id);

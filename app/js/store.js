@@ -116,6 +116,16 @@ export function sanitizeMemoryText(value = "") {
   return text.slice(0, 1400);
 }
 
+export function friendlyBackendError(status, message = "", options = {}) {
+  const text = sanitizeMemoryText(message);
+  const authMessage = options.authMessage || "Sign in to continue.";
+  const fallbackPrefix = options.fallbackPrefix || "Request failed";
+  if (status === 401 || /missing or invalid authorization|authorization bearer|bearer token/i.test(text)) {
+    return authMessage;
+  }
+  return text || `${fallbackPrefix} (${status}).`;
+}
+
 export function classifyMemory(value = "") {
   const text = String(value || "").toLowerCase();
   if (/\b(remember|make sure|from now on|always|never|prefer|preference|i like|i don't like|i hate|don't use|use this)\b/.test(text)) return "preference";

@@ -7,7 +7,7 @@
    flow (catalog, play, saves, submissions, moderation) keeps working. */
 
 import {
-  currentTenantId, isAdmin, session,
+  currentTenantId, friendlyBackendError, isAdmin, session,
   workspaceStorageGetItem, workspaceStorageSetItem,
 } from "./store.js?v=phantom-live-20260714-258";
 
@@ -40,7 +40,7 @@ function authHeaders(json = false) {
 async function api(path, options = {}) {
   const response = await fetch(path, { ...options, headers: { ...authHeaders(Boolean(options.body)), ...(options.headers || {}) } });
   const payload = await response.json().catch(() => null);
-  if (!response.ok) { const err = new Error(typeof payload?.error === "string" ? payload.error : `PhantomPlay request failed (${response.status}).`); err.status = response.status; throw err; }
+  if (!response.ok) { const err = new Error(friendlyBackendError(response.status, payload?.error, { authMessage: "Sign in to sync PhantomPlay.", fallbackPrefix: "PhantomPlay request failed" })); err.status = response.status; throw err; }
   return payload;
 }
 const tenantQuery = () => `tenant_id=${encodeURIComponent(currentTenantId())}`;

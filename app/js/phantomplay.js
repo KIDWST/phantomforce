@@ -1,5 +1,5 @@
 import {
-  currentTenantId, isAdmin, isOwnerOperator, session,
+  currentTenantId, friendlyBackendError, isAdmin, isOwnerOperator, session,
   workspaceStorageGetItem, workspaceStorageSetItem,
 } from "./store.js?v=phantom-live-20260714-258";
 
@@ -170,7 +170,7 @@ function authHeaders(json = false) {
 async function api(path, options = {}) {
   const response = await fetch(path, { ...options, headers: { ...authHeaders(Boolean(options.body)), ...(options.headers || {}) } });
   const payload = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(typeof payload?.error === "string" ? payload.error : `PhantomPlay request failed (${response.status}).`);
+  if (!response.ok) throw new Error(friendlyBackendError(response.status, payload?.error, { authMessage: "Sign in to sync PhantomPlay.", fallbackPrefix: "PhantomPlay request failed" }));
   return payload;
 }
 

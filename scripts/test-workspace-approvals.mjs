@@ -7,6 +7,7 @@ const read = (path) => readFileSync(new URL(path, root), "utf8");
 const files = {
   store: read("server/src/workspace-approvals/workspace-approval-store.ts"),
   server: read("server/src/index.ts"),
+  coreClient: read("app/js/store.js"),
   client: read("app/js/approvalpipeline.js"),
   workspaces: read("app/js/workspaces.js"),
   staticServer: read("ops/admin-live/admin-static-server.mjs"),
@@ -43,6 +44,8 @@ must(files.staticServer, /urlPath\.startsWith\("\/api\/workspace-approvals"\)/u,
 for (const exported of ["loadWorkspaceApprovals", "createWorkspaceApproval", "decideWorkspaceApproval", "deleteWorkspaceApproval"]) {
   must(files.client, new RegExp(`export async function ${exported}`, "u"), `Client API must export ${exported}.`);
 }
+must(files.coreClient, /export function friendlyBackendError/u, "Shared client core must expose a friendly backend error formatter.");
+must(files.client, /friendlyBackendError[\s\S]*Sign in to load server-backed approvals/u, "Workspace approval client must hide raw auth transport errors behind a clean sign-in message.");
 
 must(files.workspaces, /Server approvals saved/u, "Approvals page must display server approval state.");
 must(files.workspaces, /queueWorkspaceApproval/u, "Approval-producing widgets must use a shared server/local queue helper.");

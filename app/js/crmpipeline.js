@@ -1,4 +1,4 @@
-import { currentTenantId, session } from "./store.js?v=phantom-live-20260714-258";
+import { currentTenantId, friendlyBackendError, session } from "./store.js?v=phantom-live-20260714-258";
 
 export const CRM_REFRESH_SIGNAL_KEY = "pf.crm.refresh.v1";
 
@@ -18,7 +18,7 @@ export function crmRefreshSignal() {
 async function api(path, options = {}) {
   const response = await fetch(path, { ...options, headers: { ...authHeaders(Boolean(options.body)), ...(options.headers || {}) } });
   const payload = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(typeof payload?.error === "string" ? payload.error : `Request failed (${response.status}).`);
+  if (!response.ok) throw new Error(friendlyBackendError(response.status, payload?.error, { authMessage: "Sign in to load server-backed CRM." }));
   return payload;
 }
 

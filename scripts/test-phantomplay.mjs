@@ -39,6 +39,8 @@ assert.match(module, /data\.source !== "phantomplay-game"/u, "Game messages must
 assert.match(module, /Offline mode/u, "An honest offline state must exist.");
 assert.match(module, /No matching builds/u, "A real search empty state must exist.");
 assert.match(module, /not a marketplace/u, "PhantomPlay must be positioned as a sandbox, not a marketplace.");
+assert.match(module, /friendlyBackendError[\s\S]*Sign in to sync PhantomPlay/u, "Classic PhantomPlay must hide raw auth transport errors behind a clean sign-in message.");
+assert.match(moduleV2, /friendlyBackendError[\s\S]*Sign in to sync PhantomPlay/u, "PhantomPlay V2 must hide raw auth transport errors behind a clean sign-in message.");
 assert.match(module, /Play together with friends in this workspace\./u, "PhantomPlay must expose the private multiplayer room surface.");
 assert.match(module, /Start a private room/u, "PhantomPlay must expose private room creation.");
 assert.match(module, /No public discovery/u, "Private rooms must avoid public discovery.");

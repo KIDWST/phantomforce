@@ -1,4 +1,4 @@
-import { currentTenantId, session } from "./store.js?v=phantom-live-20260714-258";
+import { currentTenantId, friendlyBackendError, session } from "./store.js?v=phantom-live-20260714-258";
 
 const authHeaders = (json = false) => {
   const token = session.token();
@@ -8,7 +8,7 @@ const authHeaders = (json = false) => {
 async function api(path, options = {}) {
   const response = await fetch(path, { ...options, headers: { ...authHeaders(Boolean(options.body)), ...(options.headers || {}) } });
   const payload = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(typeof payload?.error === "string" ? payload.error : `Request failed (${response.status}).`);
+  if (!response.ok) throw new Error(friendlyBackendError(response.status, payload?.error, { authMessage: "Sign in to load server-backed proposals." }));
   return payload;
 }
 

@@ -7,6 +7,7 @@ const read = (path) => readFileSync(new URL(path, root), "utf8");
 const files = {
   store: read("server/src/proposals/proposal-store.ts"),
   server: read("server/src/index.ts"),
+  coreClient: read("app/js/store.js"),
   client: read("app/js/proposalpipeline.js"),
   workspaces: read("app/js/workspaces.js"),
   staticServer: read("ops/admin-live/admin-static-server.mjs"),
@@ -42,6 +43,8 @@ must(files.staticServer, /urlPath\.startsWith\("\/api\/proposals"\)/u, "Static s
 for (const exported of ["loadProposals", "createProposal", "updateProposal", "deleteProposal"]) {
   must(files.client, new RegExp(`export async function ${exported}`, "u"), `Client API must export ${exported}.`);
 }
+must(files.coreClient, /export function friendlyBackendError/u, "Shared client core must expose a friendly backend error formatter.");
+must(files.client, /friendlyBackendError[\s\S]*Sign in to load server-backed proposals/u, "Proposal client must hide raw auth transport errors behind a clean sign-in message.");
 
 must(files.workspaces, /Server proposals saved/u, "Proposal Forge must display server proposal state.");
 must(files.workspaces, /loadProposals/u, "Proposal Forge must load server proposals.");
