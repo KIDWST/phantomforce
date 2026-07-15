@@ -10826,6 +10826,15 @@ body:has(.phantom .app-main > .console:not(.console-workspace)) .buddy-canvas {
 .console.console-enter .hero2 { animation: pageRise 0.5s 0.05s cubic-bezier(0.22, 1, 0.36, 1) both; }
 .console.console-enter .console-rail { animation: pageRise 0.55s 0.14s cubic-bezier(0.22, 1, 0.36, 1) both; }
 
+@media (min-width: 901px) {
+  .workspace-page-first[data-workspace-page="media"] .workspace-page-body,
+  .workspace-page[data-workspace-page="media"] .workspace-page-body {
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+  }
+}
+
 /* ---- micro-interactions: the console answers your hand ---- */
 .nav-item { transition: background 0.18s, color 0.18s, border-color 0.18s, transform 0.18s; }
 .nav-item:hover { transform: translateX(2px); }

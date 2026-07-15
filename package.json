@@ -20,6 +20,7 @@
     "test:instant-chat-fallback": "npm run test:instant-chat-fallback --workspace @phantomforce/server",
     "test:content-planner": "node scripts/test-content-planner.mjs",
     "test:page-worker": "node scripts/test-page-worker.mjs",
+    "test:medialab-editor": "node scripts/test-medialab-editor.mjs",
     "test:client-setup-audit": "node scripts/audit-client-setup-data-model.mjs",
     "test:client-setup-console": "node scripts/test-client-setup-console.mjs",
     "test:crm-pipeline": "node scripts/test-crm-pipeline.mjs",

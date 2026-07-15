@@ -46,6 +46,7 @@ assert.match(cssSrc, /\.ml-grid-lib\s+\.ml-tile\s+img\s*\{[\s\S]*object-fit:\s*c
 assert.match(cssSrc, /\.ml-body:has\(\.ml-grid-lib\)\s*\{[\s\S]*overflow:\s*auto/u, "Media Pool needs its own scroll area inside the fixed Media Lab shell");
 assert.match(cssSrc, /\.workspace-page\[data-workspace-page="media"\]\s+\.workspace-page-body\s*\{[\s\S]*overflow:\s*auto/u, "Media Lab page body must scroll when controls extend below the viewport");
 assert.match(cssSrc, /\.workspace-page\[data-workspace-page="media"\]\s+\.workspace-page-body\s*\{[\s\S]*padding-bottom:\s*calc\(96px/u, "Media Lab needs bottom scroll padding so hidden lower controls stay reachable");
+assert.match(cssSrc, /\.workspace-page-first\[data-workspace-page="media"\]\s+\.workspace-page-body,[\s\S]*\.workspace-page\[data-workspace-page="media"\]\s+\.workspace-page-body\s*\{[\s\S]*overflow-y:\s*auto\s*!important/u, "Media Lab scroll rules must win late cascade overrides.");
 assert.match(cssSrc, /\.workspace-page\[data-workspace-page="media"\]\s+\.ml-body\s*\{[\s\S]*overflow:\s*auto/u, "Media Lab internal body must be scrollable for dense create/edit states");
 
 console.log("medialab editor tests passed");
