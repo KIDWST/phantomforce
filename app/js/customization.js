@@ -12,10 +12,16 @@ const CANONICAL_MODULES = {
     forceEnabled: true,
   },
 };
+const LEGACY_CRM_LABELS = /^(clients?|client ?set ?up)$/i;
 
 function normalizedModuleState(module, moduleId) {
   const canonical = CANONICAL_MODULES[moduleId];
-  if (!canonical) return module;
+  if (!canonical) {
+    if (moduleId === "crm" && LEGACY_CRM_LABELS.test(String(module?.label || "").trim())) {
+      return { ...module, label: "Leads" };
+    }
+    return module;
+  }
   const roles = Array.from(new Set([...(module?.roles || []), ...canonical.roles]));
   return {
     ...(module || { id: moduleId, order: undefined, accessMode: "entire_organization" }),
