@@ -178,11 +178,13 @@ assert.match(penaltyKick, /\.field\{[^}]*height:100%;[^}]*min-height:280px/u, "P
 assert.match(penaltyKick, /function meterPower\(\)\{[^}]*getBoundingClientRect/u, "Penalty Kick must calculate shot timing from live meter geometry.");
 assert.doesNotMatch(penaltyKick, /getComputedStyle\(meter\)\.transform\.split/u, "Penalty Kick must not use raw CSS transform pixels for shot timing.");
 assert.match(penaltyKick, /else start\(\)/u, "Penalty Kick must let keyboard users start from the opening overlay.");
-assert.match(module, /id:\s*"penalty-kick"[\s\S]*launchUrl:\s*"\/app\/games\/penalty-kick\.html\?v=1\.0\.2"[\s\S]*featured:\s*true/u, "Penalty Kick must launch the fixed playable build and be visible in the ready strip.");
+assert.match(module, /id:\s*"penalty-kick"[\s\S]*launchUrl:\s*"\/app\/games\/penalty-kick\.html\?v=1\.0\.3"[\s\S]*featured:\s*true/u, "Penalty Kick must launch the fixed playable build and be visible in the ready strip.");
 assert.match(penaltyKick, /field\.addEventListener\('pointerdown',chooseLaneFromPoint\)/u, "Penalty Kick must let touch and pointer users choose a lane from the field.");
 assert.match(penaltyKick, /shootButton\.disabled=busy\|\|paused\|\|!started/u, "Penalty Kick must disable shooting while blocked, paused, or not started.");
 assert.match(penaltyKick, /function finishShot\([^)]*\)\{[\s\S]*shots--;busy=false;render\(\);[\s\S]*if\(shots<=0\)\{started=false;render\(\);startEl\.hidden=false/u, "Penalty Kick must update the final-shot HUD before showing the final whistle.");
 assert.match(penaltyKick, /power>=\.28&&power<=\.72/u, "Penalty Kick must use a forgiving green-zone window so the game is playable.");
+assert.match(penaltyKick, /@media\(max-height:560px\)\{[\s\S]*main\{gap:6px\}[\s\S]*\.field\{min-height:clamp\(128px,36vh,200px\)[\s\S]*\.actions button\{min-height:38px/u, "Penalty Kick must compact the field and controls in short PhantomPlay frames instead of overlapping the meter and shoot button.");
+assert.match(penaltyKick, /@media\(max-height:400px\)\{[\s\S]*\.field\{min-height:110px\}/u, "Penalty Kick must keep a playable emergency layout for tiny embedded frames.");
 assert.match(games[gameSlugs.indexOf("rift-frenzy")], /rival|school|boost|eat|bigger/u, "Rift Frenzy must play as a modern fish arena, not a static old mini-game.");
 assert.match(games[gameSlugs.indexOf("serpent-surge")], /storm|boost|rival|serpent|trail/u, "Serpent Surge must play as a modern snake arena, not a static old mini-game.");
 const phantomRumbleScript = phantomRumble.match(/<script>([\s\S]*?)<\/script>/u)?.[1] || "";
