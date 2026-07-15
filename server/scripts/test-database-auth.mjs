@@ -107,7 +107,12 @@ check("audit trail records invitation + role change", auditTypes.includes("invit
 const ent = await api("/orgs/dev-org-chicagoshots/entitlements", { token: owner.token });
 check("entitlements resolve plan + usage metrics", ent.json.entitlements?.planKey === "professional" && Array.isArray(ent.json.metrics));
 const plans = await api("/admin/plans", { token: jordan.token });
-check("super-admin lists plan catalog", plans.json.plans?.length === 5);
+const planKeys = (plans.json.plans ?? []).map((plan) => plan.key);
+check(
+  "super-admin lists plan catalog",
+  ["free", "starter", "professional", "elite", "enterprise", "internal"].every((key) => planKeys.includes(key)),
+  planKeys.join(","),
+);
 const plansDenied = await api("/admin/plans", { token: owner.token });
 check("org owner CANNOT list admin plans (403)", plansDenied.status === 403);
 

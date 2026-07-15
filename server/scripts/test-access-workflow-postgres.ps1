@@ -102,6 +102,7 @@ try {
       DATABASE_URL = $databaseUrl
       PHANTOMFORCE_AUTH_PROVIDER = "demo"
       PHANTOMFORCE_ENABLE_DEMO_AUTH = "true"
+      PHANTOMFORCE_SKIP_SERVER_DOTENV = "true"
       PHANTOMFORCE_ALLOW_UNSIGNED_SESSION_HEADER = "false"
       PHANTOMFORCE_ACCESS_REPOSITORY = ""
       PHANTOMFORCE_SESSION_SECRET = "phantomforce-postgres-test-secret"
@@ -160,6 +161,7 @@ try {
       DATABASE_URL = $databaseUrl
       PHANTOMFORCE_AUTH_PROVIDER = "database"
       PHANTOMFORCE_ENABLE_DEMO_AUTH = "false"
+      PHANTOMFORCE_SKIP_SERVER_DOTENV = "true"
       PHANTOMFORCE_ALLOW_UNSIGNED_SESSION_HEADER = "false"
       PHANTOMFORCE_ACCESS_REPOSITORY = ""
       PHANTOMFORCE_SESSION_SECRET = "phantomforce-postgres-test-secret-with-enough-length"
