@@ -65,12 +65,20 @@ const { parseExpenseText } = await import("../src/connectors/finance-smart-entry
 
 const { parseReceiptImage } = await import("../src/connectors/finance-smart-entry.js");
 
-// AI parsing disabled (flags off) must degrade gracefully, not throw
+// AI parsing disabled (flags off) must degrade gracefully AND must never
+// attempt a network call -- a spy fetcher proves this, not just the result shape.
 {
+  let fetchCalled = false;
+  const spyFetch = (async () => {
+    fetchCalled = true;
+    throw new Error("fetch must not be called when live providers are disabled");
+  }) as typeof fetch;
   const result = await parseReceiptImage("data:image/png;base64,AAAA", {
+    fetcher: spyFetch,
     env: { PHANTOM_LIVE_PROVIDERS_ENABLED: "false", PHANTOM_OPENROUTER_TRANSPORT_ENABLED: "true", OPENROUTER_API_KEY: "test-key" } as NodeJS.ProcessEnv,
   });
   assert(result.available === false, "receipt parsing must report unavailable when live providers are disabled");
+  assert(fetchCalled === false, "receipt parsing must not attempt a network call at all when live providers are disabled");
 }
 
 // AI parsing enabled: a mocked OpenRouter response must produce a structured draft
