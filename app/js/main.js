@@ -71,6 +71,7 @@ const consoleRoot = $("[data-console]");
 const dashboardShellHtml = consoleRoot ? consoleRoot.innerHTML : "";
 let commandTouchScroll = { x: 0, y: 0 };
 let keyboardViewportBound = false;
+const CUSTOMER_ONBOARDING_VERSION = "2026-07-14-customer-identity-v1";
 
 function updateKeyboardOffset() {
   const vv = window.visualViewport;
@@ -803,6 +804,7 @@ function missionMapPrompts() {
 }
 
 function openOperationsMap() {
+  if (customerOnboardingLocked()) return;
   if (activePageId) renderDashboardPage(true);
   if (openId === "operations-map") {
     closeOperationsMap();
@@ -3018,11 +3020,16 @@ function navForWorkspace(id) {
     || null;
 }
 function clearOverlayOnly() {
+  if (customerOnboardingLocked()) return;
   openId = null;
   overlayRoot.innerHTML = "";
   document.body.classList.remove("overlay-open");
 }
+function customerOnboardingLocked() {
+  return openId === "customer-onboarding" && !customerOnboardingComplete();
+}
 function renderDashboardPage(pushHash = true) {
+  if (customerOnboardingLocked()) return;
   activePageId = null;
   activeNav = "dashboard";
   clearOverlayOnly();
@@ -3035,6 +3042,7 @@ function renderDashboardPage(pushHash = true) {
   }
 }
 function renderWorkspacePage(id, pushHash = true) {
+  if (customerOnboardingLocked()) return;
   const key = workspaceId(id);
   const def = workspaceDef(key);
   if (!def) return;
@@ -3083,12 +3091,14 @@ function renderWorkspacePage(id, pushHash = true) {
   }
 }
 function routeWorkspace(id, pushHash = true) {
+  if (customerOnboardingLocked()) return;
   const key = workspaceId(id);
   if (key === "dashboard") { renderDashboardPage(pushHash); return; }
   if (navForWorkspace(key)) renderWorkspacePage(key, pushHash);
   else openWorkspace(key, pushHash);
 }
 function openWorkspace(id, pushHash = true) {
+  if (customerOnboardingLocked()) return;
   const key = workspaceId(id);
   const def = workspaceDef(key);
   if (!def) return;
@@ -3131,6 +3141,7 @@ function openWorkspace(id, pushHash = true) {
 }
 function closeOverlay(clearHash) {
   if (!openId) { if (clearHash) syncNavToView(); return; }
+  if (openId === "customer-onboarding") return;
   openId = null;
   overlayRoot.innerHTML = "";
   document.body.classList.remove("overlay-open");
@@ -3141,6 +3152,151 @@ function closeOverlay(clearHash) {
   if (activePageId) renderWorkspacePage(activePageId, false);
   else renderConsole();
 }
+
+function customerOnboardingKey() {
+  const identity = (ctx.session?.orgId || ctx.session?.userId || ctx.session?.authSessionId || ctx.session?.email || ctx.session?.sessionId || "").toLowerCase();
+  if (!identity) return "";
+  return `pf.customer.onboarding.${CUSTOMER_ONBOARDING_VERSION}.${identity}`;
+}
+
+function customerOnboardingComplete() {
+  if (!isClientPublicHost() || !ctx.session?.database || ctx.session?.isSuperAdmin) return true;
+  try {
+    const key = customerOnboardingKey();
+    return Boolean(key) && localStorage.getItem(key) === "complete";
+  } catch {
+    return false;
+  }
+}
+
+function showCustomerFirstRunOnboarding() {
+  if (customerOnboardingComplete()) return;
+  clearOverlayOnly();
+  openId = "customer-onboarding";
+  document.body.classList.add("overlay-open");
+  const businessName = ctx.session?.label || wsName(currentWs()) || "";
+  overlayRoot.innerHTML = `
+    <div class="overlay overlay-wide customer-onboarding-overlay" role="dialog" aria-modal="true" aria-label="Customer workspace setup">
+      <section class="overlay-panel customer-onboarding-panel">
+        <header class="customer-onboarding-head">
+          <div>
+            <p class="overlay-kicker">First run setup</p>
+            <h2>Tell PhantomForce who you are.</h2>
+            <p class="overlay-sub">This is a brand new customer workspace. Nothing from the admin account should bleed into it, so Phantom needs your business identity before the experience opens.</p>
+          </div>
+          <div class="customer-orb" aria-hidden="true"><span></span></div>
+        </header>
+        <form class="customer-onboarding-form" data-customer-onboarding-form>
+          <section class="customer-onboarding-step">
+            <p class="customer-step-kicker">1 / 4</p>
+            <h3>What are you?</h3>
+            <div class="customer-choice-grid" role="radiogroup" aria-label="Customer type">
+              ${[
+                ["business_owner", "Business owner", "I need leads, media, sites, analytics, and follow-up."],
+                ["creator", "Creator", "I make content and want a faster publishing engine."],
+                ["developer", "Developer", "I am here to build, test, or ship with PhantomForce."],
+                ["agency", "Agency", "I run work for clients and need repeatable delivery."],
+                ["exploring", "Just exploring", "I want the free plan and a clean preview first."],
+              ].map(([value, label, copy], index) => `
+                <label class="customer-choice">
+                  <input type="radio" name="customerRole" value="${esc(value)}" ${index === 0 ? "checked" : ""} />
+                  <b>${esc(label)}</b>
+                  <i>${esc(copy)}</i>
+                </label>`).join("")}
+            </div>
+          </section>
+
+          <section class="customer-onboarding-step">
+            <p class="customer-step-kicker">2 / 4</p>
+            <h3>What are you here for?</h3>
+            <div class="customer-check-grid" aria-label="Customer goals">
+              ${[
+                ["leads", "Get more customers"],
+                ["media", "Generate photos, video, and posts"],
+                ["site", "Launch or improve a website"],
+                ["analytics", "Understand social and business results"],
+                ["automation", "Automate follow-up and operations"],
+                ["phantomplay", "Use or build PhantomPlay games"],
+              ].map(([value, label]) => `
+                <label class="customer-check">
+                  <input type="checkbox" name="customerGoals" value="${esc(value)}" ${["leads", "media", "site"].includes(value) ? "checked" : ""} />
+                  <span>${esc(label)}</span>
+                </label>`).join("")}
+            </div>
+          </section>
+
+          <section class="customer-onboarding-step">
+            <p class="customer-step-kicker">3 / 4</p>
+            <h3>Business identity</h3>
+            <div class="customer-field-grid">
+              <label><span>Business name</span><input name="businessName" value="${esc(businessName)}" placeholder="Your business or project" required /></label>
+              <label><span>Industry</span><input name="industry" placeholder="Example: sports photography, home services, SaaS" required /></label>
+              <label><span>Best customer</span><input name="audience" placeholder="Who you sell to or serve" required /></label>
+              <label><span>Tone</span><input name="tone" placeholder="Premium, funny, bold, clean, local..." /></label>
+            </div>
+          </section>
+
+          <section class="customer-onboarding-step">
+            <p class="customer-step-kicker">4 / 4</p>
+            <h3>Choose your starting plan</h3>
+            <div class="customer-choice-grid customer-plan-grid" role="radiogroup" aria-label="Plan choice">
+              ${[
+                ["free", "Free", "See what PhantomForce looks like before paying."],
+                ["starter", "Starter", "Turn the workspace into a working business cockpit."],
+                ["pro", "Pro", "Media, analytics, automation, and growth workflows together."],
+              ].map(([value, label, copy], index) => `
+                <label class="customer-choice">
+                  <input type="radio" name="plan" value="${esc(value)}" ${index === 0 ? "checked" : ""} />
+                  <b>${esc(label)}</b>
+                  <i>${esc(copy)}</i>
+                </label>`).join("")}
+            </div>
+          </section>
+
+          <button class="customer-onboarding-submit" type="submit">
+            <span>Build my workspace</span>
+            <i>No admin content, no shared business identity, no skipped setup.</i>
+          </button>
+        </form>
+      </section>
+    </div>`;
+
+  const form = $("[data-customer-onboarding-form]", overlayRoot);
+  form.onsubmit = (event) => {
+    event.preventDefault();
+    const data = new FormData(form);
+    const profile = {
+      version: CUSTOMER_ONBOARDING_VERSION,
+      completedAt: new Date().toISOString(),
+      role: data.get("customerRole") || "business_owner",
+      goals: data.getAll("customerGoals"),
+      businessName: String(data.get("businessName") || "").trim(),
+      industry: String(data.get("industry") || "").trim(),
+      audience: String(data.get("audience") || "").trim(),
+      tone: String(data.get("tone") || "").trim(),
+      plan: data.get("plan") || "free",
+    };
+    try {
+      const key = customerOnboardingKey();
+      if (key) {
+        localStorage.setItem(key, "complete");
+        localStorage.setItem(`${key}.profile`, JSON.stringify(profile));
+      }
+    } catch {}
+    if (profile.businessName) {
+      ctx.session = { ...ctx.session, label: profile.businessName };
+      session.set(ctx.session);
+      setWorkspace(currentWs());
+    }
+    openId = null;
+    overlayRoot.innerHTML = "";
+    document.body.classList.remove("overlay-open");
+    renderUser();
+    renderConsole();
+    speak(`Workspace setup saved for ${profile.businessName || "your business"}. Free plan is ready to preview.`, "", "bright");
+  };
+}
+
 function syncNavToView() {
   if (!openId) {
     if (activePageId) {
@@ -3157,6 +3313,7 @@ function syncNavToView() {
 }
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && openId) closeOverlay(true); });
 window.addEventListener("popstate", () => {
+  if (customerOnboardingLocked()) return;
   const page = location.hash.match(/^#page\/([a-z-]+)/);
   const ws = location.hash.match(/^#ws\/([a-z-]+)/);
   if (page && workspaceDef(page[1])) renderWorkspacePage(page[1], false);
@@ -3299,6 +3456,7 @@ function enterPhantom() {
       renderMobileBottomNav();
       renderStatusPills();
       renderUser();
+      showCustomerFirstRunOnboarding();
     },
   });
   void refreshNavEntitlements();
@@ -3307,6 +3465,7 @@ function enterPhantom() {
   const view = (q.get("view") || "").toLowerCase();
   const page = location.hash.match(/^#page\/([a-z-]+)/);
   const m = location.hash.match(/^#ws\/([a-z-]+)/);
+  if (customerOnboardingLocked()) return;
   if (page && workspaceDef(page[1])) renderWorkspacePage(page[1], false);
   else if (m && workspaceDef(m[1])) routeWorkspace(m[1], false);
   else if (view && view !== "command" && workspaceDef(view)) routeWorkspace(view, false);
