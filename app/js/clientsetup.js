@@ -145,10 +145,16 @@ function authHeaders(json = false) {
   return { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(json ? { "Content-Type": "application/json" } : {}) };
 }
 
+function friendlyClientSetupError(status, message = "") {
+  const text = String(message || "");
+  if (status === 401 || /authorization bearer/i.test(text)) return "Sign in to load server-backed Client Setup.";
+  return text || `Request failed (${status}).`;
+}
+
 async function api(path, options = {}) {
   const response = await fetch(path, { ...options, headers: { ...authHeaders(Boolean(options.body)), ...(options.headers || {}) } });
   const payload = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(typeof payload?.error === "string" ? payload.error : `Request failed (${response.status}).`);
+  if (!response.ok) throw new Error(friendlyClientSetupError(response.status, payload?.error));
   return payload;
 }
 

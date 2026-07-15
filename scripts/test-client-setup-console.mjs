@@ -94,6 +94,8 @@ mustInclude(files.server, /outbound_action_executed:\s*false/u, "Client setup ro
 mustInclude(files.staticServer, /urlPath\.startsWith\("\/api\/client-setup"\)/u, "Static server must proxy client setup API.");
 mustInclude(files.css, /\.client-setup-console/u, "Client Setup CSS must exist.");
 mustInclude(files.css, /overflow:\s*visible/u, "Client Setup layout must preserve natural page scrolling.");
+mustInclude(files.ui, /friendlyClientSetupError[\s\S]*Sign in to load server-backed Client Setup/u, "Client Setup must hide raw auth transport errors behind a clean sign-in message.");
+mustInclude(files.ui, /authorization bearer/i, "Client Setup must explicitly map bearer-token failures instead of displaying them.");
 
 const clientSetupSources = `${files.ui}\n${files.store}`;
 assert.doesNotMatch(clientSetupSources, /officialchicagoshots|ChicagoShots client|Test Client|fake client/iu, "Client Setup must not seed fake/live client claims.");
