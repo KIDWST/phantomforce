@@ -31,6 +31,7 @@
     "test:site-store-render": "tsx scripts/test-site-store-render.ts",
     "test:instant-chat-fallback": "tsx scripts/test-instant-chat-fallback.ts",
     "test:auth:prisma-dev": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-auth-prisma-dev.ps1",
+    "test:auth:database-live": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-auth-database-live.ps1",
     "test:auth:production-fail-closed": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-auth-production-fail-closed.ps1",
     "test:auth:owner-production": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-auth-owner-production.ps1",
     "start": "node dist/index.js",
