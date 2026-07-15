@@ -4682,10 +4682,25 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
     overscroll-behavior: contain;
   }
 
-  .workspace-page[data-workspace-page="media"] .ml {
+  /* The editor's canvas sizes itself off real pixel heights (fitEditorCanvas
+     reads .ml-canvas-wrap.clientHeight), so it needs a genuinely definite,
+     filled height chain. Every other tab wants the opposite: height:auto so
+     short content (empty states, the shot builder) isn't stretched/clipped.
+     Only stretch this ancestor to its grid row when the editor is mounted. */
+  .workspace-page[data-workspace-page="media"] .workspace-page-body:has(.ml-editor) {
     height: 100%;
     min-height: 0;
+    overflow: hidden;
+  }
+
+  .workspace-page[data-workspace-page="media"] .ml {
+    min-height: max-content;
     gap: 8px;
+  }
+
+  .workspace-page[data-workspace-page="media"] .ml:has(.ml-editor) {
+    height: 100%;
+    min-height: min(460px, calc(100dvh - 260px));
   }
 
   .workspace-page[data-workspace-page="media"] .ml-topbar {
@@ -4695,16 +4710,17 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 
   .workspace-page[data-workspace-page="media"] .ml-body {
     flex: 1 1 auto;
-    min-height: 0;
+    min-height: max-content;
     display: flex;
     flex-direction: column;
-    overflow: auto;
+    overflow: visible;
     padding-right: 4px;
     padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
     scrollbar-width: thin;
   }
 
   .workspace-page[data-workspace-page="media"] .ml-body:has(.ml-grid-lib) {
+    min-height: 0;
     overflow: auto;
     padding-right: 4px;
     scrollbar-width: thin;
@@ -4712,14 +4728,14 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
   }
 
   .workspace-page[data-workspace-page="media"] .ml-body:has(.ml-editor) {
-    min-height: 0;
+    min-height: min(440px, calc(100dvh - 280px));
     height: 100%;
     max-height: 100%;
   }
 
   .workspace-page[data-workspace-page="media"] .ml-editor {
     flex: 1 1 auto;
-    min-height: 0;
+    min-height: min(420px, calc(100dvh - 300px));
     height: 100%;
     max-height: min(100%, calc(100dvh - 220px));
     overflow: hidden;
@@ -4734,7 +4750,7 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 
   .workspace-page[data-workspace-page="media"] .ml-canvas-wrap {
     align-self: stretch;
-    min-height: 0;
+    min-height: min(360px, calc(100dvh - 320px));
     height: 100%;
     max-height: min(100%, calc(100dvh - 220px));
     padding: clamp(10px, 1vw, 16px);
