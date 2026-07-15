@@ -9,10 +9,10 @@ import {
   PACKAGES, RETAINERS, FINANCE_CATEGORIES, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS, CHAT_HISTORY_RETENTION_DAYS,
   addMemory, toggleMemoryRemember, forgetMemory, forgetChatHistory, memoryStats, memoryRetention, chatHistoryStats, chatHistoryRetention,
   session, currentTenantId, friendlyBackendError,
-} from "./store.js?v=phantom-live-20260715-1";
+} from "./store.js?v=phantom-live-20260715-2";
 import {
   isDatabaseSession, canManageActiveOrg, fetchServerApprovals, decideServerRun,
-} from "./orgs.js?v=phantom-live-20260715-1";
+} from "./orgs.js?v=phantom-live-20260715-2";
 import {
   createCrmLead as createServerCrmLead,
   crmRefreshSignal,
@@ -22,24 +22,25 @@ import {
   persistCrmProspectLanes,
   signalCrmRefresh,
   updateCrmLead as updateServerCrmLead,
-} from "./crmpipeline.js?v=phantom-live-20260715-1";
-import { createCrmProspectBuildout, isCrmProspectBuildout } from "./crmprospects.js?v=phantom-live-20260715-1";
-import { classifyClientTaskIntent, CLIENT_TASK_INTENTS, SUPPORTED_CLIENT_TASK_INTENTS, buildClientMediaAssetDraft, buildClientApprovalDraft } from "./client-tasks.js?v=phantom-live-20260715-1";
-import { registerContentAsset } from "./contenthub.js?v=phantom-live-20260715-1";
+} from "./crmpipeline.js?v=phantom-live-20260715-2";
+import { createCrmProspectBuildout, isCrmProspectBuildout } from "./crmprospects.js?v=phantom-live-20260715-2";
+import { generateDueOccurrences } from "./finance-recurring.js?v=phantom-live-20260715-2";
+import { classifyClientTaskIntent, CLIENT_TASK_INTENTS, SUPPORTED_CLIENT_TASK_INTENTS, buildClientMediaAssetDraft, buildClientApprovalDraft } from "./client-tasks.js?v=phantom-live-20260715-2";
+import { registerContentAsset } from "./contenthub.js?v=phantom-live-20260715-2";
 import {
   createProposal as createServerProposal,
   deleteProposal as deleteServerProposal,
   loadProposals,
   proposalServerAvailable,
   updateProposal as updateServerProposal,
-} from "./proposalpipeline.js?v=phantom-live-20260715-1";
+} from "./proposalpipeline.js?v=phantom-live-20260715-2";
 import {
   approvalServerAvailable,
   createWorkspaceApproval as createServerWorkspaceApproval,
   decideWorkspaceApproval as decideServerWorkspaceApproval,
   deleteWorkspaceApproval as deleteServerWorkspaceApproval,
   loadWorkspaceApprovals,
-} from "./approvalpipeline.js?v=phantom-live-20260715-1";
+} from "./approvalpipeline.js?v=phantom-live-20260715-2";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -1377,7 +1378,113 @@ function connectorLabel(connector) {
   return "Not connected";
 }
 
+async function financeApi(path, { method = "GET", body } = {}) {
+  const token = session.token();
+  const response = await fetch(path, {
+    method,
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok || !payload?.ok) {
+    throw new Error(friendlyBackendError(response.status, payload?.error?.message || payload?.error, { authMessage: "Sign in to use AI-assisted accounting entry.", fallbackPrefix: "Couldn't parse that" }));
+  }
+  return payload;
+}
+
+function topUpRecurringRules(finance, ws) {
+  const today = new Date().toISOString().slice(0, 10);
+  let changed = false;
+  for (const rule of finance.recurringRules) {
+    if (rule.ws !== ws || rule.status !== "active") continue;
+    const { occurrences, nextLastGeneratedDate } = generateDueOccurrences(rule, today);
+    if (!occurrences.length) continue;
+    changed = true;
+    for (const occurrence of occurrences) {
+      finance.transactions.unshift({
+        id: uid("txn"),
+        ws,
+        date: occurrence.date,
+        description: rule.description,
+        amount: rule.direction === "expense" ? -rule.amount : rule.amount,
+        category: rule.category,
+        account: rule.account,
+        source: "recurring-rule",
+        externalId: `rule:${rule.id}:${occurrence.date}`,
+        notes: "",
+        receiptAssetId: null,
+        recurringRuleId: rule.id,
+        aiAssisted: rule.source === "ai-parsed",
+        createdAt: new Date().toISOString(),
+      });
+    }
+    rule.lastGeneratedDate = nextLastGeneratedDate;
+  }
+  return changed;
+}
+
+function financeDraftCategoryOptions(guess) {
+  const selected = FINANCE_CATEGORIES.includes(guess) ? guess : "Uncategorized";
+  return financeCategoryOptions(selected);
+}
+
+function renderExpenseTextDraft(draft) {
+  if (draft.kind === "recurring_rule") {
+    return `
+      <article class="finance-draft-card" data-draft-kind="recurring_rule">
+        <p class="finance-draft-title">Recurring: ${esc(draft.description)}</p>
+        <label><span>Amount</span><input type="number" name="amount" step="0.01" value="${draft.amount}" required /></label>
+        <label><span>Direction</span><select name="direction"><option value="income" ${draft.direction === "income" ? "selected" : ""}>Cash in</option><option value="expense" ${draft.direction === "expense" ? "selected" : ""}>Cash out</option></select></label>
+        <label><span>Category</span><select name="category">${financeDraftCategoryOptions(draft.categoryGuess)}</select></label>
+        <label><span>Frequency</span><select name="frequency">
+          <option value="weekly" ${draft.frequency === "weekly" ? "selected" : ""}>Weekly</option>
+          <option value="biweekly" ${draft.frequency === "biweekly" ? "selected" : ""}>Every 2 weeks</option>
+          <option value="monthly" ${draft.frequency === "monthly" ? "selected" : ""}>Monthly</option>
+        </select></label>
+        <label><span>Starts</span><input type="date" name="startDate" value="${draft.startDate}" required /></label>
+        <div class="finance-draft-actions">
+          <button class="btn btn-primary" type="button" data-draft-confirm>Add to books</button>
+          <button class="btn btn-ghost" type="button" data-draft-discard>Discard</button>
+        </div>
+      </article>`;
+  }
+  return `
+    <article class="finance-draft-card" data-draft-kind="transaction">
+      <p class="finance-draft-title">${esc(draft.description)}</p>
+      <label><span>Amount</span><input type="number" name="amount" step="0.01" value="${draft.amount}" required /></label>
+      <label><span>Direction</span><select name="direction"><option value="income" ${draft.direction === "income" ? "selected" : ""}>Cash in</option><option value="expense" ${draft.direction === "expense" ? "selected" : ""}>Cash out</option></select></label>
+      <label><span>Category</span><select name="category">${financeDraftCategoryOptions(draft.categoryGuess)}</select></label>
+      <label><span>Date</span><input type="date" name="date" value="${draft.date}" required /></label>
+      <div class="finance-draft-actions">
+        <button class="btn btn-primary" type="button" data-draft-confirm>Add to books</button>
+        <button class="btn btn-ghost" type="button" data-draft-discard>Discard</button>
+      </div>
+    </article>`;
+}
+
+function renderReceiptDraft(assetId, draft, aiAvailable, reason) {
+  const safeDraft = draft || { vendor: "", amount: "", direction: "expense", date: todayInput(), categoryGuess: "Uncategorized" };
+  return `
+    <article class="finance-draft-card" data-draft-kind="receipt" data-asset-id="${esc(assetId || "")}">
+      <p class="finance-draft-title">${aiAvailable ? `AI read: ${esc(safeDraft.vendor)}` : esc(reason || "Fill in this receipt manually")}</p>
+      <label><span>Vendor</span><input type="text" name="vendor" value="${esc(safeDraft.vendor)}" /></label>
+      <label><span>Amount</span><input type="number" name="amount" step="0.01" value="${esc(String(safeDraft.amount ?? ""))}" required /></label>
+      <label><span>Direction</span><select name="direction"><option value="income" ${safeDraft.direction === "income" ? "selected" : ""}>Cash in</option><option value="expense" ${safeDraft.direction === "expense" ? "selected" : ""}>Cash out</option></select></label>
+      <label><span>Category</span><select name="category">${financeDraftCategoryOptions(safeDraft.categoryGuess)}</select></label>
+      <label><span>Date</span><input type="date" name="date" value="${safeDraft.date || todayInput()}" required /></label>
+      <div class="finance-draft-actions">
+        <button class="btn btn-primary" type="button" data-draft-confirm>Add to books</button>
+        <button class="btn btn-ghost" type="button" data-draft-discard>Discard</button>
+      </div>
+    </article>`;
+}
+
 function renderMoney(el, rerender) {
+  const ws0 = currentWs() === "phantomforce" ? "phantomforce" : currentWs();
+  if (topUpRecurringRules(store.state.finance, ws0)) store.save();
   const m = moneyView();
   const ws = currentWs() === "phantomforce" ? "phantomforce" : currentWs();
   const recent = m.transactions.slice(0, 18);
@@ -1395,12 +1502,22 @@ function renderMoney(el, rerender) {
         <div class="stat"><span>Book balance</span><b>${moneySigned(m.ledgerBalance)}</b><i>${m.uncategorizedCount} uncategorized</i></div>
       </div>
 
-      <div class="finance-grid">
-        <section class="finance-panel">
-          <div class="finance-panel-head">
-            <h3>Accounts & imports</h3>
-            <span>${m.readySources} source${m.readySources === 1 ? "" : "s"} ready</span>
-          </div>
+      <section class="finance-panel finance-smart-entry">
+        <div class="finance-panel-head">
+          <h3>Add money in or out</h3>
+          <span>photo or plain English</span>
+        </div>
+        <div class="finance-dropzone" data-finance-dropzone tabindex="0" role="button" aria-label="Drop receipt photos here or click to upload">
+          <p><b>Drop receipt photos here</b><br>or click to upload</p>
+          <input type="file" accept="image/*" data-finance-photo-input multiple hidden />
+        </div>
+        <form class="finance-text-entry" data-finance-text-form>
+          <input type="text" name="line" placeholder='"$500 every week since April"' maxlength="400" required />
+          <button class="btn btn-primary" type="submit">Parse</button>
+        </form>
+        <div class="finance-draft-queue" data-finance-draft-queue></div>
+        <details class="finance-advanced">
+          <summary>Advanced: connect a bank or card (optional)</summary>
           <div class="finance-connectors">
             ${m.connectors.map((connector) => `
               <article class="finance-connector finance-${esc(connector.status)}">
@@ -1417,13 +1534,6 @@ function renderMoney(el, rerender) {
                 </div>
               </article>`).join("")}
           </div>
-        </section>
-
-        <section class="finance-panel">
-          <div class="finance-panel-head">
-            <h3>Add transaction</h3>
-            <span>manual record</span>
-          </div>
           <form class="finance-entry" data-finance-form>
             <label><span>Date</span><input type="date" name="date" value="${todayInput()}" required /></label>
             <label><span>Description</span><input type="text" name="description" placeholder="Stripe payout, Adobe, contractor..." required /></label>
@@ -1433,8 +1543,28 @@ function renderMoney(el, rerender) {
             <label><span>Account</span><input type="text" name="account" placeholder="Business checking / card" /></label>
             <button class="btn btn-primary" type="submit">Add transaction</button>
           </form>
-        </section>
-      </div>
+        </details>
+      </section>
+
+      <section class="finance-panel">
+        <div class="finance-panel-head">
+          <h3>Recurring rules</h3>
+          <span>${m.recurringRules.filter((r) => r.status === "active").length} active</span>
+        </div>
+        <div class="finance-rules-list">
+          ${m.recurringRules.map((rule) => `
+            <article class="finance-rule-row ${rule.status === "paused" ? "is-paused" : ""}">
+              <div>
+                <b>${esc(rule.description)}</b>
+                <i>${rule.frequency} · ${moneySigned(rule.direction === "expense" ? -rule.amount : rule.amount)} · since ${esc(fmtDate(rule.startDate))}</i>
+              </div>
+              <div class="finance-rule-actions">
+                <button class="btn btn-quiet" type="button" data-act="rule-toggle" data-id="${esc(rule.id)}">${rule.status === "paused" ? "Resume" : "Pause"}</button>
+                <button class="btn btn-quiet" type="button" data-act="rule-delete" data-id="${esc(rule.id)}">Delete</button>
+              </div>
+            </article>`).join("") || empty("No recurring rules yet. Type something like \"$500 every week since April\" above.")}
+        </div>
+      </section>
 
       <section class="finance-panel">
         <div class="finance-panel-head">
@@ -1521,6 +1651,135 @@ function renderMoney(el, rerender) {
       rerender();
     };
   }
+  const textForm = el.querySelector("[data-finance-text-form]");
+  const draftQueue = el.querySelector("[data-finance-draft-queue]");
+  if (textForm && draftQueue) {
+    textForm.onsubmit = async (event) => {
+      event.preventDefault();
+      const line = new FormData(textForm).get("line");
+      textForm.reset();
+      try {
+        const response = await financeApi("/phantom-ai/ops/finance/parse-expense-text", { method: "POST", body: { text: line } });
+        const card = document.createElement("div");
+        card.innerHTML = renderExpenseTextDraft(response.draft);
+        const article = card.firstElementChild;
+        draftQueue.prepend(article);
+        wireDraftCardActions(article, { kind: response.draft.kind, ws });
+      } catch (error) {
+        pushActivity("Accounting Ledger", `Couldn't parse "${line}": ${error?.message || "unknown error"}.`, ws);
+      }
+    };
+  }
+
+  const dropzone = el.querySelector("[data-finance-dropzone]");
+  const photoInput = el.querySelector("[data-finance-photo-input]");
+  if (dropzone && photoInput && draftQueue) {
+    dropzone.onclick = () => photoInput.click();
+    dropzone.onkeydown = (event) => { if (event.key === "Enter" || event.key === " ") photoInput.click(); };
+    dropzone.ondragover = (event) => { event.preventDefault(); dropzone.classList.add("is-dragover"); };
+    dropzone.ondragleave = () => dropzone.classList.remove("is-dragover");
+    dropzone.ondrop = async (event) => {
+      event.preventDefault();
+      dropzone.classList.remove("is-dragover");
+      await handleReceiptFiles(event.dataTransfer?.files);
+    };
+    photoInput.onchange = async () => {
+      await handleReceiptFiles(photoInput.files);
+      photoInput.value = "";
+    };
+  }
+  async function handleReceiptFiles(fileList) {
+    const files = Array.from(fileList || []).filter((file) => file.type.startsWith("image/"));
+    for (const file of files) {
+      const dataUrl = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
+      });
+      try {
+        const response = await financeApi("/phantom-ai/ops/finance/parse-receipt", { method: "POST", body: { image: dataUrl, filename: file.name } });
+        const card = document.createElement("div");
+        card.innerHTML = renderReceiptDraft(response.assetId, response.draft, response.aiAvailable, response.reason);
+        const article = card.firstElementChild;
+        draftQueue?.prepend(article);
+        wireDraftCardActions(article, { kind: "receipt", ws });
+      } catch (error) {
+        pushActivity("Accounting Ledger", `Couldn't read ${file.name}: ${error?.message || "unknown error"}.`, ws);
+      }
+    }
+  }
+  function wireDraftCardActions(article, { kind, ws: draftWs }) {
+    article.querySelector("[data-draft-discard]").onclick = () => article.remove();
+    article.querySelector("[data-draft-confirm]").onclick = () => {
+      const fields = {};
+      article.querySelectorAll("input,select").forEach((input) => { fields[input.name] = input.value; });
+      const amount = Number(fields.amount);
+      if (!Number.isFinite(amount) || amount <= 0) return;
+      const signedAmount = fields.direction === "expense" ? -amount : amount;
+      const account = ensureAccount("Manual ledger");
+      if (kind === "recurring_rule") {
+        financeNow().recurringRules.unshift({
+          id: uid("rule"),
+          ws: draftWs,
+          description: fields.description || article.querySelector(".finance-draft-title")?.textContent || "Recurring transaction",
+          amount,
+          direction: fields.direction === "income" ? "income" : "expense",
+          category: fields.category || "Uncategorized",
+          account,
+          frequency: fields.frequency || "monthly",
+          intervalDays: null,
+          startDate: fields.startDate || todayInput(),
+          endDate: null,
+          status: "active",
+          lastGeneratedDate: null,
+          createdAt: new Date().toISOString(),
+          source: "ai-parsed",
+        });
+        pushActivity("Accounting Ledger", `created a recurring rule: ${fields.description || "recurring transaction"} (${moneySigned(signedAmount)} ${fields.frequency || "monthly"}).`, draftWs);
+      } else {
+        financeNow().transactions.unshift({
+          id: uid("txn"),
+          ws: draftWs,
+          date: fields.date || todayInput(),
+          description: fields.vendor || fields.description || "AI-assisted transaction",
+          amount: signedAmount,
+          category: fields.category || "Uncategorized",
+          account,
+          source: kind === "receipt" ? "ai-receipt" : "ai-text",
+          externalId: null,
+          notes: "",
+          receiptAssetId: article.dataset.assetId || null,
+          recurringRuleId: null,
+          aiAssisted: true,
+          createdAt: new Date().toISOString(),
+        });
+        pushActivity("Accounting Ledger", `added a ${signedAmount > 0 ? "cash-in" : "cash-out"} transaction: ${moneySigned(signedAmount)}.`, draftWs);
+      }
+      article.remove();
+      store.save();
+      rerender();
+    };
+  }
+
+  el.querySelectorAll("[data-act='rule-toggle']").forEach((button) => {
+    button.onclick = () => {
+      const rule = financeNow().recurringRules.find((item) => item.id === button.dataset.id);
+      if (!rule) return;
+      rule.status = rule.status === "paused" ? "active" : "paused";
+      store.save();
+      rerender();
+    };
+  });
+  el.querySelectorAll("[data-act='rule-delete']").forEach((button) => {
+    button.onclick = () => {
+      const rule = financeNow().recurringRules.find((item) => item.id === button.dataset.id);
+      if (rule && !confirm(`Delete the recurring rule "${rule.description}"? Past transactions it already created will stay on the books.`)) return;
+      financeNow().recurringRules = financeNow().recurringRules.filter((item) => item.id !== button.dataset.id);
+      store.save();
+      rerender();
+    };
+  });
   el.querySelectorAll("[data-act='delete-tx']").forEach((button) => {
     button.onclick = (event) => {
       event.preventDefault();
