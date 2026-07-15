@@ -1,4 +1,4 @@
-import { currentTenantId, session } from "./store.js?v=phantom-live-20260714-258";
+import { currentTenantId, friendlyBackendError, session } from "./store.js?v=phantom-live-20260714-258";
 
 let activeConfiguration = null;
 let activeEntitlements = null;
@@ -35,9 +35,8 @@ async function api(path, options = {}) {
   const response = await fetch(path, { ...options, headers: { ...authHeaders(Boolean(options.body)), ...(options.headers || {}) } });
   const payload = await response.json().catch(() => null);
   if (!response.ok) {
-    const message = typeof payload?.error === "string"
-      ? payload.error
-      : payload?.error?.formErrors?.join?.(" ") || payload?.error?.fieldErrors && Object.values(payload.error.fieldErrors).flat().join(" ") || `Request failed (${response.status}).`;
+    const formMessage = payload?.error?.formErrors?.join?.(" ") || payload?.error?.fieldErrors && Object.values(payload.error.fieldErrors).flat().join(" ");
+    const message = formMessage || friendlyBackendError(response.status, typeof payload?.error === "string" ? payload.error : "", { authMessage: "Sign in to load Workspace Studio." });
     throw new Error(message);
   }
   return payload;

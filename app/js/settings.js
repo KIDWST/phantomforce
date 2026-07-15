@@ -3,7 +3,7 @@
 
 import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260714-258";
 import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260714-258";
-import { loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260714-258";
+import { friendlyBackendError, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260714-258";
 import { activeOrgId, canManageActiveOrg } from "./orgs.js?v=phantom-live-20260714-258";
 import { DEFAULT_COMPANION_PREFS, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260714-258";
 
@@ -240,7 +240,7 @@ async function providerConnectionApi(path, options = {}) {
     },
   });
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok || payload?.ok === false) throw new Error(payload?.error || `Connection request failed (${response.status}).`);
+  if (!response.ok || payload?.ok === false) throw new Error(friendlyBackendError(response.status, payload?.error, { authMessage: "Sign in to manage provider connections.", fallbackPrefix: "Connection request failed" }));
   return payload;
 }
 

@@ -1,4 +1,4 @@
-import { currentTenantId, session } from "./store.js?v=phantom-live-20260714-258";
+import { currentTenantId, friendlyBackendError, session } from "./store.js?v=phantom-live-20260714-258";
 
 const PULSE_TTL_MS = 45_000;
 
@@ -67,7 +67,7 @@ export async function loadOrganizationPulse({ force = false } = {}) {
   const payload = await response.json().catch(() => ({}));
   if (!response.ok || !payload?.ok || !payload?.pulse) {
     state.status = "error";
-    state.error = String(payload?.error || `Organization Pulse failed (${response.status}).`);
+    state.error = friendlyBackendError(response.status, payload?.error, { authMessage: "Sign in to load Organization Pulse.", fallbackPrefix: "Organization Pulse failed" });
     throw new Error(state.error);
   }
   state.pulse = payload.pulse;

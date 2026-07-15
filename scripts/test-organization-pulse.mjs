@@ -95,6 +95,7 @@ assert.match(orgGraph, /proposal/u, "Client graph must style proposal nodes expl
 //     from the real CRM/proposal/approval stores.
 assert.match(orgPulseClient, /\/api\/organization\/pulse/u, "Browser pulse client must fetch the Organization Pulse endpoint.");
 assert.match(orgPulseClient, /managedGrowth/u, "Browser pulse client must read Managed Growth Ops.");
+assert.match(orgPulseClient, /friendlyBackendError[\s\S]*Sign in to load Organization Pulse/u, "Organization Pulse client must hide raw auth transport errors behind a clean sign-in message.");
 assert.match(orgPulseClient, /pulsePendingApprovalCount/u, "Browser pulse client must expose server-backed approval counts.");
 assert.match(orgPulseClient, /pulseAttentionItems/u, "Browser pulse client must expose server-backed attention items.");
 assert.match(main, /organizationpulse\.js/u, "Dashboard shell must import the Organization Pulse client.");
