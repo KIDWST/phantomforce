@@ -97,12 +97,20 @@ const hasClientSetupUi =
   && /active-1/u.test(src.clientSetupUi)
   && /pending-1/u.test(src.clientSetupUi)
   && /setup completeness/i.test(src.clientSetupUi);
+const hasClientSetupModuleToggles =
+  /CLIENT_SETUP_MODULES/u.test(src.clientSetupStore)
+  && /modules:\s*Record<string,\s*boolean>/u.test(src.clientSetupStore)
+  && /Object\.values\(slot\.modules\)\.some\(Boolean\)/u.test(src.clientSetupStore)
+  && /data-cs-module/u.test(src.clientSetupUi)
+  && /currentSlot\(state\)\.modules\[input\.dataset\.csModule\]\s*=\s*input\.checked/u.test(src.clientSetupUi)
+  && /Object\.values\(slot\.modules\s*\|\|\s*\{\}\)\.some\(Boolean\)/u.test(src.clientSetupUi);
 const clientSetupApiIsProxied = /urlPath\.startsWith\("\/api\/client-setup"\)/u.test(src.staticServer);
 
 assert.ok(hasServerClientSetupProfile, "Client setup state must be server-backed by a setup document or Prisma model.");
 assert.ok(hasBusinessTemplateFields, "Client setup must persist business template and workflow fields.");
 assert.ok(hasServicePackageModel, "Client setup must persist service/package configuration.");
 assert.ok(hasClientSetupUi, "Client Setup UI must exist with active/pending slots and completeness.");
+assert.ok(hasClientSetupModuleToggles, "Client Setup must include real module toggles that save and affect completeness.");
 assert.ok(clientSetupApiIsProxied, "Static app server must proxy /api/client-setup for local testing.");
 
 if (!hasServerClientSetupProfile) {
@@ -288,7 +296,7 @@ const evidence = {
     twoActiveClientOrganizations: hasServerClientSetupProfile && hasClientSetupUi ? "ready_setup_slots" : "blocked",
     onePendingClientSlot: hasServerClientSetupProfile && hasClientSetupUi ? "ready_setup_slot" : "blocked",
     businessTemplateSelection: hasBusinessTemplateFields && hasClientSetupUi ? "ready_setup_console" : "blocked",
-    moduleEnableDisable: "partially_ready_via_customization_modules",
+    moduleEnableDisable: hasClientSetupModuleToggles ? "ready_setup_console" : "blocked",
     servicesPackagesConfiguration: hasServicePackageModel && hasClientSetupUi ? "ready_setup_console" : "blocked",
     leadSourcesConfiguration: hasBusinessTemplateFields && hasClientSetupUi ? "ready_setup_console" : "blocked",
     socialMediaWorkflowConfiguration: hasBusinessTemplateFields && hasClientSetupUi ? "ready_setup_console" : "blocked",
@@ -309,6 +317,6 @@ assert.ok(hasServerLeadsPipelineModel, "Audit should prove server-backed CRM lea
 assert.ok(hasServerProposalPipelineModel, "Audit should prove server-backed proposal persistence exists.");
 assert.ok(hasServerWorkspaceApprovalModel, "Audit should prove server-backed workspace approval persistence exists.");
 assert.ok(hasManagedGrowthReport, "Audit should prove server-backed Managed Growth report exists.");
-assert.equal(evidence.product02Readiness.moduleEnableDisable, "partially_ready_via_customization_modules");
+assert.equal(evidence.product02Readiness.moduleEnableDisable, "ready_setup_console");
 
 console.log(JSON.stringify({ ok: true, ...evidence }, null, 2));

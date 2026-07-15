@@ -59,6 +59,13 @@ for (const phrase of [
   mustInclude(files.ui, new RegExp(phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "u"), `UI must include module: ${phrase}`);
 }
 
+mustInclude(files.ui, /data-cs-module/u, "Client Setup modules must render as individual toggles.");
+mustInclude(files.ui, /currentSlot\(state\)\.modules\[input\.dataset\.csModule\]\s*=\s*input\.checked/u, "Client Setup module toggles must save into the active setup slot.");
+mustInclude(files.ui, /Object\.values\(slot\.modules\s*\|\|\s*\{\}\)\.some\(Boolean\)/u, "Client Setup completeness must depend on enabled modules.");
+mustInclude(files.store, /CLIENT_SETUP_MODULES/u, "Server store must define canonical Client Setup modules.");
+mustInclude(files.store, /modules:\s*Record<string,\s*boolean>/u, "Server setup slots must persist enabled module state.");
+mustInclude(files.store, /Object\.values\(slot\.modules\)\.some\(Boolean\)/u, "Server setup completeness must depend on enabled modules.");
+
 for (const requiredSurface of [
   "servicesPackages",
   "leadSources",
