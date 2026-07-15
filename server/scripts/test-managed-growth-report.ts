@@ -21,7 +21,7 @@ const report = buildManagedGrowthReport({
         status: "active",
         organizationName: "ChicagoShots",
         businessTemplate: "media_content",
-        modules: { lead_queue: true, reports: true },
+        modules: { lead_queue: true, follow_up_queue: true, approval_queue: true, reports: true, business_cleanup: true },
         servicesPackages: [],
         leadSources: [],
         socialMediaWorkflow: { platforms: [], cadence: "", assetNeeds: [], notes: "" },
@@ -110,6 +110,7 @@ const report = buildManagedGrowthReport({
 });
 
 const metric = (id: string) => report.metrics.find((row) => row.id === id);
+const module = (id: string) => report.modules.find((row) => row.id === id);
 
 assert.equal(report.schemaVersion, 1);
 assert.equal(report.tenantId, "dev-org-chicagoshots");
@@ -119,12 +120,25 @@ assert.equal(metric("proposal_pipeline")?.value, 5000);
 assert.equal(metric("won_value")?.value, 5000);
 assert.equal(metric("pending_approvals")?.value, 1);
 assert.equal(metric("setup_completeness")?.value, 65);
+assert.equal(metric("enabled_lead_sources")?.value, 0);
 assert.equal(report.setup.activeConfigured, 1);
 assert.equal(report.setup.pendingConfigured, 1);
 assert.equal(report.safety.providerCalled, false);
 assert.equal(report.safety.outboundActionExecuted, false);
 assert.equal(report.safety.publicExposureChanged, false);
 assert.equal(report.safety.socialAnalyticsStatus, "not_connected_here");
+assert.equal(report.modules.length, 10);
+assert.equal(module("lead_queue")?.label, "Lead Queue");
+assert.equal(module("lead_queue")?.signalCount, 2);
+assert.equal(module("follow_up_queue")?.status, "needs_action");
+assert.equal(module("approval_queue")?.surface, "approvals");
+assert.equal(module("approval_queue")?.status, "needs_action");
+assert.equal(module("content_calendar")?.surface, "content");
+assert.equal(module("content_calendar")?.status, "needs_setup");
+assert.equal(module("media_assets")?.source, "client_setup");
+assert.equal(module("employee_tasks")?.surface, "workforce");
+assert.equal(module("business_cleanup")?.status, "needs_action");
+assert(module("client_requests")?.detail.includes("dedicated request records are not counted"));
 assert(report.blockers.some((row) => row.id === "client_setup_active_slots"));
 assert(report.blockers.some((row) => row.id === "follow_ups_due" && row.severity === "critical"));
 assert(report.blockers.some((row) => row.id === "social_analytics_disconnected"));
@@ -132,4 +146,4 @@ assert(report.nextActions.some((row) => row.surface === "approvals"));
 assert(report.nextActions.some((row) => row.surface === "crm" && row.requiresApproval));
 assert.equal(report.sourceDocuments.length, 4);
 
-console.log(JSON.stringify({ ok: true, metrics: report.metrics.length, blockers: report.blockers.length, actions: report.nextActions.length }));
+console.log(JSON.stringify({ ok: true, metrics: report.metrics.length, modules: report.modules.length, blockers: report.blockers.length, actions: report.nextActions.length }));

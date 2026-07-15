@@ -1,7 +1,10 @@
+import { CLIENT_SETUP_MODULES } from "../client-setup/client-setup-store.js";
 import type { ClientSetupDocument } from "../client-setup/client-setup-store.js";
 import type { CrmPipelineDocument } from "../crm/crm-pipeline-store.js";
 import type { ProposalDocument } from "../proposals/proposal-store.js";
 import type { WorkspaceApprovalDocument } from "../workspace-approvals/workspace-approval-store.js";
+
+export type ManagedGrowthSurface = "clientsetup" | "crm" | "proposals" | "approvals" | "analytics" | "content" | "media" | "workforce";
 
 export type ManagedGrowthMetric = {
   id: string;
@@ -24,8 +27,21 @@ export type ManagedGrowthNextAction = {
   id: string;
   title: string;
   detail: string;
-  surface: "clientsetup" | "crm" | "proposals" | "approvals" | "analytics";
+  surface: ManagedGrowthSurface;
   requiresApproval: boolean;
+  source: string;
+};
+
+export type ManagedGrowthModuleStatus = {
+  id: string;
+  label: string;
+  status: "live" | "needs_action" | "needs_setup" | "waiting";
+  enabledClients: number;
+  signalCount: number;
+  detail: string;
+  blocker: string;
+  nextAction: string;
+  surface: ManagedGrowthSurface;
   source: string;
 };
 
@@ -44,6 +60,7 @@ export type ManagedGrowthReport = {
   title: string;
   summary: string;
   metrics: ManagedGrowthMetric[];
+  modules: ManagedGrowthModuleStatus[];
   blockers: ManagedGrowthBlocker[];
   nextActions: ManagedGrowthNextAction[];
   sourceDocuments: ManagedGrowthReportSource[];
@@ -113,6 +130,48 @@ function setupSlotConfigured(slot: ClientSetupDocument["slots"][number] | undefi
   return Boolean(slot && slot.status !== "empty" && slot.organizationName.trim());
 }
 
+function configuredSlots(slots: ClientSetupDocument["slots"]) {
+  return slots.filter(setupSlotConfigured);
+}
+
+function enabledSlots(slots: ClientSetupDocument["slots"], moduleId: string) {
+  return configuredSlots(slots).filter((slot) => slot.modules?.[moduleId]);
+}
+
+function moduleStatus(input: {
+  id: string;
+  label: string;
+  enabledClients: number;
+  signalCount: number;
+  detail: string;
+  blocker?: string;
+  nextAction: string;
+  surface: ManagedGrowthSurface;
+  source: string;
+  needsAction?: boolean;
+}): ManagedGrowthModuleStatus {
+  let status: ManagedGrowthModuleStatus["status"] = "waiting";
+  if (input.enabledClients <= 0) status = "needs_setup";
+  else if (input.needsAction) status = "needs_action";
+  else if (input.signalCount > 0) status = "live";
+  return {
+    id: input.id,
+    label: input.label,
+    status,
+    enabledClients: input.enabledClients,
+    signalCount: Math.max(0, Math.round(Number(input.signalCount) || 0)),
+    detail: input.detail,
+    blocker: input.blocker || "",
+    nextAction: input.nextAction,
+    surface: input.surface,
+    source: input.source,
+  };
+}
+
+function moduleLabel(id: string) {
+  return CLIENT_SETUP_MODULES.find((module) => module.id === id)?.label || id.replaceAll("_", " ");
+}
+
 export function buildManagedGrowthReport(input: BuildManagedGrowthReportInput): ManagedGrowthReport {
   const generatedAt = input.generatedAt || new Date().toISOString();
   const now = Date.parse(generatedAt);
@@ -131,11 +190,139 @@ export function buildManagedGrowthReport(input: BuildManagedGrowthReportInput): 
   const changesRequested = approvals.filter((approval) => approval.status === "changes-requested");
   const activeConfigured = setupSlots.filter((slot) => slot.slotKind === "active" && setupSlotConfigured(slot)).length;
   const pendingConfigured = setupSlots.filter((slot) => slot.slotKind === "pending" && setupSlotConfigured(slot)).length;
-  const configuredSlots = setupSlots.filter(setupSlotConfigured);
-  const averageCompleteness = configuredSlots.length
-    ? Math.round(configuredSlots.reduce((sum, slot) => sum + Math.max(0, Number(slot.completeness?.score || 0)), 0) / configuredSlots.length)
+  const configured = configuredSlots(setupSlots);
+  const averageCompleteness = configured.length
+    ? Math.round(configured.reduce((sum, slot) => sum + Math.max(0, Number(slot.completeness?.score || 0)), 0) / configured.length)
     : 0;
   const setupBlockers = setupSlots.flatMap((slot) => Array.isArray(slot.completeness?.blockers) ? slot.completeness.blockers : []);
+  const slotsFor = (moduleId: string) => enabledSlots(setupSlots, moduleId);
+  const contentCalendarSlots = slotsFor("content_calendar");
+  const mediaAssetSlots = slotsFor("media_assets");
+  const reportsSlots = slotsFor("reports");
+  const packagesOffersSlots = slotsFor("packages_offers");
+  const businessCleanupSlots = slotsFor("business_cleanup");
+  const socialConfigured = contentCalendarSlots.filter((slot) => Boolean(slot.socialMediaWorkflow?.cadence || slot.socialMediaWorkflow?.platforms?.length || slot.socialMediaWorkflow?.assetSource)).length;
+  const mediaAssetSourcesConfigured = mediaAssetSlots.filter((slot) => Boolean(slot.socialMediaWorkflow?.assetSource)).length;
+  const reportingConfigured = reportsSlots.filter((slot) => Boolean(slot.reportingPreferences?.cadence || slot.reportingPreferences?.metrics?.length || slot.reportingPreferences?.recipients)).length;
+  const packageCount = packagesOffersSlots.reduce((sum, slot) => sum + (Array.isArray(slot.servicesPackages) ? slot.servicesPackages.length : 0), 0);
+  const businessCleanupBlockers = businessCleanupSlots.flatMap((slot) => Array.isArray(slot.completeness?.blockers) ? slot.completeness.blockers : []);
+  const enabledLeadSources = configured.reduce((sum, slot) => sum + (Array.isArray(slot.leadSources) ? slot.leadSources.filter((source) => source.enabled !== false).length : 0), 0);
+
+  const moduleStatuses = [
+    moduleStatus({
+      id: "lead_queue",
+      label: moduleLabel("lead_queue"),
+      enabledClients: slotsFor("lead_queue").length,
+      signalCount: openLeads.length,
+      detail: openLeads.length ? "Saved CRM leads are ready for qualification and routing." : "The module is ready once CRM prospect lanes are saved.",
+      blocker: openLeads.length ? "" : "No open CRM leads are saved yet.",
+      nextAction: openLeads.length ? "Open Clients and review lead priority." : "Use the Clients prompter or Capture lead to create source-labeled prospect lanes.",
+      surface: "crm",
+      source: "crm",
+    }),
+    moduleStatus({
+      id: "follow_up_queue",
+      label: moduleLabel("follow_up_queue"),
+      enabledClients: slotsFor("follow_up_queue").length,
+      signalCount: followUpsDue.length,
+      detail: followUpsDue.length ? "Due follow-ups need an approval-safe next move." : "No saved CRM follow-ups are due right now.",
+      blocker: followUpsDue.length ? "Follow-ups are due now." : "",
+      nextAction: followUpsDue.length ? "Open Clients and prepare the due follow-ups." : "Keep lead due dates current in the CRM.",
+      surface: "crm",
+      source: "crm",
+      needsAction: followUpsDue.length > 0,
+    }),
+    moduleStatus({
+      id: "content_calendar",
+      label: moduleLabel("content_calendar"),
+      enabledClients: contentCalendarSlots.length,
+      signalCount: socialConfigured,
+      detail: socialConfigured ? "Client setup contains social cadence, platforms, or content workflow details." : "Content planning needs cadence, platforms, or workflow notes in Client Setup.",
+      blocker: socialConfigured ? "" : "No configured social/media workflow is saved for active clients.",
+      nextAction: socialConfigured ? "Open Publish to turn approved media into draft posts." : "Configure the social/media workflow for each active client.",
+      surface: "content",
+      source: "client_setup",
+    }),
+    moduleStatus({
+      id: "media_assets",
+      label: moduleLabel("media_assets"),
+      enabledClients: mediaAssetSlots.length,
+      signalCount: mediaAssetSourcesConfigured,
+      detail: "Media readiness is based on saved Client Setup asset-source instructions, not local uploads or invented media counts.",
+      blocker: mediaAssetSlots.some((slot) => !slot.socialMediaWorkflow?.assetSource) ? "At least one media-enabled client needs an asset source." : "",
+      nextAction: "Open Media Lab to prepare assets, then keep publishing work approval-gated.",
+      surface: "media",
+      source: "client_setup",
+    }),
+    moduleStatus({
+      id: "approval_queue",
+      label: moduleLabel("approval_queue"),
+      enabledClients: slotsFor("approval_queue").length,
+      signalCount: pendingApprovals.length,
+      detail: pendingApprovals.length ? "Owner-gated approval cards are waiting." : "Approval rules are configured and no pending approval card is waiting.",
+      blocker: pendingApprovals.length ? "Approval queue has pending decisions." : "",
+      nextAction: pendingApprovals.length ? "Open Approvals and decide or request changes." : "Keep risky outbound work routed through Approvals.",
+      surface: "approvals",
+      source: "approvals",
+      needsAction: pendingApprovals.length > 0,
+    }),
+    moduleStatus({
+      id: "client_requests",
+      label: moduleLabel("client_requests"),
+      enabledClients: slotsFor("client_requests").length,
+      signalCount: 0,
+      detail: "Client request intake is configured in setup; dedicated request records are not counted in this report yet.",
+      blocker: slotsFor("client_requests").length ? "" : "No configured client has Client Requests enabled.",
+      nextAction: "Add request intake rules in Client Setup before exposing it to client admins.",
+      surface: "clientsetup",
+      source: "client_setup",
+    }),
+    moduleStatus({
+      id: "employee_tasks",
+      label: moduleLabel("employee_tasks"),
+      enabledClients: slotsFor("employee_tasks").length,
+      signalCount: 0,
+      detail: "Employee task readiness is setup-backed; task assignment records are not counted here yet.",
+      blocker: slotsFor("employee_tasks").length ? "" : "No configured client has Employee Tasks enabled.",
+      nextAction: "Open Workforce after roles and assignment rules are saved in Client Setup.",
+      surface: "workforce",
+      source: "client_setup",
+    }),
+    moduleStatus({
+      id: "reports",
+      label: moduleLabel("reports"),
+      enabledClients: reportsSlots.length,
+      signalCount: reportingConfigured,
+      detail: reportingConfigured ? "Reporting cadence, metrics, or recipients are saved." : "Reporting preferences need cadence, metrics, or recipients.",
+      blocker: reportingConfigured ? "" : "No configured client has reporting preferences saved.",
+      nextAction: "Open Client Setup and finish reporting preferences before treating reports as repeatable.",
+      surface: "clientsetup",
+      source: "client_setup",
+    }),
+    moduleStatus({
+      id: "packages_offers",
+      label: moduleLabel("packages_offers"),
+      enabledClients: packagesOffersSlots.length,
+      signalCount: packageCount,
+      detail: packageCount ? "Saved setup packages/offers can feed proposal work." : "No services or packages are configured yet.",
+      blocker: packageCount ? "" : "Client Setup needs at least one service/package.",
+      nextAction: packageCount ? "Open Offer Desk to turn packages into proposal drafts." : "Add sellable packages in Client Setup.",
+      surface: "proposals",
+      source: "client_setup",
+    }),
+    moduleStatus({
+      id: "business_cleanup",
+      label: moduleLabel("business_cleanup"),
+      enabledClients: businessCleanupSlots.length,
+      signalCount: businessCleanupBlockers.length,
+      detail: businessCleanupBlockers.length ? "Setup blockers are visible on clients with the cleanup checklist enabled." : "No setup completeness blockers are visible on cleanup-enabled clients.",
+      blocker: businessCleanupBlockers.length ? "Client Setup still has open completeness blockers for cleanup-enabled clients." : "",
+      nextAction: businessCleanupBlockers.length ? "Open Client Setup and clear the next setup action." : "Keep the checklist enabled for every new client.",
+      surface: "clientsetup",
+      source: "client_setup",
+      needsAction: businessCleanupBlockers.length > 0,
+    }),
+  ];
 
   const reportMetrics = [
     metric("open_leads", "Open leads", openLeads.length, "leads", "Leads in new, follow-up, or proposal stages.", "crm"),
@@ -144,6 +331,7 @@ export function buildManagedGrowthReport(input: BuildManagedGrowthReportInput): 
     metric("won_value", "Won value", moneyValue(proposalWon), "dollars", "Won proposal value recorded in Proposal Forge.", "proposals"),
     metric("pending_approvals", "Pending approvals", pendingApprovals.length, "approvals", "Approval cards waiting on owner/admin decision.", "approvals"),
     metric("setup_completeness", "Setup completeness", averageCompleteness, "percent", "Average configured client setup completeness.", "client_setup"),
+    metric("enabled_lead_sources", "Enabled lead sources", enabledLeadSources, "sources", "Enabled lead sources saved across configured client slots.", "client_setup"),
   ];
 
   const blockers: ManagedGrowthBlocker[] = [];
@@ -209,6 +397,7 @@ export function buildManagedGrowthReport(input: BuildManagedGrowthReportInput): 
     title: "Managed Growth Ops report",
     summary,
     metrics: reportMetrics,
+    modules: moduleStatuses,
     blockers,
     nextActions: nextActions.slice(0, 6),
     sourceDocuments: [

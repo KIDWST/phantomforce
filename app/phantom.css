@@ -6255,6 +6255,44 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .mg-metric b { color: var(--ink); font: 700 20px "DM Mono", monospace; letter-spacing: 0; }
 .mg-metric p { margin: 0; color: var(--dim); font-size: 11.5px; line-height: 1.42; }
 .mg-metric small { align-self: end; color: rgba(207,238,218,.62); font: 700 8px "DM Mono", monospace; letter-spacing: .08em; text-transform: uppercase; }
+.mg-modules { display: grid; gap: 12px; }
+.mg-modules .ch-card-h > span {
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--dim);
+  font: 700 9px "DM Mono", monospace;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+.mg-module-grid { display: grid; grid-template-columns: repeat(5, minmax(160px, 1fr)); gap: 10px; }
+.mg-module {
+  display: grid;
+  gap: 9px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid rgba(65,255,161,.14);
+  border-radius: 12px;
+  background: rgba(3, 10, 8, .58);
+}
+.mg-module.is-live { border-color: rgba(65,255,161,.3); background: rgba(65,255,161,.045); }
+.mg-module.is-needs_action { border-color: rgba(255,209,102,.35); background: rgba(255,209,102,.045); }
+.mg-module.is-needs_setup { border-color: rgba(255,122,168,.32); background: rgba(255,122,168,.04); }
+.mg-module > div:first-child { display: grid; gap: 4px; }
+.mg-module span {
+  color: var(--neon);
+  font: 700 8.5px "DM Mono", monospace;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+.mg-module b { color: #f0fff7; font-size: 13px; line-height: 1.2; }
+.mg-module p { margin: 0; color: var(--dim); font-size: 11.5px; line-height: 1.4; }
+.mg-module small { color: #ffe5a7; font-size: 10.5px; line-height: 1.35; }
+.mg-module dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin: 0; }
+.mg-module dl div { min-width: 0; padding: 7px; border: 1px solid rgba(65,255,161,.1); border-radius: 9px; background: rgba(0,0,0,.18); }
+.mg-module dt { color: var(--dim); font: 700 8px "DM Mono", monospace; letter-spacing: 0; text-transform: uppercase; }
+.mg-module dd { margin: 3px 0 0; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 700 11px "DM Mono", monospace; }
+.mg-module .btn { align-self: end; justify-self: start; max-width: 100%; min-height: 34px; white-space: normal; text-align: left; }
 .mg-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; align-items: start; }
 .mg-list { display: grid; gap: 9px; }
 .mg-row {
@@ -6406,6 +6444,7 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
   .mg-hero { flex-direction: column; align-items: stretch; }
   .mg-setup { min-width: 0; width: 100%; }
   .mg-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .mg-module-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .mg-grid { grid-template-columns: 1fr; }
   .mg-sources { grid-template-columns: 1fr; }
   .an .ch-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -6427,9 +6466,10 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
   .ch-detail-media { min-height: 220px; }
 }
 @media (max-width: 640px) {
-  .mg-setup, .mg-metrics { grid-template-columns: 1fr; }
+  .mg-setup, .mg-metrics, .mg-module-grid { grid-template-columns: 1fr; }
   .mg-hero h3 { font-size: 18px; }
   .mg-metric { min-height: auto; }
+  .mg-module dl { grid-template-columns: 1fr; }
   .an-coverage { grid-template-columns: 1fr; text-align: center; }
   .an-channel-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .an-engagement-card .ch-bar-row { grid-template-columns: 104px minmax(0, 1fr) 42px; }

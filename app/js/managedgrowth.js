@@ -1,4 +1,4 @@
-import { currentTenantId, session } from "./store.js?v=phantom-live-20260714-258";
+import { currentTenantId, friendlyBackendError, session } from "./store.js?v=phantom-live-20260714-258";
 
 function esc(value = "") {
   return String(value)
@@ -16,7 +16,12 @@ function authHeaders(extra = {}) {
 async function api(path) {
   const response = await fetch(path, { headers: authHeaders() });
   const json = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(String(json?.error || `Managed Growth report failed (${response.status}).`));
+  if (!response.ok) {
+    throw new Error(friendlyBackendError(response.status, json?.error, {
+      authMessage: "Sign in to load the Managed Growth Ops report.",
+      fallbackPrefix: "Managed Growth report failed",
+    }));
+  }
   return json;
 }
 
@@ -41,6 +46,13 @@ function severityLabel(severity = "info") {
   if (severity === "critical") return "Needs action";
   if (severity === "warning") return "Watch";
   return "Info";
+}
+
+function moduleStatusLabel(status = "waiting") {
+  if (status === "live") return "Ready";
+  if (status === "needs_action") return "Needs action";
+  if (status === "needs_setup") return "Needs setup";
+  return "Waiting";
 }
 
 function renderLoading(root) {
@@ -71,6 +83,7 @@ function renderReport(root, payload = {}) {
   const metrics = Array.isArray(report.metrics) ? report.metrics : [];
   const blockers = Array.isArray(report.blockers) ? report.blockers : [];
   const actions = Array.isArray(report.nextActions) ? report.nextActions : [];
+  const modules = Array.isArray(report.modules) ? report.modules : [];
   const sources = Array.isArray(report.sourceDocuments) ? report.sourceDocuments : [];
   const setup = report.setup || {};
   root.innerHTML = `
@@ -96,6 +109,32 @@ function renderReport(root, payload = {}) {
             <small>${esc(metric.source)}</small>
           </article>`).join("")}
       </div>
+      <section class="ch-card mg-modules">
+        <div class="ch-card-h">
+          <div>
+            <p class="ch-eyebrow">Operations Modules</p>
+            <h3>Managed Growth setup board</h3>
+          </div>
+          <span>${modules.length} modules</span>
+        </div>
+        <div class="mg-module-grid">
+          ${modules.map((module) => `
+            <article class="mg-module is-${esc(module.status)}">
+              <div>
+                <span>${esc(moduleStatusLabel(module.status))}</span>
+                <b>${esc(module.label)}</b>
+              </div>
+              <p>${esc(module.detail)}</p>
+              ${module.blocker ? `<small>${esc(module.blocker)}</small>` : ""}
+              <dl>
+                <div><dt>Clients</dt><dd>${Number(module.enabledClients || 0)}</dd></div>
+                <div><dt>Signals</dt><dd>${Number(module.signalCount || 0)}</dd></div>
+                <div><dt>Source</dt><dd>${esc(module.source)}</dd></div>
+              </dl>
+              <button class="btn btn-ghost" type="button" data-open-ws="${esc(module.surface || "clientsetup")}">${esc(module.nextAction || "Open workspace")}</button>
+            </article>`).join("") || `<article class="mg-row"><span>Waiting</span><b>No module readiness returned.</b><p>The server report did not include module details.</p></article>`}
+        </div>
+      </section>
       <div class="mg-grid">
         <section class="ch-card mg-blockers">
           <div class="ch-card-h"><div><p class="ch-eyebrow">Blockers</p><h3>What needs attention</h3></div></div>
