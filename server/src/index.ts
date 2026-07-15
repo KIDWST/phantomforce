@@ -1131,7 +1131,9 @@ app.get("/downloads/*", async (request, reply) => {
 app.get("/sessions", async (request) => {
   const authConfiguration = getAccessAuthConfiguration();
   const publicHost = requestPublicHost(request);
+  const scope = publicHostScope(publicHost);
   const localCustomerEnabled = localCustomerAuthEnabled();
+  const customerAccountActionsEnabled = scope !== "admin" && localCustomerEnabled;
 
   return {
     ok: true,
@@ -1139,10 +1141,10 @@ app.get("/sessions", async (request) => {
       ...authConfiguration,
       customerAuthEnabled: authConfiguration.databaseAuthEnabled || localCustomerEnabled,
       localCustomerAuthEnabled: localCustomerEnabled,
-      customerLoginEndpoint: authConfiguration.databaseAuthEnabled || localCustomerEnabled ? "/auth/login" : undefined,
-      customerRegisterEndpoint: localCustomerEnabled ? "/auth/register" : undefined,
-      customerPasswordResetRequestEndpoint: localCustomerEnabled ? "/auth/password-reset/request" : undefined,
-      customerPasswordResetCompleteEndpoint: localCustomerEnabled ? "/auth/password-reset/complete" : undefined,
+      customerLoginEndpoint: scope !== "admin" && (authConfiguration.databaseAuthEnabled || localCustomerEnabled) ? "/auth/login" : undefined,
+      customerRegisterEndpoint: customerAccountActionsEnabled ? "/auth/register" : undefined,
+      customerPasswordResetRequestEndpoint: customerAccountActionsEnabled ? "/auth/password-reset/request" : undefined,
+      customerPasswordResetCompleteEndpoint: customerAccountActionsEnabled ? "/auth/password-reset/complete" : undefined,
       localCustomerStoreConfigured: localCustomerEnabled,
       localCustomerStorePath: localCustomerEnabled && publicHostScope(publicHost) === "local" ? localCustomerAuthStorePath() : undefined,
     },
