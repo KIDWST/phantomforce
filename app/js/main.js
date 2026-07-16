@@ -2,7 +2,7 @@
 
 import {
   store, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
-  visible, todaysPlan, moneyView, fmtMoney, ago,
+  visible, todaysPlan, moneyView, fmtMoney, ago, commandBriefing,
 } from "./store.js";
 import { handleCommand, commandSuggestions } from "./command.js";
 import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js";
@@ -108,10 +108,109 @@ function renderRail() {
 
 function renderDashboard() {
   renderTopbar();
+  renderCommandBriefing();
   renderMission();
   renderRail();
   renderSuggests();
   startTicker();
+}
+
+/* ============================ command briefing ============================
+   PhantomForce opens on "what's happening," not a blank prompt (see
+   docs on Command/Outcomes/Signals architecture). Self-injects its own
+   DOM + styles, same pattern as everywhere else in this app that adds a
+   section without depending on host HTML markup — works regardless of
+   which shell wraps it. Every card is built from real store data in
+   store.js's commandBriefing(); nothing here fabricates a stat. */
+let briefingStylesInjected = false;
+const dismissedCardIds = new Set();
+
+function injectBriefingStyles() {
+  if (briefingStylesInjected) return;
+  briefingStylesInjected = true;
+  const style = document.createElement("style");
+  style.textContent = `
+    .briefing { margin: 20px 0 28px; }
+    .briefing-greet { font: 600 20px "Space Grotesk", system-ui, sans-serif; margin: 0 0 2px; }
+    .briefing-health { font: 400 13px "DM Mono", monospace; color: rgba(234,255,244,.55); margin: 0 0 16px; }
+    .briefing-cards { display: grid; gap: 12px; }
+    .briefing-card { border: 1px solid rgba(65,255,161,.18); border-radius: 16px; padding: 16px 18px;
+      background: radial-gradient(120% 160% at 0% 0%, rgba(65,255,161,.06), transparent 60%), rgba(3,10,7,.5); }
+    .briefing-card-top { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+    .briefing-dept { font: 500 9px "DM Mono", monospace; letter-spacing: .14em; text-transform: uppercase;
+      color: rgba(65,255,161,.85); border: 1px solid rgba(65,255,161,.3); border-radius: 999px; padding: 2px 8px; }
+    .briefing-confidence { font: 400 10px "DM Mono", monospace; color: rgba(234,255,244,.4); margin-left: auto; }
+    .briefing-card h4 { margin: 0 0 4px; font: 600 15px "Space Grotesk", system-ui, sans-serif; }
+    .briefing-card p { margin: 0 0 8px; font-size: 12.5px; color: rgba(234,255,244,.65); line-height: 1.5; }
+    .briefing-evidence { margin: 0 0 12px; padding: 0; list-style: none; font: 400 11px "DM Mono", monospace; color: rgba(234,255,244,.45); }
+    .briefing-evidence li { padding: 2px 0 2px 14px; position: relative; }
+    .briefing-evidence li::before { content: "▸"; position: absolute; left: 0; color: rgba(65,255,161,.5); }
+    .briefing-actions { display: flex; gap: 8px; }
+    .briefing-away { margin-top: 18px; border-top: 1px solid rgba(255,255,255,.06); padding-top: 14px; }
+    .briefing-away-head { font: 500 10px "DM Mono", monospace; letter-spacing: .12em; text-transform: uppercase; color: rgba(234,255,244,.4); margin: 0 0 8px; }
+    .briefing-away ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 5px; }
+    .briefing-away li { font-size: 12.5px; color: rgba(234,255,244,.6); padding-left: 14px; position: relative; }
+    .briefing-away li::before { content: "✓"; position: absolute; left: 0; color: rgba(65,255,161,.6); }
+  `;
+  document.head.appendChild(style);
+}
+
+function greeting() {
+  const h = new Date().getHours();
+  const time = h < 12 ? "morning" : h < 18 ? "afternoon" : "evening";
+  const name = ctx.session?.name?.split(" ")[0] || "there";
+  return `Good ${time}, ${name}`;
+}
+
+function renderCommandBriefing() {
+  if (!isAdmin()) return; // client portal keeps the simpler existing view
+  injectBriefingStyles();
+  const mission = $("[data-mission]");
+  if (!mission) return;
+  const host = mission.closest("section") || mission;
+
+  let section = $("[data-briefing]");
+  if (!section) {
+    section = document.createElement("section");
+    section.className = "briefing";
+    section.setAttribute("data-briefing", "");
+    host.parentElement.insertBefore(section, host);
+  }
+
+  const { healthLine, decisions, handledWhileAway } = commandBriefing();
+  const visibleDecisions = decisions.filter((d) => !dismissedCardIds.has(d.id));
+
+  section.innerHTML = `
+    <p class="briefing-greet">${esc(greeting())}</p>
+    <p class="briefing-health">${esc(healthLine)}</p>
+    ${visibleDecisions.length ? `<div class="briefing-cards">${visibleDecisions.map((d) => `
+      <article class="briefing-card" data-card-id="${esc(d.id)}">
+        <div class="briefing-card-top">
+          <span class="briefing-dept">${esc(d.dept)}</span>
+          <span class="briefing-confidence">confidence: ${esc(d.confidence)}</span>
+        </div>
+        <h4>${esc(d.headline)}</h4>
+        <p>${esc(d.body)}</p>
+        <ul class="briefing-evidence">${d.evidence.map((e) => `<li>${esc(e)}</li>`).join("")}</ul>
+        <div class="briefing-actions">
+          <button class="btn btn-primary" data-briefing-open="${esc(d.primary.open)}">${esc(d.primary.label)}</button>
+          <button class="btn btn-quiet" data-briefing-dismiss="${esc(d.id)}">Dismiss</button>
+        </div>
+      </article>`).join("")}</div>` : ""}
+    ${handledWhileAway.length ? `<div class="briefing-away">
+      <p class="briefing-away-head">Handled while you were away</p>
+      <ul>${handledWhileAway.map((t) => `<li>${esc(t)}</li>`).join("")}</ul>
+    </div>` : ""}`;
+
+  section.querySelectorAll("[data-briefing-open]").forEach((btn) => {
+    btn.addEventListener("click", () => openWorkspace(btn.dataset.briefingOpen));
+  });
+  section.querySelectorAll("[data-briefing-dismiss]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      dismissedCardIds.add(btn.dataset.briefingDismiss);
+      renderCommandBriefing();
+    });
+  });
 }
 
 /* ============================ command deck ============================ */
