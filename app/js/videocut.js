@@ -183,6 +183,9 @@ export function mountVideoEditor(host, opts = {}) {
     if (clip.ready === "ready" && clip.out > clip.in) return Math.max(0.1, clip.out - clip.in);
     return 2;  // metadata missing or failed: hold a placeholder slate instead of crashing
   }
+  function clipVolume(clip) {
+    return clamp(Number(clip.volume ?? 100), 0, 100);
+  }
   function segments() {
     let t = 0;
     return state.clips.map((clip) => {
@@ -265,7 +268,7 @@ export function mountVideoEditor(host, opts = {}) {
       transition: "none", text: "", textPos: "bottom",
       fit: "cover",
       duration: 3, kenBurns: false,               // photo
-      in: 0, out: 0, srcDuration: 0, mute: false, // video
+      in: 0, out: 0, srcDuration: 0, mute: false, volume: 100, // video
       w: 0, h: 0,
     };
     state.clips.push(clip);
@@ -291,6 +294,8 @@ export function mountVideoEditor(host, opts = {}) {
     const v = document.createElement("video");
     v.preload = "auto";
     v.playsInline = true;
+    v.volume = clipVolume(clip) / 100;
+    v.muted = !!clip.mute;
     v.addEventListener("error", () => { if (destroyed) return; clip.ready = "error"; renderAll(); }, { once: true });
     v.addEventListener("loadedmetadata", () => {
       readVideoDuration(v, (dur) => {
@@ -481,6 +486,7 @@ export function mountVideoEditor(host, opts = {}) {
       if (c.kind !== "video" || c.ready !== "ready") return;
       const el = c.el;
       el.muted = !!c.mute;
+      el.volume = clipVolume(c) / 100;
       const running = state.playing || !!exportRun;
       if (i === idx) {
         const want = clamp(c.in + (t - seg.start), 0, Math.max(0, c.srcDuration - 0.05));
@@ -966,7 +972,7 @@ export function mountVideoEditor(host, opts = {}) {
         </div>
         <div class="vc-clip-copy">
           <b>${esc(clip.title)}</b>
-          <span><em data-vc-clip-dur>${esc(fmtSec(clipDuration(clip)))}s</em>${clip.kind === "video" && clip.mute ? " · muted" : ""}${clip.ready === "error" ? " · failed to load" : ""}</span>
+          <span><em data-vc-clip-dur>${esc(fmtSec(clipDuration(clip)))}s</em>${clip.kind === "video" && clip.mute ? " · muted" : clip.kind === "video" && clipVolume(clip) !== 100 ? ` · ${clipVolume(clip)}%` : ""}${clip.ready === "error" ? " · failed to load" : ""}</span>
         </div>
         <div class="vc-clip-actions">
           <button type="button" data-vc-move="-1" ${idx === 0 ? "disabled" : ""} aria-label="Move earlier">◀</button>
@@ -1074,6 +1080,11 @@ export function mountVideoEditor(host, opts = {}) {
             <input class="vc-range" data-vc-ins-out type="range" min="0" max="${esc(String(clip.srcDuration))}" step="0.05" value="${esc(String(clip.out))}"/>
             <em data-vc-ins-out-out>${esc(fmtSec(clip.out))}s</em>
           </div>
+          <div class="vc-ins-slider">
+            <b>Vol</b>
+            <input class="vc-range" data-vc-ins-volume type="range" min="0" max="100" step="1" value="${esc(String(clipVolume(clip)))}"/>
+            <em data-vc-ins-volume-out>${esc(String(clipVolume(clip)))}%</em>
+          </div>
           <label class="vc-check"><input type="checkbox" data-vc-ins-mute ${clip.mute ? "checked" : ""}/> Mute this clip's audio</label>
         ` : clip.ready === "error"
           ? `<i class="vc-ins-note">This video failed to load, so it has nothing to trim.</i>`
@@ -1148,6 +1159,14 @@ export function mountVideoEditor(host, opts = {}) {
       const out = iq("[data-vc-ins-out-out]");
       if (out) out.textContent = `${fmtSec(clip.out)}s`;
       updateCardDuration(clip); updateMeta();
+    });
+    iq("[data-vc-ins-volume]")?.addEventListener("input", (e) => {
+      clip.volume = clipVolume({ volume: e.target.value });
+      e.target.value = String(clip.volume);
+      if (clip.el) clip.el.volume = clip.volume / 100;
+      const out = iq("[data-vc-ins-volume-out]");
+      if (out) out.textContent = `${clip.volume}%`;
+      renderTimeline();
     });
     iq("[data-vc-ins-mute]")?.addEventListener("change", (e) => {
       clip.mute = e.target.checked;
