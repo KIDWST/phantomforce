@@ -1,4 +1,4 @@
-import { freshEditState, freshTextStyle, paintEdit } from "./imagefilters.js?v=phantom-live-20260716-283";
+import { freshEditState, freshTextStyle, paintEdit } from "./imagefilters.js?v=phantom-live-20260716-284";
 
 let layerSequence = 0;
 
@@ -460,11 +460,63 @@ export function distributeSelectedLayers(composition, axis) {
   return axis === "x" || axis === "y";
 }
 
-export function drawCompositionOverlay(overlay, canvas, composition) {
+function snapAxisGuides(bounds, size, threshold) {
+  const center = (bounds.start + bounds.end) / 2;
+  const candidates = [
+    { guide: 0, delta: -bounds.start },
+    { guide: 0.5, delta: (size / 2) - center },
+    { guide: 1, delta: size - bounds.end },
+  ].filter((candidate) => Math.abs(candidate.delta) <= threshold);
+  return candidates.sort((a, b) => Math.abs(a.delta) - Math.abs(b.delta))[0] || null;
+}
+
+export function applyLayerDragWithSnap(composition, starts, dx, dy, opts = {}) {
+  const targets = Array.isArray(starts) ? starts.filter((item) => item?.layer && !item.layer.locked) : [];
+  if (!targets.length) return [];
+  targets.forEach((item) => {
+    item.layer.x = clamp((Number(item.x) || 0) + dx, 0, 1);
+    item.layer.y = clamp((Number(item.y) || 0) + dy, 0, 1);
+  });
+  const { width, height } = canvasSize(composition);
+  const bounds = unionBounds(targets.map((item) => item.layer), width, height);
+  const threshold = Math.max(1, Number(opts.thresholdPx || Math.min(width, height) * 0.018));
+  const guides = [];
+  const snapX = snapAxisGuides({ start: bounds.left, end: bounds.right }, width, threshold);
+  const snapY = snapAxisGuides({ start: bounds.top, end: bounds.bottom }, height, threshold);
+  if (snapX) {
+    targets.forEach((item) => { item.layer.x = clamp(item.layer.x + snapX.delta / width, 0, 1); });
+    guides.push({ axis: "x", at: snapX.guide });
+  }
+  if (snapY) {
+    targets.forEach((item) => { item.layer.y = clamp(item.layer.y + snapY.delta / height, 0, 1); });
+    guides.push({ axis: "y", at: snapY.guide });
+  }
+  return guides;
+}
+
+export function drawCompositionOverlay(overlay, canvas, composition, guides = []) {
   overlay.width = canvas.width;
   overlay.height = canvas.height;
   const ctx = overlay.getContext("2d");
   ctx.clearRect(0, 0, overlay.width, overlay.height);
+  (Array.isArray(guides) ? guides : []).forEach((guide) => {
+    ctx.save();
+    ctx.strokeStyle = "rgba(255, 209, 102, .92)";
+    ctx.lineWidth = Math.max(1.5, canvas.width / 900);
+    ctx.setLineDash([Math.max(7, canvas.width / 130), Math.max(5, canvas.width / 180)]);
+    ctx.beginPath();
+    if (guide.axis === "x") {
+      const x = Math.max(0, Math.min(1, Number(guide.at))) * canvas.width;
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, canvas.height);
+    } else if (guide.axis === "y") {
+      const y = Math.max(0, Math.min(1, Number(guide.at))) * canvas.height;
+      ctx.moveTo(0, y);
+      ctx.lineTo(canvas.width, y);
+    }
+    ctx.stroke();
+    ctx.restore();
+  });
   const selected = selectedLayers(composition).filter((layer) => layer.visible);
   selected.forEach((layer) => {
     const bounds = layerBounds(layer, canvas.width, canvas.height);

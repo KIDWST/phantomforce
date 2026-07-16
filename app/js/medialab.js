@@ -6,21 +6,21 @@
  * instead of sending people out to another product.
  */
 
-import { currentTenantId, ctx, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260716-283";
+import { currentTenantId, ctx, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260716-284";
 import {
   PLATFORMS, registerContentAsset, loadSocialAccounts, saveSocialAccounts, socialStatus,
   loadContentAssets, saveContentAssets, contentAssetDisplayUrl, hydrateContentAssetUrl,
-} from "./contenthub.js?v=phantom-live-20260716-283";
-import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260716-283";
+} from "./contenthub.js?v=phantom-live-20260716-284";
+import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260716-284";
 import {
-  addImageLayer, addTextLayer, alignSelectedLayers, cloneImageEditState, compositionSnapshot, distributeSelectedLayers, duplicateLayer,
+  addImageLayer, addTextLayer, alignSelectedLayers, applyLayerDragWithSnap, cloneImageEditState, compositionSnapshot, distributeSelectedLayers, duplicateLayer,
   canvasPoint, drawCompositionOverlay, freshComposition, hitTestLayer, hitTestResizeHandle,
   loadCompositionImages, moveLayerOrder, moveLayerToIndex, pushEditorSnapshot, removeSelectedLayers,
   renderComposition, restoreComposition, selectLayer, selectedLayers,
-} from "./content-editor.js?v=phantom-live-20260716-283";
-import { loadImageForEditing, exportCanvas, requestAiEdit, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260716-283";
-import { mountVideoEditor } from "./videocut.js?v=phantom-live-20260716-283";
-import { assetsAvailable, assetBlobUrl, listAssets, recordAssetUsage, saveToAssetCloud, listLocalAssets, refreshLocalAssets, localAssetBlobUrl } from "./orgs.js?v=phantom-live-20260716-283";
+} from "./content-editor.js?v=phantom-live-20260716-284";
+import { loadImageForEditing, exportCanvas, requestAiEdit, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260716-284";
+import { mountVideoEditor } from "./videocut.js?v=phantom-live-20260716-284";
+import { assetsAvailable, assetBlobUrl, listAssets, recordAssetUsage, saveToAssetCloud, listLocalAssets, refreshLocalAssets, localAssetBlobUrl } from "./orgs.js?v=phantom-live-20260716-284";
 
 const CFG_KEY = "pf.medialab.v1";
 const EDIT_INTENT_KEY = "pf.medialab.editIntent.v1";
@@ -2642,6 +2642,7 @@ let mlPaintColor = "#41ffa1";
 let mlAssetCache = { tenant: "", loading: false, loaded: false, assets: [], error: "" };
 let mlAssetPicker = { search: "", source: "all" };
 let mlLayerClipboard = [];
+let mlSnapGuides = [];
 
 function cloneEditState(source = editState) {
   return cloneImageEditState(source);
@@ -3349,7 +3350,7 @@ function renderEdit(body, cfg, opts, root) {
       if (!canvas.isConnected || !canvas._img) return;
       renderComposition(canvas, canvas._img, editState, mlComposition, mlLayerEffects);
       fitEditorCanvas(canvas);
-      if (overlay) drawCompositionOverlay(overlay, canvas, mlComposition);
+      if (overlay) drawCompositionOverlay(overlay, canvas, mlComposition, mlSnapGuides);
       positionMarkers();
     });
   };
@@ -3859,15 +3860,13 @@ function renderEdit(body, cfg, opts, root) {
             item.layer.w = Math.max(0.05, item.w + dx * (handle.index === 0 || handle.index === 3 ? -2 : 2));
             item.layer.h = Math.max(0.05, item.h + dy * (handle.index === 0 || handle.index === 1 ? -2 : 2));
           } else {
-            starts.forEach((item) => {
-              item.layer.x = Math.max(0, Math.min(1, item.x + dx));
-              item.layer.y = Math.max(0, Math.min(1, item.y + dy));
-            });
+            mlSnapGuides = applyLayerDragWithSnap(mlComposition, starts, dx, dy);
           }
           repaint();
         };
         overlay.onpointerup = overlay.onpointercancel = () => {
           overlay.classList.remove("is-dragging");
+          mlSnapGuides = [];
           overlay.onpointermove = null;
           overlay.onpointerup = null;
           overlay.onpointercancel = null;

@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 
 const { freshEditState } = await import("../app/js/imagefilters.js?v=phantom-live-20260714-267");
 const {
-  alignSelectedLayers, cloneImageEditState, distributeSelectedLayers, freshComposition,
+  alignSelectedLayers, applyLayerDragWithSnap, cloneImageEditState, distributeSelectedLayers, freshComposition,
   addImageLayer, addTextLayer, addColorLayer, layerBounds, moveLayerToIndex,
 } = await import("../app/js/content-editor.js?v=phantom-live-20260714-267");
 
@@ -66,6 +66,15 @@ const centers = [leftLayer, middleLayer, rightLayer]
   .map((bounds) => (bounds.left + bounds.right) / 2)
   .sort((a, b) => a - b);
 nearly(centers[1] - centers[0], centers[2] - centers[1], "distributed center spacing");
+const snapLayout = freshComposition();
+snapLayout.width = 1000;
+snapLayout.height = 500;
+const snapLayer = addTextLayer(snapLayout, "Snap");
+Object.assign(snapLayer, { x: 0.47, y: 0.33, w: 0.2, h: 0.2 });
+snapLayout.selectedIds = [snapLayer.id];
+const guides = applyLayerDragWithSnap(snapLayout, [{ layer: snapLayer, x: snapLayer.x, y: snapLayer.y }], 0.025, 0);
+assert.deepEqual(guides, [{ axis: "x", at: 0.5 }], "dragging near canvas center should return a visible vertical snap guide");
+nearly(snapLayer.x, 0.5, "dragged layer snaps to canvas center");
 
 const mediaSrc = readFileSync(new URL("../app/js/medialab.js", import.meta.url), "utf8");
 const cssSrc = readFileSync(new URL("../app/phantom.css", import.meta.url), "utf8");
@@ -87,7 +96,7 @@ assert.match(mediaSrc, /moveLayerToIndex\(mlComposition,\s*draggedId,\s*targetIn
 assert.match(mediaSrc, /addImageLayer\(mlComposition,\s*row\.url/u, "Asset Cloud selections must add image layers instead of replacing the current image");
 assert.match(mediaSrc, /data-ml-layer-overlay/u, "Media Lab edit must draw a selectable transform overlay over the image canvas");
 assert.match(mediaSrc, /hitTestResizeHandle\(mlComposition,\s*point,\s*canvas/u, "Media Lab edit must support direct corner-handle resizing on the canvas");
-assert.match(mediaSrc, /drawCompositionOverlay\(overlay,\s*canvas,\s*mlComposition\)/u, "Media Lab edit must show layer bounds and resize handles while editing");
+assert.match(mediaSrc, /drawCompositionOverlay\(overlay,\s*canvas,\s*mlComposition/u, "Media Lab edit must show layer bounds and resize handles while editing");
 assert.match(mediaSrc, /let mlEditKeyHandler = null/u, "Media Lab photo editor must keep a single scoped keyboard handler.");
 assert.match(mediaSrc, /const isEditorTypingTarget = \(target\)[\s\S]*input, textarea, select, button, \[contenteditable\]/u, "Media Lab keyboard shortcuts must ignore typing fields.");
 assert.match(mediaSrc, /const undoPhotoEdit = \(\) =>[\s\S]*restoreEdit\(mlEditHistory\.pop\(\)\)/u, "Media Lab must expose undo through the shared editor shortcut path.");
@@ -115,6 +124,12 @@ assert.match(mediaSrc, /data-ml-layer-field="blend"/u, "Media Lab layers must ex
 assert.match(mediaSrc, /"multiply",\s*"Multiply"[\s\S]*"screen",\s*"Screen"[\s\S]*"overlay",\s*"Overlay"/u, "Media Lab blend mode controls must include standard compositing modes.");
 assert.match(editorSrc, /const BLEND_MODES = new Set\(\["source-over", "multiply", "screen", "overlay", "soft-light"/u, "Layer renderer must whitelist supported blend modes.");
 assert.match(editorSrc, /ctx\.globalCompositeOperation = blendMode\(layer\.blend\)/u, "Layer renderer must apply per-layer blend modes to the export canvas.");
+assert.match(editorSrc, /export function applyLayerDragWithSnap\(composition,\s*starts,\s*dx,\s*dy/u, "Layer editor must expose reusable snap-aware drag geometry.");
+assert.match(editorSrc, /guides\.push\(\{ axis: "x", at: snapX\.guide \}\)/u, "Snap helper must report vertical snap guides for the overlay.");
+assert.match(mediaSrc, /let mlSnapGuides = \[\]/u, "Media Lab must keep transient snap-guide state during layer drags.");
+assert.match(mediaSrc, /drawCompositionOverlay\(overlay,\s*canvas,\s*mlComposition,\s*mlSnapGuides\)/u, "Media Lab overlay must render snap guides while dragging.");
+assert.match(mediaSrc, /mlSnapGuides = applyLayerDragWithSnap\(mlComposition,\s*starts,\s*dx,\s*dy\)/u, "Media Lab drag movement must use snap-aware layer geometry.");
+assert.match(mediaSrc, /mlSnapGuides = \[\][\s\S]*overlay\.onpointermove = null/u, "Media Lab must clear snap guides when layer dragging ends.");
 assert.match(mediaSrc, /data-ml-layer-center/u, "Media Lab layer inspector must expose a one-click center action.");
 assert.match(mediaSrc, /data-ml-layer-fit-canvas/u, "Media Lab layer inspector must expose a one-click fill-canvas action.");
 assert.match(mediaSrc, /data-ml-layer-reset-transform/u, "Media Lab layer inspector must expose a one-click transform reset action.");
