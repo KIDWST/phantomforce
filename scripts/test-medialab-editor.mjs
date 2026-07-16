@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 const { freshEditState } = await import("../app/js/imagefilters.js?v=phantom-live-20260714-267");
-const { cloneImageEditState, freshComposition, addImageLayer, addTextLayer, addColorLayer, moveLayerToIndex } = await import("../app/js/content-editor.js?v=phantom-live-20260714-267");
+const {
+  alignSelectedLayers, cloneImageEditState, distributeSelectedLayers, freshComposition,
+  addImageLayer, addTextLayer, addColorLayer, layerBounds, moveLayerToIndex,
+} = await import("../app/js/content-editor.js?v=phantom-live-20260714-267");
 
 const source = freshEditState();
 source.paint = {
@@ -36,6 +39,33 @@ for (const layer of [composition.layers.find((item) => item.id === "base"), imag
 assert.equal(moveLayerToIndex(composition, imageLayer.id, 0), true, "layer drag helper must move a layer to a direct stack index");
 assert.equal(composition.layers[0].id, imageLayer.id, "move-to-index must update the render stack order");
 assert.deepEqual(composition.selectedIds, [imageLayer.id], "move-to-index must keep the moved layer selected");
+
+const nearly = (actual, expected, label) => assert.ok(Math.abs(actual - expected) < 0.0001, `${label}: expected ${expected}, got ${actual}`);
+const layout = freshComposition();
+layout.width = 1000;
+layout.height = 500;
+const leftLayer = addImageLayer(layout, "memory://left.webp", "Left");
+const middleLayer = addTextLayer(layout, "Middle");
+const rightLayer = addTextLayer(layout, "Right");
+Object.assign(leftLayer, { x: 0.16, y: 0.35, w: 0.18, h: 0.2 });
+Object.assign(middleLayer, { x: 0.48, y: 0.55, w: 0.16, h: 0.18 });
+Object.assign(rightLayer, { x: 0.82, y: 0.42, w: 0.14, h: 0.16 });
+layout.selectedIds = [leftLayer.id];
+assert.equal(alignSelectedLayers(layout, "hcenter"), true, "single selected layer should align against the canvas");
+nearly(leftLayer.x, 0.5, "single layer horizontal center");
+layout.selectedIds = [leftLayer.id, middleLayer.id, rightLayer.id];
+assert.equal(alignSelectedLayers(layout, "top"), true, "multiple selected layers should align by selection bounds");
+const topEdges = layout.selectedIds.map((id) => layerBounds(layout.layers.find((layer) => layer.id === id), layout.width, layout.height).top);
+nearly(Math.max(...topEdges) - Math.min(...topEdges), 0, "aligned top edges");
+Object.assign(leftLayer, { x: 0.12 });
+Object.assign(middleLayer, { x: 0.36 });
+Object.assign(rightLayer, { x: 0.91 });
+assert.equal(distributeSelectedLayers(layout, "x"), true, "three selected layers should distribute horizontally");
+const centers = [leftLayer, middleLayer, rightLayer]
+  .map((layer) => layerBounds(layer, layout.width, layout.height))
+  .map((bounds) => (bounds.left + bounds.right) / 2)
+  .sort((a, b) => a - b);
+nearly(centers[1] - centers[0], centers[2] - centers[1], "distributed center spacing");
 
 const mediaSrc = readFileSync(new URL("../app/js/medialab.js", import.meta.url), "utf8");
 const cssSrc = readFileSync(new URL("../app/phantom.css", import.meta.url), "utf8");
@@ -88,6 +118,10 @@ assert.match(editorSrc, /ctx\.globalCompositeOperation = blendMode\(layer\.blend
 assert.match(mediaSrc, /data-ml-layer-center/u, "Media Lab layer inspector must expose a one-click center action.");
 assert.match(mediaSrc, /data-ml-layer-fit-canvas/u, "Media Lab layer inspector must expose a one-click fill-canvas action.");
 assert.match(mediaSrc, /data-ml-layer-reset-transform/u, "Media Lab layer inspector must expose a one-click transform reset action.");
+assert.match(mediaSrc, /data-ml-layer-align="\$\{esc\(mode\)\}"/u, "Media Lab layer inspector must expose alignment controls.");
+assert.match(mediaSrc, /data-ml-layer-distribute="x"/u, "Media Lab layer inspector must expose horizontal distribution.");
+assert.match(mediaSrc, /alignSelectedLayers\(mlComposition,\s*button\.dataset\.mlLayerAlign\)/u, "Media Lab alignment buttons must use the shared composition helper.");
+assert.match(mediaSrc, /distributeSelectedLayers\(mlComposition,\s*button\.dataset\.mlLayerDistribute\)/u, "Media Lab distribution buttons must use the shared composition helper.");
 assert.match(mediaSrc, /const resetLayerTransformDefaults = \(layer\) =>[\s\S]*layer\.blend = "source-over"[\s\S]*layer\.type === "text"[\s\S]*layer\.type === "image"/u, "Media Lab transform reset must restore sensible per-layer defaults.");
 assert.match(mediaSrc, /querySelector\("\[data-ml-layer-center\]"\)[\s\S]*layer\.x = 0\.5[\s\S]*layer\.y = 0\.5/u, "Media Lab center action must recenter the selected layer.");
 assert.match(mediaSrc, /querySelector\("\[data-ml-layer-fit-canvas\]"\)[\s\S]*layer\.w = 1[\s\S]*layer\.h = 1[\s\S]*layer\.fit = "cover"/u, "Media Lab fill-canvas action must expand image/base layers to the canvas.");
@@ -107,6 +141,7 @@ assert.match(cssSrc, /\.ml-layer-row\[draggable="true"\]/u, "Draggable layer row
 assert.match(cssSrc, /\.ml-layer-row\.is-drop-target/u, "Layer drag/drop must show a visible drop target");
 assert.match(cssSrc, /\.ml-layer-row\.is-locked\s*\{/u, "Locked layer rows need a visible locked state");
 assert.match(cssSrc, /\.ml-layer-transform-actions\s*\{/u, "Layer transform actions need compact editor styling");
+assert.match(cssSrc, /\.ml-layer-align-actions\s*\{[\s\S]*grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(68px,\s*1fr\)\)/u, "Layer align/distribute actions need compact responsive styling");
 assert.match(cssSrc, /\.ml-layer-actions\s*\{[\s\S]*grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(76px,\s*1fr\)\)/u, "Layer action controls must wrap cleanly as editor actions grow.");
 assert.match(cssSrc, /\.ml-layer-text-grid\s*\{/u, "Text layer controls need a compact inspector grid");
 assert.match(cssSrc, /\.ml-layer-toggle-row button\.is-on/u, "Text layer toggles need a visible enabled state");
