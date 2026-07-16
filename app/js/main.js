@@ -6,44 +6,44 @@ import {
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260716-300";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260716-300";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260716-300";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260716-300";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260716-300";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260716-300";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260716-300";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260716-300";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260716-300";
-import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260716-300";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260716-300";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260716-300";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260716-300";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260716-300";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260716-300";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260716-300";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260716-300";
-import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260716-300";
-import { mountAmbient } from "./ambient.js?v=phantom-live-20260716-300";
-import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260716-300";
+} from "./store.js?v=phantom-live-20260716-301";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260716-301";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260716-301";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260716-301";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260716-301";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260716-301";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260716-301";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260716-301";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260716-301";
+import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260716-301";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260716-301";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260716-301";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260716-301";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260716-301";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260716-301";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260716-301";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260716-301";
+import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260716-301";
+import { mountAmbient } from "./ambient.js?v=phantom-live-20260716-301";
+import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260716-301";
 import {
   fetchAuthConfig, databaseLogin, databaseLogout, customerRegister, requestCustomerPasswordReset,
   completeCustomerPasswordReset, switchOrg, fetchAuthMe, fetchEntitlementsSummary,
-} from "./orgs.js?v=phantom-live-20260716-300";
-import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260716-300";
-import { assetsAvailable } from "./orgs.js?v=phantom-live-20260716-300";
-import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260716-300";
+} from "./orgs.js?v=phantom-live-20260716-301";
+import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260716-301";
+import { assetsAvailable } from "./orgs.js?v=phantom-live-20260716-301";
+import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260716-301";
 // PhantomPlay V2 platform shell (Home/Solo/Friends/Workspace/Dev Hub) - opt-in
 // while it hardens: set localStorage "pf.phantomplay.v2" = "1" (the V2 shell has
 // a "Classic view" button to switch back). Classic stays the default experience.
-import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260716-300";
+import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260716-301";
 const phantomPlayV2Opted = () => { try { return localStorage.getItem("pf.phantomplay.v2") === "1"; } catch { return false; } };
-import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260716-300";
+import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260716-301";
 import {
   customizeNavigation,
   loadOrganizationCustomization,
-} from "./customization.js?v=phantom-live-20260716-300";
-import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260716-300";
+} from "./customization.js?v=phantom-live-20260716-301";
+import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260716-301";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -1253,7 +1253,7 @@ const MODES = {
   admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260716-300";
+const POSE_VERSION = "phantom-live-20260716-301";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -2047,6 +2047,91 @@ function renderOperatingPulse() {
     </div>`;
 }
 
+function executionTimelineLanes() {
+  const widgets = missionWidgets();
+  const byId = (id) => widgets.find((item) => item.id === id) || {};
+  const approvals = visible(store.state.approvals || []).filter((a) => a.status === "pending");
+  const plan = todaysPlan();
+  const agents = visible(store.state.agents || []);
+  const activeAgents = agents.filter((a) => ["active", "needs-approval", "blocked", "waiting"].includes(a.status));
+  const activity = visible(store.state.activity || []).filter((item) => item?.title || item?.activity || item?.text);
+  const media = byId("media");
+  const money = byId("money");
+  const leads = byId("leads");
+  const resultItems = [
+    money.stat && !["$0", "0"].includes(String(money.stat).trim()) ? { title: `${money.stat} tracked`, sub: money.sub || "Money movement logged", open: "money", state: "live" } : null,
+    media.stat && !/^0\b/.test(String(media.stat)) ? { title: `${media.stat} in media`, sub: media.sub || "Media activity exists", open: "media", state: "live" } : null,
+    leads.stat && !/^0\b/.test(String(leads.stat)) ? { title: `${leads.stat} in pipeline`, sub: leads.sub || "Client pipeline has records", open: "leads", state: "live" } : null,
+  ].filter(Boolean);
+  return [
+    {
+      lane: "You",
+      kicker: "decisions and owner gates",
+      state: approvals.length || plan.length ? "live" : "quiet",
+      open: approvals[0] ? "approvals" : plan[0]?.open || "settings",
+      items: (approvals.length || plan.length)
+        ? [
+          ...approvals.slice(0, 2).map((a) => ({ title: a.title, sub: a.detail || "Approval waiting", state: "watch", open: "approvals" })),
+          ...plan.slice(0, Math.max(0, 2 - Math.min(approvals.length, 2))).map((p) => ({ title: p.text, sub: "Owner input unlocks work", state: "watch", open: p.open || "approvals" })),
+        ]
+        : [{ title: "No owner gate waiting", sub: "Add context or start an outcome when ready.", state: "quiet", open: "settings" }],
+    },
+    {
+      lane: "Phantom",
+      kicker: "worker movement and proof",
+      state: activeAgents.length || activity.length ? "live" : "quiet",
+      open: activeAgents.length ? "workforce" : "activity",
+      items: activeAgents.length
+        ? activeAgents.slice(0, 2).map((a) => ({ title: a.name || "Worker lane", sub: a.role || a.mission || a.status || "Worker state", state: a.status === "blocked" ? "block" : "live", open: "workforce" }))
+        : activity.length
+          ? activity.slice(0, 2).map((a) => ({ title: a.title || a.activity || a.text || "Activity recorded", sub: a.who || a.source || ago(a.at), state: "live", open: "activity" }))
+          : [{ title: "No worker run active", sub: "Phantom waits for real data or an owner request.", state: "quiet", open: "activity" }],
+    },
+    {
+      lane: "Results",
+      kicker: "money, media, clients",
+      state: resultItems.length ? "live" : "quiet",
+      open: resultItems[0]?.open || "money",
+      items: resultItems.length
+        ? resultItems.slice(0, 2)
+        : [{ title: "No result logged yet", sub: "Results appear after money, media, client, or site activity is real.", state: "quiet", open: "money" }],
+    },
+  ];
+}
+
+function renderExecutionTimeline() {
+  const mount = $("[data-execution-timeline]");
+  if (!mount) return;
+  const lanes = executionTimelineLanes();
+  const live = lanes.filter((lane) => lane.state === "live").length;
+  mount.innerHTML = `
+    <div class="exec-head">
+      <div>
+        <p>Execution timeline</p>
+        <span>${live ? `${live} lane${live === 1 ? "" : "s"} moving` : "No execution lane is moving yet"}</span>
+      </div>
+      <button class="exec-open" data-open-ws="${esc(lanes.find((lane) => lane.state === "live")?.open || "activity")}" type="button">
+        Open live work ${svg("arrow")}
+      </button>
+    </div>
+    <div class="exec-lanes">
+      ${lanes.map((lane) => `
+        <article class="exec-lane is-${esc(lane.state)}">
+          <button class="exec-lane-head" data-open-ws="${esc(lane.open)}" type="button">
+            <span>${esc(lane.lane)}</span>
+            <i>${esc(lane.kicker)}</i>
+          </button>
+          <div class="exec-lane-items">
+            ${lane.items.map((item) => `
+              <button class="exec-item is-${esc(item.state || "quiet")}" data-open-ws="${esc(item.open || lane.open)}" type="button">
+                <b>${esc(item.title)}</b>
+                <i>${esc(item.sub || "")}</i>
+              </button>`).join("")}
+          </div>
+        </article>`).join("")}
+    </div>`;
+}
+
 function renderCommandToolDock() {
   const tools = (TOOL_SPINE || [])
     .filter((tool) => tool && tool.visibleToClients !== true)
@@ -2429,11 +2514,12 @@ function renderConsole() {
   renderDecisionDeck();
   renderOutcomeStrip();
   renderOperatingPulse();
+  renderExecutionTimeline();
   renderHandledProofDeck();
   /* Fire-and-forget: pull server truth for the bell + attention strip, then
      repaint both once it lands. Failures change nothing. */
   const pulseBefore = serverPulseAt;
-  fetchServerAttention().then(() => { if (serverPulseAt !== pulseBefore) { renderHero(); renderNotifs(); renderAttentionStrip(); renderDecisionDeck(); renderOutcomeStrip(); renderOperatingPulse(); renderHandledProofDeck(); renderCommandWidgets(); renderQuick(); } }).catch(() => {});
+  fetchServerAttention().then(() => { if (serverPulseAt !== pulseBefore) { renderHero(); renderNotifs(); renderAttentionStrip(); renderDecisionDeck(); renderOutcomeStrip(); renderOperatingPulse(); renderExecutionTimeline(); renderHandledProofDeck(); renderCommandWidgets(); renderQuick(); } }).catch(() => {});
   renderHero();
   renderChips();
   renderModePose(activeMode);
@@ -3950,7 +4036,7 @@ async function boot() {
   store.onChange(() => {
     if (!phantom.hidden) {
       if (activePageId) { renderConsole(); return; }
-      renderNav(); renderStatusPills(); renderHero(); renderNotifs(); renderAttentionStrip(); renderDecisionDeck(); renderOutcomeStrip(); renderOperatingPulse(); renderHandledProofDeck();
+      renderNav(); renderStatusPills(); renderHero(); renderNotifs(); renderAttentionStrip(); renderDecisionDeck(); renderOutcomeStrip(); renderOperatingPulse(); renderExecutionTimeline(); renderHandledProofDeck();
       renderCommandWidgets(); renderFlowMap(); renderFlowCompactSummary(); renderPlan(); renderQueue(); renderQuick();
     }
   });

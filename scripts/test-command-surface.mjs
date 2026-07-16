@@ -15,6 +15,7 @@ assert.match(index, /data-hero-proof/u, "Dashboard hero must have a recent proof
 assert.match(index, /data-decision-deck/u, "Dashboard must have a real-data decision deck mount.");
 assert.match(index, /data-outcome-strip/u, "Dashboard must have a first-class active outcomes section.");
 assert.match(index, /data-operating-pulse/u, "Dashboard must show a compact operating pulse from real state.");
+assert.match(index, /data-execution-timeline/u, "Dashboard must show the You / Phantom / Results execution timeline.");
 assert.match(index, /data-handled-proof/u, "Dashboard must have a handled-work proof strip mount.");
 assert.match(index, /data-quick-title>Next moves</u, "Right rail should lead with next moves, not generic quick actions.");
 assert.match(index, /data-work-title>Work in motion</u, "Right rail should show work in motion, not an old mission queue.");
@@ -34,8 +35,14 @@ assert.match(main, /function operatingPulseItems\(\)/u,
   "Command dashboard should derive department pulse items from the real tool spine.");
 assert.match(main, /function renderOperatingPulse\(\)/u,
   "Command dashboard should render the compact operating pulse.");
+assert.match(main, /function executionTimelineLanes\(\)/u,
+  "Command dashboard should derive execution lanes from real state.");
+assert.match(main, /function renderExecutionTimeline\(\)/u,
+  "Command dashboard should render the execution timeline.");
 assert.match(main, /renderOutcomeStrip\(\);[\s\S]*?renderOperatingPulse\(\);[\s\S]*?renderHandledProofDeck\(\);/u,
   "Console render order should put the operating pulse between outcomes and handled proof.");
+assert.match(main, /lane:\s*"You"[\s\S]*?lane:\s*"Phantom"[\s\S]*?lane:\s*"Results"/u,
+  "Execution timeline must keep the planner lanes: You, Phantom, Results.");
 assert.match(main, /class="cw-dept-map"/u,
   "Workforce widget should render as a compact department map, not a raw worker list.");
 assert.match(main, /class="cw-automation-empty"/u,
@@ -103,6 +110,8 @@ assert.match(css, /\.decision-intel\s*\{/u, "Decision deck must style why/eviden
 assert.match(css, /\.outcome-strip\s*\{/u, "Active outcomes must have a dedicated command-center surface.");
 assert.match(css, /\.operating-pulse\s*\{/u, "Operating pulse must have a compact command-center surface.");
 assert.match(css, /@keyframes operatingPulse/u, "Operating pulse should animate department readiness, not decorative thinking.");
+assert.match(css, /\.execution-timeline\s*\{/u, "Execution timeline must have compact dashboard styling.");
+assert.match(css, /@keyframes executionFlow/u, "Execution timeline should animate real work flow.");
 assert.match(css, /@keyframes outcomeProgress/u, "Outcome cards should animate operational progress, not decorative thinking.");
 assert.match(css, /\.handled-proof\s*\{/u, "Handled proof strip must have compact proof styling.");
 assert.match(css, /\.quick-item i\s*\{/u, "Next move rail must support compact evidence subtext.");

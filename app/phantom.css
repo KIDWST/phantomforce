@@ -13660,6 +13660,137 @@ body .phantom .workspace-page :where(
   100% { transform: translateX(100%); opacity: 0; }
 }
 
+/* ---- execution timeline: You / Phantom / Results from real operating state ---- */
+.execution-timeline {
+  display: grid;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  border: 1px solid rgba(65, 255, 161, 0.14);
+  border-radius: var(--r-lg);
+  background:
+    radial-gradient(100% 150% at 0% 0%, rgba(30, 240, 255, 0.06), transparent 52%),
+    linear-gradient(135deg, rgba(3, 13, 14, 0.72), rgba(2, 8, 8, 0.78));
+  box-shadow: var(--edge-hi);
+}
+.exec-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+.exec-head p {
+  margin: 0;
+  color: var(--neon);
+  font: 800 var(--fs-xs) / 1.25 var(--font-mono);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.exec-head span { color: var(--dim); font-size: var(--fs-sm); }
+.exec-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  cursor: pointer;
+  border: 1px solid rgba(65, 255, 161, 0.2);
+  border-radius: 999px;
+  color: var(--ink);
+  background: rgba(65, 255, 161, 0.07);
+  font-weight: 800;
+}
+.exec-lanes {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--sp-3);
+}
+.exec-lane {
+  position: relative;
+  min-width: 0;
+  display: grid;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  border: 1px solid rgba(65, 255, 161, 0.12);
+  border-radius: var(--r-md);
+  background: rgba(0, 0, 0, 0.16);
+  overflow: hidden;
+}
+.exec-lane::after {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(65, 255, 161, 0.72), transparent);
+  transform: translateX(-100%);
+  animation: executionFlow 6.4s ease-in-out infinite;
+}
+.exec-lane.is-quiet { opacity: 0.68; }
+.exec-lane-head {
+  display: grid;
+  gap: 3px;
+  padding: 0;
+  cursor: pointer;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  text-align: left;
+}
+.exec-lane-head span { color: var(--ink); font-size: var(--fs-md); font-weight: 800; }
+.exec-lane-head i {
+  color: var(--dim);
+  font: 800 9px / 1.2 var(--font-mono);
+  font-style: normal;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.exec-lane-items { display: grid; gap: 7px; }
+.exec-item {
+  position: relative;
+  display: grid;
+  gap: 3px;
+  min-height: 56px;
+  padding: 10px 10px 10px 27px;
+  cursor: pointer;
+  text-align: left;
+  border: 1px solid rgba(255, 255, 255, 0.055);
+  border-radius: var(--r-sm);
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.022);
+}
+.exec-item::before {
+  content: "";
+  position: absolute;
+  left: 10px;
+  top: 14px;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(207, 255, 226, 0.38);
+}
+.exec-item.is-live::before { background: var(--neon); box-shadow: 0 0 14px rgba(65, 255, 161, 0.48); }
+.exec-item.is-watch::before { background: var(--warn); box-shadow: 0 0 14px rgba(255, 209, 102, 0.42); }
+.exec-item.is-block::before { background: var(--bad); box-shadow: 0 0 14px rgba(255, 92, 122, 0.42); }
+.exec-item b {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+.exec-item i {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dim);
+  font-size: 11px;
+  font-style: normal;
+}
+@keyframes executionFlow {
+  0%, 60% { transform: translateX(-100%); opacity: 0; }
+  72% { opacity: 0.9; }
+  100% { transform: translateX(100%); opacity: 0; }
+}
+
 /* ---- handled proof: completed work from the real activity ledger ---- */
 .handled-proof {
   display: grid;
@@ -14155,6 +14286,8 @@ body .phantom .workspace-page :where(
   .op-pulse-head { align-items: flex-start; flex-direction: column; }
   .op-pulse-summary { justify-content: flex-start; width: 100%; }
   .op-pulse-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .exec-head { align-items: flex-start; flex-direction: column; }
+  .exec-lanes { grid-template-columns: 1fr; }
   .handled-row { grid-template-columns: 1fr; }
   .command-widgets { grid-template-columns: 1fr; }
   .cw-flow { grid-template-columns: 1fr; }
@@ -14167,6 +14300,7 @@ body .phantom .workspace-page :where(
   .decision-card::before,
   .outcome-card::before,
   .op-dept::before,
+  .exec-lane::after,
   .handled-dot,
   .cw-flow-node.is-live::before,
   .command-widget,
