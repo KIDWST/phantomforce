@@ -227,11 +227,12 @@ export async function auditCompetitorIntelligenceRequest(session: AccessSession,
 /* ---------------------------------------------------------------------------
    Business context + competitor discovery + deep-dive dossiers.
    Everything below turns what Phantom already knows about the business into
-   an honest, actionable research plan. It generates *where to look* and *what
-   to look for* — public search queries, source checklists, and hypotheses to
-   verify. It never fabricates named competitors or facts, never scrapes, and
-   never contacts anyone. Automatic web collection stays behind an explicit,
-   provider-neutral adapter that reports "not connected" until a key exists. */
+   an honest, actionable market board. Without a connected search provider it
+   still produces useful candidate lanes, searches, source checklists, and
+   hypotheses to verify. It never presents suggested leads as verified facts,
+   never scrapes, and never contacts anyone. Automatic web collection stays
+   behind an explicit, provider-neutral adapter that reports "not connected"
+   until a key exists. */
 
 const SEARCH_PROVIDER_ENV = ["PHANTOM_SEARCH_API_KEY", "SERPAPI_API_KEY", "SERPER_API_KEY", "BING_SEARCH_KEY", "TAVILY_API_KEY", "BRAVE_SEARCH_KEY"] as const;
 export function getWebDiscoveryStatus(env: NodeJS.ProcessEnv = process.env) {
@@ -243,7 +244,7 @@ export function getWebDiscoveryStatus(env: NodeJS.ProcessEnv = process.env) {
     provider: provider || "none",
     detail: connected
       ? `Automatic public-web discovery is connected through ${provider || "the configured search provider"}. Phantom can run the generated queries and pull public results for you.`
-      : "Automatic web discovery is not connected. Phantom generates the exact public search queries and source checklist for you to run, or an admin can add a search-provider key to let Phantom run them automatically.",
+      : "Automatic web discovery is not connected yet, so Phantom generates candidate lanes, exact public searches, and source checklists immediately. Add a search-provider key later to turn candidates into verified public results automatically.",
   };
 }
 
@@ -315,8 +316,75 @@ export function generateDiscoveryPlan(profile: BusinessProfile, env: NodeJS.Proc
     segment: label,
     leads, searchQueries, directories: SEGMENT_DIRECTORIES[segment],
     webDiscovery: getWebDiscoveryStatus(env),
-    disclaimer: "These are AI-generated starting points, not verified competitors. Run the queries against public sources, then add what you confirm as competitors and dated public signals. Nothing here is scraped, contacted, or published.",
+    disclaimer: "These are AI-generated starting points, not verified competitors. Use the linked public searches and directories to verify names and sources, then save confirmed competitors/signals. Nothing here is scraped, contacted, or published.",
   };
+}
+
+function starterSourceUrl(query: string) {
+  return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+}
+
+function seedDiscoveryMarketBoard(tenantId: string, state: TenantState, profile: BusinessProfile, run: DiscoveryRun) {
+  const at = now();
+  const firstQuery = run.searchQueries[0] || `${profile.offering || profile.category || "competitors"} ${profile.geography || ""}`.trim();
+  const directQuery = run.leads[0]?.exampleQueries[0] || firstQuery;
+  const reviewQuery = `${profile.offering || profile.category || "competitors"} reviews ${profile.geography || ""}`.trim();
+  const pricingQuery = `${profile.offering || profile.category || "competitors"} pricing`.trim();
+  const contentQuery = `${profile.offering || profile.category || "competitors"} ads social content`.trim();
+
+  const addOpportunity = (kind: ResearchOpportunity["kind"], title: string, query: string, insight: string, recommendations: string[]) => {
+    const sourceUrl = starterSourceUrl(query);
+    const exists = state.opportunities.some((item) => item.title === title && item.sourceUrl === sourceUrl);
+    if (exists) return;
+    state.opportunities.unshift({
+      id: id("opportunity"),
+      tenantId,
+      competitorId: "",
+      kind,
+      title,
+      sourceUrl,
+      insight,
+      recommendations,
+      accuracyNotes: [
+        "AI-generated from the saved business profile; verify public sources before using externally.",
+        "No competitor identity is treated as confirmed until a public result is saved.",
+        "Use this as a starting board, not a factual claim.",
+      ],
+      createdAt: at,
+    });
+  };
+
+  addOpportunity(
+    "search",
+    `Local competitor searches for ${profile.offering || profile.category || "your offer"}`,
+    directQuery,
+    `Start with the direct competitor searches for ${run.segment}. These are the first public queries Phantom would run for ${profile.businessName || "this business"}.`,
+    ["Open the top 10 public results.", "Save each confirmed competitor with its actual website.", "Record pricing, reviews, and landing-page signals only after verification."],
+  );
+  addOpportunity(
+    "search",
+    "Review pressure and customer objections",
+    reviewQuery,
+    "Find repeated public complaints, praise, and objections across review sources. Treat themes as aggregated demand, not individual targeting.",
+    ["Group complaints into themes.", "Turn repeated confusion into FAQ or comparison content.", "Avoid referencing individual reviewers."],
+  );
+  addOpportunity(
+    "offer",
+    "Offer and pricing comparison board",
+    pricingQuery,
+    "Compare packages, entry prices, guarantees, and onboarding friction once public pricing pages are verified.",
+    ["List each competitor's public package names.", "Note what is unclear or gated.", "Build your own clearer package language."],
+  );
+  addOpportunity(
+    "timing",
+    "Ad and content heat watch",
+    contentQuery,
+    "Watch which topics, formats, and offers competitors push publicly so your response can be original and better timed.",
+    ["Check Meta Ad Library and public social profiles.", "Track repeated hooks by theme, not copied wording.", "Counter-program with a distinct angle."],
+  );
+
+  const exists = state.audit.some((item) => item.action === "market_board_seed" && item.reason.includes(run.id));
+  if (!exists) publicAudit(state, tenantId, "system", "market_board_seed", "allowed", `Seeded market board from discovery ${run.id}. Candidates are not verified competitors.`);
 }
 
 function dossierSources(profile: BusinessProfile | null, competitor: CompetitorRecord): DossierSource[] {
@@ -419,6 +487,13 @@ export async function saveBusinessProfile(session: AccessSession, body: Record<s
     requireAllowed(state, tenantId, session, "business_profile", `${profile.category} ${profile.offering} ${profile.positioning}`);
     if (!profile.category && !profile.offering) throw new Error("Add at least your category or what you sell so Phantom can find the right competitors.");
     state.businessProfile = profile;
+    if (!state.discoveryRuns.length) {
+      const plan = generateDiscoveryPlan(profile);
+      const run: DiscoveryRun = { id: id("discovery"), tenantId, createdAt: at, ...plan };
+      state.discoveryRuns = [run];
+      seedDiscoveryMarketBoard(tenantId, state, profile, run);
+      publicAudit(state, tenantId, session.id, "competitor_discovery", "allowed", `Generated starter market board with ${run.leads.length} candidate lanes and ${run.searchQueries.length} public searches from the saved profile.`);
+    }
     publicAudit(state, tenantId, session.id, "business_profile", "allowed", "Business profile saved for competitor targeting.");
     return { profile, webDiscovery: getWebDiscoveryStatus() };
   });
@@ -433,7 +508,8 @@ export async function runCompetitorDiscovery(session: AccessSession, body: Recor
     const plan = generateDiscoveryPlan(state.businessProfile);
     const run: DiscoveryRun = { id: id("discovery"), tenantId, createdAt: now(), ...plan };
     state.discoveryRuns = [run, ...state.discoveryRuns].slice(0, 20);
-    publicAudit(state, tenantId, session.id, "competitor_discovery", "allowed", `Generated ${run.leads.length} competitor lead types and ${run.searchQueries.length} public search queries. No collection performed.`);
+    seedDiscoveryMarketBoard(tenantId, state, state.businessProfile, run);
+    publicAudit(state, tenantId, session.id, "competitor_discovery", "allowed", `Generated ${run.leads.length} candidate lanes, ${run.searchQueries.length} public searches, and starter market-board opportunities.`);
     return run;
   });
 }

@@ -6,7 +6,7 @@
    when the backend doesn't advertise database auth, none of these
    surfaces render and the app behaves exactly as before. */
 
-import { ctx, session } from "./store.js?v=phantom-live-20260712-217";
+import { ctx, session } from "./store.js?v=phantom-live-20260712-233";
 
 export const isDatabaseSession = () => !!ctx.session?.database;
 export const activeOrgId = () => (isDatabaseSession() ? ctx.session.orgId || null : null);
@@ -65,8 +65,13 @@ function localSessionFromServer(payload) {
   };
 }
 
-export async function databaseLogin(email, password) {
-  const { ok, status, json } = await api("/auth/login", { method: "POST", body: { email, password } });
+export async function databaseLogin(email, password, totpCode) {
+  const { ok, status, json } = await api("/auth/login", { method: "POST", body: { email, password, ...(totpCode ? { totpCode } : {}) } });
+  if (status === 202 && json?.error === "mfa_required") {
+    const err = new Error("Enter your authenticator code.");
+    err.mfaRequired = true;
+    throw err;
+  }
   if (!ok) {
     throw new Error(status === 401 ? "Invalid email or password." : String(json?.error || `Login failed (${status}).`));
   }
@@ -108,6 +113,12 @@ export async function fetchEntitlementsSummary() {
   if (!orgId) return null;
   const { ok, json } = await api(`/orgs/${encodeURIComponent(orgId)}/entitlements`);
   return ok ? json : null;
+}
+
+export async function selectTestPlan(planKey) {
+  const { ok, status, json } = await api("/billing/dev/select-plan", { method: "POST", body: { planKey } });
+  if (!ok) return { ok: false, error: json?.error || `plan_switch_failed_${status}` };
+  return { ok: true, entitlements: json.entitlements };
 }
 
 /* ---------------- server approval queue (agent runs) ---------------- */

@@ -1,4 +1,4 @@
-import { currentTenantId, session } from "./store.js?v=phantom-live-20260712-217";
+import { currentTenantId, session } from "./store.js?v=phantom-live-20260712-233";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 const TABS = [
@@ -23,22 +23,58 @@ function authHeaders(json = false) {
   const token = session.token();
   return { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(json ? { "Content-Type": "application/json" } : {}) };
 }
+function localAuthSnapshot() {
+  return {
+    tenantId: currentTenantId(),
+    access: { enabled: true, canManage: false, aggressiveAvailable: false },
+    settings: { aggressiveMode: false },
+    businessProfile: null,
+    webDiscovery: { connected: false, provider: "auth", detail: "Sign in to the private backend to save profiles, run discovery, and persist public-signal intelligence." },
+    competitors: [],
+    signals: [],
+    inferences: [],
+    audienceThemes: [],
+    creativeAnalyses: [],
+    interceptions: [],
+    opportunities: [],
+    mysteryEvidence: [],
+    discoveryRuns: [],
+    dossiers: [],
+    audit: [],
+    metrics: { competitors: 0, signals: 0, inferences: 0, highConfidence: 0, audienceThemes: 0, blockedRequests: 0 },
+  };
+}
 async function api(path, options = {}) {
   const response = await fetch(path, { ...options, headers: { ...authHeaders(Boolean(options.body)), ...(options.headers || {}) } });
   const payload = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(payload?.error || `Intelligence request failed (${response.status}).`);
+  if (!response.ok) {
+    if (response.status === 401 || response.status === 403) throw new Error("Sign in to the private backend to use live Competitor Intelligence.");
+    throw new Error(payload?.error || `Intelligence request failed (${response.status}).`);
+  }
   return payload;
 }
 async function refresh(silent = false) {
   if (!silent) ui.loading = true;
   ui.error = "";
   render();
+  if (!session.token()) {
+    ui.snapshot = localAuthSnapshot();
+    ui.notice = "Live intelligence needs a private backend session. You can still review the workflow and boundaries here.";
+    ui.loading = false;
+    render();
+    return;
+  }
   try { ui.snapshot = await api(`/api/competitor-intelligence?tenant_id=${encodeURIComponent(currentTenantId())}`); }
   catch (error) { ui.error = error instanceof Error ? error.message : "Competitor Intelligence is unavailable."; }
   finally { ui.loading = false; render(); }
 }
 async function run(path, body, success) {
   ui.notice = ""; ui.error = "";
+  if (!session.token()) {
+    ui.error = "Sign in to the private backend before saving or running live intelligence.";
+    render();
+    return false;
+  }
   try {
     const payload = await api(path, { method: path.endsWith("/mode") ? "PATCH" : "POST", body: JSON.stringify({ ...body, tenantId: currentTenantId() }) });
     if (payload?.result?.allowed === false) {
@@ -73,12 +109,19 @@ function inferenceCard(item) {
 }
 function overview() {
   const latest = ui.snapshot.inferences.slice(0, 4);
-  return `${modeCard()}${metrics()}<section class="ci-overview-grid"><div><div class="ci-section-head"><div><p class="ci-kicker">LATEST ESTIMATES</p><h2>What may be changing</h2></div><button class="ci-secondary" data-ci-tab="signals">Add evidence</button></div><div class="ci-inference-list">${latest.length ? latest.map(inferenceCard).join("") : empty("No estimates yet", "Add dated public signals, then fuse them into clearly labeled estimates.", '<button class="ci-primary" data-ci-tab="signals">Start with a competitor</button>')}</div></div><aside class="ci-boundaries"><p class="ci-kicker">HARD BOUNDARIES</p><h2>Win sooner. Stay clean.</h2><p>Aggressive mode changes speed and synthesis—not access rights.</p><ul><li>Public and lawfully supplied evidence only</li><li>No identities, private groups, bypasses, or deception</li><li>No invasive targeting of individual commenters</li><li>No cloning protected expression</li><li>No outreach, publishing, or operational interference</li></ul><button class="ci-secondary" data-ci-tab="evidence">Open audit log</button></aside></section>`;
+  const starterOpps = ui.snapshot.opportunities.slice(0, 4);
+  const latestDiscovery = ui.snapshot.discoveryRuns?.[0];
+  const starterResults = starterOpps.length
+    ? starterOpps.map((item) => `<article class="ci-inference"><header><div>${statusPill("CANDIDATE", "warn")} ${statusPill(item.kind.toUpperCase(), "neutral")}</div><a href="${esc(item.sourceUrl)}" target="_blank" rel="noopener noreferrer">Open source search ↗</a></header><p class="ci-overline">${esc(item.competitorId ? competitorName(item.competitorId) : "Market scout")}</p><h3>${esc(item.title)}</h3><p>${esc(item.insight)}</p><details><summary>What to do next</summary><ul>${item.recommendations.map((text) => `<li>${esc(text)}</li>`).join("")}</ul></details></article>`).join("")
+    : latestDiscovery
+      ? `<div class="ci-inference-list">${latestDiscovery.leads.slice(0, 4).map(leadCard).join("")}</div>`
+      : empty("No market board yet", "Save your business profile or run discovery to generate candidate competitors, public searches, and next actions.", '<button class="ci-primary" data-ci-tab="discover">Run discovery</button>');
+  return `${modeCard()}${metrics()}<section class="ci-overview-grid"><div><div class="ci-section-head"><div><p class="ci-kicker">${latest.length ? "LATEST ESTIMATES" : "STARTER MARKET BOARD"}</p><h2>${latest.length ? "What may be changing" : "What Phantom found from your profile"}</h2></div><button class="ci-secondary" data-ci-tab="${latest.length ? "signals" : "discover"}">${latest.length ? "Add evidence" : "Open discovery"}</button></div><div class="ci-inference-list">${latest.length ? latest.map(inferenceCard).join("") : starterResults}</div></div><aside class="ci-boundaries"><p class="ci-kicker">HARD BOUNDARIES</p><h2>Win sooner. Stay clean.</h2><p>Candidate results are starting points until a public source is verified and saved.</p><ul><li>Public and lawfully supplied evidence only</li><li>No identities, private groups, bypasses, or deception</li><li>No invasive targeting of individual commenters</li><li>No cloning protected expression</li><li>No outreach, publishing, or operational interference</li></ul><button class="ci-secondary" data-ci-tab="evidence">Open audit log</button></aside></section>`;
 }
 
 function webDiscoveryBanner() {
   const w = ui.snapshot.webDiscovery || { connected: false, provider: "none", detail: "" };
-  return `<div class="ci-web-status is-${w.connected ? "on" : "off"}"><span>${w.connected ? "◉" : "○"}</span><div><b>${w.connected ? `Automatic web discovery connected (${esc(w.provider)})` : "Automatic web discovery not connected"}</b><small>${esc(w.detail)}</small></div></div>`;
+  return `<div class="ci-web-status is-${w.connected ? "on" : "off"}"><span>${w.connected ? "◉" : "○"}</span><div><b>${w.connected ? `Automatic web discovery connected (${esc(w.provider)})` : "Candidate mode: search provider not connected yet"}</b><small>${esc(w.detail)}</small></div></div>`;
 }
 function profileSummary(p) {
   const rows = [["Category", p.category], ["What you sell", p.offering], ["Who you serve", p.audience], ["Where", p.geography], ["Positioning", p.positioning]].filter(([, v]) => v);
@@ -110,10 +153,10 @@ function discover() {
   return `<section class="ci-discover">
     <div class="ci-profile-card ${profile && profile.autoSeeded ? "is-seeded" : ""}"><div class="ci-section-head"><div><p class="ci-kicker">WHAT PHANTOM KNOWS ABOUT YOU</p><h2>Business profile</h2></div>${profile && profile.autoSeeded ? statusPill("AUTO-DRAFTED — CONFIRM", "warn") : profile ? statusPill("SAVED", "good") : ""}</div><p class="ci-hint">Phantom uses this to find the right competitors and dig into each one. The more accurate it is, the sharper the leads.</p>${profileBlock}</div>
     ${webDiscoveryBanner()}
-    <div class="ci-discover-cta"><div><h2>Find my competitors</h2><p>Generate a targeted list of who to watch, where they show up, and the exact public searches to run — from your profile.</p></div><button class="ci-primary" data-ci-discover ${ui.busy === "discover" ? "disabled" : ""}>${ui.busy === "discover" ? "Analyzing…" : "Find competitors"}</button></div>
-    ${runs.length ? discoveryCard(runs[0]) : empty("No discovery run yet", "Confirm your profile, then run discovery to get competitor leads and search queries.")}
+    <div class="ci-discover-cta"><div><h2>Build my market board</h2><p>Generate candidate competitors, source searches, review-pressure checks, offer/pricing watches, and content heat from your profile.</p></div><button class="ci-primary" data-ci-discover ${ui.busy === "discover" ? "disabled" : ""}>${ui.busy === "discover" ? "Analyzing…" : "Build market board"}</button></div>
+    ${runs.length ? discoveryCard(runs[0]) : empty("No market board yet", "Save your profile, then Phantom will generate candidate competitor lanes, searches, and source checklists.")}
     <div class="ci-section-head"><div><p class="ci-kicker">DEEP DIVE</p><h2>Investigate a competitor</h2></div></div>
-    ${s.competitors.length ? `<div class="ci-dossier-launch">${s.competitors.map((c) => `<article><div><h3>${esc(c.name)}</h3><a href="${esc(c.website)}" target="_blank" rel="noopener noreferrer">${esc((() => { try { return new URL(c.website).hostname; } catch { return c.website; } })())}</a></div><button class="ci-primary" data-ci-dossier="${esc(c.id)}" ${ui.busy === "dossier:" + c.id ? "disabled" : ""}>${ui.busy === "dossier:" + c.id ? "Building…" : "Deep dive"}</button></article>`).join("")}</div>` : empty("No competitors yet", "Add a competitor in the Signals tab, or run discovery above to find who to add.", '<button class="ci-primary" data-ci-tab="signals">Add a competitor</button>')}
+    ${s.competitors.length ? `<div class="ci-dossier-launch">${s.competitors.map((c) => `<article><div><h3>${esc(c.name)}</h3><a href="${esc(c.website)}" target="_blank" rel="noopener noreferrer">${esc((() => { try { return new URL(c.website).hostname; } catch { return c.website; } })())}</a></div><button class="ci-primary" data-ci-dossier="${esc(c.id)}" ${ui.busy === "dossier:" + c.id ? "disabled" : ""}>${ui.busy === "dossier:" + c.id ? "Building…" : "Deep dive"}</button></article>`).join("")}</div>` : empty("No verified competitors yet", "Use the market board searches above, then save confirmed public competitors here.", '<button class="ci-primary" data-ci-tab="signals">Add verified competitor</button>')}
     ${dossiers.map(dossierCard).join("")}
   </section>`;
 }
@@ -170,7 +213,7 @@ function bind() {
   root.querySelector("[data-ci-profile-cancel]")?.addEventListener("click", () => { ui.editingProfile = false; render(); });
   root.querySelector("[data-ci-discover]")?.addEventListener("click", async () => {
     ui.busy = "discover"; ui.error = ""; ui.notice = ""; render();
-    const ok = await run("/api/competitor-intelligence/discover", {}, "Competitor discovery generated from your profile.");
+    const ok = await run("/api/competitor-intelligence/discover", {}, "Market board generated from your profile.");
     ui.busy = ""; render();
   });
   root.querySelectorAll("[data-ci-dossier]").forEach((button) => button.addEventListener("click", async () => {
@@ -183,7 +226,7 @@ function bind() {
     ui.notice = ""; ui.error = "";
     try {
       await api("/api/competitor-intelligence/business-profile", { method: "PUT", body: JSON.stringify({ ...formBody(form), tenantId: currentTenantId() }) });
-      ui.editingProfile = false; ui.notice = "Business profile saved."; await refresh(true);
+      ui.editingProfile = false; ui.notice = "Business profile saved. Market board generated."; await refresh(true);
     } catch (error) { ui.error = error instanceof Error ? error.message : "Profile could not be saved."; if (button) button.disabled = false; render(); }
   });
   bindForm("[data-ci-competitor-form]", "/api/competitor-intelligence/competitors", "Competitor profile added.");

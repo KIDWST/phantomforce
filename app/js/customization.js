@@ -1,4 +1,4 @@
-import { currentTenantId, session } from "./store.js?v=phantom-live-20260712-217";
+import { currentTenantId, session } from "./store.js?v=phantom-live-20260712-233";
 
 let activeConfiguration = null;
 let activeEntitlements = null;
@@ -71,6 +71,9 @@ export function customizeNavigation(baseItems, role = "owner") {
 }
 
 export async function loadOrganizationCustomization({ onApplied } = {}) {
+  if (!session.token()) {
+    return null;
+  }
   try {
     const payload = await api(`/phantom-ai/customization/config?${tenantQuery()}`);
     activeConfiguration = payload.configuration;
@@ -111,7 +114,7 @@ function issueMarkup(issues = []) {
 }
 
 function moduleCards(draft) {
-  return draft.modules.filter((module) => module.id !== "developer").sort((a, b) => a.order - b.order).map((module) => {
+  return draft.modules.filter((module) => !["developer", "memory"].includes(module.id)).sort((a, b) => a.order - b.order).map((module) => {
     const protectedModule = ["dashboard", "approvals", "customize", "settings"].includes(module.id);
     return `<article class="cust-module" data-cust-module="${esc(module.id)}">
       <span class="cust-module-grip">⋮⋮</span>

@@ -59,14 +59,18 @@ import {
   asDatabaseSession,
   canAccessOrg,
   canManageOrg,
+  createTotpEnrollment,
   createInvitation,
   createOrganization,
+  disableTotpForUser,
+  enableTotpForUser,
+  getTwoFactorStatus,
   initializeDatabaseAuthState,
   listInvitations,
   listOrgAuditEvents,
   listOrgMembers,
   listOrganizationsForSession,
-  loginWithPassword,
+  loginWithPasswordDetailed,
   removeMember,
   resolveDatabaseSession,
   revokeDatabaseSession,
@@ -1010,6 +1014,7 @@ app.get("/session", async (request, reply) => {
 const DatabaseLoginSchema = z.object({
   email: z.string().email().max(200),
   password: z.string().min(1).max(200),
+  totpCode: z.string().trim().regex(/^\d{6}$/).optional(),
 });
 
 app.post("/auth/login", async (request, reply) => {
@@ -1021,16 +1026,19 @@ app.post("/auth/login", async (request, reply) => {
   if (!parsed.success) {
     return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
   }
-  const session = await loginWithPassword(parsed.data.email, parsed.data.password);
-  if (!session) {
-    /* uniform delay-free refusal; no user-exists oracle */
-    return reply.code(401).send({ ok: false, error: "Invalid email or password." });
+  const login = await loginWithPasswordDetailed(parsed.data.email, parsed.data.password, parsed.data.totpCode);
+  if (!login.ok && login.error === "mfa_required") {
+    return reply.code(202).send({ ok: false, error: "mfa_required", method: "totp", message: "Enter your authenticator code." });
   }
-  const token = mintDatabaseSessionToken(session.id);
+  if (!login.ok) {
+    /* uniform delay-free refusal; no user-exists oracle */
+    return reply.code(401).send({ ok: false, error: login.error === "invalid_mfa" ? "Invalid authenticator code." : "Invalid email or password." });
+  }
+  const token = mintDatabaseSessionToken(login.session.id);
   if (!token) {
     return reply.code(500).send({ ok: false, error: "Token minting unavailable." });
   }
-  return { ok: true, ...token, session };
+  return { ok: true, ...token, session: login.session };
 });
 
 app.post("/auth/logout", async (request, reply) => {
@@ -1080,6 +1088,56 @@ app.get("/auth/me", async (request, reply) => {
         }
       : null,
   };
+});
+
+app.get("/auth/2fa/status", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const dbSession = asDatabaseSession(session);
+  if (!dbSession) return reply.code(403).send({ ok: false, error: "database_session_required" });
+  return { ok: true, ...(await getTwoFactorStatus(dbSession.userId)), supported: ["totp"] };
+});
+
+app.post("/auth/2fa/setup", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const dbSession = asDatabaseSession(session);
+  if (!dbSession) return reply.code(403).send({ ok: false, error: "database_session_required" });
+  const enrollment = createTotpEnrollment(dbSession.email);
+  return { ok: true, method: "totp", ...enrollment, warning: "Save this secret only in an authenticator app. Verify once to enable 2FA." };
+});
+
+const TwoFactorEnableSchema = z.object({
+  secret: z.string().trim().min(16).max(80),
+  code: z.string().trim().regex(/^\d{6}$/),
+});
+
+app.post("/auth/2fa/enable", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const dbSession = asDatabaseSession(session);
+  if (!dbSession) return reply.code(403).send({ ok: false, error: "database_session_required" });
+  const parsed = TwoFactorEnableSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  const result = await enableTotpForUser(dbSession.userId, parsed.data.secret, parsed.data.code);
+  if (!result.ok) return reply.code(400).send({ ok: false, error: result.error });
+  return { ok: true, enabled: true, note: "2FA enabled. Other sessions were revoked; sign in again." };
+});
+
+const TwoFactorDisableSchema = z.object({
+  password: z.string().min(1).max(200),
+});
+
+app.post("/auth/2fa/disable", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const dbSession = asDatabaseSession(session);
+  if (!dbSession) return reply.code(403).send({ ok: false, error: "database_session_required" });
+  const parsed = TwoFactorDisableSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  const result = await disableTotpForUser(dbSession.userId, parsed.data.password);
+  if (!result.ok) return reply.code(400).send({ ok: false, error: result.error });
+  return { ok: true, enabled: false, note: "2FA disabled. Other sessions were revoked; sign in again." };
 });
 
 const SwitchOrgSchema = z.object({ orgId: z.string().min(1).max(120) });
@@ -1299,6 +1357,35 @@ app.post("/admin/orgs/:orgId/plan", async (request, reply) => {
   if (!result.ok) return reply.code(400).send({ ok: false, error: result.error, available: result.available });
   await recordPlanAssignmentAudit(orgId, dbSession.email, parsed.data.planKey, parsed.data.status ?? "active");
   return { ok: true, entitlements: await getOrgEntitlements(orgId) };
+});
+
+const DevPlanSelectSchema = z.object({
+  planKey: z.enum(["starter", "professional", "elite", "enterprise"]),
+});
+
+app.post("/billing/dev/select-plan", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  if (process.env.NODE_ENV === "production" && process.env.PHANTOMFORCE_ENABLE_TEST_PLAN_SWITCHER !== "true") {
+    return reply.code(404).send({ ok: false, error: "not_found" });
+  }
+  const dbSession = asDatabaseSession(session);
+  if (!dbSession || !dbSession.orgId) return reply.code(403).send({ ok: false, error: "database_session_required" });
+  const testEmail = (process.env.PHANTOMFORCE_CUSTOMER1_EMAIL ?? "customer1@phantomforce.test").toLowerCase();
+  const allowedTester = dbSession.isSuperAdmin || dbSession.email.toLowerCase() === testEmail || dbSession.email.endsWith("@phantomforce.test");
+  if (!allowedTester) return reply.code(403).send({ ok: false, error: "test_checkout_not_available" });
+  const parsed = DevPlanSelectSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  const result = await assignOrgPlan({
+    orgId: dbSession.orgId,
+    planKey: parsed.data.planKey,
+    status: "active",
+    note: "DEV TEST CHECKOUT — fake money, local plan switcher",
+    assignedByUserId: dbSession.userId,
+  });
+  if (!result.ok) return reply.code(400).send({ ok: false, error: result.error, available: result.available });
+  await recordPlanAssignmentAudit(dbSession.orgId, dbSession.email, parsed.data.planKey, "active");
+  return { ok: true, entitlements: await getOrgEntitlements(dbSession.orgId) };
 });
 
 async function recordPlanAssignmentAudit(orgId: string, actor: string, planKey: string, status: string) {

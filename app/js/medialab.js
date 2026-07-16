@@ -6,14 +6,14 @@
  * instead of sending people out to another product.
  */
 
-import { currentTenantId, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260712-217";
+import { currentTenantId, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260712-233";
 import {
   PLATFORMS, registerContentAsset, loadSocialAccounts, saveSocialAccounts, socialStatus,
-} from "./contenthub.js?v=phantom-live-20260712-217";
-import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260712-217";
-import { cloneImageEditState, pushEditorSnapshot } from "./content-editor.js?v=phantom-live-20260712-217";
-import { loadImageForEditing, exportCanvas, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260712-217";
-import { assetsAvailable, saveToAssetCloud } from "./orgs.js?v=phantom-live-20260712-217";
+} from "./contenthub.js?v=phantom-live-20260712-233";
+import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260712-233";
+import { cloneImageEditState, pushEditorSnapshot } from "./content-editor.js?v=phantom-live-20260712-233";
+import { loadImageForEditing, exportCanvas, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260712-233";
+import { assetsAvailable, saveToAssetCloud } from "./orgs.js?v=phantom-live-20260712-233";
 
 const CFG_KEY = "pf.medialab.v1";
 const EDIT_INTENT_KEY = "pf.medialab.editIntent.v1";
@@ -1029,6 +1029,7 @@ function previewAsset(req, i, context = {}) {
    STUDIO
    ========================================================================= */
 let session = { assets: [], tab: "generate", edit: null };
+let pendingJobs = [];
 
 function consumeEditIntent(opts = {}) {
   let intent = null;
@@ -1063,8 +1064,8 @@ function consumePromptIntent(opts = {}) {
 
 const NAV_TABS = [
   ["generate", "Create"],
-  ["library", "Media Pool"],
   ["pending", "Pending"],
+  ["library", "Media Pool"],
   ["edit", "Edit"],
   ["content", "Content Hub"],
 ];
@@ -1089,7 +1090,7 @@ export function renderMediaStudio(el, opts = {}) {
     <div class="ml">
       <div class="ml-topbar">
         <nav class="ml-tabs" role="tablist" aria-label="Media Lab views">
-          ${NAV_TABS.map(([id, label]) => `<button class="ml-tab ${session.tab === id && !activeDrawer ? "is-active" : ""}" role="tab" aria-selected="${session.tab === id && !activeDrawer}" data-ml-tab="${id}">${label}${id === "library" && session.assets.length ? ` · ${session.assets.length}` : ""}</button>`).join("")}
+          ${NAV_TABS.map(([id, label]) => `<button class="ml-tab ${session.tab === id && !activeDrawer ? "is-active" : ""}" role="tab" aria-selected="${session.tab === id && !activeDrawer}" data-ml-tab="${id}">${label}${id === "pending" && pendingJobs.length ? ` · ${pendingJobs.length}` : id === "library" && session.assets.length ? ` · ${session.assets.length}` : ""}</button>`).join("")}
         </nav>
         <button class="ml-settings-gear ${activeDrawer === "settings" ? "is-active" : ""}" data-ml-open-local-settings type="button" title="Media Lab settings" aria-label="Media Lab settings">${svgIc("gear")}</button>
       </div>
@@ -1250,11 +1251,27 @@ function wireDrawer(el, kind, cfg, opts, esc) {
 }
 
 function renderPending(body) {
-  body.innerHTML = `
+  const esc = (s) => String(s ?? "").replace(/[&<>'"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[c]);
+  if (!pendingJobs.length) {
+    body.innerHTML = `
     <div class="ml-idle">
       <b>No pending media.</b>
-      <i>Generate an image or video when you are ready. Outputs land under Generated.</i>
+      <i>Generate an image or video when you are ready. Work in progress appears here, then finished media moves to Media Pool.</i>
     </div>`;
+    return;
+  }
+  body.innerHTML = `<div class="ml-pending-list">
+    ${pendingJobs.map((job) => `
+      <article class="ml-pending-card is-${esc(job.status)}">
+        <div class="ml-pending-phantom"><img src="/app/assets/poses/conjure.webp?v=phantom-live-20260712-233" alt="" /></div>
+        <div class="ml-pending-copy">
+          <span>${job.modality === "video" ? "Video" : "Image"} generation</span>
+          <b>${job.status === "failed" ? "Needs another try" : "Generating now"}</b>
+          <p>${esc(job.prompt)}</p>
+          <i>${job.status === "failed" ? esc(job.error || "Render did not finish.") : `Started ${elapsedLabel(job.startedAt)} ago · ${esc(job.style)} · ${esc(job.aspect)}`}</i>
+        </div>
+      </article>`).join("")}
+  </div>`;
 }
 
 /* ---- Generate ---- */
@@ -1345,17 +1362,17 @@ function renderGenerate(body, cfg, opts, root) {
 
         ${!genState.provider ? `<button class="ml-settings-needed" data-ml-open-settings type="button">${svgIc("gear")} Connect Media Lab</button>` : ""}
 
-        <button class="ml-generate ml-hero" data-ml-generate ${genState.busy || !genState.provider ? "disabled" : ""}>
+        <button class="ml-generate ml-hero" data-ml-generate ${!genState.provider ? "disabled" : ""}>
           <span class="ml-generate-glow" aria-hidden="true"></span>
-          <span class="ml-generate-main">${genState.busy ? `${svgIc("spark")} <span data-ml-busy-label>Working…</span>` : `${svgIc("bolt")} Generate ${genState.modality === "video" ? "cut" : "image"}`}</span>
-          <i class="ml-generate-hint">${genState.busy ? "Phantom is handling the rest" : "Phantom handles the rest"}</i>
+          <span class="ml-generate-main">${svgIc("bolt")} Generate ${genState.modality === "video" ? "cut" : "image"}</span>
+          <i class="ml-generate-hint">Phantom handles the rest</i>
         </button>
       </section>
 
       <section class="ml-stage" data-ml-results aria-label="Preview Stage">
         <div class="ml-stage-frame ${genState.busy ? "is-busy" : ""} ${genState.stageFull ? "is-full" : ""}">
           <header class="ml-stage-top">
-            <span class="ml-rec ${genState.busy ? "is-live" : ""}"><i aria-hidden="true"></i><span data-ml-busy-stage>${genState.busy ? "Rendering" : "Stage ready"}</span></span>
+            <span class="ml-rec ${pendingJobs.length ? "is-live" : ""}"><i aria-hidden="true"></i><span data-ml-busy-stage>${pendingJobs.length ? "Generating" : "Stage ready"}</span></span>
             <b>Preview Stage</b>
             <span class="ml-stage-tools">
               <span class="ml-stage-chip">${genState.aspect}${genState.modality === "video" ? ` · ${genState.duration}s` : ""}</span>
@@ -1363,7 +1380,7 @@ function renderGenerate(body, cfg, opts, root) {
             </span>
           </header>
           <div class="ml-stage-view">
-            ${genState.busy ? skeletons(genState.modality === "video" ? 1 : genState.count) : resultsHtml(esc)}
+            ${resultsHtml(esc)}
           </div>
           <footer class="ml-stage-meta">${settingsChips(esc)}</footer>
         </div>
@@ -1508,6 +1525,11 @@ function refreshGeneratePanel(body, cfg, opts, root) {
   }, 0);
 }
 function skeletons(n) { return `<div class="ml-grid ml-stage-grid">${Array.from({ length: n }, () => `<div class="ml-skel"><div class="ml-skel-shim"></div></div>`).join("")}</div>`; }
+function elapsedLabel(startedAt = Date.now()) {
+  const seconds = Math.max(1, Math.round((Date.now() - startedAt) / 1000));
+  if (seconds < 60) return `${seconds}s`;
+  return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+}
 const IDLE_HINTS = [
   "Game trailer teaser: neon dusk city",
   "Landing page hero for an indie game launch",
@@ -1515,8 +1537,32 @@ const IDLE_HINTS = [
   "Emerald smoke logo reveal",
 ];
 function resultsHtml(esc) {
+  if (pendingJobs.length) return `
+    <div class="ml-wait-card">
+      <div class="ml-wait-phantom">
+        <img src="/app/assets/poses/conjure.webp?v=phantom-live-20260712-233" alt="" />
+      </div>
+      <div class="ml-wait-copy">
+        <span>${pendingJobs.length} generating</span>
+        <b>Your media is being generated.</b>
+        <p>Create more now while you wait. New jobs show up in Pending, and finished media moves into Media Pool automatically.</p>
+        <i>Happy creating.</i>
+      </div>
+    </div>`;
   const recent = session.assets.filter((a) => a.fromGen);
-  if (!recent.length) return `
+  if (recent.length) return `
+    <div class="ml-wait-card">
+      <div class="ml-wait-phantom">
+        <img src="/app/assets/poses/present.webp?v=phantom-live-20260712-233" alt="" />
+      </div>
+      <div class="ml-wait-copy">
+        <span>${recent.length} ready</span>
+        <b>Your finished media is in Media Pool.</b>
+        <p>Keep creating from here, or jump into Media Pool when you are ready to pick, edit, save, or use the output.</p>
+        <button type="button" class="ml-wait-action" data-ml-open-pool>Open Media Pool</button>
+      </div>
+    </div>`;
+  return `
     <div class="ml-idle">
       <div class="ml-idle-orb" aria-hidden="true"><span></span><span></span><span></span></div>
       <b>Create with context</b>
@@ -1528,7 +1574,6 @@ function resultsHtml(esc) {
         ${IDLE_HINTS.map((h) => `<button data-ml-hint="${esc(h)}">${esc(h)}</button>`).join("")}
       </div>
     </div>`;
-  return `<div class="ml-grid ml-stage-grid">${recent.slice(0, 8).map((a) => tileHtml(a, esc)).join("")}</div>`;
 }
 function tileHtml(a, esc) {
   return `<figure class="ml-tile ${a.meta && a.meta.preview ? "is-preview" : ""}" data-asset="${a.id}">
@@ -1587,6 +1632,10 @@ function wireGenerate(body, cfg, opts, root, esc) {
 
   const genBtn = body.querySelector("[data-ml-generate]");
   if (genBtn) genBtn.onclick = () => runGenerate(body, cfg, opts, root, esc);
+  body.querySelector("[data-ml-open-pool]")?.addEventListener("click", () => {
+    session.tab = "library";
+    renderMediaStudio(root, opts);
+  });
 
   /* Engine Doctor: silent fallbacks looked like a dumb brain. Say EXACTLY
      what state the pipeline is in and what fixes it. */
@@ -1722,38 +1771,38 @@ async function runGenerate(body, cfg, opts, root, esc) {
       return;
     }
   }
-  genState.busy = true;
-  renderGenerate(body, cfg, opts, root);
-  /* A draft/render can legitimately take a while — a frozen "Rendering…"
-     button with no feedback reads as broken. Tick a live elapsed readout and
-     step through reassuring copy the longer it runs, updated in place so we
-     never disturb the mounted busy view with a full re-render. */
-  const busyStartedAt = Date.now();
-  const busyTick = () => {
-    const s = Math.round((Date.now() - busyStartedAt) / 1000);
-      const stageText = s < 15 ? "Rendering" : s < 45 ? "Still working" : s < 120 ? "Taking longer than usual — hang tight" : "Well past normal — checking Media Lab";
-    const label = s < 60 ? `Working… ${s}s` : `Working… ${Math.floor(s / 60)}m ${s % 60}s`;
-    const stageEl = body.querySelector("[data-ml-busy-stage]");
-    const labelEl = body.querySelector("[data-ml-busy-label]");
-    if (stageEl) stageEl.textContent = stageText;
-    if (labelEl) labelEl.textContent = label;
+  const req = {
+    modality: genState.modality, provider: genState.provider, model: genState.model,
+    prompt: genState.prompt, negative: genState.negative, style: genState.style,
+    preset: activePreset()?.label || "Custom",
+    approved, creditWarningShown: spendLane,
+    ref: genState.ref, params: { aspect: genState.aspect, count: genState.modality === "video" ? 1 : genState.count, quality: genState.quality, duration: genState.duration },
   };
-  const busyTimer = setInterval(busyTick, 1000);
+  const job = {
+    id: `pending-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    status: "running",
+    startedAt: Date.now(),
+    prompt: req.prompt,
+    modality: req.modality,
+    style: req.style,
+    aspect: req.params.aspect,
+  };
+  pendingJobs.unshift(job);
+  logJob("ok", `${req.modality === "video" ? "Video" : "Image"} started — keep creating while it cooks`);
+  opts.notify?.("Media Factory", "Media is generating. It is in Pending now, and will move to Media Pool when finished.");
+  renderGenerate(body, cfg, opts, root);
+  processGenerateJob(job, req, cfg, opts, root, esc);
+}
+
+async function processGenerateJob(job, req, cfg, opts, root, esc) {
   try {
-    const req = {
-      modality: genState.modality, provider: genState.provider, model: genState.model,
-      prompt: genState.prompt, negative: genState.negative, style: genState.style,
-      preset: activePreset()?.label || "Custom",
-      approved, creditWarningShown: spendLane,
-      ref: genState.ref, params: { aspect: genState.aspect, count: genState.modality === "video" ? 1 : genState.count, quality: genState.quality, duration: genState.duration },
-    };
     const out = await generate(cfg, req);
     if (out.approvalRequired) {
       // the backend refused to render without an explicit approval — honor it
       logJob("warn", "Awaiting your approval before this render can use credits");
       if (opts.notify) opts.notify("Media Factory", out.message || "This render needs your approval before it can use credits.");
-      genState.busy = false;
-      renderGenerate(body, cfg, opts, root);
+      pendingJobs = pendingJobs.filter((item) => item.id !== job.id);
+      rerenderMediaIfMounted(root, opts);
       return;
     }
     const stamp = Date.now();
@@ -1761,14 +1810,14 @@ async function runGenerate(body, cfg, opts, root, esc) {
     created.forEach((asset) => {
       session.assets.unshift(asset);
       captureForContentHub(asset, {
-        title: `${genState.modality === "video" ? "Generated video" : "Generated image"} · ${genState.style}`,
-        prompt: out.spec?.original_prompt || genState.prompt,
-        provider: genState.provider,
-        model: out.spec?.model || genState.model,
-        style: genState.style,
-        aspect: genState.aspect,
-        duration: genState.duration,
-        preset: activePreset()?.label || "Custom",
+        title: `${req.modality === "video" ? "Generated video" : "Generated image"} · ${req.style}`,
+        prompt: out.spec?.original_prompt || req.prompt,
+        provider: req.provider,
+        model: out.spec?.model || req.model,
+        style: req.style,
+        aspect: req.params?.aspect,
+        duration: req.params?.duration,
+        preset: req.preset,
         live: out.live,
       });
     });
@@ -1777,10 +1826,11 @@ async function runGenerate(body, cfg, opts, root, esc) {
       ? null
       : { reason: out.fallbackReason || "unreachable", detail: out.fallbackDetail || "", lane: out.fallbackLane || "", at: Date.now() };
     logJob(out.live ? "ok" : out.queued ? "ok" : "warn",
-      out.live ? `Generated ${out.assets.length} ${genState.modality}${out.assets.length > 1 ? "s" : ""}`
+      out.live ? `Generated ${out.assets.length} ${req.modality}${out.assets.length > 1 ? "s" : ""}`
         : out.queued ? "Queued — waiting for final review in Media Lab"
         : `Render didn't complete — sketched locally (${out.fallbackReason || "unreachable"})`);
-    refreshGeneratePanel(body, cfg, opts, root);
+    pendingJobs = pendingJobs.filter((item) => item.id !== job.id);
+    rerenderMediaIfMounted(root, opts);
     if (opts.notify) {
       const why = out.live || out.queued ? "" : explainMediaFailure(out.fallbackReason, out.fallbackDetail, out.fallbackLane);
       const status = out.live
@@ -1788,17 +1838,27 @@ async function runGenerate(body, cfg, opts, root, esc) {
         : out.queued
           ? "queued in Media Lab — final review is waiting for"
           : `render failed (${out.fallbackReason || "unreachable"})${why ? ` — ${why};` : " —"} sketched the request locally for`;
-      opts.notify("Media Factory", `${status} ${out.assets.length} ${genState.modality}${out.assets.length > 1 ? "s" : ""} - "${genState.prompt.slice(0, 40)}".`);
+      opts.notify("Media Factory", `${status} ${out.assets.length} ${req.modality}${out.assets.length > 1 ? "s" : ""} - "${req.prompt.slice(0, 40)}".`);
     }
     // spend credits only after a live provider asset returns; previews are free.
     if (out.live) {
       cfg.credits = Math.max(0, cfg.credits - estCredits());
       saveCfg(cfg);
     }
+  } catch (error) {
+    job.status = "failed";
+    job.error = error?.message || "Media Lab did not finish this job.";
+    logJob("warn", "Media generation needs another try");
+    opts.notify?.("Media Factory", job.error);
+    rerenderMediaIfMounted(root, opts);
   } finally {
-    clearInterval(busyTimer);
-    if (genState.busy) refreshGeneratePanel(body, cfg, opts, root);
+    if (job.status !== "failed") pendingJobs = pendingJobs.filter((item) => item.id !== job.id);
+    rerenderMediaIfMounted(root, opts);
   }
+}
+
+function rerenderMediaIfMounted(root, opts) {
+  if (root?.isConnected) renderMediaStudio(root, opts);
 }
 
 function tileAction(act, id, cfg, opts, root, esc, body) {

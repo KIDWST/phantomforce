@@ -6,37 +6,37 @@ import {
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260712-220";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260712-220";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260712-220";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260712-220";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260712-220";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260712-220";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260712-220";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260712-220";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260712-220";
-import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260712-220";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260712-220";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260712-220";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260712-220";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260712-220";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260712-220";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260712-220";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260712-220";
-import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260712-220";
-import { mountAmbient } from "./ambient.js?v=phantom-live-20260712-220";
-import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260712-220";
+} from "./store.js?v=phantom-live-20260712-233";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260712-233";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260712-233";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260712-233";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260712-233";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260712-233";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260712-233";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260712-233";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260712-233";
+import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260712-233";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260712-233";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260712-233";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260712-233";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260712-233";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260712-233";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260712-233";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260712-233";
+import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260712-233";
+import { mountAmbient } from "./ambient.js?v=phantom-live-20260712-233";
+import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260712-233";
 import {
-  fetchAuthConfig, databaseLogin, databaseLogout, switchOrg, fetchAuthMe, fetchEntitlementsSummary,
-} from "./orgs.js?v=phantom-live-20260712-220";
-import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260712-220";
-import { assetsAvailable } from "./orgs.js?v=phantom-live-20260712-220";
-import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260712-220";
+  fetchAuthConfig, databaseLogin, databaseLogout, switchOrg, fetchAuthMe, fetchEntitlementsSummary, selectTestPlan,
+} from "./orgs.js?v=phantom-live-20260712-233";
+import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260712-233";
+import { assetsAvailable } from "./orgs.js?v=phantom-live-20260712-233";
+import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260712-233";
 import {
   customizeNavigation,
   loadOrganizationCustomization,
-} from "./customization.js?v=phantom-live-20260712-220";
-import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260712-220";
+} from "./customization.js?v=phantom-live-20260712-233";
+import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260712-233";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -51,6 +51,35 @@ const consoleRoot = $("[data-console]");
 const dashboardShellHtml = consoleRoot ? consoleRoot.innerHTML : "";
 let commandTouchScroll = { x: 0, y: 0 };
 let keyboardViewportBound = false;
+
+const isLocalDevHost = () => location.hostname === "127.0.0.1" || location.hostname === "localhost";
+
+async function refreshLocalDemoToken(saved) {
+  if (!saved || session.token() || !isLocalDevHost()) return saved;
+  const sessionId = saved.role === "admin" ? "admin-jordan" : "client-sports-demo";
+  try {
+    const response = await fetch("/auth/demo-login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionId }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload?.token || !payload?.session) return saved;
+    const repaired = {
+      ...saved,
+      role: saved.role === "admin" ? "admin" : "employee",
+      name: saved.role === "admin" ? (payload.session.name || "Jordan") : (payload.session.name || "Team Member"),
+      label: payload.session.label || saved.label || "",
+      sessionId: payload.session.id || saved.sessionId,
+      canManageAccess: !!payload.session.canManageAccess,
+      token: payload.token,
+    };
+    session.set(repaired);
+    return repaired;
+  } catch {
+    return saved;
+  }
+}
 
 function updateKeyboardOffset() {
   const vv = window.visualViewport;
@@ -231,8 +260,12 @@ function maybeUpgradeGateToDatabaseLogin(card) {
   fetchAuthConfig().then((auth) => {
     if (!auth?.databaseAuthEnabled || gate.hidden) return;
     card.innerHTML = `
-      <p class="gate-kicker">PHANTOMFORCE · SIGN IN</p>
-      <h1>Sign in to your business.</h1>
+      <p class="gate-kicker">PHANTOMFORCE · SECURE ACCESS</p>
+      <h1>Sign in to PhantomForce.</h1>
+      <div class="gate-auth-tabs" role="tablist" aria-label="Authentication options">
+        <button class="is-active" type="button" data-gate-auth-tab="login">Log in</button>
+        <button type="button" data-gate-auth-tab="signup">Sign up</button>
+      </div>
       <form class="owner-login" data-db-login>
         <label>
           <span>Email</span>
@@ -242,16 +275,57 @@ function maybeUpgradeGateToDatabaseLogin(card) {
           <span>Password</span>
           <input type="password" data-db-password autocomplete="current-password" placeholder="Password" required />
         </label>
+        <label data-db-totp-wrap hidden>
+          <span>Authenticator code</span>
+          <input type="text" data-db-totp autocomplete="one-time-code" inputmode="numeric" pattern="\\d{6}" placeholder="123456" />
+        </label>
         <button class="gate-opt gate-submit" type="submit">
           <span class="gate-opt-icon">⌘</span>
           <b>Open Business Manager</b>
           <i>Your account, businesses, and roles are managed on the PhantomForce server.</i>
         </button>
+        <button class="btn btn-quiet gate-dev-login" type="button" data-customer1-login>Use Customer 1 test account</button>
         <p class="gate-error" data-db-error hidden></p>
       </form>
-      <p class="gate-note">Invited to a business? Accept your invitation first, then sign in here.</p>`;
+      <div class="gate-signup" data-gate-signup hidden>
+        <h3>New business account</h3>
+        <p>Production signups are invite/checkout controlled. For local testing, use Customer 1, then switch tiers from Account.</p>
+        <button class="btn btn-primary" type="button" data-signup-focus>Back to login</button>
+      </div>
+      <div class="gate-tier-grid" aria-label="Subscription tiers">
+        ${[
+          ["starter", "Free View", "$0", "Browse the product. No operating access."],
+          ["professional", "Basic", "$29/mo", "Leads, clients, dashboard, and basic business ops."],
+          ["elite", "Pro", "$79/mo", "Media Lab, websites, Vacation Mode, and PhantomPlay."],
+          ["enterprise", "Operator", "$199/mo", "Top tier with operator tokens and advanced workflows."],
+        ].map(([key, name, price, copy]) => `
+          <article class="gate-tier" data-plan-key="${key}">
+            <b>${name}</b><strong>${price}</strong><span>${copy}</span>
+          </article>`).join("")}
+      </div>
+      <p class="gate-note">2FA supports Google Authenticator/iOS TOTP when enabled. Ganon admin is seeded from private env credentials; plaintext admin passwords are not stored in source.</p>`;
     const form = card.querySelector("[data-db-login]");
     const error = card.querySelector("[data-db-error]");
+    const totpWrap = card.querySelector("[data-db-totp-wrap]");
+    const totpInput = card.querySelector("[data-db-totp]");
+    const loginTab = card.querySelector('[data-gate-auth-tab="login"]');
+    const signupTab = card.querySelector('[data-gate-auth-tab="signup"]');
+    const signup = card.querySelector("[data-gate-signup]");
+    const setMode = (mode) => {
+      const showSignup = mode === "signup";
+      form.hidden = showSignup;
+      signup.hidden = !showSignup;
+      loginTab.classList.toggle("is-active", !showSignup);
+      signupTab.classList.toggle("is-active", showSignup);
+    };
+    loginTab.onclick = () => setMode("login");
+    signupTab.onclick = () => setMode("signup");
+    card.querySelector("[data-signup-focus]").onclick = () => setMode("login");
+    card.querySelector("[data-customer1-login]").onclick = () => {
+      card.querySelector("[data-db-email]").value = "customer1@phantomforce.test";
+      card.querySelector("[data-db-password]").value = "Customer1!TestPass";
+      form.requestSubmit();
+    };
     form.onsubmit = async (event) => {
       event.preventDefault();
       error.hidden = true;
@@ -260,10 +334,16 @@ function maybeUpgradeGateToDatabaseLogin(card) {
         ctx.session = await databaseLogin(
           card.querySelector("[data-db-email]").value.trim(),
           card.querySelector("[data-db-password]").value,
+          totpInput.value.trim(),
         );
         enterPhantom();
       } catch (err) {
         session.clear();
+        if (err?.mfaRequired) {
+          totpWrap.hidden = false;
+          totpInput.required = true;
+          totpInput.focus();
+        }
         error.textContent = err?.message || "Sign-in failed.";
         error.hidden = false;
       } finally {
@@ -277,22 +357,42 @@ function maybeUpgradeGateToDatabaseLogin(card) {
 const BASE_NAV = [
   { id: "dashboard",  label: "Dashboard",    icon: "grid",  view: "main" },
   { id: "crm",        label: "Clients",      icon: "users", ws: "leads" },
+  { id: "intelligence", label: "Competitor Intel", icon: "chart", ws: "intelligence" },
+  { id: "analytics",  label: "Analytics",    icon: "chart", ws: "analytics" },
   { id: "media",      label: "Media Lab",    icon: "media", ws: "media" },
   { id: "assets",     label: "Asset Cloud",  icon: "media", ws: "assets", dbOnly: true },
   { id: "sites",      label: "Websites",     icon: "site",  ws: "sites" },
   { id: "money",      label: "Accounting",   icon: "dollar", ws: "money" },
-  { id: "memory",     label: "Memory",       icon: "brain", ws: "memory" },
   { id: "automation", label: "Automations",  icon: "auto",  ws: "automation" },
   { id: "approvals",  label: "Approvals",    icon: "check", ws: "approvals", badge: true },
   { id: "workers",    label: "Workforce",    icon: "users", ws: "workforce" },
-  { id: "intelligence", label: "Competitor Intel", icon: "chart", ws: "intelligence" },
-  { id: "analytics",  label: "Analytics",    icon: "chart", ws: "analytics" },
   { id: "settings",   label: "Settings",     icon: "cog",   ws: "settings", navZone: "bottom" },
   { id: "developer",  label: "Developer",    icon: "dev",   ws: "developer", ownerOnly: true, navZone: "bottom" },
   { id: "vacation",   label: "Away Mode",    icon: "auto",  ws: "vacation", statusPill: true, navZone: "bottom" },
   { id: "phantomplay", label: "PhantomPlay", icon: "film",  ws: "phantomplay", navZone: "bottom", quiet: true },
 ];
-let NAV = customizeNavigation(BASE_NAV, isAdmin() ? "owner" : "client");
+const CORE_NAV_PRIORITY = new Map([
+  ["dashboard", 0],
+  ["crm", 10],
+  ["intelligence", 20],
+  ["analytics", 30],
+  ["media", 40],
+  ["assets", 45],
+  ["sites", 50],
+  ["money", 60],
+  ["automation", 70],
+  ["approvals", 80],
+  ["workers", 90],
+  ["settings", 900],
+  ["developer", 910],
+  ["vacation", 920],
+  ["phantomplay", 930],
+]);
+function buildNavigation() {
+  return customizeNavigation(BASE_NAV, isAdmin() ? "owner" : "client")
+    .sort((left, right) => (CORE_NAV_PRIORITY.get(left.id) ?? 500) - (CORE_NAV_PRIORITY.get(right.id) ?? 500));
+}
+let NAV = buildNavigation();
 /* Mirrors NAV (desktop sidebar) 1:1 so mobile never falls behind desktop —
    same items, same ownerOnly/adminOnly gates, just a compact label and a
    horizontally scrollable strip instead of a vertical list. */
@@ -324,7 +424,7 @@ let MOBILE_NAV = NAV.map((n) => ({
 }));
 
 function refreshCustomizedNavigation() {
-  NAV = customizeNavigation(BASE_NAV, isAdmin() ? "owner" : "client");
+  NAV = buildNavigation();
   MOBILE_NAV = NAV.map((n) => ({
     id: n.id,
     label: MOBILE_LABEL_OVERRIDES[n.id] || n.label,
@@ -365,6 +465,7 @@ const NAV_PARENT_BY_WORKSPACE = {
   protect: "settings",
   adminos: "developer",
   account: "settings",
+  memory: "settings",
   content: "media",
   promptlibrary: "media",
   activity: "workers",
@@ -640,8 +741,8 @@ function signOut() {
 
 /* ============================ account + plan ============================ */
 const ACCOUNT_PLAN = {
-  name: "Elite Plan",
-  price: "Best plan",
+  name: "Operator",
+  price: "Top tier",
   renewalOffsetDays: 30,
   paymentState: "Owner billing ready",
   workspaceLimit: "Owner workspace",
@@ -649,28 +750,35 @@ const ACCOUNT_PLAN = {
 const ACCOUNT_TIERS = [
   {
     id: "starter",
-    name: "Starter",
-    price: "$750/mo",
-    badge: "Launch",
-    copy: "Business Manager foundation: command surface, approvals, and one focused workspace.",
-    features: ["Business command center", "Client pipeline", "Manual offer workflow"],
+    name: "Free View",
+    price: "$0",
+    badge: "Preview",
+    copy: "See the product shell before paid access is enabled.",
+    features: ["Read-only preview", "No operator tokens", "No PhantomPlay"],
   },
   {
-    id: "pro",
-    name: "Pro Plan",
-    price: "$2,500/mo",
-    badge: "Growth",
-    copy: "Operator-grade system for growth: creator workflow, Media Lab, accounting visibility, and owner controls.",
-    features: ["Phantom AI operator", "Creator Hub + Media Lab", "Accounting-aware ops"],
+    id: "professional",
+    name: "Basic",
+    price: "$29/mo",
+    badge: "Basic",
+    copy: "Leads, clients, dashboard, accounting visibility, and basic workspace access.",
+    features: ["Leads + clients", "Basic websites", "No PhantomPlay"],
   },
   {
     id: "elite",
-    name: "Elite Plan",
-    price: "Custom",
-    badge: "Current",
-    current: true,
-    copy: "The full business operating suite: deeper loop routing, multi-workspace control, automations, and launch support.",
-    features: ["Advanced loop routing", "Multi-workspace command", "Business automation planning", "Launch support"],
+    name: "Pro",
+    price: "$79/mo",
+    badge: "Play",
+    copy: "Media Lab, Content Hub, websites, Vacation Mode, and PhantomPlay.",
+    features: ["Media Lab", "PhantomPlay", "Creator workflow"],
+  },
+  {
+    id: "enterprise",
+    name: "Operator",
+    price: "$199/mo",
+    badge: "Tokens",
+    copy: "Full operating tier with operator tokens, advanced workflows, and highest limits.",
+    features: ["Operator tokens", "Advanced workflows", "Competitor intelligence"],
   },
 ];
 let accountNotice = "";
@@ -788,7 +896,7 @@ async function hydrateLivePlan(body) {
         ${summary.metrics.map((m) => `<span><b>${esc(m.metric.replace(/_/g, " "))}</b>${m.used}/${m.limit}${m.resetAt ? ` · resets ${new Date(m.resetAt).toLocaleDateString()}` : ""}</span>`).join("")}
         <span><b>seats</b>${summary.seats.used}/${summary.seats.limit}</span>
       </div>
-      <p class="set-note">Plans are assigned manually by the PhantomForce operator until billing is connected — no self-serve checkout exists yet.</p>
+      <p class="set-note">Customer 1 and Ganon can use the test tier buttons below in local/dev mode. Production checkout still requires a real billing provider.</p>
     </article>`;
 }
 
@@ -863,7 +971,7 @@ function renderAccountPlan(body) {
               <p>${esc(tier.copy)}</p>
               <ul>${tier.features.map((feature) => `<li>${esc(feature)}</li>`).join("")}</ul>
               <button class="btn ${tier.current ? "btn-good" : "btn-primary"}" data-account-action="${tier.current ? "current" : `plan-${tier.id}`}">
-                ${tier.current ? "Current plan" : `Request ${esc(tier.name)}`}
+                ${ctx.session?.database ? `Test ${esc(tier.name)}` : tier.current ? "Current plan" : `Request ${esc(tier.name)}`}
               </button>
             </article>`).join("")}
         </div>
@@ -878,8 +986,21 @@ function renderAccountPlan(body) {
       </section>
     </div>`;
   body.querySelectorAll("[data-account-action]").forEach((btn) => {
-    btn.addEventListener("click", () => {
+    btn.addEventListener("click", async () => {
       const action = btn.dataset.accountAction || "plan";
+      if (ctx.session?.database && action.startsWith("plan-")) {
+        const planKey = action.replace("plan-", "");
+        btn.disabled = true;
+        const result = await selectTestPlan(planKey);
+        btn.disabled = false;
+        accountNotice = result.ok
+          ? `${result.entitlements?.planName || "Plan"} unlocked for this test account. Fake checkout only; no payment was charged.`
+          : `Plan switch failed: ${result.error || "server refused the test checkout"}.`;
+        pushActivity("Account", accountNotice);
+        store.save();
+        renderAccountPlan(body);
+        return;
+      }
       const label = {
         payment: "Payment-method update",
         invoice: "Manual invoice request",
@@ -905,7 +1026,7 @@ const MODES = {
   admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260712-220";
+const POSE_VERSION = "phantom-live-20260712-233";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -914,87 +1035,87 @@ let emotePoseTimer = 0;
 let transientPoseKey = "";
 const MODE_POSES = {
   ask: {
-    src: "/app/assets/poses/chin.webp",
-    caption: "Listening",
-    alt: "Phantom listening",
+    src: "/app/assets/poses/welcome.webp",
+    caption: "Plotting politely",
+    alt: "Phantom ready with a grin",
   },
   write: {
     src: "/app/assets/poses/point.webp",
-    caption: "Drafting",
+    caption: "Weaponizing commas",
     alt: "Phantom writing",
   },
   image: {
     src: "/app/assets/poses/conjure.webp",
-    caption: "Conjuring",
+    caption: "Conjuring pixels",
     alt: "Phantom creating an image",
   },
   video: {
     src: "/app/assets/poses/present.webp",
-    caption: "Directing video",
+    caption: "Directing chaos",
     alt: "Phantom directing a video",
   },
   website: {
     src: "/app/assets/poses/scheme.webp",
-    caption: "Building pages",
+    caption: "Building the trapdoor",
     alt: "Phantom building a website",
   },
   admin: {
     src: "/app/assets/poses/assert.webp",
-    caption: "Control",
+    caption: "Boss mode",
     alt: "Phantom in admin control mode",
   },
 };
 const EMOTE_POSES = {
   listen: {
     src: "/app/assets/poses/chin.webp",
-    caption: "Listening",
+    caption: "Eavesdropping legally",
     alt: "Phantom leaning in to listen",
     pose: "listen",
   },
   think: {
     src: "/app/assets/poses/scheme.webp",
-    caption: "Thinking",
+    caption: "Cooking",
     alt: "Phantom thinking through the request",
     pose: "think",
   },
   typing: {
     src: "/app/assets/poses/point.webp",
-    caption: "Reading",
+    caption: "Reading your mind badly",
     alt: "Phantom tracking your typed request",
     pose: "typing",
   },
   talk: {
-    src: "/app/assets/poses/coy.webp",
-    caption: "Answering",
+    src: "/app/assets/poses/laugh.webp",
+    caption: "Mouth online",
     alt: "Phantom answering",
     pose: "talk",
   },
   answer: {
     src: "/app/assets/poses/assert.webp",
-    caption: "Got it",
+    caption: "Nailed-ish",
     alt: "Phantom found the answer",
     pose: "answer",
   },
   alert: {
     src: "/app/assets/poses/cross.webp",
-    caption: "Heads up",
+    caption: "Tiny red flag",
     alt: "Phantom warning about something important",
     pose: "alert",
   },
   happy: {
     src: "/app/assets/poses/welcome.webp",
-    caption: "Ready",
+    caption: "Unfortunately ready",
     alt: "Phantom ready to help",
     pose: "happy",
   },
 };
 const MODE_REACTIONS = {
-  ask:     { mood: "listening", emotion: "calm", caption: "Listening" },
-  write:   { mood: "thinking",  emotion: "bright", caption: "Writing" },
-  image:   { mood: "thinking",  emotion: "excited", caption: "Conjuring" },
-  video:   { mood: "thinking",  emotion: "bright", caption: "Directing" },
-  website: { mood: "thinking",  emotion: "calm", caption: "Building" },
-  admin:   { mood: "talking",   emotion: "alert", caption: "Operator mode" },
+  ask:     { mood: "listening", emotion: "calm", caption: "Plotting politely" },
+  write:   { mood: "thinking",  emotion: "bright", caption: "Weaponizing commas" },
+  image:   { mood: "thinking",  emotion: "excited", caption: "Conjuring pixels" },
+  video:   { mood: "thinking",  emotion: "bright", caption: "Directing chaos" },
+  website: { mood: "thinking",  emotion: "calm", caption: "Building the trapdoor" },
+  admin:   { mood: "talking",   emotion: "alert", caption: "Boss mode" },
 };
 
 function poseUrl(src) {
@@ -1521,7 +1642,7 @@ const CHAT_STARTERS = [
   { label: "Create a proposal", run: "Draft a proposal for a new client" },
   { label: "Plan a campaign", run: "Create campaign media for a new campaign" },
   { label: "Make an intake form", run: "Build a client intake form page" },
-  { label: "Review my business", run: "Review my business health" },
+  { label: "Review my business", run: "Give me a plain-English review of my business" },
 ];
 
 function starterHtml() {
@@ -1544,16 +1665,25 @@ function bindStarters(log) {
 
 function progressStepsForCommand(text = "") {
   const value = String(text).toLowerCase();
+  const base = [
+    "eating chips",
+    "oiling components",
+    "sharpening the idea",
+    "checking the wires",
+    "warming up the tiny engines",
+    "sorting the useful bits",
+  ];
   if (/\b(image|video|media|photo|content|asset|thumbnail|reel)\b/.test(value)) {
-    return ["Understanding the creative brief...", "Checking your workspace...", "Preparing the result..."];
+    return ["eating chips", "oiling components", "rendering the chaos"];
   }
   if (/\b(build|create|draft|plan|proposal|campaign|site|page|workflow)\b/.test(value)) {
-    return ["Understanding the outcome...", "Checking related work...", "Building the response..."];
+    return ["eating chips", "oiling components", "assembling the thing"];
   }
   if (/\b(memory|remember|previous|history|client|lead|business)\b/.test(value)) {
-    return ["Checking your context...", "Connecting the relevant details...", "Preparing the answer..."];
+    return ["eating chips", "oiling components", "checking the business brain"];
   }
-  return ["Thinking it through...", "Checking the details...", "Preparing the answer..."];
+  const first = Math.floor(Math.random() * base.length);
+  return [base[first], base[(first + 1) % base.length], base[(first + 2) % base.length]];
 }
 
 function startChatProgress(text) {
@@ -1566,6 +1696,21 @@ function startChatProgress(text) {
     if (index === steps.length - 1) window.clearInterval(timer);
   }, reduceMotion ? 2200 : 4200);
   return () => window.clearInterval(timer);
+}
+
+function responseNeedsSpecifics(text = "") {
+  return /\?$|\b(which|what|who|where|when|how many|tell me|send me|choose|pick|confirm|need|please provide|can you share)\b/i.test(String(text).trim());
+}
+
+function commandLooksActionable(text = "") {
+  return /\b(build|create|draft|make|plan|generate|write|review|analyze|check|fix|setup|set up|run|update|summarize|find|open|show)\b/i.test(String(text));
+}
+
+function finalChatReply(raw, reply) {
+  const text = String(reply || "").trim();
+  if (!text || /^done\b/i.test(text) || responseNeedsSpecifics(text)) return text;
+  if (!commandLooksActionable(raw)) return text;
+  return `Done — ${text}`;
 }
 
 function chatTypingOn(label = "") {
@@ -1747,9 +1892,10 @@ function runCommand(raw) {
         speak("Finishing the response...", "thinking");
         await new Promise((resolve) => setTimeout(resolve, reduceMotion ? 0 : 420));
       }
-      speak(r.say);
+      const finalSay = finalChatReply(text, r.say);
+      speak(finalSay);
       if (r.cards?.length) chatAttachCards(r.cards);
-      rememberConversation({ prompt: raw, reply: r.say, mode: activeMode, route: r.open || "" });
+      rememberConversation({ prompt: raw, reply: finalSay, mode: activeMode, route: r.open || "" });
       renderConsole();
       stageReact("answer", 1100);
       if (r.open) setTimeout(() => routeWorkspace(r.open), reduceMotion ? 150 : 750);
@@ -1892,7 +2038,6 @@ const mediaOpts = () => ({
   openSettings: () => routeWorkspace("settings"),
   openWorkspace: (id) => routeWorkspace(id),
   focusCommand: () => { renderDashboardPage(true); focusCommandInput(80); },
-  renderPending: (bodyEl) => { const rr = () => WORKSPACE_DEFS.media.render(bodyEl, rr); rr(); },
 });
 
 /* Owner-only runtime lanes. Keep the product vocabulary clean here too:
@@ -2284,10 +2429,11 @@ function renderDeveloperContent(body, { workforce, workforceError, rembg, mediaH
       ];
   const shortcuts = [
     ["Workers", "workforce", "Worker map, helper lanes, routing, and activity signals."],
-    ["Memory", "memory", "Recall rules, preferences, and local context."],
+    ["Competitor Intel", "intelligence", "Market scout, competitors, public signals, and response planning."],
+    ["Analytics", "analytics", "Social and operating signals across connected channels."],
     ["PhantomOps", "adminos", "System status, tool lanes, and owner ops control."],
     ["Approvals", "approvals", "Human approval queue and blocked-action review."],
-    ["Settings", "settings", "Media and provider configuration guardrails."],
+    ["Settings", "settings", "AI routing, context learning, media, and provider guardrails."],
   ];
 
   body.innerHTML = `
@@ -2837,7 +2983,7 @@ function enterPhantom() {
 }
 
 async function boot() {
-  ctx.session = isLiveAdminHost() ? await verifyLiveSession() : resolveSession();
+  ctx.session = isLiveAdminHost() ? await verifyLiveSession() : await refreshLocalDemoToken(resolveSession());
   wireDeck();
   store.onChange(() => {
     if (!phantom.hidden) {

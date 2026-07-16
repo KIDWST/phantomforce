@@ -666,8 +666,25 @@ function handleRequest(req, res) {
   lastAsk.set(vKey, nowMs); lastAsk.set(ipKey, nowMs);
 
   let body = "";
-  req.on("data", (c) => { body += c; if (body.length > 4000) req.destroy(); });
+  let received = 0;
+  let rejected = false;
+  req.on("data", (c) => {
+    received += c.length;
+    if (!rejected) {
+      body += c;
+      if (body.length > 4000) {
+        // Answer over-long input with an honest, structured error instead of an
+        // abrupt socket reset (which the browser can't tell apart from an outage).
+        rejected = true;
+        send({ error: "too_long", message: "That message is a bit long — try a shorter question." }, 413);
+      }
+    }
+    // Hard flood ceiling: only drop the socket for genuinely abusive uploads,
+    // well past the point where the clean 413 has already been sent.
+    if (received > 262144) req.destroy();
+  });
   req.on("end", async () => {
+    if (rejected) return;
     let message;
     try { message = String((JSON.parse(body) || {}).message || "").trim().slice(0, 400); }
     catch { return send({ error: "bad_request" }, 400); }

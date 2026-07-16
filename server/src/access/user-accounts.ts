@@ -15,7 +15,7 @@
    Tenant isolation rides on AccessSession.clientId = the active org id, so
    every existing requireClientWorkspaceView call site stays enforced. */
 
-import { createHash, randomBytes, scrypt as scryptCb, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, randomBytes, scrypt as scryptCb, timingSafeEqual } from "node:crypto";
 
 import type { MembershipRole, PrismaClient } from "@prisma/client";
 
@@ -36,6 +36,9 @@ export const databaseAuthEnabled = (process.env.PHANTOMFORCE_AUTH_PROVIDER ?? "d
 const SESSION_TTL_MS = Number(process.env.PHANTOMFORCE_SESSION_TTL_MS ?? 8 * 60 * 60 * 1000);
 const INVITATION_TTL_MS = Number(process.env.PHANTOMFORCE_INVITATION_TTL_MS ?? 7 * 24 * 60 * 60 * 1000);
 const SESSION_CACHE_TTL_MS = 15_000;
+const TOTP_STEP_MS = 30_000;
+const TOTP_DIGITS = 6;
+const BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 
 export const DB_SESSION_PREFIX = "db:";
 
@@ -77,6 +80,51 @@ export async function verifyPassword(password: string, stored: string | null | u
   } catch {
     return false;
   }
+}
+
+function base32Encode(buffer: Buffer) {
+  let bits = "";
+  for (const byte of buffer) bits += byte.toString(2).padStart(8, "0");
+  let output = "";
+  for (let i = 0; i < bits.length; i += 5) output += BASE32_ALPHABET[parseInt(bits.slice(i, i + 5).padEnd(5, "0"), 2)];
+  return output;
+}
+
+function base32Decode(secret: string) {
+  const clean = secret.replace(/=+$/g, "").replace(/\s+/g, "").toUpperCase();
+  let bits = "";
+  for (const char of clean) {
+    const value = BASE32_ALPHABET.indexOf(char);
+    if (value < 0) throw new Error("invalid_totp_secret");
+    bits += value.toString(2).padStart(5, "0");
+  }
+  const bytes: number[] = [];
+  for (let i = 0; i + 8 <= bits.length; i += 8) bytes.push(parseInt(bits.slice(i, i + 8), 2));
+  return Buffer.from(bytes);
+}
+
+function totpCode(secret: string, now = Date.now(), offset = 0) {
+  const counter = Math.floor(now / TOTP_STEP_MS) + offset;
+  const msg = Buffer.alloc(8);
+  msg.writeBigUInt64BE(BigInt(counter));
+  const digest = createHmac("sha1", base32Decode(secret)).update(msg).digest();
+  const pos = digest[digest.length - 1] & 0x0f;
+  return ((digest.readUInt32BE(pos) & 0x7fffffff) % 10 ** TOTP_DIGITS).toString().padStart(TOTP_DIGITS, "0");
+}
+
+export function verifyTotpCode(secret: string | null | undefined, codeRaw: string) {
+  if (!secret) return false;
+  const code = codeRaw.replace(/\s+/g, "");
+  if (!/^\d{6}$/.test(code)) return false;
+  return [-1, 0, 1].some((offset) => totpCode(secret, Date.now(), offset) === code);
+}
+
+export function createTotpEnrollment(email: string) {
+  const secret = base32Encode(randomBytes(20));
+  const issuer = "PhantomForce";
+  const label = encodeURIComponent(`${issuer}:${email.toLowerCase()}`);
+  const otpauthUrl = `otpauth://totp/${label}?secret=${secret}&issuer=${encodeURIComponent(issuer)}&algorithm=SHA1&digits=${TOTP_DIGITS}&period=30`;
+  return { secret, otpauthUrl, issuer };
 }
 
 /* ---------------- org-scoped audit trail (hash-chained) ---------------- */
@@ -220,18 +268,16 @@ export function asDatabaseSession(session: AccessSession | undefined): DatabaseS
 /* ---------------- login / logout / org switching ---------------- */
 
 export async function loginWithPassword(emailRaw: string, password: string) {
+  const result = await loginWithPasswordDetailed(emailRaw, password);
+  return result.ok && result.session ? result.session : undefined;
+}
+
+async function createDatabaseSessionForUser(userId: string, activeOrgId: string | null) {
   const db = requirePrisma();
-  const email = emailRaw.trim().toLowerCase();
-  const user = await db.user.findUnique({ where: { email } });
-  const ok = user ? await verifyPassword(password, user.passwordHash) : false;
-  if (!user || !ok) {
-    /* uniform failure: no user-exists oracle */
-    return undefined;
-  }
   const row = await db.authSession.create({
     data: {
-      userId: user.id,
-      activeOrgId: user.activeOrgId,
+      userId,
+      activeOrgId,
       expiresAt: new Date(Date.now() + SESSION_TTL_MS),
     },
   });
@@ -239,6 +285,23 @@ export async function loginWithPassword(emailRaw: string, password: string) {
   if (!session) return undefined;
   sessionCache.set(row.id, { session, expiresAt: Date.now() + SESSION_CACHE_TTL_MS });
   return session;
+}
+
+export async function loginWithPasswordDetailed(emailRaw: string, password: string, totpCode?: string) {
+  const db = requirePrisma();
+  const email = emailRaw.trim().toLowerCase();
+  const user = await db.user.findUnique({ where: { email } });
+  const ok = user ? await verifyPassword(password, user.passwordHash) : false;
+  if (!user || !ok) {
+    /* uniform failure: no user-exists oracle */
+    return { ok: false as const, error: "invalid_credentials" };
+  }
+  if (user.twoFactorEnabled) {
+    if (!totpCode) return { ok: false as const, error: "mfa_required", mfaRequired: true, method: "totp" as const };
+    if (!verifyTotpCode(user.twoFactorSecret, totpCode)) return { ok: false as const, error: "invalid_mfa", mfaRequired: true, method: "totp" as const };
+  }
+  const session = await createDatabaseSessionForUser(user.id, user.activeOrgId);
+  return session ? { ok: true as const, session } : { ok: false as const, error: "session_create_failed" };
 }
 
 export async function revokeDatabaseSession(authSessionId: string) {
@@ -254,6 +317,29 @@ export async function revokeAllSessionsForUser(userId: string) {
   const db = requirePrisma();
   await db.authSession.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: new Date() } });
   invalidateCacheForUser(userId);
+}
+
+export async function getTwoFactorStatus(userId: string) {
+  const db = requirePrisma();
+  const user = await db.user.findUnique({ where: { id: userId }, select: { twoFactorEnabled: true, email: true } });
+  return user ? { enabled: user.twoFactorEnabled, method: user.twoFactorEnabled ? "totp" : null, email: user.email } : null;
+}
+
+export async function enableTotpForUser(userId: string, secret: string, code: string) {
+  if (!verifyTotpCode(secret, code)) return { ok: false as const, error: "invalid_code" };
+  const db = requirePrisma();
+  await db.user.update({ where: { id: userId }, data: { twoFactorSecret: secret, twoFactorEnabled: true } });
+  await revokeAllSessionsForUser(userId);
+  return { ok: true as const };
+}
+
+export async function disableTotpForUser(userId: string, password: string) {
+  const db = requirePrisma();
+  const user = await db.user.findUnique({ where: { id: userId }, select: { passwordHash: true } });
+  if (!user || !(await verifyPassword(password, user.passwordHash))) return { ok: false as const, error: "invalid_password" };
+  await db.user.update({ where: { id: userId }, data: { twoFactorSecret: null, twoFactorEnabled: false } });
+  await revokeAllSessionsForUser(userId);
+  return { ok: true as const };
 }
 
 export async function switchActiveOrg(session: DatabaseSessionDetails, orgId: string) {
@@ -546,22 +632,36 @@ export async function initializeDatabaseAuthState() {
 }
 
 /* DEVELOPMENT SEED DATA — deterministic fixtures for local work and tests.
-   Every seeded record is prefixed dev- and uses .local emails so it can never
-   be mistaken for production data. Passwords come from
-   PHANTOMFORCE_DEV_SEED_PASSWORD (default "phantom-dev-password"). */
+   Every seeded record is prefixed dev-. Passwords come from environment
+   variables; the real Ganon password is never committed into source. */
 export async function seedDevelopmentIdentities() {
   const db = requirePrisma();
   const password = process.env.PHANTOMFORCE_DEV_SEED_PASSWORD ?? "phantom-dev-password";
   const passwordHash = await hashPassword(password);
+  const ganonEmail = (process.env.PHANTOMFORCE_GANON_EMAIL ?? "phantomforcesupport@gmail.com").toLowerCase();
+  const ganonPassword = process.env.PHANTOMFORCE_GANON_PASSWORD ?? password;
+  const ganonPasswordHash = await hashPassword(ganonPassword);
+  const customerEmail = (process.env.PHANTOMFORCE_CUSTOMER1_EMAIL ?? "customer1@phantomforce.test").toLowerCase();
+  const customerPassword = process.env.PHANTOMFORCE_CUSTOMER1_PASSWORD ?? "Customer1!TestPass";
+  const customerPasswordHash = await hashPassword(customerPassword);
 
   const orgs = [
     { id: "dev-org-phantomforce", name: "PhantomForce (dev)" },
     { id: "dev-org-chicagoshots", name: "ChicagoShots (dev)" },
+    { id: "dev-org-customer1", name: "Customer 1 (plan-test)" },
   ];
   const users: Array<{
-    id: string; email: string; name: string; isSuperAdmin: boolean;
+    id: string; email: string; name: string; isSuperAdmin: boolean; passwordHash?: string;
     memberships: Array<{ orgId: string; role: MembershipRole }>;
   }> = [
+    {
+      id: "dev-user-ganon",
+      email: ganonEmail,
+      name: "Ganon",
+      isSuperAdmin: true,
+      passwordHash: ganonPasswordHash,
+      memberships: [{ orgId: "dev-org-phantomforce", role: "owner" }],
+    },
     {
       id: "dev-user-jordan",
       email: "jordan@phantomforce.local",
@@ -590,6 +690,14 @@ export async function seedDevelopmentIdentities() {
       isSuperAdmin: false,
       memberships: [{ orgId: "dev-org-chicagoshots", role: "client" }],
     },
+    {
+      id: "dev-user-customer1",
+      email: customerEmail,
+      name: "Customer 1",
+      isSuperAdmin: false,
+      passwordHash: customerPasswordHash,
+      memberships: [{ orgId: "dev-org-customer1", role: "owner" }],
+    },
   ];
 
   await db.$transaction(async (tx) => {
@@ -604,7 +712,7 @@ export async function seedDevelopmentIdentities() {
           email: user.email,
           name: user.name,
           isSuperAdmin: user.isSuperAdmin,
-          passwordHash,
+          passwordHash: user.passwordHash ?? passwordHash,
           activeOrgId: user.memberships[0]?.orgId ?? null,
         },
         update: { name: user.name, isSuperAdmin: user.isSuperAdmin },
@@ -623,4 +731,5 @@ export async function seedDevelopmentIdentities() {
   await syncPlanCatalog();
   await assignOrgPlan({ orgId: "dev-org-phantomforce", planKey: "internal", status: "active", note: "DEV SEED — internal org" });
   await assignOrgPlan({ orgId: "dev-org-chicagoshots", planKey: "professional", status: "active", note: "DEV SEED — demo business" });
+  await assignOrgPlan({ orgId: "dev-org-customer1", planKey: "starter", status: "active", note: "DEV SEED — customer 1 fake checkout account" });
 }

@@ -33,6 +33,7 @@ export function requiresWrite(method: string, url: string): boolean {
   if (path === "/auth/login" || path === "/auth/logout") return false; // database auth in/out
   if (path === "/auth/switch-org") return false; // changing active org is identity, not a paid write
   if (path === "/auth/invitations/accept") return false; // onboarding happens before entitlement exists
+  if (path === "/billing/dev/select-plan") return false; // local fake checkout must let test users leave Free View
   if (path === "/billing/webhook") return false; // authenticated by its own signing secret, not a session
   if (/(^|-)(preview|dry-run|preflight|contract|validate)$/.test(seg)) return false; // read-only computes
   if (path === "/phantom-ai/chat") return false; // conversational; its side effects are separately gated

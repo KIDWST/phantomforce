@@ -1,10 +1,10 @@
 /* PhantomForce admin settings.
    Local UI preferences only: no provider calls, sends, uploads, or billing. */
 
-import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260712-217";
-import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260712-217";
-import { loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260712-217";
-import { DEFAULT_COMPANION_PREFS, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260712-217";
+import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260712-233";
+import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260712-233";
+import { loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, workspaceStorageGetItem, workspaceStorageSetItem, store, visible, memoryStats, chatHistoryStats } from "./store.js?v=phantom-live-20260712-233";
+import { DEFAULT_COMPANION_PREFS, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260712-233";
 
 const AI_SETTINGS_KEY = "pf.operator.settings.v1";
 const SETTINGS_TAB_KEY = "pf.settings.tab.v1";
@@ -13,6 +13,7 @@ const SETTINGS_TABS = [
   { id: "model", label: "Model", category: "AI Brain" },
   { id: "loop", label: "Loop routing", category: "AI Brain" },
   { id: "chat", label: "Chat behavior", category: "AI Brain" },
+  { id: "context", label: "Context learning", category: "AI Brain" },
   { id: "workspace", label: "Workspace Studio", category: "Workspace" },
   { id: "companion", label: "Companion", category: "Workspace" },
   { id: "media", label: "Media & social", category: "Media" },
@@ -475,15 +476,15 @@ function renderChatBehaviorTab(settings) {
         <div class="set-sec-head">
           <div>
             <h3>Chat behavior</h3>
-            <p class="set-note">Basic chatbot controls for memory, context depth, and how much Phantom should carry between commands.</p>
+            <p class="set-note">Control how Phantom answers and where the guardrails sit. Business learning happens through onboarding, Hermes context, and approved activity instead of manual memory edits.</p>
           </div>
         </div>
         <div class="set-control-grid">
-          <label class="set-control"><span>Memory</span>
+          <label class="set-control"><span>Context source</span>
             <select data-ai-field="memoryMode">${optionList([
               { id: "session", label: "This session only" },
-              { id: "business", label: "Business memory" },
-              { id: "pinned", label: "Pinned facts first" },
+              { id: "business", label: "Business context" },
+              { id: "pinned", label: "Confirmed facts first" },
             ], settings.memoryMode)}</select>
           </label>
           <label class="set-control"><span>Context depth</span>
@@ -518,6 +519,34 @@ function renderChatBehaviorTab(settings) {
           <button class="btn btn-quiet" type="button" data-ai-reset>Reset safe defaults</button>
         </div>
       </div>`;
+}
+
+function renderContextLearningTab() {
+  const memories = visible(store.state.memory || []);
+  const history = visible(store.state.chatHistory || []);
+  const stats = memoryStats(memories);
+  const historyStats = chatHistoryStats(history);
+  return `
+    <div class="set-section">
+      <div class="set-sec-head">
+        <div>
+          <h3>Context learning</h3>
+          <p class="set-note">Users should not babysit memory. Phantom learns the business from account setup, Hermes backend context, approved work, and the private command center process notes.</p>
+        </div>
+      </div>
+      <div class="set-status-grid">
+        <span><b>${stats.total}</b><i>confirmed context items</i></span>
+        <span><b>${historyStats.total}</b><i>recent chat signals</i></span>
+        <span><b>Hermes</b><i>backend recall layer</i></span>
+        <span><b>Obsidian</b><i>private process memory</i></span>
+      </div>
+      <div class="set-rule-list">
+        <span>Business identity should be collected during onboarding before plan selection</span>
+        <span>Durable facts come from Hermes and approved business activity</span>
+        <span>Manual memory editing is intentionally removed from primary navigation</span>
+        <span>Temporary chat history remains separate from durable business context</span>
+      </div>
+    </div>`;
 }
 
 function renderCompanionTab() {
@@ -610,6 +639,7 @@ export function renderOperatorSettings(el, opts = {}) {
     model: () => renderModelTab(settings, activeProvider, activeModel),
     loop: () => renderLoopAdvancedSection(),
     chat: () => renderChatBehaviorTab(settings),
+    context: () => renderContextLearningTab(),
     workspace: () => `<div id="${workspaceMountId}" class="set-workspace-mount"></div>`,
     companion: () => renderCompanionTab(),
     media: () => `<div id="${mediaMountId}"></div>`,

@@ -19,7 +19,7 @@ export const DEFAULT_COMPANION_PREFS = {
   greetingFrequency: "session",
   size: "standard",
   dockLocation: "sidebar",
-  personality: "friendly",
+  personality: "playful",
   idleFrequency: "low",
   particleLevel: "low",
 };

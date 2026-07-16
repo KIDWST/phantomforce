@@ -60,61 +60,65 @@ export type PlanDefinition = {
   limits: PlanLimits;
 };
 
-/* Internal development plans. Names are placeholders — final pricing and
-   packaging are a business decision, not invented here. */
+/* Public packaging model.
+   - Free View: can inspect the product but has no meaningful operating limits.
+   - Basic: leads, clients, dashboard, and basic business ops.
+   - Pro: adds creator/media/workspace features and PhantomPlay.
+   - Operator: top tier; the only public tier with operator/agent run tokens.
+   Internal remains the private Ganon/admin lane and is never sellable. */
 export const PLAN_DEFINITIONS: PlanDefinition[] = [
   {
     key: "starter",
-    name: "Starter",
-    description: "Entry plan for a single small business.",
+    name: "Free View",
+    description: "Read-only preview access. Upgrade before operating the workspace.",
     isInternal: false,
-    trialDays: 14,
-    graceDays: 7,
+    trialDays: 0,
+    graceDays: 0,
     features: {
-      chat: true, mediaLab: true, websites: true, websitePublishing: false, customDomains: false,
-      vacationMode: false, phantomPlay: true, competitorIntelligence: false, aggressiveIntelligence: false, advancedWorkflows: false, assetPacks: false, agentRuns: true, modelTier: "standard",
+      chat: false, mediaLab: false, websites: false, websitePublishing: false, customDomains: false,
+      vacationMode: false, phantomPlay: false, competitorIntelligence: false, aggressiveIntelligence: false, advancedWorkflows: false, assetPacks: false, agentRuns: false, modelTier: "standard",
     },
     limits: {
-      seats: 3, businesses: 1, mediaCreditsPerMonth: 50, chatRequestsPerDay: 100,
-      agentRunsPerDay: 10, storageMb: 512, sitesPerOrg: 1, phantomPlayMinutesPerDay: 30, gameSubmissions: 0, competitorProfiles: 0, competitorSignals: 0,
+      seats: 1, businesses: 1, mediaCreditsPerMonth: 0, chatRequestsPerDay: 0,
+      agentRunsPerDay: 0, storageMb: 128, sitesPerOrg: 0, phantomPlayMinutesPerDay: 0, gameSubmissions: 0, competitorProfiles: 0, competitorSignals: 0,
     },
   },
   {
     key: "professional",
-    name: "Professional",
-    description: "Growing business: publishing, vacation coverage, more seats.",
+    name: "Basic",
+    description: "Leads, clients, dashboard, accounting visibility, and basic business operations.",
     isInternal: false,
     trialDays: 14,
     graceDays: 7,
     features: {
-      chat: true, mediaLab: true, websites: true, websitePublishing: true, customDomains: false,
-      vacationMode: true, phantomPlay: true, competitorIntelligence: true, aggressiveIntelligence: false, advancedWorkflows: false, assetPacks: true, agentRuns: true, modelTier: "standard",
+      chat: true, mediaLab: false, websites: true, websitePublishing: false, customDomains: false,
+      vacationMode: false, phantomPlay: false, competitorIntelligence: false, aggressiveIntelligence: false, advancedWorkflows: false, assetPacks: false, agentRuns: false, modelTier: "standard",
     },
     limits: {
-      seats: 10, businesses: 2, mediaCreditsPerMonth: 250, chatRequestsPerDay: 500,
-      agentRunsPerDay: 50, storageMb: 4096, sitesPerOrg: 5, phantomPlayMinutesPerDay: 90, gameSubmissions: 1, competitorProfiles: 5, competitorSignals: 500,
+      seats: 3, businesses: 1, mediaCreditsPerMonth: 0, chatRequestsPerDay: 150,
+      agentRunsPerDay: 0, storageMb: 1024, sitesPerOrg: 1, phantomPlayMinutesPerDay: 0, gameSubmissions: 0, competitorProfiles: 0, competitorSignals: 0,
     },
   },
   {
     key: "elite",
-    name: "Elite",
-    description: "Multi-business operators: custom domains, advanced workflows, advanced models.",
+    name: "Pro",
+    description: "Media Lab, Content Hub, websites, Vacation Mode, and PhantomPlay access.",
     isInternal: false,
     trialDays: 14,
     graceDays: 14,
     features: {
-      chat: true, mediaLab: true, websites: true, websitePublishing: true, customDomains: true,
-      vacationMode: true, phantomPlay: true, competitorIntelligence: true, aggressiveIntelligence: true, advancedWorkflows: true, assetPacks: true, agentRuns: true, modelTier: "advanced",
+      chat: true, mediaLab: true, websites: true, websitePublishing: true, customDomains: false,
+      vacationMode: true, phantomPlay: true, competitorIntelligence: true, aggressiveIntelligence: false, advancedWorkflows: false, assetPacks: true, agentRuns: false, modelTier: "standard",
     },
     limits: {
-      seats: 25, businesses: 5, mediaCreditsPerMonth: 1000, chatRequestsPerDay: 2000,
-      agentRunsPerDay: 200, storageMb: 20480, sitesPerOrg: 20, phantomPlayMinutesPerDay: 240, gameSubmissions: 5, competitorProfiles: 25, competitorSignals: 5000,
+      seats: 10, businesses: 2, mediaCreditsPerMonth: 500, chatRequestsPerDay: 750,
+      agentRunsPerDay: 0, storageMb: 10240, sitesPerOrg: 5, phantomPlayMinutesPerDay: 120, gameSubmissions: 2, competitorProfiles: 10, competitorSignals: 1000,
     },
   },
   {
     key: "enterprise",
-    name: "Enterprise",
-    description: "Custom limits negotiated per contract; manual overrides expected.",
+    name: "Operator",
+    description: "Full operating suite with operator tokens, advanced workflows, and highest limits.",
     isInternal: false,
     trialDays: 30,
     graceDays: 30,
@@ -123,8 +127,8 @@ export const PLAN_DEFINITIONS: PlanDefinition[] = [
       vacationMode: true, phantomPlay: true, competitorIntelligence: true, aggressiveIntelligence: true, advancedWorkflows: true, assetPacks: true, agentRuns: true, modelTier: "advanced",
     },
     limits: {
-      seats: 100, businesses: 25, mediaCreditsPerMonth: 10000, chatRequestsPerDay: 10000,
-      agentRunsPerDay: 1000, storageMb: 102400, sitesPerOrg: 100, phantomPlayMinutesPerDay: 1440, gameSubmissions: 50, competitorProfiles: 250, competitorSignals: 50000,
+      seats: 25, businesses: 10, mediaCreditsPerMonth: 5000, chatRequestsPerDay: 5000,
+      agentRunsPerDay: 500, storageMb: 102400, sitesPerOrg: 50, phantomPlayMinutesPerDay: 1440, gameSubmissions: 25, competitorProfiles: 100, competitorSignals: 25000,
     },
   },
   {
@@ -239,6 +243,7 @@ export async function getOrgEntitlements(orgId: string): Promise<ResolvedEntitle
   const overridesRaw = (orgPlan?.overrides ?? null) as { features?: unknown; limits?: unknown } | null;
   const features = applyOverrides(definition.features, overridesRaw?.features);
   const limits = applyOverrides(definition.limits, overridesRaw?.limits);
+  const freeViewOnly = definition.key === "starter";
 
   return {
     orgId,
@@ -248,8 +253,8 @@ export async function getOrgEntitlements(orgId: string): Promise<ResolvedEntitle
     effectiveStatus,
     trialEndsAt: trialEndsAt ? trialEndsAt.toISOString() : null,
     graceUntil: graceUntil ? graceUntil.toISOString() : null,
-    canWrite: effectiveStatus !== "suspended",
-    upgradeRequired: effectiveStatus === "suspended" || effectiveStatus === "grace",
+    canWrite: effectiveStatus !== "suspended" && !freeViewOnly,
+    upgradeRequired: freeViewOnly || effectiveStatus === "suspended" || effectiveStatus === "grace",
     features: features.value,
     limits: limits.value,
     overridesApplied: features.applied || limits.applied,

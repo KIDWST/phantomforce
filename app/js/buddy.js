@@ -2,7 +2,7 @@
    One sidebar-docked Phantom system: preference-aware, drag-safe, always
    returns home, and tied to real chat/notification states. */
 
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260712-217";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260712-233";
 import {
   COMPANION_EVENT,
   clearCompanionSessionHide,
@@ -10,7 +10,7 @@ import {
   isCompanionHiddenForSession,
   loadCompanionPrefs,
   updateCompanionPrefs,
-} from "./companion-preferences.js?v=phantom-live-20260712-217";
+} from "./companion-preferences.js?v=phantom-live-20260712-233";
 
 const reduceMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
 const LEGACY_DOCK_KEY = "pf.buddy.docked.v1";
@@ -19,27 +19,27 @@ const LAST_GREETING_KEY = "pf.companion.lastGreeting.v1";
 const LAST_QUIP_KEY = "pf.companion.lastQuip.v1";
 
 const GREETINGS = {
-  professional: ["Ready when you are.", "Your Phantom is standing by.", "Systems are ready.", "Good timing. We have work to do."],
-  friendly: ["Human!", "You're back!", "There you are.", "Welcome back, boss.", "Ready when you are.", "I was waiting for you."],
-  playful: ["Human!", "I missed you.", "There you are.", "The workforce is ready.", "Welcome back, boss.", "Everything feels better when you're here."],
+  professional: ["Ready when you are.", "Your Phantom is standing by.", "Good timing. The work tried to look busy.", "Systems are ready. I bullied the chaos into rows."],
+  friendly: ["Human!", "You're back. I saved you the least suspicious chair.", "There you are.", "Welcome back, boss.", "Ready when you are.", "I was absolutely not rehearsing this entrance."],
+  playful: ["Human!", "I missed you. The buttons were getting cocky.", "There you are.", "The workforce is ready and only mildly overdramatic.", "Welcome back, boss.", "I warmed up the chaos filter."],
   quiet: ["Ready.", "Standing by.", "Online."],
 };
 
 const BASE_QUIPS = [
-  "I run the boring half. You take the glory.",
-  "Every desk is watching. Nothing slips.",
-  "Say the word and it becomes work.",
-  "I never sleep. It's a whole thing.",
-  "Approvals first. Chaos never.",
-  "Your calendar fears me.",
-  "Caught three threats before breakfast.",
-  "Docked, not domesticated.",
+  "I put the chaos in a spreadsheet. It hated that.",
+  "Say the word and I'll make the busywork regret waking up.",
+  "I found the bottleneck. It was wearing a badge that said 'later'.",
+  "Your calendar tried to act tough. I opened color coding.",
+  "Approvals first. Nonsense last. Drama on mute.",
+  "I run the boring half so you can look unfairly talented.",
+  "I checked the queue. Mostly vibes pretending to be strategy.",
+  "Docked in the sidebar, judging tabs with restraint.",
 ];
 
 const QUIPS = {
-  professional: ["Standing by.", "Approval gates stay on.", "Nothing external moves without you.", ...BASE_QUIPS],
-  friendly: ["I'm here.", "Tell me where to look.", "Your Phantom is nearby.", ...BASE_QUIPS],
-  playful: ["I fit better over here.", "Small Phantom, serious job.", "I promise not to hover over the buttons.", "Haunting the sidebar. Professionally.", ...BASE_QUIPS],
+  professional: ["Standing by.", "Approval gates stay on.", "Nothing external moves without you.", "I reviewed the room. The room can do better.", ...BASE_QUIPS],
+  friendly: ["I'm here.", "Tell me where to look.", "Your Phantom is nearby.", "Point me at the mess. I brought labels.", ...BASE_QUIPS],
+  playful: ["I fit better over here.", "Small Phantom, serious opinions.", "I promise not to hover over the buttons unless they start it.", "Haunting the sidebar. Professionally.", "I am 80% helpful, 20% theatrical lighting.", ...BASE_QUIPS],
   quiet: ["Here.", "Ready.", "Docked.", "Approvals first."],
 };
 
@@ -517,20 +517,33 @@ function createBuddyController() {
     if (!menu) return;
     syncMenuControls();
     menu.hidden = false;
-    menu.style.left = "0px";
-    menu.style.top = "0px";
-    const rect = menu.getBoundingClientRect();
-    const anchorX = Number.isFinite(clientX) ? clientX : x + buddyWidth / 2;
-    const anchorY = Number.isFinite(clientY) ? clientY : y - buddyHeight / 2;
+    const visual = window.visualViewport;
+    const viewLeft = visual?.offsetLeft || 0;
+    const viewTop = visual?.offsetTop || 0;
+    const viewWidth = visual?.width || window.innerWidth;
+    const viewHeight = visual?.height || window.innerHeight;
     const gutter = 10;
+    const minLeft = viewLeft + gutter;
+    const minTop = viewTop + gutter;
+    const maxHeight = Math.max(180, viewHeight - gutter * 2);
+    menu.style.setProperty("left", `${minLeft}px`, "important");
+    menu.style.setProperty("top", `${minTop}px`, "important");
+    menu.style.setProperty("right", "auto", "important");
+    menu.style.setProperty("bottom", "auto", "important");
+    menu.style.maxHeight = `${maxHeight}px`;
+    const rect = menu.getBoundingClientRect();
+    const anchorX = (Number.isFinite(clientX) ? clientX : x + buddyWidth / 2) + viewLeft;
+    const anchorY = (Number.isFinite(clientY) ? clientY : y - buddyHeight / 2) + viewTop;
     const sidebar = sidebarRect();
     const prefersRightOfSidebar = prefs.dockLocation === "sidebar" && sidebar.width > 120;
     const rawLeft = prefersRightOfSidebar ? sidebar.left + sidebar.width + gutter : anchorX;
     const rawTop = prefersRightOfSidebar ? anchorY - rect.height + 18 : anchorY;
-    const left = Math.max(gutter, Math.min(window.innerWidth - rect.width - gutter, rawLeft));
-    const top = Math.max(gutter, Math.min(window.innerHeight - rect.height - gutter, rawTop));
-    menu.style.left = `${left}px`;
-    menu.style.top = `${top}px`;
+    const maxLeft = viewLeft + viewWidth - rect.width - gutter;
+    const maxTop = viewTop + viewHeight - Math.min(rect.height, maxHeight) - gutter;
+    const left = Math.max(minLeft, Math.min(maxLeft, rawLeft));
+    const top = Math.max(minTop, Math.min(maxTop, rawTop));
+    menu.style.setProperty("left", `${left}px`, "important");
+    menu.style.setProperty("top", `${top}px`, "important");
     menu.querySelector("button, select")?.focus({ preventScroll: true });
   }
 

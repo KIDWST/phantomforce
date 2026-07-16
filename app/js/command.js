@@ -10,10 +10,10 @@ import {
   store, uid, visible, currentWs, currentTenantId, isAdmin, isOwnerOperator, pushActivity, moneyView, todaysPlan,
   PACKAGES, RETAINERS, VACATION_POLICY, fmtMoney, statusLabel, daysUntil, memoryStats, chatHistoryStats,
   ctx, session, loadPhantomLoop, savePhantomLoop, loopProviderName, modelDisplayLabel,
-  getPhantomLaneTarget, loadPhantomLaneConfig, workspaceStorageGetItem, wsName,
-} from "./store.js?v=phantom-live-20260712-217";
-import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260712-217";
-import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260712-217";
+  getPhantomLaneTarget, loadPhantomLaneConfig, workspaceStorageGetItem, wsName, workspaceMeta,
+} from "./store.js?v=phantom-live-20260712-233";
+import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260712-233";
+import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260712-233";
 const classifyPhantomIntent = (text) => deriveActionContract(classifyRaw(text));
 
 /* Cross-surface handoff: chat tells the Websites page which project to focus
@@ -541,10 +541,137 @@ function currentInfoAnswer(text, settings = null) {
   };
 }
 
+function isBusinessContextQuestion(text = "") {
+  return /\b(what'?s|what is|who is|tell me about|describe|summari[sz]e|explain)\b.{0,50}\b(my|our|this|the)?\s*(business|company|brand|workspace)\b/i.test(text)
+    || /\bwhat do you know about (my|our) (business|company|brand)\b/i.test(text)
+    || /\b(my|our) business\??$/i.test(text.trim());
+}
+
+function isBusinessReviewRequest(text = "") {
+  const value = String(text || "").trim();
+  return /\b(review|audit|assess|analy[sz]e|diagnose|grade)\b.{0,70}\b(my|our|this|the)?\s*(business|company|brand|workspace)\b/i.test(value)
+    || /\b(my|our|this|the)?\s*business health\b/i.test(value);
+}
+
+function activeOrgName() {
+  const activeOrg = ctx.session?.orgId;
+  const membership = (ctx.session?.memberships || []).find((item) => item.orgId === activeOrg);
+  return membership?.orgName || ctx.session?.label || wsName(currentWs());
+}
+
+function localBusinessFacts() {
+  const ws = currentWs();
+  const meta = workspaceMeta(ws) || {};
+  const memories = visible(store.state.memory || [])
+    .filter((item) => ["business", "preference", "client"].includes(item.category))
+    .slice(0, 4);
+  const m = moneyView();
+  return {
+    workspaceId: ws,
+    workspaceName: wsName(ws),
+    workspaceKind: meta.kind || "Workspace",
+    orgName: activeOrgName(),
+    orgRole: ctx.session?.orgRole || (isAdmin() ? "admin" : "member"),
+    tagline: meta.tagline || "",
+    memoryLines: memories.map((item) => item.summary || item.title).filter(Boolean),
+    pipeline: m.pipeline,
+    openProposals: m.open.length,
+    mediaCount: visible(store.state.media || []).length,
+    siteCount: visible(store.state.sites || []).length,
+  };
+}
+
+function businessSnapshotReply(profile = null, snapshot = null) {
+  const facts = localBusinessFacts();
+  const p = profile || snapshot?.businessProfile || null;
+  const name = p?.businessName || facts.orgName || facts.workspaceName;
+  const category = p?.category || facts.workspaceKind;
+  const offering = p?.offering || facts.tagline || "The core offer is not fully filled in yet.";
+  const audience = p?.audience ? ` for ${p.audience}` : "";
+  const geography = p?.geography ? ` in ${p.geography}` : "";
+  const positioning = p?.positioning ? ` Positioning: ${p.positioning}` : "";
+  const market = snapshot?.metrics
+    ? `${snapshot.metrics.competitors} verified competitors, ${snapshot.discoveryRuns?.length || 0} discovery run${(snapshot.discoveryRuns?.length || 0) === 1 ? "" : "s"}, ${snapshot.opportunities?.length || 0} market-board item${(snapshot.opportunities?.length || 0) === 1 ? "" : "s"}.`
+    : "Market board status was not loaded in this answer.";
+  const memory = facts.memoryLines.length ? ` I also have business memory like: ${facts.memoryLines.slice(0, 2).join(" / ")}.` : "";
+  return {
+    say: `Your active business is ${name}. ${category ? `Category: ${category}. ` : ""}${offering}${audience}${geography}.${positioning} Operationally, this workspace has ${fmtMoney(facts.pipeline)} in quote potential, ${facts.openProposals} open proposal${facts.openProposals === 1 ? "" : "s"}, ${facts.mediaCount} media item${facts.mediaCount === 1 ? "" : "s"}, and ${facts.siteCount} site draft${facts.siteCount === 1 ? "" : "s"}. Competitor intelligence: ${market}${memory}`,
+    cards: [
+      card("Business", name, `${category || "No category"} · ${facts.orgRole || "member"} · ${facts.workspaceId}`, [openAction("Business profile", "intelligence"), openAction("Context learning", "settings")]),
+    ],
+    open: null,
+  };
+}
+
+function businessReviewReply(snapshot = null) {
+  const facts = localBusinessFacts();
+  const profile = snapshot?.businessProfile || null;
+  const metrics = snapshot?.metrics || {};
+  const name = profile?.businessName || facts.orgName || facts.workspaceName || "this business";
+  const leads = visible(store.state.leads || []);
+  const proposals = visible(store.state.proposals || []);
+  const approvals = visible(store.state.approvals || []).filter((a) => a.status === "pending");
+  const media = visible(store.state.media || []);
+  const sites = visible(store.state.sites || []);
+  const memories = facts.memoryLines || [];
+  const hasOffer = Boolean(profile?.offering || facts.tagline || memories.length);
+  const competitorCount = Number(metrics.competitors || 0);
+  const marketCount = Array.isArray(snapshot?.opportunities) ? snapshot.opportunities.length : 0;
+
+  const strengths = [];
+  const gaps = [];
+  const next = [];
+
+  if (hasOffer) strengths.push("the brand profile has enough shape for Phantom to talk about the offer");
+  else gaps.push("the offer is still too thin, so Phantom needs a sharper one-line promise before it can sell confidently");
+
+  if (media.length) strengths.push(`${media.length} media asset${media.length === 1 ? "" : "s"} ready to reuse`);
+  else gaps.push("there are no reusable media assets yet");
+
+  if (sites.length) strengths.push(`${sites.length} site draft${sites.length === 1 ? "" : "s"} in the workspace`);
+  else gaps.push("there is no clear website or landing page path yet");
+
+  if (proposals.length || leads.length) strengths.push(`${leads.length} lead${leads.length === 1 ? "" : "s"} and ${proposals.length} proposal${proposals.length === 1 ? "" : "s"} loaded`);
+  else gaps.push("the sales pipeline is empty, so there is nothing measurable to improve yet");
+
+  if (competitorCount || marketCount) strengths.push(`${competitorCount} verified competitor${competitorCount === 1 ? "" : "s"} and ${marketCount} market-board signal${marketCount === 1 ? "" : "s"}`);
+  else gaps.push("competitor intelligence is not verified yet");
+
+  if (facts.pipeline > 0) strengths.push(`${fmtMoney(facts.pipeline)} in quote potential`);
+  if (approvals.length) gaps.push(`${approvals.length} approval${approvals.length === 1 ? "" : "s"} waiting on a decision`);
+
+  next.push("tighten the business profile into one clear offer, audience, and proof point");
+  next.push("verify three competitors or public signals so the market board stops feeling empty");
+  next.push(media.length ? "turn the best media into a campaign or site section" : "generate one strong hero image, one short video, and one voice asset");
+  next.push(leads.length ? "move the warmest lead to a proposal or follow-up" : "add one real lead or sample customer so the pipeline has something to work against");
+
+  return {
+    say: `Plain-English review of ${name}: the foundation is there, but it is not fully instrumented yet. Strengths: ${strengths.length ? strengths.join("; ") : "the workspace is set up and ready to be shaped"}. Weak spots: ${gaps.length ? gaps.join("; ") : "nothing major is blocked, but it needs more real-world signals"}. Best next moves: ${next.slice(0, 3).join("; ")}. Overall: promising, but the app needs sharper business context and live signals before it can act like a truly smart operator.`,
+    cards: [],
+    open: null,
+  };
+}
+
+async function fetchBusinessSnapshot() {
+  if (typeof fetch !== "function") return null;
+  const token = typeof session?.token === "function" ? session.token() : "";
+  const headers = token ? { Authorization: `Bearer ${token}` } : {};
+  try {
+    const response = await fetch(`/api/competitor-intelligence?tenant_id=${encodeURIComponent(currentTenantId())}`, { headers });
+    if (!response.ok) return null;
+    return await response.json().catch(() => null);
+  } catch {
+    return null;
+  }
+}
+
 function localQuestionAnswer(text, settings = null) {
   const s = text.toLowerCase();
   const live = currentInfoAnswer(text, settings);
   if (live) return live;
+
+  if (isBusinessContextQuestion(text)) return businessSnapshotReply();
+  if (isBusinessReviewRequest(text)) return businessReviewReply();
 
   if (/\b(proposals?|quotes?|pricing|estimates?|deals?)\b/.test(s)) {
     const m = moneyView();
@@ -598,17 +725,24 @@ function localQuestionAnswer(text, settings = null) {
     };
   }
 
-  if (/\b(how do i|how should i|what should i|what do you think|why is|why are|explain|compare)\b/.test(s)) {
+  if (/\bwhat'?s?\s+(phantomforce|phantom force|phantom ai|phantom)\b|\bwhat is\s+(phantomforce|phantom force|phantom ai|phantom)\b/.test(s)) {
     return {
-      say: "Here's my take on that — if you want it turned into real work after, just say build, draft, or track and I'll take it from there.",
+      say: "PhantomForce is the business operating system you are building here: one cockpit for AI chat, business memory, media creation, websites, competitor intelligence, approvals, automations, accounting context, and worker-style operations. Phantom AI is the operator inside it: it should answer questions directly, use the business context it has, and only create records or take action when you ask.",
       cards: [],
       open: null,
     };
   }
 
-  const snap = operatorSnapshot();
+  if (/\b(how do i|how should i|what should i|what do you think|why is|why are|explain|compare)\b/.test(s)) {
+    return {
+      say: "Short answer: I can answer the question, then turn it into work only if you ask. If the question is about this business, I'll use the active workspace, saved memory, proposals, media, sites, approvals, and market board. If it's live-world info like news or weather, I need a connected provider so I don't make it up.",
+      cards: [],
+      open: null,
+    };
+  }
+
   return {
-    say: `Right now: ${snap.transactionCount ? `${signedMoney(snap.netCash)} net cashflow` : "ledger empty"}, ${fmtMoney(snap.pipeline)} in quote potential, ${snap.approvals} approval${snap.approvals === 1 ? "" : "s"} waiting, ${snap.today} thing${snap.today === 1 ? "" : "s"} on today's plan. Ask me anything, or tell me what to build, post, automate, or check.`,
+    say: "I didn't get a live-model answer back, but I also should not dump ledger status for a normal question. Ask it again or phrase it a little differently and I'll answer directly; if it needs live data, I'll say so instead of making it up.",
     cards: [],
     open: null,
   };
@@ -658,7 +792,7 @@ function intentResponse(intent, text, settings = null) {
   }
   if (intent.primaryIntent === "identity") {
     return {
-      say: "I'm PhantomForce's operator, not just a chatbot. I run the workers, media, sites, automations, and approvals in this workspace — you tell me the outcome, I handle the work and bring anything risky back to you first.",
+      say: "PhantomForce is the business operating system; Phantom AI is the operator inside it. I answer questions, use the workspace context, build drafts, prep media and sites, route workers, and keep risky actions behind approval. I should think first and only touch records when you clearly ask me to.",
       cards: [],
       open: null,
     };
@@ -995,6 +1129,11 @@ function routeCommand(raw, settings) {
     };
   }
 
+  /* --- business review / health check --- */
+  if (isBusinessReviewRequest(text)) {
+    return businessReviewReply();
+  }
+
   /* --- reviews --- */
   if (/(review|testimonial|stars|reputation)/.test(s)) {
     if (/(request|ask|draft|prepare|get|new)/.test(s)) {
@@ -1031,19 +1170,19 @@ function routeCommand(raw, settings) {
     };
   }
 
-  /* --- memory --- */
+  /* --- context learning --- */
   if (/(memory|remember|saved context|what do you know|knowledge|database|local data|past conversations)/.test(s)) {
     const mem = memoryStats();
     const hist = chatHistoryStats();
     return {
       say: mem.total
-        ? `Memory has ${mem.total} saved item${mem.total === 1 ? "" : "s"} across ${mem.categories || 1} categor${mem.categories === 1 ? "y" : "ies"}. Temporary history has ${hist.total} item${hist.total === 1 ? "" : "s"} waiting for its 10-day shred.`
-        : `Saved memory is empty right now. Temporary history has ${hist.total} item${hist.total === 1 ? "" : "s"} and shreds after 10 days.`,
-      cards: [card("Memory", "Local context database",
-        "Saved memory is durable context. Temporary chat history is separate, expires after 10 days, and throwaway greetings are never stored.",
-        [openAction("Open Memory", "memory")],
-        mem.remembered ? `${mem.remembered} remembered` : "Private and local")],
-      open: "memory",
+        ? `Phantom has ${mem.total} confirmed context item${mem.total === 1 ? "" : "s"} across ${mem.categories || 1} categor${mem.categories === 1 ? "y" : "ies"}. Temporary chat history has ${hist.total} signal${hist.total === 1 ? "" : "s"} and shreds after 10 days. Customers do not need to update this manually; Hermes and onboarding should learn the business for them.`
+        : `There is no confirmed business context saved yet. Temporary chat history has ${hist.total} signal${hist.total === 1 ? "" : "s"} and shreds after 10 days. The right fix is onboarding plus Hermes backend learning, not making customers edit memory.`,
+      cards: [card("Context learning", "Hermes backend + onboarding",
+        "Durable business facts should come from account setup, approved activity, and private backend recall. Manual memory editing is intentionally tucked away.",
+        [openAction("Open Settings", "settings"), openAction("Business Intel", "intelligence")],
+        mem.remembered ? `${mem.remembered} confirmed` : "System-managed")],
+      open: "settings",
     };
   }
 
@@ -1213,6 +1352,16 @@ export async function handleSmartCommand(raw) {
 
   if (intent.primaryIntent === "run_agent") {
     return runAgentFromChat(text, intent);
+  }
+
+  if (isBusinessContextQuestion(text)) {
+    const snapshot = await fetchBusinessSnapshot();
+    return businessSnapshotReply(snapshot?.businessProfile || null, snapshot || null);
+  }
+
+  if (isBusinessReviewRequest(text)) {
+    const snapshot = await fetchBusinessSnapshot();
+    return businessReviewReply(snapshot || null);
   }
 
   if (canAskHermes(intent, settings)) {

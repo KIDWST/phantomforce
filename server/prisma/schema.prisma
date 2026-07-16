@@ -115,6 +115,8 @@ model User {
      owners/admins are Membership.role, never this flag. */
   isSuperAdmin Boolean      @default(false)
   activeOrgId  String?
+  twoFactorEnabled Boolean  @default(false)
+  twoFactorSecret  String?
   createdAt    DateTime     @default(now())
   memberships  Membership[]
   chatThreads  ChatThread[]

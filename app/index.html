@@ -7,7 +7,7 @@
       if (location.protocol === "http:" && location.hostname.indexOf("phantomforce.online") !== -1) {
         location.replace("https://" + location.host + location.pathname + location.search + location.hash);
       }
-      window.PHANTOM_BUILD = "phantom-live-20260712-220";
+      window.PHANTOM_BUILD = "phantom-live-20260712-233";
       if ("serviceWorker" in navigator) {
         navigator.serviceWorker
           .getRegistrations()
@@ -23,7 +23,7 @@
     </script>
     <title>PhantomForce — AI Operations Console</title>
     <meta name="description" content="PhantomForce — your AI business operating system." />
-    <meta name="phantom-build" content="phantom-live-20260712-220" />
+    <meta name="phantom-build" content="phantom-live-20260712-233" />
     <meta name="robots" content="noindex" />
     <meta name="theme-color" content="#02060a" />
     <style>
@@ -102,13 +102,13 @@
 
 
     </style>
-    <link rel="icon" type="image/png" href="/app/assets/brand-phantom-favicon.png?v=phantom-live-20260712-220" />
+    <link rel="icon" type="image/png" href="/app/assets/brand-phantom-favicon.png?v=phantom-live-20260712-233" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/app/phantom.css?v=phantom-live-20260712-220" />
-    <link rel="stylesheet" href="/app/phantomplay.css?v=phantom-live-20260712-220" />
-    <link rel="stylesheet" href="/app/competitor-intelligence.css?v=phantom-live-20260712-220" />
+    <link rel="stylesheet" href="/app/phantom.css?v=phantom-live-20260712-233" />
+    <link rel="stylesheet" href="/app/phantomplay.css?v=phantom-live-20260712-233" />
+    <link rel="stylesheet" href="/app/competitor-intelligence.css?v=phantom-live-20260712-233" />
   </head>
   <body>
     <div class="bg-grid" aria-hidden="true"></div>
@@ -141,7 +141,7 @@
     <div class="phantom" data-phantom hidden>
       <header class="mobile-admin-homebar" aria-label="Mobile admin home">
         <button class="mobile-admin-brand" data-mobile-home type="button" aria-label="Open Dashboard">
-          <img class="brand-ghost" src="/app/assets/brand-phantom.png?v=phantom-live-20260712-220" alt="" aria-hidden="true" />
+          <img class="brand-ghost" src="/app/assets/brand-phantom.png?v=phantom-live-20260712-233" alt="" aria-hidden="true" />
           <span>
             <b>PhantomForce</b>
             <i>Business</i>
@@ -164,7 +164,7 @@
       <!-- ---------- sidebar ---------- -->
       <aside class="sidebar" aria-label="Primary">
         <div class="side-brand">
-          <img class="brand-ghost" src="/app/assets/brand-phantom.png?v=phantom-live-20260712-220" alt="" aria-hidden="true" />
+          <img class="brand-ghost" src="/app/assets/brand-phantom.png?v=phantom-live-20260712-233" alt="" aria-hidden="true" />
           <span class="side-brand-text">
             <b>PHANTOMFORCE</b>
             <i>BUSINESS MANAGER</i>
@@ -237,7 +237,7 @@
                     <button class="cmd-send" type="submit" aria-label="Send"><span aria-hidden="true">→</span></button>
                   </form>
                   <div class="chatbox-tools">
-                    <button class="cmd-tool" data-open-ws="memory"><span aria-hidden="true">◈</span> Memory</button>
+                    <button class="cmd-tool" data-open-ws="intelligence"><span aria-hidden="true">◈</span> Intel</button>
                     <button class="cmd-tool" data-open-ws="promptlibrary"><span aria-hidden="true">▤</span> Prompt Library</button>
                     <button class="cmd-tool" data-map-open type="button"><span class="open-map-symbol" aria-hidden="true">&#128506;</span> Map</button>
                   </div>
@@ -251,12 +251,12 @@
                   <img
                     class="phantom-mode-pose"
                     data-mode-pose
-                    src="/app/assets/poses/chin.webp?v=phantom-live-20260712-220"
-                    alt="Phantom listening"
+                    src="/app/assets/poses/welcome.webp?v=phantom-live-20260712-233"
+                    alt="Phantom ready with a grin"
                     decoding="async"
                     fetchpriority="high"
                   />
-                  <figcaption class="phantom-mode-caption" data-mode-caption>Listening</figcaption>
+                  <figcaption class="phantom-mode-caption" data-mode-caption>Plotting politely</figcaption>
                 </figure>
                 <canvas class="ghost-canvas" data-ghost width="10" height="10" aria-hidden="true"></canvas>
               </div>
@@ -447,6 +447,6 @@
     <!-- workspace overlays mount here, above the blurred console -->
     <div class="overlay-root" data-overlay-root></div>
 
-    <script type="module" src="/app/js/main.js?v=phantom-live-20260712-220"></script>
+    <script type="module" src="/app/js/main.js?v=phantom-live-20260712-233"></script>
   </body>
 </html>

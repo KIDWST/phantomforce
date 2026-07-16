@@ -13,6 +13,7 @@ process.env.PHANTOMFORCE_SERVER_LISTEN = "false";
 process.env.PHANTOMFORCE_SERVER_LOGGER = "false";
 process.env.PHANTOMFORCE_AUTH_PROVIDER = "demo";
 process.env.PHANTOMFORCE_ENABLE_DEMO_AUTH = "true";
+process.env.PHANTOMFORCE_ACCESS_REPOSITORY = "json-file";
 
 const owner: AccessSession = { id: "owner", label: "Owner", role: "admin", canManageAccess: true, isSuperAdmin: true, orgId: "org-owner", orgRole: "owner" };
 const client: AccessSession = { id: "client", label: "Client", role: "client", canManageAccess: false, orgId: "org-client", orgRole: "member" };
@@ -53,6 +54,21 @@ try {
   assert(safePolicy.allowed === true, "Lawful public-source analysis should remain available.");
   const discussionPolicy = await intel.auditCompetitorIntelligenceRequest(owner, { action: "Aggregate public complaints about password resets and allegations of fake reviews" });
   assert(discussionPolicy.allowed === true, "The policy must distinguish analysis of a problem from performing the prohibited act.");
+
+  await intel.saveBusinessProfile(owner, {
+    tenantId: "org-market-board",
+    businessName: "West Loop Strength Lab",
+    category: "Local fitness studio",
+    offering: "personal training and small group fitness",
+    audience: "busy professionals",
+    geography: "Chicago",
+    positioning: "High-accountability coaching for people who want a sustainable plan.",
+    keywords: "personal training, strength coaching, fitness studio",
+  });
+  const seededSnapshot = await intel.getCompetitorIntelligenceSnapshot(owner, { tenantId: "org-market-board", entitled: true, aggressiveEntitled: true, competitorLimit: 10, signalLimit: 100 });
+  assert(seededSnapshot.discoveryRuns.length === 1, "Saving a business profile should immediately create a discovery run.");
+  assert(seededSnapshot.opportunities.length >= 4, "Saving a business profile should seed starter market-board opportunities.");
+  assert(seededSnapshot.opportunities.every((item) => item.sourceUrl.startsWith("https://www.google.com/search?")), "Starter opportunities should link to public source searches.");
 
   let deceptiveEvidenceBlocked = false;
   try { await intel.createMysteryEvidence(owner, { competitorId: created.id, title: "Demo", observations: "Notes", legitimatelyObtained: true, noDeceptionConfirmed: false }); } catch { deceptiveEvidenceBlocked = true; }

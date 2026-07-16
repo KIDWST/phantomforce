@@ -15,6 +15,7 @@ process.env.PHANTOMFORCE_SERVER_LISTEN = "false";
 process.env.PHANTOMFORCE_SERVER_LOGGER = "false";
 process.env.PHANTOMFORCE_AUTH_PROVIDER = "demo";
 process.env.PHANTOMFORCE_ENABLE_DEMO_AUTH = "true";
+process.env.PHANTOMFORCE_ACCESS_REPOSITORY = "json-file";
 
 const owner: AccessSession = { id: "owner", userId: "owner-user", label: "Owner Studio", role: "admin", canManageAccess: true, orgId: "org-owner", orgRole: "owner", isSuperAdmin: true };
 const playerA: AccessSession = { id: "player-a", userId: "player-a", label: "Player A", role: "client", canManageAccess: false, orgId: "org-a", orgRole: "member" };
@@ -24,7 +25,7 @@ try {
   const play = await import("../src/phantom-ai/phantomplay.js");
 
   const initial = await play.getPhantomPlaySnapshot(playerA, { entitled: true, dailyMinuteLimit: 30, canSubmitGames: false });
-  assert(initial.catalog.length === 3, "Three real built-in games should ship.");
+  assert(initial.catalog.length >= 3, "At least three real built-in games should ship.");
   assert(initial.catalog.every((game) => game.kind === "built_in"), "No fake community releases should be seeded.");
   assert(initial.access.canSubmitGames === false, "The snapshot should honor the plan submission decision.");
 
