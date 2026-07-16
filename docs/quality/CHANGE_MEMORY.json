@@ -284,6 +284,87 @@
           "description": "Regression guard against checking only one side twice."
         }
       ]
+    },
+    {
+      "id": "phantom-rumble-clean-start-and-recovery",
+      "status": "active",
+      "title": "Phantom Rumble starts at menu and keeps ledge recovery",
+      "ownerDecision": "Phantom Rumble must not open on the victory overlay, and fighters need real ledge-save recovery so the game feels playable instead of instantly punishing.",
+      "requiredPatterns": [
+        {
+          "file": "app/games/phantom-rumble.html",
+          "pattern": "setupEl\\.hidden=false;endEl\\.hidden=true;pauseEl\\.hidden=true;hudEl\\.hidden=true;touchEl\\.hidden=true;",
+          "description": "The menu reset hides the victory overlay and restores the setup screen."
+        },
+        {
+          "file": "app/games/phantom-rumble.html",
+          "pattern": "function tryLedgeGrab\\(f\\)",
+          "description": "Ledge-save recovery exists."
+        },
+        {
+          "file": "app/games/phantom-rumble.html",
+          "pattern": "ledge:0,ledgeSide:0,ledgeCooldown:0",
+          "description": "Fighter state tracks ledge recovery and cooldown."
+        },
+        {
+          "file": "app/games/phantom-rumble.html",
+          "pattern": "if\\(!f\\.human\\)\\{jump\\(f\\);f\\.ai\\.jumpCd=\\.55\\}else jump\\(f\\);",
+          "description": "Bots and humans can climb back from ledge hang."
+        },
+        {
+          "file": "server/src/phantom-ai/phantomplay-v2.ts",
+          "pattern": "phantom-rumble\\.html\\?v=1\\.3\\.1",
+          "description": "Server catalog points at the fixed Phantom Rumble version."
+        },
+        {
+          "file": "app/js/phantomplay-v2.js",
+          "pattern": "phantom-rumble\\.html\\?v=2\\.2\\.4",
+          "description": "Offline catalog cache-busts the fixed Phantom Rumble version."
+        }
+      ]
+    },
+    {
+      "id": "medialab-layer-transform-controls",
+      "status": "active",
+      "title": "Media Lab keeps simple layer transform controls",
+      "ownerDecision": "Media Lab/editor layer controls must stay simple and useful: reset transform, center/fill, align selected layers, and distribute selected layers must remain available on desktop and mobile.",
+      "requiredPatterns": [
+        {
+          "file": "app/js/content-editor.js",
+          "pattern": "export function alignSelectedLayers\\(composition, mode\\)",
+          "description": "Shared composition helper can align one or more selected layers."
+        },
+        {
+          "file": "app/js/content-editor.js",
+          "pattern": "export function distributeSelectedLayers\\(composition, axis\\)",
+          "description": "Shared composition helper can distribute three or more selected layers."
+        },
+        {
+          "file": "app/js/medialab.js",
+          "pattern": "data-ml-layer-reset-transform",
+          "description": "Layer inspector exposes one-click transform reset."
+        },
+        {
+          "file": "app/js/medialab.js",
+          "pattern": "data-ml-layer-align=\"\\$\\{esc\\(mode\\)\\}\"",
+          "description": "Layer inspector exposes alignment controls."
+        },
+        {
+          "file": "app/js/medialab.js",
+          "pattern": "data-ml-layer-distribute=\"x\"",
+          "description": "Layer inspector exposes distribution controls."
+        },
+        {
+          "file": "app/phantom.css",
+          "pattern": "\\.ml-layer-align-actions\\s*\\{[\\s\\S]*grid-template-columns:\\s*repeat\\(auto-fit,\\s*minmax\\(68px,\\s*1fr\\)\\)",
+          "description": "Alignment controls wrap in the compact editor panel."
+        },
+        {
+          "file": "scripts/test-medialab-editor.mjs",
+          "pattern": "alignSelectedLayers\\(layout, \"hcenter\"\\)",
+          "description": "Media Lab editor tests cover alignment behavior."
+        }
+      ]
     }
   ]
 }

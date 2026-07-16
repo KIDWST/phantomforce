@@ -16,7 +16,7 @@ import {
   addImageLayer, addTextLayer, alignSelectedLayers, applyLayerDragWithSnap, cloneImageEditState, compositionSnapshot, distributeSelectedLayers, duplicateLayer,
   canvasPoint, drawCompositionOverlay, freshComposition, hitTestLayer, hitTestResizeHandle,
   loadCompositionImages, moveLayerOrder, moveLayerToIndex, pushEditorSnapshot, removeSelectedLayers,
-  renderComposition, restoreComposition, selectLayer, selectedLayers,
+  renderComposition, restoreComposition, selectAllLayers, selectLayer, selectedLayers,
 } from "./content-editor.js?v=phantom-live-20260716-284";
 import { loadImageForEditing, exportCanvas, requestAiEdit, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260716-284";
 import { mountVideoEditor } from "./videocut.js?v=phantom-live-20260716-284";

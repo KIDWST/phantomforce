@@ -9,7 +9,7 @@
 import {
   currentTenantId, isAdmin, session,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260716-283";
+} from "./store.js?v=phantom-live-20260716-284";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
 const mobilePlaySurface = () => typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;
@@ -66,9 +66,9 @@ const OFFLINE_GAMES = [
   ["neon-drift", "Neon Drift", "Arcade", "/app/games/neon-drift.html?v=1.2.4"],
   ["signal-match", "Signal Match", "Puzzle", "/app/games/signal-match.html"],
   ["focus-stack", "Focus Stack", "Focus", "/app/games/focus-stack.html"],
-  ["phantom-rumble", "Phantom Rumble", "Arcade", "/app/games/phantom-rumble.html?v=2.2.3"],
+  ["phantom-rumble", "Phantom Rumble", "Arcade", "/app/games/phantom-rumble.html?v=2.2.4"],
   ["sudoku-signal", "Sudoku Signal", "Focus", "/app/games/sudoku-signal.html"],
-].map(([id, title, category, launchUrl]) => ({ id, title, summary: id === "phantom-rumble" ? "Premium local platform fighter with guard, parry, dodge, ledge-save recovery, bots, and local multiplayer." : "Offline built-in game.", description: "", category, tags: [], contentRating: "everyone", developer: "Tak", kind: "built_in", launchUrl, thumbnail: "", featured: id === "phantom-rumble", version: id === "phantom-rumble" ? "2.2.3" : "1.0.0", controls: id === "phantom-rumble" ? "Keyboard controls." : "", progressSupport: true, scoreSupport: true }));
+].map(([id, title, category, launchUrl]) => ({ id, title, summary: id === "phantom-rumble" ? "Premium local platform fighter with guard, parry, dodge, ledge-save recovery, bots, and local multiplayer." : "Offline built-in game.", description: "", category, tags: [], contentRating: "everyone", developer: "Tak", kind: "built_in", launchUrl, thumbnail: "", featured: id === "phantom-rumble", version: id === "phantom-rumble" ? "2.2.4" : "1.0.0", controls: id === "phantom-rumble" ? "Keyboard controls." : "", progressSupport: true, scoreSupport: true }));
 
 function offlineState() {
   let saved = {};
