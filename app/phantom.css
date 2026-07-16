@@ -421,6 +421,13 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   border: 1px solid rgba(30, 240, 255, 0.3); background: rgba(30, 240, 255, 0.06);
   font: 500 9.5px "DM Mono", monospace; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(127, 230, 255, 0.85);
 }
+.dept-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 13px; }
+.dept-card { cursor: pointer; transition: border-color 0.2s, background 0.2s; }
+.dept-card:hover { border-color: var(--line-strong); }
+.dept-card-open { grid-column: 1 / -1; border-color: rgba(65, 255, 161, 0.4); background: rgba(65, 255, 161, 0.045); }
+.dept-count { font: 500 11px "DM Mono", monospace; color: var(--neon); white-space: nowrap; }
+.dept-members { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 11px; margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--line); cursor: default; }
+.dept-member { cursor: default; }
 .outcome-workstreams { display: grid; gap: 6px; margin: 10px 0; }
 .outcome-workstream {
   display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; text-align: left;

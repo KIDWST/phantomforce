@@ -6,7 +6,7 @@
 import {
   store, uid, visible, isAdmin, currentWs, wsName, pushActivity, resolveApproval,
   moneyView, fmtMoney, fmtDate, fmtDateTime, ago, daysUntil, statusLabel,
-  PACKAGES, RETAINERS, outcomesView,
+  PACKAGES, RETAINERS, outcomesView, workforceByDepartment,
 } from "./store.js";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -610,24 +610,39 @@ function renderWorkforce(el, rerender) {
       <p class="ws-note">Next step: check Approvals for anything waiting on you.</p>`;
     return;
   }
+  const departments = workforceByDepartment();
   el.innerHTML = `
-    <div class="ws-toolbar"><p class="ws-note">Your AI workforce, desk by desk. Statuses: active · idle · waiting · blocked · needs approval.</p></div>
-    <div class="card-grid">
-      ${agents.map((a) => `
-        <article class="record agent-card agent-${esc(a.status)}">
-          <div class="record-top"><h4><span class="agent-dot"></span>${esc(a.name)}</h4>${chip(a.status === "needs-approval" ? "pending" : a.status)}</div>
-          <p class="record-sub">${esc(a.role)}</p>
-          <p class="record-next">▸ ${esc(a.mission)}</p>
-          <div class="agent-stats">
-            <span><b>${a.d1}</b> 24h</span><span><b>${a.d7}</b> 7d</span><span><b>${a.d30}</b> 30d</span>
-            <span><b>${esc(a.tokens)}</b> tokens</span><span><b>${esc(a.cost)}</b> cost</span>
-          </div>
-          <p class="record-notes"><b>Last output:</b> ${esc(a.last)}</p>
-          ${a.next && a.next !== "—" ? `<p class="record-notes"><b>Next:</b> ${esc(a.next)}</p>` : ""}
-          <p class="agent-bundle">internal lane: ${esc(a.bundle)}</p>
+    <div class="ws-toolbar"><p class="ws-note">A comprehensible company, not an agent inventory. ${agents.length} workers total, grouped into 7 departments — click one to see who's on it.</p></div>
+    <div class="dept-grid">
+      ${departments.map((d) => `
+        <article class="record dept-card ${expandedDepts.has(d.id) ? "dept-card-open" : ""}" data-act="toggle-dept" data-id="${esc(d.id)}">
+          <div class="record-top"><h4>${esc(d.name)}</h4><span class="dept-count">${d.active}/${d.total} active</span></div>
+          <p class="record-sub">${esc(d.blurb)}</p>
+          <p class="record-notes">${d.total ? `${d.d1Total} action${d.d1Total === 1 ? "" : "s"} in the last 24h` : "No desk assigned yet"}</p>
+          ${expandedDepts.has(d.id) && d.agents.length ? `<div class="dept-members">
+            ${d.agents.map((a) => `
+              <div class="record agent-card agent-${esc(a.status)} dept-member">
+                <div class="record-top"><h4><span class="agent-dot"></span>${esc(a.name)}</h4>${chip(a.status === "needs-approval" ? "pending" : a.status)}</div>
+                <p class="record-sub">${esc(a.role)}</p>
+                <p class="record-next">▸ ${esc(a.mission)}</p>
+                <div class="agent-stats">
+                  <span><b>${a.d1}</b> 24h</span><span><b>${a.d7}</b> 7d</span><span><b>${a.d30}</b> 30d</span>
+                  <span><b>${esc(a.tokens)}</b> tokens</span><span><b>${esc(a.cost)}</b> cost</span>
+                </div>
+                <p class="record-notes"><b>Last output:</b> ${esc(a.last)}</p>
+                ${a.next && a.next !== "—" ? `<p class="record-notes"><b>Next:</b> ${esc(a.next)}</p>` : ""}
+              </div>`).join("")}
+          </div>` : ""}
         </article>`).join("")}
     </div>`;
+  bindActions(el, {
+    "toggle-dept": (id) => {
+      if (expandedDepts.has(id)) expandedDepts.delete(id); else expandedDepts.add(id);
+      rerender();
+    },
+  });
 }
+let expandedDepts = new Set();
 
 /* ============================= APPROVALS ============================= */
 function renderApprovals(el, rerender) {

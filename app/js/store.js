@@ -381,6 +381,38 @@ export function outcomesView() {
 }
 function chip_(s) { return statusLabel(s); }
 
+/* ---------------- derived: workforce by department ----------------
+   "Lead with a small Phantom workforce, not 17 tabs" — the 7
+   departments from the Command architecture, populated with the SAME
+   13 agents already seeded above (no new fake workers added). The
+   1,226-worker figure the business talks about publicly is meant to
+   live as depth *under* these 7 groupings, never as a raw list the
+   owner has to parse — this mapping is what makes that possible. */
+export const DEPARTMENTS = [
+  { id: "growth", name: "Growth", blurb: "Finds opportunities, campaigns, leads, competitive gaps, and ways to increase revenue." },
+  { id: "creative", name: "Creative", blurb: "Creates media, branding, copy, websites, posts, and campaign assets." },
+  { id: "operations", name: "Operations", blurb: "Runs automations, schedules work, tracks deadlines, and coordinates execution." },
+  { id: "client-care", name: "Client Care", blurb: "Manages leads, customers, follow-ups, proposals, and client delivery." },
+  { id: "finance", name: "Finance", blurb: "Tracks invoices, expenses, cash flow, and business health." },
+  { id: "intelligence", name: "Intelligence", blurb: "Studies performance, competitors, trends, risks, and strategic opportunities." },
+  { id: "technology", name: "Technology", blurb: "Manages sites, integrations, apps, diagnostics, and advanced developer work." },
+];
+const AGENT_DEPARTMENT = {
+  "ag-router": "operations", "ag-leads": "growth", "ag-forge": "growth",
+  "ag-media": "creative", "ag-site": "creative", "ag-store": "creative",
+  "ag-sec": "technology", "ag-review": "client-care", "ag-follow": "client-care",
+  "ag-money": "finance", "ag-book": "operations", "ag-deliver": "operations",
+  "ag-clean": "operations",
+};
+export function workforceByDepartment() {
+  return DEPARTMENTS.map((dept) => {
+    const agents = store.state.agents.filter((a) => AGENT_DEPARTMENT[a.id] === dept.id);
+    const active = agents.filter((a) => a.status === "active").length;
+    const d1Total = agents.reduce((s, a) => s + (a.d1 || 0), 0);
+    return { ...dept, agents, active, total: agents.length, d1Total };
+  });
+}
+
 /* ---------------- approvals ---------------- */
 export function resolveApproval(id, approved) {
   const a = store.state.approvals.find((x) => x.id === id);
