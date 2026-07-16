@@ -16,6 +16,8 @@ const phantomRumble = read("../app/games/phantom-rumble.html");
 const cubeTown = read("../app/games/cubetown/cubetown.js");
 const cubeTownIndex = read("../app/games/cubetown/index.html");
 const flagshipCatalog = read("../server/src/phantom-ai/phantomplay-flagship.ts");
+const kingdomBreakers = read("../app/games/kingdom-breakers.html");
+const kingdomBreakersScript = kingdomBreakers.match(/<script>([\s\S]*)<\/script>/u)?.[1] || "";
 const appFiles = [index, main, module, v2Module, ...games];
 
 assert.match(main, /id:\s*"phantomplay"[\s\S]*label:\s*"PhantomPlay"/u, "PhantomPlay must be in the native navigation.");
@@ -156,5 +158,12 @@ assert.match(phantomRumble, /if\(f\.ledge>0\|\|f\.ledgeCooldown>0\|\|f\.vy<0/u, 
 assert.match(phantomRumble, /if\(f\.ledge>0\)\{[\s\S]*!f\.human[\s\S]*jump\(f\)[\s\S]*f\.ai\.jumpCd=\.55/u, "Phantom Rumble bots must auto-recover from ledge instead of looping.");
 assert.match(phantomRumble, /function updateCamera|camera\.z|function sx/u, "Phantom Rumble must keep a dynamic arena camera without breaking normalized stage sizing.");
 assert.match(phantomRumble, /touch-action:none|overscroll-behavior:none|env\(safe-area-inset-bottom\)/u, "Phantom Rumble must be tuned for mobile touch play.");
+assert.match(kingdomBreakers, /function buildDuelLevel\(seed\)/u, "Kingdom Breakers duel mode must build a dedicated two-castle arena.");
+assert.doesNotThrow(() => new Function(kingdomBreakersScript), "Kingdom Breakers script must parse after duel arena changes.");
+assert.match(kingdomBreakers, /owner:'player'[\s\S]*owner:'bot'/u, "Kingdom Breakers duel mode must assign separate player and bot castle ownership.");
+assert.match(kingdomBreakers, /function targetOwnerForShooter\(shooter\)/u, "Kingdom Breakers duel projectiles must resolve against the opposing castle only.");
+assert.match(kingdomBreakers, /predictTrajectory\(ammoKey,ang,pw,220,'bot'\)/u, "Kingdom Breakers bot aim prediction must originate from the bot engine.");
+assert.match(kingdomBreakers, /function duelWardenDown\(owner\)/u, "Kingdom Breakers duel mode must end around Warden defeat, not shared breach score.");
+assert.match(kingdomBreakers, /duelWardenDown\('bot'\)[\s\S]*duelWardenDown\('player'\)/u, "Kingdom Breakers duel end checks must inspect both Wardens.");
 
 console.log("PhantomPlay frontend and game safety checks passed.");
