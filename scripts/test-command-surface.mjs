@@ -80,6 +80,12 @@ assert.match(main, /return items\.sort\(\(a, b\) => \(b\.weight \|\| 0\) - \(a\.
   "Attention signals must be ranked before the bell, strip, and decision deck render them.");
 assert.match(main, /function decisionMetaLabel\(item = \{\}\)/u,
   "Decision cards must explain why each card is actionable.");
+assert.match(main, /function decisionWhyText\(item = \{\}\)/u,
+  "Decision cards must explain why each signal matters.");
+assert.match(main, /function decisionEvidenceText\(item = \{\}\)/u,
+  "Decision cards must show the evidence behind the signal.");
+assert.match(main, /function decisionConfidenceText\(item = \{\}\)/u,
+  "Decision cards must show confidence instead of generic source text.");
 assert.match(main, /const items = attentionItems\(\)\.slice\(0, 3\);/u,
   "Decision deck must reuse the same real attention source and stay capped.");
 assert.match(main, /deck\.hidden = items\.length === 0/u,
@@ -93,6 +99,7 @@ assert.match(css, /\.cw-automation-empty\s*\{/u, "Automation widget must have a 
 assert.match(css, /\.cw-dock-node::before/u, "Command dock nodes should expose visible status dots.");
 assert.match(css, /\.hero2-proof\s*\{/u, "Recent handled proof line must have compact dashboard styling.");
 assert.match(css, /\.decision-deck\s*\{/u, "Decision deck must have compact command-center styling.");
+assert.match(css, /\.decision-intel\s*\{/u, "Decision deck must style why/evidence context compactly.");
 assert.match(css, /\.outcome-strip\s*\{/u, "Active outcomes must have a dedicated command-center surface.");
 assert.match(css, /\.operating-pulse\s*\{/u, "Operating pulse must have a compact command-center surface.");
 assert.match(css, /@keyframes operatingPulse/u, "Operating pulse should animate department readiness, not decorative thinking.");

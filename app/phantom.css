@@ -13359,6 +13359,38 @@ body .phantom .workspace-page :where(
 }
 .decision-copy h3 { margin: 0; color: var(--ink); font-size: clamp(15px, 1.25vw, 18px); line-height: 1.18; letter-spacing: -0.01em; }
 .decision-copy span { color: var(--dim); font-size: var(--fs-sm); line-height: 1.42; }
+.decision-intel {
+  position: relative;
+  display: grid;
+  gap: 6px;
+  padding: 9px;
+  border: 1px solid rgba(65, 255, 161, 0.1);
+  border-radius: var(--r-sm);
+  background: rgba(0, 0, 0, 0.16);
+}
+.decision-intel p {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  gap: 8px;
+  margin: 0;
+  align-items: start;
+}
+.decision-intel b {
+  color: var(--neon);
+  font: 800 9px / 1.35 var(--font-mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.decision-intel span {
+  min-width: 0;
+  color: rgba(207, 255, 226, 0.68);
+  font-size: 11px;
+  line-height: 1.36;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
 .decision-meta { position: relative; display: flex; flex-wrap: wrap; gap: 6px; }
 .decision-meta span {
   padding: 5px 8px;

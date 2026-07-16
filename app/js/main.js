@@ -6,44 +6,44 @@ import {
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260716-299";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260716-299";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260716-299";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260716-299";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260716-299";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260716-299";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260716-299";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260716-299";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260716-299";
-import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260716-299";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260716-299";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260716-299";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260716-299";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260716-299";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260716-299";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260716-299";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260716-299";
-import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260716-299";
-import { mountAmbient } from "./ambient.js?v=phantom-live-20260716-299";
-import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260716-299";
+} from "./store.js?v=phantom-live-20260716-300";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260716-300";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260716-300";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260716-300";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260716-300";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260716-300";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260716-300";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260716-300";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260716-300";
+import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260716-300";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260716-300";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260716-300";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260716-300";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260716-300";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260716-300";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260716-300";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260716-300";
+import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260716-300";
+import { mountAmbient } from "./ambient.js?v=phantom-live-20260716-300";
+import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260716-300";
 import {
   fetchAuthConfig, databaseLogin, databaseLogout, customerRegister, requestCustomerPasswordReset,
   completeCustomerPasswordReset, switchOrg, fetchAuthMe, fetchEntitlementsSummary,
-} from "./orgs.js?v=phantom-live-20260716-299";
-import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260716-299";
-import { assetsAvailable } from "./orgs.js?v=phantom-live-20260716-299";
-import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260716-299";
+} from "./orgs.js?v=phantom-live-20260716-300";
+import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260716-300";
+import { assetsAvailable } from "./orgs.js?v=phantom-live-20260716-300";
+import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260716-300";
 // PhantomPlay V2 platform shell (Home/Solo/Friends/Workspace/Dev Hub) - opt-in
 // while it hardens: set localStorage "pf.phantomplay.v2" = "1" (the V2 shell has
 // a "Classic view" button to switch back). Classic stays the default experience.
-import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260716-299";
+import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260716-300";
 const phantomPlayV2Opted = () => { try { return localStorage.getItem("pf.phantomplay.v2") === "1"; } catch { return false; } };
-import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260716-299";
+import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260716-300";
 import {
   customizeNavigation,
   loadOrganizationCustomization,
-} from "./customization.js?v=phantom-live-20260716-299";
-import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260716-299";
+} from "./customization.js?v=phantom-live-20260716-300";
+import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260716-300";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -1253,7 +1253,7 @@ const MODES = {
   admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260716-299";
+const POSE_VERSION = "phantom-live-20260716-300";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -1736,27 +1736,27 @@ function serverAttentionItems() {
   const items = [];
   const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
   const pending = pulse?.approvals?.available ? pulse.approvals.pending || 0 : 0;
-  if (pending > 0) items.push({ kind: "approval", weight: 400, icon: "check", tone: "warn", title: `${plural(pending, "approval")} waiting on you`, sub: "Server-confirmed approval queue", open: "approvals" });
+  if (pending > 0) items.push({ kind: "approval", weight: 400, icon: "check", tone: "warn", title: `${plural(pending, "approval")} waiting on you`, sub: "Server-confirmed approval queue", evidence: `/api/organization/pulse reports ${plural(pending, "pending approval")}.`, confidence: "High", why: "Owner-gated work cannot move until you decide.", open: "approvals" });
   const failed = pulse?.agentRuns?.available ? pulse.agentRuns.failed || 0 : 0;
-  if (failed > 0) items.push({ kind: "agent-failure", weight: 390, icon: "bolt", tone: "warn", title: `${plural(failed, "agent run")} failed — work stopped`, sub: "Open Automations to see what broke", open: "automation" });
+  if (failed > 0) items.push({ kind: "agent-failure", weight: 390, icon: "bolt", tone: "warn", title: `${plural(failed, "agent run")} failed — work stopped`, sub: "Open Automations to see what broke", evidence: `/api/organization/pulse reports ${plural(failed, "failed agent run")}.`, confidence: "High", why: "A failed run means a workflow needs inspection before the next move.", open: "automation" });
   const running = pulse?.agentRuns?.available ? pulse.agentRuns.running || 0 : 0;
-  if (running > 0) items.push({ kind: "running", weight: 120, icon: "clock", tone: "ok", title: `${plural(running, "job")} running now`, sub: "Agents are working in the background", open: "automation" });
+  if (running > 0) items.push({ kind: "running", weight: 120, icon: "clock", tone: "ok", title: `${plural(running, "job")} running now`, sub: "Agents are working in the background", evidence: `/api/organization/pulse reports ${plural(running, "running job")}.`, confidence: "High", why: "Work is already moving; monitor it before starting duplicate work.", open: "automation" });
   const failing = pulse?.automations?.available ? pulse.automations.failing || [] : [];
-  if (failing.length > 0) items.push({ kind: "automation-failure", weight: 300, icon: "bolt", tone: "warn", title: `Automation failing: ${failing[0].name || failing[0].id}`, sub: failing[0].lastSummary || `${failing.length} automation(s) reporting failures`, open: "automation" });
+  if (failing.length > 0) items.push({ kind: "automation-failure", weight: 300, icon: "bolt", tone: "warn", title: `Automation failing: ${failing[0].name || failing[0].id}`, sub: failing[0].lastSummary || `${failing.length} automation(s) reporting failures`, evidence: failing[0].lastSummary || `${failing.length} failing automation record(s) from server pulse.`, confidence: "High", why: "A broken automation can silently stop recurring business work.", open: "automation" });
   const opp = serverOpportunity && serverOpportunityTenant === currentTenantId() ? serverOpportunity : null;
-  if (opp) items.push({ kind: "opportunity", weight: 110, icon: "bolt", tone: "ok", title: `Opportunity: ${opp.title}`, sub: `${opp.action.label || "Open"} — from live graph analysis`, open: opp.action.route });
+  if (opp) items.push({ kind: "opportunity", weight: 110, icon: "bolt", tone: "ok", title: `Opportunity: ${opp.title}`, sub: `${opp.action.label || "Open"} — from live graph analysis`, evidence: "Live graph analysis returned a high-impact opportunity.", confidence: "Medium", why: "This may become an outcome if the evidence checks out.", open: opp.action.route });
   return items;
 }
 function attentionItems() {
   const items = [];
   visible(store.state.approvals).filter((a) => a.status === "pending").slice(0, 3)
-    .forEach((a) => items.push({ kind: "approval", weight: 400, icon: "check", tone: "warn", title: a.title, sub: "Waiting on your approval", open: "approvals" }));
+    .forEach((a) => items.push({ kind: "approval", weight: 400, icon: "check", tone: "warn", title: a.title, sub: "Waiting on your approval", evidence: `Approval queue status: ${a.status}.`, confidence: "High", why: "External or risky work remains blocked until you approve it.", open: "approvals" }));
   visible(store.state.security).filter((s) => s.posture && s.posture !== "clean")
-    .forEach(() => items.push({ kind: "security", weight: 320, icon: "shield", tone: "warn", title: "Security posture needs a look", sub: "Protect flagged attention", open: "protect" }));
+    .forEach((s) => items.push({ kind: "security", weight: 320, icon: "shield", tone: "warn", title: "Security posture needs a look", sub: "Protect flagged attention", evidence: `Protect posture: ${s.posture}.`, confidence: "Medium", why: "Security attention should be reviewed before more automation is trusted.", open: "protect" }));
   visible(store.state.leads).filter((l) => l.due && new Date(l.due).getTime() < Date.now() + 864e5 && l.status !== "won" && l.status !== "lost").slice(0, 2)
-    .forEach((l) => items.push({ kind: "follow-up", weight: 310, icon: "users", tone: "warn", title: `Follow up: ${l.name}`, sub: l.next || "Due today", open: "leads" }));
+    .forEach((l) => items.push({ kind: "follow-up", weight: 310, icon: "users", tone: "warn", title: `Follow up: ${l.name}`, sub: l.next || "Due today", evidence: `CRM due date: ${l.due}. Status: ${l.status || "open"}.`, confidence: "High", why: "A due follow-up can turn into lost pipeline if it sits.", open: "leads" }));
   visible(store.state.proposals).filter((p) => p.status === "sent-ready").slice(0, 2)
-    .forEach((p) => items.push({ kind: "quote-ready", weight: 220, icon: "dollar", tone: "ok", title: `Quote ready to send: ${p.client}`, sub: fmtMoney(p.price), open: "proposals" }));
+    .forEach((p) => items.push({ kind: "quote-ready", weight: 220, icon: "dollar", tone: "ok", title: `Quote ready to send: ${p.client}`, sub: fmtMoney(p.price), evidence: `Proposal status: ${p.status}. Value: ${fmtMoney(p.price)}.`, confidence: "High", why: "A send-ready quote is prepared work waiting on a final human gate.", open: "proposals" }));
   items.push(...serverAttentionItems());
   return items.sort((a, b) => (b.weight || 0) - (a.weight || 0));
 }
@@ -1819,6 +1819,21 @@ function decisionMetaLabel(item = {}) {
   return "review safe";
 }
 
+function decisionWhyText(item = {}) {
+  if (item.why) return item.why;
+  if (item.kind === "opportunity") return "This could become a better outcome if the evidence is worth acting on.";
+  if (item.kind === "running") return "Work is already moving, so the useful move is to monitor progress.";
+  return "This signal may affect current work, money, risk, or follow-up timing.";
+}
+
+function decisionEvidenceText(item = {}) {
+  return item.evidence || item.sub || "Evidence comes from current PhantomForce state.";
+}
+
+function decisionConfidenceText(item = {}) {
+  return item.confidence || (item.kind === "opportunity" ? "Medium" : "High");
+}
+
 function renderDecisionDeck() {
   const deck = $("[data-decision-deck]");
   if (!deck) return;
@@ -1839,9 +1854,13 @@ function renderDecisionDeck() {
             <h3>${esc(item.title)}</h3>
             <span>${esc(item.sub || "Open for evidence and next action.")}</span>
           </div>
+          <div class="decision-intel">
+            <p><b>Why</b><span>${esc(decisionWhyText(item))}</span></p>
+            <p><b>Evidence</b><span>${esc(decisionEvidenceText(item))}</span></p>
+          </div>
           <div class="decision-meta">
             <span>${esc(decisionMetaLabel(item))}</span>
-            <span>source: live signals</span>
+            <span>confidence: ${esc(decisionConfidenceText(item))}</span>
           </div>
           <button class="decision-open" data-open-ws="${esc(item.open || "activity")}" type="button">
             ${esc(decisionCtaLabel(item))} ${svg("arrow")}
