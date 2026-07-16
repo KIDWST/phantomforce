@@ -14,6 +14,7 @@ assert.match(index, /data-hero-sub/u, "Dashboard hero must have a data-backed op
 assert.match(index, /data-hero-proof/u, "Dashboard hero must have a recent proof line for handled work.");
 assert.match(index, /data-decision-deck/u, "Dashboard must have a real-data decision deck mount.");
 assert.match(index, /data-outcome-strip/u, "Dashboard must have a first-class active outcomes section.");
+assert.match(index, /data-operating-pulse/u, "Dashboard must show a compact operating pulse from real state.");
 assert.match(index, /data-handled-proof/u, "Dashboard must have a handled-work proof strip mount.");
 assert.match(index, /data-quick-title>Next moves</u, "Right rail should lead with next moves, not generic quick actions.");
 assert.match(index, /data-work-title>Work in motion</u, "Right rail should show work in motion, not an old mission queue.");
@@ -29,6 +30,12 @@ assert.match(main, /function renderCommandToolDock\(\)/u, "Command surface shoul
 assert.match(main, /function renderAutomationDock\(automations = \[\]\)/u, "Command surface should define the automation dock renderer.");
 assert.match(main, /function commandDepartmentMap\(tools = \[\]\)/u,
   "Workforce widget should condense real tool lanes into human departments.");
+assert.match(main, /function operatingPulseItems\(\)/u,
+  "Command dashboard should derive department pulse items from the real tool spine.");
+assert.match(main, /function renderOperatingPulse\(\)/u,
+  "Command dashboard should render the compact operating pulse.");
+assert.match(main, /renderOutcomeStrip\(\);[\s\S]*?renderOperatingPulse\(\);[\s\S]*?renderHandledProofDeck\(\);/u,
+  "Console render order should put the operating pulse between outcomes and handled proof.");
 assert.match(main, /class="cw-dept-map"/u,
   "Workforce widget should render as a compact department map, not a raw worker list.");
 assert.match(main, /class="cw-automation-empty"/u,
@@ -87,6 +94,8 @@ assert.match(css, /\.cw-dock-node::before/u, "Command dock nodes should expose v
 assert.match(css, /\.hero2-proof\s*\{/u, "Recent handled proof line must have compact dashboard styling.");
 assert.match(css, /\.decision-deck\s*\{/u, "Decision deck must have compact command-center styling.");
 assert.match(css, /\.outcome-strip\s*\{/u, "Active outcomes must have a dedicated command-center surface.");
+assert.match(css, /\.operating-pulse\s*\{/u, "Operating pulse must have a compact command-center surface.");
+assert.match(css, /@keyframes operatingPulse/u, "Operating pulse should animate department readiness, not decorative thinking.");
 assert.match(css, /@keyframes outcomeProgress/u, "Outcome cards should animate operational progress, not decorative thinking.");
 assert.match(css, /\.handled-proof\s*\{/u, "Handled proof strip must have compact proof styling.");
 assert.match(css, /\.quick-item i\s*\{/u, "Next move rail must support compact evidence subtext.");
