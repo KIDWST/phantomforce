@@ -106,6 +106,19 @@ try {
   $states.Add((Result "WARN" "Hermes/backend on $HermesPort did not answer /health."))
 }
 
+Section "Change memory guard"
+$guardPath = Join-Path $RepoRoot "scripts\guard-change-memory.mjs"
+if (Test-Path -LiteralPath $guardPath) {
+  $guardOutput = & node.exe $guardPath --repo-root $RepoRoot --live --admin-port $AdminPort --hermes-port $HermesPort 2>&1
+  $guardExit = $LASTEXITCODE
+  $guardSummary = (($guardOutput | ForEach-Object { [string]$_ }) -join " ")
+  if ([string]::IsNullOrWhiteSpace($guardSummary)) { $guardSummary = "no output" }
+  if ($guardSummary.Length -gt 260) { $guardSummary = $guardSummary.Substring(0, 260) }
+  $states.Add((Result ($(if ($guardExit -eq 0) { "OK" } else { "FAIL" })) $guardSummary))
+} else {
+  $states.Add((Result "FAIL" "Missing scripts\\guard-change-memory.mjs. Accepted/rejected owner decisions are not protected."))
+}
+
 Section "Sidebar guardrail"
 $customization = Get-Content -LiteralPath (Join-Path $RepoRoot "app\js\customization.js") -Raw
 $main = Get-Content -LiteralPath (Join-Path $RepoRoot "app\js\main.js") -Raw

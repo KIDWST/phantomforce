@@ -9,10 +9,10 @@ import {
   PACKAGES, RETAINERS, FINANCE_CATEGORIES, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS, CHAT_HISTORY_RETENTION_DAYS,
   addMemory, toggleMemoryRemember, forgetMemory, forgetChatHistory, memoryStats, memoryRetention, chatHistoryStats, chatHistoryRetention,
   session,
-} from "./store.js?v=phantom-live-20260716-282";
+} from "./store.js?v=phantom-live-20260716-283";
 import {
   isDatabaseSession, canManageActiveOrg, fetchServerApprovals, decideServerRun,
-} from "./orgs.js?v=phantom-live-20260716-282";
+} from "./orgs.js?v=phantom-live-20260716-283";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -740,8 +740,8 @@ function firstSentence(value) {
   return String(value || "").split(/[.!?]/)[0].trim();
 }
 
-/* one place for the "/ month" · "/ year" price suffix — the store now sells
-   yearly plans (Termina Pro), so every price renderer shares this. */
+/* one place for recurring price suffixes so every store renderer stays
+   consistent when a public-site starter mixes free, one-time, and monthly items. */
 export function cadenceSuffix(cadence) {
   return cadence === "monthly" ? " / month" : cadence === "yearly" ? " / year" : "";
 }
@@ -862,8 +862,8 @@ export function applySiteTemplate(site, templateId) {
 export function applyWebsitePrompt(site, promptText) {
   const prompt = String(promptText || "").trim();
   if (!site || !prompt) return "Tell Phantom what to change first.";
-  const design = ensureSiteDesign(site);
-  const siteStore = ensureSiteStore(site);
+  let design = ensureSiteDesign(site);
+  let siteStore = ensureSiteStore(site);
   const lower = prompt.toLowerCase();
   const quoted = prompt.match(/["“](.+?)["”]/)?.[1];
   /* "…headline to X and add a testimonials section" must not make the whole
@@ -883,6 +883,8 @@ export function applyWebsitePrompt(site, promptText) {
        prompts that merely mention it must edit, not clobber */
     if (site.templateId !== template.id && new RegExp(`\\b${template.id}\\b`, "i").test(prompt)) {
       applySiteTemplate(site, template.id);
+      design = ensureSiteDesign(site);
+      siteStore = ensureSiteStore(site);
       changed = `Applied the ${template.label} starter.`;
     }
   }
@@ -1526,7 +1528,7 @@ function renderMemory(el, rerender) {
       if (!brainPanel.open || brainPanel.dataset.mounted) return;
       brainPanel.dataset.mounted = "1";
       const mount = brainPanel.querySelector("[data-memory-brain-mount]");
-      import("./brain.js?v=phantom-live-20260716-282")
+      import("./brain.js?v=phantom-live-20260716-283")
         .then((mod) => { if (mount && mount.isConnected) mod.renderPhantomBrain(mount); })
         .catch(() => { if (mount) mount.innerHTML = `<p class="ws-note">The brain panel could not load. Check that the backend on the admin PC is running, then reopen this section.</p>`; });
     });

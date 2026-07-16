@@ -114,6 +114,34 @@ try {
     Write-SyncLog "Game files verified: $($trackedGames.Count) present on disk."
   }
 
+  # Release integrity guard: this blocks stale worktrees and old rejected UI
+  # from silently becoming "synced" again. When it blocks, the manifest tells
+  # the app exactly why instead of leaving Jordan guessing whether work landed.
+  $guardPath = Join-Path $RepoRoot "scripts\guard-change-memory.mjs"
+  if (-not (Test-Path -LiteralPath $guardPath)) {
+    $syncStatus = "blocked"
+    $syncReason = "Change memory guard is missing. Refusing to sync because accepted/rejected owner decisions cannot be verified."
+    Write-Manifest -Commit $local -Branch $branch -Status $syncStatus -Reason $syncReason
+    Write-SyncLog "BLOCKED: $syncReason"
+    Write-Output "PhantomForce admin main blocked. $syncReason"
+    return
+  }
+  $guardOutput = & node.exe $guardPath --repo-root $RepoRoot 2>&1
+  if ($LASTEXITCODE -ne 0) {
+    $rawGuardReason = (($guardOutput | ForEach-Object { [string]$_ }) -join " ")
+    if ([string]::IsNullOrWhiteSpace($rawGuardReason)) { $rawGuardReason = "Change memory guard failed with no output." }
+    $syncStatus = "blocked"
+    $syncReason = "Change memory guard blocked sync: $rawGuardReason"
+    if ($syncReason.Length -gt 220) { $syncReason = $syncReason.Substring(0, 220) }
+    Write-Manifest -Commit $local -Branch $branch -Status $syncStatus -Reason $syncReason
+    Write-SyncLog "BLOCKED: $syncReason"
+    Write-Output "PhantomForce admin main blocked by change memory guard. $syncReason"
+    return
+  }
+  $guardSummary = (($guardOutput | ForEach-Object { [string]$_ }) -join " ")
+  if ([string]::IsNullOrWhiteSpace($guardSummary)) { $guardSummary = "Change memory guard passed." }
+  Write-SyncLog $guardSummary
+
   # Restart when needed: port empty, explicitly asked, or the RUNNING server's
   # code no longer matches the file on disk (a pull delivered a new server).
   # The server reports its own source fingerprint on /health, so a push to

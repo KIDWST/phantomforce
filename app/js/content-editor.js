@@ -1,4 +1,4 @@
-import { freshEditState, freshTextStyle, paintEdit } from "./imagefilters.js?v=phantom-live-20260716-282";
+import { freshEditState, freshTextStyle, paintEdit } from "./imagefilters.js?v=phantom-live-20260716-283";
 
 let layerSequence = 0;
 
@@ -391,6 +391,73 @@ export function layerBounds(layer, width, height) {
   const xs = corners.map((point) => point.x);
   const ys = corners.map((point) => point.y);
   return { left: Math.min(...xs), top: Math.min(...ys), right: Math.max(...xs), bottom: Math.max(...ys), corners };
+}
+
+function editableSelectedTransformLayers(composition) {
+  return selectedLayers(composition).filter((layer) => layer.id !== "base" && !layer.locked && layer.visible !== false);
+}
+
+function canvasSize(composition) {
+  return {
+    width: Math.max(1, Number(composition?.width || 1000)),
+    height: Math.max(1, Number(composition?.height || 1000)),
+  };
+}
+
+function unionBounds(layers, width, height) {
+  return layers.reduce((box, layer) => {
+    const bounds = layerBounds(layer, width, height);
+    return {
+      left: Math.min(box.left, bounds.left),
+      top: Math.min(box.top, bounds.top),
+      right: Math.max(box.right, bounds.right),
+      bottom: Math.max(box.bottom, bounds.bottom),
+    };
+  }, { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity });
+}
+
+export function alignSelectedLayers(composition, mode) {
+  if (!["left", "hcenter", "right", "top", "vcenter", "bottom"].includes(mode)) return false;
+  const targets = editableSelectedTransformLayers(composition);
+  if (!targets.length) return false;
+  const { width, height } = canvasSize(composition);
+  const group = targets.length === 1 ? { left: 0, top: 0, right: width, bottom: height } : unionBounds(targets, width, height);
+  const refX = (group.left + group.right) / 2;
+  const refY = (group.top + group.bottom) / 2;
+  targets.forEach((layer) => {
+    const bounds = layerBounds(layer, width, height);
+    if (mode === "left") layer.x = clamp(layer.x + (group.left - bounds.left) / width, 0, 1);
+    else if (mode === "hcenter") layer.x = clamp(layer.x + (refX - ((bounds.left + bounds.right) / 2)) / width, 0, 1);
+    else if (mode === "right") layer.x = clamp(layer.x + (group.right - bounds.right) / width, 0, 1);
+    else if (mode === "top") layer.y = clamp(layer.y + (group.top - bounds.top) / height, 0, 1);
+    else if (mode === "vcenter") layer.y = clamp(layer.y + (refY - ((bounds.top + bounds.bottom) / 2)) / height, 0, 1);
+    else if (mode === "bottom") layer.y = clamp(layer.y + (group.bottom - bounds.bottom) / height, 0, 1);
+  });
+  return true;
+}
+
+export function distributeSelectedLayers(composition, axis) {
+  if (!["x", "y"].includes(axis)) return false;
+  const targets = editableSelectedTransformLayers(composition);
+  if (targets.length < 3) return false;
+  const { width, height } = canvasSize(composition);
+  const isX = axis === "x";
+  const size = isX ? width : height;
+  const sorted = targets
+    .map((layer) => {
+      const bounds = layerBounds(layer, width, height);
+      return { layer, center: isX ? (bounds.left + bounds.right) / 2 : (bounds.top + bounds.bottom) / 2 };
+    })
+    .sort((a, b) => a.center - b.center);
+  const start = sorted[0].center;
+  const step = (sorted[sorted.length - 1].center - start) / (sorted.length - 1);
+  sorted.forEach((item, index) => {
+    const target = start + step * index;
+    const delta = (target - item.center) / size;
+    if (isX) item.layer.x = clamp(item.layer.x + delta, 0, 1);
+    else item.layer.y = clamp(item.layer.y + delta, 0, 1);
+  });
+  return axis === "x" || axis === "y";
 }
 
 export function drawCompositionOverlay(overlay, canvas, composition) {

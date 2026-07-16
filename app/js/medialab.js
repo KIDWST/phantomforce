@@ -6,21 +6,21 @@
  * instead of sending people out to another product.
  */
 
-import { currentTenantId, ctx, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260716-282";
+import { currentTenantId, ctx, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260716-283";
 import {
   PLATFORMS, registerContentAsset, loadSocialAccounts, saveSocialAccounts, socialStatus,
   loadContentAssets, saveContentAssets, contentAssetDisplayUrl, hydrateContentAssetUrl,
-} from "./contenthub.js?v=phantom-live-20260716-282";
-import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260716-282";
+} from "./contenthub.js?v=phantom-live-20260716-283";
+import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260716-283";
 import {
-  addImageLayer, addTextLayer, cloneImageEditState, compositionSnapshot, duplicateLayer,
+  addImageLayer, addTextLayer, alignSelectedLayers, cloneImageEditState, compositionSnapshot, distributeSelectedLayers, duplicateLayer,
   canvasPoint, drawCompositionOverlay, freshComposition, hitTestLayer, hitTestResizeHandle,
   loadCompositionImages, moveLayerOrder, moveLayerToIndex, pushEditorSnapshot, removeSelectedLayers,
   renderComposition, restoreComposition, selectLayer, selectedLayers,
-} from "./content-editor.js?v=phantom-live-20260716-282";
-import { loadImageForEditing, exportCanvas, requestAiEdit, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260716-282";
-import { mountVideoEditor } from "./videocut.js?v=phantom-live-20260716-282";
-import { assetsAvailable, assetBlobUrl, listAssets, recordAssetUsage, saveToAssetCloud, listLocalAssets, refreshLocalAssets, localAssetBlobUrl } from "./orgs.js?v=phantom-live-20260716-282";
+} from "./content-editor.js?v=phantom-live-20260716-283";
+import { loadImageForEditing, exportCanvas, requestAiEdit, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260716-283";
+import { mountVideoEditor } from "./videocut.js?v=phantom-live-20260716-283";
+import { assetsAvailable, assetBlobUrl, listAssets, recordAssetUsage, saveToAssetCloud, listLocalAssets, refreshLocalAssets, localAssetBlobUrl } from "./orgs.js?v=phantom-live-20260716-283";
 
 const CFG_KEY = "pf.medialab.v1";
 const EDIT_INTENT_KEY = "pf.medialab.editIntent.v1";
@@ -2825,8 +2825,11 @@ function layerKindLabel(layer) {
 function selectedLayerPanelHtml(esc) {
   ensureEditorComposition();
   const active = selectedEditLayer();
+  const editableSelection = selectedLayers(mlComposition).filter((layer) => layer.id !== "base" && !layer.locked);
   const canDelete = active && active.id !== "base" && !active.locked;
   const canCopy = selectedLayers(mlComposition).some((layer) => layer.id !== "base");
+  const canAlign = editableSelection.length > 0;
+  const canDistribute = editableSelection.length >= 3;
   const activeLocked = !!active?.locked;
   return `
     <details class="ml-edit-section" open>
@@ -2860,6 +2863,18 @@ function selectedLayerPanelHtml(esc) {
             <button type="button" data-ml-layer-center ${activeLocked ? "disabled" : ""}>Center</button>
             <button type="button" data-ml-layer-fit-canvas ${activeLocked ? "disabled" : ""}>Fill canvas</button>
             <button type="button" data-ml-layer-reset-transform ${activeLocked ? "disabled" : ""}>Reset</button>
+          </div>
+          <div class="ml-layer-align-actions" role="group" aria-label="Align selected layers">
+            ${[
+              ["left", "Left"],
+              ["hcenter", "Center"],
+              ["right", "Right"],
+              ["top", "Top"],
+              ["vcenter", "Middle"],
+              ["bottom", "Bottom"],
+            ].map(([mode, label]) => `<button type="button" data-ml-layer-align="${esc(mode)}" ${canAlign ? "" : "disabled"}>${esc(label)}</button>`).join("")}
+            <button type="button" data-ml-layer-distribute="x" ${canDistribute ? "" : "disabled"}>Distribute X</button>
+            <button type="button" data-ml-layer-distribute="y" ${canDistribute ? "" : "disabled"}>Distribute Y</button>
           </div>
           <label class="ml-layer-field"><span>Name</span><input data-ml-layer-field="name" value="${esc(active.name || "")}" ${activeLocked ? "disabled" : ""}/></label>
           <label class="ml-slider"><span>X <b data-layer-out="x">${Math.round(active.x * 100)}</b></span><input type="range" min="0" max="100" value="${Math.round(active.x * 100)}" data-ml-layer-prop="x" ${activeLocked ? "disabled" : ""}/></label>
@@ -3703,6 +3718,26 @@ function renderEdit(body, cfg, opts, root) {
     rememberEdit();
     resetLayerTransformDefaults(layer);
     renderMediaStudio(root, opts);
+  });
+  body.querySelectorAll("[data-ml-layer-align]").forEach((button) => {
+    button.onclick = () => {
+      rememberEdit();
+      if (!alignSelectedLayers(mlComposition, button.dataset.mlLayerAlign)) {
+        mlEditHistory.pop();
+        return;
+      }
+      renderMediaStudio(root, opts);
+    };
+  });
+  body.querySelectorAll("[data-ml-layer-distribute]").forEach((button) => {
+    button.onclick = () => {
+      rememberEdit();
+      if (!distributeSelectedLayers(mlComposition, button.dataset.mlLayerDistribute)) {
+        mlEditHistory.pop();
+        return;
+      }
+      renderMediaStudio(root, opts);
+    };
   });
   const clearLayerDropState = () => body.querySelectorAll("[data-ml-layer-row]").forEach((row) => row.classList.remove("is-dragging", "is-drop-target"));
   body.querySelectorAll("[data-ml-layer-row]").forEach((row) => {

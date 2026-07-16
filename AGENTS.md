@@ -41,6 +41,11 @@
   Before you push: `git fetch origin main && git rebase origin/main` — main moves under
   you often, so expect to rebase (conflicts land mostly in `app/js/main.js`). A PR is
   still fine if you prefer review, but it is no longer required.
+- **Change memory is mandatory.** Before pushing, syncing live admin, or claiming a
+  user-facing admin change is live, run `npm run test:change-memory`. When Jordan
+  accepts a change that has been lost before, add required patterns to
+  `docs/quality/CHANGE_MEMORY.json`. When Jordan rejects or removes old behavior, add
+  forbidden patterns there so another stale worktree cannot resurrect it.
 
 ## Recent, merged & live (newest first)
 - **Org-owner social connections (2026-07-14)** — build

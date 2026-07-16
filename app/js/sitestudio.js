@@ -2,14 +2,14 @@
 
 import {
   store, uid, visible, currentWs, wsName, pushActivity, ago, fmtMoney,
-} from "./store.js?v=phantom-live-20260716-282";
+} from "./store.js?v=phantom-live-20260716-283";
 import {
   esc, baseSiteDraft, ensureSiteDesign, ensureSiteStore, applyWebsitePrompt, renderWebsitePreview,
   SITE_TEMPLATES, applySiteTemplate, cadenceSuffix,
-} from "./workspaces.js?v=phantom-live-20260716-282";
+} from "./workspaces.js?v=phantom-live-20260716-283";
 import {
   isDatabaseSession, requestServerPublish, fetchServerRun,
-} from "./orgs.js?v=phantom-live-20260716-282";
+} from "./orgs.js?v=phantom-live-20260716-283";
 
 const siteUi = {
   activeSiteId: null, device: "desktop", selectedSection: -1,
@@ -284,8 +284,10 @@ function confirmationMarkup(confirmation) {
 }
 
 function createWebsite(seed = "") {
-  const domain = domainFromText(seed);
-  const title = domain ? domainTitle(domain) : wsName(currentWs());
+  const text = String(seed || "").trim();
+  const defaultPublicSite = !text;
+  const domain = domainFromText(defaultPublicSite ? "phantomforce.online" : text);
+  const title = defaultPublicSite ? "PhantomForce" : domain ? domainTitle(domain) : wsName(currentWs());
   const draft = baseSiteDraft(title, "Website");
   draft.id = uid("site");
   draft.ws = currentWs() === "phantomforce" ? "phantomforce" : currentWs();
@@ -293,7 +295,12 @@ function createWebsite(seed = "") {
   draft.updated = new Date().toISOString();
   draft.domains = [];
   setSiteDomain(draft, domain);
-  if (seed.trim()) applyWebsiteChange(draft, seed, false);
+  if (defaultPublicSite) {
+    applySiteTemplate(draft, "phantomforce");
+    setSiteDomain(draft, "phantomforce.online");
+  } else {
+    applyWebsiteChange(draft, text, false);
+  }
   store.state.sites.unshift(draft);
   siteUi.activeSiteId = draft.id;
   pushActivity("Websites", `created ${draft.title}.`, draft.ws);
@@ -324,15 +331,15 @@ function emptyMarkup() {
     <section class="ss-simple is-empty">
       <div class="ss-simple-empty">
         <div class="ss-simple-empty-copy">
-          <p>Websites by domain</p>
-          <h3>Start a website.</h3>
-          <span>Describe the site once. Phantom builds the first draft, then every change happens through the prompt.</span>
+          <p>phantomforce.online</p>
+          <h3>Edit the public site.</h3>
+          <span>Start from the PhantomForce public site, then keep refining copy, sections, store items, and checkout proof from here.</span>
         </div>
         <form class="ss-simple-prompt" data-ss-prompt-form>
-          <textarea data-ss-prompt rows="8" placeholder="Describe the website. Include the domain if you have one."></textarea>
-          <button class="btn btn-primary" type="submit">Build website</button>
+          <textarea data-ss-prompt rows="8" placeholder="Describe what to change on phantomforce.online..."></textarea>
+          <button class="btn btn-primary" type="submit">Open PhantomForce site</button>
           <div class="ss-template-row">
-            <p>Or start from a ready-to-sell store:</p>
+            <p>Public-site starter:</p>
             ${Object.values(SITE_TEMPLATES).map((template) => `<button class="btn btn-quiet" type="button" data-ss-template="${esc(template.id)}">${esc(template.label)}</button>`).join("")}
           </div>
         </form>
@@ -441,7 +448,11 @@ function shellMarkup(active, sites, products) {
 
 export function renderSiteStudio(el) {
   const rerender = () => renderSiteStudio(el);
-  const sites = visible(store.state.sites).map(normalizeSite);
+  let sites = visible(store.state.sites).map(normalizeSite);
+  if (!sites.length) {
+    createWebsite("");
+    sites = visible(store.state.sites).map(normalizeSite);
+  }
   /* chat handoff: when Phantom just built or edited a site from the chat,
      it leaves a one-shot focus hint so this page opens ON that project —
      one website system, two doors. */
@@ -477,12 +488,13 @@ export function renderSiteStudio(el) {
       const site = active || createWebsite("");
       snapshotSite(site, `apply ${templateId} starter`);
       if (!applySiteTemplate(site, templateId)) return;
+      if (templateId === "phantomforce") setSiteDomain(site, "phantomforce.online");
       siteUi.activeSiteId = site.id;
       siteUi.panel = "store";
       siteUi.cartOpen = false;
       siteUi.checkoutOpen = false;
       siteUi.confirmation = null;
-      pushActivity("Websites", `applied the ${templateId} store starter to ${site.title}.`, site.ws);
+      pushActivity("Websites", `applied the ${templateId} public-site starter to ${site.title}.`, site.ws);
       store.save();
       rerender();
     };
