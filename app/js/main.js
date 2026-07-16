@@ -6,44 +6,44 @@ import {
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260716-291";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260716-291";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260716-291";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260716-291";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260716-291";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260716-291";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260716-291";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260716-291";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260716-291";
-import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260716-291";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260716-291";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260716-291";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260716-291";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260716-291";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260716-291";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260716-291";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260716-291";
-import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260716-291";
-import { mountAmbient } from "./ambient.js?v=phantom-live-20260716-291";
-import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260716-291";
+} from "./store.js?v=phantom-live-20260716-292";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260716-292";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260716-292";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260716-292";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260716-292";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260716-292";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260716-292";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260716-292";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260716-292";
+import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260716-292";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260716-292";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260716-292";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260716-292";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260716-292";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260716-292";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260716-292";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260716-292";
+import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260716-292";
+import { mountAmbient } from "./ambient.js?v=phantom-live-20260716-292";
+import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260716-292";
 import {
   fetchAuthConfig, databaseLogin, databaseLogout, customerRegister, requestCustomerPasswordReset,
   completeCustomerPasswordReset, switchOrg, fetchAuthMe, fetchEntitlementsSummary,
-} from "./orgs.js?v=phantom-live-20260716-291";
-import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260716-291";
-import { assetsAvailable } from "./orgs.js?v=phantom-live-20260716-291";
-import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260716-291";
+} from "./orgs.js?v=phantom-live-20260716-292";
+import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260716-292";
+import { assetsAvailable } from "./orgs.js?v=phantom-live-20260716-292";
+import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260716-292";
 // PhantomPlay V2 platform shell (Home/Solo/Friends/Workspace/Dev Hub) - opt-in
 // while it hardens: set localStorage "pf.phantomplay.v2" = "1" (the V2 shell has
 // a "Classic view" button to switch back). Classic stays the default experience.
-import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260716-291";
+import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260716-292";
 const phantomPlayV2Opted = () => { try { return localStorage.getItem("pf.phantomplay.v2") === "1"; } catch { return false; } };
-import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260716-291";
+import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260716-292";
 import {
   customizeNavigation,
   loadOrganizationCustomization,
-} from "./customization.js?v=phantom-live-20260716-291";
-import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260716-291";
+} from "./customization.js?v=phantom-live-20260716-292";
+import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260716-292";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -1253,7 +1253,7 @@ const MODES = {
   admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260716-291";
+const POSE_VERSION = "phantom-live-20260716-292";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -1673,29 +1673,29 @@ function serverAttentionItems() {
   const items = [];
   const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
   const pending = pulse?.approvals?.available ? pulse.approvals.pending || 0 : 0;
-  if (pending > 0) items.push({ icon: "check", tone: "warn", title: `${plural(pending, "approval")} waiting on you`, sub: "Server-confirmed approval queue", open: "approvals" });
+  if (pending > 0) items.push({ kind: "approval", weight: 400, icon: "check", tone: "warn", title: `${plural(pending, "approval")} waiting on you`, sub: "Server-confirmed approval queue", open: "approvals" });
   const failed = pulse?.agentRuns?.available ? pulse.agentRuns.failed || 0 : 0;
-  if (failed > 0) items.push({ icon: "bolt", tone: "warn", title: `${plural(failed, "agent run")} failed — work stopped`, sub: "Open Automations to see what broke", open: "automation" });
+  if (failed > 0) items.push({ kind: "agent-failure", weight: 390, icon: "bolt", tone: "warn", title: `${plural(failed, "agent run")} failed — work stopped`, sub: "Open Automations to see what broke", open: "automation" });
   const running = pulse?.agentRuns?.available ? pulse.agentRuns.running || 0 : 0;
-  if (running > 0) items.push({ icon: "clock", tone: "ok", title: `${plural(running, "job")} running now`, sub: "Agents are working in the background", open: "automation" });
+  if (running > 0) items.push({ kind: "running", weight: 120, icon: "clock", tone: "ok", title: `${plural(running, "job")} running now`, sub: "Agents are working in the background", open: "automation" });
   const failing = pulse?.automations?.available ? pulse.automations.failing || [] : [];
-  if (failing.length > 0) items.push({ icon: "bolt", tone: "warn", title: `Automation failing: ${failing[0].name || failing[0].id}`, sub: failing[0].lastSummary || `${failing.length} automation(s) reporting failures`, open: "automation" });
+  if (failing.length > 0) items.push({ kind: "automation-failure", weight: 300, icon: "bolt", tone: "warn", title: `Automation failing: ${failing[0].name || failing[0].id}`, sub: failing[0].lastSummary || `${failing.length} automation(s) reporting failures`, open: "automation" });
   const opp = serverOpportunity && serverOpportunityTenant === currentTenantId() ? serverOpportunity : null;
-  if (opp) items.push({ icon: "bolt", tone: "ok", title: `Opportunity: ${opp.title}`, sub: `${opp.action.label || "Open"} — from live graph analysis`, open: opp.action.route });
+  if (opp) items.push({ kind: "opportunity", weight: 110, icon: "bolt", tone: "ok", title: `Opportunity: ${opp.title}`, sub: `${opp.action.label || "Open"} — from live graph analysis`, open: opp.action.route });
   return items;
 }
 function attentionItems() {
   const items = [];
   visible(store.state.approvals).filter((a) => a.status === "pending").slice(0, 3)
-    .forEach((a) => items.push({ icon: "check", tone: "warn", title: a.title, sub: "Waiting on your approval", open: "approvals" }));
+    .forEach((a) => items.push({ kind: "approval", weight: 400, icon: "check", tone: "warn", title: a.title, sub: "Waiting on your approval", open: "approvals" }));
   visible(store.state.security).filter((s) => s.posture && s.posture !== "clean")
-    .forEach(() => items.push({ icon: "shield", tone: "warn", title: "Security posture needs a look", sub: "Protect flagged attention", open: "protect" }));
+    .forEach(() => items.push({ kind: "security", weight: 320, icon: "shield", tone: "warn", title: "Security posture needs a look", sub: "Protect flagged attention", open: "protect" }));
   visible(store.state.leads).filter((l) => l.due && new Date(l.due).getTime() < Date.now() + 864e5 && l.status !== "won" && l.status !== "lost").slice(0, 2)
-    .forEach((l) => items.push({ icon: "users", tone: "warn", title: `Follow up: ${l.name}`, sub: l.next || "Due today", open: "leads" }));
+    .forEach((l) => items.push({ kind: "follow-up", weight: 310, icon: "users", tone: "warn", title: `Follow up: ${l.name}`, sub: l.next || "Due today", open: "leads" }));
   visible(store.state.proposals).filter((p) => p.status === "sent-ready").slice(0, 2)
-    .forEach((p) => items.push({ icon: "dollar", tone: "ok", title: `Quote ready to send: ${p.client}`, sub: fmtMoney(p.price), open: "proposals" }));
+    .forEach((p) => items.push({ kind: "quote-ready", weight: 220, icon: "dollar", tone: "ok", title: `Quote ready to send: ${p.client}`, sub: fmtMoney(p.price), open: "proposals" }));
   items.push(...serverAttentionItems());
-  return items;
+  return items.sort((a, b) => (b.weight || 0) - (a.weight || 0));
 }
 /* ============================ notifications ============================ */
 let notifOpen = false;
@@ -1747,6 +1747,15 @@ function decisionCtaLabel(item = {}) {
   return "Open workspace";
 }
 
+function decisionMetaLabel(item = {}) {
+  if (item.kind === "approval") return "approval required";
+  if (["agent-failure", "automation-failure"].includes(item.kind)) return "blocked work";
+  if (item.kind === "security") return "risk review";
+  if (["follow-up", "quote-ready", "opportunity"].includes(item.kind)) return "decision ready";
+  if (item.kind === "running") return "monitoring";
+  return "review safe";
+}
+
 function renderDecisionDeck() {
   const deck = $("[data-decision-deck]");
   if (!deck) return;
@@ -1768,7 +1777,7 @@ function renderDecisionDeck() {
             <span>${esc(item.sub || "Open for evidence and next action.")}</span>
           </div>
           <div class="decision-meta">
-            <span>${item.open === "approvals" ? "approval required" : "review safe"}</span>
+            <span>${esc(decisionMetaLabel(item))}</span>
             <span>source: live signals</span>
           </div>
           <button class="decision-open" data-open-ws="${esc(item.open || "activity")}" type="button">

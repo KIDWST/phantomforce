@@ -28,6 +28,12 @@ assert.match(main, /function recentHandledProof\(\)/u,
   "Dashboard hero must be able to surface recent handled activity without fake examples.");
 assert.match(main, /function renderDecisionDeck\(\)/u,
   "Command surface must render structured decision cards from attention state.");
+assert.match(main, /kind:\s*"agent-failure"[\s\S]*?weight:\s*390/u,
+  "Decision signals must carry explicit kinds and priority weights.");
+assert.match(main, /return items\.sort\(\(a, b\) => \(b\.weight \|\| 0\) - \(a\.weight \|\| 0\)\);/u,
+  "Attention signals must be ranked before the bell, strip, and decision deck render them.");
+assert.match(main, /function decisionMetaLabel\(item = \{\}\)/u,
+  "Decision cards must explain why each card is actionable.");
 assert.match(main, /const items = attentionItems\(\)\.slice\(0, 3\);/u,
   "Decision deck must reuse the same real attention source and stay capped.");
 assert.match(main, /deck\.hidden = items\.length === 0/u,
