@@ -13379,6 +13379,85 @@ body .phantom .workspace-page :where(
   100% { transform: translateX(105%); opacity: 0; }
 }
 
+/* ---- handled proof: completed work from the real activity ledger ---- */
+.handled-proof {
+  display: grid;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  border: 1px solid rgba(65, 255, 161, 0.14);
+  border-radius: var(--r-lg);
+  background:
+    radial-gradient(80% 130% at 0% 0%, rgba(65, 255, 161, 0.08), transparent 48%),
+    linear-gradient(135deg, rgba(5, 18, 14, 0.68), rgba(2, 7, 9, 0.76));
+  box-shadow: var(--edge-hi);
+}
+.handled-proof[hidden] { display: none; }
+.handled-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); }
+.handled-head p {
+  margin: 0;
+  color: var(--neon);
+  font: 800 var(--fs-xs) / 1.25 var(--font-mono);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.handled-head span { color: var(--dim); font: 700 var(--fs-xs) / 1.25 var(--font-mono); letter-spacing: 0.08em; }
+.handled-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--sp-3);
+}
+.handled-card {
+  position: relative;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) auto;
+  gap: 6px 8px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.055);
+  border-radius: var(--r-sm);
+  background: rgba(0, 0, 0, 0.18);
+}
+.handled-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: var(--neon);
+  box-shadow: 0 0 16px rgba(65, 255, 161, 0.48);
+  animation: handledPulse 2.6s ease-in-out infinite;
+}
+.handled-card b {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #eafff4;
+  font-size: var(--fs-xs);
+}
+.handled-card p {
+  grid-column: 2 / -1;
+  margin: 0;
+  min-width: 0;
+  color: var(--dim);
+  font-size: var(--fs-xs);
+  line-height: 1.35;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.handled-card i {
+  color: rgba(207, 255, 226, 0.56);
+  font: 800 9px / 1 var(--font-mono);
+  font-style: normal;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+@keyframes handledPulse {
+  50% { opacity: 0.48; transform: scale(0.82); }
+}
+
 /* ---- command widgets: summoned operations, not permanent tab clutter ---- */
 .command-widgets {
   display: grid;
@@ -13669,12 +13748,15 @@ body .phantom .workspace-page :where(
 }
 @media (max-width: 900px) {
   .decision-grid { grid-template-columns: 1fr; }
+  .handled-row { grid-template-columns: 1fr; }
   .command-widgets { grid-template-columns: 1fr; }
   .cw-flow { grid-template-columns: 1fr; }
   .cw-dock { grid-template-columns: 1fr; }
 }
 @media (prefers-reduced-motion: reduce) {
   .decision-card::before,
+  .handled-dot,
+  .cw-flow-node.is-live::before,
   .command-widget,
   .command-widget::after,
   .command-widget[open] .cw-ic,
