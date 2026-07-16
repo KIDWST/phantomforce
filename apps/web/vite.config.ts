@@ -1,18 +1,20 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
+const backendTarget = process.env.VITE_BACKEND_PROXY_TARGET ?? "http://127.0.0.1:5190";
+
 const backendProxy = {
-  "/auth": "http://127.0.0.1:5190",
-  "/billing": "http://127.0.0.1:5190",
-  "/client-access": "http://127.0.0.1:5190",
-  "/client-access-approvals": "http://127.0.0.1:5190",
-  "/client-provisioning": "http://127.0.0.1:5190",
-  "/client-workspaces": "http://127.0.0.1:5190",
-  "/pangolin": "http://127.0.0.1:5190",
-  "/phantom-ai": "http://127.0.0.1:5190",
-  "/readiness": "http://127.0.0.1:5190",
-  "/session": "http://127.0.0.1:5190",
-  "/sessions": "http://127.0.0.1:5190",
+  "/auth": backendTarget,
+  "/billing": backendTarget,
+  "/client-access": backendTarget,
+  "/client-access-approvals": backendTarget,
+  "/client-provisioning": backendTarget,
+  "/client-workspaces": backendTarget,
+  "/pangolin": backendTarget,
+  "/phantom-ai": backendTarget,
+  "/readiness": backendTarget,
+  "/session": backendTarget,
+  "/sessions": backendTarget,
 };
 
 function phantomAppIndexPlugin() {

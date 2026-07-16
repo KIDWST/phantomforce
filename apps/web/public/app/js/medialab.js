@@ -12,7 +12,7 @@
  * demoable, and swaps to true results the moment a provider is connected.
  */
 
-import { PLATFORMS, registerContentAsset } from "./contenthub.js?v=phantom-live-20260707-38";
+import { PLATFORMS, registerContentAsset } from "./contenthub.js?v=phantom-live-20260713-qa-sweep-01";
 
 const CFG_KEY = "pf.medialab.v1";
 const SOCIAL_KEY = "pf.social.accounts.v1";

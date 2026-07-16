@@ -1,7 +1,7 @@
 import {
   store, ctx, session, isAdmin, currentWs, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago,
-} from "./store.js?v=connector-signin-20260705-01";
+} from "./store.js?v=phantom-live-20260713-qa-sweep-01";
 
 const TICKER_CHECK_MS = 700;
 const TICKER_REFRESH_MS = 12000;

@@ -3,7 +3,7 @@
    It uses the real character engine for blinking, eye tracking, and moods,
    respects reduced motion, and keeps every status dot paired with text. */
 
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260706-32";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260713-qa-sweep-01";
 
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const CHAT_SETTINGS_KEY = "pf.chat.settings.v1";
