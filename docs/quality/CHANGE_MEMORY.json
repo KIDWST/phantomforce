@@ -399,8 +399,23 @@
         },
         {
           "file": "app/js/videocut.js",
-          "pattern": "el\\.volume = clipVolume\\(c\\) / 100",
-          "description": "Playback and export sync apply per-clip volume."
+          "pattern": "function clipFadeAlpha\\(clip,\\s*local\\)[\\s\\S]*fadeIn[\\s\\S]*fadeOut[\\s\\S]*Math\\.min\\(inAlpha,\\s*outAlpha\\)",
+          "description": "PhantomCut supports per-clip fade in/out alpha."
+        },
+        {
+          "file": "app/js/videocut.js",
+          "pattern": "el\\.volume = \\(clipVolume\\(c\\) / 100\\) \\* clipFadeAlpha\\(c,\\s*local\\)",
+          "description": "Playback and export sync apply per-clip volume and fade."
+        },
+        {
+          "file": "app/js/videocut.js",
+          "pattern": "data-vc-ins-fade=\"fadeIn\"[\\s\\S]*data-vc-ins-fade=\"fadeOut\"",
+          "description": "The clip inspector exposes fade in/out sliders."
+        },
+        {
+          "file": "app/js/videocut.js",
+          "pattern": "drawTextOverlay\\(clip,\\s*frameAlpha\\)",
+          "description": "Text overlays fade with the selected clip."
         },
         {
           "file": "scripts/test-videocut-editor.mjs",

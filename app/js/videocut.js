@@ -186,6 +186,17 @@ export function mountVideoEditor(host, opts = {}) {
   function clipVolume(clip) {
     return clamp(Number(clip.volume ?? 100), 0, 100);
   }
+  function clipFadeValue(clip, key) {
+    return clamp(Number(clip?.[key]) || 0, 0, Math.min(3, clipDuration(clip) / 2));
+  }
+  function clipFadeAlpha(clip, local) {
+    const dur = clipDuration(clip);
+    const fadeIn = clipFadeValue(clip, "fadeIn");
+    const fadeOut = clipFadeValue(clip, "fadeOut");
+    const inAlpha = fadeIn > 0 ? clamp(local / fadeIn, 0, 1) : 1;
+    const outAlpha = fadeOut > 0 ? clamp((dur - local) / fadeOut, 0, 1) : 1;
+    return clamp(Math.min(inAlpha, outAlpha), 0, 1);
+  }
   function segments() {
     let t = 0;
     return state.clips.map((clip) => {
@@ -267,6 +278,7 @@ export function mountVideoEditor(host, opts = {}) {
       ready: "loading", thumb: "", el: null,
       transition: "none", text: "", textPos: "bottom",
       fit: "cover",
+      fadeIn: 0, fadeOut: 0,
       duration: 3, kenBurns: false,               // photo
       in: 0, out: 0, srcDuration: 0, mute: false, volume: 100, // video
       w: 0, h: 0,
@@ -486,14 +498,16 @@ export function mountVideoEditor(host, opts = {}) {
       if (c.kind !== "video" || c.ready !== "ready") return;
       const el = c.el;
       el.muted = !!c.mute;
-      el.volume = clipVolume(c) / 100;
       const running = state.playing || !!exportRun;
       if (i === idx) {
         const want = clamp(c.in + (t - seg.start), 0, Math.max(0, c.srcDuration - 0.05));
+        const local = clamp(t - seg.start, 0, seg.dur);
+        el.volume = (clipVolume(c) / 100) * clipFadeAlpha(c, local);
         if (hard || Math.abs(el.currentTime - want) > (running ? 0.35 : 0.2)) { try { el.currentTime = want; } catch {} }
         if (running) { if (el.paused) el.play().catch(() => {}); }
         else if (!el.paused) el.pause();
       } else {
+        el.volume = 0;
         if (!el.paused) el.pause();
         if (i === idx - 1 && Math.abs(el.currentTime - c.out) > 0.25) {
           try { el.currentTime = Math.max(0, c.out - 0.05); } catch {}
@@ -598,15 +612,16 @@ export function mountVideoEditor(host, opts = {}) {
   }
   function drawClipFrame(clip, local, alpha) {
     const W = cv.width, H = cv.height;
+    const frameAlpha = clamp(alpha, 0, 1) * clipFadeAlpha(clip, local);
     ctx.save();
-    ctx.globalAlpha = clamp(alpha, 0, 1);
+    ctx.globalAlpha = frameAlpha;
     if (clip.ready !== "ready") {
       drawPlaceholder(clip);
     } else if (clip.kind === "photo") {
       if (clip.fit === "contain") {
         try { drawContainedMediaFrame(clip.el, clip.w, clip.h, W, H); } catch {}
         ctx.restore();
-        drawTextOverlay(clip, alpha);
+        drawTextOverlay(clip, frameAlpha);
         return;
       }
       const [sx, sy, sw, sh] = coverRect(clip.w, clip.h, W, H);
@@ -635,7 +650,7 @@ export function mountVideoEditor(host, opts = {}) {
       }
     }
     ctx.restore();
-    drawTextOverlay(clip, alpha);
+    drawTextOverlay(clip, frameAlpha);
   }
   function drawFrame(t) {
     const W = cv.width, H = cv.height;
@@ -1117,6 +1132,20 @@ export function mountVideoEditor(host, opts = {}) {
           </select>
           <i class="vc-ins-note">${clip.fit === "contain" ? "Shows the whole source without cropping." : "Fills the export frame like a social video."}</i>
         </section>
+        <section class="vc-ins-section">
+          <span class="vc-microlabel">Fade</span>
+          <div class="vc-ins-slider">
+            <b>In</b>
+            <input class="vc-range" data-vc-ins-fade="fadeIn" type="range" min="0" max="3" step="0.1" value="${esc(String(clipFadeValue(clip, "fadeIn")))}"/>
+            <em data-vc-ins-fade-out="fadeIn">${esc(fmtSec(clipFadeValue(clip, "fadeIn")))}s</em>
+          </div>
+          <div class="vc-ins-slider">
+            <b>Out</b>
+            <input class="vc-range" data-vc-ins-fade="fadeOut" type="range" min="0" max="3" step="0.1" value="${esc(String(clipFadeValue(clip, "fadeOut")))}"/>
+            <em data-vc-ins-fade-out="fadeOut">${esc(fmtSec(clipFadeValue(clip, "fadeOut")))}s</em>
+          </div>
+          <i class="vc-ins-note">${clip.kind === "video" ? "Fades picture and clip audio together." : "Fades the photo and text overlay."}</i>
+        </section>
         ${kindPanel}
         <section class="vc-ins-section">
           <span class="vc-microlabel">Text overlay</span>
@@ -1137,6 +1166,16 @@ export function mountVideoEditor(host, opts = {}) {
       clip.fit = e.target.value === "contain" ? "contain" : "cover";
       drawFrame(state.playhead);
       renderInspector();
+    });
+    inspectorEl.querySelectorAll("[data-vc-ins-fade]").forEach((input) => {
+      input.addEventListener("input", (e) => {
+        const key = e.target.dataset.vcInsFade === "fadeOut" ? "fadeOut" : "fadeIn";
+        clip[key] = clipFadeValue({ ...clip, [key]: e.target.value }, key);
+        e.target.value = String(clip[key]);
+        const out = iq(`[data-vc-ins-fade-out="${key}"]`);
+        if (out) out.textContent = `${fmtSec(clip[key])}s`;
+        drawFrame(state.playhead);
+      });
     });
     // slider drags update readouts in place — a re-render mid-drag would drop the thumb
     iq("[data-vc-ins-duration]")?.addEventListener("input", (e) => {

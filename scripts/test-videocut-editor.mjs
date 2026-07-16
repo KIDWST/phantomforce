@@ -9,9 +9,11 @@ assert.match(videoSrc, /function splitClipAtPlayhead\(clip\)/u, "PhantomCut must
 assert.match(videoSrc, /function moveClipToIndex\(clip,\s*targetIndex\)/u, "PhantomCut must let timeline clips move directly to a dropped index.");
 assert.match(videoSrc, /function duplicateClip\(clip\)/u, "PhantomCut must support duplicating a timeline clip without re-importing it.");
 assert.match(videoSrc, /function clipVolume\(clip\)[\s\S]*clamp\(Number\(clip\.volume \?\? 100\), 0, 100\)/u, "PhantomCut must normalize per-clip video volume.");
+assert.match(videoSrc, /function clipFadeAlpha\(clip,\s*local\)[\s\S]*fadeIn[\s\S]*fadeOut[\s\S]*Math\.min\(inAlpha,\s*outAlpha\)/u, "PhantomCut must calculate per-clip fade alpha.");
 assert.match(videoSrc, /function containRect\(mw,\s*mh,\s*cw,\s*ch\)/u, "PhantomCut must be able to fit full media inside the export frame.");
 assert.match(videoSrc, /function drawContainedMediaFrame\(source,\s*mw,\s*mh,\s*W,\s*H\)/u, "PhantomCut fit mode must render a full-media frame with a backdrop.");
 assert.match(videoSrc, /fit:\s*"cover"/u, "New PhantomCut clips must default to social-video fill framing.");
+assert.match(videoSrc, /fadeIn:\s*0,\s*fadeOut:\s*0/u, "New PhantomCut clips must default to no clip fades.");
 assert.match(videoSrc, /mute:\s*false,\s*volume:\s*100/u, "New video clips must default to full volume while remaining unmuted.");
 assert.match(videoSrc, /clip\.fit === "contain"[\s\S]*drawContainedMediaFrame\(clip\.el,\s*clip\.w,\s*clip\.h,\s*W,\s*H\)/u, "Photo clips must support contain-fit drawing.");
 assert.match(videoSrc, /clip\.fit === "contain"[\s\S]*drawContainedMediaFrame\(el,\s*el\.videoWidth,\s*el\.videoHeight,\s*W,\s*H\)/u, "Video clips must support contain-fit drawing.");
@@ -24,10 +26,15 @@ assert.match(videoSrc, /splitPointForClip\(clip\)[\s\S]*Move the playhead inside
 assert.match(videoSrc, /data-vc-ins-fit/u, "PhantomCut inspector must expose per-clip framing controls.");
 assert.match(videoSrc, /clip\.fit = e\.target\.value === "contain" \? "contain" : "cover"/u, "Framing controls must update the selected clip fit mode.");
 assert.match(videoSrc, /data-vc-ins-volume/u, "PhantomCut inspector must expose a per-clip volume slider.");
+assert.match(videoSrc, /data-vc-ins-fade="fadeIn"/u, "PhantomCut inspector must expose clip fade-in control.");
+assert.match(videoSrc, /data-vc-ins-fade="fadeOut"/u, "PhantomCut inspector must expose clip fade-out control.");
+assert.match(videoSrc, /clip\[key\] = clipFadeValue\(\{ \.\.\.clip, \[key\]: e\.target\.value \}, key\)/u, "Fade sliders must normalize and save clip fade values.");
 assert.match(videoSrc, /clip\.volume = clipVolume\(\{ volume: e\.target\.value \}\)/u, "Volume slider must normalize and save clip volume.");
 assert.match(videoSrc, /if \(clip\.el\) clip\.el\.volume = clip\.volume \/ 100/u, "Volume slider must update the playing video element immediately.");
-assert.match(videoSrc, /el\.volume = clipVolume\(c\) \/ 100/u, "Playback and export sync must apply per-clip volume.");
+assert.match(videoSrc, /el\.volume = \(clipVolume\(c\) \/ 100\) \* clipFadeAlpha\(c,\s*local\)/u, "Playback and export sync must fade video clip audio.");
 assert.match(videoSrc, /clip\.kind === "video" && clipVolume\(clip\) !== 100/u, "Timeline cards must show non-default clip volume.");
+assert.match(videoSrc, /const frameAlpha = clamp\(alpha,\s*0,\s*1\) \* clipFadeAlpha\(clip,\s*local\)/u, "Rendered frames must apply clip fade alpha.");
+assert.match(videoSrc, /drawTextOverlay\(clip,\s*frameAlpha\)/u, "Text overlays must fade with the selected clip.");
 assert.match(videoSrc, /draggable="true"[\s\S]*Timeline clip \$\{idx \+ 1\}/u, "Timeline clips must expose native drag affordance for reordering.");
 assert.match(videoSrc, /timelineEl\.addEventListener\("dragstart"[\s\S]*card\.classList\.add\("is-dragging"\)/u, "Timeline drag start must mark the active clip.");
 assert.match(videoSrc, /timelineEl\.addEventListener\("dragover"[\s\S]*is-drop-before[\s\S]*is-drop-after/u, "Timeline drag-over must show before/after drop states.");
