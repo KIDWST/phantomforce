@@ -6,44 +6,44 @@ import {
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260716-301";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260716-301";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260716-301";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260716-301";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260716-301";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260716-301";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260716-301";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260716-301";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260716-301";
-import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260716-301";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260716-301";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260716-301";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260716-301";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260716-301";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260716-301";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260716-301";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260716-301";
-import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260716-301";
-import { mountAmbient } from "./ambient.js?v=phantom-live-20260716-301";
-import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260716-301";
+} from "./store.js?v=phantom-live-20260716-302";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260716-302";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260716-302";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260716-302";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260716-302";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260716-302";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260716-302";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260716-302";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260716-302";
+import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260716-302";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260716-302";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260716-302";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260716-302";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260716-302";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260716-302";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260716-302";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260716-302";
+import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260716-302";
+import { mountAmbient } from "./ambient.js?v=phantom-live-20260716-302";
+import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260716-302";
 import {
   fetchAuthConfig, databaseLogin, databaseLogout, customerRegister, requestCustomerPasswordReset,
   completeCustomerPasswordReset, switchOrg, fetchAuthMe, fetchEntitlementsSummary,
-} from "./orgs.js?v=phantom-live-20260716-301";
-import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260716-301";
-import { assetsAvailable } from "./orgs.js?v=phantom-live-20260716-301";
-import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260716-301";
+} from "./orgs.js?v=phantom-live-20260716-302";
+import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260716-302";
+import { assetsAvailable } from "./orgs.js?v=phantom-live-20260716-302";
+import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260716-302";
 // PhantomPlay V2 platform shell (Home/Solo/Friends/Workspace/Dev Hub) - opt-in
 // while it hardens: set localStorage "pf.phantomplay.v2" = "1" (the V2 shell has
 // a "Classic view" button to switch back). Classic stays the default experience.
-import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260716-301";
+import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260716-302";
 const phantomPlayV2Opted = () => { try { return localStorage.getItem("pf.phantomplay.v2") === "1"; } catch { return false; } };
-import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260716-301";
+import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260716-302";
 import {
   customizeNavigation,
   loadOrganizationCustomization,
-} from "./customization.js?v=phantom-live-20260716-301";
-import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260716-301";
+} from "./customization.js?v=phantom-live-20260716-302";
+import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260716-302";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -1253,7 +1253,7 @@ const MODES = {
   admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260716-301";
+const POSE_VERSION = "phantom-live-20260716-302";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -2132,6 +2132,83 @@ function renderExecutionTimeline() {
     </div>`;
 }
 
+function unblockCenterItems() {
+  const items = [];
+  const seen = new Set();
+  const add = (item) => {
+    if (!item?.title) return;
+    const key = `${item.open || ""}:${item.title}:${item.need || ""}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    items.push(item);
+  };
+  visible(store.state.approvals || [])
+    .filter((a) => a.status === "pending")
+    .slice(0, 3)
+    .forEach((a) => add({
+      title: a.title,
+      why: a.detail || "A human decision is required before Phantom can continue.",
+      need: "Approve, modify, or reject",
+      open: "approvals",
+      tone: "warn",
+      source: "approval queue",
+      weight: 500,
+    }));
+  visible(store.state.agents || [])
+    .filter((a) => ["blocked", "needs-approval", "waiting"].includes(a.status))
+    .slice(0, 3)
+    .forEach((a) => add({
+      title: a.name || a.title || "Worker lane waiting",
+      why: a.role || a.mission || "A worker lane is waiting for owner input, setup, or approval.",
+      need: a.status === "blocked" ? "Inspect blocker" : a.status === "needs-approval" ? "Review approval" : "Provide input",
+      open: a.status === "needs-approval" ? "approvals" : "workforce",
+      tone: a.status === "blocked" ? "bad" : "warn",
+      source: "workforce state",
+      weight: a.status === "blocked" ? 430 : 360,
+    }));
+  attentionItems()
+    .filter((item) => ["agent-failure", "automation-failure", "security", "follow-up"].includes(item.kind))
+    .slice(0, 4)
+    .forEach((item) => add({
+      title: item.title,
+      why: decisionWhyText(item),
+      need: decisionCtaLabel(item),
+      open: item.open || "activity",
+      tone: item.tone === "warn" ? "warn" : "ok",
+      source: decisionEvidenceText(item),
+      weight: item.weight || 200,
+    }));
+  return items.sort((a, b) => (b.weight || 0) - (a.weight || 0)).slice(0, 4);
+}
+
+function renderUnblockCenter() {
+  const mount = $("[data-unblock-center]");
+  if (!mount) return;
+  const items = unblockCenterItems();
+  mount.hidden = items.length === 0;
+  if (!items.length) { mount.innerHTML = ""; return; }
+  mount.innerHTML = `
+    <div class="unblock-head">
+      <div>
+        <p>Waiting on you</p>
+        <span>${items.length} blocker${items.length === 1 ? "" : "s"} Phantom cannot safely cross alone</span>
+      </div>
+      <button class="unblock-primary" data-open-ws="${esc(items[0].open || "approvals")}" type="button">
+        Unblock top item ${svg("arrow")}
+      </button>
+    </div>
+    <div class="unblock-grid">
+      ${items.map((item) => `
+        <article class="unblock-card is-${esc(item.tone || "warn")}">
+          <span class="unblock-source">${esc(item.source || "real state")}</span>
+          <h3>${esc(item.title)}</h3>
+          <p><b>Why</b><span>${esc(item.why || "This is stopping the next move.")}</span></p>
+          <p><b>Need</b><span>${esc(item.need || "Review")}</span></p>
+          <button data-open-ws="${esc(item.open || "approvals")}" type="button">${esc(item.need || "Review")} ${svg("arrow")}</button>
+        </article>`).join("")}
+    </div>`;
+}
+
 function renderCommandToolDock() {
   const tools = (TOOL_SPINE || [])
     .filter((tool) => tool && tool.visibleToClients !== true)
@@ -2515,11 +2592,12 @@ function renderConsole() {
   renderOutcomeStrip();
   renderOperatingPulse();
   renderExecutionTimeline();
+  renderUnblockCenter();
   renderHandledProofDeck();
   /* Fire-and-forget: pull server truth for the bell + attention strip, then
      repaint both once it lands. Failures change nothing. */
   const pulseBefore = serverPulseAt;
-  fetchServerAttention().then(() => { if (serverPulseAt !== pulseBefore) { renderHero(); renderNotifs(); renderAttentionStrip(); renderDecisionDeck(); renderOutcomeStrip(); renderOperatingPulse(); renderExecutionTimeline(); renderHandledProofDeck(); renderCommandWidgets(); renderQuick(); } }).catch(() => {});
+  fetchServerAttention().then(() => { if (serverPulseAt !== pulseBefore) { renderHero(); renderNotifs(); renderAttentionStrip(); renderDecisionDeck(); renderOutcomeStrip(); renderOperatingPulse(); renderExecutionTimeline(); renderUnblockCenter(); renderHandledProofDeck(); renderCommandWidgets(); renderQuick(); } }).catch(() => {});
   renderHero();
   renderChips();
   renderModePose(activeMode);
@@ -4036,7 +4114,7 @@ async function boot() {
   store.onChange(() => {
     if (!phantom.hidden) {
       if (activePageId) { renderConsole(); return; }
-      renderNav(); renderStatusPills(); renderHero(); renderNotifs(); renderAttentionStrip(); renderDecisionDeck(); renderOutcomeStrip(); renderOperatingPulse(); renderExecutionTimeline(); renderHandledProofDeck();
+      renderNav(); renderStatusPills(); renderHero(); renderNotifs(); renderAttentionStrip(); renderDecisionDeck(); renderOutcomeStrip(); renderOperatingPulse(); renderExecutionTimeline(); renderUnblockCenter(); renderHandledProofDeck();
       renderCommandWidgets(); renderFlowMap(); renderFlowCompactSummary(); renderPlan(); renderQueue(); renderQuick();
     }
   });

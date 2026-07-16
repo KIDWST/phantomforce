@@ -16,6 +16,7 @@ assert.match(index, /data-decision-deck/u, "Dashboard must have a real-data deci
 assert.match(index, /data-outcome-strip/u, "Dashboard must have a first-class active outcomes section.");
 assert.match(index, /data-operating-pulse/u, "Dashboard must show a compact operating pulse from real state.");
 assert.match(index, /data-execution-timeline/u, "Dashboard must show the You / Phantom / Results execution timeline.");
+assert.match(index, /data-unblock-center/u, "Dashboard must show real blockers only when Phantom needs owner input.");
 assert.match(index, /data-handled-proof/u, "Dashboard must have a handled-work proof strip mount.");
 assert.match(index, /data-quick-title>Next moves</u, "Right rail should lead with next moves, not generic quick actions.");
 assert.match(index, /data-work-title>Work in motion</u, "Right rail should show work in motion, not an old mission queue.");
@@ -39,6 +40,14 @@ assert.match(main, /function executionTimelineLanes\(\)/u,
   "Command dashboard should derive execution lanes from real state.");
 assert.match(main, /function renderExecutionTimeline\(\)/u,
   "Command dashboard should render the execution timeline.");
+assert.match(main, /function unblockCenterItems\(\)/u,
+  "Command dashboard should derive unblock cards from real blockers.");
+assert.match(main, /function renderUnblockCenter\(\)/u,
+  "Command dashboard should render the compact unblock center.");
+assert.match(main, /visible\(store\.state\.approvals \|\| \[\]\)[\s\S]*?status === "pending"/u,
+  "Unblock center must include pending approvals as real owner gates.");
+assert.match(main, /visible\(store\.state\.agents \|\| \[\]\)[\s\S]*?\["blocked", "needs-approval", "waiting"\]/u,
+  "Unblock center must include blocked or waiting worker lanes.");
 assert.match(main, /renderOutcomeStrip\(\);[\s\S]*?renderOperatingPulse\(\);[\s\S]*?renderHandledProofDeck\(\);/u,
   "Console render order should put the operating pulse between outcomes and handled proof.");
 assert.match(main, /lane:\s*"You"[\s\S]*?lane:\s*"Phantom"[\s\S]*?lane:\s*"Results"/u,
@@ -112,6 +121,8 @@ assert.match(css, /\.operating-pulse\s*\{/u, "Operating pulse must have a compac
 assert.match(css, /@keyframes operatingPulse/u, "Operating pulse should animate department readiness, not decorative thinking.");
 assert.match(css, /\.execution-timeline\s*\{/u, "Execution timeline must have compact dashboard styling.");
 assert.match(css, /@keyframes executionFlow/u, "Execution timeline should animate real work flow.");
+assert.match(css, /\.unblock-center\s*\{/u, "Unblock center must have compact command-center styling.");
+assert.match(css, /\.unblock-card\s*\{/u, "Unblock center must render each blocker as an actionable card.");
 assert.match(css, /@keyframes outcomeProgress/u, "Outcome cards should animate operational progress, not decorative thinking.");
 assert.match(css, /\.handled-proof\s*\{/u, "Handled proof strip must have compact proof styling.");
 assert.match(css, /\.quick-item i\s*\{/u, "Next move rail must support compact evidence subtext.");
