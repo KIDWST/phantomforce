@@ -375,6 +375,44 @@
           "description": "Media Lab editor tests cover alignment behavior."
         }
       ]
+    },
+    {
+      "id": "phantomcut-per-clip-volume",
+      "status": "active",
+      "title": "PhantomCut keeps per-clip video volume controls",
+      "ownerDecision": "The video editor must let users set volume per video clip, show non-default volume on timeline cards, and apply that volume during preview/export instead of only offering mute.",
+      "requiredPatterns": [
+        {
+          "file": "app/js/videocut.js",
+          "pattern": "function clipVolume\\(clip\\)[\\s\\S]*clamp\\(Number\\(clip\\.volume \\?\\? 100\\), 0, 100\\)",
+          "description": "PhantomCut normalizes per-clip video volume."
+        },
+        {
+          "file": "app/js/videocut.js",
+          "pattern": "mute: false, volume: 100",
+          "description": "New video clips default to unmuted full volume."
+        },
+        {
+          "file": "app/js/videocut.js",
+          "pattern": "data-vc-ins-volume",
+          "description": "The clip inspector exposes a volume slider."
+        },
+        {
+          "file": "app/js/videocut.js",
+          "pattern": "el\\.volume = clipVolume\\(c\\) / 100",
+          "description": "Playback and export sync apply per-clip volume."
+        },
+        {
+          "file": "scripts/test-videocut-editor.mjs",
+          "pattern": "Volume slider must normalize and save clip volume",
+          "description": "PhantomCut volume behavior is covered by tests."
+        },
+        {
+          "file": "package.json",
+          "pattern": "\"test:videocut-editor\": \"node scripts/test-videocut-editor.mjs\"",
+          "description": "The PhantomCut editor test is available as an npm script."
+        }
+      ]
     }
   ]
 }
