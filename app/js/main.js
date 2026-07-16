@@ -506,9 +506,9 @@ const BASE_NAV = [
   { id: "assets",     label: "Asset Cloud",  icon: "media", ws: "assets", dbOnly: true },
   { id: "sites",      label: "Websites",     icon: "site",  ws: "sites" },
   { id: "money",      label: "Accounting",   icon: "dollar", ws: "money" },
-  { id: "automation", label: "Automations",  icon: "auto",  ws: "automation" },
+  { id: "automation", label: "Automations",  icon: "auto",  ws: "automation", navHidden: true },
   { id: "approvals",  label: "Approvals",    icon: "check", ws: "approvals", badge: true },
-  { id: "workers",    label: "Workforce",    icon: "users", ws: "workforce" },
+  { id: "workers",    label: "Workforce",    icon: "users", ws: "workforce", navHidden: true },
   /* Clients (CRM) is owner/admin business-back-office material, not a
      surface every teammate needs a permanent sidebar slot for — it opens
      from Settings > Organization instead (data-open-ws="leads" there).
@@ -517,7 +517,7 @@ const BASE_NAV = [
      drops the item from the rendered nav list. */
   { id: "crm",        label: "Clients",      icon: "users", ws: "leads", navHidden: true },
   { id: "analytics",  label: "Analytics",    icon: "chart", ws: "analytics" },
-  { id: "memory",     label: "Memory",       icon: "brain", ws: "memory", navZone: "bottom", quiet: true },
+  { id: "memory",     label: "Memory",       icon: "brain", ws: "memory", navZone: "bottom", quiet: true, navHidden: true },
   { id: "settings",   label: "Settings",     icon: "cog",   ws: "settings", navZone: "bottom" },
   { id: "developer",  label: "Developer",    icon: "dev",   ws: "developer", ownerOnly: true, navZone: "bottom" },
   { id: "vacation",   label: "Away Mode",    icon: "auto",  ws: "vacation", statusPill: true, navZone: "bottom" },
@@ -1244,7 +1244,7 @@ const MODES = {
   admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260715-279";
+const POSE_VERSION = "phantom-live-20260716-280";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -1698,6 +1698,123 @@ function renderAttentionStrip() {
     </div>`;
 }
 
+function renderCommandWidgets() {
+  const mount = $("[data-command-widgets]");
+  if (!mount) return;
+  const widgets = missionWidgets();
+  const byId = (id) => widgets.find((item) => item.id === id) || {};
+  const approvals = visible(store.state.approvals).filter((a) => a.status === "pending");
+  const automations = (store.state.agents || []).filter((a) => a.kind === "automation");
+  const automationActive = automations.filter((a) => a.status === "active").length;
+  const automationWaiting = automations.filter((a) => ["idle", "needs-approval", "waiting"].includes(a.status)).length;
+  const memory = memoryStats();
+  const attention = attentionItems();
+  const plan = todaysPlan();
+  const workforce = byId("workforce");
+  const media = byId("media");
+  const money = byId("money");
+  const leads = byId("leads");
+
+  const card = ({ id, icon, title, stat, sub, open, tone = "ok", lines = [] }, index) => `
+    <details class="command-widget is-${esc(tone)}" data-command-widget="${esc(id)}" ${index === 0 ? "open" : ""}>
+      <summary>
+        <span class="cw-ic">${svg(icon)}</span>
+        <span class="cw-copy">
+          <b>${esc(title)}</b>
+          <i>${esc(sub)}</i>
+        </span>
+        <span class="cw-stat">${esc(stat)}</span>
+      </summary>
+      <div class="cw-body">
+        ${lines.map((line) => `<p>${line}</p>`).join("")}
+        ${open ? `<button class="cw-open" data-open-ws="${esc(open)}" type="button">Open workspace ${svg("arrow")}</button>` : ""}
+      </div>
+    </details>`;
+
+  const cards = [
+    {
+      id: "outcomes",
+      icon: "target",
+      title: "Outcome board",
+      stat: plan.length ? `${plan.length} live` : "clear",
+      sub: plan[0]?.text || "No urgent business work loaded yet.",
+      open: plan[0]?.open || "leads",
+      tone: plan.length ? "warn" : "ok",
+      lines: [
+        `<b>Leads</b><span>${esc(leads.stat || "0 open")} · ${esc(leads.sub || "pipeline current")}</span>`,
+        `<b>Money</b><span>${esc(money.stat || "$0")} · ${esc(money.sub || "ledger empty")}</span>`,
+        `<b>Media</b><span>${esc(media.stat || "0 pending")} · ${esc(media.sub || "0 generated")}</span>`,
+      ],
+    },
+    {
+      id: "workforce",
+      icon: "users",
+      title: "Workforce",
+      stat: workforce.stat || "mapped",
+      sub: workforce.sub || "Departments stay behind the curtain until opened.",
+      open: "workforce",
+      tone: "ok",
+      lines: [
+        "<b>Growth</b><span>opportunities, leads, competitor gaps</span>",
+        "<b>Creative</b><span>media, sites, copy, campaign assets</span>",
+        "<b>Operations</b><span>deadlines, routes, proof, execution flow</span>",
+      ],
+    },
+    {
+      id: "automations",
+      icon: "auto",
+      title: "Automations",
+      stat: automations.length ? `${automationActive}/${automations.length} on` : "ready",
+      sub: automations.length ? `${automationWaiting} waiting or approval-gated` : "Create from chat; manage here when it exists.",
+      open: "automation",
+      tone: automationWaiting ? "warn" : "ok",
+      lines: [
+        `<b>Active</b><span>${automationActive} running or enabled</span>`,
+        `<b>Waiting</b><span>${automationWaiting} off, queued, or approval-gated</span>`,
+        "<b>Rule</b><span>external sends, posts, spends, uploads, and destructive actions stay approval-gated</span>",
+      ],
+    },
+    {
+      id: "signals",
+      icon: "bolt",
+      title: "Signals",
+      stat: attention.length ? `${attention.length} needs you` : "quiet",
+      sub: attention[0]?.title || "No owner decision is waiting right now.",
+      open: attention[0]?.open || "activity",
+      tone: attention.length ? "warn" : "ok",
+      lines: attention.length
+        ? attention.slice(0, 3).map((item) => `<b>${esc(item.title)}</b><span>${esc(item.sub || "Open for evidence")}</span>`)
+        : ["<b>Clear</b><span>PhantomWire will surface live activity and evidence when something changes.</span>"],
+    },
+    {
+      id: "memory",
+      icon: "brain",
+      title: "Memory",
+      stat: `${memory.total || 0} saved`,
+      sub: "Handled inside chat unless you open the vault.",
+      open: "memory",
+      tone: "ok",
+      lines: [
+        `<b>Remembered</b><span>${memory.remembered || 0} durable rules and facts</span>`,
+        "<b>Behavior</b><span>Chat uses memory/context; the nav does not need a permanent Memory tab.</span>",
+      ],
+    },
+    {
+      id: "approvals",
+      icon: "check",
+      title: "Decision cards",
+      stat: approvals.length ? `${approvals.length} waiting` : "clear",
+      sub: approvals[0]?.title || "Approval queue is clean.",
+      open: "approvals",
+      tone: approvals.length ? "warn" : "ok",
+      lines: approvals.length
+        ? approvals.slice(0, 3).map((a) => `<b>${esc(a.title)}</b><span>${esc(a.detail || "Needs your call")}</span>`)
+        : ["<b>Safe</b><span>Phantom can draft and prepare; you approve anything that touches the outside world.</span>"],
+    },
+  ];
+  mount.innerHTML = cards.map(card).join("");
+}
+
 /* ============================ ⌘K command palette ============================ */
 let cmdkOpen = false, cmdkIdx = 0, cmdkItems = [];
 function fuzzy(q, text) {
@@ -1853,10 +1970,11 @@ function renderConsole() {
   /* Fire-and-forget: pull server truth for the bell + attention strip, then
      repaint both once it lands. Failures change nothing. */
   const pulseBefore = serverPulseAt;
-  fetchServerAttention().then(() => { if (serverPulseAt !== pulseBefore) { renderNotifs(); renderAttentionStrip(); } }).catch(() => {});
+  fetchServerAttention().then(() => { if (serverPulseAt !== pulseBefore) { renderNotifs(); renderAttentionStrip(); renderCommandWidgets(); } }).catch(() => {});
   renderHero();
   renderChips();
   renderModePose(activeMode);
+  renderCommandWidgets();
   renderFlowMap();
   renderFlowCompactSummary();
   renderPlan();
@@ -3017,9 +3135,10 @@ function workspaceDef(id) {
 function navForWorkspace(id) {
   const key = workspaceId(id);
   const parentId = NAV_PARENT_BY_WORKSPACE[key];
-  return NAV.find((n) => n.id === activeNav && (n.ws === key || n.id === parentId) && canAccessSurface(n))
-    || NAV.find((n) => n.ws === key && canAccessSurface(n))
-    || NAV.find((n) => n.id === parentId && canAccessSurface(n))
+  const canOwnPage = (n) => canAccessSurface(n) && (!n.navHidden || n.id === "crm");
+  return NAV.find((n) => n.id === activeNav && (n.ws === key || n.id === parentId) && canOwnPage(n))
+    || NAV.find((n) => n.ws === key && canOwnPage(n))
+    || NAV.find((n) => n.id === parentId && canOwnPage(n))
     || null;
 }
 function clearOverlayOnly() {
