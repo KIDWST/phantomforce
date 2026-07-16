@@ -6,7 +6,7 @@
 import {
   store, uid, visible, isAdmin, currentWs, wsName, pushActivity, resolveApproval,
   moneyView, fmtMoney, fmtDate, fmtDateTime, ago, daysUntil, statusLabel,
-  PACKAGES, RETAINERS,
+  PACKAGES, RETAINERS, outcomesView,
 } from "./store.js";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -394,6 +394,44 @@ function renderSites(el, rerender) {
   });
 }
 
+/* ========================= OUTCOMES ========================= */
+/* The core object the Command architecture revolves around — not a task
+   list, a target result with real linked records as evidence. Every
+   outcome here traces back to actual leads/proposals/media/security
+   records (see store.js's outcomesView()); nothing is invented to pad
+   the list out. Clicking a workstream opens the workspace holding the
+   real record it points at. */
+function renderOutcomes(el, rerender) {
+  const outcomes = outcomesView();
+  el.innerHTML = `
+    <div class="ws-toolbar">
+      <p class="ws-note">Everything the business is actively trying to achieve — not which tab to visit, what result you're driving toward.</p>
+    </div>
+    <div class="card-grid">
+      ${outcomes.map((o) => `
+        <article class="record record-wide outcome-card">
+          <div class="record-top">
+            <h4>${esc(o.title)}</h4>
+            ${chip(o.status)}
+          </div>
+          <p class="record-sub">${o.dept.map((d) => `<span class="dept-tag">${esc(d)}</span>`).join(" ")}</p>
+          <p class="record-notes"><b>Target:</b> ${esc(o.targetResult)}</p>
+          <p class="record-notes"><b>Success metric:</b> ${esc(o.successMetric)}</p>
+          <p class="record-notes">${esc(o.strategy)}</p>
+          <div class="outcome-workstreams">
+            ${o.workstreams.map((w) => `
+              <button class="outcome-workstream" data-open-ws="${esc(w.open)}">
+                <span>${esc(w.label)}</span><i>${esc(w.detail)}</i>
+              </button>`).join("")}
+          </div>
+          ${o.approvals ? `<p class="record-sub">${o.approvals} approval${o.approvals === 1 ? "" : "s"} pending on this outcome.</p>` : ""}
+        </article>`).join("") || empty("No active outcomes yet. As leads, proposals, and workstreams form a clear target, they'll surface here.")}
+    </div>`;
+  // Workstream buttons use the app's existing global [data-open-ws]
+  // delegation (see main.js) — same mechanism every other workspace's
+  // "open" buttons already use, no new wiring needed.
+}
+
 /* ========================= PLAY (PhantomPlay) ========================= */
 /* Platform-wide game catalog — not scoped per client workspace, every
    account browses the same catalog. Kids-tagged titles stay out of the
@@ -681,6 +719,7 @@ function renderPhantom(el) {
 /* ============================ REGISTRY ============================ */
 export const WORKSPACE_DEFS = {
   phantom: { title: "Phantom AI", kicker: "Command brain", render: renderPhantom },
+  outcomes: { title: "Outcomes", kicker: "What the business is driving toward", render: renderOutcomes },
   leads: { title: "Leads & Follow-Up", kicker: "Pipeline desk", render: renderLeads },
   proposals: { title: "Proposal Forge", kicker: "Quotes & offers", render: renderProposals },
   reviews: { title: "Review Desk", kicker: "Reputation engine", render: renderReviews },
@@ -713,7 +752,10 @@ export function missionWidgets() {
   const pendingGames = store.state.games.filter((g) => g.status === "pending-review").length;
   const liveStoreItems = store.state.storeItems.filter((p) => p.status === "live").length;
 
+  const outcomesCount = outcomesView().length;
+
   const w = [
+    { id: "outcomes", icon: "◎", title: "Outcomes", stat: `${outcomesCount} active`, sub: "what the business is driving toward", alert: false },
     { id: "leads", icon: "◉", title: "Handle Leads", stat: `${openLeads.length} open`, sub: dueLeads.length ? `${dueLeads.length} due today` : "pipeline current", alert: dueLeads.length > 0 },
     { id: "proposals", icon: "◆", title: "Build Quotes", stat: `${m.open.length} live`, sub: `${fmtMoney(m.pipeline)} open`, alert: false },
     { id: "media", icon: "▶", title: "Media Lab", stat: `${briefs.length} ready`, sub: "briefs & generation", alert: false },

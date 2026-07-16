@@ -416,6 +416,19 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   font: 500 10.5px "DM Mono", monospace; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(127, 230, 255, 0.7);
 }
 .record-ghostcard { border-style: dashed; }
+.dept-tag {
+  display: inline-block; margin: 0 4px 0 0; padding: 1.5px 8px; border-radius: 999px;
+  border: 1px solid rgba(30, 240, 255, 0.3); background: rgba(30, 240, 255, 0.06);
+  font: 500 9.5px "DM Mono", monospace; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(127, 230, 255, 0.85);
+}
+.outcome-workstreams { display: grid; gap: 6px; margin: 10px 0; }
+.outcome-workstream {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; text-align: left;
+  padding: 8px 12px; border-radius: 10px; border: 1px solid var(--line); background: rgba(65, 255, 161, 0.035);
+  font-size: 12.5px; color: #cfeeda; cursor: pointer; transition: border-color 0.2s, background 0.2s;
+}
+.outcome-workstream:hover { border-color: var(--line-strong); background: rgba(65, 255, 161, 0.09); }
+.outcome-workstream i { font-style: normal; color: rgba(234, 255, 244, 0.45); font-size: 11px; flex: 0 0 auto; }
 .mini-form { display: grid; gap: 8px; margin-top: 8px; }
 .mini-form input, .mini-form textarea {
   width: 100%; border: 1px solid var(--line); border-radius: 10px; background: rgba(0, 0, 0, 0.3);

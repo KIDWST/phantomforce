@@ -316,6 +316,71 @@ export function commandBriefing() {
   return { healthLine, decisions: decisions.slice(0, 3), handledWhileAway };
 }
 
+/* ---------------- derived: outcomes ----------------
+   The core object the Command architecture revolves around — see
+   docs shared with the user. An Outcome is a target result with
+   real linked records as evidence, not a standalone wishlist item.
+   Every outcome below traces to actual store data; nothing here is
+   invented to fill out the list. If the underlying records don't
+   exist, the outcome doesn't appear. */
+export function outcomesView() {
+  const outcomes = [];
+
+  const chen = store.state.proposals.find((p) => p.id === "prop-chen");
+  if (chen) {
+    const media = store.state.media.find((m) => m.id === "med-chen");
+    outcomes.push({
+      id: "outc-chicagoshots-retainer",
+      title: "Grow ChicagoShots retainer revenue",
+      dept: ["Growth", "Creative"],
+      targetResult: "Convert Chen & Park into a Partner retainer",
+      successMetric: `${fmtMoney(RETAINERS.find((r) => r.id === "partner")?.price || 0)}+/mo recurring`,
+      strategy: "Land the Pro-tier listing-video proposal, prove value over the first cycle, upsell to Partner once the cadence is trusted.",
+      status: chen.status === "won" ? "active" : "planning",
+      workstreams: [
+        { label: `Proposal: ${chen.client}`, detail: `${chip_(chen.status)} · ${fmtMoney(chen.price)}`, open: "proposals" },
+        media ? { label: `Media brief: ${media.title}`, detail: chip_(media.status), open: "media" } : null,
+      ].filter(Boolean),
+      approvals: store.state.approvals.filter((a) => a.ws === "chicagoshots" && a.status === "pending").length,
+    });
+  }
+
+  const overdueLeads = visible(store.state.leads)
+    .filter((l) => ["new", "follow-up"].includes(l.status) && daysUntil(l.due) <= 0);
+  if (overdueLeads.length) {
+    outcomes.push({
+      id: "outc-overdue-leads",
+      title: "Recover every overdue follow-up",
+      dept: ["Client Care"],
+      targetResult: "Zero leads past their due date",
+      successMetric: "0 overdue leads",
+      strategy: "Drafts are pre-written from each client's history; the only remaining step is a human decision to send.",
+      status: "active",
+      workstreams: overdueLeads.map((l) => ({ label: `${l.name} — ${l.company}`, detail: l.next, open: "leads" })),
+      approvals: 0,
+    });
+  }
+
+  const attentionSec = store.state.security.find((s) => s.posture !== "clean" && s.findings.some((f) => f.level === "warn"));
+  if (attentionSec) {
+    const warn = attentionSec.findings.find((f) => f.level === "warn");
+    outcomes.push({
+      id: "outc-security-posture",
+      title: `Close the ${wsName(attentionSec.ws)} security gap`,
+      dept: ["Technology", "Intelligence"],
+      targetResult: "Posture back to clean before next scan",
+      successMetric: `Next scan (${fmtDate(attentionSec.nextScan)}) shows clean`,
+      strategy: "One concrete finding, one concrete fix — no broad audit needed.",
+      status: "blocked",
+      workstreams: [{ label: warn.text, detail: `${attentionSec.accounts} accounts tracked`, open: "protect" }],
+      approvals: 0,
+    });
+  }
+
+  return outcomes;
+}
+function chip_(s) { return statusLabel(s); }
+
 /* ---------------- approvals ---------------- */
 export function resolveApproval(id, approved) {
   const a = store.state.approvals.find((x) => x.id === id);
