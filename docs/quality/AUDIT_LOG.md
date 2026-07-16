@@ -1,5 +1,86 @@
 # PhantomForce Audit Log
 
+## 2026-07-16 — Daily QA Sweep: PhantomPlay Catalog Restore + Responsive Proof
+
+### Surfaces Audited
+
+- Required process docs: `AGENTS.md`,
+  `docs/quality/CONTINUOUS_QUALITY_PROGRAM.md`,
+  `docs/quality/SITE_INVENTORY.md`, `docs/quality/QUALITY_BACKLOG.md`,
+  `docs/quality/NEXT_CYCLE.md`, and this audit log.
+- Database-auth setup docs and scripts:
+  `docs/DATABASE_SETUP.md`, `docs/ADMIN_RECOVERY.md`,
+  `server/scripts/test-auth-database-live.ps1`, and
+  `server/scripts/test-database-auth.mjs`.
+- PhantomPlay classic frontend catalog: `app/js/phantomplay.js`.
+- PhantomPlay server catalog: `server/src/phantom-ai/phantomplay.ts`.
+- Admin app responsive browser matrix through
+  `scripts/test-responsive-viewports.mjs`.
+- Focused Media Lab and Settings regression scripts.
+
+### Problems Verified
+
+- Q-0010: Penalty Kick was present in the code but hidden from the playable
+  PhantomPlay catalog because it was marked `featured: false` and
+  `active: false` in the frontend catalog, and `featured: false` plus
+  `active: false` in the server source catalog.
+- Option A DB-auth browser proof could not run because Docker Desktop's Linux
+  engine was not running, so the Postgres fixture script could not create the
+  required safe local database.
+
+### Problems Fixed
+
+- Q-0010: restored Penalty Kick as an active featured Sports game in the
+  frontend and server PhantomPlay catalogs.
+- Bumped the app shell/module cache id from `phantom-live-20260715-4` to
+  `phantom-live-20260716-1` so browsers load the restored catalog.
+
+### Commands Run
+
+- `docker --version; docker ps --format '{{.Names}} {{.Ports}}'`
+- `npm run test:responsive-viewports`
+- `npm run test:phantomplay`
+- `npm run build --workspace @phantomforce/server`
+- `node --check app/js/main.js; node --check app/js/phantomplay.js`
+- `npm run test:medialab-editor`
+- `npm run test:settings-connections`
+- `git diff --check`
+- `rg -n "phantom-live-20260715-4" app/index.html app/js app/phantom.css`
+
+### Results
+
+- BLOCKED: DB-auth isolation browser proof needs Docker/Postgres or an
+  equivalent local database fixture.
+- PASS: responsive browser matrix covered Dashboard, Clients, Media Lab,
+  Content Hub, Analytics, PhantomPlay, and Settings at 320, 375, 768, 1024,
+  1440, and 1920px with 42 passing cases and screenshots under
+  `tmp/responsive-viewports/2026-07-16T14-07-18-427Z/screenshots`.
+- PASS: PhantomPlay frontend/game safety checks passed.
+- PASS: server PhantomPlay suite passed with 21 built-in games, tenant
+  isolation, private rooms, moderation, route auth, and community approval
+  checks.
+- PASS: server TypeScript build completed.
+- PASS: focused Media Lab editor and Settings provider connection checks
+  passed.
+- PASS: app syntax checks passed for `main.js` and `phantomplay.js`.
+- PASS: no stale `phantom-live-20260715-4` references remain under the app
+  shell/module graph.
+
+### Remaining P0/P1
+
+- No P0 verified in this cycle.
+- P1: DB-auth org isolation browser proof remains open and blocked on a local
+  database fixture in this environment.
+- P1: responsive/mobile proof is improved by the 42-case matrix, but deeper
+  module interaction, keyboard, and visual screenshot review should continue.
+
+### Next Task
+
+Resume with DB-auth organization isolation if Docker/Postgres is available.
+Otherwise continue the responsive/mobile track with interaction-level browser
+coverage for Media Lab, PhantomPlay game launch/resume, Settings forms, and
+Content Hub editor controls.
+
 ## 2026-07-14 — Cycle 1B: Phantom Rumble Boot State + Continuous Automation Hardening
 
 ### Surfaces Audited

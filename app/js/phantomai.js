@@ -6,8 +6,8 @@
    vault, agentops.js's console) so they read as one product. It does not
    re-implement any of them. */
 
-import { isOwnerOperator } from "./store.js?v=phantom-live-20260715-4";
-import { mountAgentConsole } from "./agentops.js?v=phantom-live-20260715-4";
+import { isOwnerOperator } from "./store.js?v=phantom-live-20260716-2";
+import { mountAgentConsole } from "./agentops.js?v=phantom-live-20260716-2";
 
 const TABS = ["chat", "memory", "activity"];
 let rootEl = null;
@@ -20,7 +20,7 @@ function mountMemoryTab() {
   const mount = pane("memory")?.querySelector("[data-phantomai-memory-mount]");
   if (!mount || mount.dataset.mounted) return;
   mount.dataset.mounted = "1";
-  import("./brain.js?v=phantom-live-20260715-4")
+  import("./brain.js?v=phantom-live-20260716-2")
     .then((mod) => { if (mount.isConnected) mod.renderPhantomBrain(mount); })
     .catch(() => { mount.innerHTML = `<p class="ws-note">This panel could not load. Try again in a moment.</p>`; });
 }

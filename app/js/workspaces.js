@@ -9,10 +9,10 @@ import {
   PACKAGES, RETAINERS, FINANCE_CATEGORIES, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS, CHAT_HISTORY_RETENTION_DAYS,
   addMemory, toggleMemoryRemember, forgetMemory, forgetChatHistory, memoryStats, memoryRetention, chatHistoryStats, chatHistoryRetention,
   session, currentTenantId, friendlyBackendError,
-} from "./store.js?v=phantom-live-20260715-4";
+} from "./store.js?v=phantom-live-20260716-2";
 import {
   isDatabaseSession, canManageActiveOrg, fetchServerApprovals, decideServerRun,
-} from "./orgs.js?v=phantom-live-20260715-4";
+} from "./orgs.js?v=phantom-live-20260716-2";
 import {
   createCrmLead as createServerCrmLead,
   crmRefreshSignal,
@@ -22,25 +22,25 @@ import {
   persistCrmProspectLanes,
   signalCrmRefresh,
   updateCrmLead as updateServerCrmLead,
-} from "./crmpipeline.js?v=phantom-live-20260715-4";
-import { createCrmProspectBuildout, isCrmProspectBuildout } from "./crmprospects.js?v=phantom-live-20260715-4";
-import { generateDueOccurrences } from "./finance-recurring.js?v=phantom-live-20260715-4";
-import { classifyClientTaskIntent, CLIENT_TASK_INTENTS, SUPPORTED_CLIENT_TASK_INTENTS, buildClientMediaAssetDraft, buildClientApprovalDraft } from "./client-tasks.js?v=phantom-live-20260715-4";
-import { registerContentAsset } from "./contenthub.js?v=phantom-live-20260715-4";
+} from "./crmpipeline.js?v=phantom-live-20260716-2";
+import { createCrmProspectBuildout, isCrmProspectBuildout } from "./crmprospects.js?v=phantom-live-20260716-2";
+import { generateDueOccurrences } from "./finance-recurring.js?v=phantom-live-20260716-2";
+import { classifyClientTaskIntent, CLIENT_TASK_INTENTS, SUPPORTED_CLIENT_TASK_INTENTS, buildClientMediaAssetDraft, buildClientApprovalDraft } from "./client-tasks.js?v=phantom-live-20260716-2";
+import { registerContentAsset } from "./contenthub.js?v=phantom-live-20260716-2";
 import {
   createProposal as createServerProposal,
   deleteProposal as deleteServerProposal,
   loadProposals,
   proposalServerAvailable,
   updateProposal as updateServerProposal,
-} from "./proposalpipeline.js?v=phantom-live-20260715-4";
+} from "./proposalpipeline.js?v=phantom-live-20260716-2";
 import {
   approvalServerAvailable,
   createWorkspaceApproval as createServerWorkspaceApproval,
   decideWorkspaceApproval as decideServerWorkspaceApproval,
   deleteWorkspaceApproval as deleteServerWorkspaceApproval,
   loadWorkspaceApprovals,
-} from "./approvalpipeline.js?v=phantom-live-20260715-4";
+} from "./approvalpipeline.js?v=phantom-live-20260716-2";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());

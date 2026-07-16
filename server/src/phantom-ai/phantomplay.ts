@@ -303,12 +303,11 @@ export const PHANTOMPLAY_BUILT_IN_GAMES: PhantomPlayGame[] = [
     kind: "built_in",
     launchUrl: "/app/games/penalty-kick.html?v=1.0.3",
     thumbnail: GAME_ART_BY_SLUG["penalty-kick"],
-    featured: false,
+    featured: true,
     version: "1.0.3",
     controls: "Tap a lane or use arrows. Shoot when the meter says LOCKED.",
     progressSupport: true,
     scoreSupport: true,
-    active: false,
   },
   {
     id: "rift-frenzy",

@@ -1,11 +1,12 @@
 # PhantomForce Site Inventory
 
-Last updated: 2026-07-14
+Last updated: 2026-07-16
 
 Scope: static repository discovery, server route extraction from
 `server/src/index.ts`, application navigation from `app/js/main.js`, local
-runtime evidence in `run-evidence/first-real-run-20260714-153002`, and Cycle 1
-Headless Edge smoke at 1440x1000 and 375x812.
+runtime evidence in `run-evidence/first-real-run-20260714-153002`, Cycle 1
+Headless Edge smoke at 1440x1000 and 375x812, and 2026-07-16 responsive
+browser matrix evidence in `tmp/responsive-viewports/2026-07-16T14-07-18-427Z`.
 
 ## Public Web
 
@@ -45,11 +46,11 @@ Headless Edge smoke at 1440x1000 and 375x812.
 | Dashboard | Yes | Operating summary and chat entry. | Ask Phantom, review plan. | Empty data, live pulse. | UI sweep. | 2026-07-14 | Needs accessibility/keyboard pass. |
 | Clients | Yes | CRM pipeline. | Create/update leads, statuses. | Empty, lead list, proposal-linked. | `test:crm-pipeline`; API harness. | 2026-07-14 | Needs DB-auth tenant isolation browser pass. |
 | Client Setup | Owner/admin | Client/workspace setup slots. | Configure packages, modules, lead sources. | Active, pending, empty. | `test:client-setup-console`; API harness. | 2026-07-14 | Needs long-content/mobile form audit. |
-| Media Lab | Yes | Media generation/editing. | Create, edit, rembg, provider status. | Provider ready/off, pending jobs. | Media tests exist. | 2026-07-14 | User reported scaling/mobile issues; needs dedicated pass. |
+| Media Lab | Yes | Media generation/editing. | Create, edit, rembg, provider status. | Provider ready/off, pending jobs. | Media tests exist; 2026-07-16 responsive matrix. | 2026-07-16 | Needs interaction-level editor/mobile form audit. |
 | Websites | Yes | Website/domain prompt builder. | Prompt site changes, build/manage domains. | Empty, build, publish approval. | `test:workspace-site-builder`, site-store. | 2026-07-14 | Needs public copy and onboarding simplification audit. |
 | Accounting | Owner/admin | Transactions/import/accounting surface. | Review accounts/imports/manual records. | Empty/manual/provider not connected. | UI sweep only. | 2026-07-14 | Live bank/card/manual accounting flows need deeper tests. |
 | Planner | Yes | AI planner, prep queue, automation coverage. | Add plan blocks, review prep. | Empty, populated, stock automations. | `test:ai-planner`. | 2026-07-14 | Needs keyboard/mobile audit. |
-| PhantomPlay | Yes | Game launch/management surface. | Launch/play/configure games. | V1/V2, catalog, leaderboard. | `test:phantomplay`; API harness. | 2026-07-14 | Product separation and mobile game play need deeper QA. |
+| PhantomPlay | Yes | Game launch/management surface. | Launch/play/configure games. | V1/V2, catalog, leaderboard. | `test:phantomplay`; API harness; 2026-07-16 responsive matrix. | 2026-07-16 | Penalty Kick catalog visibility fixed; mobile game play still needs deeper QA. |
 | Competitor Intelligence | Owner/admin | Market scout and public-signal intelligence. | Scout, add competitors/signals. | Unavailable, ready, aggressive. | `test:competitor-intelligence`; API harness. | 2026-07-14 | Scout is structured but not live web research. |
 | Analytics | Owner/admin | Social/content analytics. | Review metrics/connectors. | Empty, connector missing, synced. | `test-social-analytics`. | 2026-07-14 | Needs connector/error-state audit. |
 | Memory | Owner/admin | Memory vs temporary history. | Review/add/edit/delete memory. | Empty, saved, expiring. | `test:memory`; API harness. | 2026-07-14 | Needs UI edit/delete keyboard pass. |
@@ -57,7 +58,7 @@ Headless Edge smoke at 1440x1000 and 375x812.
 | Approvals | Owner/admin | Approval queue. | Approve/request changes/decline. | Empty, pending, decided. | `test:workspace-approvals`; API harness. | 2026-07-14 | Needs destructive-action confirmation audit. |
 | Workforce | Owner/admin | Worker map and operational force view. | Inspect workers/departments. | Baseline, active, mapped. | UI sweep. | 2026-07-14 | Worker counts need real proof/terminology audit. |
 | Away Mode | Owner/admin | Vacation/coverage mode. | Activate/deactivate, settings, approvals. | Off, on, approvals. | Vacation server tests. | 2026-07-14 | UI text sample was thin; needs route-specific audit. |
-| Settings | Yes by role | Business Manager settings. | Configure model/settings/nav. | Owner/admin/client variants. | UI sweep. | 2026-07-14 | User reported settings UI regression; needs deeper pass. |
+| Settings | Yes by role | Business Manager settings. | Configure model/settings/nav. | Owner/admin/client variants. | UI sweep; 2026-07-16 responsive matrix; `test:settings-connections`. | 2026-07-16 | Needs form-submit and keyboard pass. |
 | Developer | Owner | Developer control room. | Inspect providers, runs, tooling. | Provider ready/off, logs. | UI sweep. | 2026-07-14 | Should remain role/capability, not org identity. |
 
 ## Server API Groups
@@ -70,8 +71,9 @@ See `docs/quality/site-surface.json` for grouped machine-readable coverage.
 - Browser registration, recovery, logout, invitation, and org-switching flows.
 - True DB-auth tenant isolation with separate users for PhantomForce and
   ChicagoShots.
-- Mobile viewport sweep at 320, 375, 768, 1024, 1440, and 1920px. Cycle 1 only
-  proved a 375px shell sanity check.
+- Interaction-level mobile/browser checks after the 2026-07-16 viewport matrix
+  proved no horizontal overflow or clipped visible control text across seven
+  app destinations at 320, 375, 768, 1024, 1440, and 1920px.
 - Keyboard-only and reduced-motion interaction pass.
 - Public landing, pricing, workspace profile, role/module, and subscription
   explanation audit.

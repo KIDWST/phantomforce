@@ -6,13 +6,13 @@ import {
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260715-4";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260715-4";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260715-4";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260715-4";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260715-4";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260715-4";
-import { mountManagedGrowthReport } from "./managedgrowth.js?v=phantom-live-20260715-4";
+} from "./store.js?v=phantom-live-20260716-2";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260716-2";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260716-2";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260716-2";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260716-2";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260716-2";
+import { mountManagedGrowthReport } from "./managedgrowth.js?v=phantom-live-20260716-2";
 import {
   cachedOrganizationPulse,
   loadOrganizationPulse,
@@ -20,47 +20,47 @@ import {
   pulseAttentionItems,
   pulsePendingApprovalCount,
   shouldRefreshOrganizationPulse,
-} from "./organizationpulse.js?v=phantom-live-20260715-4";
+} from "./organizationpulse.js?v=phantom-live-20260716-2";
 import {
   cachedServerRecords,
   loadServerRecords,
   serverRecordsAvailable,
   shouldRefreshServerRecords,
-} from "./serverrecords.js?v=phantom-live-20260715-4";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260715-4";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260715-4";
-import { mountPhantomWire } from "./agentops.js?v=phantom-live-20260715-4";
-import { mountPhantomAI } from "./phantomai.js?v=phantom-live-20260715-4";
-import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260715-4";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260715-4";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260715-4";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260715-4";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260715-4";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260715-4";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260715-4";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260715-4";
-import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260715-4";
-import { mountAmbient } from "./ambient.js?v=phantom-live-20260715-4";
-import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260715-4";
-import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260715-4";
-import { renderPlanner } from "./planner.js?v=phantom-live-20260715-4";
+} from "./serverrecords.js?v=phantom-live-20260716-2";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260716-2";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260716-2";
+import { mountPhantomWire } from "./agentops.js?v=phantom-live-20260716-2";
+import { mountPhantomAI } from "./phantomai.js?v=phantom-live-20260716-2";
+import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260716-2";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260716-2";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260716-2";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260716-2";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260716-2";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260716-2";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260716-2";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260716-2";
+import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260716-2";
+import { mountAmbient } from "./ambient.js?v=phantom-live-20260716-2";
+import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260716-2";
+import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260716-2";
+import { renderPlanner } from "./planner.js?v=phantom-live-20260716-2";
 import {
   fetchAuthConfig, databaseLogin, databaseSignup, databaseLogout, switchOrg, fetchAuthMe, fetchEntitlementsSummary,
-} from "./orgs.js?v=phantom-live-20260715-4";
-import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260715-4";
-import { assetsAvailable } from "./orgs.js?v=phantom-live-20260715-4";
-import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260715-4";
-import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260715-4";
+} from "./orgs.js?v=phantom-live-20260716-2";
+import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260716-2";
+import { assetsAvailable } from "./orgs.js?v=phantom-live-20260716-2";
+import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260716-2";
+import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260716-2";
 // V2 is the default PhantomPlay experience (docs/superpowers/specs/2026-07-15-
 // phantomplay-global-leaderboard-design.md decision #1); "0" is an explicit
 // opt-out via the Classic view button, still wired in phantomplay-v2.js.
 const phantomPlayV2Opted = () => { try { return localStorage.getItem("pf.phantomplay.v2") !== "0"; } catch { return true; } };
-import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260715-4";
+import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260716-2";
 import {
   customizeNavigation,
   loadOrganizationCustomization,
-} from "./customization.js?v=phantom-live-20260715-4";
-import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260715-4";
+} from "./customization.js?v=phantom-live-20260716-2";
+import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260716-2";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -525,10 +525,10 @@ const BASE_NAV = [
   { id: "money",      label: "Accounting",   icon: "dollar", ws: "money" },
   { id: "planner",    label: "Planner",      icon: "calendar", ws: "planner" },
   { id: "phantomplay", label: "PhantomPlay", icon: "film",  ws: "phantomplay" },
-  { id: "memory",     label: "Memory",       icon: "brain", ws: "memory", bottom: true },
-  { id: "automation", label: "Automations",  icon: "auto",  ws: "automation", bottom: true },
+  { id: "memory",     label: "Memory",       icon: "brain", ws: "memory", bottom: true, navHidden: true },
+  { id: "automation", label: "Automations",  icon: "auto",  ws: "automation", bottom: true, navHidden: true },
   { id: "approvals",  label: "Approvals",    icon: "check", ws: "approvals", badge: true, bottom: true },
-  { id: "workers",    label: "Workforce",    icon: "users", ws: "workforce", bottom: true },
+  { id: "workers",    label: "Workforce",    icon: "users", ws: "workforce", bottom: true, navHidden: true },
   { id: "intelligence", label: "Competitor Intel", icon: "chart", ws: "intelligence", bottom: true },
   { id: "analytics",  label: "Analytics",    icon: "chart", ws: "analytics", bottom: true },
   { id: "vacation",   label: "Away Mode", icon: "auto", ws: "vacation", statusPill: true, bottom: true, quiet: true },
@@ -581,6 +581,7 @@ function navFeatureDisabled(item) {
 function orderedNavItems() {
   return NAV
     .filter(canAccessSurface)
+    .filter((item) => !item.navHidden)
     .map((item) => ({ ...item, navDisabled: navFeatureDisabled(item) }))
     .sort((left, right) => Number(left.navDisabled) - Number(right.navDisabled));
 }
@@ -596,6 +597,7 @@ function mobileItemsFromNav(items = orderedNavItems()) {
     ownerOnly: n.ownerOnly,
     badge: n.badge,
     navDisabled: n.navDisabled,
+    navHidden: n.navHidden,
     bottom: n.bottom,
     quiet: n.quiet,
   }));
@@ -1317,7 +1319,7 @@ const MODES = {
   admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260715-4";
+const POSE_VERSION = "phantom-live-20260716-2";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -1659,6 +1661,96 @@ function renderQuick() {
     </button>`).join("");
 }
 
+function commandWidgetRows() {
+  const approvals = approvalBadgeCount();
+  const workforce = topbarBaselineWorkers();
+  const activeAgents = visible(store.state.agents || []).filter((a) => !["paused", "blocked"].includes(a.status || ""));
+  const activeAutomations = activeAgents.filter((a) => ["active", "waiting", "needs-approval"].includes(a.status || ""));
+  const memory = memoryStats(visible(store.state.memory || []));
+  const media = visible(store.state.media || []);
+  const contentReady = media.filter((m) => ["ready", "generated", "published"].includes(m.status || "")).length;
+  const signals = attentionItems();
+  const firstSignal = signals[0];
+  return [
+    {
+      id: "outcomes",
+      icon: "check",
+      title: firstSignal ? firstSignal.title : "No urgent outcome",
+      stat: approvals ? `${approvals} approval${approvals === 1 ? "" : "s"}` : "clear",
+      sub: firstSignal ? firstSignal.sub : "Phantom is ready for the next useful move.",
+      body: firstSignal
+        ? ["Evidence-backed attention item", "Review the suggested next move", "Approve, modify, or dismiss from the right workspace"]
+        : ["No forced tasks", "Use chat to define the next outcome", "Phantom keeps external actions approval-gated"],
+      open: firstSignal?.open || "approvals",
+    },
+    {
+      id: "workforce",
+      icon: "users",
+      title: "Workforce",
+      stat: workforce ? `${workforce.count} online` : `${topbarFallbackWorkers()} core`,
+      sub: workforce ? `${workforce.jobs} ledger-backed jobs in the recent window.` : "Baseline local services are ready.",
+      body: ["Growth, Creative, Operations, Client Care, Finance, Intelligence, Technology", "Workers stay behind the curtain until you need proof", "No fake runtime activity"],
+      open: "workforce",
+    },
+    {
+      id: "automation",
+      icon: "auto",
+      title: "Automations",
+      stat: activeAutomations.length ? `${activeAutomations.length} active` : "ready",
+      sub: "Saved workflows live here after Phantom builds them.",
+      body: ["Daily ideas, checks, outreach drafts, security scans", "Every external action waits for approval", "Configure cadence, limits, and business context per automation"],
+      open: "automation",
+    },
+    {
+      id: "signals",
+      icon: "chart",
+      title: "Signals",
+      stat: `${signals.length}`,
+      sub: signals.length ? "Live items Phantom thinks matter." : "No strong signal yet.",
+      body: ["Performance shifts", "Client silence", "Competitor changes", "Security or tool health changes"],
+      open: "analytics",
+    },
+    {
+      id: "memory",
+      icon: "brain",
+      title: "Memory",
+      stat: `${memory.remembered || memory.total || 0}`,
+      sub: "Institutional context is inside chat, not a nav chore.",
+      body: ["Preferences, corrections, business facts", "30-day temporary history", "Owner-editable saved memory"],
+      open: "memory",
+    },
+    {
+      id: "media",
+      icon: "media",
+      title: "Content engine",
+      stat: `${contentReady}`,
+      sub: "Generated assets, edits, and publishing material.",
+      body: ["Media Lab creates and edits", "Content Hub stores finished work", "Unused assets become future signals"],
+      open: "media",
+    },
+  ];
+}
+
+function renderCommandWidgets() {
+  const mount = $("[data-command-widgets]");
+  if (!mount) return;
+  mount.innerHTML = commandWidgetRows().map((card, index) => `
+    <details class="command-widget command-widget-${esc(card.id)}" ${index === 0 ? "open" : ""}>
+      <summary>
+        <span class="cw-ic">${svg(card.icon)}</span>
+        <span class="cw-copy">
+          <b>${esc(card.title)}</b>
+          <i>${esc(card.sub)}</i>
+        </span>
+        <span class="cw-stat">${esc(card.stat)}</span>
+      </summary>
+      <div class="cw-body">
+        ${card.body.map((line) => `<span>${esc(line)}</span>`).join("")}
+        <button type="button" class="cw-open" data-open-ws="${esc(card.open)}">Open workspace <span aria-hidden="true">→</span></button>
+      </div>
+    </details>`).join("");
+}
+
 /* ============================ attention intelligence ============================ */
 function greeting() {
   const h = new Date().getHours();
@@ -1709,7 +1801,7 @@ function paletteSources(query) {
   const q = query.trim().toLowerCase();
   const items = [];
   ensureServerRecordsFresh();
-  NAV.filter(canAccessSurface).forEach((n) =>
+  NAV.filter(canAccessSurface).filter((n) => !n.navHidden).forEach((n) =>
     items.push({ group: "Go to", label: n.label, icon: n.icon, sub: n.ws ? `Open ${n.label}` : "Console home", run: () => goNav(n.id) }));
   for (const id in WORKSPACE_DEFS) {
     const def = WORKSPACE_DEFS[id];
@@ -1863,6 +1955,7 @@ function renderConsole() {
   renderModePose(activeMode);
   renderFlowMap();
   renderFlowCompactSummary();
+  renderCommandWidgets();
   renderPlan();
   renderQueue();
   renderQuick();
@@ -3014,9 +3107,9 @@ function workspaceDef(id) {
 function navForWorkspace(id) {
   const key = workspaceId(id);
   const parentId = NAV_PARENT_BY_WORKSPACE[key];
-  return NAV.find((n) => n.id === activeNav && (n.ws === key || n.id === parentId) && canAccessSurface(n))
-    || NAV.find((n) => n.ws === key && canAccessSurface(n))
-    || NAV.find((n) => n.id === parentId && canAccessSurface(n))
+  return NAV.find((n) => !n.navHidden && n.id === activeNav && (n.ws === key || n.id === parentId) && canAccessSurface(n))
+    || NAV.find((n) => !n.navHidden && n.ws === key && canAccessSurface(n))
+    || NAV.find((n) => !n.navHidden && n.id === parentId && canAccessSurface(n))
     || null;
 }
 function clearOverlayOnly() {

@@ -1,6 +1,6 @@
 # PhantomForce Quality Backlog
 
-Last updated: 2026-07-14
+Last updated: 2026-07-16
 
 ## Verified Issues
 
@@ -64,6 +64,27 @@ Last updated: 2026-07-14
   boot smoke proving `data-end` is hidden on load and after host restore.
 - Status: Fixed and verified in Cycle 1B.
 
+### Q-0010 — P2 — Penalty Kick was hidden from PhantomPlay catalog
+
+- Route/component: `app/js/phantomplay.js`,
+  `server/src/phantom-ai/phantomplay.ts`, PhantomPlay built-in catalog.
+- Journey affected: users browsing PhantomPlay Sports or the ready strip could
+  not launch the Penalty Kick game.
+- Reproduction: run `npm run test:phantomplay`; the catalog assertion failed
+  because Penalty Kick was not a featured Sports game in the server catalog,
+  and the frontend row also had `active: false`.
+- Expected: Penalty Kick remains an active, featured Sports game with launch
+  URL `/app/games/penalty-kick.html?v=1.0.3`.
+- Actual before fix: frontend catalog hid it with `active: false`; server
+  catalog also marked it unfeatured/inactive.
+- Evidence: `npm run test:phantomplay` failure on 2026-07-16 before the fix.
+- Likely cause: catalog visibility flags regressed after recent PhantomPlay
+  catalog/category changes.
+- Correction: restore Penalty Kick to active featured status in both frontend
+  and server catalogs; cache-bust the app shell to `phantom-live-20260716-1`.
+- Regression requirement: `npm run test:phantomplay`.
+- Status: Fixed and verified in the 2026-07-16 daily QA sweep.
+
 ## High-Priority Unfixed Issues
 
 ### Q-0002 — P1 — Production-grade organization isolation needs DB-auth browser proof
@@ -80,11 +101,15 @@ Last updated: 2026-07-14
 
 - Route/component: whole app, especially Media Lab, Creator Hub, sidebar/bottom nav.
 - Journey affected: mobile admin use.
-- Evidence: repeated user screenshots/complaints; Cycle 1 only proved a 375px
-  shell sanity check for the sidebar/mobile nav, not the full module suite.
+- Evidence: repeated user screenshots/complaints; Cycle 1 proved a 375px shell
+  sanity check, and the 2026-07-16 daily sweep ran 42 browser cases across
+  Dashboard, Clients, Media Lab, Content Hub, Analytics, PhantomPlay, and
+  Settings at 320, 375, 768, 1024, 1440, and 1920px with no overflow or clipped
+  visible control text.
 - Required proof: viewport sweep at 320, 375, 768, 1024, 1440, 1920px with
   screenshots and overflow/text-overlap checks.
-- Status: Open.
+- Status: Partially proven; keep open for interaction-level mobile/game/editor
+  checks and visual screenshot review.
 
 ### Q-0004 — P2 — PhantomForce send adapter is planned-disabled
 

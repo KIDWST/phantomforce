@@ -1,78 +1,75 @@
 {
-  "cycle": 1,
-  "date": "2026-07-14",
-  "theme": "Quality program bootstrap, safe instant chat fallback, and sidebar split",
+  "cycle": "daily-qa-2026-07-16",
+  "date": "2026-07-16",
+  "theme": "PhantomPlay catalog restore and responsive browser proof",
   "sources": [
     "AGENTS.md",
-    "README.md",
-    "docs/RELEASE_CANDIDATE_TRUTH_MAP.md",
-    "server/src/index.ts",
-    "app/js/main.js",
-    "app/phantom.css",
-    "run-evidence/first-real-run-20260714-153002",
-    "Headless Edge smoke 1440x1000 and 375x812 on 2026-07-14"
+    "docs/quality/CONTINUOUS_QUALITY_PROGRAM.md",
+    "docs/quality/SITE_INVENTORY.md",
+    "docs/quality/QUALITY_BACKLOG.md",
+    "docs/quality/NEXT_CYCLE.md",
+    "docs/DATABASE_SETUP.md",
+    "docs/ADMIN_RECOVERY.md",
+    "app/js/phantomplay.js",
+    "server/src/phantom-ai/phantomplay.ts",
+    "scripts/test-responsive-viewports.mjs"
   ],
   "findings": [
     {
-      "id": "Q-0001",
+      "id": "Q-0010",
       "severity": "P2",
       "status": "fixed_verified",
-      "routeOrComponent": "/phantom-ai/chat",
-      "journey": "safe instant casual question",
-      "expected": "A harmless short prompt gets a fast local fallback when the selected provider is unavailable.",
-      "actual": "Before this cycle the route returned generic provider-failed copy.",
-      "evidence": "run-evidence/first-real-run-20260714-153002/api-business-run.json",
-      "regressionTest": "server/scripts/test-instant-chat-fallback.ts"
-    },
-    {
-      "id": "Q-0008",
-      "severity": "P2",
-      "status": "fixed_verified",
-      "routeOrComponent": "desktop sidebar navigation",
-      "journey": "Business Manager navigation",
-      "expected": "Primary business navigation is visually and structurally separated from operations/settings navigation.",
-      "actual": "Before this cycle the renderer produced one flat nav stream and relied on weak sibling styling.",
-      "evidence": "Headless Edge desktop smoke showed two side-nav groups and bottom utility group 15px from sidebar bottom.",
-      "regressionTest": "npm run test:customization-ui plus Headless Edge sidebar smoke"
+      "routeOrComponent": "PhantomPlay built-in catalog",
+      "journey": "browse and launch the Penalty Kick Sports game",
+      "expected": "Penalty Kick remains active and featured in the frontend and server catalogs.",
+      "actual": "Before this sweep the frontend row had active:false and both catalogs had featured:false.",
+      "evidence": "npm run test:phantomplay failure on 2026-07-16 before fix",
+      "regressionTest": "npm run test:phantomplay"
     },
     {
       "id": "Q-0002",
       "severity": "P1",
-      "status": "open",
-      "routeOrComponent": "organization switch and tenant data stores",
-      "journey": "separate PhantomForce and ChicagoShots organizations",
-      "expected": "Non-owner users cannot see another org's CRM/proposals/memory/assets.",
-      "actual": "Owner harness proved document separation, not DB-auth non-member denial in browser.",
-      "evidence": "first real run report tenant separation section",
-      "regressionTest": "needed"
+      "status": "blocked",
+      "routeOrComponent": "database-auth organization isolation",
+      "journey": "separate PhantomForce and ChicagoShots users and organizations",
+      "expected": "Safe local Postgres fixture can run DB-auth browser proof.",
+      "actual": "Docker Desktop Linux engine was not running, so the Postgres fixture could not start.",
+      "evidence": "docker ps failed opening dockerDesktopLinuxEngine pipe",
+      "regressionTest": "server/scripts/test-auth-database-live.ps1 once Docker/Postgres is available"
     },
     {
       "id": "Q-0003",
       "severity": "P1",
-      "status": "open",
-      "routeOrComponent": "responsive app shell and modules",
-      "journey": "mobile admin use",
-      "expected": "No overlap, clipping, horizontal scroll, or unusable controls at supported mobile widths.",
-      "actual": "Full mobile viewport pass has not been run; Cycle 1 only proved 375px shell sanity.",
-      "evidence": "user screenshots, report caveat, and limited 375px shell smoke",
-      "regressionTest": "needed"
+      "status": "partially_proven",
+      "routeOrComponent": "responsive app shell and key modules",
+      "journey": "mobile and desktop admin browsing",
+      "expected": "No horizontal overflow or clipped visible controls across required widths.",
+      "actual": "42 responsive browser cases passed across Dashboard, Clients, Media Lab, Content Hub, Analytics, PhantomPlay, and Settings.",
+      "evidence": "tmp/responsive-viewports/2026-07-16T14-07-18-427Z/report.json",
+      "regressionTest": "npm run test:responsive-viewports"
     }
   ],
   "commands": [
-    { "command": "npm run test:instant-chat-fallback", "result": "pass" },
-    { "command": "npm run test:customization-ui", "result": "pass" },
-    { "command": "node --check app\\js\\main.js; node --check app\\js\\customization.js", "result": "pass" },
+    { "command": "docker --version; docker ps --format '{{.Names}} {{.Ports}}'", "result": "blocked; Docker engine unavailable" },
+    { "command": "npm run test:responsive-viewports", "result": "pass; 42 browser cases" },
+    { "command": "npm run test:phantomplay", "result": "pass" },
+    { "command": "npm run build --workspace @phantomforce/server", "result": "pass" },
+    { "command": "node --check app/js/main.js; node --check app/js/phantomplay.js", "result": "pass" },
+    { "command": "npm run test:medialab-editor", "result": "pass" },
+    { "command": "npm run test:settings-connections", "result": "pass" },
     { "command": "git diff --check", "result": "pass" },
-    { "command": "npm run typecheck", "result": "pass" },
-    { "command": "npm run build", "result": "pass" },
-    { "command": "npm run test:intent", "result": "pass" },
-    { "command": "Headless Edge smoke 1440x1000 and 375x812", "result": "pass" },
-    { "command": "rg cache-bust check for phantom-live-20260714-254", "result": "pass; no 254 refs under app shell" },
-    { "command": "Codex heartbeat automation create", "result": "pass; continue-phantomforce-quality-program" }
+    { "command": "rg -n \"phantom-live-20260715-4\" app/index.html app/js app/phantom.css", "result": "pass; no stale app refs" }
   ],
   "checks": {
-    "status": "passed",
-    "lint": "no npm lint script exposed"
+    "status": "passed_with_db_auth_blocked",
+    "blockedExternalAccess": [
+      "Docker/Postgres fixture for DB-auth organization isolation",
+      "live OAuth/social connectors",
+      "billing provider",
+      "n8n execution",
+      "Pangolin live status",
+      "Higgsfield/OpenAI/OpenRouter live provider calls"
+    ]
   },
-  "nextCycle": "DB-auth org isolation browser proof; if local database-auth fixtures cannot be created, formalize and run the responsive viewport harness."
+  "nextCycle": "Run DB-auth org isolation when Docker/Postgres is available; otherwise add interaction-level responsive browser checks for Media Lab, PhantomPlay launch/resume, Settings forms, and Content Hub editor controls."
 }
