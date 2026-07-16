@@ -39,7 +39,7 @@ assert.match(publicHosts, /export const CLIENT_PUBLIC_HOST = "app\.phantomforce\
 assert.match(publicHosts, /if \(scope === "admin"\) return session\.canManageAccess/u, "The admin host must only allow platform/admin access sessions.");
 assert.match(publicHosts, /if \(scope === "client"\) return !session\.canManageAccess/u, "The customer host must reject platform/admin access sessions.");
 assert.match(server, /const publicHost = requestPublicHost\(request\);\s*if \(!canUseSessionOnPublicHost\(publicHost, session\)\) \{\s*await revokeDatabaseSession\(session\.authSessionId\);/u, "Database login must enforce the public-host boundary and revoke refused sessions.");
-assert.match(server, /const scope = publicHostScope\(publicHost\);[\s\S]*const customerAccountActionsEnabled = scope !== "admin" && localCustomerEnabled;[\s\S]*customerLoginEndpoint: scope !== "admin"/u, "/sessions must not advertise customer login/register/reset endpoints to admin.phantomforce.online.");
+assert.match(server, /const scope = publicHostScope\(publicHost\);[\s\S]*const customerAccountActionsEnabled = scope !== "admin" && \(databaseLoginUsable \|\| localCustomerEnabled\);[\s\S]*customerLoginEndpoint: scope !== "admin" && \(databaseLoginUsable \|\| localCustomerEnabled\) \? "\/auth\/login" : undefined/u, "/sessions must not advertise customer login/register/reset endpoints to admin.phantomforce.online.");
 assert.match(staticServer, /headers\["x-forwarded-host"\] = originalHost;[\s\S]*headers\["x-original-host"\] = originalHost;/u, "The admin static proxy must preserve the original public host so Hermes can enforce admin/app auth boundaries.");
 
 console.log("Auth boundary checks passed.");

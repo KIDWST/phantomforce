@@ -102,6 +102,9 @@ assert.match(mediaSrc, /const isEditorTypingTarget = \(target\)[\s\S]*input, tex
 assert.match(mediaSrc, /const undoPhotoEdit = \(\) =>[\s\S]*restoreEdit\(mlEditHistory\.pop\(\)\)/u, "Media Lab must expose undo through the shared editor shortcut path.");
 assert.match(mediaSrc, /const redoPhotoEdit = \(\) =>[\s\S]*restoreEdit\(mlEditFuture\.pop\(\)\)/u, "Media Lab must expose redo through the shared editor shortcut path.");
 assert.match(mediaSrc, /const duplicateActiveLayer = \(\) =>[\s\S]*duplicateLayer\(mlComposition,\s*active\.id\)/u, "Media Lab must expose layer duplication through the shared shortcut path.");
+assert.match(mediaSrc, /selectAllLayers,\s*selectLayer,\s*selectedLayers/u, "Media Lab must import the shared select-all layer helper.");
+assert.match(mediaSrc, /data-ml-layer-select-all/u, "Media Lab layer actions must expose Select all.");
+assert.match(mediaSrc, /const selectAllEditableLayers = \(\) =>[\s\S]*selectAllLayers\(mlComposition\)[\s\S]*layer\.id !== "base"[\s\S]*!layer\.locked/u, "Media Lab select-all must select only editable non-base layers.");
 assert.match(mediaSrc, /let mlLayerClipboard = \[\]/u, "Media Lab must keep an editor layer clipboard.");
 assert.match(mediaSrc, /const copySelectedEditableLayers = \(\) =>[\s\S]*selectedLayers\(mlComposition\)\.filter\(\(layer\) => layer\.id !== "base"[\s\S]*mlLayerClipboard = targets\.map/u, "Media Lab must support copying selected non-base layers.");
 assert.match(mediaSrc, /const pasteLayerClipboard = \(\) =>[\s\S]*rememberEdit\(\)[\s\S]*mlComposition\.layers\.push\(copy\)[\s\S]*mlComposition\.selectedIds = pastedIds/u, "Media Lab must support pasting copied layers back into the editable stack.");
@@ -109,6 +112,7 @@ assert.match(mediaSrc, /cloneImageEditState\(item\.effect,\s*\{ includeMask: fal
 assert.match(mediaSrc, /const deleteSelectedEditableLayers = \(\) =>[\s\S]*removeSelectedLayers\(mlComposition\)/u, "Media Lab must expose selected-layer deletion through the shared shortcut path.");
 assert.match(mediaSrc, /const nudgeSelectedLayers = \(dx,\s*dy\) =>[\s\S]*layer\.x = Math\.max\(0,\s*Math\.min\(1[\s\S]*layer\.y = Math\.max\(0,\s*Math\.min\(1/u, "Media Lab must support arrow-key layer nudging with canvas-safe bounds.");
 assert.match(mediaSrc, /document\.addEventListener\("keydown",\s*mlEditKeyHandler\)/u, "Media Lab must wire the photo editor keyboard handler.");
+assert.match(mediaSrc, /key === "a"\) handled = selectAllEditableLayers\(\)/u, "Ctrl/Cmd+A must select editable layers.");
 assert.match(mediaSrc, /key === "c"\)[\s\S]*copySelectedEditableLayers\(\)/u, "Ctrl/Cmd+C must copy selected layers.");
 assert.match(mediaSrc, /key === "v"\)[\s\S]*pasteLayerClipboard\(\)/u, "Ctrl/Cmd+V must paste copied layers.");
 assert.match(mediaSrc, /key === "arrowleft"[\s\S]*nudgeSelectedLayers\(event\.shiftKey \? -0\.025 : -0\.005/u, "Arrow keys must nudge selected layers, with Shift for larger moves.");

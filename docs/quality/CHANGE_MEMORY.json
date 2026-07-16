@@ -346,6 +346,16 @@
         },
         {
           "file": "app/js/medialab.js",
+          "pattern": "data-ml-layer-select-all",
+          "description": "Layer actions expose a one-click Select all control for editable layers."
+        },
+        {
+          "file": "app/js/medialab.js",
+          "pattern": "const selectAllEditableLayers = \\(\\) =>[\\s\\S]*selectAllLayers\\(mlComposition\\)[\\s\\S]*layer\\.id !== \"base\"[\\s\\S]*!layer\\.locked",
+          "description": "Select all excludes base, locked, and hidden layers."
+        },
+        {
+          "file": "app/js/medialab.js",
           "pattern": "data-ml-layer-align=\"\\$\\{esc\\(mode\\)\\}\"",
           "description": "Layer inspector exposes alignment controls."
         },
