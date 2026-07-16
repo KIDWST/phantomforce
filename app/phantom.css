@@ -3279,6 +3279,23 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 .hero2-title { margin: 0 0 8px; font-size: clamp(19px, 1.8vw, 24px); line-height: 1.15; letter-spacing: -0.01em; }
 .hero2-title span[data-hero-name] { background: linear-gradient(180deg, #7dffc0, var(--neon)); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .hero2-sub { margin: 0 0 16px; font-size: 13.5px; line-height: 1.5; color: var(--dim); }
+.hero2-proof {
+  display: inline-flex;
+  align-items: center;
+  max-width: min(100%, 620px);
+  margin: -4px 0 16px;
+  padding: 7px 10px;
+  border: 1px solid rgba(65, 255, 161, 0.18);
+  border-radius: 999px;
+  background: rgba(65, 255, 161, 0.06);
+  color: rgba(207, 255, 226, 0.72);
+  font: 700 10px/1.35 "DM Mono", monospace;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hero2-proof[hidden] { display: none; }
 .cmd-chips { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; max-width: 400px; margin-bottom: 16px; }
 .cmd-chip {
   display: flex; align-items: center; gap: 8px; padding: 11px 13px; cursor: pointer;
