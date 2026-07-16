@@ -22,6 +22,8 @@ assert.match(widgetSource, /renderCommandToolDock\(\)/u, "Workforce widget must 
 assert.match(widgetSource, /renderAutomationDock\(automations\)/u, "Automation widget must show an inline automation dock.");
 assert.match(main, /function renderCommandToolDock\(\)/u, "Command surface should define the worker dock renderer.");
 assert.match(main, /function renderAutomationDock\(automations = \[\]\)/u, "Command surface should define the automation dock renderer.");
+assert.match(main, /function renderOutcomePath\(\{ plan = \[\], attention = \[\], approvals = \[\], automations = \[\], activity = \[\], leads = \{\}, media = \{\}, money = \{\} \} = \{\}\)/u,
+  "Outcome board must render a real operating path from existing state.");
 assert.match(main, /function operatingBriefingText\(\{ includePrompt = false \} = \{\}\)/u,
   "Dashboard hero must derive its briefing from real operating state.");
 assert.match(main, /function recentHandledProof\(\)/u,
@@ -41,6 +43,7 @@ assert.match(main, /deck\.hidden = items\.length === 0/u,
 assert.match(main, /data-open-ws="\$\{esc\(item\.open \|\| "activity"\)\}"/u,
   "Decision cards must only open existing workspaces.");
 assert.match(css, /\.cw-dock\s*\{/u, "Expanded command widgets must have visual dock styling.");
+assert.match(css, /\.cw-flow\s*\{/u, "Outcome widget must show a compact Signal/Decision/Work/Result flow.");
 assert.match(css, /\.cw-dock-node::before/u, "Command dock nodes should expose visible status dots.");
 assert.match(css, /\.hero2-proof\s*\{/u, "Recent handled proof line must have compact dashboard styling.");
 assert.match(css, /\.decision-deck\s*\{/u, "Decision deck must have compact command-center styling.");

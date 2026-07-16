@@ -13515,6 +13515,67 @@ body .phantom .workspace-page :where(
   font-size: var(--fs-xs);
   overflow-wrap: anywhere;
 }
+.cw-flow {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid rgba(65, 255, 161, 0.12);
+  border-radius: var(--r-sm);
+  background:
+    linear-gradient(90deg, rgba(65, 255, 161, 0.12), transparent 18% 82%, rgba(65, 255, 161, 0.08)),
+    rgba(0, 0, 0, 0.18);
+}
+.cw-flow-node {
+  position: relative;
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.055);
+  border-radius: 12px;
+  background: rgba(5, 18, 14, 0.7);
+  overflow: hidden;
+}
+.cw-flow-node::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: rgba(129, 151, 143, 0.42);
+}
+.cw-flow-node.is-live::before {
+  background: linear-gradient(90deg, var(--neon), rgba(154, 255, 209, 0.18));
+  box-shadow: 0 0 18px rgba(65, 255, 161, 0.36);
+  animation: cwFlowPulse 2.8s ease-in-out infinite;
+}
+.cw-flow-node i {
+  color: var(--neon);
+  font: 800 9px / 1.2 var(--font-mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-style: normal;
+}
+.cw-flow-node b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #eafff4;
+  font-size: 12px;
+  font-weight: 800;
+}
+.cw-flow-node em {
+  min-height: 2.4em;
+  color: var(--dim);
+  font: 600 10px / 1.2 var(--font-sans);
+  font-style: normal;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
 .cw-dock {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -13598,6 +13659,9 @@ body .phantom .workspace-page :where(
   from { opacity: 0; transform: translateY(-4px); }
   to { opacity: 1; transform: none; }
 }
+@keyframes cwFlowPulse {
+  50% { opacity: 0.45; }
+}
 @media (min-width: 901px) {
   .command-widget[open] {
     grid-column: span 2;
@@ -13606,6 +13670,7 @@ body .phantom .workspace-page :where(
 @media (max-width: 900px) {
   .decision-grid { grid-template-columns: 1fr; }
   .command-widgets { grid-template-columns: 1fr; }
+  .cw-flow { grid-template-columns: 1fr; }
   .cw-dock { grid-template-columns: 1fr; }
 }
 @media (prefers-reduced-motion: reduce) {
