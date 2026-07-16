@@ -46,6 +46,9 @@ assert.match(mediaSrc, /ctx\.globalAlpha\s*=\s*erase\s*\?\s*1\s*:/, "eraser must
 assert.match(mediaSrc, /opacity:\s*mlPaintMode === "erase"\s*\?\s*100\s*:/, "new eraser strokes must record full opacity");
 assert.match(mediaSrc, /updateEditHistoryControls\(body\)/, "undo/redo controls must refresh without a full remount");
 assert.match(mediaSrc, /freshComposition\(\)/, "Media Lab edit must keep a real layer composition, not a flattened Canva-style editor");
+assert.doesNotMatch(mediaSrc, /class="ml-back"|data-ml-back|← Back/u, "Media Lab main tab bar must not render a generic Back button.");
+assert.doesNotMatch(cssSrc, /\.ml-back\b/u, "Media Lab must not keep stale styling for a generic top-level Back button.");
+assert.match(mediaSrc, /data-ml-edit-back/u, "Media Lab may keep scoped editor back controls for real edit subflows.");
 assert.match(mediaSrc, /data-ml-layer-order/, "Media Lab edit must expose layer up/down controls");
 assert.match(mediaSrc, /draggable="\$\{layer\.locked \? "false" : "true"\}"/u, "Media Lab layer rows must be draggable unless locked");
 assert.match(mediaSrc, /data-ml-layer-index="\$\{realIndex\}"/u, "Media Lab layer rows must carry their real stack index for drag/drop ordering");

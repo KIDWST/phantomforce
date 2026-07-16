@@ -1,11 +1,11 @@
 /* PhantomForce admin settings.
    Local UI preferences only: no provider calls, sends, uploads, or billing. */
 
-import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260715-279";
-import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260715-279";
-import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260715-279";
-import { currentTenantId, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260715-279";
-import { DEFAULT_COMPANION_PREFS, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260715-279";
+import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260716-282";
+import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260716-282";
+import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260716-282";
+import { currentTenantId, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260716-282";
+import { DEFAULT_COMPANION_PREFS, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260716-282";
 
 const AI_SETTINGS_KEY = "pf.operator.settings.v1";
 const SETTINGS_TAB_KEY = "pf.settings.tab.v1";
@@ -22,6 +22,17 @@ const SETTINGS_TABS = [
 ];
 
 const SETTINGS_CATEGORIES = ["AI Brain", "Workspace", "Media"];
+
+const SETTINGS_CONTEXT = {
+  model: { title: "AI model", description: "Choose the models and routing behavior Phantom uses for this workspace." },
+  loop: { title: "Loop routing", description: "Control coordinated model passes, cost limits, and fallback behavior." },
+  chat: { title: "Chat behavior", description: "Tune response style, memory depth, approval boundaries, and conversation behavior." },
+  organization: { title: "Organization & access", description: "Manage workspace identity, employees, invitations, roles, and module privileges." },
+  workspace: { title: "Workspace Studio", description: "Shape workspace branding, navigation, and operating defaults without changing the platform core." },
+  modules: { title: "Workspace modules", description: "Choose which optional capabilities are available and who can use them." },
+  companion: { title: "Companion", description: "Control where Phantom appears and how much personality and motion it uses." },
+  media: { title: "Media & social", description: "Manage local media engines and connected social platform settings." },
+};
 
 function loadSettingsTab() {
   try {
@@ -813,6 +824,8 @@ export function renderOperatorSettings(el, opts = {}) {
   const initialTab = opts.initialTab && SETTINGS_TABS.some((tab) => tab.id === opts.initialTab) ? opts.initialTab : null;
   const activeTab = initialTab || loadSettingsTab();
   if (initialTab) saveSettingsTab(initialTab);
+  const activeContext = SETTINGS_CONTEXT[activeTab] || SETTINGS_CONTEXT.model;
+  const activeCategory = SETTINGS_TABS.find((tab) => tab.id === activeTab)?.category || "Settings";
 
   const TAB_CONTENT = {
     model: () => renderModelTab(settings, activeProvider, activeModel),
@@ -829,11 +842,15 @@ export function renderOperatorSettings(el, opts = {}) {
     <div class="settings settings-operator">
       <div class="set-section set-ai-hero">
         <div>
-          <p class="set-eyebrow">Operator brain</p>
-          <h3>Phantom AI settings</h3>
-          <p class="set-note">Choose the default brain, loop behavior, memory depth, and autopilot boundary for the Business Manager. These are local owner settings; the public demo chat still cannot send, upload, charge, or touch private systems.</p>
+          <p class="set-eyebrow">Settings · ${esc(activeCategory)}</p>
+          <h3>${esc(activeContext.title)}</h3>
+          <p class="set-note">${esc(activeContext.description)}</p>
         </div>
-        ${renderSafetySummary(settings)}
+        ${["model", "loop", "chat"].includes(activeTab) ? renderSafetySummary(settings) : `
+          <div class="set-status-grid set-context-grid">
+            <span><b>Scope</b><i>${activeTab === "organization" ? "Current organization" : "Current workspace"}</i></span>
+            <span><b>Changes</b><i>${["organization", "workspace", "modules"].includes(activeTab) ? "Approval-aware and reversible" : "Saved to this workspace"}</i></span>
+          </div>`}
       </div>
 
       <div class="set-settings-layout">

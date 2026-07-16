@@ -4215,15 +4215,6 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .ml-tab { flex: 0 0 auto; white-space: nowrap; padding: 8px 15px; border-radius: 10px; border: 1px solid transparent; background: none; color: var(--dim); cursor: pointer; font: 600 13px "Space Grotesk", sans-serif; transition: background 0.18s, color 0.18s; }
 .ml-tab:hover { color: var(--ink); background: rgba(65,255,161,0.06); }
 .ml-tab.is-active { color: #04160d; background: linear-gradient(120deg, var(--neon), #15d97f); box-shadow: 0 4px 16px rgba(65,255,161,0.22); }
-.ml-back {
-  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-  min-height: 32px; padding: 7px 11px; border-radius: 999px;
-  border: 1px solid var(--line); background: rgba(0,0,0,0.22);
-  color: var(--dim); cursor: pointer; font: 700 11px "Space Grotesk", sans-serif;
-}
-.ml-back span { font-size: 15px; line-height: 1; color: var(--neon); }
-.ml-back em { font-style: normal; }
-.ml-back:hover { color: var(--ink); border-color: var(--line-strong); background: rgba(65,255,161,0.06); }
 .ml-topbar-tools { display: flex; align-items: center; gap: 6px; }
 .ml-topbar-ic { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 9px; border: 1px solid var(--line); background: rgba(0,0,0,0.22); color: var(--dim); cursor: pointer; }
 .ml-topbar-ic .ic { width: 15px; height: 15px; }
@@ -5387,6 +5378,10 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .set-section h3 { margin: 0 0 6px; font-size: 16px; }
 
 /* ---- Organization: people, roles, and module access ---- */
+.org-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
+.org-summary span { min-width: 0; padding: var(--sp-3); border: 1px solid rgba(65,255,161,0.15); border-radius: var(--r-md); background: rgba(2,10,8,0.42); }
+.org-summary b { display: block; margin-bottom: 4px; color: var(--dim); font: 600 var(--fs-xs) var(--font-mono); letter-spacing: 0.12em; text-transform: uppercase; }
+.org-summary i { display: block; overflow: hidden; color: #e9fff1; font-size: 13px; font-style: normal; text-overflow: ellipsis; white-space: nowrap; }
 .org-members { display: grid; gap: 10px; }
 .org-member { display: grid; grid-template-columns: 40px minmax(0, 1fr) minmax(180px, auto) 34px; gap: 12px; align-items: center; padding: var(--sp-3) var(--sp-4); border: 1px solid var(--line); border-radius: var(--r-md); background: #050b09; }
 .org-avatar { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, rgba(65,255,161,0.28), rgba(9,20,15,0.9)); color: var(--ink); font: 700 13px "Space Grotesk", sans-serif; }
@@ -5419,6 +5414,7 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .org-message.is-error { color: var(--warn); }
 .org-db-note h4 { margin: 0 0 6px; }
 @media (max-width: 767px) {
+  .org-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .org-member { grid-template-columns: 36px minmax(0, 1fr) 34px; }
   .org-member .org-role-pick { grid-column: 2 / -1; }
 }
@@ -13259,6 +13255,7 @@ body .phantom .workspace-page :where(
     radial-gradient(120% 160% at 10% 0%, rgba(65, 255, 161, 0.1), transparent 42%),
     linear-gradient(150deg, rgba(8, 23, 17, 0.84), rgba(5, 12, 14, 0.82));
   box-shadow: var(--edge-hi), 0 20px 48px rgba(0, 0, 0, 0.18);
+  transition: border-color 0.22s ease, box-shadow 0.22s ease, transform 0.22s ease;
 }
 .command-widget::before {
   content: "";
@@ -13267,6 +13264,27 @@ body .phantom .workspace-page :where(
   height: 1px;
   background: linear-gradient(90deg, transparent, rgba(65, 255, 161, 0.65), transparent);
   opacity: 0.45;
+}
+.command-widget::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(110deg, transparent 0 42%, rgba(65, 255, 161, 0.08) 50%, transparent 58% 100%);
+  transform: translateX(-120%);
+  opacity: 0;
+}
+.command-widget[open] {
+  border-color: rgba(65, 255, 161, 0.28);
+  box-shadow: var(--edge-hi), 0 24px 58px rgba(0, 0, 0, 0.22), 0 0 34px rgba(65, 255, 161, 0.07);
+}
+.command-widget:hover {
+  transform: translateY(-1px);
+  border-color: rgba(65, 255, 161, 0.25);
+}
+.command-widget[open]::after {
+  opacity: 1;
+  animation: cwSweep 4.8s ease-in-out infinite;
 }
 .command-widget summary {
   min-height: 78px;
@@ -13288,6 +13306,9 @@ body .phantom .workspace-page :where(
   color: var(--neon);
   background: rgba(65, 255, 161, 0.1);
   box-shadow: inset 0 0 0 1px rgba(65, 255, 161, 0.18), 0 0 18px rgba(65, 255, 161, 0.08);
+}
+.command-widget[open] .cw-ic {
+  animation: cwBeacon 2.8s ease-in-out infinite;
 }
 .cw-copy {
   min-width: 0;
@@ -13330,6 +13351,9 @@ body .phantom .workspace-page :where(
   gap: 8px;
   padding: 0 var(--sp-4) var(--sp-4);
 }
+.command-widget[open] .cw-body {
+  animation: cwReveal 0.24s ease both;
+}
 .cw-body p {
   display: grid;
   grid-template-columns: minmax(86px, 0.38fr) minmax(0, 1fr);
@@ -13366,6 +13390,17 @@ body .phantom .workspace-page :where(
   font: 700 var(--fs-xs) var(--font-sans);
 }
 .cw-open:hover { border-color: var(--line-strong); background: rgba(65, 255, 161, 0.14); }
+@keyframes cwSweep {
+  0%, 30% { transform: translateX(-120%); }
+  62%, 100% { transform: translateX(120%); }
+}
+@keyframes cwBeacon {
+  50% { box-shadow: inset 0 0 0 1px rgba(65, 255, 161, 0.42), 0 0 24px rgba(65, 255, 161, 0.22); }
+}
+@keyframes cwReveal {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
 @media (min-width: 901px) {
   .command-widget[open] {
     grid-column: span 2;
@@ -13373,6 +13408,16 @@ body .phantom .workspace-page :where(
 }
 @media (max-width: 900px) {
   .command-widgets { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .command-widget,
+  .command-widget::after,
+  .command-widget[open] .cw-ic,
+  .command-widget[open] .cw-body {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+  }
 }
 
 /* ---- dashboard widget grid: aligned card rhythm, quick actions span ---- */
@@ -13500,5 +13545,23 @@ body .phantom .workspace-page :where(
   .console-workspace,
   .workspace-page-body {
     padding-bottom: calc(28px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+}
+
+/* Final command-center fit: the chat/Phantom panel should lead, but it cannot
+   consume the entire desktop viewport. Keep enough presence for the companion
+   while letting the operating widgets appear as part of the first screen. */
+@media (min-width: 901px) {
+  .console .hero2 {
+    height: clamp(500px, 58vh, 690px);
+  }
+  .command-widgets {
+    margin-top: clamp(8px, 1vw, 14px);
+  }
+}
+
+@media (min-width: 1400px) and (min-height: 980px) {
+  .console .hero2 {
+    height: clamp(540px, 56vh, 720px);
   }
 }
