@@ -6,44 +6,44 @@ import {
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260716-297";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260716-297";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260716-297";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260716-297";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260716-297";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260716-297";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260716-297";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260716-297";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260716-297";
-import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260716-297";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260716-297";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260716-297";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260716-297";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260716-297";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260716-297";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260716-297";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260716-297";
-import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260716-297";
-import { mountAmbient } from "./ambient.js?v=phantom-live-20260716-297";
-import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260716-297";
+} from "./store.js?v=phantom-live-20260716-298";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260716-298";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260716-298";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260716-298";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260716-298";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260716-298";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260716-298";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260716-298";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260716-298";
+import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260716-298";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260716-298";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260716-298";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260716-298";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260716-298";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260716-298";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260716-298";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260716-298";
+import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260716-298";
+import { mountAmbient } from "./ambient.js?v=phantom-live-20260716-298";
+import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260716-298";
 import {
   fetchAuthConfig, databaseLogin, databaseLogout, customerRegister, requestCustomerPasswordReset,
   completeCustomerPasswordReset, switchOrg, fetchAuthMe, fetchEntitlementsSummary,
-} from "./orgs.js?v=phantom-live-20260716-297";
-import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260716-297";
-import { assetsAvailable } from "./orgs.js?v=phantom-live-20260716-297";
-import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260716-297";
+} from "./orgs.js?v=phantom-live-20260716-298";
+import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260716-298";
+import { assetsAvailable } from "./orgs.js?v=phantom-live-20260716-298";
+import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260716-298";
 // PhantomPlay V2 platform shell (Home/Solo/Friends/Workspace/Dev Hub) - opt-in
 // while it hardens: set localStorage "pf.phantomplay.v2" = "1" (the V2 shell has
 // a "Classic view" button to switch back). Classic stays the default experience.
-import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260716-297";
+import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260716-298";
 const phantomPlayV2Opted = () => { try { return localStorage.getItem("pf.phantomplay.v2") === "1"; } catch { return false; } };
-import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260716-297";
+import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260716-298";
 import {
   customizeNavigation,
   loadOrganizationCustomization,
-} from "./customization.js?v=phantom-live-20260716-297";
-import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260716-297";
+} from "./customization.js?v=phantom-live-20260716-298";
+import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260716-298";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -1253,7 +1253,7 @@ const MODES = {
   admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260716-297";
+const POSE_VERSION = "phantom-live-20260716-298";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -1945,15 +1945,52 @@ function commandToolModeTone(mode = "") {
   return "quiet";
 }
 
+function commandDepartmentForTool(tool = {}) {
+  const haystack = `${tool.internal || ""} ${tool.name || ""} ${tool.worker || ""} ${tool.role || ""}`.toLowerCase();
+  if (/media|creative|brand|asset|content|video|image|site|build/.test(haystack)) return "Creative";
+  if (/lead|client|follow|proposal|booking|customer|review/.test(haystack)) return "Client Care";
+  if (/money|finance|invoice|payment|cash|accounting/.test(haystack)) return "Finance";
+  if (/intel|analytics|competitor|research|rank|signal|code/.test(haystack)) return "Intelligence";
+  if (/workflow|automation|relay|loop|ops|standard|process|vault/.test(haystack)) return "Operations";
+  if (/access|security|protect|gateway|route|model|provider|diagnostic/.test(haystack)) return "Technology";
+  return "Growth";
+}
+
+function commandDepartmentMap(tools = []) {
+  const departments = ["Growth", "Creative", "Operations", "Client Care", "Finance", "Intelligence", "Technology"];
+  const counts = new Map(departments.map((dept) => [dept, { total: 0, active: 0, watch: 0 }]));
+  tools.forEach((tool) => {
+    const dept = commandDepartmentForTool(tool);
+    const bucket = counts.get(dept) || { total: 0, active: 0, watch: 0 };
+    bucket.total += 1;
+    if (["active", "available", "owner-controlled"].includes(tool.mode)) bucket.active += 1;
+    if (["setup-ready", "planning", "scaffolded"].includes(tool.mode)) bucket.watch += 1;
+    counts.set(dept, bucket);
+  });
+  return departments.map((dept) => ({ dept, ...(counts.get(dept) || { total: 0, active: 0, watch: 0 }) }));
+}
+
 function renderCommandToolDock() {
   const tools = (TOOL_SPINE || [])
     .filter((tool) => tool && tool.visibleToClients !== true)
-    .filter((tool) => ["active", "available", "owner-controlled", "setup-ready", "planning"].includes(tool.mode))
-    .slice(0, 6);
+    .filter((tool) => ["active", "available", "owner-controlled", "setup-ready", "planning", "scaffolded"].includes(tool.mode));
   if (!tools.length) return "";
+  const departments = commandDepartmentMap(tools).filter((dept) => dept.total > 0);
+  const total = tools.length || 1;
   return `
+    <div class="cw-dept-map" aria-label="Phantom departments">
+      ${departments.map((dept) => {
+        const pct = Math.max(12, Math.round((dept.total / total) * 100));
+        const tone = dept.active ? "ok" : dept.watch ? "watch" : "quiet";
+        return `
+          <span class="cw-dept-node is-${tone}" style="--dept-fill:${pct}%">
+            <b>${esc(dept.dept)}</b>
+            <i>${dept.active}/${dept.total} ready</i>
+          </span>`;
+      }).join("")}
+    </div>
     <div class="cw-dock cw-tool-dock" aria-label="Worker lanes">
-      ${tools.map((tool) => `
+      ${tools.slice(0, 4).map((tool) => `
         <span class="cw-dock-node is-${commandToolModeTone(tool.mode)}">
           <b>${esc(tool.worker || tool.name || "Worker")}</b>
           <i>${esc(tool.status || tool.mode || "ready")}</i>
@@ -1965,13 +2002,20 @@ function renderAutomationDock(automations = []) {
   const rows = automations.slice(0, 4);
   if (!rows.length) {
     return `
-      <div class="cw-dock cw-automation-dock" aria-label="Automation starter">
-        <span class="cw-dock-node is-watch"><b>Daily ideas</b><i>ready to configure</i></span>
-        <span class="cw-dock-node is-watch"><b>Security check</b><i>approval-gated</i></span>
-        <span class="cw-dock-node is-watch"><b>Outreach prep</b><i>draft only</i></span>
+      <div class="cw-automation-empty" aria-label="Automation starter">
+        <p><b>No configured automations yet.</b><span>Create them from Phantom chat; this card becomes the control dock after they exist.</span></p>
+        <button data-command-run="Create a daily content ideas automation" type="button">Daily ideas</button>
+        <button data-command-run="Create a security check automation" type="button">Security check</button>
+        <button data-command-run="Create an outreach draft automation" type="button">Outreach drafts</button>
       </div>`;
   }
+  const active = rows.filter((agent) => agent.status === "active").length;
+  const waiting = rows.length - active;
   return `
+    <div class="cw-automation-meter" aria-label="Automation status">
+      <span style="--auto-fill:${Math.round((active / Math.max(rows.length, 1)) * 100)}%"><b>${active}</b><i>on</i></span>
+      <span><b>${waiting}</b><i>waiting</i></span>
+    </div>
     <div class="cw-dock cw-automation-dock" aria-label="Configured automations">
       ${rows.map((agent) => `
         <span class="cw-dock-node is-${agent.status === "active" ? "ok" : "watch"}">

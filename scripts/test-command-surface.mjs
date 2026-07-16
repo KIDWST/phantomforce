@@ -27,6 +27,14 @@ assert.match(widgetSource, /renderCommandToolDock\(\)/u, "Workforce widget must 
 assert.match(widgetSource, /renderAutomationDock\(automations\)/u, "Automation widget must show an inline automation dock.");
 assert.match(main, /function renderCommandToolDock\(\)/u, "Command surface should define the worker dock renderer.");
 assert.match(main, /function renderAutomationDock\(automations = \[\]\)/u, "Command surface should define the automation dock renderer.");
+assert.match(main, /function commandDepartmentMap\(tools = \[\]\)/u,
+  "Workforce widget should condense real tool lanes into human departments.");
+assert.match(main, /class="cw-dept-map"/u,
+  "Workforce widget should render as a compact department map, not a raw worker list.");
+assert.match(main, /class="cw-automation-empty"/u,
+  "Automation widget should show a clean real-empty state instead of pretending starter recipes are running.");
+assert.match(main, /data-command-run="Create a daily content ideas automation"/u,
+  "Automation widget should let the owner create an automation from the command surface.");
 assert.match(main, /function renderOutcomePath\(\{ plan = \[\], attention = \[\], approvals = \[\], automations = \[\], activity = \[\], leads = \{\}, media = \{\}, money = \{\} \} = \{\}\)/u,
   "Outcome board must render a real operating path from existing state.");
 assert.match(main, /function operatingBriefingText\(\{ includePrompt = false \} = \{\}\)/u,
@@ -73,6 +81,8 @@ assert.match(main, /data-open-ws="\$\{esc\(item\.open \|\| "activity"\)\}"/u,
   "Decision cards must only open existing workspaces.");
 assert.match(css, /\.cw-dock\s*\{/u, "Expanded command widgets must have visual dock styling.");
 assert.match(css, /\.cw-flow\s*\{/u, "Outcome widget must show a compact Signal/Decision/Work/Result flow.");
+assert.match(css, /\.cw-dept-map\s*\{/u, "Workforce widget must have visual department-map styling.");
+assert.match(css, /\.cw-automation-empty\s*\{/u, "Automation widget must have a clean empty-state dock.");
 assert.match(css, /\.cw-dock-node::before/u, "Command dock nodes should expose visible status dots.");
 assert.match(css, /\.hero2-proof\s*\{/u, "Recent handled proof line must have compact dashboard styling.");
 assert.match(css, /\.decision-deck\s*\{/u, "Decision deck must have compact command-center styling.");
