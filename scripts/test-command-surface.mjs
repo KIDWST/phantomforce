@@ -14,6 +14,7 @@ assert.match(index, /data-hero-sub/u, "Dashboard hero must have a data-backed op
 assert.match(index, /data-hero-proof/u, "Dashboard hero must have a recent proof line for handled work.");
 assert.match(index, /data-decision-deck/u, "Dashboard must have a real-data decision deck mount.");
 assert.match(index, /data-handled-proof/u, "Dashboard must have a handled-work proof strip mount.");
+assert.match(index, /data-quick-title>Next moves</u, "Right rail should lead with next moves, not generic quick actions.");
 assert.doesNotMatch(index, /Tell me what you need<br \/>or choose a lane below/u,
   "Dashboard hero must not lead with generic chatbot framing.");
 assert.match(widgetSource, /id:\s*"workforce"/u, "Workforce must stay available as a dashboard widget.");
@@ -33,6 +34,10 @@ assert.match(main, /function handledProofItems\(\)/u,
   "Command surface must derive handled-work proof from real activity only.");
 assert.match(main, /deck\.hidden = items\.length === 0/u,
   "Handled proof strip must disappear when no real activity exists.");
+assert.match(main, /function nextMoveActions\(\)/u,
+  "Right rail must derive next moves from real attention and plan state.");
+assert.match(main, /renderedNextMoves\[.*quick\.dataset\.quick.*\] \|\| QUICK/u,
+  "Visible next-move clicks must execute the rendered data-driven action.");
 assert.match(main, /function renderDecisionDeck\(\)/u,
   "Command surface must render structured decision cards from attention state.");
 assert.match(main, /kind:\s*"agent-failure"[\s\S]*?weight:\s*390/u,
@@ -53,6 +58,7 @@ assert.match(css, /\.cw-dock-node::before/u, "Command dock nodes should expose v
 assert.match(css, /\.hero2-proof\s*\{/u, "Recent handled proof line must have compact dashboard styling.");
 assert.match(css, /\.decision-deck\s*\{/u, "Decision deck must have compact command-center styling.");
 assert.match(css, /\.handled-proof\s*\{/u, "Handled proof strip must have compact proof styling.");
+assert.match(css, /\.quick-item i\s*\{/u, "Next move rail must support compact evidence subtext.");
 assert.doesNotMatch(widgetSource, /id:\s*"memory"/u, "Memory should not consume a dashboard widget slot.");
 assert.doesNotMatch(main, /memoryStats\s*\(/u, "Dashboard widgets should not depend on Memory stats.");
 assert.match(main, /id:\s*"automation"[\s\S]*?navHidden:\s*true/u, "Automations should stay out of primary navigation.");

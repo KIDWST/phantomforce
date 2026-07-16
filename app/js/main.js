@@ -6,44 +6,44 @@ import {
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260716-294";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260716-294";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260716-294";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260716-294";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260716-294";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260716-294";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260716-294";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260716-294";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260716-294";
-import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260716-294";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260716-294";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260716-294";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260716-294";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260716-294";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260716-294";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260716-294";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260716-294";
-import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260716-294";
-import { mountAmbient } from "./ambient.js?v=phantom-live-20260716-294";
-import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260716-294";
+} from "./store.js?v=phantom-live-20260716-295";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260716-295";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260716-295";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260716-295";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260716-295";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260716-295";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260716-295";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260716-295";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260716-295";
+import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260716-295";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260716-295";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260716-295";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260716-295";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260716-295";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260716-295";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260716-295";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260716-295";
+import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260716-295";
+import { mountAmbient } from "./ambient.js?v=phantom-live-20260716-295";
+import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260716-295";
 import {
   fetchAuthConfig, databaseLogin, databaseLogout, customerRegister, requestCustomerPasswordReset,
   completeCustomerPasswordReset, switchOrg, fetchAuthMe, fetchEntitlementsSummary,
-} from "./orgs.js?v=phantom-live-20260716-294";
-import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260716-294";
-import { assetsAvailable } from "./orgs.js?v=phantom-live-20260716-294";
-import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260716-294";
+} from "./orgs.js?v=phantom-live-20260716-295";
+import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260716-295";
+import { assetsAvailable } from "./orgs.js?v=phantom-live-20260716-295";
+import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260716-295";
 // PhantomPlay V2 platform shell (Home/Solo/Friends/Workspace/Dev Hub) - opt-in
 // while it hardens: set localStorage "pf.phantomplay.v2" = "1" (the V2 shell has
 // a "Classic view" button to switch back). Classic stays the default experience.
-import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260716-294";
+import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260716-295";
 const phantomPlayV2Opted = () => { try { return localStorage.getItem("pf.phantomplay.v2") === "1"; } catch { return false; } };
-import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260716-294";
+import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260716-295";
 import {
   customizeNavigation,
   loadOrganizationCustomization,
-} from "./customization.js?v=phantom-live-20260716-294";
-import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260716-294";
+} from "./customization.js?v=phantom-live-20260716-295";
+import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260716-295";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -1253,7 +1253,7 @@ const MODES = {
   admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260716-294";
+const POSE_VERSION = "phantom-live-20260716-295";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -1613,11 +1613,43 @@ const QUICK = [
   { label: "Open Content Hub", icon: "upload",   open: "content" },
   { label: "View approval queue", icon: "check",   open: "approvals" },
 ];
+let renderedNextMoves = [];
+function nextMoveActions() {
+  const moves = [];
+  const seen = new Set();
+  const add = (item) => {
+    if (!item?.label) return;
+    const key = `${item.open || ""}:${item.run || ""}:${item.label}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    moves.push(item);
+  };
+  attentionItems().slice(0, 3).forEach((item) => add({
+    label: decisionCtaLabel(item),
+    sub: item.title,
+    icon: item.icon || "arrow",
+    open: item.open || "activity",
+  }));
+  todaysPlan().slice(0, 2).forEach((item) => add({
+    label: "Open plan item",
+    sub: item.text,
+    icon: "target",
+    open: item.open || "approvals",
+  }));
+  if (!moves.length) {
+    add({ label: "Add business context", sub: "Tell Phantom what this org sells, who it serves, and what matters.", icon: "cog", open: "settings" });
+    add({ label: "Create first outcome", sub: "Start from a result, not a tab.", icon: "target", run: "Create my first business outcome" });
+  }
+  return moves.slice(0, 5);
+}
 function renderQuick() {
-  $("[data-quick]").innerHTML = QUICK.map((q, i) => `
+  const title = $("[data-quick-title]");
+  if (title) title.textContent = "Next moves";
+  renderedNextMoves = nextMoveActions();
+  $("[data-quick]").innerHTML = renderedNextMoves.map((q, i) => `
     <button class="quick-item" data-quick="${i}">
       <span class="quick-ic">${svg(q.icon)}</span>
-      <span>${esc(q.label)}</span>
+      <span><b>${esc(q.label)}</b>${q.sub ? `<i>${esc(q.sub)}</i>` : ""}</span>
       <span class="quick-arrow">${svg("arrow")}</span>
     </button>`).join("");
 }
@@ -2191,7 +2223,7 @@ function renderConsole() {
   /* Fire-and-forget: pull server truth for the bell + attention strip, then
      repaint both once it lands. Failures change nothing. */
   const pulseBefore = serverPulseAt;
-  fetchServerAttention().then(() => { if (serverPulseAt !== pulseBefore) { renderHero(); renderNotifs(); renderAttentionStrip(); renderDecisionDeck(); renderHandledProofDeck(); renderCommandWidgets(); } }).catch(() => {});
+  fetchServerAttention().then(() => { if (serverPulseAt !== pulseBefore) { renderHero(); renderNotifs(); renderAttentionStrip(); renderDecisionDeck(); renderHandledProofDeck(); renderCommandWidgets(); renderQuick(); } }).catch(() => {});
   renderHero();
   renderChips();
   renderModePose(activeMode);
@@ -2612,7 +2644,7 @@ function wireDeck() {
     if (navBtn) { goNav(navBtn.dataset.navId); setMobileNav(false); return; }
     const quick = e.target.closest("[data-quick]");
     if (quick) {
-      const q = QUICK[+quick.dataset.quick];
+      const q = renderedNextMoves[+quick.dataset.quick] || QUICK[+quick.dataset.quick];
       if (q?.run) runCommand(q.run);
       else if (q?.open) routeWorkspace(q.open);
       return;
@@ -3707,7 +3739,7 @@ async function boot() {
     if (!phantom.hidden) {
       if (activePageId) { renderConsole(); return; }
       renderNav(); renderStatusPills(); renderHero(); renderNotifs(); renderAttentionStrip(); renderDecisionDeck(); renderHandledProofDeck();
-      renderFlowMap(); renderFlowCompactSummary(); renderPlan(); renderQueue();
+      renderFlowMap(); renderFlowCompactSummary(); renderPlan(); renderQueue(); renderQuick();
     }
   });
   if (ctx.session) enterPhantom();

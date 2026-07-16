@@ -3671,6 +3671,9 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 .quick-item { display: flex; align-items: center; gap: 11px; width: 100%; padding: 11px 12px; cursor: pointer; text-align: left; border: 1px solid var(--line); border-radius: 12px; background: none; color: var(--ink); font-size: 13px; transition: border-color 0.2s, background 0.2s; }
 .quick-item:hover { border-color: var(--line-strong); background: rgba(65, 255, 161, 0.05); }
 .quick-ic { flex: 0 0 auto; color: var(--neon); display: grid; place-items: center; }
+.quick-item > span:not(.quick-ic):not(.quick-arrow) { min-width: 0; display: grid; gap: 2px; }
+.quick-item b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 800; }
+.quick-item i { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--dim); font-size: 11px; font-style: normal; }
 .quick-arrow { margin-left: auto; color: var(--dim); }
 
 /* ---------------- phase-2 responsive ---------------- */
