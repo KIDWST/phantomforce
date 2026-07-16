@@ -15,6 +15,8 @@ assert.match(index, /data-hero-proof/u, "Dashboard hero must have a recent proof
 assert.match(index, /data-decision-deck/u, "Dashboard must have a real-data decision deck mount.");
 assert.match(index, /data-handled-proof/u, "Dashboard must have a handled-work proof strip mount.");
 assert.match(index, /data-quick-title>Next moves</u, "Right rail should lead with next moves, not generic quick actions.");
+assert.match(index, /data-work-title>Work in motion</u, "Right rail should show work in motion, not an old mission queue.");
+assert.match(index, /Open operating map/u, "Right rail map entry should read like an operating system, not a mission list.");
 assert.doesNotMatch(index, /Tell me what you need<br \/>or choose a lane below/u,
   "Dashboard hero must not lead with generic chatbot framing.");
 assert.match(widgetSource, /id:\s*"workforce"/u, "Workforce must stay available as a dashboard widget.");
@@ -28,6 +30,10 @@ assert.match(main, /function renderOutcomePath\(\{ plan = \[\], attention = \[\]
   "Outcome board must render a real operating path from existing state.");
 assert.match(main, /function operatingBriefingText\(\{ includePrompt = false \} = \{\}\)/u,
   "Dashboard hero must derive its briefing from real operating state.");
+assert.doesNotMatch(main, /<h2>Today's plan<\/h2>/u,
+  "Owner-action rail should not use calendar dashboard language.");
+assert.match(main, /<h2>Need from you<\/h2>/u,
+  "Owner-action rail should explain what Phantom needs from the owner.");
 assert.match(main, /function recentHandledProof\(\)/u,
   "Dashboard hero must be able to surface recent handled activity without fake examples.");
 assert.match(main, /function handledProofItems\(\)/u,
@@ -36,6 +42,10 @@ assert.match(main, /deck\.hidden = items\.length === 0/u,
   "Handled proof strip must disappear when no real activity exists.");
 assert.match(main, /function nextMoveActions\(\)/u,
   "Right rail must derive next moves from real attention and plan state.");
+assert.match(main, /function workInMotionItems\(\)/u,
+  "Right rail must derive work in motion from real agents and proof activity.");
+assert.match(main, /store\.state\.activity[\s\S]*?badge:\s*"PROOF"/u,
+  "Work in motion should include real handled activity as proof, not fake missions.");
 assert.match(main, /renderedNextMoves\[.*quick\.dataset\.quick.*\] \|\| QUICK/u,
   "Visible next-move clicks must execute the rendered data-driven action.");
 assert.match(main, /function renderDecisionDeck\(\)/u,

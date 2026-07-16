@@ -6,44 +6,44 @@ import {
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260716-295";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260716-295";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260716-295";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260716-295";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260716-295";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260716-295";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260716-295";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260716-295";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260716-295";
-import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260716-295";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260716-295";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260716-295";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260716-295";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260716-295";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260716-295";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260716-295";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260716-295";
-import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260716-295";
-import { mountAmbient } from "./ambient.js?v=phantom-live-20260716-295";
-import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260716-295";
+} from "./store.js?v=phantom-live-20260716-296";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260716-296";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260716-296";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260716-296";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260716-296";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260716-296";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260716-296";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260716-296";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260716-296";
+import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260716-296";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260716-296";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260716-296";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260716-296";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260716-296";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260716-296";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260716-296";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260716-296";
+import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260716-296";
+import { mountAmbient } from "./ambient.js?v=phantom-live-20260716-296";
+import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260716-296";
 import {
   fetchAuthConfig, databaseLogin, databaseLogout, customerRegister, requestCustomerPasswordReset,
   completeCustomerPasswordReset, switchOrg, fetchAuthMe, fetchEntitlementsSummary,
-} from "./orgs.js?v=phantom-live-20260716-295";
-import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260716-295";
-import { assetsAvailable } from "./orgs.js?v=phantom-live-20260716-295";
-import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260716-295";
+} from "./orgs.js?v=phantom-live-20260716-296";
+import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260716-296";
+import { assetsAvailable } from "./orgs.js?v=phantom-live-20260716-296";
+import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260716-296";
 // PhantomPlay V2 platform shell (Home/Solo/Friends/Workspace/Dev Hub) - opt-in
 // while it hardens: set localStorage "pf.phantomplay.v2" = "1" (the V2 shell has
 // a "Classic view" button to switch back). Classic stays the default experience.
-import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260716-295";
+import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260716-296";
 const phantomPlayV2Opted = () => { try { return localStorage.getItem("pf.phantomplay.v2") === "1"; } catch { return false; } };
-import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260716-295";
+import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260716-296";
 import {
   customizeNavigation,
   loadOrganizationCustomization,
-} from "./customization.js?v=phantom-live-20260716-295";
-import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260716-295";
+} from "./customization.js?v=phantom-live-20260716-296";
+import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260716-296";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -1253,7 +1253,7 @@ const MODES = {
   admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260716-295";
+const POSE_VERSION = "phantom-live-20260716-296";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -1546,7 +1546,7 @@ function renderPlan() {
   const plan = todaysPlan();
   if (!plan.length) {
     $("[data-plan]").innerHTML = `
-      <div class="section-head"><h2>Today's plan</h2></div>
+      <div class="section-head"><h2>Need from you</h2></div>
       <button class="plan-inner" data-open-ws="settings">
         <svg class="plan-donut" viewBox="0 0 72 72" aria-hidden="true">
           <circle cx="36" cy="36" r="30" class="plan-track"/>
@@ -1569,7 +1569,7 @@ function renderPlan() {
     ? plan[0].text
     : `${plan.length} things need you.`;
   $("[data-plan]").innerHTML = `
-    <div class="section-head"><h2>Today's plan</h2></div>
+    <div class="section-head"><h2>Need from you</h2></div>
     <button class="plan-inner" data-open-ws="${target}">
       <svg class="plan-donut" viewBox="0 0 72 72" aria-hidden="true">
         <circle cx="36" cy="36" r="30" class="plan-track"/>
@@ -1583,7 +1583,7 @@ function renderPlan() {
     </button>`;
 }
 
-/* ============================ mission queue ============================ */
+/* ============================ work in motion ============================ */
 const AGENT_STATE = {
   active: { label: "READY", cls: "run" },
   waiting: { label: "WAITING", cls: "wait" },
@@ -1591,18 +1591,49 @@ const AGENT_STATE = {
   blocked: { label: "BLOCKED", cls: "block" },
   idle: { label: "QUEUED", cls: "queue" },
 };
-function renderQueue() {
-  const agents = store.state.agents || [];
-  $("[data-queue-count]").textContent = agents.length;
-  $("[data-queue]").innerHTML = agents.slice(0, 4).map((a) => {
+function workInMotionItems() {
+  const items = [];
+  visible(store.state.agents || []).forEach((a) => {
     const st = AGENT_STATE[a.status] || AGENT_STATE.idle;
-    return `
-    <button class="queue-item" data-open-ws="workforce">
-      <span class="queue-ic">${svg("auto")}</span>
-      <span class="queue-meta"><b>${esc(a.name)}</b><i>${esc(a.role || a.mission || "")}</i></span>
-      <span class="queue-badge q-${st.cls}">${st.label}</span>
-    </button>`;
-  }).join("") || `<p class="empty-line">No missions yet.</p>`;
+    items.push({
+      icon: "auto",
+      title: a.name,
+      sub: a.role || a.mission || "Worker lane",
+      badge: st.label,
+      cls: st.cls,
+      open: "workforce",
+      weight: a.status === "blocked" ? 50 : a.status === "needs-approval" ? 40 : a.status === "active" ? 30 : 10,
+    });
+  });
+  visible(store.state.activity || [])
+    .filter((item) => item?.title || item?.activity || item?.text)
+    .slice(0, 4)
+    .forEach((item) => items.push({
+      icon: "check",
+      title: item.title || item.activity || item.text || "Activity recorded",
+      sub: item.who || item.source || (item.at ? `Proof ${ago(item.at)}` : "Proof logged"),
+      badge: "PROOF",
+      cls: "run",
+      open: "activity",
+      weight: 20,
+    }));
+  return items
+    .sort((a, b) => (b.weight || 0) - (a.weight || 0))
+    .slice(0, 4);
+}
+function renderQueue() {
+  const items = workInMotionItems();
+  $("[data-queue-count]").textContent = items.length;
+  $("[data-queue]").innerHTML = items.map((item) => `
+    <button class="queue-item" data-open-ws="${esc(item.open)}">
+      <span class="queue-ic">${svg(item.icon || "auto")}</span>
+      <span class="queue-meta"><b>${esc(item.title)}</b><i>${esc(item.sub || "")}</i></span>
+      <span class="queue-badge q-${esc(item.cls)}">${esc(item.badge)}</span>
+    </button>`).join("") || `
+      <div class="queue-empty">
+        <b>No work moving yet.</b>
+        <i>Start an outcome or connect real business data.</i>
+      </div>`;
 }
 
 /* ============================ quick actions ============================ */

@@ -3665,6 +3665,13 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 .q-queue { color: var(--dim); background: rgba(255, 255, 255, 0.05); }
 .q-wait { color: var(--warn); background: rgba(255, 209, 102, 0.1); }
 .q-block { color: #ff97a4; background: rgba(255, 77, 99, 0.1); }
+.queue-empty {
+  display: grid; gap: 4px; padding: 13px; margin: 4px 0 12px;
+  border: 1px dashed rgba(65, 255, 161, 0.18); border-radius: 12px;
+  background: rgba(65, 255, 161, 0.025);
+}
+.queue-empty b { font-size: 13px; }
+.queue-empty i { font-size: 12px; font-style: normal; color: var(--dim); }
 .rail-foot-btn { width: 100%; padding: 10px; cursor: pointer; border: 1px solid var(--line); border-radius: 12px; background: none; color: #cfeeda; font-size: 12.5px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; transition: border-color 0.2s, background 0.2s; }
 .rail-foot-btn:hover { border-color: var(--line-strong); background: rgba(65, 255, 161, 0.05); }
 .quick-list { display: flex; flex-direction: column; gap: 8px; }
