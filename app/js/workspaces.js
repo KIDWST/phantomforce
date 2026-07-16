@@ -9,10 +9,12 @@ import {
   PACKAGES, RETAINERS, FINANCE_CATEGORIES, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS, CHAT_HISTORY_RETENTION_DAYS,
   addMemory, toggleMemoryRemember, forgetMemory, forgetChatHistory, memoryStats, memoryRetention, chatHistoryStats, chatHistoryRetention,
   session,
-} from "./store.js?v=phantom-live-20260714-006";
+} from "./store.js?v=phantom-live-20260714-012";
 import {
   isDatabaseSession, canManageActiveOrg, fetchServerApprovals, decideServerRun,
-} from "./orgs.js?v=phantom-live-20260714-006";
+  activeOrgId,
+  fetchOrgCrm, saveOrgCrmSettings, createOrgCrmContact, pullOrgCrmContacts, updateOrgCrmContact, deleteOrgCrmContact,
+} from "./orgs.js?v=phantom-live-20260714-012";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -22,7 +24,7 @@ const kv = (k, v) => `<div class="kv"><span>${esc(k)}</span><b>${v}</b></div>`;
 const empty = (msg) => `<div class="ws-empty">${esc(msg)}</div>`;
 const wsTag = (id) => (isAdmin() && currentWs() === "phantomforce") ? `<span class="ws-tag">${esc(wsName(id))}</span>` : "";
 const memoryUi = { query: "", category: "all", brainOpen: false };
-const leadsUi = { prompt: "", notice: "" };
+const leadsUi = { prompt: "", notice: "", selectedId: "", query: "", status: "all", loadedOrg: "", loadingOrg: "" };
 const workerUi = { filter: "all", notice: "", selectedId: "", tab: "overview", preview: null, view: "map" };
 // Transient pan/zoom/search state for the fullscreen Workers "web" canvas -
 // not persisted, resets whenever the user leaves and re-enters Web view.
@@ -166,7 +168,148 @@ function normalizeLeadKey(text) {
 }
 
 function leadWorkspaceId() {
+  if (isDatabaseSession() && activeOrgId()) return activeOrgId();
   return currentWs() === "phantomforce" ? "phantomforce" : currentWs();
+}
+
+function leadWorkspaceName(id = leadWorkspaceId()) {
+  const match = (session?.get?.()?.memberships || []).find((member) => member.orgId === id || member.id === id);
+  return match?.orgName || match?.name || wsName(id);
+}
+
+function workspaceCrmSettings(ws = leadWorkspaceId()) {
+  store.state.crmSettings = store.state.crmSettings && typeof store.state.crmSettings === "object" ? store.state.crmSettings : {};
+  store.state.crmSettings[ws] = { dailyPullTarget: 5, sourceMode: "manual", notes: "", brain: { kind: "phantomforce_org_crm_brain", version: 1 }, ...(store.state.crmSettings[ws] || {}) };
+  return store.state.crmSettings[ws];
+}
+
+function normalizeSocialHandle(value) {
+  return String(value || "").trim().replace(/^@+/, "");
+}
+
+function socialUrl(platform, handle) {
+  const h = normalizeSocialHandle(handle);
+  if (!h) return "";
+  const urls = {
+    instagram: `https://www.instagram.com/${encodeURIComponent(h)}/`,
+    tiktok: `https://www.tiktok.com/@${encodeURIComponent(h)}`,
+    x: `https://x.com/${encodeURIComponent(h)}`,
+    linkedin: /^https?:\/\//i.test(h) ? h : `https://www.linkedin.com/in/${encodeURIComponent(h)}/`,
+    facebook: /^https?:\/\//i.test(h) ? h : `https://www.facebook.com/${encodeURIComponent(h)}`,
+    website: /^https?:\/\//i.test(h) ? h : `https://${h}`,
+  };
+  return urls[platform] || "";
+}
+
+function socialAvatarUrl(contact) {
+  const socials = contact?.socials || {};
+  const explicit = String(contact?.avatarUrl || contact?.profileImageUrl || "").trim();
+  if (/^https?:\/\//i.test(explicit)) return explicit;
+  const instagram = normalizeSocialHandle(socials.instagram);
+  if (instagram) return `https://unavatar.io/instagram/${encodeURIComponent(instagram)}`;
+  const x = normalizeSocialHandle(socials.x || socials.twitter);
+  if (x) return `https://unavatar.io/x/${encodeURIComponent(x)}`;
+  const tiktok = normalizeSocialHandle(socials.tiktok);
+  if (tiktok) return `https://unavatar.io/tiktok/${encodeURIComponent(tiktok)}`;
+  const linkedin = normalizeSocialHandle(socials.linkedin);
+  if (linkedin && !/^https?:\/\//i.test(linkedin)) return `https://unavatar.io/linkedin/${encodeURIComponent(linkedin)}`;
+  const website = String(contact?.website || socials.website || "").replace(/^https?:\/\//i, "").split("/")[0];
+  if (website) return `https://unavatar.io/${encodeURIComponent(website)}`;
+  return "";
+}
+
+function crmAvatar(contact) {
+  const url = socialAvatarUrl(contact);
+  if (url) return `<img src="${esc(url)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()" />`;
+  const label = String(contact.name || contact.company || "?").trim().slice(0, 2).toUpperCase();
+  return `<span>${esc(label)}</span>`;
+}
+
+function leadSocialLinks(lead) {
+  const socials = lead.socials || {};
+  const entries = [
+    ["instagram", "IG", socials.instagram],
+    ["tiktok", "TikTok", socials.tiktok],
+    ["x", "X", socials.x],
+    ["linkedin", "LinkedIn", socials.linkedin],
+    ["facebook", "FB", socials.facebook],
+    ["website", "Web", socials.website || lead.website],
+  ].filter(([, , handle]) => normalizeSocialHandle(handle));
+  return entries.map(([platform, label, handle]) => `<a href="${esc(socialUrl(platform, handle))}" target="_blank" rel="noopener noreferrer">${esc(label)}</a>`).join("");
+}
+
+function crmPayload(lead) {
+  return {
+    name: lead.name || lead.company || "Untitled contact",
+    organization: lead.company || "",
+    email: lead.email || "",
+    phone: lead.phone || "",
+    status: lead.status || "new",
+    type: lead.type || "prospect",
+    value: Number(lead.value || 0),
+    nextStep: lead.next || "",
+    notes: lead.notes || "",
+    source: lead.source || "Easy CRM",
+    website: lead.website || "",
+    avatarUrl: lead.avatarUrl || "",
+    socials: lead.socials || {},
+    tags: lead.tags || [],
+    fitScore: lead.fitScore ?? null,
+    qualification: lead.qualification || [],
+    outreach: lead.outreach || "",
+    crmStage: lead.crmStage || "Prospect",
+    dueAt: lead.due || null,
+    lastTouchAt: lead.lastTouch || null,
+  };
+}
+
+function syncServerCrm(ws, rerender) {
+  if (!isDatabaseSession() || leadsUi.loadedOrg === ws || leadsUi.loadingOrg === ws) return;
+  leadsUi.loadingOrg = ws;
+  fetchOrgCrm().then((payload) => {
+    if (!payload?.ok) return;
+    const other = store.state.leads.filter((lead) => lead.ws !== ws);
+    store.state.leads = [...(payload.contacts || []), ...other];
+    store.state.crmSettings[ws] = payload.settings || workspaceCrmSettings(ws);
+    leadsUi.loadedOrg = ws;
+    store.save();
+    rerender();
+  }).catch(() => {
+    leadsUi.notice = "CRM database is offline, using local organization memory.";
+  }).finally(() => {
+    if (leadsUi.loadingOrg === ws) leadsUi.loadingOrg = "";
+  });
+}
+
+function applyCrmCommand(prompt) {
+  const settings = workspaceCrmSettings();
+  const amount = String(prompt || "").match(/\b(?:pull|find|add|get)\s+(\d{1,5})\b/i)?.[1];
+  const perDay = /\b(per|a|each)\s+day\b|\bdaily\b/i.test(prompt);
+  if (!amount || !perDay) return "";
+  settings.dailyPullTarget = Math.max(1, Math.min(2000, Number(amount)));
+  settings.sourceMode = "daily";
+  settings.brain = {
+    ...(settings.brain || {}),
+    kind: "phantomforce_org_crm_brain",
+    version: 1,
+    dailyPullTarget: settings.dailyPullTarget,
+    lastNaturalCommand: String(prompt || "").trim(),
+    updatedAt: new Date().toISOString(),
+  };
+  if (isDatabaseSession()) saveOrgCrmSettings(settings).catch(() => {});
+  return `Daily client pull set to ${settings.dailyPullTarget.toLocaleString()} for ${leadWorkspaceName()}.`;
+}
+
+function crmPullIntent(prompt) {
+  const amount = String(prompt || "").match(/\b(?:pull|find|add|get)\s+(\d{1,5})\b/i)?.[1];
+  if (!amount) return null;
+  const audience = String(prompt || "")
+    .replace(/\b(?:pull|find|add|get)\s+\d{1,5}\s*(?:new\s+)?/i, "")
+    .replace(/\b(?:clients?|leads?|prospects?|contacts?)\b/gi, "")
+    .replace(/\b(?:per|a|each)\s+day\b|\bdaily\b/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return { count: Math.max(1, Math.min(2000, Number(amount))), audience: audience || "local businesses", prompt: String(prompt || "").trim() };
 }
 
 function splitLeadPrompt(prompt) {
@@ -209,6 +352,9 @@ function leadDraftText(lead) {
 
 function createProspectsFromPrompt(prompt) {
   const ws = leadWorkspaceId();
+  const commandNotice = applyCrmCommand(prompt);
+  const onlyDailyCommand = commandNotice && !/\b(school|gym|creator|restaurant|law|clinic|salon|realtor|contractor|agency|brand|shop|studio|church|nonprofit)\b/i.test(prompt);
+  if (onlyDailyCommand) return { created: [], skipped: 0, commandNotice };
   const segments = splitLeadPrompt(prompt);
   const templates = [];
   segments.forEach((segment) => {
@@ -246,69 +392,118 @@ function createProspectsFromPrompt(prompt) {
       promptSeed: prompt,
       requiresApproval: true,
       enriched: false,
+      type: "prospect",
+      socials: {},
+      avatarUrl: "",
+      website: "",
+      email: "",
+      phone: "",
+      lastTouch: "",
+      crmStage: "Prospect",
     };
     created.push(lead);
     existing.add(key);
   });
   if (created.length) {
     store.state.leads.unshift(...created);
+    if (isDatabaseSession()) created.forEach((lead) => createOrgCrmContact(crmPayload(lead)).then((result) => {
+      if (!result?.contact) return;
+      Object.assign(lead, result.contact);
+      store.save();
+    }).catch(() => {}));
     pushActivity("Lead Hunter", `built ${created.length} prospect card${created.length === 1 ? "" : "s"} from the Clients prompt. Outreach is draft-only until approved.`, ws);
   }
-  return { created, skipped };
+  return { created, skipped, commandNotice };
+}
+
+function filteredCrmContacts() {
+  const ws = leadWorkspaceId();
+  let leads = store.state.leads.filter((lead) => lead.ws === ws);
+  if (leadsUi.status !== "all") leads = leads.filter((lead) => lead.status === leadsUi.status);
+  const q = leadsUi.query.trim().toLowerCase();
+  if (q) {
+    leads = leads.filter((lead) => `${lead.name} ${lead.company} ${lead.email || ""} ${lead.phone || ""} ${lead.website || ""} ${Object.values(lead.socials || {}).join(" ")} ${(lead.tags || []).join(" ")}`.toLowerCase().includes(q));
+  }
+  return leads;
+}
+
+function crmContactCard(l) {
+  const due = l.due && daysUntil(l.due) <= 0 && ["new", "follow-up"].includes(l.status);
+  return `<article class="crm-card ${due ? "is-due" : ""} ${leadsUi.selectedId === l.id ? "is-selected" : ""}" data-act="select" data-id="${esc(l.id)}">
+    <button class="record-x" data-act="remove" data-id="${esc(l.id)}" aria-label="Remove contact">×</button>
+    <div class="crm-avatar">${crmAvatar(l)}</div>
+    <div class="crm-main">
+      ${wsTag(l.ws)}
+      <h4>${esc(l.name || l.company)}</h4>
+      <p>${esc(l.company || "Independent contact")} · ${esc(statusLabel(l.status || "new"))}</p>
+      <div class="crm-tags">${l.fitScore ? `<span>Fit ${esc(l.fitScore)}%</span>` : ""}${(l.tags || []).slice(0, 3).map((tag) => `<span>${esc(tag)}</span>`).join("")}</div>
+      <p class="crm-next">${esc(l.next || "No next step set")}</p>
+      <div class="crm-socials">${leadSocialLinks(l) || "<span>No socials yet</span>"}</div>
+    </div>
+    <b>${fmtMoney(Number(l.value || 0))}</b>
+  </article>`;
 }
 
 function renderLeads(el, rerender) {
-  const leads = visible(store.state.leads);
-  const lanes = [
-    ["new", "New"], ["follow-up", "Follow-up"], ["proposal", "Proposal out"], ["won", "Won"], ["lost", "Lost"],
-  ];
+  const ws = leadWorkspaceId();
+  syncServerCrm(ws, rerender);
+  const settings = workspaceCrmSettings(ws);
+  const leads = filteredCrmContacts();
+  const selected = leads.find((lead) => lead.id === leadsUi.selectedId) || leads[0] || null;
+  const lanes = [["new", "New"], ["follow-up", "Follow-up"], ["proposal", "Proposal out"], ["won", "Won"], ["lost", "Lost"]];
   el.innerHTML = `
-    <section class="lead-intel">
+    <section class="crm-command">
       <div>
-        <p>Client intelligence</p>
-        <h3>Build the client base.</h3>
-        <span>Tell Phantom who to find. It creates prospect cards, qualification steps, and approval-safe outreach angles.</span>
+        <p>Easy CRM · ${esc(leadWorkspaceName(ws))}</p>
+        <h3>Client database</h3>
+        <span>Tell Phantom “pull 5 new clients per day” or capture contacts manually. Each organization keeps its own CRM memory.</span>
       </div>
       <form class="lead-intel-form" data-lead-form>
-        <input data-lead-prompt value="${esc(leadsUi.prompt)}" placeholder="schools, gyms, creators, service companies, warm prospects..." />
-        <button class="btn btn-primary" type="submit">Run</button>
+        <input data-lead-prompt value="${esc(leadsUi.prompt)}" placeholder="pull 5 new clients per day, gyms in Chicago, warm referrals..." />
+        <button class="btn btn-primary" type="submit">Update CRM</button>
       </form>
     </section>
     ${leadsUi.notice ? `<div class="lead-intel-result">${esc(leadsUi.notice)}</div>` : ""}
-    <div class="ws-toolbar">
-      <p class="ws-note">Every lead moves draft → approval → send-ready. Nothing goes out without you.</p>
-      <button class="btn btn-primary" data-act="add">+ Capture lead</button>
+    <div class="ws-toolbar crm-toolbar">
+      <p class="ws-note">Daily pull target: <b>${Number(settings.dailyPullTarget || 0).toLocaleString()}</b> · Organization brain: <b>${esc(ws)}</b> · sends stay approval-gated.</p>
+      <input class="crm-search" data-crm-search value="${esc(leadsUi.query)}" placeholder="Search clients, socials, emails, tags..." />
+      <select class="crm-filter" data-crm-status>${[["all", "All"], ...lanes].map(([id, label]) => `<option value="${esc(id)}" ${leadsUi.status === id ? "selected" : ""}>${esc(label)}</option>`).join("")}</select>
+      <button class="btn btn-primary" data-act="add">+ New contact</button>
     </div>
-    <div class="lane-row">
-      ${lanes.map(([k, label]) => {
-        const items = leads.filter((l) => l.status === k);
-        return `<div class="lane"><div class="lane-head">${label} <b>${items.length}</b></div>
-          ${items.map((l) => `
-            <article class="record ${daysUntil(l.due) <= 0 && ["new", "follow-up"].includes(l.status) ? "record-due" : ""}">
-              <button class="record-x" data-act="remove" data-id="${l.id}" aria-label="Remove lead">×</button>
-              ${wsTag(l.ws)}
-              <h4>${esc(l.name)}</h4>
-              <p class="record-sub">${esc(l.company)} · ${esc(l.source)} · ${fmtMoney(l.value)}</p>
-              ${(l.fitScore || (l.tags && l.tags.length)) ? `<div class="lead-meta">${l.fitScore ? `<span>Fit ${esc(l.fitScore)}%</span>` : ""}${(l.tags || []).slice(0, 3).map((tag) => `<span>${esc(tag)}</span>`).join("")}</div>` : ""}
-              <p class="record-next">▸ ${esc(l.next)}${["new", "follow-up"].includes(l.status) ? ` <i>(${daysUntil(l.due) <= 0 ? "due today" : "in " + daysUntil(l.due) + "d"})</i>` : ""}</p>
-              <p class="record-notes">${esc(l.notes)}</p>
-              ${(l.qualification && l.qualification.length) ? `<ul class="lead-checks">${l.qualification.slice(0, 3).map((item) => `<li>${esc(item)}</li>`).join("")}</ul>` : ""}
-              <div class="record-actions">
-                ${l.outreach ? `<button class="btn" data-act="copy-outreach" data-id="${l.id}">Copy outreach angle</button>` : ""}
-                ${l.status === "new" ? `<button class="btn" data-act="advance" data-id="${l.id}">Start follow-up</button>` : ""}
-                ${["new", "follow-up"].includes(l.status) ? `<button class="btn" data-act="propose" data-id="${l.id}">Convert to proposal</button>` : ""}
-                ${l.status === "proposal" ? `<button class="btn btn-good" data-act="won" data-id="${l.id}">Mark won</button><button class="btn btn-quiet" data-act="lost" data-id="${l.id}">Mark lost</button>` : ""}
-                ${l.status === "won" ? `<button class="btn" data-act="review" data-id="${l.id}">Prepare review request</button>` : ""}
-                ${l.status === "lost" ? `<button class="btn btn-quiet" data-act="revive" data-id="${l.id}">Re-open</button>` : ""}
-              </div>
-            </article>`).join("") || `<div class="lane-empty">—</div>`}
-        </div>`;
-      }).join("")}
+    <div class="crm-layout">
+      <div class="crm-list">${leads.map(crmContactCard).join("") || `<div class="ws-empty">No CRM contacts yet. Say “pull 5 new clients per day” or click New contact.</div>`}</div>
+      <aside class="crm-detail">
+        ${selected ? `
+          <div class="crm-detail-head"><div class="crm-avatar is-large">${crmAvatar(selected)}</div><div><p>${esc(selected.crmStage || statusLabel(selected.status))}</p><h3>${esc(selected.name || selected.company)}</h3><span>${esc(selected.company || "")}</span></div></div>
+          <div class="crm-detail-grid">
+            <span><b>Email</b><i>${esc(selected.email || "—")}</i></span>
+            <span><b>Phone</b><i>${esc(selected.phone || "—")}</i></span>
+            <span><b>Website</b><i>${selected.website ? `<a href="${esc(socialUrl("website", selected.website))}" target="_blank" rel="noopener noreferrer">${esc(selected.website)}</a>` : "—"}</i></span>
+            <span><b>Value</b><i>${fmtMoney(Number(selected.value || 0))}</i></span>
+          </div>
+          <div class="crm-socials is-detail">${leadSocialLinks(selected) || "<span>No social handles saved yet.</span>"}</div>
+          <p class="record-next">▸ ${esc(selected.next || "No next step set")}</p>
+          <p class="record-notes">${esc(selected.notes || "No notes yet.")}</p>
+          ${(selected.qualification && selected.qualification.length) ? `<ul class="lead-checks">${selected.qualification.slice(0, 5).map((item) => `<li>${esc(item)}</li>`).join("")}</ul>` : ""}
+          <div class="record-actions">
+            <button class="btn" data-act="edit" data-id="${esc(selected.id)}">Edit CRM fields</button>
+            ${selected.outreach ? `<button class="btn" data-act="copy-outreach" data-id="${esc(selected.id)}">Copy outreach angle</button>` : ""}
+            ${selected.status === "new" ? `<button class="btn" data-act="advance" data-id="${esc(selected.id)}">Start follow-up</button>` : ""}
+            ${["new", "follow-up"].includes(selected.status) ? `<button class="btn" data-act="propose" data-id="${esc(selected.id)}">Convert to proposal</button>` : ""}
+            ${selected.status === "proposal" ? `<button class="btn btn-good" data-act="won" data-id="${esc(selected.id)}">Mark won</button><button class="btn btn-quiet" data-act="lost" data-id="${esc(selected.id)}">Mark lost</button>` : ""}
+            ${selected.status === "won" ? `<button class="btn" data-act="review" data-id="${esc(selected.id)}">Prepare review request</button>` : ""}
+            ${selected.status === "lost" ? `<button class="btn btn-quiet" data-act="revive" data-id="${esc(selected.id)}">Re-open</button>` : ""}
+          </div>
+        ` : `<div class="ws-empty">Select a contact to open the CRM profile.</div>`}
+      </aside>
     </div>`;
   const find = (id) => store.state.leads.find((l) => l.id === id);
+  const persistLead = (lead) => { if (lead && isDatabaseSession()) updateOrgCrmContact(lead.id, crmPayload(lead)).catch(() => {}); };
+  el.querySelector("[data-crm-search]")?.addEventListener("input", (event) => { leadsUi.query = event.currentTarget.value; rerender(); });
+  el.querySelector("[data-crm-status]")?.addEventListener("change", (event) => { leadsUi.status = event.currentTarget.value; rerender(); });
   const form = el.querySelector("[data-lead-form]");
   if (form) {
-    form.addEventListener("submit", (event) => {
+    form.addEventListener("submit", async (event) => {
       event.preventDefault();
       const input = form.querySelector("[data-lead-prompt]");
       const prompt = input?.value?.trim() || "";
@@ -318,42 +513,104 @@ function renderLeads(el, rerender) {
         rerender();
         return;
       }
-      const { created, skipped } = createProspectsFromPrompt(prompt);
-      leadsUi.notice = created.length
+      const pull = crmPullIntent(prompt);
+      if (pull && isDatabaseSession()) {
+        applyCrmCommand(prompt);
+        leadsUi.notice = `Pulling ${pull.count.toLocaleString()} CRM candidate${pull.count === 1 ? "" : "s"} into ${leadWorkspaceName()}...`;
+        rerender();
+        try {
+          const result = await pullOrgCrmContacts(pull);
+          if (result?.ok) {
+            const ws = leadWorkspaceId();
+            const other = store.state.leads.filter((lead) => lead.ws !== ws);
+            const merged = [...(result.contacts || []), ...store.state.leads.filter((lead) => lead.ws === ws && !result.contacts?.some((c) => c.id === lead.id))];
+            store.state.leads = [...merged, ...other];
+            store.state.crmSettings[ws] = result.settings || workspaceCrmSettings(ws);
+            leadsUi.selectedId = result.contacts?.[0]?.id || leadsUi.selectedId;
+            leadsUi.notice = `Pulled ${Number(result.created || 0).toLocaleString()} CRM candidate${result.created === 1 ? "" : "s"} into ${leadWorkspaceName()}. They are discovery records with social handles and still need enrichment before outreach.`;
+            pushActivity("Easy CRM", `pulled ${Number(result.created || 0).toLocaleString()} CRM candidate${result.created === 1 ? "" : "s"} for ${leadWorkspaceName()}.`, ws);
+            store.save();
+            rerender();
+          } else {
+            leadsUi.notice = `CRM pull failed: ${String(result?.error || "unknown error")}`;
+            rerender();
+          }
+        } catch (error) {
+          leadsUi.notice = `CRM pull failed: ${error instanceof Error ? error.message : "unknown error"}`;
+          rerender();
+        }
+        return;
+      }
+      const { created, skipped, commandNotice } = createProspectsFromPrompt(prompt);
+      leadsUi.notice = commandNotice || (created.length
         ? `Created ${created.length} prospect card${created.length === 1 ? "" : "s"} from your prompt${skipped ? ` and skipped ${skipped} duplicate${skipped === 1 ? "" : "s"}` : ""}. Outreach is draft-only until approved.`
-        : `No new cards created${skipped ? ` — ${skipped} matching prospect lane${skipped === 1 ? " already exists" : "s already exist"}` : ""}.`;
+        : `No new cards created${skipped ? ` — ${skipped} matching prospect lane${skipped === 1 ? " already exists" : "s already exist"}` : ""}.`);
       store.save();
       rerender();
     });
   }
   bindActions(el, {
+    select: (id) => { leadsUi.selectedId = id; rerender(); },
     add: () => {
-      const name = prompt("Lead name (person or business):");
+      const name = prompt("Contact name (person or business):");
       if (!name) return;
-      store.state.leads.unshift({ id: uid("lead"), ws: currentWs() === "phantomforce" ? "phantomforce" : currentWs(), name: name.trim(), company: name.trim(), source: "Manual capture", status: "new", value: 750, next: "Qualify the need and the budget", due: new Date(Date.now() + 86400000).toISOString(), owner: "Lead Hunter", notes: "", proposalId: null });
-      pushActivity("Lead Hunter", `captured a new lead: ${name.trim()}.`);
+      const company = prompt("Company / brand name:", name.trim()) || name.trim();
+      const instagram = normalizeSocialHandle(prompt("Instagram handle (optional):") || "");
+      const website = prompt("Website (optional):") || "";
+      const avatarUrl = prompt("Profile image URL (optional — paste from their public profile):") || "";
+      const lead = { id: uid("lead"), ws, name: name.trim(), company: company.trim(), source: "Manual CRM", status: "new", value: 750, next: "Qualify need, budget, and best contact path", due: new Date(Date.now() + 86400000).toISOString(), owner: "CRM", notes: "", proposalId: null, type: "prospect", socials: { instagram }, website, avatarUrl, email: "", phone: "", tags: [], qualification: [], outreach: "", crmStage: "Prospect" };
+      store.state.leads.unshift(lead);
+      leadsUi.selectedId = lead.id;
+      pushActivity("Easy CRM", `captured CRM contact: ${name.trim()}.`, ws);
+      if (isDatabaseSession()) createOrgCrmContact(crmPayload(lead)).then((result) => {
+        if (result?.contact) {
+          Object.assign(lead, result.contact);
+          leadsUi.selectedId = result.contact.id;
+          store.save();
+          rerender();
+        }
+      }).catch(() => {});
+      store.save(); rerender();
+    },
+    edit: (id) => {
+      const l = find(id); if (!l) return;
+      l.name = prompt("Contact name:", l.name || "") || l.name;
+      l.company = prompt("Company / brand:", l.company || l.name || "") || l.company;
+      l.email = prompt("Email:", l.email || "") || l.email || "";
+      l.phone = prompt("Phone:", l.phone || "") || l.phone || "";
+      l.website = prompt("Website:", l.website || "") || l.website || "";
+      l.socials = l.socials || {};
+      l.socials.instagram = normalizeSocialHandle(prompt("Instagram:", l.socials.instagram || "") || l.socials.instagram || "");
+      l.socials.tiktok = normalizeSocialHandle(prompt("TikTok:", l.socials.tiktok || "") || l.socials.tiktok || "");
+      l.socials.linkedin = prompt("LinkedIn handle or URL:", l.socials.linkedin || "") || l.socials.linkedin || "";
+      l.avatarUrl = prompt("Public profile image URL:", l.avatarUrl || "") || l.avatarUrl || "";
+      l.notes = prompt("Notes:", l.notes || "") || l.notes || "";
+      pushActivity("Easy CRM", `updated CRM profile: ${l.name || l.company}.`, l.ws);
+      if (isDatabaseSession()) updateOrgCrmContact(l.id, crmPayload(l)).catch(() => {});
       store.save(); rerender();
     },
     remove: (id) => {
       const l = find(id);
       store.state.leads = store.state.leads.filter((item) => item.id !== id);
       if (l) pushActivity("Lead Hunter", `removed lead: ${l.name}.`, l.ws);
+      if (isDatabaseSession()) deleteOrgCrmContact(id).catch(() => {});
       store.save(); rerender();
     },
     "copy-outreach": (id, btn) => copyText(btn, leadDraftText(find(id))),
-    advance: (id) => { const l = find(id); l.status = "follow-up"; store.save(); rerender(); },
+    advance: (id) => { const l = find(id); l.status = "follow-up"; persistLead(l); store.save(); rerender(); },
     propose: (id) => {
       const l = find(id);
       const pkg = PACKAGES.find((p) => p.price >= l.value) || PACKAGES[2];
       const p = { id: uid("prop"), ws: l.ws, client: l.company, contact: l.name, pkg: pkg.id, price: pkg.price, retainer: "keeper", status: "draft", pain: l.notes || "Capture the pain in one sentence.", scope: ["Build scoped to the outcome", "Lead capture + follow-up wiring", "Review engine", "30-day watch"], timeline: "2 weeks build, launch week 3", updated: new Date().toISOString() };
       store.state.proposals.unshift(p);
       l.status = "proposal"; l.proposalId = p.id; l.next = "Proposal drafted — review it in Proposal Forge";
+      persistLead(l);
       pushActivity("Proposal Forge", `opened a ${pkg.name} draft for ${l.company}.`, l.ws);
       store.save(); rerender();
     },
-    won: (id) => { const l = find(id); l.status = "won"; l.next = "Kick off delivery"; const p = store.state.proposals.find((x) => x.id === l.proposalId); if (p) p.status = "won"; pushActivity("Client Pipeline", `marked ${l.company} as won.`, l.ws); store.save(); rerender(); },
-    lost: (id) => { const l = find(id); l.status = "lost"; l.next = "Re-engage in 90 days"; const p = store.state.proposals.find((x) => x.id === l.proposalId); if (p) p.status = "lost"; store.save(); rerender(); },
-    revive: (id) => { const l = find(id); l.status = "follow-up"; l.next = "Warm re-engage with a proof point"; store.save(); rerender(); },
+    won: (id) => { const l = find(id); l.status = "won"; l.next = "Kick off delivery"; const p = store.state.proposals.find((x) => x.id === l.proposalId); if (p) p.status = "won"; persistLead(l); pushActivity("Client CRM", `marked ${l.company} as won.`, l.ws); store.save(); rerender(); },
+    lost: (id) => { const l = find(id); l.status = "lost"; l.next = "Re-engage in 90 days"; const p = store.state.proposals.find((x) => x.id === l.proposalId); if (p) p.status = "lost"; persistLead(l); store.save(); rerender(); },
+    revive: (id) => { const l = find(id); l.status = "follow-up"; l.next = "Warm re-engage with a proof point"; persistLead(l); store.save(); rerender(); },
     review: (id) => {
       const l = find(id);
       store.state.reviews.unshift({ id: uid("rev"), ws: l.ws, client: `${l.name} — ${l.company}`, status: "draft", channel: "Google", draft: `${l.name.split(" ")[0]} — glad this one landed. A short review helps the next owner find us; two sentences is plenty. Link below.`, link: "review-link-ready", received: null, quote: null });
@@ -3219,7 +3476,7 @@ function renderPhantom(el) {
 /* ============================ REGISTRY ============================ */
 export const WORKSPACE_DEFS = {
   phantom: { title: "Phantom AI", kicker: "Business command surface", render: renderPhantom },
-  leads: { title: "Client Pipeline", kicker: "Lead desk & follow-up intelligence", render: renderLeads },
+  leads: { title: "Client CRM", kicker: "Org-scoped client database and follow-up memory", render: renderLeads },
   proposals: { title: "Offer Desk", kicker: "Quotes, scopes, and deal math", render: renderProposals },
   reviews: { title: "Review Desk", kicker: "Reputation engine", render: renderReviews },
   bookings: { title: "Bookings", kicker: "Schedule desk", render: renderBookings },
@@ -3252,7 +3509,7 @@ export function missionWidgets() {
   const neuralCellCount = workerRoster.filter((worker) => worker.worker_type === "cell").length;
 
   const w = [
-    { id: "leads", icon: "◉", title: "Client Pipeline", stat: `${openLeads.length} open`, sub: dueLeads.length ? `${dueLeads.length} due today` : "pipeline current", alert: dueLeads.length > 0 },
+    { id: "leads", icon: "◉", title: "Client CRM", stat: `${openLeads.length} open`, sub: dueLeads.length ? `${dueLeads.length} due today` : "client memory current", alert: dueLeads.length > 0 },
     { id: "proposals", icon: "◆", title: "Offer Desk", stat: `${m.open.length} live`, sub: `${fmtMoney(m.pipeline)} potential`, alert: false },
     { id: "media", icon: "▶", title: "Creator Studio", stat: `${pendingMedia.length} pending`, sub: `${generatedMedia.length} generated`, alert: false },
     { id: "sites", icon: "▦", title: "Site Portfolio", stat: `${pages.length} site${pages.length === 1 ? "" : "s"}`, sub: `${pages.filter((p) => p.domain || p.url || p.design?.existingUrl).length} domain${pages.filter((p) => p.domain || p.url || p.design?.existingUrl).length === 1 ? "" : "s"}`, alert: false },

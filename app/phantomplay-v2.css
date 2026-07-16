@@ -220,3 +220,161 @@
 .pp2-toddler-title{font-size:16px;font-weight:800;color:var(--pp2-text);text-align:center}
 @media(max-width:767px){.pp2-rating-toggles{grid-template-columns:1fr}.pp2-toddler-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(prefers-reduced-motion:reduce){.pp2-card,.pp2-card:hover,.pp2-art img,.pp2-play,.pp2-wish{transition:none;transform:none}.pp2-skeleton .pp2-art,.pp2-skeleton .pp2-card-body i{animation:none}.pp2-stage-loading i{animation-duration:2s}}
+
+/* Dense game shelf pass: compact, readable, no vertical word wrapping. */
+.pp2-shell{
+  max-width:none!important;
+  width:100%!important;
+}
+.pp2-grid,
+.pp2-grid-wide{
+  grid-template-columns:repeat(5,minmax(0,1fr))!important;
+  gap:12px!important;
+}
+.pp2-card{
+  min-width:0!important;
+  height:292px!important;
+  display:flex!important;
+  flex-direction:column!important;
+  border-radius:10px!important;
+}
+.pp2-art{
+  flex:0 0 128px!important;
+  aspect-ratio:auto!important;
+  height:128px!important;
+}
+.pp2-card-body{
+  flex:1 1 auto!important;
+  min-width:0!important;
+  min-height:0!important;
+  display:grid!important;
+  grid-template-rows:auto auto auto 1fr!important;
+  gap:6px!important;
+  padding:10px!important;
+}
+.pp2-card-body header{
+  min-width:0!important;
+}
+.pp2-card-body h3,
+.pp2-dev,
+.pp2-summary{
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
+  white-space:nowrap!important;
+  min-width:0!important;
+}
+.pp2-card-body h3{
+  font-size:15px!important;
+  line-height:1.12!important;
+}
+.pp2-dev{
+  margin:0!important;
+  font-size:10px!important;
+}
+.pp2-summary{
+  min-height:0!important;
+  margin:0!important;
+  font-size:11px!important;
+  line-height:1.25!important;
+}
+.pp2-progress{
+  margin-bottom:0!important;
+}
+.pp2-card-actions{
+  align-self:end!important;
+  display:grid!important;
+  grid-template-columns:1fr auto!important;
+  gap:8px!important;
+  width:100%!important;
+}
+.pp2-card-actions .pp2-play{
+  width:100%!important;
+  padding:8px 10px!important;
+  border-radius:8px!important;
+  white-space:nowrap!important;
+}
+.pp2-card-actions span{
+  align-self:center!important;
+  white-space:nowrap!important;
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
+  max-width:78px!important;
+}
+@media(max-width:1500px){
+  .pp2-grid,.pp2-grid-wide{grid-template-columns:repeat(4,minmax(0,1fr))!important}
+}
+@media(max-width:1120px){
+  .pp2-grid,.pp2-grid-wide{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+}
+@media(max-width:780px){
+  .pp2-grid,.pp2-grid-wide{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  .pp2-card{height:276px!important}
+}
+@media(max-width:520px){
+  .pp2-grid,.pp2-grid-wide{grid-template-columns:1fr!important}
+  .pp2-card{height:286px!important}
+}
+
+/* Final V2 catalog clamp: compact cards, no vertical word wrapping. */
+body .pp2-grid,
+body .pp2-grid-wide{
+  display:grid!important;
+  grid-template-columns:repeat(auto-fill,minmax(330px,1fr))!important;
+  gap:14px!important;
+  align-items:stretch!important;
+}
+body .pp2-card{
+  min-width:0!important;
+  height:334px!important;
+  max-height:334px!important;
+  overflow:hidden!important;
+}
+body .pp2-art{
+  flex:0 0 150px!important;
+  height:150px!important;
+  min-height:150px!important;
+}
+body .pp2-card-body{
+  min-width:0!important;
+  overflow:hidden!important;
+}
+body .pp2-card-body h3,
+body .pp2-dev,
+body .pp2-card-actions span{
+  max-width:100%!important;
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
+  white-space:nowrap!important;
+  overflow-wrap:normal!important;
+  word-break:normal!important;
+  hyphens:none!important;
+}
+body .pp2-card-body h3{
+  font-size:22px!important;
+  line-height:1.05!important;
+  letter-spacing:-.01em!important;
+}
+body .pp2-summary{
+  margin:0 0 10px!important;
+  min-height:38px!important;
+  max-height:38px!important;
+  color:#b5d6c2!important;
+  font-size:14px!important;
+  line-height:1.35!important;
+  overflow:hidden!important;
+  display:-webkit-box!important;
+  -webkit-box-orient:vertical!important;
+  -webkit-line-clamp:2!important;
+  white-space:normal!important;
+  overflow-wrap:normal!important;
+  word-break:normal!important;
+  hyphens:none!important;
+}
+body .pp2-card-actions{
+  align-self:end!important;
+  width:100%!important;
+}
+@media(max-width:1600px){body .pp2-grid,body .pp2-grid-wide{grid-template-columns:repeat(auto-fill,minmax(300px,1fr))!important}}
+@media(max-width:1180px){body .pp2-grid,body .pp2-grid-wide{grid-template-columns:repeat(auto-fill,minmax(270px,1fr))!important}}
+@media(max-width:760px){body .pp2-grid,body .pp2-grid-wide{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
+@media(max-width:520px){body .pp2-grid,body .pp2-grid-wide{grid-template-columns:1fr!important}}

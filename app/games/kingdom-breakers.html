@@ -269,9 +269,9 @@ const MATERIALS={
 };
 
 const AMMO={
-  stonefall:{key:'stonefall',label:'Stonefall Orb',glyph:'●',color:'#ffb454',minSpeed:800,maxSpeed:1480,gravityScale:1.05,damage:34,splash:0,pierce:0,impulse:900,radius:13},
+  stonefall:{key:'stonefall',label:'Stonefall Orb',glyph:'●',color:'#ffb454',minSpeed:1280,maxSpeed:2460,gravityScale:0.68,damage:36,splash:0,pierce:0,impulse:940,radius:13},
   splinter:{key:'splinter',label:'Splinter Lance',glyph:'➤',color:'#3fe0c5',minSpeed:1050,maxSpeed:1900,gravityScale:0.58,damage:15,splash:0,pierce:3,impulse:260,radius:8},
-  ember:{key:'ember',label:'Emberburst Charge',glyph:'✺',color:'#ff6a5d',minSpeed:720,maxSpeed:1320,gravityScale:0.92,damage:24,splash:180,pierce:0,impulse:520,radius:11},
+  ember:{key:'ember',label:'Emberburst Charge',glyph:'✺',color:'#ff6a5d',minSpeed:1200,maxSpeed:2280,gravityScale:0.62,damage:25,splash:190,pierce:0,impulse:560,radius:11},
 };
 const AMMO_ORDER=['stonefall','splinter','ember'];
 
@@ -302,7 +302,7 @@ let shotsFired=0, wardensHarmedCount=0, damageBy={player:0,bot:0}, wardensHarmed
 let currentAmmo='stonefall', runCompletedFlag=false, activeShooter='player', settleWaitMs=0;
 let mode='campaign', currentLevelIndex=0, duel=null;
 let slowMo={active:false,t:0,dur:0}, slowMoFocus=null, shake=0;
-let dragging=false, aim={angle:-0.9,power:0};
+let dragging=false, aim={angle:-0.55,power:1};
 let paused=false, hostPaused=false;
 let hostSoundPref=true, localMuted=false, volume=70, reducedMotion=false;
 let campaignState={levels:{}, tutorialSeen:false, duels:{played:0,wins:0}};
@@ -399,12 +399,56 @@ function buildStructure(levelDef, seed){
     wardens.push({id:'w'+i, blockId:b.id, x:b.x, y:b.y-b.h/2-16, radius:15, alive:true, harmed:false});
   }
   const totalMaxHp=blocks.reduce((s,b)=>s+b.maxHp,0);
-  return {blocks, wardens, grid, groundY, baseX, blockW, blockH, cols, rows, totalMaxHp, keystoneId: keystone?keystone.id:null};
+  const tower={blocks, wardens, grid, groundY, baseX, blockW, blockH, cols, rows, totalMaxHp, keystoneId: keystone?keystone.id:null, side:'enemy'};
+  assignTowerMetadata(tower, 'enemy');
+  return tower;
+}
+
+function assignTowerMetadata(tower, side){
+  tower.side=side;
+  for(const b of tower.blocks){ b.tower=tower; b.side=side; }
+  for(const w of tower.wardens){ w.tower=tower; w.side=side; }
+  return tower;
+}
+function buildTower(levelDef, seed, side){
+  const tower=assignTowerMetadata(buildStructure(levelDef, seed), side||'enemy');
+  const structW=tower.cols*tower.blockW;
+  let baseX=tower.baseX;
+  if(side==='player') baseX=190;
+  if(side==='enemy') baseX=WORLD_W-structW-190;
+  const dx=baseX-tower.baseX;
+  tower.baseX=baseX;
+  for(const b of tower.blocks) b.x+=dx;
+  for(const w of tower.wardens){
+    const b=tower.blocks.find(x=>x.id===w.blockId);
+    if(b){ w.x=b.x; w.y=b.y-b.h/2-w.radius; }
+    else w.x+=dx;
+  }
+  return tower;
 }
 
 /* ---------- 6. physics ---------- */
-function engineX(){ return 150; }
+function activeTowers(){
+  const towers=[];
+  if(mode==='duel' && duel && duel.playerTower) towers.push(duel.playerTower);
+  if(level) towers.push(level);
+  return towers;
+}
+function towerForShooter(shooter){
+  if(mode==='duel' && duel && duel.playerTower) return shooter==='bot' ? duel.playerTower : level;
+  return level;
+}
+function ownTowerForShooter(shooter){
+  if(mode==='duel' && duel && duel.playerTower) return shooter==='bot' ? level : duel.playerTower;
+  return null;
+}
+function engineX(shooter){
+  shooter=shooter||activeShooter||'player';
+  if(shooter==='bot') return WORLD_W-118;
+  return 118;
+}
 function engineY(){ return level?level.groundY-34:WORLD_H-160; }
+function shotAngleForShooter(angle, shooter){ return shooter==='bot' ? Math.PI-angle : angle; }
 
 function startRun(levelDef, seed, runMode){
   level=buildStructure(levelDef, seed);
@@ -414,7 +458,7 @@ function startRun(levelDef, seed, runMode){
   damageBy={player:0,bot:0}; wardensHarmedBy={player:0,bot:0};
   currentAmmo=AMMO_ORDER.find(k=>pools.player[k]>0)||'stonefall';
   runCompletedFlag=false; slowMo={active:false,t:0,dur:0}; slowMoFocus=null; shake=0;
-  mode=runMode; activeShooter='player'; settleWaitMs=0;
+  mode=runMode; activeShooter='player'; settleWaitMs=0; duel=null;
   refreshHud();
 }
 
@@ -430,30 +474,32 @@ function applyDamage(block,dmg,impX,impY){
 
 function destroyBlock(block){
   if(!block.alive) return;
+  const tower=block.tower||level;
   block.alive=false;
   spawnDebris(block);
   playCrumble();
-  for(const w of level.wardens){
+  for(const w of tower.wardens){
     if(w.blockId===block.id && w.alive && !w.harmed){
       w.harmed=true; wardensHarmedCount++; wardensHarmedBy[activeShooter]=(wardensHarmedBy[activeShooter]||0)+1;
       spawnWardenAlert(w); playWardenAlarm();
     }
   }
-  if(block.isKeystone) triggerSlowMo();
+  if(block.isKeystone) triggerSlowMo(tower);
 }
 
-function triggerSlowMo(){
+function triggerSlowMo(tower){
   if(reducedMotion){ toast(mode==='duel'?'Structure critical!':'The hold breaks!'); return; }
-  slowMoFocus={x:block_lastKeystoneX(), y:block_lastKeystoneY()};
+  slowMoFocus={x:block_lastKeystoneX(tower), y:block_lastKeystoneY(tower)};
   slowMo={active:true,t:0,dur:1.35};
   shake=Math.max(shake,18);
   playRumble();
 }
-function block_lastKeystoneX(){ const ks=level.blocks.find(b=>b.id===level.keystoneId); return ks?ks.x:WORLD_W*0.7; }
-function block_lastKeystoneY(){ const ks=level.blocks.find(b=>b.id===level.keystoneId); return ks?ks.y:WORLD_H*0.5; }
+function block_lastKeystoneX(tower){ tower=tower||level; const ks=tower.blocks.find(b=>b.id===tower.keystoneId); return ks?ks.x:WORLD_W*0.7; }
+function block_lastKeystoneY(tower){ tower=tower||level; const ks=tower.blocks.find(b=>b.id===tower.keystoneId); return ks?ks.y:WORLD_H*0.5; }
 
-function checkWardenHit(x,y,radius){
-  for(const w of level.wardens){
+function checkWardenHit(x,y,radius,tower){
+  tower=tower||level;
+  for(const w of tower.wardens){
     if(!w.alive || w.harmed) continue;
     if(Math.hypot(w.x-x,w.y-y) <= radius+w.radius){
       w.harmed=true; wardensHarmedCount++; wardensHarmedBy[activeShooter]=(wardensHarmedBy[activeShooter]||0)+1;
@@ -465,8 +511,9 @@ function checkWardenHit(x,y,radius){
 function fireProjectile(ammoKey, angle, power, shooter){
   const spec=AMMO[ammoKey];
   const speed=spec.minSpeed+power*(spec.maxSpeed-spec.minSpeed);
-  const p={ id:'p'+(projIdCounter++), kind:ammoKey, shooter, x:engineX(), y:engineY(),
-    vx:Math.cos(angle)*speed, vy:Math.sin(angle)*speed, alive:true, pierceLeft:spec.pierce, hitIds:new Set(), trail:[] };
+  const shotAngle=shotAngleForShooter(angle, shooter);
+  const p={ id:'p'+(projIdCounter++), kind:ammoKey, shooter, x:engineX(shooter), y:engineY(),
+    vx:Math.cos(shotAngle)*speed, vy:Math.sin(shotAngle)*speed, alive:true, pierceLeft:spec.pierce, hitIds:new Set(), trail:[] };
   projectiles.push(p);
   playLaunch(ammoKey);
   return p;
@@ -478,27 +525,29 @@ function stepProjectile(p,dt){
   p.vy+=GRAVITY*spec.gravityScale*dt;
   p.x+=p.vx*dt; p.y+=p.vy*dt;
   activeShooter=p.shooter;
-  for(const w of level.wardens){
+  const target=towerForShooter(p.shooter);
+  for(const w of target.wardens){
     if(w.alive && !w.harmed && Math.hypot(w.x-p.x,w.y-p.y) <= spec.radius+w.radius){
-      resolveProjectileHit(p, null); return;
+      resolveProjectileHit(p, null, target); return;
     }
   }
-  for(const b of level.blocks){
+  for(const b of target.blocks){
     if(!b.alive || p.hitIds.has(b.id)) continue;
     if(Math.abs(p.x-b.x) <= b.w/2+spec.radius && Math.abs(p.y-b.y) <= b.h/2+spec.radius){
-      resolveProjectileHit(p,b); if(!p.alive) return;
+      resolveProjectileHit(p,b,target); if(!p.alive) return;
     }
   }
-  if(p.y > level.groundY+40){ resolveProjectileHit(p,null); return; }
+  if(p.y > target.groundY+40){ resolveProjectileHit(p,null,target); return; }
   if(p.x<-80 || p.x>WORLD_W+80 || p.y<-400){ p.alive=false; }
 }
 
-function resolveProjectileHit(p, block){
+function resolveProjectileHit(p, block, target){
   const spec=AMMO[p.kind];
+  target=target||towerForShooter(p.shooter);
   activeShooter=p.shooter;
   spawnImpactSpark(p.x,p.y,spec.color);
   if(p.kind==='ember'){
-    for(const b of level.blocks){
+    for(const b of target.blocks){
       if(!b.alive) continue;
       const d=Math.hypot(b.x-p.x,b.y-p.y);
       if(d<=spec.splash){
@@ -508,7 +557,7 @@ function resolveProjectileHit(p, block){
         applyDamage(b, dmg, dx/len*spec.impulse*falloff, dy/len*spec.impulse*falloff-140);
       }
     }
-    checkWardenHit(p.x,p.y,spec.splash);
+    checkWardenHit(p.x,p.y,spec.splash,target);
     spawnExplosion(p.x,p.y); playExplosion(); shake=Math.max(shake,10);
     p.alive=false; return;
   }
@@ -516,7 +565,7 @@ function resolveProjectileHit(p, block){
     applyDamage(block, spec.damage, p.vx*spec.impulse/900, p.vy*spec.impulse/900 - 60);
     p.hitIds.add(block.id);
   }
-  checkWardenHit(p.x,p.y,spec.radius);
+  checkWardenHit(p.x,p.y,spec.radius,target);
   if(p.kind==='splinter' && p.pierceLeft>0 && block){
     p.pierceLeft--; p.vx*=0.74; p.vy*=0.74; shake=Math.max(shake,4);
   } else {
@@ -524,17 +573,18 @@ function resolveProjectileHit(p, block){
   }
 }
 
-function hasSupport(b){
+function hasSupport(b,tower){
+  tower=tower||b.tower||level;
   // Use the level's full (pre-shrink) grid cell size, not the block's own
   // rendered w/h (blocks are drawn ~8% smaller than their grid cell for
   // visual spacing) — mixing the two produced an inconsistent, blockH-
   // dependent epsilon that let taller blocks (e.g. Rustwatch Post's 54u
   // blocks) read as unsupported on frame one and touched off a slow,
   // never-settling sink across the whole structure.
-  const cellW=level.blockW, cellH=level.blockH;
-  const floor=level.groundY-cellH/2;
+  const cellW=tower.blockW, cellH=tower.blockH;
+  const floor=tower.groundY-cellH/2;
   if(b.y>=floor-6) return true;
-  for(const o of level.blocks){
+  for(const o of tower.blocks){
     if(o===b||!o.alive) continue;
     if(Math.abs(o.x-b.x) < cellW*0.7){
       const gap=(b.y+cellH/2)-(o.y-cellH/2);
@@ -544,15 +594,17 @@ function hasSupport(b){
   return false;
 }
 function updateRest(b){
-  if(b.resting){ if(!hasSupport(b)) b.resting=false; return; }
+  const tower=b.tower||level;
+  if(b.resting){ if(!hasSupport(b,tower)) b.resting=false; return; }
   // A generous velocity gate (rather than a near-zero one) so a block that
   // has genuine support but is still shedding a little collision jitter
   // settles within a frame or two instead of chattering indefinitely —
   // at these speeds the visible drift is sub-pixel at 60fps anyway.
-  if(Math.abs(b.vx)<22 && Math.abs(b.vy)<22 && hasSupport(b)){ b.resting=true; b.vx=0; b.vy=0; b.angVel=0; }
+  if(Math.abs(b.vx)<22 && Math.abs(b.vy)<22 && hasSupport(b,tower)){ b.resting=true; b.vx=0; b.vy=0; b.angVel=0; }
 }
-function resolveBlockCollisions(){
-  const alive=level.blocks.filter(b=>b.alive);
+function resolveBlockCollisions(tower){
+  tower=tower||level;
+  const alive=tower.blocks.filter(b=>b.alive);
   for(let i=0;i<alive.length;i++){
     for(let j=i+1;j<alive.length;j++){
       const a=alive[i], b=alive[j];
@@ -584,36 +636,39 @@ function resolveBlockCollisions(){
     }
   }
 }
-function stepWarden(w){
+function stepWarden(w,tower){
   if(!w.alive || !w.blockId) return;
-  const b=level.blocks.find(x=>x.id===w.blockId);
+  tower=tower||w.tower||level;
+  const b=tower.blocks.find(x=>x.id===w.blockId);
   if(b && b.alive){ w.x=b.x; w.y=b.y-b.h/2-w.radius; }
 }
 function stepPhysics(dt){
   for(const p of projectiles){ if(p.alive) stepProjectile(p,dt); }
   projectiles=projectiles.filter(p=>p.alive);
-  for(const b of level.blocks){
-    if(!b.alive) continue;
-    updateRest(b);
-    if(!b.resting){
-      b.vy+=GRAVITY*dt*0.62;
-      b.x+=b.vx*dt; b.y+=b.vy*dt;
-      b.angVel*=0.96; b.angle+=b.angVel*dt; b.vx*=0.995;
+  for(const tower of activeTowers()){
+    for(const b of tower.blocks){
+      if(!b.alive) continue;
+      updateRest(b);
+      if(!b.resting){
+        b.vy+=GRAVITY*dt*0.62;
+        b.x+=b.vx*dt; b.y+=b.vy*dt;
+        b.angVel*=0.96; b.angle+=b.angVel*dt; b.vx*=0.995;
+      }
     }
+    resolveBlockCollisions(tower);
+    for(const b of tower.blocks){
+      if(!b.alive) continue;
+      const floor=tower.groundY-b.h/2;
+      if(b.y>floor){ if(b.vy>40) shake=Math.max(shake,Math.min(6,b.vy/220)); b.y=floor; b.vy=0; b.vx*=0.82; if(Math.abs(b.vx)<3) b.vx=0; b.angVel*=0.7; }
+      if(b.hitFlash>0) b.hitFlash=Math.max(0,b.hitFlash-dt*3);
+    }
+    for(const w of tower.wardens) stepWarden(w,tower);
   }
-  resolveBlockCollisions();
-  for(const b of level.blocks){
-    if(!b.alive) continue;
-    const floor=level.groundY-b.h/2;
-    if(b.y>floor){ if(b.vy>40) shake=Math.max(shake,Math.min(6,b.vy/220)); b.y=floor; b.vy=0; b.vx*=0.82; if(Math.abs(b.vx)<3) b.vx=0; b.angVel*=0.7; }
-    if(b.hitFlash>0) b.hitFlash=Math.max(0,b.hitFlash-dt*3);
-  }
-  for(const w of level.wardens) stepWarden(w);
   stepParticles(dt);
 }
 function allSettled(){
   if(projectiles.length) return false;
-  for(const b of level.blocks) if(b.alive && !b.resting) return false;
+  for(const tower of activeTowers()) for(const b of tower.blocks) if(b.alive && !b.resting) return false;
   return true;
 }
 function ammoExhausted(pool){ return AMMO_ORDER.every(k=>(pool[k]||0)<=0); }
@@ -696,19 +751,22 @@ function drawGround(){
   ctx.fillStyle='#161c2c'; ctx.fillRect(0,y,WORLD_W,WORLD_H-y);
   ctx.fillStyle='#20293e'; ctx.fillRect(0,y,WORLD_W,6);
 }
-function drawEngine(){
-  const ex=engineX(), ey=engineY();
+function drawEngine(shooter){
+  shooter=shooter||'player';
+  const ex=engineX(shooter), ey=engineY();
   ctx.save(); ctx.translate(ex,ey);
   ctx.fillStyle='#3a2a18'; ctx.beginPath(); ctx.moveTo(-34,40); ctx.lineTo(34,40); ctx.lineTo(18,0); ctx.lineTo(-18,0); ctx.closePath(); ctx.fill();
-  const armAngle = dragging ? aim.angle : -0.9;
+  const baseAngle = dragging && shooter==='player' ? aim.angle : -0.55;
+  const armAngle = shotAngleForShooter(baseAngle, shooter);
   ctx.save(); ctx.rotate(armAngle+Math.PI/2);
   ctx.fillStyle='#c97f2f'; ctx.fillRect(-6,-58,12,64);
   ctx.fillStyle='#ffb454'; ctx.beginPath(); ctx.arc(0,-58,10,0,Math.PI*2); ctx.fill();
   ctx.restore();
   ctx.restore();
 }
-function drawBlocks(){
-  for(const b of level.blocks){
+function drawBlocks(tower){
+  tower=tower||level;
+  for(const b of tower.blocks){
     if(!b.alive) continue;
     const m=MATERIALS[b.material];
     ctx.save(); ctx.translate(b.x,b.y); ctx.rotate(b.angle);
@@ -723,8 +781,9 @@ function drawBlocks(){
     ctx.restore();
   }
 }
-function drawWardens(){
-  for(const w of level.wardens){
+function drawWardens(tower){
+  tower=tower||level;
+  for(const w of tower.wardens){
     ctx.save(); ctx.translate(w.x,w.y); ctx.globalAlpha = w.harmed?0.35:1;
     ctx.fillStyle = w.harmed? '#5c6480' : '#3fe0c5';
     ctx.beginPath(); ctx.arc(0,0,w.radius,0,Math.PI*2); ctx.fill();
@@ -732,6 +791,29 @@ function drawWardens(){
     ctx.restore();
   }
   ctx.globalAlpha=1;
+}
+function towerDamagePct(tower){
+  if(!tower || !tower.totalMaxHp) return 0;
+  let dead=0;
+  for(const b of tower.blocks) if(!b.alive) dead+=b.maxHp;
+  return dead/tower.totalMaxHp*100;
+}
+function drawTowerLabels(){
+  if(!(mode==='duel' && duel && duel.playerTower)) return;
+  const towers=[{tower:duel.playerTower,label:'YOUR TOWER',x:72,align:'left',color:'#3fe0c5'},{tower:level,label:'ENEMY TOWER',x:WORLD_W-72,align:'right',color:'#ff6a5d'}];
+  ctx.save();
+  ctx.font='900 18px system-ui';
+  for(const item of towers){
+    const pct=clamp(towerDamagePct(item.tower),0,100);
+    ctx.textAlign=item.align; ctx.fillStyle=item.color; ctx.fillText(item.label,item.x,112);
+    const barW=210, barH=12, bx=item.align==='left'?item.x:item.x-barW, by=126;
+    ctx.fillStyle='rgba(255,255,255,0.12)'; roundRect(bx,by,barW,barH,999); ctx.fill();
+    ctx.fillStyle=item.color; roundRect(bx,by,barW*(1-pct/100),barH,999); ctx.fill();
+    ctx.fillStyle='rgba(238,242,251,0.82)'; ctx.font='800 13px system-ui';
+    ctx.textAlign=item.align; ctx.fillText(Math.round(100-pct)+'% standing',item.x,156);
+    ctx.font='900 18px system-ui';
+  }
+  ctx.restore();
 }
 function drawProjectiles(){
   for(const p of projectiles){
@@ -773,7 +855,9 @@ function draw(){
   }
   drawSky();
   if(level){
-    drawGround(); drawEngine(); drawBlocks(); drawWardens(); drawProjectiles(); drawParticles();
+    drawGround();
+    if(mode==='duel' && duel && duel.playerTower){ drawBlocks(duel.playerTower); drawWardens(duel.playerTower); drawEngine('bot'); }
+    drawEngine('player'); drawBlocks(level); drawWardens(level); drawTowerLabels(); drawProjectiles(); drawParticles();
     if(dragging) drawTrajectoryPreview();
   }
   ctx.restore();
@@ -781,20 +865,23 @@ function draw(){
 }
 
 /* ---------- 10. trajectory prediction (shared: aim preview + bot AI) ---------- */
-function predictTrajectory(ammoKey, angle, power, maxSteps){
+function predictTrajectory(ammoKey, angle, power, maxSteps, shooter, target){
   maxSteps = maxSteps||240;
+  shooter=shooter||'player';
+  target=target||towerForShooter(shooter);
   const spec=AMMO[ammoKey];
   const speed=spec.minSpeed+power*(spec.maxSpeed-spec.minSpeed);
-  let x=engineX(), y=engineY(), vx=Math.cos(angle)*speed, vy=Math.sin(angle)*speed;
+  const shotAngle=shotAngleForShooter(angle, shooter);
+  let x=engineX(shooter), y=engineY(), vx=Math.cos(shotAngle)*speed, vy=Math.sin(shotAngle)*speed;
   const dt=1/60; const pts=[{x,y}];
   for(let i=0;i<maxSteps;i++){
     vy+=GRAVITY*spec.gravityScale*dt; x+=vx*dt; y+=vy*dt;
     pts.push({x,y});
-    for(const b of level.blocks){
+    for(const b of target.blocks){
       if(!b.alive) continue;
       if(Math.abs(x-b.x)<=b.w/2+spec.radius && Math.abs(y-b.y)<=b.h/2+spec.radius) return {points:pts, hitX:x, hitY:y, blockId:b.id};
     }
-    if(y>level.groundY+30) return {points:pts, hitX:x, hitY:level.groundY, blockId:null};
+    if(y>target.groundY+30) return {points:pts, hitX:x, hitY:target.groundY, blockId:null};
     if(x>WORLD_W+80 || x<-80) return {points:pts, hitX:x, hitY:y, blockId:null, offscreen:true};
   }
   return {points:pts, hitX:x, hitY:y, blockId:null};
@@ -810,12 +897,12 @@ function canAim(){
 }
 function updateDragFromEvent(e){
   const w=screenToWorld(e.clientX,e.clientY);
-  const ex=engineX(), ey=engineY();
+  const ex=engineX('player'), ey=engineY();
   const dx=w.x-ex, dy=w.y-ey;
   let ang=Math.atan2(dy,dx);
   ang=clamp(ang, -Math.PI*0.47, -Math.PI*0.03);
   const dist=Math.hypot(dx,dy);
-  const power=clamp(dist/520, 0.08, 1);
+  const power=clamp(dist/320, 0.18, 1);
   aim={angle:ang,power};
   showAimReadout(e.clientX,e.clientY,power);
   playDrawTension(power);
@@ -845,7 +932,7 @@ function showAimReadout(clientX,clientY,power){ aimReadout.hidden=false; aimPowe
 function hideAimReadout(){ aimReadout.hidden=true; }
 let readoutFadeTimer=0;
 function showAimReadoutWorld(){
-  const s=worldToScreen(engineX()+Math.cos(aim.angle)*160, engineY()+Math.sin(aim.angle)*160);
+  const s=worldToScreen(engineX('player')+Math.cos(aim.angle)*160, engineY()+Math.sin(aim.angle)*160);
   showAimReadout(s.x,s.y,aim.power);
   clearTimeout(readoutFadeTimer); readoutFadeTimer=setTimeout(hideAimReadout,900);
 }
@@ -1049,17 +1136,20 @@ function sumBudget(b){ return Object.values(b).reduce((s,n)=>s+n,0); }
 function startDuel(){
   const seed=(Date.now()^Math.floor(Math.random()*1e9))>>>0;
   startRun(DUEL_DEF, seed, 'duel');
-  duel={turn:'player', playerShots:sumBudget(DUEL_DEF.budget), botShots:sumBudget(DUEL_DEF.budget), ended:false};
-  hudLevelName.textContent='Duel Arena'; hudSub.textContent='Your turn — aim and fire';
+  level=buildTower(DUEL_DEF, seed, 'enemy');
+  duel={turn:'player', playerShots:sumBudget(DUEL_DEF.budget), botShots:sumBudget(DUEL_DEF.budget), ended:false, playerTower:buildTower(DUEL_DEF, seed^0x9e3779b9, 'player')};
+  aim={angle:-0.55,power:1};
+  hudLevelName.textContent='Duel Arena'; hudSub.textContent='Your tower vs their tower — your turn';
   clockWrap.hidden=true;
   showScreen_playFallback();
   playAmbientStart();
 }
 function botPickTarget(){
-  const alive=level.blocks.filter(b=>b.alive);
-  if(!alive.length) return {x:level.baseX+200,y:level.groundY-100};
+  const targetTower=(duel && duel.playerTower) ? duel.playerTower : level;
+  const alive=targetTower.blocks.filter(b=>b.alive);
+  if(!alive.length) return {x:targetTower.baseX+200,y:targetTower.groundY-100};
   const keystone=alive.find(b=>b.isKeystone);
-  const safe=alive.filter(b=>!level.wardens.some(w=>w.alive && !w.harmed && w.blockId===b.id));
+  const safe=alive.filter(b=>!targetTower.wardens.some(w=>w.alive && !w.harmed && w.blockId===b.id));
   const pool=safe.length?safe:alive;
   if(keystone && Math.random()<0.45 && safe.includes(keystone)) return {x:keystone.x,y:keystone.y};
   const pick=pool[Math.floor(Math.random()*pool.length)];
@@ -1078,7 +1168,7 @@ function botChooseShot(){
   for(let pw=0.35; pw<=1.001; pw+=0.09){
     for(let deg=12; deg<=76; deg+=6){
       const ang=-deg*Math.PI/180;
-      const pred=predictTrajectory(ammoKey,ang,pw,220);
+      const pred=predictTrajectory(ammoKey,ang,pw,220,'bot',duel&&duel.playerTower);
       const d=Math.hypot(pred.hitX-target.x,pred.hitY-target.y);
       if(!best||d<best.d) best={power:pw,angle:ang,d};
     }
@@ -1089,7 +1179,7 @@ function botChooseShot(){
 function duelShouldEnd(){
   const pDone=(duel.playerShots<=0) || !AMMO_ORDER.some(k=>pools.player[k]>0);
   const bDone=(duel.botShots<=0) || !AMMO_ORDER.some(k=>pools.bot[k]>0);
-  return damagePctNow()>=97 || (pDone && bDone);
+  return towerDamagePct(level)>=97 || towerDamagePct(duel.playerTower)>=97 || (pDone && bDone);
 }
 function waitUntilSettled(cb){
   const check=()=>{ if(allSettled() && !slowMo.active) cb(); else setTimeout(check,120); };
@@ -1115,9 +1205,8 @@ function scheduleDuelHandoff(){
 }
 function finishDuel(){
   if(runCompletedFlag) return; runCompletedFlag=true; duel.ended=true;
-  const totalHp=level.totalMaxHp||1;
-  const playerPct=clamp(damageBy.player/totalHp*100,0,100);
-  const botPct=clamp(damageBy.bot/totalHp*100,0,100);
+  const playerPct=clamp(towerDamagePct(level),0,100);
+  const botPct=clamp(towerDamagePct(duel.playerTower),0,100);
   const keystoneDown=!!(level.keystoneId && !level.blocks.find(b=>b.id===level.keystoneId && b.alive));
   const pStars=starsFor(playerPct, wardensHarmedBy.player);
   const pScore=scoreForRun({pct:playerPct, stars:pStars, wardensHarmed:wardensHarmedBy.player, shotsRemaining:0, keystoneDown});

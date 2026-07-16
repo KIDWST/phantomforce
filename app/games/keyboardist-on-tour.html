@@ -89,7 +89,7 @@
   <section class="scr" id="menuScreen" data-screen="menu">
     <p class="kicker">PhantomPlay Original</p>
     <h1>Keyboardist On Tour</h1>
-    <p class="sub">Hit every Pulse on the Threshold line, keep your Streak alive, and take an original synth act across three venues. All music below is synthesized live in your browser — no commercial tracks involved.</p>
+    <p class="sub">Type the changing letters as they hit the Threshold line, keep your Streak alive, and take an original synth act across three venues. All music below is synthesized live in your browser — no commercial tracks involved.</p>
     <div class="panel">
       <div class="row">
         <button class="btn primary" data-go="venues">Start Tour</button>
@@ -229,6 +229,7 @@ var host=function(type,data){ data=data||{}; var msg={source:'phantomplay-game',
 
 var MAX_LANES=5;
 var GLYPHS=['●','◆','▲','■','★'];
+var TYPESTREAM='TAK TOUR PHANTOMPLAY NEON CODE FAST GHOST KEYS GLIDE RIFF SOLO BASS DRUM CLEAN SHIP BUILD WIN ';
 var COLORS_STD=['#ff2fb0','#33e0ff','#ffd23f','#7cff6b','#b98bff'];
 var COLORS_CB=['#E69F00','#56B4E9','#009E73','#F0E442','#CC79A7'];
 var DEFAULT_KEYS4=['KeyD','KeyF','KeyJ','KeyK'];
@@ -274,6 +275,21 @@ var ARENA_OVERDRIVE=chartFromBars('arena-overdrive','Arena Overdrive Set','Phant
 
 var TRACKS=[NEON_WAREHOUSE,ROOFTOP_STATIC,ARENA_OVERDRIVE];
 function trackById(id){ for(var i=0;i<TRACKS.length;i++) if(TRACKS[i].id===id) return TRACKS[i]; return null; }
+function cleanTypeChars(s){ return String(s||'').toUpperCase().replace(/[^A-Z0-9]/g,''); }
+function charAtStream(idx){ var s=cleanTypeChars(TYPESTREAM); return s[idx%s.length]||'A'; }
+function buildTypingNotes(track){
+  var notes=[], lanes=laneCountFor(track);
+  var step=Math.max(92, Math.round(step16(track.bpm)*0.88));
+  var start=track.offsetMs||900, end=Math.max(start+1000, track.lengthMs-950);
+  var lanePattern=lanes===5?[0,1,2,3,4,3,2,1,0,2,4,2]:[0,1,2,3,2,1,0,2];
+  var i=0;
+  for(var t=start;t<end;t+=step){
+    var lane=lanePattern[i%lanePattern.length];
+    notes.push({t:Math.round(t), lane:lane, ch:charAtStream(i+lane*3)});
+    i++;
+  }
+  return notes;
+}
 
 // Backing-loop patterns (independent of the note chart — just the beat
 // this track's synth band is playing under the Pulses).
@@ -449,8 +465,8 @@ function toast(msg){
 
 // ---- Tutorial ----
 var TUT_STEPS=[
-  {t:'Welcome to the tour', b:'Pulses fall down each Channel. Press that Channel\'s key exactly as the Pulse crosses the glowing Threshold line near the bottom.'},
-  {t:'Your Channels', b:'Default keys are D, F, J, K (the Arena Overdrive venue adds a 5th channel on Space). Every Channel has its own color AND its own shape/glyph, so the game stays readable if you are colorblind.'},
+  {t:'Welcome to the tour', b:'Letters pour down each Channel. Type the visible letter exactly as it crosses the glowing Threshold line near the bottom.'},
+  {t:'Your Channels', b:'You can type the changing letters directly. The old lane keys still work as a backup: D, F, J, K (Arena Overdrive adds Space).'},
   {t:'Judgment & Streak', b:'Timing is graded Perfect, Great, Good, OK, or Miss. Chaining hits builds your Streak, which raises a score multiplier — a Miss resets the Streak but not your run.'},
   {t:'Pause & customize', b:'Press P or Esc any time to pause. Settings lets you remap every key, adjust volume, flip on a colorblind-safe palette, and reduce motion.'},
   {t:'Modes', b:'Tour mode unlocks new venues as you finish each one. Soundcheck is practice with adjustable note speed and never touches your Tour saves. Session Player is an AI rival you can race in solo play. Tour Duel syncs a countdown with everyone in a PhantomPlay room.'}
@@ -567,8 +583,9 @@ function startTrack(track, opts){
   opts=opts||{};
   var lanes=laneCountFor(track);
   var laneQueues=[]; for(var l=0;l<lanes;l++) laneQueues.push([]);
-  for(var i=0;i<track.notes.length;i++){ laneQueues[track.notes[i].lane].push({t:track.notes[i].t, judged:false}); }
-  var totalNotes=track.notes.length;
+  var typingNotes=buildTypingNotes(track);
+  for(var i=0;i<typingNotes.length;i++){ laneQueues[typingNotes[i].lane].push({t:typingNotes[i].t, ch:typingNotes[i].ch, judged:false}); }
+  var totalNotes=typingNotes.length;
   SESS={
     track:track, lanes:lanes, laneQueues:laneQueues, totalNotes:totalNotes,
     practice: !!opts.practice, duel: !!opts.duel,
@@ -588,7 +605,7 @@ function startTrack(track, opts){
   startBacking(track);
   requestAnimationFrame(gameLoop);
 }
-function cloneQueues(qs){ var out=[]; for(var i=0;i<qs.length;i++){ var arr=[]; for(var j=0;j<qs[i].length;j++) arr.push({t:qs[i][j].t,judged:false}); out.push(arr); } return out; }
+function cloneQueues(qs){ var out=[]; for(var i=0;i<qs.length;i++){ var arr=[]; for(var j=0;j<qs[i].length;j++) arr.push({t:qs[i][j].t,ch:qs[i][j].ch,judged:false}); out.push(arr); } return out; }
 
 function nowMs(){ return performance.now()-SESS.startPerf-SESS.pausedMs; }
 
@@ -607,6 +624,27 @@ function judgeHit(lane, judgeTime){
   applyJudgment(g);
   hitBlip(g);
   popupJudgment(g, lane);
+}
+function judgeTypedChar(ch, judgeTime){
+  ch=String(ch||'').toUpperCase();
+  var bestLane=-1, bestIdx=-1, bestDiff=1e9;
+  for(var lane=0;lane<SESS.lanes;lane++){
+    var q=SESS.laneQueues[lane];
+    for(var i=0;i<q.length;i++){
+      var n=q[i];
+      if(n.judged) continue;
+      var diff=judgeTime-n.t;
+      if(diff < -WIN_OK) break;
+      if(n.ch===ch && Math.abs(diff)<Math.abs(bestDiff)){ bestDiff=diff; bestIdx=i; bestLane=lane; }
+    }
+  }
+  if(bestLane<0 || Math.abs(bestDiff)>WIN_OK) return false;
+  var g=classify(bestDiff);
+  SESS.laneQueues[bestLane][bestIdx].judged=true;
+  applyJudgment(g);
+  hitBlip(g);
+  popupJudgment(g, bestLane);
+  return true;
 }
 function applyJudgment(g){
   SESS.judgedCount++;
@@ -712,7 +750,7 @@ function drawStage(t){
       cx.fillStyle='#0b0716';
       cx.font=(r*1.1)+'px system-ui, sans-serif';
       cx.textAlign='center'; cx.textBaseline='middle';
-      cx.fillText(GLYPHS[lane], cxp, y+1*dpr);
+      cx.fillText(n.ch||GLYPHS[lane], cxp, y+1*dpr);
     }
     // key indicator at threshold
     cx.fillStyle='#150c26aa';
@@ -910,6 +948,9 @@ function startDuelScoreReporting(){
 window.addEventListener('keydown',function(e){
   if(rebindListener) return; // remap capture takes priority
   if(!document.querySelector('[data-screen="play"]').hidden){
+    if(SESS && !SESS.paused && !SESS.finished && e.key && /^[a-z0-9]$/i.test(e.key)){
+      if(judgeTypedChar(e.key, nowMs())){ e.preventDefault(); return; }
+    }
     var keys=SESS?keysFor(SESS.track):DEFAULT_KEYS4;
     var lane=keys.indexOf(e.code);
     if(lane>=0){ e.preventDefault(); if(SESS && !SESS.paused && !SESS.finished) judgeHit(lane, nowMs()); return; }

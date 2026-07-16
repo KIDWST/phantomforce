@@ -26,13 +26,18 @@ const outsider: AccessSession = { id: "outsider", userId: "outsider", label: "Ou
 
 try {
   const play = await import("../src/phantom-ai/phantomplay.js");
+  const v2 = await import("../src/phantom-ai/phantomplay-v2.js");
+  const flagship = await import("../src/phantom-ai/phantomplay-flagship.js");
+  if (v2.phantomPlayV2Enabled()) v2.registerPhantomPlayV2Games();
+  flagship.registerPhantomPlayFlagshipGames();
 
   const initial = await play.getPhantomPlaySnapshot(playerA, { entitled: true, dailyMinuteLimit: 30, canSubmitGames: false });
-  assert(initial.catalog.length === 20, "The full built-in game catalog (8 flagship + 12 classic) should ship.");
+  assert(initial.catalog.length >= 28, "The full expanded built-in game catalog should ship.");
   assert(play.PHANTOMPLAY_ENGINE.version === "2.0-large-map" && play.PHANTOMPLAY_ENGINE.saveStateBytes >= 262_144, "PhantomPlay should expose a large-map-capable engine profile.");
   assert(initial.engine?.largeMap?.streaming === true, "Snapshots should publish large-map engine capabilities to the player shell.");
   const builtInIds = new Set(initial.catalog.map((game) => game.id));
-  for (const gameId of ["neon-drift", "signal-match", "focus-stack", "word-weld", "reflex-grid", "penalty-kick", "rift-frenzy", "serpent-surge"]) {
+  assert(builtInIds.size === initial.catalog.length, "Built-in game IDs should not duplicate after catalog registration.");
+  for (const gameId of ["neon-drift", "signal-match", "focus-stack", "word-weld", "reflex-grid", "penalty-kick", "rift-frenzy", "serpent-surge", "color-rush", "tile-flow", "tower-tactics", "breath-pacer", "court-vision", "pixel-bloom", "circuit-serpent", "echo-sequence", "signal-sweeper", "neon-breaker", "type-storm", "logic-lights", "phantom-rumble", "sudoku-signal", "cubetown", "skyguard-arena", "keyboardist-on-tour", "tidefront-tactics", "kingdom-breakers"]) {
     assert(builtInIds.has(gameId), `${gameId} should ship as an owned built-in game.`);
   }
   assert(initial.catalog.every((game) => game.kind === "built_in"), "No fake community releases should be seeded.");
@@ -57,7 +62,7 @@ try {
   const afterReplay = await play.getPhantomPlaySnapshot(playerA, { entitled: true, dailyMinuteLimit: 30 });
   assert(afterReplay.history[0]?.score === 420 && afterReplay.history[0]?.seconds === 85, "History should keep the best score and total play time across sessions.");
 
-  const privateRoom = await play.createPhantomPlayRoom(classmateA, { gameId: "signal-match", mode: "classroom", maxPlayers: 4 }, { entitled: true });
+  const privateRoom = await play.createPhantomPlayRoom(classmateA, { gameId: "neon-drift", mode: "classroom", maxPlayers: 4 }, { entitled: true });
   assert(privateRoom.room.code.length >= 6, "Private rooms should issue a short join code.");
   assert(privateRoom.room.mode === "classroom" && privateRoom.room.safety.contentPolicy === "everyone_rating_required", "Classroom rooms should enforce Everyone-rated games.");
   assert(privateRoom.room.safety.publicDiscovery === false && privateRoom.room.safety.directPeerConnection === false && privateRoom.room.safety.inboundDevicePorts === false, "Private rooms must avoid public discovery and direct device exposure.");
@@ -183,7 +188,7 @@ try {
   assert(clientCatalog.statusCode === 200 && clientCatalog.json().access.canModerate === false, "Client accounts must not receive moderation access.");
   const clientPlay = await app.inject({ method: "POST", url: "/api/phantomplay/plays", headers: { Authorization: `Bearer ${clientToken}` }, payload: { gameId: "signal-match" } });
   assert(clientPlay.statusCode === 403 && clientPlay.json().error === "read_only_plan", "The existing free-plan write boundary must block a legacy read-only client.");
-  const ownerRoom = await app.inject({ method: "POST", url: "/api/phantomplay/rooms", headers: { Authorization: `Bearer ${ownerToken}` }, payload: { tenantId: "client-sports-demo", gameId: "signal-match", mode: "classroom", maxPlayers: 4 } });
+  const ownerRoom = await app.inject({ method: "POST", url: "/api/phantomplay/rooms", headers: { Authorization: `Bearer ${ownerToken}` }, payload: { tenantId: "client-sports-demo", gameId: "neon-drift", mode: "classroom", maxPlayers: 4 } });
   assert(ownerRoom.statusCode === 200 && ownerRoom.json().room.safety.publicDiscovery === false, "The private room API should create non-public rooms for privileged local operators.");
   const ownerRoomCode = ownerRoom.json().room.code;
   const ownerRoomFetch = await app.inject({ method: "GET", url: `/api/phantomplay/rooms/${ownerRoomCode}?tenant_id=client-sports-demo`, headers: { Authorization: `Bearer ${ownerToken}` } });

@@ -3,6 +3,7 @@ import "./load-env.js";
 import { execFileSync } from "node:child_process";
 
 import cors from "@fastify/cors";
+import { Prisma } from "@prisma/client";
 import {
   ACTION_SCHEMAS,
   ActionSchema,
@@ -58,22 +59,31 @@ import {
   DB_SESSION_PREFIX,
   acceptInvitation,
   asDatabaseSession,
+  beginLoginWithPassword,
   canAccessOrg,
   canManageOrg,
   createInvitation,
   createOrganization,
+  createSelfServeAccount,
+  confirmTwoFactorSetup,
+  disableTwoFactor,
   initializeDatabaseAuthState,
   listInvitations,
   listOrgAuditEvents,
   listOrgMembers,
   listOrganizationsForSession,
-  loginWithPassword,
+  requestPasswordReset,
+  requestUsernameReminder,
+  regenerateTwoFactorBackupCodes,
+  resetPasswordWithToken,
   removeMember,
   resolveDatabaseSession,
   revokeDatabaseSession,
   revokeInvitation,
+  startTwoFactorSetup,
   switchActiveOrg,
   updateMemberRole,
+  verifyTwoFactorLogin,
 } from "./access/user-accounts.js";
 import {
   assignOrgPlan,
@@ -129,6 +139,7 @@ import { getBillingProviderStatus } from "./access/billing-provider.js";
 import { buildDeploymentModelStatus } from "./access/deployment-model.js";
 import { paywallPreHandler } from "./access/paywall-guard.js";
 import { getPaywallDecision } from "./access/paywall.js";
+import { prisma } from "./access/prisma-runtime.js";
 import { listSubscriptions, setSubscription } from "./access/subscription-store.js";
 import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import { createReadStream, existsSync } from "node:fs";
@@ -1195,9 +1206,27 @@ app.get("/session", async (request, reply) => {
    regardless of what the frontend shows. */
 
 const DatabaseLoginSchema = z.object({
-  email: z.string().email().max(200),
+  email: z.string().max(200),
   password: z.string().min(1).max(200),
 });
+
+const SignupSchema = z.object({
+  email: z.string().email().max(200),
+  username: z.string().min(3).max(32).optional(),
+  password: z.string().min(8).max(200),
+  name: z.string().max(120).optional(),
+  organizationName: z.string().max(120).optional(),
+});
+
+const ForgotUsernameSchema = z.object({ email: z.string().email().max(200) });
+const ForgotPasswordSchema = z.object({ identifier: z.string().min(3).max(200) });
+const ResetPasswordSchema = z.object({ token: z.string().min(10).max(240), password: z.string().min(8).max(200) });
+const TwoFactorVerifySchema = z.object({ challengeToken: z.string().min(10).max(240), code: z.string().min(6).max(20) });
+const TwoFactorCodeSchema = z.object({ code: z.string().min(6).max(20) });
+
+function databaseAuthDisabled(reply: FastifyReply) {
+  return reply.code(403).send({ ok: false, error: "Database auth is disabled.", auth: getAccessAuthConfiguration() });
+}
 
 app.post("/auth/login", async (request, reply) => {
   const authConfiguration = getAccessAuthConfiguration();
@@ -1208,11 +1237,21 @@ app.post("/auth/login", async (request, reply) => {
   if (!parsed.success) {
     return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
   }
-  const session = await loginWithPassword(parsed.data.email, parsed.data.password);
-  if (!session) {
+  const login = await beginLoginWithPassword(parsed.data.email, parsed.data.password);
+  if (!login) {
     /* uniform delay-free refusal; no user-exists oracle */
     return reply.code(401).send({ ok: false, error: "Invalid email or password." });
   }
+  if (login.requires2fa) {
+    return {
+      ok: true,
+      requires2fa: true,
+      challengeToken: login.challengeToken,
+      expiresAt: login.expiresAt,
+      user: login.user,
+    };
+  }
+  const session = login.session;
   const publicHost = requestPublicHost(request);
   if (!canUseSessionOnPublicHost(publicHost, session)) {
     await revokeDatabaseSession(session.authSessionId);
@@ -1227,6 +1266,54 @@ app.post("/auth/login", async (request, reply) => {
     return reply.code(500).send({ ok: false, error: "Token minting unavailable." });
   }
   return { ok: true, ...token, session };
+});
+
+app.post("/auth/2fa/verify", async (request, reply) => {
+  if (!getAccessAuthConfiguration().databaseAuthEnabled) return databaseAuthDisabled(reply);
+  const parsed = TwoFactorVerifySchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  const session = await verifyTwoFactorLogin(parsed.data);
+  if (!session) return reply.code(401).send({ ok: false, error: "Invalid or expired 2FA challenge." });
+  const publicHost = requestPublicHost(request);
+  if (!canUseSessionOnPublicHost(publicHost, session)) {
+    await revokeDatabaseSession(session.authSessionId);
+    return reply.code(403).send({ ok: false, error: "This account is not available on this public host.", host: publicHost || "local" });
+  }
+  const token = mintDatabaseSessionToken(session.id);
+  if (!token) return reply.code(500).send({ ok: false, error: "Token minting unavailable." });
+  return { ok: true, ...token, session };
+});
+
+app.post("/auth/signup", async (request, reply) => {
+  if (!getAccessAuthConfiguration().databaseAuthEnabled) return databaseAuthDisabled(reply);
+  const parsed = SignupSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  const result = await createSelfServeAccount(parsed.data);
+  if (!result.ok) return reply.code(409).send({ ok: false, error: result.error });
+  return { ok: true, userId: result.userId, orgId: result.orgId, next: "Sign in at /auth/login." };
+});
+
+app.post("/auth/forgot-username", async (request, reply) => {
+  if (!getAccessAuthConfiguration().databaseAuthEnabled) return databaseAuthDisabled(reply);
+  const parsed = ForgotUsernameSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  return await requestUsernameReminder(parsed.data.email);
+});
+
+app.post("/auth/forgot-password", async (request, reply) => {
+  if (!getAccessAuthConfiguration().databaseAuthEnabled) return databaseAuthDisabled(reply);
+  const parsed = ForgotPasswordSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  return await requestPasswordReset(parsed.data.identifier);
+});
+
+app.post("/auth/reset-password", async (request, reply) => {
+  if (!getAccessAuthConfiguration().databaseAuthEnabled) return databaseAuthDisabled(reply);
+  const parsed = ResetPasswordSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  const result = await resetPasswordWithToken(parsed.data);
+  if (!result.ok) return reply.code(400).send({ ok: false, error: result.error });
+  return { ok: true, next: "Sign in with your new password." };
 });
 
 app.post("/auth/logout", async (request, reply) => {
@@ -1254,8 +1341,10 @@ app.get("/auth/me", async (request, reply) => {
     user: {
       id: dbSession.userId,
       email: dbSession.email,
+      username: dbSession.username,
       name: dbSession.label,
       isSuperAdmin: dbSession.isSuperAdmin,
+      twoFactorEnabled: dbSession.twoFactorEnabled,
     },
     activeOrg: dbSession.orgId
       ? {
@@ -1276,6 +1365,42 @@ app.get("/auth/me", async (request, reply) => {
         }
       : null,
   };
+});
+
+app.post("/auth/2fa/setup", async (request, reply) => {
+  const dbSession = requireDatabaseSession(request, reply);
+  if (!dbSession) return reply;
+  return await startTwoFactorSetup(dbSession);
+});
+
+app.post("/auth/2fa/confirm", async (request, reply) => {
+  const dbSession = requireDatabaseSession(request, reply);
+  if (!dbSession) return reply;
+  const parsed = TwoFactorCodeSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  const result = await confirmTwoFactorSetup(dbSession, parsed.data.code);
+  if (!result.ok) return reply.code(400).send({ ok: false, error: result.error });
+  return { ok: true, backupCodes: result.backupCodes };
+});
+
+app.post("/auth/2fa/recovery-codes", async (request, reply) => {
+  const dbSession = requireDatabaseSession(request, reply);
+  if (!dbSession) return reply;
+  const parsed = TwoFactorCodeSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  const result = await regenerateTwoFactorBackupCodes(dbSession, parsed.data.code);
+  if (!result.ok) return reply.code(400).send({ ok: false, error: result.error });
+  return { ok: true, backupCodes: result.backupCodes };
+});
+
+app.post("/auth/2fa/disable", async (request, reply) => {
+  const dbSession = requireDatabaseSession(request, reply);
+  if (!dbSession) return reply;
+  const parsed = TwoFactorCodeSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  const result = await disableTwoFactor(dbSession, parsed.data.code);
+  if (!result.ok) return reply.code(400).send({ ok: false, error: result.error });
+  return { ok: true };
 });
 
 const SwitchOrgSchema = z.object({ orgId: z.string().min(1).max(120) });
@@ -1463,6 +1588,26 @@ async function safeStat(pathname: string) {
 
 function classifyLocalPath(pathname: string, fallbackKind: LocalAssetKind = "other") {
   return LOCAL_ASSET_MIME[extname(pathname).toLowerCase()] || { kind: fallbackKind, mime: "application/octet-stream", previewable: false };
+}
+
+function isLocalAssetEditorToolPackage(asset: LocalAssetRecord) {
+  const haystack = [
+    asset.id,
+    asset.title,
+    asset.name,
+    asset.category,
+    asset.app,
+    asset.relativePath,
+    asset.safety,
+    ...(asset.tags || []),
+  ].join(" ").toLowerCase();
+  if (/\b(installer|setup|application installer|windows installer|mac installer|program installer|installers_do_not_run)\b/.test(haystack)) return true;
+  if (/\b(davinci resolve|blackmagic design|adobe premiere|premiere pro|after effects|final cut pro|avid media composer)\b/.test(haystack) && /\b(installer|setup|studio|application|windows)\b/.test(haystack)) return true;
+  return false;
+}
+
+function visibleLocalAssets(index: LocalAssetIndex) {
+  return index.assets.filter((asset) => !isLocalAssetEditorToolPackage(asset));
 }
 
 async function findPreviewFile(root: string, dir: string, depth = 0): Promise<string | null> {
@@ -1702,11 +1847,12 @@ app.get("/phantom-ai/local-assets/status", async (request, reply) => {
   const session = requireAccessSession(request, reply);
   if (!session) return reply;
   const index = await loadLocalAssetIndex(false);
-  const counts = index.assets.reduce<Record<string, number>>((memo, asset) => {
+  const visibleAssets = visibleLocalAssets(index);
+  const counts = visibleAssets.reduce<Record<string, number>>((memo, asset) => {
     memo[asset.kind] = (memo[asset.kind] || 0) + 1;
     return memo;
   }, {});
-  return { ok: index.ok, root_label: index.rootLabel, source: index.source, count: index.count, counts, generated_at: index.generatedAt, truncated: index.truncated };
+  return { ok: index.ok, root_label: index.rootLabel, source: index.source, count: visibleAssets.length, counts, generated_at: index.generatedAt, truncated: index.truncated };
 });
 
 app.get("/phantom-ai/local-assets", async (request, reply) => {
@@ -1720,11 +1866,12 @@ app.get("/phantom-ai/local-assets", async (request, reply) => {
   const search = String(q.search || "").trim().toLowerCase();
   const kind = String(q.kind || "all").trim().toLowerCase();
   const limit = Math.max(1, Math.min(120, Number(q.limit || 36) || 36));
-  const assets = index.assets
+  const visibleAssets = visibleLocalAssets(index);
+  const assets = visibleAssets
     .filter((asset) => kind === "all" || asset.kind === kind || asset.category.toLowerCase().includes(kind))
     .filter((asset) => !search || [asset.title, asset.name, asset.category, asset.app, asset.relativePath, asset.tags.join(" ")].join(" ").toLowerCase().includes(search))
     .slice(0, limit);
-  return { ok: index.ok, detail: (index as { detail?: string }).detail, root_label: index.rootLabel, source: index.source, count: index.count, returned: assets.length, truncated: index.truncated, assets: assets.map(publicLocalAsset) };
+  return { ok: index.ok, detail: (index as { detail?: string }).detail, root_label: index.rootLabel, source: index.source, count: visibleAssets.length, returned: assets.length, truncated: index.truncated, assets: assets.map(publicLocalAsset) };
 });
 
 app.get("/phantom-ai/local-assets/:assetId/file", async (request, reply) => {
@@ -1751,7 +1898,7 @@ app.post("/phantom-ai/local-assets/refresh", async (request, reply) => {
   const session = requireAccessSession(request, reply);
   if (!session) return reply;
   const index = await loadLocalAssetIndex(true);
-  return { ok: index.ok, root_label: index.rootLabel, source: index.source, count: index.count, generated_at: index.generatedAt, truncated: index.truncated };
+  return { ok: index.ok, root_label: index.rootLabel, source: index.source, count: visibleLocalAssets(index).length, generated_at: index.generatedAt, truncated: index.truncated };
 });
 
 app.get("/orgs", async (request, reply) => {
@@ -1769,6 +1916,364 @@ app.post("/orgs", async (request, reply) => {
   if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
   const org = await createOrganization({ name: parsed.data.name, actor: dbSession });
   return { ok: true, org: { id: org.id, name: org.name } };
+});
+
+const CrmSettingsSchema = z.object({
+  dailyPullTarget: z.number().int().min(1).max(2000).default(5),
+  sourceMode: z.string().trim().min(1).max(60).default("manual"),
+  notes: z.string().trim().max(1000).optional().default(""),
+  brain: z.record(z.unknown()).optional(),
+});
+
+const CrmContactSchema = z.object({
+  name: z.string().trim().min(1).max(160),
+  organization: z.string().trim().max(180).optional().default(""),
+  email: z.string().trim().email().max(200).or(z.literal("")).optional().default(""),
+  phone: z.string().trim().max(80).optional().default(""),
+  status: z.enum(["new", "follow-up", "proposal", "won", "lost"]).optional().default("new"),
+  type: z.string().trim().max(60).optional().default("prospect"),
+  value: z.number().int().min(0).max(100000000).optional().default(0),
+  nextStep: z.string().trim().max(600).optional().default(""),
+  notes: z.string().trim().max(4000).optional().default(""),
+  source: z.string().trim().max(160).optional().default("Manual CRM"),
+  website: z.string().trim().max(400).optional().default(""),
+  avatarUrl: z.string().trim().max(800).optional().default(""),
+  socials: z.record(z.string().trim().max(300)).optional().default({}),
+  tags: z.array(z.string().trim().min(1).max(60)).max(30).optional().default([]),
+  fitScore: z.number().int().min(0).max(100).nullable().optional(),
+  qualification: z.array(z.string().trim().min(1).max(240)).max(20).optional().default([]),
+  outreach: z.string().trim().max(1200).optional().default(""),
+  crmStage: z.string().trim().max(80).optional().default("Prospect"),
+  dueAt: z.string().datetime().nullable().optional(),
+  lastTouchAt: z.string().datetime().nullable().optional(),
+});
+
+const CrmContactPatchSchema = CrmContactSchema.partial();
+const CrmPullSchema = z.object({
+  count: z.number().int().min(1).max(2000),
+  prompt: z.string().trim().max(1000).optional().default(""),
+  audience: z.string().trim().max(160).optional().default("local businesses"),
+  source: z.string().trim().max(120).optional().default("Phantom CRM Pull"),
+});
+
+const CRM_PULL_ARCHETYPES = [
+  { match: /\b(gym|fitness|trainer|coach|boxing|martial)\b/i, audience: "independent gym", tags: ["fitness", "local"], value: 950, social: "instagram" },
+  { match: /\b(school|academy|college|booster|team|athletic)\b/i, audience: "school program", tags: ["schools", "community"], value: 1250, social: "facebook" },
+  { match: /\b(creator|influencer|podcast|streamer|youtube|tiktok|instagram)\b/i, audience: "creator", tags: ["creator", "content"], value: 1100, social: "tiktok" },
+  { match: /\b(restaurant|bar|venue|food|coffee|cafe)\b/i, audience: "restaurant", tags: ["hospitality", "local"], value: 900, social: "instagram" },
+  { match: /\b(contractor|roofer|plumber|hvac|home service|landscap)\b/i, audience: "home service company", tags: ["home-services", "local"], value: 1500, social: "facebook" },
+  { match: /\b(law|clinic|dental|medical|professional)\b/i, audience: "professional service office", tags: ["professional-services"], value: 1750, social: "linkedin" },
+] as const;
+
+function crmDb(reply: FastifyReply) {
+  if (prisma) return prisma;
+  reply.code(503).send({ ok: false, error: "crm_database_unavailable", reason: "DATABASE_URL is required for org-scoped CRM." });
+  return undefined;
+}
+
+function crmContactView(contact: Awaited<ReturnType<NonNullable<typeof prisma>["contact"]["findMany"]>>[number]) {
+  return {
+    id: contact.id,
+    ws: contact.orgId,
+    name: contact.name,
+    company: contact.organization || "",
+    organization: contact.organization || "",
+    email: contact.email || "",
+    phone: contact.phone || "",
+    status: contact.status,
+    type: contact.type,
+    value: contact.value,
+    next: contact.nextStep || "",
+    nextStep: contact.nextStep || "",
+    notes: contact.notes || "",
+    source: contact.source || "CRM",
+    website: contact.website || "",
+    avatarUrl: contact.avatarUrl || "",
+    socials: contact.socials || {},
+    tags: contact.tags || [],
+    fitScore: contact.fitScore,
+    qualification: contact.qualification || [],
+    outreach: contact.outreach || "",
+    crmStage: contact.crmStage || "Prospect",
+    due: contact.dueAt?.toISOString() || "",
+    lastTouch: contact.lastTouchAt?.toISOString() || "",
+    createdAt: contact.createdAt.toISOString(),
+    updatedAt: contact.updatedAt.toISOString(),
+  };
+}
+
+function crmBrainPackageView(args: {
+  orgId: string;
+  settings: Awaited<ReturnType<NonNullable<typeof prisma>["crmSettings"]["upsert"]>>;
+  contacts: Awaited<ReturnType<NonNullable<typeof prisma>["contact"]["findMany"]>>;
+}) {
+  const contacts = args.contacts.map(crmContactView);
+  const savedTags = [...new Set(contacts.flatMap((contact) => contact.tags || []))].slice(0, 80);
+  return {
+    ok: true,
+    package: {
+      kind: "phantomforce_org_brain_package",
+      version: 1,
+      orgId: args.orgId,
+      storage: {
+        hiddenInsideApp: true,
+        userFacingName: "PhantomForce",
+        suggestedPath: ".phantomforce/sys/brain/org-brain.json",
+      },
+      crm: {
+        settings: {
+          dailyPullTarget: args.settings.dailyPullTarget,
+          sourceMode: args.settings.sourceMode,
+          notes: args.settings.notes || "",
+          brain: args.settings.brain || { kind: "phantomforce_org_crm_brain", version: 1 },
+        },
+        contactCount: contacts.length,
+        contacts,
+      },
+      obsidianBrain: {
+        type: "workspace_memory_vault",
+        private: true,
+        collections: ["crm_contacts", "client_notes", "follow_up_context", "social_profiles"],
+        index: {
+          tags: savedTags,
+          contacts: contacts.map((contact) => ({
+            id: contact.id,
+            title: contact.company || contact.name,
+            status: contact.status,
+            socials: contact.socials,
+            next: contact.next,
+          })),
+        },
+      },
+      hermesBrain: {
+        type: "operator_execution_memory",
+        private: true,
+        rules: [
+          "Scope every memory lookup to orgId before answering or acting.",
+          "Never send outreach externally without explicit approval.",
+          "Use CRM contacts, socials, notes, and dailyPullTarget as working context.",
+        ],
+        currentIntent: args.settings.sourceMode === "daily" ? "daily_crm_pull" : "manual_crm",
+        dailyPullTarget: args.settings.dailyPullTarget,
+      },
+      redaction: {
+        includesSecrets: false,
+        includesSessionTokens: false,
+        includesPasswords: false,
+      },
+      exportedAt: new Date().toISOString(),
+    },
+  };
+}
+
+function crmContactWrite(data: z.infer<typeof CrmContactPatchSchema>) {
+  const write: Record<string, unknown> = {};
+  for (const key of ["name", "phone", "status", "type", "value", "nextStep", "notes", "source", "website", "avatarUrl", "socials", "tags", "fitScore", "qualification", "outreach", "crmStage"] as const) {
+    if (data[key] !== undefined) write[key] = data[key];
+  }
+  if (data.organization !== undefined) write.organization = data.organization || null;
+  if (data.email !== undefined) write.email = data.email || null;
+  if (data.dueAt !== undefined) write.dueAt = data.dueAt ? new Date(data.dueAt) : null;
+  if (data.lastTouchAt !== undefined) write.lastTouchAt = data.lastTouchAt ? new Date(data.lastTouchAt) : null;
+  return write;
+}
+
+function slugText(value: string) {
+  return String(value || "lead").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "lead";
+}
+
+function crmPullPlan(input: z.infer<typeof CrmPullSchema>, existingCount = 0) {
+  const prompt = input.prompt || input.audience || "";
+  const archetype = CRM_PULL_ARCHETYPES.find((item) => item.match.test(prompt)) || {
+    audience: input.audience || "local business",
+    tags: ["prospect", "needs-enrichment"],
+    value: 850,
+    social: "instagram",
+  };
+  const audience = input.audience && input.audience !== "local businesses" ? input.audience : archetype.audience;
+  const batchId = `pull-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  const batchTag = `batch:${batchId}`;
+  const base = slugText(audience);
+  const rows = Array.from({ length: input.count }, (_, index) => {
+    const n = existingCount + index + 1;
+    const handle = `${base}-${n}`;
+    return {
+      name: `${audience.replace(/\b\w/g, (c) => c.toUpperCase())} Candidate ${n}`,
+      organization: `${audience.replace(/\b\w/g, (c) => c.toUpperCase())} Prospect ${n}`,
+      status: "new",
+      type: "prospect",
+      value: archetype.value,
+      nextStep: "Verify the real business/contact, enrich public profile details, then draft an approval-safe first touch.",
+      notes: `Generated from CRM pull request: "${prompt || audience}". This is an org-scoped discovery candidate, not a sent outreach or claimed relationship.`,
+      source: input.source || "Phantom CRM Pull",
+      website: `${handle}.example.local`,
+      socials: { [archetype.social]: handle },
+      tags: [...new Set([...archetype.tags, "crm-pull", "needs-enrichment", batchTag])],
+      fitScore: Math.max(60, Math.min(94, 72 + (index % 18))),
+      qualification: ["Confirm real public profile", "Find decision-maker/contact path", "Match offer to pain before outreach"],
+      outreach: `Draft only: I noticed a practical way PhantomForce could help ${audience} save time or win more work. Want me to send a concise idea?`,
+      crmStage: "Discovery",
+      dueAt: new Date(Date.now() + (index + 1) * 86400000).toISOString(),
+    };
+  });
+  return { batchId, batchTag, rows };
+}
+
+app.get("/orgs/:orgId/crm", async (request, reply) => {
+  const { orgId } = request.params as { orgId: string };
+  const dbSession = requireOrgMember(request, reply, orgId);
+  if (!dbSession) return reply;
+  const db = crmDb(reply);
+  if (!db) return reply;
+  const [settings, contacts] = await Promise.all([
+    db.crmSettings.upsert({
+      where: { orgId },
+      update: {},
+      create: { orgId, dailyPullTarget: 5, sourceMode: "manual", brain: { kind: "phantomforce_org_crm_brain", version: 1 } },
+    }),
+    db.contact.findMany({ where: { orgId }, orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }] }),
+  ]);
+  return {
+    ok: true,
+    settings: { dailyPullTarget: settings.dailyPullTarget, sourceMode: settings.sourceMode, notes: settings.notes || "", brain: settings.brain || { kind: "phantomforce_org_crm_brain", version: 1 } },
+    contacts: contacts.map(crmContactView),
+  };
+});
+
+app.get("/orgs/:orgId/brain-package", async (request, reply) => {
+  const { orgId } = request.params as { orgId: string };
+  const dbSession = requireOrgMember(request, reply, orgId);
+  if (!dbSession) return reply;
+  const db = crmDb(reply);
+  if (!db) return reply;
+  const [settings, contacts] = await Promise.all([
+    db.crmSettings.upsert({
+      where: { orgId },
+      update: {},
+      create: { orgId, dailyPullTarget: 5, sourceMode: "manual", brain: { kind: "phantomforce_org_crm_brain", version: 1 } },
+    }),
+    db.contact.findMany({ where: { orgId }, orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }] }),
+  ]);
+  return crmBrainPackageView({ orgId, settings, contacts });
+});
+
+app.post("/orgs/:orgId/crm/settings", async (request, reply) => {
+  const { orgId } = request.params as { orgId: string };
+  const dbSession = requireOrgMember(request, reply, orgId);
+  if (!dbSession) return reply;
+  const db = crmDb(reply);
+  if (!db) return reply;
+  const parsed = CrmSettingsSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  const data = {
+    ...parsed.data,
+    brain: parsed.data.brain as Prisma.InputJsonValue | undefined,
+  };
+  const settings = await db.crmSettings.upsert({
+    where: { orgId },
+    update: data,
+    create: { orgId, ...data },
+  });
+  return { ok: true, settings: { dailyPullTarget: settings.dailyPullTarget, sourceMode: settings.sourceMode, notes: settings.notes || "", brain: settings.brain || { kind: "phantomforce_org_crm_brain", version: 1 } } };
+});
+
+app.post("/orgs/:orgId/crm/contacts", async (request, reply) => {
+  const { orgId } = request.params as { orgId: string };
+  const dbSession = requireOrgMember(request, reply, orgId);
+  if (!dbSession) return reply;
+  const db = crmDb(reply);
+  if (!db) return reply;
+  const parsed = CrmContactSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  const contact = await db.contact.create({ data: { orgId, ...crmContactWrite(parsed.data), name: parsed.data.name } });
+  return { ok: true, contact: crmContactView(contact) };
+});
+
+app.post("/orgs/:orgId/crm/pull", async (request, reply) => {
+  const { orgId } = request.params as { orgId: string };
+  const dbSession = requireOrgMember(request, reply, orgId);
+  if (!dbSession) return reply;
+  const db = crmDb(reply);
+  if (!db) return reply;
+  const parsed = CrmPullSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  const existingCount = await db.contact.count({ where: { orgId, source: parsed.data.source } }).catch(() => 0);
+  const plan = crmPullPlan(parsed.data, existingCount);
+  await db.contact.createMany({
+    data: plan.rows.map((row) => ({
+      orgId,
+      ...row,
+      dueAt: new Date(row.dueAt),
+    })),
+  });
+  const contacts = await db.contact.findMany({
+    where: { orgId, tags: { has: plan.batchTag } },
+    orderBy: { createdAt: "asc" },
+  });
+  const settings = await db.crmSettings.upsert({
+    where: { orgId },
+    update: {
+      dailyPullTarget: parsed.data.count,
+      sourceMode: "daily",
+      notes: parsed.data.prompt || parsed.data.audience,
+      brain: {
+        kind: "phantomforce_org_crm_brain",
+        version: 1,
+        lastNaturalCommand: parsed.data.prompt || `pull ${parsed.data.count} ${parsed.data.audience}`,
+        lastPullBatchId: plan.batchId,
+        dailyPullTarget: parsed.data.count,
+        updatedAt: new Date().toISOString(),
+      } as Prisma.InputJsonValue,
+    },
+    create: {
+      orgId,
+      dailyPullTarget: parsed.data.count,
+      sourceMode: "daily",
+      notes: parsed.data.prompt || parsed.data.audience,
+      brain: {
+        kind: "phantomforce_org_crm_brain",
+        version: 1,
+        lastNaturalCommand: parsed.data.prompt || `pull ${parsed.data.count} ${parsed.data.audience}`,
+        lastPullBatchId: plan.batchId,
+        dailyPullTarget: parsed.data.count,
+        updatedAt: new Date().toISOString(),
+      } as Prisma.InputJsonValue,
+    },
+  });
+  return {
+    ok: true,
+    batchId: plan.batchId,
+    requested: parsed.data.count,
+    created: contacts.length,
+    settings: { dailyPullTarget: settings.dailyPullTarget, sourceMode: settings.sourceMode, notes: settings.notes || "", brain: settings.brain || {} },
+    contacts: contacts.map(crmContactView),
+  };
+});
+
+app.patch("/orgs/:orgId/crm/contacts/:contactId", async (request, reply) => {
+  const { orgId, contactId } = request.params as { orgId: string; contactId: string };
+  const dbSession = requireOrgMember(request, reply, orgId);
+  if (!dbSession) return reply;
+  const db = crmDb(reply);
+  if (!db) return reply;
+  const parsed = CrmContactPatchSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  const existing = await db.contact.findFirst({ where: { id: contactId, orgId } });
+  if (!existing) return reply.code(404).send({ ok: false, error: "contact_not_found" });
+  const contact = await db.contact.update({ where: { id: contactId }, data: crmContactWrite(parsed.data) });
+  return { ok: true, contact: crmContactView(contact) };
+});
+
+app.delete("/orgs/:orgId/crm/contacts/:contactId", async (request, reply) => {
+  const { orgId, contactId } = request.params as { orgId: string; contactId: string };
+  const dbSession = requireOrgMember(request, reply, orgId);
+  if (!dbSession) return reply;
+  const db = crmDb(reply);
+  if (!db) return reply;
+  const existing = await db.contact.findFirst({ where: { id: contactId, orgId } });
+  if (!existing) return reply.code(404).send({ ok: false, error: "contact_not_found" });
+  await db.contact.delete({ where: { id: contactId } });
+  return { ok: true };
 });
 
 app.get("/orgs/:orgId/members", async (request, reply) => {

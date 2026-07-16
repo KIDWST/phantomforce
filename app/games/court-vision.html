@@ -1,31 +1,43 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'none'; img-src data:"><title>Court Vision</title><style>
-*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#020806;color:#effff6;font-family:system-ui,sans-serif}body{background:radial-gradient(circle at 50% 12%,#123e30,#020806 66%)}canvas{width:100%;height:100%;display:block;touch-action:none}.hud{position:fixed;inset:18px;display:flex;justify-content:space-between;pointer-events:none}.hud b{color:#63ffad;font-size:34px}.hud span{display:block;color:#8ba99a;font:700 11px ui-monospace;letter-spacing:.5px}.hint{position:fixed;left:50%;bottom:max(24px,env(safe-area-inset-bottom));transform:translateX(-50%);padding:12px 18px;border:1px solid #4dffa36b;border-radius:999px;background:#03110ccc;color:#caffdf;font-weight:800;white-space:nowrap;pointer-events:none}.over{position:fixed;inset:0;display:grid;place-items:center;background:#010504e0}.over[hidden]{display:none}.over div{text-align:center}.over h1{font-size:52px;color:#5affa9;margin:0}.over p{color:#a9c5b7}.over button{border:0;border-radius:999px;background:#55ffa8;padding:14px 26px;font-weight:900;cursor:pointer;font-size:16px}@media(max-width:600px){.hud b{font-size:26px}.over h1{font-size:38px}}</style></head><body><canvas></canvas><div class="hud"><div><span>BASKETS</span><b data-score>0</b></div><div style="text-align:right"><span>MISSES</span><b data-miss>0</b></div></div><div class="hint">Tap / Space to set power, again to shoot</div><div class="over" hidden><div><h1>Game over</h1><p data-result></p><button>Shoot again</button></div></div><script>
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#020806;color:#effff6;font-family:system-ui,sans-serif}body{background:radial-gradient(circle at 50% 12%,#123e30,#020806 66%)}canvas{width:100%;height:100%;display:block;touch-action:none}.hud{position:fixed;inset:18px;display:flex;justify-content:space-between;gap:10px;pointer-events:none}.hud>div{padding:9px 12px;border:1px solid #41ffa122;border-radius:14px;background:#03110ca8;backdrop-filter:blur(8px)}.hud b{color:#63ffad;font-size:34px}.hud span{display:block;color:#8ba99a;font:800 10px ui-monospace;letter-spacing:.7px;text-transform:uppercase}.center-stat{position:fixed;top:18px;left:50%;transform:translateX(-50%);text-align:center;pointer-events:none}.hint{position:fixed;left:50%;bottom:max(24px,env(safe-area-inset-bottom));transform:translateX(-50%);padding:12px 18px;border:1px solid #4dffa36b;border-radius:999px;background:#03110ccc;color:#caffdf;font-weight:800;white-space:nowrap;pointer-events:none;box-shadow:0 0 24px #41ffa118}.float{position:fixed;left:50%;top:42%;transform:translate(-50%,-50%);font:900 46px system-ui;color:#5affa9;text-shadow:0 0 28px #41ffa188;pointer-events:none;opacity:0}.float.show{animation:pop .9s ease-out}.over{position:fixed;inset:0;display:grid;place-items:center;background:#010504e0}.over[hidden]{display:none}.over div{text-align:center}.over h1{font-size:52px;color:#5affa9;margin:0}.over p{color:#a9c5b7}.over button{border:0;border-radius:999px;background:#55ffa8;padding:14px 26px;font-weight:900;cursor:pointer;font-size:16px}@keyframes pop{0%{opacity:0;transform:translate(-50%,-30%) scale(.6)}20%{opacity:1}100%{opacity:0;transform:translate(-50%,-80%) scale(1.18)}}@media(max-width:600px){.hud b{font-size:24px}.over h1{font-size:38px}.center-stat{top:82px}}</style></head><body><canvas></canvas><div class="hud"><div><span>Baskets</span><b data-score>0</b></div><div class="center-stat"><span>Streak / Level</span><b><i data-streak>0</i> · <i data-level>1</i></b></div><div style="text-align:right"><span>Misses</span><b data-miss>0</b></div></div><div class="hint">Tap / Space to set power, again to shoot</div><div class="float" data-float></div><div class="over" hidden><div><h1>Game over</h1><p data-result></p><button>Shoot again</button></div></div><script>
 const host=(type,data={})=>parent.postMessage({source:'phantomplay-game',type,...data},'*'),c=document.querySelector('canvas'),g=c.getContext('2d');
-let W,H,DPR,reduced=false,score=0,misses=0,running=true;
+let W,H,DPR,reduced=false,score=0,misses=0,streak=0,level=1,running=true,actx=null,particles=[],trail=[],rimFlash=0,rimColor='#41ffa1',crowd=[];
 let phase='aim';// aim(power oscillating) | fly | settle
 let power=0,pdir=1;let ball,hoop,dist=0,raf=0,anglePow;
 const GRAV=1400;// px/s^2 in css px
+const scoreEl=document.querySelector('[data-score]'),missEl=document.querySelector('[data-miss]'),streakEl=document.querySelector('[data-streak]'),levelEl=document.querySelector('[data-level]'),floatEl=document.querySelector('[data-float]');
+function ensureAudio(){if(actx||reduced)return;try{actx=new (AudioContext||webkitAudioContext)()}catch{}}
+function tone(freq=360,dur=.08,gain=.025,type='sine'){if(!actx)return;const o=actx.createOscillator(),v=actx.createGain();o.type=type;o.frequency.value=freq;v.gain.setValueAtTime(.0001,actx.currentTime);v.gain.exponentialRampToValueAtTime(gain,actx.currentTime+.012);v.gain.exponentialRampToValueAtTime(.0001,actx.currentTime+dur);o.connect(v);v.connect(actx.destination);o.start();o.stop(actx.currentTime+dur)}
+function flash(text){floatEl.textContent=text;floatEl.classList.remove('show');void floatEl.offsetWidth;floatEl.classList.add('show')}
+function burst(x,y,color,n=18){if(reduced)return;for(let i=0;i<n;i++){const a=Math.random()*Math.PI*2,s=70+Math.random()*210;particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:.7,max:.7,c:color,r:2+Math.random()*3})}}
+function makeCrowd(){crowd=Array.from({length:44},()=>({x:Math.random(),y:.09+Math.random()*.24,r:1+Math.random()*2,c:Math.random()<.55?'#41ffa1':'#6cf6ff',p:Math.random()*Math.PI*2}))}
 function size(){DPR=Math.min(2,devicePixelRatio||1);W=innerWidth;H=innerHeight;c.width=W*DPR;c.height=H*DPR;g.setTransform(DPR,0,0,DPR,0,0)}
-addEventListener('resize',()=>{size()});
+addEventListener('resize',()=>{size();makeCrowd()});
 function groundY(){return H*0.82}
 function launchPt(){return{x:W*0.16,y:groundY()-8}}
 function setupShot(){const lp=launchPt();
 // distance grows with score, clamped to fit screen
-const maxD=W*0.72;dist=Math.min(maxD,W*0.36+score*W*0.03);
-const hx=lp.x+dist;const rimY=groundY()-Math.min(H*0.42,H*0.30+score*4);
+level=1+Math.floor(score/4);levelEl.textContent=level;
+const maxD=W*0.74;dist=Math.min(maxD,W*0.34+score*W*0.028);
+const hx=lp.x+dist;const rimY=groundY()-Math.min(H*0.46,H*0.29+score*4.4);
 hoop={x:hx,y:rimY,w:Math.max(34,W*0.06)};
 ball={x:lp.x,y:lp.y,r:Math.max(12,W*0.018),vx:0,vy:0,flying:false};
+trail=[];
 power=0;pdir=1;phase='aim'}
 function shoot(){
+ensureAudio();tone(190,.08,.018,'triangle');
 // map power(0..100) to launch speed; aim angle fixed 58deg for a nice arc
 const ang=58*Math.PI/180;
-const speed=340+power/100*(760);
+const speed=340+power/100*(760+level*28);
 ball.vx=Math.cos(ang)*speed;ball.vy=-Math.sin(ang)*speed;ball.flying=true;phase='fly';ball.scored=false}
 let last=0;
 function loop(t){if(!running)return;if(!last)last=t;let dt=(t-last)/1000;last=t;if(dt>0.05)dt=0.05;
 if(phase==='aim'){power+=pdir*dt*130;if(power>=100){power=100;pdir=-1}else if(power<=0){power=0;pdir=1}}
 if(phase==='fly'){
 ball.vy+=GRAV*dt;ball.x+=ball.vx*dt;ball.y+=ball.vy*dt;
+if(!reduced)trail.push({x:ball.x,y:ball.y,r:ball.r,a:.55});
+trail.forEach(t=>t.a-=.035);trail=trail.filter(t=>t.a>0);
+rimFlash=Math.max(0,rimFlash-dt*2.4);
 // check rim pass: ball descending and crossing hoop x-range near rim y
 if(!ball.scored&&ball.vy>0&&Math.abs(ball.x-hoop.x)<hoop.w*0.5&&Math.abs(ball.y-hoop.y)<ball.r+8){
 ball.scored=true;made()}
@@ -33,33 +45,39 @@ if(ball.y>groundY()+ball.r||ball.x>W+40){
 if(!ball.scored)missed();else settle()}
 }
 draw();raf=requestAnimationFrame(loop)}
-function made(){score++;document.querySelector('[data-score]').textContent=score;host('score',{score,progress:Math.min(99,score*7),state:{baskets:score,misses}});setTimeout(()=>{if(running)setupShot()},520)}
+function made(){score++;streak++;rimFlash=1;rimColor=streak>=3?'#ffd166':'#41ffa1';scoreEl.textContent=score;streakEl.textContent=streak;burst(hoop.x,hoop.y,rimColor,24+streak*2);flash(streak>=3?`HEAT x${streak}`:'SWISH');tone(520,.12,.035);setTimeout(()=>tone(720,.1,.025),80);host('score',{score:score+streak*3,progress:Math.min(99,score*7),state:{baskets:score,misses,streak,level}});setTimeout(()=>{if(running)setupShot()},620)}
 function settle(){phase='wait'}
-function missed(){phase='wait';misses++;document.querySelector('[data-miss]').textContent=misses;
+function missed(){phase='wait';misses++;streak=0;rimFlash=.65;rimColor='#ff6b6b';missEl.textContent=misses;streakEl.textContent=0;burst(ball.x,Math.min(ball.y,groundY()),'#ff6b6b',10);flash('BRICK');tone(120,.12,.02,'sawtooth');
 if(misses>=3){over();return}
-host('progress',{score,progress:Math.min(99,score*7)});
+host('progress',{score,progress:Math.min(99,score*7),state:{baskets:score,misses,streak,level}});
 setTimeout(()=>{if(running)setupShot()},420)}
 function over(){running=false;cancelAnimationFrame(raf);draw();document.querySelector('[data-result]').textContent=`You sank ${score} basket${score===1?'':'s'}.`;document.querySelector('.over').hidden=false;host('complete',{score,progress:100,state:{baskets:score,misses}})}
-function restart(){score=0;misses=0;running=true;last=0;document.querySelector('[data-score]').textContent=0;document.querySelector('[data-miss]').textContent=0;document.querySelector('.over').hidden=true;setupShot();host('progress',{score:0,progress:0});raf=requestAnimationFrame(loop)}
+function restart(){score=0;misses=0;streak=0;level=1;particles=[];trail=[];rimFlash=0;running=true;last=0;scoreEl.textContent=0;missEl.textContent=0;streakEl.textContent=0;levelEl.textContent=1;document.querySelector('.over').hidden=true;setupShot();host('progress',{score:0,progress:0});raf=requestAnimationFrame(loop)}
 function draw(){g.clearRect(0,0,W,H);
+// soft crowd / arena lights
+for(const fan of crowd){g.globalAlpha=.18+.16*Math.sin((performance.now()/500)+fan.p);g.fillStyle=fan.c;g.beginPath();g.arc(fan.x*W,fan.y*H,fan.r,0,7);g.fill()}g.globalAlpha=1;
 // court floor
 g.strokeStyle='#36ff9422';g.lineWidth=1;for(let y=groundY();y<H;y+=Math.max(16,H*0.05)){g.beginPath();g.moveTo(0,y);g.lineTo(W,y);g.stroke()}
+g.strokeStyle='#41ffa11a';g.lineWidth=2;g.beginPath();g.ellipse(W*.18,groundY()+H*.09,W*.28,H*.08,0,Math.PI,0);g.stroke();
 g.strokeStyle='#41ffa155';g.lineWidth=3;g.beginPath();g.moveTo(0,groundY());g.lineTo(W,groundY());g.stroke();
 // backboard + hoop
-if(hoop){const bx=hoop.x+hoop.w*0.5+8;g.strokeStyle='#8ba99a';g.lineWidth=4;g.beginPath();g.moveTo(bx,hoop.y-46);g.lineTo(bx,hoop.y+30);g.stroke();
-g.strokeStyle='#ff6b6b';g.lineWidth=5;g.beginPath();g.moveTo(hoop.x-hoop.w*0.5,hoop.y);g.lineTo(hoop.x+hoop.w*0.5,hoop.y);g.stroke();
+if(hoop){const bx=hoop.x+hoop.w*0.5+8;if(rimFlash){g.shadowColor=rimColor;g.shadowBlur=34*rimFlash;g.strokeStyle=rimColor;g.lineWidth=10*rimFlash;g.beginPath();g.arc(hoop.x,hoop.y,hoop.w*.58,0,7);g.stroke();g.shadowBlur=0}
+g.strokeStyle='#8ba99a';g.lineWidth=4;g.beginPath();g.moveTo(bx,hoop.y-46);g.lineTo(bx,hoop.y+30);g.stroke();
+g.strokeStyle=rimFlash?rimColor:'#ff6b6b';g.lineWidth=5;g.beginPath();g.moveTo(hoop.x-hoop.w*0.5,hoop.y);g.lineTo(hoop.x+hoop.w*0.5,hoop.y);g.stroke();
 // net
 g.strokeStyle='#effff655';g.lineWidth=1;for(let i=0;i<=5;i++){const nx=hoop.x-hoop.w*0.5+hoop.w*i/5;g.beginPath();g.moveTo(nx,hoop.y);g.lineTo(hoop.x-hoop.w*0.25+hoop.w*0.5*i/5,hoop.y+26);g.stroke()}}
 // aim trajectory preview
 if(phase==='aim'&&ball){const ang=58*Math.PI/180,speed=340+power/100*760;let px=ball.x,py=ball.y,pvx=Math.cos(ang)*speed,pvy=-Math.sin(ang)*speed;g.fillStyle='#41ffa155';for(let i=0;i<26;i++){pvy+=GRAV*0.045;px+=pvx*0.045;py+=pvy*0.045;if(py>groundY())break;g.beginPath();g.arc(px,py,2,0,7);g.fill()}}
+for(const t of trail){g.globalAlpha=t.a;g.fillStyle='#ffab5a';g.beginPath();g.arc(t.x,t.y,t.r*(.55+t.a*.35),0,7);g.fill()}g.globalAlpha=1;
 // ball
 if(ball){g.save();g.shadowColor='#ffab5a';g.shadowBlur=reduced?0:16;g.fillStyle='#ff9d42';g.beginPath();g.arc(ball.x,ball.y,ball.r,0,7);g.fill();g.restore();g.strokeStyle='#7a3d10';g.lineWidth=1.5;g.beginPath();g.arc(ball.x,ball.y,ball.r,0,7);g.stroke();g.beginPath();g.moveTo(ball.x-ball.r,ball.y);g.lineTo(ball.x+ball.r,ball.y);g.moveTo(ball.x,ball.y-ball.r);g.lineTo(ball.x,ball.y+ball.r);g.stroke()}
 // power meter
-if(phase==='aim'){const mx=launchPt().x-6,mtop=groundY()-140,mh=130;g.fillStyle='#03110c';g.fillRect(mx-9,mtop,14,mh);g.fillStyle=power>75?'#ff6b6b':power>45?'#ffd166':'#41ffa1';const ph=mh*power/100;g.fillRect(mx-9,mtop+mh-ph,14,ph);g.strokeStyle='#4dffa36b';g.strokeRect(mx-9,mtop,14,mh)}}
-function act(){if(!running)return;if(phase==='aim')shoot();}
+for(const p of particles){g.globalAlpha=Math.max(0,p.life/p.max);g.fillStyle=p.c;g.beginPath();g.arc(p.x,p.y,p.r*Math.max(.25,p.life/p.max),0,7);g.fill();p.vy+=360/60;p.x+=p.vx/60;p.y+=p.vy/60;p.life-=1/60}g.globalAlpha=1;particles=particles.filter(p=>p.life>0);
+if(phase==='aim'){const mx=launchPt().x-6,mtop=groundY()-140,mh=130;g.fillStyle='#03110c';g.fillRect(mx-9,mtop,14,mh);g.fillStyle='rgba(255,209,102,.22)';g.fillRect(mx-13,mtop+mh*.20,22,mh*.22);g.fillStyle=power>75?'#ff6b6b':power>45?'#ffd166':'#41ffa1';const ph=mh*power/100;g.fillRect(mx-9,mtop+mh-ph,14,ph);g.strokeStyle='#4dffa36b';g.strokeRect(mx-9,mtop,14,mh)}}
+function act(){ensureAudio();if(!running)return;if(phase==='aim')shoot();}
 c.addEventListener('pointerdown',e=>{e.preventDefault();act()});
 addEventListener('keydown',e=>{if(e.code==='Space'||e.code==='Enter'){e.preventDefault();act()}});
 document.querySelector('.over button').onclick=restart;
 addEventListener('message',e=>{if(e.data?.source==='phantomplay-host'&&e.data.type==='settings')reduced=!!e.data.reducedMotion});
-size();setupShot();raf=requestAnimationFrame(loop);host('ready');
+size();makeCrowd();setupShot();raf=requestAnimationFrame(loop);host('ready');
 </script></body></html>

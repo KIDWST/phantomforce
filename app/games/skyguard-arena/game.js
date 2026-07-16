@@ -768,8 +768,24 @@ function drawShape(cx, cy, r, shape, color) {
 function draw() {
   ctx.clearRect(0, 0, cssW, cssH);
   ctx.fillStyle = '#080a1e'; ctx.fillRect(0, 0, cssW, cssH);
+  drawEnergyGrid();
   drawPath(); drawSlots(); drawSpire(); drawSentinels(); drawEnemies(); drawParticlesOnCanvas();
   if (spireFlash > 0) { ctx.fillStyle = `rgba(255,77,141,${spireFlash * 0.35})`; ctx.fillRect(0, 0, cssW, cssH); }
+}
+function drawEnergyGrid() {
+  const pulse = (Math.sin(simTime * 1.8) + 1) / 2;
+  ctx.save();
+  ctx.globalAlpha = 0.18 + pulse * 0.08;
+  ctx.strokeStyle = '#4ddbff33'; ctx.lineWidth = 1 * scale;
+  for (let x = offX % (48 * scale); x < cssW; x += 48 * scale) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, cssH); ctx.stroke(); }
+  for (let y = offY % (48 * scale); y < cssH; y += 48 * scale) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(cssW, y); ctx.stroke(); }
+  ctx.globalAlpha = 0.22 + pulse * 0.22;
+  ctx.strokeStyle = commanderActive ? '#ffb84d99' : '#5be6a066';
+  ctx.lineWidth = (1.5 + pulse * 1.5) * scale;
+  ctx.beginPath();
+  PATH_PX.forEach(([x, y], i) => { const [px, py] = toPx(x, y); i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py); });
+  ctx.stroke();
+  ctx.restore();
 }
 function drawPath() {
   ctx.lineWidth = 26 * scale; ctx.strokeStyle = '#141a3d'; ctx.lineJoin = 'round'; ctx.lineCap = 'round';

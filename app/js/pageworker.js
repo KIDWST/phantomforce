@@ -73,10 +73,10 @@ const PAGE_WORKERS = {
   },
   leads: {
     eyebrow: "Client intelligence",
-    title: "Build the client base.",
-    placeholder: "Tell Phantom who to find and add: schools, gyms, creators, service companies, warm prospects...",
-    helper: "Phantom converts this page prompt into CRM prospect cards, qualification tasks, and approval-safe next moves.",
-    action: "Find + add CRM prospects",
+    title: "Run the CRM.",
+    placeholder: "Tell Phantom: pull 5 new clients per day, add a warm lead, or update a client record...",
+    helper: "Phantom keeps CRM records scoped to this organization with social handles, notes, and approval-safe next moves.",
+    action: "Update CRM",
   },
   approvals: {
     eyebrow: "Approval intelligence",
@@ -126,6 +126,7 @@ const SKIP_PAGES = new Set([
   "sites",
   "media",
   "content",
+  "leads",
 ]);
 
 const BACKEND_TIMEOUT_MS = 45000;

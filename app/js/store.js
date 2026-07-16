@@ -524,6 +524,7 @@ function seed() {
     version: 4,
     workspaces: REQUIRED_WORKSPACES.map((workspace) => ({ ...workspace })),
     leads: [],
+    crmSettings: {},
     proposals: [],
     tasks: [],
     reviews: [],
@@ -559,6 +560,7 @@ function normalizeData(data) {
     assetNamespace: required.assetNamespace,
   }));
   d.leads = Array.isArray(d.leads) ? d.leads : [];
+  d.crmSettings = d.crmSettings && typeof d.crmSettings === "object" ? d.crmSettings : {};
   d.proposals = Array.isArray(d.proposals) ? d.proposals : [];
   d.tasks = Array.isArray(d.tasks) ? d.tasks : [];
   d.reviews = Array.isArray(d.reviews) ? d.reviews : [];

@@ -31,6 +31,10 @@
     "test:auth:prisma-dev": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-auth-prisma-dev.ps1",
     "test:auth:production-fail-closed": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-auth-production-fail-closed.ps1",
     "test:auth:owner-production": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-auth-owner-production.ps1",
+    "test:account-recovery-2fa": "tsx scripts/test-account-recovery-2fa.ts",
+    "test:account-recovery-2fa:postgres": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-account-recovery-2fa-postgres.ps1",
+    "test:easy-crm": "tsx scripts/test-easy-crm.ts",
+    "test:easy-crm:postgres": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-easy-crm-postgres.ps1",
     "start": "node dist/index.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev"

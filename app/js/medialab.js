@@ -1147,7 +1147,7 @@ if (typeof window !== "undefined") window.__mlLocalStats = mlLocalStats;
 /* ---- instant open: the last successful listing per search+kind lives in
    sessionStorage so reopening the drawer paints immediately, then a silent
    background refresh reconciles. Capped so it never eats the storage quota. */
-const LOCAL_ASSETS_CACHE_KEY = "pf.medialab.localAssets.cache.v1";
+const LOCAL_ASSETS_CACHE_KEY = "pf.medialab.localAssets.cache.v3";
 const LOCAL_ASSETS_CACHE_MAX_ENTRIES = 24;
 const LOCAL_ASSETS_CACHE_BUDGET = 50_000; // ~50KB of serialized listings
 let localAssetsFetchSeq = 0;
@@ -1181,6 +1181,21 @@ function localAssetsCachePut(key, result) {
   }
   if (payload.length > LOCAL_ASSETS_CACHE_BUDGET) return; // one oversized listing isn't worth caching
   try { sessionStorage.setItem(LOCAL_ASSETS_CACHE_KEY, payload); } catch {}
+}
+function isEditorToolPackage(asset = {}) {
+  const haystack = [
+    asset.id,
+    asset.title,
+    asset.name,
+    asset.category,
+    asset.app,
+    asset.relative_path,
+    asset.safety,
+    ...(asset.tags || []),
+  ].join(" ").toLowerCase();
+  if (/\b(installer|setup|application installer|windows installer|mac installer|program installer|installers_do_not_run)\b/.test(haystack)) return true;
+  if (/\b(davinci resolve studio|blackmagic design|adobe creative cloud|adobe premiere|premiere pro|after effects|final cut pro|avid media composer)\b/.test(haystack) && /\b(installer|setup|studio|application|windows|mac|download)\b/.test(haystack)) return true;
+  return false;
 }
 /* cheap change detector so background refreshes only repaint when the data moved */
 function localAssetsSnapshotHash() {
@@ -1257,7 +1272,7 @@ function localAssetsDrawerHtml(esc) {
     ["folder", "Templates"],
   ];
   return `
-    <p class="ml-drawer-note">Your local media library on this PC. Nothing is uploaded to Asset Cloud; files stay on this machine and are only pulled into the editor when you choose one.</p>
+    <p class="ml-drawer-note">AI editor-ready assets on this PC. PhantomForce is the editor layer; compatible packs are organized for PhantomCut and image editing, while outside app installers stay hidden.</p>
     <div class="ml-asset-controls">
       <input class="ml-text-in" data-ml-local-search placeholder="Search local assets..." value="${esc(s.search)}"/>
       <button class="ml-generate ml-ghost ml-inline" data-ml-local-refresh type="button">${svgIc("spark")} Refresh</button>
@@ -1280,20 +1295,56 @@ function localAssetsDrawerHtml(esc) {
 }
 function localAssetCardHtml(asset, esc) {
   const canUse = asset.kind === "image" && (!!asset.has_preview || !!asset.previewable);
+  const category = localAssetDisplayCategory(asset);
   return `
     <article class="ml-local-asset" data-local-asset="${esc(asset.id)}"${canUse ? ` draggable="true" title="Drag onto the editor or the reference slot"` : ""}>
       <div class="ml-local-thumb" data-local-thumb="${esc(asset.id)}" data-previewable="${canUse ? "1" : "0"}">
         ${canUse ? `<span>${svgIc(asset.kind === "video" ? "film" : "image")}</span>` : `<span>${svgIc("layout")}</span>`}
       </div>
       <div class="ml-local-copy">
-        <b>${esc(asset.title || asset.name)}</b>
-        <span>${esc(asset.category || asset.kind)}${asset.app ? ` · ${esc(asset.app)}` : ""}</span>
+        <b>${esc(localAssetDisplayTitle(asset))}</b>
+        <span>${esc(category)}</span>
         <i>${esc(asset.size_label || "")} ${asset.safety ? `· ${esc(asset.safety)}` : ""}</i>
       </div>
       <div class="ml-local-actions">
         ${canUse ? `<button type="button" data-ml-local-use="${esc(asset.id)}">Edit</button><button type="button" data-ml-local-ref="${esc(asset.id)}">Ref</button>` : `<em>Indexed</em>`}
       </div>
     </article>`;
+}
+function localAssetDisplayTitle(asset = {}) {
+  const raw = String(asset.title || asset.name || "").trim();
+  const text = [raw, asset.category, asset.app, asset.relative_path, ...(asset.tags || [])].join(" ").toLowerCase();
+  if (!raw || raw === "0") {
+    if (/photoshop|psd|psb/.test(text)) return "Layered design template";
+    if (/resolve|drfx|macro|preset|effect/.test(text)) return "Video effect pack";
+    return "Local creative asset";
+  }
+  let title = raw
+    .replace(/\bDaVinci\s+Resolve\s+Studio\b/gi, "Video")
+    .replace(/\bDaVinci\s+Resolve\b/gi, "Video")
+    .replace(/\bBlackmagic\s+Design\b/gi, "")
+    .replace(/\bAdobe\s+Photoshop\b/gi, "Layered")
+    .replace(/\bPhotoshop\b/gi, "Layered")
+    .replace(/\bsource\b/gi, "")
+    .replace(/\bPSD\/PSB\b/gi, "")
+    .replace(/\bPSD\b|\bPSB\b/gi, "")
+    .replace(/\bWindows\s+Installer\b/gi, "")
+    .replace(/\bInstaller\b/gi, "")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s+([).,])/g, "$1")
+    .trim();
+  if (!title || title === raw && /^0$/.test(title)) return localAssetDisplayCategory(asset);
+  return title;
+}
+function localAssetDisplayCategory(asset = {}) {
+  const text = [asset.category, asset.app, asset.relative_path, ...(asset.tags || [])].join(" ").toLowerCase();
+  if (/photoshop|psd|psb/.test(text)) return "Layered design template";
+  if (/resolve|drfx|macro|preset|effect/.test(text)) return "AI-ready video effect pack";
+  if (/project|template/.test(text)) return "Creative project template";
+  if (/archive/.test(text)) return "Asset archive";
+  if (/video/.test(text)) return "Video asset";
+  if (/image|photo/.test(text)) return "Image asset";
+  return asset.category || asset.kind || "Local asset";
 }
 function templatesDrawerHtml(esc) {
   const visible = MEDIA_PRESETS.filter((p) => p.modality === genState.modality);
@@ -1390,8 +1441,8 @@ function mediaSettingsDrawerHtml(cfg, esc) {
     </div>`;
 }
 function applyLocalAssetsResult(result = {}) {
-  localAssetsState.assets = result.assets || [];
-  localAssetsState.count = result.count || localAssetsState.assets.length || 0;
+  localAssetsState.assets = (result.assets || []).filter((asset) => !isEditorToolPackage(asset));
+  localAssetsState.count = localAssetsState.assets.length || 0;
   localAssetsState.source = result.source || "";
   localAssetsState.rootLabel = result.root_label || "";
   // the server's `detail` is the admin's next move — surface it when present

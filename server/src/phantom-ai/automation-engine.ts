@@ -445,13 +445,21 @@ const JOB_DEFINITIONS: AutomationJobDefinition[] = [
     external_action: false,
     run: async () => {
       const sales = getSalesConnectorStatus();
-      const contactCount = prisma ? await prisma.contact.count().catch(() => 0) : 0;
+      const [contactCount, settings] = prisma
+        ? await Promise.all([
+          prisma.contact.count().catch(() => 0),
+          prisma.crmSettings.findMany({ where: { sourceMode: "daily" }, select: { orgId: true, dailyPullTarget: true } }).catch(() => []),
+        ])
+        : [0, [] as Array<{ orgId: string; dailyPullTarget: number }>];
+      const dailyTarget = settings.reduce((sum, row) => sum + row.dailyPullTarget, 0);
       return {
-        ok: contactCount > 0,
-        summary: `${contactCount} contact(s) discoverable. Sales connector: ${sales.status}; live CRM sync: ${sales.live ? "on" : "off"}.`,
+        ok: contactCount > 0 || dailyTarget > 0,
+        summary: `${contactCount} contact(s) discoverable across ${settings.length || "no"} active daily CRM brain(s). Daily pull target: ${dailyTarget || 0}. Sales connector: ${sales.status}; live CRM sync: ${sales.live ? "on" : "off"}.`,
         next_action: contactCount > 0
           ? "Use Outreach Prep to draft the next touches; external sends still wait for approval."
-          : "Import or add contacts so Phantom can build follow-up queues.",
+          : dailyTarget > 0
+            ? "Daily client pull intent is saved. Connect/import a lead source or add contacts so Phantom can fill the queue."
+            : "Import or add contacts so Phantom can build follow-up queues.",
       };
     },
   },
@@ -467,14 +475,20 @@ const JOB_DEFINITIONS: AutomationJobDefinition[] = [
     approval_required: true,
     external_action: false,
     run: async () => {
-      const contactCount = prisma ? await prisma.contact.count().catch(() => 0) : 0;
-      const batchSize = Math.min(20, Math.max(10, contactCount || 10));
+      const [contactCount, settings] = prisma
+        ? await Promise.all([
+          prisma.contact.count().catch(() => 0),
+          prisma.crmSettings.findMany({ where: { sourceMode: "daily" }, select: { dailyPullTarget: true } }).catch(() => []),
+        ])
+        : [0, [] as Array<{ dailyPullTarget: number }>];
+      const target = settings.reduce((sum, row) => sum + row.dailyPullTarget, 0);
+      const batchSize = Math.min(Math.max(target || 10, 1), Math.max(contactCount, target || 10));
       const ready = contactCount > 0;
       return {
         ok: ready,
         summary: ready
           ? `Outreach prep ready: choose ${Math.min(batchSize, contactCount)} of ${contactCount} contact(s), draft personalized touches, send nothing.`
-          : "Outreach prep is on, but there are no contacts yet. It will prepare 10-20 daily drafts once CRM/contact data exists.",
+          : `Outreach prep is on, but there are no contacts yet. Saved daily pull target: ${target || 10}; it will prepare drafts once CRM/contact data exists.`,
         next_action: ready ? "Open Clients or tell Phantom the offer to draft today's outreach packet." : "Add/import contacts and tell Phantom the business offer.",
         risks: ["Any email, social DM, SMS, or CRM write must be owner-approved before execution."],
       };

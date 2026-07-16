@@ -192,6 +192,7 @@
     gathering: null, // {x,y,t,dur}
     cooking: null,   // {recipe,t,dur}
     particles: [],
+    ambience: [],
     lastFrame: 0,
     dpr: 1, W: 0, H: 0, tileW: 48, tileH: 24, originX: 0, originY: 0,
     paused: false,
@@ -1072,6 +1073,7 @@
     const grad = ctx.createLinearGradient(0, 0, 0, rt.H);
     grad.addColorStop(0, sky.top); grad.addColorStop(1, sky.hor);
     ctx.fillStyle = grad; ctx.fillRect(0, 0, rt.W, rt.H);
+    drawAmbience();
 
     // draw order: terrain back-to-front, then pieces+npcs+player interleaved by depth
     const drawables = [];
@@ -1133,6 +1135,31 @@
       ctx.fillStyle = 'rgba(10,6,20,0.45)'; ctx.fillRect(0, 0, rt.W, rt.H);
     }
   }
+
+  function drawAmbience() {
+    if (rt.reducedMotion) return;
+    if (!rt.ambience.length) {
+      for (let i = 0; i < 28; i++) rt.ambience.push({
+        x: Math.random(), y: Math.random(), phase: Math.random() * Math.PI * 2,
+        size: 1.5 + Math.random() * 2.4, drift: 0.7 + Math.random() * 1.8,
+      });
+    }
+    const night = state.minutes < 360 || state.minutes > 1120;
+    const dusk = state.minutes > 980 || state.minutes < 480;
+    if (!night && !dusk) return;
+    const t = rt.playSecondsAccum;
+    ctx.save();
+    for (const f of rt.ambience) {
+      const x = ((f.x + Math.sin(t * 0.025 * f.drift + f.phase) * 0.02) % 1) * rt.W;
+      const y = ((f.y + Math.cos(t * 0.018 * f.drift + f.phase) * 0.018) % 1) * rt.H;
+      const a = (night ? 0.55 : 0.22) + Math.sin(t * 2.2 + f.phase) * 0.18;
+      ctx.globalAlpha = Math.max(0.05, a);
+      ctx.shadowBlur = 12 * rt.dpr; ctx.shadowColor = '#ffe98a';
+      ctx.fillStyle = '#fff2a8';
+      ctx.beginPath(); ctx.arc(x, y, f.size * rt.dpr, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+  }
   function drawProgressRing(gx, gy, t, color) {
     const s = tileToScreen(gx, gy);
     ctx.save();
@@ -1157,6 +1184,7 @@
       state.minutes += (dt * 1000) * (1440 / DAY_LENGTH_MS);
       if (state.minutes >= 1440) { state.minutes -= 1440; state.day += 1; }
       state.stats.secondsPlayed += dt;
+      rt.playSecondsAccum += dt;
       stepMoveInterp(dt);
       stepNpcs(dt);
       stepGatherCook(dt);

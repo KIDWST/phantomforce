@@ -6,7 +6,7 @@
    when the backend doesn't advertise database auth, none of these
    surfaces render and the app behaves exactly as before. */
 
-import { ctx, session } from "./store.js?v=phantom-live-20260714-006";
+import { ctx, session } from "./store.js?v=phantom-live-20260714-012";
 
 export const isDatabaseSession = () => !!ctx.session?.database;
 export const activeOrgId = () => (isDatabaseSession() ? ctx.session.orgId || null : null);
@@ -57,6 +57,7 @@ function localSessionFromServer(payload) {
     canManageAccess: !!s.canManageAccess,
     database: true,
     email: s.email || "",
+    username: s.username || "",
     orgId: s.orgId || null,
     orgRole: s.orgRole || null,
     memberships: s.memberships || [],
@@ -70,10 +71,70 @@ export async function databaseLogin(email, password) {
   if (!ok) {
     throw new Error(status === 401 ? "Invalid email or password." : String(json?.error || `Login failed (${status}).`));
   }
+  if (json?.requires2fa) {
+    return { requires2fa: true, challengeToken: json.challengeToken, expiresAt: json.expiresAt, user: json.user };
+  }
   const local = localSessionFromServer(json);
   session.set(local);
   ctx.session = { ...local, token: undefined };
   return ctx.session;
+}
+
+export async function databaseVerify2fa(challengeToken, code) {
+  const { ok, status, json } = await api("/auth/2fa/verify", { method: "POST", body: { challengeToken, code } });
+  if (!ok) throw new Error(status === 401 ? "Invalid or expired 2FA code." : String(json?.error || `2FA failed (${status}).`));
+  const local = localSessionFromServer(json);
+  session.set(local);
+  ctx.session = { ...local, token: undefined };
+  return ctx.session;
+}
+
+export async function databaseSignup(payload) {
+  const { ok, status, json } = await api("/auth/signup", { method: "POST", body: payload });
+  if (!ok) throw new Error(String(json?.error || `Signup failed (${status}).`));
+  return json;
+}
+
+export async function databaseForgotUsername(email) {
+  const { ok, status, json } = await api("/auth/forgot-username", { method: "POST", body: { email } });
+  if (!ok) throw new Error(String(json?.error || `Username recovery failed (${status}).`));
+  return json;
+}
+
+export async function databaseForgotPassword(identifier) {
+  const { ok, status, json } = await api("/auth/forgot-password", { method: "POST", body: { identifier } });
+  if (!ok) throw new Error(String(json?.error || `Password reset request failed (${status}).`));
+  return json;
+}
+
+export async function databaseResetPassword(token, password) {
+  const { ok, status, json } = await api("/auth/reset-password", { method: "POST", body: { token, password } });
+  if (!ok) throw new Error(String(json?.error || `Password reset failed (${status}).`));
+  return json;
+}
+
+export async function databaseStart2faSetup() {
+  const { ok, status, json } = await api("/auth/2fa/setup", { method: "POST", body: {} });
+  if (!ok) throw new Error(String(json?.error || `2FA setup failed (${status}).`));
+  return json;
+}
+
+export async function databaseConfirm2fa(code) {
+  const { ok, status, json } = await api("/auth/2fa/confirm", { method: "POST", body: { code } });
+  if (!ok) throw new Error(String(json?.error || `2FA confirmation failed (${status}).`));
+  return json;
+}
+
+export async function databaseRegenerate2faBackupCodes(code) {
+  const { ok, status, json } = await api("/auth/2fa/recovery-codes", { method: "POST", body: { code } });
+  if (!ok) throw new Error(String(json?.error || `Recovery code regeneration failed (${status}).`));
+  return json;
+}
+
+export async function databaseDisable2fa(code) {
+  const { ok, status, json } = await api("/auth/2fa/disable", { method: "POST", body: { code } });
+  if (!ok) throw new Error(String(json?.error || `2FA disable failed (${status}).`));
+  return json;
 }
 
 export async function databaseLogout() {
@@ -108,6 +169,55 @@ export async function fetchEntitlementsSummary() {
   if (!orgId) return null;
   const { ok, json } = await api(`/orgs/${encodeURIComponent(orgId)}/entitlements`);
   return ok ? json : null;
+}
+
+export async function fetchOrgCrm() {
+  const orgId = activeOrgId();
+  if (!orgId) return null;
+  const { ok, json } = await api(`/orgs/${encodeURIComponent(orgId)}/crm`);
+  return ok ? json : null;
+}
+
+export async function fetchOrgBrainPackage() {
+  const orgId = activeOrgId();
+  if (!orgId) return null;
+  const { ok, json } = await api(`/orgs/${encodeURIComponent(orgId)}/brain-package`);
+  return ok ? json : null;
+}
+
+export async function saveOrgCrmSettings(settings) {
+  const orgId = activeOrgId();
+  if (!orgId) return { ok: false, error: "no_active_org" };
+  const { ok, json } = await api(`/orgs/${encodeURIComponent(orgId)}/crm/settings`, { method: "POST", body: settings });
+  return ok ? json : { ok: false, error: json?.error || "crm_settings_failed" };
+}
+
+export async function createOrgCrmContact(contact) {
+  const orgId = activeOrgId();
+  if (!orgId) return { ok: false, error: "no_active_org" };
+  const { ok, json } = await api(`/orgs/${encodeURIComponent(orgId)}/crm/contacts`, { method: "POST", body: contact });
+  return ok ? json : { ok: false, error: json?.error || "crm_contact_create_failed" };
+}
+
+export async function pullOrgCrmContacts(payload) {
+  const orgId = activeOrgId();
+  if (!orgId) return { ok: false, error: "no_active_org" };
+  const { ok, json } = await api(`/orgs/${encodeURIComponent(orgId)}/crm/pull`, { method: "POST", body: payload });
+  return ok ? json : { ok: false, error: json?.error || "crm_pull_failed" };
+}
+
+export async function updateOrgCrmContact(contactId, patch) {
+  const orgId = activeOrgId();
+  if (!orgId) return { ok: false, error: "no_active_org" };
+  const { ok, json } = await api(`/orgs/${encodeURIComponent(orgId)}/crm/contacts/${encodeURIComponent(contactId)}`, { method: "PATCH", body: patch });
+  return ok ? json : { ok: false, error: json?.error || "crm_contact_update_failed" };
+}
+
+export async function deleteOrgCrmContact(contactId) {
+  const orgId = activeOrgId();
+  if (!orgId) return { ok: false, error: "no_active_org" };
+  const { ok, json } = await api(`/orgs/${encodeURIComponent(orgId)}/crm/contacts/${encodeURIComponent(contactId)}`, { method: "DELETE" });
+  return ok ? json : { ok: false, error: json?.error || "crm_contact_delete_failed" };
 }
 
 /* ---------------- server approval queue (agent runs) ---------------- */

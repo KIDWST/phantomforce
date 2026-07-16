@@ -15,12 +15,17 @@
     .sub{margin:4px 0 0;color:#94ad9f;font-size:12px}
     .stats{display:grid;grid-auto-flow:column;gap:14px;font:800 11px ui-monospace,monospace;color:#77ffb8;text-align:right}
     .stats b{display:block;color:#effff6;font-size:18px;font-variant-numeric:tabular-nums}
-    .grid{width:min(100%,calc(100dvh - 240px));max-width:440px;aspect-ratio:1;display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
-    .cell{min-width:0;aspect-ratio:1;border:1px solid #42ff9a3a;border-radius:13px;background:#051710;cursor:pointer;transition:background .15s,box-shadow .15s,border-color .15s;padding:0}
+    .grid{position:relative;width:min(100%,calc(100dvh - 240px));max-width:440px;aspect-ratio:1;display:grid;grid-template-columns:repeat(5,1fr);gap:8px;padding:6px;border-radius:22px;background:radial-gradient(circle at 50% 50%,#41ffa10e,#02080600 62%);box-shadow:0 0 40px #41ffa10e}
+    .grid.surge{animation:surge .55s ease-out}
+    .cell{min-width:0;aspect-ratio:1;border:1px solid #42ff9a3a;border-radius:13px;background:#051710;cursor:pointer;transition:background .15s,box-shadow .15s,border-color .15s,transform .12s;padding:0;position:relative;overflow:hidden}
+    .cell:after{content:"";position:absolute;inset:22%;border-radius:50%;background:#ffffff3b;opacity:0;transform:scale(.2)}
+    .cell.flip{animation:flip .18s ease-out}
+    .cell.flip:after{animation:ripple .28s ease-out}
     .cell.on{background:#41ffa1;border-color:#8affd0;box-shadow:0 0 22px #41ffa15e,inset 0 0 12px #ffffff42}
     .cell.cursor{outline:3px solid #effff6;outline-offset:2px}
     body.reduced .cell{transition:none}
     body.reduced .cell.on{box-shadow:none}
+    .spark{position:absolute;z-index:4;width:6px;height:6px;border-radius:50%;background:#a7ffd0;box-shadow:0 0 16px #58ffa8;pointer-events:none}
     .bar{display:flex;gap:10px;margin-top:12px}
     .bar button{min-height:44px;padding:10px 18px;border:1px solid #42ff9a44;border-radius:999px;background:#07150f;color:#caffdf;font-weight:800;font-size:13px;cursor:pointer}
     .bar button:disabled{opacity:.4;cursor:not-allowed}
@@ -33,6 +38,9 @@
     .overlay .big{color:#effff6;font-size:20px;font-weight:800}
     .overlay button{min-width:150px;min-height:48px;border:0;border-radius:999px;background:#55ffa8;padding:14px 24px;font-weight:900;font-size:15px;cursor:pointer;color:#02150c}
     body.reduced .overlay h2{text-shadow:none}
+    @keyframes flip{50%{transform:scale(.92) rotate(2deg)}100%{transform:scale(1) rotate(0)}}
+    @keyframes ripple{0%{opacity:.8;transform:scale(.2)}100%{opacity:0;transform:scale(3.2)}}
+    @keyframes surge{0%{box-shadow:0 0 20px #41ffa122;filter:brightness(1)}45%{box-shadow:0 0 60px #58ffa899;filter:brightness(1.35)}100%{box-shadow:0 0 40px #41ffa10e;filter:brightness(1)}}
     @media(max-width:460px){h1{font-size:24px}.sub{display:none}.stats{gap:9px;font-size:9px}.stats b{font-size:15px}.grid{gap:6px;width:min(100%,calc(100dvh - 210px))}.cell{border-radius:9px}}
   </style>
 </head>
@@ -44,6 +52,7 @@
         <span>LEVEL<b><span data-level>1</span>/10</b></span>
         <span>CLICKS<b data-clicks>0</b></span>
         <span>PAR<b data-par>4</b></span>
+        <span>STREAK<b data-streak>0</b></span>
         <span>SCORE<b data-score>0</b></span>
       </div>
     </header>
@@ -66,8 +75,8 @@
     const resetBtn=document.querySelector('[data-reset]'),endBtn=document.querySelector('[data-end]');
     const SIZE=5,CELLS=SIZE*SIZE;
     let board=new Array(CELLS).fill(0),initial=board.slice(),par=4;
-    let level=1,clicks=0,totalClicks=0,levelsDone=0,totalScore=0,cursor=12;
-    let phase='start',paused=false,completed=false;
+    let level=1,clicks=0,totalClicks=0,levelsDone=0,totalScore=0,streak=0,bestStreak=0,cursor=12;
+    let phase='start',paused=false,completed=false,lastFlip=-1;
     let soundOn=true,reduced=false,audio=null;
 
     function beep(freq,dur=0.05,gain=0.03){
@@ -81,6 +90,25 @@
         g.gain.exponentialRampToValueAtTime(0.0001,audio.currentTime+dur);
         o.connect(g).connect(audio.destination);o.start();o.stop(audio.currentTime+dur);
       }catch(err){}
+    }
+    function sparkleCell(i,n=10){
+      if(reduced)return;
+      const cell=gridEl.querySelector(`[data-i="${i}"]`);
+      if(!cell)return;
+      cell.classList.remove('flip');void cell.offsetWidth;cell.classList.add('flip');
+      const r=cell.getBoundingClientRect(),gr=gridEl.getBoundingClientRect();
+      const cx=r.left-gr.left+r.width/2,cy=r.top-gr.top+r.height/2;
+      for(let k=0;k<n;k++){
+        const s=document.createElement('i');s.className='spark';gridEl.appendChild(s);
+        const a=Math.random()*Math.PI*2,dist=18+Math.random()*34;
+        s.style.left=cx+'px';s.style.top=cy+'px';
+        s.animate([{opacity:0,transform:'translate(-50%,-50%) scale(.4)'},{opacity:1,offset:.18},{opacity:0,transform:`translate(${Math.cos(a)*dist-50}%,${Math.sin(a)*dist-50}%) scale(1.4)`}],{duration:360+Math.random()*220,easing:'ease-out'}).onfinish=()=>s.remove();
+      }
+    }
+    function surgeBoard(){
+      if(reduced)return;
+      gridEl.classList.remove('surge');void gridEl.offsetWidth;gridEl.classList.add('surge');
+      for(let i=0;i<CELLS;i++)if(!board[i])sparkleCell(i,2);
     }
     function applyClick(cells,i){
       const r=Math.floor(i/SIZE),c=i%SIZE;
@@ -107,6 +135,7 @@
       document.querySelector('[data-level]').textContent=level;
       document.querySelector('[data-clicks]').textContent=clicks;
       document.querySelector('[data-par]').textContent=par;
+      document.querySelector('[data-streak]').textContent=streak;
       document.querySelector('[data-score]').textContent=totalScore;
       endBtn.disabled=levelsDone<1||phase!=='playing';
     }
@@ -120,12 +149,12 @@
     function loadLevel(){
       const gen=genLevel(level);
       board=gen.board;par=gen.par;initial=board.slice();
-      clicks=0;cursor=12;
+      clicks=0;cursor=12;lastFlip=-1;
       statusEl.textContent=`Level ${level} — par ${par}.`;
       render();
     }
     function startRun(){
-      level=1;totalClicks=0;levelsDone=0;totalScore=0;completed=false;
+      level=1;totalClicks=0;levelsDone=0;totalScore=0;streak=0;bestStreak=0;completed=false;
       phase='playing';paused=false;
       startEl.hidden=true;pauseEl.hidden=true;clearEl.hidden=true;resultEl.hidden=true;
       loadLevel();
@@ -137,21 +166,23 @@
       clearEl.hidden=true;pauseEl.hidden=true;
       resultEl.querySelector('h2').textContent=kind==='win'?'All 10 cleared':'Session over';
       resultEl.querySelector('[data-final]').textContent=`Final score ${totalScore}`;
-      resultEl.querySelector('[data-detail]').textContent=`${levelsDone} level${levelsDone===1?'':'s'} solved · ${totalClicks} total clicks.`;
+      resultEl.querySelector('[data-detail]').textContent=`${levelsDone} level${levelsDone===1?'':'s'} solved · ${totalClicks} total clicks · best streak ${bestStreak}.`;
       resultEl.hidden=false;
       updateHud();
-      host('complete',{score:totalScore,progress:100,state:{totalClicks}});
+      host('complete',{score:totalScore,progress:100,state:{totalClicks,bestStreak}});
     }
     function onSolved(){
-      const levelScore=Math.max(20,150-(clicks-par)*10);
+      if(clicks<=par)streak++;else streak=0;
+      bestStreak=Math.max(bestStreak,streak);
+      const levelScore=Math.max(20,150-(clicks-par)*10+streak*12);
       totalScore+=levelScore;levelsDone++;
-      beep(720,0.16,0.045);
+      beep(720,0.16,0.045);setTimeout(()=>beep(960,0.13,0.035),90);surgeBoard();
       updateHud();
       if(level>=10){finish('win');return}
       host('score',{score:totalScore,progress:Math.min(99,levelsDone*10),state:{level,totalClicks}});
       phase='between';
-      clearEl.querySelector('[data-gain]').textContent=`+${levelScore} points`;
-      clearEl.querySelector('[data-clearinfo]').textContent=`Level ${level} solved in ${clicks} click${clicks===1?'':'s'} (par ${par}).`;
+      clearEl.querySelector('[data-gain]').textContent=`+${levelScore} points${streak?` · streak x${streak}`:''}`;
+      clearEl.querySelector('[data-clearinfo]').textContent=`Level ${level} solved in ${clicks} click${clicks===1?'':'s'} (par ${par}). ${clicks<=par?'Clean solve.':'Over par — streak reset.'}`;
       clearEl.hidden=false;
       clearEl.querySelector('button').focus();
     }
@@ -166,8 +197,10 @@
       if(phase!=='playing'||paused)return;
       applyClick(board,i);
       clicks++;totalClicks++;
+      lastFlip=i;
       beep(300+(board[i]?90:0),0.04);
       render();
+      sparkleCell(i,board[i]?9:6);
       if(!board.some(v=>v))onSolved();
     }
     function moveCursor(dr,dc){

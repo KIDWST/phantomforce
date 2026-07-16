@@ -6,43 +6,45 @@ import {
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260714-006";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260714-006";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260714-006";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260714-006";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260714-006";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260714-006";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260714-006";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260714-006";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260714-006";
-import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260714-006";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260714-006";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260714-006";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260714-006";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260714-006";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260714-006";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260714-006";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260714-006";
-import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260714-006";
-import { mountAmbient } from "./ambient.js?v=phantom-live-20260714-006";
-import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260714-006";
+} from "./store.js?v=phantom-live-20260714-022";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260714-022";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260714-022";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260714-022";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260714-022";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260714-022";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260714-022";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260714-022";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260714-022";
+import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260714-022";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260714-022";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260714-022";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260714-022";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260714-022";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260714-022";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260714-022";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260714-022";
+import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260714-022";
+import { mountAmbient } from "./ambient.js?v=phantom-live-20260714-022";
+import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260714-022";
 import {
-  fetchAuthConfig, databaseLogin, databaseLogout, switchOrg, fetchAuthMe, fetchEntitlementsSummary,
-} from "./orgs.js?v=phantom-live-20260714-006";
-import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260714-006";
-import { assetsAvailable } from "./orgs.js?v=phantom-live-20260714-006";
-import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260714-006";
+  fetchAuthConfig, databaseLogin, databaseLogout, databaseSignup, databaseForgotUsername, databaseForgotPassword,
+  databaseResetPassword, databaseVerify2fa, databaseStart2faSetup, databaseConfirm2fa, databaseRegenerate2faBackupCodes, databaseDisable2fa,
+  switchOrg, fetchAuthMe, fetchEntitlementsSummary,
+} from "./orgs.js?v=phantom-live-20260714-022";
+import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260714-022";
+import { assetsAvailable } from "./orgs.js?v=phantom-live-20260714-022";
+import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260714-022";
 // PhantomPlay V2 platform shell (Home/Solo/Friends/Workspace/Dev Hub) - opt-in
 // while it hardens: set localStorage "pf.phantomplay.v2" = "1" (the V2 shell has
 // a "Classic view" button to switch back). Classic stays the default experience.
-import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260714-006";
+import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260714-022";
 const phantomPlayV2Opted = () => { try { return localStorage.getItem("pf.phantomplay.v2") === "1"; } catch { return false; } };
-import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260714-006";
+import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260714-022";
 import {
   customizeNavigation,
   loadOrganizationCustomization,
-} from "./customization.js?v=phantom-live-20260714-006";
-import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260714-006";
+} from "./customization.js?v=phantom-live-20260714-022";
+import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260714-022";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -277,62 +279,129 @@ function maybeUpgradeGateToDatabaseLogin(card, options = {}) {
       if (required) renderCustomerAuthBlocked(card);
       return;
     }
-    const heading = customerApp ? "Sign in to your workspace." : "Sign in to your business.";
-    const buttonLabel = customerApp ? "Open Workspace" : "Open Business Manager";
+    const resetTokenFromUrl = (() => {
+      try { return new URLSearchParams(window.location.search).get("reset_token") || ""; } catch { return ""; }
+    })();
+    const state = { mode: resetTokenFromUrl ? "reset-pass" : "signin", challenge: null, message: resetTokenFromUrl ? "Password reset token detected. Enter your new password." : "", resetToken: resetTokenFromUrl };
     const helper = customerApp
-      ? "Owners and workspace admins land in Business Manager. Employees land in Team Workspace. Permissions come from the business workspace."
-      : "Your account, businesses, and roles are managed on the PhantomForce server.";
+      ? "Owners/admins open Business Manager. Employees open Team Workspace. Permissions come from the business workspace."
+      : "Your account, businesses, roles, recovery, and 2FA are managed on the PhantomForce server.";
     const note = customerApp
-      ? "Use the email tied to your business workspace. Platform admin accounts belong on admin.phantomforce.online."
-      : "Invited to a business? Accept your invitation first, then sign in here.";
-    card.innerHTML = `
-      <p class="gate-kicker">PHANTOMFORCE · SIGN IN</p>
-      <h1>${heading}</h1>
-      <form class="owner-login" data-db-login>
-        <label>
-          <span>Email</span>
-          <input type="email" data-db-email autocomplete="username" placeholder="you@business.com" autofocus required />
-        </label>
-        <label>
-          <span>Password</span>
-          <input type="password" data-db-password autocomplete="current-password" placeholder="Password" required />
-        </label>
-        <button class="gate-opt gate-submit" type="submit">
-          <span class="gate-opt-icon">⌘</span>
-          <b>${buttonLabel}</b>
-          <i>${helper}</i>
-        </button>
+      ? "Use the email or username tied to your business workspace."
+      : "Create a business, accept an invite, recover access, or sign in with 2FA.";
+    const setError = (msg) => {
+      const error = card.querySelector("[data-db-error]");
+      if (!error) return;
+      error.textContent = msg || "";
+      error.hidden = !msg;
+    };
+    const doEnter = async (nextSession) => {
+      if (customerApp && (nextSession?.canManageAccess || nextSession?.isSuperAdmin)) {
+        await databaseLogout();
+        session.clear();
+        ctx.session = null;
+        throw new Error("Platform admin accounts must use admin.phantomforce.online.");
+      }
+      ctx.session = nextSession;
+      enterPhantom();
+    };
+    const render = () => {
+      const tab = (id, label) => `<button type="button" class="auth-tab ${state.mode === id ? "is-active" : ""}" data-auth-mode="${id}">${label}</button>`;
+      const msg = state.message ? `<p class="gate-note">${esc(state.message)}</p>` : "";
+      const body = state.mode === "signup" ? `
+        <form class="owner-login" data-auth-form="signup">
+          <label><span>Email</span><input type="email" name="email" autocomplete="email" placeholder="you@business.com" required /></label>
+          <label><span>Username</span><input name="username" autocomplete="username" placeholder="yourname" minlength="3" maxlength="32" /></label>
+          <label><span>Name</span><input name="name" autocomplete="name" placeholder="Your name" /></label>
+          <label><span>Business / workspace</span><input name="organizationName" placeholder="Business name" /></label>
+          <label><span>Password</span><input type="password" name="password" autocomplete="new-password" minlength="8" required /></label>
+          <button class="gate-opt gate-submit" type="submit"><span class="gate-opt-icon">＋</span><b>Create account</b><i>Creates your user, starter workspace, and owner role.</i></button>
+        </form>` : state.mode === "forgot-user" ? `
+        <form class="owner-login" data-auth-form="forgot-user">
+          <label><span>Account email</span><input type="email" name="email" autocomplete="email" required /></label>
+          <button class="gate-opt gate-submit" type="submit"><span class="gate-opt-icon">?</span><b>Recover username</b><i>We’ll send the username tied to this email.</i></button>
+        </form>` : state.mode === "forgot-pass" ? `
+        <form class="owner-login" data-auth-form="forgot-pass">
+          <label><span>Email or username</span><input name="identifier" autocomplete="username" required /></label>
+          <button class="gate-opt gate-submit" type="submit"><span class="gate-opt-icon">↺</span><b>Send password reset</b><i>Creates a short-lived reset token.</i></button>
+        </form>` : state.mode === "reset-pass" ? `
+        <form class="owner-login" data-auth-form="reset-pass">
+          <label><span>Reset token</span><input name="token" autocomplete="one-time-code" value="${esc(state.resetToken || "")}" required /></label>
+          <label><span>New password</span><input type="password" name="password" autocomplete="new-password" minlength="8" required /></label>
+          <button class="gate-opt gate-submit" type="submit"><span class="gate-opt-icon">✓</span><b>Reset password</b><i>Revokes old sessions and saves the new password.</i></button>
+        </form>` : state.mode === "2fa" ? `
+        <form class="owner-login" data-auth-form="2fa">
+          <label><span>2FA code</span><input name="code" inputmode="numeric" autocomplete="one-time-code" placeholder="000000" required autofocus /></label>
+          <button class="gate-opt gate-submit" type="submit"><span class="gate-opt-icon">⌁</span><b>Verify 2FA</b><i>Use your authenticator app code.</i></button>
+        </form>` : `
+        <form class="owner-login" data-auth-form="signin">
+          <label><span>Email or username</span><input name="identifier" autocomplete="username" placeholder="you@business.com or username" autofocus required /></label>
+          <label><span>Password</span><input type="password" name="password" autocomplete="current-password" placeholder="Password" required /></label>
+          <button class="gate-opt gate-submit" type="submit"><span class="gate-opt-icon">⌘</span><b>${customerApp ? "Open Workspace" : "Open Business Manager"}</b><i>${helper}</i></button>
+        </form>`;
+      card.innerHTML = `
+        <p class="gate-kicker">PHANTOMFORCE · ACCOUNT ACCESS</p>
+        <h1>${state.mode === "signup" ? "Create your Phantom account." : state.mode === "2fa" ? "Enter your 2FA code." : customerApp ? "Sign in to your workspace." : "Sign in to Phantom."}</h1>
+        <div class="auth-tabs">${tab("signin", "Sign in")}${tab("signup", "Create user")}${tab("forgot-user", "Forgot username")}${tab("forgot-pass", "Forgot password")}${tab("reset-pass", "Reset")}</div>
+        ${body}
         <p class="gate-error" data-db-error hidden></p>
-      </form>
-      <p class="gate-note">${note}</p>`;
-    const form = card.querySelector("[data-db-login]");
-    const error = card.querySelector("[data-db-error]");
-    form.onsubmit = async (event) => {
+        ${msg}
+        <p class="gate-note">${note}</p>`;
+      card.querySelectorAll("[data-auth-mode]").forEach((btn) => {
+        btn.onclick = () => { state.mode = btn.dataset.authMode; state.message = ""; render(); };
+      });
+      const form = card.querySelector("[data-auth-form]");
+      if (!form) return;
+      form.onsubmit = async (event) => {
       event.preventDefault();
-      error.hidden = true;
+      setError("");
       form.classList.add("is-loading");
       try {
-        const nextSession = await databaseLogin(
-          card.querySelector("[data-db-email]").value.trim(),
-          card.querySelector("[data-db-password]").value,
-        );
-        if (customerApp && (nextSession?.canManageAccess || nextSession?.isSuperAdmin)) {
-          await databaseLogout();
-          session.clear();
-          ctx.session = null;
-          throw new Error("Platform admin accounts must use admin.phantomforce.online.");
+        const data = new FormData(form);
+        if (state.mode === "signin") {
+          const nextSession = await databaseLogin(String(data.get("identifier") || "").trim(), String(data.get("password") || ""));
+          if (nextSession?.requires2fa) {
+            state.challenge = nextSession.challengeToken;
+            state.mode = "2fa";
+            state.message = "Password accepted. Enter your authenticator code to finish signing in.";
+            render();
+            return;
+          }
+          await doEnter(nextSession);
+        } else if (state.mode === "2fa") {
+          await doEnter(await databaseVerify2fa(state.challenge, String(data.get("code") || "")));
+        } else if (state.mode === "signup") {
+          await databaseSignup({
+            email: String(data.get("email") || "").trim(),
+            username: String(data.get("username") || "").trim() || undefined,
+            name: String(data.get("name") || "").trim() || undefined,
+            organizationName: String(data.get("organizationName") || "").trim() || undefined,
+            password: String(data.get("password") || ""),
+          });
+          state.mode = "signin"; state.message = "Account created. Sign in with your new credentials."; render();
+        } else if (state.mode === "forgot-user") {
+          const result = await databaseForgotUsername(String(data.get("email") || "").trim());
+          state.message = result?.preview?.username ? `Recovery queued. Dev preview username: ${result.preview.username}` : "If that email exists, username recovery has been queued.";
+          render();
+        } else if (state.mode === "forgot-pass") {
+          const result = await databaseForgotPassword(String(data.get("identifier") || "").trim());
+          state.mode = "reset-pass";
+          state.message = result?.preview?.resetToken ? `Reset queued. Dev preview token: ${result.preview.resetToken}` : "If that account exists, password reset has been queued.";
+          render();
+        } else if (state.mode === "reset-pass") {
+          await databaseResetPassword(String(data.get("token") || "").trim(), String(data.get("password") || ""));
+          state.mode = "signin"; state.resetToken = ""; state.message = "Password reset. Sign in with the new password."; render();
         }
-        ctx.session = nextSession;
-        enterPhantom();
       } catch (err) {
         session.clear();
         ctx.session = null;
-        error.textContent = err?.message || "Sign-in failed.";
-        error.hidden = false;
+        setError(err?.message || "Account action failed.");
       } finally {
         form.classList.remove("is-loading");
       }
     };
+    };
+    render();
   }).catch(() => {
     if (required && !gate.hidden) renderCustomerAuthBlocked(card, "The account system is not reachable. Start the backend, then sign in again.");
   });
@@ -991,6 +1060,30 @@ function renderAccountPlan(body) {
           </div>
         </article>
       </section>
+      <section class="account-section" data-account-security>
+        <div class="set-sec-head">
+          <div>
+            <p class="account-card-k">Account security</p>
+            <h3>Two-factor authentication</h3>
+          </div>
+        </div>
+        ${ctx.session?.database ? `
+          <div class="account-billing-list">
+            <span><b>Username</b><i>${esc(ctx.session.username || ctx.session.email || "Not loaded")}</i></span>
+            <span><b>2FA</b><i data-2fa-status>Checking server status…</i></span>
+          </div>
+          <div class="account-actions" style="margin-top:12px;flex-wrap:wrap">
+            <button class="btn btn-primary" data-security-action="setup-2fa">Set up 2FA</button>
+            <button class="btn" data-security-action="backup-2fa">Regenerate recovery codes</button>
+            <button class="btn" data-security-action="disable-2fa">Disable 2FA</button>
+          </div>
+          <div class="account-notice" data-security-output hidden></div>
+          <form class="owner-login" data-2fa-confirm-form hidden style="margin-top:12px">
+            <label><span>Authenticator code</span><input name="code" inputmode="numeric" autocomplete="one-time-code" placeholder="000000" required /></label>
+            <button class="btn btn-primary" type="submit">Confirm 2FA</button>
+          </form>
+        ` : `<p class="set-note">2FA is available when signed into a database-backed account.</p>`}
+      </section>
       <section class="account-section">
         <div class="set-sec-head">
           <div>
@@ -1049,7 +1142,77 @@ function renderAccountPlan(body) {
       renderAccountPlan(body);
     });
   });
+  wireAccountSecurity(body);
   if (ctx.session?.database) hydrateLivePlan(body);
+}
+
+async function wireAccountSecurity(body) {
+  if (!ctx.session?.database) return;
+  const output = body.querySelector("[data-security-output]");
+  const status = body.querySelector("[data-2fa-status]");
+  const form = body.querySelector("[data-2fa-confirm-form]");
+  let pendingSecret = "";
+  const show = (msg, isError = false) => {
+    if (!output) return;
+    output.hidden = false;
+    output.textContent = msg;
+    output.style.borderColor = isError ? "rgba(255,80,80,.36)" : "";
+    output.style.color = isError ? "#ffb7b7" : "";
+  };
+  const showRecoveryCodes = (codes = []) => {
+    if (!output) return;
+    output.hidden = false;
+    output.style.borderColor = "";
+    output.style.color = "";
+    output.innerHTML = `<b>Save these recovery codes now. They are shown once.</b><div class="auth-recovery-codes">${codes.map((code) => `<code>${esc(code)}</code>`).join("")}</div><small>Each code works once if you lose your authenticator.</small>`;
+  };
+  fetchAuthMe().then((me) => {
+    if (status) status.textContent = me?.user?.twoFactorEnabled ? "Enabled" : "Not enabled";
+  }).catch(() => { if (status) status.textContent = "Unavailable"; });
+  body.querySelector("[data-security-action='setup-2fa']")?.addEventListener("click", async () => {
+    try {
+      const setup = await databaseStart2faSetup();
+      pendingSecret = setup.secret;
+      show(`Add this secret to Google Authenticator / iOS Passwords, then enter the code below: ${setup.secret}`);
+      if (form) form.hidden = false;
+    } catch (err) {
+      show(err?.message || "2FA setup failed.", true);
+    }
+  });
+  body.querySelector("[data-security-action='disable-2fa']")?.addEventListener("click", async () => {
+    const code = prompt("Enter your current authenticator or recovery code to disable 2FA:");
+    if (!code) return;
+    try {
+      await databaseDisable2fa(code);
+      show("2FA disabled.");
+      if (status) status.textContent = "Not enabled";
+    } catch (err) {
+      show(err?.message || "Could not disable 2FA.", true);
+    }
+  });
+  body.querySelector("[data-security-action='backup-2fa']")?.addEventListener("click", async () => {
+    const code = prompt("Enter your current authenticator code to regenerate recovery codes:");
+    if (!code) return;
+    try {
+      const result = await databaseRegenerate2faBackupCodes(code);
+      showRecoveryCodes(result.backupCodes || []);
+    } catch (err) {
+      show(err?.message || "Could not regenerate recovery codes.", true);
+    }
+  });
+  form?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const code = new FormData(form).get("code");
+    try {
+      const result = await databaseConfirm2fa(String(code || ""));
+      showRecoveryCodes(result.backupCodes || []);
+      if (status) status.textContent = "Enabled";
+      form.hidden = true;
+      pendingSecret = "";
+    } catch (err) {
+      show(err?.message || "Invalid 2FA code.", true);
+    }
+  });
 }
 
 /* ============================ hero + command deck ============================ */
@@ -1062,7 +1225,7 @@ const MODES = {
   admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260714-006";
+const POSE_VERSION = "phantom-live-20260714-022";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
