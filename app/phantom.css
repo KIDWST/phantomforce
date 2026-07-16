@@ -13389,6 +13389,116 @@ body .phantom .workspace-page :where(
   100% { transform: translateX(105%); opacity: 0; }
 }
 
+/* ---- active outcomes: the operating threads everything else serves ---- */
+.outcome-strip {
+  display: grid;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  border: 1px solid rgba(65, 255, 161, 0.15);
+  border-radius: var(--r-lg);
+  background:
+    radial-gradient(60% 100% at 100% 0%, rgba(30, 240, 255, 0.07), transparent 50%),
+    linear-gradient(135deg, rgba(4, 17, 14, 0.72), rgba(2, 7, 9, 0.78));
+  box-shadow: var(--edge-hi);
+}
+.outcome-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+.outcome-head p {
+  margin: 0;
+  color: var(--neon);
+  font: 800 var(--fs-xs) / 1.25 var(--font-mono);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.outcome-head span { color: var(--dim); font-size: var(--fs-sm); }
+.outcome-new,
+.outcome-card button,
+.outcome-empty {
+  cursor: pointer;
+  border: 1px solid rgba(65, 255, 161, 0.2);
+  color: var(--ink);
+  background: rgba(65, 255, 161, 0.07);
+}
+.outcome-new {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border-radius: 999px;
+  font-weight: 800;
+}
+.outcome-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-3); }
+.outcome-card {
+  position: relative;
+  display: grid;
+  gap: var(--sp-3);
+  min-width: 0;
+  padding: var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: rgba(0, 0, 0, 0.18);
+  overflow: hidden;
+}
+.outcome-card::before {
+  content: "";
+  position: absolute;
+  inset: auto 0 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--neon), transparent);
+  animation: outcomeProgress 4.8s ease-in-out infinite;
+}
+.outcome-card.is-warn { border-color: rgba(255, 209, 102, 0.26); }
+.outcome-index {
+  width: 34px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(65, 255, 161, 0.2);
+  border-radius: 999px;
+  color: var(--neon);
+  font: 800 10px var(--font-mono);
+}
+.outcome-copy { min-width: 0; display: grid; gap: 5px; }
+.outcome-copy b { color: var(--ink); font-size: 15px; line-height: 1.2; }
+.outcome-copy i { color: var(--dim); font-style: normal; font-size: var(--fs-sm); line-height: 1.4; }
+.outcome-card > span {
+  justify-self: start;
+  padding: 5px 8px;
+  border: 1px solid rgba(65, 255, 161, 0.14);
+  border-radius: 999px;
+  color: rgba(207, 255, 226, 0.68);
+  font: 800 9px var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.outcome-card button,
+.outcome-empty {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 9px 11px;
+  border-radius: 999px;
+  font-weight: 800;
+}
+.outcome-empty {
+  width: 100%;
+  justify-content: space-between;
+  border-radius: var(--r-md);
+  text-align: left;
+}
+.outcome-empty b { font-size: 15px; }
+.outcome-empty i { max-width: 70ch; color: var(--dim); font-size: var(--fs-sm); font-style: normal; font-weight: 500; }
+@keyframes outcomeProgress {
+  0%, 40% { transform: translateX(-100%); opacity: 0; }
+  55% { opacity: 1; }
+  100% { transform: translateX(100%); opacity: 0; }
+}
+
 /* ---- handled proof: completed work from the real activity ledger ---- */
 .handled-proof {
   display: grid;
@@ -13758,6 +13868,9 @@ body .phantom .workspace-page :where(
 }
 @media (max-width: 900px) {
   .decision-grid { grid-template-columns: 1fr; }
+  .outcome-row { grid-template-columns: 1fr; }
+  .outcome-head { align-items: flex-start; flex-direction: column; }
+  .outcome-empty { align-items: flex-start; flex-direction: column; }
   .handled-row { grid-template-columns: 1fr; }
   .command-widgets { grid-template-columns: 1fr; }
   .cw-flow { grid-template-columns: 1fr; }
@@ -13765,6 +13878,7 @@ body .phantom .workspace-page :where(
 }
 @media (prefers-reduced-motion: reduce) {
   .decision-card::before,
+  .outcome-card::before,
   .handled-dot,
   .cw-flow-node.is-live::before,
   .command-widget,

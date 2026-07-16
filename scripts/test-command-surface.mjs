@@ -13,6 +13,7 @@ assert.match(index, /data-command-widgets/u, "Dashboard must keep the expandable
 assert.match(index, /data-hero-sub/u, "Dashboard hero must have a data-backed operating briefing line.");
 assert.match(index, /data-hero-proof/u, "Dashboard hero must have a recent proof line for handled work.");
 assert.match(index, /data-decision-deck/u, "Dashboard must have a real-data decision deck mount.");
+assert.match(index, /data-outcome-strip/u, "Dashboard must have a first-class active outcomes section.");
 assert.match(index, /data-handled-proof/u, "Dashboard must have a handled-work proof strip mount.");
 assert.match(index, /data-quick-title>Next moves</u, "Right rail should lead with next moves, not generic quick actions.");
 assert.match(index, /data-work-title>Work in motion</u, "Right rail should show work in motion, not an old mission queue.");
@@ -50,6 +51,14 @@ assert.match(main, /renderedNextMoves\[.*quick\.dataset\.quick.*\] \|\| QUICK/u,
   "Visible next-move clicks must execute the rendered data-driven action.");
 assert.match(main, /function renderDecisionDeck\(\)/u,
   "Command surface must render structured decision cards from attention state.");
+assert.match(main, /function activeOutcomeItems\(\)/u,
+  "Command surface must derive active outcomes from plan and attention state.");
+assert.match(main, /function renderOutcomeStrip\(\)/u,
+  "Command surface must render outcomes as a first-class operating section.");
+assert.match(main, /data-command-run="Create my first business outcome"/u,
+  "Outcome section should let a clean account capture a result, not pick a tab.");
+assert.match(main, /renderDecisionDeck\(\);[\s\S]*?renderOutcomeStrip\(\);[\s\S]*?renderHandledProofDeck\(\);/u,
+  "Console render order should put outcomes between decisions and handled proof.");
 assert.match(main, /kind:\s*"agent-failure"[\s\S]*?weight:\s*390/u,
   "Decision signals must carry explicit kinds and priority weights.");
 assert.match(main, /return items\.sort\(\(a, b\) => \(b\.weight \|\| 0\) - \(a\.weight \|\| 0\)\);/u,
@@ -67,6 +76,8 @@ assert.match(css, /\.cw-flow\s*\{/u, "Outcome widget must show a compact Signal/
 assert.match(css, /\.cw-dock-node::before/u, "Command dock nodes should expose visible status dots.");
 assert.match(css, /\.hero2-proof\s*\{/u, "Recent handled proof line must have compact dashboard styling.");
 assert.match(css, /\.decision-deck\s*\{/u, "Decision deck must have compact command-center styling.");
+assert.match(css, /\.outcome-strip\s*\{/u, "Active outcomes must have a dedicated command-center surface.");
+assert.match(css, /@keyframes outcomeProgress/u, "Outcome cards should animate operational progress, not decorative thinking.");
 assert.match(css, /\.handled-proof\s*\{/u, "Handled proof strip must have compact proof styling.");
 assert.match(css, /\.quick-item i\s*\{/u, "Next move rail must support compact evidence subtext.");
 assert.doesNotMatch(widgetSource, /id:\s*"memory"/u, "Memory should not consume a dashboard widget slot.");
