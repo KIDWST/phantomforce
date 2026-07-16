@@ -19,6 +19,8 @@ assert.doesNotMatch(main, /id: "clientsetup"|label: "Client Setup"/iu,
 
 assert.match(settings, /id: "organization", label: "Organization", category: "Workspace"/u,
   "Organization management must live under the Workspace settings category.");
+assert.match(settings, /id: "plan", label: "Plan & access", category: "Workspace"/u,
+  "Plan testing and entitlement restrictions must live under Settings, not Clients.");
 assert.match(settings, /id: "workspace", label: "Workspace Studio", category: "Workspace"/u,
   "Workspace Studio must remain in the same Settings category.");
 assert.match(settings, /renderOrganizationPanel\(organizationMount, opts\)/u,
@@ -38,6 +40,10 @@ assert.match(organization, /const canManageOrganization/u,
   "Organization controls need an explicit management permission gate.");
 assert.doesNotMatch(organization, /Client setup|Clients &amp; CRM|data-open-ws="leads"/iu,
   "Organization must not contain the retired CRM shortcut or Client Setup framing.");
+assert.match(main, /<button class="plan-inner" data-open-ws="settings">[\s\S]*No real work loaded yet\./u,
+  "The empty setup CTA must open Settings, not the client pipeline.");
+assert.doesNotMatch(main, /<button class="plan-inner" data-open-ws="leads">[\s\S]*No real work loaded yet\./u,
+  "The empty setup CTA must not route organization setup back into Clients.");
 
 assert.match(registry, /id: "crm", displayName: "Clients"/u,
   "The server module registry must retain the canonical Clients label.");

@@ -4,6 +4,9 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
+import type { PlanStatus } from "@prisma/client";
+
+import { PLAN_DEFINITIONS, type PlanDefinition, type ResolvedEntitlements } from "./entitlements.js";
 import type { AccessSession } from "./session.js";
 
 export const LOCAL_CUSTOMER_SESSION_PREFIX = "local:";
@@ -24,6 +27,10 @@ type LocalCustomerUser = {
   passwordHash: string;
   activeOrgId: string;
   memberships: LocalCustomerMembership[];
+  planKey?: string;
+  planStatus?: PlanStatus;
+  planUpdatedAt?: string;
+  planNote?: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -73,6 +80,8 @@ const exposeResetTokens = process.env.PHANTOMFORCE_LOCAL_CUSTOMER_RESET_EXPOSE_T
 const passwordIterations = 210_000;
 const passwordKeyLength = 32;
 const passwordDigest = "sha256";
+const DEFAULT_LOCAL_CUSTOMER_PLAN_KEY = "starter";
+const PLAN_STATUSES = new Set(["trial", "active", "grace", "suspended"]);
 
 let loaded = false;
 let store: LocalCustomerStore = emptyStore();
@@ -102,6 +111,42 @@ function titleFromEmail(email: string) {
     .map((word) => `${word.slice(0, 1).toUpperCase()}${word.slice(1)}`)
     .join(" ")
     .slice(0, 80) || "Customer";
+}
+
+function publicPlanDefinitions(): PlanDefinition[] {
+  return PLAN_DEFINITIONS.filter((plan) => !plan.isInternal);
+}
+
+function publicPlanDefinition(planKey?: string | null): PlanDefinition {
+  const publicPlans = publicPlanDefinitions();
+  return publicPlans.find((plan) => plan.key === planKey)
+    ?? publicPlans.find((plan) => plan.key === DEFAULT_LOCAL_CUSTOMER_PLAN_KEY)
+    ?? publicPlans[0];
+}
+
+function normalizePlanStatus(value: unknown): PlanStatus {
+  return PLAN_STATUSES.has(String(value)) ? value as PlanStatus : "active";
+}
+
+function resolveLocalCustomerEntitlements(user: LocalCustomerUser): ResolvedEntitlements {
+  const definition = publicPlanDefinition(user.planKey);
+  const status = normalizePlanStatus(user.planStatus);
+  const canWrite = localCustomerWriteAccess && status !== "suspended";
+  return {
+    orgId: user.activeOrgId,
+    planKey: definition.key,
+    planName: definition.name,
+    status,
+    effectiveStatus: status,
+    trialEndsAt: null,
+    graceUntil: null,
+    canWrite,
+    upgradeRequired: status === "grace" || status === "suspended",
+    features: definition.features,
+    limits: definition.limits,
+    overridesApplied: false,
+    note: user.planNote ?? "Customer self-service test tier.",
+  };
 }
 
 function tokenHash(value: string) {
@@ -164,6 +209,10 @@ function buildUser(input: LocalCustomerRegisterInput, passwordHash: string): Loc
     passwordHash,
     activeOrgId: orgId,
     memberships: [{ orgId, orgName: businessName, role: "owner" }],
+    planKey: DEFAULT_LOCAL_CUSTOMER_PLAN_KEY,
+    planStatus: "active",
+    planUpdatedAt: stamp,
+    planNote: "Customer self-service test tier.",
     createdAt: stamp,
     updatedAt: stamp,
   };
@@ -183,6 +232,10 @@ async function upsertSeedCustomer() {
     existing.memberships = existing.memberships.length
       ? existing.memberships.map((membership, index) => index === 0 ? { ...membership, orgName: existing.businessName, role: "owner" } : membership)
       : [{ orgId: existing.activeOrgId, orgName: existing.businessName, role: "owner" }];
+    existing.planKey = publicPlanDefinition(existing.planKey).key;
+    existing.planStatus = normalizePlanStatus(existing.planStatus);
+    existing.planUpdatedAt = existing.planUpdatedAt || nowIso();
+    existing.planNote = existing.planNote || "Customer self-service test tier.";
     existing.passwordHash = passwordHash;
     existing.updatedAt = nowIso();
   } else {
@@ -225,13 +278,14 @@ function buildSession(user: LocalCustomerUser, sessionRecord: LocalCustomerSessi
     ? user.memberships
     : [{ orgId: activeOrgId, orgName: user.businessName, role: "owner" as const }];
   const activeMembership = memberships.find((membership) => membership.orgId === activeOrgId) ?? memberships[0];
+  const entitlements = resolveLocalCustomerEntitlements(user);
   return {
     id: `${LOCAL_CUSTOMER_SESSION_PREFIX}${sessionRecord.id}`,
     label: user.name || user.email,
     role: "client",
     clientId: activeMembership?.orgId ?? activeOrgId,
     canManageAccess: false,
-    subscriptionActive: localCustomerWriteAccess,
+    subscriptionActive: entitlements.canWrite,
     userId: user.id,
     email: user.email,
     authSessionId: sessionRecord.id,
@@ -240,6 +294,53 @@ function buildSession(user: LocalCustomerUser, sessionRecord: LocalCustomerSessi
     orgRole: activeMembership?.role ?? "owner",
     memberships,
   };
+}
+
+export function listLocalCustomerPlanDefinitions() {
+  return publicPlanDefinitions().map((plan) => ({
+    key: plan.key,
+    name: plan.name,
+    description: plan.description,
+    isInternal: false,
+    trialDays: plan.trialDays,
+    graceDays: plan.graceDays,
+    features: plan.features,
+    limits: plan.limits,
+  }));
+}
+
+export async function getLocalCustomerPlanSummary(session: AccessSession) {
+  if (!enableLocalCustomerAuth || !session.id.startsWith(LOCAL_CUSTOMER_SESSION_PREFIX) || !session.userId) return undefined;
+  await loadStore();
+  const user = store.users.find((account) => account.id === session.userId);
+  if (!user) return undefined;
+  const entitlements = resolveLocalCustomerEntitlements(user);
+  return {
+    entitlements,
+    plans: listLocalCustomerPlanDefinitions(),
+    metrics: [],
+    seats: { used: user.memberships.length || 1, limit: entitlements.limits.seats },
+  };
+}
+
+export async function assignLocalCustomerPlan(session: AccessSession, planKey: string) {
+  if (!enableLocalCustomerAuth) return { ok: false as const, error: "local_customer_auth_disabled" };
+  if (!session.id.startsWith(LOCAL_CUSTOMER_SESSION_PREFIX) || !session.userId) return { ok: false as const, error: "local_customer_required" };
+  if (!["owner", "admin"].includes(session.orgRole || "")) return { ok: false as const, error: "owner_or_admin_required" };
+  const definition = publicPlanDefinitions().find((plan) => plan.key === planKey);
+  if (!definition) return { ok: false as const, error: "unknown_public_plan", available: listLocalCustomerPlanDefinitions().map((plan) => plan.key) };
+  await loadStore();
+  const user = store.users.find((account) => account.id === session.userId);
+  if (!user) return { ok: false as const, error: "account_not_found" };
+  user.planKey = definition.key;
+  user.planStatus = "active";
+  user.planUpdatedAt = nowIso();
+  user.planNote = "Customer self-service test tier.";
+  user.updatedAt = user.planUpdatedAt;
+  await saveStore();
+  const summary = await getLocalCustomerPlanSummary(session);
+  if (!summary) return { ok: false as const, error: "account_not_found" };
+  return { ok: true as const, ...summary };
 }
 
 export async function loginLocalCustomer(emailRaw: string, password: string) {

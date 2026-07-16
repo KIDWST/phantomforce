@@ -78,8 +78,11 @@ import {
 } from "./access/user-accounts.js";
 import {
   LOCAL_CUSTOMER_SESSION_PREFIX,
+  assignLocalCustomerPlan,
   completeLocalCustomerPasswordReset,
+  getLocalCustomerPlanSummary,
   initializeLocalCustomerAuthState,
+  listLocalCustomerPlanDefinitions,
   localCustomerAuthEnabled,
   localCustomerAuthStorePath,
   loginLocalCustomer,
@@ -1332,6 +1335,9 @@ const CustomerPasswordResetCompleteSchema = z.object({
   token: z.string().trim().min(20).max(240),
   password: z.string().min(8).max(200),
 });
+const CustomerPlanPreviewSchema = z.object({
+  planKey: z.string().trim().min(1).max(60),
+});
 
 function customerAuthForbiddenOnHost(request: FastifyRequest) {
   return publicHostScope(requestPublicHost(request)) === "admin";
@@ -1492,7 +1498,9 @@ app.get("/auth/me", async (request, reply) => {
   if (!session) return reply;
   const dbSession = asDatabaseSession(session);
   if (!dbSession) {
-    return { ok: true, session, database: false, localCustomer: session.id.startsWith(LOCAL_CUSTOMER_SESSION_PREFIX) };
+    const localCustomer = session.id.startsWith(LOCAL_CUSTOMER_SESSION_PREFIX);
+    const planSummary = localCustomer ? await getLocalCustomerPlanSummary(session).catch(() => undefined) : undefined;
+    return { ok: true, session, database: false, localCustomer, ...(planSummary ?? {}) };
   }
   const entitlements = dbSession.orgId ? await getOrgEntitlements(dbSession.orgId).catch(() => null) : null;
   return {
@@ -1523,6 +1531,36 @@ app.get("/auth/me", async (request, reply) => {
         }
       : null,
   };
+});
+
+app.get("/customer/plan-preview", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  if (customerAuthForbiddenOnHost(request)) {
+    return reply.code(403).send({ ok: false, error: "Customer plan testing is only available on the customer app." });
+  }
+  if (!session.id.startsWith(LOCAL_CUSTOMER_SESSION_PREFIX)) {
+    return reply.code(403).send({ ok: false, error: "Plan preview switching is only available for local customer test accounts." });
+  }
+  const summary = await getLocalCustomerPlanSummary(session);
+  if (!summary) return reply.code(404).send({ ok: false, error: "customer_account_not_found" });
+  return { ok: true, ...summary };
+});
+
+app.post("/customer/plan-preview", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  if (customerAuthForbiddenOnHost(request)) {
+    return reply.code(403).send({ ok: false, error: "Customer plan testing is only available on the customer app." });
+  }
+  const parsed = CustomerPlanPreviewSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  const result = await assignLocalCustomerPlan(session, parsed.data.planKey);
+  if (!result.ok) {
+    const code = result.error === "unknown_public_plan" ? 400 : 403;
+    return reply.code(code).send({ ok: false, error: result.error, available: "available" in result ? result.available : listLocalCustomerPlanDefinitions().map((plan) => plan.key) });
+  }
+  return { ok: true, entitlements: result.entitlements, plans: result.plans, metrics: result.metrics, seats: result.seats };
 });
 
 const SwitchOrgSchema = z.object({ orgId: z.string().min(1).max(120) });

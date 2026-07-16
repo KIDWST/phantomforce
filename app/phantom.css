@@ -13397,6 +13397,63 @@ body .phantom .workspace-page :where(
   font-size: var(--fs-xs);
   overflow-wrap: anywhere;
 }
+.cw-dock {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid rgba(65, 255, 161, 0.12);
+  border-radius: var(--r-sm);
+  background:
+    radial-gradient(80% 120% at 10% 0%, rgba(65, 255, 161, 0.12), transparent 50%),
+    rgba(0, 0, 0, 0.18);
+}
+.cw-dock-node {
+  position: relative;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  padding: 9px 9px 9px 28px;
+  border: 1px solid rgba(255, 255, 255, 0.055);
+  border-radius: 10px;
+  background: rgba(6, 18, 14, 0.68);
+}
+.cw-dock-node::before {
+  content: "";
+  position: absolute;
+  left: 10px;
+  top: 14px;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--neon);
+  box-shadow: 0 0 14px rgba(65, 255, 161, 0.45);
+}
+.cw-dock-node.is-watch::before {
+  background: var(--warn);
+  box-shadow: 0 0 14px rgba(255, 209, 102, 0.38);
+}
+.cw-dock-node.is-quiet::before {
+  background: var(--dim);
+  box-shadow: none;
+}
+.cw-dock-node b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #e9fff4;
+  font-size: 11px;
+  font-weight: 800;
+}
+.cw-dock-node i {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dim);
+  font: 700 10px / 1.2 var(--font-mono);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
 .cw-open {
   min-height: 38px;
   display: inline-flex;
@@ -13430,6 +13487,7 @@ body .phantom .workspace-page :where(
 }
 @media (max-width: 900px) {
   .command-widgets { grid-template-columns: 1fr; }
+  .cw-dock { grid-template-columns: 1fr; }
 }
 @media (prefers-reduced-motion: reduce) {
   .command-widget,

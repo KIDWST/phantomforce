@@ -6,44 +6,44 @@ import {
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260716-288";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260716-288";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260716-288";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260716-288";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260716-288";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260716-288";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260716-288";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260716-288";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260716-288";
-import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260716-288";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260716-288";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260716-288";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260716-288";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260716-288";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260716-288";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260716-288";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260716-288";
-import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260716-288";
-import { mountAmbient } from "./ambient.js?v=phantom-live-20260716-288";
-import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260716-288";
+} from "./store.js?v=phantom-live-20260716-289";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260716-289";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260716-289";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260716-289";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260716-289";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260716-289";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260716-289";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260716-289";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260716-289";
+import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260716-289";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260716-289";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260716-289";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260716-289";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260716-289";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260716-289";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260716-289";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260716-289";
+import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260716-289";
+import { mountAmbient } from "./ambient.js?v=phantom-live-20260716-289";
+import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260716-289";
 import {
   fetchAuthConfig, databaseLogin, databaseLogout, customerRegister, requestCustomerPasswordReset,
   completeCustomerPasswordReset, switchOrg, fetchAuthMe, fetchEntitlementsSummary,
-} from "./orgs.js?v=phantom-live-20260716-288";
-import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260716-288";
-import { assetsAvailable } from "./orgs.js?v=phantom-live-20260716-288";
-import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260716-288";
+} from "./orgs.js?v=phantom-live-20260716-289";
+import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260716-289";
+import { assetsAvailable } from "./orgs.js?v=phantom-live-20260716-289";
+import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260716-289";
 // PhantomPlay V2 platform shell (Home/Solo/Friends/Workspace/Dev Hub) - opt-in
 // while it hardens: set localStorage "pf.phantomplay.v2" = "1" (the V2 shell has
 // a "Classic view" button to switch back). Classic stays the default experience.
-import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260716-288";
+import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260716-289";
 const phantomPlayV2Opted = () => { try { return localStorage.getItem("pf.phantomplay.v2") === "1"; } catch { return false; } };
-import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260716-288";
+import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260716-289";
 import {
   customizeNavigation,
   loadOrganizationCustomization,
-} from "./customization.js?v=phantom-live-20260716-288";
-import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260716-288";
+} from "./customization.js?v=phantom-live-20260716-289";
+import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260716-289";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -520,6 +520,15 @@ const BASE_NAV = [
 const BASE_NAV_ORDER = new Map(BASE_NAV.map((item, index) => [item.id, index]));
 let NAV = customizeNavigation(BASE_NAV, isAdmin() ? "owner" : "client");
 let navEntitlements = { loaded: false, features: null, limits: null };
+const FEATURE_BY_NAV_ID = {
+  media: "mediaLab",
+  sites: "websites",
+  intelligence: "competitorIntelligence",
+  vacation: "vacationMode",
+  phantomplay: "phantomPlay",
+  automation: "advancedWorkflows",
+  assets: "assetPacks",
+};
 /* Mirrors NAV (desktop sidebar) 1:1 so mobile never falls behind desktop —
    same items, same ownerOnly/adminOnly gates, just a compact label and a
    horizontally scrollable strip instead of a vertical list. */
@@ -552,10 +561,11 @@ let MOBILE_NAV = NAV.map((n) => ({
 }));
 
 function navFeatureDisabled(item) {
-  if (item?.id !== "phantomplay") return false;
-  if (!ctx.session?.database || !navEntitlements.loaded) return false;
-  const featureOff = navEntitlements.features?.phantomPlay === false;
-  const minutes = Number(navEntitlements.limits?.phantomPlayMinutesPerDay ?? 1);
+  if (!ctx.session?.database && !ctx.session?.localCustomer) return false;
+  if (!navEntitlements.loaded) return false;
+  const feature = FEATURE_BY_NAV_ID[item?.id];
+  const featureOff = feature ? navEntitlements.features?.[feature] === false : false;
+  const minutes = item?.id === "phantomplay" ? Number(navEntitlements.limits?.phantomPlayMinutesPerDay ?? 1) : 1;
   return featureOff || minutes <= 0;
 }
 
@@ -602,7 +612,7 @@ function refreshCustomizedNavigation() {
 }
 
 async function refreshNavEntitlements({ rerender = true } = {}) {
-  if (!ctx.session?.database) {
+  if (!ctx.session?.database && !ctx.session?.localCustomer) {
     navEntitlements = { loaded: true, features: null, limits: null };
   } else {
     try {
@@ -735,6 +745,11 @@ function setMobileNav(open) {
 function goNav(id) {
   const item = NAV.find((n) => n.id === id);
   if (!item) return;
+  if (navFeatureDisabled(item)) {
+    try { localStorage.setItem("pf.settings.tab.v1", "plan"); } catch {}
+    routeWorkspace("settings");
+    return;
+  }
   activeNav = id;
   renderNav();
   if (id !== "dashboard") {
@@ -1238,7 +1253,7 @@ const MODES = {
   admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260716-288";
+const POSE_VERSION = "phantom-live-20260716-289";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -1501,14 +1516,14 @@ function renderPlan() {
   if (!plan.length) {
     $("[data-plan]").innerHTML = `
       <div class="section-head"><h2>Today's plan</h2></div>
-      <button class="plan-inner" data-open-ws="leads">
+      <button class="plan-inner" data-open-ws="settings">
         <svg class="plan-donut" viewBox="0 0 72 72" aria-hidden="true">
           <circle cx="36" cy="36" r="30" class="plan-track"/>
           <text x="36" y="40" class="plan-pct">0</text>
         </svg>
         <span class="plan-copy">
           <b>No real work loaded yet.</b>
-          <i>Add a lead, draft a proposal, or connect a tool.</i>
+            <i>Open Settings to finish organization setup, plan testing, or tool connections.</i>
         </span>
         <span class="plan-arrow">${svg("arrow")}</span>
       </button>`;
@@ -1692,6 +1707,60 @@ function renderAttentionStrip() {
     </div>`;
 }
 
+function commandToolModeTone(mode = "") {
+  if (["active", "owner-controlled", "available"].includes(mode)) return "ok";
+  if (["setup-ready", "planning", "scaffolded"].includes(mode)) return "watch";
+  return "quiet";
+}
+
+function renderCommandToolDock() {
+  const tools = (TOOL_SPINE || [])
+    .filter((tool) => tool && tool.visibleToClients !== true)
+    .filter((tool) => ["active", "available", "owner-controlled", "setup-ready", "planning"].includes(tool.mode))
+    .slice(0, 6);
+  if (!tools.length) return "";
+  return `
+    <div class="cw-dock cw-tool-dock" aria-label="Worker lanes">
+      ${tools.map((tool) => `
+        <span class="cw-dock-node is-${commandToolModeTone(tool.mode)}">
+          <b>${esc(tool.worker || tool.name || "Worker")}</b>
+          <i>${esc(tool.status || tool.mode || "ready")}</i>
+        </span>`).join("")}
+    </div>`;
+}
+
+function renderAutomationDock(automations = []) {
+  const rows = automations.slice(0, 4);
+  if (!rows.length) {
+    return `
+      <div class="cw-dock cw-automation-dock" aria-label="Automation starter">
+        <span class="cw-dock-node is-watch"><b>Daily ideas</b><i>ready to configure</i></span>
+        <span class="cw-dock-node is-watch"><b>Security check</b><i>approval-gated</i></span>
+        <span class="cw-dock-node is-watch"><b>Outreach prep</b><i>draft only</i></span>
+      </div>`;
+  }
+  return `
+    <div class="cw-dock cw-automation-dock" aria-label="Configured automations">
+      ${rows.map((agent) => `
+        <span class="cw-dock-node is-${agent.status === "active" ? "ok" : "watch"}">
+          <b>${esc(agent.name || "Automation")}</b>
+          <i>${esc(agent.status || "waiting")}</i>
+        </span>`).join("")}
+    </div>`;
+}
+
+function renderPhantomWireDock(activity = []) {
+  if (!activity.length) return "";
+  return `
+    <div class="cw-dock cw-wire-dock" aria-label="Recent PhantomWire activity">
+      ${activity.map((item) => `
+        <span class="cw-dock-node is-ok">
+          <b>${esc(item.who || "Phantom")}</b>
+          <i>${esc(ago(item.at))}</i>
+        </span>`).join("")}
+    </div>`;
+}
+
 function renderCommandWidgets() {
   const mount = $("[data-command-widgets]");
   if (!mount) return;
@@ -1709,7 +1778,7 @@ function renderCommandWidgets() {
   const money = byId("money");
   const leads = byId("leads");
 
-  const card = ({ id, icon, title, stat, sub, open, tone = "ok", lines = [] }, index) => `
+  const card = ({ id, icon, title, stat, sub, open, tone = "ok", lines = [], dock = "" }, index) => `
     <details class="command-widget is-${esc(tone)}" data-command-widget="${esc(id)}" ${index === 0 ? "open" : ""}>
       <summary>
         <span class="cw-ic">${svg(icon)}</span>
@@ -1721,6 +1790,7 @@ function renderCommandWidgets() {
       </summary>
       <div class="cw-body">
         ${lines.map((line) => `<p>${line}</p>`).join("")}
+        ${dock}
         ${open ? `<button class="cw-open" data-open-ws="${esc(open)}" type="button">Open workspace ${svg("arrow")}</button>` : ""}
       </div>
     </details>`;
@@ -1753,6 +1823,7 @@ function renderCommandWidgets() {
         "<b>Creative</b><span>creates media, sites, copy, campaign assets, and brand material</span>",
         "<b>Operations</b><span>routes deadlines, proof, approvals, and execution flow</span>",
       ],
+      dock: renderCommandToolDock(),
     },
     {
       id: "automations",
@@ -1767,6 +1838,7 @@ function renderCommandWidgets() {
         `<b>Waiting</b><span>${automationWaiting} off, queued, or approval-gated</span>`,
         "<b>Rule</b><span>external sends, posts, spends, uploads, and destructive actions stay approval-gated</span>",
       ],
+      dock: renderAutomationDock(automations),
     },
     {
       id: "signals",
@@ -1794,6 +1866,7 @@ function renderCommandWidgets() {
           "<b>Signals</b><span>Recent worker, automation, owner, and system events flow through PhantomWire.</span>",
           "<b>Proof</b><span>Activity belongs here; memory stays inside Phantom's chat/brain layer.</span>",
         ],
+      dock: renderPhantomWireDock(activity),
     },
     {
       id: "approvals",

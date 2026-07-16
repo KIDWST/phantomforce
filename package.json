@@ -22,6 +22,7 @@
     "test:competitor-intelligence": "node scripts/test-competitor-intelligence.mjs && npm run test:competitor-intelligence --workspace @phantomforce/server",
     "test:workspace-site-builder": "node scripts/test-workspace-site-builder.mjs",
     "test:organization-settings": "node scripts/test-organization-settings.mjs",
+    "test:customer-plan-switching": "node scripts/test-customer-plan-switching.mjs",
     "test:change-memory": "node scripts/guard-change-memory.mjs",
     "test:command-surface": "node scripts/test-command-surface.mjs",
     "test:sites": "npm run test:workspace-site-builder && npm run test:site-store-render --workspace @phantomforce/server",

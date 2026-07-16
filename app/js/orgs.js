@@ -6,13 +6,14 @@
    when the backend doesn't advertise database auth, none of these
    surfaces render and the app behaves exactly as before. */
 
-import { ctx, session } from "./store.js?v=phantom-live-20260716-288";
+import { ctx, session } from "./store.js?v=phantom-live-20260716-289";
 
 export const isDatabaseSession = () => !!ctx.session?.database;
-export const activeOrgId = () => (isDatabaseSession() ? ctx.session.orgId || null : null);
-export const activeOrgRole = () => (isDatabaseSession() ? ctx.session.orgRole || null : null);
+export const isCustomerOrgSession = () => !!(ctx.session?.database || ctx.session?.localCustomer);
+export const activeOrgId = () => (isCustomerOrgSession() ? ctx.session.orgId || null : null);
+export const activeOrgRole = () => (isCustomerOrgSession() ? ctx.session.orgRole || null : null);
 export const canManageActiveOrg = () =>
-  isDatabaseSession() && (ctx.session.isSuperAdmin || ["owner", "admin"].includes(ctx.session.orgRole || ""));
+  isCustomerOrgSession() && (ctx.session.isSuperAdmin || ["owner", "admin"].includes(ctx.session.orgRole || ""));
 
 function authHeaders(extra = {}) {
   const token = typeof session?.token === "function" ? session.token() : "";
@@ -118,6 +119,16 @@ export async function fetchAuthMe() {
   return ok ? json : null;
 }
 
+export async function fetchCustomerPlanPreview() {
+  const { ok, json } = await api("/customer/plan-preview");
+  return ok ? json : null;
+}
+
+export async function switchCustomerPlan(planKey) {
+  const { ok, status, json } = await api("/customer/plan-preview", { method: "POST", body: { planKey } });
+  return ok ? { ok: true, ...json } : { ok: false, status, error: json?.error || "plan_switch_failed", available: json?.available || [] };
+}
+
 export async function switchOrg(orgId) {
   const { ok, json } = await api("/auth/switch-org", { method: "POST", body: { orgId } });
   if (!ok || !json?.session) return { ok: false, error: json?.error || "switch_failed" };
@@ -135,7 +146,7 @@ export async function switchOrg(orgId) {
 }
 
 export async function fetchEntitlementsSummary() {
-  if (ctx.session?.localCustomer) return null;
+  if (ctx.session?.localCustomer) return fetchCustomerPlanPreview();
   const orgId = activeOrgId();
   if (!orgId) return null;
   const { ok, json } = await api(`/orgs/${encodeURIComponent(orgId)}/entitlements`);

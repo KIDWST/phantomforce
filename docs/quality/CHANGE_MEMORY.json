@@ -428,6 +428,91 @@
           "description": "The PhantomCut editor test is available as an npm script."
         }
       ]
+    },
+    {
+      "id": "client-setup-settings-not-clients",
+      "status": "active",
+      "title": "Client setup belongs in Settings, not Clients",
+      "ownerDecision": "Organization setup, plan testing, tool connections, and access setup live under Settings. Clients remains for client/customer pipeline work only.",
+      "requiredPatterns": [
+        {
+          "file": "app/js/main.js",
+          "pattern": "<button class=\"plan-inner\" data-open-ws=\"settings\">[\\s\\S]*No real work loaded yet\\.",
+          "description": "Empty setup CTA opens Settings."
+        },
+        {
+          "file": "app/js/settings.js",
+          "pattern": "id: \"organization\", label: \"Organization\", category: \"Workspace\"",
+          "description": "Organization management stays under Settings."
+        },
+        {
+          "file": "scripts/test-organization-settings.mjs",
+          "pattern": "The empty setup CTA must open Settings, not the client pipeline",
+          "description": "Regression test protects the setup route."
+        }
+      ],
+      "forbiddenPatterns": [
+        {
+          "file": "app/js/main.js",
+          "pattern": "<button class=\"plan-inner\" data-open-ws=\"leads\">[\\s\\S]*No real work loaded yet\\.",
+          "description": "Rejected setup CTA into Clients."
+        },
+        {
+          "file": "app/js/organization.js",
+          "pattern": "Client setup|Clients &amp; CRM|data-open-ws=\"leads\"",
+          "description": "Rejected Client Setup framing inside Organization settings."
+        }
+      ]
+    },
+    {
+      "id": "customer-plan-switching-tier-simulator",
+      "status": "active",
+      "title": "Customer accounts can safely test public plan restrictions",
+      "ownerDecision": "Customer test accounts on app.phantomforce.online must be able to switch public tiers to verify limits, locks, and restrictions without exposing the internal admin plan or running billing.",
+      "requiredPatterns": [
+        {
+          "file": "server/src/access/local-customer-accounts.ts",
+          "pattern": "export async function assignLocalCustomerPlan\\(session: AccessSession, planKey: string\\)",
+          "description": "Local customer accounts can switch public test tiers."
+        },
+        {
+          "file": "server/src/index.ts",
+          "pattern": "app\\.post\\(\"/customer/plan-preview\"",
+          "description": "Backend exposes the customer plan switch endpoint."
+        },
+        {
+          "file": "app/js/settings.js",
+          "pattern": "id: \"plan\", label: \"Plan & access\", category: \"Workspace\"",
+          "description": "Settings owns plan testing."
+        },
+        {
+          "file": "app/js/settings.js",
+          "pattern": "data-plan-switch=\"\\$\\{esc\\(plan\\.key\\)\\}\"",
+          "description": "Settings renders tier switch controls."
+        },
+        {
+          "file": "app/js/orgs.js",
+          "pattern": "if \\(ctx\\.session\\?\\.localCustomer\\) return fetchCustomerPlanPreview\\(\\);",
+          "description": "Local customer entitlements are read from the backend."
+        },
+        {
+          "file": "scripts/test-customer-plan-switching.mjs",
+          "pattern": "Customer plan switching checks passed",
+          "description": "Static regression test covers backend/frontend/nav wiring."
+        }
+      ],
+      "forbiddenPatterns": [
+        {
+          "file": "server/src/access/local-customer-accounts.ts",
+          "pattern": "planKey:\\s*\"internal\"",
+          "description": "Customer accounts must never default to the internal admin plan."
+        },
+        {
+          "file": "app/js/orgs.js",
+          "pattern": "if \\(ctx\\.session\\?\\.localCustomer\\) return null;",
+          "description": "Local customer entitlements must not be dropped."
+        }
+      ]
     }
   ]
 }

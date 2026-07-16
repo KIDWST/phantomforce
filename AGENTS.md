@@ -48,6 +48,11 @@
   forbidden patterns there so another stale worktree cannot resurrect it.
 
 ## Recent, merged & live (newest first)
+- **Customer plan simulator + setup routing guard (2026-07-16)** — build
+  `phantom-live-20260716-289`. Customer test accounts can switch public
+  Free/Pro/Elite/Enterprise tiers from Settings → Plan & access, local customer
+  auth returns real entitlement summaries, restricted nav items open the plan
+  panel, and the empty setup CTA routes to Settings instead of Clients.
 - **Org-owner social connections (2026-07-14)** — build
   `phantom-live-20260714-267`. Social analytics status, OAuth account start,
   and live sync are now workspace-manager routes, so database-auth org

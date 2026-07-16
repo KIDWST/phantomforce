@@ -1,11 +1,12 @@
 /* PhantomForce admin settings.
    Local UI preferences only: no provider calls, sends, uploads, or billing. */
 
-import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260716-288";
-import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260716-288";
-import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260716-288";
-import { currentTenantId, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260716-288";
-import { DEFAULT_COMPANION_PREFS, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260716-288";
+import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260716-289";
+import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260716-289";
+import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260716-289";
+import { fetchCustomerPlanPreview, fetchEntitlementsSummary, switchCustomerPlan } from "./orgs.js?v=phantom-live-20260716-289";
+import { currentTenantId, ctx, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260716-289";
+import { DEFAULT_COMPANION_PREFS, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260716-289";
 
 const AI_SETTINGS_KEY = "pf.operator.settings.v1";
 const SETTINGS_TAB_KEY = "pf.settings.tab.v1";
@@ -15,6 +16,7 @@ const SETTINGS_TABS = [
   { id: "loop", label: "Loop routing", category: "AI Brain" },
   { id: "chat", label: "Chat behavior", category: "AI Brain" },
   { id: "organization", label: "Organization", category: "Workspace" },
+  { id: "plan", label: "Plan & access", category: "Workspace" },
   { id: "workspace", label: "Workspace Studio", category: "Workspace" },
   { id: "modules", label: "Workspace Modules", category: "Workspace" },
   { id: "companion", label: "Companion", category: "Workspace" },
@@ -28,6 +30,7 @@ const SETTINGS_CONTEXT = {
   loop: { title: "Loop routing", description: "Control coordinated model passes, cost limits, and fallback behavior." },
   chat: { title: "Chat behavior", description: "Tune response style, memory depth, approval boundaries, and conversation behavior." },
   organization: { title: "Organization & access", description: "Manage workspace identity, employees, invitations, roles, and module privileges." },
+  plan: { title: "Plan & access", description: "Test customer tiers, feature gates, usage limits, and upgrade restrictions from one safe settings panel." },
   workspace: { title: "Workspace Studio", description: "Shape workspace branding, navigation, and operating defaults without changing the platform core." },
   modules: { title: "Workspace modules", description: "Choose which optional capabilities are available and who can use them." },
   companion: { title: "Companion", description: "Control where Phantom appears and how much personality and motion it uses." },
@@ -217,6 +220,170 @@ async function moduleApi(path, options = {}) {
   const payload = await response.json().catch(() => null);
   if (!response.ok) throw new Error(typeof payload?.error === "string" ? payload.error : `Workspace module request failed (${response.status}).`);
   return payload;
+}
+
+const PLAN_FEATURE_LABELS = {
+  chat: "AI chat",
+  mediaLab: "Media Lab",
+  websites: "Website builder",
+  websitePublishing: "Website publishing",
+  customDomains: "Custom domains",
+  vacationMode: "Away Mode",
+  phantomPlay: "PhantomPlay",
+  competitorIntelligence: "Customer intelligence",
+  aggressiveIntelligence: "Aggressive intelligence",
+  advancedWorkflows: "Advanced automations",
+  assetPacks: "Asset packs",
+  agentRuns: "Agent runs",
+  modelTier: "Model tier",
+};
+
+const PLAN_LIMIT_LABELS = {
+  seats: "Seats",
+  businesses: "Businesses",
+  mediaCreditsPerMonth: "Media credits/mo",
+  chatRequestsPerDay: "Chat/day",
+  agentRunsPerDay: "Agent runs/day",
+  storageMb: "Storage",
+  sitesPerOrg: "Sites",
+  phantomPlayMinutesPerDay: "Play/day",
+  gameSubmissions: "Game submissions",
+  competitorProfiles: "Competitors",
+  competitorSignals: "Signals",
+};
+
+function formatPlanLimit(key, value) {
+  const amount = Number(value);
+  if (key === "storageMb" && Number.isFinite(amount)) {
+    return amount >= 1024 ? `${Math.round(amount / 1024)} GB` : `${amount} MB`;
+  }
+  if (key === "phantomPlayMinutesPerDay" && Number.isFinite(amount)) {
+    return amount >= 1440 ? "Unlimited" : `${amount} min/day`;
+  }
+  if (Number.isFinite(amount) && amount >= 100000) return "Unlimited";
+  return String(value ?? "0");
+}
+
+function featurePills(features = {}) {
+  return Object.entries(PLAN_FEATURE_LABELS)
+    .filter(([key]) => key !== "modelTier")
+    .map(([key, label]) => {
+      const enabled = features[key] !== false;
+      return `<span class="set-chip ${enabled ? "is-on" : "is-off"}">${enabled ? "On" : "Off"} · ${esc(label)}</span>`;
+    })
+    .join("");
+}
+
+function planLimitFacts(limits = {}) {
+  return Object.entries(PLAN_LIMIT_LABELS)
+    .slice(0, 8)
+    .map(([key, label]) => `<span><b>${esc(label)}</b><i>${esc(formatPlanLimit(key, limits[key]))}</i></span>`)
+    .join("");
+}
+
+function renderPlanCard(plan, currentKey, canSwitch) {
+  const features = plan.features || {};
+  const limits = plan.limits || {};
+  const current = plan.key === currentKey;
+  const disabledFeatures = Object.entries(features)
+    .filter(([key, value]) => value === false && PLAN_FEATURE_LABELS[key])
+    .map(([key]) => PLAN_FEATURE_LABELS[key])
+    .slice(0, 4);
+  return `
+    <article class="set-choice-card ${current ? "is-selected" : ""}">
+      <div class="set-card-head">
+        <span>${esc(plan.name || plan.key)}</span>
+        <b>${current ? "Current" : "Available"}</b>
+      </div>
+      <p>${esc(plan.description || "Customer tier")}</p>
+      <div class="set-status-grid set-context-grid">
+        ${planLimitFacts(limits)}
+      </div>
+      <div class="set-chip-row">
+        ${featurePills(features)}
+      </div>
+      <p class="set-note">${disabledFeatures.length ? `Restricted here: ${esc(disabledFeatures.join(", "))}.` : "All public business features are available on this tier."}</p>
+      ${canSwitch ? `<button type="button" class="set-secondary ${current ? "is-disabled" : ""}" data-plan-switch="${esc(plan.key)}" ${current ? "disabled" : ""}>${current ? "Using this tier" : `Switch to ${esc(plan.name || plan.key)}`}</button>` : ""}
+    </article>`;
+}
+
+async function renderPlanAccessTab(el, opts = {}) {
+  const localCustomer = Boolean(ctx.session?.localCustomer);
+  el.innerHTML = `
+    <div class="set-section">
+      <div class="cust-empty">
+        <b>Loading plan access...</b>
+        <span>Reading the backend entitlement truth for this workspace.</span>
+      </div>
+    </div>`;
+  try {
+    const summary = localCustomer ? await fetchCustomerPlanPreview() : await fetchEntitlementsSummary();
+    const entitlements = summary?.entitlements || null;
+    if (!entitlements) {
+      el.innerHTML = `
+        <div class="set-section">
+          <div class="cust-empty">
+            <b>Plan access is unavailable.</b>
+            <span>Sign in to the customer app or reconnect the backend to review tier restrictions.</span>
+          </div>
+        </div>`;
+      return;
+    }
+    const plans = Array.isArray(summary?.plans) && summary.plans.length
+      ? summary.plans
+      : [{
+        key: entitlements.planKey,
+        name: entitlements.planName,
+        description: entitlements.note || "Current production assignment.",
+        features: entitlements.features,
+        limits: entitlements.limits,
+      }];
+    const currentName = entitlements.planName || entitlements.plan || entitlements.planKey || "Current plan";
+    el.innerHTML = `
+      <div class="set-section">
+        <div class="set-card-head">
+          <span>Current tier</span>
+          <b>${esc(entitlements.effectiveStatus || entitlements.status || "active")}</b>
+        </div>
+        <h3>${esc(currentName)}</h3>
+        <p class="set-note">${localCustomer
+          ? "Customer test mode: switch tiers instantly to verify limits, locks, and upgrade prompts. No billing action happens here."
+          : "Production mode: this reflects the backend-assigned plan. Super-admin plan changes still happen server-side."}</p>
+        <div class="set-status-grid set-context-grid">
+          <span><b>Writes</b><i>${entitlements.canWrite === false ? "View-only" : "Enabled"}</i></span>
+          <span><b>Model</b><i>${esc(entitlements.features?.modelTier || "standard")}</i></span>
+          <span><b>Seats</b><i>${esc(summary?.seats ? `${summary.seats.used}/${summary.seats.limit}` : formatPlanLimit("seats", entitlements.limits?.seats))}</i></span>
+          <span><b>Sites</b><i>${esc(formatPlanLimit("sitesPerOrg", entitlements.limits?.sitesPerOrg))}</i></span>
+        </div>
+        <p class="set-note" data-plan-message></p>
+      </div>
+      <div class="set-section">
+        <div class="set-card-head">
+          <span>Tier simulator</span>
+          <b>${localCustomer ? "Editable" : "Read-only"}</b>
+        </div>
+        <div class="set-choice-grid">
+          ${plans.map((plan) => renderPlanCard(plan, entitlements.planKey, localCustomer)).join("")}
+        </div>
+      </div>`;
+    const message = el.querySelector("[data-plan-message]");
+    el.querySelectorAll("[data-plan-switch]").forEach((button) => {
+      button.onclick = async () => {
+        button.disabled = true;
+        if (message) message.textContent = `Switching to ${button.textContent.replace(/^Switch to\s+/u, "")}...`;
+        const result = await switchCustomerPlan(button.dataset.planSwitch);
+        if (!result.ok) {
+          button.disabled = false;
+          if (message) message.textContent = `Plan switch failed: ${result.error || "server refused the change"}.`;
+          return;
+        }
+        if (typeof opts.onWorkspaceApplied === "function") opts.onWorkspaceApplied();
+        await renderPlanAccessTab(el, opts);
+      };
+    });
+  } catch (error) {
+    el.innerHTML = `<div class="set-section"><div class="cust-empty"><b>Plan access could not load.</b><span>${esc(error instanceof Error ? error.message : "Check the backend connection and try again.")}</span></div></div>`;
+  }
 }
 
 function renderProviderCards(settings) {
@@ -821,6 +988,7 @@ export function renderOperatorSettings(el, opts = {}) {
   const workspaceMountId = `workspace-studio-${Math.random().toString(36).slice(2)}`;
   const modulesMountId = `workspace-modules-${Math.random().toString(36).slice(2)}`;
   const organizationMountId = `organization-${Math.random().toString(36).slice(2)}`;
+  const planMountId = `plan-access-${Math.random().toString(36).slice(2)}`;
   const initialTab = opts.initialTab && SETTINGS_TABS.some((tab) => tab.id === opts.initialTab) ? opts.initialTab : null;
   const activeTab = initialTab || loadSettingsTab();
   if (initialTab) saveSettingsTab(initialTab);
@@ -832,6 +1000,7 @@ export function renderOperatorSettings(el, opts = {}) {
     loop: () => renderLoopAdvancedSection(),
     chat: () => renderChatBehaviorTab(settings),
     organization: () => `<div id="${organizationMountId}" class="set-workspace-mount"></div>`,
+    plan: () => `<div id="${planMountId}" class="set-workspace-mount"></div>`,
     workspace: () => `<div id="${workspaceMountId}" class="set-workspace-mount"></div>`,
     modules: () => `<div id="${modulesMountId}" class="set-workspace-mount"></div>`,
     companion: () => renderCompanionTab(),
@@ -1034,6 +1203,9 @@ export function renderOperatorSettings(el, opts = {}) {
 
   const organizationMount = el.querySelector(`#${organizationMountId}`);
   if (organizationMount) renderOrganizationPanel(organizationMount, opts);
+
+  const planMount = el.querySelector(`#${planMountId}`);
+  if (planMount) renderPlanAccessTab(planMount, opts);
 
   if (activeTab === "model" && settings.selectedProviders.includes("local") && !localModelStatus.loaded && !localModelStatus.loading) {
     refreshLocalModels(el, opts);
