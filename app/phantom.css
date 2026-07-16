@@ -5387,6 +5387,10 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .set-section h3 { margin: 0 0 6px; font-size: 16px; }
 
 /* ---- Organization: people, roles, and module access ---- */
+.org-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
+.org-summary span { min-width: 0; padding: var(--sp-3); border: 1px solid rgba(65,255,161,0.15); border-radius: var(--r-md); background: rgba(2,10,8,0.42); }
+.org-summary b { display: block; margin-bottom: 4px; color: var(--dim); font: 600 var(--fs-xs) var(--font-mono); letter-spacing: 0.12em; text-transform: uppercase; }
+.org-summary i { display: block; overflow: hidden; color: #e9fff1; font-size: 13px; font-style: normal; text-overflow: ellipsis; white-space: nowrap; }
 .org-members { display: grid; gap: 10px; }
 .org-member { display: grid; grid-template-columns: 40px minmax(0, 1fr) minmax(180px, auto) 34px; gap: 12px; align-items: center; padding: var(--sp-3) var(--sp-4); border: 1px solid var(--line); border-radius: var(--r-md); background: #050b09; }
 .org-avatar { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, rgba(65,255,161,0.28), rgba(9,20,15,0.9)); color: var(--ink); font: 700 13px "Space Grotesk", sans-serif; }
@@ -5419,6 +5423,7 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .org-message.is-error { color: var(--warn); }
 .org-db-note h4 { margin: 0 0 6px; }
 @media (max-width: 767px) {
+  .org-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .org-member { grid-template-columns: 36px minmax(0, 1fr) 34px; }
   .org-member .org-role-pick { grid-column: 2 / -1; }
 }

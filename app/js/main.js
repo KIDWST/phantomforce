@@ -501,6 +501,7 @@ function maybeUpgradeGateToDatabaseLogin(card, options = {}) {
 /* ============================ sidebar nav ============================ */
 const BASE_NAV = [
   { id: "dashboard",  label: "Dashboard",    icon: "grid",  view: "main" },
+  { id: "crm",        label: "Clients",      icon: "users", ws: "leads" },
   { id: "intelligence", label: "Competitor Intel", icon: "chart", ws: "intelligence" },
   { id: "media",      label: "Media Lab",    icon: "media", ws: "media" },
   { id: "assets",     label: "Asset Cloud",  icon: "media", ws: "assets", dbOnly: true },
@@ -509,13 +510,6 @@ const BASE_NAV = [
   { id: "automation", label: "Automations",  icon: "auto",  ws: "automation", navHidden: true },
   { id: "approvals",  label: "Approvals",    icon: "check", ws: "approvals", badge: true },
   { id: "workers",    label: "Workforce",    icon: "users", ws: "workforce", navHidden: true },
-  /* Clients (CRM) is owner/admin business-back-office material, not a
-     surface every teammate needs a permanent sidebar slot for — it opens
-     from Settings > Organization instead (data-open-ws="leads" there).
-     navHidden keeps goNav()/openWorkspace()/deep links and the
-     proposals/reviews/bookings parent-highlighting all working; it only
-     drops the item from the rendered nav list. */
-  { id: "crm",        label: "Clients",      icon: "users", ws: "leads", navHidden: true },
   { id: "analytics",  label: "Analytics",    icon: "chart", ws: "analytics" },
   { id: "memory",     label: "Memory",       icon: "brain", ws: "memory", navZone: "bottom", quiet: true, navHidden: true },
   { id: "settings",   label: "Settings",     icon: "cog",   ws: "settings", navZone: "bottom" },
@@ -531,7 +525,7 @@ let navEntitlements = { loaded: false, features: null, limits: null };
    horizontally scrollable strip instead of a vertical list. */
 const MOBILE_LABEL_OVERRIDES = {
   dashboard: "Home",
-  crm: "Leads",
+  crm: "Clients",
   money: "Accounting",
   sites: "Sites",
   media: "Media",

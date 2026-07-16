@@ -23,6 +23,17 @@ const SETTINGS_TABS = [
 
 const SETTINGS_CATEGORIES = ["AI Brain", "Workspace", "Media"];
 
+const SETTINGS_CONTEXT = {
+  model: { title: "AI model", description: "Choose the models and routing behavior Phantom uses for this workspace." },
+  loop: { title: "Loop routing", description: "Control coordinated model passes, cost limits, and fallback behavior." },
+  chat: { title: "Chat behavior", description: "Tune response style, memory depth, approval boundaries, and conversation behavior." },
+  organization: { title: "Organization & access", description: "Manage workspace identity, employees, invitations, roles, and module privileges." },
+  workspace: { title: "Workspace Studio", description: "Shape workspace branding, navigation, and operating defaults without changing the platform core." },
+  modules: { title: "Workspace modules", description: "Choose which optional capabilities are available and who can use them." },
+  companion: { title: "Companion", description: "Control where Phantom appears and how much personality and motion it uses." },
+  media: { title: "Media & social", description: "Manage local media engines and connected social platform settings." },
+};
+
 function loadSettingsTab() {
   try {
     const saved = localStorage.getItem(SETTINGS_TAB_KEY);
@@ -813,6 +824,8 @@ export function renderOperatorSettings(el, opts = {}) {
   const initialTab = opts.initialTab && SETTINGS_TABS.some((tab) => tab.id === opts.initialTab) ? opts.initialTab : null;
   const activeTab = initialTab || loadSettingsTab();
   if (initialTab) saveSettingsTab(initialTab);
+  const activeContext = SETTINGS_CONTEXT[activeTab] || SETTINGS_CONTEXT.model;
+  const activeCategory = SETTINGS_TABS.find((tab) => tab.id === activeTab)?.category || "Settings";
 
   const TAB_CONTENT = {
     model: () => renderModelTab(settings, activeProvider, activeModel),
@@ -829,11 +842,15 @@ export function renderOperatorSettings(el, opts = {}) {
     <div class="settings settings-operator">
       <div class="set-section set-ai-hero">
         <div>
-          <p class="set-eyebrow">Operator brain</p>
-          <h3>Phantom AI settings</h3>
-          <p class="set-note">Choose the default brain, loop behavior, memory depth, and autopilot boundary for the Business Manager. These are local owner settings; the public demo chat still cannot send, upload, charge, or touch private systems.</p>
+          <p class="set-eyebrow">Settings · ${esc(activeCategory)}</p>
+          <h3>${esc(activeContext.title)}</h3>
+          <p class="set-note">${esc(activeContext.description)}</p>
         </div>
-        ${renderSafetySummary(settings)}
+        ${["model", "loop", "chat"].includes(activeTab) ? renderSafetySummary(settings) : `
+          <div class="set-status-grid set-context-grid">
+            <span><b>Scope</b><i>${activeTab === "organization" ? "Current organization" : "Current workspace"}</i></span>
+            <span><b>Changes</b><i>${["organization", "workspace", "modules"].includes(activeTab) ? "Approval-aware and reversible" : "Saved to this workspace"}</i></span>
+          </div>`}
       </div>
 
       <div class="set-settings-layout">

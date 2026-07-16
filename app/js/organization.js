@@ -1,10 +1,10 @@
-/* PhantomForce — Organization: the boss's control room for their people.
+/* PhantomForce — organization membership and workspace access.
  *
  * Person-first, not module-first: the owner/admin sees everyone in the
  * organization, sets each person's role, invites new people, and decides
  * which parts of PhantomForce each role can open. A dev shop can hire
- * employees with far less access than the boss — or the same; that call
- * belongs to the boss, so every control here writes to the real org APIs
+ * employees with limited access or broad access; that decision belongs to
+ * the organization owner, so every control here writes to the real org APIs
  * (database memberships + the published workspace configuration), never
  * to a local mock.
  */
@@ -14,7 +14,7 @@ import { canManageActiveOrg } from "./orgs.js?v=phantom-live-20260715-279";
 
 /* Owner/admin only — legacy local-admin sessions (isAdmin/isOwnerOperator)
    and real database org sessions (canManageActiveOrg) both count. */
-const canManageClients = () => isAdmin() || isOwnerOperator() || canManageActiveOrg();
+const canManageOrganization = () => isAdmin() || isOwnerOperator() || canManageActiveOrg();
 
 const ROLES = [
   { id: "owner", label: "Owner", blurb: "Everything, including billing and this page." },
@@ -136,7 +136,7 @@ function roleBlurb(roleId) {
   return ROLES.find((role) => role.id === roleId)?.blurb || "";
 }
 
-function membersMarkup(esc) {
+function membersMarkup(esc, canManage) {
   if (!orgState.members.length) {
     return `<p class="set-note">No one else is in this organization yet. Invite your first teammate below.</p>`;
   }
@@ -148,12 +148,12 @@ function membersMarkup(esc) {
         <i>${esc(member.email)}${member.isSuperAdmin ? " · platform admin" : ""} · joined ${esc(String(member.joinedAt).slice(0, 10))}</i>
       </span>
       <label class="org-role-pick">
-        <select data-org-role="${esc(member.userId)}">
+        <select data-org-role="${esc(member.userId)}" ${canManage ? "" : "disabled"}>
           ${MEMBERSHIP_ROLES.map((role) => `<option value="${role}" ${member.role === role ? "selected" : ""}>${esc(ROLES.find((r) => r.id === role)?.label || role)}</option>`).join("")}
         </select>
         <i>${esc(roleBlurb(member.role))}</i>
       </label>
-      <button class="org-remove" type="button" data-org-remove="${esc(member.userId)}" title="Remove from organization">✕</button>
+      ${canManage ? `<button class="org-remove" type="button" data-org-remove="${esc(member.userId)}" title="Remove from organization">✕</button>` : ""}
     </div>`).join("")}</div>`;
 }
 
@@ -174,7 +174,7 @@ function invitationsMarkup(esc) {
       </div>`).join("")}</div>` : ""}`;
 }
 
-function matrixMarkup(esc) {
+function matrixMarkup(esc, canManage) {
   if (!orgState.modules.length) return `<p class="set-note">The workspace configuration hasn't loaded, so the access matrix is unavailable right now.</p>`;
   return `
     <div class="org-matrix-wrap">
@@ -184,19 +184,22 @@ function matrixMarkup(esc) {
           ${orgState.modules.map((module) => `
             <tr class="${module.enabled ? "" : "is-off"}">
               <td><b>${esc(module.label)}</b>${module.enabled ? "" : `<i>module off</i>`}</td>
-              ${ROLES.map((role) => `<td><input type="checkbox" data-org-matrix="${esc(module.id)}:${role.id}" ${module.roles.includes(role.id) ? "checked" : ""} ${OWNER_LOCKED_MODULES.has(module.id) && role.id === "owner" ? "disabled" : ""} /></td>`).join("")}
+              ${ROLES.map((role) => `<td><input type="checkbox" data-org-matrix="${esc(module.id)}:${role.id}" ${module.roles.includes(role.id) ? "checked" : ""} ${!canManage || (OWNER_LOCKED_MODULES.has(module.id) && role.id === "owner") ? "disabled" : ""} /></td>`).join("")}
             </tr>`).join("")}
         </tbody>
       </table>
     </div>
     <div class="set-actions-row">
-      <button class="btn btn-primary" type="button" data-org-matrix-save ${orgState.matrixDirty ? "" : "disabled"}>Publish access changes</button>
-      <span class="set-note">${orgState.matrixDirty ? "Unpublished changes — nothing applies until you publish." : "Checked = that role can open the module. Publishing creates a reversible workspace version."}</span>
+      ${canManage ? `<button class="btn btn-primary" type="button" data-org-matrix-save ${orgState.matrixDirty ? "" : "disabled"}>Publish access changes</button>` : ""}
+      <span class="set-note">${canManage
+        ? (orgState.matrixDirty ? "Unpublished changes — nothing applies until you publish." : "Checked = that role can open the module. Publishing creates a reversible workspace version.")
+        : "This access map is read-only for your role. An owner or admin can publish changes."}</span>
     </div>`;
 }
 
 export function renderOrganizationPanel(el, opts = {}) {
   const esc = opts.esc || ((value) => String(value ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])));
+  const canManage = canManageOrganization();
   if (!orgState.loaded && !orgState.loading) {
     loadOrganization().then(() => renderOrganizationPanel(el, opts));
   }
@@ -207,25 +210,23 @@ export function renderOrganizationPanel(el, opts = {}) {
 
   el.innerHTML = `
     <div class="set-section">
-      <p class="set-eyebrow">Organization${orgState.org ? ` · ${esc(orgState.org.name)}` : ""}</p>
-      <h3>Your people, your rules.</h3>
-      <p class="set-note">Everyone here belongs to this business — not clients, your team. Set each person's role, and decide below exactly which parts of PhantomForce each role can open.</p>
+      <p class="set-eyebrow">Workspace organization</p>
+      <h3>People &amp; access</h3>
+      <p class="set-note">Manage the organization behind this workspace: employees, invitations, roles, and the PhantomForce modules each role can open. Client leads and pipeline remain in Clients.</p>
+      <div class="org-summary" aria-label="Organization summary">
+        <span><b>Organization</b><i>${esc(orgState.org?.name || "Current workspace")}</i></span>
+        <span><b>Members</b><i>${orgState.members.length}</i></span>
+        <span><b>Pending invites</b><i>${orgState.invitations.length}</i></span>
+        <span><b>Workspace type</b><i>${esc(ORG_TYPES.find((type) => type.id === orgState.orgType)?.label || orgState.orgType)}</i></span>
+      </div>
       ${orgState.message ? `<p class="org-message">${esc(orgState.message)}</p>` : ""}
       ${orgState.error ? `<p class="org-message is-error">${esc(orgState.error)}</p>` : ""}
     </div>
 
-    ${canManageClients() ? `
-    <div class="set-section org-clients-card">
-      <p class="set-eyebrow">Client setup</p>
-      <h4>Clients &amp; CRM</h4>
-      <p class="set-note">Contacts, leads, pipeline, and follow-up — owner/admin business back office, not a surface every teammate needs parked in the sidebar. Opens as its own page.</p>
-      <button class="btn btn-primary" type="button" data-open-ws="leads">Open Clients</button>
-    </div>` : ""}
-
-    ${canManageClients() ? `
+    ${canManage ? `
     <div class="set-section org-type-card">
-      <p class="set-eyebrow">Organization setup</p>
-      <h4>How is this organization set up?</h4>
+      <p class="set-eyebrow">Workspace profile</p>
+      <h4>Choose how this organization operates</h4>
       ${orgTypeMarkup(esc)}
     </div>` : ""}
 
@@ -235,18 +236,20 @@ export function renderOrganizationPanel(el, opts = {}) {
         <p class="set-note">Members and invitations live in the real PhantomForce database. Sign in through the owner login on the admin box (or set DATABASE_URL for this environment) and this section fills in with your actual organization.</p>
       </div>` : `
       <div class="set-section">
-        <h4>People (${orgState.members.length})</h4>
-        ${membersMarkup(esc)}
+        <h4>Members (${orgState.members.length})</h4>
+        <p class="set-note">These are people with access to this organization, not CRM prospects or clients.</p>
+        ${membersMarkup(esc, canManage)}
       </div>
-      <div class="set-section">
+      ${canManage ? `<div class="set-section">
         <h4>Invite someone</h4>
-        <p class="set-note">They get an email invitation and land with the role you pick — you can change it any time.</p>
+        <p class="set-note">Invite an employee or collaborator, choose their starting role, and adjust their access at any time.</p>
         ${invitationsMarkup(esc)}
-      </div>`}
+      </div>` : ""}`}
 
     <div class="set-section">
-      <h4>What each role can open</h4>
-      ${matrixMarkup(esc)}
+      <h4>Role access</h4>
+      <p class="set-note">Control which PhantomForce modules each organization role can open.</p>
+      ${matrixMarkup(esc, canManage)}
     </div>`;
 
   const rerender = () => renderOrganizationPanel(el, opts);
@@ -351,4 +354,8 @@ export function __resetOrganizationPanel() {
   orgState.error = "";
   orgState.message = "";
   orgState.matrixDirty = false;
+  orgState.org = null;
+  orgState.members = [];
+  orgState.invitations = [];
+  orgState.modules = [];
 }
