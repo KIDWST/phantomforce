@@ -14,8 +14,8 @@ const backendTestSource = readFileSync(new URL("../server/scripts/test-phantomst
 
 assert.match(appHtml, /phantomstore\.css/u, "App shell must load PhantomStore styles.");
 assert.match(mainSource, /renderPhantomStore/u, "Main app must import PhantomStore renderer.");
-assert.match(mainSource, /\{\s*id:\s*"phantomstore",\s*label:\s*"Store",\s*icon:\s*"spark",\s*ws:\s*"phantomstore"\s*\}/u, "Sidebar must expose PhantomStore as its own workspace, labeled short as \"Store\".");
-assert.match(mainSource, /phantomstore:\s*\{\s*title:\s*"Store",\s*kicker:\s*"PhantomStore[\s\S]*render:\s*\(body\)\s*=>\s*renderPhantomStore\(body/u, "Workspace registry must render the PhantomStore screen, with the full brand name in the kicker.");
+assert.match(mainSource, /\{\s*id:\s*"phantomstore",\s*label:\s*"PhantomStore",\s*icon:\s*"spark",\s*ws:\s*"phantomstore"\s*\}/u, "Sidebar must expose PhantomStore as its own clearly labeled workspace.");
+assert.match(mainSource, /phantomstore:\s*\{\s*title:\s*"PhantomStore",\s*kicker:\s*"AI marketplace"[\s\S]*render:\s*\(body\)\s*=>\s*renderPhantomStore\(body/u, "Workspace registry must render the PhantomStore AI marketplace screen.");
 
 assert.match(storeSource, /\/api\/phantomstore\?tenant_id=/u, "PhantomStore UI must load the PhantomStore marketplace API.");
 assert.match(staticServerSource, /urlPath\.startsWith\("\/api\/phantomstore"\)/u, "Public static server must proxy PhantomStore API routes.");
