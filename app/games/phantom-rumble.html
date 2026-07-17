@@ -570,6 +570,14 @@ function drawFighter(f,t){
   const bx=px(f.x),by=py(f.y),face=f.face;
   const sway=reduced?0:Math.sin(t*.008+f.slot)*3*DPR;
   const bob=reduced?0:(f.grounded?Math.sin(t*.012+f.slot)*1.4*DPR:0);
+  /* back-scarf: whips out further during a dash/dodge/attack, using the
+     existing motion trail's speed as a stand-in for "how fast am I moving"
+     since the sprite has no separate speed field */
+  const scarfKick=Math.min(1,Math.hypot(f.vx,f.vy)*30);
+  ctx.fillStyle='#181c1f';
+  ctx.save();ctx.translate(bx-face*10*DPR,by-8*DPR+bob);ctx.rotate(-face*(.35+scarfKick*.5));
+  ctx.beginPath();ctx.moveTo(0,-3*DPR);ctx.lineTo(-face*(20+scarfKick*14)*DPR,-2*DPR);ctx.lineTo(-face*(20+scarfKick*14)*DPR,4*DPR);ctx.lineTo(0,3*DPR);ctx.closePath();ctx.fill();
+  ctx.restore();
   /* tail feathers, behind the body */
   ctx.fillStyle=f.color;
   for(let i=0;i<3;i++){
@@ -579,9 +587,20 @@ function drawFighter(f,t){
   }
   /* plump body */
   ctx.beginPath();ctx.ellipse(bx,by-9*DPR+bob,12*DPR,10*DPR,0,0,Math.PI*2);ctx.fill();
-  /* wing */
+  /* sash, diagonal across the body */
+  ctx.strokeStyle='#181c1f';ctx.lineWidth=3*DPR;ctx.globalAlpha=.85;
+  ctx.beginPath();ctx.moveTo(bx-8*DPR,by-15*DPR+bob);ctx.lineTo(bx+7*DPR,by-3*DPR+bob);ctx.stroke();
+  ctx.strokeStyle=f.glow;ctx.lineWidth=1*DPR;
+  ctx.beginPath();ctx.moveTo(bx-8*DPR,by-15*DPR+bob);ctx.lineTo(bx+7*DPR,by-3*DPR+bob);ctx.stroke();
+  ctx.globalAlpha=1;
+  /* wing, with a taped/wrapped tip reading as a ninja glove */
   ctx.globalAlpha*=.92;
+  ctx.fillStyle=f.color;
   ctx.beginPath();ctx.ellipse(bx-face*2*DPR,by-7*DPR+bob+sway*.3,7*DPR,5*DPR,face*.4,0,Math.PI*2);ctx.fill();
+  ctx.strokeStyle='#181c1f';ctx.lineWidth=1.4*DPR;
+  const wingTipX=bx-face*7*DPR,wingTipY=by-6*DPR+bob+sway*.3;
+  ctx.beginPath();ctx.moveTo(wingTipX-2*DPR,wingTipY-2*DPR);ctx.lineTo(wingTipX+2*DPR,wingTipY+2*DPR);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(wingTipX-1*DPR,wingTipY-3*DPR);ctx.lineTo(wingTipX+3*DPR,wingTipY+1*DPR);ctx.stroke();
   ctx.globalAlpha=f.invuln>0?.45+.3*Math.sin(t*.02):1;
   /* head */
   const hx=bx+face*8*DPR,hy=by-18*DPR+bob;
