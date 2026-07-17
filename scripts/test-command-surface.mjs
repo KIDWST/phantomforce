@@ -30,10 +30,15 @@ assert.doesNotMatch(index, /Tell me what you need<br \/>or choose a lane below/u
   "Dashboard hero must not lead with generic chatbot framing.");
 assert.match(widgetSource, /id:\s*"workforce"/u, "Workforce must stay available as a dashboard widget.");
 assert.match(widgetSource, /id:\s*"automations"/u, "Automations must stay available as a dashboard widget.");
+assert.match(widgetSource, /id:\s*"business"/u, "Business records must be available as a dashboard widget.");
 assert.match(widgetSource, /id:\s*"phantomwire"/u, "PhantomWire activity must be surfaced on the dashboard.");
+assert.match(widgetSource, /renderBusinessRecordsDock\(businessRecords\)/u,
+  "Business records widget must show an inline records dock.");
 assert.match(widgetSource, /renderCommandToolDock\(\)/u, "Workforce widget must show an inline worker dock.");
 assert.match(widgetSource, /renderAutomationDock\(automations\)/u, "Automation widget must show an inline automation dock.");
 assert.match(main, /function renderCommandToolDock\(\)/u, "Command surface should define the worker dock renderer.");
+assert.match(main, /function renderBusinessRecordsDock\(records = \[\]\)/u,
+  "Command surface should define the business records dock renderer.");
 assert.match(main, /function renderAutomationDock\(automations = \[\]\)/u, "Command surface should define the automation dock renderer.");
 assert.match(main, /function commandDepartmentMap\(tools = \[\]\)/u,
   "Workforce widget should condense real tool lanes into human departments.");
@@ -65,6 +70,10 @@ assert.match(main, /lane:\s*"You"[\s\S]*?lane:\s*"Phantom"[\s\S]*?lane:\s*"Resul
   "Execution timeline must keep the planner lanes: You, Phantom, Results.");
 assert.match(main, /class="cw-dept-map"/u,
   "Workforce widget should render as a compact department map, not a raw worker list.");
+assert.match(main, /class="cw-record-grid"/u,
+  "Business widget should render permanent records as a compact dock, not more primary tabs.");
+assert.match(main, /open:\s*"leads"[\s\S]*?open:\s*"media"[\s\S]*?open:\s*"sites"[\s\S]*?open:\s*"money"[\s\S]*?open:\s*"analytics"[\s\S]*?open:\s*"intelligence"/u,
+  "Business records dock must route to clients, media, sites, money, analytics, and intel.");
 assert.match(main, /class="cw-automation-empty"/u,
   "Automation widget should show a clean real-empty state instead of pretending starter recipes are running.");
 assert.match(main, /data-command-run="Create a daily content ideas automation"/u,
@@ -132,6 +141,8 @@ assert.match(main, /deck\.hidden = items\.length === 0/u,
 assert.match(main, /data-open-ws="\$\{esc\(item\.open \|\| "activity"\)\}"/u,
   "Decision cards must only open existing workspaces.");
 assert.match(css, /\.cw-dock\s*\{/u, "Expanded command widgets must have visual dock styling.");
+assert.match(css, /\.cw-record-grid\s*\{/u, "Business records dock must have compact record-grid styling.");
+assert.match(css, /\.cw-record-node\s*\{/u, "Business records dock must style each record as a clickable tile.");
 assert.match(css, /\.cw-flow\s*\{/u, "Outcome widget must show a compact Signal/Decision/Work/Result flow.");
 assert.match(css, /\.cw-dept-map\s*\{/u, "Workforce widget must have visual department-map styling.");
 assert.match(css, /\.cw-automation-empty\s*\{/u, "Automation widget must have a clean empty-state dock.");
