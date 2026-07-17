@@ -371,7 +371,8 @@ addEventListener('keyup',e=>{
     if(!f.human)continue;
     if(localNetMode&&f.slot!==localSlot)continue;
     const pad=padFor(f);
-    if(pad.heavy.includes(e.key)&&f.charge>0&&!f.dead&&f.stun<=0){attack(f,true);f.charge=0;if(netMode)sendMatchAction({type:'input',slot:localSlot,event:'heavy'},'merge')}
+    if(mode==='racetop'){f.charge=0} // heavy attack has no meaning in this mode — reset the charge keydown may have armed, but never call brawl attack()
+    else if(pad.heavy.includes(e.key)&&f.charge>0&&!f.dead&&f.stun<=0){attack(f,true);f.charge=0;if(netMode)sendMatchAction({type:'input',slot:localSlot,event:'heavy'},'merge')}
     if(pad.shield.includes(e.key))f.shieldHeld=false;
   }
 });
@@ -1003,7 +1004,7 @@ function drawFighter(f,t){
   ctx.globalAlpha=.45;ctx.fillStyle='#ff8fa3';
   ctx.beginPath();ctx.ellipse(hx-face*2*DPR,hy+3.5*DPR,2.6*DPR,1.6*DPR,0,0,Math.PI*2);ctx.fill();
   ctx.beginPath();ctx.ellipse(hx+face*9*DPR,hy+3.5*DPR,2*DPR,1.3*DPR,0,0,Math.PI*2);ctx.fill();
-  ctx.globalAlpha=1;
+  ctx.globalAlpha=f.invuln>0?.45+.3*Math.sin(t*.02):1; // restore the invuln-flicker value, not a flat 1 — otherwise the eyes/mask drawn after this stop flickering with the rest of the sprite
   /* eye mask stays behind a big glossy eye rather than obscuring it — the
      mask reads as "ninja," the oversized eye underneath (with a pupil and
      a sparkle highlight) is what reads as "cute." */
@@ -1109,6 +1110,11 @@ function resetToMenu(){
   cancelAnimationFrame(raf);
   running=false;paused=false;over=false;mode='';
   fighters=[];pickups=[];particles=[];floaters=[];rings=[];projectiles=[];matchKos=[0,0,0,0];stats={wins:0,matches:0,bestKos:0};pickupTimer=6;shake=0;slowmo=0;keys.clear();
+  // Net room state must reset here too, not just match state — otherwise
+  // a client that hosted one net match carries isHost=true into whatever
+  // room it enters next (it would wrongly believe it's still the host and
+  // try to broadcast into someone else's room).
+  isHost=false;inRoom=false;netMatchStarting=false;remoteInputs={};lastSnapshot=null;prevSnapshot=null;
   stopRaceMusic();
   document.body.classList.remove('paused');
   hudEl.hidden=true;endEl.hidden=true;setupEl.hidden=false;
@@ -1137,7 +1143,16 @@ addEventListener('message',e=>{
   if(d.type==='pause')setPaused(true);
   if(d.type==='resume')setPaused(false);
   if(d.type==='exit')resetToMenu();
-  if(d.type==='restart'){if(mode)startMatch(mode,{humans:localHumans});else resetToMenu()}
+  if(d.type==='restart'){
+    // A net-mode restart can't just re-run startMatch — that's the LOCAL
+    // match starter and would boot a broken match with no host election,
+    // no snapshots, and a wrong roster. Re-entering a net match cleanly
+    // needs the room lobby flow, which this handler doesn't build here —
+    // fall back to the menu instead of silently starting something broken.
+    if(mode&&mode.startsWith('net'))resetToMenu();
+    else if(mode)startMatch(mode,{humans:localHumans});
+    else resetToMenu();
+  }
   if(d.type==='restore')resetToMenu();
   if(d.type==='match-state')applyMatchState(d);
   if(d.type==='match-action-relay')applyRemoteAction(d);
