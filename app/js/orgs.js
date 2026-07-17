@@ -148,6 +148,33 @@ export async function switchOrg(orgId) {
   return { ok: true, session: updated };
 }
 
+export async function createOrganization(name) {
+  const { ok, status, json } = await api("/orgs", { method: "POST", body: { name } });
+  if (!ok || !json?.org) {
+    return {
+      ok: false,
+      status,
+      error: json?.message || json?.error || "organization_create_failed",
+      used: json?.used,
+      limit: json?.limit,
+    };
+  }
+  const current = ctx.session || {};
+  const memberships = json.session?.memberships
+    || [...(current.memberships || []), { orgId: json.org.id, orgName: json.org.name, role: "owner" }];
+  const updated = {
+    ...current,
+    orgId: json.session?.orgId || json.org.id,
+    orgRole: json.session?.orgRole || "owner",
+    memberships,
+    subscriptionActive: json.session?.subscriptionActive ?? current.subscriptionActive,
+    entitlements: undefined,
+  };
+  session.set({ ...updated, token: undefined });
+  ctx.session = updated;
+  return { ok: true, org: json.org, session: updated };
+}
+
 export async function fetchEntitlementsSummary() {
   if (ctx.session?.localCustomer) return fetchCustomerPlanPreview();
   const orgId = activeOrgId();

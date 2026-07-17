@@ -281,10 +281,12 @@ function planLimitFacts(limits = {}) {
     .join("");
 }
 
-function renderPlanCard(plan, currentKey, canSwitch) {
+function renderPlanCard(plan, currentKey, canSwitch, businessCount = 1) {
   const features = plan.features || {};
   const limits = plan.limits || {};
   const current = plan.key === currentKey;
+  const businessLimit = Number(limits.businesses ?? 1);
+  const downgradeLoss = Number.isFinite(businessLimit) && businessCount > businessLimit;
   const disabledFeatures = Object.entries(features)
     .filter(([key, value]) => value === false && PLAN_FEATURE_LABELS[key])
     .map(([key]) => PLAN_FEATURE_LABELS[key])
@@ -302,6 +304,7 @@ function renderPlanCard(plan, currentKey, canSwitch) {
       <div class="set-chip-row">
         ${featurePills(features)}
       </div>
+      ${downgradeLoss ? `<p class="set-note is-warning"><b>Downgrade warning:</b> this tier allows ${businessLimit} organization${businessLimit === 1 ? "" : "s"}. You currently have ${businessCount}, so you must archive or upgrade before this plan is safe.</p>` : ""}
       <p class="set-note">${disabledFeatures.length ? `Restricted here: ${esc(disabledFeatures.join(", "))}.` : "All public business features are available on this tier."}</p>
       ${canSwitch ? `<button type="button" class="set-secondary ${current ? "is-disabled" : ""}" data-plan-switch="${esc(plan.key)}" ${current ? "disabled" : ""}>${current ? "Using this tier" : `Switch to ${esc(plan.name || plan.key)}`}</button>` : ""}
     </article>`;
@@ -339,6 +342,7 @@ async function renderPlanAccessTab(el, opts = {}) {
         limits: entitlements.limits,
       }];
     const currentName = entitlements.planName || entitlements.plan || entitlements.planKey || "Current plan";
+    const businessCount = Number(summary?.businesses?.used || ctx.session?.memberships?.length || 1);
     el.innerHTML = `
       <div class="set-section">
         <div class="set-card-head">
@@ -353,6 +357,7 @@ async function renderPlanAccessTab(el, opts = {}) {
           <span><b>Writes</b><i>${entitlements.canWrite === false ? "View-only" : "Enabled"}</i></span>
           <span><b>Model</b><i>${esc(entitlements.features?.modelTier || "standard")}</i></span>
           <span><b>Seats</b><i>${esc(summary?.seats ? `${summary.seats.used}/${summary.seats.limit}` : formatPlanLimit("seats", entitlements.limits?.seats))}</i></span>
+          <span><b>Businesses</b><i>${esc(summary?.businesses ? `${summary.businesses.used}/${summary.businesses.limit}` : formatPlanLimit("businesses", entitlements.limits?.businesses))}</i></span>
           <span><b>Sites</b><i>${esc(formatPlanLimit("sitesPerOrg", entitlements.limits?.sitesPerOrg))}</i></span>
         </div>
         <p class="set-note" data-plan-message></p>
@@ -363,7 +368,7 @@ async function renderPlanAccessTab(el, opts = {}) {
           <b>${localCustomer ? "Editable" : "Read-only"}</b>
         </div>
         <div class="set-choice-grid">
-          ${plans.map((plan) => renderPlanCard(plan, entitlements.planKey, localCustomer)).join("")}
+          ${plans.map((plan) => renderPlanCard(plan, entitlements.planKey, localCustomer, businessCount)).join("")}
         </div>
       </div>`;
     const message = el.querySelector("[data-plan-message]");

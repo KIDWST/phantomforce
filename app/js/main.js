@@ -1051,7 +1051,7 @@ function renderUser() {
 
 async function signOut() {
   if (!confirm("Sign out of PhantomForce?")) return;
-  const databaseSession = !!ctx.session?.database;
+  const databaseSession = !!(ctx.session?.database || ctx.session?.localCustomer);
   accountMenuOpen = false;
   closeOverlay(true);
   try {
@@ -1183,6 +1183,7 @@ function renderAccountMenu() {
   const status = accountStatusMeta();
   const renewal = accountRenewalLabel();
   const ent = accountEntitlements();
+  const memberships = businessMemberships();
   if (btn) {
     btn.classList.toggle("is-open", accountMenuOpen);
     btn.setAttribute("aria-expanded", accountMenuOpen ? "true" : "false");
@@ -1205,13 +1206,16 @@ function renderAccountMenu() {
       </span>
       <strong>Manage →</strong>
     </button>
-    ${ctx.session?.database && (ctx.session.memberships || []).length ? `
+    ${isCustomerOrgSession() && memberships.length ? `
     <div class="user-menu-orgs">
       <i>Business</i>
-      ${(ctx.session.memberships || []).map((m) => `
+      ${memberships.map((m) => `
         <button class="user-menu-org ${m.orgId === ctx.session.orgId ? "is-active" : ""}" data-user-menu-org="${esc(m.orgId)}" type="button">
           <b>${esc(m.orgName)}</b><span>${esc(m.role)}</span>
         </button>`).join("")}
+      <button class="user-menu-org user-menu-org-add" data-user-menu-new-org type="button">
+        <b>+ New organization</b><span>Plan limit applies</span>
+      </button>
     </div>` : ""}
     <div class="user-menu-status is-${status.tone}">
       <span aria-hidden="true"></span>
@@ -1228,7 +1232,7 @@ function renderAccountMenu() {
       if (result.ok) {
         accountLiveEntitlements = null;
         await refreshNavEntitlements({ rerender: false });
-        pushActivity("Account", `switched active business to ${ctx.session.memberships.find((m) => m.orgId === orgId)?.orgName || orgId}.`);
+        pushActivity("Account", `switched active business to ${businessMemberships().find((m) => m.orgId === orgId)?.orgName || orgId}.`);
         store.save();
         routeWorkspace("dashboard");
         renderConsole();
@@ -1238,6 +1242,8 @@ function renderAccountMenu() {
       }
     };
   });
+  const createOrgButton = menu.querySelector("[data-user-menu-new-org]");
+  if (createOrgButton) createOrgButton.onclick = () => createNewOrganizationFromSwitcher();
 }
 function renderCurrentPlanCardInner() {
   const ent = accountEntitlements();
