@@ -294,7 +294,7 @@ function renderMissionCreateStepObjective(body) {
     <details class="mission-advanced">
       <summary>Advanced</summary>
       <label>Mission name (auto if blank)<input id="mf-name" type="text" placeholder="auto-generated from the objective" /></label>
-      <label>Workers (blank = let it decide)<input id="mf-count" type="number" min="2" max="10" placeholder="auto" /></label>
+      <label>Workers (blank = let it decide)<input id="mf-count" type="number" min="2" max="20" placeholder="auto" /></label>
       <label class="mission-checkbox"><input type="checkbox" id="mf-review" /> Review generated roles before launching</label>
     </details>
     <div class="mission-form-actions">
@@ -368,7 +368,7 @@ function renderMissionCreateStepObjective(body) {
     const workspaceRoot = document.getElementById("mf-workspace").value.trim();
     const name = document.getElementById("mf-name").value.trim();
     const countRaw = document.getElementById("mf-count").value.trim();
-    const workerCount = countRaw ? Math.max(2, Math.min(10, parseInt(countRaw, 10) || 0)) : undefined;
+    const workerCount = countRaw ? Math.max(2, Math.min(20, parseInt(countRaw, 10) || 0)) : undefined;
     const launchMode = document.getElementById("mf-launchmode").value;
     const reviewFirst = document.getElementById("mf-review").checked;
     const errorEl = document.getElementById("mf-error");
