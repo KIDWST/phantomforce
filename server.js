@@ -528,7 +528,12 @@ function serveStatic(req, res, urlPath) {
     return;
   }
   const ext = path.extname(filePath).toLowerCase();
-  res.writeHead(200, { "Content-Type": MIME[ext] ?? "application/octet-stream" });
+  // No caching for any static asset, not just the HTML shell: this is a
+  // single-user localhost tool where the files change constantly during
+  // active development, and a stale cached script silently masking a real
+  // fix (or resurrecting a fixed bug) is far worse than the performance
+  // cost of always refetching a handful of small local files.
+  res.writeHead(200, { "Content-Type": MIME[ext] ?? "application/octet-stream", "Cache-Control": "no-store" });
   createReadStream(filePath).pipe(res);
 }
 
