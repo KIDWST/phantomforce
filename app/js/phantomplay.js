@@ -1114,6 +1114,7 @@ function pushMatchStateToGame(room) {
     botSlots: room.botSlots || [],
     hostControls: room.hostControls || null,
     participants: room.participants || [],
+    selfActorId: ui.snapshot.actorId,
     focus: false,
   });
 }

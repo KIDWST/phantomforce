@@ -144,6 +144,31 @@ function localSeed(){
 function nextSeed(){const s=hostSeed;hostSeed=null;return s??localSeed()}
 host('request-seed');
 
+/* ---------- networked rooms (NET 1v1 / NET 2v2 / NET FFA) ----------
+   Host election mirrors kingdom-breakers.html's proven pattern: every
+   client posts a random hostNonce as a matchState probe on entering the
+   lobby; only the room's real host's PATCH ever survives to become the
+   room's persisted matchState (updatePhantomPlayRoomMatchState enforces
+   that), so only the real host ever sees its own nonce echoed back via
+   the next match-state push and sets isHost=true.
+   Real-time sync over a ~5Hz channel: each client always simulates its
+   own controlled fighter locally/immediately (so local input never feels
+   delayed); every other fighter is rendered by interpolating between the
+   host's periodic snapshots. The host is authoritative for percent/
+   stocks/KOs/pickups — it resolves hits for every fighter, including
+   ones it doesn't locally control, using input relayed to it via
+   match-action-relay (see applyRemoteAction below). */
+let inRoom=false,isHost=false,hostNonce=Math.random().toString(36).slice(2,10);
+let roomParticipants=[],remoteInputs={},lastActionAt=0;
+let lastSnapshot=null,prevSnapshot=null,snapshotAt=0,prevSnapshotAt=0;
+let localSlot=0,selfActorId=null;
+function sendMatchAction(action,modeArg){
+  const t=performance.now();
+  if(t-lastActionAt<220){setTimeout(()=>sendMatchAction(action,modeArg),220-(t-lastActionAt));return}
+  lastActionAt=performance.now();
+  host('match-action',{action,mode:modeArg==='replace'?'replace':'merge'});
+}
+
 /* ---------- fighters ---------- */
 const PALETTE=[{name:'EMBER',c:'#4ade80',glow:'#22c55e'},{name:'CIPHER',c:'#5eead4',glow:'#14b8a6'},{name:'HEX',c:'#f0abfc',glow:'#d946ef'},{name:'VOLT',c:'#fde047',glow:'#eab308'}];
 let fighters=[],pickups=[],particles=[],floaters=[],rings=[],projectiles=[],mode='',running=false,paused=false,over=false,last=0,shake=0,slowmo=0,pickupTimer=6,reduced=false,soundOn=true,matchKos=[0,0,0,0],raf=0;
@@ -233,24 +258,28 @@ const keys=new Set();
 function padFor(f){return f.slot===0?P1:P2}
 addEventListener('keydown',e=>{
   if(e.repeat)return;keys.add(e.key);
+  const netMode=mode&&mode.startsWith('net');
   for(const f of fighters){
     if(!f.human||f.dead||f.stun>0||!running||paused)continue;
+    if(netMode&&f.slot!==localSlot)continue; // in a net match, this client only drives its own fighter's local input
     const pad=padFor(f);
-    if(pad.jump.includes(e.key))jump(f);
-    if(pad.light.includes(e.key))attack(f,false);
+    if(pad.jump.includes(e.key)){jump(f);if(netMode)sendMatchAction({type:'input',slot:localSlot,event:'jump'},'merge')}
+    if(pad.light.includes(e.key)){attack(f,false);if(netMode)sendMatchAction({type:'input',slot:localSlot,event:'light'},'merge')}
     if(pad.heavy.includes(e.key))f.charge=.01;
     if(pad.shield.includes(e.key)){f.shieldHeld=true;f.parry=.18;addFloater(f.x,f.y-.1,'GUARD',f.glow,11)}
-    if(pad.dodge.includes(e.key))dodge(f);
+    if(pad.dodge.includes(e.key)){dodge(f);if(netMode)sendMatchAction({type:'input',slot:localSlot,event:'dodge'},'merge')}
     if(pad.left.includes(e.key))tapDash(f,-1,e.key);
     if(pad.right.includes(e.key))tapDash(f,1,e.key);
   }
 });
 addEventListener('keyup',e=>{
   keys.delete(e.key);
+  const netMode=mode&&mode.startsWith('net');
   for(const f of fighters){
     if(!f.human)continue;
+    if(netMode&&f.slot!==localSlot)continue;
     const pad=padFor(f);
-    if(pad.heavy.includes(e.key)&&f.charge>0&&!f.dead&&f.stun<=0){attack(f,true);f.charge=0}
+    if(pad.heavy.includes(e.key)&&f.charge>0&&!f.dead&&f.stun<=0){attack(f,true);f.charge=0;if(netMode)sendMatchAction({type:'input',slot:localSlot,event:'heavy'},'merge')}
     if(pad.shield.includes(e.key))f.shieldHeld=false;
   }
 });
@@ -463,10 +492,33 @@ function wallBonk(f,side){
 }
 function step(f,dt){
   if(f.dead)return;
+  if(mode&&mode.startsWith('net')&&!isHost&&f.slot!==localSlot&&typeof f.targetX==='number'){
+    // Non-host client, non-local fighter: this fighter's true physics runs
+    // on the host — here it's display-only, eased toward the last snapshot
+    // instead of run through local physics/AI (which would double-simulate
+    // and fight the incoming snapshot data every ~200ms).
+    f.x+=(f.targetX-f.x)*Math.min(1,dt*8);f.y+=(f.targetY-f.y)*Math.min(1,dt*8);
+    if(!reduced){f.trail.unshift({x:f.x,y:f.y});f.trail=f.trail.slice(0,8)}
+    return;
+  }
   f.invuln=Math.max(0,f.invuln-dt);f.stun=Math.max(0,f.stun-dt);f.attackCd=Math.max(0,f.attackCd-dt);f.anim=Math.max(0,f.anim-dt);f.parry=Math.max(0,f.parry-dt);f.dodgeCd=Math.max(0,f.dodgeCd-dt);f.smokeCooldown=Math.max(0,f.smokeCooldown-dt);f.speedBuff=Math.max(0,f.speedBuff-dt);
   if(f.charge>0)f.charge=Math.min(1,f.charge+dt);
   if(f.stun<=0){
-    if(f.human){
+    if(f.human&&mode&&mode.startsWith('net')&&f.slot!==localSlot){
+      // Host-side simulation of a remote human fighter: this branch only
+      // ever matters on the room host's own client (the only one that
+      // resolves authoritative hits) — everyone else's copy of this
+      // fighter is display-only, driven by applySnapshotToNonLocalFighters.
+      const remote=remoteInputs[f.slot]||{};
+      if(remote.dir)f.face=remote.dir;
+      const speedMul=f.speedBuff>0?1.35:1;
+      f.vx+=(remote.dir||0)*(remote.shield?.0007:.0018)*speedMul*(dt*60);
+      f.shieldHeld=!!remote.shield;
+      if(remote.event==='jump'){jump(f);remote.event=null}
+      if(remote.event==='light'){attack(f,false);remote.event=null}
+      if(remote.event==='heavy'){attack(f,true);remote.event=null}
+      if(remote.event==='dodge'){dodge(f);remote.event=null}
+    }else if(f.human){
       if(gpEnabled)applyGamepadInput(f);
       const dir=heldDir(f);
       if(dir)f.face=dir;
@@ -787,6 +839,7 @@ for(const b of document.querySelectorAll('[data-humans]'))b.onclick=()=>{
 };
 for(const b of document.querySelectorAll('[data-mode]'))b.onclick=()=>{
   if(b.dataset.mode==='localffa'){localSlotsEl.hidden=false;return}
+  if(b.dataset.mode.startsWith('net')){mode=b.dataset.mode;netMatchStarting=false;sendMatchAction({hostProbe:hostNonce});return}
   startMatch(b.dataset.mode,{humans:localHumans});
 };
 document.querySelector('[data-local-start]').onclick=()=>startMatch('localffa',{humans:localHumans});
@@ -825,7 +878,80 @@ addEventListener('message',e=>{
   if(d.type==='exit')resetToMenu();
   if(d.type==='restart'){if(mode)startMatch(mode,{humans:localHumans});else resetToMenu()}
   if(d.type==='restore')resetToMenu();
+  if(d.type==='match-state')applyMatchState(d);
+  if(d.type==='match-action-relay')applyRemoteAction(d);
 });
+let netMatchStarting=false;
+function applyMatchState(d){
+  inRoom=true;
+  roomParticipants=d.participants||[];
+  if(d.selfActorId)selfActorId=d.selfActorId;
+  const ms=d.matchState||{};
+  if(ms.hostProbe===hostNonce)isHost=true;
+  if(selfActorId){const idx=roomParticipants.findIndex(p=>p.actorId===selfActorId);if(idx>=0)localSlot=idx}
+  if(!mode||!mode.startsWith('net'))return;
+  // The host starts the match itself once enough players have joined —
+  // this game provides its own start trigger (matching kingdom-breakers.
+  // html's own self-contained btnPartyStart pattern) rather than waiting
+  // on a generic platform "start" affordance this game doesn't render.
+  if(isHost&&!running&&!netMatchStarting&&ms.phase!=='active'&&roomParticipants.length>=2){
+    netMatchStarting=true;hostStartNetMatch();
+  }
+  if(ms.phase==='active'&&!isHost&&ms.snapshot){
+    prevSnapshot=lastSnapshot;prevSnapshotAt=snapshotAt;
+    lastSnapshot=ms.snapshot;snapshotAt=performance.now();
+    applySnapshotToNonLocalFighters(ms.snapshot);
+  }
+}
+// match-action-relay only ever reaches the room's actual host (the
+// phantomplay.js host shell gates delivery to the host's own stream
+// connection before this message is even posted) — this is the host's
+// simulation receiving a non-host participant's current held-input
+// state, so it can compute that participant's fighter's movement/
+// attacks authoritatively.
+function applyRemoteAction(d){
+  const action=d.action||{};
+  if(action.type!=='input'||typeof action.slot!=='number')return;
+  const current=remoteInputs[action.slot]||{};
+  // Two message shapes share this seam: periodic held-state ({held:{dir,
+  // shield}}) merges in without disturbing a still-pending discrete event,
+  // and a discrete event ({event:'jump'/'light'/'heavy'/'dodge'}) sets
+  // the event without disturbing the last-known held state.
+  if(action.held)remoteInputs[action.slot]={...current,...action.held};
+  else if(action.event)remoteInputs[action.slot]={...current,event:action.event};
+}
+function hostStartNetMatch(){
+  const seed=nextSeed();
+  const humanCount=roomParticipants.length;
+  const count=mode==='net2v2'||mode==='netffa'?4:2;
+  fighters=[];
+  for(let i=0;i<count;i++)fighters.push(makeFighter(i,i<humanCount));
+  buildPlatforms(seed);
+  pickups=[];particles=[];floaters=[];rings=[];projectiles=[];matchKos=[0,0,0,0];pickupTimer=6;over=false;running=true;paused=false;
+  setupEl.hidden=true;endEl.hidden=true;hudEl.hidden=false;
+  buildHud();last=performance.now();if(raf)cancelAnimationFrame(raf);raf=requestAnimationFrame(loop);
+  sendMatchAction({phase:'active',seed,hostProbe:hostNonce},'merge');
+  setInterval(()=>{
+    if(!isHost||!running)return;
+    const snapshot=fighters.map(f=>({x:f.x,y:f.y,vx:f.vx,vy:f.vy,face:f.face,pct:f.pct,stocks:f.stocks,dead:f.dead}));
+    sendMatchAction({snapshot},'merge');
+  },200);
+}
+function applySnapshotToNonLocalFighters(snapshot){
+  snapshot.forEach((s,i)=>{
+    const f=fighters[i];
+    if(!f||i===localSlot)return; // never overwrite the locally-predicted fighter this client controls — every OTHER fighter (bot or remote human) is display-only here
+    f.pct=s.pct;f.stocks=s.stocks;f.dead=s.dead;f.targetX=s.x;f.targetY=s.y;f.face=s.face;
+  });
+}
+function startInputRelay(){
+  setInterval(()=>{
+    if(isHost||!running||mode==='')return;
+    const f=fighters[localSlot];if(!f)return;
+    sendMatchAction({type:'input',slot:localSlot,held:{dir:heldDir(f),shield:f.shieldHeld}},'merge');
+  },120);
+}
+startInputRelay();
 document.addEventListener('visibilitychange',()=>{if(document.hidden)setPaused(true)});
 setInterval(()=>{if(running&&!over)pushState(Math.min(99,Math.round(fighters.reduce((sum,t)=>sum+(3-t.stocks),0)/(fighters.length*3)*100)))},8000);
 draw(0);
