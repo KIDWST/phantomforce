@@ -593,11 +593,27 @@ function drawFighter(f,t){
   ctx.moveTo(hx-3*DPR,hy-6*DPR);ctx.lineTo(hx-1*DPR,hy-11*DPR);ctx.lineTo(hx+1*DPR,hy-6*DPR);
   ctx.lineTo(hx+2.5*DPR,hy-10*DPR);ctx.lineTo(hx+4.5*DPR,hy-5*DPR);
   ctx.closePath();ctx.fill();
+  /* ninja headband: a band across the brow plus two trailing tails that
+     whip out based on the same sway calc the body/scarf use, amplified
+     during an active attack/dodge so it visibly reacts to fast action */
+  const bandWhip=(reduced?0:Math.sin(t*.01+f.slot)*4*DPR)+(f.anim>0||f.dodgeCd>.5?face*6*DPR:0);
+  ctx.fillStyle='#181c1f';
+  ctx.beginPath();ctx.ellipse(hx,hy-2*DPR,7.4*DPR,3.2*DPR,0,Math.PI*1.08,Math.PI*1.92);ctx.fill();
+  ctx.strokeStyle=f.glow;ctx.lineWidth=1.2*DPR;
+  ctx.beginPath();ctx.moveTo(hx-6*DPR,hy-3*DPR);ctx.lineTo(hx+6*DPR,hy-3*DPR);ctx.stroke();
+  for(const dir of [-1,1]){
+    ctx.beginPath();
+    ctx.moveTo(hx-face*4*DPR,hy-3*DPR);
+    ctx.quadraticCurveTo(hx-face*10*DPR+bandWhip*dir*.4,hy-1*DPR+dir*3*DPR,hx-face*15*DPR+bandWhip*dir,hy+2*DPR+dir*4*DPR);
+    ctx.lineWidth=2*DPR;ctx.strokeStyle='#181c1f';ctx.stroke();
+  }
   /* beak */
   ctx.fillStyle='#ffb454';
   ctx.beginPath();ctx.moveTo(hx+face*6*DPR,hy);ctx.lineTo(hx+face*13*DPR,hy-1.5*DPR);ctx.lineTo(hx+face*6*DPR,hy+3*DPR);ctx.closePath();ctx.fill();
-  /* eye */
-  ctx.fillStyle='#02110a';ctx.beginPath();ctx.arc(hx+face*2*DPR,hy-1*DPR,1.6*DPR,0,Math.PI*2);ctx.fill();
+  /* eye mask: a dark band across the eyes instead of a bare dot */
+  ctx.fillStyle='#181c1f';
+  ctx.beginPath();ctx.ellipse(hx+face*1*DPR,hy-1*DPR,3.4*DPR,2*DPR,0,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#e8fff2';ctx.beginPath();ctx.arc(hx+face*2*DPR,hy-1*DPR,1*DPR,0,Math.PI*2);ctx.fill();
   if(f.anim>0){ctx.strokeStyle=f.power?'#ffffff':f.glow;ctx.lineWidth=3*DPR;ctx.globalAlpha=f.anim*4;ctx.beginPath();ctx.arc(bx+f.face*16*DPR,by-12*DPR,10*DPR,-.7,.7);ctx.stroke()}
   if(f.shieldHeld){ctx.globalAlpha=f.parry>0?.82:.42;ctx.strokeStyle=f.parry>0?'#ffffff':f.glow;ctx.lineWidth=(f.parry>0?4:2)*DPR;ctx.beginPath();ctx.arc(bx,by-15*DPR,(23+(f.parry>0?5:0))*DPR,0,Math.PI*2);ctx.stroke()}
   ctx.globalAlpha=1;ctx.shadowBlur=0;ctx.font=`900 ${13*DPR}px ui-monospace`;ctx.textAlign='center';ctx.fillStyle=f.stun>0?'#ffffff':f.color;ctx.fillText(`${Math.round(f.pct)}%`,bx,by-38*DPR);
