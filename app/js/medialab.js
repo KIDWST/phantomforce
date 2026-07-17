@@ -10,6 +10,7 @@ import { currentTenantId, ctx, session as accessSession, workspaceStorageGetItem
 import {
   PLATFORMS, registerContentAsset, loadSocialAccounts, saveSocialAccounts, socialStatus,
   loadContentAssets, saveContentAssets, contentAssetDisplayUrl, hydrateContentAssetUrl,
+  loadRecycledContentAssets, recycleContentAssets, restoreRecycledContentAssets, purgeRecycledContentAssets,
 } from "./contenthub.js?v=phantom-live-20260716-291";
 import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260716-291";
 import {
@@ -2532,6 +2533,38 @@ function poolPendingStrip(esc) {
       </article>`).join("")}
   </section>`;
 }
+function poolRecycleDaysLeft(asset) {
+  const left = Math.ceil(((asset.trashExpiresAt || asset.trashedAt || Date.now()) - Date.now()) / 864e5);
+  return Math.max(1, left);
+}
+function poolRecycleBinHtml(items, esc) {
+  if (!items.length) return "";
+  return `<details class="ml-recycle-bin">
+    <summary>
+      <span>${svgIc("close")} Recycle Bin</span>
+      <b>${items.length} item${items.length === 1 ? "" : "s"} · ${30}-day recovery</b>
+    </summary>
+    <div class="ml-recycle-list">
+      ${items.map((asset) => {
+        const url = contentAssetDisplayUrl(asset);
+        const media = url
+          ? (asset.type === "video"
+            ? `<video src="${esc(url)}" muted playsinline preload="metadata"></video>`
+            : `<img src="${esc(url)}" alt="${esc(asset.title)}" loading="lazy"/>`)
+          : `<span class="ml-pool-thumb-empty">No preview</span>`;
+        return `<article class="ml-recycle-row">
+          <figure>${media}</figure>
+          <div>
+            <b>${esc((asset.title || "Media item").slice(0, 64))}</b>
+            <i>${esc(asset.type || "media")} · recoverable for ${poolRecycleDaysLeft(asset)}d</i>
+          </div>
+          <button class="ml-pool-act" data-pool-trash-act="restore" data-id="${esc(asset.id)}">Restore</button>
+          <button class="ml-pool-act is-danger" data-pool-trash-act="purge" data-id="${esc(asset.id)}">Delete</button>
+        </article>`;
+      }).join("")}
+    </div>
+  </details>`;
+}
 function poolTileHtml(asset, esc) {
   const url = contentAssetDisplayUrl(asset);
   const media = url
@@ -2562,12 +2595,14 @@ async function poolAssetUrl(asset, opts) {
 function renderMediaPool(body, cfg, opts, root) {
   const esc = opts.esc || ((s) => String(s));
   const assets = loadContentAssets();
+  const recycled = loadRecycledContentAssets();
   mlPoolCount = assets.length;
   body.innerHTML = `
     ${poolPendingStrip(esc)}
     ${assets.length
       ? `<div class="ml-pool-grid">${assets.map((a) => poolTileHtml(a, esc)).join("")}</div>`
-      : `<div class="ml-empty" data-ml-dropzone="edit" data-ml-dropzone-label="Drop to add media">${svgIc("image")}<b>Media Pool is empty</b><i>Generate in Create — finished renders land here automatically and stay for ${30} days. Publish, edit, or reuse them any time.</i></div>`}`;
+      : `<div class="ml-empty" data-ml-dropzone="edit" data-ml-dropzone-label="Drop to add media">${svgIc("image")}<b>Media Pool is empty</b><i>Generate in Create — finished renders land here automatically and stay for ${30} days. Publish, edit, or reuse them any time.</i></div>`}
+    ${poolRecycleBinHtml(recycled, esc)}`;
   body.querySelectorAll("[data-pool-act]").forEach((btn) => btn.onclick = async () => {
     const asset = loadContentAssets().find((item) => item.id === btn.dataset.id);
     if (!asset) return;
@@ -2602,8 +2637,23 @@ function renderMediaPool(body, cfg, opts, root) {
       return;
     }
     if (act === "remove") {
-      saveContentAssets(loadContentAssets().filter((item) => item.id !== asset.id));
+      recycleContentAssets(asset);
       if (opts.notify) opts.notify("Media Pool", "removed the media from Media Pool.");
+      renderMediaPool(body, cfg, opts, root);
+    }
+  });
+  body.querySelectorAll("[data-pool-trash-act]").forEach((btn) => btn.onclick = () => {
+    const id = btn.dataset.id;
+    const act = btn.dataset.poolTrashAct;
+    if (act === "restore") {
+      const restored = restoreRecycledContentAssets(id);
+      if (opts.notify) opts.notify("Media Pool", restored.length ? "restored the media to Media Pool." : "that media already expired.");
+      renderMediaPool(body, cfg, opts, root);
+      return;
+    }
+    if (act === "purge") {
+      purgeRecycledContentAssets(id);
+      if (opts.notify) opts.notify("Media Pool", "deleted the recycled media.");
       renderMediaPool(body, cfg, opts, root);
     }
   });

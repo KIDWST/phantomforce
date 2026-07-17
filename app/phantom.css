@@ -4806,9 +4806,24 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .ml-pool-act.is-primary { background: linear-gradient(135deg, rgba(65,255,161,0.22), rgba(9,20,15,0.9)); border-color: rgba(65,255,161,0.5); }
 .ml-pool-act.is-danger:hover { border-color: var(--warn); color: var(--warn); }
 .ml-pool-act svg { width: 13px; height: 13px; }
+.ml-recycle-bin { margin-top: 18px; border: 1px solid rgba(130, 160, 150, 0.18); border-radius: var(--r-md); background: rgba(3, 9, 7, 0.72); overflow: hidden; }
+.ml-recycle-bin summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; cursor: pointer; list-style: none; color: var(--dim); }
+.ml-recycle-bin summary::-webkit-details-marker { display: none; }
+.ml-recycle-bin summary span { display: inline-flex; align-items: center; gap: 8px; font: 700 11px var(--font-mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink); }
+.ml-recycle-bin summary span svg { width: 13px; height: 13px; color: var(--dim); }
+.ml-recycle-bin summary b { font: 600 10.5px var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--dim); }
+.ml-recycle-list { display: grid; gap: 8px; padding: 0 12px 12px; }
+.ml-recycle-row { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto auto; align-items: center; gap: 10px; padding: 8px; border: 1px solid var(--line); border-radius: var(--r-sm); background: rgba(7, 18, 13, 0.8); }
+.ml-recycle-row figure { width: 64px; aspect-ratio: 4 / 3; margin: 0; border-radius: 6px; overflow: hidden; display: grid; place-items: center; background: #030906; }
+.ml-recycle-row img, .ml-recycle-row video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ml-recycle-row div { min-width: 0; display: grid; gap: 2px; }
+.ml-recycle-row b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--ink); }
+.ml-recycle-row i { font: 500 10px var(--font-mono); color: var(--dim); font-style: normal; letter-spacing: 0.04em; }
 @media (max-width: 767px) {
   .ml-pool-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
   .ml-pool-actions { padding: 6px 10px 10px; }
+  .ml-recycle-row { grid-template-columns: 54px 1fr; }
+  .ml-recycle-row .ml-pool-act { justify-content: center; }
 }
 .ml-stage-grid { position: relative; z-index: 2; align-content: start; }
 .ml-stage-grid .ml-skel:first-child { grid-column: 1 / -1; aspect-ratio: 16 / 9; }

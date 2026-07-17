@@ -27,6 +27,7 @@ import {
 const CH_KEY = "pf.contenthub.v2";
 const CH_REMOVED_KEY = "pf.contenthub.removed.v1";
 const CH_ASSETS_KEY = "pf.contenthub.assets.v1";
+const CH_ASSET_RECYCLE_KEY = "pf.contenthub.assets.recycle.v1";
 const CH_MEDIA_EDIT_INTENT_KEY = "pf.medialab.editIntent.v1";
 const CH_OPEN_TAB_KEY = "pf.contenthub.openTab.v1";
 const CH_OPEN_ASSET_KEY = "pf.contenthub.openAsset.v1";
@@ -343,6 +344,87 @@ export function saveContentAssets(items = []) {
     }
   }
   return clean;
+}
+
+function normalizeRecycledContentAsset(input = {}) {
+  const asset = normalizeContentAsset(input);
+  const trashedAt = Number(input.trashedAt || input.deletedAt || Date.now()) || Date.now();
+  return {
+    ...asset,
+    trashedAt,
+    trashExpiresAt: trashedAt + CONTENT_ASSET_LIMITS.retentionDays * DAY,
+  };
+}
+function pruneRecycledContentAssets(items = []) {
+  const now = Date.now();
+  const seen = new Set();
+  return items
+    .map(normalizeRecycledContentAsset)
+    .filter((asset) => asset.trashExpiresAt > now)
+    .sort((a, b) => b.trashedAt - a.trashedAt)
+    .filter((asset) => {
+      if (seen.has(asset.id)) return false;
+      seen.add(asset.id);
+      return true;
+    })
+    .slice(0, CONTENT_ASSET_LIMITS.maxItems * 2);
+}
+export function loadRecycledContentAssets() {
+  let raw = null;
+  try { raw = JSON.parse(workspaceStorageGetItem(CH_ASSET_RECYCLE_KEY) || "null"); } catch {}
+  const list = Array.isArray(raw) ? raw : (raw && Array.isArray(raw.assets) ? raw.assets : []);
+  const pruned = pruneRecycledContentAssets(list);
+  if (pruned.length !== list.length) saveRecycledContentAssets(pruned);
+  return pruned;
+}
+export function saveRecycledContentAssets(items = []) {
+  const clean = pruneRecycledContentAssets(items);
+  try {
+    workspaceStorageSetItem(CH_ASSET_RECYCLE_KEY, JSON.stringify({
+      assets: clean,
+      updatedAt: Date.now(),
+      retentionDays: CONTENT_ASSET_LIMITS.retentionDays,
+    }));
+  } catch {}
+  return clean;
+}
+export function recycleContentAssets(assets = []) {
+  const list = Array.isArray(assets) ? assets : [assets];
+  const normalized = list.filter(Boolean).map((asset) => normalizeRecycledContentAsset({ ...asset, trashedAt: Date.now() }));
+  if (!normalized.length) return { recycled: [], active: loadContentAssets(), bin: loadRecycledContentAssets() };
+  const ids = new Set(normalized.map((asset) => asset.id));
+  const active = saveContentAssets(loadContentAssets().filter((asset) => !ids.has(asset.id)));
+  const bin = saveRecycledContentAssets([
+    ...normalized,
+    ...loadRecycledContentAssets().filter((asset) => !ids.has(asset.id)),
+  ]);
+  return { recycled: normalized, active, bin };
+}
+export function restoreRecycledContentAssets(ids = []) {
+  const wanted = new Set(Array.isArray(ids) ? ids : [ids]);
+  const bin = loadRecycledContentAssets();
+  const restored = bin.filter((asset) => wanted.has(asset.id));
+  if (!restored.length) return [];
+  const current = loadContentAssets();
+  const restoredAt = Date.now();
+  saveContentAssets([
+    ...restored.map(({ trashedAt, trashExpiresAt, ...asset }) => ({
+      ...asset,
+      createdAt: restoredAt,
+      expiresAt: restoredAt + CONTENT_ASSET_LIMITS.retentionDays * DAY,
+      updatedAt: restoredAt,
+    })),
+    ...current.filter((asset) => !wanted.has(asset.id)),
+  ]);
+  saveRecycledContentAssets(bin.filter((asset) => !wanted.has(asset.id)));
+  return restored;
+}
+export function purgeRecycledContentAssets(ids = []) {
+  const wanted = new Set(Array.isArray(ids) ? ids : [ids]);
+  const bin = loadRecycledContentAssets();
+  const kept = wanted.size ? bin.filter((asset) => !wanted.has(asset.id)) : [];
+  saveRecycledContentAssets(kept);
+  return bin.length - kept.length;
 }
 /* In-memory bridge for oversized media: the persisted copy drops data URLs
    over the inline budget, so previews for those assets come from this cache
@@ -2840,8 +2922,11 @@ function undoLastDelete(root, opts) {
   if (!chLastDeleted) return;
   const { assets: restoredAssets, postIds } = chLastDeleted;
   if (restoredAssets.length) {
-    const current = loadContentAssets();
-    saveContentAssets([...restoredAssets, ...current.filter((a) => !restoredAssets.some((r) => r.id === a.id))]);
+    const restored = restoreRecycledContentAssets(restoredAssets.map((asset) => asset.id));
+    if (!restored.length) {
+      const current = loadContentAssets();
+      saveContentAssets([...restoredAssets, ...current.filter((a) => !restoredAssets.some((r) => r.id === a.id))]);
+    }
   }
   if (postIds.length) {
     const removed = loadRemovedContent();
@@ -2940,13 +3025,13 @@ function wireLibraryActions(body, data, assets, shownAssets, shownPosts, esc, ro
     event.stopPropagation();
     const id = btn.dataset.chDeleteAsset;
     const deleted = loadContentAssets().filter((asset) => asset.id === id);
-    saveContentAssets(loadContentAssets().filter((asset) => asset.id !== id));
+    recycleContentAssets(deleted);
     chSelection.delete(selectionKey("asset", id));
     captureDeleteForUndo(deleted, []);
     // rerender before notify(): notify() triggers a global store-change listener that can
     // fully remount this page and invalidate this closure's DOM references.
     rerender();
-    opts.notify?.("Content Hub", "Deleted the selected local media item — Ctrl+Z to undo. No external file or post was touched.");
+    opts.notify?.("Content Hub", "Removed the selected local media item — Ctrl+Z to undo. No external file or post was touched.");
   }));
   body.querySelector("[data-ch-select-mode]")?.addEventListener("click", () => {
     chState.selectMode = !chState.selectMode;
@@ -3013,7 +3098,7 @@ function wireLibraryActions(body, data, assets, shownAssets, shownPosts, esc, ro
     const assetIds = new Set(selected.filter((item) => item.kind === "asset").map((item) => item.id));
     const postIds = selected.filter((item) => item.kind === "post").map((item) => item.id);
     const deletedAssets = loadContentAssets().filter((asset) => assetIds.has(asset.id));
-    if (assetIds.size) saveContentAssets(loadContentAssets().filter((asset) => !assetIds.has(asset.id)));
+    if (assetIds.size) recycleContentAssets(deletedAssets);
     if (postIds.length) {
       const removed = loadRemovedContent();
       postIds.forEach((id) => removed.add(`post:${id}`));
@@ -3025,7 +3110,7 @@ function wireLibraryActions(body, data, assets, shownAssets, shownPosts, esc, ro
     // rerender before notify(): notify() triggers a global store-change listener that can
     // fully remount this page and invalidate this closure's DOM references.
     rerender();
-    opts.notify?.("Content Hub", `Deleted ${selected.length} local content item${selected.length === 1 ? "" : "s"} — Ctrl+Z to undo. No external post or file was touched.`);
+    opts.notify?.("Content Hub", `Removed ${selected.length} local content item${selected.length === 1 ? "" : "s"} — Ctrl+Z to undo. No external post or file was touched.`);
   });
   const uploadInput = body.querySelector("[data-ch-upload-input]");
   body.querySelector("[data-ch-upload-local]")?.addEventListener("click", () => uploadInput?.click());
