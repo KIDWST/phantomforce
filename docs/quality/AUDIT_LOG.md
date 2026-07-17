@@ -197,6 +197,63 @@ corrected or removed.
   `-14` → `-15` globally while this item was in progress); no further bump
   needed here.
 
+### 4. 3-lane Planner rebuild with dependency recalculation
+
+- Discovery: `app/js/planner.js` (`renderPlanner`) was **not wired into the
+  app at all** — not in `WORKSPACE_DEFS` (`app/js/workspaces.js`), not in
+  `CUSTOM` (`app/js/main.js`), no nav entry. It's real, complete-looking
+  code (hero, week board, AI prep queue, saved-plan list, automation stock)
+  but was dead/unreachable. Separately, `app/js/contenthub.js` has its own,
+  entirely different "Business Planner" (`renderContentPlanner`, a
+  date/time calendar scheduler for meetings/calls/deadlines/content, its own
+  `CH_PLANNER_ITEMS_KEY` storage, no relation to `planner.js`'s data model)
+  which *is* live inside Content Hub. These are two unrelated features that
+  happen to share the word "planner" — this item only touches
+  `app/js/planner.js`; the Content Hub calendar planner was left alone.
+- Decision: wired `renderPlanner` up for real (`CUSTOM.planner` in
+  `app/js/main.js`, a `dept: "Operations"` sidebar entry alongside
+  Automations/Approvals/Workforce) rather than leaving the 3-lane rebuild
+  invisible — shipping a feature nobody can reach isn't really shipping it.
+  Logged as a judgment call (Q-0018) since the task didn't explicitly ask
+  for new nav wiring.
+- 3-lane design: rather than inventing a generic Kanban (Now/Next/Later),
+  the lanes extend the *existing* plan-block data model directly — blocks
+  already had a binary `status: "open" | "done"`; this adds a real
+  `dependsOn: string[]` field (ids of other saved plan blocks) and derives
+  three lanes live at render time: **Blocked** (has an unmet dependency),
+  **Ready** (no unmet dependency, not done), **Done**. Lane membership is
+  never stored — `deriveLane()`/`unmetDependencies()` compute it from
+  current `status` + `dependsOn` on every render, so there is no separate
+  "recalculate" step to forget: completing or reopening any block
+  immediately changes what's Blocked vs. Ready for everything that depends
+  on it, and deleting a block silently un-blocks anything that depended on
+  it (a missing dependency id resolves as satisfied rather than blocking
+  forever).
+- Files: `app/js/planner.js` (`unmetDependencies`, `deriveLane`, `LANES`,
+  `depCandidates`, `dependencyPicker`, `plannerItemCard`, `laneBoard`,
+  `plannerForm` dependency multi-select, `data-pl-dep` change handler,
+  `data-pl-done` handler now logs which dependents were unblocked),
+  `app/js/main.js` (`CUSTOM.planner`, `BASE_NAV` planner entry, `renderPlanner`
+  import), `app/phantom.css` (`.planner-*` — the page previously had zero
+  CSS at all, consistent with being unreachable).
+- Verification: `node --check app/js/planner.js`, `app/js/main.js`,
+  `app/js/workspaces.js` — PASS. Full browser click-through via
+  agent-browser against the local dev server: opened the new sidebar
+  "Planner" entry under Operations, confirmed the hero/metrics/week
+  board/AI prep queue render with real store data (screenshots captured);
+  created two real plan blocks through the actual form ("Draft Q3 proposal",
+  "Send proposal to client"), set "Send proposal to client" to depend on
+  "Draft Q3 proposal" via the real dependency picker checkbox, confirmed it
+  rendered in the Blocked lane with "Blocked by Draft Q3 proposal" and the
+  Ready lane correctly held only the non-dependent block; clicked Reopen/Done
+  through several cycles and confirmed the dependent block moved
+  Blocked → Ready the instant its dependency was marked Done (and back to
+  Blocked on reopen) with no manual recalculation step — this is the actual
+  dependency-recalculation proof, not just a code-review claim. Removed all
+  test data afterward (`Remove` on each block) so no test artifacts were
+  left in the live app's local storage. No console errors at any point.
+- Cache-bust: bumped `phantom-live-20260717-15` → `-16`.
+
 ### Surfaces Audited
 
 - Required process docs: `AGENTS.md` and all files under `docs/quality/`.

@@ -1,7 +1,7 @@
 import {
   store, uid, visible, moneyView, todaysPlan, currentWs, wsName, pushActivity,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260717-15";
+} from "./store.js?v=phantom-live-20260717-16";
 
 const PLANNER_ITEMS_KEY = "pf.aiPlanner.items.v1";
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -123,18 +123,82 @@ function automationBundleCard(agent) {
   </article>`;
 }
 
-function plannerItemCard(item) {
-  return `<article class="planner-item ${item.status === "done" ? "is-done" : ""}">
+/* ---------------- 3-lane board: Blocked / Ready / Done ----------------
+   Lanes are derived, never stored: a block is only ever "blocked" while it
+   genuinely depends on another saved block that isn't done yet. That means
+   completing (or reopening) any block automatically recalculates every
+   downstream block's lane on the next render — there is no separate "recalc"
+   step to forget to run, and a dependency on a block that no longer exists
+   (deleted) silently resolves instead of leaving the block stuck blocked
+   forever. Dependencies only ever point at real saved plan blocks, never
+   invented placeholder tasks. */
+function unmetDependencies(item, items) {
+  const dependsOn = Array.isArray(item.dependsOn) ? item.dependsOn : [];
+  return dependsOn
+    .map((id) => items.find((candidate) => candidate.id === id))
+    .filter((blocker) => blocker && blocker.status !== "done");
+}
+function deriveLane(item, items) {
+  if (item.status === "done") return "done";
+  return unmetDependencies(item, items).length ? "blocked" : "ready";
+}
+const LANES = [
+  { id: "blocked", label: "Blocked", hint: "Waiting on another block to finish first." },
+  { id: "ready", label: "Ready", hint: "Nothing in the way — can be worked now." },
+  { id: "done", label: "Done", hint: "Finished. Reopening recalculates anything blocked on it." },
+];
+
+function depCandidates(item, items) {
+  // A can't depend on B if B already (directly) depends on A — the
+  // shallow guard that keeps the dependency picker from offering the most
+  // obvious two-item deadlock. Deeper cycles are still possible if someone
+  // really wants one, same as any real planning tool.
+  return items.filter((other) => other.id !== item.id && !(Array.isArray(other.dependsOn) && other.dependsOn.includes(item.id)));
+}
+
+function dependencyPicker(item, items) {
+  const candidates = depCandidates(item, items).slice(0, 24);
+  const selected = new Set(Array.isArray(item.dependsOn) ? item.dependsOn : []);
+  if (!candidates.length) return "";
+  return `<details class="planner-dep-picker">
+    <summary>Depends on ${selected.size ? `(${selected.size})` : ""}</summary>
+    <div class="planner-dep-list">
+      ${candidates.map((candidate) => `<label><input type="checkbox" data-pl-dep="${esc(item.id)}" value="${esc(candidate.id)}" ${selected.has(candidate.id) ? "checked" : ""}><span>${esc(candidate.title)}</span></label>`).join("")}
+    </div>
+  </details>`;
+}
+
+function plannerItemCard(item, items) {
+  const lane = deriveLane(item, items);
+  const blockers = lane === "blocked" ? unmetDependencies(item, items) : [];
+  return `<article class="planner-item planner-item-${lane}">
     <div>
       <small>${esc(item.type || "Plan")} · ${esc(item.priority || "normal")}</small>
       <b>${esc(item.title)}</b>
       ${item.notes ? `<p>${esc(item.notes)}</p>` : ""}
+      ${blockers.length ? `<p class="planner-item-blockers">Blocked by ${blockers.map((blocker) => esc(blocker.title)).join(", ")}</p>` : ""}
     </div>
+    ${dependencyPicker(item, items)}
     <div class="planner-item-actions">
-      <button class="btn btn-quiet" type="button" data-pl-done="${esc(item.id)}">${item.status === "done" ? "Reopen" : "Done"}</button>
+      <button class="btn btn-quiet" type="button" data-pl-done="${esc(item.id)}" ${lane === "blocked" && item.status !== "done" ? 'title="Blocked items can still be marked done if the work actually happened."' : ""}>${item.status === "done" ? "Reopen" : "Done"}</button>
       <button class="btn btn-quiet" type="button" data-pl-delete="${esc(item.id)}">Remove</button>
     </div>
   </article>`;
+}
+
+function laneBoard(items) {
+  return `<div class="planner-lanes">
+    ${LANES.map((lane) => {
+      const laneItems = items.filter((item) => deriveLane(item, items) === lane.id);
+      return `<section class="planner-lane planner-lane-${lane.id}">
+        <header><h4>${esc(lane.label)}</h4><span>${laneItems.length}</span></header>
+        <p class="planner-lane-hint">${esc(lane.hint)}</p>
+        <div class="planner-lane-items">
+          ${laneItems.length ? laneItems.map((item) => plannerItemCard(item, items)).join("") : `<p class="planner-empty">Nothing here.</p>`}
+        </div>
+      </section>`;
+    }).join("")}
+  </div>`;
 }
 
 function weekBoard(items, signals) {
@@ -167,7 +231,7 @@ function weekBoard(items, signals) {
   </section>`;
 }
 
-function plannerForm() {
+function plannerForm(items = []) {
   return `<section class="planner-card planner-add">
     <div class="planner-card-head"><div><p>Manual or AI-prepped</p><h3>Add a planning block</h3></div></div>
     <form data-pl-form>
@@ -176,6 +240,12 @@ function plannerForm() {
       <label>Date<input data-pl-date type="date" value="${isoDay()}" /></label>
       <label>Priority<select data-pl-priority><option>normal</option><option>medium</option><option>high</option></select></label>
       <label class="planner-wide">Notes<textarea data-pl-notes placeholder="What should Phantom prepare, watch, or summarize?"></textarea></label>
+      ${items.length ? `<label class="planner-wide">Depends on (optional)
+        <select data-pl-new-deps multiple size="${Math.min(6, items.length)}">
+          ${items.slice(0, 30).map((item) => `<option value="${esc(item.id)}">${esc(item.title)}${item.status === "done" ? " (done)" : ""}</option>`).join("")}
+        </select>
+        <i class="planner-hint">Ctrl/Cmd-click to select more than one. Leave empty for a block that's ready right away.</i>
+      </label>` : ""}
       <button class="btn btn-primary" type="submit">Save plan block</button>
     </form>
   </section>`;
@@ -190,7 +260,7 @@ export function renderPlanner(el, opts = {}) {
   const plan = todaysPlan();
   const workspaceLabel = wsName(currentWs());
 
-  el.innerHTML = `<div class="planner">
+  el.innerHTML = `<div class="planner pl">
     <section class="planner-hero">
       <div>
         <p>AI planner · ${esc(workspaceLabel)}</p>
@@ -228,17 +298,18 @@ export function renderPlanner(el, opts = {}) {
             ${prep.map((item) => `<article><small>${esc(item.priority)}</small><b>${esc(item.title)}</b><p>${esc(item.detail)}</p><div><button class="btn btn-quiet" type="button" data-open-ws="${esc(item.open)}">Open</button><button class="btn btn-quiet" type="button" data-pl-suggest="${esc(item.id)}">Plan it</button></div></article>`).join("")}
           </div>
         </section>
-        ${plannerForm()}
-        <section class="planner-card">
-          <div class="planner-card-head"><div><p>Saved plan</p><h3>Workspace blocks</h3></div></div>
-          <div class="planner-item-list">${items.length ? items.map(plannerItemCard).join("") : `<p class="planner-empty">Nothing saved yet. Use AI prep or add a planning block.</p>`}</div>
-        </section>
+        ${plannerForm(items)}
       </aside>
+    </section>
+    <section class="planner-card planner-board-card">
+      <div class="planner-card-head"><div><p>Saved plan · 3-lane board</p><h3>Blocked → Ready → Done</h3></div></div>
+      ${items.length ? laneBoard(items) : `<p class="planner-empty">Nothing saved yet. Use AI prep or add a planning block.</p>`}
     </section>
   </div>`;
 
   el.querySelector("[data-pl-form]")?.addEventListener("submit", (event) => {
     event.preventDefault();
+    const dependsOn = Array.from(el.querySelector("[data-pl-new-deps]")?.selectedOptions || []).map((option) => option.value);
     const item = {
       id: uid("plan"),
       title: el.querySelector("[data-pl-title]")?.value.trim().slice(0, 120) || "Planner block",
@@ -247,10 +318,11 @@ export function renderPlanner(el, opts = {}) {
       priority: el.querySelector("[data-pl-priority]")?.value || "normal",
       notes: el.querySelector("[data-pl-notes]")?.value.trim().slice(0, 500) || "",
       status: "open",
+      dependsOn,
       createdAt: new Date().toISOString(),
     };
     savePlannerItems([item, ...items]);
-    pushActivity("Planner", `saved plan block "${item.title}".`, currentWs());
+    pushActivity("Planner", `saved plan block "${item.title}"${dependsOn.length ? ` (blocked on ${dependsOn.length})` : ""}.`, currentWs());
     notify("Planner", `Saved "${item.title}".`);
     paint();
   });
@@ -278,7 +350,32 @@ export function renderPlanner(el, opts = {}) {
 
   el.querySelectorAll("[data-pl-done]").forEach((btn) => {
     btn.onclick = () => {
-      const next = items.map((item) => item.id === btn.dataset.plDone ? { ...item, status: item.status === "done" ? "open" : "done", updatedAt: new Date().toISOString() } : item);
+      const targetId = btn.dataset.plDone;
+      const target = items.find((item) => item.id === targetId);
+      const wasDone = target?.status === "done";
+      const next = items.map((item) => item.id === targetId ? { ...item, status: wasDone ? "open" : "done", updatedAt: new Date().toISOString() } : item);
+      // Dependency recalculation isn't a separate step: deriveLane() reads
+      // live status off `next`, so anything that depended on this block just
+      // became Ready (or Blocked again on reopen) the moment paint() re-renders.
+      if (!wasDone && target) {
+        const unblocked = items.filter((item) => item.id !== targetId
+          && unmetDependencies(item, items).some((blocker) => blocker.id === targetId)
+          && unmetDependencies(item, next).length === 0);
+        if (unblocked.length) pushActivity("Planner", `"${target.title}" is done — ${unblocked.map((item) => `"${item.title}"`).join(", ")} moved to Ready.`, currentWs());
+      }
+      savePlannerItems(next);
+      paint();
+    };
+  });
+  el.querySelectorAll("[data-pl-dep]").forEach((checkbox) => {
+    checkbox.onchange = () => {
+      const itemId = checkbox.dataset.plDep;
+      const next = items.map((item) => {
+        if (item.id !== itemId) return item;
+        const current = new Set(Array.isArray(item.dependsOn) ? item.dependsOn : []);
+        if (checkbox.checked) current.add(checkbox.value); else current.delete(checkbox.value);
+        return { ...item, dependsOn: [...current], updatedAt: new Date().toISOString() };
+      });
       savePlannerItems(next);
       paint();
     };

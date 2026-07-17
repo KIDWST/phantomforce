@@ -383,3 +383,26 @@ Last updated: 2026-07-17
   server-side, which this session deliberately did not do.
 - Status: Shipped, code-reviewed and browser-flow-verified via mocked
   network response; real-session click-through still open.
+
+### Q-0018 — P3 — Planner was wired into real nav/routing for the first time (needs Jordan's review)
+
+- Route/component: `app/js/main.js` (`CUSTOM.planner`, `BASE_NAV` entry),
+  `app/js/planner.js`.
+- What happened: `app/js/planner.js` existed as complete, real-looking code
+  but was never imported or registered anywhere — no `WORKSPACE_DEFS`
+  entry, no `CUSTOM` entry, no nav item, zero CSS. It was unreachable dead
+  code before this session, not a live feature being extended.
+- Judgment call: rather than build the 3-lane/dependency rebuild into
+  something nobody could open, this session registered it as a real
+  workspace (`custom: true, wide: true`, matching the Automations/Away
+  Mode/Prompt Library pattern) and added a sidebar entry under Operations
+  (`dept: "Operations"`, next to Automations/Approvals/Workforce). This
+  goes beyond "rebuild the 3-lane planner" into "also make the planner
+  reachable at all" — a reasonable call given the alternative was shipping
+  something invisible, but it's an expansion of scope the original spec
+  didn't explicitly ask for, and Jordan may have opinions on nav placement,
+  naming ("Planner" vs. something that distinguishes it from Content Hub's
+  unrelated calendar planner), or whether it should exist as a first-class
+  nav item at all versus a secondary surface opened from other cards.
+- Status: Shipped and browser-verified (see AUDIT_LOG item 4). Placement/
+  naming is the open question, not functionality.
