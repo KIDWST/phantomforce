@@ -941,6 +941,13 @@ export function roomSubscriberCount(code: string): number {
   return roomSubscribers.get(code)?.size ?? 0;
 }
 
+function broadcastRoom(room: PhantomPlayRoom): void {
+  const listeners = roomSubscribers.get(room.code);
+  if (!listeners || listeners.size === 0) return;
+  const view = roomView(room);
+  for (const listener of listeners) listener(view);
+}
+
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function replaceStoreFile(temp: string, target: string) {
@@ -1379,6 +1386,7 @@ export async function createPhantomPlayRoom(session: AccessSession, input: Recor
   };
   store.rooms.unshift(room);
   await writeStore(store);
+  broadcastRoom(room);
   return { room: roomView(room) };
 }
 
@@ -1417,6 +1425,7 @@ export async function joinPhantomPlayRoom(session: AccessSession, input: Record<
   }
   room.updatedAt = timestamp;
   await writeStore(store);
+  broadcastRoom(room);
   return { room: roomView(room) };
 }
 
@@ -1436,6 +1445,7 @@ export async function leavePhantomPlayRoom(session: AccessSession, input: Record
   if (room.hostActorId === actorId || (session.canManageAccess && input.end === true)) room.status = "locked";
   room.updatedAt = timestamp;
   await writeStore(store);
+  broadcastRoom(room);
   return { room: roomView(room) };
 }
 
@@ -1508,6 +1518,7 @@ export async function updatePhantomPlayRoomMatchState(session: AccessSession, in
 
   room.updatedAt = now();
   await writeStore(store);
+  broadcastRoom(room);
   return { room: roomView(room) };
 }
 
@@ -1533,6 +1544,7 @@ export async function setPhantomPlayRoomReady(session: AccessSession, input: Rec
   participant.lastSeenAt = now();
   room.updatedAt = now();
   await writeStore(store);
+  broadcastRoom(room);
   return { room: roomView(room) };
 }
 
