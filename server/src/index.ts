@@ -4855,6 +4855,18 @@ async function competitorIntelligenceAccess(session: AccessSession) {
   if (session.canManageAccess || session.isSuperAdmin) {
     return { entitled: true, aggressiveEntitled: true, competitorLimit: 100_000, signalLimit: 1_000_000, reason: "platform_admin" };
   }
+  if (session.id.startsWith(LOCAL_CUSTOMER_SESSION_PREFIX)) {
+    const summary = await getLocalCustomerPlanSummary(session);
+    const entitlements = summary?.entitlements;
+    const entitled = Boolean(entitlements?.features.competitorIntelligence && entitlements.canWrite !== false);
+    return {
+      entitled,
+      aggressiveEntitled: Boolean(entitlements?.features.aggressiveIntelligence && entitlements.canWrite !== false),
+      competitorLimit: entitlements?.limits.competitorProfiles ?? 0,
+      signalLimit: entitlements?.limits.competitorSignals ?? 0,
+      reason: entitled ? "local_customer_plan" : "feature_not_in_plan",
+    };
+  }
   if (session.orgId) {
     try {
       const [base, aggressive] = await Promise.all([
