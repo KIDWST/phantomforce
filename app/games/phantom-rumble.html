@@ -977,12 +977,14 @@ function drawFighter(f,t){
   ctx.strokeStyle=f.glow;ctx.lineWidth=.9*DPR;
   ctx.beginPath();ctx.moveTo(bx-6*DPR,by-12*DPR+bob);ctx.lineTo(bx+5*DPR,by-3*DPR+bob);ctx.stroke();
   ctx.globalAlpha=f.invuln>0?.45+.3*Math.sin(t*.02):1;
-  /* head — bigger than the body and pulled in close rather than jutting
-     forward, so the silhouette reads as a round baby chick, not a lean
-     adult hen. This is the single biggest lever for "cute" here. */
-  const hx=bx+face*4*DPR,hy=by-20*DPR+bob;
+  /* head — bigger than the body and pulled DOWN close against it (barely
+     any "neck" gap) rather than perched high above on a long body, so the
+     whole silhouette reads as a squat, little, round baby chick instead
+     of something tall/elongated. This — height, not just head-vs-body
+     size — is the actual lever for "little and cute." */
+  const hx=bx+face*4*DPR,hy=by-13*DPR+bob;
   ctx.fillStyle=f.color;
-  ctx.beginPath();ctx.arc(hx,hy,11*DPR,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc(hx,hy,10*DPR,0,Math.PI*2);ctx.fill();
   ctx.shadowBlur=0;ctx.strokeStyle=OUTLINE;ctx.lineWidth=2*DPR;ctx.stroke();
   /* comb — three soft rounded bumps instead of a jagged crown, reads as
      a friendly cartoon comb rather than a spiky adult rooster's; kept
@@ -1025,12 +1027,12 @@ function drawFighter(f,t){
   ctx.fillStyle='#e8fff2';ctx.beginPath();ctx.arc(hx+face*2*DPR,hy-.5*DPR,2.4*DPR,0,Math.PI*2);ctx.fill();
   ctx.fillStyle='#0b1210';ctx.beginPath();ctx.arc(hx+face*2.8*DPR,hy-.2*DPR,1.3*DPR,0,Math.PI*2);ctx.fill();
   ctx.fillStyle='#ffffff';ctx.beginPath();ctx.arc(hx+face*3.3*DPR,hy-1*DPR,.55*DPR,0,Math.PI*2);ctx.fill();
-  if(f.anim>0){ctx.strokeStyle=f.power?'#ffffff':f.glow;ctx.lineWidth=3*DPR;ctx.globalAlpha=f.anim*4;ctx.beginPath();ctx.arc(bx+f.face*16*DPR,by-14*DPR,10*DPR,-.7,.7);ctx.stroke()}
-  if(f.shieldHeld){ctx.globalAlpha=f.parry>0?.82:.42;ctx.strokeStyle=f.parry>0?'#ffffff':f.glow;ctx.lineWidth=(f.parry>0?4:2)*DPR;ctx.beginPath();ctx.arc(bx,by-17*DPR,(24+(f.parry>0?5:0))*DPR,0,Math.PI*2);ctx.stroke()}
+  if(f.anim>0){ctx.strokeStyle=f.power?'#ffffff':f.glow;ctx.lineWidth=3*DPR;ctx.globalAlpha=f.anim*4;ctx.beginPath();ctx.arc(bx+f.face*16*DPR,by-7*DPR,10*DPR,-.7,.7);ctx.stroke()}
+  if(f.shieldHeld){ctx.globalAlpha=f.parry>0?.82:.42;ctx.strokeStyle=f.parry>0?'#ffffff':f.glow;ctx.lineWidth=(f.parry>0?4:2)*DPR;ctx.beginPath();ctx.arc(bx,by-10*DPR,(24+(f.parry>0?5:0))*DPR,0,Math.PI*2);ctx.stroke()}
   ctx.globalAlpha=1;ctx.shadowBlur=0;
-  if(mode!=='racetop'){ctx.font=`900 ${13*DPR}px ui-monospace`;ctx.textAlign='center';ctx.fillStyle=f.stun>0?'#ffffff':f.color;ctx.fillText(`${Math.round(f.pct)}%`,bx,by-42*DPR)}
-  if(f.charge>0){ctx.globalAlpha=.7;ctx.strokeStyle='#fff';ctx.lineWidth=2*DPR;ctx.beginPath();ctx.arc(bx,by-14*DPR,(16+f.charge*10)*DPR,0,Math.PI*2*f.charge);ctx.stroke()}
-  if(f.power){ctx.globalAlpha=.8;ctx.fillStyle='#ffffff';ctx.beginPath();ctx.arc(bx,by-34*DPR,3*DPR,0,Math.PI*2);ctx.fill()}
+  if(mode!=='racetop'){ctx.font=`900 ${13*DPR}px ui-monospace`;ctx.textAlign='center';ctx.fillStyle=f.stun>0?'#ffffff':f.color;ctx.fillText(`${Math.round(f.pct)}%`,bx,by-35*DPR)}
+  if(f.charge>0){ctx.globalAlpha=.7;ctx.strokeStyle='#fff';ctx.lineWidth=2*DPR;ctx.beginPath();ctx.arc(bx,by-7*DPR,(16+f.charge*10)*DPR,0,Math.PI*2*f.charge);ctx.stroke()}
+  if(f.power){ctx.globalAlpha=.8;ctx.fillStyle='#ffffff';ctx.beginPath();ctx.arc(bx,by-27*DPR,3*DPR,0,Math.PI*2);ctx.fill()}
   ctx.globalAlpha=1;
 }
 function drawPickup(p,t){
