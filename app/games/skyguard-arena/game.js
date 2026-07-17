@@ -809,10 +809,19 @@ function drawSlots() {
 }
 function drawSpire() {
   const [x, y] = toPx(PATH_PX[PATH_PX.length - 1][0], PATH_PX[PATH_PX.length - 1][1]);
+  const beat = (Math.sin(simTime * 5) + 1) / 2;
+  ctx.save();
+  ctx.strokeStyle = `rgba(77,219,255,${0.18 + beat * 0.28})`;
+  ctx.lineWidth = (2 + beat * 2) * scale;
+  ctx.beginPath(); ctx.arc(x, y, (28 + beat * 8) * scale, 0, Math.PI * 2); ctx.stroke();
   const grad = ctx.createRadialGradient(x, y, 2 * scale, x, y, 22 * scale);
   grad.addColorStop(0, '#8a6bff'); grad.addColorStop(1, '#4ddbff11');
   ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(x, y, 18 * scale, 0, Math.PI * 2); ctx.fill();
   ctx.strokeStyle = '#4ddbff'; ctx.lineWidth = 2 * scale; ctx.stroke();
+  ctx.fillStyle = '#fff';
+  ctx.globalAlpha = 0.45 + beat * 0.45;
+  ctx.beginPath(); ctx.arc(x, y, 4 * scale, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
 }
 function drawSentinels() {
   for (const s of sentinels) {
@@ -824,7 +833,19 @@ function drawSentinels() {
       ctx.beginPath(); ctx.arc(px, py, stats.range * scale, 0, Math.PI * 2);
       ctx.strokeStyle = def.color + '55'; ctx.lineWidth = 1.2 * scale; ctx.stroke();
     }
+    const beat = (Math.sin(simTime * (4.5 + s.slotIndex * 0.17)) + 1) / 2;
+    ctx.save();
+    ctx.strokeStyle = def.color + '33';
+    ctx.lineWidth = (1 + beat * 1.7) * scale;
+    ctx.beginPath(); ctx.arc(px, py, (18 + beat * 7) * scale, 0, Math.PI * 2); ctx.stroke();
     drawShape(px, py, (s.tier === 1 ? 13 : 11) * scale, def.shape, def.color);
+    ctx.fillStyle = '#ffffffcc';
+    ctx.beginPath(); ctx.arc(px, py - 2 * scale, (2.4 + beat * 1.2) * scale, 0, Math.PI * 2); ctx.fill();
+    const stats = currentStats(s);
+    const muzzleA = simTime * 3.5 + s.slotIndex;
+    ctx.strokeStyle = def.color + '88';
+    ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px + Math.cos(muzzleA) * 16 * scale, py + Math.sin(muzzleA) * 16 * scale); ctx.stroke();
+    ctx.restore();
     if (s.tier === 1) { ctx.strokeStyle = '#fff8'; ctx.lineWidth = 1.4 * scale; ctx.beginPath(); ctx.arc(px, py, (s.tier === 1 ? 13 : 11) * scale + 2 * scale, 0, Math.PI * 2); ctx.stroke(); }
   }
 }
@@ -834,8 +855,20 @@ function drawEnemies() {
     const info = ENEMIES[e.type];
     const r = (info.r + (e.boss ? 6 : 0)) * scale;
     const slowed = e.slowUntil > simTime;
+    const wobble = Math.sin(simTime * 7 + e.spawnedAt) * 2 * scale;
+    ctx.save();
+    ctx.shadowColor = slowed ? '#4ddbff' : info.color;
+    ctx.shadowBlur = 12 * scale;
+    ctx.translate(0, wobble);
     drawShape(x, y, r, e.type === 'skiff' ? 'tri' : e.type === 'bulwark' ? 'square' : 'circle', slowed ? '#4ddbff' : info.color);
-    if (e.boss) { ctx.strokeStyle = '#ff4d8d88'; ctx.lineWidth = 2 * scale; ctx.beginPath(); ctx.arc(x, y, r + 6 * scale, 0, Math.PI * 2); ctx.stroke(); }
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#080a1e';
+    ctx.beginPath(); ctx.arc(x - r * .28, y - r * .18, Math.max(1.8, r * .12), 0, Math.PI * 2); ctx.arc(x + r * .28, y - r * .18, Math.max(1.8, r * .12), 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = (slowed ? '#baf7ff' : '#ffdf7a') + '77';
+    ctx.lineWidth = 1.4 * scale;
+    ctx.beginPath(); ctx.moveTo(x - r * .55, y + r * .55); ctx.lineTo(x - r * 1.3, y + r * .85); ctx.moveTo(x + r * .55, y + r * .55); ctx.lineTo(x + r * 1.3, y + r * .85); ctx.stroke();
+    if (e.boss) { ctx.strokeStyle = '#ff4d8d88'; ctx.lineWidth = 2 * scale; ctx.beginPath(); ctx.arc(x, y, r + (8 + Math.sin(simTime * 4) * 3) * scale, 0, Math.PI * 2); ctx.stroke(); }
+    ctx.restore();
     const w = 22 * scale, ratio = Math.max(0, e.hp / e.maxHp);
     ctx.fillStyle = '#1a2050'; ctx.fillRect(x - w / 2, y - r - 8 * scale, w, 3 * scale);
     ctx.fillStyle = ratio > 0.4 ? '#5be6a0' : '#ff5c6c'; ctx.fillRect(x - w / 2, y - r - 8 * scale, w * ratio, 3 * scale);

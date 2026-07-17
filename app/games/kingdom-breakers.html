@@ -279,7 +279,7 @@ const LEVELS=[
   {key:'rustwatch',   name:'Rustwatch Post',      sub:'A crumbling watchtower guarding the marsh road.',       cols:4, rows:4, blockW:76, blockH:54, wardenCount:0, ironcladFrom:0, budget:{stonefall:4,splinter:3,ember:2}},
   {key:'cinderdock',  name:'Cinderdock Hold',     sub:'A dockside granary stacked three stories high.',        cols:5, rows:5, blockW:70, blockH:50, wardenCount:1, ironcladFrom:0, budget:{stonefall:5,splinter:4,ember:2}},
   {key:'graywall',    name:'Graywall Keep',       sub:'Iron-banded walls ring the old garrison.',              cols:6, rows:5, blockW:64, blockH:48, wardenCount:1, ironcladFrom:2, budget:{stonefall:5,splinter:5,ember:3}},
-  {key:'emberfall',   name:'Emberfall Bastion',   sub:'Wardens shelter on the ramparts — breach with care.',   cols:6, rows:6, blockW:62, blockH:46, wardenCount:2, ironcladFrom:2, budget:{stonefall:6,splinter:5,ember:3}},
+  {key:'emberfall',   name:'Emberfall Bastion',   sub:'Wardens are hidden inside castle rooms — breach with care.',   cols:6, rows:6, blockW:62, blockH:46, wardenCount:2, ironcladFrom:2, budget:{stonefall:6,splinter:5,ember:3}},
   {key:'thornspire',  name:'Thornspire Citadel',  sub:'Twin towers lashed together by an iron gate.',          cols:7, rows:6, blockW:56, blockH:44, wardenCount:2, ironcladFrom:3, budget:{stonefall:6,splinter:6,ember:4}},
   {key:'warlord',     name:"Warlord's Anvil",     sub:'The Warlord Core beats behind a wall of ironclad.',     cols:8, rows:7, blockW:52, blockH:42, wardenCount:3, ironcladFrom:3, budget:{stonefall:8,splinter:6,ember:5}, boss:true},
 ];
@@ -290,7 +290,7 @@ const PARTY_WINDOW_MS=90000;
 const TUTORIAL_SLIDES=[
   {icon:'🎯', h:'Aim your engine', p:'Press and drag anywhere on the field. The direction and distance from your siege engine set the angle and power — drag far for a long, flat shot; drag short and high for a lob.'},
   {icon:'🧨', h:'Three kinds of ammunition', p:'Stonefall Orb hits hard once. Splinter Lance pierces through several blocks in a line. Emberburst Charge explodes and damages everything nearby. Switch with the ammo rack or keys 1/2/3.'},
-  {icon:'🛡', h:'Protect the Wardens', p:'Small Wardens shelter on some ledges. A direct hit — or destroying the block they stand on — costs your safety bonus, even if the hold still falls.'},
+  {icon:'🛡', h:'Protect the Wardens', p:'Wardens are tucked inside castle rooms. Destroying their room — or blasting it directly — costs your safety bonus, even if the hold still falls.'},
   {icon:'⭐', h:'Earn your stars', p:'Stars come from breach percentage, ammo left over, and keeping every Warden safe. Knock out the glowing keystone block for a slow-motion final blow.'},
 ];
 
@@ -391,12 +391,19 @@ function buildStructure(levelDef, seed){
     }
   }
   if(keystone) keystone.isKeystone=true;
-  const candidates=blocks.filter(b=>b!==keystone && !(grid[b.row+1] && grid[b.row+1][b.col]));
+  const interiorCandidates=blocks.filter(b=>
+    b!==keystone &&
+    b.row>0 &&
+    b.row<rows-1 &&
+    grid[b.row-1] && grid[b.row-1][b.col] &&
+    grid[b.row+1] && grid[b.row+1][b.col]
+  );
+  const candidates=interiorCandidates.length ? interiorCandidates : blocks.filter(b=>b!==keystone && b.row>0);
   shuffleInPlace(candidates, rng);
   const wardens=[];
   for(let i=0;i<levelDef.wardenCount && i<candidates.length;i++){
     const b=candidates[i];
-    wardens.push({id:'w'+i, blockId:b.id, x:b.x, y:b.y-b.h/2-16, radius:15, alive:true, harmed:false});
+    wardens.push({id:'w'+i, blockId:b.id, x:b.x, y:b.y, radius:Math.max(10, Math.min(15, b.h*0.23)), alive:true, harmed:false, inside:true});
   }
   const totalMaxHp=blocks.reduce((s,b)=>s+b.maxHp,0);
   const tower={blocks, wardens, grid, groundY, baseX, blockW, blockH, cols, rows, totalMaxHp, keystoneId: keystone?keystone.id:null, side:'enemy'};
@@ -421,7 +428,7 @@ function buildTower(levelDef, seed, side){
   for(const b of tower.blocks) b.x+=dx;
   for(const w of tower.wardens){
     const b=tower.blocks.find(x=>x.id===w.blockId);
-    if(b){ w.x=b.x; w.y=b.y-b.h/2-w.radius; }
+    if(b){ w.x=b.x; w.y=b.y; }
     else w.x+=dx;
   }
   return tower;
@@ -640,7 +647,7 @@ function stepWarden(w,tower){
   if(!w.alive || !w.blockId) return;
   tower=tower||w.tower||level;
   const b=tower.blocks.find(x=>x.id===w.blockId);
-  if(b && b.alive){ w.x=b.x; w.y=b.y-b.h/2-w.radius; }
+  if(b && b.alive){ w.x=b.x; w.y=b.y; }
 }
 function stepPhysics(dt){
   for(const p of projectiles){ if(p.alive) stepProjectile(p,dt); }
@@ -784,10 +791,19 @@ function drawBlocks(tower){
 function drawWardens(tower){
   tower=tower||level;
   for(const w of tower.wardens){
-    ctx.save(); ctx.translate(w.x,w.y); ctx.globalAlpha = w.harmed?0.35:1;
-    ctx.fillStyle = w.harmed? '#5c6480' : '#3fe0c5';
-    ctx.beginPath(); ctx.arc(0,0,w.radius,0,Math.PI*2); ctx.fill();
-    ctx.fillStyle='#0a0d13'; ctx.beginPath(); ctx.arc(-4,-2,1.6,0,Math.PI*2); ctx.arc(4,-2,1.6,0,Math.PI*2); ctx.fill();
+    const b=tower.blocks.find(x=>x.id===w.blockId);
+    if(!b || !b.alive) continue;
+    ctx.save(); ctx.translate(w.x,w.y); ctx.rotate(b.angle); ctx.globalAlpha = w.harmed?0.24:0.9;
+    const pulse=0.75+Math.sin(performance.now()*0.005+w.x)*0.18;
+    ctx.fillStyle = w.harmed? '#5c6480' : 'rgba(63,224,197,0.35)';
+    roundRect(-w.radius*1.25,-w.radius*0.82,w.radius*2.5,w.radius*1.64,5); ctx.fill();
+    ctx.strokeStyle = w.harmed? '#708099' : `rgba(128,255,224,${0.58+pulse*0.24})`;
+    ctx.lineWidth=2;
+    roundRect(-w.radius*1.25,-w.radius*0.82,w.radius*2.5,w.radius*1.64,5); ctx.stroke();
+    ctx.fillStyle=w.harmed?'#111827':'#09251f';
+    ctx.beginPath(); ctx.arc(-w.radius*0.36,-1,1.8,0,Math.PI*2); ctx.arc(w.radius*0.36,-1,1.8,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle='rgba(255,255,255,0.16)';
+    ctx.beginPath(); ctx.moveTo(-w.radius*0.85,w.radius*0.38); ctx.lineTo(w.radius*0.85,w.radius*0.38); ctx.stroke();
     ctx.restore();
   }
   ctx.globalAlpha=1;

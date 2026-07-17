@@ -414,6 +414,7 @@ const BASE_NAV = [
   { id: "media",      label: "Media Lab",    icon: "media", ws: "media" },
   { id: "assets",     label: "Asset Cloud",  icon: "media", ws: "assets", dbOnly: true },
   { id: "sites",      label: "Websites",     icon: "site",  ws: "sites" },
+  { id: "phantomstore", label: "Phantom Store", icon: "site", ws: "phantomstore" },
   { id: "money",      label: "Accounting",   icon: "dollar", ws: "money" },
   { id: "automation", label: "Automations",  icon: "auto",  ws: "automation" },
   { id: "approvals",  label: "Approvals",    icon: "check", ws: "approvals", badge: true },
@@ -436,6 +437,7 @@ const MOBILE_LABEL_OVERRIDES = {
   crm: "Clients",
   money: "Accounting",
   sites: "Sites",
+  phantomstore: "Store",
   media: "Media",
   phantomplay: "Play",
   automation: "Auto",
@@ -2945,9 +2947,47 @@ function renderMediaLabSuite(body) {
   $("[data-open-ws='content']", body)?.addEventListener("click", () => opts.openWorkspace?.("content"));
 }
 
+function renderPhantomStore(body) {
+  body.innerHTML = `
+    <section class="ws-hero compact">
+      <p class="kicker">CREATOR MARKETPLACE</p>
+      <h2>Phantom Store</h2>
+      <p>Reviewed products, AI tools, templates, model packs, workflows, and add-ons from users, devs, and vibecoders. Creator credit and revenue-share live here — not inside the website builder.</p>
+      <div class="ws-actions">
+        <button class="primary" type="button" data-store-submit>Submit a product</button>
+        <button class="ghost" type="button" data-store-review>Review queue</button>
+      </div>
+    </section>
+    <section class="grid two">
+      <article class="card">
+        <p class="kicker">PUBLIC WEBSITE BOUNDARY</p>
+        <h3>Websites edits PhantomForce.online.</h3>
+        <p>The Websites tab is for the public PhantomForce site and client/public pages. It should not seed or pretend to be a side-product store.</p>
+      </article>
+      <article class="card">
+        <p class="kicker">MARKETPLACE FLOW</p>
+        <h3>Submit → review → publish → payout.</h3>
+        <p>Creators submit products with metadata, install/use instructions, screenshots, support terms, and payout details. Admin approval decides what goes live.</p>
+      </article>
+      <article class="card">
+        <p class="kicker">CREATORS</p>
+        <h3>Built for AI devs and vibecoders.</h3>
+        <p>Products should show who made them, what they do, what plan they require, and how the creator gets a cut when the product sells.</p>
+      </article>
+      <article class="card">
+        <p class="kicker">SAFETY</p>
+        <h3>No silent executable dump.</h3>
+        <p>Uploads and listings need review, clear install notes, and admin control before users can download or buy anything.</p>
+      </article>
+    </section>`;
+  body.querySelector("[data-store-submit]")?.addEventListener("click", () => alert("Phantom Store submission flow is staged: product details, creator profile, files/links, review, payout split."));
+  body.querySelector("[data-store-review]")?.addEventListener("click", () => alert("Review queue is staged for admin approval before anything is published."));
+}
+
 const CUSTOM = {
   media: { title: "Media Lab", kicker: "Create and edit", custom: true, wide: true, render: (body) => renderMediaLabSuite(body) },
-  sites: { title: "Websites", kicker: "Websites by domain", custom: true, wide: true, render: (body) => renderSiteStudio(body, mediaOpts()) },
+  sites: { title: "Websites", kicker: "Edit PhantomForce.online and public pages", custom: true, wide: true, render: (body) => renderSiteStudio(body, mediaOpts()) },
+  phantomstore: { title: "Phantom Store", kicker: "Creator marketplace and reviewed product submissions", custom: true, wide: true, render: (body) => renderPhantomStore(body) },
   content: { title: "Content Hub", kicker: "Library, ideas, drafts, publishing, and performance", custom: true, wide: true, render: (body) => renderContentHub(body, mediaOpts()) },
   assets: { title: "Asset Cloud", kicker: "Your business's creative memory", custom: true, wide: true, render: (body) => renderAssetCloud(body) },
   phantomplay: { title: "PhantomPlay", kicker: "Intentional downtime and approved games", custom: true, wide: true, render: (body) => (phantomPlayV2Opted() ? renderPhantomPlayV2 : renderPhantomPlay)(body, mediaOpts()) },

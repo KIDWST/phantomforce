@@ -16,7 +16,7 @@ const FALLBACK_KEY = "pf.phantomplay.offline.v1";
 const CATEGORIES = ["All", "Arcade", "Puzzle", "Focus", "Strategy", "Sports", "Creative"];
 const STATUSES = [["online", "Online"], ["away", "Away"], ["busy", "Busy"], ["invisible", "Invisible"]];
 const STATELESS_GAMES = new Set(["phantom-rumble"]);
-const TODDLER_ONLY_GAMES = new Set(["signal-match", "reflex-grid", "penalty-kick", "color-rush"]);
+const TODDLER_ONLY_GAMES = new Set(["sudoku-signal", "signal-match", "word-weld", "focus-stack", "reflex-grid", "color-rush", "tower-tactics", "pixel-bloom", "circuit-serpent", "echo-sequence"]);
 // "Game Rating Exposure" — mirrors server PhantomPlayRating (phantomplay.ts).
 // Kept in sync by hand with defaultAllowedRatings() there; no server "give me
 // the default for my type" endpoint exists.
@@ -65,7 +65,7 @@ const OFFLINE_GAMES = [
   ["neon-drift", "Neon Drift", "Arcade", "/app/games/neon-drift.html"],
   ["phantom-dash", "Phantom Dash", "Arcade", "/app/games/phantom-dash.html?v=1.1.0"],
   ["signal-match", "Signal Match", "Puzzle", "/app/games/signal-match.html", "toddler"],
-  ["focus-stack", "Focus Stack", "Focus", "/app/games/focus-stack.html"],
+  ["focus-stack", "Focus Stack", "Focus", "/app/games/focus-stack.html", "toddler"],
   ["phantom-rumble", "Phantom Rumble", "Arcade", "/app/games/phantom-rumble.html?v=1.1.0"],
   ["sudoku-signal", "Sudoku Signal", "Focus", "/app/games/sudoku-signal.html?v=1.1.0"],
 ].map(([id, title, category, launchUrl, contentRating]) => ({ id, title, summary: "Offline built-in game.", description: "", category, tags: [], contentRating: contentRating || "everyone", developer: "Tak", kind: "built_in", launchUrl, thumbnail: "", featured: id === "phantom-rumble" || id === "phantom-dash", version: launchUrl.match(/v=([^&]+)/)?.[1] || "1.0.0", controls: "", progressSupport: true, scoreSupport: true }));
@@ -222,8 +222,8 @@ function toddlerCard(game) {
 function renderToddlerSpace() {
   const games = ui.snapshot.catalog.filter((game) => game.contentRating === "toddler");
   return `<div class="pp2-toddler-space">
-    <section class="pp2-toddler-hero"><p class="pp2-kicker">TODDLER SPACE</p><h2>Big buttons. Just tap to play.</h2><p>Only Toddler-rated games live here — no chat, no voice, no multiplayer rooms, and no links off this screen.</p></section>
-    ${games.length ? `<div class="pp2-toddler-grid">${games.map(toddlerCard).join("")}</div>` : empty("No toddler games yet", "Games rated Toddler will appear here automatically once they are published.")}
+    <section class="pp2-toddler-hero"><p class="pp2-kicker">KIDS ONLY</p><h2>Big buttons. Just tap to play.</h2><p>Only approved Kids games live here — no chat, no voice, no multiplayer rooms, and no links off this screen.</p></section>
+    ${games.length ? `<div class="pp2-toddler-grid">${games.map(toddlerCard).join("")}</div>` : empty("No kids games yet", "Kids-rated games will appear here automatically once they are published.")}
   </div>`;
 }
 
@@ -457,7 +457,7 @@ function render() {
   document.body.classList.toggle("phantomplay-playing", !!ui.player);
   if (ui.loading && !ui.snapshot) { mountedRoot.innerHTML = `<div class="pp2-shell">${skeletonRow("PhantomPlay")}</div>`; return; }
   const snapshot = ui.snapshot || offlineState();
-  const tabs = [["home", "Home"], ["solo", "Solo"], ["friends", "Friends"], ["workspace", "Workspace"], ["library", "Library"], ["toddler", "Toddler Space"], ["developer", "Dev Hub"], ...(snapshot.access.canModerate ? [["admin", "Admin"]] : [])];
+  const tabs = [["home", "Home"], ["solo", "Solo"], ["friends", "Friends"], ["workspace", "Workspace"], ["library", "Library"], ["toddler", "Kids Only"], ["developer", "Dev Hub"], ...(snapshot.access.canModerate ? [["admin", "Admin"]] : [])];
   const isToddlerTab = ui.tab === "toddler";
   const view = { home: renderHome, solo: renderSolo, friends: renderFriends, workspace: renderWorkspace, library: renderLibrary, toddler: renderToddlerSpace, developer: renderDeveloper, admin: renderAdmin }[ui.tab] || renderHome;
   mountedRoot.innerHTML = `<div class="pp2-shell ${isToddlerTab ? "pp2-shell-toddler" : ""}">

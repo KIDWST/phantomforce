@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'none'; img-src data:; media-src 'none'; frame-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'none'; img-src data:; media-src 'self' blob: data:; frame-src 'none'">
 <title>Keyboardist On Tour</title>
 <style>
   *{box-sizing:border-box}
@@ -89,11 +89,15 @@
   <section class="scr" id="menuScreen" data-screen="menu">
     <p class="kicker">PhantomPlay Original</p>
     <h1>Keyboardist On Tour</h1>
-    <p class="sub">Type the changing letters as they hit the Threshold line, keep your Streak alive, and take an original synth act across three venues. All music below is synthesized live in your browser — no commercial tracks involved.</p>
+    <p class="sub">Type nonstop changing letters as they hit the Threshold line. Load your local edit songs, then Keyboardist picks a random backing track for each run; if none are selected it uses the built-in synth.</p>
     <div class="panel">
       <div class="row">
         <button class="btn primary" data-go="venues">Start Tour</button>
         <button class="btn gold" data-go="soundcheck">Soundcheck (Practice)</button>
+      </div>
+      <div class="field">
+        <label>Local edit songs<span id="localSongStatus">none loaded</span></label>
+        <input type="file" id="localSongInput" accept="audio/*" multiple>
       </div>
       <div class="row">
         <button class="btn" data-go="settings">Settings</button>
@@ -363,7 +367,7 @@ try{ var LS=window.localStorage.getItem('kot.mirror'); if(LS) mergeState(JSON.pa
 function mirrorLocal(){ try{ window.localStorage.setItem('kot.mirror', JSON.stringify(serializeState())); }catch(e){} }
 
 // ---- Audio engine (Web Audio API, fully synthesized, no media files) ----
-var actx=null, masterGain=null, noiseBuffer=null;
+var actx=null, masterGain=null, noiseBuffer=null, localSongFiles=[], localSongAudio=null, localSongUrl="";
 function ensureAudio(){
   if(actx) return;
   var AC=window.AudioContext||window.webkitAudioContext;
@@ -378,6 +382,7 @@ function ensureAudio(){
   for(var i=0;i<len;i++) data[i]=Math.random()*2-1;
 }
 function updateMasterGain(){ if(masterGain) masterGain.gain.setTargetAtTime(effectiveVolume(), actx.currentTime, 0.05); }
+function updateMediaVolume(){ if(localSongAudio) localSongAudio.volume=effectiveVolume(); }
 function pluck(freq, t, dur, gainMul){
   if(!actx) return;
   var o=actx.createOscillator(), g=actx.createGain();
@@ -431,6 +436,20 @@ function stabSound(t,freqs){
 var seq={ timer:null, nextTime:0, step:0, stepDur:0.15, pattern:null };
 function startBacking(track){
   if(!actx) return;
+  if(localSongFiles.length){
+    stopBacking();
+    var file=localSongFiles[Math.floor(Math.random()*localSongFiles.length)];
+    try{
+      if(localSongUrl) URL.revokeObjectURL(localSongUrl);
+      localSongUrl=URL.createObjectURL(file);
+      localSongAudio=new Audio(localSongUrl);
+      localSongAudio.volume=effectiveVolume();
+      localSongAudio.loop=true;
+      localSongAudio.play().catch(function(){});
+      toast('Backing: '+file.name.replace(/\.[^.]+$/,'').slice(0,48));
+      return;
+    }catch(e){}
+  }
   var pat=BACKING[track.id]||BACKING['neon-warehouse'];
   seq.pattern=pat; seq.stepDur=60/track.bpm/4; seq.step=0; seq.nextTime=actx.currentTime+0.05;
   clearInterval(seq.timer);
@@ -446,7 +465,10 @@ function startBacking(track){
     }
   },25);
 }
-function stopBacking(){ clearInterval(seq.timer); seq.timer=null; }
+function stopBacking(){
+  clearInterval(seq.timer); seq.timer=null;
+  if(localSongAudio){ try{ localSongAudio.pause(); localSongAudio.src=''; }catch(e){} localSongAudio=null; }
+}
 
 // ---- Screen management ----
 var SCREENS=['menu','venues','soundcheck','settings','tutorial','duel-lobby','play','results'];
@@ -984,7 +1006,7 @@ document.querySelector('[data-sc-start]').addEventListener('click',function(){
 });
 document.getElementById('scSpeedRange').addEventListener('input',function(){ document.getElementById('scSpeedLbl').textContent=Number(this.value).toFixed(2)+'x'; });
 document.getElementById('settSpeedRange').addEventListener('input',function(){ G.settings.noteSpeed=Number(this.value); document.getElementById('settSpeedLbl').textContent=G.settings.noteSpeed.toFixed(2)+'x'; mirrorLocal(); persistSoon(0); });
-document.getElementById('volRange').addEventListener('input',function(){ G.settings.volume=Number(this.value); document.getElementById('volLbl').textContent=Math.round(G.settings.volume*100)+'%'; updateMasterGain(); mirrorLocal(); persistSoon(0); });
+document.getElementById('volRange').addEventListener('input',function(){ G.settings.volume=Number(this.value); document.getElementById('volLbl').textContent=Math.round(G.settings.volume*100)+'%'; updateMasterGain(); updateMediaVolume(); mirrorLocal(); persistSoon(0); });
 document.getElementById('cbToggle').addEventListener('change',function(){ G.settings.colorblind=this.checked; mirrorLocal(); persistSoon(0); });
 document.getElementById('rmToggle').addEventListener('change',function(){ G.settings.reducedMotionLocal=this.checked; document.body.classList.toggle('reduced', effectiveReducedMotion()); mirrorLocal(); persistSoon(0); });
 document.querySelectorAll('[data-keyset]').forEach(function(b){ b.addEventListener('click',function(){ keysetTab=b.getAttribute('data-keyset'); document.querySelectorAll('[data-keyset]').forEach(function(x){x.classList.remove('active');}); b.classList.add('active'); renderKeyRows(); }); });
@@ -1004,7 +1026,12 @@ document.querySelector('[data-duel-start]').addEventListener('click',function(){
   var startAt=Date.now()+4000;
   host('match-action',{action:{phase:'countdown', trackId:trackId, startAt:startAt, hostProbeFrom:DUEL.localClientId}, mode:'merge'});
 });
-document.getElementById('pVolRange').addEventListener('input',function(){ G.settings.volume=Number(this.value); document.getElementById('pVolLbl').textContent=Math.round(G.settings.volume*100)+'%'; updateMasterGain(); mirrorLocal(); persistSoon(0); });
+document.getElementById('pVolRange').addEventListener('input',function(){ G.settings.volume=Number(this.value); document.getElementById('pVolLbl').textContent=Math.round(G.settings.volume*100)+'%'; updateMasterGain(); updateMediaVolume(); mirrorLocal(); persistSoon(0); });
+document.getElementById('localSongInput').addEventListener('change',function(){
+  localSongFiles=Array.prototype.slice.call(this.files||[]).filter(function(f){return /^audio\//.test(f.type)||/\.(mp3|wav|ogg|m4a|flac)$/i.test(f.name);});
+  document.getElementById('localSongStatus').textContent=localSongFiles.length?localSongFiles.length+' loaded · random per run':'none loaded';
+  toast(localSongFiles.length?'Loaded '+localSongFiles.length+' local songs':'No audio files selected');
+});
 
 // ---- Host protocol ----
 window.addEventListener('message', function(event){

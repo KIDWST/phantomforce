@@ -997,82 +997,60 @@ function firstSentence(value) {
   return String(value || "").split(/[.!?]/)[0].trim();
 }
 
-/* one place for the "/ month" · "/ year" price suffix — the store now sells
-   yearly plans (Termina Pro), so every price renderer shares this. */
+/* one place for the "/ month" · "/ year" price suffix. */
 export function cadenceSuffix(cadence) {
   return cadence === "monthly" ? " / month" : cadence === "yearly" ? " / year" : "";
 }
 
 /* ---------------- store starters ----------------
-   Real, ready-to-sell page presets the prompt flow can drop in whole. The
-   first one sells Termina — our terminal organizer and AI prompter — as a
-   genuine digital product: no lorem, digital fulfillment, honest test-mode
-   checkout until payments are connected. */
+   Website presets the prompt flow can drop in whole. The default public-site
+   starter mirrors PhantomForce.online; marketplace selling belongs in the
+   separate Phantom Store product area, not inside the website editor. */
 export const SITE_TEMPLATES = {
-  termina: {
-    id: "termina",
-    label: "Termina — terminal organizer & AI prompter",
-    title: "Termina — store",
-    kind: "Store",
-    sections: ["Hero", "Organize sessions", "AI prompt composer", "Works in every shell", "Pricing", "FAQ", "Store", "Checkout"],
+  phantomforce: {
+    id: "phantomforce",
+    label: "PhantomForce.online — public website",
+    title: "PhantomForce.online — public site",
+    kind: "Website",
+    sections: ["Hero", "Platform", "AI Business OS", "Plans", "Creator Network", "FAQ", "Download"],
     design: {
-      brand: "Termina",
-      headline: "Your terminal, organized. Your prompts, on tap.",
-      subhead: "Termina keeps every project's shells, tabs, and AI prompts one keystroke away — stop losing sessions, stop retyping prompts, start shipping.",
-      offer: "Termina Personal — $29 once, yours forever. Termina Pro — $79/year with sync and shared prompt libraries.",
-      cta: "Get Termina",
+      brand: "PhantomForce",
+      headline: "AI business management that feels alive.",
+      subhead: "Run clients, media, websites, approvals, analytics, and operator tokens from one private command center.",
+      offer: "Download PhantomForce, sign in, and turn your business workspace into an AI-assisted operating layer.",
+      cta: "Download PhantomForce",
       theme: "neon",
-      style: "product",
-      storeEnabled: true,
+      style: "public product site",
+      existingUrl: "phantomforce.online",
+      storeEnabled: false,
     },
     copy: {
-      "organize sessions": [
-        "Group tabs by project, not by accident. Termina saves every window, tab, and working directory as a named session — close your laptop mid-deploy and reopen exactly where you left off.",
-        "Pin the sessions you live in, search the ones you forgot, and jump between client work with a single shortcut. No more twelve identical tabs named zsh.",
+      platform: [
+        "PhantomForce is the front door for running a modern AI-assisted business: client pipeline, media production, public pages, approvals, reporting, and work queues live together.",
+        "The public website should sell PhantomForce itself, not a side product. This editor is where owner/admins revise PhantomForce.online safely before publishing.",
       ].join("\n"),
-      "ai prompt composer": [
-        "Stop retyping the same prompts into a chat window. The composer keeps your best prompts as reusable templates with variables — pipe in the current directory, the last command, or the text you just selected.",
-        "Send it to the model you already pay for, review the answer next to your shell, and paste the command back in without leaving the keyboard.",
+      "ai business os": [
+        "Ask Phantom to plan, draft, organize, and route work. Harmless local work should feel fast; approvals stay clear when money, publishing, or external sends are involved.",
+        "The workspace is private by default, with admin controls for teams, plans, subscriptions, and optional operator credits.",
       ].join("\n"),
-      "works in every shell": [
-        "bash, zsh, fish, PowerShell — Termina sits above your shell, not inside it. Your keybindings, sessions, and prompt templates follow you across machines, and everything works over SSH.",
-        "Nothing to install on the server, no plugins to break on update. If your shell runs, Termina organizes it.",
+      "creator network": [
+        "Phantom Store will be its own marketplace tab where users, AI developers, and vibecoders can submit tools, templates, products, and add-ons for review.",
+        "Approved creators stay credited and revenue-share rules stay separate from the public website editor.",
       ].join("\n"),
-      pricing: [
-        "Termina Personal — $29, one-time. One license for one human, every 1.x update included, all core features: sessions, the prompt composer, and cross-shell support.",
-        "Termina Pro — $79 per year. Everything in Personal, plus synced sessions across machines, shared prompt libraries for your team, and priority support.",
+      plans: [
+        "Basic unlocks core lead and workspace tools. Mid-tier adds PhantomPlay and richer business features. Top-tier unlocks operator tokens and the strongest automation lane.",
+        "Admins can preview plan gates without changing the public website.",
       ].join("\n"),
       faq: [
-        "Is this a subscription?",
-        "Personal is a one-time purchase — pay once, keep it. Pro renews yearly, and if you stop renewing you keep everything Personal includes.",
-        "How is Termina delivered?",
-        "It's a digital download. Your license key and download link are emailed to the address you use at checkout — no shipping, nothing physical.",
-        "Which platforms are supported?",
-        "macOS, Windows, and Linux. One license covers all three.",
-        "Can I use my own AI provider?",
-        "Yes — bring your own API key. Your prompts go straight to your provider; Termina never proxies them through our servers.",
+        "Is Phantom Store the same as the website builder?",
+        "No. Websites edits PhantomForce.online and client/public pages. Phantom Store is a separate marketplace for reviewed creator submissions.",
+        "Can developers submit products?",
+        "Yes. Submissions should enter review first, then approved products can be listed with creator credit and a payout/cut model.",
+        "Does this replace users' existing tools?",
+        "No. PhantomForce is the AI layer that helps coordinate the work; outside editors and apps can still be part of the workflow.",
       ].join("\n"),
     },
-    products: [
-      {
-        name: "Termina Personal",
-        price: 29,
-        cadence: "one_time",
-        type: "digital",
-        desc: "One-time license for one person. Sessions, prompt composer, every shell — all 1.x updates included.",
-        delivery_url: "",
-        delivery_note: "Digital delivery: your Termina license key and download link (macOS, Windows, Linux) are emailed to your checkout address within a few minutes.",
-      },
-      {
-        name: "Termina Pro",
-        price: 79,
-        cadence: "yearly",
-        type: "digital",
-        desc: "Everything in Personal, plus synced sessions across machines, shared team prompt libraries, and priority support.",
-        delivery_url: "",
-        delivery_note: "Digital delivery: your Termina Pro license key and download link are emailed to your checkout address within a few minutes.",
-      },
-    ],
+    products: [],
   },
 };
 
@@ -1092,7 +1070,7 @@ export function applySiteTemplate(site, templateId) {
     ...product,
   }));
   ensureSiteStore(site);
-  site.store.enabled = true;
+  site.store.enabled = !!template.design?.storeEnabled;
   site.templateId = template.id;
   site.updated = new Date().toISOString();
   return true;
@@ -1115,15 +1093,19 @@ export function applyWebsitePrompt(site, promptText) {
   const afterTo = trimToClause(prompt.match(/\b(?:to|as|called)\s+(.{3,120})$/i)?.[1]);
   let changed = "";
 
-  /* store starters: naming a template ("sell termina", "use the termina
-     starter") drops in the whole ready-to-sell page — real copy, pricing,
-     digital products, honest test-mode checkout. */
+  /* site starters: naming a template ("use phantomforce.online", "mirror
+     PhantomForce") drops in the public product-site foundation. */
   for (const template of Object.values(SITE_TEMPLATES)) {
     /* never re-apply over a site already built from this template — later
        prompts that merely mention it must edit, not clobber */
-    if (site.templateId !== template.id && new RegExp(`\\b${template.id}\\b`, "i").test(prompt)) {
+    const wantsTemplate = template.id === "phantomforce"
+      ? /\b(?:phantomforce\.online|mirror phantomforce|mimic phantomforce|use phantomforce(?:\.online)?(?: public)? (?:starter|template)|public phantomforce site)\b/i.test(prompt)
+      : new RegExp(`\\b${template.id}\\b`, "i").test(prompt);
+    if (site.templateId !== template.id && wantsTemplate) {
       applySiteTemplate(site, template.id);
-      return `Applied the ${template.label} starter: hero, feature sections, pricing, FAQ, and ${template.products.length} digital products wired for test checkout.`;
+      return template.products.length
+        ? `Applied the ${template.label} starter: hero, feature sections, pricing, FAQ, and ${template.products.length} products wired for test checkout.`
+        : `Applied the ${template.label} starter: hero, feature sections, plans, FAQ, and download CTA.`;
     }
   }
 
