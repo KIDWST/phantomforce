@@ -14,6 +14,7 @@ assert.match(index, /data-hero-sub/u, "Dashboard hero must have a data-backed op
 assert.match(index, /data-hero-proof/u, "Dashboard hero must have a recent proof line for handled work.");
 assert.match(index, /data-decision-deck/u, "Dashboard must have a real-data decision deck mount.");
 assert.match(index, /data-command-snapshot/u, "Dashboard must have a 10-second command snapshot.");
+assert.match(index, /data-operating-spaces/u, "Dashboard must expose the four primary operating spaces.");
 assert.match(index, /data-outcome-strip/u, "Dashboard must have a first-class active outcomes section.");
 assert.match(index, /data-operating-pulse/u, "Dashboard must show a compact operating pulse from real state.");
 assert.match(index, /data-execution-timeline/u, "Dashboard must show the You / Phantom / Results execution timeline.");
@@ -64,6 +65,20 @@ assert.match(main, /function commandSnapshotItems\(\)/u,
   "Command dashboard should derive a 10-second snapshot from real state.");
 assert.match(main, /function renderCommandSnapshot\(\)/u,
   "Command dashboard should render the 10-second command snapshot.");
+assert.match(main, /function operatingSpaceItems\(\)/u,
+  "Command dashboard should derive Command, Outcomes, Workforce, and Business space cards.");
+assert.match(main, /function renderOperatingSpaces\(\)/u,
+  "Command dashboard should render the four-space operating model.");
+assert.match(main, /id:\s*"command"[\s\S]*?id:\s*"outcomes"[\s\S]*?id:\s*"workforce"[\s\S]*?id:\s*"business"/u,
+  "Operating spaces must stay limited to Command, Outcomes, Workforce, and Business.");
+assert.match(main, /data-command-focus/u,
+  "Command space should focus the prompt instead of opening another page.");
+assert.match(main, /data-open-widget="workforce"/u,
+  "Workforce space should expand the dashboard widget.");
+assert.match(main, /data-open-widget="business"/u,
+  "Business space should expand the dashboard widget.");
+assert.match(main, /function openCommandWidget\(id = ""\)/u,
+  "Command spaces should be able to open existing dashboard widgets without routing to raw tabs.");
 assert.match(main, /label:\s*"Health"[\s\S]*?label:\s*"Needs"[\s\S]*?label:\s*"Moving"[\s\S]*?label:\s*"Result"[\s\S]*?label:\s*"Next"/u,
   "Command snapshot must summarize health, needs, movement, results, and next action.");
 assert.match(main, /function executionTimelineLanes\(\)/u,
@@ -204,6 +219,11 @@ assert.match(css, /\.decision-primary\s*,/u, "Decision deck must expose a primar
 assert.match(css, /\.decision-soft\s*\{/u, "Decision deck must style modify/dismiss as secondary controls.");
 assert.match(css, /\.command-snapshot\s*\{/u, "Command snapshot must have compact command-center styling.");
 assert.match(css, /\.snap-grid\s*\{/u, "Command snapshot must scan as a compact grid.");
+assert.match(css, /\.operating-spaces\s*\{/u, "Operating spaces must have compact command-center styling.");
+assert.match(css, /\.space-card\s*\{/u, "Each operating space must render as a compact clickable card.");
+assert.match(css, /@keyframes spaceFlow/u, "Operating spaces should animate subtle operational flow.");
+assert.match(css, /\.command-widget\.is-pulsing\s*\{/u, "Opened widgets should pulse briefly when launched from an operating space.");
+assert.match(css, /@keyframes widgetTargetPulse/u, "Widget target pulse animation must be defined.");
 assert.match(css, /\.outcome-strip\s*\{/u, "Active outcomes must have a dedicated command-center surface.");
 assert.match(css, /\.outcome-route\s*\{/u, "Outcome cards must style evidence and next action compactly.");
 assert.match(css, /\.outcome-gate\s*\{/u, "Outcome cards must style the approval gate compactly.");
