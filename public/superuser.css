@@ -4,3 +4,25 @@
 body.superuser .topbar {
   background: color-mix(in srgb, var(--panel) 92%, var(--accent) 8%);
 }
+
+#wall.su-auto-grid {
+  grid-template-columns: repeat(var(--su-cols, 3), minmax(0, 1fr));
+}
+
+body.superuser .wall {
+  gap: 8px;
+  padding: 10px 14px 20px;
+  grid-auto-rows: minmax(220px, 34vh);
+}
+
+body.superuser .tile.collapsed {
+  min-height: unset;
+}
+
+/* When every tile is collapsed, rows should shrink to fit the collapsed
+   header height instead of reserving full-size terminal rows — otherwise
+   compact mode wastes exactly the vertical space it exists to reclaim. */
+#wall.su-compact-grid {
+  grid-auto-rows: min-content;
+  align-content: start;
+}
