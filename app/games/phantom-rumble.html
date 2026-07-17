@@ -286,9 +286,16 @@ function updateRaceHud(){
     if(alt)alt.textContent=`${Math.round(Math.min(100,f.altitude/towerHeight*100))}%`;
     if(place)place.textContent=f.finished?`#${f.place}`:'';
   }
-  const lowest=fighters.filter(f=>!f.finished).reduce((min,f)=>Math.max(min,f.y-hazardY),0);
+  // Danger = how close the hazard line is to the most-endangered living
+  // player. hazardCatch()'s own check is f.y>hazardY (caught once the
+  // hazard's altitude value drops below the player's), so the safety
+  // margin for a given player is hazardY-f.y — positive while safe,
+  // shrinking toward 0 (then negative) as the hazard closes in. Take the
+  // SMALLEST such margin across all living players, not the largest.
+  const living=fighters.filter(f=>!f.finished);
+  const minGap=living.length?Math.min(...living.map(f=>hazardY-f.y)):.3;
   const dangerEl=hudEl.querySelector('[data-danger]');
-  if(dangerEl)dangerEl.textContent=`${Math.max(0,Math.min(100,Math.round(100-lowest/.3*100)))}%`;
+  if(dangerEl)dangerEl.textContent=`${Math.max(0,Math.min(100,Math.round(100-minGap/.3*100)))}%`;
 }
 /* ---------- Race to the Top soundtrack: procedural 8-bit sequencer ----------
    No audio files (CSP: media-src 'none') — same oscillator approach as the
@@ -326,7 +333,7 @@ function startRaceMatch(humanCount){
   for(let i=0;i<total;i++)fighters.push(makeRaceFighter(i,i<(humanCount||1)));
   buildTower(nextSeed());
   hazardY=1;hazardSpeed=.01;
-  particles=[];floaters=[];rings=[];projectiles=[];over=false;running=true;paused=false;raceFinishOrder=[];
+  pickups=[];particles=[];floaters=[];rings=[];projectiles=[];over=false;running=true;paused=false;raceFinishOrder=[];
   setupEl.hidden=true;endEl.hidden=true;hudEl.hidden=false;
   document.querySelector('[data-touch]').hidden=fighters.some(f=>f.human&&f.slot===0)?false:true;
   buildRaceHud();last=performance.now();if(raf)cancelAnimationFrame(raf);raf=requestAnimationFrame(loop);
@@ -356,8 +363,8 @@ addEventListener('keydown',e=>{
       if(netMode)sendMatchAction({type:'input',slot:localSlot,event:'jump'},'merge');
     }
     if(pad.light.includes(e.key)){if(mode==='racetop')raceSabotage(f);else attack(f,false);if(netMode)sendMatchAction({type:'input',slot:localSlot,event:'light'},'merge')}
-    if(pad.heavy.includes(e.key))f.charge=.01;
-    if(pad.shield.includes(e.key)){f.shieldHeld=true;f.parry=.18;addFloater(f.x,f.y-.1,'GUARD',f.glow,11)}
+    if(mode!=='racetop'&&pad.heavy.includes(e.key))f.charge=.01;
+    if(mode!=='racetop'&&pad.shield.includes(e.key)){f.shieldHeld=true;f.parry=.18;addFloater(f.x,f.y-.1,'GUARD',f.glow,11)}
     if(pad.dodge.includes(e.key)){dodge(f);if(netMode)sendMatchAction({type:'input',slot:localSlot,event:'dodge'},'merge')}
     if(pad.left.includes(e.key))tapDash(f,-1,e.key);
     if(pad.right.includes(e.key))tapDash(f,1,e.key);
@@ -703,6 +710,10 @@ function raceStep(f,dt){
   f.invuln=Math.max(0,f.invuln-dt);f.stun=Math.max(0,f.stun-dt);f.attackCd=Math.max(0,f.attackCd-dt);f.anim=Math.max(0,f.anim-dt);f.dodgeCd=Math.max(0,f.dodgeCd-dt);f.shieldBubble=Math.max(0,f.shieldBubble-dt);
   if(f.stun<=0){
     if(f.human){
+      // Keyboard/touch only, by scope decision — applyGamepadInput() (and
+      // therefore f._gpDir, which heldDir() would otherwise read) is only
+      // ever called from brawl step(), not here. Wiring gamepad support
+      // for this mode is a real follow-up, not a silent oversight.
       const dir=heldDir(f);
       if(dir)f.face=dir;
       f.vx+=dir*.0018*(dt*60);
@@ -792,6 +803,7 @@ function endMatch(winner){
   endEl.hidden=false;hudEl.hidden=true;document.querySelector('[data-touch]').hidden=true;
 }
 function endRaceMatch(){
+  if(over)return; // idempotency guard — finishRace can trigger this once per fighter that crosses the win condition in the same tick
   if(raf){cancelAnimationFrame(raf);raf=0}
   running=false;over=true;stats.matches+=1;
   const finishedHuman=fighters.find(f=>f.human&&f.place===1);
@@ -1069,7 +1081,7 @@ function loop(t){
     racePickupTimer-=dt;
     if(racePickupTimer<=0){racePickupTimer=6+Math.random()*4;if(pickups.filter(p=>!p.taken).length<2)raceSpawnPickup()}
     for(const p of pickups)p.age+=dt;
-    for(const f of fighters)raceStep(f,dt);
+    for(const f of fighters){raceStep(f,dt);if(over)break} // stop processing the instant a fighter's finish ends the match, so a same-tick simultaneous finisher isn't left stuck mid-loop and wrongly rendered as "still climbing"
     updateRaceHud();
     stepParticles(dt);
     draw(t);
