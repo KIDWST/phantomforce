@@ -6,46 +6,47 @@ import {
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260717-6";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260717-6";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260717-6";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260717-6";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260717-6";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260717-6";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260717-6";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260717-6";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260717-6";
-import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260717-6";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260717-6";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260717-6";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260717-6";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260717-6";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260717-6";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260717-6";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260717-6";
-import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260717-6";
-import { mountAmbient } from "./ambient.js?v=phantom-live-20260717-6";
-import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260717-6";
+} from "./store.js?v=phantom-live-20260717-8";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260717-8";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260717-8";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260717-8";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260717-8";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260717-8";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260717-8";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260717-8";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260717-8";
+import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260717-8";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260717-8";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260717-8";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260717-8";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260717-8";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260717-8";
+import { renderOperatorMiniSettings, renderOperatorSettings, renderOwnerAdminControl } from "./settings.js?v=phantom-live-20260717-8";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260717-8";
+import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260717-8";
+import { mountAmbient } from "./ambient.js?v=phantom-live-20260717-8";
+import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260717-8";
 import {
-  fetchAuthConfig, databaseLogin, databaseLogout, databaseSignup, databaseForgotUsername, databaseForgotPassword,
+  fetchAuthConfig, databaseLogin, databaseLogout, databaseSignup, databaseSignupDeveloper, databaseUpgradeDeveloperAccount, databaseForgotUsername, databaseForgotPassword,
   databaseResetPassword, databaseVerify2fa, databaseStart2faSetup, databaseConfirm2fa, databaseRegenerate2faBackupCodes, databaseDisable2fa,
   switchOrg, fetchAuthMe, fetchEntitlementsSummary,
-} from "./orgs.js?v=phantom-live-20260717-6";
-import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260717-6";
-import { assetsAvailable } from "./orgs.js?v=phantom-live-20260717-6";
-import { renderPhantomStore } from "./phantomstore.js?v=phantom-live-20260717-6";
-import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260717-6";
+} from "./orgs.js?v=phantom-live-20260717-8";
+import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260717-8";
+import { assetsAvailable } from "./orgs.js?v=phantom-live-20260717-8";
+import { renderPhantomStore } from "./phantomstore.js?v=phantom-live-20260717-8";
+import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260717-8";
 // PhantomPlay V2 platform shell (Home/Solo/Friends/Workspace/Dev Hub) - opt-in
 // while it hardens: set localStorage "pf.phantomplay.v2" = "1" (the V2 shell has
 // a "Classic view" button to switch back). Classic stays the default experience.
-import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260717-6";
+import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260717-8";
 const phantomPlayV2Opted = () => { try { return localStorage.getItem("pf.phantomplay.v2") === "1"; } catch { return false; } };
-import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260717-6";
+import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260717-8";
 import {
+  canAccessConfiguredModule,
   customizeNavigation,
   loadOrganizationCustomization,
-} from "./customization.js?v=phantom-live-20260717-6";
-import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260717-6";
+} from "./customization.js?v=phantom-live-20260717-8";
+import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260717-8";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -317,6 +318,14 @@ function maybeUpgradeGateToDatabaseLogin(card, options = {}) {
           <label><span>Business / workspace</span><input name="organizationName" placeholder="Business name" /></label>
           <label><span>Password</span><input type="password" name="password" autocomplete="new-password" minlength="8" required /></label>
           <button class="gate-opt gate-submit" type="submit"><span class="gate-opt-icon">＋</span><b>Create account</b><i>Creates your user, starter workspace, and owner role.</i></button>
+        </form>` : state.mode === "submit-game" ? `
+        <form class="owner-login" data-auth-form="submit-game">
+          <label><span>Email</span><input type="email" name="email" autocomplete="email" placeholder="you@studio.com" required /></label>
+          <label><span>Name</span><input name="name" autocomplete="name" placeholder="Your name" /></label>
+          <label><span>Studio / dev name</span><input name="workspaceName" placeholder="Your studio or handle" minlength="2" maxlength="120" required /></label>
+          <label><span>About your game</span><textarea name="workspaceBrief" placeholder="What are you submitting? Genre, controls, what makes it worth playing." minlength="12" maxlength="600" rows="3" required></textarea></label>
+          <label><span>Password</span><input type="password" name="password" autocomplete="new-password" minlength="8" required /></label>
+          <button class="gate-opt gate-submit" type="submit"><span class="gate-opt-icon">🎮</span><b>Create developer account</b><i>Reaches Accounting, Planner, and PhantomPlay. Upgrade anytime for the full workspace.</i></button>
         </form>` : state.mode === "forgot-user" ? `
         <form class="owner-login" data-auth-form="forgot-user">
           <label><span>Account email</span><input type="email" name="email" autocomplete="email" required /></label>
@@ -343,7 +352,7 @@ function maybeUpgradeGateToDatabaseLogin(card, options = {}) {
       card.innerHTML = `
         <p class="gate-kicker">PHANTOMFORCE · ACCOUNT ACCESS</p>
         <h1>${state.mode === "signup" ? "Create your Phantom account." : state.mode === "2fa" ? "Enter your 2FA code." : customerApp ? "Sign in to your workspace." : "Sign in to Phantom."}</h1>
-        <div class="auth-tabs">${tab("signin", "Sign in")}${tab("signup", "Create user")}${tab("forgot-user", "Forgot username")}${tab("forgot-pass", "Forgot password")}${tab("reset-pass", "Reset")}</div>
+        <div class="auth-tabs">${tab("signin", "Sign in")}${tab("signup", "Create user")}${tab("submit-game", "Submit Your Game")}${tab("forgot-user", "Forgot username")}${tab("forgot-pass", "Forgot password")}${tab("reset-pass", "Reset")}</div>
         ${body}
         <p class="gate-error" data-db-error hidden></p>
         ${msg}
@@ -380,6 +389,15 @@ function maybeUpgradeGateToDatabaseLogin(card, options = {}) {
             password: String(data.get("password") || ""),
           });
           state.mode = "signin"; state.message = "Account created. Sign in with your new credentials."; render();
+        } else if (state.mode === "submit-game") {
+          const nextSession = await databaseSignupDeveloper({
+            email: String(data.get("email") || "").trim(),
+            name: String(data.get("name") || "").trim() || undefined,
+            workspaceName: String(data.get("workspaceName") || "").trim(),
+            workspaceBrief: String(data.get("workspaceBrief") || "").trim(),
+            password: String(data.get("password") || ""),
+          });
+          await doEnter(nextSession);
         } else if (state.mode === "forgot-user") {
           const result = await databaseForgotUsername(String(data.get("email") || "").trim());
           state.message = result?.preview?.username ? `Recovery queued. Dev preview username: ${result.preview.username}` : "If that email exists, username recovery has been queued.";
@@ -426,6 +444,7 @@ const BASE_NAV = [
   { id: "developer",  label: "Developer",    icon: "dev",   ws: "developer", ownerOnly: true, navZone: "bottom" },
   { id: "vacation",   label: "Away Mode",    icon: "auto",  ws: "vacation", statusPill: true, navZone: "bottom" },
   { id: "phantomplay", label: "Play", icon: "film",  ws: "phantomplay", navZone: "bottom", quiet: true, optionalModule: true },
+  { id: "admincontrol", label: "Admin Control", icon: "shield", ws: "admincontrol", ownerOnly: true, navZone: "bottom" },
   { id: "phantomstore", label: "PhantomStore", icon: "spark", ws: "phantomstore" },
 ];
 let NAV = customizeNavigation(BASE_NAV, isAdmin() ? "owner" : "client");
@@ -445,6 +464,7 @@ const MOBILE_LABEL_OVERRIDES = {
   intelligence: "Competitor",
   vacation: "Away",
   developer: "Developer",
+  admincontrol: "Admin",
 };
 let MOBILE_NAV = NAV.map((n) => ({
   id: n.id,
@@ -555,6 +575,38 @@ function workspaceId(id) {
   return WORKSPACE_ALIASES[id] || id;
 }
 
+/* The real "upgrade to unlock" CTA a developer-role member sees on any
+   module outside Accounting/Planner/PhantomPlay, instead of a blank page
+   or a raw 403 — the server already denies the underlying API calls
+   (developerRoleGuard in index.ts); this is just the honest client-side
+   explanation, with a real working upgrade action behind the button. */
+function developerUpgradeGateHtml(def) {
+  return `<div class="pp-empty" style="text-align:center;padding:56px 24px">
+    <span style="font-size:32px">🔒</span>
+    <h3>Unlock ${esc(def.title)}</h3>
+    <p>Your developer account can use Accounting, Planner, and PhantomPlay. Upgrade your account to unlock ${esc(def.title)} and the rest of your PhantomForce workspace.</p>
+    <button type="button" class="gate-opt gate-submit" data-developer-upgrade-cta style="margin-top:12px">Upgrade my account</button>
+  </div>`;
+}
+function wireDeveloperUpgradeGate(root) {
+  const btn = root.querySelector("[data-developer-upgrade-cta]");
+  if (!btn) return;
+  btn.onclick = async () => {
+    btn.disabled = true; btn.textContent = "Upgrading…";
+    try {
+      await databaseUpgradeDeveloperAccount();
+      location.reload();
+    } catch (err) {
+      btn.disabled = false; btn.textContent = "Upgrade my account";
+      alert(err?.message || "Upgrade failed.");
+    }
+  };
+}
+function developerRoleBlocksModule(key) {
+  const role = session.get?.()?.orgRole;
+  if (role !== "developer") return false;
+  return !canAccessConfiguredModule(key, role);
+}
 function canAccessSurface(surface) {
   if (surface?.ownerOnly && !isOwnerOperator()) return false;
   if (surface?.adminOnly && !isAdmin()) return false;
@@ -579,7 +631,7 @@ function renderNav() {
   const items = orderedNavItems();
   MOBILE_NAV = mobileItemsFromNav(items);
   nav.innerHTML = items.map((n) => `
-    <button class="nav-item ${activeNav === n.id ? "is-active" : ""} ${n.navZone === "bottom" ? "nav-item-bottom" : ""} ${n.quiet ? "nav-item-quiet" : ""} ${n.navDisabled ? "nav-item-disabled" : ""}" data-nav-id="${n.id}" ${activeNav === n.id ? 'aria-current="page"' : ""} ${n.navDisabled ? 'aria-disabled="true" title="Disabled for this plan; the owner can enable it later."' : ""}>
+    <button class="nav-item ${activeNav === n.id ? "is-active" : ""} ${n.navZone === "bottom" ? "nav-item-bottom" : ""} ${n.quiet ? "nav-item-quiet" : ""} ${n.navDisabled ? "nav-item-disabled" : ""} ${n.id === "admincontrol" ? "nav-item-admincontrol" : ""}" data-nav-id="${n.id}" ${activeNav === n.id ? 'aria-current="page"' : ""} ${n.navDisabled ? 'aria-disabled="true" title="Disabled for this plan; the owner can enable it later."' : ""}>
       ${svg(n.icon)}
       <span>${n.label}</span>
       ${n.badge && pending ? `<em class="nav-badge">${pending}</em>` : ""}
@@ -1227,7 +1279,7 @@ const MODES = {
   admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260717-6";
+const POSE_VERSION = "phantom-live-20260717-8";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -2959,6 +3011,7 @@ const CUSTOM = {
   account: { title: "Business Profile & Plan", kicker: "Profile, billing, and access", custom: true, render: (body) => renderAccountPlan(body) },
   clientsetup: { title: "Business Manager Settings", kicker: "Workspace and organization setup", custom: true, render: (body) => renderOperatorSettings(body, { ...mediaOpts(), initialTab: "clientsetup", onWorkspaceApplied: () => { refreshCustomizedNavigation(); renderNav(); renderMobileBottomNav(); } }) },
   developer: { title: "Developer", kicker: "Owner controls", custom: true, wide: true, ownerOnly: true, render: (body) => renderDeveloperPage(body) },
+  admincontrol: { title: "Admin Control", kicker: "Owner-only live product controls", custom: true, wide: true, ownerOnly: true, render: (body) => renderOwnerAdminControl(body, { ...mediaOpts(), onWorkspaceApplied: () => { refreshCustomizedNavigation(); renderNav(); renderMobileBottomNav(); } }) },
   settings: { title: "Business Manager Settings", kicker: "Brain, memory, routing, and safety configuration", custom: true, render: (body) => renderOperatorSettings(body, { ...mediaOpts(), onWorkspaceApplied: () => { refreshCustomizedNavigation(); renderNav(); renderMobileBottomNav(); } }) },
   automation: { title: "Automations", kicker: "Business workflows — approval-gated", custom: true, wide: true, render: (body) => renderAutomation(body, mediaOpts()) },
   vacation: { title: "Away Mode", kicker: "Your business stays covered while you are away", custom: true, wide: true, render: (body) => renderVacationMode(body, mediaOpts()) },
@@ -3071,6 +3124,7 @@ function renderWorkspacePage(id, pushHash = true) {
   renderNotifs();
   const body = $("[data-workspace-page-body]", root);
   const rerender = () => {
+    if (developerRoleBlocksModule(key)) { body.innerHTML = developerUpgradeGateHtml(def); wireDeveloperUpgradeGate(body); return; }
     if (def.custom) def.render(body);
     else { def.render(body, rerender); if (key === "phantom") wirePhantomConsole(body); }
     mountPageWorkers(root, mediaOpts());
@@ -3116,6 +3170,7 @@ function openWorkspace(id, pushHash = true) {
     </div>`;
   const body = $("[data-overlay-body]", overlayRoot);
   const rerender = () => {
+    if (developerRoleBlocksModule(key)) { body.innerHTML = developerUpgradeGateHtml(def); wireDeveloperUpgradeGate(body); return; }
     if (def.custom) def.render(body);
     else { def.render(body, rerender); if (key === "phantom") wirePhantomConsole(body); }
     mountPageWorkers(overlayRoot, mediaOpts());

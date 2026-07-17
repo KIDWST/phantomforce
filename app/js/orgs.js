@@ -6,7 +6,7 @@
    when the backend doesn't advertise database auth, none of these
    surfaces render and the app behaves exactly as before. */
 
-import { ctx, session } from "./store.js?v=phantom-live-20260714-012";
+import { ctx, session } from "./store.js?v=phantom-live-20260717-7";
 
 export const isDatabaseSession = () => !!ctx.session?.database;
 export const activeOrgId = () => (isDatabaseSession() ? ctx.session.orgId || null : null);
@@ -93,6 +93,30 @@ export async function databaseSignup(payload) {
   const { ok, status, json } = await api("/auth/signup", { method: "POST", body: payload });
   if (!ok) throw new Error(String(json?.error || `Signup failed (${status}).`));
   return json;
+}
+
+/* Submit Your Game: creates a real account capped at the fail-closed
+   "developer" role (Accounting, Planner, PhantomPlay only — enforced
+   server-side). Actual game submissions still go through PhantomPlay's
+   own submission pipeline once signed in. */
+export async function databaseSignupDeveloper(payload) {
+  const { ok, status, json } = await api("/auth/signup-developer", { method: "POST", body: payload });
+  if (!ok) throw new Error(String(json?.error || `Signup failed (${status}).`));
+  const local = localSessionFromServer(json);
+  session.set(local);
+  ctx.session = { ...local, token: undefined };
+  return ctx.session;
+}
+
+/* The real action behind every "upgrade to unlock" CTA a developer-role
+   member sees outside Accounting/Planner/PhantomPlay. */
+export async function databaseUpgradeDeveloperAccount() {
+  const { ok, status, json } = await api("/auth/upgrade-developer", { method: "POST", body: {} });
+  if (!ok) throw new Error(String(json?.error || `Upgrade failed (${status}).`));
+  const local = localSessionFromServer(json);
+  session.set(local);
+  ctx.session = { ...local, token: undefined };
+  return ctx.session;
 }
 
 export async function databaseForgotUsername(email) {
