@@ -22,6 +22,10 @@ assert.match(index, /data-handled-proof/u, "Dashboard must have a handled-work p
 assert.match(index, /data-quick-title>Next moves</u, "Right rail should lead with next moves, not generic quick actions.");
 assert.match(index, /data-work-title>Work in motion</u, "Right rail should show work in motion, not an old mission queue.");
 assert.match(index, /Open operating map/u, "Right rail map entry should read like an operating system, not a mission list.");
+assert.match(index, /data-open-ws="settings" data-settings-target="loop"/u,
+  "Chat tools must expose Loop/model settings directly.");
+assert.doesNotMatch(index, /class="cmd-tool" data-open-ws="memory"/u,
+  "Memory must not be a dashboard/chat shortcut; it belongs inside Phantom's brain layer.");
 assert.doesNotMatch(index, /Tell me what you need<br \/>or choose a lane below/u,
   "Dashboard hero must not lead with generic chatbot framing.");
 assert.match(widgetSource, /id:\s*"workforce"/u, "Workforce must stay available as a dashboard widget.");
