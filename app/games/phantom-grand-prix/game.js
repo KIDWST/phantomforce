@@ -13,6 +13,11 @@
 (function () {
   "use strict";
 
+  // PhantomPlay host protocol — every built-in game hand-rolls this the
+  // same way: postMessage 'ready' once interactive, report score/progress/
+  // complete, and react to pause/resume/restart/exit/settings from the host.
+  const host = (type, data = {}) => parent.postMessage({ source: "phantomplay-game", type, ...data }, "*");
+
   // Generic object pool — avoids per-frame allocation in spawn-heavy hot
   // loops (particles, projectiles).
   class ObjectPool {
@@ -216,6 +221,7 @@
     state.phase = "countdown";
     state.countdownT = 3.999;
     state.raceT = 0;
+    finishReported = false;
   }
 
   // ---------------------------------------------------------------------
@@ -523,6 +529,13 @@
     if (done) state.phase = "finished";
   }
 
+  function reportRaceComplete() {
+    if (finishReported) return;
+    finishReported = true;
+    const you = state.karts.find((k) => k.human);
+    host("complete", { progress: 100, score: you ? Math.max(0, 5 - (you.place || 5)) * 100 : undefined, state: { place: you?.place, standings: computeStandings().map((k) => ({ name: k.name, rank: k.rank, human: k.human })) } });
+  }
+
   // ---------------------------------------------------------------------
   // Rendering
   // ---------------------------------------------------------------------
@@ -719,7 +732,17 @@
   const countdownOverlay = document.querySelector("[data-countdown-overlay]");
   const countdownNumEl = document.querySelector("[data-countdown-num]");
   const finishOverlay = document.querySelector("[data-finish-overlay]");
+  const pauseOverlay = document.querySelector("[data-pause-overlay]");
   const standingsEl = document.querySelector("[data-standings]");
+  let hostPaused = false;
+  let finishReported = false;
+
+  function setHostPaused(next) {
+    if (hostPaused === next) return;
+    hostPaused = next;
+    pauseOverlay.hidden = !hostPaused;
+    host("paused", { paused: hostPaused });
+  }
 
   function renderStandingsList() {
     const standings = computeStandings();
@@ -743,7 +766,7 @@
       countdownOverlay.hidden = true;
     }
     if (state.phase === "finished") {
-      if (finishOverlay.hidden) { finishOverlay.hidden = false; renderStandingsList(); }
+      if (finishOverlay.hidden) { finishOverlay.hidden = false; renderStandingsList(); reportRaceComplete(); }
     } else {
       finishOverlay.hidden = true;
     }
@@ -764,7 +787,7 @@
     let delta = (now - lastFrameTime) / 1000;
     lastFrameTime = now;
     delta = Math.min(delta, 0.25);
-    if (state.phase === "racing" || state.phase === "countdown") {
+    if ((state.phase === "racing" || state.phase === "countdown") && !hostPaused) {
       accumulator += delta;
       while (accumulator >= TICK) { simulateTick(TICK); accumulator -= TICK; }
     }
@@ -773,6 +796,25 @@
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
+
+  // Host <-> game protocol: the PhantomPlay shell posts these once the
+  // iframe is mounted; without a 'ready' reply the shell's watchdog treats
+  // the game as unresponsive after 12s.
+  window.addEventListener("message", (evt) => {
+    const d = evt.data;
+    if (!d || d.source !== "phantomplay-host") return;
+    if (d.type === "pause") setHostPaused(true);
+    else if (d.type === "resume") setHostPaused(false);
+    else if (d.type === "restart") {
+      finishOverlay.hidden = true;
+      setHostPaused(false);
+      if (state.mode) startRace(state.mode);
+      else { state.phase = "menu"; startOverlay.hidden = false; }
+    } else if (d.type === "exit") {
+      setHostPaused(true);
+    }
+  });
+  host("ready");
 
   // ---------------------------------------------------------------------
   // Test/debug hook — NOT part of normal play, used for automated

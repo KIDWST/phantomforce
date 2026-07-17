@@ -17,6 +17,11 @@
 (function () {
   "use strict";
 
+  // PhantomPlay host protocol — every built-in game hand-rolls this the
+  // same way: postMessage 'ready' once interactive, report score/progress/
+  // complete, and react to pause/resume/restart/exit/settings from the host.
+  const host = (type, data = {}) => parent.postMessage({ source: "phantomplay-game", type, ...data }, "*");
+
   // Generic object pool — avoids per-frame allocation in spawn-heavy hot
   // loops (particles, projectiles).
   class ObjectPool {
@@ -204,6 +209,7 @@
     else { streak = 0; }
     spawnSpark(note, judgement);
     updateHud();
+    host("score", { score: Math.round(score), state: { streak, judgement } });
   }
 
   function spawnSpark(note, judgement) {
@@ -264,9 +270,9 @@
     }
   }
 
-  function togglePause() {
-    if (!running) return;
-    paused = !paused;
+  function setPaused(next) {
+    if (!running || paused === next) return;
+    paused = next;
     pauseOverlay.hidden = !paused;
     if (paused) {
       pausedSongTime = audioCtx.currentTime - songStartTimeRef.value;
@@ -278,6 +284,11 @@
         scheduler.start(pausedSongTime, songStartTimeRef);
       });
     }
+    host("paused", { paused });
+  }
+
+  function togglePause() {
+    setPaused(!paused);
   }
 
   function autoMissSweep(t) {
@@ -357,6 +368,7 @@
     startOverlay.querySelector("h2").textContent = "Song Complete";
     startOverlay.querySelector("p").innerHTML = `Final score <b>${Math.round(score)}</b> · best streak tracked live above · accuracy ${resolvedCount ? Math.round((creditedCount / resolvedCount) * 100) : 100}%.`;
     startOverlay.querySelector("button").textContent = "▶ Play again";
+    host("complete", { score: Math.round(score), progress: 100, state: { accuracy: resolvedCount ? Math.round((creditedCount / resolvedCount) * 100) : 100 } });
   }
 
   function start() {
@@ -373,9 +385,27 @@
     requestAnimationFrame(frame);
   }
 
+  function restartGame() {
+    if (running) { running = false; scheduler.stop(); }
+    start();
+  }
+
   startBtn.addEventListener("click", start);
   document.addEventListener("keydown", onKeyDown);
   document.addEventListener("keyup", onKeyUp);
+
+  // Host <-> game protocol: the PhantomPlay shell posts these once the
+  // iframe is mounted; without a 'ready' reply the shell's watchdog treats
+  // the game as unresponsive after 12s.
+  window.addEventListener("message", (evt) => {
+    const d = evt.data;
+    if (!d || d.source !== "phantomplay-host") return;
+    if (d.type === "pause") setPaused(true);
+    else if (d.type === "resume") setPaused(false);
+    else if (d.type === "restart") restartGame();
+    else if (d.type === "exit") { if (running) { running = false; scheduler.stop(); } }
+  });
+  host("ready");
 
   window.__beatStrikeDebug = { generateBeatmap, get score() { return score; }, get resolvedCount() { return resolvedCount; }, get creditedCount() { return creditedCount; } };
 })();
