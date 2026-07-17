@@ -1,7 +1,7 @@
 import {
   currentTenantId, isAdmin, isOwnerOperator, session,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260717-4";
+} from "./store.js?v=phantom-live-20260717-5";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 const mobilePlaySurface = () => typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;
@@ -334,6 +334,10 @@ function sortGames(games, sort = ui.category) {
   if (sort === "Multiplayer") return games.filter(multiplayerGame);
   if (sort === "Toddler") return games.filter(toddlerPick);
   if (CATEGORIES.includes(sort) && sort !== "All") return games.filter((game) => game.category === sort);
+  // Default/"All" view stays general-audience — toddler titles only show up
+  // once someone explicitly picks the Toddler filter, so the main catalog
+  // doesn't read as a kids app by default.
+  if (sort === "All") return games.filter((game) => !toddlerPick(game));
   return games;
 }
 
