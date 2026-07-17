@@ -38,6 +38,7 @@
     "test:auth:database-live": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-auth-database-live.ps1",
     "test:auth:production-fail-closed": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-auth-production-fail-closed.ps1",
     "test:auth:owner-production": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-auth-owner-production.ps1",
+    "test:auth:rate-limit": "tsx scripts/test-auth-rate-limit.ts",
     "start": "node dist/index.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev"

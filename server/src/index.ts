@@ -142,6 +142,7 @@ import { tmpdir } from "node:os";
 import { dirname, extname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createAccessStorageSnapshot } from "./access/access-storage.js";
+import { consumeRateLimit } from "./access/rate-limit.js";
 import { actionRegistry, isActionImplemented } from "./approval/action-registry.js";
 import { createFalconBroker } from "./falcon/broker.js";
 import {
@@ -1324,6 +1325,34 @@ app.get("/sessions", async (request) => {
   };
 });
 
+/* Brute-force throttle for auth endpoints. Keyed per-IP+identifier so one
+   attacker hammering a single account can't lock other accounts out, and
+   per-IP alone so a single script rotating identifiers is still capped. */
+const AUTH_RATE_LIMIT_MAX_ATTEMPTS = 10;
+const AUTH_RATE_LIMIT_WINDOW_MS = 5 * 60 * 1000;
+
+function enforceAuthRateLimit(request: FastifyRequest, reply: FastifyReply, identifier: string) {
+  const ip = request.ip || "unknown";
+  const normalizedIdentifier = (identifier || "unknown").trim().toLowerCase().slice(0, 200);
+
+  const perIdentifier = consumeRateLimit(
+    `auth:id:${ip}:${normalizedIdentifier}`,
+    AUTH_RATE_LIMIT_MAX_ATTEMPTS,
+    AUTH_RATE_LIMIT_WINDOW_MS,
+  );
+  const perIp = consumeRateLimit(`auth:ip:${ip}`, AUTH_RATE_LIMIT_MAX_ATTEMPTS * 3, AUTH_RATE_LIMIT_WINDOW_MS);
+
+  const result = perIdentifier.limited ? perIdentifier : perIp;
+  if (result.limited) {
+    reply
+      .header("Retry-After", Math.ceil(result.retryAfterMs / 1000).toString())
+      .code(429)
+      .send({ ok: false, error: "too_many_attempts" });
+    return false;
+  }
+  return true;
+}
+
 async function handleSessionLogin(request: FastifyRequest, reply: FastifyReply) {
   const authConfiguration = getAccessAuthConfiguration();
 
@@ -1334,6 +1363,10 @@ async function handleSessionLogin(request: FastifyRequest, reply: FastifyReply) 
       ok: false,
       error: parsed.error.flatten(),
     });
+  }
+
+  if (!enforceAuthRateLimit(request, reply, parsed.data.email || parsed.data.sessionId)) {
+    return reply;
   }
 
   /* Under the database auth provider, sessionLoginEnabled is false (it only
@@ -1491,6 +1524,9 @@ app.post("/auth/signup", async (request, reply) => {
     if (fieldErrors.workspaceBrief?.length) return reply.code(400).send({ ok: false, error: "workspace_brief_required" });
     return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
   }
+  if (!enforceAuthRateLimit(request, reply, parsed.data.email)) {
+    return reply;
+  }
   const result = await registerWorkspaceAccount(parsed.data);
   if (!result.ok) {
     const status = result.error === "account_exists" ? 409 : 400;
@@ -1529,6 +1565,9 @@ app.post("/auth/login", async (request, reply) => {
   const parsed = DatabaseLoginSchema.safeParse(request.body ?? {});
   if (!parsed.success) {
     return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  }
+  if (!enforceAuthRateLimit(request, reply, parsed.data.email)) {
+    return reply;
   }
   const session = await loginWithPassword(parsed.data.email, parsed.data.password);
   if (!session) {
