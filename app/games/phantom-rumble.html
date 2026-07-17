@@ -275,8 +275,21 @@ function startMatch(selected,options={}){
   document.querySelector('[data-touch]').hidden=fighters.some(f=>f.human&&f.slot===0)?false:true;
   buildHud();last=performance.now();if(raf)cancelAnimationFrame(raf);raf=requestAnimationFrame(loop);
 }
-function buildRaceHud(){} // stub — replaced with the real altitude/danger HUD once that lands
-function updateRaceHud(){} // stub — replaced with the real altitude/danger HUD once that lands
+function buildRaceHud(){
+  hudEl.innerHTML=fighters.map(f=>`<div class="fighter-card" style="border-color:${f.color}55"><i style="color:${f.color}">${f.name}${f.human?'':' · BOT'}</i><b data-alt="${f.slot}" style="color:${f.color}">0%</b><s data-place="${f.slot}" style="color:${f.color}"></s></div>`).join('')
+    +`<div class="fighter-card" style="min-width:160px"><i>DANGER</i><b data-danger style="color:#fb923c">0%</b></div>`;
+}
+function updateRaceHud(){
+  const towerHeight=(TOWER_ROWS+1)*ROW_STEP;
+  for(const f of fighters){
+    const alt=hudEl.querySelector(`[data-alt="${f.slot}"]`),place=hudEl.querySelector(`[data-place="${f.slot}"]`);
+    if(alt)alt.textContent=`${Math.round(Math.min(100,f.altitude/towerHeight*100))}%`;
+    if(place)place.textContent=f.finished?`#${f.place}`:'';
+  }
+  const lowest=fighters.filter(f=>!f.finished).reduce((min,f)=>Math.max(min,f.y-hazardY),0);
+  const dangerEl=hudEl.querySelector('[data-danger]');
+  if(dangerEl)dangerEl.textContent=`${Math.max(0,Math.min(100,Math.round(100-lowest/.3*100)))}%`;
+}
 function startRaceMusic(){} // stub — replaced with the real 8-bit sequencer once that lands
 function stopRaceMusic(){} // stub — replaced with the real 8-bit sequencer once that lands
 let raceFinishOrder=[];
@@ -634,7 +647,15 @@ function drawRacePickup(p,t){
   if(p.kind==='bubble'){ctx.shadowColor='#a78bfa';ctx.fillStyle='#a78bfa';ctx.font=`${16*DPR}px ui-monospace`;ctx.fillText('🛡',bx-8*DPR,by)}
   ctx.shadowBlur=0;
 }
-function finishRace(f){f.finished=true} // stub — replaced with real finish-order/results logic once that lands
+function finishRace(f){
+  if(f.finished)return;
+  f.finished=true;f.place=raceFinishOrder.length+1;
+  raceFinishOrder.push(f.slot);
+  addFloater(f.x,f.y-.14,f.place===1?'1st!':f.place===2?'2nd!':f.place===3?'3rd!':'4th!',f.color,f.place===1?26:18);
+  sfx(f.place===1?'ko':'pickup');
+  const remaining=fighters.filter(t=>!t.finished);
+  if(f.place===1||remaining.length===0)endRaceMatch();
+}
 let hazardY=1,hazardSpeed=.01;
 function stepHazard(dt){
   hazardY-=hazardSpeed*dt;
@@ -732,6 +753,23 @@ function endMatch(winner){
   titleEl.style.textShadow=winner?`0 0 28px ${winner.glow}`:'';
   document.querySelector('[data-endcopy]').textContent=winner?`${matchKos[winner.slot]} KOs this match. Session: ${stats.wins}/${stats.matches} rumbles won.`:`Everyone fell. Session: ${stats.wins}/${stats.matches} rumbles won.`;
   endEl.hidden=false;hudEl.hidden=true;document.querySelector('[data-touch]').hidden=true;
+}
+function endRaceMatch(){
+  if(raf){cancelAnimationFrame(raf);raf=0}
+  running=false;over=true;stats.matches+=1;
+  const finishedHuman=fighters.find(f=>f.human&&f.place===1);
+  if(finishedHuman)stats.wins+=1;
+  host('score',{score:400});
+  host('complete',{score:400,progress:100,state:null});
+  const order=fighters.filter(f=>f.finished).sort((a,b)=>a.place-b.place).concat(fighters.filter(f=>!f.finished));
+  const titleEl=document.querySelector('[data-endtitle]');
+  const winner=order[0];
+  titleEl.textContent=winner&&winner.finished?`${winner.name} REACHES THE TOP`:'RACE OVER';
+  titleEl.style.color=winner?winner.color:'';
+  titleEl.style.textShadow=winner?`0 0 28px ${winner.glow}`:'';
+  document.querySelector('[data-endcopy]').textContent=order.map((f,i)=>`${i+1}. ${f.name}${f.human?'':' (bot)'}${f.finished?'':' — still climbing'}`).join('  ·  ');
+  endEl.hidden=false;hudEl.hidden=true;document.querySelector('[data-touch]').hidden=true;
+  stopRaceMusic();
 }
 
 /* ---------- particles / juice ---------- */
