@@ -32,6 +32,7 @@
     "test:phantomstore": "tsx scripts/test-phantomstore.ts",
     "test:competitor-intelligence": "tsx scripts/test-competitor-intelligence.ts",
     "test:managed-growth-report": "tsx scripts/test-managed-growth-report.ts",
+    "test:signals": "tsx scripts/test-signals.ts",
     "test:site-store-render": "tsx scripts/test-site-store-render.ts",
     "test:instant-chat-fallback": "tsx scripts/test-instant-chat-fallback.ts",
     "test:auth:prisma-dev": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-auth-prisma-dev.ps1",
