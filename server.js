@@ -22,7 +22,7 @@ import { createDetector } from "./detect/index.js";
 import { stripAnsi } from "./detect/strip-ansi.js";
 import * as missionStore from "./mission/store.js";
 import { parseEvents } from "./mission/protocol.js";
-import { bracketedPaste, ENTER, SUBMIT_DELAY_MS } from "./mission/paste.js";
+import { submitBracketedPaste } from "./mission/paste.js";
 import { buildWorkerPrompt } from "./mission/prompt.js";
 import { decomposeObjective } from "./mission/decompose.js";
 import { classifyPrompt } from "./mission/classify.js";
@@ -325,18 +325,11 @@ function waitForReady(sessionId, timeoutMs) {
   });
 }
 
-// Pastes the prompt, then sends Enter as a separate write once the UI has
+// Pastes the prompt, then submits with a short retry sequence once the UI has
 // had a moment to finish collapsing the paste into its placeholder — see
-// mission/paste.js for why these can't be combined into one write.
-function submitPrompt(session, prompt) {
-  session.proc.write(bracketedPaste(prompt));
-  setTimeout(() => {
-    try {
-      session.proc.write(ENTER);
-    } catch {
-      /* pty gone */
-    }
-  }, SUBMIT_DELAY_MS);
+// mission/paste.js for why these cannot be combined into one write.
+async function submitPrompt(session, prompt) {
+  return submitBracketedPaste(session.proc, prompt);
 }
 
 const READY_TIMEOUT_MS = 90000; // cold Claude Code boot + trust-prompt round trip + MCP checks can take a while
@@ -371,8 +364,13 @@ async function dispatchToWorker(mission, worker) {
   if (!session) return;
   const prompt = buildWorkerPrompt({ mission, worker });
   try {
-    submitPrompt(session, prompt);
-    const record = { workerId: worker.id, source: "termina", type: "STARTED", detail: "individualized prompt dispatched" };
+    const submit = await submitPrompt(session, prompt);
+    const record = {
+      workerId: worker.id,
+      source: "termina",
+      type: "STARTED",
+      detail: `individualized prompt dispatched (${submit.submitWrites} submit attempts)`,
+    };
     await missionStore.appendLedger(appDir, mission.id, record).catch(() => {});
     await updateWorkerStatus(mission.id, worker.id, "running");
   } catch {
