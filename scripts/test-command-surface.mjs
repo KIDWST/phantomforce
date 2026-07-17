@@ -113,6 +113,14 @@ assert.match(main, /function decisionEvidenceText\(item = \{\}\)/u,
   "Decision cards must show the evidence behind the signal.");
 assert.match(main, /function decisionConfidenceText\(item = \{\}\)/u,
   "Decision cards must show confidence instead of generic source text.");
+assert.match(main, /function decisionRecommendedAction\(item = \{\}\)/u,
+  "Decision cards must recommend a concrete next move.");
+assert.match(main, /function decisionHandleText\(item = \{\}\)/u,
+  "Decision cards must state whether Phantom can prepare or handle the work.");
+assert.match(main, /function decisionGateText\(item = \{\}\)/u,
+  "Decision cards must show the approval/safety gate.");
+assert.match(main, /class="decision-action"/u,
+  "Decision cards must render recommended action, Phantom role, and gate details.");
 assert.match(main, /const items = attentionItems\(\)\.slice\(0, 3\);/u,
   "Decision deck must reuse the same real attention source and stay capped.");
 assert.match(main, /deck\.hidden = items\.length === 0/u,
@@ -127,6 +135,7 @@ assert.match(css, /\.cw-dock-node::before/u, "Command dock nodes should expose v
 assert.match(css, /\.hero2-proof\s*\{/u, "Recent handled proof line must have compact dashboard styling.");
 assert.match(css, /\.decision-deck\s*\{/u, "Decision deck must have compact command-center styling.");
 assert.match(css, /\.decision-intel\s*\{/u, "Decision deck must style why/evidence context compactly.");
+assert.match(css, /\.decision-action\s*\{/u, "Decision deck must style recommended action and approval gate context.");
 assert.match(css, /\.command-snapshot\s*\{/u, "Command snapshot must have compact command-center styling.");
 assert.match(css, /\.snap-grid\s*\{/u, "Command snapshot must scan as a compact grid.");
 assert.match(css, /\.outcome-strip\s*\{/u, "Active outcomes must have a dedicated command-center surface.");

@@ -6,44 +6,44 @@ import {
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260716-304";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260716-304";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260716-304";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260716-304";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260716-304";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260716-304";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260716-304";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260716-304";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260716-304";
-import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260716-304";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260716-304";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260716-304";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260716-304";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260716-304";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260716-304";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260716-304";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260716-304";
-import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260716-304";
-import { mountAmbient } from "./ambient.js?v=phantom-live-20260716-304";
-import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260716-304";
+} from "./store.js?v=phantom-live-20260716-305";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260716-305";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260716-305";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260716-305";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260716-305";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260716-305";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260716-305";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260716-305";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260716-305";
+import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260716-305";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260716-305";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260716-305";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260716-305";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260716-305";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260716-305";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260716-305";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260716-305";
+import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260716-305";
+import { mountAmbient } from "./ambient.js?v=phantom-live-20260716-305";
+import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260716-305";
 import {
   fetchAuthConfig, databaseLogin, databaseLogout, customerRegister, requestCustomerPasswordReset,
   completeCustomerPasswordReset, switchOrg, fetchAuthMe, fetchEntitlementsSummary,
-} from "./orgs.js?v=phantom-live-20260716-304";
-import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260716-304";
-import { assetsAvailable } from "./orgs.js?v=phantom-live-20260716-304";
-import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260716-304";
+} from "./orgs.js?v=phantom-live-20260716-305";
+import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260716-305";
+import { assetsAvailable } from "./orgs.js?v=phantom-live-20260716-305";
+import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260716-305";
 // PhantomPlay V2 platform shell (Home/Solo/Friends/Workspace/Dev Hub) - opt-in
 // while it hardens: set localStorage "pf.phantomplay.v2" = "1" (the V2 shell has
 // a "Classic view" button to switch back). Classic stays the default experience.
-import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260716-304";
+import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260716-305";
 const phantomPlayV2Opted = () => { try { return localStorage.getItem("pf.phantomplay.v2") === "1"; } catch { return false; } };
-import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260716-304";
+import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260716-305";
 import {
   customizeNavigation,
   loadOrganizationCustomization,
-} from "./customization.js?v=phantom-live-20260716-304";
-import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260716-304";
+} from "./customization.js?v=phantom-live-20260716-305";
+import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260716-305";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -1253,7 +1253,7 @@ const MODES = {
   admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260716-304";
+const POSE_VERSION = "phantom-live-20260716-305";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -1915,6 +1915,32 @@ function decisionConfidenceText(item = {}) {
   return item.confidence || (item.kind === "opportunity" ? "Medium" : "High");
 }
 
+function decisionRecommendedAction(item = {}) {
+  if (item.kind === "approval") return "Make the call so blocked work can move.";
+  if (["agent-failure", "automation-failure"].includes(item.kind)) return "Inspect the failed run and decide whether to retry, pause, or revise it.";
+  if (item.kind === "security") return "Review the risk before trusting more automation.";
+  if (item.kind === "follow-up") return "Review the follow-up packet and approve the next client touch.";
+  if (item.kind === "quote-ready") return "Review the quote and approve the manual send.";
+  if (item.kind === "opportunity") return "Turn the finding into an outcome if the evidence is worth acting on.";
+  if (item.kind === "running") return "Monitor progress and avoid duplicate work.";
+  return "Open the workspace, review evidence, and choose the next move.";
+}
+
+function decisionHandleText(item = {}) {
+  if (["approval", "quote-ready", "follow-up", "opportunity"].includes(item.kind)) return "Phantom can prepare the work.";
+  if (["agent-failure", "automation-failure", "security"].includes(item.kind)) return "Phantom can diagnose and draft a fix.";
+  if (item.kind === "running") return "Phantom is already moving this lane.";
+  return "Phantom can organize the next step.";
+}
+
+function decisionGateText(item = {}) {
+  if (item.kind === "running") return "No new approval unless it touches outside systems.";
+  if (["approval", "quote-ready", "follow-up"].includes(item.kind)) return "Approval required before anything external happens.";
+  if (["agent-failure", "automation-failure", "security"].includes(item.kind)) return "Owner review required before retrying risky work.";
+  if (item.kind === "opportunity") return "Approval required before publishing, sending, spending, or changing live assets.";
+  return "External actions stay owner-gated.";
+}
+
 function renderDecisionDeck() {
   const deck = $("[data-decision-deck]");
   if (!deck) return;
@@ -1942,6 +1968,11 @@ function renderDecisionDeck() {
           <div class="decision-meta">
             <span>${esc(decisionMetaLabel(item))}</span>
             <span>confidence: ${esc(decisionConfidenceText(item))}</span>
+          </div>
+          <div class="decision-action">
+            <p><b>Recommended</b><span>${esc(decisionRecommendedAction(item))}</span></p>
+            <p><b>Phantom</b><span>${esc(decisionHandleText(item))}</span></p>
+            <p><b>Gate</b><span>${esc(decisionGateText(item))}</span></p>
           </div>
           <button class="decision-open" data-open-ws="${esc(item.open || "activity")}" type="button">
             ${esc(decisionCtaLabel(item))} ${svg("arrow")}

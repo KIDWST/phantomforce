@@ -13495,6 +13495,36 @@ body .phantom .workspace-page :where(
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
+.decision-action {
+  position: relative;
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid rgba(65, 255, 161, 0.12);
+  border-radius: var(--r-sm);
+  background:
+    linear-gradient(90deg, rgba(65, 255, 161, 0.06), transparent 42%),
+    rgba(0, 0, 0, 0.18);
+}
+.decision-action p {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 8px;
+  margin: 0;
+  align-items: start;
+}
+.decision-action b {
+  color: rgba(65, 255, 161, 0.88);
+  font: 800 9px / 1.35 var(--font-mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.decision-action span {
+  min-width: 0;
+  color: rgba(234, 255, 244, 0.76);
+  font-size: 11px;
+  line-height: 1.35;
+}
 .decision-open {
   position: relative;
   justify-self: start;
