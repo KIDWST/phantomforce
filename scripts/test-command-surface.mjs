@@ -136,10 +136,18 @@ assert.match(main, /function decisionHandleText\(item = \{\}\)/u,
   "Decision cards must state whether Phantom can prepare or handle the work.");
 assert.match(main, /function decisionGateText\(item = \{\}\)/u,
   "Decision cards must show the approval/safety gate.");
+assert.match(main, /function decisionCommandText\(item = \{\}, action = "prepare"\)/u,
+  "Decision cards must generate safe command prompts for owner choices.");
 assert.match(main, /class="decision-action"/u,
   "Decision cards must render recommended action, Phantom role, and gate details.");
 assert.match(main, /class="cw-signal-node[\s\S]*?decisionWhyText\(signal\)[\s\S]*?decisionEvidenceText\(signal\)[\s\S]*?decisionGateText\(signal\)/u,
   "Signal widget must expose why, evidence, confidence, and gate details.");
+assert.match(main, /class="decision-buttons"[\s\S]*?Prepare packet[\s\S]*?data-open-ws="\$\{esc\(item\.open \|\| "activity"\)\}"[\s\S]*?Modify[\s\S]*?Dismiss/u,
+  "Decision cards must offer prepare, review, modify, and dismiss choices.");
+assert.match(main, /approval-safe action packet[\s\S]*?what needs my approval before anything external happens/u,
+  "Prepare decision command must preserve approval safety.");
+assert.match(main, /Do not execute anything external; just explain what will keep watching/u,
+  "Dismiss decision command must avoid external execution.");
 assert.match(main, /const items = attentionItems\(\)\.slice\(0, 3\);/u,
   "Decision deck must reuse the same real attention source and stay capped.");
 assert.match(main, /deck\.hidden = items\.length === 0/u,
@@ -160,6 +168,9 @@ assert.match(css, /\.hero2-proof\s*\{/u, "Recent handled proof line must have co
 assert.match(css, /\.decision-deck\s*\{/u, "Decision deck must have compact command-center styling.");
 assert.match(css, /\.decision-intel\s*\{/u, "Decision deck must style why/evidence context compactly.");
 assert.match(css, /\.decision-action\s*\{/u, "Decision deck must style recommended action and approval gate context.");
+assert.match(css, /\.decision-buttons\s*\{/u, "Decision deck must style the owner decision controls.");
+assert.match(css, /\.decision-primary\s*,/u, "Decision deck must expose a primary prepare-packet action.");
+assert.match(css, /\.decision-soft\s*\{/u, "Decision deck must style modify/dismiss as secondary controls.");
 assert.match(css, /\.command-snapshot\s*\{/u, "Command snapshot must have compact command-center styling.");
 assert.match(css, /\.snap-grid\s*\{/u, "Command snapshot must scan as a compact grid.");
 assert.match(css, /\.outcome-strip\s*\{/u, "Active outcomes must have a dedicated command-center surface.");

@@ -6,44 +6,44 @@ import {
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260716-308";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260716-308";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260716-308";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260716-308";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260716-308";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260716-308";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260716-308";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260716-308";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260716-308";
-import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260716-308";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260716-308";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260716-308";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260716-308";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260716-308";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260716-308";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260716-308";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260716-308";
-import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260716-308";
-import { mountAmbient } from "./ambient.js?v=phantom-live-20260716-308";
-import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260716-308";
+} from "./store.js?v=phantom-live-20260716-309";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260716-309";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260716-309";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260716-309";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260716-309";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260716-309";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260716-309";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260716-309";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260716-309";
+import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260716-309";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260716-309";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260716-309";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260716-309";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260716-309";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260716-309";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260716-309";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260716-309";
+import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260716-309";
+import { mountAmbient } from "./ambient.js?v=phantom-live-20260716-309";
+import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260716-309";
 import {
   fetchAuthConfig, databaseLogin, databaseLogout, customerRegister, requestCustomerPasswordReset,
   completeCustomerPasswordReset, switchOrg, fetchAuthMe, fetchEntitlementsSummary,
-} from "./orgs.js?v=phantom-live-20260716-308";
-import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260716-308";
-import { assetsAvailable } from "./orgs.js?v=phantom-live-20260716-308";
-import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260716-308";
+} from "./orgs.js?v=phantom-live-20260716-309";
+import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260716-309";
+import { assetsAvailable } from "./orgs.js?v=phantom-live-20260716-309";
+import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260716-309";
 // PhantomPlay V2 platform shell (Home/Solo/Friends/Workspace/Dev Hub) - opt-in
 // while it hardens: set localStorage "pf.phantomplay.v2" = "1" (the V2 shell has
 // a "Classic view" button to switch back). Classic stays the default experience.
-import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260716-308";
+import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260716-309";
 const phantomPlayV2Opted = () => { try { return localStorage.getItem("pf.phantomplay.v2") === "1"; } catch { return false; } };
-import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260716-308";
+import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260716-309";
 import {
   customizeNavigation,
   loadOrganizationCustomization,
-} from "./customization.js?v=phantom-live-20260716-308";
-import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260716-308";
+} from "./customization.js?v=phantom-live-20260716-309";
+import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260716-309";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -1253,7 +1253,7 @@ const MODES = {
   admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260716-308";
+const POSE_VERSION = "phantom-live-20260716-309";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -1941,6 +1941,17 @@ function decisionGateText(item = {}) {
   return "External actions stay owner-gated.";
 }
 
+function decisionCommandText(item = {}, action = "prepare") {
+  const title = item.title || item.sub || "this decision";
+  if (action === "modify") {
+    return `Modify this Phantom decision before anything happens: ${title}. Keep it approval-safe and ask only for the missing owner choice.`;
+  }
+  if (action === "dismiss") {
+    return `Dismiss or monitor this Phantom decision for now: ${title}. Do not execute anything external; just explain what will keep watching.`;
+  }
+  return `Prepare an approval-safe action packet for this Phantom decision: ${title}. Include evidence, next steps, risk, and what needs my approval before anything external happens.`;
+}
+
 function renderDecisionDeck() {
   const deck = $("[data-decision-deck]");
   if (!deck) return;
@@ -1974,9 +1985,16 @@ function renderDecisionDeck() {
             <p><b>Phantom</b><span>${esc(decisionHandleText(item))}</span></p>
             <p><b>Gate</b><span>${esc(decisionGateText(item))}</span></p>
           </div>
-          <button class="decision-open" data-open-ws="${esc(item.open || "activity")}" type="button">
-            ${esc(decisionCtaLabel(item))} ${svg("arrow")}
-          </button>
+          <div class="decision-buttons" aria-label="Decision actions">
+            <button class="decision-primary" data-command-run="${esc(decisionCommandText(item, "prepare"))}" type="button">
+              Prepare packet ${svg("arrow")}
+            </button>
+            <button class="decision-open" data-open-ws="${esc(item.open || "activity")}" type="button">
+              ${esc(decisionCtaLabel(item))}
+            </button>
+            <button class="decision-soft" data-command-run="${esc(decisionCommandText(item, "modify"))}" type="button">Modify</button>
+            <button class="decision-soft" data-command-run="${esc(decisionCommandText(item, "dismiss"))}" type="button">Dismiss</button>
+          </div>
         </article>`).join("")}
     </div>`;
 }
