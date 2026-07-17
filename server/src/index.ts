@@ -282,6 +282,24 @@ import {
 } from "./phantom-ai/phantomstore.js";
 import { registerPhantomPlayFlagshipGames } from "./phantom-ai/phantomplay-flagship.js";
 import {
+  createChannel as createVoiceChannel,
+  getChannel as getVoiceChannel,
+  inviteToChannel as inviteToVoiceChannel,
+  joinChannel as joinVoiceChannel,
+  joinVoiceSession,
+  leaveChannel as leaveVoiceChannel,
+  leaveVoiceSession,
+  listChannels as listVoiceChannels,
+  listMessages as listVoiceMessages,
+  postMessage as postVoiceMessage,
+  relaySignal as relayVoiceSignal,
+  sessionKeyForChannel,
+  sessionKeyForRoom,
+  setVoiceMuted,
+  subscribeToVoiceSignal,
+  voiceSessionSnapshot,
+} from "./phantom-ai/voicechannels.js";
+import {
   getPhantomPlayDeveloperAnalytics,
   getPhantomPlayDiscovery,
   getPhantomPlayGamePage,
@@ -5460,6 +5478,187 @@ app.patch("/api/phantomplay/v2/workspace-policy", async (request, reply) => {
   if (!isWorkspaceAdmin) return reply.code(403).send({ ok: false, error: "Workspace policy requires an admin or owner role." });
   try { return { ok: true, ...(await updatePhantomPlayWorkspacePolicy(session, body)) }; }
   catch (error) { return phantomPlayV2Error(reply, error); }
+});
+
+/* ============================================================================
+   VOICE CHANNELS
+   Text+voice channels ("mini Discord" inside PhantomForce) plus the shared
+   WebRTC signaling relay in-game party voice (PhantomPlay rooms) also rides
+   on — see docs/superpowers/specs/2026-07-17-voice-channels-design.md for
+   the full rationale (NDJSON-stream signaling reusing the same transport
+   shape already proven by the PhantomPlay realtime channel, STUN-only mesh
+   topology and its known no-TURN limitation, shared data model). This is a
+   pure signaling relay: the server reads a small {to, kind, payload}
+   envelope and forwards it verbatim to the addressed peer's open stream —
+   it never inspects, decodes, or touches audio, which flows peer-to-peer.
+   Deliberately no entitlement/plan gate on these routes (unlike
+   phantomPlayAccess()'s plan gating) — any authenticated PhantomForce user
+   may create/join/invite, matching the explicit "no restriction" ask. */
+
+function voiceError(reply: FastifyReply, error: unknown) {
+  return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : "Voice channels request could not be completed." });
+}
+
+app.post("/api/voice/channels", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  try { return { ok: true, ...(await createVoiceChannel(session, (request.body ?? {}) as Record<string, unknown>)) }; }
+  catch (error) { return voiceError(reply, error); }
+});
+
+app.get("/api/voice/channels", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const query = (request.query ?? {}) as { tenant_id?: unknown };
+  return { ok: true, ...(await listVoiceChannels(session, query.tenant_id)) };
+});
+
+app.get("/api/voice/channels/:id", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const params = request.params as { id?: string };
+  const query = (request.query ?? {}) as { tenant_id?: unknown };
+  const result = params.id ? await getVoiceChannel(session, params.id, query.tenant_id) : null;
+  return result ? { ok: true, ...result } : reply.code(404).send({ ok: false, error: "Channel was not found." });
+});
+
+app.post("/api/voice/channels/:id/invite", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const params = request.params as { id?: string };
+  try { return { ok: true, ...(await inviteToVoiceChannel(session, String(params.id || ""), (request.body ?? {}) as Record<string, unknown>)) }; }
+  catch (error) { return voiceError(reply, error); }
+});
+
+app.post("/api/voice/channels/:id/join", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const params = request.params as { id?: string };
+  try { return { ok: true, ...(await joinVoiceChannel(session, String(params.id || ""), (request.body ?? {}) as Record<string, unknown>)) }; }
+  catch (error) { return voiceError(reply, error); }
+});
+
+app.post("/api/voice/channels/:id/leave", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const params = request.params as { id?: string };
+  try { return { ok: true, ...(await leaveVoiceChannel(session, String(params.id || ""), (request.body ?? {}) as Record<string, unknown>)) }; }
+  catch (error) { return voiceError(reply, error); }
+});
+
+app.get("/api/voice/channels/:id/messages", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const params = request.params as { id?: string };
+  const query = (request.query ?? {}) as { tenant_id?: unknown };
+  const result = params.id ? await listVoiceMessages(session, params.id, query.tenant_id) : null;
+  return result ? { ok: true, ...result } : reply.code(404).send({ ok: false, error: "Channel was not found." });
+});
+
+app.post("/api/voice/channels/:id/messages", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const params = request.params as { id?: string };
+  try { return { ok: true, ...(await postVoiceMessage(session, String(params.id || ""), (request.body ?? {}) as Record<string, unknown>)) }; }
+  catch (error) { return voiceError(reply, error); }
+});
+
+// Starts/joins a voice session — either a standalone channel's persistent
+// voice session (body.channelId, caller must already be a channel member)
+// or a PhantomPlay game room's ephemeral party voice (body.roomCode,
+// membership verified by reusing getPhantomPlayRoom, which already 404s a
+// non-participant — no separate authorization check invented here).
+app.post("/api/voice/sessions", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const body = (request.body ?? {}) as { tenantId?: unknown; channelId?: unknown; roomCode?: unknown };
+  const tenantId = String(body.tenantId || "").trim().slice(0, 100) || undefined;
+  if (body.channelId) {
+    const channelId = String(body.channelId);
+    const channel = await getVoiceChannel(session, channelId, body.tenantId);
+    if (!channel) return reply.code(404).send({ ok: false, error: "Channel was not found." });
+    if (!channel.isMember && !session.canManageAccess) return reply.code(403).send({ ok: false, error: "Join the channel before starting voice." });
+    const sessionKey = sessionKeyForChannel(channelId);
+    return { ok: true, ...joinVoiceSession(session, sessionKey, "channel", { channelId }) };
+  }
+  if (body.roomCode) {
+    const roomCode = String(body.roomCode);
+    const room = await getPhantomPlayRoom(session, { code: roomCode, tenantId: body.tenantId });
+    if (!room) return reply.code(404).send({ ok: false, error: "Private room was not found." });
+    const sessionKey = sessionKeyForRoom(String(tenantId || room.tenantId), roomCode);
+    return { ok: true, ...joinVoiceSession(session, sessionKey, "game_room", { sourceRoomCode: roomCode }) };
+  }
+  return reply.code(400).send({ ok: false, error: "A channelId or roomCode is required to start a voice session." });
+});
+
+// Realtime signaling stream — same NDJSON-over-fetch shape already proven by
+// GET /api/phantomplay/rooms/:code/stream (see that route's comment for why
+// this isn't SSE/EventSource or a WebSocket). Presence is tied to this
+// stream's lifetime: closing it (explicit leave, tab close, network drop)
+// removes this participant from the session, so presence can never go
+// stale — there is no separate "mark offline" step to forget to call.
+app.get("/api/voice/sessions/:id/stream", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const params = request.params as { id?: string };
+  const sessionKey = String(params.id || "");
+  const actorId = session.userId || session.id || "anonymous";
+  const initial = voiceSessionSnapshot(sessionKey);
+  if (!initial || !initial.participants.some((participant) => participant.actorId === actorId)) {
+    return reply.code(403).send({ ok: false, error: "Join this voice session before opening its signaling stream." });
+  }
+
+  reply.hijack();
+  reply.raw.writeHead(200, {
+    "Content-Type": "application/x-ndjson",
+    "Cache-Control": "no-cache, no-transform",
+    Connection: "keep-alive",
+  });
+  reply.raw.write(`${JSON.stringify({ type: "presence", participants: initial.participants })}\n`);
+
+  const unsubscribe = subscribeToVoiceSignal(sessionKey, actorId, (message) => {
+    reply.raw.write(`${JSON.stringify(message)}\n`);
+  });
+  const heartbeat = setInterval(() => {
+    reply.raw.write(`${JSON.stringify({ type: "ping" })}\n`);
+  }, 20_000);
+
+  const cleanup = () => {
+    clearInterval(heartbeat);
+    unsubscribe();
+    leaveVoiceSession(session, sessionKey);
+  };
+  request.raw.on("close", cleanup);
+  request.raw.on("error", cleanup);
+});
+
+app.post("/api/voice/sessions/:id/signal", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const params = request.params as { id?: string };
+  const rateLimitKey = `voice-signal::${session.orgId || session.clientId || session.id || "anon"}::${session.userId || session.id || "anon"}`;
+  if (consumeRateLimit(rateLimitKey, 30, 2_000).limited) {
+    return reply.code(429).header("Retry-After", "2").send({ ok: false, error: "Too many signaling messages. Slow down and try again shortly." });
+  }
+  try { return relayVoiceSignal(session, String(params.id || ""), (request.body ?? {}) as Record<string, unknown>); }
+  catch (error) { return voiceError(reply, error); }
+});
+
+app.post("/api/voice/sessions/:id/mute", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const params = request.params as { id?: string };
+  const body = (request.body ?? {}) as { muted?: unknown };
+  setVoiceMuted(session, String(params.id || ""), body.muted === true);
+  return { ok: true };
+});
+
+app.post("/api/voice/sessions/:id/leave", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const params = request.params as { id?: string };
+  leaveVoiceSession(session, String(params.id || ""));
+  return { ok: true };
 });
 
 /* ============================================================================

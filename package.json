@@ -19,6 +19,7 @@
     "test:page-worker": "node scripts/test-page-worker.mjs",
     "test:topbar-media": "node scripts/test-topbar-media-responsive.mjs",
     "test:phantomplay": "node scripts/test-phantomplay.mjs && npm run test:phantomplay --workspace @phantomforce/server",
+    "test:voicechannels": "npm run test:voicechannels --workspace @phantomforce/server",
     "test:competitor-intelligence": "node scripts/test-competitor-intelligence.mjs && npm run test:competitor-intelligence --workspace @phantomforce/server",
     "test:workspace-site-builder": "node scripts/test-workspace-site-builder.mjs",
     "test:organization-settings": "node scripts/test-organization-settings.mjs",
