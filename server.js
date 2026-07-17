@@ -518,7 +518,7 @@ function serveStatic(req, res, urlPath) {
     res.end("Not found");
     return;
   }
-  if (rel === "index.html") {
+  if (rel === "index.html" || rel === "superuser.html") {
     import("node:fs/promises").then(async ({ readFile }) => {
       let html = await readFile(filePath, "utf8");
       html = html.replace("__TERMINA_TOKEN__", TOKEN);

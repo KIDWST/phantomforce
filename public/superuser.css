@@ -1,0 +1,6 @@
+/* superuser.css — Superuser-mode-only visual density and chrome.
+   Loaded after styles.css, so rules here only need to differ from base. */
+
+body.superuser .topbar {
+  background: color-mix(in srgb, var(--panel) 92%, var(--accent) 8%);
+}

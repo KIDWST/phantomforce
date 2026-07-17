@@ -984,6 +984,9 @@ document.addEventListener("click", (e) => {
   }
 });
 
+document.getElementById("mode-toggle")?.addEventListener("click", () => {
+  window.location.href = "/superuser.html";
+});
 document.getElementById("rescan").addEventListener("click", loadProfiles);
 document.getElementById("broadcast").addEventListener("click", () => toggleBroadcast());
 document.querySelectorAll(".cols-switch button").forEach((btn) => {

@@ -3,21 +3,22 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Termina — Workflow Manager</title>
+    <title>Termina — Superuser</title>
     <link rel="icon" href="/favicon.ico" />
     <link rel="stylesheet" href="/vendor/xterm.css" />
     <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/superuser.css" />
     <script>
       window.TERMINA_TOKEN = "__TERMINA_TOKEN__";
     </script>
   </head>
-  <body>
+  <body class="superuser">
     <header class="topbar">
       <div class="brand">
         <span class="brand-mark">&gt;_</span>
         <div class="brand-text">
           <strong>TERMINA</strong>
-          <span id="tagline">Workflow Manager</span>
+          <span id="tagline">Superuser</span>
         </div>
       </div>
       <div class="controls">
@@ -27,15 +28,19 @@
           <button type="button" data-cols="3" class="active">3</button>
           <button type="button" data-cols="4">4</button>
         </div>
+        <button id="su-compact-all" class="ghost" type="button" title="Toggle compact chrome on every tile">▦ Compact</button>
+        <button id="su-templates-btn" class="ghost" type="button" title="Launch a saved group of terminals">▤ Templates</button>
         <button id="rescan" class="ghost" type="button" title="Rescan available terminal types">Re-scan</button>
         <button id="missions-btn" class="ghost" type="button" title="Mission Mode — coordinate multiple Claude CLI workers on one objective">Missions</button>
         <button id="connections-btn" class="ghost" type="button" title="Settings — connections, terminal behavior">⚙ Settings</button>
-        <button id="mode-toggle" class="ghost" type="button" title="Switch to the dense, power-user view">⚡ Superuser</button>
+        <button id="mode-toggle" class="ghost" type="button" title="Back to Basic mode">Basic Mode</button>
         <button id="new-term" class="primary new-btn" type="button" aria-haspopup="true" aria-expanded="false" aria-label="New terminal (Ctrl+N)" title="New terminal (Ctrl+N)">
           <span class="new-plus">+</span><span class="kbd">Ctrl N</span>
         </button>
       </div>
     </header>
+
+    <div id="su-status-strip" class="su-status-strip"></div>
 
     <div id="broadcast-banner" class="broadcast-banner hidden">
       <span class="pulse"></span> Link on — <b>Shift-click</b> terminals to link them, or <b>Ctrl+A</b> to link them all. Typing in one linked terminal is sent to all linked terminals.
@@ -51,6 +56,16 @@
         <input id="new-menu-count" type="number" min="1" max="24" value="1" />
       </div>
       <button id="new-menu-add" class="primary" type="button">Add terminals</button>
+    </div>
+
+    <div id="su-templates-modal" class="overlay hidden" role="dialog" aria-modal="true" aria-label="Templates">
+      <div class="overlay-panel mission-panel">
+        <div class="overlay-head">
+          <span>Templates</span>
+          <button type="button" id="su-templates-close" class="ghost">Close</button>
+        </div>
+        <div id="su-templates-body" class="mission-body"></div>
+      </div>
     </div>
 
     <main id="wall" class="wall cols-3"></main>
@@ -92,6 +107,11 @@
       </div>
     </div>
 
+    <div id="su-palette" class="su-palette hidden" role="dialog" aria-modal="true" aria-label="Command palette">
+      <input id="su-palette-input" type="text" placeholder="Jump to a tile, run an action…" autocomplete="off" />
+      <div id="su-palette-results"></div>
+    </div>
+
     <script src="/vendor/xterm.js"></script>
     <script src="/vendor/addon-fit.js"></script>
     <script src="/app.js"></script>
@@ -100,5 +120,6 @@
     <script src="/timeline.js"></script>
     <script src="/mission.js"></script>
     <script src="/connections.js"></script>
+    <script src="/superuser.js"></script>
   </body>
 </html>
