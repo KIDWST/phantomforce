@@ -1,7 +1,7 @@
 // One-shot `claude -p` call that clarifies/sharpens a rough mission
 // objective before decomposition — a specificity pass, not license to
 // invent goals the user didn't ask for. Same pattern as decompose.js.
-import { runClaudePrint } from "./claude-print.js";
+import { runPrint } from "./print.js";
 
 const ENHANCE_SCHEMA = {
   type: "object",
@@ -15,7 +15,7 @@ const ENHANCE_SCHEMA = {
   required: ["enhancedObjective", "whatChanged"],
 };
 
-const ENHANCE_BUDGET_USD = 1;
+const ENHANCE_BUDGET_USD = 3;
 // Speed over polish: this is a quick clarity pass before decomposition, not
 // the mission itself — the fastest/cheapest available model is deliberately
 // used here even though it's a weaker model, so "Enhance" feels instant
@@ -32,7 +32,7 @@ export async function enhanceObjective({ objective, workspaceRoot, scratchDir })
     `answer directly from the text alone; do NOT read files, run commands, or explore the working directory.\n\n` +
     `ROUGH OBJECTIVE:\n${objective}`;
 
-  const result = await runClaudePrint({
+  const result = await runPrint({
     prompt,
     jsonSchema: ENHANCE_SCHEMA,
     cwd: workspaceRoot,

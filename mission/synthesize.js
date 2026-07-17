@@ -2,7 +2,7 @@
 // workspace root so it can independently inspect worker branches/diffs
 // rather than only trusting self-reported ledger claims. Runs as a detached
 // process, not a wall tile.
-import { runClaudePrint } from "./claude-print.js";
+import { runPrint } from "./print.js";
 
 const REPORT_SCHEMA = {
   type: "object",
@@ -56,7 +56,7 @@ const REPORT_SCHEMA = {
   ],
 };
 
-const SYNTHESIS_BUDGET_USD = 3;
+const SYNTHESIS_BUDGET_USD = 8;
 
 export async function synthesizeMission({ mission, ledger, scratchDir }) {
   const workerSummaries = mission.workers
@@ -77,7 +77,7 @@ export async function synthesizeMission({ mission, ledger, scratchDir }) {
     `rather than trusting self-reports. Explicitly separate what you verified yourself from what is only claimed, proposed, ` +
     `or unresolved. Do not claim something is complete if you have no evidence for it.`;
 
-  const result = await runClaudePrint({
+  const result = await runPrint({
     prompt,
     jsonSchema: REPORT_SCHEMA,
     cwd: mission.workspaceRoot,

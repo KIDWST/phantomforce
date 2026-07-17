@@ -5,7 +5,7 @@
 // Mission Mode flow, unchanged)? Fixes the bug where every worker silently
 // defaulted to Claude, since decomposeObjective's schema never asked for a
 // provider at all.
-import { runClaudePrint } from "./claude-print.js";
+import { runPrint } from "./print.js";
 
 const CLASSIFY_SCHEMA = {
   type: "object",
@@ -27,7 +27,7 @@ const CLASSIFY_SCHEMA = {
   required: ["kind"],
 };
 
-const CLASSIFY_BUDGET_USD = 1;
+const CLASSIFY_BUDGET_USD = 3;
 
 export async function classifyPrompt({ objective, workspaceRoot, availableProfileIds, scratchDir }) {
   const prompt =
@@ -44,7 +44,7 @@ export async function classifyPrompt({ objective, workspaceRoot, availableProfil
     `"mission" = the request describes a goal that needs an agent to read/write files, run tests, or make real ` +
     `changes across multiple steps. For "mission", omit "tiles" entirely — a separate existing pipeline handles it.`;
 
-  const result = await runClaudePrint({
+  const result = await runPrint({
     prompt,
     jsonSchema: CLASSIFY_SCHEMA,
     cwd: workspaceRoot,

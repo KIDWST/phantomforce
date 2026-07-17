@@ -4,7 +4,7 @@
 // explicitly tells Claude to tailor roles to what the objective actually is
 // (software launch vs. content business vs. anything else), not a hard-coded
 // software-team template.
-import { runClaudePrint } from "./claude-print.js";
+import { runPrint } from "./print.js";
 
 const ROLE_SCHEMA = {
   type: "object",
@@ -27,7 +27,7 @@ const ROLE_SCHEMA = {
   required: ["missionName", "roles"],
 };
 
-const DECOMPOSE_BUDGET_USD = 2;
+const DECOMPOSE_BUDGET_USD = 5;
 
 // workerCount is optional — the whole point is "just give the objective and
 // it goes to work": if omitted, Claude itself decides how many distinct,
@@ -49,7 +49,7 @@ export async function decomposeObjective({ objective, workerCount, workspaceRoot
     `Each role must have a clearly bounded, non-duplicative scope so two workers never do the same work. ` +
     `If useful, inspect the actual working directory before answering.`;
 
-  const result = await runClaudePrint({
+  const result = await runPrint({
     prompt,
     jsonSchema: ROLE_SCHEMA,
     cwd: workspaceRoot,

@@ -44,19 +44,48 @@ export async function runClaudePrint({ prompt, jsonSchema, cwd, maxBudgetUsd, ti
   scriptLines.push(`claude @claudeArgs`);
 
   try {
-    const { stdout } = await run(PWSH, ["-NoLogo", "-NoProfile", "-Command", scriptLines.join("; ")], {
-      cwd,
-      timeout: timeoutMs,
-      maxBuffer: 32 * 1024 * 1024,
-    });
+    let stdout;
+    try {
+      ({ stdout } = await run(PWSH, ["-NoLogo", "-NoProfile", "-Command", scriptLines.join("; ")], {
+        cwd,
+        timeout: timeoutMs,
+        maxBuffer: 32 * 1024 * 1024,
+      }));
+    } catch (err) {
+      throw new Error(`claude -p failed: ${describeFailure(err, timeoutMs)}`);
+    }
     const result = JSON.parse(extractJson(stdout));
     if (result.is_error) {
-      throw new Error(`claude -p reported an error: ${result.result ?? "unknown"}`);
+      throw new Error(`claude -p reported an error: ${resultErrorText(result)}`);
     }
     return result;
   } finally {
     await rm(dir, { recursive: true, force: true }).catch(() => {});
   }
+}
+
+// execFile rejects with a generic "Command failed" whose stderr is dominated by
+// harmless plugin-hook warnings; the actual cause (e.g. "Reached maximum
+// budget") lives in the JSON claude already printed to stdout. Dig it out.
+function describeFailure(err, timeoutMs) {
+  if (typeof err.stdout === "string") {
+    try {
+      const result = JSON.parse(extractJson(err.stdout));
+      return resultErrorText(result);
+    } catch {
+      // stdout had no parseable result JSON; fall through.
+    }
+  }
+  if (err.killed) {
+    return `timed out after ${timeoutMs}ms`;
+  }
+  return err.message;
+}
+
+function resultErrorText(result) {
+  const errors = Array.isArray(result.errors) ? result.errors.filter(Boolean) : [];
+  if (errors.length) return errors.join("; ");
+  return result.result ?? result.subtype ?? "unknown";
 }
 
 // pwsh prints the JSON result as the last line of stdout; be defensive about
