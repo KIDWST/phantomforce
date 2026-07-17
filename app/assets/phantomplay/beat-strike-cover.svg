@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675">
+  <title>BeatStrike — PhantomPlay cover placeholder</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1a0e24"/>
+      <stop offset="60%" stop-color="#10081a"/>
+      <stop offset="100%" stop-color="#05030a"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="675" fill="url(#bg)"/>
+  <!-- hit line -->
+  <line x1="80" y1="480" x2="1120" y2="480" stroke="rgba(255,209,102,0.7)" stroke-width="3"/>
+  <!-- lanes with falling notes -->
+  <g>
+    <circle cx="220" cy="480" r="24" fill="#ff3d94" stroke="rgba(255,255,255,.5)" stroke-width="2"/>
+    <text x="220" y="487" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="18" font-weight="700" fill="#05030a">Q</text>
+  </g>
+  <g>
+    <circle cx="450" cy="360" r="24" fill="#ffd166" stroke="rgba(255,255,255,.5)" stroke-width="2"/>
+    <text x="450" y="367" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="18" font-weight="700" fill="#05030a">K</text>
+    <rect x="438" y="260" width="24" height="100" fill="rgba(255,209,102,0.35)"/>
+  </g>
+  <g>
+    <circle cx="680" cy="220" r="24" fill="#ff3d94" stroke="rgba(255,255,255,.5)" stroke-width="2"/>
+    <text x="680" y="227" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="18" font-weight="700" fill="#05030a">M</text>
+  </g>
+  <g>
+    <circle cx="900" cy="140" r="24" fill="#1ef0ff" stroke="rgba(255,255,255,.5)" stroke-width="2"/>
+    <text x="900" y="147" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="18" font-weight="700" fill="#05030a">R</text>
+  </g>
+  <!-- keyboard row hint -->
+  <g transform="translate(430,560)" fill="none" stroke="rgba(255,255,255,.25)" stroke-width="1.5">
+    <rect x="0" y="0" width="36" height="36" rx="6"/>
+    <rect x="44" y="0" width="36" height="36" rx="6"/>
+    <rect x="88" y="0" width="36" height="36" rx="6"/>
+    <rect x="132" y="0" width="36" height="36" rx="6"/>
+    <rect x="176" y="0" width="36" height="36" rx="6"/>
+    <rect x="220" y="0" width="36" height="36" rx="6" fill="rgba(65,255,161,.22)" stroke="#41ffa1"/>
+    <rect x="264" y="0" width="36" height="36" rx="6"/>
+    <rect x="308" y="0" width="36" height="36" rx="6"/>
+  </g>
+  <text x="600" y="600" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="50" font-weight="700" fill="#eafff4" letter-spacing="2">BeatStrike</text>
+  <text x="600" y="640" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="20" fill="#c9a8e6" letter-spacing="1">PhantomPlay cover placeholder</text>
+</svg>

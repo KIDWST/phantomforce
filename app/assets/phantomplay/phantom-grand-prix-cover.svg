@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675">
+  <title>Phantom Grand Prix — PhantomPlay cover placeholder</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0e2415"/>
+      <stop offset="60%" stop-color="#0a1c10"/>
+      <stop offset="100%" stop-color="#05030a"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="675" fill="url(#bg)"/>
+  <!-- track curve -->
+  <path d="M 120 560 C 120 380 260 340 420 340 C 640 340 640 200 860 200 C 1020 200 1080 300 1080 380" fill="none" stroke="#23262c" stroke-width="90" stroke-linecap="round"/>
+  <path d="M 120 560 C 120 380 260 340 420 340 C 640 340 640 200 860 200 C 1020 200 1080 300 1080 380" fill="none" stroke="#3a3226" stroke-width="98" stroke-linecap="round" opacity="0.5" stroke-dasharray="1 0"/>
+  <path d="M 120 560 C 120 380 260 340 420 340 C 640 340 640 200 860 200 C 1020 200 1080 300 1080 380" fill="none" stroke="rgba(255,255,255,.3)" stroke-width="4" stroke-dasharray="22 18" stroke-linecap="round"/>
+  <!-- karts -->
+  <g transform="translate(300,360) rotate(-18)">
+    <polygon points="26,0 -18,-16 -10,0 -18,16" fill="#41ffa1"/>
+  </g>
+  <g transform="translate(230,392) rotate(-14)">
+    <polygon points="22,0 -16,-14 -9,0 -16,14" fill="#1ef0ff"/>
+  </g>
+  <g transform="translate(700,270) rotate(-30)">
+    <polygon points="22,0 -16,-14 -9,0 -16,14" fill="#ff3d94"/>
+  </g>
+  <g transform="translate(640,300) rotate(-24)">
+    <polygon points="20,0 -14,-12 -8,0 -14,12" fill="#ffd166"/>
+  </g>
+  <!-- item box -->
+  <g transform="translate(920,240)">
+    <rect x="-16" y="-16" width="32" height="32" fill="#ffd166" stroke="#05030a" stroke-width="3"/>
+    <text x="0" y="6" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="20" font-weight="800" fill="#05030a">?</text>
+  </g>
+  <text x="600" y="560" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="50" font-weight="700" fill="#eafff4" letter-spacing="2">Phantom Grand Prix</text>
+  <text x="600" y="602" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="20" fill="#9ad9bd" letter-spacing="1">PhantomPlay cover placeholder</text>
+</svg>
