@@ -69,13 +69,51 @@ document.getElementById("su-compact-all").addEventListener("click", () => {
   applyAutoGrid();
 });
 
+// ---- number-key quick-jump ----------------------------------------------
+
+function renderQuickJumpBadges() {
+  cards.forEach((card, i) => {
+    const tile = document.querySelector(`.tile[data-uid="${card.uid}"]`);
+    if (!tile) return;
+    let badge = tile.querySelector(".su-jump-badge");
+    if (i >= 10) {
+      badge?.remove();
+      return;
+    }
+    if (!badge) {
+      badge = document.createElement("span");
+      badge.className = "su-jump-badge";
+      tile.appendChild(badge);
+    }
+    badge.textContent = String((i + 1) % 10); // 1-9, then 0 for the 10th
+  });
+}
+
+document.addEventListener(
+  "keydown",
+  (e) => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (!/^[0-9]$/.test(e.key)) return;
+    const tag = document.activeElement?.tagName;
+    if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") return;
+    if (document.activeElement?.classList?.contains("xterm-helper-textarea")) return;
+    const index = e.key === "0" ? 9 : Number(e.key) - 1;
+    const card = cards[index];
+    if (!card) return;
+    e.preventDefault();
+    expandCard(card);
+  },
+  true,
+);
+
 let lastCardCount = -1;
 setInterval(() => {
   // Grid/compact recheck runs every tick (cheap at this scale) since
   // collapse state can change without the card count changing. The
-  // count-gated block below is for heavier per-card work (Task 6+).
+  // count-gated block below is for heavier per-card work.
   applyAutoGrid();
   if (cards.length !== lastCardCount) {
     lastCardCount = cards.length;
+    renderQuickJumpBadges();
   }
 }, 300);
