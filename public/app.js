@@ -775,17 +775,31 @@ function expandCard(card) {
   const fit = new FitAddon.FitAddon();
   term.loadAddon(fit);
   term.open(host);
-  setTimeout(() => {
+
+  const ws = new WebSocket(`ws://${location.host}/pty?session=${encodeURIComponent(card.sessionId)}&token=${encodeURIComponent(TOKEN)}`);
+  overlayCard = { card, term, fit, ws };
+
+  // Fit-then-resize, always in that order: fit.fit() is what actually
+  // measures the (now-visible) overlay and sets term.cols/rows to match
+  // it. Sending the resize from ws.onopen alone — before fit had ever
+  // run — sent xterm's untouched default size (80x24) to the real PTY,
+  // so the shell kept rendering for a tiny terminal inside a huge empty
+  // box. Called from both onopen and the deferred fit below since either
+  // can legitimately run first; both branches always fit right before
+  // sending, so whichever fires last is the one that sticks.
+  function syncOverlaySize() {
     try {
       fit.fit();
     } catch {
-      /* ignore */
+      /* not laid out yet */
     }
-  }, 30);
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: "resize", cols: term.cols, rows: term.rows }));
+    }
+  }
+  ws.onopen = syncOverlaySize;
+  setTimeout(syncOverlaySize, 30);
 
-  const ws = new WebSocket(`ws://${location.host}/pty?session=${encodeURIComponent(card.sessionId)}&token=${encodeURIComponent(TOKEN)}`);
-  overlayCard = { term, fit, ws };
-  ws.onopen = () => ws.send(JSON.stringify({ type: "resize", cols: term.cols, rows: term.rows }));
   ws.onmessage = (event) => {
     try {
       const msg = JSON.parse(event.data);
@@ -803,6 +817,7 @@ function expandCard(card) {
 function closeOverlay() {
   document.getElementById("overlay").classList.add("hidden");
   if (overlayCard) {
+    const { card } = overlayCard;
     try {
       overlayCard.ws?.close();
     } catch {
@@ -814,6 +829,16 @@ function closeOverlay() {
       /* ignore */
     }
     overlayCard = null;
+    // The overlay resized the PTY to fit its own (larger) viewport —
+    // it's the same underlying process as the small tile, which the tile
+    // never re-measures on its own since its own DOM size never changed.
+    // Snap it back to the tile's actual size now that the overlay's gone.
+    try {
+      card.fit?.fit();
+      sendResize(card);
+    } catch {
+      /* ignore */
+    }
   }
 }
 
