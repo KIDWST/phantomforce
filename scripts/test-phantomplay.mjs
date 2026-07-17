@@ -20,7 +20,7 @@ const kingdomBreakers = read("../app/games/kingdom-breakers.html");
 const kingdomBreakersScript = kingdomBreakers.match(/<script>([\s\S]*)<\/script>/u)?.[1] || "";
 const appFiles = [index, main, module, v2Module, ...games];
 
-assert.match(main, /id:\s*"phantomplay"[\s\S]*label:\s*"PhantomPlay"/u, "PhantomPlay must be in the native navigation.");
+assert.match(main, /id:\s*"phantomplay"[\s\S]*label:\s*"Play"/u, "PhantomPlay must be in the native navigation, labeled short as \"Play\".");
 assert.match(main, /renderPhantomPlay/u, "The workspace must use the PhantomPlay renderer.");
 assert.match(read("../app/js/customization.js"), /canAccessConfiguredModule[\s\S]*module\.id !== "phantomplay"[\s\S]*selected_members/u, "PhantomPlay nav access must be controlled by the workspace module configuration.");
 assert.match(main, /sessionId:\s*kind === "admin" \? "admin-jordan" : "client-sports-demo"/u, "Local UI tests must obtain a real protected demo session when the local backend is available.");

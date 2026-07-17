@@ -6,6 +6,7 @@ const mainSource = readFileSync(new URL("../app/js/main.js", import.meta.url), "
 const storeSource = readFileSync(new URL("../app/js/phantomstore.js", import.meta.url), "utf8");
 const storeCss = readFileSync(new URL("../app/phantomstore.css", import.meta.url), "utf8");
 const customizationSource = readFileSync(new URL("../app/js/customization.js", import.meta.url), "utf8");
+const staticServerSource = readFileSync(new URL("../ops/admin-live/admin-static-server.mjs", import.meta.url), "utf8");
 const registrySource = readFileSync(new URL("../server/src/customization/module-registry.ts", import.meta.url), "utf8");
 const profilesSource = readFileSync(new URL("../server/src/customization/workspace-profiles.ts", import.meta.url), "utf8");
 const backendSource = readFileSync(new URL("../server/src/phantom-ai/phantomstore.ts", import.meta.url), "utf8");
@@ -13,10 +14,11 @@ const backendTestSource = readFileSync(new URL("../server/scripts/test-phantomst
 
 assert.match(appHtml, /phantomstore\.css/u, "App shell must load PhantomStore styles.");
 assert.match(mainSource, /renderPhantomStore/u, "Main app must import PhantomStore renderer.");
-assert.match(mainSource, /\{\s*id:\s*"phantomstore",\s*label:\s*"PhantomStore",\s*icon:\s*"spark",\s*ws:\s*"phantomstore"\s*\}/u, "Sidebar must expose PhantomStore as its own workspace.");
-assert.match(mainSource, /phantomstore:\s*\{\s*title:\s*"PhantomStore"[\s\S]*render:\s*\(body\)\s*=>\s*renderPhantomStore\(body/u, "Workspace registry must render the PhantomStore screen.");
+assert.match(mainSource, /\{\s*id:\s*"phantomstore",\s*label:\s*"Store",\s*icon:\s*"spark",\s*ws:\s*"phantomstore"\s*\}/u, "Sidebar must expose PhantomStore as its own workspace, labeled short as \"Store\".");
+assert.match(mainSource, /phantomstore:\s*\{\s*title:\s*"Store",\s*kicker:\s*"PhantomStore[\s\S]*render:\s*\(body\)\s*=>\s*renderPhantomStore\(body/u, "Workspace registry must render the PhantomStore screen, with the full brand name in the kicker.");
 
 assert.match(storeSource, /\/api\/phantomstore\?tenant_id=/u, "PhantomStore UI must load the PhantomStore marketplace API.");
+assert.match(staticServerSource, /urlPath\.startsWith\("\/api\/phantomstore"\)/u, "Public static server must proxy PhantomStore API routes.");
 assert.match(storeSource, /\/api\/phantomstore\/tools"/u, "PhantomStore UI must submit tools to its own API.");
 assert.match(storeSource, /\/api\/phantomstore\/tools\/\$\{encodeURIComponent\(id\)\}\/install/u, "Install intent must use the PhantomStore install endpoint.");
 assert.match(storeSource, /\/api\/phantomstore\/tools\/\$\{encodeURIComponent\(id\)\}\/moderate/u, "Moderation must use the PhantomStore moderation endpoint.");
