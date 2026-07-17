@@ -641,10 +641,13 @@ git commit -m "feat(phantom-rumble): consolidate mode menu into SOLO/LOCAL + ONL
 
 **Files:**
 - Modify: `app/games/phantom-rumble.html` — extend the existing `addEventListener('message', ...)` host-protocol handler (currently lines 636-646), add room state (`inRoom`, `isHost`, `hostNonce`, matching `kingdom-breakers.html`'s proven pattern), add `sendMatchAction`/`applyMatchState`, and change the `net1v1`/`net2v2`/`netffa` mode buttons (Task 6) to enter a room-waiting state instead of calling `startMatch` directly.
+- Modify: `app/js/phantomplay.js` — one-line addition to `pushMatchStateToGame`'s existing payload (adds `selfActorId`), needed by Step 5 below. This is the only cross-file touch in this task.
 
 **Interfaces:**
-- Consumes: `match-state` messages shaped `{matchState, readyStates, botSlots, hostControls, participants}` (from the PhantomPlay Realtime Channel plan, delivered at the same host-shell layer `kingdom-breakers.html` already consumes — no phantom-rumble-specific server work needed, this task is entirely client-side protocol handling).
+- Consumes: `match-state` messages shaped `{matchState, readyStates, botSlots, hostControls, participants}`, AND `match-action-relay` messages shaped `{actorId, action, mode, queuedAt}` — both delivered at the host-shell layer (`app/js/phantomplay.js`) per the PhantomPlay Realtime Channel plan (Tasks 1-5 plus its post-review fix round, commit `8f3ebe55`, which specifically added the `match-action-relay` forward so a room's non-host actions actually reach the host's game code — this task is the first consumer of that seam).
 - Produces: `sendMatchAction(action, mode)` (throttled `postMessage` to the host shell, mirrors `kingdom-breakers.html:1205-1210` exactly).
+
+**Note on a design correction from the original spec:** the design doc's "each client always simulates its own fighter, remote fighters interpolate from host snapshots" description undersold one piece: the HOST's own simulation needs a way to receive a remote human player's held-input state in the first place, so it can compute correct hits/knockback for that fighter server-authoritatively (the host resolves ALL combat, not just its own). That's exactly what `match-action-relay` is for — a non-host continuously relays its held-input state via `sendMatchAction`, the relay forwards it to the host's game only, and the host's own simulation reads it. Step 5 below (added after this task's original 4 steps) wires this up; it didn't exist when this task was first drafted because the Realtime Channel plan's `match-action-relay` seam didn't exist yet either — it was added in that plan's post-review fix round.
 
 **Design — how a real-time fighter's state actually syncs over a ~5Hz channel:** the existing match-state write path is rate-limited to 10 writes / 2 seconds / room (`server/src/index.ts:5138-5155`, unchanged by the Realtime Channel plan) — so even with instant *delivery*, the host can only publish a fresh authoritative snapshot at most every ~200ms. That's fine for turn-paced games; for a real-time fighter it means: **each client always simulates its own controlled fighter locally, immediately, using the exact same `step()`/`attack()`/`jump()` functions local play already uses** (so your own inputs never feel delayed), while **every other fighter is rendered by interpolating between the last two snapshots the host published** (so remote fighters look smooth despite the ~200ms update cadence, rather than teleporting). The host's simulation is authoritative for percent/stocks/KOs/pickups (it resolves hits for every fighter, including ones it doesn't locally control, using the remote inputs relayed to it) — a non-host client never resolves its own hits as "real," it only predicts its own movement/animation locally and reconciles when the next snapshot arrives.
 
@@ -663,9 +666,9 @@ function sendMatchAction(action,modeArg){
 }
 ```
 
-- [ ] **Step 2: Handle `match-state` messages — enter the room, elect host, apply remote snapshots**
+- [ ] **Step 2: Handle `match-state` and `match-action-relay` messages — enter the room, elect host, apply remote snapshots, receive remote input**
 
-Extend the existing `addEventListener('message', ...)` handler (`app/games/phantom-rumble.html:636-646`) — add one more branch before its closing `});`:
+Extend the existing `addEventListener('message', ...)` handler (`app/games/phantom-rumble.html:636-646`) — add two more branches before its closing `});`:
 ```js
 addEventListener('message',e=>{
   const d=e.data;
@@ -678,6 +681,7 @@ addEventListener('message',e=>{
   if(d.type==='restart'){if(mode)startMatch(mode);else resetToMenu()}
   if(d.type==='restore')resetToMenu();
   if(d.type==='match-state')applyMatchState(d);
+  if(d.type==='match-action-relay')applyRemoteAction(d);
 });
 function applyMatchState(d){
   inRoom=true;
@@ -685,13 +689,24 @@ function applyMatchState(d){
   const ms=d.matchState||{};
   if(ms.hostProbe===hostNonce)isHost=true;
   if(ms.phase==='active'&&mode&&mode.startsWith('net')){
-    if(ms.inputs)remoteInputs=ms.inputs;
     if(!isHost&&ms.snapshot){
       prevSnapshot=lastSnapshot;prevSnapshotAt=snapshotAt;
       lastSnapshot=ms.snapshot;snapshotAt=performance.now();
       applySnapshotToNonLocalFighters(ms.snapshot);
     }
   }
+}
+// match-action-relay only ever reaches the room's actual host (the
+// phantomplay.js host shell gates delivery to the host's own stream
+// connection before this message is even posted — see the Realtime
+// Channel plan's fix commit 8f3ebe55) — this is the host's simulation
+// receiving a non-host participant's current held-input state, so it can
+// compute that participant's fighter's movement/attacks authoritatively.
+// This replaces the earlier (incorrect) assumption that inputs would
+// arrive bundled inside periodic matchState snapshots.
+function applyRemoteAction(d){
+  const action=d.action||{};
+  if(action.type==='input'&&typeof action.slot==='number')remoteInputs[action.slot]=action.held||{};
 }
 ```
 
@@ -749,17 +764,77 @@ function step(f,dt){
   if(f.dead)return;
 ```
 
-**Scope note:** this task establishes the plumbing (host election, snapshot broadcast, remote-fighter interpolation, action relay) using the exact rendering/HUD/pickup code already built in Tasks 1-5 — it does not change any hit-detection or damage math. Full input relay for a non-host player's own controls into the host's authoritative simulation (so a non-host's attacks actually register against the host's copy of the match) is the natural next increment once this plumbing is verified working end-to-end in a real two-browser test; flag this explicitly to the user as the boundary of this task rather than silently shipping a networked mode where only the host's inputs matter.
+**Scope note:** this task establishes the plumbing (host election, snapshot broadcast, remote-fighter interpolation, action relay) using the exact rendering/HUD/pickup code already built in Tasks 1-5 — it does not change any hit-detection or damage math. Step 5 below closes the remaining gap (a non-host's own controls actually reaching the host's authoritative simulation) using the `match-action-relay` seam.
 
-- [ ] **Step 5: Manual verification — two browser sessions**
+- [ ] **Step 5: Relay a non-host's held input to the host, and have the host simulate remote human fighters from it**
 
-Using the preview stack, open two browser profiles, log in as two different demo/room-capable sessions, use PhantomPlay's "Together" tab to create/join a room for Phantom Rumble, and confirm: both clients receive `match-state`, exactly one of them (the actual room host) sets `isHost=true`, and once the host triggers `hostStartNetMatch()` both screens transition into a match with matching fighter counts and the same seeded platform layout.
+This step needs each client to know its own controlled fighter slot (`localSlot`), derived from matching this client's actor id against its position in `roomParticipants` (the host is always index 0, per `hostStartNetMatch`'s `for(let i=0;i<count;i++)fighters.push(makeFighter(i,i<humanCount))`, where slot 0 is the first human). The game iframe doesn't currently receive its own actor id from the host shell — `pushMatchStateToGame` (Realtime Channel plan, `app/js/phantomplay.js`) already has `ui.snapshot.actorId` in scope but doesn't post it. Before writing this step's code, add one field to that existing payload: `postToGame("match-state", {matchState, readyStates, botSlots, hostControls, participants, selfActorId: ui.snapshot.actorId})` — a one-line, backward-compatible addition (every other game already ignores unknown fields in this message, confirmed by `kingdom-breakers.html`'s `applyMatchState` only destructuring the 5 fields it uses). This is the only change needed outside `phantom-rumble.html` for this step.
 
-- [ ] **Step 6: Commit**
+Add directly after the `let inRoom=...` state declaration from Step 1:
+```js
+let localSlot=0,selfActorId=null;
+```
+
+Extend `applyMatchState` (Step 2) to set it:
+```js
+function applyMatchState(d){
+  inRoom=true;
+  roomParticipants=d.participants||[];
+  if(d.selfActorId)selfActorId=d.selfActorId;
+  const ms=d.matchState||{};
+  if(ms.hostProbe===hostNonce)isHost=true;
+  if(selfActorId){const idx=roomParticipants.findIndex(p=>p.actorId===selfActorId);if(idx>=0)localSlot=idx}
+  if(ms.phase==='active'&&mode&&mode.startsWith('net')){
+    if(!isHost&&ms.snapshot){
+      prevSnapshot=lastSnapshot;prevSnapshotAt=snapshotAt;
+      lastSnapshot=ms.snapshot;snapshotAt=performance.now();
+      applySnapshotToNonLocalFighters(ms.snapshot);
+    }
+  }
+}
+```
+
+Now relay held input on a throttle. Add a periodic input-relay loop, started when a net match begins (called from `hostStartNetMatch` for the host's own bookkeeping symmetry, but the actual `setInterval` body below only sends when `!isHost`, since the host's own input already flows straight into its local simulation with no relay needed):
+```js
+function startInputRelay(){
+  setInterval(()=>{
+    if(isHost||!running||mode==='')return;
+    const f=fighters[localSlot];if(!f)return;
+    sendMatchAction({type:'input',slot:localSlot,held:{dir:heldDir(f),jump:false,light:false,heavy:false,shield:f.shieldHeld,dodge:false}},'merge');
+  },120);
+}
+```
+Call `startInputRelay()` once, at page load, alongside the existing `host('request-seed');` call (`app/games/phantom-rumble.html:131`) — it's a no-op until `running&&!isHost` is true. Held movement direction and shield are naturally continuous (fine to poll every 120ms), but jump/light/heavy/dodge are discrete press events that a 120ms poll would miss or double-fire — send those separately, immediately on keydown, reusing the existing keydown listener (`app/games/phantom-rumble.html:220-233`): wherever it currently calls `jump(f)`/`attack(f,...)`/`dodge(f)` for a human fighter, add a parallel `if(mode&&mode.startsWith('net')&&!isHost)sendMatchAction({type:'input',slot:localSlot,event:'jump'/'light'/'heavy'/'dodge'},'merge')` immediately alongside the local-prediction call (the local call still fires too — that's the client-side prediction from the design note above; the relay is what lets the HOST also see it).
+
+On the host's side, extend `step(f,dt)`'s human-input branch to source input from `remoteInputs` instead of local keys/touch for any fighter that isn't the host's own local slot, when running a net match:
+```js
+if(f.stun<=0){
+  if(f.human&&mode&&mode.startsWith('net')&&f.slot!==localSlot){
+    const remote=remoteInputs[f.slot]||{};
+    if(remote.dir)f.face=remote.dir;
+    f.vx+=(remote.dir||0)*(remote.shield?.0007:.0018)*(dt*60);
+    if(remote.event==='jump'){jump(f);remote.event=null}
+    if(remote.event==='light'){attack(f,false);remote.event=null}
+    if(remote.event==='heavy'){attack(f,true);remote.event=null}
+    if(remote.event==='dodge'){dodge(f);remote.event=null}
+  }else if(f.human){
+    const dir=heldDir(f);
+    if(dir)f.face=dir;
+    f.vx+=dir*(f.shieldHeld?.0007:.0018)*(dt*60);
+  }else botThink(f,dt);
+}
+```
+This only runs on the HOST's own simulation (the only one that matters for hit resolution — non-host clients' local fighters array is display-only for remote slots, per `applySnapshotToNonLocalFighters`'s existing "never overwrite the locally-predicted fighter this client controls" comment, which by construction also never touches OTHER humans' slots — those get overwritten by snapshot interpolation like any other remote fighter). Clearing `remote.event` after consuming it prevents a single discrete action from re-firing every frame until the next relay tick overwrites it.
+
+- [ ] **Step 6: Manual verification — two browser sessions**
+
+Using the preview stack, open two browser profiles, log in as two different demo/room-capable sessions, use PhantomPlay's "Together" tab to create/join a room for Phantom Rumble, and confirm: both clients receive `match-state`, exactly one of them (the actual room host) sets `isHost=true`, once the host triggers `hostStartNetMatch()` both screens transition into a match with matching fighter counts and the same seeded platform layout, and — the new part — moving/attacking from the NON-HOST browser actually moves/attacks that fighter on the HOST's screen (confirming the input relay closes the loop, not just that both screens boot into a match).
+
+- [ ] **Step 7: Commit**
 
 ```bash
 git add app/games/phantom-rumble.html
-git commit -m "feat(phantom-rumble): wire NET 1v1/2v2/FFA into PhantomPlay game rooms"
+git commit -m "feat(phantom-rumble): wire NET 1v1/2v2/FFA into PhantomPlay game rooms, including non-host input relay"
 ```
 
 ---
