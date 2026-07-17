@@ -7,7 +7,7 @@
       if (location.protocol === "http:" && location.hostname.indexOf("phantomforce.online") !== -1) {
         location.replace("https://" + location.host + location.pathname + location.search + location.hash);
       }
-      window.PHANTOM_BUILD = "phantom-live-20260717-2";
+      window.PHANTOM_BUILD = "phantom-live-20260717-3";
       if ("serviceWorker" in navigator) {
         navigator.serviceWorker
           .getRegistrations()
@@ -23,7 +23,7 @@
     </script>
     <title>PhantomForce — AI Operations Console</title>
     <meta name="description" content="PhantomForce — your AI business operating system." />
-    <meta name="phantom-build" content="phantom-live-20260717-2" />
+    <meta name="phantom-build" content="phantom-live-20260717-3" />
     <meta name="robots" content="noindex" />
     <meta name="theme-color" content="#02060a" />
     <style>
@@ -336,6 +336,6 @@
     <!-- workspace overlays mount here, above the blurred console -->
     <div class="overlay-root" data-overlay-root></div>
 
-    <script type="module" src="/app/js/main.js?v=phantom-live-20260717-2"></script>
+    <script type="module" src="/app/js/main.js?v=phantom-live-20260717-3"></script>
   </body>
 </html>

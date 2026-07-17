@@ -696,103 +696,63 @@ const REQUIRED_WORKSPACES = [
   },
 ];
 
-const TERMINA_STORE_SITE_ID = "site-termina-workflow-store";
-const TERMINA_STORE_PRODUCT_SEEDS = [
-  {
-    id: "prod-termina-manager",
-    name: "Termina Workflow Manager",
-    price: 49,
-    cadence: "monthly",
-    desc: "The core command workspace for terminal-driven teams.",
-    visible: true,
-  },
-  {
-    id: "prod-termina-pro-seat",
-    name: "Termina Pro Command Seat",
-    price: 149,
-    cadence: "monthly",
-    desc: "Advanced workflow control, review lanes, and operator support.",
-    visible: true,
-  },
-  {
-    id: "prod-termina-setup",
-    name: "Terminal Setup Sprint",
-    price: 750,
-    cadence: "one_time",
-    desc: "One-time setup for workflows, workspace structure, and launch routing.",
-    visible: true,
-  },
-  {
-    id: "prod-termina-automation",
-    name: "Workflow Automation Buildout",
-    price: 1500,
-    cadence: "one_time",
-    desc: "Custom workflow buildout for recurring operator tasks.",
-    visible: true,
-  },
-];
+const PHANTOMFORCE_PUBLIC_SITE_ID = "site-phantomforce-online";
 
-function terminaStoreSite(existing = {}) {
+function phantomforcePublicSite(existing = {}) {
   const now = existing.updated || new Date().toISOString();
-  const existingStore = existing.store && typeof existing.store === "object" ? existing.store : {};
-  const existingProducts = Array.isArray(existing.catalog) ? existing.catalog : [];
-  const productsByName = new Map(existingProducts.map((product) => [String(product.name || "").toLowerCase(), product]));
-  for (const product of TERMINA_STORE_PRODUCT_SEEDS) {
-    const current = productsByName.get(product.name.toLowerCase());
-    productsByName.set(product.name.toLowerCase(), { ...product, ...(current || {}), id: current?.id || product.id, visible: current?.visible ?? true });
-  }
   return {
     ...existing,
-    id: existing.id || TERMINA_STORE_SITE_ID,
+    id: existing.id || PHANTOMFORCE_PUBLIC_SITE_ID,
     ws: "phantomforce",
-    title: "Termina - Terminal Workflow Manager Store",
-    kind: "Store",
+    title: "PhantomForce.online - Public Website",
+    kind: "Website",
     status: existing.status || "draft",
-    sections: ["Home", "Workflow Manager", "Templates", "Pricing", "Store", "Checkout", "Support"],
-    domain: "termina.phantomforce.online",
-    domains: [...new Set(["termina.phantomforce.online", ...(Array.isArray(existing.domains) ? existing.domains : [])])],
-    url: "https://termina.phantomforce.online",
+    sections: ["Home", "Platform", "AI Business OS", "Plans", "Creator Network", "Download", "Support"],
+    domain: "phantomforce.online",
+    domains: [...new Set(["phantomforce.online", "www.phantomforce.online", ...(Array.isArray(existing.domains) ? existing.domains : [])])],
+    url: "https://phantomforce.online",
     updated: now,
     design: {
       ...(existing.design || {}),
-      brand: "Termina",
-      headline: "Terminal Workflow Manager Store",
-      subhead: "Build, route, and manage operator workflows from one command center.",
-      offer: "Workflow software, setup, and operator support for teams that live in the terminal.",
-      cta: "Start Termina",
+      brand: "PhantomForce",
+      headline: "AI business management that feels alive.",
+      subhead: "Edit the live public PhantomForce.online story here: business OS, client work, media, public pages, approvals, analytics, and operator credits.",
+      offer: "Download PhantomForce and run the whole workspace from one private AI command center.",
+      cta: "Download PhantomForce",
       theme: "neon",
-      style: "premium technical",
-      existingUrl: "termina.phantomforce.online",
-      storeEnabled: true,
+      style: "public product site",
+      existingUrl: "phantomforce.online",
+      storeEnabled: false,
     },
-    catalog: [...productsByName.values()],
+    catalog: [],
     store: {
-      enabled: true,
+      enabled: false,
       currency: "USD",
       checkoutMode: "test",
       paymentsConnected: false,
-      cart: existingStore.cart && typeof existingStore.cart === "object" ? existingStore.cart : {},
-      orders: Array.isArray(existingStore.orders) ? existingStore.orders : [],
+      cart: {},
+      orders: [],
     },
   };
 }
 
-function isTerminaStoreCandidate(site = {}) {
+function isPhantomforcePublicSiteCandidate(site = {}) {
   const text = `${site.id || ""} ${site.title || ""} ${site.domain || ""} ${site.url || ""}`.toLowerCase();
-  return text.includes(TERMINA_STORE_SITE_ID)
+  return text.includes(PHANTOMFORCE_PUBLIC_SITE_ID)
+    || text.includes("phantomforce.online")
     || text.includes("termina")
     || text.includes("phantomforce.shop")
     || text.includes("terminal workflow manager");
 }
 
-function ensureTerminaStoreSite(sites = []) {
+function ensurePhantomforcePublicSite(sites = []) {
   const list = Array.isArray(sites) ? [...sites] : [];
-  const index = list.findIndex(isTerminaStoreCandidate);
+  const index = list.findIndex(isPhantomforcePublicSiteCandidate);
   if (index >= 0) {
     const [existing] = list.splice(index, 1);
-    return [terminaStoreSite(existing), ...list];
+    return [phantomforcePublicSite(existing), ...list];
   }
-  return [terminaStoreSite(), ...list];
+  return [phantomforcePublicSite(), ...list];
 }
 
 function seed() {
@@ -806,7 +766,7 @@ function seed() {
     bookings: [],
     media: [],
     looperPlans: [],
-    sites: ensureTerminaStoreSite([]),
+    sites: ensurePhantomforcePublicSite([]),
     products: [],
     finance: financeSeed(),
     security: [],
@@ -841,7 +801,7 @@ function normalizeData(data) {
   d.bookings = Array.isArray(d.bookings) ? d.bookings : [];
   d.media = Array.isArray(d.media) ? d.media : [];
   d.looperPlans = Array.isArray(d.looperPlans) ? d.looperPlans : [];
-  d.sites = ensureTerminaStoreSite(Array.isArray(d.sites) ? d.sites : []);
+  d.sites = ensurePhantomforcePublicSite(Array.isArray(d.sites) ? d.sites : []);
   d.products = Array.isArray(d.products) ? d.products : [];
   d.finance = normalizeFinance(d.finance);
   d.security = Array.isArray(d.security) ? d.security : [];

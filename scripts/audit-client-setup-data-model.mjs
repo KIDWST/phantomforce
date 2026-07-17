@@ -273,9 +273,9 @@ const evidence = {
     finding(
       "MODULE-REGISTRY",
       "real_server_backed",
-      "Platform modules have canonical definitions, role lists, dependencies, and protected/required flags, including Client Setup.",
-      "PLATFORM_MODULES defines dashboard, crm, clientsetup, media, sites, accounting, PhantomPlay, intelligence, memory, automation, approvals, workforce, analytics, settings, developer.",
-      [files.moduleRegistry],
+      "Platform modules have canonical definitions, role lists, dependencies, and protected/required flags. Client setup is a workspace/org setting, not a sidebar module.",
+      "PLATFORM_MODULES defines product surfaces such as dashboard, crm, media, sites, accounting, PhantomPlay, intelligence, memory, automation, approvals, workforce, analytics, settings, and developer; setup state is stored separately in ClientSetupDocument.",
+      [files.moduleRegistry, files.clientSetupStore],
     ),
     finding(
       "WORKFLOW-ACTIONS",

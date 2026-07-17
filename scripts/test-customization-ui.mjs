@@ -25,6 +25,7 @@ for (const id of ["dashboard", "crm", "media", "sites", "money", "phantomplay", 
 assert.match(source, /\["phantomstore", "PhantomStore", false/u, "PhantomStore must be a protected platform tab, not a hideable workspace option.");
 assert.match(source, /REQUIRED_MODULE_IDS = new Set\(\["dashboard", "phantomstore", "approvals", "customize", "settings"\]\)/u, "PhantomStore must be forced enabled for existing saved configurations.");
 assert.match(source, /\["dashboard", "phantomstore", "approvals", "customize", "settings"\]\.includes\(module\.id\)/u, "Workspace Studio must mark PhantomStore as required/protected.");
+assert.doesNotMatch(source, /\["clientsetup", "Client Setup"/u, "Client Setup belongs in Workspace setup settings, not Workspace Studio modules.");
 
 const storage = new Map();
 globalThis.localStorage = {
@@ -39,7 +40,6 @@ const { normalizeCustomizationConfiguration, previewCustomizedNavigation } = awa
 const baseNav = [
   { id: "dashboard" },
   { id: "crm" },
-  { id: "clientsetup" },
   { id: "media" },
   { id: "sites" },
   { id: "money" },
@@ -57,7 +57,7 @@ const baseNav = [
   { id: "settings", bottom: true },
 ];
 const oldSavedOrder = [
-  "dashboard", "crm", "clientsetup", "media", "sites", "money", "planner", "phantomplay",
+  "dashboard", "crm", "media", "sites", "money", "planner", "phantomplay",
   "intelligence", "analytics", "memory", "automation", "approvals", "workers", "vacation", "developer", "settings",
 ];
 const configuration = {
@@ -76,7 +76,7 @@ assert.equal(freshPhantomStoreModule?.customerConfigurable, false, "Brand-new Wo
 assert.ok(previewCustomizedNavigation(baseNav, fresh, "owner").some((item) => item.id === "phantomstore"), "Brand-new owner sidebars must include PhantomStore.");
 const ownerOrder = previewCustomizedNavigation(baseNav, configuration, "owner").map((item) => item.id);
 assert.deepEqual(ownerOrder, [
-  "dashboard", "crm", "clientsetup", "media", "sites", "money", "planner", "phantomplay", "phantomstore",
+  "dashboard", "crm", "media", "sites", "money", "planner", "phantomplay", "phantomstore",
   "memory", "automation", "approvals", "workers", "intelligence", "analytics", "vacation", "developer", "settings",
 ], "Navigation customization must preserve the top group and base sidebar bottom-group order even with old saved module order values.");
 

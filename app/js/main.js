@@ -42,12 +42,11 @@ import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260717-2";
 import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260717-2";
 import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260717-2";
 import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260717-2";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260717-2";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260717-3";
 import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260717-2";
 import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260717-2";
 import { mountAmbient } from "./ambient.js?v=phantom-live-20260717-2";
 import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260717-2";
-import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260717-2";
 import { renderPlanner } from "./planner.js?v=phantom-live-20260717-2";
 import {
   fetchAuthConfig, databaseLogin, databaseSignup, databaseLogout, switchOrg, fetchAuthMe, fetchEntitlementsSummary,
@@ -65,7 +64,7 @@ import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live
 import {
   customizeNavigation,
   loadOrganizationCustomization,
-} from "./customization.js?v=phantom-live-20260717-2";
+} from "./customization.js?v=phantom-live-20260717-3";
 import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260717-2";
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -524,7 +523,6 @@ function maybeUpgradeGateToDatabaseLogin(card, options = {}) {
 const BASE_NAV = [
   { id: "dashboard",  label: "Dashboard",    icon: "grid",  view: "main" },
   { id: "crm",        label: "Clients",      icon: "users", ws: "leads" },
-  { id: "clientsetup", label: "Client Setup", icon: "users", ws: "clientsetup" },
   { id: "media",      label: "Media Lab",    icon: "media", ws: "media" },
   { id: "assets",     label: "Asset Cloud",  icon: "media", ws: "assets", dbOnly: true },
   { id: "sites",      label: "Websites",     icon: "site",  ws: "sites" },
@@ -550,7 +548,6 @@ let navEntitlements = { loaded: false, features: null, limits: null };
 const MOBILE_LABEL_OVERRIDES = {
   dashboard: "Home",
   crm: "Clients",
-  clientsetup: "Setup",
   money: "Accounting",
   planner: "Planner",
   sites: "Sites",
@@ -661,6 +658,7 @@ const WORKSPACE_ALIASES = {
 const NAV_PARENT_BY_WORKSPACE = {
   phantom: "dashboard",
   proposals: "crm",
+  clientsetup: "settings",
   reviews: "crm",
   bookings: "crm",
   protect: "settings",
@@ -3138,7 +3136,7 @@ const CUSTOM = {
   phantomplay: { title: "PhantomPlay", kicker: "Intentional downtime and approved games", custom: true, wide: true, render: (body) => (phantomPlayV2Opted() ? renderPhantomPlayV2 : renderPhantomPlay)(body, mediaOpts()) },
   phantomstore: { title: "PhantomStore", kicker: "AI marketplace for tools, agents, and apps", custom: true, wide: true, render: (body) => renderPhantomStore(body, mediaOpts()) },
   intelligence: { title: "Competitor Intelligence", kicker: "Public signals, labeled estimates, and original responses", custom: true, wide: true, render: (body) => renderCompetitorIntelligence(body, mediaOpts()) },
-  clientsetup: { title: "Client Setup", kicker: "Owner setup console", custom: true, wide: true, render: (body) => renderClientSetupConsole(body, mediaOpts()) },
+  clientsetup: { title: "Business Manager Settings", kicker: "Workspace and organization setup", custom: true, wide: true, render: (body) => renderOperatorSettings(body, { ...mediaOpts(), initialTab: "clientsetup", onWorkspaceApplied: () => { refreshCustomizedNavigation(); renderNav(); renderMobileBottomNav(); } }) },
   analytics: { title: "Analytics", kicker: "Signals, trends, and operating insight", custom: true, wide: true, render: renderAnalyticsSuite },
   planner: { title: "Planner", kicker: "AI operating plan, prep queue, and automation coverage", custom: true, wide: true, render: (body) => renderPlanner(body, mediaOpts()) },
   account: { title: "Business Profile & Plan", kicker: "Profile, billing, and access", custom: true, render: (body) => renderAccountPlan(body) },

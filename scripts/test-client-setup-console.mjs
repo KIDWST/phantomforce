@@ -6,6 +6,7 @@ const read = (path) => readFileSync(new URL(path, root), "utf8");
 
 const files = {
   main: read("app/js/main.js"),
+  settings: read("app/js/settings.js"),
   ui: read("app/js/clientsetup.js"),
   css: read("app/phantom.css"),
   store: read("server/src/client-setup/client-setup-store.ts"),
@@ -20,11 +21,12 @@ const mustInclude = (source, pattern, message) => {
   assert.match(source, pattern, message);
 };
 
-mustInclude(files.main, /renderClientSetupConsole/u, "Client Setup console must be imported and rendered.");
-mustInclude(files.main, /id:\s*"clientsetup"[\s\S]*label:\s*"Client Setup"/u, "Sidebar nav must include Client Setup.");
-mustInclude(files.main, /clientsetup:\s*\{[\s\S]*Owner setup console/u, "Custom route must render the setup console.");
-mustInclude(files.moduleRegistry, /id:\s*"clientsetup"/u, "Server module registry must expose clientsetup.");
-mustInclude(files.customizationClient, /\["clientsetup",\s*"Client Setup"/u, "Client customization registry must expose clientsetup.");
+assert.doesNotMatch(files.main, /id:\s*"clientsetup"[\s\S]*label:\s*"Client Setup"/u, "Client Setup must not be a primary sidebar nav item.");
+mustInclude(files.main, /clientsetup:\s*\{[\s\S]*initialTab:\s*"clientsetup"/u, "Client Setup deep links must open the settings-hosted setup console.");
+mustInclude(files.settings, /renderClientSetupConsole/u, "Settings must import and host the setup console.");
+mustInclude(files.settings, /id:\s*"clientsetup"[\s\S]*label:\s*"Workspace setup"[\s\S]*category:\s*"Workspace"/u, "Client Setup must live under Workspace setup settings.");
+assert.doesNotMatch(files.moduleRegistry, /id:\s*"clientsetup"/u, "Client Setup must not be exposed as a customer workspace module.");
+assert.doesNotMatch(files.customizationClient, /\["clientsetup",\s*"Client Setup"/u, "Workspace Studio must not expose Client Setup as a nav module.");
 
 for (const slotId of ["active-1", "active-2", "pending-1"]) {
   mustInclude(files.ui, new RegExp(slotId, "u"), `UI must include ${slotId} slot.`);

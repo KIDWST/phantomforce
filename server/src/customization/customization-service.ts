@@ -190,7 +190,7 @@ export function validateOrganizationConfiguration(configuration: OrganizationCon
   if (configuration.policies.apiCredentialPolicy !== "tenant_owned_only") issues.push({ path: "policies.apiCredentialPolicy", message: "Workspace API credentials must be owned by that tenant only.", severity: "error" });
   if (configuration.policies.subscriptionPolicy !== "tenant_owned_only") issues.push({ path: "policies.subscriptionPolicy", message: "Workspace subscriptions must be owned by that tenant only.", severity: "error" });
   if (configuration.policies.workspaceProfile === "developer") {
-    const blocked = ["crm", "clientsetup", "media", "sites", "money", "intelligence", "analytics", "automation", "vacation"];
+    const blocked = ["crm", "media", "sites", "money", "intelligence", "analytics", "automation", "vacation"];
     for (const moduleId of blocked) {
       if (configuration.modules.find((module) => module.id === moduleId)?.enabled) {
         issues.push({ path: `modules.${moduleId}`, message: "Developer workspaces can only enable developer-focused modules by default.", severity: "error" });

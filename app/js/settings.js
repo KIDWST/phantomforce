@@ -2,7 +2,8 @@
    Local UI preferences only: no provider calls, sends, uploads, or billing. */
 
 import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260717-2";
-import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260717-2";
+import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260717-3";
+import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260717-3";
 import { friendlyBackendError, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260717-2";
 import { activeOrgId, canManageActiveOrg } from "./orgs.js?v=phantom-live-20260717-2";
 import { DEFAULT_COMPANION_PREFS, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260717-2";
@@ -15,6 +16,7 @@ const SETTINGS_TABS = [
   { id: "loop", label: "Loop routing", category: "AI Brain" },
   { id: "chat", label: "Chat behavior", category: "AI Brain" },
   { id: "connections", label: "Provider connections", category: "AI Brain" },
+  { id: "clientsetup", label: "Workspace setup", category: "Workspace" },
   { id: "workspace", label: "Workspace Studio", category: "Workspace" },
   { id: "companion", label: "Companion", category: "Workspace" },
   { id: "media", label: "Media & social", category: "Media" },
@@ -666,6 +668,7 @@ export function renderOperatorSettings(el, opts = {}) {
   const activeProvider = providerFor(settings.provider);
   const activeModel = settings.models[activeProvider.id] || activeProvider.models[0];
   const mediaMountId = `media-settings-${Math.random().toString(36).slice(2)}`;
+  const clientSetupMountId = `client-setup-settings-${Math.random().toString(36).slice(2)}`;
   const workspaceMountId = `workspace-studio-${Math.random().toString(36).slice(2)}`;
   const initialTab = opts.initialTab && SETTINGS_TABS.some((tab) => tab.id === opts.initialTab) ? opts.initialTab : null;
   const activeTab = initialTab || loadSettingsTab();
@@ -676,6 +679,7 @@ export function renderOperatorSettings(el, opts = {}) {
     loop: () => renderLoopAdvancedSection(),
     chat: () => renderChatBehaviorTab(settings),
     connections: () => opts.providerConnectionState ? renderProviderConnectionsTab(opts.providerConnectionState) : `<div class="set-section"><p class="set-eyebrow">Tenant-owned providers</p><h3>Loading connections...</h3></div>`,
+    clientsetup: () => `<div id="${clientSetupMountId}" class="set-client-setup-mount"></div>`,
     workspace: () => `<div id="${workspaceMountId}" class="set-workspace-mount"></div>`,
     companion: () => renderCompanionTab(),
     media: () => `<div id="${mediaMountId}"></div>`,
@@ -885,6 +889,9 @@ export function renderOperatorSettings(el, opts = {}) {
 
   const mediaMount = el.querySelector(`#${mediaMountId}`);
   if (mediaMount) renderMediaSettings(mediaMount, opts);
+
+  const clientSetupMount = el.querySelector(`#${clientSetupMountId}`);
+  if (clientSetupMount) renderClientSetupConsole(clientSetupMount);
 
   const workspaceMount = el.querySelector(`#${workspaceMountId}`);
   if (workspaceMount) {
