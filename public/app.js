@@ -27,6 +27,26 @@ let broadcastOn = false;
 let activeCardUid = null;
 let openTileMenu = null;
 
+// ---- per-card identity color -------------------------------------------------
+// Distinct from status-pill colors (which mean thinking/running/failed/etc. —
+// see styles.css). This is purely "which pane is which" at a glance across a
+// wall of many terminals. Cycles deterministically so it never depends on
+// card order shifting after a remove.
+const CARD_COLORS = [
+  "#5fd58c", // signature Termina green
+  "#6fa7ff", // blue
+  "#f0a25f", // amber
+  "#d88bf0", // violet
+  "#28c4d8", // cyan
+  "#f06f9c", // rose
+  "#a3e05f", // lime
+  "#8b9bf0", // periwinkle
+];
+let cardColorCounter = 0;
+function nextCardColor() {
+  return CARD_COLORS[cardColorCounter++ % CARD_COLORS.length];
+}
+
 // ---- provider identity + status language ------------------------------------
 
 const PROVIDER_ICON = {
@@ -154,6 +174,7 @@ function addCard(init = {}, { save = true, start = false } = {}) {
     role: init.role ?? null,
     lastLedgerEvent: null,
     profileId: init.profileId ?? null,
+    color: init.color ?? nextCardColor(),
     linked: Boolean(init.linked),
     sessionId: null,
     startedAt: null,
@@ -195,6 +216,7 @@ function buildCard(card) {
   const el = document.createElement("article");
   el.className = "tile";
   el.dataset.uid = card.uid;
+  el.style.setProperty("--card-color", card.color);
 
   const head = document.createElement("div");
   head.className = "tile-head";
@@ -770,8 +792,15 @@ function closeOverlay() {
 
 // ---- columns ----------------------------------------------------------------
 
-function setColumns(n) {
+function setColumns(n, { fillEmpty = false } = {}) {
   columns = n;
+  // Choosing a column count from the toolbar is also "show me N terminals
+  // side by side" — top up empty (choose-type-later) tiles so the layout is
+  // actually visible instead of silently doing nothing on a fresh, empty
+  // wall. Never removes existing cards, never auto-starts a terminal
+  // type/process, and only applies for the explicit toolbar click — not on
+  // boot, which stays "launch clean, no terminals restored."
+  if (fillEmpty) while (cards.length < n) addCard({}, { save: false });
   document.getElementById("wall").className = `wall cols-${n}`;
   updateWallEmptyState();
   document.querySelectorAll(".cols-switch button").forEach((b) => b.classList.toggle("active", Number(b.dataset.cols) === n));
@@ -928,7 +957,7 @@ document.addEventListener("click", (e) => {
 document.getElementById("rescan").addEventListener("click", loadProfiles);
 document.getElementById("broadcast").addEventListener("click", () => toggleBroadcast());
 document.querySelectorAll(".cols-switch button").forEach((btn) => {
-  btn.addEventListener("click", () => setColumns(Number(btn.dataset.cols)));
+  btn.addEventListener("click", () => setColumns(Number(btn.dataset.cols), { fillEmpty: true }));
 });
 document.getElementById("overlay-close").addEventListener("click", closeOverlay);
 document.getElementById("overlay").addEventListener("click", (e) => {

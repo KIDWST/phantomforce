@@ -273,11 +273,22 @@ input {
 }
 
 .tile:hover {
-  border-color: rgba(95, 213, 140, 0.32);
+  border-color: color-mix(in srgb, var(--card-color, var(--accent)) 45%, var(--line));
 }
 
 .tile.live {
-  border-color: rgba(95, 213, 140, 0.42);
+  border-color: color-mix(in srgb, var(--card-color, var(--accent)) 55%, var(--line));
+}
+
+/* Per-card identity stripe — which pane is which at a glance across a wall
+   of many terminals. Independent of .status-pill's state colors. */
+.tile::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--card-color, var(--line));
+  opacity: 0.9;
 }
 
 .tile.live::before {
@@ -285,7 +296,7 @@ input {
   position: absolute;
   inset: 0 0 auto 0;
   height: 2px;
-  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  background: linear-gradient(90deg, transparent, var(--card-color, var(--accent)), transparent);
   opacity: 0.7;
 }
 
@@ -304,9 +315,9 @@ input {
   width: 22px;
   height: 22px;
   border-radius: 7px;
-  border: 1px solid var(--line);
-  background: var(--panel-2);
-  color: var(--soft);
+  border: 1px solid color-mix(in srgb, var(--card-color, var(--line)) 55%, var(--line));
+  background: color-mix(in srgb, var(--card-color, transparent) 16%, var(--panel-2));
+  color: var(--card-color, var(--soft));
   font-size: 12px;
 }
 
