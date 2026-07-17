@@ -113,8 +113,15 @@ function escapeHtml(s) {
 
 function saveWorkspace() {
   try {
-    // Only the column preference is remembered — terminals start fresh each launch.
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ columns }));
+    // Column preference always persists. Per-card name/color are also
+    // remembered, keyed by sessionId, purely so a *reconnected* live
+    // session (see session-restore.js) can recover its name/color —
+    // terminals that aren't currently running still don't come back on
+    // their own; a card without a sessionId isn't worth persisting.
+    const cardEntries = cards
+      .filter((c) => c.sessionId)
+      .map((c) => ({ sessionId: c.sessionId, name: c.name, color: c.color }));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ columns, cards: cardEntries }));
   } catch {
     /* storage unavailable */
   }
@@ -865,8 +872,11 @@ async function boot() {
     }
   }
 
-  // Launch clean — no terminals open, just the + tile. We remember your
-  // column choice, but you open the terminals you want each session.
+  // Reconnect to anything still running server-side (reload, app
+  // restart) instead of always launching clean. Cards that were merely
+  // *saved* but never started still don't come back — only live PTYs do.
+  if (typeof restoreSessions === "function") await restoreSessions();
+
   const saved = loadWorkspace();
   setColumns(saved && saved.columns ? saved.columns : 3);
 }
