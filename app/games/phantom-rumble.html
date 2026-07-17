@@ -1104,7 +1104,16 @@ for(const b of document.querySelectorAll('[data-mode]'))b.onclick=()=>{
   startMatch(b.dataset.mode,{humans:localHumans});
 };
 document.querySelector('[data-local-start]').onclick=()=>startMatch('localffa',{humans:localHumans});
-document.querySelector('[data-again]').onclick=()=>startMatch(mode,{humans:localHumans});
+document.querySelector('[data-again]').onclick=()=>{
+  // Same routing as the host 'restart' postMessage handler below: net
+  // modes can't just re-run the local startMatch (wrong roster, no host
+  // election/snapshots), and racetop needs its own starter (startMatch
+  // builds brawl fighters via makeFighter, which race-mode physics can't
+  // run on — e.g. raceStep reads f.altitude, which brawl fighters lack).
+  if(mode==='racetop')startRaceMatch(localHumans);
+  else if(mode&&mode.startsWith('net'))resetToMenu();
+  else startMatch(mode,{humans:localHumans});
+};
 document.querySelector('[data-menu]').onclick=()=>resetToMenu();
 function resetToMenu(){
   cancelAnimationFrame(raf);
@@ -1149,7 +1158,11 @@ addEventListener('message',e=>{
     // no snapshots, and a wrong roster. Re-entering a net match cleanly
     // needs the room lobby flow, which this handler doesn't build here —
     // fall back to the menu instead of silently starting something broken.
-    if(mode&&mode.startsWith('net'))resetToMenu();
+    // racetop also can't use startMatch — it builds brawl fighters via
+    // makeFighter, which race-mode physics (raceStep reads f.altitude,
+    // which brawl fighters lack) can't run on.
+    if(mode==='racetop')startRaceMatch(localHumans);
+    else if(mode&&mode.startsWith('net'))resetToMenu();
     else if(mode)startMatch(mode,{humans:localHumans});
     else resetToMenu();
   }
