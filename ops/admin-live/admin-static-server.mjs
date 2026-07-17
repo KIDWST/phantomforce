@@ -121,6 +121,7 @@ function shouldProxy(urlPath) {
     || urlPath.startsWith("/api/vacation-mode")
     || urlPath.startsWith("/api/phantomplay")
     || urlPath.startsWith("/api/competitor-intelligence")
+    || urlPath.startsWith("/api/brain")
     || urlPath.startsWith("/api/organization")
     || urlPath.startsWith("/api/client-setup")
     || urlPath.startsWith("/api/crm")

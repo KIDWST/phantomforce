@@ -40,6 +40,8 @@ assert.match(index, /canManage && requested \? requested : own/, "Pulse tenant r
 assert.match(index, /app\.get\("\/api\/organization\/pulse"/, "Pulse endpoint must exist");
 assert.match(index, /app\.get\("\/api\/organization\/graph"/, "Graph endpoint must exist");
 assert.match(proxy, /\/api\/organization/, "Static server must proxy /api/organization to Hermes");
+assert.match(index, /app\.get\("\/api\/brain\/contract"/, "Brain Signal contract endpoint must exist");
+assert.match(proxy, /\/api\/brain/, "Static server must proxy /api/brain to Hermes");
 
 // 6. The pulse layer never mutates stores (read-only imports).
 assert.ok(!/createCompetitor|createSignal|saveBusinessProfile|createBrainMemory|ingestAsset/.test(pulse),
@@ -94,17 +96,32 @@ assert.match(orgGraph, /proposal/u, "Client graph must style proposal nodes expl
 //     pulse over local fallback arrays, so badges/notifications do not drift
 //     from the real CRM/proposal/approval stores.
 assert.match(orgPulseClient, /\/api\/organization\/pulse/u, "Browser pulse client must fetch the Organization Pulse endpoint.");
+assert.match(orgPulseClient, /\/api\/brain\/contract/u, "Browser pulse client must fetch the Brain Signal contract endpoint.");
 assert.match(orgPulseClient, /managedGrowth/u, "Browser pulse client must read Managed Growth Ops.");
 assert.match(orgPulseClient, /friendlyBackendError[\s\S]*Sign in to load Organization Pulse/u, "Organization Pulse client must hide raw auth transport errors behind a clean sign-in message.");
+assert.match(orgPulseClient, /friendlyBackendError[\s\S]*Sign in to load Brain Signals/u, "Brain Signal client must hide raw auth transport errors behind a clean sign-in message.");
 assert.match(orgPulseClient, /pulsePendingApprovalCount/u, "Browser pulse client must expose server-backed approval counts.");
 assert.match(orgPulseClient, /pulseAttentionItems/u, "Browser pulse client must expose server-backed attention items.");
+assert.match(orgPulseClient, /brainContractAttentionItems/u, "Browser pulse client must expose Brain Signal attention items.");
+assert.match(orgPulseClient, /Array\.isArray\(payload\.whatChanged\)/u, "Brain Signal client must normalize missing whatChanged arrays.");
+assert.match(orgPulseClient, /Array\.isArray\(payload\.whatMatters\)/u, "Brain Signal client must normalize missing whatMatters arrays.");
+assert.match(orgPulseClient, /Array\.isArray\(payload\.recommendedActions\)/u, "Brain Signal client must normalize missing recommendedActions arrays.");
 assert.match(main, /organizationpulse\.js/u, "Dashboard shell must import the Organization Pulse client.");
+assert.match(main, /brainContractAttentionItems/u, "Dashboard shell must import Brain Signal attention items.");
 assert.match(main, /function approvalBadgeCount\(\)/u, "Dashboard shell must centralize approval badge counts.");
 assert.match(main, /organizationPulseAvailable\(\)\) return pulse \? pulsePendingApprovalCount/u, "Approval badge count must prefer cached server pulse when signed in and never fall back to local counts while loading.");
-assert.match(main, /organizationPulseAvailable\(\) \? pulseAttentionItems/u, "Attention items must prefer server pulse when signed in.");
+assert.match(main, /const brainItems = brainContractAvailable\(\) \? brainContractAttentionItems\(cachedBrainContract\(\)\) : \[\]/u, "Attention items must read Brain Signal contract first.");
+assert.match(main, /const items = brainItems\.length[\s\S]*\? brainItems[\s\S]*: organizationPulseAvailable\(\)[\s\S]*\? pulseAttentionItems\(cachedOrganizationPulse\(\)\)/u, "Attention items must prefer Brain Signals, then server pulse.");
+assert.match(main, /!items\.length && !organizationPulseAvailable\(\) && !brainContractAvailable\(\)/u, "Local fallback attention must only run when signed out.");
+assert.match(main, /data-open-ws="\$\{esc\(target\)\}"/u, "Brain-derived plan routes must be escaped before entering data-open-ws attributes.");
+assert.match(main, /data-open-ws="\$\{esc\(it\.open\)\}"/u, "Brain-derived notification routes must be escaped before entering data-open-ws attributes.");
 assert.match(main, /ensureOrganizationPulseFresh\(\);/u, "Dashboard shell must refresh Organization Pulse in the background.");
+assert.match(main, /ensureBrainContractFresh\(\);/u, "Dashboard shell must refresh Brain Signal contract in the background.");
 assert.match(main, /crm: "leads"/u, "CRM surface actions must route to the real Clients workspace.");
+assert.match(main, /"competitor-intelligence": "intelligence"/u, "Competitor Intelligence actions must route to the real Intelligence workspace.");
+assert.match(main, /managedgrowth: "analytics"/u, "Managed Growth actions must route to the real analytics workspace.");
 assert.match(flowMap, /organizationpulse\.js/u, "Operations map must share the Organization Pulse client.");
+assert.match(flowMap, /data-open-ws="\$\{esc\(n\.ws\)\}"/u, "Operations map workspace routes must escape data-open-ws attributes.");
 assert.match(flowMap, /cachedOrganizationPulse\(\)\?\.managedGrowth/u, "Operations map summary must read Managed Growth Ops from the cached server pulse.");
 assert.match(flowMap, /openLeadCount: serverGrowth \? Number\(serverGrowth\.openLeads/u, "Operations map lead counts must prefer server-backed CRM counts.");
 assert.match(flowMap, /stat: serverGrowth \? fmtMoney\(proposalPipeline\)/u, "Operations map proposal stat must prefer server-backed proposal pipeline value.");

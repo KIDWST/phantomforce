@@ -1,13 +1,18 @@
-import { currentTenantId, friendlyBackendError, session } from "./store.js?v=phantom-live-20260716-2";
+import { currentTenantId, friendlyBackendError, session } from "./store.js?v=phantom-live-20260717-2";
 
 const PULSE_TTL_MS = 45_000;
+const BRAIN_CONTRACT_TTL_MS = 45_000;
 
 const state = {
   tenant: "",
   status: "idle",
   pulse: null,
+  brainContractStatus: "idle",
+  brainContract: null,
   error: "",
+  brainContractError: "",
   loadedAt: 0,
+  brainContractLoadedAt: 0,
 };
 
 function syncTenant() {
@@ -16,8 +21,12 @@ function syncTenant() {
   state.tenant = tenant;
   state.status = "idle";
   state.pulse = null;
+  state.brainContractStatus = "idle";
+  state.brainContract = null;
   state.error = "";
+  state.brainContractError = "";
   state.loadedAt = 0;
+  state.brainContractLoadedAt = 0;
 }
 
 function authHeaders(extra = {}) {
@@ -33,6 +42,10 @@ export function organizationPulseAvailable() {
   return Boolean(typeof session?.token === "function" && session.token());
 }
 
+export function brainContractAvailable() {
+  return organizationPulseAvailable();
+}
+
 export function organizationPulseState() {
   syncTenant();
   return state;
@@ -43,11 +56,23 @@ export function cachedOrganizationPulse() {
   return state.pulse;
 }
 
+export function cachedBrainContract() {
+  syncTenant();
+  return state.brainContract;
+}
+
 export function shouldRefreshOrganizationPulse(maxAgeMs = PULSE_TTL_MS) {
   syncTenant();
   if (!organizationPulseAvailable() || state.status === "loading") return false;
   if (!state.pulse) return true;
   return Date.now() - state.loadedAt > maxAgeMs;
+}
+
+export function shouldRefreshBrainContract(maxAgeMs = BRAIN_CONTRACT_TTL_MS) {
+  syncTenant();
+  if (!brainContractAvailable() || state.brainContractStatus === "loading") return false;
+  if (!state.brainContract) return true;
+  return Date.now() - state.brainContractLoadedAt > maxAgeMs;
 }
 
 export async function loadOrganizationPulse({ force = false } = {}) {
@@ -74,6 +99,79 @@ export async function loadOrganizationPulse({ force = false } = {}) {
   state.loadedAt = Date.now();
   state.status = "ready";
   return state.pulse;
+}
+
+export async function loadBrainContract({ force = false } = {}) {
+  syncTenant();
+  if (!brainContractAvailable()) {
+    state.brainContractStatus = "unavailable";
+    state.brainContract = null;
+    state.brainContractError = "Sign in to load Brain Signals.";
+    return null;
+  }
+  if (!force && state.brainContract && Date.now() - state.brainContractLoadedAt <= BRAIN_CONTRACT_TTL_MS) return state.brainContract;
+  state.brainContractStatus = "loading";
+  state.brainContractError = "";
+  const params = new URLSearchParams();
+  if (state.tenant) params.set("tenant_id", state.tenant);
+  const response = await fetch(`/api/brain/contract?${params.toString()}`, { headers: authHeaders() });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || !payload?.ok) {
+    state.brainContractStatus = "error";
+    state.brainContractError = friendlyBackendError(response.status, payload?.error, { authMessage: "Sign in to load Brain Signals.", fallbackPrefix: "Brain Signals failed" });
+    throw new Error(state.brainContractError);
+  }
+  state.brainContract = {
+    tenantId: payload.tenantId,
+    generatedAt: payload.generatedAt,
+    whatChanged: Array.isArray(payload.whatChanged) ? payload.whatChanged : [],
+    whatMatters: Array.isArray(payload.whatMatters) ? payload.whatMatters : [],
+    recommendedActions: Array.isArray(payload.recommendedActions) ? payload.recommendedActions : [],
+  };
+  state.brainContractLoadedAt = Date.now();
+  state.brainContractStatus = "ready";
+  return state.brainContract;
+}
+
+function signalIcon(signal = {}) {
+  const department = String(signal.department || "").toLowerCase();
+  const route = String(signal.recommendedAction?.route || "").toLowerCase();
+  if (route.includes("approval") || department === "operations") return "check";
+  if (route.includes("automation") || department === "technology") return "auto";
+  if (route.includes("crm") || department === "growth" || department === "client care") return "users";
+  if (route.includes("asset") || department === "creative") return "media";
+  if (route.includes("competitor") || department === "intelligence") return "chart";
+  if (department === "finance") return "dollar";
+  return "brain";
+}
+
+function signalTone(signal = {}) {
+  if (signal.impact === "high") return "warn";
+  if (signal.impact === "medium") return "ok";
+  return "neutral";
+}
+
+export function brainContractAttentionItems(contract = cachedBrainContract()) {
+  if (!contract) return [];
+  const signals = [
+    ...(Array.isArray(contract.whatChanged) ? contract.whatChanged : []),
+    ...(Array.isArray(contract.recommendedActions) ? contract.recommendedActions : []),
+    ...(Array.isArray(contract.whatMatters) ? contract.whatMatters : []),
+  ];
+  const seen = new Set();
+  return signals.filter((signal) => {
+    const id = signal?.id || signal?.title;
+    if (!id || seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  }).slice(0, 6).map((signal) => ({
+    icon: signalIcon(signal),
+    tone: signalTone(signal),
+    title: signal.title || "Business signal",
+    sub: signal.recommendedAction?.label || signal.whatHappened || "Review the signal",
+    open: signal.recommendedAction?.route || "analytics",
+    signal,
+  }));
 }
 
 export function pulsePendingApprovalCount(pulse = cachedOrganizationPulse()) {

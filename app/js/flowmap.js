@@ -5,11 +5,11 @@
    the field. Live stats from the store; every node opens its workspace.
    Two layouts: wide wave spine and phone snake. Reduced motion → static. */
 
-import { store, visible, moneyView, fmtMoney } from "./store.js?v=phantom-live-20260716-2";
+import { store, visible, moneyView, fmtMoney } from "./store.js?v=phantom-live-20260717-2";
 import {
   cachedOrganizationPulse,
   organizationPulseAvailable,
-} from "./organizationpulse.js?v=phantom-live-20260716-2";
+} from "./organizationpulse.js?v=phantom-live-20260717-2";
 
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const NARROW_AT = 620;
@@ -157,7 +157,7 @@ function nodeSvg(n, [x, y], i, animated) {
   const spin = animated ? `<animateTransform attributeName="transform" type="rotate"
       from="${i % 2 ? 360 : 0}" to="${i % 2 ? 0 : 360}" dur="16s" repeatCount="indefinite"/>` : "";
   return `
-    <g class="flow-node${n.alert ? " flow-node-alert" : ""}" data-open-ws="${n.ws}"
+    <g class="flow-node${n.alert ? " flow-node-alert" : ""}" data-open-ws="${esc(n.ws)}"
        transform="translate(${x},${y})" tabindex="0" role="button"
        aria-label="Open ${n.label} — ${n.stat}" style="animation-delay:${i * 90}ms">
       ${radar}
