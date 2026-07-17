@@ -140,6 +140,112 @@ function cycleToNextInState(state) {
 
 setInterval(renderStatusStrip, 1000);
 
+// ---- saved templates -----------------------------------------------------
+
+const TEMPLATES_KEY = "termina.templates";
+
+function loadTemplates() {
+  try {
+    return JSON.parse(localStorage.getItem(TEMPLATES_KEY) || "[]");
+  } catch {
+    return [];
+  }
+}
+
+function saveTemplates(templates) {
+  localStorage.setItem(TEMPLATES_KEY, JSON.stringify(templates));
+}
+
+function launchTemplate(template) {
+  for (const entry of template.entries) {
+    const profile = profiles.find((p) => p.id === entry.profileId);
+    if (!profile) continue; // profile removed since the template was saved — skip, don't block the rest
+    for (let i = 0; i < entry.count; i += 1) {
+      const card = addCard({ profileId: entry.profileId }, { save: false });
+      startTerminal(card);
+    }
+  }
+}
+
+function renderTemplatesPanel() {
+  const body = document.getElementById("su-templates-body");
+  const templates = loadTemplates();
+  body.innerHTML =
+    templates
+      .map(
+        (t) => `
+      <div class="connection-row" data-id="${t.id}">
+        <div class="connection-row-head">
+          <b>${escapeHtml(t.name)}</b>
+          <span class="connection-status">${t.entries.map((e) => `${e.count}×${escapeHtml(e.profileId)}`).join(", ")}</span>
+        </div>
+        <div class="connection-row-actions">
+          <button type="button" class="mw-btn su-template-launch">Launch</button>
+          <button type="button" class="mw-btn su-template-delete">Delete</button>
+        </div>
+      </div>`,
+      )
+      .join("") +
+    `<div class="connection-row">
+      <div class="connection-row-head"><b>New template</b></div>
+      <div class="connection-row-actions">
+        <input type="text" id="su-template-name" placeholder="Name (e.g. My Usual 6)" />
+        <select id="su-template-profile"></select>
+        <input type="number" id="su-template-count" min="1" max="10" value="1" style="width:60px" />
+        <button type="button" class="mw-btn" id="su-template-add-entry">Add</button>
+      </div>
+      <div id="su-template-draft-entries"></div>
+      <button type="button" class="mw-btn primary" id="su-template-save">Save template</button>
+    </div>`;
+
+  document.getElementById("su-template-profile").innerHTML = profiles
+    .map((p) => `<option value="${p.id}">${escapeHtml(p.label)}</option>`)
+    .join("");
+
+  body.querySelectorAll(".su-template-launch").forEach((btn) =>
+    btn.addEventListener("click", () => {
+      const id = btn.closest(".connection-row").dataset.id;
+      const t = templates.find((x) => x.id === id);
+      if (t) launchTemplate(t);
+    }),
+  );
+  body.querySelectorAll(".su-template-delete").forEach((btn) =>
+    btn.addEventListener("click", () => {
+      const id = btn.closest(".connection-row").dataset.id;
+      saveTemplates(templates.filter((x) => x.id !== id));
+      renderTemplatesPanel();
+    }),
+  );
+
+  let draftEntries = [];
+  document.getElementById("su-template-add-entry").addEventListener("click", () => {
+    const profileId = document.getElementById("su-template-profile").value;
+    const count = Math.max(1, parseInt(document.getElementById("su-template-count").value, 10) || 1);
+    draftEntries.push({ profileId, count });
+    document.getElementById("su-template-draft-entries").textContent = draftEntries
+      .map((e) => `${e.count}×${e.profileId}`)
+      .join(", ");
+  });
+  document.getElementById("su-template-save").addEventListener("click", () => {
+    const name = document.getElementById("su-template-name").value.trim();
+    if (!name || !draftEntries.length) return;
+    templates.push({ id: `t${Date.now().toString(36)}`, name, entries: draftEntries });
+    saveTemplates(templates);
+    renderTemplatesPanel();
+  });
+}
+
+document.getElementById("su-templates-btn").addEventListener("click", () => {
+  document.getElementById("su-templates-modal").classList.remove("hidden");
+  renderTemplatesPanel();
+});
+document.getElementById("su-templates-close").addEventListener("click", () => {
+  document.getElementById("su-templates-modal").classList.add("hidden");
+});
+document.getElementById("su-templates-modal").addEventListener("click", (e) => {
+  if (e.target.id === "su-templates-modal") document.getElementById("su-templates-modal").classList.add("hidden");
+});
+
 let lastCardCount = -1;
 setInterval(() => {
   // Grid/compact recheck runs every tick (cheap at this scale) since
