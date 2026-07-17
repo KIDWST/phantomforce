@@ -1,4 +1,4 @@
-import { currentTenantId, session } from "./store.js?v=phantom-live-20260716-318";
+import { currentTenantId, session } from "./store.js?v=phantom-live-20260717-12";
 
 let activeConfiguration = null;
 let activeEntitlements = null;
@@ -292,7 +292,7 @@ function renderStudio(el, state, opts) {
       </section>
       <section class="cust-panel"><div class="cust-panel-head"><div><p class="cust-kicker">VERSION HISTORY</p><h3>Every publish is reversible.</h3></div></div><div data-cust-versions>${versionsMarkup()}</div></section>
     </div>
-    <section class="cust-publish"><div><p class="cust-kicker">CHANGE REVIEW</p><h3>${preview ? `Preview version ${preview.proposedVersion}` : "Preview before publishing"}</h3>${issueMarkup(preview?.issues)}</div><div class="cust-publish-actions"><button class="cust-secondary" type="button" data-cust-preview ${busy ? "disabled" : ""}>Preview changes</button><button class="cust-primary" type="button" data-cust-publish ${!preview?.valid || busy ? "disabled" : ""}>Publish workspace</button></div></section>
+    <section class="cust-publish"><div><p class="cust-kicker">CHANGE REVIEW</p><h3>${preview ? `Preview version ${preview.proposedVersion}` : "Publish live when ready"}</h3>${issueMarkup(preview?.issues)}</div><div class="cust-publish-actions"><button class="cust-secondary" type="button" data-cust-preview ${busy ? "disabled" : ""}>Preview changes</button><button class="cust-primary" type="button" data-cust-publish ${busy ? "disabled" : ""}>${preview?.valid ? "Publish workspace" : "Validate and publish"}</button></div></section>
   </div>`;
   bindStudio(el, state, opts);
 }
@@ -342,16 +342,22 @@ function bindStudio(el, state, opts) {
   });
   el.querySelectorAll("[data-cust-remove-object]").forEach((button) => { button.onclick = () => { state.draft.customObjects = state.draft.customObjects.filter((object) => object.id !== button.dataset.custRemoveObject); state.preview = null; renderStudio(el, state, opts); }; });
   const runPreview = async (patch = configurationPatch(state.draft)) => {
+    let result = null;
     state.busy = true; state.message = "Checking the workspace change…"; renderStudio(el, state, opts);
     try {
       const payload = await api("/phantom-ai/customization/preview", { method: "POST", body: JSON.stringify({ tenant_id: currentTenantId(), patch }) });
       state.preview = payload.preview; state.pendingPatch = patch; state.draft = clone(payload.preview.candidate); state.message = payload.preview.valid ? "Preview ready. Nothing has changed for the organization yet." : "Fix the highlighted items before publishing.";
+      result = state.preview;
     } catch (error) { state.preview = null; state.message = error.message; }
     state.busy = false; renderStudio(el, state, opts);
+    return result;
   };
   el.querySelector("[data-cust-preview]")?.addEventListener("click", () => runPreview());
   el.querySelector("[data-cust-publish]")?.addEventListener("click", async () => {
-    if (!state.preview?.valid) return;
+    if (!state.preview?.valid) {
+      const preview = await runPreview();
+      if (!preview?.valid) return;
+    }
     state.busy = true; state.message = "Publishing this organization version…"; renderStudio(el, state, opts);
     try {
       const payload = await api("/phantom-ai/customization/publish", { method: "POST", body: JSON.stringify({ tenant_id: currentTenantId(), patch: state.pendingPatch || configurationPatch(state.draft), expected_version: activeConfiguration.version, summary: "Published from Workspace Studio" }) });

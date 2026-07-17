@@ -1,6 +1,6 @@
-import { currentTenantId, currentWs, session, wsName } from "./store.js?v=phantom-live-20260716-318";
-import { esc } from "./workspaces.js?v=phantom-live-20260716-318";
-import { renderOrganizationGraph } from "./orggraph.js?v=phantom-live-20260716-318";
+import { currentTenantId, currentWs, session, wsName } from "./store.js?v=phantom-live-20260717-12";
+import { esc } from "./workspaces.js?v=phantom-live-20260717-12";
+import { renderOrganizationGraph } from "./orggraph.js?v=phantom-live-20260717-12";
 
 const state = {
   loading: true,

@@ -28,6 +28,7 @@
     "test:phantomstore": "node scripts/test-phantomstore-ui.mjs && npm run test:phantomstore --workspace @phantomforce/server",
     "test:customer-plan-switching": "node scripts/test-customer-plan-switching.mjs",
     "test:change-memory": "node scripts/guard-change-memory.mjs",
+    "test:responsive-viewports": "node scripts/test-responsive-viewports.mjs",
     "test:command-surface": "node scripts/test-command-surface.mjs",
     "test:sites": "npm run test:workspace-site-builder && npm run test:site-store-render --workspace @phantomforce/server",
     "typecheck": "npm run build --workspace @phantomforce/contracts && npm run typecheck --workspace @phantomforce/server",
