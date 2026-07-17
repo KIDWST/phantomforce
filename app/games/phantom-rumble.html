@@ -11,6 +11,11 @@ canvas{width:100%;height:100%;display:block}
 .overlay .modes button{border:1px solid #2cff9b55;border-radius:12px;background:#04140c;color:#7dffbd;padding:14px 18px;font:700 13px ui-monospace;cursor:pointer;min-width:150px}
 .overlay .modes button:hover{background:#0a2417;box-shadow:0 0 18px #22c55e44}
 .overlay .modes button b{display:block;font-size:16px;margin-bottom:4px;color:#baffdb}
+.overlay .mode-group{margin:14px 0 2px}
+.overlay .mode-group>i{display:block;font-size:11px;letter-spacing:2px;color:#5a7568;margin-bottom:6px;font-style:normal}
+.overlay .local-slots{display:flex;gap:8px;align-items:center;justify-content:center;margin:4px 0 10px;font-size:12px;color:#6fae8d}
+.overlay .local-slots button{border:1px solid #2cff9b33;border-radius:16px;background:#04140c;color:#6fae8d;padding:4px 12px;font:700 11px ui-monospace;cursor:pointer}
+.overlay .local-slots button[aria-checked="true"]{background:#123423;color:#baffdb;border-color:#2cff9baa}
 .overlay .diffs{display:flex;gap:8px;justify-content:center;margin:2px 0 14px}
 .overlay .diffs button{border:1px solid #2cff9b33;border-radius:20px;background:#04140c;color:#6fae8d;padding:6px 16px;font:700 11px ui-monospace;letter-spacing:1px;cursor:pointer}
 .overlay .diffs button[aria-checked="true"]{background:#123423;color:#baffdb;border-color:#2cff9baa;box-shadow:0 0 12px #22c55e33}
@@ -41,11 +46,20 @@ body.paused .pause{display:grid}
   <h1>PHANTOM RUMBLE</h1>
   <p>Brawling chickens, one walled coop, no ring-outs. Damage raises a bird's percent — the higher it climbs, the harder a fence slam cracks them for the KO. Last chicken standing takes the rumble.</p>
   <p class="pb" data-pb hidden></p>
-  <div class="modes">
-    <button data-mode="duel"><b>DUEL</b>you vs one bot</button>
-    <button data-mode="versus"><b>VERSUS</b>2 players, one keyboard</button>
-    <button data-mode="rumble"><b>RUMBLE</b>2 players + 2 bots</button>
-    <button data-mode="botbrawl"><b>BOT BRAWL</b>you vs three bots</button>
+  <div class="mode-group"><i>SOLO / LOCAL</i><div class="modes">
+    <button data-mode="solo"><b>SOLO 1v1</b>you vs one bot</button>
+    <button data-mode="localffa"><b>LOCAL FFA</b>up to 4, split a keyboard</button>
+  </div></div>
+  <div class="mode-group"><i>ONLINE</i><div class="modes">
+    <button data-mode="net1v1"><b>NET 1v1</b>invite a friend</button>
+    <button data-mode="net2v2"><b>NET 2v2</b>teams, invite code</button>
+    <button data-mode="netffa"><b>NET FFA</b>up to 4, invite code</button>
+  </div></div>
+  <div class="local-slots" data-local-slots hidden>
+    <span>Humans on this keyboard:</span>
+    <button data-humans="1" type="button" role="radio" aria-checked="false">1</button>
+    <button data-humans="2" type="button" role="radio" aria-checked="true">2</button>
+    <button data-local-start type="button">START</button>
   </div>
   <div class="diffs" data-diffs role="radiogroup" aria-label="Bot difficulty">
     <button data-diff="easy" type="button" role="radio" aria-checked="false">EASY</button>
@@ -199,10 +213,10 @@ function makeFighter(slot,human){
     grounded:false,jumps:2,stun:0,invuln:2,charge:0,power:false,shurikenArmed:false,smokeCooldown:0,speedBuff:0,dead:false,shieldHeld:false,parry:0,dodgeCd:0,
     attackCd:0,anim:0,trail:[],ai:{dir:1,timer:0,jumpCd:0,diff:DIFFS[botDifficulty]},lastTap:{key:'',at:0},_gpDir:0};
 }
-function startMatch(selected){
+function startMatch(selected,options={}){
   mode=selected;
-  const humans=mode==='versus'||mode==='rumble'?2:1;
-  const count=mode==='duel'?2:mode==='versus'?2:4;
+  const humans=selected==='solo'?1:selected==='localffa'?(options.humans||2):selected==='net1v1'?2:1;
+  const count=selected==='solo'||selected==='net1v1'?2:4;
   fighters=[];
   for(let i=0;i<count;i++)fighters.push(makeFighter(i,i<humans));
   buildPlatforms(nextSeed());
@@ -765,8 +779,18 @@ function loop(t){
 }
 
 /* ---------- overlays ---------- */
-for(const b of document.querySelectorAll('[data-mode]'))b.onclick=()=>startMatch(b.dataset.mode);
-document.querySelector('[data-again]').onclick=()=>startMatch(mode);
+let localHumans=2;
+const localSlotsEl=document.querySelector('[data-local-slots]');
+for(const b of document.querySelectorAll('[data-humans]'))b.onclick=()=>{
+  localHumans=Number(b.dataset.humans);
+  for(const btn of document.querySelectorAll('[data-humans]'))btn.setAttribute('aria-checked',String(Number(btn.dataset.humans)===localHumans));
+};
+for(const b of document.querySelectorAll('[data-mode]'))b.onclick=()=>{
+  if(b.dataset.mode==='localffa'){localSlotsEl.hidden=false;return}
+  startMatch(b.dataset.mode,{humans:localHumans});
+};
+document.querySelector('[data-local-start]').onclick=()=>startMatch('localffa',{humans:localHumans});
+document.querySelector('[data-again]').onclick=()=>startMatch(mode,{humans:localHumans});
 document.querySelector('[data-menu]').onclick=()=>resetToMenu();
 function resetToMenu(){
   cancelAnimationFrame(raf);
@@ -799,7 +823,7 @@ addEventListener('message',e=>{
   if(d.type==='pause')setPaused(true);
   if(d.type==='resume')setPaused(false);
   if(d.type==='exit')resetToMenu();
-  if(d.type==='restart'){if(mode)startMatch(mode);else resetToMenu()}
+  if(d.type==='restart'){if(mode)startMatch(mode,{humans:localHumans});else resetToMenu()}
   if(d.type==='restore')resetToMenu();
 });
 document.addEventListener('visibilitychange',()=>{if(document.hidden)setPaused(true)});
