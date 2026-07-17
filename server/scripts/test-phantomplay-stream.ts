@@ -50,3 +50,22 @@ await play.leavePhantomPlayRoom(guest, { code: roomCode, tenantId: "org-broadcas
 assert(broadcasts.length === 3, "After unsubscribing, further room changes must not reach the old listener.");
 
 console.log("PASS: broadcastRoom fires on every room mutation");
+
+const room2 = await play.createPhantomPlayRoom(host, { gameId: "neon-drift", mode: "friends", maxPlayers: 4 }, { entitled: true });
+const code2 = room2.room.code;
+await play.joinPhantomPlayRoom(guest, { code: code2, tenantId: "org-broadcast" }, { entitled: true });
+
+const events: Array<{ kind: string; payload: unknown }> = [];
+const stop2 = play.subscribeToRoom(code2, (room) => { events.push({ kind: "state", payload: room }); });
+const stopActions2 = play.subscribeToRoomActions(code2, (entry) => { events.push({ kind: "action", payload: entry }); });
+
+const queued = await play.queuePhantomPlayRoomAction(guest, { code: code2, tenantId: "org-broadcast", action: { ping: true }, mode: "merge" });
+assert(queued?.queued === true, "Queuing a non-host action should succeed for a real participant.");
+assert(events.some((e) => e.kind === "action" && (e.payload as any).actorId === "guest-user"), "The action should be relayed to subscribers, tagged with the submitting actor's id.");
+
+const outsider: AccessSession = { id: "outsider", userId: "outsider-user", label: "Outsider", role: "client", canManageAccess: false, orgId: "org-elsewhere", orgRole: "member" };
+const outsiderResult = await play.queuePhantomPlayRoomAction(outsider, { code: code2, tenantId: "org-elsewhere", action: { ping: true } }).catch(() => null);
+assert(outsiderResult === null, "A caller outside the room's tenant must not be able to queue an action.");
+
+stop2(); stopActions2();
+console.log("PASS: non-host action queue + relay");

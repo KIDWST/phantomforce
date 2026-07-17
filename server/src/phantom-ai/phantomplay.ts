@@ -948,6 +948,62 @@ function broadcastRoom(room: PhantomPlayRoom): void {
   for (const listener of listeners) listener(view);
 }
 
+type PhantomPlayRoomActionEntry = { actorId: string; action: unknown; mode: "merge" | "replace"; queuedAt: string };
+const roomActionSubscribers = new Map<string, Set<(entry: PhantomPlayRoomActionEntry) => void>>();
+
+export function subscribeToRoomActions(code: string, listener: (entry: PhantomPlayRoomActionEntry) => void): () => void {
+  let set = roomActionSubscribers.get(code);
+  if (!set) {
+    set = new Set();
+    roomActionSubscribers.set(code, set);
+  }
+  set.add(listener);
+  return () => {
+    const current = roomActionSubscribers.get(code);
+    if (!current) return;
+    current.delete(listener);
+    if (current.size === 0) roomActionSubscribers.delete(code);
+  };
+}
+
+function broadcastAction(code: string, entry: PhantomPlayRoomActionEntry): void {
+  const listeners = roomActionSubscribers.get(code);
+  if (!listeners || listeners.size === 0) return;
+  for (const listener of listeners) listener(entry);
+}
+
+// Non-host action intake: a participant who is NOT the room host cannot
+// write authoritative matchState directly (updatePhantomPlayRoomMatchState
+// enforces that), so this is their only path to influence the match — the
+// action is relayed to subscribers (in practice, the host's open stream
+// connection) rather than applied to the store here. The host's own client
+// decides whether/how to fold it into matchState via the existing
+// updatePhantomPlayRoomMatchState route, exactly as it does today when a
+// game calls sendMatchAction() and phantomplay.js's handleMatchAction()
+// forwards it — this function only removes the poll-interval delay in
+// getting the action from a non-host participant to the host in the first
+// place.
+export async function queuePhantomPlayRoomAction(session: AccessSession, input: Record<string, unknown>): Promise<{ queued: true } | null> {
+  const tenantId = tenantIdFor(session, input.tenantId);
+  const actorId = actorIdFor(session);
+  const store = await readStore();
+  const room = findRoom(store, tenantId, input.code as string | undefined);
+  if (!room) return null;
+  const status = roomStatus(room);
+  if (status === "ended" || status === "expired") throw new Error("This room is no longer active.");
+  if (!room.participants.some((participant) => participant.actorId === actorId)) {
+    throw new Error("You are not a participant in this room.");
+  }
+  const entry: PhantomPlayRoomActionEntry = {
+    actorId,
+    action: input.action ?? null,
+    mode: input.mode === "replace" ? "replace" : "merge",
+    queuedAt: now(),
+  };
+  broadcastAction(room.code, entry);
+  return { queued: true };
+}
+
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function replaceStoreFile(temp: string, target: string) {
