@@ -912,6 +912,35 @@ async function readStore(): Promise<PhantomPlayStore> {
 
 let writes = Promise.resolve();
 
+// In-memory subscriber registry for the realtime stream (Task 1 of the
+// PhantomPlay Realtime Channel plan). This is NOT a room-state cache — the
+// disk-backed store (readStore/writeStore above) remains the single source
+// of truth. This map only tracks which open server responses want to be
+// notified when a given room code changes, so broadcastRoom() (added in
+// Task 2) has someone to write to. Single-process only: see the plan's
+// Global Constraints for why this doesn't span multiple worker processes.
+export type PhantomPlayRoomView = ReturnType<typeof roomView>;
+const roomSubscribers = new Map<string, Set<(room: PhantomPlayRoomView) => void>>();
+
+export function subscribeToRoom(code: string, listener: (room: PhantomPlayRoomView) => void): () => void {
+  let set = roomSubscribers.get(code);
+  if (!set) {
+    set = new Set();
+    roomSubscribers.set(code, set);
+  }
+  set.add(listener);
+  return () => {
+    const current = roomSubscribers.get(code);
+    if (!current) return;
+    current.delete(listener);
+    if (current.size === 0) roomSubscribers.delete(code);
+  };
+}
+
+export function roomSubscriberCount(code: string): number {
+  return roomSubscribers.get(code)?.size ?? 0;
+}
+
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function replaceStoreFile(temp: string, target: string) {
