@@ -19,7 +19,7 @@ for (const profile of ["business", "creator", "developer"]) {
   assert.match(mainSource, new RegExp(`value="${profile}"`, "u"), `${profile} must be selectable in the signup UI.`);
 }
 
-assert.match(profileSource, /developer:[\s\S]*enabledModules: \["dashboard", "planner", "phantomplay", "approvals", "settings", "customize"\]/u, "Developer profile must default to dev-focused modules only.");
+assert.match(profileSource, /developer:[\s\S]*enabledModules: \["dashboard", "planner", "phantomplay", "phantomstore", "approvals", "settings", "customize"\]/u, "Developer profile must default to dev-focused modules and PhantomStore.");
 for (const blocked of ["crm", "media", "sites", "money", "intelligence", "analytics", "automation"]) {
   assert.match(serviceSource, new RegExp(`const blocked = \\[[^\\]]*"${blocked}"`, "u"), `Developer validation must block ${blocked}.`);
 }

@@ -14,7 +14,7 @@ assert.doesNotMatch(source, /Workspace Studio could not load/u, "Workspace Studi
 assert.match(source, /previewCustomizedNavigation/u, "Navigation customization needs a pure preview helper for regression tests.");
 assert.match(source, /\(left\.bottom \? 1 : 0\)\s*-\s*\(right\.bottom \? 1 : 0\)/u, "Navigation sorting must use an explicit bottom-group comparison.");
 
-for (const id of ["dashboard", "crm", "media", "sites", "money", "phantomplay", "intelligence", "analytics", "customize", "settings"]) {
+for (const id of ["dashboard", "crm", "media", "sites", "money", "phantomplay", "phantomstore", "intelligence", "analytics", "customize", "settings"]) {
   assert.match(source, new RegExp(`\\["${id}"`, "u"), `${id} must be present in the local Workspace Modules fallback.`);
 }
 
@@ -37,6 +37,7 @@ const baseNav = [
   { id: "money" },
   { id: "planner" },
   { id: "phantomplay" },
+  { id: "phantomstore" },
   { id: "memory", bottom: true },
   { id: "automation", bottom: true },
   { id: "approvals", bottom: true },
@@ -48,7 +49,7 @@ const baseNav = [
   { id: "settings", bottom: true },
 ];
 const oldSavedOrder = [
-  "dashboard", "crm", "clientsetup", "media", "sites", "money", "planner", "phantomplay",
+  "dashboard", "crm", "clientsetup", "media", "sites", "money", "planner", "phantomplay", "phantomstore",
   "intelligence", "analytics", "memory", "automation", "approvals", "workers", "vacation", "developer", "settings",
 ];
 const configuration = {
@@ -56,7 +57,7 @@ const configuration = {
 };
 const ownerOrder = previewCustomizedNavigation(baseNav, configuration, "owner").map((item) => item.id);
 assert.deepEqual(ownerOrder, [
-  "dashboard", "crm", "clientsetup", "media", "sites", "money", "planner", "phantomplay",
+  "dashboard", "crm", "clientsetup", "media", "sites", "money", "planner", "phantomplay", "phantomstore",
   "memory", "automation", "approvals", "workers", "intelligence", "analytics", "vacation", "developer", "settings",
 ], "Navigation customization must preserve the top group and base sidebar bottom-group order even with old saved module order values.");
 

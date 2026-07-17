@@ -51,6 +51,7 @@ import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260716-2";
 import { assetsAvailable } from "./orgs.js?v=phantom-live-20260716-2";
 import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260716-2";
 import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260716-2";
+import { renderPhantomStore } from "./phantomstore.js?v=phantom-live-20260716-2";
 // V2 is the default PhantomPlay experience (docs/superpowers/specs/2026-07-15-
 // phantomplay-global-leaderboard-design.md decision #1); "0" is an explicit
 // opt-out via the Classic view button, still wired in phantomplay-v2.js.
@@ -525,6 +526,7 @@ const BASE_NAV = [
   { id: "money",      label: "Accounting",   icon: "dollar", ws: "money" },
   { id: "planner",    label: "Planner",      icon: "calendar", ws: "planner" },
   { id: "phantomplay", label: "PhantomPlay", icon: "film",  ws: "phantomplay" },
+  { id: "phantomstore", label: "PhantomStore", icon: "spark", ws: "phantomstore" },
   { id: "memory",     label: "Memory",       icon: "brain", ws: "memory", bottom: true, navHidden: true },
   { id: "automation", label: "Automations",  icon: "auto",  ws: "automation", bottom: true, navHidden: true },
   { id: "approvals",  label: "Approvals",    icon: "check", ws: "approvals", badge: true, bottom: true },
@@ -549,6 +551,7 @@ const MOBILE_LABEL_OVERRIDES = {
   sites: "Sites",
   media: "Media",
   phantomplay: "Play",
+  phantomstore: "Store",
   automation: "Auto",
   approvals: "Approvals",
   analytics: "Analytics",
@@ -3085,6 +3088,7 @@ const CUSTOM = {
   content: { title: "Media Lab", kicker: "Publish studio inside Media Lab", custom: true, wide: true, render: (body) => renderMediaLabSuite(body, "content") },
   assets: { title: "Asset Cloud", kicker: "Your business's creative memory", custom: true, wide: true, render: (body) => renderAssetCloud(body) },
   phantomplay: { title: "PhantomPlay", kicker: "Intentional downtime and approved games", custom: true, wide: true, render: (body) => (phantomPlayV2Opted() ? renderPhantomPlayV2 : renderPhantomPlay)(body, mediaOpts()) },
+  phantomstore: { title: "PhantomStore", kicker: "AI marketplace for tools, agents, and apps", custom: true, wide: true, render: (body) => renderPhantomStore(body, mediaOpts()) },
   intelligence: { title: "Competitor Intelligence", kicker: "Public signals, labeled estimates, and original responses", custom: true, wide: true, render: (body) => renderCompetitorIntelligence(body, mediaOpts()) },
   clientsetup: { title: "Client Setup", kicker: "Owner setup console", custom: true, wide: true, render: (body) => renderClientSetupConsole(body, mediaOpts()) },
   analytics: { title: "Analytics", kicker: "Signals, trends, and operating insight", custom: true, wide: true, render: renderAnalyticsSuite },

@@ -14,6 +14,7 @@ const PLATFORM_MODULES = [
   ["money", "Accounting", true, ["owner", "admin", "manager"]],
   ["planner", "Planner", true, ["owner", "admin", "manager", "member"]],
   ["phantomplay", "PhantomPlay", true, ["owner", "admin", "manager", "member", "client"]],
+  ["phantomstore", "PhantomStore", true, ["owner", "admin", "manager", "member", "client"]],
   ["memory", "Memory", true, ["owner", "admin", "manager"]],
   ["automation", "Automations", true, ["owner", "admin", "manager"]],
   ["approvals", "Approvals", false, ["owner", "admin", "manager", "member"]],

@@ -23,7 +23,7 @@ export const WORKSPACE_PROFILES: Record<WorkspaceProfileId, WorkspaceProfile> = 
     description: "Leads, quotes, delivery, sites, accounting, protection, media, analytics, and approvals.",
     workspaceName: "Business HQ",
     homeModuleId: "dashboard",
-    enabledModules: ["dashboard", "crm", "media", "sites", "money", "intelligence", "analytics", "automation", "approvals", "workers", "settings", "customize"],
+    enabledModules: ["dashboard", "crm", "media", "sites", "money", "phantomstore", "intelligence", "analytics", "automation", "approvals", "workers", "settings", "customize"],
     brainStorageMode: "web_only",
     localBrainInstall: "never_silent",
     apiCredentialPolicy: "tenant_owned_only",
@@ -36,7 +36,7 @@ export const WORKSPACE_PROFILES: Record<WorkspaceProfileId, WorkspaceProfile> = 
     description: "Media Lab, Content Hub, sites, analytics, approvals, and lightweight planning.",
     workspaceName: "Creator Studio",
     homeModuleId: "media",
-    enabledModules: ["dashboard", "media", "sites", "analytics", "approvals", "settings", "customize"],
+    enabledModules: ["dashboard", "media", "sites", "phantomstore", "analytics", "approvals", "settings", "customize"],
     brainStorageMode: "web_only",
     localBrainInstall: "never_silent",
     apiCredentialPolicy: "tenant_owned_only",
@@ -49,7 +49,7 @@ export const WORKSPACE_PROFILES: Record<WorkspaceProfileId, WorkspaceProfile> = 
     description: "Planner, PhantomPlay, Developer settings, approvals, and provider/subscription setup owned by the developer.",
     workspaceName: "Dev Studio",
     homeModuleId: "planner",
-    enabledModules: ["dashboard", "planner", "phantomplay", "approvals", "settings", "customize"],
+    enabledModules: ["dashboard", "planner", "phantomplay", "phantomstore", "approvals", "settings", "customize"],
     brainStorageMode: "external_provider",
     localBrainInstall: "never_silent",
     apiCredentialPolicy: "tenant_owned_only",
@@ -67,4 +67,3 @@ export function normalizeWorkspaceProfileId(value: unknown): WorkspaceProfileId 
 export function workspaceProfileFor(value: unknown): WorkspaceProfile {
   return WORKSPACE_PROFILES[normalizeWorkspaceProfileId(value)];
 }
-
