@@ -49,6 +49,7 @@ body.paused .pause{display:grid}
   <div class="mode-group"><i>SOLO / LOCAL</i><div class="modes">
     <button data-mode="solo"><b>SOLO 1v1</b>you vs one bot</button>
     <button data-mode="localffa"><b>LOCAL FFA</b>up to 4, split a keyboard</button>
+    <button data-mode="racetop"><b>RACE TO THE TOP</b>up to 4, no health, climb or get left behind</button>
   </div></div>
   <div class="mode-group"><i>ONLINE</i><div class="modes">
     <button data-mode="net1v1"><b>NET 1v1</b>invite a friend</button>
@@ -128,6 +129,24 @@ function buildPlatforms(seed){
   const chunk=CHUNKS[Math.floor(rand()*CHUNKS.length)];
   const cx=.5,cy=.56;
   PLATS=chunk.map(c=>({x:cx+c.dx,y:cy+c.dy,w:c.w,h:.03}));
+}
+/* ---------- Race to the Top: procedurally-generated tower ----------
+   A separate seeded layout from the brawl arena's PLATS, built the same
+   deterministic way (mulberry32 from the shared match seed) so local and
+   networked matches agree on the tower without transmitting it. */
+const TOWER_ROWS=16,ROW_STEP=.16,TOWER_START_Y=.56;
+let TOWER=[],SUMMIT=null;
+function buildTower(seed){
+  const rand=mulberry32(seed);
+  TOWER=[{x:.5,y:TOWER_START_Y,w:.5,h:.03}]; // shared start platform, wider than a normal chunk so all racers can spawn on it
+  for(let row=1;row<=TOWER_ROWS;row++){
+    const chunk=CHUNKS[Math.floor(rand()*CHUNKS.length)];
+    const cy=TOWER_START_Y-row*ROW_STEP;
+    for(const c of chunk)TOWER.push({x:.5+c.dx,y:cy+c.dy*.4,w:c.w,h:.03});
+  }
+  const summitY=TOWER_START_Y-(TOWER_ROWS+1)*ROW_STEP;
+  SUMMIT={x:.5,y:summitY,w:.4,h:.035,summit:true};
+  TOWER.push(SUMMIT);
 }
 /* Server-authoritative-ready seeding: this game is local-only today (no
    client to desync from), but the seed still comes from the trusted
@@ -237,6 +256,12 @@ function makeFighter(slot,human){
     x:spawn.x,y:spawn.y,vx:0,vy:0,face:slot%2?-1:1,pct:0,stocks:3,
     grounded:false,jumps:2,stun:0,invuln:2,charge:0,power:false,shurikenArmed:false,smokeCooldown:0,speedBuff:0,dead:false,shieldHeld:false,parry:0,dodgeCd:0,
     attackCd:0,anim:0,trail:[],ai:{dir:1,timer:0,jumpCd:0,diff:DIFFS[botDifficulty]},lastTap:{key:'',at:0},_gpDir:0};
+}
+function makeRaceFighter(slot,human){
+  return {slot,human,name:PALETTE[slot].name,color:PALETTE[slot].c,glow:PALETTE[slot].glow,
+    x:.5+(slot-1.5)*.06,y:TOWER_START_Y,vx:0,vy:0,face:slot%2?-1:1,altitude:0,finished:false,place:0,
+    grounded:false,jumps:2,stun:0,invuln:2,dodgeCd:0,attackCd:0,anim:0,trail:[],grappleReady:false,shieldBubble:0,
+    ai:{dir:1,timer:0,jumpCd:0,diff:DIFFS[botDifficulty]},lastTap:{key:'',at:0},_gpDir:0};
 }
 function startMatch(selected,options={}){
   mode=selected;
