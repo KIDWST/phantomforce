@@ -5,7 +5,7 @@
 
 import {
   store, uid, visible, isAdmin, isOwnerOperator, currentWs, wsName, pushActivity, resolveApproval,
-  moneyView, fmtMoney, fmtDate, fmtDateTime, ago, daysUntil, statusLabel,
+  moneyView, fmtMoney, fmtDate, fmtDateTime, ago, daysUntil, statusLabel, outcomesView,
   PACKAGES, RETAINERS, FINANCE_CATEGORIES, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS, CHAT_HISTORY_RETENTION_DAYS,
   addMemory, toggleMemoryRemember, forgetMemory, forgetChatHistory, memoryStats, memoryRetention, chatHistoryStats, chatHistoryRetention,
   session,
@@ -3477,9 +3477,42 @@ function renderPhantom(el) {
     </div>`;
 }
 
+/* ============================ OUTCOMES ============================
+   The core object the Command architecture revolves around — see docs
+   shared with the user. Reframes work around target results instead of
+   raw tool tabs: each card traces to real linked records (outcomesView()
+   in store.js) with department tags, a target result, success metric,
+   strategy, and workstream buttons that jump straight into the real
+   workspace driving that outcome (the existing [data-open-ws] global
+   delegated click convention already handles the wiring). */
+function renderOutcomes(el, rerender) {
+  const outcomes = outcomesView();
+  el.innerHTML = `
+    <div class="ws-toolbar">
+      <p class="ws-note">Outcomes are derived from real records — proposals, overdue follow-ups, and their linked work. An outcome only appears if real data supports it.</p>
+    </div>
+    <div class="stack">
+      ${outcomes.map((o) => `
+        <article class="record record-wide">
+          <div class="record-top">
+            ${o.dept.map((d) => `<span class="ws-tag">${esc(d)}</span>`).join("")}
+            <h4>${esc(o.title)}</h4>
+            ${chip(o.status)}
+          </div>
+          ${kv("Target result", esc(o.targetResult))}
+          ${kv("Success metric", esc(o.successMetric))}
+          <p class="record-notes">${esc(o.strategy)}</p>
+          <div class="record-actions">
+            ${o.workstreams.map((w) => `<button type="button" class="btn" data-open-ws="${esc(w.open)}" title="${esc(w.detail || "")}">${esc(w.label)}</button>`).join("")}
+          </div>
+        </article>`).join("") || empty("No outcomes yet. Outcomes appear once real work — a proposal, an overdue follow-up — is in the store to drive one.")}
+    </div>`;
+}
+
 /* ============================ REGISTRY ============================ */
 export const WORKSPACE_DEFS = {
   phantom: { title: "Phantom AI", kicker: "Business command surface", render: renderPhantom },
+  outcomes: { title: "Outcomes", kicker: "Target results, not raw tool tabs", render: renderOutcomes },
   leads: { title: "Client CRM", kicker: "Org-scoped client database and follow-up memory", render: renderLeads },
   proposals: { title: "Offer Desk", kicker: "Quotes, scopes, and deal math", render: renderProposals },
   reviews: { title: "Review Desk", kicker: "Reputation engine", render: renderReviews },
@@ -3512,7 +3545,9 @@ export function missionWidgets() {
   const subagentCount = workerRoster.filter((worker) => worker.worker_type === "subagent").length;
   const neuralCellCount = workerRoster.filter((worker) => worker.worker_type === "cell").length;
 
+  const outcomes = outcomesView();
   const w = [
+    { id: "outcomes", icon: "◎", title: "Outcomes", stat: `${outcomes.length} active`, sub: outcomes.length ? "target results driving real work" : "no outcomes yet", alert: false },
     { id: "leads", icon: "◉", title: "Client CRM", stat: `${openLeads.length} open`, sub: dueLeads.length ? `${dueLeads.length} due today` : "client memory current", alert: dueLeads.length > 0 },
     { id: "proposals", icon: "◆", title: "Offer Desk", stat: `${m.open.length} live`, sub: `${fmtMoney(m.pipeline)} potential`, alert: false },
     { id: "media", icon: "▶", title: "Creator Studio", stat: `${pendingMedia.length} pending`, sub: `${generatedMedia.length} generated`, alert: false },

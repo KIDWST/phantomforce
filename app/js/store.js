@@ -1183,6 +1183,54 @@ export function commandBriefing() {
   return { healthLine, decisions: decisions.slice(0, 3), handledWhileAway };
 }
 
+/* ---------------- derived: outcomes ----------------
+   The core object the Command architecture revolves around: a target
+   result with real linked records as evidence, not a standalone
+   wishlist item. Every outcome below traces to actual store data —
+   nothing here is invented to fill out the list. If the underlying
+   records don't exist, the outcome simply doesn't appear. */
+export function outcomesView() {
+  const outcomes = [];
+
+  const overdueLeads = visible(store.state.leads)
+    .filter((l) => ["new", "follow-up"].includes(l.status) && daysUntil(l.due) <= 0);
+  if (overdueLeads.length) {
+    outcomes.push({
+      id: "outc-overdue-leads",
+      title: "Recover every overdue follow-up",
+      dept: ["Client Care"],
+      targetResult: "Zero leads past their due date",
+      successMetric: "0 overdue leads",
+      strategy: "Drafts are pre-written from each client's history; the only remaining step is a human decision to send.",
+      status: "active",
+      workstreams: overdueLeads.map((l) => ({ label: `${l.name} — ${l.company}`, detail: l.next, open: "leads" })),
+    });
+  }
+
+  const bestProposal = visible(store.state.proposals)
+    .filter((p) => ["draft", "sent-ready", "sent"].includes(p.status))
+    .sort((a, b) => (b.price || 0) - (a.price || 0))[0];
+  if (bestProposal) {
+    const retainer = RETAINERS.find((r) => r.id === bestProposal.retainer);
+    const media = visible(store.state.media).find((m) => m.ws === bestProposal.ws && m.status !== "delivered");
+    outcomes.push({
+      id: "outc-grow-retainer",
+      title: `Grow ${bestProposal.client}'s retainer revenue`,
+      dept: ["Growth", "Creative"],
+      targetResult: retainer ? `Land the ${retainer.name} retainer` : "Land the proposed package",
+      successMetric: retainer ? `${fmtMoney(retainer.price)}+/mo recurring` : `${fmtMoney(bestProposal.price)} package`,
+      strategy: "Land the current proposal, prove value over the first cycle, then upsell to a higher retainer tier once the cadence is trusted.",
+      status: bestProposal.status === "sent" ? "active" : "planning",
+      workstreams: [
+        { label: `Proposal: ${bestProposal.client}`, detail: `${statusLabel(bestProposal.status)} · ${fmtMoney(bestProposal.price)}`, open: "proposals" },
+        media ? { label: `Media brief: ${media.title}`, detail: statusLabel(media.status), open: "media" } : null,
+      ].filter(Boolean),
+    });
+  }
+
+  return outcomes;
+}
+
 /* ---------------- approvals ---------------- */
 /* opts.changesRequested keeps the underlying record untouched (it's not a
    final decision — the worker/automation that prepared it should redo the
