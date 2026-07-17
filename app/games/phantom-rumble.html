@@ -307,8 +307,16 @@ addEventListener('keydown',e=>{
     if(!f.human||f.dead||f.stun>0||!running||paused)continue;
     if(localNetMode&&f.slot!==localSlot)continue; // in a net match, this client only drives its own fighter's local input
     const pad=padFor(f);
-    if(pad.jump.includes(e.key)){jump(f);if(netMode)sendMatchAction({type:'input',slot:localSlot,event:'jump'},'merge')}
-    if(pad.light.includes(e.key)){attack(f,false);if(netMode)sendMatchAction({type:'input',slot:localSlot,event:'light'},'merge')}
+    if(pad.jump.includes(e.key)){
+      if(mode==='racetop'&&f.grappleReady){
+        f.grappleReady=false;
+        const dir=heldDir(f)||f.face||1;
+        f.vx=dir*.03;f.vy=-.032;f.jumps=1;
+        spawnBurst(f.x,f.y,'#5eead4',16);addFloater(f.x,f.y-.1,'GRAPPLE!','#5eead4',15);sfx('jump');
+      }else jump(f);
+      if(netMode)sendMatchAction({type:'input',slot:localSlot,event:'jump'},'merge');
+    }
+    if(pad.light.includes(e.key)){if(mode==='racetop')raceSabotage(f);else attack(f,false);if(netMode)sendMatchAction({type:'input',slot:localSlot,event:'light'},'merge')}
     if(pad.heavy.includes(e.key))f.charge=.01;
     if(pad.shield.includes(e.key)){f.shieldHeld=true;f.parry=.18;addFloater(f.x,f.y-.1,'GUARD',f.glow,11)}
     if(pad.dodge.includes(e.key)){dodge(f);if(netMode)sendMatchAction({type:'input',slot:localSlot,event:'dodge'},'merge')}
@@ -600,7 +608,32 @@ function step(f,dt){
   if(!reduced){f.trail.unshift({x:f.x,y:f.y});f.trail=f.trail.slice(0,8)}
   grabPickups(f);
 }
-function raceGrabPickups(f){} // stub — replaced with real pickup-grab logic once Race to the Top pickups land
+let racePickupTimer=5;
+function raceSpawnPickup(){
+  const kinds=['grapple','bubble'];
+  const kind=kinds[Math.floor(Math.random()*kinds.length)];
+  const platform=TOWER[Math.floor(Math.random()*(TOWER.length-1))]; // never the summit
+  pickups.push({kind,x:platform.x,y:platform.y-.06,age:0,fuse:null});
+}
+function raceGrabPickups(f){
+  for(const p of pickups){
+    if(p.taken)continue;
+    if(Math.abs(p.x-f.x)<.04&&Math.abs(p.y-f.y)<.06){
+      p.taken=true;
+      if(p.kind==='grapple'){f.grappleReady=true;spawnBurst(f.x,f.y,'#5eead4',14);addFloater(f.x,f.y-.09,'GRAPPLE READY','#5eead4',14);sfx('pickup')}
+      if(p.kind==='bubble'){f.shieldBubble=8;spawnBurst(f.x,f.y,'#a78bfa',14);addFloater(f.x,f.y-.09,'SHIELD UP','#a78bfa',14);sfx('pickup')}
+    }
+  }
+  pickups=pickups.filter(item=>!item.taken);
+}
+function drawRacePickup(p,t){
+  if(p.taken)return;
+  const bx=px(p.x),by=py(p.y)-(reduced?0:Math.sin(t*.004+p.age)*4*DPR);
+  ctx.shadowBlur=16*DPR;
+  if(p.kind==='grapple'){ctx.shadowColor='#5eead4';ctx.fillStyle='#5eead4';ctx.font=`${16*DPR}px ui-monospace`;ctx.fillText('🪝',bx-8*DPR,by)}
+  if(p.kind==='bubble'){ctx.shadowColor='#a78bfa';ctx.fillStyle='#a78bfa';ctx.font=`${16*DPR}px ui-monospace`;ctx.fillText('🛡',bx-8*DPR,by)}
+  ctx.shadowBlur=0;
+}
 function finishRace(f){f.finished=true} // stub — replaced with real finish-order/results logic once that lands
 let hazardY=1,hazardSpeed=.01;
 function stepHazard(dt){
@@ -940,7 +973,7 @@ function draw(t){
   for(let i=0;i<=10;i++){ctx.globalAlpha=.35;ctx.beginPath();ctx.moveTo(W*i/10,0);ctx.lineTo(W*i/10,H);ctx.stroke();ctx.beginPath();ctx.moveTo(0,H*i/10);ctx.lineTo(W,H*i/10);ctx.stroke()}
   ctx.globalAlpha=1;
   drawStage();
-  for(const p of pickups)drawPickup(p,t);
+  for(const p of pickups)(mode==='racetop'?drawRacePickup:drawPickup)(p,t);
   for(const p of projectiles)drawProjectile(p);
   for(const r of rings){ctx.globalAlpha=Math.max(0,r.life/.45);ctx.strokeStyle=r.color;ctx.lineWidth=3*DPR;ctx.beginPath();ctx.arc(px(r.x),py(r.y),px(r.r),0,Math.PI*2);ctx.stroke()}
   for(const f of fighters)drawFighter(f,t);
@@ -958,6 +991,9 @@ function loop(t){
   if(paused){raf=requestAnimationFrame(loop);return}
   if(mode==='racetop'){
     stepHazard(dt);
+    racePickupTimer-=dt;
+    if(racePickupTimer<=0){racePickupTimer=6+Math.random()*4;if(pickups.filter(p=>!p.taken).length<2)raceSpawnPickup()}
+    for(const p of pickups)p.age+=dt;
     for(const f of fighters)raceStep(f,dt);
     updateRaceHud();
     stepParticles(dt);
