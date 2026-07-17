@@ -1624,28 +1624,46 @@ function injectBriefingStyles() {
   briefingStylesInjected = true;
   const style = document.createElement("style");
   style.textContent = `
-    .briefing { margin: 0 0 20px; }
-    .briefing-greet { font: 600 20px "Space Grotesk", system-ui, sans-serif; margin: 0 0 2px; }
-    .briefing-health { font: 400 13px "DM Mono", monospace; color: rgba(234,255,244,.55); margin: 0 0 14px; }
-    .briefing-cards { display: grid; gap: 12px; }
-    .briefing-card { border: 1px solid rgba(65,255,161,.18); border-radius: 16px; padding: 16px 18px;
-      background: radial-gradient(120% 160% at 0% 0%, rgba(65,255,161,.06), transparent 60%), rgba(3,10,7,.5); }
-    .briefing-card-top { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
-    .briefing-dept { font: 500 9px "DM Mono", monospace; letter-spacing: .14em; text-transform: uppercase;
-      color: rgba(65,255,161,.85); border: 1px solid rgba(65,255,161,.3); border-radius: 999px; padding: 2px 8px; }
-    .briefing-confidence { font: 400 10px "DM Mono", monospace; color: rgba(234,255,244,.4); margin-left: auto; }
-    .briefing-card h4 { margin: 0 0 4px; font: 600 15px "Space Grotesk", system-ui, sans-serif; }
-    .briefing-card p { margin: 0 0 8px; font-size: 12.5px; color: rgba(234,255,244,.65); line-height: 1.5; }
-    .briefing-evidence { margin: 0 0 12px; padding: 0; list-style: none; font: 400 11px "DM Mono", monospace; color: rgba(234,255,244,.45); }
-    .briefing-evidence li { padding: 2px 0 2px 14px; position: relative; }
-    .briefing-evidence li::before { content: "▸"; position: absolute; left: 0; color: rgba(65,255,161,.5); }
-    .briefing-actions { display: flex; gap: 8px; }
-    .briefing-dismiss { background: transparent; border: 1px solid rgba(255,255,255,.15); color: rgba(234,255,244,.6); border-radius: 8px; padding: 6px 12px; font-size: 12px; cursor: pointer; }
-    .briefing-away { margin-top: 16px; border-top: 1px solid rgba(255,255,255,.06); padding-top: 12px; }
-    .briefing-away-head { font: 500 10px "DM Mono", monospace; letter-spacing: .12em; text-transform: uppercase; color: rgba(234,255,244,.4); margin: 0 0 8px; }
-    .briefing-away ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 5px; }
-    .briefing-away li { font-size: 12.5px; color: rgba(234,255,244,.6); padding-left: 14px; position: relative; }
-    .briefing-away li::before { content: "✓"; position: absolute; left: 0; color: rgba(65,255,161,.6); }
+    .briefing { margin: 0 0 16px; }
+    .briefing-shell {
+      display: grid; grid-template-columns: minmax(0, 1.08fr) minmax(270px, .72fr); gap: 12px;
+      border: 1px solid rgba(65,255,161,.18); border-radius: 18px; padding: 16px;
+      background:
+        radial-gradient(110% 130% at 0% 0%, rgba(65,255,161,.08), transparent 58%),
+        linear-gradient(145deg, rgba(8,21,16,.86), rgba(2,8,9,.82));
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.025), 0 20px 70px rgba(0,0,0,.16);
+    }
+    .briefing-main { display: grid; gap: 12px; min-width: 0; }
+    .briefing-kicker { margin: 0 0 5px; font: 800 9px "DM Mono", monospace; letter-spacing: .18em; text-transform: uppercase; color: var(--neon); }
+    .briefing-greet { font: 700 22px "Space Grotesk", system-ui, sans-serif; margin: 0 0 3px; letter-spacing: 0; }
+    .briefing-health { font: 500 13px "Space Grotesk", system-ui, sans-serif; color: rgba(234,255,244,.62); margin: 0; line-height: 1.45; max-width: 760px; }
+    .briefing-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+    .briefing-stat { min-width: 0; border: 1px solid rgba(65,255,161,.13); border-radius: 12px; padding: 10px;
+      background: rgba(0,0,0,.18); }
+    .briefing-stat span { display: block; margin-bottom: 5px; font: 800 8px "DM Mono", monospace; letter-spacing: .14em; text-transform: uppercase; color: rgba(159,178,182,.86); }
+    .briefing-stat b { display: block; color: #effff6; font-size: 18px; line-height: 1; }
+    .briefing-stat i { display: block; margin-top: 5px; color: rgba(234,255,244,.52); font-size: 11px; font-style: normal; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .briefing-next { min-width: 0; align-self: stretch; border: 1px solid rgba(65,255,161,.2); border-radius: 15px; padding: 13px;
+      background: rgba(0,0,0,.2); display: grid; align-content: space-between; gap: 12px; }
+    .briefing-next-top { display: flex; align-items: center; gap: 8px; }
+    .briefing-dept { font: 800 8px "DM Mono", monospace; letter-spacing: .14em; text-transform: uppercase;
+      color: rgba(65,255,161,.9); border: 1px solid rgba(65,255,161,.25); border-radius: 999px; padding: 3px 8px; }
+    .briefing-confidence { font: 700 9px "DM Mono", monospace; color: rgba(234,255,244,.42); margin-left: auto; text-transform: uppercase; }
+    .briefing-next h4 { margin: 0 0 5px; font: 700 15px "Space Grotesk", system-ui, sans-serif; line-height: 1.18; }
+    .briefing-next p { margin: 0; font-size: 12px; color: rgba(234,255,244,.62); line-height: 1.45; }
+    .briefing-evidence { margin: 8px 0 0; padding: 0; list-style: none; font: 600 10px "DM Mono", monospace; color: rgba(234,255,244,.42); }
+    .briefing-evidence li { padding: 1px 0 1px 12px; position: relative; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .briefing-evidence li::before { content: "•"; position: absolute; left: 0; color: rgba(65,255,161,.58); }
+    .briefing-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .briefing-dismiss { background: transparent; border: 1px solid rgba(255,255,255,.13); color: rgba(234,255,244,.6); border-radius: 8px; padding: 7px 11px; font-size: 12px; cursor: pointer; }
+    .briefing-empty { color: rgba(234,255,244,.58); }
+    @media (max-width: 1100px) {
+      .briefing-shell { grid-template-columns: 1fr; }
+      .briefing-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 620px) {
+      .briefing-stats { grid-template-columns: 1fr; }
+    }
   `;
   document.head.appendChild(style);
 }
@@ -1655,6 +1673,28 @@ function briefingGreeting() {
   const time = h < 12 ? "morning" : h < 18 ? "afternoon" : "evening";
   const name = (ctx.session?.name || "there").split(/\s+/)[0];
   return `Good ${time}, ${name}`;
+}
+
+function dashboardSnapshotStats() {
+  const leads = visible(store.state.leads || []);
+  const approvals = visible(store.state.approvals || []);
+  const media = visible(store.state.media || []);
+  const proposals = visible(store.state.proposals || []);
+  const money = moneyView();
+  const openLeads = leads.filter((l) => !["won", "lost"].includes(l.status));
+  const dueLeads = openLeads.filter((l) => l.due && new Date(l.due).getTime() <= Date.now() + 864e5);
+  const pendingApprovals = approvals.filter((a) => a.status === "pending");
+  const mediaReady = media.filter((m) => ["pending", "draft", "brief-ready", "generation-approved"].includes(m.status));
+  const readyProposals = proposals.filter((p) => p.status === "sent-ready");
+  const signed = money.transactions.length
+    ? (money.netCash < 0 ? `-${fmtMoney(Math.abs(money.netCash))}` : fmtMoney(money.netCash))
+    : "No ledger";
+  return [
+    { label: "Clients", value: String(openLeads.length), detail: dueLeads.length ? `${dueLeads.length} follow-up due` : "Pipeline clean" },
+    { label: "Approvals", value: String(pendingApprovals.length), detail: pendingApprovals.length ? "Need owner decision" : "None waiting" },
+    { label: "Content", value: String(mediaReady.length), detail: mediaReady.length ? "Draft or media ready" : `${media.length} media assets` },
+    { label: "Money", value: signed, detail: readyProposals.length ? `${readyProposals.length} proposal ready` : "No live claim without data" },
+  ];
 }
 
 function renderCommandBriefing() {
@@ -1671,30 +1711,57 @@ function renderCommandBriefing() {
     hero.parentElement.insertBefore(section, hero);
   }
 
-  const { healthLine, decisions, handledWhileAway } = commandBriefing();
+  const { healthLine, decisions } = commandBriefing();
   const visibleDecisions = decisions.filter((d) => !dismissedBriefingCardIds.has(d.id));
+  const next = visibleDecisions[0] || null;
+  const stats = dashboardSnapshotStats();
 
   section.innerHTML = `
-    <p class="briefing-greet">${esc(briefingGreeting())}</p>
-    <p class="briefing-health">${esc(healthLine)}</p>
-    ${visibleDecisions.length ? `<div class="briefing-cards">${visibleDecisions.map((d) => `
-      <article class="briefing-card" data-card-id="${esc(d.id)}">
-        <div class="briefing-card-top">
-          <span class="briefing-dept">${esc(d.dept)}</span>
-          <span class="briefing-confidence">confidence: ${esc(d.confidence)}</span>
+    <div class="briefing-shell">
+      <div class="briefing-main">
+        <div>
+          <p class="briefing-kicker">Owner dashboard</p>
+          <p class="briefing-greet">${esc(briefingGreeting())}</p>
+          <p class="briefing-health">${esc(healthLine)} Ask for an outcome and Phantom will turn it into client, content, approval, and reporting work.</p>
         </div>
-        <h4>${esc(d.headline)}</h4>
-        <p>${esc(d.body)}</p>
-        <ul class="briefing-evidence">${d.evidence.map((e) => `<li>${esc(e)}</li>`).join("")}</ul>
-        <div class="briefing-actions">
-          <button type="button" class="btn btn-primary" data-open-ws="${esc(d.primary.open)}">${esc(d.primary.label)}</button>
-          <button type="button" class="briefing-dismiss" data-briefing-dismiss="${esc(d.id)}">Dismiss</button>
+        <div class="briefing-stats">
+          ${stats.map((stat) => `
+            <article class="briefing-stat">
+              <span>${esc(stat.label)}</span>
+              <b>${esc(stat.value)}</b>
+              <i>${esc(stat.detail)}</i>
+            </article>
+          `).join("")}
         </div>
-      </article>`).join("")}</div>` : ""}
-    ${handledWhileAway.length ? `<div class="briefing-away">
-      <p class="briefing-away-head">Handled while you were away</p>
-      <ul>${handledWhileAway.map((line) => `<li>${esc(line)}</li>`).join("")}</ul>
-    </div>` : ""}`;
+      </div>
+      <article class="briefing-next" ${next ? `data-card-id="${esc(next.id)}"` : ""}>
+        ${next ? `
+          <div>
+            <div class="briefing-next-top">
+              <span class="briefing-dept">${esc(next.dept)}</span>
+              <span class="briefing-confidence">${esc(next.confidence)} confidence</span>
+            </div>
+            <h4>${esc(next.headline)}</h4>
+            <p>${esc(next.body)}</p>
+            <ul class="briefing-evidence">${next.evidence.slice(0, 2).map((e) => `<li>${esc(e)}</li>`).join("")}</ul>
+          </div>
+          <div class="briefing-actions">
+            <button type="button" class="btn btn-primary" data-open-ws="${esc(next.primary.open)}">${esc(next.primary.label)}</button>
+            <button type="button" class="briefing-dismiss" data-briefing-dismiss="${esc(next.id)}">Hide</button>
+          </div>
+        ` : `
+          <div>
+            <div class="briefing-next-top"><span class="briefing-dept">Next move</span></div>
+            <h4>No urgent owner decision.</h4>
+            <p class="briefing-empty">Tell Phantom what result you want, like "find five school prospects" or "turn this media into a post plan."</p>
+          </div>
+          <div class="briefing-actions">
+            <button type="button" class="btn btn-primary" data-focus-command>Ask Phantom</button>
+            <button type="button" class="briefing-dismiss" data-open-ws="activity">View activity</button>
+          </div>
+        `}
+      </article>
+    </div>`;
 
   section.querySelectorAll("[data-briefing-dismiss]").forEach((btn) => {
     btn.onclick = () => { dismissedBriefingCardIds.add(btn.dataset.briefingDismiss); renderCommandBriefing(); };
@@ -1706,21 +1773,21 @@ function renderPlan() {
   const plan = todaysPlan();
   if (!plan.length) {
     $("[data-plan]").innerHTML = `
-      <div class="section-head"><h2>Today's plan</h2></div>
+      <div class="section-head"><h2>Owner action</h2></div>
       <button class="plan-inner" data-open-ws="settings">
         <svg class="plan-donut" viewBox="0 0 72 72" aria-hidden="true">
           <circle cx="36" cy="36" r="30" class="plan-track"/>
           <text x="36" y="40" class="plan-pct">0</text>
         </svg>
         <span class="plan-copy">
-          <b>No real work loaded yet.</b>
-          <i>Add a lead, draft a proposal, or connect a tool.</i>
+          <b>No owner decision waiting.</b>
+          <i>Start from the prompt or create a task roadmap.</i>
         </span>
         <span class="plan-arrow">${svg("arrow")}</span>
       </button>`;
     return;
   }
-  const msg = plan.length === 1 ? "One real thing needs you." : "A few real things need you.";
+  const msg = plan.length === 1 ? "One decision needs you." : "A few decisions need you.";
   /* Each plan item knows the surface it lives on. Hardcoding "approvals" here
      sent a task or lead straight to an empty approval queue — the count said
      one thing was waiting and the destination said nothing was. */
@@ -1729,7 +1796,7 @@ function renderPlan() {
     ? plan[0].text
     : `${plan.length} things need you.`;
   $("[data-plan]").innerHTML = `
-    <div class="section-head"><h2>Today's plan</h2></div>
+    <div class="section-head"><h2>Owner action</h2></div>
     <button class="plan-inner" data-open-ws="${target}">
       <svg class="plan-donut" viewBox="0 0 72 72" aria-hidden="true">
         <circle cx="36" cy="36" r="30" class="plan-track"/>
@@ -1745,33 +1812,64 @@ function renderPlan() {
 
 /* ============================ mission queue ============================ */
 const AGENT_STATE = {
-  active: { label: "READY", cls: "run" },
+  active: { label: "WORKING", cls: "run" },
   waiting: { label: "WAITING", cls: "wait" },
   "needs-approval": { label: "APPROVE", cls: "wait" },
   blocked: { label: "BLOCKED", cls: "block" },
-  idle: { label: "QUEUED", cls: "queue" },
+  idle: { label: "READY", cls: "queue" },
 };
-function renderQueue() {
-  const agents = store.state.agents || [];
-  $("[data-queue-count]").textContent = agents.length;
-  $("[data-queue]").innerHTML = agents.slice(0, 4).map((a) => {
+function dashboardWorkItems() {
+  const agentItems = (store.state.agents || []).map((a) => {
     const st = AGENT_STATE[a.status] || AGENT_STATE.idle;
+    return {
+      title: a.name || "Phantom task",
+      sub: a.role || a.mission || "Ready for the next step",
+      open: "workforce",
+      icon: "auto",
+      status: st,
+    };
+  });
+  const taskItems = visible(store.state.tasks || [])
+    .filter((t) => ["new", "working", "waiting", "needs-approval", "blocked"].includes(t.status || "new"))
+    .map((t) => {
+      const st = t.status === "working" ? AGENT_STATE.active
+        : t.status === "blocked" ? AGENT_STATE.blocked
+        : t.status === "waiting" || t.status === "needs-approval" ? AGENT_STATE["needs-approval"]
+        : AGENT_STATE.idle;
+      return {
+        title: t.title || "Untitled task",
+        sub: t.next || t.notes || "Task from the owner roadmap",
+        open: "workforce",
+        icon: "check",
+        status: st,
+      };
+    });
+  return [...taskItems, ...agentItems].slice(0, 4);
+}
+function renderQueue() {
+  const items = dashboardWorkItems();
+  $("[data-queue-count]").textContent = items.length;
+  $("[data-queue]").innerHTML = items.map((item) => {
+    const st = item.status || AGENT_STATE.idle;
     return `
-    <button class="queue-item" data-open-ws="workforce">
-      <span class="queue-ic">${svg("auto")}</span>
-      <span class="queue-meta"><b>${esc(a.name)}</b><i>${esc(a.role || a.mission || "")}</i></span>
+    <button class="queue-item" data-open-ws="${esc(item.open)}">
+      <span class="queue-ic">${svg(item.icon)}</span>
+      <span class="queue-meta"><b>${esc(item.title)}</b><i>${esc(item.sub || "")}</i></span>
       <span class="queue-badge q-${st.cls}">${st.label}</span>
     </button>`;
-  }).join("") || `<p class="empty-line">No missions yet.</p>`;
+  }).join("") || `<div class="queue-empty">
+    <b>No active tasks.</b>
+    <span>Tell Phantom to create a task and it will map the next steps here.</span>
+  </div>`;
 }
 
 /* ============================ quick actions ============================ */
 const QUICK = [
-  { label: "Create new content", icon: "spark",  run: "Create campaign media" },
-  { label: "Start video campaign", icon: "film",  run: "Create a launch video" },
-  { label: "Check cashflow", icon: "chart",   run: "What's my cash flow?" },
-  { label: "Open Content Hub", icon: "upload",   open: "content" },
-  { label: "View approval queue", icon: "check",   open: "approvals" },
+  { label: "Find new clients", icon: "users",  run: "Find and add good prospect lanes for PhantomForce" },
+  { label: "Create a post", icon: "upload",   open: "content" },
+  { label: "Review approvals", icon: "check",   open: "approvals" },
+  { label: "Check live analytics", icon: "chart",   open: "analytics" },
+  { label: "Open PhantomStore", icon: "spark",   open: "phantomstore" },
 ];
 function renderQuick() {
   $("[data-quick]").innerHTML = QUICK.map((q, i) => `
@@ -2535,6 +2633,7 @@ function wireDeck() {
     if (e.target.closest("[data-cmdk-close]")) { closePalette(); return; }
     const cItem = e.target.closest("[data-cmdk-i]");
     if (cItem) { execPalette(+cItem.dataset.cmdkI); return; }
+    if (e.target.closest("[data-focus-command]")) { focusCommandInput(40); return; }
     if (e.target.closest("[data-notif-btn]")) { notifOpen = !notifOpen; renderNotifs(); return; }
     if (e.target.closest("[data-map-open]")) { openOperationsMap(); return; }
     if (e.target.closest("[data-map-close]")) { closeOperationsMap(); return; }
@@ -3285,11 +3384,12 @@ function clearOverlayOnly() {
   overlayRoot.innerHTML = "";
   document.body.classList.remove("overlay-open");
 }
-/* Build staleness watchdog: the sync script records its outcome in the
-   served manifest. If this machine stopped updating (blocked sync or no
-   sync in 24h), owners see WHY in the product instead of silently living
-   on an old build. Admin-only; missing manifest (fresh checkout, GitHub
-   Pages) shows nothing. */
+/* Build staleness watchdog: the backend sync task writes a manifest and the
+   local static server adds a private heartbeat when it serves it. A fresh
+   heartbeat means this computer is checking quietly, so do not throw a banner
+   just because the last successful git pull is old or a guard is holding a
+   local worktree. The owner-facing alert is reserved for a persistent, hard
+   failure where the watcher itself is not alive. */
 let syncBannerShown = false;
 async function checkBuildFreshness() {
   if (syncBannerShown || !isAdmin()) return;
@@ -3301,17 +3401,24 @@ async function checkBuildFreshness() {
   } catch { return; }
   if (!manifest || typeof manifest !== "object") return;
   const syncedAt = Date.parse(manifest.synced_at || "");
+  const checkedAt = Date.parse(manifest.sync_checked_at || manifest.backend_heartbeat_at || manifest.served_at || "");
   const staleMs = Number.isFinite(syncedAt) ? Date.now() - syncedAt : 0;
+  const checkedMs = Number.isFinite(checkedAt) ? Date.now() - checkedAt : Number.POSITIVE_INFINITY;
   const blocked = manifest.sync_status === "blocked";
-  const stale = staleMs > 24 * 60 * 60 * 1000;
+  const backendAlive = checkedMs < 10 * 60 * 1000;
+  const stale = staleMs > 7 * 24 * 60 * 60 * 1000;
+  if (backendAlive && (blocked || stale)) {
+    console.info("PhantomForce background sync is checking quietly.", manifest.sync_reason || manifest.sync_status || "ok");
+    return;
+  }
   if (!blocked && !stale) return;
   syncBannerShown = true;
   const bar = document.createElement("div");
   bar.className = "build-stale-banner";
   bar.setAttribute("role", "alert");
   const when = Number.isFinite(syncedAt) ? new Date(syncedAt).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "unknown";
-  bar.innerHTML = `<b>${blocked ? "Updates are blocked on this computer" : "This computer hasn't updated recently"}</b>
-    <span>${esc(String(manifest.sync_reason || `Last successful sync: ${when}. Check the sync log if this persists.`))}</span>
+  bar.innerHTML = `<b>${blocked ? "Background sync needs attention" : "Background sync has not checked in"}</b>
+    <span>${esc(String(manifest.sync_reason || `Last successful sync: ${when}. The hidden watcher will keep retrying.`))}</span>
     <button type="button" aria-label="Dismiss">&times;</button>`;
   bar.querySelector("button").onclick = () => bar.remove();
   document.body.prepend(bar);
