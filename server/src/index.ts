@@ -258,6 +258,7 @@ import {
   getPhantomStoreStatus,
   moderatePhantomStoreTool,
   recordPhantomStoreInstallClick,
+  recordPhantomStoreProductBuyClick,
   submitPhantomStoreTool,
   updatePhantomStoreTool,
 } from "./phantom-ai/phantomstore.js";
@@ -4366,6 +4367,14 @@ app.post("/api/phantomstore/tools/:id/install", async (request, reply) => {
   const params = request.params as { id?: string };
   const result = params.id ? await recordPhantomStoreInstallClick(session, params.id.slice(0, 180)) : null;
   return result ? { ok: true, session, ...result } : reply.code(404).send({ ok: false, error: "Tool was not found." });
+});
+
+app.post("/api/phantomstore/products/:id/buy", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const params = request.params as { id?: string };
+  const result = params.id ? await recordPhantomStoreProductBuyClick(session, params.id.slice(0, 180)) : null;
+  return result ? { ok: true, session, ...result } : reply.code(404).send({ ok: false, error: "Product was not found or is not available yet." });
 });
 
 /* ---- PhantomPlay V2: platform layer (social, community, workspace, dev hub) ----

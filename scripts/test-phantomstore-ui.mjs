@@ -20,7 +20,12 @@ assert.match(storeSource, /\/api\/phantomstore\?tenant_id=/u, "PhantomStore UI m
 assert.match(storeSource, /\/api\/phantomstore\/tools"/u, "PhantomStore UI must submit tools to its own API.");
 assert.match(storeSource, /\/api\/phantomstore\/tools\/\$\{encodeURIComponent\(id\)\}\/install/u, "Install intent must use the PhantomStore install endpoint.");
 assert.match(storeSource, /\/api\/phantomstore\/tools\/\$\{encodeURIComponent\(id\)\}\/moderate/u, "Moderation must use the PhantomStore moderation endpoint.");
+assert.match(storeSource, /\/api\/phantomstore\/products\/\$\{encodeURIComponent\(id\)\}\/buy/u, "Product buy intent must use the PhantomStore product endpoint.");
 assert.match(storeSource, /This is not Site Builder\. This is not Store Builder\. PhantomStore is its own AI marketplace\./u, "UI must name PhantomStore as separate from Site Builder and Store Builder.");
+assert.match(storeSource, /Seller directory/u, "Discovery must include a seller directory.");
+assert.match(storeSource, /Ready to buy/u, "Discovery must expose ready-to-buy products before community tools.");
+assert.match(storeSource, /seller reviews/u, "Seller cards must show seller reviews.");
+assert.match(storeSource, /product reviews/u, "Product cards must show product reviews.");
 assert.match(storeSource, /PhantomStore does not run this code/u, "Install panel must explain that marketplace listings do not execute code.");
 assert.match(storeSource, /PhantomStore does not upload or host submitted code/u, "Submit panel must explain that code is not hosted or uploaded.");
 assert.match(storeSource, /Source \/ repo URL/u, "Submissions must require a source URL.");
@@ -30,8 +35,11 @@ assert.match(storeSource, /const safeHref[\s\S]*\^https\?:\\\/\\\//u, "Client li
 assert.match(storeSource, /new URL\(url\)/u, "Client link safety must parse and normalize URLs before rendering hrefs.");
 assert.match(backendSource, /function safeUrl[\s\S]*parsed\.protocol === "https:" \|\| parsed\.protocol === "http:"/u, "Backend must sanitize PhantomStore URLs to http(s) only.");
 assert.match(backendTestSource, /repoUrl: "javascript:alert\(1\)"[\s\S]*non-http\(s\) repo URL must be sanitized away and fail submission/u, "Backend PhantomStore tests must reject javascript URLs.");
+assert.match(backendSource, /const SEEDED_SELLERS/u, "Backend must seed seller profiles.");
+assert.match(backendSource, /const SEEDED_PRODUCTS/u, "Backend must seed product listings.");
+assert.match(backendSource, /recordPhantomStoreProductBuyClick/u, "Backend must track product buy intent.");
 
-for (const selector of [".ps-shell", ".ps-market-hero", ".ps-tool", ".ps-submit-layout", ".ps-moderate"]) {
+for (const selector of [".ps-shell", ".ps-market-hero", ".ps-tool", ".ps-product", ".ps-seller", ".ps-reviews", ".ps-submit-layout", ".ps-moderate"]) {
   assert.ok(storeCss.includes(selector), `${selector} style must be present.`);
 }
 

@@ -83,17 +83,206 @@ export type PhantomStoreTool = {
   updatedAt: string;
 };
 
+export type PhantomStoreReview = {
+  id: string;
+  authorName: string;
+  rating: number;
+  title: string;
+  body: string;
+  createdAt: string;
+  verified: boolean;
+};
+
+export type PhantomStoreSeller = {
+  id: string;
+  name: string;
+  handle: string;
+  tagline: string;
+  summary: string;
+  websiteUrl: string;
+  supportUrl: string;
+  rating: number;
+  reviewCount: number;
+  productCount: number;
+  reviews: PhantomStoreReview[];
+  featured: boolean;
+};
+
+export type PhantomStoreProduct = {
+  id: string;
+  sellerId: string;
+  name: string;
+  summary: string;
+  description: string;
+  category: "Desktop App" | "AI Suite" | "Plugin" | "Automation" | "Creative Tool";
+  priceLabel: string;
+  buyLabel: string;
+  buyUrl: string;
+  delivery: string;
+  version: string;
+  status: "available" | "quality_hold";
+  qualityNote: string;
+  tags: string[];
+  badges: string[];
+  rating: number;
+  reviewCount: number;
+  featured: boolean;
+  updatedAt: string;
+  reviews: PhantomStoreReview[];
+};
+
 type PhantomStoreStore = {
   version: 1;
   tools: PhantomStoreTool[];
+  productClicks: Record<string, number>;
 };
+
+const seededReviews = {
+  termina: [
+    {
+      id: "review-termina-mission-wall",
+      authorName: "PhantomForce QA",
+      rating: 5,
+      title: "The terminal wall finally feels like a product.",
+      body: "Multi-agent launches, isolated worktrees, mission ledgers, and replayable reports make Termina feel less like a script and more like a command center.",
+      createdAt: "2026-07-17T00:00:00.000Z",
+      verified: true,
+    },
+  ],
+  phantomforce: [
+    {
+      id: "review-phantomforce-os",
+      authorName: "Owner workspace",
+      rating: 5,
+      title: "Everything routes through one business brain.",
+      body: "The value is the combination: media, sites, analytics, competitors, approvals, and AI execution in one protected workspace.",
+      createdAt: "2026-07-17T00:00:00.000Z",
+      verified: true,
+    },
+  ],
+  vocal: [
+    {
+      id: "review-vocal-ai",
+      authorName: "Studio tester",
+      rating: 4,
+      title: "Fast vocal-chain starting point.",
+      body: "Prompting a vocal tone and getting a usable chain is exactly the right direction for creators who do not want to babysit knobs.",
+      createdAt: "2026-07-17T00:00:00.000Z",
+      verified: true,
+    },
+  ],
+  seller: [
+    {
+      id: "review-seller-phantomforce",
+      authorName: "Launch desk",
+      rating: 5,
+      title: "Ships ambitious tools with buyer safety gates.",
+      body: "The seller catalog is strongest when products are listed with honest readiness notes, clear support paths, and visible review proof.",
+      createdAt: "2026-07-17T00:00:00.000Z",
+      verified: true,
+    },
+  ],
+} satisfies Record<string, PhantomStoreReview[]>;
+
+const SEEDED_SELLERS: PhantomStoreSeller[] = [
+  {
+    id: "seller-phantomforce",
+    name: "PhantomForce",
+    handle: "@phantomforce",
+    tagline: "Local-first AI tools for operators, creators, and builders.",
+    summary: "PhantomForce builds owner-controlled AI software: business command centers, terminal automation, creator tooling, and production-grade local workflows.",
+    websiteUrl: "https://phantomforce.online",
+    supportUrl: "https://phantomforce.online/support",
+    rating: 5,
+    reviewCount: seededReviews.seller.length,
+    productCount: 3,
+    reviews: seededReviews.seller,
+    featured: true,
+  },
+];
+
+const SEEDED_PRODUCTS: PhantomStoreProduct[] = [
+  {
+    id: "product-termina",
+    sellerId: "seller-phantomforce",
+    name: "Termina",
+    summary: "A CCTV-style terminal wall for launching and supervising multiple AI CLIs on one local machine.",
+    description:
+      "Termina opens multiple isolated worker terminals, dispatches individualized mission prompts, tracks ledgers, and keeps local AI/CLI orchestration private. The current release includes a hardened paste-and-submit path for multi-CLI dispatch.",
+    category: "Desktop App",
+    priceLabel: "$49 early access",
+    buyLabel: "Buy Termina",
+    buyUrl: "https://phantomforce.online/phantomstore/termina",
+    delivery: "Windows desktop download",
+    version: "0.2.0",
+    status: "available",
+    qualityNote: "Multi-CLI submit reliability is a launch gate and is covered by Termina's dispatch retry tests.",
+    tags: ["local ai", "terminal wall", "multi-agent", "privacy"],
+    badges: ["Local-first", "Desktop", "Launch-ready QA"],
+    rating: 5,
+    reviewCount: seededReviews.termina.length,
+    featured: true,
+    updatedAt: "2026-07-17T00:00:00.000Z",
+    reviews: seededReviews.termina,
+  },
+  {
+    id: "product-phantomforce-os",
+    sellerId: "seller-phantomforce",
+    name: "PhantomForce Business OS",
+    summary: "The main PhantomForce workspace for media, sites, analytics, competitor intel, approvals, and AI execution.",
+    description:
+      "A protected operating layer for running a business with AI. It keeps public actions approval-gated while the backend learns the business through onboarding, workspace context, and owner-controlled memory.",
+    category: "AI Suite",
+    priceLabel: "Plans from free",
+    buyLabel: "Choose plan",
+    buyUrl: "https://app.phantomforce.online",
+    delivery: "Web app workspace",
+    version: "2026.07",
+    status: "available",
+    qualityNote: "Free plan remains available for previewing the workspace before upgrading.",
+    tags: ["business os", "media lab", "analytics", "sites"],
+    badges: ["Free plan", "Workspace", "Owner gated"],
+    rating: 5,
+    reviewCount: seededReviews.phantomforce.length,
+    featured: true,
+    updatedAt: "2026-07-17T00:00:00.000Z",
+    reviews: seededReviews.phantomforce,
+  },
+  {
+    id: "product-phantom-vocal-ai",
+    sellerId: "seller-phantomforce",
+    name: "Phantom Vocal AI",
+    summary: "A prompt-first Reaper vocal-chain assistant for creators who want sound design without knob clutter.",
+    description:
+      "Describe the vocal you want and Phantom Vocal AI prepares a modern vocal chain direction. Designed for a cleaner slider/prompter workflow inside Reaper.",
+    category: "Plugin",
+    priceLabel: "$29 creator license",
+    buyLabel: "Buy plugin",
+    buyUrl: "https://phantomforce.online/phantomstore/vocal-ai",
+    delivery: "Reaper plugin download",
+    version: "0.1.0",
+    status: "available",
+    qualityNote: "UI refresh is focused on prompt-first controls, modern sliders, and better Reaper fit.",
+    tags: ["reaper", "vocal chain", "creator tool", "audio"],
+    badges: ["Reaper", "Creator", "Prompt-first"],
+    rating: 4.5,
+    reviewCount: seededReviews.vocal.length,
+    featured: false,
+    updatedAt: "2026-07-17T00:00:00.000Z",
+    reviews: seededReviews.vocal,
+  },
+];
 
 async function readStore(): Promise<PhantomStoreStore> {
   try {
     const parsed = JSON.parse(await readFile(storePath, "utf8")) as Partial<PhantomStoreStore>;
-    return { version: 1, tools: Array.isArray(parsed.tools) ? parsed.tools : [] };
+    return {
+      version: 1,
+      tools: Array.isArray(parsed.tools) ? parsed.tools : [],
+      productClicks: parsed.productClicks && typeof parsed.productClicks === "object" ? parsed.productClicks : {},
+    };
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { version: 1, tools: [] };
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { version: 1, tools: [], productClicks: {} };
     throw error;
   }
 }
@@ -183,16 +372,33 @@ function catalogFor(store: PhantomStoreStore) {
   return store.tools.filter((tool) => tool.status === "approved").map(publicTool);
 }
 
+function marketplaceFor(store: PhantomStoreStore) {
+  const productClicks = store.productClicks || {};
+  const products = SEEDED_PRODUCTS.map((product) => ({
+    ...product,
+    buyClicks: Number(productClicks[product.id] || 0),
+    seller: SEEDED_SELLERS.find((seller) => seller.id === product.sellerId) || null,
+  }));
+  const sellers = SEEDED_SELLERS.map((seller) => ({
+    ...seller,
+    productCount: products.filter((product) => product.sellerId === seller.id).length,
+  }));
+  return { sellers, products };
+}
+
 export async function getPhantomStoreSnapshot(session: AccessSession, options: { tenantId?: unknown } = {}) {
   const tenantId = tenantIdFor(session, options.tenantId);
   const actorId = actorIdFor(session);
   const store = await readStore();
   const canModerate = session.canManageAccess === true || session.isSuperAdmin === true;
   const mine = store.tools.filter((tool) => tool.developerId === actorId);
+  const marketplace = marketplaceFor(store);
   return {
     tenantId,
     actorId,
     catalog: catalogFor(store),
+    sellers: marketplace.sellers,
+    products: marketplace.products,
     submissions: (canModerate ? store.tools : mine).slice().sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
     pendingReviewCount: store.tools.filter((tool) => tool.status === "submitted").length,
     canModerate,
@@ -276,6 +482,24 @@ export async function recordPhantomStoreInstallClick(_session: AccessSession, to
   return { installClicks: tool.installClicks };
 }
 
+export async function recordPhantomStoreProductBuyClick(_session: AccessSession, productId: string) {
+  const store = await readStore();
+  const product = SEEDED_PRODUCTS.find((item) => item.id === productId && item.status === "available");
+  if (!product) return null;
+  store.productClicks = store.productClicks || {};
+  store.productClicks[product.id] = Number(store.productClicks[product.id] || 0) + 1;
+  await writeStore(store);
+  return {
+    buyClicks: store.productClicks[product.id],
+    product: { ...product, seller: SEEDED_SELLERS.find((seller) => seller.id === product.sellerId) || null },
+    checkout: {
+      mode: "external",
+      url: product.buyUrl,
+      note: "Purchase intent recorded. Continue through the seller checkout/support page.",
+    },
+  };
+}
+
 export async function getPhantomStoreStatus() {
   const store = await readStore();
   return {
@@ -283,5 +507,8 @@ export async function getPhantomStoreStatus() {
     pathConfigured: Boolean(process.env.PHANTOMFORCE_PHANTOMSTORE_PATH),
     tools: store.tools.length,
     approvedTools: store.tools.filter((tool) => tool.status === "approved").length,
+    sellers: SEEDED_SELLERS.length,
+    products: SEEDED_PRODUCTS.length,
+    productBuyClicks: Object.values(store.productClicks || {}).reduce((sum, value) => sum + Number(value || 0), 0),
   };
 }

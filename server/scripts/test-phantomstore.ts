@@ -26,6 +26,10 @@ try {
 
   const initial = await store.getPhantomStoreSnapshot(devA);
   assert(initial.catalog.length === 0, "A fresh store should ship no seeded tools.");
+  assert(initial.products.some((product: { name?: string }) => product.name === "Termina"), "PhantomStore should ship PhantomForce products, including Termina.");
+  assert(initial.sellers.some((seller: { name?: string }) => seller.name === "PhantomForce"), "PhantomStore should include a PhantomForce seller profile.");
+  assert(initial.products.every((product: { reviews?: unknown[] }) => Array.isArray(product.reviews)), "Product listings should carry product reviews.");
+  assert(initial.sellers.every((seller: { reviews?: unknown[] }) => Array.isArray(seller.reviews)), "Seller listings should carry seller reviews.");
   assert(initial.canModerate === false, "A regular developer must not receive moderation access.");
   assert(initial.submissions.length === 0, "A developer with no submissions should see an empty list.");
 
@@ -85,6 +89,10 @@ try {
   const clickedAgain = await store.recordPhantomStoreInstallClick(devB, created.tool.id);
   assert(clickedAgain?.installClicks === 2, "Install clicks should accumulate across visitors.");
 
+  const buyClick = await store.recordPhantomStoreProductBuyClick(devB, "product-termina");
+  assert(buyClick?.buyClicks === 1, "Product buy intent clicks should be tracked.");
+  assert(buyClick?.checkout?.url.includes("termina"), "Termina buy intent should point at the Termina product page.");
+
   const draftClick = await store.recordPhantomStoreInstallClick(devB, draft.tool.id);
   assert(draftClick === null, "Install clicks must not count against tools that were never approved.");
 
@@ -98,6 +106,7 @@ try {
 
   const status = await store.getPhantomStoreStatus();
   assert(status.tools === 2 && status.approvedTools === 0, "Status should reflect total tools written and current approved count (rejected submissions never get stored).");
+  assert(status.products >= 3 && status.sellers >= 1, "Status should include seeded product and seller counts.");
 
   const persisted = JSON.parse(await readFile(process.env.PHANTOMFORCE_PHANTOMSTORE_PATH, "utf8")) as { tools: unknown[] };
   assert(persisted.tools.length === 2, "Tool submissions should be durable across process restarts.");
@@ -131,6 +140,8 @@ try {
   assert(ownerModeration.statusCode === 200 && ownerModeration.json().tool.status === "approved", "The moderation route should approve a tool for an admin session.");
   const installRoute = await app.inject({ method: "POST", url: `/api/phantomstore/tools/${routeToolId}/install`, headers: { Authorization: `Bearer ${ownerToken}` } });
   assert(installRoute.statusCode === 200 && installRoute.json().installClicks === 1, "The install-click route should record a click for an approved tool.");
+  const productBuyRoute = await app.inject({ method: "POST", url: "/api/phantomstore/products/product-termina/buy", headers: { Authorization: `Bearer ${ownerToken}` } });
+  assert(productBuyRoute.statusCode === 200 && productBuyRoute.json().checkout.url.includes("termina"), "The product buy route should prepare the Termina checkout target.");
   await app.close();
 
   console.log(JSON.stringify({ ok: true, tenantIsolation: true, validationEnforced: true, moderationGated: true, catalogFiltered: true, installClicksTracked: true, moderationNoteHidden: true, routeAuth: true }));

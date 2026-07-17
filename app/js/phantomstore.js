@@ -26,6 +26,8 @@ const ui = {
   snapshot: null,
   installToolId: "",
   installMessage: "",
+  buyingProductId: "",
+  buyMessage: "",
 };
 
 let mountedRoot = null;
@@ -74,6 +76,84 @@ function visibleCatalog() {
   }).sort((a, b) => Number(!!b.featured) - Number(!!a.featured) || Number(b.installClicks || 0) - Number(a.installClicks || 0) || String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
 }
 
+function visibleProducts() {
+  const products = Array.isArray(ui.snapshot?.products) ? ui.snapshot.products : [];
+  const q = ui.query.trim().toLowerCase();
+  return products.filter((product) => {
+    const haystack = `${product.name || ""} ${product.summary || ""} ${product.description || ""} ${(product.tags || []).join(" ")} ${product.seller?.name || ""}`.toLowerCase();
+    return !q || haystack.includes(q);
+  }).sort((a, b) => Number(!!b.featured) - Number(!!a.featured) || Number(b.rating || 0) - Number(a.rating || 0));
+}
+
+function visibleSellers() {
+  const sellers = Array.isArray(ui.snapshot?.sellers) ? ui.snapshot.sellers : [];
+  const q = ui.query.trim().toLowerCase();
+  return sellers.filter((seller) => {
+    const haystack = `${seller.name || ""} ${seller.tagline || ""} ${seller.summary || ""}`.toLowerCase();
+    return !q || haystack.includes(q);
+  }).sort((a, b) => Number(!!b.featured) - Number(!!a.featured) || Number(b.rating || 0) - Number(a.rating || 0));
+}
+
+function reviewList(reviews = []) {
+  return reviews.length ? `<div class="ps-reviews">${reviews.slice(0, 2).map((review) => `
+    <blockquote>
+      <b>${esc(review.rating || 0)} / 5 · ${esc(review.title || "Review")}</b>
+      <span>${esc(review.body || "")}</span>
+      <small>${esc(review.authorName || "Verified buyer")}${review.verified ? " / verified" : ""}</small>
+    </blockquote>`).join("")}</div>` : "";
+}
+
+function productCard(product) {
+  const seller = product.seller || {};
+  const buyUrl = safeHref(product.buyUrl);
+  const isBuying = ui.buyingProductId === product.id;
+  const available = product.status === "available";
+  return `<article class="ps-product ${product.featured ? "is-featured" : ""}">
+    <header>
+      <div>
+        <p class="ps-kicker">${esc(product.category)} / ${esc(product.delivery || "Digital delivery")}</p>
+        <h3>${esc(product.name)}</h3>
+      </div>
+      <span>${esc(product.priceLabel || "Contact")}</span>
+    </header>
+    <p>${esc(product.summary)}</p>
+    <div class="ps-product-proof">
+      <b>${esc(product.rating || "New")} / 5</b>
+      <span>${Number(product.reviewCount || 0)} product reviews</span>
+      <span>Seller: ${esc(seller.name || "Seller")}</span>
+    </div>
+    <div class="ps-tags">${(product.badges || product.tags || []).map((tag) => `<em>${esc(tag)}</em>`).join("")}</div>
+    <small>${esc(product.qualityNote || "")}</small>
+    <div class="ps-card-actions">
+      <button type="button" class="ps-primary" data-ps-buy="${esc(product.id)}" ${available ? "" : "disabled"}>${isBuying ? "Preparing..." : esc(product.buyLabel || "Buy now")}</button>
+      ${buyUrl ? `<a class="ps-secondary" href="${esc(buyUrl)}" target="_blank" rel="noopener noreferrer">Product page</a>` : ""}
+    </div>
+    ${ui.buyingProductId === product.id && ui.buyMessage ? `<div class="ps-buy-note">${esc(ui.buyMessage)}</div>` : ""}
+    ${reviewList(product.reviews || [])}
+  </article>`;
+}
+
+function sellerCard(seller) {
+  const websiteUrl = safeHref(seller.websiteUrl);
+  const supportUrl = safeHref(seller.supportUrl);
+  return `<article class="ps-seller">
+    <header>
+      <div>
+        <p class="ps-kicker">${esc(seller.handle || "@seller")}</p>
+        <h3>${esc(seller.name)}</h3>
+      </div>
+      <span>${esc(seller.rating || "New")} / 5</span>
+    </header>
+    <p>${esc(seller.tagline || seller.summary || "")}</p>
+    <small>${Number(seller.productCount || 0)} products / ${Number(seller.reviewCount || 0)} seller reviews</small>
+    ${reviewList(seller.reviews || [])}
+    <div class="ps-card-actions">
+      ${websiteUrl ? `<a class="ps-secondary" href="${esc(websiteUrl)}" target="_blank" rel="noopener noreferrer">Website</a>` : ""}
+      ${supportUrl ? `<a class="ps-secondary" href="${esc(supportUrl)}" target="_blank" rel="noopener noreferrer">Support</a>` : ""}
+    </div>
+  </article>`;
+}
+
 function toolCard(tool) {
   const active = ui.installToolId === tool.id;
   const homepageUrl = safeHref(tool.homepageUrl);
@@ -117,14 +197,18 @@ function emptyState(title, copy) {
 
 function renderDiscover() {
   const catalog = visibleCatalog();
+  const products = visibleProducts();
+  const sellers = visibleSellers();
   return `<section class="ps-discover">
     <div class="ps-market-hero">
       <div>
         <p class="ps-kicker">AI MARKETPLACE</p>
         <h2>PhantomStore</h2>
-        <p>Find AI tools, agents, templates, models, and operator utilities approved for discovery. This is not Site Builder. This is not Store Builder. PhantomStore is its own AI marketplace.</p>
+        <p>Buy PhantomForce products, browse seller proof, and find AI tools, agents, templates, models, and operator utilities approved for discovery. This is not Site Builder. This is not Store Builder. PhantomStore is its own AI marketplace.</p>
       </div>
       <div class="ps-market-rules">
+        <span>Seller + product reviews</span>
+        <span>Products ready to buy</span>
         <span>No code auto-runs</span>
         <span>Source link required</span>
         <span>Admin review before listing</span>
@@ -132,9 +216,34 @@ function renderDiscover() {
     </div>
     <div class="ps-tools">
       <label class="ps-search">
-        <span>Search tools</span>
-        <input data-ps-search value="${esc(ui.query)}" placeholder="agents, CLI, templates, models..." />
+        <span>Search store</span>
+        <input data-ps-search value="${esc(ui.query)}" placeholder="Termina, sellers, agents, CLI, templates..." />
       </label>
+    </div>
+    <div class="ps-section-head ps-section-gap">
+      <div>
+        <p class="ps-kicker">PRODUCTS</p>
+        <h2>Ready to buy</h2>
+      </div>
+      <span>${products.length} products</span>
+    </div>
+    <div class="ps-product-grid">${products.length ? products.map(productCard).join("") : emptyState("No products match", "Clear the search to see current PhantomForce products.")}</div>
+    <div class="ps-section-head ps-section-gap">
+      <div>
+        <p class="ps-kicker">SELLERS</p>
+        <h2>Seller directory</h2>
+      </div>
+      <span>${sellers.length} sellers</span>
+    </div>
+    <div class="ps-seller-grid">${sellers.length ? sellers.map(sellerCard).join("") : emptyState("No sellers match", "Seller profiles appear here with their products and reviews.")}</div>
+    <div class="ps-tools">
+      <div class="ps-section-head">
+        <div>
+          <p class="ps-kicker">COMMUNITY AI TOOLS</p>
+          <h2>Approved discovery catalog</h2>
+        </div>
+        <span>${catalog.length} tools</span>
+      </div>
       <div class="ps-categories">${CATEGORIES.map((cat) => `<button type="button" class="${ui.category === cat ? "is-active" : ""}" data-ps-category="${esc(cat)}">${esc(cat)}</button>`).join("")}</div>
     </div>
     <div class="ps-grid">${catalog.length ? catalog.map(toolCard).join("") : emptyState("No approved tools yet", "Submitted tools appear here only after review. PhantomStore is ready; the catalog is just waiting for approved AI tools.")}</div>
@@ -241,9 +350,10 @@ function render() {
         <span>Separate from Websites, Site Builder, Store Builder, and PhantomPlay.</span>
       </div>
       <div class="ps-top-stats">
-        <span><b>${Number(ui.snapshot?.catalog?.length || 0)}</b><i>listed</i></span>
+        <span><b>${Number(ui.snapshot?.products?.length || 0)}</b><i>products</i></span>
+        <span><b>${Number(ui.snapshot?.sellers?.length || 0)}</b><i>sellers</i></span>
+        <span><b>${Number(ui.snapshot?.catalog?.length || 0)}</b><i>tools</i></span>
         <span><b>${Number(ui.snapshot?.submissions?.length || 0)}</b><i>${ui.snapshot?.canModerate ? "queue" : "yours"}</i></span>
-        <span><b>${ui.snapshot?.canModerate ? "Admin" : "Member"}</b><i>access</i></span>
       </div>
     </header>
     <nav class="ps-tabs" aria-label="PhantomStore sections">
@@ -287,6 +397,23 @@ async function recordInstall(id) {
     if (tool) tool.installClicks = result.installClicks;
   } catch (error) {
     ui.installMessage = error instanceof Error ? error.message : "Install details could not be opened.";
+  }
+  render();
+}
+
+async function recordBuy(id) {
+  ui.buyingProductId = id;
+  ui.buyMessage = "Preparing checkout...";
+  render();
+  try {
+    const result = await api(`/api/phantomstore/products/${encodeURIComponent(id)}/buy`, { method: "POST" });
+    const product = ui.snapshot?.products?.find((item) => item.id === id);
+    if (product) product.buyClicks = result.buyClicks;
+    ui.buyMessage = result.checkout?.note || "Purchase intent recorded.";
+    const url = safeHref(result.checkout?.url);
+    if (url) window.open(url, "_blank", "noopener,noreferrer");
+  } catch (error) {
+    ui.buyMessage = error instanceof Error ? error.message : "Checkout could not be prepared.";
   }
   render();
 }
@@ -340,6 +467,9 @@ function bind() {
   });
   mountedRoot.querySelectorAll("[data-ps-install]").forEach((button) => {
     button.onclick = () => recordInstall(button.dataset.psInstall || "");
+  });
+  mountedRoot.querySelectorAll("[data-ps-buy]").forEach((button) => {
+    button.onclick = () => recordBuy(button.dataset.psBuy || "");
   });
   mountedRoot.querySelectorAll("[data-ps-copy]").forEach((button) => {
     button.onclick = () => copyInstall(button.dataset.psCopy || "");
