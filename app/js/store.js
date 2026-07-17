@@ -103,6 +103,7 @@ function seed() {
     { id: "phantom-ages", ws: "phantomforce", name: "Phantom Ages", genre: "Strategy", audience: "general", active: true, plays30d: 0, status: "new", playUrl: "games/phantom-ages/index.html", playLabel: "▶ Play now" },
     { id: "penalty-kick", ws: "phantomforce", name: "Penalty Kick", genre: "Sports", audience: "general", active: false, plays30d: 12, status: "retired" },
     { id: "beat-strike", ws: "phantomforce", name: "BeatStrike", genre: "Rhythm", audience: "general", active: true, plays30d: 0, status: "new", playUrl: "games/beat-strike/index.html", playLabel: "▶ Play now" },
+    { id: "phantom-grand-prix", ws: "phantomforce", name: "Phantom Grand Prix", genre: "Kart Racer", audience: "general", active: true, plays30d: 0, status: "new", playUrl: "games/phantom-grand-prix/index.html", playLabel: "▶ Race now" },
     { id: "shape-sorter-jr", ws: "phantomforce", name: "Shape Sorter Jr.", genre: "Puzzle", audience: "kids", active: true, plays30d: 340, status: "live" },
     { id: "counting-critters", ws: "phantomforce", name: "Counting Critters", genre: "Educational", audience: "kids", active: true, plays30d: 285, status: "live" },
   ];
