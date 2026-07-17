@@ -247,6 +247,7 @@ export async function getOrgEntitlements(orgId: string): Promise<ResolvedEntitle
   const overridesRaw = (orgPlan?.overrides ?? null) as { features?: unknown; limits?: unknown } | null;
   const features = applyOverrides(definition.features, overridesRaw?.features);
   const limits = applyOverrides(definition.limits, overridesRaw?.limits);
+  const freeViewOnly = definition.key === "starter";
 
   return {
     orgId,
@@ -256,8 +257,8 @@ export async function getOrgEntitlements(orgId: string): Promise<ResolvedEntitle
     effectiveStatus,
     trialEndsAt: trialEndsAt ? trialEndsAt.toISOString() : null,
     graceUntil: graceUntil ? graceUntil.toISOString() : null,
-    canWrite: effectiveStatus !== "suspended",
-    upgradeRequired: effectiveStatus === "suspended" || effectiveStatus === "grace",
+    canWrite: effectiveStatus !== "suspended" && !freeViewOnly,
+    upgradeRequired: freeViewOnly || effectiveStatus === "suspended" || effectiveStatus === "grace",
     features: features.value,
     limits: limits.value,
     overridesApplied: features.applied || limits.applied,

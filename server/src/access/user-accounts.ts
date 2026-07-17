@@ -148,6 +148,10 @@ function invalidateCacheForOrg(orgId: string) {
   }
 }
 
+export function invalidateDatabaseSessionCacheForOrg(orgId: string) {
+  invalidateCacheForOrg(orgId);
+}
+
 async function buildSessionDetails(authSessionId: string): Promise<DatabaseSessionDetails | undefined> {
   const db = requirePrisma();
   const row = await db.authSession.findUnique({

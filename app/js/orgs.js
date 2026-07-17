@@ -6,7 +6,7 @@
    when the backend doesn't advertise database auth, none of these
    surfaces render and the app behaves exactly as before. */
 
-import { ctx, session } from "./store.js?v=phantom-live-20260716-291";
+import { ctx, session } from "./store.js?v=phantom-live-20260716-313";
 
 export const isDatabaseSession = () => !!ctx.session?.database;
 export const isCustomerOrgSession = () => !!(ctx.session?.database || ctx.session?.localCustomer);
@@ -64,6 +64,7 @@ function localSessionFromServer(payload) {
     orgRole: s.orgRole || null,
     memberships: s.memberships || [],
     isSuperAdmin: !!s.isSuperAdmin,
+    subscriptionActive: s.subscriptionActive,
     token: payload.token,
   };
 }
@@ -139,6 +140,8 @@ export async function switchOrg(orgId) {
     orgId: json.session.orgId || null,
     orgRole: json.session.orgRole || null,
     memberships: json.session.memberships || current.memberships || [],
+    subscriptionActive: json.session.subscriptionActive,
+    entitlements: undefined,
   };
   session.set({ ...updated, token: undefined });
   ctx.session = updated;

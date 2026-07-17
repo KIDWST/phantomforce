@@ -63,6 +63,7 @@ import {
   canManageOrg,
   createInvitation,
   createOrganization,
+  invalidateDatabaseSessionCacheForOrg,
   initializeDatabaseAuthState,
   listInvitations,
   listOrgAuditEvents,
@@ -2179,6 +2180,7 @@ app.post("/admin/orgs/:orgId/plan", async (request, reply) => {
     assignedByUserId: dbSession.userId,
   });
   if (!result.ok) return reply.code(400).send({ ok: false, error: result.error, available: result.available });
+  invalidateDatabaseSessionCacheForOrg(orgId);
   await recordPlanAssignmentAudit(orgId, dbSession.email, parsed.data.planKey, parsed.data.status ?? "active");
   return { ok: true, entitlements: await getOrgEntitlements(orgId) };
 });

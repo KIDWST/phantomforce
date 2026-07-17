@@ -131,7 +131,8 @@ function normalizePlanStatus(value: unknown): PlanStatus {
 function resolveLocalCustomerEntitlements(user: LocalCustomerUser): ResolvedEntitlements {
   const definition = publicPlanDefinition(user.planKey);
   const status = normalizePlanStatus(user.planStatus);
-  const canWrite = localCustomerWriteAccess && status !== "suspended";
+  const freeViewOnly = definition.key === "starter";
+  const canWrite = localCustomerWriteAccess && status !== "suspended" && !freeViewOnly;
   return {
     orgId: user.activeOrgId,
     planKey: definition.key,
@@ -141,7 +142,7 @@ function resolveLocalCustomerEntitlements(user: LocalCustomerUser): ResolvedEnti
     trialEndsAt: null,
     graceUntil: null,
     canWrite,
-    upgradeRequired: status === "grace" || status === "suspended",
+    upgradeRequired: freeViewOnly || status === "grace" || status === "suspended",
     features: definition.features,
     limits: definition.limits,
     overridesApplied: false,

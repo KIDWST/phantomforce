@@ -6,44 +6,44 @@ import {
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260716-311";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260716-311";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260716-311";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260716-311";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260716-311";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260716-311";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260716-311";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260716-311";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260716-311";
-import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260716-311";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260716-311";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260716-311";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260716-311";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260716-311";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260716-311";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260716-311";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260716-311";
-import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260716-311";
-import { mountAmbient } from "./ambient.js?v=phantom-live-20260716-311";
-import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260716-311";
+} from "./store.js?v=phantom-live-20260716-313";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260716-313";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260716-313";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260716-313";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260716-313";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260716-313";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260716-313";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260716-313";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260716-313";
+import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260716-313";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260716-313";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260716-313";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260716-313";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260716-313";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260716-313";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260716-313";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260716-313";
+import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260716-313";
+import { mountAmbient } from "./ambient.js?v=phantom-live-20260716-313";
+import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260716-313";
 import {
   fetchAuthConfig, databaseLogin, databaseLogout, customerRegister, requestCustomerPasswordReset,
-  completeCustomerPasswordReset, switchOrg, fetchAuthMe, fetchEntitlementsSummary,
-} from "./orgs.js?v=phantom-live-20260716-311";
-import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260716-311";
-import { assetsAvailable } from "./orgs.js?v=phantom-live-20260716-311";
-import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260716-311";
+  completeCustomerPasswordReset, switchOrg, fetchAuthMe, fetchEntitlementsSummary, switchCustomerPlan,
+} from "./orgs.js?v=phantom-live-20260716-313";
+import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260716-313";
+import { assetsAvailable } from "./orgs.js?v=phantom-live-20260716-313";
+import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260716-313";
 // PhantomPlay V2 platform shell (Home/Solo/Friends/Workspace/Dev Hub) - opt-in
 // while it hardens: set localStorage "pf.phantomplay.v2" = "1" (the V2 shell has
 // a "Classic view" button to switch back). Classic stays the default experience.
-import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260716-311";
+import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260716-313";
 const phantomPlayV2Opted = () => { try { return localStorage.getItem("pf.phantomplay.v2") === "1"; } catch { return false; } };
-import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260716-311";
+import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260716-313";
 import {
   customizeNavigation,
   loadOrganizationCustomization,
-} from "./customization.js?v=phantom-live-20260716-311";
-import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260716-311";
+} from "./customization.js?v=phantom-live-20260716-313";
+import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260716-313";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -995,15 +995,15 @@ const ACCOUNT_PLAN = {
 };
 const ACCOUNT_TIERS = [
   {
-    id: "free",
+    id: "starter",
     name: "Free",
     price: "Free",
     badge: "Launch",
-    copy: "Business Manager foundation: command surface, approvals, and one focused workspace.",
-    features: ["Business command center", "Client pipeline", "Manual offer workflow"],
+    copy: "View the business manager, inspect limits, and learn the system without changing business data.",
+    features: ["View-only workspace", "No publishing or writes", "Plan restrictions visible"],
   },
   {
-    id: "pro",
+    id: "professional",
     name: "Pro",
     price: "$2,500/mo",
     badge: "Growth",
@@ -1014,13 +1014,55 @@ const ACCOUNT_TIERS = [
     id: "elite",
     name: "Elite",
     price: "Custom",
-    badge: "Current",
-    current: true,
+    badge: "Scale",
     copy: "The full business operating suite: deeper loop routing, multi-workspace control, automations, and launch support.",
     features: ["Advanced loop routing", "Multi-workspace command", "Business automation planning", "Launch support"],
   },
 ];
 let accountNotice = "";
+let accountLiveEntitlements = null;
+
+function normalizeAccountEntitlements(entitlements) {
+  if (!entitlements || typeof entitlements !== "object") return null;
+  const tier = ACCOUNT_TIERS.find((item) => item.id === entitlements.planKey);
+  return {
+    ...entitlements,
+    planKey: entitlements.planKey || tier?.id || null,
+    planName: entitlements.planName || entitlements.plan || tier?.name || "Plan",
+    effectiveStatus: entitlements.effectiveStatus || entitlements.status || "active",
+    canWrite: entitlements.canWrite === true,
+  };
+}
+
+function syncAccountEntitlements(entitlements) {
+  const normalized = normalizeAccountEntitlements(entitlements);
+  if (!normalized) return null;
+  accountLiveEntitlements = normalized;
+  if (ctx.session?.database || ctx.session?.localCustomer) {
+    ctx.session = {
+      ...ctx.session,
+      subscriptionActive: normalized.canWrite,
+      entitlements: {
+        plan: normalized.planName,
+        planKey: normalized.planKey,
+        status: normalized.effectiveStatus,
+        canWrite: normalized.canWrite,
+        features: normalized.features,
+        limits: normalized.limits,
+      },
+    };
+    session.set(ctx.session);
+  }
+  return normalized;
+}
+
+function accountEntitlements() {
+  return accountLiveEntitlements || normalizeAccountEntitlements(ctx.session?.entitlements);
+}
+
+function accountCurrentPlanKey() {
+  return accountEntitlements()?.planKey || ((ctx.session?.database || ctx.session?.localCustomer) ? null : "elite");
+}
 
 function accountOwnerName() {
   return ctx.session?.name || (isAdmin() ? "Jordan" : "Owner");
@@ -1057,6 +1099,7 @@ function renderAccountMenu() {
   const owner = accountOwnerName();
   const status = accountStatusMeta();
   const renewal = accountRenewalLabel();
+  const ent = accountEntitlements();
   if (btn) {
     btn.classList.toggle("is-open", accountMenuOpen);
     btn.setAttribute("aria-expanded", accountMenuOpen ? "true" : "false");
@@ -1074,7 +1117,7 @@ function renderAccountMenu() {
     <button class="user-menu-plan" data-user-menu-action="account" type="button">
       <span>
         <i>Current plan</i>
-        <b>${esc(ACCOUNT_PLAN.name)}</b>
+        <b>${esc(ent?.planName || ACCOUNT_PLAN.name)}</b>
         <em>Renewal: ${esc(renewal)}</em>
       </span>
       <strong>Manage →</strong>
@@ -1100,6 +1143,7 @@ function renderAccountMenu() {
       accountMenuOpen = false;
       renderAccountMenu();
       if (result.ok) {
+        accountLiveEntitlements = null;
         await refreshNavEntitlements({ rerender: false });
         pushActivity("Account", `switched active business to ${ctx.session.memberships.find((m) => m.orgId === orgId)?.orgName || orgId}.`);
         store.save();
@@ -1112,6 +1156,63 @@ function renderAccountMenu() {
     };
   });
 }
+function renderCurrentPlanCardInner() {
+  const ent = accountEntitlements();
+  if ((ctx.session?.database || ctx.session?.localCustomer) && ent) {
+    return `
+      <p class="account-card-k">Current plan</p>
+      <h4>${esc(ent.planName)}</h4>
+      <p>${ent.canWrite ? "Write access is enabled for this business." : "Free tier is active: this workspace is view-only and change actions are blocked."}</p>
+      <div class="account-facts">
+        <span><b>Status</b>${esc(ent.effectiveStatus)}</span>
+        <span><b>Writes</b>${ent.canWrite ? "Enabled" : "Blocked"}</span>
+        <span><b>Plan key</b>${esc(ent.planKey || "unknown")}</span>
+      </div>`;
+  }
+  return `
+    <p class="account-card-k">Current plan</p>
+    <h4>${esc(ACCOUNT_PLAN.name)}</h4>
+    <p>${esc(accountStatusMeta().detail)}</p>
+    <div class="account-facts">
+      <span><b>Renewal</b>${esc(accountRenewalLabel())}</span>
+      <span><b>Billing</b>${esc(ACCOUNT_PLAN.paymentState)}</span>
+      <span><b>Access</b>${esc(ACCOUNT_PLAN.workspaceLimit)}</span>
+    </div>`;
+}
+
+function renderPlanTierCards(currentKey = accountCurrentPlanKey()) {
+  return ACCOUNT_TIERS.map((tier) => {
+    const isCurrent = tier.id === currentKey;
+    const canSwitch = !!ctx.session?.localCustomer;
+    const label = canSwitch
+      ? isCurrent ? "Current plan" : `Switch to ${tier.name}`
+      : isCurrent ? "Current plan" : `Request ${tier.name}`;
+    const action = canSwitch && !isCurrent ? `plan-${tier.id}` : isCurrent ? "current" : "plan-request";
+    return `
+      <article class="account-tier ${isCurrent ? "is-current" : ""}">
+        <span class="account-tier-badge">${esc(isCurrent ? "Current" : tier.badge)}</span>
+        <h4>${esc(tier.name)}</h4>
+        <b>${esc(tier.price)}</b>
+        <p>${esc(tier.copy)}</p>
+        <ul>${tier.features.map((feature) => `<li>${esc(feature)}</li>`).join("")}</ul>
+        <button class="btn ${isCurrent ? "btn-good" : "btn-primary"}" data-account-action="${action}" ${isCurrent ? "disabled" : ""}>
+          ${esc(label)}
+        </button>
+      </article>`;
+  }).join("");
+}
+
+function refreshAccountPlanUi(body, entitlements) {
+  const ent = entitlements ? syncAccountEntitlements(entitlements) : accountEntitlements();
+  const chip = body.querySelector(".account-plan-chip");
+  if (chip && ent) chip.innerHTML = `<span>${esc(ent.planName)}</span><b>${esc(ent.effectiveStatus)}</b>`;
+  const card = body.querySelector("[data-account-current-card]");
+  if (card) card.innerHTML = renderCurrentPlanCardInner();
+  const tiers = body.querySelector("[data-plan-tier-grid]");
+  if (tiers) tiers.innerHTML = renderPlanTierCards(ent?.planKey || accountCurrentPlanKey());
+  renderPlanMeta();
+}
+
 /* Database-auth accounts get the REAL plan from the server: assigned plan,
    status, limits, and live usage from the entitlement engine — replacing
    the static local copy. Fetched fresh on every open, never cached-fake. */
@@ -1124,9 +1225,12 @@ async function hydrateLivePlan(body) {
     mount.innerHTML = `<p class="set-note">Live plan details are unavailable right now — the server did not answer.</p>`;
     return;
   }
-  const ent = summary.entitlements;
-  const chip = body.querySelector(".account-plan-chip");
-  if (chip) chip.innerHTML = `<span>${esc(ent.planName)}</span><b>${esc(ent.effectiveStatus)}</b>`;
+  const ent = syncAccountEntitlements(summary.entitlements || me.entitlements);
+  if (!ent) {
+    mount.innerHTML = `<p class="set-note">Live plan details are unavailable right now — the server did not return entitlements.</p>`;
+    return;
+  }
+  refreshAccountPlanUi(body, ent);
   mount.innerHTML = `
     <article class="account-card">
       <p class="account-card-k">Live plan (server)</p>
@@ -1136,14 +1240,15 @@ async function hydrateLivePlan(body) {
         ${summary.metrics.map((m) => `<span><b>${esc(m.metric.replace(/_/g, " "))}</b>${m.used}/${m.limit}${m.resetAt ? ` · resets ${new Date(m.resetAt).toLocaleDateString()}` : ""}</span>`).join("")}
         <span><b>seats</b>${summary.seats.used}/${summary.seats.limit}</span>
       </div>
-      <p class="set-note">Plans are assigned manually by the PhantomForce operator until billing is connected — no self-serve checkout exists yet.</p>
+      <p class="set-note">${ctx.session?.localCustomer ? "Customer test mode: switch tiers instantly to verify real limits and locks. No billing action happens here." : "Plans are assigned manually by the PhantomForce operator until billing is connected — no self-serve checkout exists yet."}</p>
     </article>`;
+  bindAccountActions(body);
 }
 
 function renderAccountPlan(body) {
   const owner = accountOwnerName();
   const status = accountStatusMeta();
-  const renewal = accountRenewalLabel();
+  const ent = accountEntitlements();
   body.innerHTML = `
     <div class="account-plan">
       ${accountNotice ? `<div class="account-notice">${esc(accountNotice)}</div>` : ""}
@@ -1157,20 +1262,13 @@ function renderAccountPlan(body) {
           <p class="account-status account-status-${status.tone}"><span aria-hidden="true"></span>${esc(status.label)}</p>
         </div>
         <div class="account-plan-chip">
-          <span>${esc(ACCOUNT_PLAN.name)}</span>
-          <b>${esc(ACCOUNT_PLAN.price)}</b>
+          <span>${esc(ent?.planName || ACCOUNT_PLAN.name)}</span>
+          <b>${esc(ent?.effectiveStatus || ACCOUNT_PLAN.price)}</b>
         </div>
       </section>
       <section class="account-grid">
-        <article class="account-card account-current">
-          <p class="account-card-k">Current plan</p>
-          <h4>${esc(ACCOUNT_PLAN.name)}</h4>
-          <p>${esc(status.detail)}</p>
-          <div class="account-facts">
-            <span><b>Renewal</b>${esc(renewal)}</span>
-            <span><b>Billing</b>${esc(ACCOUNT_PLAN.paymentState)}</span>
-            <span><b>Access</b>${esc(ACCOUNT_PLAN.workspaceLimit)}</span>
-          </div>
+        <article class="account-card account-current" data-account-current-card>
+          ${renderCurrentPlanCardInner()}
         </article>
         <article class="account-card account-payment">
           <p class="account-card-k">Payment options</p>
@@ -1202,18 +1300,8 @@ function renderAccountPlan(body) {
             <h3>Choose the operating level</h3>
           </div>
         </div>
-        <div class="account-tiers">
-          ${ACCOUNT_TIERS.map((tier) => `
-            <article class="account-tier ${tier.current ? "is-current" : ""}">
-              <span class="account-tier-badge">${esc(tier.badge)}</span>
-              <h4>${esc(tier.name)}</h4>
-              <b>${esc(tier.price)}</b>
-              <p>${esc(tier.copy)}</p>
-              <ul>${tier.features.map((feature) => `<li>${esc(feature)}</li>`).join("")}</ul>
-              <button class="btn ${tier.current ? "btn-good" : "btn-primary"}" data-account-action="${tier.current ? "current" : `plan-${tier.id}`}">
-                ${tier.current ? "Current plan" : `Request ${esc(tier.name)}`}
-              </button>
-            </article>`).join("")}
+        <div class="account-tiers" data-plan-tier-grid>
+          ${renderPlanTierCards()}
         </div>
       </section>
       <section class="account-section account-cancel">
@@ -1225,9 +1313,36 @@ function renderAccountPlan(body) {
         <button class="btn btn-quiet" data-account-action="cancel">Prepare cancellation request</button>
       </section>
     </div>`;
+  bindAccountActions(body);
+  if (ctx.session?.database || ctx.session?.localCustomer) hydrateLivePlan(body);
+}
+
+function bindAccountActions(body) {
   body.querySelectorAll("[data-account-action]").forEach((btn) => {
-    btn.addEventListener("click", () => {
+    if (btn.dataset.accountBound === "true") return;
+    btn.dataset.accountBound = "true";
+    btn.addEventListener("click", async () => {
       const action = btn.dataset.accountAction || "plan";
+      if (ctx.session?.localCustomer && action.startsWith("plan-")) {
+        const planKey = action.replace("plan-", "");
+        btn.disabled = true;
+        const originalText = btn.textContent;
+        btn.textContent = "Switching…";
+        const result = await switchCustomerPlan(planKey);
+        btn.disabled = false;
+        btn.textContent = originalText;
+        if (result.ok) {
+          syncAccountEntitlements(result.entitlements);
+          await refreshNavEntitlements({ rerender: true });
+        }
+        accountNotice = result.ok
+          ? `${result.entitlements?.planName || "Plan"} is now the current test tier. Restrictions are active; no payment was charged.`
+          : `Plan switch failed: ${result.error || "server refused the test checkout"}.`;
+        pushActivity("Account", accountNotice);
+        store.save();
+        renderAccountPlan(body);
+        return;
+      }
       const label = {
         payment: "Payment-method update",
         invoice: "Manual invoice request",
@@ -1240,7 +1355,6 @@ function renderAccountPlan(body) {
       renderAccountPlan(body);
     });
   });
-  if (ctx.session?.database) hydrateLivePlan(body);
 }
 
 /* ============================ hero + command deck ============================ */
@@ -1253,7 +1367,7 @@ const MODES = {
   admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260716-311";
+const POSE_VERSION = "phantom-live-20260716-313";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -2791,13 +2905,14 @@ function renderPlanMeta() {
   const statusEl = $("[data-account-status]");
   const planEl = $("[data-plan-name]");
   const el = $("[data-plan-renew]");
+  const ent = accountEntitlements();
   if (nameEl) nameEl.textContent = owner;
   if (avatarEl) avatarEl.textContent = accountInitials(owner);
   if (statusEl) {
     statusEl.className = `side-profile-status is-${status.tone}`;
     statusEl.innerHTML = `<span class="side-profile-dot" aria-hidden="true"></span>${esc(status.label)}`;
   }
-  if (planEl) planEl.textContent = ACCOUNT_PLAN.name;
+  if (planEl) planEl.textContent = ent?.planName || ACCOUNT_PLAN.name;
   if (el) el.textContent = `Renewal: ${renew}`;
 }
 
