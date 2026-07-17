@@ -562,15 +562,22 @@ function stepProjectiles(dt){
 
 /* ---------- HUD ---------- */
 function buildHud(){
-  hudEl.innerHTML=fighters.map(f=>`<div class="fighter-card" style="border-color:${f.color}55"><i style="color:${f.color}">${f.name}${f.human?'':` · BOT ${botDifficulty.toUpperCase()}`}</i><b data-pct="${f.slot}" style="color:${f.color}">0%</b><s data-stocks="${f.slot}" style="color:${f.color}">●●●</s></div>`).join('');
+  hudEl.innerHTML=fighters.map(f=>`<div class="fighter-card" style="border-color:${f.color}55"><i style="color:${f.color}">${f.name}${f.human?'':` · BOT ${botDifficulty.toUpperCase()}`}</i><b data-pct="${f.slot}" style="color:${f.color}">0%</b><s data-stocks="${f.slot}" style="color:${f.color}">●●●</s><em data-buffs="${f.slot}" style="font-style:normal;display:block;font-size:11px;min-height:14px"></em></div>`).join('');
   updateHud();
 }
 function updateHud(){
   for(const f of fighters){
-    const pct=hudEl.querySelector(`[data-pct="${f.slot}"]`),st=hudEl.querySelector(`[data-stocks="${f.slot}"]`);
+    const pct=hudEl.querySelector(`[data-pct="${f.slot}"]`),st=hudEl.querySelector(`[data-stocks="${f.slot}"]`),buffs=hudEl.querySelector(`[data-buffs="${f.slot}"]`);
     if(pct)pct.textContent=`${Math.round(f.pct)}%`;
     if(pct){pct.style.transform=f.stun>0?'scale(1.18)':'scale(1)';pct.style.textShadow=f.stun>0?`0 0 16px ${f.color}`:''}
     if(st)st.textContent=f.dead?'OUT':'●'.repeat(Math.max(0,f.stocks));
+    if(buffs){
+      const active=[];
+      if(f.power)active.push('✦');
+      if(f.shurikenArmed)active.push('🗡');
+      if(f.speedBuff>0)active.push('📜');
+      buffs.textContent=active.join(' ');
+    }
   }
 }
 
@@ -750,6 +757,7 @@ function loop(t){
   for(const p of pickups)p.age+=dt;
   tickBombs(dt);
   for(const f of fighters)step(f,dt);
+  updateHud();
   stepParticles(dt);
   stepProjectiles(dt);
   draw(t);
