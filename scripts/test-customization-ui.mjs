@@ -16,10 +16,15 @@ assert.match(source, /normalizeCustomizationConfiguration/u, "Old saved Workspac
 assert.match(source, /activeConfiguration = normalizeCustomizationConfiguration\(payload\.configuration\)/u, "Loaded customization must merge in modules added after the saved configuration was created.");
 assert.match(source, /configuration = normalizeCustomizationConfiguration\(configuration\)/u, "Navigation preview must merge missing platform modules before filtering.");
 assert.match(source, /\(left\.bottom \? 1 : 0\)\s*-\s*\(right\.bottom \? 1 : 0\)/u, "Navigation sorting must use an explicit bottom-group comparison.");
+assert.match(source, /PLATFORM_MODULES\.map\(\(\[id, label, customerConfigurable, roles\]/u, "The platform module tuple boolean must be consumed as customerConfigurable.");
+assert.match(source, /enabled: id !== "developer" \|\| internal/u, "Default module visibility must not depend on customerConfigurable.");
 
 for (const id of ["dashboard", "crm", "media", "sites", "money", "phantomplay", "phantomstore", "intelligence", "analytics", "customize", "settings"]) {
   assert.match(source, new RegExp(`\\["${id}"`, "u"), `${id} must be present in the local Workspace Modules fallback.`);
 }
+assert.match(source, /\["phantomstore", "PhantomStore", false/u, "PhantomStore must be a protected platform tab, not a hideable workspace option.");
+assert.match(source, /REQUIRED_MODULE_IDS = new Set\(\["dashboard", "phantomstore", "approvals", "customize", "settings"\]\)/u, "PhantomStore must be forced enabled for existing saved configurations.");
+assert.match(source, /\["dashboard", "phantomstore", "approvals", "customize", "settings"\]\.includes\(module\.id\)/u, "Workspace Studio must mark PhantomStore as required/protected.");
 
 const storage = new Map();
 globalThis.localStorage = {
@@ -62,6 +67,13 @@ const migrated = normalizeCustomizationConfiguration(configuration);
 const phantomStoreModule = migrated.modules.find((module) => module.id === "phantomstore");
 assert.ok(phantomStoreModule?.enabled, "Old saved Workspace Studio configs must gain an enabled PhantomStore module automatically.");
 assert.ok(migrated.modules.some((module) => module.id === "phantomstore"), "PhantomStore must appear in the Workspace Studio module list after migration.");
+const disabledStoreConfig = { modules: [{ id: "phantomstore", label: "PhantomStore", enabled: false, order: 99, roles: ["owner"] }] };
+assert.equal(normalizeCustomizationConfiguration(disabledStoreConfig).modules.find((module) => module.id === "phantomstore")?.enabled, true, "PhantomStore must stay enabled even if an old saved config tried to hide it.");
+const fresh = normalizeCustomizationConfiguration();
+const freshPhantomStoreModule = fresh.modules.find((module) => module.id === "phantomstore");
+assert.equal(freshPhantomStoreModule?.enabled, true, "Brand-new Workspace Studio configs must show PhantomStore by default.");
+assert.equal(freshPhantomStoreModule?.customerConfigurable, false, "Brand-new Workspace Studio configs must not let tenants hide PhantomStore.");
+assert.ok(previewCustomizedNavigation(baseNav, fresh, "owner").some((item) => item.id === "phantomstore"), "Brand-new owner sidebars must include PhantomStore.");
 const ownerOrder = previewCustomizedNavigation(baseNav, configuration, "owner").map((item) => item.id);
 assert.deepEqual(ownerOrder, [
   "dashboard", "crm", "clientsetup", "media", "sites", "money", "planner", "phantomplay", "phantomstore",

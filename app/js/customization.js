@@ -14,7 +14,7 @@ const PLATFORM_MODULES = [
   ["money", "Accounting", true, ["owner", "admin", "manager"]],
   ["planner", "Planner", true, ["owner", "admin", "manager", "member"]],
   ["phantomplay", "PhantomPlay", true, ["owner", "admin", "manager", "member", "client"]],
-  ["phantomstore", "PhantomStore", true, ["owner", "admin", "manager", "member", "client"]],
+  ["phantomstore", "PhantomStore", false, ["owner", "admin", "manager", "member", "client"]],
   ["memory", "Memory", true, ["owner", "admin", "manager"]],
   ["automation", "Automations", true, ["owner", "admin", "manager"]],
   ["approvals", "Approvals", false, ["owner", "admin", "manager", "member"]],
@@ -101,7 +101,7 @@ function defaultConfiguration(tenantId = currentTenantId()) {
   };
 }
 
-const REQUIRED_MODULE_IDS = new Set(["dashboard", "approvals", "customize", "settings"]);
+const REQUIRED_MODULE_IDS = new Set(["dashboard", "phantomstore", "approvals", "customize", "settings"]);
 
 export function normalizeCustomizationConfiguration(configuration = null) {
   const source = configuration && typeof configuration === "object" ? configuration : {};
@@ -247,7 +247,7 @@ function invalidatePreview(state) {
 
 function moduleCards(draft) {
   return draft.modules.filter((module) => module.id !== "developer").sort((a, b) => a.order - b.order).map((module) => {
-    const protectedModule = ["dashboard", "approvals", "customize", "settings"].includes(module.id);
+    const protectedModule = ["dashboard", "phantomstore", "approvals", "customize", "settings"].includes(module.id);
     return `<article class="cust-module" data-cust-module="${esc(module.id)}">
       <span class="cust-module-grip">⋮⋮</span>
       <div><b>${esc(module.label)}</b><i>${esc(module.id)}${protectedModule ? " · required" : ""}</i></div>

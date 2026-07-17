@@ -35,8 +35,8 @@ for (const selector of [".ps-shell", ".ps-market-hero", ".ps-tool", ".ps-submit-
   assert.ok(storeCss.includes(selector), `${selector} style must be present.`);
 }
 
-assert.match(customizationSource, /\["phantomstore", "PhantomStore", true/u, "Workspace customization fallback must know PhantomStore.");
-assert.match(registrySource, /id:\s*"phantomstore"[\s\S]*displayName:\s*"PhantomStore"[\s\S]*route:\s*"phantomstore"/u, "Server module registry must expose PhantomStore.");
+assert.match(customizationSource, /\["phantomstore", "PhantomStore", false/u, "Workspace customization fallback must know PhantomStore is a protected platform tab.");
+assert.match(registrySource, /id:\s*"phantomstore"[\s\S]*displayName:\s*"PhantomStore"[\s\S]*route:\s*"phantomstore"[\s\S]*required:\s*true[\s\S]*customerConfigurable:\s*false/u, "Server module registry must expose PhantomStore as a required, non-hideable marketplace tab.");
 assert.match(profilesSource, /business:[\s\S]*enabledModules:[\s\S]*"phantomstore"/u, "Business workspaces should include PhantomStore by default.");
 assert.match(profilesSource, /creator:[\s\S]*enabledModules:[\s\S]*"phantomstore"/u, "Creator workspaces should include PhantomStore by default.");
 assert.match(profilesSource, /developer:[\s\S]*enabledModules:[\s\S]*"phantomstore"/u, "Developer workspaces should include PhantomStore by default.");
