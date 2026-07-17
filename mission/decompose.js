@@ -37,7 +37,8 @@ export async function decomposeObjective({ objective, workerCount, workspaceRoot
   const countInstruction = workerCount
     ? `into exactly ${workerCount} distinct, non-overlapping worker roles`
     : `into however many distinct, non-overlapping worker roles this objective actually calls for ` +
-      `(typically 2-6 — use your judgment; don't split into more roles than there is real independent work)`;
+      `(typically 2-6, up to 20 for genuinely large objectives — use your judgment; don't split into more ` +
+      `roles than there is real independent work)`;
 
   const prompt =
     `You are decomposing a mission objective ${countInstruction} for a team of parallel Claude Code agents. ` +
