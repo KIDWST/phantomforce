@@ -1,10 +1,6 @@
 # PhantomForce Live Admin Source
 
-This checkout is the live admin source for `admin.phantomforce.online` and local `127.0.0.1:5177`.
-
-```text
-C:\Users\jorda\Documents\Codex\worktrees\phantomforce-live-social-analytics-20260712
-```
+This checkout (`phantomforce-main-trunk-20260706`) is the live admin source for `admin.phantomforce.online` and local `127.0.0.1:5177` — confirmed directly via `/health` returning this exact path as `root`. A previous version of this file pointed at `phantomforce-live-social-analytics-20260712` instead; that worktree is stale (tens of commits behind, predates this branch's dashboard work) and is NOT the live source. Do not use it for owner-facing admin UI work.
 
 Before editing owner-facing admin UI, verify:
 
