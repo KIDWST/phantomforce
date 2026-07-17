@@ -39,6 +39,12 @@ assert.match(widgetSource, /renderSignalStackDock\(attention\)/u,
 assert.match(widgetSource, /renderCommandToolDock\(\)/u, "Workforce widget must show an inline worker dock.");
 assert.match(widgetSource, /renderAutomationDock\(automations\)/u, "Automation widget must show an inline automation dock.");
 assert.match(main, /function renderCommandToolDock\(\)/u, "Command surface should define the worker dock renderer.");
+assert.match(main, /function renderDepartmentActionDock\(departments = \[\]\)/u,
+  "Workforce widget should render department action tiles instead of raw backend worker names.");
+assert.match(main, /renderDepartmentActionDock\(departments\)/u,
+  "Workforce widget should use department actions inside the expanded dashboard card.");
+assert.doesNotMatch(main, /cw-tool-dock/u,
+  "Workforce widget should not expose the old raw worker lane dock on the dashboard.");
 assert.match(main, /function renderBusinessRecordsDock\(records = \[\]\)/u,
   "Command surface should define the business records dock renderer.");
 assert.match(main, /function renderSignalStackDock\(signals = \[\]\)/u,
@@ -168,6 +174,8 @@ assert.match(css, /\.cw-signal-node\s*\{/u, "Signals widget must style each evid
 assert.match(css, /\.cw-signal-empty\s*\{/u, "Signals widget must have a clean real-empty state.");
 assert.match(css, /\.cw-flow\s*\{/u, "Outcome widget must show a compact Signal/Decision/Work/Result flow.");
 assert.match(css, /\.cw-dept-map\s*\{/u, "Workforce widget must have visual department-map styling.");
+assert.match(css, /\.cw-dept-actions\s*\{/u, "Workforce widget must style department action tiles.");
+assert.match(css, /\.cw-dept-action\s*\{/u, "Workforce department actions must be clickable visual cards.");
 assert.match(css, /\.cw-automation-empty\s*\{/u, "Automation widget must have a clean empty-state dock.");
 assert.match(css, /\.cw-dock-node::before/u, "Command dock nodes should expose visible status dots.");
 assert.match(css, /\.hero2-proof\s*\{/u, "Recent handled proof line must have compact dashboard styling.");

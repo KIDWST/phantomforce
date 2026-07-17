@@ -14688,6 +14688,90 @@ body .phantom .workspace-page :where(
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
+.cw-dept-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid rgba(65, 255, 161, 0.12);
+  border-radius: var(--r-sm);
+  background:
+    radial-gradient(70% 120% at 20% 0%, rgba(65, 255, 161, 0.1), transparent 54%),
+    rgba(0, 0, 0, 0.18);
+}
+.cw-dept-action {
+  position: relative;
+  min-width: 0;
+  min-height: 92px;
+  display: grid;
+  align-content: space-between;
+  gap: 8px;
+  padding: 11px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  cursor: pointer;
+  text-align: left;
+  color: #eafff4;
+  background:
+    linear-gradient(135deg, rgba(65, 255, 161, 0.075), rgba(0, 0, 0, 0.14)),
+    rgba(5, 16, 13, 0.76);
+  overflow: hidden;
+}
+.cw-dept-action::before {
+  content: "";
+  position: absolute;
+  inset: auto 10px 8px;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(65, 255, 161, 0.72), transparent);
+}
+.cw-dept-action.is-watch::before {
+  background: linear-gradient(90deg, rgba(255, 209, 102, 0.72), transparent);
+}
+.cw-dept-action.is-quiet::before {
+  background: rgba(129, 151, 143, 0.24);
+}
+.cw-dept-action:hover {
+  transform: translateY(-1px);
+  border-color: rgba(65, 255, 161, 0.22);
+}
+.cw-dept-action span {
+  position: relative;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.cw-dept-action b,
+.cw-dept-action i,
+.cw-dept-action em,
+.cw-dept-action small {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-style: normal;
+}
+.cw-dept-action b { font-size: 12px; font-weight: 850; }
+.cw-dept-action i {
+  color: var(--neon);
+  font: 850 9px / 1 var(--font-mono);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.cw-dept-action em {
+  color: #eafff4;
+  font-size: 12px;
+  font-weight: 800;
+}
+.cw-dept-action small {
+  color: var(--dim);
+  font-size: 10px;
+  line-height: 1.25;
+  white-space: normal;
+}
 .cw-automation-empty {
   display: grid;
   grid-template-columns: 1fr repeat(3, auto);
@@ -14804,6 +14888,7 @@ body .phantom .workspace-page :where(
   .cw-dock { grid-template-columns: 1fr; }
   .cw-record-grid { grid-template-columns: 1fr; }
   .cw-dept-map { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cw-dept-actions { grid-template-columns: 1fr; }
   .cw-automation-empty { grid-template-columns: 1fr; }
   .cw-automation-empty button { width: 100%; }
 }
