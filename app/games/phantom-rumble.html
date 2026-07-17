@@ -11,6 +11,9 @@ canvas{width:100%;height:100%;display:block}
 .overlay .modes button{border:1px solid #2cff9b55;border-radius:12px;background:#04140c;color:#7dffbd;padding:14px 18px;font:700 13px ui-monospace;cursor:pointer;min-width:150px}
 .overlay .modes button:hover{background:#0a2417;box-shadow:0 0 18px #22c55e44}
 .overlay .modes button b{display:block;font-size:16px;margin-bottom:4px;color:#baffdb}
+.overlay .diffs{display:flex;gap:8px;justify-content:center;margin:2px 0 14px}
+.overlay .diffs button{border:1px solid #2cff9b33;border-radius:20px;background:#04140c;color:#6fae8d;padding:6px 16px;font:700 11px ui-monospace;letter-spacing:1px;cursor:pointer}
+.overlay .diffs button[aria-checked="true"]{background:#123423;color:#baffdb;border-color:#2cff9baa;box-shadow:0 0 12px #22c55e33}
 .overlay .keys{display:flex;gap:22px;justify-content:center;color:#6fae8d;font-size:12px;margin-top:14px}
 .overlay .keys span b{color:#a9ffce}
 .overlay .pb{color:#57ff9e;font-size:12px;letter-spacing:1px}
@@ -39,6 +42,11 @@ body.paused .pause{display:grid}
     <button data-mode="versus"><b>VERSUS</b>2 players, one keyboard</button>
     <button data-mode="rumble"><b>RUMBLE</b>2 players + 2 bots</button>
     <button data-mode="botbrawl"><b>BOT BRAWL</b>you vs three bots</button>
+  </div>
+  <div class="diffs" data-diffs role="radiogroup" aria-label="Bot difficulty">
+    <button data-diff="easy" type="button" role="radio" aria-checked="false">EASY</button>
+    <button data-diff="normal" type="button" role="radio" aria-checked="true">NORMAL</button>
+    <button data-diff="hard" type="button" role="radio" aria-checked="false">HARD</button>
   </div>
   <div class="keys"><span><b>P1</b> WASD move · W jump · F hit · G smash</span><span><b>P2</b> Arrows · ↑ jump · K hit · L smash</span></div>
   <p style="font-size:12px;color:#557d68">Double-tap a direction to dash. Two jumps each. Grab the pickups: ♥ heals · ✦ powers your next hit · ◉ is a pulse bomb.</p>
@@ -73,6 +81,23 @@ const SPAWNS=[{x:.28,y:.58},{x:.72,y:.58},{x:.42,y:.58},{x:.58,y:.58}];
 const PALETTE=[{name:'EMBER',c:'#4ade80',glow:'#22c55e'},{name:'CIPHER',c:'#5eead4',glow:'#14b8a6'},{name:'HEX',c:'#f0abfc',glow:'#d946ef'},{name:'VOLT',c:'#fde047',glow:'#eab308'}];
 let fighters=[],pickups=[],particles=[],floaters=[],rings=[],mode='',running=false,paused=false,over=false,last=0,shake=0,slowmo=0,pickupTimer=6,reduced=false,soundOn=true,matchKos=[0,0,0,0],raf=0;
 
+/* ---------- bot difficulty ---------- */
+const DIFFS={
+  easy:{reaction:[.32,.6],accel:.68,attackReach:.85,heavyChance:.14,pickupGreed:.2,recoverSkill:.55,jumpCd:.85},
+  normal:{reaction:[.18,.48],accel:1,attackReach:1,heavyChance:.3,pickupGreed:.35,recoverSkill:.8,jumpCd:.6},
+  hard:{reaction:[.08,.22],accel:1.3,attackReach:1.18,heavyChance:.46,pickupGreed:.55,recoverSkill:1,jumpCd:.4}
+};
+let botDifficulty='normal';
+try{const saved=localStorage.getItem('pf.phantomrumble.diff');if(saved&&DIFFS[saved])botDifficulty=saved}catch{}
+function setDiff(d){
+  if(!DIFFS[d])return;
+  botDifficulty=d;
+  try{localStorage.setItem('pf.phantomrumble.diff',d)}catch{}
+  for(const b of document.querySelectorAll('[data-diff]'))b.setAttribute('aria-checked',String(b.dataset.diff===d));
+}
+for(const b of document.querySelectorAll('[data-diff]'))b.onclick=()=>setDiff(b.dataset.diff);
+setDiff(botDifficulty);
+
 /* ---------- procedural chicken-ninja SFX ---------- */
 let audioCtx=null;
 function audio(){
@@ -100,7 +125,7 @@ function makeFighter(slot,human){
   return {slot,human,name:PALETTE[slot].name,color:PALETTE[slot].c,glow:PALETTE[slot].glow,
     x:spawn.x,y:spawn.y,vx:0,vy:0,face:slot%2?-1:1,pct:0,stocks:3,
     grounded:false,jumps:2,stun:0,invuln:2,charge:0,power:false,dead:false,
-    attackCd:0,anim:0,trail:[],ai:{dir:1,timer:0,jumpCd:0},lastTap:{key:'',at:0}};
+    attackCd:0,anim:0,trail:[],ai:{dir:1,timer:0,jumpCd:0,diff:DIFFS[botDifficulty]},lastTap:{key:'',at:0}};
 }
 function startMatch(selected){
   mode=selected;
@@ -235,25 +260,26 @@ function tickBombs(dt){
 
 /* ---------- bots ---------- */
 function botThink(f,dt){
+  const d=f.ai.diff||DIFFS.normal;
   f.ai.timer-=dt;f.ai.jumpCd-=dt;
   const foes=fighters.filter(t=>t!==f&&!t.dead);
   if(!foes.length)return;
   const foe=foes.reduce((a,b)=>Math.abs(a.x-f.x)<Math.abs(b.x-f.x)?a:b);
   const offstage=f.x<STAGE.x-STAGE.w/2-.02||f.x>STAGE.x+STAGE.w/2+.02;
-  if(offstage){ /* recover toward stage */
+  if(offstage){ /* recover toward stage, skill gates how promptly */
     f.ai.dir=f.x<STAGE.x?1:-1;
-    if(f.vy>0&&f.jumps>0&&f.ai.jumpCd<=0){jump(f);f.ai.jumpCd=.5}
+    if(f.vy>0&&f.jumps>0&&f.ai.jumpCd<=0&&Math.random()<d.recoverSkill){jump(f);f.ai.jumpCd=d.jumpCd}
   }else{
     const want=pickups.find(p=>!p.taken&&p.fuse===null);
-    const target=want&&Math.random()<.35?want:foe;
+    const target=want&&Math.random()<d.pickupGreed?want:foe;
     f.ai.dir=target.x>f.x?1:-1;
     if(f.ai.timer<=0){
-      f.ai.timer=.18+Math.random()*.3;
-      if(Math.abs(foe.x-f.x)<.07&&Math.abs(foe.y-f.y)<.08){f.face=f.ai.dir;attack(f,Math.random()<.3)}
-      if(foe.y<f.y-.12&&f.grounded&&f.ai.jumpCd<=0){jump(f);f.ai.jumpCd=.6}
+      f.ai.timer=d.reaction[0]+Math.random()*(d.reaction[1]-d.reaction[0]);
+      if(Math.abs(foe.x-f.x)<.07*d.attackReach&&Math.abs(foe.y-f.y)<.08*d.attackReach){f.face=f.ai.dir;attack(f,Math.random()<d.heavyChance)}
+      if(foe.y<f.y-.12&&f.grounded&&f.ai.jumpCd<=0&&Math.random()<d.recoverSkill){jump(f);f.ai.jumpCd=d.jumpCd}
     }
   }
-  f.vx+=f.ai.dir*.0016*(dt*60);
+  f.vx+=f.ai.dir*.0016*d.accel*(dt*60);
 }
 
 /* ---------- physics + rounds ---------- */
@@ -336,7 +362,7 @@ function stepParticles(dt){
 
 /* ---------- HUD ---------- */
 function buildHud(){
-  hudEl.innerHTML=fighters.map(f=>`<div class="fighter-card" style="border-color:${f.color}55"><i style="color:${f.color}">${f.name}${f.human?'':' · BOT'}</i><b data-pct="${f.slot}" style="color:${f.color}">0%</b><s data-stocks="${f.slot}" style="color:${f.color}">●●●</s></div>`).join('');
+  hudEl.innerHTML=fighters.map(f=>`<div class="fighter-card" style="border-color:${f.color}55"><i style="color:${f.color}">${f.name}${f.human?'':` · BOT ${botDifficulty.toUpperCase()}`}</i><b data-pct="${f.slot}" style="color:${f.color}">0%</b><s data-stocks="${f.slot}" style="color:${f.color}">●●●</s></div>`).join('');
   updateHud();
 }
 function updateHud(){
