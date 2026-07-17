@@ -8,6 +8,7 @@ import { existsSync, statSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { readUsage } from "../openrouter-agent/usage-log.mjs";
+import { costForUsage as catalogCostForUsage } from "./model-catalog.js";
 
 // Matches Claude Code's own project-directory naming exactly (verified
 // against a real ~/.claude/projects/<name> directory for a known cwd on
@@ -92,19 +93,12 @@ export function estimateFromChars(charCount) {
   return { inputTokens: Math.round(charCount / 4), outputTokens: 0 };
 }
 
-// Verified per-1M-token USD rates, checked against each model's own pricing
-// page at time of writing. An unrecognized model returns null rather than
-// guessing a rate — never invent a dollar figure.
-const RATES_PER_MILLION_USD = {
-  "claude-sonnet-5": { input: 3, output: 15 },
-  "claude-opus-4-8": { input: 15, output: 75 },
-  "claude-haiku-4-5-20251001": { input: 0.8, output: 4 },
-};
-
-export function costForUsage({ model, inputTokens, outputTokens }) {
-  const rate = model ? RATES_PER_MILLION_USD[model] : null;
-  if (!rate) return null;
-  return (inputTokens / 1_000_000) * rate.input + (outputTokens / 1_000_000) * rate.output;
+// Rates live in the shared model catalog now (mission/model-catalog.js) —
+// this thin wrapper keeps the historical call shape for existing imports
+// (server.js pollTokenUsage, tests). An unrecognized model still returns
+// null rather than guessing a rate — never invent a dollar figure.
+export function costForUsage({ model, inputTokens, outputTokens, cacheTokens }) {
+  return catalogCostForUsage(model, { inputTokens, outputTokens, cacheTokens });
 }
 
 // Unlike Claude's adapter (which discovers a transcript by scanning a
