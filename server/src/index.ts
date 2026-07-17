@@ -151,6 +151,7 @@ import { tmpdir } from "node:os";
 import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createAccessStorageSnapshot } from "./access/access-storage.js";
+import { consumeRateLimit } from "./access/rate-limit.js";
 import { actionRegistry, isActionImplemented } from "./approval/action-registry.js";
 import { createFalconBroker } from "./falcon/broker.js";
 import {
@@ -466,6 +467,14 @@ const runningCommit = (() => {
 
 const app = Fastify({
   logger: process.env.PHANTOMFORCE_SERVER_LOGGER === "false" ? false : true,
+  /* Public traffic reaches this process only through the Pangolin gateway
+     (see access/pangolin-*.ts); it forwards the real client IP via the
+     standard X-Forwarded-For chain. Direct localhost access (local dev/QA)
+     is already an inherently trusted path. Without this, request.ip would
+     resolve to Pangolin's own connecting IP for every real visitor, and
+     IP-keyed rate limiting (see access/rate-limit.ts) would bucket all
+     public traffic together instead of per client. */
+  trustProxy: true,
 });
 
 const CustomizationTenantQuerySchema = z.object({ tenant_id: z.string().trim().max(80).optional() });
@@ -1197,6 +1206,53 @@ app.get("/sessions", async (request) => {
   };
 });
 
+/* Brute-force throttle for every pre-auth credential-guessing endpoint
+   (password login, 2FA codes, password-reset tokens, signup/forgot-*
+   abuse). Keyed per-IP+identifier so one attacker hammering a single
+   account/token can't lock other users out, and per-IP alone as a floor
+   so a script rotating identifiers is still capped. request.ip resolves
+   the real client IP via the Pangolin gateway's X-Forwarded-For chain
+   (trustProxy is enabled above) rather than Pangolin's own connecting IP. */
+const AUTH_RATE_LIMIT_MAX_ATTEMPTS = 10;
+const AUTH_RATE_LIMIT_WINDOW_MS = 5 * 60 * 1000;
+/* 2FA codes and reset tokens are short, high-value secrets guessed against
+   a single fixed value — throttle those far tighter than a login email. */
+const CODE_RATE_LIMIT_MAX_ATTEMPTS = 5;
+const CODE_RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
+
+function enforceRateLimit(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  scope: string,
+  identifier: string,
+  max = AUTH_RATE_LIMIT_MAX_ATTEMPTS,
+  windowMs = AUTH_RATE_LIMIT_WINDOW_MS,
+) {
+  const ip = request.ip || "unknown";
+  const normalizedIdentifier = (identifier || "unknown").trim().toLowerCase().slice(0, 200);
+
+  const perIdentifier = consumeRateLimit(`${scope}:id:${ip}:${normalizedIdentifier}`, max, windowMs);
+  const perIp = consumeRateLimit(`${scope}:ip:${ip}`, max * 3, windowMs);
+
+  const result = perIdentifier.limited ? perIdentifier : perIp;
+  if (result.limited) {
+    reply
+      .header("Retry-After", Math.ceil(result.retryAfterMs / 1000).toString())
+      .code(429)
+      .send({ ok: false, error: "too_many_attempts" });
+    return false;
+  }
+  return true;
+}
+
+function enforceAuthRateLimit(request: FastifyRequest, reply: FastifyReply, identifier: string) {
+  return enforceRateLimit(request, reply, "auth", identifier);
+}
+
+function enforceCodeRateLimit(request: FastifyRequest, reply: FastifyReply, identifier: string) {
+  return enforceRateLimit(request, reply, "auth-code", identifier, CODE_RATE_LIMIT_MAX_ATTEMPTS, CODE_RATE_LIMIT_WINDOW_MS);
+}
+
 async function handleSessionLogin(request: FastifyRequest, reply: FastifyReply) {
   const authConfiguration = getAccessAuthConfiguration();
 
@@ -1215,6 +1271,10 @@ async function handleSessionLogin(request: FastifyRequest, reply: FastifyReply) 
       ok: false,
       error: parsed.error.flatten(),
     });
+  }
+
+  if (!enforceAuthRateLimit(request, reply, parsed.data.email || parsed.data.sessionId)) {
+    return reply;
   }
 
   const requestedSession = getAccessSession(parsed.data.sessionId);
@@ -1344,6 +1404,9 @@ app.post("/auth/login", async (request, reply) => {
   if (!parsed.success) {
     return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
   }
+  if (!enforceAuthRateLimit(request, reply, parsed.data.email)) {
+    return reply;
+  }
   const login = await beginLoginWithPassword(parsed.data.email, parsed.data.password);
   if (!login) {
     /* uniform delay-free refusal; no user-exists oracle */
@@ -1379,6 +1442,7 @@ app.post("/auth/2fa/verify", async (request, reply) => {
   if (!getAccessAuthConfiguration().databaseAuthEnabled) return databaseAuthDisabled(reply);
   const parsed = TwoFactorVerifySchema.safeParse(request.body ?? {});
   if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  if (!enforceCodeRateLimit(request, reply, parsed.data.challengeToken)) return reply;
   const session = await verifyTwoFactorLogin(parsed.data);
   if (!session) return reply.code(401).send({ ok: false, error: "Invalid or expired 2FA challenge." });
   const publicHost = requestPublicHost(request);
@@ -1395,6 +1459,7 @@ app.post("/auth/signup", async (request, reply) => {
   if (!getAccessAuthConfiguration().databaseAuthEnabled) return databaseAuthDisabled(reply);
   const parsed = SignupSchema.safeParse(request.body ?? {});
   if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  if (!enforceAuthRateLimit(request, reply, parsed.data.email)) return reply;
   const result = await createSelfServeAccount(parsed.data);
   if (!result.ok) return reply.code(409).send({ ok: false, error: result.error });
   return { ok: true, userId: result.userId, orgId: result.orgId, next: "Sign in at /auth/login." };
@@ -1417,6 +1482,7 @@ app.post("/auth/signup-developer", async (request, reply) => {
     }
     return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
   }
+  if (!enforceAuthRateLimit(request, reply, parsed.data.email)) return reply;
   const result = await registerWorkspaceAccount({ ...parsed.data, workspaceProfile: "developer" });
   if (!result.ok) return reply.code(409).send({ ok: false, error: result.error });
   const token = mintDatabaseSessionToken(result.session.id);
@@ -1440,6 +1506,7 @@ app.post("/auth/forgot-username", async (request, reply) => {
   if (!getAccessAuthConfiguration().databaseAuthEnabled) return databaseAuthDisabled(reply);
   const parsed = ForgotUsernameSchema.safeParse(request.body ?? {});
   if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  if (!enforceAuthRateLimit(request, reply, parsed.data.email)) return reply;
   return await requestUsernameReminder(parsed.data.email);
 });
 
@@ -1447,6 +1514,7 @@ app.post("/auth/forgot-password", async (request, reply) => {
   if (!getAccessAuthConfiguration().databaseAuthEnabled) return databaseAuthDisabled(reply);
   const parsed = ForgotPasswordSchema.safeParse(request.body ?? {});
   if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  if (!enforceAuthRateLimit(request, reply, parsed.data.identifier)) return reply;
   return await requestPasswordReset(parsed.data.identifier);
 });
 
@@ -1454,6 +1522,7 @@ app.post("/auth/reset-password", async (request, reply) => {
   if (!getAccessAuthConfiguration().databaseAuthEnabled) return databaseAuthDisabled(reply);
   const parsed = ResetPasswordSchema.safeParse(request.body ?? {});
   if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  if (!enforceCodeRateLimit(request, reply, parsed.data.token)) return reply;
   const result = await resetPasswordWithToken(parsed.data);
   if (!result.ok) return reply.code(400).send({ ok: false, error: result.error });
   return { ok: true, next: "Sign in with your new password." };
