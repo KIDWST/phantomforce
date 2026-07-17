@@ -21,7 +21,6 @@ const TERM_THEME = {
 };
 
 let profiles = [];
-let columns = 3;
 let uidCounter = 0;
 let broadcastOn = false;
 let activeCardUid = null;
@@ -166,15 +165,15 @@ function escapeHtml(s) {
 
 function saveWorkspace() {
   try {
-    // Column preference always persists. Per-card name/color are also
-    // remembered, keyed by sessionId, purely so a *reconnected* live
-    // session (see session-restore.js) can recover its name/color —
-    // terminals that aren't currently running still don't come back on
-    // their own; a card without a sessionId isn't worth persisting.
+    // Per-card name/color are remembered, keyed by sessionId, purely so a
+    // *reconnected* live session (see session-restore.js) can recover its
+    // name/color — terminals that aren't currently running still don't
+    // come back on their own; a card without a sessionId isn't worth
+    // persisting.
     const cardEntries = cards
       .filter((c) => c.sessionId)
       .map((c) => ({ sessionId: c.sessionId, name: c.name, color: c.color }));
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ columns, cards: cardEntries }));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ cards: cardEntries }));
   } catch {
     /* storage unavailable */
   }
@@ -906,32 +905,6 @@ function closeOverlay() {
   }
 }
 
-// ---- columns ----------------------------------------------------------------
-
-function setColumns(n, { fillEmpty = false } = {}) {
-  columns = n;
-  // Choosing a column count from the toolbar is also "show me N terminals
-  // side by side" — top up empty (choose-type-later) tiles so the layout is
-  // actually visible instead of silently doing nothing on a fresh, empty
-  // wall. Never removes existing cards, never auto-starts a terminal
-  // type/process, and only applies for the explicit toolbar click — not on
-  // boot, which stays "launch clean, no terminals restored."
-  if (fillEmpty) while (cards.length < n) addCard({}, { save: false });
-  document.getElementById("wall").className = `wall cols-${n}`;
-  updateWallEmptyState();
-  document.querySelectorAll(".cols-switch button").forEach((b) => b.classList.toggle("active", Number(b.dataset.cols) === n));
-  // Re-fit visible terminals.
-  for (const card of cards) {
-    try {
-      card.fit?.fit();
-      sendResize(card);
-    } catch {
-      /* ignore */
-    }
-  }
-  saveWorkspace();
-}
-
 // ---- boot -------------------------------------------------------------------
 
 function ensureAddCard() {
@@ -977,8 +950,7 @@ async function boot() {
   // *saved* but never started still don't come back — only live PTYs do.
   if (typeof restoreSessions === "function") await restoreSessions();
 
-  const saved = loadWorkspace();
-  setColumns(saved && saved.columns ? saved.columns : 3);
+  if (typeof applyAutoGrid === "function") applyAutoGrid();
 }
 
 // ---- new-terminal popover (add one or many at once) ------------------------
@@ -1073,14 +1045,8 @@ document.addEventListener("click", (e) => {
   }
 });
 
-document.getElementById("mode-toggle")?.addEventListener("click", () => {
-  window.location.href = "/superuser.html";
-});
 document.getElementById("rescan").addEventListener("click", loadProfiles);
 document.getElementById("broadcast").addEventListener("click", () => toggleBroadcast());
-document.querySelectorAll(".cols-switch button").forEach((btn) => {
-  btn.addEventListener("click", () => setColumns(Number(btn.dataset.cols), { fillEmpty: true }));
-});
 document.getElementById("overlay-close").addEventListener("click", closeOverlay);
 document.getElementById("overlay").addEventListener("click", (e) => {
   if (e.target.id === "overlay") closeOverlay();

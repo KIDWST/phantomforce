@@ -1,14 +1,13 @@
-/* superuser.js — the dense, power-user view. Loaded after app.js (whose
-   boot() already runs the full engine boot sequence, including session
-   reconnect via session-restore.js), settings.js, mission.js,
-   connections.js. Everything here is additive on top of those globals:
-   cards, addCard, buildCard, openTerminal, expandCard, setColumns,
-   removeCard, restartCard, setCollapsed, api, escapeHtml, profiles,
-   startTerminal, STATUS_META, toggleBroadcast, TerminaSettings. */
-
-document.getElementById("mode-toggle").addEventListener("click", () => {
-  window.location.href = "/";
-});
+/* power.js — the power-user features that used to live behind a separate
+   "Superuser" page/mode: auto-grid layout, compact density, number-key
+   quick-jump, the mission-control status strip, saved templates, bulk
+   selection, and the Ctrl+K command palette. Folded into the single
+   standard view — always on, no mode toggle. Loaded after app.js,
+   session-restore.js, settings.js, mission.js, connections.js.
+   Everything here is additive on top of those globals: cards, addCard,
+   buildCard, openTerminal, expandCard, removeCard, restartCard,
+   setCollapsed, api, escapeHtml, profiles, startTerminal, STATUS_META,
+   toggleBroadcast, TerminaSettings. */
 
 // ---- auto grid ---------------------------------------------------------
 
@@ -25,13 +24,12 @@ function applyAutoGrid() {
   const n = cards.length || 1;
   const { cols } = computeGrid(n);
   wall.style.setProperty("--su-cols", cols);
-  wall.classList.add("su-auto-grid");
   autoSuggestCompact(n);
   // Collapsed tiles shrink themselves (align-self: start), but the grid's
-  // own row height (styles.css's minmax(320px,...) / superuser.css's
-  // minmax(220px,...)) still reserves full-size rows regardless — without
-  // this, "compact" wastes exactly the vertical space it's meant to
-  // reclaim. Shrink rows to content whenever every card is collapsed.
+  // own row height (styles.css's minmax(...)) still reserves full-size
+  // rows regardless — without this, "compact" wastes exactly the vertical
+  // space it's meant to reclaim. Shrink rows to content whenever every
+  // card is collapsed.
   const allCollapsed = cards.length > 0 && cards.every((c) => c.collapsed);
   wall.classList.toggle("su-compact-grid", allCollapsed);
 }
@@ -337,7 +335,6 @@ function paletteActions() {
   }
   actions.push({ label: "Toggle compact chrome (all)", run: () => document.getElementById("su-compact-all").click() });
   actions.push({ label: "Toggle Link mode", run: () => toggleBroadcast() });
-  actions.push({ label: "Basic Mode", run: () => (window.location.href = "/") });
   return actions;
 }
 
