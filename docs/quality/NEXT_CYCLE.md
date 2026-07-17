@@ -1,6 +1,6 @@
 # Next Quality Cycle
 
-Last updated: 2026-07-16
+Last updated: 2026-07-17 (session 2)
 
 ## Start Here
 
@@ -14,61 +14,81 @@ Read:
 
 Do not restart the audit from zero unless the inventory is invalid.
 
-Continuation is scheduled in this same Codex task by heartbeat automation
-`continue-phantomforce-quality-program`.
+`npm run test:change-memory` now passes clean (78/78). Do not let it regress —
+if it fails again, check `git log` for merge commits first; the last failure
+was caused by a merge (`24d8e3a0`) silently dropping already-shipped work from
+the losing side instead of 3-way-merging it, not by careless edits.
 
-The 2026-07-16 daily sweep restored the hidden Penalty Kick PhantomPlay catalog
-entry and ran the responsive browser matrix across seven app destinations and
-six viewport widths. Do not repeat the Penalty Kick catalog fix unless a new
-regression is observed. Continue with the highest-risk open proof below.
+## Immediate priorities
 
-## Recommended Cycle 2
+### Priority 1 — Q-0013: local-customer login/registration routes
 
-Theme: prove organization isolation with database-auth users.
+The customer plan simulator backend (`/customer/plan-preview` GET/POST),
+`/auth/me` enrichment, and Settings → Plan & access UI are real and tested
+(`npm run test:customer-plan-switching` passes), but there is still no route
+that lets a real local customer test account sign in — `local-customer-accounts.ts`'s
+`loginLocalCustomer`/`registerLocalCustomer`/password-reset functions are not
+called from anywhere. Add them as **new, additive routes** (do not edit the
+working database-only `/auth/login`) — the previously-lost implementation used
+`/auth/register`, `/auth/password-reset/request`, `/auth/password-reset/complete`,
+and a combined `/auth/login` (see commit `7920549c` for reference, but a fresh
+non-colliding route design is safer than resurrecting the exact old shape).
+Add a regression test and a browser pass proving a customer signs in and
+switches tiers end-to-end.
 
-This is the highest-risk remaining P1 because cross-organization CRM, memory,
-asset, proposal, or approval leakage would be a real business and security
-failure. If safe database-auth fixtures cannot be created in this environment,
-record the blocker and immediately switch to Option B instead of stalling.
-On 2026-07-16 this was blocked because Docker Desktop's Linux engine was not
-running.
+### Priority 2 — Q-0014: Phantom Rumble redesign decision
 
-### Option A — DB-Auth Organization Isolation
+`git stash list` has an entry `WIP: Phantom Rumble chicken-coop redesign
+(conflicts with locked ledge-recovery decision, held for owner review)`. This
+needs an explicit owner call, not an agent guess: accept the redesign (update
+`docs/quality/CHANGE_MEMORY.json`'s `phantom-rumble-clean-start-and-recovery`
+rule to match it) or drop the stash and keep the current ledge-recovery arena.
 
-1. Inspect `docs/DATABASE_SETUP.md`, `docs/ADMIN_RECOVERY.md`, and auth tests.
-2. Create or reuse safe local DB-auth fixtures for PhantomForce and ChicagoShots.
-3. Verify each user sees only their own CRM, proposals, approvals, memory, and
-   assets.
-4. Browser-test the org switch/profile selector.
-5. Add regression coverage for any leak or stale-org UI state.
+### Priority 3 — DB-Auth Organization Isolation (Option B, still blocked)
 
-Likely files:
+Docker Desktop's Linux engine is still not running as of 2026-07-17 (session
+2). Re-check `docker ps`; if available, resume immediately per
+`docs/DATABASE_SETUP.md` / `docs/ADMIN_RECOVERY.md`. If still blocked, record
+it and move on rather than stalling — this has now been the blocker for three
+consecutive cycles (2026-07-16, 2026-07-17 session 1, 2026-07-17 session 2).
 
-- `server/src/access/user-accounts.ts`
-- `server/src/index.ts`
-- `app/js/orgs.js`
-- `app/js/store.js`
-- `app/js/main.js`
-- `scripts/test-auth-boundaries.mjs`
-- `server/scripts/test-auth-*.ps1`
+### Priority 4 — Responsive/Mobile Interaction Harness (Option C, partially done)
 
-### Option B — Responsive/Mobile Interaction Harness
+`scripts/test-responsive-viewports.mjs` now has an `INTERACTIONS` map and runs
+a phone (375px) + desktop (1440px) interaction pass for `settings` (Plan &
+access tab) and `media` (Edit tab) on top of the 42-case static baseline — 46
+cases total, all passing, including a keyboard-focus-traversal probe. Extend
+`INTERACTIONS` with more real actions instead of writing a new harness:
+- PhantomPlay game launch/resume (open a built-in game, verify no overlay
+  overflow, verify resume state on relaunch).
+- Media Lab layer panel: with an active edit session, click the new
+  align/distribute/select-all/reset buttons this cycle added and verify no
+  overflow.
+- Content Hub editor controls.
+- Dialogs/popovers/modals opening from a workspace page.
+- A real touch-target minimum-size audit (this cycle deliberately did not add
+  one — a first pass would likely surface many pre-existing small targets
+  across the whole app, which is a separate, larger fix than this cycle's
+  scope; decide whether to gate on it or just report it before adding).
 
-1. Reuse `npm run test:responsive-viewports` as the baseline browser runner.
-2. Add interaction-level checks for Media Lab editor actions, PhantomPlay game
-   launch/resume, Settings forms, and Content Hub editor controls.
-3. Check dialogs, popovers, touch targets, keyboard focus, and form submit
-   feedback at 320, 375, 768, 1024, 1440, and 1920px.
-4. Fix the highest-impact module batch.
+## Known pre-existing test failures (not regressions, confirmed via `git stash` against `HEAD`)
 
-Likely files:
+- `npm run test:command-surface` — looks for `data-command-widgets`, not
+  present.
+- `npm run test:auth-boundaries` — multiple stale assertions against
+  `app/js/main.js`'s current auth gate markup.
+- server `npm run test:competitor-intelligence` — `/auth/demo-login` does not
+  return 200 for `sessionId: "admin-jordan"` in this test harness's env.
+- `npm run test:medialab-editor` — expects a much larger Media Lab layer
+  surface (drag-reorder, lock/unlock, clipboard copy/paste, arrow-key nudge,
+  blend modes, snap guides, keyboard shortcuts) than the change-memory-tracked
+  subset restored this cycle. Real, scoped work for a future cycle — the code
+  exists in git history (see `AUDIT_LOG.md` 2026-07-17 session 2 for the
+  investigation method: diff against the commit that introduced each feature,
+  check ancestry, distinguish real regressions from stale test expectations).
 
-- `app/phantom.css`
-- `app/js/main.js`
-- `app/js/medialab.js`
-- `app/js/contenthub.js`
-- `app/js/settings.js`
-- `scripts/`
+None of these were touched this cycle — they were already failing at `HEAD`
+before this session started. Worth a dedicated cycle, not a quick add-on.
 
 ## Stop Condition
 

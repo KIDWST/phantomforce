@@ -1,7 +1,7 @@
 {
-  "cycle": "daily-qa-2026-07-16",
-  "date": "2026-07-16",
-  "theme": "PhantomPlay catalog restore and responsive browser proof",
+  "cycle": "daily-qa-2026-07-17",
+  "date": "2026-07-17",
+  "theme": "App boot restore and cache graph normalization",
   "sources": [
     "AGENTS.md",
     "docs/quality/CONTINUOUS_QUALITY_PROGRAM.md",
@@ -10,21 +10,23 @@
     "docs/quality/NEXT_CYCLE.md",
     "docs/DATABASE_SETUP.md",
     "docs/ADMIN_RECOVERY.md",
-    "app/js/phantomplay.js",
-    "server/src/phantom-ai/phantomplay.ts",
+    "app/index.html",
+    "app/js/main.js",
+    "app/js/store.js",
+    "app/js/phantomstore.js",
     "scripts/test-responsive-viewports.mjs"
   ],
   "findings": [
     {
-      "id": "Q-0010",
-      "severity": "P2",
+      "id": "Q-0011",
+      "severity": "P1",
       "status": "fixed_verified",
-      "routeOrComponent": "PhantomPlay built-in catalog",
-      "journey": "browse and launch the Penalty Kick Sports game",
-      "expected": "Penalty Kick remains active and featured in the frontend and server catalogs.",
-      "actual": "Before this sweep the frontend row had active:false and both catalogs had featured:false.",
-      "evidence": "npm run test:phantomplay failure on 2026-07-16 before fix",
-      "regressionTest": "npm run test:phantomplay"
+      "routeOrComponent": "admin app shell startup",
+      "journey": "open local owner QA app and render Business Manager",
+      "expected": "The shell renders after local owner session resolution.",
+      "actual": "Before the fix, PhantomStore's missing store export blocked module startup and left only the boot fallback visible.",
+      "evidence": "Browser Runtime.exceptionThrown from phantomstore.js plus initial npm run test:responsive-viewports failure",
+      "regressionTest": "npm run test:responsive-viewports"
     },
     {
       "id": "Q-0002",
@@ -38,30 +40,36 @@
       "regressionTest": "server/scripts/test-auth-database-live.ps1 once Docker/Postgres is available"
     },
     {
-      "id": "Q-0003",
+      "id": "Q-0012",
       "severity": "P1",
-      "status": "partially_proven",
-      "routeOrComponent": "responsive app shell and key modules",
-      "journey": "mobile and desktop admin browsing",
-      "expected": "No horizontal overflow or clipped visible controls across required widths.",
-      "actual": "42 responsive browser cases passed across Dashboard, Clients, Media Lab, Content Hub, Analytics, PhantomPlay, and Settings.",
-      "evidence": "tmp/responsive-viewports/2026-07-16T14-07-18-427Z/report.json",
-      "regressionTest": "npm run test:responsive-viewports"
+      "status": "open",
+      "routeOrComponent": "change-memory release integrity",
+      "journey": "prevent accepted decisions from disappearing in stale worktrees",
+      "expected": "npm run test:change-memory passes before push, sync, or live claim.",
+      "actual": "Guard failed with 20 stale-decision issues.",
+      "evidence": "npm run test:change-memory output on 2026-07-17",
+      "regressionTest": "npm run test:change-memory"
     }
   ],
   "commands": [
-    { "command": "docker --version; docker ps --format '{{.Names}} {{.Ports}}'", "result": "blocked; Docker engine unavailable" },
-    { "command": "npm run test:responsive-viewports", "result": "pass; 42 browser cases" },
+    { "command": "docker --version", "result": "pass; Docker CLI 28.2.2 present" },
+    { "command": "docker ps --format '{{.Names}} {{.Ports}}'", "result": "blocked; Docker engine unavailable" },
+    { "command": "npm run test:responsive-viewports", "result": "pass after fix; 42 browser cases" },
+    { "command": "node --check app\\js\\main.js; node --check app\\js\\store.js; node --check app\\js\\medialab.js; node --check app\\js\\workspaces.js; node --check app\\js\\phantomstore.js", "result": "pass" },
+    { "command": "npm run test:phantomstore", "result": "pass" },
     { "command": "npm run test:phantomplay", "result": "pass" },
-    { "command": "npm run build --workspace @phantomforce/server", "result": "pass" },
-    { "command": "node --check app/js/main.js; node --check app/js/phantomplay.js", "result": "pass" },
-    { "command": "npm run test:medialab-editor", "result": "pass" },
-    { "command": "npm run test:settings-connections", "result": "pass" },
+    { "command": "npm run test:medialab-editor", "result": "fail; missing accepted layer drag/transform controls" },
+    { "command": "npm run test:change-memory", "result": "fail; 20 accepted-decision issues" },
     { "command": "git diff --check", "result": "pass" },
-    { "command": "rg -n \"phantom-live-20260715-4\" app/index.html app/js app/phantom.css", "result": "pass; no stale app refs" }
+    { "command": "rg -n \"phantom-live-(?!20260717-7)\" app --pcre2", "result": "pass; no stale app cache ids" }
   ],
   "checks": {
-    "status": "passed_with_db_auth_blocked",
+    "status": "passed_with_known_release_integrity_failures",
+    "fixed": [
+      "admin app boot fallback caused by missing store export",
+      "missing test:responsive-viewports npm script",
+      "stale app module cache ids"
+    ],
     "blockedExternalAccess": [
       "Docker/Postgres fixture for DB-auth organization isolation",
       "live OAuth/social connectors",
@@ -69,7 +77,11 @@
       "n8n execution",
       "Pangolin live status",
       "Higgsfield/OpenAI/OpenRouter live provider calls"
+    ],
+    "knownFailures": [
+      "npm run test:medialab-editor",
+      "npm run test:change-memory"
     ]
   },
-  "nextCycle": "Run DB-auth org isolation when Docker/Postgres is available; otherwise add interaction-level responsive browser checks for Media Lab, PhantomPlay launch/resume, Settings forms, and Content Hub editor controls."
+  "nextCycle": "Reconcile change-memory failures first, especially Media Lab editor controls and customer plan switching; resume DB-auth org isolation when Docker/Postgres is available."
 }

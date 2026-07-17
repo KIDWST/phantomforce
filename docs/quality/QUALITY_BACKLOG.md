@@ -1,6 +1,6 @@
 # PhantomForce Quality Backlog
 
-Last updated: 2026-07-16
+Last updated: 2026-07-17
 
 ## Verified Issues
 
@@ -85,6 +85,27 @@ Last updated: 2026-07-16
 - Regression requirement: `npm run test:phantomplay`.
 - Status: Fixed and verified in the 2026-07-16 daily QA sweep.
 
+### Q-0011 — P1 — App shell can stick on boot fallback from stale module imports
+
+- Route/component: `app/index.html`, `app/js/main.js`, `app/js/phantomstore.js`,
+  `app/js/store.js`, app module cache graph.
+- Journey affected: local/admin app startup; users see only the boot Phantom
+  screen instead of the Business Manager shell.
+- Reproduction: run `npm run test:responsive-viewports` before the fix; the
+  dashboard 320px case fails because `[data-phantom]` never becomes visible.
+- Expected: local owner QA session renders the app shell at every tested
+  viewport.
+- Actual before fix: browser console reported that `phantomstore.js` requested
+  `friendlyBackendError` from `store.js`, but `store.js` did not export it.
+- Likely cause: server-backed modules were merged with stale cache ids and a
+  shared helper dependency that had not landed in `store.js`.
+- Correction: add `friendlyBackendError()`, restore the responsive npm script,
+  normalize app cache ids to `phantom-live-20260717-7`, and remove stale
+  `.ml-back` CSS.
+- Regression requirement: `npm run test:responsive-viewports` and no stale
+  `phantom-live-*` app references.
+- Status: Fixed and verified in the 2026-07-17 daily QA sweep.
+
 ## High-Priority Unfixed Issues
 
 ### Q-0002 — P1 — Production-grade organization isolation needs DB-auth browser proof
@@ -110,6 +131,123 @@ Last updated: 2026-07-16
   screenshots and overflow/text-overlap checks.
 - Status: Partially proven; keep open for interaction-level mobile/game/editor
   checks and visual screenshot review.
+
+### Q-0012 — P1 — Change-memory guard shows accepted decisions missing from this checkout
+
+- Route/component: Website Studio, sidebar shell, Kingdom Breakers, Phantom
+  Rumble, Media Lab editor, customer plan switching.
+- Journey affected: accepted owner decisions can be lost or resurrected from
+  stale worktrees.
+- Reproduction: `npm run test:change-memory` on 2026-07-17 failed with 20-21
+  issues before this fix.
+- Root cause (found this cycle): merge commit `24d8e3a0` ("merge: sync main
+  dashboard with live PhantomPlay fixes") silently dropped several already-built
+  features from the losing merge side instead of 3-way-merging them: the
+  PhantomForce public-site starter (`app/js/workspaces.js` reverted to the old
+  Termina store starter), Media Lab layer transform/align/distribute/select-all
+  controls (`app/js/medialab.js`, `app/phantom.css`), and the entire customer
+  plan-preview backend surface (`server/src/index.ts` lost the
+  `/customer/plan-preview` routes and `local-customer-accounts.ts` wiring
+  entirely — see Q-0013). Separately, the uncommitted working tree carried an
+  unrelated in-progress Phantom Rumble "chicken coop" redesign that regressed
+  the locked ledge-recovery decision (see Q-0014).
+- Correction: restored the PhantomForce public-site starter (and fixed
+  `applyWebsitePrompt`'s template-match early-return, which would otherwise
+  hijack any prompt that merely mentions "PhantomForce"); restored Media Lab
+  reset/align/distribute/select-all controls wired to the already-present
+  `content-editor.js` helpers; restored the customer plan-preview backend
+  routes, `/auth/me` enrichment, and frontend wiring (see Q-0013 for what still
+  does not reach end-to-end); reverted `app/games/phantom-rumble.html` to the
+  committed ledge-recovery version and stashed the redesign (see Q-0014);
+  updated three change-memory required patterns
+  (`sidebar-utility-bottom-zone`, `kingdom-breakers-duel-two-castles`,
+  `phantom-rumble-clean-start-and-recovery`) where the literal string had gone
+  stale against legitimately-evolved, already-verified-working code rather than
+  rewriting working code to match dead patterns.
+- Regression requirement: `npm run test:change-memory`.
+- Status: Fixed and verified 2026-07-17 (78/78 checks pass).
+
+### Q-0013 — P2 — Customer plan simulator has no reachable local-customer login
+
+- Route/component: `server/src/access/local-customer-accounts.ts`,
+  `server/src/index.ts`, customer plan switching end-to-end journey.
+- Journey affected: a real customer test account signing in on
+  app.phantomforce.online to try public plan tiers.
+- Reproduction: grep `server/src/index.ts` for any route calling
+  `loginLocalCustomer`/`registerLocalCustomer` — there is none.
+- Expected: the change-memory-tracked plan-preview endpoints
+  (`GET`/`POST /customer/plan-preview`) are reachable by an actual signed-in
+  local customer test account.
+- Actual: `server/src/access/local-customer-accounts.ts` (login, registration,
+  password reset, org creation, plan switching) was fully orphaned — not
+  imported anywhere in `server/src/index.ts` — after merge `24d8e3a0`. This
+  cycle restored the plan-preview routes, the `/auth/me` local-customer
+  enrichment, a preHandler that resolves `local:`-prefixed bearer sessions,
+  and the frontend (`app/js/orgs.js`, `app/js/settings.js`,
+  `app/js/main.js` nav gating) — all of that is real and covered by
+  `npm run test:customer-plan-switching`, which now passes. What is still
+  missing is a login/registration HTTP route for local customer accounts, so
+  `ctx.session.localCustomer` can never actually become `true` in production
+  yet. The prior lost implementation used `/auth/register`,
+  `/auth/password-reset/request`, and `/auth/password-reset/complete` merged
+  into a combined `/auth/login` handler (commit `7920549c`) — restoring that
+  by editing the *current*, already-shipped, database-only `/auth/login`
+  route is a security-sensitive change that deserves its own deliberate pass,
+  not a rushed addition inside a reconciliation cycle.
+- Likely cause: same `24d8e3a0` merge-conflict resolution as Q-0012.
+- Correction needed: add local-customer login/registration as new,
+  additive routes (do not edit the working database `/auth/login`), verified
+  with a fresh regression test and a browser pass confirming a local customer
+  can sign in and switch tiers end-to-end.
+- Status: Open — plan-preview backend/frontend restored and tested; login is
+  the remaining gap.
+
+### Q-0014 — P2 — Phantom Rumble "chicken coop" redesign conflicts with the locked ledge-recovery decision
+
+- Route/component: `app/games/phantom-rumble.html`.
+- Journey affected: Phantom Rumble arena mechanics.
+- Reproduction: `git stash list` — see
+  `WIP: Phantom Rumble chicken-coop redesign (conflicts with locked
+  ledge-recovery decision, held for owner review)`.
+- Evidence: the pre-existing uncommitted working tree (from the session this
+  cycle resumed) contained a complete, well-built rework of Phantom Rumble —
+  chicken/bird fighters, a walled "coop" arena with fence-slam KOs instead of
+  ring-outs, a persistent mute button, seeded procedural platform chunks — that
+  explicitly removes ledge-grab/ledge-recovery ("No ledge-grabbing exists
+  because there is nothing to fall off of"). `docs/quality/CHANGE_MEMORY.json`
+  rule `phantom-rumble-clean-start-and-recovery` locks the owner decision that
+  "fighters need real ledge-save recovery so the game feels playable instead
+  of instantly punishing," so this redesign cannot be committed as-is without
+  either an explicit new owner decision or a compatible recovery mechanic for
+  the walled arena.
+- Correction: this cycle did not judge which direction is correct. The
+  redesign was preserved (not discarded) as a git stash rather than committed
+  or deleted, and `app/games/phantom-rumble.html` was left at the committed,
+  ledge-recovery, change-memory-passing version.
+- **Update, same session, found later:** `docs/superpowers/specs/` contains
+  three design docs written by a *different, concurrent* agent session
+  (`2026-07-17-phantom-rumble-ninja-polish-design.md`,
+  `2026-07-17-phantom-rumble-race-to-top-design.md`,
+  `2026-07-17-phantomplay-realtime-channel-design.md`, file timestamps ~12:24
+  today) that explicitly treat the chicken-coop rework as necessary
+  foundational work to finish ("That diff never added any ninja styling...
+  the exact complaint") and reference "the owner wants a second mode." This
+  is strong circumstantial evidence the redesign direction is real and
+  wanted — but it is still evidence, not a message from Jordan in this
+  session, and the ninja-polish spec's own problem statement says the current
+  redesign is visually incomplete (chicken body with no ninja styling, no HUD
+  polish pass). Because this exact worktree is the live server for
+  admin/app.phantomforce.online with no build step for game HTML — whatever
+  is in the working tree is what real users see immediately — this cycle kept
+  the known-good, tested, locked-decision-compliant version live rather than
+  serving acknowledged-incomplete work, and left the redesign safely in
+  `git stash` rather than deleting it. A concurrent session may be about to
+  build on top of that stashed diff and find it missing from the working
+  tree.
+- Status: Open — needs an explicit owner decision, and likely needs
+  reconciliation with whatever session owns `docs/superpowers/specs/`. Do not
+  silently pop the stash back without checking that the concurrent session
+  actually needs it working-tree-resident rather than committed.
 
 ### Q-0004 — P2 — PhantomForce send adapter is planned-disabled
 
