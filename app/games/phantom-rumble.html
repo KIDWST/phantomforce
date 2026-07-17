@@ -384,6 +384,16 @@ const touchState={left:false,right:false,shield:false};
 for(const b of document.querySelectorAll('[data-t]')){
   const act=b.dataset.t;
   b.onpointerdown=ev=>{ev.preventDefault();const f=fighters[0];if(!f||!f.human||f.dead||paused||!running)return;
+    if(mode==='racetop'){
+      if(act==='left')touchState.left=true;else if(act==='right')touchState.right=true;
+      else if(act==='jump'){
+        if(f.grappleReady){f.grappleReady=false;const dir=heldDir(f)||f.face||1;f.vx=dir*.03;f.vy=-.032;f.jumps=1;spawnBurst(f.x,f.y,'#5eead4',16);addFloater(f.x,f.y-.1,'GRAPPLE!','#5eead4',15);sfx('jump')}else jump(f);
+      }
+      else if(act==='light')raceSabotage(f);
+      // 'heavy'/'shield' have no meaning in this mode — race mode reuses only jump/light/left/right/dodge
+      else if(act==='dodge')dodge(f);
+      return;
+    }
     if(act==='left')touchState.left=true;else if(act==='right')touchState.right=true;else if(act==='shield'){touchState.shield=true;f.shieldHeld=true;f.parry=.18;addFloater(f.x,f.y-.1,'GUARD',f.glow,11)}
     else if(act==='jump')jump(f);else if(act==='light')attack(f,false);else if(act==='heavy')attack(f,true);else if(act==='dodge')dodge(f);};
   b.onpointerup=()=>{if(act==='left')touchState.left=false;if(act==='right')touchState.right=false;if(act==='shield'){touchState.shield=false;const f=fighters[0];if(f)f.shieldHeld=false}};
