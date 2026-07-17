@@ -34,11 +34,15 @@ assert.match(widgetSource, /id:\s*"business"/u, "Business records must be availa
 assert.match(widgetSource, /id:\s*"phantomwire"/u, "PhantomWire activity must be surfaced on the dashboard.");
 assert.match(widgetSource, /renderBusinessRecordsDock\(businessRecords\)/u,
   "Business records widget must show an inline records dock.");
+assert.match(widgetSource, /renderSignalStackDock\(attention\)/u,
+  "Signals widget must show an evidence stack, not just a title list.");
 assert.match(widgetSource, /renderCommandToolDock\(\)/u, "Workforce widget must show an inline worker dock.");
 assert.match(widgetSource, /renderAutomationDock\(automations\)/u, "Automation widget must show an inline automation dock.");
 assert.match(main, /function renderCommandToolDock\(\)/u, "Command surface should define the worker dock renderer.");
 assert.match(main, /function renderBusinessRecordsDock\(records = \[\]\)/u,
   "Command surface should define the business records dock renderer.");
+assert.match(main, /function renderSignalStackDock\(signals = \[\]\)/u,
+  "Command surface should define the signal evidence stack renderer.");
 assert.match(main, /function renderAutomationDock\(automations = \[\]\)/u, "Command surface should define the automation dock renderer.");
 assert.match(main, /function commandDepartmentMap\(tools = \[\]\)/u,
   "Workforce widget should condense real tool lanes into human departments.");
@@ -134,6 +138,8 @@ assert.match(main, /function decisionGateText\(item = \{\}\)/u,
   "Decision cards must show the approval/safety gate.");
 assert.match(main, /class="decision-action"/u,
   "Decision cards must render recommended action, Phantom role, and gate details.");
+assert.match(main, /class="cw-signal-node[\s\S]*?decisionWhyText\(signal\)[\s\S]*?decisionEvidenceText\(signal\)[\s\S]*?decisionGateText\(signal\)/u,
+  "Signal widget must expose why, evidence, confidence, and gate details.");
 assert.match(main, /const items = attentionItems\(\)\.slice\(0, 3\);/u,
   "Decision deck must reuse the same real attention source and stay capped.");
 assert.match(main, /deck\.hidden = items\.length === 0/u,
@@ -143,6 +149,9 @@ assert.match(main, /data-open-ws="\$\{esc\(item\.open \|\| "activity"\)\}"/u,
 assert.match(css, /\.cw-dock\s*\{/u, "Expanded command widgets must have visual dock styling.");
 assert.match(css, /\.cw-record-grid\s*\{/u, "Business records dock must have compact record-grid styling.");
 assert.match(css, /\.cw-record-node\s*\{/u, "Business records dock must style each record as a clickable tile.");
+assert.match(css, /\.cw-signal-stack\s*\{/u, "Signals widget must have compact evidence-stack styling.");
+assert.match(css, /\.cw-signal-node\s*\{/u, "Signals widget must style each evidence-backed signal.");
+assert.match(css, /\.cw-signal-empty\s*\{/u, "Signals widget must have a clean real-empty state.");
 assert.match(css, /\.cw-flow\s*\{/u, "Outcome widget must show a compact Signal/Decision/Work/Result flow.");
 assert.match(css, /\.cw-dept-map\s*\{/u, "Workforce widget must have visual department-map styling.");
 assert.match(css, /\.cw-automation-empty\s*\{/u, "Automation widget must have a clean empty-state dock.");
