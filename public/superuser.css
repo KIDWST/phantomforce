@@ -27,6 +27,31 @@ body.superuser .tile.collapsed {
   align-content: start;
 }
 
+.su-status-strip {
+  display: flex;
+  gap: 8px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+  flex-wrap: wrap;
+}
+.su-status-strip:empty {
+  display: none;
+}
+.su-status-chip {
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--soft);
+  border-radius: 8px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.su-status-chip:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
 .su-jump-badge {
   position: absolute;
   top: 6px;

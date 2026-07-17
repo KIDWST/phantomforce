@@ -106,6 +106,40 @@ document.addEventListener(
   true,
 );
 
+// ---- status strip ---------------------------------------------------------
+
+function renderStatusStrip() {
+  const strip = document.getElementById("su-status-strip");
+  if (!strip) return;
+  const counts = {};
+  for (const card of cards) {
+    const state = card.status?.state || "unknown";
+    counts[state] = (counts[state] || 0) + 1;
+  }
+  strip.innerHTML = Object.entries(counts)
+    .filter(([state]) => state !== "unknown")
+    .map(([state, count]) => {
+      const meta = STATUS_META[state] || STATUS_META.unknown;
+      return `<button type="button" class="su-status-chip" data-state="${state}">${meta.icon} ${meta.label} ×${count}</button>`;
+    })
+    .join("");
+  strip.querySelectorAll(".su-status-chip").forEach((chip) => {
+    chip.addEventListener("click", () => cycleToNextInState(chip.dataset.state));
+  });
+}
+
+let statusCycleIndex = {};
+
+function cycleToNextInState(state) {
+  const matches = cards.filter((c) => (c.status?.state || "unknown") === state);
+  if (!matches.length) return;
+  const i = (statusCycleIndex[state] || 0) % matches.length;
+  statusCycleIndex[state] = i + 1;
+  expandCard(matches[i]);
+}
+
+setInterval(renderStatusStrip, 1000);
+
 let lastCardCount = -1;
 setInterval(() => {
   // Grid/compact recheck runs every tick (cheap at this scale) since
