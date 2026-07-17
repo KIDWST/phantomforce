@@ -121,11 +121,19 @@ import {
 import { assetCloudDiagnostics } from "./assets/asset-cache.js";
 import { describeAssetStorageProviders } from "./assets/asset-storage-provider.js";
 import { runContentAssetMigration } from "./assets/asset-migration.js";
+import {
+  LOCAL_CUSTOMER_SESSION_PREFIX,
+  assignLocalCustomerPlan,
+  getLocalCustomerPlanSummary,
+  listLocalCustomerPlanDefinitions,
+  resolveLocalCustomerSession,
+} from "./access/local-customer-accounts.js";
 import type { AccessSession } from "./access/session.js";
 import {
   canUseSessionOnPublicHost,
   filterSessionsForPublicHost,
   publicHostFromHeaders,
+  publicHostScope,
   PUBLIC_WEB_ORIGINS,
 } from "./access/public-hosts.js";
 import {
@@ -585,6 +593,16 @@ app.addHook("preHandler", async (request) => {
   const sid = verifyAccessSessionTokenSid(readBearerToken(request));
   if (!sid || !sid.startsWith(DB_SESSION_PREFIX)) return;
   const session = await resolveDatabaseSession(sid);
+  if (session) attachDatabaseSession(request, session);
+});
+
+/* Local customer test accounts (public plan simulator) share the same signed
+   bearer format as database auth; only the sid resolver differs. Resolution
+   is file-store-backed, not Postgres, so it gets its own lightweight hook. */
+app.addHook("preHandler", async (request) => {
+  const sid = verifyAccessSessionTokenSid(readBearerToken(request));
+  if (!sid || !sid.startsWith(LOCAL_CUSTOMER_SESSION_PREFIX)) return;
+  const session = await resolveLocalCustomerSession(sid).catch(() => undefined);
   if (session) attachDatabaseSession(request, session);
 });
 
@@ -1544,7 +1562,9 @@ app.get("/auth/me", async (request, reply) => {
   if (!session) return reply;
   const dbSession = asDatabaseSession(session);
   if (!dbSession) {
-    return { ok: true, session, database: false };
+    const localCustomer = session.id.startsWith(LOCAL_CUSTOMER_SESSION_PREFIX);
+    const planSummary = localCustomer ? await getLocalCustomerPlanSummary(session).catch(() => undefined) : undefined;
+    return { ok: true, session, database: false, localCustomer, ...(planSummary ?? {}) };
   }
   const entitlements = dbSession.orgId ? await getOrgEntitlements(dbSession.orgId).catch(() => null) : null;
   return {
@@ -1613,6 +1633,54 @@ app.post("/auth/2fa/disable", async (request, reply) => {
   const result = await disableTwoFactor(dbSession, parsed.data.code);
   if (!result.ok) return reply.code(400).send({ ok: false, error: result.error });
   return { ok: true };
+});
+
+/* ============================================================================
+   CUSTOMER PLAN SIMULATOR (public tier testing)
+   Local customer test accounts on app.phantomforce.online can switch between
+   public Free/Pro/Elite/Enterprise tiers to verify limits, locks, and
+   restrictions without exposing the internal admin plan or running billing.
+   Restricted to local-customer sessions and denied on admin.phantomforce.online. */
+
+const CustomerPlanPreviewSchema = z.object({
+  planKey: z.string().trim().min(1).max(60),
+});
+
+function customerAuthForbiddenOnHost(request: FastifyRequest) {
+  return publicHostScope(requestPublicHost(request)) === "admin";
+}
+
+app.get("/customer/plan-preview", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  if (customerAuthForbiddenOnHost(request)) {
+    return reply.code(403).send({ ok: false, error: "Customer plan testing is only available on the customer app." });
+  }
+  if (!session.id.startsWith(LOCAL_CUSTOMER_SESSION_PREFIX)) {
+    return reply.code(403).send({ ok: false, error: "Plan preview switching is only available for local customer test accounts." });
+  }
+  const summary = await getLocalCustomerPlanSummary(session);
+  if (!summary) return reply.code(404).send({ ok: false, error: "customer_account_not_found" });
+  return { ok: true, ...summary };
+});
+
+app.post("/customer/plan-preview", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  if (customerAuthForbiddenOnHost(request)) {
+    return reply.code(403).send({ ok: false, error: "Customer plan testing is only available on the customer app." });
+  }
+  if (!session.id.startsWith(LOCAL_CUSTOMER_SESSION_PREFIX)) {
+    return reply.code(403).send({ ok: false, error: "Plan preview switching is only available for local customer test accounts." });
+  }
+  const parsed = CustomerPlanPreviewSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  const result = await assignLocalCustomerPlan(session, parsed.data.planKey);
+  if (!result.ok) {
+    const code = result.error === "unknown_public_plan" ? 400 : 403;
+    return reply.code(code).send({ ok: false, error: result.error, available: "available" in result ? result.available : listLocalCustomerPlanDefinitions().map((plan) => plan.key) });
+  }
+  return { ok: true, entitlements: result.entitlements, plans: result.plans, metrics: result.metrics, seats: result.seats };
 });
 
 const SwitchOrgSchema = z.object({ orgId: z.string().min(1).max(120) });
