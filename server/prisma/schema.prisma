@@ -12,6 +12,10 @@ enum MembershipRole {
   admin
   member
   client
+  // Fail-closed, narrow-scope role for external game developers: server-side
+  // route guard (developerRoleGuard in index.ts) restricts this role to
+  // Accounting, Planner, and PhantomPlay regardless of module/nav config.
+  developer
 }
 
 enum PlanStatus {

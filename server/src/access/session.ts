@@ -29,8 +29,8 @@ export type AccessSession = {
   authSessionId?: string;
   isSuperAdmin?: boolean;
   orgId?: string | null;
-  orgRole?: "owner" | "admin" | "member" | "client" | null;
-  memberships?: Array<{ orgId: string; orgName: string; role: "owner" | "admin" | "member" | "client" }>;
+  orgRole?: "owner" | "admin" | "member" | "client" | "developer" | null;
+  memberships?: Array<{ orgId: string; orgName: string; role: "owner" | "admin" | "member" | "client" | "developer" }>;
 };
 
 const DEFAULT_SESSION_SECRET = "phantomforce-local-dev-session-secret-change-before-production";

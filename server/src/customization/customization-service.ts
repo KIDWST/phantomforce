@@ -62,12 +62,20 @@ export function defaultOrganizationConfiguration(tenantId: string, actor = "syst
     modules: PLATFORM_MODULES.map((module, order) => ({
       id: module.id,
       label: module.displayName,
-      enabled: (module.required || enabledModules.has(module.id)) && defaultModuleEnabled(module.id, tenantId),
+      // Developer-profile workspaces exist specifically for PhantomPlay
+      // (Submit Your Game) — exempt them from the "PhantomPlay starts
+      // disabled on new/reset configs" migration-safety rule below, or the
+      // one module this workspace was created for would be unusable.
+      enabled: (module.required || enabledModules.has(module.id)) && (defaultModuleEnabled(module.id, tenantId) || (profileId === "developer" && module.id === "phantomplay")),
       order,
       roles: module.allowedRoles.includes("platform_owner")
         ? ["owner"]
         : module.allowedRoles,
-      accessMode: module.id === "phantomplay" ? "owner_only" : "entire_organization",
+      // Developer-profile workspaces have no "owner" member at all (the
+      // signing-up member's role is capped at "developer" — see
+      // registerWorkspaceAccount), so PhantomPlay's usual owner_only
+      // default would lock the one module this workspace exists for.
+      accessMode: module.id === "phantomplay" ? (profileId === "developer" ? "entire_organization" : "owner_only") : "entire_organization",
       allowedMemberIds: [],
       activityEnabled: false,
       challengesEnabled: false,

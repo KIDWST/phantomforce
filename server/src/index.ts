@@ -52,6 +52,7 @@ import {
   requireAdminAccessSession,
   requireAccessSession,
   requireClientWorkspaceView,
+  resolveAccessSession,
   verifyOwnerCredentials,
   verifyAccessSessionTokenSid,
 } from "./access/session.js";
@@ -75,6 +76,7 @@ import {
   requestPasswordReset,
   requestUsernameReminder,
   regenerateTwoFactorBackupCodes,
+  registerWorkspaceAccount,
   resetPasswordWithToken,
   removeMember,
   resolveDatabaseSession,
@@ -83,6 +85,7 @@ import {
   startTwoFactorSetup,
   switchActiveOrg,
   updateMemberRole,
+  upgradeDeveloperAccount,
   verifyTwoFactorLogin,
 } from "./access/user-accounts.js";
 import {
@@ -578,6 +581,40 @@ app.addHook("preHandler", async (request) => {
 
 // Un-bypassable paywall: free/anonymous sessions may view but not mutate.
 app.addHook("preHandler", paywallPreHandler);
+
+/* Fail-closed scope guard for the "developer" membership role (self-serve
+   Submit Your Game signups): Accounting, Planner, and PhantomPlay only.
+   Accounting and Planner have no dedicated API routes of their own today
+   (they're workspace-config/local surfaces), so PhantomPlay's own route
+   family is the only real data surface this role needs — everything else
+   is DENIED BY DEFAULT, not just hidden from nav, so a developer-role
+   session can never reach another workspace module's API by calling the
+   route directly. Keep this allowlist narrow; add to it deliberately, not
+   by loosening the default. */
+const DEVELOPER_ROLE_ALLOWED_READ_PREFIXES = [
+  "/phantom-ai/customization/config",
+  "/phantom-ai/customization/modules",
+  "/phantom-ai/customization/workspace-modules",
+  "/phantom-ai/customization/versions",
+];
+function developerRoleRequestAllowed(request: FastifyRequest): boolean {
+  const path = request.url.split("?")[0];
+  if (path.startsWith("/auth/")) return true;
+  if (path === "/health") return true;
+  if (path.startsWith("/api/phantomplay")) return true;
+  if (request.method === "GET" && DEVELOPER_ROLE_ALLOWED_READ_PREFIXES.some((prefix) => path.startsWith(prefix))) return true;
+  return false;
+}
+app.addHook("preHandler", async (request, reply) => {
+  const session = resolveAccessSession(request);
+  if (session?.orgRole !== "developer") return;
+  if (developerRoleRequestAllowed(request)) return;
+  reply.code(403).send({
+    error: "developer_scope_denied",
+    message: "Your developer account can access Accounting, Planner, and PhantomPlay. Upgrade your account to unlock the full PhantomForce workspace.",
+    upgradeAvailable: true,
+  });
+});
 
 const falconBroker = createFalconBroker({
   baseUrl: process.env.FALCON_BASE_URL ?? "http://127.0.0.1:8765",
@@ -1280,6 +1317,14 @@ const SignupSchema = z.object({
   organizationName: z.string().max(120).optional(),
 });
 
+const DeveloperSignupSchema = z.object({
+  email: z.string().email().max(200),
+  password: z.string().min(8).max(200),
+  name: z.string().max(120).optional(),
+  workspaceName: z.string().min(2).max(120),
+  workspaceBrief: z.string().trim().min(12).max(600),
+});
+
 const ForgotUsernameSchema = z.object({ email: z.string().email().max(200) });
 const ForgotPasswordSchema = z.object({ identifier: z.string().min(3).max(200) });
 const ResetPasswordSchema = z.object({ token: z.string().min(10).max(240), password: z.string().min(8).max(200) });
@@ -1353,6 +1398,42 @@ app.post("/auth/signup", async (request, reply) => {
   const result = await createSelfServeAccount(parsed.data);
   if (!result.ok) return reply.code(409).send({ ok: false, error: result.error });
   return { ok: true, userId: result.userId, orgId: result.orgId, next: "Sign in at /auth/login." };
+});
+
+/* Submit Your Game: the public entry point for external game developers.
+   Creates a real account in its own workspace, capped at the fail-closed
+   "developer" role (see registerWorkspaceAccount + developerRoleGuard
+   above) — Accounting, Planner, and PhantomPlay only. Submitting an actual
+   game still goes through PhantomPlay's existing submission pipeline
+   (createPhantomPlaySubmission -> admin-reviewed pending queue -> never
+   auto-published); this route only handles account creation. */
+app.post("/auth/signup-developer", async (request, reply) => {
+  if (!getAccessAuthConfiguration().databaseAuthEnabled) return databaseAuthDisabled(reply);
+  const parsed = DeveloperSignupSchema.safeParse(request.body ?? {});
+  if (!parsed.success) {
+    const fieldErrors = parsed.error.flatten().fieldErrors;
+    if (fieldErrors.workspaceBrief?.length) {
+      return reply.code(400).send({ ok: false, error: "workspace_brief_required" });
+    }
+    return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  }
+  const result = await registerWorkspaceAccount({ ...parsed.data, workspaceProfile: "developer" });
+  if (!result.ok) return reply.code(409).send({ ok: false, error: result.error });
+  const token = mintDatabaseSessionToken(result.session.id);
+  return { ok: true, ...token, session: result.session, org: result.org };
+});
+
+/* The upgrade CTA every locked-out module shows a developer-role member —
+   see upgradeDeveloperAccount for why this can never escalate privilege in
+   a shared workspace (sole-member orgs only). */
+app.post("/auth/upgrade-developer", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const dbSession = asDatabaseSession(session);
+  if (!dbSession) return reply.code(400).send({ ok: false, error: "Upgrade requires database auth." });
+  const result = await upgradeDeveloperAccount(dbSession);
+  if (!result.ok) return reply.code(403).send({ ok: false, error: result.error });
+  return { ok: true, session: result.session };
 });
 
 app.post("/auth/forgot-username", async (request, reply) => {

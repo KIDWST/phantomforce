@@ -485,6 +485,29 @@ export async function switchActiveOrg(session: DatabaseSessionDetails, orgId: st
   return { ok: true as const, session: await resolveDatabaseSession(`${DB_SESSION_PREFIX}${session.authSessionId}`) };
 }
 
+/* The whole point of the "developer" role is to give a Submit Your Game
+   signup a real, working reason to want more from PhantomForce: they get
+   Accounting/Planner/PhantomPlay immediately, and every other module they
+   bump into shows a genuine "upgrade to unlock" CTA (never a blank 403)
+   that calls this endpoint. Self-upgrade only when they're the sole member
+   of their own workspace — a developer role added to an existing shared
+   org still requires an owner/admin to promote them, same as any other
+   role change, so this can never be used to escalate privilege inside
+   someone else's workspace. */
+export async function upgradeDeveloperAccount(session: DatabaseSessionDetails) {
+  const db = requirePrisma();
+  if (session.orgRole !== "developer" || !session.orgId) {
+    return { ok: false as const, error: "not_a_developer_account" };
+  }
+  const memberCount = await db.membership.count({ where: { orgId: session.orgId } });
+  if (memberCount > 1) {
+    return { ok: false as const, error: "shared_workspace_requires_owner_upgrade" };
+  }
+  await db.membership.updateMany({ where: { orgId: session.orgId, userId: session.userId }, data: { role: "owner" } });
+  sessionCache.delete(session.authSessionId);
+  return { ok: true as const, session: await resolveDatabaseSession(`${DB_SESSION_PREFIX}${session.authSessionId}`) };
+}
+
 export async function createSelfServeAccount(input: {
   email: string;
   username?: string;
@@ -731,7 +754,13 @@ export async function registerWorkspaceAccount(input: {
         isSuperAdmin: false,
       },
     });
-    await tx.membership.create({ data: { userId: user.id, orgId: org.id, role: "owner" } });
+    // Developer-profile signups (Submit Your Game) join their own new
+    // workspace capped at the fail-closed "developer" role instead of
+    // "owner" — developerRoleGuard in index.ts then restricts them
+    // server-side to Accounting/Planner/PhantomPlay. Every other profile
+    // keeps full ownership of the workspace they just created.
+    const membershipRole = profile.id === "developer" ? "developer" : "owner";
+    await tx.membership.create({ data: { userId: user.id, orgId: org.id, role: membershipRole } });
     const authSession = await tx.authSession.create({
       data: {
         userId: user.id,
