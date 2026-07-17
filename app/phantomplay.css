@@ -1004,6 +1004,9 @@ body.phantomplay-playing{overflow:hidden}.workspace-page:has(.pp-player) .worksp
 /* Creator-first PhantomPlay: games are by indie creators, not bundled corporate filler. */
 .pp-banner.is-notice{border-color:#42e9ff66!important;background:#42e9ff0d!important}
 .pp-banner.is-notice b{color:var(--pp-cyan)!important}
+.pp-gamepad-banner-actions{display:flex;gap:8px}
+.pp-player>header [data-pp-gamepad-toggle]{font-size:16px}
+.pp-player>header [data-pp-gamepad-toggle].is-on{border-color:#41ffa188;color:var(--neon)}
 .pp-game-actions{display:grid;grid-template-columns:1fr;gap:7px}
 .pp-support{min-height:34px;border:1px solid #42e9ff3d;border-radius:9px;background:#42e9ff0b;color:#bdf8ff;font-weight:800;cursor:pointer}
 .pp-support:hover,.pp-support:focus-visible{border-color:#42e9ff88;color:#effcff;outline:none}

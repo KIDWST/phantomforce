@@ -57,6 +57,7 @@
     let particles=[],powerups=[],trail=[];
     const keys=new Set();
     let soundOn=true,reduced=false,audio=null;
+    let gpEnabled=false,gpIdx=null,gpPrevA=false,gpPrevStart=false;
 
     function beep(freq,dur=0.05,gain=0.035){
       if(!soundOn)return;
@@ -183,10 +184,29 @@
       }
       if(ball.y-ball.r>H)loseLife();
     }
+    function gpPad(){const p=navigator.getGamepads?navigator.getGamepads():[];if(gpIdx===null)for(let i=0;i<p.length;i++)if(p[i]){gpIdx=i;break}return gpIdx===null?null:p[gpIdx]}
+    function gpUpdate(){
+      let m=0;
+      if(gpEnabled){
+        const pad=gpPad();
+        if(pad){
+          const b=pad.buttons,ax=pad.axes[0]||0;
+          if((b[14]&&b[14].pressed)||ax<-.25)m-=1;
+          if((b[15]&&b[15].pressed)||ax>.25)m+=1;
+          const a=!!(b[0]&&b[0].pressed),start=!!(b[9]&&b[9].pressed);
+          if(a&&!gpPrevA)launch();
+          if(start&&!gpPrevStart)setPaused(!paused);
+          gpPrevA=a;gpPrevStart=start;
+        }
+      }
+      return m;
+    }
     function update(dt){
       let move=0;
       if(keys.has('arrowleft')||keys.has('a'))move-=1;
       if(keys.has('arrowright')||keys.has('d'))move+=1;
+      move+=gpUpdate();
+      move=Math.max(-1,Math.min(1,move));
       if(move)paddle.x=Math.min(Math.max(paddle.x+move*PADDLE_SPEED*dt,8),W-8-paddle.w);
       if(wideTimer>0){wideTimer=Math.max(0,wideTimer-dt); if(wideTimer===0)paddle.w=paddle.baseW}
       if(slowTimer>0)slowTimer=Math.max(0,slowTimer-dt);
@@ -290,6 +310,7 @@
       if(e.data.type==='settings'){
         if('sound' in e.data)soundOn=!!e.data.sound;
         if('reducedMotion' in e.data){reduced=!!e.data.reducedMotion;document.body.classList.toggle('reduced',reduced)}
+        if('gamepad' in e.data)gpEnabled=!!e.data.gamepad;
       }
       if(e.data.type==='pause')setPaused(true);
       if(e.data.type==='resume')setPaused(false);

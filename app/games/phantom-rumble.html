@@ -197,7 +197,7 @@ function makeFighter(slot,human){
   return {slot,human,name:PALETTE[slot].name,color:PALETTE[slot].c,glow:PALETTE[slot].glow,
     x:spawn.x,y:spawn.y,vx:0,vy:0,face:slot%2?-1:1,pct:0,stocks:3,
     grounded:false,jumps:2,stun:0,invuln:2,charge:0,power:false,dead:false,shieldHeld:false,parry:0,dodgeCd:0,
-    attackCd:0,anim:0,trail:[],ai:{dir:1,timer:0,jumpCd:0,diff:DIFFS[botDifficulty]},lastTap:{key:'',at:0}};
+    attackCd:0,anim:0,trail:[],ai:{dir:1,timer:0,jumpCd:0,diff:DIFFS[botDifficulty]},lastTap:{key:'',at:0},_gpDir:0};
 }
 function startMatch(selected){
   mode=selected;
@@ -260,7 +260,50 @@ function heldDir(f){
   if(pad.left.some(k=>keys.has(k)))dir-=1;
   if(pad.right.some(k=>keys.has(k)))dir+=1;
   if(f.slot===0){if(touchState.left)dir-=1;if(touchState.right)dir+=1}
+  if(gpEnabled&&f._gpDir)dir=Math.max(-1,Math.min(1,dir+f._gpDir));
   return dir;
+}
+
+/* ---------- gamepad (PhantomPlay standard mapping) ----------
+   First connected controller drives P1 (slot 0), second connected drives
+   P2 (slot 1) — layered on top of keyboard, never replacing it, so either
+   input source works standalone or together. Discrete actions (jump,
+   light/heavy hit, guard, dodge) use press-edge detection against the
+   previous frame's button state, mirroring how the keydown handler above
+   treats the same keyboard keys. */
+let gpEnabled=false;
+const GP_DEADZONE=.22;
+const gpPrev={0:{a:false,b:false,x:false,shield:false,up:false},1:{a:false,b:false,x:false,shield:false,up:false}};
+const gpStartPrev=[false,false];
+function gpPad(slot){const pads=navigator.getGamepads?navigator.getGamepads():[];return pads[slot]||null}
+function applyGamepadInput(f){
+  const pad=gpPad(f.slot);
+  if(!pad){f._gpDir=0;return}
+  const prev=gpPrev[f.slot];
+  const ax=pad.axes[0]||0,ay=pad.axes[1]||0;
+  const dl=!!pad.buttons[14]?.pressed,dr=!!pad.buttons[15]?.pressed,du=!!pad.buttons[12]?.pressed;
+  const stick=Math.abs(ax)>GP_DEADZONE?ax:0;
+  f._gpDir=Math.max(-1,Math.min(1,stick+(dl?-1:0)+(dr?1:0)));
+  const up=du||ay<-GP_DEADZONE;
+  const a=!!pad.buttons[0]?.pressed,b=!!pad.buttons[1]?.pressed,x=!!pad.buttons[2]?.pressed;
+  const shield=!!pad.buttons[4]?.pressed||!!pad.buttons[5]?.pressed||!!pad.buttons[6]?.pressed||!!pad.buttons[7]?.pressed;
+  if(up&&!prev.up)jump(f);
+  if(a&&!prev.a)attack(f,false);
+  if(x&&!prev.x&&f.charge<=0)f.charge=.01;
+  if(!x&&prev.x){if(f.charge>0&&!f.dead&&f.stun<=0)attack(f,true);f.charge=0}
+  if(b&&!prev.b)dodge(f);
+  if(shield&&!prev.shield){f.shieldHeld=true;f.parry=.18;addFloater(f.x,f.y-.1,'GUARD',f.glow,11)}
+  if(!shield&&prev.shield&&!padFor(f).shield.some(k=>keys.has(k)))f.shieldHeld=false;
+  prev.up=up;prev.a=a;prev.b=b;prev.x=x;prev.shield=shield;
+}
+function pollGamepadPause(){
+  if(!gpEnabled)return;
+  for(let slot=0;slot<2;slot++){
+    const pad=gpPad(slot);
+    const start=!!(pad&&pad.buttons[9]&&pad.buttons[9].pressed);
+    if(start&&!gpStartPrev[slot])setPaused(!paused);
+    gpStartPrev[slot]=start;
+  }
 }
 
 /* ---------- combat ---------- */
@@ -389,6 +432,7 @@ function step(f,dt){
   if(f.charge>0)f.charge=Math.min(1,f.charge+dt);
   if(f.stun<=0){
     if(f.human){
+      if(gpEnabled)applyGamepadInput(f);
       const dir=heldDir(f);
       if(dir)f.face=dir;
       f.vx+=dir*(f.shieldHeld?.0007:.0018)*(dt*60);
@@ -592,6 +636,7 @@ function draw(t){
 /* ---------- main loop ---------- */
 function loop(t){
   if(!running)return;
+  pollGamepadPause();
   let dt=Math.min(.033,(t-last)/1000);last=t;
   if(paused){raf=requestAnimationFrame(loop);return}
   if(slowmo>0){slowmo=Math.max(0,slowmo-dt);dt*=.35}
@@ -636,7 +681,7 @@ function setPaused(value){
 addEventListener('message',e=>{
   const d=e.data;
   if(!d||d.source!=='phantomplay-host')return;
-  if(d.type==='settings'){reduced=!!d.reducedMotion;let muted=false;try{muted=localStorage.getItem('pf.phantomrumble.mute')==='1'}catch{}soundOn=!muted&&d.sound!==false;applyMuteUi()}
+  if(d.type==='settings'){reduced=!!d.reducedMotion;let muted=false;try{muted=localStorage.getItem('pf.phantomrumble.mute')==='1'}catch{}soundOn=!muted&&d.sound!==false;applyMuteUi();gpEnabled=!!d.gamepad}
   if(d.type==='seed'&&typeof d.value==='number')hostSeed=d.value>>>0;
   if(d.type==='pause')setPaused(true);
   if(d.type==='resume')setPaused(false);

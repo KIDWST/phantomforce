@@ -43,6 +43,12 @@ button{font-family:inherit}
 .sg-ghost:hover{border-color:var(--sg-cyan)}
 .sg-icon-btn{border:1px solid var(--sg-line);border-radius:10px;background:#0f1436;color:var(--sg-ink);width:34px;height:34px;cursor:pointer;font-size:14px;display:grid;place-items:center}
 
+/* Gamepad cursor — the controller highlight for whichever dock card,
+   overlay control, or panel button is currently focused. Lane slots
+   aren't DOM nodes (they're canvas-drawn), so their equivalent gamepad
+   cursor is rendered directly in game.js's drawSlots(). */
+.gp-focused{outline:3px solid var(--sg-good);outline-offset:2px;box-shadow:0 0 0 4px #5be6a033,0 0 18px #5be6a066}
+
 /* ---------- menu ---------- */
 .sg-menu{align-items:center;justify-content:center;padding:20px}
 .sg-menu-inner{width:min(720px,100%);display:flex;flex-direction:column;gap:18px}

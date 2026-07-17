@@ -745,11 +745,12 @@ commanderBtn.addEventListener('click', () => {
   commanderActive = true; commanderTimer = COMMANDER_DURATION; commanderCooldown = COMMANDER_COOLDOWN;
   sfx('commander'); updateHud();
 });
+function cancelSelection() { selectSlot(-1); placingDef = null; renderDock(); }
 addEventListener('keydown', (e) => {
   if (currentScreen !== 'game' || !running) return;
   if (e.key === 'q' || e.key === 'Q') { e.preventDefault(); commanderBtn.click(); }
   if (e.key === 'p' || e.key === 'P') { e.preventDefault(); setPaused(!paused); }
-  if (e.key === 'Escape') { e.preventDefault(); selectSlot(-1); placingDef = null; renderDock(); }
+  if (e.key === 'Escape') { e.preventDefault(); cancelSelection(); }
 });
 
 // ---------------------------------------------------------------------
@@ -796,15 +797,25 @@ function drawPath() {
   ctx.stroke();
 }
 function drawSlots() {
+  const gpHighlightSlot = (gpEnabled && gpZone === 'slots' && currentScreen === 'game' && running && !paused) ? gpSlotIndex : -1;
   for (let i = 0; i < SLOT_PX.length; i++) {
     const [x, y] = toPx(SLOT_PX[i][0], SLOT_PX[i][1]);
     const occupied = sentinels.find((s) => s.slotIndex === i);
     const isSelected = i === selectedSlot;
     const isValidDrop = placingDef && !occupied;
+    const isGpFocused = i === gpHighlightSlot;
     ctx.beginPath(); ctx.arc(x, y, 15 * scale, 0, Math.PI * 2);
     ctx.strokeStyle = isSelected ? '#ffb84d' : isValidDrop ? '#4ddbff' : '#2b3372';
     ctx.lineWidth = (isSelected || isValidDrop ? 2.4 : 1.4) * scale;
     ctx.stroke();
+    if (isGpFocused) {
+      // Gamepad cursor ring — this game has no keyboard/mouse-free path to a
+      // lane slot otherwise, so the controller cursor needs a highlight that
+      // reads clearly against the selected/valid-drop rings above.
+      const pulse = (Math.sin(simTime * 6) + 1) / 2;
+      ctx.beginPath(); ctx.arc(x, y, (19 + pulse * 2) * scale, 0, Math.PI * 2);
+      ctx.strokeStyle = '#5be6a0'; ctx.lineWidth = 2.6 * scale; ctx.stroke();
+    }
   }
 }
 function drawSpire() {
@@ -868,6 +879,7 @@ function frame(ts) {
   dt = Math.min(dt, 0.05);
   if (running && !paused && !document.hidden && currentScreen === 'game') tick(dt);
   if (currentScreen === 'game') draw();
+  pollGamepad(ts);
 }
 requestAnimationFrame(frame);
 document.addEventListener('visibilitychange', () => { if (document.hidden && running && !paused) setPaused(true); });
@@ -1049,6 +1061,8 @@ addEventListener('message', (e) => {
       if ('sound' in d) hostSoundOn = !!d.sound;
       hostReducedMotion = !!d.reducedMotion;
       applyReducedMotionClass();
+      gpEnabled = !!d.gamepad;
+      if (!gpEnabled) gpClearHighlight();
       break;
     case 'pause': setPaused(true); break;
     case 'resume': setPaused(false); break;
@@ -1071,7 +1085,236 @@ addEventListener('message', (e) => {
 });
 
 // ---------------------------------------------------------------------
-// 21. Boot
+// 21. Gamepad input — this game is fundamentally pointer-driven (click a
+//    dock card, then click a lane slot to place it), so there's no
+//    existing non-pointer path for the core loop the way Q/P/Escape cover
+//    the secondary actions. Support is a virtual highlight/cursor: the
+//    D-pad or left stick moves a highlighted target, A "clicks" whatever
+//    is highlighted (by calling the exact same handler/element the
+//    pointer path already uses), B cancels/backs out, and Start pauses —
+//    the standard W3C gamepad "standard" layout, so DualSense/DualShock
+//    and Xbox pads map identically. Only active once the PhantomPlay host
+//    sends `{ type:'settings', gamepad:true }` (see the 'settings' case
+//    above) and the iframe's `allow` attribute grants `gamepad`.
+// ---------------------------------------------------------------------
+let gpEnabled = false;
+let gpPadIndex = null;
+let gpPrevButtons = [];
+let gpLastNavAt = 0;
+const GP_DEADZONE = 0.5, GP_REPEAT_MS = 220;
+
+// Game-screen highlight state. 'dock' = a defender card in the footer
+// dock (laid out as a horizontal row, so left/right cycles it); 'slots' =
+// a lane slot on the field (scattered in a loose 2D layout, so full
+// directional spatial nav applies); 'selected' = a button in the
+// placed-sentinel panel (upgrade/sell/close) that appears once a slot is
+// picked. Pressing up from the dock enters the field; down from the
+// field (when nothing lies further down) returns to the dock — mirroring
+// the dock's actual position below the canvas.
+let gpZone = 'dock';
+let gpDockIndex = 0, gpSlotIndex = 0, gpSelIndex = 0;
+let gpUiIndex = 0, gpLastRoot = null;
+
+window.addEventListener('gamepadconnected', (e) => { if (gpPadIndex == null) gpPadIndex = e.gamepad.index; });
+window.addEventListener('gamepaddisconnected', (e) => { if (gpPadIndex === e.gamepad.index) gpPadIndex = null; });
+
+function gpDockButtons() { return Array.from(dockDefenders.querySelectorAll('[data-def]')); }
+function gpSelectedButtons() { return Array.from(dockSelected.querySelectorAll('button')); }
+function gpClampIndex(i, len) { return len <= 0 ? 0 : ((i % len) + len) % len; }
+
+// The lane slots aren't arranged in a clean grid, so cycling by array
+// index would jump around visually. Instead pick whichever other slot is
+// most in line with the pressed direction (weighted by both angle and
+// distance), which reads correctly regardless of the scattered layout.
+function gpNearestSlotInDirection(fromIndex, dx, dy) {
+  const [fx, fy] = SLOT_PX[fromIndex];
+  let best = -1, bestScore = Infinity;
+  for (let i = 0; i < SLOT_PX.length; i++) {
+    if (i === fromIndex) continue;
+    const [x, y] = SLOT_PX[i];
+    const vx = x - fx, vy = y - fy;
+    const dist = Math.hypot(vx, vy); if (dist < 1) continue;
+    const dot = vx * dx + vy * dy;
+    if (dot <= 0) continue; // behind the pressed direction
+    const align = dot / dist;
+    const score = dist / Math.max(0.15, align);
+    if (score < bestScore) { bestScore = score; best = i; }
+  }
+  return best;
+}
+
+// Overlays/screens that use the generic DOM focus-list cursor (menu,
+// tutorial, lobby, pause/settings/results overlays). The in-game screen
+// uses the dock/slots/selected zone system above instead.
+function gpActiveRoot() {
+  if (!overlayPause.hidden) return overlayPause;
+  if (!overlaySettings.hidden) return overlaySettings;
+  if (!overlayResults.hidden) return overlayResults;
+  if (currentScreen === 'menu') return screens.menu;
+  if (currentScreen === 'tutorial') return screens.tutorial;
+  if (currentScreen === 'lobby') return screens.lobby;
+  return null;
+}
+function gpFocusables(root) {
+  return Array.from(root.querySelectorAll('button, input[type="checkbox"], input[type="range"]')).filter((el) => {
+    if (el.disabled) return false;
+    let node = el;
+    while (node && node !== root) { if (node.hidden) return false; node = node.parentElement; }
+    return true;
+  });
+}
+function gpBackTarget(root) {
+  if (root === overlayPause) return $('[data-resume-btn]');
+  if (root === overlaySettings) return $('[data-settings-close]');
+  if (root === screens.lobby) return $('[data-lobby-back]');
+  if (root === screens.tutorial) return $('[data-tutorial-skip]');
+  return null;
+}
+
+function gpCurrentDomTarget() {
+  if (!gpEnabled) return null;
+  const root = gpActiveRoot();
+  if (root) {
+    if (root !== gpLastRoot) { gpUiIndex = 0; gpLastRoot = root; }
+    const list = gpFocusables(root);
+    return list[gpClampIndex(gpUiIndex, list.length)] || null;
+  }
+  gpLastRoot = null;
+  if (currentScreen === 'game' && running) {
+    if (gpZone === 'dock') { const list = gpDockButtons(); return list[gpClampIndex(gpDockIndex, list.length)] || null; }
+    if (gpZone === 'selected') { const list = gpSelectedButtons(); return list[gpClampIndex(gpSelIndex, list.length)] || null; }
+  }
+  return null; // 'slots' zone is highlighted on the canvas instead, see drawSlots()
+}
+function gpClearHighlight() { document.querySelectorAll('.gp-focused').forEach((el) => el.classList.remove('gp-focused')); }
+function gpApplyHighlight() {
+  const t = gpCurrentDomTarget();
+  document.querySelectorAll('.gp-focused').forEach((el) => { if (el !== t) el.classList.remove('gp-focused'); });
+  if (t) t.classList.add('gp-focused');
+}
+
+function gpNavigate(dx, dy) {
+  const root = gpActiveRoot();
+  if (root) {
+    const list = gpFocusables(root);
+    if (!list.length) return;
+    const dir = Math.abs(dy) >= Math.abs(dx) ? (dy > 0 ? 1 : -1) : (dx > 0 ? 1 : -1);
+    gpUiIndex = gpClampIndex(gpUiIndex + dir, list.length);
+    gpApplyHighlight();
+    return;
+  }
+  if (currentScreen !== 'game' || !running || paused) return;
+  if (gpZone === 'dock') {
+    if (dy < 0) { gpZone = 'slots'; gpApplyHighlight(); return; }
+    const list = gpDockButtons();
+    if (dx && list.length) gpDockIndex = gpClampIndex(gpDockIndex + (dx > 0 ? 1 : -1), list.length);
+    gpApplyHighlight();
+    return;
+  }
+  if (gpZone === 'slots') {
+    const next = gpNearestSlotInDirection(gpSlotIndex, dx, dy);
+    if (next >= 0) { gpSlotIndex = next; gpApplyHighlight(); return; }
+    if (dy > 0) { gpZone = 'dock'; gpApplyHighlight(); } // nothing further down -> back to the dock
+    return;
+  }
+  if (gpZone === 'selected') {
+    const list = gpSelectedButtons();
+    const dir = Math.abs(dy) >= Math.abs(dx) ? (dy > 0 ? 1 : -1) : (dx > 0 ? 1 : -1);
+    if (list.length) gpSelIndex = gpClampIndex(gpSelIndex + dir, list.length);
+    gpApplyHighlight();
+  }
+}
+
+// buttons[0] (A/Cross) — confirm/select: "click" whatever's highlighted,
+// by calling the exact same handler the pointer path already uses.
+function gpConfirm() {
+  const root = gpActiveRoot();
+  if (root) { const el = gpCurrentDomTarget(); if (el) el.click(); return; }
+  if (currentScreen !== 'game' || !running || paused) return;
+  if (gpZone === 'dock') {
+    const el = gpCurrentDomTarget();
+    if (el) {
+      el.click(); // toggles placingDef via the card's existing onclick
+      if (placingDef) gpZone = 'slots';
+    }
+    gpApplyHighlight();
+    return;
+  }
+  if (gpZone === 'slots') {
+    const hitSlot = gpSlotIndex;
+    const occupied = sentinels.find((s) => s.slotIndex === hitSlot);
+    if (occupied) { selectSlot(hitSlot); gpZone = 'selected'; gpSelIndex = 0; }
+    else if (placingDef) { tryPlace(hitSlot); gpZone = 'selected'; gpSelIndex = 0; }
+    else { selectSlot(-1); }
+    gpApplyHighlight();
+    return;
+  }
+  if (gpZone === 'selected') {
+    const el = gpCurrentDomTarget();
+    const wasDeselect = el && el.hasAttribute('data-deselect');
+    if (el) el.click();
+    if (wasDeselect || !sentinels.find((s) => s.slotIndex === selectedSlot)) gpZone = 'slots';
+    gpApplyHighlight();
+  }
+}
+// buttons[1] (B/Circle) — cancel/deselect: same as the existing Escape
+// shortcut in-game, or a sensible "back" action on menus/overlays.
+function gpCancel() {
+  const root = gpActiveRoot();
+  if (root) { const target = gpBackTarget(root); if (target) target.click(); return; }
+  if (currentScreen !== 'game') return;
+  cancelSelection();
+  gpZone = 'dock';
+  gpApplyHighlight();
+}
+// buttons[9] (Start) — pause, same as the existing 'P' shortcut.
+function gpStart() {
+  if (currentScreen === 'game' && running) { setPaused(!paused); return; }
+  if (!overlayPause.hidden) setPaused(false);
+}
+// buttons[2] (X/Square) — bonus mapping of the existing 'Q' Overcharge
+// Pulse shortcut; low-risk since commanderBtn's own guard clauses cover it.
+function gpCommanderShortcut() {
+  if (currentScreen === 'game' && running && !paused) commanderBtn.click();
+}
+
+function pollGamepad() {
+  if (!gpEnabled) { if (gpPrevButtons.length) gpPrevButtons = []; return; }
+  // renderDock()/renderDockSelected() rebuild their innerHTML on every gold
+  // change (i.e. often, mid-run), which would silently strip .gp-focused —
+  // reapply it every frame so the highlight survives those re-renders.
+  gpApplyHighlight();
+  const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+  let gp = (gpPadIndex != null) ? pads[gpPadIndex] : null;
+  if (!gp) { for (const p of pads) { if (p) { gp = p; gpPadIndex = p.index; break; } } }
+  if (!gp) return;
+
+  const pressed = (i) => !!(gp.buttons[i] && gp.buttons[i].pressed);
+  const wasPressed = (i) => !!gpPrevButtons[i];
+  const now = (window.performance && performance.now) ? performance.now() : Date.now();
+
+  const ax = gp.axes[0] || 0, ay = gp.axes[1] || 0;
+  let dx = 0, dy = 0;
+  if (pressed(14)) dx = -1; else if (pressed(15)) dx = 1;
+  else if (ax < -GP_DEADZONE) dx = -1; else if (ax > GP_DEADZONE) dx = 1;
+  if (pressed(12)) dy = -1; else if (pressed(13)) dy = 1;
+  else if (ay < -GP_DEADZONE) dy = -1; else if (ay > GP_DEADZONE) dy = 1;
+  if (dx || dy) {
+    if (now - gpLastNavAt > GP_REPEAT_MS) { gpLastNavAt = now; gpNavigate(dx, dy); sfx('click'); }
+  } else {
+    gpLastNavAt = 0;
+  }
+
+  if (pressed(0) && !wasPressed(0)) gpConfirm();
+  if (pressed(1) && !wasPressed(1)) gpCancel();
+  if (pressed(9) && !wasPressed(9)) gpStart();
+  if (pressed(2) && !wasPressed(2)) gpCommanderShortcut();
+
+  gpPrevButtons = gp.buttons.map((b) => b.pressed);
+}
+
+// ---------------------------------------------------------------------
+// 22. Boot
 // ---------------------------------------------------------------------
 recomputeUnlocks();
 renderMenuMeta();

@@ -97,6 +97,42 @@
     return notes.map((n) => ({ ...n, resolved: false, holding: false, judgement: null }));
   }
 
+  // Gamepad mode plays a distinct 8-lane beatmap (A/B/X/Y + D-pad) instead
+  // of filtering the 26-letter map down — a generator tuned for 8 lanes
+  // plays better than a 26-letter map with most lanes silently skipped.
+  const GAMEPAD_KEYS = ["gpUp", "gpDown", "gpLeft", "gpRight", "gpA", "gpB", "gpX", "gpY"];
+  const GAMEPAD_GLYPH = { gpUp: "▲", gpDown: "▼", gpLeft: "◀", gpRight: "▶", gpA: "A", gpB: "B", gpX: "X", gpY: "Y" };
+  function pickGpKey(rand, avoid) {
+    let key;
+    do { key = GAMEPAD_KEYS[Math.floor(rand() * GAMEPAD_KEYS.length)]; } while (key === avoid);
+    return key;
+  }
+  function generateBeatmapGamepad(seed) {
+    const rand = makeRandom(seed);
+    const notes = [];
+    let lastKey = null;
+    let b = 4;
+    while (b < SONG_BEATS) {
+      const roll = rand();
+      if (roll < 0.12 && b < SONG_BEATS - 2) {
+        const key = pickGpKey(rand, lastKey);
+        notes.push({ time: b * BEAT_SEC, key, type: "hold", duration: BEAT_SEC * 2, lane: Math.floor(rand() * LANES) });
+        lastKey = key; b += 2; continue;
+      }
+      if (roll < 0.32) {
+        const k1 = pickGpKey(rand, lastKey);
+        notes.push({ time: b * BEAT_SEC, key: k1, type: "tap", lane: Math.floor(rand() * LANES) });
+        const k2 = pickGpKey(rand, k1);
+        notes.push({ time: b * BEAT_SEC + BEAT_SEC / 2, key: k2, type: "tap", lane: Math.floor(rand() * LANES) });
+        lastKey = k2; b += 1; continue;
+      }
+      const key = pickGpKey(rand, lastKey);
+      notes.push({ time: b * BEAT_SEC, key, type: "tap", lane: Math.floor(rand() * LANES) });
+      lastKey = key; b += 1;
+    }
+    return notes.map((n) => ({ ...n, resolved: false, holding: false, judgement: null }));
+  }
+
   // ---- sample-accurate synthesized click track ----
   class AudioScheduler {
     constructor(ctx) {
@@ -228,14 +264,13 @@
     if (cls === "active") setTimeout(() => el.classList.remove("active"), 110);
   }
 
-  function onKeyDown(e) {
-    if (e.repeat) return;
-    const key = e.key.toLowerCase();
-    if (key === "p" || key === "escape") { togglePause(); return; }
+  // Shared by keyboard and gamepad input — both funnel into the same
+  // key-namespace note resolution. Keyboard uses real single letters;
+  // gamepad uses prefixed symbolic keys (gpUp/gpA/...) that can never
+  // collide with a literal keypress, so both sources can coexist safely.
+  function pressKey(key) {
     if (!running || paused) return;
-    if (!ALPHABET.includes(key)) return;
     flashKey(key, "active");
-
     const t = songTime();
     // Nearest unresolved note for this key within the hit window.
     let best = null, bestDt = Infinity;
@@ -255,8 +290,7 @@
     }
   }
 
-  function onKeyUp(e) {
-    const key = e.key.toLowerCase();
+  function releaseKey(key) {
     const el = keyEls[key];
     if (el) el.classList.remove("hold-active");
     if (holdingKey && holdingKey.note.key === key && !holdingKey.note.resolved) {
@@ -269,6 +303,52 @@
       holdingKey = null;
     }
   }
+
+  function onKeyDown(e) {
+    if (e.repeat) return;
+    const key = e.key.toLowerCase();
+    if (key === "p" || key === "escape") { togglePause(); return; }
+    if (usingGamepadMap) return; // a gamepad beatmap is active — ignore literal keys to avoid ambiguity
+    if (!ALPHABET.includes(key)) return;
+    pressKey(key);
+  }
+
+  function onKeyUp(e) {
+    if (usingGamepadMap) return;
+    releaseKey(e.key.toLowerCase());
+  }
+
+  // --- Gamepad (PhantomPlay standard mapping): A/B/X/Y + D-pad = the 8 lanes ---
+  let gpEnabled = false, usingGamepadMap = false;
+  const gpPrev = {};
+  function gpPad() {
+    const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+    for (let i = 0; i < pads.length; i++) if (pads[i]) return pads[i];
+    return null;
+  }
+  function gpPoll() {
+    if (!usingGamepadMap) return;
+    const pad = gpPad();
+    if (!pad) return;
+    const b = pad.buttons, ax = pad.axes[0] || 0, ay = pad.axes[1] || 0;
+    const states = {
+      gpUp: !!(b[12] && b[12].pressed) || ay < -0.5,
+      gpDown: !!(b[13] && b[13].pressed) || ay > 0.5,
+      gpLeft: !!(b[14] && b[14].pressed) || ax < -0.5,
+      gpRight: !!(b[15] && b[15].pressed) || ax > 0.5,
+      gpA: !!(b[0] && b[0].pressed),
+      gpB: !!(b[1] && b[1].pressed),
+      gpX: !!(b[2] && b[2].pressed),
+      gpY: !!(b[3] && b[3].pressed),
+    };
+    for (const key of GAMEPAD_KEYS) {
+      const now = states[key], was = !!gpPrev[key];
+      if (now && !was) pressKey(key);
+      else if (!now && was) releaseKey(key);
+      gpPrev[key] = now;
+    }
+  }
+  (function gpLoop() { gpPoll(); requestAnimationFrame(gpLoop); })();
 
   function setPaused(next) {
     if (!running || paused === next) return;
@@ -335,7 +415,7 @@
         ctx2d.fillStyle = "#05030a";
         ctx2d.font = "700 14px 'DM Mono', monospace";
         ctx2d.textAlign = "center"; ctx2d.textBaseline = "middle";
-        ctx2d.fillText(n.key.toUpperCase(), x, y + 1);
+        ctx2d.fillText(GAMEPAD_GLYPH[n.key] || n.key.toUpperCase(), x, y + 1);
       }
     }
 
@@ -374,7 +454,8 @@
   function start() {
     audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
     audioCtx.resume();
-    notes = generateBeatmap(1337);
+    usingGamepadMap = gpEnabled && !!gpPad();
+    notes = usingGamepadMap ? generateBeatmapGamepad(1337) : generateBeatmap(1337);
     score = 0; streak = 0; resolvedCount = 0; creditedCount = 0;
     running = true; paused = false; pauseOverlay.hidden = true;
     updateHud();
@@ -400,7 +481,8 @@
   window.addEventListener("message", (evt) => {
     const d = evt.data;
     if (!d || d.source !== "phantomplay-host") return;
-    if (d.type === "pause") setPaused(true);
+    if (d.type === "settings") gpEnabled = !!d.gamepad;
+    else if (d.type === "pause") setPaused(true);
     else if (d.type === "resume") setPaused(false);
     else if (d.type === "restart") restartGame();
     else if (d.type === "exit") { if (running) { running = false; scheduler.stop(); } }

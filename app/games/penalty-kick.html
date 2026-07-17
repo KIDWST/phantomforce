@@ -38,7 +38,11 @@
     lanes.forEach((button,i)=>button.onclick=()=>chooseLane(i));document.querySelector('[data-shoot]').onclick=shoot;document.querySelector('[data-pause]').onclick=()=>setPaused(true);startEl.querySelector('button').onclick=start;pauseEl.querySelector('button').onclick=()=>setPaused(false);
     addEventListener('keydown',e=>{if(e.key==='ArrowLeft'||e.key==='a'||e.key==='A'){e.preventDefault();chooseLane(selected-1)}if(e.key==='ArrowRight'||e.key==='d'||e.key==='D'){e.preventDefault();chooseLane(selected+1)}if(/^[1-5]$/.test(e.key)){chooseLane(Number(e.key)-1)}if(e.key===' '||e.key==='Enter'){e.preventDefault();if(started)shoot();else start()}if(e.key==='p'||e.key==='P')setPaused(!paused)});
     document.addEventListener('visibilitychange',()=>{if(document.hidden)setPaused(true)});
-    addEventListener('message',event=>{if(event.data?.source!=='phantomplay-host')return;if(event.data.type==='pause')setPaused(true);if(event.data.type==='resume')setPaused(false);if(event.data.type==='exit')setPaused(true);if(event.data.type==='restart')start()});
+    addEventListener('message',event=>{if(event.data?.source!=='phantomplay-host')return;if(event.data.type==='settings')gpOn=!!event.data.gamepad;if(event.data.type==='pause')setPaused(true);if(event.data.type==='resume')setPaused(false);if(event.data.type==='exit')setPaused(true);if(event.data.type==='restart')start()});
+    // --- Gamepad (PhantomPlay standard mapping): d-pad/stick pick a lane, A/Cross starts/shoots, Start button pauses ---
+    let gpOn=false,gpIdx=null,gpPrevA=false,gpPrevLeft=false,gpPrevRight=false,gpPrevStart=false;
+    function gpPad(){const p=navigator.getGamepads?navigator.getGamepads():[];if(gpIdx===null)for(let i=0;i<p.length;i++)if(p[i]){gpIdx=i;break}return gpIdx===null?null:p[gpIdx]}
+    (function gpLoop(){if(gpOn){const pad=gpPad();if(pad){const b=pad.buttons,ax=pad.axes[0]||0;const left=!!(b[14]&&b[14].pressed)||ax<-.5,right=!!(b[15]&&b[15].pressed)||ax>.5,a=!!(b[0]&&b[0].pressed),st=!!(b[9]&&b[9].pressed);if(left&&!gpPrevLeft)chooseLane(selected-1);if(right&&!gpPrevRight)chooseLane(selected+1);if(a&&!gpPrevA){if(started)shoot();else start()}if(st&&!gpPrevStart)setPaused(!paused);gpPrevLeft=left;gpPrevRight=right;gpPrevA=a;gpPrevStart=st}}requestAnimationFrame(gpLoop)})();
     render();host('ready');
   </script>
 </body>

@@ -632,10 +632,41 @@ function fireCurrent(){
   fireShot(seat,G.tool,G.aimAngle,G.aimPower);
 }
 
+/* ===================== gamepad ===================== */
+let gpEnabled=false;
+const gpPrev={fire:false,pause:false};
+function gpPad(){
+  if(!navigator.getGamepads)return null;
+  const pads=navigator.getGamepads();
+  for(let i=0;i<pads.length;i++){if(pads[i])return pads[i]}
+  return null;
+}
+function pollGamepad(dt){
+  const gp=gpEnabled?gpPad():null;
+  const pauseBtn=!!(gp&&gp.buttons[9]&&gp.buttons[9].pressed);
+  if(pauseBtn&&!gpPrev.pause&&G.battleActive)setPaused(!G.paused);
+  gpPrev.pause=pauseBtn;
+  if(!gp||!humanCanAct()){gpPrev.fire=false;return}
+  const DEAD=0.22,RATE=48; // units/sec at full stick deflection, matches keyboard/touchpad feel
+  const axX=gp.axes[0]||0,axY=gp.axes[1]||0;
+  let dAngle=0,dPower=0;
+  if(Math.abs(axX)>DEAD)dAngle+=axX*RATE*dt;
+  if(gp.buttons[14]&&gp.buttons[14].pressed)dAngle-=RATE*dt; // dpad left
+  if(gp.buttons[15]&&gp.buttons[15].pressed)dAngle+=RATE*dt; // dpad right
+  if(Math.abs(axY)>DEAD)dPower-=axY*RATE*dt; // stick up (negative Y) = more power
+  if(gp.buttons[12]&&gp.buttons[12].pressed)dPower+=RATE*dt; // dpad up
+  if(gp.buttons[13]&&gp.buttons[13].pressed)dPower-=RATE*dt; // dpad down
+  if(dAngle||dPower)adjustAim(dAngle,dPower);
+  const fireBtn=!!(gp.buttons[0]&&gp.buttons[0].pressed); // A / Cross
+  if(fireBtn&&!gpPrev.fire)fireCurrent();
+  gpPrev.fire=fireBtn;
+}
+
 /* ===================== rendering ===================== */
 let lastT=0;
 function loop(t){
   const dt=Math.min(0.033,(t-lastT)/1000||0);lastT=t;
+  pollGamepad(dt);
   if(G.battleActive&&!G.paused){
     if(G.projectile)stepProjectile(dt);
     stepParticles(dt);
@@ -1081,6 +1112,7 @@ addEventListener('message',(e)=>{
   if(d.type==='settings'){
     if(typeof d.sound==='boolean')G.soundOn=d.sound;
     if(typeof d.reducedMotion==='boolean')G.reduced=d.reducedMotion;
+    if(typeof d.gamepad==='boolean')gpEnabled=d.gamepad;
     syncSettingsUi();
   }
   if(d.type==='pause')setPaused(true);

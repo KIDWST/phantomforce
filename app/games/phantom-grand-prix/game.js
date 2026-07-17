@@ -243,6 +243,37 @@
     const itemDown = keyIsDown(k.item);
     if (itemDown && !kart._itemKeyWasDown) useItem(kart);
     kart._itemKeyWasDown = itemDown;
+    if (gpEnabled) applyGamepadInput(kart, kart.id);
+  }
+
+  // --- Gamepad (PhantomPlay standard mapping) ---
+  // First connected controller drives P1 (kart.id 0), second drives P2
+  // (kart.id 1, 2P mode only) — layered on top of keyboard, not replacing
+  // it, so either input source works standalone or together.
+  let gpEnabled = false;
+  const GP_DEADZONE = 0.22;
+  const gpPrevItem = {};
+  function gpPad(slot) {
+    const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+    return pads[slot] || null;
+  }
+  function applyGamepadInput(kart, slot) {
+    const pad = gpPad(slot);
+    if (!pad) return;
+    const ax = pad.axes[0] || 0;
+    const dpadLeft = !!pad.buttons[14]?.pressed, dpadRight = !!pad.buttons[15]?.pressed;
+    const steerGp = Math.abs(ax) > GP_DEADZONE ? ax : (dpadLeft ? -1 : dpadRight ? 1 : 0);
+    const rt = pad.buttons[7]?.value || (pad.buttons[7]?.pressed ? 1 : 0);
+    const lt = pad.buttons[6]?.value || (pad.buttons[6]?.pressed ? 1 : 0);
+    const throttleGp = rt - lt;
+    const driftGp = !!pad.buttons[0]?.pressed || !!pad.buttons[5]?.pressed;
+    const itemGp = !!pad.buttons[2]?.pressed;
+    if (steerGp) kart.inputSteer = Math.max(-1, Math.min(1, kart.inputSteer + steerGp));
+    if (throttleGp) kart.inputThrottle = Math.max(-1, Math.min(1, kart.inputThrottle + throttleGp));
+    if (driftGp) kart.inputDrift = true;
+    const wasItem = !!gpPrevItem[slot];
+    if (itemGp && !wasItem) useItem(kart);
+    gpPrevItem[slot] = itemGp;
   }
 
   function steerAI(kart) {
@@ -803,7 +834,8 @@
   window.addEventListener("message", (evt) => {
     const d = evt.data;
     if (!d || d.source !== "phantomplay-host") return;
-    if (d.type === "pause") setHostPaused(true);
+    if (d.type === "settings") gpEnabled = !!d.gamepad;
+    else if (d.type === "pause") setHostPaused(true);
     else if (d.type === "resume") setHostPaused(false);
     else if (d.type === "restart") {
       finishOverlay.hidden = true;

@@ -244,6 +244,11 @@
     paused: false,
     reducedMotion: false,
     hostSound: true,
+    gpEnabled: false, // captured from the host 'settings' message (d.gamepad)
+    gp: { // edge-detection state for the gamepad poll, mirrors keydown's evt.repeat guard
+      prevDir: { up: false, down: false, left: false, right: false },
+      prevA: false, prevB: false, prevStart: false,
+    },
     running: true,
     lastSparkTick: 0,
     lastPushAt: 0,
@@ -1396,6 +1401,7 @@
     let dt = (t - rt.lastFrame) / 1000;
     rt.lastFrame = t;
     dt = Math.min(dt, 0.05);
+    pollGamepad();
     if (!rt.paused && !anyPanelOpenBlocking()) {
       state.minutes += (dt * 1000) * (1440 / DAY_LENGTH_MS);
       if (state.minutes >= 1440) { state.minutes -= 1440; state.day += 1; }
@@ -1609,6 +1615,62 @@
   });
 
   // ---------------------------------------------------------------------
+  // Gamepad input (Standard layout — DualSense/DualShock/Xbox alike)
+  // Left stick / d-pad = movement, A/Cross = interact, B/Circle = cancel,
+  // Start = pause. Movement is edge-triggered per press, exactly like the
+  // keydown handler above (tryMove is a discrete single-tile step, so a
+  // held direction must not repeat every frame).
+  // ---------------------------------------------------------------------
+  function gpPad() {
+    if (!navigator.getGamepads) return null;
+    const pads = navigator.getGamepads();
+    for (const p of pads) if (p && p.connected !== false) return p;
+    return null;
+  }
+  function pollGamepad() {
+    if (!rt.gpEnabled) return;
+    const pad = gpPad();
+    if (!pad) return;
+    const btn = (i) => !!(pad.buttons[i] && pad.buttons[i].pressed);
+    const AXIS_DEAD = 0.5;
+    const ax = pad.axes[0] || 0, ay = pad.axes[1] || 0;
+    const dir = {
+      up: btn(12) || ay < -AXIS_DEAD,
+      down: btn(13) || ay > AXIS_DEAD,
+      left: btn(14) || ax < -AXIS_DEAD,
+      right: btn(15) || ax > AXIS_DEAD,
+    };
+    const a = btn(0), b = btn(1), start = btn(9);
+
+    // Start toggles pause regardless of open panels, mirroring the on-screen Pause button.
+    if (start && !rt.gp.prevStart) setPaused(!rt.paused);
+    rt.gp.prevStart = start;
+
+    // B cancels an in-progress placement or closes an open panel, mirroring Escape.
+    if (b && !rt.gp.prevB) {
+      if (rt.build.placing) { rt.build.placing = false; toast('Placement canceled.'); updateHud(); }
+      else if (anyPanelOpen()) closePanels();
+    }
+    rt.gp.prevB = b;
+
+    // A mirrors Space/E: catches fish while the fishing panel is open,
+    // otherwise triggers the context action — same gating as the keydown handler.
+    if (a && !rt.gp.prevA) {
+      if (anyPanelOpen()) { if (rt.fishing.open) fishCatch(); }
+      else if (!rt.paused) doContextAction();
+    }
+    rt.gp.prevA = a;
+
+    if (!anyPanelOpen() && !rt.paused) {
+      if (dir.up && !rt.gp.prevDir.up) tryMove(0, -1);
+      if (dir.down && !rt.gp.prevDir.down) tryMove(0, 1);
+      if (dir.left && !rt.gp.prevDir.left) tryMove(-1, 0);
+      if (dir.right && !rt.gp.prevDir.right) tryMove(1, 0);
+    }
+    rt.gp.prevDir = dir;
+  }
+
+  // ---------------------------------------------------------------------
   // DOM bindings
   // ---------------------------------------------------------------------
   $all('[data-ct-open]').forEach((b) => b.onclick = () => { unlockAudio(); openPanel(b.dataset.ctOpen); });
@@ -1659,6 +1721,7 @@
     if (d.type === 'settings') {
       rt.hostSound = d.sound !== false;
       if (typeof d.reducedMotion === 'boolean') { rt.reducedMotion = rt.reducedMotion || d.reducedMotion; el.reduced.checked = rt.reducedMotion; }
+      rt.gpEnabled = !!d.gamepad;
     } else if (d.type === 'pause') {
       setPaused(true);
     } else if (d.type === 'resume') {
