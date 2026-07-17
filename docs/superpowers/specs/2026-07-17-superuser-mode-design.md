@@ -24,8 +24,10 @@ gated behind a mode toggle.
 
 Explicitly in scope: mode toggle, session reconnect (global), dense
 auto-grid layout (up to ~10 tiles), number-key quick-jump, saved terminal
-templates, bulk selection/actions, a live status strip, and a command
-palette. Explicitly out of scope for this pass: freeform resizable/tiling
+templates, bulk selection/actions, a live status strip, a command
+palette, hover-to-focus terminals (global, on by default, toggleable),
+and a Settings panel (replacing Connections) that houses that toggle.
+Explicitly out of scope for this pass: freeform resizable/tiling
 panes (a full layout engine — flagged during design as a much bigger build
 than auto-grid, deferred), multi-window/multi-monitor support (a second
 Electron `BrowserWindow` — deferred, current shape is "separate page, same
@@ -193,6 +195,47 @@ reconnect matching. No change needed there.
 - Same capture-phase keydown pattern as existing shortcuts; closes on
   Escape (already a global handler, extended to also close the palette).
 
+### 9. Hover-to-focus terminals
+
+- Today, typing into a tile requires clicking it first to give the
+  underlying xterm instance DOM focus. That's actively risky when a
+  terminal is sitting at an interactive prompt (a CLI menu, a y/n
+  confirmation) — the click needed just to "select the tab" can land on
+  and trigger the prompt itself.
+- Fix: whenever the mouse is over a tile's terminal area, that tile's
+  xterm instance gets focus automatically (`term.focus()` on
+  `mouseenter`), same as classic "focus follows mouse" window managers.
+  Keyboard input goes wherever the cursor physically is, with no click
+  required — so moving the mouse to read a different pane doesn't require
+  a click that could hit something live.
+- This is a genuine behavior change to something that works today, so it
+  ships as a **setting, on by default**: "Hover to focus terminals" in the
+  new Settings panel (below). Turning it off restores today's
+  click-to-focus behavior exactly. Applies in both Basic and Superuser
+  mode — it's a safety fix, not a power-user-only feature — implemented
+  once in the shared module described below and consumed by both
+  `app.js` and `superuser.js`.
+- Interaction with existing click handlers: the current
+  "click anywhere on a collapsed card to re-expand it" and tile-menu
+  button clicks are unaffected — hover-focus only changes *keyboard*
+  routing (`term.focus()`), it doesn't intercept or suppress clicks.
+
+### 10. Settings panel (replaces Connections)
+
+- The existing `🔌 Connections` toolbar button + `#connections-modal`
+  become `⚙ Settings` — a panel with two sections: **Connections** (today's
+  per-provider API key UI, unchanged, just relocated) and **Terminal
+  behavior** (new: the "Hover to focus terminals" toggle from above, plus
+  a home for any future app-wide preference instead of one-off toggles
+  scattered across toolbars).
+- Settings persist in `localStorage` under a new `termina.settings` key
+  (same persistence pattern as `termina.templates`/workspace), read once
+  at boot by the shared hover-focus module so both pages agree on the
+  current value without a page reload.
+- Superuser mode gets its own `⚙ Settings` button opening the identical
+  panel (shared markup/logic, not a second implementation) — one settings
+  surface, reachable from either mode, since it governs behavior in both.
+
 ## Data flow
 
 ```
@@ -243,6 +286,35 @@ how columns/link/etc. were verified in the prior fix):
 5. Save a template, relaunch Termina fully (engine restart, not just page
    reload), launch the template → confirms templates survive real restarts
    since they're localStorage-backed, independent of session state.
+6. Hover the mouse over a tile without clicking, type — input lands in
+   that tile. Move to another tile, type again — input follows. Turn the
+   setting off in Settings → same actions now require a click, matching
+   today's behavior exactly.
+7. Rename sanity check: existing Connections functionality (save/view/
+   remove a provider key) still works identically from inside the new
+   Settings panel.
+
+All of the above gets exercised against a disposable second engine
+instance (`TERMINA_PORT` override), never the user's live, in-use
+instance — see "Verification strategy" below.
+
+## Verification strategy (do not touch the live instance)
+
+The user has real, live terminal sessions running in production Termina
+right now (confirmed: 4 active `claude` sessions under the running
+`server.js`). None of this work is verified against that instance until
+the user explicitly chooses to restart it. Instead:
+
+- Run a second `server.js` on a scratch port (`TERMINA_PORT=7421`) for
+  all iterative testing — a fully independent engine and `sessions` Map,
+  zero shared state with the live instance on 7420.
+- Drive it with `agent-browser` (plain Chrome tab against
+  `http://127.0.0.1:7421/`), the same approach already used to find and
+  verify the column-breakpoint bug.
+- Only once every item in Testing above passes against the scratch
+  instance do we tell the user it's safe to restart their real instance
+  (at which point session reconnect — item 1 in Build sequencing — is
+  exactly what makes that restart safe for their 4 live sessions).
 
 ## Build sequencing
 
@@ -258,3 +330,8 @@ Dependency order only — no scope is cut, everything above ships:
 4. Bulk select/actions, templates, command palette — the remaining power
    features, in whatever order implementation finds most natural given
    what's already wired up by step 3.
+5. Hover-to-focus + Settings panel (Connections rename) — independent of
+   1-4, can land in parallel; sequenced last only because it touches
+   existing, currently-working Connections code and benefits from the
+   rest of the surface (toolbar layout, shared modules) already settling
+   first.
