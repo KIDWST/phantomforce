@@ -683,7 +683,7 @@ function render() {
     ${settingsMarkup()}${playerMarkup()}
   </div>`;
   bind();
-  syncRoomPolling();
+  syncRoomStream();
 }
 
 async function updateFavorite(gameId) {
@@ -849,6 +849,87 @@ function stopRoomPolling() {
   roomPollTimer = null;
 }
 
+// ---- Private rooms: live sync via streamed NDJSON (replaces polling) ----
+// Falls back to the original poll loop (startRoomPolling/pollRooms, above)
+// after STREAM_FAILURE_LIMIT consecutive failures, so a network/proxy that
+// mishandles a long-lived chunked response degrades to the old behavior
+// instead of breaking room sync outright.
+const roomStreams = new Map(); // code -> AbortController
+let roomStreamFailures = 0;
+const STREAM_FAILURE_LIMIT = 3;
+
+async function openRoomStream(code) {
+  if (roomStreams.has(code)) return;
+  const controller = new AbortController();
+  roomStreams.set(code, controller);
+  try {
+    const response = await fetch(`/api/phantomplay/rooms/${encodeURIComponent(code)}/stream?tenant_id=${encodeURIComponent(currentTenantId())}`, {
+      headers: authHeaders(),
+      signal: controller.signal,
+    });
+    if (!response.ok || !response.body) throw new Error(`Room stream failed (${response.status}).`);
+    roomStreamFailures = 0;
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let newlineIndex;
+      while ((newlineIndex = buffer.indexOf("\n")) >= 0) {
+        const line = buffer.slice(0, newlineIndex);
+        buffer = buffer.slice(newlineIndex + 1);
+        if (!line.trim()) continue;
+        let message;
+        try { message = JSON.parse(line); } catch { continue; }
+        if (message.type === "state" && message.room) {
+          const previous = ui.snapshot.rooms.find((item) => item.code === message.room.code);
+          const changed = JSON.stringify(previous) !== JSON.stringify(message.room);
+          upsertRoom(message.room);
+          if (changed) {
+            if (!ui.player) render();
+            if (ui.player?.roomCode === message.room.code) pushMatchStateToGame(message.room);
+          }
+        }
+        // "action" and "ping" lines require no client-side handling here —
+        // "action" lines are consumed by the ROOM HOST's stream to decide
+        // whether to fold the action into matchState (a follow-up call to
+        // updateHostControls-style match-state PATCH, left as a game-level
+        // concern the same way handleMatchAction's poll-era version was);
+        // "ping" is purely a keep-alive.
+      }
+    }
+  } catch (error) {
+    if (!controller.signal.aborted) {
+      roomStreamFailures += 1;
+      if (roomStreamFailures >= STREAM_FAILURE_LIMIT) {
+        console.warn("PhantomPlay room stream failed repeatedly, falling back to polling.", error);
+        startRoomPolling();
+      }
+    }
+  } finally {
+    roomStreams.delete(code);
+  }
+}
+
+function closeRoomStream(code) {
+  const controller = roomStreams.get(code);
+  if (controller) controller.abort();
+  roomStreams.delete(code);
+}
+
+function syncRoomStream() {
+  if (roomStreamFailures >= STREAM_FAILURE_LIMIT) { syncRoomPolling(); return; }
+  if (!roomsViewOpen() || ui.offline) {
+    for (const code of [...roomStreams.keys()]) closeRoomStream(code);
+    return;
+  }
+  const desired = new Set(activeRoomCodes());
+  for (const code of [...roomStreams.keys()]) if (!desired.has(code)) closeRoomStream(code);
+  for (const code of desired) if (!roomStreams.has(code)) openRoomStream(code);
+}
+
 function syncRoomPolling() {
   if (roomsViewOpen() && !ui.offline) startRoomPolling();
   else stopRoomPolling();
@@ -994,17 +1075,24 @@ async function handleMatchAction(action, mode) {
   const roomCode = ui.player?.roomCode;
   if (!roomCode) return;
   const room = ui.snapshot.rooms.find((item) => item.code === roomCode);
-  if (!room || room.hostActorId !== ui.snapshot.actorId) return;
-  try {
-    const result = await api(`/api/phantomplay/rooms/${encodeURIComponent(roomCode)}/match-state`, { method: "PATCH", body: JSON.stringify({ tenantId: currentTenantId(), matchState: action, mode: mode === "replace" ? "replace" : "merge" }) });
-    if (result.room) {
-      upsertRoom(result.room);
-      pushMatchStateToGame(result.room);
+  if (!room) return;
+  if (room.hostActorId === ui.snapshot.actorId) {
+    // The host still writes matchState directly and authoritatively —
+    // unchanged from the polling-era behavior.
+    try {
+      const result = await api(`/api/phantomplay/rooms/${encodeURIComponent(roomCode)}/match-state`, { method: "PATCH", body: JSON.stringify({ tenantId: currentTenantId(), matchState: action, mode: mode === "replace" ? "replace" : "merge" }) });
+      if (result.room) {
+        upsertRoom(result.room);
+        pushMatchStateToGame(result.room);
+      }
+    } catch {
+      // Rate-limited or transiently blocked — the next stream/poll event resyncs authoritative state either way.
     }
-  } catch {
-    // Rate-limited (max 10 match-state writes / 2s / room) or transiently
-    // blocked — the next poll tick resyncs authoritative state either way.
+    return;
   }
+  // Non-host: relay via the new instant action route instead of waiting on
+  // the next poll tick to even reach the host.
+  api(`/api/phantomplay/rooms/${encodeURIComponent(roomCode)}/actions`, { method: "POST", body: JSON.stringify({ tenantId: currentTenantId(), action, mode: mode === "replace" ? "replace" : "merge" }) }).catch(() => {});
 }
 
 function currentGameSettings() {
