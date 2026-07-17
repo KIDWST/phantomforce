@@ -210,7 +210,7 @@ const SEEDED_PRODUCTS: PhantomStoreProduct[] = [
     description:
       "Termina opens multiple isolated worker terminals, dispatches individualized mission prompts, tracks ledgers, and keeps local AI/CLI orchestration private. The current release includes a hardened paste-and-submit path for multi-CLI dispatch.",
     category: "Desktop App",
-    priceLabel: "$49 early access",
+    priceLabel: "$20 early access",
     buyLabel: "Buy Termina",
     buyUrl: "https://phantomforce.online/phantomstore/termina",
     delivery: "Windows desktop download",
