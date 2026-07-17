@@ -129,7 +129,8 @@ for (const game of games) {
 assert.match(games[0], /\.start\[hidden\][^{]*\{display:none\}/u, "Neon Drift's start overlay must actually leave the play field.");
 assert.match(neonDrift, /invuln/u, "Neon Drift must give the ship a short grace window after damage.");
 assert.match(neonDrift, /maxSpeed=\.0032/u, "Neon Drift ship speed must stay tuned for fast arcade responsiveness.");
-assert.match(neonDrift, /accel=\.000055\*W/u, "Neon Drift needs punchier acceleration.");
+assert.match(neonDrift, /accelBase=\.00012\*W/u, "Neon Drift needs punchier acceleration.");
+assert.match(neonDrift, /accel=accelBase\*\(boosting\?1\.65:1\)/u, "Neon Drift boost must multiply acceleration.");
 assert.match(neonDrift, /drag=Math\.pow\(\.91,dt\/16\)/u, "Neon Drift must keep enough glide to feel fast.");
 assert.match(neonDrift, /player\.vx\+=\(tx-player\.x\)\*\.00054\*W/u, "Neon Drift touch-drag must chase faster on mobile.");
 assert.match(neonDrift, /c\.addEventListener\('pointerdown'[\s\S]*touchMove\(event\)/u, "Neon Drift must steer directly from the play field on touch screens.");

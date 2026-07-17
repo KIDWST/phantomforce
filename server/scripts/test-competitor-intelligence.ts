@@ -9,6 +9,7 @@ function assert(condition: unknown, message: string): asserts condition { if (!c
 const root = await mkdtemp(join(tmpdir(), "phantom-intelligence-"));
 process.env.PHANTOMFORCE_COMPETITOR_INTELLIGENCE_PATH = join(root, "intelligence.json");
 process.env.NODE_ENV = "development";
+process.env.PHANTOMFORCE_SKIP_SERVER_DOTENV = "true";
 process.env.PHANTOMFORCE_SERVER_LISTEN = "false";
 process.env.PHANTOMFORCE_SERVER_LOGGER = "false";
 process.env.PHANTOMFORCE_AUTH_PROVIDER = "demo";
