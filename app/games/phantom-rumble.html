@@ -290,8 +290,34 @@ function updateRaceHud(){
   const dangerEl=hudEl.querySelector('[data-danger]');
   if(dangerEl)dangerEl.textContent=`${Math.max(0,Math.min(100,Math.round(100-lowest/.3*100)))}%`;
 }
-function startRaceMusic(){} // stub — replaced with the real 8-bit sequencer once that lands
-function stopRaceMusic(){} // stub — replaced with the real 8-bit sequencer once that lands
+/* ---------- Race to the Top soundtrack: procedural 8-bit sequencer ----------
+   No audio files (CSP: media-src 'none') — same oscillator approach as the
+   existing tone()/sfx() SFX, just scheduled as a loop. Melody (square) +
+   bass (triangle) + a short noise-like square blip for percussion, tempo
+   creeping up as the danger meter closes in. Only runs during Race to the
+   Top; brawl-mode audio is untouched. */
+const RACE_MELODY=[659,784,880,784,988,880,784,659,880,784,659,587,659,784,988,1175];
+const RACE_BASS=[220,220,247,247,262,262,220,196];
+let raceMusicTimer=null,raceMusicStep=0;
+function raceMusicTick(){
+  if(!soundOn||mode!=='racetop'){return}
+  const urgency=Math.min(1,(hazardSpeed-.01)/.04); // 0 at match start, approaches 1 as hazardSpeed nears its cap
+  const stepMs=Math.max(95,150-urgency*55);
+  const note=RACE_MELODY[raceMusicStep%RACE_MELODY.length];
+  tone(note,.09,'square',.02,1);
+  if(raceMusicStep%2===0)tone(RACE_BASS[(raceMusicStep/2|0)%RACE_BASS.length],.14,'triangle',.03,1);
+  if(raceMusicStep%4===0)tone(90,.03,'square',.018,.3);
+  raceMusicStep+=1;
+  raceMusicTimer=setTimeout(raceMusicTick,stepMs);
+}
+function startRaceMusic(){
+  stopRaceMusic();
+  raceMusicStep=0;
+  raceMusicTick();
+}
+function stopRaceMusic(){
+  if(raceMusicTimer){clearTimeout(raceMusicTimer);raceMusicTimer=null}
+}
 let raceFinishOrder=[];
 function startRaceMatch(humanCount){
   mode='racetop';
@@ -1073,6 +1099,7 @@ function resetToMenu(){
   cancelAnimationFrame(raf);
   running=false;paused=false;over=false;mode='';
   fighters=[];pickups=[];particles=[];floaters=[];rings=[];projectiles=[];matchKos=[0,0,0,0];stats={wins:0,matches:0,bestKos:0};pickupTimer=6;shake=0;slowmo=0;keys.clear();
+  stopRaceMusic();
   document.body.classList.remove('paused');
   hudEl.hidden=true;endEl.hidden=true;setupEl.hidden=false;
   const touch=document.querySelector('[data-touch]');
