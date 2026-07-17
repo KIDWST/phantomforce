@@ -99,6 +99,10 @@ assert.match(main, /function renderOutcomeStrip\(\)/u,
   "Command surface must render outcomes as a first-class operating section.");
 assert.match(main, /data-command-run="Create my first business outcome"/u,
   "Outcome section should let a clean account capture a result, not pick a tab.");
+assert.match(main, /class="outcome-route"/u,
+  "Outcome cards must show evidence and next action, not just a title.");
+assert.match(main, /class="outcome-gate"/u,
+  "Outcome cards must show the owner gate before opening work.");
 assert.match(main, /renderDecisionDeck\(\);[\s\S]*?renderOutcomeStrip\(\);[\s\S]*?renderHandledProofDeck\(\);/u,
   "Console render order should put outcomes between decisions and handled proof.");
 assert.match(main, /kind:\s*"agent-failure"[\s\S]*?weight:\s*390/u,
@@ -139,6 +143,8 @@ assert.match(css, /\.decision-action\s*\{/u, "Decision deck must style recommend
 assert.match(css, /\.command-snapshot\s*\{/u, "Command snapshot must have compact command-center styling.");
 assert.match(css, /\.snap-grid\s*\{/u, "Command snapshot must scan as a compact grid.");
 assert.match(css, /\.outcome-strip\s*\{/u, "Active outcomes must have a dedicated command-center surface.");
+assert.match(css, /\.outcome-route\s*\{/u, "Outcome cards must style evidence and next action compactly.");
+assert.match(css, /\.outcome-gate\s*\{/u, "Outcome cards must style the approval gate compactly.");
 assert.match(css, /\.operating-pulse\s*\{/u, "Operating pulse must have a compact command-center surface.");
 assert.match(css, /@keyframes operatingPulse/u, "Operating pulse should animate department readiness, not decorative thinking.");
 assert.match(css, /\.execution-timeline\s*\{/u, "Execution timeline must have compact dashboard styling.");

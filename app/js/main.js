@@ -6,44 +6,44 @@ import {
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260716-305";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260716-305";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260716-305";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260716-305";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260716-305";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260716-305";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260716-305";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260716-305";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260716-305";
-import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260716-305";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260716-305";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260716-305";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260716-305";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260716-305";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260716-305";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260716-305";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260716-305";
-import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260716-305";
-import { mountAmbient } from "./ambient.js?v=phantom-live-20260716-305";
-import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260716-305";
+} from "./store.js?v=phantom-live-20260716-306";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260716-306";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260716-306";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260716-306";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260716-306";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260716-306";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260716-306";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260716-306";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260716-306";
+import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260716-306";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260716-306";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260716-306";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260716-306";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260716-306";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260716-306";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260716-306";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260716-306";
+import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260716-306";
+import { mountAmbient } from "./ambient.js?v=phantom-live-20260716-306";
+import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260716-306";
 import {
   fetchAuthConfig, databaseLogin, databaseLogout, customerRegister, requestCustomerPasswordReset,
   completeCustomerPasswordReset, switchOrg, fetchAuthMe, fetchEntitlementsSummary,
-} from "./orgs.js?v=phantom-live-20260716-305";
-import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260716-305";
-import { assetsAvailable } from "./orgs.js?v=phantom-live-20260716-305";
-import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260716-305";
+} from "./orgs.js?v=phantom-live-20260716-306";
+import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260716-306";
+import { assetsAvailable } from "./orgs.js?v=phantom-live-20260716-306";
+import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260716-306";
 // PhantomPlay V2 platform shell (Home/Solo/Friends/Workspace/Dev Hub) - opt-in
 // while it hardens: set localStorage "pf.phantomplay.v2" = "1" (the V2 shell has
 // a "Classic view" button to switch back). Classic stays the default experience.
-import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260716-305";
+import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260716-306";
 const phantomPlayV2Opted = () => { try { return localStorage.getItem("pf.phantomplay.v2") === "1"; } catch { return false; } };
-import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260716-305";
+import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260716-306";
 import {
   customizeNavigation,
   loadOrganizationCustomization,
-} from "./customization.js?v=phantom-live-20260716-305";
-import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260716-305";
+} from "./customization.js?v=phantom-live-20260716-306";
+import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260716-306";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -1253,7 +1253,7 @@ const MODES = {
   admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260716-305";
+const POSE_VERSION = "phantom-live-20260716-306";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -1983,16 +1983,24 @@ function renderDecisionDeck() {
 
 function activeOutcomeItems() {
   const plan = todaysPlan().slice(0, 3).map((item) => ({
+    kind: "plan",
     title: item.text,
     sub: "Owner input unlocks the next workstream.",
     meta: "needs decision",
+    evidence: "Pulled from today's plan.",
+    next: "Decide whether Phantom should prepare the next packet.",
+    gate: "Owner input required before work moves.",
     open: item.open || "approvals",
     tone: "warn",
   }));
   const signals = attentionItems().slice(0, 3).map((item) => ({
+    kind: item.kind,
     title: item.title,
     sub: item.sub || "Evidence-backed signal ready to inspect.",
     meta: decisionMetaLabel(item),
+    evidence: decisionEvidenceText(item),
+    next: decisionRecommendedAction(item),
+    gate: decisionGateText(item),
     open: item.open || "activity",
     tone: item.tone || "ok",
   }));
@@ -2032,7 +2040,14 @@ function renderOutcomeStrip() {
               <i>${esc(item.sub)}</i>
             </div>
             <span>${esc(item.meta)}</span>
-            <button data-open-ws="${esc(item.open)}" type="button">Open operation ${svg("arrow")}</button>
+            <div class="outcome-route">
+              <p><b>Evidence</b><i>${esc(item.evidence || "Current PhantomForce state.")}</i></p>
+              <p><b>Next</b><i>${esc(item.next || "Review the operation and choose the next move.")}</i></p>
+            </div>
+            <div class="outcome-gate">
+              <small>${esc(item.gate || "External actions stay owner-gated.")}</small>
+              <button data-open-ws="${esc(item.open)}" type="button">Open operation ${svg("arrow")}</button>
+            </div>
           </article>`).join("")}
       </div>`}`;
 }
