@@ -17,6 +17,7 @@ const SETTINGS_TABS = [
   { id: "chat", label: "Chat behavior", category: "AI Brain" },
   { id: "clientsetup", label: "Workspace setup", category: "Workspace" },
   { id: "organization", label: "Organization", category: "Workspace" },
+  { id: "plan", label: "Plan & access", category: "Workspace" },
   { id: "workspace", label: "Workspace Studio", category: "Workspace" },
   { id: "modules", label: "Workspace Modules", category: "Workspace" },
   { id: "companion", label: "Companion", category: "Workspace" },
@@ -24,6 +25,11 @@ const SETTINGS_TABS = [
 ];
 
 const SETTINGS_CATEGORIES = ["AI Brain", "Workspace", "Media"];
+const SETTINGS_CONTEXT = {
+  clientsetup: { title: "Workspace setup", note: "Configure the organization before lead, content, approval, and reporting work starts." },
+  organization: { title: "Organization & access", note: "Manage employees, roles, invitations, and module access for this workspace." },
+  plan: { title: "Plan & access", note: "Review workspace entitlement state without mixing it into the client pipeline." },
+};
 
 function loadSettingsTab() {
   try {
@@ -687,6 +693,37 @@ function renderCompanionTab() {
     </div>`;
 }
 
+function renderPlanAccessTab() {
+  const raw = session.get?.() || {};
+  const role = raw.orgRole || raw.role || "member";
+  const workspace = currentTenantId();
+  const writeAccess = raw.canWrite !== false;
+  return `
+    <div class="set-section">
+      <div class="set-section-head">
+        <div>
+          <p class="set-eyebrow">Plan & access</p>
+          <h3>Subscription and permissions belong to the workspace.</h3>
+          <p class="set-note">Business owners manage the plan, team access, and module permissions here. Client pipeline work stays in Clients.</p>
+        </div>
+        <span class="set-status-pill ${writeAccess ? "is-on" : ""}">${writeAccess ? "Write access" : "View only"}</span>
+      </div>
+      <div class="set-grid set-grid-two">
+        <article class="set-info-card">
+          <p class="set-eyebrow">Workspace</p>
+          <h3>${esc(workspace)}</h3>
+          <p class="set-note">This is the active organization context for permissions and module access.</p>
+        </article>
+        <article class="set-info-card">
+          <p class="set-eyebrow">Your role</p>
+          <h3>${esc(role)}</h3>
+          <p class="set-note">Owners and admins can manage workspace setup, employees, modules, and approval rules.</p>
+        </article>
+      </div>
+      <p class="set-note">No billing provider action runs from this screen. Live subscription writes stay server-controlled and approval-aware.</p>
+    </div>`;
+}
+
 function selectedMemberHelp(module) {
   const ids = module.allowedMemberIds || [];
   return ids.length ? `${ids.length} selected` : "No selected members yet";
@@ -815,6 +852,7 @@ export function renderOperatorSettings(el, opts = {}) {
   const organizationMountId = `organization-${Math.random().toString(36).slice(2)}`;
   const initialTab = opts.initialTab && SETTINGS_TABS.some((tab) => tab.id === opts.initialTab) ? opts.initialTab : null;
   const activeTab = initialTab || loadSettingsTab();
+  const activeContext = SETTINGS_CONTEXT[activeTab];
   if (initialTab) saveSettingsTab(initialTab);
 
   const TAB_CONTENT = {
@@ -823,6 +861,7 @@ export function renderOperatorSettings(el, opts = {}) {
     chat: () => renderChatBehaviorTab(settings),
     clientsetup: () => `<div id="${clientSetupMountId}" class="set-client-setup-mount"></div>`,
     organization: () => `<div id="${organizationMountId}" class="set-workspace-mount"></div>`,
+    plan: () => renderPlanAccessTab(),
     workspace: () => `<div id="${workspaceMountId}" class="set-workspace-mount"></div>`,
     modules: () => `<div id="${modulesMountId}" class="set-workspace-mount"></div>`,
     companion: () => renderCompanionTab(),
@@ -843,6 +882,7 @@ export function renderOperatorSettings(el, opts = {}) {
       <div class="set-settings-layout">
         ${renderSettingsCategories(activeTab)}
         <div class="set-tab-panel" data-set-panel role="tabpanel">
+          ${activeContext ? `<div class="set-panel-heading"><p class="set-eyebrow">Workspace settings</p><h3>${esc(activeContext.title)}</h3><p class="set-note">${esc(activeContext.note)}</p></div>` : ""}
           ${(TAB_CONTENT[activeTab] || TAB_CONTENT.model)()}
         </div>
       </div>

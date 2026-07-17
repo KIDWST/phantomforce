@@ -1,0 +1,518 @@
+{
+  "schemaVersion": 1,
+  "lastUpdated": "2026-07-16",
+  "purpose": "Release integrity ledger for PhantomForce decisions that must not disappear, regress, or be resurrected by stale worktrees.",
+  "rules": [
+    {
+      "id": "admin-live-canonical-worktree",
+      "status": "active",
+      "title": "Live admin must serve the canonical Windows checkout",
+      "ownerDecision": "Accepted admin work only counts as live when the local admin server serves phantomforce-live-social-analytics-20260712, not an old sibling checkout.",
+      "requiredPatterns": [
+        {
+          "file": "AGENTS.md",
+          "pattern": "phantomforce-live-social-analytics-20260712",
+          "description": "AGENTS documents the canonical served checkout."
+        },
+        {
+          "file": "ops/admin-live/Test-LiveAdminSource.ps1",
+          "pattern": "Admin static root",
+          "description": "The live-source doctor checks the running admin root."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "adminRootEqualsRepoRoot",
+          "description": "127.0.0.1 admin server root must match the checkout running this guard."
+        },
+        {
+          "kind": "adminRootNotMatching",
+          "pattern": "phantomforce-main-trunk-20260706",
+          "description": "The stale July 6 worktree must never be the live admin root again."
+        },
+        {
+          "kind": "hermesCommitEqualsHead",
+          "description": "Hermes/backend must run the same commit as the served checkout."
+        }
+      ]
+    },
+    {
+      "id": "websites-default-public-site-starter",
+      "status": "active",
+      "title": "Website Studio starts from the PhantomForce public site",
+      "ownerDecision": "Website Studio is for editing phantomforce.online first. It must not revert to a generic start screen or the old Termina store starter.",
+      "requiredPatterns": [
+        {
+          "file": "app/js/sitestudio.js",
+          "pattern": "const defaultPublicSite = !text;",
+          "description": "Blank Website Studio create opens the default public-site flow."
+        },
+        {
+          "file": "app/js/sitestudio.js",
+          "pattern": "applySiteTemplate\\(draft, \"phantomforce\"\\);",
+          "description": "New blank site applies the PhantomForce public-site starter."
+        },
+        {
+          "file": "app/js/sitestudio.js",
+          "pattern": "Edit the public site\\.",
+          "description": "Empty UI says Edit the public site, not Start a website."
+        },
+        {
+          "file": "app/js/workspaces.js",
+          "pattern": "label: \"PhantomForce public site\"",
+          "description": "The template picker exposes the PhantomForce public-site starter."
+        },
+        {
+          "file": "app/js/workspaces.js",
+          "pattern": "existingUrl: \"phantomforce\\.online\"",
+          "description": "The public-site starter is bound to phantomforce.online."
+        }
+      ],
+      "forbiddenPatterns": [
+        {
+          "file": "app/js/sitestudio.js",
+          "pattern": "Start a website\\.",
+          "description": "Rejected generic Website Studio headline."
+        },
+        {
+          "file": "app/js/sitestudio.js",
+          "pattern": "Build website",
+          "description": "Rejected generic Website Studio CTA."
+        },
+        {
+          "file": "app/js/sitestudio.js",
+          "pattern": "ready-to-sell store",
+          "description": "Rejected store-starter framing."
+        },
+        {
+          "file": "app/js/workspaces.js",
+          "pattern": "Termina \\u2014 terminal organizer",
+          "description": "Old Termina starter must not return as the default template."
+        },
+        {
+          "file": "app/js/workspaces.js",
+          "pattern": "Your terminal, organized\\. Your prompts, on tap\\.",
+          "description": "Old Termina hero copy must not return."
+        }
+      ]
+    },
+    {
+      "id": "accounting-real-transactions-not-fake-pipeline",
+      "status": "active",
+      "title": "Accounting means confirmed transactions",
+      "ownerDecision": "Money became Accounting. It must track real/imported transaction records. Pipeline, won quotes, and retainers belong to goals or offer potential, not cash truth.",
+      "requiredPatterns": [
+        {
+          "file": "app/js/main.js",
+          "pattern": "\\{ id: \"money\",\\s+label: \"Accounting\"",
+          "description": "The nav label is Accounting, not Money."
+        },
+        {
+          "file": "app/js/workspaces.js",
+          "pattern": "Accounting transaction reader",
+          "description": "Accounting surface has a transaction-reader section."
+        },
+        {
+          "file": "app/js/workspaces.js",
+          "pattern": "from real transactions",
+          "description": "Cash collected is explicitly from real transactions."
+        },
+        {
+          "file": "app/js/command.js",
+          "pattern": "Actual transaction ledger",
+          "description": "Chat answers route money questions to the actual ledger."
+        },
+        {
+          "file": "server/src/connectors/finance-connector.ts",
+          "pattern": "no_pipeline_cash_counting: true",
+          "description": "Finance connector contract forbids counting pipeline as cash."
+        }
+      ],
+      "forbiddenPatterns": [
+        {
+          "file": "app/js/workspaces.js",
+          "pattern": "Revenue Phantom",
+          "description": "Rejected fake revenue-pipeline framing."
+        },
+        {
+          "file": "app/js/workspaces.js",
+          "pattern": "OPEN PIPELINE",
+          "description": "Rejected money-dashboard pipeline metric."
+        },
+        {
+          "file": "app/js/workspaces.js",
+          "pattern": "pipeline is either closed or waiting to be built",
+          "description": "Rejected empty fake pipeline message."
+        }
+      ]
+    },
+    {
+      "id": "memory-history-separation-ten-day-shred",
+      "status": "active",
+      "title": "Saved memory and temporary history stay separate",
+      "ownerDecision": "Do not save hellos or throwaway chatter to durable memory. Temporary chat history is lower-value context and shreds after 10 days.",
+      "requiredPatterns": [
+        {
+          "file": "app/js/store.js",
+          "pattern": "export const CHAT_HISTORY_RETENTION_DAYS = 10;",
+          "description": "Temporary chat history has a 10-day retention cap."
+        },
+        {
+          "file": "app/js/store.js",
+          "pattern": "TRIVIAL_MESSAGE_PATTERN",
+          "description": "Trivial chatter is filtered out."
+        },
+        {
+          "file": "app/js/store.js",
+          "pattern": "source: \"temporary-chat\"",
+          "description": "Temporary chat history is typed separately from saved memory."
+        },
+        {
+          "file": "app/js/workspaces.js",
+          "pattern": "Temporary chat history is separate and shredded after",
+          "description": "Memory UI tells the truth about separation and shredding."
+        },
+        {
+          "file": "scripts/test-memory-retention.mjs",
+          "pattern": "temporary history should stay within the context window cap",
+          "description": "Retention tests cover temporary history limits."
+        }
+      ]
+    },
+    {
+      "id": "sidebar-utility-bottom-zone",
+      "status": "active",
+      "title": "Sidebar keeps structural utilities in the bottom zone",
+      "ownerDecision": "Settings, Developer, Away Mode, and Memory stay in the split bottom utility section. Customization must not flatten them back into the main nav.",
+      "requiredPatterns": [
+        {
+          "file": "app/js/customization.js",
+          "pattern": "STRUCTURAL_NAV_MODULES = new Set\\(\\[\"memory\", \"settings\", \"developer\", \"vacation\"\\]\\)",
+          "description": "Customization locks structural modules."
+        },
+        {
+          "file": "app/js/customization.js",
+          "pattern": "navZone: \"bottom\"",
+          "description": "Customization preserves bottom nav zone."
+        },
+        {
+          "file": "app/index.html",
+          "pattern": "data-nav-bottom",
+          "description": "Shell contains dedicated bottom nav."
+        },
+        {
+          "file": "app/js/main.js",
+          "pattern": "const bottomItems = items\\.filter\\(\\(n\\) => n\\.navZone === \"bottom\"\\)",
+          "description": "Main shell renders bottom-zone items separately."
+        }
+      ]
+    },
+    {
+      "id": "organization-isolation-active-org-switch",
+      "status": "active",
+      "title": "Organization switches must change the data scope",
+      "ownerDecision": "PhantomForce and ChicagoShots are separate businesses. Switching orgs must switch the active org/session/tenant scope, and cross-org reads must be denied.",
+      "requiredPatterns": [
+        {
+          "file": "app/js/orgs.js",
+          "pattern": "export async function switchOrg\\(orgId\\)",
+          "description": "Browser org switch calls the backend."
+        },
+        {
+          "file": "app/js/orgs.js",
+          "pattern": "/auth/switch-org",
+          "description": "Org switch uses the auth switch endpoint."
+        },
+        {
+          "file": "app/js/store.js",
+          "pattern": "export const currentTenantId = \\(\\) => cleanTenantSegment\\(ctx\\.session\\?\\.orgId \\|\\| workspaceMeta\\(currentWs\\(\\)\\)\\?\\.id \\|\\| currentWs\\(\\)\\);",
+          "description": "Workspace storage derives a tenant id from the active authenticated org first, then the active local workspace."
+        },
+        {
+          "file": "server/scripts/test-database-auth.mjs",
+          "pattern": "crossSwitch",
+          "description": "Database auth tests cover denied cross-org switching."
+        },
+        {
+          "file": "server/scripts/test-phantom-memory-tenant-boundary.ts",
+          "pattern": "Client ledger record must stay in client tenant",
+          "description": "Memory/ledger tests verify tenant boundaries."
+        },
+        {
+          "file": "server/scripts/test-publishing-approvals.mjs",
+          "pattern": "cross-org run queue denied \\(403\\)",
+          "description": "Publishing/run queue tests verify cross-org denial."
+        }
+      ]
+    },
+    {
+      "id": "kingdom-breakers-duel-two-castles",
+      "status": "active",
+      "title": "Kingdom Breakers duel has one player castle and one bot castle",
+      "ownerDecision": "Duel vs bot is a simple two-castle artillery fight: player weapon on one side, bot weapon on the other, winner takes out the other Warden.",
+      "requiredPatterns": [
+        {
+          "file": "app/games/kingdom-breakers.html",
+          "pattern": "function buildDuelLevel\\(seed\\)",
+          "description": "Duel mode builds its own two-castle level."
+        },
+        {
+          "file": "app/games/kingdom-breakers.html",
+          "pattern": "function targetOwnerForShooter\\(shooter\\)",
+          "description": "Shots target the opposite owner in duel mode."
+        },
+        {
+          "file": "app/games/kingdom-breakers.html",
+          "pattern": "function duelWardenDown\\(owner\\)",
+          "description": "Win/loss checks use each side's Warden."
+        },
+        {
+          "file": "app/games/kingdom-breakers.html",
+          "pattern": "predictTrajectory\\(ammoKey,ang,pw,220,'bot'\\)",
+          "description": "Bot aims from its own weapon."
+        },
+        {
+          "file": "server/src/phantom-ai/phantomplay-flagship.ts",
+          "pattern": "kingdom-breakers\\.html\\?v=1\\.0\\.2",
+          "description": "Server catalog points at the fixed Kingdom Breakers version."
+        }
+      ],
+      "forbiddenPatterns": [
+        {
+          "file": "app/games/kingdom-breakers.html",
+          "pattern": "duelWardenDown\\('player'\\) \\|\\| duelWardenDown\\('player'\\)",
+          "description": "Regression guard against checking only one side twice."
+        }
+      ]
+    },
+    {
+      "id": "phantom-rumble-clean-start-and-recovery",
+      "status": "active",
+      "title": "Phantom Rumble starts at menu and keeps ledge recovery",
+      "ownerDecision": "Phantom Rumble must not open on the victory overlay, and fighters need real ledge-save recovery so the game feels playable instead of instantly punishing.",
+      "requiredPatterns": [
+        {
+          "file": "app/games/phantom-rumble.html",
+          "pattern": "setupEl\\.hidden=false;endEl\\.hidden=true;pauseEl\\.hidden=true;hudEl\\.hidden=true;touchEl\\.hidden=true;",
+          "description": "The menu reset hides the victory overlay and restores the setup screen."
+        },
+        {
+          "file": "app/games/phantom-rumble.html",
+          "pattern": "function tryLedgeGrab\\(f\\)",
+          "description": "Ledge-save recovery exists."
+        },
+        {
+          "file": "app/games/phantom-rumble.html",
+          "pattern": "ledge:0,ledgeSide:0,ledgeCooldown:0",
+          "description": "Fighter state tracks ledge recovery and cooldown."
+        },
+        {
+          "file": "app/games/phantom-rumble.html",
+          "pattern": "if\\(!f\\.human\\)\\{jump\\(f\\);f\\.ai\\.jumpCd=\\.55\\}else jump\\(f\\);",
+          "description": "Bots and humans can climb back from ledge hang."
+        },
+        {
+          "file": "server/src/phantom-ai/phantomplay-v2.ts",
+          "pattern": "phantom-rumble\\.html\\?v=1\\.3\\.1",
+          "description": "Server catalog points at the fixed Phantom Rumble version."
+        },
+        {
+          "file": "app/js/phantomplay-v2.js",
+          "pattern": "phantom-rumble\\.html\\?v=2\\.2\\.4",
+          "description": "Offline catalog cache-busts the fixed Phantom Rumble version."
+        }
+      ]
+    },
+    {
+      "id": "medialab-layer-transform-controls",
+      "status": "active",
+      "title": "Media Lab keeps simple layer transform controls",
+      "ownerDecision": "Media Lab/editor layer controls must stay simple and useful: reset transform, center/fill, align selected layers, and distribute selected layers must remain available on desktop and mobile.",
+      "requiredPatterns": [
+        {
+          "file": "app/js/content-editor.js",
+          "pattern": "export function alignSelectedLayers\\(composition, mode\\)",
+          "description": "Shared composition helper can align one or more selected layers."
+        },
+        {
+          "file": "app/js/content-editor.js",
+          "pattern": "export function distributeSelectedLayers\\(composition, axis\\)",
+          "description": "Shared composition helper can distribute three or more selected layers."
+        },
+        {
+          "file": "app/js/medialab.js",
+          "pattern": "data-ml-layer-reset-transform",
+          "description": "Layer inspector exposes one-click transform reset."
+        },
+        {
+          "file": "app/js/medialab.js",
+          "pattern": "data-ml-layer-select-all",
+          "description": "Layer actions expose a one-click Select all control for editable layers."
+        },
+        {
+          "file": "app/js/medialab.js",
+          "pattern": "const selectAllEditableLayers = \\(\\) =>[\\s\\S]*selectAllLayers\\(mlComposition\\)[\\s\\S]*layer\\.id !== \"base\"[\\s\\S]*!layer\\.locked",
+          "description": "Select all excludes base, locked, and hidden layers."
+        },
+        {
+          "file": "app/js/medialab.js",
+          "pattern": "data-ml-layer-align=\"\\$\\{esc\\(mode\\)\\}\"",
+          "description": "Layer inspector exposes alignment controls."
+        },
+        {
+          "file": "app/js/medialab.js",
+          "pattern": "data-ml-layer-distribute=\"x\"",
+          "description": "Layer inspector exposes distribution controls."
+        },
+        {
+          "file": "app/phantom.css",
+          "pattern": "\\.ml-layer-align-actions\\s*\\{[\\s\\S]*grid-template-columns:\\s*repeat\\(auto-fit,\\s*minmax\\(68px,\\s*1fr\\)\\)",
+          "description": "Alignment controls wrap in the compact editor panel."
+        },
+        {
+          "file": "scripts/test-medialab-editor.mjs",
+          "pattern": "alignSelectedLayers\\(layout, \"hcenter\"\\)",
+          "description": "Media Lab editor tests cover alignment behavior."
+        }
+      ]
+    },
+    {
+      "id": "phantomcut-per-clip-volume",
+      "status": "active",
+      "title": "PhantomCut keeps per-clip video volume controls",
+      "ownerDecision": "The video editor must let users set volume per video clip, show non-default volume on timeline cards, and apply that volume during preview/export instead of only offering mute.",
+      "requiredPatterns": [
+        {
+          "file": "app/js/videocut.js",
+          "pattern": "function clipVolume\\(clip\\)[\\s\\S]*clamp\\(Number\\(clip\\.volume \\?\\? 100\\), 0, 100\\)",
+          "description": "PhantomCut normalizes per-clip video volume."
+        },
+        {
+          "file": "app/js/videocut.js",
+          "pattern": "mute: false, volume: 100",
+          "description": "New video clips default to unmuted full volume."
+        },
+        {
+          "file": "app/js/videocut.js",
+          "pattern": "data-vc-ins-volume",
+          "description": "The clip inspector exposes a volume slider."
+        },
+        {
+          "file": "app/js/videocut.js",
+          "pattern": "function clipFadeAlpha\\(clip,\\s*local\\)[\\s\\S]*fadeIn[\\s\\S]*fadeOut[\\s\\S]*Math\\.min\\(inAlpha,\\s*outAlpha\\)",
+          "description": "PhantomCut supports per-clip fade in/out alpha."
+        },
+        {
+          "file": "app/js/videocut.js",
+          "pattern": "el\\.volume = \\(clipVolume\\(c\\) / 100\\) \\* clipFadeAlpha\\(c,\\s*local\\)",
+          "description": "Playback and export sync apply per-clip volume and fade."
+        },
+        {
+          "file": "app/js/videocut.js",
+          "pattern": "data-vc-ins-fade=\"fadeIn\"[\\s\\S]*data-vc-ins-fade=\"fadeOut\"",
+          "description": "The clip inspector exposes fade in/out sliders."
+        },
+        {
+          "file": "app/js/videocut.js",
+          "pattern": "drawTextOverlay\\(clip,\\s*frameAlpha\\)",
+          "description": "Text overlays fade with the selected clip."
+        },
+        {
+          "file": "scripts/test-videocut-editor.mjs",
+          "pattern": "Volume slider must normalize and save clip volume",
+          "description": "PhantomCut volume behavior is covered by tests."
+        },
+        {
+          "file": "package.json",
+          "pattern": "\"test:videocut-editor\": \"node scripts/test-videocut-editor.mjs\"",
+          "description": "The PhantomCut editor test is available as an npm script."
+        }
+      ]
+    },
+    {
+      "id": "client-setup-settings-not-clients",
+      "status": "active",
+      "title": "Client setup belongs in Settings, not Clients",
+      "ownerDecision": "Organization setup, plan testing, tool connections, and access setup live under Settings. Clients remains for client/customer pipeline work only.",
+      "requiredPatterns": [
+        {
+          "file": "app/js/main.js",
+          "pattern": "<button class=\"plan-inner\" data-open-ws=\"settings\">[\\s\\S]*No real work loaded yet\\.",
+          "description": "Empty setup CTA opens Settings."
+        },
+        {
+          "file": "app/js/settings.js",
+          "pattern": "id: \"organization\", label: \"Organization\", category: \"Workspace\"",
+          "description": "Organization management stays under Settings."
+        },
+        {
+          "file": "scripts/test-organization-settings.mjs",
+          "pattern": "The empty setup CTA must open Settings, not the client pipeline",
+          "description": "Regression test protects the setup route."
+        }
+      ],
+      "forbiddenPatterns": [
+        {
+          "file": "app/js/main.js",
+          "pattern": "<button class=\"plan-inner\" data-open-ws=\"leads\">[\\s\\S]*No real work loaded yet\\.",
+          "description": "Rejected setup CTA into Clients."
+        },
+        {
+          "file": "app/js/organization.js",
+          "pattern": "Client setup|Clients &amp; CRM|data-open-ws=\"leads\"",
+          "description": "Rejected Client Setup framing inside Organization settings."
+        }
+      ]
+    },
+    {
+      "id": "customer-plan-switching-tier-simulator",
+      "status": "active",
+      "title": "Customer accounts can safely test public plan restrictions",
+      "ownerDecision": "Customer test accounts on app.phantomforce.online must be able to switch public tiers to verify limits, locks, and restrictions without exposing the internal admin plan or running billing.",
+      "requiredPatterns": [
+        {
+          "file": "server/src/access/local-customer-accounts.ts",
+          "pattern": "export async function assignLocalCustomerPlan\\(session: AccessSession, planKey: string\\)",
+          "description": "Local customer accounts can switch public test tiers."
+        },
+        {
+          "file": "server/src/index.ts",
+          "pattern": "app\\.post\\(\"/customer/plan-preview\"",
+          "description": "Backend exposes the customer plan switch endpoint."
+        },
+        {
+          "file": "app/js/settings.js",
+          "pattern": "id: \"plan\", label: \"Plan & access\", category: \"Workspace\"",
+          "description": "Settings owns plan testing."
+        },
+        {
+          "file": "app/js/settings.js",
+          "pattern": "data-plan-switch=\"\\$\\{esc\\(plan\\.key\\)\\}\"",
+          "description": "Settings renders tier switch controls."
+        },
+        {
+          "file": "app/js/orgs.js",
+          "pattern": "if \\(ctx\\.session\\?\\.localCustomer\\) return fetchCustomerPlanPreview\\(\\);",
+          "description": "Local customer entitlements are read from the backend."
+        },
+        {
+          "file": "scripts/test-customer-plan-switching.mjs",
+          "pattern": "Customer plan switching checks passed",
+          "description": "Static regression test covers backend/frontend/nav wiring."
+        }
+      ],
+      "forbiddenPatterns": [
+        {
+          "file": "server/src/access/local-customer-accounts.ts",
+          "pattern": "planKey:\\s*\"internal\"",
+          "description": "Customer accounts must never default to the internal admin plan."
+        },
+        {
+          "file": "app/js/orgs.js",
+          "pattern": "if \\(ctx\\.session\\?\\.localCustomer\\) return null;",
+          "description": "Local customer entitlements must not be dropped."
+        }
+      ]
+    }
+  ]
+}

@@ -6,6 +6,31 @@
 
 ## Source of truth
 - The canonical repo is **`github.com/KIDWST/phantomforce`**, branch **`main`**.
+- The Windows machine currently serving **`admin.phantomforce.online`** and
+  **`127.0.0.1:5177`** serves directly from:
+  `C:\Users\jorda\Documents\Codex\worktrees\phantomforce-live-social-analytics-20260712`.
+  Before telling the owner a UI change is live, verify `/health` reports that root
+  and that your change exists in the served `/app/index.html` or `/app/js/main.js`.
+- The Windows remote-stack watchdog also starts the admin services. Its host files
+  live outside this repo at:
+  `C:\Users\jorda\Documents\PhantomForce-Infrastructure\windows-host-pangolin-ai`.
+  If `127.0.0.1:5177/health` ever reports `phantomforce-main-trunk-20260706`,
+  update `Start-PhantomForce-RemoteStack.ps1` and `ecosystem.config.js` there before
+  doing more UI work; that stale watchdog can otherwise resurrect the old admin app.
+- If the owner says changes are not appearing, assume another agent edited a stale
+  sibling worktree first. Run `/health`, compare the `root`, and port the diff into
+  the served checkout before doing more design work.
+- Before telling the owner "this is live" or before debugging a stale-looking admin
+  UI, run the source doctor from the served checkout:
+  ```powershell
+  powershell -NoProfile -ExecutionPolicy Bypass -File ops\admin-live\Test-LiveAdminSource.ps1
+  ```
+  It checks branch, `origin/main`, sync manifest, live build id, local service
+  health, Hermes commit, sidebar utility pinning, and stale sibling worktrees.
+- Do **not** make owner-facing admin UI edits in another local worktree and assume
+  they are live. If you must work elsewhere, commit, push to `main`, then run
+  `ops/admin-live/Sync-AdminMain.ps1` from the served worktree or point the admin
+  server at the intended repo root.
 - If your checkout has no `origin`, it's an isolated clone — wire it up before trusting local state:
   ```bash
   git remote add origin https://github.com/KIDWST/phantomforce.git
@@ -16,8 +41,32 @@
   Before you push: `git fetch origin main && git rebase origin/main` — main moves under
   you often, so expect to rebase (conflicts land mostly in `app/js/main.js`). A PR is
   still fine if you prefer review, but it is no longer required.
+- **Change memory is mandatory.** Before pushing, syncing live admin, or claiming a
+  user-facing admin change is live, run `npm run test:change-memory`. When Jordan
+  accepts a change that has been lost before, add required patterns to
+  `docs/quality/CHANGE_MEMORY.json`. When Jordan rejects or removes old behavior, add
+  forbidden patterns there so another stale worktree cannot resurrect it.
 
 ## Recent, merged & live (newest first)
+- **Customer plan simulator + setup routing guard (2026-07-16)** — build
+  `phantom-live-20260716-289`. Customer test accounts can switch public
+  Free/Pro/Elite/Enterprise tiers from Settings → Plan & access, local customer
+  auth returns real entitlement summaries, restricted nav items open the plan
+  panel, and the empty setup CTA routes to Settings instead of Clients.
+- **Org-owner social connections (2026-07-14)** — build
+  `phantom-live-20260714-267`. Social analytics status, OAuth account start,
+  and live sync are now workspace-manager routes, so database-auth org
+  owners/admins can connect their own social accounts. Provider app credential
+  setup remains platform-owner only.
+- **Social OAuth refresh loop (2026-07-14)** — build
+  `phantom-live-20260714-259`. Analytics and Media & Social settings now poll and
+  refresh after a provider OAuth sign-in, so connected accounts move into live
+  sync without relying on a detached browser tab to notify the admin app.
+- **Scoped social OAuth + live analytics prep (2026-07-14)** — social analytics is
+  now live-feed first, with workspace-scoped stored connections and callback
+  support for TikTok, X, and LinkedIn in addition to the existing providers. The
+  admin app build is `phantom-live-20260714-256`. Provider app credentials are
+  still required before real accounts can authorize.
 - **Competitor Intelligence + optional Aggressive Mode (2026-07-12)** —
   tenant-scoped public-signal evidence, labeled weak-signal inferences,
   aggregated audience-gap mining, originality-risk checks, bounded market
@@ -64,7 +113,7 @@
   (`app/index.html`, `app/phantom.css`, `app/js/main.js`).
 - **Living Phantom character** — `app/js/character.js`: 11 painted poses, emotional
   inertia (`governMood`), hologram depth. Shared by admin + public site.
-- Current cache-bust build id: **`phantom-live-20260713-239`**.
+- Current cache-bust build id: **`phantom-live-20260715-276`**.
 
 ## Repo map
 - `app/` — the **admin console** (`admin.phantomforce.online`). `index.html`,

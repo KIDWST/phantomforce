@@ -12,11 +12,12 @@ import {
 } from "./store.js?v=phantom-live-20260717-4";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+const mobilePlaySurface = () => typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;
+const controlsCopy = (game) => mobilePlaySurface() ? "" : String(game?.controls || "").trim();
 const FALLBACK_KEY = "pf.phantomplay.offline.v1";
-const CATEGORIES = ["All", "Arcade", "Puzzle", "Focus", "Strategy", "Sports", "Creative"];
+const CATEGORIES = ["All", "Arcade", "Puzzle", "Focus", "Strategy", "Creative"];
+const GAME_SORTS = ["All", "Solo", "Multiplayer", "Toddler", ...CATEGORIES.filter((cat) => cat !== "All")];
 const STATUSES = [["online", "Online"], ["away", "Away"], ["busy", "Busy"], ["invisible", "Invisible"]];
-const STATELESS_GAMES = new Set(["phantom-rumble"]);
-const TODDLER_ONLY_GAMES = new Set(["signal-match", "reflex-grid", "penalty-kick", "color-rush"]);
 // "Game Rating Exposure" — mirrors server PhantomPlayRating (phantomplay.ts).
 // Kept in sync by hand with defaultAllowedRatings() there; no server "give me
 // the default for my type" endpoint exists.
@@ -34,7 +35,7 @@ function ratingExposurePreset(kind, profileType) {
 }
 
 const ui = {
-  tab: "home", loading: true, error: "", offline: false,
+  tab: "solo", loading: true, error: "", offline: false,
   snapshot: null, v2: null, v2Offline: false, discovery: null,
   query: "", category: "All",
   detailId: null, detail: null, detailBusy: false, reviewDraft: { rating: 0, text: "" },
@@ -62,13 +63,12 @@ const tenantQuery = () => `tenant_id=${encodeURIComponent(currentTenantId())}`;
 
 /* ---- offline fallback (built-ins only, local saves) ---- */
 const OFFLINE_GAMES = [
-  ["neon-drift", "Neon Drift", "Arcade", "/app/games/neon-drift.html"],
-  ["phantom-dash", "Phantom Dash", "Arcade", "/app/games/phantom-dash.html?v=1.1.0"],
-  ["signal-match", "Signal Match", "Puzzle", "/app/games/signal-match.html", "toddler"],
+  ["neon-drift", "Neon Drift", "Arcade", "/app/games/neon-drift.html?v=1.2.4"],
+  ["signal-match", "Signal Match", "Puzzle", "/app/games/signal-match.html"],
   ["focus-stack", "Focus Stack", "Focus", "/app/games/focus-stack.html"],
-  ["phantom-rumble", "Phantom Rumble", "Arcade", "/app/games/phantom-rumble.html?v=1.1.0"],
-  ["sudoku-signal", "Sudoku Signal", "Focus", "/app/games/sudoku-signal.html?v=1.1.0"],
-].map(([id, title, category, launchUrl, contentRating]) => ({ id, title, summary: "Offline built-in game.", description: "", category, tags: [], contentRating: contentRating || "everyone", developer: "Tak", kind: "built_in", launchUrl, thumbnail: "", featured: id === "phantom-rumble" || id === "phantom-dash", version: launchUrl.match(/v=([^&]+)/)?.[1] || "1.0.0", controls: "", progressSupport: true, scoreSupport: true }));
+  ["phantom-rumble", "Phantom Rumble", "Arcade", "/app/games/phantom-rumble.html?v=2.2.4"],
+  ["sudoku-signal", "Sudoku Signal", "Focus", "/app/games/sudoku-signal.html"],
+].map(([id, title, category, launchUrl]) => ({ id, title, summary: id === "phantom-rumble" ? "Premium local platform fighter with guard, parry, dodge, ledge-save recovery, bots, and local multiplayer." : "Offline built-in game.", description: "", category, tags: [], contentRating: "everyone", developer: "Tak", kind: "built_in", launchUrl, thumbnail: "", featured: id === "phantom-rumble", version: id === "phantom-rumble" ? "2.2.4" : "1.0.0", controls: id === "phantom-rumble" ? "Keyboard controls." : "", progressSupport: true, scoreSupport: true }));
 
 function offlineState() {
   let saved = {};
@@ -84,7 +84,7 @@ function offlineState() {
 }
 function saveOffline(snapshot = ui.snapshot) {
   if (!snapshot) return;
-  workspaceStorageSetItem(FALLBACK_KEY, JSON.stringify({ favorites: snapshot.favorites, history: snapshot.history.filter((item) => !isStatelessGame(item.gameId)), sound: snapshot.preferences.sound, reducedMotion: !!snapshot.preferences.reducedMotion }));
+  workspaceStorageSetItem(FALLBACK_KEY, JSON.stringify({ favorites: snapshot.favorites, history: snapshot.history, sound: snapshot.preferences.sound, reducedMotion: !!snapshot.preferences.reducedMotion }));
 }
 
 /* ---- hydrate ---- */
@@ -123,15 +123,19 @@ async function heartbeat() {
 
 /* ---- helpers ---- */
 const gameById = (id) => ui.snapshot?.catalog?.find((game) => game.id === id) || null;
-const isStatelessGame = (gameOrId) => STATELESS_GAMES.has(typeof gameOrId === "string" ? gameOrId : gameOrId?.id);
-const isToddlerGame = (gameOrId) => {
-  const id = typeof gameOrId === "string" ? gameOrId : gameOrId?.id;
-  const game = typeof gameOrId === "string" ? gameById(id) : gameOrId;
-  return TODDLER_ONLY_GAMES.has(id) || game?.contentRating === "toddler";
-};
-const standardGames = (games) => (games || []).filter((game) => !isToddlerGame(game));
-const historyFor = (gameId) => isStatelessGame(gameId) ? null : (ui.snapshot?.history?.find((item) => item.gameId === gameId) || null);
+const historyFor = (gameId) => ui.snapshot?.history?.find((item) => item.gameId === gameId) || null;
 const wishlisted = (gameId) => !!ui.v2?.wishlist?.includes(gameId);
+const multiplayerGame = (game) => game.localMultiplayer || game.onlineMultiplayer || game.tags?.some((tag) => /multiplayer|friends|party|duel/i.test(tag)) || ["phantom-rumble"].includes(game.id);
+const toddlerPick = (game) => game.contentRating === "toddler" || ["focus-stack", "signal-match", "sudoku-signal", "pixel-bloom"].includes(game.id);
+const builtInGames = () => ui.snapshot.catalog.filter((game) => game.kind === "built_in");
+const visibleMultiplayerGames = () => ui.snapshot.catalog.filter(multiplayerGame);
+function sortGames(games, sort = ui.category) {
+  if (sort === "Solo") return games.filter((game) => !multiplayerGame(game));
+  if (sort === "Multiplayer") return games.filter(multiplayerGame);
+  if (sort === "Toddler") return games.filter(toddlerPick);
+  if (CATEGORIES.includes(sort) && sort !== "All") return games.filter((game) => game.category === sort);
+  return games;
+}
 function stars(value, interactive = false) {
   const rating = Math.round(Number(value) || 0);
   return `<span class="pp2-stars${interactive ? " is-input" : ""}">${[1, 2, 3, 4, 5].map((n) => `<button type="button" ${interactive ? `data-pp2-star="${n}"` : "disabled"} class="${n <= rating ? "is-on" : ""}">★</button>`).join("")}</span>`;
@@ -174,12 +178,12 @@ function v2Note(copy) {
 }
 
 /* ---- HOME ---- */
-function mapIds(rows, key = "gameId") { return standardGames((rows || []).map((item) => gameById(item[key])).filter(Boolean)); }
+function mapIds(rows, key = "gameId") { return (rows || []).map((item) => gameById(item[key])).filter(Boolean); }
 function renderHome() {
   if (ui.loading) return `${skeletonRow("Featured")}${skeletonRow("Trending this week")}`;
-  const featured = standardGames(ui.snapshot.catalog).filter((game) => game.featured);
-  const hero = gameById("phantom-rumble") || featured[0] || standardGames(ui.snapshot.catalog)[0];
-  const continuing = ui.snapshot.history.filter((item) => item.canContinue && !isStatelessGame(item.gameId) && !isToddlerGame(item.gameId)).map((item) => gameById(item.gameId)).filter(Boolean).slice(0, 4);
+  const featured = ui.snapshot.catalog.filter((game) => game.featured);
+  const hero = gameById("phantom-rumble") || featured[0] || ui.snapshot.catalog[0];
+  const continuing = ui.snapshot.history.filter((item) => item.canContinue).map((item) => gameById(item.gameId)).filter(Boolean).slice(0, 4);
   const d = ui.discovery;
   const ratingNotes = {};
   for (const item of [...(d?.topRated || []), ...(d?.hiddenGems || [])]) if (item.averageRating) ratingNotes[item.gameId] = `${item.averageRating}★`;
@@ -201,42 +205,26 @@ function renderHome() {
 
 /* ---- SOLO ---- */
 function renderSolo() {
-  const games = standardGames(ui.snapshot.catalog).filter((game) => game.kind === "built_in" && (ui.category === "All" || game.category === ui.category));
+  const games = sortGames(builtInGames());
   return `<div class="pp2-solo">
-    <section class="pp2-lead"><h2>Solo</h2><p>Offline-capable games with cloud progress. Close anything mid-run — Terminal 2048 and Sudoku Signal restore the exact board on any device.</p></section>
-    <div class="pp2-cats">${CATEGORIES.map((cat) => `<button type="button" class="${ui.category === cat ? "is-active" : ""}" data-pp2-cat="${esc(cat)}">${esc(cat)}</button>`).join("")}</div>
+    <section class="pp2-play-header"><div><p class="pp2-kicker">PLAY NOW</p><h2>Games</h2></div><span>${games.length} ready</span></section>
+    <div class="pp2-cats">${GAME_SORTS.map((cat) => `<button type="button" class="${ui.category === cat ? "is-active" : ""}" data-pp2-cat="${esc(cat)}">${esc(cat)}</button>`).join("")}</div>
     ${games.length ? `<div class="pp2-grid pp2-grid-wide">${games.map((game) => card(game)).join("")}</div>` : empty("Nothing in this category", "Try another category.")}
-  </div>`;
-}
-
-/* ---- TODDLER SPACE ---- */
-// Its own destination, not a filter chip mixed into Solo/Library. Only
-// Toddler-rated games, big single-purpose cards, nothing else on the page —
-// no chat, no voice, no matchmaking, no external/outbound links.
-function toddlerCard(game) {
-  return `<button type="button" class="pp2-toddler-card" data-pp2-play="${esc(game.id)}">
-    <span class="pp2-toddler-art">${art(game)}</span>
-    <span class="pp2-toddler-title">${esc(game.title)}</span>
-  </button>`;
-}
-function renderToddlerSpace() {
-  const games = ui.snapshot.catalog.filter((game) => game.contentRating === "toddler");
-  return `<div class="pp2-toddler-space">
-    <section class="pp2-toddler-hero"><p class="pp2-kicker">TODDLER SPACE</p><h2>Big buttons. Just tap to play.</h2><p>Only Toddler-rated games live here — no chat, no voice, no multiplayer rooms, and no links off this screen.</p></section>
-    ${games.length ? `<div class="pp2-toddler-grid">${games.map(toddlerCard).join("")}</div>` : empty("No toddler games yet", "Games rated Toddler will appear here automatically once they are published.")}
   </div>`;
 }
 
 /* ---- FRIENDS ---- */
 function statusDot(status) { return `<i class="pp2-dot is-${esc(status)}"></i>`; }
 function renderFriends() {
-  if (ui.v2Offline) return `<div class="pp2-friends">${v2Note("Friends, presence, and the activity feed need the PhantomForce server.")}${row("Play on one keyboard right now", [gameById("phantom-rumble")].filter(Boolean), "Phantom Rumble is built for two players side by side — no server needed.")}</div>`;
+  const games = visibleMultiplayerGames();
+  if (ui.v2Offline) return `<div class="pp2-friends pp2-multiplayer"><section class="pp2-play-header"><div><p class="pp2-kicker">PLAY TOGETHER</p><h2>Multiplayer</h2></div><span>${games.length} ready</span></section>${row("Multiplayer games", games, "Local keyboard and private-room friendly games.")}${v2Note("Presence and private room sync need the PhantomForce server. Local multiplayer still works.")}</div>`;
   const social = ui.v2.social;
   const feed = ui.v2.feed || [];
   const addable = social.presence.filter((entry) => !social.friends.some((f) => f.actorId === entry.actorId) && !social.outgoing.some((f) => f.actorId === entry.actorId) && !social.incoming.some((f) => f.actorId === entry.actorId));
-  return `<div class="pp2-friends">
-    <section class="pp2-lead"><div><h2>Friends</h2><p>Everyone here is a signed-in member of this workspace. No strangers, no public matchmaking.</p></div>
-      <label class="pp2-status-pick">My status ${statusDot(ui.statusChoice)}<select data-pp2-status>${STATUSES.map(([value, label]) => `<option value="${value}" ${ui.statusChoice === value ? "selected" : ""}>${label}</option>`).join("")}</select></label></section>
+  return `<div class="pp2-friends pp2-multiplayer">
+    <section class="pp2-play-header"><div><p class="pp2-kicker">PLAY TOGETHER</p><h2>Multiplayer</h2></div><label class="pp2-status-pick">My status ${statusDot(ui.statusChoice)}<select data-pp2-status>${STATUSES.map(([value, label]) => `<option value="${value}" ${ui.statusChoice === value ? "selected" : ""}>${label}</option>`).join("")}</select></label></section>
+    ${row("Multiplayer games", games, "Local keyboard and private-room friendly games.")}
+    <section class="pp2-panel pp2-room-panel"><h3>Private rooms</h3><p>Invite codes, ready checks, host controls, and bot fill-in are available in Classic view for now.</p><button type="button" class="pp2-play" data-pp2-classic>Open room controls</button></section>
     <div class="pp2-cols">
       <section class="pp2-panel"><h3>Friends · ${social.friends.length}</h3>
         ${social.friends.length ? social.friends.map((f) => `<div class="pp2-person">${statusDot(f.status)}<b>${esc(f.label)}</b><span>${f.status === "playing" && f.gameId ? `playing ${esc(gameById(f.gameId)?.title || f.gameId)}` : esc(f.status)}</span><button type="button" class="pp2-ghost" data-pp2-unfriend="${esc(f.actorId)}">Remove</button></div>`).join("") : empty("No friends yet", "Add workspace members from the online list.")}
@@ -247,9 +235,7 @@ function renderFriends() {
         ${addable.length ? addable.map((entry) => `<div class="pp2-person">${statusDot(entry.status)}<b>${esc(entry.label)}</b><span>${entry.status === "playing" && entry.gameId ? `playing ${esc(gameById(entry.gameId)?.title || entry.gameId)}` : esc(entry.status)}</span><button type="button" class="pp2-play" data-pp2-befriend="${esc(entry.actorId)}">Add friend</button></div>`).join("") : empty("Nobody else is online", "Presence appears while workspace members have PhantomPlay open.")}
       </section>
     </div>
-    ${row("Made for playing together", [gameById("phantom-rumble")].filter(Boolean), "Two players on one keyboard, bots to fill the arena — or open a private online room with a friend from the Multiplayer tab in Classic view (this V2 shell doesn't have its own room UI yet).")}
-    <section class="pp2-panel"><h3>Multiplayer rooms</h3><p>Private rooms — invite codes, ready checks, host controls, and bot fill-in — live in Classic view for now.</p><button type="button" class="pp2-play" data-pp2-classic>Open Multiplayer in Classic view</button></section>
-    <section class="pp2-panel"><h3>Workspace activity</h3>${feed.length ? `<ul class="pp2-feed">${feed.slice(0, 20).map((entry) => `<li><b>${esc(entry.actorLabel)}</b> ${entry.kind === "review" ? `reviewed <i>${esc(entry.subject)}</i> ${esc(entry.detail)}` : entry.kind === "wishlist" ? `wishlisted <i>${esc(entry.subject)}</i>` : entry.kind === "follow" ? `followed <i>${esc(entry.subject)}</i>` : `released <i>${esc(entry.subject)}</i>`}<span>${esc((entry.at || "").slice(0, 10))}</span></li>`).join("")}</ul>` : empty("Quiet so far", "Reviews, wishlists, and follows will show up here.")}</section>
+    ${feed.length ? `<section class="pp2-panel"><h3>Recent activity</h3><ul class="pp2-feed">${feed.slice(0, 8).map((entry) => `<li><b>${esc(entry.actorLabel)}</b> ${entry.kind === "review" ? `reviewed <i>${esc(entry.subject)}</i> ${esc(entry.detail)}` : entry.kind === "wishlist" ? `wishlisted <i>${esc(entry.subject)}</i>` : entry.kind === "follow" ? `followed <i>${esc(entry.subject)}</i>` : `released <i>${esc(entry.subject)}</i>`}<span>${esc((entry.at || "").slice(0, 10))}</span></li>`).join("")}</ul></section>` : ""}
   </div>`;
 }
 
@@ -258,7 +244,7 @@ function renderWorkspace() {
   const policy = ui.v2?.policy;
   const admin = isAdmin();
   const draft = ui.policyDraft;
-  const builtIns = standardGames(ui.snapshot.catalog).filter((game) => game.kind === "built_in");
+  const builtIns = ui.snapshot.catalog.filter((game) => game.kind === "built_in");
   const board = ui.leaderboard;
   return `<div class="pp2-workspace">
     <section class="pp2-lead"><h2>Workspace</h2><p>The safe mode: schools, teams, and clubs. Organization-controlled catalog, ratings ceiling, and time limits — no public discovery, no strangers.</p></section>
@@ -295,12 +281,12 @@ function renderWorkspace() {
 /* ---- LIBRARY ---- */
 function filteredCatalog() {
   const query = ui.query.toLowerCase();
-  return standardGames(ui.snapshot.catalog).filter((game) => (ui.category === "All" || game.category === ui.category) && (!query || `${game.title} ${game.summary} ${game.developer} ${game.tags.join(" ")}`.toLowerCase().includes(query)));
+  return sortGames(ui.snapshot.catalog).filter((game) => !query || `${game.title} ${game.summary} ${game.developer} ${game.tags.join(" ")}`.toLowerCase().includes(query));
 }
 function renderLibrary() {
   const games = filteredCatalog();
   return `<div class="pp2-library">
-    <div class="pp2-tools"><input type="search" data-pp2-search value="${esc(ui.query)}" placeholder="Search games, developers, tags…"/><div class="pp2-cats">${CATEGORIES.map((cat) => `<button type="button" class="${ui.category === cat ? "is-active" : ""}" data-pp2-cat="${esc(cat)}">${esc(cat)}</button>`).join("")}</div></div>
+    <div class="pp2-tools"><input type="search" data-pp2-search value="${esc(ui.query)}" placeholder="Search games, developers, tags…"/><div class="pp2-cats">${GAME_SORTS.map((cat) => `<button type="button" class="${ui.category === cat ? "is-active" : ""}" data-pp2-cat="${esc(cat)}">${esc(cat)}</button>`).join("")}</div></div>
     ${games.length ? `<div class="pp2-grid pp2-grid-wide">${games.map((game) => card(game)).join("")}</div>` : empty("No matching games", "Try another search or category.")}
   </div>`;
 }
@@ -318,7 +304,7 @@ function renderDeveloper() {
   if (!snapshot.access.canSubmitGames) return empty("Dev Hub is plan-gated", "This account can play games but cannot publish releases. Owners can enable game submissions per plan.");
   const editing = snapshot.submissions.find((item) => item.id === ui.editingSubmissionId) || null;
   const analytics = ui.analytics;
-  const assistGames = [...snapshot.submissions.map((s) => ({ id: `community:${s.id}`, title: s.title, summary: s.summary, category: s.category })), ...(isAdmin() ? standardGames(snapshot.catalog).filter((g) => g.kind === "built_in") : [])];
+  const assistGames = [...snapshot.submissions.map((s) => ({ id: `community:${s.id}`, title: s.title, summary: s.summary, category: s.category })), ...(isAdmin() ? snapshot.catalog.filter((g) => g.kind === "built_in") : [])];
   return `<div class="pp2-devhub">
     <section class="pp2-lead"><h2>Dev Hub</h2><p>Publish to PhantomPlay and let PhantomForce act as your publishing team. Analytics below are computed from real play sessions — no vanity numbers.</p></section>
     <section class="pp2-panel"><h3>Analytics</h3>
@@ -385,7 +371,7 @@ function renderDetail() {
       <button type="button" class="pp2-ghost ${page?.developerFollowed ? "is-on" : ""}" data-pp2-follow="${esc(game.developer)}" ${ui.v2Offline ? "disabled" : ""}>${page?.developerFollowed ? "Following" : "Follow"} ${esc(game.developer)}</button></div></div></div>
     ${page ? `<div class="pp2-detail-stats"><span><b>${page.stats.players}</b>players</span><span><b>${page.stats.plays}</b>plays</span><span><b>${page.stats.totalHours}</b>hours</span><span><b>${page.stats.averageRating ?? "—"}</b>${page.stats.reviewCount} reviews</span><span><b>${page.stats.bestScore || "—"}</b>top score</span></div>` : ui.detailBusy ? `<p class="pp2-fine">Loading stats…</p>` : ui.v2Offline ? v2Note("Stats and reviews need the PhantomForce server.") : ""}
     <p class="pp2-detail-desc">${esc(game.description)}</p>
-    <p class="pp2-fine">Controls: ${esc(game.controls || "Keyboard and touch")}</p>
+    ${controlsCopy(game) ? `<p class="pp2-fine">Controls: ${esc(controlsCopy(game))}</p>` : ""}
     ${page ? `<div class="pp2-cols">
       <section><h3>Reviews</h3>
         <form data-pp2-review class="pp2-review-form">${stars(draft.rating || my?.rating || 0, true)}<textarea name="text" rows="2" maxlength="1200" placeholder="${my ? "Update your review…" : "What did you think?"}">${esc(draft.text || my?.text || "")}</textarea><button type="submit" class="pp2-play">${my ? "Update review" : "Post review"}</button><span data-pp2-review-msg class="pp2-fine"></span></form>
@@ -445,7 +431,8 @@ function ratingExposureMarkup() {
 function playerMarkup() {
   if (!ui.player) return "";
   const { game, play } = ui.player;
-  return `<div class="pp2-player" role="dialog" aria-modal="true" aria-label="Playing ${esc(game.title)}"><header><div><b>${esc(game.title)}</b><i>${esc(game.controls || "")}</i></div><div><button data-pp2-player-restart>Restart</button><button data-pp2-player-pause>${ui.playerPaused ? "Resume" : "Pause"}</button><button data-pp2-player-full>Full screen</button><button data-pp2-player-close aria-label="Close">×</button></div></header>
+  const controls = controlsCopy(game);
+  return `<div class="pp2-player" role="dialog" aria-modal="true" aria-label="Playing ${esc(game.title)}"><header><div><b>${esc(game.title)}</b>${controls ? `<i>${esc(controls)}</i>` : ""}</div><div><button data-pp2-player-restart>Restart</button><button data-pp2-player-pause>${ui.playerPaused ? "Resume" : "Pause"}</button><button data-pp2-player-full>Full screen</button><button data-pp2-player-close aria-label="Close">×</button></div></header>
     <div class="pp2-stage"><div class="pp2-stage-loading" ${ui.playerReady ? "hidden" : ""}><i></i><b>Loading ${esc(game.title)}…</b><span>Opening in a private sandbox.</span></div>
     <iframe src="${esc(game.launchUrl)}" title="${esc(game.title)}" sandbox="allow-scripts" referrerpolicy="no-referrer" allow="fullscreen" data-pp2-frame></iframe></div>
     <footer><span>Session ${esc(String(play.id).slice(-8))}</span><span data-pp2-live-score>Score —</span><span>${ui.resume?.state ? "Resume state loaded" : "Progress saves automatically"}</span></footer></div>`;
@@ -457,17 +444,16 @@ function render() {
   document.body.classList.toggle("phantomplay-playing", !!ui.player);
   if (ui.loading && !ui.snapshot) { mountedRoot.innerHTML = `<div class="pp2-shell">${skeletonRow("PhantomPlay")}</div>`; return; }
   const snapshot = ui.snapshot || offlineState();
-  const tabs = [["home", "Home"], ["solo", "Solo"], ["friends", "Friends"], ["workspace", "Workspace"], ["library", "Library"], ["toddler", "Toddler Space"], ["developer", "Dev Hub"], ...(snapshot.access.canModerate ? [["admin", "Admin"]] : [])];
-  const isToddlerTab = ui.tab === "toddler";
-  const view = { home: renderHome, solo: renderSolo, friends: renderFriends, workspace: renderWorkspace, library: renderLibrary, toddler: renderToddlerSpace, developer: renderDeveloper, admin: renderAdmin }[ui.tab] || renderHome;
-  mountedRoot.innerHTML = `<div class="pp2-shell ${isToddlerTab ? "pp2-shell-toddler" : ""}">
+  const tabs = [["solo", "Games"], ["friends", "Multiplayer"], ["library", "Library"], ["workspace", "Rules"], ["developer", "Developers"], ...(snapshot.access.canModerate ? [["admin", "Admin"]] : [])];
+  const view = { home: renderHome, solo: renderSolo, friends: renderFriends, workspace: renderWorkspace, library: renderLibrary, developer: renderDeveloper, admin: renderAdmin }[ui.tab] || renderSolo;
+  mountedRoot.innerHTML = `<div class="pp2-shell">
     <header class="pp2-top"><div><p class="pp2-kicker">PHANTOMFORCE ENTERTAINMENT</p><h1>PhantomPlay</h1><span>Work hard. Take a real break. Come back sharper.</span></div>
-      <div class="pp2-top-right"><span class="pp2-access ${snapshot.access.enabled ? "is-on" : "is-off"}">${snapshot.access.enabled ? esc(playTimeLabel(snapshot.access.remainingMinutesToday)) : "Plan restricted"}</span>${isToddlerTab ? "" : `<button class="pp2-ghost" data-pp2-settings aria-label="Play settings">Settings</button>`}<button class="pp2-ghost" data-pp2-classic title="Return to the classic PhantomPlay experience">Classic view</button></div></header>
+      <div class="pp2-top-right"><span class="pp2-access ${snapshot.access.enabled ? "is-on" : "is-off"}">${snapshot.access.enabled ? esc(playTimeLabel(snapshot.access.remainingMinutesToday)) : "Plan restricted"}</span><button class="pp2-ghost" data-pp2-settings aria-label="Play settings">Settings</button><button class="pp2-ghost" data-pp2-classic title="Return to the classic PhantomPlay experience">Classic view</button></div></header>
     ${ui.offline ? `<div class="pp2-banner"><b>Offline mode</b><span>Built-in games still work; saves sync when the server returns.</span><button data-pp2-retry>Retry</button></div>` : ""}
     ${ui.error && !ui.offline ? `<div class="pp2-banner is-error"><b>PhantomPlay needs attention</b><span>${esc(ui.error)}</span><button data-pp2-retry>Retry</button></div>` : ""}
     <nav class="pp2-tabs" aria-label="PhantomPlay experiences">${tabs.map(([id, label]) => `<button type="button" class="${ui.tab === id ? "is-active" : ""}" data-pp2-tab="${id}">${esc(label)}</button>`).join("")}</nav>
     <main class="pp2-content">${snapshot.access.enabled ? view() : empty("PhantomPlay is unavailable", "Ask your business owner to enable PhantomPlay for this plan.")}</main>
-    ${isToddlerTab ? "" : `${renderDetail()}${settingsMarkup()}`}${playerMarkup()}
+    ${renderDetail()}${settingsMarkup()}${playerMarkup()}
   </div>`;
   bind();
 }
@@ -494,10 +480,9 @@ async function launch(gameId) {
   if (!game?.launchUrl) { ui.error = "This game is not available to play yet."; render(); return; }
   ui.detailId = null; ui.detail = null;
   try {
-    const stateless = isStatelessGame(game);
     const [result, resume] = await Promise.all([
-      ui.offline ? Promise.resolve({ game, play: { id: `offline-${Date.now()}`, gameId, seconds: 0, score: null, progress: 0 } }) : api("/api/phantomplay/plays", { method: "POST", body: JSON.stringify({ tenantId: currentTenantId(), gameId }) }),
-      stateless || ui.v2Offline ? Promise.resolve(null) : api(`/api/phantomplay/v2/resume/${encodeURIComponent(gameId)}?${tenantQuery()}`).catch(() => null),
+      ui.offline ? Promise.resolve({ game, play: { id: `offline-${Date.now()}`, gameId, seconds: 0, score: null, progress: historyFor(gameId)?.progress || 0 } }) : api("/api/phantomplay/plays", { method: "POST", body: JSON.stringify({ tenantId: currentTenantId(), gameId }) }),
+      ui.v2Offline ? Promise.resolve(null) : api(`/api/phantomplay/v2/resume/${encodeURIComponent(gameId)}?${tenantQuery()}`).catch(() => null),
     ]);
     ui.player = { game: result.game || game, play: result.play };
     ui.resume = resume;
@@ -510,15 +495,7 @@ async function persistPlay(ended, detail = {}) {
   if (!ui.player) return;
   const delta = Math.max(0, Math.min(60, Math.round((Date.now() - playTickAt) / 1000)));
   playTickAt = Date.now();
-  const stateless = isStatelessGame(ui.player.game);
-  if (stateless) detail = { ...detail, progress: ended ? 100 : undefined, state: null };
   Object.assign(ui.player.play, { seconds: (ui.player.play.seconds || 0) + delta, score: detail.score ?? ui.player.play.score, progress: detail.progress ?? ui.player.play.progress });
-  if (stateless) {
-    ui.snapshot.history = ui.snapshot.history.filter((item) => item.gameId !== ui.player.game.id);
-    if (ui.offline) { saveOffline(); return; }
-    try { await api(`/api/phantomplay/plays/${encodeURIComponent(ui.player.play.id)}`, { method: "PATCH", body: JSON.stringify({ tenantId: currentTenantId(), secondsDelta: delta, score: detail.score, progress: 100, state: null, ended: true }) }); } catch { ui.offline = true; saveOffline(); }
-    return;
-  }
   const existing = historyFor(ui.player.game.id);
   const progress = ui.player.play.progress || 0;
   const rowData = { gameId: ui.player.game.id, lastPlayedAt: new Date().toISOString(), score: Math.max(existing?.score || 0, ui.player.play.score || 0), progress, seconds: (existing?.seconds || 0) + delta, canContinue: progress > 0 && progress < 100 };
@@ -546,7 +523,7 @@ function onGameMessage(event) {
     ui.playerReady = true;
     mountedRoot.querySelector(".pp2-stage-loading")?.setAttribute("hidden", "");
     postToGame("settings", { sound: ui.snapshot.preferences.sound, reducedMotion: ui.snapshot.preferences.reducedMotion });
-    if (!isStatelessGame(ui.player.game) && ui.resume?.state) postToGame("restore", { state: ui.resume.state });
+    if (ui.resume?.state) postToGame("restore", { state: ui.resume.state });
   }
   if (event.data.type === "paused") {
     ui.playerPaused = !!event.data.paused;

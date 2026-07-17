@@ -1,4 +1,4 @@
-import { session } from "./store.js?v=phantom-live-20260714-006";
+import { session } from "./store.js?v=phantom-live-20260716-318";
 
 const DESKTOP_PROTOCOL = "phantomforce.hermes.extension.v1";
 const BRIDGE_TIMEOUT_MS = 1800;
@@ -160,7 +160,24 @@ function mediaInitial(tab = {}) {
   return String(source).trim().charAt(0).toUpperCase() || "M";
 }
 
+function youtubeVideoId(rawUrl = "") {
+  try {
+    const url = new URL(rawUrl);
+    const host = url.hostname.replace(/^www\./i, "").toLowerCase();
+    if (host === "youtu.be") return url.pathname.split("/").filter(Boolean)[0] || "";
+    if (!/(^|\.)youtube\.com$/i.test(host)) return "";
+    if (url.pathname.startsWith("/shorts/") || url.pathname.startsWith("/embed/")) {
+      return url.pathname.split("/").filter(Boolean)[1] || "";
+    }
+    return url.searchParams.get("v") || "";
+  } catch {
+    return "";
+  }
+}
+
 function thumbnailUrl(tab = {}) {
+  const youtubeId = youtubeVideoId(tab.url || tab.pageUrl || "");
+  if (youtubeId) return `https://img.youtube.com/vi/${encodeURIComponent(youtubeId)}/hqdefault.jpg`;
   return tab.thumbnail || tab.thumbnailUrl || tab.artwork || tab.favIconUrl || tab.icon || "";
 }
 
@@ -208,8 +225,9 @@ function renderMiniRoot(root, state) {
   const canPlay = hasMedia && (active?.source !== "windows" || controls.play_pause !== false);
   const canPrevious = hasMedia && (active?.source !== "windows" || controls.previous !== false);
   const canNext = hasMedia && (active?.source !== "windows" || controls.next !== false);
+  const expanded = Boolean(root.__pfDesktopMiniExpanded);
   root.innerHTML = `
-    <div class="dc-mini-shell" data-dc-mini-shell>
+    <div class="dc-mini-shell${expanded ? " is-expanded" : ""}" data-dc-mini-shell data-dc-mini-toggle aria-expanded="${expanded ? "true" : "false"}">
       ${hasMedia ? renderThumb(active) : `<button class="dc-mini-thumb is-empty" type="button" data-dc-refresh title="Find media"><span>♪</span></button>`}
       <div class="dc-mini-copy">
         <span><i class="dc-dot${state.ok ? " is-on" : ""}"></i> Media · ${esc(status)}</span>
@@ -326,6 +344,12 @@ export function mountDesktopContextWidget(root, opts = {}) {
         controlButton.textContent = previous;
         refreshDesktopContext(root, opts);
       }, 900);
+      return;
+    }
+    const miniToggle = event.target.closest?.("[data-dc-mini-toggle]");
+    if (miniToggle) {
+      root.__pfDesktopMiniExpanded = !root.__pfDesktopMiniExpanded;
+      renderRoot(root, root.__pfDesktopContextState || {});
     }
   });
   refreshDesktopContext(root, opts);

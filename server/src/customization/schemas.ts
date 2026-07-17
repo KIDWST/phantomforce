@@ -144,6 +144,7 @@ export const OrganizationConfigurationSchema = z.object({
   schemaVersion: z.literal(1),
   tenantId: z.string().trim().min(1).max(80),
   version: z.number().int().min(1),
+  orgType: z.enum(["business", "dev_only", "full_force"]).default("business"),
   brand: OrganizationBrandSchema,
   theme: OrganizationThemeSchema,
   terminology: z.record(SafeLabelSchema).default({}),
@@ -161,6 +162,7 @@ export const OrganizationConfigurationSchema = z.object({
 });
 
 export const ConfigurationPatchSchema = z.object({
+  orgType: z.enum(["business", "dev_only", "full_force"]).optional(),
   brand: OrganizationBrandSchema.partial().optional(),
   theme: OrganizationThemeSchema.partial().optional(),
   terminology: z.record(SafeLabelSchema).optional(),

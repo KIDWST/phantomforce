@@ -2,7 +2,7 @@
    One sidebar-docked Phantom system: preference-aware, drag-safe, always
    returns home, and tied to real chat/notification states. */
 
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260714-006";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260716-318";
 import {
   COMPANION_EVENT,
   clearCompanionSessionHide,
@@ -10,7 +10,7 @@ import {
   isCompanionHiddenForSession,
   loadCompanionPrefs,
   updateCompanionPrefs,
-} from "./companion-preferences.js?v=phantom-live-20260714-006";
+} from "./companion-preferences.js?v=phantom-live-20260716-318";
 
 const reduceMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
 const LEGACY_DOCK_KEY = "pf.buddy.docked.v1";
@@ -129,7 +129,8 @@ function createBuddyController() {
   function sidebarDockZone() {
     const side = sidebarRect();
     const sidebar = document.querySelector(".sidebar");
-    const nav = sidebar?.querySelector(".side-nav");
+    const nav = sidebar?.querySelector(".side-nav-main");
+    const bottomNav = sidebar?.querySelector(".side-nav-bottom");
     const navItems = nav ? [...nav.querySelectorAll(".nav-item")].map((item) => item.getBoundingClientRect()).filter((rect) => (
       rect.width > 0 &&
       rect.height > 0 &&
@@ -138,16 +139,23 @@ function createBuddyController() {
     )) : [];
     const sideTop = Math.max(0, side.top || 0);
     const sideBottom = Math.min(window.innerHeight, side.bottom || window.innerHeight);
+    const bottomNavRect = bottomNav?.getBoundingClientRect();
+    const bottomNavVisible = !!bottomNavRect && bottomNavRect.width > 0 && bottomNavRect.height > 0 && bottomNavRect.top < sideBottom && bottomNavRect.bottom > sideTop;
     const lastNavBottom = navItems.length ? Math.max(...navItems.map((rect) => rect.bottom)) : (sideTop + 420);
-    const bottom = Math.max(sideTop + 120, sideBottom - 12);
-    const top = Math.min(Math.max(lastNavBottom + 14, sideTop + 250), Math.max(sideTop + 120, bottom - 76));
+    const hardBottom = bottomNavVisible
+      ? Math.max(sideTop + 126, Math.min(sideBottom - 12, bottomNavRect.top - 12))
+      : sideBottom - 12;
+    const bottom = Math.max(sideTop + 126, hardBottom);
+    const preferredTop = Math.max(lastNavBottom + 14, sideTop + 250);
+    const top = Math.min(preferredTop, Math.max(sideTop + 106, bottom - 78));
+    const height = Math.max(0, bottom - top);
     return {
       left: side.left,
       top,
       bottom,
       width: side.width,
-      height: Math.max(76, bottom - top),
-      cramped: false,
+      height: Math.max(76, height),
+      cramped: height < 116,
     };
   }
 
@@ -175,8 +183,9 @@ function createBuddyController() {
     const base = sizeForPrefs();
     if (!sidebarPortraitMode()) return { width: base, height: base };
     const zone = sidebarDockZone();
-    const width = Math.round(Math.min(Math.max(base, 68), Math.max(68, Math.min(100, zone.width - 30))));
-    const height = Math.round(Math.min(Math.max(base + 46, 118), Math.max(76, Math.min(168, zone.height - 8))));
+    const width = Math.round(Math.min(Math.max(base, 64), Math.max(58, Math.min(96, zone.width - 34))));
+    const idealHeight = zone.cramped ? Math.max(base + 24, 92) : Math.max(base + 46, 118);
+    const height = Math.round(Math.min(idealHeight, Math.max(76, Math.min(168, zone.height - 8))));
     return {
       width,
       height,
@@ -260,6 +269,8 @@ function createBuddyController() {
     layer.style.setProperty("--buddy-size", `${size}px`);
     layer.style.setProperty("--buddy-width", `${buddyWidth}px`);
     layer.style.setProperty("--buddy-height", `${buddyHeight}px`);
+    const zone = sidebarPortraitMode() ? sidebarDockZone() : null;
+    layer.classList.toggle("is-sidebar-cramped", !!zone?.cramped);
     setTargetToDock();
     if (!x || !y || (docked && snap)) {
       x = tx;

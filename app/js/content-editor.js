@@ -1,4 +1,4 @@
-import { freshEditState, freshTextStyle, paintEdit } from "./imagefilters.js?v=phantom-live-20260714-006";
+import { freshEditState, freshTextStyle, paintEdit } from "./imagefilters.js?v=phantom-live-20260716-318";
 
 let layerSequence = 0;
 
@@ -9,6 +9,11 @@ function id(prefix = "layer") {
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, Number(value) || 0));
+}
+
+const BLEND_MODES = new Set(["source-over", "multiply", "screen", "overlay", "soft-light", "hard-light", "color-dodge", "color-burn", "luminosity"]);
+function blendMode(value) {
+  return BLEND_MODES.has(value) ? value : "source-over";
 }
 
 export function cloneImageEditState(source = {}, opts = {}) {
@@ -77,6 +82,7 @@ export function freshComposition() {
       h: 1,
       rotation: 0,
       opacity: 1,
+      blend: "source-over",
       fit: "cover",
     }],
     selectedIds: ["base"],
@@ -123,6 +129,7 @@ export function addImageLayer(composition, src, name = "Image layer", { backgrou
     h: background ? 1 : 0.52,
     rotation: 0,
     opacity: 1,
+    blend: "source-over",
     fit: background ? "cover" : "contain",
   };
   const baseIndex = composition.layers.findIndex((item) => item.id === "base");
@@ -156,6 +163,7 @@ export function addTextLayer(composition, text = "Your headline") {
     h: 0.18,
     rotation: 0,
     opacity: 1,
+    blend: "source-over",
     font: "Space Grotesk",
     fontSize: 8,
     color: "#ffffff",
@@ -184,6 +192,7 @@ export function addColorLayer(composition, color = "#10251c") {
     h: 1,
     rotation: 0,
     opacity: 1,
+    blend: "source-over",
     radius: 0,
   };
   const baseIndex = composition.layers.findIndex((item) => item.id === "base");
@@ -218,6 +227,17 @@ export function moveLayerOrder(composition, layerId, direction) {
   if (next === index) return false;
   const [layer] = composition.layers.splice(index, 1);
   composition.layers.splice(next, 0, layer);
+  return true;
+}
+
+export function moveLayerToIndex(composition, layerId, targetIndex) {
+  const index = composition.layers.findIndex((layer) => layer.id === layerId);
+  if (index < 0) return false;
+  const next = clamp(Math.round(Number(targetIndex) || 0), 0, composition.layers.length - 1);
+  if (next === index) return false;
+  const [layer] = composition.layers.splice(index, 1);
+  composition.layers.splice(next, 0, layer);
+  composition.selectedIds = [layer.id];
   return true;
 }
 
@@ -335,6 +355,7 @@ export function renderComposition(canvas, baseImage, editState, composition, lay
     const boxH = Math.max(1, layer.h * canvas.height);
     ctx.save();
     ctx.globalAlpha = clamp(layer.opacity ?? 1, 0, 1);
+    ctx.globalCompositeOperation = blendMode(layer.blend);
     ctx.translate(layer.x * canvas.width, layer.y * canvas.height);
     ctx.rotate((Number(layer.rotation || 0) * Math.PI) / 180);
     if (layer.type === "base") drawImageFit(ctx, base, -boxW / 2, -boxH / 2, boxW, boxH, layer.fit || "cover");
@@ -372,11 +393,130 @@ export function layerBounds(layer, width, height) {
   return { left: Math.min(...xs), top: Math.min(...ys), right: Math.max(...xs), bottom: Math.max(...ys), corners };
 }
 
-export function drawCompositionOverlay(overlay, canvas, composition) {
+function editableSelectedTransformLayers(composition) {
+  return selectedLayers(composition).filter((layer) => layer.id !== "base" && !layer.locked && layer.visible !== false);
+}
+
+function canvasSize(composition) {
+  return {
+    width: Math.max(1, Number(composition?.width || 1000)),
+    height: Math.max(1, Number(composition?.height || 1000)),
+  };
+}
+
+function unionBounds(layers, width, height) {
+  return layers.reduce((box, layer) => {
+    const bounds = layerBounds(layer, width, height);
+    return {
+      left: Math.min(box.left, bounds.left),
+      top: Math.min(box.top, bounds.top),
+      right: Math.max(box.right, bounds.right),
+      bottom: Math.max(box.bottom, bounds.bottom),
+    };
+  }, { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity });
+}
+
+export function alignSelectedLayers(composition, mode) {
+  if (!["left", "hcenter", "right", "top", "vcenter", "bottom"].includes(mode)) return false;
+  const targets = editableSelectedTransformLayers(composition);
+  if (!targets.length) return false;
+  const { width, height } = canvasSize(composition);
+  const group = targets.length === 1 ? { left: 0, top: 0, right: width, bottom: height } : unionBounds(targets, width, height);
+  const refX = (group.left + group.right) / 2;
+  const refY = (group.top + group.bottom) / 2;
+  targets.forEach((layer) => {
+    const bounds = layerBounds(layer, width, height);
+    if (mode === "left") layer.x = clamp(layer.x + (group.left - bounds.left) / width, 0, 1);
+    else if (mode === "hcenter") layer.x = clamp(layer.x + (refX - ((bounds.left + bounds.right) / 2)) / width, 0, 1);
+    else if (mode === "right") layer.x = clamp(layer.x + (group.right - bounds.right) / width, 0, 1);
+    else if (mode === "top") layer.y = clamp(layer.y + (group.top - bounds.top) / height, 0, 1);
+    else if (mode === "vcenter") layer.y = clamp(layer.y + (refY - ((bounds.top + bounds.bottom) / 2)) / height, 0, 1);
+    else if (mode === "bottom") layer.y = clamp(layer.y + (group.bottom - bounds.bottom) / height, 0, 1);
+  });
+  return true;
+}
+
+export function distributeSelectedLayers(composition, axis) {
+  if (!["x", "y"].includes(axis)) return false;
+  const targets = editableSelectedTransformLayers(composition);
+  if (targets.length < 3) return false;
+  const { width, height } = canvasSize(composition);
+  const isX = axis === "x";
+  const size = isX ? width : height;
+  const sorted = targets
+    .map((layer) => {
+      const bounds = layerBounds(layer, width, height);
+      return { layer, center: isX ? (bounds.left + bounds.right) / 2 : (bounds.top + bounds.bottom) / 2 };
+    })
+    .sort((a, b) => a.center - b.center);
+  const start = sorted[0].center;
+  const step = (sorted[sorted.length - 1].center - start) / (sorted.length - 1);
+  sorted.forEach((item, index) => {
+    const target = start + step * index;
+    const delta = (target - item.center) / size;
+    if (isX) item.layer.x = clamp(item.layer.x + delta, 0, 1);
+    else item.layer.y = clamp(item.layer.y + delta, 0, 1);
+  });
+  return axis === "x" || axis === "y";
+}
+
+function snapAxisGuides(bounds, size, threshold) {
+  const center = (bounds.start + bounds.end) / 2;
+  const candidates = [
+    { guide: 0, delta: -bounds.start },
+    { guide: 0.5, delta: (size / 2) - center },
+    { guide: 1, delta: size - bounds.end },
+  ].filter((candidate) => Math.abs(candidate.delta) <= threshold);
+  return candidates.sort((a, b) => Math.abs(a.delta) - Math.abs(b.delta))[0] || null;
+}
+
+export function applyLayerDragWithSnap(composition, starts, dx, dy, opts = {}) {
+  const targets = Array.isArray(starts) ? starts.filter((item) => item?.layer && !item.layer.locked) : [];
+  if (!targets.length) return [];
+  targets.forEach((item) => {
+    item.layer.x = clamp((Number(item.x) || 0) + dx, 0, 1);
+    item.layer.y = clamp((Number(item.y) || 0) + dy, 0, 1);
+  });
+  const { width, height } = canvasSize(composition);
+  const bounds = unionBounds(targets.map((item) => item.layer), width, height);
+  const threshold = Math.max(1, Number(opts.thresholdPx || Math.min(width, height) * 0.018));
+  const guides = [];
+  const snapX = snapAxisGuides({ start: bounds.left, end: bounds.right }, width, threshold);
+  const snapY = snapAxisGuides({ start: bounds.top, end: bounds.bottom }, height, threshold);
+  if (snapX) {
+    targets.forEach((item) => { item.layer.x = clamp(item.layer.x + snapX.delta / width, 0, 1); });
+    guides.push({ axis: "x", at: snapX.guide });
+  }
+  if (snapY) {
+    targets.forEach((item) => { item.layer.y = clamp(item.layer.y + snapY.delta / height, 0, 1); });
+    guides.push({ axis: "y", at: snapY.guide });
+  }
+  return guides;
+}
+
+export function drawCompositionOverlay(overlay, canvas, composition, guides = []) {
   overlay.width = canvas.width;
   overlay.height = canvas.height;
   const ctx = overlay.getContext("2d");
   ctx.clearRect(0, 0, overlay.width, overlay.height);
+  (Array.isArray(guides) ? guides : []).forEach((guide) => {
+    ctx.save();
+    ctx.strokeStyle = "rgba(255, 209, 102, .92)";
+    ctx.lineWidth = Math.max(1.5, canvas.width / 900);
+    ctx.setLineDash([Math.max(7, canvas.width / 130), Math.max(5, canvas.width / 180)]);
+    ctx.beginPath();
+    if (guide.axis === "x") {
+      const x = Math.max(0, Math.min(1, Number(guide.at))) * canvas.width;
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, canvas.height);
+    } else if (guide.axis === "y") {
+      const y = Math.max(0, Math.min(1, Number(guide.at))) * canvas.height;
+      ctx.moveTo(0, y);
+      ctx.lineTo(canvas.width, y);
+    }
+    ctx.stroke();
+    ctx.restore();
+  });
   const selected = selectedLayers(composition).filter((layer) => layer.visible);
   selected.forEach((layer) => {
     const bounds = layerBounds(layer, canvas.width, canvas.height);

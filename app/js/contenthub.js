@@ -9,24 +9,25 @@ import {
   freshEditState, applyFilterPreset, renderBaseFrame,
   addBokehSpot, removeBokehSpotNear, removeBokehSpotAt, nearestBokehSpot, moveBokehSpot, resizeBokehSpot,
   setBokehMask, freshTextStyle, TEXT_FONTS, TEXT_PRESETS, applyTextPreset,
-} from "./imagefilters.js?v=phantom-live-20260714-006";
-import { getRembgStatus, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260714-006";
-import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260714-006";
-import { parseAnalyticsReport } from "./social-analytics.js?v=phantom-live-20260714-006";
+} from "./imagefilters.js?v=phantom-live-20260716-318";
+import { getRembgStatus, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260716-318";
+import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260716-318";
+import { parseAnalyticsReport } from "./social-analytics.js?v=phantom-live-20260716-318";
 import {
   freshComposition, compositionSnapshot, restoreComposition, addImageLayer, replaceImageLayerSource, addTextLayer, addColorLayer,
   duplicateLayer, removeSelectedLayers, moveLayerOrder, selectedLayers, selectLayer, selectAllLayers,
   loadCompositionImages, renderComposition, drawCompositionOverlay, drawDetectedSubjectOverlay, canvasPoint, hitTestLayer, hitTestResizeHandle,
   setCanvasPreset, zoomComposition, canvasPointToLayer, layerPointToCanvas,
   imageEditSnapshot, restoreImageEditSnapshot, pushEditorSnapshot,
-} from "./content-editor.js?v=phantom-live-20260714-006";
+} from "./content-editor.js?v=phantom-live-20260716-318";
 import {
-  currentTenantId, currentWs, session, store, visible, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem, wsName,
-} from "./store.js?v=phantom-live-20260714-006";
+  currentTenantId, currentWs, ctx, session, store, visible, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem, wsName,
+} from "./store.js?v=phantom-live-20260716-318";
 
 const CH_KEY = "pf.contenthub.v2";
 const CH_REMOVED_KEY = "pf.contenthub.removed.v1";
 const CH_ASSETS_KEY = "pf.contenthub.assets.v1";
+const CH_ASSET_RECYCLE_KEY = "pf.contenthub.assets.recycle.v1";
 const CH_MEDIA_EDIT_INTENT_KEY = "pf.medialab.editIntent.v1";
 const CH_OPEN_TAB_KEY = "pf.contenthub.openTab.v1";
 const CH_OPEN_ASSET_KEY = "pf.contenthub.openAsset.v1";
@@ -343,6 +344,87 @@ export function saveContentAssets(items = []) {
     }
   }
   return clean;
+}
+
+function normalizeRecycledContentAsset(input = {}) {
+  const asset = normalizeContentAsset(input);
+  const trashedAt = Number(input.trashedAt || input.deletedAt || Date.now()) || Date.now();
+  return {
+    ...asset,
+    trashedAt,
+    trashExpiresAt: trashedAt + CONTENT_ASSET_LIMITS.retentionDays * DAY,
+  };
+}
+function pruneRecycledContentAssets(items = []) {
+  const now = Date.now();
+  const seen = new Set();
+  return items
+    .map(normalizeRecycledContentAsset)
+    .filter((asset) => asset.trashExpiresAt > now)
+    .sort((a, b) => b.trashedAt - a.trashedAt)
+    .filter((asset) => {
+      if (seen.has(asset.id)) return false;
+      seen.add(asset.id);
+      return true;
+    })
+    .slice(0, CONTENT_ASSET_LIMITS.maxItems * 2);
+}
+export function loadRecycledContentAssets() {
+  let raw = null;
+  try { raw = JSON.parse(workspaceStorageGetItem(CH_ASSET_RECYCLE_KEY) || "null"); } catch {}
+  const list = Array.isArray(raw) ? raw : (raw && Array.isArray(raw.assets) ? raw.assets : []);
+  const pruned = pruneRecycledContentAssets(list);
+  if (pruned.length !== list.length) saveRecycledContentAssets(pruned);
+  return pruned;
+}
+export function saveRecycledContentAssets(items = []) {
+  const clean = pruneRecycledContentAssets(items);
+  try {
+    workspaceStorageSetItem(CH_ASSET_RECYCLE_KEY, JSON.stringify({
+      assets: clean,
+      updatedAt: Date.now(),
+      retentionDays: CONTENT_ASSET_LIMITS.retentionDays,
+    }));
+  } catch {}
+  return clean;
+}
+export function recycleContentAssets(assets = []) {
+  const list = Array.isArray(assets) ? assets : [assets];
+  const normalized = list.filter(Boolean).map((asset) => normalizeRecycledContentAsset({ ...asset, trashedAt: Date.now() }));
+  if (!normalized.length) return { recycled: [], active: loadContentAssets(), bin: loadRecycledContentAssets() };
+  const ids = new Set(normalized.map((asset) => asset.id));
+  const active = saveContentAssets(loadContentAssets().filter((asset) => !ids.has(asset.id)));
+  const bin = saveRecycledContentAssets([
+    ...normalized,
+    ...loadRecycledContentAssets().filter((asset) => !ids.has(asset.id)),
+  ]);
+  return { recycled: normalized, active, bin };
+}
+export function restoreRecycledContentAssets(ids = []) {
+  const wanted = new Set(Array.isArray(ids) ? ids : [ids]);
+  const bin = loadRecycledContentAssets();
+  const restored = bin.filter((asset) => wanted.has(asset.id));
+  if (!restored.length) return [];
+  const current = loadContentAssets();
+  const restoredAt = Date.now();
+  saveContentAssets([
+    ...restored.map(({ trashedAt, trashExpiresAt, ...asset }) => ({
+      ...asset,
+      createdAt: restoredAt,
+      expiresAt: restoredAt + CONTENT_ASSET_LIMITS.retentionDays * DAY,
+      updatedAt: restoredAt,
+    })),
+    ...current.filter((asset) => !wanted.has(asset.id)),
+  ]);
+  saveRecycledContentAssets(bin.filter((asset) => !wanted.has(asset.id)));
+  return restored;
+}
+export function purgeRecycledContentAssets(ids = []) {
+  const wanted = new Set(Array.isArray(ids) ? ids : [ids]);
+  const bin = loadRecycledContentAssets();
+  const kept = wanted.size ? bin.filter((asset) => !wanted.has(asset.id)) : [];
+  saveRecycledContentAssets(kept);
+  return bin.length - kept.length;
 }
 /* In-memory bridge for oversized media: the persisted copy drops data URLs
    over the inline budget, so previews for those assets come from this cache
@@ -2840,8 +2922,11 @@ function undoLastDelete(root, opts) {
   if (!chLastDeleted) return;
   const { assets: restoredAssets, postIds } = chLastDeleted;
   if (restoredAssets.length) {
-    const current = loadContentAssets();
-    saveContentAssets([...restoredAssets, ...current.filter((a) => !restoredAssets.some((r) => r.id === a.id))]);
+    const restored = restoreRecycledContentAssets(restoredAssets.map((asset) => asset.id));
+    if (!restored.length) {
+      const current = loadContentAssets();
+      saveContentAssets([...restoredAssets, ...current.filter((a) => !restoredAssets.some((r) => r.id === a.id))]);
+    }
   }
   if (postIds.length) {
     const removed = loadRemovedContent();
@@ -2940,13 +3025,13 @@ function wireLibraryActions(body, data, assets, shownAssets, shownPosts, esc, ro
     event.stopPropagation();
     const id = btn.dataset.chDeleteAsset;
     const deleted = loadContentAssets().filter((asset) => asset.id === id);
-    saveContentAssets(loadContentAssets().filter((asset) => asset.id !== id));
+    recycleContentAssets(deleted);
     chSelection.delete(selectionKey("asset", id));
     captureDeleteForUndo(deleted, []);
     // rerender before notify(): notify() triggers a global store-change listener that can
     // fully remount this page and invalidate this closure's DOM references.
     rerender();
-    opts.notify?.("Content Hub", "Deleted the selected local media item — Ctrl+Z to undo. No external file or post was touched.");
+    opts.notify?.("Content Hub", "Removed the selected local media item — Ctrl+Z to undo. No external file or post was touched.");
   }));
   body.querySelector("[data-ch-select-mode]")?.addEventListener("click", () => {
     chState.selectMode = !chState.selectMode;
@@ -3013,7 +3098,7 @@ function wireLibraryActions(body, data, assets, shownAssets, shownPosts, esc, ro
     const assetIds = new Set(selected.filter((item) => item.kind === "asset").map((item) => item.id));
     const postIds = selected.filter((item) => item.kind === "post").map((item) => item.id);
     const deletedAssets = loadContentAssets().filter((asset) => assetIds.has(asset.id));
-    if (assetIds.size) saveContentAssets(loadContentAssets().filter((asset) => !assetIds.has(asset.id)));
+    if (assetIds.size) recycleContentAssets(deletedAssets);
     if (postIds.length) {
       const removed = loadRemovedContent();
       postIds.forEach((id) => removed.add(`post:${id}`));
@@ -3025,7 +3110,7 @@ function wireLibraryActions(body, data, assets, shownAssets, shownPosts, esc, ro
     // rerender before notify(): notify() triggers a global store-change listener that can
     // fully remount this page and invalidate this closure's DOM references.
     rerender();
-    opts.notify?.("Content Hub", `Deleted ${selected.length} local content item${selected.length === 1 ? "" : "s"} — Ctrl+Z to undo. No external post or file was touched.`);
+    opts.notify?.("Content Hub", `Removed ${selected.length} local content item${selected.length === 1 ? "" : "s"} — Ctrl+Z to undo. No external post or file was touched.`);
   });
   const uploadInput = body.querySelector("[data-ch-upload-input]");
   body.querySelector("[data-ch-upload-local]")?.addEventListener("click", () => uploadInput?.click());
@@ -3299,9 +3384,16 @@ const analyticsConnectorState = {
   loaded: false,
   loading: false,
   connectors: [],
+  preflight: null,
   error: "",
   /* per-platform sync outcome: { state: "synced"|"error", error, syncedAt } */
   sync: {},
+};
+const analyticsOAuthSetupState = {
+  loaded: false,
+  loading: false,
+  setup: null,
+  error: "",
 };
 function analyticsAuthHeaders(extra = {}) {
   const token = typeof session?.token === "function" ? session.token() : "";
@@ -3323,6 +3415,37 @@ async function analyticsApi(path, { method = "GET", body } = {}) {
 }
 function connectorStatus(platformId) {
   return analyticsConnectorState.connectors.find((connector) => connector.id === platformId) || null;
+}
+async function refreshAnalyticsOAuthSetup({ force = false } = {}) {
+  if (analyticsOAuthSetupState.loading) return analyticsOAuthSetupState.setup;
+  if (analyticsOAuthSetupState.loaded && !force) return analyticsOAuthSetupState.setup;
+  analyticsOAuthSetupState.loading = true;
+  analyticsOAuthSetupState.error = "";
+  try {
+    const response = await analyticsApi("/phantom-ai/ops/social-oauth/setup");
+    analyticsOAuthSetupState.setup = response?.setup || null;
+    analyticsOAuthSetupState.loaded = true;
+  } catch (error) {
+    analyticsOAuthSetupState.error = error?.message || "OAuth provider setup could not be checked.";
+  } finally {
+    analyticsOAuthSetupState.loading = false;
+  }
+  return analyticsOAuthSetupState.setup;
+}
+async function saveAnalyticsOAuthAppSetup({ platform, clientId, clientSecret, redirectUri }) {
+  const response = await analyticsApi("/phantom-ai/ops/social-oauth/setup", {
+    method: "POST",
+    body: { platform, clientId, clientSecret, redirectUri },
+  });
+  analyticsOAuthSetupState.setup = response?.setup || null;
+  analyticsOAuthSetupState.loaded = true;
+  analyticsConnectorState.connectors = Array.isArray(response?.social_analytics?.connectors)
+    ? response.social_analytics.connectors
+    : analyticsConnectorState.connectors;
+  analyticsConnectorState.preflight = response?.social_analytics?.oauthPreflight || analyticsConnectorState.preflight;
+  analyticsConnectorState.loaded = false;
+  await refreshAnalyticsConnectorStatus();
+  return response;
 }
 function liveAnalyticsIsFresh(account = {}) {
   const synced = Date.parse(account?.analytics?.syncedAt || "");
@@ -3352,6 +3475,7 @@ async function refreshLiveAnalytics(el, accounts, opts, { force = false, platfor
       analyticsConnectorState.connectors = Array.isArray(response?.social_analytics?.connectors)
         ? response.social_analytics.connectors
         : [];
+      analyticsConnectorState.preflight = response?.social_analytics?.oauthPreflight || null;
       analyticsConnectorState.loaded = true;
     }
     const ready = analyticsConnectorState.connectors.filter((connector) => connector.configured && (!platform || connector.id === platform));
@@ -3478,6 +3602,110 @@ function analyticsCoverage(feedRows = []) {
   </div>`;
 }
 let analyticsNotice = "";
+let analyticsMount = null;
+let analyticsOpts = {};
+let socialOAuthListenerReady = false;
+let analyticsOAuthPollTimer = 0;
+
+async function refreshAnalyticsConnectorStatus() {
+  const response = await analyticsApi("/phantom-ai/ops/social-analytics/status");
+  analyticsConnectorState.connectors = Array.isArray(response?.social_analytics?.connectors)
+    ? response.social_analytics.connectors
+    : [];
+  analyticsConnectorState.preflight = response?.social_analytics?.oauthPreflight || null;
+  analyticsConnectorState.loaded = true;
+  return analyticsConnectorState.connectors;
+}
+
+function stopAnalyticsOAuthPolling() {
+  if (analyticsOAuthPollTimer) clearInterval(analyticsOAuthPollTimer);
+  analyticsOAuthPollTimer = 0;
+}
+
+function markAnalyticsOAuthConnected(platform, connectedAt = "") {
+  const accounts = loadSocialAccounts();
+  const account = accounts.find((row) => row.id === platform);
+  if (!account) return accounts;
+  account.enabled = true;
+  account.connectMode = "oauth-connected";
+  account.officialConnectState = "connected";
+  account.lastConnectAt = connectedAt || new Date().toISOString();
+  saveSocialAccounts(accounts);
+  return accounts;
+}
+
+function startAnalyticsOAuthPolling(platform = "") {
+  if (typeof window === "undefined" || !platform) return;
+  stopAnalyticsOAuthPolling();
+  let attempts = 0;
+  const tick = async () => {
+    attempts += 1;
+    if (!analyticsMount?.isConnected || attempts > 45) {
+      stopAnalyticsOAuthPolling();
+      return;
+    }
+    try {
+      await refreshAnalyticsConnectorStatus();
+      const connector = connectorStatus(platform);
+      if (connector?.configured) {
+        const accounts = markAnalyticsOAuthConnected(platform);
+        analyticsNotice = `${connector.name || platform} connected. Syncing live analytics…`;
+        stopAnalyticsOAuthPolling();
+        await refreshLiveAnalytics(analyticsMount, accounts, analyticsOpts, { force: true, platform });
+      } else if (attempts === 45) {
+        analyticsNotice = `${connector?.name || platform} sign-in is still pending. Finish the provider approval, then tap Sync live feed.`;
+        renderAnalytics(analyticsMount, analyticsOpts, { skipAutoRefresh: true });
+      }
+    } catch (error) {
+      if (attempts >= 4) {
+        analyticsConnectorState.error = error?.message || "Live social connection check failed.";
+        renderAnalytics(analyticsMount, analyticsOpts, { skipAutoRefresh: true });
+      }
+    }
+  };
+  setTimeout(tick, 1400);
+  analyticsOAuthPollTimer = setInterval(tick, 3500);
+}
+
+function handleSocialOAuthComplete(payload = {}) {
+  const platform = String(payload.platform || "").toLowerCase();
+  if (!platform) return;
+  stopAnalyticsOAuthPolling();
+  markAnalyticsOAuthConnected(platform, payload.connectedAt);
+  analyticsNotice = `${connectorStatus(platform)?.name || platform} connected. Syncing live analytics…`;
+  analyticsConnectorState.loaded = false;
+  if (!analyticsMount?.isConnected) return;
+  const accounts = loadSocialAccounts();
+  void refreshLiveAnalytics(analyticsMount, accounts, analyticsOpts, { force: true, platform });
+}
+function parseSocialOAuthPayload(value) {
+  if (!value) return null;
+  if (typeof value === "object") return value;
+  try { return JSON.parse(String(value)); } catch { return null; }
+}
+function ensureSocialOAuthListener() {
+  if (socialOAuthListenerReady || typeof window === "undefined") return;
+  socialOAuthListenerReady = true;
+  window.addEventListener("message", (event) => {
+    if (event.origin !== window.location.origin) return;
+    const data = parseSocialOAuthPayload(event.data);
+    if (data?.protocol === "phantomforce.social-oauth.v1" && data.type === "connected") handleSocialOAuthComplete(data);
+  });
+  window.addEventListener("storage", (event) => {
+    if (event.key !== "pf.social.oauth.last") return;
+    const data = parseSocialOAuthPayload(event.newValue);
+    if (data?.protocol === "phantomforce.social-oauth.v1" && data.type === "connected") handleSocialOAuthComplete(data);
+  });
+  const refreshWhenReturned = () => {
+    if (!analyticsMount?.isConnected) return;
+    const accounts = loadSocialAccounts();
+    void refreshLiveAnalytics(analyticsMount, accounts, analyticsOpts, { force: true });
+  };
+  window.addEventListener("focus", refreshWhenReturned);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) refreshWhenReturned();
+  });
+}
 function accountAnalyticsRow(row, esc) {
   const account = row.account;
   const feed = row.feed;
@@ -3495,12 +3723,14 @@ function accountAnalyticsRow(row, esc) {
     ? (syncFailed ? syncOutcome.error : "Official read-only analytics are ready.")
     : oauthReady
       ? "OAuth app credentials exist; finish account authorization before stats appear."
-      : "Connect the official platform account or import a platform export. Phantom will not count uploaded files as social performance.";
+      : "This channel needs the PhantomForce OAuth app configured before live analytics or posting approval can run.";
   const primaryAction = canSync
     ? `<button class="btn btn-primary" type="button" data-an-sync="${account.id}">${analyticsConnectorState.loading ? "Syncing…" : live ? "Sync now" : "Start live sync"}</button>`
     : oauthReady
       ? `<button class="btn btn-primary" type="button" data-an-oauth="${account.id}">Connect account</button>`
-      : `<button class="btn btn-ghost" type="button" data-open-ws="settings" data-open-settings-tab="media">Set up API</button>`;
+      : canManageSocialOAuthApps()
+        ? `<button class="btn btn-ghost" type="button" data-open-ws="settings" data-settings-target="media">Open Settings</button>`
+        : `<button class="btn btn-ghost" type="button" disabled>Owner setup needed</button>`;
   return `<article class="an-channel-row ${feed ? "is-live" : "is-missing"}">
     <div class="an-channel-id"><span class="ch-dot" style="background:${account.color}"></span><span><b>${esc(account.name)}</b><i>${esc(account.handle || account.loginIdentity || "profile saved")}</i></span></div>
     ${feed ? `<div class="an-channel-metrics">
@@ -3509,11 +3739,66 @@ function accountAnalyticsRow(row, esc) {
     : `<div class="an-channel-empty${syncFailed ? " is-sync-error" : ""}"><b>${esc(sourceState)}</b><span>${esc(sourceCopy)}</span></div>`}
     <div class="an-channel-actions">
       ${primaryAction}
-      <details class="an-import-backup"><summary aria-label="More data options">More</summary><small>Manual fallback · CSV · TSV · JSON</small><label class="btn btn-ghost">${feed && !live ? "Replace report" : "Import platform report"}<input type="file" accept=".csv,.tsv,.json,text/csv,text/tab-separated-values,application/json" data-an-import="${account.id}" hidden></label></details>
       ${feed ? `<button class="btn btn-ghost" type="button" data-an-clear="${account.id}">Clear data</button>` : ""}
     </div>
   </article>`;
 }
+
+function canManageSocialOAuthApps() {
+  const active = ctx?.session || {};
+  return Boolean(active.canManageAccess || active.isSuperAdmin);
+}
+
+function analyticsReadinessCopy({ hasLiveMetrics, configuredCount, oauthReadyCount, totalCount }) {
+  if (hasLiveMetrics) {
+    return {
+      tone: "live",
+      title: "Live feed is on.",
+      body: "Official platform metrics are syncing from authorized social accounts. Posting still stays approval-gated.",
+      action: `<button class="btn btn-primary" type="button" data-an-sync-all>${analyticsConnectorState.loading ? "Syncing…" : "Sync live feed"}</button>`,
+    };
+  }
+  if (configuredCount) {
+    return {
+      tone: "ready",
+      title: "Accounts are authorized. Sync the feed.",
+      body: "PhantomForce has server-side account tokens. Pull the latest platform metrics now.",
+      action: `<button class="btn btn-primary" type="button" data-an-sync-all>${analyticsConnectorState.loading ? "Syncing…" : "Sync live feed"}</button>`,
+    };
+  }
+  if (oauthReadyCount) {
+    return {
+      tone: "ready",
+      title: "Provider apps are ready. Connect accounts.",
+      body: "Use the signed-in browser buttons below once per channel. PhantomForce stores tokens server-side and keeps outbound posting gated.",
+      action: `<button class="btn btn-primary" type="button" data-an-scroll-sources>Connect accounts</button>`,
+    };
+  }
+  return {
+    tone: "blocked",
+    title: "Social apps need setup in Settings.",
+    body: canManageSocialOAuthApps()
+      ? "Provider app credentials are owner-only setup. Keep this page clean; manage them once in Settings."
+      : "PhantomForce needs platform OAuth apps configured before this workspace can authorize social accounts.",
+    action: canManageSocialOAuthApps()
+      ? `<button class="btn btn-primary" type="button" data-open-ws="settings" data-settings-target="media">Open Settings</button>`
+      : `<button class="btn btn-ghost" type="button" disabled>Waiting on platform setup</button>`,
+  };
+}
+
+function analyticsReadinessPanel({ displayAccounts, liveApiRows, configuredCount, oauthReadyCount, hasLiveMetrics, esc }) {
+  const totalCount = displayAccounts.length || 1;
+  const copy = analyticsReadinessCopy({ hasLiveMetrics, configuredCount, oauthReadyCount, totalCount });
+  return `<section class="an-readiness an-readiness-slim is-${copy.tone}" aria-label="Social live feed readiness">
+    <div class="an-readiness-main">
+      <p class="ch-eyebrow">Live feed setup</p>
+      <h3>${copy.title}</h3>
+      <p>${copy.body}</p>
+    </div>
+    <div class="an-readiness-action">${copy.action}</div>
+  </section>`;
+}
+
 function wireAnalyticsActions(el, accounts, opts) {
   el.querySelectorAll("[data-an-sync]").forEach((button) => button.onclick = async () => {
     button.disabled = true;
@@ -3532,12 +3817,16 @@ function wireAnalyticsActions(el, accounts, opts) {
       const authUrl = response?.oauth?.authorizationUrl || response?.oauth?.url;
       if (authUrl) {
         window.open(authUrl, "_blank", "noopener,noreferrer");
-        analyticsNotice = `${connectorStatus(platform)?.name || platform} sign-in opened. Come back here after approving the account.`;
+        analyticsNotice = `${connectorStatus(platform)?.name || platform} sign-in opened. Approve it once; PhantomForce will refresh this page when the callback returns.`;
+        startAnalyticsOAuthPolling(platform);
       } else {
         analyticsNotice = "That platform did not return a sign-in link.";
       }
     } catch (error) {
-      analyticsNotice = error?.message || "The account connection could not start.";
+      const connector = connectorStatus(platform);
+      analyticsNotice = connector?.oauthConfigured
+        ? (error?.message || "The account connection could not start.")
+        : `${connector?.name || platform} needs its provider app saved in Settings before account authorization can start.`;
     } finally {
       renderAnalytics(el, opts);
     }
@@ -3571,16 +3860,27 @@ function wireAnalyticsActions(el, accounts, opts) {
     analyticsNotice = `${account.name} analytics were cleared. The saved profile was not removed.`;
     renderAnalytics(el, opts);
   });
+  el.querySelectorAll("[data-an-scroll-sources]").forEach((button) => button.onclick = () => {
+    el.querySelector("[data-an-sources]")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
 }
 export function renderAnalytics(el, opts = {}, renderOptions = {}) {
+  analyticsMount = el;
+  analyticsOpts = opts;
+  ensureSocialOAuthListener();
   const esc = opts.esc || ((s) => String(s));
   const accounts = loadSocialAccounts();
+  if (canManageSocialOAuthApps() && !analyticsOAuthSetupState.loaded && !analyticsOAuthSetupState.loading) {
+    void refreshAnalyticsOAuthSetup().then(() => {
+      if (el?.isConnected) renderAnalytics(el, opts, { skipAutoRefresh: true });
+    });
+  }
   const displayAccounts = accounts.filter((account) => LIVE_ANALYTICS_PLATFORMS.has(account.id));
   const feedRows = displayAccounts.map((account) => ({ account, feed: analyticsFeedForAccount(account) }));
   const liveRows = feedRows.filter((row) => row.feed);
   const liveApiRows = liveRows.filter((row) => row.account.connectMode === "live-api");
-  const reportRows = liveRows.filter((row) => row.account.connectMode === "report-import");
   const configuredCount = analyticsConnectorState.connectors.filter((connector) => connector.configured).length;
+  const oauthReadyCount = analyticsConnectorState.connectors.filter((connector) => connector.oauthConfigured).length;
   const totals = analyticsTotals(liveRows);
   const hasLiveMetrics = liveRows.length > 0;
   const chartRows = feedRows;
@@ -3590,26 +3890,27 @@ export function renderAnalytics(el, opts = {}, renderOptions = {}) {
       <section class="an-hero">
         <div>
           <p class="ch-eyebrow">Social media analytics</p>
-          <h3>${hasLiveMetrics ? (liveApiRows.length ? "Official social analytics are reporting." : "Imported platform reports are loaded.") : "Connect your social accounts to start analytics."}</h3>
-          <p>${hasLiveMetrics ? "This page only shows platform analytics from official API syncs or imported exports. Local media files and drafts stay in Media Lab/Content Hub." : "Connect YouTube, Instagram, Facebook, TikTok, X, LinkedIn, or Pinterest for real platform metrics. If a platform is not connected yet, import its official report as a temporary fallback."}</p>
+          <h3>${hasLiveMetrics ? "Official social analytics are reporting." : "Connect your social accounts to start the live feed."}</h3>
+          <p>${hasLiveMetrics ? "This page shows live platform analytics from authorized social accounts. Local media files, drafts, and uploads are not counted as social performance." : "Authorize YouTube, Instagram, Facebook, TikTok, X, LinkedIn, or Pinterest once. PhantomForce stores the account token server-side, syncs real metrics, and keeps posting approval-gated."}</p>
         </div>
       </section>
       <section class="an-toolbar" aria-label="Live analytics actions">
         <div class="an-hero-actions">
-          ${configuredCount ? `<button class="btn btn-primary" type="button" data-an-sync-all>${analyticsConnectorState.loading ? "Syncing…" : "Sync live data"}</button>` : `<button class="btn btn-ghost" type="button" data-open-ws="settings" data-open-settings-tab="media">Connect social APIs</button>`}
-          <span class="an-src">${svgIc("up")} ${liveApiRows.length}/${displayAccounts.length} live social · ${reportRows.length} imported report${reportRows.length === 1 ? "" : "s"} · ${configuredCount}/${displayAccounts.length} API ready</span>
+          ${analyticsReadinessCopy({ hasLiveMetrics, configuredCount, oauthReadyCount, totalCount: displayAccounts.length || 1 }).action}
+          <span class="an-src">${svgIc("up")} ${liveApiRows.length}/${displayAccounts.length} live social · ${configuredCount}/${displayAccounts.length} accounts authorized · ${oauthReadyCount}/${displayAccounts.length} OAuth apps ready</span>
         </div>
       </section>
       ${analyticsNotice || analyticsConnectorState.error ? `<div class="an-flash">${esc(analyticsNotice || analyticsConnectorState.error)}</div>` : ""}
+      ${analyticsReadinessPanel({ displayAccounts, liveApiRows, configuredCount, oauthReadyCount, hasLiveMetrics, esc })}
       <div class="ch-kpis an-kpis">
         ${hasLiveMetrics
           ? `${kpi("Reach", K(totals.reach), "reported reach")}${kpi("Views", K(totals.impressions), "views + impressions")}${kpi("Engagement", K(totals.engagement), "likes + comments + shares")}${kpi("Followers", K(totals.followers), "latest reported total")}`
-          : `${kpi("Live channels", `0/${displayAccounts.length}`, "official API reporting")}${kpi("API ready", K(configuredCount), "configured connections")}${kpi("Reports", K(reportRows.length), "manual imports")}${kpi("Next step", "Connect", "choose a platform below")}`}
+          : `${kpi("Live channels", `0/${displayAccounts.length}`, "official OAuth reporting")}${kpi("OAuth apps", K(oauthReadyCount), "server apps ready")}${kpi("Authorized", K(configuredCount), "accounts connected")}${kpi("Next step", "Connect", "choose a platform below")}`}
       </div>
       <div class="an-visual-grid">
         <section class="ch-card an-trend-card">
           <div class="ch-card-h"><div><p class="ch-eyebrow">Performance trend</p><h3>Reach and views</h3></div><span class="an-live-label">${hasLiveMetrics ? "Platform data" : "Waiting for social data"}</span></div>
-          ${analyticsChart(chartRows, { title: "No social analytics connected yet", body: "Connect a social account or import an official platform export. Local uploads are not counted here." })}
+          ${analyticsChart(chartRows, { title: "No social analytics connected yet", body: "Connect a social account and live platform data will fill this chart. Local uploads are not counted here." })}
         </section>
         <section class="ch-card an-coverage-card">
           <p class="ch-eyebrow">Data coverage</p>
@@ -3620,7 +3921,7 @@ export function renderAnalytics(el, opts = {}, renderOptions = {}) {
         <div class="ch-card-h"><div><p class="ch-eyebrow">Channel comparison</p><h3>Engagement by platform</h3></div></div>
         <div class="ch-bars">${hasLiveMetrics ? feedRows.map((row) => `<div class="ch-bar-row"><span class="ch-bar-lab"><i class="ch-dot" style="background:${row.account.color}"></i>${esc(row.account.name)}</span><span class="ch-bar-track"><span class="ch-bar-fill" style="width:${Math.round((row.feed?.engagement || 0) / maxEngagement * 100)}%;background:${row.account.color}"></span></span><b class="ch-bar-val">${K(row.feed?.engagement || 0)}</b></div>`).join("") : `<div class="an-empty-note"><b>No platform engagement yet.</b><span>Once a channel is connected, this becomes your clean cross-platform comparison.</span></div>`}</div>
       </section>
-      <div class="an-section-head"><div><p class="ch-eyebrow">Sources</p><h3>Social account connections</h3></div><span>Official read-only reach/follower sync</span></div>
+      <div class="an-section-head" data-an-sources><div><p class="ch-eyebrow">Sources</p><h3>Social account connections</h3></div><span>Official OAuth reach/follower sync</span></div>
       <section class="an-channel-list" aria-label="Social analytics channels">
         ${feedRows.map((row) => accountAnalyticsRow(row, esc)).join("")}
       </section>

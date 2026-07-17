@@ -80,6 +80,20 @@ button{font-family:inherit;cursor:pointer}
 .stat-box{background:#00000033;border-radius:10px;padding:10px;text-align:center}
 .stat-box b{display:block;font-size:20px;color:var(--mint)}
 .stat-box span{font-size:10px;color:var(--text-dim)}
+.quest-log{display:grid;gap:10px}
+.quest-chapter{background:#00000030;border:1px solid var(--line);border-radius:12px;padding:10px}
+.quest-chapter h3{margin:0 0 6px;color:var(--gold);font-size:13px}
+.quest-chapter p{margin:0;color:var(--text-dim);font-size:12px;line-height:1.45}
+.quest-row{display:grid;grid-template-columns:minmax(150px,1fr) 1.4fr;gap:8px;align-items:center;border-top:1px solid #ffffff12;padding:7px 0;font-size:11px}
+.quest-row:first-of-type{border-top:none}
+.quest-row b{color:var(--text)}
+.quest-row span{color:var(--text-dim);line-height:1.35}
+.quest-row.is-done b{color:var(--mint)}
+.trial-seq,.trial-input{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin:12px 0}
+.trial-seq span,.trial-input button{min-width:46px;height:42px;border-radius:12px;display:grid;place-items:center;font-size:18px;font-weight:900}
+.trial-seq span{background:#00000044;border:1px solid var(--line);color:var(--gold)}
+.trial-input button{background:#00000033;border:1px solid var(--mint);color:var(--mint)}
+.trial-input button.is-on{background:var(--mint);color:#08221a}
 .roster-row{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--line);font-size:12px}
 .badge{background:#00000044;border-radius:7px;padding:3px 8px;font-size:10px;color:var(--text-dim)}
 .badge.you{color:var(--mint);border:1px solid var(--mint)}
@@ -116,6 +130,7 @@ input[type=range]{width:150px}
     </div>
     <div class="hud-actions">
       <button type="button" data-ct-open="build">Build</button>
+      <button type="button" data-ct-open="questlog">Quest Log</button>
       <button type="button" data-ct-open="inventory">Inventory</button>
       <button type="button" data-ct-open="customize">Customize</button>
       <button type="button" data-ct-open="together" data-ct-together-btn hidden>Together</button>
@@ -186,6 +201,26 @@ input[type=range]{width:150px}
       <button type="button" data-ct-dlg-turnin hidden>Hand over</button>
       <button type="button" class="secondary" data-ct-close>Bye for now</button>
     </div>
+  </div>
+</div>
+
+<div class="panel" data-ct-panel="questlog">
+  <div class="card">
+    <button class="close" data-ct-close>×</button>
+    <h2>Quest Log</h2>
+    <p class="sub">Follow the resident arcs, shrine trials, and Prism Gate path.</p>
+    <div class="quest-log" data-ct-quest-log></div>
+  </div>
+</div>
+
+<div class="panel" data-ct-panel="trial">
+  <div class="card">
+    <button class="close" data-ct-close>×</button>
+    <h2 data-ct-trial-name>Shrine Trial</h2>
+    <p class="sub" data-ct-trial-body></p>
+    <div class="trial-seq" data-ct-trial-seq></div>
+    <div class="trial-input" data-ct-trial-input></div>
+    <p class="small-note">Press the glowing directions in the exact order. A miss costs a little Spark and resets the pattern.</p>
   </div>
 </div>
 

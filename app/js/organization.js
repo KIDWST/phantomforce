@@ -1,15 +1,20 @@
-/* PhantomForce — Organization: the boss's control room for their people.
+/* PhantomForce — organization membership and workspace access.
  *
  * Person-first, not module-first: the owner/admin sees everyone in the
  * organization, sets each person's role, invites new people, and decides
  * which parts of PhantomForce each role can open. A dev shop can hire
- * employees with far less access than the boss — or the same; that call
- * belongs to the boss, so every control here writes to the real org APIs
+ * employees with limited access or broad access; that decision belongs to
+ * the organization owner, so every control here writes to the real org APIs
  * (database memberships + the published workspace configuration), never
  * to a local mock.
  */
 
-import { currentTenantId, session } from "./store.js?v=phantom-live-20260714-006";
+import { currentTenantId, session, isAdmin, isOwnerOperator } from "./store.js?v=phantom-live-20260716-318";
+import { canManageActiveOrg } from "./orgs.js?v=phantom-live-20260716-318";
+
+/* Owner/admin only — legacy local-admin sessions (isAdmin/isOwnerOperator)
+   and real database org sessions (canManageActiveOrg) both count. */
+const canManageOrganization = () => isAdmin() || isOwnerOperator() || canManageActiveOrg();
 
 const ROLES = [
   { id: "owner", label: "Owner", blurb: "Everything, including billing and this page." },
@@ -21,6 +26,12 @@ const ROLES = [
 /* Membership roles the database accepts today (manager is a module-visibility
    role, not yet a membership role — shown in the matrix, not the dropdown). */
 const MEMBERSHIP_ROLES = ["owner", "admin", "member", "client"];
+/* Required modules (module-registry.ts required:true) — access, approvals,
+   and recovery. Owner can't uncheck their own access to these from the
+   matrix: it's how an owner finds their way back if they lock down
+   everything else, and there's no recovery path if they lock themselves
+   out of it too. */
+const OWNER_LOCKED_MODULES = new Set(["dashboard", "approvals", "settings"]);
 
 const orgState = {
   loading: false,
@@ -31,11 +42,30 @@ const orgState = {
   members: [],
   invitations: [],
   configVersion: 0,
+  orgType: "business",
   modules: [],
   matrixDirty: false,
   message: "",
   busy: false,
 };
+
+const ORG_TYPES = [
+  { id: "dev_only", label: "Dev Only", blurb: "Sandbox for building and testing — every module unlocked, safe to break." },
+  { id: "business", label: "Business", blurb: "A normal single-business operator. The standard setup." },
+  { id: "full_force", label: "Full Force", blurb: "Multi-business/agency operator running every module at once." },
+];
+
+function orgTypeMarkup(esc) {
+  return `
+    <div class="org-type-picker">
+      ${ORG_TYPES.map((type) => `
+        <button class="org-type-option ${orgState.orgType === type.id ? "is-active" : ""}" type="button" data-org-type="${type.id}">
+          <b>${esc(type.label)}</b>
+          <i>${esc(type.blurb)}</i>
+        </button>`).join("")}
+    </div>
+    <p class="set-note">Switching to Dev Only or Full Force unlocks every module for this organization. It never turns modules off for you — switch back to Business and your setup stays as you left it.</p>`;
+}
 
 function authHeaders(json = false) {
   const token = session.token();
@@ -81,6 +111,7 @@ async function loadOrganization() {
   try {
     const configPayload = await api(`/phantom-ai/customization/config?tenant_id=${encodeURIComponent(currentTenantId())}`);
     orgState.configVersion = configPayload.configuration?.version || 0;
+    orgState.orgType = configPayload.configuration?.orgType || "business";
     orgState.modules = (configPayload.configuration?.modules || []).map((module) => ({
       id: module.id,
       label: module.label,
@@ -105,7 +136,7 @@ function roleBlurb(roleId) {
   return ROLES.find((role) => role.id === roleId)?.blurb || "";
 }
 
-function membersMarkup(esc) {
+function membersMarkup(esc, canManage) {
   if (!orgState.members.length) {
     return `<p class="set-note">No one else is in this organization yet. Invite your first teammate below.</p>`;
   }
@@ -117,12 +148,12 @@ function membersMarkup(esc) {
         <i>${esc(member.email)}${member.isSuperAdmin ? " · platform admin" : ""} · joined ${esc(String(member.joinedAt).slice(0, 10))}</i>
       </span>
       <label class="org-role-pick">
-        <select data-org-role="${esc(member.userId)}">
+        <select data-org-role="${esc(member.userId)}" ${canManage ? "" : "disabled"}>
           ${MEMBERSHIP_ROLES.map((role) => `<option value="${role}" ${member.role === role ? "selected" : ""}>${esc(ROLES.find((r) => r.id === role)?.label || role)}</option>`).join("")}
         </select>
         <i>${esc(roleBlurb(member.role))}</i>
       </label>
-      <button class="org-remove" type="button" data-org-remove="${esc(member.userId)}" title="Remove from organization">✕</button>
+      ${canManage ? `<button class="org-remove" type="button" data-org-remove="${esc(member.userId)}" title="Remove from organization">✕</button>` : ""}
     </div>`).join("")}</div>`;
 }
 
@@ -143,7 +174,7 @@ function invitationsMarkup(esc) {
       </div>`).join("")}</div>` : ""}`;
 }
 
-function matrixMarkup(esc) {
+function matrixMarkup(esc, canManage) {
   if (!orgState.modules.length) return `<p class="set-note">The workspace configuration hasn't loaded, so the access matrix is unavailable right now.</p>`;
   return `
     <div class="org-matrix-wrap">
@@ -153,19 +184,22 @@ function matrixMarkup(esc) {
           ${orgState.modules.map((module) => `
             <tr class="${module.enabled ? "" : "is-off"}">
               <td><b>${esc(module.label)}</b>${module.enabled ? "" : `<i>module off</i>`}</td>
-              ${ROLES.map((role) => `<td><input type="checkbox" data-org-matrix="${esc(module.id)}:${role.id}" ${module.roles.includes(role.id) ? "checked" : ""} ${module.id === "settings" && role.id === "owner" ? "disabled" : ""} /></td>`).join("")}
+              ${ROLES.map((role) => `<td><input type="checkbox" data-org-matrix="${esc(module.id)}:${role.id}" ${module.roles.includes(role.id) ? "checked" : ""} ${!canManage || (OWNER_LOCKED_MODULES.has(module.id) && role.id === "owner") ? "disabled" : ""} /></td>`).join("")}
             </tr>`).join("")}
         </tbody>
       </table>
     </div>
     <div class="set-actions-row">
-      <button class="btn btn-primary" type="button" data-org-matrix-save ${orgState.matrixDirty ? "" : "disabled"}>Publish access changes</button>
-      <span class="set-note">${orgState.matrixDirty ? "Unpublished changes — nothing applies until you publish." : "Checked = that role can open the module. Publishing creates a reversible workspace version."}</span>
+      ${canManage ? `<button class="btn btn-primary" type="button" data-org-matrix-save ${orgState.matrixDirty ? "" : "disabled"}>Publish access changes</button>` : ""}
+      <span class="set-note">${canManage
+        ? (orgState.matrixDirty ? "Unpublished changes — nothing applies until you publish." : "Checked = that role can open the module. Publishing creates a reversible workspace version.")
+        : "This access map is read-only for your role. An owner or admin can publish changes."}</span>
     </div>`;
 }
 
 export function renderOrganizationPanel(el, opts = {}) {
   const esc = opts.esc || ((value) => String(value ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])));
+  const canManage = canManageOrganization();
   if (!orgState.loaded && !orgState.loading) {
     loadOrganization().then(() => renderOrganizationPanel(el, opts));
   }
@@ -176,12 +210,25 @@ export function renderOrganizationPanel(el, opts = {}) {
 
   el.innerHTML = `
     <div class="set-section">
-      <p class="set-eyebrow">Organization${orgState.org ? ` · ${esc(orgState.org.name)}` : ""}</p>
-      <h3>Your people, your rules.</h3>
-      <p class="set-note">Everyone here belongs to this business — not clients, your team. Set each person's role, and decide below exactly which parts of PhantomForce each role can open.</p>
+      <p class="set-eyebrow">Workspace organization</p>
+      <h3>People &amp; access</h3>
+      <p class="set-note">Manage the organization behind this workspace: employees, invitations, roles, and the PhantomForce modules each role can open. Client leads and pipeline remain in Clients.</p>
+      <div class="org-summary" aria-label="Organization summary">
+        <span><b>Organization</b><i>${esc(orgState.org?.name || "Current workspace")}</i></span>
+        <span><b>Members</b><i>${orgState.members.length}</i></span>
+        <span><b>Pending invites</b><i>${orgState.invitations.length}</i></span>
+        <span><b>Workspace type</b><i>${esc(ORG_TYPES.find((type) => type.id === orgState.orgType)?.label || orgState.orgType)}</i></span>
+      </div>
       ${orgState.message ? `<p class="org-message">${esc(orgState.message)}</p>` : ""}
       ${orgState.error ? `<p class="org-message is-error">${esc(orgState.error)}</p>` : ""}
     </div>
+
+    ${canManage ? `
+    <div class="set-section org-type-card">
+      <p class="set-eyebrow">Workspace profile</p>
+      <h4>Choose how this organization operates</h4>
+      ${orgTypeMarkup(esc)}
+    </div>` : ""}
 
     ${orgState.needsDatabase ? `
       <div class="set-section org-db-note">
@@ -189,18 +236,20 @@ export function renderOrganizationPanel(el, opts = {}) {
         <p class="set-note">Members and invitations live in the real PhantomForce database. Sign in through the owner login on the admin box (or set DATABASE_URL for this environment) and this section fills in with your actual organization.</p>
       </div>` : `
       <div class="set-section">
-        <h4>People (${orgState.members.length})</h4>
-        ${membersMarkup(esc)}
+        <h4>Members (${orgState.members.length})</h4>
+        <p class="set-note">These are people with access to this organization, not CRM prospects or clients.</p>
+        ${membersMarkup(esc, canManage)}
       </div>
-      <div class="set-section">
+      ${canManage ? `<div class="set-section">
         <h4>Invite someone</h4>
-        <p class="set-note">They get an email invitation and land with the role you pick — you can change it any time.</p>
+        <p class="set-note">Invite an employee or collaborator, choose their starting role, and adjust their access at any time.</p>
         ${invitationsMarkup(esc)}
-      </div>`}
+      </div>` : ""}`}
 
     <div class="set-section">
-      <h4>What each role can open</h4>
-      ${matrixMarkup(esc)}
+      <h4>Role access</h4>
+      <p class="set-note">Control which PhantomForce modules each organization role can open.</p>
+      ${matrixMarkup(esc, canManage)}
     </div>`;
 
   const rerender = () => renderOrganizationPanel(el, opts);
@@ -259,6 +308,18 @@ export function renderOrganizationPanel(el, opts = {}) {
     );
   });
 
+  el.querySelectorAll("[data-org-type]").forEach((button) => button.onclick = () => {
+    const orgType = button.dataset.orgType;
+    if (orgType === orgState.orgType) return;
+    const label = ORG_TYPES.find((type) => type.id === orgType)?.label || orgType;
+    withBusy(async () => {
+      const tenant = currentTenantId();
+      const patch = { orgType };
+      await api("/phantom-ai/customization/publish", { method: "POST", body: JSON.stringify({ tenant_id: tenant, patch, expected_version: orgState.configVersion, summary: `Organization set up as ${label}` }) });
+      orgState.orgType = orgType;
+    }, `Organization set up as ${label}.`);
+  });
+
   el.querySelectorAll("[data-org-matrix]").forEach((input) => input.onchange = () => {
     const [moduleId, roleId] = input.dataset.orgMatrix.split(":");
     const module = orgState.modules.find((m) => m.id === moduleId);
@@ -293,4 +354,8 @@ export function __resetOrganizationPanel() {
   orgState.error = "";
   orgState.message = "";
   orgState.matrixDirty = false;
+  orgState.org = null;
+  orgState.members = [];
+  orgState.invitations = [];
+  orgState.modules = [];
 }

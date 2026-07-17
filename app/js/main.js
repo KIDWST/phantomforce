@@ -33,6 +33,7 @@ import {
 } from "./orgs.js?v=phantom-live-20260717-4";
 import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260717-4";
 import { assetsAvailable } from "./orgs.js?v=phantom-live-20260717-4";
+import { renderPhantomStore } from "./phantomstore.js?v=phantom-live-20260717-4";
 import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260717-4";
 // PhantomPlay V2 platform shell (Home/Solo/Friends/Workspace/Dev Hub) - opt-in
 // while it hardens: set localStorage "pf.phantomplay.v2" = "1" (the V2 shell has
@@ -425,6 +426,7 @@ const BASE_NAV = [
   { id: "developer",  label: "Developer",    icon: "dev",   ws: "developer", ownerOnly: true, navZone: "bottom" },
   { id: "vacation",   label: "Away Mode",    icon: "auto",  ws: "vacation", statusPill: true, navZone: "bottom" },
   { id: "phantomplay", label: "PhantomPlay", icon: "film",  ws: "phantomplay", navZone: "bottom", quiet: true, optionalModule: true },
+  { id: "phantomstore", label: "PhantomStore", icon: "spark", ws: "phantomstore" },
 ];
 let NAV = customizeNavigation(BASE_NAV, isAdmin() ? "owner" : "client");
 let navEntitlements = { loaded: false, features: null, limits: null };
@@ -438,6 +440,7 @@ const MOBILE_LABEL_OVERRIDES = {
   sites: "Sites",
   media: "Media",
   phantomplay: "Play",
+  phantomstore: "Store",
   automation: "Auto",
   approvals: "Approvals",
   analytics: "Analytics",
@@ -1489,7 +1492,7 @@ function renderPlan() {
   if (!plan.length) {
     $("[data-plan]").innerHTML = `
       <div class="section-head"><h2>Today's plan</h2></div>
-      <button class="plan-inner" data-open-ws="leads">
+      <button class="plan-inner" data-open-ws="settings">
         <svg class="plan-donut" viewBox="0 0 72 72" aria-hidden="true">
           <circle cx="36" cy="36" r="30" class="plan-track"/>
           <text x="36" y="40" class="plan-pct">0</text>
@@ -2952,6 +2955,7 @@ const CUSTOM = {
   content: { title: "Content Hub", kicker: "Library, ideas, drafts, publishing, and performance", custom: true, wide: true, render: (body) => renderContentHub(body, mediaOpts()) },
   assets: { title: "Asset Cloud", kicker: "Your business's creative memory", custom: true, wide: true, render: (body) => renderAssetCloud(body) },
   phantomplay: { title: "PhantomPlay", kicker: "Intentional downtime and approved games", custom: true, wide: true, render: (body) => (phantomPlayV2Opted() ? renderPhantomPlayV2 : renderPhantomPlay)(body, mediaOpts()) },
+  phantomstore: { title: "PhantomStore", kicker: "AI marketplace", custom: true, wide: true, render: (body) => renderPhantomStore(body, mediaOpts()) },
   intelligence: { title: "Competitor Intelligence", kicker: "Public signals, labeled estimates, and original responses", custom: true, wide: true, render: (body) => renderCompetitorIntelligence(body, mediaOpts()) },
   analytics: { title: "Analytics", kicker: "Signals, trends, and operating insight", custom: true, wide: true, render: (body) => renderAnalytics(body, mediaOpts()) },
   account: { title: "Business Profile & Plan", kicker: "Profile, billing, and access", custom: true, render: (body) => renderAccountPlan(body) },

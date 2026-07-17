@@ -508,15 +508,6 @@ const REQUIRED_WORKSPACES = [
     assetNamespace: "phantomforce",
     tagline: "Brand-new workspace. Real records appear only after you create or connect them.",
   },
-  {
-    id: "chicagoshots",
-    name: "ChicagoShots",
-    kind: "Business",
-    brainKey: "chicagoshots-business-brain",
-    memoryNamespace: "chicagoshots",
-    assetNamespace: "chicagoshots",
-    tagline: "Independent ChicagoShots business brain, memory, content, and media workspace.",
-  },
 ];
 
 function seed() {
@@ -722,7 +713,7 @@ export function resolveSession() {
     session.clear();
     return null;
   }
-  if (saved && isClientPublicHost() && (!saved.database || saved.canManageAccess || saved.isSuperAdmin)) {
+  if (saved && isClientPublicHost() && ((!saved.database && !saved.localCustomer) || saved.canManageAccess || saved.isSuperAdmin)) {
     session.clear();
     return null;
   }
@@ -848,7 +839,7 @@ const cleanTenantSegment = (value) => String(value || "phantomforce")
   .replace(/[^a-zA-Z0-9_.:-]+/g, "-")
   .replace(/^-+|-+$/g, "")
   .slice(0, 80) || "phantomforce";
-export const currentTenantId = () => cleanTenantSegment(workspaceMeta(currentWs())?.id || currentWs());
+export const currentTenantId = () => cleanTenantSegment(ctx.session?.orgId || workspaceMeta(currentWs())?.id || currentWs());
 export const setWorkspace = (id) => {
   if (!isAdmin()) return false;
   const target = workspaceExists(id) ? id : "phantomforce";
@@ -873,8 +864,8 @@ function markWorkspaceKeyMigrated(baseKey) {
   keys.add(baseKey);
   try { localStorage.setItem(scopedStorageMigrationKey, JSON.stringify([...keys].slice(0, 500))); } catch {}
 }
-export function workspaceStorageKey(baseKey, ws = currentWs()) {
-  return `${baseKey}::workspace::${cleanTenantSegment(ws)}`;
+export function workspaceStorageKey(baseKey, ws = null) {
+  return `${baseKey}::workspace::${cleanTenantSegment(ws || ctx.session?.orgId || currentWs())}`;
 }
 export function workspaceStorageGetItem(baseKey, { migrateGlobal = true } = {}) {
   try {

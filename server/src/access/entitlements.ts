@@ -61,7 +61,15 @@ export type PlanDefinition = {
 };
 
 /* Internal development plans. Names are placeholders — final pricing and
-   packaging are a business decision, not invented here. */
+   packaging are a business decision, not invented here.
+
+   Customer-facing tiers are Free / Pro / Elite (the `name` field). The
+   `key` values (starter/professional/elite) stay as-is on purpose — they're
+   the stable DB identifier synced into the Plan table and referenced by
+   OrgPlan.planKey, so renaming a key would orphan the old row and silently
+   re-point any already-assigned org onto whatever PLAN_DEFINITIONS[0]
+   happens to be. Renaming `name` is safe and picked up by every reader on
+   the next sync/fetch. */
 export const PLAN_DEFINITIONS: PlanDefinition[] = [
   {
     key: "free",
@@ -81,7 +89,7 @@ export const PLAN_DEFINITIONS: PlanDefinition[] = [
   },
   {
     key: "starter",
-    name: "Starter",
+    name: "Free",
     description: "Entry plan for a single small business.",
     isInternal: false,
     trialDays: 14,
@@ -97,7 +105,7 @@ export const PLAN_DEFINITIONS: PlanDefinition[] = [
   },
   {
     key: "professional",
-    name: "Professional",
+    name: "Pro",
     description: "Growing business: publishing, vacation coverage, more seats.",
     isInternal: false,
     trialDays: 14,
@@ -255,6 +263,7 @@ export async function getOrgEntitlements(orgId: string): Promise<ResolvedEntitle
   const overridesRaw = (orgPlan?.overrides ?? null) as { features?: unknown; limits?: unknown } | null;
   const features = applyOverrides(definition.features, overridesRaw?.features);
   const limits = applyOverrides(definition.limits, overridesRaw?.limits);
+  const freeViewOnly = definition.key === "starter";
 
   return {
     orgId,
@@ -264,8 +273,8 @@ export async function getOrgEntitlements(orgId: string): Promise<ResolvedEntitle
     effectiveStatus,
     trialEndsAt: trialEndsAt ? trialEndsAt.toISOString() : null,
     graceUntil: graceUntil ? graceUntil.toISOString() : null,
-    canWrite: effectiveStatus !== "suspended",
-    upgradeRequired: effectiveStatus === "suspended" || effectiveStatus === "grace",
+    canWrite: effectiveStatus !== "suspended" && !freeViewOnly,
+    upgradeRequired: freeViewOnly || effectiveStatus === "suspended" || effectiveStatus === "grace",
     features: features.value,
     limits: limits.value,
     overridesApplied: features.applied || limits.applied,

@@ -26,13 +26,13 @@ assert.match(worker, /memory:\s*\[[\s\S]*smallest durable memory update/u, "Memo
 assert.match(worker, /approvals:\s*\[[\s\S]*Never execute the underlying action/u, "Approvals fallback must not execute from the prompt result.");
 assert.match(worker, /workforce:\s*\[[\s\S]*proof that worker must return/u, "Workforce fallback must define proof requirements.");
 assert.match(worker, /phantomplay:\s*\[[\s\S]*same-workspace\/private-room boundaries/u, "PhantomPlay fallback must preserve private-room boundaries.");
-assert.match(worker, /leads:\s*\{[\s\S]*Build the client base/u, "Clients page must have a dedicated prospect-builder worker.");
-assert.match(worker, /createCrmProspectBuildout/u, "Clients worker must reuse the CRM prospect buildout instead of duplicating lead logic.");
-assert.match(worker, /CRM_PAGE_ACTION_VERB[\s\S]*find[\s\S]*discover[\s\S]*source[\s\S]*identify/u, "Clients page prompt must understand find/discover/source client requests.");
-assert.match(worker, /CRM_PAGE_AUDIENCE[\s\S]*gyms\?[\s\S]*coaches\?[\s\S]*service compan/u, "Clients page prompt must understand real prospect categories, not only the word CRM.");
-assert.match(worker, /runPageAction\(pageId, prompt\)[\s\S]*renderThinking\(out, pageId, prompt, pageAction\)[\s\S]*askBackendForPageOutcome/u, "Clients CRM creation must happen before the slower backend report.");
-assert.match(worker, /currentWorkerOutput/u, "Page worker output must survive the Clients page repaint after CRM cards are saved.");
-assert.match(worker, /No fake contact details were generated/u, "Clients worker must not hallucinate contact details.");
+assert.match(worker, /leads:\s*\{[\s\S]*Build the prospect list/u, "Leads page must have a dedicated prospect-builder worker.");
+assert.match(worker, /createCrmProspectBuildout/u, "Leads worker must reuse the CRM prospect buildout instead of duplicating lead logic.");
+assert.match(worker, /CRM_PAGE_ACTION_VERB[\s\S]*find[\s\S]*discover[\s\S]*source[\s\S]*identify/u, "Leads page prompt must understand find/discover/source client requests.");
+assert.match(worker, /CRM_PAGE_AUDIENCE[\s\S]*gyms\?[\s\S]*coaches\?[\s\S]*service compan/u, "Leads page prompt must understand real prospect categories, not only the word CRM.");
+assert.match(worker, /runPageAction\(pageId, prompt\)[\s\S]*renderThinking\(out, pageId, prompt, pageAction\)[\s\S]*askBackendForPageOutcome/u, "Leads CRM creation must happen before the slower backend report.");
+assert.match(worker, /currentWorkerOutput/u, "Page worker output must survive the Leads page repaint after CRM cards are saved.");
+assert.match(worker, /No fake contact details were generated/u, "Leads worker must not hallucinate contact details.");
 assert.match(command, /client\\s\+base[\s\S]*consider[\s\S]*could\\s\+use/u, "Client-base prospect phrasing must route into CRM prospect buildout.");
 assert.match(command, /find\|add\|search\|discover\|research\|scout\|source\|identify/u, "Global CRM prospect routing must understand find/add/discover client language.");
 assert.match(skipPages, /"settings"[\s\S]*"developer"[\s\S]*"activity"/u, "System/admin pages should skip page worker prompts.");
@@ -89,7 +89,7 @@ store.state.activity = [];
 let fetchCalled = false;
 globalThis.fetch = async () => {
   fetchCalled = true;
-  throw new Error("Clients page CRM local action must not require backend fetch.");
+  throw new Error("Leads page CRM local action must not require backend fetch.");
 };
 
 const pageAction = runPageAction(
@@ -97,15 +97,15 @@ const pageAction = runPageAction(
   "find and add clients who could use PhantomForce: gyms, schools, creators, service companies, and warm prospects",
 );
 
-assert.equal(fetchCalled, false, "Clients page CRM local action should not call the backend.");
-assert.equal(pageAction?.type, "prospect-buildout", "Clients page should execute the CRM prospect buildout action.");
-assert.equal(pageAction?.refreshWorkspace, true, "Clients page should request a workspace refresh after CRM cards are created.");
-assert.ok(store.state.leads.length >= 4, "Clients page prompt should create multiple CRM prospect lanes.");
-assert.ok(store.state.leads.some((lead) => /creator/i.test(`${lead.name} ${lead.notes}`)), "Clients page prompt should include creator prospects.");
-assert.ok(store.state.leads.some((lead) => /school|education/i.test(`${lead.name} ${lead.notes}`)), "Clients page prompt should include school prospects.");
-assert.ok(store.state.leads.some((lead) => /local service|gym|service/i.test(`${lead.name} ${lead.notes}`)), "Clients page prompt should include local service or gym prospects.");
+assert.equal(fetchCalled, false, "Leads page CRM local action should not call the backend.");
+assert.equal(pageAction?.type, "prospect-buildout", "Leads page should execute the CRM prospect buildout action.");
+assert.equal(pageAction?.refreshWorkspace, true, "Leads page should request a workspace refresh after CRM cards are created.");
+assert.ok(store.state.leads.length >= 4, "Leads page prompt should create multiple CRM prospect lanes.");
+assert.ok(store.state.leads.some((lead) => /creator/i.test(`${lead.name} ${lead.notes}`)), "Leads page prompt should include creator prospects.");
+assert.ok(store.state.leads.some((lead) => /school|education/i.test(`${lead.name} ${lead.notes}`)), "Leads page prompt should include school prospects.");
+assert.ok(store.state.leads.some((lead) => /local service|gym|service/i.test(`${lead.name} ${lead.notes}`)), "Leads page prompt should include local service or gym prospects.");
 assert.ok(store.state.leads.every((lead) => /No external outreach|contact details|live relationship claims/i.test(lead.notes)), "CRM cards must not invent live contacts or outreach claims.");
-assert.ok(store.state.tasks.some((task) => /Qualify PhantomForce CRM prospect map/i.test(task.title)), "Clients page prompt should create a qualification task.");
-assert.match(pageAction.summary, /ready in Clients/i, "Clients page action should report visible CRM results.");
+assert.ok(store.state.tasks.some((task) => /Qualify PhantomForce CRM prospect map/i.test(task.title)), "Leads page prompt should create a qualification task.");
+assert.match(pageAction.summary, /ready in Leads/i, "Leads page action should report visible CRM results.");
 
 console.log("Page worker prompt checks passed.");

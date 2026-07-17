@@ -76,9 +76,12 @@ type MarketBoardItem = {
   competitorId: string; name: string; symbol: string; category: string; domain: string; score: number;
   momentum: "gaining" | "vulnerable" | "mixed" | "quiet" | "unwatched"; confidence: "none" | Confidence;
   signalCount: number; recentSignals: number; lastSignalAt: string | null; tip: string; watch: string[];
-  sourceState?: "tracked" | "starter";
+  sourceState?: "tracked" | "starter"; whatItIs: string; edge: string; threat: "high" | "medium" | "watch";
 };
-type StarterCompetitor = { id: string; name: string; website: string; category: string; notes: string; score: number; watch: string[] };
+type StarterCompetitor = {
+  id: string; name: string; website: string; category: string; notes: string; score: number; watch: string[];
+  whatItIs: string; strength: string; gap: string; edge: string;
+};
 type AutoScoutReport = {
   generatedAt: string; mode: "starter_public_map" | "tracked_public_signals" | "mixed_public_map"; headline: string; sourceNote: string;
   competitorSet: { tracked: number; starter: number; totalCompared: number; liveSignals: number; confidence: "starter" | "low" | "medium" | "high" };
@@ -214,23 +217,93 @@ const SOURCE_LANES = [
 ] as const;
 const STARTER_MAP_UPDATED_AT = "2026-07-13T00:00:00.000Z";
 const STARTER_COMPETITORS: StarterCompetitor[] = [
-  { id: "starter-chatgpt", name: "ChatGPT", website: "https://chatgpt.com/", category: "AI assistant", score: 72, watch: ["agent workflows", "search answers", "work apps"], notes: "Starter AI assistant competitor for PhantomForce. Add public sources before treating this as live market evidence." },
-  { id: "starter-claude", name: "Claude", website: "https://www.anthropic.com/claude", category: "AI assistant", score: 70, watch: ["projects", "coding", "enterprise safety"], notes: "Starter AI assistant competitor for PhantomForce. Add public sources before treating this as live market evidence." },
-  { id: "starter-perplexity", name: "Perplexity", website: "https://www.perplexity.ai/", category: "AI answer engine", score: 65, watch: ["answer search", "source citations", "research workflows"], notes: "Starter AI search competitor for PhantomForce. Add public sources before treating this as live market evidence." },
-  { id: "starter-gemini", name: "Gemini", website: "https://gemini.google.com/", category: "AI assistant", score: 67, watch: ["Google workspace", "mobile assistant", "research"], notes: "Starter AI assistant competitor for PhantomForce. Add public sources before treating this as live market evidence." },
-  { id: "starter-hubspot", name: "HubSpot", website: "https://www.hubspot.com/products/customer-platform", category: "CRM and customer platform", score: 78, watch: ["CRM", "marketing hubs", "AI customer platform"], notes: "Starter CRM and growth-ops competitor for PhantomForce. Add public sources before treating this as live market evidence." },
-  { id: "starter-highlevel", name: "HighLevel", website: "https://www.gohighlevel.com/", category: "Agency operating system", score: 76, watch: ["lead capture", "follow-up automation", "agency dashboard"], notes: "Starter agency operating-system competitor for PhantomForce. Add public sources before treating this as live market evidence." },
-  { id: "starter-salesforce", name: "Salesforce", website: "https://www.salesforce.com/products/what-is-customer-360/", category: "Enterprise CRM", score: 74, watch: ["Customer 360", "AI agents", "sales/service clouds"], notes: "Starter enterprise CRM competitor for PhantomForce. Add public sources before treating this as live market evidence." },
-  { id: "starter-monday", name: "monday.com", website: "https://monday.com/", category: "Work management", score: 66, watch: ["work platform", "team operations", "AI agents"], notes: "Starter work-management competitor for PhantomForce. Add public sources before treating this as live market evidence." },
-  { id: "starter-clickup", name: "ClickUp", website: "https://clickup.com/", category: "Work management", score: 65, watch: ["tasks", "docs", "AI work context"], notes: "Starter productivity and operations competitor for PhantomForce. Add public sources before treating this as live market evidence." },
-  { id: "starter-notion", name: "Notion", website: "https://www.notion.com/", category: "Workspace and knowledge base", score: 63, watch: ["workspace memory", "docs", "custom agents"], notes: "Starter workspace and memory competitor for PhantomForce. Add public sources before treating this as live market evidence." },
-  { id: "starter-airtable", name: "Airtable", website: "https://www.airtable.com/platform", category: "Business app platform", score: 62, watch: ["apps", "data workflows", "AI builders"], notes: "Starter app-platform competitor for PhantomForce. Add public sources before treating this as live market evidence." },
-  { id: "starter-zapier", name: "Zapier", website: "https://zapier.com/", category: "Workflow automation", score: 64, watch: ["app automations", "AI workflows", "agents"], notes: "Starter automation competitor for PhantomForce. Add public sources before treating this as live market evidence." },
-  { id: "starter-make", name: "Make", website: "https://www.make.com/en", category: "Workflow automation", score: 61, watch: ["visual automation", "AI agents", "app integrations"], notes: "Starter automation competitor for PhantomForce. Add public sources before treating this as live market evidence." },
-  { id: "starter-hootsuite", name: "Hootsuite", website: "https://www.hootsuite.com/", category: "Social media management", score: 58, watch: ["scheduling", "analytics", "social listening"], notes: "Starter social operations competitor for PhantomForce. Add public sources before treating this as live market evidence." },
-  { id: "starter-buffer", name: "Buffer", website: "https://buffer.com/", category: "Social media management", score: 55, watch: ["content planning", "posting", "analytics"], notes: "Starter social publishing competitor for PhantomForce. Add public sources before treating this as live market evidence." },
-  { id: "starter-canva", name: "Canva", website: "https://www.canva.com/", category: "Creative production", score: 60, watch: ["AI design", "brand kits", "social creatives"], notes: "Starter creative-production competitor for PhantomForce. Add public sources before treating this as live market evidence." },
+  { id: "starter-chatgpt", name: "ChatGPT", website: "https://chatgpt.com/", category: "AI assistant", score: 72, watch: ["agent workflows", "search answers", "work apps"], notes: "Starter AI assistant competitor for PhantomForce. Add public sources before treating this as live market evidence.",
+    whatItIs: "OpenAI's general-purpose AI chat and agent product — writing, research, coding, and task automation via GPTs.",
+    strength: "Massive brand recognition and the largest raw user base of any AI assistant.",
+    gap: "It's a blank-canvas tool with no business memory, no client records, and no setup workflow — every session starts from zero.",
+    edge: "Beat them with private, persistent business memory tied to real clients, offers, and approvals — not a chat window that forgets everything." },
+  { id: "starter-claude", name: "Claude", website: "https://www.anthropic.com/claude", category: "AI assistant", score: 70, watch: ["projects", "coding", "enterprise safety"], notes: "Starter AI assistant competitor for PhantomForce. Add public sources before treating this as live market evidence.",
+    whatItIs: "Anthropic's AI assistant, positioned around careful reasoning, long documents, and safer enterprise use via Projects.",
+    strength: "Strong reputation for reliability and handling long, detailed work without losing the thread.",
+    gap: "Still a general assistant — no CRM, no client operations, no owner approval flow. Projects group files, not a running business.",
+    edge: "Beat them by wiring AI directly into approvals, client setup, and execution — action, not just conversation." },
+  { id: "starter-perplexity", name: "Perplexity", website: "https://www.perplexity.ai/", category: "AI answer engine", score: 65, watch: ["answer search", "source citations", "research workflows"], notes: "Starter AI search competitor for PhantomForce. Add public sources before treating this as live market evidence.",
+    whatItIs: "An AI-powered search/answer engine that cites sources instead of just chatting — a Google replacement for research.",
+    strength: "Fast, well-cited answers make it a go-to for quick research and comparison shopping.",
+    gap: "It's a research tool, not an operating system — it can't set up a client, run approvals, or manage a business.",
+    edge: "You're not competing on search — you're competing on what happens after the research: setup, execution, delivery." },
+  { id: "starter-gemini", name: "Gemini", website: "https://gemini.google.com/", category: "AI assistant", score: 67, watch: ["Google workspace", "mobile assistant", "research"], notes: "Starter AI assistant competitor for PhantomForce. Add public sources before treating this as live market evidence.",
+    whatItIs: "Google's AI assistant, deeply embedded across Gmail, Docs, Drive, and Android — distribution is its whole strategy.",
+    strength: "Built into tools small businesses already use every day, so adoption is nearly frictionless.",
+    gap: "It's a feature bolted onto Google Workspace, not a dedicated business management system — no client setup, no growth ops.",
+    edge: "They win on distribution; you win on depth — a purpose-built setup and growth machine beats a smart autocomplete in Gmail." },
+  { id: "starter-hubspot", name: "HubSpot", website: "https://www.hubspot.com/products/customer-platform", category: "CRM and customer platform", score: 78, watch: ["CRM", "marketing hubs", "AI customer platform"], notes: "Starter CRM and growth-ops competitor for PhantomForce. Add public sources before treating this as live market evidence.",
+    whatItIs: "A large, well-funded CRM and marketing/sales/service platform for growing companies, with an AI layer (Breeze) on top.",
+    strength: "Deep CRM feature set, strong brand trust, and a huge ecosystem of integrations and content.",
+    gap: "Pricing scales up fast past the free tier, and it's built for teams with a dedicated ops person to configure it.",
+    edge: "Beat them with faster, guided setup for small operators who don't have a RevOps hire — done-with-you beats do-it-yourself." },
+  { id: "starter-highlevel", name: "HighLevel", website: "https://www.gohighlevel.com/", category: "Agency operating system", score: 76, watch: ["lead capture", "follow-up automation", "agency dashboard"], notes: "Starter agency operating-system competitor for PhantomForce. Add public sources before treating this as live market evidence.",
+    whatItIs: "An all-in-one white-label platform built for marketing agencies to run their clients' funnels, CRM, and follow-up automation.",
+    strength: "Purpose-built for agencies reselling to local businesses — the closest real competitor in this map.",
+    gap: "It's a toolkit an agency assembles and operates on a client's behalf — the local business owner rarely touches it directly.",
+    edge: "Beat them by being the tool the OWNER uses directly, not a black box an agency runs behind the scenes." },
+  { id: "starter-salesforce", name: "Salesforce", website: "https://www.salesforce.com/products/what-is-customer-360/", category: "Enterprise CRM", score: 74, watch: ["Customer 360", "AI agents", "sales/service clouds"], notes: "Starter enterprise CRM competitor for PhantomForce. Add public sources before treating this as live market evidence.",
+    whatItIs: "The dominant enterprise CRM, with Customer 360 and Agentforce AI agents aimed at large sales and service orgs.",
+    strength: "Unmatched enterprise feature depth and market trust at the top end of the market.",
+    gap: "Built and priced for enterprise IT teams — implementation can take months and needs admins small businesses won't hire.",
+    edge: "You're not fighting them for enterprise deals — you're catching every small business Salesforce is too complex to ever reach." },
+  { id: "starter-monday", name: "monday.com", website: "https://monday.com/", category: "Work management", score: 66, watch: ["work platform", "team operations", "AI agents"], notes: "Starter work-management competitor for PhantomForce. Add public sources before treating this as live market evidence.",
+    whatItIs: "A flexible visual work-management platform (boards, timelines, dashboards) used across many industries for project tracking.",
+    strength: "Highly flexible — can be configured for almost any workflow, with a large template library.",
+    gap: "Flexibility means the owner builds their own business logic — it's a blank board, not a business with clients and approvals baked in.",
+    edge: "Beat them with a system that already knows what a service business needs, instead of a blank canvas to configure." },
+  { id: "starter-clickup", name: "ClickUp", website: "https://clickup.com/", category: "Work management", score: 65, watch: ["tasks", "docs", "AI work context"], notes: "Starter productivity and operations competitor for PhantomForce. Add public sources before treating this as live market evidence.",
+    whatItIs: "An all-in-one productivity and project-management app that tries to replace docs, chat, and task tools in one place.",
+    strength: "Feature-dense and aggressively priced, appealing to teams that want one tool instead of five.",
+    gap: "The feature density is also its weakness for a solo owner — steep learning curve, still no client billing or CRM layer.",
+    edge: "Win on simplicity and business-specific structure — a setup path built for one owner beats a tool with a thousand settings." },
+  { id: "starter-notion", name: "Notion", website: "https://www.notion.com/", category: "Workspace and knowledge base", score: 63, watch: ["workspace memory", "docs", "custom agents"], notes: "Starter workspace and memory competitor for PhantomForce. Add public sources before treating this as live market evidence.",
+    whatItIs: "A flexible docs/database workspace that businesses often repurpose into a lightweight CRM or ops hub with custom templates.",
+    strength: "Extremely flexible and popular with solo operators who like building their own systems.",
+    gap: "Whatever CRM or client-tracking setup a user builds is self-maintained — no automation, no approvals engine, no growth tooling.",
+    edge: "Beat them by shipping the system pre-built instead of asking the owner to become their own database designer." },
+  { id: "starter-airtable", name: "Airtable", website: "https://www.airtable.com/platform", category: "Business app platform", score: 62, watch: ["apps", "data workflows", "AI builders"], notes: "Starter app-platform competitor for PhantomForce. Add public sources before treating this as live market evidence.",
+    whatItIs: "A spreadsheet-database hybrid platform for building custom internal apps and workflows, with AI builders layered in.",
+    strength: "Powerful for teams willing to build custom tooling; strong in ops-heavy businesses.",
+    gap: "Still a build-it-yourself platform — every workflow, form, and automation has to be constructed and maintained by someone.",
+    edge: "You deliver the finished business system; Airtable hands over a construction kit and hopes the owner has time to build it." },
+  { id: "starter-zapier", name: "Zapier", website: "https://zapier.com/", category: "Workflow automation", score: 64, watch: ["app automations", "AI workflows", "agents"], notes: "Starter automation competitor for PhantomForce. Add public sources before treating this as live market evidence.",
+    whatItIs: "The most widely used no-code automation tool for connecting other apps together with triggers and actions.",
+    strength: "Huge library of app integrations — genuinely useful glue between disconnected tools.",
+    gap: "It only connects other tools — it doesn't own the client relationship or approvals, and breaks silently when a connected app changes.",
+    edge: "Position PhantomForce as the business itself, not glue between five other subscriptions the owner still has to babysit." },
+  { id: "starter-make", name: "Make", website: "https://www.make.com/en", category: "Workflow automation", score: 61, watch: ["visual automation", "AI agents", "app integrations"], notes: "Starter automation competitor for PhantomForce. Add public sources before treating this as live market evidence.",
+    whatItIs: "A visual, more technical automation-workflow builder, popular with agencies and power users who outgrow Zapier.",
+    strength: "More powerful and flexible automation logic than Zapier for complex multi-step scenarios.",
+    gap: "Steeper learning curve and still just automation plumbing — no CRM, no client operations, no owner-facing business layer.",
+    edge: "Most owners don't want to build automation scenarios — they want the business already running. Lead with done-for-you." },
+  { id: "starter-hootsuite", name: "Hootsuite", website: "https://www.hootsuite.com/", category: "Social media management", score: 58, watch: ["scheduling", "analytics", "social listening"], notes: "Starter social operations competitor for PhantomForce. Add public sources before treating this as live market evidence.",
+    whatItIs: "A long-standing social media scheduling, publishing, and analytics platform aimed at marketing teams.",
+    strength: "Established brand with broad platform coverage and enterprise-grade analytics.",
+    gap: "It only manages the posting calendar — no connection to leads, clients, approvals, or whether the content drove business.",
+    edge: "Beat them by tying content straight to client work and lead capture — a post that doesn't feed the business is just noise." },
+  { id: "starter-buffer", name: "Buffer", website: "https://buffer.com/", category: "Social media management", score: 55, watch: ["content planning", "posting", "analytics"], notes: "Starter social publishing competitor for PhantomForce. Add public sources before treating this as live market evidence.",
+    whatItIs: "A simpler, small-business-friendly social scheduling and analytics tool — the lightweight alternative to Hootsuite.",
+    strength: "Clean, approachable interface and fair pricing for solo operators and small teams.",
+    gap: "Same ceiling as Hootsuite at a smaller scale — scheduling and analytics only, no path from a post to a paying client.",
+    edge: "Own the full loop from content to lead to client, not just the calendar." },
+  { id: "starter-canva", name: "Canva", website: "https://www.canva.com/", category: "Creative production", score: 60, watch: ["AI design", "brand kits", "social creatives"], notes: "Starter creative-production competitor for PhantomForce. Add public sources before treating this as live market evidence.",
+    whatItIs: "The dominant easy-to-use design tool for social graphics, presentations, and brand kits, with AI design features layered in.",
+    strength: "Beloved, extremely low learning curve, and now genuinely capable with AI-assisted design.",
+    gap: "It makes the asset, then stops — no connection to publishing, client approval, reporting, or the rest of the business.",
+    edge: "Let Canva make it beautiful; PhantomForce is where the asset gets approved, published, tracked, and turned into revenue." },
 ];
+// The tracked-competitor detail header (and any other surface reading
+// CompetitorRecord.notes) only ever showed the generic per-category
+// disclaimer; lead with the real per-company fact instead, tail with the
+// same "modeled, not live evidence" framing so the compliance disclaimer
+// still reaches every surface that reads .notes.
+STARTER_COMPETITORS.forEach((item) => { item.notes = `${item.whatItIs} Modeled baseline — track public sources to confirm.`; });
 
 function daysAgo(value: string) {
   const time = new Date(value).getTime();
@@ -319,8 +392,8 @@ function buildAutoScoutReport(state: TenantState, marketBoard: MarketBoardItem[]
     domain: item.domain,
     score: item.score,
     sourceState: item.sourceState === "tracked" ? "tracked" as const : "starter" as const,
-    threatLevel: threatLevel(item.score),
-    phantomAngle: phantomAngleFor(item),
+    threatLevel: item.threat || threatLevel(item.score),
+    phantomAngle: item.edge || phantomAngleFor(item),
     watch: item.watch,
     sourceTargets: sourceTargetsForBoardItem(state, item),
   }));
@@ -414,6 +487,10 @@ function boardTip(momentum: MarketBoardItem["momentum"], positives: number, weak
   if (opportunities > 0) return "There are response options ready. Turn the best one into a tracked campaign.";
   return positives || weaknesses ? "Keep collecting public sources until the pattern is strong enough to act on." : "No recent signal yet. Add a public source to start live ranking.";
 }
+function starterFactsFor(name: string, website: string) {
+  const domain = domainFor(website);
+  return STARTER_COMPETITORS.find((entry) => entry.name.toLowerCase() === name.toLowerCase() || domainFor(entry.website) === domain);
+}
 function buildMarketBoard(state: TenantState): MarketBoardItem[] {
   return state.competitors.map((item) => {
     const signals = state.signals.filter((entry) => entry.competitorId === item.id);
@@ -427,7 +504,8 @@ function buildMarketBoard(state: TenantState): MarketBoardItem[] {
     const momentum: MarketBoardItem["momentum"] = !signals.length ? "unwatched" : growth >= weakness + 2 ? "gaining" : weakness >= growth + 1 ? "vulnerable" : growth && weakness ? "mixed" : recent.length ? "quiet" : "quiet";
     const confidence: MarketBoardItem["confidence"] = signals.length >= 6 ? "high" : signals.length >= 3 ? "medium" : signals.length ? "low" : "none";
     const newest = signals.map((entry) => entry.observedAt).sort().at(-1) || null;
-    return {
+    const facts = starterFactsFor(item.name, item.website);
+    const board: MarketBoardItem = {
       competitorId: item.id,
       name: item.name,
       symbol: symbolFor(item.name),
@@ -441,12 +519,17 @@ function buildMarketBoard(state: TenantState): MarketBoardItem[] {
       lastSignalAt: newest,
       tip: boardTip(momentum, growth, weakness, opportunities),
       sourceState: "tracked" as const,
-      watch: [
+      whatItIs: facts?.whatItIs || `A tracked ${item.category || "competitor"} you're actively comparing against — add public signals to sharpen this.`,
+      edge: "",
+      threat: threatLevel(score),
+      watch: facts?.watch || [
         growth ? "offer heat" : "offer baseline",
         weakness ? "customer pain" : "review scan",
         opportunities ? "response ready" : "opportunity scan",
       ],
     };
+    board.edge = facts?.edge || phantomAngleFor(board);
+    return board;
   }).sort((a, b) => b.score - a.score || b.recentSignals - a.recentSignals || a.name.localeCompare(b.name));
 }
 function starterCompetitors(tenantId: string): CompetitorRecord[] {
@@ -469,7 +552,10 @@ function buildStarterMarketBoard(tenantId: string, state: TenantState): MarketBo
       signalCount: 0,
       recentSignals: 0,
       lastSignalAt: null,
-      tip: "Starter competitor from PhantomForce's category map. Track it and add public sources before treating it as live evidence.",
+      tip: item.edge,
+      whatItIs: item.whatItIs,
+      edge: item.edge,
+      threat: threatLevel(item.score),
       watch: item.watch,
       sourceState: "starter" as const,
     }));
@@ -512,7 +598,10 @@ export async function getCompetitorIntelligenceSnapshot(session: AccessSession, 
     marketBoardMode,
     marketBoard,
     tips: buildTips(state, marketBoard, marketBoardMode),
-    competitors: state.competitors,
+    competitors: state.competitors.map((item) => {
+      const facts = starterFactsFor(item.name, item.website);
+      return facts ? { ...item, notes: facts.notes } : item;
+    }),
     starterCompetitors: starterCompetitors(tenantId).filter((item) => starterMarketBoard.some((boardItem) => boardItem.competitorId === item.id)),
     signals: state.signals,
     inferences: state.inferences,
@@ -730,9 +819,13 @@ function dossierSources(profile: BusinessProfile | null, competitor: CompetitorR
 
 export function generateDossier(profile: BusinessProfile | null, competitor: CompetitorRecord, env: NodeJS.ProcessEnv = process.env): Omit<CompetitorDossier, "id" | "tenantId" | "createdAt"> {
   const sources = dossierSources(profile, competitor);
+  const facts = starterFactsFor(competitor.name, competitor.website);
+  const focus = facts
+    ? `${facts.whatItIs} Their real strength: ${facts.strength} The gap for a local/small business: ${facts.gap} Your edge: ${facts.edge} Work the sources below top to bottom; log each confirmed observation as a dated public signal, then fuse.`
+    : `Deep-dive research plan for ${competitor.name}${competitor.category ? ` (${competitor.category})` : ""}. Work top to bottom; log each confirmed observation as a dated public signal, then fuse.`;
   return {
     competitorId: competitor.id, competitorName: competitor.name,
-    focus: `Deep-dive research plan for ${competitor.name}${competitor.category ? ` (${competitor.category})` : ""}. Work top to bottom; log each confirmed observation as a dated public signal, then fuse.`,
+    focus,
     sources,
     priorityChecklist: [
       "Capture their current pricing/packaging and the anchor price.",

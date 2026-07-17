@@ -258,6 +258,13 @@ import {
   updatePhantomPlaySession,
   updatePhantomPlaySubmission,
 } from "./phantom-ai/phantomplay.js";
+import {
+  getPhantomStoreSnapshot,
+  moderatePhantomStoreTool,
+  recordPhantomStoreInstallClick,
+  recordPhantomStoreProductBuyClick,
+  submitPhantomStoreTool,
+} from "./phantom-ai/phantomstore.js";
 import { registerPhantomPlayFlagshipGames } from "./phantom-ai/phantomplay-flagship.js";
 import {
   getPhantomPlayDeveloperAnalytics,
@@ -4708,6 +4715,59 @@ app.post("/api/vacation-mode/check-in", async (request, reply) => {
   const session = requireAdminAccessSession(request, reply);
   if (!session) return reply;
   return { ok: true, session, ...(await runVacationModeCheckIn("owner_requested")) };
+});
+
+/* ============================================================================
+   PHANTOMSTORE
+   Signed-in AI marketplace catalog and reviewed tool submissions. The store is
+   a moderated directory only: it never hosts, uploads, or executes submitted
+   code, and mutating routes stay behind the global paywall/write guard. */
+
+app.get("/api/phantomstore", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const query = (request.query ?? {}) as { tenant_id?: unknown };
+  return { ok: true, session, ...(await getPhantomStoreSnapshot(session, { tenantId: query.tenant_id })) };
+});
+
+app.post("/api/phantomstore/tools", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  try {
+    return { ok: true, session, ...(await submitPhantomStoreTool(session, (request.body ?? {}) as Record<string, unknown>)) };
+  } catch (error) {
+    return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : "Tool submission could not be saved." });
+  }
+});
+
+app.post("/api/phantomstore/tools/:id/moderate", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const params = request.params as { id?: string };
+  try {
+    const tool = params.id ? await moderatePhantomStoreTool(session, params.id.slice(0, 180), (request.body ?? {}) as Record<string, unknown>) : null;
+    return tool ? { ok: true, session, tool } : reply.code(404).send({ ok: false, error: "Tool submission was not found." });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Moderation decision could not be saved.";
+    const status = /moderation access/i.test(message) ? 403 : 400;
+    return reply.code(status).send({ ok: false, error: message });
+  }
+});
+
+app.post("/api/phantomstore/tools/:id/install", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const params = request.params as { id?: string };
+  const result = params.id ? await recordPhantomStoreInstallClick(session, params.id.slice(0, 180)) : null;
+  return result ? { ok: true, session, ...result } : reply.code(404).send({ ok: false, error: "Approved tool was not found." });
+});
+
+app.post("/api/phantomstore/products/:id/buy", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const params = request.params as { id?: string };
+  const result = params.id ? await recordPhantomStoreProductBuyClick(session, params.id.slice(0, 180)) : null;
+  return result ? { ok: true, session, ...result } : reply.code(404).send({ ok: false, error: "Product listing was not found." });
 });
 
 /* ============================================================================

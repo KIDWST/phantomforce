@@ -118,8 +118,8 @@ check("org owner CANNOT list admin plans (403)", plansDenied.status === 403);
 
 const suspend = await api("/admin/orgs/dev-org-chicagoshots/plan", { method: "POST", token: jordan.token, body: { planKey: "starter", status: "suspended", note: "test suspension" } });
 check("super-admin can suspend an org's plan", suspend.status === 200 && suspend.json.entitlements?.effectiveStatus === "suspended");
-/* session cache is 15s — wait it out so the paywall sees the suspension */
-await new Promise((r) => setTimeout(r, 16000));
+const suspendedMe = await api("/auth/me", { token: owner.token });
+check("plan changes invalidate session cache immediately", suspendedMe.json.entitlements?.planKey === "starter" && suspendedMe.json.entitlements?.canWrite === false);
 const writeWhileSuspended = await api("/orgs/dev-org-chicagoshots/invitations", { method: "POST", token: owner.token, body: { email: "blocked@x.local", role: "member" } });
 check("suspended org: owner writes blocked by paywall (403)", writeWhileSuspended.status === 403, JSON.stringify(writeWhileSuspended.json).slice(0, 120));
 const restore = await api("/admin/orgs/dev-org-chicagoshots/plan", { method: "POST", token: jordan.token, body: { planKey: "professional", status: "active", note: "restore" } });

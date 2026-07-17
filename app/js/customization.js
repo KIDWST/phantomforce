@@ -1,4 +1,4 @@
-import { currentTenantId, session } from "./store.js?v=phantom-live-20260714-006";
+import { currentTenantId, session } from "./store.js?v=phantom-live-20260716-318";
 
 let activeConfiguration = null;
 let activeEntitlements = null;
@@ -12,7 +12,6 @@ const CANONICAL_MODULES = {
     forceEnabled: true,
   },
 };
-
 function normalizedModuleState(module, moduleId) {
   const canonical = CANONICAL_MODULES[moduleId];
   if (!canonical) return module;
@@ -27,12 +26,13 @@ function normalizedModuleState(module, moduleId) {
 
 const PLATFORM_MODULES = [
   ["dashboard", "Dashboard", true, ["owner", "admin", "manager", "member", "client"]],
-  ["crm", "Clients", true, ["owner", "admin", "manager", "member"]],
+  ["intelligence", "Competitor Intelligence", true, ["owner", "admin", "manager"]],
   ["media", "Media Lab", true, ["owner", "admin", "manager", "member"]],
   ["sites", "Websites", true, ["owner", "admin", "manager", "member"]],
   ["money", "Accounting", true, ["owner", "admin", "manager"]],
   ["phantomplay", "PhantomPlay", true, ["owner", "admin", "manager", "member", "client"]],
-  ["intelligence", "Competitor Intelligence", true, ["owner", "admin", "manager"]],
+  ["phantomstore", "PhantomStore", false, ["owner", "admin", "manager", "member", "client"]],
+  ["crm", "Clients", true, ["owner", "admin"]],
   ["analytics", "Analytics", true, ["owner", "admin", "manager"]],
   ["memory", "Memory", true, ["owner", "admin", "manager"]],
   ["automation", "Automations", true, ["owner", "admin", "manager"]],
@@ -43,6 +43,7 @@ const PLATFORM_MODULES = [
   ["settings", "Settings", false, ["owner", "admin", "manager", "member", "client"]],
   ["developer", "Developer", false, ["owner"]],
 ];
+const STRUCTURAL_NAV_MODULES = new Set(["memory", "settings", "developer", "vacation"]);
 const DEFAULT_ENTITLEMENTS = { coBranded: false, whiteLabel: false, internalPhantomForce: true, localFallback: true };
 const authHeaders = (json = false) => {
   const token = session.token();
@@ -71,6 +72,7 @@ function defaultConfiguration(tenantId = currentTenantId()) {
     schemaVersion: 1,
     tenantId,
     version: 1,
+    orgType: internal ? "dev_only" : "business",
     brand: {
       mode: internal ? "internal_phantomforce" : "standard",
       organizationName: internal ? "PhantomForce" : "My Business",
@@ -173,12 +175,16 @@ export function customizeNavigation(baseItems, role = "owner") {
   const states = new Map(activeConfiguration.modules.map((module) => [module.id, module]));
   return baseItems
     .filter((item) => {
+      if (STRUCTURAL_NAV_MODULES.has(item.id)) return true;
       const state = normalizedModuleState(states.get(item.id), item.id);
       if (!state) return true;
       return canAccessConfiguredModule(item.id, role);
     })
     .map((item) => {
       const state = normalizedModuleState(states.get(item.id), item.id);
+      if (STRUCTURAL_NAV_MODULES.has(item.id)) {
+        return { ...item, label: item.label, customizationOrder: undefined, navZone: "bottom" };
+      }
       /* Dashboard is the platform home. Older org customizations may still
          carry "Business HQ"; keep the new product language stable here. */
       if (item.id === "dashboard") return { ...item, label: item.label, customizationOrder: state?.order };
@@ -264,7 +270,7 @@ function renderStudio(el, state, opts) {
     ${draft.localFallback ? `<div class="cust-message">Workspace Studio is using local defaults while the backend reconnects. Modules are available now; publishing waits for the server.</div>` : ""}
     ${message ? `<div class="cust-message">${esc(message)}</div>` : ""}
     <section class="cust-ai">
-      <div><p class="cust-kicker">ASK PHANTOM</p><h3>Describe the workspace you want.</h3><p>Try “Change Clients to Athletes,” “Use #22ee88,” or “Make the assistant more professional.”</p></div>
+      <div><p class="cust-kicker">ASK PHANTOM</p><h3>Describe the workspace you want.</h3><p>Try “Change Leads to Athletes,” “Use #22ee88,” or “Make the assistant more professional.”</p></div>
       <form data-cust-ai-form><textarea name="message" rows="2" maxlength="1200" placeholder="Make this workspace feel like a football recruiting platform…"></textarea><button class="cust-primary" ${busy ? "disabled" : ""}>Create preview</button></form>
     </section>
     <div class="cust-grid">

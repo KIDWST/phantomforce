@@ -50,6 +50,7 @@ export function defaultOrganizationConfiguration(tenantId: string, actor = "syst
     schemaVersion: 1,
     tenantId,
     version: 1,
+    orgType: tenantId === "phantomforce-owner" || tenantId === "phantomforce" ? "dev_only" : "business",
     brand: {
       mode: internal ? "internal_phantomforce" : "standard",
       organizationName: internal ? "PhantomForce" : "My Business",
@@ -94,8 +95,20 @@ export function defaultOrganizationConfiguration(tenantId: string, actor = "syst
   });
 }
 
+/* dev_only and full_force are "unlock everything" setups — switching into
+   either one turns on whatever optional modules are still off. This is
+   one-directional on purpose: switching back to business never turns
+   anything off behind the owner, since that would silently yank access
+   someone may already depend on. Idempotent, so it's safe to run on every
+   merge regardless of whether orgType actually changed this patch. */
+function applyOrgTypeModuleDefaults(configuration: OrganizationConfiguration): OrganizationConfiguration {
+  if (configuration.orgType === "business") return configuration;
+  const modules = configuration.modules.map((module) => (module.enabled ? module : { ...module, enabled: true }));
+  return { ...configuration, modules };
+}
+
 function mergeConfiguration(current: OrganizationConfiguration, patch: ConfigurationPatch, actor: string) {
-  return {
+  const merged = {
     ...current,
     ...patch,
     brand: { ...current.brand, ...(patch.brand ?? {}) },
@@ -108,6 +121,7 @@ function mergeConfiguration(current: OrganizationConfiguration, patch: Configura
     updatedAt: new Date().toISOString(),
     updatedBy: actor,
   };
+  return applyOrgTypeModuleDefaults(merged);
 }
 
 function hexRgb(hex: string) {
@@ -133,6 +147,11 @@ export function validateOrganizationConfiguration(configuration: OrganizationCon
   for (const requiredId of REQUIRED_MODULE_IDS) {
     const module = configuration.modules.find((candidate) => candidate.id === requiredId);
     if (!module?.enabled) issues.push({ path: `modules.${requiredId}`, message: `${MODULE_BY_ID.get(requiredId)?.displayName ?? requiredId} is required for access, approval, or recovery.`, severity: "error" });
+    /* Enabled isn't enough — if owner's own role gets unchecked for a
+       required module (dashboard, approvals, settings), the owner has no
+       way back in. The matrix UI already disables this checkbox; this is
+       the server-side backstop for direct API calls. */
+    if (module && !module.roles.includes("owner")) issues.push({ path: `modules.${requiredId}.roles`, message: `${MODULE_BY_ID.get(requiredId)?.displayName ?? requiredId} must stay open to the owner role — there'd be no way back in otherwise.`, severity: "error" });
   }
   for (const module of configuration.modules) {
     const definition = MODULE_BY_ID.get(module.id);
@@ -177,25 +196,63 @@ export function validateOrganizationConfiguration(configuration: OrganizationCon
   return issues;
 }
 
-/* Legacy label repair for already-published configurations: earlier tooling
-   published module labels like "Client Setup" for org-internal configuration.
-   Those labels live in stored config documents, not code, so they survive
-   every code deploy — normalize them back to the canonical module names at
-   read time. */
-const LEGACY_MODULE_LABELS = /^client ?set ?up$/i;
-function repairLegacyModuleLabels(configuration: OrganizationConfiguration): OrganizationConfiguration {
+/* Stored-configuration repair: published config documents outlive the code
+   that wrote them, so they fossilize — module ids that no longer exist
+   ("content"/Creator Hub), registry modules that hadn't shipped yet
+   (phantomplay, intelligence), and legacy labels ("Clients", "Client Setup",
+   "Business HQ"). A fossil config breaks every workspace-modules change,
+   because validation round-trips the full stored list and rejects the
+   unknown id. Repair at read time: drop unknown modules, append missing
+   registry modules with platform defaults, and restore canonical labels. */
+const LEGACY_MODULE_LABELS = /^(clients?|client ?set ?up|business hq)$/i;
+function repairStoredConfiguration(configuration: OrganizationConfiguration): OrganizationConfiguration {
   let repaired = false;
-  const modules = configuration.modules.map((module) => {
-    if (!LEGACY_MODULE_LABELS.test(String(module.label || "").trim())) return module;
+  const modules = configuration.modules
+    .filter((module) => {
+      if (MODULE_BY_ID.has(module.id)) return true;
+      repaired = true;
+      return false;
+    })
+    .map((module) => {
+      if (!LEGACY_MODULE_LABELS.test(String(module.label || "").trim())) return module;
+      repaired = true;
+      return { ...module, label: MODULE_BY_ID.get(module.id)?.displayName || module.id };
+    })
+    /* Clients (crm) moved from a general team tool to owner/admin business
+       back office — narrow any config still carrying the older, wider
+       manager/member roles down to the current registry default. */
+    .map((module) => {
+      if (module.id !== "crm") return module;
+      if (!module.roles.some((role) => role === "manager" || role === "member")) return module;
+      repaired = true;
+      return { ...module, roles: module.roles.filter((role) => role === "owner" || role === "admin") };
+    });
+  const present = new Set(modules.map((module) => module.id));
+  let order = modules.length;
+  for (const registryModule of PLATFORM_MODULES) {
+    if (present.has(registryModule.id)) continue;
     repaired = true;
-    return { ...module, label: MODULE_BY_ID.get(module.id)?.displayName || "Organization" };
-  });
-  return repaired ? { ...configuration, modules } : configuration;
+    modules.push({
+      id: registryModule.id,
+      label: registryModule.displayName,
+      enabled: defaultModuleEnabled(registryModule.id, configuration.tenantId),
+      order: order++,
+      roles: registryModule.allowedRoles.includes("platform_owner")
+        ? (["owner"] as const)
+        : registryModule.allowedRoles.filter((role): role is "owner" | "admin" | "manager" | "member" | "client" =>
+          ["owner", "admin", "manager", "member", "client"].includes(role)),
+      accessMode: registryModule.id === "phantomplay" ? "owner_only" : "entire_organization",
+      allowedMemberIds: [],
+      activityEnabled: false,
+      challengesEnabled: false,
+    });
+  }
+  return repaired ? OrganizationConfigurationSchema.parse({ ...configuration, modules }) : configuration;
 }
 
 export async function getOrganizationConfiguration(tenantId: string, actor: string, root?: string) {
   const document = await readCustomizationDocument(tenantId, root);
-  if (document) return { configuration: repairLegacyModuleLabels(OrganizationConfigurationSchema.parse(document.current)), versions: document.versions, audit: document.audit };
+  if (document) return { configuration: repairStoredConfiguration(OrganizationConfigurationSchema.parse(document.current)), versions: document.versions, audit: document.audit };
   const configuration = defaultOrganizationConfiguration(tenantId, actor);
   const persisted = await persistConfiguration({ configuration, summary: "Created organization defaults", actor, eventType: "created", root });
   return { configuration, versions: persisted.document.versions, audit: persisted.document.audit };

@@ -38,6 +38,11 @@ function coverRect(mw, mh, cw, ch) {
   const sw = cw / scale, sh = ch / scale;
   return [(mw - sw) / 2, (mh - sh) / 2, sw, sh];
 }
+function containRect(mw, mh, cw, ch) {
+  const scale = Math.min(cw / Math.max(1, mw), ch / Math.max(1, mh));
+  const dw = mw * scale, dh = mh * scale;
+  return [(cw - dw) / 2, (ch - dh) / 2, dw, dh];
+}
 /* MediaRecorder-made webm reports Infinity until it has been seeked past the
    end once — pool videos often come from that path, so probe before trusting. */
 function readVideoDuration(el, done) {
@@ -83,6 +88,10 @@ export function mountVideoEditor(host, opts = {}) {
   const recorderMime = pickRecorderMime();
   let clipSeq = 0;
   let pickerItems = [];
+  let localPickerItems = [];
+  let localPickerLoading = false;
+  let localPickerSeq = 0;
+  const genPanel = { open: false, busy: false, prompt: "", modality: "video" };
   let playClock = 0;                // performance.now() timestamp for playhead 0 while playing
   let exportRun = null;
   let raf = 0;
@@ -174,6 +183,20 @@ export function mountVideoEditor(host, opts = {}) {
     if (clip.ready === "ready" && clip.out > clip.in) return Math.max(0.1, clip.out - clip.in);
     return 2;  // metadata missing or failed: hold a placeholder slate instead of crashing
   }
+  function clipVolume(clip) {
+    return clamp(Number(clip.volume ?? 100), 0, 100);
+  }
+  function clipFadeValue(clip, key) {
+    return clamp(Number(clip?.[key]) || 0, 0, Math.min(3, clipDuration(clip) / 2));
+  }
+  function clipFadeAlpha(clip, local) {
+    const dur = clipDuration(clip);
+    const fadeIn = clipFadeValue(clip, "fadeIn");
+    const fadeOut = clipFadeValue(clip, "fadeOut");
+    const inAlpha = fadeIn > 0 ? clamp(local / fadeIn, 0, 1) : 1;
+    const outAlpha = fadeOut > 0 ? clamp((dur - local) / fadeOut, 0, 1) : 1;
+    return clamp(Math.min(inAlpha, outAlpha), 0, 1);
+  }
   function segments() {
     let t = 0;
     return state.clips.map((clip) => {
@@ -182,6 +205,15 @@ export function mountVideoEditor(host, opts = {}) {
       t += dur;
       return seg;
     });
+  }
+  const segmentForClip = (clip) => segments().find((seg) => seg.clip === clip) || null;
+  function splitPointForClip(clip) {
+    const seg = segmentForClip(clip);
+    if (!seg) return null;
+    const local = clamp(state.playhead - seg.start, 0, seg.dur);
+    const minTail = clip.kind === "video" ? 0.15 : 0.5;
+    if (local <= minTail || seg.dur - local <= minTail) return null;
+    return { seg, local };
   }
   const totalDuration = () => state.clips.reduce((t, c) => t + clipDuration(c), 0);
 
@@ -245,8 +277,10 @@ export function mountVideoEditor(host, opts = {}) {
       title: String(title || (kind === "photo" ? "Photo" : "Video")).slice(0, 80),
       ready: "loading", thumb: "", el: null,
       transition: "none", text: "", textPos: "bottom",
+      fit: "cover",
+      fadeIn: 0, fadeOut: 0,
       duration: 3, kenBurns: false,               // photo
-      in: 0, out: 0, srcDuration: 0, mute: false, // video
+      in: 0, out: 0, srcDuration: 0, mute: false, volume: 100, // video
       w: 0, h: 0,
     };
     state.clips.push(clip);
@@ -272,14 +306,18 @@ export function mountVideoEditor(host, opts = {}) {
     const v = document.createElement("video");
     v.preload = "auto";
     v.playsInline = true;
+    v.volume = clipVolume(clip) / 100;
+    v.muted = !!clip.mute;
     v.addEventListener("error", () => { if (destroyed) return; clip.ready = "error"; renderAll(); }, { once: true });
     v.addEventListener("loadedmetadata", () => {
       readVideoDuration(v, (dur) => {
         if (destroyed) return;
         if (!dur) { clip.ready = "error"; renderAll(); return; }
+        const requestedIn = Number(clip.in) || 0;
+        const requestedOut = Number(clip.out) || 0;
         clip.srcDuration = dur;
-        clip.in = 0;
-        clip.out = dur;
+        clip.in = clamp(requestedIn, 0, Math.max(0, dur - 0.05));
+        clip.out = requestedOut > clip.in ? clamp(requestedOut, clip.in + 0.05, dur) : dur;
         clip.ready = "ready";
         captureVideoThumb(clip);
         renderTimeline(); updateMeta();
@@ -325,6 +363,86 @@ export function mountVideoEditor(host, opts = {}) {
     state.clips.splice(i, 1);
     state.clips.splice(j, 0, clip);
     renderAll();
+  }
+  function moveClipToIndex(clip, targetIndex) {
+    const from = state.clips.indexOf(clip);
+    if (from < 0) return false;
+    const bounded = clamp(Number(targetIndex) || 0, 0, state.clips.length - 1);
+    if (from === bounded) return false;
+    state.clips.splice(from, 1);
+    state.clips.splice(bounded, 0, clip);
+    state.selectedId = clip.id;
+    renderAll();
+    return true;
+  }
+  function duplicateClip(clip) {
+    if (!clip || state.clips.length >= MAX_CLIPS) {
+      notify("PhantomCut", `Timeline is full — ${MAX_CLIPS} clips max.`);
+      return null;
+    }
+    const index = state.clips.indexOf(clip);
+    if (index < 0) return null;
+    if (clip.owned) clip.owned = false;
+    const copy = {
+      ...clip,
+      id: `vc${++clipSeq}-${Date.now().toString(36)}-copy`,
+      title: `${clip.title || "Clip"} copy`.slice(0, 80),
+      ready: "loading",
+      el: null,
+      owned: false,
+    };
+    state.clips.splice(index + 1, 0, copy);
+    state.selectedId = copy.id;
+    if (copy.kind === "photo") loadPhoto(copy); else loadVideo(copy);
+    renderAll();
+    notify("PhantomCut", "Duplicated clip.");
+    return copy;
+  }
+  function splitClipAtPlayhead(clip) {
+    if (!clip || state.clips.length >= MAX_CLIPS) {
+      notify("PhantomCut", `Timeline is full — ${MAX_CLIPS} clips max.`);
+      return;
+    }
+    const split = splitPointForClip(clip);
+    if (!split) {
+      notify("PhantomCut", "Move the playhead inside the clip before splitting.");
+      return;
+    }
+    const index = state.clips.indexOf(clip);
+    if (index < 0) return;
+    const copy = {
+      ...clip,
+      id: `vc${++clipSeq}-${Date.now().toString(36)}-split`,
+      title: `${clip.title} cut`,
+      ready: "loading",
+      thumb: "",
+      el: null,
+      owned: false,
+      transition: "none",
+    };
+    if (clip.owned) clip.owned = false;
+    if (clip.kind === "photo") {
+      const originalDuration = clipDuration(clip);
+      clip.duration = split.local;
+      copy.duration = Math.max(0.5, originalDuration - split.local);
+      state.clips.splice(index + 1, 0, copy);
+      loadPhoto(copy);
+    } else {
+      if (clip.ready !== "ready") {
+        notify("PhantomCut", "This video is still loading, so it cannot be split yet.");
+        return;
+      }
+      const cut = clip.in + split.local;
+      copy.in = cut;
+      copy.out = clip.out;
+      clip.out = cut;
+      state.clips.splice(index + 1, 0, copy);
+      loadVideo(copy);
+    }
+    state.selectedId = copy.id;
+    state.playhead = split.seg.start + split.local;
+    renderAll();
+    notify("PhantomCut", "Split clip at the playhead.");
   }
   function handleFiles(list) {
     for (const f of Array.from(list || [])) {
@@ -383,10 +501,13 @@ export function mountVideoEditor(host, opts = {}) {
       const running = state.playing || !!exportRun;
       if (i === idx) {
         const want = clamp(c.in + (t - seg.start), 0, Math.max(0, c.srcDuration - 0.05));
+        const local = clamp(t - seg.start, 0, seg.dur);
+        el.volume = (clipVolume(c) / 100) * clipFadeAlpha(c, local);
         if (hard || Math.abs(el.currentTime - want) > (running ? 0.35 : 0.2)) { try { el.currentTime = want; } catch {} }
         if (running) { if (el.paused) el.play().catch(() => {}); }
         else if (!el.paused) el.pause();
       } else {
+        el.volume = 0;
         if (!el.paused) el.pause();
         if (i === idx - 1 && Math.abs(el.currentTime - c.out) > 0.25) {
           try { el.currentTime = Math.max(0, c.out - 0.05); } catch {}
@@ -478,13 +599,31 @@ export function mountVideoEditor(host, opts = {}) {
     ctx.fillText(txt, W / 2, clip.textPos === "center" ? H / 2 : H * 0.88, W * 0.92);
     ctx.restore();
   }
+  function drawContainedMediaFrame(source, mw, mh, W, H) {
+    const [sx, sy, sw, sh] = coverRect(mw, mh, W, H);
+    const [dx, dy, dw, dh] = containRect(mw, mh, W, H);
+    ctx.save();
+    ctx.filter = `blur(${Math.max(8, Math.round(Math.min(W, H) * 0.028))}px) brightness(0.72) saturate(1.08)`;
+    ctx.drawImage(source, sx, sy, sw, sh, -W * 0.035, -H * 0.035, W * 1.07, H * 1.07);
+    ctx.restore();
+    ctx.fillStyle = "rgba(0,0,0,.22)";
+    ctx.fillRect(0, 0, W, H);
+    ctx.drawImage(source, 0, 0, mw, mh, dx, dy, dw, dh);
+  }
   function drawClipFrame(clip, local, alpha) {
     const W = cv.width, H = cv.height;
+    const frameAlpha = clamp(alpha, 0, 1) * clipFadeAlpha(clip, local);
     ctx.save();
-    ctx.globalAlpha = clamp(alpha, 0, 1);
+    ctx.globalAlpha = frameAlpha;
     if (clip.ready !== "ready") {
       drawPlaceholder(clip);
     } else if (clip.kind === "photo") {
+      if (clip.fit === "contain") {
+        try { drawContainedMediaFrame(clip.el, clip.w, clip.h, W, H); } catch {}
+        ctx.restore();
+        drawTextOverlay(clip, frameAlpha);
+        return;
+      }
       const [sx, sy, sw, sh] = coverRect(clip.w, clip.h, W, H);
       let rx = sx, ry = sy, rw = sw, rh = sh;
       if (clip.kenBurns) {
@@ -501,12 +640,17 @@ export function mountVideoEditor(host, opts = {}) {
     } else {
       const el = clip.el;
       if (el.readyState >= 2 && el.videoWidth) {
-        const [sx, sy, sw, sh] = coverRect(el.videoWidth, el.videoHeight, W, H);
-        try { ctx.drawImage(el, sx, sy, sw, sh, 0, 0, W, H); } catch {}
+        try {
+          if (clip.fit === "contain") drawContainedMediaFrame(el, el.videoWidth, el.videoHeight, W, H);
+          else {
+            const [sx, sy, sw, sh] = coverRect(el.videoWidth, el.videoHeight, W, H);
+            ctx.drawImage(el, sx, sy, sw, sh, 0, 0, W, H);
+          }
+        } catch {}
       }
     }
     ctx.restore();
-    drawTextOverlay(clip, alpha);
+    drawTextOverlay(clip, frameAlpha);
   }
   function drawFrame(t) {
     const W = cv.width, H = cv.height;
@@ -661,11 +805,16 @@ export function mountVideoEditor(host, opts = {}) {
     updateTransportUI(exportRun ? t : state.playhead, exportRun ? exportRun.total : totalDuration());
   }
 
-  /* ---------------- UI: add row / picker ---------------- */
+  /* ---------------- UI: add row / AI generate / picker ---------------- */
   function renderAddRow() {
+    const hasAi = typeof opts.sources?.generateClip === "function";
     addRowEl.innerHTML = `
-      <button class="vc-add-btn" data-vc-add-pool type="button">＋ From Media Pool</button>
-      <label class="vc-add-btn">＋ From this PC<input type="file" data-vc-add-files accept="image/*,video/*" multiple hidden/></label>
+      <div class="vc-addrow-top">
+      <div class="vc-addrow-main">
+        ${hasAi ? `<button class="vc-add-btn vc-add-btn-ai" data-vc-add-ai type="button">${genPanel.busy ? "✨ Generating…" : "✨ Generate with AI"}</button>` : ""}
+        <button class="vc-add-btn" data-vc-add-pool type="button">＋ Your media</button>
+        <label class="vc-add-btn vc-add-btn-ghost">＋ This PC<input type="file" data-vc-add-files accept="image/*,video/*" multiple hidden/></label>
+      </div>
       <div class="vc-music">
         <span class="vc-microlabel">Music</span>
         ${music.el ? `
@@ -678,9 +827,14 @@ export function mountVideoEditor(host, opts = {}) {
           <label class="vc-add-btn vc-add-btn-ghost">＋ Add track<input type="file" data-vc-music-file accept="audio/*" hidden/></label>
           <span class="vc-microlabel vc-music-note">optional · stops at the cut end</span>
         `}
-      </div>`;
+      </div>
+      </div>
+      ${hasAi && genPanel.open ? genPanelHtml() : ""}`;
     addRowEl.querySelector("[data-vc-add-pool]").onclick = openPicker;
     addRowEl.querySelector("[data-vc-add-files]").onchange = (e) => { handleFiles(e.target.files); e.target.value = ""; };
+    const aiBtn = addRowEl.querySelector("[data-vc-add-ai]");
+    if (aiBtn) aiBtn.onclick = () => { genPanel.open = !genPanel.open; renderAddRow(); };
+    wireGenPanel();
     const mf = addRowEl.querySelector("[data-vc-music-file]");
     if (mf) mf.onchange = (e) => { if (e.target.files[0]) setMusicFile(e.target.files[0]); e.target.value = ""; };
     const mv = addRowEl.querySelector("[data-vc-music-vol]");
@@ -693,37 +847,125 @@ export function mountVideoEditor(host, opts = {}) {
     const mr = addRowEl.querySelector("[data-vc-music-remove]");
     if (mr) mr.onclick = () => { clearMusic(); renderAddRow(); };
   }
-  function poolItems() {
-    const out = [];
-    const safe = (fn) => { try { const r = typeof fn === "function" ? fn() : []; return Array.isArray(r) ? r : []; } catch { return []; } };
-    for (const r of safe(opts.sources?.poolImages)) if (r && r.url) out.push({ kind: "photo", title: r.title || "Pool image", url: r.url });
-    for (const r of safe(opts.sources?.poolVideos)) if (r && r.url) out.push({ kind: "video", title: r.title || "Pool video", url: r.url });
-    return out;
-  }
-  function openPicker() {
-    pickerItems = poolItems();
-    pickerEl.hidden = false;
-    pickerEl.innerHTML = `
-      <div class="vc-picker-backdrop" data-vc-picker-close></div>
-      <div class="vc-picker-panel" role="dialog" aria-label="Media Pool picker">
-        <header class="vc-picker-head">
-          <b>Media Pool</b>
-          <span class="vc-microlabel">pick media to append to the timeline</span>
-          <button class="vc-mini-btn" data-vc-picker-close type="button" aria-label="Close">✕</button>
-        </header>
-        <div class="vc-picker-grid">
-          ${pickerItems.length ? pickerItems.map((it, i) => `
-            <button class="vc-pick" data-vc-pick="${i}" type="button">
-              <span class="vc-pick-thumb">${it.kind === "video"
-                ? `<video src="${esc(it.url)}" muted preload="metadata"></video>`
-                : `<img src="${esc(it.url)}" alt="" loading="lazy"/>`}</span>
-              <span class="vc-pick-copy"><b>${esc(it.title)}</b><i>${it.kind === "video" ? "video" : "image"}</i></span>
-            </button>`).join("")
-          : `<p class="vc-picker-empty">Media Pool is empty — generate or save media in Media Lab first, or add files from this PC.</p>`}
+  function genPanelHtml() {
+    return `
+      <div class="vc-genpanel" data-vc-genpanel>
+        <div class="vc-genpanel-mode" data-vc-gen-mode>
+          <button type="button" class="${genPanel.modality === "video" ? "is-on" : ""}" data-v="video" ${genPanel.busy ? "disabled" : ""}>Video</button>
+          <button type="button" class="${genPanel.modality === "photo" ? "is-on" : ""}" data-v="photo" ${genPanel.busy ? "disabled" : ""}>Image</button>
+        </div>
+        <textarea class="vc-genpanel-prompt" data-vc-gen-prompt rows="2" maxlength="600" placeholder="Describe the shot — subject, setting, motion, mood…" ${genPanel.busy ? "disabled" : ""}>${esc(genPanel.prompt)}</textarea>
+        <div class="vc-genpanel-actions">
+          <span class="vc-microlabel">${genPanel.busy ? "Generating — this can take a moment…" : "Adds straight to your timeline when it's ready."}</span>
+          <button type="button" class="vc-mini-btn" data-vc-gen-cancel ${genPanel.busy ? "disabled" : ""}>Cancel</button>
+          <button type="button" class="vc-add-btn vc-add-btn-ai" data-vc-gen-go ${genPanel.busy ? "disabled" : ""}>${genPanel.busy ? "Working…" : "Generate"}</button>
         </div>
       </div>`;
   }
-  function closePicker() { pickerEl.hidden = true; pickerEl.innerHTML = ""; }
+  function wireGenPanel() {
+    const panel = addRowEl.querySelector("[data-vc-genpanel]");
+    if (!panel) return;
+    panel.querySelectorAll("[data-vc-gen-mode] button").forEach((b) => b.onclick = () => {
+      genPanel.modality = b.dataset.v;
+      renderAddRow();
+    });
+    const promptEl = panel.querySelector("[data-vc-gen-prompt]");
+    if (promptEl) {
+      promptEl.oninput = () => { genPanel.prompt = promptEl.value; };
+      promptEl.focus();
+      promptEl.selectionStart = promptEl.selectionEnd = promptEl.value.length;
+    }
+    panel.querySelector("[data-vc-gen-cancel]").onclick = () => { genPanel.open = false; renderAddRow(); };
+    panel.querySelector("[data-vc-gen-go]").onclick = async () => {
+      const prompt = genPanel.prompt.trim();
+      if (!prompt) { promptEl?.focus(); return; }
+      genPanel.busy = true;
+      renderAddRow();
+      try {
+        const result = await opts.sources.generateClip(prompt, genPanel.modality === "video" ? "video" : "image");
+        if (result?.url) {
+          addClip(result.type === "video" ? "video" : "photo", result.url, result.title || "Generated", false);
+          genPanel.open = false;
+          genPanel.prompt = "";
+        }
+      } finally {
+        genPanel.busy = false;
+        renderAddRow();
+      }
+    };
+  }
+  function poolItems() {
+    const out = [];
+    const safe = (fn) => { try { const r = typeof fn === "function" ? fn() : []; return Array.isArray(r) ? r : []; } catch { return []; } };
+    for (const r of safe(opts.sources?.poolImages)) if (r && r.url) out.push({ kind: "photo", title: r.title || "Pool image", url: r.url, source: "pool" });
+    for (const r of safe(opts.sources?.poolVideos)) if (r && r.url) out.push({ kind: "video", title: r.title || "Pool video", url: r.url, source: "pool" });
+    return out;
+  }
+  function pickerGroupHtml(label, items, emptyText) {
+    return `
+      <p class="vc-picker-section">${esc(label)}</p>
+      ${items.length ? `<div class="vc-picker-grid">${items.map(({ it, i }) => `
+        <button class="vc-pick" data-vc-pick="${i}" type="button">
+          <span class="vc-pick-thumb">${it.kind === "video"
+            ? `<video src="${esc(it.url)}" muted preload="metadata"></video>`
+            : `<img src="${esc(it.url)}" alt="" loading="lazy"/>`}</span>
+          <span class="vc-pick-copy"><b>${esc(it.title)}</b><i>${it.kind === "video" ? "video" : "image"}</i></span>
+        </button>`).join("")}</div>`
+        : `<p class="vc-picker-empty">${esc(emptyText)}</p>`}`;
+  }
+  function pickerGridHtml() {
+    const indexed = pickerItems.map((it, i) => ({ it, i }));
+    const pool = indexed.filter((row) => row.it.source === "pool");
+    const local = indexed.filter((row) => row.it.source === "local");
+    const hasLocal = typeof opts.sources?.listLocal === "function";
+    return `
+      ${pickerGroupHtml("Media Pool", pool, "Media Pool is empty — generate or save media in Media Lab first.")}
+      ${hasLocal ? pickerGroupHtml(
+        "This PC",
+        local,
+        localPickerLoading ? "Scanning local files…" : "No local media indexed yet.",
+      ) : ""}`;
+  }
+  function repaintPickerGrid() {
+    const grid = pickerEl.querySelector("[data-vc-picker-body]");
+    if (grid) grid.innerHTML = pickerGridHtml();
+  }
+  async function loadLocalPickerItems() {
+    const seq = ++localPickerSeq;
+    localPickerLoading = true;
+    repaintPickerGrid();
+    const rows = await opts.sources.listLocal("all").catch(() => []);
+    if (seq !== localPickerSeq) return;
+    localPickerLoading = false;
+    localPickerItems = Array.isArray(rows) ? rows : [];
+    repaintPickerGrid(); // repaint now — the loop below only repaints per item, and may be empty
+    // resolve blob URLs progressively so the grid can preview without the picker stalling
+    for (const row of localPickerItems) {
+      if (seq !== localPickerSeq) return;
+      const url = await opts.sources.localBlobUrl(row.id).catch(() => null);
+      if (seq !== localPickerSeq) return;
+      if (url) pickerItems.push({ kind: row.kind === "video" ? "video" : "photo", title: row.title, url, source: "local" });
+      repaintPickerGrid();
+    }
+  }
+  function openPicker() {
+    pickerItems = poolItems();
+    localPickerItems = [];
+    localPickerLoading = false;
+    pickerEl.hidden = false;
+    pickerEl.innerHTML = `
+      <div class="vc-picker-backdrop" data-vc-picker-close></div>
+      <div class="vc-picker-panel" role="dialog" aria-label="Your media">
+        <header class="vc-picker-head">
+          <b>Your media</b>
+          <span class="vc-microlabel">pick something to append to the timeline</span>
+          <button class="vc-mini-btn" data-vc-picker-close type="button" aria-label="Close">✕</button>
+        </header>
+        <div data-vc-picker-body>${pickerGridHtml()}</div>
+      </div>`;
+    if (typeof opts.sources?.listLocal === "function") loadLocalPickerItems();
+  }
+  function closePicker() { pickerEl.hidden = true; pickerEl.innerHTML = ""; localPickerSeq++; }
   pickerEl.addEventListener("click", (e) => {
     const pick = e.target.closest("[data-vc-pick]");
     if (pick) {
@@ -737,7 +979,7 @@ export function mountVideoEditor(host, opts = {}) {
   /* ---------------- UI: timeline ---------------- */
   function clipCardHtml(clip, idx) {
     return `
-      <article class="vc-clip${clip.id === state.selectedId ? " is-selected" : ""}${clip.ready === "error" ? " is-error" : ""}" data-vc-clip="${esc(clip.id)}">
+      <article class="vc-clip${clip.id === state.selectedId ? " is-selected" : ""}${clip.ready === "error" ? " is-error" : ""}" data-vc-clip="${esc(clip.id)}" draggable="true" aria-label="Timeline clip ${idx + 1}: ${esc(clip.title)}">
         ${idx > 0 && clip.transition === "fade" ? `<span class="vc-clip-fade" title="0.5s crossfade from the previous clip">fade</span>` : ""}
         <div class="vc-clip-thumb">
           ${clip.thumb ? `<img src="${esc(clip.thumb)}" alt=""/>` : `<span class="vc-clip-thumb-blank">${clip.ready === "loading" ? "…" : "—"}</span>`}
@@ -745,11 +987,12 @@ export function mountVideoEditor(host, opts = {}) {
         </div>
         <div class="vc-clip-copy">
           <b>${esc(clip.title)}</b>
-          <span><em data-vc-clip-dur>${esc(fmtSec(clipDuration(clip)))}s</em>${clip.kind === "video" && clip.mute ? " · muted" : ""}${clip.ready === "error" ? " · failed to load" : ""}</span>
+          <span><em data-vc-clip-dur>${esc(fmtSec(clipDuration(clip)))}s</em>${clip.kind === "video" && clip.mute ? " · muted" : clip.kind === "video" && clipVolume(clip) !== 100 ? ` · ${clipVolume(clip)}%` : ""}${clip.ready === "error" ? " · failed to load" : ""}</span>
         </div>
         <div class="vc-clip-actions">
           <button type="button" data-vc-move="-1" ${idx === 0 ? "disabled" : ""} aria-label="Move earlier">◀</button>
           <button type="button" data-vc-move="1" ${idx === state.clips.length - 1 ? "disabled" : ""} aria-label="Move later">▶</button>
+          <button type="button" data-vc-dup aria-label="Duplicate clip">⧉</button>
           <button type="button" data-vc-del aria-label="Remove clip">✕</button>
         </div>
       </article>`;
@@ -765,6 +1008,7 @@ export function mountVideoEditor(host, opts = {}) {
     }
     timelineEl.innerHTML = state.clips.map((c, i) => clipCardHtml(c, i)).join("");
   }
+  let draggingClipId = "";
   timelineEl.addEventListener("click", (e) => {
     const card = e.target.closest("[data-vc-clip]");
     if (!card) return;
@@ -772,8 +1016,46 @@ export function mountVideoEditor(host, opts = {}) {
     if (!clip) return;
     const move = e.target.closest("[data-vc-move]");
     if (move) { moveClip(clip, Number(move.dataset.vcMove)); return; }
+    if (e.target.closest("[data-vc-dup]")) { duplicateClip(clip); return; }
     if (e.target.closest("[data-vc-del]")) { removeClip(clip); return; }
     if (state.selectedId !== clip.id) { state.selectedId = clip.id; renderTimeline(); renderInspector(); }
+  });
+  timelineEl.addEventListener("dragstart", (e) => {
+    const card = e.target.closest("[data-vc-clip]");
+    if (!card || e.target.closest("button")) return;
+    draggingClipId = card.dataset.vcClip || "";
+    card.classList.add("is-dragging");
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", draggingClipId);
+  });
+  timelineEl.addEventListener("dragover", (e) => {
+    if (!draggingClipId) return;
+    const card = e.target.closest("[data-vc-clip]");
+    if (!card || card.dataset.vcClip === draggingClipId) return;
+    e.preventDefault();
+    const rect = card.getBoundingClientRect();
+    const after = e.clientX > rect.left + rect.width / 2;
+    timelineEl.querySelectorAll(".vc-clip.is-drop-before,.vc-clip.is-drop-after").forEach((el) => el.classList.remove("is-drop-before", "is-drop-after"));
+    card.classList.add(after ? "is-drop-after" : "is-drop-before");
+    e.dataTransfer.dropEffect = "move";
+  });
+  timelineEl.addEventListener("drop", (e) => {
+    const card = e.target.closest("[data-vc-clip]");
+    const dragged = state.clips.find((clip) => clip.id === (e.dataTransfer.getData("text/plain") || draggingClipId));
+    if (!card || !dragged || card.dataset.vcClip === dragged.id) return;
+    e.preventDefault();
+    const target = state.clips.find((clip) => clip.id === card.dataset.vcClip);
+    if (!target) return;
+    const rect = card.getBoundingClientRect();
+    const after = e.clientX > rect.left + rect.width / 2;
+    const from = state.clips.indexOf(dragged);
+    let to = state.clips.indexOf(target) + (after ? 1 : 0);
+    if (from >= 0 && from < to) to -= 1;
+    moveClipToIndex(dragged, to);
+  });
+  timelineEl.addEventListener("dragend", () => {
+    draggingClipId = "";
+    timelineEl.querySelectorAll(".vc-clip.is-dragging,.vc-clip.is-drop-before,.vc-clip.is-drop-after").forEach((el) => el.classList.remove("is-dragging", "is-drop-before", "is-drop-after"));
   });
 
   /* ---------------- UI: inspector ---------------- */
@@ -790,6 +1072,7 @@ export function mountVideoEditor(host, opts = {}) {
       return;
     }
     const idx = state.clips.indexOf(clip);
+    const splitReady = !!splitPointForClip(clip);
     const kindPanel = clip.kind === "photo" ? `
       <section class="vc-ins-section">
         <span class="vc-microlabel">Duration</span>
@@ -812,6 +1095,11 @@ export function mountVideoEditor(host, opts = {}) {
             <input class="vc-range" data-vc-ins-out type="range" min="0" max="${esc(String(clip.srcDuration))}" step="0.05" value="${esc(String(clip.out))}"/>
             <em data-vc-ins-out-out>${esc(fmtSec(clip.out))}s</em>
           </div>
+          <div class="vc-ins-slider">
+            <b>Vol</b>
+            <input class="vc-range" data-vc-ins-volume type="range" min="0" max="100" step="1" value="${esc(String(clipVolume(clip)))}"/>
+            <em data-vc-ins-volume-out>${esc(String(clipVolume(clip)))}%</em>
+          </div>
           <label class="vc-check"><input type="checkbox" data-vc-ins-mute ${clip.mute ? "checked" : ""}/> Mute this clip's audio</label>
         ` : clip.ready === "error"
           ? `<i class="vc-ins-note">This video failed to load, so it has nothing to trim.</i>`
@@ -823,6 +1111,10 @@ export function mountVideoEditor(host, opts = {}) {
           <span class="vc-microlabel">Clip ${idx + 1} · ${clip.kind === "photo" ? "photo" : "video"}</span>
           <b class="vc-ins-title">${esc(clip.title)}</b>
           ${clip.ready === "error" ? `<i class="vc-ins-note vc-ins-error">This media failed to load — it renders as a blank slate in the cut.</i>` : ""}
+          <div class="vc-ins-tools">
+            <button type="button" data-vc-ins-split ${splitReady ? "" : "disabled"}>Split at playhead</button>
+            <i>${splitReady ? "Cuts this clip into two timeline pieces." : "Move the playhead inside this clip to split it."}</i>
+          </div>
         </section>
         <section class="vc-ins-section">
           <span class="vc-microlabel">Transition in</span>
@@ -831,6 +1123,28 @@ export function mountVideoEditor(host, opts = {}) {
             <option value="fade" ${clip.transition === "fade" ? "selected" : ""}>Crossfade · 0.5s</option>
           </select>
           ${idx === 0 ? `<i class="vc-ins-note">The first clip has nothing to fade from.</i>` : ""}
+        </section>
+        <section class="vc-ins-section">
+          <span class="vc-microlabel">Framing</span>
+          <select class="vc-select" data-vc-ins-fit>
+            <option value="cover" ${clip.fit !== "contain" ? "selected" : ""}>Fill frame · crop edges</option>
+            <option value="contain" ${clip.fit === "contain" ? "selected" : ""}>Fit full media · blurred backdrop</option>
+          </select>
+          <i class="vc-ins-note">${clip.fit === "contain" ? "Shows the whole source without cropping." : "Fills the export frame like a social video."}</i>
+        </section>
+        <section class="vc-ins-section">
+          <span class="vc-microlabel">Fade</span>
+          <div class="vc-ins-slider">
+            <b>In</b>
+            <input class="vc-range" data-vc-ins-fade="fadeIn" type="range" min="0" max="3" step="0.1" value="${esc(String(clipFadeValue(clip, "fadeIn")))}"/>
+            <em data-vc-ins-fade-out="fadeIn">${esc(fmtSec(clipFadeValue(clip, "fadeIn")))}s</em>
+          </div>
+          <div class="vc-ins-slider">
+            <b>Out</b>
+            <input class="vc-range" data-vc-ins-fade="fadeOut" type="range" min="0" max="3" step="0.1" value="${esc(String(clipFadeValue(clip, "fadeOut")))}"/>
+            <em data-vc-ins-fade-out="fadeOut">${esc(fmtSec(clipFadeValue(clip, "fadeOut")))}s</em>
+          </div>
+          <i class="vc-ins-note">${clip.kind === "video" ? "Fades picture and clip audio together." : "Fades the photo and text overlay."}</i>
         </section>
         ${kindPanel}
         <section class="vc-ins-section">
@@ -843,9 +1157,25 @@ export function mountVideoEditor(host, opts = {}) {
         </section>
       </div>`;
     const iq = (sel) => inspectorEl.querySelector(sel);
+    iq("[data-vc-ins-split]")?.addEventListener("click", () => splitClipAtPlayhead(clip));
     iq("[data-vc-ins-transition]")?.addEventListener("change", (e) => {
       clip.transition = e.target.value === "fade" ? "fade" : "none";
       renderTimeline(); updateMeta();
+    });
+    iq("[data-vc-ins-fit]")?.addEventListener("change", (e) => {
+      clip.fit = e.target.value === "contain" ? "contain" : "cover";
+      drawFrame(state.playhead);
+      renderInspector();
+    });
+    inspectorEl.querySelectorAll("[data-vc-ins-fade]").forEach((input) => {
+      input.addEventListener("input", (e) => {
+        const key = e.target.dataset.vcInsFade === "fadeOut" ? "fadeOut" : "fadeIn";
+        clip[key] = clipFadeValue({ ...clip, [key]: e.target.value }, key);
+        e.target.value = String(clip[key]);
+        const out = iq(`[data-vc-ins-fade-out="${key}"]`);
+        if (out) out.textContent = `${fmtSec(clip[key])}s`;
+        drawFrame(state.playhead);
+      });
     });
     // slider drags update readouts in place — a re-render mid-drag would drop the thumb
     iq("[data-vc-ins-duration]")?.addEventListener("input", (e) => {
@@ -868,6 +1198,14 @@ export function mountVideoEditor(host, opts = {}) {
       const out = iq("[data-vc-ins-out-out]");
       if (out) out.textContent = `${fmtSec(clip.out)}s`;
       updateCardDuration(clip); updateMeta();
+    });
+    iq("[data-vc-ins-volume]")?.addEventListener("input", (e) => {
+      clip.volume = clipVolume({ volume: e.target.value });
+      e.target.value = String(clip.volume);
+      if (clip.el) clip.el.volume = clip.volume / 100;
+      const out = iq("[data-vc-ins-volume-out]");
+      if (out) out.textContent = `${clip.volume}%`;
+      renderTimeline();
     });
     iq("[data-vc-ins-mute]")?.addEventListener("change", (e) => {
       clip.mute = e.target.checked;
@@ -901,11 +1239,30 @@ export function mountVideoEditor(host, opts = {}) {
   });
   refs.exportBtn.addEventListener("click", startExport);
   q("[data-vc-export-cancel]").addEventListener("click", () => stopRecorder(true));
+  const isTypingTarget = (target) => !!(target && target.closest && target.closest("input, textarea, select, button, [contenteditable]"));
   const onKey = (e) => {
-    if (e.code !== "Space" || exportRun || !root.isConnected) return;
-    if (e.target && e.target.closest && e.target.closest("input, textarea, select, button, [contenteditable]")) return;
-    e.preventDefault();
-    togglePlay();
+    if (exportRun || !root.isConnected || isTypingTarget(e.target)) return;
+    const clip = selectedClip();
+    const key = String(e.key || "").toLowerCase();
+    if (e.code === "Space") {
+      e.preventDefault();
+      togglePlay();
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && key === "d") {
+      e.preventDefault();
+      if (clip) duplicateClip(clip);
+      return;
+    }
+    if ((key === "backspace" || key === "delete") && clip) {
+      e.preventDefault();
+      removeClip(clip);
+      return;
+    }
+    if (key === "s" && clip) {
+      e.preventDefault();
+      splitClipAtPlayhead(clip);
+    }
   };
   document.addEventListener("keydown", onKey);
 
@@ -937,5 +1294,5 @@ export function mountVideoEditor(host, opts = {}) {
   renderAddRow();
   renderAll();
   raf = requestAnimationFrame(tick);
-  return { destroy };
+  return { destroy, addClip: (kind, url, title) => addClip(kind, url, title, false) };
 }

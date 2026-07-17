@@ -73,7 +73,7 @@ try {
   const betaAfterPublish = await getOrganizationConfiguration("beta-org", "owner-beta", root);
   assert.equal(betaAfterPublish.configuration.version, 1, "Publishing alpha must not change beta.");
 
-  const plan = planAssistantCustomization("Change Clients to Recruits and make the assistant professional.", published.configuration);
+  const plan = planAssistantCustomization("Change Leads to Recruits and make the assistant professional.", published.configuration);
   assert.equal(plan.understood, true);
   assert.equal(plan.sourceCodeEdited, false);
   assert.equal(plan.protectedCoreTouched, false);
