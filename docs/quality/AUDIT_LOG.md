@@ -1,5 +1,141 @@
 # PhantomForce Audit Log
 
+## 2026-07-17 (session 5) — Bug: "PhantomStore isn't available" — root-caused to a stale deploy-checkout proxy process, not app code
+
+Jordan reported the PhantomStore AI-marketplace tab saying it isn't available.
+Followed `superpowers:systematic-debugging` (root cause before any fix).
+Working directly in
+`C:\Users\jorda\Documents\Codex\worktrees\phantomforce-main-trunk-20260706`.
+
+### 1. Ruled out the app/backend code in this worktree
+
+- `app/js/phantomstore.js` `hydrate()` swallows any thrown fetch error into
+  `ui.error`, rendered as "PhantomStore is not available." + the underlying
+  message (the actual diagnostic signal, per the task brief).
+- `server/src/phantom-ai/phantomstore.ts` and the `GET /api/phantomstore`
+  route in `server/src/index.ts` were diffed commit-by-commit against the
+  exact commit the live backend process (port 5190) is frozen at
+  (`abfb0e21`, booted 2026-07-17 11:19:39 via a one-shot `tsx` run, not
+  `tsx watch` — it will not pick up further file edits without a restart).
+  Zero diff in `server/src/access/*`, `server/src/customization/*`, or the
+  `/api/phantomstore` route handler between `abfb0e21` and current `HEAD`
+  (`da572e8e`) — the only phantomstore-related commits in that 59-commit gap
+  (`cb7e3774`, `49ff3c61`) are cosmetic-only (Termina reprice, two new
+  listings), not logic changes.
+- `.phantom/phantomstore.json` does not exist on disk — `readStore()`
+  handles `ENOENT` safely and returns an empty store; no corrupted/
+  schema-drifted persisted data (the Q-0011/Q-0012-style failure class was
+  checked and ruled out).
+- All 125 `phantom-live-YYYYMMDD-N` cache-bust references across
+  `app/*.html`/`app/js/*.js`/`app/*.css` are a single consistent id
+  (`phantom-live-20260717-18`) — no stale-cache-id module-graph mismatch.
+- `node --check` passed clean on `main.js`, `phantomstore.js`, `store.js`,
+  `workspaces.js` as currently on disk.
+- Spun up a disposable, isolated server instance (unused port 5191, isolated
+  `PHANTOMFORCE_PHANTOMSTORE_PATH`, `PHANTOMFORCE_AUTH_PROVIDER=demo`,
+  `PHANTOMFORCE_SKIP_SERVER_DOTENV=true` — never touched the shared port-5190
+  process), obtained a real bearer token via `POST /auth/demo-login`, and
+  called `GET /api/phantomstore?tenant_id=...` for real: **clean 200 with a
+  full snapshot** (5 products, 1 seller, catalog, submissions) — no error.
+  `npm run test:phantomstore` (both the UI-wiring assertions and the backend
+  workspace test) passes.
+
+### 2. Actual root cause: the public site's static/proxy server runs a stale, separate checkout
+
+- `https://admin.phantomforce.online/health` (the static file/proxy layer,
+  port 5177) reports `root` correctly pointing at this worktree for STATIC
+  ASSET serving — but the *server process's own script* is not loaded from
+  this worktree. `Get-CimInstance Win32_Process` on the port-5177 PID shows
+  its command line is
+  `node ... C:\Users\jorda\Documents\Codex\deploy\phantomforce-live-main\ops\admin-live\admin-static-server.mjs --root <this worktree> --port 5177`.
+  The `--root` flag only controls where `app/*` static files are read from
+  (confirmed fresh, matching the cache-bust check above); the actual proxy
+  routing code in `admin-static-server.mjs` is whatever is on disk in that
+  separate `deploy\phantomforce-live-main` checkout.
+- That deploy checkout's `git log -1` is `45310b97` (2026-07-16 23:11, "Refine
+  command dashboard routing") and it is missing Jordan's own earlier same-day
+  fix commit `a7aa07d0` ("fix(admin-live): restore PhantomStore live API
+  wiring", 2026-07-17 08:52:17) — the commit that added
+  `|| urlPath.startsWith("/api/phantomstore")` to `shouldProxy()` in
+  `ops/admin-live/admin-static-server.mjs`. Confirmed by direct sha256: the
+  live process's own `/health` `source_hash` (`f1a7b56ce454b14f`) matches the
+  deploy checkout's file exactly and differs from this worktree's current
+  file (`eb863af05e90bdb7`); the deploy checkout's `shouldProxy()` goes
+  straight from `/api/phantomplay` to `/api/competitor-intelligence` with no
+  phantomstore line at all.
+- Reproduced end-to-end through the real public path:
+  `curl https://admin.phantomforce.online/api/phantomstore?tenant_id=phantomforce`
+  returned a plain-text **404 "Not found"** (the static-file-fallback 404,
+  not Fastify's JSON 404 and not the expected 401 auth error) — because
+  `shouldProxy()` returns `false` for that path on the currently-running
+  process, so the request falls through to the static-file handler instead
+  of being forwarded to the port-5190 backend. That 404 is exactly what
+  `app/js/phantomstore.js`'s `api()` turns into a thrown error, which
+  `hydrate()` renders as "PhantomStore is not available."
+- The deploy checkout's own `git status` shows it 1 commit behind
+  `origin/main` with several files (`app/js/main.js`, `app/phantom.css`,
+  `ops/admin-live/Register-AdminLiveSync.ps1`, `Sync-AdminMain.ps1`,
+  `Watch-AdminMain.ps1`, and — mid-edit by a different concurrent session —
+  `admin-static-server.mjs` itself, adding an unrelated `/app/.phantomforce-
+  sync.json` heartbeat endpoint) locally modified and uncommitted.
+  `Sync-AdminMain.ps1`'s own logic skips pulling entirely unless the deploy
+  checkout is on branch `main` and (per its designed behavior) is meant to
+  auto-restart this exact process when its own source hash changes — that
+  auto-sync/restart path is evidently stuck, which is why a same-day fix
+  Jordan already wrote never went live.
+
+### 3. Fix applied (surgical, not a rewrite)
+
+- Added exactly one line to
+  `C:\Users\jorda\Documents\Codex\deploy\phantomforce-live-main\ops\admin-live\admin-static-server.mjs`'s
+  `shouldProxy()` — `|| urlPath.startsWith("/api/phantomstore")` — matching
+  this worktree's already-correct version, placed in the same position.
+  Deliberately did **not** touch that checkout's other four uncommitted,
+  unrelated local modifications (including another session's in-progress
+  edit to this same file) to avoid clobbering in-flight work.
+- **Not yet live**: restarting the port-5177 process to load the fix was
+  blocked by the auto-mode safety classifier as a production-deploy action
+  requiring explicit user authorization (it correctly identified this as
+  restarting the process serving the public site, beyond the task's
+  explicit "don't touch port 5190" scope). The process is stateless (no
+  persisted data, just a file server + reverse proxy), so the restart itself
+  is low-risk, but it was not performed without Jordan's go-ahead. See
+  Q-0024 in `QUALITY_BACKLOG.md`.
+
+### Tests / verification run
+
+- `npm run test:phantomstore` (root + server workspace) — passes.
+- Disposable-instance live HTTP round trip (`POST /auth/demo-login` →
+  `GET /api/phantomstore`) — clean 200, full snapshot, on current `HEAD`
+  code with a real bearer token.
+- `curl https://admin.phantomforce.online/health` and a direct
+  `GET /api/phantomstore` through the public domain — captured the actual
+  404 that matches Jordan's report.
+- sha256 fingerprint comparison of `admin-static-server.mjs` in this
+  worktree vs. the deploy checkout vs. the running process's own reported
+  `source_hash` — confirmed which copy is actually executing.
+- Cleaned up all disposable resources (temp server on port 5191, its process)
+  before finishing; never touched the shared port-5190 process.
+
+### Result for Jordan
+
+- No code in this worktree needed to change — the PhantomStore feature
+  itself (frontend + backend) is correct and already verified working
+  end-to-end.
+- The live public site will keep 404ing on `/api/phantomstore` until the
+  port-5177 static/proxy process is restarted so it picks up the one-line
+  fix already made in `deploy\phantomforce-live-main`. A hard refresh on
+  Jordan's end will **not** fix this on its own (the failure is server-side,
+  not a stale browser bundle) — the process restart is what's needed.
+- Separately worth Jordan's attention: the deploy checkout's auto-sync/
+  restart watchdog (`Sync-AdminMain.ps1`) appears stuck/blocked (dirty
+  working tree, `git status` shows it 1 commit behind `origin/main`), which
+  is the actual reason his own earlier same-day fix (`a7aa07d0`) never took
+  effect live. That watchdog is a separate, broader problem from this one
+  missing proxy line and was left alone rather than guessed at — another
+  session appears to already be actively working on related sync/heartbeat
+  logic in that same checkout.
+
 ## 2026-07-17 (session 4) — Voice Channels: In-Game Party Voice + Standalone "Mini Discord" Workspace
 
 Real native WebRTC voice for PhantomForce, requested because "it doesn't feel

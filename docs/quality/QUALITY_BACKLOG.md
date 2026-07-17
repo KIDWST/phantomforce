@@ -1,6 +1,6 @@
 # PhantomForce Quality Backlog
 
-Last updated: 2026-07-17 (Voice Channels: Q-0020 through Q-0023 added)
+Last updated: 2026-07-17 (Q-0024 added: PhantomStore 404 on live site, root-caused to a stale deploy-checkout proxy process)
 
 ## Verified Issues
 
@@ -559,3 +559,52 @@ Last updated: 2026-07-17 (Voice Channels: Q-0020 through Q-0023 added)
   voice, that's additional work this session did not build.
 - Status: Shipped exactly as specified; the tradeoff above is the explicit
   open question for review.
+
+### Q-0024 — P1 — Live PhantomStore 404s because the port-5177 static/proxy process runs a stale, separate deploy checkout (needs Jordan's action: authorize a restart)
+
+- Route/component: `ops/admin-live/admin-static-server.mjs`'s `shouldProxy()`,
+  but the actually-broken copy is not in this worktree — it is
+  `C:\Users\jorda\Documents\Codex\deploy\phantomforce-live-main\ops\admin-live\admin-static-server.mjs`.
+- Reported symptom: "its saying phantomstore isn't available" (Jordan).
+- Root cause: the process listening on port 5177 (which
+  `admin.phantomforce.online` proxies to) loads its own server script from
+  a separate, out-of-sync checkout (`deploy\phantomforce-live-main`), not
+  from this live worktree, even though its `--root` flag correctly points
+  static file serving at this worktree. That deploy checkout is missing
+  Jordan's own same-day commit `a7aa07d0` ("fix(admin-live): restore
+  PhantomStore live API wiring"), which added the `/api/phantomstore`
+  proxy rule. Without it, `GET /api/phantomstore` on the public domain falls
+  through to the static-file 404 handler instead of reaching the port-5190
+  backend — confirmed live via `curl https://admin.phantomforce.online/api/
+  phantomstore?tenant_id=phantomforce` returning a plain-text 404. Confirmed
+  via sha256: the running process's `/health.source_hash` matches the
+  deploy checkout's file byte-for-byte and differs from this worktree's.
+- Why it wasn't self-healing: the deploy checkout's designed auto-sync/
+  restart watchdog (`ops/admin-live/Sync-AdminMain.ps1`, referenced in the
+  server's own code comments as "compares [source hash] against the file on
+  disk after every git pull and restarts the server when they differ")
+  appears stuck — that checkout is 1 commit behind `origin/main` and has
+  several files locally modified and uncommitted, which is consistent with
+  a blocked/failing `git pull` in the sync loop.
+- Fix applied so far: added the single missing
+  `|| urlPath.startsWith("/api/phantomstore")` line to the deploy checkout's
+  `shouldProxy()`, matching this worktree's already-correct version.
+  Deliberately left that checkout's other unrelated uncommitted changes
+  alone (including a different concurrent session's in-progress edit to
+  this same file adding a sync-heartbeat endpoint).
+- **Not resolved live yet**: the port-5177 process needs to be restarted to
+  load the fix. Restarting it was attempted and blocked by the auto-mode
+  safety classifier as a live production-serving process restart requiring
+  explicit user authorization — correctly so, since this task's explicit
+  constraint only pre-cleared avoiding port 5190. The process itself is
+  stateless (file server + reverse proxy, no persisted data), so the restart
+  is low-risk once authorized.
+- Broader issue for Jordan's review, not fixed here: why the deploy
+  checkout's auto-sync watchdog is stuck (dirty tree blocking `git pull`),
+  since that's the actual reason a fix Jordan wrote at 08:52 this same
+  morning never reached the live site. That is a separate, larger
+  investigation than this one missing proxy line.
+- Status: Root-caused with direct evidence (process command line, sha256
+  source-hash comparison, git ancestry, a live reproduced 404). Code fix
+  written but not yet deployed — awaiting Jordan's authorization to restart
+  the port-5177 process.
