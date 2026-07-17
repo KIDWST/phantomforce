@@ -263,8 +263,11 @@ import {
   joinPhantomPlayRoom,
   leavePhantomPlayRoom,
   moderatePhantomPlaySubmission,
+  queuePhantomPlayRoomAction,
   setPhantomPlayRoomReady,
   startPhantomPlaySession,
+  subscribeToRoom,
+  subscribeToRoomActions,
   updatePhantomPlayProfile,
   updatePhantomPlayRoomMatchState,
   updatePhantomPlaySession,
@@ -5184,6 +5187,61 @@ app.patch("/api/phantomplay/rooms/:code/ready", async (request, reply) => {
     return result ? { ok: true, session, ...result } : reply.code(404).send({ ok: false, error: "Private room was not found." });
   } catch (error) {
     return reply.code(403).send({ ok: false, error: error instanceof Error ? error.message : "Ready state update was blocked." });
+  }
+});
+
+// Realtime push for room state — additive alongside the polling GET above.
+// Writes newline-delimited JSON (NOT SSE's event:/data: framing, and NOT a
+// WebSocket) because the client uses fetch() + a streamed body reader so it
+// can send the same Authorization: Bearer header every other route uses;
+// EventSource cannot set that header, and putting the token in the URL
+// would leak it into logs/history. See docs/superpowers/specs/2026-07-17-
+// phantomplay-realtime-channel-design.md for the full rationale.
+app.get("/api/phantomplay/rooms/:code/stream", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const params = request.params as { code?: string };
+  const query = (request.query ?? {}) as { tenant_id?: unknown };
+  const initial = await getPhantomPlayRoom(session, { code: params.code, tenantId: query.tenant_id });
+  if (!initial) return reply.code(404).send({ ok: false, error: "Private room was not found." });
+
+  reply.hijack();
+  reply.raw.writeHead(200, {
+    "Content-Type": "application/x-ndjson",
+    "Cache-Control": "no-cache, no-transform",
+    Connection: "keep-alive",
+  });
+  reply.raw.write(`${JSON.stringify({ type: "state", room: initial })}\n`);
+
+  const code = String(params.code);
+  const unsubscribeState = subscribeToRoom(code, (room) => {
+    reply.raw.write(`${JSON.stringify({ type: "state", room })}\n`);
+  });
+  const unsubscribeActions = subscribeToRoomActions(code, (entry) => {
+    reply.raw.write(`${JSON.stringify({ type: "action", ...entry })}\n`);
+  });
+  const heartbeat = setInterval(() => {
+    reply.raw.write(`${JSON.stringify({ type: "ping" })}\n`);
+  }, 20_000);
+
+  const cleanup = () => {
+    clearInterval(heartbeat);
+    unsubscribeState();
+    unsubscribeActions();
+  };
+  request.raw.on("close", cleanup);
+  request.raw.on("error", cleanup);
+});
+
+app.post("/api/phantomplay/rooms/:code/actions", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const params = request.params as { code?: string };
+  try {
+    const result = await queuePhantomPlayRoomAction(session, { ...((request.body ?? {}) as Record<string, unknown>), code: params.code });
+    return result ? { ok: true, session, ...result } : reply.code(404).send({ ok: false, error: "Private room was not found." });
+  } catch (error) {
+    return reply.code(403).send({ ok: false, error: error instanceof Error ? error.message : "Action was blocked." });
   }
 });
 
