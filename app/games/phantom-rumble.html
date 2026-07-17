@@ -118,6 +118,11 @@ const CHUNKS=[
   [{dx:-.2,dy:-.1,w:.14},{dx:0,dy:-.22,w:.14},{dx:.2,dy:-.1,w:.14}],
   [{dx:-.22,dy:-.18,w:.18},{dx:.22,dy:-.18,w:.18}],
   [{dx:0,dy:-.12,w:.3}],
+  [{dx:-.28,dy:-.08,w:.12},{dx:.28,dy:-.24,w:.12}], // steep zigzag stagger
+  [{dx:-.25,dy:-.1,w:.1},{dx:0,dy:-.2,w:.1},{dx:.25,dy:-.1,w:.1},{dx:0,dy:-.28,w:.14}], // 4-step staircase weave
+  [{dx:0,dy:-.06,w:.1}], // a single narrow precision platform, close by
+  [{dx:-.3,dy:-.16,w:.22},{dx:.3,dy:-.16,w:.22}], // wide twin platforms, far apart
+  [{dx:-.12,dy:-.14,w:.13},{dx:.12,dy:-.28,w:.13},{dx:-.12,dy:-.42,w:.13}], // tight vertical spiral
 ];
 function mulberry32(seed){
   let s=seed>>>0;
@@ -134,7 +139,7 @@ function buildPlatforms(seed){
    A separate seeded layout from the brawl arena's PLATS, built the same
    deterministic way (mulberry32 from the shared match seed) so local and
    networked matches agree on the tower without transmitting it. */
-const TOWER_ROWS=16,ROW_STEP=.16,TOWER_START_Y=.56;
+const TOWER_ROWS=45,ROW_STEP=.16,TOWER_START_Y=.56;
 let TOWER=[],SUMMIT=null;
 function buildTower(seed){
   const rand=mulberry32(seed);
@@ -260,7 +265,7 @@ function makeFighter(slot,human){
 function makeRaceFighter(slot,human){
   return {slot,human,name:PALETTE[slot].name,color:PALETTE[slot].c,glow:PALETTE[slot].glow,
     x:.5+(slot-1.5)*.06,y:TOWER_START_Y,vx:0,vy:0,face:slot%2?-1:1,altitude:0,finished:false,place:0,
-    grounded:false,jumps:2,stun:0,invuln:2,dodgeCd:0,attackCd:0,anim:0,trail:[],grappleReady:false,shieldBubble:0,
+    grounded:false,jumps:2,stun:0,invuln:2,dodgeCd:0,attackCd:0,anim:0,trail:[],grappleReady:false,shieldBubble:0,speedBuff:0,
     ai:{dir:1,timer:0,jumpCd:0,diff:DIFFS[botDifficulty]},lastTap:{key:'',at:0},_gpDir:0};
 }
 function startMatch(selected,options={}){
@@ -363,7 +368,8 @@ addEventListener('keydown',e=>{
       if(netMode)sendMatchAction({type:'input',slot:localSlot,event:'jump'},'merge');
     }
     if(pad.light.includes(e.key)){if(mode==='racetop')raceSabotage(f);else attack(f,false);if(netMode)sendMatchAction({type:'input',slot:localSlot,event:'light'},'merge')}
-    if(mode!=='racetop'&&pad.heavy.includes(e.key))f.charge=.01;
+    if(mode==='racetop'){if(pad.heavy.includes(e.key)){raceSabotage(f,true);if(netMode)sendMatchAction({type:'input',slot:localSlot,event:'heavy'},'merge')}}
+    else if(pad.heavy.includes(e.key))f.charge=.01;
     if(mode!=='racetop'&&pad.shield.includes(e.key)){f.shieldHeld=true;f.parry=.18;addFloater(f.x,f.y-.1,'GUARD',f.glow,11)}
     if(pad.dodge.includes(e.key)){dodge(f);if(netMode)sendMatchAction({type:'input',slot:localSlot,event:'dodge'},'merge')}
     if(pad.left.includes(e.key))tapDash(f,-1,e.key);
@@ -398,7 +404,8 @@ for(const b of document.querySelectorAll('[data-t]')){
         if(f.grappleReady){f.grappleReady=false;const dir=heldDir(f)||f.face||1;f.vx=dir*.03;f.vy=-.032;f.jumps=1;spawnBurst(f.x,f.y,'#5eead4',16);addFloater(f.x,f.y-.1,'GRAPPLE!','#5eead4',15);sfx('jump')}else jump(f);
       }
       else if(act==='light')raceSabotage(f);
-      // 'heavy'/'shield' have no meaning in this mode — race mode reuses only jump/light/left/right/dodge
+      else if(act==='heavy')raceSabotage(f,true);
+      // 'shield' has no meaning in this mode
       else if(act==='dodge')dodge(f);
       return;
     }
@@ -667,7 +674,7 @@ function step(f,dt){
 }
 let racePickupTimer=5;
 function raceSpawnPickup(){
-  const kinds=['grapple','bubble'];
+  const kinds=['grapple','bubble','portal','dash'];
   const kind=kinds[Math.floor(Math.random()*kinds.length)];
   const platform=TOWER[Math.floor(Math.random()*(TOWER.length-1))]; // never the summit
   pickups.push({kind,x:platform.x,y:platform.y-.06,age:0,fuse:null});
@@ -679,6 +686,19 @@ function raceGrabPickups(f){
       p.taken=true;
       if(p.kind==='grapple'){f.grappleReady=true;spawnBurst(f.x,f.y,'#5eead4',14);addFloater(f.x,f.y-.09,'GRAPPLE READY','#5eead4',14);sfx('pickup')}
       if(p.kind==='bubble'){f.shieldBubble=8;spawnBurst(f.x,f.y,'#a78bfa',14);addFloater(f.x,f.y-.09,'SHIELD UP','#a78bfa',14);sfx('pickup')}
+      if(p.kind==='portal'){
+        // Instant reality-bend: warp straight up to a random platform
+        // higher than where you are now — a big, exciting swing of
+        // fortune rather than a two-endpoint portal pair to traverse.
+        const above=TOWER.filter(s=>s.y<f.y-.1&&!s.summit);
+        const dest=above.length?above[Math.floor(Math.random()*above.length)]:null;
+        if(dest){
+          spawnBurst(f.x,f.y,'#c084fc',20);
+          f.x=dest.x;f.y=dest.y-.07;f.vx=0;f.vy=0;f.invuln=.5;
+          spawnBurst(f.x,f.y,'#c084fc',24);addFloater(f.x,f.y-.1,'PORTAL WARP!','#c084fc',18);sfx('bomb');
+        }
+      }
+      if(p.kind==='dash'){f.speedBuff=6;spawnBurst(f.x,f.y,'#fde047',14);addFloater(f.x,f.y-.09,'SPEED UP','#fde047',14);sfx('pickup')}
     }
   }
   pickups=pickups.filter(item=>!item.taken);
@@ -689,6 +709,8 @@ function drawRacePickup(p,t){
   ctx.shadowBlur=16*DPR;
   if(p.kind==='grapple'){ctx.shadowColor='#5eead4';ctx.fillStyle='#5eead4';ctx.font=`${16*DPR}px ui-monospace`;ctx.fillText('🪝',bx-8*DPR,by)}
   if(p.kind==='bubble'){ctx.shadowColor='#a78bfa';ctx.fillStyle='#a78bfa';ctx.font=`${16*DPR}px ui-monospace`;ctx.fillText('🛡',bx-8*DPR,by)}
+  if(p.kind==='portal'){ctx.shadowColor='#c084fc';ctx.fillStyle='#c084fc';ctx.font=`${16*DPR}px ui-monospace`;ctx.fillText('◐',bx-8*DPR,by)}
+  if(p.kind==='dash'){ctx.shadowColor='#fde047';ctx.fillStyle='#fde047';ctx.font=`${16*DPR}px ui-monospace`;ctx.fillText('📜',bx-8*DPR,by)}
   ctx.shadowBlur=0;
 }
 function finishRace(f){
@@ -707,7 +729,8 @@ function stepHazard(dt){
 }
 function raceStep(f,dt){
   if(f.finished)return;
-  f.invuln=Math.max(0,f.invuln-dt);f.stun=Math.max(0,f.stun-dt);f.attackCd=Math.max(0,f.attackCd-dt);f.anim=Math.max(0,f.anim-dt);f.dodgeCd=Math.max(0,f.dodgeCd-dt);f.shieldBubble=Math.max(0,f.shieldBubble-dt);
+  f.invuln=Math.max(0,f.invuln-dt);f.stun=Math.max(0,f.stun-dt);f.attackCd=Math.max(0,f.attackCd-dt);f.anim=Math.max(0,f.anim-dt);f.dodgeCd=Math.max(0,f.dodgeCd-dt);f.shieldBubble=Math.max(0,f.shieldBubble-dt);f.speedBuff=Math.max(0,f.speedBuff-dt);
+  const speedMul=f.speedBuff>0?1.35:1;
   if(f.stun<=0){
     if(f.human){
       // Keyboard/touch only, by scope decision — applyGamepadInput() (and
@@ -716,8 +739,8 @@ function raceStep(f,dt){
       // for this mode is a real follow-up, not a silent oversight.
       const dir=heldDir(f);
       if(dir)f.face=dir;
-      f.vx+=dir*.0018*(dt*60);
-    }else raceBotThink(f,dt);
+      f.vx+=dir*.0018*speedMul*(dt*60);
+    }else raceBotThink(f,dt,speedMul);
   }
   f.vx*=f.grounded?.82:.94;
   f.vy=Math.min(.05,f.vy+.0011*(dt*60));
@@ -737,18 +760,27 @@ function raceStep(f,dt){
   if(f.y>hazardY&&f.invuln<=0)hazardCatch(f);
   raceGrabPickups(f);
 }
-function raceBotThink(f,dt){
+function raceBotThink(f,dt,speedMul){
   const d=f.ai.diff||DIFFS.normal;
   f.ai.timer-=dt;f.ai.jumpCd-=dt;
   const target=TOWER.filter(s=>s.y<f.y-.05).sort((a,b)=>b.y-a.y)[0]||SUMMIT;
   f.ai.dir=target.x>f.x?1:-1;
+  // Climb aggressively and reliably. Brawl bots gate jump behind a rare,
+  // probabilistic reaction timer because for them it's an occasional
+  // off-stage-recovery reflex — race bots need to jump constantly to
+  // ascend at all, so that same gating left them walking back and forth
+  // under a platform without ever climbing it ("going in circles").
+  if(f.jumps>0&&f.ai.jumpCd<=0){
+    const wasGrounded=f.grounded;
+    jump(f);
+    f.ai.jumpCd=wasGrounded?.15:.35; // quick re-tap to use the second jump, longer once both are spent
+  }
   if(f.ai.timer<=0){
     f.ai.timer=d.reaction[0]+Math.random()*(d.reaction[1]-d.reaction[0]);
-    if(f.grounded&&f.ai.jumpCd<=0&&Math.random()<d.recoverSkill){jump(f);f.ai.jumpCd=d.jumpCd}
     const rival=fighters.find(t=>t!==f&&!t.finished&&Math.abs(t.x-f.x)<.06&&Math.abs(t.y-f.y)<.08);
-    if(rival&&Math.random()<d.heavyChance){f.face=rival.x>f.x?1:-1;raceSabotage(f)}
+    if(rival&&Math.random()<d.heavyChance){f.face=rival.x>f.x?1:-1;raceSabotage(f,Math.random()<d.heavyChance)}
   }
-  f.vx+=f.ai.dir*.0016*d.accel*(dt*60);
+  f.vx+=f.ai.dir*.0016*d.accel*(speedMul||1)*(dt*60);
 }
 function slideDown(f,rows){
   f.y=Math.min(TOWER_START_Y,f.y+rows*ROW_STEP);
@@ -758,16 +790,19 @@ function slideDown(f,rows){
 function hazardCatch(f){
   slideDown(f,4);
 }
-function raceSabotage(f){
+function raceSabotage(f,heavy){
   if(f.attackCd>0)return;
-  f.attackCd=.28;f.anim=.18;
-  const reach=.06; // identical to attack()'s light-attack reach — precision is the point, no aim-assist for this mode
+  // Light: quick precise poke (attack()'s exact light reach, no aim-assist,
+  // small slide). Heavy (the 'g' key, previously a no-op in this mode):
+  // wider reach matching attack()'s heavy reach, bigger cooldown, and a
+  // much harder slide — a real, if riskier, tool alongside light sabotage.
+  f.attackCd=heavy?.55:.28;f.anim=heavy?.3:.18;
+  const reach=heavy?.085:.06;
   for(const t of fighters){
     if(t===f||t.finished||t.invuln>0||t.shieldBubble>0)continue;
     const dx=t.x-f.x,dy=t.y-f.y;
     if(Math.abs(dy)<.08&&dx*f.face>-.015&&Math.abs(dx)<reach){
-      slideDown(t,2);
-      spawnBurst(t.x,t.y,t.glow,14);sfx('hit');
+      slideDown(t,heavy?5:2); // slideDown already handles the burst/floater/sfx, including the "WASHED OUT!" label a 5-row heavy shove earns
     }
   }
 }
@@ -890,8 +925,18 @@ function updateCamera(){
   const live=fighters.filter(f=>!f.dead&&!f.finished);
   if(mode==='racetop'){
     if(!live.length){camera.x+=(.5-camera.x)*.04;camera.y+=(TOWER_START_Y-camera.y)*.04;camera.z+=(1-camera.z)*.04;return}
+    // Frame the WHOLE pack, not just the leader — locking onto the leader
+    // alone left anyone who fell behind scrolling off-screen and out of
+    // view entirely (looked like they'd "disappeared," even though they
+    // were still climbing). Center between the leader and the laggard,
+    // and zoom out as the vertical gap between them grows.
     const leader=live.reduce((a,b)=>a.y<b.y?a:b);
-    camera.x+=(.5-camera.x)*.05;camera.y+=(leader.y-camera.y)*.06;camera.z+=(1-camera.z)*.04;
+    const laggard=live.reduce((a,b)=>a.y>b.y?a:b);
+    const vertSpread=Math.max(.08,laggard.y-leader.y);
+    const midY=(leader.y+laggard.y)/2;
+    camera.x+=(.5-camera.x)*.05;
+    camera.y+=(midY-camera.y)*.06;
+    camera.z+=(Math.max(.42,Math.min(1,.95-vertSpread*.55))-camera.z)*.045;
     return;
   }
   if(!live.length){camera.x+=(.5-camera.x)*.04;camera.y+=(.56-camera.y)*.04;camera.z+=(1-camera.z)*.04;return}
