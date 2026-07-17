@@ -340,6 +340,17 @@ function buildCard(card) {
   placeholder.innerHTML = `<p class="big">EMPTY</p><p>Pick a terminal type to open one here.</p>`;
   screen.append(host, placeholder);
 
+  // Hover-to-focus: moving the mouse over a live terminal gives it
+  // keyboard focus, so you never have to click into a pane that might be
+  // mid-prompt (a stray click there could trigger the prompt itself).
+  // Toggleable in Settings; defaults on. No-op on empty tiles (card.term
+  // is null until a terminal is actually started).
+  screen.addEventListener("mouseenter", () => {
+    if (typeof hoverFocusEnabled === "function" && hoverFocusEnabled() && card.term) {
+      card.term.focus();
+    }
+  });
+
   const inspector = document.createElement("div");
   inspector.className = "tile-inspector hidden";
 

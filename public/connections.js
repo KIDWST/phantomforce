@@ -8,10 +8,6 @@ const CONNECTION_PROVIDER_META = {
   openrouter: { label: "OpenRouter", extraField: { label: "Model", placeholder: "z-ai/glm-5.2" } },
 };
 
-document.getElementById("connections-btn").addEventListener("click", () => {
-  document.getElementById("connections-modal").classList.remove("hidden");
-  renderConnections();
-});
 document.getElementById("connections-close").addEventListener("click", () => {
   document.getElementById("connections-modal").classList.add("hidden");
 });

@@ -1731,3 +1731,34 @@ body.broadcast-mode .tile.linked {
   margin: 6px 0 0;
 }
 
+/* ---- Settings panel -------------------------------------------------- */
+
+.settings-section {
+  margin-top: 18px;
+}
+.settings-section:first-of-type {
+  margin-top: 0;
+}
+.settings-section h3 {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin: 0 0 10px;
+}
+.settings-toggle-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+}
+.settings-toggle-row input {
+  margin-top: 3px;
+}
+.settings-toggle-row small {
+  display: block;
+  color: var(--muted);
+  font-weight: 400;
+  margin-top: 2px;
+}
+

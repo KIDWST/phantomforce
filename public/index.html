@@ -29,7 +29,7 @@
         </div>
         <button id="rescan" class="ghost" type="button" title="Rescan available terminal types">Re-scan</button>
         <button id="missions-btn" class="ghost" type="button" title="Mission Mode — coordinate multiple Claude CLI workers on one objective">Missions</button>
-        <button id="connections-btn" class="ghost" type="button" title="Connect your own API keys per provider">🔌 Connections</button>
+        <button id="connections-btn" class="ghost" type="button" title="Settings — connections, terminal behavior">⚙ Settings</button>
         <button id="new-term" class="primary new-btn" type="button" aria-haspopup="true" aria-expanded="false" aria-label="New terminal (Ctrl+N)" title="New terminal (Ctrl+N)">
           <span class="new-plus">+</span><span class="kbd">Ctrl N</span>
         </button>
@@ -74,13 +74,20 @@
       </div>
     </div>
 
-    <div id="connections-modal" class="overlay hidden" role="dialog" aria-modal="true" aria-label="Connections">
+    <div id="connections-modal" class="overlay hidden" role="dialog" aria-modal="true" aria-label="Settings">
       <div class="overlay-panel mission-panel">
         <div class="overlay-head">
-          <span>Connections</span>
+          <span>Settings</span>
           <button type="button" id="connections-close" class="ghost">Close</button>
         </div>
-        <div id="connections-body" class="mission-body"></div>
+        <div class="settings-section">
+          <h3>Terminal behavior</h3>
+          <div id="settings-behavior"></div>
+        </div>
+        <div class="settings-section">
+          <h3>Connections</h3>
+          <div id="connections-body" class="mission-body"></div>
+        </div>
       </div>
     </div>
 
