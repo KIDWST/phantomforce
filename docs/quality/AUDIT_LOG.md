@@ -1,5 +1,232 @@
 # PhantomForce Audit Log
 
+## 2026-07-17 (session 4) — Voice Channels: In-Game Party Voice + Standalone "Mini Discord" Workspace
+
+Real native WebRTC voice for PhantomForce, requested because "it doesn't feel
+like multiplayer without it": (1) automatic in-game party voice when players
+join a PhantomPlay room together, and (2) a standalone Voice Channels
+workspace — any authenticated user can create a text+voice channel and invite
+specific real accounts, independent of any game. Explicitly no Discord
+dependency, no external accounts, no downloads — audio is peer-to-peer WebRTC,
+the server only relays signaling. Working directly in
+`C:\Users\jorda\Documents\Codex\worktrees\phantomforce-main-trunk-20260706`,
+confirmed live via `/health` (`root` matches this checkout) and
+`GET /sessions` before editing. No `git push` performed (local commits only).
+Full design rationale in
+`docs/superpowers/specs/2026-07-17-voice-channels-design.md`.
+
+### 1. Design spec
+
+- File: `docs/superpowers/specs/2026-07-17-voice-channels-design.md`.
+- Covers: signaling transport decision (reusing the NDJSON-over-fetch shape
+  already proven by the PhantomPlay realtime channel, not a new WebSocket —
+  this server has none installed, and one was already rejected in that
+  sibling spec for Pangolin-tunnel reasons that apply equally here), the
+  STUN-only mesh topology and its known no-TURN limitation (explicit,
+  tracked, not silently shipped), the channel/membership/invite/voice-
+  session data model, and how in-game party voice and standalone channels
+  share one `VoiceCore` code path with different lifecycles.
+
+### 2. Backend signaling relay + data model
+
+- Files: `server/src/phantom-ai/voicechannels.ts` (new),
+  `server/src/index.ts` (new `/api/voice/*` routes), `server/scripts/
+  test-voicechannels.ts` (new regression test, `npm run test:voicechannels`).
+- What shipped: a JSON-file-backed store (`.phantom/voicechannels.json`,
+  same temp-file-then-rename pattern as `phantomplay.ts`) for channels/
+  membership/invites/message history, plus an in-memory-only presence +
+  signaling-subscriber layer (voice presence is never persisted — a server
+  restart can never resurrect a stale "connected" participant). Routes:
+  channel CRUD/invite/join/leave, text chat (recent-200-persisted), and
+  voice-session start/stream(NDJSON)/signal(relay)/mute/leave. The signal
+  relay is a pure pass-through — `payload` (SDP/ICE) is never inspected or
+  decoded server-side.
+- Deliberately no entitlement/plan gate beyond the platform-wide paywall
+  preHandler every mutating route already goes through (see Q-0022) — any
+  authenticated user, any role, per the explicit "no restriction" ask.
+- Existing `server/scripts/test-phantomplay.ts` and
+  `scripts/test-phantomplay.mjs` assertions were updated: PhantomPlay
+  rooms' `safety.directPeerConnection`/`safety.voice` flipped from a
+  type-locked `false` to `true` (party voice genuinely opens direct WebRTC
+  peer connections now) — the room-principles UI copy and the "SAFE BY
+  DEFAULT" bullet list were updated to match, rather than leaving a stale
+  "no voice" claim in place post-ship.
+
+### 3. Shared frontend voice core
+
+- File: `app/js/voicecore.js` (new).
+- `VoiceCore` class: mesh `RTCPeerConnection` manager (glare-avoided via
+  lexicographic actorId comparison for who initiates each offer), STUN-only
+  ICE, mic mute (`track.enabled` toggle + broadcast), basic Web-Audio-
+  `AnalyserNode` speaking-indicator (RMS floor, not VAD) on local and every
+  remote track, and the NDJSON signaling-stream client mirroring
+  `phantomplay.js`'s `openRoomStream()` (same stall-watchdog/retry-budget
+  pattern). One class, reused unmodified by both consumers below.
+
+### 4. In-game party voice
+
+- File: `app/js/phantomplay.js`.
+- What shipped: `syncPartyVoice()` hooked into `upsertRoom()` (the single
+  funnel every room join/leave/poll/stream update already passes through)
+  auto-connects a `VoiceCore` once a room has 2+ active participants; mic-
+  mute button added to `.pp-player-actions` (mirrors the gamepad-toggle
+  button pattern exactly) plus a small speaking-indicator participant strip
+  under the player header. All voice-state UI updates are targeted DOM
+  patches (`renderPartyVoiceStrip()`), never a full `render()` while the
+  game iframe is mounted (would reload the game mid-match) — same
+  discipline as the existing `[data-pp-live-score]` pattern.
+- Voice session lifecycle is tied to room membership, not to the player
+  screen being open (per the explicit task instruction) — flagged as
+  Q-0023 since this can outlive closing the game screen.
+
+### 5. Standalone "mini Discord" workspace
+
+- Files: `app/js/voicechannels.js` (new), `app/js/main.js` (`BASE_NAV`
+  entry under Operations department alongside Planner/Automations/
+  Workforce, `CUSTOM.voicechannels` registration, matching exactly how
+  Planner itself was made reachable — see Q-0018).
+- What shipped: channel list, create-channel flow (name + public/invite-
+  only), an invite flow that searches real PhantomForce accounts via the
+  existing `GET /orgs/:orgId/members` route (reused, not reinvented) with
+  an honest fallback to a manual account-id invite when no live directory
+  is available (non-`database` auth providers — see Q-0022), a text-chat
+  panel, and a "Join voice"/mute button using the same `VoiceCore` class
+  as in-game party voice.
+
+### Surfaces Audited
+
+- `server/src/phantom-ai/voicechannels.ts`, `server/src/index.ts` (new
+  routes only — existing routes untouched).
+- `app/js/voicecore.js`, `app/js/voicechannels.js` (new files).
+- `app/js/phantomplay.js` (player chrome, room join/leave, `upsertRoom`).
+- `app/js/main.js` (nav entry, workspace registration, import).
+- `app/phantomplay.css`, `app/phantom.css` (new voice UI styles).
+- `server/src/phantom-ai/phantomplay.ts`, `server/scripts/
+  test-phantomplay.ts`, `scripts/test-phantomplay.mjs` (safety-contract
+  update for the new `voice`/`directPeerConnection` flags).
+
+### Problems Verified
+
+- None pre-existing in this area (voice did not exist before this session).
+- Discovered while verifying: `scripts/test-phantomplay.mjs` failed on an
+  assertion unrelated to this session's changes (`accel=.000055*W` no
+  longer matches `app/games/neon-drift.html`, a game file this session did
+  not touch) — confirmed pre-existing by re-running the same test against
+  a `git stash` of this session's changes, which failed identically. Not
+  fixed here (out of scope: a different session's concurrent Neon Drift
+  boost-mechanic edit drifted from this baseline assertion).
+
+### Problems Fixed
+
+- N/A — this is new-feature work, not a bugfix cycle.
+
+### Tests Added
+
+- `server/scripts/test-voicechannels.ts` (`npm run test:voicechannels` /
+  `npm run test:voicechannels --workspace @phantomforce/server`): channel
+  tenant isolation, invite-only visibility/join gating, membership-gated
+  chat + recent-N history, voice-session presence accuracy, signal-relay
+  addressing (including rejecting a signal from a non-participant),
+  mute-broadcast reflection in the live snapshot, empty-session cleanup
+  (never fabricate stale presence), and game-room-kind session-key
+  derivation shared with the channel path.
+
+### Commands Run
+
+- `npm run typecheck` — PASS.
+- `node --check` on every touched/new `.js` file
+  (`app/js/main.js`, `app/js/phantomplay.js`, `app/js/voicecore.js`,
+  `app/js/voicechannels.js`) — PASS.
+- `npm run test:phantomplay` (root, chains the `.mjs` UI-copy test and the
+  server-side `tsx scripts/test-phantomplay.ts`) — server-side suite PASS
+  (including the updated voice-safety assertions); root `.mjs` suite hit
+  the pre-existing unrelated Neon Drift failure described above.
+- `npx tsx scripts/test-phantomplay.ts` (server workspace, run directly to
+  isolate from the unrelated `.mjs` failure) — PASS, all assertions
+  including the new `directPeerConnection === true && voice === true` /
+  `chat === false` split.
+- `npm run test:voicechannels` — PASS.
+- `rg -n "phantom-live-20260717-17"` across `app/` before bumping (found
+  41 files, confirming `-17` was the highest suffix in use), then a
+  scripted bump to `phantom-live-20260717-18` across `app/index.html` and
+  every `app/js/*.js` file; re-confirmed zero remaining `-17` references
+  and 43 files now on `-18` (including the two new files, which were
+  authored directly against `-18`).
+- Live-server verification (see Results below) against both the shared
+  local dev stack and a disposable, isolated `tsx server/src/index.ts`
+  instance on an unused port, using only demo-auth fixtures and a
+  temp-directory store — no shared state touched.
+
+### Results
+
+- PASS: `agent-browser` against the shared local dev stack
+  (`127.0.0.1:5177`, confirmed live via `/health` matching this checkout)
+  shows the "Voice Channels" nav entry under the Operations department
+  exactly as registered, and opening it renders the full workspace shell
+  (header, create-channel button, empty channel list, empty channel-view
+  placeholder) with no layout breakage — screenshot captured.
+- **Could not fully verify the live shared server's new `/api/voice/*`
+  routes in-browser**: the shared API process on port 5190 was already
+  running (started before this session, no file-watcher — a plain
+  `tsx` invocation, not `tsx watch`) and therefore serving code from before
+  this session's changes. Restarting that shared process was correctly
+  blocked by the environment's permission system as a shared-
+  infrastructure risk to other concurrently-committing sessions, and this
+  session did not attempt to work around that block. This also means the
+  "Business Manager" quick-login flow available in this sandbox does not
+  yield a working bearer token against that shared process for *any*
+  route, old or new (confirmed: the pre-existing `/api/phantomplay` route
+  also 401s / falls back to "Offline mode" under that same login path in
+  this environment) — an environment/session-provisioning limitation
+  unrelated to this session's code.
+- PASS (real, live, two-independent-authenticated-peers verification):
+  spun up a disposable `tsx server/src/index.ts` instance on an unused
+  port with demo auth and a temp-directory store (no shared files/ports
+  touched, torn down afterward). Using the two built-in demo identities
+  (`admin-jordan`, `client-sports-demo`) as two independent real HTTP
+  clients: created a channel, invited/joined across the invite-only gate,
+  posted and read tenant-isolated messages, both peers joined the same
+  voice session and saw accurate live presence, peer B's `POST .../signal`
+  offer was received in real time on peer A's **open, live NDJSON stream**
+  addressed correctly (`from`/`kind`/`payload` all matched exactly), and
+  peer A's mute broadcast was observed by peer B's independently-open
+  stream as a live presence update. This is a genuine end-to-end proof of
+  the signaling relay, presence, and mute-broadcast layers over real HTTP
+  between two distinct authenticated identities — the piece explicitly
+  called out as sufficient verification without physical microphone
+  hardware.
+- Also discovered during this live pass (not a bug — see Q-0022): the
+  platform-wide paywall preHandler blocks the free-tier demo client from
+  any mutating Voice Channels call exactly as it already blocks that same
+  fixture from `POST /api/phantomplay/rooms` — confirmed both behave
+  identically, so the two-peer proof above was re-run with
+  `PHANTOM_FREE_WRITE=true` set only on the disposable verify instance.
+- **Not verified in this session**: real two-browser `RTCPeerConnection`
+  reaching `connected` ICE state with actual audio flowing (would require
+  either the shared server restart that was correctly blocked, or a
+  browser-automation setup with fake-media-device flags that wasn't built
+  in the time available). Stated plainly per the task's honesty
+  requirement, not claimed as working.
+
+### Remaining P0/P1
+
+- No P0.
+- P1 (carried, unrelated to this session): DB-auth org isolation browser
+  proof is still required (pre-existing, see prior cycles).
+
+### Next Task
+
+Restart the shared local API dev server (`server/src/index.ts`, port 5190)
+so the new `/api/voice/*` routes go live for the shared stack, then finish
+the last-mile verification this session could not complete: a real two-
+browser `RTCPeerConnection` handshake reaching `connected` with actual
+audio (ideally two real `agent-browser` sessions with fake-media-device
+flags, or a manual two-tab pass), plus a click-through of the standalone
+Voice Channels workspace's create/invite/chat/join-voice flow against a
+`database`-auth-provider session so the real member-directory invite path
+(not the manual-id fallback) gets exercised. Also worth a decision pass on
+Q-0020 (TURN relay) before this reaches real users on restrictive networks.
+
 ## 2026-07-17 (session 3) — Cycle 3: Command IA — Sidebar Departments, Away Mode Enforcement, Memory Citations, 3-Lane Planner, Explanatory Analytics
 
 Continuation of the Command architecture pivot from `Documents/CLAUDECLIHANDOFF.md`

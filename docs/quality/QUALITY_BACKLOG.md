@@ -1,6 +1,6 @@
 # PhantomForce Quality Backlog
 
-Last updated: 2026-07-17
+Last updated: 2026-07-17 (Voice Channels: Q-0020 through Q-0023 added)
 
 ## Verified Issues
 
@@ -432,3 +432,130 @@ Last updated: 2026-07-17
   that isn't backed by real historical data.
 - Status: Shipped, browser-verified with real transactions and checkable
   arithmetic (see AUDIT_LOG item 5).
+
+### Q-0020 — P2 — Voice Channels ships STUN-only, no TURN relay (needs Jordan's review)
+
+- Route/component: `app/js/voicecore.js` (`ICE_SERVERS`), the WebRTC mesh
+  used by both in-game party voice (`app/js/phantomplay.js`) and the
+  standalone Voice Channels workspace (`app/js/voicechannels.js`). See
+  `docs/superpowers/specs/2026-07-17-voice-channels-design.md` for the full
+  rationale.
+- What shipped: real native WebRTC voice, no Discord dependency, no
+  external accounts — audio is peer-to-peer, the server only relays small
+  SDP/ICE signaling messages. ICE configuration is STUN-only
+  (`stun:stun.l.google.com:19302` + a Google backup), which lets two peers
+  connect directly when at least one side is behind a NAT that does simple
+  endpoint-independent mapping.
+- Known limitation, not silently shipped as flawless: without a TURN relay
+  server, peers behind a **symmetric NAT** or some **CGNAT** configurations
+  (common on some mobile/corporate networks) cannot complete a peer-to-peer
+  connection at all — STUN only helps with address discovery, TURN is the
+  fallback that actually relays audio bytes when direct connection fails.
+  This is a well-documented WebRTC-ecosystem limitation, not a bug in this
+  implementation. The affected fraction of users is impossible to predict
+  without production telemetry.
+- Mitigation already in place: a peer connection that doesn't reach
+  `connected` ICE state within a bounded timeout is shown as "Couldn't
+  connect"/`connecting`/`failed` per-participant in both voice UIs, never
+  silently hidden or faked as connected (see `VoiceCore.snapshot()` in
+  `app/js/voicecore.js`).
+- Correction needed: stand up a TURN relay (self-hosted `coturn` or a paid
+  provider) and add its credentials to `ICE_SERVERS`. This is a real
+  infrastructure decision (bandwidth cost, another exposed service,
+  possibly time-limited credential minting server-side) that this session
+  deliberately did not make unilaterally.
+- Status: Shipped with the limitation explicitly surfaced in-product (the
+  PhantomPlay room-safety copy now says "Voice uses STUN only — no relay
+  server yet, so a small minority of restrictive networks may fail to
+  connect peer-to-peer"). Real two-peer signaling handshake (offer/answer/
+  ICE relay, presence, mute broadcast) was verified end-to-end over live
+  HTTP against a real running server instance — see AUDIT_LOG for detail.
+  Real audio-quality/NAT-traversal-success-rate testing across varied
+  network topologies was not possible in this environment and remains
+  open.
+
+### Q-0021 — P3 — Voice Channels persistence is a local JSON store, not Prisma (needs Jordan's review)
+
+- Route/component: `server/src/phantom-ai/voicechannels.ts` (`readStore`/
+  `writeStore`, `.phantom/voicechannels.json`).
+- Judgment call: this app has both a Postgres/Prisma layer (auth, CRM,
+  orgs) and a local-JSON-file layer (PhantomPlay's own rooms/profiles/
+  submissions, `server/src/phantom-ai/phantomplay.ts`; CRM pipeline docs,
+  `server/src/crm/crm-pipeline-store.ts`). Voice Channels follows the
+  JSON-store convention — same temp-file-then-rename write pattern,
+  `PHANTOMFORCE_VOICECHANNELS_PATH` env override mirroring
+  `PHANTOMFORCE_PHANTOMPLAY_PATH` — because it's the pattern its closest
+  sibling feature (PhantomPlay rooms) already uses, and channel/message
+  counts are expected to be small. Live voice presence itself is
+  deliberately **never** persisted at all (in-memory only), so a server
+  restart can never resurrect a stale "connected" participant.
+- If Jordan wants channels/messages backed by Postgres instead (e.g. for
+  multi-process scale-out, or to match the CRM/org data model more
+  closely), that's a real migration, not a trivial swap — this session did
+  not attempt to guess which direction is preferred.
+- Status: Shipped and covered by `server/scripts/test-voicechannels.ts`
+  (`npm run test:voicechannels`) plus a live two-peer HTTP verification
+  pass against a real running server instance.
+
+### Q-0022 — P3 — Voice Channels invites are scoped to same-tenant real accounts only (needs Jordan's review)
+
+- Route/component: `server/src/phantom-ai/voicechannels.ts`
+  (`inviteToChannel`), `app/js/voicechannels.js` (`ensureMemberDirectory`,
+  reusing the existing `GET /orgs/:orgId/members` route from
+  `server/src/access/user-accounts.ts` `listOrgMembers`).
+- Judgment call: "invite a specific real PhantomForce user" reuses this
+  app's existing real-account directory rather than inventing a parallel
+  identity concept, per the task's explicit instruction — but that
+  directory (`listOrgMembers`) is org/tenant-scoped and requires the
+  `database` auth provider (Prisma-backed orgs). Two consequences worth
+  Jordan's attention: (1) inviting a user in a *different* tenant/org isn't
+  wired up at all in this pass — consistent with how every other module
+  here scopes identity (PhantomPlay rooms are
+  `joinPolicy: "signed_in_same_tenant_code"` too), but a real limitation if
+  cross-org voice channels are wanted later; (2) on any auth provider other
+  than `database` (`demo`, `prisma-dev`, `owner-production`,
+  `gateway-forwarded` — see `docs/DATABASE_SETUP.md`), there is no live
+  member directory to search at all, and the UI degrades honestly to a
+  manual "enter an account id" invite form rather than fabricating a fake
+  directory (`app/js/voicechannels.js`'s `memberDirectoryError` path).
+- Also flagging: while verifying this feature live, discovered the
+  platform-wide paywall preHandler (`server/src/access/paywall-guard.ts`,
+  registered globally in `server/src/index.ts`) fail-closed-gates every
+  mutating Voice Channels route (create/join/invite/message/voice-session/
+  mute) behind an active subscription or `canManageAccess`, identically to
+  how it already gates PhantomPlay's own room routes. This is existing,
+  consistent platform policy (plan tier, not role) — Voice Channels was
+  deliberately left subject to it rather than carved out an exception, but
+  flagging it here in case Jordan wants free-tier accounts to have voice
+  access as a growth lever even before PhantomPlay rooms get the same
+  treatment.
+- Status: Shipped as described; both judgment calls are open for review,
+  not treated as bugs to silently work around.
+
+### Q-0023 — P3 — In-game party voice can outlive the PhantomPlay screen being open (needs Jordan's review)
+
+- Route/component: `app/js/phantomplay.js` (`syncPartyVoice`,
+  `startPartyVoice`, `teardownPartyVoice`).
+- What shipped: per the task's explicit instruction ("Tie voice session
+  lifecycle to room join/leave, not to the whole app being open"), party
+  voice connects once a room has 2+ active participants and stays
+  connected across closing the game screen (`closePlayer()` does **not**
+  tear it down) — the mic and peer connections only close on an explicit
+  room leave, or when the room naturally drops to 1 active participant.
+- Judgment call needing review: this codebase's `renderPhantomPlay()`
+  already returns a cleanup function that is never invoked anywhere in
+  `app/js/main.js` (a pre-existing gap, not introduced by this session —
+  confirmed by reading `openWorkspace`/`renderWorkspacePage`, which both
+  discard `def.render(body)`'s return value for `custom: true` workspaces).
+  Combined with the "persist across screen close" requirement above, this
+  means party voice can keep a live mic connection running even after the
+  user navigates to a completely unrelated part of the app (Accounting,
+  Settings, etc.) as long as they're still nominally a room member. This
+  matches the letter of the requirement but may not match user
+  expectation ("I closed the game, why is my mic still on"). No UI
+  currently surfaces "you're still in party voice" outside the PhantomPlay
+  screen itself. If Jordan wants a global "still in voice" indicator, or
+  wants navigating fully away from PhantomPlay to also disconnect party
+  voice, that's additional work this session did not build.
+- Status: Shipped exactly as specified; the tradeoff above is the explicit
+  open question for review.
