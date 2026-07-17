@@ -1,5 +1,10 @@
 {
   "_comment": "Copy this to termina.config.json (next to server.js) to define your own terminal types. Each becomes an option in every window's dropdown. Commands run on your machine as you; cwd supports ~ for your home directory. Every profile auto-trusts 'do you trust this folder?' style CLI prompts by default — add \"autoTrust\": false to a profile to opt it out.",
+  "_usage_comment": "Optional spending limits (USD). sessionLimitUsd covers the current app run's live sessions; dailyLimitUsd covers today's total (persisted in .termina/usage-history.jsonl). At 80% of a limit every client shows a warning; at/over the daily limit NEW session starts return 409 until you raise the limit here — running sessions are never killed. Omit the key (or either field) for no limit.",
+  "usage": {
+    "sessionLimitUsd": 25,
+    "dailyLimitUsd": 100
+  },
   "profiles": [
     {
       "id": "pwsh",

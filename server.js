@@ -37,6 +37,16 @@ import { maybeCheckpoint, readCheckpoints } from "./mission/checkpoint.js";
 import { TOKEN_ADAPTERS, estimateFromChars, costForUsage } from "./mission/tokens.js";
 import { shouldPollSession, resolveSoloTranscript } from "./mission/usage-poll.js";
 import { contextPercent } from "./mission/model-catalog.js";
+import {
+  appendUsageHistory,
+  bucketHistoryByDay,
+  checkLimits,
+  dayKey,
+  loadUsageLimits,
+  readUsageHistory,
+  shouldBlockSessionStart,
+  summarizeUsage,
+} from "./usage-limits.js";
 import os from "node:os";
 
 const appDir = path.dirname(fileURLToPath(import.meta.url));
@@ -51,6 +61,10 @@ const TOKEN = process.env.TERMINA_TOKEN ?? randomBytes(24).toString("base64url")
 
 const profiles = loadProfiles();
 const profileById = new Map(profiles.map((p) => [p.id, p]));
+const usageLimits = loadUsageLimits(appDir);
+// usage-history.jsonl lives directly under .termina — make sure it exists
+// before the first append (missions create it lazily, solo tiles may not).
+mkdirSync(path.join(appDir, ".termina"), { recursive: true });
 
 // ---- session registry (one entry per tile terminal) ------------------------
 
@@ -210,9 +224,55 @@ async function pollSoloTokenUsage(session) {
   }
 }
 
-// Latest usage snapshot per session, kept for the summary endpoint (Task 3).
+// Latest usage snapshot per session (for /api/usage/summary), plus the
+// per-poll cost delta appended to the app-level usage-history.jsonl so daily
+// totals survive restarts, plus the limit-state transition check.
 function recordUsageSnapshot(session, snapshot) {
   session.usage = { ...snapshot, updatedAt: Date.now() };
+  if (typeof snapshot.costUsd === "number" && Number.isFinite(snapshot.costUsd)) {
+    const prev = typeof session.lastLoggedCostUsd === "number" ? session.lastLoggedCostUsd : 0;
+    const delta = snapshot.costUsd - prev;
+    if (delta > 0) {
+      session.lastLoggedCostUsd = snapshot.costUsd;
+      appendUsageHistory(appDir, { ts: Date.now(), sessionId: session.id, costUsd: delta }).catch(() => {});
+    }
+  }
+  maybeEmitLimitState();
+}
+
+function currentLimitCheck() {
+  const historyByDay = bucketHistoryByDay(readUsageHistory(appDir));
+  let sessionTotalUsd = 0;
+  for (const [, session] of sessions) {
+    if (typeof session.usage?.costUsd === "number") sessionTotalUsd += session.usage.costUsd;
+  }
+  return checkLimits({ sessionTotalUsd, todayTotalUsd: historyByDay[dayKey()] ?? 0 }, usageLimits);
+}
+
+// Broadcast a limit-state transition (ok→warn, warn→over, back to ok, …) to
+// every connected client. Advisory only: nothing running is ever killed —
+// "over" on the daily limit blocks NEW session starts (409) until the user
+// raises the limit in termina.config.json.
+let lastLimitState = "ok";
+function maybeEmitLimitState() {
+  const check = currentLimitCheck();
+  if (check.state === lastLimitState) return;
+  lastLimitState = check.state;
+  const detail = check.breached
+    .map((b) => `${b.limit === "daily" ? "today's spend" : "session spend"} $${b.totalUsd.toFixed(2)} of $${b.limitUsd.toFixed(2)} limit`)
+    .join("; ");
+  const message =
+    check.state === "over"
+      ? `Spending limit reached (${detail}). New sessions are blocked until you raise the limit in termina.config.json.`
+      : check.state === "warn"
+        ? `Approaching spending limit (${detail}).`
+        : "Spending back under configured limits.";
+  const payload = JSON.stringify({ type: "limit", state: check.state, message, breached: check.breached });
+  for (const [, session] of sessions) {
+    for (const socket of session.sockets) {
+      if (socket.readyState === socket.OPEN) socket.send(payload);
+    }
+  }
 }
 
 function statusPayload(result) {
@@ -650,9 +710,22 @@ const server = http.createServer((req, res) => {
     });
   }
 
+  // Session + daily spend rollup for the totals bar. Costs come only from
+  // real usage snapshots; unpriced models stay null, estimated stays flagged.
+  if (pathName === "/api/usage/summary" && req.method === "GET") {
+    const historyByDay = bucketHistoryByDay(readUsageHistory(appDir));
+    const summary = summarizeUsage(sessions.entries(), historyByDay, { limits: usageLimits });
+    return sendJson(res, 200, { ok: true, ...summary });
+  }
+
   // Start a terminal in a specific tile session. Body: { profile, cols, rows, capture }
   const startMatch = pathName.match(/^\/api\/sessions\/([\w.-]+)\/start$/);
   if (startMatch && req.method === "POST") {
+    // Over the daily spending limit: block NEW sessions only — running ones
+    // are never killed.
+    if (shouldBlockSessionStart(currentLimitCheck())) {
+      return sendJson(res, 409, { ok: false, error: "daily spending limit reached" });
+    }
     readJsonBody(req).then((body) => {
       const profile = profileById.get(String(body.profile));
       if (!profile) return sendJson(res, 404, { ok: false, error: "unknown_profile" });
