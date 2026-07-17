@@ -12,6 +12,9 @@ assert.match(source, /friendlyBackendError[\s\S]*Sign in to load Workspace Studi
 assert.doesNotMatch(source, /!preview\?\.valid \|\| busy/u, "Publish must not require a preview result before it is enabled.");
 assert.doesNotMatch(source, /Workspace Studio could not load/u, "Workspace Studio must not dead-end when the backend is temporarily unavailable.");
 assert.match(source, /previewCustomizedNavigation/u, "Navigation customization needs a pure preview helper for regression tests.");
+assert.match(source, /normalizeCustomizationConfiguration/u, "Old saved Workspace Studio configurations must be migrated with newly-added platform modules.");
+assert.match(source, /activeConfiguration = normalizeCustomizationConfiguration\(payload\.configuration\)/u, "Loaded customization must merge in modules added after the saved configuration was created.");
+assert.match(source, /configuration = normalizeCustomizationConfiguration\(configuration\)/u, "Navigation preview must merge missing platform modules before filtering.");
 assert.match(source, /\(left\.bottom \? 1 : 0\)\s*-\s*\(right\.bottom \? 1 : 0\)/u, "Navigation sorting must use an explicit bottom-group comparison.");
 
 for (const id of ["dashboard", "crm", "media", "sites", "money", "phantomplay", "phantomstore", "intelligence", "analytics", "customize", "settings"]) {
@@ -27,7 +30,7 @@ globalThis.localStorage = {
 globalThis.sessionStorage = globalThis.localStorage;
 globalThis.window = { dispatchEvent() {} };
 
-const { previewCustomizedNavigation } = await import(`../app/js/customization.js?test=${Date.now()}`);
+const { normalizeCustomizationConfiguration, previewCustomizedNavigation } = await import(`../app/js/customization.js?test=${Date.now()}`);
 const baseNav = [
   { id: "dashboard" },
   { id: "crm" },
@@ -49,12 +52,16 @@ const baseNav = [
   { id: "settings", bottom: true },
 ];
 const oldSavedOrder = [
-  "dashboard", "crm", "clientsetup", "media", "sites", "money", "planner", "phantomplay", "phantomstore",
+  "dashboard", "crm", "clientsetup", "media", "sites", "money", "planner", "phantomplay",
   "intelligence", "analytics", "memory", "automation", "approvals", "workers", "vacation", "developer", "settings",
 ];
 const configuration = {
   modules: oldSavedOrder.map((id, order) => ({ id, label: id, enabled: true, order, roles: ["owner", "admin", "manager", "member", "client"] })),
 };
+const migrated = normalizeCustomizationConfiguration(configuration);
+const phantomStoreModule = migrated.modules.find((module) => module.id === "phantomstore");
+assert.ok(phantomStoreModule?.enabled, "Old saved Workspace Studio configs must gain an enabled PhantomStore module automatically.");
+assert.ok(migrated.modules.some((module) => module.id === "phantomstore"), "PhantomStore must appear in the Workspace Studio module list after migration.");
 const ownerOrder = previewCustomizedNavigation(baseNav, configuration, "owner").map((item) => item.id);
 assert.deepEqual(ownerOrder, [
   "dashboard", "crm", "clientsetup", "media", "sites", "money", "planner", "phantomplay", "phantomstore",

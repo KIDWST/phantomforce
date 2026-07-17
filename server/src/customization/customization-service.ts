@@ -80,6 +80,34 @@ export function defaultOrganizationConfiguration(tenantId: string, actor = "syst
   });
 }
 
+export function hydratePlatformModules(configuration: OrganizationConfiguration): OrganizationConfiguration {
+  const internal = configuration.tenantId === "phantomforce-owner" || configuration.tenantId === "phantomforce";
+  const profile = internal ? workspaceProfileFor("business") : workspaceProfileFor(configuration.policies.workspaceProfile);
+  const enabledModules = new Set(internal ? PLATFORM_MODULES.map((module) => module.id) : profile.enabledModules);
+  const existingById = new Map(configuration.modules.map((module) => [module.id, module]));
+  const modules = PLATFORM_MODULES.map((definition, order) => {
+    const roles = definition.allowedRoles.includes("platform_owner") ? ["owner"] : definition.allowedRoles;
+    const existing = existingById.get(definition.id);
+    if (!existing) {
+      return {
+        id: definition.id,
+        label: definition.displayName,
+        enabled: definition.required || enabledModules.has(definition.id),
+        order,
+        roles,
+      };
+    }
+    return {
+      id: definition.id,
+      label: existing.label || definition.displayName,
+      enabled: definition.required || existing.enabled,
+      order: Number.isInteger(existing.order) ? existing.order : order,
+      roles: existing.roles.length ? existing.roles : roles,
+    };
+  });
+  return OrganizationConfigurationSchema.parse({ ...configuration, modules });
+}
+
 function mergeConfiguration(current: OrganizationConfiguration, patch: ConfigurationPatch, actor: string) {
   return {
     ...current,
@@ -178,7 +206,7 @@ export function validateOrganizationConfiguration(configuration: OrganizationCon
 
 export async function getOrganizationConfiguration(tenantId: string, actor: string, root?: string) {
   const document = await readCustomizationDocument(tenantId, root);
-  if (document) return { configuration: OrganizationConfigurationSchema.parse(document.current), versions: document.versions, audit: document.audit };
+  if (document) return { configuration: hydratePlatformModules(OrganizationConfigurationSchema.parse(document.current)), versions: document.versions, audit: document.audit };
   const configuration = defaultOrganizationConfiguration(tenantId, actor);
   const persisted = await persistConfiguration({ configuration, summary: "Created organization defaults", actor, eventType: "created", root });
   return { configuration, versions: persisted.document.versions, audit: persisted.document.audit };
@@ -215,7 +243,7 @@ export async function rollbackOrganizationConfiguration(options: { tenantId: str
   const state = await getOrganizationConfiguration(options.tenantId, options.actor, options.root);
   const target = state.versions.find((version) => version.version === options.version);
   if (!target) throw new Error("Configuration version not found.");
-  const restored = OrganizationConfigurationSchema.parse({ ...structuredClone(target.configuration), version: state.configuration.version + 1, updatedAt: new Date().toISOString(), updatedBy: options.actor });
+  const restored = hydratePlatformModules(OrganizationConfigurationSchema.parse({ ...structuredClone(target.configuration), version: state.configuration.version + 1, updatedAt: new Date().toISOString(), updatedBy: options.actor }));
   const issues = validateOrganizationConfiguration(restored, options.entitlements);
   if (issues.some((issue) => issue.severity === "error")) throw new Error(`That version cannot be restored: ${issues.find((issue) => issue.severity === "error")?.message}`);
   const persisted = await persistConfiguration({ configuration: restored, summary: `Restored version ${target.version}`, actor: options.actor, eventType: "rolled_back", root: options.root });

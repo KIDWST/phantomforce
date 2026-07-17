@@ -43,6 +43,9 @@ assert.match(userAccountsSource, /persistConfiguration/u, "Signup must persist p
 assert.match(serverSource, /app\.post\("\/auth\/signup"/u, "Server must expose a public signup endpoint.");
 assert.match(serverSource, /workspaceBrief:\s*z\.string\(\)\.trim\(\)\.min\(12\)\.max\(600\)/u, "Server signup schema must require a bounded workspace brief.");
 assert.match(serverSource, /fieldErrors\.workspaceBrief\?\.length[\s\S]*workspace_brief_required/u, "Server signup schema failures must return the friendly workspace brief error code.");
+assert.match(serviceSource, /export function hydratePlatformModules/u, "Saved customization documents must be hydrated with modules added after the document was created.");
+assert.match(serviceSource, /hydratePlatformModules\(OrganizationConfigurationSchema\.parse\(document\.current\)\)/u, "Loading customization must merge newly-added platform modules into old saved configs.");
+assert.match(serviceSource, /hydratePlatformModules\(OrganizationConfigurationSchema\.parse\(\{ \.\.\.structuredClone\(target\.configuration\)/u, "Rollback must also hydrate old versions with current platform modules.");
 
 assert.match(orgsSource, /databaseSignup/u, "Frontend auth client must call signup.");
 assert.match(orgsSource, /\/auth\/signup/u, "Frontend auth client must target the signup endpoint.");

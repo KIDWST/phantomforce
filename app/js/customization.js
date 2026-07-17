@@ -101,12 +101,54 @@ function defaultConfiguration(tenantId = currentTenantId()) {
   };
 }
 
+const REQUIRED_MODULE_IDS = new Set(["dashboard", "approvals", "customize", "settings"]);
+
+export function normalizeCustomizationConfiguration(configuration = null) {
+  const source = configuration && typeof configuration === "object" ? configuration : {};
+  const baseline = defaultConfiguration(source.tenantId || currentTenantId());
+  const existingModules = Array.isArray(source.modules) ? source.modules : [];
+  const existingById = new Map(existingModules.map((module) => [module.id, module]));
+  const modules = baseline.modules.map((module) => {
+    const existing = existingById.get(module.id);
+    if (!existing) return module;
+    const roles = Array.isArray(existing.roles) && existing.roles.length ? existing.roles : module.roles;
+    return {
+      ...module,
+      ...existing,
+      id: module.id,
+      label: String(existing.label || module.label).slice(0, 40) || module.label,
+      enabled: REQUIRED_MODULE_IDS.has(module.id) || existing.enabled === true,
+      order: Number.isInteger(existing.order) ? existing.order : module.order,
+      roles,
+      customerConfigurable: module.customerConfigurable,
+    };
+  });
+  return {
+    ...baseline,
+    ...source,
+    brand: { ...baseline.brand, ...(source.brand || {}) },
+    theme: { ...baseline.theme, ...(source.theme || {}) },
+    terminology: { ...baseline.terminology, ...(source.terminology || {}) },
+    navigation: { ...baseline.navigation, ...(source.navigation || {}) },
+    assistant: { ...baseline.assistant, ...(source.assistant || {}) },
+    policies: { ...baseline.policies, ...(source.policies || {}) },
+    dashboards: Array.isArray(source.dashboards) ? source.dashboards : baseline.dashboards,
+    customObjects: Array.isArray(source.customObjects) ? source.customObjects : baseline.customObjects,
+    forms: Array.isArray(source.forms) ? source.forms : baseline.forms,
+    workflows: Array.isArray(source.workflows) ? source.workflows : baseline.workflows,
+    extensions: Array.isArray(source.extensions) ? source.extensions : baseline.extensions,
+    modules,
+    localFallback: source.localFallback === true,
+  };
+}
+
 export function currentCustomization() {
   return activeConfiguration;
 }
 
 export function applyOrganizationCustomization(configuration = activeConfiguration) {
   if (!configuration) return;
+  configuration = normalizeCustomizationConfiguration(configuration);
   activeConfiguration = configuration;
   const root = document.documentElement;
   root.style.setProperty("--neon", configuration.theme.primary);
@@ -128,6 +170,7 @@ export function applyOrganizationCustomization(configuration = activeConfigurati
 
 function customizeNavigationForConfiguration(baseItems, configuration, role = "owner") {
   if (!configuration) return baseItems;
+  configuration = normalizeCustomizationConfiguration(configuration);
   const states = new Map(configuration.modules.map((module) => [module.id, module]));
   return baseItems
     .filter((item) => {
@@ -156,7 +199,7 @@ export function previewCustomizedNavigation(baseItems, configuration, role = "ow
 export async function loadOrganizationCustomization({ onApplied } = {}) {
   try {
     const payload = await api(`/phantom-ai/customization/config?${tenantQuery()}`);
-    activeConfiguration = payload.configuration;
+    activeConfiguration = normalizeCustomizationConfiguration(payload.configuration);
     activeEntitlements = payload.entitlements;
     applyOrganizationCustomization(activeConfiguration);
     if (typeof onApplied === "function") onApplied(activeConfiguration);
