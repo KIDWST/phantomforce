@@ -72,6 +72,51 @@ body.superuser .tile.collapsed {
   z-index: 50;
 }
 
+.su-palette {
+  position: fixed;
+  top: 15%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 480px;
+  max-width: 90vw;
+  background: var(--panel-2);
+  border: 1px solid var(--accent);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  z-index: 60;
+  padding: 10px;
+}
+.su-palette.hidden {
+  display: none;
+}
+#su-palette-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--text);
+  font-size: 14px;
+}
+#su-palette-results {
+  margin-top: 8px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.su-palette-item {
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--soft);
+  font-size: 13px;
+}
+.su-palette-item.active,
+.su-palette-item:hover {
+  background: var(--panel-3);
+  color: var(--text);
+}
+
 .su-jump-badge {
   position: absolute;
   top: 6px;

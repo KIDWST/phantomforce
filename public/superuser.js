@@ -322,6 +322,95 @@ function clearSelection() {
   renderBulkBar();
 }
 
+// ---- command palette ------------------------------------------------------
+
+function paletteActions() {
+  const actions = [];
+  cards.forEach((card, i) => {
+    actions.push({
+      label: `Jump to: ${card.name || card.profileId || "Untitled " + (i + 1)}`,
+      run: () => expandCard(card),
+    });
+  });
+  for (const t of loadTemplates()) {
+    actions.push({ label: `Launch template: ${t.name}`, run: () => launchTemplate(t) });
+  }
+  actions.push({ label: "Toggle compact chrome (all)", run: () => document.getElementById("su-compact-all").click() });
+  actions.push({ label: "Toggle Link mode", run: () => toggleBroadcast() });
+  actions.push({ label: "Basic Mode", run: () => (window.location.href = "/") });
+  return actions;
+}
+
+function fuzzyMatch(query, text) {
+  const q = query.toLowerCase();
+  return text.toLowerCase().includes(q);
+}
+
+let paletteSelectedIndex = 0;
+
+function openPalette() {
+  document.getElementById("su-palette").classList.remove("hidden");
+  const input = document.getElementById("su-palette-input");
+  input.value = "";
+  paletteSelectedIndex = 0;
+  renderPaletteResults("");
+  input.focus();
+}
+
+function closePalette() {
+  document.getElementById("su-palette").classList.add("hidden");
+}
+
+function renderPaletteResults(query) {
+  const results = document.getElementById("su-palette-results");
+  const matches = paletteActions().filter((a) => fuzzyMatch(query, a.label));
+  results.innerHTML = matches
+    .map((a, i) => `<div class="su-palette-item${i === paletteSelectedIndex ? " active" : ""}" data-i="${i}">${escapeHtml(a.label)}</div>`)
+    .join("");
+  results.querySelectorAll(".su-palette-item").forEach((el) => {
+    el.addEventListener("click", () => {
+      matches[Number(el.dataset.i)]?.run();
+      closePalette();
+    });
+  });
+  return matches;
+}
+
+document.getElementById("su-palette-input").addEventListener("input", (e) => {
+  paletteSelectedIndex = 0;
+  renderPaletteResults(e.target.value);
+});
+document.getElementById("su-palette-input").addEventListener("keydown", (e) => {
+  const matches = paletteActions().filter((a) => fuzzyMatch(document.getElementById("su-palette-input").value, a.label));
+  if (e.key === "ArrowDown") {
+    e.preventDefault();
+    paletteSelectedIndex = Math.min(paletteSelectedIndex + 1, matches.length - 1);
+    renderPaletteResults(document.getElementById("su-palette-input").value);
+  } else if (e.key === "ArrowUp") {
+    e.preventDefault();
+    paletteSelectedIndex = Math.max(paletteSelectedIndex - 1, 0);
+    renderPaletteResults(document.getElementById("su-palette-input").value);
+  } else if (e.key === "Enter") {
+    e.preventDefault();
+    matches[paletteSelectedIndex]?.run();
+    closePalette();
+  } else if (e.key === "Escape") {
+    closePalette();
+  }
+});
+
+document.addEventListener(
+  "keydown",
+  (e) => {
+    if ((e.ctrlKey || e.metaKey) && (e.key === "k" || e.key === "K")) {
+      e.preventDefault();
+      e.stopPropagation();
+      openPalette();
+    }
+  },
+  true,
+);
+
 let lastCardCount = -1;
 setInterval(() => {
   // Grid/compact recheck runs every tick (cheap at this scale) since
