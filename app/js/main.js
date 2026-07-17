@@ -1738,7 +1738,7 @@ function renderCommandWidgets() {
   const mount = $("[data-command-widgets]");
   if (!mount) return;
   mount.innerHTML = commandWidgetRows().map((card, index) => `
-    <details class="command-widget command-widget-${esc(card.id)}" ${index === 0 ? "open" : ""}>
+    <details class="command-widget command-widget-${esc(card.id)}">
       <summary>
         <span class="cw-ic">${svg(card.icon)}</span>
         <span class="cw-copy">

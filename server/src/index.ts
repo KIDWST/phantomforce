@@ -317,6 +317,7 @@ import {
   getOrganizationOpportunities,
   getOrganizationPulse,
 } from "./phantom-ai/organization-pulse.js";
+import { getBrainContract, getSignals } from "./phantom-ai/signals.js";
 import {
   getAutonomousSecurityScanStatus,
   startAutonomousSecurityScanScheduler,
@@ -4782,6 +4783,33 @@ app.get("/api/organization/opportunities", async (request, reply) => {
     return { ok: true, ...(await getOrganizationOpportunities(session, await pulseAccessFor(session, query.tenant_id))) };
   } catch (error) {
     return reply.code(500).send({ ok: false, error: error instanceof Error ? error.message : "Opportunities could not be assembled." });
+  }
+});
+
+/* Brain Signal contract — see server/src/phantom-ai/signals.ts and
+   docs/BRAIN_SIGNAL_CONTRACT.md. Normalizes organization-pulse opportunities
+   + graph disconnections into one cross-department Signal[]; /contract is
+   the single read other modules should consume instead of re-deriving their
+   own priority logic. */
+app.get("/api/brain/signals", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const query = (request.query ?? {}) as { tenant_id?: unknown };
+  try {
+    return { ok: true, ...(await getSignals(session, await pulseAccessFor(session, query.tenant_id))) };
+  } catch (error) {
+    return reply.code(500).send({ ok: false, error: error instanceof Error ? error.message : "Signals could not be assembled." });
+  }
+});
+
+app.get("/api/brain/contract", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const query = (request.query ?? {}) as { tenant_id?: unknown };
+  try {
+    return { ok: true, ...(await getBrainContract(session, await pulseAccessFor(session, query.tenant_id))) };
+  } catch (error) {
+    return reply.code(500).send({ ok: false, error: error instanceof Error ? error.message : "Brain contract could not be assembled." });
   }
 });
 
