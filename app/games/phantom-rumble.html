@@ -579,7 +579,10 @@ function endMatch(winner){
   const score=humanKos*100+(winner&&winner.human?winner.stocks*50:0);
   host('score',{score});
   host('complete',{score,progress:100,state:null});
-  document.querySelector('[data-endtitle]').textContent=winner?(winner.human?`${winner.name} WINS`:`${winner.name} (BOT) WINS`):'DRAW';
+  const titleEl=document.querySelector('[data-endtitle]');
+  titleEl.textContent=winner?(winner.human?`${winner.name} WINS`:`${winner.name} (BOT) WINS`):'DRAW';
+  titleEl.style.color=winner?winner.color:'';
+  titleEl.style.textShadow=winner?`0 0 28px ${winner.glow}`:'';
   document.querySelector('[data-endcopy]').textContent=winner?`${matchKos[winner.slot]} KOs this match. Session: ${stats.wins}/${stats.matches} rumbles won.`:`Everyone fell. Session: ${stats.wins}/${stats.matches} rumbles won.`;
   endEl.hidden=false;hudEl.hidden=true;document.querySelector('[data-touch]').hidden=true;
 }
