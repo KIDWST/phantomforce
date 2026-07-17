@@ -727,6 +727,15 @@ function toggleBroadcast(force) {
   saveWorkspace();
 }
 
+// Ctrl/Cmd+A while Link mode is on links every terminal at once — the
+// select-all equivalent of Shift-clicking each tile individually.
+function linkAllCards() {
+  for (const card of cards) {
+    card.linked = true;
+    document.querySelector(`.tile[data-uid="${card.uid}"]`)?.classList.add("linked");
+  }
+}
+
 // ---- expand overlay ---------------------------------------------------------
 
 let overlayCard = null;
@@ -973,6 +982,22 @@ document.addEventListener(
       e.preventDefault();
       e.stopPropagation();
       toggleNewMenu();
+    }
+  },
+  true,
+);
+
+// Ctrl/Cmd+A links every terminal at once, but only while Link mode is on —
+// otherwise it's just normal text selection. Capture phase so it works even
+// while a terminal has focus (xterm would otherwise eat the key).
+document.addEventListener(
+  "keydown",
+  (e) => {
+    if (!broadcastOn) return;
+    if ((e.ctrlKey || e.metaKey) && (e.key === "a" || e.key === "A")) {
+      e.preventDefault();
+      e.stopPropagation();
+      linkAllCards();
     }
   },
   true,
