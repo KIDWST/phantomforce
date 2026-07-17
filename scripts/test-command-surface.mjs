@@ -98,6 +98,12 @@ assert.match(main, /deck\.hidden = items\.length === 0/u,
   "Handled proof strip must disappear when no real activity exists.");
 assert.match(main, /function nextMoveActions\(\)/u,
   "Right rail must derive next moves from real attention and plan state.");
+assert.match(main, /label:\s*index === 0 \? "Prepare decision packet" : decisionCtaLabel\(item\)/u,
+  "The top real signal should become a decision packet next move, not just a workspace link.");
+assert.match(main, /run:\s*index === 0 \? decisionCommandText\(item, "prepare"\) : ""/u,
+  "Decision-packet next moves must execute the same approval-safe command as decision cards.");
+assert.match(main, /Review evidence and gate/u,
+  "The right rail should still offer a review path after preparing the packet.");
 assert.match(main, /function workInMotionItems\(\)/u,
   "Right rail must derive work in motion from real agents and proof activity.");
 assert.match(main, /store\.state\.activity[\s\S]*?badge:\s*"PROOF"/u,
