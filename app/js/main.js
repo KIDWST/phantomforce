@@ -6,47 +6,47 @@ import {
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260717-12";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260717-12";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260717-12";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260717-12";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260717-12";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260717-12";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260717-12";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260717-12";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260717-12";
-import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260717-12";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260717-12";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260717-12";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260717-12";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260717-12";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260717-12";
-import { renderOperatorMiniSettings, renderOperatorSettings, renderOwnerAdminControl } from "./settings.js?v=phantom-live-20260717-12";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260717-12";
-import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260717-12";
-import { mountAmbient } from "./ambient.js?v=phantom-live-20260717-12";
-import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260717-12";
+} from "./store.js?v=phantom-live-20260717-13";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260717-13";
+import { WORKSPACE_DEFS, missionWidgets, esc, DEPARTMENTS } from "./workspaces.js?v=phantom-live-20260717-13";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260717-13";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260717-13";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260717-13";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260717-13";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260717-13";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260717-13";
+import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260717-13";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260717-13";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260717-13";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260717-13";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260717-13";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260717-13";
+import { renderOperatorMiniSettings, renderOperatorSettings, renderOwnerAdminControl } from "./settings.js?v=phantom-live-20260717-13";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260717-13";
+import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260717-13";
+import { mountAmbient } from "./ambient.js?v=phantom-live-20260717-13";
+import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260717-13";
 import {
   fetchAuthConfig, databaseLogin, databaseLogout, databaseSignup, databaseSignupDeveloper, databaseUpgradeDeveloperAccount, databaseForgotUsername, databaseForgotPassword,
   databaseResetPassword, databaseVerify2fa, databaseStart2faSetup, databaseConfirm2fa, databaseRegenerate2faBackupCodes, databaseDisable2fa,
   switchOrg, fetchAuthMe, fetchEntitlementsSummary,
-} from "./orgs.js?v=phantom-live-20260717-12";
-import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260717-12";
-import { assetsAvailable } from "./orgs.js?v=phantom-live-20260717-12";
-import { renderPhantomStore } from "./phantomstore.js?v=phantom-live-20260717-12";
-import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260717-12";
+} from "./orgs.js?v=phantom-live-20260717-13";
+import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260717-13";
+import { assetsAvailable } from "./orgs.js?v=phantom-live-20260717-13";
+import { renderPhantomStore } from "./phantomstore.js?v=phantom-live-20260717-13";
+import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260717-13";
 // PhantomPlay V2 platform shell (Home/Solo/Friends/Workspace/Dev Hub) - opt-in
 // while it hardens: set localStorage "pf.phantomplay.v2" = "1" (the V2 shell has
 // a "Classic view" button to switch back). Classic stays the default experience.
-import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260717-12";
+import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260717-13";
 const phantomPlayV2Opted = () => { try { return localStorage.getItem("pf.phantomplay.v2") === "1"; } catch { return false; } };
-import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260717-12";
+import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260717-13";
 import {
   canAccessConfiguredModule,
   customizeNavigation,
   loadOrganizationCustomization,
-} from "./customization.js?v=phantom-live-20260717-12";
-import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260717-12";
+} from "./customization.js?v=phantom-live-20260717-13";
+import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260717-13";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -427,27 +427,48 @@ function maybeUpgradeGateToDatabaseLogin(card, options = {}) {
 }
 
 /* ============================ sidebar nav ============================ */
+/* Every main-zone item carries a `dept` tag so the sidebar can group it under
+   one of the 7 Command-architecture departments (see DEPARTMENTS, imported
+   from workspaces.js — the same list Workforce already groups agents under).
+   Dashboard and Outcomes don't belong to a single department (they're
+   cross-department overview surfaces), so they carry dept: null and render
+   under an ungrouped "Command" header instead of being forced into one of
+   the 7 — this is a judgment call, logged in QUALITY_BACKLOG.md.
+   Utility/bottom-zone items (navZone: "bottom") are untouched by grouping;
+   the sidebar split itself is preserved exactly as before. */
 const BASE_NAV = [
-  { id: "dashboard",  label: "Dashboard",    icon: "grid",  view: "main" },
-  { id: "outcomes",   label: "Outcomes",     icon: "target", ws: "outcomes" },
-  { id: "crm",        label: "Clients",      icon: "users", ws: "leads" },
-  { id: "media",      label: "Media Lab",    icon: "media", ws: "media" },
-  { id: "assets",     label: "Asset Cloud",  icon: "media", ws: "assets", dbOnly: true },
-  { id: "sites",      label: "Websites",     icon: "site",  ws: "sites" },
-  { id: "money",      label: "Accounting",   icon: "dollar", ws: "money" },
-  { id: "automation", label: "Automations",  icon: "auto",  ws: "automation" },
-  { id: "approvals",  label: "Approvals",    icon: "check", ws: "approvals", badge: true },
-  { id: "workers",    label: "Workforce",    icon: "users", ws: "workforce" },
-  { id: "intelligence", label: "Competitor Intel", icon: "chart", ws: "intelligence" },
-  { id: "analytics",  label: "Analytics",    icon: "chart", ws: "analytics" },
+  { id: "dashboard",  label: "Dashboard",    icon: "grid",  view: "main", dept: null },
+  { id: "outcomes",   label: "Outcomes",     icon: "target", ws: "outcomes", dept: null },
+  { id: "crm",        label: "Clients",      icon: "users", ws: "leads", dept: "Client Care" },
+  { id: "media",      label: "Media Lab",    icon: "media", ws: "media", dept: "Creative" },
+  { id: "assets",     label: "Asset Cloud",  icon: "media", ws: "assets", dbOnly: true, dept: "Creative" },
+  { id: "sites",      label: "Websites",     icon: "site",  ws: "sites", dept: "Technology" },
+  { id: "money",      label: "Accounting",   icon: "dollar", ws: "money", dept: "Finance" },
+  { id: "automation", label: "Automations",  icon: "auto",  ws: "automation", dept: "Operations" },
+  { id: "approvals",  label: "Approvals",    icon: "check", ws: "approvals", badge: true, dept: "Operations" },
+  { id: "workers",    label: "Workforce",    icon: "users", ws: "workforce", dept: "Operations" },
+  { id: "intelligence", label: "Competitor Intel", icon: "chart", ws: "intelligence", dept: "Intelligence" },
+  { id: "analytics",  label: "Analytics",    icon: "chart", ws: "analytics", dept: "Intelligence" },
   { id: "memory",     label: "Memory",       icon: "brain", ws: "memory", navZone: "bottom", quiet: true },
   { id: "settings",   label: "Settings",     icon: "cog",   ws: "settings", navZone: "bottom" },
   { id: "developer",  label: "Developer",    icon: "dev",   ws: "developer", ownerOnly: true, navZone: "bottom" },
   { id: "vacation",   label: "Away Mode",    icon: "auto",  ws: "vacation", statusPill: true, navZone: "bottom" },
   { id: "phantomplay", label: "Play", icon: "film",  ws: "phantomplay", navZone: "bottom", quiet: true, optionalModule: true },
   { id: "admincontrol", label: "Admin Control", icon: "shield", ws: "admincontrol", ownerOnly: true, navZone: "bottom" },
-  { id: "phantomstore", label: "PhantomStore", icon: "spark", ws: "phantomstore" },
+  { id: "phantomstore", label: "PhantomStore", icon: "spark", ws: "phantomstore", dept: "Growth" },
 ];
+/* Section order for the main (non-bottom) nav group: an ungrouped "Command"
+   bucket for cross-department overview items, then the 7 departments in the
+   same order Workforce uses. */
+const NAV_SECTION_ORDER = ["__command", ...DEPARTMENTS];
+const NAV_SECTION_LABEL = { __command: "Command" };
+let collapsedNavSections = new Set();
+try {
+  collapsedNavSections = new Set(JSON.parse(localStorage.getItem("pf.nav.collapsedSections.v1") || "[]"));
+} catch { collapsedNavSections = new Set(); }
+function saveCollapsedNavSections() {
+  try { localStorage.setItem("pf.nav.collapsedSections.v1", JSON.stringify([...collapsedNavSections])); } catch {}
+}
 let NAV = customizeNavigation(BASE_NAV, isAdmin() ? "owner" : "client");
 let navEntitlements = { loaded: false, features: null, limits: null };
 /* Mirrors NAV (desktop sidebar) 1:1 so mobile never falls behind desktop —
@@ -637,18 +658,48 @@ function navStatusPill(n) {
   }
   return "";
 }
+function navItemHtml(n, pending) {
+  return `
+    <button class="nav-item ${activeNav === n.id ? "is-active" : ""} ${n.navZone === "bottom" ? "nav-item-bottom" : ""} ${n.quiet ? "nav-item-quiet" : ""} ${n.navDisabled ? "nav-item-disabled" : ""} ${n.id === "admincontrol" ? "nav-item-admincontrol" : ""}" data-nav-id="${n.id}" ${n.navHidden ? "hidden" : ""} ${activeNav === n.id ? 'aria-current="page"' : ""} ${n.navDisabled ? 'aria-disabled="true" title="Disabled for this plan; the owner can enable it later."' : ""}>
+      ${svg(n.icon)}
+      <span>${n.label}</span>
+      ${n.badge && pending ? `<em class="nav-badge">${pending}</em>` : ""}
+      ${n.navDisabled ? `<em class="nav-pill is-locked">OFF</em>` : navStatusPill(n)}
+    </button>`;
+}
+/* Groups the main-zone items (navZone !== "bottom") into an ungrouped
+   "Command" bucket plus the 7 departments from DEPARTMENTS, in a fixed
+   section order, preserving each item's relative order within its section.
+   Bottom-zone items are returned separately, untouched, so the existing
+   utility split (Memory/Settings/Developer/Away Mode, etc.) stays exact. */
+function groupNavSections(items) {
+  const bottom = items.filter((n) => n.navZone === "bottom");
+  const main = items.filter((n) => n.navZone !== "bottom");
+  const buckets = new Map(NAV_SECTION_ORDER.map((key) => [key, []]));
+  main.forEach((n) => {
+    const key = n.dept && DEPARTMENTS.includes(n.dept) ? n.dept : "__command";
+    if (!buckets.has(key)) buckets.set(key, []);
+    buckets.get(key).push(n);
+  });
+  const sections = NAV_SECTION_ORDER
+    .map((key) => ({ key, label: NAV_SECTION_LABEL[key] || key, items: buckets.get(key) || [] }))
+    .filter((section) => section.items.length);
+  return { sections, bottom };
+}
 function renderNav() {
   const nav = $("[data-nav]");
   const pending = visible(store.state.approvals).filter((a) => a.status === "pending").length;
   const items = orderedNavItems();
   MOBILE_NAV = mobileItemsFromNav(items);
-  nav.innerHTML = items.map((n) => `
-    <button class="nav-item ${activeNav === n.id ? "is-active" : ""} ${n.navZone === "bottom" ? "nav-item-bottom" : ""} ${n.quiet ? "nav-item-quiet" : ""} ${n.navDisabled ? "nav-item-disabled" : ""} ${n.id === "admincontrol" ? "nav-item-admincontrol" : ""}" data-nav-id="${n.id}" ${activeNav === n.id ? 'aria-current="page"' : ""} ${n.navDisabled ? 'aria-disabled="true" title="Disabled for this plan; the owner can enable it later."' : ""}>
-      ${svg(n.icon)}
-      <span>${n.label}</span>
-      ${n.badge && pending ? `<em class="nav-badge">${pending}</em>` : ""}
-      ${n.navDisabled ? `<em class="nav-pill is-locked">OFF</em>` : navStatusPill(n)}
-    </button>`).join("");
+  const { sections, bottom } = groupNavSections(items);
+  nav.innerHTML = sections.map((section) => {
+    const collapsed = collapsedNavSections.has(section.key);
+    return `
+    <button type="button" class="nav-section-head ${collapsed ? "is-collapsed" : ""}" data-nav-section="${esc(section.key)}" aria-expanded="${collapsed ? "false" : "true"}">
+      <span class="nav-section-chevron">${collapsed ? "▸" : "▾"}</span><span>${esc(section.label)}</span>
+    </button>
+    ${section.items.map((n) => navItemHtml({ ...n, navHidden: collapsed }, pending)).join("")}`;
+  }).join("") + bottom.map((n) => navItemHtml(n, pending)).join("");
   renderMobileBottomNav();
 }
 
@@ -1296,7 +1347,7 @@ const MODES = {
   admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260717-12";
+const POSE_VERSION = "phantom-live-20260717-13";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -2391,6 +2442,14 @@ function wireDeck() {
       return;
     }
     if (e.target.closest("[data-side-toggle]")) { setMobileNav(!mobileNavOpen); return; }
+    const navSection = e.target.closest("[data-nav-section]");
+    if (navSection) {
+      const key = navSection.dataset.navSection;
+      if (collapsedNavSections.has(key)) collapsedNavSections.delete(key); else collapsedNavSections.add(key);
+      saveCollapsedNavSections();
+      renderNav();
+      return;
+    }
     const navBtn = e.target.closest("[data-nav-id]");
     if (navBtn) { goNav(navBtn.dataset.navId); setMobileNav(false); return; }
     const quick = e.target.closest("[data-quick]");

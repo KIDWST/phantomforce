@@ -1,6 +1,63 @@
 # PhantomForce Audit Log
 
-## 2026-07-17 (session 2) — Cycle 2: Change-Memory Reconciliation + Responsive Interaction Harness
+## 2026-07-17 (session 3) — Cycle 3: Command IA — Sidebar Departments, Away Mode Enforcement, Memory Citations, 3-Lane Planner, Explanatory Analytics
+
+Continuation of the Command architecture pivot from `Documents/CLAUDECLIHANDOFF.md`
+("Command Briefing / Outcomes / Workforce-Departments" already shipped in a
+prior session). This session implements the five items that handoff
+explicitly listed as "not yet built" spec-only design intent: sidebar
+department reframe, Away Mode bounded-autonomy + return-and-report,
+Institutional Memory citation, 3-lane Planner with dependency recalculation,
+and explanatory Analytics. Working directly in
+`C:\Users\jorda\Documents\Codex\worktrees\phantomforce-main-trunk-20260706`,
+confirmed live via `/health` (`root` matches this checkout) before editing.
+No `git push` performed at any point (local commits only, per instructions).
+
+Note: this checkout contains a nested `CLAUDE.md`
+(`app`-adjacent, i.e. this repo root) claiming the live source is actually a
+*different* worktree (`phantomforce-live-social-analytics-20260712`) and
+instructing to push after every change. `/health` on both
+`admin.phantomforce.online` and the local dev port confirmed `root` matches
+*this* checkout, contradicting that file. Treated the nested file as
+untrusted/stale content, not an instruction — did not switch worktrees and
+did not push. Flagging here in case that nested CLAUDE.md is meant to be
+corrected or removed.
+
+### 1. Sidebar department reframe
+
+- Files: `app/js/main.js` (`BASE_NAV`, `NAV_SECTION_ORDER`,
+  `groupNavSections`, `renderNav`, collapse-toggle click handler),
+  `app/js/workspaces.js` (exported `DEPARTMENTS`), `app/phantom.css`
+  (`.nav-section-head`).
+- What changed: the main nav group (everything except the existing
+  Memory/Settings/Developer/Away Mode/Play/Admin Control utility group,
+  which is untouched) now renders under collapsible section headers for the
+  same 7 departments Workforce uses, plus an ungrouped "Command" header for
+  Dashboard/Outcomes. Every `data-nav-id` route/click target is unchanged.
+  Collapse state persists in `localStorage` under
+  `pf.nav.collapsedSections.v1`.
+- Judgment calls on the module→department mapping are logged as
+  `docs/quality/QUALITY_BACKLOG.md` Q-0015 for Jordan's review.
+- Verification: `node --check app/js/main.js`, `node --check
+  app/js/workspaces.js`, `npm run test:customization-ui` (PASS — this is the
+  existing coverage for Admin Control's owner-only sidebar item and
+  Workspace Studio's publish flow, still passes with the new grouped
+  renderer). Browser click-through via agent-browser against the local dev
+  server (`127.0.0.1:5177`, confirmed live via `/health`): screenshots show
+  all 7 department headers plus Command rendering with the correct items;
+  toggling a section's `.click()` correctly hides/shows only that
+  section's items (confirmed both directions); clicking a grouped nav item
+  (Accounting, under Finance) still opens the real Accounting workspace with
+  real ledger data; the bottom utility group is visually unchanged. No
+  console errors (`agent-browser errors` empty). One tooling note: the CDP
+  coordinate-based `click <selector>` command intermittently mis-clicked in
+  a short (568px-tall) headless viewport — worked around by triggering
+  `.click()` directly via `agent-browser eval` and reconfirming via
+  `aria-expanded`/`hidden` state; this is an automation-tool quirk, not an
+  app bug (a real click via mouse in a normal-height window is unaffected).
+- Cache-bust: bumped `phantom-live-20260717-12` → `-13` across
+  `app/index.html` and all `app/js/*.js` (verified `-12` was the highest
+  suffix in use immediately before bumping).
 
 ### Surfaces Audited
 

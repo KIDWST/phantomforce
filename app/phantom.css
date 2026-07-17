@@ -2801,6 +2801,15 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 .side-brand-text i { display: block; margin-top: 1px; font: 500 7px "DM Mono", monospace; font-style: normal; letter-spacing: 0.14em; color: var(--dim); }
 .side-toggle { display: none; }
 .side-nav { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-height: 0; }
+.nav-section-head {
+  display: flex; align-items: center; gap: 5px; width: 100%; text-align: left; cursor: pointer;
+  background: none; border: 0; padding: 10px 9px 3px; margin-top: 4px;
+  font: 700 9.5px "DM Mono", monospace; letter-spacing: 0.09em; text-transform: uppercase;
+  color: var(--dim); opacity: 0.72;
+}
+.nav-section-head:hover { opacity: 1; color: var(--ink); }
+.nav-section-head:first-child { margin-top: 0; }
+.nav-section-chevron { width: 9px; flex: 0 0 9px; font-size: 9px; opacity: 0.8; }
 .nav-item {
   display: flex; align-items: center; gap: 9px; width: 100%; text-align: left; cursor: pointer;
   min-height: 38px; padding: 7px 9px; border-radius: 10px; border: 1px solid transparent; background: none;

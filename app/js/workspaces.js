@@ -9,12 +9,12 @@ import {
   PACKAGES, RETAINERS, FINANCE_CATEGORIES, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS, CHAT_HISTORY_RETENTION_DAYS,
   addMemory, toggleMemoryRemember, forgetMemory, forgetChatHistory, memoryStats, memoryRetention, chatHistoryStats, chatHistoryRetention,
   session,
-} from "./store.js?v=phantom-live-20260717-12";
+} from "./store.js?v=phantom-live-20260717-13";
 import {
   isDatabaseSession, canManageActiveOrg, fetchServerApprovals, decideServerRun,
   activeOrgId,
   fetchOrgCrm, saveOrgCrmSettings, createOrgCrmContact, pullOrgCrmContacts, updateOrgCrmContact, deleteOrgCrmContact,
-} from "./orgs.js?v=phantom-live-20260717-12";
+} from "./orgs.js?v=phantom-live-20260717-13";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -1788,7 +1788,7 @@ function renderMemory(el, rerender) {
       if (!brainPanel.open || brainPanel.dataset.mounted) return;
       brainPanel.dataset.mounted = "1";
       const mount = brainPanel.querySelector("[data-memory-brain-mount]");
-      import("./brain.js?v=phantom-live-20260717-12")
+      import("./brain.js?v=phantom-live-20260717-13")
         .then((mod) => { if (mount && mount.isConnected) mod.renderPhantomBrain(mount); })
         .catch(() => { if (mount) mount.innerHTML = `<p class="ws-note">The brain panel could not load. Check that the backend on the admin PC is running, then reopen this section.</p>`; });
     });
@@ -2036,7 +2036,11 @@ const WORKFORCE_EMPLOYEES = [
 // has no desk assigned yet — no existing role fit it — and stays in this
 // list anyway so the workforce view honestly shows "No desk assigned yet"
 // rather than hiding the department until someone happens to staff it.
-const WORKFORCE_FILTERS = ["All", "Growth", "Creative", "Operations", "Client Care", "Finance", "Intelligence", "Technology"];
+// Exported as DEPARTMENTS so the sidebar nav (main.js) can group the primary
+// business modules under the same 7 departments instead of maintaining a
+// second, possibly-drifting department list.
+export const DEPARTMENTS = ["Growth", "Creative", "Operations", "Client Care", "Finance", "Intelligence", "Technology"];
+const WORKFORCE_FILTERS = ["All", ...DEPARTMENTS];
 
 const SWARM_SUBAGENT_TEMPLATES = [
   {

@@ -1,4 +1,4 @@
-import { currentTenantId, session } from "./store.js?v=phantom-live-20260717-12";
+import { currentTenantId, session } from "./store.js?v=phantom-live-20260717-13";
 
 let activeConfiguration = null;
 let activeEntitlements = null;

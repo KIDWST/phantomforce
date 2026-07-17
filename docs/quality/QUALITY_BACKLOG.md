@@ -281,3 +281,47 @@ Last updated: 2026-07-17
 - Journey affected: maintainability/reviewability.
 - Evidence: 150+ routes in one file.
 - Status: Open; do not refactor broadly without tests and a focused plan.
+
+### Q-0015 — P3 — Sidebar department grouping required judgment calls on module→department mapping (needs Jordan's review)
+
+- Route/component: `app/js/main.js` (`BASE_NAV`, `groupNavSections`,
+  `renderNav`), `app/js/workspaces.js` (`DEPARTMENTS` export),
+  `app/phantom.css` (`.nav-section-head`).
+- Journey affected: primary sidebar navigation (the main module group only —
+  the Memory/Settings/Developer/Away Mode utility group at the bottom is
+  unchanged).
+- What shipped: the main nav group now renders under collapsible section
+  headers matching the same 7 departments Workforce already uses
+  (`DEPARTMENTS` in `workspaces.js`: Growth, Creative, Operations, Client
+  Care, Finance, Intelligence, Technology), plus an 8th ungrouped "Command"
+  header for Dashboard and Outcomes. Collapse state persists per-browser in
+  `localStorage` (`pf.nav.collapsedSections.v1`). Every existing route/click
+  target (`data-nav-id`) is unchanged — this is presentation-only.
+- Judgment calls that need Jordan's confirmation, not a clean 1:1 mapping:
+  - Dashboard and Outcomes don't belong to a single department (they're
+    cross-department overview surfaces), so they sit under an ungrouped
+    "Command" header instead of one of the 7 departments. Reasonable, but a
+    genuine choice — could alternatively be left fully outside any
+    section/header.
+  - "Clients" (`crm`, which bundles Leads/Proposals/Reviews/Bookings behind
+    one nav button) was assigned to Client Care, even though Proposals is
+    conceptually closer to Growth (Iris Cole, the Growth-department proposal
+    writer in Workforce, works proposals). A single nav button can only sit
+    in one section; Client Care was picked because the button is literally
+    labeled "Clients."
+  - "Workforce" itself was assigned to Operations (matches Roman
+    Hayes/Clara Min's ops-coordination focus in `WORKFORCE_EMPLOYEES`)
+    rather than left ungrouped, even though it's the department-roster view.
+  - "PhantomStore" was assigned to Growth (revenue/marketplace) — the only
+    item in that section; there was no unambiguous alternative.
+  - Intelligence now contains two real modules (Competitor Intel, Analytics)
+    despite having zero staffed agents in the Workforce view — intentional:
+    nav grouping reflects business function, not staffing, so this does not
+    contradict the Q-0008/Workforce "no desk assigned yet" honesty pattern
+    (that pattern is about not fabricating *people*, not about hiding real
+    *modules*).
+- Status: Shipped, working, browser-verified (collapse/expand and click-
+  through both confirmed). Flagged because the module→department assignment
+  above is this session's best-reasonable-interpretation judgment call per
+  the handoff's "validate the approach with Jordan" instruction, not because
+  anything is broken.
