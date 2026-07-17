@@ -150,7 +150,7 @@ git commit -m "Raise mission worker cap from 10 to 20"
   - `create_mission(base_url: str, token: str, name: str, objective: str, workspace_root: str, launch_mode: str, roles: list) -> dict` — returns the `mission` object.
   - `get_mission(base_url: str, token: str, mission_id: str) -> dict` — returns `{"mission": {...}, "ledger": [...], "tokens": {...}}`.
   - `list_repos(base_url: str, token: str) -> list` — returns `[{"path": str, "name": str}, ...]`.
-  - `is_mission_done(mission: dict) -> bool` — `True` once every worker's status is one of the terminal states Termina's own UI treats as finished.
+  - `is_mission_done(mission: dict, ledger: list) -> bool` — `True` once every worker is either abnormally terminated by status (`failed`/`stopped`) or has a `COMPLETE`/`FAILED` event for its id in the ledger. (`worker.status` alone never reaches a "finished successfully" value in Termina's real server — that signal only exists as a ledger event from the CLI's own self-reporting protocol, `mission/protocol.js`.)
   - `synthesize(base_url: str, token: str, mission_id: str) -> dict` — returns `{"report": {...}, "markdown": str, "costUsd": float | None}`.
 
 - [ ] **Step 1: Add `tests/conftest.py` so test files can import the app-root modules**
@@ -666,8 +666,9 @@ After `_discord_bridge` (ends at line 651, right before `_run_acceptance` at lin
         except termina_bridge.TerminaError as e:
             return {"ok": False, "error": str(e)}
         mission = result["mission"]
+        ledger = result["ledger"]
         workers = [{"name": w.get("name"), "status": w.get("status")} for w in mission.get("workers", [])]
-        return {"ok": True, "missionId": mission["id"], "status": mission.get("status"), "workers": workers, "done": termina_bridge.is_mission_done(mission)}
+        return {"ok": True, "missionId": mission["id"], "status": mission.get("status"), "workers": workers, "done": termina_bridge.is_mission_done(mission, ledger)}
 
 ```
 
