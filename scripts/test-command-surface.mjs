@@ -52,6 +52,10 @@ assert.match(main, /function renderSignalStackDock\(signals = \[\]\)/u,
 assert.match(main, /function renderAutomationDock\(automations = \[\]\)/u, "Command surface should define the automation dock renderer.");
 assert.match(main, /function commandDepartmentMap\(tools = \[\]\)/u,
   "Workforce widget should condense real tool lanes into human departments.");
+assert.match(main, /function departmentWorkspace\(dept = "Growth"\)/u,
+  "Department pulse tiles should route to the business lane they serve, not the raw worker inventory.");
+assert.match(main, /open:\s*departmentWorkspace\(dept\.dept\)/u,
+  "Operating pulse departments must open their real business lane.");
 assert.match(main, /function operatingPulseItems\(\)/u,
   "Command dashboard should derive department pulse items from the real tool spine.");
 assert.match(main, /function renderOperatingPulse\(\)/u,
@@ -90,6 +94,12 @@ assert.match(main, /function renderAutomationStarterDock\(\)/u,
   "Automation widget should render safe starter recipes instead of a vague empty state.");
 assert.match(main, /class="cw-auto-starters"/u,
   "Automation widget should show a compact starter dock.");
+assert.match(main, /button class="cw-dock-node[\s\S]*?data-open-ws="automation"/u,
+  "Configured automations should be manageable from compact widget rows.");
+assert.doesNotMatch(widgetSource, /id:\s*"workforce"[\s\S]*?open:\s*"workforce"[\s\S]*?id:\s*"automations"/u,
+  "Workforce card should expand on the dashboard instead of pushing the raw inventory as the primary action.");
+assert.doesNotMatch(widgetSource, /id:\s*"automations"[\s\S]*?open:\s*"automation"[\s\S]*?id:\s*"signals"/u,
+  "Automation card should expand on the dashboard and expose starter/manage controls inside the widget.");
 assert.match(main, /5 ideas per day[\s\S]*?draft-only and approval-safe/u,
   "Daily ideas starter must keep configurable daily replacement and approval-safe behavior.");
 assert.match(main, /10 to 20 prospects per day[\s\S]*?never send without approval/u,

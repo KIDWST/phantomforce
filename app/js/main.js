@@ -6,44 +6,44 @@ import {
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260716-316";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260716-316";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260716-316";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260716-316";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260716-316";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260716-316";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260716-316";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260716-316";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260716-316";
-import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260716-316";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260716-316";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260716-316";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260716-316";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260716-316";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260716-316";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260716-316";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260716-316";
-import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260716-316";
-import { mountAmbient } from "./ambient.js?v=phantom-live-20260716-316";
-import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260716-316";
+} from "./store.js?v=phantom-live-20260716-317";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260716-317";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260716-317";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260716-317";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260716-317";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260716-317";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260716-317";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260716-317";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260716-317";
+import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260716-317";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260716-317";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260716-317";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260716-317";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260716-317";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260716-317";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260716-317";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260716-317";
+import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260716-317";
+import { mountAmbient } from "./ambient.js?v=phantom-live-20260716-317";
+import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260716-317";
 import {
   fetchAuthConfig, databaseLogin, databaseLogout, customerRegister, requestCustomerPasswordReset,
   completeCustomerPasswordReset, switchOrg, createOrganization, fetchAuthMe, fetchEntitlementsSummary, switchCustomerPlan,
-} from "./orgs.js?v=phantom-live-20260716-316";
-import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260716-316";
-import { assetsAvailable } from "./orgs.js?v=phantom-live-20260716-316";
-import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260716-316";
+} from "./orgs.js?v=phantom-live-20260716-317";
+import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260716-317";
+import { assetsAvailable } from "./orgs.js?v=phantom-live-20260716-317";
+import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260716-317";
 // PhantomPlay V2 platform shell (Home/Solo/Friends/Workspace/Dev Hub) - opt-in
 // while it hardens: set localStorage "pf.phantomplay.v2" = "1" (the V2 shell has
 // a "Classic view" button to switch back). Classic stays the default experience.
-import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260716-316";
+import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260716-317";
 const phantomPlayV2Opted = () => { try { return localStorage.getItem("pf.phantomplay.v2") === "1"; } catch { return false; } };
-import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260716-316";
+import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260716-317";
 import {
   customizeNavigation,
   loadOrganizationCustomization,
-} from "./customization.js?v=phantom-live-20260716-316";
-import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260716-316";
+} from "./customization.js?v=phantom-live-20260716-317";
+import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260716-317";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -1456,7 +1456,7 @@ const MODES = {
   admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260716-316";
+const POSE_VERSION = "phantom-live-20260716-317";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -2352,6 +2352,10 @@ const DEPARTMENT_ACTIONS = {
   Technology: { open: "developer", action: "Keep systems healthy", gate: "developer controls stay behind the curtain" },
 };
 
+function departmentWorkspace(dept = "Growth") {
+  return DEPARTMENT_ACTIONS[dept]?.open || "activity";
+}
+
 const AUTOMATION_STARTERS = [
   {
     title: "Daily ideas",
@@ -2418,7 +2422,7 @@ function operatingPulseItems() {
       stat: dept.total ? `${dept.active}/${dept.total}` : "0",
       sub,
       tone,
-      open: "workforce",
+      open: departmentWorkspace(dept.dept),
     };
   });
 }
@@ -2677,10 +2681,10 @@ function renderAutomationDock(automations = []) {
     </div>
     <div class="cw-dock cw-automation-dock" aria-label="Configured automations">
       ${rows.map((agent) => `
-        <span class="cw-dock-node is-${agent.status === "active" ? "ok" : "watch"}">
+        <button class="cw-dock-node is-${agent.status === "active" ? "ok" : "watch"}" data-open-ws="automation" type="button">
           <b>${esc(agent.name || "Automation")}</b>
           <i>${esc(agent.status || "waiting")}</i>
-        </span>`).join("")}
+        </button>`).join("")}
     </div>`;
 }
 
@@ -2862,7 +2866,6 @@ function renderCommandWidgets() {
       title: "Workforce",
       stat: workforce.stat || "mapped",
       sub: workforce.sub || "Departments stay behind the curtain until summoned.",
-      open: "workforce",
       tone: "ok",
       lines: [
         "<b>Growth</b><span>finds opportunities, leads, competitor gaps, and revenue moves</span>",
@@ -2877,7 +2880,6 @@ function renderCommandWidgets() {
       title: "Automations",
       stat: automations.length ? `${automationActive}/${automations.length} on` : "ready",
       sub: automations.length ? `${automationWaiting} waiting or approval-gated` : "Create from chat; manage here when it exists.",
-      open: "automation",
       tone: automationWaiting ? "warn" : "ok",
       lines: [
         `<b>Active</b><span>${automationActive} running or enabled</span>`,

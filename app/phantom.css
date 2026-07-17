@@ -14404,10 +14404,23 @@ body .phantom .workspace-page :where(
   min-width: 0;
   display: grid;
   gap: 2px;
+  width: 100%;
+  text-align: left;
   padding: 9px 9px 9px 28px;
   border: 1px solid rgba(255, 255, 255, 0.055);
   border-radius: 10px;
   background: rgba(6, 18, 14, 0.68);
+  color: inherit;
+  font: inherit;
+}
+button.cw-dock-node {
+  cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
+}
+button.cw-dock-node:hover {
+  transform: translateY(-1px);
+  border-color: rgba(65, 255, 161, 0.24);
+  background: rgba(8, 32, 23, 0.78);
 }
 .cw-dock-node::before {
   content: "";
