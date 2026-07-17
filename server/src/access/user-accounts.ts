@@ -777,7 +777,7 @@ export async function registerWorkspaceAccount(input: {
     note: `Self-serve ${profile.id} workspace signup`,
   });
 
-  const profileConfiguration = defaultOrganizationConfiguration(created.org.id, email, profile.id);
+  const profileConfiguration = defaultOrganizationConfiguration(created.org.id, email);
   const assistantBrief = JSON.stringify(workspaceBrief.slice(0, 220));
   const configuration = {
     ...profileConfiguration,

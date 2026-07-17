@@ -12,6 +12,10 @@ import {
   readCustomizationDocument,
   type ConfigurationVersion,
 } from "./customization-store.js";
+import {
+  workspaceProfileFor,
+  type WorkspaceProfileId,
+} from "./workspace-profiles.js";
 
 const RESERVED_FIELD_IDS = new Set([
   "id", "tenant_id", "tenantid", "org_id", "orgid", "user_id", "userid", "permission", "permissions",
@@ -37,16 +41,19 @@ function defaultModuleEnabled(moduleId: string, tenantId: string) {
   return true;
 }
 
-export function defaultOrganizationConfiguration(tenantId: string, actor = "system"): OrganizationConfiguration {
+export function defaultOrganizationConfiguration(tenantId: string, actor = "system", profileId: WorkspaceProfileId = "business"): OrganizationConfiguration {
   const now = new Date().toISOString();
+  const internal = tenantId === "phantomforce-owner" || tenantId === "phantomforce";
+  const profile = internal ? workspaceProfileFor("business") : workspaceProfileFor(profileId);
+  const enabledModules = new Set(internal ? PLATFORM_MODULES.map((module) => module.id) : profile.enabledModules);
   return OrganizationConfigurationSchema.parse({
     schemaVersion: 1,
     tenantId,
     version: 1,
     brand: {
-      mode: tenantId === "phantomforce-owner" || tenantId === "phantomforce" ? "internal_phantomforce" : "standard",
-      organizationName: tenantId === "phantomforce-owner" || tenantId === "phantomforce" ? "PhantomForce" : "My Business",
-      workspaceName: "Dashboard",
+      mode: internal ? "internal_phantomforce" : "standard",
+      organizationName: internal ? "PhantomForce" : "My Business",
+      workspaceName: internal ? "Dashboard" : profile.workspaceName,
       poweredByPhantomForce: true,
     },
     theme: {},
@@ -54,7 +61,7 @@ export function defaultOrganizationConfiguration(tenantId: string, actor = "syst
     modules: PLATFORM_MODULES.map((module, order) => ({
       id: module.id,
       label: module.displayName,
-      enabled: defaultModuleEnabled(module.id, tenantId),
+      enabled: (module.required || enabledModules.has(module.id)) && defaultModuleEnabled(module.id, tenantId),
       order,
       roles: module.allowedRoles.includes("platform_owner")
         ? ["owner"]
@@ -64,7 +71,7 @@ export function defaultOrganizationConfiguration(tenantId: string, actor = "syst
       activityEnabled: false,
       challengesEnabled: false,
     })),
-    navigation: {},
+    navigation: { homeModuleId: profile.homeModuleId },
     assistant: {},
     dashboards: [{ id: "owner_home", name: "Dashboard", scope: "owner", widgets: [
       { id: "daily_brief", type: "ai_briefing", title: "Daily brief", source: "phantom.briefing" },
@@ -74,7 +81,14 @@ export function defaultOrganizationConfiguration(tenantId: string, actor = "syst
     forms: [],
     workflows: [],
     extensions: [],
-    policies: {},
+    policies: {
+      workspaceProfile: internal ? "business" : profile.id,
+      brainStorageMode: internal ? "optional_local" : profile.brainStorageMode,
+      localBrainInstall: profile.localBrainInstall,
+      apiCredentialPolicy: profile.apiCredentialPolicy,
+      subscriptionPolicy: profile.subscriptionPolicy,
+      historyPolicy: profile.historyPolicy,
+    },
     updatedAt: now,
     updatedBy: actor,
   });

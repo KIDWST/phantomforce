@@ -2,7 +2,8 @@
    Local UI preferences only: no provider calls, sends, uploads, or billing. */
 
 import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260714-006";
-import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260714-006";
+import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260717-4";
+import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260717-4";
 import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260714-006";
 import { currentTenantId, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260714-006";
 import { DEFAULT_COMPANION_PREFS, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260714-006";
@@ -14,6 +15,7 @@ const SETTINGS_TABS = [
   { id: "model", label: "Model", category: "AI Brain" },
   { id: "loop", label: "Loop routing", category: "AI Brain" },
   { id: "chat", label: "Chat behavior", category: "AI Brain" },
+  { id: "clientsetup", label: "Workspace setup", category: "Workspace" },
   { id: "organization", label: "Organization", category: "Workspace" },
   { id: "workspace", label: "Workspace Studio", category: "Workspace" },
   { id: "modules", label: "Workspace Modules", category: "Workspace" },
@@ -807,6 +809,7 @@ export function renderOperatorSettings(el, opts = {}) {
   const activeProvider = providerFor(settings.provider);
   const activeModel = settings.models[activeProvider.id] || activeProvider.models[0];
   const mediaMountId = `media-settings-${Math.random().toString(36).slice(2)}`;
+  const clientSetupMountId = `client-setup-settings-${Math.random().toString(36).slice(2)}`;
   const workspaceMountId = `workspace-studio-${Math.random().toString(36).slice(2)}`;
   const modulesMountId = `workspace-modules-${Math.random().toString(36).slice(2)}`;
   const organizationMountId = `organization-${Math.random().toString(36).slice(2)}`;
@@ -818,6 +821,7 @@ export function renderOperatorSettings(el, opts = {}) {
     model: () => renderModelTab(settings, activeProvider, activeModel),
     loop: () => renderLoopAdvancedSection(),
     chat: () => renderChatBehaviorTab(settings),
+    clientsetup: () => `<div id="${clientSetupMountId}" class="set-client-setup-mount"></div>`,
     organization: () => `<div id="${organizationMountId}" class="set-workspace-mount"></div>`,
     workspace: () => `<div id="${workspaceMountId}" class="set-workspace-mount"></div>`,
     modules: () => `<div id="${modulesMountId}" class="set-workspace-mount"></div>`,
@@ -999,6 +1003,9 @@ export function renderOperatorSettings(el, opts = {}) {
 
   const mediaMount = el.querySelector(`#${mediaMountId}`);
   if (mediaMount) renderMediaSettings(mediaMount, opts);
+
+  const clientSetupMount = el.querySelector(`#${clientSetupMountId}`);
+  if (clientSetupMount) renderClientSetupConsole(clientSetupMount);
 
   const workspaceMount = el.querySelector(`#${workspaceMountId}`);
   if (workspaceMount) {

@@ -41,6 +41,10 @@ export const ModuleConfigurationSchema = z.object({
   enabled: z.boolean(),
   order: z.number().int().min(0).max(1000),
   roles: z.array(z.enum(["owner", "admin", "manager", "member", "client"])).min(1).max(5),
+  accessMode: z.enum(["owner_only", "selected_members", "entire_organization"]).default("entire_organization"),
+  allowedMemberIds: z.array(z.string().trim().min(1).max(120)).max(200).default([]),
+  activityEnabled: z.boolean().default(false),
+  challengesEnabled: z.boolean().default(false),
 });
 
 export const NavigationConfigurationSchema = z.object({
