@@ -10509,6 +10509,18 @@ details.ch-lb-section .ch-lb-slider:last-child, details.ch-lb-section .ch-lb-chi
 .buddy.is-docked[data-dock="sidebar"] .buddy-canvas {
   filter: drop-shadow(0 14px 28px rgba(0, 0, 0, 0.46)) drop-shadow(0 0 22px rgba(65, 255, 161, 0.16));
 }
+.buddy.is-scroll-vanishing { pointer-events: none; }
+.buddy.is-scroll-vanishing .buddy-canvas {
+  pointer-events: none;
+  animation: buddyVanish 0.9s ease both;
+}
+.buddy.is-scroll-hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+.buddy.is-scroll-hidden .buddy-canvas {
+  pointer-events: none;
+}
 .buddy.is-grabbed .buddy-canvas { cursor: grabbing; }
 .buddy-say {
   position: absolute; left: 50%; bottom: calc(100% - 26px); transform: translateX(-50%);
@@ -10544,6 +10556,11 @@ details.ch-lb-section .ch-lb-slider:last-child, details.ch-lb-section .ch-lb-chi
 @keyframes buddyPop {
   0% { opacity: 0; transform: translateX(-50%) translateY(6px) scale(0.85); }
   100% { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+}
+@keyframes buddyVanish {
+  0% { opacity: 1; filter: drop-shadow(0 14px 28px rgba(0, 0, 0, 0.46)) drop-shadow(0 0 22px rgba(65, 255, 161, 0.16)); }
+  60% { opacity: 0.68; filter: blur(0.8px) drop-shadow(0 8px 18px rgba(0, 0, 0, 0.32)) drop-shadow(0 0 18px rgba(65, 255, 161, 0.14)); }
+  100% { opacity: 0.06; filter: blur(4px) drop-shadow(0 0 14px rgba(65, 255, 161, 0.06)); }
 }
 .buddy-menu {
   position: fixed;
@@ -11013,6 +11030,7 @@ body:has(.phantom .app-main > .console:not(.console-workspace)) .buddy-canvas {
 @media (prefers-reduced-motion: reduce) {
   .bg-glow { animation: none; }
   .buddy-say.pop { animation: none; }
+  .buddy.is-scroll-vanishing .buddy-canvas { animation: none; }
   .buddy, .buddy-canvas { transition: none !important; }
   .workspace-page.page-enter,
   .workspace-page.page-enter .workspace-page-head,
