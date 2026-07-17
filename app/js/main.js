@@ -6,48 +6,49 @@ import {
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260717-17";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260717-17";
-import { WORKSPACE_DEFS, missionWidgets, esc, DEPARTMENTS } from "./workspaces.js?v=phantom-live-20260717-17";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260717-17";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260717-17";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260717-17";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260717-17";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260717-17";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260717-17";
-import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260717-17";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260717-17";
-import { renderPlanner } from "./planner.js?v=phantom-live-20260717-17";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260717-17";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260717-17";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260717-17";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260717-17";
-import { renderOperatorMiniSettings, renderOperatorSettings, renderOwnerAdminControl } from "./settings.js?v=phantom-live-20260717-17";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260717-17";
-import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260717-17";
-import { mountAmbient } from "./ambient.js?v=phantom-live-20260717-17";
-import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260717-17";
+} from "./store.js?v=phantom-live-20260717-18";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260717-18";
+import { WORKSPACE_DEFS, missionWidgets, esc, DEPARTMENTS } from "./workspaces.js?v=phantom-live-20260717-18";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260717-18";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260717-18";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260717-18";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260717-18";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260717-18";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260717-18";
+import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260717-18";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260717-18";
+import { renderPlanner } from "./planner.js?v=phantom-live-20260717-18";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260717-18";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260717-18";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260717-18";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260717-18";
+import { renderOperatorMiniSettings, renderOperatorSettings, renderOwnerAdminControl } from "./settings.js?v=phantom-live-20260717-18";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260717-18";
+import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260717-18";
+import { mountAmbient } from "./ambient.js?v=phantom-live-20260717-18";
+import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260717-18";
 import {
   fetchAuthConfig, databaseLogin, databaseLogout, databaseSignup, databaseSignupDeveloper, databaseUpgradeDeveloperAccount, databaseForgotUsername, databaseForgotPassword,
   databaseResetPassword, databaseVerify2fa, databaseStart2faSetup, databaseConfirm2fa, databaseRegenerate2faBackupCodes, databaseDisable2fa,
   switchOrg, fetchAuthMe, fetchEntitlementsSummary,
-} from "./orgs.js?v=phantom-live-20260717-17";
-import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260717-17";
-import { assetsAvailable } from "./orgs.js?v=phantom-live-20260717-17";
-import { renderPhantomStore } from "./phantomstore.js?v=phantom-live-20260717-17";
-import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260717-17";
+} from "./orgs.js?v=phantom-live-20260717-18";
+import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260717-18";
+import { assetsAvailable } from "./orgs.js?v=phantom-live-20260717-18";
+import { renderPhantomStore } from "./phantomstore.js?v=phantom-live-20260717-18";
+import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260717-18";
 // PhantomPlay V2 platform shell (Home/Solo/Friends/Workspace/Dev Hub) - opt-in
 // while it hardens: set localStorage "pf.phantomplay.v2" = "1" (the V2 shell has
 // a "Classic view" button to switch back). Classic stays the default experience.
-import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260717-17";
+import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260717-18";
 const phantomPlayV2Opted = () => { try { return localStorage.getItem("pf.phantomplay.v2") === "1"; } catch { return false; } };
-import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260717-17";
+import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260717-18";
 import {
   canAccessConfiguredModule,
   customizeNavigation,
   loadOrganizationCustomization,
-} from "./customization.js?v=phantom-live-20260717-17";
-import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260717-17";
+} from "./customization.js?v=phantom-live-20260717-18";
+import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260717-18";
+import { renderVoiceChannels } from "./voicechannels.js?v=phantom-live-20260717-18";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -447,6 +448,7 @@ const BASE_NAV = [
   { id: "money",      label: "Accounting",   icon: "dollar", ws: "money", dept: "Finance" },
   { id: "automation", label: "Automations",  icon: "auto",  ws: "automation", dept: "Operations" },
   { id: "planner",    label: "Planner",       icon: "calendar", ws: "planner", dept: "Operations" },
+  { id: "voicechannels", label: "Voice Channels", icon: "chat", ws: "voicechannels", dept: "Operations" },
   { id: "approvals",  label: "Approvals",    icon: "check", ws: "approvals", badge: true, dept: "Operations" },
   { id: "workers",    label: "Workforce",    icon: "users", ws: "workforce", dept: "Operations" },
   { id: "intelligence", label: "Competitor Intel", icon: "chart", ws: "intelligence", dept: "Intelligence" },
@@ -1349,7 +1351,7 @@ const MODES = {
   admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260717-17";
+const POSE_VERSION = "phantom-live-20260717-18";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -3255,6 +3257,7 @@ const CUSTOM = {
   settings: { title: "Business Manager Settings", kicker: "Brain, memory, routing, and safety configuration", custom: true, render: (body) => renderOperatorSettings(body, { ...mediaOpts(), onWorkspaceApplied: () => { refreshCustomizedNavigation(); renderNav(); renderMobileBottomNav(); } }) },
   automation: { title: "Automations", kicker: "Business workflows — approval-gated", custom: true, wide: true, render: (body) => renderAutomation(body, mediaOpts()) },
   planner: { title: "Planner", kicker: "Blocked → Ready → Done, with real dependency recalculation", custom: true, wide: true, render: (body) => renderPlanner(body, mediaOpts()) },
+  voicechannels: { title: "Voice Channels", kicker: "Text and voice channels, independent of any game", custom: true, wide: true, render: (body) => renderVoiceChannels(body, mediaOpts()) },
   vacation: { title: "Away Mode", kicker: "Your business stays covered while you are away", custom: true, wide: true, render: (body) => renderVacationMode(body, mediaOpts()) },
   promptlibrary: { title: "Prompt Library", kicker: "Saved prompts, ready to reuse", custom: true, wide: true, render: (body) => renderPromptLibrary(body, mediaOpts()) },
   customize: { title: "Workspace Studio", kicker: "Make this organization feel purpose-built", custom: true, wide: true, adminOnly: true, render: (body) => renderOperatorSettings(body, { ...mediaOpts(), initialTab: "workspace", onWorkspaceApplied: () => { refreshCustomizedNavigation(); renderNav(); renderMobileBottomNav(); } }) },
