@@ -2,51 +2,51 @@
 
 import {
   store, ctx, session, resolveSession, isAdmin, currentWs, currentTenantId, setWorkspace, wsName,
-  visible, todaysPlan, moneyView, fmtMoney, ago, pushActivity, isLiveAdminHost, isClientPublicHost, isLocalDevHost, isStaticPublicHost,
+  visible, todaysPlan, commandBriefing, moneyView, fmtMoney, ago, pushActivity, isLiveAdminHost, isClientPublicHost, isLocalDevHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260717-8";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260717-8";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260717-8";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260717-8";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260717-8";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260717-8";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260717-8";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260717-8";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260717-8";
-import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260717-8";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260717-8";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260717-8";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260717-8";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260717-8";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260717-8";
-import { renderOperatorMiniSettings, renderOperatorSettings, renderOwnerAdminControl } from "./settings.js?v=phantom-live-20260717-8";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260717-8";
-import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260717-8";
-import { mountAmbient } from "./ambient.js?v=phantom-live-20260717-8";
-import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260717-8";
+} from "./store.js?v=phantom-live-20260717-10";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260717-10";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260717-10";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260717-10";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260717-10";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260717-10";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260717-10";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260717-10";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260717-10";
+import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260717-10";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260717-10";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260717-10";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260717-10";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260717-10";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260717-10";
+import { renderOperatorMiniSettings, renderOperatorSettings, renderOwnerAdminControl } from "./settings.js?v=phantom-live-20260717-10";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260717-10";
+import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260717-10";
+import { mountAmbient } from "./ambient.js?v=phantom-live-20260717-10";
+import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260717-10";
 import {
   fetchAuthConfig, databaseLogin, databaseLogout, databaseSignup, databaseSignupDeveloper, databaseUpgradeDeveloperAccount, databaseForgotUsername, databaseForgotPassword,
   databaseResetPassword, databaseVerify2fa, databaseStart2faSetup, databaseConfirm2fa, databaseRegenerate2faBackupCodes, databaseDisable2fa,
   switchOrg, fetchAuthMe, fetchEntitlementsSummary,
-} from "./orgs.js?v=phantom-live-20260717-8";
-import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260717-8";
-import { assetsAvailable } from "./orgs.js?v=phantom-live-20260717-8";
-import { renderPhantomStore } from "./phantomstore.js?v=phantom-live-20260717-8";
-import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260717-8";
+} from "./orgs.js?v=phantom-live-20260717-10";
+import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260717-10";
+import { assetsAvailable } from "./orgs.js?v=phantom-live-20260717-10";
+import { renderPhantomStore } from "./phantomstore.js?v=phantom-live-20260717-10";
+import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260717-10";
 // PhantomPlay V2 platform shell (Home/Solo/Friends/Workspace/Dev Hub) - opt-in
 // while it hardens: set localStorage "pf.phantomplay.v2" = "1" (the V2 shell has
 // a "Classic view" button to switch back). Classic stays the default experience.
-import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260717-8";
+import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260717-10";
 const phantomPlayV2Opted = () => { try { return localStorage.getItem("pf.phantomplay.v2") === "1"; } catch { return false; } };
-import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260717-8";
+import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260717-10";
 import {
   canAccessConfiguredModule,
   customizeNavigation,
   loadOrganizationCustomization,
-} from "./customization.js?v=phantom-live-20260717-8";
-import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260717-8";
+} from "./customization.js?v=phantom-live-20260717-10";
+import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260717-10";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -1279,7 +1279,7 @@ const MODES = {
   admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260717-8";
+const POSE_VERSION = "phantom-live-20260717-10";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -1534,6 +1534,99 @@ function setMode(id) {
 function renderHero() {
   const name = (ctx.session?.name || "there").split(/\s+/)[0];
   $("[data-hero-name]").textContent = `${name}.`;
+}
+
+/* ============================ command briefing ============================
+   The dashboard opens on "here's what's happening," not just a blank
+   prompt — chat stays available right below, but it's no longer the only
+   thing here. Self-injects its own DOM + styles so it works regardless of
+   which shell markup wraps it. Every card comes from commandBriefing() in
+   store.js, which is built ONLY from real store records — nothing here
+   fabricates a stat. Admin-only for now; the client portal keeps its
+   existing simpler view. */
+let briefingStylesInjected = false;
+const dismissedBriefingCardIds = new Set();
+
+function injectBriefingStyles() {
+  if (briefingStylesInjected) return;
+  briefingStylesInjected = true;
+  const style = document.createElement("style");
+  style.textContent = `
+    .briefing { margin: 0 0 20px; }
+    .briefing-greet { font: 600 20px "Space Grotesk", system-ui, sans-serif; margin: 0 0 2px; }
+    .briefing-health { font: 400 13px "DM Mono", monospace; color: rgba(234,255,244,.55); margin: 0 0 14px; }
+    .briefing-cards { display: grid; gap: 12px; }
+    .briefing-card { border: 1px solid rgba(65,255,161,.18); border-radius: 16px; padding: 16px 18px;
+      background: radial-gradient(120% 160% at 0% 0%, rgba(65,255,161,.06), transparent 60%), rgba(3,10,7,.5); }
+    .briefing-card-top { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+    .briefing-dept { font: 500 9px "DM Mono", monospace; letter-spacing: .14em; text-transform: uppercase;
+      color: rgba(65,255,161,.85); border: 1px solid rgba(65,255,161,.3); border-radius: 999px; padding: 2px 8px; }
+    .briefing-confidence { font: 400 10px "DM Mono", monospace; color: rgba(234,255,244,.4); margin-left: auto; }
+    .briefing-card h4 { margin: 0 0 4px; font: 600 15px "Space Grotesk", system-ui, sans-serif; }
+    .briefing-card p { margin: 0 0 8px; font-size: 12.5px; color: rgba(234,255,244,.65); line-height: 1.5; }
+    .briefing-evidence { margin: 0 0 12px; padding: 0; list-style: none; font: 400 11px "DM Mono", monospace; color: rgba(234,255,244,.45); }
+    .briefing-evidence li { padding: 2px 0 2px 14px; position: relative; }
+    .briefing-evidence li::before { content: "▸"; position: absolute; left: 0; color: rgba(65,255,161,.5); }
+    .briefing-actions { display: flex; gap: 8px; }
+    .briefing-dismiss { background: transparent; border: 1px solid rgba(255,255,255,.15); color: rgba(234,255,244,.6); border-radius: 8px; padding: 6px 12px; font-size: 12px; cursor: pointer; }
+    .briefing-away { margin-top: 16px; border-top: 1px solid rgba(255,255,255,.06); padding-top: 12px; }
+    .briefing-away-head { font: 500 10px "DM Mono", monospace; letter-spacing: .12em; text-transform: uppercase; color: rgba(234,255,244,.4); margin: 0 0 8px; }
+    .briefing-away ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 5px; }
+    .briefing-away li { font-size: 12.5px; color: rgba(234,255,244,.6); padding-left: 14px; position: relative; }
+    .briefing-away li::before { content: "✓"; position: absolute; left: 0; color: rgba(65,255,161,.6); }
+  `;
+  document.head.appendChild(style);
+}
+
+function briefingGreeting() {
+  const h = new Date().getHours();
+  const time = h < 12 ? "morning" : h < 18 ? "afternoon" : "evening";
+  const name = (ctx.session?.name || "there").split(/\s+/)[0];
+  return `Good ${time}, ${name}`;
+}
+
+function renderCommandBriefing() {
+  if (!isAdmin()) return;
+  const hero = $(".hero2");
+  if (!hero) return;
+  injectBriefingStyles();
+
+  let section = $("[data-briefing]");
+  if (!section) {
+    section = document.createElement("section");
+    section.className = "briefing";
+    section.setAttribute("data-briefing", "");
+    hero.parentElement.insertBefore(section, hero);
+  }
+
+  const { healthLine, decisions, handledWhileAway } = commandBriefing();
+  const visibleDecisions = decisions.filter((d) => !dismissedBriefingCardIds.has(d.id));
+
+  section.innerHTML = `
+    <p class="briefing-greet">${esc(briefingGreeting())}</p>
+    <p class="briefing-health">${esc(healthLine)}</p>
+    ${visibleDecisions.length ? `<div class="briefing-cards">${visibleDecisions.map((d) => `
+      <article class="briefing-card" data-card-id="${esc(d.id)}">
+        <div class="briefing-card-top">
+          <span class="briefing-dept">${esc(d.dept)}</span>
+          <span class="briefing-confidence">confidence: ${esc(d.confidence)}</span>
+        </div>
+        <h4>${esc(d.headline)}</h4>
+        <p>${esc(d.body)}</p>
+        <ul class="briefing-evidence">${d.evidence.map((e) => `<li>${esc(e)}</li>`).join("")}</ul>
+        <div class="briefing-actions">
+          <button type="button" class="btn btn-primary" data-open-ws="${esc(d.primary.open)}">${esc(d.primary.label)}</button>
+          <button type="button" class="briefing-dismiss" data-briefing-dismiss="${esc(d.id)}">Dismiss</button>
+        </div>
+      </article>`).join("")}</div>` : ""}
+    ${handledWhileAway.length ? `<div class="briefing-away">
+      <p class="briefing-away-head">Handled while you were away</p>
+      <ul>${handledWhileAway.map((line) => `<li>${esc(line)}</li>`).join("")}</ul>
+    </div>` : ""}`;
+
+  section.querySelectorAll("[data-briefing-dismiss]").forEach((btn) => {
+    btn.onclick = () => { dismissedBriefingCardIds.add(btn.dataset.briefingDismiss); renderCommandBriefing(); };
+  });
 }
 
 /* ============================ today's plan (donut) ============================ */
@@ -1866,6 +1959,7 @@ function renderConsole() {
   const pulseBefore = serverPulseAt;
   fetchServerAttention().then(() => { if (serverPulseAt !== pulseBefore) renderNotifs(); }).catch(() => {});
   renderHero();
+  renderCommandBriefing();
   renderChips();
   renderModePose(activeMode);
   renderFlowMap();

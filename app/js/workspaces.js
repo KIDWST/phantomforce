@@ -9,12 +9,12 @@ import {
   PACKAGES, RETAINERS, FINANCE_CATEGORIES, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS, CHAT_HISTORY_RETENTION_DAYS,
   addMemory, toggleMemoryRemember, forgetMemory, forgetChatHistory, memoryStats, memoryRetention, chatHistoryStats, chatHistoryRetention,
   session,
-} from "./store.js?v=phantom-live-20260714-012";
+} from "./store.js?v=phantom-live-20260717-7";
 import {
   isDatabaseSession, canManageActiveOrg, fetchServerApprovals, decideServerRun,
   activeOrgId,
   fetchOrgCrm, saveOrgCrmSettings, createOrgCrmContact, pullOrgCrmContacts, updateOrgCrmContact, deleteOrgCrmContact,
-} from "./orgs.js?v=phantom-live-20260714-012";
+} from "./orgs.js?v=phantom-live-20260717-7";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -1766,7 +1766,7 @@ function renderMemory(el, rerender) {
       if (!brainPanel.open || brainPanel.dataset.mounted) return;
       brainPanel.dataset.mounted = "1";
       const mount = brainPanel.querySelector("[data-memory-brain-mount]");
-      import("./brain.js?v=phantom-live-20260714-006")
+      import("./brain.js?v=phantom-live-20260717-7")
         .then((mod) => { if (mount && mount.isConnected) mod.renderPhantomBrain(mount); })
         .catch(() => { if (mount) mount.innerHTML = `<p class="ws-note">The brain panel could not load. Check that the backend on the admin PC is running, then reopen this section.</p>`; });
     });
@@ -1832,7 +1832,7 @@ const WORKFORCE_EMPLOYEES = [
     id: "maya-brooks",
     name: "Maya Brooks",
     title: "Client Success Operator",
-    department: "Client Success",
+    department: "Client Care",
     status: "available",
     focus: "Keeps customer notes clean, catches follow-up gaps, and prepares owner-ready check-ins.",
     skills: ["client care", "handoffs", "retention", "notes"],
@@ -1847,7 +1847,7 @@ const WORKFORCE_EMPLOYEES = [
     id: "leo-grant",
     name: "Leo Grant",
     title: "Lead Research Specialist",
-    department: "Sales",
+    department: "Growth",
     status: "working",
     focus: "Researches prospects, enriches lead context, and drafts next-best outreach angles.",
     skills: ["lead research", "prospect notes", "follow-up prep", "pipeline"],
@@ -1862,7 +1862,7 @@ const WORKFORCE_EMPLOYEES = [
     id: "nina-cross",
     name: "Nina Cross",
     title: "Creator Producer",
-    department: "Creator",
+    department: "Creative",
     status: "working",
     focus: "Turns ideas into captions, campaign media, generated assets, and approval-ready drafts.",
     skills: ["captions", "media", "campaigns", "creator queue"],
@@ -1877,7 +1877,7 @@ const WORKFORCE_EMPLOYEES = [
     id: "marcus-vale",
     name: "Marcus Vale",
     title: "Website Technician",
-    department: "Websites",
+    department: "Technology",
     status: "reviewing",
     focus: "Prepares page changes, checks launch readiness, and flags anything that needs approval.",
     skills: ["site edits", "forms", "launch checks", "copy"],
@@ -1907,7 +1907,7 @@ const WORKFORCE_EMPLOYEES = [
     id: "eli-rhodes",
     name: "Eli Rhodes",
     title: "Accounting Assistant",
-    department: "Accounting",
+    department: "Finance",
     status: "available",
     focus: "Watches transactions, invoice readiness, unpaid items, and cash truth without pretending pipeline is money.",
     skills: ["ledger review", "quotes", "invoice prep", "cashflow"],
@@ -1922,7 +1922,7 @@ const WORKFORCE_EMPLOYEES = [
     id: "sofia-lane",
     name: "Sofia Lane",
     title: "Creator Ops Manager",
-    department: "Creator",
+    department: "Creative",
     status: "reviewing",
     focus: "Packages creator drafts, post ideas, and campaign calendars for owner approval.",
     skills: ["creator drafts", "platform fit", "calendar prep", "reviews"],
@@ -1937,7 +1937,7 @@ const WORKFORCE_EMPLOYEES = [
     id: "theo-knight",
     name: "Theo Knight",
     title: "Security & Access Monitor",
-    department: "Security",
+    department: "Technology",
     status: "available",
     focus: "Reviews access posture, risky routes, exposed-key warnings, and safety checklists.",
     skills: ["access checks", "risk notes", "route review", "security"],
@@ -1952,7 +1952,7 @@ const WORKFORCE_EMPLOYEES = [
     id: "iris-cole",
     name: "Iris Cole",
     title: "Proposal Writer",
-    department: "Sales",
+    department: "Growth",
     status: "available",
     focus: "Drafts quote language, scope notes, and proposal packets that still need owner approval.",
     skills: ["proposal drafts", "offer framing", "scope", "pricing notes"],
@@ -1997,7 +1997,7 @@ const WORKFORCE_EMPLOYEES = [
     id: "owen-price",
     name: "Owen Price",
     title: "Media Systems Operator",
-    department: "Creator",
+    department: "Creative",
     status: "available",
     focus: "Prepares image and video generation plans, credit estimates, and asset-library organization.",
     skills: ["media lab", "credit checks", "asset library", "render prep"],
@@ -2010,7 +2010,11 @@ const WORKFORCE_EMPLOYEES = [
   },
 ];
 
-const WORKFORCE_FILTERS = ["All", "Operations", "Sales", "Creator", "Websites", "Accounting", "Security", "Client Success"];
+// The 7 departments from the Command architecture directive. Intelligence
+// has no desk assigned yet — no existing role fit it — and stays in this
+// list anyway so the workforce view honestly shows "No desk assigned yet"
+// rather than hiding the department until someone happens to staff it.
+const WORKFORCE_FILTERS = ["All", "Growth", "Creative", "Operations", "Client Care", "Finance", "Intelligence", "Technology"];
 
 const SWARM_SUBAGENT_TEMPLATES = [
   {

@@ -640,6 +640,27 @@ export const isClientPublicHost = () => location.hostname === CLIENT_PUBLIC_HOST
 export const isStaticPublicHost = () => PUBLIC_PAGES_HOSTS.has(location.hostname);
 export const isLocalDevHost = () => LOCAL_DEV_HOSTS.has(location.hostname);
 
+export function friendlyBackendError(status, error, options = {}) {
+  const authMessage = options.authMessage || "Sign in to continue.";
+  const fallbackPrefix = options.fallbackPrefix || "Request failed";
+  const raw = String(error || "").trim();
+  const normalized = raw.toLowerCase();
+  if (status === 401) return authMessage;
+  if (status === 403) return "You do not have permission to use that workspace action.";
+  if (status === 404) return `${fallbackPrefix}: the requested workspace service was not found.`;
+  if (status === 502 || status === 503 || status === 504 || /unavailable|econnrefused|fetch failed|network/i.test(raw)) {
+    return `${fallbackPrefix}: the local backend is unavailable.`;
+  }
+  const known = {
+    no_active_org: "No active workspace is selected.",
+    assets_unavailable: "Asset Cloud is not connected for this workspace.",
+    tenant_required: "This action needs a workspace scope.",
+  };
+  if (known[normalized]) return known[normalized];
+  if (raw) return `${fallbackPrefix}: ${raw.replaceAll("_", " ")}.`;
+  return `${fallbackPrefix} (${status || "unknown"}).`;
+}
+
 export function liveAdminUrl() {
   const url = new URL(`https://${ADMIN_PUBLIC_HOST}/app/index.html`);
   url.searchParams.set("from", "phantomforce-online");
@@ -1101,6 +1122,65 @@ export function todaysPlan() {
     if (daysUntil(s.rotationDue) <= 30) items.push({ icon: "⚠", text: `Password rotation window closes in ${daysUntil(s.rotationDue)} days`, kind: "security", open: "protect" });
   });
   return items.slice(0, 7);
+}
+
+/* ---------------- derived: command briefing ----------------
+   Every decision card below is built ONLY from real records already in
+   the store — no fabricated stats, no invented performance numbers. If
+   a category has nothing real to show, it's simply omitted rather than
+   padded out to hit a target count. This mirrors the "never show a bare
+   claim without evidence" principle the briefing itself is meant to
+   demonstrate. */
+export function commandBriefing() {
+  const decisions = [];
+
+  const overdueLeads = visible(store.state.leads)
+    .filter((l) => ["new", "follow-up"].includes(l.status) && daysUntil(l.due) <= 0);
+  if (overdueLeads.length) {
+    decisions.push({
+      id: "cmd-leads",
+      dept: "Client Care",
+      headline: `${overdueLeads.length} client follow-up${overdueLeads.length === 1 ? "" : "s"} ${overdueLeads.length === 1 ? "is" : "are"} overdue`,
+      body: "Drafts are ready in Leads & Follow-Up using each client's history.",
+      evidence: overdueLeads.slice(0, 3).map((l) => `${l.name} (${l.company}) — ${l.next}`),
+      confidence: "high",
+      primary: { label: "Review messages", open: "leads" },
+    });
+  }
+
+  const readyMedia = visible(store.state.media).find((m) => m.status === "brief-ready");
+  if (readyMedia) {
+    decisions.push({
+      id: "cmd-media",
+      dept: "Creative",
+      headline: `${wsName(readyMedia.ws)} hasn't published in a while — a brief is ready`,
+      body: `Phantom prepared "${readyMedia.title}" with a full shot list. Needs your sign-off before any generation runs.`,
+      evidence: [`${(readyMedia.shots || []).length}-shot list`, `Angle: ${readyMedia.angle}`],
+      confidence: "medium",
+      primary: { label: "Review campaign", open: "media" },
+    });
+  }
+
+  const readyReview = visible(store.state.reviews).find((r) => r.status === "publish-ready" && r.quote);
+  if (readyReview) {
+    decisions.push({
+      id: "cmd-review",
+      dept: "Growth",
+      headline: "A strong testimonial is approved but not live yet",
+      body: `${(readyReview.client || "").split(" — ")[0]}'s quote is ready for the reviews wall.`,
+      evidence: [`"${readyReview.quote}"`],
+      confidence: "high",
+      primary: { label: "Review & publish", open: "reviews" },
+    });
+  }
+
+  const handledWhileAway = visible(store.state.activity).slice(0, 5).map((a) => `${a.who} ${a.text}`);
+
+  const healthLine = decisions.length === 0
+    ? "Your business is stable. Nothing needs attention right now."
+    : `Your business is stable. ${decisions.length} thing${decisions.length === 1 ? "" : "s"} need${decisions.length === 1 ? "s" : ""} attention.`;
+
+  return { healthLine, decisions: decisions.slice(0, 3), handledWhileAway };
 }
 
 /* ---------------- approvals ---------------- */
