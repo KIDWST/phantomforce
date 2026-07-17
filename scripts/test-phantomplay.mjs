@@ -17,6 +17,7 @@ const neonDrift = games[gameSlugs.indexOf("neon-drift")];
 const phantomRumble = games[gameSlugs.indexOf("phantom-rumble")];
 const phantomRumbleBotThink = phantomRumble.match(/function botThink\(f,dt\)\{[\s\S]*?\r?\nfunction step\(f,dt\)\{/u)?.[0] || "";
 const penaltyKick = games[gameSlugs.indexOf("penalty-kick")];
+const neonBreaker = read("../app/games/neon-breaker.html");
 const kingdomBreakers = read("../app/games/kingdom-breakers.html");
 const kingdomBreakersScript = kingdomBreakers.match(/<script>([\s\S]*)<\/script>/u)?.[1] || "";
 const skyguardHtml = read("../app/games/skyguard-arena/index.html");
@@ -100,6 +101,8 @@ for (const id of ["reflex-grid", "rift-frenzy", "serpent-surge", "color-rush", "
 const penaltyKickServerBlock = catalogBlock(phantomplayServer, "penalty-kick");
 assert.match(penaltyKickServerBlock, /category:\s*"Sports"/u, "Penalty Kick must stay in Sports.");
 assert.match(penaltyKickServerBlock, /featured:\s*true/u, "Penalty Kick must stay visible as a featured sports game.");
+const neonBreakerServerBlock = catalogBlock(phantomplayServer, "neon-breaker");
+assert.match(neonBreakerServerBlock, /launchUrl:\s*"\/app\/games\/neon-breaker\.html\?v=1\.0\.1"[\s\S]*version:\s*"1\.0\.1"/u, "Neon Breaker must launch the cache-busted visible-paddle build.");
 assert.match(module, /ui\.roomMode === "classroom" \? game\.contentRating === "everyone" : !isKidsGame\(game\)/u, "Classroom rooms must include Kids games while friend rooms keep them out of default multiplayer.");
 const renderDeveloperV2Source = moduleV2.match(/function renderDeveloper\(\) \{([\s\S]*?)\n\/\* ---- ADMIN ---- \*\//u)?.[1] || "";
 assert.ok(renderDeveloperV2Source, "V2 renderDeveloper must exist.");
@@ -187,6 +190,11 @@ assert.match(penaltyKick, /function finishShot\([^)]*\)\{[\s\S]*shots--;busy=fal
 assert.match(penaltyKick, /power>=\.28&&power<=\.72/u, "Penalty Kick must use a forgiving green-zone window so the game is playable.");
 assert.match(penaltyKick, /@media\(max-height:560px\)\{[\s\S]*main\{gap:6px\}[\s\S]*\.field\{min-height:clamp\(128px,36vh,200px\)[\s\S]*\.actions button\{min-height:38px/u, "Penalty Kick must compact the field and controls in short PhantomPlay frames instead of overlapping the meter and shoot button.");
 assert.match(penaltyKick, /@media\(max-height:400px\)\{[\s\S]*\.field\{min-height:110px\}/u, "Penalty Kick must keep a playable emergency layout for tiny embedded frames.");
+assert.doesNotThrow(() => new Function(neonBreaker.match(/<script>([\s\S]*?)<\/script>/u)?.[1] || ""), "Neon Breaker script must parse.");
+assert.match(neonBreaker, /PADDLE_Y=H-88/u, "Neon Breaker must serve the paddle and ball inside the visible embedded frame, not on the clipped bottom edge.");
+assert.match(neonBreaker, /paddle=\{x:W\/2-46,y:PADDLE_Y,w:92,h:13\}/u, "Neon Breaker must start with a wide visible paddle.");
+assert.match(neonBreaker, /paddle\.y=PADDLE_Y;[\s\S]*ball\.x=paddle\.x\+paddle\.w\/2;ball\.y=paddle\.y-ball\.r-2/u, "Neon Breaker serve must keep the ball attached above the visible paddle.");
+assert.match(neonBreaker, /fillText\('Tap \/ Space to launch',W\/2,paddle\.y-22\)/u, "Neon Breaker's launch instruction must sit above the visible launch rail.");
 assert.match(games[gameSlugs.indexOf("rift-frenzy")], /rival|school|boost|eat|bigger/u, "Rift Frenzy must play as a modern fish arena, not a static old mini-game.");
 assert.match(games[gameSlugs.indexOf("serpent-surge")], /storm|boost|rival|serpent|trail/u, "Serpent Surge must play as a modern snake arena, not a static old mini-game.");
 const phantomRumbleScript = phantomRumble.match(/<script>([\s\S]*?)<\/script>/u)?.[1] || "";

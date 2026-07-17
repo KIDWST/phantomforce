@@ -46,12 +46,12 @@
     const startEl=document.querySelector('.start'),pauseEl=document.querySelector('.pause'),resultEl=document.querySelector('.result');
     const W=480,H=640,COLS=10,ROWS=6,GAP=4,BLEFT=12,BTOP=64,BW=(W-BLEFT*2-GAP*(COLS-1))/COLS,BH=18,TOTAL=ROWS*COLS;
     const ROW_COLORS=['#9dffd9','#6fffbf','#41ffa1','#2ce68d','#1fc478','#16a465'];
-    const BASE_SPEED=300,MAX_SPEED=560,PADDLE_SPEED=470;
+    const BASE_SPEED=300,MAX_SPEED=560,PADDLE_SPEED=470,PADDLE_Y=H-88;
 
     let bricks=[],score=0,level=1,lives=3,destroyed=0,totalDestroyed=0;
     let phase='start',paused=false,completed=false,serving=true;
-    let paddle={x:W/2-42,y:H-36,w:84,h:12};
-    let ball={x:W/2,y:H-50,vx:0,vy:0,r:6};
+    let paddle={x:W/2-46,y:PADDLE_Y,w:92,h:13};
+    let ball={x:W/2,y:PADDLE_Y-9,vx:0,vy:0,r:7};
     let speed=BASE_SPEED,last=0,levelFlash=0;
     const keys=new Set();
     let soundOn=true,reduced=false,audio=null;
@@ -97,6 +97,7 @@
     }
     function serve(){
       serving=true;
+      paddle.y=PADDLE_Y;
       paddle.x=Math.min(Math.max(paddle.x,8),W-8-paddle.w);
       ball.x=paddle.x+paddle.w/2;ball.y=paddle.y-ball.r-2;ball.vx=0;ball.vy=0;
     }
@@ -184,17 +185,20 @@
         ctx.fillRect(b.x,b.y,BW,BH);
       }
       ctx.shadowBlur=0;
-      ctx.fillStyle='#0a3323';
+      ctx.save();
+      ctx.shadowColor='#58ffa8';ctx.shadowBlur=reduced?0:18;
+      ctx.fillStyle='#19c779';
       ctx.fillRect(paddle.x,paddle.y,paddle.w,paddle.h);
-      ctx.fillStyle='#58ffa8';
-      ctx.shadowColor='#58ffa8';ctx.shadowBlur=reduced?0:14;
+      ctx.fillStyle='#b8ffdd';
       ctx.fillRect(paddle.x,paddle.y,paddle.w,3);
+      ctx.strokeStyle='#6dffc0';ctx.lineWidth=1.5;ctx.strokeRect(paddle.x+.75,paddle.y+.75,paddle.w-1.5,paddle.h-1.5);
+      ctx.restore();
       ctx.beginPath();ctx.arc(ball.x,ball.y,ball.r,0,Math.PI*2);
       ctx.fillStyle='#effff6';ctx.shadowColor='#41ffa1';ctx.shadowBlur=reduced?0:16;ctx.fill();
       ctx.shadowBlur=0;
       if(phase==='playing'&&serving){
         ctx.fillStyle='#8fd8b4';ctx.font='700 15px ui-monospace,monospace';ctx.textAlign='center';
-        ctx.fillText('Tap / Space to launch',W/2,H-70);
+        ctx.fillText('Tap / Space to launch',W/2,paddle.y-22);
       }
       if(levelFlash>0){
         ctx.fillStyle='#bfffdd';ctx.font='900 30px system-ui,sans-serif';ctx.textAlign='center';

@@ -441,7 +441,7 @@ export const PHANTOMPLAY_BUILT_IN_GAMES: PhantomPlayGame[] = [
     id: "neon-breaker", title: "Neon Breaker", summary: "Break every brick — the angle is yours to control.",
     description: "Breakout with real deflection physics, six brick tiers, and levels that speed up as you clear them.",
     category: "Arcade", tags: ["classic", "paddle", "levels", "touch"], contentRating: "everyone", developer: TAK_CREATOR, kind: "built_in",
-    launchUrl: "/app/games/neon-breaker.html", thumbnail: "/app/assets/poses/mode-dark-video.webp", featured: true, version: "1.0.0",
+    launchUrl: "/app/games/neon-breaker.html?v=1.0.1", thumbnail: "/app/assets/poses/mode-dark-video.webp", featured: true, version: "1.0.1",
     controls: "Drag or Arrow keys, Space to launch", progressSupport: true, scoreSupport: true,
   },
   {
