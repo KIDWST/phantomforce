@@ -2059,11 +2059,36 @@ function renderConsole() {
 /* ============================ command run ============================ */
 const chatHistory = [];
 const chatLogEl = () => $("[data-chat-log]");
+/* Institutional-memory citation: composeBrainContext() on the server already
+   reports exactly which saved-memory records were injected into a given
+   reply (m.citations.used_memory_ids) — real, traceable ids, never invented.
+   The badge only renders when that list is non-empty, and the panel it
+   expands into only ever shows memories actually fetched from the backend
+   (citationMemoryLookup) or an honest "couldn't load"/"no longer available"
+   line — never a fabricated snippet. */
+function citationBadgeHtml(m, i) {
+  const ids = m.citations?.used_memory_ids;
+  if (m.who !== "phantom" || !ids?.length) return "";
+  const open = m.citationsOpen ? "is-open" : "";
+  return `<button type="button" class="msg-citation ${open}" data-msg-citation="${i}" aria-expanded="${m.citationsOpen ? "true" : "false"}" title="Phantom used ${ids.length} saved memor${ids.length === 1 ? "y" : "ies"} to help answer this">◈ ${ids.length} source${ids.length === 1 ? "" : "s"}</button>`;
+}
+function citationPanelHtml(m, i) {
+  const ids = m.citations?.used_memory_ids;
+  if (m.who !== "phantom" || !ids?.length || !m.citationsOpen) return "";
+  if (m.citationDetails === "loading") return `<div class="msg-citation-panel"><p class="msg-citation-loading">Loading source memories…</p></div>`;
+  if (m.citationDetails === "error") return `<div class="msg-citation-panel"><p class="msg-citation-empty">Could not load the source memories right now.</p></div>`;
+  const found = Array.isArray(m.citationDetails) ? m.citationDetails : null;
+  if (!found) return `<div class="msg-citation-panel"><p class="msg-citation-loading">Loading source memories…</p></div>`;
+  const rows = ids.map((id) => found.find((memory) => memory.id === id)).map((memory, idx) => memory
+    ? `<article class="msg-citation-row"><span class="msg-citation-type">${esc(memory.type || "memory")}</span><p>${esc((memory.text || "").slice(0, 220))}</p></article>`
+    : `<article class="msg-citation-row msg-citation-missing"><span class="msg-citation-type">unavailable</span><p>Source memory ${idx + 1} is no longer in the vault (deleted or expired since this reply).</p></article>`).join("");
+  return `<div class="msg-citation-panel">${rows}<button type="button" class="btn btn-quiet msg-citation-view" data-msg-citation-view>Open Memory</button></div>`;
+}
 function msgHtml(m, i) {
   const cards = (m.cards || []).map((c, ci) => cardHtml(c, ci, i)).join("");
   return `<div class="msg msg-${m.who}" data-msg-i="${i}">
     ${m.who === "phantom" ? `<span class="msg-avatar" aria-hidden="true"></span>` : ""}
-    <div class="msg-body"><p class="msg-text"></p>${cards ? `<div class="msg-cards">${cards}</div>` : ""}</div>
+    <div class="msg-body"><p class="msg-text"></p>${citationBadgeHtml(m, i)}${citationPanelHtml(m, i)}${cards ? `<div class="msg-cards">${cards}</div>` : ""}</div>
   </div>`;
 }
 function renderChatLog() {
@@ -2197,6 +2222,31 @@ function chatAttachCards(cards) {
     }
   }
   renderChatLog();
+}
+function chatAttachCitations(brain) {
+  if (!brain?.used_memory_ids?.length) return;
+  for (let i = chatHistory.length - 1; i >= 0; i--) {
+    if (chatHistory[i].who === "phantom") {
+      chatHistory[i].citations = brain;
+      break;
+    }
+  }
+  renderChatLog();
+}
+/* Fetches the real memory records behind a set of ids from the same brain
+   vault brain.js already reads (GET /phantom-ai/brain/memories). Not cached
+   across messages — memories can be edited/forgotten between replies, and
+   this is a rare click-triggered lookup, not a hot path, so correctness
+   beats saving one request. */
+async function citationMemoryLookup(ids = []) {
+  const token = session.token();
+  const headers = token ? { Authorization: `Bearer ${token}` } : {};
+  const params = new URLSearchParams({ limit: "200", tenant_id: currentTenantId() });
+  const response = await fetch(`/phantom-ai/brain/memories?${params.toString()}`, { headers });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || !payload?.ok || !Array.isArray(payload.memories)) throw new Error("memory lookup failed");
+  const byId = new Map(payload.memories.map((memory) => [memory.id, memory]));
+  return ids.map((id) => byId.get(id)).filter(Boolean);
 }
 let typeTimer = 0;
 let ghostMood = "idle";
@@ -2354,6 +2404,7 @@ function runCommand(raw) {
       }
       speak(r.say);
       if (r.cards?.length) chatAttachCards(r.cards);
+      if (r.brain) chatAttachCitations(r.brain);
       rememberConversation({ prompt: raw, reply: r.say, mode: activeMode, route: r.open || "" });
       renderConsole();
       stageReact("answer", 1100);
@@ -2441,6 +2492,23 @@ function wireDeck() {
       else routeWorkspace(item.target);
       return;
     }
+    const citationBtn = e.target.closest("[data-msg-citation]");
+    if (citationBtn) {
+      const entry = chatHistory[Number(citationBtn.dataset.msgCitation)];
+      if (!entry) return;
+      entry.citationsOpen = !entry.citationsOpen;
+      if (entry.citationsOpen && !entry.citationDetails) {
+        entry.citationDetails = "loading";
+        renderChatLog();
+        citationMemoryLookup(entry.citations?.used_memory_ids || [])
+          .then((found) => { entry.citationDetails = found; renderChatLog(); })
+          .catch(() => { entry.citationDetails = "error"; renderChatLog(); });
+        return;
+      }
+      renderChatLog();
+      return;
+    }
+    if (e.target.closest("[data-msg-citation-view]")) { routeWorkspace("memory"); return; }
     if (e.target.closest("[data-side-toggle]")) { setMobileNav(!mobileNavOpen); return; }
     const navSection = e.target.closest("[data-nav-section]");
     if (navSection) {

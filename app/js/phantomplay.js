@@ -1,13 +1,15 @@
 import {
   currentTenantId, isAdmin, isOwnerOperator, session,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260717-12";
+} from "./store.js?v=phantom-live-20260717-15";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 const mobilePlaySurface = () => typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;
 const controlsCopy = (game) => mobilePlaySurface() ? "" : String(game?.controls || "").trim();
 const FALLBACK_KEY = "pf.phantomplay.offline.v1";
 const DEV_SUPPORT_KEY = "pf.phantomplay.developerSupport.v1";
+const GAMEPAD_PREF_KEY = "pf.phantomplay.gamepad";
+const GAMEPAD_PROMPT_SEEN_KEY = "pf.phantomplay.gamepadPromptSeen";
 const CATEGORIES = ["All", "Arcade", "Puzzle", "Focus", "Strategy", "Creative"];
 const GAME_SORTS = ["All", "Solo", "Multiplayer", "Toddler", ...CATEGORIES.filter((category) => category !== "All")];
 // "Game Rating Exposure" — mirrors server PhantomPlayRating (phantomplay.ts).
@@ -59,7 +61,7 @@ const CATEGORY_ART = {
   Creative: GAME_ART_BY_SLUG["word-weld"],
 };
 const BUILT_INS = [
-  { id: "neon-drift", title: "Neon Drift", summary: "Auto-fire spaceship shooter with waves, powerups, and shield saves.", description: "A real arcade shooter: fly fast, fire nonstop, collect rapid fire, spread shot, shield, magnet, and repair powerups, then push deeper into harder waves.", category: "Arcade", tags: ["shooter", "powerups", "arcade", "touch"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/neon-drift.html?v=1.2.5", thumbnail: GAME_ART_BY_SLUG["neon-drift"], featured: true, version: "1.2.5", controls: "WASD/arrow keys to fly. Auto-fire is always on.", progressSupport: true, scoreSupport: true, engine: { tier: "arcade-large-map", minVersion: PHANTOMPLAY_ENGINE.version } },
+  { id: "neon-drift", title: "Neon Drift", summary: "Auto-fire spaceship shooter with boost, nine weapon drops, and shield saves.", description: "A real arcade shooter: fly fast, hold Shift to boost past danger, fire nonstop, and collect powerups like Plasma Beam, Potato Launcher, Ion Lance, Drone Swarm, Chain Volt, Mine Layer, Overdrive Core, Cryo Shard, and Void Rift, then push deeper into harder waves.", category: "Arcade", tags: ["shooter", "powerups", "arcade", "touch"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/neon-drift.html?v=1.3.0", thumbnail: GAME_ART_BY_SLUG["neon-drift"], featured: true, version: "1.3.0", controls: "WASD/arrow keys to fly. Hold Shift to boost. Auto-fire is always on.", progressSupport: true, scoreSupport: true, engine: { tier: "arcade-large-map", minVersion: PHANTOMPLAY_ENGINE.version } },
   { id: "signal-match", title: "Signal Match", summary: "Find every matching signal with the fewest turns.", description: "A responsive memory grid with clear score, feedback, pause, restart, touch, and keyboard support.", category: "Puzzle", tags: ["memory", "calm", "puzzle"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/signal-match.html?v=1.1.1", thumbnail: GAME_ART_BY_SLUG["signal-match"], featured: true, version: "1.1.1", controls: "Click, tap, or use Tab + Enter", progressSupport: true, scoreSupport: true },
   { id: "focus-stack", title: "Focus Stack", summary: "Drop each layer cleanly and build the tallest signal tower.", description: "A focused timing run with a visible score, proper start, pause, restart, and resize-safe play field.", category: "Focus", tags: ["timing", "focus", "quick"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/focus-stack.html?v=1.1.1", thumbnail: GAME_ART_BY_SLUG["focus-stack"], featured: false, version: "1.1.1", controls: "Space, Enter, click, or tap", progressSupport: true, scoreSupport: true },
   { id: "word-weld", title: "Word Weld", summary: "Daily Wordle-inspired puzzle plus buddy-duel word runs for PhantomForce friends.", description: "A Wordle-inspired daily weld: everyone gets the same five-letter puzzle once per day on this workspace device, or you can start a pass-and-play buddy duel for private PhantomForce friends.", category: "Puzzle", tags: ["word", "daily", "puzzle", "multiplayer", "friends", "touch"], contentRating: "everyone", multiplayerDescriptor: "Buddy Duel is pass-and-play today; ready for private PhantomPlay room relay without public discovery.", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/word-weld.html?v=2.0.0", thumbnail: GAME_ART_BY_SLUG["word-weld"], featured: true, version: "2.0.0", controls: "Keyboard, tap letters, Enter to submit", progressSupport: true, scoreSupport: true },
@@ -92,6 +94,9 @@ const ui = {
   developerMessage: "",
   guardianMessage: "",
   ratingBusy: false,
+  gamepadEnabled: false,
+  gamepadEverSeen: false,
+  gamepadPromptVisible: false,
 };
 
 let mountedRoot = null;
@@ -100,6 +105,7 @@ let playClock = null;
 let playTickAt = 0;
 let messageBound = false;
 let keyboardBound = false;
+let gamepadBound = false;
 let playerClosing = false;
 let roomPollTimer = null;
 let roomPollTicks = 0;
@@ -653,7 +659,7 @@ function playerMarkup() {
   const { game, play } = ui.player;
   const engine = engineFor(game);
   const controls = controlsCopy(game);
-  return `<div class="pp-player" role="dialog" aria-modal="true" aria-label="Playing ${esc(game.title)}"><header><div><img src="${esc(thumbnailFor(game))}" alt=""/><span><b>${esc(game.title)}</b>${controls ? `<i>${esc(controls)}</i>` : ""}</span></div><div class="pp-player-actions"><button data-pp-player-restart title="Restart game">Restart</button><button data-pp-player-pause title="Pause game">${ui.playerPaused ? "Resume" : "Pause"}</button><button data-pp-player-fullscreen title="Full screen">Full screen</button><button data-pp-player-close aria-label="Close game">×</button></div></header><div class="pp-player-stage"><button class="pp-player-exit" data-pp-player-close type="button" aria-label="Exit game">Exit</button><div class="pp-player-loading" ${ui.playerReady ? "hidden" : ""}><i></i><b>Loading ${esc(game.title)}…</b><span>The game is opening in a private sandbox.</span></div><iframe src="${esc(game.launchUrl)}" title="${esc(game.title)}" sandbox="allow-scripts" referrerpolicy="no-referrer" allow="fullscreen" tabindex="0" data-pp-frame></iframe></div><footer><span>Session <b>${esc(play.id.slice(-8))}</b></span><span data-pp-live-score>Score —</span><span data-pp-live-state>${ui.playerPaused ? "Paused" : "Playing"}</span><span>Engine ${esc(engine.version)}</span><span>Progress saves automatically</span></footer></div>`;
+  return `<div class="pp-player" role="dialog" aria-modal="true" aria-label="Playing ${esc(game.title)}"><header><div><img src="${esc(thumbnailFor(game))}" alt=""/><span><b>${esc(game.title)}</b>${controls ? `<i>${esc(controls)}</i>` : ""}</span></div><div class="pp-player-actions"><button data-pp-player-restart title="Restart game">Restart</button><button data-pp-player-pause title="Pause game">${ui.playerPaused ? "Resume" : "Pause"}</button><button data-pp-player-fullscreen title="Full screen">Full screen</button>${ui.gamepadEverSeen ? `<button data-pp-gamepad-toggle class="${ui.gamepadEnabled ? "is-on" : ""}" title="${ui.gamepadEnabled ? "Controller enabled — click to disable" : "Controller detected — click to enable"}" aria-pressed="${ui.gamepadEnabled}">🎮</button>` : ""}<button data-pp-player-close aria-label="Close game">×</button></div></header><div class="pp-player-stage"><button class="pp-player-exit" data-pp-player-close type="button" aria-label="Exit game">Exit</button><div class="pp-player-loading" ${ui.playerReady ? "hidden" : ""}><i></i><b>Loading ${esc(game.title)}…</b><span>The game is opening in a private sandbox.</span></div><iframe src="${esc(game.launchUrl)}" title="${esc(game.title)}" sandbox="allow-scripts" referrerpolicy="no-referrer" allow="fullscreen; gamepad" tabindex="0" data-pp-frame></iframe></div><footer><span>Session <b>${esc(play.id.slice(-8))}</b></span><span data-pp-live-score>Score —</span><span data-pp-live-state>${ui.playerPaused ? "Paused" : "Playing"}</span><span>Engine ${esc(engine.version)}</span><span>Progress saves automatically</span></footer></div>`;
 }
 
 function render() {
@@ -670,6 +676,7 @@ function render() {
     <header class="pp-top"><div><p class="pp-kicker">PHANTOMFORCE GAME SANDBOX</p><h1>PhantomPlay</h1><span>Play, build, test, and return to work sharper.</span></div><div><span class="pp-access ${snapshot.access.enabled ? "is-ready" : "is-blocked"}">${snapshot.access.enabled ? esc(playTimeLabel(snapshot.access.remainingMinutesToday)) : "Plan restricted"}</span><button class="pp-settings-button" data-pp-settings aria-label="Play settings">${icon("settings")}</button></div></header>
     ${ui.offline ? `<div class="pp-banner is-offline"><b>Offline mode</b><span>Built-in games still work. Favorites and progress will sync after the server returns.</span><button data-pp-retry>Retry</button></div>` : ""}
     ${ui.error && !ui.offline ? `<div class="pp-banner is-error"><b>PhantomPlay needs attention</b><span>${esc(ui.error)}</span><button data-pp-retry>Retry</button></div>` : ""}
+    ${ui.gamepadPromptVisible ? `<div class="pp-banner is-notice pp-gamepad-banner"><b>🎮 Controller detected</b><span>Enable it for PhantomPlay games?</span><div class="pp-gamepad-banner-actions"><button data-pp-gamepad-accept>Enable</button><button data-pp-gamepad-decline>Not now</button></div></div>` : ""}
     ${ui.notice ? `<div class="pp-banner is-notice"><b>Creator support</b><span>${esc(ui.notice)}</span><button data-pp-clear-notice>OK</button></div>` : ""}
     <nav class="pp-tabs" aria-label="PhantomPlay sections">${tabs.map(([id, label]) => `<button type="button" class="${ui.tab === id ? "is-active" : ""}" data-pp-tab="${id}">${esc(label)}</button>`).join("")}</nav>
     <main class="pp-content">${snapshot.access.enabled ? content : empty("PhantomPlay is unavailable", "This optional workspace module is separate from core PhantomForce operations. Ask a workspace owner to enable access if your team uses it.")}</main>
@@ -1000,6 +1007,41 @@ async function handleMatchAction(action, mode) {
   }
 }
 
+function currentGameSettings() {
+  return { sound: ui.snapshot?.preferences?.sound, reducedMotion: ui.snapshot?.preferences?.reducedMotion, gamepad: ui.gamepadEnabled };
+}
+
+function pushGamepadSettingToGame() {
+  if (!ui.player || !ui.playerReady) return;
+  postToGame("settings", { ...currentGameSettings(), focus: false });
+}
+
+function setGamepadEnabled(next) {
+  ui.gamepadEnabled = next;
+  ui.gamepadPromptVisible = false;
+  try {
+    localStorage.setItem(GAMEPAD_PREF_KEY, next ? "1" : "0");
+    localStorage.setItem(GAMEPAD_PROMPT_SEEN_KEY, "1");
+  } catch { /* private mode / storage disabled — preference just won't persist */ }
+  render();
+  pushGamepadSettingToGame();
+}
+
+function toggleGamepadEnabled() { setGamepadEnabled(!ui.gamepadEnabled); }
+
+// Fires once per session on the first controller connection (browsers only
+// dispatch gamepadconnected after the pad reports input, and some skip it
+// entirely for a pad that was already connected at page load — so mount()
+// also checks navigator.getGamepads() directly as a fallback).
+function handleGamepadConnected() {
+  if (ui.gamepadEverSeen) return;
+  ui.gamepadEverSeen = true;
+  let promptSeen = false;
+  try { promptSeen = localStorage.getItem(GAMEPAD_PROMPT_SEEN_KEY) === "1"; } catch { /* noop */ }
+  if (!promptSeen) ui.gamepadPromptVisible = true;
+  render();
+}
+
 function togglePlayerPause() {
   if (!ui.playerReady) return;
   ui.playerPaused = !ui.playerPaused;
@@ -1033,7 +1075,7 @@ function onGameMessage(event) {
     ui.playerReady = true;
     clearTimeout(readyWatchdog);
     mountedRoot.querySelector(".pp-player-loading")?.setAttribute("hidden", "");
-    frame.contentWindow?.postMessage({ source: "phantomplay-host", type: "settings", sound: ui.snapshot.preferences.sound, reducedMotion: ui.snapshot.preferences.reducedMotion, engine: engineFor(ui.player.game) }, "*");
+    frame.contentWindow?.postMessage({ source: "phantomplay-host", type: "settings", ...currentGameSettings(), engine: engineFor(ui.player.game) }, "*");
     frame.focus?.({ preventScroll: true });
     if (ui.player.roomCode) {
       const room = ui.snapshot.rooms.find((item) => item.code === ui.player.roomCode);
@@ -1178,6 +1220,9 @@ function bind() {
   mountedRoot.querySelector("[data-pp-player-pause]")?.addEventListener("click", togglePlayerPause);
   mountedRoot.querySelector("[data-pp-player-restart]")?.addEventListener("click", restartPlayer);
   mountedRoot.querySelector("[data-pp-player-fullscreen]")?.addEventListener("click", () => mountedRoot.querySelector(".pp-player-stage")?.requestFullscreen?.());
+  mountedRoot.querySelector("[data-pp-gamepad-toggle]")?.addEventListener("click", toggleGamepadEnabled);
+  mountedRoot.querySelector("[data-pp-gamepad-accept]")?.addEventListener("click", () => setGamepadEnabled(true));
+  mountedRoot.querySelector("[data-pp-gamepad-decline]")?.addEventListener("click", () => setGamepadEnabled(false));
   const form = mountedRoot.querySelector("[data-pp-submit-form]");
   if (form) form.onsubmit = (event) => { event.preventDefault(); submitGame(form, event.submitter); };
   mountedRoot.querySelectorAll("[data-pp-edit-submission]").forEach((button) => button.onclick = () => { ui.editingSubmissionId = button.dataset.ppEditSubmission; render(); mountedRoot.querySelector("[data-pp-submit-form]")?.scrollIntoView({ behavior: "smooth", block: "start" }); });
@@ -1203,6 +1248,12 @@ export function renderPhantomPlay(root, opts = {}) {
       if ((event.key === "p" || event.key === "P") && !event.ctrlKey && !event.metaKey) { event.preventDefault(); togglePlayerPause(); }
       if ((event.key === "r" || event.key === "R") && !event.ctrlKey && !event.metaKey) { event.preventDefault(); restartPlayer(); }
     });
+  }
+  if (!gamepadBound) {
+    gamepadBound = true;
+    try { ui.gamepadEnabled = localStorage.getItem(GAMEPAD_PREF_KEY) === "1"; } catch { /* noop */ }
+    window.addEventListener("gamepadconnected", handleGamepadConnected);
+    try { if (Array.from(navigator.getGamepads?.() || []).some(Boolean)) handleGamepadConnected(); } catch { /* noop */ }
   }
   render();
   hydrate();

@@ -312,6 +312,14 @@ async function askHermesBrain(raw, intent, settings) {
       open: null,
       intent,
       hermes: payload.hermes || null,
+      // composeBrainContext() (server/src/phantom-ai/neural-spine.ts) already
+      // scores real saved memories and reports which ones were injected into
+      // this reply's micro-prompt (payload.brain.used_memory_ids) — this was
+      // computed and returned by every chat response but never read on the
+      // client, so replies had no visible citation even though a real,
+      // traceable source list existed. Passed through here so the chat UI
+      // (main.js chatAttachCitations/msgHtml) can show it.
+      brain: payload.brain || null,
     };
   } catch {
     return null;
