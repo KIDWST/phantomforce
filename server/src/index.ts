@@ -5344,10 +5344,9 @@ app.get("/api/phantomplay/admin/rating-history", async (request, reply) => {
 
 if (phantomPlayV2Enabled()) registerPhantomPlayV2Games();
 
-// ---- PhantomPlay Flagship Five: 5 deeper games registered additively on top
-// of V1's catalog array, same push-not-edit pattern as V2 above. Metadata
-// only lands here in a later step (PHANTOMPLAY_FLAGSHIP_GAMES is empty for
-// now) — the call site is wired now so registration order is settled.
+// ---- PhantomPlay flagship games: deeper titles registered additively on top
+// of V1's catalog array, same push-not-edit pattern as V2 above. See
+// PHANTOMPLAY_FLAGSHIP_GAMES for the current roster.
 registerPhantomPlayFlagshipGames();
 
 function phantomPlayV2Gate(reply: FastifyReply) {

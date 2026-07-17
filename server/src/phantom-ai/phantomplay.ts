@@ -717,6 +717,25 @@ export const PHANTOMPLAY_BUILT_IN_GAMES: PhantomPlayGame[] = [
     progressSupport: true,
     scoreSupport: true,
   },
+  {
+    id: "crown-circuit",
+    title: "Crown Circuit",
+    summary: "Head-to-head three-lane elixir battler — deploy units, break towers, take the crown.",
+    description: "A local two-player lane battler in the royale tradition: each side banks elixir, picks from four unit cards, and deploys down three lanes to shove past defending towers and crack the enemy crown tower before the 180-second clock runs out.",
+    category: "Strategy",
+    tags: ["strategy", "lanes", "towers", "versus", "local-multiplayer"],
+    contentRating: "everyone10",
+    developer: "Tak",
+    developerAvatar: TAK_AVATAR,
+    kind: "built_in",
+    launchUrl: "/app/games/crown-circuit.html?v=1.0.0",
+    thumbnail: "/app/assets/phantomplay/crown-circuit-cover.svg?v=1.0.0",
+    featured: false,
+    version: "1.0.0",
+    controls: "P1: 1-4 choose a card, Q/W/E deploy to a lane. P2: 7-0 choose, I/O/P deploy.",
+    progressSupport: false,
+    scoreSupport: true,
+  },
 ];
 
 const ratingRank: Record<PhantomPlayRating, number> = { toddler: 0, everyone: 1, everyone10: 2, teen: 3, mature: 4 };

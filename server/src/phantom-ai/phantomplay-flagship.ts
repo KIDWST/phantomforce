@@ -1,6 +1,6 @@
-/* PhantomForce — PhantomPlay Flagship Five.
+/* PhantomForce — PhantomPlay flagship games.
 
-   Five substantially deeper PhantomPlay games (real progression,
+   Substantially deeper PhantomPlay games (real progression,
    cross-network multiplayer via the existing workspace-relay room model,
    in-app tutorials) than any of the 23 existing built-in games. Following
    the exact precedent set by ./phantomplay-v2.ts: this file owns its own
