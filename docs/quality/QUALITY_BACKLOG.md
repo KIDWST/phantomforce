@@ -406,3 +406,29 @@ Last updated: 2026-07-17
   nav item at all versus a secondary surface opened from other cards.
 - Status: Shipped and browser-verified (see AUDIT_LOG item 4). Placement/
   naming is the open question, not functionality.
+
+### Q-0019 — P3 — Explanatory Analytics landed on Accounting, not social/organization analytics (needs Jordan's review)
+
+- Route/component: `app/js/workspaces.js` (`financeExplainer`,
+  `financeExplainerHtml`, `renderMoney`).
+- Judgment call: the task suggested checking `organizationpulse.js`,
+  `competitor-intelligence.js`, or similar for the "why + what to do about
+  it" upgrade. This session instead picked Accounting, because Organization
+  Pulse/Brain Contract and social Analytics both require a live signed-in
+  server session (and social also needs live OAuth-connected accounts) that
+  this session doesn't have credentials for — the same real-owner-session
+  gap hit in items 2 and 3. Accounting's data is local-only and always
+  populated as soon as the owner enters a transaction, so it was the
+  surface this session could both build *and prove* end-to-end. If Jordan
+  specifically wants the explanatory treatment on Organization Pulse,
+  Competitor Intelligence, or social Analytics instead (or in addition),
+  that's real follow-up work, not a trivial copy-paste — those surfaces
+  have different real data shapes than `moneyView()`.
+- Secondary judgment call: "biggest driver of spend" is a same-period
+  snapshot (largest category by absolute dollar total right now), not a
+  trend comparison against a prior period — there's no historical baseline
+  stored anywhere yet to compare against, so this session didn't invent one
+  rather than fabricate a trend claim ("spending is up 20% this month")
+  that isn't backed by real historical data.
+- Status: Shipped, browser-verified with real transactions and checkable
+  arithmetic (see AUDIT_LOG item 5).

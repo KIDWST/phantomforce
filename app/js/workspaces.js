@@ -9,12 +9,12 @@ import {
   PACKAGES, RETAINERS, FINANCE_CATEGORIES, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS, CHAT_HISTORY_RETENTION_DAYS,
   addMemory, toggleMemoryRemember, forgetMemory, forgetChatHistory, memoryStats, memoryRetention, chatHistoryStats, chatHistoryRetention,
   session,
-} from "./store.js?v=phantom-live-20260717-16";
+} from "./store.js?v=phantom-live-20260717-17";
 import {
   isDatabaseSession, canManageActiveOrg, fetchServerApprovals, decideServerRun,
   activeOrgId,
   fetchOrgCrm, saveOrgCrmSettings, createOrgCrmContact, pullOrgCrmContacts, updateOrgCrmContact, deleteOrgCrmContact,
-} from "./orgs.js?v=phantom-live-20260717-16";
+} from "./orgs.js?v=phantom-live-20260717-17";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -1424,6 +1424,61 @@ function connectorLabel(connector) {
   return "Not connected";
 }
 
+/* Explanatory Analytics: turns the stat tiles above into a plain-language
+   "why" (derived only from real transactions/pipeline already in m — no
+   invented commentary) plus a concrete "what to do about it" that links to
+   a real workspace/action already in the app. Returns null when there's
+   nothing real to explain yet, matching the honesty-over-completeness
+   pattern used elsewhere (Workforce's "No desk assigned yet", Command
+   Briefing's omit-rather-than-pad rule) — an empty ledger gets no
+   fabricated insight. */
+function financeExplainer(m) {
+  if (!m.transactions.length) return null;
+  const expenseByCategory = {};
+  m.transactions.filter((tx) => tx.amount < 0).forEach((tx) => {
+    const cat = tx.category || "Uncategorized";
+    expenseByCategory[cat] = (expenseByCategory[cat] || 0) + Math.abs(tx.amount);
+  });
+  const topCategory = Object.entries(expenseByCategory).sort((a, b) => b[1] - a[1])[0] || null;
+  const topShare = topCategory && m.cashOut > 0 ? Math.round((topCategory[1] / m.cashOut) * 100) : 0;
+
+  const why = [];
+  if (m.netCash < 0) why.push(`Net cash is negative: cash out (${fmtMoney(m.cashOut)}) is running ahead of cash in (${fmtMoney(m.cashIn)}) for the transactions on record.`);
+  else if (m.netCash > 0) why.push(`Net cash is positive: cash in (${fmtMoney(m.cashIn)}) is ahead of cash out (${fmtMoney(m.cashOut)}) for the transactions on record.`);
+  else why.push(`Cash in and cash out are exactly even on the transactions recorded so far.`);
+  if (topCategory && topCategory[1] > 0) why.push(`"${topCategory[0]}" is the single biggest driver of spend — ${fmtMoney(topCategory[1])}, ${topShare}% of everything recorded as cash out.`);
+  if (m.uncategorizedCount) why.push(`${m.uncategorizedCount} transaction${m.uncategorizedCount === 1 ? " is" : "s are"} still "Uncategorized," which means the breakdown above is understated until those get a real category.`);
+
+  const actions = [];
+  if (m.uncategorizedCount) actions.push({ label: `Categorize ${m.uncategorizedCount} transaction${m.uncategorizedCount === 1 ? "" : "s"}`, detail: "Scroll to the ledger below and set a real category on each — every stat here gets sharper once they're sorted." });
+  if (m.pipeline > 0) actions.push({ label: `Follow up on ${fmtMoney(m.pipeline)} in open proposals`, detail: "That value isn't cash yet — it only becomes real cashflow once a proposal closes and a transaction lands here.", open: "proposals" });
+  else if (!m.open.length && !m.won.length) actions.push({ label: "No pipeline on record — draft a proposal", detail: "Cashflow has nowhere to grow from without new pipeline behind it.", open: "proposals" });
+  return { why, actions };
+}
+function financeExplainerHtml(m) {
+  const explainer = financeExplainer(m);
+  if (!explainer) return "";
+  return `<section class="finance-panel finance-explain">
+    <div class="finance-panel-head">
+      <h3>Why these numbers</h3>
+      <span>derived from ${m.transactions.length} real transaction${m.transactions.length === 1 ? "" : "s"}</span>
+    </div>
+    <ul class="finance-why-list">${explainer.why.map((line) => `<li>${esc(line)}</li>`).join("")}</ul>
+    ${explainer.actions.length ? `
+      <p class="finance-explain-sub">What to do about it</p>
+      <div class="finance-action-list">
+        ${explainer.actions.map((action) => `
+          <article class="finance-action">
+            <div>
+              <b>${esc(action.label)}</b>
+              <p>${esc(action.detail)}</p>
+            </div>
+            ${action.open ? `<button class="btn btn-quiet" type="button" data-open-ws="${esc(action.open)}">Open</button>` : ""}
+          </article>`).join("")}
+      </div>` : ""}
+  </section>`;
+}
+
 function renderMoney(el, rerender) {
   const m = moneyView();
   const ws = currentWs() === "phantomforce" ? "phantomforce" : currentWs();
@@ -1441,6 +1496,8 @@ function renderMoney(el, rerender) {
         <div class="stat"><span>Net cashflow</span><b>${moneySigned(m.netCash)}</b><i>${actualCount ? "income minus outflow" : "ledger empty"}</i></div>
         <div class="stat"><span>Book balance</span><b>${moneySigned(m.ledgerBalance)}</b><i>${m.uncategorizedCount} uncategorized</i></div>
       </div>
+
+      ${financeExplainerHtml(m)}
 
       <div class="finance-grid">
         <section class="finance-panel">
@@ -1788,7 +1845,7 @@ function renderMemory(el, rerender) {
       if (!brainPanel.open || brainPanel.dataset.mounted) return;
       brainPanel.dataset.mounted = "1";
       const mount = brainPanel.querySelector("[data-memory-brain-mount]");
-      import("./brain.js?v=phantom-live-20260717-16")
+      import("./brain.js?v=phantom-live-20260717-17")
         .then((mod) => { if (mount && mount.isConnected) mod.renderPhantomBrain(mount); })
         .catch(() => { if (mount) mount.innerHTML = `<p class="ws-note">The brain panel could not load. Check that the backend on the admin PC is running, then reopen this section.</p>`; });
     });

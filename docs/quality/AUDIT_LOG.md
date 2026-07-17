@@ -254,6 +254,58 @@ corrected or removed.
   left in the live app's local storage. No console errors at any point.
 - Cache-bust: bumped `phantom-live-20260717-15` → `-16`.
 
+### 5. Explanatory Analytics — Accounting "why + what to do"
+
+- Surface chosen: Accounting (`app/js/workspaces.js` `renderMoney`), not the
+  social-analytics surface the task suggested checking
+  (`organizationpulse.js`/`competitor-intelligence.js`/`contenthub.js`
+  `renderAnalytics`). Reason: social analytics and Organization Pulse/Brain
+  Contract both require a live signed-in server session and (for social)
+  live OAuth-connected accounts — this session has no real owner
+  credentials (same constraint hit in items 2 and 3), so any explanation
+  built on top of them would be untestable this round and, worse, would
+  render against an empty state in most real sessions too. Accounting's
+  data (`moneyView()` in `store.js`) is 100% local — real transactions the
+  owner enters or imports — so it's the one metric surface guaranteed to
+  have real, testable data without any live backend dependency, and it
+  still satisfies "at least one meaningful chart/metric view."
+- What shipped: a "Why these numbers" panel between the stat tiles and the
+  rest of the Accounting page. `financeExplainer()` derives, from the same
+  `moneyView()` data the stat tiles already use — never invented numbers:
+  which direction net cash is moving and by how much (cash in vs. cash out,
+  both real sums); which expense category is the single biggest driver of
+  spend and its real percentage share of total cash out; a note when
+  transactions are still "Uncategorized" (explains why the read is
+  incomplete). Below that, "What to do about it" lists concrete next
+  actions with a real `Open` button wired to `data-open-ws` (the app's
+  existing global click-delegation convention) — categorize uncategorized
+  transactions, follow up on real open-proposal pipeline value, or draft a
+  proposal if there's no pipeline at all. Returns nothing (no panel at all)
+  when the ledger is empty — matches the honesty-over-completeness pattern
+  used elsewhere in this app (Workforce's "No desk assigned yet," Command
+  Briefing's omit-rather-than-pad rule) instead of fabricating insight for
+  zero data.
+- Files: `app/js/workspaces.js` (`financeExplainer`, `financeExplainerHtml`,
+  wired into `renderMoney`), `app/phantom.css` (`.finance-explain`,
+  `.finance-why-list`, `.finance-action-list`, `.finance-action`).
+- Verification: `node --check app/js/workspaces.js` — PASS. Full browser
+  proof via agent-browser: confirmed the panel is absent on an empty ledger
+  (no fabricated insight); added three real transactions through the actual
+  form (one $2,500 income, two expenses: $60 Software, $900 Contractors);
+  confirmed the panel appeared with correct, checkable math — "Net cash is
+  positive: cash in ($2,500) is ahead of cash out ($960)" (2500-960=1540,
+  matches the Net Cashflow tile exactly) and "'Contractors' is the single
+  biggest driver of spend — $900, 94% of everything recorded as cash out"
+  (900/960 = 93.75%, rounds to 94% correctly); confirmed the "what to do"
+  action ("No pipeline on record — draft a proposal," since this test
+  session had zero proposals) had a real, working `Open` button that
+  navigated to the actual Offer Desk (proposals) workspace. Deleted all
+  three test transactions afterward (stubbed `window.confirm` to clear the
+  browser confirm dialog agent-browser's coordinate click couldn't reach,
+  same short-viewport quirk noted in item 1) so no test data was left in
+  the live app's local storage. No console errors at any point.
+- Cache-bust: bumped `phantom-live-20260717-16` → `-17`.
+
 ### Surfaces Audited
 
 - Required process docs: `AGENTS.md` and all files under `docs/quality/`.
