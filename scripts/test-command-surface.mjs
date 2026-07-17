@@ -84,10 +84,16 @@ assert.match(main, /class="cw-record-grid"/u,
   "Business widget should render permanent records as a compact dock, not more primary tabs.");
 assert.match(main, /open:\s*"leads"[\s\S]*?open:\s*"media"[\s\S]*?open:\s*"sites"[\s\S]*?open:\s*"money"[\s\S]*?open:\s*"analytics"[\s\S]*?open:\s*"intelligence"/u,
   "Business records dock must route to clients, media, sites, money, analytics, and intel.");
-assert.match(main, /class="cw-automation-empty"/u,
-  "Automation widget should show a clean real-empty state instead of pretending starter recipes are running.");
-assert.match(main, /data-command-run="Create a daily content ideas automation"/u,
-  "Automation widget should let the owner create an automation from the command surface.");
+assert.match(main, /const AUTOMATION_STARTERS = \[/u,
+  "Automation widget should define starter recipes for a clean account.");
+assert.match(main, /function renderAutomationStarterDock\(\)/u,
+  "Automation widget should render safe starter recipes instead of a vague empty state.");
+assert.match(main, /class="cw-auto-starters"/u,
+  "Automation widget should show a compact starter dock.");
+assert.match(main, /5 ideas per day[\s\S]*?draft-only and approval-safe/u,
+  "Daily ideas starter must keep configurable daily replacement and approval-safe behavior.");
+assert.match(main, /10 to 20 prospects per day[\s\S]*?never send without approval/u,
+  "Outreach starter must stay manual-send safe.");
 assert.match(main, /function renderOutcomePath\(\{ plan = \[\], attention = \[\], approvals = \[\], automations = \[\], activity = \[\], leads = \{\}, media = \{\}, money = \{\} \} = \{\}\)/u,
   "Outcome board must render a real operating path from existing state.");
 assert.match(main, /function operatingBriefingText\(\{ includePrompt = false \} = \{\}\)/u,
@@ -176,7 +182,8 @@ assert.match(css, /\.cw-flow\s*\{/u, "Outcome widget must show a compact Signal/
 assert.match(css, /\.cw-dept-map\s*\{/u, "Workforce widget must have visual department-map styling.");
 assert.match(css, /\.cw-dept-actions\s*\{/u, "Workforce widget must style department action tiles.");
 assert.match(css, /\.cw-dept-action\s*\{/u, "Workforce department actions must be clickable visual cards.");
-assert.match(css, /\.cw-automation-empty\s*\{/u, "Automation widget must have a clean empty-state dock.");
+assert.match(css, /\.cw-auto-starters\s*\{/u, "Automation widget must have a compact starter recipe dock.");
+assert.match(css, /\.cw-auto-starter\s*\{/u, "Automation starter recipe cards must be styled.");
 assert.match(css, /\.cw-dock-node::before/u, "Command dock nodes should expose visible status dots.");
 assert.match(css, /\.hero2-proof\s*\{/u, "Recent handled proof line must have compact dashboard styling.");
 assert.match(css, /\.decision-deck\s*\{/u, "Decision deck must have compact command-center styling.");

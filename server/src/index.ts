@@ -81,6 +81,7 @@ import {
   LOCAL_CUSTOMER_SESSION_PREFIX,
   assignLocalCustomerPlan,
   completeLocalCustomerPasswordReset,
+  createLocalCustomerOrganization,
   getLocalCustomerPlanSummary,
   initializeLocalCustomerAuthState,
   listLocalCustomerPlanDefinitions,
@@ -91,6 +92,7 @@ import {
   requestLocalCustomerPasswordReset,
   resolveLocalCustomerSession,
   revokeLocalCustomerSession,
+  switchLocalCustomerOrganization,
 } from "./access/local-customer-accounts.js";
 import { isDatabaseConnectivityError, isDatabaseReachable } from "./access/prisma-runtime.js";
 import {
@@ -1561,7 +1563,7 @@ app.post("/customer/plan-preview", async (request, reply) => {
     const code = result.error === "unknown_public_plan" ? 400 : 403;
     return reply.code(code).send({ ok: false, error: result.error, available: "available" in result ? result.available : listLocalCustomerPlanDefinitions().map((plan) => plan.key) });
   }
-  return { ok: true, entitlements: result.entitlements, plans: result.plans, metrics: result.metrics, seats: result.seats };
+  return { ok: true, entitlements: result.entitlements, plans: result.plans, metrics: result.metrics, seats: result.seats, businesses: result.businesses };
 });
 
 const SwitchOrgSchema = z.object({ orgId: z.string().min(1).max(120) });
@@ -1569,10 +1571,15 @@ const SwitchOrgSchema = z.object({ orgId: z.string().min(1).max(120) });
 app.post("/auth/switch-org", async (request, reply) => {
   const session = requireAccessSession(request, reply);
   if (!session) return reply;
-  const dbSession = asDatabaseSession(session);
-  if (!dbSession) return reply.code(400).send({ ok: false, error: "Org switching requires database auth." });
   const parsed = SwitchOrgSchema.safeParse(request.body ?? {});
   if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  if (session.id.startsWith(LOCAL_CUSTOMER_SESSION_PREFIX)) {
+    const result = await switchLocalCustomerOrganization(session, parsed.data.orgId);
+    if (!result.ok) return reply.code(403).send({ ok: false, error: result.error });
+    return { ok: true, session: result.session };
+  }
+  const dbSession = asDatabaseSession(session);
+  if (!dbSession) return reply.code(400).send({ ok: false, error: "Org switching requires database auth." });
   const result = await switchActiveOrg(dbSession, parsed.data.orgId);
   if (!result.ok) return reply.code(403).send({ ok: false, error: result.error });
   return { ok: true, session: result.session };
@@ -2041,20 +2048,61 @@ app.post("/phantom-ai/local-assets/refresh", async (request, reply) => {
 });
 
 app.get("/orgs", async (request, reply) => {
-  const dbSession = requireDatabaseSession(request, reply);
-  if (!dbSession) return reply;
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  if (session.id.startsWith(LOCAL_CUSTOMER_SESSION_PREFIX)) {
+    return {
+      ok: true,
+      organizations: (session.memberships || []).map((membership) => ({
+        id: membership.orgId,
+        name: membership.orgName,
+        role: membership.role,
+      })),
+    };
+  }
+  const dbSession = asDatabaseSession(session);
+  if (!dbSession) return reply.code(403).send({ ok: false, error: "This route requires database auth." });
   return { ok: true, organizations: await listOrganizationsForSession(dbSession) };
 });
 
 const OrgCreateSchema = z.object({ name: z.string().min(2).max(120) });
 
 app.post("/orgs", async (request, reply) => {
-  const dbSession = requireSuperAdmin(request, reply);
-  if (!dbSession) return reply;
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
   const parsed = OrgCreateSchema.safeParse(request.body ?? {});
   if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
-  const org = await createOrganization({ name: parsed.data.name, actor: dbSession });
-  return { ok: true, org: { id: org.id, name: org.name } };
+  if (session.id.startsWith(LOCAL_CUSTOMER_SESSION_PREFIX)) {
+    const result = await createLocalCustomerOrganization(session, parsed.data.name);
+    if (!result.ok) {
+      const code = result.error === "business_limit_reached" ? 403 : 400;
+      const message = result.error === "business_limit_reached"
+        ? `Your current plan allows ${result.limit} organization${Number(result.limit) === 1 ? "" : "s"}. Upgrade before creating another business.`
+        : result.error;
+      return reply.code(code).send({ ok: false, error: result.error, message, used: "used" in result ? result.used : undefined, limit: "limit" in result ? result.limit : undefined });
+    }
+    return { ok: true, org: result.org, session: result.session };
+  }
+  const dbSession = asDatabaseSession(session);
+  if (!dbSession) return reply.code(403).send({ ok: false, error: "This route requires database auth." });
+  const canCreate = dbSession.isSuperAdmin || ["owner", "admin"].includes(dbSession.orgRole || "");
+  if (!canCreate) return reply.code(403).send({ ok: false, error: "owner_or_admin_required" });
+  if (!dbSession.isSuperAdmin && !dbSession.orgId) return reply.code(403).send({ ok: false, error: "active_org_required" });
+  const entitlements = dbSession.orgId ? await getOrgEntitlements(dbSession.orgId) : undefined;
+  const used = Math.max(1, dbSession.memberships.length);
+  const limit = Number(entitlements?.limits.businesses ?? Number.POSITIVE_INFINITY);
+  if (!dbSession.isSuperAdmin && Number.isFinite(limit) && used >= limit) {
+    return reply.code(403).send({
+      ok: false,
+      error: "business_limit_reached",
+      message: `Your current plan allows ${limit} organization${limit === 1 ? "" : "s"}. Upgrade before creating another business.`,
+      used,
+      limit,
+    });
+  }
+  const org = await createOrganization({ name: parsed.data.name, actor: dbSession, planKey: entitlements?.planKey });
+  const refreshed = await resolveDatabaseSession(`${DB_SESSION_PREFIX}${dbSession.authSessionId}`);
+  return { ok: true, org: { id: org.id, name: org.name }, session: refreshed };
 });
 
 app.get("/orgs/:orgId/members", async (request, reply) => {

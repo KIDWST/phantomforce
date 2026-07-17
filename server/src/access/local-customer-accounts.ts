@@ -321,6 +321,7 @@ export async function getLocalCustomerPlanSummary(session: AccessSession) {
     plans: listLocalCustomerPlanDefinitions(),
     metrics: [],
     seats: { used: user.memberships.length || 1, limit: entitlements.limits.seats },
+    businesses: { used: user.memberships.length || 1, limit: entitlements.limits.businesses },
   };
 }
 
@@ -342,6 +343,49 @@ export async function assignLocalCustomerPlan(session: AccessSession, planKey: s
   const summary = await getLocalCustomerPlanSummary(session);
   if (!summary) return { ok: false as const, error: "account_not_found" };
   return { ok: true as const, ...summary };
+}
+
+export async function switchLocalCustomerOrganization(session: AccessSession, orgId: string) {
+  if (!enableLocalCustomerAuth) return { ok: false as const, error: "local_customer_auth_disabled" };
+  if (!session.id.startsWith(LOCAL_CUSTOMER_SESSION_PREFIX) || !session.userId) return { ok: false as const, error: "local_customer_required" };
+  await loadStore();
+  const user = store.users.find((account) => account.id === session.userId);
+  const sessionId = session.id.slice(LOCAL_CUSTOMER_SESSION_PREFIX.length);
+  const sessionRecord = store.sessions.find((record) => record.id === sessionId && record.userId === session.userId);
+  if (!user || !sessionRecord) return { ok: false as const, error: "account_not_found" };
+  const membership = user.memberships.find((item) => item.orgId === orgId);
+  if (!membership) return { ok: false as const, error: "not_a_member" };
+  user.activeOrgId = membership.orgId;
+  user.updatedAt = nowIso();
+  sessionRecord.activeOrgId = membership.orgId;
+  await saveStore();
+  return { ok: true as const, session: buildSession(user, sessionRecord) };
+}
+
+export async function createLocalCustomerOrganization(session: AccessSession, nameRaw: string) {
+  if (!enableLocalCustomerAuth) return { ok: false as const, error: "local_customer_auth_disabled" };
+  if (!session.id.startsWith(LOCAL_CUSTOMER_SESSION_PREFIX) || !session.userId) return { ok: false as const, error: "local_customer_required" };
+  if (!["owner", "admin"].includes(session.orgRole || "")) return { ok: false as const, error: "owner_or_admin_required" };
+  await loadStore();
+  const user = store.users.find((account) => account.id === session.userId);
+  const sessionId = session.id.slice(LOCAL_CUSTOMER_SESSION_PREFIX.length);
+  const sessionRecord = store.sessions.find((record) => record.id === sessionId && record.userId === session.userId);
+  if (!user || !sessionRecord) return { ok: false as const, error: "account_not_found" };
+  const entitlements = resolveLocalCustomerEntitlements(user);
+  const used = user.memberships.length || 1;
+  const limit = Number(entitlements.limits.businesses ?? 1);
+  if (Number.isFinite(limit) && used >= limit) {
+    return { ok: false as const, error: "business_limit_reached", used, limit };
+  }
+  const name = nameRaw.trim().replace(/\s+/g, " ").slice(0, 120);
+  const orgId = deterministicId("local-org", `${user.id}:${name}:${Date.now()}:${randomBytes(6).toString("base64url")}`);
+  const membership: LocalCustomerMembership = { orgId, orgName: name, role: "owner" };
+  user.memberships.push(membership);
+  user.activeOrgId = orgId;
+  user.updatedAt = nowIso();
+  sessionRecord.activeOrgId = orgId;
+  await saveStore();
+  return { ok: true as const, org: { id: orgId, name }, session: buildSession(user, sessionRecord) };
 }
 
 export async function loginLocalCustomer(emailRaw: string, password: string) {

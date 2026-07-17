@@ -38,12 +38,19 @@ const INVITATION_TTL_MS = Number(process.env.PHANTOMFORCE_INVITATION_TTL_MS ?? 7
 const SESSION_CACHE_TTL_MS = 15_000;
 
 export const DB_SESSION_PREFIX = "db:";
+const RETIRED_DEV_ORG_IDS = new Set(["dev-org-chicagoshots"]);
+const RETIRED_DEV_USER_IDS = ["dev-user-chicago-owner", "dev-user-chicago-employee", "dev-user-chicago-client"];
+const DEFAULT_DEV_ORG_ID = "dev-org-phantomforce";
 
 function requirePrisma(): PrismaClient {
   if (!prisma) {
     throw new Error("PHANTOMFORCE_AUTH_PROVIDER=database requires DATABASE_URL (Prisma repository mode).");
   }
   return prisma;
+}
+
+function isRetiredDevOrg(orgId: string | null | undefined) {
+  return !!orgId && RETIRED_DEV_ORG_IDS.has(orgId);
 }
 
 /* ---------------- password hashing (scrypt, no external deps) ---------------- */
@@ -162,12 +169,14 @@ async function buildSessionDetails(authSessionId: string): Promise<DatabaseSessi
   });
   if (!row || row.revokedAt || row.expiresAt.getTime() < Date.now()) return undefined;
 
-  const memberships = row.user.memberships.map((m) => ({ orgId: m.orgId, orgName: m.org.name, role: m.role }));
+  const memberships = row.user.memberships
+    .filter((m) => !isRetiredDevOrg(m.orgId))
+    .map((m) => ({ orgId: m.orgId, orgName: m.org.name, role: m.role }));
   const activeOrgId =
-    row.activeOrgId && memberships.some((m) => m.orgId === row.activeOrgId)
+    row.activeOrgId && !isRetiredDevOrg(row.activeOrgId) && memberships.some((m) => m.orgId === row.activeOrgId)
       ? row.activeOrgId
       : row.user.isSuperAdmin
-        ? row.activeOrgId
+        ? memberships[0]?.orgId ?? DEFAULT_DEV_ORG_ID
         : memberships[0]?.orgId ?? null;
   const orgRole = memberships.find((m) => m.orgId === activeOrgId)?.role ?? null;
   const isSuperAdmin = row.user.isSuperAdmin;
@@ -294,6 +303,7 @@ export async function listOrganizationsForSession(session: DatabaseSessionDetail
   const db = requirePrisma();
   if (session.isSuperAdmin) {
     const orgs = await db.org.findMany({
+      where: { id: { notIn: [...RETIRED_DEV_ORG_IDS] } },
       orderBy: { createdAt: "asc" },
       include: { _count: { select: { memberships: true } }, orgPlan: { select: { planKey: true, status: true } } },
     });
@@ -305,12 +315,31 @@ export async function listOrganizationsForSession(session: DatabaseSessionDetail
       role: session.memberships.find((m) => m.orgId === org.id)?.role ?? null,
     }));
   }
-  return session.memberships.map((m) => ({ id: m.orgId, name: m.orgName, role: m.role }));
+  return session.memberships
+    .filter((m) => !isRetiredDevOrg(m.orgId))
+    .map((m) => ({ id: m.orgId, name: m.orgName, role: m.role }));
 }
 
-export async function createOrganization(input: { name: string; actor: DatabaseSessionDetails; ownerEmail?: string }) {
+export async function createOrganization(input: { name: string; actor: DatabaseSessionDetails; ownerEmail?: string; planKey?: string }) {
   const db = requirePrisma();
   const org = await db.org.create({ data: { name: input.name.trim().slice(0, 120) } });
+  await db.membership.upsert({
+    where: { userId_orgId: { userId: input.actor.userId, orgId: org.id } },
+    create: { userId: input.actor.userId, orgId: org.id, role: "owner" },
+    update: { role: "owner" },
+  });
+  if (input.planKey) {
+    await assignOrgPlan({
+      orgId: org.id,
+      planKey: input.planKey,
+      status: "active",
+      note: "Created from the organization switcher.",
+      assignedByUserId: input.actor.userId,
+    });
+  }
+  await db.authSession.update({ where: { id: input.actor.authSessionId }, data: { activeOrgId: org.id } }).catch(() => null);
+  await db.user.update({ where: { id: input.actor.userId }, data: { activeOrgId: org.id } }).catch(() => null);
+  invalidateCacheForUser(input.actor.userId);
   await recordOrgAuditEvent({
     orgId: org.id,
     actor: input.actor.email,
@@ -560,7 +589,6 @@ export async function seedDevelopmentIdentities() {
 
   const orgs = [
     { id: "dev-org-phantomforce", name: "PhantomForce (dev)" },
-    { id: "dev-org-chicagoshots", name: "ChicagoShots (dev)" },
   ];
   const users: Array<{
     id: string; email: string; name: string; isSuperAdmin: boolean;
@@ -573,30 +601,11 @@ export async function seedDevelopmentIdentities() {
       isSuperAdmin: true,
       memberships: [{ orgId: "dev-org-phantomforce", role: "owner" }],
     },
-    {
-      id: "dev-user-chicago-owner",
-      email: "owner@chicagoshots.local",
-      name: "ChicagoShots Owner (dev)",
-      isSuperAdmin: false,
-      memberships: [{ orgId: "dev-org-chicagoshots", role: "owner" }],
-    },
-    {
-      id: "dev-user-chicago-employee",
-      email: "employee@chicagoshots.local",
-      name: "ChicagoShots Employee (dev)",
-      isSuperAdmin: false,
-      memberships: [{ orgId: "dev-org-chicagoshots", role: "member" }],
-    },
-    {
-      id: "dev-user-chicago-client",
-      email: "client@chicagoshots.local",
-      name: "ChicagoShots Client (dev)",
-      isSuperAdmin: false,
-      memberships: [{ orgId: "dev-org-chicagoshots", role: "client" }],
-    },
   ];
 
   await db.$transaction(async (tx) => {
+    await tx.org.deleteMany({ where: { id: { in: [...RETIRED_DEV_ORG_IDS] } } });
+    await tx.user.deleteMany({ where: { id: { in: RETIRED_DEV_USER_IDS } } });
     for (const org of orgs) {
       await tx.org.upsert({ where: { id: org.id }, create: org, update: { name: org.name } });
     }
@@ -626,5 +635,4 @@ export async function seedDevelopmentIdentities() {
   /* dev plan assignments — clearly marked, never production data */
   await syncPlanCatalog();
   await assignOrgPlan({ orgId: "dev-org-phantomforce", planKey: "internal", status: "active", note: "DEV SEED — internal org" });
-  await assignOrgPlan({ orgId: "dev-org-chicagoshots", planKey: "professional", status: "active", note: "DEV SEED — demo business" });
 }

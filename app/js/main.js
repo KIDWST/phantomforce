@@ -28,7 +28,7 @@ import { mountAmbient } from "./ambient.js?v=phantom-live-20260716-316";
 import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260716-316";
 import {
   fetchAuthConfig, databaseLogin, databaseLogout, customerRegister, requestCustomerPasswordReset,
-  completeCustomerPasswordReset, switchOrg, fetchAuthMe, fetchEntitlementsSummary, switchCustomerPlan,
+  completeCustomerPasswordReset, switchOrg, createOrganization, fetchAuthMe, fetchEntitlementsSummary, switchCustomerPlan,
 } from "./orgs.js?v=phantom-live-20260716-316";
 import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260716-316";
 import { assetsAvailable } from "./orgs.js?v=phantom-live-20260716-316";
@@ -862,6 +862,42 @@ function renderFlowCompactSummary() {
 let topbarWorkforce = null;
 let topbarWorkforceLoading = false;
 let topbarWorkforceChecked = false;
+const NEW_ORG_SELECT_VALUE = "__new_organization__";
+
+function isCustomerOrgSession() {
+  return Boolean(ctx.session?.database || ctx.session?.localCustomer);
+}
+
+function businessMemberships() {
+  const memberships = Array.isArray(ctx.session?.memberships) ? ctx.session.memberships : [];
+  return memberships
+    .filter((membership) => membership?.orgId && !/chicagoshots/i.test(`${membership.orgId} ${membership.orgName || ""}`))
+    .map((membership) => ({
+      orgId: membership.orgId,
+      orgName: membership.orgName || membership.name || "Business",
+      role: membership.role || "member",
+    }));
+}
+
+function orgSwitcherMarkup() {
+  if (!isAdmin()) return "";
+  if (isCustomerOrgSession()) {
+    const memberships = businessMemberships();
+    const activeOrgId = ctx.session?.orgId || memberships[0]?.orgId || "";
+    return `
+    <label class="ws-switch" title="Switch isolated business organization">
+      <select data-org-select aria-label="Switch organization">
+        ${memberships.map((m) => `<option value="${esc(m.orgId)}" ${m.orgId === activeOrgId ? "selected" : ""}>${esc(m.orgName)}</option>`).join("")}
+        <option disabled>──────────</option>
+        <option value="${NEW_ORG_SELECT_VALUE}">+ New organization</option>
+      </select>
+    </label>`;
+  }
+  return `
+    <label class="ws-switch" title="Switch isolated business workspace">
+      <select data-org-select aria-label="Switch workspace">${store.state.workspaces.map((w) => `<option value="${w.id}" ${w.id === currentWs() ? "selected" : ""}>${esc(w.name)}</option>`).join("")}</select>
+    </label>`;
+}
 
 function topbarBaselineWorkers() {
   const summary = topbarWorkforce?.summary;
@@ -889,11 +925,7 @@ function renderStatusPills() {
     <div class="pill pill-${p.tone} ${p.open ? "pill-link" : ""}" ${p.open ? `data-pill-open="${p.open}" role="button" tabindex="0"` : ""}>
       <span class="pill-k">${p.label}</span>
       <span class="pill-v">${p.dot ? `<i class="dot"></i>` : ""}${p.lock ? `<i class="lock" aria-hidden="true">🔒</i>` : ""}<span class="pill-v-text" title="${esc(p.value)}">${esc(p.value)}</span></span>
-    </div>`).join("")
-    + (isAdmin() ? `
-    <label class="ws-switch" title="Switch isolated business workspace">
-      <select data-org-select aria-label="Switch workspace">${store.state.workspaces.map((w) => `<option value="${w.id}" ${w.id === currentWs() ? "selected" : ""}>${esc(w.name)}</option>`).join("")}</select>
-    </label>` : "");
+    </div>`).join("") + orgSwitcherMarkup();
   const sel = $("[data-org-select]");
   if (sel) sel.onchange = () => switchWorkspace(sel.value);
   $$("[data-pill-open]").forEach((el) => {
@@ -918,7 +950,20 @@ async function switchWorkspace(id) {
     renderStatusPills();
     return;
   }
-  if (!setWorkspace(id)) { renderStatusPills(); return; }
+  if (id === NEW_ORG_SELECT_VALUE) {
+    await createNewOrganizationFromSwitcher();
+    return;
+  }
+  if (isCustomerOrgSession()) {
+    const result = await switchOrg(id);
+    if (!result.ok) {
+      renderStatusPills();
+      pushActivity("Account", "business switch was refused by the server — this account is not a member.");
+      store.save();
+      return;
+    }
+    accountLiveEntitlements = null;
+  } else if (!setWorkspace(id)) { renderStatusPills(); return; }
   await loadOrganizationCustomization({ onApplied: refreshCustomizedNavigation });
   await refreshNavEntitlements({ rerender: false });
   accountMenuOpen = false;
@@ -926,10 +971,48 @@ async function switchWorkspace(id) {
   clearOverlayOnly();
   stageReact("nav", 640);
   setGhostMood("listening", { emotion: "bright", ms: 1200 });
-  speak(wsName(currentWs()) + " is active. Workspace data is isolated.", "", "bright");
+  const activeBusinessName = isCustomerOrgSession()
+    ? businessMemberships().find((m) => m.orgId === ctx.session?.orgId)?.orgName || "Business"
+    : wsName(currentWs());
+  speak(activeBusinessName + " is active. Workspace data is isolated.", "", "bright");
   if (activePageId) renderWorkspacePage(activePageId, false);
   else renderConsole();
   console.info("[PhantomForce] workspace switched", { from: before, to: currentWs(), tenant: currentTenantId() });
+}
+
+async function createNewOrganizationFromSwitcher() {
+  if (!isAdmin() || !isCustomerOrgSession()) {
+    renderStatusPills();
+    return;
+  }
+  const name = prompt("Name this new organization:");
+  const cleanName = String(name || "").trim().replace(/\s+/g, " ").slice(0, 120);
+  if (!cleanName) {
+    renderStatusPills();
+    return;
+  }
+  const result = await createOrganization(cleanName);
+  if (!result.ok) {
+    const limitText = result.limit ? ` Your plan allows ${result.limit} organization${Number(result.limit) === 1 ? "" : "s"} and you already have ${result.used || "that many"}.` : "";
+    pushActivity("Account", `new organization was blocked.${limitText}`);
+    alert(`${result.error || "Could not create organization."}${limitText}`);
+    renderStatusPills();
+    store.save();
+    return;
+  }
+  accountLiveEntitlements = null;
+  await loadOrganizationCustomization({ onApplied: refreshCustomizedNavigation });
+  await refreshNavEntitlements({ rerender: false });
+  accountMenuOpen = false;
+  notifOpen = false;
+  clearOverlayOnly();
+  stageReact("nav", 640);
+  setGhostMood("listening", { emotion: "bright", ms: 1200 });
+  speak(`${result.org.name} is active. Workspace data is isolated.`, "", "bright");
+  pushActivity("Account", `created organization ${result.org.name}.`);
+  store.save();
+  routeWorkspace("dashboard");
+  renderConsole();
 }
 let clockTimer = 0;
 let accountMenuOpen = false;
@@ -2263,6 +2346,37 @@ const DEPARTMENT_ACTIONS = {
   Technology: { open: "developer", action: "Keep systems healthy", gate: "developer controls stay behind the curtain" },
 };
 
+const AUTOMATION_STARTERS = [
+  {
+    title: "Daily ideas",
+    cadence: "5 every morning",
+    config: "topic, style, platform, audience",
+    gate: "drafts only until approved",
+    command: "Create a daily content ideas automation with 5 ideas per day, daily replacement, configurable topic, style, platform, and audience. Keep it draft-only and approval-safe.",
+  },
+  {
+    title: "Security watch",
+    cadence: "daily check",
+    config: "domain, local health, exposed risk",
+    gate: "reports only; no destructive fixes",
+    command: "Create a daily security watch automation for domain, local health, exposed-route, malware, and leaked-data checks. Report findings only and queue any risky fix for approval.",
+  },
+  {
+    title: "Outreach drafts",
+    cadence: "10-20 leads/day",
+    config: "target client, tone, offer, channel",
+    gate: "manual-send required",
+    command: "Create an outreach draft automation for 10 to 20 prospects per day with configurable target client, tone, offer, and channel. Draft only; never send without approval.",
+  },
+  {
+    title: "Competitor pulse",
+    cadence: "daily scan",
+    config: "competitors, keywords, offers",
+    gate: "evidence before action",
+    command: "Create a competitor pulse automation that scans configured competitors, keywords, offers, and content gaps daily. Turn findings into approval-safe decisions with evidence.",
+  },
+];
+
 function renderDepartmentActionDock(departments = []) {
   const rows = departments.filter((dept) => dept.total > 0).slice(0, 4);
   if (!rows.length) return "";
@@ -2526,16 +2640,27 @@ function renderCommandToolDock() {
     ${renderDepartmentActionDock(departments)}`;
 }
 
+function renderAutomationStarterDock() {
+  return `
+    <div class="cw-auto-starters" aria-label="Automation starter recipes">
+      <p>
+        <b>Start with safe defaults.</b>
+        <span>Tell Phantom about the business, then create one of these draft-only automations. Every outside-world action still waits for approval.</span>
+      </p>
+      ${AUTOMATION_STARTERS.map((starter) => `
+        <button class="cw-auto-starter" data-command-run="${esc(starter.command)}" type="button">
+          <b>${esc(starter.title)}</b>
+          <span>${esc(starter.cadence)}</span>
+          <i>${esc(starter.config)}</i>
+          <em>${esc(starter.gate)}</em>
+        </button>`).join("")}
+    </div>`;
+}
+
 function renderAutomationDock(automations = []) {
   const rows = automations.slice(0, 4);
   if (!rows.length) {
-    return `
-      <div class="cw-automation-empty" aria-label="Automation starter">
-        <p><b>No configured automations yet.</b><span>Create them from Phantom chat; this card becomes the control dock after they exist.</span></p>
-        <button data-command-run="Create a daily content ideas automation" type="button">Daily ideas</button>
-        <button data-command-run="Create a security check automation" type="button">Security check</button>
-        <button data-command-run="Create an outreach draft automation" type="button">Outreach drafts</button>
-      </div>`;
+    return renderAutomationStarterDock();
   }
   const active = rows.filter((agent) => agent.status === "active").length;
   const waiting = rows.length - active;

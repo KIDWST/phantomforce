@@ -369,6 +369,12 @@ async function renderPlanAccessTab(el, opts = {}) {
     const message = el.querySelector("[data-plan-message]");
     el.querySelectorAll("[data-plan-switch]").forEach((button) => {
       button.onclick = async () => {
+        const target = plans.find((plan) => plan.key === button.dataset.planSwitch);
+        const targetBusinessLimit = Number(target?.limits?.businesses ?? 1);
+        if (Number.isFinite(targetBusinessLimit) && businessCount > targetBusinessLimit) {
+          const ok = confirm(`This plan allows ${targetBusinessLimit} organization${targetBusinessLimit === 1 ? "" : "s"}, but you currently have ${businessCount}. Downgrading can remove access to an organization unless you clean that up first. Continue?`);
+          if (!ok) return;
+        }
         button.disabled = true;
         if (message) message.textContent = `Switching to ${button.textContent.replace(/^Switch to\s+/u, "")}...`;
         const result = await switchCustomerPlan(button.dataset.planSwitch);
