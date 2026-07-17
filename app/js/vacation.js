@@ -1,4 +1,4 @@
-import { session as accessSession, ago } from "./store.js?v=phantom-live-20260717-13";
+import { session as accessSession, ago } from "./store.js?v=phantom-live-20260717-15";
 
 const esc = (value = "") => String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 const cacheKey = "pf.vacation.statusCache.v2";
@@ -169,15 +169,39 @@ function walletCard(status) {
   </section>`;
 }
 
-function taskForm() {
+// Maps operator task types to the coverage-plan toggle that authorizes them
+// (mirrors TASK_TYPE_ALLOW_FIELD in server/src/phantom-ai/vacation-mode.ts).
+// Types with no entry (research, exception_triage, other) have no owner
+// toggle, so nothing here marks them as restricted.
+const TASK_TYPE_COVERAGE_FIELD = {
+  phone_call: "allowCalls",
+  attend_meeting: "allowMeetings",
+  lead_follow_up: "allowLeadFollowUps",
+  booking_coordination: "allowBookingCoordination",
+  client_message: "allowClientMessages",
+};
+
+function taskForm(coverage = {}) {
   return `<section class="vm-card vm-operator-form">
     <div class="vm-card-head"><div><span class="vm-kicker">Real human help</span><h3>Give the operator desk a job.</h3></div></div>
-    <label class="vm-field"><span>Type of work</span><select data-op-field="type">${Object.entries(taskLabels).map(([value, label]) => `<option value="${value}">${esc(label)}</option>`).join("")}</select></label>
+    <label class="vm-field"><span>Type of work</span><select data-op-field="type">${Object.entries(taskLabels).map(([value, label]) => {
+      const field = TASK_TYPE_COVERAGE_FIELD[value];
+      const off = field && coverage[field] === false;
+      return `<option value="${value}">${esc(label)}${off ? " — off in coverage plan" : ""}</option>`;
+    }).join("")}</select></label>
     <label class="vm-field"><span>What needs to happen?</span><input data-op-field="title" placeholder="Call the new lead and book a consultation"></label>
     <label class="vm-field"><span>Details the operator needs</span><textarea rows="4" data-op-field="instructions" placeholder="Who, why, preferred outcome, boundaries, and anything they should not promise"></textarea></label>
     <label class="vm-field"><span>When?</span><input type="datetime-local" data-op-field="scheduledFor"></label>
     <button class="btn btn-primary" type="button" data-op-create>Queue human help</button>
+    <p class="vm-form-note">A type marked "off in coverage plan" will still save, but Phantom will not queue it for a human until you turn that toggle on below.</p>
   </section>`;
+}
+
+function blockedReasonCopy(task) {
+  if (task.status !== "blocked") return "";
+  if (task.blockedReason === "policy") return `Your coverage plan has "${esc(taskLabels[task.type] || "this type of work")}" turned off.`;
+  if (task.blockedReason === "credits") return "Not enough Operator Credits reserved.";
+  return "";
 }
 
 function tasksCard(tasks) {
@@ -186,6 +210,7 @@ function tasksCard(tasks) {
     <div class="vm-op-list">${visible.length ? visible.map((task) => `<article class="vm-op-task">
       <div class="vm-op-task-top"><span class="vm-state-pill ${task.status === "completed" ? "on" : task.status === "blocked" ? "off" : ""}">${esc(task.status.replaceAll("_", " "))}</span><button class="vm-task-x" type="button" data-op-cancel="${esc(task.id)}" title="Cancel request" aria-label="Cancel request">×</button></div>
       <h4>${esc(task.title)}</h4><p>${esc(task.instructions || "No extra instructions.")}</p>
+      ${task.status === "blocked" ? `<p class="vm-op-blocked-reason">${blockedReasonCopy(task)}</p>` : ""}
       <div class="vm-op-task-meta"><span>${esc(taskLabels[task.type] || "Human work")}</span><span>${task.creditCost} credits</span><span>${task.scheduledFor ? fmt(task.scheduledFor) : "As soon as possible"}</span></div>
     </article>`).join("") : `<div class="vm-empty">No human work queued. Your operator desk starts clean.</div>`}</div>
   </section>`;
@@ -213,7 +238,7 @@ function render(el) {
   }
   if (state.error) { el.innerHTML = `<div class="vm-error"><b>Away Mode could not load.</b><span>${esc(state.error)}</span><button class="btn" data-retry>Retry</button></div>`; return; }
   const s = state.status;
-  el.innerHTML = `<div class="vm">${statusHero(s)}${digestCard(s, state.activity, state.approvals)}<div class="vm-grid vm-grid-power">${coveragePlan(s)}${walletCard(s)}${taskForm()}${tasksCard(state.tasks)}${exceptionsCard(state.approvals)}${activityCard(state.activity)}${readinessCard(s.readiness || [])}</div></div>`;
+  el.innerHTML = `<div class="vm">${statusHero(s)}${digestCard(s, state.activity, state.approvals)}<div class="vm-grid vm-grid-power">${coveragePlan(s)}${walletCard(s)}${taskForm(s.operatorCoverage || {})}${tasksCard(state.tasks)}${exceptionsCard(state.approvals)}${activityCard(state.activity)}${readinessCard(s.readiness || [])}</div></div>`;
 }
 
 async function refresh(el) {

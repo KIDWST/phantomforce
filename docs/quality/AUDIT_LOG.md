@@ -59,6 +59,65 @@ corrected or removed.
   `app/index.html` and all `app/js/*.js` (verified `-12` was the highest
   suffix in use immediately before bumping).
 
+### 2. Away Mode: bounded-autonomy enforcement + return-and-report
+
+- Discovery: Away Mode already substantially exists under `app/js/vacation.js`
+  (real backend at `server/src/phantom-ai/vacation-mode.ts`, persisted to
+  `.phantom/vacation-mode.json`) — a coverage-plan config surface
+  (`allowCalls`/`allowMeetings`/`allowLeadFollowUps`/
+  `allowBookingCoordination`/`allowClientMessages`, `dailyCreditLimit`,
+  `handoffNotes`), a real Operator Credits wallet separate from AI credits,
+  and a `digestCard()` "while you were away" return-and-report summary built
+  from real `VacationActivity` events inside the actual away-period window
+  (`digestWindow()`). This is a materially smaller net-new build than the
+  handoff implied — most of item 2 was already shipped.
+- The real gap found by reading `createVacationOperatorTask` in
+  `server/src/phantom-ai/vacation-mode.ts`: the coverage-plan `allow*`
+  toggles were saved and displayed in the UI but never read anywhere before
+  this fix — turning off "Take calls" had zero effect on whether a
+  `phone_call` operator task could be queued. The bounded-autonomy config
+  was a UI mockup wearing real-looking persistence, not an enforced
+  boundary.
+- Fix: `TASK_TYPE_ALLOW_FIELD` maps each `OperatorTaskType` to its coverage
+  toggle (only the 5 types that have a real owner-facing toggle;
+  `research`/`exception_triage`/`other` have none and are deliberately never
+  policy-blocked, so as not to invent a restriction the owner never set).
+  `createVacationOperatorTask` now checks the toggle before the credit-
+  balance check, refuses the task (`status: "blocked"`,
+  `blockedReason: "policy"`) without reserving credits, and logs an honest
+  activity/ledger event naming which toggle blocked it. Added
+  `app/js/vacation.js` UI: the "type of work" select now marks types the
+  current coverage plan has turned off, and a blocked task card shows
+  *why* it was blocked (policy vs. credits) instead of a bare "blocked" pill.
+- Files: `server/src/phantom-ai/vacation-mode.ts` (`TASK_TYPE_ALLOW_FIELD`,
+  `TASK_TYPE_LABEL`, `OperatorTask.blockedReason`,
+  `createVacationOperatorTask`), `app/js/vacation.js`
+  (`TASK_TYPE_COVERAGE_FIELD`, `taskForm`, `blockedReasonCopy`, `tasksCard`),
+  `app/phantom.css` (`.vm-form-note`, `.vm-op-blocked-reason`),
+  `server/scripts/test-vacation-operator-coverage.ts` (new regression
+  assertions).
+- Verification: extended `server/scripts/test-vacation-operator-coverage.ts`
+  with a policy-block regression (turn `allowCalls` off, assert a
+  `phone_call` task is blocked with `blockedReason: "policy"` and reserves
+  zero credits; assert an unrelated allowed type still queues normally;
+  assert a type with no coverage toggle — `research` — is never reported as
+  policy-blocked). Ran directly with `npx tsx
+  scripts/test-vacation-operator-coverage.ts` from `server/` — PASS, full
+  JSON summary printed, all assertions including the pre-existing
+  cross-tenant approval-isolation checks still pass. `npm run typecheck` —
+  PASS. `node --check app/js/vacation.js` — PASS. No dedicated `npm run
+  test:*` script wraps this file (it's invoked directly via `tsx` in the
+  script itself, matching how the file was already being run before this
+  session); did not add a new root `package.json` script since one wasn't
+  present for this test before either.
+- Not independently re-verified in a browser this round (Away Mode requires
+  a signed-in server session with `/api/vacation-mode/*` live, and the
+  digest/coverage UI paths were not touched beyond the two additions above);
+  the underlying logic change is covered by the regression test above, and
+  the UI change is a narrow, additive template change to already-working
+  render functions.
+- Cache-bust: bumped `phantom-live-20260717-13` → `-14`.
+
 ### Surfaces Audited
 
 - Required process docs: `AGENTS.md` and all files under `docs/quality/`.

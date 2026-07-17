@@ -9872,6 +9872,8 @@ body.phantomplay-playing .buddy-say {
 .vm-staffing b { color: var(--ink); font-size: 12px; }
 .vm-operator-form { display: grid; gap: 11px; }
 .vm-operator-form > .btn { justify-content: center; min-height: 46px; }
+.vm-form-note { margin: 0; color: var(--dim); font-size: 11px; line-height: 1.5; }
+.vm-op-blocked-reason { margin: 6px 0 0; padding: 7px 9px; border-radius: 8px; border: 1px solid rgba(255,107,124,.25); background: rgba(255,107,124,.07); color: rgba(255,180,190,.92); font-size: 11px; line-height: 1.4; }
 .vm-op-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 11px; }
 .vm-op-task { min-width: 0; padding: 14px; border: 1px solid var(--line); border-radius: 14px; background: rgba(2,15,10,.7); }
 .vm-op-task-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }

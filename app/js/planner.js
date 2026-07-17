@@ -1,7 +1,7 @@
 import {
   store, uid, visible, moneyView, todaysPlan, currentWs, wsName, pushActivity,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260717-13";
+} from "./store.js?v=phantom-live-20260717-15";
 
 const PLANNER_ITEMS_KEY = "pf.aiPlanner.items.v1";
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));

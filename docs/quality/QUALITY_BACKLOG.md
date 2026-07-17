@@ -325,3 +325,32 @@ Last updated: 2026-07-17
   above is this session's best-reasonable-interpretation judgment call per
   the handoff's "validate the approach with Jordan" instruction, not because
   anything is broken.
+
+### Q-0016 — P3 — Away Mode bounded-autonomy enforcement is new; not re-verified in a live browser session (needs Jordan's review)
+
+- Route/component: `server/src/phantom-ai/vacation-mode.ts`
+  (`createVacationOperatorTask`, `TASK_TYPE_ALLOW_FIELD`), `app/js/vacation.js`
+  (`taskForm`, `tasksCard`).
+- What shipped: Away Mode's coverage-plan toggles (allow calls / meetings /
+  lead follow-ups / booking coordination / client messages) now actually
+  gate `createVacationOperatorTask` instead of being stored-but-unused. A
+  policy-blocked request is refused, reserves no credits, and reports why.
+- Judgment call needing review: only the 5 task types that have a real
+  owner-facing toggle (`phone_call`, `attend_meeting`, `lead_follow_up`,
+  `booking_coordination`, `client_message`) can be policy-blocked;
+  `research`, `exception_triage`, and `other` have no toggle in the coverage
+  plan UI and are deliberately never blocked by this check. If Jordan wants
+  those three gated too, that needs either a new coverage-plan toggle (real
+  UI + real enforcement) or an explicit decision that they're always
+  allowed — this session did not invent a toggle that doesn't exist in the
+  UI.
+- Verification gap: covered by a new regression test
+  (`server/scripts/test-vacation-operator-coverage.ts`, run directly via
+  `npx tsx` — PASS) and `npm run typecheck`, but not re-driven through a
+  signed-in browser session this round (Away Mode's UI requires a live
+  server session; the existing render functions were extended narrowly, not
+  rewritten). A owner click-through — turn off "Take calls" in the coverage
+  plan, queue a call, confirm the card shows the policy-blocked reason — is
+  worth a manual pass before considering this fully proven end-to-end.
+- Status: Shipped, typecheck + regression-test verified; browser click-
+  through still open.

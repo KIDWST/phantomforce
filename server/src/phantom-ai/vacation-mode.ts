@@ -112,6 +112,11 @@ export type OperatorTask = {
   outcome: string | null;
   createdAt: string;
   updatedAt: string;
+  // Distinguishes "blocked, out of Operator Credits" from "blocked, the
+  // owner's coverage plan doesn't authorize this kind of work" — both use
+  // status: "blocked", but the owner needs to know which one it is (one is
+  // solved by buying credits, the other by changing a policy toggle).
+  blockedReason?: "credits" | "policy" | null;
 };
 
 type VacationWorkspaceState = {
@@ -193,6 +198,34 @@ const TASK_COST: Record<OperatorTaskType, number> = {
   research: 1,
   exception_triage: 1,
   other: 2,
+};
+
+// Bounded-autonomy enforcement: maps each operator task type to the
+// coverage-plan toggle that actually authorizes it (app/js/vacation.js
+// coveragePlan() checkboxes). Task types with no entry here (research,
+// exception_triage, other) have no corresponding owner toggle in the
+// coverage plan UI, so they are never blocked by this check — inventing a
+// restriction the owner never configured would be its own kind of
+// dishonesty. This is what makes "what Phantom can decide alone vs. must
+// ask about" real: before this, the coverage toggles were saved and
+// displayed but createVacationOperatorTask() never actually read them, so
+// turning a toggle off had no effect on what could be queued.
+const TASK_TYPE_ALLOW_FIELD: Partial<Record<OperatorTaskType, keyof OperatorCoverage>> = {
+  phone_call: "allowCalls",
+  attend_meeting: "allowMeetings",
+  lead_follow_up: "allowLeadFollowUps",
+  booking_coordination: "allowBookingCoordination",
+  client_message: "allowClientMessages",
+};
+const TASK_TYPE_LABEL: Record<OperatorTaskType, string> = {
+  phone_call: "Take calls",
+  attend_meeting: "Attend meetings",
+  lead_follow_up: "Follow up with leads",
+  booking_coordination: "Handle bookings",
+  client_message: "Handle client messages",
+  research: "Research",
+  exception_triage: "Handle an exception",
+  other: "Other human work",
 };
 
 const RISK_ORDER: Record<VacationRiskLevel, number> = { urgent: 4, high: 3, medium: 2, low: 1 };
@@ -484,14 +517,28 @@ export async function createVacationOperatorTask(session: AccessSession, body: u
   const title = text(input.title, 180);
   if (!title) throw new Error("Operator task title is required.");
   const creditCost = TASK_COST[type];
+  // Bounded-autonomy check: does the owner's coverage plan actually allow
+  // this kind of work while they're away? This is checked before the
+  // credit-balance check so a policy block never gets misread as a billing
+  // problem.
+  const allowField = TASK_TYPE_ALLOW_FIELD[type];
+  const policyBlocked = allowField ? state.operatorCoverage[allowField] !== true : false;
   const available = state.operatorWallet.included - state.operatorWallet.used - state.operatorWallet.reserved;
-  const status: OperatorTaskStatus = available < creditCost ? "blocked" : humanStaffingReady() ? "queued" : "needs_setup";
+  const creditsBlocked = !policyBlocked && available < creditCost;
+  const status: OperatorTaskStatus = policyBlocked || creditsBlocked ? "blocked" : humanStaffingReady() ? "queued" : "needs_setup";
+  const blockedReason: OperatorTask["blockedReason"] = policyBlocked ? "policy" : creditsBlocked ? "credits" : null;
   const timestamp = now();
-  const task: OperatorTask = { id: `vac-op-${randomUUID()}`, workspaceId: state.workspaceId, type, title, instructions: text(input.instructions, 1800), status, creditCost, scheduledFor: typeof input.scheduledFor === "string" && input.scheduledFor ? text(input.scheduledFor, 60) : null, assignedTo: null, outcome: null, createdAt: timestamp, updatedAt: timestamp };
+  const task: OperatorTask = { id: `vac-op-${randomUUID()}`, workspaceId: state.workspaceId, type, title, instructions: text(input.instructions, 1800), status, creditCost, scheduledFor: typeof input.scheduledFor === "string" && input.scheduledFor ? text(input.scheduledFor, 60) : null, assignedTo: null, outcome: null, createdAt: timestamp, updatedAt: timestamp, blockedReason };
   if (status !== "blocked") state.operatorWallet.reserved += creditCost;
   state.operatorTasks.unshift(task);
-  const message = status === "queued" ? `Queued human operator work: ${title}.` : status === "needs_setup" ? `Saved operator request: ${title}. Human staffing must be connected before assignment.` : `Blocked operator request: ${title}. Not enough Operator Credits.`;
-  const event = activity(state.workspaceId, { actor: "Workflow", eventType: status === "blocked" ? "blocked" : status === "needs_setup" ? "needs_setup" : "queued_approval", riskLevel: status === "blocked" ? "medium" : "low", message, relatedEntity: title, metadata: { operatorTaskId: task.id, operatorCredits: creditCost } });
+  const message = status === "queued"
+    ? `Queued human operator work: ${title}.`
+    : status === "needs_setup"
+      ? `Saved operator request: ${title}. Human staffing must be connected before assignment.`
+      : policyBlocked
+        ? `Blocked operator request: ${title}. "${TASK_TYPE_LABEL[type]}" is turned off in your Away Mode coverage plan — enable it in the coverage plan if you want Phantom to queue this kind of work while you're away.`
+        : `Blocked operator request: ${title}. Not enough Operator Credits.`;
+  const event = activity(state.workspaceId, { actor: "Workflow", eventType: status === "blocked" ? "blocked" : status === "needs_setup" ? "needs_setup" : "queued_approval", riskLevel: status === "blocked" ? "medium" : "low", message, relatedEntity: title, metadata: { operatorTaskId: task.id, operatorCredits: creditCost, blockedReason } });
   pushActivity(state, event);
   await writeStore(store);
   await ledger(session, state, event);

@@ -61,8 +61,43 @@ try {
   assert(check.active === 1, "Check-in should inspect the active workspace.");
 
   await module.cancelVacationOperatorTask(session, queued.task.id);
+  const afterCancel = await module.getVacationModeStatus(session);
+  assert(afterCancel.operatorWallet.reserved === 0, "Cancel should release reserved credits.");
+
+  /* Bounded-autonomy enforcement regression: the coverage-plan toggles are
+     the "what Phantom can decide alone vs. must ask about" contract. Turning
+     allowCalls off must actually block a phone_call operator task instead of
+     just being stored and displayed. */
+  await module.updateVacationModeSettings(session, {
+    operatorCoverage: { allowCalls: false, allowMeetings: true, ownerInterruptionPolicy: "emergencies_only" },
+  });
+  const policyBlocked = await module.createVacationOperatorTask(session, {
+    type: "phone_call",
+    title: "Call a lead while the owner is away",
+    instructions: "This should be refused by the coverage plan, not queued.",
+  });
+  assert(policyBlocked.task.status === "blocked", "A phone_call task must be blocked when allowCalls is off.");
+  assert(policyBlocked.task.blockedReason === "policy", "The block reason must be reported as a policy block, not a credit block.");
+  assert(policyBlocked.wallet.reserved === 0, "A policy-blocked task must not reserve Operator Credits.");
+
+  const stillAllowed = await module.createVacationOperatorTask(session, {
+    type: "attend_meeting",
+    title: "Join a scheduled meeting",
+    instructions: "allowMeetings is still on; this should queue normally.",
+  });
+  assert(stillAllowed.task.status === "queued", "A task type whose coverage toggle is still on must not be blocked by an unrelated toggle.");
+  await module.cancelVacationOperatorTask(session, stillAllowed.task.id);
+
+  const untoggledType = await module.createVacationOperatorTask(session, {
+    type: "research",
+    title: "Look something up",
+    instructions: "research has no coverage toggle at all; it must never be policy-blocked.",
+  });
+  assert(untoggledType.task.status !== "blocked" || untoggledType.task.blockedReason !== "policy", "Task types with no coverage toggle must never be reported as policy-blocked.");
+  if (untoggledType.task.status === "queued") await module.cancelVacationOperatorTask(session, untoggledType.task.id);
+
   const final = await module.getVacationModeStatus(session);
-  assert(final.operatorWallet.reserved === 0, "Cancel should release reserved credits.");
+  assert(final.operatorWallet.reserved === 0, "No reserved credits should remain after the coverage-enforcement checks clean up.");
   await module.deactivateVacationMode(session);
 
   const { app } = await import("../src/index.js");
