@@ -546,12 +546,13 @@ function stepProjectiles(dt){
       if(t.dead||t.slot===p.owner||t.invuln>0)continue;
       if(Math.abs(t.x-p.x)<.025&&Math.abs(t.y-p.y)<.08){
         p.hit=true;p.life=0;
-        if(t.shieldHeld){shake=Math.min(1,shake+.12);addFloater(t.x,t.y-.11,'BLOCK',t.glow,14);sfx('jump');continue}
+        if(t.shieldHeld){shake=Math.min(1,shake+.12);addFloater(t.x,t.y-.11,'BLOCK',t.glow,14);sfx('jump');break}
         t.pct=Math.min(300,t.pct+p.dmg);
         const kb=p.kb*(1+t.pct/60);
         t.vx=Math.sign(p.vx||1)*kb;t.vy=-kb*.7;t.stun=.22;t.grounded=false;
         spawnBurst(t.x,t.y,p.color,12);addFloater(t.x,t.y-.09,`HIT +${p.dmg}%`,p.color,15);sfx('hit');
         updateHud();
+        break;
       }
     }
     if(p.x<ARENA.left-.02||p.x>ARENA.right+.02)p.life=0;
@@ -617,67 +618,84 @@ function drawFighter(f,t){
      since the sprite has no separate speed field */
   const scarfKick=Math.min(1,Math.hypot(f.vx,f.vy)*30);
   ctx.fillStyle='#181c1f';
-  ctx.save();ctx.translate(bx-face*10*DPR,by-8*DPR+bob);ctx.rotate(-face*(.35+scarfKick*.5));
-  ctx.beginPath();ctx.moveTo(0,-3*DPR);ctx.lineTo(-face*(20+scarfKick*14)*DPR,-2*DPR);ctx.lineTo(-face*(20+scarfKick*14)*DPR,4*DPR);ctx.lineTo(0,3*DPR);ctx.closePath();ctx.fill();
+  ctx.save();ctx.translate(bx-face*8*DPR,by-7*DPR+bob);ctx.rotate(-face*(.35+scarfKick*.5));
+  ctx.beginPath();ctx.moveTo(0,-2.4*DPR);ctx.lineTo(-face*(16+scarfKick*11)*DPR,-1.6*DPR);ctx.lineTo(-face*(16+scarfKick*11)*DPR,3.2*DPR);ctx.lineTo(0,2.4*DPR);ctx.closePath();ctx.fill();
   ctx.restore();
   /* tail feathers, behind the body */
   ctx.fillStyle=f.color;
   for(let i=0;i<3;i++){
-    ctx.save();ctx.translate(bx-face*9*DPR,by-6*DPR-i*3*DPR+bob);ctx.rotate(-face*(.5+i*.24));
-    ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(-face*15*DPR,-4*DPR);ctx.lineTo(-face*15*DPR,4*DPR);ctx.closePath();ctx.fill();
+    ctx.save();ctx.translate(bx-face*7*DPR,by-4.5*DPR-i*2.5*DPR+bob);ctx.rotate(-face*(.5+i*.24));
+    ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(-face*12*DPR,-3.2*DPR);ctx.lineTo(-face*12*DPR,3.2*DPR);ctx.closePath();ctx.fill();
     ctx.restore();
   }
-  /* plump body */
-  ctx.beginPath();ctx.ellipse(bx,by-9*DPR+bob,12*DPR,10*DPR,0,0,Math.PI*2);ctx.fill();
+  /* plump body — kept smaller and rounder than the head on purpose: a
+     "chicklet" (baby chick) reads as cute from oversized-head proportions,
+     not from the body shape, so the head is the star here, not this. */
+  ctx.beginPath();ctx.ellipse(bx,by-8*DPR+bob,9*DPR,8*DPR,0,0,Math.PI*2);ctx.fill();
   /* sash, diagonal across the body */
-  ctx.strokeStyle='#181c1f';ctx.lineWidth=3*DPR;ctx.globalAlpha=.85;
-  ctx.beginPath();ctx.moveTo(bx-8*DPR,by-15*DPR+bob);ctx.lineTo(bx+7*DPR,by-3*DPR+bob);ctx.stroke();
-  ctx.strokeStyle=f.glow;ctx.lineWidth=1*DPR;
-  ctx.beginPath();ctx.moveTo(bx-8*DPR,by-15*DPR+bob);ctx.lineTo(bx+7*DPR,by-3*DPR+bob);ctx.stroke();
+  ctx.strokeStyle='#181c1f';ctx.lineWidth=2.6*DPR;ctx.globalAlpha=.85;
+  ctx.beginPath();ctx.moveTo(bx-6*DPR,by-12*DPR+bob);ctx.lineTo(bx+5*DPR,by-3*DPR+bob);ctx.stroke();
+  ctx.strokeStyle=f.glow;ctx.lineWidth=.9*DPR;
+  ctx.beginPath();ctx.moveTo(bx-6*DPR,by-12*DPR+bob);ctx.lineTo(bx+5*DPR,by-3*DPR+bob);ctx.stroke();
   ctx.globalAlpha=1;
   /* wing, with a taped/wrapped tip reading as a ninja glove */
   ctx.globalAlpha*=.92;
   ctx.fillStyle=f.color;
-  ctx.beginPath();ctx.ellipse(bx-face*2*DPR,by-7*DPR+bob+sway*.3,7*DPR,5*DPR,face*.4,0,Math.PI*2);ctx.fill();
-  ctx.strokeStyle='#181c1f';ctx.lineWidth=1.4*DPR;
-  const wingTipX=bx-face*7*DPR,wingTipY=by-6*DPR+bob+sway*.3;
-  ctx.beginPath();ctx.moveTo(wingTipX-2*DPR,wingTipY-2*DPR);ctx.lineTo(wingTipX+2*DPR,wingTipY+2*DPR);ctx.stroke();
-  ctx.beginPath();ctx.moveTo(wingTipX-1*DPR,wingTipY-3*DPR);ctx.lineTo(wingTipX+3*DPR,wingTipY+1*DPR);ctx.stroke();
+  ctx.beginPath();ctx.ellipse(bx-face*2*DPR,by-6*DPR+bob+sway*.3,6*DPR,4.4*DPR,face*.4,0,Math.PI*2);ctx.fill();
+  ctx.strokeStyle='#181c1f';ctx.lineWidth=1.3*DPR;
+  const wingTipX=bx-face*6*DPR,wingTipY=by-5*DPR+bob+sway*.3;
+  ctx.beginPath();ctx.moveTo(wingTipX-1.8*DPR,wingTipY-1.8*DPR);ctx.lineTo(wingTipX+1.8*DPR,wingTipY+1.8*DPR);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(wingTipX-.9*DPR,wingTipY-2.6*DPR);ctx.lineTo(wingTipX+2.6*DPR,wingTipY+.9*DPR);ctx.stroke();
   ctx.globalAlpha=f.invuln>0?.45+.3*Math.sin(t*.02):1;
-  /* head */
-  const hx=bx+face*8*DPR,hy=by-18*DPR+bob;
-  ctx.beginPath();ctx.arc(hx,hy,7*DPR,0,Math.PI*2);ctx.fill();
+  /* head — bigger than the body and pulled in close rather than jutting
+     forward, so the silhouette reads as a round baby chick, not a lean
+     adult hen. This is the single biggest lever for "cute" here. */
+  const hx=bx+face*4*DPR,hy=by-20*DPR+bob;
+  ctx.beginPath();ctx.arc(hx,hy,11*DPR,0,Math.PI*2);ctx.fill();
   ctx.shadowBlur=0;
-  /* comb */
+  /* comb — kept deliberately small rather than scaled up with the bigger
+     head: real chicks don't have a full comb yet, and a small comb on a
+     big round head reinforces "baby," not "miniature adult." */
   ctx.fillStyle='#ff3d5a';
   ctx.beginPath();
-  ctx.moveTo(hx-3*DPR,hy-6*DPR);ctx.lineTo(hx-1*DPR,hy-11*DPR);ctx.lineTo(hx+1*DPR,hy-6*DPR);
-  ctx.lineTo(hx+2.5*DPR,hy-10*DPR);ctx.lineTo(hx+4.5*DPR,hy-5*DPR);
+  ctx.moveTo(hx-2.5*DPR,hy-9*DPR);ctx.lineTo(hx-1*DPR,hy-13*DPR);ctx.lineTo(hx+.5*DPR,hy-9*DPR);
+  ctx.lineTo(hx+1.8*DPR,hy-12.5*DPR);ctx.lineTo(hx+3.2*DPR,hy-8*DPR);
   ctx.closePath();ctx.fill();
   /* ninja headband: a band across the brow plus two trailing tails that
      whip out based on the same sway calc the body/scarf use, amplified
-     during an active attack/dodge so it visibly reacts to fast action */
-  const bandWhip=(reduced?0:Math.sin(t*.01+f.slot)*4*DPR)+(f.anim>0||f.dodgeCd>.5?face*6*DPR:0);
+     during an active attack/dodge so it visibly reacts to fast action —
+     rescaled to the bigger head */
+  const bandWhip=(reduced?0:Math.sin(t*.01+f.slot)*5*DPR)+(f.anim>0||f.dodgeCd>.5?face*8*DPR:0);
   ctx.fillStyle='#181c1f';
-  ctx.beginPath();ctx.ellipse(hx,hy-2*DPR,7.4*DPR,3.2*DPR,0,Math.PI*1.08,Math.PI*1.92);ctx.fill();
-  ctx.strokeStyle=f.glow;ctx.lineWidth=1.2*DPR;
-  ctx.beginPath();ctx.moveTo(hx-6*DPR,hy-3*DPR);ctx.lineTo(hx+6*DPR,hy-3*DPR);ctx.stroke();
+  ctx.beginPath();ctx.ellipse(hx,hy-3*DPR,10.4*DPR,4.4*DPR,0,Math.PI*1.08,Math.PI*1.92);ctx.fill();
+  ctx.strokeStyle=f.glow;ctx.lineWidth=1.5*DPR;
+  ctx.beginPath();ctx.moveTo(hx-8.5*DPR,hy-4.2*DPR);ctx.lineTo(hx+8.5*DPR,hy-4.2*DPR);ctx.stroke();
   for(const dir of [-1,1]){
     ctx.beginPath();
-    ctx.moveTo(hx-face*4*DPR,hy-3*DPR);
-    ctx.quadraticCurveTo(hx-face*10*DPR+bandWhip*dir*.4,hy-1*DPR+dir*3*DPR,hx-face*15*DPR+bandWhip*dir,hy+2*DPR+dir*4*DPR);
-    ctx.lineWidth=2*DPR;ctx.strokeStyle='#181c1f';ctx.stroke();
+    ctx.moveTo(hx-face*6*DPR,hy-4*DPR);
+    ctx.quadraticCurveTo(hx-face*14*DPR+bandWhip*dir*.4,hy-1*DPR+dir*4*DPR,hx-face*21*DPR+bandWhip*dir,hy+3*DPR+dir*5*DPR);
+    ctx.lineWidth=2.4*DPR;ctx.strokeStyle='#181c1f';ctx.stroke();
   }
-  /* beak */
+  /* beak — small and rounded, a cute button rather than a sharp point */
   ctx.fillStyle='#ffb454';
-  ctx.beginPath();ctx.moveTo(hx+face*6*DPR,hy);ctx.lineTo(hx+face*13*DPR,hy-1.5*DPR);ctx.lineTo(hx+face*6*DPR,hy+3*DPR);ctx.closePath();ctx.fill();
-  /* eye mask: a dark band across the eyes instead of a bare dot */
+  ctx.beginPath();ctx.moveTo(hx+face*7*DPR,hy+1*DPR);ctx.lineTo(hx+face*12*DPR,hy);ctx.lineTo(hx+face*7*DPR,hy+3.4*DPR);ctx.closePath();ctx.fill();
+  /* blush: two soft cheek marks — the other big lever for "cute" alongside
+     the oversized head/eyes */
+  ctx.globalAlpha=.45;ctx.fillStyle='#ff8fa3';
+  ctx.beginPath();ctx.ellipse(hx-face*2*DPR,hy+3.5*DPR,2.6*DPR,1.6*DPR,0,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.ellipse(hx+face*9*DPR,hy+3.5*DPR,2*DPR,1.3*DPR,0,0,Math.PI*2);ctx.fill();
+  ctx.globalAlpha=1;
+  /* eye mask stays behind a big glossy eye rather than obscuring it — the
+     mask reads as "ninja," the oversized eye underneath (with a pupil and
+     a sparkle highlight) is what reads as "cute." */
   ctx.fillStyle='#181c1f';
-  ctx.beginPath();ctx.ellipse(hx+face*1*DPR,hy-1*DPR,3.4*DPR,2*DPR,0,0,Math.PI*2);ctx.fill();
-  ctx.fillStyle='#e8fff2';ctx.beginPath();ctx.arc(hx+face*2*DPR,hy-1*DPR,1*DPR,0,Math.PI*2);ctx.fill();
-  if(f.anim>0){ctx.strokeStyle=f.power?'#ffffff':f.glow;ctx.lineWidth=3*DPR;ctx.globalAlpha=f.anim*4;ctx.beginPath();ctx.arc(bx+f.face*16*DPR,by-12*DPR,10*DPR,-.7,.7);ctx.stroke()}
-  if(f.shieldHeld){ctx.globalAlpha=f.parry>0?.82:.42;ctx.strokeStyle=f.parry>0?'#ffffff':f.glow;ctx.lineWidth=(f.parry>0?4:2)*DPR;ctx.beginPath();ctx.arc(bx,by-15*DPR,(23+(f.parry>0?5:0))*DPR,0,Math.PI*2);ctx.stroke()}
-  ctx.globalAlpha=1;ctx.shadowBlur=0;ctx.font=`900 ${13*DPR}px ui-monospace`;ctx.textAlign='center';ctx.fillStyle=f.stun>0?'#ffffff':f.color;ctx.fillText(`${Math.round(f.pct)}%`,bx,by-38*DPR);
+  ctx.beginPath();ctx.ellipse(hx+face*1*DPR,hy-.5*DPR,4.6*DPR,3.2*DPR,0,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#e8fff2';ctx.beginPath();ctx.arc(hx+face*2*DPR,hy-.5*DPR,2.4*DPR,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#0b1210';ctx.beginPath();ctx.arc(hx+face*2.8*DPR,hy-.2*DPR,1.3*DPR,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#ffffff';ctx.beginPath();ctx.arc(hx+face*3.3*DPR,hy-1*DPR,.55*DPR,0,Math.PI*2);ctx.fill();
+  if(f.anim>0){ctx.strokeStyle=f.power?'#ffffff':f.glow;ctx.lineWidth=3*DPR;ctx.globalAlpha=f.anim*4;ctx.beginPath();ctx.arc(bx+f.face*16*DPR,by-14*DPR,10*DPR,-.7,.7);ctx.stroke()}
+  if(f.shieldHeld){ctx.globalAlpha=f.parry>0?.82:.42;ctx.strokeStyle=f.parry>0?'#ffffff':f.glow;ctx.lineWidth=(f.parry>0?4:2)*DPR;ctx.beginPath();ctx.arc(bx,by-17*DPR,(24+(f.parry>0?5:0))*DPR,0,Math.PI*2);ctx.stroke()}
+  ctx.globalAlpha=1;ctx.shadowBlur=0;ctx.font=`900 ${13*DPR}px ui-monospace`;ctx.textAlign='center';ctx.fillStyle=f.stun>0?'#ffffff':f.color;ctx.fillText(`${Math.round(f.pct)}%`,bx,by-42*DPR);
   if(f.charge>0){ctx.globalAlpha=.7;ctx.strokeStyle='#fff';ctx.lineWidth=2*DPR;ctx.beginPath();ctx.arc(bx,by-14*DPR,(16+f.charge*10)*DPR,0,Math.PI*2*f.charge);ctx.stroke()}
   if(f.power){ctx.globalAlpha=.8;ctx.fillStyle='#ffffff';ctx.beginPath();ctx.arc(bx,by-34*DPR,3*DPR,0,Math.PI*2);ctx.fill()}
   ctx.globalAlpha=1;
