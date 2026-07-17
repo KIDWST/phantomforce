@@ -275,6 +275,24 @@ function startMatch(selected,options={}){
   document.querySelector('[data-touch]').hidden=fighters.some(f=>f.human&&f.slot===0)?false:true;
   buildHud();last=performance.now();if(raf)cancelAnimationFrame(raf);raf=requestAnimationFrame(loop);
 }
+function buildRaceHud(){} // stub — replaced with the real altitude/danger HUD once that lands
+function updateRaceHud(){} // stub — replaced with the real altitude/danger HUD once that lands
+function startRaceMusic(){} // stub — replaced with the real 8-bit sequencer once that lands
+function stopRaceMusic(){} // stub — replaced with the real 8-bit sequencer once that lands
+let raceFinishOrder=[];
+function startRaceMatch(humanCount){
+  mode='racetop';
+  const total=4;
+  fighters=[];
+  for(let i=0;i<total;i++)fighters.push(makeRaceFighter(i,i<(humanCount||1)));
+  buildTower(nextSeed());
+  hazardY=1;hazardSpeed=.01;
+  particles=[];floaters=[];rings=[];projectiles=[];over=false;running=true;paused=false;raceFinishOrder=[];
+  setupEl.hidden=true;endEl.hidden=true;hudEl.hidden=false;
+  document.querySelector('[data-touch]').hidden=fighters.some(f=>f.human&&f.slot===0)?false:true;
+  buildRaceHud();last=performance.now();if(raf)cancelAnimationFrame(raf);raf=requestAnimationFrame(loop);
+  startRaceMusic();
+}
 
 /* ---------- input ---------- */
 const P1={left:['a','A'],right:['d','D'],jump:['w','W'],light:['f','F'],heavy:['g','G'],shield:['q','Q','e','E'],dodge:['c','C']};
@@ -582,6 +600,75 @@ function step(f,dt){
   if(!reduced){f.trail.unshift({x:f.x,y:f.y});f.trail=f.trail.slice(0,8)}
   grabPickups(f);
 }
+function raceGrabPickups(f){} // stub — replaced with real pickup-grab logic once Race to the Top pickups land
+function finishRace(f){f.finished=true} // stub — replaced with real finish-order/results logic once that lands
+let hazardY=1,hazardSpeed=.01;
+function stepHazard(dt){
+  hazardY-=hazardSpeed*dt;
+  hazardSpeed=Math.min(.05,hazardSpeed+.0004*dt); // accelerates over the match, capped so it never becomes unfair-instant
+}
+function raceStep(f,dt){
+  if(f.finished)return;
+  f.invuln=Math.max(0,f.invuln-dt);f.stun=Math.max(0,f.stun-dt);f.attackCd=Math.max(0,f.attackCd-dt);f.anim=Math.max(0,f.anim-dt);f.dodgeCd=Math.max(0,f.dodgeCd-dt);f.shieldBubble=Math.max(0,f.shieldBubble-dt);
+  if(f.stun<=0){
+    if(f.human){
+      const dir=heldDir(f);
+      if(dir)f.face=dir;
+      f.vx+=dir*.0018*(dt*60);
+    }else raceBotThink(f,dt);
+  }
+  f.vx*=f.grounded?.82:.94;
+  f.vy=Math.min(.05,f.vy+.0011*(dt*60));
+  f.x+=f.vx*(dt*60);f.y+=f.vy*(dt*60);
+  f.grounded=false;
+  for(const s of TOWER){
+    const top=s.y-s.h/2;
+    if(f.vy>=0&&Math.abs(f.x-s.x)<s.w/2&&f.y>=top-.012&&f.y<=top+.05){
+      f.y=top;f.vy=0;f.grounded=true;f.jumps=2;
+      if(s.summit&&!f.finished)finishRace(f);
+    }
+  }
+  if(f.x<ARENA.left)f.x=ARENA.left;
+  if(f.x>ARENA.right)f.x=ARENA.right;
+  f.altitude=Math.max(f.altitude,TOWER_START_Y-f.y);
+  if(!reduced){f.trail.unshift({x:f.x,y:f.y});f.trail=f.trail.slice(0,8)}
+  if(f.y>hazardY&&f.invuln<=0)hazardCatch(f);
+  raceGrabPickups(f);
+}
+function raceBotThink(f,dt){
+  const d=f.ai.diff||DIFFS.normal;
+  f.ai.timer-=dt;f.ai.jumpCd-=dt;
+  const target=TOWER.filter(s=>s.y<f.y-.05).sort((a,b)=>b.y-a.y)[0]||SUMMIT;
+  f.ai.dir=target.x>f.x?1:-1;
+  if(f.ai.timer<=0){
+    f.ai.timer=d.reaction[0]+Math.random()*(d.reaction[1]-d.reaction[0]);
+    if(f.grounded&&f.ai.jumpCd<=0&&Math.random()<d.recoverSkill){jump(f);f.ai.jumpCd=d.jumpCd}
+    const rival=fighters.find(t=>t!==f&&!t.finished&&Math.abs(t.x-f.x)<.06&&Math.abs(t.y-f.y)<.08);
+    if(rival&&Math.random()<d.heavyChance){f.face=rival.x>f.x?1:-1;raceSabotage(f)}
+  }
+  f.vx+=f.ai.dir*.0016*d.accel*(dt*60);
+}
+function slideDown(f,rows){
+  f.y=Math.min(TOWER_START_Y,f.y+rows*ROW_STEP);
+  f.vx=0;f.vy=0;f.stun=.4;f.invuln=.6;f.grounded=false;
+  spawnBurst(f.x,f.y,f.glow,18);addFloater(f.x,f.y-.1,rows>=4?'WASHED OUT!':'KNOCKED DOWN!',f.glow,16);sfx('ko');
+}
+function hazardCatch(f){
+  slideDown(f,4);
+}
+function raceSabotage(f){
+  if(f.attackCd>0)return;
+  f.attackCd=.28;f.anim=.18;
+  const reach=.06; // identical to attack()'s light-attack reach — precision is the point, no aim-assist for this mode
+  for(const t of fighters){
+    if(t===f||t.finished||t.invuln>0||t.shieldBubble>0)continue;
+    const dx=t.x-f.x,dy=t.y-f.y;
+    if(Math.abs(dy)<.08&&dx*f.face>-.015&&Math.abs(dx)<reach){
+      slideDown(t,2);
+      spawnBurst(t.x,t.y,t.glow,14);sfx('hit');
+    }
+  }
+}
 function ko(f,side=0){
   f.stocks-=1;shake=1;slowmo=reduced?0:.35;
   const kx=side<0?ARENA.left+.01:side>0?ARENA.right-.01:f.x,ky=Math.max(.05,Math.min(.95,f.y));
@@ -680,7 +767,13 @@ function updateHud(){
 /* ---------- draw ---------- */
 const camera={x:.5,y:.56,z:1};
 function updateCamera(){
-  const live=fighters.filter(f=>!f.dead);
+  const live=fighters.filter(f=>!f.dead&&!f.finished);
+  if(mode==='racetop'){
+    if(!live.length){camera.x+=(.5-camera.x)*.04;camera.y+=(TOWER_START_Y-camera.y)*.04;camera.z+=(1-camera.z)*.04;return}
+    const leader=live.reduce((a,b)=>a.y<b.y?a:b);
+    camera.x+=(.5-camera.x)*.05;camera.y+=(leader.y-camera.y)*.06;camera.z+=(1-camera.z)*.04;
+    return;
+  }
   if(!live.length){camera.x+=(.5-camera.x)*.04;camera.y+=(.56-camera.y)*.04;camera.z+=(1-camera.z)*.04;return}
   const cx=live.reduce((s,f)=>s+f.x,0)/live.length,cy=live.reduce((s,f)=>s+f.y,0)/live.length;
   const spread=Math.max(.35,...live.map(f=>Math.hypot(f.x-cx,f.y-cy)));
@@ -689,6 +782,18 @@ function updateCamera(){
 function sx(x){return (x-camera.x)*W*camera.z+W/2}
 function px(x){return x*W}function py(y){return y*H}
 function drawStage(){
+  if(mode==='racetop'){
+    for(const s of TOWER){
+      ctx.fillStyle=s.summit?'#2a1f0a':'#0a1f14';ctx.strokeStyle=s.summit?'#fde04799':'#2cff9b33';ctx.lineWidth=(s.summit?3:2)*DPR;
+      const x=px(s.x-s.w/2),y=py(s.y-s.h/2),w=px(s.w),h=Math.max(6*DPR,py(s.h));
+      ctx.beginPath();ctx.roundRect(x,y,w,h,6*DPR);ctx.fill();ctx.stroke();
+      if(s.summit){ctx.fillStyle='#fde047';ctx.font=`900 ${14*DPR}px ui-monospace`;ctx.textAlign='center';ctx.fillText('SUMMIT',px(s.x),y-8*DPR)}
+    }
+    const hazardPx=py(hazardY);
+    ctx.fillStyle='#3a1a0a99';ctx.fillRect(0,hazardPx,W,H*4);
+    ctx.strokeStyle='#fb923c';ctx.lineWidth=2*DPR;ctx.beginPath();ctx.moveTo(0,hazardPx);ctx.lineTo(W,hazardPx);ctx.stroke();
+    return;
+  }
   /* The coop: solid floor + side fences (no ring-out, nothing to fall
      off of) with a set of seeded floating roosts (PLATS) in the middle. */
   ctx.fillStyle='#0b2417';ctx.strokeStyle='#2cff9b44';ctx.lineWidth=2*DPR;
@@ -802,7 +907,8 @@ function drawFighter(f,t){
   ctx.fillStyle='#ffffff';ctx.beginPath();ctx.arc(hx+face*3.3*DPR,hy-1*DPR,.55*DPR,0,Math.PI*2);ctx.fill();
   if(f.anim>0){ctx.strokeStyle=f.power?'#ffffff':f.glow;ctx.lineWidth=3*DPR;ctx.globalAlpha=f.anim*4;ctx.beginPath();ctx.arc(bx+f.face*16*DPR,by-14*DPR,10*DPR,-.7,.7);ctx.stroke()}
   if(f.shieldHeld){ctx.globalAlpha=f.parry>0?.82:.42;ctx.strokeStyle=f.parry>0?'#ffffff':f.glow;ctx.lineWidth=(f.parry>0?4:2)*DPR;ctx.beginPath();ctx.arc(bx,by-17*DPR,(24+(f.parry>0?5:0))*DPR,0,Math.PI*2);ctx.stroke()}
-  ctx.globalAlpha=1;ctx.shadowBlur=0;ctx.font=`900 ${13*DPR}px ui-monospace`;ctx.textAlign='center';ctx.fillStyle=f.stun>0?'#ffffff':f.color;ctx.fillText(`${Math.round(f.pct)}%`,bx,by-42*DPR);
+  ctx.globalAlpha=1;ctx.shadowBlur=0;
+  if(mode!=='racetop'){ctx.font=`900 ${13*DPR}px ui-monospace`;ctx.textAlign='center';ctx.fillStyle=f.stun>0?'#ffffff':f.color;ctx.fillText(`${Math.round(f.pct)}%`,bx,by-42*DPR)}
   if(f.charge>0){ctx.globalAlpha=.7;ctx.strokeStyle='#fff';ctx.lineWidth=2*DPR;ctx.beginPath();ctx.arc(bx,by-14*DPR,(16+f.charge*10)*DPR,0,Math.PI*2*f.charge);ctx.stroke()}
   if(f.power){ctx.globalAlpha=.8;ctx.fillStyle='#ffffff';ctx.beginPath();ctx.arc(bx,by-34*DPR,3*DPR,0,Math.PI*2);ctx.fill()}
   ctx.globalAlpha=1;
@@ -850,6 +956,15 @@ function loop(t){
   pollGamepadPause();
   let dt=Math.min(.033,(t-last)/1000);last=t;
   if(paused){raf=requestAnimationFrame(loop);return}
+  if(mode==='racetop'){
+    stepHazard(dt);
+    for(const f of fighters)raceStep(f,dt);
+    updateRaceHud();
+    stepParticles(dt);
+    draw(t);
+    raf=requestAnimationFrame(loop);
+    return;
+  }
   if(slowmo>0){slowmo=Math.max(0,slowmo-dt);dt*=.35}
   shake=Math.max(0,shake-dt*3);
   pickupTimer-=dt;
@@ -873,6 +988,7 @@ for(const b of document.querySelectorAll('[data-humans]'))b.onclick=()=>{
 };
 for(const b of document.querySelectorAll('[data-mode]'))b.onclick=()=>{
   if(b.dataset.mode==='localffa'){localSlotsEl.hidden=false;return}
+  if(b.dataset.mode==='racetop'){startRaceMatch(localHumans);return}
   if(b.dataset.mode.startsWith('net')){mode=b.dataset.mode;netMatchStarting=false;sendMatchAction({hostProbe:hostNonce});return}
   startMatch(b.dataset.mode,{humans:localHumans});
 };
