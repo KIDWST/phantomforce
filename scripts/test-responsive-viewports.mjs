@@ -421,7 +421,55 @@ function auditPage() {
   };
 }
 
-async function runViewportCase(cdp, baseUrl, screenshotDir, page, viewport, { navigate = true } = {}) {
+/* Interaction-level probes: run inside the page after the base audit, for a
+   small representative subset of viewports (not every case — Chrome/CDP
+   round-trips add up fast). Each probe clicks a real control and re-runs the
+   same overflow/clipping audit so a dialog, popover, or tab body that only
+   appears after interaction is not a blind spot the static-load audit misses. */
+function clickAndAudit(selector) {
+  const el = document.querySelector(selector);
+  if (!el) return { clicked: false };
+  el.click();
+  return { clicked: true };
+}
+
+function focusTraversalProbe() {
+  const before = document.activeElement;
+  const event = new KeyboardEvent("keydown", { key: "Tab", bubbles: true });
+  document.body.focus?.();
+  document.dispatchEvent(event);
+  const focusables = [...document.querySelectorAll('button, a[href], input, select, textarea, [tabindex]:not([tabindex="-1"])')]
+    .filter((el) => {
+      const style = getComputedStyle(el);
+      const rect = el.getBoundingClientRect();
+      return style.display !== "none" && style.visibility !== "hidden" && rect.width > 1 && rect.height > 1 && !el.disabled;
+    });
+  if (focusables[0]) focusables[0].focus();
+  const after = document.activeElement;
+  const focusVisible = after && after !== document.body && after !== before;
+  const outline = after ? getComputedStyle(after).outlineStyle : "none";
+  return {
+    focusableCount: focusables.length,
+    focusMoved: focusVisible,
+    focusedTag: after ? after.tagName.toLowerCase() : null,
+    outlineStyle: outline,
+  };
+}
+
+const INTERACTIONS = {
+  settings: {
+    label: "open Plan & access tab",
+    selector: '[data-set-tab="plan"]',
+    settleMs: 500,
+  },
+  media: {
+    label: "open Edit tab",
+    selector: '[data-ml-tab="edit"], .ml-tabs button',
+    settleMs: 400,
+  },
+};
+
+async function runViewportCase(cdp, baseUrl, screenshotDir, page, viewport, { navigate = true, interact = false } = {}) {
   await cdp.send("Emulation.setDeviceMetricsOverride", {
     width: viewport.width,
     height: viewport.height,
@@ -438,14 +486,25 @@ async function runViewportCase(cdp, baseUrl, screenshotDir, page, viewport, { na
     await sleep(250);
   }
   const appState = await waitForApp(cdp, page.id);
+
+  let interaction = null;
+  const probe = INTERACTIONS[page.id];
+  if (interact && probe) {
+    const clickResult = await evaluate(cdp, `(${clickAndAudit.toString()})(${JSON.stringify(probe.selector)})`).catch(() => null);
+    await sleep(probe.settleMs);
+    interaction = { label: probe.label, ...clickResult };
+  }
+
+  const focus = interact ? await evaluate(cdp, `(${focusTraversalProbe.toString()})()`).catch(() => null) : null;
   const audit = await evaluate(cdp, `(${auditPage.toString()})()`);
   const png = await cdp.send("Page.captureScreenshot", {
     format: "png",
     captureBeyondViewport: false,
   }, 20_000);
-  const file = path.join(screenshotDir, `${page.label}-${viewport.width}x${viewport.height}.png`);
+  const suffix = interact ? "-interact" : "";
+  const file = path.join(screenshotDir, `${page.label}-${viewport.width}x${viewport.height}${suffix}.png`);
   writeFileSync(file, Buffer.from(png.data, "base64"));
-  return { page: page.id, label: page.label, viewport, appState, audit, screenshot: file };
+  return { page: page.id, label: page.label, viewport, appState, audit, interaction, focus, screenshot: file };
 }
 
 function assertCase(result) {
@@ -465,6 +524,20 @@ function assertCase(result) {
   }
   if (viewport.width > 900) {
     assert.equal(audit.nav.desktopVisible, true, `${label} ${viewport.width}: desktop sidebar must be visible.`);
+  }
+}
+
+function assertInteraction(result) {
+  const { label, viewport, interaction, focus, audit } = result;
+  if (interaction) {
+    assert.equal(interaction.clicked, true, `${label} ${viewport.width}: interaction target "${interaction.label}" must exist and be clickable.`);
+    assert.equal(audit.horizontalOverflow, false, `${label} ${viewport.width}: "${interaction.label}" must not introduce horizontal overflow.`);
+    assert.deepEqual(audit.offenders, [], `${label} ${viewport.width}: "${interaction.label}" must not push visible elements outside the viewport.`);
+    assert.deepEqual(audit.clippedText, [], `${label} ${viewport.width}: "${interaction.label}" must not clip visible control text.`);
+  }
+  if (focus) {
+    assert.ok(focus.focusableCount > 0, `${label} ${viewport.width}: page must expose at least one focusable control for keyboard users.`);
+    assert.equal(focus.focusMoved, true, `${label} ${viewport.width}: keyboard focus must be able to move onto a real control.`);
   }
 }
 
@@ -502,6 +575,23 @@ async function main() {
       }
     }
 
+    /* Interaction-level pass: a small representative subset of viewports
+       (phone + desktop), only for pages with a registered probe, on a fresh
+       navigation so prior static-audit clicks/state cannot leak in. */
+    const interactionViewports = viewports.filter((v) => v.width === 375 || v.width === 1440);
+    for (const page of pages) {
+      if (!INTERACTIONS[page.id]) continue;
+      let navigate = true;
+      for (const viewport of interactionViewports) {
+        console.error(`[responsive:interact] ${page.label} ${viewport.width}x${viewport.height} — ${INTERACTIONS[page.id].label}`);
+        const result = await runViewportCase(cdp, baseUrl, screenshotDir, page, viewport, { navigate, interact: true });
+        navigate = false;
+        results.push(result);
+        assertCase(result);
+        assertInteraction(result);
+      }
+    }
+
     const summary = {
       ok: true,
       checkedAt: new Date().toISOString(),
@@ -519,7 +609,10 @@ async function main() {
         "document has no horizontal overflow",
         "visible elements do not escape viewport",
         "visible control text is not clipped",
+        "registered interaction targets (Settings Plan & access tab, Media Lab Edit tab) are clickable and open without overflow/clipping at phone and desktop widths",
+        "keyboard focus can move onto a real control after interaction",
       ],
+      interactionProbes: Object.fromEntries(Object.entries(INTERACTIONS).map(([id, probe]) => [id, probe.label])),
     };
     writeFileSync(summary.report, JSON.stringify({ ...summary, results }, null, 2));
     console.log(JSON.stringify(summary, null, 2));
