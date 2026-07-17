@@ -196,7 +196,7 @@ function makeFighter(slot,human){
   const spawn=SPAWNS[slot];
   return {slot,human,name:PALETTE[slot].name,color:PALETTE[slot].c,glow:PALETTE[slot].glow,
     x:spawn.x,y:spawn.y,vx:0,vy:0,face:slot%2?-1:1,pct:0,stocks:3,
-    grounded:false,jumps:2,stun:0,invuln:2,charge:0,power:false,dead:false,shieldHeld:false,parry:0,dodgeCd:0,
+    grounded:false,jumps:2,stun:0,invuln:2,charge:0,power:false,shurikenArmed:false,smokeCooldown:0,speedBuff:0,dead:false,shieldHeld:false,parry:0,dodgeCd:0,
     attackCd:0,anim:0,trail:[],ai:{dir:1,timer:0,jumpCd:0,diff:DIFFS[botDifficulty]},lastTap:{key:'',at:0},_gpDir:0};
 }
 function startMatch(selected){
@@ -353,8 +353,15 @@ function attack(f,heavy){
 }
 
 /* ---------- pickups: ♥ heal · ✦ spark core · ◉ pulse bomb ---------- */
+function applyPickupEffect(kind,fighter){
+  if(kind==='heart')fighter.pct=Math.max(0,fighter.pct-30);
+  if(kind==='spark')fighter.power=true;
+  if(kind==='shuriken')fighter.shurikenArmed=true;
+  if(kind==='speed')fighter.speedBuff=6;
+  return fighter;
+}
 function spawnPickup(){
-  const kinds=['heart','spark','bomb'];
+  const kinds=['heart','spark','bomb','shuriken','smoke','speed'];
   const kind=kinds[Math.floor(Math.random()*kinds.length)];
   const spot={x:FLOOR.x-FLOOR.w*.42+Math.random()*FLOOR.w*.84,y:FLOOR.y-.08};
   pickups.push({kind,x:spot.x,y:spot.y,age:0,fuse:kind==='bomb'?0:null});
@@ -364,9 +371,17 @@ function grabPickups(f){
     if(p.taken)continue;
     if(Math.abs(p.x-f.x)<.04&&Math.abs(p.y-f.y)<.06){
       p.taken=true;
-      if(p.kind==='heart'){f.pct=Math.max(0,f.pct-30);spawnBurst(f.x,f.y,'#f87171',14);addFloater(f.x,f.y-.09,'HEAL -30%', '#f87171',14);sfx('pickup')}
-      if(p.kind==='spark'){f.power=true;spawnBurst(f.x,f.y,'#ffffff',16);addFloater(f.x,f.y-.09,'POWER UP', '#ffffff',14);sfx('pickup')}
+      if(p.kind==='heart'){applyPickupEffect('heart',f);spawnBurst(f.x,f.y,'#f87171',14);addFloater(f.x,f.y-.09,'HEAL -30%', '#f87171',14);sfx('pickup')}
+      if(p.kind==='spark'){applyPickupEffect('spark',f);spawnBurst(f.x,f.y,'#ffffff',16);addFloater(f.x,f.y-.09,'POWER UP', '#ffffff',14);sfx('pickup')}
       if(p.kind==='bomb'){p.taken=false;p.fuse=.9;p.owner=f.slot}
+      if(p.kind==='shuriken'){applyPickupEffect('shuriken',f);spawnBurst(f.x,f.y,'#e8fff2',14);addFloater(f.x,f.y-.09,'SHURIKEN', '#e8fff2',14);sfx('pickup')}
+      if(p.kind==='speed'){applyPickupEffect('speed',f);spawnBurst(f.x,f.y,'#fde047',14);addFloater(f.x,f.y-.09,'SPEED UP', '#fde047',14);sfx('pickup')}
+      if(p.kind==='smoke'){
+        const dir=heldDir(f)||f.face||1;
+        f.x=Math.max(ARENA.left+.02,Math.min(ARENA.right-.02,f.x+dir*.14));
+        f.invuln=Math.max(f.invuln,.3);
+        spawnBurst(f.x,f.y,'#9aa0a6',22);addFloater(f.x,f.y-.09,'SMOKE!', '#9aa0a6',14);sfx('pickup');
+      }
       updateHud();
     }
   }
