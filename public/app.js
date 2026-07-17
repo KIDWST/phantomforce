@@ -82,6 +82,59 @@ function emptyStatus() {
   return { state: "unknown", confidence: 0, ruleId: null, label: null, why: null, match: null };
 }
 
+// States where the CLI is actively blocked on the user reading and
+// answering something, as opposed to just being idle/thinking/done.
+// "waiting" is deliberately excluded — every detector pack (see
+// detect/packs/*.js) uses it for a harmless idle prompt with nothing to
+// read ("idle input prompt caret, no spinner active"); only
+// "needs_approval" represents a real question blocking on the user.
+const QUESTION_STATES = new Set(["needs_approval"]);
+
+// Scrolls a terminal so a just-appeared prompt is visible from where it
+// starts, not just wherever xterm's default bottom-follow happened to
+// land. Tries to find the detector's own matched trigger text in the
+// buffer first (most precise); falls back to a fixed look-back if that
+// text can't be found (e.g. it was ANSI-styled differently than its
+// plain-text match, or truncated at the detector's 160-char cap).
+function scrollToPromptStart(term, matchText) {
+  const buf = term.buffer.active;
+  const needle = (matchText || "").trim().slice(0, 40);
+  const bottomLine = buf.length - 1;
+  let foundLine = -1;
+  if (needle) {
+    const searchDepth = Math.min(bottomLine, 200);
+    for (let y = bottomLine; y >= bottomLine - searchDepth; y -= 1) {
+      const line = buf.getLine(y);
+      if (line && line.translateToString(true).includes(needle)) {
+        foundLine = y;
+        break;
+      }
+    }
+  }
+  const contextLines = 3;
+  const target = foundLine >= 0 ? foundLine - contextLines : bottomLine - 15;
+  term.scrollToLine(Math.max(0, target));
+}
+
+// "Jump to bottom" affordance: a terminal that's been scrolled up (to
+// read a question, scrollback, whatever) shouldn't require hunting for
+// where "the bottom" is again, especially useful once a scroll-to-prompt
+// (above) has deliberately moved the view away from it.
+function attachJumpToBottom(term, container) {
+  container.querySelector(".jump-to-bottom")?.remove(); // openTerminal can re-run (restart) on the same container
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "jump-to-bottom hidden";
+  btn.textContent = "↓ Jump to bottom";
+  btn.addEventListener("click", () => term.scrollToBottom());
+  container.appendChild(btn);
+  term.onScroll(() => {
+    const buf = term.buffer.active;
+    btn.classList.toggle("hidden", buf.viewportY >= buf.baseY);
+  });
+  return btn;
+}
+
 function formatElapsed(ms) {
   if (!Number.isFinite(ms) || ms < 0) return "";
   const totalSeconds = Math.floor(ms / 1000);
@@ -564,6 +617,7 @@ function openTerminal(card, sessionId) {
   const fit = new FitAddon.FitAddon();
   term.loadAddon(fit);
   term.open(host);
+  attachJumpToBottom(term, host.parentElement);
   try {
     fit.fit();
   } catch {
@@ -583,6 +637,7 @@ function openTerminal(card, sessionId) {
         term.write(msg.data);
         if (card.uid !== activeCardUid) markActivity(card, msg.data);
       } else if (msg.type === "status") {
+        const prevState = card.status.state;
         card.status = {
           state: msg.state,
           confidence: msg.confidence,
@@ -592,6 +647,14 @@ function openTerminal(card, sessionId) {
           match: msg.match,
         };
         renderStatus(card);
+        // A prompt just appeared, not just another ping of an
+        // already-known one: xterm's default "stick to bottom on new
+        // output" often leaves only the tail of a multi-line question
+        // visible, so you'd have to manually scroll up to see what's
+        // actually being asked. Jump the view to where it starts instead.
+        if (QUESTION_STATES.has(card.status.state) && !QUESTION_STATES.has(prevState)) {
+          scrollToPromptStart(term, card.status.match);
+        }
         if (card.role && typeof window.onMissionActivity === "function") window.onMissionActivity(card);
       } else if (msg.type === "ledger") {
         card.lastLedgerEvent = msg.event;
@@ -775,6 +838,7 @@ function expandCard(card) {
   const fit = new FitAddon.FitAddon();
   term.loadAddon(fit);
   term.open(host);
+  attachJumpToBottom(term, host);
 
   const ws = new WebSocket(`ws://${location.host}/pty?session=${encodeURIComponent(card.sessionId)}&token=${encodeURIComponent(TOKEN)}`);
   overlayCard = { card, term, fit, ws };
