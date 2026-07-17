@@ -994,9 +994,15 @@ export async function queuePhantomPlayRoomAction(session: AccessSession, input: 
   if (!room.participants.some((participant) => participant.actorId === actorId)) {
     throw new Error("You are not a participant in this room.");
   }
+  // Same size/serializability guard updatePhantomPlayRoomMatchState already
+  // enforces on matchState (same ROOM_MATCH_STATE_MAX_BYTES budget, via the
+  // same helper below) — a relayed action is just as capable of carrying an
+  // oversized or non-serializable payload as a matchState write, so it gets
+  // the same guard instead of a second, duplicated one.
+  const action = safeMatchStateValue(input.action ?? null);
   const entry: PhantomPlayRoomActionEntry = {
     actorId,
-    action: input.action ?? null,
+    action,
     mode: input.mode === "replace" ? "replace" : "merge",
     queuedAt: now(),
   };

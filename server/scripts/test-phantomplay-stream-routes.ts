@@ -94,6 +94,32 @@ assert(actionRes.ok, `Action POST should succeed; got ${actionRes.status}.`);
 const actionLine = await nextLine();
 assert(actionLine.type === "action" && typeof (actionLine as any).actorId === "string", "An action POST should relay to the open stream as an 'action' line.");
 
+// Finding 3 (final review): the action relay must share the same in-memory
+// rate limiter the match-state PATCH route already uses
+// (phantomPlayMatchStateRateLimited), keyed the same way
+// (`${org/client/session}::${user/session}::${code}`). Fire a burst of
+// action POSTs for the same session/room well past the shared window's cap
+// (10 per 2s) and confirm at least one gets rejected with the same 429 shape
+// the match-state route uses.
+let sawRateLimited = false;
+for (let i = 0; i < 15; i += 1) {
+  const burstRes = await fetch(`${base}/api/phantomplay/rooms/${code}/actions`, {
+    method: "POST",
+    headers: authHeaders,
+    body: JSON.stringify({ tenantId: "stream-route-test", action: { tick: i } }),
+  });
+  if (burstRes.status === 429) {
+    sawRateLimited = true;
+    const body = (await burstRes.json()) as { ok: boolean; error: string };
+    assert(body.ok === false, "A 429 response from the actions route should carry the same { ok: false, error } shape the match-state route's rate limit uses.");
+    assert(burstRes.headers.get("retry-after") === "2", "A 429 response from the actions route should carry the same Retry-After header the match-state route's rate limit sends.");
+    break;
+  }
+  await burstRes.json().catch(() => undefined);
+}
+assert(sawRateLimited, "A burst of action POSTs for the same session/room should eventually be rate-limited (429), matching the match-state PATCH route's limiter.");
+console.log("PASS: action POST route shares the match-state rate limiter");
+
 reader.cancel().catch(() => {});
 await app.close();
 console.log("PASS: stream + actions routes");

@@ -5237,6 +5237,14 @@ app.post("/api/phantomplay/rooms/:code/actions", async (request, reply) => {
   const session = requireAccessSession(request, reply);
   if (!session) return reply;
   const params = request.params as { code?: string };
+  // Same in-memory fixed-window limiter as the match-state PATCH route above
+  // (phantomPlayMatchStateRateLimited), keyed the same way — this relay is
+  // just as exposed to a flooding participant as direct matchState writes
+  // are, so it gets the same budget rather than an unbounded one.
+  const rateLimitKey = `${session.orgId || session.clientId || session.id || "anon"}::${session.userId || session.id || "anon"}::${params.code || ""}`;
+  if (phantomPlayMatchStateRateLimited(rateLimitKey)) {
+    return reply.code(429).header("Retry-After", "2").send({ ok: false, error: "Too many actions. Slow down and try again shortly." });
+  }
   try {
     const result = await queuePhantomPlayRoomAction(session, { ...((request.body ?? {}) as Record<string, unknown>), code: params.code });
     return result ? { ok: true, session, ...result } : reply.code(404).send({ ok: false, error: "Private room was not found." });

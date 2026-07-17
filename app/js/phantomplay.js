@@ -855,13 +855,45 @@ function stopRoomPolling() {
 // mishandles a long-lived chunked response degrades to the old behavior
 // instead of breaking room sync outright.
 const roomStreams = new Map(); // code -> AbortController
+// code -> ms timestamp of the last line (state/action/ping) received on that
+// room's stream. Feeds the stall watchdog below: the server pings every 20s
+// specifically so a client can tell "quiet because nothing changed" apart
+// from "quiet because the connection died silently" (e.g. a proxy/tunnel
+// that keeps the socket open but stops delivering bytes) — without this,
+// reader.read() can hang forever with no error and no fallback ever fires.
+const roomStreamLastSeen = new Map();
 let roomStreamFailures = 0;
 const STREAM_FAILURE_LIMIT = 3;
+const STREAM_HEARTBEAT_MS = 20_000; // must match the server's ping interval
+const STREAM_STALL_TIMEOUT_MS = STREAM_HEARTBEAT_MS * 2 + 8_000; // ~48s: 2x heartbeat + jitter slack
+const STREAM_STALL_CHECK_MS = 5_000;
+let roomStreamStallTimer = null;
+
+// One shared watchdog covers every open stream (simpler than a timer per
+// stream) but aborts only the specific stalled stream's own AbortController
+// — a quiet stream for room A must not affect room B's still-healthy one.
+function ensureStreamStallWatchdog() {
+  if (roomStreamStallTimer) return;
+  roomStreamStallTimer = setInterval(() => {
+    const cutoff = Date.now() - STREAM_STALL_TIMEOUT_MS;
+    for (const [code, controller] of roomStreams) {
+      const lastSeen = roomStreamLastSeen.get(code) ?? 0;
+      if (lastSeen >= cutoff) continue;
+      // Flag this as a stall-triggered abort (as opposed to
+      // closeRoomStream's deliberate, non-failure abort) so the catch block
+      // below counts it toward roomStreamFailures instead of ignoring it.
+      controller.stalled = true;
+      controller.abort();
+    }
+  }, STREAM_STALL_CHECK_MS);
+}
 
 async function openRoomStream(code) {
   if (roomStreams.has(code)) return;
   const controller = new AbortController();
   roomStreams.set(code, controller);
+  roomStreamLastSeen.set(code, Date.now());
+  ensureStreamStallWatchdog();
   try {
     const response = await fetch(`/api/phantomplay/rooms/${encodeURIComponent(code)}/stream?tenant_id=${encodeURIComponent(currentTenantId())}`, {
       headers: authHeaders(),
@@ -883,6 +915,7 @@ async function openRoomStream(code) {
         if (!line.trim()) continue;
         let message;
         try { message = JSON.parse(line); } catch { continue; }
+        roomStreamLastSeen.set(code, Date.now());
         if (message.type === "state" && message.room) {
           const previous = ui.snapshot.rooms.find((item) => item.code === message.room.code);
           const changed = JSON.stringify(previous) !== JSON.stringify(message.room);
@@ -891,17 +924,27 @@ async function openRoomStream(code) {
             if (!ui.player) render();
             if (ui.player?.roomCode === message.room.code) pushMatchStateToGame(message.room);
           }
+        } else if (message.type === "action") {
+          // Non-host action relay seam: a non-host participant's action
+          // (queued via POST .../actions) arrives here on every open
+          // stream for this room, but it should only ever reach a mounted
+          // game when WE are the room's host and this stream is for the
+          // player's currently-open room — the same host check
+          // handleMatchAction's host branch uses (room.hostActorId ===
+          // ui.snapshot.actorId). What a game does with
+          // "match-action-relay" is out of scope here; this is only the
+          // delivery seam the follow-on plans (Ninja Polish's networked
+          // modes, Race to the Top) will consume.
+          const room = ui.snapshot.rooms.find((item) => item.code === code);
+          if (room?.hostActorId === ui.snapshot.actorId && ui.player?.roomCode === code) {
+            postToGame("match-action-relay", { actorId: message.actorId, action: message.action, mode: message.mode, queuedAt: message.queuedAt, focus: false });
+          }
         }
-        // "action" and "ping" lines require no client-side handling here —
-        // "action" lines are consumed by the ROOM HOST's stream to decide
-        // whether to fold the action into matchState (a follow-up call to
-        // updateHostControls-style match-state PATCH, left as a game-level
-        // concern the same way handleMatchAction's poll-era version was);
-        // "ping" is purely a keep-alive.
+        // "ping" lines need no handling beyond the roomStreamLastSeen touch above.
       }
     }
   } catch (error) {
-    if (!controller.signal.aborted) {
+    if (!controller.signal.aborted || controller.stalled) {
       roomStreamFailures += 1;
       if (roomStreamFailures >= STREAM_FAILURE_LIMIT) {
         console.warn("PhantomPlay room stream failed repeatedly, falling back to polling.", error);
@@ -909,7 +952,18 @@ async function openRoomStream(code) {
       }
     }
   } finally {
-    roomStreams.delete(code);
+    // Identity-scoped cleanup: only remove the map entries if they still
+    // point at THIS controller. Without this check, a fast
+    // close-then-reopen for the same room code (closeRoomStream aborts
+    // controller A and deletes the entry; syncRoomStream immediately
+    // reopens with controller B) would let A's now-aborted fetch's finally
+    // block delete B's still-live entry out from under it — orphaning B as
+    // an untracked stream and causing a third controller to be opened on
+    // the next syncRoomStream call.
+    if (roomStreams.get(code) === controller) {
+      roomStreams.delete(code);
+      roomStreamLastSeen.delete(code);
+    }
   }
 }
 

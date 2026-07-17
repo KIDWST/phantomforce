@@ -69,3 +69,18 @@ assert(outsiderResult === null, "A caller outside the room's tenant must not be 
 
 stop2(); stopActions2();
 console.log("PASS: non-host action queue + relay");
+
+// Finding 3 (final review): the action relay must reuse the same size guard
+// updatePhantomPlayRoomMatchState already enforces on matchState (same
+// ROOM_MATCH_STATE_MAX_BYTES budget) — an oversized action must be rejected,
+// not silently relayed.
+let oversizedRejected = false;
+try {
+  await play.queuePhantomPlayRoomAction(guest, { code: code2, tenantId: "org-broadcast", action: { blob: "x".repeat(200_000) } });
+} catch (error) {
+  oversizedRejected = true;
+  assert(error instanceof Error && /too large/i.test(error.message), `An oversized action should be rejected with a size-limit error; got: ${error instanceof Error ? error.message : error}`);
+}
+assert(oversizedRejected, "An oversized action payload must be rejected, not queued.");
+
+console.log("PASS: oversized action payload is rejected by the shared size guard");
