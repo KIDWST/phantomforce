@@ -408,6 +408,14 @@ import {
   rollbackOrganizationConfiguration,
   type CustomizationEntitlements,
 } from "./customization/customization-service.js";
+import {
+  CLIENT_SETUP_BUSINESS_TEMPLATES,
+  CLIENT_SETUP_MODULES,
+  getClientSetupDocument,
+  isClientSetupSlotId,
+  publicClientSetupDocument,
+  saveClientSetupSlot,
+} from "./client-setup/client-setup-store.js";
 
 const host = process.env.HOST ?? "127.0.0.1";
 const port = Number(process.env.PORT ?? 5190);
@@ -463,6 +471,10 @@ const WorkspaceModuleUpdateBodySchema = z.object({
   allowedMemberIds: z.array(z.string().trim().min(1).max(120)).max(200).default([]),
   activityEnabled: z.boolean().default(false),
   challengesEnabled: z.boolean().default(false),
+});
+const ClientSetupSaveBodySchema = z.object({
+  tenant_id: z.string().trim().max(80).optional(),
+  slot: z.unknown(),
 });
 const SocialAnalyticsSyncSchema = z.object({
   platform: z.enum(["youtube", "instagram", "facebook", "tiktok", "x", "linkedin", "pinterest"]),
@@ -897,6 +909,49 @@ app.patch("/phantom-ai/customization/workspace-modules", async (request, reply) 
     if (error instanceof z.ZodError) return reply.status(400).send({ ok: false, error: error.flatten() });
     return reply.status(409).send({ ok: false, error: error instanceof Error ? error.message : "Workspace module could not be updated." });
   }
+});
+
+app.get("/api/client-setup", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const parsed = CustomizationTenantQuerySchema.safeParse(request.query ?? {});
+  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
+  const tenantId = customizationTenantForSession(session, parsed.data.tenant_id);
+  const document = await getClientSetupDocument(tenantId, session.id);
+  return {
+    ok: true,
+    tenant_id: tenantId,
+    document: publicClientSetupDocument(document),
+    templates: CLIENT_SETUP_BUSINESS_TEMPLATES,
+    modules: CLIENT_SETUP_MODULES,
+    can_manage: canManageWorkspaceModules(session, tenantId),
+    provider_called: false,
+    outbound_action_executed: false,
+  };
+});
+
+app.post("/api/client-setup/slots/:slotId", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const params = request.params as { slotId?: unknown };
+  const slotId = typeof params.slotId === "string" ? params.slotId : "";
+  if (!isClientSetupSlotId(slotId)) return reply.status(400).send({ ok: false, error: "Unknown setup slot." });
+  const parsed = ClientSetupSaveBodySchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
+  const tenantId = customizationTenantForSession(session, parsed.data.tenant_id);
+  if (!canManageWorkspaceModules(session, tenantId)) {
+    return reply.code(403).send({ ok: false, error: "Saving workspace setup requires an organization owner or administrator." });
+  }
+  const result = await saveClientSetupSlot({ tenantId, slotId, slot: parsed.data.slot, actor: session.id });
+  return {
+    ok: true,
+    tenant_id: tenantId,
+    document: publicClientSetupDocument(result.document),
+    slot: result.slot,
+    can_manage: true,
+    provider_called: false,
+    outbound_action_executed: false,
+  };
 });
 
 app.get("/phantom-ai/customization/versions", async (request, reply) => {
