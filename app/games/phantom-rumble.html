@@ -29,13 +29,17 @@ body.paused .pause{display:grid}
 .touch button{width:64px;height:64px;border-radius:50%;border:1px solid #2cff9b66;background:#04140ccc;color:#7dffbd;font:700 11px ui-monospace}
 @media(pointer:coarse){.touch{display:flex}}
 @media(max-width:640px){.overlay h1{font-size:34px}}
+.mute-btn{position:fixed;top:calc(10px + env(safe-area-inset-top));right:calc(10px + env(safe-area-inset-right));z-index:6;width:38px;height:38px;border-radius:50%;border:1px solid #2cff9b55;background:#04140ccc;color:#7dffbd;font-size:16px;cursor:pointer;display:grid;place-items:center}
+.mute-btn:hover{background:#0a2417}
+.mute-btn[aria-pressed="true"]{color:#5a7568;border-color:#ffffff22}
 </style></head><body>
 <canvas></canvas>
+<button class="mute-btn" data-mute type="button" aria-pressed="false" aria-label="Mute sound">🔊</button>
 <div class="hud" data-hud hidden></div>
 <div class="touch" data-touch hidden><div><button data-t="left">◀</button><button data-t="right">▶</button></div><div><button data-t="jump">JUMP</button><button data-t="light">HIT</button><button data-t="heavy">SMASH</button><button data-t="shield">SHIELD</button><button data-t="dodge">DODGE</button></div></div>
 <div class="overlay" data-setup><div>
   <h1>PHANTOM RUMBLE</h1>
-  <p>Knock the other phantoms off the arena. Damage raises their percent — the higher it climbs, the further they fly. Last phantom standing takes the rumble.</p>
+  <p>Brawling chickens, one walled coop, no ring-outs. Damage raises a bird's percent — the higher it climbs, the harder a fence slam cracks them for the KO. Last chicken standing takes the rumble.</p>
   <p class="pb" data-pb hidden></p>
   <div class="modes">
     <button data-mode="duel"><b>DUEL</b>you vs one bot</button>
@@ -70,16 +74,84 @@ addEventListener('resize',size);size();
 let stats={wins:0,matches:0,bestKos:0};
 function pushState(progress){host('progress',{progress,state:null})}
 
-/* ---------- arena ---------- */
-/* Normalized coordinates: x 0..1 of arena width, y 0..1 of arena height. */
-const STAGE={x:.5,y:.72,w:.74,h:.045};
-const PLATS=[];
-const BLAST={left:-.18,right:1.18,top:-.3,bottom:1.25};
+/* ---------- arena ----------
+   The Coop: a walled arena, not an open void. There is no ring-out —
+   the arena floor and side fences are solid. Instead, a fighter is
+   KO'd ("CRACKED!") when a hit sends them into a fence hard enough
+   while their damage is high — same knockback-scales-with-percent
+   tension as a ring-out fighter, just resolved against a wall instead
+   of an off-screen blast zone. No ledge-grabbing exists because there
+   is nothing to fall off of.
+   Normalized coordinates: x 0..1 of arena width, y 0..1 of arena height. */
+const ARENA={left:.07,right:.93,floor:.82,ceil:.05};
+const FLOOR={x:.5,y:ARENA.floor,w:ARENA.right-ARENA.left,h:.045};
+const SLAM_SPEED=.024; /* base impact speed (at 0% dmg) that starts to threaten a crack */
 const SPAWNS=[{x:.28,y:.58},{x:.72,y:.58},{x:.42,y:.58},{x:.58,y:.58}];
+
+/* ---------- modular chunk-based procedural platforms ----------
+   A small library of relative platform "chunks." Each match seeds a
+   fresh, deterministic layout from a handful of chunks so the coop
+   never looks exactly the same twice, without hand-authoring dozens of
+   full maps. The seed is requested from the trusted host shell (see
+   host protocol below) rather than generated in-page, so a future
+   networked match can hand every client the same seed and guarantee
+   everyone plays the same layout — this game has no client-side
+   "roll your own map" step. */
+const CHUNKS=[
+  [{dx:-.16,dy:-.15,w:.16},{dx:.16,dy:-.15,w:.16}],
+  [{dx:0,dy:-.2,w:.22}],
+  [{dx:-.2,dy:-.1,w:.14},{dx:0,dy:-.22,w:.14},{dx:.2,dy:-.1,w:.14}],
+  [{dx:-.22,dy:-.18,w:.18},{dx:.22,dy:-.18,w:.18}],
+  [{dx:0,dy:-.12,w:.3}],
+];
+function mulberry32(seed){
+  let s=seed>>>0;
+  return function(){s|=0;s=(s+0x6d2b79f5)|0;let t=Math.imul(s^(s>>>15),1|s);t=(t+Math.imul(t^(t>>>7),61|t))^t;return((t^(t>>>14))>>>0)/4294967296};
+}
+let PLATS=[];
+function buildPlatforms(seed){
+  const rand=mulberry32(seed);
+  const chunk=CHUNKS[Math.floor(rand()*CHUNKS.length)];
+  const cx=.5,cy=.56;
+  PLATS=chunk.map(c=>({x:cx+c.dx,y:cy+c.dy,w:c.w,h:.03}));
+}
+/* Server-authoritative-ready seeding: this game is local-only today (no
+   client to desync from), but the seed still comes from the trusted
+   host shell rather than being rolled in-page, so a future networked
+   room can hand every client the exact same seed and no one ever
+   generates their own map. hostSeed wins if the host answered before
+   this match started; otherwise a real random seed is drawn locally
+   (never a predictable one) so solo/local play never stalls waiting on
+   a host that doesn't implement this yet. */
+let hostSeed=null;
+function localSeed(){
+  try{const a=new Uint32Array(1);crypto.getRandomValues(a);return a[0]}catch{return Math.floor(Math.random()*4294967296)}
+}
+function nextSeed(){const s=hostSeed;hostSeed=null;return s??localSeed()}
+host('request-seed');
 
 /* ---------- fighters ---------- */
 const PALETTE=[{name:'EMBER',c:'#4ade80',glow:'#22c55e'},{name:'CIPHER',c:'#5eead4',glow:'#14b8a6'},{name:'HEX',c:'#f0abfc',glow:'#d946ef'},{name:'VOLT',c:'#fde047',glow:'#eab308'}];
 let fighters=[],pickups=[],particles=[],floaters=[],rings=[],mode='',running=false,paused=false,over=false,last=0,shake=0,slowmo=0,pickupTimer=6,reduced=false,soundOn=true,matchKos=[0,0,0,0],raf=0;
+
+/* ---------- persistent mute ----------
+   A real always-visible mute control, not just a host settings toggle —
+   available on the setup screen, mid-match, everywhere — and remembered
+   across sessions the same way bot difficulty is. */
+try{soundOn=localStorage.getItem('pf.phantomrumble.mute')!=='1'}catch{}
+const muteBtn=document.querySelector('[data-mute]');
+function applyMuteUi(){
+  if(!muteBtn)return;
+  muteBtn.textContent=soundOn?'🔊':'🔇';
+  muteBtn.setAttribute('aria-pressed',String(!soundOn));
+  muteBtn.setAttribute('aria-label',soundOn?'Mute sound':'Unmute sound');
+}
+if(muteBtn)muteBtn.onclick=()=>{
+  soundOn=!soundOn;
+  try{localStorage.setItem('pf.phantomrumble.mute',soundOn?'0':'1')}catch{}
+  applyMuteUi();
+};
+applyMuteUi();
 
 /* ---------- bot difficulty ---------- */
 const DIFFS={
@@ -124,7 +196,7 @@ function makeFighter(slot,human){
   const spawn=SPAWNS[slot];
   return {slot,human,name:PALETTE[slot].name,color:PALETTE[slot].c,glow:PALETTE[slot].glow,
     x:spawn.x,y:spawn.y,vx:0,vy:0,face:slot%2?-1:1,pct:0,stocks:3,
-    grounded:false,jumps:2,stun:0,invuln:2,charge:0,power:false,dead:false,shieldHeld:false,parry:0,dodgeCd:0,ledge:0,ledgeSide:null,ledgeCooldown:0,
+    grounded:false,jumps:2,stun:0,invuln:2,charge:0,power:false,dead:false,shieldHeld:false,parry:0,dodgeCd:0,
     attackCd:0,anim:0,trail:[],ai:{dir:1,timer:0,jumpCd:0,diff:DIFFS[botDifficulty]},lastTap:{key:'',at:0}};
 }
 function startMatch(selected){
@@ -133,6 +205,7 @@ function startMatch(selected){
   const count=mode==='duel'?2:mode==='versus'?2:4;
   fighters=[];
   for(let i=0;i<count;i++)fighters.push(makeFighter(i,i<humans));
+  buildPlatforms(nextSeed());
   pickups=[];particles=[];floaters=[];rings=[];matchKos=[0,0,0,0];pickupTimer=6;over=false;running=true;paused=false;
   setupEl.hidden=true;endEl.hidden=true;hudEl.hidden=false;
   document.querySelector('[data-touch]').hidden=fighters.some(f=>f.human&&f.slot===0)?false:true;
@@ -192,7 +265,6 @@ function heldDir(f){
 
 /* ---------- combat ---------- */
 function jump(f){
-  if(f.ledge>0){const side=f.ledgeSide||1;f.ledge=0;f.ledgeCooldown=.75;f.x+=-side*.02;f.vx=-side*.018;f.vy=-.024;f.jumps=1;spawnBurst(f.x,f.y,f.glow,9);sfx('jump');return}
   if(f.jumps<=0)return;
   f.vy=-.026;f.jumps-=1;f.grounded=false;spawnBurst(f.x,f.y+.02,f.glow,5);addFloater(f.x,f.y-.08,'HI-YA!',f.glow,12);sfx('jump');
 }
@@ -201,17 +273,6 @@ function dodge(f){
   const dir=heldDir(f)||f.face||1;
   f.dodgeCd=.75;f.invuln=Math.max(f.invuln,.22);f.shieldHeld=false;f.parry=0;
   f.vx=dir*.018;f.vy-=.003;spawnBurst(f.x,f.y,f.glow,12);addRing(f.x,f.y,.09,f.glow);addFloater(f.x,f.y-.12,'DODGE',f.glow,13);sfx('jump');
-}
-function tryLedgeGrab(f){
-  const edgePad=.055,top=STAGE.y-STAGE.h/2;
-  if(f.ledge>0||f.ledgeCooldown>0||f.vy<0)return false;
-  const ledgeSide=f.x<STAGE.x?-1:1;
-  const edgeX=STAGE.x+ledgeSide*STAGE.w/2;
-  const close=Math.abs(f.x-edgeX)<edgePad&&f.y>top-.08&&f.y<top+.12&&f.vy>=0&&f.stun<=.08;
-  if(!close)return false;
-  f.ledge=.32;f.ledgeSide=ledgeSide;f.ledgeCooldown=1.1;f.x=edgeX-ledgeSide*.012;f.y=top;f.vx=0;f.vy=0;f.jumps=1;f.invuln=Math.max(f.invuln,.3);
-  spawnBurst(f.x,f.y,f.glow,7);addRing(f.x,f.y,.065,f.glow); /* internal LEDGE save, no noisy label */
-  return true;
 }
 function attack(f,heavy){
   if(f.attackCd>0)return;
@@ -252,7 +313,7 @@ function attack(f,heavy){
 function spawnPickup(){
   const kinds=['heart','spark','bomb'];
   const kind=kinds[Math.floor(Math.random()*kinds.length)];
-  const spot={x:STAGE.x-STAGE.w*.42+Math.random()*STAGE.w*.84,y:STAGE.y-.08};
+  const spot={x:FLOOR.x-FLOOR.w*.42+Math.random()*FLOOR.w*.84,y:FLOOR.y-.08};
   pickups.push({kind,x:spot.x,y:spot.y,age:0,fuse:kind==='bomb'?0:null});
 }
 function grabPickups(f){
@@ -296,10 +357,12 @@ function botThink(f,dt){
   const foes=fighters.filter(t=>t!==f&&!t.dead);
   if(!foes.length)return;
   const foe=foes.reduce((a,b)=>Math.abs(a.x-f.x)<Math.abs(b.x-f.x)?a:b);
-  const offstage=f.x<STAGE.x-STAGE.w/2-.02||f.x>STAGE.x+STAGE.w/2+.02;
-  if(offstage){ /* recover toward stage, skill gates how promptly */
-    f.ai.dir=f.x<STAGE.x?1:-1;
-    if(f.vy>0&&f.jumps>0&&f.ai.jumpCd<=0&&Math.random()<d.recoverSkill){jump(f);f.ai.jumpCd=d.jumpCd}
+  /* No off-stage recovery branch — the coop is walled, there is nowhere
+     to fall. A bot near a fence at high percent should back off rather
+     than press into it (avoiding a self-inflicted crack). */
+  const nearWall=f.x<ARENA.left+.1||f.x>ARENA.right-.1;
+  if(nearWall&&f.pct>60&&Math.random()<d.recoverSkill){
+    f.ai.dir=f.x<ARENA.left+.1?1:-1;
   }else{
     const want=pickups.find(p=>!p.taken&&p.fuse===null);
     const target=want&&Math.random()<d.pickupGreed?want:foe;
@@ -315,10 +378,14 @@ function botThink(f,dt){
 
 /* ---------- physics + rounds ---------- */
 function land(f,top){f.y=top;f.vy=0;f.grounded=true;f.jumps=2}
+function wallBonk(f,side){
+  f.x=side<0?ARENA.left+.006:ARENA.right-.006;
+  f.vx*=-.35;shake=Math.min(1,shake+.15);
+  spawnBurst(f.x,f.y-.1,f.glow,8);sfx('squawk');
+}
 function step(f,dt){
   if(f.dead)return;
-  f.invuln=Math.max(0,f.invuln-dt);f.stun=Math.max(0,f.stun-dt);f.attackCd=Math.max(0,f.attackCd-dt);f.anim=Math.max(0,f.anim-dt);f.parry=Math.max(0,f.parry-dt);f.dodgeCd=Math.max(0,f.dodgeCd-dt);f.ledgeCooldown=Math.max(0,f.ledgeCooldown-dt);f.ledge=Math.max(0,f.ledge-dt);
-  if(f.ledge>0){if(!f.human&&f.ai.jumpCd<=0){jump(f);f.ai.jumpCd=.55}return}
+  f.invuln=Math.max(0,f.invuln-dt);f.stun=Math.max(0,f.stun-dt);f.attackCd=Math.max(0,f.attackCd-dt);f.anim=Math.max(0,f.anim-dt);f.parry=Math.max(0,f.parry-dt);f.dodgeCd=Math.max(0,f.dodgeCd-dt);
   if(f.charge>0)f.charge=Math.min(1,f.charge+dt);
   if(f.stun<=0){
     if(f.human){
@@ -329,23 +396,37 @@ function step(f,dt){
   }
   f.vx*=f.grounded?.82:.94;
   f.vy=Math.min(.05,f.vy+.0011*(dt*60));
+  const incomingVx=f.vx;
   f.x+=f.vx*(dt*60);f.y+=f.vy*(dt*60);
   f.grounded=false;
-  const surfaces=[STAGE];
+  const surfaces=[FLOOR,...PLATS];
   for(const s of surfaces){
     const top=s.y-s.h/2;
     if(f.vy>=0&&Math.abs(f.x-s.x)<s.w/2&&f.y>=top-.012&&f.y<=top+.05){
       land(f,top);
     }
   }
+  if(f.y>ARENA.floor+.02)land(f,ARENA.floor); /* safety net — the floor is always solid */
+  if(f.y<ARENA.ceil){f.y=ARENA.ceil;if(f.vy<0)f.vy=0}
+  /* Fences, not a void: a soft touch just bonks off, but a hit that
+     lands you into a fence hard enough while you're already damaged
+     cracks you for the KO — the whole "one more good hit ends it"
+     tension of a ring-out, resolved without anyone ever leaving the
+     coop. */
+  if(f.x<ARENA.left||f.x>ARENA.right){
+    const side=f.x<ARENA.left?-1:1;
+    const impactSpeed=Math.abs(incomingVx);
+    const crackThreshold=SLAM_SPEED*(1-Math.min(.72,f.pct/260));
+    if(impactSpeed>crackThreshold&&f.pct>15)ko(f,side);
+    else wallBonk(f,side);
+  }
   if(!reduced){f.trail.unshift({x:f.x,y:f.y});f.trail=f.trail.slice(0,8)}
   grabPickups(f);
-  if(f.x<BLAST.left||f.x>BLAST.right||f.y>BLAST.bottom||f.y<BLAST.top){if(!tryLedgeGrab(f))ko(f)}
 }
-function ko(f){
+function ko(f,side=0){
   f.stocks-=1;shake=1;slowmo=reduced?0:.35;
-  const kx=f.x<0?.02:f.x>1?.98:f.x,ky=Math.max(.05,Math.min(.95,f.y));
-  spawnBurst(kx,ky,f.glow,56);addRing(kx,ky,.2,f.glow);addFloater(.5,.24,`${f.name} KO!`,f.glow,34);sfx('ko');
+  const kx=side<0?ARENA.left+.01:side>0?ARENA.right-.01:f.x,ky=Math.max(.05,Math.min(.95,f.y));
+  spawnBurst(kx,ky,f.glow,56);addRing(kx,ky,.2,f.glow);addFloater(.5,.24,`${f.name} CRACKED!`,f.glow,34);sfx('ko');
   const killer=fighters.find(t=>!t.dead&&t!==f&&Math.abs(t.x-f.x)<.4);
   if(killer)matchKos[killer.slot]+=1;
   if(f.stocks<=0){f.dead=true}
@@ -418,12 +499,23 @@ function updateCamera(){
 function sx(x){return (x-camera.x)*W*camera.z+W/2}
 function px(x){return x*W}function py(y){return y*H}
 function drawStage(){
-  for(const s of [STAGE]){
-    ctx.fillStyle=s===STAGE?'#0b2417':'#0a1f14';
-    ctx.strokeStyle='#2cff9b44';ctx.lineWidth=2*DPR;
+  /* The coop: solid floor + side fences (no ring-out, nothing to fall
+     off of) with a set of seeded floating roosts (PLATS) in the middle. */
+  ctx.fillStyle='#0b2417';ctx.strokeStyle='#2cff9b44';ctx.lineWidth=2*DPR;
+  const fx=px(FLOOR.x-FLOOR.w/2),fy=py(FLOOR.y-FLOOR.h/2),fw=px(FLOOR.w),fh=Math.max(6*DPR,py(FLOOR.h));
+  ctx.beginPath();ctx.roundRect(fx,fy,fw,fh,8*DPR);ctx.fill();ctx.stroke();
+  ctx.fillStyle='#4ade8022';ctx.fillRect(fx,fy,fw,2*DPR);
+  /* fences */
+  ctx.strokeStyle='#2cff9b66';ctx.lineWidth=3*DPR;
+  for(const wallX of [ARENA.left,ARENA.right]){
+    const x=px(wallX),topY=py(ARENA.ceil),botY=py(ARENA.floor);
+    ctx.beginPath();ctx.moveTo(x,topY);ctx.lineTo(x,botY);ctx.stroke();
+    for(let i=0;i<8;i++){const railY=topY+(botY-topY)*i/7;ctx.beginPath();ctx.moveTo(x-6*DPR,railY);ctx.lineTo(x+6*DPR,railY);ctx.stroke()}
+  }
+  for(const s of PLATS){
+    ctx.fillStyle='#0a1f14';ctx.strokeStyle='#2cff9b33';ctx.lineWidth=2*DPR;
     const x=px(s.x-s.w/2),y=py(s.y-s.h/2),w=px(s.w),h=Math.max(6*DPR,py(s.h));
-    ctx.beginPath();ctx.roundRect(x,y,w,h,8*DPR);ctx.fill();ctx.stroke();
-    ctx.fillStyle='#4ade8022';ctx.fillRect(x,y,w,2*DPR);
+    ctx.beginPath();ctx.roundRect(x,y,w,h,6*DPR);ctx.fill();ctx.stroke();
   }
 }
 function drawFighter(f,t){
@@ -431,16 +523,37 @@ function drawFighter(f,t){
   if(!reduced)for(let i=f.trail.length-1;i>0;i--){const tr=f.trail[i];ctx.globalAlpha=(1-i/f.trail.length)*.25;ctx.fillStyle=f.glow;ctx.beginPath();ctx.arc(px(tr.x),py(tr.y)-14*DPR,10*DPR,0,Math.PI*2);ctx.fill()}
   ctx.globalAlpha=f.invuln>0?.45+.3*Math.sin(t*.02):1;
   ctx.shadowBlur=22*DPR;ctx.shadowColor=f.glow;
-  const bx=px(f.x),by=py(f.y);
-  ctx.fillStyle=f.color;
-  ctx.beginPath();
-  ctx.arc(bx,by-16*DPR,11*DPR,Math.PI,0);
+  const bx=px(f.x),by=py(f.y),face=f.face;
   const sway=reduced?0:Math.sin(t*.008+f.slot)*3*DPR;
-  ctx.bezierCurveTo(bx+11*DPR,by+2*DPR,bx+6*DPR+sway,by+6*DPR,bx,by+2*DPR);
-  ctx.bezierCurveTo(bx-6*DPR-sway,by+6*DPR,bx-11*DPR,by+2*DPR,bx-11*DPR,by-16*DPR);
-  ctx.fill();
-  ctx.shadowBlur=0;ctx.fillStyle='#02110a';
-  ctx.fillRect(bx+f.face*3*DPR-4*DPR,by-20*DPR,4*DPR,5*DPR);ctx.fillRect(bx+f.face*3*DPR+2*DPR,by-20*DPR,4*DPR,5*DPR);
+  const bob=reduced?0:(f.grounded?Math.sin(t*.012+f.slot)*1.4*DPR:0);
+  /* tail feathers, behind the body */
+  ctx.fillStyle=f.color;
+  for(let i=0;i<3;i++){
+    ctx.save();ctx.translate(bx-face*9*DPR,by-6*DPR-i*3*DPR+bob);ctx.rotate(-face*(.5+i*.24));
+    ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(-face*15*DPR,-4*DPR);ctx.lineTo(-face*15*DPR,4*DPR);ctx.closePath();ctx.fill();
+    ctx.restore();
+  }
+  /* plump body */
+  ctx.beginPath();ctx.ellipse(bx,by-9*DPR+bob,12*DPR,10*DPR,0,0,Math.PI*2);ctx.fill();
+  /* wing */
+  ctx.globalAlpha*=.92;
+  ctx.beginPath();ctx.ellipse(bx-face*2*DPR,by-7*DPR+bob+sway*.3,7*DPR,5*DPR,face*.4,0,Math.PI*2);ctx.fill();
+  ctx.globalAlpha=f.invuln>0?.45+.3*Math.sin(t*.02):1;
+  /* head */
+  const hx=bx+face*8*DPR,hy=by-18*DPR+bob;
+  ctx.beginPath();ctx.arc(hx,hy,7*DPR,0,Math.PI*2);ctx.fill();
+  ctx.shadowBlur=0;
+  /* comb */
+  ctx.fillStyle='#ff3d5a';
+  ctx.beginPath();
+  ctx.moveTo(hx-3*DPR,hy-6*DPR);ctx.lineTo(hx-1*DPR,hy-11*DPR);ctx.lineTo(hx+1*DPR,hy-6*DPR);
+  ctx.lineTo(hx+2.5*DPR,hy-10*DPR);ctx.lineTo(hx+4.5*DPR,hy-5*DPR);
+  ctx.closePath();ctx.fill();
+  /* beak */
+  ctx.fillStyle='#ffb454';
+  ctx.beginPath();ctx.moveTo(hx+face*6*DPR,hy);ctx.lineTo(hx+face*13*DPR,hy-1.5*DPR);ctx.lineTo(hx+face*6*DPR,hy+3*DPR);ctx.closePath();ctx.fill();
+  /* eye */
+  ctx.fillStyle='#02110a';ctx.beginPath();ctx.arc(hx+face*2*DPR,hy-1*DPR,1.6*DPR,0,Math.PI*2);ctx.fill();
   if(f.anim>0){ctx.strokeStyle=f.power?'#ffffff':f.glow;ctx.lineWidth=3*DPR;ctx.globalAlpha=f.anim*4;ctx.beginPath();ctx.arc(bx+f.face*16*DPR,by-12*DPR,10*DPR,-.7,.7);ctx.stroke()}
   if(f.shieldHeld){ctx.globalAlpha=f.parry>0?.82:.42;ctx.strokeStyle=f.parry>0?'#ffffff':f.glow;ctx.lineWidth=(f.parry>0?4:2)*DPR;ctx.beginPath();ctx.arc(bx,by-15*DPR,(23+(f.parry>0?5:0))*DPR,0,Math.PI*2);ctx.stroke()}
   ctx.globalAlpha=1;ctx.shadowBlur=0;ctx.font=`900 ${13*DPR}px ui-monospace`;ctx.textAlign='center';ctx.fillStyle=f.stun>0?'#ffffff':f.color;ctx.fillText(`${Math.round(f.pct)}%`,bx,by-38*DPR);
@@ -523,7 +636,8 @@ function setPaused(value){
 addEventListener('message',e=>{
   const d=e.data;
   if(!d||d.source!=='phantomplay-host')return;
-  if(d.type==='settings'){reduced=!!d.reducedMotion;soundOn=d.sound!==false}
+  if(d.type==='settings'){reduced=!!d.reducedMotion;let muted=false;try{muted=localStorage.getItem('pf.phantomrumble.mute')==='1'}catch{}soundOn=!muted&&d.sound!==false;applyMuteUi()}
+  if(d.type==='seed'&&typeof d.value==='number')hostSeed=d.value>>>0;
   if(d.type==='pause')setPaused(true);
   if(d.type==='resume')setPaused(false);
   if(d.type==='exit')resetToMenu();

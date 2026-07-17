@@ -220,34 +220,35 @@ Last updated: 2026-07-17
   of instantly punishing," so this redesign cannot be committed as-is without
   either an explicit new owner decision or a compatible recovery mechanic for
   the walled arena.
-- Correction: this cycle did not judge which direction is correct. The
-  redesign was preserved (not discarded) as a git stash rather than committed
-  or deleted, and `app/games/phantom-rumble.html` was left at the committed,
-  ledge-recovery, change-memory-passing version.
-- **Update, same session, found later:** `docs/superpowers/specs/` contains
-  three design docs written by a *different, concurrent* agent session
-  (`2026-07-17-phantom-rumble-ninja-polish-design.md`,
+- Correction: this cycle first stashed the redesign and left the committed
+  ledge-recovery version live, pending owner review.
+- **Update, confirmed by Jordan directly:** `docs/superpowers/specs/`
+  contains three design docs from a *different, concurrent, intentional*
+  agent session (`2026-07-17-phantom-rumble-ninja-polish-design.md`,
   `2026-07-17-phantom-rumble-race-to-top-design.md`,
-  `2026-07-17-phantomplay-realtime-channel-design.md`, file timestamps ~12:24
-  today) that explicitly treat the chicken-coop rework as necessary
-  foundational work to finish ("That diff never added any ninja styling...
-  the exact complaint") and reference "the owner wants a second mode." This
-  is strong circumstantial evidence the redesign direction is real and
-  wanted — but it is still evidence, not a message from Jordan in this
-  session, and the ninja-polish spec's own problem statement says the current
-  redesign is visually incomplete (chicken body with no ninja styling, no HUD
-  polish pass). Because this exact worktree is the live server for
-  admin/app.phantomforce.online with no build step for game HTML — whatever
-  is in the working tree is what real users see immediately — this cycle kept
-  the known-good, tested, locked-decision-compliant version live rather than
-  serving acknowledged-incomplete work, and left the redesign safely in
-  `git stash` rather than deleting it. A concurrent session may be about to
-  build on top of that stashed diff and find it missing from the working
-  tree.
-- Status: Open — needs an explicit owner decision, and likely needs
-  reconciliation with whatever session owns `docs/superpowers/specs/`. Do not
-  silently pop the stash back without checking that the concurrent session
-  actually needs it working-tree-resident rather than committed.
+  `2026-07-17-phantomplay-realtime-channel-design.md`) that explicitly build
+  on top of the chicken-coop rework as required foundation ("extends
+  `drawFighter()`... building on top of the existing (uncommitted)
+  chicken-body drawing rather than replacing it," "the fence-crack KO
+  mechanic from the in-progress diff are kept exactly as they land") and
+  state directly "the owner wants a second mode." Jordan confirmed this
+  session's concurrent-agent activity is expected, not a conflict to
+  arbitrate — treat it as the active direction and work with it. The
+  `git stash pop` has been reapplied: `app/games/phantom-rumble.html` is
+  back to the uncommitted chicken-coop working-tree state so the ninja-polish
+  spec's next executor finds its stated starting point intact. Note this
+  means the *live* admin/app.phantomforce.online game page currently serves
+  the visually-incomplete chicken-body redesign (no ninja gear yet, per the
+  ninja-polish spec's own problem statement) rather than the polished
+  ledge-recovery version, until that spec is executed.
+- Status: Open, but reframed — not an owner-arbitration blocker. The
+  `phantom-rumble-clean-start-and-recovery` lock in
+  `docs/quality/CHANGE_MEMORY.json` still requires `tryLedgeGrab`/ledge state
+  and will correctly fail `test:change-memory` against this working tree
+  until it's updated. Do not "fix" that failure by reverting the redesign —
+  update or retire that lock once the ninja-polish/race-to-top work is
+  actually finished and committed (it explicitly removes ledge-grabbing by
+  design), not before.
 
 ### Q-0004 — P2 — PhantomForce send adapter is planned-disabled
 
