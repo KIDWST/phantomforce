@@ -528,9 +528,38 @@ function modelLabel(modelId) {
   return MODEL_LABELS[modelId] || modelId;
 }
 
-function renderModel(card) {
+// Compact form for the one-line tile readout ("Sonnet 5", not
+// "Claude - Sonnet 5" — the provider already opens the line).
+function shortModelLabel(modelId) {
+  return modelLabel(modelId).replace(/^Claude - /, "");
+}
+
+// Full telemetry readout for a tile: provider · model · in/out/cache tokens
+// · context % · cost — all from the latest real `tokens` WS payload. Falls
+// back to the old model-only display when only a model id is known.
+function renderUsage(card) {
   const el = document.querySelector(`.tile[data-uid="${card.uid}"] .tile-model`);
   if (!el) return;
+  const u = card.usage;
+  if (u && u.model && window.UsageFormat) {
+    el.textContent = window.UsageFormat.usageLine({
+      provider: u.provider ?? card.profileId,
+      modelLabel: shortModelLabel(u.model),
+      inputTokens: u.inputTokens,
+      outputTokens: u.outputTokens,
+      cacheTokens: u.cacheTokens,
+      contextPercent: u.contextPercent,
+      costUsd: u.costUsd,
+      estimated: u.estimated,
+    });
+    el.title =
+      u.attribution === "ambiguous"
+        ? "Estimated — several sessions share this folder's Claude transcript directory, so attribution is ambiguous"
+        : u.estimated
+          ? "Estimated — no real usage data found yet for this session"
+          : "Live usage from this session's real CLI transcript";
+    return;
+  }
   if (!card.tokenModel) {
     el.textContent = "";
     return;
@@ -552,6 +581,90 @@ setInterval(() => {
     if (card.startedAt) renderRuntime(card);
   }
 }, 1000);
+
+// ---- usage totals bar + spending-limit banner --------------------------------
+
+let lastUsageSummary = null;
+
+async function refreshUsageSummary() {
+  try {
+    const res = await api("/api/usage/summary");
+    const data = await res.json();
+    if (!data.ok) return;
+    lastUsageSummary = data;
+    renderUsageTotals(data);
+  } catch {
+    /* engine offline — leave the last known totals */
+  }
+}
+
+function renderUsageTotals(summary) {
+  const btn = document.getElementById("usage-totals");
+  if (!btn) return;
+  const fmt = window.UsageFormat;
+  const usd = (x) => (fmt ? fmt.formatUsd(x) || "$0.00" : `$${(x ?? 0).toFixed(2)}`);
+  btn.textContent = `Session ${usd(summary.sessionTotalUsd)} · Today ${usd(summary.todayTotalUsd)}`;
+  btn.dataset.state = summary.limitState || "ok";
+  const bits = [];
+  if (summary.limits?.sessionLimitUsd != null) bits.push(`session limit ${usd(summary.limits.sessionLimitUsd)}`);
+  if (summary.limits?.dailyLimitUsd != null) bits.push(`daily limit ${usd(summary.limits.dailyLimitUsd)}`);
+  btn.title = `API spend from real usage data. ${bits.length ? bits.join(", ") : "No spending limits configured."} Click for per-terminal detail.`;
+  if (!document.getElementById("usage-popover").classList.contains("hidden")) renderUsagePopover();
+}
+
+// Per-tile spend detail. Costs are only ever real or omitted: an unpriced
+// model shows "—", estimated rows keep their "~".
+function renderUsagePopover() {
+  const pop = document.getElementById("usage-popover");
+  const summary = lastUsageSummary;
+  const fmt = window.UsageFormat;
+  if (!pop || !summary || !fmt) return;
+  const rows = summary.perSession.map((p) => {
+    const card = cards.find((c) => c.sessionId === p.sessionId);
+    const label = card?.name || card?.profileId || p.name || p.sessionId;
+    const cost = fmt.formatUsd(p.costUsd) || "—";
+    const tokens = `in ${fmt.formatTokens(p.inputTokens)} out ${fmt.formatTokens(p.outputTokens)}`;
+    return (
+      `<div class="usage-row"><span class="usage-row-name">${escapeHtml(label)}</span>` +
+      `<span class="usage-row-detail">${escapeHtml(p.model ? shortModelLabel(p.model) : p.provider || "")} · ${escapeHtml(tokens)}</span>` +
+      `<span class="usage-row-cost">${escapeHtml(p.estimated ? `~${cost}` : cost)}</span></div>`
+    );
+  });
+  pop.innerHTML =
+    `<div class="usage-pop-head">Per-terminal spend</div>` +
+    (rows.length ? rows.join("") : `<div class="usage-row-empty">No usage data yet — open a Claude or OpenRouter terminal and run a prompt.</div>`) +
+    `<div class="usage-pop-foot">Today ${escapeHtml(fmt.formatUsd(summary.todayTotalUsd) || "$0.00")} · limit state ${escapeHtml(summary.limitState)}</div>`;
+}
+
+function toggleUsagePopover() {
+  const pop = document.getElementById("usage-popover");
+  const btn = document.getElementById("usage-totals");
+  const willShow = pop.classList.contains("hidden");
+  pop.classList.toggle("hidden", !willShow);
+  btn.setAttribute("aria-expanded", String(willShow));
+  if (willShow) {
+    const r = btn.getBoundingClientRect();
+    pop.style.left = `${Math.max(12, Math.min(r.left, window.innerWidth - 292))}px`;
+    pop.style.top = `${r.bottom + 8}px`;
+    pop.style.right = "auto";
+    renderUsagePopover();
+  }
+}
+
+function renderLimitBanner(msg) {
+  const banner = document.getElementById("limit-banner");
+  if (!banner) return;
+  if (!msg || msg.state === "ok") {
+    banner.classList.add("hidden");
+    banner.textContent = "";
+    return;
+  }
+  banner.dataset.state = msg.state;
+  banner.textContent = msg.message || (msg.state === "over" ? "Spending limit reached." : "Approaching spending limit.");
+  banner.classList.remove("hidden");
+}
+
+setInterval(refreshUsageSummary, 5000);
 
 function setCardProfile(card, profileId) {
   card.profileId = profileId || null;
@@ -659,11 +772,15 @@ function openTerminal(card, sessionId) {
         card.lastLedgerEvent = msg.event;
         if (card.role && typeof window.onMissionActivity === "function") window.onMissionActivity(card);
       } else if (msg.type === "tokens") {
+        card.usage = msg;
         if (msg.model) {
           card.tokenModel = msg.model;
           card.tokenEstimated = Boolean(msg.estimated);
-          renderModel(card);
         }
+        renderUsage(card);
+      } else if (msg.type === "limit") {
+        renderLimitBanner(msg);
+        refreshUsageSummary();
       }
     } catch {
       /* ignore */
@@ -950,6 +1067,8 @@ async function boot() {
   // *saved* but never started still don't come back — only live PTYs do.
   if (typeof restoreSessions === "function") await restoreSessions();
 
+  refreshUsageSummary();
+
   if (typeof applyAutoGrid === "function") applyAutoGrid();
 }
 
@@ -1046,6 +1165,18 @@ document.addEventListener("click", (e) => {
 });
 
 document.getElementById("rescan").addEventListener("click", loadProfiles);
+document.getElementById("usage-totals").addEventListener("click", (e) => {
+  e.stopPropagation();
+  toggleUsagePopover();
+});
+document.addEventListener("click", (e) => {
+  const pop = document.getElementById("usage-popover");
+  const btn = document.getElementById("usage-totals");
+  if (!pop.classList.contains("hidden") && !pop.contains(e.target) && !btn.contains(e.target)) {
+    pop.classList.add("hidden");
+    btn.setAttribute("aria-expanded", "false");
+  }
+});
 document.getElementById("broadcast").addEventListener("click", () => toggleBroadcast());
 document.getElementById("overlay-close").addEventListener("click", closeOverlay);
 document.getElementById("overlay").addEventListener("click", (e) => {

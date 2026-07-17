@@ -897,6 +897,93 @@ input {
   }
 }
 
+/* ---- usage totals bar + spending-limit banner ---- */
+
+.usage-totals {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.usage-totals:empty {
+  display: none;
+}
+
+.usage-totals[data-state="warn"] {
+  border-color: rgba(229, 181, 75, 0.65);
+  color: #e5b54b;
+}
+
+.usage-totals[data-state="over"] {
+  border-color: rgba(236, 47, 69, 0.7);
+  color: #ec2f45;
+}
+
+.usage-popover {
+  width: 280px;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.usage-pop-head {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.usage-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.usage-row-name {
+  flex: none;
+  max-width: 90px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.usage-row-detail {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #5c6879;
+}
+
+.usage-row-cost {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.usage-row-empty,
+.usage-pop-foot {
+  color: #5c6879;
+  font-size: 11px;
+}
+
+.limit-banner {
+  margin: 12px 22px 0;
+  padding: 9px 14px;
+  border-radius: 11px;
+  border: 1px solid rgba(229, 181, 75, 0.5);
+  background: rgba(229, 181, 75, 0.08);
+  color: #e5b54b;
+  font-size: 13px;
+}
+
+.limit-banner[data-state="over"] {
+  border-color: rgba(236, 47, 69, 0.6);
+  background: rgba(236, 47, 69, 0.08);
+  color: #ec2f45;
+}
+
+.limit-banner.hidden {
+  display: none;
+}
+
 .broadcast-banner {
   display: flex;
   align-items: center;

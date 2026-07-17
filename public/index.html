@@ -22,6 +22,7 @@
         </div>
       </div>
       <div class="controls">
+        <button id="usage-totals" class="ghost usage-totals" type="button" data-state="ok" title="API spend — session and today totals; click for per-terminal detail" aria-haspopup="true" aria-expanded="false"></button>
         <button id="broadcast" class="ghost" type="button" aria-pressed="false" title="Link terminals so typing in one goes to all linked ones">⇄ Link</button>
         <button id="su-compact-all" class="ghost" type="button" title="Toggle compact chrome on every tile">▦ Compact</button>
         <button id="su-templates-btn" class="ghost" type="button" title="Launch a saved group of terminals">▤ Templates</button>
@@ -35,6 +36,10 @@
     </header>
 
     <div id="su-status-strip" class="su-status-strip"></div>
+
+    <div id="limit-banner" class="limit-banner hidden" role="alert"></div>
+
+    <div id="usage-popover" class="popover usage-popover hidden" role="dialog" aria-label="Per-terminal API spend"></div>
 
     <div id="broadcast-banner" class="broadcast-banner hidden">
       <span class="pulse"></span> Link on — <b>Shift-click</b> terminals to link them, or <b>Ctrl+A</b> to link them all. Typing in one linked terminal is sent to all linked terminals.
@@ -108,6 +113,7 @@
 
     <script src="/vendor/xterm.js"></script>
     <script src="/vendor/addon-fit.js"></script>
+    <script type="module" src="/usage-format.js"></script>
     <script src="/app.js"></script>
     <script src="/session-restore.js"></script>
     <script src="/settings.js"></script>
