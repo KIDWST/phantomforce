@@ -13,6 +13,7 @@ assert.match(index, /data-command-widgets/u, "Dashboard must keep the expandable
 assert.match(index, /data-hero-sub/u, "Dashboard hero must have a data-backed operating briefing line.");
 assert.match(index, /data-hero-proof/u, "Dashboard hero must have a recent proof line for handled work.");
 assert.match(index, /data-decision-deck/u, "Dashboard must have a real-data decision deck mount.");
+assert.match(index, /data-command-snapshot/u, "Dashboard must have a 10-second command snapshot.");
 assert.match(index, /data-outcome-strip/u, "Dashboard must have a first-class active outcomes section.");
 assert.match(index, /data-operating-pulse/u, "Dashboard must show a compact operating pulse from real state.");
 assert.match(index, /data-execution-timeline/u, "Dashboard must show the You / Phantom / Results execution timeline.");
@@ -36,6 +37,12 @@ assert.match(main, /function operatingPulseItems\(\)/u,
   "Command dashboard should derive department pulse items from the real tool spine.");
 assert.match(main, /function renderOperatingPulse\(\)/u,
   "Command dashboard should render the compact operating pulse.");
+assert.match(main, /function commandSnapshotItems\(\)/u,
+  "Command dashboard should derive a 10-second snapshot from real state.");
+assert.match(main, /function renderCommandSnapshot\(\)/u,
+  "Command dashboard should render the 10-second command snapshot.");
+assert.match(main, /label:\s*"Health"[\s\S]*?label:\s*"Needs"[\s\S]*?label:\s*"Moving"[\s\S]*?label:\s*"Result"[\s\S]*?label:\s*"Next"/u,
+  "Command snapshot must summarize health, needs, movement, results, and next action.");
 assert.match(main, /function executionTimelineLanes\(\)/u,
   "Command dashboard should derive execution lanes from real state.");
 assert.match(main, /function renderExecutionTimeline\(\)/u,
@@ -116,6 +123,8 @@ assert.match(css, /\.cw-dock-node::before/u, "Command dock nodes should expose v
 assert.match(css, /\.hero2-proof\s*\{/u, "Recent handled proof line must have compact dashboard styling.");
 assert.match(css, /\.decision-deck\s*\{/u, "Decision deck must have compact command-center styling.");
 assert.match(css, /\.decision-intel\s*\{/u, "Decision deck must style why/evidence context compactly.");
+assert.match(css, /\.command-snapshot\s*\{/u, "Command snapshot must have compact command-center styling.");
+assert.match(css, /\.snap-grid\s*\{/u, "Command snapshot must scan as a compact grid.");
 assert.match(css, /\.outcome-strip\s*\{/u, "Active outcomes must have a dedicated command-center surface.");
 assert.match(css, /\.operating-pulse\s*\{/u, "Operating pulse must have a compact command-center surface.");
 assert.match(css, /@keyframes operatingPulse/u, "Operating pulse should animate department readiness, not decorative thinking.");

@@ -3644,7 +3644,7 @@ function accountAnalyticsRow(row, esc) {
     : oauthReady
       ? `<button class="btn btn-primary" type="button" data-an-oauth="${account.id}">Connect account</button>`
       : canManageSocialOAuthApps()
-        ? `<button class="btn btn-ghost" type="button" data-an-show-oauth-setup="${account.id}">Set up app</button>`
+        ? `<button class="btn btn-ghost" type="button" data-open-ws="settings" data-settings-target="media">Open Settings</button>`
         : `<button class="btn btn-ghost" type="button" disabled>Owner setup needed</button>`;
   return `<article class="an-channel-row ${feed ? "is-live" : "is-missing"}">
     <div class="an-channel-id"><span class="ch-dot" style="background:${account.color}"></span><span><b>${esc(account.name)}</b><i>${esc(account.handle || account.loginIdentity || "profile saved")}</i></span></div>
@@ -3691,163 +3691,26 @@ function analyticsReadinessCopy({ hasLiveMetrics, configuredCount, oauthReadyCou
   }
   return {
     tone: "blocked",
-    title: "Provider apps need setup first.",
+    title: "Social apps need setup in Settings.",
     body: canManageSocialOAuthApps()
-      ? "Add the platform app credentials once below. After that every org can connect accounts through OAuth."
+      ? "Provider app credentials are owner-only setup. Keep this page clean; manage them once in Settings."
       : "PhantomForce needs platform OAuth apps configured before this workspace can authorize social accounts.",
     action: canManageSocialOAuthApps()
-      ? `<button class="btn btn-primary" type="button" data-an-show-oauth-setup>Set up provider apps</button>`
+      ? `<button class="btn btn-primary" type="button" data-open-ws="settings" data-settings-target="media">Open Settings</button>`
       : `<button class="btn btn-ghost" type="button" disabled>Waiting on platform setup</button>`,
   };
-}
-
-function analyticsOAuthSetupInline(esc) {
-  if (!canManageSocialOAuthApps()) return "";
-  const setup = analyticsOAuthSetupState.setup || {};
-  const providers = Array.isArray(setup.providers) ? setup.providers : [];
-  const callbackUrl = setup.recommendedRedirectUri || setup.redirectUri || "https://admin.phantomforce.online/phantom-ai/ops/social-oauth/callback";
-  const missing = providers.filter((provider) => !provider.oauthConfigured);
-  const ready = providers.filter((provider) => provider.oauthConfigured);
-  const providerOptions = (providers.length ? providers : PLATFORMS)
-    .map((provider) => `<option value="${esc(provider.id)}">${esc(provider.name)}${provider.id === "instagram" ? " + Facebook" : ""}</option>`)
-    .join("");
-  const statusText = analyticsOAuthSetupState.loading
-    ? "Checking provider apps..."
-    : `${ready.length}/${providers.length || PLATFORMS.length} provider apps ready`;
-  const selectedProvider = missing[0] || providers[0] || null;
-  const selectedScopes = Array.isArray(selectedProvider?.scopes) ? selectedProvider.scopes : [];
-  return `<details class="an-oauth-setup" data-an-oauth-setup ${missing.length || analyticsOAuthSetupState.error ? "open" : ""}>
-    <summary>
-      <span>${svgIc("lock")} Provider app setup</span>
-      <b>${esc(statusText)}</b>
-    </summary>
-    <p>Set the platform app once. After that, any business user can click Connect account and approve with their signed-in browser. Posting permissions stay approval-gated.</p>
-    ${analyticsOAuthSetupState.error ? `<div class="an-flash">${esc(analyticsOAuthSetupState.error)}</div>` : ""}
-    <label class="an-oauth-callback">
-      <span>Use this callback URL in each provider console</span>
-      <input readonly value="${esc(callbackUrl)}" data-an-oauth-callback />
-    </label>
-    <div class="an-oauth-providers">
-      ${providers.length
-        ? providers.map((provider) => `<span class="${provider.oauthConfigured ? "is-ready" : "is-missing"}" title="${esc((provider.scopes || []).join(", "))}">${esc(provider.name)}${provider.id === "instagram" ? " + Facebook" : ""}</span>`).join("")
-        : `<span class="is-missing">Provider status loading</span>`}
-    </div>
-    ${selectedProvider ? `<div class="an-oauth-scope-card">
-      <div>
-        <b>${esc(selectedProvider.name)} setup</b>
-        <span>${esc(selectedProvider.idLabel || "Client ID")} + ${esc(selectedProvider.secretLabel || "Client secret")}</span>
-      </div>
-      ${selectedProvider.consoleUrl ? `<a class="btn btn-ghost" href="${esc(selectedProvider.consoleUrl)}" target="_blank" rel="noopener">Open provider console</a>` : ""}
-      <p>${selectedScopes.map((scope) => `<code>${esc(scope)}</code>`).join("")}</p>
-    </div>` : ""}
-    <form class="an-oauth-form" data-an-oauth-setup-form>
-      <select data-an-oauth-platform>${providerOptions}</select>
-      <input data-an-oauth-client-id autocomplete="off" placeholder="Client ID / App ID / Client key" />
-      <input data-an-oauth-client-secret autocomplete="off" placeholder="Client secret / App secret" type="password" />
-      <button class="btn btn-primary" type="submit">${analyticsOAuthSetupState.loading ? "Saving..." : "Save app"}</button>
-    </form>
-  </details>`;
-}
-
-function analyticsOAuthLaunchpad({ displayAccounts, configuredCount, oauthReadyCount, liveApiRows, esc }) {
-  const preflight = analyticsConnectorState.preflight || {};
-  const platforms = Array.isArray(preflight.platforms) ? preflight.platforms : [];
-  const stage = liveApiRows.length
-    ? "sync"
-    : configuredCount
-      ? "sync"
-      : oauthReadyCount
-        ? "connect"
-        : "setup";
-  const title = stage === "sync"
-    ? "Live accounts are ready to sync."
-    : stage === "connect"
-      ? "Connect with the signed-in browser."
-      : "Set up provider apps once.";
-  const body = stage === "sync"
-    ? "Authorized account tokens are stored server-side. Pull official metrics whenever you need a fresh report."
-    : stage === "connect"
-      ? "Click a channel below while you are already signed into that social account. PhantomForce never reads browser cookies; it only receives the provider OAuth callback."
-      : "Add each platform app ID and secret once. Then every workspace can connect their own social accounts from the browser.";
-  return `<section class="an-oauth-launchpad" data-an-oauth-launchpad>
-    <div class="an-oauth-launch-head">
-      <div>
-        <p class="ch-eyebrow">OAuth launchpad</p>
-        <h3>${esc(title)}</h3>
-        <p>${esc(body)}</p>
-      </div>
-      <div class="an-oauth-progress" aria-label="OAuth progress">
-        <span class="${oauthReadyCount ? "is-done" : "is-next"}"><b>1</b><i>App</i></span>
-        <span class="${configuredCount ? "is-done" : oauthReadyCount ? "is-next" : ""}"><b>2</b><i>Account</i></span>
-        <span class="${liveApiRows.length ? "is-done" : configuredCount ? "is-next" : ""}"><b>3</b><i>Feed</i></span>
-      </div>
-    </div>
-    <div class="an-oauth-platform-grid">
-      ${displayAccounts.map((account) => {
-        const connector = connectorStatus(account.id) || {};
-        const step = platforms.find((item) => item.id === account.id) || {};
-        const live = !!analyticsFeedForAccount(account) && account.connectMode === "live-api";
-        const authorized = !!connector.configured;
-        const appReady = !!connector.oauthConfigured;
-        const action = authorized
-          ? `<button class="btn btn-primary" type="button" data-an-sync="${account.id}">Sync</button>`
-          : appReady
-            ? `<button class="btn btn-primary" type="button" data-an-oauth="${account.id}">Connect</button>`
-            : canManageSocialOAuthApps()
-              ? `<button class="btn btn-ghost" type="button" data-an-show-oauth-setup="${account.id}">Set up app</button>`
-              : `<button class="btn btn-ghost" type="button" disabled>Owner setup</button>`;
-        const label = live
-          ? "live feed"
-          : authorized
-            ? "authorized"
-            : appReady
-              ? "ready for OAuth"
-              : "needs app";
-        return `<article class="an-oauth-platform ${live ? "is-live" : authorized ? "is-authorized" : appReady ? "is-ready" : "is-missing"}">
-          <div><span class="ch-dot" style="background:${account.color}"></span><b>${esc(account.name)}</b><i>${esc(label)}</i></div>
-          <p>${esc(step.nextDetail || connector.reason || "Set up OAuth to unlock official analytics.")}</p>
-          ${action}
-        </article>`;
-      }).join("")}
-    </div>
-  </section>`;
 }
 
 function analyticsReadinessPanel({ displayAccounts, liveApiRows, configuredCount, oauthReadyCount, hasLiveMetrics, esc }) {
   const totalCount = displayAccounts.length || 1;
   const copy = analyticsReadinessCopy({ hasLiveMetrics, configuredCount, oauthReadyCount, totalCount });
-  const missingApps = analyticsConnectorState.connectors
-    .filter((connector) => !connector.oauthConfigured)
-    .map((connector) => connector.name)
-    .slice(0, 4);
-  const readyApps = analyticsConnectorState.connectors
-    .filter((connector) => connector.oauthConfigured)
-    .map((connector) => connector.name)
-    .slice(0, 4);
-  const providerNote = oauthReadyCount
-    ? `Ready: ${readyApps.join(", ")}${analyticsConnectorState.connectors.filter((c) => c.oauthConfigured).length > readyApps.length ? "…" : ""}`
-    : `Missing: ${missingApps.join(", ") || "provider apps"}`;
-  const preflight = analyticsConnectorState.preflight || {};
-  const nextLabel = preflight.nextGlobalLabel || (liveApiRows.length ? "Sync live feed" : oauthReadyCount ? "Connect accounts" : "Set up provider apps");
-  const nextDetail = preflight.nextGlobalAction === "connect_signed_in_account"
-    ? "Use your signed-in browser once per channel. PhantomForce stores the token on the server and never reads browser cookies."
-    : preflight.nextGlobalAction === "sync_live_feed"
-      ? "Authorized accounts are ready for official read-only metrics sync."
-      : "Provider apps are the one-time unlock before any business can use signed-in OAuth.";
-  return `<section class="an-readiness is-${copy.tone}" aria-label="Social live feed readiness">
+  return `<section class="an-readiness an-readiness-slim is-${copy.tone}" aria-label="Social live feed readiness">
     <div class="an-readiness-main">
       <p class="ch-eyebrow">Live feed setup</p>
       <h3>${copy.title}</h3>
       <p>${copy.body}</p>
-      <p class="an-next-step"><b>Next:</b> ${esc(nextLabel)} · ${esc(nextDetail)}</p>
-    </div>
-    <div class="an-readiness-steps">
-      <span class="${oauthReadyCount ? "is-done" : "is-next"}"><b>${oauthReadyCount}/${totalCount}</b><i>provider apps</i><em>${providerNote}</em></span>
-      <span class="${configuredCount ? "is-done" : oauthReadyCount ? "is-next" : ""}"><b>${configuredCount}/${totalCount}</b><i>accounts authorized</i><em>signed-in browser OAuth</em></span>
-      <span class="${liveApiRows.length ? "is-done" : configuredCount ? "is-next" : ""}"><b>${liveApiRows.length}/${totalCount}</b><i>live feeds</i><em>real metrics reporting</em></span>
     </div>
     <div class="an-readiness-action">${copy.action}</div>
-    ${oauthReadyCount < totalCount ? analyticsOAuthSetupInline(esc) : ""}
   </section>`;
 }
 
@@ -3878,12 +3741,7 @@ function wireAnalyticsActions(el, accounts, opts) {
       const connector = connectorStatus(platform);
       analyticsNotice = connector?.oauthConfigured
         ? (error?.message || "The account connection could not start.")
-        : `${connector?.name || platform} needs its provider app saved first. Open the setup panel below, paste the app credentials, then connect the account with this browser.`;
-      const setupPanel = el.querySelector("[data-an-oauth-setup]");
-      if (setupPanel) {
-        setupPanel.open = true;
-        setupPanel.scrollIntoView({ behavior: "smooth", block: "center" });
-      }
+        : `${connector?.name || platform} needs its provider app saved in Settings before account authorization can start.`;
     } finally {
       renderAnalytics(el, opts);
     }
@@ -3920,49 +3778,6 @@ function wireAnalyticsActions(el, accounts, opts) {
   el.querySelectorAll("[data-an-scroll-sources]").forEach((button) => button.onclick = () => {
     el.querySelector("[data-an-sources]")?.scrollIntoView({ behavior: "smooth", block: "start" });
   });
-  el.querySelectorAll("[data-an-show-oauth-setup]").forEach((button) => button.onclick = () => {
-    const panel = el.querySelector("[data-an-oauth-setup]");
-    if (!panel) {
-      analyticsNotice = "Provider app setup is owner-only. Ask the workspace owner to save the platform app first.";
-      renderAnalytics(el, opts, { skipAutoRefresh: true });
-      return;
-    }
-    panel.open = true;
-    const platform = button.dataset.anShowOauthSetup || "";
-    const select = panel.querySelector("[data-an-oauth-platform]");
-    if (platform && select) select.value = platform === "facebook" ? "instagram" : platform;
-    panel.scrollIntoView({ behavior: "smooth", block: "center" });
-  });
-  const callbackInput = el.querySelector("[data-an-oauth-callback]");
-  if (callbackInput) callbackInput.onclick = () => {
-    callbackInput.select();
-    navigator.clipboard?.writeText(callbackInput.value).catch(() => {});
-  };
-  const setupForm = el.querySelector("[data-an-oauth-setup-form]");
-  if (setupForm) setupForm.onsubmit = async (event) => {
-    event.preventDefault();
-    const platform = setupForm.querySelector("[data-an-oauth-platform]")?.value || "";
-    const clientId = setupForm.querySelector("[data-an-oauth-client-id]")?.value.trim() || "";
-    const clientSecret = setupForm.querySelector("[data-an-oauth-client-secret]")?.value.trim() || "";
-    const redirectUri = callbackInput?.value || "";
-    if (!clientId && !clientSecret) {
-      analyticsNotice = "Paste the provider app ID or secret before saving.";
-      renderAnalytics(el, opts, { skipAutoRefresh: true });
-      return;
-    }
-    try {
-      analyticsOAuthSetupState.loading = true;
-      analyticsNotice = `Saving ${platform} provider app...`;
-      renderAnalytics(el, opts, { skipAutoRefresh: true });
-      await saveAnalyticsOAuthAppSetup({ platform, clientId, clientSecret, redirectUri });
-      analyticsNotice = `${platform} provider app saved. Connect the account below with the signed-in browser.`;
-    } catch (error) {
-      analyticsNotice = error?.message || "Provider app setup could not be saved.";
-    } finally {
-      analyticsOAuthSetupState.loading = false;
-      renderAnalytics(el, opts, { skipAutoRefresh: true });
-    }
-  };
 }
 export function renderAnalytics(el, opts = {}, renderOptions = {}) {
   analyticsMount = el;
@@ -4002,7 +3817,6 @@ export function renderAnalytics(el, opts = {}, renderOptions = {}) {
       </section>
       ${analyticsNotice || analyticsConnectorState.error ? `<div class="an-flash">${esc(analyticsNotice || analyticsConnectorState.error)}</div>` : ""}
       ${analyticsReadinessPanel({ displayAccounts, liveApiRows, configuredCount, oauthReadyCount, hasLiveMetrics, esc })}
-      ${analyticsOAuthLaunchpad({ displayAccounts, configuredCount, oauthReadyCount, liveApiRows, esc })}
       <div class="ch-kpis an-kpis">
         ${hasLiveMetrics
           ? `${kpi("Reach", K(totals.reach), "reported reach")}${kpi("Views", K(totals.impressions), "views + impressions")}${kpi("Engagement", K(totals.engagement), "likes + comments + shares")}${kpi("Followers", K(totals.followers), "latest reported total")}`
