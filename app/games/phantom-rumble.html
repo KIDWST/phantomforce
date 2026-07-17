@@ -132,7 +132,7 @@ host('request-seed');
 
 /* ---------- fighters ---------- */
 const PALETTE=[{name:'EMBER',c:'#4ade80',glow:'#22c55e'},{name:'CIPHER',c:'#5eead4',glow:'#14b8a6'},{name:'HEX',c:'#f0abfc',glow:'#d946ef'},{name:'VOLT',c:'#fde047',glow:'#eab308'}];
-let fighters=[],pickups=[],particles=[],floaters=[],rings=[],mode='',running=false,paused=false,over=false,last=0,shake=0,slowmo=0,pickupTimer=6,reduced=false,soundOn=true,matchKos=[0,0,0,0],raf=0;
+let fighters=[],pickups=[],particles=[],floaters=[],rings=[],projectiles=[],mode='',running=false,paused=false,over=false,last=0,shake=0,slowmo=0,pickupTimer=6,reduced=false,soundOn=true,matchKos=[0,0,0,0],raf=0;
 
 /* ---------- persistent mute ----------
    A real always-visible mute control, not just a host settings toggle —
@@ -206,7 +206,7 @@ function startMatch(selected){
   fighters=[];
   for(let i=0;i<count;i++)fighters.push(makeFighter(i,i<humans));
   buildPlatforms(nextSeed());
-  pickups=[];particles=[];floaters=[];rings=[];matchKos=[0,0,0,0];pickupTimer=6;over=false;running=true;paused=false;
+  pickups=[];particles=[];floaters=[];rings=[];projectiles=[];matchKos=[0,0,0,0];pickupTimer=6;over=false;running=true;paused=false;
   setupEl.hidden=true;endEl.hidden=true;hudEl.hidden=false;
   document.querySelector('[data-touch]').hidden=fighters.some(f=>f.human&&f.slot===0)?false:true;
   buildHud();last=performance.now();if(raf)cancelAnimationFrame(raf);raf=requestAnimationFrame(loop);
@@ -320,7 +320,13 @@ function dodge(f){
 function attack(f,heavy){
   if(f.attackCd>0)return;
   if(f.shieldHeld)return;
-  f.attackCd=heavy?.55:.28;f.anim=heavy?.3:.18;
+  if(!heavy&&f.shurikenArmed){
+    f.shurikenArmed=false;f.attackCd=.28;f.anim=.14;
+    projectiles.push({x:f.x+f.face*.03,y:f.y-.14,vx:f.face*.045,owner:f.slot,color:f.color,life:1.4,dmg:6,kb:.011});
+    spawnBurst(f.x+f.face*.03,f.y-.14,f.color,6);sfx('hit');
+    return;
+  }
+  f.attackCd=(heavy?.55:.28)*(f.speedBuff>0?.75:1);f.anim=heavy?.3:.18;
   const reach=heavy?.085:.06;
   const power=f.power?2:1;
   if(f.power){f.power=false;spawnBurst(f.x,f.y,'#ffffff',14)}
@@ -443,14 +449,15 @@ function wallBonk(f,side){
 }
 function step(f,dt){
   if(f.dead)return;
-  f.invuln=Math.max(0,f.invuln-dt);f.stun=Math.max(0,f.stun-dt);f.attackCd=Math.max(0,f.attackCd-dt);f.anim=Math.max(0,f.anim-dt);f.parry=Math.max(0,f.parry-dt);f.dodgeCd=Math.max(0,f.dodgeCd-dt);
+  f.invuln=Math.max(0,f.invuln-dt);f.stun=Math.max(0,f.stun-dt);f.attackCd=Math.max(0,f.attackCd-dt);f.anim=Math.max(0,f.anim-dt);f.parry=Math.max(0,f.parry-dt);f.dodgeCd=Math.max(0,f.dodgeCd-dt);f.smokeCooldown=Math.max(0,f.smokeCooldown-dt);f.speedBuff=Math.max(0,f.speedBuff-dt);
   if(f.charge>0)f.charge=Math.min(1,f.charge+dt);
   if(f.stun<=0){
     if(f.human){
       if(gpEnabled)applyGamepadInput(f);
       const dir=heldDir(f);
       if(dir)f.face=dir;
-      f.vx+=dir*(f.shieldHeld?.0007:.0018)*(dt*60);
+      const speedMul=f.speedBuff>0?1.35:1;
+      f.vx+=dir*(f.shieldHeld?.0007:.0018)*speedMul*(dt*60);
     }else botThink(f,dt);
   }
   f.vx*=f.grounded?.82:.94;
@@ -530,6 +537,26 @@ function stepParticles(dt){
   floaters=floaters.filter(f=>f.life>0);
   for(const r of rings){r.r+=dt*.28;r.life-=dt}
   rings=rings.filter(r=>r.life>0);
+}
+function stepProjectiles(dt){
+  for(const p of projectiles){
+    p.x+=p.vx*(dt*60);p.life-=dt;
+    if(p.hit)continue;
+    for(const t of fighters){
+      if(t.dead||t.slot===p.owner||t.invuln>0)continue;
+      if(Math.abs(t.x-p.x)<.025&&Math.abs(t.y-p.y)<.08){
+        p.hit=true;p.life=0;
+        if(t.shieldHeld){shake=Math.min(1,shake+.12);addFloater(t.x,t.y-.11,'BLOCK',t.glow,14);sfx('jump');continue}
+        t.pct=Math.min(300,t.pct+p.dmg);
+        const kb=p.kb*(1+t.pct/60);
+        t.vx=Math.sign(p.vx||1)*kb;t.vy=-kb*.7;t.stun=.22;t.grounded=false;
+        spawnBurst(t.x,t.y,p.color,12);addFloater(t.x,t.y-.09,`HIT +${p.dmg}%`,p.color,15);sfx('hit');
+        updateHud();
+      }
+    }
+    if(p.x<ARENA.left-.02||p.x>ARENA.right+.02)p.life=0;
+  }
+  projectiles=projectiles.filter(p=>p.life>0);
 }
 
 /* ---------- HUD ---------- */
@@ -664,6 +691,14 @@ function drawPickup(p,t){
   if(p.kind==='bomb'){ctx.shadowColor='#fb923c';ctx.fillStyle=p.fuse!==null&&p.fuse>0?(Math.floor(p.fuse*10)%2?'#fb923c':'#fff'):'#fb923c';ctx.font=`${16*DPR}px ui-monospace`;ctx.fillText('◉',bx-8*DPR,by)}
   ctx.shadowBlur=0;
 }
+function drawProjectile(p){
+  ctx.save();ctx.translate(px(p.x),py(p.y));ctx.rotate(performance.now()*.02);
+  ctx.fillStyle=p.color;ctx.shadowBlur=10*DPR;ctx.shadowColor=p.color;
+  ctx.beginPath();
+  for(let i=0;i<4;i++){const a=i*Math.PI/2;ctx.lineTo(Math.cos(a)*5*DPR,Math.sin(a)*5*DPR);ctx.lineTo(Math.cos(a+Math.PI/4)*2*DPR,Math.sin(a+Math.PI/4)*2*DPR)}
+  ctx.closePath();ctx.fill();ctx.shadowBlur=0;
+  ctx.restore();
+}
 function draw(t){
   ctx.clearRect(0,0,W,H);
   ctx.save();
@@ -675,6 +710,7 @@ function draw(t){
   ctx.globalAlpha=1;
   drawStage();
   for(const p of pickups)drawPickup(p,t);
+  for(const p of projectiles)drawProjectile(p);
   for(const r of rings){ctx.globalAlpha=Math.max(0,r.life/.45);ctx.strokeStyle=r.color;ctx.lineWidth=3*DPR;ctx.beginPath();ctx.arc(px(r.x),py(r.y),px(r.r),0,Math.PI*2);ctx.stroke()}
   for(const f of fighters)drawFighter(f,t);
   for(const p of particles){ctx.globalAlpha=Math.max(0,p.life);ctx.fillStyle=p.color;ctx.fillRect(px(p.x),py(p.y),p.size*DPR,p.size*DPR)}
@@ -697,6 +733,7 @@ function loop(t){
   tickBombs(dt);
   for(const f of fighters)step(f,dt);
   stepParticles(dt);
+  stepProjectiles(dt);
   draw(t);
   raf=requestAnimationFrame(loop);
 }
@@ -708,7 +745,7 @@ document.querySelector('[data-menu]').onclick=()=>resetToMenu();
 function resetToMenu(){
   cancelAnimationFrame(raf);
   running=false;paused=false;over=false;mode='';
-  fighters=[];pickups=[];particles=[];floaters=[];rings=[];matchKos=[0,0,0,0];stats={wins:0,matches:0,bestKos:0};pickupTimer=6;shake=0;slowmo=0;keys.clear();
+  fighters=[];pickups=[];particles=[];floaters=[];rings=[];projectiles=[];matchKos=[0,0,0,0];stats={wins:0,matches:0,bestKos:0};pickupTimer=6;shake=0;slowmo=0;keys.clear();
   document.body.classList.remove('paused');
   hudEl.hidden=true;endEl.hidden=true;setupEl.hidden=false;
   const touch=document.querySelector('[data-touch]');
