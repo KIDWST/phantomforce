@@ -6,20 +6,20 @@
  * instead of sending people out to another product.
  */
 
-import { currentTenantId, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260714-006";
+import { currentTenantId, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260717-12";
 import {
   PLATFORMS, registerContentAsset, loadSocialAccounts, saveSocialAccounts, socialStatus,
   loadContentAssets, saveContentAssets, contentAssetDisplayUrl, hydrateContentAssetUrl,
-} from "./contenthub.js?v=phantom-live-20260714-006";
-import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260714-006";
+} from "./contenthub.js?v=phantom-live-20260717-12";
+import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260717-12";
 import {
-  addImageLayer, addTextLayer, cloneImageEditState, compositionSnapshot, duplicateLayer,
+  addImageLayer, addTextLayer, alignSelectedLayers, cloneImageEditState, compositionSnapshot, distributeSelectedLayers, duplicateLayer,
   freshComposition, hitTestLayer, loadCompositionImages, moveLayerOrder, pushEditorSnapshot,
-  removeSelectedLayers, renderComposition, restoreComposition, selectLayer, selectedLayers,
-} from "./content-editor.js?v=phantom-live-20260714-006";
-import { loadImageForEditing, exportCanvas, requestAiEdit, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260714-006";
-import { mountVideoEditor } from "./videocut.js?v=phantom-live-20260714-006";
-import { assetsAvailable, assetBlobUrl, listAssets, recordAssetUsage, saveToAssetCloud, listLocalAssets, refreshLocalAssets, localAssetBlobUrl } from "./orgs.js?v=phantom-live-20260714-006";
+  removeSelectedLayers, renderComposition, restoreComposition, selectAllLayers, selectLayer, selectedLayers,
+} from "./content-editor.js?v=phantom-live-20260717-12";
+import { loadImageForEditing, exportCanvas, requestAiEdit, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260717-12";
+import { mountVideoEditor } from "./videocut.js?v=phantom-live-20260717-12";
+import { assetsAvailable, assetBlobUrl, listAssets, recordAssetUsage, saveToAssetCloud, listLocalAssets, refreshLocalAssets, localAssetBlobUrl } from "./orgs.js?v=phantom-live-20260717-12";
 
 const CFG_KEY = "pf.medialab.v1";
 const EDIT_INTENT_KEY = "pf.medialab.editIntent.v1";
@@ -2646,12 +2646,18 @@ function selectedLayerPanelHtml(esc) {
   ensureEditorComposition();
   const active = selectedEditLayer();
   const canDelete = active && active.id !== "base" && !active.locked;
+  const editableSelection = selectedLayers(mlComposition).filter((layer) => layer.id !== "base" && !layer.locked);
+  const canAlign = editableSelection.length > 0;
+  const canDistribute = editableSelection.length >= 3;
+  const canSelectAll = mlComposition.layers.some((layer) => layer.id !== "base" && !layer.locked && layer.visible !== false);
+  const activeLocked = !!active?.locked;
   return `
     <details class="ml-edit-section" open>
       <summary><span>Layers</span><b>${mlComposition.layers.length}</b></summary>
       <div class="ml-edit-section-body">
         <div class="ml-layer-actions">
           <button type="button" data-ml-layer-add-text>${svgIc("edit")} Text</button>
+          <button type="button" data-ml-layer-select-all ${canSelectAll ? "" : "disabled"}>Select all</button>
           <button type="button" data-ml-layer-duplicate ${canDelete ? "" : "disabled"}>${svgIc("copy")} Duplicate</button>
           <button type="button" data-ml-layer-delete ${canDelete ? "" : "disabled"}>${svgIc("close")} Delete</button>
         </div>
@@ -2671,6 +2677,21 @@ function selectedLayerPanelHtml(esc) {
         </div>
         ${active ? `<div class="ml-layer-inspector">
           <div class="ml-layer-inspector-head"><b>${esc(active.name || layerKindLabel(active))}</b><span>${esc(layerKindLabel(active))}</span></div>
+          <div class="ml-layer-transform-actions">
+            <button type="button" data-ml-layer-reset-transform ${activeLocked ? "disabled" : ""}>Reset</button>
+          </div>
+          <div class="ml-layer-align-actions" role="group" aria-label="Align selected layers">
+            ${[
+              ["left", "Left"],
+              ["hcenter", "Center"],
+              ["right", "Right"],
+              ["top", "Top"],
+              ["vcenter", "Middle"],
+              ["bottom", "Bottom"],
+            ].map(([mode, label]) => `<button type="button" data-ml-layer-align="${esc(mode)}" ${canAlign ? "" : "disabled"}>${esc(label)}</button>`).join("")}
+            <button type="button" data-ml-layer-distribute="x" ${canDistribute ? "" : "disabled"}>Distribute X</button>
+            <button type="button" data-ml-layer-distribute="y" ${canDistribute ? "" : "disabled"}>Distribute Y</button>
+          </div>
           <label class="ml-layer-field"><span>Name</span><input data-ml-layer-field="name" value="${esc(active.name || "")}" ${active.id === "base" ? "" : ""}/></label>
           <label class="ml-slider"><span>X <b data-layer-out="x">${Math.round(active.x * 100)}</b></span><input type="range" min="0" max="100" value="${Math.round(active.x * 100)}" data-ml-layer-prop="x"/></label>
           <label class="ml-slider"><span>Y <b data-layer-out="y">${Math.round(active.y * 100)}</b></span><input type="range" min="0" max="100" value="${Math.round(active.y * 100)}" data-ml-layer-prop="y"/></label>
@@ -3258,6 +3279,64 @@ function renderEdit(body, cfg, opts, root) {
     rememberEdit();
     removeSelectedLayers(mlComposition);
     renderMediaStudio(root, opts);
+  });
+  body.querySelector("[data-ml-layer-reset-transform]")?.addEventListener("click", () => {
+    const layer = selectedEditLayer();
+    if (!layer || layer.locked) return;
+    rememberEdit();
+    layer.x = 0.5;
+    layer.y = 0.5;
+    layer.rotation = 0;
+    layer.opacity = 1;
+    layer.blend = "source-over";
+    if (layer.type === "text") {
+      layer.w = 0.78;
+      layer.h = 0.18;
+    } else if (layer.type === "image") {
+      layer.w = 0.52;
+      layer.h = 0.52;
+      layer.fit = "contain";
+    } else {
+      layer.w = 1;
+      layer.h = 1;
+    }
+    renderMediaStudio(root, opts);
+  });
+  body.querySelectorAll("[data-ml-layer-align]").forEach((button) => {
+    button.onclick = () => {
+      rememberEdit();
+      if (!alignSelectedLayers(mlComposition, button.dataset.mlLayerAlign)) {
+        mlEditHistory.pop();
+        return;
+      }
+      renderMediaStudio(root, opts);
+    };
+  });
+  body.querySelectorAll("[data-ml-layer-distribute]").forEach((button) => {
+    button.onclick = () => {
+      rememberEdit();
+      if (!distributeSelectedLayers(mlComposition, button.dataset.mlLayerDistribute)) {
+        mlEditHistory.pop();
+        return;
+      }
+      renderMediaStudio(root, opts);
+    };
+  });
+  const selectAllEditableLayers = () => {
+    selectAllLayers(mlComposition);
+    mlComposition.selectedIds = mlComposition.selectedIds.filter((id) => {
+      const layer = mlComposition.layers.find((item) => item.id === id);
+      return layer && layer.id !== "base" && !layer.locked && layer.visible !== false;
+    });
+    if (!mlComposition.selectedIds.length) {
+      mlComposition.selectedIds = ["base"];
+      return false;
+    }
+    renderMediaStudio(root, opts);
+    return true;
+  };
+  body.querySelector("[data-ml-layer-select-all]")?.addEventListener("click", () => {
+    selectAllEditableLayers();
   });
   body.querySelectorAll("[data-ml-layer-prop]").forEach((input) => {
     input.onpointerdown = () => rememberEdit();
