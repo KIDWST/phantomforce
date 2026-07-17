@@ -78,3 +78,29 @@ test("readClaudeUsage sums usage across assistant turns from a real-shaped trans
     assert.equal(usage.model, "claude-sonnet-5");
   });
 });
+
+test("readClaudeUsage reports cacheTokens and the latest turn's input (input+cache of the newest assistant message)", async () => {
+  await withTempClaudeProjects(async (claudeProjectsDir) => {
+    const file = path.join(claudeProjectsDir, "session.jsonl");
+    const line1 = JSON.stringify({
+      type: "assistant",
+      message: { model: "claude-sonnet-5", usage: { input_tokens: 2, cache_creation_input_tokens: 100, cache_read_input_tokens: 50, output_tokens: 20 } },
+    });
+    const line2 = JSON.stringify({
+      type: "assistant",
+      message: { model: "claude-sonnet-5", usage: { input_tokens: 3, cache_creation_input_tokens: 0, cache_read_input_tokens: 400, output_tokens: 30 } },
+    });
+    await writeFile(file, `${line1}\n${line2}\n`, "utf8");
+
+    const usage = await readClaudeUsage(file);
+    assert.equal(usage.cacheTokens, 100 + 50 + 0 + 400);
+    // Last turn = second assistant line only: 3 + 0 + 400.
+    assert.equal(usage.lastTurnInputTokens, 3 + 0 + 400);
+  });
+});
+
+test("readClaudeUsage on an unreadable file reports zeroed cache/last-turn fields too", async () => {
+  const usage = await readClaudeUsage(path.join(os.tmpdir(), "termina-definitely-missing.jsonl"));
+  assert.equal(usage.cacheTokens, 0);
+  assert.equal(usage.lastTurnInputTokens, 0);
+});

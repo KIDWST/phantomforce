@@ -35,6 +35,8 @@ import { CONNECTION_PROVIDERS, readConnections, removeConnection, saveConnection
 import { createFrameRecorder, readFrames } from "./mission/recorder.js";
 import { maybeCheckpoint, readCheckpoints } from "./mission/checkpoint.js";
 import { TOKEN_ADAPTERS, estimateFromChars, costForUsage } from "./mission/tokens.js";
+import { shouldPollSession, resolveSoloTranscript } from "./mission/usage-poll.js";
+import { contextPercent } from "./mission/model-catalog.js";
 import os from "node:os";
 
 const appDir = path.dirname(fileURLToPath(import.meta.url));
@@ -72,10 +74,10 @@ function feedDetector(session, data) {
     session.lastDetected = result;
     if (session.capture) captureDetection(session, result);
     broadcastStatus(session, result);
-    if (session.missionId) {
-      feedMissionProtocol(session, result.raw);
-      pollTokenUsage(session).catch(() => {});
-    }
+    if (session.missionId) feedMissionProtocol(session, result.raw);
+    // Not mission-gated: any session whose provider has a real token adapter
+    // (mission worker OR solo claude/openrouter tile) gets live telemetry.
+    if (shouldPollSession(session)) pollTokenUsage(session).catch(() => {});
   }, DETECTOR_TICK_MS);
 }
 
@@ -108,6 +110,11 @@ function feedMissionProtocol(session, raw) {
 // recorder's own byte count. Pushed to clients and rolled up into
 // tokens.json — never silently treated as equal-confidence to real data.
 async function pollTokenUsage(session) {
+  if (session.missionId) return pollMissionTokenUsage(session);
+  return pollSoloTokenUsage(session);
+}
+
+async function pollMissionTokenUsage(session) {
   const mission = missionStore.readMission(appDir, session.missionId);
   const worker = mission?.workers.find((w) => w.id === session.workerId);
   if (!worker) return;
@@ -120,7 +127,13 @@ async function pollTokenUsage(session) {
     const transcript = await adapter.findTranscript(worker.cwd, claudeProjectsDir, worker.usageLogPath);
     if (transcript) {
       const real = await adapter.readUsage(transcript);
-      usage = { inputTokens: real.inputTokens, outputTokens: real.outputTokens, model: real.model };
+      usage = {
+        inputTokens: real.inputTokens,
+        outputTokens: real.outputTokens,
+        cacheTokens: real.cacheTokens ?? 0,
+        lastTurnInputTokens: real.lastTurnInputTokens ?? null,
+        model: real.model,
+      };
       adapterCostUsd = typeof real.costUsd === "number" ? real.costUsd : null;
       estimated = false;
     }
@@ -129,15 +142,77 @@ async function pollTokenUsage(session) {
     const frames = await readFrames(appDir, session.missionId, session.workerId);
     const charCount = (frames ?? []).reduce((sum, f) => sum + f.data.length, 0);
     const est = estimateFromChars(charCount);
-    usage = { inputTokens: est.inputTokens, outputTokens: est.outputTokens, model: null };
+    usage = { inputTokens: est.inputTokens, outputTokens: est.outputTokens, cacheTokens: 0, lastTurnInputTokens: null, model: null };
   }
-  const costUsd = adapterCostUsd ?? costForUsage({ model: usage.model, inputTokens: usage.inputTokens, outputTokens: usage.outputTokens });
+  const costUsd =
+    adapterCostUsd ??
+    costForUsage({ model: usage.model, inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, cacheTokens: usage.cacheTokens });
+  const snapshot = {
+    ...usage,
+    provider: worker.provider,
+    contextPercent: contextPercent(usage.model, usage.lastTurnInputTokens),
+    costUsd,
+    estimated,
+  };
+  recordUsageSnapshot(session, snapshot);
 
-  const payload = JSON.stringify({ type: "tokens", workerId: session.workerId, ...usage, costUsd, estimated });
+  const payload = JSON.stringify({ type: "tokens", sessionId: session.id, workerId: session.workerId, ...snapshot });
   for (const socket of session.sockets) {
     if (socket.readyState === socket.OPEN) socket.send(payload);
   }
   await missionStore.writeTokens(appDir, session.missionId, session.workerId, { ...usage, costUsd, estimated }).catch(() => {});
+}
+
+// Solo tiles: real transcript data only — there is no frames-based estimate
+// here (recordings are mission-only), so a tile with no readable transcript
+// simply shows nothing rather than something invented. A shared project dir
+// with several concurrently-advancing transcripts cannot be attributed with
+// certainty, so that data is flagged estimated + attribution:"ambiguous"
+// (QA ledger TQA-03) — never presented as real.
+async function pollSoloTokenUsage(session) {
+  const adapter = TOKEN_ADAPTERS[session.provider];
+  if (!adapter || !session.cwd) return;
+
+  let transcript = null;
+  let ambiguous = false;
+  if (session.provider === "claude") {
+    const found = await resolveSoloTranscript(session.cwd, claudeProjectsDir, session.startedAt);
+    if (!found) return;
+    transcript = found.path;
+    ambiguous = found.ambiguous;
+  } else {
+    transcript = await adapter.findTranscript(session.cwd, claudeProjectsDir, session.usageLogPath);
+  }
+  if (!transcript) return;
+
+  const real = await adapter.readUsage(transcript);
+  const adapterCostUsd = typeof real.costUsd === "number" ? real.costUsd : null;
+  const costUsd =
+    adapterCostUsd ??
+    costForUsage({ model: real.model, inputTokens: real.inputTokens, outputTokens: real.outputTokens, cacheTokens: real.cacheTokens ?? 0 });
+  const snapshot = {
+    provider: session.provider,
+    model: real.model,
+    inputTokens: real.inputTokens,
+    outputTokens: real.outputTokens,
+    cacheTokens: real.cacheTokens ?? 0,
+    lastTurnInputTokens: real.lastTurnInputTokens ?? null,
+    contextPercent: contextPercent(real.model, real.lastTurnInputTokens ?? null),
+    costUsd,
+    estimated: ambiguous,
+    ...(ambiguous ? { attribution: "ambiguous" } : {}),
+  };
+  recordUsageSnapshot(session, snapshot);
+
+  const payload = JSON.stringify({ type: "tokens", sessionId: session.id, ...snapshot });
+  for (const socket of session.sockets) {
+    if (socket.readyState === socket.OPEN) socket.send(payload);
+  }
+}
+
+// Latest usage snapshot per session, kept for the summary endpoint (Task 3).
+function recordUsageSnapshot(session, snapshot) {
+  session.usage = { ...snapshot, updatedAt: Date.now() };
 }
 
 function statusPayload(result) {
@@ -233,7 +308,13 @@ function startSession(sessionId, profile, opts = {}) {
 
   const session = {
     proc: null,
+    id: sessionId,
     profileId: profile.id,
+    // Provider identity + spawn cwd, recorded so the token poller can find
+    // this session's own CLI transcript even for solo (non-mission) tiles.
+    provider: profile.detector ?? profile.id,
+    cwd: profile.cwd ?? null,
+    usage: null,
     status: "starting",
     buffer: "",
     sockets: new Set(),

@@ -59,11 +59,15 @@ export async function readClaudeUsage(filePath) {
   try {
     text = await readFile(filePath, "utf8");
   } catch {
-    return { inputTokens: 0, outputTokens: 0, cacheTokens: 0, model: null };
+    return { inputTokens: 0, outputTokens: 0, cacheTokens: 0, lastTurnInputTokens: 0, model: null };
   }
   let inputTokens = 0;
   let outputTokens = 0;
   let cacheTokens = 0;
+  // Input+cache of the newest assistant message — what the model actually
+  // saw on its latest turn, which is what context-window math needs (the
+  // running inputTokens sum re-counts the cached prefix every turn).
+  let lastTurnInputTokens = 0;
   let model = null;
   for (const line of text.trim().split("\n")) {
     if (!line) continue;
@@ -75,14 +79,15 @@ export async function readClaudeUsage(filePath) {
     }
     const usage = entry?.message?.usage;
     if (entry?.type !== "assistant" || !usage) continue;
-    inputTokens += usage.input_tokens ?? 0;
-    inputTokens += usage.cache_creation_input_tokens ?? 0;
-    inputTokens += usage.cache_read_input_tokens ?? 0;
-    cacheTokens += (usage.cache_creation_input_tokens ?? 0) + (usage.cache_read_input_tokens ?? 0);
+    const turnCache = (usage.cache_creation_input_tokens ?? 0) + (usage.cache_read_input_tokens ?? 0);
+    const turnInput = (usage.input_tokens ?? 0) + turnCache;
+    inputTokens += turnInput;
+    cacheTokens += turnCache;
+    lastTurnInputTokens = turnInput;
     outputTokens += usage.output_tokens ?? 0;
     if (entry.message.model) model = entry.message.model;
   }
-  return { inputTokens, outputTokens, cacheTokens, model };
+  return { inputTokens, outputTokens, cacheTokens, lastTurnInputTokens, model };
 }
 
 // Character-count fallback for providers/moments with no readable real
