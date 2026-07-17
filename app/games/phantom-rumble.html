@@ -258,10 +258,11 @@ const keys=new Set();
 function padFor(f){return f.slot===0?P1:P2}
 addEventListener('keydown',e=>{
   if(e.repeat)return;keys.add(e.key);
-  const netMode=mode&&mode.startsWith('net');
+  const localNetMode=mode&&mode.startsWith('net'); // gates "is this my own fighter" regardless of host/non-host
+  const netMode=localNetMode&&!isHost; // gates "should I relay this" — the host's own presses apply straight to its authoritative simulation, no relay-to-self needed
   for(const f of fighters){
     if(!f.human||f.dead||f.stun>0||!running||paused)continue;
-    if(netMode&&f.slot!==localSlot)continue; // in a net match, this client only drives its own fighter's local input
+    if(localNetMode&&f.slot!==localSlot)continue; // in a net match, this client only drives its own fighter's local input
     const pad=padFor(f);
     if(pad.jump.includes(e.key)){jump(f);if(netMode)sendMatchAction({type:'input',slot:localSlot,event:'jump'},'merge')}
     if(pad.light.includes(e.key)){attack(f,false);if(netMode)sendMatchAction({type:'input',slot:localSlot,event:'light'},'merge')}
@@ -274,10 +275,11 @@ addEventListener('keydown',e=>{
 });
 addEventListener('keyup',e=>{
   keys.delete(e.key);
-  const netMode=mode&&mode.startsWith('net');
+  const localNetMode=mode&&mode.startsWith('net');
+  const netMode=localNetMode&&!isHost;
   for(const f of fighters){
     if(!f.human)continue;
-    if(netMode&&f.slot!==localSlot)continue;
+    if(localNetMode&&f.slot!==localSlot)continue;
     const pad=padFor(f);
     if(pad.heavy.includes(e.key)&&f.charge>0&&!f.dead&&f.stun<=0){attack(f,true);f.charge=0;if(netMode)sendMatchAction({type:'input',slot:localSlot,event:'heavy'},'merge')}
     if(pad.shield.includes(e.key))f.shieldHeld=false;
@@ -900,11 +902,31 @@ function applyMatchState(d){
   if(isHost&&!running&&!netMatchStarting&&ms.phase!=='active'&&roomParticipants.length>=2){
     netMatchStarting=true;hostStartNetMatch();
   }
-  if(ms.phase==='active'&&!isHost&&ms.snapshot){
-    prevSnapshot=lastSnapshot;prevSnapshotAt=snapshotAt;
-    lastSnapshot=ms.snapshot;snapshotAt=performance.now();
-    applySnapshotToNonLocalFighters(ms.snapshot);
+  if(ms.phase==='active'){
+    if(!isHost&&!running&&typeof ms.seed==='number')joinNetMatch(ms.seed);
+    if(!isHost&&ms.snapshot){
+      prevSnapshot=lastSnapshot;prevSnapshotAt=snapshotAt;
+      lastSnapshot=ms.snapshot;snapshotAt=performance.now();
+      applySnapshotToNonLocalFighters(ms.snapshot);
+    }
   }
+}
+// A non-host client never gets its own hostStartNetMatch() call (that
+// function is host-only, since only the host may PATCH matchState) — this
+// is its counterpart: once the host's phase:'active' broadcast (with the
+// shared seed) arrives, build the same fighters/platforms locally so both
+// sides agree on layout, and start the render loop. Never broadcasts
+// anything itself; it's a mirror of hostStartNetMatch's setup, not a
+// second source of truth.
+function joinNetMatch(seed){
+  const humanCount=roomParticipants.length;
+  const count=mode==='net2v2'||mode==='netffa'?4:2;
+  fighters=[];
+  for(let i=0;i<count;i++)fighters.push(makeFighter(i,i<humanCount));
+  buildPlatforms(seed);
+  pickups=[];particles=[];floaters=[];rings=[];projectiles=[];matchKos=[0,0,0,0];pickupTimer=6;over=false;running=true;paused=false;
+  setupEl.hidden=true;endEl.hidden=true;hudEl.hidden=false;
+  buildHud();last=performance.now();if(raf)cancelAnimationFrame(raf);raf=requestAnimationFrame(loop);
 }
 // match-action-relay only ever reaches the room's actual host (the
 // phantomplay.js host shell gates delivery to the host's own stream
@@ -943,15 +965,35 @@ function hostStartNetMatch(){
 function applySnapshotToNonLocalFighters(snapshot){
   snapshot.forEach((s,i)=>{
     const f=fighters[i];
-    if(!f||i===localSlot)return; // never overwrite the locally-predicted fighter this client controls — every OTHER fighter (bot or remote human) is display-only here
-    f.pct=s.pct;f.stocks=s.stocks;f.dead=s.dead;f.targetX=s.x;f.targetY=s.y;f.face=s.face;
+    if(!f)return;
+    // pct/stocks/dead are host-authoritative for EVERY fighter, including
+    // this client's own — the local client only predicts movement, never
+    // damage/KO resolution, so these always apply even for localSlot.
+    f.pct=s.pct;f.stocks=s.stocks;f.dead=s.dead;
+    if(i===localSlot)return; // position stays locally-predicted; only non-local fighters get eased toward the snapshot
+    f.targetX=s.x;f.targetY=s.y;f.face=s.face;
   });
+}
+// Held-state uses its own drop-if-busy send (not sendMatchAction's
+// retry-via-setTimeout queue) and its own throttle timer, independent of
+// discrete jump/light/heavy/dodge events. Retrying every 120ms tick
+// against a 220ms floor would otherwise queue faster than it drains,
+// growing an ever-staler backlog for the whole match — dropping a held-
+// state tick is harmless since the next one 120ms later has fresher data,
+// but a discrete keypress must never be silently dropped, so it keeps
+// sendMatchAction's guaranteed-delivery retry on its own separate timer.
+let lastHeldSentAt=0;
+function sendHeldState(held){
+  const t=performance.now();
+  if(t-lastHeldSentAt<220)return;
+  lastHeldSentAt=t;
+  host('match-action',{action:{type:'input',slot:localSlot,held},mode:'merge'});
 }
 function startInputRelay(){
   setInterval(()=>{
     if(isHost||!running||mode==='')return;
     const f=fighters[localSlot];if(!f)return;
-    sendMatchAction({type:'input',slot:localSlot,held:{dir:heldDir(f),shield:f.shieldHeld}},'merge');
+    sendHeldState({dir:heldDir(f),shield:f.shieldHeld});
   },120);
 }
 startInputRelay();
