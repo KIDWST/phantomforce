@@ -225,8 +225,8 @@
         },
         {
           "file": "app/js/store.js",
-          "pattern": "export const currentTenantId = \\(\\) => cleanTenantSegment\\(workspaceMeta\\(currentWs\\(\\)\\)\\?\\.id \\|\\| currentWs\\(\\)\\);",
-          "description": "Workspace storage derives a tenant id from the active workspace."
+          "pattern": "export const currentTenantId = \\(\\) => cleanTenantSegment\\(ctx\\.session\\?\\.orgId \\|\\| workspaceMeta\\(currentWs\\(\\)\\)\\?\\.id \\|\\| currentWs\\(\\)\\);",
+          "description": "Workspace storage derives a tenant id from the active authenticated org first, then the active local workspace."
         },
         {
           "file": "server/scripts/test-database-auth.mjs",
