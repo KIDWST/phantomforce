@@ -246,6 +246,82 @@ document.getElementById("su-templates-modal").addEventListener("click", (e) => {
   if (e.target.id === "su-templates-modal") document.getElementById("su-templates-modal").classList.add("hidden");
 });
 
+// ---- bulk selection --------------------------------------------------------
+
+const selectedUids = new Set();
+
+document.addEventListener(
+  "mousedown",
+  (e) => {
+    if (!e.ctrlKey && !e.metaKey) return;
+    const tile = e.target.closest(".tile");
+    if (!tile) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const uid = tile.dataset.uid;
+    if (selectedUids.has(uid)) {
+      selectedUids.delete(uid);
+      tile.classList.remove("su-selected");
+    } else {
+      selectedUids.add(uid);
+      tile.classList.add("su-selected");
+    }
+    renderBulkBar();
+  },
+  true,
+);
+
+function selectedCards() {
+  return cards.filter((c) => selectedUids.has(c.uid));
+}
+
+function renderBulkBar() {
+  let bar = document.getElementById("su-bulk-bar");
+  if (selectedUids.size === 0) {
+    bar?.remove();
+    return;
+  }
+  if (!bar) {
+    bar = document.createElement("div");
+    bar.id = "su-bulk-bar";
+    bar.className = "su-bulk-bar";
+    document.body.appendChild(bar);
+  }
+  bar.innerHTML = `
+    <span>${selectedUids.size} selected</span>
+    <button type="button" class="mw-btn" id="su-bulk-close">Close</button>
+    <button type="button" class="mw-btn" id="su-bulk-restart">Restart</button>
+    <button type="button" class="mw-btn" id="su-bulk-link">Link</button>
+    <button type="button" class="mw-btn" id="su-bulk-compact">Compact</button>
+    <button type="button" class="mw-btn" id="su-bulk-clear">Clear selection</button>
+  `;
+  document.getElementById("su-bulk-close").addEventListener("click", () => {
+    for (const card of selectedCards()) removeCard(card);
+    clearSelection();
+  });
+  document.getElementById("su-bulk-restart").addEventListener("click", () => {
+    for (const card of selectedCards()) restartCard(card);
+  });
+  document.getElementById("su-bulk-link").addEventListener("click", () => {
+    for (const card of selectedCards()) {
+      card.linked = true;
+      document.querySelector(`.tile[data-uid="${card.uid}"]`)?.classList.add("linked");
+    }
+  });
+  document.getElementById("su-bulk-compact").addEventListener("click", () => {
+    for (const card of selectedCards()) setCollapsed(card, true);
+  });
+  document.getElementById("su-bulk-clear").addEventListener("click", clearSelection);
+}
+
+function clearSelection() {
+  for (const uid of selectedUids) {
+    document.querySelector(`.tile[data-uid="${uid}"]`)?.classList.remove("su-selected");
+  }
+  selectedUids.clear();
+  renderBulkBar();
+}
+
 let lastCardCount = -1;
 setInterval(() => {
   // Grid/compact recheck runs every tick (cheap at this scale) since
