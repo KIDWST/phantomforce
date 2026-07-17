@@ -354,3 +354,32 @@ Last updated: 2026-07-17
   worth a manual pass before considering this fully proven end-to-end.
 - Status: Shipped, typecheck + regression-test verified; browser click-
   through still open.
+
+### Q-0017 — P3 — Memory citation UI could not be end-to-end verified with real owner credentials (needs Jordan's review)
+
+- Route/component: `app/js/main.js` (`chatAttachCitations`,
+  `citationBadgeHtml`, `citationPanelHtml`, `citationMemoryLookup`),
+  `app/js/command.js` (`askHermesBrain`).
+- What shipped: chat replies that used real saved-memory context now show a
+  "◈ N sources" badge; clicking it fetches and displays the real memory
+  text (or an honest failure message) instead of the citation data being
+  silently discarded like before.
+- Verification gap: this session has no real owner login credentials
+  (demo auth is disabled on this backend), so the full path — real Hermes
+  reply, real relevant memories, real citation panel showing real memory
+  text — could only be proven up to the point where `/phantom-ai/brain/
+  memories` requires a real bearer token. The client logic was proven with
+  a mocked chat response driven through the real UI (see AUDIT_LOG), and
+  the "no token → honest failure, not fabrication" path was proven for
+  real. What's still open: an owner click-through with a real signed-in
+  session, asking something that actually scores against a real saved
+  memory, and confirming the panel shows the right memory text.
+- Judgment call: citations only ever attach to `askHermesBrain` (LLM-backed)
+  replies, never to `handleCommand`'s local rule-based replies — even
+  though `handleCommand` also reads real store data (leads, proposals,
+  etc.) for some replies, it doesn't go through `composeBrainContext`, so
+  there's no `used_memory_ids` list to cite. Extending citations to local
+  replies would require inventing a citation source that doesn't exist
+  server-side, which this session deliberately did not do.
+- Status: Shipped, code-reviewed and browser-flow-verified via mocked
+  network response; real-session click-through still open.

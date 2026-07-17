@@ -118,6 +118,85 @@ corrected or removed.
   render functions.
 - Cache-bust: bumped `phantom-live-20260717-13` → `-14`.
 
+### 3. Institutional Memory with visible citation
+
+- Discovery: the server already computes and returns real, traceable
+  citation data on essentially every `/phantom-ai/chat` response —
+  `composeBrainContext()` (`server/src/phantom-ai/neural-spine.ts`) scores
+  real saved memories against the message and reports which ones were
+  injected into the reply's micro-prompt
+  (`brainContext.debug.injectedMemoryIds`); `server/src/index.ts` threads
+  this into the response as `brain.used_memory_ids` /
+  `brain.relevant_memory_count` at every chat-response call site (verified
+  via `grep -n "used_memory_ids" server/src/index.ts` — 6 call sites, not
+  just the greeting shortcut). The client (`app/js/command.js`
+  `askHermesBrain`) received this field on every response and discarded it
+  — `payload.brain` was never read. So "every claim traceable to a real
+  record" was already true on the backend; there was no visible citation
+  anywhere in the UI.
+- Fix: `askHermesBrain` now passes `brain: payload.brain || null` through in
+  its return value. `app/js/main.js` adds `chatAttachCitations()` (mirrors
+  the existing `chatAttachCards()` pattern exactly) to tag the most recent
+  Phantom chat bubble with the real `used_memory_ids` list, a
+  `citationBadgeHtml()`/`citationPanelHtml()` pair that render a small
+  "◈ N sources" badge only when that list is non-empty, and
+  `citationMemoryLookup()` which fetches the real memory text for the cited
+  ids on click (via the existing `GET /phantom-ai/brain/memories` endpoint
+  brain.js already uses — no new backend endpoint needed). If a cited memory
+  can't be loaded or was deleted since, the panel says so explicitly
+  ("Source memory N is no longer in the vault" / "Could not load the source
+  memories right now") instead of ever fabricating a snippet. Local
+  rule-based replies (`handleCommand`, no LLM/brain context involved) never
+  get a badge, by construction — `r.brain` is only set on real
+  `askHermesBrain` responses.
+- Files: `app/js/command.js` (`askHermesBrain`), `app/js/main.js`
+  (`chatAttachCitations`, `citationBadgeHtml`, `citationPanelHtml`,
+  `citationMemoryLookup`, `msgHtml`, click delegation for
+  `[data-msg-citation]`/`[data-msg-citation-view]`), `app/phantom.css`
+  (`.msg-citation`, `.msg-citation-panel`, related rows).
+- Verification: `node --check app/js/main.js`, `node --check
+  app/js/command.js` — PASS. End-to-end browser proof via agent-browser
+  against the local dev server: real owner credentials aren't available to
+  this session (demo auth is disabled on this backend —
+  `POST /auth/demo-login` returns `"Demo auth is disabled."` — and
+  `/phantom-ai/chat` correctly 401s without a bearer token), so a fully live
+  citation could not be produced end-to-end. Instead, monkey-patched
+  `window.fetch` in the live page to intercept only the `/phantom-ai/chat`
+  call with a response shaped exactly like the server's real payload
+  (`{ message: {...}, brain: { used_memory_ids: [...] } }`), then drove the
+  real command input/submit through the real `runCommand` →
+  `handleSmartCommand` → `askHermesBrain` path (picked a neutral phrase —
+  the first attempt, "what do you remember", got correctly routed to the
+  *local* memory-recall intent instead of Hermes, which is itself correct
+  existing behavior, not a bug). Confirmed: the reply bubble rendered with a
+  "◈ 2 sources" badge; clicking it triggered the loading state, called the
+  real (unmocked) `GET /phantom-ai/brain/memories`, got a real 401 (no
+  token), and rendered the honest "Could not load the source memories right
+  now" fallback rather than fabricating anything — screenshots captured.
+  `window.fetch` restored to original afterward. No console errors
+  (`agent-browser errors` empty) at any point. This proves the full client
+  data-flow and honest-failure path; the only thing not provable in this
+  session is what the citation panel looks like with real memory text
+  successfully loaded, which requires real owner credentials.
+- Git-history note: this feature's `app/js/main.js`/`app/js/command.js`
+  changes ended up committed inside `5ed4b759`
+  ("feat(neon-drift): add boost, faster acceleration curve, and 9 weapon
+  powerups") rather than their own commit — a concurrent session sharing
+  this working directory ran a broad `git add`/`git commit` for its Neon
+  Drift work while these edits were sitting uncommitted, and swept them in.
+  Confirmed via `git log -S "citationBadgeHtml" -- app/js/main.js` and
+  `git diff --stat` (both files show zero diff against `HEAD`, i.e. already
+  committed). Did not rebase/amend to fix the attribution — rewriting
+  history in a directory another live session is actively committing to is
+  unsafe. Only `app/phantom.css` (the citation CSS) and this doc update
+  remained uncommitted and are committed cleanly below as the "item 3"
+  commit; the JS logic itself already shipped correctly, just under a
+  misleading commit message that has nothing to do with this feature.
+- Cache-bust: `app/phantom.css` was already on `phantom-live-20260717-15`
+  when this commit was prepared (the same concurrent session bumped
+  `-14` → `-15` globally while this item was in progress); no further bump
+  needed here.
+
 ### Surfaces Audited
 
 - Required process docs: `AGENTS.md` and all files under `docs/quality/`.

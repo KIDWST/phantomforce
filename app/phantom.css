@@ -8339,6 +8339,20 @@ body.phantomplay-playing .buddy-say {
 .msg-user .msg-text { color: #cfe3da; font-size: 13px; }
 .msg-cards { display: flex; flex-direction: column; gap: 8px; }
 .msg-cards .rcard { width: 100%; }
+.msg-citation {
+  align-self: flex-start; display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 8px; border-radius: 999px; border: 1px solid rgba(65,255,161,.28);
+  background: rgba(65,255,161,.07); color: rgba(180,255,220,.9);
+  font: 700 9.5px "DM Mono", monospace; letter-spacing: 0.03em; cursor: pointer;
+}
+.msg-citation:hover, .msg-citation.is-open { background: rgba(65,255,161,.14); color: var(--neon); }
+.msg-citation-panel { display: grid; gap: 6px; padding: 8px; border-radius: 10px; border: 1px dashed rgba(65,255,161,.25); background: rgba(2,15,10,.5); }
+.msg-citation-row { display: flex; align-items: baseline; gap: 7px; }
+.msg-citation-row p { margin: 0; font-size: 11.5px; line-height: 1.4; color: rgba(220,240,230,.85); }
+.msg-citation-type { flex: 0 0 auto; font: 700 8.5px "DM Mono", monospace; text-transform: uppercase; color: var(--dim); }
+.msg-citation-missing p { color: var(--dim); font-style: italic; }
+.msg-citation-loading, .msg-citation-empty { margin: 0; font-size: 11.5px; color: var(--dim); }
+.msg-citation-view { align-self: flex-start; padding: 4px 10px; font-size: 10.5px; min-height: 26px; }
 .msg-typing-label { margin: 0 0 5px; font: 600 10.5px "DM Mono", monospace; color: var(--neon); letter-spacing: 0.02em; }
 .msg-dots { display: inline-flex; gap: 4px; align-items: center; min-height: 14px; }
 .msg-dots i { width: 5px; height: 5px; border-radius: 50%; background: var(--neon); opacity: 0.5; animation: dotBeat 1.1s ease-in-out infinite; }
