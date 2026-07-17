@@ -1,7 +1,8 @@
 import {
   currentTenantId, isAdmin, isOwnerOperator, session,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260717-17";
+} from "./store.js?v=phantom-live-20260717-18";
+import { VoiceCore } from "./voicecore.js?v=phantom-live-20260717-18";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 const mobilePlaySurface = () => typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;
@@ -109,6 +110,16 @@ let gamepadBound = false;
 let playerClosing = false;
 let roomPollTimer = null;
 let roomPollTicks = 0;
+// In-game party voice: a VoiceCore instance (app/js/voicecore.js — the same
+// shared code path the standalone Voice Channels workspace uses) scoped to
+// whichever private room's game is currently the "party" — connects
+// automatically once 2+ room participants are active, and stays connected
+// across closing the game screen (tied to room membership, not to the
+// player chrome being open — see docs/superpowers/specs/2026-07-17-
+// voice-channels-design.md). Explicit room leave tears it down.
+let partyVoice = null;
+let partyVoiceState = null;
+let partyVoiceRoomCode = null;
 // Pre-existing dead reference fixed in passing: closePlayer()/onGameMessage()
 // already called clearTimeout(readyWatchdog) and launch() already called
 // armReadyWatchdog(), but neither the variable nor the function existed
@@ -503,7 +514,7 @@ function renderTogether() {
   return `<div class="pp-together" data-pp-private-rooms>
     <section class="pp-room-hero">
       <div><p class="pp-kicker">MULTIPLAYER</p><h2>Play together with friends in this workspace.</h2><p>Create a private room, invite up to a few friends with a short-lived join code, and jump into a real match — ready checks, host controls, bot fill-in if someone's missing, and reconnect if your connection drops. Built-in games keep their no-internet rule; the app only relays room membership and match state.</p></div>
-      <div class="pp-room-principles"><span>No public discovery</span><span>No direct inbound device ports</span><span>No room chat or voice</span><span>Same workspace only</span></div>
+      <div class="pp-room-principles"><span>No public discovery</span><span>No direct inbound device ports</span><span>Party voice connects automatically (peer-to-peer, mic mute anytime)</span><span>No room text chat yet</span><span>Same workspace only</span></div>
     </section>
     <section class="pp-room-layout">
       <form class="pp-room-card" data-pp-create-room-form>
@@ -523,8 +534,8 @@ function renderTogether() {
     </section>
     ${ui.roomMessage ? `<div class="pp-banner ${ui.roomMessage.startsWith("Blocked") ? "is-error" : "is-offline"}"><b>Private room status</b><span>${esc(ui.roomMessage)}</span><button type="button" data-pp-room-clear>Clear</button></div>` : ""}
     <section class="pp-room-safety">
-      <div><p class="pp-kicker">SAFE BY DEFAULT</p><h3>Private rooms, workspace-only.</h3><p>Short join codes, no public discovery, classroom mode restricts to Everyone-rated games automatically, and every built-in game still makes zero external network calls of its own — the app relays room and match state, nothing more.</p></div>
-      <ul><li>Signed-in same-tenant join policy</li><li>Room invite expires after 90 minutes</li><li>Roster only; no private messaging</li><li>Games still run in script-only iframes</li></ul>
+      <div><p class="pp-kicker">SAFE BY DEFAULT</p><h3>Private rooms, workspace-only.</h3><p>Short join codes, no public discovery, classroom mode restricts to Everyone-rated games automatically, and every built-in game still makes zero external network calls of its own — the app relays room, match state, and voice-signaling only.</p></div>
+      <ul><li>Signed-in same-tenant join policy</li><li>Room invite expires after 90 minutes</li><li>Party voice is peer-to-peer audio (mesh WebRTC, mute anytime); no room text chat yet</li><li>Voice uses STUN only — no relay server yet, so a small minority of restrictive networks may fail to connect peer-to-peer</li><li>Games still run in script-only iframes</li></ul>
     </section>
     <section class="pp-section"><div class="pp-section-head"><div><h2>Your multiplayer rooms</h2><p>Only rooms you host or have joined are shown here.</p></div><span>${rooms.length} visible</span></div>${rooms.length ? `<div class="pp-room-grid">${rooms.map(roomCard).join("")}</div>` : empty("No rooms yet", "Create a room or join with a code to start playing together.")}</section>
   </div>`;
@@ -659,7 +670,7 @@ function playerMarkup() {
   const { game, play } = ui.player;
   const engine = engineFor(game);
   const controls = controlsCopy(game);
-  return `<div class="pp-player" role="dialog" aria-modal="true" aria-label="Playing ${esc(game.title)}"><header><div><img src="${esc(thumbnailFor(game))}" alt=""/><span><b>${esc(game.title)}</b>${controls ? `<i>${esc(controls)}</i>` : ""}</span></div><div class="pp-player-actions"><button data-pp-player-restart title="Restart game">Restart</button><button data-pp-player-pause title="Pause game">${ui.playerPaused ? "Resume" : "Pause"}</button><button data-pp-player-fullscreen title="Full screen">Full screen</button>${ui.gamepadEverSeen ? `<button data-pp-gamepad-toggle class="${ui.gamepadEnabled ? "is-on" : ""}" title="${ui.gamepadEnabled ? "Controller enabled — click to disable" : "Controller detected — click to enable"}" aria-pressed="${ui.gamepadEnabled}">🎮</button>` : ""}<button data-pp-player-close aria-label="Close game">×</button></div></header><div class="pp-player-stage"><button class="pp-player-exit" data-pp-player-close type="button" aria-label="Exit game">Exit</button><div class="pp-player-loading" ${ui.playerReady ? "hidden" : ""}><i></i><b>Loading ${esc(game.title)}…</b><span>The game is opening in a private sandbox.</span></div><iframe src="${esc(game.launchUrl)}" title="${esc(game.title)}" sandbox="allow-scripts" referrerpolicy="no-referrer" allow="fullscreen; gamepad" tabindex="0" data-pp-frame></iframe></div><footer><span>Session <b>${esc(play.id.slice(-8))}</b></span><span data-pp-live-score>Score —</span><span data-pp-live-state>${ui.playerPaused ? "Paused" : "Playing"}</span><span>Engine ${esc(engine.version)}</span><span>Progress saves automatically</span></footer></div>`;
+  return `<div class="pp-player" role="dialog" aria-modal="true" aria-label="Playing ${esc(game.title)}"><header><div><img src="${esc(thumbnailFor(game))}" alt=""/><span><b>${esc(game.title)}</b>${controls ? `<i>${esc(controls)}</i>` : ""}</span></div><div class="pp-player-actions"><button data-pp-player-restart title="Restart game">Restart</button><button data-pp-player-pause title="Pause game">${ui.playerPaused ? "Resume" : "Pause"}</button><button data-pp-player-fullscreen title="Full screen">Full screen</button>${ui.gamepadEverSeen ? `<button data-pp-gamepad-toggle class="${ui.gamepadEnabled ? "is-on" : ""}" title="${ui.gamepadEnabled ? "Controller enabled — click to disable" : "Controller detected — click to enable"}" aria-pressed="${ui.gamepadEnabled}">🎮</button>` : ""}${ui.player.roomCode ? `<button data-pp-mic-toggle class="${partyVoiceState?.muted ? "is-muted" : ""}" title="${partyVoice ? (partyVoiceState?.muted ? "Unmute party voice" : "Mute party voice") : "Party voice connects automatically once someone else joins."}" ${partyVoice ? "" : "disabled"}>${partyVoiceState?.muted ? "🔇" : "🎙️"}</button>` : ""}<button data-pp-player-close aria-label="Close game">×</button></div></header>${partyVoiceStripHtml()}<div class="pp-player-stage"><button class="pp-player-exit" data-pp-player-close type="button" aria-label="Exit game">Exit</button><div class="pp-player-loading" ${ui.playerReady ? "hidden" : ""}><i></i><b>Loading ${esc(game.title)}…</b><span>The game is opening in a private sandbox.</span></div><iframe src="${esc(game.launchUrl)}" title="${esc(game.title)}" sandbox="allow-scripts" referrerpolicy="no-referrer" allow="fullscreen; gamepad" tabindex="0" data-pp-frame></iframe></div><footer><span>Session <b>${esc(play.id.slice(-8))}</b></span><span data-pp-live-score>Score —</span><span data-pp-live-state>${ui.playerPaused ? "Paused" : "Playing"}</span><span>Engine ${esc(engine.version)}</span><span>Progress saves automatically</span></footer></div>`;
 }
 
 function render() {
@@ -780,6 +791,10 @@ async function launch(gameId, opts = {}) {
     render();
     startClock();
     armReadyWatchdog();
+    if (ui.player.roomCode) {
+      const room = ui.snapshot.rooms.find((item) => item.code === ui.player.roomCode);
+      if (room) syncPartyVoice(room);
+    }
   } catch (error) { ui.error = error.message; render(); }
 }
 
@@ -803,6 +818,83 @@ function upsertRoom(room) {
   if (!room || !ui.snapshot) return;
   const idx = ui.snapshot.rooms.findIndex((item) => item.code === room.code);
   if (idx >= 0) ui.snapshot.rooms[idx] = room; else ui.snapshot.rooms.unshift(room);
+  // upsertRoom is the single funnel every join/leave/poll/stream update
+  // already passes through (see the realtime-channel design notes above) —
+  // the most reliable single hook point for "did this room's membership
+  // change enough to (dis)connect party voice", rather than duplicating the
+  // check across every call site that can bring in a room update.
+  syncPartyVoice(room);
+}
+
+// ---- In-game party voice: auto-connect once 2+ room participants are
+// active, using the exact same VoiceCore class the standalone Voice
+// Channels workspace uses (app/js/voicecore.js). ----
+function syncPartyVoice(room) {
+  if (!room || !ui.player || ui.player.roomCode !== room.code) return;
+  const activeParticipants = (room.participants || []).filter((participant) => participant.status !== "left");
+  if (activeParticipants.length > 1) {
+    if (!partyVoice || partyVoiceRoomCode !== room.code) startPartyVoice(room, activeParticipants);
+  } else if (partyVoice && partyVoiceRoomCode === room.code) {
+    teardownPartyVoice();
+  }
+}
+
+function startPartyVoice(room, activeParticipants) {
+  teardownPartyVoice();
+  partyVoiceRoomCode = room.code;
+  const me = activeParticipants.find((participant) => participant.actorId === ui.snapshot?.actorId);
+  partyVoice = new VoiceCore({ tenantId: currentTenantId(), roomCode: room.code, myLabel: me?.label || "You" });
+  partyVoice.addEventListener("state", (event) => { partyVoiceState = event.detail; renderPartyVoiceStrip(); });
+  partyVoice.addEventListener("error", (event) => {
+    // Never call render() while a game iframe is mounted (see the poll-loop
+    // comment below) — surface the error without rebuilding the player.
+    ui.roomMessage = `Party voice: ${event.detail.message}`;
+    if (!ui.player) render();
+  });
+  partyVoice.connect();
+  renderPartyVoiceStrip();
+}
+
+function teardownPartyVoice() {
+  partyVoice?.destroy();
+  partyVoice = null;
+  partyVoiceState = null;
+  partyVoiceRoomCode = null;
+  renderPartyVoiceStrip();
+}
+
+function togglePartyVoiceMuted() {
+  partyVoice?.toggleMuted();
+}
+
+// Targeted DOM patch, mirroring persistPlay()'s [data-pp-live-score] pattern
+// below — never a full render() while the game iframe is mounted (it would
+// rebuild the <iframe> and reload the game mid-match).
+function renderPartyVoiceStrip() {
+  if (!mountedRoot) return;
+  const micButton = mountedRoot.querySelector("[data-pp-mic-toggle]");
+  if (micButton) {
+    micButton.disabled = !partyVoice;
+    micButton.classList.toggle("is-muted", !!partyVoiceState?.muted);
+    micButton.textContent = partyVoiceState?.muted ? "🔇" : "🎙️";
+    micButton.title = partyVoice ? (partyVoiceState?.muted ? "Unmute party voice" : "Mute party voice") : "Party voice connects automatically once someone else joins.";
+  }
+  const strip = mountedRoot.querySelector("[data-pp-voice-strip]");
+  if (strip) strip.outerHTML = partyVoiceStripHtml();
+}
+
+function partyVoiceConnDotClass(state) {
+  if (state === "connected") return "is-live";
+  if (state === "failed") return "is-away";
+  return "is-pending";
+}
+
+function partyVoiceStripHtml() {
+  if (!ui.player?.roomCode) return "";
+  const participants = partyVoiceState?.participants || [];
+  if (!partyVoice) return `<div class="pp-voice-strip" data-pp-voice-strip><em>Party voice connects automatically once someone else joins.</em></div>`;
+  if (!participants.length) return `<div class="pp-voice-strip" data-pp-voice-strip><em>Connecting party voice…</em></div>`;
+  return `<div class="pp-voice-strip" data-pp-voice-strip>${participants.map((participant) => `<span class="pp-voice-chip ${participant.speaking ? "is-speaking" : ""}"><em class="pp-conn-dot ${partyVoiceConnDotClass(participant.connectionState)}"></em>${esc(participant.label)}${participant.muted ? " 🔇" : ""}</span>`).join("")}</div>`;
 }
 
 async function pollRooms() {
@@ -1053,6 +1145,7 @@ async function leavePrivateRoom(code) {
     ui.roomMessage = `Left room ${code}.`;
     upsertRoom(result.room);
     if (ui.player?.roomCode === code) ui.player.roomCode = null;
+    if (partyVoiceRoomCode === code) teardownPartyVoice();
   } catch (error) {
     ui.roomMessage = `Blocked: ${error.message}`;
   }
@@ -1364,6 +1457,7 @@ function bind() {
   mountedRoot.querySelector("[data-pp-player-restart]")?.addEventListener("click", restartPlayer);
   mountedRoot.querySelector("[data-pp-player-fullscreen]")?.addEventListener("click", () => mountedRoot.querySelector(".pp-player-stage")?.requestFullscreen?.());
   mountedRoot.querySelector("[data-pp-gamepad-toggle]")?.addEventListener("click", toggleGamepadEnabled);
+  mountedRoot.querySelector("[data-pp-mic-toggle]")?.addEventListener("click", togglePartyVoiceMuted);
   mountedRoot.querySelector("[data-pp-gamepad-accept]")?.addEventListener("click", () => setGamepadEnabled(true));
   mountedRoot.querySelector("[data-pp-gamepad-decline]")?.addEventListener("click", () => setGamepadEnabled(false));
   const form = mountedRoot.querySelector("[data-pp-submit-form]");

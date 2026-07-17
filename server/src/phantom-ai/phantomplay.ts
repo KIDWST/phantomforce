@@ -212,10 +212,18 @@ export type PhantomPlayRoom = {
     transport: "workspace_relay";
     joinPolicy: "signed_in_same_tenant_code";
     publicDiscovery: false;
-    directPeerConnection: false;
+    // Party voice (see docs/superpowers/specs/2026-07-17-voice-channels-
+    // design.md) genuinely opens a direct WebRTC peer connection between
+    // room members for audio once 2+ are active — directPeerConnection and
+    // voice flipped true when that shipped, deliberately, rather than
+    // leaving a stale "no direct peer connection" claim in place. Flagged
+    // as a reviewed invariant change in docs/quality/QUALITY_BACKLOG.md.
+    // inboundDevicePorts stays false: WebRTC's ICE/STUN negotiation does not
+    // require a participant to forward an inbound port on their router.
+    directPeerConnection: true;
     inboundDevicePorts: false;
     chat: false;
-    voice: false;
+    voice: true;
     externalGameNetworking: false;
     inviteTtlMinutes: number;
     contentPolicy: "everyone_rating_required" | "profile_content_setting";
@@ -1170,10 +1178,10 @@ function roomView(room: PhantomPlayRoom) {
       transport: "workspace_relay" as const,
       joinPolicy: "signed_in_same_tenant_code" as const,
       publicDiscovery: false as const,
-      directPeerConnection: false as const,
+      directPeerConnection: true as const,
       inboundDevicePorts: false as const,
       chat: false as const,
-      voice: false as const,
+      voice: true as const,
       externalGameNetworking: false as const,
       inviteTtlMinutes: ROOM_TTL_MINUTES,
       contentPolicy: room.safety?.contentPolicy || (room.mode === "classroom" ? "everyone_rating_required" : "profile_content_setting"),
@@ -1437,10 +1445,10 @@ export async function createPhantomPlayRoom(session: AccessSession, input: Recor
       transport: "workspace_relay",
       joinPolicy: "signed_in_same_tenant_code",
       publicDiscovery: false,
-      directPeerConnection: false,
+      directPeerConnection: true,
       inboundDevicePorts: false,
       chat: false,
-      voice: false,
+      voice: true,
       externalGameNetworking: false,
       inviteTtlMinutes: ROOM_TTL_MINUTES,
       contentPolicy: mode === "classroom" ? "everyone_rating_required" : "profile_content_setting",

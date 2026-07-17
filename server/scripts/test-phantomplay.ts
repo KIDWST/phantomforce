@@ -66,8 +66,13 @@ try {
   const privateRoom = await play.createPhantomPlayRoom(classmateA, { gameId: "neon-drift", mode: "classroom", maxPlayers: 4 }, { entitled: true });
   assert(privateRoom.room.code.length >= 6, "Private rooms should issue a short join code.");
   assert(privateRoom.room.mode === "classroom" && privateRoom.room.safety.contentPolicy === "everyone_rating_required", "Classroom rooms should enforce Everyone-rated games.");
-  assert(privateRoom.room.safety.publicDiscovery === false && privateRoom.room.safety.directPeerConnection === false && privateRoom.room.safety.inboundDevicePorts === false, "Private rooms must avoid public discovery and direct device exposure.");
-  assert(privateRoom.room.safety.chat === false && privateRoom.room.safety.voice === false && privateRoom.room.safety.externalGameNetworking === false, "Private rooms must not add chat, voice, or game-side external networking.");
+  assert(privateRoom.room.safety.publicDiscovery === false && privateRoom.room.safety.inboundDevicePorts === false, "Private rooms must avoid public discovery and inbound device port exposure.");
+  // Party voice (docs/superpowers/specs/2026-07-17-voice-channels-design.md)
+  // deliberately flipped directPeerConnection/voice to true — this
+  // invariant used to assert both were false; updated here rather than left
+  // stale, and flagged in docs/quality/QUALITY_BACKLOG.md for review.
+  assert(privateRoom.room.safety.directPeerConnection === true && privateRoom.room.safety.voice === true, "Private rooms should offer peer-to-peer party voice.");
+  assert(privateRoom.room.safety.chat === false && privateRoom.room.safety.externalGameNetworking === false, "Private rooms must not add room text chat or game-side external networking.");
   const joinedRoom = await play.joinPhantomPlayRoom(classmateB, { code: privateRoom.room.code }, { entitled: true });
   assert(joinedRoom?.room.participantCount === 2, "A classmate in the same workspace should be able to join with a room code.");
   const privateSnapshot = await play.getPhantomPlaySnapshot(classmateB, { entitled: true, dailyMinuteLimit: 30 });
