@@ -25,7 +25,7 @@
 </head>
 <body>
   <main>
-    <header><h1>Circuit Serpent</h1><div class="stats"><span>SCORE <b data-score>0</b></span><span>PACKETS <b data-packets>0</b></span></div></header>
+    <header><h1>Circuit Serpent</h1><div class="stats"><span>SCORE <b data-score>0</b></span><span>PACKETS <b data-packets>0</b></span><span>LEVEL <b data-level>1</b></span></div></header>
     <div class="board"><canvas aria-label="Circuit Serpent play grid"></canvas></div>
     <p class="hint">Arrows / WASD steer &middot; P pauses</p>
   </main>
@@ -36,8 +36,8 @@
     const host=(type,data={})=>parent.postMessage({source:'phantomplay-game',type,...data},'*');
     const N=17,canvas=document.querySelector('canvas'),g=canvas.getContext('2d');
     const startEl=document.querySelector('.start'),pauseEl=document.querySelector('.pause'),resultEl=document.querySelector('.result');
-    const scoreEl=document.querySelector('[data-score]'),packetsEl=document.querySelector('[data-packets]');
-    let snake=[],dir={x:1,y:0},queue=[],food=null,score=0,packets=0,stepMs=160,acc=0,lastT=null,phase='idle',paused=false,soundOn=true,reduced=false,ac=null;
+    const scoreEl=document.querySelector('[data-score]'),packetsEl=document.querySelector('[data-packets]'),levelEl=document.querySelector('[data-level]');
+    let snake=[],dir={x:1,y:0},queue=[],food=null,bursts=[],score=0,packets=0,level=1,stepMs=160,acc=0,lastT=null,phase='idle',paused=false,soundOn=true,reduced=false,ac=null;
 
     function tone(f,d=.08,type='square',vol=.05){
       if(!soundOn)return;
@@ -57,10 +57,11 @@
       return out;
     }
     function placeFood(){const free=freeCells();if(!free.length){food=null;gameOver(true);return}food=free[Math.floor(Math.random()*free.length)]}
-    function updateHud(){scoreEl.textContent=score;packetsEl.textContent=packets}
+    function updateHud(){scoreEl.textContent=score;packetsEl.textContent=packets;levelEl.textContent=level}
+    function burst(x,y,color='#8affc9'){if(reduced)return;for(let i=0;i<18;i++)bursts.push({x,y,color,a:Math.random()*Math.PI*2,v:1.5+Math.random()*3,life:18+Math.random()*18})}
     function start(){
-      snake=[{x:8,y:8},{x:7,y:8},{x:6,y:8}];dir={x:1,y:0};queue=[];
-      score=0;packets=0;stepMs=160;acc=0;lastT=null;phase='play';paused=false;
+      snake=[{x:8,y:8},{x:7,y:8},{x:6,y:8}];dir={x:1,y:0};queue=[];bursts=[];
+      score=0;packets=0;level=1;stepMs=160;acc=0;lastT=null;phase='play';paused=false;
       startEl.hidden=true;pauseEl.hidden=true;resultEl.hidden=true;
       placeFood();updateHud();draw();
       host('progress',{score:0,progress:0,state:{packets:0}});
@@ -80,10 +81,12 @@
       if(body.some(p=>p.x===head.x&&p.y===head.y))return gameOver(false);
       snake.unshift(head);
       if(eat){
-        score+=10;packets++;
-        if(packets%5===0)stepMs=Math.max(70,stepMs-9);
+        level=1+Math.floor(packets/5);
+        score+=10+Math.max(0,level-1)*2;packets++;
+        if(packets%5===0){stepMs=Math.max(70,stepMs-9);level=1+Math.floor(packets/5);tone(880,.12,'triangle',.05)}
+        burst(food.x,food.y);
         updateHud();tone(620+packets*7,.07,'square',.045);
-        host('score',{score,progress:Math.min(99,packets*4),state:{packets,length:snake.length}});
+        host('score',{score,progress:Math.min(99,packets*4),state:{packets,length:snake.length,level}});
         placeFood();
       }else snake.pop();
     }
@@ -92,9 +95,9 @@
       phase='over';paused=false;pauseEl.hidden=true;
       tone(110,.32,'sawtooth',.06);
       resultEl.querySelector('h2').textContent=filled?'Grid conquered':'Signal lost';
-      resultEl.querySelector('[data-final]').textContent=`Final score ${score} — ${packets} data-packet${packets===1?'':'s'} consumed.`;
+      resultEl.querySelector('[data-final]').textContent=`Final score ${score} — ${packets} data-packet${packets===1?'':'s'} consumed · level ${level}.`;
       resultEl.hidden=false;
-      host('complete',{score,progress:100,state:{packets,result:filled?'filled':'crash'}});
+      host('complete',{score,progress:100,state:{packets,level,result:filled?'filled':'crash'}});
     }
     function setPaused(next){if(phase!=='play'||paused===next)return;paused=next;pauseEl.hidden=!paused;host('paused',{paused})}
     function draw(){
@@ -115,6 +118,11 @@
         const pad=cell*.09;
         g.fillRect(p.x*cell+pad,p.y*cell+pad,cell-pad*2,cell-pad*2);
       });
+      for(const b of bursts){
+        const px=(b.x+.5)*cell+Math.cos(b.a)*b.v*(36-b.life),py=(b.y+.5)*cell+Math.sin(b.a)*b.v*(36-b.life);
+        g.globalAlpha=Math.max(0,b.life/36);g.fillStyle=b.color;g.beginPath();g.arc(px,py,Math.max(1,cell*.08),0,Math.PI*2);g.fill();b.life-=1;
+      }
+      g.globalAlpha=1;bursts=bursts.filter(b=>b.life>0);
       g.shadowBlur=0;
     }
     function loop(t){

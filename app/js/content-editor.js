@@ -1,4 +1,4 @@
-import { freshEditState, freshTextStyle, paintEdit } from "./imagefilters.js?v=phantom-live-20260717-2";
+import { freshEditState, freshTextStyle, paintEdit } from "./imagefilters.js?v=phantom-live-20260714-006";
 
 let layerSequence = 0;
 
@@ -310,48 +310,9 @@ function drawText(ctx, layer, width, height) {
   lines.forEach((line, index) => ctx.fillText(line, tx, start + index * lineHeight));
 }
 
-function drawLayerPaintStrokes(canvas, state = {}) {
-  const paint = state.paint;
-  if (!paint || !Array.isArray(paint.strokes) || !paint.strokes.length) return;
-  const ctx = canvas.getContext("2d");
-  ctx.save();
-  ctx.lineCap = "round";
-  ctx.lineJoin = "round";
-  paint.strokes.forEach((stroke) => {
-    const points = Array.isArray(stroke.points) ? stroke.points : [];
-    if (!points.length) return;
-    const erase = stroke.mode === "erase";
-    const width = Math.max(2, Number(stroke.size || paint.size || 26));
-    ctx.save();
-    ctx.globalAlpha = erase ? 1 : clamp((stroke.opacity ?? paint.opacity ?? 84) / 100, 0.05, 1);
-    ctx.globalCompositeOperation = erase ? "destination-out" : "source-over";
-    ctx.strokeStyle = erase ? "rgba(0,0,0,1)" : (stroke.color || "#41ffa1");
-    ctx.fillStyle = ctx.strokeStyle;
-    ctx.lineWidth = width;
-    ctx.beginPath();
-    if (points.length === 1) {
-      const point = points[0];
-      ctx.arc(point.x * canvas.width, point.y * canvas.height, width / 2, 0, Math.PI * 2);
-      ctx.fill();
-    } else {
-      points.forEach((point, index) => {
-        const x = point.x * canvas.width;
-        const y = point.y * canvas.height;
-        if (index) ctx.lineTo(x, y);
-        else ctx.moveTo(x, y);
-      });
-      ctx.stroke();
-    }
-    ctx.restore();
-  });
-  ctx.restore();
-}
-
 function renderImageLayerSource(image, state) {
   const rendered = document.createElement("canvas");
-  const layerState = { ...freshEditState(), ...(state || {}), textStyle: { ...freshEditState().textStyle, ...(state?.textStyle || {}) } };
-  paintEdit(rendered, image, layerState);
-  drawLayerPaintStrokes(rendered, layerState);
+  paintEdit(rendered, image, { ...freshEditState(), ...(state || {}), textStyle: { ...freshEditState().textStyle, ...(state?.textStyle || {}) } });
   return rendered;
 }
 

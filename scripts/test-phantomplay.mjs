@@ -1,38 +1,21 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import vm from "node:vm";
 
 const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
 const main = read("../app/js/main.js");
 const module = read("../app/js/phantomplay.js");
-const moduleV2 = read("../app/js/phantomplay-v2.js");
 const index = read("../app/index.html");
 const css = read("../app/phantomplay.css");
-const cssV2 = read("../app/phantomplay-v2.css");
 const staticServer = read("../ops/admin-live/admin-static-server.mjs");
-const phantomplayServer = read("../server/src/phantom-ai/phantomplay.ts");
-const gameSlugs = ["neon-drift", "phantom-rumble", "signal-match", "focus-stack", "word-weld", "reflex-grid", "penalty-kick", "rift-frenzy", "serpent-surge", "crown-circuit"];
+const gameSlugs = ["neon-drift", "signal-match", "focus-stack", "word-weld", "reflex-grid", "penalty-kick", "rift-frenzy", "serpent-surge"];
 const games = gameSlugs.map((name) => read(`../app/games/${name}.html`));
 const neonDrift = games[gameSlugs.indexOf("neon-drift")];
-const phantomRumble = games[gameSlugs.indexOf("phantom-rumble")];
-const phantomRumbleBotThink = phantomRumble.match(/function botThink\(f,dt\)\{[\s\S]*?\r?\nfunction step\(f,dt\)\{/u)?.[0] || "";
 const penaltyKick = games[gameSlugs.indexOf("penalty-kick")];
-const neonBreaker = read("../app/games/neon-breaker.html");
-const kingdomBreakers = read("../app/games/kingdom-breakers.html");
-const kingdomBreakersScript = kingdomBreakers.match(/<script>([\s\S]*)<\/script>/u)?.[1] || "";
-const skyguardHtml = read("../app/games/skyguard-arena/index.html");
-const skyguardJs = read("../app/games/skyguard-arena/game.js");
-const skyguardCss = read("../app/games/skyguard-arena/style.css");
 const appFiles = [index, main, module, ...games];
-function catalogBlock(source, id) {
-  const escaped = id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const match = source.match(new RegExp(`\\{\\s*\\n\\s*id:\\s*"${escaped}"[\\s\\S]*?\\n\\s*\\},`, "u")) || source.match(new RegExp(`\\{\\s*id:\\s*"${escaped}"[^\\n]*\\},?`, "u"));
-  assert.ok(match, `${id} catalog row must be inspectable.`);
-  return match[0];
-}
 
 assert.match(main, /id:\s*"phantomplay"[\s\S]*label:\s*"PhantomPlay"/u, "PhantomPlay must be in the native navigation.");
 assert.match(main, /renderPhantomPlay/u, "The workspace must use the PhantomPlay renderer.");
+assert.match(read("../app/js/customization.js"), /canAccessConfiguredModule[\s\S]*module\.id !== "phantomplay"[\s\S]*selected_members/u, "PhantomPlay nav access must be controlled by the workspace module configuration.");
 assert.match(main, /sessionId:\s*kind === "admin" \? "admin-jordan" : "client-sports-demo"/u, "Local UI tests must obtain a real protected demo session when the local backend is available.");
 assert.match(index, /phantomplay\.css\?v=phantom-live-/u, "The dedicated PhantomPlay stylesheet must be loaded.");
 assert.match(module, /sandbox="allow-scripts"/u, "Games must launch in a script-only sandbox.");
@@ -42,72 +25,22 @@ assert.match(module, /data\.source !== "phantomplay-game"/u, "Game messages must
 assert.match(module, /Offline mode/u, "An honest offline state must exist.");
 assert.match(module, /No matching builds/u, "A real search empty state must exist.");
 assert.match(module, /not a marketplace/u, "PhantomPlay must be positioned as a sandbox, not a marketplace.");
-assert.match(module, /friendlyBackendError[\s\S]*Sign in to sync PhantomPlay/u, "Classic PhantomPlay must hide raw auth transport errors behind a clean sign-in message.");
-assert.match(moduleV2, /friendlyBackendError[\s\S]*Sign in to sync PhantomPlay/u, "PhantomPlay V2 must hide raw auth transport errors behind a clean sign-in message.");
-assert.match(module, /Play together with friends in this workspace\./u, "PhantomPlay must expose the private multiplayer room surface.");
-assert.match(module, /Start a private room/u, "PhantomPlay must expose private room creation.");
+assert.match(module, /Playtest Rooms/u, "PhantomPlay must expose the private playtest surface.");
 assert.match(module, /No public discovery/u, "Private rooms must avoid public discovery.");
 assert.match(module, /same workspace/u, "Private rooms must be scoped to the signed-in workspace.");
 assert.match(module, /No direct inbound device ports/u, "Wireless play must not require exposing player devices.");
 assert.match(module, /Classroom mode only allows Everyone-rated games/u, "School rooms must have an Everyone-rated content boundary.");
 assert.match(module, /\/api\/phantomplay\/rooms/u, "The play-together UI must use the authenticated PhantomPlay room API.");
-assert.match(module, /\/api\/phantomplay\/rooms\/\$\{encodeURIComponent\(code\)\}\/match/u, "Room games must be able to relay match actions through PhantomPlay.");
-assert.match(module, /match-state/u, "The player shell must pass room match state into multiplayer games.");
 assert.match(module, /Edit build/u, "Builders must be able to revise builds.");
-assert.match(module, /function developerDirectory/u, "The Developers tab must be backed by a developer directory derived from catalog data.");
-assert.match(module, /function developerIdentityFor/u, "Developer profiles must use a stable identity helper, not raw display names.");
-assert.match(module, /developerId|developer_id/u, "Developer profiles must prefer server-issued developer ids when present.");
-assert.match(module, /community:\$\{stableKeyPart\(gameIdentity\)\}/u, "Community developers without stable ids must not collapse into one shared profile.");
-assert.match(module, /\[data-pp-tab\][\s\S]*selectedDeveloperId = ""[\s\S]*developerMessage = ""/u, "Top-level PhantomPlay tab navigation must reset stale developer profile state.");
+assert.match(module, /function developerDirectory/u, "The Dev Rooms tab must be backed by a developer directory derived from catalog data.");
 assert.match(module, /Dev score/u, "Developer profiles must expose a visible Dev score.");
 assert.match(module, /data-pp-open-dev/u, "Developer cards must open profile views.");
 assert.match(module, /data-pp-support-dev/u, "Developer profiles must allow local support marks.");
 assert.match(module, /data-pp-donate-dev/u, "Developer profiles must allow local collaboration intent without starting payments.");
 assert.match(module, /data-pp-save-dev-note/u, "Developer profiles must support private dev notes.");
-assert.match(module, /\["developer", "Developers"\]/u, "The classic PhantomPlay tab label must be Developers, not Dev Rooms.");
-assert.match(module, /Browse the people building PhantomPlay games/u, "The classic Developers view must present a developer directory, not a submission room.");
-assert.doesNotMatch(module, /\["developer", "Dev Rooms"\]|Open dev rooms|← Dev Rooms|<h2>Dev Rooms<\/h2>|No dev rooms yet/u, "The classic Developers view must not keep old Dev Rooms tab copy.");
 const renderDeveloperSource = module.match(/function renderDeveloper\(\) \{([\s\S]*?)\nfunction renderAdmin/u)?.[1] || "";
 assert.ok(renderDeveloperSource, "renderDeveloper must exist.");
-assert.doesNotMatch(renderDeveloperSource, /data-pp-submit-form|New submission|DEVELOPER DISTRIBUTION|marketplace|storefront/u, "The Developers tab must render the sandbox directory/profile flow, not the old submission form or marketplace copy.");
-assert.match(moduleV2, /function developerDirectory/u, "The V2 Developers tab must be backed by a developer directory derived from catalog data.");
-assert.match(moduleV2, /function developerIdentityFor/u, "V2 developer profiles must use a stable identity helper, not raw display names.");
-assert.match(moduleV2, /developerId|developer_id/u, "V2 developer profiles must prefer server-issued developer ids when present.");
-assert.match(moduleV2, /community:\$\{stableKeyPart\(gameIdentity\)\}/u, "V2 community developers without stable ids must not collapse into one shared profile.");
-assert.match(moduleV2, /\[data-pp2-tab\][\s\S]*selectedDeveloperId = ""[\s\S]*developerMessage = ""/u, "Top-level V2 tab navigation must reset stale developer profile state.");
-assert.match(moduleV2, /Dev score/u, "V2 developer profiles must expose a visible Dev score.");
-assert.match(moduleV2, /data-pp2-open-dev/u, "V2 developer cards must open profile views.");
-assert.match(moduleV2, /data-pp2-support-dev/u, "V2 developer profiles must allow local support marks.");
-assert.match(moduleV2, /data-pp2-donate-dev/u, "V2 developer profiles must allow local collaboration intent without starting payments.");
-assert.match(moduleV2, /data-pp2-save-dev-note/u, "V2 developer profiles must support private dev notes.");
-assert.match(moduleV2, /\["developer", "Developers"\]/u, "The V2 tab label must be Developers, not Dev Hub.");
-assert.doesNotMatch(moduleV2, /\["developer", "Dev Hub"\]|Open Dev Hub|Dev Hub is plan-gated/u, "The V2 Developers tab must not present the old Dev Hub gate or label.");
-for (const source of [module, moduleV2]) {
-  assert.match(source, /"Kids"/u, "PhantomPlay must label the child-focused category as Kids.");
-  assert.match(source, /KIDS_GAME_IDS[\s\S]*reflex-grid[\s\S]*rift-frenzy[\s\S]*serpent-surge[\s\S]*color-rush[\s\S]*circuit-serpent/u, "The Kids-only games must be explicitly grouped together.");
-  assert.match(source, /ui\.category === "Kids" \? isKidsGame\(game\) : ui\.category === "All" \? !isKidsGame\(game\)/u, "All/default browsing must hide Kids games until the Kids category is clicked.");
-  assert.doesNotMatch(source, /toddlar|toddler/i, "The category must never be labeled toddler/toddlar.");
-}
-for (const id of ["reflex-grid", "rift-frenzy", "serpent-surge"]) {
-  const block = catalogBlock(module, id);
-  assert.match(block, /category:\s*"Kids"/u, `${id} must be Kids-only in the classic shell.`);
-  assert.match(block, /featured:\s*false/u, `${id} must not be featured in the classic shell.`);
-}
-for (const id of ["reflex-grid", "rift-frenzy", "serpent-surge", "color-rush", "circuit-serpent"]) {
-  const block = catalogBlock(phantomplayServer, id);
-  assert.match(block, /category:\s*"Kids"/u, `${id} must be Kids-only in the server catalog.`);
-  assert.match(block, /featured:\s*false/u, `${id} must not be featured in the server catalog.`);
-}
-const penaltyKickServerBlock = catalogBlock(phantomplayServer, "penalty-kick");
-assert.match(penaltyKickServerBlock, /category:\s*"Sports"/u, "Penalty Kick must stay in Sports.");
-assert.match(penaltyKickServerBlock, /featured:\s*true/u, "Penalty Kick must stay visible as a featured sports game.");
-const neonBreakerServerBlock = catalogBlock(phantomplayServer, "neon-breaker");
-assert.match(neonBreakerServerBlock, /launchUrl:\s*"\/app\/games\/neon-breaker\.html\?v=1\.0\.1"[\s\S]*version:\s*"1\.0\.1"/u, "Neon Breaker must launch the cache-busted visible-paddle build.");
-assert.match(module, /ui\.roomMode === "classroom" \? game\.contentRating === "everyone" : !isKidsGame\(game\)/u, "Classroom rooms must include Kids games while friend rooms keep them out of default multiplayer.");
-const renderDeveloperV2Source = moduleV2.match(/function renderDeveloper\(\) \{([\s\S]*?)\n\/\* ---- ADMIN ---- \*\//u)?.[1] || "";
-assert.ok(renderDeveloperV2Source, "V2 renderDeveloper must exist.");
-assert.match(renderDeveloperV2Source, /pp2-dev-list|renderDeveloperProfile|developerBuilderTools/u, "V2 renderDeveloper must render the directory/profile flow before secondary builder tools.");
-assert.doesNotMatch(renderDeveloperV2Source, /data-pp2-submit|New submission|Publish to PhantomPlay and let PhantomForce|plan-gated/u, "The default V2 Developers view must not be the old submission form or a plan gate.");
+assert.doesNotMatch(renderDeveloperSource, /data-pp-submit-form|New submission|DEVELOPER DISTRIBUTION|marketplace|storefront/u, "The Dev Rooms tab must render the sandbox directory/profile flow, not the old submission form or marketplace copy.");
 assert.match(module, /Request changes/u, "Admin moderation controls must exist.");
 assert.match(module, /data-pp-favorite/u, "Favorites must be interactive.");
 assert.match(module, /data-pp-player-pause/u, "The player must expose pause and resume controls.");
@@ -120,8 +53,6 @@ assert.match(module, /saveStateBytes:\s*262144/u, "The engine must support large
 assert.match(module, /largeMap:\s*\{/u, "The engine must advertise large-map support.");
 assert.match(module, /engine:\s*engineFor/u, "Game settings must include engine capabilities.");
 assert.match(module, /frame\.focus/u, "The active game frame must receive keyboard focus.");
-assert.match(module, /const scoreValue = Number\(event\.data\.score\);[\s\S]*Number\.isFinite\(scoreValue\) \? scoreValue : undefined/u, "The PhantomPlay shell must preserve zero scores from games.");
-assert.match(moduleV2, /const scoreValue = Number\(event\.data\.score\);[\s\S]*Number\.isFinite\(scoreValue\) \? scoreValue : undefined/u, "The PhantomPlay V2 shell must preserve zero scores from games.");
 for (const slug of gameSlugs) {
   assert.match(module, new RegExp(`id:\\s*"${slug}"`, "u"), `${slug} must be registered in the frontend built-in catalog.`);
   assert.match(module, new RegExp(`/app/games/${slug}\\.html`, "u"), `${slug} must have a playable launch URL.`);
@@ -130,21 +61,9 @@ assert.match(css, /@media\s*\(max-width:\s*767px\)/u, "Phone-specific responsive
 assert.match(css, /\.pp-dev-list/u, "Developer directory cards must be styled.");
 assert.match(css, /\.pp-dev-profile/u, "Developer profile views must be styled.");
 assert.match(css, /\.pp-dev-notes/u, "Developer notes must be styled.");
-assert.match(css, /\.pp-game-body\{[\s\S]*display:flex;[\s\S]*flex-direction:column/u, "PhantomPlay game cards must keep text in a real flex body instead of a squeezing action grid.");
-assert.match(css, /\.pp-game-body>p\{[\s\S]*-webkit-line-clamp:2/u, "PhantomPlay summaries must clamp tightly instead of wrapping into tall one-word columns.");
-assert.match(css, /\.pp-play\{[\s\S]*align-self:stretch;[\s\S]*width:100%/u, "Compact PhantomPlay action buttons must fill the card width for a stable click target.");
-assert.match(css, /\.workspace-page\[data-workspace-page="phantomplay"\]:not\(:has\(\.pp-player\)\):not\(:has\(\.pp2-player\)\) \.workspace-page-body\{[\s\S]*overflow-y:auto;[\s\S]*padding-bottom:calc\(140px/u, "Classic PhantomPlay must keep its workspace body scrollable with bottom runway while leaving either active player locked.");
-assert.match(css, /@media\(min-width:768px\)\{[\s\S]*\.workspace-page\[data-workspace-page="phantomplay"\] \.pp-shell\{[\s\S]*min-height:max-content;[\s\S]*padding-bottom:calc\(110px/u, "Classic PhantomPlay must add desktop-only real content height without overriding mobile resets.");
-assert.match(cssV2, /\.pp2-dev-list/u, "V2 developer directory cards must be styled.");
-assert.match(cssV2, /\.pp2-dev-profile/u, "V2 developer profile views must be styled.");
-assert.match(cssV2, /\.pp2-dev-notes/u, "V2 developer notes must be styled.");
-assert.match(cssV2, /\.workspace-page\[data-workspace-page="phantomplay"\]:not\(:has\(\.pp2-player\)\):not\(:has\(\.pp-player\)\) \.workspace-page-body\{[\s\S]*overflow-y:auto;[\s\S]*padding-bottom:calc\(140px/u, "V2 PhantomPlay must keep its workspace body scrollable with bottom runway while leaving either active player locked.");
-assert.match(cssV2, /@media\(min-width:768px\)\{[\s\S]*\.workspace-page\[data-workspace-page="phantomplay"\] \.pp2-shell\{[\s\S]*min-height:max-content;[\s\S]*padding-bottom:calc\(110px/u, "V2 PhantomPlay must add desktop-only real content height without overriding mobile layout.");
 assert.match(css, /\.pp-player-exit/u, "The player needs a stage-level exit control over the game iframe.");
 assert.match(css, /workspace-page:has\(\.pp-player\)[^{]*\.workspace-page-body\{[^}]*transform:none!important/u, "The game player must escape the animated page containing block.");
 assert.match(staticServer, /urlPath\.startsWith\("\/api\/phantomplay"\)/u, "The live admin server must proxy PhantomPlay API routes.");
-assert.match(phantomplayServer, /developerId\?: string/u, "Approved community games must carry developerId into the catalog contract.");
-assert.match(phantomplayServer, /developerId:\s*item\.developerId/u, "The server must not drop developerId when submissions become playable games.");
 
 const buildIds = new Set(appFiles.flatMap((source) => source.match(/phantom-live-\d{8}-\d+/gu) || []));
 assert.equal(buildIds.size, 1, `The PhantomPlay module graph must use one build ID, found: ${[...buildIds].join(", ")}`);
@@ -168,117 +87,16 @@ assert.match(games[0], /\.start\[hidden\][^{]*\{display:none\}/u, "Neon Drift's 
 assert.match(neonDrift, /invuln/u, "Neon Drift must give the ship a short grace window after damage.");
 assert.match(neonDrift, /maxSpeed=\.0018/u, "Neon Drift ship speed must stay tuned for fast arcade responsiveness.");
 assert.match(neonDrift, /accel=\.0000084\*W/u, "Neon Drift needs punchier acceleration.");
-assert.doesNotMatch(neonDrift, /DRAG TO FLY|Touch and drag on mobile|touch-drag/u, "Neon Drift mobile controls must stay invisible and avoid obvious touch instructions.");
 assert.match(neonDrift, /Math\.max\(130,390-wave\*18\)/u, "Neon Drift waves should spawn quickly enough to stay exciting.");
 assert.match(neonDrift, /t\*\.000055/u, "Neon Drift background motion should feel fast enough.");
 assert.match(neonDrift, /e\.y>1\.12\)\{e\.dead=true\}/u, "Escaped enemies should leave the field without damaging the player.");
 assert.doesNotMatch(neonDrift, /e\.y>1\.08\)\{e\.dead=true;damage\(\)\}/u, "Escaped enemies must not cause invisible hull damage.");
-assert.match(phantomRumble, /shieldHeld|data-t="shield"|PARRY/u, "Phantom Rumble must have real guard and parry mechanics.");
-assert.match(phantomRumble, /function dodge|dodgeCd|data-t="dodge"/u, "Phantom Rumble must have an active dodge verb on keyboard and touch.");
-assert.match(phantomRumble, /function tryLedgeGrab|ledgeSide|LEDGE/u, "Phantom Rumble must include ledge-save recovery so close KOs stay playable.");
-assert.match(phantomRumble, /function updateCamera|camera\.z|function sx/u, "Phantom Rumble must keep a dynamic arena camera without breaking normalized stage sizing.");
-assert.match(phantomRumble, /touch-action:none|overscroll-behavior:none|env\(safe-area-inset-bottom\)/u, "Phantom Rumble must be tuned for mobile touch play.");
-assert.doesNotMatch(games[gameSlugs.indexOf("focus-stack")], /function size\(\)\{[^}]*reset\(\)/u, "Focus Stack must not erase a run when the mobile viewport resizes.");
+assert.doesNotMatch(games[2], /function size\(\)\{[^}]*reset\(\)/u, "Focus Stack must not erase a run when the mobile viewport resizes.");
 assert.match(penaltyKick, /\.field\{[^}]*height:100%;[^}]*min-height:280px/u, "Penalty Kick must reserve a real playable field instead of collapsing around absolute children.");
 assert.match(penaltyKick, /function meterPower\(\)\{[^}]*getBoundingClientRect/u, "Penalty Kick must calculate shot timing from live meter geometry.");
 assert.doesNotMatch(penaltyKick, /getComputedStyle\(meter\)\.transform\.split/u, "Penalty Kick must not use raw CSS transform pixels for shot timing.");
 assert.match(penaltyKick, /else start\(\)/u, "Penalty Kick must let keyboard users start from the opening overlay.");
-assert.match(module, /id:\s*"penalty-kick"[\s\S]*launchUrl:\s*"\/app\/games\/penalty-kick\.html\?v=1\.0\.3"[\s\S]*featured:\s*true/u, "Penalty Kick must launch the fixed playable build and be visible in the ready strip.");
-assert.match(penaltyKick, /field\.addEventListener\('pointerdown',chooseLaneFromPoint\)/u, "Penalty Kick must let touch and pointer users choose a lane from the field.");
-assert.match(penaltyKick, /shootButton\.disabled=busy\|\|paused\|\|!started/u, "Penalty Kick must disable shooting while blocked, paused, or not started.");
-assert.match(penaltyKick, /function finishShot\([^)]*\)\{[\s\S]*shots--;busy=false;render\(\);[\s\S]*if\(shots<=0\)\{started=false;render\(\);startEl\.hidden=false/u, "Penalty Kick must update the final-shot HUD before showing the final whistle.");
-assert.match(penaltyKick, /power>=\.28&&power<=\.72/u, "Penalty Kick must use a forgiving green-zone window so the game is playable.");
-assert.match(penaltyKick, /@media\(max-height:560px\)\{[\s\S]*main\{gap:6px\}[\s\S]*\.field\{min-height:clamp\(128px,36vh,200px\)[\s\S]*\.actions button\{min-height:38px/u, "Penalty Kick must compact the field and controls in short PhantomPlay frames instead of overlapping the meter and shoot button.");
-assert.match(penaltyKick, /@media\(max-height:400px\)\{[\s\S]*\.field\{min-height:110px\}/u, "Penalty Kick must keep a playable emergency layout for tiny embedded frames.");
-assert.doesNotThrow(() => new Function(neonBreaker.match(/<script>([\s\S]*?)<\/script>/u)?.[1] || ""), "Neon Breaker script must parse.");
-assert.match(neonBreaker, /PADDLE_Y=H-88/u, "Neon Breaker must serve the paddle and ball inside the visible embedded frame, not on the clipped bottom edge.");
-assert.match(neonBreaker, /paddle=\{x:W\/2-46,y:PADDLE_Y,w:92,h:13\}/u, "Neon Breaker must start with a wide visible paddle.");
-assert.match(neonBreaker, /paddle\.y=PADDLE_Y;[\s\S]*ball\.x=paddle\.x\+paddle\.w\/2;ball\.y=paddle\.y-ball\.r-2/u, "Neon Breaker serve must keep the ball attached above the visible paddle.");
-assert.match(neonBreaker, /fillText\('Tap \/ Space to launch',W\/2,paddle\.y-22\)/u, "Neon Breaker's launch instruction must sit above the visible launch rail.");
 assert.match(games[gameSlugs.indexOf("rift-frenzy")], /rival|school|boost|eat|bigger/u, "Rift Frenzy must play as a modern fish arena, not a static old mini-game.");
 assert.match(games[gameSlugs.indexOf("serpent-surge")], /storm|boost|rival|serpent|trail/u, "Serpent Surge must play as a modern snake arena, not a static old mini-game.");
-const phantomRumbleScript = phantomRumble.match(/<script>([\s\S]*?)<\/script>/u)?.[1] || "";
-assert.doesNotThrow(() => new Function(phantomRumbleScript), "Phantom Rumble script must parse.");
-assert.match(phantomRumble, /touch-action:none/u, "Phantom Rumble must keep touch controls from scrolling the page.");
-assert.match(phantomRumble, /data-t="shield"[\s\S]*data-t="dodge"/u, "Phantom Rumble must expose shield and dodge touch controls.");
-assert.match(phantomRumble, /function raiseShield\(f\)/u, "Phantom Rumble must implement shield input.");
-assert.match(phantomRumble, /function dodge\(f\)/u, "Phantom Rumble must implement dodge input.");
-assert.match(phantomRumble, /function tryLedgeGrab\(f,s\)/u, "Phantom Rumble must implement ledge recovery.");
-assert.match(phantomRumble, /ledgeCooldown:0/u, "Phantom Rumble fighters must track a ledge cooldown.");
-assert.match(phantomRumble, /if\(f\.ledge>0\)\{[\s\S]*f\.ledgeCooldown=\.75[\s\S]*f\.x\+=-side\*\.02[\s\S]*return/u, "Phantom Rumble ledge jumps must push fighters away from the ledge and prevent immediate re-grabs.");
-assert.match(phantomRumble, /if\(f\.ledge>0\|\|f\.ledgeCooldown>0\|\|f\.vy<0/u, "Phantom Rumble ledge grabs must respect cooldown lockout.");
-assert.match(phantomRumble, /function step\(f,dt\)\{[\s\S]*if\(f\.ledge>0\)\{[\s\S]*!f\.human[\s\S]*jump\(f\)[\s\S]*f\.ai\.jumpCd=\.55/u, "Phantom Rumble bots must auto-recover from ledge inside the physics step before ledge freeze returns.");
-assert.ok(phantomRumbleBotThink, "Phantom Rumble botThink source must be inspectable.");
-assert.doesNotMatch(phantomRumbleBotThink, /if\(f\.ledge>0\)/u, "Phantom Rumble bot ledge recovery must not live in an unreachable botThink branch.");
-assert.match(phantomRumble, /data-shield="\$\{f\.slot\}"/u, "Phantom Rumble HUD must show guard meter state.");
-assert.match(module, /id:\s*"phantom-rumble"[\s\S]*phantom-rumble\.html\?v=2\.2\.3[\s\S]*version:\s*"2\.2\.3"/u, "Classic PhantomPlay must launch the cache-busted Phantom Rumble 2.2.3 build.");
-assert.match(moduleV2, /"phantom-rumble",\s*"Phantom Rumble"[\s\S]*phantom-rumble\.html\?v=2\.2\.3[\s\S]*version:\s*id === "phantom-rumble" \? "2\.2\.3"/u, "V2 PhantomPlay must launch the cache-busted Phantom Rumble 2.2.3 build.");
-assert.match(kingdomBreakers, /function buildDuelLevel\(seed\)/u, "Kingdom Breakers duel mode must build a dedicated two-castle arena.");
-assert.doesNotThrow(() => new Function(kingdomBreakersScript), "Kingdom Breakers script must parse after duel arena changes.");
-assert.match(kingdomBreakers, /owner:'player'[\s\S]*owner:'bot'/u, "Kingdom Breakers duel mode must assign separate player and bot castle ownership.");
-assert.match(kingdomBreakers, /function targetOwnerForShooter\(shooter\)/u, "Kingdom Breakers duel projectiles must resolve against the opposing castle only.");
-assert.match(kingdomBreakers, /predictTrajectory\(ammoKey,ang,pw,220,'bot'\)/u, "Kingdom Breakers bot aim prediction must originate from the bot engine.");
-assert.match(kingdomBreakers, /function duelWardenDown\(owner\)/u, "Kingdom Breakers duel mode must end around Warden defeat, not shared breach score.");
-assert.match(kingdomBreakers, /duelWardenDown\('bot'\)[\s\S]*duelWardenDown\('player'\)/u, "Kingdom Breakers duel end checks must inspect both Wardens.");
-assert.match(phantomRumble, /const VALID_MODES=new Set\(\['duel','versus','rumble','botbrawl'\]\)/u, "Phantom Rumble must validate rematch/start modes before starting a match.");
-assert.match(phantomRumble, /function resetMatchState\(\)\{[\s\S]*fighters=\[\];pickups=\[\];particles=\[\];popups=\[\];[\s\S]*STAGE\.w=STAGE_W_BASE;[\s\S]*camera=\{x:\.5,y:\.58,z:1\};/u, "Phantom Rumble must reset stale fighters, effects, platforms, and camera before returning to the menu.");
-assert.match(phantomRumble, /function showMenu\(\)\{[\s\S]*mode='';resetMatchState\(\);/u, "Phantom Rumble menu returns must clear stale match mode and state.");
-assert.match(phantomRumble, /if\(!VALID_MODES\.has\(selected\)\)\{showMenu\(\);return\}/u, "Phantom Rumble must reject invalid start modes instead of entering a broken run.");
-assert.match(phantomRumble, /data-again[\s\S]*VALID_MODES\.has\(mode\)\?startMatch\(mode\):showMenu\(\)/u, "Phantom Rumble rematch must fall back to the arena menu when the prior mode is stale.");
-assert.match(phantomRumble, /d\.type==='restore'[\s\S]*Number\(d\.progress\)>=100\|\|over\|\|!endEl\.hidden[\s\S]*showMenu\(\);return/u, "Phantom Rumble must not restore a completed or ended match back into a stuck arena.");
-assert.match(phantomRumble, /addEventListener\('pageshow',event=>\{if\(event\.persisted\|\|over\|\|!running\|\|!endEl\.hidden\)showMenu\(\)\}\)/u, "Phantom Rumble must reset stale browser-page restores to the arena menu.");
-const crownCircuit = games[gameSlugs.indexOf("crown-circuit")];
-assert.match(module, /id:\s*"crown-circuit"[\s\S]*multiplayerOnly:\s*true/u, "Crown Circuit must be registered as multiplayer-only.");
-assert.match(crownCircuit, /STRICTLY MULTIPLAYER|No solo mode/u, "Crown Circuit must not present a solo mode.");
-assert.match(crownCircuit, /P1 uses 1-4[\s\S]*P2 uses 7-0/u, "Crown Circuit must expose local two-player keyboard controls.");
-assert.match(crownCircuit, /match-action[\s\S]*match-state/u, "Crown Circuit must support PhantomPlay room relay messages.");
-assert.doesNotMatch(crownCircuit, /AI opponent|startDuel|botTakeTurn|botChooseShot/i, "Crown Circuit must not include bot-opponent code.");
-assert.match(skyguardHtml, /connect-src 'none'/u, "Skyguard Arena must keep network access disabled in its CSP.");
-assert.match(skyguardHtml, /img-src 'self' data:/u, "Skyguard Arena must only allow local/data images.");
-assert.match(skyguardHtml, /data-ready-store/u, "Skyguard Arena must include the pre-battle market surface.");
-assert.match(skyguardHtml, /1v1 Star Duel/u, "Skyguard Arena must lead with the duel mode.");
-assert.doesNotMatch(skyguardHtml, /data-loadout|sg-loadout/u, "Skyguard Arena must not ship inert loadout markup.");
-assert.doesNotMatch(`${skyguardHtml}\n${skyguardJs}`, /https?:\/\//u, "Skyguard Arena must not call external services.");
-assert.match(skyguardJs, /const CURRENCY = 'Stardust'/u, "Skyguard Arena must use the Stardust economy label consistently.");
-assert.doesNotMatch(skyguardJs, /LOADOUT_SIZE|LOADOUT_CARDS/u, "Skyguard Arena must not keep unused loadout constants.");
-assert.match(skyguardJs, /PREBATTLE_OFFERS[\s\S]*shipMachine[\s\S]*starHarvester[\s\S]*trialHero/u, "Skyguard Arena must offer machine, economy, and hero pre-battle choices.");
-assert.match(skyguardJs, /MIDGAME_BUYS[\s\S]*shipMachine[\s\S]*starHarvester[\s\S]*trialHero/u, "Skyguard Arena must expose midgame perk buys in the dock.");
-assert.match(skyguardJs, /function duelReadyMode/u, "Skyguard Arena must centralize duel-only mode checks.");
-assert.match(skyguardJs, /id === 'shipMachine' && !duelReadyMode\(\)/u, "Skyguard Arena must block solo-mode Ship Machine purchases.");
-assert.match(skyguardJs, /if \(shopTab === 'sends' && !duelReady\) shopTab = 'towers'/u, "Skyguard Arena must hide the Sends tab outside duel-ready modes.");
-assert.match(skyguardJs, /runCompleted = false; myResult = null; running = true; paused = true/u, "Skyguard Arena must pause at the pre-battle market before launching the lane.");
-assert.match(skyguardJs, /function launchFromReadyStore\(\)[\s\S]*paused = false;[\s\S]*beginPrep\(1\.5\)/u, "Skyguard Arena must start the lane only after the market launch/skip action.");
-assert.match(skyguardJs, /function launchFromReadyStore\(\)[\s\S]*preBattleOpen = false;[\s\S]*renderPressureDock\(\)/u, "Skyguard Arena must re-render Surrender after the pre-battle market launches.");
-assert.match(skyguardJs, /function dispatchPressure[\s\S]*applyPressureToBot[\s\S]*matchAction/u, "Skyguard Arena pressure sends must support local bot practice and room relay.");
-assert.match(skyguardJs, /function tickBattlePerks[\s\S]*shipMachineTimer[\s\S]*dispatchPressure\('swarm'/u, "Skyguard Arena Ship Machine must create real timed pressure.");
-assert.match(skyguardJs, /function tickBattlePerks[\s\S]*!duelReadyMode\(\)/u, "Skyguard Arena Ship Machine must use the shared duel-ready mode guard.");
-assert.match(skyguardJs, /function renderPressureDock\(\)[\s\S]*running && duelReadyMode\(\)[\s\S]*data-pressure="surrender"[\s\S]*addEventListener\('click', surrender\)/u, "Skyguard Arena must keep one-click Surrender visible in duel-ready modes.");
-assert.match(skyguardJs, /function renderPressureDock\(\)[\s\S]*!preBattleOpen/u, "Skyguard Arena must hide Surrender while the pre-battle market is open.");
-assert.match(skyguardJs, /function drawHero\(\)[\s\S]*Vega/u, "Skyguard Arena must render the hero helper when active.");
-assert.match(skyguardJs, /Endless Duel Prep run/u, "Skyguard Arena result copy must use the renamed Endless Duel Prep label.");
-assert.match(skyguardJs, /campaign: 'Solo Route'[\s\S]*skirmish: '1v1 Star Duel'[\s\S]*battle: 'Room Duel'/u, "Skyguard Arena result copy must match the renamed mode labels.");
-assert.match(skyguardCss, /\.sg-ready-store/u, "Skyguard Arena pre-battle market must be styled.");
-assert.match(skyguardCss, /\.sg-shop-tabs/u, "Skyguard Arena dock shop tabs must be styled.");
-const skyguardShopConstants = skyguardJs.match(/const CURRENCY = 'Stardust';[\s\S]*?const PRESSURE_SENDS = \[[\s\S]*?\];/u)?.[0] || "";
-const skyguardHelpersStart = skyguardJs.indexOf("function duelReadyMode");
-const skyguardHelpersEnd = skyguardJs.indexOf("function perkOwned");
-const skyguardShopHelpers = skyguardHelpersStart >= 0 && skyguardHelpersEnd > skyguardHelpersStart
-  ? skyguardJs.slice(skyguardHelpersStart, skyguardHelpersEnd)
-  : "";
-assert.ok(skyguardShopConstants && skyguardShopHelpers, "Skyguard shop helper source must be executable in tests.");
-const skyguardShopModel = vm.runInNewContext(`${skyguardShopConstants}\n${skyguardShopHelpers}\n({
-  campaignPrebattle: availablePrebattleOffers('campaign').map((item) => item.id),
-  skirmishPrebattle: availablePrebattleOffers('skirmish').map((item) => item.id),
-  endlessMidgame: availableMidgameBuys('endless').map((item) => item.id),
-  battleMidgame: availableMidgameBuys('battle').map((item) => item.id),
-  sendsSolo: duelReadyMode('campaign'),
-  sendsDuel: duelReadyMode('battle')
-})`);
-assert.deepEqual([...skyguardShopModel.campaignPrebattle], ["starHarvester", "trialHero"], "Solo pre-battle shop must hide duel-only Ship Machine.");
-assert.ok(skyguardShopModel.skirmishPrebattle.includes("shipMachine"), "Duel pre-battle shop must keep Ship Machine available.");
-assert.deepEqual([...skyguardShopModel.endlessMidgame], ["starHarvester", "trialHero"], "Solo midgame shop must hide duel-only Ship Machine.");
-assert.ok(skyguardShopModel.battleMidgame.includes("shipMachine"), "Duel midgame shop must keep Ship Machine available.");
-assert.equal(skyguardShopModel.sendsSolo, false, "Solo modes must not expose pressure sends.");
-assert.equal(skyguardShopModel.sendsDuel, true, "Duel modes must expose pressure sends.");
 
 console.log("PhantomPlay frontend and game safety checks passed.");

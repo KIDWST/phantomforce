@@ -1,25 +1,48 @@
 import {
-  currentTenantId, friendlyBackendError, isAdmin, isOwnerOperator, session,
+  currentTenantId, isAdmin, isOwnerOperator, session,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260717-2";
+} from "./store.js?v=phantom-live-20260714-022";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 const FALLBACK_KEY = "pf.phantomplay.offline.v1";
 const DEV_SUPPORT_KEY = "pf.phantomplay.developerSupport.v1";
-const CATEGORIES = ["All", "Arcade", "Puzzle", "Focus", "Strategy", "Sports", "Creative", "Kids"];
-const KIDS_GAME_IDS = new Set(["reflex-grid", "rift-frenzy", "serpent-surge", "color-rush", "circuit-serpent"]);
+const CATEGORIES = ["All", "Arcade", "Puzzle", "Focus", "Strategy", "Sports", "Creative"];
+const STATELESS_GAMES = new Set(["phantom-rumble"]);
+const TODDLER_ONLY_GAMES = new Set(["signal-match", "reflex-grid", "penalty-kick", "color-rush"]);
+// "Game Rating Exposure" — mirrors server PhantomPlayRating (phantomplay.ts).
+// Order matches ratingRank there (gentlest first).
+const RATING_TIERS = [["toddler", "Toddler"], ["everyone", "Everyone"], ["everyone10", "Everyone 10+"], ["teen", "Teen"], ["mature", "Mature"]];
+const ALL_RATING_VALUES = RATING_TIERS.map(([value]) => value);
+// Mirrors defaultAllowedRatings() in server/src/phantom-ai/phantomplay.ts —
+// kept in sync by hand since preferences.allowedRatings has no server-side
+// "give me the default for my type" endpoint of its own.
+function defaultAllowedRatingsFor(profileType) {
+  if (profileType === "toddler") return ["toddler", "everyone"];
+  if (profileType === "child") return ["toddler", "everyone", "everyone10", "teen"];
+  return [...ALL_RATING_VALUES];
+}
+function ratingExposurePreset(kind, profileType) {
+  if (kind === "my-age") return defaultAllowedRatingsFor(profileType);
+  if (kind === "family") return ["toddler", "everyone", "everyone10"];
+  return [...ALL_RATING_VALUES];
+}
+const ROOM_POLL_MS = 1750;
+// Every Nth poll tick, re-send the participant's own current ready value
+// unchanged as a liveness "touch" — the room store only bumps lastSeenAt on
+// join/leave/ready, so this keeps the connection-status indicator accurate
+// without a dedicated heartbeat route.
+const ROOM_POLL_TOUCH_EVERY = 10;
 const PHANTOMPLAY_ENGINE = {
   version: "2.0-large-map",
   saveStateBytes: 262144,
   largeMap: { chunkSize: 1024, maxLoadedChunks: 64, streaming: true },
-  protocols: ["ready", "score", "progress", "complete", "paused", "exit", "settings", "save-state", "load-state", "match-action", "match-state"],
+  protocols: ["ready", "score", "progress", "complete", "paused", "exit", "settings", "save-state", "load-state"],
 };
-const PHANTOMPLAY_ART_VERSION = "phantomplay-art-20260712";
+const PHANTOMPLAY_ART_VERSION = "phantomplay-art-20260714";
 const artUrl = (file) => `/app/assets/phantomplay/${file}?v=${PHANTOMPLAY_ART_VERSION}`;
 const TAK_AVATAR = artUrl("tak-avatar.webp");
 const GAME_ART_BY_SLUG = {
   "neon-drift": artUrl("neon-drift-cover.webp"),
-  "phantom-rumble": artUrl("kingdom-breakers-cover.svg"),
   "signal-match": artUrl("signal-match-cover.webp"),
   "focus-stack": artUrl("focus-stack-cover.webp"),
   "word-weld": artUrl("word-weld-cover.webp"),
@@ -27,7 +50,6 @@ const GAME_ART_BY_SLUG = {
   "penalty-kick": artUrl("penalty-kick-cover.webp"),
   "rift-frenzy": artUrl("neon-drift-cover.webp"),
   "serpent-surge": artUrl("reflex-grid-cover.webp"),
-  "crown-circuit": artUrl("reflex-grid-cover.webp"),
 };
 const CATEGORY_ART = {
   Arcade: GAME_ART_BY_SLUG["neon-drift"],
@@ -38,22 +60,22 @@ const CATEGORY_ART = {
   Creative: GAME_ART_BY_SLUG["word-weld"],
 };
 const BUILT_INS = [
-  { id: "neon-drift", title: "Neon Drift", summary: "Auto-fire spaceship shooter with waves, powerups, and shield saves.", description: "A real arcade shooter: fly fast, fire nonstop, collect rapid fire, spread shot, shield, magnet, and repair powerups, then push deeper into harder waves.", category: "Arcade", tags: ["shooter", "powerups", "arcade", "touch"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/neon-drift.html?v=1.3.0", thumbnail: GAME_ART_BY_SLUG["neon-drift"], featured: true, version: "1.3.0", controls: "WASD/arrow keys to fly. Auto-fire is always on.", progressSupport: true, scoreSupport: true, engine: { tier: "arcade-large-map", minVersion: PHANTOMPLAY_ENGINE.version } },
-  { id: "phantom-rumble", title: "Phantom Rumble", summary: "A premium local platform fighter with guard, parry, dodge, ledge-save recovery, bots, drops, and touch controls.", description: "A full PhantomPlay platform fighter: up to four players or bots brawl across a dynamic arena with percent knockback, double jumps, charge smashes, Phantom Burst, guard/parry, dodge, ledge-save recovery, camera focus, and reality-bending drops. Local keyboard and mobile touch play are both supported without external networking.", category: "Arcade", tags: ["platform fighter", "multiplayer", "action", "local", "touch"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/phantom-rumble.html?v=2.2.3", thumbnail: GAME_ART_BY_SLUG["phantom-rumble"], featured: true, version: "2.2.3", controls: "P1: WASD, Shift guard, Q dodge, Space tap/hold. P2: arrows, I guard, O dodge, Enter tap/hold. Touch controls on mobile.", progressSupport: true, scoreSupport: true, localMultiplayer: true, minPlayers: 1, maxPlayers: 4, engine: { tier: "arena-large-map", minVersion: PHANTOMPLAY_ENGINE.version } },
-  { id: "signal-match", title: "Signal Match", summary: "Find every matching signal with the fewest turns.", description: "A responsive memory grid with clear score, feedback, pause, restart, touch, and keyboard support.", category: "Puzzle", tags: ["memory", "calm", "puzzle"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/signal-match.html?v=1.1.1", thumbnail: GAME_ART_BY_SLUG["signal-match"], featured: true, version: "1.1.1", controls: "Click, tap, or use Tab + Enter", progressSupport: true, scoreSupport: true },
-  { id: "focus-stack", title: "Focus Stack", summary: "Drop each layer cleanly and build the tallest signal tower.", description: "A focused timing run with a visible score, proper start, pause, restart, and resize-safe play field.", category: "Focus", tags: ["timing", "focus", "quick"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/focus-stack.html?v=1.1.1", thumbnail: GAME_ART_BY_SLUG["focus-stack"], featured: false, version: "1.1.1", controls: "Space, Enter, click, or tap", progressSupport: true, scoreSupport: true },
-  { id: "word-weld", title: "Word Weld", summary: "Build as many words as you can from one shifting signal rack.", description: "A quick word-building game with tap, keyboard, score, timer, and clean reset controls.", category: "Creative", tags: ["word", "creative", "quick", "touch"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/word-weld.html?v=1.0.0", thumbnail: GAME_ART_BY_SLUG["word-weld"], featured: true, version: "1.0.0", controls: "Keyboard, tap letters, Enter to submit", progressSupport: true, scoreSupport: true },
-  { id: "reflex-grid", title: "Reflex Grid", summary: "Hit the live cells before the grid burns out.", description: "A fast aim-and-reaction grid for short focus breaks, with mistakes, streaks, and a real finish.", category: "Kids", tags: ["reaction", "strategy", "touch", "aim", "kids"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/reflex-grid.html?v=1.0.0", thumbnail: GAME_ART_BY_SLUG["reflex-grid"], featured: false, version: "1.0.0", controls: "Click, tap, or use number keys", progressSupport: true, scoreSupport: true },
-  { id: "penalty-kick", title: "Penalty Kick", summary: "Pick your lane, hit the green zone, and beat the keeper.", description: "A readable, touch-friendly sports timing game with five shots, tap-to-aim lanes, visible timing feedback, keeper reads, and a clean final whistle.", category: "Sports", tags: ["sports", "timing", "soccer", "touch"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/penalty-kick.html?v=1.0.3", thumbnail: GAME_ART_BY_SLUG["penalty-kick"], featured: true, version: "1.0.3", controls: "Tap a lane or use arrows. Shoot when the meter says LOCKED.", progressSupport: true, scoreSupport: true },
-  { id: "rift-frenzy", title: "Rift Frenzy", summary: "Grow from reef bait to apex hunter in a neon multiplayer-style fish arena.", description: "A modern eat-smaller-fish arena with rival schools, growth stages, boost windows, danger reads, and touch-friendly movement. It feels like a live arena even when running as a safe built-in sandbox.", category: "Kids", tags: ["fish", "arena", "growth", "io", "touch", "kids"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/rift-frenzy.html?v=1.0.4", thumbnail: GAME_ART_BY_SLUG["rift-frenzy"], featured: false, version: "1.0.4", controls: "Move with WASD/arrow keys or touch-drag. Eat smaller fish, avoid bigger rivals, boost with Space.", progressSupport: true, scoreSupport: true, engine: { tier: "arena-large-map", minVersion: PHANTOMPLAY_ENGINE.version } },
-  { id: "serpent-surge", title: "Serpent Surge", summary: "A fast snake arena with rivals, pickups, cutoffs, boost trails, and storm pressure.", description: "A PhantomPlay take on snake arena games: orbit energy, grow long, bait rival serpents, use boost carefully, and survive a closing storm ring without any external networking.", category: "Kids", tags: ["snake", "arena", "io", "survival", "touch", "kids"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/serpent-surge.html?v=1.0.4", thumbnail: GAME_ART_BY_SLUG["serpent-surge"], featured: false, version: "1.0.4", controls: "Steer with mouse, touch, WASD, or arrows. Hold Space or touch pressure to boost.", progressSupport: true, scoreSupport: true, engine: { tier: "arena-large-map", minVersion: PHANTOMPLAY_ENGINE.version } },
-  { id: "crown-circuit", title: "Crown Circuit", summary: "A two-player-only lane card battle with towers, elixir, counters, and sudden death.", description: "A strictly multiplayer tower duel: two players draft from four unit cards, spend elixir, choose lanes, break towers, and win the crown. No solo mode, no bots, no fake opponents - local keyboard duels or PhantomPlay private rooms only.", category: "Strategy", tags: ["multiplayer-only", "tower duel", "cards", "lanes", "keyboard", "rooms"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/crown-circuit.html?v=1.0.0", thumbnail: GAME_ART_BY_SLUG["crown-circuit"], featured: true, version: "1.0.0", controls: "Local: P1 uses 1-4 then Q/W/E. P2 uses 7-0 then I/O/P. Online: create a PhantomPlay room, join with two players, then launch.", progressSupport: false, scoreSupport: true, multiplayerOnly: true, localMultiplayer: true, onlineMultiplayer: true, minPlayers: 2, maxPlayers: 2, engine: { tier: "arena-multiplayer-relay", minVersion: PHANTOMPLAY_ENGINE.version } },
+  { id: "neon-drift", title: "Neon Drift", summary: "Auto-fire spaceship shooter with waves, powerups, and shield saves.", description: "A real arcade shooter: move with WASD/arrow keys or touch-drag, fire nonstop, collect rapid fire, spread shot, shield, magnet, and repair powerups, then push deeper into harder waves.", category: "Arcade", tags: ["shooter", "powerups", "arcade", "touch"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/neon-drift.html?v=1.2.3", thumbnail: GAME_ART_BY_SLUG["neon-drift"], featured: true, version: "1.2.3", controls: "WASD/arrow keys to fly. Auto-fire is always on. Touch and drag on mobile.", progressSupport: true, scoreSupport: true, engine: { tier: "arcade-large-map", minVersion: PHANTOMPLAY_ENGINE.version } },
+  { id: "phantom-dash", title: "Phantom Dash", summary: "Jump, double-jump, and flip gravity through a neon obstacle gauntlet.", description: "A Geometry Dash-style one-button runner with rising speed, gravity gates, neon hazards, score, levels, and quick restarts.", category: "Arcade", tags: ["runner", "jump", "geometry", "arcade", "touch"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/phantom-dash.html?v=1.1.0", thumbnail: CATEGORY_ART["Arcade"], featured: true, version: "1.1.0", controls: "Space, ↑, click, or tap to jump. Double-jump, gravity flips, orbs, and combo flow are enabled.", progressSupport: true, scoreSupport: true },
+  { id: "signal-match", title: "Signal Match", summary: "Watch the signal flash, then match the pairs from memory.", description: "A responsive memory grid with a real preview flash, streaks, clear feedback, pause, restart, touch, and keyboard support.", category: "Puzzle", tags: ["memory", "calm", "puzzle"], contentRating: "toddler", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/signal-match.html?v=1.1.2", thumbnail: GAME_ART_BY_SLUG["signal-match"], featured: false, version: "1.1.2", controls: "Click, tap, or use Tab + Enter", progressSupport: true, scoreSupport: true },
+  { id: "focus-stack", title: "Focus Stack", summary: "Drop perfect layers, build flow, and stack the tallest signal tower.", description: "A focused timing run with a visible score, proper start, pause, restart, and resize-safe play field.", category: "Focus", tags: ["timing", "focus", "quick"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/focus-stack.html?v=1.2.0", thumbnail: GAME_ART_BY_SLUG["focus-stack"], featured: false, version: "1.2.0", controls: "Space, Enter, click, or tap", progressSupport: true, scoreSupport: true },
+  { id: "word-weld", title: "Word Weld", summary: "Weld words from shifting racks with combo sparks and time bonuses.", description: "A quicker, juicier word-building game with keyboard/touch input, combo scoring, forged-word bursts, timer bonuses, and clean reset controls.", category: "Creative", tags: ["word", "creative", "quick", "touch"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/word-weld.html?v=1.1.0", thumbnail: GAME_ART_BY_SLUG["word-weld"], featured: true, version: "1.1.0", controls: "Keyboard, tap letters, Enter to submit", progressSupport: true, scoreSupport: true },
+  { id: "reflex-grid", title: "Reflex Grid", summary: "Hit live cells under combo pressure before the grid burns out.", description: "A sharper aim-and-reaction grid with combo scoring, a visible timeout bar, audio cues, hit/miss feedback, mistakes, and a real finish.", category: "Strategy", tags: ["reaction", "strategy", "touch", "aim"], contentRating: "toddler", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/reflex-grid.html?v=1.1.0", thumbnail: GAME_ART_BY_SLUG["reflex-grid"], featured: false, version: "1.1.0", controls: "Click, tap, or use number keys", progressSupport: true, scoreSupport: true },
+  { id: "penalty-kick", title: "Penalty Kick", summary: "Pick your lane, time the strike, and beat the keeper.", description: "A touch-friendly sports timing game with five shots, visible score, keeper reads, and saved score.", category: "Sports", tags: ["sports", "timing", "soccer", "touch"], contentRating: "toddler", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/penalty-kick.html?v=1.1.0", thumbnail: GAME_ART_BY_SLUG["penalty-kick"], featured: false, version: "1.1.0", controls: "Choose one of five lanes, read the keeper, then shoot in the sweet spot.", progressSupport: true, scoreSupport: true },
+  { id: "rift-frenzy", title: "Rift Frenzy", summary: "Grow from reef bait to apex hunter in a neon multiplayer-style fish arena.", description: "A modern eat-smaller-fish arena with rival schools, growth stages, boost windows, danger reads, and touch-friendly movement. It feels like a live arena even when running as a safe built-in sandbox.", category: "Arcade", tags: ["fish", "arena", "growth", "io", "touch"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/rift-frenzy.html?v=1.1.0", thumbnail: GAME_ART_BY_SLUG["rift-frenzy"], featured: true, version: "1.1.0", controls: "Move with WASD/arrow keys or touch-drag. Eat smaller fish, avoid bigger rivals, boost with Space.", progressSupport: true, scoreSupport: true, engine: { tier: "arena-large-map", minVersion: PHANTOMPLAY_ENGINE.version } },
+  { id: "serpent-surge", title: "Serpent Surge", summary: "A fast snake arena with rivals, pickups, cutoffs, boost trails, and storm pressure.", description: "A PhantomPlay take on snake arena games: orbit energy, grow long, bait rival serpents, use boost carefully, and survive a closing storm ring without any external networking.", category: "Strategy", tags: ["snake", "arena", "io", "survival", "touch"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/serpent-surge.html?v=1.1.0", thumbnail: GAME_ART_BY_SLUG["serpent-surge"], featured: true, version: "1.1.0", controls: "Steer with mouse, touch, WASD, or arrows. Hold Space or touch pressure to boost.", progressSupport: true, scoreSupport: true, engine: { tier: "arena-large-map", minVersion: PHANTOMPLAY_ENGINE.version } },
 ];
 
 const ui = {
   tab: "home",
   loading: true,
   error: "",
+  notice: "",
   offline: false,
   query: "",
   category: "All",
@@ -69,16 +91,35 @@ const ui = {
   editingSubmissionId: null,
   selectedDeveloperId: "",
   developerMessage: "",
+  guardianMessage: "",
+  ratingBusy: false,
 };
 
 let mountedRoot = null;
 let mountedOpts = null;
 let playClock = null;
-let matchClock = null;
 let playTickAt = 0;
 let messageBound = false;
 let keyboardBound = false;
 let playerClosing = false;
+let roomPollTimer = null;
+let roomPollTicks = 0;
+// Pre-existing dead reference fixed in passing: closePlayer()/onGameMessage()
+// already called clearTimeout(readyWatchdog) and launch() already called
+// armReadyWatchdog(), but neither the variable nor the function existed
+// anywhere in this file (a ReferenceError on every launch()). Restored the
+// evident original intent: if a game never posts "ready", surface an error
+// instead of leaving the loading spinner up forever.
+let readyWatchdog = null;
+function armReadyWatchdog() {
+  clearTimeout(readyWatchdog);
+  readyWatchdog = setTimeout(() => {
+    if (ui.player && !ui.playerReady) {
+      ui.error = "This game did not respond. Try restarting or closing it.";
+      render();
+    }
+  }, 12000);
+}
 
 function slugifyGame(value) {
   return String(value ?? "")
@@ -116,32 +157,6 @@ function developerNameFor(game) {
   return game?.kind === "built_in" || artSlugFor(game) || game?.developer === "Phantom Labs" ? "Tak" : (game?.developer || "Tak");
 }
 
-function firstPresent(...values) {
-  return values.find((value) => String(value ?? "").trim()) ?? "";
-}
-
-function stableKeyPart(value) {
-  const text = String(value ?? "").normalize("NFKC").trim().toLowerCase();
-  let hash = 0;
-  for (const char of text) hash = ((hash * 31) + (char.codePointAt(0) || 0)) >>> 0;
-  return `${slugifyDeveloper(text)}-${hash.toString(36)}`;
-}
-
-function genericDeveloperName(value) {
-  const name = String(value ?? "").normalize("NFKC").trim().toLowerCase();
-  return !name || name === "developer" || name === "phantom labs";
-}
-
-function developerIdentityFor(game) {
-  const displayName = developerNameFor(game);
-  if (game?.kind === "built_in" || displayName.toLowerCase() === "tak") return { id: "developer:tak", name: "Tak" };
-  const explicitId = firstPresent(game?.developerId, game?.developer_id, game?.ownerId, game?.owner_id, game?.accountId, game?.authorId, game?.submittedById);
-  if (explicitId) return { id: `developer:${stableKeyPart(explicitId)}`, name: displayName };
-  const gameIdentity = firstPresent(game?.id, game?.submissionId, game?.title, displayName);
-  if (game?.kind === "community" || genericDeveloperName(displayName)) return { id: `community:${stableKeyPart(gameIdentity)}`, name: displayName };
-  return { id: `developer:${stableKeyPart(displayName)}`, name: displayName };
-}
-
 function normalizeGame(game) {
   const developer = developerNameFor(game);
   return {
@@ -170,7 +185,7 @@ function authHeaders(json = false) {
 async function api(path, options = {}) {
   const response = await fetch(path, { ...options, headers: { ...authHeaders(Boolean(options.body)), ...(options.headers || {}) } });
   const payload = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(friendlyBackendError(response.status, payload?.error, { authMessage: "Sign in to sync PhantomPlay.", fallbackPrefix: "PhantomPlay request failed" }));
+  if (!response.ok) throw new Error(typeof payload?.error === "string" ? payload.error : `PhantomPlay request failed (${response.status}).`);
   return payload;
 }
 
@@ -181,10 +196,13 @@ function offlineState() {
     tenantId: currentTenantId(),
     actorId: "offline",
     access: { enabled: true, reason: "offline_built_ins", dailyMinuteLimit: 60, usedMinutesToday: 0, remainingMinutesToday: 60, canSubmitGames: false, canModerate: false },
-    catalog: BUILT_INS.filter((game) => game.active !== false).map(normalizeGame),
+    catalog: BUILT_INS.map(normalizeGame),
     favorites: Array.isArray(saved.favorites) ? saved.favorites : [],
     history: Array.isArray(saved.history) ? saved.history : [],
-    preferences: { contentRating: "teen", sound: saved.sound !== false, reducedMotion: !!saved.reducedMotion, allowCommunityGames: true },
+    leaderboards: { overall: [], byGame: [] },
+    preferences: { contentRating: "teen", allowedRatings: [...ALL_RATING_VALUES], sound: saved.sound !== false, reducedMotion: !!saved.reducedMotion, allowCommunityGames: true },
+    profileType: "adult",
+    guardianLock: { enabled: false },
     engine: PHANTOMPLAY_ENGINE,
     rooms: [],
     submissions: [],
@@ -195,7 +213,7 @@ function offlineState() {
 
 function saveOffline(snapshot = ui.snapshot) {
   if (!snapshot) return;
-  workspaceStorageSetItem(FALLBACK_KEY, JSON.stringify({ favorites: snapshot.favorites, history: snapshot.history, sound: snapshot.preferences.sound, reducedMotion: snapshot.preferences.reducedMotion }));
+  workspaceStorageSetItem(FALLBACK_KEY, JSON.stringify({ favorites: snapshot.favorites, history: snapshot.history.filter((item) => !STATELESS_GAMES.has(item.gameId)), sound: snapshot.preferences.sound, reducedMotion: snapshot.preferences.reducedMotion }));
 }
 
 function loadDeveloperSupport() {
@@ -240,15 +258,24 @@ function icon(name) {
 }
 
 function historyFor(gameId) {
+  if (STATELESS_GAMES.has(gameId)) return null;
   return ui.snapshot?.history?.find((item) => item.gameId === gameId) || null;
 }
+const isToddlerGame = (gameOrId) => {
+  const id = typeof gameOrId === "string" ? gameOrId : gameOrId?.id;
+  const game = typeof gameOrId === "string" ? ui.snapshot?.catalog?.find((item) => item.id === id) : gameOrId;
+  return TODDLER_ONLY_GAMES.has(id) || game?.contentRating === "toddler";
+};
+const standardGames = (games) => (games || []).filter((game) => !isToddlerGame(game));
 
-function isKidsGame(game) {
-  return game?.category === "Kids" || KIDS_GAME_IDS.has(game?.id);
-}
-
-function visibleByCategory(game) {
-  return ui.category === "Kids" ? isKidsGame(game) : ui.category === "All" ? !isKidsGame(game) : game.category === ui.category && !isKidsGame(game);
+function fallbackLeaderboards(snapshot = ui.snapshot) {
+  const history = Array.isArray(snapshot?.history) ? snapshot.history : [];
+  const catalog = standardGames(Array.isArray(snapshot?.catalog) ? snapshot.catalog : []);
+  const rows = history.filter((item) => item.score != null && !isToddlerGame(item.gameId)).map((item) => {
+    const game = catalog.find((entry) => entry.id === item.gameId);
+    return { gameId: item.gameId, gameTitle: game?.title || item.gameId, player: "You", score: Number(item.score) || 0, seconds: Number(item.seconds) || 0, updatedAt: item.lastPlayedAt, isYou: true };
+  }).sort((a, b) => b.score - a.score || a.seconds - b.seconds);
+  return { overall: rows.slice(0, 10), byGame: catalog.map((game) => ({ gameId: game.id, gameTitle: game.title, rows: rows.filter((row) => row.gameId === game.id).slice(0, 5) })).filter((board) => board.rows.length) };
 }
 
 function playTimeLabel(value, compact = false) {
@@ -273,8 +300,9 @@ function devScoreFor(developer, support = {}) {
 function developerDirectory() {
   const supportRecords = loadDeveloperSupport();
   const directory = new Map();
-  for (const game of ui.snapshot?.catalog || []) {
-    const { id, name } = developerIdentityFor(game);
+  for (const game of standardGames(ui.snapshot?.catalog || [])) {
+    const name = developerNameFor(game);
+    const id = slugifyDeveloper(name);
     const entry = directory.get(id) || { id, name, avatar: "", games: [], categories: new Set(), featuredCount: 0 };
     entry.avatar ||= developerAvatarFor(game);
     entry.games.push(game);
@@ -319,7 +347,7 @@ function gameCard(game, variant = "") {
     <p>${esc(game.summary)}</p>
     <div class="pp-game-meta"><span>${esc(game.contentRating === "everyone" ? "Everyone" : game.contentRating)}</span><span>v${esc(game.version)}</span>${history?.score != null ? `<span>Best ${history.score}</span>` : ""}</div>
     ${history?.canContinue ? `<div class="pp-progress"><i style="width:${Math.max(3, Math.min(100, history.progress))}%"></i></div>` : ""}
-    <button class="pp-play" type="button" data-pp-play="${esc(game.id)}">${icon("play")} ${history?.canContinue ? "Continue" : "Play now"}</button></div>
+    <div class="pp-game-actions"><button class="pp-play" type="button" data-pp-play="${esc(game.id)}">${icon("play")} ${history?.canContinue ? "Continue" : "Play now"}</button><button class="pp-support" type="button" data-pp-support="${esc(game.developer)}">Support this creator</button></div></div>
   </article>`;
 }
 
@@ -332,12 +360,12 @@ function gameRows(games, title, copy = "") {
 }
 
 function renderHome() {
-  const visibleCatalog = ui.snapshot.catalog.filter((game) => !isKidsGame(game));
-  const featured = visibleCatalog.filter((game) => game.featured);
-  const recent = ui.snapshot.history.map((item) => visibleCatalog.find((game) => game.id === item.gameId)).filter(Boolean).slice(0, 4);
-  const continuing = ui.snapshot.history.filter((item) => item.canContinue).map((item) => visibleCatalog.find((game) => game.id === item.gameId)).filter(Boolean).slice(0, 4);
-  const community = ui.snapshot.catalog.filter((game) => game.kind === "community").slice(0, 4);
-  const activeGameId = featured[0]?.id || visibleCatalog[0]?.id || "";
+  const featured = standardGames(ui.snapshot.catalog).filter((game) => game.featured);
+  const playableHistory = ui.snapshot.history.filter((item) => !STATELESS_GAMES.has(item.gameId) && !isToddlerGame(item.gameId));
+  const recent = playableHistory.map((item) => ui.snapshot.catalog.find((game) => game.id === item.gameId)).filter(Boolean).slice(0, 4);
+  const continuing = playableHistory.filter((item) => item.canContinue).map((item) => ui.snapshot.catalog.find((game) => game.id === item.gameId)).filter(Boolean).slice(0, 4);
+  const community = standardGames(ui.snapshot.catalog).filter((game) => game.kind === "community").slice(0, 4);
+  const activeGameId = featured[0]?.id || standardGames(ui.snapshot.catalog)[0]?.id || "";
   return `<div class="pp-home">
     <section class="pp-hero">
       <div class="pp-console-copy">
@@ -362,14 +390,31 @@ function renderHome() {
     ${continuing.length ? gameRows(continuing, "Continue playing", "Pick up from your last saved point.") : ""}
     ${gameRows(featured, "Ready to play", "Fast, polished builds selected for the play lab.")}
     ${recent.length ? gameRows(recent, "Recently played") : ""}
-    ${gameRows(community, "Shared prototypes", "Reviewed builds from developers appear here when they are safe to test.")}
-    <section class="pp-spotlight"><img src="${esc(TAK_AVATAR)}" alt=""/><div><p class="pp-kicker">DEVELOPER SPOTLIGHT</p><h2>${esc(ui.snapshot.developerSpotlight)}</h2><p>PhantomPlay is for creators who want a private build room, playtest feedback, version notes, and a clean path to ship later.</p><button class="pp-secondary" data-pp-tab="developer">Open Developers</button></div></section>
+    ${gameRows(community, "Shared prototypes", "Reviewed builds from dev rooms appear here when they are safe to test.")}
+    <section class="pp-spotlight"><img src="${esc(TAK_AVATAR)}" alt=""/><div><p class="pp-kicker">SANDBOX BUILDER SPOTLIGHT</p><h2>${esc(ui.snapshot.developerSpotlight)}</h2><p>PhantomPlay is for creators who want a private build room, playtest feedback, version notes, and a clean path to ship later.</p><button class="pp-secondary" data-pp-tab="developer">Open dev rooms</button></div></section>
   </div>`;
+}
+
+function leaderboardRows(rows = []) {
+  return rows.length ? rows.map((row, index) => `<li class="${row.isYou ? "is-you" : ""}"><b>#${index + 1}</b><span>${esc(row.player)}</span><strong>${Number(row.score).toLocaleString()}</strong><em>${esc(row.gameTitle || "")}</em></li>`).join("") : `<li class="is-empty"><span>No scores yet. Play a game and claim the board.</span></li>`;
+}
+
+function renderLeaderboardPreview() {
+  const boards = (ui.snapshot.leaderboards?.overall?.length || ui.snapshot.leaderboards?.byGame?.length) ? ui.snapshot.leaderboards : fallbackLeaderboards();
+  const overall = (boards.overall || []).filter((row) => !isToddlerGame(row.gameId));
+  return `<section class="pp-leaderboard pp-leaderboard-preview"><div class="pp-section-head"><div><h2>Phantom leaderboard</h2><p>Compare scores across players without exposing private game behavior.</p></div><button type="button" data-pp-tab="leaderboard">View board</button></div><ol>${leaderboardRows(overall.slice(0, 5))}</ol></section>`;
+}
+
+function renderLeaderboard() {
+  const boards = (ui.snapshot.leaderboards?.overall?.length || ui.snapshot.leaderboards?.byGame?.length) ? ui.snapshot.leaderboards : fallbackLeaderboards();
+  const overall = (boards.overall || []).filter((row) => !isToddlerGame(row.gameId));
+  const byGame = (boards.byGame || []).filter((board) => !isToddlerGame(board.gameId));
+  return `<section class="pp-leaderboard"><div class="pp-section-head"><div><h2>Phantom leaderboard</h2><p>Top scores across PhantomPlay creator games.</p></div></div><ol>${leaderboardRows(overall)}</ol><div class="pp-board-grid">${byGame.map((board) => `<article><h3>${esc(board.gameTitle)}</h3><ol>${leaderboardRows((board.rows || []).filter((row) => !isToddlerGame(row.gameId)))}</ol></article>`).join("") || empty("No leaderboard data yet", "Play a score-enabled game to seed the first leaderboard.")}</div></section>`;
 }
 
 function filteredCatalog() {
   const query = ui.query.toLowerCase();
-  return ui.snapshot.catalog.filter((game) => visibleByCategory(game) && (!query || `${game.title} ${game.summary} ${developerNameFor(game)} ${game.tags.join(" ")}`.toLowerCase().includes(query)));
+  return standardGames(ui.snapshot.catalog).filter((game) => (ui.category === "All" || game.category === ui.category) && (!query || `${game.title} ${game.summary} ${developerNameFor(game)} ${game.tags.join(" ")}`.toLowerCase().includes(query)));
 }
 
 function renderLibrary() {
@@ -378,13 +423,80 @@ function renderLibrary() {
 }
 
 function renderFavorites() {
-  const games = ui.snapshot.catalog.filter((game) => ui.snapshot.favorites.includes(game.id) && !isKidsGame(game));
+  const games = standardGames(ui.snapshot.catalog).filter((game) => ui.snapshot.favorites.includes(game.id));
   return games.length ? `<div class="pp-game-grid pp-game-grid-full">${games.map((game) => gameCard(game)).join("")}</div>` : empty("No favorites yet", "Tap the heart on any game to save it here.");
+}
+
+// Toddler Space: its own destination, not a filter chip in the Play Lab
+// grid. Only toddler-tier games, big single-purpose cards, and nothing else
+// on the page — no favorites, no support/dev links, no rooms, no search.
+function toddlerCard(game) {
+  return `<button type="button" class="pp-toddler-card" data-pp-toddler-play="${esc(game.id)}">
+    <span class="pp-toddler-art"><img src="${esc(thumbnailFor(game))}" alt="" loading="lazy"/></span>
+    <span class="pp-toddler-title">${esc(game.title)}</span>
+  </button>`;
+}
+
+function renderToddlerSpace() {
+  const games = ui.snapshot.catalog.filter((game) => game.contentRating === "toddler");
+  return `<div class="pp-toddler-space">
+    <section class="pp-toddler-hero">
+      <p class="pp-kicker">TODDLER SPACE</p>
+      <h2>Big buttons. Just tap to play.</h2>
+      <p>A simplified area for the youngest players: only Toddler-rated games, no chat, no voice, no multiplayer rooms, and no links off this screen.</p>
+    </section>
+    ${games.length ? `<div class="pp-toddler-grid">${games.map(toddlerCard).join("")}</div>` : empty("No toddler games yet", "Games rated Toddler will appear here automatically once they are published.")}
+  </div>`;
+}
+
+// Connection status derived purely from lastSeenAt age — no separate
+// heartbeat route. "Just now" = updated in the last 20s (join/leave/ready or
+// the polling loop's periodic ready-touch). "Reconnecting" = stale but still
+// inside the room's own reconnectGraceSeconds. "Away" = stale beyond that.
+function connectionStatusFor(participant, room) {
+  if (participant.status === "left") return { label: "Left", cls: "is-left" };
+  const lastSeenMs = Date.parse(participant.lastSeenAt || participant.joinedAt || 0);
+  const ageSeconds = Number.isFinite(lastSeenMs) ? Math.max(0, (Date.now() - lastSeenMs) / 1000) : Infinity;
+  const grace = Number(room.reconnectGraceSeconds) || 45;
+  if (ageSeconds < 20) return { label: "Just now", cls: "is-live" };
+  if (ageSeconds < grace) return { label: "Reconnecting", cls: "is-pending" };
+  return { label: "Away", cls: "is-away" };
 }
 
 function roomRoster(room) {
   const participants = Array.isArray(room.participants) ? room.participants : [];
-  return participants.length ? participants.map((participant) => `<span class="${participant.status === "online" ? "is-online" : ""}"><b>${esc(participant.label || "Player")}</b><i>${esc(participant.role === "host" ? "host" : participant.status)}</i></span>`).join("") : "<em>No players joined yet.</em>";
+  if (!participants.length) return "<em>No players joined yet.</em>";
+  return participants.map((participant) => {
+    const ready = room.readyStates?.[participant.actorId] === true;
+    const isMe = participant.actorId === ui.snapshot.actorId;
+    const conn = connectionStatusFor(participant, room);
+    return `<span class="pp-roster-row ${participant.status === "online" ? "is-online" : ""}">
+      <b>${esc(participant.label || "Player")}</b>
+      <i>${esc(participant.role === "host" ? "host" : participant.status)}</i>
+      <em class="pp-conn-dot ${conn.cls}" title="Connection: ${esc(conn.label)}">${esc(conn.label)}</em>
+      ${isMe
+        ? `<button type="button" class="pp-ready-toggle ${ready ? "is-ready" : ""}" data-pp-room-ready="${esc(room.code)}" data-pp-ready-next="${ready ? "0" : "1"}">${ready ? "Ready ✓" : "Set ready"}</button>`
+        : `<span class="pp-ready-badge ${ready ? "is-ready" : ""}">${ready ? "Ready" : "Not ready"}</span>`}
+    </span>`;
+  }).join("");
+}
+
+function hostControlsMarkup(room) {
+  const isHost = room.hostActorId === ui.snapshot.actorId;
+  const controls = room.hostControls || { allowBotFill: false, maxHumans: room.maxPlayers };
+  if (!isHost) {
+    return `<div class="pp-room-hostctl is-readonly"><span>Bot fill ${controls.allowBotFill ? "on" : "off"}</span><span>Max humans ${esc(controls.maxHumans)}</span></div>`;
+  }
+  return `<div class="pp-room-hostctl">
+    <label class="pp-switch"><input type="checkbox" data-pp-room-botfill="${esc(room.code)}" ${controls.allowBotFill ? "checked" : ""}/><span></span>Allow bot fill</label>
+    <label>Max humans<input type="number" min="1" max="${esc(room.maxPlayers)}" value="${esc(controls.maxHumans)}" data-pp-room-maxhumans="${esc(room.code)}"/></label>
+  </div>`;
+}
+
+function botSlotsMarkup(room) {
+  const slots = Array.isArray(room.botSlots) ? room.botSlots : [];
+  if (!slots.length) return "";
+  return `<div class="pp-room-botslots">${slots.map((slot) => `<span class="pp-bot-chip">Bot · ${esc(slot.difficulty || "standard")}</span>`).join("")}</div>`;
 }
 
 function roomCard(room) {
@@ -392,17 +504,19 @@ function roomCard(room) {
     <header><div><p class="pp-kicker">${room.mode === "classroom" ? "CLASSROOM ROOM" : "FRIENDS ROOM"}</p><h3>${esc(room.gameTitle)}</h3></div><strong>${esc(room.code)}</strong></header>
     <p>Workspace-only room. Share the short code with people who are signed into the same workspace.</p>
     <div class="pp-room-roster">${roomRoster(room)}</div>
+    ${hostControlsMarkup(room)}
+    ${botSlotsMarkup(room)}
     <div class="pp-room-actions"><button type="button" class="pp-primary" data-pp-room-play="${esc(room.gameId)}" data-pp-room-code="${esc(room.code)}">${icon("play")} Launch game</button><button type="button" class="pp-secondary" data-pp-copy-room="${esc(room.code)}">Copy code</button><button type="button" class="pp-secondary" data-pp-room-leave="${esc(room.code)}">Leave</button></div>
   </article>`;
 }
 
 function renderTogether() {
   const rooms = Array.isArray(ui.snapshot.rooms) ? ui.snapshot.rooms : [];
-  const classroomGames = ui.snapshot.catalog.filter((game) => ui.roomMode === "classroom" ? game.contentRating === "everyone" : !isKidsGame(game));
+  const classroomGames = standardGames(ui.snapshot.catalog).filter((game) => ui.roomMode !== "classroom" || game.contentRating === "everyone");
   const selectedGameId = classroomGames.some((game) => game.id === ui.roomGameId) ? ui.roomGameId : (classroomGames[0]?.id || "");
   return `<div class="pp-together" data-pp-private-rooms>
     <section class="pp-room-hero">
-      <div><p class="pp-kicker">MULTIPLAYER</p><h2>Play together with friends in this workspace.</h2><p>Create a private room, invite a few friends with a short-lived join code, and jump into a real match together. Built-in games keep their no-internet rule; the app only relays room membership and progress state.</p></div>
+      <div><p class="pp-kicker">PLAYTEST ROOMS</p><h2>Playtest Rooms for this workspace.</h2><p>Create a private Playtest Rooms session, invite up to a few friends with a short-lived join code, and jump into a real match — ready checks, host controls, bot fill-in if someone's missing, and reconnect if your connection drops. Built-in games keep their no-internet rule; the app only relays room membership and match state.</p></div>
       <div class="pp-room-principles"><span>No public discovery</span><span>No direct inbound device ports</span><span>No room chat or voice</span><span>Same workspace only</span></div>
     </section>
     <section class="pp-room-layout">
@@ -423,7 +537,7 @@ function renderTogether() {
     </section>
     ${ui.roomMessage ? `<div class="pp-banner ${ui.roomMessage.startsWith("Blocked") ? "is-error" : "is-offline"}"><b>Private room status</b><span>${esc(ui.roomMessage)}</span><button type="button" data-pp-room-clear>Clear</button></div>` : ""}
     <section class="pp-room-safety">
-      <div><p class="pp-kicker">SAFE BY DEFAULT</p><h3>Private rooms, workspace-only.</h3><p>Short join codes, no public discovery, classroom mode restricts to Everyone-rated games automatically, and every built-in game still makes zero external network calls of its own — the app relays room and progress state, nothing more.</p></div>
+      <div><p class="pp-kicker">SAFE BY DEFAULT</p><h3>Private rooms, workspace-only.</h3><p>Short join codes, no public discovery, classroom mode restricts to Everyone-rated games automatically, and every built-in game still makes zero external network calls of its own — the app relays room and match state, nothing more.</p></div>
       <ul><li>Signed-in same-tenant join policy</li><li>Room invite expires after 90 minutes</li><li>Roster only; no private messaging</li><li>Games still run in script-only iframes</li></ul>
     </section>
     <section class="pp-section"><div class="pp-section-head"><div><h2>Your multiplayer rooms</h2><p>Only rooms you host or have joined are shown here.</p></div><span>${rooms.length} visible</span></div>${rooms.length ? `<div class="pp-room-grid">${rooms.map(roomCard).join("")}</div>` : empty("No rooms yet", "Create a room or join with a code to start playing together.")}</section>
@@ -439,12 +553,84 @@ function selectedSubmission() {
   return ui.snapshot.submissions.find((item) => item.id === ui.editingSubmissionId) || null;
 }
 
+function renderSubmit() {
+  const canSubmit = !!ui.snapshot.access.canSubmitGames;
+  const editing = selectedSubmission();
+  const submissions = Array.isArray(ui.snapshot.submissions) ? ui.snapshot.submissions : [];
+  const categoryOptions = [...CATEGORIES.filter((category) => category !== "All"), "Other"];
+  if (!canSubmit) {
+    return `<div class="pp-submit-page">
+      <section class="pp-dev-guide pp-submit-join">
+        <div>
+          <p class="pp-kicker">JOIN AS DEVELOPER</p>
+          <h2>Bring your game to PhantomPlay.</h2>
+          <p>Players need an obvious path to become builders. This is the creator doorway: submit browser-first games, get them reviewed, and earn a public dev room once builds are approved.</p>
+        </div>
+        <ul>
+          <li>HTML5, JavaScript, WebGL, WebAssembly, and Godot web exports first.</li>
+          <li>Every build goes through safety review before discovery.</li>
+          <li>Creator identity stays separate from PhantomForce system games.</li>
+          <li>Publishing access is enabled by subscription or workspace owner approval.</li>
+        </ul>
+      </section>
+      <section class="pp-submit-locked">
+        <h2>Developer publishing is plan-gated</h2>
+        <p>This account can browse and play, but cannot publish yet. Upgrade or ask the workspace owner to enable PhantomPlay submissions.</p>
+      </section>
+    </div>`;
+  }
+  return `<div class="pp-submit-page">
+    <section class="pp-dev-guide pp-submit-join">
+      <div>
+        <p class="pp-kicker">SUBMIT YOUR GAME</p>
+        <h2>Ship lightweight games into the PhantomPlay review lane.</h2>
+        <p>Use this for creator-made games only. Save rough drafts while you work, then submit when the browser build, screenshots, controls, and data handling notes are ready.</p>
+      </div>
+      <ul>
+        <li>Browser-playable builds only for now.</li>
+        <li>No executables or privileged system access.</li>
+        <li>Approved games can appear in Play Lab and developer rooms.</li>
+        <li>Creators keep ownership of their work.</li>
+      </ul>
+    </section>
+    <div class="pp-dev-layout">
+      <form class="pp-submit-form" data-pp-submit-form>
+        <header><div><p class="pp-kicker">${editing ? "EDIT BUILD" : "NEW BUILD"}</p><h2>${editing ? "Update submission" : "Game submission"}</h2></div>${editing ? `<button type="button" class="pp-secondary" data-pp-cancel-edit>Cancel edit</button>` : ""}</header>
+        <input type="hidden" name="submissionId" value="${esc(editing?.id || "")}"/>
+        <div class="pp-form-row">
+          <label>Game title<input name="title" value="${esc(editing?.title || "")}" maxlength="90" required/></label>
+          <label>Version<input name="version" value="${esc(editing?.version || "1.0.0")}" required/></label>
+          <label>Category<select name="category">${categoryOptions.map((category) => `<option value="${esc(category)}" ${editing?.category === category ? "selected" : ""}>${esc(category)}</option>`).join("")}</select></label>
+        </div>
+        <label>Creator / studio<input name="developerName" value="${esc(editing?.developerName || ui.snapshot.session?.label || "")}" maxlength="90" placeholder="Tak, your studio, or creator name"/></label>
+        <label>One-line hook<input name="summary" value="${esc(editing?.summary || "")}" maxlength="180" required placeholder="What makes this worth playing instantly?"/></label>
+        <label>Description<textarea name="description" rows="4" maxlength="3000" required>${esc(editing?.description || "")}</textarea></label>
+        <div class="pp-form-row">
+          <label>Launch URL<input name="launchUrl" value="${esc(editing?.launchUrl || "")}" required placeholder="https://… or /app/games/community/…"/></label>
+          <label>Rating<select name="contentRating">${["everyone", "teen", "mature"].map((rating) => `<option value="${rating}" ${editing?.contentRating === rating ? "selected" : ""}>${esc(rating)}</option>`).join("")}</select></label>
+          <label>Tags<input name="tags" value="${esc(editing?.tags?.join(", ") || "")}" placeholder="arcade, quick, puzzle"/></label>
+        </div>
+        <label>Screenshots, one URL per line<textarea name="screenshots" rows="2" required>${esc(editing?.screenshots?.join("\n") || "")}</textarea></label>
+        <label>Controls<input name="controls" value="${esc(editing?.controls || "")}" maxlength="240" required placeholder="Keyboard, mouse, touch, controller…"/></label>
+        <label>Player data used<textarea name="dataHandling" rows="2" maxlength="600" required placeholder="Say what progress, scores, storage, or network calls the game uses.">${esc(editing?.dataHandling || "")}</textarea></label>
+        <label>Release notes<textarea name="releaseNotes" rows="2" maxlength="600"></textarea></label>
+        <div class="pp-form-actions"><button type="submit" class="pp-secondary" value="draft">Save draft</button><button type="submit" class="pp-primary" value="submit">${editing ? "Resubmit for review" : "Submit for review"}</button></div>
+        <p data-pp-form-message></p>
+      </form>
+      <section class="pp-submission-list">
+        <div class="pp-section-head"><div><h2>Your submissions</h2><p>Drafts, review notes, and status live here.</p></div><span>${submissions.length} builds</span></div>
+        ${submissions.length ? submissions.map((item) => submissionCard(item)).join("") : empty("No submissions yet", "Save a draft or submit a browser game for review.")}
+      </section>
+    </div>
+  </div>`;
+}
+
 function developerCard(developer) {
   const previewGames = developer.games.slice(0, 4);
   return `<article class="pp-dev-card">
     <header>
       <img src="${esc(developer.avatar || TAK_AVATAR)}" alt="" loading="lazy"/>
-      <div><p class="pp-kicker">DEVELOPER</p><h3>${esc(developer.name)}</h3><span>${developer.games.length} playable build${developer.games.length === 1 ? "" : "s"}</span></div>
+      <div><p class="pp-kicker">DEV ROOM</p><h3>${esc(developer.name)}</h3><span>${developer.games.length} playable build${developer.games.length === 1 ? "" : "s"}</span></div>
       <strong><b>${developer.score}</b><span>Dev score</span></strong>
     </header>
     <div class="pp-dev-thumbs">${previewGames.map((game) => `<img src="${esc(thumbnailFor(game))}" alt="" loading="lazy"/>`).join("")}</div>
@@ -458,10 +644,10 @@ function renderDeveloperProfile(developer) {
   const notes = developer.notes.length ? developer.notes.map((note) => `<li><span>${esc(savedDateLabel(note.at))}</span><p>${esc(note.text)}</p></li>`).join("") : `<li class="is-empty"><p>No private dev notes yet.</p></li>`;
   return `<div class="pp-developer">
     <section class="pp-dev-profile">
-      <button type="button" class="pp-secondary pp-dev-back" data-pp-dev-back>← Developers</button>
+      <button type="button" class="pp-secondary pp-dev-back" data-pp-dev-back>← Dev Rooms</button>
       <header>
         <img src="${esc(developer.avatar || TAK_AVATAR)}" alt="" loading="lazy"/>
-        <div><p class="pp-kicker">DEVELOPER PROFILE</p><h2>${esc(developer.name)}</h2><span>${developer.games.length} playable build${developer.games.length === 1 ? "" : "s"} · ${developer.categories.join(" / ") || "PhantomPlay"}</span></div>
+        <div><p class="pp-kicker">DEV ROOM</p><h2>${esc(developer.name)}</h2><span>${developer.games.length} playable build${developer.games.length === 1 ? "" : "s"} · ${developer.categories.join(" / ") || "PhantomPlay"}</span></div>
         <strong><b>${developer.score}</b><span>Dev score</span></strong>
       </header>
       <div class="pp-dev-stats">
@@ -498,12 +684,12 @@ function renderDeveloper() {
   if (developer) return renderDeveloperProfile(developer);
   return `<div class="pp-developer">
     <section class="pp-dev-guide">
-      <div><p class="pp-kicker">DEVELOPERS</p><h2>Browse the people building PhantomPlay games.</h2><p>Open developer profiles, test playable prototypes, leave private notes, track versions, and decide what is ready to support or share. PhantomPlay is where the game gets sharper before it goes anywhere public.</p></div>
+      <div><p class="pp-kicker">DEV ROOMS</p><h2>A private sandbox for people making games.</h2><p>Open builder rooms, test playable prototypes, leave private notes, track versions, and decide what is ready to share. PhantomPlay is where the game gets sharper before it goes anywhere public.</p></div>
       <ul><li>Dev score is based on build quality signals</li><li>Profiles show reviewed playable prototypes</li><li>Support and collaboration intent stay local</li><li>No public payments or public profiles</li></ul>
     </section>
     <section class="pp-dev-directory">
-      <div class="pp-section-head"><div><h2>Developers</h2><p>Ranked by build quality, playtest history, and lab-ready prototypes.</p></div><span>${developers.length} developer${developers.length === 1 ? "" : "s"}</span></div>
-      ${developers.length ? `<div class="pp-dev-list">${developers.map(developerCard).join("")}</div>` : empty("No developers yet", "Reviewed builds will create developer profiles automatically.")}
+      <div class="pp-section-head"><div><h2>Dev Rooms</h2><p>Ranked by build quality, playtest history, and lab-ready prototypes.</p></div><span>${developers.length} rooms</span></div>
+      ${developers.length ? `<div class="pp-dev-list">${developers.map(developerCard).join("")}</div>` : empty("No dev rooms yet", "Reviewed builds will create dev rooms automatically.")}
     </section>
   </div>`;
 }
@@ -513,9 +699,41 @@ function renderAdmin() {
   return `<section class="pp-admin"><div class="pp-section-head"><div><h2>Sandbox safety review</h2><p>Approve only playable builds that pass the PhantomPlay security, content, and quality checklist.</p></div><span>${ui.snapshot.submissions.length} builds</span></div><div class="pp-submission-list">${ui.snapshot.submissions.length ? ui.snapshot.submissions.map((item) => submissionCard(item, true)).join("") : empty("Queue clear", "No developer builds are waiting.")}</div></section>`;
 }
 
+// Game Rating Exposure — per-tier toggles + presets, calling PATCH
+// /api/phantomplay/profile ({preferences:{allowedRatings}}, guardianPin?)
+// per server/src/phantom-ai/phantomplay.ts updatePhantomPlayProfile. A
+// guardian PIN field appears whenever this profile has an enabled guardian
+// lock and isn't an adult profile — the server enforces the PIN; the client
+// only needs to collect and forward it.
+function ratingExposureMarkup() {
+  const snapshot = ui.snapshot;
+  const allowed = new Set(Array.isArray(snapshot.preferences.allowedRatings) ? snapshot.preferences.allowedRatings : ALL_RATING_VALUES);
+  const profileType = snapshot.profileType || "adult";
+  const guardianEnabled = !!snapshot.guardianLock?.enabled;
+  const needsPin = guardianEnabled && profileType !== "adult";
+  return `<div class="pp-rating-exposure">
+    <h3>Game Rating Exposure</h3>
+    <p>Choose exactly which content tiers can appear in this profile's catalog.</p>
+    ${needsPin ? `<label>Guardian PIN<input type="password" inputmode="numeric" maxlength="32" data-pp-exposure-pin placeholder="Required to change exposure"/></label>` : ""}
+    <div class="pp-rating-toggles">${RATING_TIERS.map(([value, label]) => `<label class="pp-switch"><input type="checkbox" data-pp-rating-toggle="${value}" ${allowed.has(value) ? "checked" : ""} ${ui.ratingBusy ? "disabled" : ""}/><span></span>${esc(label)}</label>`).join("")}</div>
+    <div class="pp-rating-presets">
+      <button type="button" data-pp-rating-preset="my-age" ${ui.ratingBusy ? "disabled" : ""}>My age</button>
+      <button type="button" data-pp-rating-preset="family" ${ui.ratingBusy ? "disabled" : ""}>Family Friendly Only</button>
+      <button type="button" data-pp-rating-preset="all" ${ui.ratingBusy ? "disabled" : ""}>Show All Allowed Ratings</button>
+    </div>
+    <label>Profile type<select data-pp-profile-type><option value="adult" ${profileType === "adult" ? "selected" : ""}>Adult</option><option value="child" ${profileType === "child" ? "selected" : ""}>Child</option><option value="toddler" ${profileType === "toddler" ? "selected" : ""}>Toddler</option></select></label>
+    <div class="pp-guardian-lock">
+      <label class="pp-switch"><input type="checkbox" data-pp-guardian-enabled ${guardianEnabled ? "checked" : ""}/><span></span>Guardian PIN lock</label>
+      <p>When on, a PIN is required to widen this profile's rating exposure or change its profile type.</p>
+      <div class="pp-guardian-pin-row"><input type="password" inputmode="numeric" maxlength="32" data-pp-guardian-pin-input placeholder="${guardianEnabled ? "Current PIN, to change" : "Set a PIN (4+ digits)"}"/><button type="button" data-pp-guardian-save>Save</button></div>
+    </div>
+    ${ui.guardianMessage ? `<p class="pp-guardian-note">${esc(ui.guardianMessage)}</p>` : ""}
+  </div>`;
+}
+
 function settingsMarkup() {
   const p = ui.snapshot.preferences;
-  return `<aside class="pp-settings ${ui.settingsOpen ? "is-open" : ""}" ${ui.settingsOpen ? "" : "hidden"}><header><div><p class="pp-kicker">PLAY SETTINGS</p><h2>Your break, your limits.</h2></div><button data-pp-settings-close aria-label="Close settings">×</button></header><label>Content allowed<select data-pp-pref="contentRating"><option value="everyone" ${p.contentRating === "everyone" ? "selected" : ""}>Everyone</option><option value="teen" ${p.contentRating === "teen" ? "selected" : ""}>Teen</option><option value="mature" ${p.contentRating === "mature" ? "selected" : ""}>Mature</option></select></label><label class="pp-switch"><input type="checkbox" data-pp-pref="sound" ${p.sound ? "checked" : ""}/><span></span>Sound</label><label class="pp-switch"><input type="checkbox" data-pp-pref="reducedMotion" ${p.reducedMotion ? "checked" : ""}/><span></span>Reduce motion</label><label class="pp-switch"><input type="checkbox" data-pp-pref="allowCommunityGames" ${p.allowCommunityGames ? "checked" : ""}/><span></span>Show reviewed prototypes</label><p>PhantomPlay never changes your work, agents, files, or business data while you play.</p></aside>`;
+  return `<aside class="pp-settings ${ui.settingsOpen ? "is-open" : ""}" ${ui.settingsOpen ? "" : "hidden"}><header><div><p class="pp-kicker">PLAY SETTINGS</p><h2>Your break, your limits.</h2></div><button data-pp-settings-close aria-label="Close settings">×</button></header><label>Content allowed<select data-pp-pref="contentRating"><option value="everyone" ${p.contentRating === "everyone" ? "selected" : ""}>Everyone</option><option value="teen" ${p.contentRating === "teen" ? "selected" : ""}>Teen</option><option value="mature" ${p.contentRating === "mature" ? "selected" : ""}>Mature</option></select></label><label class="pp-switch"><input type="checkbox" data-pp-pref="sound" ${p.sound ? "checked" : ""}/><span></span>Sound</label><label class="pp-switch"><input type="checkbox" data-pp-pref="reducedMotion" ${p.reducedMotion ? "checked" : ""}/><span></span>Reduce motion</label><label class="pp-switch"><input type="checkbox" data-pp-pref="allowCommunityGames" ${p.allowCommunityGames ? "checked" : ""}/><span></span>Show reviewed prototypes</label>${ratingExposureMarkup()}<p>PhantomPlay never changes your work, agents, files, or business data while you play.</p></aside>`;
 }
 
 function engineFor(game) {
@@ -526,8 +744,7 @@ function playerMarkup() {
   if (!ui.player) return "";
   const { game, play } = ui.player;
   const engine = engineFor(game);
-  const roomCode = ui.player.room?.code || "";
-  return `<div class="pp-player" role="dialog" aria-modal="true" aria-label="Playing ${esc(game.title)}"><header><div><img src="${esc(thumbnailFor(game))}" alt=""/><span><b>${esc(game.title)}</b><i>${esc(game.controls)}</i></span></div><div class="pp-player-actions"><button data-pp-player-restart title="Restart game">Restart</button><button data-pp-player-pause title="Pause game">${ui.playerPaused ? "Resume" : "Pause"}</button><button data-pp-player-fullscreen title="Full screen">Full screen</button><button data-pp-player-close aria-label="Close game">×</button></div></header><div class="pp-player-stage"><button class="pp-player-exit" data-pp-player-close type="button" aria-label="Exit game">Exit</button><div class="pp-player-loading" ${ui.playerReady ? "hidden" : ""}><i></i><b>Loading ${esc(game.title)}…</b><span>${roomCode ? `Joining room ${esc(roomCode)}.` : "The game is opening in a private sandbox."}</span></div><iframe src="${esc(game.launchUrl)}" title="${esc(game.title)}" sandbox="allow-scripts" referrerpolicy="no-referrer" allow="fullscreen" tabindex="0" data-pp-frame></iframe></div><footer><span>${roomCode ? `Room <b>${esc(roomCode)}</b>` : `Session <b>${esc(play.id.slice(-8))}</b>`}</span><span data-pp-live-score>Score —</span><span data-pp-live-state>${ui.playerPaused ? "Paused" : "Playing"}</span><span>Engine ${esc(engine.version)}</span><span>${game.multiplayerOnly ? "Multiplayer only" : "Progress saves automatically"}</span></footer></div>`;
+  return `<div class="pp-player" role="dialog" aria-modal="true" aria-label="Playing ${esc(game.title)}"><header><div><img src="${esc(thumbnailFor(game))}" alt=""/><span><b>${esc(game.title)}</b><i>${esc(game.controls)}</i></span></div><div class="pp-player-actions"><button data-pp-player-restart title="Restart game">Restart</button><button data-pp-player-pause title="Pause game">${ui.playerPaused ? "Resume" : "Pause"}</button><button data-pp-player-fullscreen title="Full screen">Full screen</button><button data-pp-player-close aria-label="Close game">×</button></div></header><div class="pp-player-stage"><button class="pp-player-exit" data-pp-player-close type="button" aria-label="Exit game">Exit</button><div class="pp-player-loading" ${ui.playerReady ? "hidden" : ""}><i></i><b>Loading ${esc(game.title)}…</b><span>The game is opening in a private sandbox.</span></div><iframe src="${esc(game.launchUrl)}" title="${esc(game.title)}" sandbox="allow-scripts" referrerpolicy="no-referrer" allow="fullscreen" tabindex="0" data-pp-frame></iframe></div><footer><span>Session <b>${esc(play.id.slice(-8))}</b></span><span data-pp-live-score>Score —</span><span data-pp-live-state>${ui.playerPaused ? "Paused" : "Playing"}</span><span>Engine ${esc(engine.version)}</span><span>Progress saves automatically</span></footer></div>`;
 }
 
 function render() {
@@ -538,17 +755,20 @@ function render() {
     return;
   }
   const snapshot = ui.snapshot || offlineState();
-  const tabs = [["home", "Sandbox"], ["library", "Play Lab"], ["together", "Multiplayer"], ["favorites", "Saved"], ["developer", "Developers"], ...(snapshot.access.canModerate ? [["admin", "Safety Review"]] : [])];
-  const content = ui.tab === "library" ? renderLibrary() : ui.tab === "together" ? renderTogether() : ui.tab === "favorites" ? renderFavorites() : ui.tab === "developer" ? renderDeveloper() : ui.tab === "admin" ? renderAdmin() : renderHome();
-  mountedRoot.innerHTML = `<div class="pp-shell">
-    <header class="pp-top"><div><p class="pp-kicker">PHANTOMFORCE GAME SANDBOX</p><h1>PhantomPlay</h1><span>Play, build, test, and return to work sharper.</span></div><div><span class="pp-access ${snapshot.access.enabled ? "is-ready" : "is-blocked"}">${snapshot.access.enabled ? esc(playTimeLabel(snapshot.access.remainingMinutesToday)) : "Plan restricted"}</span><button class="pp-settings-button" data-pp-settings aria-label="Play settings">${icon("settings")}</button></div></header>
+  const tabs = [["home", "Sandbox"], ["library", "Play Lab"], ["together", "Multiplayer"], ["favorites", "Saved"], ["toddler", "Toddler Space"], ["developer", "Dev Rooms"], ["submit", "Submit Game"], ...(snapshot.access.canModerate ? [["admin", "Safety Review"]] : [])];
+  const isToddlerTab = ui.tab === "toddler";
+  const content = ui.tab === "library" ? renderLibrary() : ui.tab === "together" ? renderTogether() : ui.tab === "favorites" ? renderFavorites() : isToddlerTab ? renderToddlerSpace() : ui.tab === "developer" ? renderDeveloper() : ui.tab === "submit" ? renderSubmit() : ui.tab === "admin" ? renderAdmin() : renderHome();
+  mountedRoot.innerHTML = `<div class="pp-shell ${isToddlerTab ? "pp-shell-toddler" : ""}">
+    <header class="pp-top"><div><p class="pp-kicker">PHANTOMFORCE GAME SANDBOX</p><h1>PhantomPlay</h1><span>Play, build, test, and return to work sharper.</span></div><div><button type="button" class="pp-submit-cta" data-pp-tab="submit">${snapshot.access.canSubmitGames ? "Submit game" : "Join as developer"}</button><span class="pp-access ${snapshot.access.enabled ? "is-ready" : "is-blocked"}">${snapshot.access.enabled ? esc(playTimeLabel(snapshot.access.remainingMinutesToday)) : "Plan restricted"}</span>${isToddlerTab ? "" : `<button class="pp-settings-button" data-pp-settings aria-label="Play settings">${icon("settings")}</button>`}</div></header>
     ${ui.offline ? `<div class="pp-banner is-offline"><b>Offline mode</b><span>Built-in games still work. Favorites and progress will sync after the server returns.</span><button data-pp-retry>Retry</button></div>` : ""}
     ${ui.error && !ui.offline ? `<div class="pp-banner is-error"><b>PhantomPlay needs attention</b><span>${esc(ui.error)}</span><button data-pp-retry>Retry</button></div>` : ""}
+    ${ui.notice ? `<div class="pp-banner is-notice"><b>Creator support</b><span>${esc(ui.notice)}</span><button data-pp-clear-notice>OK</button></div>` : ""}
     <nav class="pp-tabs" aria-label="PhantomPlay sections">${tabs.map(([id, label]) => `<button type="button" class="${ui.tab === id ? "is-active" : ""}" data-pp-tab="${id}">${esc(label)}</button>`).join("")}</nav>
-    <main class="pp-content">${snapshot.access.enabled ? content : empty("PhantomPlay is unavailable", "Ask your business owner to enable PhantomPlay for this plan.")}</main>
-    ${settingsMarkup()}${playerMarkup()}
+    <main class="pp-content">${snapshot.access.enabled ? content : empty("PhantomPlay is unavailable", "This optional workspace module is separate from core PhantomForce operations. Ask a workspace owner to enable access if your team uses it.")}</main>
+    ${isToddlerTab ? "" : settingsMarkup()}${playerMarkup()}
   </div>`;
   bind();
+  syncRoomPolling();
 }
 
 async function updateFavorite(gameId) {
@@ -569,26 +789,174 @@ async function updatePreferences() {
   } catch (error) { ui.error = error.message; render(); }
 }
 
+// PATCH /api/phantomplay/profile with an optional guardianPin — the same
+// shape/route updatePhantomPlayProfile (server) already accepts. A guardian
+// PIN is only ever read from the DOM at call time (never cached in `ui`), so
+// each attempt requires re-entering it.
+function guardianPinFromDom() {
+  return mountedRoot?.querySelector("[data-pp-exposure-pin]")?.value.trim() || undefined;
+}
+
+async function applyRatingExposure(nextRatings) {
+  if (ui.offline) { ui.guardianMessage = "Rating exposure needs the PhantomForce server."; render(); return; }
+  ui.ratingBusy = true;
+  render();
+  try {
+    const payload = await api("/api/phantomplay/profile", { method: "PATCH", body: JSON.stringify({ tenantId: currentTenantId(), preferences: { allowedRatings: nextRatings }, guardianPin: guardianPinFromDom() }) });
+    ui.snapshot.preferences = payload.preferences;
+    ui.guardianMessage = "";
+  } catch (error) {
+    ui.guardianMessage = error.message;
+  } finally {
+    ui.ratingBusy = false;
+    render();
+  }
+}
+
+async function applyProfileType(nextType) {
+  if (ui.offline) { ui.guardianMessage = "Profile type needs the PhantomForce server."; render(); return; }
+  ui.ratingBusy = true;
+  render();
+  try {
+    const payload = await api("/api/phantomplay/profile", { method: "PATCH", body: JSON.stringify({ tenantId: currentTenantId(), profileType: nextType, guardianPin: guardianPinFromDom() }) });
+    ui.snapshot.profileType = payload.profileType;
+    ui.snapshot.preferences = payload.preferences;
+    ui.guardianMessage = "";
+  } catch (error) {
+    ui.guardianMessage = error.message;
+  } finally {
+    ui.ratingBusy = false;
+    render();
+  }
+}
+
+async function saveGuardianLock() {
+  const checkbox = mountedRoot?.querySelector("[data-pp-guardian-enabled]");
+  const pinInput = mountedRoot?.querySelector("[data-pp-guardian-pin-input]");
+  const nextEnabled = !!checkbox?.checked;
+  const pin = pinInput?.value.trim() || "";
+  if (nextEnabled && pin && pin.length < 4) { ui.guardianMessage = "Choose a PIN with at least 4 digits."; render(); return; }
+  if (ui.offline) { ui.guardianMessage = "Guardian lock needs the PhantomForce server."; render(); return; }
+  try {
+    const payload = await api("/api/phantomplay/profile", { method: "PATCH", body: JSON.stringify({ tenantId: currentTenantId(), guardianLock: { enabled: nextEnabled, pin: pin || undefined }, guardianPin: guardianPinFromDom() }) });
+    ui.snapshot.guardianLock = payload.guardianLock;
+    ui.guardianMessage = nextEnabled ? "Guardian PIN saved." : "Guardian PIN lock turned off.";
+  } catch (error) {
+    ui.guardianMessage = error.message;
+  }
+  render();
+}
+
 function offlinePlay(game) {
-  const play = { id: `offline-${Date.now()}`, gameId: game.id, startedAt: new Date().toISOString(), seconds: 0, score: null, progress: historyFor(game.id)?.progress || 0 };
+  const play = { id: `offline-${Date.now()}`, gameId: game.id, startedAt: new Date().toISOString(), seconds: 0, score: null, progress: STATELESS_GAMES.has(game.id) ? 0 : (historyFor(game.id)?.progress || 0) };
   return { game, play };
 }
 
-async function launch(gameId, roomCode = "") {
+async function launch(gameId, opts = {}) {
   if (!gameId) return;
   const game = ui.snapshot.catalog.find((item) => item.id === gameId);
   if (!game?.launchUrl) { ui.error = "This game is not available to play yet."; render(); return; }
   try {
     const result = ui.offline ? offlinePlay(game) : await api("/api/phantomplay/plays", { method: "POST", body: JSON.stringify({ tenantId: currentTenantId(), gameId }) });
-    const room = roomCode ? (ui.snapshot.rooms || []).find((item) => item.code === roomCode) || { code: roomCode, gameId } : null;
-    ui.player = { game: result.game || game, play: result.play, room };
+    ui.player = { game: result.game || game, play: result.play, roomCode: opts.roomCode || null };
     ui.playerReady = false;
     ui.playerPaused = false;
     playTickAt = Date.now();
     render();
     startClock();
-    startMatchPolling();
+    armReadyWatchdog();
   } catch (error) { ui.error = error.message; render(); }
+}
+
+// ---- Private rooms: live sync ----
+// Rooms used to refresh only via a full hydrate() after create/join/leave.
+// Now those actions apply the room the server already handed back directly
+// (no extra round trip), and this polling loop is the ongoing live-sync
+// mechanism — it keeps roster/ready-states/matchState current for as long as
+// a room view (the "together" tab, or an active room-launched game) is open.
+function roomsViewOpen() {
+  return ui.tab === "together" || !!ui.player?.roomCode;
+}
+
+function activeRoomCodes() {
+  const fromList = (ui.snapshot?.rooms || []).map((room) => room.code).filter(Boolean);
+  const fromPlayer = ui.player?.roomCode ? [ui.player.roomCode] : [];
+  return [...new Set([...fromList, ...fromPlayer])];
+}
+
+function upsertRoom(room) {
+  if (!room || !ui.snapshot) return;
+  const idx = ui.snapshot.rooms.findIndex((item) => item.code === room.code);
+  if (idx >= 0) ui.snapshot.rooms[idx] = room; else ui.snapshot.rooms.unshift(room);
+}
+
+async function pollRooms() {
+  if (!roomsViewOpen() || ui.offline) { stopRoomPolling(); return; }
+  roomPollTicks += 1;
+  const codes = activeRoomCodes();
+  if (!codes.length) return;
+  let listChanged = false;
+  for (const code of codes) {
+    let room;
+    try {
+      const result = await api(`/api/phantomplay/rooms/${encodeURIComponent(code)}?tenant_id=${encodeURIComponent(currentTenantId())}`);
+      room = result.room;
+    } catch {
+      continue; // transient poll failure — try again next tick
+    }
+    if (!room) continue;
+    const previous = ui.snapshot.rooms.find((item) => item.code === code);
+    const changed = JSON.stringify(previous) !== JSON.stringify(room);
+    upsertRoom(room);
+    if (changed) {
+      if (!ui.player) listChanged = true;
+      if (ui.player?.roomCode === code) pushMatchStateToGame(room);
+    }
+    if (roomPollTicks % ROOM_POLL_TOUCH_EVERY === 0) {
+      const myReady = room.readyStates?.[ui.snapshot.actorId] === true;
+      api(`/api/phantomplay/rooms/${encodeURIComponent(code)}/ready`, { method: "PATCH", body: JSON.stringify({ tenantId: currentTenantId(), ready: myReady }) }).catch(() => {});
+    }
+  }
+  // Never call render() while a game iframe is mounted — it would rebuild
+  // the <iframe> element and reload the game. Only the roster/room-list
+  // view (no iframe present) is safe to re-render from the poll.
+  if (listChanged && ui.tab === "together" && !ui.player) render();
+}
+
+function startRoomPolling() {
+  if (roomPollTimer) return;
+  roomPollTicks = 0;
+  roomPollTimer = setInterval(pollRooms, ROOM_POLL_MS);
+}
+
+function stopRoomPolling() {
+  clearInterval(roomPollTimer);
+  roomPollTimer = null;
+}
+
+function syncRoomPolling() {
+  if (roomsViewOpen() && !ui.offline) startRoomPolling();
+  else stopRoomPolling();
+}
+
+async function toggleRoomReady(code, ready) {
+  try {
+    const result = await api(`/api/phantomplay/rooms/${encodeURIComponent(code)}/ready`, { method: "PATCH", body: JSON.stringify({ tenantId: currentTenantId(), ready }) });
+    upsertRoom(result.room);
+  } catch (error) {
+    ui.roomMessage = `Blocked: ${error.message}`;
+  }
+  render();
+}
+
+async function updateHostControls(code, patch) {
+  try {
+    const result = await api(`/api/phantomplay/rooms/${encodeURIComponent(code)}/match-state`, { method: "PATCH", body: JSON.stringify({ tenantId: currentTenantId(), hostControls: patch }) });
+    upsertRoom(result.room);
+  } catch (error) {
+    ui.roomMessage = `Blocked: ${error.message}`;
+  }
+  render();
 }
 
 async function createPrivateRoom(form) {
@@ -601,10 +969,9 @@ async function createPrivateRoom(form) {
     ui.roomMode = result.room?.mode || ui.roomMode;
     ui.roomGameId = result.room?.gameId || ui.roomGameId;
     ui.roomMessage = `Room ${result.room?.code || ""} is ready. Share the code only with signed-in people in this workspace.`;
-    await hydrate();
+    upsertRoom(result.room);
   } catch (error) {
     ui.roomMessage = `Blocked: ${error.message}`;
-    render();
   } finally {
     ui.roomBusy = false;
     render();
@@ -621,10 +988,9 @@ async function joinPrivateRoom(form) {
   try {
     const result = await api(`/api/phantomplay/rooms/${encodeURIComponent(code)}/join`, { method: "POST", body: JSON.stringify({ tenantId: currentTenantId() }) });
     ui.roomMessage = `Joined room ${result.room?.code || code}. Launch the game when your group is ready.`;
-    await hydrate();
+    upsertRoom(result.room);
   } catch (error) {
     ui.roomMessage = `Blocked: ${error.message}`;
-    render();
   } finally {
     ui.roomBusy = false;
     render();
@@ -633,13 +999,14 @@ async function joinPrivateRoom(form) {
 
 async function leavePrivateRoom(code) {
   try {
-    await api(`/api/phantomplay/rooms/${encodeURIComponent(code)}/leave`, { method: "POST", body: JSON.stringify({ tenantId: currentTenantId() }) });
+    const result = await api(`/api/phantomplay/rooms/${encodeURIComponent(code)}/leave`, { method: "POST", body: JSON.stringify({ tenantId: currentTenantId() }) });
     ui.roomMessage = `Left room ${code}.`;
-    await hydrate();
+    upsertRoom(result.room);
+    if (ui.player?.roomCode === code) ui.player.roomCode = null;
   } catch (error) {
     ui.roomMessage = `Blocked: ${error.message}`;
-    render();
   }
+  render();
 }
 
 function startClock() {
@@ -651,7 +1018,15 @@ async function persistPlay(ended, detail = {}) {
   if (!ui.player) return;
   const delta = Math.max(0, Math.min(60, Math.round((Date.now() - playTickAt) / 1000)));
   playTickAt = Date.now();
+  const stateless = STATELESS_GAMES.has(ui.player.game.id);
+  if (stateless) detail = { ...detail, progress: ended ? 100 : undefined, state: null };
   Object.assign(ui.player.play, { seconds: (ui.player.play.seconds || 0) + delta, score: detail.score ?? ui.player.play.score, progress: detail.progress ?? ui.player.play.progress });
+  if (stateless) {
+    ui.snapshot.history = ui.snapshot.history.filter((item) => item.gameId !== ui.player.game.id);
+    if (ui.offline) { saveOffline(); return; }
+    try { await api(`/api/phantomplay/plays/${encodeURIComponent(ui.player.play.id)}`, { method: "PATCH", body: JSON.stringify({ tenantId: currentTenantId(), secondsDelta: delta, score: detail.score, progress: 100, state: null, ended: true }) }); } catch { ui.offline = true; saveOffline(); }
+    return;
+  }
   const existing = historyFor(ui.player.game.id);
   const progress = ui.player.play.progress || 0;
   const row = { gameId: ui.player.game.id, lastPlayedAt: new Date().toISOString(), score: Math.max(existing?.score || 0, ui.player.play.score || 0), progress, seconds: (existing?.seconds || 0) + delta, canContinue: progress > 0 && progress < 100 };
@@ -666,7 +1041,7 @@ async function closePlayer() {
   postToGame("exit", { focus: false });
   if (document.fullscreenElement) await document.exitFullscreen?.().catch(() => undefined);
   clearInterval(playClock);
-  clearInterval(matchClock);
+  clearTimeout(readyWatchdog);
   await persistPlay(true);
   ui.player = null;
   ui.playerReady = false;
@@ -676,61 +1051,52 @@ async function closePlayer() {
   render();
 }
 
-function postToGame(type, options = {}) {
+// `data` may include `focus: false` to skip stealing focus (e.g. a
+// background match-state push); every other key is spread onto the posted
+// message as-is.
+function postToGame(type, data = {}) {
+  const { focus, ...payload } = data;
   const frame = mountedRoot?.querySelector("[data-pp-frame]");
-  frame?.contentWindow?.postMessage({ source: "phantomplay-host", type, engine: ui.player ? engineFor(ui.player.game) : PHANTOMPLAY_ENGINE }, "*");
-  if (options.focus !== false) frame?.focus?.({ preventScroll: true });
+  frame?.contentWindow?.postMessage({ source: "phantomplay-host", type, engine: ui.player ? engineFor(ui.player.game) : PHANTOMPLAY_ENGINE, ...payload }, "*");
+  if (focus !== false) frame?.focus?.({ preventScroll: true });
 }
 
-function postSettingsToGame() {
-  const frame = mountedRoot?.querySelector("[data-pp-frame]");
-  if (!frame || !ui.player) return;
-  frame.contentWindow?.postMessage({
-    source: "phantomplay-host",
-    type: "settings",
-    sound: ui.snapshot.preferences.sound,
-    reducedMotion: ui.snapshot.preferences.reducedMotion,
-    engine: engineFor(ui.player.game),
-    actorId: ui.snapshot.actorId,
-    room: ui.player.room || null,
-  }, "*");
+// host -> game "match-state": the host pushes the latest polled matchState +
+// readyStates + botSlots (+ hostControls, for a game that wants to react to
+// bot-fill/maxHumans) down to the active iframe whenever the room changes.
+function pushMatchStateToGame(room) {
+  if (!ui.player) return;
+  postToGame("match-state", {
+    matchState: room.matchState ?? null,
+    readyStates: room.readyStates || {},
+    botSlots: room.botSlots || [],
+    hostControls: room.hostControls || null,
+    participants: room.participants || [],
+    focus: false,
+  });
 }
 
-async function pollMatchState() {
-  const code = ui.player?.room?.code;
-  if (!code || ui.offline) return;
+// game -> host "match-action": a game reports a player's local action. Only
+// the current room host may write authoritative matchState server-side
+// (updatePhantomPlayRoomMatchState enforces this), so a non-host participant's
+// action has no transport to reach the true host today — it is intentionally
+// dropped here rather than attempted-and-rejected on every keystroke. Games
+// built against this contract should treat matchState (pushed back down via
+// "match-state") as the source of truth, not their own local action echo.
+async function handleMatchAction(action, mode) {
+  const roomCode = ui.player?.roomCode;
+  if (!roomCode) return;
+  const room = ui.snapshot.rooms.find((item) => item.code === roomCode);
+  if (!room || room.hostActorId !== ui.snapshot.actorId) return;
   try {
-    const payload = await api(`/api/phantomplay/rooms/${encodeURIComponent(code)}?tenant_id=${encodeURIComponent(currentTenantId())}`);
-    if (payload.room) {
-      ui.player.room = payload.room;
-      const frame = mountedRoot?.querySelector("[data-pp-frame]");
-      frame?.contentWindow?.postMessage({ source: "phantomplay-host", type: "match-state", room: payload.room, match: payload.room.match || null, actorId: ui.snapshot.actorId }, "*");
+    const result = await api(`/api/phantomplay/rooms/${encodeURIComponent(roomCode)}/match-state`, { method: "PATCH", body: JSON.stringify({ tenantId: currentTenantId(), matchState: action, mode: mode === "replace" ? "replace" : "merge" }) });
+    if (result.room) {
+      upsertRoom(result.room);
+      pushMatchStateToGame(result.room);
     }
-  } catch {}
-}
-
-function startMatchPolling() {
-  clearInterval(matchClock);
-  if (!ui.player?.room?.code) return;
-  pollMatchState();
-  matchClock = setInterval(pollMatchState, 900);
-}
-
-async function sendMatchAction(action = {}) {
-  const code = ui.player?.room?.code;
-  if (!code || ui.offline) return;
-  try {
-    const payload = await api(`/api/phantomplay/rooms/${encodeURIComponent(code)}/match`, {
-      method: "POST",
-      body: JSON.stringify({ tenantId: currentTenantId(), gameId: ui.player.game.id, action }),
-    });
-    if (payload.room) {
-      ui.player.room = payload.room;
-      const frame = mountedRoot?.querySelector("[data-pp-frame]");
-      frame?.contentWindow?.postMessage({ source: "phantomplay-host", type: "match-state", room: payload.room, match: payload.room.match || null, actorId: ui.snapshot.actorId }, "*");
-    }
-  } catch (error) {
-    ui.error = error.message;
+  } catch {
+    // Rate-limited (max 10 match-state writes / 2s / room) or transiently
+    // blocked — the next poll tick resyncs authoritative state either way.
   }
 }
 
@@ -765,12 +1131,14 @@ function onGameMessage(event) {
   }
   if (event.data.type === "ready") {
     ui.playerReady = true;
+    clearTimeout(readyWatchdog);
     mountedRoot.querySelector(".pp-player-loading")?.setAttribute("hidden", "");
-    postSettingsToGame();
+    frame.contentWindow?.postMessage({ source: "phantomplay-host", type: "settings", sound: ui.snapshot.preferences.sound, reducedMotion: ui.snapshot.preferences.reducedMotion, engine: engineFor(ui.player.game) }, "*");
     frame.focus?.({ preventScroll: true });
-  }
-  if (event.data.type === "match-action") {
-    sendMatchAction(event.data.action || {});
+    if (ui.player.roomCode) {
+      const room = ui.snapshot.rooms.find((item) => item.code === ui.player.roomCode);
+      if (room) pushMatchStateToGame(room);
+    }
   }
   if (event.data.type === "paused") {
     ui.playerPaused = !!event.data.paused;
@@ -780,12 +1148,13 @@ function onGameMessage(event) {
     if (state) state.textContent = ui.playerPaused ? "Paused" : "Playing";
   }
   if (event.data.type === "score" || event.data.type === "progress" || event.data.type === "complete") {
-    const scoreValue = Number(event.data.score);
-    const progressValue = Number(event.data.progress);
-    const detail = { score: Number.isFinite(scoreValue) ? scoreValue : undefined, progress: event.data.type === "complete" ? 100 : Number.isFinite(progressValue) ? progressValue : undefined, state: event.data.state };
+    const detail = { score: Number(event.data.score) || undefined, progress: event.data.type === "complete" ? 100 : Number(event.data.progress) || undefined, state: event.data.state };
     const score = mountedRoot.querySelector("[data-pp-live-score]");
     if (score && detail.score !== undefined) score.textContent = `Score ${detail.score}`;
     persistPlay(event.data.type === "complete", detail);
+  }
+  if (event.data.type === "match-action") {
+    handleMatchAction(event.data.action, event.data.mode);
   }
 }
 
@@ -870,12 +1239,9 @@ function saveDeveloperNote(devId, text) {
 }
 
 function bind() {
-  mountedRoot.querySelectorAll("[data-pp-tab]").forEach((button) => button.onclick = () => {
-    ui.selectedDeveloperId = "";
-    ui.developerMessage = "";
-    ui.tab = button.dataset.ppTab;
-    render();
-  });
+  mountedRoot.querySelectorAll("[data-pp-tab]").forEach((button) => button.onclick = () => { ui.tab = button.dataset.ppTab; render(); });
+  mountedRoot.querySelectorAll("[data-pp-support]").forEach((button) => button.onclick = (event) => { event.stopPropagation(); ui.notice = `${button.dataset.ppSupport || "This creator"} support is queued for the creator profile/payments layer. For now, favorites and leaderboard plays help boost discovery.`; render(); });
+  mountedRoot.querySelector("[data-pp-clear-notice]")?.addEventListener("click", () => { ui.notice = ""; render(); });
   mountedRoot.querySelectorAll("[data-pp-play]").forEach((button) => button.onclick = () => launch(button.dataset.ppPlay));
   mountedRoot.querySelectorAll("[data-pp-favorite]").forEach((button) => button.onclick = (event) => { event.stopPropagation(); updateFavorite(button.dataset.ppFavorite); });
   mountedRoot.querySelectorAll("[data-pp-category]").forEach((button) => button.onclick = () => { ui.category = button.dataset.ppCategory; render(); });
@@ -890,8 +1256,19 @@ function bind() {
   mountedRoot.querySelector("[data-pp-join-room-form]")?.addEventListener("submit", (event) => { event.preventDefault(); joinPrivateRoom(event.currentTarget); });
   mountedRoot.querySelector("[data-pp-room-clear]")?.addEventListener("click", () => { ui.roomMessage = ""; render(); });
   mountedRoot.querySelectorAll("[data-pp-copy-room]").forEach((button) => button.onclick = async () => { try { await navigator.clipboard?.writeText(button.dataset.ppCopyRoom || ""); ui.roomMessage = `Room ${button.dataset.ppCopyRoom} code copied locally.`; } catch { ui.roomMessage = `Room code: ${button.dataset.ppCopyRoom}`; } render(); });
-  mountedRoot.querySelectorAll("[data-pp-room-play]").forEach((button) => button.onclick = () => launch(button.dataset.ppRoomPlay, button.dataset.ppRoomCode || ""));
+  mountedRoot.querySelectorAll("[data-pp-room-play]").forEach((button) => button.onclick = () => launch(button.dataset.ppRoomPlay, { roomCode: button.dataset.ppRoomCode }));
   mountedRoot.querySelectorAll("[data-pp-room-leave]").forEach((button) => button.onclick = () => leavePrivateRoom(button.dataset.ppRoomLeave));
+  mountedRoot.querySelectorAll("[data-pp-room-ready]").forEach((button) => button.onclick = () => toggleRoomReady(button.dataset.ppRoomReady, button.dataset.ppReadyNext === "1"));
+  mountedRoot.querySelectorAll("[data-pp-room-botfill]").forEach((input) => input.onchange = () => updateHostControls(input.dataset.ppRoomBotfill, { allowBotFill: input.checked }));
+  mountedRoot.querySelectorAll("[data-pp-room-maxhumans]").forEach((input) => input.onchange = () => updateHostControls(input.dataset.ppRoomMaxhumans, { maxHumans: Number(input.value) || 1 }));
+  mountedRoot.querySelectorAll("[data-pp-toddler-play]").forEach((button) => button.onclick = () => launch(button.dataset.ppToddlerPlay));
+  mountedRoot.querySelectorAll("[data-pp-rating-toggle]").forEach((input) => input.onchange = () => {
+    const next = [...mountedRoot.querySelectorAll("[data-pp-rating-toggle]:checked")].map((el) => el.dataset.ppRatingToggle);
+    applyRatingExposure(next);
+  });
+  mountedRoot.querySelectorAll("[data-pp-rating-preset]").forEach((button) => button.onclick = () => applyRatingExposure(ratingExposurePreset(button.dataset.ppRatingPreset, ui.snapshot.profileType || "adult")));
+  mountedRoot.querySelector("[data-pp-profile-type]")?.addEventListener("change", (event) => applyProfileType(event.target.value));
+  mountedRoot.querySelector("[data-pp-guardian-save]")?.addEventListener("click", saveGuardianLock);
   mountedRoot.querySelectorAll("[data-pp-open-dev]").forEach((button) => button.onclick = () => { ui.selectedDeveloperId = button.dataset.ppOpenDev; ui.developerMessage = ""; render(); });
   mountedRoot.querySelector("[data-pp-dev-back]")?.addEventListener("click", () => { ui.selectedDeveloperId = ""; ui.developerMessage = ""; render(); });
   mountedRoot.querySelector("[data-pp-dev-message-clear]")?.addEventListener("click", () => { ui.developerMessage = ""; render(); });
@@ -907,6 +1284,12 @@ function bind() {
   mountedRoot.querySelectorAll("[data-pp-edit-submission]").forEach((button) => button.onclick = () => { ui.editingSubmissionId = button.dataset.ppEditSubmission; render(); mountedRoot.querySelector("[data-pp-submit-form]")?.scrollIntoView({ behavior: "smooth", block: "start" }); });
   mountedRoot.querySelector("[data-pp-cancel-edit]")?.addEventListener("click", () => { ui.editingSubmissionId = null; render(); });
   mountedRoot.querySelectorAll("[data-pp-moderate]").forEach((button) => button.onclick = () => moderate(button));
+  const copyProtocol = mountedRoot.querySelector("[data-pp-copy-protocol]");
+  if (copyProtocol) copyProtocol.addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(PROTOCOL_SNIPPET); copyProtocol.textContent = "Copied to clipboard ✓"; }
+    catch { copyProtocol.textContent = "Select the snippet below and copy"; }
+    setTimeout(() => { copyProtocol.textContent = "Copy protocol snippet"; }, 2200);
+  });
 }
 
 export function renderPhantomPlay(root, opts = {}) {
@@ -924,5 +1307,5 @@ export function renderPhantomPlay(root, opts = {}) {
   }
   render();
   hydrate();
-  return () => { clearInterval(playClock); clearInterval(matchClock); document.body.classList.remove("phantomplay-playing"); mountedRoot = null; mountedOpts = null; };
+  return () => { clearInterval(playClock); stopRoomPolling(); document.body.classList.remove("phantomplay-playing"); mountedRoot = null; mountedOpts = null; };
 }

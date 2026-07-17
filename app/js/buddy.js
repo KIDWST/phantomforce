@@ -2,7 +2,7 @@
    One sidebar-docked Phantom system: preference-aware, drag-safe, always
    returns home, and tied to real chat/notification states. */
 
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260717-2";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260714-006";
 import {
   COMPANION_EVENT,
   clearCompanionSessionHide,
@@ -10,14 +10,13 @@ import {
   isCompanionHiddenForSession,
   loadCompanionPrefs,
   updateCompanionPrefs,
-} from "./companion-preferences.js?v=phantom-live-20260717-2";
+} from "./companion-preferences.js?v=phantom-live-20260714-006";
 
 const reduceMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
 const LEGACY_DOCK_KEY = "pf.buddy.docked.v1";
 const GREETED_SESSION_KEY = "pf.companion.greeted.session.v1";
 const LAST_GREETING_KEY = "pf.companion.lastGreeting.v1";
 const LAST_QUIP_KEY = "pf.companion.lastQuip.v1";
-const LAST_SCROLL_QUIP_KEY = "pf.companion.lastScrollQuip.v1";
 
 const GREETINGS = {
   professional: ["Ready when you are.", "Your Phantom is standing by.", "Systems are ready.", "Good timing. We have work to do."],
@@ -35,7 +34,6 @@ const BASE_QUIPS = [
   "Your calendar fears me.",
   "Caught three threats before breakfast.",
   "Docked, not domesticated.",
-  "Business, but make it playable.",
 ];
 
 const QUIPS = {
@@ -44,13 +42,6 @@ const QUIPS = {
   playful: ["I fit better over here.", "Small Phantom, serious job.", "I promise not to hover over the buttons.", "Haunting the sidebar. Professionally.", ...BASE_QUIPS],
   quiet: ["Here.", "Ready.", "Docked.", "Approvals first."],
 };
-
-const SCROLL_AWAY_QUIPS = [
-  "Wait, where are you going?",
-  "Wait for me.",
-  "I thought we were friends.",
-  "Don't forget me!",
-];
 
 const STATE_LOOK = {
   docked: { mood: "idle", emotion: "calm", pulse: 0 },
@@ -82,12 +73,6 @@ export function mountBuddy() {
   controller = createBuddyController();
   controller.applyPreferences(loadCompanionPrefs());
   window.addEventListener(COMPANION_EVENT, (event) => controller?.applyPreferences(event.detail || loadCompanionPrefs()));
-  window.addEventListener("keydown", (event) => {
-    if (event.ctrlKey && event.altKey && !event.metaKey && (event.key === "s" || event.key === "S")) {
-      event.preventDefault();
-      controller?.spawnAsk();
-    }
-  });
 }
 
 function createBuddyController() {
@@ -128,11 +113,6 @@ function createBuddyController() {
   let geometryRaf = 0;
   let revealAt = 0;
   let revealed = false;
-  let scrollHidden = false;
-  let scrollVanishing = false;
-  let scrollHideTimer = 0;
-  let lastScrollAwayAt = 0;
-  const scrollPositions = new WeakMap();
 
   function mobile() { return window.matchMedia("(max-width: 720px)").matches; }
   function reduceMotion() { return reduceMotionQuery.matches || prefs.motionLevel === "reduced" || prefs.motionLevel === "none"; }
@@ -149,24 +129,18 @@ function createBuddyController() {
   function sidebarDockZone() {
     const side = sidebarRect();
     const sidebar = document.querySelector(".sidebar");
-    const mainNav = sidebar?.querySelector(".side-nav-main");
-    const utilityNav = sidebar?.querySelector(".side-nav-utility");
-    const navRoot = mainNav || sidebar?.querySelector(".side-nav");
-    const navItems = navRoot ? [...navRoot.querySelectorAll(".nav-item")].map((item) => item.getBoundingClientRect()).filter((rect) => (
+    const nav = sidebar?.querySelector(".side-nav");
+    const navItems = nav ? [...nav.querySelectorAll(".nav-item")].map((item) => item.getBoundingClientRect()).filter((rect) => (
       rect.width > 0 &&
       rect.height > 0 &&
       rect.bottom > 0 &&
       rect.top < window.innerHeight
     )) : [];
-    const utilityRect = utilityNav?.getBoundingClientRect();
     const sideTop = Math.max(0, side.top || 0);
     const sideBottom = Math.min(window.innerHeight, side.bottom || window.innerHeight);
     const lastNavBottom = navItems.length ? Math.max(...navItems.map((rect) => rect.bottom)) : (sideTop + 420);
-    const utilityTop = utilityRect && utilityRect.width > 0 && utilityRect.height > 0
-      ? Math.max(sideTop + 160, Math.min(sideBottom - 16, utilityRect.top))
-      : sideBottom;
-    const bottom = Math.max(sideTop + 150, utilityTop - 12);
-    const top = Math.min(Math.max(lastNavBottom + 18, sideTop + 250), Math.max(sideTop + 120, bottom - 100));
+    const bottom = Math.max(sideTop + 120, sideBottom - 12);
+    const top = Math.min(Math.max(lastNavBottom + 14, sideTop + 250), Math.max(sideTop + 120, bottom - 76));
     return {
       left: side.left,
       top,
@@ -181,7 +155,7 @@ function createBuddyController() {
     const hasSidebar = window.innerWidth > 900;
     const inSidebarDock = hasSidebar && prefs.dockLocation === "sidebar";
     return {
-      left: inSidebarDock ? 10 : hasSidebar ? 236 : 14,
+      left: inSidebarDock ? 10 : hasSidebar ? 214 : 14,
       right: 18,
       top: hasSidebar ? 88 : 72,
       bottom: mobile() ? 98 : 24,
@@ -190,9 +164,9 @@ function createBuddyController() {
 
   function sizeForPrefs() {
     const map = {
-      compact: mobile() ? 68 : 88,
-      standard: mobile() ? 78 : 112,
-      large: mobile() ? 92 : 132,
+      compact: mobile() ? 60 : 58,
+      standard: mobile() ? 68 : 64,
+      large: mobile() ? 78 : 74,
     };
     return map[prefs.size] || map.standard;
   }
@@ -201,8 +175,8 @@ function createBuddyController() {
     const base = sizeForPrefs();
     if (!sidebarPortraitMode()) return { width: base, height: base };
     const zone = sidebarDockZone();
-    const width = Math.round(Math.min(Math.max(base, 82), Math.max(82, Math.min(136, zone.width - 26))));
-    const height = Math.round(Math.min(Math.max(base + 72, 162), Math.max(112, Math.min(224, zone.height - 8))));
+    const width = Math.round(Math.min(Math.max(base, 68), Math.max(68, Math.min(100, zone.width - 30))));
+    const height = Math.round(Math.min(Math.max(base + 46, 118), Math.max(76, Math.min(168, zone.height - 8))));
     return {
       width,
       height,
@@ -221,8 +195,8 @@ function createBuddyController() {
     const halfX = buddyWidth / 2;
     const halfY = buddyHeight / 2;
     const zone = sidebarDockZone();
-    const minX = zone.left + 6 + halfX;
-    const maxX = zone.left + zone.width - 6 - halfX;
+    const minX = zone.left + 20 + halfX;
+    const maxX = Math.min(zone.left + zone.width - 12 - halfX, minX + 18);
     const minY = zone.top + halfY;
     const maxY = zone.bottom - halfY;
     return {
@@ -242,7 +216,7 @@ function createBuddyController() {
     if (dock === "sidebar") {
       const bounds = sidebarPatrolBounds();
       return {
-        x: (bounds.minX + bounds.maxX) / 2,
+        x: bounds.minX,
         y: bounds.maxY,
       };
     }
@@ -339,6 +313,10 @@ function createBuddyController() {
     canvas = layer.querySelector("[data-buddy-canvas]");
     sayEl = layer.querySelector("[data-buddy-say]");
     menu = layer.querySelector("[data-buddy-menu]");
+    /* The layer moves via transform, and a transformed ancestor becomes the
+       containing block for position:fixed children — leaving the menu inside
+       would offset its viewport coordinates by the phantom's position and
+       throw it off-screen. It must live directly under <body>. */
     document.body.appendChild(menu);
     ctx2 = canvas.getContext("2d");
     character = createPhantomCharacter({ small: true });
@@ -357,13 +335,10 @@ function createBuddyController() {
       eventAbort = null;
     }
     if (layer) layer.remove();
-    if (menu) menu.remove();
+    if (menu) menu.remove(); // re-parented to <body>, so the layer no longer owns it
     layer = canvas = sayEl = menu = ctx2 = character = null;
     revealed = false;
     revealAt = 0;
-    clearTimeout(scrollHideTimer);
-    scrollHidden = false;
-    scrollVanishing = false;
   }
 
   function syncMenuControls() {
@@ -377,8 +352,6 @@ function createBuddyController() {
     if (!layer) return;
     layer.classList.toggle("is-docked", docked);
     layer.classList.toggle("is-roaming", false);
-    layer.classList.toggle("is-scroll-hidden", scrollHidden);
-    layer.classList.toggle("is-scroll-vanishing", scrollVanishing);
     layer.dataset.motion = prefs.motionLevel;
     layer.dataset.personality = prefs.personality;
     layer.dataset.dock = prefs.dockLocation;
@@ -438,16 +411,6 @@ function createBuddyController() {
     return next;
   }
 
-  function scrollAwayText() {
-    let last = "";
-    try { last = localStorage.getItem(LAST_SCROLL_QUIP_KEY) || ""; } catch {}
-    const options = SCROLL_AWAY_QUIPS.filter((item) => item !== last);
-    const pool = options.length ? options : SCROLL_AWAY_QUIPS;
-    const next = pool[Math.floor(Math.random() * pool.length)];
-    try { localStorage.setItem(LAST_SCROLL_QUIP_KEY, next); } catch {}
-    return next;
-  }
-
   function maybeGreet() {
     if (!layer || !canGreetNow()) return;
     markGreeted();
@@ -475,48 +438,6 @@ function createBuddyController() {
     stateUntil = ms ? performance.now() + ms : 0;
     pulse = Math.max(pulse, STATE_LOOK[next].pulse || 0);
     if (layer) layer.dataset.state = state;
-  }
-
-  function revealFromScroll() {
-    if (!layer || (!scrollHidden && !scrollVanishing)) return;
-    clearTimeout(scrollHideTimer);
-    scrollHidden = false;
-    scrollVanishing = false;
-    layer.classList.remove("is-scroll-hidden", "is-scroll-vanishing");
-    configureCanvas({ snap: false });
-    dock();
-    updatePointerHitState(true);
-  }
-
-  function vanishForScroll() {
-    if (!layer || scrollHidden || scrollVanishing || !sidebarPortraitMode() || dragging || userBusy()) return;
-    const now = performance.now();
-    if (now - lastScrollAwayAt < 14000) {
-      scrollVanishing = true;
-      scrollHidden = false;
-      applyPreferenceClasses();
-      clearTimeout(scrollHideTimer);
-      scrollHideTimer = setTimeout(() => {
-        scrollVanishing = false;
-        scrollHidden = true;
-        applyPreferenceClasses();
-        updatePointerHitState(true);
-      }, 920);
-      return;
-    }
-    lastScrollAwayAt = now;
-    scrollVanishing = true;
-    closeMenu();
-    setState("concerned", 1200);
-    say(scrollAwayText(), 1450);
-    applyPreferenceClasses();
-    clearTimeout(scrollHideTimer);
-    scrollHideTimer = setTimeout(() => {
-      scrollVanishing = false;
-      scrollHidden = true;
-      applyPreferenceClasses();
-      updatePointerHitState(true);
-    }, 1500);
   }
 
   function react(kind, ms = 1600) {
@@ -553,10 +474,9 @@ function createBuddyController() {
     if (!force && now < nextWanderAt) return;
     if (docked && prefs.dockLocation === "sidebar" && !mobile() && motionAllowed() && !userBusy()) {
       const bounds = sidebarPatrolBounds();
-      const height = Math.max(1, bounds.maxY - bounds.minY);
-      tx = (bounds.minX + bounds.maxX) / 2;
-      ty = bounds.minY + height * (0.25 + Math.random() * 0.5);
-      nextWanderAt = now + 2600 + Math.random() * 3000;
+      tx = bounds.minX + Math.random() * Math.max(1, bounds.maxX - bounds.minX);
+      ty = bounds.maxY - Math.random() * Math.min(18, Math.max(1, bounds.maxY - bounds.minY));
+      nextWanderAt = now + 4200 + Math.random() * 5200;
       return;
     }
     if (!roamingAllowed() || docked || userBusy()) {
@@ -602,23 +522,6 @@ function createBuddyController() {
     say("Ready.", 1600);
   }
 
-  function spawnAsk() {
-    clearCompanionSessionHide();
-    prefs = updateCompanionPrefs({
-      enabled: true,
-      visible: true,
-      startDocked: true,
-      dockLocation: "sidebar",
-      speechEnabled: true,
-    });
-    applyPreferences(prefs);
-    dock();
-    setTimeout(() => {
-      focusChat();
-      say("Ask me from anywhere.", 2200);
-    }, 0);
-  }
-
   function openSurface(id) {
     const button = document.querySelector(`[data-nav-id="${id}"]`);
     if (button) {
@@ -641,8 +544,10 @@ function createBuddyController() {
     const anchorX = Number.isFinite(clientX) ? clientX : x + buddyWidth / 2;
     const anchorY = Number.isFinite(clientY) ? clientY : y - buddyHeight / 2;
     const gutter = 10;
-    const rawLeft = anchorX + gutter;
-    const rawTop = anchorY + gutter;
+    const sidebar = sidebarRect();
+    const prefersRightOfSidebar = prefs.dockLocation === "sidebar" && sidebar.width > 120;
+    const rawLeft = prefersRightOfSidebar ? sidebar.left + sidebar.width + gutter : anchorX;
+    const rawTop = prefersRightOfSidebar ? anchorY - rect.height + 18 : anchorY;
     const left = Math.max(gutter, Math.min(window.innerWidth - rect.width - gutter, rawLeft));
     const top = Math.max(gutter, Math.min(window.innerHeight - rect.height - gutter, rawTop));
     menu.style.left = `${left}px`;
@@ -656,7 +561,6 @@ function createBuddyController() {
 
   function buddyRectHit(clientX, clientY) {
     if (!canvas || !layer) return false;
-    if (scrollHidden || scrollVanishing) return false;
     if (document.body.classList.contains("overlay-open")) return false;
     if (getComputedStyle(layer).opacity === "0") return false;
     const rect = canvas.getBoundingClientRect();
@@ -733,32 +637,7 @@ function createBuddyController() {
     };
     window.addEventListener("pointermove", (event) => { lastPointer = { x: event.clientX, y: event.clientY }; updatePointerHitState(); }, { passive: true, signal });
     window.addEventListener("resize", () => { configureCanvas({ snap: true }); if (docked || mobile()) dock(); }, { passive: true, signal });
-    const scrollKey = (target) => (target === document || target === window || target === document.body || target === document.documentElement)
-      ? document.documentElement
-      : target;
-    const scrollTopFor = (target) => {
-      const key = scrollKey(target);
-      if (!(key instanceof Element)) return null;
-      if (key.closest?.(".sidebar, .buddy-menu")) return null;
-      if (key === document.documentElement || key === document.body) {
-        return window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
-      }
-      if (key.scrollHeight <= key.clientHeight + 4) return null;
-      return key.scrollTop;
-    };
-    const handleScroll = (event) => {
-      scheduleGeometryRefresh();
-      if (!docked || !sidebarPortraitMode()) return;
-      const key = scrollKey(event.target);
-      const current = scrollTopFor(event.target);
-      if (current == null || !(key instanceof Element)) return;
-      const previous = scrollPositions.has(key) ? scrollPositions.get(key) : current;
-      scrollPositions.set(key, current);
-      const delta = current - previous;
-      if (delta > 18 && current > 20) vanishForScroll();
-      else if (delta < -36 || current < 8) revealFromScroll();
-    };
-    document.addEventListener("scroll", handleScroll, { passive: true, capture: true, signal });
+    document.addEventListener("scroll", scheduleGeometryRefresh, { passive: true, capture: true, signal });
     document.addEventListener("pointerdown", (event) => {
       openMenuFromPointerEvent(event);
     }, { capture: true, signal });
@@ -920,7 +799,7 @@ function createBuddyController() {
         dt,
         cx: buddyWidth / 2,
         cy: portrait ? buddyHeight * 0.56 : buddyHeight * 0.56,
-        scale: portrait ? Math.min(buddyWidth * 0.62, buddyHeight * 0.35) : size * 0.3,
+        scale: portrait ? Math.min(buddyWidth * 0.52, buddyHeight * 0.27) : size * 0.3,
         mood: look.mood,
         emotion: look.emotion,
         pulse: pulse + (look.pulse || 0),
@@ -941,5 +820,5 @@ function createBuddyController() {
     requestAnimationFrame(frame);
   }
 
-  return { applyPreferences, react, spawnAsk };
+  return { applyPreferences, react };
 }

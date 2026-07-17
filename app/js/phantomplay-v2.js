@@ -1,5 +1,5 @@
 /* PhantomPlay V2 — the platform experience shell.
-   Home / Solo / Friends / Workspace / Library / Developers (+ Admin) over the
+   Home / Solo / Friends / Workspace / Library / Dev Hub (+ Admin) over the
    V1 APIs (/api/phantomplay/*) plus the V2 platform layer
    (/api/phantomplay/v2/*). V1's phantomplay.js is untouched; main.js mounts
    this module instead. Every V2 surface degrades honestly: if the V2 routes
@@ -7,16 +7,31 @@
    flow (catalog, play, saves, submissions, moderation) keeps working. */
 
 import {
-  currentTenantId, friendlyBackendError, isAdmin, session,
+  currentTenantId, isAdmin, session,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260717-2";
+} from "./store.js?v=phantom-live-20260714-022";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
 const FALLBACK_KEY = "pf.phantomplay.offline.v1";
-const DEV_SUPPORT_KEY = "pf.phantomplay.developerSupport.v1";
-const CATEGORIES = ["All", "Arcade", "Puzzle", "Focus", "Strategy", "Sports", "Creative", "Kids"];
-const KIDS_GAME_IDS = new Set(["reflex-grid", "rift-frenzy", "serpent-surge", "color-rush", "circuit-serpent"]);
+const CATEGORIES = ["All", "Arcade", "Puzzle", "Focus", "Strategy", "Sports", "Creative"];
 const STATUSES = [["online", "Online"], ["away", "Away"], ["busy", "Busy"], ["invisible", "Invisible"]];
+const STATELESS_GAMES = new Set(["phantom-rumble"]);
+const TODDLER_ONLY_GAMES = new Set(["signal-match", "reflex-grid", "penalty-kick", "color-rush"]);
+// "Game Rating Exposure" — mirrors server PhantomPlayRating (phantomplay.ts).
+// Kept in sync by hand with defaultAllowedRatings() there; no server "give me
+// the default for my type" endpoint exists.
+const RATING_TIERS = [["toddler", "Toddler"], ["everyone", "Everyone"], ["everyone10", "Everyone 10+"], ["teen", "Teen"], ["mature", "Mature"]];
+const ALL_RATING_VALUES = RATING_TIERS.map(([value]) => value);
+function defaultAllowedRatingsFor(profileType) {
+  if (profileType === "toddler") return ["toddler", "everyone"];
+  if (profileType === "child") return ["toddler", "everyone", "everyone10", "teen"];
+  return [...ALL_RATING_VALUES];
+}
+function ratingExposurePreset(kind, profileType) {
+  if (kind === "my-age") return defaultAllowedRatingsFor(profileType);
+  if (kind === "family") return ["toddler", "everyone", "everyone10"];
+  return [...ALL_RATING_VALUES];
+}
 
 const ui = {
   tab: "home", loading: true, error: "", offline: false,
@@ -28,10 +43,7 @@ const ui = {
   statusChoice: "online", friendTarget: "",
   analytics: null, leaderboardGameId: "", leaderboard: null,
   policyDraft: null, policyMessage: "", assistMessage: "",
-  selectedDeveloperId: "", developerMessage: "",
-  // Global player handle + cross-tenant leaderboard (docs/superpowers/specs/
-  // 2026-07-15-phantomplay-global-leaderboard-design.md).
-  handle: null, handleDismissed: false, handleMessage: "", globalBoard: null,
+  guardianMessage: "", ratingBusy: false,
 };
 
 let mountedRoot = null, playClock = null, playTickAt = 0, heartbeatClock = null, messageBound = false, keyboardBound = false;
@@ -43,7 +55,7 @@ function authHeaders(json = false) {
 async function api(path, options = {}) {
   const response = await fetch(path, { ...options, headers: { ...authHeaders(Boolean(options.body)), ...(options.headers || {}) } });
   const payload = await response.json().catch(() => null);
-  if (!response.ok) { const err = new Error(friendlyBackendError(response.status, payload?.error, { authMessage: "Sign in to sync PhantomPlay.", fallbackPrefix: "PhantomPlay request failed" })); err.status = response.status; throw err; }
+  if (!response.ok) { const err = new Error(typeof payload?.error === "string" ? payload.error : `PhantomPlay request failed (${response.status}).`); err.status = response.status; throw err; }
   return payload;
 }
 const tenantQuery = () => `tenant_id=${encodeURIComponent(currentTenantId())}`;
@@ -51,11 +63,12 @@ const tenantQuery = () => `tenant_id=${encodeURIComponent(currentTenantId())}`;
 /* ---- offline fallback (built-ins only, local saves) ---- */
 const OFFLINE_GAMES = [
   ["neon-drift", "Neon Drift", "Arcade", "/app/games/neon-drift.html"],
-  ["signal-match", "Signal Match", "Puzzle", "/app/games/signal-match.html"],
+  ["phantom-dash", "Phantom Dash", "Arcade", "/app/games/phantom-dash.html?v=1.1.0"],
+  ["signal-match", "Signal Match", "Puzzle", "/app/games/signal-match.html", "toddler"],
   ["focus-stack", "Focus Stack", "Focus", "/app/games/focus-stack.html"],
-  ["phantom-rumble", "Phantom Rumble", "Arcade", "/app/games/phantom-rumble.html?v=2.2.3"],
-  ["sudoku-signal", "Sudoku Signal", "Focus", "/app/games/sudoku-signal.html"],
-].map(([id, title, category, launchUrl]) => ({ id, title, summary: id === "phantom-rumble" ? "Premium local platform fighter with guard, parry, dodge, ledge-save recovery, bots, drops, and touch controls." : "Offline built-in game.", description: "", category, tags: [], contentRating: "everyone", developer: "Tak", kind: "built_in", launchUrl, thumbnail: "", featured: id === "phantom-rumble", version: id === "phantom-rumble" ? "2.2.3" : "1.0.0", controls: id === "phantom-rumble" ? "Keyboard or mobile touch controls." : "", progressSupport: true, scoreSupport: true }));
+  ["phantom-rumble", "Phantom Rumble", "Arcade", "/app/games/phantom-rumble.html?v=1.1.0"],
+  ["sudoku-signal", "Sudoku Signal", "Focus", "/app/games/sudoku-signal.html?v=1.1.0"],
+].map(([id, title, category, launchUrl, contentRating]) => ({ id, title, summary: "Offline built-in game.", description: "", category, tags: [], contentRating: contentRating || "everyone", developer: "Tak", kind: "built_in", launchUrl, thumbnail: "", featured: id === "phantom-rumble" || id === "phantom-dash", version: launchUrl.match(/v=([^&]+)/)?.[1] || "1.0.0", controls: "", progressSupport: true, scoreSupport: true }));
 
 function offlineState() {
   let saved = {};
@@ -64,13 +77,14 @@ function offlineState() {
     tenantId: currentTenantId(), actorId: "offline",
     access: { enabled: true, reason: "offline_built_ins", dailyMinuteLimit: 60, usedMinutesToday: 0, remainingMinutesToday: 60, canSubmitGames: false, canModerate: false },
     catalog: OFFLINE_GAMES, favorites: Array.isArray(saved.favorites) ? saved.favorites : [], history: Array.isArray(saved.history) ? saved.history : [],
-    preferences: { contentRating: "teen", sound: saved.sound !== false, reducedMotion: !!saved.reducedMotion, allowCommunityGames: true },
+    preferences: { contentRating: "teen", allowedRatings: [...ALL_RATING_VALUES], sound: saved.sound !== false, reducedMotion: !!saved.reducedMotion, allowCommunityGames: true },
+    profileType: "adult", guardianLock: { enabled: false },
     submissions: [], developerSpotlight: "Tak", approvedCommunityCount: 0,
   };
 }
 function saveOffline(snapshot = ui.snapshot) {
   if (!snapshot) return;
-  workspaceStorageSetItem(FALLBACK_KEY, JSON.stringify({ favorites: snapshot.favorites, history: snapshot.history, sound: snapshot.preferences.sound, reducedMotion: !!snapshot.preferences.reducedMotion }));
+  workspaceStorageSetItem(FALLBACK_KEY, JSON.stringify({ favorites: snapshot.favorites, history: snapshot.history.filter((item) => !isStatelessGame(item.gameId)), sound: snapshot.preferences.sound, reducedMotion: !!snapshot.preferences.reducedMotion }));
 }
 
 /* ---- hydrate ---- */
@@ -95,12 +109,6 @@ async function hydrate() {
     const [v2, discovery] = await Promise.all([api(`/api/phantomplay/v2?${tenantQuery()}`), api(`/api/phantomplay/v2/discovery?${tenantQuery()}`)]);
     ui.v2 = v2; ui.discovery = discovery; ui.v2Offline = false;
   } catch { ui.v2 = null; ui.discovery = null; ui.v2Offline = true; }
-  if (!ui.v2Offline) {
-    try {
-      const [handle, globalBoard] = await Promise.all([api("/api/phantomplay/handle"), api("/api/phantomplay/leaderboard/global")]);
-      ui.handle = handle; ui.globalBoard = globalBoard;
-    } catch { ui.handle = null; ui.globalBoard = null; }
-  } else { ui.handle = null; ui.globalBoard = null; }
   ui.loading = false;
   render();
 }
@@ -115,14 +123,15 @@ async function heartbeat() {
 
 /* ---- helpers ---- */
 const gameById = (id) => ui.snapshot?.catalog?.find((game) => game.id === id) || null;
-const historyFor = (gameId) => ui.snapshot?.history?.find((item) => item.gameId === gameId) || null;
+const isStatelessGame = (gameOrId) => STATELESS_GAMES.has(typeof gameOrId === "string" ? gameOrId : gameOrId?.id);
+const isToddlerGame = (gameOrId) => {
+  const id = typeof gameOrId === "string" ? gameOrId : gameOrId?.id;
+  const game = typeof gameOrId === "string" ? gameById(id) : gameOrId;
+  return TODDLER_ONLY_GAMES.has(id) || game?.contentRating === "toddler";
+};
+const standardGames = (games) => (games || []).filter((game) => !isToddlerGame(game));
+const historyFor = (gameId) => isStatelessGame(gameId) ? null : (ui.snapshot?.history?.find((item) => item.gameId === gameId) || null);
 const wishlisted = (gameId) => !!ui.v2?.wishlist?.includes(gameId);
-function isKidsGame(game) {
-  return game?.category === "Kids" || KIDS_GAME_IDS.has(game?.id);
-}
-function visibleByCategory(game) {
-  return ui.category === "Kids" ? isKidsGame(game) : ui.category === "All" ? !isKidsGame(game) : game.category === ui.category && !isKidsGame(game);
-}
 function stars(value, interactive = false) {
   const rating = Math.round(Number(value) || 0);
   return `<span class="pp2-stars${interactive ? " is-input" : ""}">${[1, 2, 3, 4, 5].map((n) => `<button type="button" ${interactive ? `data-pp2-star="${n}"` : "disabled"} class="${n <= rating ? "is-on" : ""}">★</button>`).join("")}</span>`;
@@ -163,172 +172,14 @@ function empty(title, copy) {
 function v2Note(copy) {
   return `<div class="pp2-banner"><b>Social is offline</b><span>${esc(copy)}</span></div>`;
 }
-function slugifyDeveloper(value) {
-  return String(value || "developer").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 72) || "developer";
-}
-function firstPresent(...values) {
-  return values.find((value) => String(value ?? "").trim()) ?? "";
-}
-function stableKeyPart(value) {
-  const text = String(value ?? "").normalize("NFKC").trim().toLowerCase();
-  let hash = 0;
-  for (const char of text) hash = ((hash * 31) + (char.codePointAt(0) || 0)) >>> 0;
-  return `${slugifyDeveloper(text)}-${hash.toString(36)}`;
-}
-function genericDeveloperName(value) {
-  const name = String(value ?? "").normalize("NFKC").trim().toLowerCase();
-  return !name || name === "developer" || name === "phantom labs";
-}
-function developerIdentityFor(game) {
-  const displayName = String(game?.developer || "Developer").trim() || "Developer";
-  if (game?.kind === "built_in" || displayName.toLowerCase() === "tak") return { id: "developer:tak", name: "Tak" };
-  const explicitId = firstPresent(game?.developerId, game?.developer_id, game?.ownerId, game?.owner_id, game?.accountId, game?.authorId, game?.submittedById);
-  if (explicitId) return { id: `developer:${stableKeyPart(explicitId)}`, name: displayName };
-  const gameIdentity = firstPresent(game?.id, game?.submissionId, game?.title, displayName);
-  if (game?.kind === "community" || genericDeveloperName(displayName)) return { id: `community:${stableKeyPart(gameIdentity)}`, name: displayName };
-  return { id: `developer:${stableKeyPart(displayName)}`, name: displayName };
-}
-function playableResume(resume) {
-  const progress = Number(resume?.progress);
-  if (!resume?.state || !Number.isFinite(progress) || progress <= 0 || progress >= 100) return null;
-  return resume;
-}
-function loadDeveloperSupport() {
-  try {
-    const parsed = JSON.parse(workspaceStorageGetItem(DEV_SUPPORT_KEY) || "{}");
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
-  } catch { return {}; }
-}
-function saveDeveloperSupport(records) {
-  workspaceStorageSetItem(DEV_SUPPORT_KEY, JSON.stringify(records || {}));
-}
-function developerAvatarFor(developer) {
-  const game = developer?.games?.find((item) => item.thumbnail) || developer?.games?.[0];
-  return game?.developerAvatar || game?.thumbnail || "";
-}
-function devScoreFor(developer, support = {}) {
-  const games = Array.isArray(developer.games) ? developer.games : [];
-  const base = 64;
-  const gameScore = Math.min(16, games.length * 3);
-  const featuredScore = Math.min(10, Number(developer.featuredCount || 0) * 2);
-  const communityScore = Math.min(6, Number(developer.communityCount || 0) * 2);
-  const supportScore = Math.min(8, Number(support.supportCount || 0) * 2);
-  const noteScore = Math.min(4, Array.isArray(support.notes) ? support.notes.length : 0);
-  return Math.max(0, Math.min(100, base + gameScore + featuredScore + communityScore + supportScore + noteScore));
-}
-function developerDirectory() {
-  const directory = new Map();
-  for (const game of ui.snapshot?.catalog || []) {
-    const { id, name } = developerIdentityFor(game);
-    if (!directory.has(id)) directory.set(id, { id, name, games: [], categories: new Set(), featuredCount: 0, communityCount: 0 });
-    const entry = directory.get(id);
-    entry.games.push(game);
-    if (game.category) entry.categories.add(game.category);
-    if (game.featured) entry.featuredCount += 1;
-    if (game.kind === "community") entry.communityCount += 1;
-  }
-  const supportRecords = loadDeveloperSupport();
-  return [...directory.values()].map((developer) => {
-    const support = supportRecords[developer.id] || {};
-    const normalized = {
-      ...developer,
-      categories: [...developer.categories].sort(),
-      supportCount: Number(support.supportCount || 0),
-      donationIntentCount: Number(support.donationIntentCount || 0),
-      notes: Array.isArray(support.notes) ? support.notes : [],
-      supported: Boolean(support.supportedAt),
-      avatar: developerAvatarFor(developer),
-    };
-    return { ...normalized, score: devScoreFor(normalized, support) };
-  }).sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
-}
-function selectedDeveloper() {
-  return developerDirectory().find((developer) => developer.id === ui.selectedDeveloperId) || null;
-}
-function dateLabel(value) {
-  if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-}
-function developerCard(developer) {
-  const previews = developer.games.slice(0, 4);
-  return `<article class="pp2-dev-card" data-pp2-open-dev="${esc(developer.id)}">
-    <header>
-      <div class="pp2-dev-avatar">${developer.avatar ? `<img src="${esc(developer.avatar)}" alt="" loading="lazy"/>` : `<span>${esc(developer.name.slice(0, 1))}</span>`}</div>
-      <div><p class="pp2-kicker">DEVELOPER</p><h3>${esc(developer.name)}</h3><span>${developer.games.length} game${developer.games.length === 1 ? "" : "s"} in PhantomPlay</span></div>
-      <strong class="pp2-dev-score"><b>${developer.score}</b><span>Dev score</span></strong>
-    </header>
-    <p>${esc(developer.categories.join(" / ") || "PhantomPlay")} creator with ${developer.featuredCount} featured build${developer.featuredCount === 1 ? "" : "s"} and ${developer.supportCount} local support mark${developer.supportCount === 1 ? "" : "s"}.</p>
-    <div class="pp2-dev-tags">${developer.categories.map((category) => `<span>${esc(category)}</span>`).join("")}</div>
-    <div class="pp2-dev-thumbs">${previews.map((game) => `<span title="${esc(game.title)}">${art(game)}</span>`).join("")}</div>
-    <button type="button" class="pp2-ghost" data-pp2-open-dev="${esc(developer.id)}">View profile</button>
-  </article>`;
-}
-function renderDeveloperProfile(developer) {
-  const notes = developer.notes.length ? developer.notes.map((note) => `<li><span>${esc(dateLabel(note.at))}</span><p>${esc(note.text)}</p></li>`).join("") : `<li class="is-empty"><p>No private dev notes yet.</p></li>`;
-  return `<div class="pp2-dev-profile">
-    <button type="button" class="pp2-ghost" data-pp2-dev-back>Back to developers</button>
-    <section class="pp2-panel pp2-dev-hero">
-      <div class="pp2-dev-avatar is-large">${developer.avatar ? `<img src="${esc(developer.avatar)}" alt="" loading="lazy"/>` : `<span>${esc(developer.name.slice(0, 1))}</span>`}</div>
-      <div><p class="pp2-kicker">DEVELOPER PROFILE</p><h2>${esc(developer.name)}</h2><p>${developer.games.length} playable game${developer.games.length === 1 ? "" : "s"} · ${esc(developer.categories.join(" / ") || "PhantomPlay")}</p></div>
-      <strong class="pp2-dev-score is-large"><b>${developer.score}</b><span>Dev score</span></strong>
-    </section>
-    <section class="pp2-dev-stats">
-      <span><b>${developer.games.length}</b><i>Games</i></span>
-      <span><b>${developer.featuredCount}</b><i>Featured</i></span>
-      <span><b>${developer.supportCount}</b><i>Support</i></span>
-      <span><b>${developer.donationIntentCount}</b><i>Collab intent</i></span>
-    </section>
-    <section class="pp2-panel pp2-dev-actions">
-      <button type="button" class="pp2-play" data-pp2-support-dev="${esc(developer.id)}">${developer.supported ? "Supported" : "Support developer"}</button>
-      <button type="button" class="pp2-ghost" data-pp2-donate-dev="${esc(developer.id)}">Mark donate / collab intent</button>
-      <p class="pp2-fine">This records private local intent only. No payment, outreach, or external service starts here.</p>
-    </section>
-    ${ui.developerMessage ? `<div class="pp2-banner"><b>Developer note</b><span>${esc(ui.developerMessage)}</span><button type="button" data-pp2-dev-message-clear>Clear</button></div>` : ""}
-    <section class="pp2-panel pp2-dev-notes">
-      <h3>Private notes</h3>
-      <textarea data-pp2-dev-note="${esc(developer.id)}" rows="3" maxlength="800" placeholder="Leave yourself a note about this developer, their games, or support ideas."></textarea>
-      <button type="button" class="pp2-ghost" data-pp2-save-dev-note="${esc(developer.id)}">Save private note</button>
-      <ul>${notes}</ul>
-    </section>
-    <section class="pp2-row pp2-dev-games">
-      <header><h2>Games by ${esc(developer.name)}</h2><p>Every playable PhantomPlay build currently available for this developer.</p></header>
-      <div class="pp2-grid pp2-grid-wide">${developer.games.map((game) => card(game)).join("")}</div>
-    </section>
-  </div>`;
-}
 
 /* ---- HOME ---- */
-function mapIds(rows, key = "gameId") { return (rows || []).map((item) => gameById(item[key])).filter((game) => game && !isKidsGame(game)); }
-function bestPlayerHero() {
-  const board = ui.globalBoard;
-  if (!board?.top?.length) return "";
-  const leader = board.top[0];
-  return `<section class="pp2-panel pp2-best-player">
-    <div><p class="pp2-kicker">BEST PLAYER</p><h2>${esc(leader.username)}</h2><span>${leader.globalScore.toLocaleString()} global points</span></div>
-    <ol class="pp2-board">${board.top.map((row) => `<li class="${board.self && row.rank === board.self.rank && row.username === board.self.username ? "is-you" : ""}"><b>#${row.rank}</b><span>${esc(row.username)}</span><em>${row.globalScore.toLocaleString()}</em></li>`).join("")}</ol>
-    ${board.self && !board.top.some((row) => row.rank === board.self.rank) ? `<p class="pp2-fine">Your rank: #${board.self.rank} · ${esc(board.self.username)} · ${board.self.globalScore.toLocaleString()} points</p>` : ""}
-  </section>`;
-}
-function communityRankings() {
-  const board = ui.globalBoard;
-  const developers = developerDirectory().slice(0, 5);
-  if (!board?.top?.length && !developers.length) return "";
-  return `<section class="pp2-row pp2-community-rankings">
-    <header><h2>Community Rankings</h2><p>Top players across every PhantomForce business, alongside PhantomPlay's top developers. Two different scoreboards, shown together.</p></header>
-    <div class="pp2-cols">
-      <div><h3>Top players</h3>${board?.top?.length ? `<ol class="pp2-board">${board.top.map((row) => `<li><b>#${row.rank}</b><span>${esc(row.username)}</span><em>${row.globalScore.toLocaleString()}</em></li>`).join("")}</ol>` : empty("No ranked players yet", "Claim a handle and set a score to appear here.")}</div>
-      <div><h3>Top developers</h3>${developers.length ? `<ol class="pp2-board">${developers.map((developer) => `<li><b>${developer.score}</b><span>${esc(developer.name)}</span><em>${developer.games.length} game${developer.games.length === 1 ? "" : "s"}</em></li>`).join("")}</ol>` : empty("No developers yet", "Playable games will create developer profiles automatically.")}</div>
-    </div>
-  </section>`;
-}
+function mapIds(rows, key = "gameId") { return standardGames((rows || []).map((item) => gameById(item[key])).filter(Boolean)); }
 function renderHome() {
   if (ui.loading) return `${skeletonRow("Featured")}${skeletonRow("Trending this week")}`;
-  const visibleCatalog = ui.snapshot.catalog.filter((game) => !isKidsGame(game));
-  const featured = visibleCatalog.filter((game) => game.featured);
-  const hero = gameById("phantom-rumble") || featured[0] || visibleCatalog[0];
-  const continuing = ui.snapshot.history.filter((item) => item.canContinue).map((item) => gameById(item.gameId)).filter((game) => game && !isKidsGame(game)).slice(0, 4);
+  const featured = standardGames(ui.snapshot.catalog).filter((game) => game.featured);
+  const hero = gameById("phantom-rumble") || featured[0] || standardGames(ui.snapshot.catalog)[0];
+  const continuing = ui.snapshot.history.filter((item) => item.canContinue && !isStatelessGame(item.gameId) && !isToddlerGame(item.gameId)).map((item) => gameById(item.gameId)).filter(Boolean).slice(0, 4);
   const d = ui.discovery;
   const ratingNotes = {};
   for (const item of [...(d?.topRated || []), ...(d?.hiddenGems || [])]) if (item.averageRating) ratingNotes[item.gameId] = `${item.averageRating}★`;
@@ -336,7 +187,6 @@ function renderHome() {
   for (const item of d?.friendsPlaying || []) friendNotes[item.gameId] = `${item.label} is playing`;
   return `<div class="pp2-home">
     ${hero ? `<section class="pp2-hero"><div class="pp2-hero-art">${art(hero)}</div><div class="pp2-hero-copy"><p class="pp2-kicker">FEATURED</p><h1>${esc(hero.title)}</h1><p>${esc(hero.summary)}</p><div><button class="pp2-play" data-pp2-play="${esc(hero.id)}">Play now</button><button class="pp2-ghost" data-pp2-open="${esc(hero.id)}">Game page</button></div></div></section>` : ""}
-    ${bestPlayerHero()}
     ${row("Continue playing", continuing, "Pick up exactly where you left off — saves follow your profile.")}
     ${d ? row("Friends playing now", mapIds(d.friendsPlaying), "", friendNotes) : ""}
     ${d ? row("Trending this week", mapIds(d.trending), "Ranked by real plays across this workspace.") : ""}
@@ -345,18 +195,35 @@ function renderHome() {
     ${d ? row("New community releases", mapIds(d.newReleases)) : ""}
     ${row("Featured", featured)}
     ${ui.v2Offline ? v2Note("Discovery, reviews, friends, and wishlists need the PhantomForce server. Built-in games and saves still work.") : ""}
-    ${communityRankings()}
-    <section class="pp2-spotlight"><div><p class="pp2-kicker">DEVELOPER SPOTLIGHT</p><h2>${esc(ui.snapshot.developerSpotlight)}</h2><p>Browse developers, see every game they have in PhantomPlay, and keep private support notes without turning play into a marketplace.</p><button class="pp2-ghost" data-pp2-tab="developer">Open Developers</button></div></section>
+    <section class="pp2-spotlight"><div><p class="pp2-kicker">DEVELOPER SPOTLIGHT</p><h2>${esc(ui.snapshot.developerSpotlight)}</h2><p>Publish a game to PhantomPlay and PhantomForce becomes your publishing team — analytics, patch notes, art and campaign briefs, all in the Dev Hub.</p><button class="pp2-ghost" data-pp2-tab="developer">Open Dev Hub</button></div></section>
   </div>`;
 }
 
 /* ---- SOLO ---- */
 function renderSolo() {
-  const games = ui.snapshot.catalog.filter((game) => game.kind === "built_in" && visibleByCategory(game));
+  const games = standardGames(ui.snapshot.catalog).filter((game) => game.kind === "built_in" && (ui.category === "All" || game.category === ui.category));
   return `<div class="pp2-solo">
     <section class="pp2-lead"><h2>Solo</h2><p>Offline-capable games with cloud progress. Close anything mid-run — Terminal 2048 and Sudoku Signal restore the exact board on any device.</p></section>
     <div class="pp2-cats">${CATEGORIES.map((cat) => `<button type="button" class="${ui.category === cat ? "is-active" : ""}" data-pp2-cat="${esc(cat)}">${esc(cat)}</button>`).join("")}</div>
     ${games.length ? `<div class="pp2-grid pp2-grid-wide">${games.map((game) => card(game)).join("")}</div>` : empty("Nothing in this category", "Try another category.")}
+  </div>`;
+}
+
+/* ---- TODDLER SPACE ---- */
+// Its own destination, not a filter chip mixed into Solo/Library. Only
+// Toddler-rated games, big single-purpose cards, nothing else on the page —
+// no chat, no voice, no matchmaking, no external/outbound links.
+function toddlerCard(game) {
+  return `<button type="button" class="pp2-toddler-card" data-pp2-play="${esc(game.id)}">
+    <span class="pp2-toddler-art">${art(game)}</span>
+    <span class="pp2-toddler-title">${esc(game.title)}</span>
+  </button>`;
+}
+function renderToddlerSpace() {
+  const games = ui.snapshot.catalog.filter((game) => game.contentRating === "toddler");
+  return `<div class="pp2-toddler-space">
+    <section class="pp2-toddler-hero"><p class="pp2-kicker">TODDLER SPACE</p><h2>Big buttons. Just tap to play.</h2><p>Only Toddler-rated games live here — no chat, no voice, no multiplayer rooms, and no links off this screen.</p></section>
+    ${games.length ? `<div class="pp2-toddler-grid">${games.map(toddlerCard).join("")}</div>` : empty("No toddler games yet", "Games rated Toddler will appear here automatically once they are published.")}
   </div>`;
 }
 
@@ -380,7 +247,8 @@ function renderFriends() {
         ${addable.length ? addable.map((entry) => `<div class="pp2-person">${statusDot(entry.status)}<b>${esc(entry.label)}</b><span>${entry.status === "playing" && entry.gameId ? `playing ${esc(gameById(entry.gameId)?.title || entry.gameId)}` : esc(entry.status)}</span><button type="button" class="pp2-play" data-pp2-befriend="${esc(entry.actorId)}">Add friend</button></div>`).join("") : empty("Nobody else is online", "Presence appears while workspace members have PhantomPlay open.")}
       </section>
     </div>
-    ${row("Made for playing together", [gameById("phantom-rumble")].filter(Boolean), "Two players on one keyboard, bots to fill the arena. Voice and online parties are on the roadmap — nothing here fakes them.")}
+    ${row("Made for playing together", [gameById("phantom-rumble")].filter(Boolean), "Two players on one keyboard, bots to fill the arena — or open a private online room with a friend from the Multiplayer tab in Classic view (this V2 shell doesn't have its own room UI yet).")}
+    <section class="pp2-panel"><h3>Multiplayer rooms</h3><p>Private rooms — invite codes, ready checks, host controls, and bot fill-in — live in Classic view for now.</p><button type="button" class="pp2-play" data-pp2-classic>Open Multiplayer in Classic view</button></section>
     <section class="pp2-panel"><h3>Workspace activity</h3>${feed.length ? `<ul class="pp2-feed">${feed.slice(0, 20).map((entry) => `<li><b>${esc(entry.actorLabel)}</b> ${entry.kind === "review" ? `reviewed <i>${esc(entry.subject)}</i> ${esc(entry.detail)}` : entry.kind === "wishlist" ? `wishlisted <i>${esc(entry.subject)}</i>` : entry.kind === "follow" ? `followed <i>${esc(entry.subject)}</i>` : `released <i>${esc(entry.subject)}</i>`}<span>${esc((entry.at || "").slice(0, 10))}</span></li>`).join("")}</ul>` : empty("Quiet so far", "Reviews, wishlists, and follows will show up here.")}</section>
   </div>`;
 }
@@ -390,7 +258,7 @@ function renderWorkspace() {
   const policy = ui.v2?.policy;
   const admin = isAdmin();
   const draft = ui.policyDraft;
-  const builtIns = ui.snapshot.catalog.filter((game) => game.kind === "built_in");
+  const builtIns = standardGames(ui.snapshot.catalog).filter((game) => game.kind === "built_in");
   const board = ui.leaderboard;
   return `<div class="pp2-workspace">
     <section class="pp2-lead"><h2>Workspace</h2><p>The safe mode: schools, teams, and clubs. Organization-controlled catalog, ratings ceiling, and time limits — no public discovery, no strangers.</p></section>
@@ -427,14 +295,7 @@ function renderWorkspace() {
 /* ---- LIBRARY ---- */
 function filteredCatalog() {
   const query = ui.query.toLowerCase();
-  const games = ui.snapshot.catalog.filter((game) => visibleByCategory(game) && (!query || `${game.title} ${game.summary} ${game.developer} ${game.tags.join(" ")}`.toLowerCase().includes(query)));
-  // Default sort: most-played first (all-time), per the discovery service's
-  // catalogOrder. Games missing from it (no discovery data yet) keep their
-  // original catalog order, appended after every ranked game.
-  const order = ui.discovery?.catalogOrder;
-  if (!order?.length) return games;
-  const rank = new Map(order.map((id, index) => [id, index]));
-  return [...games].sort((a, b) => (rank.get(a.id) ?? order.length) - (rank.get(b.id) ?? order.length));
+  return standardGames(ui.snapshot.catalog).filter((game) => (ui.category === "All" || game.category === ui.category) && (!query || `${game.title} ${game.summary} ${game.developer} ${game.tags.join(" ")}`.toLowerCase().includes(query)));
 }
 function renderLibrary() {
   const games = filteredCatalog();
@@ -444,7 +305,7 @@ function renderLibrary() {
   </div>`;
 }
 
-/* ---- DEVELOPERS ---- */
+/* ---- DEV HUB ---- */
 const ASSIST_BRIEFS = {
   icon: (game) => `Design a square game icon for "${game.title}" — ${game.summary} Terminal-inspired, dark background (#05070a), phosphor green accents, no text, crisp at 64px.`,
   trailer: (game) => `Cut a 20-second gameplay trailer for "${game.title}". ${game.summary} Dark terminal aesthetic, fast cuts, end card with the title in monospace green on black.`,
@@ -452,25 +313,24 @@ const ASSIST_BRIEFS = {
   social: (game) => `Draft 3 short social posts announcing "${game.title}" on PhantomPlay — one playful, one feature-focused, one for game developers. Include the hook: ${game.summary}`,
   patch: (game) => `Write patch notes for the next release of "${game.title}" from these raw notes: [paste your changes]. Keep them player-facing, grouped by Added/Changed/Fixed.`,
 };
-function developerBuilderTools() {
+function renderDeveloper() {
   const snapshot = ui.snapshot;
-  if (!snapshot.access.canSubmitGames) return `<section class="pp2-panel pp2-builder-tools"><h3>Release tools locked</h3><p class="pp2-fine">This account can browse and support developers. Owners can enable build submissions per plan.</p></section>`;
+  if (!snapshot.access.canSubmitGames) return empty("Dev Hub is plan-gated", "This account can play games but cannot publish releases. Owners can enable game submissions per plan.");
   const editing = snapshot.submissions.find((item) => item.id === ui.editingSubmissionId) || null;
   const analytics = ui.analytics;
-  const assistGames = [...snapshot.submissions.map((s) => ({ id: `community:${s.id}`, title: s.title, summary: s.summary, category: s.category })), ...(isAdmin() ? snapshot.catalog.filter((g) => g.kind === "built_in") : [])];
-  return `<details class="pp2-panel pp2-builder-tools">
-    <summary>Release tools for builders</summary>
-    <p class="pp2-fine">Use these when a developer is actually preparing a build. The main Developers tab stays focused on profiles, games, support, and notes.</p>
-    <section class="pp2-subpanel"><h3>Release analytics</h3>
+  const assistGames = [...snapshot.submissions.map((s) => ({ id: `community:${s.id}`, title: s.title, summary: s.summary, category: s.category })), ...(isAdmin() ? standardGames(snapshot.catalog).filter((g) => g.kind === "built_in") : [])];
+  return `<div class="pp2-devhub">
+    <section class="pp2-lead"><h2>Dev Hub</h2><p>Publish to PhantomPlay and let PhantomForce act as your publishing team. Analytics below are computed from real play sessions — no vanity numbers.</p></section>
+    <section class="pp2-panel"><h3>Analytics</h3>
       ${ui.v2Offline ? v2Note("Analytics need the PhantomForce server.") : analytics ? (analytics.games.length ? `<div class="pp2-table-wrap"><table class="pp2-table"><thead><tr><th>Game</th><th>Plays</th><th>Players</th><th>DAU</th><th>MAU</th><th>Hours</th><th>Avg session</th><th>Returning</th><th>Rating</th><th>Wishlists</th></tr></thead><tbody>${analytics.games.map((row) => `<tr><td>${esc(row.title)}</td><td>${row.plays}</td><td>${row.players}</td><td>${row.dau}</td><td>${row.mau}</td><td>${row.totalHours}</td><td>${row.avgSessionMinutes}m</td><td>${row.returningPlayers}</td><td>${row.averageRating ?? "—"} (${row.reviewCount})</td><td>${row.wishlists}</td></tr>`).join("")}</tbody></table></div>` : empty("No analytics yet", "Numbers appear once your published games are played.")) : `<button type="button" class="pp2-ghost" data-pp2-load-analytics>Load analytics</button>`}
     </section>
-    <section class="pp2-subpanel"><h3>Creative assists</h3>
+    <section class="pp2-panel"><h3>Publishing assists</h3>
       <p class="pp2-fine">Each button copies a production-ready brief to your clipboard — paste it into Media Lab (art, trailers), Content Hub (posts), or Phantom chat (copy, patch notes). Honest by design: nothing is generated behind your back.</p>
       ${assistGames.length ? `<div class="pp2-assist"><select data-pp2-assist-game>${assistGames.map((game) => `<option value="${esc(game.id)}">${esc(game.title)}</option>`).join("")}</select>
       <div class="pp2-assist-buttons">${Object.entries({ icon: "Icon brief", trailer: "Trailer brief", copy: "Store copy brief", social: "Social posts brief", patch: "Patch notes brief" }).map(([key, label]) => `<button type="button" class="pp2-ghost" data-pp2-assist="${key}">${label}</button>`).join("")}</div></div>
       ${ui.assistMessage ? `<p class="pp2-fine">${esc(ui.assistMessage)}</p>` : ""}` : empty("No games yet", "Save a submission below and the assists unlock.")}
     </section>
-    <section class="pp2-subpanel"><h3>${editing ? "Update release" : "Draft build"}</h3>
+    <section class="pp2-panel"><h3>${editing ? "Update release" : "New submission"}</h3>
       <form class="pp2-submit" data-pp2-submit>
         <input type="hidden" name="submissionId" value="${esc(editing?.id || "")}"/>
         <div class="pp2-form-grid">
@@ -493,19 +353,9 @@ function developerBuilderTools() {
         <p data-pp2-form-message class="pp2-fine"></p>
       </form>
     </section>
-    <section class="pp2-subpanel"><h3>Your releases</h3>
+    <section class="pp2-panel"><h3>Your releases</h3>
       ${snapshot.submissions.length ? snapshot.submissions.map((item) => `<div class="pp2-sub"><header><b>${esc(item.title || "Untitled")}</b><span class="is-${esc(item.status)}">${esc(item.status.replaceAll("_", " "))}</span></header><p>${esc(item.summary || "")}</p><footer><span>v${esc(item.version)} · ${item.versions.length} versions</span>${["draft", "changes_requested", "rejected"].includes(item.status) ? `<button type="button" class="pp2-ghost" data-pp2-edit="${esc(item.id)}">Edit</button>` : ""}</footer>${item.moderationNote ? `<blockquote>${esc(item.moderationNote)}</blockquote>` : ""}</div>`).join("") : empty("No releases yet", "Save a draft or submit a finished game for review.")}
     </section>
-  </details>`;
-}
-function renderDeveloper() {
-  const developers = developerDirectory();
-  const developer = selectedDeveloper();
-  if (developer) return renderDeveloperProfile(developer);
-  return `<div class="pp2-developers">
-    <section class="pp2-lead"><div><h2>Developers</h2><p>Browse every PhantomPlay developer, inspect their games, track Dev score, and keep private support or collaboration notes.</p></div><span class="pp2-access is-on">${developers.length} developer${developers.length === 1 ? "" : "s"}</span></section>
-    ${developers.length ? `<div class="pp2-dev-list">${developers.map(developerCard).join("")}</div>` : empty("No developers yet", "Playable games will create developer profiles automatically.")}
-    ${developerBuilderTools()}
   </div>`;
 }
 
@@ -550,38 +400,6 @@ function renderDetail() {
   </article></div>`;
 }
 
-/* ---- GLOBAL HANDLE PROMPT ---- */
-// One-time username picker: shows once per session (or until claimed/dismissed)
-// when GET /api/phantomplay/handle says hasHandle:false. Legacy demo/session
-// accounts get a clear error on submit rather than the prompt being hidden
-// outright, since the server can't tell "no handle yet" from "can't have one"
-// without the account existing to check.
-function handlePromptMarkup() {
-  if (ui.v2Offline || ui.handleDismissed || !ui.handle || ui.handle.hasHandle) return "";
-  return `<div class="pp2-detail-backdrop" data-pp2-handle-backdrop><article class="pp2-detail pp2-handle-prompt" role="dialog" aria-modal="true" aria-label="Pick your PhantomPlay username">
-    <button type="button" class="pp2-detail-close" data-pp2-handle-dismiss aria-label="Close">×</button>
-    <p class="pp2-kicker">PHANTOMPLAY IDENTITY</p>
-    <h2>Pick your player name</h2>
-    <p>This is the name shown on PhantomPlay's global leaderboard, across every PhantomForce business — never your business name or email.</p>
-    <form data-pp2-claim-handle>
-      <label>Username<input type="text" name="username" maxlength="20" minlength="3" pattern="[a-zA-Z0-9_]{3,20}" placeholder="3-20 letters, numbers, underscores" required/></label>
-      ${ui.handleMessage ? `<p class="pp2-fine">${esc(ui.handleMessage)}</p>` : ""}
-      <div><button type="submit" class="pp2-play">Claim username</button><button type="button" class="pp2-ghost" data-pp2-handle-dismiss>Not now</button></div>
-    </form>
-  </article></div>`;
-}
-async function claimHandle(form) {
-  const username = new FormData(form).get("username");
-  ui.handleMessage = "Saving…"; render();
-  try {
-    ui.handle = await api("/api/phantomplay/handle", { method: "POST", body: JSON.stringify({ username }) });
-    ui.handleMessage = "";
-    const board = await api("/api/phantomplay/leaderboard/global").catch(() => null);
-    if (board) ui.globalBoard = board;
-  } catch (error) { ui.handleMessage = error.message; }
-  render();
-}
-
 /* ---- SETTINGS / PLAYER ---- */
 function settingsMarkup() {
   if (!ui.settingsOpen) return "";
@@ -591,7 +409,38 @@ function settingsMarkup() {
     <label class="pp2-check"><input type="checkbox" data-pp2-pref="sound" ${p.sound ? "checked" : ""}/> Sound</label>
     <label class="pp2-check"><input type="checkbox" data-pp2-pref="reducedMotion" ${p.reducedMotion ? "checked" : ""}/> Reduce motion</label>
     <label class="pp2-check"><input type="checkbox" data-pp2-pref="allowCommunityGames" ${p.allowCommunityGames ? "checked" : ""}/> Show community games</label>
+    ${ratingExposureMarkup()}
     <p class="pp2-fine">PhantomPlay never touches your work, agents, files, or business data.</p></aside>`;
+}
+
+// Game Rating Exposure — mirrors the V1 panel exactly against the same
+// PATCH /api/phantomplay/profile route (updatePhantomPlayProfile). A
+// guardian PIN field appears whenever this profile has an enabled guardian
+// lock and isn't an adult profile; the server enforces the PIN.
+function ratingExposureMarkup() {
+  const snapshot = ui.snapshot;
+  const allowed = new Set(Array.isArray(snapshot.preferences.allowedRatings) ? snapshot.preferences.allowedRatings : ALL_RATING_VALUES);
+  const profileType = snapshot.profileType || "adult";
+  const guardianEnabled = !!snapshot.guardianLock?.enabled;
+  const needsPin = guardianEnabled && profileType !== "adult";
+  return `<div class="pp2-rating-exposure">
+    <h3>Game Rating Exposure</h3>
+    <p class="pp2-fine">Choose exactly which content tiers can appear in this profile's catalog.</p>
+    ${needsPin ? `<label>Guardian PIN<input type="password" inputmode="numeric" maxlength="32" data-pp2-exposure-pin placeholder="Required to change exposure"/></label>` : ""}
+    <div class="pp2-rating-toggles">${RATING_TIERS.map(([value, label]) => `<label class="pp2-check"><input type="checkbox" data-pp2-rating-toggle="${value}" ${allowed.has(value) ? "checked" : ""} ${ui.ratingBusy ? "disabled" : ""}/> ${esc(label)}</label>`).join("")}</div>
+    <div class="pp2-rating-presets">
+      <button type="button" class="pp2-ghost" data-pp2-rating-preset="my-age" ${ui.ratingBusy ? "disabled" : ""}>My age</button>
+      <button type="button" class="pp2-ghost" data-pp2-rating-preset="family" ${ui.ratingBusy ? "disabled" : ""}>Family Friendly Only</button>
+      <button type="button" class="pp2-ghost" data-pp2-rating-preset="all" ${ui.ratingBusy ? "disabled" : ""}>Show All Allowed Ratings</button>
+    </div>
+    <label>Profile type<select data-pp2-profile-type><option value="adult" ${profileType === "adult" ? "selected" : ""}>Adult</option><option value="child" ${profileType === "child" ? "selected" : ""}>Child</option><option value="toddler" ${profileType === "toddler" ? "selected" : ""}>Toddler</option></select></label>
+    <div class="pp2-guardian-lock">
+      <label class="pp2-check"><input type="checkbox" data-pp2-guardian-enabled ${guardianEnabled ? "checked" : ""}/> Guardian PIN lock</label>
+      <p class="pp2-fine">When on, a PIN is required to widen this profile's rating exposure or change its profile type.</p>
+      <div class="pp2-guardian-pin-row"><input type="password" inputmode="numeric" maxlength="32" data-pp2-guardian-pin-input placeholder="${guardianEnabled ? "Current PIN, to change" : "Set a PIN (4+ digits)"}"/><button type="button" class="pp2-play" data-pp2-guardian-save>Save</button></div>
+    </div>
+    ${ui.guardianMessage ? `<p class="pp2-fine">${esc(ui.guardianMessage)}</p>` : ""}
+  </div>`;
 }
 function playerMarkup() {
   if (!ui.player) return "";
@@ -608,16 +457,17 @@ function render() {
   document.body.classList.toggle("phantomplay-playing", !!ui.player);
   if (ui.loading && !ui.snapshot) { mountedRoot.innerHTML = `<div class="pp2-shell">${skeletonRow("PhantomPlay")}</div>`; return; }
   const snapshot = ui.snapshot || offlineState();
-  const tabs = [["home", "Home"], ["solo", "Solo"], ["friends", "Friends"], ["workspace", "Workspace"], ["library", "Library"], ["developer", "Developers"], ...(snapshot.access.canModerate ? [["admin", "Admin"]] : [])];
-  const view = { home: renderHome, solo: renderSolo, friends: renderFriends, workspace: renderWorkspace, library: renderLibrary, developer: renderDeveloper, admin: renderAdmin }[ui.tab] || renderHome;
-  mountedRoot.innerHTML = `<div class="pp2-shell">
+  const tabs = [["home", "Home"], ["solo", "Solo"], ["friends", "Friends"], ["workspace", "Workspace"], ["library", "Library"], ["toddler", "Toddler Space"], ["developer", "Dev Hub"], ...(snapshot.access.canModerate ? [["admin", "Admin"]] : [])];
+  const isToddlerTab = ui.tab === "toddler";
+  const view = { home: renderHome, solo: renderSolo, friends: renderFriends, workspace: renderWorkspace, library: renderLibrary, toddler: renderToddlerSpace, developer: renderDeveloper, admin: renderAdmin }[ui.tab] || renderHome;
+  mountedRoot.innerHTML = `<div class="pp2-shell ${isToddlerTab ? "pp2-shell-toddler" : ""}">
     <header class="pp2-top"><div><p class="pp2-kicker">PHANTOMFORCE ENTERTAINMENT</p><h1>PhantomPlay</h1><span>Work hard. Take a real break. Come back sharper.</span></div>
-      <div class="pp2-top-right"><span class="pp2-access ${snapshot.access.enabled ? "is-on" : "is-off"}">${snapshot.access.enabled ? esc(playTimeLabel(snapshot.access.remainingMinutesToday)) : "Plan restricted"}</span><button class="pp2-ghost" data-pp2-settings aria-label="Play settings">Settings</button><button class="pp2-ghost" data-pp2-classic title="Return to the classic PhantomPlay experience">Classic view</button></div></header>
+      <div class="pp2-top-right"><span class="pp2-access ${snapshot.access.enabled ? "is-on" : "is-off"}">${snapshot.access.enabled ? esc(playTimeLabel(snapshot.access.remainingMinutesToday)) : "Plan restricted"}</span>${isToddlerTab ? "" : `<button class="pp2-ghost" data-pp2-settings aria-label="Play settings">Settings</button>`}<button class="pp2-ghost" data-pp2-classic title="Return to the classic PhantomPlay experience">Classic view</button></div></header>
     ${ui.offline ? `<div class="pp2-banner"><b>Offline mode</b><span>Built-in games still work; saves sync when the server returns.</span><button data-pp2-retry>Retry</button></div>` : ""}
     ${ui.error && !ui.offline ? `<div class="pp2-banner is-error"><b>PhantomPlay needs attention</b><span>${esc(ui.error)}</span><button data-pp2-retry>Retry</button></div>` : ""}
     <nav class="pp2-tabs" aria-label="PhantomPlay experiences">${tabs.map(([id, label]) => `<button type="button" class="${ui.tab === id ? "is-active" : ""}" data-pp2-tab="${id}">${esc(label)}</button>`).join("")}</nav>
     <main class="pp2-content">${snapshot.access.enabled ? view() : empty("PhantomPlay is unavailable", "Ask your business owner to enable PhantomPlay for this plan.")}</main>
-    ${renderDetail()}${settingsMarkup()}${playerMarkup()}${handlePromptMarkup()}
+    ${isToddlerTab ? "" : `${renderDetail()}${settingsMarkup()}`}${playerMarkup()}
   </div>`;
   bind();
 }
@@ -644,12 +494,13 @@ async function launch(gameId) {
   if (!game?.launchUrl) { ui.error = "This game is not available to play yet."; render(); return; }
   ui.detailId = null; ui.detail = null;
   try {
+    const stateless = isStatelessGame(game);
     const [result, resume] = await Promise.all([
-      ui.offline ? Promise.resolve({ game, play: { id: `offline-${Date.now()}`, gameId, seconds: 0, score: null, progress: historyFor(gameId)?.progress || 0 } }) : api("/api/phantomplay/plays", { method: "POST", body: JSON.stringify({ tenantId: currentTenantId(), gameId }) }),
-      ui.v2Offline ? Promise.resolve(null) : api(`/api/phantomplay/v2/resume/${encodeURIComponent(gameId)}?${tenantQuery()}`).catch(() => null),
+      ui.offline ? Promise.resolve({ game, play: { id: `offline-${Date.now()}`, gameId, seconds: 0, score: null, progress: 0 } }) : api("/api/phantomplay/plays", { method: "POST", body: JSON.stringify({ tenantId: currentTenantId(), gameId }) }),
+      stateless || ui.v2Offline ? Promise.resolve(null) : api(`/api/phantomplay/v2/resume/${encodeURIComponent(gameId)}?${tenantQuery()}`).catch(() => null),
     ]);
     ui.player = { game: result.game || game, play: result.play };
-    ui.resume = playableResume(resume);
+    ui.resume = resume;
     ui.playerReady = false; ui.playerPaused = false; playTickAt = Date.now();
     render(); startClock(); heartbeat();
   } catch (error) { ui.error = error.message; render(); }
@@ -659,7 +510,15 @@ async function persistPlay(ended, detail = {}) {
   if (!ui.player) return;
   const delta = Math.max(0, Math.min(60, Math.round((Date.now() - playTickAt) / 1000)));
   playTickAt = Date.now();
+  const stateless = isStatelessGame(ui.player.game);
+  if (stateless) detail = { ...detail, progress: ended ? 100 : undefined, state: null };
   Object.assign(ui.player.play, { seconds: (ui.player.play.seconds || 0) + delta, score: detail.score ?? ui.player.play.score, progress: detail.progress ?? ui.player.play.progress });
+  if (stateless) {
+    ui.snapshot.history = ui.snapshot.history.filter((item) => item.gameId !== ui.player.game.id);
+    if (ui.offline) { saveOffline(); return; }
+    try { await api(`/api/phantomplay/plays/${encodeURIComponent(ui.player.play.id)}`, { method: "PATCH", body: JSON.stringify({ tenantId: currentTenantId(), secondsDelta: delta, score: detail.score, progress: 100, state: null, ended: true }) }); } catch { ui.offline = true; saveOffline(); }
+    return;
+  }
   const existing = historyFor(ui.player.game.id);
   const progress = ui.player.play.progress || 0;
   const rowData = { gameId: ui.player.game.id, lastPlayedAt: new Date().toISOString(), score: Math.max(existing?.score || 0, ui.player.play.score || 0), progress, seconds: (existing?.seconds || 0) + delta, canContinue: progress > 0 && progress < 100 };
@@ -687,7 +546,7 @@ function onGameMessage(event) {
     ui.playerReady = true;
     mountedRoot.querySelector(".pp2-stage-loading")?.setAttribute("hidden", "");
     postToGame("settings", { sound: ui.snapshot.preferences.sound, reducedMotion: ui.snapshot.preferences.reducedMotion });
-    if (ui.resume?.state) postToGame("restore", { state: ui.resume.state });
+    if (!isStatelessGame(ui.player.game) && ui.resume?.state) postToGame("restore", { state: ui.resume.state });
   }
   if (event.data.type === "paused") {
     ui.playerPaused = !!event.data.paused;
@@ -695,9 +554,7 @@ function onGameMessage(event) {
     if (button) button.textContent = ui.playerPaused ? "Resume" : "Pause";
   }
   if (event.data.type === "score" || event.data.type === "progress" || event.data.type === "complete") {
-    const scoreValue = Number(event.data.score);
-    const progressValue = Number(event.data.progress);
-    const detail = { score: Number.isFinite(scoreValue) ? scoreValue : undefined, progress: event.data.type === "complete" ? 100 : Number.isFinite(progressValue) ? progressValue : undefined, state: event.data.state };
+    const detail = { score: Number(event.data.score) || undefined, progress: event.data.type === "complete" ? 100 : Number(event.data.progress) || undefined, state: event.data.state };
     const live = mountedRoot.querySelector("[data-pp2-live-score]");
     if (live && detail.score !== undefined) live.textContent = `Score ${detail.score}`;
     persistPlay(event.data.type === "complete", detail);
@@ -784,54 +641,52 @@ async function updatePreferences() {
     await hydrate();
   } catch (error) { ui.error = error.message; render(); }
 }
-function supportDeveloper(id) {
-  const records = loadDeveloperSupport();
-  const record = records[id] || {};
-  if (record.supportedAt) {
-    ui.developerMessage = "Support was already marked for this developer.";
-    render();
-    return;
-  }
-  records[id] = { ...record, supportedAt: new Date().toISOString(), supportCount: Number(record.supportCount || 0) + 1 };
-  saveDeveloperSupport(records);
-  ui.developerMessage = "Support saved locally for this developer.";
-  render();
+
+// A guardian PIN is only ever read from the DOM at call time (never cached
+// in `ui`), so each attempt requires re-entering it.
+function guardianPinFromDom() {
+  return mountedRoot?.querySelector("[data-pp2-exposure-pin]")?.value.trim() || undefined;
 }
-function logDeveloperDonationIntent(id) {
-  const records = loadDeveloperSupport();
-  const record = records[id] || {};
-  records[id] = { ...record, donationIntentAt: new Date().toISOString(), donationIntentCount: Number(record.donationIntentCount || 0) + 1 };
-  saveDeveloperSupport(records);
-  ui.developerMessage = "Donation or collaboration interest saved locally. No payment was started.";
-  render();
+async function applyRatingExposure(nextRatings) {
+  if (ui.offline) { ui.guardianMessage = "Rating exposure needs the PhantomForce server."; render(); return; }
+  ui.ratingBusy = true; render();
+  try {
+    const payload = await api("/api/phantomplay/profile", { method: "PATCH", body: JSON.stringify({ tenantId: currentTenantId(), preferences: { allowedRatings: nextRatings }, guardianPin: guardianPinFromDom() }) });
+    ui.snapshot.preferences = payload.preferences;
+    ui.guardianMessage = "";
+  } catch (error) { ui.guardianMessage = error.message; }
+  finally { ui.ratingBusy = false; render(); }
 }
-function saveDeveloperNote(id) {
-  const field = mountedRoot.querySelector(`[data-pp2-dev-note="${CSS.escape(id)}"]`);
-  const text = String(field?.value || "").trim();
-  if (!text) {
-    ui.developerMessage = "Write a note before saving it.";
-    render();
-    return;
-  }
-  const records = loadDeveloperSupport();
-  const record = records[id] || {};
-  const notes = Array.isArray(record.notes) ? record.notes : [];
-  records[id] = { ...record, notes: [{ text: text.slice(0, 800), at: new Date().toISOString() }, ...notes].slice(0, 25) };
-  saveDeveloperSupport(records);
-  ui.developerMessage = "Private developer note saved locally.";
+async function applyProfileType(nextType) {
+  if (ui.offline) { ui.guardianMessage = "Profile type needs the PhantomForce server."; render(); return; }
+  ui.ratingBusy = true; render();
+  try {
+    const payload = await api("/api/phantomplay/profile", { method: "PATCH", body: JSON.stringify({ tenantId: currentTenantId(), profileType: nextType, guardianPin: guardianPinFromDom() }) });
+    ui.snapshot.profileType = payload.profileType;
+    ui.snapshot.preferences = payload.preferences;
+    ui.guardianMessage = "";
+  } catch (error) { ui.guardianMessage = error.message; }
+  finally { ui.ratingBusy = false; render(); }
+}
+async function saveGuardianLock() {
+  const checkbox = mountedRoot?.querySelector("[data-pp2-guardian-enabled]");
+  const pinInput = mountedRoot?.querySelector("[data-pp2-guardian-pin-input]");
+  const nextEnabled = !!checkbox?.checked;
+  const pin = pinInput?.value.trim() || "";
+  if (nextEnabled && pin && pin.length < 4) { ui.guardianMessage = "Choose a PIN with at least 4 digits."; render(); return; }
+  if (ui.offline) { ui.guardianMessage = "Guardian lock needs the PhantomForce server."; render(); return; }
+  try {
+    const payload = await api("/api/phantomplay/profile", { method: "PATCH", body: JSON.stringify({ tenantId: currentTenantId(), guardianLock: { enabled: nextEnabled, pin: pin || undefined }, guardianPin: guardianPinFromDom() }) });
+    ui.snapshot.guardianLock = payload.guardianLock;
+    ui.guardianMessage = nextEnabled ? "Guardian PIN saved." : "Guardian PIN lock turned off.";
+  } catch (error) { ui.guardianMessage = error.message; }
   render();
 }
 
 /* ---- bind ---- */
 function bind() {
   const on = (selector, event, handler) => mountedRoot.querySelectorAll(selector).forEach((el) => el.addEventListener(event, handler));
-  mountedRoot.querySelectorAll("[data-pp2-tab]").forEach((b) => b.onclick = () => {
-    ui.selectedDeveloperId = "";
-    ui.developerMessage = "";
-    ui.tab = b.dataset.pp2Tab;
-    if (ui.tab === "developer" && !ui.analytics && !ui.v2Offline) loadAnalytics();
-    render();
-  });
+  mountedRoot.querySelectorAll("[data-pp2-tab]").forEach((b) => b.onclick = () => { ui.tab = b.dataset.pp2Tab; if (ui.tab === "developer" && !ui.analytics && !ui.v2Offline) loadAnalytics(); render(); });
   mountedRoot.querySelectorAll("[data-pp2-play]").forEach((b) => b.onclick = (e) => { e.stopPropagation(); launch(b.dataset.pp2Play); });
   mountedRoot.querySelectorAll("[data-pp2-open]").forEach((b) => b.addEventListener("click", (e) => { if (e.target.closest("[data-pp2-play],[data-pp2-wish]")) return; openDetail(b.dataset.pp2Open); }));
   mountedRoot.querySelectorAll("[data-pp2-wish]").forEach((b) => b.onclick = (e) => { e.stopPropagation(); toggleWishlist(b.dataset.pp2Wish); });
@@ -842,6 +697,13 @@ function bind() {
   on("[data-pp2-settings]", "click", () => { ui.settingsOpen = true; render(); });
   on("[data-pp2-settings-close]", "click", () => { ui.settingsOpen = false; render(); });
   mountedRoot.querySelectorAll("[data-pp2-pref]").forEach((input) => input.onchange = () => { ui.snapshot.preferences[input.dataset.pp2Pref] = input.type === "checkbox" ? input.checked : input.value; updatePreferences(); });
+  mountedRoot.querySelectorAll("[data-pp2-rating-toggle]").forEach((input) => input.onchange = () => {
+    const next = [...mountedRoot.querySelectorAll("[data-pp2-rating-toggle]:checked")].map((el) => el.dataset.pp2RatingToggle);
+    applyRatingExposure(next);
+  });
+  mountedRoot.querySelectorAll("[data-pp2-rating-preset]").forEach((b) => b.onclick = () => applyRatingExposure(ratingExposurePreset(b.dataset.pp2RatingPreset, ui.snapshot.profileType || "adult")));
+  on("[data-pp2-profile-type]", "change", (e) => applyProfileType(e.target.value));
+  on("[data-pp2-guardian-save]", "click", saveGuardianLock);
   on("[data-pp2-status]", "change", (e) => { ui.statusChoice = e.target.value; heartbeat(); });
   mountedRoot.querySelectorAll("[data-pp2-befriend]").forEach((b) => b.onclick = () => friendAction(b.dataset.pp2Befriend, "request"));
   mountedRoot.querySelectorAll("[data-pp2-accept]").forEach((b) => b.onclick = () => friendAction(b.dataset.pp2Accept, "accept"));
@@ -849,10 +711,6 @@ function bind() {
   mountedRoot.querySelectorAll("[data-pp2-unfriend]").forEach((b) => b.onclick = () => friendAction(b.dataset.pp2Unfriend, "remove"));
   on("[data-pp2-close-detail]", "click", (e) => { if (e.target === e.currentTarget) { ui.detailId = null; ui.detail = null; render(); } });
   on("[data-pp2-close-detail-btn]", "click", () => { ui.detailId = null; ui.detail = null; render(); });
-  on("[data-pp2-handle-backdrop]", "click", (e) => { if (e.target === e.currentTarget) { ui.handleDismissed = true; ui.handleMessage = ""; render(); } });
-  mountedRoot.querySelectorAll("[data-pp2-handle-dismiss]").forEach((b) => b.onclick = () => { ui.handleDismissed = true; ui.handleMessage = ""; render(); });
-  const claimForm = mountedRoot.querySelector("[data-pp2-claim-handle]");
-  if (claimForm) claimForm.onsubmit = (e) => { e.preventDefault(); claimHandle(claimForm); };
   mountedRoot.querySelectorAll("[data-pp2-star]").forEach((b) => b.onclick = () => { ui.reviewDraft.rating = Number(b.dataset.pp2Star); ui.reviewDraft.text = mountedRoot.querySelector("[data-pp2-review] textarea")?.value || ""; render(); });
   const reviewForm = mountedRoot.querySelector("[data-pp2-review]");
   if (reviewForm) reviewForm.onsubmit = (e) => { e.preventDefault(); submitReview(reviewForm); };
@@ -867,12 +725,6 @@ function bind() {
   on("[data-pp2-cancel-edit]", "click", () => { ui.editingSubmissionId = null; render(); });
   on("[data-pp2-load-analytics]", "click", loadAnalytics);
   mountedRoot.querySelectorAll("[data-pp2-assist]").forEach((b) => b.onclick = () => copyAssist(b.dataset.pp2Assist));
-  mountedRoot.querySelectorAll("[data-pp2-open-dev]").forEach((b) => b.onclick = (e) => { e.stopPropagation(); ui.selectedDeveloperId = b.dataset.pp2OpenDev; ui.developerMessage = ""; render(); });
-  on("[data-pp2-dev-back]", "click", () => { ui.selectedDeveloperId = ""; ui.developerMessage = ""; render(); });
-  on("[data-pp2-dev-message-clear]", "click", () => { ui.developerMessage = ""; render(); });
-  mountedRoot.querySelectorAll("[data-pp2-support-dev]").forEach((b) => b.onclick = () => supportDeveloper(b.dataset.pp2SupportDev));
-  mountedRoot.querySelectorAll("[data-pp2-donate-dev]").forEach((b) => b.onclick = () => logDeveloperDonationIntent(b.dataset.pp2DonateDev));
-  mountedRoot.querySelectorAll("[data-pp2-save-dev-note]").forEach((b) => b.onclick = () => saveDeveloperNote(b.dataset.pp2SaveDevNote));
   on("[data-pp2-policy-edit]", "click", () => { ui.policyDraft = { ...ui.v2.policy, approvedGameIds: [...ui.v2.policy.approvedGameIds] }; render(); });
   on("[data-pp2-policy-cancel]", "click", () => { ui.policyDraft = null; render(); });
   const policyForm = mountedRoot.querySelector("[data-pp2-policy-form]");

@@ -18,6 +18,16 @@ type LocalOllamaFetch = (
   },
 ) => Promise<LocalOllamaFetchResponse>;
 
+export type LocalOllamaStatus = {
+  ok: boolean;
+  endpoint: string;
+  model_id: string;
+  fallback_model_id: string | null;
+  local_only: boolean;
+  models: string[];
+  error: string | null;
+};
+
 const DEFAULT_OLLAMA_PROBE_TIMEOUT_MS = 4000;
 const DEFAULT_OLLAMA_CHAT_TIMEOUT_MS = 60000;
 
@@ -212,6 +222,70 @@ async function listInstalledOllamaModels(baseUrl: string, fetchImpl: LocalOllama
   } finally {
     clearTimeout(timer);
   }
+}
+
+export async function getLocalOllamaStatus(
+  options: {
+    env?: NodeJS.ProcessEnv | Record<string, string | undefined>;
+    fetchImpl?: LocalOllamaFetch;
+  } = {},
+): Promise<LocalOllamaStatus> {
+  const env = options.env ?? process.env;
+  const baseUrl = normalizeBaseUrl(env.OLLAMA_BASE_URL);
+  const endpoint = `${baseUrl}/api/tags`;
+  const modelId = resolveLocalModel(env);
+  const fallbackModelId = resolveFallbackModel(env, modelId);
+  const localOnly = isLocalOllamaBaseUrl(baseUrl);
+
+  if (!localOnly && env.PHANTOM_ALLOW_REMOTE_OLLAMA !== "true") {
+    return {
+      ok: false,
+      endpoint,
+      model_id: modelId,
+      fallback_model_id: fallbackModelId,
+      local_only: false,
+      models: [],
+      error: "OLLAMA_BASE_URL must be localhost unless PHANTOM_ALLOW_REMOTE_OLLAMA=true.",
+    };
+  }
+
+  const fetchImpl = options.fetchImpl ?? (globalThis.fetch as unknown as LocalOllamaFetch | undefined);
+  if (!fetchImpl) {
+    return {
+      ok: false,
+      endpoint,
+      model_id: modelId,
+      fallback_model_id: fallbackModelId,
+      local_only: localOnly,
+      models: [],
+      error: "No server fetch implementation is available for local Ollama status.",
+    };
+  }
+
+  const models = await listInstalledOllamaModels(baseUrl, fetchImpl);
+  if (!models) {
+    return {
+      ok: false,
+      endpoint,
+      model_id: modelId,
+      fallback_model_id: fallbackModelId,
+      local_only: localOnly,
+      models: [],
+      error: "Local Ollama did not return an installed model list.",
+    };
+  }
+
+  return {
+    ok: models.has(modelId) || Boolean(fallbackModelId && models.has(fallbackModelId)),
+    endpoint,
+    model_id: modelId,
+    fallback_model_id: fallbackModelId,
+    local_only: localOnly,
+    models: Array.from(models).sort(),
+    error: models.has(modelId) || Boolean(fallbackModelId && models.has(fallbackModelId))
+      ? null
+      : `Requested local model "${modelId}" is not installed.`,
+  };
 }
 
 export async function callLocalOllamaChat(

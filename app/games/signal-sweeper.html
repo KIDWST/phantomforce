@@ -11,14 +11,19 @@
     .stats b{color:#41ffa1;font-size:15px}
     .stats button{min-height:36px;padding:6px 12px;border:1px solid #41ffa144;border-radius:999px;background:#07150f;color:#caffdf;font-weight:800;font-size:11px;cursor:pointer}
     .stats button[aria-pressed="true"]{background:#144a30;border-color:#41ffa1;color:#9dffcb}
-    .grid{align-self:center;justify-self:center;width:min(100%,calc(100dvh - 176px));max-width:460px;aspect-ratio:1;display:grid;grid-template-columns:repeat(9,1fr);gap:4px;touch-action:none}
-    .cell{min-width:0;border:1px solid #41ffa136;border-radius:6px;background:linear-gradient(145deg,#0a2118,#04120c);color:#effff6;font:800 clamp(11px,3.4vmin,18px) ui-monospace,monospace;padding:0;cursor:pointer;transition:background .12s,border-color .12s;touch-action:none}
+    .grid{position:relative;align-self:center;justify-self:center;width:min(100%,calc(100dvh - 176px));max-width:460px;aspect-ratio:1;display:grid;grid-template-columns:repeat(9,1fr);gap:4px;touch-action:none;padding:5px;border-radius:18px;background:radial-gradient(circle at 50% 50%,#41ffa10f,#02080600 66%);box-shadow:0 0 38px #41ffa10d}
+    .grid.pulse{animation:gridPulse .45s ease-out}
+    .cell{position:relative;overflow:hidden;min-width:0;border:1px solid #41ffa136;border-radius:6px;background:linear-gradient(145deg,#0a2118,#04120c);color:#effff6;font:800 clamp(11px,3.4vmin,18px) ui-monospace,monospace;padding:0;cursor:pointer;transition:background .12s,border-color .12s,transform .12s;touch-action:none}
+    .cell:after{content:"";position:absolute;inset:28%;border-radius:50%;background:#ffffff42;opacity:0;transform:scale(.1)}
+    .cell.flash{animation:cellFlash .2s ease-out}
+    .cell.flash:after{animation:cellRipple .32s ease-out}
     .cell.revealed{background:#03110b;border-color:#1d3a2c;cursor:default}
     .cell.flagged{color:#ffd25e;border-color:#ffd25e66}
     .cell.mine{background:#3a0d14;border-color:#ff5470;color:#ff8fa3}
     .cell.boom{background:#71131f;box-shadow:0 0 20px #ff547088}
     .cell.cursor{outline:2px solid #65ffb1;outline-offset:-1px}
     .n1{color:#58c9ff}.n2{color:#41ffa1}.n3{color:#ffd25e}.n4{color:#c299ff}.n5{color:#ff8fa3}.n6{color:#4fffe3}.n7{color:#ffffff}.n8{color:#ff6b6b}
+    .spark{position:absolute;z-index:5;width:5px;height:5px;border-radius:50%;background:#8affd0;box-shadow:0 0 14px #58ffa8;pointer-events:none}
     .hint{text-align:center;color:#7ea391;font-size:12px;margin:0}
     .overlay{position:fixed;inset:0;z-index:6;display:grid;place-items:center;background:#010504dc;backdrop-filter:blur(4px)}
     .overlay.pause{z-index:7}
@@ -29,6 +34,9 @@
     .overlay button{min-width:150px;min-height:48px;border:0;border-radius:999px;background:#55ffa8;color:#03130c;padding:12px 26px;font-weight:900;font-size:15px;cursor:pointer}
     .reduced *{transition:none!important;animation:none!important}
     .reduced .cell.boom{box-shadow:none}
+    @keyframes cellFlash{50%{transform:scale(.92)}100%{transform:scale(1)}}
+    @keyframes cellRipple{0%{opacity:.9;transform:scale(.1)}100%{opacity:0;transform:scale(3.5)}}
+    @keyframes gridPulse{0%{box-shadow:0 0 20px #41ffa122;filter:brightness(1)}45%{box-shadow:0 0 64px #58ffa888;filter:brightness(1.3)}100%{box-shadow:0 0 38px #41ffa10d;filter:brightness(1)}}
     @media(max-width:420px){h1{font-size:19px}.stats{gap:8px}.stats b{font-size:13px}.overlay h2{font-size:32px}.hint{font-size:10px}}
   </style>
 </head>
@@ -36,7 +44,7 @@
   <main>
     <header>
       <h1>Signal Sweeper</h1>
-      <div class="stats"><span>&#9873; <b data-mines>10</b></span><span>&#9202; <b data-time>0</b>s</span><button type="button" data-flagmode aria-pressed="false">&#9873; Flag: off</button></div>
+      <div class="stats"><span>&#9873; <b data-mines>10</b></span><span>&#9202; <b data-time>0</b>s</span><span>CHAIN <b data-chain>0</b></span><button type="button" data-flagmode aria-pressed="false">&#9873; Flag: off</button></div>
     </header>
     <div class="grid" aria-label="Signal Sweeper minefield"></div>
     <p class="hint">Tap to reveal &middot; hold or F to flag &middot; arrows + Enter for keyboard &middot; P pauses</p>
@@ -47,9 +55,9 @@
   <script>
     const host=(type,data={})=>parent.postMessage({source:'phantomplay-game',type,...data},'*');
     const SIZE=9,MINES=10,TOTAL=SIZE*SIZE,SAFE=TOTAL-MINES;
-    const grid=document.querySelector('.grid'),minesEl=document.querySelector('[data-mines]'),timeEl=document.querySelector('[data-time]'),flagBtn=document.querySelector('[data-flagmode]');
+    const grid=document.querySelector('.grid'),minesEl=document.querySelector('[data-mines]'),timeEl=document.querySelector('[data-time]'),chainEl=document.querySelector('[data-chain]'),flagBtn=document.querySelector('[data-flagmode]');
     const startEl=document.querySelector('.start'),pauseEl=document.querySelector('.pause'),resultEl=document.querySelector('.result');
-    let cells=[],els=[],phase='idle',paused=false,minesPlaced=false,revealed=0,flags=0,flagMode=false,cursor=40,elapsedMs=0,stamp=0,timerInt=0,clockOn=false,overlayTimer=0,soundOn=true,reduced=false,ac=null,lpTimer=0,lpFired=false,pressIdx=-1;
+    let cells=[],els=[],phase='idle',paused=false,minesPlaced=false,revealed=0,flags=0,chain=0,bestChain=0,flagMode=false,cursor=40,elapsedMs=0,stamp=0,timerInt=0,clockOn=false,overlayTimer=0,soundOn=true,reduced=false,ac=null,lpTimer=0,lpFired=false,pressIdx=-1;
 
     function tone(f,d=.1,type='sine',vol=.05){
       if(!soundOn)return;
@@ -62,6 +70,23 @@
         o.connect(v);v.connect(ac.destination);o.start(t);o.stop(t+d);
       }catch(err){}
     }
+    function sparkCell(i,n=8,color='#8affd0'){
+      if(reduced)return;
+      const el=els[i]; if(!el)return;
+      el.classList.remove('flash');void el.offsetWidth;el.classList.add('flash');
+      const r=el.getBoundingClientRect(),gr=grid.getBoundingClientRect();
+      const cx=r.left-gr.left+r.width/2,cy=r.top-gr.top+r.height/2;
+      for(let k=0;k<n;k++){
+        const s=document.createElement('i');s.className='spark';s.style.background=color;s.style.boxShadow=`0 0 14px ${color}`;grid.appendChild(s);
+        const a=Math.random()*Math.PI*2,dist=16+Math.random()*30;
+        s.style.left=cx+'px';s.style.top=cy+'px';
+        s.animate([{opacity:0,transform:'translate(-50%,-50%) scale(.4)'},{opacity:1,offset:.2},{opacity:0,transform:`translate(${Math.cos(a)*dist-50}%,${Math.sin(a)*dist-50}%) scale(1.5)`}],{duration:330+Math.random()*230,easing:'ease-out'}).onfinish=()=>s.remove();
+      }
+    }
+    function pulseGrid(){
+      if(reduced)return;
+      grid.classList.remove('pulse');void grid.offsetWidth;grid.classList.add('pulse');
+    }
     function neighbors(i){
       const x=i%SIZE,y=Math.floor(i/SIZE),out=[];
       for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
@@ -72,7 +97,7 @@
       return out;
     }
     function seconds(){return Math.floor((elapsedMs+(clockOn?performance.now()-stamp:0))/1000)}
-    function curScore(){return Math.max(0,1000-seconds()*5)}
+    function curScore(){return Math.max(0,1000-seconds()*5+bestChain*8)}
     function tickClock(){timeEl.textContent=seconds()}
     function startClock(){if(clockOn)return;stamp=performance.now();timerInt=setInterval(tickClock,250);clockOn=true}
     function stopClock(){if(!clockOn)return;elapsedMs+=performance.now()-stamp;clearInterval(timerInt);timerInt=0;clockOn=false;tickClock()}
@@ -123,10 +148,10 @@
       clearTimeout(overlayTimer);clearTimeout(lpTimer);
       if(timerInt){clearInterval(timerInt);timerInt=0}
       buildBoard();
-      phase='play';paused=false;minesPlaced=false;revealed=0;flags=0;
+      phase='play';paused=false;minesPlaced=false;revealed=0;flags=0;chain=0;bestChain=0;
       elapsedMs=0;stamp=0;clockOn=false;pressIdx=-1;lpFired=false;
       flagMode=false;flagBtn.setAttribute('aria-pressed','false');flagBtn.innerHTML='&#9873; Flag: off';
-      timeEl.textContent=0;minesEl.textContent=MINES;
+      timeEl.textContent=0;minesEl.textContent=MINES;chainEl.textContent=0;
       cursor=40;renderCell(cursor);
       startEl.hidden=true;pauseEl.hidden=true;resultEl.hidden=true;
       host('progress',{score:0,progress:0,state:{revealed:0}});
@@ -136,6 +161,7 @@
       const c=cells[i];
       if(c.rev)return;
       c.flag=!c.flag;
+      chain=0;chainEl.textContent=chain;
       flags+=c.flag?1:-1;
       minesEl.textContent=MINES-flags;
       renderCell(i);
@@ -148,15 +174,19 @@
       if(!minesPlaced){placeMines(i);minesPlaced=true;startClock()}
       if(c.mine){lose(i);return}
       const stack=[i];
+      let opened=0;
       while(stack.length){
         const j=stack.pop(),cj=cells[j];
         if(cj.rev||cj.flag||cj.mine)continue;
-        cj.rev=true;revealed++;renderCell(j);
+        cj.rev=true;revealed++;opened++;renderCell(j);
+        if(opened<=18)sparkCell(j,cj.adj?5:3,cj.adj?'#8affd0':'#42d9ff');
         if(cj.adj===0)neighbors(j).forEach(n=>{if(!cells[n].rev)stack.push(n)});
       }
-      tone(760,.04,'sine',.03);
+      chain+=Math.max(1,opened);bestChain=Math.max(bestChain,chain);chainEl.textContent=chain;
+      if(opened>3)pulseGrid();
+      tone(760+Math.min(420,chain*8),.04,'sine',.03);
       if(revealed>=SAFE){win();return}
-      host('progress',{score:curScore(),progress:Math.min(99,Math.round(revealed/SAFE*100)),state:{revealed,flags}});
+      host('progress',{score:curScore(),progress:Math.min(99,Math.round(revealed/SAFE*100)),state:{revealed,flags,chain,bestChain}});
     }
     function lose(boomIdx){
       if(phase!=='play')return;
@@ -165,10 +195,11 @@
         if(c.mine){c.rev=true;renderCell(i);els[i].classList.add('mine');els[i].textContent='✸'}
       });
       els[boomIdx].classList.add('boom');
+      sparkCell(boomIdx,34,'#ff5470');pulseGrid();
       tone(82,.5,'sawtooth',.08);
       resultEl.querySelector('h2').textContent='Signal lost';
-      resultEl.querySelector('[data-final]').textContent=`A mine tripped after ${seconds()}s with ${revealed} of ${SAFE} cells swept. Final score 0.`;
-      host('complete',{score:0,progress:100,state:{result:'loss'}});
+      resultEl.querySelector('[data-final]').textContent=`A mine tripped after ${seconds()}s with ${revealed} of ${SAFE} cells swept. Best chain ${bestChain}. Final score 0.`;
+      host('complete',{score:0,progress:100,state:{result:'loss',bestChain}});
       overlayTimer=setTimeout(()=>{resultEl.hidden=false},900);
     }
     function win(){
@@ -176,11 +207,13 @@
       phase='over';paused=false;pauseEl.hidden=true;stopClock();
       const s=seconds(),sc=Math.max(0,1000-s*5);
       cells.forEach((c,i)=>{if(c.mine&&!c.flag){c.flag=true;renderCell(i)}});
+      pulseGrid();
+      for(let i=0;i<TOTAL;i++)if(!cells[i].mine)sparkCell(i,1,'#8affd0');
       minesEl.textContent=0;
       tone(660,.12,'sine',.06);tone(880,.3,'sine',.05);
       resultEl.querySelector('h2').textContent='Grid secured';
-      resultEl.querySelector('[data-final]').textContent=`All clean cells swept in ${s}s — final score ${sc}.`;
-      host('complete',{score:sc,progress:100,state:{result:'win',seconds:s}});
+      resultEl.querySelector('[data-final]').textContent=`All clean cells swept in ${s}s — final score ${sc}. Best chain ${bestChain}.`;
+      host('complete',{score:sc,progress:100,state:{result:'win',seconds:s,bestChain}});
       overlayTimer=setTimeout(()=>{resultEl.hidden=false},600);
     }
     function setPaused(next){

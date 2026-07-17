@@ -3,6 +3,7 @@ import "./load-env.js";
 import { execFileSync } from "node:child_process";
 
 import cors from "@fastify/cors";
+import { Prisma } from "@prisma/client";
 import {
   ACTION_SCHEMAS,
   ActionSchema,
@@ -47,7 +48,6 @@ import {
   issueAccessSessionToken,
   listAccessSessions,
   mintDatabaseSessionToken,
-  OWNER_SESSION_ID,
   readBearerToken,
   requireAdminAccessSession,
   requireAccessSession,
@@ -59,23 +59,31 @@ import {
   DB_SESSION_PREFIX,
   acceptInvitation,
   asDatabaseSession,
+  beginLoginWithPassword,
   canAccessOrg,
   canManageOrg,
   createInvitation,
   createOrganization,
+  createSelfServeAccount,
+  confirmTwoFactorSetup,
+  disableTwoFactor,
   initializeDatabaseAuthState,
   listInvitations,
   listOrgAuditEvents,
   listOrgMembers,
   listOrganizationsForSession,
-  loginWithPassword,
-  registerWorkspaceAccount,
+  requestPasswordReset,
+  requestUsernameReminder,
+  regenerateTwoFactorBackupCodes,
+  resetPasswordWithToken,
   removeMember,
   resolveDatabaseSession,
   revokeDatabaseSession,
   revokeInvitation,
+  startTwoFactorSetup,
   switchActiveOrg,
   updateMemberRole,
+  verifyTwoFactorLogin,
 } from "./access/user-accounts.js";
 import {
   assignOrgPlan,
@@ -131,18 +139,15 @@ import { getBillingProviderStatus } from "./access/billing-provider.js";
 import { buildDeploymentModelStatus } from "./access/deployment-model.js";
 import { paywallPreHandler } from "./access/paywall-guard.js";
 import { getPaywallDecision } from "./access/paywall.js";
+import { prisma } from "./access/prisma-runtime.js";
 import { listSubscriptions, setSubscription } from "./access/subscription-store.js";
-import {
-  listTenantProviderConnections,
-  saveTenantProviderConnection,
-} from "./access/tenant-provider-connections.js";
-import { randomUUID, timingSafeEqual } from "node:crypto";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
+import { createReadStream, existsSync } from "node:fs";
+import { appendFile, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, extname, join, resolve, sep } from "node:path";
+import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createAccessStorageSnapshot } from "./access/access-storage.js";
-import { consumeRateLimit } from "./access/rate-limit.js";
 import { actionRegistry, isActionImplemented } from "./approval/action-registry.js";
 import { createFalconBroker } from "./falcon/broker.js";
 import {
@@ -173,7 +178,6 @@ import { buildHermesInteractionMemoryPreview } from "./phantom-ai/hermes-interac
 import { recallHermesInteractionMemory } from "./phantom-ai/hermes-interaction-recall.js";
 import { buildOpsDashboardContext } from "./phantom-ai/ops-context.js";
 import { buildAgentWorkforceStatus } from "./phantom-ai/agent-workforce.js";
-import { buildInstantChatFallbackReply } from "./phantom-ai/instant-chat-fallback.js";
 import {
   AgentActionRequestSchema,
   getAgentActionDefinitions,
@@ -181,8 +185,6 @@ import {
 } from "./phantom-ai/agent-actions.js";
 import { getSalesConnectorStatus } from "./connectors/sales-connector.js";
 import { getFinanceConnectorStatus } from "./connectors/finance-connector.js";
-import { parseExpenseText, parseReceiptImage } from "./connectors/finance-smart-entry.js";
-import { getReceiptAssetStorageProvider } from "./connectors/receipt-asset-storage.js";
 import {
   completeSocialOAuthCallback,
   createSocialOAuthStart,
@@ -239,45 +241,24 @@ import {
   updateVacationModeSettings,
 } from "./phantom-ai/vacation-mode.js";
 import {
+  applyPhantomPlayRatingOverride,
   createPhantomPlayRoom,
   createPhantomPlaySubmission,
+  getPhantomPlayRatingChangeHistory,
   getPhantomPlayRoom,
   getPhantomPlaySnapshot,
   getPhantomPlayStoreStatus,
   joinPhantomPlayRoom,
   leavePhantomPlayRoom,
   moderatePhantomPlaySubmission,
+  setPhantomPlayRoomReady,
   startPhantomPlaySession,
   updatePhantomPlayProfile,
-  updatePhantomPlayRoomMatch,
+  updatePhantomPlayRoomMatchState,
   updatePhantomPlaySession,
   updatePhantomPlaySubmission,
 } from "./phantom-ai/phantomplay.js";
-import {
-  getPhantomStoreSnapshot,
-  getPhantomStoreStatus,
-  moderatePhantomStoreTool,
-  recordPhantomStoreInstallClick,
-  recordPhantomStoreProductBuyClick,
-  submitPhantomStoreTool,
-  updatePhantomStoreTool,
-} from "./phantom-ai/phantomstore.js";
-import {
-  claimPhantomPlayHandle,
-  getPhantomPlayGlobalLeaderboard,
-  getPhantomPlayHandle,
-  recomputeGlobalScoreForUser,
-} from "./phantom-ai/phantomplay-handle.js";
-import {
-  confirmMissionStart,
-  createMissionApproval,
-  decomposeMissionObjective,
-  getMission,
-  getMissionReport,
-  missionWorkerAction,
-  synthesizeMission,
-  terminaHealth,
-} from "./phantom-ai/termina-bridge.js";
+import { registerPhantomPlayFlagshipGames } from "./phantom-ai/phantomplay-flagship.js";
 import {
   getPhantomPlayDeveloperAnalytics,
   getPhantomPlayDiscovery,
@@ -296,7 +277,6 @@ import {
   updatePhantomPlayWorkspacePolicy,
   upsertPhantomPlayReview,
 } from "./phantom-ai/phantomplay-v2.js";
-import { registerPhantomPlayFlagshipGames } from "./phantom-ai/phantomplay-flagship.js";
 import {
   auditCompetitorIntelligenceRequest,
   createAudienceTheme,
@@ -307,8 +287,13 @@ import {
   createResearchOpportunity,
   createSignal,
   fuseCompetitorSignals,
+  getBusinessProfile,
   getCompetitorIntelligenceSnapshot,
   getCompetitorIntelligenceStoreStatus,
+  getWebDiscoveryStatus,
+  runCompetitorDiscovery,
+  runCompetitorDossier,
+  saveBusinessProfile,
   updateMarketScoutContext,
   updateAggressiveMode,
 } from "./phantom-ai/competitor-intelligence.js";
@@ -318,7 +303,6 @@ import {
   getOrganizationOpportunities,
   getOrganizationPulse,
 } from "./phantom-ai/organization-pulse.js";
-import { getBrainContract, getSignals } from "./phantom-ai/signals.js";
 import {
   getAutonomousSecurityScanStatus,
   startAutonomousSecurityScanScheduler,
@@ -377,15 +361,13 @@ import {
   getWindowsMediaStatus,
   isWindowsMediaCommand,
 } from "./phantom-ai/windows-media-session.js";
-import { runCodexOperatorChat } from "./phantom-ai/codex-operator.js";
 import { callClaudeCliChat } from "./phantom-ai/providers/claude-cli-transport.js";
 import { callCodexCliChat } from "./phantom-ai/providers/codex-cli-transport.js";
-import { callLocalOllamaChat } from "./phantom-ai/providers/local-ollama-transport.js";
+import { callLocalOllamaChat, getLocalOllamaStatus } from "./phantom-ai/providers/local-ollama-transport.js";
 import { callOpenRouterGlm52 } from "./phantom-ai/providers/openrouter-live-transport.js";
 import {
   adminProviderAttemptOrder,
   getAdminProviderManagerStatus,
-  getPublicAdminProviderManagerStatus,
   recordAdminProviderFailure,
   recordAdminProviderSuccess,
   startAdminProviderHealthMonitor,
@@ -426,42 +408,13 @@ import {
   rollbackOrganizationConfiguration,
   type CustomizationEntitlements,
 } from "./customization/customization-service.js";
-import {
-  CLIENT_SETUP_BUSINESS_TEMPLATES,
-  CLIENT_SETUP_MODULES,
-  getClientSetupDocument,
-  isClientSetupSlotId,
-  publicClientSetupDocument,
-  saveClientSetupSlot,
-} from "./client-setup/client-setup-store.js";
-import {
-  createCrmLead,
-  deleteCrmLead,
-  getCrmPipelineDocument,
-  publicCrmPipelineDocument,
-  updateCrmLead,
-  upsertCrmProspectLanes,
-} from "./crm/crm-pipeline-store.js";
-import {
-  createProposalDraft,
-  deleteProposalDraft,
-  getProposalDocument,
-  publicProposalDocument,
-  updateProposalDraft,
-} from "./proposals/proposal-store.js";
-import {
-  createWorkspaceApproval,
-  decideWorkspaceApproval,
-  deleteWorkspaceApproval,
-  getWorkspaceApprovalDocument,
-  publicWorkspaceApprovalDocument,
-} from "./workspace-approvals/workspace-approval-store.js";
-import { buildManagedGrowthReport } from "./managed-growth/managed-growth-report.js";
 
 const host = process.env.HOST ?? "127.0.0.1";
 const port = Number(process.env.PORT ?? 5190);
 const moduleDir = dirname(fileURLToPath(import.meta.url));
 const appStaticRoot = resolve(moduleDir, "..", "..", "app");
+const downloadsRoot = resolve(moduleDir, "..", "..", "downloads");
+const installManifestVersion = "phantomforce-install-consent-2026-07-12";
 const appStaticTypes: Record<string, string> = {
   ".css": "text/css; charset=utf-8",
   ".html": "text/html; charset=utf-8",
@@ -473,6 +426,8 @@ const appStaticTypes: Record<string, string> = {
   ".png": "image/png",
   ".svg": "image/svg+xml; charset=utf-8",
   ".webp": "image/webp",
+  ".txt": "text/plain; charset=utf-8",
+  ".zip": "application/zip",
 };
 
 /* Build fingerprint captured once at boot: the git commit this Hermes
@@ -500,19 +455,15 @@ const CustomizationPreviewBodySchema = z.object({ tenant_id: z.string().trim().m
 const CustomizationPublishBodySchema = CustomizationPreviewBodySchema.extend({ summary: z.string().trim().max(240).optional(), expected_version: z.number().int().positive().optional() });
 const CustomizationRollbackBodySchema = z.object({ tenant_id: z.string().trim().max(80).optional(), version: z.number().int().positive() });
 const CustomizationAssistantBodySchema = z.object({ tenant_id: z.string().trim().max(80).optional(), message: z.string().trim().min(1).max(1200) });
-const ClientSetupTenantQuerySchema = z.object({ tenant_id: z.string().trim().max(80).optional() });
-const ClientSetupSlotBodySchema = z.object({ tenant_id: z.string().trim().max(80).optional(), slot: z.unknown() });
-const CrmTenantQuerySchema = z.object({ tenant_id: z.string().trim().max(80).optional() });
-const CrmLeadBodySchema = z.object({ tenant_id: z.string().trim().max(80).optional(), lead: z.unknown() });
-const CrmLeadPatchBodySchema = z.object({ tenant_id: z.string().trim().max(80).optional(), patch: z.unknown() });
-const CrmProspectLanesBodySchema = z.object({ tenant_id: z.string().trim().max(80).optional(), prompt: z.string().trim().max(1200).optional(), leads: z.array(z.unknown()).max(12) });
-const ProposalTenantQuerySchema = z.object({ tenant_id: z.string().trim().max(80).optional() });
-const ProposalBodySchema = z.object({ tenant_id: z.string().trim().max(80).optional(), proposal: z.unknown() });
-const ProposalPatchBodySchema = z.object({ tenant_id: z.string().trim().max(80).optional(), patch: z.unknown() });
-const WorkspaceApprovalTenantQuerySchema = z.object({ tenant_id: z.string().trim().max(80).optional() });
-const WorkspaceApprovalBodySchema = z.object({ tenant_id: z.string().trim().max(80).optional(), approval: z.unknown() });
-const WorkspaceApprovalPatchBodySchema = z.object({ tenant_id: z.string().trim().max(80).optional(), patch: z.unknown() });
-const ManagedGrowthReportTenantQuerySchema = z.object({ tenant_id: z.string().trim().max(80).optional() });
+const WorkspaceModuleUpdateBodySchema = z.object({
+  tenant_id: z.string().trim().max(80).optional(),
+  module_id: z.literal("phantomplay"),
+  enabled: z.boolean(),
+  accessMode: z.enum(["owner_only", "selected_members", "entire_organization"]).default("owner_only"),
+  allowedMemberIds: z.array(z.string().trim().min(1).max(120)).max(200).default([]),
+  activityEnabled: z.boolean().default(false),
+  challengesEnabled: z.boolean().default(false),
+});
 const SocialAnalyticsSyncSchema = z.object({
   platform: z.enum(["youtube", "instagram", "facebook", "tiktok", "x", "linkedin", "pinterest"]),
 });
@@ -538,34 +489,51 @@ function customizationEntitlements(session: AccessSession, tenantId: string): Cu
   };
 }
 
-function clientSetupTenantForSession(session: AccessSession, requestedTenantId?: string) {
-  if (session.canManageAccess) return safeCustomizationTenantId(requestedTenantId, "phantomforce-owner");
-  return safeCustomizationTenantId(session.orgId || session.clientId, `client-${session.id}`);
+function customizationActorRole(session: AccessSession) {
+  if (session.canManageAccess || session.isSuperAdmin) return "owner";
+  return session.orgRole || session.role || "client";
 }
 
-function canManageClientSetup(session: AccessSession) {
-  return session.canManageAccess || session.orgRole === "owner" || session.orgRole === "admin";
+function actorModuleIds(session: AccessSession) {
+  return [session.userId, session.id, session.email, session.authSessionId].filter(Boolean).map((value) => String(value));
 }
 
-function crmTenantForSession(session: AccessSession, requestedTenantId?: string) {
-  if (session.canManageAccess) return safeCustomizationTenantId(requestedTenantId, "phantomforce-owner");
-  return safeCustomizationTenantId(session.orgId || session.clientId, `client-${session.id}`);
+function canManageWorkspaceModules(session: AccessSession, tenantId: string) {
+  if (session.canManageAccess || session.isSuperAdmin) return true;
+  const ownTenant = session.orgId || session.clientId;
+  return ownTenant === tenantId && (session.orgRole === "owner" || session.orgRole === "admin");
 }
 
-function canWriteCrm(session: AccessSession) {
-  return session.canManageAccess || session.orgRole === "owner" || session.orgRole === "admin" || session.orgRole === "member";
-}
-
-function proposalTenantForSession(session: AccessSession, requestedTenantId?: string) {
-  return crmTenantForSession(session, requestedTenantId);
-}
-
-function workspaceApprovalTenantForSession(session: AccessSession, requestedTenantId?: string) {
-  return crmTenantForSession(session, requestedTenantId);
-}
-
-function canDecideWorkspaceApprovals(session: AccessSession) {
-  return session.canManageAccess || session.orgRole === "owner" || session.orgRole === "admin";
+async function moduleAccessForSession(session: AccessSession, moduleId: string, requestedTenantId?: unknown) {
+  const tenantId = customizationTenantForSession(session, typeof requestedTenantId === "string" ? requestedTenantId : undefined);
+  const state = await getOrganizationConfiguration(tenantId, session.id);
+  const module = state.configuration.modules.find((item) => item.id === moduleId);
+  const role = customizationActorRole(session);
+  const canManage = canManageWorkspaceModules(session, tenantId);
+  const allowedMemberIds = module?.allowedMemberIds ?? [];
+  let allowed = Boolean(module?.enabled && module.roles.includes(role));
+  if (moduleId === "phantomplay" && allowed) {
+    const accessMode = module?.accessMode ?? "owner_only";
+    if (accessMode === "owner_only") allowed = canManage;
+    else if (accessMode === "selected_members") {
+      allowed = canManage || actorModuleIds(session).some((id) => allowedMemberIds.includes(id));
+    }
+  }
+  return {
+    tenantId,
+    module,
+    role,
+    canManage,
+    allowed,
+    reason: !module?.enabled
+      ? "module_disabled"
+      : !module.roles.includes(role)
+        ? "role_not_allowed"
+        : allowed
+          ? "allowed"
+          : "member_not_allowed",
+    configurationVersion: state.configuration.version,
+  };
 }
 
 await app.register(cors, {
@@ -856,6 +824,81 @@ app.get("/phantom-ai/customization/config", async (request, reply) => {
   };
 });
 
+app.get("/phantom-ai/customization/workspace-modules", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const parsed = CustomizationTenantQuerySchema.safeParse(request.query ?? {});
+  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
+  const tenantId = customizationTenantForSession(session, parsed.data.tenant_id);
+  const state = await getOrganizationConfiguration(tenantId, session.id);
+  const phantomPlayAccess = await moduleAccessForSession(session, "phantomplay", tenantId);
+  return {
+    ok: true,
+    tenant_id: tenantId,
+    can_manage: canManageWorkspaceModules(session, tenantId),
+    modules: state.configuration.modules
+      .filter((module) => module.id === "phantomplay")
+      .map((module) => ({
+        id: module.id,
+        label: module.label,
+        enabled: module.enabled,
+        accessMode: module.accessMode ?? "owner_only",
+        allowedMemberIds: module.allowedMemberIds ?? [],
+        activityEnabled: module.activityEnabled ?? false,
+        challengesEnabled: module.challengesEnabled ?? false,
+        canAccess: phantomPlayAccess.allowed,
+        accessReason: phantomPlayAccess.reason,
+      })),
+    version: state.configuration.version,
+    provider_called: false,
+  };
+});
+
+app.patch("/phantom-ai/customization/workspace-modules", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const parsed = WorkspaceModuleUpdateBodySchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
+  const tenantId = customizationTenantForSession(session, parsed.data.tenant_id);
+  if (!canManageWorkspaceModules(session, tenantId)) {
+    return reply.code(403).send({ ok: false, error: "Managing workspace modules requires an organization owner or administrator." });
+  }
+  const state = await getOrganizationConfiguration(tenantId, session.id);
+  const patch = {
+    modules: state.configuration.modules.map((module) => module.id === parsed.data.module_id
+      ? {
+          ...module,
+          enabled: parsed.data.enabled,
+          accessMode: parsed.data.accessMode,
+          allowedMemberIds: parsed.data.accessMode === "selected_members" ? parsed.data.allowedMemberIds : [],
+          activityEnabled: parsed.data.enabled && parsed.data.activityEnabled,
+          challengesEnabled: parsed.data.enabled && parsed.data.challengesEnabled,
+        }
+      : module),
+  };
+  try {
+    const result = await publishConfigurationChange({
+      tenantId,
+      actor: session.id,
+      patch,
+      summary: parsed.data.enabled ? "Updated PhantomPlay workspace module access" : "Disabled PhantomPlay workspace module",
+      expectedVersion: state.configuration.version,
+      entitlements: customizationEntitlements(session, tenantId),
+    });
+    return {
+      ok: true,
+      tenant_id: tenantId,
+      result,
+      organization_data_deleted: false,
+      notifications_sent: false,
+      provider_called: false,
+    };
+  } catch (error) {
+    if (error instanceof z.ZodError) return reply.status(400).send({ ok: false, error: error.flatten() });
+    return reply.status(409).send({ ok: false, error: error instanceof Error ? error.message : "Workspace module could not be updated." });
+  }
+});
+
 app.get("/phantom-ai/customization/versions", async (request, reply) => {
   const session = requireAdminAccessSession(request, reply);
   if (!session) return reply;
@@ -946,340 +989,6 @@ app.post("/phantom-ai/customization/assistant-plan", async (request, reply) => {
   return { ok: true, tenant_id: tenantId, plan, preview, provider_called: false, source_code_edited: false, requires_approval: true };
 });
 
-app.get("/api/client-setup", async (request, reply) => {
-  const session = requireAccessSession(request, reply);
-  if (!session) return reply;
-  const parsed = ClientSetupTenantQuerySchema.safeParse(request.query ?? {});
-  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
-  const tenantId = clientSetupTenantForSession(session, parsed.data.tenant_id);
-  const document = await getClientSetupDocument(tenantId, session.id);
-  return {
-    ok: true,
-    tenant_id: tenantId,
-    can_manage: canManageClientSetup(session),
-    document: publicClientSetupDocument(document),
-    templates: CLIENT_SETUP_BUSINESS_TEMPLATES,
-    modules: CLIENT_SETUP_MODULES,
-    provider_called: false,
-    outbound_action_executed: false,
-    public_exposure_changed: false,
-  };
-});
-
-app.post("/api/client-setup/slots/:slotId", async (request, reply) => {
-  const session = requireAccessSession(request, reply);
-  if (!session) return reply;
-  if (!canManageClientSetup(session)) {
-    return reply.status(403).send({ ok: false, error: "Saving client setup requires workspace owner/admin access." });
-  }
-  const { slotId } = request.params as { slotId: string };
-  if (!isClientSetupSlotId(slotId)) return reply.status(404).send({ ok: false, error: "Unknown setup slot." });
-  const parsed = ClientSetupSlotBodySchema.safeParse(request.body ?? {});
-  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
-  const tenantId = clientSetupTenantForSession(session, parsed.data.tenant_id);
-  const result = await saveClientSetupSlot({ tenantId, slotId, slot: parsed.data.slot, actor: session.id });
-  return {
-    ok: true,
-    tenant_id: tenantId,
-    slot: result.slot,
-    document: publicClientSetupDocument(result.document),
-    provider_called: false,
-    outbound_action_executed: false,
-    public_exposure_changed: false,
-  };
-});
-
-app.get("/api/crm/leads", async (request, reply) => {
-  const session = requireAccessSession(request, reply);
-  if (!session) return reply;
-  const parsed = CrmTenantQuerySchema.safeParse(request.query ?? {});
-  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
-  const tenantId = crmTenantForSession(session, parsed.data.tenant_id);
-  const document = await getCrmPipelineDocument(tenantId, session.id);
-  return {
-    ok: true,
-    tenant_id: tenantId,
-    can_write: canWriteCrm(session),
-    document: publicCrmPipelineDocument(document),
-    provider_called: false,
-    outbound_action_executed: false,
-    public_exposure_changed: false,
-  };
-});
-
-app.post("/api/crm/leads", async (request, reply) => {
-  const session = requireAccessSession(request, reply);
-  if (!session) return reply;
-  if (!canWriteCrm(session)) return reply.status(403).send({ ok: false, error: "Saving CRM leads requires workspace member access." });
-  const parsed = CrmLeadBodySchema.safeParse(request.body ?? {});
-  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
-  const tenantId = crmTenantForSession(session, parsed.data.tenant_id);
-  const result = await createCrmLead({ tenantId, lead: parsed.data.lead, actor: session.id });
-  return {
-    ok: true,
-    tenant_id: tenantId,
-    lead: result.result,
-    document: publicCrmPipelineDocument(result.document),
-    provider_called: false,
-    outbound_action_executed: false,
-    public_exposure_changed: false,
-  };
-});
-
-app.post("/api/crm/prospect-lanes", async (request, reply) => {
-  const session = requireAccessSession(request, reply);
-  if (!session) return reply;
-  if (!canWriteCrm(session)) return reply.status(403).send({ ok: false, error: "Saving CRM prospect lanes requires workspace member access." });
-  const parsed = CrmProspectLanesBodySchema.safeParse(request.body ?? {});
-  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
-  const tenantId = crmTenantForSession(session, parsed.data.tenant_id);
-  const result = await upsertCrmProspectLanes({ tenantId, leads: parsed.data.leads, actor: session.id });
-  return {
-    ok: true,
-    tenant_id: tenantId,
-    leads: result.result,
-    document: publicCrmPipelineDocument(result.document),
-    prompt_recorded: Boolean(parsed.data.prompt),
-    provider_called: false,
-    outbound_action_executed: false,
-    public_exposure_changed: false,
-  };
-});
-
-app.post("/api/crm/leads/:leadId", async (request, reply) => {
-  const session = requireAccessSession(request, reply);
-  if (!session) return reply;
-  if (!canWriteCrm(session)) return reply.status(403).send({ ok: false, error: "Updating CRM leads requires workspace member access." });
-  const { leadId } = request.params as { leadId: string };
-  const parsed = CrmLeadPatchBodySchema.safeParse(request.body ?? {});
-  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
-  const tenantId = crmTenantForSession(session, parsed.data.tenant_id);
-  try {
-    const result = await updateCrmLead({ tenantId, leadId, patch: parsed.data.patch, actor: session.id });
-    return {
-      ok: true,
-      tenant_id: tenantId,
-      lead: result.result,
-      document: publicCrmPipelineDocument(result.document),
-      provider_called: false,
-      outbound_action_executed: false,
-      public_exposure_changed: false,
-    };
-  } catch (error) {
-    return reply.status(404).send({ ok: false, error: error instanceof Error ? error.message : "CRM lead not found." });
-  }
-});
-
-app.delete("/api/crm/leads/:leadId", async (request, reply) => {
-  const session = requireAccessSession(request, reply);
-  if (!session) return reply;
-  if (!canWriteCrm(session)) return reply.status(403).send({ ok: false, error: "Deleting CRM leads requires workspace member access." });
-  const { leadId } = request.params as { leadId: string };
-  const parsed = CrmTenantQuerySchema.safeParse(request.query ?? {});
-  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
-  const tenantId = crmTenantForSession(session, parsed.data.tenant_id);
-  const result = await deleteCrmLead({ tenantId, leadId, actor: session.id });
-  return {
-    ok: true,
-    tenant_id: tenantId,
-    deleted: result.result,
-    document: publicCrmPipelineDocument(result.document),
-    provider_called: false,
-    outbound_action_executed: false,
-    public_exposure_changed: false,
-  };
-});
-
-app.get("/api/proposals", async (request, reply) => {
-  const session = requireAccessSession(request, reply);
-  if (!session) return reply;
-  const parsed = ProposalTenantQuerySchema.safeParse(request.query ?? {});
-  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
-  const tenantId = proposalTenantForSession(session, parsed.data.tenant_id);
-  const document = await getProposalDocument(tenantId, session.id);
-  return {
-    ok: true,
-    tenant_id: tenantId,
-    can_write: canWriteCrm(session),
-    document: publicProposalDocument(document),
-    provider_called: false,
-    outbound_action_executed: false,
-    public_exposure_changed: false,
-  };
-});
-
-app.post("/api/proposals", async (request, reply) => {
-  const session = requireAccessSession(request, reply);
-  if (!session) return reply;
-  if (!canWriteCrm(session)) return reply.status(403).send({ ok: false, error: "Saving proposal drafts requires workspace member access." });
-  const parsed = ProposalBodySchema.safeParse(request.body ?? {});
-  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
-  const tenantId = proposalTenantForSession(session, parsed.data.tenant_id);
-  const result = await createProposalDraft({ tenantId, proposal: parsed.data.proposal, actor: session.id });
-  return {
-    ok: true,
-    tenant_id: tenantId,
-    proposal: result.result,
-    document: publicProposalDocument(result.document),
-    provider_called: false,
-    outbound_action_executed: false,
-    public_exposure_changed: false,
-  };
-});
-
-app.post("/api/proposals/:proposalId", async (request, reply) => {
-  const session = requireAccessSession(request, reply);
-  if (!session) return reply;
-  if (!canWriteCrm(session)) return reply.status(403).send({ ok: false, error: "Updating proposal drafts requires workspace member access." });
-  const { proposalId } = request.params as { proposalId: string };
-  const parsed = ProposalPatchBodySchema.safeParse(request.body ?? {});
-  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
-  const tenantId = proposalTenantForSession(session, parsed.data.tenant_id);
-  try {
-    const result = await updateProposalDraft({ tenantId, proposalId, patch: parsed.data.patch, actor: session.id });
-    return {
-      ok: true,
-      tenant_id: tenantId,
-      proposal: result.result,
-      document: publicProposalDocument(result.document),
-      provider_called: false,
-      outbound_action_executed: false,
-      public_exposure_changed: false,
-    };
-  } catch (error) {
-    return reply.status(404).send({ ok: false, error: error instanceof Error ? error.message : "Proposal draft not found." });
-  }
-});
-
-app.delete("/api/proposals/:proposalId", async (request, reply) => {
-  const session = requireAccessSession(request, reply);
-  if (!session) return reply;
-  if (!canWriteCrm(session)) return reply.status(403).send({ ok: false, error: "Deleting proposal drafts requires workspace member access." });
-  const { proposalId } = request.params as { proposalId: string };
-  const parsed = ProposalTenantQuerySchema.safeParse(request.query ?? {});
-  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
-  const tenantId = proposalTenantForSession(session, parsed.data.tenant_id);
-  const result = await deleteProposalDraft({ tenantId, proposalId, actor: session.id });
-  return {
-    ok: true,
-    tenant_id: tenantId,
-    deleted: result.result,
-    document: publicProposalDocument(result.document),
-    provider_called: false,
-    outbound_action_executed: false,
-    public_exposure_changed: false,
-  };
-});
-
-app.get("/api/workspace-approvals", async (request, reply) => {
-  const session = requireAccessSession(request, reply);
-  if (!session) return reply;
-  const parsed = WorkspaceApprovalTenantQuerySchema.safeParse(request.query ?? {});
-  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
-  const tenantId = workspaceApprovalTenantForSession(session, parsed.data.tenant_id);
-  const document = await getWorkspaceApprovalDocument(tenantId, session.id);
-  return {
-    ok: true,
-    tenant_id: tenantId,
-    can_write: canWriteCrm(session),
-    can_decide: canDecideWorkspaceApprovals(session),
-    document: publicWorkspaceApprovalDocument(document),
-    provider_called: false,
-    outbound_action_executed: false,
-    public_exposure_changed: false,
-    approval_execution_implemented: false,
-  };
-});
-
-app.post("/api/workspace-approvals", async (request, reply) => {
-  const session = requireAccessSession(request, reply);
-  if (!session) return reply;
-  if (!canWriteCrm(session)) return reply.status(403).send({ ok: false, error: "Creating approval requests requires workspace member access." });
-  const parsed = WorkspaceApprovalBodySchema.safeParse(request.body ?? {});
-  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
-  const tenantId = workspaceApprovalTenantForSession(session, parsed.data.tenant_id);
-  const result = await createWorkspaceApproval({ tenantId, approval: parsed.data.approval, actor: session.id });
-  return {
-    ok: true,
-    tenant_id: tenantId,
-    approval: result.result,
-    document: publicWorkspaceApprovalDocument(result.document),
-    provider_called: false,
-    outbound_action_executed: false,
-    public_exposure_changed: false,
-    approval_execution_implemented: false,
-  };
-});
-
-app.post("/api/workspace-approvals/:approvalId", async (request, reply) => {
-  const session = requireAccessSession(request, reply);
-  if (!session) return reply;
-  if (!canDecideWorkspaceApprovals(session)) return reply.status(403).send({ ok: false, error: "Deciding approval requests requires owner or admin access." });
-  const { approvalId } = request.params as { approvalId: string };
-  const parsed = WorkspaceApprovalPatchBodySchema.safeParse(request.body ?? {});
-  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
-  const tenantId = workspaceApprovalTenantForSession(session, parsed.data.tenant_id);
-  try {
-    const result = await decideWorkspaceApproval({ tenantId, approvalId, patch: parsed.data.patch, actor: session.id });
-    return {
-      ok: true,
-      tenant_id: tenantId,
-      approval: result.result,
-      document: publicWorkspaceApprovalDocument(result.document),
-      provider_called: false,
-      outbound_action_executed: false,
-      public_exposure_changed: false,
-      approval_execution_implemented: false,
-    };
-  } catch (error) {
-    return reply.status(404).send({ ok: false, error: error instanceof Error ? error.message : "Workspace approval not found." });
-  }
-});
-
-app.delete("/api/workspace-approvals/:approvalId", async (request, reply) => {
-  const session = requireAccessSession(request, reply);
-  if (!session) return reply;
-  if (!canDecideWorkspaceApprovals(session)) return reply.status(403).send({ ok: false, error: "Deleting approval requests requires owner or admin access." });
-  const { approvalId } = request.params as { approvalId: string };
-  const parsed = WorkspaceApprovalTenantQuerySchema.safeParse(request.query ?? {});
-  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
-  const tenantId = workspaceApprovalTenantForSession(session, parsed.data.tenant_id);
-  const result = await deleteWorkspaceApproval({ tenantId, approvalId, actor: session.id });
-  return {
-    ok: true,
-    tenant_id: tenantId,
-    deleted: result.result,
-    document: publicWorkspaceApprovalDocument(result.document),
-    provider_called: false,
-    outbound_action_executed: false,
-    public_exposure_changed: false,
-    approval_execution_implemented: false,
-  };
-});
-
-app.get("/api/managed-growth/report", async (request, reply) => {
-  const session = requireAccessSession(request, reply);
-  if (!session) return reply;
-  const parsed = ManagedGrowthReportTenantQuerySchema.safeParse(request.query ?? {});
-  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
-  const tenantId = crmTenantForSession(session, parsed.data.tenant_id);
-  const [clientSetup, crm, proposals, approvals] = await Promise.all([
-    getClientSetupDocument(tenantId, session.id),
-    getCrmPipelineDocument(tenantId, session.id),
-    getProposalDocument(tenantId, session.id),
-    getWorkspaceApprovalDocument(tenantId, session.id),
-  ]);
-  const report = buildManagedGrowthReport({ tenantId, clientSetup, crm, proposals, approvals });
-  return {
-    ok: true,
-    tenant_id: tenantId,
-    report,
-    provider_called: false,
-    outbound_action_executed: false,
-    public_exposure_changed: false,
-  };
-});
-
 function requestPublicHost(request: FastifyRequest) {
   return publicHostFromHeaders(request.headers as Record<string, unknown>);
 }
@@ -1314,6 +1023,66 @@ app.get("/app/*", async (request, reply) => {
   }
 });
 
+app.get("/api/install/manifest", async () => {
+  const bytes = await readFile(resolve(downloadsRoot, "phantomforce-install-manifest.json"), "utf8");
+  return JSON.parse(bytes) as Record<string, unknown>;
+});
+
+const InstallAcceptSchema = z.object({
+  accepted: z.literal(true),
+  manifestVersion: z.string().default(installManifestVersion),
+  name: z.string().trim().min(1).max(160).optional(),
+  email: z.string().trim().email().max(254).optional(),
+  source: z.string().trim().max(80).optional(),
+});
+
+app.post("/api/install/accept", async (request, reply) => {
+  const parsed = InstallAcceptSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  if (parsed.data.manifestVersion !== installManifestVersion) {
+    return reply.code(409).send({ ok: false, error: "Install terms changed. Refresh and accept the current PhantomForce install terms.", current: installManifestVersion });
+  }
+  const record = {
+    id: randomUUID(),
+    acceptedAt: new Date().toISOString(),
+    manifestVersion: parsed.data.manifestVersion,
+    source: parsed.data.source || "download",
+    name: parsed.data.name || null,
+    emailDomain: parsed.data.email?.split("@").pop()?.toLowerCase() || null,
+    userAgent: String(request.headers["user-agent"] || "").slice(0, 220),
+  };
+  const logPath = resolve(process.env.PHANTOMFORCE_INSTALL_ACCEPTANCE_LOG || join(tmpdir(), "phantomforce", "install-acceptance.ndjson"));
+  await mkdir(dirname(logPath), { recursive: true });
+  await appendFile(logPath, `${JSON.stringify(record)}\n`, "utf8");
+  return { ok: true, receipt: record.id, acceptedAt: record.acceptedAt, manifestVersion: installManifestVersion };
+});
+
+app.get("/downloads/*", async (request, reply) => {
+  const query = (request.query ?? {}) as { accepted?: unknown };
+  if (query.accepted !== installManifestVersion) {
+    return reply.code(403).send({
+      ok: false,
+      error: "acceptance_required",
+      manifestVersion: installManifestVersion,
+      manifestUrl: "/api/install/manifest",
+      acceptUrl: "/api/install/accept",
+    });
+  }
+  const rawPath = String((request.params as { "*": string })["*"] || "");
+  if (!rawPath || rawPath.includes("\0")) return reply.code(400).send({ ok: false, error: "Invalid download path." });
+  const assetPath = resolve(downloadsRoot, rawPath.replace(/^[/\\]+/, ""));
+  if (assetPath !== downloadsRoot && !assetPath.startsWith(`${downloadsRoot}${sep}`)) {
+    return reply.code(403).send({ ok: false, error: "Download path is outside the PhantomForce package bundle." });
+  }
+  try {
+    const bytes = await readFile(assetPath);
+    const contentType = appStaticTypes[extname(assetPath).toLowerCase()] ?? "application/octet-stream";
+    return reply.header("content-type", contentType).header("cache-control", "no-store").send(bytes);
+  } catch {
+    return reply.code(404).send({ ok: false, error: "download_not_found" });
+  }
+});
+
 app.get("/sessions", async (request) => {
   const authConfiguration = getAccessAuthConfiguration();
   const publicHost = requestPublicHost(request);
@@ -1323,40 +1092,22 @@ app.get("/sessions", async (request) => {
     auth: {
       ...authConfiguration,
     },
-    sessions: filterSessionsForPublicHost(publicHost, listAccessSessions()),
+    sessions: authConfiguration.ownerProductionAuthEnabled
+      ? []
+      : filterSessionsForPublicHost(publicHost, listAccessSessions()),
   };
 });
 
-/* Brute-force throttle for auth endpoints. Keyed per-IP+identifier so one
-   attacker hammering a single account can't lock other accounts out, and
-   per-IP alone so a single script rotating identifiers is still capped. */
-const AUTH_RATE_LIMIT_MAX_ATTEMPTS = 10;
-const AUTH_RATE_LIMIT_WINDOW_MS = 5 * 60 * 1000;
-
-function enforceAuthRateLimit(request: FastifyRequest, reply: FastifyReply, identifier: string) {
-  const ip = request.ip || "unknown";
-  const normalizedIdentifier = (identifier || "unknown").trim().toLowerCase().slice(0, 200);
-
-  const perIdentifier = consumeRateLimit(
-    `auth:id:${ip}:${normalizedIdentifier}`,
-    AUTH_RATE_LIMIT_MAX_ATTEMPTS,
-    AUTH_RATE_LIMIT_WINDOW_MS,
-  );
-  const perIp = consumeRateLimit(`auth:ip:${ip}`, AUTH_RATE_LIMIT_MAX_ATTEMPTS * 3, AUTH_RATE_LIMIT_WINDOW_MS);
-
-  const result = perIdentifier.limited ? perIdentifier : perIp;
-  if (result.limited) {
-    reply
-      .header("Retry-After", Math.ceil(result.retryAfterMs / 1000).toString())
-      .code(429)
-      .send({ ok: false, error: "too_many_attempts" });
-    return false;
-  }
-  return true;
-}
-
 async function handleSessionLogin(request: FastifyRequest, reply: FastifyReply) {
   const authConfiguration = getAccessAuthConfiguration();
+
+  if (!authConfiguration.sessionLoginEnabled) {
+    return reply.code(403).send({
+      ok: false,
+      error: "Session login is disabled.",
+      auth: authConfiguration,
+    });
+  }
 
   const parsed = AccessLoginSchema.safeParse(request.body);
 
@@ -1364,25 +1115,6 @@ async function handleSessionLogin(request: FastifyRequest, reply: FastifyReply) 
     return reply.code(400).send({
       ok: false,
       error: parsed.error.flatten(),
-    });
-  }
-
-  if (!enforceAuthRateLimit(request, reply, parsed.data.email || parsed.data.sessionId)) {
-    return reply;
-  }
-
-  /* Under the database auth provider, sessionLoginEnabled is false (it only
-     covers the legacy in-memory providers below) — but the admin gate still
-     posts email+password to this same endpoint for the platform super-admin,
-     so that specific shape must be allowed through before the legacy gate. */
-  const isDatabaseOwnerLoginAttempt =
-    authConfiguration.databaseAuthEnabled && parsed.data.sessionId === OWNER_SESSION_ID && Boolean(parsed.data.password);
-
-  if (!authConfiguration.sessionLoginEnabled && !isDatabaseOwnerLoginAttempt) {
-    return reply.code(403).send({
-      ok: false,
-      error: "Session login is disabled.",
-      auth: authConfiguration,
     });
   }
 
@@ -1396,34 +1128,6 @@ async function handleSessionLogin(request: FastifyRequest, reply: FastifyReply) 
       host: publicHost || "local",
       sessions: filterSessionsForPublicHost(publicHost, listAccessSessions()),
     });
-  }
-
-  /* Owner-production's in-memory owner key doesn't apply under database
-     auth — the platform super-admin must be verified against the real
-     Postgres user instead. Only isSuperAdmin users may authenticate here;
-     ordinary org members/owners still sign in through /auth/login. */
-  if (isDatabaseOwnerLoginAttempt && parsed.data.password) {
-    const dbSession = parsed.data.email ? await loginWithPassword(parsed.data.email, parsed.data.password) : undefined;
-    if (!dbSession || !dbSession.isSuperAdmin) {
-      return reply.code(401).send({
-        ok: false,
-        error: "Invalid owner email or password.",
-        sessions: [],
-      });
-    }
-    if (!canUseSessionOnPublicHost(publicHost, dbSession)) {
-      await revokeDatabaseSession(dbSession.authSessionId);
-      return reply.code(403).send({
-        ok: false,
-        error: "This session is not available on this public host.",
-        host: publicHost || "local",
-      });
-    }
-    const dbToken = mintDatabaseSessionToken(dbSession.id);
-    if (!dbToken) {
-      return reply.code(500).send({ ok: false, error: "Token minting unavailable." });
-    }
-    return { ok: true, ...dbToken, session: dbSession };
   }
 
   let ownerKeyForToken = parsed.data.ownerKey;
@@ -1449,7 +1153,7 @@ async function handleSessionLogin(request: FastifyRequest, reply: FastifyReply) 
       ok: false,
       error: "Invalid session credentials.",
       auth: authConfiguration,
-      sessions: listAccessSessions(),
+      sessions: authConfiguration.ownerProductionAuthEnabled ? [] : listAccessSessions(),
     });
   }
 
@@ -1502,62 +1206,27 @@ app.get("/session", async (request, reply) => {
    regardless of what the frontend shows. */
 
 const DatabaseLoginSchema = z.object({
-  email: z.string().email().max(200),
+  email: z.string().max(200),
   password: z.string().min(1).max(200),
 });
 
-const DatabaseSignupSchema = z.object({
+const SignupSchema = z.object({
   email: z.string().email().max(200),
+  username: z.string().min(3).max(32).optional(),
   password: z.string().min(8).max(200),
   name: z.string().max(120).optional(),
-  workspaceName: z.string().min(2).max(120),
-  workspaceBrief: z.string().trim().min(12).max(600),
-  workspaceProfile: z.enum(["business", "creator", "developer"]).default("business"),
+  organizationName: z.string().max(120).optional(),
 });
 
-app.post("/auth/signup", async (request, reply) => {
-  const authConfiguration = getAccessAuthConfiguration();
-  if (!authConfiguration.databaseAuthEnabled) {
-    return reply.code(403).send({ ok: false, error: "Database auth is disabled.", auth: authConfiguration });
-  }
-  const parsed = DatabaseSignupSchema.safeParse(request.body ?? {});
-  if (!parsed.success) {
-    const fieldErrors = parsed.error.flatten().fieldErrors;
-    if (fieldErrors.workspaceBrief?.length) return reply.code(400).send({ ok: false, error: "workspace_brief_required" });
-    return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
-  }
-  if (!enforceAuthRateLimit(request, reply, parsed.data.email)) {
-    return reply;
-  }
-  const result = await registerWorkspaceAccount(parsed.data);
-  if (!result.ok) {
-    const status = result.error === "account_exists" ? 409 : 400;
-    return reply.code(status).send({ ok: false, error: result.error });
-  }
-  const publicHost = requestPublicHost(request);
-  if (!canUseSessionOnPublicHost(publicHost, result.session)) {
-    await revokeDatabaseSession(result.session.authSessionId);
-    return reply.code(403).send({
-      ok: false,
-      error: "This account is not available on this public host.",
-      host: publicHost || "local",
-    });
-  }
-  const token = mintDatabaseSessionToken(result.session.id);
-  if (!token) return reply.code(500).send({ ok: false, error: "Token minting unavailable." });
-  return {
-    ok: true,
-    ...token,
-    session: result.session,
-    org: result.org,
-    workspaceProfile: {
-      id: result.profile.id,
-      label: result.profile.label,
-      workspaceName: result.profile.workspaceName,
-      homeModuleId: result.profile.homeModuleId,
-    },
-  };
-});
+const ForgotUsernameSchema = z.object({ email: z.string().email().max(200) });
+const ForgotPasswordSchema = z.object({ identifier: z.string().min(3).max(200) });
+const ResetPasswordSchema = z.object({ token: z.string().min(10).max(240), password: z.string().min(8).max(200) });
+const TwoFactorVerifySchema = z.object({ challengeToken: z.string().min(10).max(240), code: z.string().min(6).max(20) });
+const TwoFactorCodeSchema = z.object({ code: z.string().min(6).max(20) });
+
+function databaseAuthDisabled(reply: FastifyReply) {
+  return reply.code(403).send({ ok: false, error: "Database auth is disabled.", auth: getAccessAuthConfiguration() });
+}
 
 app.post("/auth/login", async (request, reply) => {
   const authConfiguration = getAccessAuthConfiguration();
@@ -1568,14 +1237,21 @@ app.post("/auth/login", async (request, reply) => {
   if (!parsed.success) {
     return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
   }
-  if (!enforceAuthRateLimit(request, reply, parsed.data.email)) {
-    return reply;
-  }
-  const session = await loginWithPassword(parsed.data.email, parsed.data.password);
-  if (!session) {
+  const login = await beginLoginWithPassword(parsed.data.email, parsed.data.password);
+  if (!login) {
     /* uniform delay-free refusal; no user-exists oracle */
     return reply.code(401).send({ ok: false, error: "Invalid email or password." });
   }
+  if (login.requires2fa) {
+    return {
+      ok: true,
+      requires2fa: true,
+      challengeToken: login.challengeToken,
+      expiresAt: login.expiresAt,
+      user: login.user,
+    };
+  }
+  const session = login.session;
   const publicHost = requestPublicHost(request);
   if (!canUseSessionOnPublicHost(publicHost, session)) {
     await revokeDatabaseSession(session.authSessionId);
@@ -1590,6 +1266,54 @@ app.post("/auth/login", async (request, reply) => {
     return reply.code(500).send({ ok: false, error: "Token minting unavailable." });
   }
   return { ok: true, ...token, session };
+});
+
+app.post("/auth/2fa/verify", async (request, reply) => {
+  if (!getAccessAuthConfiguration().databaseAuthEnabled) return databaseAuthDisabled(reply);
+  const parsed = TwoFactorVerifySchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  const session = await verifyTwoFactorLogin(parsed.data);
+  if (!session) return reply.code(401).send({ ok: false, error: "Invalid or expired 2FA challenge." });
+  const publicHost = requestPublicHost(request);
+  if (!canUseSessionOnPublicHost(publicHost, session)) {
+    await revokeDatabaseSession(session.authSessionId);
+    return reply.code(403).send({ ok: false, error: "This account is not available on this public host.", host: publicHost || "local" });
+  }
+  const token = mintDatabaseSessionToken(session.id);
+  if (!token) return reply.code(500).send({ ok: false, error: "Token minting unavailable." });
+  return { ok: true, ...token, session };
+});
+
+app.post("/auth/signup", async (request, reply) => {
+  if (!getAccessAuthConfiguration().databaseAuthEnabled) return databaseAuthDisabled(reply);
+  const parsed = SignupSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  const result = await createSelfServeAccount(parsed.data);
+  if (!result.ok) return reply.code(409).send({ ok: false, error: result.error });
+  return { ok: true, userId: result.userId, orgId: result.orgId, next: "Sign in at /auth/login." };
+});
+
+app.post("/auth/forgot-username", async (request, reply) => {
+  if (!getAccessAuthConfiguration().databaseAuthEnabled) return databaseAuthDisabled(reply);
+  const parsed = ForgotUsernameSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  return await requestUsernameReminder(parsed.data.email);
+});
+
+app.post("/auth/forgot-password", async (request, reply) => {
+  if (!getAccessAuthConfiguration().databaseAuthEnabled) return databaseAuthDisabled(reply);
+  const parsed = ForgotPasswordSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  return await requestPasswordReset(parsed.data.identifier);
+});
+
+app.post("/auth/reset-password", async (request, reply) => {
+  if (!getAccessAuthConfiguration().databaseAuthEnabled) return databaseAuthDisabled(reply);
+  const parsed = ResetPasswordSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  const result = await resetPasswordWithToken(parsed.data);
+  if (!result.ok) return reply.code(400).send({ ok: false, error: result.error });
+  return { ok: true, next: "Sign in with your new password." };
 });
 
 app.post("/auth/logout", async (request, reply) => {
@@ -1617,8 +1341,10 @@ app.get("/auth/me", async (request, reply) => {
     user: {
       id: dbSession.userId,
       email: dbSession.email,
+      username: dbSession.username,
       name: dbSession.label,
       isSuperAdmin: dbSession.isSuperAdmin,
+      twoFactorEnabled: dbSession.twoFactorEnabled,
     },
     activeOrg: dbSession.orgId
       ? {
@@ -1639,6 +1365,42 @@ app.get("/auth/me", async (request, reply) => {
         }
       : null,
   };
+});
+
+app.post("/auth/2fa/setup", async (request, reply) => {
+  const dbSession = requireDatabaseSession(request, reply);
+  if (!dbSession) return reply;
+  return await startTwoFactorSetup(dbSession);
+});
+
+app.post("/auth/2fa/confirm", async (request, reply) => {
+  const dbSession = requireDatabaseSession(request, reply);
+  if (!dbSession) return reply;
+  const parsed = TwoFactorCodeSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  const result = await confirmTwoFactorSetup(dbSession, parsed.data.code);
+  if (!result.ok) return reply.code(400).send({ ok: false, error: result.error });
+  return { ok: true, backupCodes: result.backupCodes };
+});
+
+app.post("/auth/2fa/recovery-codes", async (request, reply) => {
+  const dbSession = requireDatabaseSession(request, reply);
+  if (!dbSession) return reply;
+  const parsed = TwoFactorCodeSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  const result = await regenerateTwoFactorBackupCodes(dbSession, parsed.data.code);
+  if (!result.ok) return reply.code(400).send({ ok: false, error: result.error });
+  return { ok: true, backupCodes: result.backupCodes };
+});
+
+app.post("/auth/2fa/disable", async (request, reply) => {
+  const dbSession = requireDatabaseSession(request, reply);
+  if (!dbSession) return reply;
+  const parsed = TwoFactorCodeSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  const result = await disableTwoFactor(dbSession, parsed.data.code);
+  if (!result.ok) return reply.code(400).send({ ok: false, error: result.error });
+  return { ok: true };
 });
 
 const SwitchOrgSchema = z.object({ orgId: z.string().min(1).max(120) });
@@ -1716,6 +1478,429 @@ function requireSuperAdmin(request: FastifyRequest, reply: FastifyReply) {
   return dbSession;
 }
 
+/* Local Asset Library: read-only Motionarray/desktop asset indexing.
+   This is separate from permanent multi-tenant Asset Cloud. It keeps large
+   local packages on disk, uses the existing Motionarray manager manifest when
+   present, and exposes metadata plus explicit authenticated file fetches. */
+type LocalAssetKind = "image" | "video" | "audio" | "project" | "archive" | "document" | "folder" | "other";
+type LocalAssetRecord = {
+  id: string;
+  name: string;
+  title: string;
+  kind: LocalAssetKind;
+  category: string;
+  app: string;
+  relativePath: string;
+  localPath: string;
+  servePath?: string;
+  originalZip?: string;
+  sizeBytes: number;
+  sizeLabel: string;
+  mime: string;
+  status: string;
+  safety: string;
+  tags: string[];
+  previewable: boolean;
+  updatedAt?: string;
+};
+type LocalAssetIndex = {
+  ok: boolean;
+  root: string;
+  rootLabel: string;
+  generatedAt: string;
+  count: number;
+  truncated: boolean;
+  source: "manifest" | "scan" | "cache";
+  assets: LocalAssetRecord[];
+};
+
+/* Probed in order when PHANTOMFORCE_LOCAL_ASSET_ROOT is unset — the owner's
+   folder is "G:\Motionarray download here"; the shorter name is kept as a
+   fallback for boxes that predate the rename. */
+const LOCAL_ASSET_DEFAULT_ROOTS = ["G:\\Motionarray download here", "G:\\Motionarray download"];
+const LOCAL_ASSET_MANAGER_DIR = "_PhantomForce_Asset_Manager";
+const LOCAL_ASSET_MANIFEST = join(LOCAL_ASSET_MANAGER_DIR, "PhantomForce_Ready", "phantomforce_motionarray_manifest.json");
+const LOCAL_ASSET_CACHE = join(LOCAL_ASSET_MANAGER_DIR, "PhantomForce_Ready", "phantomforce-local-asset-cache.json");
+const LOCAL_ASSET_SCAN_LIMIT = 2500;
+const LOCAL_ASSET_CACHE_TTL_MS = 10 * 60 * 1000;
+const LOCAL_ASSET_MIME: Record<string, { kind: LocalAssetKind; mime: string; previewable: boolean }> = {
+  ".jpg": { kind: "image", mime: "image/jpeg", previewable: true },
+  ".jpeg": { kind: "image", mime: "image/jpeg", previewable: true },
+  ".png": { kind: "image", mime: "image/png", previewable: true },
+  ".webp": { kind: "image", mime: "image/webp", previewable: true },
+  ".gif": { kind: "image", mime: "image/gif", previewable: true },
+  ".svg": { kind: "image", mime: "image/svg+xml", previewable: true },
+  ".mp4": { kind: "video", mime: "video/mp4", previewable: true },
+  ".mov": { kind: "video", mime: "video/quicktime", previewable: false },
+  ".webm": { kind: "video", mime: "video/webm", previewable: true },
+  ".mp3": { kind: "audio", mime: "audio/mpeg", previewable: true },
+  ".wav": { kind: "audio", mime: "audio/wav", previewable: true },
+  ".m4a": { kind: "audio", mime: "audio/mp4", previewable: true },
+  ".zip": { kind: "archive", mime: "application/zip", previewable: false },
+  ".psd": { kind: "project", mime: "application/octet-stream", previewable: false },
+  ".psb": { kind: "project", mime: "application/octet-stream", previewable: false },
+  ".drfx": { kind: "project", mime: "application/octet-stream", previewable: false },
+  ".dra": { kind: "project", mime: "application/octet-stream", previewable: false },
+  ".csv": { kind: "document", mime: "text/csv", previewable: false },
+  ".json": { kind: "document", mime: "application/json", previewable: false },
+  ".md": { kind: "document", mime: "text/markdown", previewable: false },
+};
+
+let localAssetIndexCache: { key: string; at: number; index: LocalAssetIndex } | null = null;
+
+function localAssetRoot() {
+  const configured = String(process.env.PHANTOMFORCE_LOCAL_ASSET_ROOT || "").trim();
+  if (configured) return resolve(configured);
+  const found = LOCAL_ASSET_DEFAULT_ROOTS.find((candidate) => existsSync(candidate));
+  return resolve(found || LOCAL_ASSET_DEFAULT_ROOTS[0]);
+}
+
+/* The label shown in the product. Never the folder basename: that leaks
+   third-party service names and the owner's disk layout into customer UI. */
+function localAssetLabel() {
+  return String(process.env.PHANTOMFORCE_LOCAL_ASSET_LABEL || "").trim() || "Local library";
+}
+
+function isPathInside(parent: string, child: string) {
+  const rel = relative(parent, child);
+  return !!rel && rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel);
+}
+
+function localAssetId(seed: string) {
+  return createHash("sha1").update(seed.toLowerCase()).digest("hex").slice(0, 24);
+}
+
+function sizeLabel(bytes: number) {
+  if (!Number.isFinite(bytes) || bytes <= 0) return "unknown";
+  if (bytes >= 1073741824) return `${(bytes / 1073741824).toFixed(bytes >= 10737418240 ? 0 : 1)} GB`;
+  if (bytes >= 1048576) return `${(bytes / 1048576).toFixed(bytes >= 10485760 ? 0 : 1)} MB`;
+  if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${bytes} B`;
+}
+
+async function safeStat(pathname: string) {
+  try {
+    return await stat(pathname);
+  } catch {
+    return null;
+  }
+}
+
+function classifyLocalPath(pathname: string, fallbackKind: LocalAssetKind = "other") {
+  return LOCAL_ASSET_MIME[extname(pathname).toLowerCase()] || { kind: fallbackKind, mime: "application/octet-stream", previewable: false };
+}
+
+function isLocalAssetEditorToolPackage(asset: LocalAssetRecord) {
+  const haystack = [
+    asset.id,
+    asset.title,
+    asset.name,
+    asset.category,
+    asset.app,
+    asset.relativePath,
+    asset.safety,
+    ...(asset.tags || []),
+  ].join(" ").toLowerCase();
+  if (/\b(installer|setup|application installer|windows installer|mac installer|program installer|installers_do_not_run)\b/.test(haystack)) return true;
+  if (/\b(davinci resolve|blackmagic design|adobe premiere|premiere pro|after effects|final cut pro|avid media composer)\b/.test(haystack) && /\b(installer|setup|studio|application|windows)\b/.test(haystack)) return true;
+  return false;
+}
+
+function visibleLocalAssets(index: LocalAssetIndex) {
+  return index.assets.filter((asset) => !isLocalAssetEditorToolPackage(asset));
+}
+
+async function findPreviewFile(root: string, dir: string, depth = 0): Promise<string | null> {
+  if (depth > 3) return null;
+  let entries: any[];
+  try {
+    entries = await readdir(dir, { withFileTypes: true });
+  } catch {
+    return null;
+  }
+  const sorted = entries.sort((a, b) => {
+    const aw = a.isFile() && classifyLocalPath(a.name).previewable ? 0 : a.isDirectory() ? 1 : 2;
+    const bw = b.isFile() && classifyLocalPath(b.name).previewable ? 0 : b.isDirectory() ? 1 : 2;
+    return aw - bw || a.name.localeCompare(b.name);
+  });
+  for (const entry of sorted) {
+    if (entry.name === "__MACOSX") continue;
+    const full = resolve(dir, entry.name);
+    if (!isPathInside(root, full)) continue;
+    if (entry.isFile() && classifyLocalPath(full).previewable) return full;
+    if (entry.isDirectory()) {
+      const nested = await findPreviewFile(root, full, depth + 1);
+      if (nested) return nested;
+    }
+  }
+  return null;
+}
+
+async function recordFromManifestAsset(root: string, raw: any): Promise<LocalAssetRecord | null> {
+  const rawPath = String(raw?.local_path || raw?.original_zip || "").trim();
+  if (!rawPath) return null;
+  const resolved = resolve(rawPath);
+  if (!isPathInside(root, resolved)) return null;
+  const st = await safeStat(resolved);
+  const isDir = !!st?.isDirectory();
+  const previewPath = isDir ? await findPreviewFile(root, resolved) : null;
+  const cls = previewPath
+    ? classifyLocalPath(previewPath)
+    : isDir
+      ? { kind: "folder" as LocalAssetKind, mime: "application/x-directory", previewable: false }
+      : classifyLocalPath(resolved);
+  const sizeBytes = Number.isFinite(Number(raw?.size_bytes))
+    ? Number(raw.size_bytes)
+    : Number.isFinite(Number(raw?.size_gb))
+      ? Math.round(Number(raw.size_gb) * 1073741824)
+      : (st?.isFile() ? st.size : 0);
+  const rel = relative(root, resolved).replaceAll("\\", "/");
+  const title = String(raw?.name || basename(resolved) || "Asset").replaceAll("_", " ");
+  return {
+    id: String(raw?.id || localAssetId(rel)),
+    name: String(raw?.name || basename(resolved) || title),
+    title,
+    kind: cls.kind,
+    category: String(raw?.category || (isDir ? "Folder" : cls.kind)),
+    app: String(raw?.app || ""),
+    relativePath: rel,
+    localPath: resolved,
+    servePath: previewPath || undefined,
+    originalZip: raw?.original_zip ? String(raw.original_zip) : undefined,
+    sizeBytes,
+    sizeLabel: sizeLabel(sizeBytes),
+    mime: cls.mime,
+    status: String(raw?.status || "ready"),
+    safety: String(raw?.safety || "Read-only local asset"),
+    tags: Array.isArray(raw?.tags) ? raw.tags.map(String) : String(raw?.tags || "").split(",").map((tag) => tag.trim()).filter(Boolean),
+    previewable: cls.previewable,
+    updatedAt: st?.mtime?.toISOString?.(),
+  };
+}
+
+async function readLocalAssetManifest(root: string): Promise<LocalAssetIndex | null> {
+  const manifestPath = resolve(root, LOCAL_ASSET_MANIFEST);
+  if (!isPathInside(root, manifestPath)) return null;
+  try {
+    const parsed = JSON.parse(await readFile(manifestPath, "utf8"));
+    const rawAssets = Array.isArray(parsed?.assets) ? parsed.assets : [];
+    const assets = (await Promise.all(rawAssets.map((asset: any) => recordFromManifestAsset(root, asset))))
+      .filter((asset): asset is LocalAssetRecord => !!asset);
+    return {
+      ok: true,
+      root,
+      rootLabel: localAssetLabel(),
+      generatedAt: String(parsed?.generated_at || new Date().toISOString()),
+      count: assets.length,
+      truncated: false,
+      source: "manifest",
+      assets,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function scanLocalAssets(root: string): Promise<LocalAssetIndex> {
+  const assets: LocalAssetRecord[] = [];
+  async function walk(dir: string, depth = 0) {
+    if (assets.length >= LOCAL_ASSET_SCAN_LIMIT || depth > 8) return;
+    let entries: any[];
+    try {
+      entries = await readdir(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (assets.length >= LOCAL_ASSET_SCAN_LIMIT) return;
+      if (["$RECYCLE.BIN", "System Volume Information", "__MACOSX", LOCAL_ASSET_MANAGER_DIR].includes(entry.name)) continue;
+      const full = resolve(dir, entry.name);
+      if (!isPathInside(root, full)) continue;
+      if (entry.isDirectory()) {
+        await walk(full, depth + 1);
+        continue;
+      }
+      if (!entry.isFile()) continue;
+      const st = await safeStat(full);
+      const cls = classifyLocalPath(full);
+      const rel = relative(root, full).replaceAll("\\", "/");
+      assets.push({
+        id: localAssetId(rel),
+        name: basename(full),
+        title: basename(full, extname(full)).replaceAll("_", " "),
+        kind: cls.kind,
+        category: cls.kind,
+        app: "",
+        relativePath: rel,
+        localPath: full,
+        servePath: cls.previewable ? full : undefined,
+        sizeBytes: st?.size || 0,
+        sizeLabel: sizeLabel(st?.size || 0),
+        mime: cls.mime,
+        status: "ready",
+        safety: "Read-only local asset",
+        tags: ["local", "library", cls.kind],
+        previewable: cls.previewable,
+        updatedAt: st?.mtime?.toISOString?.(),
+      });
+    }
+  }
+  await walk(root);
+  return {
+    ok: true,
+    root,
+    rootLabel: localAssetLabel(),
+    generatedAt: new Date().toISOString(),
+    count: assets.length,
+    truncated: assets.length >= LOCAL_ASSET_SCAN_LIMIT,
+    source: "scan",
+    assets,
+  };
+}
+
+/* Cold starts must be instant: the previous version WROTE a disk cache but
+   never read it, so every server restart forced a full rescan on first open.
+   Now the disk cache is served immediately (localPath rebuilt from
+   relativePath) while a fresh scan replaces it in the background. */
+let localAssetRefreshInFlight: Promise<LocalAssetIndex> | null = null;
+
+async function readLocalAssetDiskCache(root: string): Promise<LocalAssetIndex | null> {
+  try {
+    const cachePath = resolve(root, LOCAL_ASSET_CACHE);
+    if (!isPathInside(root, cachePath)) return null;
+    const parsed = JSON.parse(await readFile(cachePath, "utf8"));
+    if (!Array.isArray(parsed?.assets)) return null;
+    const assets = (parsed.assets as Array<Record<string, unknown>>).flatMap((asset) => {
+      const relativePath = String(asset.relativePath ?? "");
+      if (!relativePath) return [];
+      const localPath = resolve(root, relativePath);
+      if (!isPathInside(root, localPath)) return [];
+      return [{ ...(asset as unknown as LocalAssetRecord), localPath }];
+    });
+    return {
+      ok: true, root, rootLabel: localAssetLabel(),
+      generatedAt: String(parsed.generatedAt || new Date().toISOString()),
+      count: assets.length, truncated: Boolean(parsed.truncated), source: "cache", assets,
+    };
+  } catch { return null; }
+}
+
+async function rebuildLocalAssetIndex(root: string): Promise<LocalAssetIndex> {
+  const index = await readLocalAssetManifest(root) || await scanLocalAssets(root);
+  localAssetIndexCache = { key: root, at: Date.now(), index };
+  try {
+    const cachePath = resolve(root, LOCAL_ASSET_CACHE);
+    if (isPathInside(root, cachePath)) {
+      await mkdir(dirname(cachePath), { recursive: true });
+      await writeFile(cachePath, JSON.stringify({ ...index, assets: index.assets.map(({ localPath, ...asset }) => asset) }, null, 2), "utf8");
+    }
+  } catch { /* cache writes are best-effort */ }
+  return index;
+}
+
+async function loadLocalAssetIndex(refresh = false): Promise<LocalAssetIndex> {
+  const root = localAssetRoot();
+  const rootStatus = await safeStat(root);
+  if (!rootStatus?.isDirectory()) {
+    return { ok: false, root, rootLabel: localAssetLabel(), generatedAt: new Date().toISOString(), count: 0, truncated: false, source: "scan", assets: [] };
+  }
+  const key = root;
+  if (!refresh && localAssetIndexCache?.key === key && Date.now() - localAssetIndexCache.at < LOCAL_ASSET_CACHE_TTL_MS) return localAssetIndexCache.index;
+  if (refresh) {
+    localAssetRefreshInFlight ??= rebuildLocalAssetIndex(root).finally(() => { localAssetRefreshInFlight = null; });
+    return localAssetRefreshInFlight;
+  }
+  // Cold start: serve the persisted index instantly and rescan behind it.
+  const disk = await readLocalAssetDiskCache(root);
+  if (disk && disk.assets.length) {
+    localAssetIndexCache = { key, at: Date.now() - LOCAL_ASSET_CACHE_TTL_MS + 60_000, index: disk };
+    localAssetRefreshInFlight ??= rebuildLocalAssetIndex(root).finally(() => { localAssetRefreshInFlight = null; });
+    return disk;
+  }
+  localAssetRefreshInFlight ??= rebuildLocalAssetIndex(root).finally(() => { localAssetRefreshInFlight = null; });
+  return localAssetRefreshInFlight;
+}
+
+function publicLocalAsset(asset: LocalAssetRecord) {
+  return {
+    id: asset.id,
+    name: asset.name,
+    title: asset.title,
+    kind: asset.kind,
+    category: asset.category,
+    app: asset.app,
+    relative_path: asset.relativePath,
+    original_zip: asset.originalZip ? basename(asset.originalZip) : undefined,
+    size_bytes: asset.sizeBytes,
+    size_label: asset.sizeLabel,
+    mime: asset.mime,
+    status: asset.status,
+    safety: asset.safety,
+    tags: asset.tags,
+    previewable: asset.previewable,
+    has_preview: !!asset.servePath || asset.previewable,
+    updated_at: asset.updatedAt,
+  };
+}
+
+app.get("/phantom-ai/local-assets/status", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const index = await loadLocalAssetIndex(false);
+  const visibleAssets = visibleLocalAssets(index);
+  const counts = visibleAssets.reduce<Record<string, number>>((memo, asset) => {
+    memo[asset.kind] = (memo[asset.kind] || 0) + 1;
+    return memo;
+  }, {});
+  return { ok: index.ok, root_label: index.rootLabel, source: index.source, count: visibleAssets.length, counts, generated_at: index.generatedAt, truncated: index.truncated };
+});
+
+app.get("/phantom-ai/local-assets", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const q = request.query as Record<string, string | undefined>;
+  const index = await loadLocalAssetIndex(q.refresh === "1" || q.refresh === "true");
+  if (!index.ok && (session.canManageAccess || session.isSuperAdmin)) {
+    (index as { detail?: string }).detail = `Local folder not found at ${index.root}. Set PHANTOMFORCE_LOCAL_ASSET_ROOT in server/.env to your asset folder and restart Hermes.`;
+  }
+  const search = String(q.search || "").trim().toLowerCase();
+  const kind = String(q.kind || "all").trim().toLowerCase();
+  const limit = Math.max(1, Math.min(120, Number(q.limit || 36) || 36));
+  const visibleAssets = visibleLocalAssets(index);
+  const assets = visibleAssets
+    .filter((asset) => kind === "all" || asset.kind === kind || asset.category.toLowerCase().includes(kind))
+    .filter((asset) => !search || [asset.title, asset.name, asset.category, asset.app, asset.relativePath, asset.tags.join(" ")].join(" ").toLowerCase().includes(search))
+    .slice(0, limit);
+  return { ok: index.ok, detail: (index as { detail?: string }).detail, root_label: index.rootLabel, source: index.source, count: visibleAssets.length, returned: assets.length, truncated: index.truncated, assets: assets.map(publicLocalAsset) };
+});
+
+app.get("/phantom-ai/local-assets/:assetId/file", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const { assetId } = request.params as { assetId: string };
+  const index = await loadLocalAssetIndex(false);
+  const asset = index.assets.find((item) => item.id === assetId);
+  if (!asset) return reply.code(404).send({ ok: false, error: "local_asset_not_found" });
+  if (!asset.previewable && !asset.servePath) return reply.code(415).send({ ok: false, error: "local_asset_not_previewable" });
+  const root = localAssetRoot();
+  const resolved = resolve(asset.servePath || asset.localPath);
+  if (!isPathInside(root, resolved)) return reply.code(403).send({ ok: false, error: "local_asset_path_blocked" });
+  const st = await safeStat(resolved);
+  if (!st?.isFile()) return reply.code(404).send({ ok: false, error: "local_asset_file_missing" });
+  return reply
+    .header("content-type", asset.mime || "application/octet-stream")
+    .header("x-content-type-options", "nosniff")
+    .header("cache-control", "private, max-age=3600")
+    .send(createReadStream(resolved));
+});
+
+app.post("/phantom-ai/local-assets/refresh", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const index = await loadLocalAssetIndex(true);
+  return { ok: index.ok, root_label: index.rootLabel, source: index.source, count: visibleLocalAssets(index).length, generated_at: index.generatedAt, truncated: index.truncated };
+});
+
 app.get("/orgs", async (request, reply) => {
   const dbSession = requireDatabaseSession(request, reply);
   if (!dbSession) return reply;
@@ -1731,6 +1916,364 @@ app.post("/orgs", async (request, reply) => {
   if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
   const org = await createOrganization({ name: parsed.data.name, actor: dbSession });
   return { ok: true, org: { id: org.id, name: org.name } };
+});
+
+const CrmSettingsSchema = z.object({
+  dailyPullTarget: z.number().int().min(1).max(2000).default(5),
+  sourceMode: z.string().trim().min(1).max(60).default("manual"),
+  notes: z.string().trim().max(1000).optional().default(""),
+  brain: z.record(z.unknown()).optional(),
+});
+
+const CrmContactSchema = z.object({
+  name: z.string().trim().min(1).max(160),
+  organization: z.string().trim().max(180).optional().default(""),
+  email: z.string().trim().email().max(200).or(z.literal("")).optional().default(""),
+  phone: z.string().trim().max(80).optional().default(""),
+  status: z.enum(["new", "follow-up", "proposal", "won", "lost"]).optional().default("new"),
+  type: z.string().trim().max(60).optional().default("prospect"),
+  value: z.number().int().min(0).max(100000000).optional().default(0),
+  nextStep: z.string().trim().max(600).optional().default(""),
+  notes: z.string().trim().max(4000).optional().default(""),
+  source: z.string().trim().max(160).optional().default("Manual CRM"),
+  website: z.string().trim().max(400).optional().default(""),
+  avatarUrl: z.string().trim().max(800).optional().default(""),
+  socials: z.record(z.string().trim().max(300)).optional().default({}),
+  tags: z.array(z.string().trim().min(1).max(60)).max(30).optional().default([]),
+  fitScore: z.number().int().min(0).max(100).nullable().optional(),
+  qualification: z.array(z.string().trim().min(1).max(240)).max(20).optional().default([]),
+  outreach: z.string().trim().max(1200).optional().default(""),
+  crmStage: z.string().trim().max(80).optional().default("Prospect"),
+  dueAt: z.string().datetime().nullable().optional(),
+  lastTouchAt: z.string().datetime().nullable().optional(),
+});
+
+const CrmContactPatchSchema = CrmContactSchema.partial();
+const CrmPullSchema = z.object({
+  count: z.number().int().min(1).max(2000),
+  prompt: z.string().trim().max(1000).optional().default(""),
+  audience: z.string().trim().max(160).optional().default("local businesses"),
+  source: z.string().trim().max(120).optional().default("Phantom CRM Pull"),
+});
+
+const CRM_PULL_ARCHETYPES = [
+  { match: /\b(gym|fitness|trainer|coach|boxing|martial)\b/i, audience: "independent gym", tags: ["fitness", "local"], value: 950, social: "instagram" },
+  { match: /\b(school|academy|college|booster|team|athletic)\b/i, audience: "school program", tags: ["schools", "community"], value: 1250, social: "facebook" },
+  { match: /\b(creator|influencer|podcast|streamer|youtube|tiktok|instagram)\b/i, audience: "creator", tags: ["creator", "content"], value: 1100, social: "tiktok" },
+  { match: /\b(restaurant|bar|venue|food|coffee|cafe)\b/i, audience: "restaurant", tags: ["hospitality", "local"], value: 900, social: "instagram" },
+  { match: /\b(contractor|roofer|plumber|hvac|home service|landscap)\b/i, audience: "home service company", tags: ["home-services", "local"], value: 1500, social: "facebook" },
+  { match: /\b(law|clinic|dental|medical|professional)\b/i, audience: "professional service office", tags: ["professional-services"], value: 1750, social: "linkedin" },
+] as const;
+
+function crmDb(reply: FastifyReply) {
+  if (prisma) return prisma;
+  reply.code(503).send({ ok: false, error: "crm_database_unavailable", reason: "DATABASE_URL is required for org-scoped CRM." });
+  return undefined;
+}
+
+function crmContactView(contact: Awaited<ReturnType<NonNullable<typeof prisma>["contact"]["findMany"]>>[number]) {
+  return {
+    id: contact.id,
+    ws: contact.orgId,
+    name: contact.name,
+    company: contact.organization || "",
+    organization: contact.organization || "",
+    email: contact.email || "",
+    phone: contact.phone || "",
+    status: contact.status,
+    type: contact.type,
+    value: contact.value,
+    next: contact.nextStep || "",
+    nextStep: contact.nextStep || "",
+    notes: contact.notes || "",
+    source: contact.source || "CRM",
+    website: contact.website || "",
+    avatarUrl: contact.avatarUrl || "",
+    socials: contact.socials || {},
+    tags: contact.tags || [],
+    fitScore: contact.fitScore,
+    qualification: contact.qualification || [],
+    outreach: contact.outreach || "",
+    crmStage: contact.crmStage || "Prospect",
+    due: contact.dueAt?.toISOString() || "",
+    lastTouch: contact.lastTouchAt?.toISOString() || "",
+    createdAt: contact.createdAt.toISOString(),
+    updatedAt: contact.updatedAt.toISOString(),
+  };
+}
+
+function crmBrainPackageView(args: {
+  orgId: string;
+  settings: Awaited<ReturnType<NonNullable<typeof prisma>["crmSettings"]["upsert"]>>;
+  contacts: Awaited<ReturnType<NonNullable<typeof prisma>["contact"]["findMany"]>>;
+}) {
+  const contacts = args.contacts.map(crmContactView);
+  const savedTags = [...new Set(contacts.flatMap((contact) => contact.tags || []))].slice(0, 80);
+  return {
+    ok: true,
+    package: {
+      kind: "phantomforce_org_brain_package",
+      version: 1,
+      orgId: args.orgId,
+      storage: {
+        hiddenInsideApp: true,
+        userFacingName: "PhantomForce",
+        suggestedPath: ".phantomforce/sys/brain/org-brain.json",
+      },
+      crm: {
+        settings: {
+          dailyPullTarget: args.settings.dailyPullTarget,
+          sourceMode: args.settings.sourceMode,
+          notes: args.settings.notes || "",
+          brain: args.settings.brain || { kind: "phantomforce_org_crm_brain", version: 1 },
+        },
+        contactCount: contacts.length,
+        contacts,
+      },
+      obsidianBrain: {
+        type: "workspace_memory_vault",
+        private: true,
+        collections: ["crm_contacts", "client_notes", "follow_up_context", "social_profiles"],
+        index: {
+          tags: savedTags,
+          contacts: contacts.map((contact) => ({
+            id: contact.id,
+            title: contact.company || contact.name,
+            status: contact.status,
+            socials: contact.socials,
+            next: contact.next,
+          })),
+        },
+      },
+      hermesBrain: {
+        type: "operator_execution_memory",
+        private: true,
+        rules: [
+          "Scope every memory lookup to orgId before answering or acting.",
+          "Never send outreach externally without explicit approval.",
+          "Use CRM contacts, socials, notes, and dailyPullTarget as working context.",
+        ],
+        currentIntent: args.settings.sourceMode === "daily" ? "daily_crm_pull" : "manual_crm",
+        dailyPullTarget: args.settings.dailyPullTarget,
+      },
+      redaction: {
+        includesSecrets: false,
+        includesSessionTokens: false,
+        includesPasswords: false,
+      },
+      exportedAt: new Date().toISOString(),
+    },
+  };
+}
+
+function crmContactWrite(data: z.infer<typeof CrmContactPatchSchema>) {
+  const write: Record<string, unknown> = {};
+  for (const key of ["name", "phone", "status", "type", "value", "nextStep", "notes", "source", "website", "avatarUrl", "socials", "tags", "fitScore", "qualification", "outreach", "crmStage"] as const) {
+    if (data[key] !== undefined) write[key] = data[key];
+  }
+  if (data.organization !== undefined) write.organization = data.organization || null;
+  if (data.email !== undefined) write.email = data.email || null;
+  if (data.dueAt !== undefined) write.dueAt = data.dueAt ? new Date(data.dueAt) : null;
+  if (data.lastTouchAt !== undefined) write.lastTouchAt = data.lastTouchAt ? new Date(data.lastTouchAt) : null;
+  return write;
+}
+
+function slugText(value: string) {
+  return String(value || "lead").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "lead";
+}
+
+function crmPullPlan(input: z.infer<typeof CrmPullSchema>, existingCount = 0) {
+  const prompt = input.prompt || input.audience || "";
+  const archetype = CRM_PULL_ARCHETYPES.find((item) => item.match.test(prompt)) || {
+    audience: input.audience || "local business",
+    tags: ["prospect", "needs-enrichment"],
+    value: 850,
+    social: "instagram",
+  };
+  const audience = input.audience && input.audience !== "local businesses" ? input.audience : archetype.audience;
+  const batchId = `pull-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  const batchTag = `batch:${batchId}`;
+  const base = slugText(audience);
+  const rows = Array.from({ length: input.count }, (_, index) => {
+    const n = existingCount + index + 1;
+    const handle = `${base}-${n}`;
+    return {
+      name: `${audience.replace(/\b\w/g, (c) => c.toUpperCase())} Candidate ${n}`,
+      organization: `${audience.replace(/\b\w/g, (c) => c.toUpperCase())} Prospect ${n}`,
+      status: "new",
+      type: "prospect",
+      value: archetype.value,
+      nextStep: "Verify the real business/contact, enrich public profile details, then draft an approval-safe first touch.",
+      notes: `Generated from CRM pull request: "${prompt || audience}". This is an org-scoped discovery candidate, not a sent outreach or claimed relationship.`,
+      source: input.source || "Phantom CRM Pull",
+      website: `${handle}.example.local`,
+      socials: { [archetype.social]: handle },
+      tags: [...new Set([...archetype.tags, "crm-pull", "needs-enrichment", batchTag])],
+      fitScore: Math.max(60, Math.min(94, 72 + (index % 18))),
+      qualification: ["Confirm real public profile", "Find decision-maker/contact path", "Match offer to pain before outreach"],
+      outreach: `Draft only: I noticed a practical way PhantomForce could help ${audience} save time or win more work. Want me to send a concise idea?`,
+      crmStage: "Discovery",
+      dueAt: new Date(Date.now() + (index + 1) * 86400000).toISOString(),
+    };
+  });
+  return { batchId, batchTag, rows };
+}
+
+app.get("/orgs/:orgId/crm", async (request, reply) => {
+  const { orgId } = request.params as { orgId: string };
+  const dbSession = requireOrgMember(request, reply, orgId);
+  if (!dbSession) return reply;
+  const db = crmDb(reply);
+  if (!db) return reply;
+  const [settings, contacts] = await Promise.all([
+    db.crmSettings.upsert({
+      where: { orgId },
+      update: {},
+      create: { orgId, dailyPullTarget: 5, sourceMode: "manual", brain: { kind: "phantomforce_org_crm_brain", version: 1 } },
+    }),
+    db.contact.findMany({ where: { orgId }, orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }] }),
+  ]);
+  return {
+    ok: true,
+    settings: { dailyPullTarget: settings.dailyPullTarget, sourceMode: settings.sourceMode, notes: settings.notes || "", brain: settings.brain || { kind: "phantomforce_org_crm_brain", version: 1 } },
+    contacts: contacts.map(crmContactView),
+  };
+});
+
+app.get("/orgs/:orgId/brain-package", async (request, reply) => {
+  const { orgId } = request.params as { orgId: string };
+  const dbSession = requireOrgMember(request, reply, orgId);
+  if (!dbSession) return reply;
+  const db = crmDb(reply);
+  if (!db) return reply;
+  const [settings, contacts] = await Promise.all([
+    db.crmSettings.upsert({
+      where: { orgId },
+      update: {},
+      create: { orgId, dailyPullTarget: 5, sourceMode: "manual", brain: { kind: "phantomforce_org_crm_brain", version: 1 } },
+    }),
+    db.contact.findMany({ where: { orgId }, orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }] }),
+  ]);
+  return crmBrainPackageView({ orgId, settings, contacts });
+});
+
+app.post("/orgs/:orgId/crm/settings", async (request, reply) => {
+  const { orgId } = request.params as { orgId: string };
+  const dbSession = requireOrgMember(request, reply, orgId);
+  if (!dbSession) return reply;
+  const db = crmDb(reply);
+  if (!db) return reply;
+  const parsed = CrmSettingsSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  const data = {
+    ...parsed.data,
+    brain: parsed.data.brain as Prisma.InputJsonValue | undefined,
+  };
+  const settings = await db.crmSettings.upsert({
+    where: { orgId },
+    update: data,
+    create: { orgId, ...data },
+  });
+  return { ok: true, settings: { dailyPullTarget: settings.dailyPullTarget, sourceMode: settings.sourceMode, notes: settings.notes || "", brain: settings.brain || { kind: "phantomforce_org_crm_brain", version: 1 } } };
+});
+
+app.post("/orgs/:orgId/crm/contacts", async (request, reply) => {
+  const { orgId } = request.params as { orgId: string };
+  const dbSession = requireOrgMember(request, reply, orgId);
+  if (!dbSession) return reply;
+  const db = crmDb(reply);
+  if (!db) return reply;
+  const parsed = CrmContactSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  const contact = await db.contact.create({ data: { orgId, ...crmContactWrite(parsed.data), name: parsed.data.name } });
+  return { ok: true, contact: crmContactView(contact) };
+});
+
+app.post("/orgs/:orgId/crm/pull", async (request, reply) => {
+  const { orgId } = request.params as { orgId: string };
+  const dbSession = requireOrgMember(request, reply, orgId);
+  if (!dbSession) return reply;
+  const db = crmDb(reply);
+  if (!db) return reply;
+  const parsed = CrmPullSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  const existingCount = await db.contact.count({ where: { orgId, source: parsed.data.source } }).catch(() => 0);
+  const plan = crmPullPlan(parsed.data, existingCount);
+  await db.contact.createMany({
+    data: plan.rows.map((row) => ({
+      orgId,
+      ...row,
+      dueAt: new Date(row.dueAt),
+    })),
+  });
+  const contacts = await db.contact.findMany({
+    where: { orgId, tags: { has: plan.batchTag } },
+    orderBy: { createdAt: "asc" },
+  });
+  const settings = await db.crmSettings.upsert({
+    where: { orgId },
+    update: {
+      dailyPullTarget: parsed.data.count,
+      sourceMode: "daily",
+      notes: parsed.data.prompt || parsed.data.audience,
+      brain: {
+        kind: "phantomforce_org_crm_brain",
+        version: 1,
+        lastNaturalCommand: parsed.data.prompt || `pull ${parsed.data.count} ${parsed.data.audience}`,
+        lastPullBatchId: plan.batchId,
+        dailyPullTarget: parsed.data.count,
+        updatedAt: new Date().toISOString(),
+      } as Prisma.InputJsonValue,
+    },
+    create: {
+      orgId,
+      dailyPullTarget: parsed.data.count,
+      sourceMode: "daily",
+      notes: parsed.data.prompt || parsed.data.audience,
+      brain: {
+        kind: "phantomforce_org_crm_brain",
+        version: 1,
+        lastNaturalCommand: parsed.data.prompt || `pull ${parsed.data.count} ${parsed.data.audience}`,
+        lastPullBatchId: plan.batchId,
+        dailyPullTarget: parsed.data.count,
+        updatedAt: new Date().toISOString(),
+      } as Prisma.InputJsonValue,
+    },
+  });
+  return {
+    ok: true,
+    batchId: plan.batchId,
+    requested: parsed.data.count,
+    created: contacts.length,
+    settings: { dailyPullTarget: settings.dailyPullTarget, sourceMode: settings.sourceMode, notes: settings.notes || "", brain: settings.brain || {} },
+    contacts: contacts.map(crmContactView),
+  };
+});
+
+app.patch("/orgs/:orgId/crm/contacts/:contactId", async (request, reply) => {
+  const { orgId, contactId } = request.params as { orgId: string; contactId: string };
+  const dbSession = requireOrgMember(request, reply, orgId);
+  if (!dbSession) return reply;
+  const db = crmDb(reply);
+  if (!db) return reply;
+  const parsed = CrmContactPatchSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  const existing = await db.contact.findFirst({ where: { id: contactId, orgId } });
+  if (!existing) return reply.code(404).send({ ok: false, error: "contact_not_found" });
+  const contact = await db.contact.update({ where: { id: contactId }, data: crmContactWrite(parsed.data) });
+  return { ok: true, contact: crmContactView(contact) };
+});
+
+app.delete("/orgs/:orgId/crm/contacts/:contactId", async (request, reply) => {
+  const { orgId, contactId } = request.params as { orgId: string; contactId: string };
+  const dbSession = requireOrgMember(request, reply, orgId);
+  if (!dbSession) return reply;
+  const db = crmDb(reply);
+  if (!db) return reply;
+  const existing = await db.contact.findFirst({ where: { id: contactId, orgId } });
+  if (!existing) return reply.code(404).send({ ok: false, error: "contact_not_found" });
+  await db.contact.delete({ where: { id: contactId } });
+  return { ok: true };
 });
 
 app.get("/orgs/:orgId/members", async (request, reply) => {
@@ -1819,42 +2362,6 @@ app.get("/orgs/:orgId/entitlements", async (request, reply) => {
   const dbSession = requireOrgMember(request, reply, orgId);
   if (!dbSession) return reply;
   return { ok: true, ...(await getUsageSummary(orgId)) };
-});
-
-const TenantProviderConnectionSchema = z.object({
-  provider: z.string().trim().min(2).max(60),
-  credentialReference: z.string().trim().max(180).optional(),
-  subscriptionReference: z.string().trim().max(180).optional(),
-  historyMode: z.enum(["provider_managed", "workspace_scoped", "none"]).default("provider_managed"),
-  note: z.string().trim().max(240).optional(),
-});
-
-app.get("/orgs/:orgId/provider-connections", async (request, reply) => {
-  const { orgId } = request.params as { orgId: string };
-  const dbSession = requireOrgManager(request, reply, orgId);
-  if (!dbSession) return reply;
-  return {
-    ok: true,
-    connections: await listTenantProviderConnections(orgId),
-    secret_storage: "not_in_browser",
-    tenant_owned_only: true,
-  };
-});
-
-app.post("/orgs/:orgId/provider-connections", async (request, reply) => {
-  const { orgId } = request.params as { orgId: string };
-  const dbSession = requireOrgManager(request, reply, orgId);
-  if (!dbSession) return reply;
-  const parsed = TenantProviderConnectionSchema.safeParse(request.body ?? {});
-  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
-  const result = await saveTenantProviderConnection({ orgId, ...parsed.data });
-  if (!result.ok) return reply.code(400).send({ ok: false, error: result.error });
-  return {
-    ok: true,
-    connection: result.connection,
-    secret_stored: false,
-    tenant_owned_only: true,
-  };
 });
 
 app.get("/admin/plans", async (request, reply) => {
@@ -2530,18 +3037,6 @@ function brainScopeProofForSession(session: AccessSession, carrier?: { tenant_id
   };
 }
 
-function requireManualBrainEditor(session: AccessSession, reply: FastifyReply) {
-  if (session.canManageAccess) return true;
-  reply.code(403).send({
-    ok: false,
-    error: "Manual brain editing is reserved for the platform owner workspace. Customer workspaces use scoped web memory and provider-managed history.",
-    provider_called: false,
-    network_call_performed: false,
-    external_action_executed: false,
-  });
-  return false;
-}
-
 function buildBrainContextModule(brainContext: Awaited<ReturnType<typeof composeBrainContext>>): ContextModuleData {
   return {
     module: "phantom_brain",
@@ -2572,13 +3067,13 @@ function parsePhantomAiChatProvider(value: unknown) {
   return value === "openrouter_glm" ? "openrouter_glm" : "phantom";
 }
 
-type AdminPhantomAiModelLane = "codex" | "glm_5_2" | "claude_cli";
+type AdminPhantomAiModelLane = "codex" | "glm_5_2" | "claude_cli" | "local_ollama";
 type AdminPhantomAiRouteTier = "instant" | "standard" | "deep";
 
 function parseAdminPhantomAiModelLane(value: unknown): AdminPhantomAiModelLane {
   if (value === "glm_5_2" || value === "openrouter_glm" || value === "glm") return "glm_5_2";
+  if (value === "local_ollama" || value === "ollama" || value === "local") return "local_ollama";
   if (value === "claude_cli" || value === "claude") return "claude_cli";
-  if (value === "private_brain" || value === "private" || value === "operator") return "codex";
   return "codex";
 }
 
@@ -2609,12 +3104,9 @@ function parseAllowProviderFallback(value: unknown, routeTier: AdminPhantomAiRou
   return routeTier !== "instant";
 }
 
-function isExplicitAdminOperatorPrompt(value: string) {
-  return /^(?:\/(?:run|list|read|search)\s+|run command:\s*|run cmd:\s*|execute command:\s*|execute:\s*)/i.test(value.trim());
-}
-
 function adminPhantomAiModelLabel(lane: AdminPhantomAiModelLane) {
   if (lane === "glm_5_2") return "Local GLM";
+  if (lane === "local_ollama") return "Local Ollama";
   if (lane === "claude_cli") return "Claude CLI";
   return "Private Brain";
 }
@@ -2624,6 +3116,7 @@ function publicAdminPhantomAiModelLane(lane: AdminPhantomAiModelLane) {
 }
 
 function adminPhantomAiProviderRoute(lane: AdminPhantomAiModelLane) {
+  if (lane === "local_ollama") return "local" as const;
   if (lane === "glm_5_2") return "local" as const;
   if (lane === "claude_cli") return "claude" as const;
   return "local" as const;
@@ -2638,16 +3131,14 @@ type AdminPhantomAiProviderId = AdminProviderId;
 
 function parseAllowedAdminProviders(value: unknown): AdminPhantomAiProviderId[] | undefined {
   if (!Array.isArray(value)) return undefined;
-  const providers = Array.from(new Set(value.map((item: unknown) => {
-    if (item === "private_brain" || item === "private") return "codex_cli";
-    return item;
-  }).filter((item: unknown): item is AdminPhantomAiProviderId =>
+  const providers = Array.from(new Set(value.filter((item: unknown): item is AdminPhantomAiProviderId =>
     item === "codex_cli" || item === "claude_cli" || item === "openrouter_glm" || item === "local_ollama")));
   return providers.length ? providers : undefined;
 }
 
 function adminPhantomAiProviderIdForLane(lane: AdminPhantomAiModelLane): AdminPhantomAiProviderId {
   if (lane === "claude_cli") return "claude_cli";
+  if (lane === "local_ollama") return "local_ollama";
   if (lane === "glm_5_2") return process.env.PHANTOM_FORCE_OPENROUTER_GLM === "true" ? "openrouter_glm" : "local_ollama";
   return "codex_cli";
 }
@@ -2655,11 +3146,12 @@ function adminPhantomAiProviderIdForLane(lane: AdminPhantomAiModelLane): AdminPh
 function adminPhantomAiLaneForProviderId(providerId: AdminPhantomAiProviderId): AdminPhantomAiModelLane {
   if (providerId === "claude_cli") return "claude_cli";
   if (providerId === "codex_cli") return "codex";
+  if (providerId === "local_ollama") return "local_ollama";
   return "glm_5_2";
 }
 
 function adminPhantomAiProviderLabel(providerId: AdminPhantomAiProviderId) {
-  if (providerId === "codex_cli") return "Private Brain";
+  if (providerId === "codex_cli") return "Private Brain (Codex)";
   if (providerId === "claude_cli") return "Claude CLI";
   if (providerId === "openrouter_glm") return "OpenRouter GLM 5.2";
   return "Local GLM (Ollama)";
@@ -2674,6 +3166,7 @@ type AdminPhantomAiChatContext = {
   sensitivityLevel: SensitivityLevel;
   approvalRequired: boolean;
   executionMode: "approval" | "auto";
+  requestedModel?: string;
   requestedModelId?: string | null;
   routeTier?: AdminPhantomAiRouteTier;
   maxProviderMs?: number | null;
@@ -2783,6 +3276,7 @@ async function callAdminPhantomAiProvider(providerId: AdminPhantomAiProviderId, 
       env: {
         ...process.env,
         OLLAMA_BASE_URL: process.env.OLLAMA_BASE_URL?.trim() || "http://127.0.0.1:11434",
+        ...(ctx.requestedModel && ctx.requestedModel !== "local-auto" ? { PHANTOM_OLLAMA_MODEL: ctx.requestedModel } : {}),
         PHANTOM_LOCAL_MODEL_AVAILABLE: "true",
         PHANTOM_OLLAMA_TIMEOUT_MS: String(timeoutMs),
         ...(ctx.requestedModelId ? { PHANTOM_OLLAMA_MODEL: ctx.requestedModelId } : {}),
@@ -3322,7 +3816,7 @@ app.get("/phantom-ai/provider-status", async (request, reply) => {
     session,
     status: {
       ...providerStatus,
-      provider_manager: getPublicAdminProviderManagerStatus(),
+      provider_manager: getAdminProviderManagerStatus(),
       hermes: {
         ...providerStatus.hermes,
         ledger_path: ledgerStatus.ledgerPath,
@@ -3330,6 +3824,24 @@ app.get("/phantom-ai/provider-status", async (request, reply) => {
         ledger_bytes: ledgerStatus.bytes,
       },
     },
+  };
+});
+
+app.get("/phantom-ai/local-models/status", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  return {
+    ok: true,
+    session,
+    ollama: await getLocalOllamaStatus(),
+    provider_manager: getAdminProviderManagerStatus(),
+    provider_called: false,
+    model_called: false,
+    prompts_sent: false,
   };
 });
 
@@ -4149,9 +4661,19 @@ app.post("/api/vacation-mode/check-in", async (request, reply) => {
    platform moderation. Games run in a browser sandbox; these routes never
    proxy game traffic or expose internal infrastructure. */
 
-async function phantomPlayAccess(session: AccessSession) {
-  if (session.canManageAccess || session.isSuperAdmin) {
-    return { entitled: true, dailyMinuteLimit: 1_000_000, submissionLimit: 100_000, reason: "platform_admin" };
+async function phantomPlayAccess(session: AccessSession, requestedTenantId?: unknown) {
+  const moduleAccess = await moduleAccessForSession(session, "phantomplay", requestedTenantId);
+  if (!moduleAccess.allowed) {
+    return {
+      entitled: false,
+      dailyMinuteLimit: 0,
+      submissionLimit: 0,
+      reason: moduleAccess.reason,
+      moduleAccess,
+    };
+  }
+  if (session.canManageAccess || session.isSuperAdmin || moduleAccess.canManage) {
+    return { entitled: true, dailyMinuteLimit: 1_000_000, submissionLimit: 100_000, reason: "workspace_module", moduleAccess };
   }
   if (session.orgId) {
     try {
@@ -4161,9 +4683,10 @@ async function phantomPlayAccess(session: AccessSession) {
         dailyMinuteLimit: decision.entitlements.limits.phantomPlayMinutesPerDay,
         submissionLimit: decision.entitlements.limits.gameSubmissions,
         reason: decision.reason,
+        moduleAccess,
       };
     } catch {
-      return { entitled: false, dailyMinuteLimit: 0, submissionLimit: 0, reason: "entitlements_unavailable" };
+      return { entitled: false, dailyMinuteLimit: 0, submissionLimit: 0, reason: "entitlements_unavailable", moduleAccess };
     }
   }
   return {
@@ -4171,6 +4694,7 @@ async function phantomPlayAccess(session: AccessSession) {
     dailyMinuteLimit: session.subscriptionActive === false ? 0 : 60,
     submissionLimit: 0,
     reason: session.subscriptionActive === false ? "subscription_inactive" : "legacy_session",
+    moduleAccess,
   };
 }
 
@@ -4178,11 +4702,26 @@ app.get("/api/phantomplay", async (request, reply) => {
   const session = requireAccessSession(request, reply);
   if (!session) return reply;
   const query = (request.query ?? {}) as { tenant_id?: unknown };
-  const access = await phantomPlayAccess(session);
+  const access = await phantomPlayAccess(session, query.tenant_id);
+  if (!access.entitled) {
+    return reply.code(403).send({
+      ok: false,
+      error: access.reason === "module_disabled"
+        ? "PhantomPlay is not enabled for this workspace."
+        : "PhantomPlay is not available to this account.",
+      reason: access.reason,
+      tenant_id: access.moduleAccess.tenantId,
+      module: {
+        enabled: access.moduleAccess.module?.enabled ?? false,
+        accessMode: access.moduleAccess.module?.accessMode ?? "owner_only",
+      },
+      provider_called: false,
+    });
+  }
   return {
     ok: true,
     session,
-    ...(await getPhantomPlaySnapshot(session, { tenantId: query.tenant_id, entitled: access.entitled, dailyMinuteLimit: access.dailyMinuteLimit, canSubmitGames: access.submissionLimit > 0 })),
+    ...(await getPhantomPlaySnapshot(session, { tenantId: access.moduleAccess.tenantId, entitled: access.entitled, dailyMinuteLimit: access.dailyMinuteLimit, canSubmitGames: access.submissionLimit > 0 })),
     subscription: access,
     storage: session.canManageAccess ? await getPhantomPlayStoreStatus() : undefined,
   };
@@ -4191,7 +4730,7 @@ app.get("/api/phantomplay", async (request, reply) => {
 app.patch("/api/phantomplay/profile", async (request, reply) => {
   const session = requireAccessSession(request, reply);
   if (!session) return reply;
-  const access = await phantomPlayAccess(session);
+  const access = await phantomPlayAccess(session, (request.body as Record<string, unknown> | undefined)?.tenantId);
   if (!access.entitled) return reply.code(403).send({ ok: false, error: "PhantomPlay is not available for this plan.", reason: access.reason });
   return { ok: true, session, ...(await updatePhantomPlayProfile(session, (request.body ?? {}) as Record<string, unknown>)) };
 });
@@ -4199,7 +4738,7 @@ app.patch("/api/phantomplay/profile", async (request, reply) => {
 app.post("/api/phantomplay/plays", async (request, reply) => {
   const session = requireAccessSession(request, reply);
   if (!session) return reply;
-  const access = await phantomPlayAccess(session);
+  const access = await phantomPlayAccess(session, (request.body as Record<string, unknown> | undefined)?.tenantId);
   try {
     return { ok: true, session, ...(await startPhantomPlaySession(session, (request.body ?? {}) as Record<string, unknown>, { entitled: access.entitled, dailyMinuteLimit: access.dailyMinuteLimit })) };
   } catch (error) {
@@ -4211,20 +4750,16 @@ app.patch("/api/phantomplay/plays/:id", async (request, reply) => {
   const session = requireAccessSession(request, reply);
   if (!session) return reply;
   const params = request.params as { id?: string };
-  const body = (request.body ?? {}) as Record<string, unknown>;
-  const play = params.id ? await updatePhantomPlaySession(session, params.id.slice(0, 180), body) : null;
-  if (play && body.score !== undefined && session.userId) {
-    // Best-effort: keep the global leaderboard's denormalized score cache in
-    // sync. Never fails the play-session response if this falls behind.
-    recomputeGlobalScoreForUser(session.userId).catch(() => undefined);
-  }
+  const access = await phantomPlayAccess(session, (request.body as Record<string, unknown> | undefined)?.tenantId);
+  if (!access.entitled) return reply.code(403).send({ ok: false, error: "PhantomPlay is not available to this account.", reason: access.reason });
+  const play = params.id ? await updatePhantomPlaySession(session, params.id.slice(0, 180), (request.body ?? {}) as Record<string, unknown>) : null;
   return play ? { ok: true, session, play } : reply.code(404).send({ ok: false, error: "Play session was not found." });
 });
 
 app.post("/api/phantomplay/rooms", async (request, reply) => {
   const session = requireAccessSession(request, reply);
   if (!session) return reply;
-  const access = await phantomPlayAccess(session);
+  const access = await phantomPlayAccess(session, (request.body as Record<string, unknown> | undefined)?.tenantId);
   try {
     return { ok: true, session, ...(await createPhantomPlayRoom(session, (request.body ?? {}) as Record<string, unknown>, { entitled: access.entitled })) };
   } catch (error) {
@@ -4244,7 +4779,7 @@ app.get("/api/phantomplay/rooms/:code", async (request, reply) => {
 app.post("/api/phantomplay/rooms/:code/join", async (request, reply) => {
   const session = requireAccessSession(request, reply);
   if (!session) return reply;
-  const access = await phantomPlayAccess(session);
+  const access = await phantomPlayAccess(session, (request.body as Record<string, unknown> | undefined)?.tenantId);
   const params = request.params as { code?: string };
   try {
     const result = await joinPhantomPlayRoom(session, { ...((request.body ?? {}) as Record<string, unknown>), code: params.code }, { entitled: access.entitled });
@@ -4262,24 +4797,70 @@ app.post("/api/phantomplay/rooms/:code/leave", async (request, reply) => {
   return result ? { ok: true, session, ...result } : reply.code(404).send({ ok: false, error: "Private room was not found." });
 });
 
-app.post("/api/phantomplay/rooms/:code/match", async (request, reply) => {
+// No existing rate-limit helper/pattern was found anywhere else in this repo
+// (no @fastify/rate-limit dependency, no in-memory limiter precedent) to
+// reuse, so this is a small self-contained in-memory fixed-window limiter
+// scoped ONLY to the match-state PATCH route below, since that route is
+// expected to be called frequently by design (host push + participant poll).
+const phantomPlayMatchStateHits = new Map<string, { count: number; windowStartMs: number }>();
+const PHANTOMPLAY_MATCH_STATE_WINDOW_MS = 2_000;
+const PHANTOMPLAY_MATCH_STATE_MAX_PER_WINDOW = 10;
+function phantomPlayMatchStateRateLimited(key: string): boolean {
+  const nowMs = Date.now();
+  if (phantomPlayMatchStateHits.size > 5_000) {
+    for (const [mapKey, entry] of phantomPlayMatchStateHits) {
+      if (nowMs - entry.windowStartMs >= PHANTOMPLAY_MATCH_STATE_WINDOW_MS) phantomPlayMatchStateHits.delete(mapKey);
+    }
+  }
+  const entry = phantomPlayMatchStateHits.get(key);
+  if (!entry || nowMs - entry.windowStartMs >= PHANTOMPLAY_MATCH_STATE_WINDOW_MS) {
+    phantomPlayMatchStateHits.set(key, { count: 1, windowStartMs: nowMs });
+    return false;
+  }
+  entry.count += 1;
+  return entry.count > PHANTOMPLAY_MATCH_STATE_MAX_PER_WINDOW;
+}
+
+// V1 polling-based sync: the host PATCHes matchState here and every other
+// participant polls GET /api/phantomplay/rooms/:code on a short client
+// interval to observe it. A future WebSocket/SSE push transport can replace
+// this polling mechanism later without changing this route's request or
+// response contract.
+app.patch("/api/phantomplay/rooms/:code/match-state", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const params = request.params as { code?: string };
+  const rateLimitKey = `${session.orgId || session.clientId || session.id || "anon"}::${session.userId || session.id || "anon"}::${params.code || ""}`;
+  if (phantomPlayMatchStateRateLimited(rateLimitKey)) {
+    return reply.code(429).header("Retry-After", "2").send({ ok: false, error: "Too many match-state updates. Slow down and try again shortly." });
+  }
+  try {
+    const result = await updatePhantomPlayRoomMatchState(session, { ...((request.body ?? {}) as Record<string, unknown>), code: params.code });
+    return result ? { ok: true, session, ...result } : reply.code(404).send({ ok: false, error: "Private room was not found." });
+  } catch (error) {
+    return reply.code(403).send({ ok: false, error: error instanceof Error ? error.message : "Match-state update was blocked." });
+  }
+});
+
+app.patch("/api/phantomplay/rooms/:code/ready", async (request, reply) => {
   const session = requireAccessSession(request, reply);
   if (!session) return reply;
   const params = request.params as { code?: string };
   try {
-    const result = await updatePhantomPlayRoomMatch(session, { ...((request.body ?? {}) as Record<string, unknown>), code: params.code });
+    const result = await setPhantomPlayRoomReady(session, { ...((request.body ?? {}) as Record<string, unknown>), code: params.code });
     return result ? { ok: true, session, ...result } : reply.code(404).send({ ok: false, error: "Private room was not found." });
   } catch (error) {
-    return reply.code(403).send({ ok: false, error: error instanceof Error ? error.message : "Match relay was blocked." });
+    return reply.code(403).send({ ok: false, error: error instanceof Error ? error.message : "Ready state update was blocked." });
   }
 });
 
 app.post("/api/phantomplay/submissions", async (request, reply) => {
   const session = requireAccessSession(request, reply);
   if (!session) return reply;
-  const access = await phantomPlayAccess(session);
   const body = (request.body ?? {}) as Record<string, unknown>;
-  const snapshot = await getPhantomPlaySnapshot(session, { tenantId: body.tenantId, entitled: access.entitled, dailyMinuteLimit: access.dailyMinuteLimit, canSubmitGames: access.submissionLimit > 0 });
+  const access = await phantomPlayAccess(session, body.tenantId);
+  if (!access.entitled) return reply.code(403).send({ ok: false, error: "Game submissions are not enabled for this account or workspace.", reason: access.reason });
+  const snapshot = await getPhantomPlaySnapshot(session, { tenantId: access.moduleAccess.tenantId, entitled: access.entitled, dailyMinuteLimit: access.dailyMinuteLimit, canSubmitGames: access.submissionLimit > 0 });
   if (!access.entitled || !snapshot.access.canSubmitGames || access.submissionLimit < 1) return reply.code(403).send({ ok: false, error: "Game submissions are not enabled for this account or plan." });
   if (snapshot.submissions.length >= access.submissionLimit && !session.canManageAccess) return reply.code(403).send({ ok: false, error: "This plan's game submission limit has been reached." });
   try {
@@ -4292,7 +4873,7 @@ app.post("/api/phantomplay/submissions", async (request, reply) => {
 app.patch("/api/phantomplay/submissions/:id", async (request, reply) => {
   const session = requireAccessSession(request, reply);
   if (!session) return reply;
-  const access = await phantomPlayAccess(session);
+  const access = await phantomPlayAccess(session, (request.body as Record<string, unknown> | undefined)?.tenantId);
   if (!access.entitled || access.submissionLimit < 1) return reply.code(403).send({ ok: false, error: "Game submissions are not enabled for this account or plan." });
   const params = request.params as { id?: string };
   try {
@@ -4315,66 +4896,28 @@ app.post("/api/phantomplay/submissions/:id/moderate", async (request, reply) => 
   }
 });
 
-app.get("/api/phantomstore", async (request, reply) => {
-  const session = requireAccessSession(request, reply);
-  if (!session) return reply;
-  const query = (request.query ?? {}) as { tenant_id?: unknown };
-  return {
-    ok: true,
-    session,
-    ...(await getPhantomStoreSnapshot(session, { tenantId: query.tenant_id })),
-    storage: session.canManageAccess ? await getPhantomStoreStatus() : undefined,
-  };
-});
-
-app.post("/api/phantomstore/tools", async (request, reply) => {
-  const session = requireAccessSession(request, reply);
-  if (!session) return reply;
-  try {
-    return { ok: true, session, ...(await submitPhantomStoreTool(session, (request.body ?? {}) as Record<string, unknown>)) };
-  } catch (error) {
-    return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : "Tool submission could not be saved." });
-  }
-});
-
-app.patch("/api/phantomstore/tools/:id", async (request, reply) => {
-  const session = requireAccessSession(request, reply);
-  if (!session) return reply;
-  const params = request.params as { id?: string };
-  try {
-    const result = params.id ? await updatePhantomStoreTool(session, params.id.slice(0, 180), (request.body ?? {}) as Record<string, unknown>) : null;
-    return result ? { ok: true, session, ...result } : reply.code(404).send({ ok: false, error: "Tool was not found." });
-  } catch (error) {
-    return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : "Tool update could not be saved." });
-  }
-});
-
-app.post("/api/phantomstore/tools/:id/moderate", async (request, reply) => {
+// Admin/guardian override of a game's rating/descriptors, or of another
+// profile's Game Rating Exposure (allowedRatings) / profileType /
+// guardian-lock enabled flag. Gated the same way submission moderation is
+// above (requireAdminAccessSession) — platform/workspace admin authority
+// only; a profile's own self-service rating-exposure changes go through
+// PATCH /api/phantomplay/profile instead, which enforces the guardian PIN.
+app.post("/api/phantomplay/admin/rating-override", async (request, reply) => {
   const session = requireAdminAccessSession(request, reply);
   if (!session) return reply;
-  const params = request.params as { id?: string };
   try {
-    const tool = params.id ? await moderatePhantomStoreTool(session, params.id.slice(0, 180), (request.body ?? {}) as Record<string, unknown>) : null;
-    return tool ? { ok: true, session, tool } : reply.code(404).send({ ok: false, error: "Tool was not found." });
+    return { ok: true, session, ...(await applyPhantomPlayRatingOverride(session, (request.body ?? {}) as Record<string, unknown>)) };
   } catch (error) {
-    return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : "Moderation decision could not be saved." });
+    return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : "Rating override could not be saved." });
   }
 });
 
-app.post("/api/phantomstore/tools/:id/install", async (request, reply) => {
-  const session = requireAccessSession(request, reply);
+app.get("/api/phantomplay/admin/rating-history", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
   if (!session) return reply;
-  const params = request.params as { id?: string };
-  const result = params.id ? await recordPhantomStoreInstallClick(session, params.id.slice(0, 180)) : null;
-  return result ? { ok: true, session, ...result } : reply.code(404).send({ ok: false, error: "Tool was not found." });
-});
-
-app.post("/api/phantomstore/products/:id/buy", async (request, reply) => {
-  const session = requireAccessSession(request, reply);
-  if (!session) return reply;
-  const params = request.params as { id?: string };
-  const result = params.id ? await recordPhantomStoreProductBuyClick(session, params.id.slice(0, 180)) : null;
-  return result ? { ok: true, session, ...result } : reply.code(404).send({ ok: false, error: "Product was not found or is not available yet." });
+  const query = (request.query ?? {}) as { limit?: unknown };
+  const limit = Number(query.limit);
+  return { ok: true, session, history: await getPhantomPlayRatingChangeHistory(Number.isFinite(limit) ? limit : 200) };
 });
 
 /* ---- PhantomPlay V2: platform layer (social, community, workspace, dev hub) ----
@@ -4383,6 +4926,11 @@ app.post("/api/phantomstore/products/:id/buy", async (request, reply) => {
    (including V2 game registration) and V1 behaves exactly as before. */
 
 if (phantomPlayV2Enabled()) registerPhantomPlayV2Games();
+
+// ---- PhantomPlay Flagship Five: 5 deeper games registered additively on top
+// of V1's catalog array, same push-not-edit pattern as V2 above. Metadata
+// only lands here in a later step (PHANTOMPLAY_FLAGSHIP_GAMES is empty for
+// now) — the call site is wired now so registration order is settled.
 registerPhantomPlayFlagshipGames();
 
 function phantomPlayV2Gate(reply: FastifyReply) {
@@ -4515,131 +5063,6 @@ app.patch("/api/phantomplay/v2/workspace-policy", async (request, reply) => {
   catch (error) { return phantomPlayV2Error(reply, error); }
 });
 
-/* ---- PhantomPlay global leaderboard (docs/superpowers/specs/2026-07-15-
-   phantomplay-global-leaderboard-design.md). The only cross-tenant-visible
-   surface in the app: getPhantomPlayGlobalLeaderboard strictly returns
-   { rank, username, globalScore } and nothing else -- see that module's
-   header comment before changing what it returns. Handles require a
-   database-auth account (session.userId); legacy demo/session accounts get a
-   clear 400 rather than a silent no-op. */
-app.get("/api/phantomplay/handle", async (request, reply) => {
-  const session = requireAccessSession(request, reply);
-  if (!session) return reply;
-  if (!phantomPlayV2Gate(reply)) return reply;
-  return { ok: true, ...(await getPhantomPlayHandle(session)) };
-});
-
-app.post("/api/phantomplay/handle", async (request, reply) => {
-  const session = requireAccessSession(request, reply);
-  if (!session) return reply;
-  if (!phantomPlayV2Gate(reply)) return reply;
-  try {
-    return { ok: true, ...(await claimPhantomPlayHandle(session, (request.body ?? {}) as Record<string, unknown>)) };
-  } catch (error) {
-    const statusCode = (error as { statusCode?: number }).statusCode ?? 400;
-    return reply.code(statusCode).send({ ok: false, error: error instanceof Error ? error.message : "That handle could not be claimed." });
-  }
-});
-
-app.get("/api/phantomplay/leaderboard/global", async (request, reply) => {
-  const session = requireAccessSession(request, reply);
-  if (!session) return reply;
-  if (!phantomPlayV2Gate(reply)) return reply;
-  return { ok: true, ...(await getPhantomPlayGlobalLeaderboard(session)) };
-});
-
-/* ---- Termina Mission Bridge (vertical slice) ----
-   docs/superpowers/specs/2026-07-15-termina-mission-bridge-design.md.
-   Owner-facing only (mirrors the CLI/Termina view in missioncontrol.js,
-   already admin-gated client-side) -- this executes real commands via
-   Termina's PTY worker sessions, so every route here requires a platform
-   admin session, not just any signed-in session. */
-function terminaError(reply: FastifyReply, error: unknown) {
-  return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : "Termina request failed." });
-}
-
-app.get("/phantom-ai/termina/health", async (request, reply) => {
-  const session = requireAdminAccessSession(request, reply);
-  if (!session) return reply;
-  return { ok: true, ...(await terminaHealth()) };
-});
-
-app.post("/phantom-ai/missions/decompose", async (request, reply) => {
-  const session = requireAdminAccessSession(request, reply);
-  if (!session) return reply;
-  const body = (request.body ?? {}) as { objective?: unknown };
-  try {
-    const plan = await decomposeMissionObjective(String(body.objective ?? ""));
-    return { ok: true, ...plan };
-  } catch (error) { return terminaError(reply, error); }
-});
-
-app.post("/phantom-ai/missions", async (request, reply) => {
-  const session = requireAdminAccessSession(request, reply);
-  if (!session) return reply;
-  const body = (request.body ?? {}) as { objective?: unknown; missionName?: unknown; roles?: unknown };
-  const objective = String(body.objective ?? "").trim();
-  const roles = Array.isArray(body.roles) ? body.roles : [];
-  if (!objective || !roles.length) return reply.code(400).send({ ok: false, error: "An objective and decomposed roles are required -- call decompose first." });
-  // This only records a pending approval; it does not start any workers or
-  // execute anything yet. See POST .../approvals/:id/confirm.
-  const approval = createMissionApproval({
-    requestedByLabel: session.label,
-    missionName: String(body.missionName ?? "Untitled mission").trim() || "Untitled mission",
-    objective,
-    roles: roles as never,
-  });
-  return { ok: true, ...approval };
-});
-
-app.post("/phantom-ai/missions/approvals/:id/confirm", async (request, reply) => {
-  const session = requireAdminAccessSession(request, reply);
-  if (!session) return reply;
-  const params = request.params as { id?: string };
-  try {
-    const mission = params.id ? await confirmMissionStart(params.id) : null;
-    return mission ? { ok: true, mission } : reply.code(404).send({ ok: false, error: "Mission approval was not found." });
-  } catch (error) { return terminaError(reply, error); }
-});
-
-app.get("/phantom-ai/missions/:id", async (request, reply) => {
-  const session = requireAdminAccessSession(request, reply);
-  if (!session) return reply;
-  const params = request.params as { id?: string };
-  try {
-    return { ok: true, ...(await getMission(String(params.id))) };
-  } catch (error) { return terminaError(reply, error); }
-});
-
-app.post("/phantom-ai/missions/:id/workers/:workerId/:action", async (request, reply) => {
-  const session = requireAdminAccessSession(request, reply);
-  if (!session) return reply;
-  const params = request.params as { id?: string; workerId?: string; action?: string };
-  if (params.action !== "stop" && params.action !== "retry") return reply.code(400).send({ ok: false, error: "Action must be stop or retry." });
-  try {
-    const worker = await missionWorkerAction(String(params.id), String(params.workerId), params.action);
-    return { ok: true, worker };
-  } catch (error) { return terminaError(reply, error); }
-});
-
-app.post("/phantom-ai/missions/:id/synthesize", async (request, reply) => {
-  const session = requireAdminAccessSession(request, reply);
-  if (!session) return reply;
-  const params = request.params as { id?: string };
-  try {
-    return { ok: true, ...(await synthesizeMission(String(params.id))) };
-  } catch (error) { return terminaError(reply, error); }
-});
-
-app.get("/phantom-ai/missions/:id/report", async (request, reply) => {
-  const session = requireAdminAccessSession(request, reply);
-  if (!session) return reply;
-  const params = request.params as { id?: string };
-  try {
-    return { ok: true, ...(await getMissionReport(String(params.id))) };
-  } catch (error) { return terminaError(reply, error); }
-});
-
 /* ============================================================================
    COMPETITOR INTELLIGENCE
    Tenant-scoped analysis of lawfully available public signals. These routes
@@ -4689,9 +5112,89 @@ app.get("/api/competitor-intelligence", async (request, reply) => {
     ok: true,
     session,
     ...(await getCompetitorIntelligenceSnapshot(session, { tenantId: query.tenant_id, ...access })),
+    webDiscovery: getWebDiscoveryStatus(),
     subscription: access,
     storage: session.canManageAccess ? await getCompetitorIntelligenceStoreStatus() : undefined,
   };
+});
+
+app.get("/api/competitor-intelligence/business-profile", async (request, reply) => {
+  const session = requireAccessSession(request, reply); if (!session) return reply;
+  const access = await competitorIntelligenceAccess(session); if (!access.entitled) return reply.code(403).send({ ok: false, error: "Competitor Intelligence is not available for this plan." });
+  const query = (request.query ?? {}) as { tenant_id?: unknown };
+  try { return { ok: true, ...(await getBusinessProfile(session, query.tenant_id)) }; } catch (error) { return intelligenceError(reply, error); }
+});
+
+app.put("/api/competitor-intelligence/business-profile", async (request, reply) => {
+  const session = requireAccessSession(request, reply); if (!session) return reply;
+  const access = await competitorIntelligenceAccess(session); if (!access.entitled) return reply.code(403).send({ ok: false, error: "Competitor Intelligence is not available for this plan." });
+  try { return { ok: true, ...(await saveBusinessProfile(session, (request.body ?? {}) as Record<string, unknown>)) }; } catch (error) { return intelligenceError(reply, error); }
+});
+
+app.post("/api/competitor-intelligence/discover", async (request, reply) => {
+  const session = requireAccessSession(request, reply); if (!session) return reply;
+  const access = await competitorIntelligenceAccess(session); if (!access.entitled) return reply.code(403).send({ ok: false, error: "Competitor Intelligence is not available for this plan." });
+  try { return { ok: true, discovery: await runCompetitorDiscovery(session, (request.body ?? {}) as Record<string, unknown>) }; } catch (error) { return intelligenceError(reply, error); }
+});
+
+app.post("/api/competitor-intelligence/dossier", async (request, reply) => {
+  const session = requireAccessSession(request, reply); if (!session) return reply;
+  const access = await competitorIntelligenceAccess(session); if (!access.entitled) return reply.code(403).send({ ok: false, error: "Competitor Intelligence is not available for this plan." });
+  try { return { ok: true, dossier: await runCompetitorDossier(session, (request.body ?? {}) as Record<string, unknown>) }; } catch (error) { return intelligenceError(reply, error); }
+});
+
+/* ============================================================================
+   ORGANIZATION PULSE + BRAIN GRAPH
+   One tenant-scoped aggregation over every real store: live attention data
+   for the dashboard and a real-entity graph with honest gap detection. */
+
+async function pulseAccessFor(session: AccessSession, requestedTenant: unknown) {
+  const ciAccess = await competitorIntelligenceAccess(session);
+  const dbSession = asDatabaseSession(session);
+  const canManage = Boolean(session.canManageAccess || session.isSuperAdmin || session.orgRole === "owner" || session.orgRole === "admin");
+  const own = session.orgId || session.clientId || session.id;
+  // Non-managing sessions are pinned to their own tenant — the requested id
+  // is honored only for platform admins/owners (same rule as every store).
+  const requested = typeof requestedTenant === "string" && requestedTenant.trim() ? requestedTenant.trim().slice(0, 120) : "";
+  return {
+    tenantId: canManage && requested ? requested : own,
+    orgId: dbSession?.orgId && process.env.DATABASE_URL ? dbSession.orgId : null,
+    competitorEntitled: ciAccess.entitled,
+    canManage,
+  };
+}
+
+app.get("/api/organization/pulse", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const query = (request.query ?? {}) as { tenant_id?: unknown };
+  try {
+    return { ok: true, pulse: await getOrganizationPulse(session, await pulseAccessFor(session, query.tenant_id)) };
+  } catch (error) {
+    return reply.code(500).send({ ok: false, error: error instanceof Error ? error.message : "Pulse could not be assembled." });
+  }
+});
+
+app.get("/api/organization/graph", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const query = (request.query ?? {}) as { tenant_id?: unknown };
+  try {
+    return { ok: true, graph: await getOrganizationGraph(session, await pulseAccessFor(session, query.tenant_id)) };
+  } catch (error) {
+    return reply.code(500).send({ ok: false, error: error instanceof Error ? error.message : "Graph could not be assembled." });
+  }
+});
+
+app.get("/api/organization/opportunities", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const query = (request.query ?? {}) as { tenant_id?: unknown };
+  try {
+    return { ok: true, ...(await getOrganizationOpportunities(session, await pulseAccessFor(session, query.tenant_id))) };
+  } catch (error) {
+    return reply.code(500).send({ ok: false, error: error instanceof Error ? error.message : "Opportunities could not be assembled." });
+  }
 });
 
 app.patch("/api/competitor-intelligence/mode", async (request, reply) => {
@@ -4742,85 +5245,6 @@ for (const [route, handler] of intelligenceCreateRoutes) {
     try { return { ok: true, result: await handler(session, (request.body ?? {}) as Record<string, unknown>) }; } catch (error) { return intelligenceError(reply, error); }
   });
 }
-
-/* ============================================================================
-   ORGANIZATION PULSE + BRAIN GRAPH
-   One tenant-scoped aggregation over real stores: live attention data for the
-   dashboard, graph, and chat context. */
-
-async function pulseAccessFor(session: AccessSession, requestedTenant: unknown) {
-  const ciAccess = await competitorIntelligenceAccess(session);
-  const dbSession = asDatabaseSession(session);
-  const canManage = Boolean(session.canManageAccess || session.isSuperAdmin || session.orgRole === "owner" || session.orgRole === "admin");
-  const own = session.orgId || session.clientId || session.id;
-  const requested = typeof requestedTenant === "string" && requestedTenant.trim() ? requestedTenant.trim().slice(0, 120) : "";
-  return {
-    tenantId: canManage && requested ? requested : own,
-    orgId: dbSession?.orgId && process.env.DATABASE_URL ? dbSession.orgId : null,
-    competitorEntitled: ciAccess.entitled,
-    canManage,
-  };
-}
-
-app.get("/api/organization/pulse", async (request, reply) => {
-  const session = requireAccessSession(request, reply);
-  if (!session) return reply;
-  const query = (request.query ?? {}) as { tenant_id?: unknown };
-  try {
-    return { ok: true, pulse: await getOrganizationPulse(session, await pulseAccessFor(session, query.tenant_id)) };
-  } catch (error) {
-    return reply.code(500).send({ ok: false, error: error instanceof Error ? error.message : "Pulse could not be assembled." });
-  }
-});
-
-app.get("/api/organization/graph", async (request, reply) => {
-  const session = requireAccessSession(request, reply);
-  if (!session) return reply;
-  const query = (request.query ?? {}) as { tenant_id?: unknown };
-  try {
-    return { ok: true, graph: await getOrganizationGraph(session, await pulseAccessFor(session, query.tenant_id)) };
-  } catch (error) {
-    return reply.code(500).send({ ok: false, error: error instanceof Error ? error.message : "Graph could not be assembled." });
-  }
-});
-
-app.get("/api/organization/opportunities", async (request, reply) => {
-  const session = requireAccessSession(request, reply);
-  if (!session) return reply;
-  const query = (request.query ?? {}) as { tenant_id?: unknown };
-  try {
-    return { ok: true, ...(await getOrganizationOpportunities(session, await pulseAccessFor(session, query.tenant_id))) };
-  } catch (error) {
-    return reply.code(500).send({ ok: false, error: error instanceof Error ? error.message : "Opportunities could not be assembled." });
-  }
-});
-
-/* Brain Signal contract — see server/src/phantom-ai/signals.ts and
-   docs/BRAIN_SIGNAL_CONTRACT.md. Normalizes organization-pulse opportunities
-   + graph disconnections into one cross-department Signal[]; /contract is
-   the single read other modules should consume instead of re-deriving their
-   own priority logic. */
-app.get("/api/brain/signals", async (request, reply) => {
-  const session = requireAccessSession(request, reply);
-  if (!session) return reply;
-  const query = (request.query ?? {}) as { tenant_id?: unknown };
-  try {
-    return { ok: true, ...(await getSignals(session, await pulseAccessFor(session, query.tenant_id))) };
-  } catch (error) {
-    return reply.code(500).send({ ok: false, error: error instanceof Error ? error.message : "Signals could not be assembled." });
-  }
-});
-
-app.get("/api/brain/contract", async (request, reply) => {
-  const session = requireAccessSession(request, reply);
-  if (!session) return reply;
-  const query = (request.query ?? {}) as { tenant_id?: unknown };
-  try {
-    return { ok: true, ...(await getBrainContract(session, await pulseAccessFor(session, query.tenant_id))) };
-  } catch (error) {
-    return reply.code(500).send({ ok: false, error: error instanceof Error ? error.message : "Brain contract could not be assembled." });
-  }
-});
 
 function buildHermesInteractionMemoryPreviewFromBody(
   body: {
@@ -5462,7 +5886,6 @@ app.post("/phantom-ai/brain/memories", async (request, reply) => {
   if (!session) {
     return reply;
   }
-  if (!requireManualBrainEditor(session, reply)) return reply;
 
   const parsed = BrainMemoryCreateSchema.safeParse(request.body ?? {});
   if (!parsed.success) {
@@ -5490,7 +5913,6 @@ app.patch("/phantom-ai/brain/memories/:id", async (request, reply) => {
   if (!session) {
     return reply;
   }
-  if (!requireManualBrainEditor(session, reply)) return reply;
 
   const parsed = BrainMemoryPatchSchema.safeParse(request.body ?? {});
   if (!parsed.success) {
@@ -5531,7 +5953,6 @@ app.delete("/phantom-ai/brain/memories/:id", async (request, reply) => {
   if (!session) {
     return reply;
   }
-  if (!requireManualBrainEditor(session, reply)) return reply;
 
   const params = request.params as { id: string };
   const query = (request.query ?? {}) as { tenant_id?: unknown };
@@ -5926,11 +6347,19 @@ const SiteSnapshotSchema = z.object({
     theme: z.string().max(40).optional(),
     style: z.string().max(40).optional(),
   }).default({}),
+  /* optional real section content keyed by lowercased section name (store
+     templates fill this so published pages carry actual copy) */
+  copy: z.record(z.string().min(1).max(60), z.string().max(4000)).optional(),
   products: z.array(z.object({
     id: z.string().min(1).max(120).regex(/^[a-z0-9_-]+$/i),
     name: z.string().min(1).max(100),
     price: z.number().min(0).max(10_000_000),
-    cadence: z.enum(["one_time", "monthly"]).default("one_time"),
+    cadence: z.enum(["one_time", "monthly", "yearly"]).default("one_time"),
+    /* digital products skip shipping at checkout and carry delivery details
+       for the receipt; every pre-existing product defaults to physical */
+    type: z.enum(["physical", "digital"]).default("physical"),
+    delivery_url: z.string().max(600).default(""),
+    delivery_note: z.string().max(500).default(""),
     desc: z.string().max(500).default(""),
     visible: z.boolean().default(true),
   })).max(50).default([]),
@@ -6198,68 +6627,6 @@ app.get("/phantom-ai/ops/finance-connector/status", async (request, reply) => {
   }
 
   return { ok: true, session, read_only: true, finance_connector: getFinanceConnectorStatus() };
-});
-
-const FinanceExpenseTextSchema = z.object({
-  text: z.string().trim().min(1).max(400),
-});
-
-app.post("/phantom-ai/ops/finance/parse-expense-text", async (request, reply) => {
-  const session = requireAdminAccessSession(request, reply);
-  if (!session) return reply;
-
-  const parsed = FinanceExpenseTextSchema.safeParse(request.body ?? {});
-  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
-
-  const result = parseExpenseText(parsed.data.text);
-  if (!result.ok) return reply.code(422).send({ ok: false, error: result.error });
-
-  return { ok: true, session, read_only: true, draft: result.draft };
-});
-
-const FinanceReceiptSchema = z.object({
-  image: z.string().trim().min(1).max(20_000_000),
-  filename: z.string().trim().max(160).optional(),
-});
-
-app.post("/phantom-ai/ops/finance/parse-receipt", { bodyLimit: 16 * 1024 * 1024 }, async (request, reply) => {
-  const session = requireAdminAccessSession(request, reply);
-  if (!session) return reply;
-
-  const parsed = FinanceReceiptSchema.safeParse(request.body ?? {});
-  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
-
-  const storageProvider = getReceiptAssetStorageProvider();
-  const stored = await storageProvider.putAsset({
-    ownerScope: session.id,
-    dataUrl: parsed.data.image,
-    originalName: parsed.data.filename,
-  });
-  const assetId = stored.ok ? stored.asset.id : null;
-
-  const aiResult = await parseReceiptImage(parsed.data.image);
-
-  return {
-    ok: true,
-    session,
-    read_only: true,
-    assetId,
-    aiAvailable: aiResult.available,
-    draft: aiResult.available ? aiResult.draft : null,
-    reason: aiResult.available ? undefined : aiResult.reason,
-  };
-});
-
-app.get("/phantom-ai/ops/finance/receipt/:assetId", async (request, reply) => {
-  const session = requireAdminAccessSession(request, reply);
-  if (!session) return reply;
-
-  const { assetId } = request.params as { assetId: string };
-  const storageProvider = getReceiptAssetStorageProvider();
-  const result = await storageProvider.getAssetFile(assetId, session.id);
-  if (!result.ok) return reply.code(404).send({ ok: false, error: result.error });
-
-  return { ok: true, session, image: result.dataUrl, asset: result.asset };
 });
 
 app.get("/phantom-ai/ops/social-analytics/status", async (request, reply) => {
@@ -7456,6 +7823,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
     allowed_providers?: unknown;
     admin_model?: unknown;
     model_lane?: unknown;
+    requested_model?: unknown;
     message?: unknown;
     tenant_id?: unknown;
     business_name?: unknown;
@@ -7464,7 +7832,6 @@ app.post("/phantom-ai/chat", async (request, reply) => {
     task_type?: unknown;
     sensitivity_level?: unknown;
     execution_mode?: unknown;
-    requested_model?: unknown;
     route_tier?: unknown;
     max_provider_ms?: unknown;
     allow_provider_fallback?: unknown;
@@ -7569,108 +7936,6 @@ app.post("/phantom-ai/chat", async (request, reply) => {
     return privacyFirstLocationReply;
   }
 
-  if (session.canManageAccess && adminModelLane === "codex" && isExplicitAdminOperatorPrompt(normalized.user_request)) {
-    const operatorResult = await runCodexOperatorChat({
-      requestId: normalized.request_id,
-      businessName: normalized.business_name,
-      userMessage: normalized.user_request,
-      compactContext: "Explicit admin operator command. Return a receipt for the local action only.",
-      approvalRequired: false,
-      cwd: process.cwd(),
-    });
-    const ledgerRecord: HermesLedgerRecord = {
-      timestamp: new Date().toISOString(),
-      tenant_id: normalized.tenant_id,
-      business_name: normalized.business_name,
-      actor_user_id: normalized.actor_user_id,
-      actor_role: normalized.actor_role,
-      request_id: normalized.request_id,
-      task_type: normalized.task_type,
-      sensitivity_level: normalized.sensitivity_level,
-      provider_route: "router",
-      model_id: "phantom-private-brain",
-      context_chars: 0,
-      estimated_tokens: 0,
-      estimated_cost_usd: null,
-      user_request_summary: redactSensitiveText(normalized.user_request).replace(/\s+/g, " ").slice(0, 240),
-      result_summary: redactSensitiveText(
-        operatorResult.tool_executed
-          ? `Private Brain executed ${operatorResult.tool_name ?? "operator tool"} and returned a receipt.`
-          : `Private Brain operator did not execute: ${operatorResult.error_message ?? operatorResult.status}`,
-      ).slice(0, 360),
-      approval_required: false,
-      approval_status: "not_required",
-      risks: [],
-      next_action: operatorResult.tool_executed
-        ? "Review the private operator receipt in Phantom AI."
-        : "Review the private operator lane error and retry if appropriate.",
-      agent_run_id: `phantom-ai-admin-codex-${normalized.request_id}`,
-      parent_task_id: normalized.request_id,
-    };
-    await appendHermesLedgerRecord(ledgerRecord);
-
-    return {
-      ok: true,
-      session,
-      provider_choice: "phantom",
-      admin_model_lane: "private_brain",
-      admin_model_label: adminPhantomAiModelLabel("codex"),
-      admin_model_requested_lane: "private_brain",
-      admin_execution_mode: adminExecutionMode,
-      model_id: "phantom-private-brain",
-      message: {
-        role: "assistant",
-        content: operatorResult.output_text,
-      },
-      operator: {
-        status: operatorResult.status,
-        admin_only: operatorResult.admin_only,
-        localhost_only: operatorResult.localhost_only,
-        tool_requested: operatorResult.tool_requested,
-        tool_executed: operatorResult.tool_executed,
-        tool_name: operatorResult.tool_name,
-        tool_result: operatorResult.tool_result,
-      },
-      private_brain: {
-        status: operatorResult.status,
-        model_id: "phantom-private-brain",
-        admin_only: operatorResult.admin_only,
-        localhost_only: operatorResult.localhost_only,
-        approval_executed: operatorResult.approval_executed,
-        external_action_executed: operatorResult.external_action_executed,
-        queue_written: operatorResult.queue_written,
-        ledger_written: true,
-      },
-      fallback: {
-        used: false,
-        all_failed: false,
-        requested_provider: adminPhantomAiProviderLabel("codex_cli"),
-        responding_provider: adminPhantomAiProviderLabel("codex_cli"),
-        attempts: [{ provider_id: "codex_cli", status: operatorResult.status, error_message: operatorResult.error_message }],
-      },
-      hermes: {
-        context_used: false,
-        ledger_written: true,
-        provider_route: "private_brain",
-        recalled_memory_count: 0,
-      },
-      memory_scope: buildMemoryScopeProof(normalized),
-      memory_context: {
-        scope: normalized.memory_scope,
-        recalled_memory_count: 0,
-        compact_context_chars: 0,
-        redaction: "not_used_for_explicit_operator_command",
-      },
-      ledger_record: redactHermesLedgerRecord(ledgerRecord),
-      provider_request_body_created: operatorResult.request_body_prepared,
-      live_provider_called: operatorResult.provider_called,
-      network_call_performed: operatorResult.network_call_performed,
-      approval_executed: false,
-      queue_written: false,
-      external_action_executed: false,
-    };
-  }
-
   if (session.canManageAccess && adminRouteTier === "instant" && isInstantAdminChatSafe(normalized)) {
     const instantChat = await runAdminPhantomAiChatWithFallback(adminModelLane, {
       requestId: normalized.request_id,
@@ -7697,9 +7962,6 @@ app.post("/phantom-ai/chat", async (request, reply) => {
       "network_call_performed" in modelResult ? Boolean(modelResult.network_call_performed) : providerCalled;
     const requestBodyPrepared = "request_body_prepared" in modelResult ? Boolean(modelResult.request_body_prepared) : false;
     const allProvidersFailed = instantChat.allFailed;
-    const instantLocalFallback = allProvidersFailed
-      ? buildInstantChatFallbackReply(normalized.user_request, normalized.business_name)
-      : null;
 
     return {
       ok: true,
@@ -7709,10 +7971,12 @@ app.post("/phantom-ai/chat", async (request, reply) => {
       admin_model_label: respondingLabel,
       admin_model_requested_lane: publicAdminPhantomAiModelLane(adminModelLane),
       admin_execution_mode: adminExecutionMode,
-      model_id: instantLocalFallback?.model_id ?? ("model_id" in modelResult ? modelResult.model_id : respondingProviderId),
+      model_id: "model_id" in modelResult ? modelResult.model_id : respondingProviderId,
       message: {
         role: "assistant",
-        content: instantLocalFallback?.output_text ?? resultOutput,
+        content: allProvidersFailed
+          ? buildAdminPhantomAiAllProvidersFailedMessage()
+          : resultOutput,
       },
       private_brain:
         respondingProviderId === "codex_cli" && "provider_id" in modelResult && modelResult.provider_id === "codex_cli"
@@ -7729,18 +7993,16 @@ app.post("/phantom-ai/chat", async (request, reply) => {
             }
           : null,
       fallback: {
-        used: Boolean(instantLocalFallback),
+        used: false,
         all_failed: allProvidersFailed,
         requested_provider: adminPhantomAiProviderLabel(instantChat.primaryProviderId),
         responding_provider: respondingLabel,
         attempts: instantChat.attempts,
-        local_instant_fallback_used: Boolean(instantLocalFallback),
       },
-      instant_local_fallback: instantLocalFallback,
       hermes: {
         context_used: false,
         ledger_written: false,
-        provider_route: instantLocalFallback ? "local" : respondingProviderRoute,
+        provider_route: respondingProviderRoute,
         route_tier: "instant",
         recalled_memory_count: 0,
       },
@@ -7781,7 +8043,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
         routeTier: adminRouteTier,
         maxProviderMs,
       }),
-      result_status: instantLocalFallback?.status ?? resultStatus,
+      result_status: resultStatus,
     };
   }
 

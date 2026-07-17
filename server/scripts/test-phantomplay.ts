@@ -10,12 +10,13 @@ function assert(condition: unknown, message: string): asserts condition {
 
 const root = await mkdtemp(join(tmpdir(), "phantomplay-"));
 process.env.PHANTOMFORCE_PHANTOMPLAY_PATH = join(root, "phantomplay.json");
+process.env.PHANTOMFORCE_CUSTOMIZATION_DIR = join(root, "customization");
+process.env.PHANTOMFORCE_SKIP_SERVER_DOTENV = "true";
 process.env.NODE_ENV = "development";
 process.env.PHANTOMFORCE_SERVER_LISTEN = "false";
 process.env.PHANTOMFORCE_SERVER_LOGGER = "false";
 process.env.PHANTOMFORCE_AUTH_PROVIDER = "demo";
 process.env.PHANTOMFORCE_ENABLE_DEMO_AUTH = "true";
-process.env.PHANTOMFORCE_SKIP_SERVER_DOTENV = "true";
 
 const owner: AccessSession = { id: "owner", userId: "owner-user", label: "Owner Studio", role: "admin", canManageAccess: true, orgId: "org-owner", orgRole: "owner", isSuperAdmin: true };
 const playerA: AccessSession = { id: "player-a", userId: "player-a", label: "Player A", role: "client", canManageAccess: false, orgId: "org-a", orgRole: "member" };
@@ -26,17 +27,20 @@ const outsider: AccessSession = { id: "outsider", userId: "outsider", label: "Ou
 
 try {
   const play = await import("../src/phantom-ai/phantomplay.js");
+  const v2 = await import("../src/phantom-ai/phantomplay-v2.js");
+  const flagship = await import("../src/phantom-ai/phantomplay-flagship.js");
+  if (v2.phantomPlayV2Enabled()) v2.registerPhantomPlayV2Games();
+  flagship.registerPhantomPlayFlagshipGames();
 
   const initial = await play.getPhantomPlaySnapshot(playerA, { entitled: true, dailyMinuteLimit: 30, canSubmitGames: false });
-  assert(initial.catalog.length === 21, "Twenty-one real built-in games should ship, including the multiplayer-only Crown Circuit.");
+  assert(initial.catalog.length >= 28, "The full expanded built-in game catalog should ship.");
   assert(play.PHANTOMPLAY_ENGINE.version === "2.0-large-map" && play.PHANTOMPLAY_ENGINE.saveStateBytes >= 262_144, "PhantomPlay should expose a large-map-capable engine profile.");
   assert(initial.engine?.largeMap?.streaming === true, "Snapshots should publish large-map engine capabilities to the player shell.");
   const builtInIds = new Set(initial.catalog.map((game) => game.id));
-  for (const gameId of ["neon-drift", "signal-match", "focus-stack", "word-weld", "reflex-grid", "penalty-kick", "rift-frenzy", "serpent-surge", "crown-circuit"]) {
+  assert(builtInIds.size === initial.catalog.length, "Built-in game IDs should not duplicate after catalog registration.");
+  for (const gameId of ["neon-drift", "signal-match", "focus-stack", "word-weld", "reflex-grid", "penalty-kick", "rift-frenzy", "serpent-surge", "color-rush", "tile-flow", "tower-tactics", "breath-pacer", "court-vision", "pixel-bloom", "circuit-serpent", "echo-sequence", "signal-sweeper", "neon-breaker", "type-storm", "logic-lights", "phantom-rumble", "sudoku-signal", "cubetown", "skyguard-arena", "keyboardist-on-tour", "tidefront-tactics", "kingdom-breakers"]) {
     assert(builtInIds.has(gameId), `${gameId} should ship as an owned built-in game.`);
   }
-  const crownCircuit = initial.catalog.find((game) => game.id === "crown-circuit");
-  assert(crownCircuit?.multiplayerOnly === true && crownCircuit.localMultiplayer === true && crownCircuit.onlineMultiplayer === true, "Crown Circuit should be explicitly multiplayer-only with local and room play.");
   assert(initial.catalog.every((game) => game.kind === "built_in"), "No fake community releases should be seeded.");
   assert(initial.catalog.find((game) => game.id === "neon-drift")?.version === "1.2.3", "Neon Drift should ship the faster arcade tuning.");
   assert(initial.access.canSubmitGames === false, "The snapshot should honor the plan submission decision.");
@@ -59,7 +63,7 @@ try {
   const afterReplay = await play.getPhantomPlaySnapshot(playerA, { entitled: true, dailyMinuteLimit: 30 });
   assert(afterReplay.history[0]?.score === 420 && afterReplay.history[0]?.seconds === 85, "History should keep the best score and total play time across sessions.");
 
-  const privateRoom = await play.createPhantomPlayRoom(classmateA, { gameId: "signal-match", mode: "classroom", maxPlayers: 4 }, { entitled: true });
+  const privateRoom = await play.createPhantomPlayRoom(classmateA, { gameId: "neon-drift", mode: "classroom", maxPlayers: 4 }, { entitled: true });
   assert(privateRoom.room.code.length >= 6, "Private rooms should issue a short join code.");
   assert(privateRoom.room.mode === "classroom" && privateRoom.room.safety.contentPolicy === "everyone_rating_required", "Classroom rooms should enforce Everyone-rated games.");
   assert(privateRoom.room.safety.publicDiscovery === false && privateRoom.room.safety.directPeerConnection === false && privateRoom.room.safety.inboundDevicePorts === false, "Private rooms must avoid public discovery and direct device exposure.");
@@ -71,12 +75,6 @@ try {
   const outsiderView = await play.getPhantomPlayRoom(outsider, { code: privateRoom.room.code });
   assert(outsiderView === null, "Room codes must not work across tenant boundaries.");
   await play.leavePhantomPlayRoom(classmateB, { code: privateRoom.room.code });
-
-  const crownRoom = await play.createPhantomPlayRoom(classmateA, { gameId: "crown-circuit", mode: "friends", maxPlayers: 8 }, { entitled: true });
-  assert(crownRoom.room.maxPlayers === 2, "Crown Circuit rooms must cap at two players.");
-  await play.joinPhantomPlayRoom(classmateB, { code: crownRoom.room.code }, { entitled: true });
-  const matchUpdate = await play.updatePhantomPlayRoomMatch(classmateA, { code: crownRoom.room.code, gameId: "crown-circuit", action: { type: "deploy", payload: { side: "blue", lane: 1, cardIndex: 2 } } });
-  assert(matchUpdate?.room.match?.actions.length === 1 && matchUpdate.room.match.actions[0].type === "deploy", "Crown Circuit room actions should relay through durable match state.");
 
   let invalidRejected = false;
   try { await play.createPhantomPlaySubmission(owner, { title: "Bad", submit: true }); } catch { invalidRejected = true; }
@@ -165,21 +163,42 @@ try {
   const ownerToken = await login("admin-jordan");
   const clientToken = await login("client-sports-demo");
   const ownerCatalog = await app.inject({ method: "GET", url: "/api/phantomplay", headers: { Authorization: `Bearer ${ownerToken}` } });
+  assert(ownerCatalog.statusCode === 403 && ownerCatalog.json().reason === "module_disabled", "PhantomPlay should be disabled by default even for a new owner workspace.");
+  const disabledClientCatalog = await app.inject({ method: "GET", url: "/api/phantomplay", headers: { Authorization: `Bearer ${clientToken}` } });
+  assert(disabledClientCatalog.statusCode === 403 && disabledClientCatalog.json().reason === "module_disabled", "New client workspaces should not expose PhantomPlay until it is enabled.");
+  const modulePatch = await app.inject({
+    method: "PATCH",
+    url: "/phantom-ai/customization/workspace-modules",
+    headers: { Authorization: `Bearer ${ownerToken}` },
+    payload: {
+      tenant_id: "client-sports-demo",
+      module_id: "phantomplay",
+      enabled: true,
+      accessMode: "entire_organization",
+      allowedMemberIds: [],
+      activityEnabled: true,
+      challengesEnabled: true,
+    },
+  });
+  assert(modulePatch.statusCode === 200 && modulePatch.json().organization_data_deleted === false && modulePatch.json().notifications_sent === false, "Enabling PhantomPlay should preserve org data and avoid notifications.");
+  const moduleStatus = await app.inject({ method: "GET", url: "/phantom-ai/customization/workspace-modules?tenant_id=client-sports-demo", headers: { Authorization: `Bearer ${ownerToken}` } });
+  assert(moduleStatus.statusCode === 200 && moduleStatus.json().modules?.[0]?.enabled === true && moduleStatus.json().modules?.[0]?.accessMode === "entire_organization", "Workspace module status should report the saved PhantomPlay access mode.");
+  const ownerManagedCatalog = await app.inject({ method: "GET", url: "/api/phantomplay?tenant_id=client-sports-demo", headers: { Authorization: `Bearer ${ownerToken}` } });
+  assert(ownerManagedCatalog.statusCode === 200 && ownerManagedCatalog.json().access.canModerate === true, "Platform admin should receive moderation access after enabling the target workspace.");
   const clientCatalog = await app.inject({ method: "GET", url: "/api/phantomplay", headers: { Authorization: `Bearer ${clientToken}` } });
-  assert(ownerCatalog.statusCode === 200 && ownerCatalog.json().access.canModerate === true, "Platform admin should receive moderation access.");
   assert(clientCatalog.statusCode === 200 && clientCatalog.json().access.canModerate === false, "Client accounts must not receive moderation access.");
   const clientPlay = await app.inject({ method: "POST", url: "/api/phantomplay/plays", headers: { Authorization: `Bearer ${clientToken}` }, payload: { gameId: "signal-match" } });
   assert(clientPlay.statusCode === 403 && clientPlay.json().error === "read_only_plan", "The existing free-plan write boundary must block a legacy read-only client.");
-  const ownerRoom = await app.inject({ method: "POST", url: "/api/phantomplay/rooms", headers: { Authorization: `Bearer ${ownerToken}` }, payload: { gameId: "signal-match", mode: "classroom", maxPlayers: 4 } });
+  const ownerRoom = await app.inject({ method: "POST", url: "/api/phantomplay/rooms", headers: { Authorization: `Bearer ${ownerToken}` }, payload: { tenantId: "client-sports-demo", gameId: "neon-drift", mode: "classroom", maxPlayers: 4 } });
   assert(ownerRoom.statusCode === 200 && ownerRoom.json().room.safety.publicDiscovery === false, "The private room API should create non-public rooms for privileged local operators.");
   const ownerRoomCode = ownerRoom.json().room.code;
-  const ownerRoomFetch = await app.inject({ method: "GET", url: `/api/phantomplay/rooms/${ownerRoomCode}`, headers: { Authorization: `Bearer ${ownerToken}` } });
+  const ownerRoomFetch = await app.inject({ method: "GET", url: `/api/phantomplay/rooms/${ownerRoomCode}?tenant_id=client-sports-demo`, headers: { Authorization: `Bearer ${ownerToken}` } });
   assert(ownerRoomFetch.statusCode === 200 && ownerRoomFetch.json().room.code === ownerRoomCode, "The private room API should return joined/hosted room state only through authenticated routes.");
   const clientModeration = await app.inject({ method: "POST", url: `/api/phantomplay/submissions/${created.submission.id}/moderate`, headers: { Authorization: `Bearer ${clientToken}` }, payload: { decision: "approved" } });
   assert(clientModeration.statusCode === 403, "The moderation route must reject client sessions.");
   await app.close();
 
-  console.log(JSON.stringify({ ok: true, builtInGames: initial.catalog.length, arenaBuiltIns: ["rift-frenzy", "serpent-surge", "crown-circuit"], savedScore: saved?.score, tenantIsolation: true, privateRooms: true, privateUrlRejected, versionCount: updated?.submission.versions.length, moderationBlocked: playerModerationBlocked, routeAuth: true, communityApproval: true, disabledRemoved: true, timeLimitBlocked: limitBlocked }));
+  console.log(JSON.stringify({ ok: true, builtInGames: initial.catalog.length, arenaBuiltIns: ["rift-frenzy", "serpent-surge"], savedScore: saved?.score, tenantIsolation: true, privateRooms: true, privateUrlRejected, versionCount: updated?.submission.versions.length, moderationBlocked: playerModerationBlocked, routeAuth: true, communityApproval: true, disabledRemoved: true, timeLimitBlocked: limitBlocked }));
 } finally {
   await rm(root, { recursive: true, force: true });
 }

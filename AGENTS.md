@@ -4,26 +4,6 @@
 > touch files. Multiple agents work this repo in parallel; this note keeps us from
 > clobbering each other. Update the "Recent, merged & live" list when you land work.
 
-## PhantomForce continuous quality mission
-
-Before website, admin-app, onboarding, pricing, PhantomPlay, or product-navigation
-work, read:
-
-- `docs/quality/CONTINUOUS_QUALITY_PROGRAM.md`
-- `docs/quality/SITE_INVENTORY.md`
-- `docs/quality/QUALITY_BACKLOG.md`
-- `docs/quality/NEXT_CYCLE.md`
-
-PhantomForce is not considered permanently complete. Work in finite, verified
-quality cycles: discover surfaces, exercise real journeys, record evidence, fix
-the highest-impact verified issue batch, run relevant checks, inspect browser
-behavior for UI changes, update the quality docs, and leave an exact next-cycle
-checkpoint.
-
-Do not perform speculative redesign churn merely to stay active. Do not merge,
-push, deploy, sync live admin, change billing/auth behavior, or execute external
-actions without explicit authorization and targeted regression coverage.
-
 ## Source of truth
 - The canonical repo is **`github.com/KIDWST/phantomforce`**, branch **`main`**.
 - If your checkout has no `origin`, it's an isolated clone — wire it up before trusting local state:
@@ -38,13 +18,6 @@ actions without explicit authorization and targeted regression coverage.
   still fine if you prefer review, but it is no longer required.
 
 ## Recent, merged & live (newest first)
-- **PhantomPlay V2 graft + trunk restore (2026-07-13)** — origin/main and this local
-  trunk diverged badly (39 vs 72 commits); a naive merge produced chimera code and was
-  rolled back (backup/pre-v2-merge-20260713). PhantomPlay V2 (phantomplay-v2.ts, /api/
-  phantomplay/v2/*, opt-in phantomplay-v2.js shell, Phantom Rumble + Sudoku Signal) is
-  grafted onto THIS line and also lives on origin/main (eddc9d5). WHOEVER OWNS THE 72
-  LOCAL COMMITS: please reconcile with origin/main deliberately (organization-pulse,
-  workspace module gating, and the 15 origin-line games need a semantic merge, not -X ours).
 - **Competitor Intelligence + optional Aggressive Mode (2026-07-12)** —
   tenant-scoped public-signal evidence, labeled weak-signal inferences,
   aggregated audience-gap mining, originality-risk checks, bounded market
@@ -91,7 +64,7 @@ actions without explicit authorization and targeted regression coverage.
   (`app/index.html`, `app/phantom.css`, `app/js/main.js`).
 - **Living Phantom character** — `app/js/character.js`: 11 painted poses, emotional
   inertia (`governMood`), hologram depth. Shared by admin + public site.
-- Current cache-bust build id: **`phantom-live-20260713-248`**.
+- Current cache-bust build id: **`phantom-live-20260713-239`**.
 
 ## Repo map
 - `app/` — the **admin console** (`admin.phantomforce.online`). `index.html`,

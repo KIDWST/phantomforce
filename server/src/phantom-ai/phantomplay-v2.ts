@@ -30,8 +30,11 @@ import { fileURLToPath } from "node:url";
 
 import type { AccessSession } from "../access/session.js";
 import {
+  isRatingAllowed,
+  mergeGameRatingOverride,
   PHANTOMPLAY_BUILT_IN_GAMES,
   type PhantomPlayGame,
+  type PhantomPlayGameOverride,
   type PhantomPlayRating,
   type PhantomPlaySubmission,
 } from "./phantomplay.js";
@@ -65,8 +68,8 @@ const cover = (label: string, glyph: string, hue: string) =>
 // (Snake, 2048, minesweeper, and typing already exist on main as
 // circuit-serpent, tower-tactics, signal-sweeper, and type-storm.)
 export const PHANTOMPLAY_V2_GAMES: PhantomPlayGame[] = [
-  { id: "phantom-rumble", title: "Phantom Rumble", summary: "A premium local platform fighter with guard, parry, dodge, ledge-save recovery, bots, drops, and touch controls.", description: "A full PhantomPlay platform fighter: up to four players or bots brawl across a dynamic arena with percent knockback, double jumps, charge smashes, Phantom Burst, guard/parry, dodge, ledge-save recovery, camera focus, and reality-bending drops. Local keyboard and mobile touch play are both supported without external networking.", category: "Arcade", tags: ["platform fighter", "multiplayer", "action", "local", "touch"], contentRating: "everyone", developer: "Tak", kind: "built_in", launchUrl: "/app/games/phantom-rumble.html?v=2.2.3", thumbnail: cover("PHANTOM RUMBLE", "⚔", "#4ade80"), featured: true, version: "2.2.3", controls: "P1: WASD, Shift guard, Q dodge, Space tap/hold. P2: arrows, I guard, O dodge, Enter tap/hold. Touch controls on mobile.", progressSupport: true, scoreSupport: true },
-  { id: "sudoku-signal", title: "Sudoku Signal", summary: "Generated sudoku with pencil marks — resumes exactly where you stopped.", description: "Every puzzle is generated with a unique solution. Three difficulties, conflict highlighting, pencil marks, and full cloud resume.", category: "Focus", tags: ["logic", "calm", "resume"], contentRating: "everyone", developer: "Tak", kind: "built_in", launchUrl: "/app/games/sudoku-signal.html?v=1.0.0", thumbnail: cover("SUDOKU SIGNAL", "⌗", "#a7f3d0"), featured: false, version: "1.0.0", controls: "Arrows + 1-9, or tap + number pad", progressSupport: true, scoreSupport: true },
+  { id: "phantom-rumble", title: "Phantom Rumble", summary: "Chicken-ninja phantom brawls with KO callouts, pickups, SFX, and hard-reset rematches.", description: "A local-multiplayer platform fighter. Two players share a keyboard (WASD+F/G vs arrows+K/L), bots fill the rest. Percent-based knockback, double jumps, dashes, pickups, KO callouts, procedural SFX, and stock battles — built for the FRIENDS tab, no network needed. Exiting always clears the fight state so the next launch starts fresh.", category: "Arcade", tags: ["multiplayer", "action", "local", "party"], contentRating: "everyone", developer: "Tak", kind: "built_in", launchUrl: "/app/games/phantom-rumble.html?v=1.1.0", thumbnail: cover("PHANTOM RUMBLE", "⚔", "#4ade80"), featured: true, version: "1.1.0", controls: "P1: WASD + F/G · P2: Arrows + K/L · bots optional", progressSupport: true, scoreSupport: true },
+  { id: "sudoku-signal", title: "Sudoku Signal", summary: "Generated sudoku with pencil marks, clean-placement streaks, and resume support.", description: "Every puzzle is generated with a unique solution. Three difficulties, conflict highlighting, pencil marks, signal streak scoring, best-streak result reporting, and full cloud resume.", category: "Focus", tags: ["logic", "calm", "resume"], contentRating: "everyone", developer: "Tak", kind: "built_in", launchUrl: "/app/games/sudoku-signal.html?v=1.1.0", thumbnail: cover("SUDOKU SIGNAL", "⌗", "#a7f3d0"), featured: false, version: "1.1.0", controls: "Arrows + 1-9, or tap + number pad", progressSupport: true, scoreSupport: true },
 ];
 
 let gamesRegistered = false;
@@ -82,8 +85,11 @@ export function registerPhantomPlayV2Games() {
 const clean = (value: unknown, max = 500) => String(value ?? "").trim().replace(/[\u0000-\u001f\u007f]/g, " ").slice(0, max);
 const now = () => new Date().toISOString();
 const clamp = (value: unknown, min: number, max: number) => Math.max(min, Math.min(max, Number(value) || 0));
-const ratingRank: Record<PhantomPlayRating, number> = { everyone: 0, teen: 1, mature: 2 };
-const safeRating = (value: unknown): PhantomPlayRating => value === "mature" || value === "teen" ? value : "everyone";
+// Mirrors ./phantomplay.ts's ratingRank/safeRating exactly (kept local, not
+// imported, since both are unexported implementation details there).
+const ratingRank: Record<PhantomPlayRating, number> = { toddler: 0, everyone: 1, everyone10: 2, teen: 3, mature: 4 };
+const safeRating = (value: unknown): PhantomPlayRating =>
+  value === "mature" || value === "teen" || value === "everyone10" || value === "toddler" ? value : "everyone";
 
 function tenantIdFor(session: AccessSession, requested?: unknown) {
   const own = session.orgId || session.clientId || session.id || "phantomforce";
@@ -151,26 +157,61 @@ async function writeStore(store: V2Store) {
   await writes;
 }
 
-// V1 store, read-only. Shape documented in ./phantomplay.ts.
+// V1 store, read-only. Shape documented in ./phantomplay.ts. `preferences`
+// and `gameOverrides` mirror V1's rating-exposure fields only as far as this
+// module needs to read them (never written here).
 type V1Session = { id: string; gameId: string; startedAt: string; updatedAt: string; endedAt: string | null; seconds: number; score: number | null; progress: number; state: Record<string, string | number | boolean | null> };
-type V1Profile = { tenantId: string; actorId: string; favorites: string[]; sessions: V1Session[] };
-async function readV1Store(): Promise<{ profiles: Record<string, V1Profile>; submissions: PhantomPlaySubmission[] }> {
+type V1Profile = {
+  tenantId: string;
+  actorId: string;
+  favorites: string[];
+  sessions: V1Session[];
+  preferences?: { allowedRatings?: PhantomPlayRating[] };
+};
+async function readV1Store(): Promise<{ profiles: Record<string, V1Profile>; submissions: PhantomPlaySubmission[]; gameOverrides: Record<string, PhantomPlayGameOverride> }> {
   try {
-    const parsed = JSON.parse(await readFile(v1StorePath(), "utf8")) as { profiles?: Record<string, V1Profile>; submissions?: PhantomPlaySubmission[] };
-    return { profiles: parsed.profiles && typeof parsed.profiles === "object" ? parsed.profiles : {}, submissions: Array.isArray(parsed.submissions) ? parsed.submissions : [] };
+    const parsed = JSON.parse(await readFile(v1StorePath(), "utf8")) as {
+      profiles?: Record<string, V1Profile>;
+      submissions?: PhantomPlaySubmission[];
+      gameOverrides?: Record<string, PhantomPlayGameOverride>;
+    };
+    return {
+      profiles: parsed.profiles && typeof parsed.profiles === "object" ? parsed.profiles : {},
+      submissions: Array.isArray(parsed.submissions) ? parsed.submissions : [],
+      gameOverrides: parsed.gameOverrides && typeof parsed.gameOverrides === "object" ? parsed.gameOverrides : {},
+    };
   } catch {
-    return { profiles: {}, submissions: [] };
+    return { profiles: {}, submissions: [], gameOverrides: {} };
   }
 }
 
-function fullCatalog(submissions: PhantomPlaySubmission[]): PhantomPlayGame[] {
+function fullCatalog(submissions: PhantomPlaySubmission[], gameOverrides: Record<string, PhantomPlayGameOverride> = {}): PhantomPlayGame[] {
   const community = submissions.filter((item) => item.status === "approved" && item.launchUrl).map((item) => ({
     id: `community:${item.id}`, title: item.title, summary: item.summary, description: item.description,
     category: item.category, tags: item.tags, contentRating: item.contentRating, developer: item.developerName,
     kind: "community" as const, launchUrl: item.launchUrl, thumbnail: item.screenshots[0] || "", featured: item.featured,
     version: item.version, controls: item.controls, progressSupport: true, scoreSupport: true,
   }));
-  return [...PHANTOMPLAY_BUILT_IN_GAMES, ...community];
+  return [...PHANTOMPLAY_BUILT_IN_GAMES, ...community].map((game) => mergeGameRatingOverride(game, gameOverrides[game.id]));
+}
+
+// Full workspace-ceiling + profile-allow-set filter, shared by every surface
+// in this module that assembles a games list for a specific session (game
+// page, discovery/trending/hidden-gems, review/wishlist game lookups). A
+// game hidden by EITHER the workspace policy OR the profile's own
+// allowedRatings must not appear here — matching V1's catalogFor in
+// ./phantomplay.ts, which applies the same two-gate rule for the main list.
+function visibleCatalogFor(
+  store: V2Store,
+  v1: { profiles: Record<string, V1Profile>; submissions: PhantomPlaySubmission[]; gameOverrides: Record<string, PhantomPlayGameOverride> },
+  tenantId: string,
+  actorId: string,
+): PhantomPlayGame[] {
+  const catalog = fullCatalog(v1.submissions, v1.gameOverrides);
+  const policy = store.policies[tenantId] || defaultWorkspacePolicy();
+  const afterWorkspace = applyWorkspacePolicy(catalog, policy);
+  const profile = v1.profiles[profileKey(tenantId, actorId)];
+  return afterWorkspace.filter((game) => isRatingAllowed(game.contentRating, profile?.preferences?.allowedRatings));
 }
 
 function tenantSocial(store: V2Store, tenantId: string) {
@@ -279,11 +320,10 @@ export async function upsertPhantomPlayReview(session: AccessSession, gameId: st
   const actorId = actorIdFor(session);
   const rating = Math.round(clamp(input.rating, 1, 5));
   const text = clean(input.text, 1200);
-  const v1 = await readV1Store();
-  const game = fullCatalog(v1.submissions).find((item) => item.id === gameId);
+  const [store, v1] = await Promise.all([readStore(), readV1Store()]);
+  const game = visibleCatalogFor(store, v1, tenantId, actorId).find((item) => item.id === gameId);
   if (!game) throw new Error("That game is not in the catalog.");
   if (text.length < 3) throw new Error("Write at least a few words.");
-  const store = await readStore();
   const existing = store.reviews.find((item) => item.tenantId === tenantId && item.gameId === gameId && item.actorId === actorId);
   const stamp = now();
   if (existing) {
@@ -307,7 +347,7 @@ export async function setPhantomPlayWishlist(session: AccessSession, gameId: str
   store.wishlists[key] = on ? [gameId, ...list.filter((id) => id !== gameId)].slice(0, 200) : list.filter((id) => id !== gameId);
   if (on && !list.includes(gameId)) {
     const v1 = await readV1Store();
-    const game = fullCatalog(v1.submissions).find((item) => item.id === gameId);
+    const game = visibleCatalogFor(store, v1, tenantId, actorId).find((item) => item.id === gameId);
     if (game) pushFeed(store, tenantId, { kind: "wishlist", actorLabel: actorLabelFor(session), subject: game.title, detail: "", at: now() });
   }
   await writeStore(store);
@@ -366,7 +406,7 @@ export async function getPhantomPlayGamePage(session: AccessSession, gameId: str
   const tenantId = tenantIdFor(session, options.tenantId);
   const actorId = actorIdFor(session);
   const [store, v1] = await Promise.all([readStore(), readV1Store()]);
-  const catalog = fullCatalog(v1.submissions);
+  const catalog = visibleCatalogFor(store, v1, tenantId, actorId);
   const game = catalog.find((item) => item.id === gameId);
   if (!game) return null;
   const profiles = tenantProfiles(v1.profiles, tenantId);
@@ -421,33 +461,31 @@ export async function getPhantomPlayDiscovery(session: AccessSession, options: {
   const tenantId = tenantIdFor(session, options.tenantId);
   const actorId = actorIdFor(session);
   const [store, v1] = await Promise.all([readStore(), readV1Store()]);
-  const catalog = fullCatalog(v1.submissions);
+  // Every discovery row below (trending/topRated/hiddenGems/newReleases) is
+  // built ONLY from this workspace+profile-filtered catalog, so a game
+  // hidden by the workspace ceiling or this profile's rating exposure can
+  // never surface through a secondary discovery row even if it has plays,
+  // reviews, or is a brand-new community release.
+  const catalog = visibleCatalogFor(store, v1, tenantId, actorId);
+  const visibleIds = new Set(catalog.map((game) => game.id));
   const profiles = tenantProfiles(v1.profiles, tenantId);
   const weekCutoff = Date.now() - 7 * 86400_000;
-  // All-time counts drive "trending" and the catalog's default sort key
-  // (most-played first); the 7-day window is kept separately for
-  // hiddenGems, where "low recent plays" is the point of the metric.
   const playCounts = new Map<string, number>();
-  const weekPlayCounts = new Map<string, number>();
   for (const profile of profiles) for (const item of profile.sessions || []) {
-    playCounts.set(item.gameId, (playCounts.get(item.gameId) || 0) + 1);
-    if (Date.parse(item.startedAt) >= weekCutoff) weekPlayCounts.set(item.gameId, (weekPlayCounts.get(item.gameId) || 0) + 1);
+    if (Date.parse(item.startedAt) >= weekCutoff) playCounts.set(item.gameId, (playCounts.get(item.gameId) || 0) + 1);
   }
   const avg = (gameId: string) => ratingSummary(store.reviews, tenantId, gameId);
-  const known = (id: string) => catalog.some((game) => game.id === id);
+  const known = (id: string) => visibleIds.has(id);
   const bucket = tenantSocial(store, tenantId);
   const friends = bucket.friendships.filter((item) => item.status === "accepted" && (item.a === actorId || item.b === actorId)).map((item) => (item.a === actorId ? item.b : item.a));
   const friendsPlaying = livePresence(bucket)
-    .filter((entry) => friends.includes(entry.actorId) && entry.gameId && entry.status !== "invisible")
+    .filter((entry) => friends.includes(entry.actorId) && entry.gameId && entry.status !== "invisible" && visibleIds.has(entry.gameId))
     .map((entry) => ({ gameId: entry.gameId, actorId: entry.actorId, label: entry.label }));
   return {
     trending: [...playCounts.entries()].filter(([id]) => known(id)).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([gameId, plays]) => ({ gameId, plays })),
-    // Default catalog/library sort key: most-played first, all-time. Games
-    // with no recorded plays keep catalog order, appended after played ones.
-    catalogOrder: [...catalog].sort((a, b) => (playCounts.get(b.id) || 0) - (playCounts.get(a.id) || 0)).map((game) => game.id),
     topRated: catalog.map((game) => ({ gameId: game.id, ...avg(game.id) })).filter((row) => row.reviewCount >= 2 && (row.averageRating ?? 0) >= 3.5).sort((a, b) => (b.averageRating ?? 0) - (a.averageRating ?? 0)).slice(0, 6).map(({ gameId, averageRating }) => ({ gameId, averageRating })),
-    hiddenGems: catalog.map((game) => ({ gameId: game.id, plays: weekPlayCounts.get(game.id) || 0, ...avg(game.id) })).filter((row) => (row.averageRating ?? 0) >= 4 && row.plays < 10).slice(0, 6).map(({ gameId, averageRating }) => ({ gameId, averageRating })),
-    newReleases: v1.submissions.filter((item) => item.status === "approved").sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 6).map((item) => ({ gameId: `community:${item.id}` })),
+    hiddenGems: catalog.map((game) => ({ gameId: game.id, plays: playCounts.get(game.id) || 0, ...avg(game.id) })).filter((row) => (row.averageRating ?? 0) >= 4 && row.plays < 10).slice(0, 6).map(({ gameId, averageRating }) => ({ gameId, averageRating })),
+    newReleases: v1.submissions.filter((item) => item.status === "approved" && visibleIds.has(`community:${item.id}`)).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 6).map((item) => ({ gameId: `community:${item.id}` })),
     friendsPlaying,
   };
 }
@@ -459,9 +497,8 @@ export async function getPhantomPlayResumeState(session: AccessSession, gameId: 
   const v1 = await readV1Store();
   const profile = v1.profiles[profileKey(tenantId, actorId)];
   if (!profile) return { gameId, state: null };
-  const latest = (profile.sessions || []).filter((item) => item.gameId === gameId).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
-  const canResume = !!latest && !latest.endedAt && latest.progress > 0 && latest.progress < 100 && !!latest.state && Object.keys(latest.state).length > 0;
-  return { gameId, state: canResume ? latest.state : null, progress: latest?.progress ?? null, updatedAt: latest?.updatedAt || null };
+  const latest = (profile.sessions || []).filter((item) => item.gameId === gameId && item.state && Object.keys(item.state).length).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
+  return { gameId, state: latest?.state || null, progress: latest?.progress ?? null, updatedAt: latest?.updatedAt || null };
 }
 
 // ---- developer analytics ---------------------------------------------------------------------

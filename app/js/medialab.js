@@ -6,18 +6,20 @@
  * instead of sending people out to another product.
  */
 
-import { currentTenantId, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260717-2";
+import { currentTenantId, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260714-006";
 import {
   PLATFORMS, registerContentAsset, loadSocialAccounts, saveSocialAccounts, socialStatus,
-} from "./contenthub.js?v=phantom-live-20260717-2";
-import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260717-2";
+  loadContentAssets, saveContentAssets, contentAssetDisplayUrl, hydrateContentAssetUrl,
+} from "./contenthub.js?v=phantom-live-20260714-006";
+import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260714-006";
 import {
   addImageLayer, addTextLayer, cloneImageEditState, compositionSnapshot, duplicateLayer,
   freshComposition, hitTestLayer, loadCompositionImages, moveLayerOrder, pushEditorSnapshot,
   removeSelectedLayers, renderComposition, restoreComposition, selectLayer, selectedLayers,
-} from "./content-editor.js?v=phantom-live-20260717-2";
-import { loadImageForEditing, exportCanvas, requestAiEdit, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260717-2";
-import { assetsAvailable, assetBlobUrl, listAssets, recordAssetUsage, saveToAssetCloud } from "./orgs.js?v=phantom-live-20260717-2";
+} from "./content-editor.js?v=phantom-live-20260714-006";
+import { loadImageForEditing, exportCanvas, requestAiEdit, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260714-006";
+import { mountVideoEditor } from "./videocut.js?v=phantom-live-20260714-006";
+import { assetsAvailable, assetBlobUrl, listAssets, recordAssetUsage, saveToAssetCloud, listLocalAssets, refreshLocalAssets, localAssetBlobUrl } from "./orgs.js?v=phantom-live-20260714-006";
 
 const CFG_KEY = "pf.medialab.v1";
 const EDIT_INTENT_KEY = "pf.medialab.editIntent.v1";
@@ -81,8 +83,8 @@ const EDIT_PROMPT_LANGUAGES = [
   },
   {
     id: "higgsfield",
-    label: "Higgsfield product polish",
-    prompt: "Higgsfield-ready edit language: premium product/ad finish, realistic lighting, sharp subject separation, clean background control, and no fake text.",
+    label: "Premium product polish",
+    prompt: "Premium product/ad finish: realistic lighting, sharp subject separation, clean background control, and no fake text.",
   },
   {
     id: "chicagoshots",
@@ -1077,7 +1079,10 @@ function previewAsset(req, i, context = {}) {
 /* =========================================================================
    STUDIO
    ========================================================================= */
-let session = { assets: [], tab: "generate", edit: null };
+let session = { assets: [], tab: "generate", edit: null, editMode: null };
+/* pool size for the tab badge — kept from register/render results so the
+   topbar never has to parse the (potentially multi-MB) pool store itself */
+let mlPoolCount = 0;
 
 function consumeEditIntent(opts = {}) {
   let intent = null;
@@ -1089,13 +1094,13 @@ function consumeEditIntent(opts = {}) {
     type: "image",
     url: intent.url,
     saved: true,
-    meta: { prompt: intent.prompt || "", title: intent.title || "Creator Hub edit" },
+    meta: { prompt: intent.prompt || "", title: intent.title || "Content Hub edit" },
   };
   if (!session.assets.some((item) => item.id === asset.id)) session.assets.unshift(asset);
   session.edit = { url: asset.url, type: "image", id: asset.id };
   session.tab = "edit";
   resetEdit();
-  opts.notify?.("Media Factory", `loaded ${intent.title || "Creator Hub asset"} for local edit.`);
+  opts.notify?.("Media Factory", `loaded ${intent.title || "Content Hub asset"} for local edit.`);
 }
 
 function consumePromptIntent(opts = {}) {
@@ -1117,57 +1122,229 @@ const NAV_TABS = [
   ["edit", "Edit"],
 ];
 const NAV_DRAWERS = [
+  ["assets", "Assets", "image"],
   ["templates", "Templates", "layout"],
   ["history", "History", "clock"],
   ["engine", "Engine", "cpu"],
 ];
 let activeDrawer = null;
+const localAssetsState = {
+  loaded: false,
+  loading: false,
+  search: "",
+  kind: "all",
+  assets: [],
+  count: 0,
+  source: "",
+  rootLabel: "",
+  message: "",
+  viewHash: "",
+};
+/* test/diagnostics hook: how much of the local-assets panel came from cache */
+const mlLocalStats = { paintedFromCache: false, thumbCacheHits: 0 };
+if (typeof window !== "undefined") window.__mlLocalStats = mlLocalStats;
+
+/* ---- instant open: the last successful listing per search+kind lives in
+   sessionStorage so reopening the drawer paints immediately, then a silent
+   background refresh reconciles. Capped so it never eats the storage quota. */
+const LOCAL_ASSETS_CACHE_KEY = "pf.medialab.localAssets.cache.v3";
+const LOCAL_ASSETS_CACHE_MAX_ENTRIES = 24;
+const LOCAL_ASSETS_CACHE_BUDGET = 50_000; // ~50KB of serialized listings
+let localAssetsFetchSeq = 0;
+let localAssetsDrawerSynced = false; // one background refresh per drawer open
+
+function localAssetsCacheKey() {
+  return `${localAssetsState.kind}::${String(localAssetsState.search || "").trim().toLowerCase()}`;
+}
+function localAssetsCacheReadAll() {
+  try { return JSON.parse(sessionStorage.getItem(LOCAL_ASSETS_CACHE_KEY) || "{}") || {}; } catch { return {}; }
+}
+function localAssetsCacheGet(key) {
+  const entry = localAssetsCacheReadAll()[key];
+  return entry && Array.isArray(entry.assets) ? entry : null;
+}
+function localAssetsCachePut(key, result) {
+  const all = localAssetsCacheReadAll();
+  all[key] = {
+    assets: result.assets || [],
+    count: result.count || (result.assets || []).length || 0,
+    root_label: result.root_label || "",
+    source: result.source || "",
+    at: Date.now(),
+  };
+  const oldestFirst = () => Object.keys(all).sort((a, b) => (all[a]?.at || 0) - (all[b]?.at || 0));
+  while (Object.keys(all).length > LOCAL_ASSETS_CACHE_MAX_ENTRIES) delete all[oldestFirst()[0]];
+  let payload = JSON.stringify(all);
+  while (payload.length > LOCAL_ASSETS_CACHE_BUDGET && Object.keys(all).length > 1) {
+    delete all[oldestFirst()[0]];
+    payload = JSON.stringify(all);
+  }
+  if (payload.length > LOCAL_ASSETS_CACHE_BUDGET) return; // one oversized listing isn't worth caching
+  try { sessionStorage.setItem(LOCAL_ASSETS_CACHE_KEY, payload); } catch {}
+}
+function isEditorToolPackage(asset = {}) {
+  const haystack = [
+    asset.id,
+    asset.title,
+    asset.name,
+    asset.category,
+    asset.app,
+    asset.relative_path,
+    asset.safety,
+    ...(asset.tags || []),
+  ].join(" ").toLowerCase();
+  if (/\b(installer|setup|application installer|windows installer|mac installer|program installer|installers_do_not_run)\b/.test(haystack)) return true;
+  if (/\b(davinci resolve studio|blackmagic design|adobe creative cloud|adobe premiere|premiere pro|after effects|final cut pro|avid media composer)\b/.test(haystack) && /\b(installer|setup|studio|application|windows|mac|download)\b/.test(haystack)) return true;
+  return false;
+}
+/* cheap change detector so background refreshes only repaint when the data moved */
+function localAssetsSnapshotHash() {
+  const s = localAssetsState;
+  return String(hashStr(JSON.stringify([
+    s.assets.map((a) => [a.id, a.title, a.size_label, a.updated_at]),
+    s.count, s.rootLabel, s.source, s.message, s.loading,
+  ])));
+}
 let pendingJobs = [];
 
 export function renderMediaStudio(el, opts = {}) {
+  if (opts.initialTab && el.dataset.mlInitialTab !== opts.initialTab) {
+    session.tab = opts.initialTab;
+    el.dataset.mlInitialTab = opts.initialTab;
+  }
   consumeEditIntent(opts);
   consumePromptIntent(opts);
   const esc = opts.esc || ((s) => String(s));
   const cfg = loadCfg();
   if (session.tab === "briefs") session.tab = "pending";
+  if (activeDrawer !== "assets") localAssetsDrawerSynced = false;
+  /* while a local-asset drag is live, the tab buttons stand in as drop targets
+     for surfaces that only exist on their own tab */
+  const tabDropAttrs = (id) => {
+    if (id === "edit" && session.tab !== "edit") return ` data-ml-dropzone="edit" data-ml-dropzone-label="Drop to open in editor"`;
+    if (id === "generate" && session.tab !== "generate") return ` data-ml-dropzone="ref" data-ml-dropzone-label="Drop to use as reference"`;
+    return "";
+  };
   el.innerHTML = `
     <div class="ml">
       <div class="ml-topbar">
-        <button class="ml-back" data-ml-back type="button" aria-label="Go back"><span aria-hidden="true">&larr;</span><em>Back</em></button>
         <nav class="ml-tabs" role="tablist" aria-label="Media Lab views">
-          ${NAV_TABS.map(([id, label]) => `<button class="ml-tab ${session.tab === id && !activeDrawer ? "is-active" : ""}" role="tab" aria-selected="${session.tab === id && !activeDrawer}" data-ml-tab="${id}">${label}${id === "library" && session.assets.length ? ` · ${session.assets.length}` : ""}</button>`).join("")}
+          ${NAV_TABS.map(([id, label]) => `<button class="ml-tab ${session.tab === id && !activeDrawer ? "is-active" : ""}" role="tab" aria-selected="${session.tab === id && !activeDrawer}" data-ml-tab="${id}"${tabDropAttrs(id)}>${label}${id === "library" && mlPoolCount ? ` · ${mlPoolCount}` : ""}${id === "pending" && pendingJobs.length ? ` · ${pendingJobs.length}` : ""}</button>`).join("")}
         </nav>
+        <button class="ml-asset-open ${activeDrawer === "assets" ? "is-active" : ""}" data-ml-drawer-open="assets" type="button">${svgIc("image")} Assets</button>
         <button class="ml-settings-gear ${activeDrawer === "settings" ? "is-active" : ""}" data-ml-open-local-settings type="button" title="Media Lab settings" aria-label="Media Lab settings">${svgIc("gear")}</button>
       </div>
       <div class="ml-body" data-ml-body></div>
       ${activeDrawer ? drawerHtml(activeDrawer, cfg, esc, opts) : ""}
     </div>`;
-  el.querySelector("[data-ml-back]")?.addEventListener("click", () => {
-    if (window.history.length > 1) window.history.back();
-    else opts.openWorkspace?.("home");
-  });
   el.querySelectorAll("[data-ml-tab]").forEach((b) => b.onclick = () => { session.tab = b.dataset.mlTab; activeDrawer = null; renderMediaStudio(el, opts); });
   el.querySelectorAll("[data-ml-drawer-open]").forEach((b) => b.onclick = () => { activeDrawer = activeDrawer === b.dataset.mlDrawerOpen ? null : b.dataset.mlDrawerOpen; renderMediaStudio(el, opts); });
   el.querySelector("[data-ml-open-local-settings]")?.addEventListener("click", () => { activeDrawer = activeDrawer === "settings" ? null : "settings"; renderMediaStudio(el, opts); });
   el.querySelector("[data-ml-drawer-close]")?.addEventListener("click", () => { activeDrawer = null; renderMediaStudio(el, opts); });
   el.querySelector("[data-ml-drawer-backdrop]")?.addEventListener("click", () => { activeDrawer = null; renderMediaStudio(el, opts); });
+  ensureMediaLabDnd(el, opts);
   wireDrawer(el, activeDrawer, cfg, opts, esc);
   const body = el.querySelector("[data-ml-body]");
   if (session.tab === "generate") renderGenerate(body, cfg, opts, el);
   else if (session.tab === "pending") (opts.renderPending ? opts.renderPending(body) : renderPending(body));
   else if (session.tab === "edit") renderEdit(body, cfg, opts, el);
-  else if (session.tab === "library") renderLibrary(body, opts, el);
+  else if (session.tab === "library") renderMediaPool(body, cfg, opts, el);
 }
 
 /* ---- drawers: Templates / History / Engine / Settings — local Media Lab only ---- */
 function drawerHtml(kind, cfg, esc, opts) {
-  const titleFor = { templates: "Templates", history: "History", engine: "Engine", settings: "Media Lab settings" };
+  const titleFor = { assets: "Local Assets", templates: "Templates", history: "History", engine: "Engine", settings: "Media Lab settings" };
   return `
     <div class="ml-drawer-backdrop" data-ml-drawer-backdrop></div>
     <aside class="ml-drawer" role="dialog" aria-label="${titleFor[kind]}">
       <header class="ml-drawer-head"><b>${titleFor[kind]}</b><button class="ml-drawer-x" data-ml-drawer-close aria-label="Close">${svgIc("close")}</button></header>
-      <div class="ml-drawer-body">${kind === "templates" ? templatesDrawerHtml(esc) : kind === "history" ? historyDrawerHtml(esc) : kind === "settings" ? mediaSettingsDrawerHtml(cfg, esc) : engineDrawerHtml(cfg, esc)}</div>
+      <div class="ml-drawer-body">${kind === "assets" ? localAssetsDrawerHtml(esc) : kind === "templates" ? templatesDrawerHtml(esc) : kind === "history" ? historyDrawerHtml(esc) : kind === "settings" ? mediaSettingsDrawerHtml(cfg, esc) : engineDrawerHtml(cfg, esc)}</div>
     </aside>`;
+}
+function localAssetsDrawerHtml(esc) {
+  const s = localAssetsState;
+  const kinds = [
+    ["all", "All"],
+    ["image", "Images"],
+    ["video", "Video"],
+    ["project", "Projects"],
+    ["archive", "Archives"],
+    ["folder", "Templates"],
+  ];
+  return `
+    <p class="ml-drawer-note">AI editor-ready assets on this PC. PhantomForce is the editor layer; compatible packs are organized for PhantomCut and image editing, while outside app installers stay hidden.</p>
+    <div class="ml-asset-controls">
+      <input class="ml-text-in" data-ml-local-search placeholder="Search local assets..." value="${esc(s.search)}"/>
+      <button class="ml-generate ml-ghost ml-inline" data-ml-local-refresh type="button">${svgIc("spark")} Refresh</button>
+    </div>
+    <div class="ml-chips ml-chips-wrap ml-local-kinds">
+      ${kinds.map(([id, label]) => `<button type="button" class="${s.kind === id ? "is-on" : ""}" data-ml-local-kind="${id}">${label}</button>`).join("")}
+    </div>
+    <div class="ml-local-summary">
+      <b>${s.loading ? "Indexing..." : `${s.count || 0} assets indexed`}</b>
+      <span>${esc(s.rootLabel || "Local library")} ${s.source ? `· ${esc(s.source)}` : ""}</span>
+    </div>
+    ${s.message ? `<p class="ml-drawer-note ml-local-message">${esc(s.message)}</p>` : ""}
+    <div class="ml-local-assets" data-ml-local-assets>
+      ${s.loading
+        ? `<div class="ml-local-empty">Scanning local assets...</div>`
+        : s.assets.length
+          ? s.assets.map((asset) => localAssetCardHtml(asset, esc)).join("")
+          : `<div class="ml-local-empty">No local assets match that search.</div>`}
+    </div>`;
+}
+function localAssetCardHtml(asset, esc) {
+  const canUse = asset.kind === "image" && (!!asset.has_preview || !!asset.previewable);
+  const category = localAssetDisplayCategory(asset);
+  return `
+    <article class="ml-local-asset" data-local-asset="${esc(asset.id)}"${canUse ? ` draggable="true" title="Drag onto the editor or the reference slot"` : ""}>
+      <div class="ml-local-thumb" data-local-thumb="${esc(asset.id)}" data-previewable="${canUse ? "1" : "0"}">
+        ${canUse ? `<span>${svgIc(asset.kind === "video" ? "film" : "image")}</span>` : `<span>${svgIc("layout")}</span>`}
+      </div>
+      <div class="ml-local-copy">
+        <b>${esc(localAssetDisplayTitle(asset))}</b>
+        <span>${esc(category)}</span>
+        <i>${esc(asset.size_label || "")} ${asset.safety ? `· ${esc(asset.safety)}` : ""}</i>
+      </div>
+      <div class="ml-local-actions">
+        ${canUse ? `<button type="button" data-ml-local-use="${esc(asset.id)}">Edit</button><button type="button" data-ml-local-ref="${esc(asset.id)}">Ref</button>` : `<em>Indexed</em>`}
+      </div>
+    </article>`;
+}
+function localAssetDisplayTitle(asset = {}) {
+  const raw = String(asset.title || asset.name || "").trim();
+  const text = [raw, asset.category, asset.app, asset.relative_path, ...(asset.tags || [])].join(" ").toLowerCase();
+  if (!raw || raw === "0") {
+    if (/photoshop|psd|psb/.test(text)) return "Layered design template";
+    if (/resolve|drfx|macro|preset|effect/.test(text)) return "Video effect pack";
+    return "Local creative asset";
+  }
+  let title = raw
+    .replace(/\bDaVinci\s+Resolve\s+Studio\b/gi, "Video")
+    .replace(/\bDaVinci\s+Resolve\b/gi, "Video")
+    .replace(/\bBlackmagic\s+Design\b/gi, "")
+    .replace(/\bAdobe\s+Photoshop\b/gi, "Layered")
+    .replace(/\bPhotoshop\b/gi, "Layered")
+    .replace(/\bsource\b/gi, "")
+    .replace(/\bPSD\/PSB\b/gi, "")
+    .replace(/\bPSD\b|\bPSB\b/gi, "")
+    .replace(/\bWindows\s+Installer\b/gi, "")
+    .replace(/\bInstaller\b/gi, "")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s+([).,])/g, "$1")
+    .trim();
+  if (!title || title === raw && /^0$/.test(title)) return localAssetDisplayCategory(asset);
+  return title;
+}
+function localAssetDisplayCategory(asset = {}) {
+  const text = [asset.category, asset.app, asset.relative_path, ...(asset.tags || [])].join(" ").toLowerCase();
+  if (/photoshop|psd|psb/.test(text)) return "Layered design template";
+  if (/resolve|drfx|macro|preset|effect/.test(text)) return "AI-ready video effect pack";
+  if (/project|template/.test(text)) return "Creative project template";
+  if (/archive/.test(text)) return "Asset archive";
+  if (/video/.test(text)) return "Video asset";
+  if (/image|photo/.test(text)) return "Image asset";
+  return asset.category || asset.kind || "Local asset";
 }
 function templatesDrawerHtml(esc) {
   const visible = MEDIA_PRESETS.filter((p) => p.modality === genState.modality);
@@ -1263,7 +1440,245 @@ function mediaSettingsDrawerHtml(cfg, esc) {
       </section>
     </div>`;
 }
+function applyLocalAssetsResult(result = {}) {
+  localAssetsState.assets = (result.assets || []).filter((asset) => !isEditorToolPackage(asset));
+  localAssetsState.count = localAssetsState.assets.length || 0;
+  localAssetsState.source = result.source || "";
+  localAssetsState.rootLabel = result.root_label || "";
+  // the server's `detail` is the admin's next move — surface it when present
+  localAssetsState.message = result.ok === false
+    ? (String(result.detail || "").trim() || "Local asset lane is not reachable from this session yet.")
+    : "";
+}
+function paintLocalAssets(el, opts) {
+  localAssetsState.viewHash = localAssetsSnapshotHash();
+  renderMediaStudio(el, opts);
+}
+async function loadLocalAssetsForDrawer(el, opts, refresh = false) {
+  const seq = ++localAssetsFetchSeq; // newest request wins; stale responses are dropped
+  const cacheKey = localAssetsCacheKey();
+  const cached = localAssetsCacheGet(cacheKey);
+  localAssetsState.message = "";
+  if (cached) {
+    // instant open: paint the last successful listing, no "Scanning..." flash
+    applyLocalAssetsResult({ ok: true, ...cached });
+    localAssetsState.loading = false;
+    localAssetsState.loaded = true;
+    mlLocalStats.paintedFromCache = true;
+  } else {
+    localAssetsState.loading = true;
+  }
+  if (localAssetsState.viewHash !== localAssetsSnapshotHash()) paintLocalAssets(el, opts);
+  const query = { search: localAssetsState.search, kind: localAssetsState.kind, limit: 60 };
+  const result = refresh
+    ? await refreshLocalAssets().then(() => listLocalAssets(query))
+    : await listLocalAssets(query);
+  if (seq !== localAssetsFetchSeq) return;
+  localAssetsState.loading = false;
+  localAssetsState.loaded = true;
+  applyLocalAssetsResult(result);
+  if (result.ok !== false) localAssetsCachePut(cacheKey, result);
+  // background refresh repaints only when the data actually changed
+  if (activeDrawer === "assets" && localAssetsState.viewHash !== localAssetsSnapshotHash()) paintLocalAssets(el, opts);
+}
+async function useLocalAsset(assetId, mode, el, opts) {
+  const asset = localAssetsState.assets.find((item) => item.id === assetId);
+  const url = await localAssetBlobUrl(assetId);
+  if (!url) {
+    opts.notify?.("Media Lab", "That local asset cannot be opened in the browser editor.");
+    return;
+  }
+  if (mode === "ref") {
+    genState.ref = url;
+    session.tab = "generate";
+    activeDrawer = null;
+    opts.notify?.("Media Lab", `using ${asset?.title || "local asset"} as reference.`);
+    renderMediaStudio(el, opts);
+    return;
+  }
+  session.edit = { url, type: asset?.kind === "video" ? "video" : "image", id: assetId };
+  session.tab = "edit";
+  activeDrawer = null;
+  resetEdit();
+  opts.notify?.("Media Lab", `opened ${asset?.title || "local asset"} in the editor.`);
+  renderMediaStudio(el, opts);
+}
+/* assetId -> object URL, reused across drawer opens so reopening is instant */
+const localThumbUrlCache = new Map();
+function paintLocalThumb(node, asset, url) {
+  node.innerHTML = asset.kind === "video"
+    ? `<video src="${url}" muted playsinline preload="metadata"></video>`
+    : `<img src="${url}" alt=""/>`;
+}
+async function hydrateLocalAssetThumbs(el) {
+  const nodes = [...el.querySelectorAll("[data-local-thumb][data-previewable='1']")].slice(0, 24);
+  const pending = [];
+  for (const node of nodes) {
+    const id = node.dataset.localThumb;
+    const asset = localAssetsState.assets.find((item) => item.id === id);
+    if (!id || !asset || asset.kind === "audio") continue;
+    const cachedUrl = localThumbUrlCache.get(id);
+    if (cachedUrl) {
+      mlLocalStats.thumbCacheHits += 1;
+      paintLocalThumb(node, asset, cachedUrl);
+      continue;
+    }
+    pending.push({ node, asset, id });
+  }
+  // small fetch pool: at most 4 blob loads in flight, top (first visible) cards first
+  let next = 0;
+  const worker = async () => {
+    while (next < pending.length) {
+      const job = pending[next++];
+      const url = await localAssetBlobUrl(job.id).catch(() => null);
+      if (!url) continue;
+      localThumbUrlCache.set(job.id, url);
+      if (job.node.isConnected) paintLocalThumb(job.node, job.asset, url);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(4, pending.length) }, () => worker()));
+}
+/* ---- drag & drop: local-asset cards onto editor/reference, plus OS files ----
+   All listeners are delegated on the studio mount and bound exactly once
+   (the mount survives re-renders even though innerHTML is replaced often). */
+const LOCAL_ASSET_DRAG_MIME = "application/x-pf-local-asset";
+let mlDragAssetId = null;
+let mlOsDragDepth = 0;
+
+function mlDropzones(el) { return [...el.querySelectorAll("[data-ml-dropzone]")]; }
+function mlSetDropzonesActive(el, on) {
+  el.classList.toggle("ml-asset-dragging", on);
+  mlDropzones(el).forEach((zone) => {
+    zone.classList.toggle("is-ml-droptarget", on);
+    if (!on) zone.classList.remove("is-dragover");
+  });
+}
+function mlOsOverlay(el, show) {
+  let overlay = el.querySelector("[data-ml-os-overlay]");
+  if (show && !overlay) {
+    overlay = document.createElement("div");
+    overlay.className = "ml-os-drop-overlay";
+    overlay.setAttribute("data-ml-os-overlay", "");
+    overlay.innerHTML = `<b>Drop media to open in the editor</b>`;
+    el.appendChild(overlay);
+  }
+  if (!show && overlay) overlay.remove();
+}
+function mlEndDrag(el) {
+  mlDragAssetId = null;
+  mlOsDragDepth = 0;
+  mlSetDropzonesActive(el, false);
+  mlOsOverlay(el, false);
+}
+function openDroppedFileInEditor(fileObj, el, opts) {
+  const type = /^video\//i.test(fileObj.type || "") ? "video" : "image";
+  const url = URL.createObjectURL(fileObj);
+  session.edit = { url, type, id: `dropped-${fileObj.name}` };
+  session.tab = "edit";
+  activeDrawer = null;
+  resetEdit();
+  renderMediaStudio(el, opts);
+  opts.notify?.("Media Lab", `opened ${fileObj.name} in the editor.`);
+}
+function ensureMediaLabDnd(el, opts) {
+  el.__mlDndOpts = opts; // handlers always read the latest render's opts
+  if (el.dataset.mlDndBound === "1") return;
+  el.dataset.mlDndBound = "1";
+  const currentOpts = () => el.__mlDndOpts || {};
+  const isFileDrag = (e) => [...(e.dataTransfer?.types || [])].includes("Files");
+  const isAssetDrag = (e) => mlDragAssetId != null || [...(e.dataTransfer?.types || [])].includes(LOCAL_ASSET_DRAG_MIME);
+
+  el.addEventListener("dragstart", (e) => {
+    const card = e.target?.closest?.("[data-local-asset][draggable='true']");
+    if (!card || !e.dataTransfer) return;
+    mlDragAssetId = card.dataset.localAsset || null;
+    if (!mlDragAssetId) return;
+    try {
+      e.dataTransfer.setData(LOCAL_ASSET_DRAG_MIME, mlDragAssetId);
+      e.dataTransfer.effectAllowed = "copy";
+      const thumb = card.querySelector("[data-local-thumb] img, [data-local-thumb] video");
+      if (thumb) e.dataTransfer.setDragImage(thumb, 28, 28);
+    } catch {}
+    mlSetDropzonesActive(el, true);
+  });
+  el.addEventListener("dragend", () => mlEndDrag(el));
+  el.addEventListener("dragenter", (e) => {
+    if (!isFileDrag(e) || isAssetDrag(e)) return;
+    e.preventDefault();
+    mlOsDragDepth += 1;
+    mlOsOverlay(el, true);
+  });
+  el.addEventListener("dragleave", (e) => {
+    if (!isFileDrag(e) || isAssetDrag(e)) return;
+    mlOsDragDepth = Math.max(0, mlOsDragDepth - 1);
+    if (!mlOsDragDepth) mlOsOverlay(el, false);
+  });
+  // preventDefault scoped to the studio root — never let the browser navigate
+  // away to a dropped file anywhere on the Media Lab surface
+  el.addEventListener("dragover", (e) => {
+    const asset = isAssetDrag(e);
+    const files = !asset && isFileDrag(e);
+    if (!asset && !files) return;
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
+    if (asset) {
+      const zone = e.target?.closest?.("[data-ml-dropzone]");
+      mlDropzones(el).forEach((z) => z.classList.toggle("is-dragover", z === zone));
+    } else {
+      mlOsOverlay(el, true);
+    }
+  });
+  el.addEventListener("drop", (e) => {
+    const dndOpts = currentOpts();
+    let assetId = "";
+    try { assetId = e.dataTransfer?.getData?.(LOCAL_ASSET_DRAG_MIME) || ""; } catch {}
+    if (!assetId && isAssetDrag(e)) assetId = mlDragAssetId || "";
+    if (assetId) {
+      e.preventDefault();
+      const zone = e.target?.closest?.("[data-ml-dropzone]");
+      mlEndDrag(el);
+      // same code path as the card buttons — drop is just another way in
+      if (zone) useLocalAsset(assetId, zone.dataset.mlDropzone === "ref" ? "ref" : "edit", el, dndOpts);
+      return;
+    }
+    if (!isFileDrag(e)) return;
+    e.preventDefault();
+    mlEndDrag(el);
+    if (e.target?.closest?.("[data-ml-drop]")) return; // Shot Builder's reference uploader owns drops on itself
+    const fileObj = [...(e.dataTransfer?.files || [])].find((f) => /^(image|video)\//i.test(f.type || ""));
+    if (!fileObj) {
+      dndOpts.notify?.("Media Lab", "Only image or video files can be dropped into the editor.");
+      return;
+    }
+    openDroppedFileInEditor(fileObj, el, dndOpts);
+  });
+}
+
 function wireDrawer(el, kind, cfg, opts, esc) {
+  if (kind === "assets") {
+    if (!localAssetsDrawerSynced) {
+      localAssetsDrawerSynced = true;
+      // paints cache instantly, then refreshes once per drawer open in the background
+      loadLocalAssetsForDrawer(el, opts);
+    }
+    hydrateLocalAssetThumbs(el);
+    const search = el.querySelector("[data-ml-local-search]");
+    if (search) {
+      let timer = null;
+      search.oninput = () => {
+        localAssetsState.search = search.value;
+        clearTimeout(timer);
+        timer = setTimeout(() => loadLocalAssetsForDrawer(el, opts, true), 250);
+      };
+    }
+    el.querySelectorAll("[data-ml-local-kind]").forEach((b) => b.onclick = () => {
+      localAssetsState.kind = b.dataset.mlLocalKind || "all";
+      loadLocalAssetsForDrawer(el, opts, true);
+    });
+    el.querySelector("[data-ml-local-refresh]")?.addEventListener("click", () => loadLocalAssetsForDrawer(el, opts, true));
+    el.querySelectorAll("[data-ml-local-use]").forEach((b) => b.onclick = () => useLocalAsset(b.dataset.mlLocalUse, "edit", el, opts));
+    el.querySelectorAll("[data-ml-local-ref]").forEach((b) => b.onclick = () => useLocalAsset(b.dataset.mlLocalRef, "ref", el, opts));
+  }
   if (kind === "templates") {
     el.querySelectorAll(".ml-drawer [data-ml-presets] button").forEach((b) => b.onclick = () => {
       const preset = MEDIA_PRESETS.find((p) => p.id === b.dataset.v);
@@ -1393,7 +1808,7 @@ function renderGenerate(body, cfg, opts, root) {
         </div>
 
         <label class="ml-field"><span>Reference</span>
-          <div class="ml-drop ${genState.ref ? "has-ref" : ""}" data-ml-drop>
+          <div class="ml-drop ${genState.ref ? "has-ref" : ""}" data-ml-drop data-ml-dropzone="ref" data-ml-dropzone-label="Drop to use as reference">
             ${genState.ref
               ? `<img src="${genState.ref}" alt="reference"/><span class="ml-drop-copy"><b>Reference attached</b><i>Style, logo, continuity</i></span><button class="ml-drop-x" data-ml-clearref aria-label="Remove reference image">${svgIc("close")}</button>`
               : `<span class="ml-drop-ic">${svgIc("upload")}</span><span class="ml-drop-copy"><b>Add reference image</b><i>Optional — style, logo, continuity</i></span><button class="ml-drop-browse" type="button">Browse files</button>`}
@@ -1555,6 +1970,7 @@ function saveMediaPoolSource(asset, extra = {}) {
       live: !!extra.live,
       createdAt: asset.at || Date.now(),
     });
+    if (result?.stats) mlPoolCount = result.stats.count;
     return result.stats;
   } catch {
     return null;
@@ -1868,6 +2284,15 @@ async function runGenerate(body, cfg, opts, root, esc) {
       session.assets.unshift(asset);
     });
     session.assets = session.assets.slice(0, 60);
+    /* Completed renders belong in Media Pool automatically — pending while
+       rendering, in the pool the moment they land. Queued drafts and
+       failed-render sketches stay out so the pool only holds real media. */
+    if (out.live) {
+      created.forEach((asset) => {
+        asset.saved = true;
+        saveMediaPoolSource(asset);
+      });
+    }
     lastRenderIssue = out.live || out.queued
       ? null
       : { reason: out.fallbackReason || "unreachable", detail: out.fallbackDetail || "", lane: out.fallbackLane || "", at: Date.now() };
@@ -1879,7 +2304,7 @@ async function runGenerate(body, cfg, opts, root, esc) {
     if (opts.notify) {
       const why = out.live || out.queued ? "" : explainMediaFailure(out.fallbackReason, out.fallbackDetail, out.fallbackLane);
       const status = out.live
-        ? "generated"
+        ? "generated and saved to Media Pool:"
         : out.queued
           ? "queued in Media Lab — final review is waiting for"
           : `render failed (${out.fallbackReason || "unreachable"})${why ? ` — ${why};` : " —"} sketched the request locally for`;
@@ -1914,24 +2339,120 @@ function tileAction(act, id, cfg, opts, root, esc, body) {
 }
 
 /* ---- Library ---- */
-function renderLibrary(body, opts, root) {
+/* ---- Media Pool: the workspace's persistent, publish-ready media ----
+   Backed by the same store Content Hub publishes from (loadContentAssets),
+   so anything visible here is selectable in Publish — one pool, no split
+   truth. Pending renders show at the top and flip into the grid the moment
+   they complete (runGenerate auto-saves live results). */
+function poolAgeLabel(createdAt) {
+  const mins = Math.max(1, Math.round((Date.now() - createdAt) / 60000));
+  if (mins < 60) return `${mins}m ago`;
+  if (mins < 1440) return `${Math.round(mins / 60)}h ago`;
+  return `${Math.round(mins / 1440)}d ago`;
+}
+function poolPendingStrip(esc) {
+  if (!pendingJobs.length) return "";
+  return `<section class="ml-pool-pending" aria-label="Renders in progress">
+    ${pendingJobs.map((job) => `
+      <article class="ml-pool-pending-card">
+        <span class="ml-rec is-live"><i aria-hidden="true"></i>Rendering</span>
+        <b>${esc((job.prompt || "Untitled request").slice(0, 80))}</b>
+        <i>${esc(job.modality)} · ${esc(job.aspect)} · started ${poolAgeLabel(job.startedAt)}</i>
+      </article>`).join("")}
+  </section>`;
+}
+function poolTileHtml(asset, esc) {
+  const url = contentAssetDisplayUrl(asset);
+  const media = url
+    ? (asset.type === "video"
+      ? `<video src="${esc(url)}" muted playsinline preload="metadata"></video>`
+      : `<img src="${esc(url)}" alt="${esc(asset.title)}" loading="lazy"/>`)
+    : `<span class="ml-pool-thumb-empty">${asset.syncedId ? "Loading preview…" : "Preview unavailable"}</span>`;
+  return `<article class="ml-pool-card" data-pool-id="${esc(asset.id)}">
+    <figure class="ml-pool-thumb" data-pool-media="${esc(asset.id)}">${media}</figure>
+    <div class="ml-pool-meta">
+      <b>${esc(asset.title.slice(0, 60))}</b>
+      <i>${esc(asset.source || "Media Lab")} · ${esc(asset.type)} · ${poolAgeLabel(asset.createdAt)} · ${asset.syncedId ? "backed up" : "this device"}</i>
+    </div>
+    <div class="ml-pool-actions">
+      <button class="ml-pool-act is-primary" data-pool-act="publish" data-id="${esc(asset.id)}">${svgIc("hub")} Publish</button>
+      ${asset.type === "image" ? `<button class="ml-pool-act" data-pool-act="edit" data-id="${esc(asset.id)}">${svgIc("edit")} Edit</button>` : ""}
+      ${asset.type === "image" ? `<button class="ml-pool-act" data-pool-act="ref" data-id="${esc(asset.id)}" title="Use as generation reference">${svgIc("image")} Ref</button>` : ""}
+      <button class="ml-pool-act" data-pool-act="download" data-id="${esc(asset.id)}" title="Download">${svgIc("download")}</button>
+      <button class="ml-pool-act is-danger" data-pool-act="remove" data-id="${esc(asset.id)}" title="Remove from Media Pool">${svgIc("close")}</button>
+    </div>
+  </article>`;
+}
+async function poolAssetUrl(asset, opts) {
+  const url = contentAssetDisplayUrl(asset) || await hydrateContentAssetUrl(asset);
+  if (!url && opts.notify) opts.notify("Media Pool", "That media has no preview on this device and no backup to pull from.");
+  return url;
+}
+function renderMediaPool(body, cfg, opts, root) {
   const esc = opts.esc || ((s) => String(s));
-  const assets = session.assets;
-  body.innerHTML = assets.length
-    ? `<div class="ml-grid ml-grid-lib">${assets.map((a) => tileHtml(a, esc)).join("")}</div>`
-    : `<div class="ml-empty">${svgIc("image")}<b>No assets yet</b><i>Everything you generate or edit lands in this one pool for the session.</i></div>`;
-  body.querySelectorAll("[data-tile-act]").forEach((b) => b.onclick = () => {
-    const a = assets.find((x) => x.id === b.dataset.id); if (!a) return;
-    if (b.dataset.tileAct === "download") downloadAsset(a);
-    else if (b.dataset.tileAct === "edit") { session.edit = { url: a.url, type: a.type, id: a.id }; session.tab = "edit"; renderMediaStudio(root, opts); }
-    else if (b.dataset.tileAct === "ref") { genState.ref = a.url; session.tab = "generate"; renderMediaStudio(root, opts); }
-    else if (b.dataset.tileAct === "remove") {
-      session.assets = session.assets.filter((x) => x.id !== b.dataset.id);
-      if (session.edit?.id === b.dataset.id) session.edit = null;
-      if (opts.notify) opts.notify("Media Factory", "removed a local media asset.");
+  const assets = loadContentAssets();
+  mlPoolCount = assets.length;
+  body.innerHTML = `
+    ${poolPendingStrip(esc)}
+    ${assets.length
+      ? `<div class="ml-pool-grid">${assets.map((a) => poolTileHtml(a, esc)).join("")}</div>`
+      : `<div class="ml-empty" data-ml-dropzone="edit" data-ml-dropzone-label="Drop to add media">${svgIc("image")}<b>Media Pool is empty</b><i>Generate in Create — finished renders land here automatically and stay for ${30} days. Publish, edit, or reuse them any time.</i></div>`}`;
+  body.querySelectorAll("[data-pool-act]").forEach((btn) => btn.onclick = async () => {
+    const asset = loadContentAssets().find((item) => item.id === btn.dataset.id);
+    if (!asset) return;
+    const act = btn.dataset.poolAct;
+    if (act === "publish") {
+      try {
+        workspaceStorageSetItem(CONTENT_HUB_OPEN_TAB_KEY, "publish");
+        workspaceStorageSetItem(CONTENT_HUB_OPEN_ASSET_KEY, asset.id);
+      } catch {}
+      opts.openWorkspace?.("content");
+      return;
+    }
+    if (act === "download") {
+      const url = await poolAssetUrl(asset, opts);
+      if (url) downloadAsset({ ...asset, url });
+      return;
+    }
+    if (act === "edit") {
+      const url = await poolAssetUrl(asset, opts);
+      if (!url) return;
+      session.edit = { url, type: asset.type, id: asset.id };
+      session.tab = "edit";
       renderMediaStudio(root, opts);
+      return;
+    }
+    if (act === "ref") {
+      const url = await poolAssetUrl(asset, opts);
+      if (!url) return;
+      genState.ref = url;
+      session.tab = "generate";
+      renderMediaStudio(root, opts);
+      return;
+    }
+    if (act === "remove") {
+      saveContentAssets(loadContentAssets().filter((item) => item.id !== asset.id));
+      if (opts.notify) opts.notify("Media Pool", "removed the media from Media Pool.");
+      renderMediaPool(body, cfg, opts, root);
     }
   });
+  /* pull trimmed previews back from the sync backend and patch tiles in place */
+  (async () => {
+    for (const asset of assets.filter((a) => !contentAssetDisplayUrl(a) && a.syncedId)) {
+      const url = await hydrateContentAssetUrl(asset);
+      const slot = body.querySelector(`[data-pool-media="${CSS.escape(asset.id)}"]`);
+      if (!url || !slot || !slot.isConnected) continue;
+      slot.innerHTML = asset.type === "video"
+        ? `<video src="${esc(url)}" muted playsinline preload="metadata"></video>`
+        : `<img src="${esc(url)}" alt="${esc(asset.title)}" loading="lazy"/>`;
+    }
+  })();
+  /* keep the pending strip honest while renders finish in the background */
+  if (pendingJobs.length) {
+    setTimeout(() => {
+      if (session.tab === "library" && body.isConnected) renderMediaPool(body, cfg, opts, root);
+    }, 5000);
+  }
 }
 
 /* ---- Edit (real client-side canvas editor) ---- */
@@ -2168,7 +2689,7 @@ function rowMatchesAssetSearch(row) {
   return `${row.title || ""} ${row.source || ""} ${row.prompt || ""}`.toLowerCase().includes(query);
 }
 function editorAssetRows() {
-  const local = session.assets
+  const sessionRows = session.assets
     .filter((asset) => asset.type === "image" && asset.url)
     .map((asset) => ({
       id: asset.id,
@@ -2178,6 +2699,18 @@ function editorAssetRows() {
       sourceType: "local",
       prompt: asset.meta?.prompt || "",
     }));
+  /* the persistent pool, not just this session's renders */
+  const poolRows = loadContentAssets()
+    .filter((asset) => asset.type === "image" && contentAssetDisplayUrl(asset))
+    .map((asset) => ({
+      id: asset.id,
+      title: asset.title || "Media Pool image",
+      url: contentAssetDisplayUrl(asset),
+      source: "Media Pool",
+      sourceType: "local",
+      prompt: asset.prompt || "",
+    }));
+  const local = [...sessionRows, ...poolRows];
   const cloud = (mlAssetCache.assets || [])
     .filter((asset) => asset.kind === "image" && asset.previewUrl)
     .map((asset) => ({
@@ -2261,13 +2794,103 @@ async function loadEditorAssetCache(root, opts, force = false) {
   }
   if (root?.isConnected) renderMediaStudio(root, opts);
 }
+/* ---- PhantomCut mount: one persistent host so the project (clips, music,
+   settings) survives tab and workspace switches within the session ---- */
+let vcHost = null;
+let vcMounted = null;
+function poolMediaRows(kind) {
+  const sess = session.assets
+    .filter((a) => a.type === kind && a.url)
+    .map((a) => ({ id: a.id, title: a.meta?.title || a.meta?.prompt || "Session render", url: a.url }));
+  const pool = loadContentAssets()
+    .filter((a) => a.type === kind)
+    .map((a) => ({ id: a.id, title: a.title, url: contentAssetDisplayUrl(a) }))
+    .filter((row) => row.url);
+  const seen = new Set();
+  return [...sess, ...pool].filter((row) => !seen.has(row.url) && seen.add(row.url));
+}
+function handleVideoExport(result, opts) {
+  const title = result.title || "PhantomCut edit";
+  if (result.dataUrl) {
+    const registered = registerContentAsset({
+      id: `cut-${Date.now()}`,
+      type: "video",
+      title,
+      prompt: "Edited in PhantomCut.",
+      source: "Media Pool",
+      url: result.dataUrl,
+      duration: result.duration,
+      saved: true,
+      createdAt: Date.now(),
+    });
+    if (registered?.stats) mlPoolCount = registered.stats.count;
+    opts.notify?.("PhantomCut", `exported "${title}" and saved it to Media Pool.`);
+  } else {
+    opts.notify?.("PhantomCut", `exported "${title}" — too large to keep in Media Pool, so it downloaded to your device instead.`);
+  }
+}
+function ensureVideoEditor(opts) {
+  if (!vcHost) {
+    vcHost = document.createElement("div");
+    vcHost.className = "ml-videocut-host";
+  }
+  if (!vcMounted) {
+    vcMounted = mountVideoEditor(vcHost, {
+      esc: opts.esc || ((s) => String(s)),
+      notify: opts.notify,
+      aspect: "16:9",
+      sources: {
+        poolImages: () => poolMediaRows("image"),
+        poolVideos: () => poolMediaRows("video"),
+      },
+      onExported: (result) => handleVideoExport(result, opts),
+    });
+  }
+  return vcHost;
+}
+
+function editModeBar(active, esc) {
+  return `<div class="ml-edit-mode-bar">
+    <button type="button" data-ml-edit-back title="Back to editor choice">⟵ Editors</button>
+    <span>${active === "video" ? "PhantomCut · video editor" : "Photo editor"}</span>
+  </div>`;
+}
 function renderEdit(body, cfg, opts, root) {
   const esc = opts.esc || ((s) => String(s));
+  /* external entry points (drag & drop, Media Pool "Edit", Content Hub) set
+     session.edit with an image — that's an explicit photo-editing intent */
+  if (session.edit && !session.editMode) session.editMode = "photo";
+  if (!session.editMode) {
+    body.innerHTML = `<div class="ml-edit-choose" role="group" aria-label="Choose an editor">
+      <button type="button" class="ml-choose-card" data-ml-choose="photo">
+        ${svgIc("image")}
+        <b>Photo</b>
+        <i>Retouch, filters, layers, background removal, and AI cleanup. Start from Media Pool, a new render, or a file.</i>
+      </button>
+      <button type="button" class="ml-choose-card" data-ml-choose="video">
+        ${svgIc("film")}
+        <b>Video</b>
+        <i>PhantomCut: build a cut from photos, clips, or both — Ken Burns, crossfades, titles, music, and a real export.</i>
+      </button>
+    </div>`;
+    body.querySelectorAll("[data-ml-choose]").forEach((btn) => btn.onclick = () => {
+      session.editMode = btn.dataset.mlChoose;
+      renderMediaStudio(root, opts);
+    });
+    return;
+  }
+  if (session.editMode === "video") {
+    body.innerHTML = editModeBar("video", esc);
+    body.appendChild(ensureVideoEditor(opts));
+    body.querySelector("[data-ml-edit-back]").onclick = () => { session.editMode = null; renderMediaStudio(root, opts); };
+    return;
+  }
   if (!session.edit) {
-    body.innerHTML = `<div class="ml-empty">${svgIc("edit")}<b>Pick something to edit</b><i>Generate an image, choose one from Media Pool, or upload.</i>
+    body.innerHTML = `${editModeBar("photo", esc)}<div class="ml-empty" data-ml-dropzone="edit" data-ml-dropzone-label="Drop to open in editor">${svgIc("edit")}<b>Pick something to edit</b><i>Generate an image, choose one from Media Pool, or upload.</i>
       <div class="ml-edit-pick"><button class="ml-generate ml-inline" data-ml-upload>${svgIc("upload")} Upload an image</button>
       ${session.assets[0] ? `<button class="ml-generate ml-inline ml-ghost" data-ml-fromlib>Use latest generation</button>` : ""}</div>
       <input type="file" accept="image/*" data-ml-editfile hidden /></div>`;
+    body.querySelector("[data-ml-edit-back]").onclick = () => { session.editMode = null; renderMediaStudio(root, opts); };
     const f = body.querySelector("[data-ml-editfile]");
     body.querySelector("[data-ml-upload]").onclick = () => f.click();
     f.onchange = () => readImage(f.files[0], (url) => { session.edit = { url, type: "image", id: `up-${Date.now()}` }; resetEdit(); renderMediaStudio(root, opts); });
@@ -2279,7 +2902,7 @@ function renderEdit(body, cfg, opts, root) {
   ensureEditorComposition();
   body.innerHTML = `
     <div class="ml-editor">
-      <div class="ml-canvas-wrap">
+      <div class="ml-canvas-wrap" data-ml-dropzone="edit" data-ml-dropzone-label="Drop to open in editor">
         ${mlEditLoadError ? `<div class="ch-lb-load-error"><b>Couldn't load this image</b><span>${esc(mlEditLoadError)}</span></div>` : ""}
         <div class="ml-edit-topbar" aria-label="Edit history and preview">
           <button type="button" data-ml-undo ${mlEditHistory.length ? "" : "disabled"} title="Undo">${svgIc("undo")}</button>
@@ -2291,7 +2914,7 @@ function renderEdit(body, cfg, opts, root) {
         <div class="ch-lb-pick-hint" data-ml-pick-hint hidden>${svgIc("spark")} Click to add focus, right-click a spot to remove it</div>
       </div>
       <div class="ml-tools">
-        <div class="ml-edit-title"><div><span>Image editor</span><b>Make it ready to use.</b></div><button class="ml-tutorial-btn" type="button" data-ml-tutorial title="Help">?</button></div>
+        <div class="ml-edit-title"><div><span><button type="button" class="ml-edit-back-inline" data-ml-edit-back title="Back to editor choice">⟵</button> Image editor</span><b>Make it ready to use.</b></div><button class="ml-tutorial-btn" type="button" data-ml-tutorial title="Help">?</button></div>
         ${mlShowTutorial ? tutorialMarkup() : ""}
         <div class="ml-quick-fixes">
           <button type="button" data-ml-clean>${svgIc("spark")} Clean up</button>
@@ -2372,6 +2995,7 @@ function renderEdit(body, cfg, opts, root) {
         </details>
         <div class="ml-editor-actions">
           <button class="ml-generate" data-ml-savedit>${svgIc("check")} Save to Media Pool</button>
+          <button class="ml-generate ml-ghost" data-ml-layeredit>Open layer editor</button>
           <button class="ml-generate ml-ghost" data-ml-dledit>${svgIc("upload")} Download</button>
           <button class="ml-link" data-ml-resetedit>Reset</button>
           <button class="ml-link" data-ml-changeedit>Change image</button>
@@ -2381,19 +3005,15 @@ function renderEdit(body, cfg, opts, root) {
   const canvas = body.querySelector("[data-ml-canvas]");
   const markerLayer = body.querySelector("[data-ml-bokeh-markers]");
   loadEditorAssetCache(root, opts);
-  const renderEditorCanvas = async (img = canvas._img) => {
-    if (!img) return false;
-    ensureEditorComposition();
-    await loadCompositionImages(mlComposition, loadImageForEditing);
-    if (!canvas.isConnected || canvas._img !== img) return false;
-    renderComposition(canvas, img, editState, mlComposition, mlLayerEffects);
-    fitEditorCanvas(canvas);
-    positionMarkers();
-    return true;
-  };
   const repaint = () => {
     if (!canvas._img) return;
-    renderEditorCanvas(canvas._img).catch(() => {});
+    ensureEditorComposition();
+    loadCompositionImages(mlComposition, loadImageForEditing).finally(() => {
+      if (!canvas.isConnected || !canvas._img) return;
+      renderComposition(canvas, canvas._img, editState, mlComposition, mlLayerEffects);
+      fitEditorCanvas(canvas);
+      positionMarkers();
+    });
   };
   const refreshEditor = () => { syncSliders(body); repaint(); updateEditHistoryControls(body); };
   const positionMarkers = () => {
@@ -2407,16 +3027,6 @@ function renderEdit(body, cfg, opts, root) {
       el.style.top = `${canvasRect.top - markerRect.top + spots[i].y * canvasRect.height}px`;
     });
   };
-  async function repaintWithImg(img) {
-    canvas._img = img;
-    await renderEditorCanvas(img);
-  }
-  async function exportCurrentEdit(format = "image/png", quality) {
-    if (!canvas._img) return { ok: false, error: "This image is still loading. Try again in a moment." };
-    const rendered = await renderEditorCanvas(canvas._img);
-    if (!rendered) return { ok: false, error: "This image changed while rendering. Try again in a moment." };
-    return exportCanvas(canvas, repaintWithImg, format, quality);
-  }
   if (window.ResizeObserver) {
     const fitObserver = new ResizeObserver(() => {
       if (!canvas.isConnected) { fitObserver.disconnect(); return; }
@@ -2442,7 +3052,6 @@ function renderEdit(body, cfg, opts, root) {
         mlEditLoadError = null;
         editState.loadedUrl = targetUrl;
         mlLayerEffects.base = editState;
-        canvas._img = img;
         repaint();
       })
       .catch((error) => {
@@ -2456,6 +3065,7 @@ function renderEdit(body, cfg, opts, root) {
   window.addEventListener("resize", mlEditResizeHandler);
   // wire tools
   body.querySelector("[data-ml-tutorial]")?.addEventListener("click", () => { mlShowTutorial = !mlShowTutorial; renderMediaStudio(root, opts); });
+  body.querySelector("[data-ml-edit-back]")?.addEventListener("click", () => { session.editMode = null; renderMediaStudio(root, opts); });
   updateEditHistoryControls(body);
   body.querySelector("[data-ml-undo]")?.addEventListener("click", () => {
     if (!mlEditHistory.length) return;
@@ -2512,7 +3122,7 @@ function renderEdit(body, cfg, opts, root) {
     const button = event.currentTarget;
     if (!canvas._img) return;
     button.disabled = true; button.textContent = "Removing…";
-    const exported = await exportCurrentEdit("image/png");
+    const exported = await exportCanvas(canvas, (img) => { canvas._img = img; repaint(); }, "image/png");
     const result = exported.ok ? await requestRemoveBackground(exported.url) : { ok: false, message: exported.error };
     if (result.ok) {
       rememberEdit();
@@ -2743,7 +3353,7 @@ function renderEdit(body, cfg, opts, root) {
     const prompt = buildEditPrompt(q);
     runai.disabled = true; runai.textContent = "…";
     rememberEdit();
-    const exported = await exportCurrentEdit("image/png");
+    const exported = await exportCanvas(canvas, (img) => { canvas._img = img; repaint(); }, "image/png");
     const aspect = canvas.width / Math.max(1, canvas.height) > 1.55 ? "16:9" : canvas.width / Math.max(1, canvas.height) < 0.7 ? "9:16" : canvas.width / Math.max(1, canvas.height) < 0.9 ? "4:5" : "1:1";
     const result = exported.ok ? await requestAiEdit({ dataUrl: exported.url, prompt, provider: "cinematic", aspect }) : { ok: false, message: exported.error };
     if (result.ok && result.url) {
@@ -2762,8 +3372,9 @@ function renderEdit(body, cfg, opts, root) {
   if (language) language.onchange = () => { editState.promptLanguage = language.value; };
   body.querySelector("[data-ml-resetedit]").onclick = () => { resetEdit(); renderMediaStudio(root, opts); };
   body.querySelector("[data-ml-changeedit]").onclick = () => { session.edit = null; mlBokehPicking = false; renderMediaStudio(root, opts); };
+  const repaintWithImg = (img) => { canvas._img = img; repaint(); };
   const duplicateCurrentEdit = async () => {
-    const exported = await exportCurrentEdit("image/webp", 0.9);
+    const exported = await exportCanvas(canvas, repaintWithImg, "image/webp", 0.9);
     if (!exported.ok) { opts.notify?.("Media Factory", `Couldn't duplicate this image: ${exported.error}`); return; }
     const at = Date.now();
     const asset = { id: `dup-${at}`, type: "image", url: exported.url, saved: true, at, meta: { edited: true, prompt: editState.text || "Duplicated image" } };
@@ -2774,7 +3385,7 @@ function renderEdit(body, cfg, opts, root) {
   };
   body.querySelectorAll("[data-ml-duplicate-edit]").forEach((button) => button.onclick = duplicateCurrentEdit);
   body.querySelector("[data-ml-savedit]").onclick = async () => {
-    const exported = await exportCurrentEdit("image/webp", 0.9);
+    const exported = await exportCanvas(canvas, repaintWithImg, "image/webp", 0.9);
     if (!exported.ok) { if (opts.notify) opts.notify("Media Factory", `Couldn't save this edit: ${exported.error}`); return; }
     const at = Date.now();
     const asset = { id: `edit-${at}`, type: "image", url: exported.url, saved: true, at, meta: { edited: true, prompt: editState.text || "Edited image" } };
@@ -2788,10 +3399,33 @@ function renderEdit(body, cfg, opts, root) {
     if (opts.notify) opts.notify("Media Factory", "saved an edited image to Media Pool.");
   };
   body.querySelector("[data-ml-dledit]").onclick = async () => {
-    const exported = await exportCurrentEdit("image/webp", 0.92);
+    const exported = await exportCanvas(canvas, repaintWithImg, "image/webp", 0.92);
     if (!exported.ok) { if (opts.notify) opts.notify("Media Factory", `Couldn't download this edit: ${exported.error}`); return; }
     downloadAsset({ url: exported.url, type: "image", id: "edit" });
   };
+  body.querySelector("[data-ml-layeredit]")?.addEventListener("click", async () => {
+    if (!canvas._img) return;
+    const exported = await exportCanvas(canvas, repaintWithImg, "image/webp", 0.9);
+    if (!exported.ok) { if (opts.notify) opts.notify("Media Factory", `Couldn't open the layer editor: ${exported.error}`); return; }
+    const at = Date.now();
+    const title = editState.text ? `Layer edit - ${editState.text.slice(0, 36)}` : "Layer edit draft";
+    const result = registerContentAsset({
+      id: `layer-edit-${at}`,
+      type: "image",
+      title,
+      prompt: editState.text || "Opened from Media Lab quick editor.",
+      source: "Media Lab quick editor",
+      url: exported.url,
+      createdAt: at,
+      saved: true,
+    }, { skipSync: true });
+    try {
+      workspaceStorageSetItem(CONTENT_HUB_OPEN_TAB_KEY, "library");
+      workspaceStorageSetItem(CONTENT_HUB_OPEN_ASSET_KEY, result.asset.id);
+    } catch {}
+    if (opts.notify) opts.notify("Media Factory", "Opened the current edit in Content Hub's layer editor. Nothing was posted.");
+    opts.openWorkspace?.("content");
+  });
 }
 function slider(label, key, min, max, val) {
   return `<label class="ml-slider"><span>${label} <b data-out="${key}">${val}</b></span>

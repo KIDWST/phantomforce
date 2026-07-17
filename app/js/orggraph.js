@@ -5,7 +5,7 @@
    prefers-reduced-motion and body.freeze by drawing the settled layout
    instantly. No fabricated data: gaps and disconnection reasons come straight
    from the server payload. */
-import { currentTenantId, session } from "./store.js?v=phantom-live-20260717-2";
+import { currentTenantId, session } from "./store.js?v=phantom-live-20260714-006";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (ch) => (
   { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]
@@ -17,10 +17,6 @@ const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (ch) => (
    "system" is deliberately neutral slate: infrastructure, not identity. */
 const TYPE_COLORS = {
   organization: "#41ffa1",
-  "managed-growth": "#2ef2a0",
-  "client-setup": "#73f59b",
-  "crm-lead": "#41d7ff",
-  proposal: "#f5d76e",
   "business-profile": "#2fd0c0",
   website: "#3b82f6",
   asset: "#9ac232",

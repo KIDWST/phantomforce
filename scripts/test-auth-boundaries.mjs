@@ -8,9 +8,7 @@ const main = read("../app/js/main.js");
 const orgs = read("../app/js/orgs.js");
 const store = read("../app/js/store.js");
 const server = read("../server/src/index.ts");
-const sessionAccess = read("../server/src/access/session.ts");
 const publicHosts = read("../server/src/access/public-hosts.ts");
-const staticServer = read("../ops/admin-live/admin-static-server.mjs");
 
 assert.match(store, /export const CLIENT_PUBLIC_HOST = "app\.phantomforce\.online"/u, "The customer app host must be explicit in the browser session layer.");
 assert.match(store, /export const isClientPublicHost = \(\) => location\.hostname === CLIENT_PUBLIC_HOST/u, "The browser must detect the customer app host.");
@@ -18,55 +16,13 @@ assert.match(store, /export const isLocalDevHost = \(\) => LOCAL_DEV_HOSTS\.has\
 assert.match(store, /const allowLocalSessionShortcut = isLocalDevHost\(\)/u, "Session query shortcuts must be guarded by local-dev host detection.");
 assert.match(store, /if \(saved\?\.database && !token\) \{\s*session\.clear\(\);\s*return null;\s*\}/u, "Saved database sessions must not restore after the token is gone.");
 assert.match(store, /isClientPublicHost\(\) && \(!saved\.database \|\| saved\.canManageAccess \|\| saved\.isSuperAdmin\)/u, "The customer app must reject local/admin/super-admin session mirrors.");
-assert.match(store, /let liveSessionToken = "";/u, "The current tab must retain a volatile bearer token when browser sessionStorage is unavailable.");
-assert.match(store, /const token = s\?\.token \|\| "";\s*if \(token\) liveSessionToken = token;/u, "Session set must capture the live token before writing browser storage.");
-assert.match(store, /const SESSION_ENDED_KEY = "pf\.session\.ended\.v1"/u, "Logout must leave a local ended-session marker.");
-assert.match(store, /if \(localStorage\.getItem\(SESSION_ENDED_KEY\)\) return null;/u, "A logout marker must block accidental restored local sessions.");
-assert.match(store, /localStorage\.removeItem\(SESSION_ENDED_KEY\);[\s\S]*const \{ token: _token, \.\.\.safeSession \} = s \|\| \{\};/u, "A real login/session set must clear the logout marker.");
-assert.match(store, /const \{ token: _token, \.\.\.safeSession \} = s \|\| \{\};\s*localStorage\.setItem\(SESSION_KEY, JSON\.stringify\(safeSession\)\);/u, "Durable local session storage must continue stripping bearer tokens.");
-assert.match(store, /if \(liveSessionToken\) return liveSessionToken;/u, "Authenticated API clients must read the volatile token before falling back to sessionStorage.");
-assert.match(store, /liveSessionToken = "";\s*try \{\s*localStorage\.removeItem\(SESSION_KEY\);/u, "Logout must clear the volatile bearer token before clearing browser storage.");
-assert.match(store, /localStorage\.setItem\(SESSION_ENDED_KEY, String\(Date\.now\(\)\)\);/u, "Logout must mark the browser as explicitly signed out.");
-assert.match(store, /function clearSessionShortcutFromUrl\(\) \{[\s\S]*url\.searchParams\.delete\("session"\);[\s\S]*history\.replaceState\(null, "", `\$\{url\.pathname\}\$\{url\.search\}\$\{url\.hash\}`\);/u, "Logout/session guards must be able to strip query-session shortcuts from the URL.");
-assert.match(store, /if \(key && localStorage\.getItem\(SESSION_ENDED_KEY\)\) \{[\s\S]*clearSessionShortcutFromUrl\(\);[\s\S]*return null;/u, "A logout marker must block query-session shortcut re-entry.");
 
 assert.match(main, /if \(isClientPublicHost\(\)\) \{\s*renderCustomerAuthLoading\(card\);\s*maybeUpgradeGateToDatabaseLogin\(card, \{ customerApp: true, required: true \}\);\s*return;\s*\}/u, "app.phantomforce.online must render required real-account auth instead of role buttons.");
-assert.match(main, /if \(isLiveAdminHost\(\)\) \{\s*renderOwnerLoginGate\(card\);\s*return;\s*\}/u, "admin.phantomforce.online must render only the owner login and return before any customer auth panel can mount.");
-assert.doesNotMatch(main.match(/if \(isLiveAdminHost\(\)\) \{([\s\S]*?)\n  \}\n\n  if \(isClientPublicHost\(\)/u)?.[1] || "", /maybeUpgradeGateToDatabaseLogin|data-auth-mode="register"|Forgot password|Create account/u, "Admin login must not include or upgrade to customer create-account/password-reset controls.");
-assert.match(main, /if \(isLocalDevHost\(\)\) \{\s*renderLocalAuthLoading\(card\);\s*maybeUpgradeGateToDatabaseLogin\(card, \{ localDev: true, allowLocalFallback: true \}\);\s*return;\s*\}/u, "Local QA must check the configured auth backend before showing shortcut entry.");
-assert.match(main, /const CUSTOMER_ONBOARDING_VERSION = "2026-07-14-customer-identity-v1";/u, "Customer onboarding must have an explicit versioned completion key.");
-assert.match(main, /function clearOverlayOnly\(\) \{\s*if \(customerOnboardingLocked\(\)\) return;/u, "First-run customer onboarding must survive normal nav/route overlay clearing.");
-assert.match(main, /function customerOnboardingLocked\(\) \{\s*return openId === "customer-onboarding" && !customerOnboardingComplete\(\);/u, "Customer onboarding lock must centralize non-dismiss routing.");
-assert.match(main, /function renderDashboardPage\(pushHash = true\) \{\s*if \(customerOnboardingLocked\(\)\) return;/u, "Dashboard routing must not bypass required customer onboarding.");
-assert.match(main, /function renderWorkspacePage\(id, pushHash = true\) \{\s*if \(customerOnboardingLocked\(\)\) return;/u, "Workspace-page routing must not bypass required customer onboarding.");
-assert.match(main, /function routeWorkspace\(id, pushHash = true\) \{\s*if \(customerOnboardingLocked\(\)\) return;/u, "Workspace routing must not bypass required customer onboarding.");
-assert.match(main, /function openWorkspace\(id, pushHash = true\) \{\s*if \(customerOnboardingLocked\(\)\) return;/u, "Overlay workspace routing must not replace required customer onboarding.");
-assert.match(main, /function openOperationsMap\(\) \{\s*if \(customerOnboardingLocked\(\)\) return;/u, "Operations map must not replace required customer onboarding.");
-assert.match(main, /window\.addEventListener\("popstate", \(\) => \{\s*if \(customerOnboardingLocked\(\)\) return;/u, "Browser back/forward routing must not bypass required customer onboarding.");
-assert.match(main, /ctx\.session\?\.orgId \|\| ctx\.session\?\.userId \|\| ctx\.session\?\.authSessionId \|\| ctx\.session\?\.email \|\| ctx\.session\?\.sessionId \|\| ""/u, "Customer onboarding completion must use a stable database identity, not one shared browser fallback.");
-assert.match(main, /const key = customerOnboardingKey\(\);\s*return Boolean\(key\) && localStorage\.getItem\(key\) === "complete";/u, "Customer onboarding must not treat an anonymous/shared key as complete.");
-assert.match(main, /function showCustomerFirstRunOnboarding\(\) \{[\s\S]*Tell PhantomForce who you are\.[\s\S]*What are you\?[\s\S]*What are you here for\?[\s\S]*Business identity[\s\S]*Choose your starting plan[\s\S]*Free/u, "app.phantomforce.online must force first-run customer identity, intent, business, and free-plan setup.");
-assert.match(main, /if \(openId === "customer-onboarding"\) return;/u, "First-run customer onboarding must not be dismissible like a normal overlay.");
-assert.match(main, /if \(!isLocalDevHost\(\)\) return;\s*try \{\s*const response = await fetch\("\/auth\/demo-login"/u, "Demo login must remain local-development only.");
-assert.match(main, /localDev && auth\?\.ownerProductionAuthEnabled && auth\?\.productionReady[\s\S]*renderOwnerLoginGate\(card,[\s\S]*LOCAL OWNER ACCESS[\s\S]*Local shortcuts stay hidden while owner auth is ready/u, "Local QA must use real owner sign-in when owner-production auth is configured.");
+assert.match(main, /if \(isLocalDevHost\(\)\) \{\s*try \{/u, "Demo login must remain local-development only.");
 assert.match(main, /function renderCustomerAuthBlocked\(card, message = "Customer account login is not enabled on this backend\."\)/u, "Customer app must block when database auth is disabled.");
 assert.match(main, /Platform admin accounts must use admin\.phantomforce\.online/u, "Customer app must direct platform admin accounts away from app.phantomforce.online.");
 assert.match(main, /try \{\s*if \(databaseSession\) await databaseLogout\(\);\s*\} finally \{\s*session\.clear\(\);/u, "Logout must always clear local access even if database revocation fails.");
 assert.match(main, /url\.searchParams\.delete\("session"\)/u, "Logout must remove local session shortcuts from the URL.");
-assert.match(main, /async function verifyDatabaseBootSession\(candidate\) \{[\s\S]*const me = await fetchAuthMe\(\)\.catch\(\(\) => null\);[\s\S]*if \(!me\?\.ok \|\| !me\.database \|\| !me\.user\) \{[\s\S]*session\.clear\(\);[\s\S]*if \(isClientPublicHost\(\) && me\.user\.isSuperAdmin\) \{/u, "Database session boot restore must verify the server session before opening the shell.");
-assert.match(main, /const orgRole = activeOrg\.role \|\| null;/u, "Verified database boot restore must not trust stale local orgRole values.");
-assert.match(main, /orgId: activeOrg\.id \|\| null,/u, "Verified database boot restore must not trust stale local orgId values.");
-assert.doesNotMatch(main, /activeOrg\.role \|\| candidate\.orgRole|activeOrg\.id \|\| candidate\.orgId/u, "Server-verified restore must prefer server active org truth over the local session mirror.");
-assert.match(main, /const resolvedSession = isLiveAdminHost\(\) \? await verifyLiveSession\(\) : resolveSession\(\);\s*ctx\.session = await verifyDatabaseBootSession\(resolvedSession\);/u, "Boot must route saved database sessions through server verification.");
-assert.doesNotMatch(main, /confirm\("Sign out of PhantomForce\?"\)/u, "Sign out should not be blocked by a native confirmation before clearing access.");
-assert.doesNotMatch(main, /phantomforcesupport@gmail\.com/u, "Owner login must not expose or prefill a real owner email.");
-assert.match(main, /name="pf-access-identity" autocomplete="new-password"[\s\S]*placeholder="you@yourcompany\.com"/u, "Owner email field must use neutral anti-autofill attributes.");
-assert.match(main, /emailInput\) emailInput\.value = "";/u, "Owner email field must be cleared after render to defeat browser prefill.");
-assert.match(main, /data-db-email name="pf-workspace-identity" autocomplete="new-password"[\s\S]*readonly/u, "Customer workspace email login must use neutral anti-autofill attributes.");
-assert.match(main, /data-db-password name="phantomforce-workspace-password" autocomplete="new-password"[\s\S]*readonly/u, "Customer workspace password login must use neutral anti-autofill attributes.");
-assert.match(main, /const emailInput = card\.querySelector\("\[data-db-email\]"\);[\s\S]*const passwordInput = card\.querySelector\("\[data-db-password\]"\);[\s\S]*input\.value = "";[\s\S]*input\.removeAttribute\("readonly"\);[\s\S]*if \(emailInput\) emailInput\.value = "";[\s\S]*if \(passwordInput\) passwordInput\.value = "";/u, "Customer workspace login fields must clear after render and unlock only on user interaction.");
-assert.doesNotMatch(main, /data-db-email autocomplete="username"|data-db-password autocomplete="current-password"/u, "Customer login must not invite silent browser credential refill after logout.");
-assert.doesNotMatch(`${main}\n${store}`, /admin PC|Hermes\/backend|server\\?\.env|PHANTOMFORCE_OWNER_LOGIN_KEY/u, "Browser login/auth copy must not expose backend internals.");
 
 assert.match(orgs, /const managesOrg = s\.isSuperAdmin \|\| \["owner", "admin"\]\.includes\(s\.orgRole \|\| ""\)/u, "Only org owners/admins may map to Business Manager.");
 assert.doesNotMatch(orgs, /\["owner", "admin", "member"\]\.includes\(s\.orgRole/u, "Plain org members must not map to Business Manager.");
@@ -76,101 +32,8 @@ assert.match(index, /Business owner or workspace admin/u, "Business Manager copy
 assert.match(index, /Jordan and PhantomForce platform admins use admin\.phantomforce\.online/u, "The static gate must separate Jordan/admin from customer app users.");
 
 assert.match(publicHosts, /export const CLIENT_PUBLIC_HOST = "app\.phantomforce\.online"/u, "The server public-host boundary must know the customer app host.");
-assert.match(publicHosts, /function recognizedPublicHost\(value: string \| undefined\)/u, "Public-host detection must explicitly recognize only PhantomForce public hosts.");
-assert.match(publicHosts, /const directHost = normalizePublicHost\(firstHeader\(headers\.host\)\);[\s\S]*const forwardedHost = normalizePublicHost\([\s\S]*const trustedPublicHost = recognizedPublicHost\(directHost\) \|\| recognizedPublicHost\(forwardedHost\);/u, "The real Host header must win over forwarded headers when it is a recognized PhantomForce public host.");
-assert.doesNotMatch(publicHosts, /firstHeader\(headers\["x-forwarded-host"\]\) \?\?\s*firstHeader\(headers\["x-original-host"\]\) \?\?\s*firstHeader\(headers\.host\)/u, "Forwarded host headers must not outrank the direct Host header.");
 assert.match(publicHosts, /if \(scope === "admin"\) return session\.canManageAccess/u, "The admin host must only allow platform/admin access sessions.");
 assert.match(publicHosts, /if \(scope === "client"\) return !session\.canManageAccess/u, "The customer host must reject platform/admin access sessions.");
-assert.match(staticServer, /headers\["x-forwarded-host"\] = originalHost;[\s\S]*headers\["x-original-host"\] = originalHost;/u, "The admin static proxy must preserve the original public host so Hermes can enforce admin/app auth boundaries.");
-assert.match(sessionAccess, /import \{ canUseSessionOnPublicHost, filterSessionsForPublicHost, publicHostFromHeaders \} from "\.\/public-hosts\.js";/u, "Every authenticated request must be able to enforce the public-host boundary.");
-assert.match(sessionAccess, /const publicHost = publicHostFromHeaders\(request\.headers as Record<string, unknown>\);[\s\S]*if \(!canUseSessionOnPublicHost\(publicHost, session\)\) \{[\s\S]*This session is not available on this public host/u, "Authenticated requests must reject tokens used on the wrong public host, not only during login.");
 assert.match(server, /const publicHost = requestPublicHost\(request\);\s*if \(!canUseSessionOnPublicHost\(publicHost, session\)\) \{\s*await revokeDatabaseSession\(session\.authSessionId\);/u, "Database login must enforce the public-host boundary and revoke refused sessions.");
-assert.match(server, /function requireManualBrainEditor\(session: AccessSession, reply: FastifyReply\)/u, "Manual brain editing must have an explicit platform-only guard.");
-assert.match(server, /if \(session\.canManageAccess\) return true;/u, "Manual brain editing must remain limited to platform-access sessions.");
-assert.match(server, /app\.post\("\/phantom-ai\/brain\/memories"[\s\S]*if \(!requireManualBrainEditor\(session, reply\)\) return reply;/u, "Customer sessions must not create manual brain memories.");
-assert.match(server, /app\.patch\("\/phantom-ai\/brain\/memories\/:id"[\s\S]*if \(!requireManualBrainEditor\(session, reply\)\) return reply;/u, "Customer sessions must not edit manual brain memories.");
-assert.match(server, /app\.delete\("\/phantom-ai\/brain\/memories\/:id"[\s\S]*if \(!requireManualBrainEditor\(session, reply\)\) return reply;/u, "Customer sessions must not delete manual brain memories.");
-
-const localStore = new Map();
-const sessionStore = new Map();
-const storageApi = (map) => ({
-  getItem: (key) => map.get(key) ?? null,
-  setItem: (key, value) => { map.set(key, String(value)); },
-  removeItem: (key) => { map.delete(key); },
-});
-
-let currentUrl = new URL("https://app.phantomforce.online/app/index.html");
-function installLocation(href) {
-  currentUrl = new URL(href);
-  globalThis.location = {
-    get href() { return currentUrl.href; },
-    get hostname() { return currentUrl.hostname; },
-    get search() { return currentUrl.search; },
-    get pathname() { return currentUrl.pathname; },
-    get hash() { return currentUrl.hash; },
-    replace(next) { currentUrl = new URL(next, currentUrl.href); },
-  };
-}
-
-globalThis.localStorage = storageApi(localStore);
-globalThis.sessionStorage = storageApi(sessionStore);
-globalThis.window = { dispatchEvent() {} };
-globalThis.history = {
-  replaceState(_state, _title, next) { currentUrl = new URL(next, currentUrl.origin); },
-};
-globalThis.CustomEvent = class CustomEvent {
-  constructor(type, init = {}) {
-    this.type = type;
-    this.detail = init.detail;
-  }
-};
-
-const {
-  ADMIN_PUBLIC_HOST,
-  CLIENT_PUBLIC_HOST,
-  resolveSession,
-  session: browserSession,
-} = await import(`../app/js/store.js?auth-boundaries=${Date.now()}`);
-
-installLocation(`https://${CLIENT_PUBLIC_HOST}/app/index.html`);
-browserSession.set({
-  database: true,
-  role: "admin",
-  name: "Workspace Owner",
-  orgId: "org-client",
-  orgRole: "owner",
-  canManageAccess: false,
-  token: "client-db-token",
-});
-assert.equal(JSON.parse(localStore.get("pf.session.v3")).token, undefined, "Bearer tokens must not be written to durable localStorage.");
-assert.equal(browserSession.token(), "client-db-token", "The current tab should keep the live bearer token after a real login.");
-assert.equal(resolveSession()?.database, true, "Customer app should restore a valid database customer session.");
-
-browserSession.clear();
-installLocation(`https://${CLIENT_PUBLIC_HOST}/app/index.html?session=client`);
-assert.equal(resolveSession(), null, "Logout marker must block query-session shortcut re-entry on the customer app.");
-assert.equal(new URL(globalThis.location.href).searchParams.has("session"), false, "Blocked shortcut re-entry must strip the session query from the URL.");
-assert.equal(browserSession.token(), "", "Logout must clear the live bearer token.");
-
-browserSession.set({ role: "admin", name: "Local Admin", ws: "phantomforce", canManageAccess: true });
-installLocation(`https://${CLIENT_PUBLIC_HOST}/app/index.html`);
-assert.equal(resolveSession(), null, "Customer app must reject a non-database/admin local session mirror.");
-assert.equal(browserSession.get(), null, "Rejecting an admin mirror must clear the saved browser session.");
-
-browserSession.set({
-  database: true,
-  role: "admin",
-  name: "Platform Admin",
-  canManageAccess: true,
-  isSuperAdmin: true,
-  token: "platform-token",
-});
-installLocation(`https://${CLIENT_PUBLIC_HOST}/app/index.html`);
-assert.equal(resolveSession(), null, "Customer app must reject a database platform-admin session even when a token exists.");
-assert.equal(browserSession.token(), "", "Rejecting a platform-admin session on the customer app must clear its bearer token.");
-
-browserSession.set({ role: "admin", name: "Admin Without Token", canManageAccess: true });
-installLocation(`https://${ADMIN_PUBLIC_HOST}/app/index.html`);
-assert.equal(resolveSession(), null, "Admin host must not restore an admin session without a live bearer token.");
 
 console.log("Auth boundary checks passed.");

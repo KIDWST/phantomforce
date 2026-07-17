@@ -76,21 +76,6 @@ const DEFENDERS = {
 };
 const DEFENDER_ORDER = ['glare', 'arc', 'frost', 'vane'];
 const UNLOCK_RANK = { glare: 1, arc: 1, frost: 2, vane: 3 };
-const CURRENCY = 'Stardust';
-const PREBATTLE_OFFERS = [
-  { id: 'shipMachine', title: 'Ship Machine', tag: 'AUTO SEND', cost: 50, have: 'x1', art: 'ship', copy: 'Launches Spark Drone pressure for you every cycle so your rival never gets a quiet lane.' },
-  { id: 'starHarvester', title: 'Star Harvester', tag: 'ECON', cost: 50, have: 'x1', art: 'harvester', copy: `Pulls extra ${CURRENCY} after every cleared wave and keeps your build moving.` },
-  { id: 'trialHero', title: 'Try Hero Vega', tag: 'HERO', cost: 0, have: '6/6', art: 'hero', copy: 'Adds Vega Starborn to this battle: a free orbit hero with a piercing beam and lane aura.' },
-];
-const MIDGAME_BUYS = [
-  { id: 'shipMachine', title: 'Ship Machine', cost: 125, art: 'ship', copy: 'Auto-sends Spark Drones every cycle.' },
-  { id: 'starHarvester', title: 'Star Harvester', cost: 110, art: 'harvester', copy: `Adds bonus ${CURRENCY} after every wave.` },
-  { id: 'trialHero', title: 'Hire Vega', cost: 180, art: 'hero', copy: 'Hero beam joins the lane instantly.' },
-];
-const PRESSURE_SENDS = [
-  { id: 'swarm', title: 'Spark Drones', cost: 35, mult: 'x5', tag: 'FAST', copy: 'Cheap pressure ships that force early defenses.' },
-  { id: 'overload', title: 'Jam Probe', cost: 60, mult: 'x2', tag: 'TACTIC', copy: 'Disrupts the rival lane and punishes weak timing.' },
-];
 
 const ENEMIES = {
   driftling: { hp: 16, speed: 0.085, armor: 0, bounty: 4, color: '#7c88c9', r: 9, label: 'Driftling' },
@@ -138,7 +123,6 @@ const waveBanner = $('[data-wave-banner]'), bossBanner = $('[data-boss-banner]')
 const dockDefenders = $('[data-dock-defenders]'), dockSelected = $('[data-dock-selected]'), dockPressure = $('[data-dock-pressure]');
 const commanderBtn = $('[data-commander-btn]'), commanderFill = $('[data-commander-fill]');
 const opponentPanel = $('[data-opponent-panel]'), oppName = $('[data-opp-name]'), oppLives = $('[data-opp-lives]'), oppWave = $('[data-opp-wave]'), oppStatus = $('[data-opp-status]'), oppBar = $('[data-opp-bar]'), oppNote = $('[data-opp-note]');
-const readyStore = $('[data-ready-store]'), readyOptions = $('[data-ready-options]'), readyBank = $('[data-ready-bank]');
 const toastEl = $('[data-toast]');
 const overlayPause = $('[data-overlay-pause]'), overlaySettings = $('[data-overlay-settings]'), overlayResults = $('[data-overlay-results]');
 const resultsTitle = $('[data-results-title]'), resultsSub = $('[data-results-sub]'), resultsGrid = $('[data-results-grid]'), rematchBtn = $('[data-results-rematch]');
@@ -152,40 +136,6 @@ function toast(msg) {
   toastEl.textContent = msg; toastEl.hidden = false;
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => { toastEl.hidden = true; }, 2600);
-}
-function priceLabel(cost) { return cost > 0 ? `${cost} ${CURRENCY}` : 'Trial'; }
-function buyIcon(kind) {
-  return `<span class="sg-buy-art sg-buy-${esc(kind)}" aria-hidden="true"><i></i></span>`;
-}
-function duelReadyMode(value = mode) { return value === 'skirmish' || value === 'battle'; }
-function availablePrebattleOffers(value = mode) {
-  return PREBATTLE_OFFERS.filter((offer) => offer.id !== 'shipMachine' || duelReadyMode(value));
-}
-function availableMidgameBuys(value = mode) {
-  return MIDGAME_BUYS.filter((buy) => buy.id !== 'shipMachine' || duelReadyMode(value));
-}
-function perkOwned(id) {
-  if (id === 'shipMachine') return battlePerks.shipMachine;
-  if (id === 'starHarvester') return battlePerks.starHarvester;
-  if (id === 'trialHero') return battlePerks.hero;
-  return false;
-}
-function activateHero() {
-  battlePerks.hero = true;
-  hero = { name: 'Vega Starborn', cooldown: 0.25, pulse: 0, x: 0.50 * REF_W, y: 0.50 * REF_H };
-}
-function buyPerk(id, cost, fromReadyStore) {
-  if (perkOwned(id)) { toast('Already active for this battle.'); return; }
-  if (id === 'shipMachine' && !duelReadyMode()) { toast('Ship Machine is for duel pressure.'); return; }
-  if (gold < cost) { toast(`Need more ${CURRENCY}.`); return; }
-  gold -= cost;
-  if (id === 'shipMachine') { battlePerks.shipMachine = true; shipMachineTimer = 4; toast('Ship Machine online.'); }
-  if (id === 'starHarvester') { battlePerks.starHarvester = true; toast('Star Harvester online.'); }
-  if (id === 'trialHero') { activateHero(); toast('Vega joined your lane.'); }
-  sfx('upgrade');
-  updateHud();
-  if (fromReadyStore) renderReadyStore();
-  renderDock();
 }
 
 // ---------------------------------------------------------------------
@@ -308,11 +258,6 @@ let commanderActive = false, commanderCooldown = 0, commanderTimer = 0;
 const COMMANDER_COOLDOWN = 25, COMMANDER_DURATION = 6;
 let pressureCooldown = 0;
 let bot = null;
-let shopTab = 'towers';
-let preBattleOpen = false;
-let battlePerks = { shipMachine: false, starHarvester: false, hero: false };
-let shipMachineTimer = 0;
-let hero = null;
 let _uid = 1; function uid() { return _uid++; }
 
 function newBot(difficulty) {
@@ -455,10 +400,8 @@ function scheduleWave(n) {
   updateHud();
 }
 function handleWaveCleared() {
-  const harvesterBonus = battlePerks.starHarvester ? 24 + Math.min(26, wave * 3) : 0;
-  const bonus = 20 + wave * 5 + harvesterBonus;
+  const bonus = 20 + wave * 5;
   gold += bonus; score += wave * 30;
-  if (harvesterBonus) toast(`Star Harvester +${harvesterBonus} ${CURRENCY}.`);
   sfx('wave');
   reportProgress();
   if (mode === 'battle') maybeBroadcastHostStatus(false);
@@ -511,54 +454,6 @@ function fire(s, stats, target) {
     target.slowFactor = Math.max(target.slowFactor || 0, stats.slow);
   }
 }
-function fireHero(target) {
-  if (!hero || !target) return;
-  const dmg = 20 + Math.min(28, wave * 2);
-  dealDamage(target, dmg, 1);
-  target.slowUntil = Math.max(target.slowUntil || 0, simTime + 0.55);
-  target.slowFactor = Math.max(target.slowFactor || 0, 0.18);
-  particles.push({ type: 'tracer', x1: hero.x, y1: hero.y, x2: target.x, y2: target.y, color: '#ffe86b', life: 0.16, age: 0 });
-  hero.pulse = 0.28;
-  tone(980, 0.055, 'triangle', 0.22);
-}
-function tickHero(dt) {
-  if (!hero) return;
-  hero.cooldown -= dt;
-  hero.pulse = Math.max(0, hero.pulse - dt);
-  if (hero.cooldown > 0) return;
-  let target = null, bestT = -1;
-  for (const e of enemies) {
-    if (!e.alive) continue;
-    const d = Math.hypot(e.x - hero.x, e.y - hero.y);
-    if (d <= 240 && e.t > bestT) { target = e; bestT = e.t; }
-  }
-  if (target) fireHero(target);
-  hero.cooldown = 0.72;
-}
-function dispatchPressure(kind, label) {
-  if (mode === 'skirmish') { applyPressureToBot(kind); toast(`${label || 'Pressure'} sent to Rival AI.`); return; }
-  if (mode === 'battle') {
-    const entrySeq = ((battle.duel && battle.duel.pressureLog) || []).length + 1;
-    const entry = { seq: entrySeq, type: kind, from: battle.amIHost ? 'host' : 'guest', at: Date.now() };
-    if (battle.amIHost) {
-      const log = [...((battle.duel && battle.duel.pressureLog) || []), entry].slice(-24);
-      pushDuelState({ pressureLog: log });
-      toast(`${label || 'Pressure'} sent to your opponent.`);
-    } else {
-      matchAction({ duel: { ...(battle.duel || {}), pressureLog: [...((battle.duel && battle.duel.pressureLog) || []), entry] } }, 'merge');
-      toast('Sent — delivery depends on room sync.');
-    }
-  }
-}
-function tickBattlePerks(dt) {
-  tickHero(dt);
-  if (!battlePerks.shipMachine || !duelReadyMode()) return;
-  shipMachineTimer -= dt;
-  if (shipMachineTimer > 0) return;
-  shipMachineTimer = 14;
-  sfx('pressure-send');
-  dispatchPressure('swarm', 'Ship Machine');
-}
 let simTime = 0;
 function tick(dt) {
   simTime += dt;
@@ -567,7 +462,6 @@ function tick(dt) {
   if (pressureCooldown > 0) pressureCooldown = Math.max(0, pressureCooldown - dt);
   if (spireFlash > 0) spireFlash = Math.max(0, spireFlash - dt);
   updateParticles(dt);
-  tickBattlePerks(dt);
 
   if (prepRemaining > 0) {
     prepRemaining -= dt;
@@ -626,28 +520,23 @@ function updateParticles(dt) {
 // ---------------------------------------------------------------------
 function startRun(m) {
   mode = m;
-  gold = (m === 'skirmish' || m === 'battle') ? 260 : 220;
+  gold = m === 'endless' ? 180 : 150;
   lives = maxLives = 20;
   wave = 0; score = 0; killCount = 0;
   sentinels = []; enemies = []; particles = [];
   spawnQueue = []; waveActive = false; prepRemaining = 0;
   commanderActive = false; commanderCooldown = 0; commanderTimer = 0; pressureCooldown = 0;
   selectedSlot = -1; placingDef = null;
-  shopTab = 'towers';
-  battlePerks = { shipMachine: false, starHarvester: false, hero: false };
-  shipMachineTimer = 0; hero = null;
-  preBattleOpen = true;
-  lastDockGold = -1; lastDockCooldownLocked = null; lastDockPerkKey = '';
-  runCompleted = false; myResult = null; running = true; paused = true;
+  runCompleted = false; myResult = null; running = true; paused = false;
   totalWaves = m === 'endless' ? Infinity : CAMPAIGN_WAVES.length;
   bot = (m === 'skirmish') ? newBot('standard') : null;
-  hud.mode.textContent = { campaign: 'Solo Route', endless: 'Endless Duel Prep', skirmish: '1v1 Star Duel', battle: 'Room Duel' }[m] || m;
+  hud.mode.textContent = { campaign: 'Campaign', endless: 'Endless Watch', skirmish: 'Skirmish vs Bot', battle: 'Room Duel' }[m] || m;
   opponentPanel.hidden = !(m === 'skirmish' || m === 'battle');
   overlayResults.hidden = true; overlayPause.hidden = true;
   showScreen('game');
   requestAnimationFrame(resizeCanvas);
-  readyStore.hidden = false;
-  renderDock(); renderDockSelected(); renderPressureDock(); updateHud(); renderOpponentPanel(); renderReadyStore();
+  renderDock(); renderDockSelected(); renderPressureDock(); updateHud(); renderOpponentPanel();
+  beginPrep(2.5);
   host('progress', { score: 0, progress: 0 });
 }
 function reportProgress() {
@@ -680,59 +569,15 @@ function surrender() {
 }
 function returnToMenu() {
   running = false; paused = false;
-  preBattleOpen = false;
-  if (readyStore) readyStore.hidden = true;
   overlayPause.hidden = true; overlayResults.hidden = true;
   showScreen('menu');
   renderMenuMeta();
 }
-function renderReadyStore() {
-  if (!readyOptions || !readyBank) return;
-  readyBank.textContent = String(gold);
-  const offers = availablePrebattleOffers();
-  readyOptions.innerHTML = offers.length ? offers.map((offer) => {
-    const owned = perkOwned(offer.id);
-    const affordable = gold >= offer.cost;
-    const disabled = owned || !affordable;
-    return `<article class="sg-ready-option ${owned ? 'is-owned' : ''}">
-      <div class="sg-ready-art">${buyIcon(offer.art)}</div>
-      <div class="sg-ready-have">You have: <b>${esc(owned ? 'ACTIVE' : offer.have)}</b></div>
-      <h3>${esc(offer.title)}</h3>
-      <p>${esc(offer.copy)}</p>
-      <button type="button" data-prebuy="${esc(offer.id)}" ${disabled ? 'disabled' : ''}>
-        <span>${esc(owned ? 'Active' : priceLabel(offer.cost))}</span>
-      </button>
-    </article>`;
-  }).join('') : `<article class="sg-ready-option sg-ready-empty">
-      <div class="sg-ready-art">${buyIcon('ship')}</div>
-      <div class="sg-ready-have">No market cards</div>
-      <h3>Skip the shop</h3>
-      <p>This mode has no optional pre-battle buys. Start clean and spend in battle.</p>
-    </article>`;
-  readyOptions.querySelectorAll('[data-prebuy]').forEach((btn) => {
-    const offer = offers.find((item) => item.id === btn.dataset.prebuy);
-    btn.onclick = () => offer && buyPerk(offer.id, offer.cost, true);
-  });
-}
-function launchFromReadyStore() {
-  if (!preBattleOpen) return;
-  preBattleOpen = false;
-  readyStore.hidden = true;
-  paused = false;
-  sfx('wave');
-  beginPrep(1.5);
-  renderPressureDock();
-  updateHud();
-}
-$('[data-ready-start]').addEventListener('click', launchFromReadyStore);
-$('[data-ready-skip]').addEventListener('click', launchFromReadyStore);
 
 // ---------------------------------------------------------------------
 // 11. HUD / dock rendering
 // ---------------------------------------------------------------------
 let lastDockGold = -1;
-let lastDockCooldownLocked = null;
-let lastDockPerkKey = '';
 function updateHud() {
   hud.gold.textContent = String(gold);
   hud.wave.textContent = mode === 'endless' ? `${wave}` : `${Math.min(wave, totalWaves)}/${totalWaves}`;
@@ -746,75 +591,25 @@ function updateHud() {
   // The dock's afford/lock state depends on `gold`, which changes every
   // tick (kills, bounties, spends) — only rebuild its DOM when the value
   // actually moved, instead of every animation frame.
-  const cooldownLocked = pressureCooldown > 0;
-  const perkKey = `${shopTab}|${battlePerks.shipMachine ? 1 : 0}${battlePerks.starHarvester ? 1 : 0}${battlePerks.hero ? 1 : 0}`;
-  if (gold !== lastDockGold || cooldownLocked !== lastDockCooldownLocked || perkKey !== lastDockPerkKey) {
+  if (gold !== lastDockGold) {
     lastDockGold = gold;
-    lastDockCooldownLocked = cooldownLocked;
-    lastDockPerkKey = perkKey;
     renderDock();
     if (selectedSlot >= 0) renderDockSelected();
   }
 }
 function renderDock() {
   const unlocked = unlockedSet();
-  const duelReady = duelReadyMode();
-  if (shopTab === 'sends' && !duelReady) shopTab = 'towers';
-  const tabs = [
-    ['towers', 'Towers'],
-    ...(duelReady ? [['sends', 'Sends']] : []),
-    ['boosts', 'Machines + Hero'],
-  ];
-  let cards = '';
-  if (shopTab === 'towers') {
-    cards = DEFENDER_ORDER.map((id) => {
-      const def = DEFENDERS[id];
-      const isUnlocked = unlocked.has(id);
-      const affordable = gold >= def.cost;
-      const disabled = !isUnlocked || !affordable;
-      const sub = isUnlocked ? priceLabel(def.cost) : `Rank ${UNLOCK_RANK[id]}`;
-      return `<button type="button" class="sg-def-card sg-shop-card ${placingDef === id ? 'is-selected' : ''}" data-def="${id}" ${disabled ? 'disabled' : ''}>
-        <span class="sg-def-icon def-${id}"></span>
-        <b>${esc(def.name)}</b>
-        <span>${esc(sub)}</span>
-      </button>`;
-    }).join('');
-  } else if (shopTab === 'sends') {
-    cards = PRESSURE_SENDS.map((send) => {
-      const disabled = !duelReady || gold < send.cost || pressureCooldown > 0;
-      return `<button type="button" class="sg-send-card sg-shop-card" data-pressure="${esc(send.id)}" ${disabled ? 'disabled' : ''}>
-        <span class="sg-send-mult">${esc(send.mult)}</span>
-        <b>${esc(send.title)}</b>
-        <i>${esc(priceLabel(send.cost))}</i>
-        <small>${esc(send.copy)}</small>
-      </button>`;
-    }).join('');
-  } else {
-    const buys = availableMidgameBuys();
-    cards = buys.length ? buys.map((buy) => {
-      const owned = perkOwned(buy.id);
-      const disabled = owned || gold < buy.cost;
-      return `<button type="button" class="sg-boost-card sg-shop-card ${owned ? 'is-owned' : ''}" data-boost="${esc(buy.id)}" ${disabled ? 'disabled' : ''}>
-        ${buyIcon(buy.art)}
-        <b>${esc(buy.title)}</b>
-        <i>${esc(owned ? 'Active' : priceLabel(buy.cost))}</i>
-        <small>${esc(buy.copy)}</small>
-      </button>`;
-    }).join('') : `<div class="sg-empty-card sg-shop-card"><b>No machines loaded</b><span>Bring a machine or hero card next run.</span></div>`;
-  }
-  dockDefenders.innerHTML = `<div class="sg-shop-shell">
-    <div class="sg-shop-tabs">${tabs.map(([key, label]) => `<button type="button" data-shop-tab="${key}" class="${shopTab === key ? 'is-on' : ''}">${esc(label)}</button>`).join('')}</div>
-    <div class="sg-shop-cards">${cards}</div>
-  </div>`;
-  dockDefenders.querySelectorAll('[data-shop-tab]').forEach((btn) => btn.onclick = () => { shopTab = btn.dataset.shopTab; renderDock(); });
+  dockDefenders.innerHTML = DEFENDER_ORDER.map((id) => {
+    const def = DEFENDERS[id];
+    const isUnlocked = unlocked.has(id);
+    const affordable = gold >= def.cost;
+    const disabled = !isUnlocked || !affordable;
+    const sub = isUnlocked ? `${def.cost} Glint` : `Rank ${UNLOCK_RANK[id]} required`;
+    return `<button type="button" class="sg-def-card ${placingDef === id ? 'is-selected' : ''}" data-def="${id}" ${disabled ? 'disabled' : ''}><span class="sg-def-icon def-${id}"></span><b>${esc(def.name)}</b><span>${esc(sub)}</span></button>`;
+  }).join('');
   dockDefenders.querySelectorAll('[data-def]').forEach((btn) => btn.onclick = () => {
     placingDef = placingDef === btn.dataset.def ? null : btn.dataset.def;
     renderDock();
-  });
-  dockDefenders.querySelectorAll('[data-pressure]').forEach((btn) => btn.onclick = () => onPressureClick(btn.dataset.pressure));
-  dockDefenders.querySelectorAll('[data-boost]').forEach((btn) => {
-    const buy = MIDGAME_BUYS.find((item) => item.id === btn.dataset.boost);
-    btn.onclick = () => buy && buyPerk(buy.id, buy.cost, false);
   });
 }
 function renderDockSelected() {
@@ -824,7 +619,7 @@ function renderDockSelected() {
   const maxTier = def.tiers.length - 1;
   dockSelected.hidden = false;
   dockSelected.innerHTML = `<b>${esc(def.name)} · T${s.tier + 1}</b>
-    ${s.tier < maxTier ? `<button type="button" data-upgrade ${gold < def.upgradeCost ? 'disabled' : ''}>Upgrade (${priceLabel(def.upgradeCost)})</button>` : '<span>Max tier</span>'}
+    ${s.tier < maxTier ? `<button type="button" data-upgrade ${gold < def.upgradeCost ? 'disabled' : ''}>Upgrade (${def.upgradeCost})</button>` : '<span>Max tier</span>'}
     <button type="button" data-sell>Sell (+${Math.round((s.spent || 0) * 0.6)})</button>
     <button type="button" data-deselect>Close</button>`;
   dockSelected.querySelector('[data-upgrade]')?.addEventListener('click', upgradeSelected);
@@ -832,20 +627,35 @@ function renderDockSelected() {
   dockSelected.querySelector('[data-deselect]')?.addEventListener('click', () => selectSlot(-1));
 }
 function renderPressureDock() {
-  const show = running && duelReadyMode() && !preBattleOpen;
+  const show = running && (mode === 'battle' || mode === 'skirmish');
   dockPressure.hidden = !show;
-  dockPressure.innerHTML = show ? `<button type="button" class="sg-surrender-card" data-pressure="surrender">Surrender</button>` : '';
-  dockPressure.querySelector('[data-pressure="surrender"]')?.addEventListener('click', surrender);
+  if (!show) return;
+  dockPressure.innerHTML = `
+    <button type="button" class="sg-pressure-btn" data-pressure="swarm" ${gold < 40 || pressureCooldown > 0 ? 'disabled' : ''}>Swarm Ping · 40</button>
+    <button type="button" class="sg-pressure-btn" data-pressure="overload" ${gold < 60 || pressureCooldown > 0 ? 'disabled' : ''}>Jam Signal · 60</button>
+    <button type="button" class="sg-pressure-btn" data-pressure="surrender">Surrender</button>`;
+  dockPressure.querySelectorAll('[data-pressure]').forEach((b) => b.onclick = () => onPressureClick(b.dataset.pressure));
 }
 function onPressureClick(kind) {
   if (kind === 'surrender') { surrender(); return; }
-  const send = PRESSURE_SENDS.find((item) => item.id === kind);
-  if (!send) return;
-  const cost = send.cost;
+  const costs = { swarm: 40, overload: 60 };
+  const cost = costs[kind];
   if (gold < cost || pressureCooldown > 0) return;
   gold -= cost; pressureCooldown = 6;
   sfx('pressure-send'); updateHud();
-  dispatchPressure(kind, send.title);
+  if (mode === 'skirmish') { applyPressureToBot(kind); toast('Sent to Rival AI.'); return; }
+  if (mode === 'battle') {
+    const entrySeq = ((battle.duel && battle.duel.pressureLog) || []).length + 1;
+    const entry = { seq: entrySeq, type: kind, from: battle.amIHost ? 'host' : 'guest', at: Date.now() };
+    if (battle.amIHost) {
+      const log = [...((battle.duel && battle.duel.pressureLog) || []), entry].slice(-24);
+      pushDuelState({ pressureLog: log });
+      toast('Pressure sent to your opponent.');
+    } else {
+      matchAction({ duel: { ...(battle.duel || {}), pressureLog: [...((battle.duel && battle.duel.pressureLog) || []), entry] } }, 'merge');
+      toast('Sent — delivery depends on room sync.');
+    }
+  }
 }
 function renderOpponentPanel() {
   if (mode === 'skirmish') {
@@ -908,7 +718,7 @@ function selectSlot(i) { selectedSlot = i; renderDockSelected(); }
 function tryPlace(slotIndex) {
   const def = DEFENDERS[placingDef];
   if (!unlockedSet().has(placingDef)) { toast('Locked — reach the required Command Rank.'); return; }
-  if (gold < def.cost) { toast(`Not enough ${CURRENCY}.`); return; }
+  if (gold < def.cost) { toast('Not enough Glint.'); return; }
   gold -= def.cost;
   sentinels.push({ id: uid(), defId: placingDef, tier: 0, slotIndex, cooldown: 0, spent: def.cost });
   sfx('place'); placingDef = null;
@@ -919,7 +729,7 @@ function upgradeSelected() {
   if (!s) return;
   const def = DEFENDERS[s.defId];
   if (s.tier >= def.tiers.length - 1) return;
-  if (gold < def.upgradeCost) { toast(`Not enough ${CURRENCY}.`); return; }
+  if (gold < def.upgradeCost) { toast('Not enough Glint.'); return; }
   gold -= def.upgradeCost; s.tier += 1; s.spent = (s.spent || 0) + def.upgradeCost;
   sfx('upgrade'); updateHud(); renderDockSelected();
 }
@@ -957,101 +767,33 @@ function drawShape(cx, cy, r, shape, color) {
 }
 function draw() {
   ctx.clearRect(0, 0, cssW, cssH);
-  drawBackground();
-  drawPath(); drawSlots(); drawSpire(); drawHero(); drawSentinels(); drawEnemies(); drawParticlesOnCanvas();
+  ctx.fillStyle = '#080a1e'; ctx.fillRect(0, 0, cssW, cssH);
+  drawEnergyGrid();
+  drawPath(); drawSlots(); drawSpire(); drawSentinels(); drawEnemies(); drawParticlesOnCanvas();
   if (spireFlash > 0) { ctx.fillStyle = `rgba(255,77,141,${spireFlash * 0.35})`; ctx.fillRect(0, 0, cssW, cssH); }
 }
-function drawBackground() {
-  const grad = ctx.createLinearGradient(0, 0, cssW, cssH);
-  grad.addColorStop(0, '#061532');
-  grad.addColorStop(0.48, '#020715');
-  grad.addColorStop(1, '#130725');
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, cssW, cssH);
-
-  const nebulaA = ctx.createRadialGradient(cssW * 0.16, cssH * 0.50, 0, cssW * 0.16, cssH * 0.50, cssW * 0.42);
-  nebulaA.addColorStop(0, '#6c22ff38');
-  nebulaA.addColorStop(0.34, '#20c8ff16');
-  nebulaA.addColorStop(1, 'transparent');
-  ctx.fillStyle = nebulaA;
-  ctx.fillRect(0, 0, cssW, cssH);
-
-  const planet = ctx.createRadialGradient(cssW * 0.78, cssH * 0.18, 0, cssW * 0.78, cssH * 0.18, cssW * 0.28);
-  planet.addColorStop(0, '#1a66ff33');
-  planet.addColorStop(0.45, '#0b3c8a24');
-  planet.addColorStop(1, 'transparent');
-  ctx.fillStyle = planet;
-  ctx.beginPath();
-  ctx.arc(cssW * 0.78, cssH * 0.18, cssW * 0.28, 0, Math.PI * 2);
-  ctx.fill();
-
+function drawEnergyGrid() {
+  const pulse = (Math.sin(simTime * 1.8) + 1) / 2;
   ctx.save();
-  ctx.globalAlpha = 0.72;
-  for (let i = 0; i < 105; i++) {
-    const x = ((Math.sin(i * 37.77) + 1) * 0.5 * cssW + simTime * (i % 3 ? 2 : -1)) % cssW;
-    const y = ((Math.cos(i * 19.13) + 1) * 0.5 * cssH);
-    const r = (i % 9 === 0 ? 1.8 : 0.8) * scale;
-    ctx.fillStyle = i % 7 === 0 ? '#6fdfff' : '#d9e8ff';
-    ctx.fillRect(x, y, r, r);
-  }
-  ctx.restore();
-
-  drawDistantCarrier(cssW * 0.79, cssH * 0.21, 1.0, 0.28, -1);
-  drawDistantCarrier(cssW * 0.19, cssH * 0.75, 1.25, 0.20, 1);
-}
-function drawDistantCarrier(x, y, size, alpha, dir) {
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.scale(dir * size * scale, size * scale);
-  ctx.globalAlpha = alpha;
-  ctx.fillStyle = '#020711';
-  ctx.strokeStyle = '#2aaeff55';
-  ctx.lineWidth = 1.4;
-  ctx.beginPath();
-  ctx.moveTo(-70, 0); ctx.lineTo(-34, -14); ctx.lineTo(44, -10); ctx.lineTo(82, 0);
-  ctx.lineTo(38, 12); ctx.lineTo(-48, 11); ctx.closePath();
-  ctx.fill(); ctx.stroke();
-  ctx.fillStyle = '#20c8ff';
-  for (let i = 0; i < 5; i++) ctx.fillRect(-32 + i * 20, -2, 8, 2);
-  ctx.restore();
-}
-function drawPath() {
-  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-  ctx.shadowColor = '#20c8ff';
-  ctx.shadowBlur = 28 * scale;
-  ctx.lineWidth = 34 * scale; ctx.strokeStyle = '#0b66ff55';
+  ctx.globalAlpha = 0.18 + pulse * 0.08;
+  ctx.strokeStyle = '#4ddbff33'; ctx.lineWidth = 1 * scale;
+  for (let x = offX % (48 * scale); x < cssW; x += 48 * scale) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, cssH); ctx.stroke(); }
+  for (let y = offY % (48 * scale); y < cssH; y += 48 * scale) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(cssW, y); ctx.stroke(); }
+  ctx.globalAlpha = 0.22 + pulse * 0.22;
+  ctx.strokeStyle = commanderActive ? '#ffb84d99' : '#5be6a066';
+  ctx.lineWidth = (1.5 + pulse * 1.5) * scale;
   ctx.beginPath();
   PATH_PX.forEach(([x, y], i) => { const [px, py] = toPx(x, y); i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py); });
   ctx.stroke();
-  ctx.shadowBlur = 18 * scale;
-  ctx.lineWidth = 22 * scale; ctx.strokeStyle = '#179affcc';
-  ctx.stroke();
-  ctx.shadowBlur = 0;
-  ctx.lineWidth = 5 * scale; ctx.strokeStyle = '#8fe9ff';
-  ctx.stroke();
-  ctx.lineWidth = 1.4 * scale; ctx.strokeStyle = '#ffffffcc';
-  ctx.stroke();
-
-  ctx.save();
-  ctx.shadowColor = '#8fe9ff';
-  ctx.shadowBlur = 12 * scale;
-  for (let i = 0; i < 18; i++) {
-    const t = (simTime * 0.09 + i / 18) % 1;
-    const p = pointAtT(t), q = pointAtT(Math.min(1, t + 0.004));
-    const [x, y] = toPx(p.x, p.y), [qx, qy] = toPx(q.x, q.y);
-    const a = Math.atan2(qy - y, qx - x);
-    ctx.translate(x, y); ctx.rotate(a);
-    ctx.fillStyle = '#c7f7ff';
-    ctx.beginPath();
-    ctx.moveTo(8 * scale, 0);
-    ctx.lineTo(-5 * scale, -4 * scale);
-    ctx.lineTo(-2 * scale, 0);
-    ctx.lineTo(-5 * scale, 4 * scale);
-    ctx.closePath();
-    ctx.fill();
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-  }
   ctx.restore();
+}
+function drawPath() {
+  ctx.lineWidth = 26 * scale; ctx.strokeStyle = '#141a3d'; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  ctx.beginPath();
+  PATH_PX.forEach(([x, y], i) => { const [px, py] = toPx(x, y); i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py); });
+  ctx.stroke();
+  ctx.lineWidth = 2 * scale; ctx.strokeStyle = '#ffb84d33';
+  ctx.stroke();
 }
 function drawSlots() {
   for (let i = 0; i < SLOT_PX.length; i++) {
@@ -1059,36 +801,18 @@ function drawSlots() {
     const occupied = sentinels.find((s) => s.slotIndex === i);
     const isSelected = i === selectedSlot;
     const isValidDrop = placingDef && !occupied;
-    const r = (occupied ? 18 : 15) * scale;
-    ctx.fillStyle = '#020916cc';
-    ctx.beginPath(); ctx.arc(x, y, r + 7 * scale, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = isSelected ? '#ffbf33' : isValidDrop ? '#20c8ff' : '#2c5c91';
-    ctx.shadowColor = ctx.strokeStyle;
-    ctx.shadowBlur = (isSelected || isValidDrop ? 16 : 6) * scale;
+    ctx.beginPath(); ctx.arc(x, y, 15 * scale, 0, Math.PI * 2);
+    ctx.strokeStyle = isSelected ? '#ffb84d' : isValidDrop ? '#4ddbff' : '#2b3372';
     ctx.lineWidth = (isSelected || isValidDrop ? 2.4 : 1.4) * scale;
-    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
     ctx.stroke();
-    ctx.shadowBlur = 0;
   }
 }
 function drawSpire() {
   const [x, y] = toPx(PATH_PX[PATH_PX.length - 1][0], PATH_PX[PATH_PX.length - 1][1]);
-  const pulse = 1 + Math.sin(simTime * 5) * 0.04;
-  ctx.save();
-  ctx.shadowColor = '#20c8ff';
-  ctx.shadowBlur = 34 * scale;
-  const grad = ctx.createRadialGradient(x, y, 2 * scale, x, y, 54 * scale);
-  grad.addColorStop(0, '#dffcff');
-  grad.addColorStop(0.22, '#20c8ff');
-  grad.addColorStop(0.56, '#0b66ff55');
-  grad.addColorStop(1, '#20c8ff00');
-  ctx.fillStyle = grad;
-  ctx.beginPath(); ctx.arc(x, y, 48 * scale * pulse, 0, Math.PI * 2); ctx.fill();
-  ctx.strokeStyle = '#8fe9ff'; ctx.lineWidth = 2.5 * scale;
-  for (let r of [24, 36, 48]) { ctx.beginPath(); ctx.arc(x, y, r * scale * pulse, 0, Math.PI * 2); ctx.stroke(); }
-  ctx.fillStyle = '#dffcff';
-  ctx.beginPath(); ctx.moveTo(x, y - 30 * scale); ctx.lineTo(x + 14 * scale, y); ctx.lineTo(x, y + 30 * scale); ctx.lineTo(x - 14 * scale, y); ctx.closePath(); ctx.fill();
-  ctx.restore();
+  const grad = ctx.createRadialGradient(x, y, 2 * scale, x, y, 22 * scale);
+  grad.addColorStop(0, '#8a6bff'); grad.addColorStop(1, '#4ddbff11');
+  ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(x, y, 18 * scale, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#4ddbff'; ctx.lineWidth = 2 * scale; ctx.stroke();
 }
 function drawSentinels() {
   for (const s of sentinels) {
@@ -1100,64 +824,9 @@ function drawSentinels() {
       ctx.beginPath(); ctx.arc(px, py, stats.range * scale, 0, Math.PI * 2);
       ctx.strokeStyle = def.color + '55'; ctx.lineWidth = 1.2 * scale; ctx.stroke();
     }
-    drawTowerBase(px, py, def.color, s.tier);
-    ctx.save();
-    ctx.shadowColor = def.color;
-    ctx.shadowBlur = 20 * scale;
-    drawShape(px, py - 4 * scale, (s.tier === 1 ? 15 : 12) * scale, def.shape, def.color);
-    ctx.restore();
-    if (s.tier === 1) { ctx.strokeStyle = '#fff8'; ctx.lineWidth = 1.4 * scale; ctx.beginPath(); ctx.arc(px, py - 4 * scale, 18 * scale, 0, Math.PI * 2); ctx.stroke(); }
+    drawShape(px, py, (s.tier === 1 ? 13 : 11) * scale, def.shape, def.color);
+    if (s.tier === 1) { ctx.strokeStyle = '#fff8'; ctx.lineWidth = 1.4 * scale; ctx.beginPath(); ctx.arc(px, py, (s.tier === 1 ? 13 : 11) * scale + 2 * scale, 0, Math.PI * 2); ctx.stroke(); }
   }
-}
-function drawHero() {
-  if (!hero) return;
-  const [px, py] = toPx(hero.x, hero.y);
-  const pulse = 1 + Math.sin(simTime * 3) * 0.045 + hero.pulse * 0.9;
-  ctx.save();
-  ctx.translate(px, py);
-  ctx.shadowColor = '#ffe86b';
-  ctx.shadowBlur = 28 * scale;
-  ctx.fillStyle = '#10183a';
-  ctx.strokeStyle = '#ffe86b';
-  ctx.lineWidth = 2.6 * scale;
-  ctx.beginPath();
-  ctx.arc(0, 0, 28 * scale * pulse, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
-  ctx.fillStyle = '#ffe86b';
-  ctx.beginPath();
-  ctx.moveTo(0, -20 * scale);
-  ctx.lineTo(17 * scale, 10 * scale);
-  ctx.lineTo(0, 4 * scale);
-  ctx.lineTo(-17 * scale, 10 * scale);
-  ctx.closePath();
-  ctx.fill();
-  ctx.fillStyle = '#fff7bd';
-  ctx.beginPath();
-  ctx.arc(0, -5 * scale, 5 * scale, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
-}
-function drawTowerBase(x, y, color, tier) {
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.fillStyle = '#071020';
-  ctx.strokeStyle = color;
-  ctx.shadowColor = color;
-  ctx.shadowBlur = 14 * scale;
-  ctx.lineWidth = 2 * scale;
-  ctx.beginPath();
-  for (let i = 0; i < 8; i++) {
-    const a = Math.PI / 4 * i + Math.PI / 8;
-    const r = (tier ? 27 : 23) * scale;
-    const px = Math.cos(a) * r, py = Math.sin(a) * r * 0.78;
-    i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
-  }
-  ctx.closePath(); ctx.fill(); ctx.stroke();
-  ctx.shadowBlur = 0;
-  ctx.strokeStyle = '#ffffff33';
-  ctx.beginPath(); ctx.arc(0, 0, (tier ? 18 : 15) * scale, 0, Math.PI * 2); ctx.stroke();
-  ctx.restore();
 }
 function drawEnemies() {
   for (const e of enemies) {
@@ -1165,37 +834,12 @@ function drawEnemies() {
     const info = ENEMIES[e.type];
     const r = (info.r + (e.boss ? 6 : 0)) * scale;
     const slowed = e.slowUntil > simTime;
-    drawEnemyShip(e, x, y, r, slowed ? '#20c8ff' : info.color);
-    if (e.boss) { ctx.strokeStyle = '#ff563dcc'; ctx.lineWidth = 2 * scale; ctx.shadowColor = '#ff563d'; ctx.shadowBlur = 18 * scale; ctx.beginPath(); ctx.arc(x, y, r + 12 * scale, 0, Math.PI * 2); ctx.stroke(); ctx.shadowBlur = 0; }
+    drawShape(x, y, r, e.type === 'skiff' ? 'tri' : e.type === 'bulwark' ? 'square' : 'circle', slowed ? '#4ddbff' : info.color);
+    if (e.boss) { ctx.strokeStyle = '#ff4d8d88'; ctx.lineWidth = 2 * scale; ctx.beginPath(); ctx.arc(x, y, r + 6 * scale, 0, Math.PI * 2); ctx.stroke(); }
     const w = 22 * scale, ratio = Math.max(0, e.hp / e.maxHp);
     ctx.fillStyle = '#1a2050'; ctx.fillRect(x - w / 2, y - r - 8 * scale, w, 3 * scale);
     ctx.fillStyle = ratio > 0.4 ? '#5be6a0' : '#ff5c6c'; ctx.fillRect(x - w / 2, y - r - 8 * scale, w * ratio, 3 * scale);
   }
-}
-function drawEnemyShip(e, x, y, r, color) {
-  const p = pointAtT(Math.min(1, e.t + 0.004));
-  const [qx, qy] = toPx(p.x, p.y);
-  const a = Math.atan2(qy - y, qx - x);
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.rotate(a);
-  ctx.shadowColor = color;
-  ctx.shadowBlur = 16 * scale;
-  ctx.fillStyle = '#020711';
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 2 * scale;
-  const body = e.boss ? r * 1.9 : r * 1.35;
-  ctx.beginPath();
-  ctx.moveTo(body, 0);
-  ctx.lineTo(-body * 0.55, -r * 0.78);
-  ctx.lineTo(-body * 0.20, 0);
-  ctx.lineTo(-body * 0.55, r * 0.78);
-  ctx.closePath();
-  ctx.fill(); ctx.stroke();
-  ctx.fillStyle = color;
-  ctx.fillRect(-body * 0.75, -r * 0.28, r * 0.55, r * 0.16);
-  ctx.fillRect(-body * 0.75, r * 0.12, r * 0.55, r * 0.16);
-  ctx.restore();
 }
 function drawParticlesOnCanvas() {
   for (const p of particles) {
@@ -1203,15 +847,11 @@ function drawParticlesOnCanvas() {
     ctx.globalAlpha = t;
     if (p.type === 'tracer') {
       const [x1, y1] = toPx(p.x1, p.y1), [x2, y2] = toPx(p.x2, p.y2);
-      ctx.shadowColor = p.color; ctx.shadowBlur = 18 * scale;
-      ctx.strokeStyle = p.color; ctx.lineWidth = 3.5 * scale;
+      ctx.strokeStyle = p.color; ctx.lineWidth = 2 * scale;
       ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
-      ctx.shadowBlur = 0;
     } else {
       const [x, y] = toPx(p.x, p.y);
-      ctx.shadowColor = p.color; ctx.shadowBlur = 12 * scale;
-      ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(x, y, 4 * scale, 0, Math.PI * 2); ctx.fill();
-      ctx.shadowBlur = 0;
+      ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(x, y, 3 * scale, 0, Math.PI * 2); ctx.fill();
     }
   }
   ctx.globalAlpha = 1;
@@ -1249,8 +889,8 @@ $('[data-menu-btn]').addEventListener('click', () => returnToMenu());
 
 function showResults({ kind, xpGain, rankedUp, surrendered }) {
   const won = kind === 'victory';
-  resultsTitle.textContent = won ? (mode === 'battle' ? 'Duel won' : 'Route held') : (mode === 'battle' ? 'Duel lost' : (surrendered ? 'Surrendered' : 'Core fallen'));
-  resultsSub.textContent = mode === 'endless' ? `Endless Duel Prep run — reached wave ${wave}.` : `${{ campaign: 'Solo Route', skirmish: '1v1 Star Duel', battle: 'Room Duel' }[mode] || mode} run finished.`;
+  resultsTitle.textContent = won ? (mode === 'battle' ? 'Duel won' : 'Route held') : (mode === 'battle' ? 'Duel lost' : (surrendered ? 'Surrendered' : 'Spire fallen'));
+  resultsSub.textContent = mode === 'endless' ? `Endless run — reached wave ${wave}.` : `${{ campaign: 'Campaign', skirmish: 'Skirmish', battle: 'Room Duel' }[mode] || mode} run finished.`;
   const stats = [
     ['Waves survived', String(mode === 'endless' ? Math.max(0, wave - 1) : Math.min(wave, totalWaves))],
     ['Enemies defeated', String(killCount)],
@@ -1317,13 +957,13 @@ $('[data-settings-close]').addEventListener('click', () => { overlaySettings.hid
 // 17. Tutorial
 // ---------------------------------------------------------------------
 const TUTORIAL_STEPS = [
-  { h: 'Welcome, Skyguard', p: 'This is a 1v1 star-lane battle. Build your defense, send pressure to the rival lane, and protect your core longer than they protect theirs.' },
-  { h: `${CURRENCY} economy`, p: `Defeating raiders and clearing waves earns ${CURRENCY}. Spend it on towers, sends, machines, upgrades, or a hero.` },
-  { h: 'Pre-battle market', p: 'Before launch, buy a Ship Machine, Star Harvester, or trial hero. These are real battle helpers, not cosmetic buttons.' },
-  { h: 'Tower shop', p: 'Glare Cannon hits fast. Arc Diffuser splashes. Frost Prism slows. Vane Sniper deletes tough ships from long range.' },
-  { h: 'Sends win duels', p: 'Spark Drones and Jam Probes pressure the enemy lane. The Ship Machine keeps sending automatically once it is online.' },
-  { h: 'Heroes and boosts', p: 'Vega Starborn fires from the center lane. Overcharge Pulse boosts every tower for a short, dangerous window.' },
-  { h: 'Outlast the rival', p: 'Every raider that reaches the end drains your core. Lose it all and the lane falls. In duels, their lane is trying to survive the same storm.' },
+  { h: 'Welcome, Skyguard', p: 'Driftbreaker raids follow the Skyline Route toward your Anchor Spire. Place Sentinels along the corridor to break them before they arrive.' },
+  { h: 'Glint economy', p: 'Defeating raiders and clearing waves earns Glint. Spend it placing new Sentinels and upgrading the ones you already have.' },
+  { h: 'Four Sentinels', p: 'Glare Cannon hits fast and single-target. Arc Diffuser splashes a small area. Frost Prism slows a raider down. Vane Sniper hits hard at long range and cuts through armor.' },
+  { h: 'Upgrades', p: 'Tap a placed Sentinel to see its Tier 2 upgrade — more damage, more range, and a stronger effect for a one-time Glint cost.' },
+  { h: 'Overcharge Pulse', p: "Your commander ability boosts every Sentinel's damage and fire rate for a few seconds. Use it on a tough wave, then wait out its cooldown." },
+  { h: 'Hold the Spire', p: 'Every raider that reaches the end drains your Spire’s integrity. Lose it all and the route falls. Clear every wave, including the boss, to win a Campaign run.' },
+  { h: 'Duels', p: 'Skirmish and Room Duel add an opposing lane. Spend Glint on Pressure Powers to hit your rival’s lane while defending your own.' },
 ];
 let tutorialStep = 0, tutorialReturn = 'menu';
 function openTutorial(returnTo) { tutorialReturn = returnTo || 'menu'; tutorialStep = 0; renderTutorial(); showScreen('tutorial'); }

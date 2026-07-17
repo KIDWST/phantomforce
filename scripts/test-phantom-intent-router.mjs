@@ -64,7 +64,7 @@ const cases = {
     "add a task: update the profile card",
     "make this a todo",
     "turn this into a task",
-    "assign Phantom a task to inspect the navbar",
+    "assign Codex a task to inspect the navbar",
     "track this as high priority",
     "put this on my task list",
   ],
@@ -218,20 +218,6 @@ assert.equal(smartGreeting.hermes || null, null, "greetings should stay local");
 assert.equal(store.state.tasks.length, 0, "smart greetings should not create tasks");
 
 const originalFetch = globalThis.fetch;
-globalThis.fetch = async (url) => {
-  assert.match(String(url), /\/phantom-ai\/runs$/, "chat-started run should call the run engine");
-  return {
-    ok: false,
-    status: 403,
-    json: async () => ({ ok: false, error: "upgrade_required" }),
-  };
-};
-const blockedServerRun = await handleSmartCommand("run a business snapshot");
-globalThis.fetch = originalFetch;
-assert.match(blockedServerRun.say, /couldn't start that run/i, "rejected server runs must be reported honestly");
-assert.match(blockedServerRun.say, /isn't authorized|not authorized/i, "403 server run denials should stay user-safe.");
-assert.doesNotMatch(blockedServerRun.say, /upgrade_required|Authorization bearer|Missing or invalid Authorization/i, "chat-started server runs must not leak backend auth/error codes.");
-
 let capturedChatBody = null;
 globalThis.fetch = async (url, init) => {
   assert.match(String(url), /\/phantom-ai\/chat$/, "instant questions should use the chat backend");
@@ -250,7 +236,7 @@ const instantQuestion = await handleSmartCommand("what's your favorite food?");
 assert.equal(instantQuestion.say, "I'd pick tacos.");
 assert.equal(capturedChatBody.route_tier, "instant");
 assert.equal(capturedChatBody.requested_model, "gpt-5.5-instant");
-assert.deepEqual(capturedChatBody.allowed_providers, ["private_brain"]);
+assert.deepEqual(capturedChatBody.allowed_providers, ["codex_cli"]);
 assert.equal(capturedChatBody.allow_provider_fallback, false);
 assert.ok(capturedChatBody.max_provider_ms <= 5000, "instant questions should cap provider time tightly");
 globalThis.fetch = originalFetch;
@@ -301,16 +287,13 @@ globalThis.fetch = async () => {
   crmFetchCalled = true;
   throw new Error("CRM prospect buildout should not call the backend");
 };
-const exactClientsCrmPrompt = "update our clients crm with clients who you think would be interested in phantomforce. your phantom workforce.. creators, businesses, schools, everyone. Just add to our CRM/clients tab";
-const crmBuildout = await handleSmartCommand(exactClientsCrmPrompt);
+const crmBuildout = await handleSmartCommand("update our clients crm with clients who you think would be interested in phantomforce. your phantom workforce.. creators, businesses, schools, everyone. Just add to our CRM/clients tab");
 globalThis.fetch = originalFetch;
 assert.equal(crmFetchCalled, false, "CRM prospect buildout should stay on the deterministic local path");
 assert.equal(crmBuildout.open, "leads", "CRM prospect buildout should open the Clients pipeline");
-assert.ok(store.state.leads.length >= 7, "CRM prospect buildout with 'everyone' should create the full safe prospect set");
+assert.ok(store.state.leads.length >= 4, "CRM prospect buildout should create multiple prospect lanes");
 assert.ok(store.state.leads.some((lead) => /creator/i.test(`${lead.name} ${lead.notes}`)), "creator prospects should be represented");
 assert.ok(store.state.leads.some((lead) => /school|education/i.test(`${lead.name} ${lead.notes}`)), "school prospects should be represented");
-assert.ok(store.state.leads.some((lead) => /warm|referral/i.test(`${lead.name} ${lead.notes}`)), "warm prospects should be represented");
-assert.ok(store.state.leads.every((lead) => /No external outreach|contact details|live relationship claims/i.test(lead.notes)), "CRM buildout must not invent contacts or outreach claims");
 assert.ok(store.state.tasks.some((task) => /Qualify PhantomForce CRM prospect map/i.test(task.title)), "CRM prospect buildout should create a qualification task");
 assert.match(crmBuildout.say, /did not invent contact details|message anyone/i, "CRM proof should state no fake contacts or outreach");
 store.state.leads = [];
@@ -331,28 +314,6 @@ assert.ok(store.state.leads.some((lead) => /school|education/i.test(`${lead.name
 assert.ok(store.state.leads.some((lead) => /local service|gym|service/i.test(`${lead.name} ${lead.notes}`)), "find/add request should represent service/gym prospects");
 assert.ok(store.state.leads.some((lead) => /warm|referral/i.test(`${lead.name} ${lead.notes}`)), "find/add request should represent warm prospects");
 store.state.leads = [];
-store.state.tasks = [];
-
-crmFetchCalled = false;
-globalThis.fetch = async () => {
-  crmFetchCalled = true;
-  throw new Error("Messy CRM requests should not call the backend");
-};
-const messyClientsCrm = await handleSmartCommand("put companies, organizations, owners, and schools that need our business command center into the clients page");
-globalThis.fetch = originalFetch;
-assert.equal(crmFetchCalled, false, "Messy CRM requests should stay deterministic and local");
-assert.equal(messyClientsCrm.open, "leads", "Messy CRM requests should open the Clients pipeline");
-assert.ok(store.state.leads.length >= 3, "Messy CRM request should create several prospect cards");
-assert.ok(store.state.leads.some((lead) => /local service|business/i.test(`${lead.name} ${lead.notes}`)), "messy CRM request should represent owner/company prospects");
-assert.ok(store.state.leads.some((lead) => /school|education/i.test(`${lead.name} ${lead.notes}`)), "messy CRM request should represent school prospects");
-assert.ok(store.state.leads.some((lead) => /ops-heavy|command center|operations/i.test(`${lead.name} ${lead.notes}`)), "messy CRM request should represent command-center prospects");
-assert.match(messyClientsCrm.say, /CRM prospect card.*Clients/i, "Messy CRM proof should say cards are ready in Clients");
-store.state.leads = [];
-store.state.tasks = [];
-
-const unrelatedClientReport = handleCommand("create a report for the client team");
-assert.notEqual(unrelatedClientReport.open, "leads", "Unrelated client-team work should not open the Clients CRM pipeline");
-assert.equal(store.state.leads.length, 0, "Unrelated client-team work should not create CRM prospect cards");
 store.state.tasks = [];
 
 const complaint = handleCommand("i hate this dashboard, it feels annoying");
@@ -404,10 +365,6 @@ assert.equal(vacationGo.intent.primaryIntent, "vacation_mode");
 assert.match(vacationGo.say, /armed|approval/i, "confirmed vacation mode shows an approval-gated run");
 assert.ok(store.state.agents.length > agentsBefore, "confirmed vacation mode creates a run record");
 assert.ok(store.state.approvals.length > approvalsBefore, "the vacation run is approval-gated in the queue");
-
-const commandSourceForRunErrors = readFileSync(new URL("../app/js/command.js", import.meta.url), "utf8");
-assert.match(commandSourceForRunErrors, /friendlyRunStartError[\s\S]*status === 401 \|\| status === 403/u, "Chat-started server runs must hide raw 401/403 auth and entitlement transport errors.");
-assert.doesNotMatch(commandSourceForRunErrors, /String\(payload\?\.error \|\| `the run engine answered/u, "Chat-started server runs must not pass raw backend errors directly to the user.");
 
 const risky = handleCommand("publish it");
 assert.equal(risky.intent.primaryIntent, "approval_request");

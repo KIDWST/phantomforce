@@ -3,7 +3,7 @@
    dashboard. Termina can be wired underneath later; until then this uses
    PhantomForce-managed sessions and is explicit about that fallback. */
 
-import { currentWs, wsName, pushActivity, store, isAdmin, session } from "./store.js?v=phantom-live-20260717-2";
+import { currentWs, wsName, pushActivity, store, isAdmin } from "./store.js?v=phantom-live-20260714-006";
 
 const KEY = "pf.mission-control.v1";
 const WORKERS = [
@@ -21,23 +21,6 @@ const esc = (v = "") => String(v).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<
 const uid = (p) => `${p}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 const now = () => new Date().toISOString();
 const time = (iso) => new Date(iso || Date.now()).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-
-/* ---- Termina Mission Bridge (docs/superpowers/specs/2026-07-15-termina-
-   mission-bridge-design.md) — real execution, admin-only. Every existing
-   localStorage-simulated path above/below is untouched and stays the
-   fallback for missions not backed by a real Termina mission; this only
-   adds an opt-in "Run for real via Termina" path through the same setup
-   dialog, approval center, and CLI view. */
-async function terminaApi(path, options = {}) {
-  const token = session.token();
-  const response = await fetch(path, { ...options, headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(options.body ? { "Content-Type": "application/json" } : {}), ...(options.headers || {}) } });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok || payload?.ok === false) throw new Error(payload?.error || `Termina request failed (${response.status}).`);
-  return payload;
-}
-function terminaSessionsFromWorkers(workers = []) {
-  return workers.map((w) => ({ worker: w.name, status: w.status, env: w.branch ? `worktree ${w.branch}` : w.cwd || "workspace", model: w.provider || "unknown" }));
-}
 
 function defaultState() {
   return { enabled: false, view: "Simple", activeMissionId: null, missions: [] };
@@ -206,82 +189,6 @@ function activeMission(state) {
   return state.missions.find((m) => m.id === state.activeMissionId) || state.missions[0] || null;
 }
 
-const terminaPollTimers = new Map();
-
-async function startTerminaMissionFlow(mission, root, state) {
-  mission.termina = { available: false, mode: "Checking Termina…", sessions: [] };
-  persistAndRender(root, state);
-  try {
-    const health = await terminaApi("/phantom-ai/termina/health");
-    if (!health.reachable) {
-      mission.termina = { available: false, mode: "Termina is not running on this machine — start it to run this mission for real.", sessions: [] };
-      mission.activity.unshift({ id: uid("evt"), actor: "Termina", type: "unavailable", text: "Termina bridge unreachable; mission stayed simulated.", at: now(), proof: health.reason || "health check failed" });
-      persistAndRender(root, state);
-      return;
-    }
-    const plan = await terminaApi("/phantom-ai/missions/decompose", { method: "POST", body: JSON.stringify({ objective: mission.objective }) });
-    const approval = await terminaApi("/phantom-ai/missions", { method: "POST", body: JSON.stringify({ objective: mission.objective, missionName: mission.name, roles: plan.roles }) });
-    mission.backend = "termina-pending";
-    mission.termina = { available: true, mode: "Awaiting your approval to start real workers.", sessions: [], approvalId: approval.approvalId };
-    mission.approvals.unshift({
-      id: uid("approval"),
-      worker: "Termina",
-      action: `Start ${plan.roles.length} real worker${plan.roles.length === 1 ? "" : "s"} for: ${mission.objective}`,
-      destination: "Termina (real execution)",
-      effect: `Runs real Claude/Codex/PowerShell workers against the approved scratch project only. Expires ${new Date(approval.expiresAt).toLocaleTimeString()}.`,
-      risk: "High",
-      cost: `~$${(plan.costUsd ?? 0).toFixed(2)} planning cost so far`,
-      status: "pending",
-      createdAt: now(),
-      terminaApprovalId: approval.approvalId,
-    });
-    mission.activity.unshift({ id: uid("evt"), actor: "Termina", type: "plan_ready", text: `Termina planned ${plan.roles.length} real worker(s). Approve in the Approval Center to start them.`, at: now(), proof: "Observe-tier plan only — nothing executes yet." });
-  } catch (error) {
-    mission.termina = { available: false, mode: `Termina error: ${error.message}`, sessions: [] };
-    mission.activity.unshift({ id: uid("evt"), actor: "Termina", type: "error", text: error.message, at: now(), proof: "Mission stayed simulated." });
-  }
-  persistAndRender(root, state);
-}
-
-async function confirmTerminaApproval(mission, approval, root, state) {
-  try {
-    const result = await terminaApi(`/phantom-ai/missions/approvals/${encodeURIComponent(approval.terminaApprovalId)}/confirm`, { method: "POST" });
-    mission.backend = "termina";
-    mission.terminaMissionId = result.mission.id;
-    mission.termina = { available: true, mode: "Termina (real execution running)", sessions: terminaSessionsFromWorkers(result.mission.workers), missionId: result.mission.id };
-    mission.activity.unshift({ id: uid("evt"), actor: "Termina", type: "mission_started", text: `Real Termina mission ${result.mission.id} started.`, at: now(), proof: `${result.mission.workers.length} worker(s) launched via Termina's own worktree isolation.` });
-    startTerminaPolling(mission, root, state);
-  } catch (error) {
-    approval.status = "pending";
-    mission.termina = { available: false, mode: `Approval failed: ${error.message}`, sessions: [] };
-    mission.activity.unshift({ id: uid("evt"), actor: "Termina", type: "error", text: `Could not start the real mission: ${error.message}`, at: now(), proof: "Approval was not consumed; try again or re-plan." });
-  }
-  persistAndRender(root, state);
-}
-
-function stopTerminaPolling(missionId) {
-  const timer = terminaPollTimers.get(missionId);
-  if (timer) { clearInterval(timer); terminaPollTimers.delete(missionId); }
-}
-
-function startTerminaPolling(mission, root, state) {
-  stopTerminaPolling(mission.id);
-  const timer = setInterval(async () => {
-    const stillCurrent = state.missions.find((m) => m.id === mission.id);
-    if (!stillCurrent || stillCurrent.terminaMissionId !== mission.terminaMissionId) { stopTerminaPolling(mission.id); return; }
-    try {
-      const { mission: live } = await terminaApi(`/phantom-ai/missions/${encodeURIComponent(mission.terminaMissionId)}`);
-      mission.termina.sessions = terminaSessionsFromWorkers(live.workers);
-      mission.termina.mode = `Termina (${live.status})`;
-      if (live.status === "completed" || live.status === "failed" || live.status === "stopped") stopTerminaPolling(mission.id);
-      persistAndRender(root, state);
-    } catch {
-      /* transient poll failure — keep the last known state, try again next tick */
-    }
-  }, 3000);
-  terminaPollTimers.set(mission.id, timer);
-}
-
 function setMissionStatus(mission, status, paused = mission.paused) {
   mission.status = status;
   mission.paused = paused;
@@ -323,7 +230,6 @@ function renderSetup() {
         <label>Permission level<select name="permission"><option>Draft + local actions</option><option>Auto safe reads only</option><option>Approval for every action</option></select></label>
       </div>
       <label>Approval rules<input name="approvalRules" value="External/public/destructive actions require approval" /></label>
-      ${isAdmin() ? `<label class="mc-check"><input type="checkbox" name="terminaReal" /> Run for real via Termina (executes real commands against the approved scratch project; needs your approval in the Approval Center before anything runs)</label>` : ""}
       <footer><button type="button" data-mc-close>Cancel</button><button class="mc-primary" value="start">Start Mission</button></footer>
     </form>
   </dialog>`;
@@ -397,17 +303,13 @@ function bind(root, state) {
   root.querySelectorAll("[data-mc-close]").forEach((btn) => btn.addEventListener("click", () => root.querySelector("[data-mc-dialog]")?.close()));
   root.querySelector("[data-mc-setup]")?.addEventListener("submit", (event) => {
     event.preventDefault();
-    const form = event.currentTarget;
-    const mission = missionFromForm(form);
-    mission.backend = "simulated";
-    const wantsTermina = isAdmin() && form.querySelector('[name="terminaReal"]')?.checked;
+    const mission = missionFromForm(event.currentTarget);
     state.missions.unshift(mission);
     state.activeMissionId = mission.id;
     state.enabled = true;
     pushActivity("Mission Control", `started mission: ${mission.name}.`);
     store.save();
     persistAndRender(root, state);
-    if (wantsTermina) startTerminaMissionFlow(mission, root, state);
   });
   root.querySelectorAll("[data-mc-view]").forEach((btn) => btn.addEventListener("click", () => {
     state.view = btn.dataset.mcView;
@@ -492,10 +394,6 @@ function bind(root, state) {
     approval.status = btn.dataset.mcApprove ? "approved" : "denied";
     mission.activity.unshift({ id: uid("evt"), actor: "User", type: approval.status, text: `${approval.status}: ${approval.action}`, at: now(), proof: "Approval decision recorded; no external execution is automatic." });
     persistAndRender(root, state);
-    // Approving a Termina mission-start is the one exception: this is the
-    // actual trigger that starts real workers (see the design doc's
-    // approval-gate section). Every other approval stays local/simulated.
-    if (approval.status === "approved" && approval.terminaApprovalId) confirmTerminaApproval(mission, approval, root, state);
   }));
 }
 

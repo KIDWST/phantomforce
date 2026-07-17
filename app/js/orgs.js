@@ -6,7 +6,7 @@
    when the backend doesn't advertise database auth, none of these
    surfaces render and the app behaves exactly as before. */
 
-import { ctx, session } from "./store.js?v=phantom-live-20260717-2";
+import { ctx, session } from "./store.js?v=phantom-live-20260714-012";
 
 export const isDatabaseSession = () => !!ctx.session?.database;
 export const activeOrgId = () => (isDatabaseSession() ? ctx.session.orgId || null : null);
@@ -57,6 +57,7 @@ function localSessionFromServer(payload) {
     canManageAccess: !!s.canManageAccess,
     database: true,
     email: s.email || "",
+    username: s.username || "",
     orgId: s.orgId || null,
     orgRole: s.orgRole || null,
     memberships: s.memberships || [],
@@ -70,29 +71,70 @@ export async function databaseLogin(email, password) {
   if (!ok) {
     throw new Error(status === 401 ? "Invalid email or password." : String(json?.error || `Login failed (${status}).`));
   }
+  if (json?.requires2fa) {
+    return { requires2fa: true, challengeToken: json.challengeToken, expiresAt: json.expiresAt, user: json.user };
+  }
   const local = localSessionFromServer(json);
   session.set(local);
   ctx.session = { ...local, token: undefined };
   return ctx.session;
 }
 
-export async function databaseSignup({ email, password, name, workspaceName, workspaceBrief, workspaceProfile }) {
-  const { ok, status, json } = await api("/auth/signup", {
-    method: "POST",
-    body: { email, password, name, workspaceName, workspaceBrief, workspaceProfile },
-  });
-  if (!ok) {
-    const message = status === 409
-      ? "That email already has a workspace. Sign in instead."
-      : json?.error === "workspace_brief_required"
-        ? "Tell PhantomForce what this workspace does before creating it."
-      : String(json?.error || `Workspace creation failed (${status}).`);
-    throw new Error(message);
-  }
+export async function databaseVerify2fa(challengeToken, code) {
+  const { ok, status, json } = await api("/auth/2fa/verify", { method: "POST", body: { challengeToken, code } });
+  if (!ok) throw new Error(status === 401 ? "Invalid or expired 2FA code." : String(json?.error || `2FA failed (${status}).`));
   const local = localSessionFromServer(json);
   session.set(local);
   ctx.session = { ...local, token: undefined };
   return ctx.session;
+}
+
+export async function databaseSignup(payload) {
+  const { ok, status, json } = await api("/auth/signup", { method: "POST", body: payload });
+  if (!ok) throw new Error(String(json?.error || `Signup failed (${status}).`));
+  return json;
+}
+
+export async function databaseForgotUsername(email) {
+  const { ok, status, json } = await api("/auth/forgot-username", { method: "POST", body: { email } });
+  if (!ok) throw new Error(String(json?.error || `Username recovery failed (${status}).`));
+  return json;
+}
+
+export async function databaseForgotPassword(identifier) {
+  const { ok, status, json } = await api("/auth/forgot-password", { method: "POST", body: { identifier } });
+  if (!ok) throw new Error(String(json?.error || `Password reset request failed (${status}).`));
+  return json;
+}
+
+export async function databaseResetPassword(token, password) {
+  const { ok, status, json } = await api("/auth/reset-password", { method: "POST", body: { token, password } });
+  if (!ok) throw new Error(String(json?.error || `Password reset failed (${status}).`));
+  return json;
+}
+
+export async function databaseStart2faSetup() {
+  const { ok, status, json } = await api("/auth/2fa/setup", { method: "POST", body: {} });
+  if (!ok) throw new Error(String(json?.error || `2FA setup failed (${status}).`));
+  return json;
+}
+
+export async function databaseConfirm2fa(code) {
+  const { ok, status, json } = await api("/auth/2fa/confirm", { method: "POST", body: { code } });
+  if (!ok) throw new Error(String(json?.error || `2FA confirmation failed (${status}).`));
+  return json;
+}
+
+export async function databaseRegenerate2faBackupCodes(code) {
+  const { ok, status, json } = await api("/auth/2fa/recovery-codes", { method: "POST", body: { code } });
+  if (!ok) throw new Error(String(json?.error || `Recovery code regeneration failed (${status}).`));
+  return json;
+}
+
+export async function databaseDisable2fa(code) {
+  const { ok, status, json } = await api("/auth/2fa/disable", { method: "POST", body: { code } });
+  if (!ok) throw new Error(String(json?.error || `2FA disable failed (${status}).`));
+  return json;
 }
 
 export async function databaseLogout() {
@@ -127,6 +169,55 @@ export async function fetchEntitlementsSummary() {
   if (!orgId) return null;
   const { ok, json } = await api(`/orgs/${encodeURIComponent(orgId)}/entitlements`);
   return ok ? json : null;
+}
+
+export async function fetchOrgCrm() {
+  const orgId = activeOrgId();
+  if (!orgId) return null;
+  const { ok, json } = await api(`/orgs/${encodeURIComponent(orgId)}/crm`);
+  return ok ? json : null;
+}
+
+export async function fetchOrgBrainPackage() {
+  const orgId = activeOrgId();
+  if (!orgId) return null;
+  const { ok, json } = await api(`/orgs/${encodeURIComponent(orgId)}/brain-package`);
+  return ok ? json : null;
+}
+
+export async function saveOrgCrmSettings(settings) {
+  const orgId = activeOrgId();
+  if (!orgId) return { ok: false, error: "no_active_org" };
+  const { ok, json } = await api(`/orgs/${encodeURIComponent(orgId)}/crm/settings`, { method: "POST", body: settings });
+  return ok ? json : { ok: false, error: json?.error || "crm_settings_failed" };
+}
+
+export async function createOrgCrmContact(contact) {
+  const orgId = activeOrgId();
+  if (!orgId) return { ok: false, error: "no_active_org" };
+  const { ok, json } = await api(`/orgs/${encodeURIComponent(orgId)}/crm/contacts`, { method: "POST", body: contact });
+  return ok ? json : { ok: false, error: json?.error || "crm_contact_create_failed" };
+}
+
+export async function pullOrgCrmContacts(payload) {
+  const orgId = activeOrgId();
+  if (!orgId) return { ok: false, error: "no_active_org" };
+  const { ok, json } = await api(`/orgs/${encodeURIComponent(orgId)}/crm/pull`, { method: "POST", body: payload });
+  return ok ? json : { ok: false, error: json?.error || "crm_pull_failed" };
+}
+
+export async function updateOrgCrmContact(contactId, patch) {
+  const orgId = activeOrgId();
+  if (!orgId) return { ok: false, error: "no_active_org" };
+  const { ok, json } = await api(`/orgs/${encodeURIComponent(orgId)}/crm/contacts/${encodeURIComponent(contactId)}`, { method: "PATCH", body: patch });
+  return ok ? json : { ok: false, error: json?.error || "crm_contact_update_failed" };
+}
+
+export async function deleteOrgCrmContact(contactId) {
+  const orgId = activeOrgId();
+  if (!orgId) return { ok: false, error: "no_active_org" };
+  const { ok, json } = await api(`/orgs/${encodeURIComponent(orgId)}/crm/contacts/${encodeURIComponent(contactId)}`, { method: "DELETE" });
+  return ok ? json : { ok: false, error: json?.error || "crm_contact_delete_failed" };
 }
 
 /* ---------------- server approval queue (agent runs) ---------------- */
@@ -176,11 +267,22 @@ export async function requestServerPublish(site) {
       theme: site.design?.theme || undefined,
       style: site.design?.style || undefined,
     },
+    /* template/section copy travels with the build so the published page
+       carries the real content, not just section names */
+    copy: site.copy && typeof site.copy === "object"
+      ? Object.fromEntries(Object.entries(site.copy)
+          .filter(([key, value]) => typeof value === "string" && value.trim())
+          .slice(0, 12)
+          .map(([key, value]) => [String(key).slice(0, 60), String(value).slice(0, 4000)]))
+      : undefined,
     products: (site.catalog || []).map((product) => ({
       id: product.id,
       name: product.name,
       price: Number(product.price || 0),
-      cadence: product.cadence === "monthly" ? "monthly" : "one_time",
+      cadence: ["monthly", "yearly"].includes(product.cadence) ? product.cadence : "one_time",
+      type: product.type === "digital" ? "digital" : "physical",
+      delivery_url: product.type === "digital" ? String(product.delivery_url || "").slice(0, 600) : "",
+      delivery_note: product.type === "digital" ? String(product.delivery_note || "").slice(0, 500) : "",
       desc: product.desc || "",
       visible: product.visible !== false,
     })),
@@ -347,4 +449,63 @@ export function clearAssetBlobCache() {
 export async function saveToAssetCloud(dataUrl, name, opts = {}) {
   if (!assetsAvailable()) return { ok: false, error: "assets_unavailable" };
   return uploadAsset(dataUrl, name, { source: opts.source || "media-lab", tags: opts.tags, folderId: opts.folderId });
+}
+
+/* ---------------- local asset library ----------------
+   Read-only desktop asset lane for editor-time assets such as the local
+   Motionarray folder. This is intentionally separate from permanent org Asset
+   Cloud storage: listing and previewing local assets must not upload or meter
+   the whole folder. */
+
+export async function localAssetStatus() {
+  try {
+    const { ok, json } = await api("/phantom-ai/local-assets/status");
+    return ok ? json : { ok: false, count: 0 };
+  } catch {
+    return { ok: false, count: 0 };
+  }
+}
+
+export async function listLocalAssets(query = {}) {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    if (value !== undefined && value !== null && value !== "") params.set(key, String(value));
+  }
+  try {
+    const { ok, json } = await api(`/phantom-ai/local-assets?${params.toString()}`);
+    return ok ? json : { ok: false, assets: [], count: 0 };
+  } catch {
+    return { ok: false, assets: [], count: 0 };
+  }
+}
+
+export async function refreshLocalAssets() {
+  try {
+    const { ok, json } = await api("/phantom-ai/local-assets/refresh", { method: "POST", body: {} });
+    return ok ? json : { ok: false };
+  } catch {
+    return { ok: false };
+  }
+}
+
+const localAssetBlobCache = new Map();
+export async function localAssetBlobUrl(assetId) {
+  const key = String(assetId || "");
+  if (!key) return null;
+  if (localAssetBlobCache.has(key)) return localAssetBlobCache.get(key);
+  try {
+    const res = await fetch(`/phantom-ai/local-assets/${encodeURIComponent(key)}/file`, { headers: authHeaders() });
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    localAssetBlobCache.set(key, url);
+    return url;
+  } catch {
+    return null;
+  }
+}
+
+export function clearLocalAssetBlobCache() {
+  for (const url of localAssetBlobCache.values()) URL.revokeObjectURL(url);
+  localAssetBlobCache.clear();
 }

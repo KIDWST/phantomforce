@@ -12,10 +12,6 @@ import {
   readCustomizationDocument,
   type ConfigurationVersion,
 } from "./customization-store.js";
-import {
-  workspaceProfileFor,
-  type WorkspaceProfileId,
-} from "./workspace-profiles.js";
 
 const RESERVED_FIELD_IDS = new Set([
   "id", "tenant_id", "tenantid", "org_id", "orgid", "user_id", "userid", "permission", "permissions",
@@ -31,19 +27,26 @@ export type CustomizationEntitlements = {
 
 export type ValidationIssue = { path: string; message: string; severity: "error" | "warning" };
 
-export function defaultOrganizationConfiguration(tenantId: string, actor = "system", profileId: WorkspaceProfileId = "business"): OrganizationConfiguration {
+function defaultModuleEnabled(moduleId: string, tenantId: string) {
+  if (moduleId === "developer") return tenantId === "phantomforce-owner" || tenantId === "phantomforce";
+  // Migration rule: existing configuration documents keep their current
+  // PhantomPlay setting. Only newly created/reset organization configs start
+  // with PhantomPlay disabled so business workspaces never see games unless an
+  // owner deliberately enables the optional module.
+  if (moduleId === "phantomplay") return false;
+  return true;
+}
+
+export function defaultOrganizationConfiguration(tenantId: string, actor = "system"): OrganizationConfiguration {
   const now = new Date().toISOString();
-  const internal = tenantId === "phantomforce-owner" || tenantId === "phantomforce";
-  const profile = internal ? workspaceProfileFor("business") : workspaceProfileFor(profileId);
-  const enabledModules = new Set(internal ? PLATFORM_MODULES.map((module) => module.id) : profile.enabledModules);
   return OrganizationConfigurationSchema.parse({
     schemaVersion: 1,
     tenantId,
     version: 1,
     brand: {
-      mode: internal ? "internal_phantomforce" : "standard",
-      organizationName: internal ? "PhantomForce" : "My Business",
-      workspaceName: internal ? "Dashboard" : profile.workspaceName,
+      mode: tenantId === "phantomforce-owner" || tenantId === "phantomforce" ? "internal_phantomforce" : "standard",
+      organizationName: tenantId === "phantomforce-owner" || tenantId === "phantomforce" ? "PhantomForce" : "My Business",
+      workspaceName: "Dashboard",
       poweredByPhantomForce: true,
     },
     theme: {},
@@ -51,13 +54,17 @@ export function defaultOrganizationConfiguration(tenantId: string, actor = "syst
     modules: PLATFORM_MODULES.map((module, order) => ({
       id: module.id,
       label: module.displayName,
-      enabled: module.required || enabledModules.has(module.id),
+      enabled: defaultModuleEnabled(module.id, tenantId),
       order,
       roles: module.allowedRoles.includes("platform_owner")
         ? ["owner"]
         : module.allowedRoles,
+      accessMode: module.id === "phantomplay" ? "owner_only" : "entire_organization",
+      allowedMemberIds: [],
+      activityEnabled: false,
+      challengesEnabled: false,
     })),
-    navigation: { homeModuleId: profile.homeModuleId },
+    navigation: {},
     assistant: {},
     dashboards: [{ id: "owner_home", name: "Dashboard", scope: "owner", widgets: [
       { id: "daily_brief", type: "ai_briefing", title: "Daily brief", source: "phantom.briefing" },
@@ -67,45 +74,10 @@ export function defaultOrganizationConfiguration(tenantId: string, actor = "syst
     forms: [],
     workflows: [],
     extensions: [],
-    policies: {
-      workspaceProfile: internal ? "business" : profile.id,
-      brainStorageMode: internal ? "optional_local" : profile.brainStorageMode,
-      localBrainInstall: profile.localBrainInstall,
-      apiCredentialPolicy: profile.apiCredentialPolicy,
-      subscriptionPolicy: profile.subscriptionPolicy,
-      historyPolicy: profile.historyPolicy,
-    },
+    policies: {},
     updatedAt: now,
     updatedBy: actor,
   });
-}
-
-export function hydratePlatformModules(configuration: OrganizationConfiguration): OrganizationConfiguration {
-  const internal = configuration.tenantId === "phantomforce-owner" || configuration.tenantId === "phantomforce";
-  const profile = internal ? workspaceProfileFor("business") : workspaceProfileFor(configuration.policies.workspaceProfile);
-  const enabledModules = new Set(internal ? PLATFORM_MODULES.map((module) => module.id) : profile.enabledModules);
-  const existingById = new Map(configuration.modules.map((module) => [module.id, module]));
-  const modules = PLATFORM_MODULES.map((definition, order) => {
-    const roles = definition.allowedRoles.includes("platform_owner") ? ["owner"] : definition.allowedRoles;
-    const existing = existingById.get(definition.id);
-    if (!existing) {
-      return {
-        id: definition.id,
-        label: definition.displayName,
-        enabled: definition.required || enabledModules.has(definition.id),
-        order,
-        roles,
-      };
-    }
-    return {
-      id: definition.id,
-      label: existing.label || definition.displayName,
-      enabled: definition.required || existing.enabled,
-      order: Number.isInteger(existing.order) ? existing.order : order,
-      roles: existing.roles.length ? existing.roles : roles,
-    };
-  });
-  return OrganizationConfigurationSchema.parse({ ...configuration, modules });
 }
 
 function mergeConfiguration(current: OrganizationConfiguration, patch: ConfigurationPatch, actor: string) {
@@ -186,27 +158,30 @@ export function validateOrganizationConfiguration(configuration: OrganizationCon
     if ((action.type === "connector_action" || action.type === "notify") && !action.requiresApproval) issues.push({ path: `workflows.${workflow.id}`, message: "External connector and notification actions must remain approval-gated.", severity: "error" });
   }
   if (!configuration.policies.requireApprovalForOutbound || !configuration.policies.requireApprovalForDestructive) issues.push({ path: "policies", message: "Organization configuration cannot weaken platform approval enforcement.", severity: "error" });
-  if (!["never_silent", "optional_prompt"].includes(configuration.policies.localBrainInstall)) issues.push({ path: "policies.localBrainInstall", message: "Local brain setup must never install silently; users must explicitly opt in.", severity: "error" });
-  if (configuration.policies.apiCredentialPolicy !== "tenant_owned_only") issues.push({ path: "policies.apiCredentialPolicy", message: "Workspace API credentials must be owned by that tenant only.", severity: "error" });
-  if (configuration.policies.subscriptionPolicy !== "tenant_owned_only") issues.push({ path: "policies.subscriptionPolicy", message: "Workspace subscriptions must be owned by that tenant only.", severity: "error" });
-  if (configuration.policies.workspaceProfile === "developer") {
-    const blocked = ["crm", "media", "sites", "money", "intelligence", "analytics", "automation", "vacation"];
-    for (const moduleId of blocked) {
-      if (configuration.modules.find((module) => module.id === moduleId)?.enabled) {
-        issues.push({ path: `modules.${moduleId}`, message: "Developer workspaces can only enable developer-focused modules by default.", severity: "error" });
-      }
-    }
-    if (configuration.policies.brainStorageMode !== "external_provider") issues.push({ path: "policies.brainStorageMode", message: "Developer workspaces should rely on connected provider history instead of duplicating a local brain.", severity: "error" });
-    if (configuration.policies.historyPolicy !== "provider_managed_when_connected") issues.push({ path: "policies.historyPolicy", message: "Developer history should be provider-managed when a connected subscription already tracks it.", severity: "error" });
-  }
 
   if (luminance(configuration.theme.primary) < 0.12 && configuration.theme.colorMode !== "light") issues.push({ path: "theme.primary", message: "The primary color is too dark to remain readable on the dark workspace.", severity: "warning" });
   return issues;
 }
 
+/* Legacy label repair for already-published configurations: earlier tooling
+   published module labels like "Client Setup" for org-internal configuration.
+   Those labels live in stored config documents, not code, so they survive
+   every code deploy — normalize them back to the canonical module names at
+   read time. */
+const LEGACY_MODULE_LABELS = /^client ?set ?up$/i;
+function repairLegacyModuleLabels(configuration: OrganizationConfiguration): OrganizationConfiguration {
+  let repaired = false;
+  const modules = configuration.modules.map((module) => {
+    if (!LEGACY_MODULE_LABELS.test(String(module.label || "").trim())) return module;
+    repaired = true;
+    return { ...module, label: MODULE_BY_ID.get(module.id)?.displayName || "Organization" };
+  });
+  return repaired ? { ...configuration, modules } : configuration;
+}
+
 export async function getOrganizationConfiguration(tenantId: string, actor: string, root?: string) {
   const document = await readCustomizationDocument(tenantId, root);
-  if (document) return { configuration: hydratePlatformModules(OrganizationConfigurationSchema.parse(document.current)), versions: document.versions, audit: document.audit };
+  if (document) return { configuration: repairLegacyModuleLabels(OrganizationConfigurationSchema.parse(document.current)), versions: document.versions, audit: document.audit };
   const configuration = defaultOrganizationConfiguration(tenantId, actor);
   const persisted = await persistConfiguration({ configuration, summary: "Created organization defaults", actor, eventType: "created", root });
   return { configuration, versions: persisted.document.versions, audit: persisted.document.audit };
@@ -243,7 +218,7 @@ export async function rollbackOrganizationConfiguration(options: { tenantId: str
   const state = await getOrganizationConfiguration(options.tenantId, options.actor, options.root);
   const target = state.versions.find((version) => version.version === options.version);
   if (!target) throw new Error("Configuration version not found.");
-  const restored = hydratePlatformModules(OrganizationConfigurationSchema.parse({ ...structuredClone(target.configuration), version: state.configuration.version + 1, updatedAt: new Date().toISOString(), updatedBy: options.actor }));
+  const restored = OrganizationConfigurationSchema.parse({ ...structuredClone(target.configuration), version: state.configuration.version + 1, updatedAt: new Date().toISOString(), updatedBy: options.actor });
   const issues = validateOrganizationConfiguration(restored, options.entitlements);
   if (issues.some((issue) => issue.severity === "error")) throw new Error(`That version cannot be restored: ${issues.find((issue) => issue.severity === "error")?.message}`);
   const persisted = await persistConfiguration({ configuration: restored, summary: `Restored version ${target.version}`, actor: options.actor, eventType: "rolled_back", root: options.root });

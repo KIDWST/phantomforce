@@ -54,11 +54,18 @@ export type SiteSnapshot = {
     theme?: string;
     style?: string;
   };
+  /* optional real section content keyed by lowercased section name */
+  copy?: Record<string, string>;
   products?: Array<{
     id: string;
     name: string;
     price: number;
-    cadence: "one_time" | "monthly";
+    cadence: "one_time" | "monthly" | "yearly";
+    /* digital products skip shipping and carry delivery details for the
+       receipt; absent type means physical (every pre-existing product). */
+    type?: "physical" | "digital";
+    delivery_url?: string;
+    delivery_note?: string;
     desc: string;
     visible: boolean;
   }>;
@@ -70,11 +77,20 @@ export type SiteSnapshot = {
   };
 };
 
+const isDigital = (product: { type?: string }) => product.type === "digital";
+const cadenceSuffix = (cadence?: string) =>
+  cadence === "monthly" ? " / month" : cadence === "yearly" ? " / year" : "";
+
 const THEME_COLORS: Record<string, { bg: string; accent: string; ink: string }> = {
   dark: { bg: "#0c1116", accent: "#41ffa1", ink: "#eef4f0" },
   gold: { bg: "#161206", accent: "#ffd166", ink: "#fff6e0" },
   light: { bg: "#f7f8fa", accent: "#0f7b5f", ink: "#15221c" },
   crimson: { bg: "#160a0c", accent: "#ff5964", ink: "#ffeef0" },
+  /* parity with the in-app builder themes so a published build matches the preview */
+  neon: { bg: "#04120c", accent: "#41ffa1", ink: "#e8fff2" },
+  blue: { bg: "#070f1a", accent: "#6cb8ff", ink: "#eaf4ff" },
+  red: { bg: "#160a0c", accent: "#ff5964", ink: "#ffeef0" },
+  purple: { bg: "#0e0916", accent: "#c9a4ff", ink: "#f4ecff" },
 };
 
 /* Deterministic server-side static rendering — self-contained HTML, no
@@ -84,13 +100,21 @@ export function renderSiteHtml(snapshot: SiteSnapshot): string {
   const products = (snapshot.products ?? []).filter((product) => product.visible !== false);
   const storeEnabled = Boolean(snapshot.store?.enabled || products.length);
   const currency = snapshot.store?.currency || "USD";
+  /* a catalog of only digital products never needs shipping fields at all;
+     any physical product renders them (the cart script hides them again for
+     digital-only carts) */
+  const hasPhysicalProducts = products.some((product) => !isDigital(product));
   const productCards = products.length
     ? products.map((product) => `<article class="product">
         <div class="product-art" aria-hidden="true">${esc(product.name.slice(0, 1).toUpperCase())}</div>
-        <div><h3>${esc(product.name)}</h3><p>${esc(product.desc)}</p></div>
-        <footer><b>${esc(money(product.price, currency))}${product.cadence === "monthly" ? " / month" : ""}</b><button type="button" data-add="${esc(product.id)}">Add to cart</button></footer>
+        <div><h3>${esc(product.name)}</h3><p>${esc(product.desc)}</p>${isDigital(product) ? `<small class="digital-tag">Digital download — delivered by link or email, nothing ships</small>` : ""}</div>
+        <footer><b>${esc(money(product.price, currency))}${cadenceSuffix(product.cadence)}</b><button type="button" data-add="${esc(product.id)}">Add to cart</button></footer>
       </article>`).join("")
     : `<div class="empty-store"><b>Store inventory is being prepared.</b><p>Check back after the next approved catalog update.</p></div>`;
+  const copyFor = (section: string) => {
+    const text = snapshot.copy?.[section.toLowerCase()];
+    return typeof text === "string" && text.trim() ? text : null;
+  };
   const sections = snapshot.sections
     .map((section) => {
       const key = section.toLowerCase();
@@ -100,8 +124,11 @@ export function renderSiteHtml(snapshot: SiteSnapshot): string {
       if (key === "checkout") {
         return `<section id="checkout"><h2>Checkout</h2><p>${storeEnabled ? "Choose an offer above, then review your cart. This preview checkout records no payment." : "Checkout becomes available when the store has an approved offer."}</p>${storeEnabled ? `<button type="button" class="open-cart secondary">Review cart</button>` : ""}</section>`;
       }
-      const body =
-        key === "contact"
+      /* real section content (templates fill this) beats the generic fallback */
+      const custom = copyFor(section);
+      const body = custom
+        ? custom.split(/\n+/).map((line) => `<p>${esc(line)}</p>`).join("")
+        : key === "contact"
           ? `<p>Reach ${esc(snapshot.design.brand || snapshot.title)} — contact details go live once connected.</p>`
           : key === "offer" && snapshot.design.offer
             ? `<p>${esc(snapshot.design.offer)}</p>`
@@ -119,17 +146,32 @@ export function renderSiteHtml(snapshot: SiteSnapshot): string {
     <form class="test-checkout" hidden>
       <label>Name<input name="name" autocomplete="name" required></label>
       <label>Email<input name="email" type="email" autocomplete="email" required></label>
+      ${hasPhysicalProducts ? `<div class="shipping" data-shipping>
+        <small>SHIPPING</small>
+        <label>Address<input name="address" autocomplete="street-address" required></label>
+        <label>City<input name="city" autocomplete="address-level2" required></label>
+        <label>Postal code<input name="postal" autocomplete="postal-code" required></label>
+      </div>` : `<p class="digital-note">Digital order — nothing ships. Delivery details appear on your receipt and go to the email above.</p>`}
+      <p class="test-mode">Test mode — no real charge</p>
       <button type="submit">Place test order</button>
       <small>Test checkout only. No payment is collected and nothing is sent externally.</small>
     </form>
     <button type="button" class="start-checkout">Continue to test checkout</button>
-    <p class="receipt" role="status"></p>
+    <div class="receipt" role="status"></div>
   </aside>
 </div>` : "";
   const storeScript = storeEnabled ? `
 <script>
 (() => {
-  const products = ${scriptJson(products.map(({ id, name, price, cadence }) => ({ id, name, price, cadence })))};
+  const products = ${scriptJson(products.map(({ id, name, price, cadence, type, delivery_url, delivery_note }) => ({
+    id,
+    name,
+    price,
+    cadence,
+    type: type === "digital" ? "digital" : "physical",
+    delivery_url: type === "digital" && typeof delivery_url === "string" && /^https?:\/\//i.test(delivery_url) ? delivery_url : "",
+    delivery_note: type === "digital" && typeof delivery_note === "string" ? delivery_note : "",
+  })))};
   const currency = ${scriptJson(currency)};
   const cart = new Map();
   const backdrop = document.querySelector('.cart-backdrop');
@@ -139,11 +181,22 @@ export function renderSiteHtml(snapshot: SiteSnapshot): string {
   const receipt = document.querySelector('.receipt');
   const fmt = (value) => new Intl.NumberFormat('en-US', { style: 'currency', currency, maximumFractionDigits: 2 }).format(value);
   const html = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
+  const shipping = document.querySelector('[data-shipping]');
+  function syncShipping(rows) {
+    if (!shipping) return;
+    /* digital-only carts skip shipping — email is the delivery address */
+    const needs = rows.some((row) => row.product.type !== 'digital');
+    shipping.hidden = !needs;
+    shipping.querySelectorAll('input').forEach((input) => { input.disabled = !needs; input.required = needs; });
+  }
+  function cartRows() {
+    return [...cart].map(([id, qty]) => ({ product: products.find((item) => item.id === id), qty })).filter((row) => row.product);
+  }
   function render() {
-    const rows = [...cart].map(([id, qty]) => ({ product: products.find((item) => item.id === id), qty })).filter((row) => row.product);
+    const rows = cartRows();
     items.innerHTML = rows.length ? rows.map(({ product, qty }) => {
       const id = html(product.id);
-      return '<article><div><b>' + html(product.name) + '</b><span>' + fmt(product.price * qty) + '</span></div><div class="qty"><button type="button" data-qty="' + id + '" data-delta="-1">−</button><span>' + qty + '</span><button type="button" data-qty="' + id + '" data-delta="1">+</button><button type="button" data-remove="' + id + '">Remove</button></div></article>';
+      return '<article><div><b>' + html(product.name) + (product.type === 'digital' ? ' <i class="digital-flag">digital</i>' : '') + '</b><span>' + fmt(product.price * qty) + '</span></div><div class="qty"><button type="button" data-qty="' + id + '" data-delta="-1">−</button><span>' + qty + '</span><button type="button" data-qty="' + id + '" data-delta="1">+</button><button type="button" data-remove="' + id + '">Remove</button></div></article>';
     }).join('') : '<p class="cart-empty">Your cart is empty.</p>';
     const count = rows.reduce((sum, row) => sum + row.qty, 0);
     const total = rows.reduce((sum, row) => sum + row.product.price * row.qty, 0);
@@ -151,6 +204,7 @@ export function renderSiteHtml(snapshot: SiteSnapshot): string {
     document.querySelector('.cart-total b').textContent = fmt(total);
     start.disabled = !rows.length;
     if (!rows.length) { checkout.hidden = true; start.hidden = false; }
+    syncShipping(rows);
   }
   document.addEventListener('click', (event) => {
     const add = event.target.closest('[data-add]');
@@ -158,7 +212,7 @@ export function renderSiteHtml(snapshot: SiteSnapshot): string {
     if (event.target.closest('.open-cart')) { backdrop.hidden = false; return; }
     if (event.target.closest('.close-cart') || event.target === backdrop) { backdrop.hidden = true; return; }
     const qty = event.target.closest('[data-qty]');
-    if (qty) { const next = (cart.get(qty.dataset.qty) || 0) + Number(qty.dataset.delta); next > 0 ? cart.set(qty.dataset.qty, next) : cart.delete(qty.dataset.qty); render(); return; }
+    if (qty) { const next = Math.min(99, (cart.get(qty.dataset.qty) || 0) + Number(qty.dataset.delta)); next > 0 ? cart.set(qty.dataset.qty, next) : cart.delete(qty.dataset.qty); render(); return; }
     const remove = event.target.closest('[data-remove]');
     if (remove) { cart.delete(remove.dataset.remove); render(); }
   });
@@ -166,7 +220,19 @@ export function renderSiteHtml(snapshot: SiteSnapshot): string {
   checkout.addEventListener('submit', (event) => {
     event.preventDefault();
     const data = new FormData(checkout);
-    receipt.textContent = 'Test order confirmed for ' + data.get('name') + '. No payment was collected.';
+    const rows = cartRows();
+    const orderId = 'PF-TEST-' + Date.now().toString(36).toUpperCase();
+    const digital = rows.filter((row) => row.product.type === 'digital');
+    const delivery = digital.length
+      ? '<span class="delivery"><b>Your digital delivery</b>' + digital.map(({ product }) =>
+          '<span>' + html(product.name)
+          + (product.delivery_url ? ' — <a href="' + html(product.delivery_url) + '" rel="noopener">access link</a>' : '')
+          + (product.delivery_note ? ' — ' + html(product.delivery_note) : (product.delivery_url ? '' : ' — the store owner will email your access details'))
+          + '</span>').join('') + '</span>'
+      : '';
+    receipt.innerHTML = '<b>Test order ' + orderId + ' confirmed for ' + html(data.get('name')) + '.</b>'
+      + '<span class="test-mode-chip">Test mode — no real charge</span>'
+      + '<span>No payment was collected.</span>' + delivery;
     cart.clear(); checkout.reset(); checkout.hidden = true; start.hidden = false; render();
   });
   render();
@@ -211,7 +277,18 @@ export function renderSiteHtml(snapshot: SiteSnapshot): string {
   .test-checkout { display: grid; gap: 12px; }
   .test-checkout label { display: grid; gap: 5px; }
   .test-checkout input { width: 100%; padding: 11px; border: 1px solid ${theme.accent}45; border-radius: 10px; background: transparent; color: ${theme.ink}; }
-  .receipt { margin-top: 14px; color: ${theme.accent}; font-weight: 700; }
+  .digital-tag { display: block; margin-top: 6px; color: ${theme.accent}; font-weight: 700; font-size: 12px; }
+  .digital-flag { font-style: normal; margin-left: 6px; padding: 1px 7px; border: 1px solid ${theme.accent}55; border-radius: 999px; font-size: 10px; color: ${theme.accent}; }
+  .shipping { display: grid; gap: 12px; padding: 12px; border: 1px solid ${theme.accent}30; border-radius: 12px; }
+  .shipping small { color: ${theme.accent}; font-weight: 800; letter-spacing: .16em; }
+  .shipping[hidden] { display: none; }
+  .digital-note { padding: 10px 12px; border: 1px dashed ${theme.accent}55; border-radius: 10px; opacity: .82; font-size: 13px; }
+  .test-mode { padding: 6px 10px; border: 1px solid #ffd16666; border-radius: 999px; text-align: center; color: #ffd166; font-weight: 800; font-size: 12px; letter-spacing: .05em; text-transform: uppercase; }
+  .receipt { display: grid; gap: 8px; margin-top: 14px; color: ${theme.accent}; font-weight: 700; }
+  .receipt:empty { display: none; }
+  .test-mode-chip { justify-self: start; padding: 3px 9px; border: 1px solid #ffd16666; border-radius: 999px; color: #ffd166; font-size: 11px; letter-spacing: .05em; text-transform: uppercase; }
+  .receipt .delivery { display: grid; gap: 5px; padding: 10px 12px; border: 1px solid ${theme.accent}40; border-radius: 12px; color: ${theme.ink}; font-weight: 500; font-size: 13px; }
+  .receipt .delivery b, .receipt .delivery a { color: ${theme.accent}; }
   footer { padding: 40px 24px; text-align: center; opacity: .6; font-size: 13px; }
   @media (max-width: 600px) { header { padding: 54px 20px; } section { padding: 32px 20px; } .cart-backdrop { padding: 8px; } .cart { max-height: calc(100dvh - 16px); } }
 </style>
@@ -252,6 +329,14 @@ function validateBuild(html: string, snapshot: SiteSnapshot): { ok: boolean; log
     }
     if (html.includes("Test checkout only. No payment is collected")) log.push("ok: safe test checkout rendered");
     else { ok = false; log.push("FAIL: safe test checkout missing"); }
+    if (html.includes("Test mode — no real charge")) log.push("ok: test-mode label rendered at payment");
+    else { ok = false; log.push("FAIL: test-mode label missing from checkout"); }
+    const visibleProducts = (snapshot.products ?? []).filter((product) => product.visible !== false);
+    if (visibleProducts.every((product) => product.type === "digital")) {
+      if (!/name="address"/.test(html)) log.push("ok: digital-only store renders no shipping fields");
+      else { ok = false; log.push("FAIL: digital-only store must not ask for shipping"); }
+    } else if (/name="address"/.test(html)) log.push("ok: shipping fields rendered for physical products");
+    else { ok = false; log.push("FAIL: physical products need shipping fields at checkout"); }
   }
   log.push(ok ? "RESULT: validated" : "RESULT: failed");
   return { ok, log };

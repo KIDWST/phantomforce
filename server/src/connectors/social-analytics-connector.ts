@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from "node:crypto";
+import { randomBytes } from "node:crypto";
 
 import {
   consumePendingSocialOAuthState,
@@ -58,9 +58,6 @@ const firstEnv = (...names: string[]) => names.map(env).find(Boolean) || "";
 const defaultHandle = "officialchicagoshots";
 const metaOauthConfigured = () => Boolean(env("META_APP_ID") && env("META_APP_SECRET"));
 const socialPlatforms = ["youtube", "instagram", "facebook", "tiktok", "x", "linkedin", "pinterest"] as const;
-const basicAuth = (user: string, password: string) => `Basic ${Buffer.from(`${user}:${password}`).toString("base64")}`;
-const pkceVerifier = () => randomBytes(32).toString("base64url");
-const pkceChallenge = (verifier: string) => createHash("sha256").update(verifier).digest("base64url");
 
 const stored = (platform: SocialAnalyticsPlatform, key: string) => {
   const connection = getStoredSocialConnection(platform);
@@ -230,8 +227,7 @@ export function createSocialOAuthStart(platform: SocialAnalyticsPlatform) {
     throw new Error(`${connector.name} OAuth needs ${platform.toUpperCase()}_OAUTH_REDIRECT_URI or SOCIAL_OAUTH_REDIRECT_URI.`);
   }
   const state = oauthState(platform);
-  const codeVerifier = platform === "x" || platform === "pinterest" ? pkceVerifier() : "";
-  savePendingSocialOAuthState(state, platform, codeVerifier ? { codeVerifier } : {});
+  savePendingSocialOAuthState(state, platform);
   const scopes = scopeValue(platform, connector.scopes);
   let authorizationUrl = "";
   if (platform === "youtube") {
@@ -267,7 +263,7 @@ export function createSocialOAuthStart(platform: SocialAnalyticsPlatform) {
       response_type: "code",
       scope: scopes,
       state,
-      code_challenge: pkceChallenge(codeVerifier),
+      code_challenge: env("X_OAUTH_CODE_CHALLENGE") || "configure-server-generated-pkce",
       code_challenge_method: "S256",
     })}`;
   } else if (platform === "linkedin") {
@@ -285,8 +281,6 @@ export function createSocialOAuthStart(platform: SocialAnalyticsPlatform) {
       response_type: "code",
       scope: scopes,
       state,
-      code_challenge: pkceChallenge(codeVerifier),
-      code_challenge_method: "S256",
     })}`;
   }
 
@@ -309,12 +303,7 @@ function tokenExpiry(expiresIn: unknown) {
   return seconds > 0 ? new Date(Date.now() + seconds * 1000).toISOString() : undefined;
 }
 
-async function exchangeToken(
-  fetcher: typeof fetch,
-  url: string,
-  body: URLSearchParams,
-  headers: Record<string, string> = {},
-) {
+async function exchangeToken(fetcher: typeof fetch, url: string, body: URLSearchParams, headers: Record<string, string> = {}) {
   const response = await fetcher(url, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded", ...headers },
@@ -431,124 +420,29 @@ export async function completeSocialOAuthCallback(query: Record<string, unknown>
     return { platform, connected: platform === "instagram" ? instagram || facebook : facebook, linkedFacebookPage: facebook, linkedInstagramBusiness: instagram };
   }
 
-  if (platform === "tiktok") {
-    const payload = await exchangeToken(fetcher, "https://open.tiktokapis.com/v2/oauth/token/", new URLSearchParams({
-      client_key: env("TIKTOK_CLIENT_KEY"),
-      client_secret: env("TIKTOK_CLIENT_SECRET"),
-      code,
-      grant_type: "authorization_code",
-      redirect_uri: redirectUri,
-    }));
-    const accessToken = text(payload?.access_token);
-    if (!accessToken) throw new Error("TikTok did not return an access token.");
-    const profile = await requestJson(
-      fetcher,
-      "https://open.tiktokapis.com/v2/user/info/?fields=open_id,union_id,display_name,username",
-      { headers: { Authorization: `Bearer ${accessToken}` } },
-    );
-    const user = profile?.data?.user || {};
-    if (!text(user?.open_id || payload?.open_id)) throw new Error("TikTok did not return a user identity.");
-    const saved = saveStoredSocialConnection("tiktok", {
-      provider: "TikTok Display API",
-      accessToken,
-      refreshToken: text(payload?.refresh_token) || undefined,
-      expiresAt: tokenExpiry(payload?.expires_in),
-      accountId: text(user?.open_id || payload?.open_id),
-      accountName: text(user?.display_name),
-      accountHandle: cleanHandle(user?.username || user?.display_name || defaultHandle),
-      scopes: CONNECTORS.find((connector) => connector.id === "tiktok")?.scopes,
-    });
-    return { platform, connected: saved };
-  }
-
-  if (platform === "x") {
-    if (!pending.codeVerifier) throw new Error("X OAuth callback is missing its PKCE verifier. Start the connection again.");
-    const payload = await exchangeToken(fetcher, "https://api.x.com/2/oauth2/token", new URLSearchParams({
-      client_id: env("X_CLIENT_ID"),
-      code,
-      grant_type: "authorization_code",
-      redirect_uri: redirectUri,
-      code_verifier: pending.codeVerifier,
-    }), { Authorization: basicAuth(env("X_CLIENT_ID"), env("X_CLIENT_SECRET")) });
-    const accessToken = text(payload?.access_token);
-    if (!accessToken) throw new Error("X did not return an access token.");
-    const profile = await requestJson(fetcher, "https://api.x.com/2/users/me?user.fields=username,name,public_metrics", {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
-    const user = profile?.data || {};
-    const xHandle = cleanHandle(user?.username);
-    if (!text(user?.id) || !xHandle) throw new Error("X did not return a user identity.");
-    const saved = saveStoredSocialConnection("x", {
-      provider: "X API v2",
-      accessToken,
-      refreshToken: text(payload?.refresh_token) || undefined,
-      expiresAt: tokenExpiry(payload?.expires_in),
-      accountId: text(user?.id),
-      accountName: text(user?.name),
-      accountHandle: xHandle,
-      scopes: CONNECTORS.find((connector) => connector.id === "x")?.scopes,
-    });
-    return { platform, connected: saved };
-  }
-
-  if (platform === "linkedin") {
-    const payload = await exchangeToken(fetcher, "https://www.linkedin.com/oauth/v2/accessToken", new URLSearchParams({
-      client_id: env("LINKEDIN_CLIENT_ID"),
-      client_secret: env("LINKEDIN_CLIENT_SECRET"),
-      code,
-      grant_type: "authorization_code",
-      redirect_uri: redirectUri,
-    }));
-    const accessToken = text(payload?.access_token);
-    if (!accessToken) throw new Error("LinkedIn did not return an access token.");
-    let organizationId = env("LINKEDIN_ORGANIZATION_ID");
-    let organizationName = env("LINKEDIN_ORGANIZATION_NAME") || "LinkedIn organization";
-    let organizationHandle = cleanHandle(env("LINKEDIN_HANDLE") || defaultHandle);
-    if (!organizationId) {
-      const orgs = await requestJson(fetcher, "https://api.linkedin.com/v2/organizationAcls?q=roleAssignee&role=ADMINISTRATOR&state=APPROVED&projection=(elements*(organization~(id,localizedName,vanityName)))", {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-      const organization = orgs?.elements?.[0]?.["organization~"] || {};
-      organizationId = text(organization?.id);
-      organizationName = text(organization?.localizedName) || organizationName;
-      organizationHandle = cleanHandle(organization?.vanityName || organizationName || organizationHandle);
-    }
-    if (!organizationId) {
-      throw new Error("LinkedIn connected, but no organization account was returned. Add LINKEDIN_ORGANIZATION_ID before syncing company analytics.");
-    }
-    const saved = saveStoredSocialConnection("linkedin", {
-      provider: "LinkedIn Marketing API",
-      accessToken,
-      refreshToken: text(payload?.refresh_token) || undefined,
-      expiresAt: tokenExpiry(payload?.expires_in),
-      accountId: organizationId,
-      accountName: organizationName,
-      accountHandle: organizationHandle,
-      scopes: CONNECTORS.find((connector) => connector.id === "linkedin")?.scopes,
-    });
-    return { platform, connected: saved };
-  }
-
   if (platform === "pinterest") {
-    if (!pending.codeVerifier) throw new Error("Pinterest OAuth callback is missing its PKCE verifier. Start the connection again.");
-    const payload = await exchangeToken(fetcher, "https://api.pinterest.com/v5/oauth/token", new URLSearchParams({
-      code,
-      grant_type: "authorization_code",
-      redirect_uri: redirectUri,
-      code_verifier: pending.codeVerifier,
-    }), { Authorization: basicAuth(env("PINTEREST_CLIENT_ID"), env("PINTEREST_CLIENT_SECRET")) });
+    /* Pinterest v5 token exchange authenticates the app with HTTP Basic
+       (client_id:client_secret), not form fields. */
+    const clientId = env("PINTEREST_CLIENT_ID");
+    const clientSecret = env("PINTEREST_CLIENT_SECRET");
+    if (!clientId || !clientSecret) throw new Error("Pinterest OAuth needs PINTEREST_CLIENT_ID and PINTEREST_CLIENT_SECRET in server/.env.");
+    const payload = await exchangeToken(
+      fetcher,
+      "https://api.pinterest.com/v5/oauth/token",
+      new URLSearchParams({ grant_type: "authorization_code", code, redirect_uri: redirectUri }),
+      { Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}` },
+    );
     const accessToken = text(payload?.access_token);
     if (!accessToken) throw new Error("Pinterest did not return an access token.");
     const profile = await requestJson(fetcher, "https://api.pinterest.com/v5/user_account", {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
-    if (!text(profile?.username || profile?.account_id || profile?.id)) throw new Error("Pinterest did not return an account identity.");
     const saved = saveStoredSocialConnection("pinterest", {
-      provider: "Pinterest API v5",
+      provider: "Pinterest API",
       accessToken,
       refreshToken: text(payload?.refresh_token) || undefined,
       expiresAt: tokenExpiry(payload?.expires_in),
-      accountId: text(profile?.username || profile?.account_id || profile?.id),
+      accountId: text(profile?.id),
       accountName: text(profile?.business_name || profile?.username),
       accountHandle: cleanHandle(profile?.username || defaultHandle),
       scopes: CONNECTORS.find((connector) => connector.id === "pinterest")?.scopes,
@@ -580,108 +474,9 @@ async function requestJson(
   }
 }
 
-type RefreshedToken = { accessToken: string; refreshToken?: string; expiresIn?: unknown };
-type RefreshHandler = (fetcher: typeof fetch, refreshToken: string) => Promise<RefreshedToken>;
-
-async function refreshGoogleToken(fetcher: typeof fetch, refreshToken: string): Promise<RefreshedToken> {
-  const payload = await exchangeToken(fetcher, "https://oauth2.googleapis.com/token", new URLSearchParams({
-    client_id: firstEnv("YOUTUBE_OAUTH_CLIENT_ID", "GOOGLE_OAUTH_CLIENT_ID"),
-    client_secret: firstEnv("YOUTUBE_OAUTH_CLIENT_SECRET", "GOOGLE_OAUTH_CLIENT_SECRET"),
-    refresh_token: refreshToken,
-    grant_type: "refresh_token",
-  }));
-  return { accessToken: text(payload?.access_token), expiresIn: payload?.expires_in };
-}
-
-async function refreshTikTokToken(fetcher: typeof fetch, refreshToken: string): Promise<RefreshedToken> {
-  const payload = await exchangeToken(fetcher, "https://open.tiktokapis.com/v2/oauth/token/", new URLSearchParams({
-    client_key: env("TIKTOK_CLIENT_KEY"),
-    client_secret: env("TIKTOK_CLIENT_SECRET"),
-    refresh_token: refreshToken,
-    grant_type: "refresh_token",
-  }));
-  return { accessToken: text(payload?.access_token), refreshToken: text(payload?.refresh_token) || undefined, expiresIn: payload?.expires_in };
-}
-
-async function refreshXToken(fetcher: typeof fetch, refreshToken: string): Promise<RefreshedToken> {
-  const payload = await exchangeToken(fetcher, "https://api.x.com/2/oauth2/token", new URLSearchParams({
-    refresh_token: refreshToken,
-    grant_type: "refresh_token",
-    client_id: env("X_CLIENT_ID"),
-  }), { Authorization: basicAuth(env("X_CLIENT_ID"), env("X_CLIENT_SECRET")) });
-  return { accessToken: text(payload?.access_token), refreshToken: text(payload?.refresh_token) || undefined, expiresIn: payload?.expires_in };
-}
-
-async function refreshLinkedInToken(fetcher: typeof fetch, refreshToken: string): Promise<RefreshedToken> {
-  const payload = await exchangeToken(fetcher, "https://www.linkedin.com/oauth/v2/accessToken", new URLSearchParams({
-    grant_type: "refresh_token",
-    refresh_token: refreshToken,
-    client_id: env("LINKEDIN_CLIENT_ID"),
-    client_secret: env("LINKEDIN_CLIENT_SECRET"),
-  }));
-  return { accessToken: text(payload?.access_token), refreshToken: text(payload?.refresh_token) || undefined, expiresIn: payload?.expires_in };
-}
-
-async function refreshPinterestToken(fetcher: typeof fetch, refreshToken: string): Promise<RefreshedToken> {
-  const payload = await exchangeToken(fetcher, "https://api.pinterest.com/v5/oauth/token", new URLSearchParams({
-    grant_type: "refresh_token",
-    refresh_token: refreshToken,
-  }), { Authorization: basicAuth(env("PINTEREST_CLIENT_ID"), env("PINTEREST_CLIENT_SECRET")) });
-  return { accessToken: text(payload?.access_token), refreshToken: text(payload?.refresh_token) || undefined, expiresIn: payload?.expires_in };
-}
-
-// Meta (Instagram/Facebook) page tokens are minted from a long-lived user token
-// exchange rather than a standard OAuth refresh_token grant, so they are
-// intentionally excluded here; they need a re-authorization instead of a refresh.
-const REFRESH_HANDLERS: Partial<Record<SocialAnalyticsPlatform, RefreshHandler>> = {
-  youtube: refreshGoogleToken,
-  tiktok: refreshTikTokToken,
-  x: refreshXToken,
-  linkedin: refreshLinkedInToken,
-  pinterest: refreshPinterestToken,
-};
-
-function isExpiringSoon(expiresAt?: string) {
-  if (!expiresAt) return false;
-  const expiry = Date.parse(expiresAt);
-  if (!Number.isFinite(expiry)) return false;
-  return expiry - Date.now() < 2 * 60_000;
-}
-
-async function ensureFreshAccessToken(platform: SocialAnalyticsPlatform, fetcher: typeof fetch): Promise<string> {
-  const connection = getStoredSocialConnection(platform);
-  if (!connection?.accessToken) return "";
-  if (!connection.refreshToken || !isExpiringSoon(connection.expiresAt)) return connection.accessToken;
-  const handler = REFRESH_HANDLERS[platform];
-  if (!handler) return connection.accessToken;
-  try {
-    const refreshed = await handler(fetcher, connection.refreshToken);
-    if (!refreshed.accessToken) return connection.accessToken;
-    saveStoredSocialConnection(platform, {
-      provider: connection.provider,
-      accessToken: refreshed.accessToken,
-      refreshToken: refreshed.refreshToken || connection.refreshToken,
-      expiresAt: tokenExpiry(refreshed.expiresIn) || connection.expiresAt,
-      accountId: connection.accountId,
-      accountName: connection.accountName,
-      accountHandle: connection.accountHandle,
-      pageId: connection.pageId,
-      pageName: connection.pageName,
-      businessAccountId: connection.businessAccountId,
-      scopes: connection.scopes,
-      metadata: connection.metadata,
-    });
-    return refreshed.accessToken;
-  } catch {
-    // Refresh failed; fall back to the existing token so the caller gets the
-    // provider's real "unauthorized" error instead of a masked refresh error.
-    return connection.accessToken;
-  }
-}
-
 async function syncYouTube(fetcher: typeof fetch): Promise<SocialAnalyticsSnapshot> {
   const apiKey = env("YOUTUBE_API_KEY");
-  const accessToken = apiKey ? firstStored("youtube", "accessToken") : await ensureFreshAccessToken("youtube", fetcher);
+  const accessToken = firstStored("youtube", "accessToken");
   const channelId = env("YOUTUBE_CHANNEL_ID") || firstStored("youtube", "accountId");
   const handle = cleanHandle(env("YOUTUBE_CHANNEL_HANDLE") || firstStored("youtube", "accountHandle"));
   if ((!apiKey && !accessToken) || (!channelId && !handle && !accessToken)) throw new Error("YouTube is not connected.");
@@ -801,7 +596,7 @@ async function syncFacebook(fetcher: typeof fetch): Promise<SocialAnalyticsSnaps
 }
 
 async function syncTikTok(fetcher: typeof fetch): Promise<SocialAnalyticsSnapshot> {
-  const token = env("TIKTOK_ACCESS_TOKEN") || await ensureFreshAccessToken("tiktok", fetcher);
+  const token = env("TIKTOK_ACCESS_TOKEN") || firstStored("tiktok", "accessToken");
   if (!token) throw new Error("TikTok is not connected.");
   const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
   const user = await requestJson(fetcher, "https://open.tiktokapis.com/v2/user/info/?fields=display_name,follower_count,likes_count,video_count", { headers });
@@ -835,7 +630,7 @@ async function syncTikTok(fetcher: typeof fetch): Promise<SocialAnalyticsSnapsho
 }
 
 async function syncX(fetcher: typeof fetch): Promise<SocialAnalyticsSnapshot> {
-  const token = firstEnv("X_BEARER_TOKEN", "TWITTER_BEARER_TOKEN") || await ensureFreshAccessToken("x", fetcher);
+  const token = firstEnv("X_BEARER_TOKEN", "TWITTER_BEARER_TOKEN") || firstStored("x", "accessToken");
   const username = cleanHandle(firstEnv("X_USERNAME", "X_HANDLE", "TWITTER_USERNAME") || firstStored("x", "accountHandle", "accountName")) || defaultHandle;
   if (!token || !username) throw new Error("X is not connected.");
   const headers = { Authorization: `Bearer ${token}` };
@@ -863,7 +658,7 @@ async function syncX(fetcher: typeof fetch): Promise<SocialAnalyticsSnapshot> {
 }
 
 async function syncLinkedIn(fetcher: typeof fetch): Promise<SocialAnalyticsSnapshot> {
-  const token = env("LINKEDIN_ACCESS_TOKEN") || await ensureFreshAccessToken("linkedin", fetcher);
+  const token = env("LINKEDIN_ACCESS_TOKEN") || firstStored("linkedin", "accessToken");
   const organizationId = env("LINKEDIN_ORGANIZATION_ID") || firstStored("linkedin", "accountId");
   if (!token || !organizationId) throw new Error("LinkedIn is not connected.");
   const organizationUrn = organizationId.startsWith("urn:li:organization:")
@@ -908,7 +703,7 @@ async function syncLinkedIn(fetcher: typeof fetch): Promise<SocialAnalyticsSnaps
 }
 
 async function syncPinterest(fetcher: typeof fetch): Promise<SocialAnalyticsSnapshot> {
-  const token = env("PINTEREST_ACCESS_TOKEN") || await ensureFreshAccessToken("pinterest", fetcher);
+  const token = env("PINTEREST_ACCESS_TOKEN") || firstStored("pinterest", "accessToken");
   if (!token) throw new Error("Pinterest is not connected.");
   const headers = { Authorization: `Bearer ${token}` };
   const profile = await requestJson(fetcher, "https://api.pinterest.com/v5/user_account", { headers });

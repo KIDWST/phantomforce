@@ -109,8 +109,13 @@ enum GatewayProvider {
 model User {
   id           String       @id @default(uuid())
   email        String       @unique
+  username     String?      @unique
   passwordHash String?
   name         String?
+  twoFactorEnabled Boolean  @default(false)
+  twoFactorSecret  String?
+  twoFactorBackupCodes String[] @default([])
+  twoFactorConfirmedAt DateTime?
   /* Platform super-admin (Jordan). Distinct from any per-org role — org
      owners/admins are Membership.role, never this flag. */
   isSuperAdmin Boolean      @default(false)
@@ -120,6 +125,7 @@ model User {
   chatThreads  ChatThread[]
   decisions    Approval[]   @relation("ApprovalDecider")
   authSessions AuthSession[]
+  authChallenges AuthChallenge[]
   sentInvitations Invitation[] @relation("InvitationInviter")
   playerHandle PlayerHandle?
 }
@@ -137,6 +143,28 @@ model PlayerHandle {
   globalScore Int      @default(0)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+enum AuthChallengeKind {
+  login_2fa
+  password_reset
+  username_reminder
+}
+
+model AuthChallenge {
+  id          String            @id @default(uuid())
+  userId      String?
+  kind        AuthChallengeKind
+  tokenHash   String
+  meta        Json?
+  createdAt   DateTime          @default(now())
+  expiresAt   DateTime
+  consumedAt  DateTime?
+  user        User?             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([kind, tokenHash])
+  @@index([userId, kind])
+  @@index([expiresAt])
 }
 
 /* Server-side login session for the database auth provider. Revocation is
@@ -310,6 +338,7 @@ model Org {
   invitations Invitation[]
   orgPlan     OrgPlan?
   usageEvents UsageEvent[]
+  crmSettings CrmSettings?
   sites       Site[]
   mediaAssets MediaAsset[]
   assetFolders AssetFolder[]
@@ -562,11 +591,40 @@ model Contact {
   email        String?
   phone        String?
   organization String?
+  status       String   @default("new")
+  type         String   @default("prospect")
+  value        Int      @default(0)
+  nextStep     String?
+  notes        String?
+  source       String?
+  website      String?
+  avatarUrl    String?
+  socials      Json?
+  tags         String[] @default([])
+  fitScore     Int?
+  qualification String[] @default([])
+  outreach     String?
+  crmStage     String?
+  dueAt        DateTime?
+  lastTouchAt  DateTime?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   org          Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
   @@index([orgId])
+  @@index([orgId, status])
+  @@index([orgId, updatedAt])
+}
+
+model CrmSettings {
+  orgId           String   @id
+  dailyPullTarget Int      @default(5)
+  sourceMode      String   @default("manual")
+  notes           String?
+  brain           Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  org             Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
 }
 
 model ClientAccess {

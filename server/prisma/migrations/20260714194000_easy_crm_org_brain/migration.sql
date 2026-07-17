@@ -1,0 +1,2 @@
+ALTER TABLE "CrmSettings"
+  ADD COLUMN IF NOT EXISTS "brain" JSONB;

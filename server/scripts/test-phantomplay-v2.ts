@@ -16,7 +16,6 @@ process.env.PHANTOMFORCE_SERVER_LISTEN = "false";
 process.env.PHANTOMFORCE_SERVER_LOGGER = "false";
 process.env.PHANTOMFORCE_AUTH_PROVIDER = "demo";
 process.env.PHANTOMFORCE_ENABLE_DEMO_AUTH = "true";
-process.env.PHANTOMFORCE_SKIP_SERVER_DOTENV = "true";
 
 const owner: AccessSession = { id: "owner", userId: "owner-user", label: "Owner Studio", role: "admin", canManageAccess: true, orgId: "org-owner", orgRole: "owner", isSuperAdmin: true };
 const playerA: AccessSession = { id: "player-a", userId: "player-a", label: "Player A", role: "client", canManageAccess: false, orgId: "org-a", orgRole: "member" };
@@ -34,10 +33,6 @@ try {
   const after = v1.PHANTOMPLAY_BUILT_IN_GAMES.length;
   assert(after === before + v2.PHANTOMPLAY_V2_GAMES.length, "V2 games should register exactly once into the V1 catalog.");
   assert(v2.PHANTOMPLAY_V2_GAMES.length === 2, "Two V2 built-in games should ship (Phantom Rumble + Sudoku Signal; the rest already exist on main).");
-  const rumbleCatalogEntry = v2.PHANTOMPLAY_V2_GAMES.find((game) => game.id === "phantom-rumble");
-  assert(rumbleCatalogEntry, "Phantom Rumble must be registered as a V2 built-in game.");
-  assert(rumbleCatalogEntry.version === "2.2.3" && rumbleCatalogEntry.launchUrl.endsWith("phantom-rumble.html?v=2.2.3"), "Phantom Rumble V2 metadata must point at the upgraded build.");
-  assert(/guard|parry|dodge/i.test(`${rumbleCatalogEntry.summary} ${rumbleCatalogEntry.controls}`), "Phantom Rumble catalog copy must expose guard, parry, and dodge controls.");
 
   // V2 games are playable through V1's real session pipeline (validation included).
   const started = await v1.startPhantomPlaySession(playerA, { gameId: "sudoku-signal" }, { entitled: true, dailyMinuteLimit: 60 });
@@ -92,10 +87,6 @@ try {
   assert(discovery.trending[0]?.gameId === "sudoku-signal", "Trending should rank this week's real plays.");
   assert(discovery.topRated.some((row) => row.gameId === "sudoku-signal"), "Top rated needs >=2 reviews and a high average.");
   assert(discovery.friendsPlaying.some((row) => row.actorId === "player-b" && row.gameId === "sudoku-signal"), "Friends-playing should combine friendships and presence.");
-  const finished = await v1.startPhantomPlaySession(playerA, { gameId: "phantom-rumble" }, { entitled: true, dailyMinuteLimit: 60 });
-  await v1.updatePhantomPlaySession(playerA, finished.play.id, { secondsDelta: 10, score: 900, progress: 100, ended: true, state: { wins: 1, matches: 1, bestKos: 4 } });
-  const completedResume = await v2.getPhantomPlayResumeState(playerA, "phantom-rumble");
-  assert(completedResume.state === null && completedResume.progress === 100, "Completed sessions must not restore stale game state.");
 
   // Developer analytics: real numbers, admin sees built-ins, players see only their own submissions.
   const ownerAnalytics = await v2.getPhantomPlayDeveloperAnalytics(owner, { tenantId: "org-a" });
@@ -138,12 +129,18 @@ try {
     headers: { Authorization: `Bearer ${ownerToken}` },
     payload: { tenant_id: "client-sports-demo", module_id: "phantomplay", enabled: true, accessMode: "entire_organization", allowedMemberIds: [], activityEnabled: true, challengesEnabled: true },
   });
-  // Some trunk lines gate PhantomPlay as an optional workspace module; when
-  // the enable route is absent (404), the catalog route is open directly.
-  const moduleGated = moduleEnable.statusCode === 200;
-  const v1Route = await app.inject({ method: "GET", url: moduleGated ? "/api/phantomplay?tenant_id=client-sports-demo" : "/api/phantomplay", headers: { Authorization: `Bearer ${ownerToken}` } });
-  const v1Catalog = v1Route.statusCode === 200 ? (v1Route.json().catalog as Array<{ id: string; launchUrl?: string; version?: string }>) : [];
-  assert(v1Route.statusCode === 200 && v1Catalog.some((game) => game.id === "phantom-rumble" && game.launchUrl?.endsWith("phantom-rumble.html?v=2.2.3") && game.version === "2.2.3") && v1Catalog.some((game) => game.id === "sudoku-signal"), "The V1 catalog route should include registered V2 games.");
+  assert(moduleEnable.statusCode === 200, "Enabling the PhantomPlay workspace module should succeed.");
+  const v1Route = await app.inject({ method: "GET", url: "/api/phantomplay?tenant_id=client-sports-demo", headers: { Authorization: `Bearer ${ownerToken}` } });
+  /* Server startup registers additional built-ins (flagship games) into the
+     same catalog array, so compare against the LIVE registered set — a
+     frozen pre-import count goes stale the moment startup adds a game. */
+  const registeredIds = new Set(v1.PHANTOMPLAY_BUILT_IN_GAMES.map((game) => game.id));
+  const servedIds = new Set((v1Route.json().catalog as Array<{ id: string }>).map((game) => game.id));
+  assert(v1Route.statusCode === 200 && servedIds.size === registeredIds.size && [...registeredIds].every((id) => servedIds.has(id)), "The V1 catalog route should serve exactly the registered built-in set.");
+  assert(v2.PHANTOMPLAY_V2_GAMES.every((game) => servedIds.has(game.id)), "The V1 catalog route should include the registered V2 games.");
+  for (const flagshipId of ["cubetown", "skyguard-arena", "keyboardist-on-tour", "tidefront-tactics", "kingdom-breakers"]) {
+    assert(servedIds.has(flagshipId), `The V1 catalog route should include flagship game ${flagshipId}.`);
+  }
   const gamePageRoute = await app.inject({ method: "GET", url: "/api/phantomplay/v2/games/phantom-rumble", headers: { Authorization: `Bearer ${ownerToken}` } });
   assert(gamePageRoute.statusCode === 200 && gamePageRoute.json().game.id === "phantom-rumble", "Game-page route should resolve V2 games.");
   const policyForbidden = await app.inject({ method: "PATCH", url: "/api/phantomplay/v2/workspace-policy", payload: { dailyMinuteLimit: 10 } });

@@ -2,12 +2,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 const source = readFileSync(new URL("../app/js/contenthub.js", import.meta.url), "utf8");
-const mainSource = readFileSync(new URL("../app/js/main.js", import.meta.url), "utf8");
 const mediaLabSource = readFileSync(new URL("../app/js/medialab.js", import.meta.url), "utf8");
 const css = readFileSync(new URL("../app/phantom.css", import.meta.url), "utf8");
 
 const tabBlock = source.match(/const tabs = \[([\s\S]*?)\];/u)?.[1] || "";
-const mediaPoolGridBlock = css.match(/\.ml-grid-lib\s*\{[^}]*\}/u)?.[0] || "";
 const expectedTabs = ["ideas", "drafts", "publish", "calendar"];
 const positions = expectedTabs.map((tab) => tabBlock.indexOf(`\"${tab}\"`));
 
@@ -16,9 +14,6 @@ assert.deepEqual([...positions].sort((a, b) => a - b), positions, "Content Hub t
 assert.doesNotMatch(tabBlock, /library|Library|Creation/u, "Content Hub navigation must not present created media as a Library/Creation tab.");
 assert.ok(!tabBlock.includes("production"), "The old Workflow/Production tab must not remain in navigation.");
 assert.match(source, /const chState = \{ tab: "publish"/u, "Content Hub should open on the Publish composer by default.");
-assert.match(mainSource, /data-media-suite-tab="content"[\s\S]*?>\$\{svg\("doc"\)\} Publish<\/button>/u, "Media Lab should label the posting surface as Publish, not a generated-media library.");
-assert.match(mainSource, /Publish studio inside Media Lab/u, "The direct content route should describe the Publish studio.");
-assert.match(source, /<h3>Publish Studio<\/h3>/u, "The Content Hub workbar must read as a post publishing studio.");
 assert.match(source, /requestedTab === "library"\) chState\.tab = "publish"/u, "Old library deep links must land on Publish.");
 assert.match(source, /PUBLISH_FORMATS/u, "Publish must include explicit post type selection.");
 assert.match(source, /data-ch-pub-drop/u, "Publish must support drag-and-drop source files.");
@@ -46,9 +41,5 @@ assert.match(css, /\.ch-pub-drop/u, "Publish drop zone must be styled.");
 assert.match(css, /\.workspace-page-first\[data-workspace-page="content"\][\s\S]*?\.media-suite-body\s*\{[\s\S]*?overflow:\s*auto/u, "Content Hub must scroll inside the full-page Media Lab shell instead of being clipped.");
 assert.match(css, /\.workspace-page-first\[data-workspace-page="content"\][\s\S]*?\.media-suite-body\s*\{[\s\S]*?padding-bottom:\s*calc\(112px/u, "Content Hub needs bottom scroll padding so the taskbar/browser chrome cannot hide the last controls.");
 assert.match(css, /\.media-suite-body > \.ch\s*\{[\s\S]*?min-height:\s*max-content/u, "Content Hub must be allowed to grow beyond the visible viewport inside the scroll area.");
-assert.ok(mediaPoolGridBlock, "Media Pool grid CSS block must be present.");
-assert.match(mediaPoolGridBlock, /minmax\(150px, 190px\)[\s\S]*?padding-bottom:\s*14px/u, "Media Pool must start as a compact thumbnail grid instead of oversized image panels.");
-assert.match(css, /\.ml-grid-lib \.ml-tile\s*\{[\s\S]*?max-width:\s*190px/u, "Media Pool tiles must remain library-sized.");
-assert.doesNotMatch(mediaPoolGridBlock, /overflow:\s*auto/u, "Media Pool grid must not create a nested scrollbar inside the Media Lab body scroll area.");
 
 console.log("Content Hub planner checks passed.");

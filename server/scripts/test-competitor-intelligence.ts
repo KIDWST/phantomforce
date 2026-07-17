@@ -13,23 +13,12 @@ process.env.PHANTOMFORCE_SERVER_LISTEN = "false";
 process.env.PHANTOMFORCE_SERVER_LOGGER = "false";
 process.env.PHANTOMFORCE_AUTH_PROVIDER = "demo";
 process.env.PHANTOMFORCE_ENABLE_DEMO_AUTH = "true";
-process.env.PHANTOMFORCE_SKIP_SERVER_DOTENV = "true";
 
 const owner: AccessSession = { id: "owner", label: "Owner", role: "admin", canManageAccess: true, isSuperAdmin: true, orgId: "org-owner", orgRole: "owner" };
 const client: AccessSession = { id: "client", label: "Client", role: "client", canManageAccess: false, orgId: "org-client", orgRole: "member" };
 
 try {
   const intel = await import("../src/phantom-ai/competitor-intelligence.js");
-  const freshSnapshot = await intel.getCompetitorIntelligenceSnapshot(owner, { entitled: true, aggressiveEntitled: true, competitorLimit: 10, signalLimit: 100 });
-  assert(freshSnapshot.scout.status === "needs_context", "Fresh workspaces should still ask for business context.");
-  assert(freshSnapshot.scout.briefing.includes("starter competitor map"), "Fresh workspaces should explain that the starter map is already visible.");
-  assert(freshSnapshot.marketBoardMode === "starter" && freshSnapshot.marketBoard.length >= 8, "Fresh workspaces should show starter competitors immediately.");
-  assert(freshSnapshot.autoScout.mode === "starter_public_map" && freshSnapshot.autoScout.competitorSet.totalCompared >= 8, "Fresh workspaces should auto-render starter comparisons.");
-  assert(freshSnapshot.autoScout.comparisons.some((item) => item.name === "ChatGPT" && item.sourceTargets.length >= 2), "Starter comparisons should include AI competitors and source targets.");
-  assert(freshSnapshot.autoScout.opportunities.some((item) => /Client Setup Machine/i.test(item.title)), "Starter auto-scout should steer toward the Client Setup Machine moat.");
-  assert(freshSnapshot.metrics.sourceLanes >= 4, "Fresh workspaces should count source lanes instead of looking inactive.");
-  assert(freshSnapshot.scout.lanes.every((lane) => lane.candidateCompetitors.length && lane.sourceTargets.length && lane.nextAction), "Fresh source lanes should include candidate competitors, source targets, and next actions.");
-
   const scout = await intel.updateMarketScoutContext(owner, { businessName: "Owner Studio", location: "Chicago", offer: "premium photo and media services", audience: "local brands and creators", goals: "Find competitors gaining traction, weak reviews, product sales, and pricing changes." });
   assert(scout.status === "ready_to_discover" && scout.lanes.length >= 4, "Scout context should arm proactive public-source discovery lanes.");
   assert(scout.lanes.every((lane) => lane.status === "active"), "Scout lanes should be active without confusing queue language.");

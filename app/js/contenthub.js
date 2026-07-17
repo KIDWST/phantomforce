@@ -9,20 +9,20 @@ import {
   freshEditState, applyFilterPreset, renderBaseFrame,
   addBokehSpot, removeBokehSpotNear, removeBokehSpotAt, nearestBokehSpot, moveBokehSpot, resizeBokehSpot,
   setBokehMask, freshTextStyle, TEXT_FONTS, TEXT_PRESETS, applyTextPreset,
-} from "./imagefilters.js?v=phantom-live-20260717-2";
-import { getRembgStatus, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260717-2";
-import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260717-2";
-import { parseAnalyticsReport } from "./social-analytics.js?v=phantom-live-20260717-2";
+} from "./imagefilters.js?v=phantom-live-20260714-006";
+import { getRembgStatus, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260714-006";
+import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260714-006";
+import { parseAnalyticsReport } from "./social-analytics.js?v=phantom-live-20260714-006";
 import {
   freshComposition, compositionSnapshot, restoreComposition, addImageLayer, replaceImageLayerSource, addTextLayer, addColorLayer,
   duplicateLayer, removeSelectedLayers, moveLayerOrder, selectedLayers, selectLayer, selectAllLayers,
   loadCompositionImages, renderComposition, drawCompositionOverlay, drawDetectedSubjectOverlay, canvasPoint, hitTestLayer, hitTestResizeHandle,
   setCanvasPreset, zoomComposition, canvasPointToLayer, layerPointToCanvas,
   imageEditSnapshot, restoreImageEditSnapshot, pushEditorSnapshot,
-} from "./content-editor.js?v=phantom-live-20260717-2";
+} from "./content-editor.js?v=phantom-live-20260714-006";
 import {
   currentTenantId, currentWs, session, store, visible, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem, wsName,
-} from "./store.js?v=phantom-live-20260717-2";
+} from "./store.js?v=phantom-live-20260714-006";
 
 const CH_KEY = "pf.contenthub.v2";
 const CH_REMOVED_KEY = "pf.contenthub.removed.v1";
@@ -99,17 +99,11 @@ function defaultSocialAccounts() {
     enabled: false, connectMode: "manual", officialConnectState: "not_configured", lastConnectAt: "",
   }));
 }
-function normalizeSocialAccount(base, saved = {}) {
-  const merged = { ...base, ...(saved || {}) };
-  const fallbackHandle = base.handle || plat(base.id).handle || "officialchicagoshots";
-  if (!String(merged.handle || "").trim()) merged.handle = fallbackHandle;
-  return merged;
-}
 export function loadSocialAccounts() {
   let saved = [];
   try { saved = JSON.parse(workspaceStorageGetItem(SOCIAL_KEY) || "[]"); } catch {}
   const rows = Array.isArray(saved) ? saved : [];
-  return defaultSocialAccounts().map((base) => normalizeSocialAccount(base, rows.find((row) => row && row.id === base.id)));
+  return defaultSocialAccounts().map((base) => ({ ...base, ...(rows.find((row) => row && row.id === base.id) || {}) }));
 }
 export function saveSocialAccounts(accounts) {
   try { workspaceStorageSetItem(SOCIAL_KEY, JSON.stringify(accounts)); } catch {}
@@ -234,7 +228,7 @@ function genPosts() {
     const hue = Math.floor(rng() * 360);
     posts.push({
       id: `post-${i}`, platform: p.id, type, caption: CAPTIONS[i % CAPTIONS.length],
-      publishedAt, status: scheduled ? "scheduled" : "published", hue, isDemo: true,
+      publishedAt, status: scheduled ? "scheduled" : "published", hue,
       hashtags: tags, mentions: [],
       metrics: { reach, impressions, likes, comments, shares, saves, views, watchAvg: watch, clicks, followersGained, engagementRate: +(100 * (likes + comments + shares + saves) / Math.max(1, reach)).toFixed(1), reactions },
       comments: cmts,
@@ -301,8 +295,6 @@ function normalizeContentAsset(input = {}) {
     updatedAt: Number(input.updatedAt || 0) || 0,
     bytes: dataBytes(url),
     syncedId: String(input.syncedId || ""),
-    clientId: String(input.clientId || ""),
-    clientName: String(input.clientName || ""),
   };
 }
 function pruneContentAssets(items = []) {
@@ -352,24 +344,41 @@ export function saveContentAssets(items = []) {
   }
   return clean;
 }
+/* In-memory bridge for oversized media: the persisted copy drops data URLs
+   over the inline budget, so previews for those assets come from this cache
+   (seeded at save time) or get re-fetched from the sync backend on demand.
+   Without this, a big render "saves" but can never be seen again. */
+const contentAssetUrlCache = new Map();
+export function contentAssetDisplayUrl(asset) {
+  if (!asset) return "";
+  return asset.url || contentAssetUrlCache.get(asset.id) || "";
+}
+export async function hydrateContentAssetUrl(asset) {
+  const known = contentAssetDisplayUrl(asset);
+  if (known || !asset?.syncedId) return known;
+  const result = await fetchSyncedAssetFile(asset.syncedId);
+  if (result.ok && result.dataUrl) {
+    contentAssetUrlCache.set(asset.id, result.dataUrl);
+    return result.dataUrl;
+  }
+  return "";
+}
+
 export function registerContentAsset(asset, options = {}) {
   const normalized = normalizeContentAsset(asset);
   const current = loadContentAssets().filter((item) => item.id !== normalized.id);
   const saved = saveContentAssets([normalized, ...current]);
   const finalAsset = saved.find((item) => item.id === normalized.id) || normalized;
-  if (!options.skipSync && !finalAsset.syncedId && finalAsset.url && finalAsset.url.startsWith("data:")) {
-    queueAssetSync(finalAsset.id);
+  /* Sync from the ORIGINAL url, not the stored one — normalization trims
+     oversized data URLs to "", so the biggest renders were never backed up
+     and their previews were unrecoverable. */
+  const originalUrl = typeof asset.url === "string" && asset.url.startsWith("data:") ? asset.url : "";
+  if (originalUrl && !finalAsset.url) contentAssetUrlCache.set(finalAsset.id, originalUrl);
+  const uploadUrl = finalAsset.url && finalAsset.url.startsWith("data:") ? finalAsset.url : originalUrl;
+  if (!options.skipSync && !finalAsset.syncedId && uploadUrl) {
+    queueAssetSync(finalAsset.id, uploadUrl);
   }
   return { asset: finalAsset, stats: contentAssetStats(saved) };
-}
-/* Lets the Clients module (or anything else) show "content queued/created
-   for this client" without owning the Content Hub asset store itself —
-   pass the clientId used when the asset was registered via
-   registerContentAsset({ ..., clientId, clientName }). */
-export function assetsForClient(clientId) {
-  const id = String(clientId || "");
-  if (!id) return [];
-  return loadContentAssets().filter((asset) => asset.clientId === id);
 }
 
 /* ---------------- cross-device sync (backs up to the real server) ----------------
@@ -380,10 +389,11 @@ export function assetsForClient(clientId) {
    and syncing is a best-effort convenience, not a requirement to keep
    working. syncedId marks an asset as already backed up so it's never
    re-uploaded on every re-render. */
-async function queueAssetSync(assetId) {
+async function queueAssetSync(assetId, urlOverride = "") {
   const asset = loadContentAssets().find((item) => item.id === assetId);
-  if (!asset || asset.syncedId || !asset.url || !asset.url.startsWith("data:")) return;
-  const result = await syncAssetUpload(asset.url, asset.title);
+  const uploadUrl = (asset?.url && asset.url.startsWith("data:") ? asset.url : "") || urlOverride;
+  if (!asset || asset.syncedId || !uploadUrl || !uploadUrl.startsWith("data:")) return;
+  const result = await syncAssetUpload(uploadUrl, asset.title);
   if (!result.ok) return;
   const fresh = loadContentAssets();
   const target = fresh.find((item) => item.id === assetId);
@@ -403,12 +413,14 @@ function syncCreatorTenant() {
     if (chLbKeyHandler) { document.removeEventListener("keydown", chLbKeyHandler); chLbKeyHandler = null; }
     if (chLibraryKeyHandler) { document.removeEventListener("keydown", chLibraryKeyHandler); chLibraryKeyHandler = null; }
     chState.tab = "publish";
+    chState.platform = "all";
     chState.ctype = "all";
+    chState.eng = "likes";
   }
   chRenderedTenant = tenant;
 }
 
-/* Runs once per Creator Hub mount: pulls the list of server-synced assets
+/* Runs once per Content Hub mount: pulls the list of server-synced assets
    and merges in any this device doesn't have locally yet (registered with
    skipSync so pulling never triggers a re-upload right back to the
    server). This is what makes a photo edited on one device show up on
@@ -706,9 +718,9 @@ function svgIc(k) {
 }
 
 /* =========================================================================
-   Creator Hub
+   Content Hub
    ========================================================================= */
-const chState = { tab: "publish", ctype: "all" };
+const chState = { tab: "publish", platform: "all", ctype: "all", eng: "likes" };
 const CONTENT_TYPE_FILTERS = [["all", "All"], ["reel", "Reels"], ["video", "Video"], ["carousel", "Carousels"], ["text", "Posts"], ["image", "Images"]];
 const chSelection = new Set();
 let chLightbox = null;
@@ -733,7 +745,7 @@ export function renderContentHub(el, opts = {}) {
   const data = loadContent();
   const mediaAssets = loadContentAssets();
   if (requestedAssetId) {
-    const requestedAsset = mediaAssets.find((asset) => asset.id === requestedAssetId && asset.type === "image" && asset.url);
+    const requestedAsset = mediaAssets.find((asset) => asset.id === requestedAssetId && (asset.url || contentAssetUrlCache.get(asset.id) || asset.syncedId));
     if (requestedAsset) {
       savePublishState({ ...loadPublishState(), sourceKey: `asset:${requestedAsset.id}` });
       chState.tab = "publish";
@@ -749,7 +761,7 @@ export function renderContentHub(el, opts = {}) {
   el.innerHTML = `
     <div class="ch">
       <section class="ch-workbar">
-        <div><h3>Publish Studio</h3><span>${esc(wsName(currentWs()))} · ${esc(tabs.find(([id]) => id === chState.tab)?.[1] || "Publish")}</span></div>
+        <div><h3>Creator Hub</h3><span>${esc(wsName(currentWs()))} · ${esc(tabs.find(([id]) => id === chState.tab)?.[1] || "Publish")}</span></div>
         <div class="ch-tenant-actions"><span class="ch-tenant-pill">Isolated workspace</span><button class="btn btn-primary" data-open-ws="media">Open Media Pool</button></div>
       </section>
       <div class="ch-tabs">
@@ -769,6 +781,27 @@ export function renderContentHub(el, opts = {}) {
   else if (t === "drafts") renderDraftQueue(body, data, esc, el, opts);
   else if (t === "calendar") renderContentPlanner(body, data, esc, el, opts);
   if (chLightbox) wireLightbox(el, opts);
+  hydrateTrimmedMedia(el, esc);
+}
+
+/* Swap "loading preview from backup…" placeholders for the real media by
+   pulling each oversized asset back from the sync backend. Patches the DOM
+   in place so an async fetch never fights a fresh render. */
+async function hydrateTrimmedMedia(el, esc) {
+  const slots = [...el.querySelectorAll("[data-ch-hydrate-asset]")];
+  if (!slots.length) return;
+  const assets = loadContentAssets();
+  for (const slot of slots) {
+    const asset = assets.find((item) => item.id === slot.dataset.chHydrateAsset);
+    if (!asset) continue;
+    const url = await hydrateContentAssetUrl(asset);
+    if (!url || !slot.isConnected) continue;
+    const holder = document.createElement("span");
+    holder.innerHTML = asset.type === "video"
+      ? `<video src="${esc(url)}" muted playsinline preload="metadata"></video><span class="ch-post-play">▶</span>`
+      : `<img src="${esc(url)}" alt="${esc(asset.title)}" loading="lazy"/>`;
+    slot.replaceWith(...holder.childNodes);
+  }
 }
 
 function kpi(label, value, sub, tone) {
@@ -835,51 +868,25 @@ function renderCreatorIdeas(body, data, esc, root, opts) {
   wireRemovals(body, opts, root);
 }
 function renderDraftQueue(body, data, esc, root, opts) {
-  const drafts = loadPublishDrafts().filter((draft) => draft.status === "draft");
+  const drafts = activeIdeas().slice(1, 5).filter((idea) => !isRemoved(`draft:${idea.id}`));
   body.innerHTML = `
     <div class="ch-card">
-      <div class="ch-card-h"><h3>Draft queue</h3><span class="ch-src">Posts saved from Publish, or drafted from an idea, waiting to be scheduled or sent</span></div>
+      <div class="ch-card-h"><h3>Draft queue</h3><span class="ch-src">Safe drafts move on autopilot; risky claims stop for review</span></div>
       <div class="ch-draft-list">
-        ${drafts.length ? drafts.map((draft, i) => `<article class="ch-draft">
+        ${drafts.length ? drafts.map((idea, i) => `<article class="ch-draft ch-removable">
+          ${removeButton(`draft:${idea.id}`, `Remove ${idea.title} draft`)}
           <span class="ch-draft-step">${i + 1}</span>
           <div>
-            <h4>${esc(draft.sourceTitle || "Manual post")}</h4>
-            <p>${esc((draft.caption || "").slice(0, 150))}${(draft.caption || "").length > 150 ? "..." : ""}</p>
-            <div class="ch-draft-meta"><span>${draft.platforms.map((id) => esc(plat(id).name)).join(" · ")}</span><span>${esc(TYPES[draft.sourceType] || draft.sourceType || "text")}</span><span>Saved ${ago(new Date(draft.createdAt).toISOString())}</span></div>
+            <h4>${esc(idea.title)}</h4>
+            <p>${esc(idea.angle)}</p>
+            <div class="ch-draft-meta"><span>${esc(idea.format)}</span><span>Autopilot copy pass</span><span>Asset direction</span></div>
           </div>
-          <div class="ch-action-row">
-            <button class="btn" data-ch-draft-continue="${draft.id}">Continue in Publish</button>
-            <button class="btn btn-quiet" data-ch-draft-delete="${draft.id}">Delete</button>
-          </div>
-        </article>`).join("") : `<p class="empty-line">No saved drafts yet. Save a draft from Publish, or click "Draft from this" on an idea, to queue it here.</p>`}
+          <button class="btn" data-ch-action="approve-draft" data-idea-id="${idea.id}">Prepare autopilot</button>
+        </article>`).join("") : `<p class="empty-line">No draft items are waiting. Removed items stay local to this browser.</p>`}
       </div>
     </div>`;
-  wireDraftQueue(body, root, opts);
-}
-function wireDraftQueue(body, root, opts) {
-  body.querySelectorAll("[data-ch-draft-continue]").forEach((btn) => btn.addEventListener("click", () => {
-    const draft = loadPublishDrafts().find((d) => d.id === btn.dataset.chDraftContinue);
-    if (!draft) return;
-    savePublishState({
-      ...loadPublishState(),
-      platforms: draft.platforms,
-      sourceKey: draft.sourceKey,
-      postType: draft.postType,
-      brief: draft.brief,
-      tone: draft.tone,
-      cta: draft.cta,
-      caption: draft.caption,
-      scheduleAt: localDateTimeValue(),
-    });
-    chState.tab = "publish";
-    opts.notify?.("Creator Hub", "Loaded this draft into Publish. Schedule it or post it now.");
-    if (root) renderContentHub(root, opts);
-  }));
-  body.querySelectorAll("[data-ch-draft-delete]").forEach((btn) => btn.addEventListener("click", () => {
-    savePublishDrafts(loadPublishDrafts().filter((d) => d.id !== btn.dataset.chDraftDelete));
-    opts.notify?.("Creator Hub", "Deleted the draft. No live post was touched.");
-    if (root) renderContentHub(root, opts);
-  }));
+  wireCreatorActions(body, opts, root);
+  wireRemovals(body, opts, root);
 }
 function loadPlannerItems() {
   try {
@@ -907,7 +914,7 @@ function plannerTime(value) {
 function plannerRows(data) {
   const own = loadPlannerItems().map((item) => ({ ...item, source: "planner", removable: true }));
   const content = data.posts
-    .filter((post) => post.status === "scheduled" && !post.isDemo && !isRemoved(`schedule:${post.id}`))
+    .filter((post) => post.status === "scheduled" && !isRemoved(`schedule:${post.id}`))
     .map((post) => ({ id: `content:${post.id}`, postId: post.id, title: post.caption, kind: "content", startsAt: post.publishedAt, source: plat(post.platform).name, detail: TYPES[post.type] || post.type, removable: false }));
   return [...own, ...content].sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt));
 }
@@ -971,7 +978,7 @@ function renderContentPlanner(body, data, esc, root, opts) {
     const items = loadPlannerItems();
     items.push({ id: `planner-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, title: String(form.get("title") || "").trim(), startsAt: startsAt.toISOString(), kind: String(form.get("kind") || "task"), detail: String(form.get("detail") || "").trim(), createdAt: Date.now() });
     savePlannerItems(items);
-    opts.notify?.("Creator Hub", "Added to this business planner.");
+    opts.notify?.("Content Hub", "Added to this business planner.");
     renderContentHub(root, opts);
   });
   body.querySelectorAll("[data-planner-remove]").forEach((button) => { button.onclick = (event) => { event.stopPropagation(); savePlannerItems(loadPlannerItems().filter((item) => item.id !== button.dataset.plannerRemove)); renderContentHub(root, opts); }; });
@@ -980,7 +987,7 @@ function renderContentPlanner(body, data, esc, root, opts) {
   wirePostCards(body, data, esc, root, opts);
 }
 function publishSources(data, assets) {
-  const assetRows = assets.slice(0, 10).map((asset) => ({
+  const assetRows = assets.slice(0, 24).map((asset) => ({
     key: `asset:${asset.id}`,
     kind: "asset",
     asset,
@@ -998,7 +1005,7 @@ function publishSources(data, assets) {
       kind: "post",
       post,
       title: post.caption,
-      sub: `${plat(post.platform).name} · ${TYPES[post.type] || post.type}${post.isDemo ? " · Sample idea" : ""}`,
+      sub: `${plat(post.platform).name} · ${TYPES[post.type] || post.type}`,
       copy: post.caption,
       type: post.type,
       hue: post.hue || 155,
@@ -1013,12 +1020,16 @@ function sourceMediaMarkup(source, esc, size = "large") {
   if (!source) return `<span class="ch-pub-media-empty">Choose or upload media</span>`;
   if (source.kind === "asset") {
     const asset = source.asset;
-    if (asset.url) {
+    const url = contentAssetDisplayUrl(asset);
+    if (url) {
       return asset.type === "video"
-        ? `<video src="${esc(asset.url)}" muted playsinline preload="metadata"></video><span class="ch-post-play">▶</span>`
-        : `<img src="${esc(asset.url)}" alt="${esc(asset.title)}" loading="lazy"/>`;
+        ? `<video src="${esc(url)}" muted playsinline preload="metadata"></video><span class="ch-post-play">▶</span>`
+        : `<img src="${esc(url)}" alt="${esc(asset.title)}" loading="lazy"/>`;
     }
-    return `<span class="ch-pub-media-empty" style="${assetBg(asset)}">${size === "tiny" ? "media" : "media saved · preview loading"}</span>`;
+    if (asset.syncedId) {
+      return `<span class="ch-pub-media-empty" style="${assetBg(asset)}" data-ch-hydrate-asset="${esc(asset.id)}" data-ch-hydrate-type="${esc(asset.type)}" data-ch-hydrate-title="${esc(asset.title)}">${size === "tiny" ? "media" : "loading preview from backup…"}</span>`;
+    }
+    return `<span class="ch-pub-media-empty" style="${assetBg(asset)}">${size === "tiny" ? "media" : "preview unavailable on this device"}</span>`;
   }
   if (source.post) {
     return `<span class="ch-pub-media-empty" style="${thumb(source.post)}"><span class="ch-post-plat" style="background:${plat(source.post.platform).color}">${PGLYPH[source.post.platform] || "●"}</span>${isVideo(source.post.type) ? `<span class="ch-post-play">▶</span>` : ""}</span>`;
@@ -1166,7 +1177,7 @@ function addPublishPosts(data, draft, status) {
       metrics: blankMetrics(),
       comments: [],
       localOnly: true,
-      analyticsVisible: false,
+      analyticsVisible: status === "published",
       sourceDraftId: draft.id,
     });
   });
@@ -1178,7 +1189,7 @@ function publishQueueMarkup(drafts, esc) {
     <span class="ch-pub-status ch-pub-status-${esc(draft.status)}">${esc(draftStatusLabel(draft.status))}</span>
     <b>${esc(draft.sourceTitle || "Manual post")}</b>
     <p>${esc((draft.caption || "").slice(0, 150))}${(draft.caption || "").length > 150 ? "..." : ""}</p>
-    <i>${draft.platforms.map((id) => esc(plat(id).name)).join(" · ")} · ${draft.status === "scheduled" ? "scheduled" : draft.status === "posted" || draft.status === "manual-posted" ? "saved to post history" : "draft"}</i>
+    <i>${draft.platforms.map((id) => esc(plat(id).name)).join(" · ")} · ${draft.status === "scheduled" ? "scheduled" : draft.status === "posted" || draft.status === "manual-posted" ? "visible in local analytics" : "draft"}</i>
   </article>`).join("");
 }
 function renderPostPublish(body, data, esc, root, opts) {
@@ -1263,7 +1274,7 @@ function renderPostPublish(body, data, esc, root, opts) {
             <button type="button" class="ch-tool" data-ch-pub-post-now>Post now</button>
             <button type="button" class="ch-tool" data-ch-pub-live disabled title="OAuth publishing adapters are not authorized in this local build.">OAuth live post</button>
           </div>
-          <p class="ch-pub-note">Post now saves a local post-history record for every selected channel. Live external posting and platform analytics stay locked until OAuth scopes and account approvals are connected.</p>
+          <p class="ch-pub-note">Post now records the post across every selected channel in the local analytics ledger. Live external posting stays locked until OAuth scopes and account approvals are connected.</p>
         </div>
       </div>
       <aside class="ch-card ch-pub-preview">
@@ -1274,7 +1285,7 @@ function renderPostPublish(body, data, esc, root, opts) {
       </aside>
     </section>
     <section class="ch-card ch-pub-queue">
-      <div class="ch-card-h"><h3>Post status</h3><span class="ch-src">drafts · scheduled · post history</span></div>
+      <div class="ch-card-h"><h3>Post status</h3><span class="ch-src">drafts · scheduled · posted locally</span></div>
       <div class="ch-pub-queue-grid">${publishQueueMarkup(drafts, esc)}</div>
     </section>`;
   wirePostPublish(body, data, assets, esc, root, opts);
@@ -1430,7 +1441,7 @@ function wirePostPublish(body, data, assets, esc, root, opts) {
     notify(status === "scheduled"
       ? "Post scheduled locally and added to Planner. No external post was sent."
       : status === "posted"
-        ? "Post saved to local post history. OAuth live posting and platform analytics still require connected accounts."
+        ? "Post recorded across selected channels and added to local analytics. OAuth live posting still requires connected accounts."
         : "Post draft saved locally.");
     renderContentHub(root, opts);
   };
@@ -1502,7 +1513,7 @@ function contentAssetCard(asset, esc) {
   const meta = asset.type === "video" ? "Media Lab video" : "Media Lab image";
   const key = selectionKey("asset", asset.id);
   const selected = chSelection.has(key);
-  const flags = [asset.saved ? "saved" : "", asset.clientName ? `for ${asset.clientName}` : "", asset.batchLabel ? asset.batchLabel : "", asset.aiEditPlan ? "AI edit plan" : ""].filter(Boolean);
+  const flags = [asset.saved ? "saved" : "", asset.batchLabel ? asset.batchLabel : "", asset.aiEditPlan ? "AI edit plan" : ""].filter(Boolean);
   return `<article class="ch-asset-card ch-selectable ${selected ? "is-selected" : ""}" data-ch-select-item="${esc(key)}" data-ch-asset-id="${esc(asset.id)}" title="${hasUrl ? "Click to open" : ""}">
     <button class="ch-remove ch-asset-x" data-ch-delete-asset="${esc(asset.id)}" aria-label="Remove ${esc(asset.title)}" title="Remove ${esc(asset.title)}" type="button">x</button>
     <span class="ch-select-box" data-ch-select-hit aria-hidden="true">${selected ? "✓" : ""}</span>
@@ -1522,7 +1533,7 @@ function contentAssetCard(asset, esc) {
 }
 /* ---------------- inline lightbox: expand + AI-prompt image editor ----------------
    Reuses the same tested canvas filter engine as Media Lab's Edit tab (see
-   imagefilters.js) but stays entirely local to Creator Hub — its own isolated
+   imagefilters.js) but stays entirely local to Content Hub — its own isolated
    edit state per open, mounted right over the grid instead of navigating away. */
 function freshLightbox(asset, extra = {}) {
   const extraLayers = extra.layers || {};
@@ -2568,7 +2579,7 @@ function wireLightbox(root, opts) {
     if (!result.ok) {
       lb.aiEdit = { ...lb.aiEdit, status: "error", message: result.message };
       rerender();
-      opts.notify?.("Creator Hub", `AI edit failed on "${asset.title}": ${result.message}`);
+      opts.notify?.("Content Hub", `AI edit failed on "${asset.title}": ${result.message}`);
       return;
     }
     try {
@@ -2586,7 +2597,7 @@ function wireLightbox(root, opts) {
       lb.aiEdit = { ...lb.aiEdit, status: "success", message: "" };
       repaint();
       rerender();
-      opts.notify?.("Creator Hub", `AI edited the selected layer in "${asset.title}".`);
+      opts.notify?.("Content Hub", `AI edited the selected layer in "${asset.title}".`);
     } catch {
       if (chLightbox !== lb) return;
       lb.aiEdit = { ...lb.aiEdit, status: "error", message: "The media engine returned an image that could not be loaded." };
@@ -2651,7 +2662,7 @@ function wireLightbox(root, opts) {
     if (!exported.ok) {
       lb.bg = { status: "error", message: exported.error };
       rerender();
-      opts.notify?.("Creator Hub", `Background removal failed on "${asset.title}": ${exported.error}`);
+      opts.notify?.("Content Hub", `Background removal failed on "${asset.title}": ${exported.error}`);
       return;
     }
     const beforeUrl = exported.url;
@@ -2660,7 +2671,7 @@ function wireLightbox(root, opts) {
     if (!result.ok) {
       lb.bg = { status: "error", message: result.message };
       rerender();
-      opts.notify?.("Creator Hub", `Background removal failed on "${asset.title}": ${result.message}`);
+      opts.notify?.("Content Hub", `Background removal failed on "${asset.title}": ${result.message}`);
       return;
     }
     lb.bg = { status: "preview", beforeUrl, afterUrl: result.image, targetLayerId: source.layer.id, targetName: source.layer.name };
@@ -2692,7 +2703,7 @@ function wireLightbox(root, opts) {
       commitEditorChange(lb, before);
       repaint();
       rerender();
-      opts.notify?.("Creator Hub", `removed the background from "${target.name}".`);
+      opts.notify?.("Content Hub", `removed the background from "${target.name}".`);
     }).catch(() => {
       if (chLightbox !== lb) return;
       lb.bg = { status: "error", message: "The cutout image could not be loaded." };
@@ -2719,7 +2730,7 @@ function wireLightbox(root, opts) {
     if (!exported.ok) {
       lb.bokehDetect = { status: "error", message: exported.error };
       rerender();
-      opts.notify?.("Creator Hub", `AI subject detection failed on "${asset.title}": ${exported.error}`);
+      opts.notify?.("Content Hub", `AI subject detection failed on "${asset.title}": ${exported.error}`);
       return;
     }
     const result = await requestRemoveBackground(exported.url);
@@ -2727,7 +2738,7 @@ function wireLightbox(root, opts) {
     if (!result.ok) {
       lb.bokehDetect = { status: "error", message: result.message };
       rerender();
-      opts.notify?.("Creator Hub", `AI subject detection failed on "${asset.title}": ${result.message}`);
+      opts.notify?.("Content Hub", `AI subject detection failed on "${asset.title}": ${result.message}`);
       return;
     }
     try {
@@ -2743,7 +2754,7 @@ function wireLightbox(root, opts) {
       lb.bokehDetect = { status: "success", message: "" };
       repaint();
       rerender();
-      opts.notify?.("Creator Hub", `AI-detected the subject on "${asset.title}" for bokeh.`);
+      opts.notify?.("Content Hub", `AI-detected the subject on "${asset.title}" for bokeh.`);
     } catch {
       if (chLightbox !== lb) return;
       lb.bokehDetect = { status: "error", message: "The detected subject image could not be loaded." };
@@ -2778,7 +2789,7 @@ function wireLightbox(root, opts) {
   root.querySelector("[data-ch-lb-download]").onclick = async () => {
     const exported = await exportCanvas(canvas, repaintWithImg, exportFormat(), 0.92);
     if (chLightbox !== lb) return;
-    if (!exported.ok) { opts.notify?.("Creator Hub", `Couldn't download "${asset.title}": ${exported.error}`); return; }
+    if (!exported.ok) { opts.notify?.("Content Hub", `Couldn't download "${asset.title}": ${exported.error}`); return; }
     const link = document.createElement("a");
     link.href = exported.url;
     link.download = `phantomforce-${asset.id}.${exportExt()}`;
@@ -2787,22 +2798,22 @@ function wireLightbox(root, opts) {
   root.querySelector("[data-ch-lb-save]").onclick = async () => {
     const exported = await exportCanvas(canvas, repaintWithImg, exportFormat(), 0.9);
     if (chLightbox !== lb) return;
-    if (!exported.ok) { opts.notify?.("Creator Hub", `Couldn't save "${asset.title}": ${exported.error}`); return; }
+    if (!exported.ok) { opts.notify?.("Content Hub", `Couldn't save "${asset.title}": ${exported.error}`); return; }
     registerContentAsset({ ...asset, url: exported.url, prompt: s.text || asset.prompt, saved: true, syncedId: "", trimmed: false, updatedAt: Date.now() });
     // close (and its rerender) must run before notify(), since notify() triggers a global
     // store-change listener that can fully remount this page and invalidate this closure's
     // DOM references — closing first ensures the lightbox-closed state lands on live DOM.
     close();
-    opts.notify?.("Creator Hub", `saved your edit to "${asset.title}".`);
+    opts.notify?.("Content Hub", `saved your edit to "${asset.title}".`);
   };
   root.querySelector("[data-ch-lb-save-copy]").onclick = async () => {
     const exported = await exportCanvas(canvas, repaintWithImg, exportFormat(), 0.9);
     if (chLightbox !== lb) return;
-    if (!exported.ok) { opts.notify?.("Creator Hub", `Couldn't save a copy of "${asset.title}": ${exported.error}`); return; }
+    if (!exported.ok) { opts.notify?.("Content Hub", `Couldn't save a copy of "${asset.title}": ${exported.error}`); return; }
     const at = Date.now();
     registerContentAsset({ ...asset, id: `edit-${at}-${Math.random().toString(36).slice(2, 6)}`, url: exported.url, title: `${asset.title} (edit)`, prompt: s.text || asset.prompt, createdAt: at, saved: true, syncedId: "", trimmed: false });
     close();
-    opts.notify?.("Creator Hub", `saved a copy of "${asset.title}" with your edits.`);
+    opts.notify?.("Content Hub", `saved a copy of "${asset.title}" with your edits.`);
   };
 }
 function visibleLibraryItems(shownAssets, shownPosts) {
@@ -2840,7 +2851,7 @@ function undoLastDelete(root, opts) {
   const count = restoredAssets.length + postIds.length;
   chLastDeleted = null;
   renderContentHub(root, opts);
-  opts.notify?.("Creator Hub", `Restored ${count} item${count === 1 ? "" : "s"}.`);
+  opts.notify?.("Content Hub", `Restored ${count} item${count === 1 ? "" : "s"}.`);
 }
 function openAssetInMediaLabEditor(asset, opts = {}) {
   if (!asset?.url || asset.type !== "image") return false;
@@ -2906,7 +2917,7 @@ function wireLibraryActions(body, data, assets, shownAssets, shownPosts, esc, ro
 
   // Ctrl/Cmd+A selects everything currently visible (the OS convention — "select all in
   // this view"); Ctrl/Cmd+Z undoes the most recent delete. Self-removes once this render's
-  // body is no longer live, since there's no explicit "Creator Hub unmounted" hook to hang
+  // body is no longer live, since there's no explicit "Content Hub unmounted" hook to hang
   // cleanup off of.
   if (chLibraryKeyHandler) document.removeEventListener("keydown", chLibraryKeyHandler);
   chLibraryKeyHandler = (event) => {
@@ -2935,7 +2946,7 @@ function wireLibraryActions(body, data, assets, shownAssets, shownPosts, esc, ro
     // rerender before notify(): notify() triggers a global store-change listener that can
     // fully remount this page and invalidate this closure's DOM references.
     rerender();
-    opts.notify?.("Creator Hub", "Deleted the selected local media item — Ctrl+Z to undo. No external file or post was touched.");
+    opts.notify?.("Content Hub", "Deleted the selected local media item — Ctrl+Z to undo. No external file or post was touched.");
   }));
   body.querySelector("[data-ch-select-mode]")?.addEventListener("click", () => {
     chState.selectMode = !chState.selectMode;
@@ -2949,7 +2960,7 @@ function wireLibraryActions(body, data, assets, shownAssets, shownPosts, esc, ro
   body.querySelector("[data-ch-select-everything]")?.addEventListener("click", () => {
     allItems.forEach((item) => chSelection.add(selectionKey(item.kind, item.id)));
     chState.selectMode = true;
-    opts.notify?.("Creator Hub", `Selected all ${allItems.length} local content item${allItems.length === 1 ? "" : "s"}.`);
+    opts.notify?.("Content Hub", `Selected all ${allItems.length} local content item${allItems.length === 1 ? "" : "s"}.`);
     rerender();
   });
   body.querySelector("[data-ch-clear-selected]")?.addEventListener("click", () => {
@@ -2959,40 +2970,40 @@ function wireLibraryActions(body, data, assets, shownAssets, shownPosts, esc, ro
   body.querySelector("[data-ch-download-selected]")?.addEventListener("click", () => {
     const selected = selectedLibraryItems(data, loadContentAssets());
     downloadLibraryItems(selected, "selected");
-    opts.notify?.("Creator Hub", `Downloaded/exported ${selected.length} selected item${selected.length === 1 ? "" : "s"}.`);
+    opts.notify?.("Content Hub", `Downloaded/exported ${selected.length} selected item${selected.length === 1 ? "" : "s"}.`);
   });
   body.querySelector("[data-ch-download-all]")?.addEventListener("click", () => {
     downloadLibraryItems(shownItems, "shown");
-    opts.notify?.("Creator Hub", `Downloaded/exported ${shownItems.length} visible item${shownItems.length === 1 ? "" : "s"}.`);
+    opts.notify?.("Content Hub", `Downloaded/exported ${shownItems.length} visible item${shownItems.length === 1 ? "" : "s"}.`);
   });
   body.querySelector("[data-ch-export-selected]")?.addEventListener("click", () => {
     const selected = selectedLibraryItems(data, loadContentAssets());
     exportLibraryItems(selected, "selected");
-    opts.notify?.("Creator Hub", "Exported a local selected-content packet.");
+    opts.notify?.("Content Hub", "Exported a local selected-content packet.");
   });
   body.querySelector("[data-ch-save-selected]")?.addEventListener("click", () => {
     const ids = new Set(selectedLibraryItems(data, loadContentAssets()).filter((item) => item.kind === "asset").map((item) => item.id));
     setSelectedAssetMetadata(ids, { saved: true });
-    opts.notify?.("Creator Hub", `Saved ${ids.size} media item${ids.size === 1 ? "" : "s"} locally.`);
+    opts.notify?.("Content Hub", `Saved ${ids.size} media item${ids.size === 1 ? "" : "s"} locally.`);
     rerender();
   });
   body.querySelector("[data-ch-batch-edit]")?.addEventListener("click", () => {
     const ids = new Set(selectedLibraryItems(data, loadContentAssets()).filter((item) => item.kind === "asset").map((item) => item.id));
     setSelectedAssetMetadata(ids, { batchLabel: "batch edit ready" });
-    opts.notify?.("Creator Hub", `Marked ${ids.size} media item${ids.size === 1 ? "" : "s"} for batch edit.`);
+    opts.notify?.("Content Hub", `Marked ${ids.size} media item${ids.size === 1 ? "" : "s"} for batch edit.`);
     rerender();
   });
   body.querySelector("[data-ch-batch-ai]")?.addEventListener("click", () => {
     const ids = new Set(selectedLibraryItems(data, loadContentAssets()).filter((item) => item.kind === "asset").map((item) => item.id));
     setSelectedAssetMetadata(ids, { aiEditPlan: "Local AI edit plan drafted; external generation still gated." });
     exportLibraryItems(selectedLibraryItems(data, loadContentAssets()).filter((item) => item.kind === "asset" && ids.has(item.id)), "batch-ai-edit-plan");
-    opts.notify?.("Creator Hub", "Created a local batch AI edit plan. No external generation ran.");
+    opts.notify?.("Content Hub", "Created a local batch AI edit plan. No external generation ran.");
     rerender();
   });
   body.querySelector("[data-ch-edit-selected]")?.addEventListener("click", () => {
     const assetItem = selectedLibraryItems(data, loadContentAssets()).find((item) => item.kind === "asset" && item.asset.type === "image" && item.asset.url);
     if (!assetItem) {
-      opts.notify?.("Creator Hub", "Select an image with a live preview to open it in the local editor.");
+      opts.notify?.("Content Hub", "Select an image with a live preview to open it in the local editor.");
       return;
     }
     openAssetInMediaLabEditor(assetItem.asset, opts);
@@ -3014,7 +3025,7 @@ function wireLibraryActions(body, data, assets, shownAssets, shownPosts, esc, ro
     // rerender before notify(): notify() triggers a global store-change listener that can
     // fully remount this page and invalidate this closure's DOM references.
     rerender();
-    opts.notify?.("Creator Hub", `Deleted ${selected.length} local content item${selected.length === 1 ? "" : "s"} — Ctrl+Z to undo. No external post or file was touched.`);
+    opts.notify?.("Content Hub", `Deleted ${selected.length} local content item${selected.length === 1 ? "" : "s"} — Ctrl+Z to undo. No external post or file was touched.`);
   });
   const uploadInput = body.querySelector("[data-ch-upload-input]");
   body.querySelector("[data-ch-upload-local]")?.addEventListener("click", () => uploadInput?.click());
@@ -3042,22 +3053,18 @@ function wireLibraryActions(body, data, assets, shownAssets, shownPosts, esc, ro
   });
 }
 function wireCreatorActions(body, opts, root) {
-  body.querySelectorAll("[data-ch-action='draft']").forEach((btn) => btn.addEventListener("click", () => {
+  body.querySelectorAll("[data-ch-action]").forEach((btn) => btn.addEventListener("click", () => {
     const idea = activeIdeas().find((row) => row.id === btn.dataset.ideaId) || savedIdeas().find((row) => row.id === btn.dataset.ideaId) || activeIdeas()[Number(btn.dataset.ideaI || 0)];
     if (!idea) return;
-    const base = loadPublishState();
-    const state = { ...base, platforms: normalizePlatformIds(idea.platforms, base.platforms), brief: idea.angle || idea.title, caption: "" };
-    const draft = buildPublishDraft(state, { title: idea.title, copy: idea.angle, kind: "text", type: "text", hue: 155 }, "draft");
-    savePublishDrafts([draft, ...loadPublishDrafts()]);
-    opts.notify?.("Creator Hub", `Drafted "${idea.title}". Continue it from the Drafts tab.`);
-    chState.tab = "drafts";
+    const action = btn.dataset.chAction === "approve-draft" ? "Draft prep reviewed" : "Draft prep started";
+    opts.notify?.("Content Hub", `${action} for ${idea.title}. Safe preparation can continue automatically; no live post was sent.`);
     if (root) renderContentHub(root, opts);
   }));
   body.querySelectorAll("[data-ch-idea-save]").forEach((btn) => btn.addEventListener("click", () => {
     const idea = activeIdeas().find((row) => row.id === btn.dataset.chIdeaSave);
     if (!idea) return;
     saveIdeaForLater(idea);
-    opts.notify?.("Creator Hub", `Saved "${idea.title}" so tomorrow's refresh won't erase it.`);
+    opts.notify?.("Content Hub", `Saved "${idea.title}" so tomorrow's refresh won't erase it.`);
     if (root) renderContentHub(root, opts);
   }));
   body.querySelector("[data-ch-add-idea]")?.addEventListener("click", () => {
@@ -3065,18 +3072,139 @@ function wireCreatorActions(body, opts, root) {
     const angle = body.querySelector("[data-ch-custom-angle]")?.value || "";
     const idea = addCustomDailyIdea({ title, angle });
     if (!idea) {
-      opts.notify?.("Creator Hub", "Add a short idea title first.");
+      opts.notify?.("Content Hub", "Add a short idea title first.");
       return;
     }
-    opts.notify?.("Creator Hub", `Added "${idea.title}" to today's ideas. It clears tomorrow unless saved.`);
+    opts.notify?.("Content Hub", `Added "${idea.title}" to today's ideas. It clears tomorrow unless saved.`);
     if (root) renderContentHub(root, opts);
   });
   body.querySelector("[data-ch-refresh-ideas]")?.addEventListener("click", () => {
     refreshDailyIdeas();
-    opts.notify?.("Creator Hub", "Refreshed today's disposable idea batch.");
+    opts.notify?.("Content Hub", "Refreshed today's disposable idea batch.");
     if (root) renderContentHub(root, opts);
   });
 }
+function renderOverview(body, data, esc, root, opts) {
+  const a = analyze(data.posts);
+  const maxP = Math.max(1, ...a.byPlatform.map((p) => p.reach));
+  body.innerHTML = `
+    <div class="ch-kpis">
+      ${kpi("Total reach", K(a.totals.reach), `${K(a.totals.impressions)} impressions`)}
+      ${kpi("Engagement", K(a.totals.engagement), `${a.totals.engagementRate}% rate`)}
+      ${kpi("Likes", K(a.totals.likes), `${K(a.totals.comments)} comments`)}
+      ${kpi("Video views", K(a.totals.views), "reels · shorts · video")}
+      ${kpi("Followers gained", "+" + K(a.totals.followers), "last 45 days", "good")}
+    </div>
+    <div class="ch-cols">
+      <div class="ch-card">
+        <div class="ch-card-h"><h3>Reach by platform</h3></div>
+        <div class="ch-bars">
+          ${a.byPlatform.map((p) => `<div class="ch-bar-row"><span class="ch-bar-lab"><i class="ch-dot" style="background:${p.color}"></i>${esc(p.name)}</span>
+            <span class="ch-bar-track"><span class="ch-bar-fill" style="width:${Math.round(100 * p.reach / maxP)}%;background:${p.color}"></span></span>
+            <b class="ch-bar-val">${K(p.reach)}</b></div>`).join("")}
+        </div>
+      </div>
+      <div class="ch-card">
+        <div class="ch-card-h"><h3>Content mix</h3></div>
+        <div class="ch-mix">
+          ${a.byType.map((t) => `<div class="ch-mix-row"><span>${esc(t.label)}</span><span class="ch-mix-bar"><span style="width:${Math.round(100 * t.count / a.totals.posts)}%"></span></span><b>${t.count}</b></div>`).join("")}
+        </div>
+      </div>
+    </div>
+    <div class="ch-card">
+      <div class="ch-card-h"><h3>Top posts</h3><span class="ch-src">by engagement</span></div>
+      <div class="ch-grid">${a.topPosts.map((p) => postCard(p, esc)).join("")}</div>
+    </div>`;
+  wirePostCards(body, data, esc, root, opts);
+}
+
+function renderPlatforms(body, data, esc, root, opts) {
+  const counts = {}; data.posts.forEach((p) => counts[p.platform] = (counts[p.platform] || 0) + 1);
+  const chips = [["all", "All", data.posts.length]].concat(PLATFORMS.filter((p) => counts[p.id]).map((p) => [p.id, p.name, counts[p.id]]));
+  if (!chips.find((c) => c[0] === chState.platform)) chState.platform = "all";
+  const rows = data.posts.filter((p) => chState.platform === "all" || p.platform === chState.platform);
+  const sub = chState.platform === "all" ? null : platStrip(rows, esc);
+  body.innerHTML = `
+    <div class="ch-chips" data-ch-plat>
+      ${chips.map(([id, l, n]) => `<button class="ch-chip ${chState.platform === id ? "is-on" : ""}" data-v="${id}">${id !== "all" ? `<i class="ch-dot" style="background:${plat(id).color}"></i>` : ""}${esc(l)} <em>${n}</em></button>`).join("")}
+    </div>
+    ${sub || ""}
+    <div class="ch-grid ch-grid-lg">${rows.map((p) => postCard(p, esc)).join("") || `<p class="empty-line">No posts on this platform.</p>`}</div>`;
+  body.querySelectorAll("[data-ch-plat] button").forEach((b) => b.onclick = () => { chState.platform = b.dataset.v; renderContentHub(root, opts); });
+  wirePostCards(body, data, esc, root, opts);
+}
+function platStrip(rows, esc) {
+  const pub = rows.filter((r) => r.status === "published");
+  const s = (f) => pub.reduce((a, x) => a + f(x.metrics), 0);
+  const p = plat(rows[0].platform);
+  return `<div class="ch-platstrip" style="--pc:${p.color}">
+    ${kpi("Reach", K(s((m) => m.reach)), p.handle)}
+    ${kpi("Likes", K(s((m) => m.likes)), "")}
+    ${kpi("Comments", K(s((m) => m.comments)), "")}
+    ${kpi("Shares", K(s((m) => m.shares)), "")}
+    ${kpi("Saves", K(s((m) => m.saves)), "")}
+    ${kpi("Followers", "+" + K(s((m) => m.followersGained)), "")}
+  </div>`;
+}
+
+function renderContentTypes(body, data, esc, root, opts) {
+  const groups = [["all", "All"], ["image", "Images"], ["carousel", "Carousels"], ["reel", "Reels"], ["short", "Shorts"], ["video", "Videos"], ["story", "Stories"], ["text", "Posts"], ["article", "Articles"]];
+  const counts = {}; data.posts.forEach((p) => counts[p.type] = (counts[p.type] || 0) + 1);
+  const avail = groups.filter(([id]) => id === "all" || counts[id]);
+  if (!avail.find((c) => c[0] === chState.ctype)) chState.ctype = "all";
+  const rows = data.posts.filter((p) => chState.ctype === "all" || p.type === chState.ctype);
+  body.innerHTML = `
+    <div class="ch-chips" data-ch-type>
+      ${avail.map(([id, l]) => `<button class="ch-chip ${chState.ctype === id ? "is-on" : ""}" data-v="${id}">${esc(l)} <em>${id === "all" ? data.posts.length : counts[id]}</em></button>`).join("")}
+    </div>
+    <div class="ch-grid ch-grid-lg">${rows.map((p) => postCard(p, esc)).join("")}</div>`;
+  body.querySelectorAll("[data-ch-type] button").forEach((b) => b.onclick = () => { chState.ctype = b.dataset.v; renderContentHub(root, opts); });
+  wirePostCards(body, data, esc, root, opts);
+}
+
+function renderEngagement(body, data, esc, root, opts) {
+  const tabs = [["likes", "Likes"], ["comments", "Comments"], ["reactions", "Reactions"], ["shares", "Shares & saves"]];
+  if (!tabs.find((t) => t[0] === chState.eng)) chState.eng = "likes";
+  const pub = data.posts.filter((p) => p.status === "published");
+  let inner = "";
+  if (chState.eng === "likes") {
+    const rows = pub.slice().sort((a, b) => b.metrics.likes - a.metrics.likes);
+    inner = `<div class="ch-table"><div class="ch-tr ch-th"><span>Post</span><span>Platform</span><span>${svgIc("heart")} Likes</span><span>Rate</span></div>
+      ${rows.map((p) => `<button class="ch-tr" data-ch-open="${p.id}"><span class="ch-tr-post"><i class="ch-tr-thumb" style="${thumb(p)}"></i>${esc(p.caption)}</span>
+        <span><i class="ch-dot" style="background:${plat(p.platform).color}"></i>${plat(p.platform).name}</span><span class="ch-num">${K(p.metrics.likes)}</span><span class="ch-num">${p.metrics.engagementRate}%</span></button>`).join("")}</div>`;
+  } else if (chState.eng === "comments") {
+    const stream = [];
+    pub.forEach((p) => p.comments.forEach((c) => stream.push({ ...c, post: p })));
+    stream.sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+    inner = `<div class="ch-comments">${stream.slice(0, 40).map((c) => `<div class="ch-comment ch-s-${c.sentiment}">
+      <span class="ch-c-av">${esc(c.user[0].toUpperCase())}</span>
+      <span class="ch-c-body"><b>@${esc(c.user)} <span class="ch-c-sent">${c.sentiment === "pos" ? "positive" : c.sentiment === "neg" ? "critical" : "neutral"}</span></b>
+        <span class="ch-c-text">${esc(c.text)}</span>
+        <span class="ch-c-meta"><i class="ch-dot" style="background:${plat(c.post.platform).color}"></i>${plat(c.post.platform).name} · ${esc(c.post.caption.slice(0, 28))}… · ${ago(c.at)} · ${svgIc("heart")} ${c.likes}</span></span></div>`).join("")}</div>`;
+  } else if (chState.eng === "reactions") {
+    const R = { like: 0, love: 0, haha: 0, wow: 0, sad: 0, angry: 0 };
+    pub.forEach((p) => { if (p.metrics.reactions) for (const k in R) R[k] += p.metrics.reactions[k]; });
+    const total = Object.values(R).reduce((a, b) => a + b, 0) || 1;
+    const EMO = { like: "👍", love: "❤️", haha: "😂", wow: "😮", sad: "😢", angry: "😠" };
+    inner = `<div class="ch-react">${Object.entries(R).map(([k, v]) => `<div class="ch-react-row"><span class="ch-react-emo">${EMO[k]}</span><span class="ch-react-lab">${k}</span>
+      <span class="ch-bar-track"><span class="ch-bar-fill" style="width:${Math.round(100 * v / total)}%"></span></span><b>${K(v)}</b></div>`).join("")}
+      <p class="ch-src">Reactions from Facebook & LinkedIn posts. Others report likes only.</p></div>`;
+  } else {
+    const rows = pub.slice().sort((a, b) => (b.metrics.shares + b.metrics.saves) - (a.metrics.shares + a.metrics.saves));
+    inner = `<div class="ch-table"><div class="ch-tr ch-th"><span>Post</span><span>Platform</span><span>${svgIc("share")} Shares</span><span>${svgIc("save")} Saves</span></div>
+      ${rows.map((p) => `<button class="ch-tr" data-ch-open="${p.id}"><span class="ch-tr-post"><i class="ch-tr-thumb" style="${thumb(p)}"></i>${esc(p.caption)}</span>
+        <span><i class="ch-dot" style="background:${plat(p.platform).color}"></i>${plat(p.platform).name}</span><span class="ch-num">${K(p.metrics.shares)}</span><span class="ch-num">${K(p.metrics.saves)}</span></button>`).join("")}</div>`;
+  }
+  body.innerHTML = `<div class="ch-chips" data-ch-eng>${tabs.map(([id, l]) => `<button class="ch-chip ${chState.eng === id ? "is-on" : ""}" data-v="${id}">${l}</button>`).join("")}</div>${inner}`;
+  body.querySelectorAll("[data-ch-eng] button").forEach((b) => b.onclick = () => { chState.eng = b.dataset.v; renderContentHub(root, opts); });
+  wirePostCards(body, data, esc, root, opts);
+}
+
+function renderScheduled(body, data, esc) {
+  const rows = data.posts.filter((p) => p.status === "scheduled" && !isRemoved(`schedule:${p.id}`)).sort((a, b) => Date.parse(a.publishedAt) - Date.parse(b.publishedAt));
+  body.innerHTML = rows.length ? `<div class="ch-grid ch-grid-lg">${rows.map((p) => postCard(p, esc)).join("")}</div>` : `<p class="empty-line">Nothing scheduled. Create a post in Publish and schedule it here.</p>`;
+}
+
 function postCard(p, esc, options = {}) {
   const P = plat(p.platform);
   const key = selectionKey("post", p.id);
@@ -3172,6 +3300,8 @@ const analyticsConnectorState = {
   loading: false,
   connectors: [],
   error: "",
+  /* per-platform sync outcome: { state: "synced"|"error", error, syncedAt } */
+  sync: {},
 };
 function analyticsAuthHeaders(extra = {}) {
   const token = typeof session?.token === "function" ? session.token() : "";
@@ -3209,6 +3339,7 @@ async function syncLiveAnalyticsAccount(account, accounts) {
   account.officialConnectState = "connected";
   account.lastConnectAt = response.analytics?.syncedAt || new Date().toISOString();
   saveSocialAccounts(accounts);
+  analyticsConnectorState.sync[account.id] = { state: "synced", error: "", syncedAt: account.lastConnectAt };
   return account.analytics;
 }
 async function refreshLiveAnalytics(el, accounts, opts, { force = false, platform = "" } = {}) {
@@ -3224,16 +3355,40 @@ async function refreshLiveAnalytics(el, accounts, opts, { force = false, platfor
       analyticsConnectorState.loaded = true;
     }
     const ready = analyticsConnectorState.connectors.filter((connector) => connector.configured && (!platform || connector.id === platform));
+    const failed = [];
+    let syncedCount = 0;
     for (const connector of ready) {
       const account = accounts.find((row) => row.id === connector.id);
-      if (!account || (!force && liveAnalyticsIsFresh(account))) continue;
-      await syncLiveAnalyticsAccount(account, accounts);
+      if (!account) continue;
+      if (!force && liveAnalyticsIsFresh(account)) {
+        analyticsConnectorState.sync[connector.id] = { state: "synced", error: "", syncedAt: account.analytics?.syncedAt || "" };
+        continue;
+      }
+      try {
+        await syncLiveAnalyticsAccount(account, accounts);
+        syncedCount += 1;
+      } catch (error) {
+        /* One channel failing must never hide another channel's live data:
+           record the server's exact failure per platform and keep going. */
+        analyticsConnectorState.sync[connector.id] = {
+          state: "error",
+          error: error?.message || "The platform analytics sync failed.",
+          syncedAt: account.analytics?.syncedAt || "",
+        };
+        failed.push(connector.name || connector.id);
+      }
     }
     if (force && platform && !ready.length) {
       const connector = connectorStatus(platform);
       throw new Error(connector?.reason || "Connect this channel in Settings before syncing live data.");
     }
-    if (force) analyticsNotice = ready.length ? "Live platform data synced." : "No live social connector is configured yet.";
+    if (force) {
+      analyticsNotice = !ready.length
+        ? "No live social connector is configured yet."
+        : failed.length
+          ? `${syncedCount ? `${syncedCount} channel${syncedCount === 1 ? "" : "s"} synced. ` : ""}${failed.join(", ")} did not sync — the exact platform error is shown on each channel below.`
+          : "Live platform data synced.";
+    }
   } catch (error) {
     const message = error?.message || "Live analytics could not be reached.";
     analyticsConnectorState.error = force ? message : "";
@@ -3331,9 +3486,13 @@ function accountAnalyticsRow(row, esc) {
   const live = account.connectMode === "live-api" && !!feed;
   const canSync = !!connector?.configured;
   const oauthReady = !!connector?.oauthConfigured;
-  const sourceState = canSync ? "Ready to sync" : oauthReady ? "Authorize account" : saved ? "Profile saved, analytics not connected" : account.handle ? "Handle saved, analytics not connected" : "Needs social connection";
+  const syncOutcome = analyticsConnectorState.sync[account.id] || null;
+  const syncFailed = syncOutcome?.state === "error";
+  const sourceState = canSync
+    ? (syncFailed ? "Live sync failed" : "Ready to sync")
+    : oauthReady ? "Authorize account" : saved ? "Profile saved, analytics not connected" : account.handle ? "Handle saved, analytics not connected" : "Needs social connection";
   const sourceCopy = canSync
-    ? "Official read-only analytics are ready."
+    ? (syncFailed ? syncOutcome.error : "Official read-only analytics are ready.")
     : oauthReady
       ? "OAuth app credentials exist; finish account authorization before stats appear."
       : "Connect the official platform account or import a platform export. Phantom will not count uploaded files as social performance.";
@@ -3341,13 +3500,13 @@ function accountAnalyticsRow(row, esc) {
     ? `<button class="btn btn-primary" type="button" data-an-sync="${account.id}">${analyticsConnectorState.loading ? "Syncing…" : live ? "Sync now" : "Start live sync"}</button>`
     : oauthReady
       ? `<button class="btn btn-primary" type="button" data-an-oauth="${account.id}">Connect account</button>`
-      : `<button class="btn btn-ghost" type="button" data-open-ws="settingsmedia">Set up API</button>`;
+      : `<button class="btn btn-ghost" type="button" data-open-ws="settings" data-open-settings-tab="media">Set up API</button>`;
   return `<article class="an-channel-row ${feed ? "is-live" : "is-missing"}">
     <div class="an-channel-id"><span class="ch-dot" style="background:${account.color}"></span><span><b>${esc(account.name)}</b><i>${esc(account.handle || account.loginIdentity || "profile saved")}</i></span></div>
     ${feed ? `<div class="an-channel-metrics">
       <span><b>${K(feed.reach)}</b>reach</span><span><b>${K(feed.impressions)}</b>views</span><span><b>${K(feed.engagement)}</b>engagement</span><span><b>${K(feed.followers)}</b>followers</span>
-    </div><div class="an-channel-source"><b>${live ? "Live · " : "Report · "}${esc(feed.source)}</b><i>${feed.syncedAt ? esc(ago(feed.syncedAt)) : "current"}</i></div>`
-    : `<div class="an-channel-empty"><b>${esc(sourceState)}</b><span>${esc(sourceCopy)}</span></div>`}
+    </div><div class="an-channel-source"><b>${live ? "Live · " : "Report · "}${esc(feed.source)}</b><i>${feed.syncedAt ? `Synced ${esc(ago(feed.syncedAt))}` : "current"}</i>${syncFailed ? `<em class="an-sync-error">${esc(syncOutcome.error)}</em>` : ""}</div>`
+    : `<div class="an-channel-empty${syncFailed ? " is-sync-error" : ""}"><b>${esc(sourceState)}</b><span>${esc(sourceCopy)}</span></div>`}
     <div class="an-channel-actions">
       ${primaryAction}
       <details class="an-import-backup"><summary aria-label="More data options">More</summary><small>Manual fallback · CSV · TSV · JSON</small><label class="btn btn-ghost">${feed && !live ? "Replace report" : "Import platform report"}<input type="file" accept=".csv,.tsv,.json,text/csv,text/tab-separated-values,application/json" data-an-import="${account.id}" hidden></label></details>
@@ -3434,8 +3593,10 @@ export function renderAnalytics(el, opts = {}, renderOptions = {}) {
           <h3>${hasLiveMetrics ? (liveApiRows.length ? "Official social analytics are reporting." : "Imported platform reports are loaded.") : "Connect your social accounts to start analytics."}</h3>
           <p>${hasLiveMetrics ? "This page only shows platform analytics from official API syncs or imported exports. Local media files and drafts stay in Media Lab/Content Hub." : "Connect YouTube, Instagram, Facebook, TikTok, X, LinkedIn, or Pinterest for real platform metrics. If a platform is not connected yet, import its official report as a temporary fallback."}</p>
         </div>
+      </section>
+      <section class="an-toolbar" aria-label="Live analytics actions">
         <div class="an-hero-actions">
-          ${configuredCount ? `<button class="btn btn-primary" type="button" data-an-sync-all>${analyticsConnectorState.loading ? "Syncing…" : "Sync live data"}</button>` : `<button class="btn btn-ghost" type="button" data-open-ws="settingsmedia">Connect social APIs</button>`}
+          ${configuredCount ? `<button class="btn btn-primary" type="button" data-an-sync-all>${analyticsConnectorState.loading ? "Syncing…" : "Sync live data"}</button>` : `<button class="btn btn-ghost" type="button" data-open-ws="settings" data-open-settings-tab="media">Connect social APIs</button>`}
           <span class="an-src">${svgIc("up")} ${liveApiRows.length}/${displayAccounts.length} live social · ${reportRows.length} imported report${reportRows.length === 1 ? "" : "s"} · ${configuredCount}/${displayAccounts.length} API ready</span>
         </div>
       </section>

@@ -1,29 +1,47 @@
-import { currentTenantId, friendlyBackendError, session } from "./store.js?v=phantom-live-20260717-2";
+import { currentTenantId, session } from "./store.js?v=phantom-live-20260714-006";
 
 let activeConfiguration = null;
 let activeEntitlements = null;
 let activeVersions = [];
 
 const clone = (value) => JSON.parse(JSON.stringify(value));
+const CANONICAL_MODULES = {
+  intelligence: {
+    label: "Competitor Intel",
+    roles: ["owner", "admin", "manager", "member", "client"],
+    forceEnabled: true,
+  },
+};
+
+function normalizedModuleState(module, moduleId) {
+  const canonical = CANONICAL_MODULES[moduleId];
+  if (!canonical) return module;
+  const roles = Array.from(new Set([...(module?.roles || []), ...canonical.roles]));
+  return {
+    ...(module || { id: moduleId, order: undefined, accessMode: "entire_organization" }),
+    label: canonical.label,
+    enabled: canonical.forceEnabled ? true : module?.enabled !== false,
+    roles,
+  };
+}
+
 const PLATFORM_MODULES = [
   ["dashboard", "Dashboard", true, ["owner", "admin", "manager", "member", "client"]],
   ["crm", "Clients", true, ["owner", "admin", "manager", "member"]],
   ["media", "Media Lab", true, ["owner", "admin", "manager", "member"]],
   ["sites", "Websites", true, ["owner", "admin", "manager", "member"]],
   ["money", "Accounting", true, ["owner", "admin", "manager"]],
-  ["planner", "Planner", true, ["owner", "admin", "manager", "member"]],
   ["phantomplay", "PhantomPlay", true, ["owner", "admin", "manager", "member", "client"]],
-  ["phantomstore", "PhantomStore", false, ["owner", "admin", "manager", "member", "client"]],
+  ["intelligence", "Competitor Intelligence", true, ["owner", "admin", "manager"]],
+  ["analytics", "Analytics", true, ["owner", "admin", "manager"]],
   ["memory", "Memory", true, ["owner", "admin", "manager"]],
   ["automation", "Automations", true, ["owner", "admin", "manager"]],
   ["approvals", "Approvals", false, ["owner", "admin", "manager", "member"]],
   ["workers", "Workforce", true, ["owner", "admin", "manager"]],
-  ["intelligence", "Competitor Intelligence", true, ["owner", "admin", "manager"]],
-  ["analytics", "Analytics", true, ["owner", "admin", "manager"]],
   ["vacation", "Away Mode", true, ["owner", "admin"]],
   ["customize", "Workspace Studio", false, ["owner", "admin"]],
-  ["developer", "Developer", false, ["owner"]],
   ["settings", "Settings", false, ["owner", "admin", "manager", "member", "client"]],
+  ["developer", "Developer", false, ["owner"]],
 ];
 const DEFAULT_ENTITLEMENTS = { coBranded: false, whiteLabel: false, internalPhantomForce: true, localFallback: true };
 const authHeaders = (json = false) => {
@@ -35,8 +53,9 @@ async function api(path, options = {}) {
   const response = await fetch(path, { ...options, headers: { ...authHeaders(Boolean(options.body)), ...(options.headers || {}) } });
   const payload = await response.json().catch(() => null);
   if (!response.ok) {
-    const formMessage = payload?.error?.formErrors?.join?.(" ") || payload?.error?.fieldErrors && Object.values(payload.error.fieldErrors).flat().join(" ");
-    const message = formMessage || friendlyBackendError(response.status, typeof payload?.error === "string" ? payload.error : "", { authMessage: "Sign in to load Workspace Studio." });
+    const message = typeof payload?.error === "string"
+      ? payload.error
+      : payload?.error?.formErrors?.join?.(" ") || payload?.error?.fieldErrors && Object.values(payload.error.fieldErrors).flat().join(" ") || `Request failed (${response.status}).`;
     throw new Error(message);
   }
   return payload;
@@ -84,60 +103,10 @@ function defaultConfiguration(tenantId = currentTenantId()) {
     forms: [],
     workflows: [],
     extensions: [],
-    policies: {
-      requireApprovalForOutbound: true,
-      requireApprovalForDestructive: true,
-      workspaceProfile: "business",
-      brainStorageMode: internal ? "optional_local" : "web_only",
-      localBrainInstall: "never_silent",
-      apiCredentialPolicy: "tenant_owned_only",
-      subscriptionPolicy: "tenant_owned_only",
-      historyPolicy: "workspace_scoped",
-    },
+    policies: { requireApprovalForOutbound: true, requireApprovalForDestructive: true },
     updatedAt: new Date().toISOString(),
     updatedBy: "local-fallback",
     localFallback: true,
-  };
-}
-
-const REQUIRED_MODULE_IDS = new Set(["dashboard", "phantomstore", "approvals", "customize", "settings"]);
-
-export function normalizeCustomizationConfiguration(configuration = null) {
-  const source = configuration && typeof configuration === "object" ? configuration : {};
-  const baseline = defaultConfiguration(source.tenantId || currentTenantId());
-  const existingModules = Array.isArray(source.modules) ? source.modules : [];
-  const existingById = new Map(existingModules.map((module) => [module.id, module]));
-  const modules = baseline.modules.map((module) => {
-    const existing = existingById.get(module.id);
-    if (!existing) return module;
-    const roles = Array.isArray(existing.roles) && existing.roles.length ? existing.roles : module.roles;
-    return {
-      ...module,
-      ...existing,
-      id: module.id,
-      label: String(existing.label || module.label).slice(0, 40) || module.label,
-      enabled: REQUIRED_MODULE_IDS.has(module.id) || existing.enabled === true,
-      order: Number.isInteger(existing.order) ? existing.order : module.order,
-      roles,
-      customerConfigurable: module.customerConfigurable,
-    };
-  });
-  return {
-    ...baseline,
-    ...source,
-    brand: { ...baseline.brand, ...(source.brand || {}) },
-    theme: { ...baseline.theme, ...(source.theme || {}) },
-    terminology: { ...baseline.terminology, ...(source.terminology || {}) },
-    navigation: { ...baseline.navigation, ...(source.navigation || {}) },
-    assistant: { ...baseline.assistant, ...(source.assistant || {}) },
-    policies: { ...baseline.policies, ...(source.policies || {}) },
-    dashboards: Array.isArray(source.dashboards) ? source.dashboards : baseline.dashboards,
-    customObjects: Array.isArray(source.customObjects) ? source.customObjects : baseline.customObjects,
-    forms: Array.isArray(source.forms) ? source.forms : baseline.forms,
-    workflows: Array.isArray(source.workflows) ? source.workflows : baseline.workflows,
-    extensions: Array.isArray(source.extensions) ? source.extensions : baseline.extensions,
-    modules,
-    localFallback: source.localFallback === true,
   };
 }
 
@@ -145,9 +114,41 @@ export function currentCustomization() {
   return activeConfiguration;
 }
 
+function currentActorIds() {
+  const raw = session.get?.() || {};
+  return [
+    raw.userId,
+    raw.id,
+    raw.email,
+    raw.authSessionId,
+  ].filter(Boolean).map((value) => String(value).trim());
+}
+
+function roleForCustomization(role = "owner") {
+  const raw = session.get?.() || {};
+  return raw.orgRole || role;
+}
+
+export function canAccessConfiguredModule(moduleId, role = "owner") {
+  if (!activeConfiguration) return true;
+  const module = normalizedModuleState(activeConfiguration.modules.find((item) => item.id === moduleId), moduleId);
+  if (!module) return true;
+  if (!module.enabled) return false;
+  const effectiveRole = roleForCustomization(role);
+  if (!module.roles.includes(effectiveRole)) return false;
+  if (module.id !== "phantomplay") return true;
+  if (module.accessMode === "entire_organization") return true;
+  if (module.accessMode === "owner_only") return ["owner", "admin"].includes(effectiveRole) || session.get?.()?.canManageAccess === true;
+  if (module.accessMode === "selected_members") {
+    if (["owner", "admin"].includes(effectiveRole) || session.get?.()?.canManageAccess === true) return true;
+    const actorIds = currentActorIds();
+    return actorIds.some((id) => module.allowedMemberIds?.includes(id));
+  }
+  return false;
+}
+
 export function applyOrganizationCustomization(configuration = activeConfiguration) {
   if (!configuration) return;
-  configuration = normalizeCustomizationConfiguration(configuration);
   activeConfiguration = configuration;
   const root = document.documentElement;
   root.style.setProperty("--neon", configuration.theme.primary);
@@ -167,38 +168,29 @@ export function applyOrganizationCustomization(configuration = activeConfigurati
   if (configuration.brand.logoUrl) document.querySelectorAll(".brand-ghost").forEach((image) => { image.src = configuration.brand.logoUrl; });
 }
 
-function customizeNavigationForConfiguration(baseItems, configuration, role = "owner") {
-  if (!configuration) return baseItems;
-  configuration = normalizeCustomizationConfiguration(configuration);
-  const states = new Map(configuration.modules.map((module) => [module.id, module]));
+export function customizeNavigation(baseItems, role = "owner") {
+  if (!activeConfiguration) return baseItems.filter((item) => item.optionalModule !== true);
+  const states = new Map(activeConfiguration.modules.map((module) => [module.id, module]));
   return baseItems
     .filter((item) => {
-      const state = states.get(item.id);
+      const state = normalizedModuleState(states.get(item.id), item.id);
       if (!state) return true;
-      return state.enabled && state.roles.includes(role);
+      return canAccessConfiguredModule(item.id, role);
     })
-    .map((item, index) => {
-      const state = states.get(item.id);
-      const customizationOrder = item.bottom ? index : (state?.order ?? index);
-      return state ? { ...item, label: state.label, baseOrder: index, customizationOrder } : { ...item, baseOrder: index, customizationOrder };
+    .map((item) => {
+      const state = normalizedModuleState(states.get(item.id), item.id);
+      /* Dashboard is the platform home. Older org customizations may still
+         carry "Business HQ"; keep the new product language stable here. */
+      if (item.id === "dashboard") return { ...item, label: item.label, customizationOrder: state?.order };
+      return state ? { ...item, label: state.label, customizationOrder: state.order } : item;
     })
-    .sort((left, right) => (left.bottom ? 1 : 0) - (right.bottom ? 1 : 0)
-      || (left.customizationOrder ?? 999) - (right.customizationOrder ?? 999)
-      || (left.baseOrder ?? 999) - (right.baseOrder ?? 999));
-}
-
-export function customizeNavigation(baseItems, role = "owner") {
-  return customizeNavigationForConfiguration(baseItems, activeConfiguration, role);
-}
-
-export function previewCustomizedNavigation(baseItems, configuration, role = "owner") {
-  return customizeNavigationForConfiguration(baseItems, configuration, role);
+    .sort((left, right) => (left.customizationOrder ?? 999) - (right.customizationOrder ?? 999));
 }
 
 export async function loadOrganizationCustomization({ onApplied } = {}) {
   try {
     const payload = await api(`/phantom-ai/customization/config?${tenantQuery()}`);
-    activeConfiguration = normalizeCustomizationConfiguration(payload.configuration);
+    activeConfiguration = payload.configuration;
     activeEntitlements = payload.entitlements;
     applyOrganizationCustomization(activeConfiguration);
     if (typeof onApplied === "function") onApplied(activeConfiguration);
@@ -235,18 +227,13 @@ function configurationPatch(configuration) {
 }
 
 function issueMarkup(issues = []) {
-  if (!issues.length) return `<p class="cust-ok">Ready to publish. Preview is optional.</p>`;
+  if (!issues.length) return `<p class="cust-ok">Ready to preview. No validation problems found.</p>`;
   return `<div class="cust-issues">${issues.map((issue) => `<p class="is-${esc(issue.severity)}"><b>${esc(issue.severity)}</b>${esc(issue.message)}</p>`).join("")}</div>`;
-}
-
-function invalidatePreview(state) {
-  state.preview = null;
-  state.pendingPatch = null;
 }
 
 function moduleCards(draft) {
   return draft.modules.filter((module) => module.id !== "developer").sort((a, b) => a.order - b.order).map((module) => {
-    const protectedModule = ["dashboard", "phantomstore", "approvals", "customize", "settings"].includes(module.id);
+    const protectedModule = ["dashboard", "approvals", "customize", "settings"].includes(module.id);
     return `<article class="cust-module" data-cust-module="${esc(module.id)}">
       <span class="cust-module-grip">⋮⋮</span>
       <div><b>${esc(module.label)}</b><i>${esc(module.id)}${protectedModule ? " · required" : ""}</i></div>
@@ -271,7 +258,7 @@ function renderStudio(el, state, opts) {
   const whiteLabelAllowed = activeEntitlements?.whiteLabel;
   el.innerHTML = `<div class="customization-studio">
     <section class="cust-hero">
-      <div><p class="cust-kicker">WORKSPACE STUDIO</p><h2>Make PhantomForce fit this business.</h2><p>Change the workspace above the security boundary. Preview if useful, publish directly when ready, and restore any earlier version.</p></div>
+      <div><p class="cust-kicker">WORKSPACE STUDIO</p><h2>Make PhantomForce fit this business.</h2><p>Change the workspace above the security boundary. Preview first, publish when it looks right, and restore any earlier version.</p></div>
       <div class="cust-scope"><span>Editing</span><b>${esc(draft.brand.organizationName)}</b><i>Version ${draft.version} · Powered by PhantomForce</i></div>
     </section>
     ${draft.localFallback ? `<div class="cust-message">Workspace Studio is using local defaults while the backend reconnects. Modules are available now; publishing waits for the server.</div>` : ""}
@@ -299,7 +286,7 @@ function renderStudio(el, state, opts) {
       </section>
       <section class="cust-panel"><div class="cust-panel-head"><div><p class="cust-kicker">VERSION HISTORY</p><h3>Every publish is reversible.</h3></div></div><div data-cust-versions>${versionsMarkup()}</div></section>
     </div>
-    <section class="cust-publish"><div><p class="cust-kicker">CHANGE REVIEW</p><h3>${preview ? `Preview version ${preview.proposedVersion}` : "Ready to publish"}</h3>${issueMarkup(preview?.issues)}</div><div class="cust-publish-actions"><button class="cust-secondary" type="button" data-cust-preview ${busy ? "disabled" : ""}>Preview changes</button><button class="cust-primary" type="button" data-cust-publish ${busy || draft.localFallback ? "disabled" : ""}>Publish workspace</button></div></section>
+    <section class="cust-publish"><div><p class="cust-kicker">CHANGE REVIEW</p><h3>${preview ? `Preview version ${preview.proposedVersion}` : "Preview before publishing"}</h3>${issueMarkup(preview?.issues)}</div><div class="cust-publish-actions"><button class="cust-secondary" type="button" data-cust-preview ${busy ? "disabled" : ""}>Preview changes</button><button class="cust-primary" type="button" data-cust-publish ${!preview?.valid || busy ? "disabled" : ""}>Publish workspace</button></div></section>
   </div>`;
   bindStudio(el, state, opts);
 }
@@ -330,12 +317,12 @@ function bindStudio(el, state, opts) {
   el.querySelectorAll("[data-cust-field]").forEach((input) => {
     input.onchange = () => {
       setPath(state.draft, input.dataset.custField, input.value);
-      invalidatePreview(state);
+      state.preview = null;
       if (input.type === "color") applyOrganizationCustomization(state.draft);
     };
   });
-  el.querySelectorAll("[data-cust-module-label]").forEach((input) => { input.onchange = () => { const module = state.draft.modules.find((item) => item.id === input.dataset.custModuleLabel); if (module) module.label = input.value; invalidatePreview(state); }; });
-  el.querySelectorAll("[data-cust-module-enabled]").forEach((input) => { input.onchange = () => { const module = state.draft.modules.find((item) => item.id === input.dataset.custModuleEnabled); if (module) module.enabled = input.checked; invalidatePreview(state); }; });
+  el.querySelectorAll("[data-cust-module-label]").forEach((input) => { input.onchange = () => { const module = state.draft.modules.find((item) => item.id === input.dataset.custModuleLabel); if (module) module.label = input.value; state.preview = null; }; });
+  el.querySelectorAll("[data-cust-module-enabled]").forEach((input) => { input.onchange = () => { const module = state.draft.modules.find((item) => item.id === input.dataset.custModuleEnabled); if (module) module.enabled = input.checked; state.preview = null; }; });
   el.querySelector("[data-cust-object-form]")?.addEventListener("submit", (event) => {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
@@ -344,10 +331,10 @@ function bindStudio(el, state, opts) {
     const id = plural.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 40);
     if (!id) return;
     state.draft.customObjects.push({ id, singularLabel: singular, pluralLabel: plural, icon: "db", fields: parseObjectFields(data.get("fields")), rolePermissions: { owner: ["view", "create", "edit", "delete", "export"], admin: ["view", "create", "edit"] } });
-    invalidatePreview(state);
+    state.preview = null;
     renderStudio(el, state, opts);
   });
-  el.querySelectorAll("[data-cust-remove-object]").forEach((button) => { button.onclick = () => { state.draft.customObjects = state.draft.customObjects.filter((object) => object.id !== button.dataset.custRemoveObject); invalidatePreview(state); renderStudio(el, state, opts); }; });
+  el.querySelectorAll("[data-cust-remove-object]").forEach((button) => { button.onclick = () => { state.draft.customObjects = state.draft.customObjects.filter((object) => object.id !== button.dataset.custRemoveObject); state.preview = null; renderStudio(el, state, opts); }; });
   const runPreview = async (patch = configurationPatch(state.draft)) => {
     state.busy = true; state.message = "Checking the workspace change…"; renderStudio(el, state, opts);
     try {
@@ -358,10 +345,10 @@ function bindStudio(el, state, opts) {
   };
   el.querySelector("[data-cust-preview]")?.addEventListener("click", () => runPreview());
   el.querySelector("[data-cust-publish]")?.addEventListener("click", async () => {
-    const patch = state.pendingPatch || configurationPatch(state.draft);
-    state.busy = true; state.message = state.preview?.valid ? "Publishing this organization version…" : "Publishing directly. Phantom will validate it on the way in…"; renderStudio(el, state, opts);
+    if (!state.preview?.valid) return;
+    state.busy = true; state.message = "Publishing this organization version…"; renderStudio(el, state, opts);
     try {
-      const payload = await api("/phantom-ai/customization/publish", { method: "POST", body: JSON.stringify({ tenant_id: currentTenantId(), patch, expected_version: activeConfiguration.version, summary: "Published from Workspace Studio" }) });
+      const payload = await api("/phantom-ai/customization/publish", { method: "POST", body: JSON.stringify({ tenant_id: currentTenantId(), patch: state.pendingPatch || configurationPatch(state.draft), expected_version: activeConfiguration.version, summary: "Published from Workspace Studio" }) });
       activeConfiguration = payload.result.configuration; state.draft = clone(activeConfiguration); state.preview = null; state.pendingPatch = null; state.message = `Version ${activeConfiguration.version} is live for this organization.`; applyOrganizationCustomization(activeConfiguration); await fetchVersions(); if (typeof opts.onApplied === "function") opts.onApplied(activeConfiguration);
     } catch (error) { state.message = error.message; }
     state.busy = false; renderStudio(el, state, opts);
@@ -373,11 +360,11 @@ function bindStudio(el, state, opts) {
     catch (error) { state.message = error.message; }
     state.busy = false; renderStudio(el, state, opts);
   });
-  el.querySelectorAll("[data-cust-rollback]").forEach((button) => { button.onclick = async () => { state.busy = true; state.message = `Restoring version ${button.dataset.custRollback}…`; renderStudio(el, state, opts); try { const payload = await api("/phantom-ai/customization/rollback", { method: "POST", body: JSON.stringify({ tenant_id: currentTenantId(), version: Number(button.dataset.custRollback) }) }); activeConfiguration = payload.result.configuration; state.draft = clone(activeConfiguration); invalidatePreview(state); applyOrganizationCustomization(activeConfiguration); await fetchVersions(); state.message = `Restored as version ${activeConfiguration.version}.`; if (typeof opts.onApplied === "function") opts.onApplied(activeConfiguration); } catch (error) { state.message = error.message; } state.busy = false; renderStudio(el, state, opts); }; });
+  el.querySelectorAll("[data-cust-rollback]").forEach((button) => { button.onclick = async () => { state.busy = true; state.message = `Restoring version ${button.dataset.custRollback}…`; renderStudio(el, state, opts); try { const payload = await api("/phantom-ai/customization/rollback", { method: "POST", body: JSON.stringify({ tenant_id: currentTenantId(), version: Number(button.dataset.custRollback) }) }); activeConfiguration = payload.result.configuration; state.draft = clone(activeConfiguration); state.preview = null; applyOrganizationCustomization(activeConfiguration); await fetchVersions(); state.message = `Restored as version ${activeConfiguration.version}.`; if (typeof opts.onApplied === "function") opts.onApplied(activeConfiguration); } catch (error) { state.message = error.message; } state.busy = false; renderStudio(el, state, opts); }; });
   el.querySelector("[data-cust-defaults]")?.addEventListener("click", async () => {
     if (!window.confirm("Restore the PhantomForce workspace layout? Organization records and files will stay intact.")) return;
     state.busy = true; state.message = "Restoring safe defaults…"; renderStudio(el, state, opts);
-    try { const payload = await api("/phantom-ai/customization/reset", { method: "POST", body: JSON.stringify({ tenant_id: currentTenantId() }) }); activeConfiguration = payload.result.configuration; state.draft = clone(activeConfiguration); invalidatePreview(state); applyOrganizationCustomization(activeConfiguration); await fetchVersions(); state.message = "PhantomForce defaults restored. Organization data was not deleted."; if (typeof opts.onApplied === "function") opts.onApplied(activeConfiguration); } catch (error) { state.message = error.message; }
+    try { const payload = await api("/phantom-ai/customization/reset", { method: "POST", body: JSON.stringify({ tenant_id: currentTenantId() }) }); activeConfiguration = payload.result.configuration; state.draft = clone(activeConfiguration); state.preview = null; applyOrganizationCustomization(activeConfiguration); await fetchVersions(); state.message = "PhantomForce defaults restored. Organization data was not deleted."; if (typeof opts.onApplied === "function") opts.onApplied(activeConfiguration); } catch (error) { state.message = error.message; }
     state.busy = false; renderStudio(el, state, opts);
   });
 }

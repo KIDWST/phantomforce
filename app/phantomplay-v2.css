@@ -114,49 +114,7 @@
 .pp2-cats button{border:1px solid var(--pp2-line);border-radius:999px;background:transparent;color:var(--pp2-mut);padding:6px 14px;font:700 11px ui-monospace;cursor:pointer}
 .pp2-cats button.is-active{background:#0f2c1b;color:var(--pp2-green);border-color:#2cff9b55}
 
-/* developers */
-.pp2-dev-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;margin-bottom:18px}
-.pp2-dev-card{border:1px solid var(--pp2-line);border-radius:14px;background:linear-gradient(145deg,#081109,#04100a);padding:14px;cursor:pointer;transition:border-color .16s,box-shadow .16s,transform .16s}
-.pp2-dev-card:hover{border-color:#2cff9b66;box-shadow:0 16px 34px #00000088,0 0 24px #22c55e22;transform:translateY(-2px)}
-.pp2-dev-card header{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;margin-bottom:10px}
-.pp2-dev-card h3{margin:0;color:#dcffe9;font-size:17px}
-.pp2-dev-card header span,.pp2-dev-card p{color:var(--pp2-mut);font-size:12px;line-height:1.5}
-.pp2-dev-card p{margin:0 0 10px}
-.pp2-dev-avatar{width:48px;height:48px;border-radius:14px;border:1px solid #2cff9b44;background:#03120a;overflow:hidden;display:grid;place-items:center;color:var(--pp2-green);font-weight:900}
-.pp2-dev-avatar img{width:100%;height:100%;object-fit:cover;display:block}
-.pp2-dev-avatar.is-large{width:76px;height:76px;border-radius:18px;font-size:28px}
-.pp2-dev-score{border:1px solid #2cff9b44;border-radius:12px;min-width:72px;padding:8px 10px;text-align:center;background:#04180d;color:#baffdb}
-.pp2-dev-score b{display:block;color:var(--pp2-green);font-size:22px;line-height:1}
-.pp2-dev-score span{display:block;margin-top:4px;color:var(--pp2-mut);font-size:10px;text-transform:uppercase;letter-spacing:1px}
-.pp2-dev-score.is-large{min-width:92px}
-.pp2-dev-score.is-large b{font-size:30px}
-.pp2-dev-tags{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
-.pp2-dev-tags span{border:1px solid var(--pp2-line);border-radius:999px;color:#a9ffce;background:#03120a;padding:4px 9px;font-size:10px}
-.pp2-dev-thumbs{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:10px 0}
-.pp2-dev-thumbs>span{aspect-ratio:16/10;border:1px solid #10241a;border-radius:8px;background:#03120a;overflow:hidden;display:grid;place-items:center}
-.pp2-dev-thumbs img{width:100%;height:100%;object-fit:cover;display:block}
-.pp2-dev-thumbs .pp2-art-fallback{font-size:18px}
-.pp2-dev-profile{display:grid;gap:14px}
-.pp2-dev-hero{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:16px;margin-bottom:0}
-.pp2-dev-hero h2{margin:0 0 6px;color:#baffdb;font-size:26px}
-.pp2-dev-hero p{margin:0;color:var(--pp2-mut);font-size:13px}
-.pp2-dev-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
-.pp2-dev-stats span{border:1px solid var(--pp2-line);border-radius:12px;background:#06120a;padding:12px;text-align:center}
-.pp2-dev-stats b{display:block;color:var(--pp2-green);font-size:22px}
-.pp2-dev-stats i{display:block;color:var(--pp2-mut);font-style:normal;font-size:11px;text-transform:uppercase;letter-spacing:1px}
-.pp2-dev-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.pp2-dev-actions p{flex-basis:100%;margin:0}
-.pp2-dev-notes{display:grid;gap:10px}
-.pp2-dev-notes textarea{min-height:90px;resize:vertical;background:#03120a;border:1px solid var(--pp2-line);border-radius:10px;color:var(--pp2-text);padding:10px 12px;font:inherit}
-.pp2-dev-notes ul{list-style:none;margin:4px 0 0;padding:0;display:grid;gap:8px}
-.pp2-dev-notes li{display:grid;grid-template-columns:72px 1fr;gap:10px;border-top:1px solid #10241a;padding-top:8px;color:var(--pp2-mut);font-size:12px}
-.pp2-dev-notes li.is-empty{grid-template-columns:1fr}
-.pp2-dev-notes span{color:#a9ffce}
-.pp2-dev-notes p{margin:0;line-height:1.5}
-.pp2-dev-games{margin-top:4px}
-.pp2-builder-tools summary{cursor:pointer;color:#a9ffce;font-weight:800}
-.pp2-builder-tools[open] summary{margin-bottom:10px}
-.pp2-subpanel{border-top:1px solid #10241a;padding-top:14px;margin-top:14px}
+/* dev hub */
 .pp2-table-wrap{overflow-x:auto}
 .pp2-table{width:100%;border-collapse:collapse;font-size:12px}
 .pp2-table th{text-align:left;color:var(--pp2-mut);font-weight:600;padding:6px 10px;border-bottom:1px solid var(--pp2-line)}
@@ -236,36 +194,187 @@
 .pp2-spotlight h2{margin:2px 0 8px;color:#baffdb}
 .pp2-spotlight p{color:var(--pp2-mut);font-size:13px;line-height:1.5;max-width:640px}
 
-/* ---- global leaderboard (docs/superpowers/specs/2026-07-15-phantomplay-global-leaderboard-design.md) ---- */
-.pp2-best-player{display:grid;grid-template-columns:1fr 1.2fr;gap:20px;align-items:start;background:linear-gradient(120deg,#0a1a10,#04100a)}
-.pp2-best-player h2{margin:4px 0 4px;font-size:28px;color:#baffdb;text-shadow:0 0 24px #22c55e44}
-.pp2-best-player>div>span{color:var(--pp2-green);font-size:13px}
-.pp2-best-player .pp2-board li.is-you{background:#0f2a1a;border-radius:6px;padding-left:6px;margin:0 -6px}
-.pp2-best-player .pp2-board em{font-style:normal;color:var(--pp2-green)}
-.pp2-community-rankings .pp2-cols>div{border:1px solid var(--pp2-line);border-radius:14px;background:var(--pp2-panel);padding:16px}
-.pp2-community-rankings h3{margin:0 0 8px;font-size:14px;letter-spacing:1px;color:#a9ffce}
-.pp2-community-rankings .pp2-board em{font-style:normal;color:var(--pp2-green)}
-.pp2-handle-prompt{width:min(420px,100%)}
-.pp2-handle-prompt h2{margin:6px 0 8px;color:#baffdb}
-.pp2-handle-prompt p{color:var(--pp2-mut);font-size:13px;line-height:1.5}
-.pp2-handle-prompt label{display:block;margin:14px 0 6px;font-size:12px;color:#a9ffce}
-.pp2-handle-prompt input{width:100%;background:#03120a;border:1px solid var(--pp2-line);border-radius:8px;color:var(--pp2-text);padding:9px 10px;font:inherit}
-.pp2-handle-prompt div{display:flex;gap:10px;margin-top:16px}
+@media(max-width:880px){.pp2-cols{grid-template-columns:1fr}.pp2-hero{grid-template-columns:1fr}.pp2-detail-hero{grid-template-columns:1fr}}
 
-@media(max-width:880px){.pp2-cols{grid-template-columns:1fr}.pp2-hero{grid-template-columns:1fr}.pp2-detail-hero{grid-template-columns:1fr}.pp2-dev-hero{grid-template-columns:1fr}.pp2-dev-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.pp2-best-player{grid-template-columns:1fr}}
+/* Game Rating Exposure + guardian lock (inside pp2-settings) */
+.pp2-rating-exposure{border-top:1px solid var(--pp2-line);padding-top:14px;display:grid;gap:8px}
+.pp2-rating-exposure h3{margin:0;font-size:13px;letter-spacing:1px;color:var(--pp2-green)}
+.pp2-rating-exposure input[type=password]{background:#03120a;border:1px solid var(--pp2-line);border-radius:8px;color:var(--pp2-text);padding:8px 10px;font:inherit}
+.pp2-rating-toggles{display:grid;grid-template-columns:1fr 1fr;gap:4px 10px}
+.pp2-rating-presets{display:flex;flex-wrap:wrap;gap:6px}
+.pp2-guardian-lock{border:1px solid var(--pp2-line);border-radius:10px;padding:10px;display:grid;gap:6px;background:#03120a}
+.pp2-guardian-pin-row{display:flex;gap:8px}
+.pp2-guardian-pin-row input{flex:1;min-width:0}
+
+/* Toddler Space — its own destination, no chat/voice/matchmaking/links */
+.pp2-shell-toddler .pp2-tabs{margin-bottom:8px}
+.pp2-toddler-space{display:grid;gap:18px}
+.pp2-toddler-hero{border:1px solid var(--pp2-line);border-radius:18px;background:linear-gradient(120deg,#08150d,#04100a 60%,#02180e);padding:24px;text-align:center}
+.pp2-toddler-hero h2{margin:4px 0 8px;font-size:clamp(24px,3.4vw,34px);color:#baffdb}
+.pp2-toddler-hero p:not(.pp2-kicker){margin:0 auto;max-width:560px;color:var(--pp2-mut);font-size:13px;line-height:1.6}
+.pp2-toddler-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px}
+.pp2-toddler-card{display:flex;flex-direction:column;align-items:center;gap:10px;padding:16px;border:2px solid var(--pp2-line);border-radius:20px;background:var(--pp2-panel);cursor:pointer;min-height:180px}
+.pp2-toddler-card:hover,.pp2-toddler-card:focus-visible{border-color:var(--pp2-green);outline:none;transform:translateY(-2px)}
+.pp2-toddler-art{width:100%;aspect-ratio:1/1;border-radius:14px;overflow:hidden;background:#03120a;display:grid;place-items:center}
+.pp2-toddler-art img{width:100%;height:100%;object-fit:cover;display:block}
+.pp2-toddler-title{font-size:16px;font-weight:800;color:var(--pp2-text);text-align:center}
+@media(max-width:767px){.pp2-rating-toggles{grid-template-columns:1fr}.pp2-toddler-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(prefers-reduced-motion:reduce){.pp2-card,.pp2-card:hover,.pp2-art img,.pp2-play,.pp2-wish{transition:none;transform:none}.pp2-skeleton .pp2-art,.pp2-skeleton .pp2-card-body i{animation:none}.pp2-stage-loading i{animation-duration:2s}}
 
-/* V2 gets the same bottom runway as classic PhantomPlay. The scroll container
-   lives on the workspace body, so the app needs extra real content height,
-   not just visual margin. */
-@media(min-width:768px){
-  .workspace-page[data-workspace-page="phantomplay"] .pp2-shell{
-    min-height:max-content;
-    padding-bottom:calc(110px + env(safe-area-inset-bottom,0px));
-  }
+/* Dense game shelf pass: compact, readable, no vertical word wrapping. */
+.pp2-shell{
+  max-width:none!important;
+  width:100%!important;
 }
-.workspace-page[data-workspace-page="phantomplay"]:not(:has(.pp2-player)):not(:has(.pp-player)) .workspace-page-body{
-  overflow-y:auto;
-  overscroll-behavior:contain;
-  padding-bottom:calc(140px + env(safe-area-inset-bottom,0px))!important;
+.pp2-grid,
+.pp2-grid-wide{
+  grid-template-columns:repeat(5,minmax(0,1fr))!important;
+  gap:12px!important;
 }
+.pp2-card{
+  min-width:0!important;
+  height:292px!important;
+  display:flex!important;
+  flex-direction:column!important;
+  border-radius:10px!important;
+}
+.pp2-art{
+  flex:0 0 128px!important;
+  aspect-ratio:auto!important;
+  height:128px!important;
+}
+.pp2-card-body{
+  flex:1 1 auto!important;
+  min-width:0!important;
+  min-height:0!important;
+  display:grid!important;
+  grid-template-rows:auto auto auto 1fr!important;
+  gap:6px!important;
+  padding:10px!important;
+}
+.pp2-card-body header{
+  min-width:0!important;
+}
+.pp2-card-body h3,
+.pp2-dev,
+.pp2-summary{
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
+  white-space:nowrap!important;
+  min-width:0!important;
+}
+.pp2-card-body h3{
+  font-size:15px!important;
+  line-height:1.12!important;
+}
+.pp2-dev{
+  margin:0!important;
+  font-size:10px!important;
+}
+.pp2-summary{
+  min-height:0!important;
+  margin:0!important;
+  font-size:11px!important;
+  line-height:1.25!important;
+}
+.pp2-progress{
+  margin-bottom:0!important;
+}
+.pp2-card-actions{
+  align-self:end!important;
+  display:grid!important;
+  grid-template-columns:1fr auto!important;
+  gap:8px!important;
+  width:100%!important;
+}
+.pp2-card-actions .pp2-play{
+  width:100%!important;
+  padding:8px 10px!important;
+  border-radius:8px!important;
+  white-space:nowrap!important;
+}
+.pp2-card-actions span{
+  align-self:center!important;
+  white-space:nowrap!important;
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
+  max-width:78px!important;
+}
+@media(max-width:1500px){
+  .pp2-grid,.pp2-grid-wide{grid-template-columns:repeat(4,minmax(0,1fr))!important}
+}
+@media(max-width:1120px){
+  .pp2-grid,.pp2-grid-wide{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+}
+@media(max-width:780px){
+  .pp2-grid,.pp2-grid-wide{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  .pp2-card{height:276px!important}
+}
+@media(max-width:520px){
+  .pp2-grid,.pp2-grid-wide{grid-template-columns:1fr!important}
+  .pp2-card{height:286px!important}
+}
+
+/* Final V2 catalog clamp: compact cards, no vertical word wrapping. */
+body .pp2-grid,
+body .pp2-grid-wide{
+  display:grid!important;
+  grid-template-columns:repeat(auto-fill,minmax(330px,1fr))!important;
+  gap:14px!important;
+  align-items:stretch!important;
+}
+body .pp2-card{
+  min-width:0!important;
+  height:334px!important;
+  max-height:334px!important;
+  overflow:hidden!important;
+}
+body .pp2-art{
+  flex:0 0 150px!important;
+  height:150px!important;
+  min-height:150px!important;
+}
+body .pp2-card-body{
+  min-width:0!important;
+  overflow:hidden!important;
+}
+body .pp2-card-body h3,
+body .pp2-dev,
+body .pp2-card-actions span{
+  max-width:100%!important;
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
+  white-space:nowrap!important;
+  overflow-wrap:normal!important;
+  word-break:normal!important;
+  hyphens:none!important;
+}
+body .pp2-card-body h3{
+  font-size:22px!important;
+  line-height:1.05!important;
+  letter-spacing:-.01em!important;
+}
+body .pp2-summary{
+  margin:0 0 10px!important;
+  min-height:38px!important;
+  max-height:38px!important;
+  color:#b5d6c2!important;
+  font-size:14px!important;
+  line-height:1.35!important;
+  overflow:hidden!important;
+  display:-webkit-box!important;
+  -webkit-box-orient:vertical!important;
+  -webkit-line-clamp:2!important;
+  white-space:normal!important;
+  overflow-wrap:normal!important;
+  word-break:normal!important;
+  hyphens:none!important;
+}
+body .pp2-card-actions{
+  align-self:end!important;
+  width:100%!important;
+}
+@media(max-width:1600px){body .pp2-grid,body .pp2-grid-wide{grid-template-columns:repeat(auto-fill,minmax(300px,1fr))!important}}
+@media(max-width:1180px){body .pp2-grid,body .pp2-grid-wide{grid-template-columns:repeat(auto-fill,minmax(270px,1fr))!important}}
+@media(max-width:760px){body .pp2-grid,body .pp2-grid-wide{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
+@media(max-width:520px){body .pp2-grid,body .pp2-grid-wide{grid-template-columns:1fr!important}}

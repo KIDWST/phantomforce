@@ -15,10 +15,11 @@
    Tenant isolation rides on AccessSession.clientId = the active org id, so
    every existing requireClientWorkspaceView call site stays enforced. */
 
-import { createHash, randomBytes, scrypt as scryptCb, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, randomBytes, scrypt as scryptCb, timingSafeEqual } from "node:crypto";
 
-import type { MembershipRole, PrismaClient } from "@prisma/client";
+import type { AuthChallengeKind, MembershipRole, PrismaClient } from "@prisma/client";
 
+import { deliverAccountMessage, resetPasswordUrl } from "./auth-delivery.js";
 import { assignOrgPlan, getOrgEntitlements, syncPlanCatalog } from "./entitlements.js";
 import { prisma } from "./prisma-runtime.js";
 import type { AccessSession } from "./session.js";
@@ -42,8 +43,15 @@ export const databaseAuthEnabled = (process.env.PHANTOMFORCE_AUTH_PROVIDER ?? "d
 const SESSION_TTL_MS = Number(process.env.PHANTOMFORCE_SESSION_TTL_MS ?? 8 * 60 * 60 * 1000);
 const INVITATION_TTL_MS = Number(process.env.PHANTOMFORCE_INVITATION_TTL_MS ?? 7 * 24 * 60 * 60 * 1000);
 const SESSION_CACHE_TTL_MS = 15_000;
+const TWO_FACTOR_CHALLENGE_TTL_MS = Number(process.env.PHANTOMFORCE_2FA_CHALLENGE_TTL_MS ?? 5 * 60 * 1000);
+const PASSWORD_RESET_TTL_MS = Number(process.env.PHANTOMFORCE_PASSWORD_RESET_TTL_MS ?? 30 * 60 * 1000);
+const USERNAME_REMINDER_TTL_MS = Number(process.env.PHANTOMFORCE_USERNAME_REMINDER_TTL_MS ?? 30 * 60 * 1000);
 
 export const DB_SESSION_PREFIX = "db:";
+const ACCOUNT_TOKEN_BYTES = 32;
+const TOTP_STEP_SECONDS = 30;
+const TOTP_DIGITS = 6;
+const TWO_FACTOR_BACKUP_CODE_COUNT = 10;
 
 function requirePrisma(): PrismaClient {
   if (!prisma) {
@@ -83,6 +91,152 @@ export async function verifyPassword(password: string, stored: string | null | u
   } catch {
     return false;
   }
+}
+
+/* ---------------- account identifiers, recovery tokens, TOTP ---------------- */
+
+export function normalizeUsername(value: string | null | undefined) {
+  const normalized = String(value ?? "").trim().toLowerCase().replace(/[^a-z0-9._-]/g, "");
+  return normalized.length >= 3 && normalized.length <= 32 ? normalized : "";
+}
+
+function normalizeEmail(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function tokenHash(token: string) {
+  return createHash("sha256").update(token).digest("hex");
+}
+
+function freshAccountToken() {
+  return randomBytes(ACCOUNT_TOKEN_BYTES).toString("base64url");
+}
+
+async function createAuthChallenge(input: {
+  kind: AuthChallengeKind;
+  userId?: string | null;
+  ttlMs: number;
+  meta?: Record<string, unknown>;
+}) {
+  const db = requirePrisma();
+  const token = freshAccountToken();
+  const challenge = await db.authChallenge.create({
+    data: {
+      kind: input.kind,
+      userId: input.userId ?? null,
+      tokenHash: tokenHash(token),
+      meta: input.meta as object | undefined,
+      expiresAt: new Date(Date.now() + input.ttlMs),
+    },
+  });
+  return { challenge, token };
+}
+
+async function consumeAuthChallenge(kind: AuthChallengeKind, token: string) {
+  const db = requirePrisma();
+  const challenge = await db.authChallenge.findUnique({
+    where: { kind_tokenHash: { kind, tokenHash: tokenHash(token) } },
+  });
+  if (!challenge || challenge.consumedAt || challenge.expiresAt.getTime() < Date.now()) return undefined;
+  await db.authChallenge.update({ where: { id: challenge.id }, data: { consumedAt: new Date() } });
+  return challenge;
+}
+
+const BASE32 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+
+function base32Encode(buffer: Buffer) {
+  let bits = 0;
+  let value = 0;
+  let output = "";
+  for (const byte of buffer) {
+    value = (value << 8) | byte;
+    bits += 8;
+    while (bits >= 5) {
+      output += BASE32[(value >>> (bits - 5)) & 31];
+      bits -= 5;
+    }
+  }
+  if (bits > 0) output += BASE32[(value << (5 - bits)) & 31];
+  return output;
+}
+
+function base32Decode(value: string) {
+  const clean = value.replace(/=+$/g, "").replace(/\s+/g, "").toUpperCase();
+  let bits = 0;
+  let current = 0;
+  const out: number[] = [];
+  for (const ch of clean) {
+    const idx = BASE32.indexOf(ch);
+    if (idx < 0) continue;
+    current = (current << 5) | idx;
+    bits += 5;
+    if (bits >= 8) {
+      out.push((current >>> (bits - 8)) & 255);
+      bits -= 8;
+    }
+  }
+  return Buffer.from(out);
+}
+
+export function generateTwoFactorSecret() {
+  return base32Encode(randomBytes(20));
+}
+
+function hotp(secret: string, counter: number) {
+  const key = base32Decode(secret);
+  const msg = Buffer.alloc(8);
+  msg.writeBigUInt64BE(BigInt(counter));
+  const digest = createHmac("sha1", key).update(msg).digest();
+  const offset = digest[digest.length - 1] & 0xf;
+  const code = ((digest[offset] & 0x7f) << 24)
+    | ((digest[offset + 1] & 0xff) << 16)
+    | ((digest[offset + 2] & 0xff) << 8)
+    | (digest[offset + 3] & 0xff);
+  return String(code % 10 ** TOTP_DIGITS).padStart(TOTP_DIGITS, "0");
+}
+
+export function verifyTotp(secret: string | null | undefined, codeRaw: string, atMs = Date.now()) {
+  if (!secret) return false;
+  const code = String(codeRaw ?? "").replace(/\s+/g, "");
+  if (!/^\d{6}$/.test(code)) return false;
+  const counter = Math.floor(atMs / 1000 / TOTP_STEP_SECONDS);
+  for (const offset of [-1, 0, 1]) {
+    if (hotp(secret, counter + offset) === code) return true;
+  }
+  return false;
+}
+
+function normalizeBackupCode(codeRaw: string) {
+  return String(codeRaw ?? "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+}
+
+function backupCodeHash(codeRaw: string) {
+  return createHash("sha256").update(normalizeBackupCode(codeRaw)).digest("hex");
+}
+
+function formatBackupCode(raw: string) {
+  const clean = normalizeBackupCode(raw).slice(0, 12);
+  return `${clean.slice(0, 4)}-${clean.slice(4, 8)}-${clean.slice(8, 12)}`;
+}
+
+function generateBackupCodes() {
+  const codes = Array.from({ length: TWO_FACTOR_BACKUP_CODE_COUNT }, () => formatBackupCode(randomBytes(8).toString("base64url")));
+  return {
+    codes,
+    hashes: codes.map(backupCodeHash),
+  };
+}
+
+async function consumeBackupCode(userId: string, codeRaw: string, hashes: string[] | null | undefined) {
+  const normalized = normalizeBackupCode(codeRaw);
+  if (!/^[A-Z0-9]{10,20}$/.test(normalized)) return false;
+  const current = Array.isArray(hashes) ? hashes : [];
+  const hash = backupCodeHash(normalized);
+  if (!current.includes(hash)) return false;
+  const next = current.filter((item) => item !== hash);
+  await requirePrisma().user.update({ where: { id: userId }, data: { twoFactorBackupCodes: next } });
+  invalidateCacheForUser(userId);
+  return true;
 }
 
 /* ---------------- org-scoped audit trail (hash-chained) ---------------- */
@@ -125,8 +279,10 @@ export async function recordOrgAuditEvent(input: {
 export type DatabaseSessionDetails = AccessSession & {
   userId: string;
   email: string;
+  username: string | null;
   authSessionId: string;
   isSuperAdmin: boolean;
+  twoFactorEnabled: boolean;
   orgId: string | null;
   orgRole: MembershipRole | null;
   memberships: Array<{ orgId: string; orgName: string; role: MembershipRole }>;
@@ -196,8 +352,10 @@ async function buildSessionDetails(authSessionId: string): Promise<DatabaseSessi
     subscriptionActive,
     userId: row.userId,
     email: row.user.email,
+    username: row.user.username,
     authSessionId: row.id,
     isSuperAdmin,
+    twoFactorEnabled: row.user.twoFactorEnabled,
     orgId: activeOrgId,
     orgRole,
     memberships,
@@ -225,15 +383,18 @@ export function asDatabaseSession(session: AccessSession | undefined): DatabaseS
 
 /* ---------------- login / logout / org switching ---------------- */
 
-export async function loginWithPassword(emailRaw: string, password: string) {
+async function findUserByIdentifier(identifierRaw: string) {
   const db = requirePrisma();
-  const email = emailRaw.trim().toLowerCase();
-  const user = await db.user.findUnique({ where: { email } });
-  const ok = user ? await verifyPassword(password, user.passwordHash) : false;
-  if (!user || !ok) {
-    /* uniform failure: no user-exists oracle */
-    return undefined;
-  }
+  const identifier = identifierRaw.trim().toLowerCase();
+  if (identifier.includes("@")) return db.user.findUnique({ where: { email: identifier } });
+  const username = normalizeUsername(identifier);
+  return username ? db.user.findUnique({ where: { username } }) : null;
+}
+
+export async function createLoginSessionForUser(userId: string) {
+  const db = requirePrisma();
+  const user = await db.user.findUnique({ where: { id: userId } });
+  if (!user) return undefined;
   const row = await db.authSession.create({
     data: {
       userId: user.id,
@@ -245,6 +406,52 @@ export async function loginWithPassword(emailRaw: string, password: string) {
   if (!session) return undefined;
   sessionCache.set(row.id, { session, expiresAt: Date.now() + SESSION_CACHE_TTL_MS });
   return session;
+}
+
+export async function beginLoginWithPassword(identifierRaw: string, password: string) {
+  const user = await findUserByIdentifier(identifierRaw);
+  const ok = user ? await verifyPassword(password, user.passwordHash) : false;
+  if (!user || !ok) {
+    /* uniform failure: no user-exists oracle */
+    return undefined;
+  }
+  if (user.twoFactorEnabled) {
+    const { token } = await createAuthChallenge({
+      kind: "login_2fa",
+      userId: user.id,
+      ttlMs: TWO_FACTOR_CHALLENGE_TTL_MS,
+      meta: { email: user.email },
+    });
+    return {
+      requires2fa: true as const,
+      challengeToken: token,
+      expiresAt: new Date(Date.now() + TWO_FACTOR_CHALLENGE_TTL_MS).toISOString(),
+      user: { email: user.email, username: user.username, name: user.name },
+    };
+  }
+  const session = await createLoginSessionForUser(user.id);
+  return session ? { requires2fa: false as const, session } : undefined;
+}
+
+export async function loginWithPassword(identifierRaw: string, password: string) {
+  const result = await beginLoginWithPassword(identifierRaw, password);
+  return result && !result.requires2fa ? result.session : undefined;
+}
+
+export async function verifyTwoFactorLogin(input: { challengeToken: string; code: string }) {
+  const db = requirePrisma();
+  const challenge = await db.authChallenge.findUnique({
+    where: { kind_tokenHash: { kind: "login_2fa", tokenHash: tokenHash(input.challengeToken) } },
+  });
+  if (!challenge?.userId) return undefined;
+  if (challenge.consumedAt || challenge.expiresAt.getTime() < Date.now()) return undefined;
+  const user = await db.user.findUnique({ where: { id: challenge.userId } });
+  if (!user || !user.twoFactorEnabled) return undefined;
+  const codeOk = verifyTotp(user.twoFactorSecret, input.code)
+    || await consumeBackupCode(user.id, input.code, user.twoFactorBackupCodes);
+  if (!codeOk) return undefined;
+  await db.authChallenge.update({ where: { id: challenge.id }, data: { consumedAt: new Date() } });
+  return createLoginSessionForUser(user.id);
 }
 
 export async function revokeDatabaseSession(authSessionId: string) {
@@ -276,6 +483,175 @@ export async function switchActiveOrg(session: DatabaseSessionDetails, orgId: st
   await db.user.update({ where: { id: session.userId }, data: { activeOrgId: orgId } });
   sessionCache.delete(session.authSessionId);
   return { ok: true as const, session: await resolveDatabaseSession(`${DB_SESSION_PREFIX}${session.authSessionId}`) };
+}
+
+export async function createSelfServeAccount(input: {
+  email: string;
+  username?: string;
+  password: string;
+  name?: string;
+  organizationName?: string;
+}) {
+  const db = requirePrisma();
+  await syncPlanCatalog();
+  const email = normalizeEmail(input.email);
+  const username = normalizeUsername(input.username);
+  if (input.username && !username) return { ok: false as const, error: "invalid_username" };
+  const existing = await db.user.findFirst({
+    where: { OR: [{ email }, ...(username ? [{ username }] : [])] },
+    select: { email: true, username: true },
+  });
+  if (existing?.email === email) return { ok: false as const, error: "email_already_registered" };
+  if (username && existing?.username === username) return { ok: false as const, error: "username_already_registered" };
+  const orgName = (input.organizationName || `${input.name || username || email.split("@")[0]}'s workspace`).trim().slice(0, 120);
+  const passwordHash = await hashPassword(input.password);
+  const result = await db.$transaction(async (tx) => {
+    const org = await tx.org.create({ data: { name: orgName } });
+    const user = await tx.user.create({
+      data: {
+        email,
+        username: username || null,
+        name: input.name?.trim().slice(0, 120) || null,
+        passwordHash,
+        activeOrgId: org.id,
+      },
+    });
+    await tx.membership.create({ data: { userId: user.id, orgId: org.id, role: "owner" } });
+    return { user, org };
+  });
+  await assignOrgPlan({
+    orgId: result.org.id,
+    planKey: "starter",
+    status: "trial",
+    note: "Self-serve signup starter trial",
+  });
+  await recordOrgAuditEvent({
+    orgId: result.org.id,
+    actor: result.user.email,
+    eventType: "account.created",
+    targetType: "user",
+    targetId: result.user.id,
+    payload: { email: result.user.email, username: result.user.username, orgId: result.org.id },
+  });
+  return { ok: true as const, userId: result.user.id, orgId: result.org.id };
+}
+
+export async function requestUsernameReminder(emailRaw: string) {
+  const db = requirePrisma();
+  const email = normalizeEmail(emailRaw);
+  const user = await db.user.findUnique({ where: { email } });
+  let delivery: unknown = "queued";
+  if (user) {
+    const { token } = await createAuthChallenge({
+      kind: "username_reminder",
+      userId: user.id,
+      ttlMs: USERNAME_REMINDER_TTL_MS,
+      meta: { email, username: user.username ?? user.email },
+    });
+    delivery = await deliverAccountMessage({
+      kind: "username_reminder",
+      to: user.email,
+      subject: "Your PhantomForce username",
+      text: `Your PhantomForce username is: ${user.username ?? user.email}`,
+    });
+    return {
+      ok: true as const,
+      delivery,
+      preview: !productionMode ? { token, username: user.username ?? user.email } : undefined,
+    };
+  }
+  return { ok: true as const, delivery };
+}
+
+export async function requestPasswordReset(identifierRaw: string) {
+  const user = await findUserByIdentifier(identifierRaw);
+  let delivery: unknown = "queued";
+  if (user) {
+    const { token } = await createAuthChallenge({
+      kind: "password_reset",
+      userId: user.id,
+      ttlMs: PASSWORD_RESET_TTL_MS,
+      meta: { email: user.email },
+    });
+    const actionUrl = resetPasswordUrl(token);
+    delivery = await deliverAccountMessage({
+      kind: "password_reset",
+      to: user.email,
+      subject: "Reset your PhantomForce password",
+      text: `Reset your PhantomForce password with this link: ${actionUrl}\n\nIf you did not request this, ignore this message.`,
+      actionUrl,
+    });
+    return {
+      ok: true as const,
+      delivery,
+      preview: !productionMode ? { resetToken: token } : undefined,
+    };
+  }
+  return { ok: true as const, delivery };
+}
+
+export async function resetPasswordWithToken(input: { token: string; password: string }) {
+  const challenge = await consumeAuthChallenge("password_reset", input.token);
+  if (!challenge?.userId) return { ok: false as const, error: "invalid_or_expired_reset_token" };
+  const db = requirePrisma();
+  await db.user.update({ where: { id: challenge.userId }, data: { passwordHash: await hashPassword(input.password) } });
+  await revokeAllSessionsForUser(challenge.userId);
+  return { ok: true as const };
+}
+
+export async function startTwoFactorSetup(session: DatabaseSessionDetails) {
+  const db = requirePrisma();
+  const secret = generateTwoFactorSecret();
+  await db.user.update({ where: { id: session.userId }, data: { twoFactorSecret: secret, twoFactorEnabled: false, twoFactorConfirmedAt: null } });
+  invalidateCacheForUser(session.userId);
+  const issuer = encodeURIComponent("PhantomForce");
+  const label = encodeURIComponent(session.email);
+  return {
+    ok: true as const,
+    secret,
+    otpauthUrl: `otpauth://totp/${issuer}:${label}?secret=${secret}&issuer=${issuer}&digits=${TOTP_DIGITS}&period=${TOTP_STEP_SECONDS}`,
+  };
+}
+
+export async function confirmTwoFactorSetup(session: DatabaseSessionDetails, code: string) {
+  const db = requirePrisma();
+  const user = await db.user.findUnique({ where: { id: session.userId } });
+  if (!user?.twoFactorSecret || !verifyTotp(user.twoFactorSecret, code)) return { ok: false as const, error: "invalid_2fa_code" };
+  const backup = generateBackupCodes();
+  await db.user.update({
+    where: { id: session.userId },
+    data: { twoFactorEnabled: true, twoFactorConfirmedAt: new Date(), twoFactorBackupCodes: backup.hashes },
+  });
+  invalidateCacheForUser(session.userId);
+  return { ok: true as const, backupCodes: backup.codes };
+}
+
+export async function regenerateTwoFactorBackupCodes(session: DatabaseSessionDetails, code: string) {
+  const db = requirePrisma();
+  const user = await db.user.findUnique({ where: { id: session.userId } });
+  if (!user?.twoFactorEnabled || !verifyTotp(user.twoFactorSecret, code)) return { ok: false as const, error: "invalid_2fa_code" };
+  const backup = generateBackupCodes();
+  await db.user.update({
+    where: { id: session.userId },
+    data: { twoFactorBackupCodes: backup.hashes },
+  });
+  invalidateCacheForUser(session.userId);
+  return { ok: true as const, backupCodes: backup.codes };
+}
+
+export async function disableTwoFactor(session: DatabaseSessionDetails, code: string) {
+  const db = requirePrisma();
+  const user = await db.user.findUnique({ where: { id: session.userId } });
+  if (!user?.twoFactorEnabled) return { ok: false as const, error: "invalid_2fa_code" };
+  const codeOk = verifyTotp(user.twoFactorSecret, code)
+    || await consumeBackupCode(user.id, code, user.twoFactorBackupCodes);
+  if (!codeOk) return { ok: false as const, error: "invalid_2fa_code" };
+  await db.user.update({
+    where: { id: session.userId },
+    data: { twoFactorEnabled: false, twoFactorSecret: null, twoFactorBackupCodes: [], twoFactorConfirmedAt: null },
+  });
+  invalidateCacheForUser(session.userId);
+  return { ok: true as const };
 }
 
 /* ---------------- organizations + memberships ---------------- */

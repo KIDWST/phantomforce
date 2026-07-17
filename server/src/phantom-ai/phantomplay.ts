@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { copyFile, mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -10,29 +10,38 @@ const repoRoot = resolve(moduleDir, "../../..");
 const storePath = process.env.PHANTOMFORCE_PHANTOMPLAY_PATH || resolve(repoRoot, ".phantom", "phantomplay.json");
 const retryableWriteCodes = new Set(["EPERM", "EACCES", "EBUSY"]);
 
-export type PhantomPlayRating = "everyone" | "teen" | "mature";
+// 5-tier scheme. The 3 original values ("everyone" | "teen" | "mature") are
+// kept byte-identical so all pre-existing games' contentRating fields stay
+// valid with zero migration. "toddler" and "everyone10" are new, inserted
+// between "everyone" and "teen" in severity (see `ratingRank` below).
+export type PhantomPlayRating = "toddler" | "everyone" | "everyone10" | "teen" | "mature";
 export type PhantomPlaySubmissionStatus = "draft" | "submitted" | "changes_requested" | "approved" | "rejected" | "disabled";
 export type PhantomPlayEngineProfile = {
   tier: string;
   minVersion: string;
 };
 
-type PhantomPlayMatchAction = {
-  id: string;
-  seq: number;
-  actorId: string;
-  label: string;
-  type: string;
-  payload: Record<string, string | number | boolean | null>;
-  createdAt: string;
-};
-
-type PhantomPlayMatchState = {
-  gameId: string;
-  seq: number;
-  updatedAt: string;
-  actions: PhantomPlayMatchAction[];
-};
+// Content descriptors are additive tags alongside the single contentRating —
+// e.g. a "teen" game might carry ["competitive_play", "online_interaction",
+// "in_game_chat"]. Optional/omitted on all pre-existing games; treat missing
+// as [].
+export type PhantomPlayContentDescriptor =
+  | "cartoon_action"
+  | "fantasy_conflict"
+  | "mild_destruction"
+  | "intense_action"
+  | "competitive_play"
+  | "online_interaction"
+  | "user_generated_content"
+  | "music"
+  | "strategic_complexity"
+  | "simulated_economy"
+  | "in_game_chat"
+  | "voice_chat"
+  | "educational_content"
+  | "no_reading_required"
+  | "flashing_lights"
+  | "horror_themes";
 
 export type PhantomPlayGame = {
   id: string;
@@ -42,8 +51,15 @@ export type PhantomPlayGame = {
   category: string;
   tags: string[];
   contentRating: PhantomPlayRating;
+  // Optional — omitted on all pre-existing games, treat missing as [].
+  contentDescriptors?: PhantomPlayContentDescriptor[];
+  // Optional free-text summaries of a game's multiplayer/chat surface, for
+  // display next to the rating (e.g. "Local co-op, no networking" or
+  // "Cross-network relay rooms, text chat disabled"). Omitted on all
+  // pre-existing games.
+  multiplayerDescriptor?: string;
+  chatDescriptor?: string;
   developer: string;
-  developerId?: string;
   developerAvatar?: string;
   kind: "built_in" | "community";
   launchUrl: string;
@@ -54,15 +70,6 @@ export type PhantomPlayGame = {
   progressSupport: boolean;
   scoreSupport: boolean;
   engine?: PhantomPlayEngineProfile;
-  multiplayerOnly?: boolean;
-  localMultiplayer?: boolean;
-  onlineMultiplayer?: boolean;
-  minPlayers?: number;
-  maxPlayers?: number;
-  /** Soft-disable: omitted or true = visible in the catalog as normal. Set to
-      false to pull a game from discovery without deleting its record or any
-      player progress/history tied to its id. */
-  active?: boolean;
 };
 
 const PHANTOMPLAY_ART_VERSION = "phantomplay-art-20260712";
@@ -70,11 +77,10 @@ export const PHANTOMPLAY_ENGINE = {
   version: "2.0-large-map",
   saveStateBytes: 262_144,
   largeMap: { chunkSize: 1024, maxLoadedChunks: 64, streaming: true },
-  protocols: ["ready", "score", "progress", "complete", "paused", "exit", "settings", "save-state", "load-state", "match-action", "match-state"],
+  protocols: ["ready", "score", "progress", "complete", "paused", "exit", "settings", "save-state", "load-state"],
 } as const;
 const artUrl = (file: string) => `/app/assets/phantomplay/${file}?v=${PHANTOMPLAY_ART_VERSION}`;
 const TAK_AVATAR = artUrl("tak-avatar.webp");
-const TAK_CREATOR = "Tak";
 const GAME_ART_BY_SLUG: Record<string, string> = {
   "neon-drift": artUrl("neon-drift-cover.webp"),
   "signal-match": artUrl("signal-match-cover.webp"),
@@ -84,7 +90,6 @@ const GAME_ART_BY_SLUG: Record<string, string> = {
   "penalty-kick": artUrl("penalty-kick-cover.webp"),
   "rift-frenzy": artUrl("neon-drift-cover.webp"),
   "serpent-surge": artUrl("reflex-grid-cover.webp"),
-  "crown-circuit": artUrl("reflex-grid-cover.webp"),
 };
 const CATEGORY_ART: Record<string, string> = {
   Arcade: GAME_ART_BY_SLUG["neon-drift"],
@@ -107,13 +112,37 @@ type PlaySession = {
   state: Record<string, string | number | boolean | null>;
 };
 
+// Coarse audience type for this profile. Drives the DEFAULT of
+// preferences.allowedRatings when a profile is first created (adult = every
+// tier; child/toddler = every tier except "mature", per the "no Mature
+// exposure by default for child profiles" rule). Does not itself gate
+// anything after creation — allowedRatings is the actual enforcement set.
+export type PhantomPlayProfileType = "adult" | "child" | "toddler";
+
+// PIN-gates a child/toddler profile's own ability to widen its rating
+// exposure. pinHash/pinSalt are sha256(salt + pin) — never store a plaintext
+// PIN. When enabled and the acting session is not a workspace/platform admin,
+// preferences.allowedRatings + profileType changes require a matching PIN.
+export type PhantomPlayGuardianLock = {
+  enabled: boolean;
+  pinHash: string | null;
+  pinSalt: string | null;
+  updatedAt: string;
+};
+
 type PlayerProfile = {
   tenantId: string;
   actorId: string;
   favorites: string[];
   sessions: PlaySession[];
+  profileType: PhantomPlayProfileType;
+  guardianLock: PhantomPlayGuardianLock;
   preferences: {
     contentRating: PhantomPlayRating;
+    // "Game Rating Exposure": the actual per-profile allow-set. A rating
+    // absent from this array is hidden from this profile's catalog no matter
+    // what `contentRating` (the legacy single ceiling) says — both must pass.
+    allowedRatings: PhantomPlayRating[];
     sound: boolean;
     reducedMotion: boolean;
     allowCommunityGames: boolean;
@@ -132,6 +161,26 @@ type PhantomPlayRoomParticipant = {
   lastSeenAt: string;
 };
 
+// Per-participant ready-check, keyed by actorId. A missing key means "not
+// marked ready" (same as `false`) — never assume ready for an absent key.
+export type PhantomPlayRoomReadyStates = Record<string, boolean>;
+
+// Host-set caps on the room. `maxHumans` defaults to 3 (kept well under
+// `maxPlayers`, which already caps at 8/30 for friends/classroom) — a room
+// only needs a higher maxHumans when a specific game's design calls for it,
+// so callers pass an explicit value rather than relying on maxPlayers alone.
+export type PhantomPlayRoomHostControls = {
+  allowBotFill: boolean;
+  maxHumans: number;
+};
+
+// A game-defined bot seat. `difficulty` is a free-text label the game
+// interprets itself (the platform never simulates bot behavior).
+export type PhantomPlayRoomBotSlot = {
+  slotId: string;
+  difficulty: string;
+};
+
 export type PhantomPlayRoom = {
   id: string;
   code: string;
@@ -147,7 +196,18 @@ export type PhantomPlayRoom = {
   updatedAt: string;
   expiresAt: string;
   participants: PhantomPlayRoomParticipant[];
-  match?: PhantomPlayMatchState;
+  // Generic JSON-serializable match-state envelope. The platform never reads
+  // or interprets its contents — each game defines its own internal shape.
+  // Written only via updatePhantomPlayRoomMatchState (host-authoritative).
+  matchState: unknown;
+  readyStates: PhantomPlayRoomReadyStates;
+  hostControls: PhantomPlayRoomHostControls;
+  botSlots: PhantomPlayRoomBotSlot[];
+  // Seconds a participant may remain `status: "online"` with a stale
+  // lastSeenAt before API consumers should treat them as effectively
+  // disconnected. Purely advisory to consumers — the server never
+  // auto-removes a participant for exceeding this window.
+  reconnectGraceSeconds: number;
   safety: {
     transport: "workspace_relay";
     joinPolicy: "signed_in_same_tenant_code";
@@ -186,30 +246,83 @@ export type PhantomPlaySubmission = {
   updatedAt: string;
 };
 
+// Append-only audit trail for rating-relevant changes: a game's
+// contentRating/contentDescriptors changing, or a profile's
+// allowedRatings/guardianLock changing via an admin or guardian action.
+// Never written to by ordinary player actions (favoriting, playing, etc).
+export type PhantomPlayRatingChangeEntry = {
+  id: string;
+  actorId: string;
+  ts: string;
+  gameId?: string;
+  profileId?: string;
+  field: "contentRating" | "contentDescriptors" | "allowedRatings" | "guardianLock" | "profileType";
+  previousValue: unknown;
+  newValue: unknown;
+  reason: string;
+};
+
+// Per-game admin override of contentRating/contentDescriptors. Built-in
+// games are a source-defined constant array (PHANTOMPLAY_BUILT_IN_GAMES); we
+// never mutate that array in place. An override here is merged on top of a
+// game (built-in or community) wherever the catalog is assembled. Exported
+// so other modules (e.g. phantomplay-v2.ts's own catalog-consuming surfaces)
+// can merge/read the same overrides read-only, matching V2's existing
+// read-only-of-V1-store pattern.
+export type PhantomPlayGameOverride = {
+  contentRating?: PhantomPlayRating;
+  contentDescriptors?: PhantomPlayContentDescriptor[];
+  updatedAt: string;
+};
+
+// Pure merge helper, reusable outside this module's store shape.
+export function mergeGameRatingOverride(game: PhantomPlayGame, override?: PhantomPlayGameOverride): PhantomPlayGame {
+  if (!override) return game;
+  return {
+    ...game,
+    contentRating: override.contentRating ?? game.contentRating,
+    contentDescriptors: override.contentDescriptors ?? game.contentDescriptors,
+  };
+}
+
+// True when `rating` is visible under a profile's "Game Rating Exposure"
+// allow-set. An empty/missing allow-set is treated as unrestricted (matches
+// the "adult" default / pre-feature-backfill behavior) rather than hiding
+// everything, so a caller that hasn't loaded a profile's set yet fails open
+// to "show" rather than silently hiding the whole catalog.
+export function isRatingAllowed(rating: PhantomPlayRating, allowedRatings: PhantomPlayRating[] | undefined | null): boolean {
+  if (!allowedRatings || !allowedRatings.length) return true;
+  return allowedRatings.includes(rating);
+}
+
 type PhantomPlayStore = {
   version: 1;
   profiles: Record<string, PlayerProfile>;
   rooms: PhantomPlayRoom[];
   submissions: PhantomPlaySubmission[];
+  ratingChangeHistory: PhantomPlayRatingChangeEntry[];
+  gameOverrides: Record<string, PhantomPlayGameOverride>;
 };
+
+const TAK_CREATOR = "Tak";
 
 export const PHANTOMPLAY_BUILT_IN_GAMES: PhantomPlayGame[] = [
   {
     id: "neon-drift",
     title: "Neon Drift",
     summary: "Auto-fire spaceship shooter with waves, powerups, and shield saves.",
-    description: "A real arcade shooter: fly fast, fire nonstop, collect rapid fire, spread shot, shield, magnet, and repair powerups, then push deeper into harder waves.",
+    description: "A real arcade shooter: move with WASD/arrow keys or touch-drag, fire nonstop, collect rapid fire, spread shot, shield, magnet, and repair powerups, then push deeper into harder waves.",
     category: "Arcade",
     tags: ["shooter", "powerups", "arcade", "touch"],
     contentRating: "everyone",
     developer: "Tak",
     developerAvatar: TAK_AVATAR,
     kind: "built_in",
-    launchUrl: "/app/games/neon-drift.html?v=1.3.0",
+    launchUrl: "/app/games/neon-drift.html?v=1.2.3",
     thumbnail: GAME_ART_BY_SLUG["neon-drift"],
     featured: true,
     version: "1.2.3",
-    controls: "WASD/arrow keys to fly. Auto-fire is always on.",
+    controls: "WASD/arrow keys to fly. Auto-fire is always on. Touch and drag on mobile.",
     progressSupport: true,
     scoreSupport: true,
     engine: { tier: "arcade-large-map", minVersion: PHANTOMPLAY_ENGINE.version },
@@ -217,37 +330,56 @@ export const PHANTOMPLAY_BUILT_IN_GAMES: PhantomPlayGame[] = [
   {
     id: "signal-match",
     title: "Signal Match",
-    summary: "Find the matching signals before the grid resets.",
-    description: "A calm memory game with short rounds, a visible score, keyboard support, and saved best scores.",
+    summary: "Watch a one-by-one signal sequence, then match the pairs from memory.",
+    description: "A calm memory game with sequential symbol flashes, short rounds, match burst feedback, a visible score, keyboard support, and saved best scores.",
     category: "Puzzle",
-    tags: ["memory", "calm", "puzzle", "touch"],
+    tags: ["memory", "flash", "puzzle", "touch"],
+    contentRating: "toddler",
+    developer: "Tak",
+    developerAvatar: TAK_AVATAR,
+    kind: "built_in",
+    launchUrl: "/app/games/signal-match.html?v=1.2.0",
+    thumbnail: GAME_ART_BY_SLUG["signal-match"],
+    featured: false,
+    version: "1.2.0",
+    controls: "Click, tap, or use Tab + Enter",
+    progressSupport: true,
+    scoreSupport: true,
+  },
+  {
+    id: "phantom-dash",
+    title: "Phantom Dash",
+    summary: "Jump, double-jump, and flip gravity through a neon obstacle gauntlet.",
+    description: "A Geometry Dash-style one-button runner with rising speed, gravity gates, neon hazards, score, levels, and quick restarts.",
+    category: "Arcade",
+    tags: ["runner", "jump", "geometry", "arcade", "touch"],
     contentRating: "everyone",
     developer: "Tak",
     developerAvatar: TAK_AVATAR,
     kind: "built_in",
-    launchUrl: "/app/games/signal-match.html?v=1.1.1",
-    thumbnail: GAME_ART_BY_SLUG["signal-match"],
+    launchUrl: "/app/games/phantom-dash.html?v=1.1.0",
+    thumbnail: CATEGORY_ART["Arcade"],
     featured: true,
-    version: "1.1.1",
-    controls: "Click, tap, or use Tab + Enter",
+    version: "1.1.0",
+    controls: "Space, ↑, click, or tap to jump. Double-jump, gravity flips, orbs, and combo flow are enabled.",
     progressSupport: true,
     scoreSupport: true,
   },
   {
     id: "focus-stack",
     title: "Focus Stack",
-    summary: "Drop each layer cleanly and build the tallest signal tower.",
-    description: "A timing game designed for quick intentional breaks, with visible score, resumable progress, and a local best score.",
+    summary: "Drop perfect layers with landing guides, sliced shards, flow bursts, and tower shockwaves.",
+    description: "A timing game designed for quick intentional breaks, with landing guides, falling cutoff shards, perfect-drop shockwaves, visible score, resumable progress, and a local best score.",
     category: "Focus",
     tags: ["timing", "focus", "quick", "touch"],
     contentRating: "everyone",
     developer: "Tak",
     developerAvatar: TAK_AVATAR,
     kind: "built_in",
-    launchUrl: "/app/games/focus-stack.html?v=1.1.1",
+    launchUrl: "/app/games/focus-stack.html?v=1.3.0",
     thumbnail: GAME_ART_BY_SLUG["focus-stack"],
     featured: false,
-    version: "1.1.1",
+    version: "1.3.0",
     controls: "Space, Enter, click, or tap",
     progressSupport: true,
     scoreSupport: true,
@@ -255,18 +387,18 @@ export const PHANTOMPLAY_BUILT_IN_GAMES: PhantomPlayGame[] = [
   {
     id: "word-weld",
     title: "Word Weld",
-    summary: "Build as many words as you can from one shifting signal rack.",
-    description: "A quick word-building game with tap, keyboard, score, timer, and clean reset controls.",
+    summary: "Weld words from shifting racks with combo sparks and time bonuses.",
+    description: "A quicker, juicier word-building game with keyboard/touch input, combo scoring, forged-word bursts, timer bonuses, and clean reset controls.",
     category: "Creative",
     tags: ["word", "creative", "quick", "touch"],
     contentRating: "everyone",
     developer: "Tak",
     developerAvatar: TAK_AVATAR,
     kind: "built_in",
-    launchUrl: "/app/games/word-weld.html?v=1.0.0",
+    launchUrl: "/app/games/word-weld.html?v=1.1.0",
     thumbnail: GAME_ART_BY_SLUG["word-weld"],
     featured: true,
-    version: "1.0.0",
+    version: "1.1.0",
     controls: "Keyboard, tap letters, Enter to submit",
     progressSupport: true,
     scoreSupport: true,
@@ -274,18 +406,18 @@ export const PHANTOMPLAY_BUILT_IN_GAMES: PhantomPlayGame[] = [
   {
     id: "reflex-grid",
     title: "Reflex Grid",
-    summary: "Hit the live cells before the grid burns out.",
-    description: "A fast aim-and-reaction grid for short focus breaks, with mistakes, streaks, and a real finish.",
-    category: "Kids",
-    tags: ["reaction", "strategy", "touch", "aim", "kids"],
-    contentRating: "everyone",
+    summary: "Hit live cells, chase bonus targets, and keep the combo alive before the grid burns out.",
+    description: "A sharper aim-and-reaction grid with combo scoring, bonus targets, hit sparks, miss shock feedback, a visible timeout bar, audio cues, mistakes, and a real finish.",
+    category: "Strategy",
+    tags: ["reaction", "strategy", "touch", "aim"],
+    contentRating: "toddler",
     developer: "Tak",
     developerAvatar: TAK_AVATAR,
     kind: "built_in",
-    launchUrl: "/app/games/reflex-grid.html?v=1.0.0",
+    launchUrl: "/app/games/reflex-grid.html?v=1.3.0",
     thumbnail: GAME_ART_BY_SLUG["reflex-grid"],
     featured: false,
-    version: "1.0.0",
+    version: "1.3.0",
     controls: "Click, tap, or use number keys",
     progressSupport: true,
     scoreSupport: true,
@@ -293,19 +425,19 @@ export const PHANTOMPLAY_BUILT_IN_GAMES: PhantomPlayGame[] = [
   {
     id: "penalty-kick",
     title: "Penalty Kick",
-    summary: "Pick your lane, hit the green zone, and beat the keeper.",
-    description: "A readable, touch-friendly sports timing game with five shots, tap-to-aim lanes, visible timing feedback, keeper reads, and a clean final whistle.",
+    summary: "Pick your lane, time the strike, and beat the keeper.",
+    description: "A touch-friendly sports timing game with five shots, visible score, keeper reads, and saved score.",
     category: "Sports",
     tags: ["sports", "timing", "soccer", "touch"],
-    contentRating: "everyone",
+    contentRating: "toddler",
     developer: "Tak",
     developerAvatar: TAK_AVATAR,
     kind: "built_in",
-    launchUrl: "/app/games/penalty-kick.html?v=1.0.3",
+    launchUrl: "/app/games/penalty-kick.html?v=1.1.0",
     thumbnail: GAME_ART_BY_SLUG["penalty-kick"],
-    featured: true,
-    version: "1.0.3",
-    controls: "Tap a lane or use arrows. Shoot when the meter says LOCKED.",
+    featured: false,
+    version: "1.1.0",
+    controls: "Choose one of five lanes, read the keeper, then shoot in the sweet spot.",
     progressSupport: true,
     scoreSupport: true,
   },
@@ -314,16 +446,16 @@ export const PHANTOMPLAY_BUILT_IN_GAMES: PhantomPlayGame[] = [
     title: "Rift Frenzy",
     summary: "Grow from reef bait to apex hunter in a neon multiplayer-style fish arena.",
     description: "A modern eat-smaller-fish arena with rival schools, growth stages, boost windows, danger reads, and touch-friendly movement. It feels like a live arena even when running as a safe built-in sandbox.",
-    category: "Kids",
-    tags: ["fish", "arena", "growth", "io", "touch", "kids"],
+    category: "Arcade",
+    tags: ["fish", "arena", "growth", "io", "touch"],
     contentRating: "everyone",
     developer: "Tak",
     developerAvatar: TAK_AVATAR,
     kind: "built_in",
-    launchUrl: "/app/games/rift-frenzy.html?v=1.0.4",
+    launchUrl: "/app/games/rift-frenzy.html?v=1.1.0",
     thumbnail: GAME_ART_BY_SLUG["rift-frenzy"],
-    featured: false,
-    version: "1.0.4",
+    featured: true,
+    version: "1.1.0",
     controls: "Move with WASD/arrow keys or touch-drag. Eat smaller fish, avoid bigger rivals, boost with Space.",
     progressSupport: true,
     scoreSupport: true,
@@ -334,139 +466,297 @@ export const PHANTOMPLAY_BUILT_IN_GAMES: PhantomPlayGame[] = [
     title: "Serpent Surge",
     summary: "A fast snake arena with rivals, pickups, cutoffs, boost trails, and storm pressure.",
     description: "A PhantomPlay take on snake arena games: orbit energy, grow long, bait rival serpents, use boost carefully, and survive a closing storm ring without any external networking.",
-    category: "Kids",
-    tags: ["snake", "arena", "io", "survival", "touch", "kids"],
+    category: "Strategy",
+    tags: ["snake", "arena", "io", "survival", "touch"],
     contentRating: "everyone",
     developer: "Tak",
     developerAvatar: TAK_AVATAR,
     kind: "built_in",
-    launchUrl: "/app/games/serpent-surge.html?v=1.0.4",
+    launchUrl: "/app/games/serpent-surge.html?v=1.1.0",
     thumbnail: GAME_ART_BY_SLUG["serpent-surge"],
-    featured: false,
-    version: "1.0.4",
+    featured: true,
+    version: "1.1.0",
     controls: "Steer with mouse, touch, WASD, or arrows. Hold Space or touch pressure to boost.",
     progressSupport: true,
     scoreSupport: true,
     engine: { tier: "arena-large-map", minVersion: PHANTOMPLAY_ENGINE.version },
   },
   {
-    id: "crown-circuit",
-    title: "Crown Circuit",
-    summary: "A two-player-only lane card battle with towers, elixir, counters, and sudden death.",
-    description: "A strictly multiplayer tower duel: two players draft from four unit cards, spend elixir, choose lanes, break towers, and win the crown. No solo mode, no bots, no fake opponents - local keyboard duels or PhantomPlay private rooms only.",
-    category: "Strategy",
-    tags: ["multiplayer-only", "tower duel", "cards", "lanes", "keyboard", "rooms"],
-    contentRating: "everyone",
-    developer: TAK_CREATOR,
+    id: "color-rush",
+    title: "Color Rush",
+    summary: "Catch target colors through lane sweeps, rush chains, particle bursts, and combo pressure.",
+    description: "Four falling columns with glowing target lanes, lane sweep feedback, target-change surges, catch/miss particle bursts, combo scoring, faster target swaps, audio feedback, and three-life pressure.",
+    category: "Arcade",
+    tags: ["reaction", "color", "keyboard", "touch"],
+    contentRating: "toddler",
+    developer: "Tak",
     developerAvatar: TAK_AVATAR,
     kind: "built_in",
-    launchUrl: "/app/games/crown-circuit.html?v=1.0.0",
-    thumbnail: GAME_ART_BY_SLUG["crown-circuit"],
-    featured: true,
-    version: "1.0.0",
-    controls: "Local: P1 uses 1-4 then Q/W/E. P2 uses 7-0 then I/O/P. Online: create a PhantomPlay room, join with two players, then launch.",
-    progressSupport: false,
+    launchUrl: "/app/games/color-rush.html?v=1.2.0",
+    thumbnail: CATEGORY_ART["Arcade"],
+    featured: false,
+    version: "1.2.0",
+    controls: "A/S/D/F or tap a column",
+    progressSupport: true,
     scoreSupport: true,
-    multiplayerOnly: true,
-    localMultiplayer: true,
-    onlineMultiplayer: true,
-    minPlayers: 2,
-    maxPlayers: 2,
-    engine: { tier: "arena-multiplayer-relay", minVersion: PHANTOMPLAY_ENGINE.version },
   },
   {
-    id: "color-rush", title: "Color Rush", summary: "Catch only the target color as the tiles fall faster.",
-    description: "Four falling columns and a rotating target color. Catch the right hue, ignore the rest, keep three lives.",
-    category: "Kids", tags: ["reaction", "color", "keyboard", "touch", "kids"], contentRating: "everyone", developer: TAK_CREATOR, kind: "built_in",
-    launchUrl: "/app/games/color-rush.html", thumbnail: "/app/assets/poses/mode-dark-image.webp", featured: false, version: "1.0.0",
-    controls: "A/S/D/F or tap a column", progressSupport: true, scoreSupport: true,
+    id: "tile-flow",
+    title: "Tile Flow",
+    summary: "Rotate charged pipes through animated current paths, pulsing nodes, and eight energized boards.",
+    description: "A tactile pipe-rotation puzzle with animated current flow, pulsing node endpoints, twist feedback, board-wide solve surges, glow trails, and escalating boards. Turn each tile until the current reaches the exit.",
+    category: "Puzzle",
+    tags: ["logic", "calm", "keyboard", "touch"],
+    contentRating: "everyone",
+    developer: "Tak",
+    developerAvatar: TAK_AVATAR,
+    kind: "built_in",
+    launchUrl: "/app/games/tile-flow.html?v=1.2.0",
+    thumbnail: CATEGORY_ART["Puzzle"],
+    featured: false,
+    version: "1.2.0",
+    controls: "Click/tap to rotate, arrows to move",
+    progressSupport: true,
+    scoreSupport: true,
   },
   {
-    id: "tile-flow", title: "Tile Flow", summary: "Rotate the pipes to connect the signal end to end.",
-    description: "Eight hand-verified solvable levels. Turn each tile until the flow reaches the exit.",
-    category: "Puzzle", tags: ["logic", "calm", "keyboard", "touch"], contentRating: "everyone", developer: TAK_CREATOR, kind: "built_in",
-    launchUrl: "/app/games/tile-flow.html", thumbnail: "/app/assets/poses/mode-dark-website.webp", featured: false, version: "1.0.0",
-    controls: "Click/tap to rotate, arrows to move", progressSupport: true, scoreSupport: true,
+    id: "tower-tactics",
+    title: "Tower Tactics",
+    summary: "Slide, merge, and chain combo towers toward 2048.",
+    description: "A sharper 4x4 merge puzzle with combo scoring, impact feedback, and glowing high-value towers. Plan your slides — the board fills fast when you stop thinking ahead.",
+    category: "Strategy",
+    tags: ["merge", "strategy", "keyboard", "touch"],
+    contentRating: "everyone",
+    developer: "Tak",
+    developerAvatar: TAK_AVATAR,
+    kind: "built_in",
+    launchUrl: "/app/games/tower-tactics.html?v=1.1.0",
+    thumbnail: CATEGORY_ART["Strategy"],
+    featured: false,
+    version: "1.1.0",
+    controls: "Arrow keys or swipe",
+    progressSupport: true,
+    scoreSupport: true,
   },
   {
-    id: "tower-tactics", title: "Tower Tactics", summary: "Slide and merge matching tiles to build the highest number.",
-    description: "A tight 4x4 merge puzzle. Plan your slides — the board fills fast when you stop thinking ahead.",
-    category: "Strategy", tags: ["merge", "strategy", "keyboard", "touch"], contentRating: "everyone", developer: TAK_CREATOR, kind: "built_in",
-    launchUrl: "/app/games/tower-tactics.html", thumbnail: "/app/assets/poses/mode-dark-admin.webp", featured: false, version: "1.0.0",
-    controls: "Arrow keys or swipe", progressSupport: true, scoreSupport: true,
+    id: "breath-pacer",
+    title: "Breath Pacer",
+    summary: "Box-breathe with phase waves, flow streaks, soft audio, and calming neon motion.",
+    description: "An immersive breathing companion with expanding light, animated phase waves, phase-change cues, timing accuracy, flow streaks, subtle synthesized tones, and a two-minute completion ritual.",
+    category: "Focus",
+    tags: ["calm", "breathing", "wellness", "touch"],
+    contentRating: "everyone",
+    developer: "Tak",
+    developerAvatar: TAK_AVATAR,
+    kind: "built_in",
+    launchUrl: "/app/games/breath-pacer.html?v=1.2.0",
+    thumbnail: CATEGORY_ART["Focus"],
+    featured: false,
+    version: "1.2.0",
+    controls: "Tap or press Space on each phase",
+    progressSupport: true,
+    scoreSupport: true,
   },
   {
-    id: "breath-pacer", title: "Breath Pacer", summary: "Match your breath to the pacer and reset in two minutes.",
-    description: "A box-breathing companion. Follow the expanding ring through inhale, hold, exhale, hold and score your timing.",
-    category: "Focus", tags: ["calm", "breathing", "wellness", "touch"], contentRating: "everyone", developer: TAK_CREATOR, kind: "built_in",
-    launchUrl: "/app/games/breath-pacer.html", thumbnail: "/app/assets/poses/mode-dark-ask.webp", featured: false, version: "1.0.0",
-    controls: "Tap or press Space on each phase", progressSupport: true, scoreSupport: true,
+    id: "court-vision",
+    title: "Court Vision",
+    summary: "Sink neon free throws with ball trails, rim flashes, streak heat, and miss pressure.",
+    description: "A physics free-throw shooter with growing distance, streak scoring, level scaling, ball trails, rim flash feedback, arena lights, synthesized court sounds, and three-miss pressure.",
+    category: "Sports",
+    tags: ["sports", "physics", "timing", "touch"],
+    contentRating: "everyone",
+    developer: "Tak",
+    developerAvatar: TAK_AVATAR,
+    kind: "built_in",
+    launchUrl: "/app/games/court-vision.html?v=1.2.0",
+    thumbnail: CATEGORY_ART["Sports"],
+    featured: false,
+    version: "1.2.0",
+    controls: "Tap or press Space to shoot",
+    progressSupport: true,
+    scoreSupport: true,
   },
   {
-    id: "court-vision", title: "Court Vision", summary: "Read the arc and power to sink the free throw.",
-    description: "A physics free-throw shooter. The distance and rim grow with every make; three misses ends the game.",
-    category: "Sports", tags: ["sports", "physics", "timing", "touch"], contentRating: "everyone", developer: TAK_CREATOR, kind: "built_in",
-    launchUrl: "/app/games/court-vision.html", thumbnail: "/app/assets/poses/mode-dark-video.webp", featured: false, version: "1.0.0",
-    controls: "Tap or press Space to shoot", progressSupport: true, scoreSupport: true,
+    id: "pixel-bloom",
+    title: "Pixel Bloom",
+    summary: "Grow a neon mandala through linked petals, combo ripples, particle bursts, and unlockable seasons.",
+    description: "A calm creative puzzle-toy with mirrored blooms, petal particle bursts, visual ripples, combo scoring, seasonal palette surges, keyboard/touch control, and a stronger completion state.",
+    category: "Creative",
+    tags: ["calm", "creative", "relax", "touch"],
+    contentRating: "everyone",
+    developer: "Tak",
+    developerAvatar: TAK_AVATAR,
+    kind: "built_in",
+    launchUrl: "/app/games/pixel-bloom.html?v=1.2.0",
+    thumbnail: CATEGORY_ART["Creative"],
+    featured: false,
+    version: "1.2.0",
+    controls: "Tap cells or arrows + Space",
+    progressSupport: true,
+    scoreSupport: true,
   },
   {
-    id: "pixel-bloom", title: "Pixel Bloom", summary: "Bloom a symmetric neon mandala — no timer, no pressure.",
-    description: "A calm creative toy. Place petals that mirror four ways; build combos as the pattern fills.",
-    category: "Creative", tags: ["calm", "creative", "relax", "touch"], contentRating: "everyone", developer: TAK_CREATOR, kind: "built_in",
-    launchUrl: "/app/games/pixel-bloom.html", thumbnail: "/app/assets/poses/mode-dark-image.webp", featured: false, version: "1.0.0",
-    controls: "Tap cells or arrows + Space", progressSupport: true, scoreSupport: true,
+    id: "circuit-serpent",
+    title: "Circuit Serpent",
+    summary: "Grow the serpent with packet bursts, visible levels, and rising speed.",
+    description: "Classic snake on a 17x17 circuit board upgraded with packet particle bursts, visible level progression, speed jumps every five packets, and one-crash arcade pressure.",
+    category: "Arcade",
+    tags: ["snake", "classic", "reaction", "touch"],
+    contentRating: "everyone",
+    developer: "Tak",
+    developerAvatar: TAK_AVATAR,
+    kind: "built_in",
+    launchUrl: "/app/games/circuit-serpent.html?v=1.1.0",
+    thumbnail: CATEGORY_ART["Arcade"],
+    featured: false,
+    version: "1.1.0",
+    controls: "Arrows/WASD, swipe, or tap screen edges",
+    progressSupport: true,
+    scoreSupport: true,
   },
   {
-    id: "circuit-serpent", title: "Circuit Serpent", summary: "Grow the serpent — eat packets, dodge walls and your own tail.",
-    description: "Classic snake on a 17x17 circuit board. Speed climbs every five packets; one crash ends the run.",
-    category: "Kids", tags: ["snake", "classic", "reaction", "touch", "kids"], contentRating: "everyone", developer: TAK_CREATOR, kind: "built_in",
-    launchUrl: "/app/games/circuit-serpent.html", thumbnail: "/app/assets/poses/mode-dark-admin.webp", featured: false, version: "1.0.0",
-    controls: "Arrows/WASD, swipe, or tap screen edges", progressSupport: true, scoreSupport: true,
+    id: "echo-sequence",
+    title: "Echo Sequence",
+    summary: "Echo growing neon patterns with streaks, pulsing rings, pad sparks, and sharper feedback.",
+    description: "A memory-sequence classic upgraded with four glowing pads, original tones, streak scoring, perfect-round callouts, expanding echo rings, pad sparks, and stronger hit/miss feedback.",
+    category: "Focus",
+    tags: ["memory", "sequence", "sound", "touch"],
+    contentRating: "everyone",
+    developer: "Tak",
+    developerAvatar: TAK_AVATAR,
+    kind: "built_in",
+    launchUrl: "/app/games/echo-sequence.html?v=1.2.0",
+    thumbnail: CATEGORY_ART["Focus"],
+    featured: true,
+    version: "1.2.0",
+    controls: "Tap pads or press 1-4",
+    progressSupport: true,
+    scoreSupport: true,
   },
   {
-    id: "echo-sequence", title: "Echo Sequence", summary: "Watch the pads light up, then echo the pattern back.",
-    description: "A memory-sequence classic with four glowing pads and original tones. One wrong echo ends the run.",
-    category: "Focus", tags: ["memory", "sequence", "sound", "touch"], contentRating: "everyone", developer: TAK_CREATOR, kind: "built_in",
-    launchUrl: "/app/games/echo-sequence.html", thumbnail: "/app/assets/poses/mode-dark-ask.webp", featured: true, version: "1.0.0",
-    controls: "Tap pads or press 1-4", progressSupport: true, scoreSupport: true,
+    id: "signal-sweeper",
+    title: "Signal Sweeper",
+    summary: "Sweep a live signal grid with reveal-chain sparks, flags, and clock pressure.",
+    description: "Minesweeper with a guaranteed-safe first reveal, animated chain bursts, grid pulse feedback, flag mode, long-press flagging, reveal-chain scoring, best-chain results, and a race-the-clock score.",
+    category: "Strategy",
+    tags: ["logic", "classic", "mines", "touch"],
+    contentRating: "everyone",
+    developer: "Tak",
+    developerAvatar: TAK_AVATAR,
+    kind: "built_in",
+    launchUrl: "/app/games/signal-sweeper.html?v=1.2.0",
+    thumbnail: CATEGORY_ART["Strategy"],
+    featured: false,
+    version: "1.2.0",
+    controls: "Tap to reveal, long-press or F to flag",
+    progressSupport: true,
+    scoreSupport: true,
   },
   {
-    id: "signal-sweeper", title: "Signal Sweeper", summary: "Clear the grid without touching a mine — the numbers tell the truth.",
-    description: "Minesweeper with a guaranteed-safe first reveal, flag mode, long-press flagging, and a race-the-clock score.",
-    category: "Strategy", tags: ["logic", "classic", "mines", "touch"], contentRating: "everyone", developer: TAK_CREATOR, kind: "built_in",
-    launchUrl: "/app/games/signal-sweeper.html", thumbnail: "/app/assets/poses/mode-dark-website.webp", featured: false, version: "1.0.0",
-    controls: "Tap to reveal, long-press or F to flag", progressSupport: true, scoreSupport: true,
+    id: "neon-breaker",
+    title: "Neon Breaker",
+    summary: "Break glowing bricks with combo chains, powerups, trails, and clean arcade physics.",
+    description: "Breakout with real deflection physics, combo chains, ball trails, wide/slow powerups, six brick tiers, and levels that speed up as they clear.",
+    category: "Arcade",
+    tags: ["classic", "paddle", "levels", "touch"],
+    contentRating: "everyone",
+    developer: "Tak",
+    developerAvatar: TAK_AVATAR,
+    kind: "built_in",
+    launchUrl: "/app/games/neon-breaker.html?v=1.1.0",
+    thumbnail: CATEGORY_ART["Arcade"],
+    featured: true,
+    version: "1.1.0",
+    controls: "Drag or Arrow keys, Space to launch",
+    progressSupport: true,
+    scoreSupport: true,
   },
   {
-    id: "neon-breaker", title: "Neon Breaker", summary: "Break every brick — the angle is yours to control.",
-    description: "Breakout with real deflection physics, six brick tiers, and levels that speed up as you clear them.",
-    category: "Arcade", tags: ["classic", "paddle", "levels", "touch"], contentRating: "everyone", developer: TAK_CREATOR, kind: "built_in",
-    launchUrl: "/app/games/neon-breaker.html?v=1.0.1", thumbnail: "/app/assets/poses/mode-dark-video.webp", featured: true, version: "1.0.1",
-    controls: "Drag or Arrow keys, Space to launch", progressSupport: true, scoreSupport: true,
+    id: "type-storm",
+    title: "Type Storm",
+    summary: "Type falling words through rising storm levels and combo bursts.",
+    description: "A typing sprint with 200 words, combo streaks, visible level progression, destruction particles, and a pace that keeps climbing. Three shields, no mercy.",
+    category: "Focus",
+    tags: ["typing", "speed", "keyboard", "words"],
+    contentRating: "everyone",
+    developer: "Tak",
+    developerAvatar: TAK_AVATAR,
+    kind: "built_in",
+    launchUrl: "/app/games/type-storm.html?v=1.1.0",
+    thumbnail: CATEGORY_ART["Focus"],
+    featured: false,
+    version: "1.1.0",
+    controls: "Just type — tap first on mobile",
+    progressSupport: true,
+    scoreSupport: true,
   },
   {
-    id: "type-storm", title: "Type Storm", summary: "Type the falling words before they breach your shields.",
-    description: "A typing sprint with 200 words, combo streaks, and a pace that keeps climbing. Three shields, no mercy.",
-    category: "Focus", tags: ["typing", "speed", "keyboard", "words"], contentRating: "everyone", developer: TAK_CREATOR, kind: "built_in",
-    launchUrl: "/app/games/type-storm.html", thumbnail: "/app/assets/poses/mode-dark-write.webp", featured: false, version: "1.0.0",
-    controls: "Just type — tap first on mobile", progressSupport: true, scoreSupport: true,
-  },
-  {
-    id: "logic-lights", title: "Logic Lights", summary: "Turn every light off — each tap flips its neighbors too.",
-    description: "Ten hand-guaranteed solvable Lights Out levels with par scores. Beat par, bank the points.",
-    category: "Puzzle", tags: ["logic", "lights-out", "calm", "touch"], contentRating: "everyone", developer: TAK_CREATOR, kind: "built_in",
-    launchUrl: "/app/games/logic-lights.html", thumbnail: "/app/assets/poses/mode-dark-image.webp", featured: false, version: "1.0.0",
-    controls: "Tap cells or arrows + Enter", progressSupport: true, scoreSupport: true,
+    id: "logic-lights",
+    title: "Logic Lights",
+    summary: "Clear energized Lights Out boards with flip sparks, board surges, par streaks, and score pressure.",
+    description: "Ten guaranteed-solvable Lights Out levels with par scoring, streak bonuses for clean solves, animated flip sparks, level-clear board surges, audio feedback, and keyboard/touch controls.",
+    category: "Puzzle",
+    tags: ["logic", "lights-out", "calm", "touch"],
+    contentRating: "everyone",
+    developer: "Tak",
+    developerAvatar: TAK_AVATAR,
+    kind: "built_in",
+    launchUrl: "/app/games/logic-lights.html?v=1.2.0",
+    thumbnail: CATEGORY_ART["Puzzle"],
+    featured: false,
+    version: "1.2.0",
+    controls: "Tap cells or arrows + Enter",
+    progressSupport: true,
+    scoreSupport: true,
   },
 ];
 
-const ratingRank: Record<PhantomPlayRating, number> = { everyone: 0, teen: 1, mature: 2 };
+const ratingRank: Record<PhantomPlayRating, number> = { toddler: 0, everyone: 1, everyone10: 2, teen: 3, mature: 4 };
+const ALL_RATINGS: PhantomPlayRating[] = ["toddler", "everyone", "everyone10", "teen", "mature"];
 const clean = (value: unknown, max = 500) => String(value ?? "").trim().replace(/[\u0000-\u001f\u007f]/g, " ").slice(0, max);
 const now = () => new Date().toISOString();
 const clamp = (value: unknown, min: number, max: number) => Math.max(min, Math.min(max, Number(value) || 0));
-const safeRating = (value: unknown): PhantomPlayRating => value === "mature" || value === "teen" ? value : "everyone";
+const safeRating = (value: unknown): PhantomPlayRating =>
+  value === "mature" || value === "teen" || value === "everyone10" || value === "toddler" ? value : "everyone";
+const safeProfileType = (value: unknown): PhantomPlayProfileType => value === "child" || value === "toddler" ? value : "adult";
+// Adult profiles default to every tier. Child/toddler profiles default to
+// every tier EXCEPT "mature" — the brief's "no Mature exposure by default
+// for child profiles" rule. Toddler is further restricted to the two
+// gentlest tiers by default (Toddler Space separation is a later UI step;
+// this is the data-model half of it).
+function defaultAllowedRatings(profileType: PhantomPlayProfileType): PhantomPlayRating[] {
+  if (profileType === "adult") return [...ALL_RATINGS];
+  if (profileType === "toddler") return ["toddler", "everyone"];
+  return ["toddler", "everyone", "everyone10", "teen"];
+}
+function safeAllowedRatings(value: unknown, fallback: PhantomPlayRating[]): PhantomPlayRating[] {
+  if (!Array.isArray(value)) return fallback;
+  const cleaned = [...new Set(value.filter((item): item is PhantomPlayRating => ALL_RATINGS.includes(item as PhantomPlayRating)))];
+  return cleaned.length ? cleaned : fallback;
+}
+
+// Guardian PIN is never stored in plaintext — only sha256(salt + pin).
+function hashGuardianPin(pin: string, pinSalt: string) {
+  return createHash("sha256").update(`${pinSalt}:${pin}`).digest("hex");
+}
+function verifyGuardianPin(lock: PhantomPlayGuardianLock, pin: unknown): boolean {
+  if (!lock.pinHash || !lock.pinSalt) return false;
+  const candidate = clean(pin, 32);
+  return candidate.length > 0 && hashGuardianPin(candidate, lock.pinSalt) === lock.pinHash;
+}
+
+// Append-only; see PhantomPlayRatingChangeEntry for the shape.
+function appendRatingChangeHistory(store: PhantomPlayStore, entry: Omit<PhantomPlayRatingChangeEntry, "id" | "ts">) {
+  store.ratingChangeHistory = Array.isArray(store.ratingChangeHistory) ? store.ratingChangeHistory : [];
+  store.ratingChangeHistory.unshift({ id: `rating-change-${randomUUID()}`, ts: now(), ...entry });
+  store.ratingChangeHistory = store.ratingChangeHistory.slice(0, 2000);
+}
 const safeVersion = (value: unknown) => /^\d+\.\d+\.\d+(?:-[a-z0-9.-]+)?$/i.test(clean(value, 40)) ? clean(value, 40) : "1.0.0";
 const ROOM_TTL_MINUTES = 90;
+const ROOM_RECONNECT_GRACE_SECONDS = 45;
+const ROOM_DEFAULT_MAX_HUMANS = 3;
+const ROOM_MATCH_STATE_MAX_BYTES = 65_536;
+const ROOM_MAX_BOT_SLOTS = 12;
 const privateHost = (hostname: string) => {
   const host = hostname.toLowerCase().replace(/^\[|\]$/g, "");
   if (host === "localhost" || [".localhost", ".local", ".internal", ".lan", ".home"].some((suffix) => host.endsWith(suffix)) || host === "0.0.0.0" || host === "::1") return true;
@@ -528,6 +818,13 @@ function developerNameFor(game: PhantomPlayGame) {
   return game.kind === "built_in" || artSlugFor(game) || game.developer === "Phantom Labs" ? "Tak" : (game.developer || "Tak");
 }
 
+// Merges an admin rating-override (contentRating/contentDescriptors) on top
+// of a catalog entry, if one exists. Never mutates PHANTOMPLAY_BUILT_IN_GAMES
+// or PHANTOMPLAY_V2_GAMES themselves — overrides live only in the JSON store.
+function applyGameOverride(store: PhantomPlayStore, game: PhantomPlayGame): PhantomPlayGame {
+  return mergeGameRatingOverride(game, store.gameOverrides?.[game.id]);
+}
+
 function normalizeGameArt(game: PhantomPlayGame): PhantomPlayGame {
   const developer = developerNameFor(game);
   return {
@@ -556,14 +853,43 @@ function profileKey(tenantId: string, actorId: string) {
   return `${tenantId}::${actorId}`;
 }
 
-function freshProfile(tenantId: string, actorId: string): PlayerProfile {
+function freshProfile(tenantId: string, actorId: string, profileType: PhantomPlayProfileType = "adult"): PlayerProfile {
   return {
     tenantId,
     actorId,
     favorites: [],
     sessions: [],
-    preferences: { contentRating: "teen", sound: true, reducedMotion: false, allowCommunityGames: true },
+    profileType,
+    guardianLock: { enabled: false, pinHash: null, pinSalt: null, updatedAt: now() },
+    preferences: {
+      contentRating: "teen",
+      allowedRatings: defaultAllowedRatings(profileType),
+      sound: true,
+      reducedMotion: false,
+      allowCommunityGames: true,
+    },
     updatedAt: now(),
+  };
+}
+
+// Backfills rooms persisted before matchState/readyStates/hostControls/
+// botSlots/reconnectGraceSeconds existed, so an older store file never
+// crashes a reader that assumes these fields are present.
+function normalizeRoomShape(room: Partial<PhantomPlayRoom> & Record<string, unknown>): PhantomPlayRoom {
+  const maxPlayers = Number.isFinite(room.maxPlayers) ? (room.maxPlayers as number) : 8;
+  const hostControls = room.hostControls && typeof room.hostControls === "object" && !Array.isArray(room.hostControls)
+    ? (room.hostControls as Partial<PhantomPlayRoomHostControls>)
+    : {};
+  return {
+    ...(room as PhantomPlayRoom),
+    matchState: Object.prototype.hasOwnProperty.call(room, "matchState") ? room.matchState : null,
+    readyStates: room.readyStates && typeof room.readyStates === "object" && !Array.isArray(room.readyStates) ? (room.readyStates as PhantomPlayRoomReadyStates) : {},
+    hostControls: {
+      allowBotFill: hostControls.allowBotFill === true,
+      maxHumans: Number.isFinite(hostControls.maxHumans) ? Math.floor(clamp(hostControls.maxHumans, 1, Math.max(maxPlayers, 1))) : Math.min(ROOM_DEFAULT_MAX_HUMANS, Math.max(maxPlayers, 1)),
+    },
+    botSlots: Array.isArray(room.botSlots) ? (room.botSlots as PhantomPlayRoomBotSlot[]).slice(0, ROOM_MAX_BOT_SLOTS) : [],
+    reconnectGraceSeconds: Number.isFinite(room.reconnectGraceSeconds) ? Math.max(5, Math.floor(room.reconnectGraceSeconds as number)) : ROOM_RECONNECT_GRACE_SECONDS,
   };
 }
 
@@ -573,11 +899,13 @@ async function readStore(): Promise<PhantomPlayStore> {
     return {
       version: 1,
       profiles: parsed.profiles && typeof parsed.profiles === "object" ? parsed.profiles : {},
-      rooms: Array.isArray(parsed.rooms) ? parsed.rooms : [],
+      rooms: Array.isArray(parsed.rooms) ? parsed.rooms.map((room) => normalizeRoomShape(room as PhantomPlayRoom)) : [],
       submissions: Array.isArray(parsed.submissions) ? parsed.submissions : [],
+      ratingChangeHistory: Array.isArray(parsed.ratingChangeHistory) ? parsed.ratingChangeHistory : [],
+      gameOverrides: parsed.gameOverrides && typeof parsed.gameOverrides === "object" ? parsed.gameOverrides : {},
     };
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { version: 1, profiles: {}, rooms: [], submissions: [] };
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { version: 1, profiles: {}, rooms: [], submissions: [], ratingChangeHistory: [], gameOverrides: {} };
     throw error;
   }
 }
@@ -626,6 +954,16 @@ function ensureProfile(store: PhantomPlayStore, tenantId: string, actorId: strin
   const profile = store.profiles[key] || freshProfile(tenantId, actorId);
   profile.favorites = Array.isArray(profile.favorites) ? profile.favorites.slice(0, 200) : [];
   profile.sessions = Array.isArray(profile.sessions) ? profile.sessions.slice(0, 120) : [];
+  // Backfill fields for profiles persisted before this feature existed.
+  // Pre-existing profiles are treated as "adult" (unrestricted) so upgrading
+  // this server never silently hides games from an already-active account.
+  profile.profileType = safeProfileType(profile.profileType);
+  if (!profile.guardianLock || typeof profile.guardianLock !== "object") {
+    profile.guardianLock = { enabled: false, pinHash: null, pinSalt: null, updatedAt: now() };
+  }
+  if (!Array.isArray(profile.preferences.allowedRatings) || !profile.preferences.allowedRatings.length) {
+    profile.preferences.allowedRatings = defaultAllowedRatings(profile.profileType);
+  }
   store.profiles[key] = profile;
   return profile;
 }
@@ -640,7 +978,6 @@ function communityGames(store: PhantomPlayStore): PhantomPlayGame[] {
     tags: item.tags,
     contentRating: item.contentRating,
     developer: item.developerName,
-    developerId: item.developerId,
     kind: "community",
     launchUrl: item.launchUrl,
     thumbnail: item.screenshots[0] || "/app/assets/poses/mode-dark-ask.webp",
@@ -652,11 +989,18 @@ function communityGames(store: PhantomPlayStore): PhantomPlayGame[] {
   }));
 }
 
+// Applies BOTH the legacy single-ceiling preference (ratingRank comparison)
+// AND the richer per-profile "Game Rating Exposure" allow-set — a game
+// hidden by either must not appear. Admin gameOverrides are merged in before
+// either filter runs, so an overridden rating is what gets checked.
 function catalogFor(store: PhantomPlayStore, profile: PlayerProfile) {
-  const all = [...PHANTOMPLAY_BUILT_IN_GAMES, ...(profile.preferences.allowCommunityGames ? communityGames(store) : [])].map(normalizeGameArt);
+  const all = [...PHANTOMPLAY_BUILT_IN_GAMES, ...(profile.preferences.allowCommunityGames ? communityGames(store) : [])]
+    .map((game) => applyGameOverride(store, game))
+    .map(normalizeGameArt);
+  const allowedRatings = new Set(safeAllowedRatings(profile.preferences.allowedRatings, defaultAllowedRatings(profile.profileType)));
   return all
-    .filter((game) => game.active !== false)
-    .filter((game) => ratingRank[game.contentRating] <= ratingRank[profile.preferences.contentRating]);
+    .filter((game) => ratingRank[game.contentRating] <= ratingRank[profile.preferences.contentRating])
+    .filter((game) => allowedRatings.has(game.contentRating));
 }
 
 function historySummary(profile: PlayerProfile) {
@@ -679,6 +1023,33 @@ function historySummary(profile: PlayerProfile) {
     seconds: item.totalSeconds,
     canContinue: item.latest.progress > 0 && item.latest.progress < 100,
   }));
+}
+
+function phantomLeaderboards(store: PhantomPlayStore, catalog: PhantomPlayGame[], actorId: string) {
+  const gameIds = new Set(catalog.map((game) => game.id));
+  const scores: Array<{ gameId: string; gameTitle: string; player: string; score: number; seconds: number; updatedAt: string; isYou: boolean }> = [];
+  for (const profile of Object.values(store.profiles)) {
+    for (const session of profile.sessions) {
+      if (!gameIds.has(session.gameId) || session.score === null) continue;
+      const gameTitle = catalog.find((game) => game.id === session.gameId)?.title || session.gameId;
+      scores.push({
+        gameId: session.gameId,
+        gameTitle,
+        player: profile.actorId === actorId ? "You" : `Player ${profile.actorId.slice(-4) || "ghost"}`,
+        score: session.score,
+        seconds: session.seconds,
+        updatedAt: session.updatedAt,
+        isYou: profile.actorId === actorId,
+      });
+    }
+  }
+  const sortScores = (rows: typeof scores) => rows.sort((a, b) => b.score - a.score || a.seconds - b.seconds || b.updatedAt.localeCompare(a.updatedAt));
+  const byGame = catalog.map((game) => ({
+    gameId: game.id,
+    gameTitle: game.title,
+    rows: sortScores(scores.filter((row) => row.gameId === game.id)).slice(0, 5),
+  })).filter((board) => board.rows.length);
+  return { overall: sortScores(scores.slice()).slice(0, 10), byGame };
 }
 
 function roomStatus(room: PhantomPlayRoom): PhantomPlayRoomStatus {
@@ -767,17 +1138,6 @@ function safePlayState(value: unknown): PlaySession["state"] {
   return state;
 }
 
-function safeMatchPayload(value: unknown): PhantomPlayMatchAction["payload"] {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
-  const payload: PhantomPlayMatchAction["payload"] = {};
-  for (const [key, raw] of Object.entries(value as Record<string, unknown>).slice(0, 24)) {
-    const cleanKey = clean(key, 60);
-    if (!cleanKey) continue;
-    payload[cleanKey] = typeof raw === "string" ? clean(raw, 240) : typeof raw === "number" ? clamp(raw, -1_000_000, 1_000_000) : typeof raw === "boolean" || raw === null ? raw : null;
-  }
-  return payload;
-}
-
 export async function getPhantomPlaySnapshot(session: AccessSession, options: { tenantId?: unknown; entitled?: boolean; dailyMinuteLimit?: number; canSubmitGames?: boolean } = {}) {
   const tenantId = tenantIdFor(session, options.tenantId);
   const actorId = actorIdFor(session);
@@ -799,9 +1159,16 @@ export async function getPhantomPlaySnapshot(session: AccessSession, options: { 
       canModerate: session.canManageAccess || session.isSuperAdmin === true,
     },
     catalog,
+    leaderboards: phantomLeaderboards(store, catalog, actorId),
     favorites: profile.favorites,
     history: historySummary(profile),
     preferences: profile.preferences,
+    // Exposed the same shape PATCH /api/phantomplay/profile already returns
+    // (never pinHash/pinSalt) so the client can render current rating
+    // exposure + guardian-lock state without a spurious write-triggering
+    // PATCH just to read it.
+    profileType: profile.profileType,
+    guardianLock: { enabled: profile.guardianLock.enabled },
     engine: PHANTOMPLAY_ENGINE,
     rooms: roomsForSnapshot(store, tenantId, actorId, session),
     submissions: store.submissions.filter((item) => item.developerId === actorId || session.canManageAccess).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
@@ -815,19 +1182,75 @@ export async function updatePhantomPlayProfile(session: AccessSession, input: Re
   const actorId = actorIdFor(session);
   const store = await readStore();
   const profile = ensureProfile(store, tenantId, actorId);
+  const profileId = profileKey(tenantId, actorId);
   const gameId = clean(input.gameId, 180);
   if (input.favorite === true && gameId && !profile.favorites.includes(gameId)) profile.favorites.unshift(gameId);
   if (input.favorite === false && gameId) profile.favorites = profile.favorites.filter((id) => id !== gameId);
-  if (input.preferences && typeof input.preferences === "object" && !Array.isArray(input.preferences)) {
-    const prefs = input.preferences as Record<string, unknown>;
-    if (prefs.contentRating !== undefined) profile.preferences.contentRating = safeRating(prefs.contentRating);
-    if (typeof prefs.sound === "boolean") profile.preferences.sound = prefs.sound;
-    if (typeof prefs.reducedMotion === "boolean") profile.preferences.reducedMotion = prefs.reducedMotion;
-    if (typeof prefs.allowCommunityGames === "boolean") profile.preferences.allowCommunityGames = prefs.allowCommunityGames;
+
+  const prefs = input.preferences && typeof input.preferences === "object" && !Array.isArray(input.preferences)
+    ? (input.preferences as Record<string, unknown>)
+    : {};
+  const requestsRatingExposureChange = prefs.allowedRatings !== undefined || input.profileType !== undefined;
+  // Platform/workspace admins always bypass the guardian PIN (same "admin
+  // always may" precedent as workspace policy / submission moderation
+  // elsewhere in this module). Otherwise, an enabled guardian lock requires
+  // a matching PIN before allowedRatings or profileType may change.
+  const guardianOk = session.canManageAccess || !profile.guardianLock.enabled || verifyGuardianPin(profile.guardianLock, input.guardianPin);
+  if (requestsRatingExposureChange && !guardianOk) {
+    throw new Error("A guardian PIN is required to change this profile's rating exposure.");
   }
+
+  if (input.profileType !== undefined) {
+    const previousValue = profile.profileType;
+    const newValue = safeProfileType(input.profileType);
+    if (newValue !== previousValue) {
+      profile.profileType = newValue;
+      appendRatingChangeHistory(store, { actorId, profileId, field: "profileType", previousValue, newValue, reason: clean(input.reason, 240) || "profile_type_update" });
+    }
+  }
+
+  if (prefs.contentRating !== undefined) profile.preferences.contentRating = safeRating(prefs.contentRating);
+  if (typeof prefs.sound === "boolean") profile.preferences.sound = prefs.sound;
+  if (typeof prefs.reducedMotion === "boolean") profile.preferences.reducedMotion = prefs.reducedMotion;
+  if (typeof prefs.allowCommunityGames === "boolean") profile.preferences.allowCommunityGames = prefs.allowCommunityGames;
+  if (prefs.allowedRatings !== undefined) {
+    const previousValue = profile.preferences.allowedRatings;
+    const newValue = safeAllowedRatings(prefs.allowedRatings, previousValue);
+    if (JSON.stringify([...newValue].sort()) !== JSON.stringify([...previousValue].sort())) {
+      profile.preferences.allowedRatings = newValue;
+      appendRatingChangeHistory(store, { actorId, profileId, field: "allowedRatings", previousValue, newValue, reason: clean(input.reason, 240) || "profile_preference_update" });
+    }
+  }
+
+  // Guardian lock itself: enabling for the first time (or while already
+  // disabled) needs no PIN — that's the guardian's initial setup moment.
+  // Disabling it, or changing an already-set PIN, needs the current PIN (or
+  // an admin session) so a child profile can't unlock itself.
+  if (input.guardianLock && typeof input.guardianLock === "object" && !Array.isArray(input.guardianLock)) {
+    const lockInput = input.guardianLock as Record<string, unknown>;
+    const previousValue = { enabled: profile.guardianLock.enabled };
+    const settingUpFresh = !profile.guardianLock.enabled && !profile.guardianLock.pinHash;
+    if (settingUpFresh || guardianOk) {
+      const nextEnabled = typeof lockInput.enabled === "boolean" ? lockInput.enabled : profile.guardianLock.enabled;
+      const newPin = clean(lockInput.pin, 32);
+      if (newPin) {
+        const { pinHash, pinSalt } = ((pin: string) => { const salt = randomUUID(); return { pinHash: hashGuardianPin(pin, salt), pinSalt: salt }; })(newPin);
+        profile.guardianLock.pinHash = pinHash;
+        profile.guardianLock.pinSalt = pinSalt;
+      }
+      profile.guardianLock.enabled = nextEnabled;
+      profile.guardianLock.updatedAt = now();
+      if (nextEnabled !== previousValue.enabled) {
+        appendRatingChangeHistory(store, { actorId, profileId, field: "guardianLock", previousValue, newValue: { enabled: nextEnabled }, reason: clean(input.reason, 240) || "guardian_lock_update" });
+      }
+    } else {
+      throw new Error("A guardian PIN is required to change the guardian lock.");
+    }
+  }
+
   profile.updatedAt = now();
   await writeStore(store);
-  return { favorites: profile.favorites, preferences: profile.preferences };
+  return { favorites: profile.favorites, preferences: profile.preferences, profileType: profile.profileType, guardianLock: { enabled: profile.guardianLock.enabled } };
 }
 
 export async function startPhantomPlaySession(session: AccessSession, input: Record<string, unknown>, limits: { entitled?: boolean; dailyMinuteLimit?: number } = {}) {
@@ -881,12 +1304,14 @@ export async function createPhantomPlayRoom(session: AccessSession, input: Recor
   if (!game) throw new Error("Choose an available PhantomPlay game for this room.");
   const mode: PhantomPlayRoomMode = input.mode === "friends" ? "friends" : "classroom";
   if (mode === "classroom" && game.contentRating !== "everyone") throw new Error("Classroom rooms can only use Everyone-rated games.");
-  const maxLimit = Math.min(mode === "classroom" ? 30 : 8, game.maxPlayers || 30);
+  const maxLimit = mode === "classroom" ? 30 : 8;
   const requestedMax = Number(input.maxPlayers);
-  const defaultMax = game.multiplayerOnly ? Math.max(2, Math.min(2, maxLimit)) : (mode === "classroom" ? 12 : 6);
-  const maxPlayers = Number.isFinite(requestedMax) ? Math.floor(clamp(requestedMax, 2, maxLimit)) : defaultMax;
+  const maxPlayers = Number.isFinite(requestedMax) ? Math.floor(clamp(requestedMax, 2, maxLimit)) : (mode === "classroom" ? 12 : 6);
   const timestamp = now();
   pruneRooms(store);
+  const requestedHostControls = input.hostControls && typeof input.hostControls === "object" && !Array.isArray(input.hostControls)
+    ? (input.hostControls as Record<string, unknown>)
+    : {};
   const room: PhantomPlayRoom = {
     id: `pp-room-${randomUUID()}`,
     code: freshRoomCode(store, tenantId),
@@ -902,6 +1327,14 @@ export async function createPhantomPlayRoom(session: AccessSession, input: Recor
     updatedAt: timestamp,
     expiresAt: new Date(Date.now() + ROOM_TTL_MINUTES * 60_000).toISOString(),
     participants: [{ actorId, label: actorLabelFor(session), role: "host", status: "online", joinedAt: timestamp, lastSeenAt: timestamp }],
+    matchState: null,
+    readyStates: {},
+    hostControls: {
+      allowBotFill: requestedHostControls.allowBotFill === true,
+      maxHumans: Number.isFinite(Number(requestedHostControls.maxHumans)) ? Math.floor(clamp(requestedHostControls.maxHumans, 1, maxPlayers)) : Math.min(ROOM_DEFAULT_MAX_HUMANS, maxPlayers),
+    },
+    botSlots: [],
+    reconnectGraceSeconds: ROOM_RECONNECT_GRACE_SECONDS,
     safety: {
       transport: "workspace_relay",
       joinPolicy: "signed_in_same_tenant_code",
@@ -916,41 +1349,6 @@ export async function createPhantomPlayRoom(session: AccessSession, input: Recor
     },
   };
   store.rooms.unshift(room);
-  await writeStore(store);
-  return { room: roomView(room) };
-}
-
-export async function updatePhantomPlayRoomMatch(session: AccessSession, input: Record<string, unknown>) {
-  const tenantId = tenantIdFor(session, input.tenantId);
-  const actorId = actorIdFor(session);
-  const store = await readStore();
-  const room = findRoom(store, tenantId, input.code);
-  if (!room) return null;
-  if (roomStatus(room) !== "open") throw new Error("This private room is not open.");
-  const participant = room.participants.find((item) => item.actorId === actorId && item.status === "online");
-  if (!participant && !session.canManageAccess) return null;
-  const gameId = clean(input.gameId || room.gameId, 180);
-  if (gameId !== room.gameId) throw new Error("Match action game does not match the room game.");
-  const timestamp = now();
-  const match = room.match && room.match.gameId === room.gameId
-    ? room.match
-    : { gameId: room.gameId, seq: 0, updatedAt: timestamp, actions: [] };
-  const actionInput = input.action && typeof input.action === "object" && !Array.isArray(input.action) ? input.action as Record<string, unknown> : {};
-  const type = clean(actionInput.type || "input", 50) || "input";
-  match.seq += 1;
-  match.updatedAt = timestamp;
-  match.actions.push({
-    id: `match-action-${randomUUID()}`,
-    seq: match.seq,
-    actorId,
-    label: participant?.label || actorLabelFor(session),
-    type,
-    payload: safeMatchPayload(actionInput.payload),
-    createdAt: timestamp,
-  });
-  match.actions = match.actions.slice(-240);
-  room.match = match;
-  room.updatedAt = timestamp;
   await writeStore(store);
   return { room: roomView(room) };
 }
@@ -1008,6 +1406,103 @@ export async function leavePhantomPlayRoom(session: AccessSession, input: Record
   }
   if (room.hostActorId === actorId || (session.canManageAccess && input.end === true)) room.status = "locked";
   room.updatedAt = timestamp;
+  await writeStore(store);
+  return { room: roomView(room) };
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+// Throws if `value` isn't JSON-serializable or exceeds the size budget —
+// callers should surface this as a 400, not silently truncate someone's
+// authoritative match state.
+function safeMatchStateValue(value: unknown): unknown {
+  let serialized: string;
+  try {
+    serialized = JSON.stringify(value ?? null) ?? "null";
+  } catch {
+    throw new Error("matchState must be JSON-serializable.");
+  }
+  if (Buffer.byteLength(serialized, "utf8") > ROOM_MATCH_STATE_MAX_BYTES) {
+    throw new Error(`matchState is too large (limit ${ROOM_MATCH_STATE_MAX_BYTES} bytes).`);
+  }
+  return JSON.parse(serialized);
+}
+
+function safeBotSlotsInput(value: unknown): PhantomPlayRoomBotSlot[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item): item is Record<string, unknown> => isPlainObject(item))
+    .map((item) => ({ slotId: clean(item.slotId, 60), difficulty: clean(item.difficulty, 40) }))
+    .filter((item) => item.slotId)
+    .slice(0, ROOM_MAX_BOT_SLOTS);
+}
+
+// Host-authoritative write of a room's generic match-state envelope, plus
+// (optionally, in the same call) hostControls/botSlots. "Host-authoritative"
+// is a deliberate safety choice: the platform never trusts a non-host
+// participant's browser with an authoritative match result, so only the
+// current room host (or a workspace/platform admin, matching every other
+// admin-override precedent in this module) may call this.
+export async function updatePhantomPlayRoomMatchState(session: AccessSession, input: Record<string, unknown>) {
+  const tenantId = tenantIdFor(session, input.tenantId);
+  const actorId = actorIdFor(session);
+  const store = await readStore();
+  const room = findRoom(store, tenantId, input.code);
+  if (!room) return null;
+  const status = roomStatus(room);
+  if (status === "ended" || status === "expired") throw new Error("This room is no longer active.");
+  if (room.hostActorId !== actorId && !session.canManageAccess) {
+    throw new Error("Only the current room host can update match state.");
+  }
+
+  if (Object.prototype.hasOwnProperty.call(input, "matchState")) {
+    const incoming = safeMatchStateValue(input.matchState);
+    const mode = input.mode === "replace" ? "replace" : "merge";
+    room.matchState = mode === "merge" && isPlainObject(room.matchState) && isPlainObject(incoming)
+      ? { ...room.matchState, ...incoming }
+      : incoming;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(input, "hostControls") && isPlainObject(input.hostControls)) {
+    const requested = input.hostControls as Record<string, unknown>;
+    if (typeof requested.allowBotFill === "boolean") room.hostControls.allowBotFill = requested.allowBotFill;
+    if (requested.maxHumans !== undefined && Number.isFinite(Number(requested.maxHumans))) {
+      room.hostControls.maxHumans = Math.floor(clamp(requested.maxHumans, 1, room.maxPlayers));
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(input, "botSlots")) {
+    room.botSlots = safeBotSlotsInput(input.botSlots);
+  }
+
+  room.updatedAt = now();
+  await writeStore(store);
+  return { room: roomView(room) };
+}
+
+// A participant's self-service ready toggle. Any real participant record
+// (host or player, regardless of "online"/"left" — matching the reconnect
+// window) may flip their own entry; nobody may set another actor's.
+export async function setPhantomPlayRoomReady(session: AccessSession, input: Record<string, unknown>) {
+  const tenantId = tenantIdFor(session, input.tenantId);
+  const actorId = actorIdFor(session);
+  const store = await readStore();
+  const room = findRoom(store, tenantId, input.code);
+  if (!room) return null;
+  const status = roomStatus(room);
+  if (status === "ended" || status === "expired") throw new Error("This room is no longer active.");
+  const participant = room.participants.find((item) => item.actorId === actorId);
+  if (!participant) throw new Error("You are not a participant in this room.");
+  room.readyStates[actorId] = input.ready === true;
+  // This is the only self-service, low-frequency, already-mutating room call
+  // a participant makes on a regular cadence, so the client also uses it as
+  // a liveness "touch" (re-sending its current ready value unchanged) to
+  // keep lastSeenAt fresh for connection-status display — bumping it here
+  // avoids adding a second write-triggering route just for a heartbeat.
+  participant.lastSeenAt = now();
+  room.updatedAt = now();
   await writeStore(store);
   return { room: roomView(room) };
 }
@@ -1102,7 +1597,107 @@ export async function moderatePhantomPlaySubmission(session: AccessSession, subm
   return submission;
 }
 
+// Admin/guardian rating-override endpoint's service function. Gated at the
+// route layer with the same requireAdminAccessSession precedent used by
+// moderatePhantomPlaySubmission above — this function assumes the caller
+// already checked platform/workspace admin authority.
+//
+// target "game": overrides a catalog game's contentRating/contentDescriptors
+// (built-in or community) via store.gameOverrides — never mutates
+// PHANTOMPLAY_BUILT_IN_GAMES/PHANTOMPLAY_V2_GAMES in place.
+//
+// target "profile": a guardian/admin action on another actor's profile —
+// sets allowedRatings ("Game Rating Exposure"), profileType, and/or the
+// guardian-lock enabled flag, bypassing the PIN gate that applies to the
+// profile's own self-service updatePhantomPlayProfile calls.
+//
+// Every effective change is appended to ratingChangeHistory.
+export async function applyPhantomPlayRatingOverride(session: AccessSession, input: Record<string, unknown>) {
+  const actorId = actorIdFor(session);
+  const target = clean(input.target, 20);
+  const reason = clean(input.reason, 240) || "admin_rating_override";
+  const store = await readStore();
+
+  if (target === "game") {
+    const gameId = clean(input.gameId, 180);
+    if (!gameId) throw new Error("A gameId is required.");
+    const known = [...PHANTOMPLAY_BUILT_IN_GAMES, ...communityGames(store)].find((game) => game.id === gameId);
+    if (!known) throw new Error("That game is not in the catalog.");
+    const current = applyGameOverride(store, known);
+    const nextOverride: PhantomPlayGameOverride = { ...(store.gameOverrides[gameId] || {}), updatedAt: now() };
+    if (input.contentRating !== undefined) {
+      const newValue = safeRating(input.contentRating);
+      if (newValue !== current.contentRating) {
+        appendRatingChangeHistory(store, { actorId, gameId, field: "contentRating", previousValue: current.contentRating, newValue, reason });
+      }
+      nextOverride.contentRating = newValue;
+    }
+    if (input.contentDescriptors !== undefined) {
+      const newValue = (Array.isArray(input.contentDescriptors) ? input.contentDescriptors.map((item) => clean(item, 60)).filter(Boolean).slice(0, 20) : []) as PhantomPlayContentDescriptor[];
+      if (JSON.stringify(newValue) !== JSON.stringify(current.contentDescriptors || [])) {
+        appendRatingChangeHistory(store, { actorId, gameId, field: "contentDescriptors", previousValue: current.contentDescriptors || [], newValue, reason });
+      }
+      nextOverride.contentDescriptors = newValue;
+    }
+    store.gameOverrides[gameId] = nextOverride;
+    await writeStore(store);
+    return { gameId, override: nextOverride };
+  }
+
+  if (target === "profile") {
+    const targetTenantId = tenantIdFor(session, input.tenantId);
+    const targetActorId = clean(input.actorId, 120);
+    if (!targetActorId) throw new Error("An actorId is required.");
+    const profile = ensureProfile(store, targetTenantId, targetActorId);
+    const profileId = profileKey(targetTenantId, targetActorId);
+    if (input.allowedRatings !== undefined) {
+      const previousValue = profile.preferences.allowedRatings;
+      const newValue = safeAllowedRatings(input.allowedRatings, previousValue);
+      if (JSON.stringify([...newValue].sort()) !== JSON.stringify([...previousValue].sort())) {
+        profile.preferences.allowedRatings = newValue;
+        appendRatingChangeHistory(store, { actorId, profileId, field: "allowedRatings", previousValue, newValue, reason });
+      }
+    }
+    if (input.profileType !== undefined) {
+      const previousValue = profile.profileType;
+      const newValue = safeProfileType(input.profileType);
+      if (newValue !== previousValue) {
+        profile.profileType = newValue;
+        appendRatingChangeHistory(store, { actorId, profileId, field: "profileType", previousValue, newValue, reason });
+      }
+    }
+    if (input.guardianLockEnabled !== undefined) {
+      const previousValue = { enabled: profile.guardianLock.enabled };
+      const nextEnabled = input.guardianLockEnabled === true;
+      if (nextEnabled !== previousValue.enabled) {
+        appendRatingChangeHistory(store, { actorId, profileId, field: "guardianLock", previousValue, newValue: { enabled: nextEnabled }, reason });
+      }
+      profile.guardianLock.enabled = nextEnabled;
+      profile.guardianLock.updatedAt = now();
+    }
+    profile.updatedAt = now();
+    await writeStore(store);
+    return { profileId, preferences: profile.preferences, profileType: profile.profileType, guardianLock: { enabled: profile.guardianLock.enabled } };
+  }
+
+  throw new Error('target must be "game" or "profile".');
+}
+
+export async function getPhantomPlayRatingChangeHistory(limit = 200) {
+  const store = await readStore();
+  return store.ratingChangeHistory.slice(0, Math.max(0, Math.min(2000, limit)));
+}
+
 export async function getPhantomPlayStoreStatus() {
   const store = await readStore();
-  return { provider: "local_json", pathConfigured: Boolean(process.env.PHANTOMFORCE_PHANTOMPLAY_PATH), profiles: Object.keys(store.profiles).length, rooms: store.rooms.filter((room) => ["open", "locked"].includes(roomStatus(room))).length, submissions: store.submissions.length, approvedCommunityGames: communityGames(store).length };
+  return {
+    provider: "local_json",
+    pathConfigured: Boolean(process.env.PHANTOMFORCE_PHANTOMPLAY_PATH),
+    profiles: Object.keys(store.profiles).length,
+    rooms: store.rooms.filter((room) => ["open", "locked"].includes(roomStatus(room))).length,
+    submissions: store.submissions.length,
+    approvedCommunityGames: communityGames(store).length,
+    ratingChangeHistoryEntries: store.ratingChangeHistory.length,
+    gameOverrides: Object.keys(store.gameOverrides).length,
+  };
 }

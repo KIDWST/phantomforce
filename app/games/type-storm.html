@@ -33,6 +33,7 @@
   <header class="hud">
     <div><span>SCORE</span><b data-score>0</b></div>
     <div><span>COMBO</span><b data-combo>0</b></div>
+    <div><span>LEVEL</span><b data-level>1</b></div>
     <div class="shields"><span>SHIELDS</span><b data-shields>&#11041;&#11041;&#11041;</b></div>
   </header>
   <div class="stage"><canvas aria-label="Type Storm play field"></canvas></div>
@@ -50,8 +51,8 @@
     const hintEl=document.querySelector('.hint');
     const FONT='700 20px ui-monospace,SFMono-Regular,Menlo,monospace';
     let cw=320,ch=480,baseY=420;
-    let falling=[],active=null,phase='start',paused=false,completed=false;
-    let score=0,shields=3,wordsDestroyed=0,streak=0,bestCombo=0,elapsed=0,spawnT=0,flash=0;
+    let falling=[],active=null,bolts=[],phase='start',paused=false,completed=false;
+    let score=0,shields=3,wordsDestroyed=0,streak=0,bestCombo=0,level=1,elapsed=0,spawnT=0,flash=0;
     let last=0,soundOn=true,reduced=false,audio=null;
 
     function beep(freq,dur=0.05,gain=0.03){
@@ -78,7 +79,12 @@
     function updateHud(){
       document.querySelector('[data-score]').textContent=score;
       document.querySelector('[data-combo]').textContent=streak;
+      document.querySelector('[data-level]').textContent=level;
       document.querySelector('[data-shields]').textContent=shields>0?'⬢'.repeat(shields):'—';
+    }
+    function addBolt(x,y,color='#63ffad'){
+      if(reduced)return;
+      for(let i=0;i<10;i++)bolts.push({x,y,color,a:Math.random()*Math.PI*2,v:40+Math.random()*90,life:.28+Math.random()*.2});
     }
     function spawn(){
       if(falling.length>=10)return;
@@ -96,8 +102,8 @@
       falling.push({text,matched:0,x,y:-14,width,speed:base*(0.85+Math.random()*0.3)});
     }
     function startRun(){
-      falling=[];active=null;
-      score=0;shields=3;wordsDestroyed=0;streak=0;bestCombo=0;elapsed=0;spawnT=1.2;flash=0;completed=false;
+      falling=[];active=null;bolts=[];
+      score=0;shields=3;wordsDestroyed=0;streak=0;bestCombo=0;level=1;elapsed=0;spawnT=1.2;flash=0;completed=false;
       phase='playing';paused=false;
       startEl.hidden=true;pauseEl.hidden=true;resultEl.hidden=true;
       updateHud();
@@ -108,9 +114,9 @@
       if(completed||phase==='over')return;
       phase='over';completed=true;active=null;
       resultEl.querySelector('[data-final]').textContent=`Final score ${score}`;
-      resultEl.querySelector('[data-detail]').textContent=`${wordsDestroyed} word${wordsDestroyed===1?'':'s'} destroyed · best combo ${bestCombo}.`;
+      resultEl.querySelector('[data-detail]').textContent=`${wordsDestroyed} word${wordsDestroyed===1?'':'s'} destroyed · best combo ${bestCombo} · level ${level}.`;
       resultEl.hidden=false;
-      host('complete',{score,progress:100,state:{words:wordsDestroyed,bestCombo}});
+      host('complete',{score,progress:100,state:{words:wordsDestroyed,bestCombo,level}});
     }
     function miss(){
       streak=0;flash=Math.max(flash,0.25);
@@ -120,11 +126,13 @@
       falling=falling.filter(w=>w!==word);
       if(active===word)active=null;
       wordsDestroyed++;
+      level=1+Math.floor(wordsDestroyed/12);
       const bonus=Math.min(50,streak*5);
       score+=word.text.length*5+bonus;
       streak++;bestCombo=Math.max(bestCombo,streak);
+      addBolt(word.x+word.width/2,word.y);
       updateHud();beep(660+Math.min(400,streak*30),0.07,0.04);
-      host('score',{score,progress:Math.min(99,wordsDestroyed*3),state:{words:wordsDestroyed,bestCombo}});
+      host('score',{score,progress:Math.min(99,wordsDestroyed*3),state:{words:wordsDestroyed,bestCombo,level}});
     }
     function handleLetter(ch){
       if(phase!=='playing'||paused)return;
@@ -147,18 +155,21 @@
       shields--;streak=0;flash=0.5;
       updateHud();beep(110,0.3,0.05);
       if(shields<=0){gameOver();return}
-      host('progress',{score,progress:Math.min(99,wordsDestroyed*3),state:{words:wordsDestroyed,bestCombo}});
+      host('progress',{score,progress:Math.min(99,wordsDestroyed*3),state:{words:wordsDestroyed,bestCombo,level}});
     }
     function update(dt){
       elapsed+=dt;
       if(flash>0)flash=Math.max(0,flash-dt);
       spawnT-=dt;
-      const interval=Math.max(0.65,2.2-elapsed*0.028);
+      level=1+Math.floor(wordsDestroyed/12);
+      const interval=Math.max(0.52,2.2-elapsed*0.028-level*.035);
       if(spawnT<=0){spawn();spawnT=interval}
       for(const w of [...falling]){
         w.y+=w.speed*dt;
         if(w.y>=baseY){loseShield(w);if(phase!=='playing')return}
       }
+      for(const b of bolts){b.x+=Math.cos(b.a)*b.v*dt;b.y+=Math.sin(b.a)*b.v*dt;b.life-=dt}
+      bolts=bolts.filter(b=>b.life>0);
     }
     function draw(){
       ctx.clearRect(0,0,cw,ch);
@@ -189,6 +200,11 @@
         ctx.fillStyle=isActive?'#effff6':'#a9c5b7';
         ctx.fillText(rest,w.x+ctx.measureText(pre).width,w.y);
       }
+      for(const b of bolts){
+        ctx.globalAlpha=Math.max(0,b.life/.45);ctx.fillStyle=b.color;
+        ctx.beginPath();ctx.arc(b.x,b.y,3+4*b.life,0,Math.PI*2);ctx.fill();
+      }
+      ctx.globalAlpha=1;
     }
     function loop(t){
       requestAnimationFrame(loop);

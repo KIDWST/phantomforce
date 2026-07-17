@@ -6,66 +6,45 @@ import {
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260717-2";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260717-2";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260717-2";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260717-2";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260717-2";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260717-2";
-import { mountManagedGrowthReport } from "./managedgrowth.js?v=phantom-live-20260717-2";
+} from "./store.js?v=phantom-live-20260714-022";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260714-022";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260714-022";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260714-022";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260714-022";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260714-022";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260714-022";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260714-022";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260714-022";
+import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260714-022";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260714-022";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260714-022";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260714-022";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260714-022";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260714-022";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260714-022";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260714-022";
+import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260714-022";
+import { mountAmbient } from "./ambient.js?v=phantom-live-20260714-022";
+import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260714-022";
 import {
-  brainContractAttentionItems,
-  brainContractAvailable,
-  cachedBrainContract,
-  cachedOrganizationPulse,
-  loadBrainContract,
-  loadOrganizationPulse,
-  organizationPulseAvailable,
-  pulseAttentionItems,
-  pulsePendingApprovalCount,
-  shouldRefreshBrainContract,
-  shouldRefreshOrganizationPulse,
-} from "./organizationpulse.js?v=phantom-live-20260717-2";
-import {
-  cachedServerRecords,
-  loadServerRecords,
-  serverRecordsAvailable,
-  shouldRefreshServerRecords,
-} from "./serverrecords.js?v=phantom-live-20260717-2";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260717-2";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260717-2";
-import { mountPhantomWire } from "./agentops.js?v=phantom-live-20260717-2";
-import { mountPhantomAI } from "./phantomai.js?v=phantom-live-20260717-2";
-import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260717-2";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260717-2";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260717-2";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260717-2";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260717-2";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260717-2";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260717-3";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260717-2";
-import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260717-2";
-import { mountAmbient } from "./ambient.js?v=phantom-live-20260717-2";
-import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260717-2";
-import { renderPlanner } from "./planner.js?v=phantom-live-20260717-2";
-import {
-  fetchAuthConfig, databaseLogin, databaseSignup, databaseLogout, switchOrg, fetchAuthMe, fetchEntitlementsSummary,
-} from "./orgs.js?v=phantom-live-20260717-2";
-import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260717-2";
-import { assetsAvailable } from "./orgs.js?v=phantom-live-20260717-2";
-import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260717-2";
-import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260717-2";
-import { renderPhantomStore } from "./phantomstore.js?v=phantom-live-20260717-2";
-// V2 is the default PhantomPlay experience (docs/superpowers/specs/2026-07-15-
-// phantomplay-global-leaderboard-design.md decision #1); "0" is an explicit
-// opt-out via the Classic view button, still wired in phantomplay-v2.js.
-const phantomPlayV2Opted = () => { try { return localStorage.getItem("pf.phantomplay.v2") !== "0"; } catch { return true; } };
-import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260717-2";
+  fetchAuthConfig, databaseLogin, databaseLogout, databaseSignup, databaseForgotUsername, databaseForgotPassword,
+  databaseResetPassword, databaseVerify2fa, databaseStart2faSetup, databaseConfirm2fa, databaseRegenerate2faBackupCodes, databaseDisable2fa,
+  switchOrg, fetchAuthMe, fetchEntitlementsSummary,
+} from "./orgs.js?v=phantom-live-20260714-022";
+import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260714-022";
+import { assetsAvailable } from "./orgs.js?v=phantom-live-20260714-022";
+import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260714-022";
+// PhantomPlay V2 platform shell (Home/Solo/Friends/Workspace/Dev Hub) - opt-in
+// while it hardens: set localStorage "pf.phantomplay.v2" = "1" (the V2 shell has
+// a "Classic view" button to switch back). Classic stays the default experience.
+import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260714-022";
+const phantomPlayV2Opted = () => { try { return localStorage.getItem("pf.phantomplay.v2") === "1"; } catch { return false; } };
+import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260714-022";
 import {
   customizeNavigation,
   loadOrganizationCustomization,
-} from "./customization.js?v=phantom-live-20260717-3";
-import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260717-2";
+} from "./customization.js?v=phantom-live-20260714-022";
+import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260714-022";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -80,7 +59,6 @@ const consoleRoot = $("[data-console]");
 const dashboardShellHtml = consoleRoot ? consoleRoot.innerHTML : "";
 let commandTouchScroll = { x: 0, y: 0 };
 let keyboardViewportBound = false;
-const CUSTOMER_ONBOARDING_VERSION = "2026-07-14-customer-identity-v1";
 
 function updateKeyboardOffset() {
   const vv = window.visualViewport;
@@ -167,19 +145,18 @@ const I = {
 const svg = (key, cls = "") => `<svg class="ic ${cls}" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${I[key] || ""}</svg>`;
 
 /* ============================ access gate ============================ */
-function renderOwnerLoginGate(card, {
-  kicker = "PHANTOMFORCE · LIVE OWNER ACCESS",
-  heading = "Sign in to Phantom.",
-  helper = "Owner account required. This host opens the full operating layer.",
-  note = "The private gateway protects this route. PhantomForce owns the visible login and session.",
-} = {}) {
-  card.innerHTML = `
-      <p class="gate-kicker">${kicker}</p>
-      <h1>${heading}</h1>
+function showGate() {
+  gate.hidden = false;
+  phantom.hidden = true;
+  const card = gate.querySelector(".gate-card");
+  if (isLiveAdminHost()) {
+    card.innerHTML = `
+      <p class="gate-kicker">PHANTOMFORCE · LIVE OWNER ACCESS</p>
+      <h1>Sign in to Phantom.</h1>
       <form class="owner-login" data-owner-login>
         <label>
-          <span>Email</span>
-          <input type="email" data-owner-email name="pf-access-identity" autocomplete="new-password" autocapitalize="none" spellcheck="false" placeholder="you@yourcompany.com" autofocus required />
+          <span>Owner email</span>
+          <input type="email" data-owner-email name="phantomforce-owner-email" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="phantomforcesupport@gmail.com" autofocus required />
         </label>
         <label>
           <span>Owner password</span>
@@ -188,126 +165,39 @@ function renderOwnerLoginGate(card, {
         <button class="gate-opt gate-submit" type="submit">
           <span class="gate-opt-icon">⌘</span>
           <b>Launch Business Manager</b>
-          <i>${helper}</i>
+          <i>Owner account required. This host opens the full operating layer.</i>
         </button>
         <p class="gate-error" data-owner-error hidden></p>
       </form>
-      <p class="gate-note">${note}</p>`;
-  const form = card.querySelector("[data-owner-login]");
-  const emailInput = card.querySelector("[data-owner-email]");
-  const passwordInput = card.querySelector("[data-owner-password]");
-  const error = card.querySelector("[data-owner-error]");
-  [emailInput, passwordInput].forEach((input) => {
-    if (!input) return;
-    input.value = "";
-    const unlock = () => input.removeAttribute("readonly");
-    input.addEventListener("pointerdown", unlock, { once: true });
-    input.addEventListener("focus", unlock, { once: true });
-  });
-  setTimeout(() => {
-    if (emailInput) emailInput.value = "";
-    if (passwordInput) passwordInput.value = "";
-  }, 50);
-  form.onsubmit = async (event) => {
-    event.preventDefault();
-    error.hidden = true;
-    const email = emailInput.value.trim();
-    const password = passwordInput.value;
-    if (!email || !password) { error.textContent = "Enter your email and password."; error.hidden = false; return; }
-    if (/(^|[._+-])(customer|client|test-client|sports)([._+-]|@)|@(customer|client|test-client|sports)\./i.test(email)) {
-      error.textContent = "This is the owner-only admin login. Use the PhantomForce owner account here. Client/test accounts belong on the client app, not admin.phantomforce.online.";
-      error.hidden = false;
-      return;
-    }
-    form.classList.add("is-loading");
-    try {
-      ctx.session = await ownerLogin(email, password);
-      enterPhantom();
-    } catch (err) {
-      session.clear();
-      error.textContent = err?.message || "Owner login failed.";
-      error.hidden = false;
-    } finally {
-      form.classList.remove("is-loading");
-    }
-  };
-}
-
-function renderRoleChoiceGate(card, { localFallback = false } = {}) {
-  card.innerHTML = `
-      <p class="gate-kicker">PHANTOMFORCE · PRIVATE ACCESS</p>
-      <h1>Who is entering Phantom?</h1>
-      <div class="gate-options">
-        <button class="gate-opt" data-enter="admin">
-          <span class="gate-opt-icon">⌘</span>
-          <b>Business Manager</b>
-          <i>Business owner or workspace admin - permissions, modules, approvals, and team control.</i>
-          <em>app.phantomforce.online</em>
-        </button>
-        <button class="gate-opt" data-enter="employee">
-          <span class="gate-opt-icon">◈</span>
-          <b>Team Workspace</b>
-          <i>Employee or operator access inside the business workspace your owner/admin invited you to.</i>
-          <em>app.phantomforce.online</em>
-        </button>
-      </div>
-      <p class="gate-note">${localFallback
-        ? "Local QA shortcut only. Customer accounts require database auth; Jordan and platform admins use admin.phantomforce.online."
-        : "Jordan and PhantomForce platform admins use admin.phantomforce.online."}</p>`;
-  card.querySelectorAll("[data-enter]").forEach((btn) => {
-    btn.onclick = async () => {
-      const kind = btn.dataset.enter;
-      if (kind === "admin" && isStaticPublicHost()) { redirectToLiveAdmin(); return; }
-      if (!isLocalDevHost()) return;
-      try {
-        const response = await fetch("/auth/demo-login", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sessionId: kind === "admin" ? "admin-jordan" : "client-sports-demo" }),
-        });
-        const payload = await response.json().catch(() => ({}));
-        if (response.ok && payload?.token && payload?.session) {
-          ctx.session = {
-            role: kind === "admin" ? "admin" : "employee",
-            name: kind === "admin" ? "Jordan" : "Team Member",
-            label: payload.session.label || "",
-            ws: "phantomforce",
-            sessionId: payload.session.id,
-            canManageAccess: !!payload.session.canManageAccess,
-            token: payload.token,
-          };
-          session.set(ctx.session);
-          enterPhantom();
-          return;
-        }
-      } catch {
-        // The existing local-only visual session remains available offline.
+      <p class="gate-note">The private gateway protects this route. PhantomForce owns the visible login and session.</p>`;
+    const form = card.querySelector("[data-owner-login]");
+    const emailInput = card.querySelector("[data-owner-email]");
+    const passwordInput = card.querySelector("[data-owner-password]");
+    const error = card.querySelector("[data-owner-error]");
+    form.onsubmit = async (event) => {
+      event.preventDefault();
+      error.hidden = true;
+      const email = emailInput.value.trim();
+      const password = passwordInput.value;
+      if (!email || !password) { error.textContent = "Enter your email and password."; error.hidden = false; return; }
+      if (/(^|[._+-])(customer|client|test-client|sports)([._+-]|@)|@(customer|client|test-client|sports)\./i.test(email)) {
+        error.textContent = "This is the owner-only admin login. Use the PhantomForce owner account here. Client/test accounts belong on the client app, not admin.phantomforce.online.";
+        error.hidden = false;
+        return;
       }
-      ctx.session = kind === "admin"
-        ? { role: "admin", name: "Jordan", label: "PhantomForce Owner", ws: "phantomforce", sessionId: "local-admin", canManageAccess: true }
-        : { role: "employee", name: "Team Member", ws: "phantomforce" };
-      session.set(ctx.session);
-      enterPhantom();
+      form.classList.add("is-loading");
+      try {
+        ctx.session = await ownerLogin(email, password);
+        enterPhantom();
+      } catch (err) {
+        session.clear();
+        error.textContent = err?.message || "Owner login failed.";
+        error.hidden = false;
+      } finally {
+        form.classList.remove("is-loading");
+      }
     };
-  });
-}
-
-function renderLocalAuthLoading(card) {
-  card.innerHTML = `
-    <p class="gate-kicker">PHANTOMFORCE · LOCAL QA ACCESS</p>
-    <h1>Checking account boundary.</h1>
-    <div class="owner-login">
-      <p class="gate-note">Phantom is checking whether this local app is backed by owner auth or customer account auth before showing an entry path.</p>
-    </div>
-    <p class="gate-note">When a real auth backend is ready, local QA uses it. One-click access is only an offline local fallback.</p>`;
-}
-
-function showGate() {
-  gate.hidden = false;
-  phantom.hidden = true;
-  const card = gate.querySelector(".gate-card");
-  if (isLiveAdminHost()) {
-    renderOwnerLoginGate(card);
+    maybeUpgradeGateToDatabaseLogin(card);
     return;
   }
 
@@ -317,13 +207,44 @@ function showGate() {
     return;
   }
 
-  if (isLocalDevHost()) {
-    renderLocalAuthLoading(card);
-    maybeUpgradeGateToDatabaseLogin(card, { localDev: true, allowLocalFallback: true });
-    return;
-  }
+  gate.querySelectorAll("[data-enter]").forEach((btn) => {
+    btn.onclick = async () => {
+      const kind = btn.dataset.enter;
+      if (kind === "admin" && isStaticPublicHost()) { redirectToLiveAdmin(); return; }
+      if (isLocalDevHost()) {
+        try {
+          const response = await fetch("/auth/demo-login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ sessionId: kind === "admin" ? "admin-jordan" : "client-sports-demo" }),
+          });
+          const payload = await response.json().catch(() => ({}));
+          if (response.ok && payload?.token && payload?.session) {
+            ctx.session = {
+              role: kind === "admin" ? "admin" : "employee",
+              name: kind === "admin" ? "Jordan" : "Team Member",
+              label: payload.session.label || "",
+              ws: "phantomforce",
+              sessionId: payload.session.id,
+              canManageAccess: !!payload.session.canManageAccess,
+              token: payload.token,
+            };
+            session.set(ctx.session);
+            enterPhantom();
+            return;
+          }
+        } catch {
+          // The existing local-only visual session remains available offline.
+        }
+      }
+      ctx.session = kind === "admin"
+        ? { role: "admin", name: "Jordan", label: "PhantomForce Owner", ws: "phantomforce", sessionId: "local-admin", canManageAccess: true }
+        : { role: "employee", name: "Team Member", ws: "phantomforce" };
+      session.set(ctx.session);
+      enterPhantom();
+    };
+  });
 
-  renderRoleChoiceGate(card);
   maybeUpgradeGateToDatabaseLogin(card);
 }
 
@@ -351,171 +272,138 @@ function renderCustomerAuthBlocked(card, message = "Customer account login is no
 }
 
 function maybeUpgradeGateToDatabaseLogin(card, options = {}) {
-  const { customerApp = false, required = false, localDev = false, allowLocalFallback = false } = options;
+  const { customerApp = false, required = false } = options;
   fetchAuthConfig().then((auth) => {
     if (gate.hidden) return;
     if (!auth?.databaseAuthEnabled) {
-      if (localDev && auth?.ownerProductionAuthEnabled && auth?.productionReady) {
-        renderOwnerLoginGate(card, {
-          kicker: "PHANTOMFORCE · LOCAL OWNER ACCESS",
-          heading: "Sign in to test Business Manager.",
-          helper: "Owner account required. Local QA is using the same owner-auth boundary as the private admin route.",
-          note: "Team/customer workspace accounts require database auth. Local shortcuts stay hidden while owner auth is ready.",
-        });
-        return;
-      }
       if (required) renderCustomerAuthBlocked(card);
-      else if (allowLocalFallback) renderRoleChoiceGate(card, { localFallback: true });
       return;
     }
-    const heading = customerApp ? "Sign in to your workspace." : "Sign in to your business.";
-    const buttonLabel = customerApp ? "Open Workspace" : "Open Business Manager";
+    const resetTokenFromUrl = (() => {
+      try { return new URLSearchParams(window.location.search).get("reset_token") || ""; } catch { return ""; }
+    })();
+    const state = { mode: resetTokenFromUrl ? "reset-pass" : "signin", challenge: null, message: resetTokenFromUrl ? "Password reset token detected. Enter your new password." : "", resetToken: resetTokenFromUrl };
     const helper = customerApp
-      ? "Owners and workspace admins land in Business Manager. Employees land in Team Workspace. Permissions come from the business workspace."
-      : "Your account, businesses, and roles are managed on the PhantomForce server.";
+      ? "Owners/admins open Business Manager. Employees open Team Workspace. Permissions come from the business workspace."
+      : "Your account, businesses, roles, recovery, and 2FA are managed on the PhantomForce server.";
     const note = customerApp
-      ? "Use the email tied to your business workspace. Platform admin accounts belong on admin.phantomforce.online."
-      : "Invited to a business? Accept your invitation first, then sign in here.";
-    const signupHtml = customerApp ? `
-      <form class="owner-login" data-db-signup>
-        <label>
-          <span>Your name</span>
-          <input type="text" data-signup-name name="pf-signup-name" autocomplete="name" placeholder="Jordan" />
-        </label>
-        <label>
-          <span>Workspace name</span>
-          <input type="text" data-signup-workspace name="pf-signup-workspace" autocomplete="organization" placeholder="Your business or studio" required />
-        </label>
-        <label>
-          <span>What are you?</span>
-          <textarea data-signup-brief name="pf-signup-brief" rows="3" minlength="12" maxlength="600" placeholder="Example: a Chicago sports photo brand selling event galleries, prints, and social clips." required></textarea>
-        </label>
-        <label>
-          <span>Email</span>
-          <input type="email" data-signup-email name="pf-signup-email" autocomplete="email" autocapitalize="none" spellcheck="false" placeholder="you@business.com" required />
-        </label>
-        <label>
-          <span>Password</span>
-          <input type="password" data-signup-password name="pf-signup-password" autocomplete="new-password" placeholder="At least 8 characters" required />
-        </label>
-        <div class="gate-options" role="radiogroup" aria-label="Workspace type">
-          <label class="gate-opt">
-            <input type="radio" name="workspaceProfile" value="business" checked />
-            <b>Business</b>
-            <i>Leads, sites, media, analytics, automations, and approvals.</i>
-          </label>
-          <label class="gate-opt">
-            <input type="radio" name="workspaceProfile" value="creator" />
-            <b>Creator</b>
-            <i>Media Lab, Content Hub, sites, analytics, and publishing.</i>
-          </label>
-          <label class="gate-opt">
-            <input type="radio" name="workspaceProfile" value="developer" />
-            <b>Developer</b>
-            <i>Planner and PhantomPlay only by default. Bring your own APIs.</i>
-          </label>
-        </div>
-        <button class="gate-opt gate-submit" type="submit">
-          <span class="gate-opt-icon">+</span>
-          <b>Create Workspace</b>
-          <i>No shared admin data, keys, subscriptions, or silent local installs.</i>
-        </button>
-        <p class="gate-error" data-signup-error hidden></p>
-      </form>
-      <p class="gate-note">Already have an account? Sign in below.</p>` : "";
-    card.innerHTML = `
-      <p class="gate-kicker">PHANTOMFORCE · ${customerApp ? "CREATE WORKSPACE" : "SIGN IN"}</p>
-      <h1>${customerApp ? "Tell PhantomForce what you are." : heading}</h1>
-      ${signupHtml}
-      <form class="owner-login" data-db-login>
-        <label>
-          <span>Email</span>
-          <input type="email" data-db-email name="pf-workspace-identity" autocomplete="new-password" autocapitalize="none" spellcheck="false" placeholder="you@business.com" autofocus required readonly />
-        </label>
-        <label>
-          <span>Password</span>
-          <input type="password" data-db-password name="phantomforce-workspace-password" autocomplete="new-password" placeholder="Password" required readonly />
-        </label>
-        <button class="gate-opt gate-submit" type="submit">
-          <span class="gate-opt-icon">⌘</span>
-          <b>${buttonLabel}</b>
-          <i>${helper}</i>
-        </button>
+      ? "Use the email or username tied to your business workspace."
+      : "Create a business, accept an invite, recover access, or sign in with 2FA.";
+    const setError = (msg) => {
+      const error = card.querySelector("[data-db-error]");
+      if (!error) return;
+      error.textContent = msg || "";
+      error.hidden = !msg;
+    };
+    const doEnter = async (nextSession) => {
+      if (customerApp && (nextSession?.canManageAccess || nextSession?.isSuperAdmin)) {
+        await databaseLogout();
+        session.clear();
+        ctx.session = null;
+        throw new Error("Platform admin accounts must use admin.phantomforce.online.");
+      }
+      ctx.session = nextSession;
+      enterPhantom();
+    };
+    const render = () => {
+      const tab = (id, label) => `<button type="button" class="auth-tab ${state.mode === id ? "is-active" : ""}" data-auth-mode="${id}">${label}</button>`;
+      const msg = state.message ? `<p class="gate-note">${esc(state.message)}</p>` : "";
+      const body = state.mode === "signup" ? `
+        <form class="owner-login" data-auth-form="signup">
+          <label><span>Email</span><input type="email" name="email" autocomplete="email" placeholder="you@business.com" required /></label>
+          <label><span>Username</span><input name="username" autocomplete="username" placeholder="yourname" minlength="3" maxlength="32" /></label>
+          <label><span>Name</span><input name="name" autocomplete="name" placeholder="Your name" /></label>
+          <label><span>Business / workspace</span><input name="organizationName" placeholder="Business name" /></label>
+          <label><span>Password</span><input type="password" name="password" autocomplete="new-password" minlength="8" required /></label>
+          <button class="gate-opt gate-submit" type="submit"><span class="gate-opt-icon">＋</span><b>Create account</b><i>Creates your user, starter workspace, and owner role.</i></button>
+        </form>` : state.mode === "forgot-user" ? `
+        <form class="owner-login" data-auth-form="forgot-user">
+          <label><span>Account email</span><input type="email" name="email" autocomplete="email" required /></label>
+          <button class="gate-opt gate-submit" type="submit"><span class="gate-opt-icon">?</span><b>Recover username</b><i>We’ll send the username tied to this email.</i></button>
+        </form>` : state.mode === "forgot-pass" ? `
+        <form class="owner-login" data-auth-form="forgot-pass">
+          <label><span>Email or username</span><input name="identifier" autocomplete="username" required /></label>
+          <button class="gate-opt gate-submit" type="submit"><span class="gate-opt-icon">↺</span><b>Send password reset</b><i>Creates a short-lived reset token.</i></button>
+        </form>` : state.mode === "reset-pass" ? `
+        <form class="owner-login" data-auth-form="reset-pass">
+          <label><span>Reset token</span><input name="token" autocomplete="one-time-code" value="${esc(state.resetToken || "")}" required /></label>
+          <label><span>New password</span><input type="password" name="password" autocomplete="new-password" minlength="8" required /></label>
+          <button class="gate-opt gate-submit" type="submit"><span class="gate-opt-icon">✓</span><b>Reset password</b><i>Revokes old sessions and saves the new password.</i></button>
+        </form>` : state.mode === "2fa" ? `
+        <form class="owner-login" data-auth-form="2fa">
+          <label><span>2FA code</span><input name="code" inputmode="numeric" autocomplete="one-time-code" placeholder="000000" required autofocus /></label>
+          <button class="gate-opt gate-submit" type="submit"><span class="gate-opt-icon">⌁</span><b>Verify 2FA</b><i>Use your authenticator app code.</i></button>
+        </form>` : `
+        <form class="owner-login" data-auth-form="signin">
+          <label><span>Email or username</span><input name="identifier" autocomplete="username" placeholder="you@business.com or username" autofocus required /></label>
+          <label><span>Password</span><input type="password" name="password" autocomplete="current-password" placeholder="Password" required /></label>
+          <button class="gate-opt gate-submit" type="submit"><span class="gate-opt-icon">⌘</span><b>${customerApp ? "Open Workspace" : "Open Business Manager"}</b><i>${helper}</i></button>
+        </form>`;
+      card.innerHTML = `
+        <p class="gate-kicker">PHANTOMFORCE · ACCOUNT ACCESS</p>
+        <h1>${state.mode === "signup" ? "Create your Phantom account." : state.mode === "2fa" ? "Enter your 2FA code." : customerApp ? "Sign in to your workspace." : "Sign in to Phantom."}</h1>
+        <div class="auth-tabs">${tab("signin", "Sign in")}${tab("signup", "Create user")}${tab("forgot-user", "Forgot username")}${tab("forgot-pass", "Forgot password")}${tab("reset-pass", "Reset")}</div>
+        ${body}
         <p class="gate-error" data-db-error hidden></p>
-      </form>
-      <p class="gate-note">${note}</p>`;
-    const form = card.querySelector("[data-db-login]");
-    const signupForm = card.querySelector("[data-db-signup]");
-    const emailInput = card.querySelector("[data-db-email]");
-    const passwordInput = card.querySelector("[data-db-password]");
-    const error = card.querySelector("[data-db-error]");
-    [emailInput, passwordInput].forEach((input) => {
-      if (!input) return;
-      input.value = "";
-      const unlock = () => input.removeAttribute("readonly");
-      input.addEventListener("pointerdown", unlock, { once: true });
-      input.addEventListener("focus", unlock, { once: true });
-    });
-    setTimeout(() => {
-      if (emailInput) emailInput.value = "";
-      if (passwordInput) passwordInput.value = "";
-    }, 50);
-    if (signupForm) {
-      const signupError = card.querySelector("[data-signup-error]");
-      signupForm.onsubmit = async (event) => {
-        event.preventDefault();
-        signupError.hidden = true;
-        signupForm.classList.add("is-loading");
-        try {
-          const nextSession = await databaseSignup({
-            name: card.querySelector("[data-signup-name]")?.value.trim() || "",
-            workspaceName: card.querySelector("[data-signup-workspace]")?.value.trim() || "",
-            workspaceBrief: card.querySelector("[data-signup-brief]")?.value.trim() || "",
-            email: card.querySelector("[data-signup-email]")?.value.trim() || "",
-            password: card.querySelector("[data-signup-password]")?.value || "",
-            workspaceProfile: signupForm.querySelector("input[name='workspaceProfile']:checked")?.value || "business",
-          });
-          ctx.session = nextSession;
-          enterPhantom();
-        } catch (err) {
-          session.clear();
-          ctx.session = null;
-          signupError.textContent = err?.message || "Workspace creation failed.";
-          signupError.hidden = false;
-        } finally {
-          signupForm.classList.remove("is-loading");
-        }
-      };
-    }
-    form.onsubmit = async (event) => {
+        ${msg}
+        <p class="gate-note">${note}</p>`;
+      card.querySelectorAll("[data-auth-mode]").forEach((btn) => {
+        btn.onclick = () => { state.mode = btn.dataset.authMode; state.message = ""; render(); };
+      });
+      const form = card.querySelector("[data-auth-form]");
+      if (!form) return;
+      form.onsubmit = async (event) => {
       event.preventDefault();
-      error.hidden = true;
+      setError("");
       form.classList.add("is-loading");
       try {
-        const nextSession = await databaseLogin(
-          emailInput.value.trim(),
-          passwordInput.value,
-        );
-        if (customerApp && (nextSession?.canManageAccess || nextSession?.isSuperAdmin)) {
-          await databaseLogout();
-          session.clear();
-          ctx.session = null;
-          throw new Error("Platform admin accounts must use admin.phantomforce.online.");
+        const data = new FormData(form);
+        if (state.mode === "signin") {
+          const nextSession = await databaseLogin(String(data.get("identifier") || "").trim(), String(data.get("password") || ""));
+          if (nextSession?.requires2fa) {
+            state.challenge = nextSession.challengeToken;
+            state.mode = "2fa";
+            state.message = "Password accepted. Enter your authenticator code to finish signing in.";
+            render();
+            return;
+          }
+          await doEnter(nextSession);
+        } else if (state.mode === "2fa") {
+          await doEnter(await databaseVerify2fa(state.challenge, String(data.get("code") || "")));
+        } else if (state.mode === "signup") {
+          await databaseSignup({
+            email: String(data.get("email") || "").trim(),
+            username: String(data.get("username") || "").trim() || undefined,
+            name: String(data.get("name") || "").trim() || undefined,
+            organizationName: String(data.get("organizationName") || "").trim() || undefined,
+            password: String(data.get("password") || ""),
+          });
+          state.mode = "signin"; state.message = "Account created. Sign in with your new credentials."; render();
+        } else if (state.mode === "forgot-user") {
+          const result = await databaseForgotUsername(String(data.get("email") || "").trim());
+          state.message = result?.preview?.username ? `Recovery queued. Dev preview username: ${result.preview.username}` : "If that email exists, username recovery has been queued.";
+          render();
+        } else if (state.mode === "forgot-pass") {
+          const result = await databaseForgotPassword(String(data.get("identifier") || "").trim());
+          state.mode = "reset-pass";
+          state.message = result?.preview?.resetToken ? `Reset queued. Dev preview token: ${result.preview.resetToken}` : "If that account exists, password reset has been queued.";
+          render();
+        } else if (state.mode === "reset-pass") {
+          await databaseResetPassword(String(data.get("token") || "").trim(), String(data.get("password") || ""));
+          state.mode = "signin"; state.resetToken = ""; state.message = "Password reset. Sign in with the new password."; render();
         }
-        ctx.session = nextSession;
-        enterPhantom();
       } catch (err) {
         session.clear();
         ctx.session = null;
-        error.textContent = err?.message || "Sign-in failed.";
-        error.hidden = false;
+        setError(err?.message || "Account action failed.");
       } finally {
         form.classList.remove("is-loading");
       }
     };
+    };
+    render();
   }).catch(() => {
     if (required && !gate.hidden) renderCustomerAuthBlocked(card, "The account system is not reachable. Start the backend, then sign in again.");
-    else if (allowLocalFallback && !gate.hidden) renderRoleChoiceGate(card, { localFallback: true });
   });
 }
 
@@ -527,18 +415,16 @@ const BASE_NAV = [
   { id: "assets",     label: "Asset Cloud",  icon: "media", ws: "assets", dbOnly: true },
   { id: "sites",      label: "Websites",     icon: "site",  ws: "sites" },
   { id: "money",      label: "Accounting",   icon: "dollar", ws: "money" },
-  { id: "planner",    label: "Planner",      icon: "calendar", ws: "planner" },
-  { id: "phantomplay", label: "PhantomPlay", icon: "film",  ws: "phantomplay" },
-  { id: "phantomstore", label: "PhantomStore", icon: "spark", ws: "phantomstore" },
-  { id: "memory",     label: "Memory",       icon: "brain", ws: "memory", bottom: true, navHidden: true },
-  { id: "automation", label: "Automations",  icon: "auto",  ws: "automation", bottom: true, navHidden: true },
-  { id: "approvals",  label: "Approvals",    icon: "check", ws: "approvals", badge: true, bottom: true },
-  { id: "workers",    label: "Workforce",    icon: "users", ws: "workforce", bottom: true, navHidden: true },
-  { id: "intelligence", label: "Competitor Intel", icon: "chart", ws: "intelligence", bottom: true },
-  { id: "analytics",  label: "Analytics",    icon: "chart", ws: "analytics", bottom: true },
-  { id: "vacation",   label: "Away Mode", icon: "auto", ws: "vacation", statusPill: true, bottom: true, quiet: true },
-  { id: "developer",  label: "Developer",    icon: "dev",   ws: "developer", ownerOnly: true, bottom: true, quiet: true },
-  { id: "settings",   label: "Settings",     icon: "cog",   ws: "settings", bottom: true, quiet: true },
+  { id: "automation", label: "Automations",  icon: "auto",  ws: "automation" },
+  { id: "approvals",  label: "Approvals",    icon: "check", ws: "approvals", badge: true },
+  { id: "workers",    label: "Workforce",    icon: "users", ws: "workforce" },
+  { id: "intelligence", label: "Competitor Intel", icon: "chart", ws: "intelligence" },
+  { id: "analytics",  label: "Analytics",    icon: "chart", ws: "analytics" },
+  { id: "memory",     label: "Memory",       icon: "brain", ws: "memory", navZone: "bottom", quiet: true },
+  { id: "settings",   label: "Settings",     icon: "cog",   ws: "settings", navZone: "bottom" },
+  { id: "developer",  label: "Developer",    icon: "dev",   ws: "developer", ownerOnly: true, navZone: "bottom" },
+  { id: "vacation",   label: "Away Mode",    icon: "auto",  ws: "vacation", statusPill: true, navZone: "bottom" },
+  { id: "phantomplay", label: "PhantomPlay", icon: "film",  ws: "phantomplay", navZone: "bottom", quiet: true, optionalModule: true },
 ];
 let NAV = customizeNavigation(BASE_NAV, isAdmin() ? "owner" : "client");
 let navEntitlements = { loaded: false, features: null, limits: null };
@@ -549,15 +435,13 @@ const MOBILE_LABEL_OVERRIDES = {
   dashboard: "Home",
   crm: "Clients",
   money: "Accounting",
-  planner: "Planner",
   sites: "Sites",
   media: "Media",
   phantomplay: "Play",
-  phantomstore: "Store",
   automation: "Auto",
   approvals: "Approvals",
   analytics: "Analytics",
-  intelligence: "Intel",
+  intelligence: "Competitor",
   vacation: "Away",
   developer: "Developer",
 };
@@ -570,9 +454,9 @@ let MOBILE_NAV = NAV.map((n) => ({
   adminOnly: n.adminOnly,
   ownerOnly: n.ownerOnly,
   badge: n.badge,
-  navDisabled: n.navDisabled,
-  bottom: n.bottom,
+  navZone: n.navZone,
   quiet: n.quiet,
+  navDisabled: n.navDisabled,
 }));
 
 function navFeatureDisabled(item) {
@@ -586,9 +470,12 @@ function navFeatureDisabled(item) {
 function orderedNavItems() {
   return NAV
     .filter(canAccessSurface)
-    .filter((item) => !item.navHidden)
     .map((item) => ({ ...item, navDisabled: navFeatureDisabled(item) }))
-    .sort((left, right) => Number(left.navDisabled) - Number(right.navDisabled));
+    /* bottom-zone items always sit after the main list — a workspace
+       customization order must never strand a tucked item mid-sidebar */
+    .sort((left, right) =>
+      (Number(left.navZone === "bottom") - Number(right.navZone === "bottom"))
+      || (Number(left.navDisabled) - Number(right.navDisabled)));
 }
 
 function mobileItemsFromNav(items = orderedNavItems()) {
@@ -601,10 +488,9 @@ function mobileItemsFromNav(items = orderedNavItems()) {
     adminOnly: n.adminOnly,
     ownerOnly: n.ownerOnly,
     badge: n.badge,
-    navDisabled: n.navDisabled,
-    navHidden: n.navHidden,
-    bottom: n.bottom,
+    navZone: n.navZone,
     quiet: n.quiet,
+    navDisabled: n.navDisabled,
   }));
 }
 
@@ -641,15 +527,10 @@ let lastEnteredPageKey = null;
 let mobileNavOpen = false;
 
 const WORKSPACE_ALIASES = {
-  assetcloud: "assets",
   brain: "workforce",
-  "competitor-intelligence": "intelligence",
-  crm: "leads",
-  analytics: "analytics",
-  content: "content",
-  managedgrowth: "analytics",
-  "managed-growth": "analytics",
   memory: "memory",
+  content: "content",
+  analytics: "analytics",
 };
 
 /* Secondary workspaces still belong to a clear product section. Keeping that
@@ -658,7 +539,6 @@ const WORKSPACE_ALIASES = {
 const NAV_PARENT_BY_WORKSPACE = {
   phantom: "dashboard",
   proposals: "crm",
-  clientsetup: "settings",
   reviews: "crm",
   bookings: "crm",
   protect: "settings",
@@ -691,82 +571,18 @@ function navStatusPill(n) {
   }
   return "";
 }
-
-let organizationPulseRefreshInFlight = false;
-let brainContractRefreshInFlight = false;
-let serverRecordsRefreshInFlight = false;
-
-function localPendingApprovals() {
-  return visible(store.state.approvals).filter((a) => a.status === "pending").length;
-}
-
-function approvalBadgeCount() {
-  const pulse = cachedOrganizationPulse();
-  if (organizationPulseAvailable()) return pulse ? pulsePendingApprovalCount(pulse) : 0;
-  return localPendingApprovals();
-}
-
-function ensureOrganizationPulseFresh() {
-  if (!shouldRefreshOrganizationPulse() || organizationPulseRefreshInFlight) return;
-  organizationPulseRefreshInFlight = true;
-  loadOrganizationPulse()
-    .catch(() => null)
-    .finally(() => {
-      organizationPulseRefreshInFlight = false;
-      renderNav();
-      renderMobileBottomNav();
-      renderNotifs();
-      if (!activePageId && !openId) renderPlan();
-    });
-}
-
-function ensureBrainContractFresh() {
-  if (!shouldRefreshBrainContract() || brainContractRefreshInFlight) return;
-  brainContractRefreshInFlight = true;
-  loadBrainContract()
-    .catch(() => null)
-    .finally(() => {
-      brainContractRefreshInFlight = false;
-      renderNotifs();
-      renderCommandWidgets();
-      if (!activePageId && !openId) renderPlan();
-    });
-}
-
-function ensureServerRecordsFresh() {
-  if (!shouldRefreshServerRecords() || serverRecordsRefreshInFlight) return;
-  serverRecordsRefreshInFlight = true;
-  loadServerRecords()
-    .catch(() => null)
-    .finally(() => {
-      serverRecordsRefreshInFlight = false;
-      if (cmdkOpen) renderPalette($("[data-cmdk-input]")?.value || "");
-    });
-}
-
 function renderNav() {
   const nav = $("[data-nav]");
-  const pending = approvalBadgeCount();
+  const pending = visible(store.state.approvals).filter((a) => a.status === "pending").length;
   const items = orderedNavItems();
   MOBILE_NAV = mobileItemsFromNav(items);
-  const renderItem = (n) => `
-    <button class="nav-item ${activeNav === n.id ? "is-active" : ""} ${n.bottom ? "nav-item-bottom" : ""} ${n.quiet ? "nav-item-quiet" : ""} ${n.navDisabled ? "nav-item-disabled" : ""}" data-nav-id="${n.id}" type="button" ${activeNav === n.id ? 'aria-current="page"' : ""} ${n.navDisabled ? 'aria-disabled="true" title="Disabled for this plan; the owner can enable it later."' : ""}>
+  nav.innerHTML = items.map((n) => `
+    <button class="nav-item ${activeNav === n.id ? "is-active" : ""} ${n.navZone === "bottom" ? "nav-item-bottom" : ""} ${n.quiet ? "nav-item-quiet" : ""} ${n.navDisabled ? "nav-item-disabled" : ""}" data-nav-id="${n.id}" ${activeNav === n.id ? 'aria-current="page"' : ""} ${n.navDisabled ? 'aria-disabled="true" title="Disabled for this plan; the owner can enable it later."' : ""}>
       ${svg(n.icon)}
       <span>${n.label}</span>
       ${n.badge && pending ? `<em class="nav-badge">${pending}</em>` : ""}
       ${n.navDisabled ? `<em class="nav-pill is-locked">OFF</em>` : navStatusPill(n)}
-    </button>`;
-  const primaryItems = items.filter((n) => !n.bottom);
-  const utilityItems = items.filter((n) => n.bottom);
-  nav.innerHTML = `
-    <div class="side-nav-group side-nav-main" role="group" aria-label="Business sections">
-      ${primaryItems.map(renderItem).join("")}
-    </div>
-    ${utilityItems.length ? `
-      <div class="side-nav-group side-nav-utility" role="group" aria-label="Operations and settings">
-        ${utilityItems.map(renderItem).join("")}
-      </div>` : ""}
-  `;
+    </button>`).join("");
   renderMobileBottomNav();
 }
 
@@ -779,7 +595,7 @@ function mobileNavActive(item) {
 function renderMobileBottomNav() {
   const nav = $("[data-mobile-bottom-nav]");
   if (!nav) return;
-  const pending = approvalBadgeCount();
+  const pending = visible(store.state.approvals).filter((a) => a.status === "pending").length;
   MOBILE_NAV = mobileItemsFromNav();
   nav.innerHTML = MOBILE_NAV.map((item) => `
     <button class="mobile-bottom-item ${mobileNavActive(item) ? "is-active" : ""} ${item.navDisabled ? "is-disabled" : ""}" data-mobile-nav="${esc(item.id)}" type="button" ${mobileNavActive(item) ? 'aria-current="page"' : ""} ${item.navDisabled ? 'aria-disabled="true" title="Disabled for this plan; the owner can enable it later."' : ""}>
@@ -833,7 +649,6 @@ function missionMapPrompts() {
 }
 
 function openOperationsMap() {
-  if (customerOnboardingLocked()) return;
   if (activePageId) renderDashboardPage(true);
   if (openId === "operations-map") {
     closeOperationsMap();
@@ -1030,6 +845,7 @@ function renderUser() {
 }
 
 async function signOut() {
+  if (!confirm("Sign out of PhantomForce?")) return;
   const databaseSession = !!ctx.session?.database;
   accountMenuOpen = false;
   closeOverlay(true);
@@ -1047,36 +863,6 @@ async function signOut() {
   }
 }
 
-async function verifyDatabaseBootSession(candidate) {
-  if (!candidate?.database) return candidate;
-  const me = await fetchAuthMe().catch(() => null);
-  if (!me?.ok || !me.database || !me.user) {
-    session.clear();
-    return null;
-  }
-  if (isClientPublicHost() && me.user.isSuperAdmin) {
-    session.clear();
-    return null;
-  }
-  const activeOrg = me.activeOrg || {};
-  const orgRole = activeOrg.role || null;
-  const managesOrg = !!me.user.isSuperAdmin || ["owner", "admin"].includes(orgRole || "");
-  const verified = {
-    ...candidate,
-    role: managesOrg ? "admin" : "employee",
-    name: me.user.name || candidate.name || me.user.email || "Operator",
-    label: me.user.name || candidate.label || "",
-    email: me.user.email || candidate.email || "",
-    orgId: activeOrg.id || null,
-    orgRole,
-    memberships: Array.isArray(me.memberships) ? me.memberships : candidate.memberships || [],
-    isSuperAdmin: !!me.user.isSuperAdmin,
-    canManageAccess: !!me.user.isSuperAdmin,
-  };
-  session.set(verified);
-  return verified;
-}
-
 /* ============================ account + plan ============================ */
 const ACCOUNT_PLAN = {
   name: "Elite Plan",
@@ -1085,16 +871,33 @@ const ACCOUNT_PLAN = {
   paymentState: "Owner billing ready",
   workspaceLimit: "Owner workspace",
 };
-/* Real plan tiers (free/starter/professional/elite/enterprise) exist and are
-   enforced server-side (server/src/access/entitlements.ts) but are assigned
-   manually by the operator — there is no self-serve checkout. livePlan holds
-   the real fetched plan for database-backed accounts once hydrateLivePlan()
-   resolves; until then (or for local/demo accounts with no backend at all)
-   every plan display falls back to the static ACCOUNT_PLAN placeholder. */
-let livePlan = null;
-function activePlanView() {
-  return livePlan || ACCOUNT_PLAN;
-}
+const ACCOUNT_TIERS = [
+  {
+    id: "starter",
+    name: "Starter",
+    price: "$750/mo",
+    badge: "Launch",
+    copy: "Business Manager foundation: command surface, approvals, and one focused workspace.",
+    features: ["Business command center", "Client pipeline", "Manual offer workflow"],
+  },
+  {
+    id: "pro",
+    name: "Pro Plan",
+    price: "$2,500/mo",
+    badge: "Growth",
+    copy: "Operator-grade system for growth: creator workflow, Media Lab, accounting visibility, and owner controls.",
+    features: ["Phantom AI operator", "Content Hub + Media Lab", "Accounting-aware ops"],
+  },
+  {
+    id: "elite",
+    name: "Elite Plan",
+    price: "Custom",
+    badge: "Current",
+    current: true,
+    copy: "The full business operating suite: deeper loop routing, multi-workspace control, automations, and launch support.",
+    features: ["Advanced loop routing", "Multi-workspace command", "Business automation planning", "Launch support"],
+  },
+];
 let accountNotice = "";
 
 function accountOwnerName() {
@@ -1117,8 +920,7 @@ function phantomLoopUnavailableMessage() {
   return "Phantom Loop needs a target model picked first — open chat settings to choose one.";
 }
 function accountRenewalLabel() {
-  const offset = activePlanView().renewalOffsetDays ?? ACCOUNT_PLAN.renewalOffsetDays;
-  return new Date(Date.now() + offset * 864e5).toLocaleDateString([], { month: "long", day: "numeric", year: "numeric" });
+  return new Date(Date.now() + ACCOUNT_PLAN.renewalOffsetDays * 864e5).toLocaleDateString([], { month: "long", day: "numeric", year: "numeric" });
 }
 function accountStatusMeta() {
   const attention = store.state.security.some((s) => s.posture && s.posture !== "clean");
@@ -1150,7 +952,7 @@ function renderAccountMenu() {
     <button class="user-menu-plan" data-user-menu-action="account" type="button">
       <span>
         <i>Current plan</i>
-        <b>${esc(activePlanView().name)}</b>
+        <b>${esc(ACCOUNT_PLAN.name)}</b>
         <em>Renewal: ${esc(renewal)}</em>
       </span>
       <strong>Manage →</strong>
@@ -1201,28 +1003,8 @@ async function hydrateLivePlan(body) {
     return;
   }
   const ent = summary.entitlements;
-  livePlan = {
-    name: ent.planName,
-    price: ent.canWrite ? "Assigned by operator" : "Restricted",
-    renewalOffsetDays: ACCOUNT_PLAN.renewalOffsetDays,
-    paymentState: `${ent.effectiveStatus}${ent.canWrite ? "" : " — writes disabled"} · no self-serve billing yet`,
-    workspaceLimit: `${summary.seats.used}/${summary.seats.limit} seats`,
-  };
   const chip = body.querySelector(".account-plan-chip");
   if (chip) chip.innerHTML = `<span>${esc(ent.planName)}</span><b>${esc(ent.effectiveStatus)}</b>`;
-  const currentCard = body.querySelector(".account-current");
-  if (currentCard) {
-    const h4 = currentCard.querySelector("h4");
-    if (h4) h4.textContent = ent.planName;
-    const facts = currentCard.querySelector(".account-facts");
-    if (facts) {
-      facts.innerHTML = `
-        <span><b>Renewal</b>${esc(accountRenewalLabel())}</span>
-        <span><b>Billing</b>${esc(livePlan.paymentState)}</span>
-        <span><b>Access</b>${esc(livePlan.workspaceLimit)}</span>`;
-    }
-  }
-  renderPlanMeta();
   mount.innerHTML = `
     <article class="account-card">
       <p class="account-card-k">Live plan (server)</p>
@@ -1253,19 +1035,19 @@ function renderAccountPlan(body) {
           <p class="account-status account-status-${status.tone}"><span aria-hidden="true"></span>${esc(status.label)}</p>
         </div>
         <div class="account-plan-chip">
-          <span>${esc(activePlanView().name)}</span>
-          <b>${esc(activePlanView().price)}</b>
+          <span>${esc(ACCOUNT_PLAN.name)}</span>
+          <b>${esc(ACCOUNT_PLAN.price)}</b>
         </div>
       </section>
       <section class="account-grid">
         <article class="account-card account-current">
           <p class="account-card-k">Current plan</p>
-          <h4>${esc(activePlanView().name)}</h4>
+          <h4>${esc(ACCOUNT_PLAN.name)}</h4>
           <p>${esc(status.detail)}</p>
           <div class="account-facts">
             <span><b>Renewal</b>${esc(renewal)}</span>
-            <span><b>Billing</b>${esc(activePlanView().paymentState)}</span>
-            <span><b>Access</b>${esc(activePlanView().workspaceLimit)}</span>
+            <span><b>Billing</b>${esc(ACCOUNT_PLAN.paymentState)}</span>
+            <span><b>Access</b>${esc(ACCOUNT_PLAN.workspaceLimit)}</span>
           </div>
         </article>
         <article class="account-card account-payment">
@@ -1277,6 +1059,30 @@ function renderAccountPlan(body) {
             <button class="btn" data-account-action="invoice">Request invoice</button>
           </div>
         </article>
+      </section>
+      <section class="account-section" data-account-security>
+        <div class="set-sec-head">
+          <div>
+            <p class="account-card-k">Account security</p>
+            <h3>Two-factor authentication</h3>
+          </div>
+        </div>
+        ${ctx.session?.database ? `
+          <div class="account-billing-list">
+            <span><b>Username</b><i>${esc(ctx.session.username || ctx.session.email || "Not loaded")}</i></span>
+            <span><b>2FA</b><i data-2fa-status>Checking server status…</i></span>
+          </div>
+          <div class="account-actions" style="margin-top:12px;flex-wrap:wrap">
+            <button class="btn btn-primary" data-security-action="setup-2fa">Set up 2FA</button>
+            <button class="btn" data-security-action="backup-2fa">Regenerate recovery codes</button>
+            <button class="btn" data-security-action="disable-2fa">Disable 2FA</button>
+          </div>
+          <div class="account-notice" data-security-output hidden></div>
+          <form class="owner-login" data-2fa-confirm-form hidden style="margin-top:12px">
+            <label><span>Authenticator code</span><input name="code" inputmode="numeric" autocomplete="one-time-code" placeholder="000000" required /></label>
+            <button class="btn btn-primary" type="submit">Confirm 2FA</button>
+          </form>
+        ` : `<p class="set-note">2FA is available when signed into a database-backed account.</p>`}
       </section>
       <section class="account-section">
         <div class="set-sec-head">
@@ -1294,15 +1100,22 @@ function renderAccountPlan(body) {
       <section class="account-section">
         <div class="set-sec-head">
           <div>
-            <p class="account-card-k">Plan management</p>
-            <h3>Change your plan</h3>
+            <p class="account-card-k">Plan tiers</p>
+            <h3>Choose the operating level</h3>
           </div>
         </div>
-        <div class="account-billing-list">
-          <span><b>How plans work</b><i>Plans are assigned manually by the PhantomForce operator — there is no self-serve checkout yet.</i></span>
-        </div>
-        <div class="account-actions">
-          <button class="btn btn-primary" data-account-action="request-plan-change">Request a different plan</button>
+        <div class="account-tiers">
+          ${ACCOUNT_TIERS.map((tier) => `
+            <article class="account-tier ${tier.current ? "is-current" : ""}">
+              <span class="account-tier-badge">${esc(tier.badge)}</span>
+              <h4>${esc(tier.name)}</h4>
+              <b>${esc(tier.price)}</b>
+              <p>${esc(tier.copy)}</p>
+              <ul>${tier.features.map((feature) => `<li>${esc(feature)}</li>`).join("")}</ul>
+              <button class="btn ${tier.current ? "btn-good" : "btn-primary"}" data-account-action="${tier.current ? "current" : `plan-${tier.id}`}">
+                ${tier.current ? "Current plan" : `Request ${esc(tier.name)}`}
+              </button>
+            </article>`).join("")}
         </div>
       </section>
       <section class="account-section account-cancel">
@@ -1322,7 +1135,6 @@ function renderAccountPlan(body) {
         invoice: "Manual invoice request",
         current: "Current plan review",
         cancel: "Cancellation request",
-        "request-plan-change": "Plan change request",
       }[action] || `${btn.textContent.trim()} request`;
       accountNotice = `${label} prepared for owner review. No billing, cancellation, payment, or access change was executed.`;
       pushActivity("Account", accountNotice);
@@ -1330,7 +1142,77 @@ function renderAccountPlan(body) {
       renderAccountPlan(body);
     });
   });
+  wireAccountSecurity(body);
   if (ctx.session?.database) hydrateLivePlan(body);
+}
+
+async function wireAccountSecurity(body) {
+  if (!ctx.session?.database) return;
+  const output = body.querySelector("[data-security-output]");
+  const status = body.querySelector("[data-2fa-status]");
+  const form = body.querySelector("[data-2fa-confirm-form]");
+  let pendingSecret = "";
+  const show = (msg, isError = false) => {
+    if (!output) return;
+    output.hidden = false;
+    output.textContent = msg;
+    output.style.borderColor = isError ? "rgba(255,80,80,.36)" : "";
+    output.style.color = isError ? "#ffb7b7" : "";
+  };
+  const showRecoveryCodes = (codes = []) => {
+    if (!output) return;
+    output.hidden = false;
+    output.style.borderColor = "";
+    output.style.color = "";
+    output.innerHTML = `<b>Save these recovery codes now. They are shown once.</b><div class="auth-recovery-codes">${codes.map((code) => `<code>${esc(code)}</code>`).join("")}</div><small>Each code works once if you lose your authenticator.</small>`;
+  };
+  fetchAuthMe().then((me) => {
+    if (status) status.textContent = me?.user?.twoFactorEnabled ? "Enabled" : "Not enabled";
+  }).catch(() => { if (status) status.textContent = "Unavailable"; });
+  body.querySelector("[data-security-action='setup-2fa']")?.addEventListener("click", async () => {
+    try {
+      const setup = await databaseStart2faSetup();
+      pendingSecret = setup.secret;
+      show(`Add this secret to Google Authenticator / iOS Passwords, then enter the code below: ${setup.secret}`);
+      if (form) form.hidden = false;
+    } catch (err) {
+      show(err?.message || "2FA setup failed.", true);
+    }
+  });
+  body.querySelector("[data-security-action='disable-2fa']")?.addEventListener("click", async () => {
+    const code = prompt("Enter your current authenticator or recovery code to disable 2FA:");
+    if (!code) return;
+    try {
+      await databaseDisable2fa(code);
+      show("2FA disabled.");
+      if (status) status.textContent = "Not enabled";
+    } catch (err) {
+      show(err?.message || "Could not disable 2FA.", true);
+    }
+  });
+  body.querySelector("[data-security-action='backup-2fa']")?.addEventListener("click", async () => {
+    const code = prompt("Enter your current authenticator code to regenerate recovery codes:");
+    if (!code) return;
+    try {
+      const result = await databaseRegenerate2faBackupCodes(code);
+      showRecoveryCodes(result.backupCodes || []);
+    } catch (err) {
+      show(err?.message || "Could not regenerate recovery codes.", true);
+    }
+  });
+  form?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const code = new FormData(form).get("code");
+    try {
+      const result = await databaseConfirm2fa(String(code || ""));
+      showRecoveryCodes(result.backupCodes || []);
+      if (status) status.textContent = "Enabled";
+      form.hidden = true;
+      pendingSecret = "";
+    } catch (err) {
+      show(err?.message || "Invalid 2FA code.", true);
+    }
+  });
 }
 
 /* ============================ hero + command deck ============================ */
@@ -1343,7 +1225,7 @@ const MODES = {
   admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260717-2";
+const POSE_VERSION = "phantom-live-20260714-022";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -1602,14 +1484,7 @@ function renderHero() {
 
 /* ============================ today's plan (donut) ============================ */
 function renderPlan() {
-  const brainItems = brainContractAvailable() ? brainContractAttentionItems(cachedBrainContract()) : [];
-  const serverPulseAvailable = organizationPulseAvailable();
-  const serverPlan = brainItems.length
-    ? brainItems.map((item) => ({ text: item.title, open: item.open }))
-    : serverPulseAvailable
-    ? pulseAttentionItems(cachedOrganizationPulse()).map((item) => ({ text: item.title, open: item.open }))
-    : [];
-  const plan = (brainItems.length || serverPulseAvailable) ? serverPlan : todaysPlan();
+  const plan = todaysPlan();
   if (!plan.length) {
     $("[data-plan]").innerHTML = `
       <div class="section-head"><h2>Today's plan</h2></div>
@@ -1636,7 +1511,7 @@ function renderPlan() {
     : `${plan.length} things need you.`;
   $("[data-plan]").innerHTML = `
     <div class="section-head"><h2>Today's plan</h2></div>
-    <button class="plan-inner" data-open-ws="${esc(target)}">
+    <button class="plan-inner" data-open-ws="${target}">
       <svg class="plan-donut" viewBox="0 0 72 72" aria-hidden="true">
         <circle cx="36" cy="36" r="30" class="plan-track"/>
         <text x="36" y="40" class="plan-pct">${plan.length}</text>
@@ -1676,7 +1551,7 @@ const QUICK = [
   { label: "Create new content", icon: "spark",  run: "Create campaign media" },
   { label: "Start video campaign", icon: "film",  run: "Create a launch video" },
   { label: "Check cashflow", icon: "chart",   run: "What's my cash flow?" },
-  { label: "Open media library", icon: "upload",   open: "media" },
+  { label: "Open Content Hub", icon: "upload",   open: "content" },
   { label: "View approval queue", icon: "check",   open: "approvals" },
 ];
 function renderQuick() {
@@ -1688,134 +1563,79 @@ function renderQuick() {
     </button>`).join("");
 }
 
-function commandWidgetRows() {
-  const approvals = approvalBadgeCount();
-  const workforce = topbarBaselineWorkers();
-  const activeAgents = visible(store.state.agents || []).filter((a) => !["paused", "blocked"].includes(a.status || ""));
-  const activeAutomations = activeAgents.filter((a) => ["active", "waiting", "needs-approval"].includes(a.status || ""));
-  const memory = memoryStats(visible(store.state.memory || []));
-  const media = visible(store.state.media || []);
-  const contentReady = media.filter((m) => ["ready", "generated", "published"].includes(m.status || "")).length;
-  const brainContract = cachedBrainContract();
-  const whatChanged = Array.isArray(brainContract?.whatChanged) ? brainContract.whatChanged : [];
-  const whatMatters = Array.isArray(brainContract?.whatMatters) ? brainContract.whatMatters : [];
-  const recommendedActions = Array.isArray(brainContract?.recommendedActions) ? brainContract.recommendedActions : [];
-  const signals = attentionItems();
-  const firstSignal = signals[0];
-  const firstRecommended = recommendedActions[0] || firstSignal?.signal;
-  const firstMatter = whatMatters[0] || firstSignal?.signal;
-  return [
-    {
-      id: "outcomes",
-      icon: "check",
-      title: firstRecommended?.recommendedAction?.label || firstSignal?.title || "No urgent outcome",
-      stat: approvals ? `${approvals} approval${approvals === 1 ? "" : "s"}` : (recommendedActions.length ? `${recommendedActions.length} move${recommendedActions.length === 1 ? "" : "s"}` : "clear"),
-      sub: firstRecommended?.whatHappened || firstSignal?.sub || "Phantom is watching for the next useful move.",
-      body: firstRecommended
-        ? [
-          `${firstRecommended.department || "Operations"} signal`,
-          firstRecommended.evidence?.source ? `Evidence: ${firstRecommended.evidence.source}` : "Evidence-backed attention item",
-          firstRecommended.approvalRequired ? "Approval required before action" : "Review, approve, or route the next step",
-        ]
-        : ["No forced tasks", "Use chat to define the next outcome", "Phantom keeps external actions approval-gated"],
-      open: firstRecommended?.recommendedAction?.route || firstSignal?.open || "approvals",
-    },
-    {
-      id: "workforce",
-      icon: "users",
-      title: "Workforce",
-      stat: workforce ? `${workforce.count} online` : `${topbarFallbackWorkers()} core`,
-      sub: workforce ? `${workforce.jobs} ledger-backed jobs in the recent window.` : "Baseline local services are ready.",
-      body: ["Growth, Creative, Operations, Client Care, Finance, Intelligence, Technology", "Workers stay behind the curtain until you need proof", "No fake runtime activity"],
-      open: "workforce",
-    },
-    {
-      id: "automation",
-      icon: "auto",
-      title: "Automations",
-      stat: activeAutomations.length ? `${activeAutomations.length} active` : "ready",
-      sub: "Saved workflows live here after Phantom builds them.",
-      body: ["Daily ideas, checks, outreach drafts, security scans", "Every external action waits for approval", "Configure cadence, limits, and business context per automation"],
-      open: "automation",
-    },
-    {
-      id: "signals",
-      icon: "chart",
-      title: firstMatter?.title || "Signals",
-      stat: `${whatMatters.length || signals.length}`,
-      sub: firstMatter?.whatHappened || (signals.length ? "Live items Phantom thinks matter." : "No strong signal yet."),
-      body: whatMatters.length
-        ? [
-          `${whatChanged.length} live change${whatChanged.length === 1 ? "" : "s"}`,
-          `${recommendedActions.length} recommended move${recommendedActions.length === 1 ? "" : "s"}`,
-          "Ranked by impact without pretending missing data is live",
-        ]
-        : ["Performance shifts", "Client silence", "Competitor changes", "Security or tool health changes"],
-      open: firstMatter?.recommendedAction?.route || firstSignal?.open || "analytics",
-    },
-    {
-      id: "memory",
-      icon: "brain",
-      title: "Memory",
-      stat: `${memory.remembered || memory.total || 0}`,
-      sub: "Institutional context is inside chat, not a nav chore.",
-      body: ["Preferences, corrections, business facts", "30-day temporary history", "Owner-editable saved memory"],
-      open: "memory",
-    },
-    {
-      id: "media",
-      icon: "media",
-      title: "Content engine",
-      stat: `${contentReady}`,
-      sub: "Generated assets, edits, and publishing material.",
-      body: ["Media Lab creates and edits", "Content Hub stores finished work", "Unused assets become future signals"],
-      open: "media",
-    },
-  ];
-}
-
-function renderCommandWidgets() {
-  const mount = $("[data-command-widgets]");
-  if (!mount) return;
-  mount.innerHTML = commandWidgetRows().map((card, index) => `
-    <details class="command-widget command-widget-${esc(card.id)}">
-      <summary>
-        <span class="cw-ic">${svg(card.icon)}</span>
-        <span class="cw-copy">
-          <b>${esc(card.title)}</b>
-          <i>${esc(card.sub)}</i>
-        </span>
-        <span class="cw-stat">${esc(card.stat)}</span>
-      </summary>
-      <div class="cw-body">
-        ${card.body.map((line) => `<span>${esc(line)}</span>`).join("")}
-        <button type="button" class="cw-open" data-open-ws="${esc(card.open)}">Open workspace <span aria-hidden="true">→</span></button>
-      </div>
-    </details>`).join("");
-}
-
 /* ============================ attention intelligence ============================ */
 function greeting() {
   const h = new Date().getHours();
   return h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
 }
+/* Server truth for the bell: /api/organization/pulse tells us what is
+   actually pending/failing/running on the backend, beyond the client store,
+   and /api/organization/opportunities contributes the top high-impact
+   recommendation from the live graph analysis. Both share the 60s cache and
+   fail independently; on fetch failure we show nothing extra (no fake data). */
+let serverPulse = null;
+let serverPulseTenant = "";
+let serverPulseAt = 0;
+let serverPulseInFlight = null;
+let serverOpportunity = null; // top high-impact opportunity only, or null
+let serverOpportunityTenant = "";
+async function fetchServerAttention(force = false) {
+  const tenant = currentTenantId();
+  if (!force && serverPulse && serverPulseTenant === tenant && Date.now() - serverPulseAt < 60000) return serverPulse;
+  if (serverPulseInFlight) return serverPulseInFlight;
+  serverPulseInFlight = (async () => {
+    const token = session.token();
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    const getJson = async (path) => {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 8000);
+      try {
+        const r = await fetch(`${path}?tenant_id=${encodeURIComponent(tenant)}`, { headers, signal: ctrl.signal });
+        const d = await r.json().catch(() => null);
+        return r.ok ? d : null;
+      } finally { clearTimeout(timer); }
+    };
+    const [pulseData, oppData] = await Promise.all([
+      getJson("/api/organization/pulse").catch(() => null), // keep last known pulse; never invent items
+      getJson("/api/organization/opportunities").catch(() => null),
+    ]);
+    if (pulseData?.ok && pulseData.pulse) { serverPulse = pulseData.pulse; serverPulseTenant = tenant; serverPulseAt = Date.now(); }
+    if (oppData?.ok && Array.isArray(oppData.opportunities)) {
+      serverOpportunity = oppData.opportunities.find((o) => o?.impact === "high" && o.title && o.action?.route) || null;
+      serverOpportunityTenant = tenant;
+    }
+    serverPulseInFlight = null;
+    return serverPulse;
+  })();
+  return serverPulseInFlight;
+}
+function serverAttentionItems() {
+  const pulse = serverPulse && serverPulseTenant === currentTenantId() ? serverPulse : null;
+  const items = [];
+  const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+  const pending = pulse?.approvals?.available ? pulse.approvals.pending || 0 : 0;
+  if (pending > 0) items.push({ icon: "check", tone: "warn", title: `${plural(pending, "approval")} waiting on you`, sub: "Server-confirmed approval queue", open: "approvals" });
+  const failed = pulse?.agentRuns?.available ? pulse.agentRuns.failed || 0 : 0;
+  if (failed > 0) items.push({ icon: "bolt", tone: "warn", title: `${plural(failed, "agent run")} failed — work stopped`, sub: "Open Automations to see what broke", open: "automation" });
+  const running = pulse?.agentRuns?.available ? pulse.agentRuns.running || 0 : 0;
+  if (running > 0) items.push({ icon: "clock", tone: "ok", title: `${plural(running, "job")} running now`, sub: "Agents are working in the background", open: "automation" });
+  const failing = pulse?.automations?.available ? pulse.automations.failing || [] : [];
+  if (failing.length > 0) items.push({ icon: "bolt", tone: "warn", title: `Automation failing: ${failing[0].name || failing[0].id}`, sub: failing[0].lastSummary || `${failing.length} automation(s) reporting failures`, open: "automation" });
+  const opp = serverOpportunity && serverOpportunityTenant === currentTenantId() ? serverOpportunity : null;
+  if (opp) items.push({ icon: "bolt", tone: "ok", title: `Opportunity: ${opp.title}`, sub: `${opp.action.label || "Open"} — from live graph analysis`, open: opp.action.route });
+  return items;
+}
 function attentionItems() {
-  const brainItems = brainContractAvailable() ? brainContractAttentionItems(cachedBrainContract()) : [];
-  const items = brainItems.length
-    ? brainItems
-    : organizationPulseAvailable()
-      ? pulseAttentionItems(cachedOrganizationPulse())
-      : [];
-  if (!items.length && !organizationPulseAvailable() && !brainContractAvailable()) {
-    visible(store.state.approvals).filter((a) => a.status === "pending").slice(0, 3)
-      .forEach((a) => items.push({ icon: "check", tone: "warn", title: a.title, sub: "Waiting on your approval", open: "approvals" }));
-    visible(store.state.leads).filter((l) => l.due && new Date(l.due).getTime() < Date.now() + 864e5 && l.status !== "won" && l.status !== "lost").slice(0, 2)
-      .forEach((l) => items.push({ icon: "users", tone: "warn", title: `Follow up: ${l.name}`, sub: l.next || "Due today", open: "leads" }));
-    visible(store.state.proposals).filter((p) => p.status === "sent-ready").slice(0, 2)
-      .forEach((p) => items.push({ icon: "dollar", tone: "ok", title: `Quote ready to send: ${p.client}`, sub: fmtMoney(p.price), open: "proposals" }));
-  }
+  const items = [];
+  visible(store.state.approvals).filter((a) => a.status === "pending").slice(0, 3)
+    .forEach((a) => items.push({ icon: "check", tone: "warn", title: a.title, sub: "Waiting on your approval", open: "approvals" }));
   visible(store.state.security).filter((s) => s.posture && s.posture !== "clean")
     .forEach(() => items.push({ icon: "shield", tone: "warn", title: "Security posture needs a look", sub: "Protect flagged attention", open: "protect" }));
+  visible(store.state.leads).filter((l) => l.due && new Date(l.due).getTime() < Date.now() + 864e5 && l.status !== "won" && l.status !== "lost").slice(0, 2)
+    .forEach((l) => items.push({ icon: "users", tone: "warn", title: `Follow up: ${l.name}`, sub: l.next || "Due today", open: "leads" }));
+  visible(store.state.proposals).filter((p) => p.status === "sent-ready").slice(0, 2)
+    .forEach((p) => items.push({ icon: "dollar", tone: "ok", title: `Quote ready to send: ${p.client}`, sub: fmtMoney(p.price), open: "proposals" }));
+  items.push(...serverAttentionItems());
   return items;
 }
 /* ============================ notifications ============================ */
@@ -1832,7 +1652,7 @@ function renderNotifs() {
   menu.hidden = !notifOpen;
   if (!notifOpen) return;
   menu.innerHTML = `<div class="notif-head">Notifications${items.length ? ` · ${items.length}` : ""}</div>` + (items.length
-    ? items.map((it) => `<button class="notif-item" data-open-ws="${esc(it.open)}"><span class="notif-item-ic notif-${esc(it.tone)}">${svg(it.icon)}</span><span class="notif-item-body"><b>${esc(it.title)}</b><i>${esc(it.sub)}</i></span></button>`).join("")
+    ? items.map((it) => `<button class="notif-item" data-open-ws="${it.open}"><span class="notif-item-ic notif-${it.tone}">${svg(it.icon)}</span><span class="notif-item-body"><b>${esc(it.title)}</b><i>${esc(it.sub)}</i></span></button>`).join("")
     : `<div class="notif-empty">You're all caught up.</div>`);
 }
 
@@ -1848,8 +1668,7 @@ function fuzzy(q, text) {
 function paletteSources(query) {
   const q = query.trim().toLowerCase();
   const items = [];
-  ensureServerRecordsFresh();
-  NAV.filter(canAccessSurface).filter((n) => !n.navHidden).forEach((n) =>
+  NAV.filter(canAccessSurface).forEach((n) =>
     items.push({ group: "Go to", label: n.label, icon: n.icon, sub: n.ws ? `Open ${n.label}` : "Console home", run: () => goNav(n.id) }));
   for (const id in WORKSPACE_DEFS) {
     const def = WORKSPACE_DEFS[id];
@@ -1861,19 +1680,10 @@ function paletteSources(query) {
   commandSuggestions().forEach((s) => items.push({ group: "Ask", label: s, icon: "chat", sub: "Run", run: () => runCommand(s) }));
   if (q.length >= 2) {
     const add = (label, sub, open, icon) => items.push({ group: "Records", label, icon, sub, run: () => routeWorkspace(open) });
-    const serverRecords = serverRecordsAvailable() ? cachedServerRecords() : null;
-    const leads = serverRecordsAvailable() ? (serverRecords?.leads || []) : visible(store.state.leads);
-    const proposals = serverRecordsAvailable() ? (serverRecords?.proposals || []) : visible(store.state.proposals);
-    const approvals = serverRecordsAvailable() ? (serverRecords?.approvals || []) : visible(store.state.approvals);
-    const setupSlots = serverRecordsAvailable() ? (serverRecords?.setupSlots || []) : [];
-    leads.filter((l) => (l.name || "").toLowerCase().includes(q) || (l.company || "").toLowerCase().includes(q)).slice(0, 4)
+    visible(store.state.leads).filter((l) => (l.name || "").toLowerCase().includes(q) || (l.company || "").toLowerCase().includes(q)).slice(0, 4)
       .forEach((l) => add(l.name, `Lead · ${l.company || l.status}`, "leads", "users"));
-    proposals.filter((p) => (p.client || "").toLowerCase().includes(q)).slice(0, 4)
+    visible(store.state.proposals).filter((p) => (p.client || "").toLowerCase().includes(q)).slice(0, 4)
       .forEach((p) => add(p.client, `Proposal · ${fmtMoney(p.price)}`, "proposals", "dollar"));
-    approvals.filter((a) => `${a.title || ""} ${a.detail || ""} ${a.ref || ""}`.toLowerCase().includes(q)).slice(0, 4)
-      .forEach((a) => add(a.title, `Approval · ${a.status || "pending"}`, "approvals", "check"));
-    setupSlots.filter((slot) => `${slot.organizationName || ""} ${slot.businessTemplate || ""}`.toLowerCase().includes(q)).slice(0, 4)
-      .forEach((slot) => add(slot.organizationName || slot.slotId, `Client setup · ${slot.completeness?.score || 0}%`, "clientsetup", "users"));
     visible(store.state.media).filter((m) => (m.title || "").toLowerCase().includes(q)).slice(0, 4)
       .forEach((m) => add(m.title, "Media item", "media", "film"));
     visible(store.state.sites).filter((s) => (s.title || "").toLowerCase().includes(q)).slice(0, 4)
@@ -1938,7 +1748,7 @@ const signedMoney = (value) => value < 0 ? `-${fmtMoney(Math.abs(value))}` : fmt
 
 function briefingText() {
   const m = moneyView();
-  const pend = approvalBadgeCount();
+  const pend = visible(store.state.approvals).filter((a) => a.status === "pending").length;
   const name = (ctx.session?.name || "there").split(/\s+/)[0];
   const bits = [`${greeting()}, ${name}`];
   if (m.transactions.length) bits.push(`${signedMoney(m.netCash)} net cashflow`);
@@ -1963,7 +1773,7 @@ function renderPlanMeta() {
     statusEl.className = `side-profile-status is-${status.tone}`;
     statusEl.innerHTML = `<span class="side-profile-dot" aria-hidden="true"></span>${esc(status.label)}`;
   }
-  if (planEl) planEl.textContent = activePlanView().name;
+  if (planEl) planEl.textContent = ACCOUNT_PLAN.name;
   if (el) el.textContent = `Renewal: ${renew}`;
 }
 
@@ -1997,14 +1807,15 @@ function renderConsole() {
   renderPlanMeta();
   renderUser();
   renderNotifs();
-  ensureOrganizationPulseFresh();
-  ensureBrainContractFresh();
+  /* Fire-and-forget: pull server truth for the bell, then repaint the badge
+     (and the open menu) once it lands. Failures change nothing. */
+  const pulseBefore = serverPulseAt;
+  fetchServerAttention().then(() => { if (serverPulseAt !== pulseBefore) renderNotifs(); }).catch(() => {});
   renderHero();
   renderChips();
   renderModePose(activeMode);
   renderFlowMap();
   renderFlowCompactSummary();
-  renderCommandWidgets();
   renderPlan();
   renderQueue();
   renderQuick();
@@ -2023,7 +1834,6 @@ function renderConsole() {
     onLoopUnavailable: () => speak(phantomLoopUnavailableMessage(), "", "alert"),
     renderSettings: renderChatSettingsPanel,
   });
-  mountPhantomAI($("[data-phantomai-shell]"));
   renderChatLog();
   mountMissionControl($("[data-mission-control]"), {
     runBrain: (text) => handleSmartCommand(text),
@@ -2269,7 +2079,7 @@ function cardHtml(c, cardIndex = "", entryIndex = "") {
       <h4>${esc(c.title)}</h4>
       ${c.body ? `<p class="rcard-body">${esc(c.body)}</p>` : ""}
       ${c.meta ? `<p class="rcard-meta">${esc(c.meta)}</p>` : ""}
-      ${c.actions?.length ? `<div class="rcard-actions">${c.actions.map((a) => `<button class="btn" data-open-ws="${esc(a.open)}">${esc(a.label)}</button>`).join("")}</div>` : ""}
+      ${c.actions?.length ? `<div class="rcard-actions">${c.actions.map((a) => `<button class="btn" data-open-ws="${a.open}">${esc(a.label)}</button>`).join("")}</div>` : ""}
     </article>`;
 }
 function bindCardRemovers(root, onRemove) {
@@ -2515,27 +2325,43 @@ function laneTargetForId(id) {
 function laneTargetOptions(selected) {
   return PHANTOM_LANE_TARGETS.map((target) => `<option value="${esc(target.id)}" ${target.id === selected ? "selected" : ""}>${esc(target.name)}</option>`).join("");
 }
-function laneModelOptions(targetId, selectedModel) {
-  const target = laneTargetForId(targetId);
-  return target.models.map((model) => `<option value="${esc(model)}" ${model === selectedModel ? "selected" : ""}>${esc(model)}</option>`).join("");
+function localModelOptions(localModels) {
+  const installed = Array.isArray(localModels?.installed_models) ? localModels.installed_models : [];
+  return [...new Set(["local-auto", ...installed.map((model) => model.model || model.name).filter(Boolean)])];
 }
-function renderBrainLaneControls() {
+function localModelLabel(modelId, localModels) {
+  if (modelId === "local-auto") return localModels?.model_count ? "Auto - best installed Ollama model" : "Auto - read Ollama";
+  const model = (localModels?.installed_models || []).find((item) => item.model === modelId || item.name === modelId);
+  const suffix = [model?.parameter_size, model?.quantization_level].filter(Boolean).join(" ");
+  return `${model?.display_name || modelId}${suffix ? ` (${suffix})` : ""}`;
+}
+function laneModelOptions(targetId, selectedModel, localModels = null) {
+  const target = laneTargetForId(targetId);
+  const models = target.id === "local_ollama" ? localModelOptions(localModels) : target.models;
+  return models.map((model) => `<option value="${esc(model)}" ${model === selectedModel ? "selected" : ""}>${esc(target.id === "local_ollama" ? localModelLabel(model, localModels) : model)}</option>`).join("");
+}
+function renderBrainLaneControls(localModels = null) {
   const cfg = loadPhantomLaneConfig();
   return PHANTOM_LANES.map((lane) => {
     const selected = cfg.lanes?.[lane.id] || {};
     const target = laneTargetForId(selected.target || lane.defaultTarget);
-    const model = target.models.includes(selected.model) ? selected.model : target.models[0];
+    const models = target.id === "local_ollama" ? localModelOptions(localModels) : target.models;
+    const model = models.includes(selected.model) || (target.allowCustomModel && typeof selected.model === "string" && selected.model.trim()) ? selected.model : models[0];
+    const localHint = lane.id === "local" && target.id === "local_ollama"
+      ? `<small>${localModels?.reachable ? `${Number(localModels.model_count || 0)} Ollama model${localModels.model_count === 1 ? "" : "s"} on this PC` : esc(localModels?.error || "Ollama status waiting")}</small>`
+      : "";
     return `
       <div class="developer-lane-control" data-dev-lane-row="${esc(lane.id)}">
         <div class="developer-lane-copy">
           <b>${esc(lane.name)}</b>
           <i>${esc(lane.role)}</i>
+          ${localHint}
         </div>
         <label><span>Backend</span>
           <select data-dev-lane-target="${esc(lane.id)}">${laneTargetOptions(target.id)}</select>
         </label>
         <label><span>Model</span>
-          <select data-dev-lane-model="${esc(lane.id)}">${laneModelOptions(target.id, model)}</select>
+          <select data-dev-lane-model="${esc(lane.id)}">${laneModelOptions(target.id, model, localModels)}</select>
         </label>
         <em data-dev-lane-current="${esc(lane.id)}">${esc(phantomLaneTargetName(target.id))}</em>
       </div>`;
@@ -2574,16 +2400,30 @@ async function fetchProviderManagerStatus() {
   }
 }
 
+async function fetchLocalModelStatus() {
+  try {
+    const token = session.token();
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 8000);
+    const response = await fetch("/phantom-ai/local-models/status", { headers, signal: ctrl.signal });
+    clearTimeout(timer);
+    const payload = await response.json().catch(() => null);
+    return response.ok && payload?.ollama ? payload.ollama : null;
+  } catch {
+    return null;
+  }
+}
+
 function providerManagerMarkup(manager) {
   if (!manager?.providers?.length) return `<p class="dev-provider-empty">Provider state is waiting for the local backend.</p>`;
+  const labels = { codex_cli: "Codex", claude_cli: "Claude", openrouter_glm: "OpenRouter", local_ollama: "Local" };
   return `<div class="dev-provider-monitor">
     ${manager.providers.map((provider) => {
       const tone = provider.status === "online" ? "on" : provider.status === "offline" ? "off" : "warn";
-      const displayId = provider.display_id || provider.id || "provider";
-      const displayName = provider.display_name || displayId;
       return `<article class="dev-provider-row dev-tone-${tone}">
         <span class="dev-state-pill dev-tone-${tone}">${devDot()}${esc(provider.status)}</span>
-        <div><b>${esc(displayName)}</b><i>${provider.preferred ? "Preferred" : manager.active_provider_display_id === displayId ? "Active fallback" : "Standby"}</i></div>
+        <div><b>${esc(labels[provider.provider_id] || provider.provider_id)}</b><i>${provider.preferred ? "Preferred" : manager.active_provider_id === provider.provider_id ? "Active fallback" : "Standby"}</i></div>
         <span><b>${provider.latency_ms == null ? "—" : `${provider.latency_ms}ms`}</b><i>Latency</i></span>
         <span><b>${esc(provider.quota || "unknown")}</b><i>Quota</i></span>
         <span><b>${provider.last_success_at ? esc(ago(provider.last_success_at)) : "—"}</b><i>Last success</i></span>
@@ -2779,7 +2619,7 @@ function animateDevCount(el, target) {
 }
 
 let devRefreshTimer = 0;
-function wireDeveloperSection(body, opts) {
+function wireDeveloperSection(body, opts, localModels = null) {
   const showLaneSaved = () => {
     const saved = body.querySelector("[data-dev-lane-saved]");
     if (!saved) return;
@@ -2797,7 +2637,7 @@ function wireDeveloperSection(body, opts) {
     const nextModel = patch.model || (target.id === current.target ? current.model : target.models[0]) || target.models[0];
     cfg.lanes[laneId] = {
       target: target.id,
-      model: target.models.includes(nextModel) ? nextModel : target.models[0],
+      model: target.models.includes(nextModel) || (target.allowCustomModel && typeof nextModel === "string" && nextModel.trim()) ? nextModel : target.models[0],
     };
     return savePhantomLaneConfig(cfg);
   };
@@ -2807,7 +2647,7 @@ function wireDeveloperSection(body, opts) {
       const cfg = saveLane(laneId, { target: select.value });
       const selected = cfg.lanes[laneId];
       const model = body.querySelector(`[data-dev-lane-model="${laneId}"]`);
-      if (model) model.innerHTML = laneModelOptions(selected.target, selected.model);
+      if (model) model.innerHTML = laneModelOptions(selected.target, selected.model, localModels);
       const current = body.querySelector(`[data-dev-lane-current="${laneId}"]`);
       if (current) current.textContent = phantomLaneTargetName(selected.target);
       showLaneSaved();
@@ -2841,7 +2681,7 @@ function wireDeveloperSection(body, opts) {
   });
 }
 
-function renderDeveloperContent(body, { workforce, workforceError, rembg, mediaHealth, providerManager }, opts) {
+function renderDeveloperContent(body, { workforce, workforceError, rembg, mediaHealth, providerManager, localModels }, opts) {
   const s = ctx.session || {};
   const w = workforce;
   const summary = w?.summary;
@@ -3000,7 +2840,7 @@ function renderDeveloperContent(body, { workforce, workforceError, rembg, mediaH
         <div class="developer-lane-groups">
           <div class="developer-lane-group developer-lane-group-wide">
             <b>Phantom routing lanes</b>
-            <div class="developer-lane-controls">${renderBrainLaneControls()}</div>
+            <div class="developer-lane-controls">${renderBrainLaneControls(localModels)}</div>
             <p class="developer-lane-saved" data-dev-lane-saved hidden>Saved — next message uses this routing.</p>
           </div>
           <div class="developer-lane-group">
@@ -3027,7 +2867,7 @@ function renderDeveloperContent(body, { workforce, workforceError, rembg, mediaH
       </section>
     </div>`;
 
-  wireDeveloperSection(body, opts);
+  wireDeveloperSection(body, opts, localModels);
   const autopilotMount = body.querySelector("[data-dev-autopilot]");
   if (autopilotMount) renderDeveloperAutopilotPanel(autopilotMount, opts);
   const agentRunsMount = body.querySelector("[data-dev-agent-runs]");
@@ -3036,17 +2876,18 @@ function renderDeveloperContent(body, { workforce, workforceError, rembg, mediaH
 }
 
 async function loadDeveloperData(body, opts) {
-  const [wfResult, rembg, mediaHealth, providerManager] = await Promise.all([
+  const [wfResult, rembg, mediaHealth, providerManager, localModels] = await Promise.all([
     fetchAgentWorkforceStatus(24),
     getRembgStatus(),
     getMediaEngineHealth(),
     fetchProviderManagerStatus(),
+    fetchLocalModelStatus(),
   ]);
   if (!document.body.contains(body)) return;
   renderDeveloperContent(body, {
     workforce: wfResult.ok ? wfResult.workforce : null,
     workforceError: wfResult.ok ? null : wfResult.error,
-    rembg, mediaHealth, providerManager,
+    rembg, mediaHealth, providerManager, localModels,
   }, opts);
 }
 
@@ -3085,60 +2926,33 @@ function renderDeveloperPage(body) {
   }, 30000);
 }
 
-function renderMediaLabSuite(body, initialTab = "create") {
-  let activeTab = initialTab === "content" ? "content" : "create";
+function renderMediaLabSuite(body) {
   const opts = mediaOpts();
-  const paint = () => {
-    body.innerHTML = `
+  body.innerHTML = `
       <section class="media-suite" data-media-suite>
         <header class="media-suite-head">
           <div>
-            <p class="media-suite-kicker">One creative workspace</p>
+            <p class="media-suite-kicker">Creation workspace</p>
             <h2>Media Lab</h2>
-            <p>Generate, edit, organize, and publish from the same tab.</p>
+            <p>Create and edit here. Finished work moves to Content Hub for planning, publishing, and analytics.</p>
           </div>
-          <nav class="media-suite-tabs" role="tablist" aria-label="Media Lab sections">
-            <button class="${activeTab === "create" ? "is-active" : ""}" data-media-suite-tab="create" type="button" role="tab" aria-selected="${activeTab === "create"}">${svg("media")} Create & Edit</button>
-            <button class="${activeTab === "content" ? "is-active" : ""}" data-media-suite-tab="content" type="button" role="tab" aria-selected="${activeTab === "content"}">${svg("doc")} Publish</button>
-          </nav>
+          <button class="media-suite-link" data-open-ws="content" type="button">${svg("doc")} Open Content Hub</button>
         </header>
         <div class="media-suite-body" data-media-suite-body></div>
       </section>`;
-    const target = $("[data-media-suite-body]", body);
-    if (activeTab === "content") renderContentHub(target, opts);
-    else renderMediaStudio(target, opts);
-    $$("[data-media-suite-tab]", body).forEach((button) => {
-      button.onclick = () => {
-        activeTab = button.dataset.mediaSuiteTab === "content" ? "content" : "create";
-        try { history.replaceState(null, "", `#page/${activeTab === "content" ? "content" : "media"}`); } catch {}
-        paint();
-      };
-    });
-  };
-  paint();
-}
-
-function renderAnalyticsSuite(body) {
-  body.innerHTML = `
-    <section class="analytics-stack">
-      <div data-managed-growth-report></div>
-      <div data-social-analytics-report></div>
-    </section>`;
-  mountManagedGrowthReport($("[data-managed-growth-report]", body));
-  renderAnalytics($("[data-social-analytics-report]", body), mediaOpts());
+  const target = $("[data-media-suite-body]", body);
+  renderMediaStudio(target, opts);
+  $("[data-open-ws='content']", body)?.addEventListener("click", () => opts.openWorkspace?.("content"));
 }
 
 const CUSTOM = {
-  media: { title: "Media Lab", kicker: "Create, organize, and publish", custom: true, wide: true, render: (body) => renderMediaLabSuite(body, "create") },
+  media: { title: "Media Lab", kicker: "Create and edit", custom: true, wide: true, render: (body) => renderMediaLabSuite(body) },
   sites: { title: "Websites", kicker: "Websites by domain", custom: true, wide: true, render: (body) => renderSiteStudio(body, mediaOpts()) },
-  content: { title: "Media Lab", kicker: "Publish studio inside Media Lab", custom: true, wide: true, render: (body) => renderMediaLabSuite(body, "content") },
+  content: { title: "Content Hub", kicker: "Library, ideas, drafts, publishing, and performance", custom: true, wide: true, render: (body) => renderContentHub(body, mediaOpts()) },
   assets: { title: "Asset Cloud", kicker: "Your business's creative memory", custom: true, wide: true, render: (body) => renderAssetCloud(body) },
   phantomplay: { title: "PhantomPlay", kicker: "Intentional downtime and approved games", custom: true, wide: true, render: (body) => (phantomPlayV2Opted() ? renderPhantomPlayV2 : renderPhantomPlay)(body, mediaOpts()) },
-  phantomstore: { title: "PhantomStore", kicker: "AI marketplace for tools, agents, and apps", custom: true, wide: true, render: (body) => renderPhantomStore(body, mediaOpts()) },
   intelligence: { title: "Competitor Intelligence", kicker: "Public signals, labeled estimates, and original responses", custom: true, wide: true, render: (body) => renderCompetitorIntelligence(body, mediaOpts()) },
-  clientsetup: { title: "Business Manager Settings", kicker: "Workspace and organization setup", custom: true, wide: true, render: (body) => renderOperatorSettings(body, { ...mediaOpts(), initialTab: "clientsetup", onWorkspaceApplied: () => { refreshCustomizedNavigation(); renderNav(); renderMobileBottomNav(); } }) },
-  analytics: { title: "Analytics", kicker: "Signals, trends, and operating insight", custom: true, wide: true, render: renderAnalyticsSuite },
-  planner: { title: "Planner", kicker: "AI operating plan, prep queue, and automation coverage", custom: true, wide: true, render: (body) => renderPlanner(body, mediaOpts()) },
+  analytics: { title: "Analytics", kicker: "Signals, trends, and operating insight", custom: true, wide: true, render: (body) => renderAnalytics(body, mediaOpts()) },
   account: { title: "Business Profile & Plan", kicker: "Profile, billing, and access", custom: true, render: (body) => renderAccountPlan(body) },
   developer: { title: "Developer", kicker: "Owner controls", custom: true, wide: true, ownerOnly: true, render: (body) => renderDeveloperPage(body) },
   settings: { title: "Business Manager Settings", kicker: "Brain, memory, routing, and safety configuration", custom: true, render: (body) => renderOperatorSettings(body, { ...mediaOpts(), onWorkspaceApplied: () => { refreshCustomizedNavigation(); renderNav(); renderMobileBottomNav(); } }) },
@@ -3146,7 +2960,10 @@ const CUSTOM = {
   vacation: { title: "Away Mode", kicker: "Your business stays covered while you are away", custom: true, wide: true, render: (body) => renderVacationMode(body, mediaOpts()) },
   promptlibrary: { title: "Prompt Library", kicker: "Saved prompts, ready to reuse", custom: true, wide: true, render: (body) => renderPromptLibrary(body, mediaOpts()) },
   customize: { title: "Workspace Studio", kicker: "Make this organization feel purpose-built", custom: true, wide: true, adminOnly: true, render: (body) => renderOperatorSettings(body, { ...mediaOpts(), initialTab: "workspace", onWorkspaceApplied: () => { refreshCustomizedNavigation(); renderNav(); renderMobileBottomNav(); } }) },
-  settingsmedia: { title: "Business Manager Settings", kicker: "Brain, memory, routing, and safety configuration", custom: true, render: (body) => renderOperatorSettings(body, { ...mediaOpts(), initialTab: "media", onWorkspaceApplied: () => { refreshCustomizedNavigation(); renderNav(); renderMobileBottomNav(); } }) },
+  /* The full worker roster + telemetry + live tail log — kept out of the
+     dashboard's permanent layout (that only shows a compact summary) and
+     opened on demand from "View all activity". */
+  activity: { title: "Activity", kicker: "Full PhantomWire feed — workers, telemetry, and live log", custom: true, wide: true, render: (body) => { body.innerHTML = `<div class="agentops"></div>`; mountAgentConsole(body.firstElementChild); } },
 };
 
 let openId = null;
@@ -3157,22 +2974,49 @@ function workspaceDef(id) {
 function navForWorkspace(id) {
   const key = workspaceId(id);
   const parentId = NAV_PARENT_BY_WORKSPACE[key];
-  return NAV.find((n) => !n.navHidden && n.id === activeNav && (n.ws === key || n.id === parentId) && canAccessSurface(n))
-    || NAV.find((n) => !n.navHidden && n.ws === key && canAccessSurface(n))
-    || NAV.find((n) => !n.navHidden && n.id === parentId && canAccessSurface(n))
+  return NAV.find((n) => n.id === activeNav && (n.ws === key || n.id === parentId) && canAccessSurface(n))
+    || NAV.find((n) => n.ws === key && canAccessSurface(n))
+    || NAV.find((n) => n.id === parentId && canAccessSurface(n))
     || null;
 }
 function clearOverlayOnly() {
-  if (customerOnboardingLocked()) return;
   openId = null;
   overlayRoot.innerHTML = "";
   document.body.classList.remove("overlay-open");
 }
-function customerOnboardingLocked() {
-  return openId === "customer-onboarding" && !customerOnboardingComplete();
+/* Build staleness watchdog: the sync script records its outcome in the
+   served manifest. If this machine stopped updating (blocked sync or no
+   sync in 24h), owners see WHY in the product instead of silently living
+   on an old build. Admin-only; missing manifest (fresh checkout, GitHub
+   Pages) shows nothing. */
+let syncBannerShown = false;
+async function checkBuildFreshness() {
+  if (syncBannerShown || !isAdmin()) return;
+  let manifest = null;
+  try {
+    const response = await fetch("/app/.phantomforce-sync.json", { cache: "no-store" });
+    if (!response.ok) return;
+    manifest = await response.json();
+  } catch { return; }
+  if (!manifest || typeof manifest !== "object") return;
+  const syncedAt = Date.parse(manifest.synced_at || "");
+  const staleMs = Number.isFinite(syncedAt) ? Date.now() - syncedAt : 0;
+  const blocked = manifest.sync_status === "blocked";
+  const stale = staleMs > 24 * 60 * 60 * 1000;
+  if (!blocked && !stale) return;
+  syncBannerShown = true;
+  const bar = document.createElement("div");
+  bar.className = "build-stale-banner";
+  bar.setAttribute("role", "alert");
+  const when = Number.isFinite(syncedAt) ? new Date(syncedAt).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "unknown";
+  bar.innerHTML = `<b>${blocked ? "Updates are blocked on this computer" : "This computer hasn't updated recently"}</b>
+    <span>${esc(String(manifest.sync_reason || `Last successful sync: ${when}. Check the sync log if this persists.`))}</span>
+    <button type="button" aria-label="Dismiss">&times;</button>`;
+  bar.querySelector("button").onclick = () => bar.remove();
+  document.body.prepend(bar);
 }
+
 function renderDashboardPage(pushHash = true) {
-  if (customerOnboardingLocked()) return;
   activePageId = null;
   activeNav = "dashboard";
   clearOverlayOnly();
@@ -3180,12 +3024,12 @@ function renderDashboardPage(pushHash = true) {
   setGhostMood("idle", { emotion: "happy", ms: 1200 });
   stageReact("dashboard", 520);
   renderConsole();
+  checkBuildFreshness();
   if (pushHash && location.hash) {
     try { history.pushState(null, "", location.pathname + location.search); } catch {}
   }
 }
 function renderWorkspacePage(id, pushHash = true) {
-  if (customerOnboardingLocked()) return;
   const key = workspaceId(id);
   const def = workspaceDef(key);
   if (!def) return;
@@ -3221,12 +3065,10 @@ function renderWorkspacePage(id, pushHash = true) {
   renderPlanMeta();
   renderUser();
   renderNotifs();
-  ensureOrganizationPulseFresh();
-  ensureBrainContractFresh();
   const body = $("[data-workspace-page-body]", root);
   const rerender = () => {
     if (def.custom) def.render(body);
-    else def.render(body, rerender, mediaOpts());
+    else { def.render(body, rerender); if (key === "phantom") wirePhantomConsole(body); }
     mountPageWorkers(root, mediaOpts());
   };
   rerender();
@@ -3235,14 +3077,12 @@ function renderWorkspacePage(id, pushHash = true) {
   }
 }
 function routeWorkspace(id, pushHash = true) {
-  if (customerOnboardingLocked()) return;
   const key = workspaceId(id);
   if (key === "dashboard") { renderDashboardPage(pushHash); return; }
   if (navForWorkspace(key)) renderWorkspacePage(key, pushHash);
   else openWorkspace(key, pushHash);
 }
 function openWorkspace(id, pushHash = true) {
-  if (customerOnboardingLocked()) return;
   const key = workspaceId(id);
   const def = workspaceDef(key);
   if (!def) return;
@@ -3273,7 +3113,7 @@ function openWorkspace(id, pushHash = true) {
   const body = $("[data-overlay-body]", overlayRoot);
   const rerender = () => {
     if (def.custom) def.render(body);
-    else def.render(body, rerender, mediaOpts());
+    else { def.render(body, rerender); if (key === "phantom") wirePhantomConsole(body); }
     mountPageWorkers(overlayRoot, mediaOpts());
   };
   rerender();
@@ -3285,7 +3125,6 @@ function openWorkspace(id, pushHash = true) {
 }
 function closeOverlay(clearHash) {
   if (!openId) { if (clearHash) syncNavToView(); return; }
-  if (openId === "customer-onboarding") return;
   openId = null;
   overlayRoot.innerHTML = "";
   document.body.classList.remove("overlay-open");
@@ -3296,151 +3135,6 @@ function closeOverlay(clearHash) {
   if (activePageId) renderWorkspacePage(activePageId, false);
   else renderConsole();
 }
-
-function customerOnboardingKey() {
-  const identity = (ctx.session?.orgId || ctx.session?.userId || ctx.session?.authSessionId || ctx.session?.email || ctx.session?.sessionId || "").toLowerCase();
-  if (!identity) return "";
-  return `pf.customer.onboarding.${CUSTOMER_ONBOARDING_VERSION}.${identity}`;
-}
-
-function customerOnboardingComplete() {
-  if (!isClientPublicHost() || !ctx.session?.database || ctx.session?.isSuperAdmin) return true;
-  try {
-    const key = customerOnboardingKey();
-    return Boolean(key) && localStorage.getItem(key) === "complete";
-  } catch {
-    return false;
-  }
-}
-
-function showCustomerFirstRunOnboarding() {
-  if (customerOnboardingComplete()) return;
-  clearOverlayOnly();
-  openId = "customer-onboarding";
-  document.body.classList.add("overlay-open");
-  const businessName = ctx.session?.label || wsName(currentWs()) || "";
-  overlayRoot.innerHTML = `
-    <div class="overlay overlay-wide customer-onboarding-overlay" role="dialog" aria-modal="true" aria-label="Customer workspace setup">
-      <section class="overlay-panel customer-onboarding-panel">
-        <header class="customer-onboarding-head">
-          <div>
-            <p class="overlay-kicker">First run setup</p>
-            <h2>Tell PhantomForce who you are.</h2>
-            <p class="overlay-sub">This is a brand new customer workspace. Nothing from the admin account should bleed into it, so Phantom needs your business identity before the experience opens.</p>
-          </div>
-          <div class="customer-orb" aria-hidden="true"><span></span></div>
-        </header>
-        <form class="customer-onboarding-form" data-customer-onboarding-form>
-          <section class="customer-onboarding-step">
-            <p class="customer-step-kicker">1 / 4</p>
-            <h3>What are you?</h3>
-            <div class="customer-choice-grid" role="radiogroup" aria-label="Customer type">
-              ${[
-                ["business_owner", "Business owner", "I need leads, media, sites, analytics, and follow-up."],
-                ["creator", "Creator", "I make content and want a faster publishing engine."],
-                ["developer", "Developer", "I am here to build, test, or ship with PhantomForce."],
-                ["agency", "Agency", "I run work for clients and need repeatable delivery."],
-                ["exploring", "Just exploring", "I want the free plan and a clean preview first."],
-              ].map(([value, label, copy], index) => `
-                <label class="customer-choice">
-                  <input type="radio" name="customerRole" value="${esc(value)}" ${index === 0 ? "checked" : ""} />
-                  <b>${esc(label)}</b>
-                  <i>${esc(copy)}</i>
-                </label>`).join("")}
-            </div>
-          </section>
-
-          <section class="customer-onboarding-step">
-            <p class="customer-step-kicker">2 / 4</p>
-            <h3>What are you here for?</h3>
-            <div class="customer-check-grid" aria-label="Customer goals">
-              ${[
-                ["leads", "Get more customers"],
-                ["media", "Generate photos, video, and posts"],
-                ["site", "Launch or improve a website"],
-                ["analytics", "Understand social and business results"],
-                ["automation", "Automate follow-up and operations"],
-                ["phantomplay", "Use or build PhantomPlay games"],
-              ].map(([value, label]) => `
-                <label class="customer-check">
-                  <input type="checkbox" name="customerGoals" value="${esc(value)}" ${["leads", "media", "site"].includes(value) ? "checked" : ""} />
-                  <span>${esc(label)}</span>
-                </label>`).join("")}
-            </div>
-          </section>
-
-          <section class="customer-onboarding-step">
-            <p class="customer-step-kicker">3 / 4</p>
-            <h3>Business identity</h3>
-            <div class="customer-field-grid">
-              <label><span>Business name</span><input name="businessName" value="${esc(businessName)}" placeholder="Your business or project" required /></label>
-              <label><span>Industry</span><input name="industry" placeholder="Example: sports photography, home services, SaaS" required /></label>
-              <label><span>Best customer</span><input name="audience" placeholder="Who you sell to or serve" required /></label>
-              <label><span>Tone</span><input name="tone" placeholder="Premium, funny, bold, clean, local..." /></label>
-            </div>
-          </section>
-
-          <section class="customer-onboarding-step">
-            <p class="customer-step-kicker">4 / 4</p>
-            <h3>Choose your starting plan</h3>
-            <div class="customer-choice-grid customer-plan-grid" role="radiogroup" aria-label="Plan choice">
-              ${[
-                ["free", "Free", "See what PhantomForce looks like before paying."],
-                ["starter", "Starter", "Turn the workspace into a working business cockpit."],
-                ["pro", "Pro", "Media, analytics, automation, and growth workflows together."],
-              ].map(([value, label, copy], index) => `
-                <label class="customer-choice">
-                  <input type="radio" name="plan" value="${esc(value)}" ${index === 0 ? "checked" : ""} />
-                  <b>${esc(label)}</b>
-                  <i>${esc(copy)}</i>
-                </label>`).join("")}
-            </div>
-          </section>
-
-          <button class="customer-onboarding-submit" type="submit">
-            <span>Build my workspace</span>
-            <i>No admin content, no shared business identity, no skipped setup.</i>
-          </button>
-        </form>
-      </section>
-    </div>`;
-
-  const form = $("[data-customer-onboarding-form]", overlayRoot);
-  form.onsubmit = (event) => {
-    event.preventDefault();
-    const data = new FormData(form);
-    const profile = {
-      version: CUSTOMER_ONBOARDING_VERSION,
-      completedAt: new Date().toISOString(),
-      role: data.get("customerRole") || "business_owner",
-      goals: data.getAll("customerGoals"),
-      businessName: String(data.get("businessName") || "").trim(),
-      industry: String(data.get("industry") || "").trim(),
-      audience: String(data.get("audience") || "").trim(),
-      tone: String(data.get("tone") || "").trim(),
-      plan: data.get("plan") || "free",
-    };
-    try {
-      const key = customerOnboardingKey();
-      if (key) {
-        localStorage.setItem(key, "complete");
-        localStorage.setItem(`${key}.profile`, JSON.stringify(profile));
-      }
-    } catch {}
-    if (profile.businessName) {
-      ctx.session = { ...ctx.session, label: profile.businessName };
-      session.set(ctx.session);
-      setWorkspace(currentWs());
-    }
-    openId = null;
-    overlayRoot.innerHTML = "";
-    document.body.classList.remove("overlay-open");
-    renderUser();
-    renderConsole();
-    speak(`Workspace setup saved for ${profile.businessName || "your business"}. Free plan is ready to preview.`, "", "bright");
-  };
-}
-
 function syncNavToView() {
   if (!openId) {
     if (activePageId) {
@@ -3457,13 +3151,48 @@ function syncNavToView() {
 }
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && openId) closeOverlay(true); });
 window.addEventListener("popstate", () => {
-  if (customerOnboardingLocked()) return;
   const page = location.hash.match(/^#page\/([a-z-]+)/);
   const ws = location.hash.match(/^#ws\/([a-z-]+)/);
   if (page && workspaceDef(page[1])) renderWorkspacePage(page[1], false);
   else if (ws && workspaceDef(ws[1])) routeWorkspace(ws[1], false);
   else renderDashboardPage(false);
 });
+
+/* ============================ phantom console (chat overlay) ============================ */
+const phantomHistory = [];
+function wirePhantomConsole(body) {
+  const log = $("[data-phantom-log]", body);
+  const form = $("[data-phantom-form]", body);
+  const input = $("[data-phantom-input]", body);
+  const paint = () => {
+    log.innerHTML = phantomHistory.map((h, entryIndex) => `
+      <div class="phantom-entry">
+        <p class="phantom-user">› ${esc(h.q)}</p>
+        <p class="phantom-reply">${esc(h.say)}</p>
+        ${(h.cards || []).map((c, cardIndex) => cardHtml(c, cardIndex, entryIndex)).join("")}
+      </div>`).join("") || `<p class="phantom-hello">This is the full command console. Everything you ask is classified first: answers stay answers, commands become guarded work, and external actions stay approval-gated.</p>`;
+    bindCardRemovers(log, (entryIndex, cardIndex) => {
+      const cards = phantomHistory[entryIndex]?.cards;
+      if (!cards) return;
+      cards.splice(cardIndex, 1);
+      paint();
+    });
+    log.scrollTop = log.scrollHeight;
+  };
+  paint();
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const v = input.value.trim();
+    if (!v) return;
+    input.value = "";
+    const r = await handleSmartCommand(v).catch(() => handleCommand(v));
+    phantomHistory.push({ q: v, say: r.say, cards: r.cards });
+    rememberConversation({ prompt: v, reply: r.say, mode: "phantom-console", route: r.open || "" });
+    paint();
+    renderConsole();
+  });
+  setTimeout(() => focusWithoutScroll(input), 60);
+}
 
 /* ============================ ghost (2D character) ============================ */
 let ghostPulse = 0;
@@ -3564,7 +3293,6 @@ function enterPhantom() {
       renderMobileBottomNav();
       renderStatusPills();
       renderUser();
-      showCustomerFirstRunOnboarding();
     },
   });
   void refreshNavEntitlements();
@@ -3573,7 +3301,6 @@ function enterPhantom() {
   const view = (q.get("view") || "").toLowerCase();
   const page = location.hash.match(/^#page\/([a-z-]+)/);
   const m = location.hash.match(/^#ws\/([a-z-]+)/);
-  if (customerOnboardingLocked()) return;
   if (page && workspaceDef(page[1])) renderWorkspacePage(page[1], false);
   else if (m && workspaceDef(m[1])) routeWorkspace(m[1], false);
   else if (view && view !== "command" && workspaceDef(view)) routeWorkspace(view, false);
@@ -3586,8 +3313,7 @@ function enterPhantom() {
 }
 
 async function boot() {
-  const resolvedSession = isLiveAdminHost() ? await verifyLiveSession() : resolveSession();
-  ctx.session = await verifyDatabaseBootSession(resolvedSession);
+  ctx.session = isLiveAdminHost() ? await verifyLiveSession() : resolveSession();
   wireDeck();
   store.onChange(() => {
     if (!phantom.hidden) {

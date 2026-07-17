@@ -4,9 +4,8 @@
    draftable actions, and one blocking question max. External actions stay
    approval-gated. */
 
-import { store, visible, currentWs, wsName, pushActivity, session, currentTenantId } from "./store.js?v=phantom-live-20260717-2";
-import { createCrmProspectBuildout, isCrmProspectBuildout } from "./crmprospects.js?v=phantom-live-20260717-2";
-import { persistCrmProspectLanes, signalCrmRefresh } from "./crmpipeline.js?v=phantom-live-20260717-2";
+import { store, visible, currentWs, wsName, pushActivity, session, currentTenantId } from "./store.js?v=phantom-live-20260714-006";
+import { createCrmProspectBuildout, isCrmProspectBuildout } from "./command.js?v=phantom-live-20260714-006";
 
 const esc = (value = "") => String(value)
   .replaceAll("&", "&amp;")
@@ -74,10 +73,10 @@ const PAGE_WORKERS = {
   },
   leads: {
     eyebrow: "Client intelligence",
-    title: "Build the client base.",
-    placeholder: "Tell Phantom who to find and add: schools, gyms, creators, service companies, warm prospects...",
-    helper: "Phantom converts this page prompt into CRM prospect cards, qualification tasks, and approval-safe next moves.",
-    action: "Find + add CRM prospects",
+    title: "Run the CRM.",
+    placeholder: "Tell Phantom: pull 5 new clients per day, add a warm lead, or update a client record...",
+    helper: "Phantom keeps CRM records scoped to this organization with social handles, notes, and approval-safe next moves.",
+    action: "Update CRM",
   },
   approvals: {
     eyebrow: "Approval intelligence",
@@ -117,8 +116,6 @@ const DEFAULT_WORKER = {
   action: "Infer next action",
 };
 
-const WORKER_OUTPUT_CACHE = new Map();
-
 const SKIP_PAGES = new Set([
   "settings",
   "developer",
@@ -147,11 +144,6 @@ function workerFor(pageId) {
 
 export function pageWorkerHtml(pageId, def = {}) {
   if (SKIP_PAGES.has(pageId) || def.ownerOnly) return "";
-  return legacyPageWorkerHtml(pageId, def);
-}
-
-function legacyPageWorkerHtml(pageId, def = {}) {
-  if (SKIP_PAGES.has(pageId) || def.ownerOnly) return "";
   const worker = workerFor(pageId);
   return `
     <section class="page-worker" data-page-worker="${esc(pageId)}">
@@ -164,14 +156,8 @@ function legacyPageWorkerHtml(pageId, def = {}) {
         <textarea data-page-worker-input rows="1" placeholder="${esc(worker.placeholder)}" aria-label="${esc(worker.title)}"></textarea>
         <button type="submit" aria-label="Run page intelligence">Run</button>
       </form>
-      ${pageWorkerOutputHtml(pageId)}
+      <div class="page-worker-output" data-page-worker-output hidden></div>
     </section>`;
-}
-
-function pageWorkerOutputHtml(pageId) {
-  const cached = WORKER_OUTPUT_CACHE.get(pageId);
-  if (!cached?.html) return `<div class="page-worker-output" data-page-worker-output hidden></div>`;
-  return `<div class="${esc(cached.className || "page-worker-output")}" data-page-worker-output>${cached.html}</div>`;
 }
 
 const HISTORY_KEY = "pf.pageworker.intelligence.v1";
@@ -188,9 +174,8 @@ const RISKY = /\b(send|publish|post|deploy|delete|charge|spend|email|dm|message|
 const URGENT = /\b(now|today|asap|tonight|this week|urgent|quick|fast|same day|immediately)\b/i;
 const MONEY = /\$[\d,]+|\b\d+\s?(?:dollars|bucks|usd)\b/i;
 const URL = /\bhttps?:\/\/[^\s]+|\b[a-z0-9-]+\.(?:com|online|net|org|co)\b/i;
-const CRM_PAGE_ACTION_VERB = /\b(add|find|search|discover|source|scout|research|identify|update|fill|populate|build|load|start|create|generate|make|map|draft|list|convert|turn|put|bring)\b/i;
-const CRM_PAGE_AUDIENCE = /\b(clients?|leads?|prospects?|contacts?|customers?|accounts?|buyers?|companies|organizations?|orgs?|owners?|founders?|decision makers?|small business(?:es)?|business(?:es)?|creators?|creative teams?|schools?|districts?|education|gyms?|coaches?|trainers?|service compan(?:y|ies)|contractors?|home services?|restaurants?|bars?|venues?|clubs?|teams?|professional services?|warm prospects?|everyone)\b/i;
-const CRM_PAGE_BUILDOUT_CUE = /\b(crm|clients?\s+(?:tab|page|pipeline|list|base)|prospects?|lead\s+(?:base|list)|find|add|source|scout|discover|research|who|interested|could\s+use|would\s+need|need\s+(?:us|phantomforce)|business command center|managed growth|everyone)\b/i;
+const CRM_PAGE_ACTION_VERB = /\b(add|find|search|discover|source|scout|research|identify|update|fill|populate|build|load|start|create|generate|make|map|draft|list)\b/i;
+const CRM_PAGE_AUDIENCE = /\b(clients?|leads?|prospects?|contacts?|customers?|small business(?:es)?|business(?:es)?|creators?|schools?|education|gyms?|coaches?|trainers?|service compan(?:y|ies)|contractors?|home services?|restaurants?|bars?|venues?|clubs?|teams?|professional services?|warm prospects?|everyone)\b/i;
 
 function tokenize(value = "") {
   return String(value).toLowerCase().match(/[a-z0-9]{3,}/g)?.filter((word) => !STOP_WORDS.has(word)) || [];
@@ -383,8 +368,8 @@ function isLeadsProspectPrompt(pageId, prompt = "") {
   if (pageId !== "leads") return false;
   const text = String(prompt || "");
   return isCrmProspectBuildout(text)
-    || (CRM_PAGE_ACTION_VERB.test(text) && CRM_PAGE_AUDIENCE.test(text) && CRM_PAGE_BUILDOUT_CUE.test(text))
-    || (/\b(who|companies|businesses|people|organizations|accounts|owners|founders|decision makers)\b[\s\S]{0,100}\b(interested|could\s+use|would\s+need|could\s+buy|could\s+hire|need\s+(?:us|phantomforce)|business command center|managed growth)\b/i.test(text));
+    || (CRM_PAGE_ACTION_VERB.test(text) && CRM_PAGE_AUDIENCE.test(text))
+    || (/\b(who|companies|businesses|people|organizations)\b[\s\S]{0,80}\b(interested|could\s+use|would\s+need|could\s+buy|could\s+hire|need\s+phantomforce)\b/i.test(text));
 }
 
 export function runPageAction(pageId, prompt) {
@@ -400,36 +385,14 @@ export function runPageAction(pageId, prompt) {
   return {
     type: "prospect-buildout",
     title: buildout.created.length ? "Prospect lanes created" : "Prospect lanes already mapped",
-    summary: `${createdNames.length || laneNames.length} draft CRM card${(createdNames.length || laneNames.length) === 1 ? "" : "s"} ready in Clients: ${names}.`,
-    leads: buildout.leads || buildout.created,
+    summary: `${createdNames.length || laneNames.length} draft lane${(createdNames.length || laneNames.length) === 1 ? "" : "s"} ready in Clients: ${names}.`,
     notes: [
       "No outreach, upload, deploy, or public action happened.",
       "No fake contact details were generated.",
-      "Next: qualify one card with public/CRM research before adding real business names.",
+      "Next: qualify one lane with public/CRM research before adding real business names.",
     ],
     refreshWorkspace: true,
   };
-}
-
-async function persistPageAction(pageAction, prompt) {
-  if (pageAction?.type !== "prospect-buildout" || !Array.isArray(pageAction.leads) || !pageAction.leads.length) return pageAction;
-  if (!session?.token?.()) {
-    pageAction.notes.push("Server CRM needs a signed-in backend session; the draft lanes stayed local for now.");
-    return pageAction;
-  }
-  try {
-    const payload = await persistCrmProspectLanes(pageAction.leads, prompt);
-    const saved = Array.isArray(payload.leads) ? payload.leads.length : pageAction.leads.length;
-    pageAction.serverPersisted = true;
-    pageAction.title = "Prospect lanes saved";
-    pageAction.summary = `${saved} draft CRM card${saved === 1 ? "" : "s"} saved to server CRM.`;
-    pageAction.notes.unshift("Server CRM saved the draft lanes for this workspace.");
-    signalCrmRefresh("prospect-lanes-saved");
-  } catch (error) {
-    pageAction.serverPersisted = false;
-    pageAction.notes.push(`Server CRM save failed, so the local draft lanes stayed visible: ${error?.message || "unknown error"}`);
-  }
-  return pageAction;
 }
 
 function pageActionHtml(action) {
@@ -447,6 +410,9 @@ function blockingQuestion(prompt, pageId) {
   const words = tokenize(prompt);
   if (!prompt.trim()) return "What outcome do you want on this page?";
   if (words.length <= 2) return "Give me one sentence with the outcome, and I’ll infer the rest.";
+  if (pageId === "analytics" && /\b(why|what worked|performance)\b/i.test(prompt) && !visible(store.state.socialAccounts || []).length) {
+    return "Which account or channel should I treat as the source if no connector is live yet?";
+  }
   return "";
 }
 
@@ -512,13 +478,6 @@ function backendStatusLabel(backend) {
     || (payload.live_provider_called ? "live provider" : "backend answered");
 }
 
-function backendSafeError(status) {
-  if (status === 401 || status === 403) return "Private brain needs a fresh approved session before it can add a live report.";
-  if (status === 408 || status === 429) return "Private brain is busy right now, so Phantom kept the local result visible.";
-  if (status >= 500) return "Private brain did not answer cleanly, so Phantom kept the local result visible.";
-  return "Private brain could not return a live report, so Phantom kept the local result visible.";
-}
-
 function backendContentHtml(content) {
   return String(content || "")
     .trim()
@@ -526,32 +485,6 @@ function backendContentHtml(content) {
     .filter(Boolean)
     .map((block) => `<p>${esc(block).replace(/\n/g, "<br>")}</p>`)
     .join("");
-}
-
-function localResultSummary(pageId, prompt, analysis) {
-  const text = String(prompt || "");
-  if (pageId === "analytics" && /\b(empty|why|what\s+should|next|stats?|analytics|metric|performance|views?|reach|engagement)\b/i.test(text)) {
-    return [
-      "Done: analytics are empty because this page only trusts official social API syncs or imported platform reports. Saved handles do not create metrics.",
-      "Next: connect OAuth/API access for the first channel you care about, or import that platform's CSV/TSV/JSON export. Local uploads, drafts, and post-history records stay out of analytics.",
-    ];
-  }
-  if (pageId === "intelligence" && /\b(competitor|compare|market|better|beat|against|alternative)\b/i.test(text)) {
-    return [
-      "Done: Phantom can build the starter competitor map from the business category, then mark every item as starter context until a public source is attached.",
-      "Next: add a competitor URL, search source, review source, or public directory lane so the board can separate verified evidence from strategy guesses.",
-    ];
-  }
-  if (pageId === "phantomplay" && /\b(friend|friends|school|class|wireless|together|multiplayer|kids|student)\b/i.test(text)) {
-    return [
-      "Done: PhantomPlay should keep play together private by default: same workspace, short-lived room code, no public discovery, and no chat/voice until moderation exists.",
-      "Next: use classroom-safe Everyone-rated rooms first, then add stronger owner controls before any broader multiplayer surface.",
-    ];
-  }
-  if (!analysis.question && analysis.actions.length) {
-    return [`Done: Phantom has enough context to draft ${analysis.intent.toLowerCase()} locally without external execution.`];
-  }
-  return [];
 }
 
 function sessionActorId() {
@@ -641,16 +574,12 @@ function backendPrompt(pageId, prompt, analysis) {
 
 async function askBackendForPageOutcome(pageId, prompt, analysis) {
   if (!String(prompt || "").trim()) return { content: "", error: "" };
-  if (typeof fetch !== "function") return { content: "", error: "Private brain is not available in this browser, so Phantom kept the local result visible." };
+  if (typeof fetch !== "function") return { content: "", error: "AI backend fetch is unavailable in this browser." };
   const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
   const timeout = controller ? setTimeout(() => controller.abort(), BACKEND_TIMEOUT_MS) : null;
   const token = typeof session?.token === "function" ? session.token() : "";
-  if (!token) {
-    if (timeout) clearTimeout(timeout);
-    return { content: "", error: "Private brain needs a fresh approved session before it can add a live report." };
-  }
   const headers = { "Content-Type": "application/json" };
-  headers.Authorization = `Bearer ${token}`;
+  if (token) headers.Authorization = `Bearer ${token}`;
   try {
     const response = await fetch("/phantom-ai/chat", {
       method: "POST",
@@ -660,8 +589,8 @@ async function askBackendForPageOutcome(pageId, prompt, analysis) {
         message: backendPrompt(pageId, prompt, analysis),
         user_request: prompt,
         provider: "phantom",
-        admin_model: "private_brain",
-        model_lane: "private_brain",
+        admin_model: "codex",
+        model_lane: "codex",
         route_tier: "standard",
         max_provider_ms: BACKEND_TIMEOUT_MS,
         allow_provider_fallback: true,
@@ -679,9 +608,11 @@ async function askBackendForPageOutcome(pageId, prompt, analysis) {
     let payload = {};
     try { payload = raw ? JSON.parse(raw) : {}; }
     catch { payload = { message: { content: raw } }; }
-    if (!response.ok) return { content: "", error: backendSafeError(response.status), status: response.status, payload };
+    if (!response.ok) {
+      return { content: "", error: `AI backend returned HTTP ${response.status}.`, payload };
+    }
     const content = backendTextFrom(payload);
-    if (!content) return { content: "", error: "Private brain answered without a usable report, so Phantom kept the local result visible.", payload };
+    if (!content) return { content: "", error: "AI backend returned no message content.", payload };
     return {
       content,
       provider: payload.admin_model_label || payload.model_id || payload.provider_choice || "",
@@ -691,8 +622,8 @@ async function askBackendForPageOutcome(pageId, prompt, analysis) {
     return {
       content: "",
       error: error?.name === "AbortError"
-        ? "Private brain took too long to answer, so Phantom kept the local result visible."
-        : "Private brain could not be reached, so Phantom kept the local result visible.",
+        ? "AI backend took too long to answer."
+        : `AI backend could not be reached: ${error?.message || "unknown error"}.`,
     };
   } finally {
     if (timeout) clearTimeout(timeout);
@@ -701,9 +632,6 @@ async function askBackendForPageOutcome(pageId, prompt, analysis) {
 
 function renderPageWorkerResult(out, analysis, pageAction, backend) {
   const hasBackendAnswer = Boolean(backend?.content);
-  const pageId = out.closest("[data-page-worker]")?.dataset.pageWorker || "page";
-  const prompt = out.closest("[data-page-worker]")?.querySelector("[data-page-worker-input]")?.value || "";
-  const localSummary = localResultSummary(pageId, prompt, analysis);
   out.classList.remove("is-thinking");
   out.innerHTML = `
     <div class="page-worker-intel-head">
@@ -719,11 +647,6 @@ function renderPageWorkerResult(out, analysis, pageAction, backend) {
       <div class="page-worker-backend-result is-fallback">
         <span>Backend check</span>
         <p>${esc(backend.error)} Phantom kept the local result visible instead of going blank.</p>
-      </div>` : ""}
-    ${localSummary.length ? `
-      <div class="page-worker-backend-result page-worker-local-summary">
-        <span>What Phantom can tell right now</span>
-        ${localSummary.map((item) => `<p>${esc(item)}</p>`).join("")}
       </div>` : ""}
     <p class="page-worker-understood">${esc(analysis.understood)}</p>
     <div class="page-worker-intel-grid">
@@ -748,10 +671,6 @@ function renderPageWorkerResult(out, analysis, pageAction, backend) {
       <b>${analysis.question ? "Before we proceed, answer this:" : "Done. Ready to draft."}</b>
       <span>${esc(analysis.question || "Phantom has enough to draft locally. External moves still require approval.")}</span>
     </div>`;
-  WORKER_OUTPUT_CACHE.set(pageId, {
-    html: out.innerHTML,
-    className: out.className,
-  });
 }
 
 function currentWorkerOutput(card, pageId) {
@@ -759,25 +678,6 @@ function currentWorkerOutput(card, pageId) {
     ? card
     : document.querySelector(`[data-page-worker="${String(pageId || "page").replace(/"/g, '\\"')}"]`);
   return liveCard?.querySelector("[data-page-worker-output]") || card?.querySelector("[data-page-worker-output]") || null;
-}
-
-function snapshotWorkerOutput(card, pageId) {
-  const out = currentWorkerOutput(card, pageId);
-  if (!out || out.hidden || !out.innerHTML.trim()) return null;
-  return {
-    html: out.innerHTML,
-    className: out.className,
-  };
-}
-
-function restorePageWorkerOutput(pageId, snapshot) {
-  const source = snapshot?.html ? snapshot : WORKER_OUTPUT_CACHE.get(pageId);
-  if (!source?.html) return;
-  const out = currentWorkerOutput(null, pageId);
-  if (!out) return;
-  out.hidden = false;
-  out.className = source.className || "page-worker-output";
-  out.innerHTML = source.html;
 }
 
 async function renderPlan(card, pageId, prompt) {
@@ -788,7 +688,6 @@ async function renderPlan(card, pageId, prompt) {
   out = currentWorkerOutput(card, pageId);
   if (!out) return { analysis, pageAction, backend: null };
   renderThinking(out, pageId, prompt, pageAction);
-  if (pageAction) await persistPageAction(pageAction, prompt);
   const backend = await askBackendForPageOutcome(pageId, prompt, analysis);
   out = currentWorkerOutput(card, pageId);
   if (!out) return { analysis, pageAction, backend };
@@ -821,13 +720,7 @@ export function mountPageWorkers(root = document, opts = {}) {
           ? "AI backend analyzed the prompt and reported the result."
           : "I could not get a backend answer, so I kept the local fallback result visible."));
         if (result?.pageAction?.refreshWorkspace) {
-          const outputSnapshot = snapshotWorkerOutput(card, pageId);
-          setTimeout(() => {
-            opts.openWorkspace?.(pageId);
-            const restore = () => restorePageWorkerOutput(pageId, outputSnapshot);
-            if (typeof requestAnimationFrame === "function") requestAnimationFrame(restore);
-            else setTimeout(restore, 0);
-          }, 320);
+          setTimeout(() => opts.openWorkspace?.(pageId), 320);
         }
       } finally {
         delete form.dataset.pageWorkerBusy;

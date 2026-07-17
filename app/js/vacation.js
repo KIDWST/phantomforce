@@ -1,4 +1,4 @@
-import { session as accessSession, ago, friendlyBackendError } from "./store.js?v=phantom-live-20260717-2";
+import { session as accessSession, ago } from "./store.js?v=phantom-live-20260714-006";
 
 const esc = (value = "") => String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 const cacheKey = "pf.vacation.statusCache.v2";
@@ -15,7 +15,7 @@ async function api(path, options = {}) {
   const response = await fetch(path, { ...options, headers: authHeaders({ ...(options.body ? { "Content-Type": "application/json" } : {}), ...(options.headers || {}) }) });
   const data = await response.json().catch(() => ({}));
   if (!response.ok || data.ok === false) {
-    const error = new Error(friendlyBackendError(response.status, data.error || data.message, { authMessage: "Sign in with your owner account to use Away Mode.", fallbackPrefix: "Away Mode request failed" }));
+    const error = new Error(data.error || data.message || `Away Mode request failed (${response.status})`);
     error.status = response.status;
     throw error;
   }
@@ -61,33 +61,78 @@ function checkbox(key, label, detail, checked) {
   return `<label class="vm-cover-toggle"><input type="checkbox" data-cover="${esc(key)}" ${checked ? "checked" : ""}><span><b>${esc(label)}</b><i>${esc(detail)}</i></span></label>`;
 }
 
+function sinceLine(status) {
+  if (status.enabled) return `Away since ${fmt(status.startedAt)}`;
+  if (status.startedAt && status.endedAt) return `Last away period ended ${fmt(status.endedAt)}`;
+  return "Never been used yet";
+}
+
 function statusHero(status) {
-  const coverage = status.operatorCoverage || {};
-  return `<section class="vm-command ${status.enabled ? "is-active" : ""}">
+  const enabled = !!status.enabled;
+  const plannedEnd = status.operatorCoverage?.awayEnd;
+  return `<section class="vm-command ${enabled ? "is-active" : ""}">
     <div class="vm-command-copy">
-      <span class="vm-kicker">PhantomForce away coverage</span>
-      <h2>${status.enabled ? "You are away. Phantom is on duty." : "Go away. Your business stays covered."}</h2>
-      <p>${status.enabled ? "Routine digital work keeps moving. Human work uses Operator Credits. You only hear from us when something truly needs you." : "Turn it on once, then stop babysitting the business. Phantom covers digital work and routes calls, meetings, and hands-on requests to your operator desk."}</p>
-      <div class="vm-promise-row"><span>Digital work</span><b>AI coverage</b><span>Calls + meetings</span><b>Operator Credits</b><span>Owner alerts</span><b>Emergencies only</b></div>
+      <span class="vm-kicker">Away Mode</span>
+      <h2>${enabled ? "ON — Phantom is covering." : "OFF — nothing runs without you."}</h2>
+      <p class="vm-since">${esc(sinceLine(status))}${enabled && plannedEnd ? ` · turns itself off ${fmt(plannedEnd)}` : ""}</p>
+      <ul class="vm-behaviors">
+        <li><b>Scheduled check-ins.</b> Phantom reviews the business on a timer and logs every check.${enabled ? ` Next check ${fmt(status.nextCheckInAt)}${status.lastCheckInAt ? `, last ${fmt(status.lastCheckInAt)}` : ""}.` : ""}</li>
+        <li><b>Exceptions only.</b> While away, only urgent and high-risk approvals reach you. Routine approvals wait for your return.</li>
+        <li><b>Human work by request.</b> Jobs you queue go to the operator desk and spend Operator Credits — never AI credits.</li>
+        <li><b>Nothing sent externally on its own.</b> Every outbound action still requires your approval, away or not.</li>
+        ${plannedEnd ? `<li><b>Automatic end.</b> Away Mode switches itself off at your planned return time (${fmt(plannedEnd)}).</li>` : ""}
+      </ul>
     </div>
     <div class="vm-command-state">
-      <span class="vm-state-pill ${status.enabled ? "on" : "off"}">${status.enabled ? "ON DUTY" : "OFF"}</span>
-      <strong>${status.enabled ? "100% hands-off" : "Ready when you are"}</strong>
-      <small>${status.enabled ? `Next check ${fmt(status.nextCheckInAt)}` : "Nothing starts until you turn it on"}</small>
-      <button class="btn ${status.enabled ? "vm-danger" : "btn-primary"}" type="button" data-vm-toggle>${status.enabled ? "Stop Away Mode" : "Turn on Away Mode"}</button>
+      <span class="vm-state-pill ${enabled ? "on" : "off"}">${enabled ? "ON" : "OFF"}</span>
+      <strong>${enabled ? "Phantom is on duty" : "Away Mode is off"}</strong>
+      <small>${enabled ? `Away since ${fmt(status.startedAt)}` : "Coverage starts the moment you turn it on"}</small>
+      <button class="btn ${enabled ? "vm-danger" : "btn-primary"}" type="button" data-vm-toggle>${enabled ? "Turn off Away Mode" : "Turn on Away Mode"}</button>
     </div>
   </section>`;
 }
 
-function metrics(status) {
-  const m = status.metrics || {};
-  return `<div class="vm-metrics">
-    <div class="vm-metric"><b>${m.itemsObserved || 0}</b><span>Checked</span></div>
-    <div class="vm-metric"><b>${m.draftsCreated || 0}</b><span>Drafted</span></div>
-    <div class="vm-metric"><b>${m.operatorTasksOpen || 0}</b><span>Operator jobs</span></div>
-    <div class="vm-metric"><b>${m.approvalsPending || 0}</b><span>True exceptions</span></div>
-    <div class="vm-metric"><b>${fmt(m.lastCheckIn)}</b><span>Last check-in</span></div>
+const isToggleEvent = (event) => event.relatedEntity === "Away Mode" || event.relatedEntity === "Instant stop";
+
+function digestWindow(status) {
+  const start = status.startedAt ? Date.parse(status.startedAt) : NaN;
+  if (!Number.isFinite(start)) return null;
+  if (status.enabled) return { start, end: Date.now(), live: true };
+  const end = status.endedAt ? Date.parse(status.endedAt) : NaN;
+  return Number.isFinite(end) ? { start, end, live: false } : null;
+}
+
+function digestCard(status, activity, approvals) {
+  const win = digestWindow(status);
+  const head = (title, sub) => `<div class="vm-card-head"><div><span class="vm-kicker">${win?.live ? "While you're away" : "While you were away"}</span><h3>${esc(title)}</h3></div><span>${esc(sub)}</span></div>`;
+  if (!win) {
+    return `<section class="vm-card vm-wide">${head("No away period yet", "")}<div class="vm-empty"><b>Nothing to report.</b><span>Turn on Away Mode and this digest will summarize what Phantom handled while you were gone.</span></div></section>`;
+  }
+  const inWindow = activity.filter((event) => {
+    const t = Date.parse(event.createdAt);
+    return Number.isFinite(t) && t >= win.start && t <= win.end + 60_000;
+  });
+  const checkIns = inWindow.filter((e) => e.eventType === "observed").length;
+  const notable = inWindow.filter((e) => e.eventType !== "observed" && !isToggleEvent(e));
+  const drafted = notable.filter((e) => e.eventType === "drafted").length;
+  const completed = notable.filter((e) => e.eventType === "completed").length;
+  const queued = notable.filter((e) => e.eventType === "queued_approval").length;
+  const flagged = notable.filter((e) => e.eventType === "blocked" || e.eventType === "needs_setup").length;
+  const waiting = approvals.length;
+  const range = `${fmt(status.startedAt)} – ${win.live ? "now" : fmt(status.endedAt)}`;
+  const stats = `<div class="vm-digest-stats">
+    <span><b>${checkIns}</b> check-in${checkIns === 1 ? "" : "s"}</span>
+    <span><b>${drafted}</b> drafted</span>
+    <span><b>${completed}</b> completed</span>
+    <span><b>${queued}</b> queued for humans</span>
+    <span><b>${flagged}</b> flagged</span>
+    <span class="${waiting ? "is-waiting" : ""}"><b>${waiting}</b> waiting on you</span>
   </div>`;
+  const quiet = !notable.length && !waiting;
+  const body = quiet
+    ? `<div class="vm-empty"><b>All quiet.</b><span>${checkIns ? `Phantom checked in ${checkIns} time${checkIns === 1 ? "" : "s"} and nothing needed you.` : "No coverage checks have run in this window yet."}</span></div>`
+    : `<div class="vm-feed">${notable.slice(0, 6).map((event) => `<article class="vm-feed-item vm-event-${esc(event.eventType)}"><span></span><div><b>${esc(event.message)}</b><p>${esc(event.actor)} · ${esc(event.relatedEntity || event.eventType.replaceAll("_", " "))}</p></div><time>${ago(event.createdAt)}</time></article>`).join("") || `<div class="vm-empty-inline">Nothing notable yet — ${waiting} approval${waiting === 1 ? "" : "s"} below need${waiting === 1 ? "s" : ""} you.</div>`}</div>`;
+  return `<section class="vm-card vm-wide">${head(quiet ? "Nothing needed you" : "Here is what happened", range)}${stats}${body}</section>`;
 }
 
 function coveragePlan(status) {
@@ -153,7 +198,7 @@ function exceptionsCard(approvals) {
 }
 
 function activityCard(events) {
-  return `<section class="vm-card"><div class="vm-card-head"><div><span class="vm-kicker">Proof</span><h3>What happened while you were away</h3></div><span>${events.length} receipts</span></div><div class="vm-feed">${events.slice(0, 25).map((event) => `<article class="vm-feed-item vm-event-${esc(event.eventType)}"><span></span><div><b>${esc(event.message)}</b><p>${esc(event.actor)} · ${esc(event.relatedEntity || event.eventType.replaceAll("_", " "))}</p></div><time>${ago(event.createdAt)}</time></article>`).join("") || `<div class="vm-empty">No activity yet.</div>`}</div></section>`;
+  return `<section class="vm-card"><div class="vm-card-head"><div><span class="vm-kicker">Proof</span><h3>Full activity log</h3></div><span>${events.length} receipts</span></div><div class="vm-feed">${events.slice(0, 25).map((event) => `<article class="vm-feed-item vm-event-${esc(event.eventType)}"><span></span><div><b>${esc(event.message)}</b><p>${esc(event.actor)} · ${esc(event.relatedEntity || event.eventType.replaceAll("_", " "))}</p></div><time>${ago(event.createdAt)}</time></article>`).join("") || `<div class="vm-empty">No activity yet.</div>`}</div></section>`;
 }
 
 function readinessCard(items) {
@@ -168,7 +213,7 @@ function render(el) {
   }
   if (state.error) { el.innerHTML = `<div class="vm-error"><b>Away Mode could not load.</b><span>${esc(state.error)}</span><button class="btn" data-retry>Retry</button></div>`; return; }
   const s = state.status;
-  el.innerHTML = `<div class="vm">${statusHero(s)}${metrics(s)}<div class="vm-grid vm-grid-power">${coveragePlan(s)}${walletCard(s)}${taskForm()}${tasksCard(state.tasks)}${exceptionsCard(state.approvals)}${activityCard(state.activity)}${readinessCard(s.readiness || [])}</div></div>`;
+  el.innerHTML = `<div class="vm">${statusHero(s)}${digestCard(s, state.activity, state.approvals)}<div class="vm-grid vm-grid-power">${coveragePlan(s)}${walletCard(s)}${taskForm()}${tasksCard(state.tasks)}${exceptionsCard(state.approvals)}${activityCard(state.activity)}${readinessCard(s.readiness || [])}</div></div>`;
 }
 
 async function refresh(el) {
@@ -205,7 +250,7 @@ export function renderVacationMode(el, opts = {}) {
       if (button.matches("[data-retry]")) return void await refresh(el);
       if (button.matches("[data-vm-toggle]")) {
         await mutate(el, state.status?.enabled ? "/api/vacation-mode/deactivate" : "/api/vacation-mode/activate", "POST", payload(el));
-        notify("Away Mode", state.status?.enabled ? "Away Mode is on duty." : "Away Mode stopped.");
+        notify("Away Mode", state.status?.enabled ? "Away Mode is on. Phantom is covering." : "Away Mode is off.");
         return;
       }
       if (button.matches("[data-vm-save]")) { await mutate(el, "/api/vacation-mode/settings", "PATCH", payload(el)); notify("Away Mode", "Coverage plan saved."); return; }

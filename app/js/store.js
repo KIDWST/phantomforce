@@ -6,7 +6,6 @@
 const DB_KEY = "pf.phantom.v4";
 const SESSION_KEY = "pf.session.v3";
 const LIVE_TOKEN_KEY = "pf.live.sessionToken.v1";
-const SESSION_ENDED_KEY = "pf.session.ended.v1";
 const DAY = 86400000;
 
 export const uid = (p = "id") => `${p}-${Math.random().toString(36).slice(2, 8)}${(Date.now() % 100000).toString(36)}`;
@@ -71,7 +70,6 @@ export const FINANCE_CONNECTORS = [
   { id: "card", type: "credit-card", name: "Credit card", provider: "Plaid", status: "not-connected" },
   { id: "manual", type: "manual", name: "Manual ledger", provider: "Local entry / CSV", status: "ready" },
 ];
-export const FINANCE_RECURRENCE_FREQUENCIES = ["weekly", "biweekly", "monthly", "custom-days"];
 
 /* ---------------- local memory ---------------- */
 export const MEMORY_RETENTION_DAYS = 30;
@@ -108,23 +106,13 @@ const EXPLICIT_MEMORY_SAVE_PATTERN = /\b(?:remember(?: this| that)?|save (?:this
 const FUTURE_RULE_PATTERN = /\b(?:from now on|going forward|in the future|every time|next time|do it this way next time|never do this again|always (?:use|do|keep|show|write|respond|route|ask|make)|never (?:use|do|show|write|respond|route|ask|make))\b/i;
 const STABLE_PREFERENCE_PATTERN = /\b(?:(?:my|our) (?:default|preference|preferred (?:style|format|workflow|model|tool|tone)) (?:is|should be)|(?:i|we) prefer\b|(?:my|our) (?:business|company|brand|workflow|process) (?:is|uses?|requires?)\b|we use\b)/i;
 const ONE_OFF_REQUEST_PATTERN = /\b(?:fix|change|update|remove|add|build|create|generate|move|open|close|check|look at|why (?:is|does|did|was)|what happened|isn't working|not working|still broken|still offline)\b/i;
-const FAILED_INTERACTION_PATTERN = /(?:did not complete (?:this )?(?:phantom )?chat request|private brain error|command failed|run-[a-z-]+\.ps1|powershell\.exe|appdata\\local\\temp|request failed before a usable answer|provider (?:is )?(?:unavailable|offline)|transport error|timed? out|stack trace|exit code\s*\d+)/i;
+const FAILED_INTERACTION_PATTERN = /(?:did not complete (?:this )?(?:phantom )?chat request|private brain error|command failed|run-codex\.ps1|powershell\.exe|appdata\\local\\temp|request failed before a usable answer|provider (?:is )?(?:unavailable|offline)|transport error|timed? out|stack trace|exit code\s*\d+)/i;
 const FAILED_HISTORY_REPLY = "Request failed before a usable answer was produced.";
 
 export function sanitizeMemoryText(value = "") {
   let text = String(value || "").replace(/\s+/g, " ").trim();
   for (const [pattern, replacement] of SECRET_REDACTIONS) text = text.replace(pattern, replacement);
   return text.slice(0, 1400);
-}
-
-export function friendlyBackendError(status, message = "", options = {}) {
-  const text = sanitizeMemoryText(message);
-  const authMessage = options.authMessage || "Sign in to continue.";
-  const fallbackPrefix = options.fallbackPrefix || "Request failed";
-  if (status === 401 || /missing or invalid authorization|authorization bearer|bearer token/i.test(text)) {
-    return authMessage;
-  }
-  return text || `${fallbackPrefix} (${status}).`;
 }
 
 export function classifyMemory(value = "") {
@@ -309,7 +297,7 @@ export const TOOL_SPINE = [
     mode: "active",
     status: "online",
     role: "Compiles context, receipts, redaction notes, and useful memory for Phantom AI.",
-    ownerControl: "Business Manager memory is on. Client workspaces keep their own separate memory unless you connect them.",
+    ownerControl: "Business Manager memory is on. Organization workspaces keep their own separate memory unless you connect them.",
     activity: "compiled owner context, redacted receipts, and memory hints for Phantom AI.",
     path: "Private backend",
     visibleToClients: false,
@@ -455,151 +443,7 @@ function financeSeed() {
     accounts: [],
     transactions: [],
     connectors: FINANCE_CONNECTORS,
-    recurringRules: [],
   };
-}
-
-export const STOCK_AUTOMATION_BUNDLES = [
-  {
-    id: "phantomforce-daily-operating-brief",
-    name: "Daily Operating Brief",
-    cadence: "Daily at 7:30 AM",
-    family: "Planner",
-    mission: "Prepare a morning owner brief with today's approvals, overdue follow-ups, open tasks, finance flags, and the highest-leverage next move.",
-    jobs: ["Approval queue review", "Overdue CRM follow-ups", "Open task triage", "Accounting exceptions", "Priority recommendation"],
-  },
-  {
-    id: "phantomforce-weekly-scans",
-    name: "PhantomForce Weekly Scans",
-    cadence: "Weekly Monday morning",
-    family: "Security",
-    mission: "Run the weekly safety scan bundle across app health, exposed routes, stale credentials, security notes, and connector readiness without sending or deleting anything.",
-    jobs: ["App health scan", "Security route check", "Credential age review", "Connector status check", "Owner-only findings brief"],
-  },
-  {
-    id: "phantomforce-crm-sync-hygiene",
-    name: "CRM Sync and Hygiene",
-    cadence: "Daily",
-    family: "CRM",
-    mission: "Review client and lead records for missing next steps, stale statuses, duplicate-looking contacts, and follow-up gaps before they become lost business.",
-    jobs: ["New lead intake check", "Follow-up gap scan", "Duplicate contact review", "Next-action assignment", "CRM push/pull preparation"],
-  },
-  {
-    id: "phantomforce-accounting-review",
-    name: "Accounting Transaction Review",
-    cadence: "Weekdays",
-    family: "Accounting",
-    mission: "Prepare accounting health checks from manual, bank, or card transaction sources: uncategorized spend, cash movement, missing receipts, and unusual activity.",
-    jobs: ["Bank/card connector check", "Manual ledger review", "Uncategorized transaction queue", "Receipt reminder prep", "Cash movement summary"],
-  },
-  {
-    id: "phantomforce-calendar-prep",
-    name: "Calendar and Scheduling Prep",
-    cadence: "Daily",
-    family: "Scheduling",
-    mission: "Prepare the day around meetings, deadlines, travel buffers, follow-ups, and focus windows so the owner sees conflicts before they cause friction.",
-    jobs: ["Calendar connector check", "Conflict scan", "Focus window suggestion", "Meeting prep notes", "Follow-up reminders"],
-  },
-  {
-    id: "phantomforce-content-publisher-prep",
-    name: "Content Publisher Prep",
-    cadence: "Daily",
-    family: "Creator",
-    mission: "Prepare publish-ready content opportunities, draft queue gaps, asset reminders, and scheduled post checks for creator and business workflows.",
-    jobs: ["Draft queue review", "Asset readiness scan", "Posting gap check", "Idea bank refresh", "Approval-safe publish prep"],
-  },
-  {
-    id: "phantomforce-website-domain-watch",
-    name: "Website and Domain Watch",
-    cadence: "Weekly",
-    family: "Websites",
-    mission: "Check site drafts, connected domains, stale pages, missing policy sections, and forms that need attention before a business website goes stale.",
-    jobs: ["Domain inventory", "Site draft status", "Form readiness", "Policy page check", "Change prompt suggestions"],
-  },
-  {
-    id: "phantomforce-memory-vault-hygiene",
-    name: "Memory Vault Hygiene",
-    cadence: "Every 3 days",
-    family: "Memory",
-    mission: "Separate durable memories from temporary history, flag low-value saved notes, and keep private context useful without hoarding trivial chat.",
-    jobs: ["Saved memory review", "Temporary history expiry", "Duplicate memory check", "Sensitive text scan", "Useful-context summary"],
-  },
-  {
-    id: "phantomforce-approval-risk-gate",
-    name: "Approval Risk Gate",
-    cadence: "Always watching",
-    family: "Approvals",
-    mission: "Watch prepared work for send, publish, spend, delete, deploy, or external-contact risk and keep those actions approval-gated.",
-    jobs: ["Approval-required action scan", "External send check", "Spend/deploy/delete gate", "Pending approval aging", "Owner-ready decision summary"],
-  },
-  {
-    id: "phantomforce-growth-intelligence-pulse",
-    name: "Growth Intelligence Pulse",
-    cadence: "Weekly",
-    family: "Intelligence",
-    mission: "Prepare competitor, offer, trend, customer, and market signals so the planner can suggest sharper business moves without waiting for manual input.",
-    jobs: ["Competitor watch", "Offer trend notes", "Customer segment hints", "Market signal brief", "Next experiment suggestion"],
-  },
-];
-
-function stockAutomationForWorkspace(bundle, ws) {
-  const now = new Date().toISOString();
-  return {
-    id: `stock-${ws}-${bundle.id}`,
-    ws,
-    kind: "automation",
-    source: "Stock automation",
-    stock: true,
-    stockBundleId: bundle.id,
-    family: bundle.family,
-    cadence: bundle.cadence,
-    name: bundle.name,
-    mission: bundle.mission,
-    jobs: [...bundle.jobs],
-    status: "active",
-    allowedDuringVacation: true,
-    requiresApprovalDuringVacation: true,
-    safeMode: "read-only-prep",
-    createdAt: now,
-    updatedAt: now,
-  };
-}
-
-function ensureStockAutomations(agents = [], workspaces = REQUIRED_WORKSPACES) {
-  const list = Array.isArray(agents) ? [...agents] : [];
-  const byId = new Set(list.map((agent) => agent?.id).filter(Boolean));
-  for (const workspace of workspaces) {
-    const ws = workspace.id;
-    for (const bundle of STOCK_AUTOMATION_BUNDLES) {
-      const id = `stock-${ws}-${bundle.id}`;
-      if (!byId.has(id)) {
-        list.push(stockAutomationForWorkspace(bundle, ws));
-        byId.add(id);
-      }
-    }
-  }
-  return list.map((agent) => {
-    if (!agent?.stockBundleId) return agent;
-    const bundle = STOCK_AUTOMATION_BUNDLES.find((item) => item.id === agent.stockBundleId);
-    if (!bundle) return agent;
-    return {
-      ...agent,
-      kind: "automation",
-      source: agent.source || "Stock automation",
-      stock: true,
-      family: agent.family || bundle.family,
-      cadence: agent.cadence || bundle.cadence,
-      name: agent.name || bundle.name,
-      mission: agent.mission || bundle.mission,
-      jobs: Array.isArray(agent.jobs) && agent.jobs.length ? agent.jobs : [...bundle.jobs],
-      status: agent.status || "active",
-      allowedDuringVacation: agent.allowedDuringVacation !== false,
-      requiresApprovalDuringVacation: true,
-      safeMode: agent.safeMode || "read-only-prep",
-      createdAt: agent.createdAt || new Date().toISOString(),
-      updatedAt: agent.updatedAt || agent.createdAt || new Date().toISOString(),
-    };
-  });
 }
 
 function normalizeFinance(finance) {
@@ -631,29 +475,9 @@ function normalizeFinance(finance) {
       externalId: tx.externalId || null,
       notes: String(tx.notes || "").slice(0, 300),
       createdAt: tx.createdAt || new Date().toISOString(),
-      receiptAssetId: tx.receiptAssetId || null,
-      recurringRuleId: tx.recurringRuleId || null,
-      aiAssisted: Boolean(tx.aiAssisted),
     };
   }).filter((tx) => tx.amount !== 0) : [];
-  const recurringRules = Array.isArray(input.recurringRules) ? input.recurringRules.map((rule) => ({
-    id: rule.id || uid("rule"),
-    ws: rule.ws || "phantomforce",
-    description: String(rule.description || "Recurring transaction").slice(0, 160),
-    amount: Math.abs(Number(rule.amount) || 0),
-    direction: rule.direction === "income" ? "income" : "expense",
-    category: FINANCE_CATEGORIES.includes(rule.category) ? rule.category : "Uncategorized",
-    account: String(rule.account || "Manual ledger").slice(0, 80),
-    frequency: FINANCE_RECURRENCE_FREQUENCIES.includes(rule.frequency) ? rule.frequency : "monthly",
-    intervalDays: rule.frequency === "custom-days" ? Math.max(1, Number(rule.intervalDays) || 1) : null,
-    startDate: rule.startDate || new Date().toISOString().slice(0, 10),
-    endDate: rule.endDate || null,
-    status: rule.status === "paused" ? "paused" : "active",
-    lastGeneratedDate: rule.lastGeneratedDate || null,
-    createdAt: rule.createdAt || new Date().toISOString(),
-    source: rule.source === "ai-parsed" ? "ai-parsed" : "manual",
-  })) : [];
-  return { accounts, transactions, connectors, recurringRules };
+  return { accounts, transactions, connectors };
 }
 
 // Normalizes in place and always returns the same object identity for a given
@@ -670,7 +494,6 @@ function ensureFinance() {
   current.accounts = normalized.accounts;
   current.transactions = normalized.transactions;
   current.connectors = normalized.connectors;
-  current.recurringRules = normalized.recurringRules;
   return current;
 }
 
@@ -696,82 +519,24 @@ const REQUIRED_WORKSPACES = [
   },
 ];
 
-const PHANTOMFORCE_PUBLIC_SITE_ID = "site-phantomforce-online";
-
-function phantomforcePublicSite(existing = {}) {
-  const now = existing.updated || new Date().toISOString();
-  return {
-    ...existing,
-    id: existing.id || PHANTOMFORCE_PUBLIC_SITE_ID,
-    ws: "phantomforce",
-    title: "PhantomForce.online - Public Website",
-    kind: "Website",
-    status: existing.status || "draft",
-    sections: ["Home", "Platform", "AI Business OS", "Plans", "Creator Network", "Download", "Support"],
-    domain: "phantomforce.online",
-    domains: [...new Set(["phantomforce.online", "www.phantomforce.online", ...(Array.isArray(existing.domains) ? existing.domains : [])])],
-    url: "https://phantomforce.online",
-    updated: now,
-    design: {
-      ...(existing.design || {}),
-      brand: "PhantomForce",
-      headline: "AI business management that feels alive.",
-      subhead: "Edit the live public PhantomForce.online story here: business OS, client work, media, public pages, approvals, analytics, and operator credits.",
-      offer: "Download PhantomForce and run the whole workspace from one private AI command center.",
-      cta: "Download PhantomForce",
-      theme: "neon",
-      style: "public product site",
-      existingUrl: "phantomforce.online",
-      storeEnabled: false,
-    },
-    catalog: [],
-    store: {
-      enabled: false,
-      currency: "USD",
-      checkoutMode: "test",
-      paymentsConnected: false,
-      cart: {},
-      orders: [],
-    },
-  };
-}
-
-function isPhantomforcePublicSiteCandidate(site = {}) {
-  const text = `${site.id || ""} ${site.title || ""} ${site.domain || ""} ${site.url || ""}`.toLowerCase();
-  return text.includes(PHANTOMFORCE_PUBLIC_SITE_ID)
-    || text.includes("phantomforce.online")
-    || text.includes("termina")
-    || text.includes("phantomforce.shop")
-    || text.includes("terminal workflow manager");
-}
-
-function ensurePhantomforcePublicSite(sites = []) {
-  const list = Array.isArray(sites) ? [...sites] : [];
-  const index = list.findIndex(isPhantomforcePublicSiteCandidate);
-  if (index >= 0) {
-    const [existing] = list.splice(index, 1);
-    return [phantomforcePublicSite(existing), ...list];
-  }
-  return [phantomforcePublicSite(), ...list];
-}
-
 function seed() {
   return {
     version: 4,
     workspaces: REQUIRED_WORKSPACES.map((workspace) => ({ ...workspace })),
     leads: [],
+    crmSettings: {},
     proposals: [],
     tasks: [],
     reviews: [],
     bookings: [],
     media: [],
     looperPlans: [],
-    sites: ensurePhantomforcePublicSite([]),
+    sites: [],
     products: [],
     finance: financeSeed(),
     security: [],
     approvals: [],
-    agents: ensureStockAutomations([]),
+    agents: [],
     vacationRuns: [],
     memory: [],
     chatHistory: [],
@@ -795,18 +560,19 @@ function normalizeData(data) {
     assetNamespace: required.assetNamespace,
   }));
   d.leads = Array.isArray(d.leads) ? d.leads : [];
+  d.crmSettings = d.crmSettings && typeof d.crmSettings === "object" ? d.crmSettings : {};
   d.proposals = Array.isArray(d.proposals) ? d.proposals : [];
   d.tasks = Array.isArray(d.tasks) ? d.tasks : [];
   d.reviews = Array.isArray(d.reviews) ? d.reviews : [];
   d.bookings = Array.isArray(d.bookings) ? d.bookings : [];
   d.media = Array.isArray(d.media) ? d.media : [];
   d.looperPlans = Array.isArray(d.looperPlans) ? d.looperPlans : [];
-  d.sites = ensurePhantomforcePublicSite(Array.isArray(d.sites) ? d.sites : []);
+  d.sites = Array.isArray(d.sites) ? d.sites : [];
   d.products = Array.isArray(d.products) ? d.products : [];
   d.finance = normalizeFinance(d.finance);
   d.security = Array.isArray(d.security) ? d.security : [];
   d.approvals = Array.isArray(d.approvals) ? d.approvals : [];
-  d.agents = ensureStockAutomations(Array.isArray(d.agents) ? d.agents : [], d.workspaces);
+  d.agents = Array.isArray(d.agents) ? d.agents : [];
   d.vacationRuns = Array.isArray(d.vacationRuns) ? d.vacationRuns : [];
   d.memory = pruneMemory(Array.isArray(d.memory) ? d.memory : []);
   d.chatHistory = pruneChatHistory(Array.isArray(d.chatHistory) ? d.chatHistory : []);
@@ -850,39 +616,25 @@ export const store = {
 };
 
 /* ---------------- session ---------------- */
-let liveSessionToken = "";
-
 export const session = {
   get() {
-    try {
-      if (localStorage.getItem(SESSION_ENDED_KEY)) return null;
-    } catch {}
     try { return JSON.parse(localStorage.getItem(SESSION_KEY) || "null"); } catch { return null; }
   },
   set(s) {
-    const token = s?.token || "";
-    if (token) liveSessionToken = token;
     try {
-      localStorage.removeItem(SESSION_ENDED_KEY);
-      const { token: _token, ...safeSession } = s || {};
+      const { token, ...safeSession } = s || {};
       localStorage.setItem(SESSION_KEY, JSON.stringify(safeSession));
       if (token) sessionStorage.setItem(LIVE_TOKEN_KEY, token);
     } catch {}
   },
   token() {
-    if (liveSessionToken) return liveSessionToken;
-    try {
-      liveSessionToken = sessionStorage.getItem(LIVE_TOKEN_KEY) || "";
-      return liveSessionToken;
-    } catch {
-      return "";
-    }
+    try { return sessionStorage.getItem(LIVE_TOKEN_KEY) || ""; } catch { return ""; }
   },
   clear() {
-    liveSessionToken = "";
-    try { localStorage.removeItem(SESSION_KEY); } catch {}
-    try { sessionStorage.removeItem(LIVE_TOKEN_KEY); } catch {}
-    try { localStorage.setItem(SESSION_ENDED_KEY, String(Date.now())); } catch {}
+    try {
+      localStorage.removeItem(SESSION_KEY);
+      sessionStorage.removeItem(LIVE_TOKEN_KEY);
+    } catch {}
   },
 };
 
@@ -896,15 +648,6 @@ export const isLiveAdminHost = () => location.hostname === ADMIN_PUBLIC_HOST;
 export const isClientPublicHost = () => location.hostname === CLIENT_PUBLIC_HOST;
 export const isStaticPublicHost = () => PUBLIC_PAGES_HOSTS.has(location.hostname);
 export const isLocalDevHost = () => LOCAL_DEV_HOSTS.has(location.hostname);
-
-function clearSessionShortcutFromUrl() {
-  try {
-    const url = new URL(location.href);
-    if (!url.searchParams.has("session")) return;
-    url.searchParams.delete("session");
-    history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
-  } catch {}
-}
 
 export function liveAdminUrl() {
   const url = new URL(`https://${ADMIN_PUBLIC_HOST}/app/index.html`);
@@ -926,12 +669,6 @@ export function resolveSession() {
 
   const q = new URLSearchParams(location.search);
   const key = (q.get("session") || "").toLowerCase();
-  try {
-    if (key && localStorage.getItem(SESSION_ENDED_KEY)) {
-      clearSessionShortcutFromUrl();
-      return null;
-    }
-  } catch {}
   const allowLocalSessionShortcut = isLocalDevHost();
   if (key === OWNER_SESSION_ID) {
     if (isStaticPublicHost()) {
@@ -1016,16 +753,17 @@ export async function ownerLogin(ownerKeyOrEmail, password) {
       body: JSON.stringify(body),
     });
   } catch {
-    throw new Error("Sign-in is temporarily unavailable. Try again in a moment.");
+    throw new Error("Your password is probably fine — the backend on the admin PC isn't answering at all. Start Hermes/backend, wait ~20 seconds, then sign in again.");
   }
   const payload = await response.json().catch(() => ({}));
   if (!response.ok || !payload?.token || !payload?.session) {
     const raw = String(payload?.error || "");
-    // A down backend must never expose internal server details to the login UI.
+    // a down backend must never read as "wrong password"
     if (response.status === 502 || /unavailable|ECONNREFUSED|fetch failed/i.test(raw)) {
-      throw new Error("Sign-in is temporarily unavailable. Try again in a moment.");
+      throw new Error("Your password is probably fine — the backend on the admin PC is stopped. Start Hermes/backend, wait ~20 seconds, then sign in again.");
     }
     if (response.status === 401 || response.status === 403) {
+      // auto-diagnose: is the backend even holding an owner key right now?
       let auth = payload?.auth && typeof payload.auth === "object" ? payload.auth : null;
       let keyLoaded = typeof auth?.ownerLoginKeyConfigured === "boolean" ? auth.ownerLoginKeyConfigured : null;
       try {
@@ -1036,21 +774,14 @@ export async function ownerLogin(ownerKeyOrEmail, password) {
         if (typeof auth?.ownerLoginKeyConfigured === "boolean") keyLoaded = auth.ownerLoginKeyConfigured;
       } catch {}
       if (keyLoaded === false) {
-        throw new Error("Sign-in is temporarily unavailable. Try again in a moment.");
+        throw new Error("Owner login is not fully loaded on this backend. Restart Hermes/backend so server\\.env is loaded, then sign in again.");
       }
       if (auth?.ownerProductionAuthEnabled && auth?.productionReady) {
-        throw new Error("That email or password was rejected.");
+        throw new Error("That email or password was rejected. The backend is running and owner auth is configured.");
       }
-      throw new Error("Sign-in is temporarily unavailable. Try again in a moment.");
+      throw new Error("Owner login was rejected because this backend is not in ready owner-auth mode. Restart the PhantomForce server and check /sessions before trying again.");
     }
-    const internalAuthErrorPattern = new RegExp([
-      "back" + "end",
-      "Hermes" + "/" + "back" + "end",
-      "server" + "\\\\?" + "\\.env",
-      "admin" + "\\s*PC",
-      "environment\\s+variable",
-    ].join("|"), "i");
-    throw new Error(raw && raw.length < 140 && !internalAuthErrorPattern.test(raw) ? raw : "Sign-in failed. Check the account details and try again.");
+    throw new Error(raw || "Owner login failed.");
   }
   const sessionId = payload.session.id || OWNER_SESSION_ID;
   const isOwnerSession = sessionId === OWNER_SESSION_ID;
@@ -1117,11 +848,7 @@ const cleanTenantSegment = (value) => String(value || "phantomforce")
   .replace(/[^a-zA-Z0-9_.:-]+/g, "-")
   .replace(/^-+|-+$/g, "")
   .slice(0, 80) || "phantomforce";
-export const currentTenantId = () => cleanTenantSegment(
-  ctx.session?.database && !ctx.session?.canManageAccess && ctx.session?.orgId
-    ? ctx.session.orgId
-    : workspaceMeta(currentWs())?.id || currentWs(),
-);
+export const currentTenantId = () => cleanTenantSegment(workspaceMeta(currentWs())?.id || currentWs());
 export const setWorkspace = (id) => {
   if (!isAdmin()) return false;
   const target = workspaceExists(id) ? id : "phantomforce";
@@ -1354,7 +1081,6 @@ export function moneyView() {
     transactions,
     accounts,
     connectors: finance.connectors,
-    recurringRules: finance.recurringRules,
     cashIn,
     cashOut,
     netCash,
@@ -1457,8 +1183,8 @@ const MODEL_DISPLAY_LABELS = {
   "claude-sonnet-5": "Balanced", "claude-opus-4-8": "Deep", "claude-haiku-4-5": "Fast",
   "glm-5": "Standard", "openrouter-auto": "Auto-routed",
   "claude-cli": "Claude default", "claude-sonnet": "Sonnet", "claude-opus": "Opus",
-  "private-default": "Private default", "private-high": "High reasoning", "private-fast": "Fast",
-  "z-ai/glm-5.2": "GLM 5.2", "local-auto": "Automatic local", "local-glm": "Local GLM",
+  "codex-default": "Codex default", "codex-high": "High reasoning", "codex-fast": "Fast",
+  "z-ai/glm-5.2": "GLM 5.2", "local-auto": "Auto-detect Ollama", "local-ollama": "Ollama auto", "local-glm": "Local GLM",
   "llama3": "Fast", "mistral": "Balanced", "custom-local": "Custom",
   "custom": "Custom",
 };
@@ -1470,14 +1196,15 @@ export const modelDisplayLabel = (id) => MODEL_DISPLAY_LABELS[id] || id;
 const PHANTOM_LANE_KEY = "pf.phantomlanes.v1";
 export const PHANTOM_LANES = [
   { id: "claude", name: "Phantom Reasoning", role: "Strategy, copy, review", defaultTarget: "claude_cli" },
-  { id: "private", name: "Phantom Private", role: "Code, repo work, implementation", defaultTarget: "private_brain" },
+  { id: "codex", name: "Phantom Code", role: "Code, repo work, implementation", defaultTarget: "codex" },
   { id: "openrouter", name: "Phantom Router", role: "Flexible cloud routing", defaultTarget: "glm_5_2" },
-  { id: "local", name: "Phantom Local", role: "Private/local-first work", defaultTarget: "glm_5_2" },
+  { id: "local", name: "Phantom Local", role: "Private/local-first work", defaultTarget: "local_ollama" },
 ];
 export const PHANTOM_LANE_TARGETS = [
   { id: "claude_cli", name: "Claude CLI", provider: "phantom", models: ["claude-cli", "claude-sonnet", "claude-opus"] },
-  { id: "private_brain", name: "Private Operator", provider: "phantom", models: ["private-default", "private-high", "private-fast"] },
+  { id: "codex", name: "Codex / Private Operator", provider: "phantom", models: ["codex-default", "codex-high", "codex-fast"] },
   { id: "glm_5_2", name: "GLM / OpenRouter Route", provider: "openrouter_glm", models: ["z-ai/glm-5.2", "openrouter-auto", "local-glm"] },
+  { id: "local_ollama", name: "Ollama / Local PC", provider: "local_ollama", models: ["local-auto"], allowCustomModel: true },
 ];
 export function phantomLaneTargetName(id) {
   return PHANTOM_LANE_TARGETS.find((target) => target.id === id)?.name || id;
@@ -1489,7 +1216,9 @@ function normalizePhantomLaneConfig(input = {}) {
     const existing = saved.lanes?.[lane.id] || {};
     const target = PHANTOM_LANE_TARGETS.some((item) => item.id === existing.target) ? existing.target : lane.defaultTarget;
     const targetDef = PHANTOM_LANE_TARGETS.find((item) => item.id === target) || PHANTOM_LANE_TARGETS[0];
-    const model = targetDef.models.includes(existing.model) ? existing.model : targetDef.models[0];
+    const model = targetDef.models.includes(existing.model) || (targetDef.allowCustomModel && typeof existing.model === "string" && existing.model.trim())
+      ? existing.model
+      : targetDef.models[0];
     lanes[lane.id] = { target, model };
   }
   return { lanes, updatedAt: saved.updatedAt || null };

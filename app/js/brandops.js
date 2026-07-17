@@ -8,11 +8,11 @@
    user-created automation records. No internal lanes or fabricated
    records are shown. */
 
-import { friendlyBackendError, store, uid, visible, pushActivity, ago, currentWs, session, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260717-2";
+import { store, uid, visible, pushActivity, ago, currentWs, session, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260714-006";
 import {
   DAILY_IDEA_AUTOMATION_ID, dailyIdeaState, refreshDailyIdeas, saveDailyIdeaAutomation,
   DAILY_IDEA_CHANNELS, DAILY_IDEA_CONTENT_TYPES, DAILY_IDEA_FOCUS, DAILY_IDEA_STYLES,
-} from "./content-ideas.js?v=phantom-live-20260717-2";
+} from "./content-ideas.js?v=phantom-live-20260714-006";
 
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
@@ -32,16 +32,12 @@ function authHeaders(extra = {}) {
   return { ...extra, ...(token ? { Authorization: `Bearer ${token}` } : {}) };
 }
 
-function automationEngineError(status, message, authMessage = "Sign in to load automation jobs.") {
-  return friendlyBackendError(status, message, { authMessage, fallbackPrefix: "Request failed" });
-}
-
 async function fetchAutopilotJobs() {
   try {
     const r = await fetch("/phantom-ai/automations", { headers: authHeaders() });
     const d = await r.json().catch(() => null);
     if (r.ok && d && d.ok) return { ok: true, jobs: d.jobs };
-    return { ok: false, error: automationEngineError(r.status, d?.error) };
+    return { ok: false, error: (d && d.error) || `Request failed (${r.status}).` };
   } catch {
     return { ok: false, error: "Could not reach the automation engine." };
   }
@@ -55,7 +51,7 @@ async function toggleAutopilotJob(id, enabled) {
       body: JSON.stringify({ enabled }),
     });
     const d = await r.json().catch(() => null);
-    return r.ok && d && d.ok ? { ok: true } : { ok: false, error: automationEngineError(r.status, d?.error, "Sign in to manage automation jobs.") };
+    return r.ok && d && d.ok ? { ok: true } : { ok: false, error: (d && d.error) || `Request failed (${r.status}).` };
   } catch {
     return { ok: false, error: "Could not reach the automation engine." };
   }
@@ -65,13 +61,21 @@ async function runAutopilotJobNow(id) {
   try {
     const r = await fetch(`/phantom-ai/automations/${encodeURIComponent(id)}/run`, { method: "POST", headers: authHeaders() });
     const d = await r.json().catch(() => null);
-    return r.ok && d && d.ok ? { ok: true } : { ok: false, error: automationEngineError(r.status, d?.error, "Sign in to manage automation jobs.") };
+    return r.ok && d && d.ok ? { ok: true } : { ok: false, error: (d && d.error) || `Request failed (${r.status}).` };
   } catch {
     return { ok: false, error: "Could not reach the automation engine." };
   }
 }
 
-const AUTOPILOT_CATEGORY_LABEL = { health: "System health", ops: "Business operations", content: "Content & marketing" };
+const AUTOPILOT_CATEGORY_LABEL = {
+  health: "System health",
+  ops: "Business operations",
+  content: "Content & marketing",
+  intelligence: "Competitor intelligence",
+  security: "Security protection",
+  crm: "CRM discovery",
+  outreach: "Outreach prep",
+};
 const AUTOPILOT_CADENCE_LABEL = { daily: "Daily", weekly: "Weekly", monthly: "Monthly" };
 
 const AGENT_STATE = {
@@ -96,6 +100,7 @@ const RECIPES = [
 
 const TABS = [
   ["configured", "Configured"],
+  ["autopilot", "Always-on"],
   ["recipes", "Recipes"],
   ["logs", "Logs"],
   ["safety", "Safety rules"],
@@ -146,6 +151,13 @@ function autopilotJobCard(job) {
       <button class="btn btn-quiet ap-run-now" type="button" data-ap-run="${esc(job.id)}" ${busy || !job.enabled ? "disabled" : ""}>${busy ? "Running…" : "Run now"}</button>
     </div>
     <p class="ap-job-desc">${esc(job.description)}</p>
+    ${job.benefit ? `<p class="ap-job-benefit">${esc(job.benefit)}</p>` : ""}
+    <div class="ap-job-meta">
+      ${job.output ? `<span>${esc(job.output)}</span>` : ""}
+      ${job.approval_required ? `<span>Approval-gated</span>` : `<span>Read-only</span>`}
+      ${job.external_action ? `<span>External action</span>` : `<span>No external writes</span>`}
+    </div>
+    ${Array.isArray(job.setup_fields) && job.setup_fields.length ? `<div class="ap-job-setup">${job.setup_fields.map((field) => `<i>${esc(field)}</i>`).join("")}</div>` : ""}
     <div class="ap-job-foot">
       <span class="ap-job-status ap-tone-${tone}">${job.last_status ? esc(job.last_status) : "not run yet"}</span>
       <span>${job.last_summary ? esc(job.last_summary) : "No runs logged yet."}</span>
@@ -212,19 +224,14 @@ function dailyIdeaEditPanel(config, missingProfile) {
 
 function customAutomationEditPanel(a, pendingApproval, allowedDuringVacation) {
   const st = AGENT_STATE[a.status] || AGENT_STATE.idle;
-  const bundleJobs = Array.isArray(a.jobs) && a.jobs.length
-    ? `<div class="au-bundle-jobs"><b>Bundled work</b>${a.jobs.map((job) => `<span>${esc(job)}</span>`).join("")}</div>`
-    : "";
   return `<div class="au-edit-panel" data-au-edit-panel="${esc(a.id)}">
     <div class="au-edit-grid">
       <label>Name<input data-au-edit-name="${esc(a.id)}" value="${esc(a.name)}" /></label>
-      <label>Status<input value="${esc(st.label)}${a.safeMode ? ` · ${esc(a.safeMode)}` : ""}" disabled /></label>
+      <label>Status<input value="${esc(st.label)}" disabled /></label>
       <label class="au-config-wide">Mission<textarea data-au-edit-mission="${esc(a.id)}">${esc(a.mission || a.role || "")}</textarea></label>
       <label>Source<input value="${esc(a.source || "Dashboard")}" disabled /></label>
-      <label>Cadence<input value="${esc(a.cadence || "Manual / event-triggered")}" disabled /></label>
       <label>Updated<input value="${esc(ago(a.updatedAt))}" disabled /></label>
     </div>
-    ${bundleJobs}
     <div class="au-config-actions">
       <button class="btn btn-primary" data-au-save-agent="${esc(a.id)}" type="button">Save changes</button>
       ${pendingApproval ? `<button class="btn btn-quiet" data-open-ws="approvals" type="button">Review approval</button>` : ""}
@@ -274,10 +281,10 @@ function configuredAutomationTab(agents) {
         html: `<div class="au-automation-block">
         ${automationRow({
           id: a.id,
-          kicker: a.family ? `${a.source || "Automation"} · ${a.family}` : a.source || "User-created automation",
+          kicker: a.source || "User-created automation",
           name: a.name,
           summary: a.mission || a.role || "",
-          meta: `${a.cadence || `Updated ${ago(a.updatedAt)}`} · ${(a.jobs || []).length ? `${a.jobs.length} checks` : allowedDuringVacation ? "Vacation allowed" : "Vacation blocked"}`,
+          meta: `Updated ${ago(a.updatedAt)} · ${allowedDuringVacation ? "Vacation allowed" : "Vacation blocked"}`,
           enabled: a.status === "active",
           disabled,
           expanded,
@@ -325,9 +332,9 @@ function autopilotDeveloperTab() {
   }
   const jobs = autopilotJobs || [];
   const activeCount = jobs.filter((j) => j.enabled).length;
-  const categories = ["health", "ops", "content"];
+  const categories = ["security", "intelligence", "crm", "outreach", "content", "ops", "health"];
   return `<div class="ap-wrap">
-    <p class="bm-hint">These are real, scheduled server jobs — daily/weekly/monthly — that run fully autonomously and log every result to the Hermes ledger. Every one is read-only/prep-only: none of them send, post, pay, or publish. Flip a switch to turn a job off; "Run now" fires it immediately for a live check.</p>
+    <p class="bm-hint">Tell Phantom about the business first — website, store, emails, CRM/source, offer, audience, and competitors. These automations start on for every account, but the better the profile, the sharper the results. Sends, posts, spending, uploads, CRM writes, and publishing still require approval.</p>
     <div class="au-summary" aria-label="Autopilot summary">
       <span><b>${jobs.length}</b><i>Jobs defined</i></span>
       <span><b>${activeCount}</b><i>Turned on</i></span>
@@ -443,8 +450,7 @@ async function fetchAgentRunsData() {
       return { ok: true, operations: ops.operations, runs: runsPayload.runs };
     }
     const status = !opsRes.ok ? opsRes.status : runsRes.status;
-    const message = !opsRes.ok ? ops?.error : runsPayload?.error;
-    return { ok: false, error: friendlyBackendError(status, message, { authMessage: "Sign in to load the run engine.", fallbackPrefix: "Run engine request failed" }) };
+    return { ok: false, error: status === 401 || status === 403 ? "This session isn't authorized for the run engine." : `Run engine request failed (${status}).` };
   } catch {
     return { ok: false, error: "Could not reach the run engine." };
   }
@@ -538,7 +544,7 @@ function wireAgentRunsPanel(el, notify, paint) {
         });
         const d = await r.json().catch(() => null);
         if (r.ok && d?.ok) notify("Agent runs", `Started ${d.run.title} (${d.run.id}).`);
-        else notify("Agent runs", `Couldn't start the run: ${friendlyBackendError(r.status, d?.error, { authMessage: "Sign in to start agent runs.", fallbackPrefix: "Run request failed" })}.`);
+        else notify("Agent runs", `Couldn't start the run: ${(d && d.error) || `request failed (${r.status})`}.`);
       } catch {
         notify("Agent runs", "Couldn't reach the run engine.");
       }
@@ -632,13 +638,14 @@ export function renderAutomation(el, opts = {}) {
   const off = Math.max(0, count - running);
 
   const panel = auTab === "configured" ? configuredAutomationTab(agents)
+    : auTab === "autopilot" ? autopilotDeveloperTab()
     : auTab === "recipes" ? recipesTab()
     : auTab === "logs" ? logsTab()
     : safetyTab();
 
   el.innerHTML = `
     <div class="au">
-      <div class="bm-note au-note"><i></i>Configured automations live here. Switch them on or off manually, edit the details in the row, and use Vacation Mode from its own tab.</div>
+      <div class="bm-note au-note"><i></i>Tell Phantom about your business — website, store, emails, CRM/source, offer, audience, and competitors — so automations use the right data from day one.</div>
       <div class="au-summary" aria-label="Automation summary">
         <span><b>${count}</b><i>Configured</i></span>
         <span><b>${running}</b><i>On</i></span>
@@ -650,6 +657,9 @@ export function renderAutomation(el, opts = {}) {
       </nav>
       <section class="bm-card au-card">${panel}</section>
     </div>`;
+
+  if (auTab === "autopilot") loadAutopilotDiagnostics(el, paint);
+  if (auTab === "autopilot") wireAutopilotDiagnostics(el, notify, paint);
 
   el.querySelectorAll("[data-au-tab]").forEach((btn) => btn.onclick = () => { auTab = btn.dataset.auTab; paint(); });
 
