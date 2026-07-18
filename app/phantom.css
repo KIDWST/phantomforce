@@ -13350,15 +13350,18 @@ body .phantom .workspace-page :where(
   .app-main:has(> .console:not(.console-workspace)) .console {
     min-height: 0;
     grid-template-columns: minmax(0, 1fr) minmax(280px, 320px);
+    grid-auto-rows: minmax(0, 1fr);
     gap: 12px;
     padding: 12px 16px 16px;
     overflow: hidden;
+    align-items: stretch;
   }
   .console:not(.console-workspace) .console-center {
     display: grid;
     grid-template-rows: auto minmax(0, 1fr);
     gap: 10px;
     min-height: 0;
+    overflow: hidden;
   }
   .console:not(.console-workspace) .hero2 {
     height: auto;

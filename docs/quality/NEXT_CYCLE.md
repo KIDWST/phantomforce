@@ -21,8 +21,11 @@ briefly unreachable, safe questions and casual chat now stay inside a dedicated
 conversation fallback and cannot fall through command keywords such as bank,
 proposal, lead, approval, or media. Informational business-adjacent questions
 are distinguished from explicit private workspace-state requests, browser and
-server personality are aligned, and dead `ledger empty` chat copy is gone. The
-browser module graph is cache-busted as `phantom-live-20260718-31`.
+server personality are aligned, and dead `ledger empty` chat copy is gone.
+Desktop conversations now keep the composer inside the viewport and scroll
+history internally; complete standalone questions cannot be mistaken for
+short follow-ups. The browser module graph is cache-busted as
+`phantom-live-20260718-32`.
 
 ## Recommended Cycle 17
 

@@ -1164,7 +1164,13 @@ Run the authenticated two-organization persistence proof in Recommended Cycle 16
   accounting, dashboards, ledgers, or bookkeeping.
 - Added offline multi-turn browser coverage across seven business-adjacent
   prompts, plus an explicit workspace-state control case.
-- Cache-busted the full browser module graph as `phantom-live-20260718-31`.
+- Corrected the desktop cockpit grid so the dashboard center column consumes
+  the available viewport row, the composer remains visible, and only the
+  message history scrolls.
+- Restricted prior-topic inheritance to genuinely short follow-ups such as
+  `why?`; complete questions such as `why is continuity useful?` now start
+  from their own meaning.
+- Cache-busted the full browser module graph as `phantom-live-20260718-32`.
 - Added permanent change-memory guards for classification, isolation, and tests.
 
 ## Focused Verification
@@ -1172,9 +1178,21 @@ Run the authenticated two-organization persistence proof in Recommended Cycle 16
 - PASS: `npm run test:dashboard-chat` (42 connected browser prompts, 11
   degraded server turns, deterministic tool checks, and the new offline set).
 - PASS: `npm run test:intent`.
-- PASS: `npm run test:change-memory` (135 permanent assertions).
+- PASS: `npm run test:change-memory` (136 permanent assertions).
 - PASS: `npm run test:release-critical` (19/19 critical checks).
+- PASS: `npm run build`.
 - PASS: `git diff --check`.
+- PASS: bundled Playwright/Chrome source gate against
+  `http://127.0.0.1:5181/app/?session=admin` with `/phantom-ai/chat` aborted.
+  At 1440x900, four offline turns left the composer at y=803..870, message
+  history scrolled internally (448px client / 608px content), page width was
+  exactly 1440px, and there were no page or non-HTTP console errors. At
+  390x844, two offline turns left the composer at y=681..743, page width was
+  exactly 390px, and there were no page or non-HTTP console errors.
+- PASS: visual review of
+  `C:\Users\jorda\AppData\Local\Temp\phantomforce-cycle16-desktop-fixed.png`
+  and `phantomforce-cycle16-mobile-fixed.png`; controls, text, and composer
+  remained visible without overlap.
 
 ## Next Task
 

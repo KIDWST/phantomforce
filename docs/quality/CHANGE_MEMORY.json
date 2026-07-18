@@ -794,6 +794,11 @@
           "file": "app/js/main.js",
           "pattern": "function renderDashboardBrief\\(\\)",
           "description": "Dashboard snapshot is derived from real local organization records."
+        },
+        {
+          "file": "app/phantom.css",
+          "pattern": "@media \\(min-width: 1201px\\)[\\s\\S]*grid-auto-rows: minmax\\(0, 1fr\\);[\\s\\S]*align-items: stretch;[\\s\\S]*console-center[\\s\\S]*overflow: hidden;",
+          "description": "Desktop dashboard chat is bounded to the available viewport row so the composer stays visible and only message history scrolls."
         }
       ],
       "forbiddenPatterns": [

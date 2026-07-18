@@ -17,6 +17,7 @@ installMemoryStorage("sessionStorage");
 const commandSrc = readFileSync(new URL("../app/js/command.js", import.meta.url), "utf8");
 const mainSrc = readFileSync(new URL("../app/js/main.js", import.meta.url), "utf8");
 const indexSrc = readFileSync(new URL("../app/index.html", import.meta.url), "utf8");
+const phantomCss = readFileSync(new URL("../app/phantom.css", import.meta.url), "utf8");
 const serverSrc = readFileSync(new URL("../server/src/index.ts", import.meta.url), "utf8");
 const buildId = commandSrc.match(/store\.js\?v=([^"']+)/)?.[1] || "";
 const q = buildId ? `?v=${buildId}` : "";
@@ -178,9 +179,10 @@ const offlineGeneralQuestions = [
   ["what is an approval workflow?", /reviewer|consequential/i],
   ["how does accounting work?", /records|financial activity/i],
   ["how does a bank work?", /deposits|lends|payment/i],
+  ["why is continuity useful?", /context|active thread/i],
   ["tell me about bank robberies in movies", /active thread/i],
 ];
-for (const [prompt] of offlineGeneralQuestions.slice(0, 6)) {
+for (const [prompt] of offlineGeneralQuestions.slice(0, 7)) {
   assert.equal(classifyPhantomIntent(prompt).primaryIntent, "question", `${prompt} must classify as information, not a workspace command`);
 }
 assert.equal(classifyPhantomIntent("how does an approval workflow help my school project?").primaryIntent, "question");
@@ -215,5 +217,10 @@ assert.doesNotMatch(indexSrc, /class="quick-card"/, "duplicate dashboard quick a
 assert.doesNotMatch(indexSrc, /class="chatbox-tools"/, "duplicate chat utility row must stay removed");
 assert.match(mainSrc, /const bottomItems = items\.filter\(\(n\) => n\.navZone === "bottom"\)/);
 assert.match(mainSrc, /options\.instant/);
+assert.match(
+  phantomCss,
+  /@media \(min-width: 1201px\)[\s\S]*?\.app-main:has\(> \.console:not\(\.console-workspace\)\) \.console \{[\s\S]*?grid-auto-rows: minmax\(0, 1fr\);[\s\S]*?align-items: stretch;[\s\S]*?\.console:not\(\.console-workspace\) \.console-center \{[\s\S]*?overflow: hidden;/,
+  "desktop chat must stay inside the viewport grid so only its message log scrolls",
+);
 
 console.log(`dashboard chat quality checks passed (${casualPrompts.length} prompts)`);

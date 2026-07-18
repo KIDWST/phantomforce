@@ -12,9 +12,9 @@ import {
   recentChatTurns,
   ctx, session, loadPhantomLoop, savePhantomLoop, loopProviderName, modelDisplayLabel,
   getPhantomLaneTarget, loadPhantomLaneConfig, workspaceStorageGetItem, wsName,
-} from "./store.js?v=phantom-live-20260718-31";
-import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260718-31";
-import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260718-31";
+} from "./store.js?v=phantom-live-20260718-32";
+import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260718-32";
+import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260718-32";
 const classifyPhantomIntent = (text) => deriveActionContract(classifyRaw(text));
 
 /* Cross-surface handoff: chat tells the Websites page which project to focus
@@ -797,7 +797,8 @@ function localQuestionAnswer(text, settings = null) {
   };
 
   const recent = recentChatTurns(1)[0];
-  if (/^(why|why not|how so|what do you mean|what does that mean|tell me more|and why|really)\b/i.test(text.trim()) && recent?.assistant) {
+  const shortFollowUp = /^(?:why|why not|how so|what do you mean|what does that mean|tell me more|and why|really)[?!.]*$/i;
+  if (shortFollowUp.test(text.trim()) && recent?.assistant) {
     const previous = recent.assistant;
     return {
       say: /spicy ramen/i.test(previous)
@@ -833,6 +834,7 @@ function localQuestionAnswer(text, settings = null) {
     [/\bwhat (?:is|are) (?:an? )?approval workflow\b/i, "An approval workflow routes a proposed action to the right reviewer before anything consequential happens."],
     [/\bwhat (?:is|are) accounting\b|\bhow does accounting work\b/i, "Accounting records and categorizes real financial activity so a business can understand cash, obligations, performance, and taxes."],
     [/\bhow does (?:a )?bank work\b/i, "A bank holds deposits, moves money, lends part of its capital, and manages payment and risk systems under financial regulation."],
+    [/\bwhy is continuity useful\b/i, "Continuity preserves the context of an active thread, so each answer can build on what was already established without making you repeat yourself."],
   ].find(([pattern]) => pattern.test(text));
   if (definition) return { say: definition[1], cards: [], open: null };
 
