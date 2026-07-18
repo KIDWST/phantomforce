@@ -21,6 +21,48 @@ export const PRESENCE_STATES = {
   paused: { label: "Paused", caption: "Paused.", dot: "err", mood: "idle", emotion: "sad", hold: 0 },
 };
 
+/* Rotating thinking lines: mostly grounded status copy with a light sprinkle
+   of personality. The pool is shuffled per cycle so no line repeats until the
+   whole pool has played, and rotation only runs while Phantom is actually in
+   the "thinking" state with no explicit caption override — so it stays fun
+   without ever getting spammy or masking real status text. */
+const THINKING_LINES = [
+  "Thinking through the best move...",
+  "Lining up the pieces...",
+  "Reading the room...",
+  "Biting robot chips...",
+  "Checking the numbers twice...",
+  "Phoning home with E.T. ...",
+  "Sharpening the plan...",
+  "Untangling the wires...",
+  "Consulting the ghost in the machine...",
+  "Weighing the options...",
+  "Doing the boring math so you don't have to...",
+  "Polishing the answer...",
+];
+let thinkingTimer = 0;
+let thinkingDeck = [];
+function nextThinkingLine() {
+  if (!thinkingDeck.length) {
+    thinkingDeck = [...THINKING_LINES];
+    for (let i = thinkingDeck.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [thinkingDeck[i], thinkingDeck[j]] = [thinkingDeck[j], thinkingDeck[i]];
+    }
+  }
+  return thinkingDeck.pop();
+}
+function stopThinkingRotation() { clearInterval(thinkingTimer); thinkingTimer = 0; }
+function startThinkingRotation() {
+  stopThinkingRotation();
+  if (!el) return;
+  el.caption.textContent = nextThinkingLine();
+  thinkingTimer = setInterval(() => {
+    if (current !== "thinking" || !el) { stopThinkingRotation(); return; }
+    el.caption.textContent = nextThinkingLine();
+  }, 4500);
+}
+
 let el = null;
 let character = null;
 let ctx2 = null;
@@ -39,6 +81,21 @@ let onModeChange = null;
 let canUseLoop = () => true;
 let onLoopUnavailable = null;
 let renderSettingsPanel = null;
+let popCleanupTimer = 0;
+
+function clearAvatarPop() {
+  clearTimeout(popCleanupTimer);
+  el?.canvas?.classList.remove("pc-pop");
+}
+
+function triggerAvatarPop() {
+  if (reduceMotion || !el?.canvas) return;
+  el.canvas.classList.remove("pc-pop");
+  void el.canvas.offsetWidth;
+  el.canvas.classList.add("pc-pop");
+  clearTimeout(popCleanupTimer);
+  popCleanupTimer = setTimeout(clearAvatarPop, 520);
+}
 
 export function setCompanionState(state, caption) {
   const def = PRESENCE_STATES[state] || PRESENCE_STATES.idle;
@@ -47,17 +104,15 @@ export function setCompanionState(state, caption) {
     prevDef = PRESENCE_STATES[current] || PRESENCE_STATES.idle;
     stateChangedAt = performance.now();
     // squash-and-stretch: a small anticipatory pop on every mood change
-    if (!reduceMotion && el?.canvas) {
-      el.canvas.classList.remove("pc-pop");
-      void el.canvas.offsetWidth;
-      el.canvas.classList.add("pc-pop");
-    }
+    triggerAvatarPop();
   }
   current = nextKey;
   if (!el) return;
   el.dot.className = `pc-dot pc-dot-${def.dot}`;
   el.label.textContent = def.label;
   el.caption.textContent = caption || def.caption;
+  if (current === "thinking" && !caption && !reduceMotion) startThinkingRotation();
+  else stopThinkingRotation();
   el.root.dataset.state = current;
   if (current === "success" || current === "speaking") pulse = Math.max(pulse, 0.7);
   if (current === "warning" || current === "error") pulse = 1;
@@ -236,9 +291,17 @@ export function mountCompanion(headEl, opts = {}) {
   el.canvas.style.width = `${SIZE}px`;
   el.canvas.style.height = `${SIZE}px`;
   ctx2 = el.canvas.getContext("2d");
-  character = createPhantomCharacter({ small: true });
+  character = createPhantomCharacter({ small: true, settled: true });
 
   window.addEventListener("pointermove", (e) => { pointer = { x: e.clientX, y: e.clientY }; }, { passive: true });
+  el.canvas.addEventListener("animationend", (event) => {
+    if (event.animationName === "pcPop") clearAvatarPop();
+  });
+  el.canvas.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    pulse = Math.max(pulse, 0.18);
+  });
   el.modeChip.addEventListener("click", () => requestLoopMode(mode === "loop" ? "chat" : "loop"));
   el.settingsBtn.addEventListener("click", (event) => {
     event.stopPropagation();
