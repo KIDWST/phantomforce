@@ -659,6 +659,26 @@
             "file": "server/scripts/test-instant-chat-http-live-model.ts",
             "pattern": "rapidFireVerified: true,[\\s\\S]*uncertaintyVerified: true,[\\s\\S]*empathyVerified: true,[\\s\\S]*structuredOutputVerified: true,[\\s\\S]*adaptiveLengthVerified: true",
             "description": "The authenticated real-model gate protects long mixed-topic threads, uncertainty, empathy, structured output, and adaptive answer length."
+          },
+          {
+            "file": "server/src/phantom-ai/instant-chat-tools.ts",
+            "pattern": "tool_id: \"phantom-identity\"[\\s\\S]*Phantom's fast conversation lane is currently \\${safeModel}",
+            "description": "Phantom identity and active fast-lane model disclosure come from route truth rather than model improvisation."
+          },
+          {
+            "file": "server/src/phantom-ai/instant-chat-tools.ts",
+            "pattern": "function enforceExactWordCount\\(userRequest: string, output: string\\)",
+            "description": "Explicit exact-word-count requests are corrected deterministically when the model miscounts."
+          },
+          {
+            "file": "server/src/phantom-ai/instant-chat-tools.ts",
+            "pattern": "function stripUnneededFollowUpQuestion\\(userRequest: string, output: string\\)",
+            "description": "Generic engagement questions are stripped from direct acknowledgments while user-requested questions remain intact."
+          },
+          {
+            "file": "server/scripts/test-instant-chat-http-live-model.ts",
+            "pattern": "identityTruthVerified: true,[\\s\\S]*practicalCodeVerified: true,[\\s\\S]*multilingualVerified: true,[\\s\\S]*sourceHonestyVerified: true",
+            "description": "The real-model gate protects branded identity, model truth, practical code help, multilingual continuity, and refusal to fabricate sources."
           }
       ],
       "forbiddenPatterns": [

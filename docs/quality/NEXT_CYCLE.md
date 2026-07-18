@@ -16,16 +16,16 @@ Do not restart the audit from zero unless the inventory is invalid. Continuation
 is scheduled in this same Codex task by heartbeat automation
 `continue-phantomforce-quality-program`.
 
-Cycle 9 hardened long natural conversation beyond the original routing fix. The
-authenticated gate now drives 59 mixed admin/customer requests, including twelve
-unrelated everyday questions in one uninterrupted thread, uncertainty, empathy,
-quoted untrusted instructions, JSON-only output, and a requested 120-word answer.
-The fast brain keeps its 80-token default for ordinary speed but expands the
-generation budget when the user explicitly asks for more detail. Simple answers
-no longer append unnecessary follow-up questions. The public app remains build
+Cycle 10 made identity and formatting authoritative. Phantom no longer improvises
+which model is running: identity and fast-lane model questions resolve from route
+truth. Generic engagement questions are removed from straightforward context
+acknowledgments, and exact word-count requests are corrected deterministically.
+The authenticated gate now drives 67 requests and additionally verifies practical
+code help, debugging, sustained Spanish conversation, fictional DOI handling, and
+refusal to invent inaccessible quotations. The public app remains build
 `phantom-live-20260718-29`; this cycle changes the live server brain.
 
-## Recommended Cycle 10
+## Recommended Cycle 11
 
 Theme: authenticated cross-organization persistence proof.
 

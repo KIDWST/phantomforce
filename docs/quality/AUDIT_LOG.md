@@ -846,3 +846,40 @@ Run the authenticated two-organization persistence proof in Recommended Cycle 9.
 ## Next Task
 
 Run the authenticated two-organization persistence proof in Recommended Cycle 10.
+
+# 2026-07-18 - Cycle 10: Identity and Epistemic Truth
+
+## Problems Verified
+
+- When asked which model powered the current conversation, the real model claimed
+  it was an unspecified “latest model” instead of the configured `qwen2.5:14b`.
+- Prompt-only suppression of unnecessary engagement questions was nondeterministic;
+  a context acknowledgment still occasionally appended “Anything specific...?”
+- The real model occasionally returned four words for an exact five-word request.
+- Code help, sustained multilingual conversation, and refusal to fabricate source
+  identifiers or inaccessible quotations were not covered by the release gate.
+
+## Corrections
+
+- Added a deterministic identity resolver for Phantom identity, ChatGPT
+  disambiguation, and active fast-lane model disclosure using actual route data.
+- Added bounded output cleanup for generic follow-up questions while preserving
+  questions the user explicitly requests.
+- Added deterministic exact-word-count enforcement for numeric and written counts.
+- Expanded the authenticated real-model gate to practical JavaScript generation,
+  debugging, Spanish follow-up continuity, fictional DOI handling, and private
+  source honesty.
+- Added permanent change-memory guards for all four behaviors.
+
+## Focused Verification
+
+- PASS: `npm run test:instant-chat:tools --workspace @phantomforce/server`.
+- PASS: `npm run typecheck`.
+- PASS: `npm run test:instant-chat:http-live-model --workspace
+  @phantomforce/server`: 67 authenticated requests, 452 ms average, 2,043 ms
+  maximum, zero fallback, zero business leakage, and all capability assertions.
+- PASS: `npm run test:release-critical` (19/19 critical checks).
+
+## Next Task
+
+Run the authenticated two-organization persistence proof in Recommended Cycle 11.

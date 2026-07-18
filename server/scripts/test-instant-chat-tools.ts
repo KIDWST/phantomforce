@@ -38,6 +38,18 @@ assert.deepEqual(
 );
 assert.equal(buildInstantChatToolReply("Tell me a joke.", listTurns), null);
 assert.deepEqual(
+  buildInstantChatToolReply("Who are you?", [], "qwen2.5:14b"),
+  { output_text: "I'm Phantom AI, the general-purpose assistant inside PhantomForce.", tool_id: "phantom-identity" },
+);
+assert.deepEqual(
+  buildInstantChatToolReply("What model are you running for this conversation?", [], "qwen2.5:14b"),
+  { output_text: "Phantom's fast conversation lane is currently qwen2.5:14b.", tool_id: "phantom-identity" },
+);
+assert.deepEqual(
+  buildInstantChatToolReply("Are you ChatGPT?", [], "qwen2.5:14b"),
+  { output_text: "No. I'm Phantom AI inside PhantomForce.", tool_id: "phantom-identity" },
+);
+assert.deepEqual(
   buildInstantChatToolReply("What is 12 times 7?", []),
   { output_text: "12 times 7 = 84.", tool_id: "phantom-calculator" },
 );
@@ -69,6 +81,29 @@ assert.equal(
     "Both are smart; both are unusual, but did you know octopuses have three hearts.",
   ),
   "Octopuses have three hearts.",
+);
+assert.equal(
+  enforceInstantOutputConstraints(
+    "For this chat only, my dog Nova wears a yellow raincoat.",
+    "Got it. Nova wears a yellow raincoat. Anything specific you'd like to discuss?",
+  ),
+  "Got it. Nova wears a yellow raincoat.",
+);
+assert.equal(
+  enforceInstantOutputConstraints("Turn that into a question.", "Why is the sky blue?"),
+  "Why is the sky blue?",
+);
+assert.equal(
+  enforceInstantOutputConstraints("Write exactly five words about rain.", "Rain paints the whole city."),
+  "Rain paints the whole city.",
+);
+assert.equal(
+  enforceInstantOutputConstraints("Write exactly five words about rain.", "Rain paints city streets."),
+  "Rain paints city streets outside.",
+);
+assert.equal(
+  enforceInstantOutputConstraints("Write exactly three words about rain.", "Rain paints every city street silver."),
+  "Rain paints every.",
 );
 assert.equal(instantResponseTokenBudget("What is the capital of Japan?"), 80);
 assert.equal(instantResponseTokenBudget("Explain rainbows in about 120 words."), 242);

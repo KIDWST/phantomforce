@@ -8488,7 +8488,11 @@ app.post("/phantom-ai/chat", async (request, reply) => {
   }
 
   if (instantConversation) {
-    const toolReply = buildInstantChatToolReply(normalized.user_request, recentConversation);
+    const toolReply = buildInstantChatToolReply(
+      normalized.user_request,
+      recentConversation,
+      requestedModelId || process.env.PHANTOM_INSTANT_CHAT_MODEL || "qwen2.5:14b",
+    );
     if (toolReply) {
       return {
         ok: true,

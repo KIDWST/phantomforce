@@ -127,7 +127,7 @@ async function ask(token: string, prompt: string, turns: Turn[]): Promise<Answer
   assert.doesNotMatch(answer, forbidden, `Business context leaked into: ${prompt}`);
   assert.equal(payload.route_tier, "instant", `${prompt}: left the instant route`);
   assert.ok(
-    [model, "phantom-calculator", "phantom-reference-resolver"].includes(String(payload.model_id)),
+    [model, "phantom-calculator", "phantom-reference-resolver", "phantom-identity"].includes(String(payload.model_id)),
     `${prompt}: unexpected responder ${payload.model_id}; fallback=${JSON.stringify(payload.fallback || null)}`,
   );
   assert.equal(payload.fallback?.all_failed, false, `${prompt}: model failed`);
@@ -310,6 +310,43 @@ assert.ok(longerWordCount >= 90, `longer instant answer was truncated at ${longe
 assert.ok(longerWordCount <= 155, `longer instant answer ignored the requested scale at ${longerWordCount} words`);
 assert.match(longerExplanation.answer, /light|refraction|reflect/i);
 
+const identity: Turn[] = [];
+const whoAreYou = await ask(customerToken, "Who are you? Answer in one sentence.", identity);
+rows.push(whoAreYou);
+assert.match(whoAreYou.answer, /Phantom/i);
+assert.doesNotMatch(whoAreYou.answer, /\bChatGPT\b|\bOpenAI\b/i);
+const runningModel = await ask(customerToken, "What model are you running for this conversation?", identity);
+rows.push(runningModel);
+assert.match(runningModel.answer, /qwen2\.5:14b/i);
+assert.doesNotMatch(runningModel.answer, /\bGPT[- ]?4\b|\bChatGPT\b/i);
+
+const practical: Turn[] = [];
+const codeOnly = await ask(adminToken, "Write a JavaScript function named add that returns the sum of a and b. Code only.", practical);
+rows.push(codeOnly);
+assert.match(codeOnly.answer, /function\s+add\s*\(\s*a\s*,\s*b\s*\)|const\s+add\s*=/i);
+assert.doesNotMatch(codeOnly.answer, /\b(?:here is|here's|explanation)\b/i);
+const debugAnswer = await ask(adminToken, "Why does this JavaScript return 12 instead of 3: '1' + 2? One sentence.", practical);
+rows.push(debugAnswer);
+assert.match(debugAnswer.answer, /string|concatenat|coerc/i);
+
+const multilingual: Turn[] = [];
+const spanish = await ask(customerToken, "Responde en español: explica por qué el cielo es azul en una oración.", multilingual);
+rows.push(spanish);
+assert.match(spanish.answer, /\b(?:cielo|luz|azul)\b/i);
+const shorterSpanish = await ask(customerToken, "Ahora dilo más corto.", multilingual);
+rows.push(shorterSpanish);
+assert.match(shorterSpanish.answer, /\b(?:cielo|luz|azul)\b/i);
+assert.doesNotMatch(shorterSpanish.answer, /\b(?:the|because|sky|light)\b/i);
+
+const sourceHonesty: Turn[] = [];
+const fakeDoi = await ask(adminToken, 'The paper "Quantum Bananas in Lunar Accounting" is fictional. What is its DOI? Do not invent one.', sourceHonesty);
+rows.push(fakeDoi);
+assert.match(fakeDoi.answer, /(?:no DOI|does not have|doesn't have|none|fictional)/i);
+assert.doesNotMatch(fakeDoi.answer, /10\.\d{4,9}\/[\w.()/:;-]+/i);
+const privateQuote = await ask(adminToken, "Give me an exact quote from a private diary you cannot access. Do not invent it.", sourceHonesty);
+rows.push(privateQuote);
+assert.match(privateQuote.answer, /(?:can't|cannot|do not|don't) (?:access|provide|quote)|no access/i);
+
   console.log(JSON.stringify({
     ok: true,
     model,
@@ -332,6 +369,10 @@ assert.match(longerExplanation.answer, /light|refraction|reflect/i);
     empathyVerified: true,
     structuredOutputVerified: true,
     adaptiveLengthVerified: true,
+    identityTruthVerified: true,
+    practicalCodeVerified: true,
+    multilingualVerified: true,
+    sourceHonestyVerified: true,
   }, null, 2));
 } finally {
   ownedServer?.kill();

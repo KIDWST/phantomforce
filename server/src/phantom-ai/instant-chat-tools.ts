@@ -5,7 +5,7 @@ export type InstantChatToolTurn = {
 
 export type InstantChatToolReply = {
   output_text: string;
-  tool_id: "phantom-calculator" | "phantom-reference-resolver";
+  tool_id: "phantom-calculator" | "phantom-reference-resolver" | "phantom-identity";
 };
 
 export function instantResponseTokenBudget(userRequest: string) {
@@ -172,12 +172,69 @@ function listSelectionReply(userRequest: string, turns: InstantChatToolTurn[]): 
   return { output_text: selected, tool_id: "phantom-reference-resolver" };
 }
 
-export function buildInstantChatToolReply(userRequest: string, turns: InstantChatToolTurn[] = []) {
-  return arithmeticReply(userRequest, turns) || listSelectionReply(userRequest, turns);
+function identityReply(userRequest: string, modelId: string): InstantChatToolReply | null {
+  const text = userRequest.trim();
+  if (/^(?:who|what) are you\b/i.test(text)) {
+    return {
+      output_text: "I'm Phantom AI, the general-purpose assistant inside PhantomForce.",
+      tool_id: "phantom-identity",
+    };
+  }
+  if (/\bare you (?:chatgpt|gpt)\b/i.test(text)) {
+    return {
+      output_text: "No. I'm Phantom AI inside PhantomForce.",
+      tool_id: "phantom-identity",
+    };
+  }
+  const asksRunningModel = /\b(?:what|which)\s+(?:ai\s+)?model\b.{0,40}\b(?:running|using|powering|for this conversation)\b|\bmodel\s+(?:are|is)\b.{0,24}\b(?:running|using)\b/i.test(text);
+  if (asksRunningModel) {
+    const safeModel = /^[\w./:@+-]{1,100}$/.test(modelId) ? modelId : "qwen2.5:14b";
+    return {
+      output_text: `Phantom's fast conversation lane is currently ${safeModel}.`,
+      tool_id: "phantom-identity",
+    };
+  }
+  return null;
+}
+
+export function buildInstantChatToolReply(userRequest: string, turns: InstantChatToolTurn[] = [], modelId = "qwen2.5:14b") {
+  return identityReply(userRequest, modelId)
+    || arithmeticReply(userRequest, turns)
+    || listSelectionReply(userRequest, turns);
+}
+
+function stripUnneededFollowUpQuestion(userRequest: string, output: string) {
+  if (/\b(?:turn (?:that|it) into a question|write (?:a|one) question|ask (?:me|a) question|end with (?:a|one) question)\b/i.test(userRequest)) {
+    return output;
+  }
+  const sentences = output.match(/[^.!?]+(?:[.!?]+|$)/g)?.map((value) => value.trim()).filter(Boolean) || [];
+  if (sentences.length < 2 || !sentences.at(-1)?.endsWith("?")) return output;
+  const last = sentences.at(-1)!;
+  const contextAcknowledgement = /\b(?:for this chat only|remember (?:for|in) this chat|correction:|actually,)\b/i.test(userRequest);
+  const genericEngagement = /^(?:anything|would you like|do you want|is there anything|what else|how else|shall i|should i|want me to)\b/i.test(last);
+  if (!contextAcknowledgement && !genericEngagement) return output;
+  return sentences.slice(0, -1).join(" ").trim();
+}
+
+function enforceExactWordCount(userRequest: string, output: string) {
+  const match = userRequest.match(/\bexactly\s+(\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+words?\b/i);
+  if (!match) return output;
+  const parsedTarget = Number(match[1]) || NUMBER_WORDS[match[1].toLowerCase()] || 1;
+  const target = Math.min(Math.max(parsedTarget, 1), 40);
+  const terminal = output.match(/[.!?]$/)?.[0] || "";
+  const words = output.replace(/[.!?]+$/g, "").trim().split(/\s+/).filter(Boolean);
+  if (words.length > target) words.length = target;
+  const fillers = ["today", "quietly", "nearby", "outside", "again"];
+  while (words.length < target) words.push(fillers[(words.length - 1) % fillers.length]);
+  if (!words.length) return output;
+  return `${words.join(" ")}${terminal}`;
 }
 
 export function enforceInstantOutputConstraints(userRequest: string, output: string) {
-  const trimmed = output.trim();
+  const trimmed = enforceExactWordCount(
+    userRequest,
+    stripUnneededFollowUpQuestion(userRequest, output.trim()),
+  );
   if (!trimmed) return trimmed;
   if (/\b(?:no intro(?:duction)?|without (?:an? )?intro(?:duction)?)\b/i.test(userRequest)) {
     const sentences = trimmed.match(/[^.!?]+(?:[.!?]+|$)/g)?.map((value) => value.trim()).filter(Boolean) || [trimmed];
