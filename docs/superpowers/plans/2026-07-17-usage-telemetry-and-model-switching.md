@@ -29,11 +29,11 @@
 - Catalog entries (from current tokens.js rates plus context windows): `claude-fable-5` (provider anthropic, 200000 ctx, in 5, out 25, cacheRead 0.50), `claude-opus-4-8` (anthropic, 200000, in 5, out 25, cacheRead 0.50), `claude-sonnet-5` (anthropic, 200000, in 3, out 15, cacheRead 0.30), `claude-haiku-4-5-20251001` (anthropic, 200000, in 1, out 5, cacheRead 0.10), plus a `codex` provider entry `gpt-5-codex` (openai, 400000, rates null → cost null), and `openrouter:*` passthrough (cost comes from OpenRouter's own reported cost, catalog only supplies label/context when known). Keep existing rates from `RATES_PER_MILLION_USD` verbatim where they exist; do NOT invent rates for models not already priced — return null cost.
 - `mission/tokens.js` `costForUsage` becomes a re-export/thin wrapper of the catalog version so existing imports keep working (check `pollTokenUsage` in server.js:134 and tests).
 
-- [ ] Step 1: Write failing tests in `tests/mission/model-catalog.test.mjs`: getModel known/unknown; costForUsage matches existing tokens.test.mjs expectations for sonnet/opus/haiku; costForUsage returns null for unknown model; contextPercent(claude-sonnet-5, 100000) === 50; contextPercent unknown model → null.
-- [ ] Step 2: `node --test tests/mission/model-catalog.test.mjs` → FAIL (module missing).
-- [ ] Step 3: Implement `mission/model-catalog.js`; rewire `mission/tokens.js` to use it.
-- [ ] Step 4: `npm test` → all pass (existing tokens tests unchanged and green).
-- [ ] Step 5: Commit `feat(telemetry): add shared model catalog with rates and context windows`.
+- [x] Step 1: Write failing tests in `tests/mission/model-catalog.test.mjs`: getModel known/unknown; costForUsage matches existing tokens.test.mjs expectations for sonnet/opus/haiku; costForUsage returns null for unknown model; contextPercent(claude-sonnet-5, 100000) === 50; contextPercent unknown model → null.
+- [x] Step 2: `node --test tests/mission/model-catalog.test.mjs` → FAIL (module missing).
+- [x] Step 3: Implement `mission/model-catalog.js`; rewire `mission/tokens.js` to use it.
+- [x] Step 4: `npm test` → all pass (existing tokens tests unchanged and green).
+- [x] Step 5: Commit `feat(telemetry): add shared model catalog with rates and context windows`.
 
 ### Task 2: Solo-tile telemetry (ungate polling) + cache tokens + last-turn input
 
@@ -47,11 +47,11 @@
 - Produces: WS `tokens` message shape `{type:"tokens", sessionId, workerId?, provider, model, inputTokens, outputTokens, cacheTokens, lastTurnInputTokens, contextPercent, costUsd, estimated}`. Session object gains `.cwd` (recorded at spawn) and `.usage` (latest snapshot, for the summary endpoint in Task 3).
 - IMPORTANT honesty constraint: for a solo tile whose cwd maps to a Claude project dir shared with other sessions (e.g. plain `C:\Users\jorda`), transcript attribution is ambiguous — in that case pick the transcript whose mtime advanced in step with this session's PTY activity if determinable; otherwise set `estimated:true` and `attribution:"ambiguous"` in the payload. Never present ambiguous data as real (this exact failure is documented in the QA ledger as TQA-03).
 
-- [ ] Step 1: Write failing tests: `readClaudeUsage` returns cacheTokens + lastTurnInputTokens from a fixture JSONL with 2 assistant turns; `shouldPollSession` true for mission worker AND solo claude/openrouter tile with cwd, false for pwsh/cmd/wsl profiles with no adapter; ambiguous-attribution → estimated true.
-- [ ] Step 2: Run → FAIL.
-- [ ] Step 3: Implement.
-- [ ] Step 4: `npm test` → pass.
-- [ ] Step 5: Commit `feat(telemetry): live token/cost telemetry for solo tiles with honest attribution`.
+- [x] Step 1: Write failing tests: `readClaudeUsage` returns cacheTokens + lastTurnInputTokens from a fixture JSONL with 2 assistant turns; `shouldPollSession` true for mission worker AND solo claude/openrouter tile with cwd, false for pwsh/cmd/wsl profiles with no adapter; ambiguous-attribution → estimated true.
+- [x] Step 2: Run → FAIL.
+- [x] Step 3: Implement.
+- [x] Step 4: `npm test` → pass.
+- [x] Step 5: Commit `feat(telemetry): live token/cost telemetry for solo tiles with honest attribution`.
 
 ### Task 3: Session + daily totals, summary endpoint, spending limits
 
@@ -66,9 +66,9 @@
 - Daily bucketing: reuse `tokens-history.jsonl` pattern (`mission/store.js:168`) — add an app-level append `usage-history.jsonl` under the `.termina` data dir with `{ts, sessionId, costUsd}` per poll delta; day = local date string.
 - Limit behavior: emit WS `{type:"limit", state, message}` to all clients when crossing warn/over. Do NOT auto-kill sessions; over-limit shows a red banner + blocks NEW session starts (`/api/sessions/:id/start` returns 409 with `{error:"daily spending limit reached"}`) until the user raises the limit in config. No silent kills.
 
-- [ ] Step 1: Failing tests for summarizeUsage aggregation, checkLimits thresholds (ok/warn at 80%/over), day bucketing, and start-block decision function.
-- [ ] Step 2: Run → FAIL. Step 3: Implement. Step 4: `npm test` → pass.
-- [ ] Step 5: Commit `feat(telemetry): session/daily spend totals, summary API, spending limits`.
+- [x] Step 1: Failing tests for summarizeUsage aggregation, checkLimits thresholds (ok/warn at 80%/over), day bucketing, and start-block decision function.
+- [x] Step 2: Run → FAIL. Step 3: Implement. Step 4: `npm test` → pass.
+- [x] Step 5: Commit `feat(telemetry): session/daily spend totals, summary API, spending limits`.
 
 ### Task 4: Frontend tile telemetry readout + totals bar
 
@@ -81,7 +81,7 @@
 - Consumes: WS `tokens` payload (Task 2 shape), `GET /api/usage/summary` (Task 3), `limit` WS message.
 - Tile shows: provider icon (existing `providerIcon()` app.js:61) + model label + in/out/cache + ctx% + cost. Totals bar shows session total, today total, limit state (green/amber/red); clicking opens a details popover listing per-tile spend.
 
-- [ ] Step 1: Failing tests for the three formatters. Step 2: FAIL. Step 3: Implement formatters + wire into app.js/index.html. Step 4: `npm test` pass; manual smoke: `npm start`, open a claude tile, observe live usage line. Step 5: Commit `feat(ui): per-tile usage readout and session/daily totals bar`.
+- [x] Step 1: Failing tests for the three formatters. Step 2: FAIL. Step 3: Implement formatters + wire into app.js/index.html. Step 4: `npm test` pass; manual smoke: `npm start`, open a claude tile, observe live usage line. Step 5: Commit `feat(ui): per-tile usage readout and session/daily totals bar`.
 
 ### Task 5: Per-tab model override + one-click global model switch
 
@@ -97,12 +97,12 @@
 - Produces: session start body `{profile, cols, rows, model?}`; per-tab override wins over global default; tiles with no override follow the next global switch.
 - Switching = relaunch (no in-band swap exists). Confirm dialog only when the tile has an active PTY with recent output (<60s) — otherwise switch immediately; global switch always shows one confirm listing affected tiles.
 
-- [ ] Step 1: Failing tests: claude profile args contain `--model claude-opus-4-8` when requested and are unchanged when not; openrouter spawn env gets `OPENROUTER_MODEL`; adapters pass model on retry.
-- [ ] Step 2: FAIL. Step 3: Implement backend, then frontend. Step 4: `npm test` pass; smoke: switch model per-tab and globally, verify relaunch + new model appears in usage line after first turn. Step 5: Commit `feat(models): per-tab model override and one-click global model switching`.
+- [x] Step 1: Failing tests: claude profile args contain `--model claude-opus-4-8` when requested and are unchanged when not; openrouter spawn env gets `OPENROUTER_MODEL`; adapters pass model on retry.
+- [x] Step 2: FAIL. Step 3: Implement backend, then frontend. Step 4: `npm test` pass; smoke: switch model per-tab and globally, verify relaunch + new model appears in usage line after first turn. Step 5: Commit `feat(models): per-tab model override and one-click global model switching`.
 
 ### Task 6: Verification sweep
 
-- [ ] `npm test` full suite green.
-- [ ] `node scripts/smoke.mjs` (if runnable) green.
-- [ ] Manual: `npm start`; open claude + pwsh + openrouter tiles; verify pwsh tile shows no usage line (no adapter, no fake data); claude tile shows real tokens after a prompt; totals bar updates; set `dailyLimitUsd: 0.01` in config → red banner + new-session 409; global switch relaunches tiles.
-- [ ] Commit any fixes; final commit `chore: telemetry + model switching verification pass`.
+- [x] `npm test` full suite green.
+- [x] `node scripts/smoke.mjs` (if runnable) green.
+- [x] Manual: `npm start`; open claude + pwsh + openrouter tiles; verify pwsh tile shows no usage line (no adapter, no fake data); claude tile shows real tokens after a prompt; totals bar updates; set `dailyLimitUsd: 0.01` in config → red banner + new-session 409; global switch relaunches tiles.
+- [x] Commit any fixes; final commit `chore: telemetry + model switching verification pass`.
