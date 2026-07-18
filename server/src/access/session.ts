@@ -581,7 +581,9 @@ export function requireAccessSession(request: FastifyRequest, reply: FastifyRepl
     reply.code(401).send({
       ok: false,
       error: `Missing or invalid ${AUTHORIZATION_HEADER} bearer token.`,
-      loginEndpoint: enableOwnerProductionAuth
+      loginEndpoint: enableDatabaseAuth
+        ? "/auth/login"
+        : enableOwnerProductionAuth
         ? "/auth/owner-login"
         : enableDemoAuth
           ? "/auth/demo-login"

@@ -1,4 +1,4 @@
-import { currentTenantId, session } from "./store.js?v=phantom-live-20260718-34";
+import { currentTenantId, friendlyBackendError, isLiveAdminHost, session } from "./store.js?v=phantom-live-20260718-35";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 const TABS = [["radar", "Radar"], ["competitors", "Competitors"], ["sources", "Sources & settings"]];
@@ -13,7 +13,7 @@ const SIGNAL_LABELS = {
 };
 const GAP_TYPES = [["question", "Ignored question"], ["complaint", "Weakly handled complaint"], ["pricing", "Pricing confusion"], ["feature", "Desired feature"], ["trust", "Trust concern"], ["segment", "Underserved segment"], ["objection", "Purchase objection"]];
 const EVENT_TYPES = ["Price increase", "Product discontinuation", "Negative feedback spike", "New feature launch", "Rebrand", "Service outage", "Geographic expansion", "Audience shift", "Major campaign", "New subscription tier", "Policy change", "Public limitation"];
-const ui = { tab: "radar", radarWidget: "board", loading: true, error: "", notice: "", snapshot: null, signalQuery: "", competitorFilter: "all", editingProfile: false, busy: "", selectedCompetitor: "" };
+const ui = { tab: "radar", radarWidget: "board", loading: true, error: "", notice: "", authRequired: false, snapshot: null, signalQuery: "", competitorFilter: "all", editingProfile: false, busy: "", selectedCompetitor: "" };
 let root = null;
 
 function authHeaders(json = false) {
@@ -23,15 +23,27 @@ function authHeaders(json = false) {
 async function api(path, options = {}) {
   const response = await fetch(path, { ...options, headers: { ...authHeaders(Boolean(options.body)), ...(options.headers || {}) } });
   const payload = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(payload?.error || `Intelligence request failed (${response.status}).`);
+  if (!response.ok) {
+    if (response.status === 401) {
+      session.clear();
+      const error = new Error("Your admin sign-in expired. Sign in again to reopen Competitor Intel.");
+      error.authRequired = true;
+      error.loginEndpoint = payload?.loginEndpoint || (isLiveAdminHost() ? "/auth/login" : "");
+      throw error;
+    }
+    throw new Error(friendlyBackendError(response.status, payload?.error, {
+      authMessage: "Sign in again to reopen Competitor Intel.",
+      fallbackPrefix: "Competitor Intel request failed",
+    }));
+  }
   return payload;
 }
 async function refresh(silent = false) {
   if (!silent) ui.loading = true;
-  ui.error = "";
+  ui.error = ""; ui.authRequired = false;
   render();
   try { ui.snapshot = await api(`/api/competitor-intelligence?tenant_id=${encodeURIComponent(currentTenantId())}`); }
-  catch (error) { ui.error = error instanceof Error ? error.message : "Competitor Intelligence is unavailable."; }
+  catch (error) { ui.authRequired = !!error?.authRequired; ui.error = error instanceof Error ? error.message : "Competitor Intelligence is unavailable."; }
   finally { ui.loading = false; render(); }
 }
 async function run(path, body, success) {
@@ -316,6 +328,7 @@ function sourcesView() {
 /* --------------------------------- Shell ---------------------------------- */
 function content() {
   if (ui.loading) return `<div class="ci-loading"><i></i><i></i><i></i><p>Loading public-signal intelligence…</p></div>`;
+  if (ui.authRequired) return empty("Sign in again", ui.error || "Your admin session expired.", '<button class="ci-primary" data-ci-login>Open admin sign-in</button>');
   if (!ui.snapshot) return empty("Intelligence is unavailable", ui.error || "The protected service did not respond.", '<button class="ci-primary" data-ci-retry>Try again</button>');
   if (!ui.snapshot.access.enabled) return empty("Competitor Intelligence is not included", "Ask the workspace owner about a plan with public-signal intelligence.");
   return ({ radar, competitors: competitorsView, sources: sourcesView }[ui.tab] || radar)();
@@ -337,6 +350,7 @@ function bind() {
   root.querySelectorAll("[data-ci-tab]").forEach((button) => button.addEventListener("click", () => { ui.tab = button.dataset.ciTab; ui.notice = ""; ui.error = ""; render(); root.scrollIntoView({ behavior: "smooth", block: "start" }); }));
   root.querySelectorAll("[data-ci-widget]").forEach((button) => button.addEventListener("click", () => { ui.radarWidget = button.dataset.ciWidget; render(); }));
   root.querySelector("[data-ci-retry]")?.addEventListener("click", () => refresh());
+  root.querySelector("[data-ci-login]")?.addEventListener("click", () => { window.location.href = "/app/index.html"; });
   root.querySelector("[data-ci-mode]")?.addEventListener("click", () => run("/api/competitor-intelligence/mode", { enabled: !ui.snapshot.settings.aggressiveMode }, ui.snapshot.settings.aggressiveMode ? "Standard mode restored." : "Aggressive Intelligence Mode activated."));
   root.querySelectorAll("[data-ci-fuse]").forEach((button) => button.addEventListener("click", () => run("/api/competitor-intelligence/fuse", { competitorId: button.dataset.ciFuse }, "Public signals fused into labeled estimates.")));
   root.querySelectorAll("[data-ci-select]").forEach((button) => button.addEventListener("click", () => { ui.selectedCompetitor = button.dataset.ciSelect; render(); }));
