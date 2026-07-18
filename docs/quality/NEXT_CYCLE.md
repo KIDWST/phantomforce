@@ -23,8 +23,8 @@ micro-tools now handle arithmetic chains and exact ordinal list selection in
 eight-turn browser bound or using durable/business memory. A self-starting gate
 now drives 27 mixed admin/customer requests through the real server and model,
 including corrections, topic switches, exact output, arithmetic, and context
-rollover. The final build number is assigned during publish after reconciling
-concurrent `main` work.
+rollover. Build `phantom-live-20260718-28` is the reconciled publish marker for
+this cycle.
 
 ## Recommended Cycle 8
 

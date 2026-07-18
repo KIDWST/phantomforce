@@ -684,6 +684,7 @@ Run the authenticated two-organization persistence proof in Recommended Cycle 7.
   ordinary model answers.
 - Added unit coverage to the normal dashboard-chat suite and a self-starting,
   authenticated HTTP real-model gate that drives both admin and customer sessions.
+- Cache-busted the application as `phantom-live-20260718-28`.
 
 ## Verification
 
@@ -691,7 +692,7 @@ Run the authenticated two-organization persistence proof in Recommended Cycle 7.
   turns, and deterministic instant-tool checks).
 - PASS: `npm run test:change-memory` (106 protected checks before build stamping).
 - PASS: `npm run test:instant-chat:http-live-model` from `server`: 27 consecutive
-  authenticated HTTP requests, 443 ms average, 879 ms maximum, zero fallbacks,
+  authenticated HTTP requests, 485 ms average, 904 ms maximum, zero fallbacks,
   zero business leakage, five deterministic tool responses, corrected-subject
   continuity, topic switching, exact arithmetic, and context rollover verified.
 - PASS: the self-starting gate terminated its disposable port-5192 server after
