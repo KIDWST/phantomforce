@@ -52,6 +52,12 @@
   forbidden patterns there so another stale worktree cannot resurrect it.
 
 ## Recent, merged & live (newest first)
+- **Real instant conversational brain (2026-07-18)** — build
+  `phantom-live-20260718-26`. Smart-mode casual chat uses the localhost-only
+  `qwen2.5:7b` lane with bounded temporary context, concise output, no business
+  module leakage, and sub-second warm responses. Standard/deep work retains its
+  existing role, approval, and provider controls. A hidden Windows logon task
+  keeps Ollama available after restart.
 - **Dedicated live checkout + tenant-backed revenue truth (2026-07-18)** — build
   `phantom-live-20260718-25`. CRM discovery refuses to invent contacts when no
   verified public-research adapter is connected; manual CRM records, proposal
@@ -124,7 +130,7 @@
   (`app/index.html`, `app/phantom.css`, `app/js/main.js`).
 - **Living Phantom character** — `app/js/character.js`: 11 painted poses, emotional
   inertia (`governMood`), hologram depth. Shared by admin + public site.
-- Current cache-bust build id: **`phantom-live-20260718-25`**.
+- Current cache-bust build id: **`phantom-live-20260718-26`**.
 
 ## Repo map
 - `app/` — the **admin console** (`admin.phantomforce.online`). `index.html`,
