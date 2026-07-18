@@ -1115,6 +1115,20 @@ Run the authenticated two-organization persistence proof in Recommended Cycle 15
   change-memory assertions before this cycle's final documentation guard).
 - PASS: disposable fallback test port `5193` was closed after verification.
 - PASS: `git diff --check`.
+- PASS after live sync: `ops/admin-live/Test-LiveAdminSource.ps1` reported
+  canonical commit `e4af87e`, matching `origin/main`, sync manifest, Hermes,
+  serving source, and public build `phantom-live-20260718-30`; all 135 permanent
+  change-memory checks passed.
+- PASS after live sync: `npm run test:instant-chat:http-fallback --workspace
+  @phantomforce/server` completed 3 authenticated requests with Ollama forced
+  unreachable, useful local responses, truthful fallback metadata, active-topic
+  continuity, and zero stale business leakage.
+- PASS after live sync: `npm run test:instant-chat:http-live-model --workspace
+  @phantomforce/server` completed 75 authenticated requests at 427 ms average
+  and 1,919 ms maximum, with zero fallback and zero business leakage.
+- PASS: `PhantomForce Ollama Service` last result `0`; `qwen2.5:14b` remained
+  warm at 100% GPU with context 2048 and a 24-hour lease.
+- PASS: disposable test ports `5192` and `5193` were closed.
 
 ## Next Task
 
