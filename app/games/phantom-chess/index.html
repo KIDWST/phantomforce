@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Phantom Chess — PhantomPlay</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="hud">
+      <div class="hud-stat"><b data-status-line>White to move</b><span data-mode-line>LOCAL 2P</span></div>
+      <div class="hud-btns">
+        <button class="hud-btn" data-new-btn>⟲ New Game</button>
+        <button class="hud-btn" data-mode-btn>⇄ Change Mode</button>
+      </div>
+    </div>
+
+    <div class="table">
+      <div class="captured" data-captured-b></div>
+      <div class="board" data-board></div>
+      <div class="captured" data-captured-w></div>
+    </div>
+
+    <div class="overlay" data-mode-overlay>
+      <div class="panel">
+        <h2>Phantom Chess</h2>
+        <p>Full rules — castling, en passant, promotion. Pick how you want to play.</p>
+        <div class="mode-choice">
+          <button class="mode-btn" data-pick-mode="2p"><strong>2 Player</strong><span>Local — share the board</span></button>
+          <button class="mode-btn" data-pick-mode="ai"><strong>vs Phantom</strong><span>You play White vs the AI</span></button>
+        </div>
+      </div>
+    </div>
+
+    <div class="overlay" data-promo-overlay hidden>
+      <div class="panel">
+        <h2>Promote to</h2>
+        <div class="promo-row" data-promo-row></div>
+      </div>
+    </div>
+
+    <div class="overlay" data-end-overlay hidden>
+      <div class="panel">
+        <h2 data-end-title>Checkmate</h2>
+        <p data-end-sub></p>
+        <button class="btn-primary" data-rematch-btn>Rematch</button>
+        <button class="btn-ghost" data-end-mode-btn>Change Mode</button>
+      </div>
+    </div>
+
+    <script src="engine.js"></script>
+    <script src="game.js"></script>
+  </body>
+</html>
