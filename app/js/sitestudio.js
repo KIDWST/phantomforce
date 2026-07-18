@@ -2,15 +2,15 @@
 
 import {
   store, uid, visible, currentWs, wsName, pushActivity, ago, fmtMoney,
-} from "./store.js?v=phantom-live-20260717-18";
+} from "./store.js?v=phantom-live-20260718-1";
 import {
   esc, baseSiteDraft, ensureSiteDesign, ensureSiteStore, applyWebsitePrompt, renderWebsitePreview,
   SITE_TEMPLATES, applySiteTemplate, cadenceSuffix,
-} from "./workspaces.js?v=phantom-live-20260717-18";
+} from "./workspaces.js?v=phantom-live-20260718-1";
 import {
   isDatabaseSession, requestServerPublish, fetchServerRun,
   addServerSiteDomain, verifyServerSiteDomain,
-} from "./orgs.js?v=phantom-live-20260717-18";
+} from "./orgs.js?v=phantom-live-20260718-1";
 
 const siteUi = {
   activeSiteId: null, device: "desktop", selectedSection: -1,
@@ -38,6 +38,10 @@ function snapshotSite(site, label) {
       store: JSON.parse(JSON.stringify(site.store || {})),
       domain: site.domain || "",
       url: site.url || "",
+      domainProvider: site.domainProvider || "",
+      sourceUrl: site.sourceUrl || "",
+      sourceCode: site.sourceCode || "",
+      webBotLog: JSON.parse(JSON.stringify(site.webBotLog || [])),
     },
   });
   site.history = site.history.slice(0, HISTORY_CAP);
@@ -53,6 +57,7 @@ function restoreSnapshot(site, index) {
   site.sections = [...snap.data.sections];
   site.catalog = JSON.parse(JSON.stringify(snap.data.catalog || []));
   site.store = JSON.parse(JSON.stringify(snap.data.store || {}));
+  site.webBotLog = JSON.parse(JSON.stringify(snap.data.webBotLog || []));
   site.updated = new Date().toISOString();
   /* drop the consumed snapshot (it now sits at index+1 after the unshift) */
   site.history.splice(index + 1, 1);
@@ -264,6 +269,10 @@ function normalizeSite(site) {
   ensureSiteDesign(site);
   ensureSiteStore(site);
   site.domains = Array.isArray(site.domains) ? site.domains : [];
+  site.domainProvider = String(site.domainProvider || "");
+  site.sourceUrl = String(site.sourceUrl || "");
+  site.sourceCode = String(site.sourceCode || "");
+  site.webBotLog = Array.isArray(site.webBotLog) ? site.webBotLog : [];
   /* server-truth domain records (connect/verify). Intentionally NOT part of
      snapshotSite history — like serverPublish, undo must never roll back what
      the server knows about a domain's real DNS state. */
@@ -271,6 +280,177 @@ function normalizeSite(site) {
   const domain = siteDomain(site);
   if (domain && !site.domains.includes(domain)) site.domains.unshift(domain);
   return site;
+}
+
+const SOURCE_CODE_LIMIT = 120000;
+const WEBBOT_PROVIDERS = ["Cloudflare", "GoDaddy", "Namecheap", "Squarespace", "Wix", "Shopify", "WordPress", "Webflow", "Other / unknown"];
+
+function cleanHtmlText(value) {
+  return String(value || "")
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function firstTagText(source, tag) {
+  const match = String(source || "").match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, "i"));
+  return match ? cleanHtmlText(match[1]) : "";
+}
+
+function metaDescription(source) {
+  const text = String(source || "");
+  const byNameFirst = text.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["'][^>]*>/i);
+  const byContentFirst = text.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']description["'][^>]*>/i);
+  return cleanHtmlText(byNameFirst?.[1] || byContentFirst?.[1] || "");
+}
+
+function sourceIntel(source) {
+  const code = String(source || "").slice(0, SOURCE_CODE_LIMIT);
+  const titleText = firstTagText(code, "title");
+  const headline = firstTagText(code, "h1");
+  const description = metaDescription(code);
+  const headingMatches = Array.from(code.matchAll(/<h[2-3][^>]*>([\s\S]*?)<\/h[2-3]>/gi))
+    .map((match) => cleanHtmlText(match[1]))
+    .filter(Boolean);
+  const labeledMatches = Array.from(code.matchAll(/<(?:section|main|article|nav|footer)[^>]+(?:aria-label|data-title)=["']([^"']+)["'][^>]*>/gi))
+    .map((match) => cleanHtmlText(match[1]))
+    .filter(Boolean);
+  const sections = [];
+  ["Home", ...headingMatches, ...labeledMatches].forEach((section) => {
+    const clean = section.slice(0, 48);
+    if (clean && !sections.some((existing) => existing.toLowerCase() === clean.toLowerCase())) sections.push(clean);
+  });
+  return {
+    bytes: code.length,
+    title: titleText.slice(0, 80),
+    headline: headline.slice(0, 100),
+    description: description.slice(0, 180),
+    sections: sections.slice(0, 10),
+  };
+}
+
+function applySourceCodeToSite(site, source) {
+  const code = String(source || "").slice(0, SOURCE_CODE_LIMIT);
+  site.sourceCode = code;
+  const intel = sourceIntel(code);
+  const design = ensureSiteDesign(site);
+  if (intel.title) site.title = intel.title;
+  if (intel.headline) design.headline = intel.headline;
+  if (intel.description) design.subhead = intel.description;
+  if (intel.sections.length >= 2) site.sections = intel.sections;
+  return intel;
+}
+
+function addWebBotLog(site, title, body) {
+  site.webBotLog = Array.isArray(site.webBotLog) ? site.webBotLog : [];
+  site.webBotLog.unshift({
+    id: uid("webbot"),
+    at: new Date().toISOString(),
+    title: String(title || "Phantom Web Bot").slice(0, 60),
+    body: String(body || "").slice(0, 420),
+  });
+  site.webBotLog = site.webBotLog.slice(0, 8);
+}
+
+function liveStageMarkup(site) {
+  const domain = siteDomain(site);
+  if (domain === LIVE_SITE_DOMAIN) return liveSiteMarkup(site, { loaded: true });
+  if (!domain) {
+    return `
+      <section class="ss-live-site ss-live-empty" data-ss-live-site>
+        <header><div><p>Website view</p><h3>No domain yet</h3></div></header>
+        <p>Add the domain and provider on the right. If you have the page code, paste it there too, and Phantom Web Bot will work from the real source context instead of a fake preview.</p>
+      </section>`;
+  }
+  return `
+    <section class="ss-live-site" data-ss-live-site>
+      <header>
+        <div><p>Website view</p><h3>${esc(domain)}</h3></div>
+        <a class="btn btn-quiet" href="https://${esc(domain)}" target="_blank" rel="noopener">Open https://${esc(domain)}</a>
+      </header>
+      <p>This is the public site view for the selected domain. Changes stay local until a publish run is approved.</p>
+      <iframe class="ss-live-frame" src="https://${esc(domain)}" title="Live ${esc(domain)} preview" loading="lazy" referrerpolicy="no-referrer"></iframe>
+    </section>`;
+}
+
+function webBotMarkup(site, products, options = {}) {
+  const domain = siteDomain(site);
+  const intel = sourceIntel(site.sourceCode || "");
+  const logs = Array.isArray(site.webBotLog) ? site.webBotLog : [];
+  const sourceLabel = site.sourceCode
+    ? `${intel.bytes.toLocaleString()} chars remembered${intel.sections.length ? ` · ${intel.sections.length} sections detected` : ""}`
+    : "Paste page code/source when we have it.";
+  return `
+    <section class="ss-webbot-panel" data-ss-webbot>
+      <header>
+        <div>
+          <p>Phantom Web Bot</p>
+          <h3>One chat for this website.</h3>
+        </div>
+        <span>${esc(domain || "domain needed")}</span>
+      </header>
+      <p class="ss-webbot-lede">Give Phantom the domain provider, the page code if we have it, and the outcome. It will update the local working copy, explain what changed, and keep publishing approval-gated.</p>
+      <form class="ss-webbot-form" data-ss-webbot-form>
+        <div class="ss-webbot-two">
+          <label>
+            <span>Domain</span>
+            <input data-ss-domain value="${esc(domain)}" placeholder="phantomforce.online" autocomplete="off" />
+          </label>
+          <label>
+            <span>Domain provider</span>
+            <input data-ss-provider list="ss-domain-provider-list" value="${esc(site.domainProvider || "")}" placeholder="Cloudflare, GoDaddy, Namecheap..." autocomplete="off" />
+            <datalist id="ss-domain-provider-list">
+              ${WEBBOT_PROVIDERS.map((provider) => `<option value="${esc(provider)}"></option>`).join("")}
+            </datalist>
+          </label>
+        </div>
+        <label>
+          <span>Page code/source if available</span>
+          <textarea data-ss-source-code rows="7" placeholder="Paste index.html, a React component, Shopify/Liquid, Webflow export, or notes about where the page code lives. Scripts are not executed here.">${esc(site.sourceCode || "")}</textarea>
+        </label>
+        <label>
+          <span>Ask Phantom Web Bot</span>
+          <textarea data-ss-webbot-prompt rows="4" placeholder="Example: make the hero clearer, add a bookings CTA, fix mobile spacing, implement the services section..."></textarea>
+        </label>
+        <label>
+          <span>Code location / repo note</span>
+          <input data-ss-source-url value="${esc(site.sourceUrl || "")}" placeholder="Optional: repo path, page file, CMS theme, or admin URL note" autocomplete="off" />
+        </label>
+        <footer>
+          <button class="btn btn-primary" type="submit">Run Phantom Web Bot</button>
+          <small>${esc(sourceLabel)}</small>
+        </footer>
+      </form>
+      <div class="ss-webbot-log" aria-label="Phantom Web Bot results">
+        ${logs.map((item) => `
+          <article>
+            <b>${esc(item.title)}</b>
+            <p>${esc(item.body)}</p>
+            <span>${ago(item.at)}</span>
+          </article>`).join("") || `
+          <article>
+            <b>Ready for the real site</b>
+            <p>Tell Phantom what to change, or paste source so it can map the page before editing. Nothing posts, publishes, or touches DNS from this panel.</p>
+            <span>now</span>
+          </article>`}
+      </div>
+      <details class="ss-domain-advanced">
+        <summary>Domain verification details</summary>
+        ${domainManagerMarkup(site, options)}
+      </details>
+      <details class="ss-store-tools">
+        <summary>Offer and checkout tools <span>${products.length}</span></summary>
+        ${productEditorMarkup(site)}
+      </details>
+    </section>`;
 }
 
 function productsFor(site) {
@@ -505,30 +685,19 @@ function shellMarkup(active, sites, products) {
           </button>`).join("")}
       </div>
 
-      <div class="ss-simple-domain">
-        ${liveSiteMarkup(active, { loaded: siteUi.livePreviewLoaded })}
-        <form data-ss-domain-form>
-          <label>
-            <span>Domain (local label)</span>
-            <input data-ss-domain value="${esc(domain)}" placeholder="yourdomain.com" />
-          </label>
-          <button class="btn btn-quiet" type="submit">Save domain</button>
-        </form>
-        ${domainManagerMarkup(active, {
+      <div class="ss-site-focus">
+        ${liveStageMarkup(active)}
+        ${webBotMarkup(active, products, {
           databaseSession: isDatabaseSession(),
           notice: siteUi.domainNotice || "",
           verifyingDomainId: siteUi.verifyingDomainId,
         })}
       </div>
 
-      <div class="ss-editbar">
-        <div class="ss-modebar" role="tablist" aria-label="Website tools">
-          <button type="button" role="tab" aria-selected="${siteUi.panel === "website"}" class="${siteUi.panel === "website" ? "is-active" : ""}" data-ss-panel="website">Website</button>
-          <button type="button" role="tab" aria-selected="${siteUi.panel === "store"}" class="${siteUi.panel === "store" ? "is-active" : ""}" data-ss-panel="store">Store <span>${products.length}</span></button>
-        </div>
-        <div class="ss-devbar" role="group" aria-label="Preview device">
-          ${[["desktop", "Desktop"], ["tablet", "Tablet"], ["phone", "Phone"]].map(([id, label]) =>
-            `<button type="button" class="${siteUi.device === id ? "is-active" : ""}" data-ss-device="${id}">${label}</button>`).join("")}
+      <div class="ss-editbar ss-webbot-actions">
+        <div class="ss-editbar-note">
+          <b>Local working copy</b>
+          <span>Phantom can prepare and implement edits here. Nothing changes at ${esc(domain || "the public domain")} until publish approval passes.</span>
         </div>
         <div class="ss-editbar-actions">
           <button class="btn btn-quiet" type="button" data-act="ss-undo" ${(active.history || []).length ? "" : "disabled"}>Undo</button>
@@ -553,32 +722,8 @@ function shellMarkup(active, sites, products) {
         </div>
       </div>
 
-      <main class="ss-simple-main ${siteUi.panel === "store" ? "has-store-console" : ""}">
-        <div class="ss-simple-preview ss-device-${esc(siteUi.device)}" data-ss-preview>${renderWebsitePreview(active, products, { selected: siteUi.selectedSection, interactive: true, cart: ensureSiteStore(active).cart })}</div>
-        ${siteUi.panel === "store" ? productEditorMarkup(active) : ""}
-        ${siteUi.cartOpen ? cartMarkup(active) : ""}
-      </main>
-
-      ${siteUi.selectedSection >= 0 && active.sections[siteUi.selectedSection] !== undefined ? `
-      <div class="ss-section-toolbar" data-ss-section-toolbar>
-        <b>Section: ${esc(active.sections[siteUi.selectedSection])}</b>
-        <input data-ss-section-name value="${esc(active.sections[siteUi.selectedSection])}" aria-label="Rename section" />
-        <button class="btn btn-quiet" type="button" data-act="ss-section-rename">Rename</button>
-        <button class="btn btn-quiet" type="button" data-act="ss-section-up" ${siteUi.selectedSection === 0 ? "disabled" : ""}>Move up</button>
-        <button class="btn btn-quiet" type="button" data-act="ss-section-down" ${siteUi.selectedSection >= active.sections.length - 1 ? "disabled" : ""}>Move down</button>
-        <button class="btn btn-quiet ss-section-remove" type="button" data-act="ss-section-remove">Remove</button>
-        <button class="btn btn-quiet" type="button" data-act="ss-section-done">Done</button>
-      </div>` : `
-      <p class="ss-select-hint">Click a section in the preview to rename, reorder, or remove it.</p>`}
-
-      <form class="ss-simple-prompt" data-ss-prompt-form>
-        <textarea data-ss-prompt rows="3" placeholder="${siteUi.selectedSection >= 0 && active.sections[siteUi.selectedSection] !== undefined
-          ? `Describe a change for the ${esc(active.sections[siteUi.selectedSection])} section — or the whole site.`
-          : "Describe the change. Example: make the hero simpler, add testimonials, use chicagoshots.com"}"></textarea>
-        <button class="btn btn-primary" type="submit">Update website</button>
-      </form>
-
       ${siteUi.confirmation ? confirmationMarkup(siteUi.confirmation) : ""}
+      ${siteUi.cartOpen ? cartMarkup(active) : ""}
 
       <p class="ss-simple-status">Last edited ${ago(active.updated || new Date().toISOString())}</p>
       ${siteUi.checkoutOpen ? checkoutMarkup(active) : ""}
@@ -682,6 +827,48 @@ export function renderSiteStudio(el) {
   /* ---- live-site surface: preview loads only on explicit click ---- */
   const liveLoadBtn = el.querySelector("[data-ss-live-load]");
   if (liveLoadBtn) liveLoadBtn.onclick = () => { siteUi.livePreviewLoaded = true; rerender(); };
+
+  const webBotForm = el.querySelector("[data-ss-webbot-form]");
+  if (webBotForm && active) {
+    webBotForm.onsubmit = (event) => {
+      event.preventDefault();
+      const nextDomain = slugText(webBotForm.querySelector("[data-ss-domain]")?.value || "");
+      const nextProvider = String(webBotForm.querySelector("[data-ss-provider]")?.value || "").trim().slice(0, 80);
+      const nextSourceUrl = String(webBotForm.querySelector("[data-ss-source-url]")?.value || "").trim().slice(0, 400);
+      const nextSource = String(webBotForm.querySelector("[data-ss-source-code]")?.value || "").slice(0, SOURCE_CODE_LIMIT);
+      const prompt = String(webBotForm.querySelector("[data-ss-webbot-prompt]")?.value || "").trim();
+      const changedContext =
+        nextDomain !== siteDomain(active) ||
+        nextProvider !== (active.domainProvider || "") ||
+        nextSourceUrl !== (active.sourceUrl || "") ||
+        nextSource !== (active.sourceCode || "");
+      if (!prompt && !changedContext) return;
+
+      snapshotSite(active, prompt ? `web bot: ${prompt.slice(0, 52)}` : "web bot context update");
+      if (nextDomain !== siteDomain(active)) setSiteDomain(active, nextDomain);
+      active.domainProvider = nextProvider;
+      active.sourceUrl = nextSourceUrl;
+      let intel = null;
+      if (nextSource !== (active.sourceCode || "")) {
+        intel = applySourceCodeToSite(active, nextSource);
+      } else {
+        active.sourceCode = nextSource;
+      }
+      const results = [];
+      if (nextProvider) results.push(`Provider remembered: ${nextProvider}.`);
+      if (nextSourceUrl) results.push(`Code location noted.`);
+      if (intel) {
+        results.push(`Read ${intel.bytes.toLocaleString()} chars of page source${intel.headline ? ` and found "${intel.headline}"` : ""}.`);
+      }
+      if (prompt) results.push(applyWebsiteChange(active, prompt, false));
+      results.push("Kept it local. Publish still requires approval.");
+      active.updated = new Date().toISOString();
+      addWebBotLog(active, "Phantom Web Bot ran", results.join(" "));
+      pushActivity("Websites", `Phantom Web Bot updated ${active.title}.`, active.ws);
+      store.save();
+      rerender();
+    };
+  }
 
   /* ---- domain connect/verify wiring (real server routes) ---- */
   el.querySelectorAll("[data-ss-copy]").forEach((button) => {
@@ -918,6 +1105,7 @@ export function renderSiteStudio(el) {
     active.sections = [...snap.data.sections];
     active.catalog = JSON.parse(JSON.stringify(snap.data.catalog || []));
     active.store = JSON.parse(JSON.stringify(snap.data.store || {}));
+    active.webBotLog = JSON.parse(JSON.stringify(snap.data.webBotLog || []));
     active.updated = new Date().toISOString();
     pushActivity("Websites", `undid the last edit on ${active.title}.`, active.ws);
     store.save();

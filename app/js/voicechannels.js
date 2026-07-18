@@ -6,8 +6,8 @@
  * voice. See docs/superpowers/specs/2026-07-17-voice-channels-design.md.
  */
 
-import { currentTenantId, session, ctx, wsName, currentWs } from "./store.js?v=phantom-live-20260717-18";
-import { VoiceCore } from "./voicecore.js?v=phantom-live-20260717-18";
+import { currentTenantId, session, ctx, wsName, currentWs } from "./store.js?v=phantom-live-20260718-1";
+import { VoiceCore } from "./voicecore.js?v=phantom-live-20260718-1";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 

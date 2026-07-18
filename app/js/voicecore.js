@@ -18,7 +18,7 @@
 // The server is a pure signaling relay (SDP offers/answers, ICE candidates)
 // — it never touches or decodes audio. All audio flows peer-to-peer.
 
-import { session } from "./store.js?v=phantom-live-20260717-18";
+import { session } from "./store.js?v=phantom-live-20260718-1";
 
 const ICE_SERVERS = [{ urls: "stun:stun.l.google.com:19302" }, { urls: "stun:stun1.l.google.com:19302" }];
 const STREAM_HEARTBEAT_MS = 20_000; // must match the server's ping interval

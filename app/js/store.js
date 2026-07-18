@@ -658,9 +658,11 @@ export const session = {
 };
 
 export function friendlyBackendError(status, error, options = {}) {
-  const code = String(error || "").replace(/_/g, " ").trim();
   const authMessage = options.authMessage || "Sign in to continue.";
   const fallbackPrefix = options.fallbackPrefix || "Request failed";
+  const raw = String(error || "").trim();
+  const normalized = raw.toLowerCase();
+  const code = raw.replace(/_/g, " ").trim();
   if (status === 401) return authMessage;
   if (status === 403) {
     if (/upgrade required|seat limit reached|paywall|plan/i.test(code)) return "This business plan does not allow that action yet.";
@@ -669,6 +671,15 @@ export function friendlyBackendError(status, error, options = {}) {
   if (status === 404) return `${fallbackPrefix}: that record was not found.`;
   if (status === 409) return `${fallbackPrefix}: this changed somewhere else. Refresh and try again.`;
   if (status === 429) return `${fallbackPrefix}: too many requests. Wait a moment and try again.`;
+  if (status === 502 || status === 503 || status === 504 || /unavailable|econnrefused|fetch failed|network/i.test(raw)) {
+    return `${fallbackPrefix}: the local backend is unavailable.`;
+  }
+  const known = {
+    no_active_org: "No active workspace is selected.",
+    assets_unavailable: "Asset Cloud is not connected for this workspace.",
+    tenant_required: "This action needs a workspace scope.",
+  };
+  if (known[normalized]) return known[normalized];
   if (status >= 500 || status === 0) return `${fallbackPrefix}: the backend is unavailable right now.`;
   return `${fallbackPrefix}${status ? ` (${status})` : ""}${code ? `: ${code}` : "."}`;
 }
@@ -683,27 +694,6 @@ export const isLiveAdminHost = () => location.hostname === ADMIN_PUBLIC_HOST;
 export const isClientPublicHost = () => location.hostname === CLIENT_PUBLIC_HOST;
 export const isStaticPublicHost = () => PUBLIC_PAGES_HOSTS.has(location.hostname);
 export const isLocalDevHost = () => LOCAL_DEV_HOSTS.has(location.hostname);
-
-export function friendlyBackendError(status, error, options = {}) {
-  const authMessage = options.authMessage || "Sign in to continue.";
-  const fallbackPrefix = options.fallbackPrefix || "Request failed";
-  const raw = String(error || "").trim();
-  const normalized = raw.toLowerCase();
-  if (status === 401) return authMessage;
-  if (status === 403) return "You do not have permission to use that workspace action.";
-  if (status === 404) return `${fallbackPrefix}: the requested workspace service was not found.`;
-  if (status === 502 || status === 503 || status === 504 || /unavailable|econnrefused|fetch failed|network/i.test(raw)) {
-    return `${fallbackPrefix}: the local backend is unavailable.`;
-  }
-  const known = {
-    no_active_org: "No active workspace is selected.",
-    assets_unavailable: "Asset Cloud is not connected for this workspace.",
-    tenant_required: "This action needs a workspace scope.",
-  };
-  if (known[normalized]) return known[normalized];
-  if (raw) return `${fallbackPrefix}: ${raw.replaceAll("_", " ")}.`;
-  return `${fallbackPrefix} (${status || "unknown"}).`;
-}
 
 export function liveAdminUrl() {
   const url = new URL(`https://${ADMIN_PUBLIC_HOST}/app/index.html`);
