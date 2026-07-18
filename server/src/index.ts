@@ -1735,6 +1735,7 @@ app.post("/auth/2fa/verify", async (request, reply) => {
 
 app.post("/auth/signup", async (request, reply) => {
   if (!getAccessAuthConfiguration().databaseAuthEnabled) return databaseAuthDisabled(reply);
+  if (customerAuthForbiddenOnHost(request)) return reply.code(403).send({ ok: false, error: "Customer accounts cannot be created on admin.phantomforce.online." });
   const parsed = SignupSchema.safeParse(request.body ?? {});
   if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
   const result = await createSelfServeAccount(parsed.data);
@@ -1744,6 +1745,7 @@ app.post("/auth/signup", async (request, reply) => {
 
 app.post("/auth/forgot-username", async (request, reply) => {
   if (!getAccessAuthConfiguration().databaseAuthEnabled) return databaseAuthDisabled(reply);
+  if (customerAuthForbiddenOnHost(request)) return reply.code(403).send({ ok: false, error: "Customer account recovery belongs on app.phantomforce.online." });
   const parsed = ForgotUsernameSchema.safeParse(request.body ?? {});
   if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
   return await requestUsernameReminder(parsed.data.email);
@@ -1751,6 +1753,7 @@ app.post("/auth/forgot-username", async (request, reply) => {
 
 app.post("/auth/forgot-password", async (request, reply) => {
   if (!getAccessAuthConfiguration().databaseAuthEnabled) return databaseAuthDisabled(reply);
+  if (customerAuthForbiddenOnHost(request)) return reply.code(403).send({ ok: false, error: "Customer account recovery belongs on app.phantomforce.online." });
   const parsed = ForgotPasswordSchema.safeParse(request.body ?? {});
   if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
   return await requestPasswordReset(parsed.data.identifier);
@@ -1758,6 +1761,7 @@ app.post("/auth/forgot-password", async (request, reply) => {
 
 app.post("/auth/reset-password", async (request, reply) => {
   if (!getAccessAuthConfiguration().databaseAuthEnabled) return databaseAuthDisabled(reply);
+  if (customerAuthForbiddenOnHost(request)) return reply.code(403).send({ ok: false, error: "Customer password reset belongs on app.phantomforce.online." });
   const parsed = ResetPasswordSchema.safeParse(request.body ?? {});
   if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
   const result = await resetPasswordWithToken(parsed.data);

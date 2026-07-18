@@ -6,47 +6,47 @@ import {
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260718-35";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260718-35";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260718-35";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260718-35";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260718-35";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260718-35";
-import { mountManagedGrowthReport } from "./managedgrowth.js?v=phantom-live-20260718-35";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260718-35";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260718-35";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260718-35";
-import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260718-35";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260718-35";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260718-35";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260718-35";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260718-35";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260718-35";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260718-35";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260718-35";
-import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260718-35";
-import { mountAmbient } from "./ambient.js?v=phantom-live-20260718-35";
-import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260718-35";
+} from "./store.js?v=phantom-live-20260718-36";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260718-36";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260718-36";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260718-36";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260718-36";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260718-36";
+import { mountManagedGrowthReport } from "./managedgrowth.js?v=phantom-live-20260718-36";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260718-36";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260718-36";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260718-36";
+import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260718-36";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260718-36";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260718-36";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260718-36";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260718-36";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260718-36";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260718-36";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260718-36";
+import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260718-36";
+import { mountAmbient } from "./ambient.js?v=phantom-live-20260718-36";
+import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260718-36";
 import {
   fetchAuthConfig, databaseLogin, databaseLogout, databaseSignup, databaseForgotUsername, databaseForgotPassword,
   databaseResetPassword, databaseVerify2fa, databaseStart2faSetup, databaseConfirm2fa, databaseRegenerate2faBackupCodes, databaseDisable2fa,
   switchOrg, fetchAuthMe, fetchEntitlementsSummary,
-} from "./orgs.js?v=phantom-live-20260718-35";
-import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260718-35";
-import { assetsAvailable } from "./orgs.js?v=phantom-live-20260718-35";
-import { renderPhantomStore } from "./phantomstore.js?v=phantom-live-20260718-35";
-import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260718-35";
+} from "./orgs.js?v=phantom-live-20260718-36";
+import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260718-36";
+import { assetsAvailable } from "./orgs.js?v=phantom-live-20260718-36";
+import { renderPhantomStore } from "./phantomstore.js?v=phantom-live-20260718-36";
+import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260718-36";
 // PhantomPlay V2 platform shell (Home/Solo/Friends/Workspace/Dev Hub) - opt-in
 // while it hardens: set localStorage "pf.phantomplay.v2" = "1" (the V2 shell has
 // a "Classic view" button to switch back). Classic stays the default experience.
-import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260718-35";
+import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260718-36";
 const phantomPlayV2Opted = () => { try { return localStorage.getItem("pf.phantomplay.v2") === "1"; } catch { return false; } };
-import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260718-35";
+import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260718-36";
 import {
   customizeNavigation,
   loadOrganizationCustomization,
-} from "./customization.js?v=phantom-live-20260718-35";
-import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260718-35";
+} from "./customization.js?v=phantom-live-20260718-36";
+import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260718-36";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -199,7 +199,7 @@ function showGate() {
         form.classList.remove("is-loading");
       }
     };
-    maybeUpgradeGateToDatabaseLogin(card);
+    maybeUpgradeGateToDatabaseLogin(card, { internalAdmin: true });
     return;
   }
 
@@ -274,7 +274,7 @@ function renderCustomerAuthBlocked(card, message = "Customer account login is no
 }
 
 function maybeUpgradeGateToDatabaseLogin(card, options = {}) {
-  const { customerApp = false, required = false } = options;
+  const { customerApp = false, internalAdmin = false, required = false } = options;
   fetchAuthConfig().then((auth) => {
     if (gate.hidden) return;
     if (!auth?.customerAuthEnabled && !auth?.databaseAuthEnabled) {
@@ -287,9 +287,13 @@ function maybeUpgradeGateToDatabaseLogin(card, options = {}) {
     const state = { mode: resetTokenFromUrl ? "reset-pass" : "signin", challenge: null, message: resetTokenFromUrl ? "Password reset token detected. Enter your new password." : "", resetToken: resetTokenFromUrl };
     const helper = customerApp
       ? "Owners/admins open Business Manager. Employees open Team Workspace. Permissions come from the business workspace."
+      : internalAdmin
+      ? "Internal PhantomForce operator access only."
       : "Your account, businesses, roles, recovery, and 2FA are managed on the PhantomForce server.";
     const note = customerApp
       ? "Use the email or username tied to your business workspace."
+      : internalAdmin
+      ? "Admin is not a public signup or customer account surface. Customer accounts, signup, and recovery live on app.phantomforce.online."
       : "Create a business, accept an invite, recover access, or sign in with 2FA.";
     const setError = (msg) => {
       const error = card.querySelector("[data-db-error]");
@@ -310,7 +314,8 @@ function maybeUpgradeGateToDatabaseLogin(card, options = {}) {
     const render = () => {
       const tab = (id, label) => `<button type="button" class="auth-tab ${state.mode === id ? "is-active" : ""}" data-auth-mode="${id}">${label}</button>`;
       const msg = state.message ? `<p class="gate-note">${esc(state.message)}</p>` : "";
-      const body = state.mode === "signup" ? `
+      if (internalAdmin && !["signin", "2fa"].includes(state.mode)) state.mode = "signin";
+      const body = state.mode === "signup" && !internalAdmin ? `
         <form class="owner-login" data-auth-form="signup">
           <label><span>Email</span><input type="email" name="email" autocomplete="email" placeholder="you@business.com" required /></label>
           <label><span>Username</span><input name="username" autocomplete="username" placeholder="yourname" minlength="3" maxlength="32" /></label>
@@ -318,15 +323,15 @@ function maybeUpgradeGateToDatabaseLogin(card, options = {}) {
           <label><span>Business / workspace</span><input name="organizationName" placeholder="Business name" /></label>
           <label><span>Password</span><input type="password" name="password" autocomplete="new-password" minlength="8" required /></label>
           <button class="gate-opt gate-submit" type="submit"><span class="gate-opt-icon">＋</span><b>Create account</b><i>Creates your user, starter workspace, and owner role.</i></button>
-        </form>` : state.mode === "forgot-user" ? `
+        </form>` : state.mode === "forgot-user" && !internalAdmin ? `
         <form class="owner-login" data-auth-form="forgot-user">
           <label><span>Account email</span><input type="email" name="email" autocomplete="email" required /></label>
           <button class="gate-opt gate-submit" type="submit"><span class="gate-opt-icon">?</span><b>Recover username</b><i>We’ll send the username tied to this email.</i></button>
-        </form>` : state.mode === "forgot-pass" ? `
+        </form>` : state.mode === "forgot-pass" && !internalAdmin ? `
         <form class="owner-login" data-auth-form="forgot-pass">
           <label><span>Email or username</span><input name="identifier" autocomplete="username" required /></label>
           <button class="gate-opt gate-submit" type="submit"><span class="gate-opt-icon">↺</span><b>Send password reset</b><i>Creates a short-lived reset token.</i></button>
-        </form>` : state.mode === "reset-pass" ? `
+        </form>` : state.mode === "reset-pass" && !internalAdmin ? `
         <form class="owner-login" data-auth-form="reset-pass">
           <label><span>Reset token</span><input name="token" autocomplete="one-time-code" value="${esc(state.resetToken || "")}" required /></label>
           <label><span>New password</span><input type="password" name="password" autocomplete="new-password" minlength="8" required /></label>
@@ -342,9 +347,9 @@ function maybeUpgradeGateToDatabaseLogin(card, options = {}) {
           <button class="gate-opt gate-submit" type="submit"><span class="gate-opt-icon">⌘</span><b>${customerApp ? "Open Workspace" : "Open Business Manager"}</b><i>${helper}</i></button>
         </form>`;
       card.innerHTML = `
-        <p class="gate-kicker">PHANTOMFORCE · ACCOUNT ACCESS</p>
-        <h1>${state.mode === "signup" ? "Create your Phantom account." : state.mode === "2fa" ? "Enter your 2FA code." : customerApp ? "Sign in to your workspace." : "Sign in to Phantom."}</h1>
-        <div class="auth-tabs">${tab("signin", "Sign in")}${tab("signup", "Create user")}${tab("forgot-user", "Forgot username")}${tab("forgot-pass", "Forgot password")}${tab("reset-pass", "Reset")}</div>
+        <p class="gate-kicker">PHANTOMFORCE · ${internalAdmin ? "INTERNAL ACCESS" : "ACCOUNT ACCESS"}</p>
+        <h1>${state.mode === "signup" ? "Create your Phantom account." : state.mode === "2fa" ? "Enter your 2FA code." : customerApp ? "Sign in to your workspace." : internalAdmin ? "Internal admin sign-in." : "Sign in to Phantom."}</h1>
+        ${internalAdmin ? "" : `<div class="auth-tabs">${tab("signin", "Sign in")}${tab("signup", "Create user")}${tab("forgot-user", "Forgot username")}${tab("forgot-pass", "Forgot password")}${tab("reset-pass", "Reset")}</div>`}
         ${body}
         <p class="gate-error" data-db-error hidden></p>
         ${msg}
@@ -1321,7 +1326,7 @@ const MODES = {
   admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260718-35";
+const POSE_VERSION = "phantom-live-20260718-36";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
