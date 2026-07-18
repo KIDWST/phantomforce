@@ -1354,6 +1354,34 @@ Recommended Cycle 18.
   average and 2,120 ms maximum with zero fallback and zero business leakage.
 - PASS: `git diff --check`.
 
+## Deployment Verification And Resurrection Fix
+
+- The first public check caught `app.phantomforce.online` and port 5177 serving
+  build `phantom-live-20260718-3` from the stale
+  `phantomforce-main-trunk-20260706` worktree even though the dedicated checkout
+  and sync manifest were current.
+- Root cause: the Windows remote-stack starter, PM2 ecosystem file, four hidden
+  VBS scheduled-task helpers, and one long-running `Watch-AdminMain.ps1` process
+  still referenced the July 6 worktree. Those dormant launchers repeatedly
+  reclaimed ports 5177 and 5190 after successful deploys.
+- Corrected every persistent launcher to
+  `C:\Users\jorda\Documents\Codex\deployments\phantomforce-live`, stopped all
+  stale process trees, restarted the canonical static/API services, and ran the
+  scheduled sync again.
+- Added a strict-doctor resurrection guard that fails when hidden helpers,
+  watchdog configs, or a running admin watcher point outside the canonical
+  deployment.
+- PASS: scheduled task `PhantomForce Admin Main Sync` completed automatic runs
+  with result `0` after the repair; zero stale processes and zero stale helper
+  references remained.
+- PASS: local 5177/5190 plus public `app.phantomforce.online` and
+  `admin.phantomforce.online` health routes all resolved to the dedicated
+  deployment; the public app served `phantom-live-20260718-34`.
+- PASS: deployed live-model gate completed 82 requests at 535 ms average and
+  2,019 ms maximum with zero fallback and zero business leakage.
+- PASS: strict doctor reported source/origin/deployment/manifest/Hermes aligned,
+  both resurrection checks green, build 34 live, and clean working trees.
+
 ## Next Task
 
 Extend the same authenticated two-organization proof to CRM leads, proposals,

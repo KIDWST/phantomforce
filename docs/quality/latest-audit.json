@@ -9,6 +9,13 @@
     "rootCause": "Database sessions retained a legacy phantomforce workspace id, browser storage preferred it over active orgId, and in-memory chat was not cleared on organization switch.",
     "correction": "Database and local-customer browser context now derives from active orgId; membership names resolve correctly; successful organization switches clear the visible transcript."
   },
+  "deploymentFinding": {
+    "id": "Q-0011",
+    "severity": "P1",
+    "status": "fixed_verified",
+    "rootCause": "Hidden VBS launchers, watchdog configuration, and a running watcher still referenced the July 6 worktree and repeatedly reclaimed ports 5177/5190.",
+    "correction": "All persistent launchers now target the dedicated deployment; stale processes were removed; the strict doctor audits resurrection sources."
+  },
   "verification": {
     "databaseApiChecks": 56,
     "browserChecks": 8,

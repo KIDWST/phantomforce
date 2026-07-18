@@ -70,6 +70,11 @@
           "description": "The live-source doctor checks the running admin root."
         },
         {
+          "file": "ops/admin-live/Test-LiveAdminSource.ps1",
+          "pattern": "Resurrection guard[\\s\\S]*Scheduled helpers and watchdog configs point at the canonical deployment[\\s\\S]*No stale admin watcher process can reclaim the live ports",
+          "description": "The strict doctor rejects dormant helpers or running watchers that can restore a stale worktree after an apparently successful deploy."
+        },
+        {
           "file": "ops/admin-live/Sync-AdminMain.ps1",
           "pattern": "sync_status = \"ok\"",
           "description": "Every successful sync writes the status consumed by the live-source doctor."

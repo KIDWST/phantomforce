@@ -109,6 +109,26 @@ Last updated: 2026-07-18
   server\scripts\test-auth-database-live.ps1` and `npm run test:memory`.
 - Status: Fixed and verified in Cycle 18.
 
+### Q-0011 — P1 — Stale watchdog could overwrite a successful live deployment
+
+- Route/component: Windows admin sync, remote-stack watchdog, ports 5177/5190.
+- Journey affected: any newly pushed admin or customer-app correction.
+- Reproduction before fix: sync the dedicated deployment, observe build 34,
+  then wait for the hidden sync/watchdog; public health returned the July 6
+  worktree and build 3 again.
+- Expected: every scheduled helper and watchdog serves only the clean
+  `deployments\phantomforce-live` checkout.
+- Actual before fix: hidden VBS launchers, PM2 config, remote-stack PowerShell,
+  and a live watcher still referenced `phantomforce-main-trunk-20260706`.
+- Correction: repoint all launchers, terminate stale process trees, restart the
+  canonical services, and make the strict source doctor audit dormant helpers
+  and running watchers.
+- Evidence: multiple post-fix scheduled task runs returned result 0; public and
+  local health remained on the deployment root and build 34; resurrection guard
+  passed with zero stale helpers/processes.
+- Regression requirement: `ops/admin-live/Test-LiveAdminSource.ps1 -Strict`.
+- Status: Fixed and verified in Cycle 18.
+
 ## High-Priority Unfixed Issues
 
 ### Q-0003 — P1 — Mobile layout and scaling are not fully proven

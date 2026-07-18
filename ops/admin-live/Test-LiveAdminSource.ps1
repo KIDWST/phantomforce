@@ -106,6 +106,48 @@ try {
   $states.Add((Result "WARN" "Hermes/backend on $HermesPort did not answer /health."))
 }
 
+Section "Resurrection guard"
+$canonicalNeedles = @(
+  $RepoRoot,
+  ($RepoRoot -replace '\\', '/')
+)
+$helperPaths = @(
+  (Join-Path $env:LOCALAPPDATA "PhantomForce\admin-live\run-admin-live-start.vbs"),
+  (Join-Path $env:LOCALAPPDATA "PhantomForce\admin-live\run-admin-live-sync.vbs"),
+  (Join-Path $env:LOCALAPPDATA "PhantomForce\admin-live\run-hermes-start.vbs"),
+  (Join-Path $env:LOCALAPPDATA "PhantomForce\admin-live\start-admin-live-watch.vbs"),
+  (Join-Path $env:USERPROFILE "Documents\PhantomForce-Infrastructure\windows-host-pangolin-ai\Start-PhantomForce-RemoteStack.ps1"),
+  (Join-Path $env:USERPROFILE "Documents\PhantomForce-Infrastructure\windows-host-pangolin-ai\ecosystem.config.js")
+)
+$badHelpers = @()
+foreach ($helperPath in $helperPaths) {
+  if (-not (Test-Path -LiteralPath $helperPath)) { continue }
+  $helperText = Get-Content -LiteralPath $helperPath -Raw
+  $pointsAtCanonical = $false
+  foreach ($needle in $canonicalNeedles) {
+    if ($helperText.Contains($needle)) { $pointsAtCanonical = $true; break }
+  }
+  if (-not $pointsAtCanonical) { $badHelpers += $helperPath }
+}
+$states.Add((Result ($(if ($badHelpers.Count -eq 0) { "OK" } else { "FAIL" })) ($(if ($badHelpers.Count -eq 0) { "Scheduled helpers and watchdog configs point at the canonical deployment." } else { "Non-canonical helpers: $($badHelpers -join ', ')" }))))
+
+$badProcesses = @()
+try {
+  $serviceProcesses = Get-CimInstance Win32_Process | Where-Object {
+    $_.ProcessId -ne $PID -and
+    $_.CommandLine -and
+    ($_.CommandLine -match 'Watch-AdminMain')
+  }
+  foreach ($serviceProcess in $serviceProcesses) {
+    if (-not $serviceProcess.CommandLine.Contains($RepoRoot)) {
+      $badProcesses += "$($serviceProcess.Name):$($serviceProcess.ProcessId)"
+    }
+  }
+} catch {
+  $states.Add((Result "WARN" "Could not inspect watcher process command lines."))
+}
+$states.Add((Result ($(if ($badProcesses.Count -eq 0) { "OK" } else { "FAIL" })) ($(if ($badProcesses.Count -eq 0) { "No stale admin watcher process can reclaim the live ports." } else { "Non-canonical live processes: $($badProcesses -join ', ')" }))))
+
 Section "Change memory guard"
 $guardPath = Join-Path $RepoRoot "scripts\guard-change-memory.mjs"
 if (Test-Path -LiteralPath $guardPath) {
