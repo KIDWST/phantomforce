@@ -12,9 +12,9 @@ import {
   recentChatTurns,
   ctx, session, loadPhantomLoop, savePhantomLoop, loopProviderName, modelDisplayLabel,
   getPhantomLaneTarget, loadPhantomLaneConfig, workspaceStorageGetItem, wsName,
-} from "./store.js?v=phantom-live-20260718-21";
-import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260718-21";
-import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260718-21";
+} from "./store.js?v=phantom-live-20260718-22";
+import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260718-22";
+import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260718-22";
 const classifyPhantomIntent = (text) => deriveActionContract(classifyRaw(text));
 
 /* Cross-surface handoff: chat tells the Websites page which project to focus
@@ -92,9 +92,9 @@ const PRIVATE_BACKEND_MODEL_BY_ALIAS = Object.freeze({
   "private-high": "gpt-5.6-sol",
 });
 const INSTANT_CHAT_MODEL = "gpt-5.5-instant";
-const INSTANT_CHAT_MAX_PROVIDER_MS = 3200;
+const INSTANT_CHAT_MAX_PROVIDER_MS = 4500;
 const INSTANT_CHAT_ALLOWED_INTENTS = new Set(["identity", "capability", "question", "chat"]);
-const INSTANT_CHAT_BLOCKLIST = /\b(?:build|create|draft|write|make|fix|debug|code|implement|analy[sz]e|research|compare|summari[sz]e|plan|strategy|proposal|website|site|content|video|image|media|schedule|client|lead|transaction|accounting|bank|security|deploy|send|post|upload|delete|weather|forecast|current|latest|today|tomorrow|yesterday|price|stock|law|legal|medical|diagnosis|contract|tenant|isolation|phantomforce)\b/i;
+const INSTANT_CHAT_BLOCKLIST = /\b(?:build|create|draft|write|make|fix|debug|code|implement|research|plan|strategy|proposal|website|site|content|video|image|media|schedule|client|lead|transaction|accounting|bank|security|deploy|send|post|upload|delete|weather|forecast|current|latest|today|tomorrow|yesterday|price|stock|law|legal|medical|diagnosis|contract|tenant|isolation|phantomforce)\b/i;
 const INSTANT_CHAT_SIGNAL = /\b(?:favorite|do you like|would you rather|tell me a joke|joke|how are you|what'?s your|what is your|who are you|are you|can you|what is \d|what'?s \d)\b/i;
 const DEEP_THINKING_SIGNAL = /\b(strategy|strategic|think through|reason through|break down|roadmap|plan|growth|business model|moat|positioning|prioriti[sz]e|compare|critique|diagnose|why is|why does|what should|how should)\b/i;
 
@@ -171,8 +171,9 @@ function chatRouteProfileForRequest(raw, intent, settings) {
     const providerId = settings.providerMode === "smart" && selected.includes("private")
       ? "private"
       : normalProviderId;
+    /* One fast attempt, then the server's deterministic local responder.
+       Walking a second model made basic chat take the full combined timeout. */
     const instantProviders = [providerId];
-    if (settings.providerMode === "smart" && providerId !== "local" && selected.includes("local")) instantProviders.push("local");
     return {
       tier: "instant",
       providerId,
@@ -203,13 +204,45 @@ function canAskHermes(intent, settings) {
 
 /* Business context for the live brain, in the exact shape the server's
    parseContextModuleData accepts (max 8 modules, 5 items each). */
-function buildContextModules(settings, recentConversation = recentChatTurns(4)) {
+const BUSINESS_CONTEXT_TERMS = /\b(?:business|company|workspace|client|customer|lead|crm|proposal|quote|invoice|payment|revenue|expense|profit|cash|bank|card|transaction|accounting|ledger|budget|tax|website|domain|content|campaign|media|automation|approval|planner|schedule|task|project|goal|competitor|organization|organisation|phantomforce|chicagoshots)\b/i;
+const MONEY_CONTEXT_TERMS = /\b(?:money|cash|bank|card|transaction|accounting|ledger|invoice|payment|revenue|expense|profit|budget|tax|proposal|quote)\b/i;
+const PLAN_CONTEXT_TERMS = /\b(?:plan|planner|schedule|calendar|task|project|goal|priority|deadline|due|today|tomorrow|week)\b/i;
+function contextTerms(value) {
+  return new Set(String(value || "").toLowerCase().match(/[a-z0-9]{4,}/g) || []);
+}
+
+function memoryMatchesRequest(memory, raw) {
+  if (memory.pinnedByUser) return true;
+  const requestTerms = contextTerms(raw);
+  if (!requestTerms.size) return false;
+  const memoryTerms = contextTerms(`${memory.title || ""} ${memory.summary || ""} ${memory.text || ""}`);
+  return [...requestTerms].some((term) => memoryTerms.has(term));
+}
+
+function needsBusinessContext(raw, intent) {
+  if (intent?.requiresAdminApproval || intent?.shouldCreateTask || intent?.shouldCreateAutomation) return true;
+  return BUSINESS_CONTEXT_TERMS.test(String(raw || ""));
+}
+
+function buildContextModules(settings, raw, intent, recentConversation = recentChatTurns(8)) {
+  const includeBusiness = needsBusinessContext(raw, intent);
+  if (!includeBusiness) {
+    return recentConversation.length ? [{
+      module: "recent_conversation",
+      summary: `${recentConversation.length} temporary chat turns. Use only for conversational continuity; do not introduce business status.`,
+      items: recentConversation.slice(-8).map((turn) => ({
+        title: String(turn.user || "").slice(0, 90),
+        status: "temporary context",
+        detail: String(turn.assistant || "").slice(0, 200),
+      })),
+    }] : [];
+  }
   const ws = currentWs();
   const memories = visible(store.state.memory || []);
   const topMemories = [
     ...memories.filter((m) => m.pinnedByUser || m.pinnedByAi),
     ...memories.filter((m) => !m.pinnedByUser && !m.pinnedByAi),
-  ].slice(0, 5);
+  ].filter((memory) => memoryMatchesRequest(memory, raw)).slice(0, 5);
   const m = moneyView();
   const plan = todaysPlan().slice(0, 5);
   const modules = [
@@ -234,21 +267,23 @@ function buildContextModules(settings, recentConversation = recentChatTurns(4)) 
     modules.push({
       module: "recent_conversation",
       summary: `${recentConversation.length} recent temporary chat turn${recentConversation.length === 1 ? "" : "s"}. Use only to resolve references in the current request; never turn them into ledger, pipeline, or status answers unless asked.`,
-      items: recentConversation.slice(-4).map((turn) => ({
+      items: recentConversation.slice(-8).map((turn) => ({
         title: String(turn.user || "").slice(0, 90),
         status: "temporary context",
         detail: String(turn.assistant || "").slice(0, 200),
       })),
     });
   }
-  modules.push({
-    module: "money",
-    summary: m.transactions.length
-      ? `Net cash ${m.netCash}, ${m.transactions.length} transactions, pipeline ${m.pipeline}, ${m.open.length} open proposals.`
-      : `Ledger empty. Pipeline ${m.pipeline}, ${m.open.length} open proposals.`,
-    items: [],
-  });
-  if (plan.length) {
+  if (MONEY_CONTEXT_TERMS.test(raw)) {
+    modules.push({
+      module: "money",
+      summary: m.transactions.length
+        ? `Net cash ${m.netCash}, ${m.transactions.length} transactions, pipeline ${m.pipeline}, ${m.open.length} open proposals.`
+        : `No accounting transactions recorded. Quote potential ${m.pipeline}; ${m.open.length} open proposals.`,
+      items: [],
+    });
+  }
+  if (plan.length && PLAN_CONTEXT_TERMS.test(raw)) {
     modules.push({
       module: "today_plan",
       summary: `${plan.length} items on today's plan.`,
@@ -271,7 +306,8 @@ async function askHermesBrain(raw, intent, settings) {
   if (token) headers.Authorization = `Bearer ${token}`;
   const loop = loadPhantomLoop();
   const requestedProviderId = routeProfile.providerId;
-  const recentConversation = recentChatTurns(4);
+  const recentConversation = recentChatTurns(8);
+  const includeBusinessContext = needsBusinessContext(raw, intent);
   try {
     const response = await fetch("/phantom-ai/chat", {
       method: "POST",
@@ -294,14 +330,13 @@ async function askHermesBrain(raw, intent, settings) {
         workspace_id: currentWs(),
         business_name: wsName(currentWs()),
         actor_user_id: ctx.session?.sessionId || ctx.session?.name || "owner-admin",
-        business_summary: `${wsName(currentWs())} Business Manager workspace. AI-assisted operations, Creator Hub, bookings, offer desk, accounting, follow-up, site portfolio, approval gates, and scoped local memory.`,
-        /* The server's parseContextModuleData expects an ARRAY of
-           {module, summary, items:[{title,status,detail}]} — the old object
-           shape was silently discarded, so the model never saw any of this.
-           Now it carries the active business, the owner's actual saved
-           memories (workspace-scoped, pinned first), money and today's plan
-           — real context, not just counts. */
-        module_data: buildContextModules(settings, recentConversation),
+        business_summary: includeBusinessContext
+          ? `${wsName(currentWs())} Business Manager workspace. AI-assisted operations with organization-scoped data and approval gates.`
+          : "General conversation. Answer the current question naturally; business workspace status is intentionally out of scope.",
+        /* Send structured, request-relevant modules. Casual chat carries only
+           temporary conversation; business, memory, money, and plan data are
+           included only when the current request calls for them. */
+        module_data: buildContextModules(settings, raw, intent, recentConversation),
         conversation_history: recentConversation,
         phantom_loop: loop.enabled ? {
           target_provider: loop.targetProvider,

@@ -522,7 +522,7 @@
       "requiredPatterns": [
         {
           "file": "app/js/store.js",
-          "pattern": "export function recentChatTurns\\(limit = 4\\)",
+          "pattern": "export function recentChatTurns\\(limit = 8\\)",
           "description": "Temporary recent turns are exposed as a bounded, workspace-scoped context window."
         },
         {
@@ -532,8 +532,8 @@
         },
         {
           "file": "server/src/index.ts",
-          "pattern": "if \\(adminRouteTier !== \"instant\"\\) try",
-          "description": "Instant casual chat skips organization pulse and opportunity lookups."
+          "pattern": "if \\(adminRouteTier !== \"instant\" && businessContextRelevant\\) try",
+          "description": "Instant and non-business chat skip organization pulse and opportunity lookups."
         },
         {
           "file": "server/src/index.ts",

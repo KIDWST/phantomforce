@@ -1059,8 +1059,8 @@ export function chatHistoryStats(list = visible(store.state.chatHistory || [])) 
 /* Recent chat is temporary working context, never durable memory. Keep the
    window small, workspace-scoped, redacted, and oldest-first so a model can
    resolve short follow-ups without receiving the full 10-day history. */
-export function recentChatTurns(limit = 4) {
-  const boundedLimit = Math.min(Math.max(Number(limit) || 4, 1), 6);
+export function recentChatTurns(limit = 8) {
+  const boundedLimit = Math.min(Math.max(Number(limit) || 8, 1), 10);
   return pruneChatHistory(visible(store.state.chatHistory || []))
     .slice(0, boundedLimit)
     .reverse()

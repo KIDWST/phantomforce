@@ -194,6 +194,7 @@ import { buildHermesLiveCallReceiptContract } from "./phantom-ai/hermes-live-rec
 import { buildHermesInteractionMemoryPreview } from "./phantom-ai/hermes-interaction-memory.js";
 import { recallHermesInteractionMemory } from "./phantom-ai/hermes-interaction-recall.js";
 import { buildInstantChatFallbackReply } from "./phantom-ai/instant-chat-fallback.js";
+import { filterConversationModules, needsBusinessContext } from "./phantom-ai/conversation-policy.js";
 import { buildOpsDashboardContext } from "./phantom-ai/ops-context.js";
 import { buildAgentWorkforceStatus } from "./phantom-ai/agent-workforce.js";
 import {
@@ -3476,7 +3477,7 @@ type RecentChatTurn = {
 function parseRecentConversation(value: unknown): RecentChatTurn[] {
   if (!Array.isArray(value)) return [];
   return value
-    .slice(-6)
+    .slice(-10)
     .flatMap((entry): RecentChatTurn[] => {
       if (!entry || typeof entry !== "object") return [];
       const source = entry as Record<string, unknown>;
@@ -8446,6 +8447,11 @@ app.post("/phantom-ai/chat", async (request, reply) => {
   const allowProviderFallback = parseAllowProviderFallback(body.allow_provider_fallback, adminRouteTier);
   const allowedAdminProviders = parseAllowedAdminProviders(body.allowed_providers);
   const recentConversation = parseRecentConversation(body.conversation_history);
+  const businessContextRelevant = needsBusinessContext(normalized.user_request, normalized.task_type);
+  normalized.module_data = filterConversationModules(normalized.module_data, normalized.user_request, normalized.task_type);
+  if (!businessContextRelevant) {
+    normalized.business_summary = "General conversation. Business workspace status is intentionally excluded unless the current request asks for it.";
+  }
   if (adminRouteTier !== "instant" && recentConversation.length && !normalized.module_data.some((module) => module.module === "recent_conversation")) {
     normalized.module_data.push({
       module: "recent_conversation",
@@ -8461,7 +8467,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
      assets from THIS org's library ride into context as one compact module
      (never whole folders); assets flagged aiReferenceAllowed:false or
      deprecated are filtered inside the search. Failures never break chat. */
-  if (adminRouteTier !== "instant") {
+  if (adminRouteTier !== "instant" && businessContextRelevant) {
     const dbSession = asDatabaseSession(session);
     if (dbSession?.orgId && process.env.DATABASE_URL) {
       try {
@@ -8484,7 +8490,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
   /* Workspace pulse — live org state (approvals waiting, failed runs,
      competitor coverage, asset inventory) so Phantom answers from what the
      business is ACTUALLY doing right now, not memory alone. Additive only. */
-  if (adminRouteTier !== "instant") try {
+  if (adminRouteTier !== "instant" && businessContextRelevant) try {
     const dbSession = asDatabaseSession(session);
     const ciAccess = await competitorIntelligenceAccess(session);
     const pulse = await getOrganizationPulse(session, {
@@ -8645,7 +8651,10 @@ app.post("/phantom-ai/chat", async (request, reply) => {
     logEvent: true,
   }, brainOptions);
   const brainModule = buildBrainContextModule(brainContext);
-  const brainAugmentedSummary = buildBrainAugmentedSummary(normalized, brainContext);
+  const businessBrainModules = businessContextRelevant ? [brainModule] : [];
+  const brainAugmentedSummary = businessContextRelevant
+    ? buildBrainAugmentedSummary(normalized, brainContext)
+    : normalized.business_summary;
 
   if (session.canManageAccess) {
     if (/^(hey|hi|hello|yo|sup|gm|gn|good morning|good afternoon|good evening|what'?s up|wassup|you there|u there)[\s.!?]*$/i.test(normalized.user_request.trim())) {
@@ -8700,8 +8709,8 @@ app.post("/phantom-ai/chat", async (request, reply) => {
       provider_route: adminProviderRoute,
       user_request: normalized.user_request,
       business_summary: brainAugmentedSummary,
-      module_data: [...normalized.module_data, brainModule],
-      relevant_rules: brainContext.activeRules,
+      module_data: [...normalized.module_data, ...businessBrainModules],
+      relevant_rules: businessContextRelevant ? brainContext.activeRules : [],
       approval_restrictions: brainContext.needsApproval
         ? ["Phantom Brain requires approval before external, destructive, payment, upload, post, send, or spend actions."]
         : [],
@@ -8907,8 +8916,8 @@ app.post("/phantom-ai/chat", async (request, reply) => {
       provider_route: "openrouter_glm",
       user_request: normalized.user_request,
       business_summary: brainAugmentedSummary,
-      module_data: [...normalized.module_data, brainModule],
-      relevant_rules: brainContext.activeRules,
+      module_data: [...normalized.module_data, ...businessBrainModules],
+      relevant_rules: businessContextRelevant ? brainContext.activeRules : [],
       approval_restrictions: brainContext.needsApproval
         ? ["Phantom Brain requires approval before external, destructive, payment, upload, post, send, or spend actions."]
         : [],
@@ -9070,7 +9079,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
   const result = await runModelRouterFoundation({
     ...normalized,
     business_summary: brainAugmentedSummary,
-    module_data: [...normalized.module_data, brainModule],
+    module_data: [...normalized.module_data, ...businessBrainModules],
   });
   const interactionMemory = await recordHermesInteractionMemoryFromRun(result);
   const protectedResponse = buildPhantomAiWorkspaceReply(normalized.user_request, normalized.business_name);

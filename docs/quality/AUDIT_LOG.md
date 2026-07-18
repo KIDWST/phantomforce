@@ -481,3 +481,50 @@ Run the DB-auth organization isolation browser pass. If this environment cannot
 stand up safe database-auth fixtures, immediately switch to formalizing the
 responsive viewport harness from the headless Edge smoke and sweep the required
 320, 375, 768, 1024, 1440, and 1920px widths.
+# 2026-07-18 - Cycle 4: Chat Brain Relevance, Continuity, and Speed
+
+## Problems Verified
+
+- Casual browser requests always included the accounting module, including the
+  literal empty-ledger state, even when the user asked an unrelated question.
+- Standard non-business questions could receive workspace pulse and Brain memory
+  after the initial module filter.
+- Temporary conversation context stopped at four turns in the browser and six
+  turns on the API.
+- Instant routing could wait through two sequential provider timeouts.
+- The local fallback only maintained the taco topic for one follow-up; a third
+  conversational turn lost the subject.
+
+## Corrections
+
+- Added browser and API relevance gates. Casual chat now sends temporary recent
+  conversation only; money, plan, saved memory, assets, and pulse require current
+  request relevance.
+- Expanded bounded temporary context to eight browser turns and ten API turns.
+- Changed instant routing to one 4.5-second private fast-model attempt followed
+  by the local fallback, eliminating the second provider wait.
+- Added topic-aware follow-ups, common direct answers, arithmetic, shortening,
+  simplification, examples, and humor transformations to degraded chat.
+- Restored explicit `assign Codex/Claude a task` intent handling found by the
+  broader regression pass.
+- Cache-busted the application as `phantom-live-20260718-22`.
+
+## Verification
+
+- PASS: `npm run test:dashboard-chat` (22 browser prompts, 11 adversarial turns).
+- PASS: `npm run test:intent`.
+- PASS: `npm run test:memory`.
+- PASS: `npm run test:auth-boundaries`.
+- PASS: `npm run test:content-planner`.
+- PASS: `npm run test:medialab-editor` and `npm run test:videocut-editor`.
+- PASS: `npm run test:phantomplay` (29 built-ins, tenant isolation true).
+- PASS: `npm run test:competitor-intelligence` (tenant isolation true).
+- PASS: site builder, organization settings, client setup, customization,
+  customer plan switching, command surface, and topbar responsive checks.
+- PASS: `npm run test:change-memory` (90 protected checks).
+- PASS: `npm run typecheck`, `npm run build`, and `git diff --check`.
+
+## Next Task
+
+Run authenticated two-organization browser persistence proof, then continue the
+responsive viewport harness if database fixtures are unavailable.

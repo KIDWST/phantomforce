@@ -96,19 +96,31 @@ assert.equal(capturedBodies.length, casualPrompts.length, "all 22 casual prompts
 for (const body of capturedBodies) {
   assert.equal(body.route_tier, "instant");
   assert.equal(body.requested_model, "gpt-5.5-instant");
-  assert.deepEqual(body.allowed_providers, ["codex_cli", "local_ollama"]);
-  assert.equal(body.allow_provider_fallback, true);
-  assert.ok(body.max_provider_ms <= 3200, "instant provider time must stay tightly bounded");
+  assert.deepEqual(body.allowed_providers, ["codex_cli"]);
+  assert.equal(body.allow_provider_fallback, false);
+  assert.ok(body.max_provider_ms <= 4500, "instant provider time must stay tightly bounded");
   assert.ok(Array.isArray(body.conversation_history));
-  assert.ok(body.conversation_history.length <= 4, "only a small recent-turn window may leave the browser");
+  assert.ok(body.conversation_history.length <= 8, "only a bounded recent-turn window may leave the browser");
+  assert.doesNotMatch(body.business_summary, /accounting|bookings|offer desk|approval gates/i);
+  assert.deepEqual(
+    body.module_data.map((entry) => entry.module),
+    body.conversation_history.length ? ["recent_conversation"] : [],
+    "casual chat must not send business, money, plan, or memory modules",
+  );
 }
 
 const followUpBody = capturedBodies[1];
 assert.equal(followUpBody.message, "why tacos?");
 assert.equal(followUpBody.conversation_history.at(-1)?.user, "what's your favorite food?");
 assert.match(followUpBody.conversation_history.at(-1)?.assistant || "", /favorite food/i);
-assert.ok(recentChatTurns(4).length <= 4);
+assert.ok(recentChatTurns(8).length <= 8);
 assert.equal(store.state.memory.length, 0, "casual questions must not become durable memory");
+
+await handleSmartCommand("what is in my accounting ledger?");
+const accountingBody = capturedBodies.at(-1);
+assert.equal(accountingBody.route_tier, "standard");
+assert.match(accountingBody.business_summary, /Business Manager workspace/i);
+assert.deepEqual(accountingBody.module_data.map((entry) => entry.module), ["active_business", "recent_conversation", "money"]);
 
 store.state.chatHistory = [];
 rememberConversation({
@@ -125,7 +137,8 @@ globalThis.fetch = originalFetch;
 assert.doesNotMatch(commandSrc, /Right now:.*ledger empty/i, "the rejected generic ledger fallback must stay deleted");
 assert.doesNotMatch(commandSrc, /The connected brain didn't return a clean expansion in time/i);
 assert.match(commandSrc, /conversation_history:\s*recentConversation/);
-assert.match(serverSrc, /adminRouteTier !== "instant"\) try/, "instant chat must skip organization pulse work");
+assert.match(serverSrc, /adminRouteTier !== "instant" && businessContextRelevant\) try/, "general questions must skip workspace pulse work");
+assert.match(serverSrc, /module_data: \[\.\.\.normalized\.module_data, \.\.\.businessBrainModules\]/, "general questions must not receive the business brain module");
 assert.match(serverSrc, /local_response:\s*Boolean\(localFallback\)/);
 assert.match(indexSrc, /data-dashboard-brief-metrics/);
 assert.match(indexSrc, /data-nav-bottom/);

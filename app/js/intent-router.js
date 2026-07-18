@@ -6,7 +6,7 @@
 const clean = (value = "") => String(value || "").replace(/\s+/g, " ").trim();
 const lower = (value = "") => clean(value).toLowerCase();
 
-const EXPLICIT_TASK = /\b(create|add|make|assign|track|put|save|log)\s+(a\s+)?(task|todo|to-do|work item)\b|\b(make|add|put|save|track)\s+(this|that|it).{0,30}\b(task list|todo|to-do|tasks?)\b|\bmake\s+(this|that|it)\s+a\s+(todo|to-do|task)\b|\bturn\s+(this|that|it)\s+into\s+a\s+(task|todo|to-do)\b|\bassign\s+phantom\s+a\s+task\b|\btrack this as\b/i;
+const EXPLICIT_TASK = /\b(create|add|make|assign|track|put|save|log)\s+(a\s+)?(task|todo|to-do|work item)\b|\b(make|add|put|save|track)\s+(this|that|it).{0,30}\b(task list|todo|to-do|tasks?)\b|\bmake\s+(this|that|it)\s+a\s+(todo|to-do|task)\b|\bturn\s+(this|that|it)\s+into\s+a\s+(task|todo|to-do)\b|\bassign\s+(phantom|codex|claude)\s+a\s+task\b|\btrack this as\b/i;
 const TASK_CANDIDATE = /\b(needs?|should|someone should|we need to|have to|must)\s+(to\s+)?(fix|fixing|update|change|improve|make|clean|polish|repair|redo|adjust|better)\b|\bneeds?\s+(better|fixing|spacing|polish|cleanup|work)\b|\bmake\s+.{2,80}\s+better\b|\b(is|looks|feels)\s+(broken|off|bad|ugly|wrong|annoying|confusing)\b/i;
 const BRAINSTORM = /\b(we should|maybe|what if|it would be cool|i think|i want|could we|should we)\b/i;
 const QUESTION = /\?|\b(what|why|how|when|where|who|can|could|should|would|is|are|do|does|did)\b/i;
@@ -79,7 +79,7 @@ function taskDraft(text) {
     ? quoted[1]
     : source
       .replace(/^.*?\b(task|todo|to-do|work item)\s*(to|:)?\s*/i, "")
-      .replace(/^assign\s+phantom\s+a\s+task\s+(to|for)?\s*/i, "")
+      .replace(/^assign\s+(phantom|codex|claude)\s+a\s+task\s+(to|for)?\s*/i, "")
       .replace(/^track this as\s+/i, "")
       /* "…a task called X" / "named X" / "titled X" previously left the
          connective word glued to the front: title became "called X". */

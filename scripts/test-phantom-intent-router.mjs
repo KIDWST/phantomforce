@@ -236,9 +236,9 @@ const instantQuestion = await handleSmartCommand("what's your favorite food?");
 assert.equal(instantQuestion.say, "I'd pick tacos.");
 assert.equal(capturedChatBody.route_tier, "instant");
 assert.equal(capturedChatBody.requested_model, "gpt-5.5-instant");
-assert.deepEqual(capturedChatBody.allowed_providers, ["codex_cli", "local_ollama"]);
-assert.equal(capturedChatBody.allow_provider_fallback, true);
-assert.ok(capturedChatBody.max_provider_ms <= 3200, "instant questions should cap provider time tightly");
+assert.deepEqual(capturedChatBody.allowed_providers, ["codex_cli"]);
+assert.equal(capturedChatBody.allow_provider_fallback, false);
+assert.ok(capturedChatBody.max_provider_ms <= 4500, "instant questions should cap one provider attempt tightly");
 globalThis.fetch = originalFetch;
 
 let broadChatBody = null;

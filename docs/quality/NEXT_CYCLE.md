@@ -16,13 +16,14 @@ Do not restart the audit from zero unless the inventory is invalid. Continuation
 is scheduled in this same Codex task by heartbeat automation
 `continue-phantomforce-quality-program`.
 
-Cycle 3 completed the fast contextual dashboard, restored accepted UI/features,
-mounted the missing server persistence routes, and returned the accepted-change
-guard to 90 passing checks. Customer plan switching and Competitor Intelligence
-are now covered and green; do not repeat them as the primary cycle unless a live
-reproduction regresses.
+Cycle 4 completed the chat-brain relevance and continuity correction. Casual
+questions now carry an eight-turn temporary window without accounting, plan,
+workspace pulse, or saved-memory leakage; business modules require current-request
+relevance. Instant chat makes one bounded fast-model attempt and then returns a
+topic-aware local answer instead of waiting through a second model timeout. Build
+`phantom-live-20260718-22` passed the full user-facing regression matrix.
 
-## Recommended Cycle 4
+## Recommended Cycle 5
 
 Theme: authenticated cross-organization persistence proof.
 
