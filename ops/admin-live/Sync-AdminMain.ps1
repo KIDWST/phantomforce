@@ -29,6 +29,8 @@ function Write-Manifest {
     branch = $Branch
     commit = $Commit
     synced_at = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+    sync_status = "ok"
+    sync_reason = ""
     served_direct = $true
     port = $Port
   }

@@ -63,6 +63,11 @@
           "file": "ops/admin-live/Test-LiveAdminSource.ps1",
           "pattern": "Admin static root",
           "description": "The live-source doctor checks the running admin root."
+        },
+        {
+          "file": "ops/admin-live/Sync-AdminMain.ps1",
+          "pattern": "sync_status = \"ok\"",
+          "description": "Every successful sync writes the status consumed by the live-source doctor."
         }
       ],
       "liveChecks": [
