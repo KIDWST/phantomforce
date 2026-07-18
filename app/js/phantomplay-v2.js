@@ -15,7 +15,7 @@ const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "
 const mobilePlaySurface = () => typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;
 const controlsCopy = (game) => mobilePlaySurface() ? "" : String(game?.controls || "").trim();
 const FALLBACK_KEY = "pf.phantomplay.offline.v1";
-const CATEGORIES = ["All", "Arcade", "Puzzle", "Focus", "Strategy", "Creative"];
+const CATEGORIES = ["All", "Arcade", "Puzzle", "Focus", "Strategy", "Creative", "Sports"];
 const GAME_SORTS = ["All", "Solo", "Multiplayer", "Toddler", ...CATEGORIES.filter((cat) => cat !== "All")];
 const STATUSES = [["online", "Online"], ["away", "Away"], ["busy", "Busy"], ["invisible", "Invisible"]];
 // "Game Rating Exposure" — mirrors server PhantomPlayRating (phantomplay.ts).
@@ -66,9 +66,60 @@ const OFFLINE_GAMES = [
   ["neon-drift", "Neon Drift", "Arcade", "/app/games/neon-drift.html?v=1.2.4"],
   ["signal-match", "Signal Match", "Puzzle", "/app/games/signal-match.html"],
   ["focus-stack", "Focus Stack", "Focus", "/app/games/focus-stack.html"],
+  ["word-weld", "Word Weld", "Puzzle", "/app/games/word-weld.html?v=2.0.0"],
+  ["reflex-grid", "Reflex Grid", "Strategy", "/app/games/reflex-grid.html?v=1.0.0"],
+  ["phantom-dash", "Phantom Dash", "Arcade", "/app/games/phantom-dash.html?v=1.1.0"],
+  ["penalty-kick", "Penalty Kick", "Sports", "/app/games/penalty-kick.html?v=1.1.0"],
+  ["rift-frenzy", "Rift Frenzy", "Arcade", "/app/games/rift-frenzy.html?v=1.1.0"],
+  ["serpent-surge", "Serpent Surge", "Strategy", "/app/games/serpent-surge.html?v=1.0.4"],
+  ["color-rush", "Color Rush", "Arcade", "/app/games/color-rush.html?v=1.2.0"],
+  ["tile-flow", "Tile Flow", "Puzzle", "/app/games/tile-flow.html?v=1.2.0"],
+  ["tower-tactics", "Tower Tactics", "Strategy", "/app/games/tower-tactics.html?v=1.1.0"],
+  ["breath-pacer", "Breath Pacer", "Focus", "/app/games/breath-pacer.html?v=1.2.0"],
+  ["court-vision", "Court Vision", "Sports", "/app/games/court-vision.html?v=1.2.0"],
+  ["pixel-bloom", "Pixel Bloom", "Creative", "/app/games/pixel-bloom.html"],
+  ["circuit-serpent", "Circuit Serpent", "Arcade", "/app/games/circuit-serpent.html?v=1.1.0"],
+  ["echo-sequence", "Echo Sequence", "Focus", "/app/games/echo-sequence.html?v=1.2.0"],
+  ["signal-sweeper", "Signal Sweeper", "Strategy", "/app/games/signal-sweeper.html?v=1.2.0"],
+  ["neon-breaker", "Neon Breaker", "Arcade", "/app/games/neon-breaker.html?v=1.1.0"],
+  ["type-storm", "Type Storm", "Focus", "/app/games/type-storm.html?v=1.1.0"],
+  ["logic-lights", "Logic Lights", "Puzzle", "/app/games/logic-lights.html?v=1.2.0"],
   ["phantom-rumble", "Phantom Rumble", "Arcade", "/app/games/phantom-rumble.html?v=2.2.4"],
   ["sudoku-signal", "Sudoku Signal", "Focus", "/app/games/sudoku-signal.html"],
-].map(([id, title, category, launchUrl]) => ({ id, title, summary: id === "phantom-rumble" ? "Premium local platform fighter with guard, parry, dodge, ledge-save recovery, bots, and local multiplayer." : "Offline built-in game.", description: "", category, tags: [], contentRating: "everyone", developer: "Tak", kind: "built_in", launchUrl, thumbnail: "", featured: id === "phantom-rumble", version: id === "phantom-rumble" ? "2.2.4" : "1.0.0", controls: id === "phantom-rumble" ? "Keyboard controls." : "", progressSupport: true, scoreSupport: true }));
+  ["cubetown", "CubeTown", "Creative", "/app/games/cubetown/index.html?v=1.1.0"],
+  ["skyguard-arena", "Skyguard Arena", "Strategy", "/app/games/skyguard-arena/index.html?v=1.1.0"],
+  ["keyboardist-on-tour", "Keyboardist On Tour", "Focus", "/app/games/keyboardist-on-tour.html?v=1.1.0"],
+  ["tidefront-tactics", "Tidefront Tactics", "Strategy", "/app/games/tidefront-tactics.html?v=1.1.0"],
+  ["kingdom-breakers", "Kingdom Breakers", "Strategy", "/app/games/kingdom-breakers.html?v=1.1.0"],
+  ["phantom-grand-prix", "Phantom Grand Prix", "Arcade", "/app/games/phantom-grand-prix/index.html?v=1.0.0"],
+  ["beat-strike", "BeatStrike", "Focus", "/app/games/beat-strike/index.html?v=1.0.0"],
+  ["crown-circuit", "Crown Circuit", "Strategy", "/app/games/crown-circuit.html?v=1.0.0"],
+].map(([id, title, category, launchUrl]) => ({
+  id,
+  title,
+  summary: id === "phantom-rumble"
+    ? "Premium local platform fighter with guard, parry, dodge, ledge-save recovery, bots, and local multiplayer."
+    : id === "kingdom-breakers"
+      ? "Physics siege/destruction with campaign, duel mode, bot towers, and breach scoring."
+      : id === "tidefront-tactics"
+        ? "Turn-based wind-read artillery tactics with skiffs, weapons, bots, and boss duels."
+        : id === "crown-circuit"
+          ? "Three-lane elixir battler: deploy units, break towers, take the crown."
+          : "Offline built-in game.",
+  description: "",
+  category,
+  tags: ["phantomplay"],
+  contentRating: ["kingdom-breakers", "tidefront-tactics", "crown-circuit", "skyguard-arena"].includes(id) ? "everyone10" : "everyone",
+  developer: "Tak",
+  kind: "built_in",
+  launchUrl,
+  thumbnail: "",
+  featured: ["phantom-rumble", "kingdom-breakers", "tidefront-tactics", "cubetown", "skyguard-arena", "phantom-grand-prix"].includes(id),
+  version: id === "phantom-rumble" ? "2.2.4" : "1.0.0",
+  controls: id === "phantom-rumble" ? "Keyboard controls." : "",
+  progressSupport: true,
+  scoreSupport: true,
+}));
 
 function offlineState() {
   let saved = {};
