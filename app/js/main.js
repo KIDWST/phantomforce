@@ -4075,6 +4075,40 @@ async function fetchLocalModelStatus() {
   }
 }
 
+/* Developer queues + failures: derived from real local/server state only.
+   Both render an honest empty row when nothing is waiting or failing. */
+function devQueuesMarkup() {
+  const approvals = visible(store.state.approvals || []).filter((a) => a.status === "pending");
+  const waitingAgents = visible(store.state.agents || []).filter((a) => ["blocked", "needs-approval", "waiting", "idle"].includes(a.status));
+  const mediaQueue = visible(store.state.media || []).filter((m) => ["pending", "draft", "brief-ready", "generation-approved"].includes(m.status));
+  const rows = [
+    ["Approvals", approvals.length, approvals[0]?.title || "queue clean", "approvals"],
+    ["Worker lanes waiting", waitingAgents.length, waitingAgents[0]?.name || waitingAgents[0]?.title || "all moving", "workforce"],
+    ["Media in flight", mediaQueue.length, mediaQueue[0]?.title || "nothing queued", "media"],
+  ];
+  return `<div class="developer-list dev-queues">
+    ${rows.map(([label, count, detail, open]) => `<span><b>${esc(label)}</b><i>${count} · ${esc(String(detail).slice(0, 80))}</i>${count ? `<button class="btn btn-quiet" data-open-ws="${esc(open)}" type="button">Open</button>` : ""}</span>`).join("")}
+  </div>`;
+}
+
+function devFailuresMarkup(manager, w, workforceError) {
+  const items = [];
+  if (workforceError) items.push({ src: "Workforce status", text: String(workforceError) });
+  (manager?.providers || []).filter((p) => p.status === "offline").forEach((p) => {
+    items.push({ src: `Provider ${p.provider_id}`, text: `offline${p.last_error ? ` — ${p.last_error}` : ""}${p.last_success_at ? ` (last success ${ago(p.last_success_at)})` : ""}` });
+  });
+  visible(store.state.agents || []).filter((a) => ["failed", "error"].includes(a.status)).forEach((a) => {
+    items.push({ src: a.name || a.title || "Worker lane", text: a.detail || a.note || "reported failure" });
+  });
+  (w?.ticker || []).filter((entry) => /fail|error|denied|timeout/i.test(String(entry?.text || entry || ""))).slice(0, 5).forEach((entry) => {
+    items.push({ src: "Ledger", text: String(entry?.text || entry).slice(0, 140) });
+  });
+  if (!items.length) return `<div class="developer-list dev-failures"><span><b>None observed</b><i>No provider, worker, or ledger failures in the current window.</i></span></div>`;
+  return `<div class="developer-list dev-failures">
+    ${items.slice(0, 8).map((item) => `<span><b>${esc(item.src)}</b><i>${esc(item.text)}</i></span>`).join("")}
+  </div>`;
+}
+
 function providerManagerMarkup(manager) {
   if (!manager?.providers?.length) return `<p class="dev-provider-empty">Provider state is waiting for the local backend.</p>`;
   const labels = { codex_cli: "Codex", claude_cli: "Claude", openrouter_glm: "OpenRouter", local_ollama: "Local" };
@@ -4453,6 +4487,22 @@ function renderDeveloperContent(body, { workforce, workforceError, rembg, mediaH
           <p>Stateful failover, background recovery, last health, and latency. This telemetry stays behind the owner curtain.</p>
         </div>
         ${providerManagerMarkup(providerManager)}
+      </section>
+
+      <section class="dev-section">
+        <div class="dev-section-head">
+          <h4>${svg("check")} Queues</h4>
+          <p>Everything currently waiting, from real local state — approvals, waiting worker lanes, and media in flight.</p>
+        </div>
+        ${devQueuesMarkup()}
+      </section>
+
+      <section class="dev-section">
+        <div class="dev-section-head">
+          <h4>${svg("bolt")} Failures</h4>
+          <p>Consolidated recent failures: offline providers, failed worker lanes, and error ledger entries. Empty means none observed.</p>
+        </div>
+        ${devFailuresMarkup(providerManager, w, workforceError)}
       </section>
 
       <section class="dev-section">
