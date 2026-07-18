@@ -6,7 +6,7 @@
    when the backend doesn't advertise database auth, none of these
    surfaces render and the app behaves exactly as before. */
 
-import { ctx, session } from "./store.js?v=phantom-live-20260718-1";
+import { ctx, session } from "./store.js?v=phantom-live-20260718-3";
 
 export const isDatabaseSession = () => !!ctx.session?.database;
 export const isCustomerOrgSession = () => !!(ctx.session?.database || ctx.session?.localCustomer);
@@ -43,6 +43,11 @@ export async function fetchAuthConfig() {
   return cachedAuthConfig;
 }
 
+async function customerAuthEndpoint(key, fallback) {
+  const auth = await fetchAuthConfig();
+  return auth?.[key] || fallback;
+}
+
 /* Maps the server's database session onto the local session shape the app
    already uses. Frontend role is presentation only — every real boundary
    is enforced server-side per request. */
@@ -70,7 +75,8 @@ function localSessionFromServer(payload) {
 }
 
 export async function databaseLogin(email, password) {
-  const { ok, status, json } = await api("/auth/login", { method: "POST", body: { email, password } });
+  const endpoint = await customerAuthEndpoint("customerLoginEndpoint", "/auth/login");
+  const { ok, status, json } = await api(endpoint, { method: "POST", body: { email, password } });
   if (!ok) {
     throw new Error(status === 401 ? "Invalid email or password." : String(json?.error || `Login failed (${status}).`));
   }
@@ -93,8 +99,15 @@ export async function databaseVerify2fa(challengeToken, code) {
 }
 
 export async function databaseSignup(payload) {
-  const { ok, status, json } = await api("/auth/signup", { method: "POST", body: payload });
+  const endpoint = await customerAuthEndpoint("customerSignupEndpoint", "/auth/signup");
+  const { ok, status, json } = await api(endpoint, { method: "POST", body: payload });
   if (!ok) throw new Error(String(json?.error || `Signup failed (${status}).`));
+  if (json?.session && json?.token) {
+    const local = localSessionFromServer(json);
+    session.set(local);
+    ctx.session = { ...local, token: undefined };
+    return ctx.session;
+  }
   return json;
 }
 
@@ -123,19 +136,23 @@ export async function databaseUpgradeDeveloperAccount() {
 }
 
 export async function databaseForgotUsername(email) {
-  const { ok, status, json } = await api("/auth/forgot-username", { method: "POST", body: { email } });
+  const endpoint = await customerAuthEndpoint("customerForgotUsernameEndpoint", "");
+  if (!endpoint) throw new Error("Username recovery is not available for this account mode.");
+  const { ok, status, json } = await api(endpoint, { method: "POST", body: { email } });
   if (!ok) throw new Error(String(json?.error || `Username recovery failed (${status}).`));
   return json;
 }
 
 export async function databaseForgotPassword(identifier) {
-  const { ok, status, json } = await api("/auth/forgot-password", { method: "POST", body: { identifier } });
+  const endpoint = await customerAuthEndpoint("customerForgotPasswordEndpoint", "/auth/forgot-password");
+  const { ok, status, json } = await api(endpoint, { method: "POST", body: { identifier } });
   if (!ok) throw new Error(String(json?.error || `Password reset request failed (${status}).`));
   return json;
 }
 
 export async function databaseResetPassword(token, password) {
-  const { ok, status, json } = await api("/auth/reset-password", { method: "POST", body: { token, password } });
+  const endpoint = await customerAuthEndpoint("customerResetPasswordEndpoint", "/auth/reset-password");
+  const { ok, status, json } = await api(endpoint, { method: "POST", body: { token, password } });
   if (!ok) throw new Error(String(json?.error || `Password reset failed (${status}).`));
   return json;
 }
@@ -183,6 +200,15 @@ export async function fetchCustomerPlanPreview() {
 export async function switchCustomerPlan(planKey) {
   const { ok, status, json } = await api("/customer/plan-preview", { method: "POST", body: { planKey } });
   return ok ? { ok: true, ...json } : { ok: false, status, error: json?.error || "plan_switch_failed", available: json?.available || [] };
+}
+
+/* Platform-owner roster: for super-admin database sessions the /orgs route
+   already returns EVERY organization (member counts + plan); tenant sessions
+   only ever see their own memberships, so this exposes nothing new. */
+export async function fetchAllOrganizations() {
+  const { ok, status, json } = await api("/orgs");
+  if (!ok) return { ok: false, status, error: json?.error || "orgs_unavailable" };
+  return { ok: true, organizations: json.organizations || [] };
 }
 
 export async function switchOrg(orgId) {

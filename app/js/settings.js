@@ -1,13 +1,13 @@
 /* PhantomForce admin settings.
    Local UI preferences only: no provider calls, sends, uploads, or billing. */
 
-import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260718-1";
-import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260718-1";
-import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260718-1";
-import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260718-1";
-import { fetchCustomerPlanPreview, fetchEntitlementsSummary, switchCustomerPlan } from "./orgs.js?v=phantom-live-20260718-1";
-import { ctx, currentTenantId, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260718-1";
-import { DEFAULT_COMPANION_PREFS, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260718-1";
+import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260718-3";
+import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260718-3";
+import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260718-3";
+import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260718-3";
+import { fetchCustomerPlanPreview, fetchEntitlementsSummary, switchCustomerPlan, fetchAllOrganizations, switchOrg, isDatabaseSession } from "./orgs.js?v=phantom-live-20260718-3";
+import { ctx, currentTenantId, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260718-3";
+import { DEFAULT_COMPANION_PREFS, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260718-3";
 
 const AI_SETTINGS_KEY = "pf.operator.settings.v1";
 const SETTINGS_TAB_KEY = "pf.settings.tab.v1";
@@ -1117,6 +1117,14 @@ export function renderOwnerAdminControl(el, opts = {}) {
         ${renderAdminControlCards(ownerAdminPanel)}
       </section>
       ${renderAdminPanelShell(ownerAdminPanel, panelMountId)}
+      <section class="admin-control-hero" aria-label="All organizations">
+        <div>
+          <p class="set-eyebrow">Platform owner</p>
+          <h3>All organizations</h3>
+          <p class="set-note">Every tenant on this PhantomForce install. Tenant admins manage their own workspace in Settings → Organization; this roster is the Jordan-level view.</p>
+          <div data-admin-org-roster><p class="set-note">Loading organizations…</p></div>
+        </div>
+      </section>
       <section class="admin-control-shortcuts">
         <div>
           <p class="set-eyebrow">Fast lanes</p>
@@ -1138,6 +1146,45 @@ export function renderOwnerAdminControl(el, opts = {}) {
     });
   });
   mountAdminPanel(ownerAdminPanel, el.querySelector(`#${panelMountId}`), opts);
+  mountAdminOrgRoster(el.querySelector("[data-admin-org-roster]"), el, opts);
+}
+
+/* All-tenant roster for the platform owner. Real data only: super-admin
+   database sessions get every org from /orgs (member counts + plan); local
+   or tenant sessions see an honest explanation instead of an empty table. */
+async function mountAdminOrgRoster(mount, rootEl, opts) {
+  if (!mount) return;
+  if (!isDatabaseSession()) {
+    mount.innerHTML = `<p class="set-note">Sign in with the owner database account to list every organization. Local owner sessions only see this workspace.</p>`;
+    return;
+  }
+  const result = await fetchAllOrganizations().catch(() => ({ ok: false, error: "orgs_unavailable" }));
+  if (!mount.isConnected) return;
+  if (!result.ok) {
+    mount.innerHTML = `<p class="set-note">Organizations are unavailable right now (${esc(String(result.error))}) — nothing is shown in their place.</p>`;
+    return;
+  }
+  const orgs = result.organizations;
+  if (!orgs.length) {
+    mount.innerHTML = `<p class="set-note">No organizations exist yet.</p>`;
+    return;
+  }
+  const activeId = ctx.session?.orgId || null;
+  mount.innerHTML = `<div class="developer-list admin-org-roster">
+    ${orgs.map((org) => `<span>
+      <b>${esc(org.name)}${org.id === activeId ? " · active" : ""}</b>
+      <i>${Number.isFinite(Number(org.memberCount)) ? `${org.memberCount} member${org.memberCount === 1 ? "" : "s"}` : "membership private"}${org.plan ? ` · ${esc(org.plan.key)} (${esc(org.plan.status)})` : ""}${org.role ? ` · your role: ${esc(org.role)}` : ""}</i>
+      ${org.id !== activeId ? `<button class="btn btn-quiet" data-admin-org-switch="${esc(org.id)}" type="button">Switch into</button>` : ""}
+    </span>`).join("")}
+  </div>`;
+  mount.querySelectorAll("[data-admin-org-switch]").forEach((button) => {
+    button.onclick = async () => {
+      button.disabled = true;
+      const switched = await switchOrg(button.dataset.adminOrgSwitch).catch(() => ({ ok: false }));
+      if (switched.ok) renderOwnerAdminControl(rootEl, opts);
+      else { button.disabled = false; button.textContent = "Switch failed"; }
+    };
+  });
 }
 
 export function renderOperatorSettings(el, opts = {}) {
