@@ -704,6 +704,21 @@
             "file": "server/scripts/test-instant-chat-http-live-model.ts",
             "pattern": "factualReplacementVerified: true,[\\s\\S]*conversationalTasteVerified: true",
             "description": "The authenticated real-model gate rejects a fabricated fact, protects replacement-only behavior, and proves a natural multi-turn taste conversation."
+          },
+          {
+            "file": "app/js/intent-router.js",
+            "pattern": "const CURRENT_INFO = /[\\s\\S]*stock\\|share\\|crypto\\|bitcoin\\|ethereum[\\s\\S]*price\\|quote\\|value\\|rate",
+            "description": "Browser routing requires live-data intent around market nouns instead of escalating every mention of current, latest, or stock."
+          },
+          {
+            "file": "server/scripts/test-instant-chat-fallback.ts",
+            "pattern": "what does electrical current mean[\\s\\S]*how do I make chicken stock[\\s\\S]*why do stock photos look fake[\\s\\S]*what is the current Bitcoin price",
+            "description": "Server policy tests protect both casual lexical uses and genuinely live market requests."
+          },
+          {
+            "file": "server/scripts/test-instant-chat-http-live-model.ts",
+            "pattern": "lexicalRoutingVerified: true",
+            "description": "The authenticated real-model gate proves electrical current and stock-photo questions remain fast, accurate, and free of business leakage."
           }
       ],
       "forbiddenPatterns": [

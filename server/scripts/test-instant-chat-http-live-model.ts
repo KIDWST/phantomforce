@@ -209,7 +209,7 @@ assert.doesNotMatch(rows.at(-1)!.answer, forbidden);
 assert.doesNotMatch(rows.at(-1)!.answer, /^(?:yes|did you know|surprising fact|fun fact)\b/i);
 assert.doesNotMatch(rows.at(-1)!.answer, /did you know|surprising fact|fun fact/i);
 assert.equal((rows.at(-1)!.answer.match(/[.!?]+/g) || []).length, 1, "no-introduction request must return one fact only");
-assert.match(rows.at(-1)!.answer, /three hearts|blue blood|taste with (?:their )?suckers|neurons? in (?:their )?arms|have no bones|fit through|regrow (?:a |their )?arms/i);
+assert.match(rows.at(-1)!.answer, /three hearts|blue blood|taste with (?:their )?suckers|(?:brains?|neurons?) in (?:their )?arms|open jars|have no bones|fit through|regrow (?:a |their )?arms/i);
 assert.doesNotMatch(rows.at(-1)!.answer, /dolphin|echolocation|hearts? (?:that )?(?:run|pass|travel) through (?:their )?stomachs?/i);
 
 const corrections: Turn[] = [];
@@ -281,7 +281,7 @@ for (const [prompt, expected] of rapidChecks) {
 }
 
 const taste: Turn[] = [];
-const favoriteFood = await ask(customerToken, "What's your favorite food? Pick one and answer casually in one sentence.", taste);
+const favoriteFood = await ask(customerToken, "What's your current favorite food? Pick one and answer casually in one sentence.", taste);
 rows.push(favoriteFood);
 assert.equal(favoriteFood.modelId, "phantom-personality");
 assert.match(favoriteFood.answer, /ramen/i);
@@ -293,6 +293,14 @@ assert.doesNotMatch(favoriteReason.answer, /(?:as an AI|I (?:do not|don't) (?:ea
 const pairedDessert = await ask(customerToken, "Choose a dessert that pairs with it. Dessert only.", taste);
 rows.push(pairedDessert);
 assert.ok(pairedDessert.answer.split(/\s+/).length <= 5, "dessert-only answer must stay compact");
+
+const lexicalBoundaries: Turn[] = [];
+const electricalCurrent = await ask(customerToken, "In electricity, what does current mean? One sentence.", lexicalBoundaries);
+rows.push(electricalCurrent);
+assert.match(electricalCurrent.answer, /electric charge|electrons?|flow/i);
+const stockPhoto = await ask(customerToken, "Why can stock photos look artificial? One sentence.", lexicalBoundaries);
+rows.push(stockPhoto);
+assert.match(stockPhoto.answer, /posed|staged|generic|authentic|natural/i);
 
 const uncertainty: Turn[] = [];
 const hiddenCoin = await ask(adminToken, "I flipped a coin where you cannot see it. Did it land heads or tails? Do not guess.", uncertainty);
@@ -405,6 +413,7 @@ assert.doesNotMatch(newestCorrection.answer, /Glacier/i);
     recencyPackingVerified: true,
     factualReplacementVerified: true,
     conversationalTasteVerified: true,
+    lexicalRoutingVerified: true,
   }, null, 2));
 } finally {
   ownedServer?.kill();

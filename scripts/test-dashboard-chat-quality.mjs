@@ -72,6 +72,10 @@ const casualPrompts = [
   "explain what a contract is",
   "what is a blog post?",
   "how does uploading work?",
+  "what does electrical current mean?",
+  "how do I make chicken stock?",
+  "why do stock photos look fake?",
+  "what is your current favorite food?",
 ];
 
 const forbiddenStatus = /\b(?:ledger|pipeline|cashflow|cash flow|approvals? waiting|today's plan|right now:)\b/i;

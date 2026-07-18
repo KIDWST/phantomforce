@@ -40,6 +40,18 @@ const CASES = [
   ["catch me up", "status_check"],
 ];
 
+const LIVE_DATA_CASES = [
+  ["what does electrical current mean?", false],
+  ["how do I make chicken stock?", false],
+  ["why do stock photos look fake?", false],
+  ["what is your current favorite food?", false],
+  ["what's the weather in Chicago?", true],
+  ["show me the latest headlines", true],
+  ["what is the current Bitcoin price?", true],
+  ["what was the Bulls score last night?", true],
+  ["what is the exchange rate for dollars to euros?", true],
+];
+
 let failures = 0;
 for (const [text, want] of CASES) {
   const got = classifyPhantomIntent(text).primaryIntent;
@@ -47,5 +59,11 @@ for (const [text, want] of CASES) {
   if (!ok) failures += 1;
   console.log(`${ok ? "PASS" : "FAIL"}  "${text}" -> ${got}${ok ? "" : ` (wanted ${want})`}`);
 }
-console.log(failures ? `${failures} FAILURES` : `ALL ${CASES.length} PASS`);
+for (const [text, want] of LIVE_DATA_CASES) {
+  const got = classifyPhantomIntent(text).needsLiveData;
+  const ok = got === want;
+  if (!ok) failures += 1;
+  console.log(`${ok ? "PASS" : "FAIL"}  live-data "${text}" -> ${got}${ok ? "" : ` (wanted ${want})`}`);
+}
+console.log(failures ? `${failures} FAILURES` : `ALL ${CASES.length + LIVE_DATA_CASES.length} PASS`);
 process.exit(failures ? 1 : 0);

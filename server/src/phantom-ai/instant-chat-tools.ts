@@ -199,7 +199,7 @@ function identityReply(userRequest: string, modelId: string): InstantChatToolRep
 
 function personalityReply(userRequest: string): InstantChatToolReply | null {
   const text = userRequest.trim();
-  if (/\b(?:what(?:'s| is)|tell me)\s+(?:your\s+)?favorite food\b|\bwhat food (?:is your favorite|would you (?:pick|choose))\b/i.test(text)) {
+  if (/\b(?:what(?:'s| is)|tell me)\s+(?:your\s+)?(?:current\s+)?favorite food\b|\bwhat food (?:is your favorite|would you (?:pick|choose))\b/i.test(text)) {
     return {
       output_text: "Spicy ramen - bold, comforting, and impossible to make boring.",
       tool_id: "phantom-personality",

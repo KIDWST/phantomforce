@@ -16,17 +16,18 @@ Do not restart the audit from zero unless the inventory is invalid. Continuation
 is scheduled in this same Codex task by heartbeat automation
 `continue-phantomforce-quality-program`.
 
-Cycle 12 strengthened personality, factual restraint, and exact short-answer
-compliance. A verbose real-model audit exposed a fabricated octopus fact and the
-same sterile favorite-food disclaimer the owner rejected. Phantom now answers
-direct favorite-food questions through a 2 ms deterministic personality lane,
-keeps model-backed follow-ups conversational, returns replacement facts without
-repeating old material, and strips explanations from short `dessert only` and
-similar requests. The authenticated gate now drives 71 requests with zero business
-leakage. The public app remains build `phantom-live-20260718-29`; this cycle changes
-the live server brain.
+Cycle 13 corrected model-routing false positives. The browser and server used to
+treat any mention of `current`, `latest`, or `stock` as live data, escalating
+ordinary questions about electrical current, chicken stock, stock photos, and even
+Phantom's current favorite food. Live-data routing now requires intent-shaped
+combinations such as weather queries, latest headlines, market prices, scores, or
+exchange rates. The browser contract covers 42 casual prompts, the intent boundary
+covers 35 cases, and the authenticated model gate now drives 73 requests with zero
+business leakage. The browser cache key advances to
+`phantom-live-20260718-30`; this cycle updates both browser routing and the live
+server brain.
 
-## Recommended Cycle 13
+## Recommended Cycle 14
 
 Theme: authenticated cross-organization persistence proof.
 

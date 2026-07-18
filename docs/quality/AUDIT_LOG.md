@@ -979,3 +979,40 @@ Run the authenticated two-organization persistence proof in Recommended Cycle 12
 ## Next Task
 
 Run the authenticated two-organization persistence proof in Recommended Cycle 13.
+
+# 2026-07-18 - Cycle 13: Intent-Shaped Model Routing
+
+## Problems Verified
+
+- Browser and server instant-route exclusions treated the words `current`,
+  `latest`, and `stock` as live-data requests without considering their meaning.
+- Questions about electrical current, chicken stock, stock photos, and a current
+  favorite could therefore be escalated to a slower, more expensive model.
+- Existing tests covered genuine live requests but not lexical false positives.
+
+## Corrections
+
+- Replaced broad live-data keywords with intent-shaped weather, news, market,
+  score, traffic, time, date, and exchange-rate patterns in browser routing.
+- Mirrored the safe/unsafe distinction in the server conversation policy.
+- Preserved escalation for diagnosis, medical/legal advice, active weather,
+  current prices, latest headlines, scores, and exchange rates.
+- Expanded browser and server policy tests across both sides of the boundary.
+- Added real-model answers for electrical-current and stock-photo questions.
+- Cache-busted the browser application as `phantom-live-20260718-30`.
+- Added permanent change-memory guards for model-routing precision.
+
+## Focused Verification
+
+- PASS: `node scripts/test-intent-router.mjs` (35/35 routing cases).
+- PASS: `npm run test:dashboard-chat` (42 browser prompts plus server checks).
+- PASS: `npm run test:instant-chat --workspace @phantomforce/server`.
+- PASS: `npm run typecheck`.
+- PASS: `npm run test:instant-chat:http-live-model --workspace
+  @phantomforce/server`: 73 authenticated requests, 438 ms average, 1,838 ms
+  maximum, zero fallback, zero business leakage, and lexical routing verified.
+- PASS: `npm run test:release-critical` (19/19 critical checks).
+
+## Next Task
+
+Run the authenticated two-organization persistence proof in Recommended Cycle 14.

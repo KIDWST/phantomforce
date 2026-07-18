@@ -69,6 +69,10 @@ assert.equal(isSafeInstantConversationRequest({ task_type: "question", user_requ
 assert.equal(isSafeInstantConversationRequest({ task_type: "chat", user_request: "explain what a contract is" }), true);
 assert.equal(isSafeInstantConversationRequest({ task_type: "question", user_request: "what is a blog post?" }), true);
 assert.equal(isSafeInstantConversationRequest({ task_type: "question", user_request: "how does uploading work?" }), true);
+assert.equal(isSafeInstantConversationRequest({ task_type: "question", user_request: "what does electrical current mean?" }), true);
+assert.equal(isSafeInstantConversationRequest({ task_type: "question", user_request: "how do I make chicken stock?" }), true);
+assert.equal(isSafeInstantConversationRequest({ task_type: "question", user_request: "why do stock photos look fake?" }), true);
+assert.equal(isSafeInstantConversationRequest({ task_type: "question", user_request: "what is your current favorite food?" }), true);
 assert.equal(isSafeInstantConversationRequest({ task_type: "chat", user_request: "generate an image of a city" }), false);
 assert.equal(isSafeInstantConversationRequest({ task_type: "chat", user_request: "build a website for my company" }), false);
 assert.equal(isSafeInstantConversationRequest({ task_type: "question", user_request: "show my invoice" }), false);
@@ -79,5 +83,9 @@ assert.equal(isSafeInstantConversationRequest({ task_type: "chat", user_request:
 assert.equal(isSafeInstantConversationRequest({ task_type: "question", user_request: "help me think through a growth strategy" }), false);
 assert.equal(isSafeInstantConversationRequest({ task_type: "chat", user_request: "compare them in one sentence" }), true);
 assert.equal(isSafeInstantConversationRequest({ task_type: "question", user_request: "compare CRM platforms for a growing agency" }), false);
+assert.equal(isSafeInstantConversationRequest({ task_type: "question", user_request: "what is the current Bitcoin price?" }), false);
+assert.equal(isSafeInstantConversationRequest({ task_type: "question", user_request: "what's the weather in Chicago?" }), false);
+assert.equal(isSafeInstantConversationRequest({ task_type: "question", user_request: "show me the latest headlines" }), false);
+assert.equal(isSafeInstantConversationRequest({ task_type: "question", user_request: "what was the Bulls score last night?" }), false);
 
 console.log(`instant chat fallback checks passed (${turns.length + directPrompts.length} adversarial turns)`);
