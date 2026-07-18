@@ -1211,3 +1211,67 @@ Run the authenticated two-organization persistence proof in Recommended Cycle 16
 ## Next Task
 
 Run the authenticated two-organization persistence proof in Recommended Cycle 17.
+
+# 2026-07-18 - Cycle 17: Semantic Chat Boundaries And Real Memory
+
+## Problems Verified
+
+- Browser intent treated ordinary uses of `approve`, `queue`, `summary`,
+  `report`, and `remember` as private workspace operations.
+- Reminder matching treated monitor lizards, historical `tell me when`
+  questions, and movie-watching requests as scheduled automations.
+- Automation and website matching confused poems, stories, and explicit task
+  requests with workflow or site creation.
+- The browser and server used duplicate broad business-action regexes, so a
+  harmless poem about automation could classify correctly in the browser but
+  still be rejected by the instant server route.
+- Autobiographical chat such as `I remember my first bike` was routed as chat
+  but still promoted into durable memory by a separate storage heuristic.
+- Explicit memory commands displayed memory statistics instead of confirming
+  and creating the saved record.
+
+## Corrections
+
+- Replaced broad approval, reminder, status, memory, task-candidate,
+  automation, and artifact matching with semantic patterns that require
+  ownership, operational verbs, direct objects, or real scheduling language.
+- Moved explicit task, reminder, and automation artifacts ahead of website
+  matching so `create a task to update my website` cannot become a website.
+- Aligned browser and server instant-route business-action policy around
+  direct business objects instead of unrelated words appearing nearby.
+- Tightened durable-memory detection to explicit forward-looking save
+  language; recall questions and autobiographical uses remain temporary chat.
+- Added real pinned-memory creation and a concise `Remembered:` confirmation
+  for explicit durable-memory requests.
+- Expanded browser-brain coverage from 48 to 56 prompts and live-model
+  coverage from 79 to 82 authenticated requests.
+- Cache-busted the full browser module graph as
+  `phantom-live-20260718-33`.
+- Added four permanent change-memory guards for these boundaries.
+
+## Focused Verification
+
+- PASS: `npm run test:intent`.
+- PASS: `npm run test:dashboard-chat` (56 browser prompts, 11 degraded server
+  turns, and deterministic tool checks).
+- PASS: `npm run test:instant-chat --workspace @phantomforce/server`.
+- PASS: `npm run typecheck --workspace @phantomforce/server`.
+- PASS: `npm run test:change-memory` (140 permanent assertions).
+- PASS: `npm run test:release-critical` (19/19 critical checks).
+- PASS: `git diff --check`.
+- PASS: authenticated disposable-server live-model gate completed 82 requests
+  at 521 ms average and 1,742 ms maximum with zero fallback and zero business
+  leakage; all continuity, topic-switch, correction, reasoning, exact-format,
+  lexical-routing, and topic-isolation assertions remained true.
+- PASS: bundled Playwright/Chrome source gate sent seven collision-heavy
+  prompts through the instant local-model lane with no workspace cards, then
+  created one real durable memory without a provider request. Build `33`
+  stayed exactly 1440px wide; composer y=803..870; history scrolled internally
+  at 448px client / 899px content; zero page errors.
+- PASS: visual review of
+  `C:\Users\jorda\AppData\Local\Temp\phantomforce-cycle17-semantic-chat.png`.
+
+## Next Task
+
+Run the authenticated browser and two-organization memory-isolation proof in
+Recommended Cycle 18.

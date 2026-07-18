@@ -16,50 +16,47 @@ Do not restart the audit from zero unless the inventory is invalid. Continuation
 is scheduled in this same Codex task by heartbeat automation
 `continue-phantomforce-quality-program`.
 
-Cycle 16 closed the remaining browser-side status-dump path. If the chat API is
-briefly unreachable, safe questions and casual chat now stay inside a dedicated
-conversation fallback and cannot fall through command keywords such as bank,
-proposal, lead, approval, or media. Informational business-adjacent questions
-are distinguished from explicit private workspace-state requests, browser and
-server personality are aligned, and dead `ledger empty` chat copy is gone.
-Desktop conversations now keep the composer inside the viewport and scroll
-history internally; complete standalone questions cannot be mistaken for
-short follow-ups. The browser module graph is cache-busted as
-`phantom-live-20260718-32`.
+Cycle 17 removed the next class of chat keyword collisions. Approval opinions,
+queue data structures, literary summaries, historical reports, monitor
+lizards, automation poems, grammar rewrites, autobiographical memories, and
+refresher-style reminders now remain normal instant conversation. Explicit
+workspace status, tasks, automations, scheduled reminders, and durable memory
+still take their operational lanes. Browser and server policy agree, explicit
+memory creates a real pinned record, and the module graph is cache-busted as
+`phantom-live-20260718-33`.
 
-## Recommended Cycle 17
+## Recommended Cycle 18
 
-Theme: authenticated cross-organization persistence proof.
+Theme: authenticated browser conversation and memory-isolation proof.
 
-The CRM, proposal, workspace-approval, and Managed Growth stores are now mounted
-through tenant-scoped API routes. The next highest-value step is proving their
-complete browser lifecycle against two real authenticated organizations.
+The unit and authenticated HTTP gates are strong. The next highest-value proof
+is a real signed-in browser session that alternates long casual conversation,
+durable memory, and explicit workspace commands while switching organizations.
 
 ### Required Pass
 
-1. Start the disposable DB-auth Postgres fixture and sign in as members of two
-   different organizations.
-2. In organization A, create, edit, refresh, and delete a CRM lead and proposal.
-3. Create an approval, decide it as an authorized owner/admin, and verify the
-   status survives a reload.
-4. Switch to organization B and prove organization A records are absent.
-5. Attempt direct cross-tenant route calls and require 403/404 without leaking
-   record existence.
-6. Verify Managed Growth only summarizes the active tenant's server records and
-   never invents external metrics.
-7. Browser-check the lifecycle at 390px and 1440px; keep screenshots and exact
-   command output in the audit log.
+1. Start the disposable DB-auth fixture and sign in through the actual browser
+   login flow as members of two organizations.
+2. Run at least 20 alternating casual, lexical-collision, follow-up, correction,
+   and explicit workspace prompts without reloading.
+3. Require casual prompts to use the instant route with no cards, navigation,
+   business modules, or unsolicited workspace state.
+4. Save a durable memory in organization A, reload, and prove it remains there.
+5. Switch to organization B and prove organization A memory and temporary chat
+   are absent from the UI, request packet, and model answer.
+6. Switch back to A and prove its memory returns without B contamination.
+7. Browser-check the full sequence at 390px and 1440px, including composer
+   visibility, internal history scrolling, exact widths, and zero page errors.
 
 Likely files:
 
 - `server/src/index.ts`
-- `server/src/crm/crm-pipeline-store.ts`
-- `server/src/proposals/proposal-store.ts`
-- `server/src/workspace-approvals/workspace-approval-store.ts`
-- `server/src/managed-growth/managed-growth-report.ts`
-- `app/js/crmpipeline.js`
-- `app/js/proposalpipeline.js`
-- `app/js/approvalpipeline.js`
+- `server/src/phantom-ai/conversation-policy.ts`
+- `server/src/phantom-ai/instant-chat-context.ts`
+- `app/js/intent-router.js`
+- `app/js/command.js`
+- `app/js/store.js`
+- `app/js/orgs.js`
 - `scripts/test-database-auth-org-browser.mjs`
 
 ## Regression Commands To Keep

@@ -311,6 +311,27 @@ assert.match(electricalCurrent.answer, /electric charge|electrons?|flow/i);
 const stockPhoto = await ask(customerToken, "Why can stock photos look artificial? One sentence.", lexicalBoundaries);
 rows.push(stockPhoto);
 assert.match(stockPhoto.answer, /posed|staged|generic|authentic|natural|idealized|real-life|randomness|imperfection/i);
+const approvalOpinion = await ask(customerToken, "Do you approve of pineapple on pizza? Answer casually in one sentence.", lexicalBoundaries);
+rows.push(approvalOpinion);
+assert.match(approvalOpinion.answer, /pineapple|pizza|sweet|savory|yes|no/i);
+const queueMeaning = await ask(customerToken, "In programming, what is a queue data structure? One sentence.", lexicalBoundaries);
+rows.push(queueMeaning);
+assert.match(queueMeaning.answer, /first.in.first.out|FIFO|enqueue|dequeue/i);
+const hamletSummary = await ask(customerToken, "Give me a one-sentence summary of Hamlet.", lexicalBoundaries);
+rows.push(hamletSummary);
+assert.match(hamletSummary.answer, /Hamlet|prince|Denmark|revenge/i);
+const photosynthesisReminder = await ask(customerToken, "Remind me how photosynthesis works in one sentence.", lexicalBoundaries);
+rows.push(photosynthesisReminder);
+assert.match(photosynthesisReminder.answer, /light|sun|carbon dioxide|sugar|oxygen/i);
+const monitorLizard = await ask(customerToken, "What do monitor lizards eat? One sentence.", lexicalBoundaries);
+rows.push(monitorLizard);
+assert.match(monitorLizard.answer, /meat|animal|insect|prey|egg|fish|bird|mammal/i);
+const automationPoem = await ask(customerToken, "Write a four-line poem about automation.", lexicalBoundaries);
+rows.push(automationPoem);
+assert.equal(automationPoem.answer.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).length, 4);
+const grammarRewrite = await ask(customerToken, "Make this sentence grammatical and return only the correction: me go store.", lexicalBoundaries);
+rows.push(grammarRewrite);
+assert.match(grammarRewrite.answer.trim(), /^I (?:am going|go|went) to the store[.!]?$/i);
 
 const businessToCasual: Turn[] = [
   { user: "Review my accounting ledger.", assistant: "The accounting ledger and sales pipeline need attention." },

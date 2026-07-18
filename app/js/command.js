@@ -9,12 +9,12 @@
 import {
   store, uid, visible, currentWs, currentTenantId, isAdmin, isOwnerOperator, pushActivity, moneyView, todaysPlan,
   PACKAGES, RETAINERS, VACATION_POLICY, fmtMoney, statusLabel, daysUntil, memoryStats, chatHistoryStats,
-  recentChatTurns,
+  recentChatTurns, addMemory,
   ctx, session, loadPhantomLoop, savePhantomLoop, loopProviderName, modelDisplayLabel,
   getPhantomLaneTarget, loadPhantomLaneConfig, workspaceStorageGetItem, wsName,
-} from "./store.js?v=phantom-live-20260718-32";
-import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260718-32";
-import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260718-32";
+} from "./store.js?v=phantom-live-20260718-33";
+import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260718-33";
+import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260718-33";
 const classifyPhantomIntent = (text) => deriveActionContract(classifyRaw(text));
 
 /* Cross-surface handoff: chat tells the Websites page which project to focus
@@ -46,6 +46,13 @@ function subjectOf(text) {
   return m[1].replace(/[.?!]\s*$/, "").replace(/^(the|a|an)\s+/i, "").trim();
 }
 const title = (s) => s.replace(/\b\w/g, (c) => c.toUpperCase());
+
+function memoryFactFromRequest(text) {
+  return String(text || "")
+    .replace(/^(?:please\s+)?(?:remember for later(?:\s+that)?|remember(?: this| that)?(?:\s*:|\s+that)|remember(?=\s+(?:my|our)\b)|save (?:this|that)(?: as (?:a )?memory)?(?:\s*:)?|keep (?:this|that) in memory(?:\s*:)?|add (?:this|that) to (?:your )?memory(?:\s*:)?|make sure you remember(?:\s+that)?)/i, "")
+    .trim()
+    .replace(/[.]\s*$/, "");
+}
 
 function card(kicker, name, body, actions = [], meta = "") {
   return { kicker, title: name, body, actions, meta };
@@ -95,7 +102,7 @@ const INSTANT_CHAT_MODEL = "qwen2.5:14b";
 const INSTANT_CHAT_MAX_PROVIDER_MS = 4500;
 const INSTANT_CHAT_ALLOWED_INTENTS = new Set(["identity", "capability", "question", "chat"]);
 const INSTANT_CHAT_ALWAYS_BLOCKED = /\b(?:diagnos(?:e|is)|medical advice|legal advice)\b|\b(?:what(?:'s| is)|how(?:'s| is)|check|show me|give me)\b.{0,28}\b(?:weather|forecast|temperature|humidity)\b|\b(?:latest|current|today'?s?|breaking|live)\b.{0,28}\b(?:news|headlines?|score|price|quote|exchange rate|weather|forecast)\b|\b(?:stock|share|crypto|bitcoin|ethereum)\b.{0,28}\b(?:price|quote|value|rate|today|now|current|latest)\b|\b(?:price of|exchange rate)\b/i;
-const INSTANT_CHAT_BUSINESS_ACTION = /\b(?:build|create|draft|write|fix|debug|code|implement|research|plan|strategize|design|make|generate|schedule|automate|review|open)\b.{0,48}\b(?:proposal|website|site|automation|task|client|customer|lead|transaction|accounting|invoice|payment|security scan|contract|tenant|organization|phantomforce)\b|\b(?:generate|create|edit|enhance|upload|publish|remove (?:the )?background)\b.{0,32}\b(?:content|video|image|media)\b/i;
+const INSTANT_CHAT_BUSINESS_ACTION = /\b(?:build|create|draft|write|fix|debug|code|implement|research|plan|strategize|design|make|generate|schedule|automate|review|open)\s+(?:me\s+|us\s+)?(?:(?:an?|the|my|our|this)\s+)?(?:proposal|website|site|automation|task|client|customer|lead|transaction|accounting|invoice|payment|security scan|contract|tenant|organization|phantomforce)\b|\b(?:generate|create|edit|enhance|upload|publish|remove (?:the )?background)\s+(?:an?|the|my|our|this)?\s*(?:content|video|image|media)\b/i;
 const INSTANT_CHAT_EXTERNAL_ACTION = /(?:^|\b(?:please|can you|could you|would you|will you|i need you to|go ahead and)\s+)(?:deploy|delete|send|post|upload|publish)\b/i;
 const INSTANT_CHAT_PRIVATE_BUSINESS = /\b(?:my|our|this)\s+(?:business|company|workspace|proposal|website|site|automation|task|client|customer|lead|transaction|accounting|bank(?: account)?|invoice|payment|security|contract|tenant|organization)\b/i;
 const INSTANT_CHAT_SIGNAL = /\b(?:favorite|do you like|would you rather|tell me a joke|joke|how are you|what'?s your|what is your|who are you|are you|can you|what is \d|what'?s \d)\b/i;
@@ -997,6 +1004,21 @@ function intentResponse(intent, text, settings = null) {
   if (intent.primaryIntent === "capability") {
     return {
       say: "Ask in plain business language. I can answer questions, plan work, use your business memory, Create a video request, prepare media, route workers, build sites, create automations, and queue approvals. The more your accounts, assets, and memory are connected, the more I can actually do.",
+      cards: [],
+      open: null,
+    };
+  }
+  if (intent.primaryIntent === "memory_update") {
+    const fact = memoryFactFromRequest(text) || text.trim();
+    const saved = addMemory({
+      source: "manual",
+      text: text.trim(),
+      title: fact,
+      summary: fact,
+      pinnedByUser: true,
+    });
+    return {
+      say: saved ? "Remembered: " + fact : "I couldn't save that memory just now.",
       cards: [],
       open: null,
     };

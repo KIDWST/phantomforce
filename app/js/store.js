@@ -102,7 +102,7 @@ const SECRET_REDACTIONS = [
   [/[A-Za-z]:\\Users\\[^\\\s]+\\AppData\\Local\\Temp\\[^\s,;]+/gi, "[redacted-temp-path]"],
 ];
 
-const EXPLICIT_MEMORY_SAVE_PATTERN = /\b(?:remember(?: this| that)?|save (?:this|that)(?: as (?:a )?memory)?|keep (?:this|that) in memory|add (?:this|that) to (?:your )?memory)\b/i;
+const EXPLICIT_MEMORY_SAVE_PATTERN = /^(?:please\s+)?(?:remember for later(?:\s+that)?|remember(?: this| that)?(?:\s*:|\s+that\b)|remember\s+(?:my|our)\b|save (?:this|that)(?: as (?:a )?memory)?\b|keep (?:this|that) in memory\b|add (?:this|that) to (?:your )?memory\b)|^(?:can|could|would)\s+you\s+remember\b|^i want you to remember\b|^make sure you remember\b/i;
 const TEMPORARY_MEMORY_PATTERN = /\b(?:for|just for)\s+(?:this|the)\s+(?:chat|conversation|session)\s+only\b|\b(?:do not|don'?t)\s+(?:save|remember|store)\s+(?:this|that|it)\b|\btemporary(?:ly)?\s+(?:only|context)\b/i;
 const FUTURE_RULE_PATTERN = /\b(?:from now on|going forward|in the future|every time|next time|do it this way next time|never do this again|always (?:use|do|keep|show|write|respond|route|ask|make)|never (?:use|do|show|write|respond|route|ask|make))\b/i;
 const STABLE_PREFERENCE_PATTERN = /\b(?:(?:my|our) (?:default|preference|preferred (?:style|format|workflow|model|tool|tone)) (?:is|should be)|(?:i|we) prefer\b|(?:my|our) (?:business|company|brand|workflow|process) (?:is|uses?|requires?)\b|we use\b)/i;

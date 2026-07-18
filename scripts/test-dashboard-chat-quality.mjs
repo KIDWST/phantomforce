@@ -77,6 +77,20 @@ const casualPrompts = [
   "how do I make chicken stock?",
   "why do stock photos look fake?",
   "what is your current favorite food?",
+  "do you approve of pineapple on pizza?",
+  "what queue data structure should I use?",
+  "give me a summary of Hamlet",
+  "report on the history of jazz",
+  "I remember my first bike",
+  "remind me how photosynthesis works",
+  "what do monitor lizards eat?",
+  "tell me when dinosaurs lived",
+  "watch this movie and tell me what you think",
+  "write a poem about automation",
+  "create a story about a workflow",
+  "automation changed factory work",
+  "make this sentence better: me go store",
+  "this story needs better pacing",
 ];
 
 const forbiddenStatus = /\b(?:ledger|pipeline|cashflow|cash flow|approvals? waiting|today's plan|right now:)\b/i;
@@ -202,6 +216,18 @@ assert.doesNotMatch(degradedFood.say, /tacos/i);
 
 const explicitWorkspaceQuestion = await handleSmartCommand("show my open proposals");
 assert.match(explicitWorkspaceQuestion.say, /proposal/i, "explicit workspace-state questions must still reach the business command surface");
+for (const [prompt, expectedIntent] of [
+  ["what's in my approval queue?", "approval_request"],
+  ["show my sales pipeline", "status_check"],
+  ["give me my weekly report", "status_check"],
+  ["remind me tomorrow at 9 to call Sam", "reminder"],
+  ["remember for later that my brand color is green", "memory_update"],
+  ["create an automation to scan my site weekly", "create_automation"],
+  ["create a task to update my website", "create_task"],
+  ["monitor my site daily", "reminder"],
+]) {
+  assert.equal(classifyPhantomIntent(prompt).primaryIntent, expectedIntent, prompt + " must retain its explicit operational lane");
+}
 globalThis.fetch = originalFetch;
 
 assert.doesNotMatch(commandSrc, /Right now:.*ledger empty/i, "the rejected generic ledger fallback must stay deleted");

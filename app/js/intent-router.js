@@ -8,6 +8,7 @@ const lower = (value = "") => clean(value).toLowerCase();
 
 const EXPLICIT_TASK = /\b(create|add|make|assign|track|put|save|log)\s+(a\s+)?(task|todo|to-do|work item)\b|\b(make|add|put|save|track)\s+(this|that|it).{0,30}\b(task list|todo|to-do|tasks?)\b|\bmake\s+(this|that|it)\s+a\s+(todo|to-do|task)\b|\bturn\s+(this|that|it)\s+into\s+a\s+(task|todo|to-do)\b|\bassign\s+(phantom|codex|claude)\s+a\s+task\b|\btrack this as\b/i;
 const TASK_CANDIDATE = /\b(needs?|should|someone should|we need to|have to|must)\s+(to\s+)?(fix|fixing|update|change|improve|make|clean|polish|repair|redo|adjust|better)\b|\bneeds?\s+(better|fixing|spacing|polish|cleanup|work)\b|\bmake\s+.{2,80}\s+better\b|\b(is|looks|feels)\s+(broken|off|bad|ugly|wrong|annoying|confusing)\b/i;
+const TASK_SURFACE = /\b(app|website|site|dashboard|page|screen|sidebar|navbar|nav|chat ?box|profile card|media lab|editor|button|form|layout|spacing|billing|automation|workflow|phantomforce)\b/i;
 const BRAINSTORM = /\b(we should|maybe|what if|it would be cool|i think|i want|could we|should we)\b/i;
 const QUESTION = /\?|\b(what|why|how|when|where|who|can|could|should|would|is|are|do|does|did)\b/i;
 const GREETING = /^(hey|hi|hello|yo|sup|gm|gn|good morning|good afternoon|good evening|what'?s up|wassup|you there|u there|ping|test)(\s+there)?([,\s]+(phantom(force)?|ghost|buddy|man|dude))?[\s.!?]*$/i;
@@ -18,15 +19,18 @@ const INFORMATIONAL_CONCEPT_QUESTION = /^(?:what (?:is|are)|how (?:does|do)|expl
 const PRIVATE_CONCEPT_REFERENCE = /\b(?:my|our|this workspace(?:'s)?|this business(?:'s)?|this company(?:'s)?)\b.{0,32}\b(?:approval|workflow|memory|pipeline|accounting|invoice|proposal|quote|lead|prospect|automation|task|website|bank|transaction|crm)\b/i;
 const FEEDBACK = /\b(i hate|i don't like|this sucks|looks awful|looks bad|annoying|frustrating|disappointed|not what i wanted|too robotic|too cluttered)\b/i;
 const PLAN = /\b(make|create|give|draft|build)\s+(me\s+)?(a\s+)?(plan|roadmap|breakdown|strategy)|\b(break this down|roadmap this|plan this|help me plan)\b/i;
-const REMINDER = /\b(remind me|reminder|schedule (this|that|it)\b|check this every|every morning|every day|daily|weekly|monitor|tell me when|watch this)\b/i;
+const REMINDER = /\bremind me\s+(?:to\b|(?:at|on|tomorrow|today|tonight|next|in\s+\d)\b)|\b(?:set|create|add)\s+(?:a\s+)?reminder\b|\bschedule (?:this|that|it)\b|\bcheck this every\b|\bmonitor\s+(?:my|our|this|the)\s+(?:site|website|account|inbox|calendar|system|server|campaign|page)\b|\btell me when (?:this|that|it|my|our)\b|\bwatch (?:my|our|this|the)\s+(?:site|website|account|inbox|system|server)\b/i;
 const AUTOMATION = /\b(automation|automate|workflow|autopilot|recurring|auto[- ]?follow|auto[- ]?post)\b/i;
-const APPROVAL = /\b(approve|approval|sign off|waiting on me|pending|review queue|needs my call)\b/i;
-const MEMORY = /\b(remember|save this memory|make sure you remember|from now on|always remember|forget this)\b/i;
+const AUTOMATION_CREATE = /\b(?:create|make|build|draft|set ?up|add)\s+(?:me\s+|us\s+)?(?:an?\s+)?(?:automation|workflow|autopilot)\b|\bautomate\s+(?:my|our|this|the)\b/i;
+const AUTOMATION_IDEA = /^(?:an?\s+)?(?:automation|workflow)(?:\s+(?:for|to|that)\b|[.!?]*$)|\b(?:want|need|could use|thinking about)\b.{0,30}\b(?:automation|workflow)\b/i;
+const APPROVAL = /^(?:please\s+)?(?:approve|decline|reject|sign off(?: on)?)\b|^(?:the\s+)?(?:approval|review) queue[.!?]*$|\b(?:my|our|this workspace(?:'s)?|this business(?:'s)?|this company(?:'s)?)\b.{0,40}\b(?:approvals?|approval queue|review queue|pending decisions?)\b|\b(?:show|open|list|check|review)\b.{0,40}\b(?:approvals?|approval queue|review queue|pending decisions?|waiting on me)\b|\b(?:waiting on me|needs my call)\b/i;
+const MEMORY = /^(?:please\s+)?(?:remember(?: this| that)?(?:\s*:|\s+that\b|\s+for later\b|\s+(?:my|our)\b)|save (?:this|that)(?: as (?:a )?memory)?\b|keep (?:this|that) in memory\b|add (?:this|that) to (?:your )?memory\b|make sure you remember\b)|\b(?:from now on|always remember)\b/i;
+const MEMORY_QUERY = /\bwhat (?:do you remember|have you saved|is in (?:my|our) memory)\b|\bshow (?:me )?(?:my|our|saved) memor(?:y|ies)\b/i;
 const TEMPORARY_CONTEXT = /\b(?:for|just for)\s+(?:this|the)\s+(?:chat|conversation|session)\s+only\b|\bdo not save (?:this|that)\b/i;
 /* "today" alone is NOT a status request — "I'm overwhelmed by everything
    today" is a person talking, not a report query. Only real status phrasing
    counts. */
-const STATUS = /\b(status|catch me up|what'?s next|what is next|today'?s plan|plan for today|pipeline|queue|summary|report)\b/i;
+const STATUS = /^(?:status|business status|workspace status|catch me up|what'?s next(?: today)?|what is next(?: today)?|today'?s plan|plan for today|summary|report)[.!?]*$|\b(?:my|our|this workspace(?:'s)?|this business(?:'s)?|this company(?:'s)?)\b.{0,40}\b(?:status|today'?s plan|pipeline|queue|summary|report)\b|\b(?:show|open|list|check|review|summari[sz]e|give me)\b.{0,24}\b(?:my|our|workspace|business|company|sales|client|approval|task|work)\b.{0,32}\b(?:status|plan|pipeline|queue|summary|report)\b/i;
 /* the user is venting, not filing a request — answer like a person */
 const VENT = /\b(i'?m|i am|im|feeling|been)\s+(so\s+|really\s+|pretty\s+)?(overwhelmed|stressed|burn(ed|t)?[\s-]*out|exhausted|drowning|swamped|frustrated|anxious|behind on everything)\b|\btoo much (going on|on my plate)\b|\blong (day|week)\b/i;
 /* server agent runs — explicit "run a …" phrasing for the real, safe
@@ -55,7 +59,6 @@ const BUILD_TARGET = /\b(campaign|intake form|build plan|dashboard|portal|funnel
 const WEBSITE_CREATE = /\b(build|create|make|draft|design|spin up|start)\s+(me\s+|us\s+)?(a|an|another|new)\s+[^.?!]{0,40}?\b(website|web ?site|site|landing page|web ?page|home ?page|store ?front|online store)\b/i;
 /* editing an existing site from chat: explicit site nouns + change verbs */
 const WEBSITE_UPDATE = /\b(update|change|edit|redo|rework|improve|adjust|tweak|refresh)\b[^.?!]{0,40}\b(website|site|landing page|home ?page|hero|headline)\b|\bmake\s+(the\s+)?(site|website|hero|headline|page)\b[^.?!]{0,50}\b(premium|simpler|cleaner|shorter|better|blue|red|gold|purple|green|neon)\b|\b(site|website)\b[^.?!]{0,40}\b(more premium|cleaner|simpler)\b/i;
-const EXPLICIT_ARTIFACT = /\b(create|draft|build|make|prepare|write|new)\b/i;
 /* Termina (multi-agent command wall) — EXPLICIT phrasing only. A bare mention
    of "termina" in a question stays conversation. */
 const TERMINA = /\b(open (this |that |it )?in termina|send (this|that|it) to termina|split (this|that|it) across (multiple )?(agents|workers)|run planner[\s,\/&-]*builder[\s,\/&-]*reviewer|create parallel workers?\b)/i;
@@ -72,6 +75,14 @@ function confidenceFor(kind, text) {
   if (EXPLICIT_TASK.test(text) || /remind me|check this every/i.test(text)) return 0.92;
   if (TASK_CANDIDATE.test(text) || BRAINSTORM.test(text)) return 0.74;
   return 0.82;
+}
+
+function isTaskCandidate(text) {
+  const explicitObligation = /\b(?:we|someone|the team|phantom|codex|claude)\s+(?:need(?:s)? to|should|must|has to|have to)\s+(?:fix|update|change|improve|clean|polish|repair|redo|adjust)\b/i;
+  const directBrokenReference = /^(?:this|that|it)\s+(?:is|looks|feels)\s+(?:broken|off|bad|ugly|wrong|annoying|confusing)[.!?]*$/i;
+  return explicitObligation.test(text)
+    || directBrokenReference.test(text)
+    || (TASK_SURFACE.test(text) && TASK_CANDIDATE.test(text));
 }
 
 function taskDraft(text) {
@@ -141,6 +152,41 @@ export function classifyPhantomIntent(raw = "") {
      stay questions. */
   const politeStripped = text.replace(/^(hey\s+|ok\s+|yo\s+)?(phantom[,\s]+)?(can|could|will|would)\s+you\s+(please\s+)?|^please\s+/i, "");
   const isHowWhatQuestion = /^(how|what|why|when|where|who|should|do|does|did|is|are)\b/i.test(politeStripped);
+  if (EXPLICIT_TASK.test(politeStripped) && !isHowWhatQuestion) {
+    return {
+      ...result,
+      primaryIntent: "create_task",
+      confidence: confidenceFor("create_task", text),
+      shouldCreateTask: true,
+      requiresUserConfirmation: false,
+      reasonCode: "explicit_task_request",
+      taskDraft: taskDraft(text),
+    };
+  }
+  if (REMINDER.test(politeStripped) && !isHowWhatQuestion) {
+    return {
+      ...result,
+      primaryIntent: "reminder",
+      confidence: confidenceFor("reminder", text),
+      shouldCreateAutomation: true,
+      shouldAskClarifyingQuestion: !/\b(tomorrow|today|daily|weekly|every|morning|evening|at\s+\d)/i.test(text),
+      requiresUserConfirmation: true,
+      requiresAdminApproval: true,
+      reasonCode: "reminder_or_monitor_request",
+      automationDraft: automationDraft(text),
+    };
+  }
+  if (AUTOMATION_CREATE.test(politeStripped) && !isHowWhatQuestion) {
+    return {
+      ...result,
+      primaryIntent: "create_automation",
+      confidence: confidenceFor("create_automation", text),
+      shouldCreateAutomation: true,
+      requiresAdminApproval: true,
+      reasonCode: "explicit_automation_request",
+      automationDraft: automationDraft(text),
+    };
+  }
   if (WEBSITE_CREATE.test(politeStripped) && !isHowWhatQuestion) {
     return { ...result, primaryIntent: "create_website", confidence: 0.93, reasonCode: "explicit_website_create" };
   }
@@ -199,8 +245,11 @@ export function classifyPhantomIntent(raw = "") {
   if (INFORMATIONAL_CONCEPT_QUESTION.test(text) && !PRIVATE_CONCEPT_REFERENCE.test(text)) {
     return { ...result, primaryIntent: "question", confidence: 0.92, reasonCode: "informational_concept_question" };
   }
-  if (MEMORY.test(text) && TEMPORARY_CONTEXT.test(text)) {
+  if (TEMPORARY_CONTEXT.test(text) && /\bremember\b/i.test(text)) {
     return { ...result, primaryIntent: "chat", confidence: 0.94, reasonCode: "temporary_conversation_context" };
+  }
+  if (MEMORY_QUERY.test(text)) {
+    return { ...result, primaryIntent: "status_check", confidence: 0.92, reasonCode: "saved_memory_query" };
   }
   if (MEMORY.test(text)) {
     return { ...result, primaryIntent: "memory_update", confidence: confidenceFor("memory_update", text), reasonCode: "memory_keyword" };
@@ -251,41 +300,6 @@ export function classifyPhantomIntent(raw = "") {
       reasonCode: "explicit_termina_request",
     };
   }
-  if (EXPLICIT_TASK.test(text)) {
-    return {
-      ...result,
-      primaryIntent: "create_task",
-      confidence: confidenceFor("create_task", text),
-      shouldCreateTask: true,
-      requiresUserConfirmation: false,
-      reasonCode: "explicit_task_request",
-      taskDraft: taskDraft(text),
-    };
-  }
-  if (REMINDER.test(text)) {
-    return {
-      ...result,
-      primaryIntent: "reminder",
-      confidence: confidenceFor("reminder", text),
-      shouldCreateAutomation: true,
-      shouldAskClarifyingQuestion: !/\b(tomorrow|today|daily|weekly|every|morning|evening|at\s+\d)/i.test(text),
-      requiresUserConfirmation: true,
-      requiresAdminApproval: true,
-      reasonCode: "reminder_or_monitor_request",
-      automationDraft: automationDraft(text),
-    };
-  }
-  if (AUTOMATION.test(text) && EXPLICIT_ARTIFACT.test(text)) {
-    return {
-      ...result,
-      primaryIntent: "create_automation",
-      confidence: confidenceFor("create_automation", text),
-      shouldCreateAutomation: true,
-      requiresAdminApproval: true,
-      reasonCode: "explicit_automation_request",
-      automationDraft: automationDraft(text),
-    };
-  }
   if (CURRENT_INFO.test(text)) {
     /* checked after task/reminder/automation so "remind me to check the
        weather every morning" still becomes an automation — but a bare
@@ -300,10 +314,10 @@ export function classifyPhantomIntent(raw = "") {
       ...result,
       primaryIntent: "feedback",
       confidence: confidenceFor("feedback", text),
-      shouldAskClarifyingQuestion: TASK_CANDIDATE.test(text),
-      requiresUserConfirmation: TASK_CANDIDATE.test(text),
+      shouldAskClarifyingQuestion: isTaskCandidate(text),
+      requiresUserConfirmation: isTaskCandidate(text),
       reasonCode: "feedback_not_task",
-      taskDraft: TASK_CANDIDATE.test(text) ? taskDraft(text) : null,
+      taskDraft: isTaskCandidate(text) ? taskDraft(text) : null,
     };
   }
   if (BRAINSTORM.test(text)) {
@@ -315,7 +329,7 @@ export function classifyPhantomIntent(raw = "") {
       reasonCode: "soft_brainstorm_language",
     };
   }
-  if (TASK_CANDIDATE.test(text)) {
+  if (isTaskCandidate(text)) {
     return {
       ...result,
       primaryIntent: "task_candidate",
@@ -332,7 +346,7 @@ export function classifyPhantomIntent(raw = "") {
   if (QUESTION.test(text)) {
     return { ...result, primaryIntent: "question", confidence: confidenceFor("question", text), reasonCode: "question_not_action" };
   }
-  if (AUTOMATION.test(text)) {
+  if (AUTOMATION_IDEA.test(text)) {
     return {
       ...result,
       primaryIntent: "automation_candidate",

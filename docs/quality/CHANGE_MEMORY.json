@@ -751,6 +751,26 @@
             "description": "Offline browser tests prove business-adjacent concept questions remain text-only while an explicit workspace-state request still reaches the business surface."
           },
           {
+            "file": "scripts/test-phantom-intent-router.mjs",
+            "pattern": "Do you approve of pineapple on pizza[\\s\\S]*What do monitor lizards eat[\\s\\S]*Create an automation to scan my site weekly[\\s\\S]*explicit durable memory must create one real memory record",
+            "description": "Browser intent tests protect ordinary language from approval, reminder, automation, task, website, status, and memory keyword collisions while preserving explicit operations."
+          },
+          {
+            "file": "app/js/store.js",
+            "pattern": "EXPLICIT_MEMORY_SAVE_PATTERN = /\\^\\(\\?:please[\\s\\S]*export function shouldAiRemember",
+            "description": "Saved-memory detection requires an explicit forward-looking instruction and cannot pin autobiographical uses of the word remember."
+          },
+          {
+            "file": "app/js/command.js",
+            "pattern": "if \\(intent\\.primaryIntent === \"memory_update\"\\)[\\s\\S]*pinnedByUser: true[\\s\\S]*Remembered:",
+            "description": "An explicit durable-memory command creates a real pinned record and confirms the fact that was saved."
+          },
+          {
+            "file": "server/scripts/test-instant-chat-fallback.ts",
+            "pattern": "write a four-line poem about automation[\\s\\S]*what do monitor lizards eat[\\s\\S]*make this sentence grammatical",
+            "description": "Server instant-route policy stays aligned with browser semantic boundaries instead of blocking harmless creative and lexical prompts."
+          },
+          {
             "file": "server/src/phantom-ai/instant-chat-tools.ts",
             "pattern": "tool_id: \"phantom-stable-fact\"[\\s\\S]*function enforceCodeOnly",
             "description": "Explicit verified octopus facts use a curated stable answer, and code-only responses deterministically remove Markdown fences."

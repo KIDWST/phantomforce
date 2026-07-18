@@ -79,6 +79,10 @@ assert.equal(isSafeInstantConversationRequest({ task_type: "question", user_requ
 assert.equal(isSafeInstantConversationRequest({ task_type: "question", user_request: "how do I make chicken stock?" }), true);
 assert.equal(isSafeInstantConversationRequest({ task_type: "question", user_request: "why do stock photos look fake?" }), true);
 assert.equal(isSafeInstantConversationRequest({ task_type: "question", user_request: "what is your current favorite food?" }), true);
+assert.equal(isSafeInstantConversationRequest({ task_type: "chat", user_request: "write a four-line poem about automation" }), true);
+assert.equal(isSafeInstantConversationRequest({ task_type: "chat", user_request: "create a story about a workflow" }), true);
+assert.equal(isSafeInstantConversationRequest({ task_type: "question", user_request: "what do monitor lizards eat?" }), true);
+assert.equal(isSafeInstantConversationRequest({ task_type: "chat", user_request: "make this sentence grammatical: me go store" }), true);
 assert.equal(isSafeInstantConversationRequest({ task_type: "chat", user_request: "generate an image of a city" }), false);
 assert.equal(isSafeInstantConversationRequest({ task_type: "chat", user_request: "build a website for my company" }), false);
 assert.equal(isSafeInstantConversationRequest({ task_type: "question", user_request: "show my invoice" }), false);

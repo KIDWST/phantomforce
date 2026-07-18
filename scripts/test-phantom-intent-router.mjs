@@ -24,7 +24,7 @@ const buildId = commandSrc.match(/store\.js\?v=([^"']+)/)?.[1] || "";
 const q = buildId ? `?v=${buildId}` : "";
 const { classifyPhantomIntent } = await import(`../app/js/intent-router.js${q}`);
 const { handleCommand, handleSmartCommand } = await import(`../app/js/command.js${q}`);
-const { ctx, store, VACATION_POLICY } = await import(`../app/js/store.js${q}`);
+const { ctx, store, VACATION_POLICY, shouldAiRemember } = await import(`../app/js/store.js${q}`);
 
 ctx.session = { role: "admin", name: "Jordan", ws: "phantomforce" };
 
@@ -247,6 +247,43 @@ assert.equal(classifyPhantomIntent("write a haiku about rain").needsLiveData, fa
 assert.equal(classifyPhantomIntent("will it rain tomorrow?").needsLiveData, true, "forecast questions must keep the live-data lane");
 assert.equal(classifyPhantomIntent("Remember for this chat only: my dog's name is Pixel.").primaryIntent, "chat", "chat-only facts must not become durable memory");
 assert.equal(classifyPhantomIntent("Remember that my dog's name is Pixel.").primaryIntent, "memory_update", "an explicit durable memory request must keep the memory lane");
+for (const prompt of [
+  "Do you approve of pineapple on pizza?",
+  "What does approval mean in psychology?",
+  "What queue data structure should I use?",
+  "Give me a summary of Hamlet.",
+  "Report on the history of jazz.",
+  "What's next in this novel?",
+  "I remember my first bike.",
+  "Remember when we discussed pizza?",
+  "Remind me how photosynthesis works.",
+  "What do monitor lizards eat?",
+  "Tell me when dinosaurs lived.",
+  "Watch this movie and tell me what you think.",
+  "Write a poem about automation.",
+  "Create a story about a workflow.",
+  "Automation changed factory work.",
+  "Make this sentence better: me go store.",
+  "This story needs better pacing.",
+]) {
+  assert.ok(["question", "chat"].includes(classifyPhantomIntent(prompt).primaryIntent), prompt + " must remain normal conversation");
+}
+assert.equal(classifyPhantomIntent("What's in my approval queue?").primaryIntent, "approval_request");
+assert.equal(classifyPhantomIntent("Show my sales pipeline.").primaryIntent, "status_check");
+assert.equal(classifyPhantomIntent("Give me my weekly report.").primaryIntent, "status_check");
+assert.equal(classifyPhantomIntent("Remind me tomorrow at 9 to call Sam.").primaryIntent, "reminder");
+assert.equal(classifyPhantomIntent("Create an automation to scan my site weekly.").primaryIntent, "create_automation");
+assert.equal(classifyPhantomIntent("Create a task to update my website.").primaryIntent, "create_task");
+assert.equal(classifyPhantomIntent("Monitor my site daily.").primaryIntent, "reminder");
+assert.equal(shouldAiRemember("I remember my first bike."), false, "autobiographical conversation must not become saved memory");
+assert.equal(shouldAiRemember("Remember when we discussed pizza?"), false, "a recall question must not become saved memory");
+assert.equal(shouldAiRemember("Remember for later that my brand color is green."), true, "explicit future memory must remain durable");
+store.state.memory = [];
+const durableMemory = handleCommand("Remember for later that my brand color is green.");
+assert.match(durableMemory.say, /Remembered: my brand color is green/i);
+assert.equal(store.state.memory.length, 1, "explicit durable memory must create one real memory record");
+assert.equal(store.state.memory[0].pinnedByUser, true, "explicit durable memory must be pinned by the user");
+assert.match(store.state.memory[0].summary, /brand color is green/i);
 
 let broadChatBody = null;
 globalThis.fetch = async (url, init) => {
