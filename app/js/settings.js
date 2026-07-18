@@ -13,16 +13,16 @@ const AI_SETTINGS_KEY = "pf.operator.settings.v1";
 const SETTINGS_TAB_KEY = "pf.settings.tab.v1";
 
 const SETTINGS_TABS = [
-  { id: "model", label: "Model", category: "AI Brain" },
-  { id: "loop", label: "Loop routing", category: "AI Brain" },
-  { id: "chat", label: "Chat behavior", category: "AI Brain" },
-  { id: "clientsetup", label: "Workspace setup", category: "Workspace" },
-  { id: "organization", label: "Organization", category: "Workspace" },
-  { id: "plan", label: "Plan & access", category: "Workspace" },
-  { id: "workspace", label: "Workspace Studio", category: "Workspace" },
-  { id: "modules", label: "Workspace Modules", category: "Workspace" },
-  { id: "companion", label: "Companion", category: "Workspace" },
-  { id: "media", label: "Media & social", category: "Media" },
+  { id: "model", label: "Model", category: "AI Brain", keywords: ["provider", "claude", "codex", "openrouter", "ollama", "local model", "brain", "default model"] },
+  { id: "loop", label: "Loop routing", category: "AI Brain", keywords: ["phantom loop", "cost", "budget", "max cost", "routing", "autopilot"] },
+  { id: "chat", label: "Chat behavior", category: "AI Brain", keywords: ["response style", "memory", "context", "receipts", "tone"] },
+  { id: "clientsetup", label: "Workspace setup", category: "Workspace", keywords: ["onboarding", "client setup", "templates", "services", "packages"] },
+  { id: "organization", label: "Organization", category: "Workspace", keywords: ["members", "roles", "invitations", "employees", "access", "admin", "team"] },
+  { id: "plan", label: "Plan & access", category: "Workspace", keywords: ["entitlements", "limits", "tier", "subscription", "billing"] },
+  { id: "workspace", label: "Workspace Studio", category: "Workspace", keywords: ["branding", "navigation", "customize", "publish", "studio"] },
+  { id: "modules", label: "Workspace Modules", category: "Workspace", keywords: ["features", "tabs", "enable", "disable", "phantomstore", "phantomplay"] },
+  { id: "companion", label: "Companion", category: "Workspace", keywords: ["pet", "avatar", "phantom character", "motion", "personality"] },
+  { id: "media", label: "Media & social", category: "Media", keywords: ["oauth", "social accounts", "analytics connection", "instagram", "tiktok", "youtube", "publishing", "providers", "connect account"] },
 ];
 
 const SETTINGS_CATEGORIES = ["AI Brain", "Workspace", "Media"];
@@ -134,9 +134,42 @@ const esc = (value = "") => String(value)
   .replace(/"/g, "&quot;")
   .replace(/'/g, "&#39;");
 
+let settingsSearchQuery = "";
+
+function settingsSearchMatches(query) {
+  const q = String(query || "").trim().toLowerCase();
+  if (!q) return [];
+  return SETTINGS_TABS.filter((tab) =>
+    tab.label.toLowerCase().includes(q) ||
+    tab.category.toLowerCase().includes(q) ||
+    (tab.keywords || []).some((keyword) => keyword.toLowerCase().includes(q)));
+}
+
 function renderSettingsCategories(activeTab) {
+  const query = settingsSearchQuery.trim();
+  const searchInput = `
+    <input type="search" class="set-search-input" data-set-search placeholder="Search settings…"
+           value="${esc(settingsSearchQuery)}" aria-label="Search settings" autocomplete="off" spellcheck="false"
+           style="width:100%;box-sizing:border-box;margin:0 0 8px;padding:8px 10px;border-radius:10px;border:1px solid var(--line-strong, rgba(255,255,255,0.14));background:rgba(255,255,255,0.04);color:inherit;font:inherit;" />
+  `;
+  if (query) {
+    const matches = settingsSearchMatches(query);
+    return `
+      <nav class="set-category-nav" aria-label="Settings categories">
+        ${searchInput}
+        <div class="set-category-options set-search-results" data-set-search-results>
+          ${matches.length ? matches.map((item) => `
+            <button type="button" class="${item.id === activeTab ? "is-active" : ""}" role="tab" aria-selected="${item.id === activeTab}" data-set-tab="${esc(item.id)}">
+              ${esc(item.label)} · ${esc(item.category)}
+            </button>
+          `).join("") : `<p class="set-note">No settings match "${esc(query)}".</p>`}
+        </div>
+      </nav>
+    `;
+  }
   return `
     <nav class="set-category-nav" aria-label="Settings categories">
+      ${searchInput}
       ${SETTINGS_CATEGORIES.map((category) => {
         const items = SETTINGS_TABS.filter((item) => item.category === category);
         const hasActiveItem = items.some((item) => item.id === activeTab);
@@ -1155,12 +1188,34 @@ export function renderOperatorSettings(el, opts = {}) {
       </div>
     </div>`;
 
-  el.querySelectorAll("[data-set-tab]").forEach((button) => {
-    button.onclick = () => {
-      saveSettingsTab(button.dataset.setTab);
-      renderOperatorSettings(el, opts);
-    };
-  });
+  const bindCategoryNav = () => {
+    el.querySelectorAll("[data-set-tab]").forEach((button) => {
+      button.onclick = () => {
+        saveSettingsTab(button.dataset.setTab);
+        settingsSearchQuery = "";
+        renderOperatorSettings(el, opts);
+      };
+    });
+    const search = el.querySelector("[data-set-search]");
+    if (search) {
+      search.oninput = () => {
+        settingsSearchQuery = search.value;
+        const nav = el.querySelector(".set-category-nav");
+        if (!nav) return;
+        const wrapper = document.createElement("div");
+        wrapper.innerHTML = renderSettingsCategories(activeTab);
+        nav.replaceWith(wrapper.firstElementChild);
+        bindCategoryNav();
+        const next = el.querySelector("[data-set-search]");
+        if (next) {
+          next.focus();
+          const end = next.value.length;
+          try { next.setSelectionRange(end, end); } catch {}
+        }
+      };
+    }
+  };
+  bindCategoryNav();
 
   const saveAndRender = () => {
     saveOperatorSettings(settings);
