@@ -879,6 +879,15 @@ Run the authenticated two-organization persistence proof in Recommended Cycle 10
   @phantomforce/server`: 67 authenticated requests, 452 ms average, 2,043 ms
   maximum, zero fallback, zero business leakage, and all capability assertions.
 - PASS: `npm run test:release-critical` (19/19 critical checks).
+- PASS after live sync: the 67-request gate ran from the dedicated deployment
+  source at 439 ms average and 1,846 ms maximum, with zero fallback, zero business
+  leakage, and every identity, formatting, code, multilingual, and source-honesty
+  assertion true.
+- PASS: `ops/admin-live/Test-LiveAdminSource.ps1` reported clean canonical commit
+  `39da116`, matching `origin/main`, sync manifest, running Hermes source, and
+  public build `phantom-live-20260718-29`.
+- PASS: `PhantomForce Ollama Service` last result `0`; `qwen2.5:14b` remained warm
+  at 100% GPU with context 2048 and a 24-hour lease.
 
 ## Next Task
 
