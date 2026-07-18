@@ -36,6 +36,7 @@ export async function submitBracketedPaste(proc, text, options = {}) {
   const retries = Math.max(1, Number.isFinite(options.retries) ? Math.floor(options.retries) : SUBMIT_RETRY_COUNT);
   const wait = typeof options.sleep === "function" ? options.sleep : sleep;
 
+  if (options.clearBeforePaste) proc.write("\x15");
   proc.write(bracketedPaste(text));
   await wait(submitDelayMs);
   for (let attempt = 0; attempt < retries; attempt += 1) {

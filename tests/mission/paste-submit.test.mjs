@@ -35,3 +35,20 @@ test("submitBracketedPaste always submits at least once", async () => {
   assert.equal(result.submitWrites, 1);
   assert.deepEqual(writes.slice(1), [ENTER]);
 });
+
+test("submitBracketedPaste can clear stale input before scheduled sends", async () => {
+  const writes = [];
+  const proc = { write: (chunk) => writes.push(chunk) };
+
+  await submitBracketedPaste(proc, "scheduled follow-up", {
+    clearBeforePaste: true,
+    submitDelayMs: 0,
+    retryDelayMs: 0,
+    retries: 1,
+    sleep: async () => {},
+  });
+
+  assert.equal(writes[0], "\x15");
+  assert.equal(writes[1], bracketedPaste("scheduled follow-up"));
+  assert.equal(writes[2], ENTER);
+});

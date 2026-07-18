@@ -1048,6 +1048,375 @@ function linkAllCards() {
   }
 }
 
+// ---- prompt scheduler -------------------------------------------------------
+
+const schedulerUi = {
+  targetMode: "linked",
+  range: "1-3",
+  prompt: "",
+  runAt: "",
+  schedules: [],
+  notice: "",
+  serverAvailable: true,
+};
+const SCHEDULER_LOCAL_KEY = "termina.promptSchedules.v1";
+const localPromptScheduleTimers = new Map();
+
+function readLocalPromptSchedules() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(SCHEDULER_LOCAL_KEY) || "[]");
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeLocalPromptSchedules(schedules) {
+  try {
+    localStorage.setItem(SCHEDULER_LOCAL_KEY, JSON.stringify(schedules));
+  } catch {
+    /* storage unavailable */
+  }
+}
+
+function pad2(value) {
+  return String(value).padStart(2, "0");
+}
+
+function localDateTimeValue(date) {
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}T${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
+}
+
+function defaultSchedulerTime() {
+  const next = new Date();
+  next.setSeconds(0, 0);
+  next.setHours(12, 0, 0, 0);
+  if (next.getTime() <= Date.now() + 30_000) next.setDate(next.getDate() + 1);
+  return localDateTimeValue(next);
+}
+
+function liveCards() {
+  return cards.filter((card) => card.sessionId && card.ws && card.ws.readyState === WebSocket.OPEN);
+}
+
+function labelForCard(card, index = cards.indexOf(card)) {
+  return `Tab ${index + 1} · ${card.name || profileLabel(card.profileId) || card.profileId || card.uid}`;
+}
+
+function parseTabRange(value) {
+  const text = String(value || "").trim();
+  const match = text.match(/^(\d{1,2})(?:\s*-\s*(\d{1,2}))?$/);
+  if (!match) return null;
+  const a = Math.max(1, Number(match[1]));
+  const b = Math.max(1, Number(match[2] || match[1]));
+  return [Math.min(a, b), Math.max(a, b)];
+}
+
+function schedulerTargetCards() {
+  const live = liveCards();
+  if (schedulerUi.targetMode === "all") return live;
+  if (schedulerUi.targetMode === "active") return live.filter((card) => card.uid === activeCardUid);
+  if (schedulerUi.targetMode === "range") {
+    const range = parseTabRange(schedulerUi.range) || [1, 3];
+    return live.filter((card) => {
+      const tab = cards.indexOf(card) + 1;
+      return tab >= range[0] && tab <= range[1];
+    });
+  }
+  const linked = live.filter((card) => card.linked);
+  return linked.length ? linked : live.filter((card) => card.uid === activeCardUid);
+}
+
+function schedulerTargetSummary() {
+  const targets = schedulerTargetCards();
+  if (!targets.length) return "No live tabs selected.";
+  return targets.map((card) => labelForCard(card)).join(", ");
+}
+
+async function refreshPromptSchedules() {
+  try {
+    const res = await api("/api/prompt-schedules");
+    if (!res.ok) throw new Error("scheduler_api_unavailable");
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || "scheduler_api_unavailable");
+    schedulerUi.serverAvailable = true;
+    schedulerUi.schedules = data.schedules || [];
+  } catch {
+    schedulerUi.serverAvailable = false;
+    schedulerUi.schedules = readLocalPromptSchedules();
+    schedulerUi.notice = "Scheduler is running locally in this window. Keep Termina open.";
+  }
+}
+
+function armLocalPromptSchedule(schedule) {
+  if (!schedule || schedule.status !== "queued") return;
+  const existing = localPromptScheduleTimers.get(schedule.id);
+  if (existing) clearTimeout(existing);
+  const delay = Math.max(0, schedule.runAt - Date.now());
+  const timer = setTimeout(() => {
+    localPromptScheduleTimers.delete(schedule.id);
+    runLocalPromptSchedule(schedule.id);
+  }, Math.min(delay, 2_147_000_000));
+  localPromptScheduleTimers.set(schedule.id, timer);
+}
+
+function loadLocalPromptSchedules() {
+  for (const schedule of readLocalPromptSchedules()) armLocalPromptSchedule(schedule);
+}
+
+function sendInputToCard(card, data) {
+  if (card.ws?.readyState === WebSocket.OPEN) {
+    card.ws.send(JSON.stringify({ type: "input", data }));
+    return true;
+  }
+  return false;
+}
+
+async function sendScheduledPromptToCard(card, prompt) {
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  if (!sendInputToCard(card, "\x15")) throw new Error("tab_not_live");
+  sendInputToCard(card, `\x1b[200~${prompt}\x1b[201~`);
+  await sleep(3000);
+  for (let i = 0; i < 3; i += 1) {
+    sendInputToCard(card, "\r");
+    if (i < 2) await sleep(1200);
+  }
+}
+
+async function runLocalPromptSchedule(scheduleId) {
+  const schedules = readLocalPromptSchedules();
+  const schedule = schedules.find((item) => item.id === scheduleId);
+  if (!schedule || schedule.status !== "queued") return;
+  const targets = schedule.sessionIds
+    .map((sessionId) => liveCards().find((card) => card.sessionId === sessionId))
+    .filter(Boolean);
+  if (!targets.length) {
+    schedule.status = "failed";
+    schedule.error = "No selected live tabs were running when this local schedule fired.";
+    schedule.sentAt = Date.now();
+    writeLocalPromptSchedules(schedules);
+    return;
+  }
+  schedule.status = "sending";
+  writeLocalPromptSchedules(schedules);
+  const results = [];
+  for (const card of targets) {
+    try {
+      await sendScheduledPromptToCard(card, schedule.prompt);
+      results.push({ sessionId: card.sessionId, ok: true, submitWrites: 3 });
+    } catch (error) {
+      results.push({ sessionId: card.sessionId, ok: false, error: error.message || "send_failed" });
+    }
+  }
+  const sent = results.filter((result) => result.ok).length;
+  schedule.status = sent ? "sent" : "failed";
+  schedule.sentAt = Date.now();
+  schedule.result = { attempted: results.length, sent, targets: results };
+  if (!sent) schedule.error = "Prompt failed to send to every selected tab.";
+  writeLocalPromptSchedules(schedules);
+}
+
+function createLocalPromptSchedule(payload) {
+  const schedules = readLocalPromptSchedules();
+  const schedule = {
+    id: `local-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+    prompt: payload.prompt,
+    runAt: Math.max(Date.now(), payload.runAt),
+    createdAt: Date.now(),
+    status: "queued",
+    targetMode: payload.targetMode,
+    sessionIds: payload.sessionIds,
+    targetLabels: payload.targetLabels,
+  };
+  schedules.unshift(schedule);
+  writeLocalPromptSchedules(schedules);
+  armLocalPromptSchedule(schedule);
+  return schedule;
+}
+
+function scheduleStatusLine(schedule) {
+  const runAt = new Date(schedule.runAt).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  const targets = (schedule.targetLabels || []).join(", ") || `${(schedule.sessionIds || []).length} tab(s)`;
+  const sent = schedule.result?.sent ? ` · sent ${schedule.result.sent}/${schedule.result.attempted}` : "";
+  const error = schedule.error ? ` · ${schedule.error}` : "";
+  return `${escapeHtml(runAt)} · ${escapeHtml(schedule.status)} · ${escapeHtml(targets)}${escapeHtml(sent)}${escapeHtml(error)}`;
+}
+
+function renderPromptScheduler() {
+  const body = document.getElementById("prompt-scheduler-body");
+  if (!body) return;
+  if (!schedulerUi.runAt) schedulerUi.runAt = defaultSchedulerTime();
+  const targets = schedulerTargetSummary();
+  body.innerHTML = `
+    <div class="scheduler-grid">
+      <section class="scheduler-card scheduler-compose">
+        <p class="scheduler-eyebrow">queue the next move</p>
+        <h3>Send when usage comes back.</h3>
+        <textarea id="scheduler-prompt" rows="7" placeholder="Paste the exact next prompt Termina should send...">${escapeHtml(schedulerUi.prompt)}</textarea>
+        <div class="scheduler-row">
+          <label>When
+            <input id="scheduler-run-at" type="datetime-local" value="${escapeHtml(schedulerUi.runAt)}" />
+          </label>
+          <button id="scheduler-noon" class="ghost" type="button">12 PM</button>
+          <button id="scheduler-now" class="ghost" type="button">Send now</button>
+        </div>
+        <div class="scheduler-row">
+          <label>Tabs
+            <select id="scheduler-target">
+              <option value="linked"${schedulerUi.targetMode === "linked" ? " selected" : ""}>Linked tabs</option>
+              <option value="range"${schedulerUi.targetMode === "range" ? " selected" : ""}>Tabs by number</option>
+              <option value="all"${schedulerUi.targetMode === "all" ? " selected" : ""}>Every live tab</option>
+              <option value="active"${schedulerUi.targetMode === "active" ? " selected" : ""}>Active tab</option>
+            </select>
+          </label>
+          <label class="${schedulerUi.targetMode === "range" ? "" : "scheduler-hidden"}">Range
+            <input id="scheduler-range" type="text" value="${escapeHtml(schedulerUi.range)}" placeholder="1-3" />
+          </label>
+          <button id="scheduler-link-all" class="ghost" type="button">Link all</button>
+        </div>
+        <div class="scheduler-targets">${escapeHtml(targets)}</div>
+        <button id="scheduler-save" class="primary scheduler-save" type="button">Schedule prompt</button>
+        ${schedulerUi.notice ? `<p class="scheduler-notice">${escapeHtml(schedulerUi.notice)}</p>` : ""}
+      </section>
+      <section class="scheduler-card">
+        <p class="scheduler-eyebrow">scheduled</p>
+        <h3>Prompt queue</h3>
+        <div class="scheduler-list">
+          ${
+            schedulerUi.schedules.length
+              ? schedulerUi.schedules
+                  .slice(0, 8)
+                  .map(
+                    (schedule) => `
+                      <div class="scheduler-item">
+                        <b>${escapeHtml((schedule.prompt || "").slice(0, 80))}${(schedule.prompt || "").length > 80 ? "..." : ""}</b>
+                        <span>${scheduleStatusLine(schedule)}</span>
+                        ${schedule.status === "queued" ? `<button class="ghost" type="button" data-scheduler-cancel="${escapeHtml(schedule.id)}">Cancel</button>` : ""}
+                      </div>
+                    `,
+                  )
+                  .join("")
+              : `<p class="scheduler-empty">Nothing queued yet.</p>`
+          }
+        </div>
+      </section>
+    </div>
+  `;
+
+  const promptEl = document.getElementById("scheduler-prompt");
+  const runAtEl = document.getElementById("scheduler-run-at");
+  const targetEl = document.getElementById("scheduler-target");
+  const rangeEl = document.getElementById("scheduler-range");
+
+  promptEl?.addEventListener("input", () => {
+    schedulerUi.prompt = promptEl.value;
+  });
+  runAtEl?.addEventListener("input", () => {
+    schedulerUi.runAt = runAtEl.value;
+  });
+  targetEl?.addEventListener("change", () => {
+    schedulerUi.targetMode = targetEl.value;
+    renderPromptScheduler();
+  });
+  rangeEl?.addEventListener("input", () => {
+    schedulerUi.range = rangeEl.value;
+    const targetEl = document.querySelector(".scheduler-targets");
+    if (targetEl) targetEl.textContent = schedulerTargetSummary();
+  });
+  document.getElementById("scheduler-noon")?.addEventListener("click", () => {
+    schedulerUi.runAt = defaultSchedulerTime();
+    renderPromptScheduler();
+  });
+  document.getElementById("scheduler-link-all")?.addEventListener("click", () => {
+    toggleBroadcast(true);
+    linkAllCards();
+    schedulerUi.targetMode = "linked";
+    renderPromptScheduler();
+  });
+  document.getElementById("scheduler-now")?.addEventListener("click", () => submitPromptSchedule(Date.now()));
+  document.getElementById("scheduler-save")?.addEventListener("click", () => {
+    const runAt = new Date(schedulerUi.runAt).getTime();
+    submitPromptSchedule(runAt);
+  });
+  body.querySelectorAll("[data-scheduler-cancel]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      if (schedulerUi.serverAvailable) {
+        await api(`/api/prompt-schedules/${encodeURIComponent(btn.dataset.schedulerCancel)}`, { method: "DELETE" });
+      } else {
+        const schedules = readLocalPromptSchedules();
+        const schedule = schedules.find((item) => item.id === btn.dataset.schedulerCancel);
+        if (schedule?.status === "queued") {
+          schedule.status = "canceled";
+          schedule.sentAt = Date.now();
+        }
+        const timer = localPromptScheduleTimers.get(btn.dataset.schedulerCancel);
+        if (timer) clearTimeout(timer);
+        localPromptScheduleTimers.delete(btn.dataset.schedulerCancel);
+        writeLocalPromptSchedules(schedules);
+      }
+      schedulerUi.notice = "Schedule canceled.";
+      await refreshPromptSchedules();
+      renderPromptScheduler();
+    });
+  });
+}
+
+async function submitPromptSchedule(runAt) {
+  schedulerUi.prompt = document.getElementById("scheduler-prompt")?.value.trim() || schedulerUi.prompt.trim();
+  schedulerUi.runAt = document.getElementById("scheduler-run-at")?.value || schedulerUi.runAt;
+  schedulerUi.range = document.getElementById("scheduler-range")?.value || schedulerUi.range;
+  if (!schedulerUi.prompt) {
+    schedulerUi.notice = "Add the prompt first.";
+    renderPromptScheduler();
+    return;
+  }
+  const targets = schedulerTargetCards();
+  if (!targets.length) {
+    schedulerUi.notice = "No live tabs selected. Start or link the tabs first.";
+    renderPromptScheduler();
+    return;
+  }
+  const scheduledAt = Number.isFinite(runAt) ? runAt : new Date(schedulerUi.runAt).getTime();
+  if (!Number.isFinite(scheduledAt)) {
+    schedulerUi.notice = "Pick a valid time.";
+    renderPromptScheduler();
+    return;
+  }
+  const payload = {
+    prompt: schedulerUi.prompt,
+    runAt: scheduledAt,
+    targetMode: schedulerUi.targetMode,
+    sessionIds: targets.map((card) => card.sessionId),
+    targetLabels: targets.map((card) => labelForCard(card)),
+  };
+  try {
+    if (schedulerUi.serverAvailable) {
+      const res = await api("/api/prompt-schedules", { method: "POST", body: JSON.stringify(payload) });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || "schedule_failed");
+    } else {
+      createLocalPromptSchedule(payload);
+    }
+    schedulerUi.notice = scheduledAt <= Date.now() + 1000 ? "Sending now." : "Prompt scheduled.";
+    schedulerUi.prompt = "";
+    await refreshPromptSchedules();
+  } catch (error) {
+    schedulerUi.notice = error.message || "Could not schedule prompt.";
+  }
+  renderPromptScheduler();
+}
+
+async function openPromptScheduler() {
+  await refreshPromptSchedules();
+  document.getElementById("prompt-scheduler-modal").classList.remove("hidden");
+  renderPromptScheduler();
+  setTimeout(() => document.getElementById("scheduler-prompt")?.focus(), 0);
+}
+
+function closePromptScheduler() {
+  document.getElementById("prompt-scheduler-modal").classList.add("hidden");
+}
+
 // ---- expand overlay ---------------------------------------------------------
 
 let overlayCard = null;
@@ -1183,6 +1552,7 @@ async function boot() {
   // *saved* but never started still don't come back — only live PTYs do.
   if (typeof restoreSessions === "function") await restoreSessions();
 
+  loadLocalPromptSchedules();
   refreshUsageSummary();
 
   if (typeof applyAutoGrid === "function") applyAutoGrid();
@@ -1295,6 +1665,11 @@ document.addEventListener("click", (e) => {
   }
 });
 document.getElementById("broadcast").addEventListener("click", () => toggleBroadcast());
+document.getElementById("scheduler-btn").addEventListener("click", () => openPromptScheduler());
+document.getElementById("prompt-scheduler-close").addEventListener("click", closePromptScheduler);
+document.getElementById("prompt-scheduler-modal").addEventListener("click", (e) => {
+  if (e.target.id === "prompt-scheduler-modal") closePromptScheduler();
+});
 document.getElementById("overlay-close").addEventListener("click", closeOverlay);
 document.getElementById("overlay").addEventListener("click", (e) => {
   if (e.target.id === "overlay") closeOverlay();
@@ -1333,6 +1708,7 @@ document.addEventListener(
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
   if (!document.getElementById("overlay").classList.contains("hidden")) closeOverlay();
+  else if (!document.getElementById("prompt-scheduler-modal").classList.contains("hidden")) closePromptScheduler();
   else if (!document.getElementById("new-menu").classList.contains("hidden")) closeNewMenu();
   else if (openTileMenu) closeTileMenu();
 });

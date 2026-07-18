@@ -9,7 +9,7 @@
 
 import { randomBytes } from "node:crypto";
 import { createReadStream, existsSync, mkdirSync, statSync } from "node:fs";
-import { appendFile } from "node:fs/promises";
+import { appendFile, readFile, writeFile } from "node:fs/promises";
 import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -52,6 +52,7 @@ import os from "node:os";
 const appDir = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(appDir, "public");
 const missionScratchDir = path.join(appDir, ".termina", "tmp");
+const promptSchedulePath = path.join(appDir, ".termina", "prompt-schedules.json");
 
 const HOST = process.env.TERMINA_HOST ?? "127.0.0.1";
 const PORT = Number(process.env.TERMINA_PORT ?? 7420);
@@ -65,6 +66,8 @@ const usageLimits = loadUsageLimits(appDir);
 // usage-history.jsonl lives directly under .termina — make sure it exists
 // before the first append (missions create it lazily, solo tiles may not).
 mkdirSync(path.join(appDir, ".termina"), { recursive: true });
+let promptSchedules = [];
+const promptScheduleTimers = new Map();
 
 // ---- session registry (one entry per tile terminal) ------------------------
 
@@ -481,6 +484,163 @@ async function submitPrompt(session, prompt) {
   return submitBracketedPaste(session.proc, prompt);
 }
 
+function promptScheduleView(schedule) {
+  return {
+    id: schedule.id,
+    prompt: schedule.prompt,
+    runAt: schedule.runAt,
+    createdAt: schedule.createdAt,
+    status: schedule.status,
+    targetMode: schedule.targetMode,
+    sessionIds: schedule.sessionIds,
+    targetLabels: schedule.targetLabels,
+    sentAt: schedule.sentAt ?? null,
+    result: schedule.result ?? null,
+    error: schedule.error ?? null,
+  };
+}
+
+async function savePromptSchedules() {
+  const serializable = promptSchedules.map(promptScheduleView);
+  await writeFile(promptSchedulePath, JSON.stringify(serializable, null, 2), "utf8").catch(() => {});
+}
+
+async function loadPromptSchedules() {
+  try {
+    const raw = await readFile(promptSchedulePath, "utf8");
+    const parsed = JSON.parse(raw);
+    promptSchedules = Array.isArray(parsed)
+      ? parsed
+          .map((schedule) => ({
+            ...schedule,
+            id: String(schedule.id || ""),
+            prompt: String(schedule.prompt || ""),
+            runAt: Number(schedule.runAt),
+            createdAt: Number(schedule.createdAt || Date.now()),
+            status: String(schedule.status || "queued"),
+            targetMode: String(schedule.targetMode || "selected"),
+            sessionIds: Array.isArray(schedule.sessionIds) ? schedule.sessionIds.map(String) : [],
+            targetLabels: Array.isArray(schedule.targetLabels) ? schedule.targetLabels.map(String) : [],
+          }))
+          .filter((schedule) => schedule.id && schedule.prompt && Number.isFinite(schedule.runAt))
+      : [];
+  } catch {
+    promptSchedules = [];
+  }
+  for (const schedule of promptSchedules) armPromptSchedule(schedule);
+}
+
+function liveSessionLabels() {
+  return Array.from(sessions.entries()).map(([id, session], index) => ({
+    id,
+    index: index + 1,
+    profileId: session.profileId,
+    model: session.model ?? null,
+    status: session.status,
+    label: `Tab ${index + 1} · ${session.profileId}`,
+    startedAt: new Date(session.startedAt).toISOString(),
+  }));
+}
+
+function normalizePromptScheduleInput(body) {
+  const prompt = String(body.prompt ?? "").trim();
+  if (!prompt) return { error: "prompt_required" };
+  if (prompt.length > 12000) return { error: "prompt_too_long" };
+
+  const runAt = Number(body.runAt);
+  if (!Number.isFinite(runAt)) return { error: "run_at_required" };
+
+  const sessionIds = Array.isArray(body.sessionIds)
+    ? body.sessionIds.map((id) => String(id).trim()).filter(Boolean).slice(0, 24)
+    : [];
+  if (!sessionIds.length) return { error: "target_sessions_required" };
+
+  const targetLabels = Array.isArray(body.targetLabels)
+    ? body.targetLabels.map((label) => String(label).trim()).filter(Boolean).slice(0, 24)
+    : [];
+
+  return {
+    schedule: {
+      id: `ps-${randomBytes(5).toString("hex")}`,
+      prompt,
+      runAt: Math.max(Date.now(), Math.floor(runAt)),
+      createdAt: Date.now(),
+      status: "queued",
+      targetMode: String(body.targetMode || "selected").slice(0, 32),
+      sessionIds,
+      targetLabels,
+    },
+  };
+}
+
+function armPromptSchedule(schedule) {
+  if (!schedule || schedule.status !== "queued") return;
+  const existing = promptScheduleTimers.get(schedule.id);
+  if (existing) clearTimeout(existing);
+
+  const delay = Math.max(0, schedule.runAt - Date.now());
+  const maxDelay = 2_147_000_000;
+  const timer = setTimeout(() => {
+    promptScheduleTimers.delete(schedule.id);
+    if (schedule.runAt - Date.now() > 1000) {
+      armPromptSchedule(schedule);
+      return;
+    }
+    runPromptSchedule(schedule.id).catch(() => {});
+  }, Math.min(delay, maxDelay));
+  promptScheduleTimers.set(schedule.id, timer);
+}
+
+async function runPromptSchedule(scheduleId) {
+  const schedule = promptSchedules.find((item) => item.id === scheduleId);
+  if (!schedule || schedule.status !== "queued") return;
+
+  const targets = schedule.sessionIds
+    .map((sessionId) => [sessionId, sessions.get(sessionId)])
+    .filter((entry) => entry[1]?.proc);
+
+  if (!targets.length) {
+    schedule.status = "failed";
+    schedule.error = "No selected live tabs were running when this schedule fired.";
+    schedule.sentAt = Date.now();
+    await savePromptSchedules();
+    return;
+  }
+
+  schedule.status = "sending";
+  await savePromptSchedules();
+
+  const results = [];
+  for (const [sessionId, session] of targets) {
+    try {
+      const submit = await submitBracketedPaste(session.proc, schedule.prompt, { clearBeforePaste: true });
+      results.push({ sessionId, ok: true, submitWrites: submit.submitWrites });
+    } catch (error) {
+      results.push({ sessionId, ok: false, error: error?.message || "send_failed" });
+    }
+  }
+
+  const sent = results.filter((result) => result.ok).length;
+  schedule.status = sent > 0 ? "sent" : "failed";
+  schedule.sentAt = Date.now();
+  schedule.result = { attempted: results.length, sent, targets: results };
+  if (!sent) schedule.error = "Prompt failed to send to every selected tab.";
+  await savePromptSchedules();
+}
+
+function cancelPromptSchedule(scheduleId) {
+  const schedule = promptSchedules.find((item) => item.id === scheduleId);
+  if (!schedule) return false;
+  const timer = promptScheduleTimers.get(scheduleId);
+  if (timer) clearTimeout(timer);
+  promptScheduleTimers.delete(scheduleId);
+  if (schedule.status === "queued") {
+    schedule.status = "canceled";
+    schedule.sentAt = Date.now();
+  }
+  return true;
+}
+
 const READY_TIMEOUT_MS = 90000; // cold Claude Code boot + trust-prompt round trip + MCP checks can take a while
 
 // Waits for each worker to signal readiness for input, then delivers its
@@ -747,6 +907,47 @@ const server = http.createServer((req, res) => {
   // The shared model catalog, for the per-tab and global model switchers.
   if (pathName === "/api/models" && req.method === "GET") {
     return sendJson(res, 200, { ok: true, models: MODEL_CATALOG });
+  }
+
+  if (pathName === "/api/prompt-schedules" && req.method === "GET") {
+    return sendJson(res, 200, {
+      ok: true,
+      schedules: promptSchedules.map(promptScheduleView).sort((a, b) => b.createdAt - a.createdAt),
+      sessions: liveSessionLabels(),
+    });
+  }
+
+  if (pathName === "/api/prompt-schedules" && req.method === "POST") {
+    readJsonBody(req)
+      .then(async (body) => {
+        const normalized = normalizePromptScheduleInput(body);
+        if (normalized.error) return sendJson(res, 400, { ok: false, error: normalized.error });
+        promptSchedules.unshift(normalized.schedule);
+        await savePromptSchedules();
+        armPromptSchedule(normalized.schedule);
+        return sendJson(res, 200, { ok: true, schedule: promptScheduleView(normalized.schedule) });
+      })
+      .catch((error) => sendJson(res, 500, { ok: false, error: error.message }));
+    return;
+  }
+
+  const promptScheduleRunMatch = pathName.match(/^\/api\/prompt-schedules\/([\w.-]+)\/run$/);
+  if (promptScheduleRunMatch && req.method === "POST") {
+    const schedule = promptSchedules.find((item) => item.id === promptScheduleRunMatch[1]);
+    if (!schedule) return sendJson(res, 404, { ok: false, error: "schedule_not_found" });
+    schedule.runAt = Date.now();
+    schedule.status = "queued";
+    savePromptSchedules().catch(() => {});
+    armPromptSchedule(schedule);
+    return sendJson(res, 200, { ok: true, schedule: promptScheduleView(schedule) });
+  }
+
+  const promptScheduleMatch = pathName.match(/^\/api\/prompt-schedules\/([\w.-]+)$/);
+  if (promptScheduleMatch && req.method === "DELETE") {
+    const ok = cancelPromptSchedule(promptScheduleMatch[1]);
+    if (!ok) return sendJson(res, 404, { ok: false, error: "schedule_not_found" });
+    savePromptSchedules().catch(() => {});
+    return sendJson(res, 200, { ok: true, schedules: promptSchedules.map(promptScheduleView) });
   }
 
   const stopMatch = pathName.match(/^\/api\/sessions\/([\w.-]+)\/stop$/);
@@ -1188,6 +1389,8 @@ function shutdown() {
 }
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
+
+await loadPromptSchedules();
 
 server.listen(PORT, HOST, () => {
   const url = `http://${HOST}:${PORT}/?token=${TOKEN}`;

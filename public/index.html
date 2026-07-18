@@ -25,6 +25,7 @@
         <button id="usage-totals" class="ghost usage-totals" type="button" data-state="ok" title="API spend — session and today totals; click for per-terminal detail" aria-haspopup="true" aria-expanded="false"></button>
         <select id="global-model" class="global-model hidden" title="Default model for all terminals — switching relaunches running Claude/Codex/OpenRouter tiles without a per-tab override" aria-label="Default model for all terminals"></select>
         <button id="broadcast" class="ghost" type="button" aria-pressed="false" title="Link terminals so typing in one goes to all linked ones">⇄ Link</button>
+        <button id="scheduler-btn" class="ghost" type="button" title="Schedule a prompt to send to selected live tabs">Scheduler</button>
         <button id="su-compact-all" class="ghost" type="button" title="Toggle compact chrome on every tile">▦ Compact</button>
         <button id="su-templates-btn" class="ghost" type="button" title="Launch a saved group of terminals">▤ Templates</button>
         <button id="rescan" class="ghost" type="button" title="Rescan available terminal types">Re-scan</button>
@@ -65,6 +66,16 @@
           <button type="button" id="su-templates-close" class="ghost">Close</button>
         </div>
         <div id="su-templates-body" class="mission-body"></div>
+      </div>
+    </div>
+
+    <div id="prompt-scheduler-modal" class="overlay hidden" role="dialog" aria-modal="true" aria-label="Prompt Scheduler">
+      <div class="overlay-panel mission-panel scheduler-panel">
+        <div class="overlay-head">
+          <span>Prompt Scheduler</span>
+          <button type="button" id="prompt-scheduler-close" class="ghost">Close</button>
+        </div>
+        <div id="prompt-scheduler-body" class="mission-body"></div>
       </div>
     </div>
 
