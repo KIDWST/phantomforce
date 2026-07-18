@@ -62,15 +62,24 @@ assert.match(storeSource, /data-ps-detail/u, "Product cards must open an in-app 
 assert.match(storeSource, /data-ps-product-view/u, "The detail view must be marked with a deep-linkable data attribute.");
 assert.match(storeSource, /data-ps-back/u, "The detail view must provide a back-to-discover control.");
 assert.match(storeSource, /data-ps-variant/u, "The detail view must offer a variant selector.");
+assert.doesNotMatch(storeSource, />Product page</u, "The UI must not show a duplicate external Product page link when View details is the product page.");
+assert.match(storeSource, /function productWorkflowMatch/u, "Products must calculate an AI workflow match score.");
+assert.match(storeSource, /workflow match/u, "The product page must expose AI workflow match copy.");
+assert.match(storeSource, /function productGallery/u, "The product page must build a gallery/showcase from product media plus branded fallback frames.");
+assert.match(storeSource, /function productShowcase/u, "The product page must explain the AI fit, prediction, and proof signals.");
 assert.match(storeSource, /variant \? \{ variantId: variant\.id \} : \{\}/u, "Buy requests must carry the selected variant id.");
 assert.match(storeSource, /ui\.snapshot\?\.canModerate \? adminProductsPanel\(\)/u, "The admin product editor must only render for moderation-capable sessions.");
 assert.match(storeSource, /\/api\/phantomstore\/products\/\$\{encodeURIComponent\(productId\)\}/u, "The admin product editor must save through the product update endpoint.");
 assert.match(storeSource, /quality_hold/u, "Buy availability must respect quality_hold status.");
 assert.match(storeSource, /function outOfStock/u, "Buy availability must respect tracked inventory at zero stock.");
 
-for (const selector of [".ps-shell", ".ps-market-hero", ".ps-tool", ".ps-product", ".ps-seller", ".ps-reviews", ".ps-submit-layout", ".ps-moderate", ".ps-product-media", ".ps-detail", ".ps-variant", ".ps-admin-products"]) {
+for (const selector of [".ps-shell", ".ps-market-hero", ".ps-tool", ".ps-product", ".ps-seller", ".ps-reviews", ".ps-submit-layout", ".ps-moderate", ".ps-product-media", ".ps-detail", ".ps-variant", ".ps-admin-products", ".ps-match-chip", ".ps-card-gallery", ".ps-ai-fit-panel", ".ps-fit-meter", ".ps-showcase-strip", ".ps-detail-stage"]) {
   assert.ok(storeCss.includes(selector), `${selector} style must be present.`);
 }
+
+assert.match(storeCss, /@keyframes ps-card-scan/u, "Product cards must include a modern animated scan treatment.");
+assert.match(storeCss, /@keyframes ps-light-sweep/u, "Product media must include animated light sweep treatment.");
+assert.match(storeCss, /@keyframes ps-meter/u, "AI workflow match meter must animate into place.");
 
 assert.match(customizationSource, /\["phantomstore", "PhantomStore", false/u, "Workspace customization fallback must know PhantomStore is a protected platform tab.");
 assert.match(registrySource, /id:\s*"phantomstore"[\s\S]*displayName:\s*"PhantomStore"[\s\S]*route:\s*"phantomstore"[\s\S]*required:\s*true[\s\S]*customerConfigurable:\s*false/u, "Server module registry must expose PhantomStore as a required, non-hideable marketplace tab.");

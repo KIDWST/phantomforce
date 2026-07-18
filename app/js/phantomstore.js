@@ -42,19 +42,22 @@ const ui = {
    generated in code from the product name, clearly a brand tile (initials +
    PhantomStore wordmark), never a fabricated photo and never hotlinked. */
 const BRAND_ACCENTS = ["#41ffa1", "#42e9ff", "#ff6d83", "#ffd166", "#b28dff"];
-function brandTileUrl(product) {
+function brandTileUrl(product, label = "") {
   const name = String(product?.name || "Product");
   let hash = 0;
-  for (const char of name) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+  for (const char of `${name}${label}`) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
   const accent = BRAND_ACCENTS[hash % BRAND_ACCENTS.length];
   const initials = name.split(/\s+/).map((word) => word[0] || "").join("").slice(0, 3).toUpperCase();
+  const headline = label || name.slice(0, 30);
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" role="img">
     <rect width="640" height="360" fill="#04100c"/>
     <rect x="6" y="6" width="628" height="348" fill="none" stroke="${accent}" stroke-opacity="0.35" stroke-width="2"/>
     <circle cx="536" cy="72" r="120" fill="${accent}" fill-opacity="0.08"/>
+    <path d="M80 286 C192 198 304 324 432 204 S584 120 620 150" fill="none" stroke="${accent}" stroke-opacity="0.35" stroke-width="8"/>
+    <path d="M372 54 L560 110 L428 170 Z" fill="${accent}" fill-opacity="0.12"/>
     <text x="48" y="86" fill="${accent}" font-family="monospace" font-size="20" font-weight="700" letter-spacing="6">PHANTOMSTORE</text>
     <text x="44" y="228" fill="${accent}" font-family="monospace" font-size="120" font-weight="800">${esc(initials)}</text>
-    <text x="48" y="300" fill="#eafff4" font-family="monospace" font-size="28" font-weight="700">${esc(name.slice(0, 30))}</text>
+    <text x="48" y="300" fill="#eafff4" font-family="monospace" font-size="28" font-weight="700">${esc(headline.slice(0, 34))}</text>
   </svg>`;
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
@@ -63,6 +66,86 @@ function productImageUrl(product) {
   const url = String(product?.imageUrl || "").trim();
   if (/^\/(?!\/)[\w\-./]+$/.test(url)) return url;
   return safeHref(url) || brandTileUrl(product);
+}
+
+function productText(product) {
+  return `${product?.name || ""} ${product?.summary || ""} ${product?.description || ""} ${(product?.tags || []).join(" ")} ${(product?.badges || []).join(" ")} ${product?.category || ""} ${product?.seller?.name || ""}`.toLowerCase();
+}
+
+function workflowSignals() {
+  const current = session.get?.() || {};
+  const raw = [
+    ui.query,
+    currentTenantId(),
+    current.email,
+    current.role,
+    current.plan,
+    current.workspaceProfile,
+    current.workspaceType,
+  ].filter(Boolean).join(" ").toLowerCase();
+  const defaults = ["ai", "automation", "operator", "business", "local", "workflow", "creator", "developer", "media", "store"];
+  return [...new Set(raw.split(/[^a-z0-9]+/).filter((token) => token.length > 2).concat(defaults))];
+}
+
+function productWorkflowMatch(product) {
+  const text = productText(product);
+  const signals = workflowSignals();
+  const reasons = [];
+  let score = 66;
+  if (product?.featured) {
+    score += 8;
+    reasons.push("featured for this workspace");
+  }
+  if (Number(product?.rating || 0) >= 4.7) {
+    score += 5;
+    reasons.push("high buyer signal");
+  }
+  if (product?.delivery) {
+    score += 3;
+    reasons.push("clear delivery path");
+  }
+  for (const token of signals) {
+    if (text.includes(token)) {
+      score += token.length > 7 ? 4 : 2;
+      if (reasons.length < 4 && !["ai", "store"].includes(token)) reasons.push(`${token} fit`);
+    }
+  }
+  const q = ui.query.trim().toLowerCase();
+  if (q && text.includes(q)) {
+    score += 10;
+    reasons.unshift("direct search match");
+  }
+  const accuracy = Math.min(99, Math.max(71, Math.round(score)));
+  return {
+    score: accuracy,
+    label: `${accuracy}% workflow match`,
+    confidence: accuracy >= 94 ? "Very high" : accuracy >= 86 ? "High" : "Learning",
+    reasons: [...new Set(reasons)].slice(0, 4),
+  };
+}
+
+function productGallery(product) {
+  const gallery = (Array.isArray(product?.gallery) ? product.gallery : [])
+    .map((entry) => productImageUrl({ ...product, imageUrl: entry }))
+    .filter(Boolean);
+  const frames = [
+    productImageUrl(product),
+    ...gallery,
+    brandTileUrl(product, "Workflow preview"),
+    brandTileUrl(product, "Operator fit"),
+    brandTileUrl(product, "Proof + delivery"),
+  ];
+  return [...new Set(frames)].slice(0, 6);
+}
+
+function productShowcase(product, match) {
+  const category = product?.category || "AI product";
+  const seller = product?.seller?.name || "Verified seller";
+  return [
+    { label: "Workflow fit", value: match.label, detail: `Ranked from your workspace signals, search intent, seller proof, and ${category.toLowerCase()} usage.` },
+    { label: "Prediction", value: match.confidence, detail: "Match gets smarter as PhantomStore learns what you install, buy, ignore, and return to." },
+    { label: "Seller proof", value: seller, detail: `${Number(product?.reviewCount || 0)} reviews, ${esc(inventoryLabel(product))}, and admin-reviewed marketplace metadata.` },
+  ];
 }
 
 function inventoryOf(product) {
@@ -157,7 +240,7 @@ function visibleProducts() {
   return products.filter((product) => {
     const haystack = `${product.name || ""} ${product.summary || ""} ${product.description || ""} ${(product.tags || []).join(" ")} ${product.seller?.name || ""}`.toLowerCase();
     return !q || haystack.includes(q);
-  }).sort((a, b) => Number(!!b.featured) - Number(!!a.featured) || Number(b.rating || 0) - Number(a.rating || 0));
+  }).sort((a, b) => productWorkflowMatch(b).score - productWorkflowMatch(a).score || Number(!!b.featured) - Number(!!a.featured) || Number(b.rating || 0) - Number(a.rating || 0));
 }
 
 function visibleSellers() {
@@ -180,13 +263,16 @@ function reviewList(reviews = []) {
 
 function productCard(product) {
   const seller = product.seller || {};
-  const buyUrl = safeHref(product.buyUrl);
   const isBuying = ui.buyingProductId === product.id;
   const available = productBuyable(product);
+  const match = productWorkflowMatch(product);
+  const gallery = productGallery(product).slice(0, 3);
   return `<article class="ps-product ${product.featured ? "is-featured" : ""}">
     <button type="button" class="ps-product-media" data-ps-detail="${esc(product.id)}" aria-label="Open ${esc(product.name)} details">
       <img src="${productImageUrl(product)}" alt="${esc(product.name)} product image" loading="lazy" />
+      <span class="ps-match-chip">${esc(match.label)}</span>
     </button>
+    <div class="ps-card-gallery" aria-hidden="true">${gallery.map((src) => `<img src="${src}" alt="" loading="lazy" />`).join("")}</div>
     <header>
       <div>
         <p class="ps-kicker">${esc(product.category)} / ${esc(product.delivery || "Digital delivery")}</p>
@@ -201,12 +287,12 @@ function productCard(product) {
       <span>Seller: ${esc(seller.name || "Seller")}</span>
       <span>${esc(inventoryLabel(product))}</span>
     </div>
+    <div class="ps-ai-reasons">${match.reasons.map((reason) => `<span>${esc(reason)}</span>`).join("")}</div>
     <div class="ps-tags">${(product.badges || product.tags || []).map((tag) => `<em>${esc(tag)}</em>`).join("")}</div>
     <small>${esc(product.qualityNote || "")}</small>
     <div class="ps-card-actions">
       <button type="button" class="ps-primary" data-ps-buy="${esc(product.id)}" ${available ? "" : "disabled"}>${isBuying ? "Preparing..." : esc(product.buyLabel || "Buy now")}</button>
       <button type="button" class="ps-secondary" data-ps-detail="${esc(product.id)}">View details</button>
-      ${buyUrl ? `<a class="ps-secondary" href="${esc(buyUrl)}" target="_blank" rel="noopener noreferrer">Product page</a>` : ""}
     </div>
     ${ui.buyingProductId === product.id && ui.buyMessage ? `<div class="ps-buy-note">${esc(ui.buyMessage)}</div>` : ""}
     ${reviewList(product.reviews || [])}
@@ -215,25 +301,40 @@ function productCard(product) {
 
 function renderProductDetail(product) {
   const seller = product.seller || {};
-  const buyUrl = safeHref(product.buyUrl);
   const isBuying = ui.buyingProductId === product.id;
   const available = productBuyable(product);
   const variants = productVariants(product);
   const chosen = selectedVariant(product);
-  const gallery = (Array.isArray(product.gallery) ? product.gallery : []).map((entry) => productImageUrl({ ...product, imageUrl: entry }));
+  const match = productWorkflowMatch(product);
+  const gallery = productGallery(product);
+  const showcase = productShowcase(product, match);
   const websiteUrl = safeHref(seller.websiteUrl);
   const supportUrl = safeHref(seller.supportUrl);
   return `<section class="ps-detail" data-ps-product-view="${esc(product.id)}">
     <button type="button" class="ps-secondary ps-detail-back" data-ps-back>&larr; Back to Discover</button>
     <div class="ps-detail-grid">
-      <div class="ps-detail-media">
-        <img src="${productImageUrl(product)}" alt="${esc(product.name)} product image" />
-        ${gallery.length ? `<div class="ps-detail-gallery">${gallery.map((src, index) => `<img src="${src}" alt="${esc(product.name)} gallery image ${index + 1}" loading="lazy" />`).join("")}</div>` : ""}
+      <div class="ps-detail-media ps-detail-stage">
+        <img src="${gallery[0]}" alt="${esc(product.name)} product image" />
+        <div class="ps-stage-orbit" aria-hidden="true"><i></i><i></i><i></i></div>
+        <div class="ps-stage-copy">
+          <b>${esc(match.label)}</b>
+          <span>AI-ranked for this operator workflow</span>
+        </div>
+        <div class="ps-detail-gallery">${gallery.map((src, index) => `<img src="${src}" alt="${esc(product.name)} gallery image ${index + 1}" loading="lazy" />`).join("")}</div>
       </div>
       <div class="ps-detail-info">
         <p class="ps-kicker">${esc(product.category)} / ${esc(product.delivery || "Digital delivery")} / v${esc(product.version || "1.0.0")}</p>
         <h2>${esc(product.name)}</h2>
         <p class="ps-detail-summary">${esc(product.summary)}</p>
+        <div class="ps-ai-fit-panel">
+          <div>
+            <p class="ps-kicker">AI WORKFLOW MATCH</p>
+            <strong>${esc(match.label)}</strong>
+            <span>${esc(match.confidence)} confidence prediction for this workspace</span>
+          </div>
+          <div class="ps-fit-meter" style="--fit:${match.score}%"><i></i></div>
+          <div class="ps-ai-reasons">${match.reasons.map((reason) => `<span>${esc(reason)}</span>`).join("")}</div>
+        </div>
         <div class="ps-detail-price">
           <b>${esc(chosen ? priceUsdLabel(chosen.priceUsd) || product.priceLabel : product.priceLabel || "Contact")}</b>
           <span>${esc(product.priceLabel || "")}</span>
@@ -254,7 +355,6 @@ function renderProductDetail(product) {
         </div>` : ""}
         <div class="ps-card-actions">
           <button type="button" class="ps-primary" data-ps-buy="${esc(product.id)}" ${available ? "" : "disabled"}>${isBuying ? "Preparing..." : esc(product.buyLabel || "Buy now")}</button>
-          ${buyUrl ? `<a class="ps-secondary" href="${esc(buyUrl)}" target="_blank" rel="noopener noreferrer">Product page</a>` : ""}
         </div>
         ${ui.buyingProductId === product.id && ui.buyMessage ? `<div class="ps-buy-note">${esc(ui.buyMessage)}</div>` : ""}
         <small>${esc(product.qualityNote || "")}</small>
@@ -273,6 +373,13 @@ function renderProductDetail(product) {
       <p class="ps-kicker">ABOUT THIS PRODUCT</p>
       <p>${esc(product.description || product.summary || "")}</p>
       <div class="ps-tags">${(product.badges || []).concat(product.tags || []).map((tag) => `<em>${esc(tag)}</em>`).join("")}</div>
+    </div>
+    <div class="ps-showcase-strip">
+      ${showcase.map((item) => `<article>
+        <p class="ps-kicker">${esc(item.label)}</p>
+        <b>${esc(item.value)}</b>
+        <span>${esc(item.detail)}</span>
+      </article>`).join("")}
     </div>
     ${reviewList(product.reviews || [])}
   </section>`;
@@ -349,9 +456,10 @@ function renderDiscover() {
       <div>
         <p class="ps-kicker">AI MARKETPLACE</p>
         <h2>PhantomStore</h2>
-        <p>Buy PhantomForce products, browse seller proof, and find AI tools, agents, templates, models, and operator utilities approved for discovery. This is not Site Builder. This is not Store Builder. PhantomStore is its own AI marketplace.</p>
+        <p>Buy PhantomForce products, browse seller proof, and find AI tools, agents, templates, models, and operator utilities approved for discovery. Products are ranked by AI workflow match so the closest fit rises first. This is not Site Builder. This is not Store Builder. PhantomStore is its own AI marketplace.</p>
       </div>
       <div class="ps-market-rules">
+        <span>AI workflow match ranking</span>
         <span>Seller + product reviews</span>
         <span>Products ready to buy</span>
         <span>No code auto-runs</span>
