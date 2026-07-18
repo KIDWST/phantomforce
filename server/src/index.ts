@@ -1234,11 +1234,21 @@ app.get("/downloads/*", async (request, reply) => {
 app.get("/sessions", async (request) => {
   const authConfiguration = getAccessAuthConfiguration();
   const publicHost = requestPublicHost(request);
+  const scope = publicHostScope(publicHost);
+  const databaseLoginUsable = databaseAuthEnabledForSessions();
+  const localCustomerEnabled = scope !== "admin";
+  const customerAccountActionsEnabled = scope !== "admin" && (databaseLoginUsable || localCustomerEnabled);
 
   return {
     ok: true,
     auth: {
       ...authConfiguration,
+      customerAccountActionsEnabled,
+      customerLoginEndpoint: scope !== "admin" && (databaseLoginUsable || localCustomerEnabled) ? "/auth/login" : undefined,
+      customerSignupEndpoint: customerAccountActionsEnabled ? "/auth/signup" : undefined,
+      customerForgotUsernameEndpoint: customerAccountActionsEnabled ? "/auth/forgot-username" : undefined,
+      customerForgotPasswordEndpoint: customerAccountActionsEnabled ? "/auth/forgot-password" : undefined,
+      customerResetPasswordEndpoint: customerAccountActionsEnabled ? "/auth/reset-password" : undefined,
     },
     sessions: authConfiguration.ownerProductionAuthEnabled
       ? []
