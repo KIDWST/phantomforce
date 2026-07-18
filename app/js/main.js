@@ -6,49 +6,49 @@ import {
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260718-2";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260718-2";
-import { WORKSPACE_DEFS, missionWidgets, esc, DEPARTMENTS } from "./workspaces.js?v=phantom-live-20260718-2";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260718-2";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260718-2";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260718-2";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260718-2";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260718-2";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260718-2";
-import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260718-2";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260718-2";
-import { renderPlanner } from "./planner.js?v=phantom-live-20260718-2";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260718-2";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260718-2";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260718-2";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260718-2";
-import { renderOperatorMiniSettings, renderOperatorSettings, renderOwnerAdminControl } from "./settings.js?v=phantom-live-20260718-2";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260718-2";
-import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260718-2";
-import { mountAmbient } from "./ambient.js?v=phantom-live-20260718-2";
-import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260718-2";
+} from "./store.js?v=phantom-live-20260718-3";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260718-3";
+import { WORKSPACE_DEFS, missionWidgets, esc, DEPARTMENTS } from "./workspaces.js?v=phantom-live-20260718-3";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260718-3";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260718-3";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260718-3";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260718-3";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260718-3";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260718-3";
+import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260718-3";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260718-3";
+import { renderPlanner } from "./planner.js?v=phantom-live-20260718-3";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260718-3";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260718-3";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260718-3";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260718-3";
+import { renderOperatorMiniSettings, renderOperatorSettings, renderOwnerAdminControl } from "./settings.js?v=phantom-live-20260718-3";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260718-3";
+import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260718-3";
+import { mountAmbient } from "./ambient.js?v=phantom-live-20260718-3";
+import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260718-3";
 import {
   fetchAuthConfig, databaseLogin, databaseLogout, databaseSignup, databaseSignupDeveloper, databaseUpgradeDeveloperAccount, databaseForgotUsername, databaseForgotPassword,
   databaseResetPassword, databaseVerify2fa, databaseStart2faSetup, databaseConfirm2fa, databaseRegenerate2faBackupCodes, databaseDisable2fa,
   switchOrg, fetchAuthMe, fetchEntitlementsSummary,
-} from "./orgs.js?v=phantom-live-20260718-2";
-import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260718-2";
-import { assetsAvailable } from "./orgs.js?v=phantom-live-20260718-2";
-import { renderPhantomStore } from "./phantomstore.js?v=phantom-live-20260718-2";
-import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260718-2";
+} from "./orgs.js?v=phantom-live-20260718-3";
+import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260718-3";
+import { assetsAvailable } from "./orgs.js?v=phantom-live-20260718-3";
+import { renderPhantomStore } from "./phantomstore.js?v=phantom-live-20260718-3";
+import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260718-3";
 // PhantomPlay V2 platform shell (Home/Solo/Friends/Workspace/Dev Hub) - opt-in
 // while it hardens: set localStorage "pf.phantomplay.v2" = "1" (the V2 shell has
 // a "Classic view" button to switch back). Classic stays the default experience.
-import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260718-2";
+import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260718-3";
 const phantomPlayV2Opted = () => { try { return localStorage.getItem("pf.phantomplay.v2") === "1"; } catch { return false; } };
-import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260718-2";
+import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260718-3";
 import {
   canAccessConfiguredModule,
   customizeNavigation,
   loadOrganizationCustomization,
-} from "./customization.js?v=phantom-live-20260718-2";
-import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260718-2";
-import { renderVoiceChannels } from "./voicechannels.js?v=phantom-live-20260718-2";
+} from "./customization.js?v=phantom-live-20260718-3";
+import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260718-3";
+import { renderVoiceChannels } from "./voicechannels.js?v=phantom-live-20260718-3";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -279,7 +279,9 @@ function maybeUpgradeGateToDatabaseLogin(card, options = {}) {
   const { customerApp = false, required = false } = options;
   fetchAuthConfig().then((auth) => {
     if (gate.hidden) return;
-    if (!auth?.databaseAuthEnabled) {
+    const databaseMode = !!auth?.databaseAuthEnabled;
+    const localCustomerMode = !databaseMode && !!auth?.localCustomerAuthEnabled;
+    if (!databaseMode && !localCustomerMode) {
       if (required) renderCustomerAuthBlocked(card);
       return;
     }
@@ -288,10 +290,14 @@ function maybeUpgradeGateToDatabaseLogin(card, options = {}) {
     })();
     const state = { mode: resetTokenFromUrl ? "reset-pass" : "signin", challenge: null, message: resetTokenFromUrl ? "Password reset token detected. Enter your new password." : "", resetToken: resetTokenFromUrl };
     const helper = customerApp
-      ? "Owners/admins open Business Manager. Employees open Team Workspace. Permissions come from the business workspace."
+      ? localCustomerMode
+        ? "Customer test accounts open a safe public-plan workspace."
+        : "Owners/admins open Business Manager. Employees open Team Workspace. Permissions come from the business workspace."
       : "Your account, businesses, roles, recovery, and 2FA are managed on the PhantomForce server.";
     const note = customerApp
-      ? "Use the email or username tied to your business workspace."
+      ? localCustomerMode
+        ? "Use the email tied to your customer test workspace."
+        : "Use the email or username tied to your business workspace."
       : "Create a business, accept an invite, recover access, or sign in with 2FA.";
     const setError = (msg) => {
       const error = card.querySelector("[data-db-error]");
@@ -311,15 +317,23 @@ function maybeUpgradeGateToDatabaseLogin(card, options = {}) {
     };
     const render = () => {
       const tab = (id, label) => `<button type="button" class="auth-tab ${state.mode === id ? "is-active" : ""}" data-auth-mode="${id}">${label}</button>`;
+      const tabs = [
+        tab("signin", "Sign in"),
+        tab("signup", "Create user"),
+        databaseMode ? tab("submit-game", "Submit Your Game") : "",
+        databaseMode ? tab("forgot-user", "Forgot username") : "",
+        tab("forgot-pass", "Forgot password"),
+        tab("reset-pass", "Reset"),
+      ].join("");
       const msg = state.message ? `<p class="gate-note">${esc(state.message)}</p>` : "";
       const body = state.mode === "signup" ? `
         <form class="owner-login" data-auth-form="signup">
           <label><span>Email</span><input type="email" name="email" autocomplete="email" placeholder="you@business.com" required /></label>
-          <label><span>Username</span><input name="username" autocomplete="username" placeholder="yourname" minlength="3" maxlength="32" /></label>
+          ${databaseMode ? `<label><span>Username</span><input name="username" autocomplete="username" placeholder="yourname" minlength="3" maxlength="32" /></label>` : ""}
           <label><span>Name</span><input name="name" autocomplete="name" placeholder="Your name" /></label>
           <label><span>Business / workspace</span><input name="organizationName" placeholder="Business name" /></label>
           <label><span>Password</span><input type="password" name="password" autocomplete="new-password" minlength="8" required /></label>
-          <button class="gate-opt gate-submit" type="submit"><span class="gate-opt-icon">＋</span><b>Create account</b><i>Creates your user, starter workspace, and owner role.</i></button>
+          <button class="gate-opt gate-submit" type="submit"><span class="gate-opt-icon">＋</span><b>Create account</b><i>${localCustomerMode ? "Creates a local customer test workspace on the Free tier." : "Creates your user, starter workspace, and owner role."}</i></button>
         </form>` : state.mode === "submit-game" ? `
         <form class="owner-login" data-auth-form="submit-game">
           <label><span>Email</span><input type="email" name="email" autocomplete="email" placeholder="you@studio.com" required /></label>
@@ -354,7 +368,7 @@ function maybeUpgradeGateToDatabaseLogin(card, options = {}) {
       card.innerHTML = `
         <p class="gate-kicker">PHANTOMFORCE · ACCOUNT ACCESS</p>
         <h1>${state.mode === "signup" ? "Create your Phantom account." : state.mode === "2fa" ? "Enter your 2FA code." : customerApp ? "Sign in to your workspace." : "Sign in to Phantom."}</h1>
-        <div class="auth-tabs">${tab("signin", "Sign in")}${tab("signup", "Create user")}${tab("submit-game", "Submit Your Game")}${tab("forgot-user", "Forgot username")}${tab("forgot-pass", "Forgot password")}${tab("reset-pass", "Reset")}</div>
+        <div class="auth-tabs">${tabs}</div>
         ${body}
         <p class="gate-error" data-db-error hidden></p>
         ${msg}
@@ -383,13 +397,17 @@ function maybeUpgradeGateToDatabaseLogin(card, options = {}) {
         } else if (state.mode === "2fa") {
           await doEnter(await databaseVerify2fa(state.challenge, String(data.get("code") || "")));
         } else if (state.mode === "signup") {
-          await databaseSignup({
+          const nextSession = await databaseSignup({
             email: String(data.get("email") || "").trim(),
             username: String(data.get("username") || "").trim() || undefined,
             name: String(data.get("name") || "").trim() || undefined,
             organizationName: String(data.get("organizationName") || "").trim() || undefined,
             password: String(data.get("password") || ""),
           });
+          if (nextSession?.sessionId || nextSession?.localCustomer) {
+            await doEnter(nextSession);
+            return;
+          }
           state.mode = "signin"; state.message = "Account created. Sign in with your new credentials."; render();
         } else if (state.mode === "submit-game") {
           const nextSession = await databaseSignupDeveloper({
@@ -440,7 +458,9 @@ function maybeUpgradeGateToDatabaseLogin(card, options = {}) {
    the sidebar split itself is preserved exactly as before. */
 const BASE_NAV = [
   { id: "dashboard",  label: "Dashboard",    icon: "grid",  view: "main", dept: null },
-  { id: "outcomes",   label: "Outcomes",     icon: "target", ws: "outcomes", dept: null },
+  /* Outcomes lives on the Dashboard as the Goals/outcome strip; the workspace
+     stays deep-linkable from there but is out of primary navigation. */
+  { id: "outcomes",   label: "Goals",        icon: "target", ws: "outcomes", dept: null, navHidden: true },
   { id: "crm",        label: "Clients",      icon: "users", ws: "leads", dept: "Client Care" },
   { id: "media",      label: "Media Lab",    icon: "media", ws: "media", dept: "Creative" },
   { id: "assets",     label: "Asset Cloud",  icon: "media", ws: "assets", dbOnly: true, dept: "Creative" },
@@ -448,7 +468,9 @@ const BASE_NAV = [
   { id: "money",      label: "Accounting",   icon: "dollar", ws: "money", dept: "Finance" },
   { id: "automation", label: "Automations",  icon: "auto",  ws: "automation", dept: "Operations", navHidden: true },
   { id: "planner",    label: "Planner",       icon: "calendar", ws: "planner", dept: "Operations" },
-  { id: "voicechannels", label: "Voice Channels", icon: "chat", ws: "voicechannels", dept: "Operations" },
+  /* Voice Channels lives inside PhantomPlay's Voice tab; workspace kept for
+     deep links but out of the sidebar. */
+  { id: "voicechannels", label: "Voice Channels", icon: "chat", ws: "voicechannels", dept: "Operations", navHidden: true },
   { id: "approvals",  label: "Approvals",    icon: "check", ws: "approvals", badge: true, dept: "Operations" },
   { id: "workers",    label: "Workforce",    icon: "users", ws: "workforce", dept: "Operations", navHidden: true },
   { id: "intelligence", label: "Competitor Intel", icon: "chart", ws: "intelligence", dept: "Intelligence" },
@@ -1353,7 +1375,7 @@ const MODES = {
   admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260718-2";
+const POSE_VERSION = "phantom-live-20260718-3";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -3351,6 +3373,48 @@ function applyCompanionMode(mode) {
     : "Ask PhantomForce anything...";
 }
 
+/* Chat AI-usage readout: only REAL numbers. The workforce status endpoint
+   reports measured tokens + estimated cost for its window; the loop cap is
+   the owner's own setting. Per-message chat token counts are not recorded
+   server-side (hermes receipts carry provider_usage_recorded:false), so we
+   never invent them — the panel says exactly what the window totals cover. */
+async function renderChatUsageBlock(target) {
+  let mount = target.querySelector("[data-chat-usage]");
+  if (!mount) {
+    mount = document.createElement("div");
+    mount.setAttribute("data-chat-usage", "");
+    mount.className = "mini-set-section";
+    target.appendChild(mount);
+  }
+  const loop = loadPhantomLoop();
+  const cap = Number(loop?.maxCostPerResponse);
+  const capLine = Number.isFinite(cap) && cap > 0
+    ? `Per-response cost cap: $${cap.toFixed(2)}`
+    : "No per-response cost cap set (Settings → Loop routing).";
+  mount.innerHTML = `<p class="set-eyebrow">AI usage</p><p class="ws-note">Loading real usage window…</p><p class="ws-note">${esc(capLine)}</p>`;
+  try {
+    const result = await fetchAgentWorkforceStatus(24);
+    if (!document.body.contains(mount)) return;
+    const summary = result.ok ? result.workforce?.summary : null;
+    if (summary && Number.isFinite(Number(summary.tokens_in_window))) {
+      const tokens = Number(summary.tokens_in_window).toLocaleString();
+      const cost = Number(summary.estimated_cost_usd_in_window || 0);
+      const over = Number.isFinite(cap) && cap > 0 && cost > cap * 20;
+      mount.innerHTML = `<p class="set-eyebrow">AI usage · last ${esc(String(summary.window_hours || 24))}h</p>
+        <p class="ws-note">${esc(tokens)} tokens · est. $${esc(cost.toFixed(4))} across all Phantom work (not just this chat).</p>
+        <p class="ws-note">${esc(capLine)}</p>
+        ${over ? `<p class="ws-note" style="color:var(--warn,#f6ad3c)">Heads up: window spend is running well past 20x your per-response cap — review Developer for the breakdown.</p>` : ""}
+        <button type="button" class="btn btn-quiet" data-open-ws="developer">Full breakdown in Developer</button>`;
+      mount.querySelector("[data-open-ws]")?.addEventListener("click", () => routeWorkspace("developer"));
+    } else {
+      mount.innerHTML = `<p class="set-eyebrow">AI usage</p><p class="ws-note">Usage window unavailable right now (backend not reachable or signed out) — nothing is estimated in its place.</p><p class="ws-note">${esc(capLine)}</p>`;
+    }
+  } catch {
+    if (!document.body.contains(mount)) return;
+    mount.innerHTML = `<p class="set-eyebrow">AI usage</p><p class="ws-note">Usage window unavailable right now — nothing is estimated in its place.</p><p class="ws-note">${esc(capLine)}</p>`;
+  }
+}
+
 function renderChatSettingsPanel(target) {
   renderOperatorMiniSettings(target, {
     openSettings: () => routeWorkspace("settings"),
@@ -3372,6 +3436,7 @@ function renderChatSettingsPanel(target) {
       if (caption) caption.textContent = loop.enabled ? "Phantom Loop on — deeper pass ready" : "Phantom Loop off";
     },
   });
+  renderChatUsageBlock(target);
 }
 
 const CHAT_STARTERS = [
