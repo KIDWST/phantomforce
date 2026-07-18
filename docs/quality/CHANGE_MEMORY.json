@@ -644,6 +644,21 @@
             "file": "server/src/index.ts",
             "pattern": "const instantConversation = adminRouteTier === \"instant\" && isSafeInstantConversationRequest\\(normalized\\);[\\s\\S]*const businessContextRelevant = !instantConversation",
             "description": "The server independently strips business context from verified instant conversation even when a harmless question contains a business-related noun."
+          },
+          {
+            "file": "server/src/phantom-ai/instant-chat-tools.ts",
+            "pattern": "export function instantResponseTokenBudget\\(userRequest: string\\)",
+            "description": "The fast model keeps a small default response budget but expands it when the user explicitly asks for more words, steps, bullets, examples, or long-form detail."
+          },
+          {
+            "file": "server/src/phantom-ai/providers/local-ollama-transport.ts",
+            "pattern": "Do not append a follow-up question unless missing information prevents a useful answer",
+            "description": "Ordinary acknowledgments and direct answers do not end with a needless engagement question."
+          },
+          {
+            "file": "server/scripts/test-instant-chat-http-live-model.ts",
+            "pattern": "rapidFireVerified: true,[\\s\\S]*uncertaintyVerified: true,[\\s\\S]*empathyVerified: true,[\\s\\S]*structuredOutputVerified: true,[\\s\\S]*adaptiveLengthVerified: true",
+            "description": "The authenticated real-model gate protects long mixed-topic threads, uncertainty, empathy, structured output, and adaptive answer length."
           }
       ],
       "forbiddenPatterns": [

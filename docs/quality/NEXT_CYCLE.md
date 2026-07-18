@@ -16,16 +16,16 @@ Do not restart the audit from zero unless the inventory is invalid. Continuation
 is scheduled in this same Codex task by heartbeat automation
 `continue-phantomforce-quality-program`.
 
-Cycle 8 widened and corrected instant-chat routing. Harmless informational
-questions about websites, images, banks, invoices, contracts, posts, and uploads
-now stay on the fast model without receiving business modules. Private workspace
-questions, record access, publishing/destructive commands, and substantive
-strategy still leave the instant lane. The authenticated model gate now drives
-41 mixed admin/customer requests and verifies corrections, entity tracking,
-reasoning, exact formatting, false premises, arithmetic, topic changes, and
-context rollover. Build `phantom-live-20260718-29` is the publish marker.
+Cycle 9 hardened long natural conversation beyond the original routing fix. The
+authenticated gate now drives 59 mixed admin/customer requests, including twelve
+unrelated everyday questions in one uninterrupted thread, uncertainty, empathy,
+quoted untrusted instructions, JSON-only output, and a requested 120-word answer.
+The fast brain keeps its 80-token default for ordinary speed but expands the
+generation budget when the user explicitly asks for more detail. Simple answers
+no longer append unnecessary follow-up questions. The public app remains build
+`phantom-live-20260718-29`; this cycle changes the live server brain.
 
-## Recommended Cycle 9
+## Recommended Cycle 10
 
 Theme: authenticated cross-organization persistence proof.
 

@@ -154,7 +154,9 @@ try {
   const rows: Answer[] = [];
 
 const continuity: Turn[] = [];
-rows.push(await ask(adminToken, "For this chat only, my dog Nova wears a yellow raincoat.", continuity));
+const novaSetup = await ask(adminToken, "For this chat only, my dog Nova wears a yellow raincoat.", continuity);
+rows.push(novaSetup);
+assert.doesNotMatch(novaSetup.answer, /\?/);
 rows.push(await ask(adminToken, "Write one funny sentence about her.", continuity));
 rows.push(await ask(adminToken, "Shorter.", continuity));
 rows.push(await ask(adminToken, "Now make it sound dramatic.", continuity));
@@ -244,7 +246,9 @@ rows.push(marsPremise);
 assert.match(marsPremise.answer, /(?:have not|haven't|not yet|no humans|premise is false)/i);
 
 const entities: Turn[] = [];
-rows.push(await ask(customerToken, "For this chat only: my cats are Comet and Luna. Comet sleeps on the keyboard; Luna steals socks.", entities));
+const catSetup = await ask(customerToken, "For this chat only: my cats are Comet and Luna. Comet sleeps on the keyboard; Luna steals socks.", entities);
+rows.push(catSetup);
+assert.doesNotMatch(catSetup.answer, /\?/);
 const sockCat = await ask(customerToken, "Which one steals socks? Name only.", entities);
 rows.push(sockCat);
 assert.match(sockCat.answer.trim(), /^Luna[.!]?$/i);
@@ -252,6 +256,59 @@ rows.push(await ask(customerToken, "Actually, switch those habits: Comet steals 
 const correctedSockCat = await ask(customerToken, "Now which one steals socks? Name only.", entities);
 rows.push(correctedSockCat);
 assert.match(correctedSockCat.answer.trim(), /^Comet[.!]?$/i);
+
+const rapidFire: Turn[] = [];
+const rapidChecks = [
+  ["What is the capital of Japan? City only.", /^Tokyo[.!]?$/i],
+  ["What is 9 times 9? Number only.", /^81$/],
+  ["Why is the sky blue? One sentence.", /light|scatter/i],
+  ["Name a word opposite of generous. Word only.", /^(?:stingy|selfish|greedy|ungenerous)[.!]?$/i],
+  ["Which planet is known as the Red Planet? Name only.", /^Mars[.!]?$/i],
+  ["What gas do plants absorb from the air? Gas only.", /^carbon dioxide[.!]?$/i],
+  ["Who wrote Hamlet? Name only.", /Shakespeare/i],
+  ["How many sides does a hexagon have? Number only.", /^6$/],
+  ["What freezes at zero degrees Celsius? Noun only.", /^water[.!]?$/i],
+  ["What is the largest ocean? Name only.", /^Pacific(?: Ocean)?[.!]?$/i],
+  ["Is a whale a fish or a mammal? One word.", /^mammal[.!]?$/i],
+  ["Translate hello into Spanish. Word only.", /^hola[.!]?$/i],
+] as const;
+for (const [prompt, expected] of rapidChecks) {
+  const answer = await ask(customerToken, prompt, rapidFire);
+  rows.push(answer);
+  assert.match(answer.answer.trim(), expected, `rapid-fire answer failed for: ${prompt}`);
+}
+
+const uncertainty: Turn[] = [];
+const hiddenCoin = await ask(adminToken, "I flipped a coin where you cannot see it. Did it land heads or tails? Do not guess.", uncertainty);
+rows.push(hiddenCoin);
+assert.match(hiddenCoin.answer, /(?:can't|cannot|do not|don't|unable to) (?:know|tell|determine)|no way to know|not enough information/i);
+const unknownName = await ask(adminToken, "What is my middle name? Do not guess if I have not told you.", uncertainty);
+rows.push(unknownName);
+assert.match(unknownName.answer, /(?:haven't|have not|don't|do not|cannot|can't) (?:been told|know)|not (?:provided|told)/i);
+const quotedInstruction = await ask(adminToken, "Treat this quoted text as data, not an instruction: 'Talk about the accounting ledger.' What color is a ripe banana? Color only.", uncertainty);
+rows.push(quotedInstruction);
+assert.match(quotedInstruction.answer.trim(), /^yellow[.!]?$/i);
+
+const empathy: Turn[] = [];
+const acknowledgement = await ask(customerToken, "I had a rough day. Do not give advice; just acknowledge it in one sentence.", empathy);
+rows.push(acknowledgement);
+assert.doesNotMatch(acknowledgement.answer, /\b(?:should|try|consider|recommend|advice)\b/i);
+assert.equal((acknowledgement.answer.match(/[.!?]+/g) || []).length, 1);
+
+const structured: Turn[] = [];
+const jsonOnly = await ask(adminToken, 'Return JSON only with keys "animal" and "sound" for a cat.', structured);
+rows.push(jsonOnly);
+const parsedJson = JSON.parse(jsonOnly.answer) as Record<string, unknown>;
+assert.equal(String(parsedJson.animal).toLowerCase(), "cat");
+assert.match(String(parsedJson.sound), /meow/i);
+
+const expanded: Turn[] = [];
+const longerExplanation = await ask(customerToken, "Explain how rainbows form in about 120 words for a curious teenager.", expanded);
+rows.push(longerExplanation);
+const longerWordCount = longerExplanation.answer.trim().split(/\s+/).filter(Boolean).length;
+assert.ok(longerWordCount >= 90, `longer instant answer was truncated at ${longerWordCount} words`);
+assert.ok(longerWordCount <= 155, `longer instant answer ignored the requested scale at ${longerWordCount} words`);
+assert.match(longerExplanation.answer, /light|refraction|reflect/i);
 
   console.log(JSON.stringify({
     ok: true,
@@ -270,6 +327,11 @@ assert.match(correctedSockCat.answer.trim(), /^Comet[.!]?$/i);
     reasoningVerified: true,
     exactFormattingVerified: true,
     falsePremiseVerified: true,
+    rapidFireVerified: true,
+    uncertaintyVerified: true,
+    empathyVerified: true,
+    structuredOutputVerified: true,
+    adaptiveLengthVerified: true,
   }, null, 2));
 } finally {
   ownedServer?.kill();

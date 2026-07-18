@@ -798,3 +798,41 @@ Run the authenticated two-organization persistence proof in Recommended Cycle 9.
   database-auth suite plus browser tenant-isolation proof.
 - PASS: stopped PostgreSQL deliberately; patched Hermes startup revived it and
   restored database reachability with restart policy `unless-stopped`.
+
+# 2026-07-18 - Cycle 9: Long-Thread Conversation Quality
+
+## Problems Verified
+
+- The existing 41-request gate proved correctness inside several focused threads
+  but did not reproduce a user asking many unrelated everyday questions without
+  manually resetting the topic.
+- Every instant response had a fixed 80-token generation ceiling. A real request
+  for about 120 words stopped at 61 words even though the local model was healthy.
+- Raw model transcripts showed simple context acknowledgments occasionally ended
+  with an unnecessary question, making Phantom feel mechanically engagement-led.
+
+## Corrections
+
+- Expanded the authenticated real-model matrix to 59 requests, including twelve
+  rapid-fire general questions in one thread, unknown facts, an unseen coin,
+  quoted instruction-like data, empathy without advice, JSON-only output, and a
+  longer educational explanation.
+- Added deterministic adaptive token budgeting. Ordinary questions retain the
+  80-token low-latency path; explicit word counts, lists, examples, and long-form
+  requests receive a bounded larger budget.
+- Directed both the temporary context compiler and local model system prompt not
+  to append follow-up questions unless missing information blocks a useful answer.
+- Added permanent change-memory guards for these behaviors.
+
+## Focused Verification
+
+- PASS: `npm run test:instant-chat:tools --workspace @phantomforce/server`.
+- PASS: `npm run typecheck`.
+- PASS: `npm run test:instant-chat:http-live-model --workspace
+  @phantomforce/server`: 59 authenticated requests, 451 ms average, 2,226 ms
+  maximum, zero fallback, zero business leakage, and all behavioral assertions.
+- PASS: `npm run test:release-critical` (19/19 critical checks).
+
+## Next Task
+
+Run the authenticated two-organization persistence proof in Recommended Cycle 10.

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { buildInstantChatToolReply, enforceInstantOutputConstraints } from "../src/phantom-ai/instant-chat-tools.js";
+import { buildInstantChatToolReply, enforceInstantOutputConstraints, instantResponseTokenBudget } from "../src/phantom-ai/instant-chat-tools.js";
 
 const ticketTurns = [
   { user: "A ticket is 45 dollars. Apply a 20 percent discount.", assistant: "The discounted price is $36." },
@@ -70,5 +70,10 @@ assert.equal(
   ),
   "Octopuses have three hearts.",
 );
+assert.equal(instantResponseTokenBudget("What is the capital of Japan?"), 80);
+assert.equal(instantResponseTokenBudget("Explain rainbows in about 120 words."), 242);
+assert.equal(instantResponseTokenBudget("Give exactly 5 bullet points."), 188);
+assert.equal(instantResponseTokenBudget("Write a detailed article about rainbows."), 320);
+assert.equal(instantResponseTokenBudget("Write exactly 900 words."), 592);
 
 console.log("instant chat deterministic tool checks passed");

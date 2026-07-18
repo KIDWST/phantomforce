@@ -8,6 +8,21 @@ export type InstantChatToolReply = {
   tool_id: "phantom-calculator" | "phantom-reference-resolver";
 };
 
+export function instantResponseTokenBudget(userRequest: string) {
+  const text = String(userRequest || "");
+  const requestedWords = text.match(/\b(?:(?:about|around|roughly|approximately|exactly|at least|up to)\s+)?(\d{2,4})[ -]words?\b/i);
+  if (requestedWords) {
+    const words = Math.min(Math.max(Number(requestedWords[1]), 20), 320);
+    return Math.min(Math.max(Math.ceil(words * 1.75) + 32, 80), 600);
+  }
+  if (/\b(?:detailed|comprehensive|in-depth|long-form)\b|\b(?:essay|article|story)\b.{0,24}\b(?:about|on|explaining)\b/i.test(text)) {
+    return 320;
+  }
+  const requestedItems = text.match(/\b(?:exactly\s+)?(\d{1,2})\s+(?:bullet points?|items?|steps?|examples?)\b/i);
+  if (requestedItems) return Math.min(Math.max(Number(requestedItems[1]) * 28 + 48, 80), 320);
+  return 80;
+}
+
 const NUMBER_WORDS: Record<string, number> = {
   one: 1,
   two: 2,

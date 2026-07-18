@@ -194,7 +194,7 @@ import { buildHermesLiveCallReceiptContract } from "./phantom-ai/hermes-live-rec
 import { buildHermesInteractionMemoryPreview } from "./phantom-ai/hermes-interaction-memory.js";
 import { recallHermesInteractionMemory } from "./phantom-ai/hermes-interaction-recall.js";
 import { buildInstantChatFallbackReply } from "./phantom-ai/instant-chat-fallback.js";
-import { buildInstantChatToolReply, enforceInstantOutputConstraints } from "./phantom-ai/instant-chat-tools.js";
+import { buildInstantChatToolReply, enforceInstantOutputConstraints, instantResponseTokenBudget } from "./phantom-ai/instant-chat-tools.js";
 import { filterConversationModules, isSafeInstantConversationRequest, needsBusinessContext } from "./phantom-ai/conversation-policy.js";
 import { buildOpsDashboardContext } from "./phantom-ai/ops-context.js";
 import { buildAgentWorkforceStatus } from "./phantom-ai/agent-workforce.js";
@@ -3452,7 +3452,7 @@ function parseRecentConversation(value: unknown): RecentChatTurn[] {
 }
 
 function buildInstantConversationContext(turns: RecentChatTurn[]) {
-  const rule = "Answer the current casual request directly. Resolve pronouns and transformations from the newest relevant turn, preserve named subjects, and treat later corrections as authoritative. Follow exact format constraints such as 'only the number' without extra framing. Never volunteer ledger, pipeline, accounting, approvals, or dashboard status unless the current request explicitly asks for it.";
+  const rule = "Answer the current casual request directly. Resolve pronouns and transformations from the newest relevant turn, preserve named subjects, and treat later corrections as authoritative. Follow exact format constraints such as 'only the number' without extra framing. Do not append a follow-up question unless missing information prevents a useful answer. Never volunteer ledger, pipeline, accounting, approvals, or dashboard status unless the current request explicitly asks for it.";
   const topicReset = /\b(?:new topic|switch(?:ing)? topics?|change(?:ing)? (?:the )?subject|unrelated question)\b/i;
   let activeTurns = turns;
   for (let index = turns.length - 1; index >= 0; index -= 1) {
@@ -3741,7 +3741,7 @@ async function callAdminPhantomAiProvider(providerId: AdminPhantomAiProviderId, 
       approvalRequired: ctx.approvalRequired,
       executionMode: ctx.executionMode,
       conversationMode: ctx.routeTier === "instant",
-      maxTokens: ctx.routeTier === "instant" ? 80 : undefined,
+      maxTokens: ctx.routeTier === "instant" ? instantResponseTokenBudget(ctx.userMessage) : undefined,
       adminOperatorLane: true,
     },
     {
