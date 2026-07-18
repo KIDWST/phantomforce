@@ -719,6 +719,21 @@
             "file": "server/scripts/test-instant-chat-http-live-model.ts",
             "pattern": "lexicalRoutingVerified: true",
             "description": "The authenticated real-model gate proves electrical current and stock-photo questions remain fast, accurate, and free of business leakage."
+          },
+          {
+            "file": "server/src/phantom-ai/instant-chat-context.ts",
+            "pattern": "export function needsInstantConversationContext[\\s\\S]*function activeTopicTurns[\\s\\S]*topicStart = index",
+            "description": "Temporary history is included only for genuine follow-ups or topic overlap, and standalone prompts automatically start a clean topic segment."
+          },
+          {
+            "file": "server/src/phantom-ai/instant-chat-tools.ts",
+            "pattern": "tool_id: \"phantom-stable-fact\"[\\s\\S]*function enforceCodeOnly",
+            "description": "Explicit verified octopus facts use a curated stable answer, and code-only responses deterministically remove Markdown fences."
+          },
+          {
+            "file": "server/scripts/test-instant-chat-http-live-model.ts",
+            "pattern": "topicIsolationVerified: true",
+            "description": "The authenticated model gate proves an accounting-to-penguin topic switch and its shorter follow-up never inherit stale business content."
           }
       ],
       "forbiddenPatterns": [

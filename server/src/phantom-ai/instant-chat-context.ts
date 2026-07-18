@@ -6,22 +6,58 @@ export type InstantConversationTurn = {
 export const MAX_INSTANT_CONTEXT_CHARS = 4800;
 
 const CONTEXT_HEADER = "Fast casual chat. The following is temporary recent conversation from the active topic, not saved memory. Use it only to resolve references such as why, that, or tell me more.";
-const CONTEXT_RULE = "Answer the current casual request directly. Resolve pronouns and transformations from the newest relevant turn, preserve named subjects, and treat later corrections as authoritative. When the user asks for a replacement, shorter version, final item, or one new fact, return the replacement only instead of repeating earlier material. Follow exact format constraints such as 'only the number' without extra framing. For factual claims, use stable knowledge and never invent a plausible-sounding detail; say when you are unsure. Do not append a follow-up question unless missing information prevents a useful answer. Never volunteer ledger, pipeline, accounting, approvals, or dashboard status unless the current request explicitly asks for it.";
+const CONTEXT_RULE = "Answer the current casual request directly. Resolve pronouns and transformations from the newest relevant turn, preserve named subjects, and treat later corrections as authoritative. When the user asks for a replacement, shorter version, final item, or one new fact, return the replacement only instead of repeating earlier material. Follow exact format constraints such as 'only the number' without extra framing. When an approximate word count is requested, aim within 20 percent of it instead of stopping early. For factual claims, use stable knowledge and never invent a plausible-sounding detail; say when you are unsure. Do not append a follow-up question unless missing information prevents a useful answer. Never volunteer ledger, pipeline, accounting, approvals, or dashboard status unless the current request explicitly asks for it.";
 const TOPIC_RESET = /\b(?:new topic|switch(?:ing)? topics?|change(?:ing)? (?:the )?subject|unrelated question)\b/i;
+const FOLLOW_UP_SIGNAL = /^(?:why\s+(?:that|it|this|so|them|those|one)\b|why\s*\?|how (?:so|come|about)\b|another\b|more\b|shorter\b|longer\b|again\b|continue\b|go on\b|now\b|actually\b|correction\b|instead\b|same\b|pick\b|choose\b|use\b|make (?:it|that|this|them|(?:the )?(?:comparison|answer|sentence|story|list|version))\b|turn (?:it|that|this)\b|answer (?:it|that|the question)\b|what about\b|tell me more\b|give me .{0,20}\bmore\b|give me (?:only )?(?:the )?(?:corrected|final|next|same|other|another|more)\b|end with\b|double-check\b|ahora\b|dilo\b|otra\b|m[a\u00e1]s corto\b)/i;
+const CONTEXT_REFERENCE = /\b(?:it|that|this|them|those|these|former|latter|above|previous|earlier|last answer|same one|which one|the other|her|hers|him|they|there|corrected|final)\b/i;
+const CONTEXT_OPERATION = /\b(?:then|also|instead|add|apply|remove|rephrase|rewrite|translate|summarize|simplify|expand|combine|compare them)\b/i;
+const CONTEXT_STOP_WORDS = new Set([
+  "about", "after", "again", "answer", "before", "could", "current", "does", "explain", "favorite", "from", "give", "have", "into", "just", "latest", "make", "more", "only", "please", "question", "sentence", "should", "something", "that", "their", "then", "there", "these", "thing", "this", "those", "what", "when", "where", "which", "would", "write", "your",
+]);
+
+function meaningfulTerms(value: string) {
+  return new Set((value.toLowerCase().match(/[a-z0-9]{4,}/g) || []).filter((term) => !CONTEXT_STOP_WORDS.has(term)));
+}
+
+function hasTopicOverlap(turns: InstantConversationTurn[], userRequest: string) {
+  const requestTerms = meaningfulTerms(userRequest);
+  if (!requestTerms.size) return false;
+  const priorTerms = meaningfulTerms(turns.slice(-3).map((turn) => `${turn.user} ${turn.assistant}`).join(" "));
+  return [...requestTerms].some((term) => priorTerms.has(term));
+}
+
+export function needsInstantConversationContext(turns: InstantConversationTurn[], userRequest: string) {
+  const text = userRequest.trim();
+  if (!turns.length || !text || TOPIC_RESET.test(text)) return false;
+  return FOLLOW_UP_SIGNAL.test(text)
+    || CONTEXT_REFERENCE.test(text)
+    || CONTEXT_OPERATION.test(text)
+    || hasTopicOverlap(turns, text);
+}
 
 function activeTopicTurns(turns: InstantConversationTurn[]) {
-  for (let index = turns.length - 1; index >= 0; index -= 1) {
-    if (TOPIC_RESET.test(turns[index].user)) return turns.slice(index);
+  let topicStart = 0;
+  for (let index = 0; index < turns.length; index += 1) {
+    if (TOPIC_RESET.test(turns[index].user)) {
+      topicStart = index;
+      continue;
+    }
+    if (index > topicStart && !needsInstantConversationContext(turns.slice(topicStart, index), turns[index].user)) {
+      topicStart = index;
+    }
   }
-  return turns;
+  return turns.slice(topicStart);
 }
 
 export function buildInstantConversationContext(
   turns: InstantConversationTurn[],
+  userRequest = "",
   maxChars = MAX_INSTANT_CONTEXT_CHARS,
 ) {
   const budget = Math.max(Math.floor(maxChars), CONTEXT_RULE.length + 200);
-  if (!turns.length) return `Fast casual chat. No business memory required. ${CONTEXT_RULE}`.slice(0, budget);
+  if (!turns.length || (userRequest && !needsInstantConversationContext(turns, userRequest))) {
+    return `Fast casual chat. The current request is standalone; do not carry over prior topics. No business memory required. ${CONTEXT_RULE}`.slice(0, budget);
+  }
 
   const activeTurns = activeTopicTurns(turns);
   const fixedChars = CONTEXT_HEADER.length + CONTEXT_RULE.length + 2;

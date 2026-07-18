@@ -8540,7 +8540,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
       businessName: normalized.business_name,
       taskType: normalized.task_type,
       userMessage: normalized.user_request,
-      compactContext: buildInstantConversationContext(recentConversation),
+      compactContext: buildInstantConversationContext(recentConversation, normalized.user_request),
       sensitivityLevel: normalized.sensitivity_level,
       approvalRequired: false,
       executionMode: adminExecutionMode,

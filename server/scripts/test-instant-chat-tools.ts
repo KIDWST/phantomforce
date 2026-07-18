@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 
 import { buildInstantChatToolReply, enforceInstantOutputConstraints, instantResponseTokenBudget } from "../src/phantom-ai/instant-chat-tools.js";
-import { buildInstantConversationContext, MAX_INSTANT_CONTEXT_CHARS } from "../src/phantom-ai/instant-chat-context.js";
+import { buildInstantConversationContext, MAX_INSTANT_CONTEXT_CHARS, needsInstantConversationContext } from "../src/phantom-ai/instant-chat-context.js";
 
 const ticketTurns = [
   { user: "A ticket is 45 dollars. Apply a 20 percent discount.", assistant: "The discounted price is $36." },
@@ -116,12 +116,16 @@ const favoriteFood = buildInstantChatToolReply("What's your favorite food? Pick 
 assert.equal(favoriteFood?.tool_id, "phantom-personality");
 assert.match(favoriteFood?.output_text || "", /ramen/i);
 assert.equal(buildInstantChatToolReply("What's my favorite food?"), null);
+const verifiedOctopus = buildInstantChatToolReply("Give one surprising, verified octopus fact.");
+assert.equal(verifiedOctopus?.tool_id, "phantom-stable-fact");
+assert.equal(verifiedOctopus?.output_text, "Octopuses have three hearts.");
 assert.equal(
   enforceInstantOutputConstraints("Choose a dessert that pairs with it. Dessert only.", "Chocolate mousse - rich and creamy."),
   "Chocolate mousse",
 );
 assert.equal(enforceInstantOutputConstraints("City only.", "Tokyo\nJapan's capital."), "Tokyo");
 assert.equal(enforceInstantOutputConstraints("Code only.", "const answer = 1;"), "const answer = 1;");
+assert.equal(enforceInstantOutputConstraints("Code only.", "```javascript\nconst answer = 1;\n```"), "const answer = 1;");
 
 const oversizedTurns = Array.from({ length: 8 }, (_, index) => ({
   user: `user-${index + 1} ${"u".repeat(400)}`,
@@ -143,5 +147,26 @@ const resetContext = buildInstantConversationContext([
 ]);
 assert.doesNotMatch(resetContext, /old-topic|old-answer/);
 assert.match(resetContext, /blue moons|newest-answer/);
+
+const staleBusinessTurns = [
+  { user: "Review the accounting ledger.", assistant: "The ledger and sales pipeline need attention." },
+  { user: "What is overdue?", assistant: "Two ledger entries and one pipeline item." },
+];
+assert.equal(needsInstantConversationContext(staleBusinessTurns, "Tell me a joke about penguins."), false);
+const cleanStandaloneContext = buildInstantConversationContext(staleBusinessTurns, "Tell me a joke about penguins.");
+assert.doesNotMatch(cleanStandaloneContext, /Review the accounting ledger|sales pipeline need|Two ledger entries|pipeline item/i);
+assert.match(cleanStandaloneContext, /standalone; do not carry over prior topics/i);
+
+const switchedTurns = [
+  ...staleBusinessTurns,
+  { user: "Tell me a joke about penguins.", assistant: "A penguin wore a tuxedo because every night felt formal." },
+];
+assert.equal(needsInstantConversationContext(switchedTurns, "Shorter."), true);
+const cleanFollowUpContext = buildInstantConversationContext(switchedTurns, "Shorter.");
+assert.match(cleanFollowUpContext, /penguin wore a tuxedo/i);
+assert.doesNotMatch(cleanFollowUpContext, /Review the accounting ledger|sales pipeline need|Two ledger entries|pipeline item/i);
+assert.equal(needsInstantConversationContext([{ user: "My dog is Nova.", assistant: "Nova sounds lovely." }], "Tell me about Nova."), true);
+assert.equal(needsInstantConversationContext([{ user: "Compare octopuses and dolphins.", assistant: "Octopuses hide; dolphins echolocate." }], "Make the comparison playful."), true);
+assert.equal(needsInstantConversationContext([{ user: "Name a tiny spaceship.", assistant: "Pocket Comet" }], "Give me three more, names only."), true);
 
 console.log("instant chat deterministic tool checks passed");

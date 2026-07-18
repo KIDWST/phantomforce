@@ -16,18 +16,17 @@ Do not restart the audit from zero unless the inventory is invalid. Continuation
 is scheduled in this same Codex task by heartbeat automation
 `continue-phantomforce-quality-program`.
 
-Cycle 13 corrected model-routing false positives. The browser and server used to
-treat any mention of `current`, `latest`, or `stock` as live data, escalating
-ordinary questions about electrical current, chicken stock, stock photos, and even
-Phantom's current favorite food. Live-data routing now requires intent-shaped
-combinations such as weather queries, latest headlines, market prices, scores, or
-exchange rates. The browser contract covers 42 casual prompts, the intent boundary
-covers 35 cases, and the authenticated model gate now drives 73 requests with zero
-business leakage. The browser cache key advances to
-`phantom-live-20260718-30`; this cycle updates both browser routing and the live
-server brain.
+Cycle 14 removed stale-topic contamination from temporary chat history. Standalone
+requests now start a clean semantic topic automatically, while true follow-ups,
+pronoun references, transformations, and overlapping named subjects retain only
+their relevant topic segment. A direct penguin joke after accounting history and
+its `Shorter` follow-up now exclude old ledger/pipeline turns. The verbose audit
+also caught and fixed lost spaceship/comparison context, Markdown fences on
+`Code only`, and unreliable generated verified octopus facts. The authenticated
+gate now drives 75 requests with zero business leakage. The public app remains
+build `phantom-live-20260718-30`; this cycle changes the live server brain.
 
-## Recommended Cycle 14
+## Recommended Cycle 15
 
 Theme: authenticated cross-organization persistence proof.
 

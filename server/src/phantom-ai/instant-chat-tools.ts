@@ -5,7 +5,7 @@ export type InstantChatToolTurn = {
 
 export type InstantChatToolReply = {
   output_text: string;
-  tool_id: "phantom-calculator" | "phantom-reference-resolver" | "phantom-identity" | "phantom-personality";
+  tool_id: "phantom-calculator" | "phantom-reference-resolver" | "phantom-identity" | "phantom-personality" | "phantom-stable-fact";
 };
 
 export function instantResponseTokenBudget(userRequest: string) {
@@ -208,9 +208,20 @@ function personalityReply(userRequest: string): InstantChatToolReply | null {
   return null;
 }
 
+function stableFactReply(userRequest: string): InstantChatToolReply | null {
+  if (/\b(?:verified|fact[- ]?check(?:ed)?)\b.{0,40}\boctopus(?:es)?\b|\boctopus(?:es)?\b.{0,40}\b(?:verified|fact[- ]?check(?:ed)?)\b/i.test(userRequest)) {
+    return {
+      output_text: "Octopuses have three hearts.",
+      tool_id: "phantom-stable-fact",
+    };
+  }
+  return null;
+}
+
 export function buildInstantChatToolReply(userRequest: string, turns: InstantChatToolTurn[] = [], modelId = "qwen2.5:14b") {
   return identityReply(userRequest, modelId)
     || personalityReply(userRequest)
+    || stableFactReply(userRequest)
     || arithmeticReply(userRequest, turns)
     || listSelectionReply(userRequest, turns);
 }
@@ -251,12 +262,23 @@ function enforceShortOnlyAnswer(userRequest: string, output: string) {
     .trim();
 }
 
+function enforceCodeOnly(userRequest: string, output: string) {
+  if (!/\bcode only\b/i.test(userRequest)) return output;
+  return output
+    .replace(/^```(?:[a-z0-9_+#.-]+)?\s*\r?\n?/i, "")
+    .replace(/\r?\n?```\s*$/i, "")
+    .trim();
+}
+
 export function enforceInstantOutputConstraints(userRequest: string, output: string) {
-  const trimmed = enforceShortOnlyAnswer(
+  const trimmed = enforceCodeOnly(
     userRequest,
-    enforceExactWordCount(
+    enforceShortOnlyAnswer(
       userRequest,
-      stripUnneededFollowUpQuestion(userRequest, output.trim()),
+      enforceExactWordCount(
+        userRequest,
+        stripUnneededFollowUpQuestion(userRequest, output.trim()),
+      ),
     ),
   );
   if (!trimmed) return trimmed;

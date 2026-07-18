@@ -1026,3 +1026,43 @@ Run the authenticated two-organization persistence proof in Recommended Cycle 13
 ## Next Task
 
 Run the authenticated two-organization persistence proof in Recommended Cycle 14.
+
+# 2026-07-18 - Cycle 14: Automatic Temporary Topic Isolation
+
+## Problems Verified
+
+- Instant chat packed all recent temporary turns whenever context was available,
+  so a standalone casual prompt after accounting could still receive ledger-
+  flavored history even though durable business modules were excluded.
+- A first semantic segmentation pass treated `Make the comparison playful` and
+  `Give me three more` as new topics, losing octopus/dolphin and spaceship context.
+- The real model sometimes fenced `Code only` output and invented details when
+  explicitly asked for a verified octopus fact.
+
+## Corrections
+
+- Added follow-up, reference, transformation, and lexical-overlap detection for
+  temporary conversation context.
+- Added automatic topic segmentation: each standalone prompt starts a clean
+  suffix, while genuine follow-ups retain only the active semantic topic.
+- Passed the current request into context construction at the server boundary.
+- Added deterministic Markdown-fence removal for `Code only` requests.
+- Added a curated instant stable-fact response for explicit verified octopus facts.
+- Strengthened real-model assertions for space-themed names, playful comparison
+  continuity, code-only output, accounting-to-casual isolation, and shorter replies.
+- Kept approximate-length answers single-call and fast while preserving exact-
+  count enforcement for explicit exact word requests.
+- Added permanent change-memory guards for topic isolation and output truth.
+
+## Focused Verification
+
+- PASS: `npm run test:instant-chat:tools --workspace @phantomforce/server`.
+- PASS: `npm run typecheck`.
+- PASS: `npm run test:instant-chat:http-live-model --workspace
+  @phantomforce/server`: 75 authenticated requests, 440 ms average, 1,522 ms
+  maximum, zero fallback, zero business leakage, and topic isolation verified.
+- PASS: `npm run test:release-critical` (19/19 critical checks).
+
+## Next Task
+
+Run the authenticated two-organization persistence proof in Recommended Cycle 15.
