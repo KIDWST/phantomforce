@@ -40,10 +40,9 @@ WshShell.Run "$vbsCommand", 0, True
 
 $startVbs = Join-Path $stateDir "run-admin-live-start.vbs"
 $hermesVbs = Join-Path $stateDir "run-hermes-start.vbs"
-$syncVbs = Join-Path $stateDir "run-admin-live-sync.vbs"
+$syncVbs = Join-Path $PSScriptRoot "Run-AdminMainSyncHidden.vbs"
 New-HiddenLauncher -VbsPath $startVbs -Command "$ps $startArgs"
 New-HiddenLauncher -VbsPath $hermesVbs -Command "$ps $hermesArgs"
-New-HiddenLauncher -VbsPath $syncVbs -Command "$ps $syncArgs"
 
 $wscript = (Get-Command wscript.exe -ErrorAction Stop).Source
 $startAction = New-ScheduledTaskAction -Execute $wscript -Argument "`"$startVbs`""

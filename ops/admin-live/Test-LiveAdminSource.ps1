@@ -112,10 +112,6 @@ $canonicalNeedles = @(
   ($RepoRoot -replace '\\', '/')
 )
 $helperPaths = @(
-  (Join-Path $env:LOCALAPPDATA "PhantomForce\admin-live\run-admin-live-start.vbs"),
-  (Join-Path $env:LOCALAPPDATA "PhantomForce\admin-live\run-admin-live-sync.vbs"),
-  (Join-Path $env:LOCALAPPDATA "PhantomForce\admin-live\run-hermes-start.vbs"),
-  (Join-Path $env:LOCALAPPDATA "PhantomForce\admin-live\start-admin-live-watch.vbs"),
   (Join-Path $env:USERPROFILE "Documents\PhantomForce-Infrastructure\windows-host-pangolin-ai\Start-PhantomForce-RemoteStack.ps1"),
   (Join-Path $env:USERPROFILE "Documents\PhantomForce-Infrastructure\windows-host-pangolin-ai\ecosystem.config.js")
 )
@@ -130,6 +126,22 @@ foreach ($helperPath in $helperPaths) {
   if (-not $pointsAtCanonical) { $badHelpers += $helperPath }
 }
 $states.Add((Result ($(if ($badHelpers.Count -eq 0) { "OK" } else { "FAIL" })) ($(if ($badHelpers.Count -eq 0) { "Scheduled helpers and watchdog configs point at the canonical deployment." } else { "Non-canonical helpers: $($badHelpers -join ', ')" }))))
+
+$repoOverride = [Environment]::GetEnvironmentVariable("PHANTOMFORCE_DASHBOARD_REPO", "User")
+$overrideOk = [string]::IsNullOrWhiteSpace($repoOverride) -or ((Resolve-Path -LiteralPath $repoOverride -ErrorAction SilentlyContinue).Path -eq $RepoRoot)
+$states.Add((Result ($(if ($overrideOk) { "OK" } else { "FAIL" })) ($(if ($overrideOk) { "Dashboard repository environment override is empty or canonical." } else { "PHANTOMFORCE_DASHBOARD_REPO points at $repoOverride" }))))
+
+$syncTaskOk = $false
+try {
+  $syncTask = Get-ScheduledTask -TaskName "PhantomForce Admin Main Sync" -ErrorAction Stop
+  $syncActionText = (($syncTask.Actions | ForEach-Object { "$($_.Execute) $($_.Arguments)" }) -join " ")
+  $syncTaskOk = $syncActionText.Contains((Join-Path $RepoRoot "ops\admin-live\Run-AdminMainSyncHidden.vbs"))
+} catch {}
+$states.Add((Result ($(if ($syncTaskOk) { "OK" } else { "FAIL" })) ($(if ($syncTaskOk) { "Recurring admin sync launches the tracked canonical hidden runner." } else { "Recurring admin sync task is missing or points outside the canonical deployment." }))))
+
+$fallbackWatch = (Get-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name "PhantomForceAdminLiveSync" -ErrorAction SilentlyContinue).PhantomForceAdminLiveSync
+$fallbackOk = [string]::IsNullOrWhiteSpace($fallbackWatch) -or $fallbackWatch.Contains($RepoRoot)
+$states.Add((Result ($(if ($fallbackOk) { "OK" } else { "FAIL" })) ($(if ($fallbackOk) { "Legacy login fallback watcher is absent or canonical." } else { "Legacy login fallback watcher points outside the canonical deployment." }))))
 
 $badProcesses = @()
 try {

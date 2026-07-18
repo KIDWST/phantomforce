@@ -1360,10 +1360,11 @@ Recommended Cycle 18.
   build `phantom-live-20260718-3` from the stale
   `phantomforce-main-trunk-20260706` worktree even though the dedicated checkout
   and sync manifest were current.
-- Root cause: the Windows remote-stack starter, PM2 ecosystem file, four hidden
-  VBS scheduled-task helpers, and one long-running `Watch-AdminMain.ps1` process
-  still referenced the July 6 worktree. Those dormant launchers repeatedly
-  reclaimed ports 5177 and 5190 after successful deploys.
+- Root cause: the Windows remote-stack starter, PM2 ecosystem file, persisted
+  `PHANTOMFORCE_DASHBOARD_REPO` user variable, mutable hidden VBS scheduled-task
+  helpers, and one long-running `Watch-AdminMain.ps1` process still referenced
+  the July 6 worktree. Those launchers repeatedly reclaimed ports 5177 and 5190
+  after successful deploys.
 - Corrected every persistent launcher to
   `C:\Users\jorda\Documents\Codex\deployments\phantomforce-live`, stopped all
   stale process trees, restarted the canonical static/API services, and ran the
@@ -1371,6 +1372,9 @@ Recommended Cycle 18.
 - Added a strict-doctor resurrection guard that fails when hidden helpers,
   watchdog configs, or a running admin watcher point outside the canonical
   deployment.
+- Replaced the recurring task's mutable AppData launcher with tracked
+  `ops/admin-live/Run-AdminMainSyncHidden.vbs`, which derives its repo root from
+  its own canonical location; removed the obsolete HKCU login fallback.
 - PASS: scheduled task `PhantomForce Admin Main Sync` completed automatic runs
   with result `0` after the repair; zero stale processes and zero stale helper
   references remained.

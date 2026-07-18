@@ -13,8 +13,8 @@
     "id": "Q-0011",
     "severity": "P1",
     "status": "fixed_verified",
-    "rootCause": "Hidden VBS launchers, watchdog configuration, and a running watcher still referenced the July 6 worktree and repeatedly reclaimed ports 5177/5190.",
-    "correction": "All persistent launchers now target the dedicated deployment; stale processes were removed; the strict doctor audits resurrection sources."
+    "rootCause": "Mutable VBS launchers, watchdog configuration, a persisted repository environment override, and a running watcher still referenced the July 6 worktree and repeatedly reclaimed ports 5177/5190.",
+    "correction": "Watchdogs and environment are pinned to the deployment; recurring sync uses a tracked self-locating hidden runner; stale processes were removed; the strict doctor audits resurrection sources."
   },
   "verification": {
     "databaseApiChecks": 56,

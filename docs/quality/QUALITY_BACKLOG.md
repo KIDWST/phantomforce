@@ -119,10 +119,12 @@ Last updated: 2026-07-18
 - Expected: every scheduled helper and watchdog serves only the clean
   `deployments\phantomforce-live` checkout.
 - Actual before fix: hidden VBS launchers, PM2 config, remote-stack PowerShell,
-  and a live watcher still referenced `phantomforce-main-trunk-20260706`.
-- Correction: repoint all launchers, terminate stale process trees, restart the
-  canonical services, and make the strict source doctor audit dormant helpers
-  and running watchers.
+  a persisted repository environment override, and a live watcher still
+  referenced `phantomforce-main-trunk-20260706`.
+- Correction: pin watchdogs and the user environment to the deployment, replace
+  the recurring task's mutable AppData launcher with a tracked self-locating
+  hidden runner, terminate stale process trees, and make the strict source
+  doctor audit every resurrection source.
 - Evidence: multiple post-fix scheduled task runs returned result 0; public and
   local health remained on the deployment root and build 34; resurrection guard
   passed with zero stale helpers/processes.
