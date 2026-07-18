@@ -1,75 +1,31 @@
 {
-  "cycle": "daily-qa-2026-07-16",
-  "date": "2026-07-16",
-  "theme": "PhantomPlay catalog restore and responsive browser proof",
-  "sources": [
-    "AGENTS.md",
-    "docs/quality/CONTINUOUS_QUALITY_PROGRAM.md",
-    "docs/quality/SITE_INVENTORY.md",
-    "docs/quality/QUALITY_BACKLOG.md",
-    "docs/quality/NEXT_CYCLE.md",
-    "docs/DATABASE_SETUP.md",
-    "docs/ADMIN_RECOVERY.md",
-    "app/js/phantomplay.js",
-    "server/src/phantom-ai/phantomplay.ts",
-    "scripts/test-responsive-viewports.mjs"
-  ],
-  "findings": [
-    {
-      "id": "Q-0010",
-      "severity": "P2",
-      "status": "fixed_verified",
-      "routeOrComponent": "PhantomPlay built-in catalog",
-      "journey": "browse and launch the Penalty Kick Sports game",
-      "expected": "Penalty Kick remains active and featured in the frontend and server catalogs.",
-      "actual": "Before this sweep the frontend row had active:false and both catalogs had featured:false.",
-      "evidence": "npm run test:phantomplay failure on 2026-07-16 before fix",
-      "regressionTest": "npm run test:phantomplay"
-    },
-    {
-      "id": "Q-0002",
-      "severity": "P1",
-      "status": "blocked",
-      "routeOrComponent": "database-auth organization isolation",
-      "journey": "separate PhantomForce and ChicagoShots users and organizations",
-      "expected": "Safe local Postgres fixture can run DB-auth browser proof.",
-      "actual": "Docker Desktop Linux engine was not running, so the Postgres fixture could not start.",
-      "evidence": "docker ps failed opening dockerDesktopLinuxEngine pipe",
-      "regressionTest": "server/scripts/test-auth-database-live.ps1 once Docker/Postgres is available"
-    },
-    {
-      "id": "Q-0003",
-      "severity": "P1",
-      "status": "partially_proven",
-      "routeOrComponent": "responsive app shell and key modules",
-      "journey": "mobile and desktop admin browsing",
-      "expected": "No horizontal overflow or clipped visible controls across required widths.",
-      "actual": "42 responsive browser cases passed across Dashboard, Clients, Media Lab, Content Hub, Analytics, PhantomPlay, and Settings.",
-      "evidence": "tmp/responsive-viewports/2026-07-16T14-07-18-427Z/report.json",
-      "regressionTest": "npm run test:responsive-viewports"
-    }
-  ],
-  "commands": [
-    { "command": "docker --version; docker ps --format '{{.Names}} {{.Ports}}'", "result": "blocked; Docker engine unavailable" },
-    { "command": "npm run test:responsive-viewports", "result": "pass; 42 browser cases" },
-    { "command": "npm run test:phantomplay", "result": "pass" },
-    { "command": "npm run build --workspace @phantomforce/server", "result": "pass" },
-    { "command": "node --check app/js/main.js; node --check app/js/phantomplay.js", "result": "pass" },
-    { "command": "npm run test:medialab-editor", "result": "pass" },
-    { "command": "npm run test:settings-connections", "result": "pass" },
-    { "command": "git diff --check", "result": "pass" },
-    { "command": "rg -n \"phantom-live-20260715-4\" app/index.html app/js app/phantom.css", "result": "pass; no stale app refs" }
-  ],
-  "checks": {
-    "status": "passed_with_db_auth_blocked",
-    "blockedExternalAccess": [
-      "Docker/Postgres fixture for DB-auth organization isolation",
-      "live OAuth/social connectors",
-      "billing provider",
-      "n8n execution",
-      "Pangolin live status",
-      "Higgsfield/OpenAI/OpenRouter live provider calls"
+  "cycle": 18,
+  "date": "2026-07-18",
+  "theme": "authenticated organization context isolation",
+  "finding": {
+    "id": "Q-0002",
+    "severity": "P1",
+    "status": "fixed_verified",
+    "rootCause": "Database sessions retained a legacy phantomforce workspace id, browser storage preferred it over active orgId, and in-memory chat was not cleared on organization switch.",
+    "correction": "Database and local-customer browser context now derives from active orgId; membership names resolve correctly; successful organization switches clear the visible transcript."
+  },
+  "verification": {
+    "databaseApiChecks": 56,
+    "browserChecks": 8,
+    "mixedChatTurns": 20,
+    "viewports": ["1440x900", "390x844"],
+    "report": "tmp/database-auth-org-browser/2026-07-18T22-38-16-176Z/report.json",
+    "commands": [
+      "powershell -NoProfile -ExecutionPolicy Bypass -File server\\scripts\\test-auth-database-live.ps1",
+      "npm run test:memory",
+      "npm run test:intent",
+      "npm run test:dashboard-chat",
+      "npm run test:change-memory",
+      "npm run test:release-critical",
+      "npm run typecheck --workspace @phantomforce/server",
+      "npm run test:instant-chat:http-live-model --workspace @phantomforce/server",
+      "git diff --check"
     ]
   },
-  "nextCycle": "Run DB-auth org isolation when Docker/Postgres is available; otherwise add interaction-level responsive browser checks for Media Lab, PhantomPlay launch/resume, Settings forms, and Content Hub editor controls."
+  "nextCycle": "Extend the same authenticated two-organization browser proof to CRM, proposals, approvals, assets, accounting transactions, and connectors."
 }

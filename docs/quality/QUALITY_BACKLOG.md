@@ -1,6 +1,6 @@
 # PhantomForce Quality Backlog
 
-Last updated: 2026-07-16
+Last updated: 2026-07-18
 
 ## Verified Issues
 
@@ -85,17 +85,31 @@ Last updated: 2026-07-16
 - Regression requirement: `npm run test:phantomplay`.
 - Status: Fixed and verified in the 2026-07-16 daily QA sweep.
 
+### Q-0002 — P1 — Database-auth browser context leaked across organizations
+
+- Route/component: authenticated organization switch, browser store, Memory,
+  and dashboard chat.
+- Journey affected: a legitimate user switches between PhantomForce and
+  ChicagoShots.
+- Reproduction before fix: sign in with memberships in both organizations,
+  store temporary and durable context in organization A, then switch to B.
+- Expected: browser storage, visible transcript, request context, and model
+  answers use the active organization id and contain no A data in B.
+- Actual before fix: database sessions retained `ws: "phantomforce"`; the
+  browser store preferred that legacy workspace over `orgId`, and in-memory
+  chat bubbles were not cleared during the switch.
+- Correction: database and local-customer sessions derive `currentWs()` from
+  the active `orgId`; organization switches clear the visible chat history;
+  workspace labels resolve from database memberships.
+- Evidence: disposable PostgreSQL fixture passed 56 authorization/API checks
+  and eight browser checks, including a valid two-org switch, forged non-member
+  rejection, two-way UI/storage/request/model isolation, reload persistence,
+  20 mixed chat turns, and 1440x900 plus 390x844 viewport checks.
+- Regression requirement: `powershell -NoProfile -ExecutionPolicy Bypass -File
+  server\scripts\test-auth-database-live.ps1` and `npm run test:memory`.
+- Status: Fixed and verified in Cycle 18.
+
 ## High-Priority Unfixed Issues
-
-### Q-0002 — P1 — Production-grade organization isolation needs DB-auth browser proof
-
-- Route/component: org switch, CRM, memory, assets, proposals.
-- Journey affected: switching between PhantomForce and ChicagoShots.
-- Evidence: owner harness proved tenant-document separation, but owner-admin can
-  intentionally request any tenant.
-- Required proof: two database-auth users/orgs; non-member access denied server
-  side and UI visibly changes between orgs.
-- Status: Open.
 
 ### Q-0003 — P1 — Mobile layout and scaling are not fully proven
 

@@ -1063,6 +1063,16 @@ export async function seedDevelopmentIdentities() {
       memberships: [{ orgId: "dev-org-chicagoshots", role: "owner" }],
     },
     {
+      id: "dev-user-multi-org-owner",
+      email: "owner@both.local",
+      name: "Multi-organization Owner (dev)",
+      isSuperAdmin: false,
+      memberships: [
+        { orgId: "dev-org-phantomforce", role: "owner" },
+        { orgId: "dev-org-chicagoshots", role: "admin" },
+      ],
+    },
+    {
       id: "dev-user-chicago-employee",
       email: "employee@chicagoshots.local",
       name: "ChicagoShots Employee (dev)",

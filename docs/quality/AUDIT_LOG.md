@@ -1293,3 +1293,68 @@ Run the authenticated two-organization persistence proof in Recommended Cycle 17
 
 Run the authenticated browser and two-organization memory-isolation proof in
 Recommended Cycle 18.
+
+# 2026-07-18 - Cycle 18: Authenticated Organization Context Isolation
+
+## Problem Verified
+
+- Database-auth sessions always retained the legacy browser workspace id
+  `phantomforce` even when their active `orgId` changed.
+- Browser storage preferred that legacy workspace id. For a database user this
+  collapsed durable memory and temporary chat from multiple organizations into
+  the global PhantomForce namespace.
+- The dashboard's in-memory transcript also remained visible after a successful
+  organization switch, so organization A bubbles could still appear in B.
+- Existing tests proved that non-members were denied but did not exercise a
+  legitimate user who belonged to two organizations, leaving this leak hidden.
+
+## Corrections
+
+- Database and local-customer sessions now derive `currentWs()` from active
+  `orgId`; legacy local-admin sessions retain their workspace behavior.
+- Database workspace labels resolve from the authenticated membership list.
+- Successful database and local workspace switches clear the visible chat
+  transcript before rendering the new organization's context.
+- Added a deterministic non-superadmin test identity with legitimate
+  memberships in PhantomForce and ChicagoShots.
+- Expanded the database-auth browser fixture into a real two-organization
+  journey with 20 mixed chat prompts, request capture, durable-memory reload,
+  two-way isolation, forged-switch rejection, and desktop/mobile screenshots.
+- Added direct browser-store regression coverage for two-way durable and
+  temporary context separation.
+- Replaced internal accounting wording in user-facing empty states with
+  `Actual transactions`, `None yet`, and `add or connect`.
+- Cache-busted the full browser module graph as
+  `phantom-live-20260718-34`.
+- Added a permanent change-memory rule and product decision for active-
+  organization browser context.
+
+## Source Verification
+
+- PASS: `powershell -NoProfile -ExecutionPolicy Bypass -File
+  server\scripts\test-auth-database-live.ps1` applied all eight migrations,
+  passed all 56 authorization/API checks, and passed eight authenticated
+  browser checks.
+- PASS: browser fixture used one legitimate two-organization user, rejected a
+  forged non-member switch with 403, ran 20 mixed conversational prompts, and
+  proved zero cross-organization UI, local-storage, request-packet, or model-
+  answer contamination in either direction.
+- PASS: durable organization A memory survived reload; organization B received
+  none of A's temporary or durable context; switching back restored only A.
+- PASS: final screenshots at 1440x900 and 390x844 showed the composer and
+  accounting empty state without horizontal overflow or overlapping text:
+  `tmp/database-auth-org-browser/2026-07-18T22-38-16-176Z`.
+- PASS: `npm run test:memory`.
+- PASS: `npm run test:intent`.
+- PASS: `npm run test:dashboard-chat` (56 browser prompts, 11 outage turns,
+  and deterministic tool checks).
+- PASS: `npm run test:release-critical` (19/19).
+- PASS: `npm run typecheck --workspace @phantomforce/server`.
+- PASS: authenticated source live-model gate completed 82 requests at 520 ms
+  average and 2,120 ms maximum with zero fallback and zero business leakage.
+- PASS: `git diff --check`.
+
+## Next Task
+
+Extend the same authenticated two-organization proof to CRM leads, proposals,
+approvals, assets, accounting transactions, and connector state in Cycle 19.

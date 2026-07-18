@@ -1,6 +1,6 @@
 # PhantomForce Product Decisions
 
-Last updated: 2026-07-14
+Last updated: 2026-07-18
 
 ## Active Principles
 
@@ -39,6 +39,17 @@ feel like a command center instead of a flat list of every capability.
 
 Mobile keeps the bottom taskbar shell; the desktop lower group should not be
 forced into mobile as a second sidebar.
+
+### D-0004 — Active organization owns all browser context
+
+Database-auth and customer sessions scope memory, temporary chat, request
+context, and visible transcript to the active organization id. Organizations
+are separate businesses; a legacy global workspace fallback must never expose
+one business's context while another business is selected.
+
+The database-auth browser fixture must prove two-way isolation and non-member
+rejection. A successful organization switch clears the visible transcript
+before the new organization's context is rendered.
 
 ## Decisions Needed Later
 

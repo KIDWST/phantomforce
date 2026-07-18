@@ -174,8 +174,8 @@
         },
         {
           "file": "app/js/command.js",
-          "pattern": "Actual transaction ledger",
-          "description": "Chat answers route money questions to the actual ledger."
+          "pattern": "Actual transactions",
+          "description": "Chat answers route explicit money questions to confirmed transactions in plain language."
         },
         {
           "file": "server/src/connectors/finance-connector.ts",
@@ -198,6 +198,21 @@
           "file": "app/js/workspaces.js",
           "pattern": "pipeline is either closed or waiting to be built",
           "description": "Rejected empty fake pipeline message."
+        },
+        {
+          "file": "app/js/main.js",
+          "pattern": "No ledger",
+          "description": "Rejected internal accounting jargon on the customer-facing dashboard."
+        },
+        {
+          "file": "app/js/command.js",
+          "pattern": "Your accounting ledger",
+          "description": "Explicit accounting answers use records and transactions, not ledger jargon."
+        },
+        {
+          "file": "app/js/workspaces.js",
+          "pattern": "ledger empty",
+          "description": "Accounting empty state must say no transactions yet."
         }
       ]
     },
@@ -831,6 +846,41 @@
           "file": "app/index.html",
           "pattern": "class=\"chatbox-tools\"",
           "description": "Redundant Memory, Prompt Library, and Map row must not return inside chat."
+        }
+      ]
+    },
+    {
+      "id": "database-auth-active-organization-isolation",
+      "status": "active",
+      "title": "Every browser context follows the active authenticated organization",
+      "ownerDecision": "A database-auth or customer session must scope memory, temporary history, request context, and visible chat to the active organization id. Switching businesses clears the visible transcript immediately, while switching back restores only that organization's stored context. A legacy local admin session may continue to use its local workspace id.",
+      "requiredPatterns": [
+        {
+          "file": "app/js/store.js",
+          "pattern": "activeSession\\.database \\|\\| activeSession\\.localCustomer[\\s\\S]*activeSession\\.orgId \\|\\| activeSession\\.ws",
+          "description": "Database and customer browser storage use the active organization id instead of the legacy global workspace id."
+        },
+        {
+          "file": "app/js/main.js",
+          "pattern": "const result = await switchOrg[\\s\\S]*chatHistory\\.length = 0;[\\s\\S]*renderConsole",
+          "description": "A successful authenticated organization switch removes the previous organization's visible transcript before rerendering."
+        },
+        {
+          "file": "scripts/test-memory-retention.mjs",
+          "pattern": "organization B must not see organization A durable memory[\\s\\S]*switching back must restore only organization A temporary context",
+          "description": "Storage regression proves durable and temporary browser context remains separate in both switch directions."
+        },
+        {
+          "file": "scripts/test-database-auth-org-browser.mjs",
+          "pattern": "organization B receives no A memory, history, request context, or visible chat[\\s\\S]*organization A returns without organization B contamination",
+          "description": "The real database-login browser fixture proves two-way isolation for UI, storage, request packets, and model answers."
+        }
+      ],
+      "forbiddenPatterns": [
+        {
+          "file": "app/js/store.js",
+          "pattern": "return ctx\\.session\\.ws \\|\\| \"phantomforce\"",
+          "description": "Rejected fallback that collapsed every database-auth organization into the global PhantomForce workspace."
         }
       ]
     },

@@ -16,48 +16,44 @@ Do not restart the audit from zero unless the inventory is invalid. Continuation
 is scheduled in this same Codex task by heartbeat automation
 `continue-phantomforce-quality-program`.
 
-Cycle 17 removed the next class of chat keyword collisions. Approval opinions,
-queue data structures, literary summaries, historical reports, monitor
-lizards, automation poems, grammar rewrites, autobiographical memories, and
-refresher-style reminders now remain normal instant conversation. Explicit
-workspace status, tasks, automations, scheduled reminders, and durable memory
-still take their operational lanes. Browser and server policy agree, explicit
-memory creates a real pinned record, and the module graph is cache-busted as
-`phantom-live-20260718-33`. Commit `c679f80` is pushed and deployed; canonical
-source, origin, deployment manifest, Hermes, and the public build agree.
+Cycle 18 closed a real cross-organization browser-context defect. Database and
+local-customer sessions now scope browser memory and temporary history to the
+active `orgId`, successful switches clear the old visible transcript, and
+database membership names render correctly. A legitimate two-organization
+user passed 20 mixed chat turns, reload persistence, two-way organization
+switches, request/model isolation, forged non-member rejection, and desktop
+plus mobile browser checks. The module graph is cache-busted as
+`phantom-live-20260718-34`.
 
-## Recommended Cycle 18
+## Recommended Cycle 19
 
-Theme: authenticated browser conversation and memory-isolation proof.
+Theme: full business-record organization-isolation browser proof.
 
-The unit and authenticated HTTP gates are strong. The next highest-value proof
-is a real signed-in browser session that alternates long casual conversation,
-durable memory, and explicit workspace commands while switching organizations.
+Memory and chat now have strong authenticated browser evidence. Extend the
+same proof to records that could cause business harm if crossed: CRM leads,
+proposals, approvals, assets, accounting transactions, and connector state.
 
 ### Required Pass
 
-1. Start the disposable DB-auth fixture and sign in through the actual browser
-   login flow as members of two organizations.
-2. Run at least 20 alternating casual, lexical-collision, follow-up, correction,
-   and explicit workspace prompts without reloading.
-3. Require casual prompts to use the instant route with no cards, navigation,
-   business modules, or unsolicited workspace state.
-4. Save a durable memory in organization A, reload, and prove it remains there.
-5. Switch to organization B and prove organization A memory and temporary chat
-   are absent from the UI, request packet, and model answer.
-6. Switch back to A and prove its memory returns without B contamination.
-7. Browser-check the full sequence at 390px and 1440px, including composer
-   visibility, internal history scrolling, exact widths, and zero page errors.
+1. Use one database-auth user with legitimate memberships in two organizations.
+2. Create distinct CRM leads, proposals, approvals, assets, and accounting
+   transactions in A and B through real UI/API paths.
+3. Require every module to rerender on switch and show only the active tenant.
+4. Capture network requests and require every tenant-aware request to carry or
+   resolve the active organization, never a legacy global workspace.
+5. Attempt URL, body, local-storage, and switcher tampering for a non-member
+   organization and require fail-closed 401/403 behavior.
+6. Reload in each organization and prove persistence without contamination.
+7. Browser-check desktop and mobile module states with zero overflow, stale
+   labels, stale counts, console errors, or fake records.
 
 Likely files:
 
 - `server/src/index.ts`
-- `server/src/phantom-ai/conversation-policy.ts`
-- `server/src/phantom-ai/instant-chat-context.ts`
-- `app/js/intent-router.js`
-- `app/js/command.js`
 - `app/js/store.js`
-- `app/js/orgs.js`
+- `app/js/serverrecords.js`
+- `app/js/crmpipeline.js`
+- `app/js/workspaces.js`
 - `scripts/test-database-auth-org-browser.mjs`
 
 ## Regression Commands To Keep

@@ -848,7 +848,13 @@ export const isOwnerOperator = () => {
   return s.sessionId === OWNER_SESSION_ID
     || (s.canManageAccess === true && /\b(jordan|phantomforce owner)\b/.test(identity));
 };
-export const currentWs = () => ctx.session?.ws || "phantomforce";
+export const currentWs = () => {
+  const activeSession = ctx.session || {};
+  if (activeSession.database || activeSession.localCustomer) {
+    return cleanTenantSegment(activeSession.orgId || activeSession.ws || "phantomforce");
+  }
+  return activeSession.ws || "phantomforce";
+};
 export const workspaceExists = (id) => store.state.workspaces.some((workspace) => workspace.id === id);
 export const workspaceMeta = (id = currentWs()) => store.state.workspaces.find((workspace) => workspace.id === id) || store.state.workspaces[0];
 const cleanTenantSegment = (value) => String(value || "phantomforce")
@@ -918,7 +924,10 @@ export function visible(list) {
   if (isAdmin() && ws === "phantomforce") return list;
   return list.filter((r) => r.ws === ws);
 }
-export const wsName = (id) => store.state.workspaces.find((w) => w.id === id)?.name || id;
+export const wsName = (id) => {
+  const databaseMembership = (ctx.session?.memberships || []).find((membership) => membership?.orgId === id);
+  return databaseMembership?.orgName || store.state.workspaces.find((w) => w.id === id)?.name || id;
+};
 
 export function pushActivity(who, text, ws = currentWs()) {
   store.state.activity.unshift({ id: uid("act"), ws, who, text, at: new Date().toISOString() });

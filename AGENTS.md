@@ -52,6 +52,12 @@
   forbidden patterns there so another stale worktree cannot resurrect it.
 
 ## Recent, merged & live (newest first)
+- **Authenticated organization context isolation (2026-07-18)** — build
+  `phantom-live-20260718-34`. Database/customer sessions scope local memory and
+  temporary chat to active `orgId`, switches clear stale visible transcripts,
+  and a disposable-Postgres browser fixture proves two-way organization
+  isolation, reload persistence, forged-switch rejection, and mobile/desktop
+  rendering for a legitimate multi-organization user.
 - **Real instant conversational brain (2026-07-18)** — build
   `phantom-live-20260718-29`. Smart-mode casual chat uses the localhost-only
   `qwen2.5:14b` lane with bounded temporary context, concise output, no business
@@ -130,7 +136,7 @@
   (`app/index.html`, `app/phantom.css`, `app/js/main.js`).
 - **Living Phantom character** — `app/js/character.js`: 11 painted poses, emotional
   inertia (`governMood`), hologram depth. Shared by admin + public site.
-- Current cache-bust build id: **`phantom-live-20260718-29`**.
+- Current cache-bust build id: **`phantom-live-20260718-34`**.
 
 ## Repo map
 - `app/` — the **admin console** (`admin.phantomforce.online`). `index.html`,

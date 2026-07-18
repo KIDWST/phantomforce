@@ -13,12 +13,18 @@ globalThis.sessionStorage = {
 };
 
 const {
+  addMemory,
+  ctx,
+  currentWs,
   isFailedMemoryInteraction,
   pruneMemory,
+  recentChatTurns,
   rememberConversation,
   sanitizeMemoryText,
   shouldAiRemember,
   store,
+  visible,
+  wsName,
 } = await import("../app/js/store.js");
 
 const technicalFailure = "Codex did not complete this Phantom chat request. Private Brain error: Command failed: powershell.exe -File C:\\Users\\jorda\\AppData\\Local\\Temp\\phantom-codex-chat\\run-codex.ps1 202";
@@ -70,5 +76,38 @@ for (let index = 0; index < 130; index += 1) {
   rememberConversation({ prompt: `Explain temporary context item number ${index}`, reply: `Temporary answer ${index}` });
 }
 assert.equal(store.state.chatHistory.length, 120, "temporary history should stay within the context window cap");
+
+store.reset();
+ctx.session = {
+  role: "admin",
+  database: true,
+  ws: "phantomforce",
+  orgId: "dev-org-phantomforce",
+  memberships: [
+    { orgId: "dev-org-phantomforce", orgName: "PhantomForce (dev)", role: "owner" },
+    { orgId: "dev-org-chicagoshots", orgName: "ChicagoShots (dev)", role: "owner" },
+  ],
+};
+assert.equal(currentWs(), "dev-org-phantomforce", "database sessions must scope local records to the active organization, not the HQ workspace");
+assert.equal(wsName(currentWs()), "PhantomForce (dev)", "database organization labels must come from authenticated memberships");
+addMemory({ text: "PhantomForce brand color is emerald", pinnedByUser: true });
+rememberConversation({ prompt: "My temporary PhantomForce code word is comet", reply: "Comet for this conversation." });
+assert.equal(visible(store.state.memory).length, 1, "organization A must see its durable memory");
+assert.equal(recentChatTurns().length, 1, "organization A must see its temporary conversation");
+
+ctx.session.orgId = "dev-org-chicagoshots";
+assert.equal(currentWs(), "dev-org-chicagoshots", "changing the authenticated active org must change the local workspace scope immediately");
+assert.equal(visible(store.state.memory).length, 0, "organization B must not see organization A durable memory");
+assert.equal(recentChatTurns().length, 0, "organization B must not receive organization A temporary conversation");
+addMemory({ text: "ChicagoShots brand color is gold", pinnedByUser: true });
+rememberConversation({ prompt: "My temporary ChicagoShots code word is lens", reply: "Lens for this conversation." });
+assert.deepEqual(visible(store.state.memory).map((item) => item.text), ["ChicagoShots brand color is gold"]);
+
+ctx.session.orgId = "dev-org-phantomforce";
+assert.deepEqual(visible(store.state.memory).map((item) => item.text), ["PhantomForce brand color is emerald"], "switching back must restore only organization A memory");
+assert.equal(recentChatTurns()[0]?.user, "My temporary PhantomForce code word is comet", "switching back must restore only organization A temporary context");
+
+ctx.session = { role: "admin", ws: "phantomforce" };
+assert.equal(currentWs(), "phantomforce", "legacy local admin sessions must keep their existing workspace behavior");
 
 console.log("memory retention tests passed");

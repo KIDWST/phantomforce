@@ -1,12 +1,12 @@
 # PhantomForce Site Inventory
 
-Last updated: 2026-07-16
+Last updated: 2026-07-18
 
 Scope: static repository discovery, server route extraction from
 `server/src/index.ts`, application navigation from `app/js/main.js`, local
 runtime evidence in `run-evidence/first-real-run-20260714-153002`, Cycle 1
-Headless Edge smoke at 1440x1000 and 375x812, and 2026-07-16 responsive
-browser matrix evidence in `tmp/responsive-viewports/2026-07-16T14-07-18-427Z`.
+Headless Edge smoke, the 2026-07-16 responsive matrix, and Cycle 18's real
+database-auth two-organization browser proof at 1440x900 and 390x844.
 
 ## Public Web
 
@@ -35,8 +35,8 @@ browser matrix evidence in `tmp/responsive-viewports/2026-07-16T14-07-18-427Z`.
 | `/auth/demo-login` | No/local config | Demo/local session login. | Select test/admin/client session. | Enabled, disabled. | Multiple server tests. | Demo-only, not production auth. |
 | `/auth/login` | No/database config | Database user login. | Email/password login. | Enabled, disabled, invalid, host restriction. | Auth boundary tests. | Needs browser registration/recovery audit. |
 | `/auth/logout` | Yes | End session. | Logout/revoke DB session. | DB session, stateless session. | Auth tests. | UI logout flow not fully exercised this cycle. |
-| `/auth/me` | Yes | Current account/org state. | Read memberships, entitlements. | Legacy, database. | First real run harness. | DB-auth org isolation still needs browser/user run. |
-| `/auth/switch-org` | DB session | Switch active organization. | Change org. | Member, non-member denied. | Auth tests. | Critical user-reported org switching risk requires DB-auth UI pass. |
+| `/auth/me` | Yes | Current account/org state. | Read memberships, entitlements. | Legacy, database. | Cycle 18 DB-auth browser fixture. | Two-membership browser state and active-org persistence verified. |
+| `/auth/switch-org` | DB session | Switch active organization. | Change org. | Member, non-member denied. | 56 API checks plus Cycle 18 browser fixture. | Valid two-org switching and forged non-member rejection verified. |
 | `/auth/invitations/accept` | No/database config | Accept org invite. | Create/claim account. | Valid, expired, invalid. | Auth tests. | Browser onboarding and recovery not audited. |
 
 ## Authenticated Navigation Destinations
@@ -53,7 +53,7 @@ browser matrix evidence in `tmp/responsive-viewports/2026-07-16T14-07-18-427Z`.
 | PhantomPlay | Yes | Game launch/management surface. | Launch/play/configure games. | V1/V2, catalog, leaderboard. | `test:phantomplay`; API harness; 2026-07-16 responsive matrix. | 2026-07-16 | Penalty Kick catalog visibility fixed; mobile game play still needs deeper QA. |
 | Competitor Intelligence | Owner/admin | Market scout and public-signal intelligence. | Scout, add competitors/signals. | Unavailable, ready, aggressive. | `test:competitor-intelligence`; API harness. | 2026-07-14 | Scout is structured but not live web research. |
 | Analytics | Owner/admin | Social/content analytics. | Review metrics/connectors. | Empty, connector missing, synced. | `test-social-analytics`. | 2026-07-14 | Needs connector/error-state audit. |
-| Memory | Owner/admin | Memory vs temporary history. | Review/add/edit/delete memory. | Empty, saved, expiring. | `test:memory`; API harness. | 2026-07-14 | Needs UI edit/delete keyboard pass. |
+| Memory | Owner/admin | Memory vs temporary history. | Review/add/edit/delete memory. | Empty, saved, expiring, organization switch. | `test:memory`; Cycle 18 DB-auth browser fixture. | 2026-07-18 | Two-way organization isolation is verified; UI edit/delete keyboard pass remains. |
 | Automations | Owner/admin | Scheduled automation controls. | Toggle/run/edit bundles. | Collapsed, expanded, enabled/disabled, logs. | `test:automation-workspace`; API harness. | 2026-07-14 | Needs switch-only behavior browser regression. |
 | Approvals | Owner/admin | Approval queue. | Approve/request changes/decline. | Empty, pending, decided. | `test:workspace-approvals`; API harness. | 2026-07-14 | Needs destructive-action confirmation audit. |
 | Workforce | Owner/admin | Worker map and operational force view. | Inspect workers/departments. | Baseline, active, mapped. | UI sweep. | 2026-07-14 | Worker counts need real proof/terminology audit. |

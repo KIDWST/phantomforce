@@ -273,7 +273,7 @@ function stateExpression() {
   }).toString()})()`;
 }
 
-async function loginAsChicagoShotsOwner(cdp, diagnostics = null) {
+async function loginAs(cdp, email, diagnostics = null) {
   await waitForExpression(cdp, `(() => {
     const form = document.querySelector('[data-auth-form="signin"]');
     return !!form && !!form.querySelector('[name="identifier"]') && !!form.querySelector('[name="password"]');
@@ -286,7 +286,7 @@ async function loginAsChicagoShotsOwner(cdp, diagnostics = null) {
       input.dispatchEvent(new Event("input", { bubbles: true }));
       input.dispatchEvent(new Event("change", { bubbles: true }));
     };
-    set('[data-auth-form="signin"] [name="identifier"]', "owner@chicagoshots.local");
+    set('[data-auth-form="signin"] [name="identifier"]', ${JSON.stringify(email)});
     set('[data-auth-form="signin"] [name="password"]', ${JSON.stringify(PASSWORD)});
     document.querySelector('[data-auth-form="signin"]').requestSubmit();
     return true;
@@ -328,6 +328,91 @@ async function readSwitcherState(cdp) {
   })()`);
 }
 
+async function submitChat(cdp, prompt, diagnostics = null) {
+  const before = await evaluate(cdp, `(() => ({
+    lastPhantom: [...document.querySelectorAll("[data-chat-log] .msg-phantom:not(.msg-typing) .msg-text")].at(-1)?.textContent.trim() || "",
+  }))()`);
+  await evaluate(cdp, `(() => {
+    const form = document.querySelector("[data-command-form]");
+    const input = document.querySelector("[data-command-input]");
+    if (!form || !input) return false;
+    input.value = ${JSON.stringify(prompt)};
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    form.requestSubmit();
+    return true;
+  })()`);
+  await waitForExpression(cdp, `(() => {
+    const users = [...document.querySelectorAll("[data-chat-log] .msg-user .msg-text")];
+    const phantoms = [...document.querySelectorAll("[data-chat-log] .msg-phantom:not(.msg-typing) .msg-text")];
+    const lastUser = users.at(-1)?.textContent.trim() || "";
+    const lastPhantom = phantoms.at(-1)?.textContent.trim() || "";
+    return lastUser === ${JSON.stringify(prompt)}
+      && !!lastPhantom
+      && lastPhantom !== ${JSON.stringify(before.lastPhantom)}
+      && !document.querySelector("[data-chat-log] .msg-typing");
+  })()`, `chat answer for ${prompt}`, 20_000, diagnostics);
+  return evaluate(cdp, `(() => {
+    const users = [...document.querySelectorAll("[data-chat-log] .msg-user .msg-text")];
+    const phantomRows = [...document.querySelectorAll("[data-chat-log] .msg-phantom:not(.msg-typing)")];
+    const last = phantomRows.at(-1);
+    return {
+      prompt: users.at(-1)?.textContent.trim() || "",
+      answer: last?.querySelector(".msg-text")?.textContent.trim() || "",
+      cards: last?.querySelectorAll(".rcard").length || 0,
+      url: location.href,
+    };
+  })()`);
+}
+
+async function localContextState(cdp) {
+  return evaluate(cdp, `(() => {
+    const state = JSON.parse(localStorage.getItem("pf.phantom.v4") || "{}");
+    const activeOrg = JSON.parse(localStorage.getItem("pf.session.v3") || "{}").orgId || "";
+    return {
+      activeOrg,
+      memory: (state.memory || []).filter((item) => item.ws === activeOrg).map((item) => item.text),
+      history: (state.chatHistory || []).filter((item) => item.ws === activeOrg).map((item) => ({ prompt: item.prompt, reply: item.reply })),
+      allMemoryScopes: [...new Set((state.memory || []).map((item) => item.ws))],
+      allHistoryScopes: [...new Set((state.chatHistory || []).map((item) => item.ws))],
+    };
+  })()`);
+}
+
+async function openMemory(cdp, diagnostics = null) {
+  await evaluate(cdp, `document.querySelector('[data-nav-id="memory"]')?.click()`);
+  await waitForExpression(cdp, `!!document.querySelector("[data-memory-search]")`, "memory workspace", 10_000, diagnostics);
+  return evaluate(cdp, `document.querySelector("main")?.innerText || ""`);
+}
+
+async function switchBrowserOrg(cdp, orgId, diagnostics = null) {
+  await evaluate(cdp, `(() => {
+    const select = document.querySelector("[data-org-select]");
+    if (!select) return false;
+    select.value = ${JSON.stringify(orgId)};
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+    return true;
+  })()`);
+  await waitForExpression(cdp, `fetch("/auth/me", {
+    headers: { Authorization: "Bearer " + sessionStorage.getItem("pf.live.sessionToken.v1") },
+  }).then((response) => response.json()).then((body) => body.activeOrg?.id === ${JSON.stringify(orgId)})`, `organization switch to ${orgId}`, 15_000, diagnostics);
+  await waitForExpression(cdp, `document.querySelector("[data-org-select]")?.value === ${JSON.stringify(orgId)}`, `organization switcher value ${orgId}`, 10_000, diagnostics);
+}
+
+async function viewportState(cdp, width, height) {
+  await cdp.send("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: 1, mobile: width <= 480 });
+  await sleep(150);
+  return evaluate(cdp, `(() => {
+    const input = document.querySelector("[data-command-input]");
+    const rect = input?.getBoundingClientRect();
+    return {
+      width: innerWidth,
+      height: innerHeight,
+      scrollWidth: document.documentElement.scrollWidth,
+      composer: rect ? { top: Math.round(rect.top), bottom: Math.round(rect.bottom), width: Math.round(rect.width) } : null,
+    };
+  })()`);
+}
+
 async function main() {
   assert.equal(typeof WebSocket, "function", "Node 22+ global WebSocket is required for the Chrome CDP auth smoke test.");
   await waitForHttpOk(`${apiBase}/health`, { timeoutMs: 15_000 });
@@ -351,23 +436,30 @@ async function main() {
     await cdp.send("Runtime.enable");
     await cdp.send("Log.enable");
     await cdp.send("Network.enable");
+    await cdp.send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-reduced-motion", value: "reduce" }] });
     const diagnostics = installDiagnostics(cdp);
+    const chatRequests = [];
+    cdp.on("Network.requestWillBeSent", (message) => {
+      const request = message.params?.request;
+      if (!request?.url?.includes("/phantom-ai/chat") || !request.postData) return;
+      try { chatRequests.push(JSON.parse(request.postData)); } catch { diagnostics.push("chat-request", request.postData); }
+    });
 
     const loadEvent = cdp.waitEvent("Page.loadEventFired", 15_000).catch(() => null);
     await cdp.send("Page.navigate", { url: `${baseUrl}/app/` });
     await loadEvent;
     await waitForExpression(cdp, stateExpression(), "database login shell", 20_000, diagnostics);
 
-    await loginAsChicagoShotsOwner(cdp, diagnostics);
+    await loginAs(cdp, "owner@both.local", diagnostics);
     await waitForExpression(cdp, `!!document.querySelector("[data-org-select]")`, "topbar organization switcher", 15_000, diagnostics);
 
     const initialMe = await browserAuthMe(cdp);
-    assert.equal(initialMe?.activeOrg?.id, "dev-org-chicagoshots", "browser session must start scoped to ChicagoShots.");
+    assert.equal(initialMe?.activeOrg?.id, "dev-org-phantomforce", "multi-org browser session must start in its first authenticated organization.");
 
     const headerState = await readSwitcherState(cdp);
     assert.equal(headerState.selectExists, true, "admin header must render an organization switcher.");
-    assert.deepEqual(headerState.options.map((option) => option.value), ["dev-org-chicagoshots"], "ChicagoShots owner must only see ChicagoShots in the header switcher.");
-    assert.equal(headerState.value, "dev-org-chicagoshots", "header switcher value must match the server active org.");
+    assert.deepEqual(headerState.options.map((option) => option.value), ["dev-org-phantomforce", "dev-org-chicagoshots"], "multi-org owner must see exactly their two memberships.");
+    assert.equal(headerState.value, "dev-org-phantomforce", "header switcher value must match the server active org.");
 
     await evaluate(cdp, `document.querySelector("[data-user-btn]")?.click()`);
     await waitForExpression(cdp, `(() => {
@@ -375,7 +467,7 @@ async function main() {
       return !!menu && !menu.hidden && document.querySelectorAll("[data-user-menu-org]").length > 0;
     })()`, "profile organization menu", 10_000, diagnostics);
     const menuState = await readSwitcherState(cdp);
-    assert.deepEqual(menuState.menuButtons.map((button) => button.orgId), ["dev-org-chicagoshots"], "profile menu must only show org memberships returned by the server.");
+    assert.deepEqual(menuState.menuButtons.map((button) => button.orgId), ["dev-org-phantomforce", "dev-org-chicagoshots"], "profile menu must only show org memberships returned by the server.");
     assert.equal(menuState.menuButtons[0]?.active, true, "profile menu must mark the server active org as active.");
 
     const directCrossSwitch = await evaluate(cdp, `fetch("/auth/switch-org", {
@@ -384,27 +476,141 @@ async function main() {
         "Content-Type": "application/json",
         Authorization: "Bearer " + sessionStorage.getItem("pf.live.sessionToken.v1"),
       },
-      body: JSON.stringify({ orgId: "dev-org-phantomforce" }),
+      body: JSON.stringify({ orgId: "client-sports-demo" }),
     }).then((response) => ({ status: response.status }))`);
-    assert.equal(directCrossSwitch.status, 403, "server must reject a browser cross-org switch for a non-member.");
+    assert.equal(directCrossSwitch.status, 403, "server must reject a browser switch outside the user's memberships.");
 
     await evaluate(cdp, `(() => {
       const select = document.querySelector("[data-org-select]");
       const option = document.createElement("option");
-      option.value = "dev-org-phantomforce";
-      option.textContent = "PhantomForce";
+      option.value = "client-sports-demo";
+      option.textContent = "Unauthorized Sports Demo";
       select.append(option);
-      select.value = "dev-org-phantomforce";
+      select.value = "client-sports-demo";
       select.dispatchEvent(new Event("change", { bubbles: true }));
       return true;
     })()`);
     await sleep(700);
 
     const afterTamperMe = await browserAuthMe(cdp);
-    assert.equal(afterTamperMe?.activeOrg?.id, "dev-org-chicagoshots", "tampered local switcher must not change the server active org.");
+    assert.equal(afterTamperMe?.activeOrg?.id, "dev-org-phantomforce", "tampered local switcher must not change the server active org.");
     const afterTamperState = await readSwitcherState(cdp);
-    assert.deepEqual(afterTamperState.options.map((option) => option.value), ["dev-org-chicagoshots"], "tampered local option must be removed on rerender.");
-    assert.equal(afterTamperState.value, "dev-org-chicagoshots", "switcher must return to the server active org after a refused switch.");
+    assert.deepEqual(afterTamperState.options.map((option) => option.value), ["dev-org-phantomforce", "dev-org-chicagoshots"], "tampered local option must be removed on rerender.");
+    assert.equal(afterTamperState.value, "dev-org-phantomforce", "switcher must return to the server active org after a refused switch.");
+
+    const reloadAfterTamper = cdp.waitEvent("Page.loadEventFired", 15_000).catch(() => null);
+    await cdp.send("Page.reload", { ignoreCache: true });
+    await reloadAfterTamper;
+    await waitForExpression(cdp, `!!document.querySelector("[data-command-form]")`, "dashboard after tamper reload", 15_000, diagnostics);
+
+    const prompts = [
+      "What's your favorite food?",
+      "Why that one?",
+      "Do you approve of pineapple on pizza?",
+      "What queue data structure should I use?",
+      "Give me a summary of Hamlet.",
+      "Report on the history of jazz.",
+      "I remember my first bike.",
+      "Remind me how photosynthesis works.",
+      "What do monitor lizards eat?",
+      "Write a poem about automation.",
+      "Make this sentence better: we was ready.",
+      "What is 17 times 19?",
+      "Explain recursion in one sentence.",
+      "Actually, explain it like I'm twelve.",
+      "What makes a good apology?",
+      "Give me two names for a fictional moon.",
+      "Tell me a short clean joke.",
+      "My temporary code word is comet.",
+      "Remember for later that PhantomForce test color is emerald.",
+      "What was that temporary code word?",
+    ];
+    const promptResults = [];
+    for (const prompt of prompts) promptResults.push(await submitChat(cdp, prompt, diagnostics));
+    assert.equal(promptResults.length, 20, "browser must complete the full 20-turn conversation without reload.");
+    assert.equal(promptResults.every((result) => result.cards === 0), true, "casual and memory prompts must not create business cards.");
+    assert.equal(promptResults.some((result) => /ledger|pipeline|actual cash|transaction reader/i.test(result.answer)), false, "ordinary browser conversation must not leak accounting language.");
+    assert.match(promptResults.at(-1)?.answer || "", /comet/i, "the twentieth turn must retain the active temporary topic.");
+
+    const phantomContext = await localContextState(cdp);
+    assert.equal(phantomContext.activeOrg, "dev-org-phantomforce");
+    assert.equal(phantomContext.memory.some((text) => /emerald/i.test(text)), true, "explicit PhantomForce memory must be durable and organization-scoped.");
+    assert.equal(phantomContext.history.some((item) => /comet/i.test(item.prompt)), true, "PhantomForce temporary history must be organization-scoped.");
+    assert.deepEqual(phantomContext.allMemoryScopes, ["dev-org-phantomforce"], "no durable memory may be written to the global HQ scope.");
+    assert.deepEqual(phantomContext.allHistoryScopes, ["dev-org-phantomforce"], "no chat history may be written to the global HQ scope.");
+
+    const phantomMemoryText = await openMemory(cdp, diagnostics);
+    assert.match(phantomMemoryText, /emerald/i, "PhantomForce memory must render in the Memory UI.");
+    assert.match(phantomMemoryText, /comet/i, "PhantomForce temporary history must render in the Memory UI.");
+
+    const reloadMemory = cdp.waitEvent("Page.loadEventFired", 15_000).catch(() => null);
+    await cdp.send("Page.reload", { ignoreCache: true });
+    await reloadMemory;
+    await waitForExpression(cdp, `!!document.querySelector("[data-memory-search]")`, "reloaded memory workspace", 15_000, diagnostics);
+    const reloadedMemoryText = await evaluate(cdp, `document.querySelector("main")?.innerText || ""`);
+    assert.match(reloadedMemoryText, /emerald/i, "durable memory must survive a browser reload.");
+
+    await switchBrowserOrg(cdp, "dev-org-chicagoshots", diagnostics);
+    const chicagoBodyAfterSwitch = await evaluate(cdp, `document.body.innerText`);
+    assert.doesNotMatch(chicagoBodyAfterSwitch, /emerald|comet/i, "organization switch must clear the previous business chat from the visible UI.");
+    const chicagoInitialContext = await localContextState(cdp);
+    assert.deepEqual(chicagoInitialContext.memory, [], "ChicagoShots must start without PhantomForce durable memory.");
+    assert.deepEqual(chicagoInitialContext.history, [], "ChicagoShots must start without PhantomForce temporary history.");
+
+    const chicagoRequestStart = chatRequests.length;
+    const chicagoNoContext = await submitChat(cdp, "What temporary code word did I use earlier?", diagnostics);
+    assert.doesNotMatch(chicagoNoContext.answer, /comet|emerald/i, "ChicagoShots answer must not reveal PhantomForce context.");
+    const chicagoRequest = chatRequests.slice(chicagoRequestStart).at(-1);
+    assert.ok(chicagoRequest, "ChicagoShots casual question must send an authenticated model request.");
+    assert.equal(chicagoRequest?.workspace_id, "dev-org-chicagoshots", "ChicagoShots model request must use the active organization ID.");
+    assert.doesNotMatch(JSON.stringify(chicagoRequest), /comet|emerald/i, "ChicagoShots request packet must not contain PhantomForce context.");
+
+    await submitChat(cdp, "Remember for later that ChicagoShots test color is gold.", diagnostics);
+    await submitChat(cdp, "My temporary code word is lens.", diagnostics);
+    const chicagoContext = await localContextState(cdp);
+    assert.equal(chicagoContext.memory.some((text) => /gold/i.test(text)), true, "ChicagoShots durable memory must save in its own scope.");
+    assert.equal(
+      chicagoContext.history.some((item) => /lens/i.test(item.prompt)),
+      true,
+      `ChicagoShots temporary history must save in its own scope: ${JSON.stringify(chicagoContext)}`,
+    );
+    const chicagoMemoryText = await openMemory(cdp, diagnostics);
+    assert.match(chicagoMemoryText, /gold|lens/i, "ChicagoShots memory must render in its Memory UI.");
+    assert.doesNotMatch(chicagoMemoryText, /emerald|comet/i, "ChicagoShots Memory UI must not render PhantomForce context.");
+
+    await switchBrowserOrg(cdp, "dev-org-phantomforce", diagnostics);
+    const phantomRestored = await localContextState(cdp);
+    assert.equal(phantomRestored.memory.some((text) => /emerald/i.test(text)), true, "switching back must restore PhantomForce durable memory.");
+    assert.equal(phantomRestored.history.some((item) => /comet/i.test(item.prompt)), true, "switching back must restore PhantomForce temporary context.");
+    const restoredMemoryText = await openMemory(cdp, diagnostics);
+    assert.match(restoredMemoryText, /emerald|comet/i, "restored PhantomForce context must render in the UI.");
+    assert.doesNotMatch(restoredMemoryText, /gold|lens/i, "restored PhantomForce UI must not contain ChicagoShots context.");
+
+    await evaluate(cdp, `document.querySelector('[data-nav-id="dashboard"]')?.click()`);
+    await waitForExpression(cdp, `!!document.querySelector("[data-command-form]")`, "restored dashboard", 10_000, diagnostics);
+    const restoredRequestStart = chatRequests.length;
+    const restoredAnswer = await submitChat(cdp, "What temporary code word did I use earlier?", diagnostics);
+    const restoredRequest = chatRequests.slice(restoredRequestStart).at(-1);
+    assert.match(JSON.stringify(restoredRequest), /comet/i, "restored PhantomForce request must receive PhantomForce temporary context.");
+    assert.doesNotMatch(JSON.stringify(restoredRequest), /lens|gold/i, "restored PhantomForce request must not receive ChicagoShots context.");
+    assert.match(restoredAnswer.answer, /comet/i, "restored PhantomForce model answer must resolve its own temporary context.");
+
+    const desktop = await viewportState(cdp, 1440, 900);
+    const desktopCapture = await cdp.send("Page.captureScreenshot", { format: "png", captureBeyondViewport: false });
+    const desktopScreenshot = path.join(runDir, "desktop-organization-memory.png");
+    writeFileSync(desktopScreenshot, Buffer.from(desktopCapture.data, "base64"));
+    const mobile = await viewportState(cdp, 390, 844);
+    const mobileCapture = await cdp.send("Page.captureScreenshot", { format: "png", captureBeyondViewport: false });
+    const mobileScreenshot = path.join(runDir, "mobile-organization-memory.png");
+    writeFileSync(mobileScreenshot, Buffer.from(mobileCapture.data, "base64"));
+    assert.equal(desktop.scrollWidth, 1440, "desktop browser must have exact viewport width without horizontal overflow.");
+    assert.equal(mobile.scrollWidth, 390, "mobile browser must have exact viewport width without horizontal overflow.");
+    assert.ok(desktop.composer && desktop.composer.bottom <= desktop.height, "desktop composer must remain visible.");
+    assert.ok(mobile.composer && mobile.composer.bottom <= mobile.height, "mobile composer must remain visible.");
+
+    const instantRequests = chatRequests.filter((request) => prompts.includes(request.user_request || request.message));
+    assert.ok(instantRequests.length >= 15, "the mixed 20-turn sequence must exercise the authenticated model lane repeatedly.");
+    assert.equal(instantRequests.every((request) => request.route_tier === "instant"), true, "ordinary 20-turn browser requests must remain on the instant lane.");
 
     const summary = {
       ok: true,
@@ -413,16 +619,32 @@ async function main() {
       appBase: baseUrl,
       chrome: getChromePath(),
       report: path.join(runDir, "report.json"),
+      desktopScreenshot,
+      mobileScreenshot,
       checks: [
         "database login renders in browser",
-        "ChicagoShots owner signs in",
-        "header switcher uses server memberships only",
-        "profile menu uses server memberships only",
-        "direct cross-org browser switch is rejected",
-        "tampered local switcher cannot drift the active org",
+        "multi-organization owner sees exactly two memberships",
+        "non-member switch and tampered switcher are rejected",
+        "20 mixed browser turns stay conversational without ledger leakage",
+        "durable memory survives reload inside organization A",
+        "organization B receives no A memory, history, request context, or visible chat",
+        "organization A returns without organization B contamination",
+        "desktop and mobile composer stay visible without horizontal overflow",
       ],
     };
-    writeFileSync(summary.report, JSON.stringify({ ...summary, headerState, menuState, afterTamperState }, null, 2));
+    writeFileSync(summary.report, JSON.stringify({
+      ...summary,
+      headerState,
+      menuState,
+      afterTamperState,
+      promptResults,
+      phantomContext,
+      chicagoContext,
+      phantomRestored,
+      desktop,
+      mobile,
+      chatRequestCount: chatRequests.length,
+    }, null, 2));
     console.log(JSON.stringify(summary, null, 2));
   } finally {
     cdp?.close();
