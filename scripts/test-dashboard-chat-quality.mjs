@@ -56,6 +56,7 @@ const casualPrompts = [
   "is 100 bigger than 99?",
   "what are you thinking?",
   "say something funny",
+  "make it funny",
 ];
 
 const forbiddenStatus = /\b(?:ledger|pipeline|cashflow|cash flow|approvals? waiting|today's plan|right now:)\b/i;
@@ -92,7 +93,7 @@ for (const prompt of casualPrompts) {
   rememberConversation({ prompt, reply: result.say, mode: "ask" });
 }
 
-assert.equal(capturedBodies.length, casualPrompts.length, "all 22 casual prompts must exercise the backend route");
+assert.equal(capturedBodies.length, casualPrompts.length, "all casual prompts must exercise the backend route");
 for (const body of capturedBodies) {
   assert.equal(body.route_tier, "instant");
   assert.equal(body.requested_model, "gpt-5.5-instant");

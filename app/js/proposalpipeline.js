@@ -1,4 +1,4 @@
-import { currentTenantId, friendlyBackendError, session } from "./store.js?v=phantom-live-20260718-22";
+import { currentTenantId, friendlyBackendError, session } from "./store.js?v=phantom-live-20260718-23";
 
 const authHeaders = (json = false) => {
   const token = session.token();

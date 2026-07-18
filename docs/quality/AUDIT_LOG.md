@@ -507,11 +507,11 @@ responsive viewport harness from the headless Edge smoke and sweep the required
   simplification, examples, and humor transformations to degraded chat.
 - Restored explicit `assign Codex/Claude a task` intent handling found by the
   broader regression pass.
-- Cache-busted the application as `phantom-live-20260718-22`.
+- Cache-busted the application as `phantom-live-20260718-23`.
 
 ## Verification
 
-- PASS: `npm run test:dashboard-chat` (22 browser prompts, 11 adversarial turns).
+- PASS: `npm run test:dashboard-chat` (23 browser prompts, 11 adversarial turns).
 - PASS: `npm run test:intent`.
 - PASS: `npm run test:memory`.
 - PASS: `npm run test:auth-boundaries`.
