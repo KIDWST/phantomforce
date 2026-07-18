@@ -14,12 +14,18 @@ function ask(prompt: string) {
   return answer;
 }
 
-assert.match(ask("what's your favorite food?"), /tacos/i);
-assert.match(ask("why?"), /because tacos/i);
-assert.match(ask("tell me more"), /modular|tortilla/i);
-assert.match(ask("give me an example"), /bean taco|fish taco/i);
-assert.match(ask("make it funny"), /five-star review/i);
+assert.match(ask("what's your favorite food?"), /spicy ramen/i);
+assert.match(ask("why?"), /comforting and intense/i);
+assert.match(ask("tell me more"), /broth|toppings/i);
+assert.match(ask("give me an example"), /last answer|spicy ramen/i);
+assert.match(ask("make it funny"), /spicy ramen|ideas need a costume change/i);
 assert.ok(ask("shorter").length < turns.at(-2)!.assistant.length);
+
+turns.length = 0;
+turns.push({ user: "Show my accounting ledger.", assistant: "Your ledger has three entries and one invoice." });
+const standaloneAfterBusiness = ask("Explain photosynthesis.");
+assert.match(standaloneAfterBusiness, /sunlight/i);
+assert.doesNotMatch(standaloneAfterBusiness, /three entries/i);
 
 turns.length = 0;
 assert.match(ask("explain photosynthesis"), /sunlight/i);

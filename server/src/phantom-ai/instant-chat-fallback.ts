@@ -1,3 +1,6 @@
+import { needsInstantConversationContext, selectActiveInstantTopicTurns } from "./instant-chat-context.js";
+import { buildInstantChatToolReply, enforceInstantOutputConstraints } from "./instant-chat-tools.js";
+
 const MAX_REPLY_CHARS = 520;
 
 type RecentChatTurn = {
@@ -11,10 +14,6 @@ function cleanText(value: string) {
 
 function boundReply(value: string) {
   return cleanText(value).slice(0, MAX_REPLY_CHARS);
-}
-
-function mentionsFood(text: string) {
-  return /\b(favorite|favourite|fav)\b.*\b(food|meal|snack|dish|eat)\b|\b(food|meal|snack|dish)\b.*\b(favorite|favourite|fav)\b/i.test(text);
 }
 
 function calculate(text: string) {
@@ -56,9 +55,11 @@ function topicalExample(previous: string, topicContext: string) {
 }
 
 function followUpReply(request: string, recentConversation: RecentChatTurn[]) {
-  const previous = previousAnswer(recentConversation);
+  if (!needsInstantConversationContext(recentConversation, request)) return "";
+  const activeConversation = selectActiveInstantTopicTurns(recentConversation);
+  const previous = previousAnswer(activeConversation);
   if (!previous) return "";
-  const topicContext = recentConversation.slice(-6).map((turn) => `${turn.user} ${turn.assistant}`).join(" ");
+  const topicContext = activeConversation.slice(-6).map((turn) => `${turn.user} ${turn.assistant}`).join(" ");
   if (/\b(shorter|brief|one sentence|sum that up)\b/i.test(request)) return shorten(previous);
   if (/\b(simpler|plain english|eli5|explain that simply)\b/i.test(request)) {
     if (/photosynthesis/i.test(previous)) return "Plants use sunlight to make food from water and air, and oxygen comes out.";
@@ -71,17 +72,19 @@ function followUpReply(request: string, recentConversation: RecentChatTurn[]) {
     return `The short version, with better timing: ${firstSentence(previous)} Apparently even ideas need a costume change.`;
   }
   if (/^(why|why not|how so|and why|really)\b/i.test(request)) {
+    if (/spicy ramen/i.test(topicContext)) return "Because it can be comforting and intense at the same time, and every bowl can have its own personality.";
     if (/tacos?/i.test(topicContext)) return "Because tacos can be simple or ambitious, fit almost any mood, and have an excellent crunchy-to-soft ratio. Mostly, they're just hard not to enjoy.";
     if (/procrastinat/i.test(topicContext)) return "Because the brain often chooses immediate relief over a delayed reward, especially when a task feels vague, risky, or emotionally uncomfortable.";
     return `Because the main point was: ${firstSentence(previous)} The reason is usually the tradeoff or cause behind that claim, not a new topic.`;
   }
   if (/^(what do you mean|what does that mean|tell me more|go on|continue)\b/i.test(request)) {
+    if (/spicy ramen/i.test(topicContext)) return "The broth brings depth, the spice adds energy, and the toppings let you change the whole mood without losing the core dish.";
     if (/photosynthesis/i.test(topicContext)) return "The sugar stores chemical energy the plant can use to grow. Oxygen is released as a byproduct, which is why plants matter so much to the atmosphere.";
     if (/tacos?/i.test(topicContext)) return "They're modular: tortilla, filling, texture, sauce. You can change every part without losing the basic idea, which is a pretty great design.";
     return `The core idea is: ${firstSentence(previous)} I'm staying with that thread, not switching to workspace status.`;
   }
   if (/^(do you agree|is that true|are you sure)\b/i.test(request)) return `Broadly, yes, with normal exceptions. The claim I'm standing behind is: ${firstSentence(previous)}`;
-  return "";
+  return `I'm still with this thread: ${firstSentence(previous)} The instant model timed out before I could answer the new part accurately, so I won't invent one.`;
 }
 
 function directAnswer(request: string, businessName: string) {
@@ -91,7 +94,6 @@ function directAnswer(request: string, businessName: string) {
   if (/\b(tell me (a )?joke|make me laugh|say something funny)\b/i.test(lower)) return "I told my calendar I needed space. It scheduled a follow-up.";
   if (math) return math;
   if (/\bphotosynthesis\b/i.test(lower)) return "Photosynthesis is how plants use sunlight to turn water and carbon dioxide into sugar for energy, releasing oxygen along the way.";
-  if (mentionsFood(lower)) return "I'd pick tacos. Fast, flexible, and hard to ruin. That feels spiritually correct for an instant answer.";
   if (/\bhow are you|how's it going|you good|what's up\b/i.test(lower)) return "I'm good: focused, curious, and ready to help without turning a basic question into a board meeting.";
   if (/\bwho are you|what are you|your name\b/i.test(lower)) return `I'm Phantom AI inside ${cleanText(businessName) || "PhantomForce"}: quick for normal conversation and operational when you ask me to do real work.`;
   if (/\bwhat can you do|how can you help\b/i.test(lower)) return "I can talk through ordinary questions, explain and brainstorm, then shift into planning and business execution when you actually ask for it.";
@@ -108,7 +110,7 @@ function directAnswer(request: string, businessName: string) {
   if (/\bwhat are you thinking\b/i.test(lower)) return "That a good answer should feel obvious after you hear it, even if it took real work to make it that clean.";
   if (/\btell me something interesting\b/i.test(lower)) return "Octopuses have neurons in their arms, so a surprising amount of their sensing and movement is handled away from the central brain.";
   if (/\b(?:favorite|favourite|prefer|would you rather)\b/i.test(lower)) return "I'd choose the option that creates the better story without creating a maintenance problem tomorrow.";
-  return "I couldn't verify a strong answer before the instant model deadline. Ask once more and I'll keep the same conversation thread; I won't substitute unrelated business status.";
+  return "The instant model timed out before I could answer that accurately. Retry once and I'll answer the same question directly.";
 }
 
 export function buildInstantChatFallbackReply(
@@ -117,11 +119,12 @@ export function buildInstantChatFallbackReply(
   recentConversation: RecentChatTurn[] = [],
 ) {
   const request = cleanText(userRequest);
-  const content = followUpReply(request, recentConversation) || directAnswer(request, businessName);
+  const toolReply = buildInstantChatToolReply(request, recentConversation);
+  const content = toolReply?.output_text || followUpReply(request, recentConversation) || directAnswer(request, businessName);
   return {
     status: "local_fallback" as const,
     model_id: "phantom-instant-local-fallback",
-    output_text: boundReply(content),
+    output_text: boundReply(enforceInstantOutputConstraints(request, content)),
     provider_called: false as const,
     network_call_performed: false as const,
     provider_request_body_created: false as const,

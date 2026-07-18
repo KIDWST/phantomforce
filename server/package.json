@@ -28,6 +28,7 @@
     "test:instant-chat:tools": "tsx scripts/test-instant-chat-tools.ts",
     "test:instant-chat:live-model": "tsx scripts/test-instant-chat-live-model.ts",
     "test:instant-chat:http-live-model": "tsx scripts/test-instant-chat-http-live-model.ts",
+    "test:instant-chat:http-fallback": "tsx scripts/test-instant-chat-http-fallback.ts",
     "test:customization": "tsx scripts/test-customization-platform.ts",
     "test:phantomplay": "tsx scripts/test-phantomplay.ts",
     "test:phantomstore": "tsx scripts/test-phantomstore.ts",

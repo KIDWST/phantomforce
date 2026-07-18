@@ -722,8 +722,18 @@
           },
           {
             "file": "server/src/phantom-ai/instant-chat-context.ts",
-            "pattern": "export function needsInstantConversationContext[\\s\\S]*function activeTopicTurns[\\s\\S]*topicStart = index",
+            "pattern": "export function needsInstantConversationContext[\\s\\S]*export function selectActiveInstantTopicTurns[\\s\\S]*topicStart = index",
             "description": "Temporary history is included only for genuine follow-ups or topic overlap, and standalone prompts automatically start a clean topic segment."
+          },
+          {
+            "file": "server/src/phantom-ai/instant-chat-fallback.ts",
+            "pattern": "selectActiveInstantTopicTurns[\\s\\S]*buildInstantChatToolReply[\\s\\S]*enforceInstantOutputConstraints",
+            "description": "Provider-outage replies reuse the active topic, deterministic personality/tools, and output constraints instead of behaving like a separate chatbot."
+          },
+          {
+            "file": "server/scripts/test-instant-chat-http-fallback.ts",
+            "pattern": "OLLAMA_BASE_URL: \"http://127\\.0\\.0\\.1:9\"[\\s\\S]*fallback\\?\\.all_failed, true[\\s\\S]*instant chat HTTP forced-fallback checks passed",
+            "description": "An authenticated HTTP gate forces Ollama offline and proves useful topic-safe local degradation without business leakage."
           },
           {
             "file": "server/src/phantom-ai/instant-chat-tools.ts",

@@ -1075,3 +1075,47 @@ Run the authenticated two-organization persistence proof in Recommended Cycle 14
 ## Next Task
 
 Run the authenticated two-organization persistence proof in Recommended Cycle 15.
+
+# 2026-07-18 - Cycle 15: Provider-Outage Conversation Resilience
+
+## Problems Verified
+
+- The local provider-failure path behaved like a second chatbot: it preferred
+  tacos while the healthy Phantom personality preferred spicy ramen.
+- Fallback follow-ups searched the full recent conversation instead of the
+  active semantic topic, creating stale-topic contamination risk.
+- An unsupported fallback question told the user to ask again while mentioning
+  unrelated business state, even in a purely casual conversation.
+- Unit checks did not prove the behavior through the authenticated HTTP route
+  with a genuinely unreachable Ollama endpoint.
+
+## Corrections
+
+- Reused the normal deterministic instant tools and output constraints in the
+  local provider-failure path, keeping personality and formatting consistent.
+- Exported and reused active-topic selection so degraded follow-ups operate only
+  on the current semantic thread.
+- Added resilient follow-ups for the shared spicy-ramen personality and an
+  honest, business-free timeout response when no deterministic answer exists.
+- Expanded semantic follow-up detection for examples and confidence checks.
+- Added an authenticated disposable-server gate with Ollama forced unreachable;
+  it proves useful direct answers, topic continuity, no stale accounting leak,
+  deterministic personality, truthful fallback metadata, and process cleanup.
+- Added permanent change-memory guards for all of the above behavior.
+
+## Focused Verification
+
+- PASS: `npm run test:instant-chat --workspace @phantomforce/server` (11
+  adversarial degraded-mode turns).
+- PASS: `npm run test:instant-chat:tools --workspace @phantomforce/server`.
+- PASS: `npm run test:instant-chat:http-fallback --workspace
+  @phantomforce/server` (3 authenticated requests, provider unreachable).
+- PASS: `npm run typecheck --workspace @phantomforce/server`.
+- PASS: `npm run test:release-critical` (19/19 critical checks; 132 permanent
+  change-memory assertions before this cycle's final documentation guard).
+- PASS: disposable fallback test port `5193` was closed after verification.
+- PASS: `git diff --check`.
+
+## Next Task
+
+Run the authenticated two-organization persistence proof in Recommended Cycle 16.

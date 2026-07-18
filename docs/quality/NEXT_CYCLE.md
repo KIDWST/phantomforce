@@ -16,17 +16,16 @@ Do not restart the audit from zero unless the inventory is invalid. Continuation
 is scheduled in this same Codex task by heartbeat automation
 `continue-phantomforce-quality-program`.
 
-Cycle 14 removed stale-topic contamination from temporary chat history. Standalone
-requests now start a clean semantic topic automatically, while true follow-ups,
-pronoun references, transformations, and overlapping named subjects retain only
-their relevant topic segment. A direct penguin joke after accounting history and
-its `Shorter` follow-up now exclude old ledger/pipeline turns. The verbose audit
-also caught and fixed lost spaceship/comparison context, Markdown fences on
-`Code only`, and unreliable generated verified octopus facts. The authenticated
-gate now drives 75 requests with zero business leakage. The public app remains
-build `phantom-live-20260718-30`; this cycle changes the live server brain.
+Cycle 15 made the fast brain resilient when its local model restarts, times out,
+or is temporarily unreachable. Degraded replies now reuse Phantom's normal
+deterministic personality, tools, output constraints, and active semantic topic
+instead of behaving like a separate canned chatbot. A new authenticated HTTP
+gate deliberately points Ollama at a closed port and proves that direct answers
+and follow-ups remain useful, stale accounting history stays excluded, fallback
+metadata is truthful, and the disposable server exits cleanly. The public app
+remains build `phantom-live-20260718-30`; this cycle changes the live server brain.
 
-## Recommended Cycle 15
+## Recommended Cycle 16
 
 Theme: authenticated cross-organization persistence proof.
 
