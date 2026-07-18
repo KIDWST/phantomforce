@@ -692,11 +692,12 @@ Run the authenticated two-organization persistence proof in Recommended Cycle 7.
   turns, and deterministic instant-tool checks).
 - PASS: `npm run test:change-memory` (106 protected checks before build stamping).
 - PASS: `npm run test:instant-chat:http-live-model` from `server`: 27 consecutive
-  authenticated HTTP requests, 485 ms average, 904 ms maximum, zero fallbacks,
+  authenticated HTTP requests, 475 ms average, 855 ms maximum, zero fallbacks,
   zero business leakage, five deterministic tool responses, corrected-subject
   continuity, topic switching, exact arithmetic, and context rollover verified.
 - PASS: the self-starting gate terminated its disposable port-5192 server after
-  completion.
+  completion. It explicitly skips the deployment's production `.env` only inside
+  the child test process so demo authentication cannot be replaced by live auth.
 - PASS: `npm run typecheck`, `npm run build`, and `git diff --check` during the
   focused correction pass.
 

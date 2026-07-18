@@ -27,6 +27,7 @@ async function ensureServer(): Promise<ChildProcess | null> {
       NODE_ENV: "development",
       PHANTOMFORCE_AUTH_PROVIDER: "demo",
       PHANTOMFORCE_ENABLE_DEMO_AUTH: "true",
+      PHANTOMFORCE_SKIP_SERVER_DOTENV: "true",
       PHANTOM_INSTANT_CHAT_MODEL: model,
       PHANTOM_OLLAMA_TIMEOUT_MS: "4500",
     },
