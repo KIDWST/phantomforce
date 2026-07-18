@@ -21,7 +21,7 @@ questions now carry an eight-turn temporary window without accounting, plan,
 workspace pulse, or saved-memory leakage; business modules require current-request
 relevance. Instant chat makes one bounded fast-model attempt and then returns a
 topic-aware local answer instead of waiting through a second model timeout. Build
-`phantom-live-20260718-23` passed the full user-facing regression matrix.
+`phantom-live-20260718-24` passed the full user-facing regression matrix.
 
 ## Recommended Cycle 5
 

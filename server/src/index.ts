@@ -194,7 +194,7 @@ import { buildHermesLiveCallReceiptContract } from "./phantom-ai/hermes-live-rec
 import { buildHermesInteractionMemoryPreview } from "./phantom-ai/hermes-interaction-memory.js";
 import { recallHermesInteractionMemory } from "./phantom-ai/hermes-interaction-recall.js";
 import { buildInstantChatFallbackReply } from "./phantom-ai/instant-chat-fallback.js";
-import { filterConversationModules, needsBusinessContext } from "./phantom-ai/conversation-policy.js";
+import { filterConversationModules, isSafeInstantConversationRequest, needsBusinessContext } from "./phantom-ai/conversation-policy.js";
 import { buildOpsDashboardContext } from "./phantom-ai/ops-context.js";
 import { buildAgentWorkforceStatus } from "./phantom-ai/agent-workforce.js";
 import {
@@ -3857,16 +3857,6 @@ async function runAdminPhantomAiChatWithFallback(
 
 function buildAdminPhantomAiAllProvidersFailedMessage() {
   return "I couldn't complete that just now. Your request is still here — try again in a moment.";
-}
-
-const INSTANT_ADMIN_CHAT_TASK_TYPES = new Set(["identity", "capability", "question", "chat"]);
-const INSTANT_ADMIN_CHAT_BLOCKLIST = /\b(?:build|create|draft|write|make|fix|debug|code|implement|analy[sz]e|research|compare|summari[sz]e|plan|strategy|proposal|website|site|content|video|image|media|schedule|client|lead|transaction|accounting|bank|security|deploy|send|post|upload|delete|weather|forecast|current|latest|today|tomorrow|yesterday|price|stock|law|legal|medical|diagnosis|contract|tenant|isolation|phantomforce)\b/i;
-
-function isInstantAdminChatSafe(normalized: { task_type: string; user_request: string }) {
-  const text = normalized.user_request.trim();
-  if (!INSTANT_ADMIN_CHAT_TASK_TYPES.has(normalized.task_type)) return false;
-  if (!text || text.length > 180 || text.split(/\s+/).filter(Boolean).length > 22) return false;
-  return !INSTANT_ADMIN_CHAT_BLOCKLIST.test(text);
 }
 
 type PendingPrivacyIntent = {
@@ -8523,7 +8513,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
     return privacyFirstLocationReply;
   }
 
-  if (session.canManageAccess && adminRouteTier === "instant" && isInstantAdminChatSafe(normalized)) {
+  if (session.canManageAccess && adminRouteTier === "instant" && isSafeInstantConversationRequest(normalized)) {
     const instantChat = await runAdminPhantomAiChatWithFallback(adminModelLane, {
       requestId: normalized.request_id,
       businessName: normalized.business_name,

@@ -507,7 +507,7 @@ responsive viewport harness from the headless Edge smoke and sweep the required
   simplification, examples, and humor transformations to degraded chat.
 - Restored explicit `assign Codex/Claude a task` intent handling found by the
   broader regression pass.
-- Cache-busted the application as `phantom-live-20260718-23`.
+- Cache-busted the application as `phantom-live-20260718-24`.
 
 ## Verification
 

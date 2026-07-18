@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { filterConversationModules, needsBusinessContext } from "../src/phantom-ai/conversation-policy.js";
+import { filterConversationModules, isSafeInstantConversationRequest, needsBusinessContext } from "../src/phantom-ai/conversation-policy.js";
 import { buildInstantChatFallbackReply } from "../src/phantom-ai/instant-chat-fallback.js";
 
 const forbidden = /\b(?:ledger|pipeline|cashflow|cash flow|approval|invoice|workspace status)\b/i;
@@ -51,5 +51,8 @@ const modules = [
 assert.equal(needsBusinessContext("why are tacos good?", "question"), false);
 assert.deepEqual(filterConversationModules(modules, "why are tacos good?", "question").map((item) => item.module), ["recent_conversation"]);
 assert.deepEqual(filterConversationModules(modules, "what is in my accounting ledger?", "question").map((item) => item.module), ["recent_conversation", "money", "active_business"]);
+assert.equal(isSafeInstantConversationRequest({ task_type: "chat", user_request: "make it funny" }), true);
+assert.equal(isSafeInstantConversationRequest({ task_type: "create_website", user_request: "make a website" }), false);
+assert.equal(isSafeInstantConversationRequest({ task_type: "question", user_request: "show my accounting ledger" }), false);
 
 console.log(`instant chat fallback checks passed (${turns.length + directPrompts.length} adversarial turns)`);

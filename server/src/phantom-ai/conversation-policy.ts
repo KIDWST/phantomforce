@@ -9,6 +9,8 @@ const BUSINESS_TASKS = new Set([
   "create_task", "create_website", "website_update", "create_automation", "approval_request",
   "plan", "brainstorm", "feedback", "memory_update", "run_agent",
 ]);
+const INSTANT_TASKS = new Set(["identity", "capability", "question", "chat"]);
+const INSTANT_BLOCKLIST = /\b(?:build|create|draft|write|fix|debug|code|implement|research|plan|strategy|proposal|website|site|content|video|image|media|schedule|client|lead|transaction|accounting|bank|security|deploy|send|post|upload|delete|weather|forecast|current|latest|today|tomorrow|yesterday|price|stock|law|legal|medical|diagnosis|contract|tenant|isolation|phantomforce)\b/i;
 
 const MODULE_RELEVANCE: Record<string, RegExp> = {
   money: /\b(?:money|cash|bank|card|transaction|accounting|ledger|invoice|payment|revenue|expense|profit|budget|tax|proposal|quote)\b/i,
@@ -27,6 +29,13 @@ function hasLexicalOverlap(module: ConversationContextModule, userRequest: strin
 
 export function needsBusinessContext(userRequest: string, taskType = "") {
   return BUSINESS_TASKS.has(taskType) || BUSINESS_TERMS.test(userRequest);
+}
+
+export function isSafeInstantConversationRequest(input: { task_type: string; user_request: string }) {
+  const text = input.user_request.trim();
+  if (!INSTANT_TASKS.has(input.task_type)) return false;
+  if (!text || text.length > 180 || text.split(/\s+/).filter(Boolean).length > 22) return false;
+  return !INSTANT_BLOCKLIST.test(text);
 }
 
 export function filterConversationModules<T extends ConversationContextModule>(
