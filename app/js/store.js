@@ -657,6 +657,22 @@ export const session = {
   },
 };
 
+export function friendlyBackendError(status, error, options = {}) {
+  const code = String(error || "").replace(/_/g, " ").trim();
+  const authMessage = options.authMessage || "Sign in to continue.";
+  const fallbackPrefix = options.fallbackPrefix || "Request failed";
+  if (status === 401) return authMessage;
+  if (status === 403) {
+    if (/upgrade required|seat limit reached|paywall|plan/i.test(code)) return "This business plan does not allow that action yet.";
+    return "This account is not allowed to access that business data.";
+  }
+  if (status === 404) return `${fallbackPrefix}: that record was not found.`;
+  if (status === 409) return `${fallbackPrefix}: this changed somewhere else. Refresh and try again.`;
+  if (status === 429) return `${fallbackPrefix}: too many requests. Wait a moment and try again.`;
+  if (status >= 500 || status === 0) return `${fallbackPrefix}: the backend is unavailable right now.`;
+  return `${fallbackPrefix}${status ? ` (${status})` : ""}${code ? `: ${code}` : "."}`;
+}
+
 export const ADMIN_PUBLIC_HOST = "admin.phantomforce.online";
 export const CLIENT_PUBLIC_HOST = "app.phantomforce.online";
 export const PUBLIC_PAGES_HOSTS = new Set(["phantomforce.online", "www.phantomforce.online"]);

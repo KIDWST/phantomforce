@@ -18,6 +18,9 @@ const cubeTownIndex = read("../app/games/cubetown/index.html");
 const flagshipCatalog = read("../server/src/phantom-ai/phantomplay-flagship.ts");
 const kingdomBreakers = read("../app/games/kingdom-breakers.html");
 const kingdomBreakersScript = kingdomBreakers.match(/<script>([\s\S]*)<\/script>/u)?.[1] || "";
+const crownCircuit = read("../app/games/crown-circuit.html");
+const crownCircuitScript = crownCircuit.match(/<script>([\s\S]*)<\/script>/u)?.[1] || "";
+const tidefrontTactics = read("../app/games/tidefront-tactics.html");
 const appFiles = [index, main, module, v2Module, ...games];
 
 assert.match(main, /id:\s*"phantomplay"[\s\S]*label:\s*"Play"/u, "PhantomPlay must be in the native navigation, labeled short as \"Play\".");
@@ -145,9 +148,17 @@ assert.match(games[gameSlugs.indexOf("type-storm")], /vertical word-rain|stormAl
 assert.match(games[gameSlugs.indexOf("pixel-bloom")], /no timer|no pressure|source:'phantomplay-game'/u, "Pixel Bloom must remain a gentle toddler-friendly built-in.");
 const riftFrenzy = games[gameSlugs.indexOf("rift-frenzy")];
 const riftFrenzyScript = riftFrenzy.match(/<script>([\s\S]*)<\/script>/u)?.[1] || "";
-assert.match(riftFrenzy, /Four schools|convert|Solo \+ bots|2 players|3 players|4 players/u, "Rift Frenzy must be a school-conversion arena with solo and 1-4 player starts.");
+assert.match(riftFrenzy, /school-to-grow|10-second cooldown|Solo \+ bots|2 players|3 players|4 players/u, "Rift Frenzy must be the school-to-grow survival arena with solo and 1-4 player starts.");
 assert.match(riftFrenzy, /const colors=\["#46ffd0","#ff4d7d","#67a7ff","#ffe066"\]/u, "Rift Frenzy must run four colored schools.");
 assert.match(riftFrenzy, /function addFollower\(team,source\)[\s\S]*team\.school\.push/u, "Rift Frenzy must convert fish into school followers instead of only deleting them.");
+assert.match(riftFrenzy, /absorbCooldown:10000/u, "Rift Frenzy absorb must use the exact 10-second cooldown.");
+assert.match(riftFrenzy, /function absorbSchool\(team\)[\s\S]*team\.absorbCd=CONFIG\.absorbCooldown/u, "Rift Frenzy must turn carried schools into permanent growth.");
+assert.match(riftFrenzy, /function stealFromSchool\(thief,owner,fishIndex/u, "Rift Frenzy must support skill-based school stealing.");
+assert.match(riftFrenzy, /const reefs=\[[\s\S]*const kelp=\[[\s\S]*const caves=\[[\s\S]*const currents=\[[\s\S]*const whirlpools=\[/u, "Rift Frenzy must include real map hazards and traversal zones.");
+assert.match(riftFrenzy, /const .*predators=\[/u, "Rift Frenzy must include predator pressure.");
+assert.match(riftFrenzy, /camera\.zoom/u, "Rift Frenzy must zoom the camera as the player grows.");
+assert.match(riftFrenzy, /function eliminate\(victim,killer\)[\s\S]*alive=false/u, "Rift Frenzy must eliminate rivals instead of ending only by timer score.");
+assert.match(riftFrenzy, /function thinkBot\(team\)[\s\S]*team\.ai\.absorb=true/u, "Rift Frenzy bots must understand absorb timing.");
 assert.match(riftFrenzy, /human:i<humanCount/u, "Rift Frenzy solo must fill non-human schools with bots.");
 assert.match(riftFrenzy, /document\.querySelectorAll\("\[data-mode-start\]"\)/u, "Rift Frenzy must expose local 1-4 player mode buttons.");
 assert.match(games[gameSlugs.indexOf("rift-frenzy")], /const steer=1-Math\.pow\(\.72,dt\/16\)/u, "Rift Frenzy movement must use frame-stable steering instead of overcorrecting.");
@@ -156,6 +167,14 @@ assert.match(games[gameSlugs.indexOf("rift-frenzy")], /team\.vx=\(team\.vx\+\(ax
 assert.match(games[gameSlugs.indexOf("rift-frenzy")], /for\(let i=0;i<24;i\+\+\)spawnFish\(true\)/u, "Rift Frenzy must start with enough edible fish to be playable immediately.");
 assert.match(games[gameSlugs.indexOf("rift-frenzy")], /target\.boost=false/u, "Rift Frenzy touch boost must release when touch ends.");
 assert.doesNotThrow(() => new Function(riftFrenzyScript), "Rift Frenzy script must parse after the school-conversion rewrite.");
+for (const slug of ["crown-circuit", "kingdom-breakers", "tidefront-tactics", "skyguard-arena"]) {
+  assert.match(module, new RegExp(`id:\\s*"${slug}"`, "u"), `${slug} must be restored to the frontend fallback catalog.`);
+  assert.match(module, new RegExp(`GAME_ART_BY_SLUG\\["${slug}"\\]`, "u"), `${slug} must use dedicated PhantomPlay game art.`);
+  assert.match(flagshipCatalog, new RegExp(`id:\\s*"${slug}"`, "u"), `${slug} must be registered as a server-side flagship game.`);
+}
+assert.match(crownCircuit, /STRICTLY MULTIPLAYER|Start 2-player match|Room .*you are/u, "Crown Circuit must be the restored royale-style 1v1 game.");
+assert.doesNotThrow(() => new Function(crownCircuitScript), "Crown Circuit script must parse.");
+assert.match(tidefrontTactics, /Arrow keys to adjust angle\/power|Space to fire|Fleet Room/u, "Tidefront Tactics must remain the restored artillery battle.");
 assert.match(games[gameSlugs.indexOf("serpent-surge")], /storm|boost|rival|serpent|trail/u, "Serpent Surge must play as a modern snake arena, not a static old mini-game.");
 assert.match(phantomRumble, /shieldHeld|data-t="shield"|PARRY/u, "Phantom Rumble must have real guard and parry mechanics.");
 assert.match(phantomRumble, /function dodge|dodgeCd|data-t="dodge"/u, "Phantom Rumble must have an active dodge verb on keyboard and touch.");

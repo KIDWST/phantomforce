@@ -93,6 +93,11 @@ try {
       throw "Prisma migrate deploy failed."
     }
 
+    npx prisma generate --schema server/prisma/schema.prisma
+    if ($LASTEXITCODE -ne 0) {
+      throw "Prisma generate failed."
+    }
+
     npm run build --workspace @phantomforce/server
     if ($LASTEXITCODE -ne 0) {
       throw "Server build failed."
@@ -150,11 +155,20 @@ try {
       if ($LASTEXITCODE -ne 0) {
         throw "Database auth live API probe failed."
       }
+
+      if ($env:PHANTOMFORCE_SKIP_DATABASE_AUTH_BROWSER -ne "true") {
+        $env:PHANTOMFORCE_DATABASE_AUTH_BROWSER_API_BASE = $serverUrl
+        node scripts/test-database-auth-org-browser.mjs
+        if ($LASTEXITCODE -ne 0) {
+          throw "Database auth browser organization probe failed."
+        }
+      }
     } finally {
       if ($serverProcess -and -not $serverProcess.HasExited) {
         Stop-Process -Id $serverProcess.Id -Force
       }
       Remove-Item Env:\BASE -ErrorAction SilentlyContinue
+      Remove-Item Env:\PHANTOMFORCE_DATABASE_AUTH_BROWSER_API_BASE -ErrorAction SilentlyContinue
     }
   } finally {
     Pop-Location

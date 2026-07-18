@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 720" role="img" aria-labelledby="title desc">
+  <title id="title">Rift Frenzy cover art</title>
+  <desc id="desc">Neon ocean fish collecting a school while rivals and predators circle the rift.</desc>
+  <defs>
+    <radialGradient id="sea" cx="45%" cy="38%" r="72%">
+      <stop offset="0" stop-color="#0f6470"/>
+      <stop offset=".48" stop-color="#06352f"/>
+      <stop offset="1" stop-color="#010504"/>
+    </radialGradient>
+    <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="8" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <rect width="1200" height="720" fill="url(#sea)"/>
+  <g opacity=".18" fill="none" stroke="#46ffd0" stroke-width="3">
+    <path d="M36 136C198 75 319 186 447 122c142-71 261-70 382 3 92 55 201 32 319-25"/>
+    <path d="M63 566c121-94 238-96 351-8 123 96 261 91 415-16 98-68 199-73 304-15"/>
+    <circle cx="905" cy="195" r="92"/><circle cx="240" cy="523" r="118"/>
+  </g>
+  <g filter="url(#glow)">
+    <path d="M593 365c72-71 170-74 250-8 42 35 43 91 2 125-79 67-209 55-270-27-20-27-14-61 18-90z" fill="#46ffd0"/>
+    <path d="M560 405 450 335l18 92-86 49 104 17-6 91 86-70" fill="#2aff9a"/>
+    <circle cx="695" cy="386" r="17" fill="#02110c"/>
+    <path d="M727 447c47 18 99 6 145-37" fill="none" stroke="#02110c" stroke-width="17" stroke-linecap="round"/>
+  </g>
+  <g filter="url(#glow)" opacity=".9">
+    <g fill="#9fffe7">
+      <ellipse cx="290" cy="272" rx="38" ry="20"/><path d="M256 272 220 249v46z"/>
+      <ellipse cx="360" cy="318" rx="31" ry="17"/><path d="M332 318 300 299v38z"/>
+      <ellipse cx="424" cy="257" rx="27" ry="15"/><path d="M400 257 373 241v32z"/>
+      <ellipse cx="323" cy="418" rx="30" ry="16"/><path d="M296 418 266 400v36z"/>
+      <ellipse cx="466" cy="454" rx="24" ry="13"/><path d="M444 454 420 440v28z"/>
+    </g>
+    <g fill="#ff5d7d">
+      <ellipse cx="893" cy="316" rx="34" ry="18"/><path d="m922 316 34-22v44z"/>
+      <ellipse cx="957" cy="438" rx="28" ry="15"/><path d="m982 438 29-18v36z"/>
+    </g>
+  </g>
+  <g opacity=".48" filter="url(#glow)">
+    <path d="M914 582c42-73 138-74 183-5-67-16-124-14-183 5z" fill="#ffbd6a"/>
+    <path d="M1028 524c-19-34-20-73 0-116 30 55 31 93 0 116z" fill="#ff7868"/>
+  </g>
+  <text x="54" y="95" fill="#eafff5" font-family="Arial Black,Arial,sans-serif" font-size="54" letter-spacing="3">RIFT FRENZY</text>
+  <text x="58" y="146" fill="#46ffd0" font-family="ui-monospace,Menlo,monospace" font-size="24" font-weight="900" letter-spacing="5">SCHOOL TO GROW SURVIVAL</text>
+</svg>
