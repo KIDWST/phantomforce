@@ -6,11 +6,14 @@
 
 ## Source of truth
 - The canonical repo is **`github.com/KIDWST/phantomforce`**, branch **`main`**.
-- The Windows machine currently serving **`admin.phantomforce.online`** and
-  **`127.0.0.1:5177`** serves directly from:
+- The canonical Windows editing checkout is
   `C:\Users\jorda\Documents\Codex\worktrees\phantomforce-live-social-analytics-20260712`.
-  Before telling the owner a UI change is live, verify `/health` reports that root
-  and that your change exists in the served `/app/index.html` or `/app/js/main.js`.
+  The machine serving **`admin.phantomforce.online`**, **`app.phantomforce.online`**,
+  and **`127.0.0.1:5177`** uses the clean deployment checkout at
+  `C:\Users\jorda\Documents\Codex\deployments\phantomforce-live`. The scheduled
+  sync fast-forwards that checkout to `origin/main`; do not serve an arbitrary
+  feature worktree. Before declaring a change live, verify `/health` reports the
+  deployment root and its commit matches `origin/main`.
 - The Windows remote-stack watchdog also starts the admin services. Its host files
   live outside this repo at:
   `C:\Users\jorda\Documents\PhantomForce-Infrastructure\windows-host-pangolin-ai`.
@@ -18,11 +21,12 @@
   update `Start-PhantomForce-RemoteStack.ps1` and `ecosystem.config.js` there before
   doing more UI work; that stale watchdog can otherwise resurrect the old admin app.
 - If the owner says changes are not appearing, assume another agent edited a stale
-  sibling worktree first. Run `/health`, compare the `root`, and port the diff into
-  the served checkout before doing more design work.
+  sibling worktree first. Run `/health`, compare the `root`, land the intended diff
+  on `origin/main`, and sync the dedicated deployment before doing more design work.
 - Before telling the owner "this is live" or before debugging a stale-looking admin
-  UI, run the source doctor from the served checkout:
+  UI, run the source doctor from the dedicated deployment checkout:
   ```powershell
+  cd C:\Users\jorda\Documents\Codex\deployments\phantomforce-live
   powershell -NoProfile -ExecutionPolicy Bypass -File ops\admin-live\Test-LiveAdminSource.ps1
   ```
   It checks branch, `origin/main`, sync manifest, live build id, local service
@@ -48,12 +52,13 @@
   forbidden patterns there so another stale worktree cannot resurrect it.
 
 ## Recent, merged & live (newest first)
-- **Tenant-backed revenue truth + release gate (2026-07-18)** — build
+- **Dedicated live checkout + tenant-backed revenue truth (2026-07-18)** — build
   `phantom-live-20260718-25`. CRM discovery refuses to invent contacts when no
   verified public-research adapter is connected; manual CRM records, proposal
   drafts, and workspace approvals persist by organization; Analytics restores the
-  source-backed Managed Growth report. `npm run test:release-full` covers the
-  19-check product gate plus disposable-Postgres auth/tenant and Easy CRM suites.
+  source-backed Managed Growth report. The live watchdog and scheduled sync use the
+  clean deployment checkout. `npm run test:release-full` covers the 19-check product
+  gate plus disposable-Postgres auth/tenant and Easy CRM suites.
 - **Customer plan simulator + setup routing guard (2026-07-16)** — build
   `phantom-live-20260716-289`. Customer test accounts can switch public
   Free/Pro/Elite/Enterprise tiers from Settings → Plan & access, local customer

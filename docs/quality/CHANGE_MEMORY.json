@@ -51,13 +51,18 @@
     {
       "id": "admin-live-canonical-worktree",
       "status": "active",
-      "title": "Live admin must serve the canonical Windows checkout",
-      "ownerDecision": "Accepted admin work only counts as live when the local admin server serves phantomforce-live-social-analytics-20260712, not an old sibling checkout.",
+      "title": "Live admin must serve the clean deployment checkout",
+      "ownerDecision": "Accepted admin work only counts as live after it is pushed to origin/main and the local admin server serves the clean phantomforce-live deployment checkout, not a development or stale sibling worktree.",
       "requiredPatterns": [
         {
           "file": "AGENTS.md",
           "pattern": "phantomforce-live-social-analytics-20260712",
-          "description": "AGENTS documents the canonical served checkout."
+          "description": "AGENTS documents the canonical editing checkout."
+        },
+        {
+          "file": "AGENTS.md",
+          "pattern": "deployments\\\\phantomforce-live",
+          "description": "AGENTS documents the dedicated clean deployment checkout."
         },
         {
           "file": "ops/admin-live/Test-LiveAdminSource.ps1",
