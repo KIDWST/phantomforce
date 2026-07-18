@@ -5,7 +5,7 @@
    (store.js) — no fabricated business records. Self-contained: owns its own
    timers, guards against double-mount, and respects reduced-motion. */
 
-import { store, visible, TOOL_SPINE } from "./store.js?v=phantom-live-20260717-6";
+import { store, visible, TOOL_SPINE } from "./store.js?v=phantom-live-20260718-20";
 
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -87,7 +87,7 @@ export function mountPhantomWire(el) {
     }).join(`<span class="atk-sep">/</span>`);
     // duplicated track for a seamless marquee loop
     el.innerHTML = `<div class="atk-label">PHANTOMWIRE</div>
-      <div class="atk-view"><div class="atk-track ${reduceMotion ? "is-static" : ""}">${items}<span class="atk-sep">/</span>${items}</div></div>`;
+      <div class="atk-view"><div class="atk-track ${reduceMotion ? "is-static" : ""}">${items}<span class="atk-loop-copy" aria-hidden="true"><span class="atk-sep">/</span>${items}</span></div></div>`;
   };
   render();
   const off = store.onChange(() => {

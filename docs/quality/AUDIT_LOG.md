@@ -1,5 +1,113 @@
 # PhantomForce Audit Log
 
+## 2026-07-18 — Cycle 3: Fast Contextual Dashboard + Accepted-Change Recovery
+
+### Surfaces Audited
+
+- Dashboard command surface, conversation history, intent routing, instant
+  fallback, provider selection, and server chat context.
+- Desktop and mobile dashboard composition at 1440x810 and 390x804 in the
+  in-app browser.
+- Accepted-change memory across customer plan switching, competitor
+  intelligence, Media Lab layers, PhantomCut, PhantomPlay, organization
+  settings, Site Studio, the split sidebar, auth boundaries, and top-bar media.
+- Tenant-scoped CRM, proposal, workspace-approval, and Managed Growth report
+  persistence routes.
+
+### Problems Verified
+
+- Simple conversational questions could route into an expensive model path,
+  take too long, and answer with unrelated business-ledger context.
+- Follow-up questions did not reliably receive the recent conversation, so a
+  direct follow-up such as "why tacos?" could lose the subject.
+- The dashboard repeated controls, suggestions, labels, metrics, and internal
+  system language instead of behaving like a focused business command surface.
+- Several previously accepted features had been partially replaced by older
+  implementations during overlapping work, including the full Media Lab layer
+  editor, customer plan simulation, Site Studio prompt behavior, and split
+  navigation styling.
+- CRM, proposal, and workspace-approval JSON stores existed, but their API
+  routes were not mounted in `server/src/index.ts`.
+
+### Problems Fixed
+
+- Added a bounded workspace-scoped recent-chat window, sanitized to exclude
+  failed and irrelevant records, and passed it through both client and server
+  chat routing.
+- Added direct instant answers for harmless casual prompts, basic arithmetic,
+  identity/capability questions, and contextual follow-ups before expensive
+  provider routing. Instant routing now times out after 3.2 seconds and falls
+  through predictably.
+- Rebuilt the dashboard into a compact split composition with one chat entry
+  point, four useful starters, concise operational context, honest metrics, and
+  responsive desktop/mobile behavior.
+- Restored accepted implementations for plan switching, competitor
+  intelligence, Media Lab layers, PhantomCut, organization settings, Site
+  Studio prompts, top-bar media, the split sidebar, and game-state guards.
+- Mounted tenant-scoped CRM lead/prospect-lane, proposal, workspace-approval,
+  and Managed Growth report routes with explicit no-provider/no-outbound/no-
+  public-exposure safety flags and owner/admin decision boundaries.
+- Advanced the app cache build id to `phantom-live-20260718-20`.
+
+### Browser Proof
+
+- Local URL: `http://127.0.0.1:5187/app/?demo=1`.
+- Desktop: asked "What's your favorite food?" and received a direct tacos
+  answer without a provider/ledger dump; then asked "Why tacos?" and received a
+  direct context-aware follow-up.
+- Desktop dashboard proof: `dashboard-chat-audit-20260717/03-after-dashboard-desktop.png`.
+- Mobile dashboard proof: `dashboard-chat-audit-20260717/04-after-dashboard-mobile.png`.
+- Before comparison: `dashboard-chat-audit-20260717/01-before-dashboard-desktop.png`.
+
+### Commands Run
+
+- `npm run build`
+- `npm run test:dashboard-chat`
+- `npm run test:command-surface`
+- `npm run test:change-memory`
+- `npm run test:customer-plan-switching`
+- `npm run test:competitor-intelligence`
+- `npm run test:client-setup-audit`
+- `npm run test:workspace-site-builder`
+- `npm run test:medialab-editor`
+- `npm run test:videocut-editor`
+- `npm run test:auth-boundaries`
+- `npm run test:phantomplay`
+- `node --check` across 10 touched frontend modules.
+- `git diff --check`
+
+### Results
+
+- PASS: production workspace build completed for contracts and server.
+- PASS: dashboard quality suite covered 22 prompts plus the server instant-chat
+  fallback.
+- PASS: compact command-surface contract.
+- PASS: accepted-change guard reported 90 checks.
+- PASS: customer plan switching and competitor intelligence frontend/server
+  policy suites.
+- PASS: structured client data-model audit reported no blockers and verified
+  the mounted persistence routes.
+- PASS: Site Studio prompt parsing, Media Lab layers, PhantomCut, auth
+  boundaries, and PhantomPlay regressions.
+- PASS: PhantomPlay reported 29 built-in games with tenant isolation, private
+  rooms, moderation, and route authorization.
+- PASS: frontend syntax and whitespace checks; Git emitted only Windows line-
+  ending notices.
+
+### Remaining P0/P1
+
+- No P0 remains verified in this batch.
+- P1: run an authenticated live-browser write/read isolation pass against the
+  newly mounted CRM, proposal, and workspace-approval routes after deployment.
+- P1: continue interaction-level mobile proof inside Media Lab and PhantomPlay,
+  beyond their current static/responsive and contract tests.
+
+### Next Task
+
+Exercise the server-backed CRM/proposal/approval lifecycle in two authenticated
+organizations and prove that create, edit, decision, delete, refresh, and
+cross-tenant denial all remain isolated in the browser.
+
 ## 2026-07-17 — Cycle 2: DB-Auth Organization Isolation + Browser Switcher Proof
 
 ### Surfaces Audited

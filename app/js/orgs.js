@@ -6,13 +6,14 @@
    when the backend doesn't advertise database auth, none of these
    surfaces render and the app behaves exactly as before. */
 
-import { ctx, session } from "./store.js?v=phantom-live-20260717-6";
+import { ctx, session } from "./store.js?v=phantom-live-20260718-20";
 
 export const isDatabaseSession = () => !!ctx.session?.database;
-export const activeOrgId = () => (isDatabaseSession() ? ctx.session.orgId || null : null);
-export const activeOrgRole = () => (isDatabaseSession() ? ctx.session.orgRole || null : null);
+export const isCustomerOrgSession = () => !!(ctx.session?.database || ctx.session?.localCustomer);
+export const activeOrgId = () => (isCustomerOrgSession() ? ctx.session.orgId || null : null);
+export const activeOrgRole = () => (isCustomerOrgSession() ? ctx.session.orgRole || null : null);
 export const canManageActiveOrg = () =>
-  isDatabaseSession() && (ctx.session.isSuperAdmin || ["owner", "admin"].includes(ctx.session.orgRole || ""));
+  isCustomerOrgSession() && (ctx.session.isSuperAdmin || ["owner", "admin"].includes(ctx.session.orgRole || ""));
 
 function authHeaders(extra = {}) {
   const token = typeof session?.token === "function" ? session.token() : "";
@@ -47,6 +48,7 @@ export async function fetchAuthConfig() {
    is enforced server-side per request. */
 function localSessionFromServer(payload) {
   const s = payload.session || {};
+  const localCustomer = payload.authMode === "local-customer" || String(s.id || "").startsWith("local:");
   const managesOrg = s.isSuperAdmin || ["owner", "admin"].includes(s.orgRole || "");
   return {
     role: managesOrg ? "admin" : "employee",
@@ -55,7 +57,8 @@ function localSessionFromServer(payload) {
     ws: "phantomforce",
     sessionId: s.id,
     canManageAccess: !!s.canManageAccess,
-    database: true,
+    database: !localCustomer,
+    localCustomer,
     email: s.email || "",
     username: s.username || "",
     orgId: s.orgId || null,
@@ -90,7 +93,13 @@ export async function databaseVerify2fa(challengeToken, code) {
 }
 
 export async function databaseSignup(payload) {
-  const { ok, status, json } = await api("/auth/signup", { method: "POST", body: payload });
+  const config = await fetchAuthConfig();
+  const localCustomer = !config?.databaseAuthEnabled && config?.customerRegisterEndpoint;
+  const endpoint = localCustomer || "/auth/signup";
+  const body = localCustomer
+    ? { email: payload.email, password: payload.password, name: payload.name, businessName: payload.organizationName }
+    : payload;
+  const { ok, status, json } = await api(endpoint, { method: "POST", body });
   if (!ok) throw new Error(String(json?.error || `Signup failed (${status}).`));
   return json;
 }
@@ -102,13 +111,21 @@ export async function databaseForgotUsername(email) {
 }
 
 export async function databaseForgotPassword(identifier) {
-  const { ok, status, json } = await api("/auth/forgot-password", { method: "POST", body: { identifier } });
+  const config = await fetchAuthConfig();
+  const localCustomer = !config?.databaseAuthEnabled && config?.customerPasswordResetRequestEndpoint;
+  const endpoint = localCustomer || "/auth/forgot-password";
+  const body = localCustomer ? { email: identifier } : { identifier };
+  const { ok, status, json } = await api(endpoint, { method: "POST", body });
   if (!ok) throw new Error(String(json?.error || `Password reset request failed (${status}).`));
+  if (localCustomer && json?.resetToken) return { ...json, preview: { resetToken: json.resetToken } };
   return json;
 }
 
 export async function databaseResetPassword(token, password) {
-  const { ok, status, json } = await api("/auth/reset-password", { method: "POST", body: { token, password } });
+  const config = await fetchAuthConfig();
+  const localCustomer = !config?.databaseAuthEnabled && config?.customerPasswordResetCompleteEndpoint;
+  const endpoint = localCustomer || "/auth/reset-password";
+  const { ok, status, json } = await api(endpoint, { method: "POST", body: { token, password } });
   if (!ok) throw new Error(String(json?.error || `Password reset failed (${status}).`));
   return json;
 }
@@ -148,6 +165,18 @@ export async function fetchAuthMe() {
   return ok ? json : null;
 }
 
+export async function fetchCustomerPlanPreview() {
+  const { ok, json } = await api("/customer/plan-preview");
+  return ok ? json : null;
+}
+
+export async function switchCustomerPlan(planKey) {
+  const { ok, status, json } = await api("/customer/plan-preview", { method: "POST", body: { planKey } });
+  return ok
+    ? { ok: true, ...json }
+    : { ok: false, status, error: json?.error || "plan_switch_failed", available: json?.available || [] };
+}
+
 export async function switchOrg(orgId) {
   const { ok, json } = await api("/auth/switch-org", { method: "POST", body: { orgId } });
   if (!ok || !json?.session) return { ok: false, error: json?.error || "switch_failed" };
@@ -165,6 +194,7 @@ export async function switchOrg(orgId) {
 }
 
 export async function fetchEntitlementsSummary() {
+  if (ctx.session?.localCustomer) return fetchCustomerPlanPreview();
   const orgId = activeOrgId();
   if (!orgId) return null;
   const { ok, json } = await api(`/orgs/${encodeURIComponent(orgId)}/entitlements`);

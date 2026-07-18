@@ -1,6 +1,6 @@
 # Next Quality Cycle
 
-Last updated: 2026-07-17
+Last updated: 2026-07-18
 
 ## Start Here
 
@@ -12,77 +12,64 @@ Read:
 4. `docs/quality/QUALITY_BACKLOG.md`
 5. `docs/quality/AUDIT_LOG.md`
 
-Do not restart the audit from zero unless the inventory is invalid.
-
-Continuation is scheduled in this same Codex task by heartbeat automation
+Do not restart the audit from zero unless the inventory is invalid. Continuation
+is scheduled in this same Codex task by heartbeat automation
 `continue-phantomforce-quality-program`.
 
-The 2026-07-17 cycle completed the highest-risk DB-auth organization isolation
-proof. The disposable Postgres runner now regenerates Prisma Client, runs the
-40-check API boundary suite, and runs a Chrome browser proof that the
-ChicagoShots owner only sees/switches ChicagoShots and cannot drift into
-PhantomForce through a tampered selector. Do not repeat this as the primary
-cycle unless auth, session, org switching, or module cache-busting changes.
+Cycle 3 completed the fast contextual dashboard, restored accepted UI/features,
+mounted the missing server persistence routes, and returned the accepted-change
+guard to 90 passing checks. Customer plan switching and Competitor Intelligence
+are now covered and green; do not repeat them as the primary cycle unless a live
+reproduction regresses.
 
-## Recommended Cycle 3
+## Recommended Cycle 4
 
-Theme: fix customer-facing plan switching and competitor intelligence.
+Theme: authenticated cross-organization persistence proof.
 
-This is now the highest user-visible P1: `app.phantomforce.online` customer
-plan switching can hang on "switching", and Competitor Intelligence reported a
-502. `npm run test:change-memory` also still lists customer plan switching as a
-missing memory-guard implementation.
+The CRM, proposal, workspace-approval, and Managed Growth stores are now mounted
+through tenant-scoped API routes. The next highest-value step is proving their
+complete browser lifecycle against two real authenticated organizations.
 
-### Option A — Customer Plan Switching
+### Required Pass
 
-1. Inspect the active plan docs, `test:customer-plan-switching`, and the
-   failing `test:change-memory` expectations.
-2. Verify the backend endpoint for changing a customer test org's plan exists,
-   updates server entitlements, and never grants platform-admin powers.
-3. Verify the settings/account UI updates from Free -> Pro -> Elite and back,
-   showing the selected tier as current and enforcing the matching restrictions.
-4. Add/repair regression coverage so the user can freely test tiers as
-   `.customer1` without a hung "switching" state.
-5. Browser-test the flow against a local database-auth app session.
-
-Likely files:
-
-- `server/src/index.ts`
-- `server/src/access/entitlements.ts`
-- `app/js/orgs.js`
-- `app/js/store.js`
-- `app/js/settings.js`
-- `scripts/test-customer-plan-switching.mjs`
-- `docs/quality/CHANGE_MEMORY.json`
-
-### Option B — Competitor Intelligence 502
-
-1. Reproduce the 502 against the local static server + API proxy, not by visual
-   guesswork.
-2. Inspect `/api/competitor-intelligence` server handling, provider fallback,
-   timeout behavior, and frontend error messaging.
-3. Make the feature useful even when live intelligence is unavailable: return a
-   clear degraded result or guided intake, not a dead red panel.
-4. Add a test for successful response and fallback/unavailable response.
-5. Browser-test the Research Intelligence panel after the fix.
+1. Start the disposable DB-auth Postgres fixture and sign in as members of two
+   different organizations.
+2. In organization A, create, edit, refresh, and delete a CRM lead and proposal.
+3. Create an approval, decide it as an authorized owner/admin, and verify the
+   status survives a reload.
+4. Switch to organization B and prove organization A records are absent.
+5. Attempt direct cross-tenant route calls and require 403/404 without leaking
+   record existence.
+6. Verify Managed Growth only summarizes the active tenant's server records and
+   never invents external metrics.
+7. Browser-check the lifecycle at 390px and 1440px; keep screenshots and exact
+   command output in the audit log.
 
 Likely files:
 
 - `server/src/index.ts`
-- `server/src/phantom-ai/*`
-- `app/js/competitor-intelligence.js`
-- `app/competitor-intelligence.css`
-- `scripts/test-competitor-intelligence.mjs`
+- `server/src/crm/crm-pipeline-store.ts`
+- `server/src/proposals/proposal-store.ts`
+- `server/src/workspace-approvals/workspace-approval-store.ts`
+- `server/src/managed-growth/managed-growth-report.ts`
+- `app/js/crmpipeline.js`
+- `app/js/proposalpipeline.js`
+- `app/js/approvalpipeline.js`
+- `scripts/test-database-auth-org-browser.mjs`
 
-### Regression Commands To Keep
+## Regression Commands To Keep
 
 - `powershell -NoProfile -ExecutionPolicy Bypass -File server\scripts\test-auth-database-live.ps1`
-- `npm run test:customer-plan-switching`
-- `npm run test:competitor-intelligence`
+- `npm run test:client-setup-audit`
+- `npm run test:dashboard-chat`
 - `npm run test:change-memory`
+- `npm run test:auth-boundaries`
+- `npm run build`
 - `git diff --check`
 
 ## Stop Condition
 
-Stop after one coherent improvement batch, with tests and docs updated. Do not
-push, deploy, or sync live admin without explicit authorization.
+Stop after one coherent improvement batch with tests and docs updated. The user
+has explicitly authorized commit, push, and live deployment; still fetch/rebase
+first, preserve concurrent work, and verify the deployed commit/build id before
+reporting completion.

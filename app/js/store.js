@@ -1056,6 +1056,21 @@ export function chatHistoryStats(list = visible(store.state.chatHistory || [])) 
   return { total: items.length, categories, expiresSoon };
 }
 
+/* Recent chat is temporary working context, never durable memory. Keep the
+   window small, workspace-scoped, redacted, and oldest-first so a model can
+   resolve short follow-ups without receiving the full 10-day history. */
+export function recentChatTurns(limit = 4) {
+  const boundedLimit = Math.min(Math.max(Number(limit) || 4, 1), 6);
+  return pruneChatHistory(visible(store.state.chatHistory || []))
+    .slice(0, boundedLimit)
+    .reverse()
+    .map((entry) => ({
+      user: sanitizeMemoryText(entry.prompt).slice(0, 420),
+      assistant: sanitizeMemoryText(entry.reply).slice(0, 520),
+    }))
+    .filter((entry) => entry.user && entry.assistant && entry.assistant !== FAILED_HISTORY_REPLY);
+}
+
 /* ---------------- derived: money ---------------- */
 export function moneyView() {
   const props = visible(store.state.proposals);

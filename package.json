@@ -11,6 +11,7 @@
     "build": "npm run build --workspaces --if-present",
     "dev:server": "npm run dev --workspace @phantomforce/server",
     "test:intent": "node scripts/test-phantom-intent-router.mjs",
+    "test:dashboard-chat": "node scripts/test-dashboard-chat-quality.mjs && npm run test:instant-chat --workspace @phantomforce/server",
     "test:auth-boundaries": "node scripts/test-auth-boundaries.mjs",
     "test:memory": "node scripts/test-memory-retention.mjs",
     "test:content-planner": "node scripts/test-content-planner.mjs",

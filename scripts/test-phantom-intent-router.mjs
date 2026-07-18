@@ -236,9 +236,9 @@ const instantQuestion = await handleSmartCommand("what's your favorite food?");
 assert.equal(instantQuestion.say, "I'd pick tacos.");
 assert.equal(capturedChatBody.route_tier, "instant");
 assert.equal(capturedChatBody.requested_model, "gpt-5.5-instant");
-assert.deepEqual(capturedChatBody.allowed_providers, ["codex_cli"]);
-assert.equal(capturedChatBody.allow_provider_fallback, false);
-assert.ok(capturedChatBody.max_provider_ms <= 5000, "instant questions should cap provider time tightly");
+assert.deepEqual(capturedChatBody.allowed_providers, ["codex_cli", "local_ollama"]);
+assert.equal(capturedChatBody.allow_provider_fallback, true);
+assert.ok(capturedChatBody.max_provider_ms <= 3200, "instant questions should cap provider time tightly");
 globalThis.fetch = originalFetch;
 
 let broadChatBody = null;
@@ -278,7 +278,8 @@ globalThis.fetch = async (url, init) => {
 const degradedThought = await handleSmartCommand("why is Phantom not thinking properly?");
 globalThis.fetch = originalFetch;
 assert.doesNotMatch(degradedThought.say, /couldn't complete that just now/i, "provider all-failed must not surface as the final chat answer");
-assert.match(degradedThought.say, /take|ask|build|track|anything/i, "provider all-failed should degrade to the local operator path");
+assert.ok(degradedThought.say.trim().length > 20, "provider all-failed should still return a useful local answer");
+assert.doesNotMatch(degradedThought.say, /ledger|pipeline|cashflow|approvals? waiting|today's plan/i, "provider all-failed must not become an unrelated status dump");
 
 store.state.leads = [];
 store.state.tasks = [];
@@ -390,7 +391,7 @@ assert.ok(Array.isArray(store.state.vacationRuns), "vacationRuns state exists");
 
 assert.match(mainSrc, /Tell Phantom to create a task/i, "mission map should include the task creation keeper copy");
 assert.match(mainSrc, /data-map-prompt/i, "mission map should load task prompts into chat");
-assert.match(indexSrc, /data-map-open type="button">View mission business map/i, "right rail mission map button should open the map overlay");
+assert.match(indexSrc, /data-map-open type="button">Open operations map/i, "right rail operations map button should open the map overlay");
 assert.doesNotMatch(indexSrc, /data-open-ws="dashboard">View business map/i, "right rail mission map button should not navigate to an empty dashboard route");
 
 console.log("phantom intent router tests passed");

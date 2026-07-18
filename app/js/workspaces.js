@@ -9,12 +9,12 @@ import {
   PACKAGES, RETAINERS, FINANCE_CATEGORIES, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS, CHAT_HISTORY_RETENTION_DAYS,
   addMemory, toggleMemoryRemember, forgetMemory, forgetChatHistory, memoryStats, memoryRetention, chatHistoryStats, chatHistoryRetention,
   session,
-} from "./store.js?v=phantom-live-20260717-6";
+} from "./store.js?v=phantom-live-20260718-20";
 import {
   isDatabaseSession, canManageActiveOrg, fetchServerApprovals, decideServerRun,
   activeOrgId,
   fetchOrgCrm, saveOrgCrmSettings, createOrgCrmContact, pullOrgCrmContacts, updateOrgCrmContact, deleteOrgCrmContact,
-} from "./orgs.js?v=phantom-live-20260717-6";
+} from "./orgs.js?v=phantom-live-20260718-20";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -1003,74 +1003,92 @@ export function cadenceSuffix(cadence) {
   return cadence === "monthly" ? " / month" : cadence === "yearly" ? " / year" : "";
 }
 
-/* ---------------- store starters ----------------
-   Real, ready-to-sell page presets the prompt flow can drop in whole. The
-   first one sells Termina — our terminal organizer and AI prompter — as a
-   genuine digital product: no lorem, digital fulfillment, honest test-mode
-   checkout until payments are connected. */
+/* ---------------- public site starters ----------------
+   Real, ready-to-edit site presets the prompt flow can drop in whole. This
+   studio is for PhantomForce first: the default starter is the public
+   phantomforce.online site, with test checkout until payments are connected. */
 export const SITE_TEMPLATES = {
-  termina: {
-    id: "termina",
-    label: "Termina — terminal organizer & AI prompter",
-    title: "Termina — store",
+  phantomforce: {
+    id: "phantomforce",
+    label: "PhantomForce public site",
+    title: "PhantomForce — public site",
     kind: "Store",
-    sections: ["Hero", "Organize sessions", "AI prompt composer", "Works in every shell", "Pricing", "FAQ", "Store", "Checkout"],
+    sections: ["Home", "Platform", "Media Lab", "Websites", "Analytics", "PhantomPlay", "Pricing", "Store", "FAQ", "Contact", "Privacy", "Refunds", "Checkout"],
     design: {
-      brand: "Termina",
-      headline: "Your terminal, organized. Your prompts, on tap.",
-      subhead: "Termina keeps every project's shells, tabs, and AI prompts one keystroke away — stop losing sessions, stop retyping prompts, start shipping.",
-      offer: "Termina Personal — $29 once, yours forever. Termina Pro — $79/year with sync and shared prompt libraries.",
-      cta: "Get Termina",
+      brand: "PhantomForce",
+      headline: "Run your business with a phantom workforce.",
+      subhead: "Leads, content, websites, media, analytics, approvals, and delivery in one private command center.",
+      offer: "Start free, then upgrade when PhantomForce is ready to run more of the business with you.",
+      cta: "Start free",
       theme: "neon",
       style: "product",
       storeEnabled: true,
+      existingUrl: "phantomforce.online",
     },
     copy: {
-      "organize sessions": [
-        "Group tabs by project, not by accident. Termina saves every window, tab, and working directory as a named session — close your laptop mid-deploy and reopen exactly where you left off.",
-        "Pin the sessions you live in, search the ones you forgot, and jump between client work with a single shortcut. No more twelve identical tabs named zsh.",
+      platform: [
+        "PhantomForce gives each business one operating layer: intake, memory, client work, approvals, automation, and delivery stay connected instead of scattered across tools.",
+        "Every action is approval-gated where it matters. Phantom can draft, organize, review, and prepare work without silently publishing, charging, or changing anything risky.",
       ].join("\n"),
-      "ai prompt composer": [
-        "Stop retyping the same prompts into a chat window. The composer keeps your best prompts as reusable templates with variables — pipe in the current directory, the last command, or the text you just selected.",
-        "Send it to the model you already pay for, review the answer next to your shell, and paste the command back in without leaving the keyboard.",
+      "media lab": [
+        "Generate images, videos, and voice assets from the same workspace where the campaign will be edited and published.",
+        "Long-running media jobs move into Pending, finished assets land in Media Pool, and the editor keeps the customer creating instead of staring at a loading screen.",
       ].join("\n"),
-      "works in every shell": [
-        "bash, zsh, fish, PowerShell — Termina sits above your shell, not inside it. Your keybindings, sessions, and prompt templates follow you across machines, and everything works over SSH.",
-        "Nothing to install on the server, no plugins to break on update. If your shell runs, Termina organizes it.",
+      websites: [
+        "Describe the site once, then keep refining the live draft from the same prompt-driven editor.",
+        "PhantomForce keeps store products, checkout proof, public copy, and publishing approvals together so the site can keep improving without a second CMS.",
+      ].join("\n"),
+      analytics: [
+        "Connect social and web channels once, then let PhantomForce summarize what is working, what changed, and where attention is leaking.",
+        "The analytics view is built to become a combined command center, not a pile of disconnected platform screenshots.",
+      ].join("\n"),
+      phantomplay: [
+        "PhantomPlay gives the team a real break without leaving the workspace. Built-in games save progress, work offline, and stay separate from business execution.",
+        "The public site can show PhantomPlay as part of the product story while the app controls what modules each customer sees.",
       ].join("\n"),
       pricing: [
-        "Termina Personal — $29, one-time. One license for one human, every 1.x update included, all core features: sessions, the prompt composer, and cross-shell support.",
-        "Termina Pro — $79 per year. Everything in Personal, plus synced sessions across machines, shared prompt libraries for your team, and priority support.",
+        "Free Plan — see what PhantomForce looks like before committing.",
+        "Launch Sprint — hands-on setup for a serious first workspace.",
+        "Operator Support — monthly help keeping the system sharp, connected, and improving.",
       ].join("\n"),
       faq: [
-        "Is this a subscription?",
-        "Personal is a one-time purchase — pay once, keep it. Pro renews yearly, and if you stop renewing you keep everything Personal includes.",
-        "How is Termina delivered?",
-        "It's a digital download. Your license key and download link are emailed to the address you use at checkout — no shipping, nothing physical.",
-        "Which platforms are supported?",
-        "macOS, Windows, and Linux. One license covers all three.",
-        "Can I use my own AI provider?",
-        "Yes — bring your own API key. Your prompts go straight to your provider; Termina never proxies them through our servers.",
+        "Can I try it first?",
+        "Yes. The public site keeps the free plan visible so new customers can see the product before choosing a paid path.",
+        "Does PhantomForce replace my team?",
+        "No. It gives the business a smarter operating layer so people spend less time hunting, copying, waiting, and repeating.",
+        "Can it publish or charge without approval?",
+        "No. Risky actions stay approval-gated by design.",
+        "Is this the same site editor used for phantomforce.online?",
+        "Yes. Site Studio edits the public PhantomForce site starter first, then every change continues from that draft.",
       ].join("\n"),
     },
     products: [
       {
-        name: "Termina Personal",
-        price: 29,
-        cadence: "one_time",
+        name: "Free Plan",
+        price: 0,
+        cadence: "monthly",
         type: "digital",
-        desc: "One-time license for one person. Sessions, prompt composer, every shell — all 1.x updates included.",
+        desc: "Explore PhantomForce with a lightweight workspace before choosing a paid plan.",
         delivery_url: "",
-        delivery_note: "Digital delivery: your Termina license key and download link (macOS, Windows, Linux) are emailed to your checkout address within a few minutes.",
+        delivery_note: "Account access is created in app.phantomforce.online after signup.",
       },
       {
-        name: "Termina Pro",
-        price: 79,
-        cadence: "yearly",
+        name: "Launch Sprint",
+        price: 750,
+        cadence: "one_time",
         type: "digital",
-        desc: "Everything in Personal, plus synced sessions across machines, shared team prompt libraries, and priority support.",
+        desc: "Guided first setup for brand identity, workspace structure, modules, and launch-ready workflows.",
         delivery_url: "",
-        delivery_note: "Digital delivery: your Termina Pro license key and download link are emailed to your checkout address within a few minutes.",
+        delivery_note: "Delivery is scheduled after intake. PhantomForce support coordinates onboarding by email.",
+      },
+      {
+        name: "Operator Support",
+        price: 775,
+        cadence: "monthly",
+        type: "digital",
+        desc: "Monthly support to keep automations, content, analytics, websites, and delivery improving.",
+        delivery_url: "",
+        delivery_note: "Support access is confirmed after checkout and handled through the customer workspace.",
       },
     ],
   },
@@ -1101,8 +1119,8 @@ export function applySiteTemplate(site, templateId) {
 export function applyWebsitePrompt(site, promptText) {
   const prompt = String(promptText || "").trim();
   if (!site || !prompt) return "Tell Phantom what to change first.";
-  const design = ensureSiteDesign(site);
-  const siteStore = ensureSiteStore(site);
+  let design = ensureSiteDesign(site);
+  let siteStore = ensureSiteStore(site);
   const lower = prompt.toLowerCase();
   const quoted = prompt.match(/["“](.+?)["”]/)?.[1];
   /* "…headline to X and add a testimonials section" must not make the whole
@@ -1123,7 +1141,14 @@ export function applyWebsitePrompt(site, promptText) {
        prompts that merely mention it must edit, not clobber */
     if (site.templateId !== template.id && new RegExp(`\\b${template.id}\\b`, "i").test(prompt)) {
       applySiteTemplate(site, template.id);
-      return `Applied the ${template.label} starter: hero, feature sections, pricing, FAQ, and ${template.products.length} digital products wired for test checkout.`;
+      design = ensureSiteDesign(site);
+      siteStore = ensureSiteStore(site);
+      changed = `Applied the ${template.label} starter.`;
+      const hasCustomInstructions = /\b(include|add|change|set|use|remove|create|update|with)\b/i.test(prompt);
+      if (!hasCustomInstructions) {
+        return `${changed} Hero, feature sections, pricing, FAQ, and ${template.products.length} digital products are wired for test checkout.`;
+      }
+      break;
     }
   }
 
@@ -1766,7 +1791,7 @@ function renderMemory(el, rerender) {
       if (!brainPanel.open || brainPanel.dataset.mounted) return;
       brainPanel.dataset.mounted = "1";
       const mount = brainPanel.querySelector("[data-memory-brain-mount]");
-      import("./brain.js?v=phantom-live-20260717-6")
+      import("./brain.js?v=phantom-live-20260718-20")
         .then((mod) => { if (mount && mount.isConnected) mod.renderPhantomBrain(mount); })
         .catch(() => { if (mount) mount.innerHTML = `<p class="ws-note">The brain panel could not load. Check that the backend on the admin PC is running, then reopen this section.</p>`; });
     });

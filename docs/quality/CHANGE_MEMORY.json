@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "lastUpdated": "2026-07-16",
+  "lastUpdated": "2026-07-17",
   "purpose": "Release integrity ledger for PhantomForce decisions that must not disappear, regress, or be resurrected by stale worktrees.",
   "rules": [
     {
@@ -273,8 +273,8 @@
         },
         {
           "file": "server/src/phantom-ai/phantomplay-flagship.ts",
-          "pattern": "kingdom-breakers\\.html\\?v=1\\.0\\.2",
-          "description": "Server catalog points at the fixed Kingdom Breakers version."
+          "pattern": "kingdom-breakers\\.html\\?v=1\\.1\\.0",
+          "description": "Server catalog points at the latest fixed Kingdom Breakers version."
         }
       ],
       "forbiddenPatterns": [
@@ -511,6 +511,86 @@
           "file": "app/js/orgs.js",
           "pattern": "if \\(ctx\\.session\\?\\.localCustomer\\) return null;",
           "description": "Local customer entitlements must not be dropped."
+        }
+      ]
+    },
+    {
+      "id": "dashboard-chat-context-and-fast-routing",
+      "status": "active",
+      "title": "Dashboard chat keeps the thread and uses the lightest capable brain",
+      "ownerDecision": "Normal questions and short follow-ups use the instant route, carry only a small temporary recent-turn window, skip business pulse work, and never degrade into an unrelated ledger or pipeline status dump.",
+      "requiredPatterns": [
+        {
+          "file": "app/js/store.js",
+          "pattern": "export function recentChatTurns\\(limit = 4\\)",
+          "description": "Temporary recent turns are exposed as a bounded, workspace-scoped context window."
+        },
+        {
+          "file": "app/js/command.js",
+          "pattern": "conversation_history: recentConversation",
+          "description": "The dashboard sends recent temporary context with the current request."
+        },
+        {
+          "file": "server/src/index.ts",
+          "pattern": "if \\(adminRouteTier !== \"instant\"\\) try",
+          "description": "Instant casual chat skips organization pulse and opportunity lookups."
+        },
+        {
+          "file": "server/src/index.ts",
+          "pattern": "local_response: Boolean\\(localFallback\\)",
+          "description": "Provider failure returns a safe local answer without pretending a provider succeeded."
+        },
+        {
+          "file": "scripts/test-dashboard-chat-quality.mjs",
+          "pattern": "dashboard chat quality checks passed \\(\\$\\{casualPrompts.length\\} prompts\\)",
+          "description": "The full dashboard brain is exercised across more than twenty casual prompts."
+        }
+      ],
+      "forbiddenPatterns": [
+        {
+          "file": "app/js/command.js",
+          "pattern": "Right now:.*ledger empty",
+          "description": "Rejected generic fallback that replaced unrelated questions with business status."
+        }
+      ]
+    },
+    {
+      "id": "dashboard-one-brief-one-chat",
+      "status": "active",
+      "title": "Dashboard stays focused and sidebar utilities stay split",
+      "ownerDecision": "The dashboard presents one real organization brief, one primary Phantom chat, and the proof rail. Duplicate quick actions and the redundant chat utility row stay removed, while structural utilities remain in a dedicated bottom sidebar zone.",
+      "requiredPatterns": [
+        {
+          "file": "app/index.html",
+          "pattern": "data-dashboard-brief-metrics",
+          "description": "Dashboard has one real business snapshot above chat."
+        },
+        {
+          "file": "app/index.html",
+          "pattern": "data-nav-bottom",
+          "description": "Sidebar shell has a dedicated utility zone."
+        },
+        {
+          "file": "app/js/main.js",
+          "pattern": "const bottomItems = items\\.filter\\(\\(n\\) => n\\.navZone === \"bottom\"\\)",
+          "description": "Bottom-zone items render separately from business modules."
+        },
+        {
+          "file": "app/js/main.js",
+          "pattern": "function renderDashboardBrief\\(\\)",
+          "description": "Dashboard snapshot is derived from real local organization records."
+        }
+      ],
+      "forbiddenPatterns": [
+        {
+          "file": "app/index.html",
+          "pattern": "class=\"quick-card\"",
+          "description": "Duplicate dashboard quick-action panel must not return."
+        },
+        {
+          "file": "app/index.html",
+          "pattern": "class=\"chatbox-tools\"",
+          "description": "Redundant Memory, Prompt Library, and Map row must not return inside chat."
         }
       ]
     }

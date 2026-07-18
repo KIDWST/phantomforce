@@ -26,7 +26,7 @@ assert.match(worker, /memory:\s*\[[\s\S]*smallest durable memory update/u, "Memo
 assert.match(worker, /approvals:\s*\[[\s\S]*Never execute the underlying action/u, "Approvals fallback must not execute from the prompt result.");
 assert.match(worker, /workforce:\s*\[[\s\S]*proof that worker must return/u, "Workforce fallback must define proof requirements.");
 assert.match(worker, /phantomplay:\s*\[[\s\S]*same-workspace\/private-room boundaries/u, "PhantomPlay fallback must preserve private-room boundaries.");
-assert.match(worker, /leads:\s*\{[\s\S]*Build the prospect list/u, "Leads page must have a dedicated prospect-builder worker.");
+assert.match(worker, /leads:\s*\{[\s\S]*Run the CRM/u, "CRM actions must keep their dedicated worker route without relabeling prospects as clients.");
 assert.match(worker, /createCrmProspectBuildout/u, "Leads worker must reuse the CRM prospect buildout instead of duplicating lead logic.");
 assert.match(worker, /CRM_PAGE_ACTION_VERB[\s\S]*find[\s\S]*discover[\s\S]*source[\s\S]*identify/u, "Leads page prompt must understand find/discover/source client requests.");
 assert.match(worker, /CRM_PAGE_AUDIENCE[\s\S]*gyms\?[\s\S]*coaches\?[\s\S]*service compan/u, "Leads page prompt must understand real prospect categories, not only the word CRM.");
@@ -106,6 +106,6 @@ assert.ok(store.state.leads.some((lead) => /school|education/i.test(`${lead.name
 assert.ok(store.state.leads.some((lead) => /local service|gym|service/i.test(`${lead.name} ${lead.notes}`)), "Leads page prompt should include local service or gym prospects.");
 assert.ok(store.state.leads.every((lead) => /No external outreach|contact details|live relationship claims/i.test(lead.notes)), "CRM cards must not invent live contacts or outreach claims.");
 assert.ok(store.state.tasks.some((task) => /Qualify PhantomForce CRM prospect map/i.test(task.title)), "Leads page prompt should create a qualification task.");
-assert.match(pageAction.summary, /ready in Leads/i, "Leads page action should report visible CRM results.");
+assert.match(pageAction.summary, /ready in Clients/i, "CRM page action should report visible prospect lanes in Clients.");
 
 console.log("Page worker prompt checks passed.");

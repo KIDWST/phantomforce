@@ -1,12 +1,13 @@
 /* PhantomForce admin settings.
    Local UI preferences only: no provider calls, sends, uploads, or billing. */
 
-import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260717-6";
-import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260717-6";
-import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260717-6";
-import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260717-6";
-import { currentTenantId, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260717-6";
-import { DEFAULT_COMPANION_PREFS, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260717-6";
+import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260718-20";
+import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260718-20";
+import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260718-20";
+import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260718-20";
+import { fetchCustomerPlanPreview, fetchEntitlementsSummary, switchCustomerPlan } from "./orgs.js?v=phantom-live-20260718-20";
+import { currentTenantId, ctx, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260718-20";
+import { DEFAULT_COMPANION_PREFS, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260718-20";
 
 const AI_SETTINGS_KEY = "pf.operator.settings.v1";
 const SETTINGS_TAB_KEY = "pf.settings.tab.v1";
@@ -693,35 +694,99 @@ function renderCompanionTab() {
     </div>`;
 }
 
-function renderPlanAccessTab() {
-  const raw = session.get?.() || {};
-  const role = raw.orgRole || raw.role || "member";
-  const workspace = currentTenantId();
-  const writeAccess = raw.canWrite !== false;
+const PLAN_FEATURE_LABELS = {
+  chat: "AI chat",
+  mediaLab: "Media Lab",
+  websites: "Website builder",
+  websitePublishing: "Website publishing",
+  competitorIntelligence: "Customer intelligence",
+  advancedWorkflows: "Advanced automations",
+  phantomPlay: "PhantomPlay",
+};
+
+const PLAN_LIMIT_LABELS = {
+  seats: "Seats",
+  businesses: "Businesses",
+  mediaCreditsPerMonth: "Media credits/mo",
+  chatRequestsPerDay: "Chat/day",
+  agentRunsPerDay: "Agent runs/day",
+  storageMb: "Storage",
+  sitesPerOrg: "Sites",
+  competitorProfiles: "Competitors",
+};
+
+function formatPlanLimit(key, value) {
+  const amount = Number(value);
+  if (key === "storageMb" && Number.isFinite(amount)) return amount >= 1024 ? `${Math.round(amount / 1024)} GB` : `${amount} MB`;
+  if (Number.isFinite(amount) && amount >= 100000) return "Unlimited";
+  return String(value ?? "0");
+}
+
+function renderPlanCard(plan, currentKey, canSwitch) {
+  const current = plan.key === currentKey;
+  const limits = Object.entries(PLAN_LIMIT_LABELS)
+    .slice(0, 6)
+    .map(([key, label]) => `<span><b>${esc(label)}</b><i>${esc(formatPlanLimit(key, plan.limits?.[key]))}</i></span>`)
+    .join("");
+  const features = Object.entries(PLAN_FEATURE_LABELS)
+    .map(([key, label]) => `<span class="set-chip ${plan.features?.[key] === false ? "is-off" : "is-on"}">${plan.features?.[key] === false ? "Locked" : "Included"} · ${esc(label)}</span>`)
+    .join("");
   return `
-    <div class="set-section">
-      <div class="set-section-head">
-        <div>
-          <p class="set-eyebrow">Plan & access</p>
-          <h3>Subscription and permissions belong to the workspace.</h3>
-          <p class="set-note">Business owners manage the plan, team access, and module permissions here. Client pipeline work stays in Clients.</p>
+    <article class="set-choice-card set-plan-card ${current ? "is-selected" : ""}">
+      <div class="set-card-head"><span>${esc(plan.name || plan.key)}</span><b>${current ? "Current" : "Available"}</b></div>
+      <p>${esc(plan.description || "Customer operating tier")}</p>
+      <div class="set-status-grid set-context-grid">${limits}</div>
+      <div class="set-chip-row">${features}</div>
+      ${canSwitch ? `<button type="button" class="btn ${current ? "btn-quiet" : "btn-primary"}" data-plan-switch="${esc(plan.key)}" ${current ? "disabled" : ""}>${current ? "Using this tier" : `Switch to ${esc(plan.name || plan.key)}`}</button>` : ""}
+    </article>`;
+}
+
+async function renderPlanAccessTab(el, opts = {}) {
+  const localCustomer = Boolean(ctx.session?.localCustomer);
+  el.innerHTML = `<div class="set-section"><div class="cust-empty"><b>Loading plan access...</b><span>Reading the backend entitlement truth for this workspace.</span></div></div>`;
+  try {
+    const summary = localCustomer ? await fetchCustomerPlanPreview() : await fetchEntitlementsSummary();
+    const entitlements = summary?.entitlements || null;
+    if (!entitlements) {
+      el.innerHTML = `<div class="set-section"><div class="cust-empty"><b>Plan access is unavailable.</b><span>Reconnect the customer backend, then reopen this tab.</span></div></div>`;
+      return;
+    }
+    const plans = Array.isArray(summary.plans) && summary.plans.length
+      ? summary.plans
+      : [{ key: entitlements.planKey, name: entitlements.planName, description: entitlements.note, features: entitlements.features, limits: entitlements.limits }];
+    el.innerHTML = `
+      <div class="set-section">
+        <div class="set-section-head">
+          <div><p class="set-eyebrow">Plan & access</p><h3>${esc(entitlements.planName || entitlements.planKey || "Current tier")}</h3><p class="set-note">${localCustomer ? "Customer test mode: switch tiers instantly. Restrictions apply immediately; no charge or billing action runs." : "This workspace plan is assigned by the backend and is read-only here."}</p></div>
+          <span class="set-status-pill ${entitlements.canWrite === false ? "" : "is-on"}">${entitlements.canWrite === false ? "View only" : "Write access"}</span>
         </div>
-        <span class="set-status-pill ${writeAccess ? "is-on" : ""}">${writeAccess ? "Write access" : "View only"}</span>
+        <p class="set-note" data-plan-message></p>
       </div>
-      <div class="set-grid set-grid-two">
-        <article class="set-info-card">
-          <p class="set-eyebrow">Workspace</p>
-          <h3>${esc(workspace)}</h3>
-          <p class="set-note">This is the active organization context for permissions and module access.</p>
-        </article>
-        <article class="set-info-card">
-          <p class="set-eyebrow">Your role</p>
-          <h3>${esc(role)}</h3>
-          <p class="set-note">Owners and admins can manage workspace setup, employees, modules, and approval rules.</p>
-        </article>
-      </div>
-      <p class="set-note">No billing provider action runs from this screen. Live subscription writes stay server-controlled and approval-aware.</p>
-    </div>`;
+      <div class="set-section">
+        <div class="set-card-head"><span>Tier simulator</span><b>${localCustomer ? "Live test" : "Read-only"}</b></div>
+        <div class="set-choice-grid set-plan-grid">${plans.map((plan) => renderPlanCard(plan, entitlements.planKey, localCustomer)).join("")}</div>
+      </div>`;
+    const message = el.querySelector("[data-plan-message]");
+    el.querySelectorAll("[data-plan-switch]").forEach((button) => {
+      button.onclick = async () => {
+        button.disabled = true;
+        if (message) message.textContent = `Switching to ${button.textContent.replace(/^Switch to\s+/u, "")}...`;
+        const result = await switchCustomerPlan(button.dataset.planSwitch);
+        if (!result.ok) {
+          button.disabled = false;
+          if (message) message.textContent = `Plan switch failed: ${result.error || "server refused the change"}.`;
+          return;
+        }
+        const current = session.get?.() || {};
+        session.set?.({ ...current, canWrite: result.entitlements?.canWrite });
+        if (ctx.session) ctx.session = { ...ctx.session, canWrite: result.entitlements?.canWrite };
+        if (typeof opts.onWorkspaceApplied === "function") opts.onWorkspaceApplied(result.entitlements);
+        await renderPlanAccessTab(el, opts);
+      };
+    });
+  } catch (error) {
+    el.innerHTML = `<div class="set-section"><div class="cust-empty"><b>Plan access could not load.</b><span>${esc(error instanceof Error ? error.message : "Check the backend connection and try again.")}</span></div></div>`;
+  }
 }
 
 function selectedMemberHelp(module) {
@@ -850,6 +915,7 @@ export function renderOperatorSettings(el, opts = {}) {
   const workspaceMountId = `workspace-studio-${Math.random().toString(36).slice(2)}`;
   const modulesMountId = `workspace-modules-${Math.random().toString(36).slice(2)}`;
   const organizationMountId = `organization-${Math.random().toString(36).slice(2)}`;
+  const planMountId = `plan-access-${Math.random().toString(36).slice(2)}`;
   const initialTab = opts.initialTab && SETTINGS_TABS.some((tab) => tab.id === opts.initialTab) ? opts.initialTab : null;
   const activeTab = initialTab || loadSettingsTab();
   const activeContext = SETTINGS_CONTEXT[activeTab];
@@ -861,7 +927,7 @@ export function renderOperatorSettings(el, opts = {}) {
     chat: () => renderChatBehaviorTab(settings),
     clientsetup: () => `<div id="${clientSetupMountId}" class="set-client-setup-mount"></div>`,
     organization: () => `<div id="${organizationMountId}" class="set-workspace-mount"></div>`,
-    plan: () => renderPlanAccessTab(),
+    plan: () => `<div id="${planMountId}" class="set-workspace-mount"></div>`,
     workspace: () => `<div id="${workspaceMountId}" class="set-workspace-mount"></div>`,
     modules: () => `<div id="${modulesMountId}" class="set-workspace-mount"></div>`,
     companion: () => renderCompanionTab(),
@@ -1064,6 +1130,9 @@ export function renderOperatorSettings(el, opts = {}) {
 
   const organizationMount = el.querySelector(`#${organizationMountId}`);
   if (organizationMount) renderOrganizationPanel(organizationMount, opts);
+
+  const planMount = el.querySelector(`#${planMountId}`);
+  if (planMount) renderPlanAccessTab(planMount, opts);
 
   if (activeTab === "model" && settings.selectedProviders.includes("local") && !localModelStatus.loaded && !localModelStatus.loading) {
     refreshLocalModels(el, opts);

@@ -47,6 +47,7 @@ import {
   getAccessSession,
   issueAccessSessionToken,
   listAccessSessions,
+  mintAccessSessionToken,
   mintDatabaseSessionToken,
   readBearerToken,
   requireAdminAccessSession,
@@ -86,6 +87,21 @@ import {
   verifyTwoFactorLogin,
 } from "./access/user-accounts.js";
 import {
+  LOCAL_CUSTOMER_SESSION_PREFIX,
+  assignLocalCustomerPlan,
+  completeLocalCustomerPasswordReset,
+  getLocalCustomerPlanSummary,
+  initializeLocalCustomerAuthState,
+  listLocalCustomerPlanDefinitions,
+  localCustomerAuthEnabled,
+  localCustomerAuthStorePath,
+  loginLocalCustomer,
+  registerLocalCustomer,
+  requestLocalCustomerPasswordReset,
+  resolveLocalCustomerSession,
+  revokeLocalCustomerSession,
+} from "./access/local-customer-accounts.js";
+import {
   assignOrgPlan,
   checkSeatLimit,
   checkUsageLimit,
@@ -123,6 +139,7 @@ import {
   canUseSessionOnPublicHost,
   filterSessionsForPublicHost,
   publicHostFromHeaders,
+  publicHostScope,
   PUBLIC_WEB_ORIGINS,
 } from "./access/public-hosts.js";
 import {
@@ -139,7 +156,7 @@ import { getBillingProviderStatus } from "./access/billing-provider.js";
 import { buildDeploymentModelStatus } from "./access/deployment-model.js";
 import { paywallPreHandler } from "./access/paywall-guard.js";
 import { getPaywallDecision } from "./access/paywall.js";
-import { prisma } from "./access/prisma-runtime.js";
+import { isDatabaseReachable, prisma } from "./access/prisma-runtime.js";
 import { listSubscriptions, setSubscription } from "./access/subscription-store.js";
 import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import { createReadStream, existsSync } from "node:fs";
@@ -176,6 +193,7 @@ import {
 import { buildHermesLiveCallReceiptContract } from "./phantom-ai/hermes-live-receipts.js";
 import { buildHermesInteractionMemoryPreview } from "./phantom-ai/hermes-interaction-memory.js";
 import { recallHermesInteractionMemory } from "./phantom-ai/hermes-interaction-recall.js";
+import { buildInstantChatFallbackReply } from "./phantom-ai/instant-chat-fallback.js";
 import { buildOpsDashboardContext } from "./phantom-ai/ops-context.js";
 import { buildAgentWorkforceStatus } from "./phantom-ai/agent-workforce.js";
 import {
@@ -423,6 +441,29 @@ import {
   publicClientSetupDocument,
   saveClientSetupSlot,
 } from "./client-setup/client-setup-store.js";
+import {
+  createCrmLead,
+  deleteCrmLead,
+  getCrmPipelineDocument,
+  publicCrmPipelineDocument,
+  updateCrmLead,
+  upsertCrmProspectLanes,
+} from "./crm/crm-pipeline-store.js";
+import {
+  createProposalDraft,
+  deleteProposalDraft,
+  getProposalDocument,
+  publicProposalDocument,
+  updateProposalDraft,
+} from "./proposals/proposal-store.js";
+import {
+  createWorkspaceApproval,
+  decideWorkspaceApproval,
+  deleteWorkspaceApproval,
+  getWorkspaceApprovalDocument,
+  publicWorkspaceApprovalDocument,
+} from "./workspace-approvals/workspace-approval-store.js";
+import { buildManagedGrowthReport } from "./managed-growth/managed-growth-report.js";
 
 const host = process.env.HOST ?? "127.0.0.1";
 const port = Number(process.env.PORT ?? 5190);
@@ -483,6 +524,24 @@ const ClientSetupSaveBodySchema = z.object({
   tenant_id: z.string().trim().max(80).optional(),
   slot: z.unknown(),
 });
+const CrmLeadParamsSchema = z.object({ leadId: z.string().trim().min(1).max(120) });
+const ProposalParamsSchema = z.object({ proposalId: z.string().trim().min(1).max(120) });
+const WorkspaceApprovalParamsSchema = z.object({ approvalId: z.string().trim().min(1).max(120) });
+const WorkspaceRecordCreateBodySchema = z.object({
+  tenant_id: z.string().trim().max(80).optional(),
+  lead: z.unknown().optional(),
+  proposal: z.unknown().optional(),
+  approval: z.unknown().optional(),
+});
+const WorkspaceRecordPatchBodySchema = z.object({
+  tenant_id: z.string().trim().max(80).optional(),
+  patch: z.unknown(),
+});
+const CrmProspectLanesBodySchema = z.object({
+  tenant_id: z.string().trim().max(80).optional(),
+  prompt: z.string().trim().max(1200).optional().default(""),
+  leads: z.array(z.unknown()).max(12),
+});
 const SocialAnalyticsSyncSchema = z.object({
   platform: z.enum(["youtube", "instagram", "facebook", "tiktok", "x", "linkedin", "pinterest"]),
 });
@@ -522,6 +581,20 @@ function canManageWorkspaceModules(session: AccessSession, tenantId: string) {
   const ownTenant = session.orgId || session.clientId;
   return ownTenant === tenantId && (session.orgRole === "owner" || session.orgRole === "admin");
 }
+
+function canWriteCrm(session: AccessSession) {
+  return Boolean(session.canManageAccess || session.isSuperAdmin || session.orgId || session.clientId);
+}
+
+function canDecideWorkspaceApprovals(session: AccessSession, tenantId: string) {
+  return canManageWorkspaceModules(session, tenantId);
+}
+
+const workspaceRecordSafety = {
+  provider_called: false,
+  outbound_action_executed: false,
+  public_exposure_changed: false,
+} as const;
 
 async function moduleAccessForSession(session: AccessSession, moduleId: string, requestedTenantId?: unknown) {
   const tenantId = customizationTenantForSession(session, typeof requestedTenantId === "string" ? requestedTenantId : undefined);
@@ -565,15 +638,20 @@ await app.register(cors, {
   allowedHeaders: ["Content-Type", AUTHORIZATION_HEADER, SESSION_HEADER],
 });
 
-/* Database-auth sessions resolve from Postgres per request. This hook runs
-   BEFORE the paywall so the paywall sees the real entitlement-bearing
-   session. Signature and expiry are verified before any DB lookup. */
+/* Resolve database and private local-customer sessions before the paywall so
+   every route sees server-owned identity and entitlements. */
 app.addHook("preHandler", async (request) => {
-  if (!databaseAuthEnabledForSessions()) return;
   const sid = verifyAccessSessionTokenSid(readBearerToken(request));
-  if (!sid || !sid.startsWith(DB_SESSION_PREFIX)) return;
-  const session = await resolveDatabaseSession(sid);
-  if (session) attachDatabaseSession(request, session);
+  if (!sid) return;
+  if (sid.startsWith(DB_SESSION_PREFIX) && databaseAuthEnabledForSessions()) {
+    const session = await resolveDatabaseSession(sid);
+    if (session) attachDatabaseSession(request, session);
+    return;
+  }
+  if (sid.startsWith(LOCAL_CUSTOMER_SESSION_PREFIX) && localCustomerAuthEnabled()) {
+    const session = await resolveLocalCustomerSession(sid);
+    if (session) attachDatabaseSession(request, session);
+  }
 });
 
 // Un-bypassable paywall: free/anonymous sessions may view but not mutate.
@@ -778,6 +856,7 @@ try {
   await initializeClientAccessState();
   await initializeAccessIdentityState();
   await initializeDatabaseAuthState();
+  await initializeLocalCustomerAuthState();
   await initializeAccessWorkflowState();
   await rehydrateAgentRuns();
   /* the publish executor talks to Postgres — register only when configured */
@@ -956,6 +1035,208 @@ app.post("/api/client-setup/slots/:slotId", async (request, reply) => {
     document: publicClientSetupDocument(result.document),
     slot: result.slot,
     can_manage: true,
+    provider_called: false,
+    outbound_action_executed: false,
+  };
+});
+
+app.get("/api/crm/leads", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const parsed = CustomizationTenantQuerySchema.safeParse(request.query ?? {});
+  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
+  const tenantId = customizationTenantForSession(session, parsed.data.tenant_id);
+  const document = await getCrmPipelineDocument(tenantId, session.id);
+  return { ok: true, tenant_id: tenantId, document: publicCrmPipelineDocument(document), ...workspaceRecordSafety };
+});
+
+app.post("/api/crm/leads", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  if (!canWriteCrm(session)) return reply.status(403).send({ ok: false, error: "CRM write access is required." });
+  const parsed = WorkspaceRecordCreateBodySchema.safeParse(request.body ?? {});
+  if (!parsed.success || parsed.data.lead === undefined) {
+    return reply.status(400).send({ ok: false, error: parsed.success ? "A CRM lead is required." : parsed.error.flatten() });
+  }
+  const tenantId = customizationTenantForSession(session, parsed.data.tenant_id);
+  const result = await createCrmLead({ tenantId, lead: parsed.data.lead, actor: session.id });
+  return { ok: true, tenant_id: tenantId, lead: result.result, document: publicCrmPipelineDocument(result.document), ...workspaceRecordSafety };
+});
+
+app.post("/api/crm/prospect-lanes", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  if (!canWriteCrm(session)) return reply.status(403).send({ ok: false, error: "CRM write access is required." });
+  const parsed = CrmProspectLanesBodySchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
+  const tenantId = customizationTenantForSession(session, parsed.data.tenant_id);
+  const result = await upsertCrmProspectLanes({ tenantId, leads: parsed.data.leads, actor: session.id });
+  return {
+    ok: true,
+    tenant_id: tenantId,
+    prompt: parsed.data.prompt,
+    leads: result.result,
+    document: publicCrmPipelineDocument(result.document),
+    ...workspaceRecordSafety,
+  };
+});
+
+app.post("/api/crm/leads/:leadId", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  if (!canWriteCrm(session)) return reply.status(403).send({ ok: false, error: "CRM write access is required." });
+  const params = CrmLeadParamsSchema.safeParse(request.params ?? {});
+  const parsed = WorkspaceRecordPatchBodySchema.safeParse(request.body ?? {});
+  if (!params.success) return reply.status(400).send({ ok: false, error: params.error.flatten() });
+  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
+  const tenantId = customizationTenantForSession(session, parsed.data.tenant_id);
+  try {
+    const result = await updateCrmLead({ tenantId, leadId: params.data.leadId, patch: parsed.data.patch, actor: session.id });
+    return { ok: true, tenant_id: tenantId, lead: result.result, document: publicCrmPipelineDocument(result.document), ...workspaceRecordSafety };
+  } catch (error) {
+    return reply.status(404).send({ ok: false, error: error instanceof Error ? error.message : "CRM lead not found." });
+  }
+});
+
+app.delete("/api/crm/leads/:leadId", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  if (!canWriteCrm(session)) return reply.status(403).send({ ok: false, error: "CRM write access is required." });
+  const params = CrmLeadParamsSchema.safeParse(request.params ?? {});
+  const parsed = CustomizationTenantQuerySchema.safeParse(request.query ?? {});
+  if (!params.success) return reply.status(400).send({ ok: false, error: params.error.flatten() });
+  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
+  const tenantId = customizationTenantForSession(session, parsed.data.tenant_id);
+  const result = await deleteCrmLead({ tenantId, leadId: params.data.leadId, actor: session.id });
+  return { ok: true, tenant_id: tenantId, lead: result.result, document: publicCrmPipelineDocument(result.document), ...workspaceRecordSafety };
+});
+
+app.get("/api/proposals", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const parsed = CustomizationTenantQuerySchema.safeParse(request.query ?? {});
+  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
+  const tenantId = customizationTenantForSession(session, parsed.data.tenant_id);
+  const document = await getProposalDocument(tenantId, session.id);
+  return { ok: true, tenant_id: tenantId, document: publicProposalDocument(document), ...workspaceRecordSafety };
+});
+
+app.post("/api/proposals", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  if (!canWriteCrm(session)) return reply.status(403).send({ ok: false, error: "Proposal write access is required." });
+  const parsed = WorkspaceRecordCreateBodySchema.safeParse(request.body ?? {});
+  if (!parsed.success || parsed.data.proposal === undefined) {
+    return reply.status(400).send({ ok: false, error: parsed.success ? "A proposal draft is required." : parsed.error.flatten() });
+  }
+  const tenantId = customizationTenantForSession(session, parsed.data.tenant_id);
+  const result = await createProposalDraft({ tenantId, proposal: parsed.data.proposal, actor: session.id });
+  return { ok: true, tenant_id: tenantId, proposal: result.result, document: publicProposalDocument(result.document), ...workspaceRecordSafety };
+});
+
+app.post("/api/proposals/:proposalId", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  if (!canWriteCrm(session)) return reply.status(403).send({ ok: false, error: "Proposal write access is required." });
+  const params = ProposalParamsSchema.safeParse(request.params ?? {});
+  const parsed = WorkspaceRecordPatchBodySchema.safeParse(request.body ?? {});
+  if (!params.success) return reply.status(400).send({ ok: false, error: params.error.flatten() });
+  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
+  const tenantId = customizationTenantForSession(session, parsed.data.tenant_id);
+  try {
+    const result = await updateProposalDraft({ tenantId, proposalId: params.data.proposalId, patch: parsed.data.patch, actor: session.id });
+    return { ok: true, tenant_id: tenantId, proposal: result.result, document: publicProposalDocument(result.document), ...workspaceRecordSafety };
+  } catch (error) {
+    return reply.status(404).send({ ok: false, error: error instanceof Error ? error.message : "Proposal draft not found." });
+  }
+});
+
+app.delete("/api/proposals/:proposalId", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  if (!canWriteCrm(session)) return reply.status(403).send({ ok: false, error: "Proposal write access is required." });
+  const params = ProposalParamsSchema.safeParse(request.params ?? {});
+  const parsed = CustomizationTenantQuerySchema.safeParse(request.query ?? {});
+  if (!params.success) return reply.status(400).send({ ok: false, error: params.error.flatten() });
+  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
+  const tenantId = customizationTenantForSession(session, parsed.data.tenant_id);
+  const result = await deleteProposalDraft({ tenantId, proposalId: params.data.proposalId, actor: session.id });
+  return { ok: true, tenant_id: tenantId, proposal: result.result, document: publicProposalDocument(result.document), ...workspaceRecordSafety };
+});
+
+app.get("/api/workspace-approvals", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const parsed = CustomizationTenantQuerySchema.safeParse(request.query ?? {});
+  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
+  const tenantId = customizationTenantForSession(session, parsed.data.tenant_id);
+  const document = await getWorkspaceApprovalDocument(tenantId, session.id);
+  return { ok: true, tenant_id: tenantId, document: publicWorkspaceApprovalDocument(document), approval_execution_implemented: false, ...workspaceRecordSafety };
+});
+
+app.post("/api/workspace-approvals", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  if (!canWriteCrm(session)) return reply.status(403).send({ ok: false, error: "Approval request access is required." });
+  const parsed = WorkspaceRecordCreateBodySchema.safeParse(request.body ?? {});
+  if (!parsed.success || parsed.data.approval === undefined) {
+    return reply.status(400).send({ ok: false, error: parsed.success ? "An approval request is required." : parsed.error.flatten() });
+  }
+  const tenantId = customizationTenantForSession(session, parsed.data.tenant_id);
+  const result = await createWorkspaceApproval({ tenantId, approval: parsed.data.approval, actor: session.id });
+  return { ok: true, tenant_id: tenantId, approval: result.result, document: publicWorkspaceApprovalDocument(result.document), approval_execution_implemented: false, ...workspaceRecordSafety };
+});
+
+app.post("/api/workspace-approvals/:approvalId", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const params = WorkspaceApprovalParamsSchema.safeParse(request.params ?? {});
+  const parsed = WorkspaceRecordPatchBodySchema.safeParse(request.body ?? {});
+  if (!params.success) return reply.status(400).send({ ok: false, error: params.error.flatten() });
+  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
+  const tenantId = customizationTenantForSession(session, parsed.data.tenant_id);
+  if (!canDecideWorkspaceApprovals(session, tenantId)) {
+    return reply.status(403).send({ ok: false, error: "Approval decisions require an organization owner or administrator." });
+  }
+  try {
+    const result = await decideWorkspaceApproval({ tenantId, approvalId: params.data.approvalId, patch: parsed.data.patch, actor: session.id });
+    return { ok: true, tenant_id: tenantId, approval: result.result, document: publicWorkspaceApprovalDocument(result.document), approval_execution_implemented: false, ...workspaceRecordSafety };
+  } catch (error) {
+    return reply.status(404).send({ ok: false, error: error instanceof Error ? error.message : "Workspace approval not found." });
+  }
+});
+
+app.delete("/api/workspace-approvals/:approvalId", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const params = WorkspaceApprovalParamsSchema.safeParse(request.params ?? {});
+  const parsed = CustomizationTenantQuerySchema.safeParse(request.query ?? {});
+  if (!params.success) return reply.status(400).send({ ok: false, error: params.error.flatten() });
+  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
+  const tenantId = customizationTenantForSession(session, parsed.data.tenant_id);
+  if (!canDecideWorkspaceApprovals(session, tenantId)) {
+    return reply.status(403).send({ ok: false, error: "Deleting approvals requires an organization owner or administrator." });
+  }
+  const result = await deleteWorkspaceApproval({ tenantId, approvalId: params.data.approvalId, actor: session.id });
+  return { ok: true, tenant_id: tenantId, approval: result.result, document: publicWorkspaceApprovalDocument(result.document), approval_execution_implemented: false, ...workspaceRecordSafety };
+});
+
+app.get("/api/managed-growth/report", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const parsed = CustomizationTenantQuerySchema.safeParse(request.query ?? {});
+  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
+  const tenantId = customizationTenantForSession(session, parsed.data.tenant_id);
+  const [crm, proposals, approvals, clientSetup] = await Promise.all([
+    getCrmPipelineDocument(tenantId, session.id),
+    getProposalDocument(tenantId, session.id),
+    getWorkspaceApprovalDocument(tenantId, session.id),
+    getClientSetupDocument(tenantId, session.id),
+  ]);
+  return {
+    ok: true,
+    tenant_id: tenantId,
+    report: buildManagedGrowthReport({ tenantId, clientSetup, crm, proposals, approvals }),
     provider_called: false,
     outbound_action_executed: false,
   };
@@ -1148,11 +1429,25 @@ app.get("/downloads/*", async (request, reply) => {
 app.get("/sessions", async (request) => {
   const authConfiguration = getAccessAuthConfiguration();
   const publicHost = requestPublicHost(request);
+  const scope = publicHostScope(publicHost);
+  const localCustomerEnabled = localCustomerAuthEnabled();
+  const databaseReachable = authConfiguration.databaseAuthEnabled ? await isDatabaseReachable() : false;
+  const databaseLoginUsable = authConfiguration.databaseAuthEnabled && databaseReachable;
+  const customerAccountActionsEnabled = scope !== "admin" && (databaseLoginUsable || localCustomerEnabled);
 
   return {
     ok: true,
     auth: {
       ...authConfiguration,
+      databaseReachable,
+      customerAuthEnabled: databaseLoginUsable || localCustomerEnabled,
+      localCustomerAuthEnabled: localCustomerEnabled,
+      customerLoginEndpoint: scope !== "admin" && (databaseLoginUsable || localCustomerEnabled) ? "/auth/login" : undefined,
+      customerRegisterEndpoint: customerAccountActionsEnabled ? "/auth/register" : undefined,
+      customerPasswordResetRequestEndpoint: customerAccountActionsEnabled ? "/auth/password-reset/request" : undefined,
+      customerPasswordResetCompleteEndpoint: customerAccountActionsEnabled ? "/auth/password-reset/complete" : undefined,
+      localCustomerStoreConfigured: localCustomerEnabled,
+      localCustomerStorePath: localCustomerEnabled && publicHostScope(publicHost) === "local" ? localCustomerAuthStorePath() : undefined,
     },
     sessions: authConfiguration.ownerProductionAuthEnabled
       ? []
@@ -1272,6 +1567,19 @@ const DatabaseLoginSchema = z.object({
   password: z.string().min(1).max(200),
 });
 
+const CustomerRegisterSchema = z.object({
+  email: z.string().email().max(200),
+  password: z.string().min(8).max(200),
+  name: z.string().trim().max(120).optional(),
+  businessName: z.string().trim().max(120).optional(),
+});
+const CustomerPasswordResetRequestSchema = z.object({ email: z.string().email().max(200) });
+const CustomerPasswordResetCompleteSchema = z.object({
+  token: z.string().trim().min(20).max(240),
+  password: z.string().min(8).max(200),
+});
+const CustomerPlanPreviewSchema = z.object({ planKey: z.string().trim().min(1).max(60) });
+
 const SignupSchema = z.object({
   email: z.string().email().max(200),
   username: z.string().min(3).max(32).optional(),
@@ -1290,10 +1598,31 @@ function databaseAuthDisabled(reply: FastifyReply) {
   return reply.code(403).send({ ok: false, error: "Database auth is disabled.", auth: getAccessAuthConfiguration() });
 }
 
+function customerAuthForbiddenOnHost(request: FastifyRequest) {
+  return publicHostScope(requestPublicHost(request)) === "admin";
+}
+
+function localCustomerTokenResponse(session: AccessSession) {
+  const token = mintAccessSessionToken(session.id);
+  return token ? { ok: true as const, ...token, session, authMode: "local-customer", database: false } : undefined;
+}
+
 app.post("/auth/login", async (request, reply) => {
   const authConfiguration = getAccessAuthConfiguration();
   if (!authConfiguration.databaseAuthEnabled) {
-    return reply.code(403).send({ ok: false, error: "Database auth is disabled.", auth: authConfiguration });
+    if (!localCustomerAuthEnabled()) {
+      return reply.code(403).send({ ok: false, error: "Customer account login is not enabled on this backend.", auth: authConfiguration });
+    }
+    if (customerAuthForbiddenOnHost(request)) {
+      return reply.code(403).send({ ok: false, error: "Customer accounts cannot sign in on admin.phantomforce.online." });
+    }
+    const parsed = DatabaseLoginSchema.safeParse(request.body ?? {});
+    if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+    const localSession = await loginLocalCustomer(parsed.data.email, parsed.data.password);
+    if (!localSession) return reply.code(401).send({ ok: false, error: "Invalid email or password." });
+    const token = localCustomerTokenResponse(localSession);
+    if (!token) return reply.code(500).send({ ok: false, error: "Token minting unavailable." });
+    return token;
   }
   const parsed = DatabaseLoginSchema.safeParse(request.body ?? {});
   if (!parsed.success) {
@@ -1328,6 +1657,48 @@ app.post("/auth/login", async (request, reply) => {
     return reply.code(500).send({ ok: false, error: "Token minting unavailable." });
   }
   return { ok: true, ...token, session };
+});
+
+app.post("/auth/register", async (request, reply) => {
+  if (!localCustomerAuthEnabled()) {
+    return reply.code(403).send({ ok: false, error: "Customer account creation is not enabled on this backend." });
+  }
+  if (customerAuthForbiddenOnHost(request)) {
+    return reply.code(403).send({ ok: false, error: "Customer accounts cannot be created on admin.phantomforce.online." });
+  }
+  const parsed = CustomerRegisterSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  const result = await registerLocalCustomer(parsed.data);
+  if (!result.ok) return reply.code(result.error === "account_already_exists" ? 409 : 403).send({ ok: false, error: result.error });
+  const token = localCustomerTokenResponse(result.session);
+  if (!token) return reply.code(500).send({ ok: false, error: "Token minting unavailable." });
+  return token;
+});
+
+app.post("/auth/password-reset/request", async (request, reply) => {
+  if (!localCustomerAuthEnabled()) return reply.code(403).send({ ok: false, error: "Customer password reset is not enabled on this backend." });
+  if (customerAuthForbiddenOnHost(request)) return reply.code(403).send({ ok: false, error: "Customer password reset cannot run on admin.phantomforce.online." });
+  const parsed = CustomerPasswordResetRequestSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  const result = await requestLocalCustomerPasswordReset(parsed.data.email);
+  if (!result.ok) return reply.code(403).send({ ok: false, error: result.error });
+  return {
+    ok: true,
+    message: "If that account exists, a reset path is now available.",
+    resetToken: result.resetToken,
+    expiresAt: result.expiresAt,
+    tokenReturnedForTestOnly: Boolean(result.resetToken),
+  };
+});
+
+app.post("/auth/password-reset/complete", async (request, reply) => {
+  if (!localCustomerAuthEnabled()) return reply.code(403).send({ ok: false, error: "Customer password reset is not enabled on this backend." });
+  if (customerAuthForbiddenOnHost(request)) return reply.code(403).send({ ok: false, error: "Customer password reset cannot run on admin.phantomforce.online." });
+  const parsed = CustomerPasswordResetCompleteSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  const result = await completeLocalCustomerPasswordReset(parsed.data.token, parsed.data.password);
+  if (!result.ok) return reply.code(400).send({ ok: false, error: result.error });
+  return { ok: true };
 });
 
 app.post("/auth/2fa/verify", async (request, reply) => {
@@ -1381,6 +1752,10 @@ app.post("/auth/reset-password", async (request, reply) => {
 app.post("/auth/logout", async (request, reply) => {
   const session = requireAccessSession(request, reply);
   if (!session) return reply;
+  if (session.id.startsWith(LOCAL_CUSTOMER_SESSION_PREFIX)) {
+    await revokeLocalCustomerSession(session.id);
+    return { ok: true, revoked: true };
+  }
   const dbSession = asDatabaseSession(session);
   if (!dbSession) {
     return { ok: true, note: "Stateless session tokens expire on their own; nothing to revoke server-side." };
@@ -1394,7 +1769,9 @@ app.get("/auth/me", async (request, reply) => {
   if (!session) return reply;
   const dbSession = asDatabaseSession(session);
   if (!dbSession) {
-    return { ok: true, session, database: false };
+    const localCustomer = session.id.startsWith(LOCAL_CUSTOMER_SESSION_PREFIX);
+    const planSummary = localCustomer ? await getLocalCustomerPlanSummary(session).catch(() => undefined) : undefined;
+    return { ok: true, session, database: false, localCustomer, ...(planSummary ?? {}) };
   }
   const entitlements = dbSession.orgId ? await getOrgEntitlements(dbSession.orgId).catch(() => null) : null;
   return {
@@ -1427,6 +1804,37 @@ app.get("/auth/me", async (request, reply) => {
         }
       : null,
   };
+});
+
+app.get("/customer/plan-preview", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  if (customerAuthForbiddenOnHost(request)) {
+    return reply.code(403).send({ ok: false, error: "Customer plan testing is only available on the customer app." });
+  }
+  if (!session.id.startsWith(LOCAL_CUSTOMER_SESSION_PREFIX)) {
+    return reply.code(403).send({ ok: false, error: "Plan preview switching is only available for local customer test accounts." });
+  }
+  const summary = await getLocalCustomerPlanSummary(session);
+  if (!summary) return reply.code(404).send({ ok: false, error: "customer_account_not_found" });
+  return { ok: true, ...summary };
+});
+
+app.post("/customer/plan-preview", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  if (customerAuthForbiddenOnHost(request)) {
+    return reply.code(403).send({ ok: false, error: "Customer plan testing is only available on the customer app." });
+  }
+  const parsed = CustomerPlanPreviewSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  const result = await assignLocalCustomerPlan(session, parsed.data.planKey);
+  if (!result.ok) {
+    const code = result.error === "unknown_public_plan" ? 400 : 403;
+    const available = "available" in result ? result.available : listLocalCustomerPlanDefinitions().map((plan) => plan.key);
+    return reply.code(code).send({ ok: false, error: result.error, available });
+  }
+  return { ok: true, entitlements: result.entitlements, plans: result.plans, metrics: result.metrics, seats: result.seats };
 });
 
 app.post("/auth/2fa/setup", async (request, reply) => {
@@ -3057,6 +3465,33 @@ function buildModelRouterRequestFromBody(
     tenant_override_blocked: memoryScope.tenant_override_blocked,
     actor_override_blocked: memoryScope.actor_override_blocked,
   };
+}
+
+type RecentChatTurn = {
+  user: string;
+  assistant: string;
+};
+
+function parseRecentConversation(value: unknown): RecentChatTurn[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .slice(-6)
+    .flatMap((entry): RecentChatTurn[] => {
+      if (!entry || typeof entry !== "object") return [];
+      const source = entry as Record<string, unknown>;
+      if (typeof source.user !== "string" || typeof source.assistant !== "string") return [];
+      const user = redactSensitiveText(source.user).replace(/\s+/g, " ").trim().slice(0, 420);
+      const assistant = redactSensitiveText(source.assistant).replace(/\s+/g, " ").trim().slice(0, 520);
+      return user && assistant ? [{ user, assistant }] : [];
+    });
+}
+
+function buildInstantConversationContext(turns: RecentChatTurn[]) {
+  const rule = "Answer the current casual request directly. Never volunteer ledger, pipeline, accounting, approvals, or dashboard status unless the current request explicitly asks for it.";
+  if (!turns.length) return `Fast casual chat. No business memory required. ${rule}`;
+  const transcript = turns.map((turn, index) =>
+    `Turn ${index + 1} user: ${turn.user}\nTurn ${index + 1} assistant: ${turn.assistant}`).join("\n");
+  return `Fast casual chat. The following is temporary recent conversation, not saved memory. Use it only to resolve references such as why, that, or tell me more.\n${transcript}\n${rule}`;
 }
 
 function buildMemoryScopeProof(normalized: {
@@ -7953,6 +8388,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
     user_request?: unknown;
     business_summary?: unknown;
     module_data?: unknown;
+    conversation_history?: unknown;
   };
   const providerChoice = parsePhantomAiChatProvider(body.provider);
 
@@ -7991,6 +8427,18 @@ app.post("/phantom-ai/chat", async (request, reply) => {
   const maxProviderMs = parseAdminMaxProviderMs(body.max_provider_ms);
   const allowProviderFallback = parseAllowProviderFallback(body.allow_provider_fallback, adminRouteTier);
   const allowedAdminProviders = parseAllowedAdminProviders(body.allowed_providers);
+  const recentConversation = parseRecentConversation(body.conversation_history);
+  if (adminRouteTier !== "instant" && recentConversation.length && !normalized.module_data.some((module) => module.module === "recent_conversation")) {
+    normalized.module_data.push({
+      module: "recent_conversation",
+      summary: `${recentConversation.length} recent temporary chat turn(s). Use only to resolve the current request; do not treat this as durable memory or business status.`,
+      items: recentConversation.slice(-5).map((turn) => ({
+        title: turn.user.slice(0, 120),
+        status: "temporary context",
+        detail: turn.assistant.slice(0, 220),
+      })),
+    });
+  }
   /* Asset Cloud retrieval — structured and permission-aware. Matching
      assets from THIS org's library ride into context as one compact module
      (never whole folders); assets flagged aiReferenceAllowed:false or
@@ -8018,7 +8466,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
   /* Workspace pulse — live org state (approvals waiting, failed runs,
      competitor coverage, asset inventory) so Phantom answers from what the
      business is ACTUALLY doing right now, not memory alone. Additive only. */
-  try {
+  if (adminRouteTier !== "instant") try {
     const dbSession = asDatabaseSession(session);
     const ciAccess = await competitorIntelligenceAccess(session);
     const pulse = await getOrganizationPulse(session, {
@@ -8057,14 +8505,14 @@ app.post("/phantom-ai/chat", async (request, reply) => {
       businessName: normalized.business_name,
       taskType: normalized.task_type,
       userMessage: normalized.user_request,
-      compactContext: "Fast casual chat. No business memory required unless the user explicitly asks for PhantomForce, a client, an organization, files, money, security, or current/live facts.",
+      compactContext: buildInstantConversationContext(recentConversation),
       sensitivityLevel: normalized.sensitivity_level,
       approvalRequired: false,
       executionMode: adminExecutionMode,
       requestedModelId,
       routeTier: adminRouteTier,
       maxProviderMs,
-    }, allowedAdminProviders, { allowFallback: false });
+    }, allowedAdminProviders, { allowFallback: allowProviderFallback });
     const respondingProviderId = instantChat.providerId;
     const respondingLane = adminPhantomAiLaneForProviderId(respondingProviderId);
     const respondingLabel = adminPhantomAiProviderLabel(respondingProviderId);
@@ -8077,6 +8525,9 @@ app.post("/phantom-ai/chat", async (request, reply) => {
       "network_call_performed" in modelResult ? Boolean(modelResult.network_call_performed) : providerCalled;
     const requestBodyPrepared = "request_body_prepared" in modelResult ? Boolean(modelResult.request_body_prepared) : false;
     const allProvidersFailed = instantChat.allFailed;
+    const localFallback = allProvidersFailed
+      ? buildInstantChatFallbackReply(normalized.user_request, normalized.business_name, recentConversation)
+      : null;
 
     return {
       ok: true,
@@ -8086,12 +8537,10 @@ app.post("/phantom-ai/chat", async (request, reply) => {
       admin_model_label: respondingLabel,
       admin_model_requested_lane: publicAdminPhantomAiModelLane(adminModelLane),
       admin_execution_mode: adminExecutionMode,
-      model_id: "model_id" in modelResult ? modelResult.model_id : respondingProviderId,
+      model_id: localFallback?.model_id || ("model_id" in modelResult ? modelResult.model_id : respondingProviderId),
       message: {
         role: "assistant",
-        content: allProvidersFailed
-          ? buildAdminPhantomAiAllProvidersFailedMessage()
-          : resultOutput,
+        content: localFallback?.output_text || resultOutput,
       },
       private_brain:
         respondingProviderId === "codex_cli" && "provider_id" in modelResult && modelResult.provider_id === "codex_cli"
@@ -8108,14 +8557,15 @@ app.post("/phantom-ai/chat", async (request, reply) => {
             }
           : null,
       fallback: {
-        used: false,
+        used: instantChat.fallbackUsed || Boolean(localFallback),
         all_failed: allProvidersFailed,
+        local_response: Boolean(localFallback),
         requested_provider: adminPhantomAiProviderLabel(instantChat.primaryProviderId),
         responding_provider: respondingLabel,
         attempts: instantChat.attempts,
       },
       hermes: {
-        context_used: false,
+        context_used: recentConversation.length > 0,
         ledger_written: false,
         provider_route: respondingProviderRoute,
         route_tier: "instant",
@@ -8126,7 +8576,9 @@ app.post("/phantom-ai/chat", async (request, reply) => {
         suggested_intent: normalized.task_type,
         risk_level: "low",
         needs_approval: false,
-        micro_prompt: "Fast casual chat; business memory intentionally skipped.",
+        micro_prompt: recentConversation.length
+          ? "Fast casual chat with temporary recent-turn context; saved business memory intentionally skipped."
+          : "Fast casual chat; saved business memory intentionally skipped.",
         relevant_memory_count: 0,
         used_memory_ids: [],
         active_rules: [],
@@ -8138,6 +8590,10 @@ app.post("/phantom-ai/chat", async (request, reply) => {
         recalled_memory_count: 0,
         compact_context_chars: 0,
         redaction: "not_used_for_instant_route",
+      },
+      conversation_context: {
+        temporary_turn_count: recentConversation.length,
+        durable_memory_used: false,
       },
       provider_request_body_created: requestBodyPrepared,
       live_provider_called: providerCalled,

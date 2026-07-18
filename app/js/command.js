@@ -9,11 +9,12 @@
 import {
   store, uid, visible, currentWs, currentTenantId, isAdmin, isOwnerOperator, pushActivity, moneyView, todaysPlan,
   PACKAGES, RETAINERS, VACATION_POLICY, fmtMoney, statusLabel, daysUntil, memoryStats, chatHistoryStats,
+  recentChatTurns,
   ctx, session, loadPhantomLoop, savePhantomLoop, loopProviderName, modelDisplayLabel,
   getPhantomLaneTarget, loadPhantomLaneConfig, workspaceStorageGetItem, wsName,
-} from "./store.js?v=phantom-live-20260717-6";
-import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260717-6";
-import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260717-6";
+} from "./store.js?v=phantom-live-20260718-20";
+import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260718-20";
+import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260718-20";
 const classifyPhantomIntent = (text) => deriveActionContract(classifyRaw(text));
 
 /* Cross-surface handoff: chat tells the Websites page which project to focus
@@ -91,7 +92,7 @@ const CODEX_BACKEND_MODEL_BY_ALIAS = Object.freeze({
   "codex-high": "gpt-5.6-sol",
 });
 const INSTANT_CHAT_MODEL = "gpt-5.5-instant";
-const INSTANT_CHAT_MAX_PROVIDER_MS = 5000;
+const INSTANT_CHAT_MAX_PROVIDER_MS = 3200;
 const INSTANT_CHAT_ALLOWED_INTENTS = new Set(["identity", "capability", "question", "chat"]);
 const INSTANT_CHAT_BLOCKLIST = /\b(?:build|create|draft|write|make|fix|debug|code|implement|analy[sz]e|research|compare|summari[sz]e|plan|strategy|proposal|website|site|content|video|image|media|schedule|client|lead|transaction|accounting|bank|security|deploy|send|post|upload|delete|weather|forecast|current|latest|today|tomorrow|yesterday|price|stock|law|legal|medical|diagnosis|contract|tenant|isolation|phantomforce)\b/i;
 const INSTANT_CHAT_SIGNAL = /\b(?:favorite|do you like|would you rather|tell me a joke|joke|how are you|what'?s your|what is your|who are you|are you|can you|what is \d|what'?s \d)\b/i;
@@ -115,11 +116,12 @@ function isInstantChatRequest(raw, intent) {
   if (intent.needsLiveData || intent.requiresAdminApproval || intent.shouldCreateTask || intent.shouldCreateAutomation) return false;
   if (text.length > 140 || countWords(text) > 18) return false;
   if (INSTANT_CHAT_BLOCKLIST.test(text)) return false;
-  return INSTANT_CHAT_SIGNAL.test(text) || (intent.primaryIntent === "chat" && countWords(text) <= 10);
+  return INSTANT_CHAT_SIGNAL.test(text)
+    || (["chat", "question"].includes(intent.primaryIntent) && countWords(text) <= 10);
 }
 
 function shouldUseDeepReasoning(raw, intent) {
-  return ["brainstorm", "plan", "feedback"].includes(intent.primaryIntent) || DEEP_THINKING_SIGNAL.test(String(raw || ""));
+  return ["brainstorm", "plan"].includes(intent.primaryIntent) || DEEP_THINKING_SIGNAL.test(String(raw || ""));
 }
 
 function providerIdForRequest(settings, intent, deepReasoning = false) {
@@ -169,12 +171,14 @@ function chatRouteProfileForRequest(raw, intent, settings) {
     const providerId = settings.providerMode === "smart" && selected.includes("codex")
       ? "codex"
       : normalProviderId;
+    const instantProviders = [providerId];
+    if (settings.providerMode === "smart" && providerId !== "local" && selected.includes("local")) instantProviders.push("local");
     return {
       tier: "instant",
       providerId,
       requestedModel: selectedModelForProvider(settings, providerId, { tier: "instant" }),
-      allowedProviders: [PROVIDER_TO_BACKEND[providerId]].filter(Boolean),
-      allowFallback: false,
+      allowedProviders: instantProviders.map((id) => PROVIDER_TO_BACKEND[id]).filter(Boolean),
+      allowFallback: instantProviders.length > 1,
       maxProviderMs: INSTANT_CHAT_MAX_PROVIDER_MS,
     };
   }
@@ -199,7 +203,7 @@ function canAskHermes(intent, settings) {
 
 /* Business context for the live brain, in the exact shape the server's
    parseContextModuleData accepts (max 8 modules, 5 items each). */
-function buildContextModules(settings) {
+function buildContextModules(settings, recentConversation = recentChatTurns(4)) {
   const ws = currentWs();
   const memories = visible(store.state.memory || []);
   const topMemories = [
@@ -223,6 +227,17 @@ function buildContextModules(settings) {
         title: String(mem.title || "").slice(0, 90),
         status: mem.category || "note",
         detail: String(mem.summary || mem.text || "").slice(0, 200),
+      })),
+    });
+  }
+  if (recentConversation.length) {
+    modules.push({
+      module: "recent_conversation",
+      summary: `${recentConversation.length} recent temporary chat turn${recentConversation.length === 1 ? "" : "s"}. Use only to resolve references in the current request; never turn them into ledger, pipeline, or status answers unless asked.`,
+      items: recentConversation.slice(-4).map((turn) => ({
+        title: String(turn.user || "").slice(0, 90),
+        status: "temporary context",
+        detail: String(turn.assistant || "").slice(0, 200),
       })),
     });
   }
@@ -256,6 +271,7 @@ async function askHermesBrain(raw, intent, settings) {
   if (token) headers.Authorization = `Bearer ${token}`;
   const loop = loadPhantomLoop();
   const requestedProviderId = routeProfile.providerId;
+  const recentConversation = recentChatTurns(4);
   try {
     const response = await fetch("/phantom-ai/chat", {
       method: "POST",
@@ -285,7 +301,8 @@ async function askHermesBrain(raw, intent, settings) {
            Now it carries the active business, the owner's actual saved
            memories (workspace-scoped, pinned first), money and today's plan
            — real context, not just counts. */
-        module_data: buildContextModules(settings),
+        module_data: buildContextModules(settings, recentConversation),
+        conversation_history: recentConversation,
         phantom_loop: loop.enabled ? {
           target_provider: loop.targetProvider,
           target_model: loop.targetModel,
@@ -301,7 +318,7 @@ async function askHermesBrain(raw, intent, settings) {
       }),
     });
     const payload = await response.json().catch(() => ({}));
-    if (payload?.fallback?.all_failed) return null;
+    if (payload?.fallback?.all_failed && !payload?.fallback?.local_response) return null;
     if (!response.ok || !payload?.message?.content) return null;
     const say = String(payload.message.content || "").replace(/\s+\n/g, "\n").trim();
     if (!say) return null;
@@ -759,6 +776,36 @@ function localQuestionAnswer(text, settings = null) {
   const live = currentInfoAnswer(text, settings);
   if (live) return live;
 
+  const recent = recentChatTurns(1)[0];
+  if (/^(why|why not|how so|what do you mean|what does that mean|tell me more|and why|really)\b/i.test(text.trim()) && recent?.assistant) {
+    const previous = recent.assistant;
+    return {
+      say: /tacos?/i.test(previous)
+        ? "Because tacos can be simple or ambitious, they work for almost any mood, and the crunchy-to-soft ratio has excellent engineering. Mostly, though, they're just hard not to enjoy."
+        : `I meant this part of my last answer: "${previous.slice(0, 180)}" Tell me which piece you want unpacked and I'll stay on that exact thread.`,
+      cards: [],
+      open: null,
+    };
+  }
+
+  const multiplication = text.match(/(?:what(?:'s| is)?\s+)?(-?\d+(?:\.\d+)?)\s*(?:x|×|\*)\s*(-?\d+(?:\.\d+)?)/i);
+  if (multiplication) {
+    const result = Number(multiplication[1]) * Number(multiplication[2]);
+    return {
+      say: `${multiplication[1]} × ${multiplication[2]} = ${Number.isInteger(result) ? result : Number(result.toFixed(6))}.`,
+      cards: [],
+      open: null,
+    };
+  }
+
+  if (/\bphotosynthesis\b/i.test(text)) {
+    return {
+      say: "Photosynthesis is how plants use light energy to turn water and carbon dioxide into sugar, releasing oxygen along the way.",
+      cards: [],
+      open: null,
+    };
+  }
+
   if (/\b(favorite|favourite)\b.*\b(food|meal|snack|drink)\b|\bwhat'?s your (?:favorite|favourite) (?:food|meal|snack|drink)\b/i.test(text)) {
     return {
       say: "If I had taste buds, I'd pick tacos: fast, flexible, and somehow always the correct answer.",
@@ -778,6 +825,22 @@ function localQuestionAnswer(text, settings = null) {
   if (/\bhow are you\b|\bdo you like\b|\bwould you rather\b/i.test(text)) {
     return {
       say: "I'm good — awake, caffeinated in spirit, and ready to keep the work moving without making every answer a whole production.",
+      cards: [],
+      open: null,
+    };
+  }
+
+  if (/\b(who are you|what are you)\b/i.test(text)) {
+    return {
+      say: "I'm Phantom, the operator inside PhantomForce. I answer questions, keep business context straight, and turn clear requests into work while leaving sensitive actions behind approval gates.",
+      cards: [],
+      open: null,
+    };
+  }
+
+  if (/\b(what can you do|how can you help|your capabilities)\b/i.test(text)) {
+    return {
+      say: "I can think through a question, draft and organize work, route tasks to the right tools, read the current workspace, and prepare actions across clients, content, websites, accounting, planning, and automations. Anything consequential still waits for your approval.",
       cards: [],
       open: null,
     };
@@ -843,9 +906,8 @@ function localQuestionAnswer(text, settings = null) {
     };
   }
 
-  const snap = operatorSnapshot();
   return {
-    say: `Right now: ${snap.transactionCount ? `${signedMoney(snap.netCash)} net cashflow` : "ledger empty"}, ${fmtMoney(snap.pipeline)} in quote potential, ${snap.approvals} approval${snap.approvals === 1 ? "" : "s"} waiting, ${snap.today} thing${snap.today === 1 ? "" : "s"} on today's plan. Ask me anything, or tell me what to build, post, automate, or check.`,
+    say: "I didn't get a clean model answer in time. Your question is still the active thread, and I won't swap in unrelated accounting or dashboard status. Try it once more or add one detail.",
     cards: [],
     open: null,
   };

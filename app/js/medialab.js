@@ -6,20 +6,22 @@
  * instead of sending people out to another product.
  */
 
-import { currentTenantId, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260717-6";
+import { currentTenantId, ctx, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260718-20";
 import {
   PLATFORMS, registerContentAsset, loadSocialAccounts, saveSocialAccounts, socialStatus,
   loadContentAssets, saveContentAssets, contentAssetDisplayUrl, hydrateContentAssetUrl,
-} from "./contenthub.js?v=phantom-live-20260717-6";
-import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260717-6";
+  loadRecycledContentAssets, recycleContentAssets, restoreRecycledContentAssets, purgeRecycledContentAssets,
+} from "./contenthub.js?v=phantom-live-20260718-20";
+import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260718-20";
 import {
-  addImageLayer, addTextLayer, cloneImageEditState, compositionSnapshot, duplicateLayer,
-  freshComposition, hitTestLayer, loadCompositionImages, moveLayerOrder, pushEditorSnapshot,
-  removeSelectedLayers, renderComposition, restoreComposition, selectLayer, selectedLayers,
-} from "./content-editor.js?v=phantom-live-20260717-6";
-import { loadImageForEditing, exportCanvas, requestAiEdit, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260717-6";
-import { mountVideoEditor } from "./videocut.js?v=phantom-live-20260717-6";
-import { assetsAvailable, assetBlobUrl, listAssets, recordAssetUsage, saveToAssetCloud, listLocalAssets, refreshLocalAssets, localAssetBlobUrl } from "./orgs.js?v=phantom-live-20260717-6";
+  addImageLayer, addTextLayer, alignSelectedLayers, applyLayerDragWithSnap, cloneImageEditState, compositionSnapshot, distributeSelectedLayers, duplicateLayer,
+  canvasPoint, drawCompositionOverlay, freshComposition, hitTestLayer, hitTestResizeHandle,
+  loadCompositionImages, moveLayerOrder, moveLayerToIndex, pushEditorSnapshot, removeSelectedLayers,
+  renderComposition, restoreComposition, selectAllLayers, selectLayer, selectedLayers,
+} from "./content-editor.js?v=phantom-live-20260718-20";
+import { loadImageForEditing, exportCanvas, requestAiEdit, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260718-20";
+import { mountVideoEditor } from "./videocut.js?v=phantom-live-20260718-20";
+import { assetsAvailable, assetBlobUrl, listAssets, recordAssetUsage, saveToAssetCloud, listLocalAssets, refreshLocalAssets, localAssetBlobUrl } from "./orgs.js?v=phantom-live-20260718-20";
 
 const CFG_KEY = "pf.medialab.v1";
 const EDIT_INTENT_KEY = "pf.medialab.editIntent.v1";
@@ -185,7 +187,22 @@ const HERMES_EXTENSION_KEY = "pf.hermes.extension.connect.v1";
 let mediaSettingsMount = null;
 let mediaSettingsOpts = {};
 let hermesExtensionListenerReady = false;
+let socialOAuthListenerReady = false;
 let socialBridgePollTimer = 0;
+let socialOAuthPollTimer = 0;
+let socialOAuthState = {
+  loaded: false,
+  loading: false,
+  error: "",
+  connectors: [],
+  preflight: null,
+};
+let socialOAuthSetupState = {
+  loaded: false,
+  loading: false,
+  error: "",
+  setup: null,
+};
 
 function cleanSocialHandle(value = "") {
   return String(value || "")
@@ -236,7 +253,156 @@ async function requestSocialOAuthStart(platform) {
   if (!json?.oauth?.authorizationUrl) throw new Error("OAuth start did not return an authorization URL.");
   return json.oauth;
 }
+async function refreshSocialOAuthStatus({ force = false } = {}) {
+  if (socialOAuthState.loading || (socialOAuthState.loaded && !force)) return socialOAuthState;
+  socialOAuthState = { ...socialOAuthState, loading: true, error: "" };
+  try {
+    const response = await fetch("/phantom-ai/ops/social-analytics/status", {
+      headers: socialAuthHeaders(),
+    });
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(String(json?.error || `OAuth status failed (${response.status}).`));
+    socialOAuthState = {
+      loaded: true,
+      loading: false,
+      error: "",
+      connectors: Array.isArray(json?.social_analytics?.connectors) ? json.social_analytics.connectors : [],
+      preflight: json?.social_analytics?.oauthPreflight || null,
+    };
+  } catch (error) {
+    socialOAuthState = {
+      ...socialOAuthState,
+      loaded: true,
+      loading: false,
+      error: error?.message || "OAuth status could not be checked.",
+    };
+  }
+  rerenderMediaSettings();
+  return socialOAuthState;
+}
+async function refreshSocialOAuthSetup({ force = false } = {}) {
+  if (socialOAuthSetupState.loading || (socialOAuthSetupState.loaded && !force)) return socialOAuthSetupState;
+  socialOAuthSetupState = { ...socialOAuthSetupState, loading: true, error: "" };
+  try {
+    const response = await fetch("/phantom-ai/ops/social-oauth/setup", {
+      headers: socialAuthHeaders(),
+    });
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(String(json?.error || `OAuth setup check failed (${response.status}).`));
+    socialOAuthSetupState = { loaded: true, loading: false, error: "", setup: json.setup || null };
+  } catch (error) {
+    socialOAuthSetupState = {
+      ...socialOAuthSetupState,
+      loaded: true,
+      loading: false,
+      error: error?.message || "OAuth app setup could not be checked.",
+    };
+  }
+  rerenderMediaSettings();
+  return socialOAuthSetupState;
+}
+async function saveSocialOAuthAppSetup(payload = {}) {
+  const response = await fetch("/phantom-ai/ops/social-oauth/setup", {
+    method: "POST",
+    headers: socialAuthHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify(payload),
+  });
+  const json = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(String(json?.error || `OAuth setup save failed (${response.status}).`));
+  socialOAuthSetupState = { loaded: true, loading: false, error: "", setup: json.setup || null };
+  socialOAuthState.preflight = json?.social_analytics?.oauthPreflight || socialOAuthState.preflight;
+  socialOAuthState.loaded = false;
+  await refreshSocialOAuthStatus({ force: true });
+  return json;
+}
+function socialConnectorFor(platform) {
+  return socialOAuthState.connectors.find((connector) => connector.id === platform) || null;
+}
+function parseSocialOAuthPayload(value) {
+  if (!value) return null;
+  if (typeof value === "object") return value;
+  try { return JSON.parse(String(value)); } catch { return null; }
+}
+function handleSocialOAuthComplete(payload = {}) {
+  const platform = String(payload.platform || "").toLowerCase();
+  if (!platform) return;
+  stopSocialOAuthAuthorizationPolling();
+  const accounts = loadSocialAccounts();
+  const account = accounts.find((row) => row.id === platform);
+  if (account) {
+    account.enabled = true;
+    account.connectMode = "oauth-connected";
+    account.lastConnectAt = payload.connectedAt || new Date().toISOString();
+    saveSocialAccounts(accounts);
+  }
+  socialNotice = `${socialAccountName(platform)} connected. Refreshing live authorization state…`;
+  socialOAuthState.loaded = false;
+  void refreshSocialOAuthStatus({ force: true });
+}
+function stopSocialOAuthAuthorizationPolling() {
+  if (socialOAuthPollTimer) clearInterval(socialOAuthPollTimer);
+  socialOAuthPollTimer = 0;
+}
+function startSocialOAuthAuthorizationPolling(platform = "") {
+  if (typeof window === "undefined" || !platform) return;
+  stopSocialOAuthAuthorizationPolling();
+  let attempts = 0;
+  const tick = async () => {
+    attempts += 1;
+    if (!mediaSettingsMount?.isConnected || attempts > 45) {
+      stopSocialOAuthAuthorizationPolling();
+      return;
+    }
+    await refreshSocialOAuthStatus({ force: true });
+    const connector = socialConnectorFor(platform);
+    if (connector?.configured) {
+      const accounts = loadSocialAccounts();
+      const account = accounts.find((row) => row.id === platform);
+      if (account) {
+        account.enabled = true;
+        account.connectMode = "oauth-connected";
+        account.lastConnectAt = new Date().toISOString();
+        saveSocialAccounts(accounts);
+      }
+      socialNotice = `${connector.name || socialAccountName(platform)} connected. Live analytics can sync now. Posting still stays approval-gated.`;
+      stopSocialOAuthAuthorizationPolling();
+      rerenderMediaSettings();
+    } else if (attempts === 45) {
+      socialNotice = `${connector?.name || socialAccountName(platform)} sign-in is still pending. Finish provider approval, then return here.`;
+      rerenderMediaSettings();
+    }
+  };
+  setTimeout(tick, 1400);
+  socialOAuthPollTimer = setInterval(tick, 3500);
+}
+function ensureSocialOAuthCompletionListener() {
+  if (socialOAuthListenerReady || typeof window === "undefined") return;
+  socialOAuthListenerReady = true;
+  window.addEventListener("message", (event) => {
+    if (event.origin !== window.location.origin) return;
+    const data = parseSocialOAuthPayload(event.data);
+    if (data?.protocol === "phantomforce.social-oauth.v1" && data.type === "connected") handleSocialOAuthComplete(data);
+  });
+  window.addEventListener("storage", (event) => {
+    if (event.key !== "pf.social.oauth.last") return;
+    const data = parseSocialOAuthPayload(event.newValue);
+    if (data?.protocol === "phantomforce.social-oauth.v1" && data.type === "connected") handleSocialOAuthComplete(data);
+  });
+  const refreshWhenReturned = () => {
+    if (!mediaSettingsMount?.isConnected) return;
+    void refreshSocialOAuthStatus({ force: true });
+    void refreshSocialOAuthSetup({ force: true });
+  };
+  window.addEventListener("focus", refreshWhenReturned);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) refreshWhenReturned();
+  });
+}
 function socialStatusLabel(account) {
+  const connector = socialConnectorFor(account.id);
+  if (connector?.configured) return "live authorized";
+  if (connector?.oauthConfigured) return "OAuth ready";
+  if (socialOAuthState.loading) return "checking OAuth";
   const st = socialStatus(account);
   if (account.connectMode === "live-api" && account.analytics?.live) return "live OAuth";
   if (st === "linked") return "profile saved";
@@ -245,6 +411,10 @@ function socialStatusLabel(account) {
   return "not saved";
 }
 function socialPostingState(account) {
+  const connector = socialConnectorFor(account.id);
+  if (connector?.configured) return "live feed + posting gated";
+  if (connector?.oauthConfigured) return "connect signed-in account";
+  if (socialOAuthState.loading) return "checking setup";
   const st = socialStatus(account);
   if (account.connectMode === "live-api" && account.analytics?.live) return "live data";
   if (account.analytics) return "report imported";
@@ -254,8 +424,12 @@ function socialPostingState(account) {
   return "not configured";
 }
 function socialActionLabel(account) {
-  if (account.connectMode === "live-api" && account.analytics?.live) return `Refresh ${account.name}`;
-  return `Connect ${account.name} OAuth`;
+  const connector = socialConnectorFor(account.id);
+  if (account.connectMode === "live-api" && account.analytics?.live) return `Sync ${account.name}`;
+  if (connector?.configured) return `Reconnect ${account.name}`;
+  if (connector?.oauthConfigured) return `Connect ${account.name}`;
+  if (socialOAuthState.loading) return "Checking…";
+  return "OAuth setup needed";
 }
 function clampHermesText(value = "", limit = 180) {
   const text = String(value || "").replace(/\s+/g, " ").trim();
@@ -1147,11 +1321,15 @@ if (typeof window !== "undefined") window.__mlLocalStats = mlLocalStats;
 /* ---- instant open: the last successful listing per search+kind lives in
    sessionStorage so reopening the drawer paints immediately, then a silent
    background refresh reconciles. Capped so it never eats the storage quota. */
-const LOCAL_ASSETS_CACHE_KEY = "pf.medialab.localAssets.cache.v3";
+const LOCAL_ASSETS_CACHE_KEY = "pf.medialab.localAssets.cache.v1";
 const LOCAL_ASSETS_CACHE_MAX_ENTRIES = 24;
 const LOCAL_ASSETS_CACHE_BUDGET = 50_000; // ~50KB of serialized listings
 let localAssetsFetchSeq = 0;
 let localAssetsDrawerSynced = false; // one background refresh per drawer open
+/* the Edit tab shows local assets inline (no separate drawer needed to start
+   editing) — filtered to whatever the current editor context wants */
+let mlInlineAssetsSyncedKind = null;
+let mlLastEditId = undefined;
 
 function localAssetsCacheKey() {
   return `${localAssetsState.kind}::${String(localAssetsState.search || "").trim().toLowerCase()}`;
@@ -1182,21 +1360,6 @@ function localAssetsCachePut(key, result) {
   if (payload.length > LOCAL_ASSETS_CACHE_BUDGET) return; // one oversized listing isn't worth caching
   try { sessionStorage.setItem(LOCAL_ASSETS_CACHE_KEY, payload); } catch {}
 }
-function isEditorToolPackage(asset = {}) {
-  const haystack = [
-    asset.id,
-    asset.title,
-    asset.name,
-    asset.category,
-    asset.app,
-    asset.relative_path,
-    asset.safety,
-    ...(asset.tags || []),
-  ].join(" ").toLowerCase();
-  if (/\b(installer|setup|application installer|windows installer|mac installer|program installer|installers_do_not_run)\b/.test(haystack)) return true;
-  if (/\b(davinci resolve studio|blackmagic design|adobe creative cloud|adobe premiere|premiere pro|after effects|final cut pro|avid media composer)\b/.test(haystack) && /\b(installer|setup|studio|application|windows|mac|download)\b/.test(haystack)) return true;
-  return false;
-}
 /* cheap change detector so background refreshes only repaint when the data moved */
 function localAssetsSnapshotHash() {
   const s = localAssetsState;
@@ -1218,6 +1381,7 @@ export function renderMediaStudio(el, opts = {}) {
   const cfg = loadCfg();
   if (session.tab === "briefs") session.tab = "pending";
   if (activeDrawer !== "assets") localAssetsDrawerSynced = false;
+  if (session.tab !== "edit") mlInlineAssetsSyncedKind = null;
   /* while a local-asset drag is live, the tab buttons stand in as drop targets
      for surfaces that only exist on their own tab */
   const tabDropAttrs = (id) => {
@@ -1272,7 +1436,7 @@ function localAssetsDrawerHtml(esc) {
     ["folder", "Templates"],
   ];
   return `
-    <p class="ml-drawer-note">AI editor-ready assets on this PC. PhantomForce is the editor layer; compatible packs are organized for PhantomCut and image editing, while outside app installers stay hidden.</p>
+    <p class="ml-drawer-note">Your local media library on this PC. Nothing is uploaded to Asset Cloud; files stay on this machine and are only pulled into the editor when you choose one.</p>
     <div class="ml-asset-controls">
       <input class="ml-text-in" data-ml-local-search placeholder="Search local assets..." value="${esc(s.search)}"/>
       <button class="ml-generate ml-ghost ml-inline" data-ml-local-refresh type="button">${svgIc("spark")} Refresh</button>
@@ -1295,15 +1459,14 @@ function localAssetsDrawerHtml(esc) {
 }
 function localAssetCardHtml(asset, esc) {
   const canUse = asset.kind === "image" && (!!asset.has_preview || !!asset.previewable);
-  const category = localAssetDisplayCategory(asset);
   return `
     <article class="ml-local-asset" data-local-asset="${esc(asset.id)}"${canUse ? ` draggable="true" title="Drag onto the editor or the reference slot"` : ""}>
       <div class="ml-local-thumb" data-local-thumb="${esc(asset.id)}" data-previewable="${canUse ? "1" : "0"}">
         ${canUse ? `<span>${svgIc(asset.kind === "video" ? "film" : "image")}</span>` : `<span>${svgIc("layout")}</span>`}
       </div>
       <div class="ml-local-copy">
-        <b>${esc(localAssetDisplayTitle(asset))}</b>
-        <span>${esc(category)}</span>
+        <b>${esc(asset.title || asset.name)}</b>
+        <span>${esc(asset.category || asset.kind)}${asset.app ? ` · ${esc(asset.app)}` : ""}</span>
         <i>${esc(asset.size_label || "")} ${asset.safety ? `· ${esc(asset.safety)}` : ""}</i>
       </div>
       <div class="ml-local-actions">
@@ -1311,40 +1474,45 @@ function localAssetCardHtml(asset, esc) {
       </div>
     </article>`;
 }
-function localAssetDisplayTitle(asset = {}) {
-  const raw = String(asset.title || asset.name || "").trim();
-  const text = [raw, asset.category, asset.app, asset.relative_path, ...(asset.tags || [])].join(" ").toLowerCase();
-  if (!raw || raw === "0") {
-    if (/photoshop|psd|psb/.test(text)) return "Layered design template";
-    if (/resolve|drfx|macro|preset|effect/.test(text)) return "Video effect pack";
-    return "Local creative asset";
-  }
-  let title = raw
-    .replace(/\bDaVinci\s+Resolve\s+Studio\b/gi, "Video")
-    .replace(/\bDaVinci\s+Resolve\b/gi, "Video")
-    .replace(/\bBlackmagic\s+Design\b/gi, "")
-    .replace(/\bAdobe\s+Photoshop\b/gi, "Layered")
-    .replace(/\bPhotoshop\b/gi, "Layered")
-    .replace(/\bsource\b/gi, "")
-    .replace(/\bPSD\/PSB\b/gi, "")
-    .replace(/\bPSD\b|\bPSB\b/gi, "")
-    .replace(/\bWindows\s+Installer\b/gi, "")
-    .replace(/\bInstaller\b/gi, "")
-    .replace(/\s{2,}/g, " ")
-    .replace(/\s+([).,])/g, "$1")
-    .trim();
-  if (!title || title === raw && /^0$/.test(title)) return localAssetDisplayCategory(asset);
-  return title;
+/* ---- Edit tab: local assets inline, no separate drawer to open first.
+   `kind` narrows to what the current editor context can use ("image" while
+   editing a photo, "video" for PhantomCut, "all" on the chooser screen). */
+function ensureInlineAssetsSynced(root, opts, kind) {
+  if (mlInlineAssetsSyncedKind === kind) return;
+  mlInlineAssetsSyncedKind = kind;
+  localAssetsState.kind = kind;
+  loadLocalAssetsForDrawer(root, opts);
 }
-function localAssetDisplayCategory(asset = {}) {
-  const text = [asset.category, asset.app, asset.relative_path, ...(asset.tags || [])].join(" ").toLowerCase();
-  if (/photoshop|psd|psb/.test(text)) return "Layered design template";
-  if (/resolve|drfx|macro|preset|effect/.test(text)) return "AI-ready video effect pack";
-  if (/project|template/.test(text)) return "Creative project template";
-  if (/archive/.test(text)) return "Asset archive";
-  if (/video/.test(text)) return "Video asset";
-  if (/image|photo/.test(text)) return "Image asset";
-  return asset.category || asset.kind || "Local asset";
+function editInlineAssetsHtml(esc, kind) {
+  const s = localAssetsState;
+  const rows = (s.assets || []).filter((a) => kind === "all" || a.kind === kind);
+  const noun = kind === "video" ? "video" : kind === "image" ? "image" : "media";
+  return `
+    <div class="ml-inline-local" data-ml-inline-local>
+      <div class="ml-inline-local-head">
+        <b>${svgIc("image")} From your local library</b>
+        <input class="ml-text-in ml-inline-local-search" data-ml-inline-local-search placeholder="Search local ${noun}..." value="${esc(s.search)}"/>
+      </div>
+      ${s.loading && !rows.length
+        ? `<div class="ml-local-empty">Scanning local assets...</div>`
+        : rows.length
+          ? `<div class="ml-local-assets ml-inline-assets">${rows.slice(0, 10).map((a) => localAssetCardHtml(a, esc)).join("")}</div>`
+          : `<div class="ml-local-empty">No local ${noun} assets indexed yet${s.message ? ` — ${esc(s.message)}` : "."}</div>`}
+    </div>`;
+}
+function wireInlineLocalAssets(container, root, opts) {
+  hydrateLocalAssetThumbs(container);
+  const search = container.querySelector("[data-ml-inline-local-search]");
+  if (search) {
+    let timer = null;
+    search.oninput = () => {
+      localAssetsState.search = search.value;
+      clearTimeout(timer);
+      timer = setTimeout(() => loadLocalAssetsForDrawer(root, opts, true), 250);
+    };
+  }
+  container.querySelectorAll("[data-ml-local-use]").forEach((b) => b.onclick = () => useLocalAsset(b.dataset.mlLocalUse, "edit", root, opts));
+  container.querySelectorAll("[data-ml-local-ref]").forEach((b) => b.onclick = () => useLocalAsset(b.dataset.mlLocalRef, "ref", root, opts));
 }
 function templatesDrawerHtml(esc) {
   const visible = MEDIA_PRESETS.filter((p) => p.modality === genState.modality);
@@ -1441,8 +1609,8 @@ function mediaSettingsDrawerHtml(cfg, esc) {
     </div>`;
 }
 function applyLocalAssetsResult(result = {}) {
-  localAssetsState.assets = (result.assets || []).filter((asset) => !isEditorToolPackage(asset));
-  localAssetsState.count = localAssetsState.assets.length || 0;
+  localAssetsState.assets = result.assets || [];
+  localAssetsState.count = result.count || localAssetsState.assets.length || 0;
   localAssetsState.source = result.source || "";
   localAssetsState.rootLabel = result.root_label || "";
   // the server's `detail` is the admin's next move — surface it when present
@@ -1478,8 +1646,12 @@ async function loadLocalAssetsForDrawer(el, opts, refresh = false) {
   localAssetsState.loaded = true;
   applyLocalAssetsResult(result);
   if (result.ok !== false) localAssetsCachePut(cacheKey, result);
-  // background refresh repaints only when the data actually changed
-  if (activeDrawer === "assets" && localAssetsState.viewHash !== localAssetsSnapshotHash()) paintLocalAssets(el, opts);
+  // background refresh repaints only when the data actually changed, and only
+  // while something is actually showing it — the drawer or the Edit tab's
+  // inline picker (which has no separate "open" state to gate on)
+  const visible = activeDrawer === "assets"
+    || (session.tab === "edit" && (!session.editMode || (session.editMode === "photo" && !session.edit)));
+  if (visible && localAssetsState.viewHash !== localAssetsSnapshotHash()) paintLocalAssets(el, opts);
 }
 async function useLocalAsset(assetId, mode, el, opts) {
   const asset = localAssetsState.assets.find((item) => item.id === assetId);
@@ -2361,6 +2533,38 @@ function poolPendingStrip(esc) {
       </article>`).join("")}
   </section>`;
 }
+function poolRecycleDaysLeft(asset) {
+  const left = Math.ceil(((asset.trashExpiresAt || asset.trashedAt || Date.now()) - Date.now()) / 864e5);
+  return Math.max(1, left);
+}
+function poolRecycleBinHtml(items, esc) {
+  if (!items.length) return "";
+  return `<details class="ml-recycle-bin">
+    <summary>
+      <span>${svgIc("close")} Recycle Bin</span>
+      <b>${items.length} item${items.length === 1 ? "" : "s"} · ${30}-day recovery</b>
+    </summary>
+    <div class="ml-recycle-list">
+      ${items.map((asset) => {
+        const url = contentAssetDisplayUrl(asset);
+        const media = url
+          ? (asset.type === "video"
+            ? `<video src="${esc(url)}" muted playsinline preload="metadata"></video>`
+            : `<img src="${esc(url)}" alt="${esc(asset.title)}" loading="lazy"/>`)
+          : `<span class="ml-pool-thumb-empty">No preview</span>`;
+        return `<article class="ml-recycle-row">
+          <figure>${media}</figure>
+          <div>
+            <b>${esc((asset.title || "Media item").slice(0, 64))}</b>
+            <i>${esc(asset.type || "media")} · recoverable for ${poolRecycleDaysLeft(asset)}d</i>
+          </div>
+          <button class="ml-pool-act" data-pool-trash-act="restore" data-id="${esc(asset.id)}">Restore</button>
+          <button class="ml-pool-act is-danger" data-pool-trash-act="purge" data-id="${esc(asset.id)}">Delete</button>
+        </article>`;
+      }).join("")}
+    </div>
+  </details>`;
+}
 function poolTileHtml(asset, esc) {
   const url = contentAssetDisplayUrl(asset);
   const media = url
@@ -2391,12 +2595,14 @@ async function poolAssetUrl(asset, opts) {
 function renderMediaPool(body, cfg, opts, root) {
   const esc = opts.esc || ((s) => String(s));
   const assets = loadContentAssets();
+  const recycled = loadRecycledContentAssets();
   mlPoolCount = assets.length;
   body.innerHTML = `
     ${poolPendingStrip(esc)}
     ${assets.length
       ? `<div class="ml-pool-grid">${assets.map((a) => poolTileHtml(a, esc)).join("")}</div>`
-      : `<div class="ml-empty" data-ml-dropzone="edit" data-ml-dropzone-label="Drop to add media">${svgIc("image")}<b>Media Pool is empty</b><i>Generate in Create — finished renders land here automatically and stay for ${30} days. Publish, edit, or reuse them any time.</i></div>`}`;
+      : `<div class="ml-empty" data-ml-dropzone="edit" data-ml-dropzone-label="Drop to add media">${svgIc("image")}<b>Media Pool is empty</b><i>Generate in Create — finished renders land here automatically and stay for ${30} days. Publish, edit, or reuse them any time.</i></div>`}
+    ${poolRecycleBinHtml(recycled, esc)}`;
   body.querySelectorAll("[data-pool-act]").forEach((btn) => btn.onclick = async () => {
     const asset = loadContentAssets().find((item) => item.id === btn.dataset.id);
     if (!asset) return;
@@ -2431,8 +2637,23 @@ function renderMediaPool(body, cfg, opts, root) {
       return;
     }
     if (act === "remove") {
-      saveContentAssets(loadContentAssets().filter((item) => item.id !== asset.id));
+      recycleContentAssets(asset);
       if (opts.notify) opts.notify("Media Pool", "removed the media from Media Pool.");
+      renderMediaPool(body, cfg, opts, root);
+    }
+  });
+  body.querySelectorAll("[data-pool-trash-act]").forEach((btn) => btn.onclick = () => {
+    const id = btn.dataset.id;
+    const act = btn.dataset.poolTrashAct;
+    if (act === "restore") {
+      const restored = restoreRecycledContentAssets(id);
+      if (opts.notify) opts.notify("Media Pool", restored.length ? "restored the media to Media Pool." : "that media already expired.");
+      renderMediaPool(body, cfg, opts, root);
+      return;
+    }
+    if (act === "purge") {
+      purgeRecycledContentAssets(id);
+      if (opts.notify) opts.notify("Media Pool", "deleted the recycled media.");
       renderMediaPool(body, cfg, opts, root);
     }
   });
@@ -2460,6 +2681,7 @@ let editState = { ...freshEditState(), loadedUrl: null };
 let mlComposition = freshComposition();
 let mlLayerEffects = { base: editState };
 let mlEditResizeHandler = null;
+let mlEditKeyHandler = null;
 let mlBokehPicking = false;
 let mlShowTutorial = false;
 let mlEditLoadError = null;
@@ -2469,6 +2691,8 @@ let mlPaintMode = "select";
 let mlPaintColor = "#41ffa1";
 let mlAssetCache = { tenant: "", loading: false, loaded: false, assets: [], error: "" };
 let mlAssetPicker = { search: "", source: "all" };
+let mlLayerClipboard = [];
+let mlSnapGuides = [];
 
 function cloneEditState(source = editState) {
   return cloneImageEditState(source);
@@ -2566,6 +2790,13 @@ function fitEditorCanvas(canvas) {
   const scale = Math.min(availableW / canvas.width, availableH / canvas.height, 1.5);
   canvas.style.width = `${Math.max(1, Math.floor(canvas.width * scale))}px`;
   canvas.style.height = `${Math.max(1, Math.floor(canvas.height * scale))}px`;
+  const overlay = wrap.querySelector("[data-ml-layer-overlay]");
+  if (overlay) {
+    overlay.width = canvas.width;
+    overlay.height = canvas.height;
+    overlay.style.width = canvas.style.width;
+    overlay.style.height = canvas.style.height;
+  }
 }
 function paintActiveCanvas(canvas, img, state = editState) {
   paintEdit(canvas, img, state);
@@ -2645,13 +2876,22 @@ function layerKindLabel(layer) {
 function selectedLayerPanelHtml(esc) {
   ensureEditorComposition();
   const active = selectedEditLayer();
+  const editableSelection = selectedLayers(mlComposition).filter((layer) => layer.id !== "base" && !layer.locked);
   const canDelete = active && active.id !== "base" && !active.locked;
+  const canCopy = selectedLayers(mlComposition).some((layer) => layer.id !== "base");
+  const canAlign = editableSelection.length > 0;
+  const canDistribute = editableSelection.length >= 3;
+  const canSelectAll = mlComposition.layers.some((layer) => layer.id !== "base" && !layer.locked && layer.visible !== false);
+  const activeLocked = !!active?.locked;
   return `
     <details class="ml-edit-section" open>
       <summary><span>Layers</span><b>${mlComposition.layers.length}</b></summary>
       <div class="ml-edit-section-body">
         <div class="ml-layer-actions">
           <button type="button" data-ml-layer-add-text>${svgIc("edit")} Text</button>
+          <button type="button" data-ml-layer-select-all ${canSelectAll ? "" : "disabled"}>Select all</button>
+          <button type="button" data-ml-layer-copy ${canCopy ? "" : "disabled"}>${svgIc("copy")} Copy</button>
+          <button type="button" data-ml-layer-paste ${mlLayerClipboard.length ? "" : "disabled"}>Paste</button>
           <button type="button" data-ml-layer-duplicate ${canDelete ? "" : "disabled"}>${svgIc("copy")} Duplicate</button>
           <button type="button" data-ml-layer-delete ${canDelete ? "" : "disabled"}>${svgIc("close")} Delete</button>
         </div>
@@ -2659,26 +2899,77 @@ function selectedLayerPanelHtml(esc) {
           ${[...mlComposition.layers].reverse().map((layer) => {
             const realIndex = mlComposition.layers.findIndex((item) => item.id === layer.id);
             const selected = mlComposition.selectedIds.includes(layer.id);
-            return `<div class="ml-layer-row ${selected ? "is-selected" : ""} ${layer.visible === false ? "is-off" : ""}" data-ml-layer-row="${esc(layer.id)}">
+            return `<div class="ml-layer-row ${selected ? "is-selected" : ""} ${layer.visible === false ? "is-off" : ""} ${layer.locked ? "is-locked" : ""}" data-ml-layer-row="${esc(layer.id)}" data-ml-layer-index="${realIndex}" draggable="${layer.locked ? "false" : "true"}">
               <button type="button" data-ml-layer-visible="${esc(layer.id)}" title="${layer.visible === false ? "Show layer" : "Hide layer"}">${layer.visible === false ? "○" : "●"}</button>
               <button type="button" class="ml-layer-name" data-ml-layer-select="${esc(layer.id)}"><b>${esc(layer.name || layerKindLabel(layer))}</b><i>${esc(layerKindLabel(layer))}</i></button>
               <span class="ml-layer-row-actions">
-                <button type="button" data-ml-layer-order="-1" data-layer-id="${esc(layer.id)}" ${realIndex <= 0 ? "disabled" : ""} title="Move down">↓</button>
-                <button type="button" data-ml-layer-order="1" data-layer-id="${esc(layer.id)}" ${realIndex >= mlComposition.layers.length - 1 ? "disabled" : ""} title="Move up">↑</button>
+                <button type="button" data-ml-layer-lock="${esc(layer.id)}" title="${layer.locked ? "Unlock layer" : "Lock layer"}">${layer.locked ? "🔒" : "🔓"}</button>
+                <button type="button" data-ml-layer-order="-1" data-layer-id="${esc(layer.id)}" ${layer.locked || realIndex <= 0 ? "disabled" : ""} title="Move down">↓</button>
+                <button type="button" data-ml-layer-order="1" data-layer-id="${esc(layer.id)}" ${layer.locked || realIndex >= mlComposition.layers.length - 1 ? "disabled" : ""} title="Move up">↑</button>
               </span>
             </div>`;
           }).join("")}
         </div>
         ${active ? `<div class="ml-layer-inspector">
-          <div class="ml-layer-inspector-head"><b>${esc(active.name || layerKindLabel(active))}</b><span>${esc(layerKindLabel(active))}</span></div>
-          <label class="ml-layer-field"><span>Name</span><input data-ml-layer-field="name" value="${esc(active.name || "")}" ${active.id === "base" ? "" : ""}/></label>
-          <label class="ml-slider"><span>X <b data-layer-out="x">${Math.round(active.x * 100)}</b></span><input type="range" min="0" max="100" value="${Math.round(active.x * 100)}" data-ml-layer-prop="x"/></label>
-          <label class="ml-slider"><span>Y <b data-layer-out="y">${Math.round(active.y * 100)}</b></span><input type="range" min="0" max="100" value="${Math.round(active.y * 100)}" data-ml-layer-prop="y"/></label>
-          <label class="ml-slider"><span>Width <b data-layer-out="w">${Math.round(active.w * 100)}</b></span><input type="range" min="5" max="200" value="${Math.round(active.w * 100)}" data-ml-layer-prop="w"/></label>
-          <label class="ml-slider"><span>Height <b data-layer-out="h">${Math.round(active.h * 100)}</b></span><input type="range" min="5" max="200" value="${Math.round(active.h * 100)}" data-ml-layer-prop="h"/></label>
-          <label class="ml-slider"><span>Opacity <b data-layer-out="opacity">${Math.round((active.opacity ?? 1) * 100)}</b></span><input type="range" min="0" max="100" value="${Math.round((active.opacity ?? 1) * 100)}" data-ml-layer-prop="opacity"/></label>
-          <label class="ml-slider"><span>Rotate <b data-layer-out="rotation">${Math.round(active.rotation || 0)}</b></span><input type="range" min="-180" max="180" value="${Math.round(active.rotation || 0)}" data-ml-layer-prop="rotation"/></label>
-          ${active.type === "text" ? `<label class="ml-layer-field"><span>Text</span><textarea rows="3" data-ml-layer-field="text">${esc(active.text || "")}</textarea></label>` : ""}
+          <div class="ml-layer-inspector-head"><b>${esc(active.name || layerKindLabel(active))}</b><span>${activeLocked ? "Locked" : esc(layerKindLabel(active))}</span></div>
+          <div class="ml-layer-transform-actions">
+            <button type="button" data-ml-layer-center ${activeLocked ? "disabled" : ""}>Center</button>
+            <button type="button" data-ml-layer-fit-canvas ${activeLocked ? "disabled" : ""}>Fill canvas</button>
+            <button type="button" data-ml-layer-reset-transform ${activeLocked ? "disabled" : ""}>Reset</button>
+          </div>
+          <div class="ml-layer-align-actions" role="group" aria-label="Align selected layers">
+            ${[
+              ["left", "Left"],
+              ["hcenter", "Center"],
+              ["right", "Right"],
+              ["top", "Top"],
+              ["vcenter", "Middle"],
+              ["bottom", "Bottom"],
+            ].map(([mode, label]) => `<button type="button" data-ml-layer-align="${esc(mode)}" ${canAlign ? "" : "disabled"}>${esc(label)}</button>`).join("")}
+            <button type="button" data-ml-layer-distribute="x" ${canDistribute ? "" : "disabled"}>Distribute X</button>
+            <button type="button" data-ml-layer-distribute="y" ${canDistribute ? "" : "disabled"}>Distribute Y</button>
+          </div>
+          <label class="ml-layer-field"><span>Name</span><input data-ml-layer-field="name" value="${esc(active.name || "")}" ${activeLocked ? "disabled" : ""}/></label>
+          <label class="ml-slider"><span>X <b data-layer-out="x">${Math.round(active.x * 100)}</b></span><input type="range" min="0" max="100" value="${Math.round(active.x * 100)}" data-ml-layer-prop="x" ${activeLocked ? "disabled" : ""}/></label>
+          <label class="ml-slider"><span>Y <b data-layer-out="y">${Math.round(active.y * 100)}</b></span><input type="range" min="0" max="100" value="${Math.round(active.y * 100)}" data-ml-layer-prop="y" ${activeLocked ? "disabled" : ""}/></label>
+          <label class="ml-slider"><span>Width <b data-layer-out="w">${Math.round(active.w * 100)}</b></span><input type="range" min="5" max="200" value="${Math.round(active.w * 100)}" data-ml-layer-prop="w" ${activeLocked ? "disabled" : ""}/></label>
+          <label class="ml-slider"><span>Height <b data-layer-out="h">${Math.round(active.h * 100)}</b></span><input type="range" min="5" max="200" value="${Math.round(active.h * 100)}" data-ml-layer-prop="h" ${activeLocked ? "disabled" : ""}/></label>
+          <label class="ml-slider"><span>Opacity <b data-layer-out="opacity">${Math.round((active.opacity ?? 1) * 100)}</b></span><input type="range" min="0" max="100" value="${Math.round((active.opacity ?? 1) * 100)}" data-ml-layer-prop="opacity" ${activeLocked ? "disabled" : ""}/></label>
+          <label class="ml-layer-field"><span>Blend</span><select data-ml-layer-field="blend" ${activeLocked ? "disabled" : ""}>
+            ${[
+              ["source-over", "Normal"],
+              ["multiply", "Multiply"],
+              ["screen", "Screen"],
+              ["overlay", "Overlay"],
+              ["soft-light", "Soft light"],
+              ["hard-light", "Hard light"],
+              ["color-dodge", "Color dodge"],
+              ["color-burn", "Color burn"],
+              ["luminosity", "Luminosity"],
+            ].map(([value, label]) => `<option value="${esc(value)}" ${(active.blend || "source-over") === value ? "selected" : ""}>${esc(label)}</option>`).join("")}
+          </select></label>
+          <label class="ml-slider"><span>Rotate <b data-layer-out="rotation">${Math.round(active.rotation || 0)}</b></span><input type="range" min="-180" max="180" value="${Math.round(active.rotation || 0)}" data-ml-layer-prop="rotation" ${activeLocked ? "disabled" : ""}/></label>
+          ${active.type === "image" || active.type === "base" ? `<label class="ml-layer-field"><span>Fit</span><select data-ml-layer-field="fit" ${activeLocked ? "disabled" : ""}>
+            <option value="cover" ${active.fit === "cover" ? "selected" : ""}>Cover frame</option>
+            <option value="contain" ${active.fit === "contain" ? "selected" : ""}>Contain full image</option>
+          </select></label>` : ""}
+          ${active.type === "text" ? `<label class="ml-layer-field"><span>Text</span><textarea rows="3" data-ml-layer-field="text" ${activeLocked ? "disabled" : ""}>${esc(active.text || "")}</textarea></label>
+            <label class="ml-slider"><span>Type size <b data-layer-out="fontSize">${Math.round(active.fontSize || 8)}</b></span><input type="range" min="3" max="18" value="${Math.round(active.fontSize || 8)}" data-ml-layer-prop="fontSize" ${activeLocked ? "disabled" : ""}/></label>
+            <div class="ml-layer-text-grid">
+              <label class="ml-layer-field"><span>Font</span><select data-ml-layer-field="font" ${activeLocked ? "disabled" : ""}>
+                ${["Space Grotesk", "DM Sans", "Inter", "Georgia", "Arial Black"].map((font) => `<option value="${esc(font)}" ${(active.font || "Space Grotesk") === font ? "selected" : ""}>${esc(font)}</option>`).join("")}
+              </select></label>
+              <label class="ml-layer-field"><span>Align</span><select data-ml-layer-field="align" ${activeLocked ? "disabled" : ""}>
+                ${["left", "center", "right"].map((align) => `<option value="${esc(align)}" ${(active.align || "center") === align ? "selected" : ""}>${esc(align)}</option>`).join("")}
+              </select></label>
+              <label class="ml-layer-field"><span>Text color</span><input type="color" data-ml-layer-field="color" value="${esc(active.color || "#ffffff")}" ${activeLocked ? "disabled" : ""}/></label>
+              <label class="ml-layer-field"><span>Box color</span><input type="color" data-ml-layer-field="background" value="${esc(active.background || "#000000")}" ${activeLocked ? "disabled" : ""}/></label>
+            </div>
+            <label class="ml-slider"><span>Box opacity <b data-layer-out="backgroundOpacity">${Math.round((active.backgroundOpacity || 0) * 100)}</b></span><input type="range" min="0" max="100" value="${Math.round((active.backgroundOpacity || 0) * 100)}" data-ml-layer-prop="backgroundOpacity" ${activeLocked ? "disabled" : ""}/></label>
+            <div class="ml-layer-toggle-row">
+              <button type="button" class="${active.bold ? "is-on" : ""}" data-ml-layer-toggle="bold" ${activeLocked ? "disabled" : ""}>Bold</button>
+              <button type="button" class="${active.shadow ? "is-on" : ""}" data-ml-layer-toggle="shadow" ${activeLocked ? "disabled" : ""}>Shadow</button>
+            </div>` : ""}
         </div>` : ""}
       </div>
     </details>`;
@@ -2829,6 +3120,83 @@ function handleVideoExport(result, opts) {
     opts.notify?.("PhantomCut", `exported "${title}" — too large to keep in Media Pool, so it downloaded to your device instead.`);
   }
 }
+/* PhantomCut's own "Generate with AI" entry point — the same pipeline Create
+   uses (approval gate, live-vs-preview honesty, Media Pool save), scoped to
+   one clip so it can hand straight back to the timeline instead of routing
+   the admin out to the Create tab. Returns {url,type,title} or null. */
+async function generateInlineClip(cfg, opts, prompt, modality) {
+  const trimmed = String(prompt || "").trim();
+  if (!trimmed) return null;
+  const laneId = normalizeLaneId(PRIMARY_MEDIA_LANE);
+  const health = await checkEngineHealth(cfg).catch(() => engineHealth);
+  const spendLane = !!(health.media?.[laneId] || health.engine?.cliFallbackEnabled);
+  let approved = true;
+  if (spendLane && cfg.requireApproval) {
+    approved = window.confirm("This will use Media Lab credits. Approve render?");
+    if (!approved) {
+      opts.notify?.("PhantomCut", "Generation cancelled — nothing was charged.");
+      return null;
+    }
+  }
+  const duration = 6;
+  const req = {
+    modality, provider: laneId, model: "",
+    prompt: trimmed, negative: "", style: "Cinematic", preset: "Custom",
+    approved, creditWarningShown: spendLane,
+    ref: null, params: { aspect: "16:9", count: 1, quality: "standard", duration },
+  };
+  try {
+    const out = await generate(cfg, req);
+    if (out.approvalRequired) {
+      opts.notify?.("PhantomCut", out.message || "This render needs your approval before it can use credits.");
+      return null;
+    }
+    if (!out.assets?.length) {
+      opts.notify?.("PhantomCut", "Generation didn't return any media — try a different prompt.");
+      return null;
+    }
+    const stamp = Date.now();
+    const title = `${modality === "video" ? "Generated video" : "Generated image"} for PhantomCut`;
+    const asset = {
+      id: `gen-${stamp}-0`,
+      ...out.assets[0],
+      fromGen: true,
+      at: stamp,
+      meta: { ...(out.assets[0].meta || {}), title, prompt: out.spec?.original_prompt || trimmed, provider: laneId, model: out.spec?.model, style: "Cinematic", live: out.live },
+    };
+    session.assets.unshift(asset);
+    session.assets = session.assets.slice(0, 60);
+    if (out.live) {
+      asset.saved = true;
+      saveMediaPoolSource(asset);
+      cfg.credits = Math.max(0, cfg.credits - (modality === "video" ? duration * 4 : 3));
+      saveCfg(cfg);
+    }
+    logJob(out.live ? "ok" : "warn", out.live ? `PhantomCut generated a ${modality}` : "PhantomCut render didn't complete — sketched locally");
+    opts.notify?.("PhantomCut", out.live
+      ? `Generated and added to your timeline: "${trimmed.slice(0, 40)}".`
+      : `Render didn't finish live — added a local preview for "${trimmed.slice(0, 40)}".`);
+    return { url: asset.url, type: asset.type, title };
+  } catch {
+    opts.notify?.("PhantomCut", "Generation failed — try again in a moment.");
+    return null;
+  }
+}
+/* Local-disk assets, ready for PhantomCut's own picker — same registry the
+   Edit tab's inline library uses, so the editor never needs a separate tab
+   to reach what's already on this PC. */
+async function localItemsForVideoEditor(kind) {
+  try {
+    const result = await listLocalAssets({ kind: kind === "all" ? "all" : kind, limit: 40 });
+    if (result?.ok === false) return [];
+    return (result.assets || [])
+      .filter((asset) => asset.kind === "image" || asset.kind === "video")
+      .filter((asset) => !!asset.has_preview || !!asset.previewable)
+      .map((asset) => ({ id: asset.id, kind: asset.kind, title: asset.title || asset.name || "Local file" }));
+  } catch {
+    return [];
+  }
+}
 function ensureVideoEditor(opts) {
   if (!vcHost) {
     vcHost = document.createElement("div");
@@ -2842,6 +3210,9 @@ function ensureVideoEditor(opts) {
       sources: {
         poolImages: () => poolMediaRows("image"),
         poolVideos: () => poolMediaRows("video"),
+        listLocal: (kind) => localItemsForVideoEditor(kind),
+        localBlobUrl: (id) => localAssetBlobUrl(id),
+        generateClip: (prompt, modality) => generateInlineClip(loadCfg(), opts, prompt, modality),
       },
       onExported: (result) => handleVideoExport(result, opts),
     });
@@ -2857,10 +3228,17 @@ function editModeBar(active, esc) {
 }
 function renderEdit(body, cfg, opts, root) {
   const esc = opts.esc || ((s) => String(s));
-  /* external entry points (drag & drop, Media Pool "Edit", Content Hub) set
-     session.edit with an image — that's an explicit photo-editing intent */
-  if (session.edit && !session.editMode) session.editMode = "photo";
+  /* external entry points (drag & drop, Media Pool "Edit", Content Hub, local
+     asset picks) set session.edit — decypher photo vs. video from what was
+     actually picked instead of always assuming photo, and only re-sync once
+     per new asset so re-renders don't fight a mode the admin already changed */
+  const isNewEdit = !!session.edit && session.edit.id !== mlLastEditId;
+  if (isNewEdit) {
+    mlLastEditId = session.edit.id;
+    session.editMode = session.edit.type === "video" ? "video" : "photo";
+  }
   if (!session.editMode) {
+    ensureInlineAssetsSynced(root, opts, "all");
     body.innerHTML = `<div class="ml-edit-choose" role="group" aria-label="Choose an editor">
       <button type="button" class="ml-choose-card" data-ml-choose="photo">
         ${svgIc("image")}
@@ -2872,29 +3250,39 @@ function renderEdit(body, cfg, opts, root) {
         <b>Video</b>
         <i>PhantomCut: build a cut from photos, clips, or both — Ken Burns, crossfades, titles, music, and a real export.</i>
       </button>
-    </div>`;
+    </div>
+    <p class="ml-inline-local-hint">Or jump straight in — pick anything below and Phantom opens the right editor for it.</p>
+    ${editInlineAssetsHtml(esc, "all")}`;
     body.querySelectorAll("[data-ml-choose]").forEach((btn) => btn.onclick = () => {
       session.editMode = btn.dataset.mlChoose;
       renderMediaStudio(root, opts);
     });
+    wireInlineLocalAssets(body, root, opts);
     return;
   }
   if (session.editMode === "video") {
     body.innerHTML = editModeBar("video", esc);
-    body.appendChild(ensureVideoEditor(opts));
+    const host = ensureVideoEditor(opts);
+    if (isNewEdit && session.edit?.type === "video" && session.edit.url) {
+      vcMounted?.addClip?.("video", session.edit.url, session.edit.id || "Local video");
+    }
+    body.appendChild(host);
     body.querySelector("[data-ml-edit-back]").onclick = () => { session.editMode = null; renderMediaStudio(root, opts); };
     return;
   }
   if (!session.edit) {
+    ensureInlineAssetsSynced(root, opts, "image");
     body.innerHTML = `${editModeBar("photo", esc)}<div class="ml-empty" data-ml-dropzone="edit" data-ml-dropzone-label="Drop to open in editor">${svgIc("edit")}<b>Pick something to edit</b><i>Generate an image, choose one from Media Pool, or upload.</i>
       <div class="ml-edit-pick"><button class="ml-generate ml-inline" data-ml-upload>${svgIc("upload")} Upload an image</button>
       ${session.assets[0] ? `<button class="ml-generate ml-inline ml-ghost" data-ml-fromlib>Use latest generation</button>` : ""}</div>
-      <input type="file" accept="image/*" data-ml-editfile hidden /></div>`;
+      <input type="file" accept="image/*" data-ml-editfile hidden /></div>
+      ${editInlineAssetsHtml(esc, "image")}`;
     body.querySelector("[data-ml-edit-back]").onclick = () => { session.editMode = null; renderMediaStudio(root, opts); };
     const f = body.querySelector("[data-ml-editfile]");
     body.querySelector("[data-ml-upload]").onclick = () => f.click();
     f.onchange = () => readImage(f.files[0], (url) => { session.edit = { url, type: "image", id: `up-${Date.now()}` }; resetEdit(); renderMediaStudio(root, opts); });
     const fl = body.querySelector("[data-ml-fromlib]"); if (fl) fl.onclick = () => { const a = session.assets[0]; session.edit = { url: a.url, type: a.type, id: a.id }; resetEdit(); renderMediaStudio(root, opts); };
+    wireInlineLocalAssets(body, root, opts);
     return;
   }
   const bSpots = editState.bokeh?.spots || [];
@@ -2910,6 +3298,7 @@ function renderEdit(body, cfg, opts, root) {
           <button type="button" data-ml-before title="Hold to see original">Before</button>
         </div>
         <canvas class="ml-canvas ${mlPaintMode !== "select" ? "is-painting" : ""}" data-ml-canvas></canvas>
+        <canvas class="ml-layer-overlay ${mlPaintMode === "select" && !mlBokehPicking ? "is-active" : ""}" data-ml-layer-overlay aria-hidden="true"></canvas>
         <div class="ch-lb-bokeh-markers" data-ml-bokeh-markers></div>
         <div class="ch-lb-pick-hint" data-ml-pick-hint hidden>${svgIc("spark")} Click to add focus, right-click a spot to remove it</div>
       </div>
@@ -3003,6 +3392,7 @@ function renderEdit(body, cfg, opts, root) {
       </div>
     </div>`;
   const canvas = body.querySelector("[data-ml-canvas]");
+  const overlay = body.querySelector("[data-ml-layer-overlay]");
   const markerLayer = body.querySelector("[data-ml-bokeh-markers]");
   loadEditorAssetCache(root, opts);
   const repaint = () => {
@@ -3012,10 +3402,118 @@ function renderEdit(body, cfg, opts, root) {
       if (!canvas.isConnected || !canvas._img) return;
       renderComposition(canvas, canvas._img, editState, mlComposition, mlLayerEffects);
       fitEditorCanvas(canvas);
+      if (overlay) drawCompositionOverlay(overlay, canvas, mlComposition, mlSnapGuides);
       positionMarkers();
     });
   };
   const refreshEditor = () => { syncSliders(body); repaint(); updateEditHistoryControls(body); };
+  const isEditorTypingTarget = (target) => !!(target && target.closest && target.closest("input, textarea, select, button, [contenteditable]"));
+  const undoPhotoEdit = () => {
+    if (!mlEditHistory.length) return false;
+    mlEditFuture.push(fullEditorSnapshot());
+    restoreEdit(mlEditHistory.pop());
+    refreshEditor();
+    return true;
+  };
+  const redoPhotoEdit = () => {
+    if (!mlEditFuture.length) return false;
+    mlEditHistory.push(fullEditorSnapshot());
+    restoreEdit(mlEditFuture.pop());
+    refreshEditor();
+    return true;
+  };
+  const duplicateActiveLayer = () => {
+    const active = selectedEditLayer();
+    if (!active || active.id === "base") return false;
+    rememberEdit();
+    const copy = duplicateLayer(mlComposition, active.id);
+    if (copy && mlLayerEffects[active.id]) mlLayerEffects[copy.id] = cloneImageEditState(mlLayerEffects[active.id]);
+    renderMediaStudio(root, opts);
+    return true;
+  };
+  const selectAllEditableLayers = () => {
+    selectAllLayers(mlComposition);
+    mlComposition.selectedIds = mlComposition.selectedIds.filter((id) => {
+      const layer = mlComposition.layers.find((item) => item.id === id);
+      return layer && layer.id !== "base" && !layer.locked && layer.visible !== false;
+    });
+    if (!mlComposition.selectedIds.length) {
+      mlComposition.selectedIds = ["base"];
+      return false;
+    }
+    renderMediaStudio(root, opts);
+    return true;
+  };
+  const copySelectedEditableLayers = () => {
+    const targets = selectedLayers(mlComposition).filter((layer) => layer.id !== "base");
+    if (!targets.length) return false;
+    mlLayerClipboard = targets.map((layer) => ({
+      layer: { ...layer },
+      effect: mlLayerEffects[layer.id] ? cloneImageEditState(mlLayerEffects[layer.id], { includeMask: false }) : null,
+    }));
+    updateEditHistoryControls(body);
+    return true;
+  };
+  const pasteLayerClipboard = () => {
+    if (!mlLayerClipboard.length) return false;
+    rememberEdit();
+    const stamp = Date.now().toString(36);
+    const pastedIds = [];
+    mlLayerClipboard.forEach((item, index) => {
+      const source = item.layer || {};
+      const copy = {
+        ...source,
+        id: `${source.type || "layer"}-paste-${stamp}-${index}`,
+        name: `${source.name || layerKindLabel(source)} copy`,
+        locked: false,
+        x: Math.max(0, Math.min(1, (Number(source.x) || 0.5) + 0.035 * (index + 1))),
+        y: Math.max(0, Math.min(1, (Number(source.y) || 0.5) + 0.035 * (index + 1))),
+      };
+      mlComposition.layers.push(copy);
+      if (item.effect) mlLayerEffects[copy.id] = cloneImageEditState(item.effect, { includeMask: false });
+      pastedIds.push(copy.id);
+    });
+    mlComposition.selectedIds = pastedIds;
+    renderMediaStudio(root, opts);
+    return true;
+  };
+  const deleteSelectedEditableLayers = () => {
+    const editable = selectedLayers(mlComposition).some((layer) => layer.id !== "base" && !layer.locked);
+    if (!editable) return false;
+    rememberEdit();
+    removeSelectedLayers(mlComposition);
+    renderMediaStudio(root, opts);
+    return true;
+  };
+  const nudgeSelectedLayers = (dx, dy) => {
+    const targets = selectedLayers(mlComposition).filter((layer) => layer.id !== "base" && !layer.locked);
+    if (!targets.length) return false;
+    rememberEdit();
+    targets.forEach((layer) => {
+      layer.x = Math.max(0, Math.min(1, (Number(layer.x) || 0) + dx));
+      layer.y = Math.max(0, Math.min(1, (Number(layer.y) || 0) + dy));
+    });
+    repaint();
+    return true;
+  };
+  const resetLayerTransformDefaults = (layer) => {
+    layer.x = 0.5;
+    layer.y = 0.5;
+    layer.rotation = 0;
+    layer.opacity = 1;
+    layer.blend = "source-over";
+    if (layer.type === "text") {
+      layer.w = 0.78;
+      layer.h = 0.18;
+    } else if (layer.type === "image") {
+      layer.w = 0.52;
+      layer.h = 0.52;
+      layer.fit = "contain";
+    } else {
+      layer.w = 1;
+      layer.h = 1;
+    }
+  };
   const positionMarkers = () => {
     if (!markerLayer) return;
     const spots = editState.bokeh?.spots || [];
@@ -3063,22 +3561,36 @@ function renderEdit(body, cfg, opts, root) {
   if (mlEditResizeHandler) window.removeEventListener("resize", mlEditResizeHandler);
   mlEditResizeHandler = () => positionMarkers();
   window.addEventListener("resize", mlEditResizeHandler);
+  if (mlEditKeyHandler) document.removeEventListener("keydown", mlEditKeyHandler);
+  mlEditKeyHandler = (event) => {
+    if (!body.isConnected || !session.edit || session.editMode !== "photo") {
+      document.removeEventListener("keydown", mlEditKeyHandler);
+      mlEditKeyHandler = null;
+      return;
+    }
+    if (isEditorTypingTarget(event.target)) return;
+    const key = String(event.key || "").toLowerCase();
+    let handled = false;
+    if ((event.ctrlKey || event.metaKey) && !event.shiftKey && key === "z") handled = undoPhotoEdit();
+    else if (((event.ctrlKey || event.metaKey) && key === "y") || ((event.ctrlKey || event.metaKey) && event.shiftKey && key === "z")) handled = redoPhotoEdit();
+    else if ((event.ctrlKey || event.metaKey) && key === "a") handled = selectAllEditableLayers();
+    else if ((event.ctrlKey || event.metaKey) && key === "c") handled = copySelectedEditableLayers();
+    else if ((event.ctrlKey || event.metaKey) && key === "v") handled = pasteLayerClipboard();
+    else if ((event.ctrlKey || event.metaKey) && key === "d") handled = duplicateActiveLayer();
+    else if (key === "backspace" || key === "delete") handled = deleteSelectedEditableLayers();
+    else if (key === "arrowleft") handled = nudgeSelectedLayers(event.shiftKey ? -0.025 : -0.005, 0);
+    else if (key === "arrowright") handled = nudgeSelectedLayers(event.shiftKey ? 0.025 : 0.005, 0);
+    else if (key === "arrowup") handled = nudgeSelectedLayers(0, event.shiftKey ? -0.025 : -0.005);
+    else if (key === "arrowdown") handled = nudgeSelectedLayers(0, event.shiftKey ? 0.025 : 0.005);
+    if (handled) event.preventDefault();
+  };
+  document.addEventListener("keydown", mlEditKeyHandler);
   // wire tools
   body.querySelector("[data-ml-tutorial]")?.addEventListener("click", () => { mlShowTutorial = !mlShowTutorial; renderMediaStudio(root, opts); });
   body.querySelector("[data-ml-edit-back]")?.addEventListener("click", () => { session.editMode = null; renderMediaStudio(root, opts); });
   updateEditHistoryControls(body);
-  body.querySelector("[data-ml-undo]")?.addEventListener("click", () => {
-    if (!mlEditHistory.length) return;
-    mlEditFuture.push(fullEditorSnapshot());
-    restoreEdit(mlEditHistory.pop());
-    refreshEditor();
-  });
-  body.querySelector("[data-ml-redo]")?.addEventListener("click", () => {
-    if (!mlEditFuture.length) return;
-    mlEditHistory.push(fullEditorSnapshot());
-    restoreEdit(mlEditFuture.pop());
-    refreshEditor();
-  });
+  body.querySelector("[data-ml-undo]")?.addEventListener("click", undoPhotoEdit);
+  body.querySelector("[data-ml-redo]")?.addEventListener("click", redoPhotoEdit);
   const before = body.querySelector("[data-ml-before]");
   const showBefore = () => { if (canvas._img) paintEdit(canvas, canvas._img, { ...freshEditState(), loadedUrl: editState.loadedUrl }); fitEditorCanvas(canvas); };
   if (before) {
@@ -3236,28 +3748,118 @@ function renderEdit(body, cfg, opts, root) {
     if (layer) layer.visible = layer.visible === false;
     renderMediaStudio(root, opts);
   });
+  body.querySelectorAll("[data-ml-layer-lock]").forEach((button) => button.onclick = () => {
+    rememberEdit();
+    const layer = mlComposition.layers.find((item) => item.id === button.dataset.mlLayerLock);
+    if (layer) layer.locked = !layer.locked;
+    renderMediaStudio(root, opts);
+  });
   body.querySelectorAll("[data-ml-layer-order]").forEach((button) => button.onclick = () => {
     rememberEdit();
     moveLayerOrder(mlComposition, button.dataset.layerId, Number(button.dataset.mlLayerOrder));
     renderMediaStudio(root, opts);
+  });
+  body.querySelector("[data-ml-layer-center]")?.addEventListener("click", () => {
+    const layer = selectedEditLayer();
+    if (!layer || layer.locked) return;
+    rememberEdit();
+    layer.x = 0.5;
+    layer.y = 0.5;
+    renderMediaStudio(root, opts);
+  });
+  body.querySelector("[data-ml-layer-fit-canvas]")?.addEventListener("click", () => {
+    const layer = selectedEditLayer();
+    if (!layer || layer.locked) return;
+    rememberEdit();
+    layer.x = 0.5;
+    layer.y = 0.5;
+    layer.w = 1;
+    layer.h = 1;
+    layer.rotation = 0;
+    if (layer.type === "image" || layer.type === "base") layer.fit = "cover";
+    renderMediaStudio(root, opts);
+  });
+  body.querySelector("[data-ml-layer-reset-transform]")?.addEventListener("click", () => {
+    const layer = selectedEditLayer();
+    if (!layer || layer.locked) return;
+    rememberEdit();
+    resetLayerTransformDefaults(layer);
+    renderMediaStudio(root, opts);
+  });
+  body.querySelectorAll("[data-ml-layer-align]").forEach((button) => {
+    button.onclick = () => {
+      rememberEdit();
+      if (!alignSelectedLayers(mlComposition, button.dataset.mlLayerAlign)) {
+        mlEditHistory.pop();
+        return;
+      }
+      renderMediaStudio(root, opts);
+    };
+  });
+  body.querySelectorAll("[data-ml-layer-distribute]").forEach((button) => {
+    button.onclick = () => {
+      rememberEdit();
+      if (!distributeSelectedLayers(mlComposition, button.dataset.mlLayerDistribute)) {
+        mlEditHistory.pop();
+        return;
+      }
+      renderMediaStudio(root, opts);
+    };
+  });
+  const clearLayerDropState = () => body.querySelectorAll("[data-ml-layer-row]").forEach((row) => row.classList.remove("is-dragging", "is-drop-target"));
+  body.querySelectorAll("[data-ml-layer-row]").forEach((row) => {
+    row.addEventListener("dragstart", (event) => {
+      const layer = mlComposition.layers.find((item) => item.id === row.dataset.mlLayerRow);
+      if (!layer || layer.locked) {
+        event.preventDefault();
+        return;
+      }
+      row.classList.add("is-dragging");
+      event.dataTransfer?.setData("text/x-phantom-layer", layer.id);
+      if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+    });
+    row.addEventListener("dragover", (event) => {
+      const draggedId = event.dataTransfer?.getData("text/x-phantom-layer") || "";
+      if (!draggedId || draggedId === row.dataset.mlLayerRow) return;
+      event.preventDefault();
+      body.querySelectorAll("[data-ml-layer-row].is-drop-target").forEach((item) => item.classList.remove("is-drop-target"));
+      row.classList.add("is-drop-target");
+      if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+    });
+    row.addEventListener("dragleave", () => row.classList.remove("is-drop-target"));
+    row.addEventListener("dragend", clearLayerDropState);
+    row.addEventListener("drop", (event) => {
+      const draggedId = event.dataTransfer?.getData("text/x-phantom-layer") || "";
+      const targetIndex = Number(row.dataset.mlLayerIndex);
+      clearLayerDropState();
+      if (!draggedId || draggedId === row.dataset.mlLayerRow) return;
+      event.preventDefault();
+      const dragged = mlComposition.layers.find((item) => item.id === draggedId);
+      if (!dragged || dragged.locked) return;
+      rememberEdit();
+      moveLayerToIndex(mlComposition, draggedId, targetIndex);
+      renderMediaStudio(root, opts);
+    });
   });
   body.querySelector("[data-ml-layer-add-text]")?.addEventListener("click", () => {
     rememberEdit();
     addTextLayer(mlComposition, "Your headline");
     renderMediaStudio(root, opts);
   });
+  body.querySelector("[data-ml-layer-select-all]")?.addEventListener("click", () => {
+    selectAllEditableLayers();
+  });
+  body.querySelector("[data-ml-layer-copy]")?.addEventListener("click", () => {
+    if (copySelectedEditableLayers()) renderMediaStudio(root, opts);
+  });
+  body.querySelector("[data-ml-layer-paste]")?.addEventListener("click", () => {
+    pasteLayerClipboard();
+  });
   body.querySelector("[data-ml-layer-duplicate]")?.addEventListener("click", () => {
-    const active = selectedEditLayer();
-    if (!active || active.id === "base") return;
-    rememberEdit();
-    const copy = duplicateLayer(mlComposition, active.id);
-    if (copy && mlLayerEffects[active.id]) mlLayerEffects[copy.id] = cloneImageEditState(mlLayerEffects[active.id]);
-    renderMediaStudio(root, opts);
+    duplicateActiveLayer();
   });
   body.querySelector("[data-ml-layer-delete]")?.addEventListener("click", () => {
-    rememberEdit();
-    removeSelectedLayers(mlComposition);
-    renderMediaStudio(root, opts);
+    deleteSelectedEditableLayers();
   });
   body.querySelectorAll("[data-ml-layer-prop]").forEach((input) => {
     input.onpointerdown = () => rememberEdit();
@@ -3266,48 +3868,83 @@ function renderEdit(body, cfg, opts, root) {
       if (!layer) return;
       const key = input.dataset.mlLayerProp;
       const raw = Number(input.value);
-      layer[key] = ["x", "y", "w", "h", "opacity"].includes(key) ? raw / 100 : raw;
+      layer[key] = ["x", "y", "w", "h", "opacity", "backgroundOpacity"].includes(key) ? raw / 100 : raw;
       const out = body.querySelector(`[data-layer-out="${key}"]`);
       if (out) out.textContent = input.value;
       repaint();
     };
   });
   body.querySelectorAll("[data-ml-layer-field]").forEach((field) => {
+    let fieldRemembered = false;
+    const rememberLayerFieldEdit = () => {
+      if (fieldRemembered) return;
+      const layer = selectedEditLayer();
+      if (!layer || layer.locked) return;
+      fieldRemembered = true;
+      rememberEdit();
+      updateEditHistoryControls(body);
+    };
+    field.onfocus = rememberLayerFieldEdit;
+    field.onpointerdown = rememberLayerFieldEdit;
     field.onchange = field.oninput = () => {
       const layer = selectedEditLayer();
-      if (!layer) return;
+      if (!layer || layer.locked) return;
+      rememberLayerFieldEdit();
       layer[field.dataset.mlLayerField] = field.value;
       repaint();
     };
   });
-  canvas.onpointerdown = (event) => {
+  body.querySelectorAll("[data-ml-layer-toggle]").forEach((button) => {
+    button.onclick = () => {
+      const layer = selectedEditLayer();
+      if (!layer) return;
+      rememberEdit();
+      const key = button.dataset.mlLayerToggle;
+      layer[key] = !layer[key];
+      button.classList.toggle("is-on", !!layer[key]);
+      repaint();
+    };
+  });
+  if (overlay) overlay.onpointerdown = (event) => {
     if (mlPaintMode === "select" && !mlBokehPicking) {
-      const point = { ...canvasEditPoint(event, canvas), px: canvasEditPoint(event, canvas).x * canvas.width, py: canvasEditPoint(event, canvas).y * canvas.height };
-      const hit = hitTestLayer(mlComposition, point, canvas);
+      const point = canvasPoint(event, canvas);
+      const rect = canvas.getBoundingClientRect();
+      const handle = hitTestResizeHandle(mlComposition, point, canvas, rect.width / Math.max(1, canvas.width));
+      const hit = handle?.layer || hitTestLayer(mlComposition, point, canvas);
       if (hit) {
         event.preventDefault();
         rememberEdit();
-        selectLayer(mlComposition, hit.id, event.shiftKey || event.ctrlKey || event.metaKey);
+        selectLayer(mlComposition, hit.id, !handle && (event.shiftKey || event.ctrlKey || event.metaKey));
         const targets = selectedLayers(mlComposition).filter((layer) => !layer.locked);
-        const starts = targets.map((layer) => ({ layer, x: layer.x, y: layer.y }));
+        const starts = targets.map((layer) => ({ layer, x: layer.x, y: layer.y, w: layer.w, h: layer.h }));
         const start = point;
-        canvas.setPointerCapture?.(event.pointerId);
-        canvas.onpointermove = (moveEvent) => {
-          const p = { ...canvasEditPoint(moveEvent, canvas), px: canvasEditPoint(moveEvent, canvas).x * canvas.width, py: canvasEditPoint(moveEvent, canvas).y * canvas.height };
-          const dx = (p.px - start.px) / Math.max(1, canvas.width);
-          const dy = (p.py - start.py) / Math.max(1, canvas.height);
-          starts.forEach((item) => { item.layer.x = Math.max(0, Math.min(1, item.x + dx)); item.layer.y = Math.max(0, Math.min(1, item.y + dy)); });
+        overlay.setPointerCapture?.(event.pointerId);
+        overlay.classList.add("is-dragging");
+        overlay.onpointermove = (moveEvent) => {
+          const p = canvasPoint(moveEvent, canvas);
+          const dx = p.x - start.x;
+          const dy = p.y - start.y;
+          if (handle && starts.length === 1) {
+            const item = starts[0];
+            item.layer.w = Math.max(0.05, item.w + dx * (handle.index === 0 || handle.index === 3 ? -2 : 2));
+            item.layer.h = Math.max(0.05, item.h + dy * (handle.index === 0 || handle.index === 1 ? -2 : 2));
+          } else {
+            mlSnapGuides = applyLayerDragWithSnap(mlComposition, starts, dx, dy);
+          }
           repaint();
         };
-        canvas.onpointerup = canvas.onpointercancel = () => {
-          canvas.onpointermove = null;
-          canvas.onpointerup = null;
-          canvas.onpointercancel = null;
+        overlay.onpointerup = overlay.onpointercancel = () => {
+          overlay.classList.remove("is-dragging");
+          mlSnapGuides = [];
+          overlay.onpointermove = null;
+          overlay.onpointerup = null;
+          overlay.onpointercancel = null;
           renderMediaStudio(root, opts);
         };
       }
-      return;
     }
+  };
+  canvas.onpointerdown = (event) => {
     if (mlPaintMode === "select" || mlBokehPicking) return;
     event.preventDefault();
     rememberEdit();
@@ -3472,14 +4109,85 @@ function downloadAsset(a) {
    owner-only surface area — it lives exclusively in the Developer tab
    (main.js buildDevPrograms). This tab never re-exposes it. */
 
+function socialOAuthSetupPanel(esc) {
+  const setup = socialOAuthSetupState.setup;
+  const providers = Array.isArray(setup?.providers) ? setup.providers : [];
+  const callbackUrl = setup?.recommendedRedirectUri || setup?.redirectUri || "https://admin.phantomforce.online/phantom-ai/ops/social-oauth/callback";
+  const preflight = socialOAuthState.preflight || {};
+  const nextLabel = preflight.nextGlobalLabel || "Set up provider apps";
+  const nextDetail = preflight.nextGlobalAction === "connect_signed_in_account"
+    ? "Provider apps are saved. Connect each account with the browser that is already signed in."
+    : preflight.nextGlobalAction === "sync_live_feed"
+      ? "Accounts are authorized. Sync live metrics from the official platform APIs."
+      : "Create the provider app credentials once, then every workspace can connect accounts with OAuth.";
+  const providerOptions = providers.length
+    ? providers.map((provider) => `<option value="${esc(provider.id)}">${esc(provider.name)}${provider.id === "instagram" ? " + Facebook" : ""}</option>`).join("")
+    : PLATFORMS.map((platform) => `<option value="${esc(platform.id)}">${esc(platform.name)}</option>`).join("");
+  const providerRows = providers.length
+    ? providers.map((provider) => `<span class="${provider.oauthConfigured ? "is-ready" : "is-missing"}">${esc(provider.name)}${provider.id === "instagram" ? " + Facebook" : ""} · ${provider.oauthConfigured ? "ready" : "needs app"}</span>`).join("")
+    : `<span>Checking provider app setup…</span>`;
+  return `<details class="set-oauth-apps" open>
+    <summary>
+      <span>OAuth apps</span>
+      <b>${esc(String(setup?.readyCount ?? 0))}/${esc(String(setup?.totalCount ?? (providers.length || PLATFORMS.length)))} ready</b>
+    </summary>
+    <p>Set each platform app once. After this, any business user just clicks Connect account and approves in their signed-in browser. Secrets stay server-side.</p>
+    <p class="set-social-next"><b>Next:</b> ${esc(nextLabel)} · ${esc(nextDetail)}</p>
+    ${socialOAuthSetupState.error ? `<div class="set-social-notice">${esc(socialOAuthSetupState.error)}</div>` : ""}
+    <label class="set-oauth-callback">
+      <span>Callback URL for provider consoles</span>
+      <input readonly value="${esc(callbackUrl)}" data-oauth-callback />
+    </label>
+    <div class="set-oauth-provider-row">${providerRows}</div>
+    <form class="set-oauth-form" data-oauth-setup-form>
+      <select data-oauth-platform>${providerOptions}</select>
+      <input data-oauth-client-id autocomplete="off" placeholder="Client ID / App ID / Client key" />
+      <input data-oauth-client-secret autocomplete="off" placeholder="Client secret / App secret" type="password" />
+      <button class="btn btn-primary" type="submit">${socialOAuthSetupState.loading ? "Checking…" : "Save app"}</button>
+    </form>
+  </details>`;
+}
+
+function canManageSocialOAuthApps() {
+  const active = ctx?.session || {};
+  return Boolean(active.canManageAccess || active.isSuperAdmin);
+}
+
+function socialOAuthManagedPanel(esc) {
+  const readyCount = socialOAuthState.connectors.filter((connector) => connector.oauthConfigured).length;
+  const authorizedCount = socialOAuthState.connectors.filter((connector) => connector.configured).length;
+  const totalCount = socialOAuthState.connectors.length || PLATFORMS.length;
+  const preflight = socialOAuthState.preflight || {};
+  const nextLabel = preflight.nextGlobalLabel || (authorizedCount ? "Sync live feed" : readyCount ? "Connect accounts" : "Provider setup waiting");
+  const nextDetail = preflight.nextGlobalAction === "sync_live_feed"
+    ? "Authorized accounts can now pull official metrics."
+    : preflight.nextGlobalAction === "connect_signed_in_account"
+      ? "Use the browser account you are already signed into; PhantomForce stores the resulting token server-side."
+      : "The platform app must be configured by the owner before account OAuth can begin.";
+  return `<details class="set-oauth-apps set-oauth-managed" open>
+    <summary>
+      <span>Account connection</span>
+      <b>${esc(String(authorizedCount))}/${esc(String(totalCount))} accounts authorized</b>
+    </summary>
+    <p>Choose a channel below and connect it with the signed-in browser. PhantomForce keeps the platform app credentials server-side, stores account tokens server-side, and keeps posting approval-gated.</p>
+    <p class="set-social-next"><b>Next:</b> ${esc(nextLabel)} · ${esc(nextDetail)} ${readyCount ? `(${readyCount}/${totalCount} provider apps ready)` : ""}</p>
+  </details>`;
+}
+
 export function renderMediaSettings(el, opts = {}) {
   mediaSettingsMount = el;
   mediaSettingsOpts = opts;
   ensureHermesExtensionListener();
+  ensureSocialOAuthCompletionListener();
+  const canManageApps = canManageSocialOAuthApps();
+  if (!socialOAuthState.loaded && !socialOAuthState.loading) void refreshSocialOAuthStatus();
+  if (canManageApps && !socialOAuthSetupState.loaded && !socialOAuthSetupState.loading) void refreshSocialOAuthSetup();
   const esc = opts.esc || ((s) => String(s));
   const cfg = loadCfg();
   const socialAccounts = loadSocialAccounts();
   const linkedCount = socialAccounts.filter((account) => socialStatus(account) === "linked" || account.handle).length;
+  const oauthReadyCount = socialOAuthState.connectors.filter((connector) => connector.oauthConfigured).length;
+  const authorizedCount = socialOAuthState.connectors.filter((connector) => connector.configured).length;
   const routeRow = (modality, label) => {
     const provs = providersFor(cfg, modality === "enhance" ? "enhance" : modality);
     return `<label class="set-route"><span>${label}</span>
@@ -3512,9 +4220,11 @@ export function renderMediaSettings(el, opts = {}) {
             <h3>Social profiles</h3>
             <p class="set-note">Every channel defaults to officialchicagoshots and stays editable. Real analytics and cross-posting require OAuth/API authorization; profile handles alone never create fake stats or external posts.</p>
           </div>
-          <span class="set-safe-pill">${linkedCount}/${socialAccounts.length} saved</span>
+          <span class="set-safe-pill">${authorizedCount}/${socialAccounts.length} live · ${oauthReadyCount}/${socialAccounts.length} ready</span>
         </div>
         ${socialNotice ? `<div class="set-social-notice">${esc(socialNotice)}</div>` : ""}
+        ${socialOAuthState.error ? `<div class="set-social-notice">OAuth status check: ${esc(socialOAuthState.error)}</div>` : ""}
+        ${canManageApps ? socialOAuthSetupPanel(esc) : socialOAuthManagedPanel(esc)}
         <div class="set-social-grid">
           ${socialAccounts.map((account) => socialCard(account, esc)).join("")}
         </div>
@@ -3525,6 +4235,29 @@ export function renderMediaSettings(el, opts = {}) {
   el.querySelectorAll("[data-route]").forEach((s) => s.onchange = () => { cfg.routing[s.dataset.route] = s.value; saveCfg(cfg); });
   el.querySelectorAll("[data-set-quality] button").forEach((b) => b.onclick = () => { genState.quality = b.dataset.v || "standard"; renderMediaSettings(el, opts); });
   const ap = el.querySelector("[data-set-approval]"); ap.onchange = () => { cfg.requireApproval = ap.checked; saveCfg(cfg); };
+  const callbackInput = el.querySelector("[data-oauth-callback]");
+  if (callbackInput) callbackInput.onclick = () => { callbackInput.select(); navigator.clipboard?.writeText(callbackInput.value).catch(() => {}); };
+  const oauthSetupForm = el.querySelector("[data-oauth-setup-form]");
+  if (oauthSetupForm) oauthSetupForm.onsubmit = async (event) => {
+    event.preventDefault();
+    const platform = oauthSetupForm.querySelector("[data-oauth-platform]")?.value || "";
+    const clientId = oauthSetupForm.querySelector("[data-oauth-client-id]")?.value.trim() || "";
+    const clientSecret = oauthSetupForm.querySelector("[data-oauth-client-secret]")?.value.trim() || "";
+    const redirectUri = callbackInput?.value || "";
+    if (!clientId && !clientSecret) {
+      socialNotice = "Paste the provider app ID or secret before saving.";
+      renderMediaSettings(el, opts);
+      return;
+    }
+    try {
+      socialNotice = `Saving ${platform} OAuth app setup…`;
+      await saveSocialOAuthAppSetup({ platform, clientId, clientSecret, redirectUri });
+      socialNotice = `${platform} OAuth app saved. Connect the account from its channel card.`;
+    } catch (error) {
+      socialNotice = error?.message || "OAuth app setup could not be saved.";
+    }
+    renderMediaSettings(el, opts);
+  };
 
   // social account linking stays local and never reads browser cookies/tokens.
   // OAuth/API tokens must stay server-side; this UI only captures editable public identity.
@@ -3547,18 +4280,16 @@ export function renderMediaSettings(el, opts = {}) {
     if (open) open.onclick = async () => {
       open.disabled = true;
       try {
+        if (!socialOAuthState.loaded) await refreshSocialOAuthStatus({ force: true });
         const oauth = await requestSocialOAuthStart(account.id);
         window.open(oauth.authorizationUrl, "_blank", "noopener,noreferrer");
         account.connectMode = "oauth-started";
         account.lastConnectAt = new Date().toISOString();
-        socialNotice = `${account.name} OAuth opened for @${oauth.handle || account.handle || "officialchicagoshots"}. Complete the provider login, then Analytics can sync after the server stores the token.`;
+        socialNotice = `${account.name} authorization opened. Approve it once; PhantomForce refreshes this panel when the callback returns.`;
+        startSocialOAuthAuthorizationPolling(account.id);
       } catch (error) {
-        requestHermesExtensionProfileLink(account.id);
-        window.open(socialLoginTarget(account), "_blank", "noopener,noreferrer");
-        account.connectMode = "browser-bridge";
-        account.lastConnectAt = new Date().toISOString();
-        socialNotice = `${account.name} OAuth is not ready yet: ${error?.message || "missing credentials"}. Opened normal login only so the public handle can still be saved; no live stats or cross-posting were authorized.`;
-        startSocialBridgePolling(account.id);
+        account.connectMode = account.handle ? "manual-confirmed" : "manual";
+        socialNotice = `${account.name} needs the PhantomForce OAuth app configured before account authorization can start. A normal browser login is not enough for analytics or posting.`;
       }
       saveAndRender();
     };
@@ -3584,14 +4315,22 @@ export function renderMediaSettings(el, opts = {}) {
 
 function socialCard(account, esc) {
   const status = socialStatus(account);
+  const connector = socialConnectorFor(account.id);
   const profile = socialProfileTarget(account);
-  const lastConnect = status === "linked"
+  const lastConnect = connector?.configured
+    ? `Authorized account: ${connector.savedConnection?.accountHandle || connector.savedConnection?.accountName || connector.handle || account.name}`
+    : connector?.oauthConfigured
+      ? "OAuth app ready. Connect the account once."
+      : status === "linked"
     ? (profile ? `Saved profile: ${profile}` : "Profile saved locally")
   : status === "pending"
       ? "Confirm your handle below once you're signed in, or clear this to start over."
       : account.handle
         ? `Default handle ready: ${account.handle}`
         : "Save a public handle or profile URL";
+  const oauthDetail = connector
+    ? `<div class="set-social-hermes-proof">${svgIc(connector.configured ? "check" : connector.oauthConfigured ? "lock" : "spark")} ${esc(connector.configured ? "Live analytics authorized" : connector.oauthConfigured ? "OAuth app ready for authorization" : "OAuth app setup needed")}</div>`
+    : socialOAuthState.loading ? `<div class="set-social-hermes-proof">${svgIc("refresh")} Checking OAuth setup…</div>` : "";
   const hermesProof = account.hermesProof
     ? `<div class="set-social-hermes-proof">${svgIc("spark")} Saved profile · ${esc(account.hermesProof.displayName || account.hermesProof.handle || account.name)}</div>`
     : "";
@@ -3605,6 +4344,7 @@ function socialCard(account, esc) {
       <span>Analytics status</span>
       <b>${esc(socialPostingState(account))}</b>
     </div>
+    ${oauthDetail}
     ${hermesProof}
     <div class="set-social-actions">
       <button class="set-social-open set-social-action set-social-signin" data-social-open type="button">${esc(socialActionLabel(account))}</button>
