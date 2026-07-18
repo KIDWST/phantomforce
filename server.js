@@ -17,7 +17,7 @@ import { fileURLToPath } from "node:url";
 import pty from "node-pty";
 import { WebSocketServer } from "ws";
 
-import { loadProfiles, terminalEnv } from "./profiles.js";
+import { buildProfileArgs, loadProfiles, terminalEnv } from "./profiles.js";
 import { createDetector } from "./detect/index.js";
 import { stripAnsi } from "./detect/strip-ansi.js";
 import * as missionStore from "./mission/store.js";
@@ -36,7 +36,7 @@ import { createFrameRecorder, readFrames } from "./mission/recorder.js";
 import { maybeCheckpoint, readCheckpoints } from "./mission/checkpoint.js";
 import { TOKEN_ADAPTERS, estimateFromChars, costForUsage } from "./mission/tokens.js";
 import { shouldPollSession, resolveSoloTranscript } from "./mission/usage-poll.js";
-import { contextPercent } from "./mission/model-catalog.js";
+import { MODEL_CATALOG, contextPercent } from "./mission/model-catalog.js";
 import {
   appendUsageHistory,
   bucketHistoryByDay,
@@ -374,6 +374,10 @@ function startSession(sessionId, profile, opts = {}) {
     // this session's own CLI transcript even for solo (non-mission) tiles.
     provider: profile.detector ?? profile.id,
     cwd: profile.cwd ?? null,
+    // Explicitly requested model for this launch (null = the CLI's own
+    // default). Applied at spawn via buildProfileArgs — there is no in-band
+    // model swap; changing it means a relaunch.
+    model: opts.model ?? null,
     usage: null,
     status: "starting",
     buffer: "",
@@ -397,12 +401,15 @@ function startSession(sessionId, profile, opts = {}) {
   sessions.set(sessionId, session);
 
   try {
-    session.proc = pty.spawn(profile.command, profile.args, {
+    const { args, env: modelEnv } = buildProfileArgs(profile, { model: opts.model });
+    session.proc = pty.spawn(profile.command, args, {
       name: "xterm-256color",
       cols: opts.cols || 100,
       rows: opts.rows || 28,
       cwd: profile.cwd,
-      env: terminalEnv(profile.id),
+      // Model env override (OPENROUTER_MODEL) wins over the Connections
+      // default that terminalEnv injects.
+      env: { ...terminalEnv(profile.id), ...modelEnv },
     });
     session.status = "running";
     session.proc.onData((data) => {
@@ -441,6 +448,7 @@ function sessionView(id, session) {
   return {
     id,
     profileId: session.profileId,
+    model: session.model ?? null,
     status: session.status,
     startedAt: new Date(session.startedAt).toISOString(),
     exitCode: session.exitCode,
@@ -729,10 +737,16 @@ const server = http.createServer((req, res) => {
     readJsonBody(req).then((body) => {
       const profile = profileById.get(String(body.profile));
       if (!profile) return sendJson(res, 404, { ok: false, error: "unknown_profile" });
-      const session = startSession(startMatch[1], profile, { cols: body.cols, rows: body.rows, capture: body.capture });
+      const model = typeof body.model === "string" && body.model.trim() ? body.model.trim() : null;
+      const session = startSession(startMatch[1], profile, { cols: body.cols, rows: body.rows, capture: body.capture, model });
       return sendJson(res, 200, { ok: session.status !== "error", session: sessionView(startMatch[1], session) });
     });
     return;
+  }
+
+  // The shared model catalog, for the per-tab and global model switchers.
+  if (pathName === "/api/models" && req.method === "GET") {
+    return sendJson(res, 200, { ok: true, models: MODEL_CATALOG });
   }
 
   const stopMatch = pathName.match(/^\/api\/sessions\/([\w.-]+)\/stop$/);
@@ -920,7 +934,8 @@ const server = http.createServer((req, res) => {
     const workerProfile = {
       ...providerProfile,
       cwd: worker.cwd,
-      args: AGENT_PROVIDERS[providerId].buildArgs(worker.mode, { usageLogPath: worker.usageLogPath }),
+      // Keep the worker's own model (if one was ever set) across the retry.
+      args: AGENT_PROVIDERS[providerId].buildArgs(worker.mode, { usageLogPath: worker.usageLogPath, model: worker.model }),
     };
     const session = startSession(newSessionId, workerProfile, { cols: 100, rows: 28, missionId, workerId });
     worker.sessionId = newSessionId;

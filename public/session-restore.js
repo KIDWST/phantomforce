@@ -28,6 +28,9 @@ async function restoreSessions() {
         profileId: s.profileId,
         name: savedCard?.name ?? "",
         color: savedCard?.color ?? undefined,
+        // Model the live session was actually launched with (server-side
+        // truth), falling back to the saved per-tab override.
+        model: s.model ?? savedCard?.model ?? null,
       },
       { save: false },
     );

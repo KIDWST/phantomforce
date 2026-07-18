@@ -101,6 +101,50 @@ const BUILT_IN = isWin
       },
     ];
 
+// Single-quote escaping for a pwsh -Command string — same shape as
+// mission/claude-print.js / mission/adapters.js.
+function psQuote(value) {
+  return `'${String(value).replace(/'/g, "''")}'`;
+}
+
+// Which model flag/env a profile understands, keyed by its provider identity
+// (detector when set, else the profile id). Plain shells have no model
+// concept and ignore the request entirely.
+const MODEL_CAPABLE = new Set(["claude", "codex", "openrouter"]);
+
+export function profileSupportsModel(profile) {
+  return MODEL_CAPABLE.has(profile?.detector ?? profile?.id);
+}
+
+// Launch-time model injection. Returns { args, env }:
+// - claude/codex profiles: appends `--model '<id>'` inside the existing
+//   pwsh -Command string (the CLI invocation itself), psQuoted so arbitrary
+//   ids can never break out of the command;
+// - openrouter: the agent reads OPENROUTER_MODEL from its environment
+//   (openrouter-agent/agent.mjs), so the model becomes a spawn-env override
+//   (applied after terminalEnv so it wins over the Connections default);
+// - everything else, or no model requested: args unchanged, env empty.
+// Never mutates the profile.
+export function buildProfileArgs(profile, { model } = {}) {
+  const args = [...(profile.args ?? [])];
+  const env = {};
+  if (!model || !profileSupportsModel(profile)) return { args, env };
+  const kind = profile.detector ?? profile.id;
+  if (kind === "openrouter") {
+    env.OPENROUTER_MODEL = String(model);
+    return { args, env };
+  }
+  // claude/codex run as `pwsh -Command "<cli> ..."` — append to that string.
+  const commandIdx = args.indexOf("-Command");
+  if (commandIdx !== -1 && commandIdx + 1 < args.length) {
+    args[commandIdx + 1] = `${args[commandIdx + 1]} --model ${psQuote(model)}`;
+  } else {
+    // Direct-exe custom profile: pass the flag as real argv.
+    args.push("--model", String(model));
+  }
+  return { args, env };
+}
+
 // A minimal environment for spawned terminals — don't inherit Termina's own env
 // (which holds the launch token). Keep what a shell needs to work.
 export function terminalEnv(providerId) {

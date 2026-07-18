@@ -583,6 +583,34 @@ input {
   border-color: rgba(95, 213, 140, 0.6);
 }
 
+/* Per-tile model override. Unlike .instance-select it stays visible while
+   the tile is live — that's exactly when switching models matters. */
+.model-select {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 150px;
+  padding: 7px 8px;
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--soft);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.model-select:hover {
+  border-color: rgba(95, 213, 140, 0.4);
+}
+
+.model-select:focus {
+  outline: none;
+  border-color: rgba(95, 213, 140, 0.6);
+}
+
+.model-select.hidden {
+  display: none;
+}
+
 .screen {
   position: relative;
   flex: 1;
@@ -895,6 +923,32 @@ input {
   100% {
     background-position: -140% 0;
   }
+}
+
+/* ---- global model switcher (top bar) ---- */
+
+.global-model {
+  padding: 7px 10px;
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--soft);
+  font-size: 12px;
+  cursor: pointer;
+  max-width: 190px;
+}
+
+.global-model:hover {
+  border-color: rgba(95, 213, 140, 0.4);
+}
+
+.global-model:focus {
+  outline: none;
+  border-color: rgba(95, 213, 140, 0.6);
+}
+
+.global-model.hidden {
+  display: none;
 }
 
 /* ---- usage totals bar + spending-limit banner ---- */

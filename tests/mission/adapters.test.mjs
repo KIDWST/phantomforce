@@ -72,3 +72,20 @@ test("openrouter buildArgs includes --usage-log when a path is given", () => {
 test("openrouter buildArgs with no opts still works (backward compatible default)", () => {
   assert.doesNotThrow(() => AGENT_PROVIDERS.openrouter.buildArgs("plan"));
 });
+
+test("claude buildArgs passes an explicit model through as --model (worker retry keeps its model)", () => {
+  const args = AGENT_PROVIDERS.claude.buildArgs("approval", { model: "claude-opus-4-8" }).join(" ");
+  assert.ok(args.includes("--permission-mode manual"), args);
+  assert.ok(args.includes("--model"), args);
+  assert.ok(args.includes("claude-opus-4-8"), args);
+});
+
+test("claude buildArgs without a model stays byte-identical to today's args", () => {
+  assert.deepEqual(AGENT_PROVIDERS.claude.buildArgs("approval"), ["-NoLogo", "-NoExit", "-Command", "claude --permission-mode manual"]);
+});
+
+test("codex buildArgs passes an explicit model through as --model", () => {
+  const args = AGENT_PROVIDERS.codex.buildArgs("auto", { model: "gpt-5-codex" }).join(" ");
+  assert.ok(args.includes("--model"), args);
+  assert.ok(args.includes("gpt-5-codex"), args);
+});

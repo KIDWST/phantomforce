@@ -21,6 +21,19 @@ const TERM_THEME = {
 };
 
 let profiles = [];
+let modelCatalog = [];
+// Global default model: applied to newly started model-capable tiles that
+// have no per-tab override. Persisted locally; per-tab override always wins.
+const DEFAULT_MODEL_KEY = "termina.defaultModel.v1";
+let defaultModel = null;
+try {
+  defaultModel = localStorage.getItem(DEFAULT_MODEL_KEY) || null;
+} catch {
+  /* storage unavailable */
+}
+// Profiles whose CLI understands a model switch (matches the server's
+// buildProfileArgs support: claude/codex via --model, openrouter via env).
+const MODEL_CAPABLE = new Set(["claude", "codex", "openrouter"]);
 let uidCounter = 0;
 let broadcastOn = false;
 let activeCardUid = null;
@@ -172,7 +185,7 @@ function saveWorkspace() {
     // persisting.
     const cardEntries = cards
       .filter((c) => c.sessionId)
-      .map((c) => ({ sessionId: c.sessionId, name: c.name, color: c.color }));
+      .map((c) => ({ sessionId: c.sessionId, name: c.name, color: c.color, model: c.model ?? null }));
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ cards: cardEntries }));
   } catch {
     /* storage unavailable */
@@ -223,6 +236,96 @@ function optionHtml(selectedId) {
   );
 }
 
+// ---- model catalog + switching ----------------------------------------------
+
+async function loadModels() {
+  try {
+    const res = await api("/api/models");
+    const data = await res.json();
+    if (!data.ok || !Array.isArray(data.models)) return;
+    modelCatalog = data.models;
+  } catch {
+    return; // engine offline — switchers stay hidden
+  }
+  renderGlobalModelSelect();
+  for (const card of cards) {
+    const sel = document.querySelector(`.tile[data-uid="${card.uid}"] .model-select`);
+    if (sel) renderModelSelect(card, sel);
+  }
+}
+
+function catalogLabel(modelId) {
+  return modelCatalog.find((m) => m.id === modelId)?.label ?? modelLabel(modelId);
+}
+
+function modelSelectOptionHtml(selectedModel) {
+  const defaultLabel = defaultModel ? `Default (${catalogLabel(defaultModel)})` : "Default model";
+  return (
+    `<option value="">${escapeHtml(defaultLabel)}</option>` +
+    modelCatalog.map((m) => `<option value="${escapeHtml(m.id)}"${m.id === selectedModel ? " selected" : ""}>${escapeHtml(m.label)}</option>`).join("")
+  );
+}
+
+function renderModelSelect(card, sel) {
+  const show = Boolean(card.profileId && MODEL_CAPABLE.has(card.profileId) && modelCatalog.length);
+  sel.classList.toggle("hidden", !show);
+  if (show) sel.innerHTML = modelSelectOptionHtml(card.model);
+}
+
+// Switching = relaunch (no in-band swap exists). Only interrupt-worthy work
+// gets a confirm: an active PTY with output in the last 60s.
+function requestCardModel(card, sel) {
+  const newModel = sel.value || null;
+  if (newModel === card.model) return;
+  const busy = card.sessionId && card.lastOutputAt && Date.now() - card.lastOutputAt < 60000;
+  const label = newModel ? catalogLabel(newModel) : defaultModel ? `the default (${catalogLabel(defaultModel)})` : "the CLI's own default";
+  if (busy && !confirm(`This terminal was active in the last minute. Relaunch it on ${label}?`)) {
+    sel.value = card.model ?? "";
+    return;
+  }
+  card.model = newModel;
+  saveWorkspace();
+  if (card.sessionId) restartCard(card);
+}
+
+function renderGlobalModelSelect() {
+  const sel = document.getElementById("global-model");
+  if (!sel) return;
+  sel.classList.toggle("hidden", !modelCatalog.length);
+  sel.innerHTML =
+    `<option value="">Model: CLI default</option>` +
+    modelCatalog.map((m) => `<option value="${escapeHtml(m.id)}"${m.id === defaultModel ? " selected" : ""}>${escapeHtml(m.label)}</option>`).join("");
+}
+
+// One click, all tabs: set the global default and relaunch every running
+// model-capable tile that has no per-tab override (an override always wins,
+// so those tiles are left alone). Always confirms, listing what restarts.
+function requestGlobalModel(sel) {
+  const newModel = sel.value || null;
+  if (newModel === defaultModel) return;
+  const affected = cards.filter((c) => c.sessionId && !c.model && c.profileId && MODEL_CAPABLE.has(c.profileId));
+  const names = affected.map((c) => c.name || profileLabel(c.profileId) || c.uid);
+  const label = newModel ? catalogLabel(newModel) : "each CLI's own default";
+  const detail = affected.length ? `This relaunches ${affected.length} running terminal(s): ${names.join(", ")}.` : "No running terminals need a relaunch.";
+  if (!confirm(`Switch the default model to ${label}? ${detail} Terminals with a per-tab model keep it.`)) {
+    sel.value = defaultModel ?? "";
+    return;
+  }
+  defaultModel = newModel;
+  try {
+    if (defaultModel) localStorage.setItem(DEFAULT_MODEL_KEY, defaultModel);
+    else localStorage.removeItem(DEFAULT_MODEL_KEY);
+  } catch {
+    /* storage unavailable */
+  }
+  renderGlobalModelSelect();
+  for (const card of cards) {
+    const cardSel = document.querySelector(`.tile[data-uid="${card.uid}"] .model-select`);
+    if (cardSel) renderModelSelect(card, cardSel);
+  }
+  for (const card of affected) restartCard(card);
+}
+
 // ---- card lifecycle ---------------------------------------------------------
 
 function addCard(init = {}, { save = true, start = false } = {}) {
@@ -233,6 +336,7 @@ function addCard(init = {}, { save = true, start = false } = {}) {
     role: init.role ?? null,
     lastLedgerEvent: null,
     profileId: init.profileId ?? null,
+    model: init.model ?? null,
     color: init.color ?? nextCardColor(),
     linked: Boolean(init.linked),
     sessionId: null,
@@ -300,6 +404,12 @@ function buildCard(card) {
   select.innerHTML = optionHtml(card.profileId);
   select.addEventListener("change", () => setCardProfile(card, select.value));
 
+  const modelSelect = document.createElement("select");
+  modelSelect.className = "model-select";
+  modelSelect.setAttribute("aria-label", "Model override for this terminal");
+  modelSelect.title = "Model for this terminal — switching relaunches the CLI";
+  modelSelect.addEventListener("change", () => requestCardModel(card, modelSelect));
+
   const pill = document.createElement("span");
   pill.className = "status-pill";
   pill.dataset.state = card.status.state;
@@ -315,7 +425,8 @@ function buildCard(card) {
   remove.textContent = "×";
   remove.addEventListener("click", () => removeCard(card));
 
-  head.append(icon, name, select, pill, menu.button, remove);
+  head.append(icon, name, select, modelSelect, pill, menu.button, remove);
+  renderModelSelect(card, modelSelect);
 
   const meta = document.createElement("div");
   meta.className = "tile-meta";
@@ -673,6 +784,8 @@ function setCardProfile(card, profileId) {
   if (nameEl) nameEl.placeholder = card.profileId ? profileLabel(card.profileId) : "Name this window";
   const iconEl = document.querySelector(`.tile[data-uid="${card.uid}"] .tile-icon`);
   if (iconEl) iconEl.textContent = card.profileId ? providerIcon(card.profileId) : "❯";
+  const modelSel = document.querySelector(`.tile[data-uid="${card.uid}"] .model-select`);
+  if (modelSel) renderModelSelect(card, modelSel);
   renderProject(card);
   saveWorkspace();
   if (card.profileId) startTerminal(card);
@@ -693,7 +806,8 @@ async function startTerminal(card) {
   try {
     const res = await api(`/api/sessions/${sessionId}/start`, {
       method: "POST",
-      body: JSON.stringify({ profile: card.profileId, cols: 100, rows: 28 }),
+      // Per-tab override wins; otherwise the global default (if any).
+      body: JSON.stringify({ profile: card.profileId, cols: 100, rows: 28, model: card.model ?? defaultModel ?? undefined }),
     });
     const data = await res.json();
     if (!data.ok) {
@@ -747,6 +861,7 @@ function openTerminal(card, sessionId) {
       const msg = JSON.parse(event.data);
       if (msg.type === "output") {
         term.write(msg.data);
+        card.lastOutputAt = Date.now();
         if (card.uid !== activeCardUid) markActivity(card, msg.data);
       } else if (msg.type === "status") {
         const prevState = card.status.state;
@@ -1052,6 +1167,7 @@ function ensureAddCard() {
 async function boot() {
   ensureAddCard();
   await loadProfiles();
+  await loadModels();
 
   // Ask once for permission so background terminals can ping you.
   if (typeof Notification !== "undefined" && Notification.permission === "default") {
@@ -1165,6 +1281,7 @@ document.addEventListener("click", (e) => {
 });
 
 document.getElementById("rescan").addEventListener("click", loadProfiles);
+document.getElementById("global-model").addEventListener("change", (e) => requestGlobalModel(e.target));
 document.getElementById("usage-totals").addEventListener("click", (e) => {
   e.stopPropagation();
   toggleUsagePopover();

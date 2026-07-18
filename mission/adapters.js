@@ -28,20 +28,27 @@ function psQuote(value) {
   return `'${String(value).replace(/'/g, "''")}'`;
 }
 
+// `--model` is appended only when explicitly requested (opts.model) — same
+// flag claude-print.js already uses for `claude -p`; codex supports the same
+// flag. Absent a model, args stay byte-identical to before.
+function withModel(command, model) {
+  return model ? `${command} --model ${psQuote(model)}` : command;
+}
+
 export const AGENT_PROVIDERS = {
   claude: {
     label: "Claude CLI",
-    buildArgs: (mode) => {
+    buildArgs: (mode, opts = {}) => {
       const flag = mode === "plan" ? "plan" : mode === "auto" ? "auto" : "manual";
-      return ["-NoLogo", "-NoExit", "-Command", `claude --permission-mode ${flag}`];
+      return ["-NoLogo", "-NoExit", "-Command", withModel(`claude --permission-mode ${flag}`, opts.model)];
     },
   },
   codex: {
     label: "Codex CLI",
-    buildArgs: (mode) => {
-      if (mode === "plan") return ["-NoLogo", "-NoExit", "-Command", "codex --sandbox read-only --ask-for-approval on-request"];
+    buildArgs: (mode, opts = {}) => {
+      if (mode === "plan") return ["-NoLogo", "-NoExit", "-Command", withModel("codex --sandbox read-only --ask-for-approval on-request", opts.model)];
       const approval = mode === "auto" ? "never" : "on-request";
-      return ["-NoLogo", "-NoExit", "-Command", `codex --sandbox workspace-write --ask-for-approval ${approval}`];
+      return ["-NoLogo", "-NoExit", "-Command", withModel(`codex --sandbox workspace-write --ask-for-approval ${approval}`, opts.model)];
     },
   },
   openrouter: {
