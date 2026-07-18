@@ -41,7 +41,7 @@
     { "id": "settings", "label": "Settings", "group": "bottom", "purpose": "configuration" }
   ],
   "serverRouteGroups": [
-    { "group": "auth", "examples": ["/auth/owner-login", "/auth/login", "/auth/logout", "/auth/me", "/auth/switch-org"], "coverage": "partial" },
+    { "group": "auth", "examples": ["/auth/owner-login", "/auth/login", "/auth/customer-login", "/auth/customer-signup", "/auth/customer-forgot-password", "/auth/customer-reset-password", "/auth/logout", "/auth/me", "/auth/switch-org"], "coverage": "partial; local-customer routes verified 2026-07-18" },
     { "group": "orgs", "examples": ["/orgs", "/orgs/:orgId/members", "/orgs/:orgId/invitations", "/orgs/:orgId/entitlements"], "coverage": "partial" },
     { "group": "crm", "examples": ["/api/crm/leads", "/api/crm/prospect-lanes"], "coverage": "runtime exercised" },
     { "group": "clientSetup", "examples": ["/api/client-setup", "/api/client-setup/slots/:slotId"], "coverage": "runtime exercised" },

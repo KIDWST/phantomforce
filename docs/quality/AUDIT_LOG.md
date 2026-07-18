@@ -1,5 +1,119 @@
 # PhantomForce Audit Log
 
+## 2026-07-18 — Daily QA Sweep: Local-Customer Auth Routes + Plan Simulator End-to-End
+
+Working directly in
+`C:\Users\jorda\Documents\Codex\worktrees\phantomforce-main-trunk-20260706`.
+Read `AGENTS.md`, automation memory, and all files under `docs/quality/`
+before editing.
+
+### Surfaces Audited
+
+- Local-customer account/auth path:
+  `server/src/access/local-customer-accounts.ts`, `server/src/index.ts`.
+- Customer plan simulator: `/customer/plan-preview`, `/auth/me`,
+  `app/js/orgs.js`, `app/js/main.js`, Settings Plan & access.
+- Release integrity rules:
+  `docs/quality/CHANGE_MEMORY.json` and `scripts/test-customer-plan-switching.mjs`.
+- PhantomPlay and PhantomStore focused suites.
+- Full responsive Chrome/CDP matrix through `scripts/test-responsive-viewports.mjs`.
+
+### Problems Verified
+
+- Q-0013 was real: `loginLocalCustomer`, `registerLocalCustomer`, and password
+  reset helpers existed, but no HTTP route exposed them, so a real local
+  customer test account could not sign in to exercise the plan simulator.
+- `/sessions` advertised customer account actions too broadly and did not
+  identify the local-customer route set when database auth was unavailable.
+- The customer app auth gate only rendered when database auth was enabled, so
+  local-customer mode could still present a blocked/dead login path.
+- DB-auth organization isolation remains blocked because Docker Desktop's Linux
+  engine is still unavailable.
+
+### Problems Fixed
+
+- Added additive customer-only routes:
+  `/auth/customer-login`, `/auth/customer-signup`,
+  `/auth/customer-forgot-password`, and `/auth/customer-reset-password`.
+  They are denied on `admin.phantomforce.online`, require
+  `PHANTOMFORCE_LOCAL_CUSTOMER_AUTH=true`, share the existing auth throttles,
+  and mint the same signed bearer token format already resolved by the
+  `local:` pre-handler.
+- Server startup now initializes the local-customer seed store, so configured
+  seed accounts can actually sign in through the app process.
+- `/sessions` now advertises the correct customer endpoints for database vs.
+  local-customer mode and keeps all customer account actions hidden on the
+  admin host.
+- `/auth/logout` now revokes local-customer sessions instead of treating them
+  as stateless.
+- `app/js/orgs.js` uses the customer endpoints advertised by `/sessions`.
+- `app/js/main.js` renders the customer login gate for local-customer mode and
+  hides database-only buttons such as Submit Your Game and username recovery.
+- Cache-bust id normalized to `phantom-live-20260718-3` across the app module
+  graph.
+
+### Tests Added
+
+- `server/scripts/test-local-customer-auth-routes.ts`.
+- Root/server npm scripts:
+  `npm run test:local-customer-auth` and server workspace
+  `test:local-customer-auth`.
+
+### Commands Run
+
+- `docker --version; docker ps --format '{{.Names}} {{.Ports}}'`
+- `node --check app/js/main.js; node --check app/js/orgs.js`
+- JSON parse check for `package.json`, `server/package.json`, and
+  `docs/quality/CHANGE_MEMORY.json`
+- `npx tsc -p server/tsconfig.json --noEmit`
+- `rg -n "phantom-live-(?!20260718-3)" app/index.html app/js --pcre2`
+- `npm run test:local-customer-auth`
+- `npm run test:customer-plan-switching`
+- `npm run test:change-memory`
+- `npm run test:phantomplay`
+- `npm run test:phantomstore`
+- `npm run test:responsive-viewports`
+- `git diff --check`
+
+### Results
+
+- PASS: local-customer HTTP route test proved `/sessions` advertising,
+  admin-host denial, seeded login, signup conflict handling, `/auth/me`,
+  plan switch to Elite, password reset revoking old sessions, re-login, and
+  logout revocation using an isolated temp store.
+- PASS: customer plan static guard.
+- PASS: server typecheck and app JS syntax checks.
+- PASS: PhantomPlay and PhantomStore focused suites.
+- PASS: responsive Chrome/CDP matrix: 46 cases across Dashboard, Clients,
+  Media Lab, Content Hub, Analytics, PhantomPlay, and Settings at 320, 375,
+  768, 1024, 1440, and 1920px. Interaction probes covered Media Lab Edit and
+  Settings Plan & access on phone and desktop. Report:
+  `tmp/responsive-viewports/2026-07-18T14-12-58-838Z/report.json`.
+- PASS: no stale app cache ids outside `phantom-live-20260718-3`.
+- PASS: `git diff --check` (line-ending warnings only).
+- FAIL, known/pre-existing: `npm run test:change-memory` still fails only the
+  Phantom Rumble ledge-recovery rule because the active chicken-coop redesign
+  intentionally removes that older mechanic; see Q-0014.
+- BLOCKED: true DB-auth organization isolation still needs Docker/Postgres.
+- BLOCKED: direct browser proof on `app.phantomforce.online:5293` was blocked
+  by Chrome secure-upgrade/HSTS behavior against a plain local HTTP server.
+  The backend route proof used real Fastify HTTP injection, and the local app
+  browser proof used the repo's Chrome/CDP harness.
+
+### Remaining P0/P1
+
+- No P0 found in this cycle.
+- P1: DB-auth organization isolation browser proof remains blocked on Docker.
+- P1: Q-0014 keeps `test:change-memory` red until the Phantom Rumble
+  chicken-coop direction and release-integrity rule are reconciled.
+
+### Next Task
+
+Resolve Q-0014 by finishing the intentional Phantom Rumble chicken-coop/ninja
+polish work and updating the locked change-memory rule to match the accepted
+new mechanic, or explicitly restore a compatible recovery mechanic. Resume
+DB-auth org isolation as soon as Docker/Postgres is available.
+
 ## 2026-07-17 (session 5) — Bug: "PhantomStore isn't available" — root-caused to a stale deploy-checkout proxy process, not app code
 
 Jordan reported the PhantomStore AI-marketplace tab saying it isn't available.

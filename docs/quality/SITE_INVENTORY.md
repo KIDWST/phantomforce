@@ -1,6 +1,6 @@
 # PhantomForce Site Inventory
 
-Last updated: 2026-07-16
+Last updated: 2026-07-18
 
 Scope: static repository discovery, server route extraction from
 `server/src/index.ts`, application navigation from `app/js/main.js`, local
@@ -34,10 +34,14 @@ browser matrix evidence in `tmp/responsive-viewports/2026-07-16T14-07-18-427Z`.
 | `/auth/owner-login` | No | Owner/admin login. | Submit owner credentials. | Success, invalid, host restriction. | First real run harness; auth suites exist. | Do not print secrets in tests. |
 | `/auth/demo-login` | No/local config | Demo/local session login. | Select test/admin/client session. | Enabled, disabled. | Multiple server tests. | Demo-only, not production auth. |
 | `/auth/login` | No/database config | Database user login. | Email/password login. | Enabled, disabled, invalid, host restriction. | Auth boundary tests. | Needs browser registration/recovery audit. |
-| `/auth/logout` | Yes | End session. | Logout/revoke DB session. | DB session, stateless session. | Auth tests. | UI logout flow not fully exercised this cycle. |
+| `/auth/logout` | Yes | End session. | Logout/revoke DB or local-customer session. | DB session, local customer, stateless session. | `test:local-customer-auth`; auth tests. | UI logout flow not fully exercised this cycle. |
 | `/auth/me` | Yes | Current account/org state. | Read memberships, entitlements. | Legacy, database. | First real run harness. | DB-auth org isolation still needs browser/user run. |
 | `/auth/switch-org` | DB session | Switch active organization. | Change org. | Member, non-member denied. | Auth tests. | Critical user-reported org switching risk requires DB-auth UI pass. |
 | `/auth/invitations/accept` | No/database config | Accept org invite. | Create/claim account. | Valid, expired, invalid. | Auth tests. | Browser onboarding and recovery not audited. |
+| `/auth/customer-login` | No/customer app local config | Local customer test account login for plan simulator. | Email/password login. | Enabled, disabled, invalid, admin-host denied. | `test:local-customer-auth`. | Direct customer-domain browser proof blocked locally by HTTPS/HSTS; route flow verified. |
+| `/auth/customer-signup` | No/customer app local config | Local customer test account registration. | Create account/workspace and sign in. | Created, duplicate, admin-host denied. | `test:local-customer-auth`. | Needs production-host HTTPS browser click-through. |
+| `/auth/customer-forgot-password` | No/customer app local config | Local customer password reset request. | Create reset token/receipt. | Unknown email privacy, test-domain preview token. | `test:local-customer-auth`. | Email delivery/provider not wired; test preview only. |
+| `/auth/customer-reset-password` | No/customer app local config | Local customer password reset completion. | Save new password and revoke sessions. | Valid token, expired/invalid token. | `test:local-customer-auth`. | Needs production-host browser click-through. |
 
 ## Authenticated Navigation Destinations
 
@@ -58,7 +62,7 @@ browser matrix evidence in `tmp/responsive-viewports/2026-07-16T14-07-18-427Z`.
 | Approvals | Owner/admin | Approval queue. | Approve/request changes/decline. | Empty, pending, decided. | `test:workspace-approvals`; API harness. | 2026-07-14 | Needs destructive-action confirmation audit. |
 | Workforce | Owner/admin | Worker map and operational force view. | Inspect workers/departments. | Baseline, active, mapped. | UI sweep. | 2026-07-14 | Worker counts need real proof/terminology audit. |
 | Away Mode | Owner/admin | Vacation/coverage mode. | Activate/deactivate, settings, approvals. | Off, on, approvals. | Vacation server tests. | 2026-07-14 | UI text sample was thin; needs route-specific audit. |
-| Settings | Yes by role | Business Manager settings. | Configure model/settings/nav. | Owner/admin/client variants. | UI sweep; 2026-07-16 responsive matrix; `test:settings-connections`. | 2026-07-16 | Needs form-submit and keyboard pass. |
+| Settings | Yes by role | Business Manager settings. | Configure model/settings/nav, switch customer test tiers. | Owner/admin/client variants, local-customer Plan & access. | UI sweep; 2026-07-18 responsive matrix; `test:settings-connections`; `test:local-customer-auth`. | 2026-07-18 | Needs more form-submit and keyboard pass coverage. |
 | Developer | Owner | Developer control room. | Inspect providers, runs, tooling. | Provider ready/off, logs. | UI sweep. | 2026-07-14 | Should remain role/capability, not org identity. |
 
 ## Server API Groups
@@ -68,7 +72,9 @@ See `docs/quality/site-surface.json` for grouped machine-readable coverage.
 
 ## Coverage Gaps For Next Cycles
 
-- Browser registration, recovery, logout, invitation, and org-switching flows.
+- Browser registration, recovery, logout, invitation, and org-switching flows;
+  local-customer versions are route-tested but still need production-host HTTPS
+  browser click-through.
 - True DB-auth tenant isolation with separate users for PhantomForce and
   ChicagoShots.
 - Interaction-level mobile/browser checks after the 2026-07-16 viewport matrix

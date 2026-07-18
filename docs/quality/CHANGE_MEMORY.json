@@ -481,6 +481,26 @@
           "description": "Backend exposes the customer plan switch endpoint."
         },
         {
+          "file": "server/src/index.ts",
+          "pattern": "app\\.post\\(\"/auth/customer-login\"",
+          "description": "Backend exposes additive local-customer login without replacing database /auth/login."
+        },
+        {
+          "file": "server/src/index.ts",
+          "pattern": "app\\.post\\(\"/auth/customer-signup\"",
+          "description": "Backend exposes additive local-customer registration."
+        },
+        {
+          "file": "server/src/index.ts",
+          "pattern": "app\\.post\\(\"/auth/customer-forgot-password\"",
+          "description": "Backend exposes additive local-customer password reset request."
+        },
+        {
+          "file": "server/src/index.ts",
+          "pattern": "customerLoginEndpoint[\\s\\S]*/auth/customer-login",
+          "description": "/sessions advertises the local customer login endpoint when database auth is off."
+        },
+        {
           "file": "app/js/settings.js",
           "pattern": "id: \"plan\", label: \"Plan & access\", category: \"Workspace\"",
           "description": "Settings owns plan testing."

@@ -1,32 +1,30 @@
 {
-  "cycle": "daily-qa-2026-07-17",
-  "date": "2026-07-17",
-  "theme": "App boot restore and cache graph normalization",
+  "cycle": "daily-qa-2026-07-18",
+  "date": "2026-07-18",
+  "theme": "Local-customer auth routes and customer plan simulator reachability",
   "sources": [
     "AGENTS.md",
-    "docs/quality/CONTINUOUS_QUALITY_PROGRAM.md",
-    "docs/quality/SITE_INVENTORY.md",
-    "docs/quality/QUALITY_BACKLOG.md",
-    "docs/quality/NEXT_CYCLE.md",
-    "docs/DATABASE_SETUP.md",
-    "docs/ADMIN_RECOVERY.md",
-    "app/index.html",
+    "docs/quality/*",
+    "automation memory",
+    "server/src/access/local-customer-accounts.ts",
+    "server/src/index.ts",
+    "app/js/orgs.js",
     "app/js/main.js",
-    "app/js/store.js",
-    "app/js/phantomstore.js",
+    "scripts/test-customer-plan-switching.mjs",
+    "server/scripts/test-local-customer-auth-routes.ts",
     "scripts/test-responsive-viewports.mjs"
   ],
   "findings": [
     {
-      "id": "Q-0011",
-      "severity": "P1",
+      "id": "Q-0013",
+      "severity": "P2",
       "status": "fixed_verified",
-      "routeOrComponent": "admin app shell startup",
-      "journey": "open local owner QA app and render Business Manager",
-      "expected": "The shell renders after local owner session resolution.",
-      "actual": "Before the fix, PhantomStore's missing store export blocked module startup and left only the boot fallback visible.",
-      "evidence": "Browser Runtime.exceptionThrown from phantomstore.js plus initial npm run test:responsive-viewports failure",
-      "regressionTest": "npm run test:responsive-viewports"
+      "routeOrComponent": "local-customer auth and customer plan simulator",
+      "journey": "a local customer test account signs in and switches public tiers",
+      "expected": "Local customer helpers are reachable through customer-host-only HTTP routes and return signed bearer sessions.",
+      "actual": "Before the fix, helper functions existed but no HTTP route exposed login, registration, or password reset.",
+      "evidence": "npm run test:local-customer-auth proves sessions advertising, admin-host denial, seeded login, signup, plan switch, password reset, and logout revocation.",
+      "regressionTest": "npm run test:local-customer-auth && npm run test:customer-plan-switching"
     },
     {
       "id": "Q-0002",
@@ -35,43 +33,49 @@
       "routeOrComponent": "database-auth organization isolation",
       "journey": "separate PhantomForce and ChicagoShots users and organizations",
       "expected": "Safe local Postgres fixture can run DB-auth browser proof.",
-      "actual": "Docker Desktop Linux engine was not running, so the Postgres fixture could not start.",
+      "actual": "Docker Desktop Linux engine was still unavailable.",
       "evidence": "docker ps failed opening dockerDesktopLinuxEngine pipe",
       "regressionTest": "server/scripts/test-auth-database-live.ps1 once Docker/Postgres is available"
     },
     {
-      "id": "Q-0012",
+      "id": "Q-0014",
       "severity": "P1",
       "status": "open",
-      "routeOrComponent": "change-memory release integrity",
-      "journey": "prevent accepted decisions from disappearing in stale worktrees",
-      "expected": "npm run test:change-memory passes before push, sync, or live claim.",
-      "actual": "Guard failed with 20 stale-decision issues.",
-      "evidence": "npm run test:change-memory output on 2026-07-17",
-      "regressionTest": "npm run test:change-memory"
+      "routeOrComponent": "Phantom Rumble release integrity",
+      "journey": "accepted game mechanic remains aligned with change-memory guard",
+      "expected": "npm run test:change-memory passes or the guard matches the accepted chicken-coop direction.",
+      "actual": "Only the Phantom Rumble ledge-recovery rule fails while the chicken-coop redesign is active.",
+      "evidence": "npm run test:change-memory failed with 2 missing ledge-recovery patterns",
+      "regressionTest": "npm run test:change-memory after Q-0014 is reconciled"
     }
   ],
   "commands": [
     { "command": "docker --version", "result": "pass; Docker CLI 28.2.2 present" },
     { "command": "docker ps --format '{{.Names}} {{.Ports}}'", "result": "blocked; Docker engine unavailable" },
-    { "command": "npm run test:responsive-viewports", "result": "pass after fix; 42 browser cases" },
-    { "command": "node --check app\\js\\main.js; node --check app\\js\\store.js; node --check app\\js\\medialab.js; node --check app\\js\\workspaces.js; node --check app\\js\\phantomstore.js", "result": "pass" },
-    { "command": "npm run test:phantomstore", "result": "pass" },
+    { "command": "node --check app/js/main.js; node --check app/js/orgs.js", "result": "pass" },
+    { "command": "npx tsc -p server/tsconfig.json --noEmit", "result": "pass" },
+    { "command": "rg -n \"phantom-live-(?!20260718-3)\" app/index.html app/js --pcre2", "result": "pass; no stale app cache ids" },
+    { "command": "npm run test:local-customer-auth", "result": "pass" },
+    { "command": "npm run test:customer-plan-switching", "result": "pass" },
     { "command": "npm run test:phantomplay", "result": "pass" },
-    { "command": "npm run test:medialab-editor", "result": "fail; missing accepted layer drag/transform controls" },
-    { "command": "npm run test:change-memory", "result": "fail; 20 accepted-decision issues" },
-    { "command": "git diff --check", "result": "pass" },
-    { "command": "rg -n \"phantom-live-(?!20260717-7)\" app --pcre2", "result": "pass; no stale app cache ids" }
+    { "command": "npm run test:phantomstore", "result": "pass" },
+    { "command": "npm run test:responsive-viewports", "result": "pass; 46 Chrome/CDP cases" },
+    { "command": "npm run test:change-memory", "result": "fail; known Q-0014 Phantom Rumble rule only" },
+    { "command": "git diff --check", "result": "pass; line-ending warnings only" }
   ],
   "checks": {
-    "status": "passed_with_known_release_integrity_failures",
+    "status": "passed_with_known_phantom_rumble_change_memory_failure",
     "fixed": [
-      "admin app boot fallback caused by missing store export",
-      "missing test:responsive-viewports npm script",
-      "stale app module cache ids"
+      "local-customer login route missing",
+      "local-customer registration route missing",
+      "local-customer password reset routes missing",
+      "server startup did not initialize seeded local customer accounts",
+      "customer app login gate did not render for local-customer auth mode",
+      "local-customer logout did not revoke server sessions"
     ],
     "blockedExternalAccess": [
       "Docker/Postgres fixture for DB-auth organization isolation",
+      "customer-domain HTTPS browser proof on a plain local HTTP server",
       "live OAuth/social connectors",
       "billing provider",
       "n8n execution",
@@ -79,9 +83,8 @@
       "Higgsfield/OpenAI/OpenRouter live provider calls"
     ],
     "knownFailures": [
-      "npm run test:medialab-editor",
-      "npm run test:change-memory"
+      "npm run test:change-memory (Q-0014 Phantom Rumble ledge-recovery rule)"
     ]
   },
-  "nextCycle": "Reconcile change-memory failures first, especially Media Lab editor controls and customer plan switching; resume DB-auth org isolation when Docker/Postgres is available."
+  "nextCycle": "Reconcile Q-0014 Phantom Rumble chicken-coop mechanics with change-memory, then resume DB-auth organization isolation when Docker/Postgres is available."
 }

@@ -1,6 +1,6 @@
 # PhantomForce Quality Backlog
 
-Last updated: 2026-07-17 (Q-0024 added: PhantomStore 404 on live site, root-caused to a stale deploy-checkout proxy process)
+Last updated: 2026-07-18 (Q-0013 fixed: additive local-customer auth routes now make the plan simulator reachable end-to-end)
 
 ## Verified Issues
 
@@ -195,12 +195,19 @@ Last updated: 2026-07-17 (Q-0024 added: PhantomStore 404 on live site, root-caus
   route is a security-sensitive change that deserves its own deliberate pass,
   not a rushed addition inside a reconciliation cycle.
 - Likely cause: same `24d8e3a0` merge-conflict resolution as Q-0012.
-- Correction needed: add local-customer login/registration as new,
-  additive routes (do not edit the working database `/auth/login`), verified
-  with a fresh regression test and a browser pass confirming a local customer
-  can sign in and switch tiers end-to-end.
-- Status: Open — plan-preview backend/frontend restored and tested; login is
-  the remaining gap.
+- Correction: added new additive local-customer routes
+  (`/auth/customer-login`, `/auth/customer-signup`,
+  `/auth/customer-forgot-password`, `/auth/customer-reset-password`) without
+  replacing the database `/auth/login`; `/sessions` advertises the correct
+  customer route set by auth mode and never exposes customer actions on the
+  admin host; local-customer logout now revokes sessions; the customer app
+  login gate renders in local-customer mode and hides database-only actions.
+- Regression requirement: `npm run test:local-customer-auth` and
+  `npm run test:customer-plan-switching`.
+- Status: Fixed and verified 2026-07-18. Direct browser proof on
+  `app.phantomforce.online:5293` is still blocked by local HTTPS/HSTS behavior,
+  but the route flow is covered by isolated Fastify HTTP injection and the
+  local app shell by the responsive Chrome/CDP harness.
 
 ### Q-0014 — P2 — Phantom Rumble "chicken coop" redesign conflicts with the locked ledge-recovery decision
 
