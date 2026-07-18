@@ -73,6 +73,53 @@ try {
   assert(ownerSnapshot.tips.length > 0, "Snapshot should include next best action tips.");
   assert(clientSnapshot.marketBoardMode === "starter" && clientSnapshot.marketBoard.some((item) => item.name === "HubSpot" && item.signalCount === 0), "Fresh workspaces should see a starter competitor map with no fake live signals.");
 
+  /* ---- Alert subscriptions: tenant-scoped CRUD + store-backed in-app alerts ---- */
+  const subscription = await intel.upsertAlertSubscription(owner, { competitorId: created.id, enabled: true, triggers: ["pricing_page", "not_a_real_type"] });
+  assert(subscription.enabled === true && subscription.triggers.length === 1 && subscription.triggers[0] === "pricing_page", "Subscription upsert must persist enabled state and keep only valid signal-type triggers.");
+  const updatedSubscription = await intel.upsertAlertSubscription(owner, { competitorId: created.id, enabled: true, triggers: ["pricing_page"] });
+  assert(updatedSubscription.id === subscription.id, "Re-subscribing to the same competitor must update, not duplicate, the subscription.");
+  let crossTenantSubscriptionBlocked = false;
+  try { await intel.upsertAlertSubscription(client, { competitorId: created.id, enabled: true }); } catch { crossTenantSubscriptionBlocked = true; }
+  assert(crossTenantSubscriptionBlocked, "A tenant must not be able to subscribe to another workspace's competitor.");
+
+  await intel.createSignal(owner, { competitorId: created.id, type: "job_listing", title: "Senior growth hire posted", summary: "A public job listing for a growth role appeared.", sourceUrl: "https://rival.example.test/careers", observedAt: "2026-07-15", publicAccessConfirmed: true }, 100);
+  let alertSnapshot = await intel.getCompetitorIntelligenceSnapshot(owner, { entitled: true, aggressiveEntitled: true, competitorLimit: 10, signalLimit: 100 });
+  assert(alertSnapshot.alerts.length === 0, "Signals outside the subscribed trigger types must not create alerts.");
+
+  await intel.createSignal(owner, { competitorId: created.id, type: "pricing_page", title: "Anchor price raised again", summary: "The public pricing page now lists a higher anchor price.", sourceUrl: "https://rival.example.test/pricing", observedAt: "2026-07-16", publicAccessConfirmed: true }, 100);
+  alertSnapshot = await intel.getCompetitorIntelligenceSnapshot(owner, { entitled: true, aggressiveEntitled: true, competitorLimit: 10, signalLimit: 100 });
+  assert(alertSnapshot.alerts.length === 1 && alertSnapshot.alerts[0].read === false && alertSnapshot.alerts[0].signalType === "pricing_page", "A matching new signal must create exactly one unread in-app alert.");
+  assert(alertSnapshot.metrics.unreadAlerts === 1 && alertSnapshot.metrics.activeAlertSubscriptions === 1, "Snapshot metrics must expose unread alerts and active subscriptions.");
+  const clientAlertSnapshot = await intel.getCompetitorIntelligenceSnapshot(client, { entitled: true, aggressiveEntitled: false, competitorLimit: 3, signalLimit: 100 });
+  assert(clientAlertSnapshot.alerts.length === 0 && clientAlertSnapshot.alertSubscriptions.length === 0, "Alerts and subscriptions must be tenant-isolated.");
+
+  const readResult = await intel.markCompetitorAlertsRead(owner, { alertIds: [alertSnapshot.alerts[0].id] });
+  assert(readResult.updated === 1 && readResult.unread === 0, "Marking an alert read must report the unread-to-read transition.");
+  const readSnapshot = await intel.getCompetitorIntelligenceSnapshot(owner, { entitled: true, aggressiveEntitled: true, competitorLimit: 10, signalLimit: 100 });
+  assert(readSnapshot.alerts[0].read === true && readSnapshot.metrics.unreadAlerts === 0, "Read alerts must persist as read in the store.");
+
+  await intel.upsertAlertSubscription(owner, { competitorId: created.id, enabled: false, triggers: ["pricing_page"] });
+  await intel.createSignal(owner, { competitorId: created.id, type: "pricing_page", title: "Minor pricing copy tweak", summary: "Another public pricing revision was observed.", sourceUrl: "https://rival.example.test/pricing", observedAt: "2026-07-17", publicAccessConfirmed: true }, 100);
+  const disabledSnapshot = await intel.getCompetitorIntelligenceSnapshot(owner, { entitled: true, aggressiveEntitled: true, competitorLimit: 10, signalLimit: 100 });
+  assert(disabledSnapshot.alerts.length === 1, "Disabled subscriptions must not create new alerts.");
+
+  /* ---- Timeline: day-grouped view of stored signals + labeled estimates ---- */
+  const timeline = await intel.getCompetitorTimeline(owner, { competitorId: created.id, days: 90 });
+  assert(timeline.days === 90 && timeline.competitorId === created.id && Array.isArray(timeline.groups) && timeline.groups.length >= 3, "Timeline must group dated activity for the requested competitor and range.");
+  assert(timeline.groups.every((group) => /^\d{4}-\d{2}-\d{2}$/.test(group.date) && group.items.length > 0), "Every timeline group needs an ISO date and at least one item.");
+  const flatItems = timeline.groups.flatMap((group) => group.items);
+  assert(flatItems.every((item) => (item.kind === "signal" || item.kind === "estimate") && item.title && item.at && item.competitorName), "Timeline items must be labeled signals or estimates built only from stored records.");
+  assert(flatItems.some((item) => item.kind === "estimate"), "Fused inferences must appear on the timeline labeled as estimates, not facts.");
+  assert(timeline.totalSignals === flatItems.filter((item) => item.kind === "signal").length && timeline.totalSignals >= 4, "Timeline totals must match the stored signals in range.");
+  const allTimeline = await intel.getCompetitorTimeline(owner, {});
+  assert(allTimeline.competitorId === "all" && allTimeline.days === 30, "Timeline must default to all competitors over 30 days.");
+  const quiet = await intel.createCompetitor(owner, { name: "Quiet Rival", website: "https://quiet.example.test", category: "Service" }, 10);
+  const emptyTimeline = await intel.getCompetitorTimeline(owner, { competitorId: quiet.id, days: 7 });
+  assert(emptyTimeline.groups.length === 0 && emptyTimeline.totalSignals === 0 && emptyTimeline.totalEstimates === 0, "Empty ranges must return an honest empty timeline, never fabricated events.");
+  let crossTenantTimelineBlocked = false;
+  try { await intel.getCompetitorTimeline(client, { competitorId: created.id, days: 30 }); } catch { crossTenantTimelineBlocked = true; }
+  assert(crossTenantTimelineBlocked, "Timeline access must be tenant-scoped.");
+
   const { app } = await import("../src/index.js");
   const unauth = await app.inject({ method: "GET", url: "/api/competitor-intelligence" });
   assert(unauth.statusCode === 401, "Intelligence API must require authentication.");
@@ -85,7 +132,15 @@ try {
   assert(scoutResponse.statusCode === 200 && scoutResponse.json().scout.status !== "needs_context", "Scout route should save market context and return active lanes.");
   const blockedResponse = await app.inject({ method: "POST", url: "/api/competitor-intelligence/policy-check", headers: { Authorization: `Bearer ${token}` }, payload: { action: "bypass a CAPTCHA and rotate IP addresses" } });
   assert(blockedResponse.statusCode === 200 && blockedResponse.json().result.allowed === false, "Policy route must return and audit a blocked decision without execution.");
+  const unauthTimeline = await app.inject({ method: "GET", url: "/api/competitor-intelligence/timeline" });
+  assert(unauthTimeline.statusCode === 401, "Timeline route must require authentication.");
+  const timelineResponse = await app.inject({ method: "GET", url: `/api/competitor-intelligence/timeline?days=90&competitor_id=${encodeURIComponent(created.id)}`, headers: { Authorization: `Bearer ${token}` } });
+  assert(timelineResponse.statusCode === 200 && Array.isArray(timelineResponse.json().timeline.groups) && timelineResponse.json().timeline.groups.length > 0, "Timeline route should return day-grouped dated activity.");
+  const subscribeResponse = await app.inject({ method: "POST", url: "/api/competitor-intelligence/alert-subscriptions", headers: { Authorization: `Bearer ${token}` }, payload: { competitorId: created.id, enabled: true, triggers: ["release_note"] } });
+  assert(subscribeResponse.statusCode === 200 && subscribeResponse.json().subscription.enabled === true && subscribeResponse.json().subscription.triggers.includes("release_note"), "Alert-subscription route should persist the toggle and triggers.");
+  const readRouteResponse = await app.inject({ method: "POST", url: "/api/competitor-intelligence/alerts/read", headers: { Authorization: `Bearer ${token}` }, payload: { all: true } });
+  assert(readRouteResponse.statusCode === 200 && typeof readRouteResponse.json().unread === "number", "Alerts-read route should report the remaining unread count.");
   await app.close();
 
-  console.log(JSON.stringify({ ok: true, tenantIsolation: true, inferenceLabeled: true, sourcesAttached: true, aggregateGap: true, similarityRisk: creative.similarityRisk, sensitiveEventBlocked: sensitiveBlocked, prohibitedActionBlocked: true, routeAuth: true }));
+  console.log(JSON.stringify({ ok: true, tenantIsolation: true, inferenceLabeled: true, sourcesAttached: true, aggregateGap: true, similarityRisk: creative.similarityRisk, sensitiveEventBlocked: sensitiveBlocked, prohibitedActionBlocked: true, routeAuth: true, alertSubscriptions: true, inAppAlerts: true, timelineGroups: timeline.groups.length }));
 } finally { await rm(root, { recursive: true, force: true }); }

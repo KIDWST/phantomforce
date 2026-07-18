@@ -1,8 +1,15 @@
-import { currentTenantId, session } from "./store.js?v=phantom-live-20260718-1";
+import { currentTenantId, session } from "./store.js?v=phantom-live-20260718-3";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 const TABS = [["radar", "Radar"], ["competitors", "Competitors"], ["sources", "Sources & settings"]];
-const RADAR_WIDGETS = [["board", "Competitor board"], ["pressure", "Category pressure"], ["opportunities", "Opportunities"], ["estimates", "Latest estimates"]];
+const RADAR_WIDGETS = [["board", "Competitor board"], ["timeline", "Timeline"], ["alerts", "Alerts"], ["pressure", "Category pressure"], ["opportunities", "Opportunities"], ["estimates", "Latest estimates"]];
+const TIMELINE_RANGES = [7, 30, 90];
+const SIGNAL_ICONS = {
+  website_copy: "¶", pricing_page: "$", landing_page: "◧", indexed_page: "⌕", public_ad: "▶", ad_volume: "≡",
+  social_cadence: "↻", content_format: "◫", release_note: "⇪", documentation: "☰", app_store_note: "▤", public_review: "★",
+  customer_complaint: "!", job_listing: "⚑", employee_role: "◔", partnership: "∞", event_appearance: "◈", newsletter: "✉",
+  domain_change: "@", technology_stack: "⌗", search_pattern: "?", community_discussion: "…",
+};
 const SIGNAL_LABELS = {
   website_copy: "Website copy", pricing_page: "Pricing page", landing_page: "Landing page", indexed_page: "New indexed page",
   public_ad: "Public ad", ad_volume: "Ad volume", social_cadence: "Social cadence", content_format: "Content format",
@@ -13,7 +20,7 @@ const SIGNAL_LABELS = {
 };
 const GAP_TYPES = [["question", "Ignored question"], ["complaint", "Weakly handled complaint"], ["pricing", "Pricing confusion"], ["feature", "Desired feature"], ["trust", "Trust concern"], ["segment", "Underserved segment"], ["objection", "Purchase objection"]];
 const EVENT_TYPES = ["Price increase", "Product discontinuation", "Negative feedback spike", "New feature launch", "Rebrand", "Service outage", "Geographic expansion", "Audience shift", "Major campaign", "New subscription tier", "Policy change", "Public limitation"];
-const ui = { tab: "radar", radarWidget: "board", loading: true, error: "", notice: "", snapshot: null, signalQuery: "", competitorFilter: "all", editingProfile: false, busy: "", selectedCompetitor: "" };
+const ui = { tab: "radar", radarWidget: "board", loading: true, error: "", notice: "", snapshot: null, signalQuery: "", competitorFilter: "all", editingProfile: false, busy: "", selectedCompetitor: "", timelineCompetitor: "all", timelineDays: 30, timelineData: null, timelineLoading: false, timelineError: "" };
 let root = null;
 
 function authHeaders(json = false) {
@@ -48,6 +55,21 @@ async function run(path, body, success) {
     ui.notice = success; await refresh(true); return true;
   }
   catch (error) { ui.error = error instanceof Error ? error.message : "Request failed."; render(); return false; }
+}
+async function loadTimeline() {
+  ui.timelineLoading = true; ui.timelineError = ""; render();
+  try {
+    const params = new URLSearchParams({ tenant_id: currentTenantId(), days: String(ui.timelineDays) });
+    if (ui.timelineCompetitor && ui.timelineCompetitor !== "all") params.set("competitor_id", ui.timelineCompetitor);
+    const payload = await api(`/api/competitor-intelligence/timeline?${params.toString()}`);
+    ui.timelineData = payload?.timeline || null;
+  } catch (error) { ui.timelineError = error instanceof Error ? error.message : "Timeline is unavailable."; ui.timelineData = null; }
+  finally { ui.timelineLoading = false; render(); }
+}
+function openTimeline(competitorId = "all") {
+  ui.tab = "radar"; ui.radarWidget = "timeline"; ui.timelineCompetitor = competitorId || "all"; ui.notice = ""; ui.error = "";
+  loadTimeline();
+  root?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 function fmtDate(value) { try { return new Date(value).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }); } catch { return "Unknown date"; } }
 function ago(value) { const minutes = Math.max(1, Math.round((Date.now() - new Date(value).getTime()) / 60000)); return minutes < 60 ? `${minutes}m ago` : minutes < 1440 ? `${Math.round(minutes / 60)}h ago` : `${Math.round(minutes / 1440)}d ago`; }
@@ -159,7 +181,7 @@ function marketBoard() {
     const bodyHtml = starter
       ? `<div class="ci-threat-row"><span class="ci-threat-pill is-${esc(item.threat || "watch")}">${esc(threatLabel(item.threat))}</span></div>${item.whatItIs ? `<p class="ci-whatitis">${esc(item.whatItIs)}</p>` : ""}<p class="ci-edge"><b>Your edge:</b> ${esc(item.edge || item.tip)}</p>`
       : `<div class="ci-ticker"><span>${esc(momentumLabel(item.momentum))}</span><i style="width:${Math.max(6, Math.min(100, Number(item.score || 0)))}%"></i></div><p>${esc(item.tip)}</p>`;
-    return `<article class="is-${esc(item.momentum)} ${starter ? "is-starter" : ""}" data-ci-card="${esc(item.competitorId)}"><header><span class="ci-symbol">${esc(item.symbol)}</span><div><p>${esc(item.category)} · ${esc(item.domain)}</p><h3>${esc(item.name)}</h3></div><b>${Number(item.score || 0)}</b></header>${bodyHtml}<p class="ci-proof">${esc(sourceStateLabel(item))}${item.lastSignalAt ? ` · last signal ${fmtDate(item.lastSignalAt)}` : ""}</p><div class="ci-watch-tags">${(item.watch || []).slice(0, 3).map((tag) => `<span>${esc(tag)}</span>`).join("")}</div>${starter ? `<button class="ci-primary" data-ci-track-starter="${esc(item.competitorId)}">Track + compare</button>` : item.signalCount ? `<button class="ci-secondary" data-ci-fuse="${esc(item.competitorId)}">Refresh estimate</button>` : `<button class="ci-secondary" data-ci-tab="sources">Add source</button>`}</article>`;
+    return `<article class="is-${esc(item.momentum)} ${starter ? "is-starter" : ""}" data-ci-card="${esc(item.competitorId)}"><header><span class="ci-symbol">${esc(item.symbol)}</span><div><p>${esc(item.category)} · ${esc(item.domain)}</p><h3>${esc(item.name)}</h3></div><b>${Number(item.score || 0)}</b></header>${bodyHtml}<p class="ci-proof">${esc(sourceStateLabel(item))}${item.lastSignalAt ? ` · last signal ${fmtDate(item.lastSignalAt)}` : ""}</p><div class="ci-watch-tags">${(item.watch || []).slice(0, 3).map((tag) => `<span>${esc(tag)}</span>`).join("")}</div>${starter ? `<button class="ci-primary" data-ci-track-starter="${esc(item.competitorId)}">Track + compare</button>` : item.signalCount ? `<div class="ci-card-actions"><button class="ci-secondary" data-ci-fuse="${esc(item.competitorId)}">Refresh estimate</button><button class="ci-secondary" data-ci-timeline="${esc(item.competitorId)}">View timeline</button></div>` : `<div class="ci-card-actions"><button class="ci-secondary" data-ci-tab="sources">Add source</button><button class="ci-secondary" data-ci-timeline="${esc(item.competitorId)}">View timeline</button></div>`}</article>`;
   }).join("")}</section>`;
 }
 function opportunityRail() {
@@ -171,9 +193,71 @@ function opportunityRail() {
 function inferenceCard(item) {
   return `<article class="ci-inference"><header><div>${statusPill("ESTIMATE", "neutral")} ${statusPill(item.confidence.toUpperCase(), item.confidence === "high" ? "good" : item.confidence === "medium" ? "warn" : "neutral")}</div><time>${fmtDate(item.createdAt)}</time></header><p class="ci-overline">${esc(competitorName(item.competitorId))} · ${esc(item.area.replaceAll("_", " "))}</p><h3>${esc(item.estimate)}</h3><details><summary>Evidence and reasoning</summary><div class="ci-detail-grid"><div><h4>Supporting signals</h4><ul>${item.supportingSignals.map((signal) => `<li><a href="${esc(signal.source)}" target="_blank" rel="noopener noreferrer">${esc(signal.title)}</a><small>${fmtDate(signal.date)}</small></li>`).join("")}</ul></div><div><h4>Alternative explanations</h4><ul>${item.alternativeExplanations.map((text) => `<li>${esc(text)}</li>`).join("")}</ul></div><div><h4>Recommended verification</h4><ul>${item.recommendedVerification.map((text) => `<li>${esc(text)}</li>`).join("")}</ul></div><div><h4>Safe response options</h4><ul>${item.safeResponseOptions.map((text) => `<li>${esc(text)}</li>`).join("")}</ul></div></div></details><footer><span>Confidence score</span><div><i style="width:${Math.round(item.confidenceScore * 100)}%"></i></div><b>${Math.round(item.confidenceScore * 100)}%</b></footer></article>`;
 }
+/* ------------------------ Timeline + alerts panels ------------------------ */
+function timelineItemCard(item) {
+  const isEstimate = item.kind === "estimate";
+  const icon = isEstimate ? "≈" : (SIGNAL_ICONS[item.type] || "•");
+  const typeLabel = isEstimate ? String(item.type || "").replaceAll("_", " ") : (SIGNAL_LABELS[item.type] || item.type);
+  const source = !isEstimate && item.sourceUrl ? ` · <a href="${esc(item.sourceUrl)}" target="_blank" rel="noopener noreferrer">${esc(item.sourceLabel || "Source")}</a>` : "";
+  return `<article class="ci-timeline-item ${isEstimate ? "is-estimate" : "is-signal"}">
+    <span class="ci-timeline-icon" aria-hidden="true">${icon}</span>
+    <div class="ci-timeline-body">
+      <header>${statusPill(isEstimate ? "ESTIMATE" : "SIGNAL", isEstimate ? "neutral" : "good")}<b>${esc(typeLabel)}</b><time>${esc(ago(item.at))}</time></header>
+      <h3>${esc(item.title)}</h3>
+      <p>${esc(item.detail)}</p>
+      <small>${esc(item.competitorName)}${source}</small>
+    </div>
+  </article>`;
+}
+function timelinePanel() {
+  const scopeName = ui.timelineCompetitor === "all" ? "All competitors" : competitorName(ui.timelineCompetitor);
+  const controls = `<div class="ci-timeline-controls">
+    <select data-ci-timeline-competitor aria-label="Timeline competitor">${competitorOptions(true, ui.timelineCompetitor)}</select>
+    <div class="ci-timeline-ranges" role="group" aria-label="Timeline range">${TIMELINE_RANGES.map((days) => `<button type="button" class="${Number(ui.timelineDays) === days ? "is-active" : ""}" data-ci-timeline-days="${days}">${days} days</button>`).join("")}</div>
+  </div>`;
+  let body;
+  if (!(ui.snapshot.competitors || []).length) body = empty("Track a competitor first", "The timeline shows dated public signals and labeled estimates for competitors you track. Add one in the Competitors tab.");
+  else if (ui.timelineLoading || (!ui.timelineData && !ui.timelineError)) body = `<p class="ci-timeline-loading">Loading dated activity…</p>`;
+  else if (ui.timelineError) body = `<div class="ci-message is-error">${esc(ui.timelineError)}</div>`;
+  else if (!ui.timelineData.groups?.length) body = empty("No dated activity in this range", `No stored public signals or labeled estimates for ${scopeName.toLowerCase() === "all competitors" ? "any tracked competitor" : scopeName} in the last ${Number(ui.timelineData.days)} days. Widen the range or record a dated public signal — nothing is fabricated here.`);
+  else body = `<div class="ci-timeline-meta"><span>${Number(ui.timelineData.totalSignals || 0)} public signals</span><span>${Number(ui.timelineData.totalEstimates || 0)} labeled estimates</span><span>${esc(scopeName)} · last ${Number(ui.timelineData.days)} days</span></div>
+    <div class="ci-timeline-groups">${ui.timelineData.groups.map((group) => `<section class="ci-timeline-day"><h4>${fmtDate(`${group.date}T12:00:00`)}</h4><div class="ci-timeline-items">${group.items.map(timelineItemCard).join("")}</div></section>`).join("")}</div>`;
+  return `<section class="ci-timeline">${controls}${body}</section>`;
+}
+function alertsPanel() {
+  const s = ui.snapshot;
+  const alerts = s.alerts || [];
+  const subs = s.alertSubscriptions || [];
+  const unread = Number(s.metrics?.unreadAlerts || 0);
+  const competitors = s.competitors || [];
+  const list = alerts.length
+    ? `<div class="ci-alert-list">${alerts.map((item) => `<article class="ci-alert ${item.read ? "" : "is-unread"}">
+        <span class="ci-timeline-icon" aria-hidden="true">${SIGNAL_ICONS[item.signalType] || "•"}</span>
+        <div class="ci-timeline-body">
+          <header>${statusPill(item.read ? "READ" : "NEW", item.read ? "neutral" : "hot")}<b>${esc(SIGNAL_LABELS[item.signalType] || item.signalType)}</b><time>${esc(ago(item.createdAt))}</time></header>
+          <h3>${esc(item.title)}</h3>
+          <p>${esc(item.summary)}</p>
+          <small>${esc(competitorName(item.competitorId))} · observed ${fmtDate(item.observedAt)}</small>
+        </div>
+        <div class="ci-alert-actions">${item.read ? "" : `<button class="ci-secondary" data-ci-alert-read="${esc(item.id)}">Mark read</button>`}<button class="ci-secondary" data-ci-timeline="${esc(item.competitorId)}">View timeline</button></div>
+      </article>`).join("")}</div>`
+    : empty("No alerts yet", subs.some((item) => item.enabled) ? "You're subscribed. When a new stored public signal matches your triggers, an in-app alert appears here." : "Turn on \"Alert me\" for a competitor below. Matching new public signals will create in-app alerts — nothing is emailed or pushed.");
+  const subsBlock = competitors.length
+    ? `<div class="ci-alert-subs"><h4 class="ci-sub">Alert subscriptions</h4><p class="ci-hint">In-app only — no email, push, or external notifications. Toggle alerts per competitor and pick which recorded signal types should trigger one.</p>${competitors.map((item) => {
+        const sub = subs.find((entry) => entry.competitorId === item.id);
+        const on = Boolean(sub?.enabled);
+        const triggers = sub?.triggers || [];
+        return `<details class="ci-alert-sub ${on ? "is-on" : ""}"><summary><b>${esc(item.name)}</b><span>${on ? (triggers.length ? `On · ${triggers.length} trigger type${triggers.length === 1 ? "" : "s"}` : "On · all signal types") : "Off"}</span><button type="button" class="${on ? "ci-secondary" : "ci-primary"}" data-ci-sub-toggle="${esc(item.id)}">${on ? "Turn off" : "Alert me"}</button></summary><form data-ci-sub-form="${esc(item.id)}"><div class="ci-alert-triggers">${Object.entries(SIGNAL_LABELS).map(([value, label]) => `<label class="ci-check"><input type="checkbox" name="trigger" value="${value}" ${triggers.includes(value) ? "checked" : ""}> ${esc(label)}</label>`).join("")}</div><p class="ci-proof">No boxes checked = alert on every signal type for this competitor.</p><button class="ci-primary" type="submit">Save triggers</button></form></details>`;
+      }).join("")}</div>`
+    : empty("Track a competitor first", "Alerts subscribe to competitors you already track. Add one in the Competitors tab.");
+  return `<section class="ci-alerts"><div class="ci-alerts-head"><h4 class="ci-sub">In-app alerts${unread ? ` · ${unread} unread` : ""}</h4>${unread ? `<button class="ci-secondary" data-ci-alerts-read-all>Mark all read</button>` : ""}</div>${list}${subsBlock}</section>`;
+}
+
 function radarWidgetPanel() {
   const s = ui.snapshot;
   const widget = RADAR_WIDGETS.some(([id]) => id === ui.radarWidget) ? ui.radarWidget : "board";
+  if (widget === "timeline") return timelinePanel();
+  if (widget === "alerts") return alertsPanel();
   if (widget === "pressure") return clusterBars() || empty("No category pressure yet", "Track competitors across categories so Phantom can compare pressure once signals come in.");
   if (widget === "opportunities") return opportunityRail();
   if (widget === "estimates") {
@@ -189,7 +273,7 @@ function radar() {
   return `${viewHead("MARKET RADAR", auto.headline || "Where the market is moving")}
     <div class="ci-context"><b>${esc(contextLine())}</b>${auto.sourceNote ? `<span>${esc(auto.sourceNote)}</span>` : ""}</div>
     ${metrics()}${marketMap()}
-    <nav class="ci-radar-widgets" aria-label="Competitor views">${RADAR_WIDGETS.map(([id, label]) => `<button type="button" class="${widget === id ? "is-active" : ""}" data-ci-widget="${id}">${label}</button>`).join("")}</nav>
+    <nav class="ci-radar-widgets" aria-label="Competitor views">${RADAR_WIDGETS.map(([id, label]) => `<button type="button" class="${widget === id ? "is-active" : ""}" data-ci-widget="${id}">${label}${id === "alerts" && Number(s.metrics?.unreadAlerts || 0) ? `<i class="ci-widget-badge">${Number(s.metrics.unreadAlerts)}</i>` : ""}</button>`).join("")}</nav>
     <section class="ci-radar-panel">${radarWidgetPanel()}</section>`;
 }
 
@@ -224,7 +308,7 @@ function competitorDetail(selected) {
   const dossier = ui.snapshot.dossiers.find((item) => item.competitorId === selected.id);
   const busy = ui.busy === `dossier:${selected.id}`;
   return `<div class="ci-comp-detail">
-    <div class="ci-comp-detail-head"><div><b>${esc(selected.name)}</b><a href="${esc(selected.website)}" target="_blank" rel="noopener noreferrer">${esc(hostOf(selected.website))} ↗</a>${selected.notes ? `<p>${esc(selected.notes)}</p>` : ""}</div><div class="ci-comp-actions"><button class="ci-primary" data-ci-dossier="${esc(selected.id)}" ${busy ? "disabled" : ""}>${busy ? "Building…" : dossier ? "Refresh deep dive" : "Deep dive"}</button><button class="ci-secondary" data-ci-fuse="${esc(selected.id)}">Fuse signals</button></div></div>
+    <div class="ci-comp-detail-head"><div><b>${esc(selected.name)}</b><a href="${esc(selected.website)}" target="_blank" rel="noopener noreferrer">${esc(hostOf(selected.website))} ↗</a>${selected.notes ? `<p>${esc(selected.notes)}</p>` : ""}</div><div class="ci-comp-actions"><button class="ci-primary" data-ci-dossier="${esc(selected.id)}" ${busy ? "disabled" : ""}>${busy ? "Building…" : dossier ? "Refresh deep dive" : "Deep dive"}</button><button class="ci-secondary" data-ci-fuse="${esc(selected.id)}">Fuse signals</button><button class="ci-secondary" data-ci-timeline="${esc(selected.id)}">View timeline</button></div></div>
     ${dossier ? dossierCard(dossier) : empty("No dossier yet", `Generate a deep-dive research plan for ${selected.name} — public sources, a priority checklist, and hypotheses to verify.`)}
     <h4 class="ci-sub">Research actions</h4>${researchForms(selected.id)}
     <h4 class="ci-sub">Research log</h4>${researchLog(selected.id)}
@@ -335,7 +419,26 @@ function bindForm(selector, path, success, transform = (value) => value) {
 }
 function bind() {
   root.querySelectorAll("[data-ci-tab]").forEach((button) => button.addEventListener("click", () => { ui.tab = button.dataset.ciTab; ui.notice = ""; ui.error = ""; render(); root.scrollIntoView({ behavior: "smooth", block: "start" }); }));
-  root.querySelectorAll("[data-ci-widget]").forEach((button) => button.addEventListener("click", () => { ui.radarWidget = button.dataset.ciWidget; render(); }));
+  root.querySelectorAll("[data-ci-widget]").forEach((button) => button.addEventListener("click", () => { ui.radarWidget = button.dataset.ciWidget; if (ui.radarWidget === "timeline") { loadTimeline(); return; } render(); }));
+  root.querySelectorAll("[data-ci-timeline]").forEach((button) => button.addEventListener("click", () => openTimeline(button.dataset.ciTimeline)));
+  root.querySelectorAll("[data-ci-timeline-days]").forEach((button) => button.addEventListener("click", () => { ui.timelineDays = Number(button.dataset.ciTimelineDays) || 30; loadTimeline(); }));
+  const timelineSelect = root.querySelector("[data-ci-timeline-competitor]");
+  if (timelineSelect) { timelineSelect.value = ui.timelineCompetitor; timelineSelect.addEventListener("change", (event) => { ui.timelineCompetitor = event.target.value || "all"; loadTimeline(); }); }
+  root.querySelectorAll("[data-ci-alert-read]").forEach((button) => button.addEventListener("click", () => run("/api/competitor-intelligence/alerts/read", { alertIds: [button.dataset.ciAlertRead] }, "Alert marked read.")));
+  root.querySelector("[data-ci-alerts-read-all]")?.addEventListener("click", () => run("/api/competitor-intelligence/alerts/read", { all: true }, "All alerts marked read."));
+  root.querySelectorAll("[data-ci-sub-toggle]").forEach((button) => button.addEventListener("click", (event) => {
+    event.preventDefault(); event.stopPropagation();
+    const competitorId = button.dataset.ciSubToggle;
+    const sub = (ui.snapshot?.alertSubscriptions || []).find((item) => item.competitorId === competitorId);
+    run("/api/competitor-intelligence/alert-subscriptions", { competitorId, enabled: !sub?.enabled, triggers: sub?.triggers || [] }, sub?.enabled ? "In-app alerts turned off for this competitor." : "In-app alerts on — matching new signals will appear in the Alerts panel.");
+  }));
+  root.querySelectorAll("[data-ci-sub-form]").forEach((form) => form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const competitorId = form.dataset.ciSubForm;
+    const triggers = [...form.querySelectorAll('input[name="trigger"]:checked')].map((input) => input.value);
+    run("/api/competitor-intelligence/alert-subscriptions", { competitorId, enabled: true, triggers }, triggers.length ? "Alert triggers saved." : "Alert triggers saved — every signal type will alert.");
+  }));
+  if (ui.tab === "radar" && ui.radarWidget === "timeline" && ui.snapshot?.access?.enabled && !ui.timelineData && !ui.timelineLoading && !ui.timelineError && (ui.snapshot.competitors || []).length) loadTimeline();
   root.querySelector("[data-ci-retry]")?.addEventListener("click", () => refresh());
   root.querySelector("[data-ci-mode]")?.addEventListener("click", () => run("/api/competitor-intelligence/mode", { enabled: !ui.snapshot.settings.aggressiveMode }, ui.snapshot.settings.aggressiveMode ? "Standard mode restored." : "Aggressive Intelligence Mode activated."));
   root.querySelectorAll("[data-ci-fuse]").forEach((button) => button.addEventListener("click", () => run("/api/competitor-intelligence/fuse", { competitorId: button.dataset.ciFuse }, "Public signals fused into labeled estimates.")));
@@ -386,5 +489,5 @@ function bind() {
 }
 
 export function renderCompetitorIntelligence(target, options = {}) {
-  root = target; ui.tab = "radar"; ui.editingProfile = false; ui.busy = ""; ui.selectedCompetitor = ""; refresh();
+  root = target; ui.tab = "radar"; ui.editingProfile = false; ui.busy = ""; ui.selectedCompetitor = ""; ui.timelineCompetitor = "all"; ui.timelineDays = 30; ui.timelineData = null; ui.timelineLoading = false; ui.timelineError = ""; refresh();
 }

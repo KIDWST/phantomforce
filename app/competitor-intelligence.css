@@ -128,3 +128,56 @@
 .ci-stream-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:18px 0 10px;flex-wrap:wrap}
 .ci-stream-head .ci-sub{margin:0}
 @media(max-width:1050px){.ci-comp-layout{grid-template-columns:1fr}.ci-comp-detail-head{flex-direction:column}.ci-discover-cta{flex-direction:column;align-items:flex-start}}
+
+/* Timeline + in-app alerts: day-grouped vertical timeline of stored public
+   signals and labeled estimates (Radar widget + "View timeline" buttons),
+   and the per-competitor alert subscription / unread-alert panel.
+   Static styles only — no animation loops. */
+.ci-timeline{display:grid;gap:16px}
+.ci-timeline-controls{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.ci-timeline-controls select{max-width:280px;border:1px solid var(--line);border-radius:var(--r-sm);padding:var(--sp-2) var(--sp-3);background:#03100c;color:#e8fff4;font:inherit}
+.ci-timeline-ranges{display:flex;gap:6px}
+.ci-timeline-ranges button{border:1px solid rgba(66,245,164,.24);border-radius:999px;padding:8px 14px;background:rgba(2,12,10,.6);color:#9fc3b2;font:700 12px "DM Mono",monospace;cursor:pointer}
+.ci-timeline-ranges button:hover{border-color:rgba(66,245,164,.5);color:#dfffee}
+.ci-timeline-ranges button.is-active{border-color:#42f5a4;background:#42f5a4;color:#04130c}
+.ci-timeline-meta{display:flex;flex-wrap:wrap;gap:8px}
+.ci-timeline-meta span{border:1px solid rgba(66,245,164,.2);border-radius:999px;padding:5px 10px;color:#9fe9c4;background:rgba(14,74,47,.2);font:700 11px "DM Mono",monospace;text-transform:uppercase;letter-spacing:.08em}
+.ci-timeline-loading{margin:22px 0;color:#84a894}
+.ci-timeline-groups{display:grid;gap:18px}
+.ci-timeline-day>h4{margin:0 0 10px;padding-bottom:7px;border-bottom:1px solid rgba(66,245,164,.18);color:#42f5a4;font:700 13px "DM Mono",monospace;text-transform:uppercase;letter-spacing:.1em}
+.ci-timeline-items{display:grid;gap:10px;padding-left:14px;border-left:2px solid rgba(66,245,164,.2)}
+.ci-timeline-item,.ci-alert{display:grid;grid-template-columns:40px minmax(0,1fr);gap:12px;padding:var(--sp-4);border:1px solid var(--ci-line);border-radius:var(--r-md);background:var(--ci-panel)}
+.ci-timeline-item.is-estimate{border-style:dashed;border-color:rgba(155,190,173,.3)}
+.ci-timeline-icon{display:grid;place-items:center;width:40px;height:40px;border:1px solid rgba(66,245,164,.34);border-radius:50%;background:#03120d;color:#42f5a4;font:900 16px "DM Mono",monospace}
+.ci-timeline-item.is-estimate .ci-timeline-icon{border-style:dashed;color:#9fc3b2}
+.ci-timeline-body{min-width:0}
+.ci-timeline-body header{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:6px}
+.ci-timeline-body header b{color:#bff7d7;font-size:12px;text-transform:capitalize}
+.ci-timeline-body time{margin-left:auto;color:#678b79;font-size:12px}
+.ci-timeline-body h3{margin:0 0 5px;font-size:16px}
+.ci-timeline-body p{margin:0 0 7px;color:#a4c2b3;line-height:1.45}
+.ci-timeline-body small{color:#6e917f}
+.ci-timeline-body small a{color:#54db9b}
+.ci-card-actions{display:flex;flex-wrap:wrap;gap:8px}
+.ci-widget-badge{display:inline-grid;place-items:center;min-width:18px;height:18px;margin-left:7px;padding:0 5px;border-radius:999px;background:#ff5964;color:#fff;font:900 10px "DM Mono",monospace;font-style:normal;vertical-align:1px}
+.ci-radar-widgets button.is-active .ci-widget-badge{background:#04130c;color:#42f5a4}
+.ci-alerts{display:grid;gap:16px}
+.ci-alerts-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.ci-alerts-head .ci-sub{margin:0}
+.ci-alert-list{display:grid;gap:10px}
+.ci-alert{grid-template-columns:40px minmax(0,1fr) auto}
+.ci-alert.is-unread{border-color:rgba(255,84,95,.42);box-shadow:0 0 16px rgba(255,84,95,.12)}
+.ci-alert-actions{display:grid;gap:6px;align-content:start}
+.ci-alert-subs{display:grid;gap:10px}
+.ci-alert-subs .ci-sub{margin:6px 0 0}
+.ci-alert-sub{border:1px solid var(--ci-line);border-radius:var(--r-md);background:var(--ci-panel);overflow:hidden}
+.ci-alert-sub.is-on{border-color:rgba(66,245,164,.42)}
+.ci-alert-sub>summary{display:flex;align-items:center;gap:12px;padding:13px 16px;cursor:pointer}
+.ci-alert-sub>summary::marker{color:#42f5a4}
+.ci-alert-sub>summary b{font-size:15px}
+.ci-alert-sub>summary span{margin-left:auto;color:#9fc3b2;font:700 11px "DM Mono",monospace;text-transform:uppercase;letter-spacing:.08em}
+.ci-alert-sub form{display:grid;gap:10px;padding:0 16px 16px;border-top:1px solid rgba(76,143,109,.18)}
+.ci-alert-triggers{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px 12px;padding-top:12px}
+.ci-alert-triggers .ci-check{color:#9fc2b0;font-size:12.5px;gap:7px}
+@media(max-width:900px){.ci-alert{grid-template-columns:40px minmax(0,1fr)}.ci-alert-actions{grid-column:2;grid-auto-flow:column;justify-content:start}.ci-alert-triggers{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:600px){.ci-timeline-controls select{max-width:none;width:100%}.ci-timeline-items{padding-left:10px}.ci-alert-triggers{grid-template-columns:1fr}.ci-timeline-item,.ci-alert{padding:13px}}

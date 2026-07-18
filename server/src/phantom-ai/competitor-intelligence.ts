@@ -67,6 +67,12 @@ export type MysteryEvidence = {
   observations: string; sourceReference: string; legitimatelyObtained: true; noDeceptionConfirmed: true; createdAt: string;
 };
 export type AuditRecord = { id: string; tenantId: string; actorId: string; action: string; result: "allowed" | "blocked"; reason: string; alternative: string; createdAt: string };
+/* In-app alert subscriptions: the owner opts into per-competitor alerts and
+   picks triggers from the existing public signal types (empty = all types).
+   Alerts are store-backed, tenant-scoped, and in-app only — no email, push,
+   or any external notification, consistent with the module's boundaries. */
+export type AlertSubscription = { id: string; tenantId: string; competitorId: string; triggers: SignalType[]; enabled: boolean; createdAt: string; updatedAt: string };
+export type AlertRecord = { id: string; tenantId: string; competitorId: string; subscriptionId: string; signalId: string; signalType: SignalType; title: string; summary: string; observedAt: string; read: boolean; createdAt: string };
 export type ScoutContext = { businessName: string; location: string; offer: string; audience: string; goals: string; createdAt: string; updatedAt: string };
 type ScoutLane = {
   id: string; label: string; status: "needs_context" | "active" | "watching" | "source_ready"; query: string; why: string;
@@ -113,10 +119,10 @@ type TenantState = {
   businessProfile: BusinessProfile | null; discoveryRuns: DiscoveryRun[]; dossiers: CompetitorDossier[];
   competitors: CompetitorRecord[]; signals: SignalRecord[]; inferences: InferenceRecord[]; audienceThemes: AudienceTheme[];
   creativeAnalyses: CreativeAnalysis[]; interceptions: InterceptionPackage[]; opportunities: ResearchOpportunity[];
-  mysteryEvidence: MysteryEvidence[]; audit: AuditRecord[];
+  mysteryEvidence: MysteryEvidence[]; audit: AuditRecord[]; alertSubscriptions: AlertSubscription[]; alerts: AlertRecord[];
 };
 type Store = { version: 1; tenants: Record<string, TenantState> };
-const freshTenant = (): TenantState => ({ settings: { aggressiveMode: false, modeChangedAt: null, publicSourcesOnly: true, individualTargeting: false, externalActions: false, scoutContext: null, scoutEnabled: false, scoutCadence: "manual", lastScoutRunAt: null }, businessProfile: null, discoveryRuns: [], dossiers: [], competitors: [], signals: [], inferences: [], audienceThemes: [], creativeAnalyses: [], interceptions: [], opportunities: [], mysteryEvidence: [], audit: [] });
+const freshTenant = (): TenantState => ({ settings: { aggressiveMode: false, modeChangedAt: null, publicSourcesOnly: true, individualTargeting: false, externalActions: false, scoutContext: null, scoutEnabled: false, scoutCadence: "manual", lastScoutRunAt: null }, businessProfile: null, discoveryRuns: [], dossiers: [], competitors: [], signals: [], inferences: [], audienceThemes: [], creativeAnalyses: [], interceptions: [], opportunities: [], mysteryEvidence: [], audit: [], alertSubscriptions: [], alerts: [] });
 let writeChain = Promise.resolve();
 
 function normalizeTenantState(state: TenantState): TenantState {
@@ -131,6 +137,8 @@ function normalizeTenantState(state: TenantState): TenantState {
   state.opportunities = Array.isArray(state.opportunities) ? state.opportunities : [];
   state.mysteryEvidence = Array.isArray(state.mysteryEvidence) ? state.mysteryEvidence : [];
   state.audit = Array.isArray(state.audit) ? state.audit : [];
+  state.alertSubscriptions = Array.isArray(state.alertSubscriptions) ? state.alertSubscriptions : [];
+  state.alerts = Array.isArray(state.alerts) ? state.alerts : [];
   state.businessProfile = state.businessProfile ?? null;
   state.discoveryRuns = Array.isArray(state.discoveryRuns) ? state.discoveryRuns : [];
   state.dossiers = Array.isArray(state.dossiers) ? state.dossiers : [];
@@ -611,6 +619,8 @@ export async function getCompetitorIntelligenceSnapshot(session: AccessSession, 
     opportunities: state.opportunities,
     mysteryEvidence: state.mysteryEvidence,
     audit: state.audit.slice(0, 100),
+    alertSubscriptions: state.alertSubscriptions,
+    alerts: state.alerts.slice(0, 100),
     metrics: {
       competitors: state.competitors.length,
       starterCompetitors: starterMarketBoard.length,
@@ -622,6 +632,8 @@ export async function getCompetitorIntelligenceSnapshot(session: AccessSession, 
       blockedRequests: state.audit.filter((entry) => entry.result === "blocked").length,
       marketMovers: marketBoard.filter((entry) => entry.momentum === "gaining" || entry.momentum === "vulnerable").length,
       activeScoutLanes: scout.lanes.filter((entry) => entry.status !== "needs_context").length,
+      unreadAlerts: state.alerts.filter((entry) => !entry.read).length,
+      activeAlertSubscriptions: state.alertSubscriptions.filter((entry) => entry.enabled).length,
     },
   };
 }
@@ -662,9 +674,19 @@ export async function createCompetitor(session: AccessSession, body: Record<stri
   return mutate(tenantId, (state) => { if (state.competitors.length >= limit && !session.canManageAccess) throw new Error("This plan's competitor limit has been reached."); const name = clean(body.name, 120); if (!name) throw new Error("Competitor name is required."); const website = url(body.website); requireAllowed(state, tenantId, session, "create_competitor", `${name} ${website} ${clean(body.notes, 1000)}`); const at = now(); const item: CompetitorRecord = { id: id("competitor"), tenantId, name, website, category: clean(body.category, 100), notes: clean(body.notes, 1000), active: true, createdAt: at, updatedAt: at }; state.competitors.unshift(item); publicAudit(state, tenantId, session.id, "create_competitor", "allowed", "Public competitor profile added."); return item; });
 }
 
+/* When a newly recorded signal matches an enabled subscription for its
+   competitor, store an unread in-app alert. Purely store-backed — nothing is
+   sent anywhere. Returns the number of alerts created. */
+function recordSignalAlerts(state: TenantState, tenantId: string, signal: SignalRecord) {
+  const matches = state.alertSubscriptions.filter((sub) => sub.enabled && sub.competitorId === signal.competitorId && (!sub.triggers.length || sub.triggers.includes(signal.type)));
+  for (const sub of matches) state.alerts.unshift({ id: id("alert"), tenantId, competitorId: signal.competitorId, subscriptionId: sub.id, signalId: signal.id, signalType: signal.type, title: signal.title, summary: signal.summary.slice(0, 400), observedAt: signal.observedAt, read: false, createdAt: now() });
+  if (matches.length) state.alerts = state.alerts.slice(0, 200);
+  return matches.length;
+}
+
 export async function createSignal(session: AccessSession, body: Record<string, unknown>, limit: number) {
   const tenantId = tenantFor(session, body.tenantId);
-  return mutate(tenantId, (state) => { if (state.signals.length >= limit && !session.canManageAccess) throw new Error("This plan's signal limit has been reached."); competitor(state, tenantId, body.competitorId); if (!bool(body.publicAccessConfirmed)) throw new Error("Confirm that the source is public and lawfully accessible."); const type = clean(body.type, 80) as SignalType; if (!SIGNAL_TYPES.includes(type)) throw new Error("Choose a supported public signal type."); const title = clean(body.title, 180); const summary = clean(body.summary, 1500); const sourceUrl = url(body.sourceUrl); requireAllowed(state, tenantId, session, "add_signal", `${title} ${summary} ${sourceUrl}`); if (!title || !summary) throw new Error("Signal title and summary are required."); const observed = new Date(clean(body.observedAt, 40) || Date.now()); if (Number.isNaN(observed.getTime())) throw new Error("Observed date is invalid."); const item: SignalRecord = { id: id("signal"), tenantId, competitorId: clean(body.competitorId, 180), type, title, summary, observedAt: observed.toISOString(), sourceUrl, sourceLabel: clean(body.sourceLabel, 160) || new URL(sourceUrl).hostname, publicAccessConfirmed: true, createdAt: now() }; state.signals.unshift(item); publicAudit(state, tenantId, session.id, "add_signal", "allowed", "Lawful public signal recorded with date and source."); return item; });
+  return mutate(tenantId, (state) => { if (state.signals.length >= limit && !session.canManageAccess) throw new Error("This plan's signal limit has been reached."); competitor(state, tenantId, body.competitorId); if (!bool(body.publicAccessConfirmed)) throw new Error("Confirm that the source is public and lawfully accessible."); const type = clean(body.type, 80) as SignalType; if (!SIGNAL_TYPES.includes(type)) throw new Error("Choose a supported public signal type."); const title = clean(body.title, 180); const summary = clean(body.summary, 1500); const sourceUrl = url(body.sourceUrl); requireAllowed(state, tenantId, session, "add_signal", `${title} ${summary} ${sourceUrl}`); if (!title || !summary) throw new Error("Signal title and summary are required."); const observed = new Date(clean(body.observedAt, 40) || Date.now()); if (Number.isNaN(observed.getTime())) throw new Error("Observed date is invalid."); const item: SignalRecord = { id: id("signal"), tenantId, competitorId: clean(body.competitorId, 180), type, title, summary, observedAt: observed.toISOString(), sourceUrl, sourceLabel: clean(body.sourceLabel, 160) || new URL(sourceUrl).hostname, publicAccessConfirmed: true, createdAt: now() }; state.signals.unshift(item); recordSignalAlerts(state, tenantId, item); publicAudit(state, tenantId, session.id, "add_signal", "allowed", "Lawful public signal recorded with date and source."); return item; });
 }
 
 export async function fuseCompetitorSignals(session: AccessSession, body: Record<string, unknown>) {
@@ -703,6 +725,85 @@ export async function createMysteryEvidence(session: AccessSession, body: Record
 export async function auditCompetitorIntelligenceRequest(session: AccessSession, body: Record<string, unknown>) {
   const tenantId = tenantFor(session, body.tenantId); const action = clean(body.action, 300); const decision = policy(action);
   return mutate(tenantId, (state) => { publicAudit(state, tenantId, session.id, "policy_check", decision.allowed ? "allowed" : "blocked", decision.boundary, decision.alternative); return decision; });
+}
+
+/* ---------------------------------------------------------------------------
+   Alert subscriptions + dated signal timeline.
+   Subscriptions let the workspace opt into per-competitor in-app alerts with
+   triggers chosen from the existing public signal types. The timeline is a
+   read-only, day-grouped view over signals and labeled estimates that are
+   ALREADY stored — nothing is collected or fabricated here. */
+
+export async function upsertAlertSubscription(session: AccessSession, body: Record<string, unknown>) {
+  const tenantId = tenantFor(session, body.tenantId);
+  return mutate(tenantId, (state) => {
+    const target = competitor(state, tenantId, body.competitorId);
+    const triggers = (Array.isArray(body.triggers) ? body.triggers : []).map((entry) => clean(entry, 80)).filter((entry): entry is SignalType => (SIGNAL_TYPES as readonly string[]).includes(entry)).slice(0, SIGNAL_TYPES.length);
+    const enabled = bool(body.enabled);
+    const at = now();
+    let subscription = state.alertSubscriptions.find((entry) => entry.competitorId === target.id && entry.tenantId === tenantId);
+    if (subscription) { subscription.triggers = triggers; subscription.enabled = enabled; subscription.updatedAt = at; }
+    else { subscription = { id: id("alertsub"), tenantId, competitorId: target.id, triggers, enabled, createdAt: at, updatedAt: at }; state.alertSubscriptions.unshift(subscription); }
+    publicAudit(state, tenantId, session.id, "alert_subscription", "allowed", enabled ? `In-app alerts enabled for ${target.name} (${triggers.length ? `${triggers.length} trigger type${triggers.length === 1 ? "" : "s"}` : "all signal types"}). No external notifications are sent.` : `In-app alerts disabled for ${target.name}.`);
+    return subscription;
+  });
+}
+
+export async function markCompetitorAlertsRead(session: AccessSession, body: Record<string, unknown>) {
+  const tenantId = tenantFor(session, body.tenantId);
+  return mutate(tenantId, (state) => {
+    const ids = Array.isArray(body.alertIds) ? new Set(body.alertIds.map((entry) => clean(entry, 180))) : null;
+    const markAll = bool(body.all);
+    if (!markAll && !ids?.size) throw new Error("Pass alertIds or all:true to mark alerts read.");
+    let updated = 0;
+    for (const alert of state.alerts) { if (!alert.read && (markAll || ids?.has(alert.id))) { alert.read = true; updated += 1; } }
+    return { updated, unread: state.alerts.filter((alert) => !alert.read).length };
+  });
+}
+
+const TIMELINE_RANGES = [7, 30, 90] as const;
+export type TimelineItem = { kind: "signal" | "estimate"; id: string; competitorId: string; competitorName: string; type: string; title: string; detail: string; sourceUrl: string; sourceLabel: string; at: string; confidence?: Confidence };
+export async function getCompetitorTimeline(session: AccessSession, options: { tenantId?: unknown; competitorId?: unknown; days?: unknown }) {
+  const tenantId = tenantFor(session, options.tenantId);
+  const store = await load();
+  const state = normalizeTenantState(store.tenants[tenantId] ?? freshTenant());
+  const requestedDays = Number(options.days);
+  const days = (TIMELINE_RANGES as readonly number[]).includes(requestedDays) ? requestedDays : 30;
+  const requestedCompetitor = clean(options.competitorId, 180);
+  const scope = requestedCompetitor && requestedCompetitor !== "all" ? requestedCompetitor : "";
+  if (scope && !state.competitors.some((entry) => entry.id === scope && entry.tenantId === tenantId)) throw new Error("Competitor record was not found in this workspace.");
+  const cutoff = Date.now() - days * 86400000;
+  const nameFor = (competitorId: string) => state.competitors.find((entry) => entry.id === competitorId)?.name || "Unknown competitor";
+  const items: TimelineItem[] = [];
+  for (const signal of state.signals) {
+    if (scope && signal.competitorId !== scope) continue;
+    const at = new Date(signal.observedAt).getTime();
+    if (!Number.isFinite(at) || at < cutoff) continue;
+    items.push({ kind: "signal", id: signal.id, competitorId: signal.competitorId, competitorName: nameFor(signal.competitorId), type: signal.type, title: signal.title, detail: signal.summary, sourceUrl: signal.sourceUrl, sourceLabel: signal.sourceLabel, at: signal.observedAt });
+  }
+  for (const inference of state.inferences) {
+    if (scope && inference.competitorId !== scope) continue;
+    const at = new Date(inference.createdAt).getTime();
+    if (!Number.isFinite(at) || at < cutoff) continue;
+    items.push({ kind: "estimate", id: inference.id, competitorId: inference.competitorId, competitorName: nameFor(inference.competitorId), type: inference.area, title: inference.estimate, detail: `Labeled estimate (${inference.confidence} confidence) fused from ${inference.supportingSignalIds.length} stored public signal${inference.supportingSignalIds.length === 1 ? "" : "s"} — not a verified fact.`, sourceUrl: "", sourceLabel: "", at: inference.createdAt, confidence: inference.confidence });
+  }
+  items.sort((a, b) => b.at.localeCompare(a.at));
+  const groups: Array<{ date: string; items: TimelineItem[] }> = [];
+  for (const item of items) {
+    const date = item.at.slice(0, 10);
+    const last = groups[groups.length - 1];
+    if (last && last.date === date) last.items.push(item);
+    else groups.push({ date, items: [item] });
+  }
+  return {
+    tenantId,
+    competitorId: scope || "all",
+    days,
+    generatedAt: now(),
+    totalSignals: items.filter((item) => item.kind === "signal").length,
+    totalEstimates: items.filter((item) => item.kind === "estimate").length,
+    groups,
+  };
 }
 
 /* ---------------------------------------------------------------------------

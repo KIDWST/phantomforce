@@ -53,6 +53,7 @@ import {
   requireAccessSession,
   requireClientWorkspaceView,
   resolveAccessSession,
+  mintAccessSessionToken,
   verifyOwnerCredentials,
   verifyAccessSessionTokenSid,
 } from "./access/session.js";
@@ -124,9 +125,16 @@ import { runContentAssetMigration } from "./assets/asset-migration.js";
 import {
   LOCAL_CUSTOMER_SESSION_PREFIX,
   assignLocalCustomerPlan,
+  completeLocalCustomerPasswordReset,
   getLocalCustomerPlanSummary,
+  initializeLocalCustomerAuthState,
+  localCustomerAuthEnabled,
+  loginLocalCustomer,
   listLocalCustomerPlanDefinitions,
+  registerLocalCustomer,
+  requestLocalCustomerPasswordReset,
   resolveLocalCustomerSession,
+  revokeLocalCustomerSession,
 } from "./access/local-customer-accounts.js";
 import type { AccessSession } from "./access/session.js";
 import {
@@ -247,8 +255,11 @@ import {
   getVacationModeApprovals,
   getVacationModeStatus,
   getVacationOperatorTasks,
+  pauseVacationMode,
+  resumeVacationMode,
   runVacationModeCheckIn,
   startVacationModeEngine,
+  takeOverVacationOperatorTask,
   updateVacationOperatorTask,
   updateVacationModeSettings,
 } from "./phantom-ai/vacation-mode.js";
@@ -331,10 +342,13 @@ import {
   getBusinessProfile,
   getCompetitorIntelligenceSnapshot,
   getCompetitorIntelligenceStoreStatus,
+  getCompetitorTimeline,
   getWebDiscoveryStatus,
+  markCompetitorAlertsRead,
   runCompetitorDiscovery,
   runCompetitorDossier,
   saveBusinessProfile,
+  upsertAlertSubscription,
   updateMarketScoutContext,
   updateAggressiveMode,
 } from "./phantom-ai/competitor-intelligence.js";
@@ -863,6 +877,7 @@ try {
   assertAccessAuthConfiguration();
   await initializeClientAccessState();
   await initializeAccessIdentityState();
+  await initializeLocalCustomerAuthState();
   await initializeDatabaseAuthState();
   await initializeAccessWorkflowState();
   await rehydrateAgentRuns();
@@ -1236,19 +1251,48 @@ app.get("/sessions", async (request) => {
   const publicHost = requestPublicHost(request);
   const scope = publicHostScope(publicHost);
   const databaseLoginUsable = databaseAuthEnabledForSessions();
-  const localCustomerEnabled = scope !== "admin";
+  const localCustomerEnabled = scope !== "admin" && localCustomerAuthEnabled();
   const customerAccountActionsEnabled = scope !== "admin" && (databaseLoginUsable || localCustomerEnabled);
+  const customerLoginEndpoint = scope === "admin"
+    ? undefined
+    : databaseLoginUsable
+      ? "/auth/login"
+      : localCustomerEnabled
+        ? "/auth/customer-login"
+        : undefined;
+  const customerSignupEndpoint = scope === "admin"
+    ? undefined
+    : databaseLoginUsable
+      ? "/auth/signup"
+      : localCustomerEnabled
+        ? "/auth/customer-signup"
+        : undefined;
+  const customerForgotPasswordEndpoint = scope === "admin"
+    ? undefined
+    : databaseLoginUsable
+      ? "/auth/forgot-password"
+      : localCustomerEnabled
+        ? "/auth/customer-forgot-password"
+        : undefined;
+  const customerResetPasswordEndpoint = scope === "admin"
+    ? undefined
+    : databaseLoginUsable
+      ? "/auth/reset-password"
+      : localCustomerEnabled
+        ? "/auth/customer-reset-password"
+        : undefined;
 
   return {
     ok: true,
     auth: {
       ...authConfiguration,
       customerAccountActionsEnabled,
-      customerLoginEndpoint: scope !== "admin" && (databaseLoginUsable || localCustomerEnabled) ? "/auth/login" : undefined,
-      customerSignupEndpoint: customerAccountActionsEnabled ? "/auth/signup" : undefined,
-      customerForgotUsernameEndpoint: customerAccountActionsEnabled ? "/auth/forgot-username" : undefined,
-      customerForgotPasswordEndpoint: customerAccountActionsEnabled ? "/auth/forgot-password" : undefined,
-      customerResetPasswordEndpoint: customerAccountActionsEnabled ? "/auth/reset-password" : undefined,
+      localCustomerAuthEnabled: localCustomerEnabled,
+      customerLoginEndpoint,
+      customerSignupEndpoint,
+      customerForgotUsernameEndpoint: scope !== "admin" && databaseLoginUsable ? "/auth/forgot-username" : undefined,
+      customerForgotPasswordEndpoint,
+      customerResetPasswordEndpoint,
     },
     sessions: authConfiguration.ownerProductionAuthEnabled
       ? []
@@ -1301,6 +1345,14 @@ function enforceAuthRateLimit(request: FastifyRequest, reply: FastifyReply, iden
 
 function enforceCodeRateLimit(request: FastifyRequest, reply: FastifyReply, identifier: string) {
   return enforceRateLimit(request, reply, "auth-code", identifier, CODE_RATE_LIMIT_MAX_ATTEMPTS, CODE_RATE_LIMIT_WINDOW_MS);
+}
+
+function customerAuthForbiddenOnHost(request: FastifyRequest) {
+  return publicHostScope(requestPublicHost(request)) === "admin";
+}
+
+function localCustomerAuthDisabled(reply: FastifyReply) {
+  return reply.code(403).send({ ok: false, error: "Local customer auth is disabled." });
 }
 
 async function handleSessionLogin(request: FastifyRequest, reply: FastifyReply) {
@@ -1435,6 +1487,19 @@ const DeveloperSignupSchema = z.object({
   workspaceBrief: z.string().trim().min(12).max(600),
 });
 
+const LocalCustomerLoginSchema = z.object({
+  email: z.string().email().max(200),
+  password: z.string().min(1).max(200),
+});
+const LocalCustomerSignupSchema = z.object({
+  email: z.string().email().max(200),
+  password: z.string().min(8).max(200),
+  name: z.string().max(120).optional(),
+  organizationName: z.string().max(120).optional(),
+  businessName: z.string().max(120).optional(),
+});
+const LocalCustomerForgotPasswordSchema = z.object({ identifier: z.string().min(3).max(200) });
+const LocalCustomerResetPasswordSchema = z.object({ token: z.string().min(10).max(240), password: z.string().min(8).max(200) });
 const ForgotUsernameSchema = z.object({ email: z.string().email().max(200) });
 const ForgotPasswordSchema = z.object({ identifier: z.string().min(3).max(200) });
 const ResetPasswordSchema = z.object({ token: z.string().min(10).max(240), password: z.string().min(8).max(200) });
@@ -1444,6 +1509,76 @@ const TwoFactorCodeSchema = z.object({ code: z.string().min(6).max(20) });
 function databaseAuthDisabled(reply: FastifyReply) {
   return reply.code(403).send({ ok: false, error: "Database auth is disabled.", auth: getAccessAuthConfiguration() });
 }
+
+function localCustomerHostDenied(reply: FastifyReply) {
+  return reply.code(403).send({ ok: false, error: "Customer account actions are only available on the customer app." });
+}
+
+function localCustomerTokenResponse(session: AccessSession) {
+  const token = mintAccessSessionToken(session.id);
+  if (!token) return undefined;
+  return { ok: true as const, authMode: "local-customer", ...token, session };
+}
+
+app.post("/auth/customer-login", async (request, reply) => {
+  if (customerAuthForbiddenOnHost(request)) return localCustomerHostDenied(reply);
+  if (!localCustomerAuthEnabled()) return localCustomerAuthDisabled(reply);
+  const parsed = LocalCustomerLoginSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  if (!enforceAuthRateLimit(request, reply, parsed.data.email)) return reply;
+  const session = await loginLocalCustomer(parsed.data.email, parsed.data.password);
+  if (!session) return reply.code(401).send({ ok: false, error: "Invalid email or password." });
+  const response = localCustomerTokenResponse(session);
+  if (!response) return reply.code(500).send({ ok: false, error: "Token minting unavailable." });
+  return response;
+});
+
+app.post("/auth/customer-signup", async (request, reply) => {
+  if (customerAuthForbiddenOnHost(request)) return localCustomerHostDenied(reply);
+  if (!localCustomerAuthEnabled()) return localCustomerAuthDisabled(reply);
+  const parsed = LocalCustomerSignupSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  if (!enforceAuthRateLimit(request, reply, parsed.data.email)) return reply;
+  const result = await registerLocalCustomer({
+    email: parsed.data.email,
+    password: parsed.data.password,
+    name: parsed.data.name,
+    businessName: parsed.data.businessName || parsed.data.organizationName,
+  });
+  if (!result.ok) {
+    const code = result.error === "account_already_exists" ? 409 : 403;
+    return reply.code(code).send({ ok: false, error: result.error });
+  }
+  const response = localCustomerTokenResponse(result.session);
+  if (!response) return reply.code(500).send({ ok: false, error: "Token minting unavailable." });
+  return response;
+});
+
+app.post("/auth/customer-forgot-password", async (request, reply) => {
+  if (customerAuthForbiddenOnHost(request)) return localCustomerHostDenied(reply);
+  if (!localCustomerAuthEnabled()) return localCustomerAuthDisabled(reply);
+  const parsed = LocalCustomerForgotPasswordSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  if (!enforceAuthRateLimit(request, reply, parsed.data.identifier)) return reply;
+  const result = await requestLocalCustomerPasswordReset(parsed.data.identifier);
+  if (!result.ok) return reply.code(403).send({ ok: false, error: result.error });
+  return {
+    ok: true,
+    expiresAt: result.expiresAt,
+    preview: result.resetToken ? { resetToken: result.resetToken } : undefined,
+  };
+});
+
+app.post("/auth/customer-reset-password", async (request, reply) => {
+  if (customerAuthForbiddenOnHost(request)) return localCustomerHostDenied(reply);
+  if (!localCustomerAuthEnabled()) return localCustomerAuthDisabled(reply);
+  const parsed = LocalCustomerResetPasswordSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  if (!enforceCodeRateLimit(request, reply, parsed.data.token)) return reply;
+  const result = await completeLocalCustomerPasswordReset(parsed.data.token, parsed.data.password);
+  if (!result.ok) return reply.code(400).send({ ok: false, error: result.error });
+  return { ok: true, next: "Sign in with your new password." };
+});
 
 app.post("/auth/login", async (request, reply) => {
   const authConfiguration = getAccessAuthConfiguration();
@@ -1583,6 +1718,10 @@ app.post("/auth/logout", async (request, reply) => {
   if (!session) return reply;
   const dbSession = asDatabaseSession(session);
   if (!dbSession) {
+    if (session.id.startsWith(LOCAL_CUSTOMER_SESSION_PREFIX)) {
+      await revokeLocalCustomerSession(session.id);
+      return { ok: true, revoked: true };
+    }
     return { ok: true, note: "Stateless session tokens expire on their own; nothing to revoke server-side." };
   }
   await revokeDatabaseSession(dbSession.authSessionId);
@@ -1677,10 +1816,6 @@ app.post("/auth/2fa/disable", async (request, reply) => {
 const CustomerPlanPreviewSchema = z.object({
   planKey: z.string().trim().min(1).max(60),
 });
-
-function customerAuthForbiddenOnHost(request: FastifyRequest) {
-  return publicHostScope(requestPublicHost(request)) === "admin";
-}
 
 app.get("/customer/plan-preview", async (request, reply) => {
   const session = requireAccessSession(request, reply);
@@ -4827,6 +4962,56 @@ app.post("/api/vacation-mode/deactivate", async (request, reply) => {
   };
 });
 
+app.post("/api/vacation-mode/pause", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const result = await pauseVacationMode(session);
+
+  if (!result) {
+    return reply.code(409).send({
+      ok: false,
+      error: "Away Mode is not active, so there is no coverage to pause.",
+    });
+  }
+
+  return {
+    ok: true,
+    session,
+    ...result,
+    external_send_performed: false,
+    provider_call_performed: false,
+  };
+});
+
+app.post("/api/vacation-mode/resume", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const result = await resumeVacationMode(session);
+
+  if (!result) {
+    return reply.code(409).send({
+      ok: false,
+      error: "Away Mode is not active, so there is no coverage to resume.",
+    });
+  }
+
+  return {
+    ok: true,
+    session,
+    ...result,
+    external_send_performed: false,
+    provider_call_performed: false,
+  };
+});
+
 app.patch("/api/vacation-mode/settings", async (request, reply) => {
   const session = requireAccessSession(request, reply);
 
@@ -4947,6 +5132,18 @@ app.post("/api/vacation-mode/operator-tasks/:id/cancel", async (request, reply) 
   const params = request.params as { id?: string };
   const task = params.id ? await cancelVacationOperatorTask(session, params.id.slice(0, 180)) : null;
   return task ? { ok: true, session, task } : reply.code(404).send({ ok: false, error: "Operator request was not found." });
+});
+
+app.post("/api/vacation-mode/operator-tasks/:id/take-over", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const params = request.params as { id?: string };
+  try {
+    const task = params.id ? await takeOverVacationOperatorTask(session, params.id.slice(0, 180)) : null;
+    return task ? { ok: true, session, task } : reply.code(404).send({ ok: false, error: "Operator request was not found." });
+  } catch (error) {
+    return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : "Request could not be taken over." });
+  }
 });
 
 app.patch("/api/vacation-mode/operator-tasks/:id/status", async (request, reply) => {
@@ -5888,6 +6085,28 @@ for (const [route, handler] of intelligenceCreateRoutes) {
     try { return { ok: true, result: await handler(session, (request.body ?? {}) as Record<string, unknown>) }; } catch (error) { return intelligenceError(reply, error); }
   });
 }
+
+/* Competitor Intelligence: dated timeline + in-app alert subscriptions.
+   Timeline is a read-only, day-grouped view over signals/estimates already
+   stored for the tenant. Alerts are store-backed and in-app only. */
+app.get("/api/competitor-intelligence/timeline", async (request, reply) => {
+  const session = requireAccessSession(request, reply); if (!session) return reply;
+  const access = await competitorIntelligenceAccess(session); if (!access.entitled) return reply.code(403).send({ ok: false, error: "Competitor Intelligence is not available for this plan." });
+  const query = (request.query ?? {}) as { tenant_id?: unknown; competitor_id?: unknown; days?: unknown };
+  try { return { ok: true, timeline: await getCompetitorTimeline(session, { tenantId: query.tenant_id, competitorId: query.competitor_id, days: query.days }) }; } catch (error) { return intelligenceError(reply, error); }
+});
+
+app.post("/api/competitor-intelligence/alert-subscriptions", async (request, reply) => {
+  const session = requireAccessSession(request, reply); if (!session) return reply;
+  const access = await competitorIntelligenceAccess(session); if (!access.entitled) return reply.code(403).send({ ok: false, error: "Competitor Intelligence is not available for this plan." });
+  try { return { ok: true, subscription: await upsertAlertSubscription(session, (request.body ?? {}) as Record<string, unknown>) }; } catch (error) { return intelligenceError(reply, error); }
+});
+
+app.post("/api/competitor-intelligence/alerts/read", async (request, reply) => {
+  const session = requireAccessSession(request, reply); if (!session) return reply;
+  const access = await competitorIntelligenceAccess(session); if (!access.entitled) return reply.code(403).send({ ok: false, error: "Competitor Intelligence is not available for this plan." });
+  try { return { ok: true, ...(await markCompetitorAlertsRead(session, (request.body ?? {}) as Record<string, unknown>)) }; } catch (error) { return intelligenceError(reply, error); }
+});
 
 function buildHermesInteractionMemoryPreviewFromBody(
   body: {
