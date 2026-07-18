@@ -79,8 +79,16 @@
   .tut-step .dots{display:flex;gap:6px;justify-content:center}
   .tut-step .dots span{width:6px;height:6px;border-radius:50%;background:#2a1543}
   .tut-step .dots span.on{background:#ff2fb0}
+  .menace-wrap{display:flex;flex-direction:column;gap:2px;min-width:120px;max-width:160px}
+  .menace-bar{height:8px;border-radius:99px;background:#241236;overflow:hidden;border:1px solid #b93cff55}
+  .menace-bar i{display:block;height:100%;width:0%;background:linear-gradient(90deg,#7a3cff,#ff2fb0);transition:width .12s linear}
+  .menace-wrap span{font-size:9px;color:#b98bff;text-transform:uppercase;letter-spacing:.06em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  body.menace{background:radial-gradient(circle at 50% -10%,#3c0a54,#0a0312 62%)}
+  body.menace canvas{border-color:#b93cff88;box-shadow:0 0 34px #b93cff44}
+  body.menace .menace-bar i{background:linear-gradient(90deg,#b93cff,#ff2fb0)}
   @media(prefers-reduced-motion:reduce){.btn,.venue{transition:none}}
   .reduced .judg,.reduced .btn{transition:none}
+  .reduced .menace-bar i{transition:none}
 </style>
 </head>
 <body>
@@ -95,6 +103,10 @@
         <button class="btn primary" data-go="venues">Start Tour</button>
         <button class="btn gold" data-go="soundcheck">Soundcheck (Practice)</button>
       </div>
+      <div class="row">
+        <button class="btn" id="controllerModeBtn" data-go="controller">Controller on Tour</button>
+      </div>
+      <div id="controllerMenuNote" class="note" hidden>Controller detected — Controller on Tour puts the whole set on your gamepad: face buttons, trigger whammy, and the Phantom Menace frenzy.</div>
       <div class="row">
         <button class="btn" data-go="settings">Settings</button>
         <button class="btn" data-tutorial>How To Play</button>
@@ -123,6 +135,17 @@
       <div class="field"><label>Track<span></span></label><select id="scTrackSelect"></select></div>
       <div class="field"><label>Note speed<span id="scSpeedLbl">1.0x</span></label><input type="range" id="scSpeedRange" min="0.6" max="2.5" step="0.05" value="1"></div>
       <div class="row"><button class="btn primary" data-sc-start>Start soundcheck</button><button class="btn" data-go="menu">Back</button></div>
+    </div>
+  </section>
+
+  <section class="scr" id="controllerScreen" data-screen="controller" hidden>
+    <p class="kicker">Controller on Tour</p>
+    <h2>Gamepad set</h2>
+    <p class="sub">Four channels on your face buttons. Hold notes pay a bonus while you whammy a trigger — oscillate the pressure to multiply it. Perfects and streaks charge the Phantom Menace meter; when it is full, hold both bumpers and squeeze both triggers for an 8-second double-score frenzy. Keyboard is ignored in this mode.</p>
+    <div class="panel">
+      <div class="field"><label>Track<span></span></label><select id="ctTrackSelect"></select></div>
+      <p class="note" id="ctPadStatus">No controller detected yet — press any button on your gamepad.</p>
+      <div class="row"><button class="btn primary" data-ct-start>Start set</button><button class="btn" data-go="menu">Back</button></div>
     </div>
   </section>
 
@@ -169,6 +192,7 @@
     <div class="hud">
       <div class="id"><b id="hudTrack">—</b><span id="hudMode">Tour</span></div>
       <div class="stat"><div><b id="hudScore">0</b><span>Score</span></div><div><b id="hudStreak">0</b><span>Streak</span></div><div><b id="hudAcc">100%</b><span>Acc</span></div></div>
+      <div class="menace-wrap" id="menaceWrap" hidden><div class="menace-bar"><i id="menaceFill"></i></div><span id="menaceHint">Phantom Menace 0%</span></div>
       <button class="btn small" data-pause>Pause</button>
     </div>
     <div class="rival" id="rivalLine" hidden></div>
@@ -287,6 +311,29 @@ function buildTypingNotes(track){
     var lane=lanePattern[i%lanePattern.length];
     notes.push({t:Math.round(t), lane:lane, ch:charAtStream(i+lane*3)});
     i++;
+  }
+  return notes;
+}
+
+// Controller on Tour charts: always 4 lanes (one per face button), sparser
+// than the typing stream, with periodic hold notes that pay a whammy bonus.
+function buildControllerNotes(track){
+  var notes=[];
+  var step=Math.max(150, Math.round(step16(track.bpm)*1.7));
+  var start=track.offsetMs||900, end=Math.max(start+1000, track.lengthMs-950);
+  var lanePattern=[0,1,2,3,1,3,0,2,3,2,1,0,2,0,3,1];
+  var laneBusyUntil=[0,0,0,0];
+  var i=0;
+  for(var t=start;t<end;t+=step){
+    var lane=lanePattern[i%lanePattern.length];
+    i++;
+    if(t<laneBusyUntil[lane]) continue;
+    var n={t:Math.round(t), lane:lane};
+    if(i%5===0){
+      n.hold=Math.max(520, Math.min(1700, step*3));
+      laneBusyUntil[lane]=t+n.hold+step;
+    }
+    notes.push(n);
   }
   return notes;
 }
@@ -449,7 +496,7 @@ function startBacking(track){
 function stopBacking(){ clearInterval(seq.timer); seq.timer=null; }
 
 // ---- Screen management ----
-var SCREENS=['menu','venues','soundcheck','settings','tutorial','duel-lobby','play','results'];
+var SCREENS=['menu','venues','soundcheck','controller','settings','tutorial','duel-lobby','play','results'];
 function showScreen(name){
   for(var i=0;i<SCREENS.length;i++){
     var el=document.querySelector('[data-screen="'+SCREENS[i]+'"]');
@@ -469,7 +516,7 @@ var TUT_STEPS=[
   {t:'Your Channels', b:'You can type the changing letters directly. The old lane keys still work as a backup: D, F, J, K (Arena Overdrive adds Space).'},
   {t:'Judgment & Streak', b:'Timing is graded Perfect, Great, Good, OK, or Miss. Chaining hits builds your Streak, which raises a score multiplier — a Miss resets the Streak but not your run.'},
   {t:'Pause & customize', b:'Press P or Esc any time to pause. Settings lets you remap every key, adjust volume, flip on a colorblind-safe palette, and reduce motion.'},
-  {t:'Modes', b:'Tour mode unlocks new venues as you finish each one. Soundcheck is practice with adjustable note speed and never touches your Tour saves. Session Player is an AI rival you can race in solo play. Tour Duel syncs a countdown with everyone in a PhantomPlay room.'}
+  {t:'Modes', b:'Tour mode unlocks new venues as you finish each one. Soundcheck is practice with adjustable note speed and never touches your Tour saves. Session Player is an AI rival you can race in solo play. Tour Duel syncs a countdown with everyone in a PhantomPlay room. Controller on Tour is a gamepad-only set: face buttons play, triggers whammy hold notes, and bumpers plus triggers unleash the Phantom Menace.'}
 ];
 var tutStep=0, tutReturnScreen='menu';
 function openTutorial(returnScreen){
@@ -581,25 +628,30 @@ function keysFor(track){ return track.lanes===5?G.keyBindings5:G.keyBindings4; }
 function startTrack(track, opts){
   ensureAudio(); if(actx && actx.state==='suspended') actx.resume();
   opts=opts||{};
-  var lanes=laneCountFor(track);
+  var controller=!!opts.controller;
+  var lanes=controller?4:laneCountFor(track);
   var laneQueues=[]; for(var l=0;l<lanes;l++) laneQueues.push([]);
-  var typingNotes=buildTypingNotes(track);
-  for(var i=0;i<typingNotes.length;i++){ laneQueues[typingNotes[i].lane].push({t:typingNotes[i].t, ch:typingNotes[i].ch, judged:false}); }
+  var typingNotes=controller?buildControllerNotes(track):buildTypingNotes(track);
+  for(var i=0;i<typingNotes.length;i++){ laneQueues[typingNotes[i].lane].push({t:typingNotes[i].t, ch:typingNotes[i].ch, hold:typingNotes[i].hold||0, judged:false, holding:false}); }
   var totalNotes=typingNotes.length;
   SESS={
     track:track, lanes:lanes, laneQueues:laneQueues, totalNotes:totalNotes,
-    practice: !!opts.practice, duel: !!opts.duel,
+    practice: !!opts.practice, duel: !!opts.duel, controller: controller,
     noteSpeed: opts.practice ? Number(document.getElementById('scSpeedRange').value) : G.settings.noteSpeed,
     startPerf: performance.now(), pausedMs:0, pauseStartedAt:0, paused:false,
     score:0, streak:0, maxStreak:0, weightSum:0, judgedCount:0,
     counts:{PERFECT:0,GREAT:0,GOOD:0,OK:0,MISS:0},
+    menace:0, menaceUntil:0, holdCarry:0, lastHoldT:0, whammy:{last:0,act:0},
     finished:false,
-    bot: opts.bot ? { skill:opts.botSkill||0.75, queues:cloneQueues(laneQueues), score:0, streak:0 } : null,
+    bot: (opts.bot && !controller) ? { skill:opts.botSkill||0.75, queues:cloneQueues(laneQueues), score:0, streak:0 } : null,
     raf:0
   };
   document.getElementById('hudTrack').textContent=track.title;
-  document.getElementById('hudMode').textContent = opts.practice?'Soundcheck':(opts.duel?'Tour Duel':'Tour');
-  document.getElementById('rivalLine').hidden = !SESS.bot;
+  document.getElementById('hudMode').textContent = controller?'Controller on Tour':(opts.practice?'Soundcheck':(opts.duel?'Tour Duel':'Tour'));
+  document.getElementById('rivalLine').hidden = !(SESS.bot||controller);
+  if(controller) document.getElementById('rivalLine').textContent='Gamepad only — whammy a trigger during hold notes';
+  document.getElementById('menaceWrap').hidden=!controller;
+  document.body.classList.remove('menace');
   showScreen('play');
   setupCanvas();
   startBacking(track);
@@ -618,12 +670,13 @@ function judgeHit(lane, judgeTime){
     if(Math.abs(diff)<Math.abs(bestDiff)){ bestDiff=diff; best=i; }
     if(diff< -WIN_OK) break; // notes are time-sorted per lane; no earlier candidate needed
   }
-  if(best<0 || Math.abs(bestDiff)>WIN_OK) { flashLane(lane); return; }
+  if(best<0 || Math.abs(bestDiff)>WIN_OK) { flashLane(lane); return null; }
   var g=classify(bestDiff);
   q[best].judged=true;
   applyJudgment(g);
   hitBlip(g);
   popupJudgment(g, lane);
+  return q[best];
 }
 function judgeTypedChar(ch, judgeTime){
   ch=String(ch||'').toUpperCase();
@@ -646,14 +699,20 @@ function judgeTypedChar(ch, judgeTime){
   popupJudgment(g, bestLane);
   return true;
 }
+function menaceActive(){ return !!(SESS && SESS.controller && SESS.menaceUntil && !SESS.finished && nowMs()<SESS.menaceUntil); }
 function applyJudgment(g){
   SESS.judgedCount++;
   SESS.weightSum+=GRADE_WEIGHT[g];
   SESS.counts[g]++;
   if(g==='MISS'){ SESS.streak=0; }
   else { SESS.streak++; SESS.maxStreak=Math.max(SESS.maxStreak,SESS.streak); }
-  var mult=multiplierFor(SESS.streak);
+  var mult=multiplierFor(SESS.streak)*(menaceActive()?2:1);
   SESS.score+=Math.round(GRADE_SCORE[g]*mult);
+  if(SESS.controller && g!=='MISS' && !menaceActive()){
+    var gain = g==='PERFECT'?6 : (g==='GREAT'?3 : 1);
+    if(SESS.streak>0 && SESS.streak%10===0) gain+=8;
+    SESS.menace=Math.min(100, SESS.menace+gain);
+  }
   updateHud();
 }
 function updateHud(){
@@ -662,6 +721,15 @@ function updateHud(){
   var acc=SESS.judgedCount? (SESS.weightSum/SESS.judgedCount*100) : 100;
   document.getElementById('hudAcc').textContent=Math.round(acc)+'%';
   if(SESS.bot){ document.getElementById('rivalLine').textContent='Session Player: '+SESS.bot.score+' pts (streak '+SESS.bot.streak+')'; }
+  if(SESS.controller){
+    var active=menaceActive();
+    document.body.classList.toggle('menace', active);
+    document.getElementById('menaceFill').style.width=(active?100:Math.round(SESS.menace))+'%';
+    var hint=document.getElementById('menaceHint');
+    if(active) hint.textContent='PHANTOM MENACE x2 - '+Math.max(1,Math.ceil((SESS.menaceUntil-nowMs())/1000))+'s';
+    else if(SESS.menace>=100) hint.textContent='FULL: bumpers + both triggers!';
+    else hint.textContent='Phantom Menace '+Math.round(SESS.menace)+'%'+(SESS.whammy.act>0.25?' - WHAMMY':'');
+  }
 }
 var judgTimer=null;
 function popupJudgment(g,lane){
@@ -722,45 +790,62 @@ function resizeCanvas(){
   var rect=cv.getBoundingClientRect();
   cv.width=Math.max(240,rect.width)*dpr; cv.height=Math.max(240,rect.height)*dpr;
 }
+var PHANTOM_LANE_COLORS=['#b93cff','#7a5cff','#ff4de0','#8f2fff','#b93cff'];
+var GP_FACE_LABELS=['A','B','X','Y'];
 function drawStage(t){
   if(!cx) return;
   var w=cv.width, h=cv.height;
   cx.clearRect(0,0,w,h);
+  var frenzy=menaceActive();
+  if(frenzy){ cx.fillStyle='#1b052f'; cx.fillRect(0,0,w,h); }
+  function laneColor(lane){ return frenzy?PHANTOM_LANE_COLORS[lane%5]:colorFor(lane); }
   var lanes=SESS.lanes, laneW=w/lanes;
   var topY=h*0.06, threshY=h*0.82;
-  cx.strokeStyle='#ff2fb055'; cx.lineWidth=2*dpr;
+  cx.strokeStyle=frenzy?'#b93cff66':'#ff2fb055'; cx.lineWidth=2*dpr;
   for(var l=1;l<lanes;l++){ cx.beginPath(); cx.moveTo(l*laneW,0); cx.lineTo(l*laneW,h); cx.stroke(); }
   cx.fillStyle='#ffffff22';
   cx.fillRect(0,threshY-2*dpr,w,4*dpr);
-  cx.fillStyle='#ffd23f';
+  cx.fillStyle=frenzy?'#b93cff':'#ffd23f';
   cx.fillRect(0,threshY-1*dpr,w,2*dpr);
   var travelMs=1800/Math.max(0.4,SESS.noteSpeed);
   for(var lane=0;lane<lanes;lane++){
     var q=SESS.laneQueues[lane];
     for(var i=0;i<q.length;i++){
       var n=q[i];
-      if(n.judged) continue;
+      if(n.judged && !n.holding) continue;
       var f=(t-(n.t-travelMs))/travelMs;
-      if(f< -0.05 || f>1.15) continue;
+      if(f< -0.05) continue;
+      if(!n.hold && f>1.15) continue;
+      if(n.hold && t>n.t+n.hold+200) continue;
       var y=topY+f*(threshY-topY);
       var cxp=lane*laneW+laneW/2;
       var r=Math.min(laneW*0.32, 30*dpr);
-      cx.fillStyle=colorFor(lane)+'cc';
-      cx.beginPath(); cx.arc(cxp,y,r,0,Math.PI*2); cx.fill();
-      cx.fillStyle='#0b0716';
+      if(n.hold){
+        var f2=(t-((n.t+n.hold)-travelMs))/travelMs;
+        var y2=topY+f2*(threshY-topY);
+        var yHead=n.holding?Math.min(y,threshY):Math.min(y,threshY+r);
+        cx.strokeStyle=laneColor(lane)+(n.holding?'ee':'77');
+        cx.lineWidth=r*0.7; cx.lineCap='round';
+        cx.beginPath(); cx.moveTo(cxp,Math.max(topY,y2)); cx.lineTo(cxp,yHead); cx.stroke();
+        y=yHead;
+      }
+      cx.fillStyle=laneColor(lane)+'cc';
+      cx.beginPath(); cx.arc(cxp,y,n.holding?r*1.12:r,0,Math.PI*2); cx.fill();
+      cx.fillStyle=frenzy?'#0d0117':'#0b0716';
       cx.font=(r*1.1)+'px system-ui, sans-serif';
       cx.textAlign='center'; cx.textBaseline='middle';
       cx.fillText(n.ch||GLYPHS[lane], cxp, y+1*dpr);
     }
     // key indicator at threshold
-    cx.fillStyle='#150c26aa';
+    cx.fillStyle=frenzy?'#20083aaa':'#150c26aa';
     var kx=lane*laneW+laneW/2;
     cx.beginPath(); cx.arc(kx,threshY,Math.min(laneW*0.36,34*dpr),0,Math.PI*2); cx.fill();
-    cx.strokeStyle=colorFor(lane); cx.lineWidth=2*dpr;
+    cx.strokeStyle=laneColor(lane); cx.lineWidth=2*dpr;
     cx.beginPath(); cx.arc(kx,threshY,Math.min(laneW*0.36,34*dpr),0,Math.PI*2); cx.stroke();
-    cx.fillStyle=colorFor(lane);
+    cx.fillStyle=laneColor(lane);
     cx.font=(14*dpr)+'px ui-monospace, monospace';
-    cx.fillText(KEY_LABEL[keysFor(SESS.track)[lane]]||'?', kx, threshY);
+    cx.textAlign='center'; cx.textBaseline='middle';
+    cx.fillText(SESS.controller?GP_FACE_LABELS[lane]:(KEY_LABEL[keysFor(SESS.track)[lane]]||'?'), kx, threshY);
   }
 }
 
@@ -780,11 +865,19 @@ function endTrack(){
   SESS.finished=true;
   stopBacking();
   cancelAnimationFrame(SESS.raf);
+  document.body.classList.remove('menace');
   var acc=SESS.judgedCount? (SESS.weightSum/SESS.judgedCount*100) : 0;
   var grade=letterGrade(acc);
   var stars=starsFor(grade);
   var result={score:SESS.score, accuracy:Math.round(acc*10)/10, grade:grade, stars:stars, maxStreak:SESS.maxStreak, counts:SESS.counts};
-  if(!SESS.practice){
+  if(SESS.controller){
+    // Controller sets keep their own bests and never gate Tour progression.
+    var ckey='ctrl-'+SESS.track.id;
+    var cprev=G.progression.best[ckey];
+    if(!cprev || result.score>cprev.score) G.progression.best[ckey]=result;
+    mirrorLocal();
+    persistSoon(result.score);
+  } else if(!SESS.practice){
     var prev=G.progression.best[SESS.track.id];
     if(!prev || result.score>prev.score) G.progression.best[SESS.track.id]=result;
     if(G.progression.completed.indexOf(SESS.track.id)<0) G.progression.completed.push(SESS.track.id);
@@ -797,7 +890,7 @@ function endTrack(){
 }
 
 function showResults(result){
-  document.getElementById('resKicker').textContent = SESS.practice?'Soundcheck complete (not saved to Tour)':(SESS.duel?'Duel set complete':'Set complete');
+  document.getElementById('resKicker').textContent = SESS.controller?'Controller on Tour — set complete':(SESS.practice?'Soundcheck complete (not saved to Tour)':(SESS.duel?'Duel set complete':'Set complete'));
   document.getElementById('resGrade').textContent=result.grade;
   document.getElementById('resScore').textContent=result.score;
   document.getElementById('resAcc').textContent=result.accuracy+'%';
@@ -838,8 +931,8 @@ function showResults(result){
   if(SESS.duel){
     actions.appendChild(mkBtn('Back to duel lobby','primary',function(){ showScreen('duel-lobby'); renderDuelLobby(); }));
   } else {
-    actions.appendChild(mkBtn('Play again','primary',function(){ startTrack(SESS.track,{practice:SESS.practice,bot:!!SESS.bot,botSkill:SESS.bot?SESS.bot.skill:0}); }));
-    actions.appendChild(mkBtn('Back to '+(SESS.practice?'soundcheck':'venues'),'',function(){ showScreen(SESS.practice?'soundcheck':'venues'); renderVenues(); }));
+    actions.appendChild(mkBtn('Play again','primary',function(){ startTrack(SESS.track,{practice:SESS.practice,controller:SESS.controller,bot:!!SESS.bot,botSkill:SESS.bot?SESS.bot.skill:0}); }));
+    actions.appendChild(mkBtn('Back to '+(SESS.controller?'controller setup':(SESS.practice?'soundcheck':'venues')),'',function(){ if(SESS.controller){ renderControllerSetup(); showScreen('controller'); } else { showScreen(SESS.practice?'soundcheck':'venues'); renderVenues(); } }));
   }
   actions.appendChild(mkBtn('Main menu','',function(){ showScreen('menu'); }));
   showScreen('results');
@@ -945,9 +1038,22 @@ function startDuelScoreReporting(){
 }
 
 // ---- Input ----
+var kbBlockToastAt=0;
+function kbBlockNote(){
+  var now=Date.now();
+  if(now-kbBlockToastAt<2500) return;
+  kbBlockToastAt=now;
+  toast('Controller on Tour is gamepad-only — the keyboard is ignored.');
+}
 window.addEventListener('keydown',function(e){
   if(rebindListener) return; // remap capture takes priority
   if(!document.querySelector('[data-screen="play"]').hidden){
+    if(SESS && SESS.controller && !SESS.finished){
+      // Gamepad-only enforcement: pause keys still work, gameplay keys do not.
+      if(e.code==='KeyP'||e.code==='Escape'){ e.preventDefault(); setPaused(!SESS.paused); return; }
+      if((e.key && /^[a-z0-9 ]$/i.test(e.key)) || keysFor(SESS.track).indexOf(e.code)>=0){ e.preventDefault(); if(!SESS.paused) kbBlockNote(); }
+      return;
+    }
     if(SESS && !SESS.paused && !SESS.finished && e.key && /^[a-z0-9]$/i.test(e.key)){
       if(judgeTypedChar(e.key, nowMs())){ e.preventDefault(); return; }
     }
@@ -962,19 +1068,87 @@ document.addEventListener('visibilitychange',function(){ if(document.hidden && S
 // ---- Gamepad (4 face buttons -> the D/F/J/K lanes; 5th "Space" lane on
 // Arena Overdrive is keyboard-only, same as the standard-layout gamepad
 // simply not having a 5th face button) ----
-var gpIdx=null, gpPrev=[false,false,false,false];
+var gpIdx=null, gpPrev=[false,false,false,false], gpPrevStart=false;
 var GP_LANES4=[0,1,2,3], GP_LANES5=[0,1,3,4]; // skip lane 2 (Space) on 5-channel tracks
 function gpPad(){ var p=navigator.getGamepads?navigator.getGamepads():[]; if(gpIdx===null){ for(var i=0;i<p.length;i++){ if(p[i]){ gpIdx=i; break; } } } return gpIdx===null?null:p[gpIdx]; }
 function gpLaneIndices(){ return (SESS && SESS.lanes===5) ? GP_LANES5 : GP_LANES4; }
+function btnVal(pad,i){ var b=pad.buttons[i]; if(!b) return 0; return (typeof b.value==='number' && b.value>0) ? b.value : (b.pressed?1:0); }
+function releaseHolds(lane){
+  var q=SESS.laneQueues[lane];
+  for(var i=0;i<q.length;i++){ if(q[i].holding) q[i].holding=false; }
+}
+// Whammy + Phantom Menace tick (Controller on Tour only). Whammy reads the
+// analog trigger values (L2/R2); digital triggers still work because rapid
+// on/off pumping produces the same value deltas the oscillation tracker eats.
+var HOLD_RATE=90; // base bonus points per second per held note
+function controllerTick(pad,t){
+  var l2=btnVal(pad,6), r2=btnVal(pad,7);
+  var v=Math.max(l2,r2);
+  var wh=SESS.whammy;
+  var d=Math.abs(v-wh.last); wh.last=v;
+  wh.act=Math.min(1, wh.act*0.93 + d*2.2);
+  var holding=0;
+  for(var lane=0;lane<SESS.lanes;lane++){
+    var q=SESS.laneQueues[lane];
+    for(var i=0;i<q.length;i++){
+      var n=q[i];
+      if(!n.holding) continue;
+      if(t>n.t+n.hold){ n.holding=false; continue; }
+      holding++;
+    }
+  }
+  if(holding>0){
+    var dtSec=Math.max(0, Math.min(0.1, (t-(SESS.lastHoldT||t))/1000));
+    var mult=(1+2*wh.act)*(menaceActive()?2:1);
+    SESS.holdCarry+=holding*HOLD_RATE*dtSec*mult;
+    var add=Math.floor(SESS.holdCarry);
+    if(add>0){ SESS.holdCarry-=add; SESS.score+=add; }
+  }
+  SESS.lastHoldT=t;
+  if(SESS.menace>=100 && !menaceActive()){
+    var lb=!!(pad.buttons[4] && pad.buttons[4].pressed), rb=!!(pad.buttons[5] && pad.buttons[5].pressed);
+    if(lb && rb && l2>0.55 && r2>0.55){
+      SESS.menaceUntil=t+8000; SESS.menace=0;
+      toast('PHANTOM MENACE — double score for 8 seconds!');
+    }
+  }
+}
+var padSuggested=false, lastPadStatus='';
+function suggestController(){
+  if(padSuggested) return;
+  padSuggested=true;
+  var btn=document.getElementById('controllerModeBtn'); if(btn) btn.classList.add('gold');
+  var note=document.getElementById('controllerMenuNote'); if(note) note.hidden=false;
+  toast('Controller detected — try Controller on Tour!');
+}
+window.addEventListener('gamepadconnected', function(){ gpIdx=null; suggestController(); });
 (function gpLoop(){
-  if(gpEnabled && SESS && !SESS.paused && !SESS.finished){
+  var ctrl=!!(SESS && SESS.controller);
+  if(!padSuggested && gpPad()) suggestController();
+  var ctScr=document.getElementById('controllerScreen');
+  if(ctScr && !ctScr.hidden){
+    var msg=gpPad()?'Controller connected — ready to play.':'No controller detected yet — press any button on your gamepad.';
+    if(msg!==lastPadStatus){ lastPadStatus=msg; document.getElementById('ctPadStatus').textContent=msg; }
+  }
+  if((gpEnabled||ctrl) && SESS && !SESS.finished){
     var pad=gpPad();
     if(pad){
-      var lanes=gpLaneIndices();
-      for(var i=0;i<4;i++){
-        var pressed=!!(pad.buttons[i] && pad.buttons[i].pressed);
-        if(pressed && !gpPrev[i]) judgeHit(lanes[i], nowMs());
-        gpPrev[i]=pressed;
+      var startPressed=!!(pad.buttons[9] && pad.buttons[9].pressed);
+      if(ctrl && startPressed && !gpPrevStart) setPaused(!SESS.paused);
+      gpPrevStart=startPressed;
+      if(!SESS.paused){
+        var t=nowMs();
+        var lanes=ctrl?GP_LANES4:gpLaneIndices();
+        for(var i=0;i<4;i++){
+          var pressed=!!(pad.buttons[i] && pad.buttons[i].pressed);
+          if(pressed && !gpPrev[i]){
+            var n=judgeHit(lanes[i], t);
+            if(ctrl && n && n.hold) n.holding=true;
+          }
+          if(ctrl && !pressed && gpPrev[i]) releaseHolds(lanes[i]);
+          gpPrev[i]=pressed;
+        }
+        if(ctrl) controllerTick(pad,t);
       }
     }
   }
@@ -987,6 +1161,7 @@ document.querySelectorAll('[data-go]').forEach(function(btn){
     var target=btn.getAttribute('data-go');
     if(target==='venues') renderVenues();
     if(target==='soundcheck') renderSoundcheckSetup();
+    if(target==='controller') renderControllerSetup();
     if(target==='settings') renderSettings();
     if(target==='duel-lobby') renderDuelLobby();
     showScreen(target);
@@ -1005,6 +1180,16 @@ document.querySelector('[data-sc-start]').addEventListener('click',function(){
   startTrack(track,{practice:true});
 });
 document.getElementById('scSpeedRange').addEventListener('input',function(){ document.getElementById('scSpeedLbl').textContent=Number(this.value).toFixed(2)+'x'; });
+function renderControllerSetup(){
+  var sel=document.getElementById('ctTrackSelect');
+  if(!sel.dataset.filled){ for(var i=0;i<TRACKS.length;i++){ var o=document.createElement('option'); o.value=TRACKS[i].id; o.textContent=TRACKS[i].title; sel.appendChild(o); } sel.dataset.filled='1'; }
+  lastPadStatus='';
+}
+document.querySelector('[data-ct-start]').addEventListener('click',function(){
+  if(!gpPad()){ toast('Connect a gamepad first — Controller on Tour is gamepad-only.'); return; }
+  var track=trackById(document.getElementById('ctTrackSelect').value)||TRACKS[0];
+  startTrack(track,{controller:true});
+});
 document.getElementById('settSpeedRange').addEventListener('input',function(){ G.settings.noteSpeed=Number(this.value); document.getElementById('settSpeedLbl').textContent=G.settings.noteSpeed.toFixed(2)+'x'; mirrorLocal(); persistSoon(0); });
 document.getElementById('volRange').addEventListener('input',function(){ G.settings.volume=Number(this.value); document.getElementById('volLbl').textContent=Math.round(G.settings.volume*100)+'%'; updateMasterGain(); mirrorLocal(); persistSoon(0); });
 document.getElementById('cbToggle').addEventListener('change',function(){ G.settings.colorblind=this.checked; mirrorLocal(); persistSoon(0); });
@@ -1018,6 +1203,7 @@ document.querySelector('[data-resume]').addEventListener('click',function(){ if(
 document.querySelector('[data-quit]').addEventListener('click',function(){
   stopBacking(); if(SESS) { SESS.finished=true; cancelAnimationFrame(SESS.raf); }
   document.getElementById('pauseOverlay').hidden=true;
+  document.body.classList.remove('menace');
   showScreen('menu');
 });
 document.querySelector('[data-duel-start]').addEventListener('click',function(){
@@ -1047,8 +1233,9 @@ window.addEventListener('message', function(event){
   } else if(type==='restart'){
     var wasActive = SESS && !SESS.finished;
     var trackToReplay = wasActive ? SESS.track : null;
-    var replayOpts = wasActive ? { practice: SESS.practice, duel: SESS.duel, bot: !!SESS.bot, botSkill: SESS.bot ? SESS.bot.skill : undefined } : null;
+    var replayOpts = wasActive ? { practice: SESS.practice, duel: SESS.duel, controller: SESS.controller, bot: !!SESS.bot, botSkill: SESS.bot ? SESS.bot.skill : undefined } : null;
     stopBacking(); if(SESS){ SESS.finished=true; cancelAnimationFrame(SESS.raf); }
+    document.body.classList.remove('menace');
     if(trackToReplay){ startTrack(trackToReplay, replayOpts); } else { showScreen('menu'); }
   } else if(type==='restore' || type==='load-state'){
     mergeState(event.data.state);
