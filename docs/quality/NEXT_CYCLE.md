@@ -23,7 +23,8 @@ refresher-style reminders now remain normal instant conversation. Explicit
 workspace status, tasks, automations, scheduled reminders, and durable memory
 still take their operational lanes. Browser and server policy agree, explicit
 memory creates a real pinned record, and the module graph is cache-busted as
-`phantom-live-20260718-33`.
+`phantom-live-20260718-33`. Commit `c679f80` is pushed and deployed; canonical
+source, origin, deployment manifest, Hermes, and the public build agree.
 
 ## Recommended Cycle 18
 

@@ -1270,6 +1270,24 @@ Run the authenticated two-organization persistence proof in Recommended Cycle 17
   at 448px client / 899px content; zero page errors.
 - PASS: visual review of
   `C:\Users\jorda\AppData\Local\Temp\phantomforce-cycle17-semantic-chat.png`.
+- PASS after live sync: `ops/admin-live/Test-LiveAdminSource.ps1 -Strict`
+  reported canonical checkout, origin, deployment manifest, static source, and
+  Hermes at commit `c679f80`; the public app served
+  `phantom-live-20260718-33`, both working trees were clean, and all 143 live
+  change-memory checks passed.
+- PASS after live sync: `npm run test:instant-chat:http-live-model --workspace
+  @phantomforce/server` completed 82 authenticated requests against the
+  deployed service at 559 ms average and 2,110 ms maximum, with zero fallback,
+  zero business leakage, nine deterministic tool responses, and every
+  continuity, topic-switch, reasoning, formatting, lexical-routing, and
+  topic-isolation assertion true.
+- PASS after live sync: the public browser loaded
+  `https://app.phantomforce.online/` at build `phantom-live-20260718-33`, showed
+  the expected sign-in boundary, and remained exactly 1,280px wide in a
+  1,280x720 viewport with no horizontal overflow. The anonymous localhost
+  browser correctly lacked an authorization token and therefore exercised the
+  visible fallback; authenticated model behavior is covered by the preceding
+  deployed HTTP gate.
 
 ## Next Task
 
