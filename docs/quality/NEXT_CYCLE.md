@@ -16,17 +16,16 @@ Do not restart the audit from zero unless the inventory is invalid. Continuation
 is scheduled in this same Codex task by heartbeat automation
 `continue-phantomforce-quality-program`.
 
-Cycle 7 hardened the complete authenticated instant-chat HTTP route. Ordinary
-conversation still uses the warmed `qwen2.5:14b` brain, while deterministic local
-micro-tools now handle arithmetic chains and exact ordinal list selection in
-1-2 ms. Temporary context preserves list line breaks without expanding its
-eight-turn browser bound or using durable/business memory. A self-starting gate
-now drives 27 mixed admin/customer requests through the real server and model,
-including corrections, topic switches, exact output, arithmetic, and context
-rollover. Build `phantom-live-20260718-28` is the reconciled publish marker for
-this cycle.
+Cycle 8 widened and corrected instant-chat routing. Harmless informational
+questions about websites, images, banks, invoices, contracts, posts, and uploads
+now stay on the fast model without receiving business modules. Private workspace
+questions, record access, publishing/destructive commands, and substantive
+strategy still leave the instant lane. The authenticated model gate now drives
+41 mixed admin/customer requests and verifies corrections, entity tracking,
+reasoning, exact formatting, false premises, arithmetic, topic changes, and
+context rollover. Build `phantom-live-20260718-29` is the publish marker.
 
-## Recommended Cycle 8
+## Recommended Cycle 9
 
 Theme: authenticated cross-organization persistence proof.
 

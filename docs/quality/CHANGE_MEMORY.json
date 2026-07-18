@@ -630,11 +630,21 @@
           "pattern": "phantom-calculator[\\s\\S]*phantom-reference-resolver",
           "description": "Deterministic micro-tools handle arithmetic chains and exact ordinal list selection instead of gambling on model output."
         },
-        {
-          "file": "server/scripts/test-instant-chat-http-live-model.ts",
-          "pattern": "contextRolloverVerified: true",
-          "description": "A self-starting authenticated HTTP gate exercises long conversation, topic switching, correction, arithmetic, exact output, and the bounded context rollover."
-        }
+          {
+            "file": "server/scripts/test-instant-chat-http-live-model.ts",
+            "pattern": "contextRolloverVerified: true",
+            "description": "A self-starting authenticated HTTP gate exercises long conversation, topic switching, correction, arithmetic, exact output, and the bounded context rollover."
+          },
+          {
+            "file": "app/js/command.js",
+            "pattern": "if \\(isInstantChatRequest\\(raw, intent\\)\\) return false;",
+            "description": "Harmless informational questions do not inherit business context merely because they mention a website, image, bank, invoice, contract, or post."
+          },
+          {
+            "file": "server/src/index.ts",
+            "pattern": "const instantConversation = adminRouteTier === \"instant\" && isSafeInstantConversationRequest\\(normalized\\);[\\s\\S]*const businessContextRelevant = !instantConversation",
+            "description": "The server independently strips business context from verified instant conversation even when a harmless question contains a business-related noun."
+          }
       ],
       "forbiddenPatterns": [
         {

@@ -53,8 +53,8 @@
 
 ## Recent, merged & live (newest first)
 - **Real instant conversational brain (2026-07-18)** — build
-  `phantom-live-20260718-28`. Smart-mode casual chat uses the localhost-only
-  `qwen2.5:7b` lane with bounded temporary context, concise output, no business
+  `phantom-live-20260718-29`. Smart-mode casual chat uses the localhost-only
+  `qwen2.5:14b` lane with bounded temporary context, concise output, no business
   module leakage, and sub-second warm responses. Standard/deep work retains its
   existing role, approval, and provider controls. A hidden Windows logon task
   keeps Ollama available after restart.
@@ -130,7 +130,7 @@
   (`app/index.html`, `app/phantom.css`, `app/js/main.js`).
 - **Living Phantom character** — `app/js/character.js`: 11 painted poses, emotional
   inertia (`governMood`), hologram depth. Shared by admin + public site.
-- Current cache-bust build id: **`phantom-live-20260718-28`**.
+- Current cache-bust build id: **`phantom-live-20260718-29`**.
 
 ## Repo map
 - `app/` — the **admin console** (`admin.phantomforce.online`). `index.html`,

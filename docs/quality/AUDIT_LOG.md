@@ -709,6 +709,48 @@ Run the authenticated two-organization persistence proof in Recommended Cycle 7.
 
 Run the authenticated two-organization persistence proof in Recommended Cycle 8.
 
+# 2026-07-18 - Cycle 8: Intent-Aware Instant Chat Routing
+
+## Problems Verified
+
+- The instant-chat noun blocklist treated harmless questions such as `what is a
+  website?`, `how does a bank work?`, and `what is an invoice?` as business work.
+- Browser context selection separately treated those nouns as permission to send
+  workspace metadata, including approval language, into ordinary conversation.
+- A first routing correction made the word `compare` too broad and promoted the
+  short follow-up `Compare them in one sentence` out of instant chat.
+- The 27-turn gate did not prove entity correction, ordered reasoning, exact word
+  counts, false-premise handling, or correction of several facts at once.
+
+## Corrections
+
+- Replaced noun-only blocking with intent-aware business-action, private-record,
+  external-action, live-data, and deep-reasoning boundaries in browser and server.
+- Made verified instant conversation explicitly business-context-free even when
+  the subject is a general business noun.
+- Kept short pronoun comparisons conversational while substantive comparisons,
+  strategy, record access, publishing, destructive commands, and private
+  workspace questions retain heavier guarded routes.
+- Expanded browser regression coverage to 38 casual prompts and the authenticated
+  real-model HTTP matrix to 41 admin/customer requests.
+- Tightened `no introduction` cleanup when an otherwise valid fact is preceded by
+  conversational filler.
+- Cache-busted the application as `phantom-live-20260718-29`.
+
+## Focused Verification
+
+- PASS: `npm run test:dashboard-chat` (38 browser prompts, adversarial fallback
+  routing, and deterministic tools).
+- PASS: `npm run test:intent`.
+- PASS: `npm run typecheck`.
+- PASS: `npm run test:instant-chat:http-live-model --workspace
+  @phantomforce/server`: 41 authenticated requests, 415 ms average, 794 ms
+  maximum, zero fallback, zero business leakage, and all capability assertions.
+
+## Next Task
+
+Run the authenticated two-organization persistence proof in Recommended Cycle 9.
+
 # 2026-07-18 - Live Database Authentication Recovery
 
 ## Failure Verified
