@@ -528,3 +528,55 @@ responsive viewport harness from the headless Edge smoke and sweep the required
 
 Run authenticated two-organization browser persistence proof, then continue the
 responsive viewport harness if database fixtures are unavailable.
+
+# 2026-07-18 - Cycle 5: Real Fast Conversational Brain
+
+## Problems Verified
+
+- Smart instant chat requested `gpt-5.5-instant` through Codex CLI, but that
+  target failed in the installed CLI; arbitrary questions therefore fell back
+  to a small scripted responder.
+- The available Codex models answered correctly but took 11-13 seconds, and the
+  Claude CLI had no usable quota.
+- The old local transport forced every answer through a large business-operator
+  prompt, causing irrelevant action cards, ledger language, and long output.
+- Ollama was installed with capable models but was not configured to start after
+  Windows sign-in.
+
+## Corrections
+
+- Routed smart-mode casual chat to `qwen2.5:7b` through the localhost-only Ollama
+  transport. Explicit provider selections and all standard/deep routes remain
+  unchanged.
+- Added a dedicated conversation mode with an 80-token ceiling, 2048-token
+  context, 30-minute warm lease, concise general-purpose system prompt, and no
+  business-operator instructions.
+- Enabled the action-free instant lane for authenticated customer sessions as
+  well as administrators. It still receives only bounded temporary conversation
+  and cannot execute external actions.
+- Registered and exercised the hidden Windows scheduled task
+  `PhantomForce Ollama Service`; last task result was `0` and localhost port
+  `11434` returned HTTP 200.
+- Cache-busted the application as `phantom-live-20260718-26`.
+
+## Verification
+
+- PASS: `npm run test:dashboard-chat` (23 browser prompts, 11 adversarial turns).
+- PASS: `npm run test:intent`, `npm run test:memory`,
+  `npm run test:auth-boundaries`, and `npm run test:command-surface`.
+- PASS: `npx tsx scripts/test-local-ollama-transport.ts` from `server`.
+- PASS: `npm run test:release-critical` (19/19 checks), including typecheck,
+  build, tenant-backed CRM/proposals/approvals, and 99 change-memory guards.
+- PASS: standalone `npm run typecheck`, `npm run build`, and
+  `npm run test:change-memory` after the final build stamp.
+- PASS: direct transport smoke against the installed model answered sky color in
+  753 ms, favorite food in 315 ms, and `60 miles / 90 minutes` correctly in
+  275 ms.
+- PASS: real `/phantom-ai/chat` HTTP smoke answered through `qwen2.5:7b` without
+  fallback for an admin session in 648 ms and a customer session in 277 ms.
+- PASS: three real HTTP turns retained the chicken-taco topic through
+  `make that funnier` and `give me another option`, each in 355-691 ms.
+
+## Next Task
+
+Run the authenticated two-organization persistence proof in Recommended Cycle 6.

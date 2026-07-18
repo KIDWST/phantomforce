@@ -3598,7 +3598,7 @@ function adminPhantomAiProviderLabel(providerId: AdminPhantomAiProviderId) {
   if (providerId === "codex_cli") return "Private Brain (Codex)";
   if (providerId === "claude_cli") return "Claude CLI";
   if (providerId === "openrouter_glm") return "OpenRouter GLM 5.2";
-  return "Local GLM (Ollama)";
+  return "Phantom Instant";
 }
 
 type AdminPhantomAiChatContext = {
@@ -3714,6 +3714,8 @@ async function callAdminPhantomAiProvider(providerId: AdminPhantomAiProviderId, 
       sensitivityLevel: ctx.sensitivityLevel,
       approvalRequired: ctx.approvalRequired,
       executionMode: ctx.executionMode,
+      conversationMode: ctx.routeTier === "instant",
+      maxTokens: ctx.routeTier === "instant" ? 80 : undefined,
       adminOperatorLane: true,
     },
     {
@@ -8458,7 +8460,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
     return privacyFirstLocationReply;
   }
 
-  if (session.canManageAccess && adminRouteTier === "instant" && isSafeInstantConversationRequest(normalized)) {
+  if (adminRouteTier === "instant" && isSafeInstantConversationRequest(normalized)) {
     const instantChat = await runAdminPhantomAiChatWithFallback(adminModelLane, {
       requestId: normalized.request_id,
       businessName: normalized.business_name,

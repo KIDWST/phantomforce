@@ -59,6 +59,51 @@ assert.equal(called.external_provider_called, false);
 assert.equal(called.output_text, "Follow up on the warmest lead first.");
 assert.deepEqual(called.usage, { prompt_tokens: 12, completion_tokens: 9, total_tokens: 21 });
 
+let conversationBody: Record<string, any> = {};
+const conversation = await callLocalOllamaChat(
+  {
+    ...baseInput,
+    taskType: "question",
+    userMessage: "Why is the sky blue?",
+    compactContext: "Fast casual chat. Recent conversation: none.",
+    conversationMode: true,
+    maxTokens: 80,
+  },
+  {
+    env: {
+      OLLAMA_BASE_URL: "http://127.0.0.1:11434",
+      PHANTOM_OLLAMA_MODEL: "qwen2.5:7b",
+    },
+    fetchImpl: async (url, init) => {
+      if (url.endsWith("/api/tags")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ models: [{ name: "qwen2.5:7b", model: "qwen2.5:7b" }] }),
+          text: async () => "",
+        };
+      }
+      conversationBody = JSON.parse(init.body ?? "{}");
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ message: { role: "assistant", content: "Blue light scatters more strongly in the atmosphere." } }),
+        text: async () => "",
+      };
+    },
+  },
+);
+
+assert.equal(conversation.status, "called");
+assert.equal(conversation.model_id, "qwen2.5:7b");
+assert.equal(conversationBody.keep_alive, "30m");
+assert.equal(conversationBody.options.num_predict, 80);
+assert.equal(conversationBody.options.num_ctx, 2048);
+assert.match(conversationBody.messages[0].content, /general-purpose assistant/i);
+assert.doesNotMatch(conversationBody.messages[0].content, /business operator|ChicagoShots|action lanes/i);
+assert.doesNotMatch(conversationBody.messages[1].content, /Execution mode|action cards|backend ops/i);
+assert.match(conversationBody.messages[1].content, /Why is the sky blue/);
+
 const remoteBlocked = await callLocalOllamaChat(baseInput, {
   env: {
     OLLAMA_BASE_URL: "https://example.com",
@@ -105,6 +150,7 @@ console.log(
       fallbackUsed: called.fallback_used,
       remoteBlocked: remoteBlocked.status,
       refusalSanitized: refused.status,
+      conversationMode: conversation.status,
       externalProviderCalled: called.external_provider_called,
     },
     null,

@@ -12,9 +12,9 @@ import {
   recentChatTurns,
   ctx, session, loadPhantomLoop, savePhantomLoop, loopProviderName, modelDisplayLabel,
   getPhantomLaneTarget, loadPhantomLaneConfig, workspaceStorageGetItem, wsName,
-} from "./store.js?v=phantom-live-20260718-25";
-import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260718-25";
-import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260718-25";
+} from "./store.js?v=phantom-live-20260718-26";
+import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260718-26";
+import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260718-26";
 const classifyPhantomIntent = (text) => deriveActionContract(classifyRaw(text));
 
 /* Cross-surface handoff: chat tells the Websites page which project to focus
@@ -91,7 +91,7 @@ const PRIVATE_BACKEND_MODEL_BY_ALIAS = Object.freeze({
   "private-default": "gpt-5.5",
   "private-high": "gpt-5.6-sol",
 });
-const INSTANT_CHAT_MODEL = "gpt-5.5-instant";
+const INSTANT_CHAT_MODEL = "qwen2.5:7b";
 const INSTANT_CHAT_MAX_PROVIDER_MS = 4500;
 const INSTANT_CHAT_ALLOWED_INTENTS = new Set(["identity", "capability", "question", "chat"]);
 const INSTANT_CHAT_BLOCKLIST = /\b(?:build|create|draft|write|fix|debug|code|implement|research|plan|strategy|proposal|website|site|content|video|image|media|schedule|client|lead|transaction|accounting|bank|security|deploy|send|post|upload|delete|weather|forecast|current|latest|today|tomorrow|yesterday|price|stock|law|legal|medical|diagnosis|contract|tenant|isolation|phantomforce)\b/i;
@@ -144,7 +144,7 @@ function providerForRequest(providerId) {
 }
 
 function selectedModelForProvider(settings, providerId, routeProfile = null) {
-  if (providerId === "private" && routeProfile?.tier === "instant") return INSTANT_CHAT_MODEL;
+  if (providerId === "local" && routeProfile?.tier === "instant") return INSTANT_CHAT_MODEL;
   const configured = settings.models?.[providerId];
   if (configured) return providerId === "private" ? (PRIVATE_BACKEND_MODEL_BY_ALIAS[configured] || configured) : configured;
   const cfg = loadPhantomLaneConfig();
@@ -167,10 +167,7 @@ function chatRouteProfileForRequest(raw, intent, settings) {
   const deepReasoning = shouldUseDeepReasoning(raw, intent);
   const normalProviderId = providerIdForRequest(settings, intent, deepReasoning);
   if (isInstantChatRequest(raw, intent)) {
-    const selected = selectedProviderIds(settings);
-    const providerId = settings.providerMode === "smart" && selected.includes("private")
-      ? "private"
-      : normalProviderId;
+    const providerId = settings.providerMode === "smart" ? "local" : normalProviderId;
     /* One fast attempt, then the server's deterministic local responder.
        Walking a second model made basic chat take the full combined timeout. */
     const instantProviders = [providerId];

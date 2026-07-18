@@ -96,8 +96,9 @@ for (const prompt of casualPrompts) {
 assert.equal(capturedBodies.length, casualPrompts.length, "all casual prompts must exercise the backend route");
 for (const body of capturedBodies) {
   assert.equal(body.route_tier, "instant");
-  assert.equal(body.requested_model, "gpt-5.5-instant");
-  assert.deepEqual(body.allowed_providers, ["codex_cli"]);
+  assert.equal(body.requested_model, "qwen2.5:7b");
+  assert.equal(body.admin_model, "local_ollama");
+  assert.deepEqual(body.allowed_providers, ["local_ollama"]);
   assert.equal(body.allow_provider_fallback, false);
   assert.ok(body.max_provider_ms <= 4500, "instant provider time must stay tightly bounded");
   assert.ok(Array.isArray(body.conversation_history));

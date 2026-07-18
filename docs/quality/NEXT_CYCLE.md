@@ -16,14 +16,16 @@ Do not restart the audit from zero unless the inventory is invalid. Continuation
 is scheduled in this same Codex task by heartbeat automation
 `continue-phantomforce-quality-program`.
 
-Cycle 4 completed the chat-brain relevance and continuity correction. Casual
-questions now carry an eight-turn temporary window without accounting, plan,
-workspace pulse, or saved-memory leakage; business modules require current-request
-relevance. Instant chat makes one bounded fast-model attempt and then returns a
-topic-aware local answer instead of waiting through a second model timeout. Build
-`phantom-live-20260718-24` passed the full user-facing regression matrix.
+Cycle 5 completed the real instant-brain correction. Smart-mode casual chat now
+routes to the installed `qwen2.5:7b` local model with a compact conversation-only
+prompt, an 80-token response ceiling, a 30-minute warm lease, and no business or
+saved-memory modules. The same action-free lane is available to authenticated
+customer sessions, while standard/deep work keeps its existing role, approval,
+and provider controls. A hidden Windows logon task keeps Ollama available after
+restart. Build `phantom-live-20260718-26` passed all 19 release-critical checks,
+including chat, auth, memory, command, organization data, build, and change memory.
 
-## Recommended Cycle 5
+## Recommended Cycle 6
 
 Theme: authenticated cross-organization persistence proof.
 
@@ -63,6 +65,7 @@ Likely files:
 - `powershell -NoProfile -ExecutionPolicy Bypass -File server\scripts\test-auth-database-live.ps1`
 - `npm run test:client-setup-audit`
 - `npm run test:dashboard-chat`
+- `npm run test:release-critical`
 - `npm run test:change-memory`
 - `npm run test:auth-boundaries`
 - `npm run build`
