@@ -29,6 +29,19 @@ try {
   assert(initial.products.some((product: { name?: string }) => product.name === "Termina"), "PhantomStore should ship PhantomForce products, including Termina.");
   assert(initial.sellers.some((seller: { name?: string }) => seller.name === "PhantomForce"), "PhantomStore should include a PhantomForce seller profile.");
   assert(initial.products.every((product: { reviews?: unknown[] }) => Array.isArray(product.reviews)), "Product listings should carry product reviews.");
+  assert(
+    initial.products.every((product: { imageUrl?: unknown; gallery?: unknown; variants?: unknown; inventory?: unknown }) =>
+      "imageUrl" in product && Array.isArray(product.gallery) && Array.isArray(product.variants) && typeof product.inventory === "object" && product.inventory !== null),
+    "Every seeded product must ship imageUrl, gallery, variants, and inventory fields.",
+  );
+  const seededTermina = initial.products.find((product: { id?: string }) => product.id === "product-termina") as { variants?: { id: string; priceUsd: number; available: boolean }[]; imageUrl?: string | null } | undefined;
+  const terminaVariant = seededTermina?.variants?.[0];
+  assert(terminaVariant?.id === "termina-early-access" && terminaVariant.priceUsd === 20 && terminaVariant.available === true, "Termina must keep its real $20 early-access pricing as a variant.");
+  assert(seededTermina?.imageUrl === null, "Termina has no real product image asset yet, so imageUrl must stay null (branded tile fallback), not a fabricated URL.");
+  const seededOs = initial.products.find((product: { id?: string }) => product.id === "product-phantomforce-os") as { imageUrl?: string | null } | undefined;
+  assert(seededOs?.imageUrl === "/app/assets/brand-phantom.png", "Business OS should reference the real shipped brand image asset.");
+  const seededFile = JSON.parse(await readFile(process.env.PHANTOMFORCE_PHANTOMSTORE_PATH, "utf8")) as { products?: { id?: string }[] };
+  assert(Array.isArray(seededFile.products) && seededFile.products.some((product) => product.id === "product-termina"), "Products must be seeded into the JSON store on first read and served from the store after that.");
   assert(initial.sellers.every((seller: { reviews?: unknown[] }) => Array.isArray(seller.reviews)), "Seller listings should carry seller reviews.");
   assert(initial.canModerate === false, "A regular developer must not receive moderation access.");
   assert(initial.submissions.length === 0, "A developer with no submissions should see an empty list.");
@@ -93,6 +106,35 @@ try {
   assert(buyClick?.buyClicks === 1, "Product buy intent clicks should be tracked.");
   assert(buyClick?.checkout?.url.includes("termina"), "Termina buy intent should point at the Termina product page.");
 
+  const variantBuy = await store.recordPhantomStoreProductBuyClick(devB, "product-termina", { variantId: "termina-early-access" });
+  assert(variantBuy?.variantId === "termina-early-access" && variantBuy.variantBuyClicks === 1, "Variant-aware buys must record which variant was chosen.");
+  assert(variantBuy?.buyClicks === 2, "A variant buy still counts toward the product's total buy clicks.");
+  let unknownVariantBlocked = false;
+  try { await store.recordPhantomStoreProductBuyClick(devB, "product-termina", { variantId: "not-a-variant" }); } catch { unknownVariantBlocked = true; }
+  assert(unknownVariantBlocked, "Unknown variant ids must be rejected instead of silently recorded.");
+  const variantSnapshot = await store.getPhantomStoreSnapshot(devB);
+  const terminaWithClicks = variantSnapshot.products.find((product: { id?: string }) => product.id === "product-termina") as { variantBuyClicks?: Record<string, number> } | undefined;
+  assert(terminaWithClicks?.variantBuyClicks?.["termina-early-access"] === 1, "The snapshot must expose per-variant buy click stats.");
+
+  let nonAdminEditBlocked = false;
+  try { await store.upsertPhantomStoreProduct(devA, "product-termina", { priceLabel: "$1 hijack" }); } catch { nonAdminEditBlocked = true; }
+  assert(nonAdminEditBlocked, "Non-admin sessions must not edit store products.");
+  const edited = await store.upsertPhantomStoreProduct(owner, "product-termina", { qualityNote: "Updated by admin test." });
+  assert(edited?.qualityNote === "Updated by admin test.", "Admin edits should apply to the stored product.");
+  const editedSnapshot = await store.getPhantomStoreSnapshot(devB);
+  const editedTermina = editedSnapshot.products.find((product: { id?: string }) => product.id === "product-termina") as { qualityNote?: string; priceLabel?: string } | undefined;
+  assert(editedTermina?.qualityNote === "Updated by admin test.", "Product edits must persist in the store and serve to every session.");
+  assert(editedTermina?.priceLabel === "$20 early access", "Fields the admin did not touch must keep their seeded values.");
+
+  const createdProduct = await store.upsertPhantomStoreProduct(owner, null, {
+    name: "Test Bundle", summary: "Admin-created listing for inventory tests.", buyUrl: "https://example.test/bundle",
+    inventory: { mode: "tracked", stock: 0 }, variants: [{ id: "bundle-standard", label: "Standard", priceUsd: 5 }],
+  });
+  assert(createdProduct?.inventory.mode === "tracked" && createdProduct.inventory.stock === 0, "Admin-created products should honor tracked inventory.");
+  let outOfStockBlocked = false;
+  try { await store.recordPhantomStoreProductBuyClick(devB, createdProduct.id); } catch { outOfStockBlocked = true; }
+  assert(outOfStockBlocked, "Buy clicks must be refused when tracked inventory is at zero stock.");
+
   const draftClick = await store.recordPhantomStoreInstallClick(devB, draft.tool.id);
   assert(draftClick === null, "Install clicks must not count against tools that were never approved.");
 
@@ -142,9 +184,20 @@ try {
   assert(installRoute.statusCode === 200 && installRoute.json().installClicks === 1, "The install-click route should record a click for an approved tool.");
   const productBuyRoute = await app.inject({ method: "POST", url: "/api/phantomstore/products/product-termina/buy", headers: { Authorization: `Bearer ${ownerToken}` } });
   assert(productBuyRoute.statusCode === 200 && productBuyRoute.json().checkout.url.includes("termina"), "The product buy route should prepare the Termina checkout target.");
+  const variantBuyRoute = await app.inject({ method: "POST", url: "/api/phantomstore/products/product-termina/buy", headers: { Authorization: `Bearer ${ownerToken}` }, payload: { variantId: "termina-early-access" } });
+  assert(variantBuyRoute.statusCode === 200 && variantBuyRoute.json().variantId === "termina-early-access", "The buy route should record the selected variant id.");
+  const devProductUpdate = await app.inject({ method: "PATCH", url: "/api/phantomstore/products/product-termina", headers: { Authorization: `Bearer ${devToken}` }, payload: { priceLabel: "$1 hijack" } });
+  assert(devProductUpdate.statusCode === 403, "The product update route must return 403 for non-admin sessions.");
+  const ownerProductUpdate = await app.inject({ method: "PATCH", url: "/api/phantomstore/products/product-termina", headers: { Authorization: `Bearer ${ownerToken}` }, payload: { qualityNote: "Route-updated quality note." } });
+  assert(ownerProductUpdate.statusCode === 200 && ownerProductUpdate.json().product.qualityNote === "Route-updated quality note.", "The product update route should apply admin edits.");
+  const ownerProductCreate = await app.inject({
+    method: "POST", url: "/api/phantomstore/products", headers: { Authorization: `Bearer ${ownerToken}` },
+    payload: { name: "Route Product", summary: "Created through the admin product route.", buyUrl: "https://example.test/route-product" },
+  });
+  assert(ownerProductCreate.statusCode === 200 && ownerProductCreate.json().product.id.startsWith("product-"), "The product create route should mint a store-backed product for admin sessions.");
   await app.close();
 
-  console.log(JSON.stringify({ ok: true, tenantIsolation: true, validationEnforced: true, moderationGated: true, catalogFiltered: true, installClicksTracked: true, moderationNoteHidden: true, routeAuth: true }));
+  console.log(JSON.stringify({ ok: true, tenantIsolation: true, validationEnforced: true, moderationGated: true, catalogFiltered: true, installClicksTracked: true, moderationNoteHidden: true, routeAuth: true, productStoreBacked: true, variantBuysTracked: true, adminProductEditingGated: true }));
 } finally {
   await rm(root, { recursive: true, force: true });
 }

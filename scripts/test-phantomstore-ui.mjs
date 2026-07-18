@@ -14,7 +14,9 @@ const backendTestSource = readFileSync(new URL("../server/scripts/test-phantomst
 
 assert.match(appHtml, /phantomstore\.css/u, "App shell must load PhantomStore styles.");
 assert.match(mainSource, /renderPhantomStore/u, "Main app must import PhantomStore renderer.");
-assert.match(mainSource, /\{\s*id:\s*"phantomstore",\s*label:\s*"PhantomStore",\s*icon:\s*"spark",\s*ws:\s*"phantomstore"\s*\}/u, "Sidebar must expose PhantomStore as its own clearly labeled workspace.");
+/* Tolerates extra nav-entry properties (e.g. dept) added by other workstreams;
+   the invariant is the id/label/icon/ws quadruple, not the exact object shape. */
+assert.match(mainSource, /\{\s*id:\s*"phantomstore",\s*label:\s*"PhantomStore",\s*icon:\s*"spark",\s*ws:\s*"phantomstore"[^}]*\}/u, "Sidebar must expose PhantomStore as its own clearly labeled workspace.");
 assert.match(mainSource, /phantomstore:\s*\{\s*title:\s*"PhantomStore",\s*kicker:\s*"AI marketplace"[\s\S]*render:\s*\(body\)\s*=>\s*renderPhantomStore\(body/u, "Workspace registry must render the PhantomStore AI marketplace screen.");
 
 assert.match(storeSource, /\/api\/phantomstore\?tenant_id=/u, "PhantomStore UI must load the PhantomStore marketplace API.");
@@ -41,7 +43,32 @@ assert.match(backendSource, /const SEEDED_SELLERS/u, "Backend must seed seller p
 assert.match(backendSource, /const SEEDED_PRODUCTS/u, "Backend must seed product listings.");
 assert.match(backendSource, /recordPhantomStoreProductBuyClick/u, "Backend must track product buy intent.");
 
-for (const selector of [".ps-shell", ".ps-market-hero", ".ps-tool", ".ps-product", ".ps-seller", ".ps-reviews", ".ps-submit-layout", ".ps-moderate"]) {
+/* Product model upgrades: real image fields, variants, inventory, and
+   store-backed persistence with admin-gated editing. */
+assert.match(backendSource, /imageUrl: string \| null;[\s\S]*gallery: string\[\];[\s\S]*variants: PhantomStoreProductVariant\[\];[\s\S]*inventory: PhantomStoreProductInventory;/u, "Product model must carry imageUrl, gallery, variants, and inventory.");
+assert.match(backendSource, /imageUrl: "\/app\/assets\/brand-phantom\.png"/u, "Business OS must use the real shipped brand image asset, not a fabricated photo.");
+assert.match(backendSource, /imageUrl: null/u, "Products without a real image asset must ship imageUrl null so the client renders a branded tile instead of a fake image.");
+assert.match(backendSource, /id: "termina-early-access", label: "Early access license", priceUsd: 20/u, "Termina must keep its real $20 early-access pricing as a variant.");
+assert.match(backendSource, /function seedProductsIfEmpty/u, "Products must be store-backed: seeded once from SEEDED_PRODUCTS, then served from the JSON store.");
+assert.match(backendSource, /export async function upsertPhantomStoreProduct[\s\S]*Platform moderation access is required/u, "Product create/update must reuse the moderation permission gate.");
+assert.match(backendSource, /productVariantClicks/u, "Backend must record variant-level buy clicks.");
+assert.match(backendTestSource, /variantId: "termina-early-access"/u, "Backend PhantomStore tests must cover variant-aware buy recording.");
+assert.match(backendTestSource, /devProductUpdate\.statusCode === 403/u, "Backend PhantomStore tests must prove non-admin product updates get a 403.");
+
+/* In-app product detail view + admin product editor in the UI. */
+assert.match(storeSource, /function brandTileUrl[\s\S]*data:image\/svg\+xml/u, "Missing product images must render a deterministic branded SVG tile generated in code.");
+assert.match(storeSource, /function productImageUrl/u, "Product cards must render the backend imageUrl field with a branded-tile fallback.");
+assert.match(storeSource, /data-ps-detail/u, "Product cards must open an in-app detail view.");
+assert.match(storeSource, /data-ps-product-view/u, "The detail view must be marked with a deep-linkable data attribute.");
+assert.match(storeSource, /data-ps-back/u, "The detail view must provide a back-to-discover control.");
+assert.match(storeSource, /data-ps-variant/u, "The detail view must offer a variant selector.");
+assert.match(storeSource, /variant \? \{ variantId: variant\.id \} : \{\}/u, "Buy requests must carry the selected variant id.");
+assert.match(storeSource, /ui\.snapshot\?\.canModerate \? adminProductsPanel\(\)/u, "The admin product editor must only render for moderation-capable sessions.");
+assert.match(storeSource, /\/api\/phantomstore\/products\/\$\{encodeURIComponent\(productId\)\}/u, "The admin product editor must save through the product update endpoint.");
+assert.match(storeSource, /quality_hold/u, "Buy availability must respect quality_hold status.");
+assert.match(storeSource, /function outOfStock/u, "Buy availability must respect tracked inventory at zero stock.");
+
+for (const selector of [".ps-shell", ".ps-market-hero", ".ps-tool", ".ps-product", ".ps-seller", ".ps-reviews", ".ps-submit-layout", ".ps-moderate", ".ps-product-media", ".ps-detail", ".ps-variant", ".ps-admin-products"]) {
   assert.ok(storeCss.includes(selector), `${selector} style must be present.`);
 }
 

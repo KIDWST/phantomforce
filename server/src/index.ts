@@ -279,6 +279,7 @@ import {
   recordPhantomStoreInstallClick,
   recordPhantomStoreProductBuyClick,
   submitPhantomStoreTool,
+  upsertPhantomStoreProduct,
 } from "./phantom-ai/phantomstore.js";
 import { registerPhantomPlayFlagshipGames } from "./phantom-ai/phantomplay-flagship.js";
 import {
@@ -5005,8 +5006,43 @@ app.post("/api/phantomstore/products/:id/buy", async (request, reply) => {
   const session = requireAccessSession(request, reply);
   if (!session) return reply;
   const params = request.params as { id?: string };
-  const result = params.id ? await recordPhantomStoreProductBuyClick(session, params.id.slice(0, 180)) : null;
-  return result ? { ok: true, session, ...result } : reply.code(404).send({ ok: false, error: "Product listing was not found." });
+  try {
+    const result = params.id ? await recordPhantomStoreProductBuyClick(session, params.id.slice(0, 180), (request.body ?? {}) as Record<string, unknown>) : null;
+    return result ? { ok: true, session, ...result } : reply.code(404).send({ ok: false, error: "Product listing was not found." });
+  } catch (error) {
+    return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : "Purchase intent could not be recorded." });
+  }
+});
+
+/* Admin-gated product editing: products live in the JSON store (seeded once
+   from the shipped catalog) and only moderation-capable sessions may create or
+   update listings. Same 403 mapping as the tool moderation route above. */
+
+app.post("/api/phantomstore/products", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  try {
+    const product = await upsertPhantomStoreProduct(session, null, (request.body ?? {}) as Record<string, unknown>);
+    return { ok: true, session, product };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Product could not be created.";
+    const status = /moderation access/i.test(message) ? 403 : 400;
+    return reply.code(status).send({ ok: false, error: message });
+  }
+});
+
+app.patch("/api/phantomstore/products/:id", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const params = request.params as { id?: string };
+  try {
+    const product = params.id ? await upsertPhantomStoreProduct(session, params.id.slice(0, 180), (request.body ?? {}) as Record<string, unknown>) : null;
+    return product ? { ok: true, session, product } : reply.code(404).send({ ok: false, error: "Product listing was not found." });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Product could not be updated.";
+    const status = /moderation access/i.test(message) ? 403 : 400;
+    return reply.code(status).send({ ok: false, error: message });
+  }
 });
 
 /* ============================================================================

@@ -30,6 +30,46 @@
 .ps-review{display:grid;gap:12px}.ps-submission-list{display:grid;gap:10px}.ps-submission{padding:15px}.ps-submission header p{margin:0;color:var(--dim);font-size:9px;text-transform:uppercase}.ps-submission header>span{padding:5px 8px;border-radius:999px;background:#ffd1661a;color:var(--warn);font:800 8px "DM Mono",monospace;text-transform:uppercase}.ps-submission header>span.is-approved{background:#41ffa11a;color:var(--neon)}.ps-submission header>span.is-rejected,.ps-submission header>span.is-disabled{background:#ff6d831a;color:var(--ps-coral)}.ps-submission blockquote{margin:10px 0 0;padding:9px;border-left:2px solid var(--warn);color:#d8c88f;font-size:11px}
 .ps-moderate{display:grid;grid-template-columns:minmax(160px,1fr) auto repeat(4,auto);gap:7px;margin-top:12px}.ps-moderate label{display:flex;align-items:center;gap:6px;color:var(--dim);font-size:10px}.ps-moderate button{min-height:34px;padding:7px 9px;border:1px solid var(--line);border-radius:7px;background:#07120e;color:var(--ink);cursor:pointer}
 .ps-empty,.ps-error,.ps-loading{display:grid;place-content:center;justify-items:center;gap:8px;min-height:260px;padding:28px;text-align:center}.ps-empty b{display:grid;place-items:center;width:42px;height:42px;border-radius:50%;background:#41ffa114;color:var(--neon)}.ps-empty h3,.ps-error b,.ps-loading b{margin:0}.ps-loading i{width:34px;height:34px;border:2px solid #41ffa12e;border-top-color:var(--neon);border-radius:50%;animation:ps-spin .8s linear infinite}.ps-error button{min-height:38px;padding:8px 12px;border:1px solid var(--line);border-radius:7px;background:#04100c;color:var(--ink);cursor:pointer}
+.ps-product-media{display:block;width:100%;margin:0;padding:0;border:1px solid var(--line);border-radius:8px;background:#010504;cursor:pointer;overflow:hidden}
+.ps-product-media img{display:block;width:100%;aspect-ratio:16/9;object-fit:cover}
+.ps-title-link{margin:0;padding:0;border:0;background:none;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.ps-title-link:hover{color:var(--neon)}
+.ps-detail{display:grid;gap:14px}
+.ps-detail-back{align-self:start;justify-self:start}
+.ps-detail-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;padding:18px;border:1px solid var(--line);border-radius:10px;background:linear-gradient(160deg,#07140ff2,#020807fa)}
+.ps-detail-media{display:grid;gap:8px;align-content:start}
+.ps-detail-media>img{display:block;width:100%;border:1px solid var(--line);border-radius:8px;background:#010504;aspect-ratio:16/9;object-fit:cover}
+.ps-detail-gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:6px}
+.ps-detail-gallery img{display:block;width:100%;aspect-ratio:16/9;object-fit:cover;border:1px solid var(--line);border-radius:6px;background:#010504}
+.ps-detail-info{display:grid;gap:11px;align-content:start}
+.ps-detail-info h2{margin:0;font-size:28px}
+.ps-detail-summary{margin:0;color:#a9c5b7;font-size:13px;line-height:1.55}
+.ps-detail-price{display:flex;align-items:baseline;gap:10px}
+.ps-detail-price b{font-size:26px;color:var(--neon)}
+.ps-detail-price span{color:var(--dim);font:800 10px "DM Mono",monospace;text-transform:uppercase}
+.ps-variants{display:grid;gap:7px}
+.ps-variant{display:flex;align-items:center;gap:9px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:#030c09;cursor:pointer}
+.ps-variant.is-active{border-color:var(--neon);box-shadow:0 0 0 1px #41ffa133}
+.ps-variant.is-unavailable{opacity:.55;cursor:not-allowed}
+.ps-variant input{accent-color:var(--neon)}
+.ps-variant span{flex:1;color:var(--ink);font-weight:800;font-size:12px}
+.ps-variant b{color:var(--neon);font:800 12px "DM Mono",monospace}
+.ps-variant i{color:var(--ps-coral);font:800 8px "DM Mono",monospace;text-transform:uppercase;font-style:normal}
+.ps-detail-seller{display:grid;gap:6px;padding:12px;border:1px solid var(--line);border-radius:8px;background:#030c09}
+.ps-detail-seller b{font-size:13px}
+.ps-detail-seller>span{color:#a9c5b7;font-size:11px}
+.ps-detail-description{display:grid;gap:9px;padding:18px;border:1px solid var(--line);border-radius:10px;background:linear-gradient(160deg,#07140ff2,#020807fa)}
+.ps-detail-description p:not(.ps-kicker){margin:0;color:#a9c5b7;font-size:13px;line-height:1.6;white-space:pre-line}
+.ps-admin-products{display:grid;gap:12px;padding:16px;border:1px solid #42e9ff33;border-radius:10px;background:#42e9ff08}
+.ps-admin-product-list{display:grid;gap:10px}
+.ps-admin-product{display:grid;gap:9px;padding:14px;border:1px solid var(--line);border-radius:9px;background:linear-gradient(160deg,#07140ff2,#020807fa)}
+.ps-admin-product header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.ps-admin-product h3{margin:0}
+.ps-admin-product header>span{padding:6px 8px;border:1px solid #41ffa13d;border-radius:999px;background:#41ffa10c;color:var(--neon);font:900 9px "DM Mono",monospace;white-space:nowrap}
+.ps-admin-product small{color:var(--dim);font-size:10px}
+.ps-product-form{margin-top:4px}
+.ps-check{display:flex !important;align-items:center;gap:8px}
+.ps-check input{width:auto}
 @keyframes ps-spin{to{transform:rotate(360deg)}}
-@media(max-width:900px){.ps-top{display:grid}.ps-top-stats{min-width:0;grid-template-columns:repeat(2,minmax(0,1fr))}.ps-market-hero,.ps-submit-layout{grid-template-columns:1fr}.ps-row,.ps-row-small{grid-template-columns:1fr}.ps-moderate{grid-template-columns:1fr 1fr}.ps-moderate input{grid-column:1/-1}.ps-top h1{font-size:29px}.ps-market-hero h2{font-size:31px}}
+@media(max-width:900px){.ps-detail-grid{grid-template-columns:1fr}.ps-top{display:grid}.ps-top-stats{min-width:0;grid-template-columns:repeat(2,minmax(0,1fr))}.ps-market-hero,.ps-submit-layout{grid-template-columns:1fr}.ps-row,.ps-row-small{grid-template-columns:1fr}.ps-moderate{grid-template-columns:1fr 1fr}.ps-moderate input{grid-column:1/-1}.ps-top h1{font-size:29px}.ps-market-hero h2{font-size:31px}}
 @media(prefers-reduced-motion:reduce){.ps-loading i{animation:none}}

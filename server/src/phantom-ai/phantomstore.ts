@@ -108,22 +108,82 @@ export type PhantomStoreSeller = {
   featured: boolean;
 };
 
+export type PhantomStoreProductCategory = "Desktop App" | "AI Suite" | "Plugin" | "Automation" | "Creative Tool";
+const PRODUCT_CATEGORIES: PhantomStoreProductCategory[] = ["Desktop App", "AI Suite", "Plugin", "Automation", "Creative Tool"];
+function safeProductCategory(value: unknown): PhantomStoreProductCategory {
+  const v = clean(value, 30);
+  return (PRODUCT_CATEGORIES as string[]).includes(v) ? (v as PhantomStoreProductCategory) : "Desktop App";
+}
+
+export type PhantomStoreProductStatus = "available" | "quality_hold";
+function safeProductStatus(value: unknown): PhantomStoreProductStatus {
+  return clean(value, 20) === "quality_hold" ? "quality_hold" : "available";
+}
+
+/* Product images stay first-party: either an app-relative asset path that the
+   admin shell already serves (e.g. /app/assets/...) or an http(s) URL. Anything
+   else is dropped so a stored product can never render a javascript: image. */
+function safeImageUrl(value: unknown): string | null {
+  const url = clean(value, 700);
+  if (!url) return null;
+  if (/^\/(?!\/)[\w\-./]+\.(?:png|jpe?g|webp|svg|gif)$/i.test(url)) return url;
+  return safeUrl(url) || null;
+}
+
+export type PhantomStoreProductVariant = {
+  id: string;
+  label: string;
+  priceUsd: number;
+  available: boolean;
+};
+
+function safeVariants(value: unknown): PhantomStoreProductVariant[] {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, 12).flatMap((raw) => {
+    const v = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+    const label = clean(v.label, 90);
+    if (!label) return [];
+    const priceUsd = Number(v.priceUsd);
+    return [{
+      id: clean(v.id, 80) || `variant-${randomUUID()}`,
+      label,
+      priceUsd: Number.isFinite(priceUsd) && priceUsd >= 0 ? Math.round(priceUsd * 100) / 100 : 0,
+      available: v.available !== false,
+    }];
+  });
+}
+
+export type PhantomStoreProductInventory = { mode: "unlimited" | "tracked"; stock?: number };
+
+function safeInventory(value: unknown): PhantomStoreProductInventory {
+  const v = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+  if (clean(v.mode, 20) === "tracked") {
+    const stock = Number(v.stock);
+    return { mode: "tracked", stock: Number.isFinite(stock) && stock >= 0 ? Math.floor(stock) : 0 };
+  }
+  return { mode: "unlimited" };
+}
+
 export type PhantomStoreProduct = {
   id: string;
   sellerId: string;
   name: string;
   summary: string;
   description: string;
-  category: "Desktop App" | "AI Suite" | "Plugin" | "Automation" | "Creative Tool";
+  category: PhantomStoreProductCategory;
   priceLabel: string;
   buyLabel: string;
   buyUrl: string;
   delivery: string;
   version: string;
-  status: "available" | "quality_hold";
+  status: PhantomStoreProductStatus;
   qualityNote: string;
   tags: string[];
   badges: string[];
+  imageUrl: string | null;
+  gallery: string[];
+  variants: PhantomStoreProductVariant[];
+  inventory: PhantomStoreProductInventory;
   rating: number;
   reviewCount: number;
   featured: boolean;
@@ -134,7 +194,9 @@ export type PhantomStoreProduct = {
 type PhantomStoreStore = {
   version: 1;
   tools: PhantomStoreTool[];
+  products: PhantomStoreProduct[];
   productClicks: Record<string, number>;
+  productVariantClicks: Record<string, Record<string, number>>;
 };
 
 const seededReviews = {
@@ -219,6 +281,13 @@ const SEEDED_PRODUCTS: PhantomStoreProduct[] = [
     qualityNote: "Multi-CLI submit reliability is a launch gate and is covered by Termina's dispatch retry tests.",
     tags: ["local ai", "terminal wall", "multi-agent", "privacy"],
     badges: ["Local-first", "Desktop", "Launch-ready QA"],
+    /* No real Termina product photography exists in the repo yet; null tells
+       the client to render its deterministic branded SVG tile instead of a
+       fabricated image. Same rule for the other imageUrl: null products. */
+    imageUrl: null,
+    gallery: [],
+    variants: [{ id: "termina-early-access", label: "Early access license", priceUsd: 20, available: true }],
+    inventory: { mode: "unlimited" },
     rating: 5,
     reviewCount: seededReviews.termina.length,
     featured: true,
@@ -242,6 +311,13 @@ const SEEDED_PRODUCTS: PhantomStoreProduct[] = [
     qualityNote: "Free plan remains available for previewing the workspace before upgrading.",
     tags: ["business os", "media lab", "analytics", "sites"],
     badges: ["Free plan", "Workspace", "Owner gated"],
+    /* The PhantomForce brand mark is a real shipped asset in the admin app. */
+    imageUrl: "/app/assets/brand-phantom.png",
+    gallery: [],
+    /* Plans are chosen inside the workspace's own plan picker, so the listing
+       carries no fixed-price variants rather than inventing plan prices here. */
+    variants: [],
+    inventory: { mode: "unlimited" },
     rating: 5,
     reviewCount: seededReviews.phantomforce.length,
     featured: true,
@@ -265,6 +341,10 @@ const SEEDED_PRODUCTS: PhantomStoreProduct[] = [
     qualityNote: "UI refresh is focused on prompt-first controls, modern sliders, and better Reaper fit.",
     tags: ["reaper", "vocal chain", "creator tool", "audio"],
     badges: ["Reaper", "Creator", "Prompt-first"],
+    imageUrl: null,
+    gallery: [],
+    variants: [{ id: "vocal-ai-creator", label: "Creator license", priceUsd: 29, available: true }],
+    inventory: { mode: "unlimited" },
     rating: 4.5,
     reviewCount: seededReviews.vocal.length,
     featured: false,
@@ -289,6 +369,10 @@ const SEEDED_PRODUCTS: PhantomStoreProduct[] = [
     qualityNote: "Early access: source-only delivery, requires Python and manual bridge-token setup. No packaged installer yet.",
     tags: ["automation", "remote control", "devops", "bridge"],
     badges: ["Local-first", "Approval-gated", "Early access"],
+    imageUrl: null,
+    gallery: [],
+    variants: [{ id: "phantombot-early-access", label: "Early access source bundle", priceUsd: 20, available: true }],
+    inventory: { mode: "unlimited" },
     rating: 0,
     reviewCount: 0,
     featured: false,
@@ -313,6 +397,10 @@ const SEEDED_PRODUCTS: PhantomStoreProduct[] = [
     qualityNote: "Early access: bring your own DaVinci Resolve install and Higgsfield CLI login. No packaged installer yet.",
     tags: ["davinci resolve", "video generation", "higgsfield", "creator tool"],
     badges: ["Local-first", "Bring your own credits", "Early access"],
+    imageUrl: null,
+    gallery: [],
+    variants: [{ id: "phantomcut-early-access", label: "Early access license", priceUsd: 20, available: true }],
+    inventory: { mode: "unlimited" },
     rating: 0,
     reviewCount: 0,
     featured: false,
@@ -321,18 +409,78 @@ const SEEDED_PRODUCTS: PhantomStoreProduct[] = [
   },
 ];
 
+/* Stored products are re-normalized on read so a hand-edited or pre-upgrade
+   store file can never surface a product missing the image/variant/inventory
+   shape the UI depends on. */
+function normalizeStoredProduct(raw: unknown): PhantomStoreProduct | null {
+  if (!raw || typeof raw !== "object") return null;
+  const p = raw as Partial<PhantomStoreProduct> & Record<string, unknown>;
+  if (!clean(p.id, 120) || !clean(p.name, 90)) return null;
+  return {
+    id: clean(p.id, 120),
+    sellerId: clean(p.sellerId, 80) || "seller-phantomforce",
+    name: clean(p.name, 90),
+    summary: clean(p.summary, 300),
+    description: clean(p.description, 4000),
+    category: safeProductCategory(p.category),
+    priceLabel: clean(p.priceLabel, 60),
+    buyLabel: clean(p.buyLabel, 40) || "Buy now",
+    buyUrl: safeUrl(p.buyUrl),
+    delivery: clean(p.delivery, 120),
+    version: clean(p.version, 40) || "1.0.0",
+    status: safeProductStatus(p.status),
+    qualityNote: clean(p.qualityNote, 500),
+    tags: Array.isArray(p.tags) ? p.tags.map((t) => clean(t, 30)).filter(Boolean).slice(0, 8) : [],
+    badges: Array.isArray(p.badges) ? p.badges.map((b) => clean(b, 40)).filter(Boolean).slice(0, 6) : [],
+    imageUrl: safeImageUrl(p.imageUrl),
+    gallery: Array.isArray(p.gallery) ? p.gallery.map(safeImageUrl).filter((g): g is string => Boolean(g)).slice(0, 8) : [],
+    variants: safeVariants(p.variants),
+    inventory: safeInventory(p.inventory),
+    rating: Number.isFinite(Number(p.rating)) ? Number(p.rating) : 0,
+    reviewCount: Number.isFinite(Number(p.reviewCount)) ? Number(p.reviewCount) : 0,
+    featured: p.featured === true,
+    updatedAt: clean(p.updatedAt, 40) || now(),
+    reviews: Array.isArray(p.reviews) ? (p.reviews as PhantomStoreReview[]) : [],
+  };
+}
+
 async function readStore(): Promise<PhantomStoreStore> {
   try {
     const parsed = JSON.parse(await readFile(storePath, "utf8")) as Partial<PhantomStoreStore>;
     return {
       version: 1,
       tools: Array.isArray(parsed.tools) ? parsed.tools : [],
+      products: Array.isArray(parsed.products) ? parsed.products.map(normalizeStoredProduct).filter((p): p is PhantomStoreProduct => Boolean(p)) : [],
       productClicks: parsed.productClicks && typeof parsed.productClicks === "object" ? parsed.productClicks : {},
+      productVariantClicks: parsed.productVariantClicks && typeof parsed.productVariantClicks === "object" ? parsed.productVariantClicks : {},
     };
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { version: 1, tools: [], productClicks: {} };
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { version: 1, tools: [], products: [], productClicks: {}, productVariantClicks: {} };
     throw error;
   }
+}
+
+/* Products live in the JSON store so admins can edit them; the hardcoded
+   SEEDED_PRODUCTS list is only the one-time seed for an empty store. Returns
+   true when the caller should persist the seeded store. */
+function seedProductsIfEmpty(store: PhantomStoreStore): boolean {
+  if (store.products.length) return false;
+  store.products = SEEDED_PRODUCTS.map((product) => ({
+    ...product,
+    tags: [...product.tags],
+    badges: [...product.badges],
+    gallery: [...product.gallery],
+    variants: product.variants.map((variant) => ({ ...variant })),
+    inventory: { ...product.inventory },
+    reviews: product.reviews.map((review) => ({ ...review })),
+  }));
+  return true;
+}
+
+async function readStoreWithProducts(): Promise<PhantomStoreStore> {
+  const store = await readStore();
+  if (seedProductsIfEmpty(store)) await writeStore(store);
+  return store;
 }
 
 let writes = Promise.resolve();
@@ -422,9 +570,11 @@ function catalogFor(store: PhantomStoreStore) {
 
 function marketplaceFor(store: PhantomStoreStore) {
   const productClicks = store.productClicks || {};
-  const products = SEEDED_PRODUCTS.map((product) => ({
+  const variantClicks = store.productVariantClicks || {};
+  const products = store.products.map((product) => ({
     ...product,
     buyClicks: Number(productClicks[product.id] || 0),
+    variantBuyClicks: variantClicks[product.id] || {},
     seller: SEEDED_SELLERS.find((seller) => seller.id === product.sellerId) || null,
   }));
   const sellers = SEEDED_SELLERS.map((seller) => ({
@@ -437,7 +587,7 @@ function marketplaceFor(store: PhantomStoreStore) {
 export async function getPhantomStoreSnapshot(session: AccessSession, options: { tenantId?: unknown } = {}) {
   const tenantId = tenantIdFor(session, options.tenantId);
   const actorId = actorIdFor(session);
-  const store = await readStore();
+  const store = await readStoreWithProducts();
   const canModerate = session.canManageAccess === true || session.isSuperAdmin === true;
   const mine = store.tools.filter((tool) => tool.developerId === actorId);
   const marketplace = marketplaceFor(store);
@@ -530,33 +680,113 @@ export async function recordPhantomStoreInstallClick(_session: AccessSession, to
   return { installClicks: tool.installClicks };
 }
 
-export async function recordPhantomStoreProductBuyClick(_session: AccessSession, productId: string) {
-  const store = await readStore();
-  const product = SEEDED_PRODUCTS.find((item) => item.id === productId && item.status === "available");
+/* Admin-only product editing, mirroring the moderation permission gate above:
+   the same canManageAccess/isSuperAdmin check and the same "moderation access"
+   error message the route layer already maps to a 403. */
+function productInput(input: Record<string, unknown>) {
+  return {
+    name: clean(input.name, 90),
+    summary: clean(input.summary, 300),
+    description: clean(input.description, 4000),
+    category: safeProductCategory(input.category),
+    priceLabel: clean(input.priceLabel, 60),
+    buyLabel: clean(input.buyLabel, 40) || "Buy now",
+    buyUrl: safeUrl(input.buyUrl),
+    delivery: clean(input.delivery, 120),
+    version: clean(input.version, 40) || "1.0.0",
+    status: safeProductStatus(input.status),
+    qualityNote: clean(input.qualityNote, 500),
+    tags: Array.isArray(input.tags) ? input.tags.map((t) => clean(t, 30)).filter(Boolean).slice(0, 8) : [],
+    badges: Array.isArray(input.badges) ? input.badges.map((b) => clean(b, 40)).filter(Boolean).slice(0, 6) : [],
+    imageUrl: safeImageUrl(input.imageUrl),
+    gallery: Array.isArray(input.gallery) ? input.gallery.map(safeImageUrl).filter((g): g is string => Boolean(g)).slice(0, 8) : [],
+    variants: safeVariants(input.variants),
+    inventory: safeInventory(input.inventory),
+    featured: input.featured === true,
+  };
+}
+
+export async function upsertPhantomStoreProduct(session: AccessSession, productId: string | null, input: Record<string, unknown>) {
+  if (!session.canManageAccess && session.isSuperAdmin !== true) throw new Error("Platform moderation access is required.");
+  const store = await readStoreWithProducts();
+  if (productId) {
+    const product = store.products.find((item) => item.id === productId);
+    if (!product) return null;
+    const data = productInput({ ...product, ...input });
+    if (!data.name) throw new Error("Product name is required.");
+    if (!data.summary) throw new Error("Product summary is required.");
+    /* Ratings/reviews are proof, not admin-editable fields — no fake reviews. */
+    Object.assign(product, data, { updatedAt: now() });
+    await writeStore(store);
+    return product;
+  }
+  const data = productInput(input);
+  if (!data.name) throw new Error("Product name is required.");
+  if (!data.summary) throw new Error("Product summary is required.");
+  const product: PhantomStoreProduct = {
+    id: `product-${randomUUID()}`,
+    sellerId: clean(input.sellerId, 80) || "seller-phantomforce",
+    ...data,
+    rating: 0,
+    reviewCount: 0,
+    updatedAt: now(),
+    reviews: [],
+  };
+  store.products.unshift(product);
+  await writeStore(store);
+  return product;
+}
+
+export async function recordPhantomStoreProductBuyClick(_session: AccessSession, productId: string, input: Record<string, unknown> = {}) {
+  const store = await readStoreWithProducts();
+  const product = store.products.find((item) => item.id === productId && item.status === "available");
   if (!product) return null;
+  const inventory = safeInventory(product.inventory);
+  if (inventory.mode === "tracked" && Number(inventory.stock || 0) <= 0) {
+    throw new Error("This product is out of stock right now.");
+  }
+  const requestedVariantId = clean(input.variantId, 80);
+  let variant: PhantomStoreProductVariant | null = null;
+  if (requestedVariantId) {
+    variant = (product.variants || []).find((item) => item.id === requestedVariantId) || null;
+    if (!variant) throw new Error("That product variant was not found.");
+    if (!variant.available) throw new Error("That product variant is not available right now.");
+  }
   store.productClicks = store.productClicks || {};
   store.productClicks[product.id] = Number(store.productClicks[product.id] || 0) + 1;
+  let variantBuyClicks: number | null = null;
+  if (variant) {
+    store.productVariantClicks = store.productVariantClicks || {};
+    const clicks = (store.productVariantClicks[product.id] = store.productVariantClicks[product.id] || {});
+    clicks[variant.id] = Number(clicks[variant.id] || 0) + 1;
+    variantBuyClicks = clicks[variant.id];
+  }
   await writeStore(store);
   return {
     buyClicks: store.productClicks[product.id],
+    variantId: variant?.id || null,
+    variantBuyClicks,
     product: { ...product, seller: SEEDED_SELLERS.find((seller) => seller.id === product.sellerId) || null },
     checkout: {
       mode: "external",
       url: product.buyUrl,
-      note: "Purchase intent recorded. Continue through the seller checkout/support page.",
+      note: variant
+        ? `Purchase intent recorded for "${variant.label}". Continue through the seller checkout/support page.`
+        : "Purchase intent recorded. Continue through the seller checkout/support page.",
     },
   };
 }
 
 export async function getPhantomStoreStatus() {
   const store = await readStore();
+  seedProductsIfEmpty(store);
   return {
     provider: "local_json",
     pathConfigured: Boolean(process.env.PHANTOMFORCE_PHANTOMSTORE_PATH),
     tools: store.tools.length,
     approvedTools: store.tools.filter((tool) => tool.status === "approved").length,
     sellers: SEEDED_SELLERS.length,
-    products: SEEDED_PRODUCTS.length,
+    products: store.products.length,
     productBuyClicks: Object.values(store.productClicks || {}).reduce((sum, value) => sum + Number(value || 0), 0),
   };
 }

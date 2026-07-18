@@ -28,7 +28,82 @@ const ui = {
   installMessage: "",
   buyingProductId: "",
   buyMessage: "",
+  /* In-app product detail view (sub-view state, same pattern PhantomPlay uses
+     for game detail: internal state, marked with a data attribute — the shell
+     router only routes #ws/<workspace> so sub-views stay in-workspace). */
+  productId: "",
+  variantChoice: {},
+  /* Admin product editor ("" closed, "new" creating, else product id). */
+  adminProductId: "",
+  adminProductMessage: "",
 };
+
+/* Deterministic branded tile for products that have no real image asset yet:
+   generated in code from the product name, clearly a brand tile (initials +
+   PhantomStore wordmark), never a fabricated photo and never hotlinked. */
+const BRAND_ACCENTS = ["#41ffa1", "#42e9ff", "#ff6d83", "#ffd166", "#b28dff"];
+function brandTileUrl(product) {
+  const name = String(product?.name || "Product");
+  let hash = 0;
+  for (const char of name) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+  const accent = BRAND_ACCENTS[hash % BRAND_ACCENTS.length];
+  const initials = name.split(/\s+/).map((word) => word[0] || "").join("").slice(0, 3).toUpperCase();
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" role="img">
+    <rect width="640" height="360" fill="#04100c"/>
+    <rect x="6" y="6" width="628" height="348" fill="none" stroke="${accent}" stroke-opacity="0.35" stroke-width="2"/>
+    <circle cx="536" cy="72" r="120" fill="${accent}" fill-opacity="0.08"/>
+    <text x="48" y="86" fill="${accent}" font-family="monospace" font-size="20" font-weight="700" letter-spacing="6">PHANTOMSTORE</text>
+    <text x="44" y="228" fill="${accent}" font-family="monospace" font-size="120" font-weight="800">${esc(initials)}</text>
+    <text x="48" y="300" fill="#eafff4" font-family="monospace" font-size="28" font-weight="700">${esc(name.slice(0, 30))}</text>
+  </svg>`;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
+function productImageUrl(product) {
+  const url = String(product?.imageUrl || "").trim();
+  if (/^\/(?!\/)[\w\-./]+$/.test(url)) return url;
+  return safeHref(url) || brandTileUrl(product);
+}
+
+function inventoryOf(product) {
+  const inventory = product?.inventory && typeof product.inventory === "object" ? product.inventory : { mode: "unlimited" };
+  return inventory.mode === "tracked" ? { mode: "tracked", stock: Math.max(0, Number(inventory.stock || 0)) } : { mode: "unlimited" };
+}
+
+function outOfStock(product) {
+  const inventory = inventoryOf(product);
+  return inventory.mode === "tracked" && inventory.stock <= 0;
+}
+
+function inventoryLabel(product) {
+  if (product?.status === "quality_hold") return "Quality hold — purchasing paused";
+  const inventory = inventoryOf(product);
+  if (inventory.mode === "tracked") return inventory.stock > 0 ? `${inventory.stock} in stock` : "Out of stock";
+  return "Digital delivery — always in stock";
+}
+
+function productVariants(product) {
+  return Array.isArray(product?.variants) ? product.variants : [];
+}
+
+function selectedVariant(product) {
+  const variants = productVariants(product);
+  if (!variants.length) return null;
+  const chosenId = ui.variantChoice[product.id];
+  return variants.find((variant) => variant.id === chosenId) || variants.find((variant) => variant.available) || variants[0];
+}
+
+function priceUsdLabel(value) {
+  const price = Number(value);
+  if (!Number.isFinite(price)) return "";
+  return Number.isInteger(price) ? `$${price}` : `$${price.toFixed(2)}`;
+}
+
+function productBuyable(product) {
+  if (product?.status !== "available" || outOfStock(product)) return false;
+  const variant = selectedVariant(product);
+  return !variant || variant.available === true;
+}
 
 let mountedRoot = null;
 let searchTimer = 0;
@@ -107,12 +182,15 @@ function productCard(product) {
   const seller = product.seller || {};
   const buyUrl = safeHref(product.buyUrl);
   const isBuying = ui.buyingProductId === product.id;
-  const available = product.status === "available";
+  const available = productBuyable(product);
   return `<article class="ps-product ${product.featured ? "is-featured" : ""}">
+    <button type="button" class="ps-product-media" data-ps-detail="${esc(product.id)}" aria-label="Open ${esc(product.name)} details">
+      <img src="${productImageUrl(product)}" alt="${esc(product.name)} product image" loading="lazy" />
+    </button>
     <header>
       <div>
         <p class="ps-kicker">${esc(product.category)} / ${esc(product.delivery || "Digital delivery")}</p>
-        <h3>${esc(product.name)}</h3>
+        <h3><button type="button" class="ps-title-link" data-ps-detail="${esc(product.id)}">${esc(product.name)}</button></h3>
       </div>
       <span>${esc(product.priceLabel || "Contact")}</span>
     </header>
@@ -121,16 +199,83 @@ function productCard(product) {
       <b>${esc(product.rating || "New")} / 5</b>
       <span>${Number(product.reviewCount || 0)} product reviews</span>
       <span>Seller: ${esc(seller.name || "Seller")}</span>
+      <span>${esc(inventoryLabel(product))}</span>
     </div>
     <div class="ps-tags">${(product.badges || product.tags || []).map((tag) => `<em>${esc(tag)}</em>`).join("")}</div>
     <small>${esc(product.qualityNote || "")}</small>
     <div class="ps-card-actions">
       <button type="button" class="ps-primary" data-ps-buy="${esc(product.id)}" ${available ? "" : "disabled"}>${isBuying ? "Preparing..." : esc(product.buyLabel || "Buy now")}</button>
+      <button type="button" class="ps-secondary" data-ps-detail="${esc(product.id)}">View details</button>
       ${buyUrl ? `<a class="ps-secondary" href="${esc(buyUrl)}" target="_blank" rel="noopener noreferrer">Product page</a>` : ""}
     </div>
     ${ui.buyingProductId === product.id && ui.buyMessage ? `<div class="ps-buy-note">${esc(ui.buyMessage)}</div>` : ""}
     ${reviewList(product.reviews || [])}
   </article>`;
+}
+
+function renderProductDetail(product) {
+  const seller = product.seller || {};
+  const buyUrl = safeHref(product.buyUrl);
+  const isBuying = ui.buyingProductId === product.id;
+  const available = productBuyable(product);
+  const variants = productVariants(product);
+  const chosen = selectedVariant(product);
+  const gallery = (Array.isArray(product.gallery) ? product.gallery : []).map((entry) => productImageUrl({ ...product, imageUrl: entry }));
+  const websiteUrl = safeHref(seller.websiteUrl);
+  const supportUrl = safeHref(seller.supportUrl);
+  return `<section class="ps-detail" data-ps-product-view="${esc(product.id)}">
+    <button type="button" class="ps-secondary ps-detail-back" data-ps-back>&larr; Back to Discover</button>
+    <div class="ps-detail-grid">
+      <div class="ps-detail-media">
+        <img src="${productImageUrl(product)}" alt="${esc(product.name)} product image" />
+        ${gallery.length ? `<div class="ps-detail-gallery">${gallery.map((src, index) => `<img src="${src}" alt="${esc(product.name)} gallery image ${index + 1}" loading="lazy" />`).join("")}</div>` : ""}
+      </div>
+      <div class="ps-detail-info">
+        <p class="ps-kicker">${esc(product.category)} / ${esc(product.delivery || "Digital delivery")} / v${esc(product.version || "1.0.0")}</p>
+        <h2>${esc(product.name)}</h2>
+        <p class="ps-detail-summary">${esc(product.summary)}</p>
+        <div class="ps-detail-price">
+          <b>${esc(chosen ? priceUsdLabel(chosen.priceUsd) || product.priceLabel : product.priceLabel || "Contact")}</b>
+          <span>${esc(product.priceLabel || "")}</span>
+        </div>
+        <div class="ps-product-proof">
+          <b>${esc(product.rating || "New")} / 5</b>
+          <span>${Number(product.reviewCount || 0)} product reviews</span>
+          <span>${esc(inventoryLabel(product))}</span>
+        </div>
+        ${variants.length ? `<div class="ps-variants" role="radiogroup" aria-label="Choose a variant">
+          <p class="ps-kicker">VARIANT</p>
+          ${variants.map((variant) => `<label class="ps-variant ${chosen?.id === variant.id ? "is-active" : ""} ${variant.available ? "" : "is-unavailable"}">
+            <input type="radio" name="ps-variant-${esc(product.id)}" value="${esc(variant.id)}" data-ps-variant="${esc(product.id)}" ${chosen?.id === variant.id ? "checked" : ""} ${variant.available ? "" : "disabled"} />
+            <span>${esc(variant.label)}</span>
+            <b>${esc(priceUsdLabel(variant.priceUsd) || "—")}</b>
+            ${variant.available ? "" : "<i>Unavailable</i>"}
+          </label>`).join("")}
+        </div>` : ""}
+        <div class="ps-card-actions">
+          <button type="button" class="ps-primary" data-ps-buy="${esc(product.id)}" ${available ? "" : "disabled"}>${isBuying ? "Preparing..." : esc(product.buyLabel || "Buy now")}</button>
+          ${buyUrl ? `<a class="ps-secondary" href="${esc(buyUrl)}" target="_blank" rel="noopener noreferrer">Product page</a>` : ""}
+        </div>
+        ${ui.buyingProductId === product.id && ui.buyMessage ? `<div class="ps-buy-note">${esc(ui.buyMessage)}</div>` : ""}
+        <small>${esc(product.qualityNote || "")}</small>
+        <div class="ps-detail-seller">
+          <p class="ps-kicker">SELLER</p>
+          <b>${esc(seller.name || "Seller")}</b>
+          <span>${esc(seller.tagline || "")}</span>
+          <div class="ps-card-actions">
+            ${websiteUrl ? `<a class="ps-secondary" href="${esc(websiteUrl)}" target="_blank" rel="noopener noreferrer">Website</a>` : ""}
+            ${supportUrl ? `<a class="ps-secondary" href="${esc(supportUrl)}" target="_blank" rel="noopener noreferrer">Support</a>` : ""}
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="ps-detail-description">
+      <p class="ps-kicker">ABOUT THIS PRODUCT</p>
+      <p>${esc(product.description || product.summary || "")}</p>
+      <div class="ps-tags">${(product.badges || []).concat(product.tags || []).map((tag) => `<em>${esc(tag)}</em>`).join("")}</div>
+    </div>
+    ${reviewList(product.reviews || [])}
+  </section>`;
 }
 
 function sellerCard(seller) {
@@ -318,9 +463,103 @@ function submissionCard(tool) {
   </article>`;
 }
 
+const PRODUCT_CATEGORIES = ["Desktop App", "AI Suite", "Plugin", "Automation", "Creative Tool"];
+const PRODUCT_STATUSES = ["available", "quality_hold"];
+
+/* Variants edit as one line each: id | label | priceUsd | yes/no (available).
+   Line format keeps the admin form honest and diffable without a JSON editor. */
+function variantLines(product) {
+  return productVariants(product).map((variant) => `${variant.id} | ${variant.label} | ${Number(variant.priceUsd) || 0} | ${variant.available === false ? "no" : "yes"}`).join("\n");
+}
+
+function parseVariantLines(value) {
+  return String(value || "").split("\n").map((line) => line.trim()).filter(Boolean).map((line) => {
+    const [id = "", label = "", priceUsd = "", available = "yes"] = line.split("|").map((part) => part.trim());
+    return { id, label, priceUsd: Number(priceUsd) || 0, available: available.toLowerCase() !== "no" };
+  });
+}
+
+function adminProductForm(product) {
+  const isNew = !product;
+  const p = product || { status: "available", category: "Desktop App", inventory: { mode: "unlimited" } };
+  const inventory = inventoryOf(p);
+  return `<form class="ps-form ps-product-form" data-ps-product-form data-product-id="${esc(isNew ? "" : p.id)}">
+    <header>
+      <div>
+        <p class="ps-kicker">${isNew ? "NEW PRODUCT" : "EDIT PRODUCT"}</p>
+        <h3>${esc(isNew ? "Create store product" : p.name)}</h3>
+      </div>
+      <span>Admin only</span>
+    </header>
+    <label>Name<input name="name" maxlength="90" required value="${esc(p.name || "")}" /></label>
+    <label>Summary<input name="summary" maxlength="300" required value="${esc(p.summary || "")}" /></label>
+    <label>Description<textarea name="description" rows="4" maxlength="4000">${esc(p.description || "")}</textarea></label>
+    <div class="ps-row">
+      <label>Category<select name="category">${PRODUCT_CATEGORIES.map((cat) => `<option ${p.category === cat ? "selected" : ""}>${esc(cat)}</option>`).join("")}</select></label>
+      <label>Status<select name="status">${PRODUCT_STATUSES.map((status) => `<option ${p.status === status ? "selected" : ""}>${esc(status)}</option>`).join("")}</select></label>
+      <label>Version<input name="version" maxlength="40" value="${esc(p.version || "1.0.0")}" /></label>
+    </div>
+    <div class="ps-row">
+      <label>Price label<input name="priceLabel" maxlength="60" value="${esc(p.priceLabel || "")}" /></label>
+      <label>Buy label<input name="buyLabel" maxlength="40" value="${esc(p.buyLabel || "")}" /></label>
+      <label>Delivery<input name="delivery" maxlength="120" value="${esc(p.delivery || "")}" /></label>
+    </div>
+    <label>Buy URL<input name="buyUrl" type="url" value="${esc(p.buyUrl || "")}" placeholder="https://..." /></label>
+    <label>Image URL (app asset path or https)<input name="imageUrl" value="${esc(p.imageUrl || "")}" placeholder="/app/assets/... or https://... — blank uses the branded tile" /></label>
+    <label>Quality note<input name="qualityNote" maxlength="500" value="${esc(p.qualityNote || "")}" /></label>
+    <div class="ps-row ps-row-small">
+      <label>Tags (comma-separated)<input name="tags" maxlength="240" value="${esc((p.tags || []).join(", "))}" /></label>
+      <label>Badges (comma-separated)<input name="badges" maxlength="240" value="${esc((p.badges || []).join(", "))}" /></label>
+    </div>
+    <label>Variants (one per line: id | label | priceUsd | yes/no)<textarea name="variants" rows="3" placeholder="termina-early-access | Early access license | 20 | yes">${esc(variantLines(p))}</textarea></label>
+    <div class="ps-row ps-row-small">
+      <label>Inventory mode<select name="inventoryMode"><option ${inventory.mode === "unlimited" ? "selected" : ""}>unlimited</option><option ${inventory.mode === "tracked" ? "selected" : ""}>tracked</option></select></label>
+      <label>Stock (tracked only)<input name="inventoryStock" type="number" min="0" step="1" value="${esc(inventory.mode === "tracked" ? inventory.stock : "")}" /></label>
+    </div>
+    <label class="ps-check"><input type="checkbox" name="featured" ${p.featured ? "checked" : ""} /> Featured</label>
+    <div class="ps-form-actions">
+      <button type="submit" class="ps-primary" ${ui.busy ? "disabled" : ""}>${isNew ? "Create product" : "Save product"}</button>
+      <button type="button" class="ps-secondary" data-ps-product-cancel>Cancel</button>
+    </div>
+    <p data-ps-form-message>${esc(ui.adminProductMessage)}</p>
+  </form>`;
+}
+
+function adminProductsPanel() {
+  const products = Array.isArray(ui.snapshot?.products) ? ui.snapshot.products : [];
+  return `<div class="ps-admin-products">
+    <div class="ps-section-head">
+      <div>
+        <p class="ps-kicker">PRODUCTS / ADMIN EDITOR</p>
+        <h2>Edit store products</h2>
+      </div>
+      <button type="button" class="ps-secondary" data-ps-product-edit="new">New product</button>
+    </div>
+    ${ui.adminProductId === "new" ? adminProductForm(null) : ""}
+    <div class="ps-admin-product-list">${products.map((product) => {
+      const variantClicks = product.variantBuyClicks && typeof product.variantBuyClicks === "object" ? Object.entries(product.variantBuyClicks).map(([id, count]) => `${id}: ${Number(count) || 0}`).join(", ") : "";
+      return `<article class="ps-admin-product">
+        <header>
+          <div>
+            <p class="ps-kicker">${esc(product.category)} / ${esc(product.status)}${product.featured ? " / featured" : ""}</p>
+            <h3>${esc(product.name)}</h3>
+          </div>
+          <span>${esc(product.priceLabel || "")}</span>
+        </header>
+        <small>${Number(product.buyClicks || 0)} buy clicks${variantClicks ? ` (${esc(variantClicks)})` : ""} / ${esc(inventoryLabel(product))}</small>
+        <div class="ps-card-actions">
+          <button type="button" class="ps-secondary" data-ps-product-edit="${esc(product.id)}">${ui.adminProductId === product.id ? "Close editor" : "Edit"}</button>
+        </div>
+        ${ui.adminProductId === product.id ? adminProductForm(product) : ""}
+      </article>`;
+    }).join("")}</div>
+  </div>`;
+}
+
 function renderSubmissions() {
   const submissions = Array.isArray(ui.snapshot?.submissions) ? ui.snapshot.submissions : [];
   return `<section class="ps-review">
+    ${ui.snapshot?.canModerate ? adminProductsPanel() : ""}
     <div class="ps-section-head">
       <div>
         <p class="ps-kicker">${ui.snapshot?.canModerate ? "MODERATION QUEUE" : "YOUR BUILDS"}</p>
@@ -337,6 +576,11 @@ function renderContent() {
   if (ui.error) return `<div class="ps-error"><b>PhantomStore is not available.</b><span>${esc(ui.error)}</span><button type="button" data-ps-refresh>Try again</button></div>`;
   if (ui.tab === "submit") return renderSubmit();
   if (ui.tab === "review") return renderSubmissions();
+  if (ui.productId) {
+    const product = (ui.snapshot?.products || []).find((item) => item.id === ui.productId);
+    if (product) return renderProductDetail(product);
+    ui.productId = "";
+  }
   return renderDiscover();
 }
 
@@ -406,9 +650,15 @@ async function recordBuy(id) {
   ui.buyMessage = "Preparing checkout...";
   render();
   try {
-    const result = await api(`/api/phantomstore/products/${encodeURIComponent(id)}/buy`, { method: "POST" });
     const product = ui.snapshot?.products?.find((item) => item.id === id);
-    if (product) product.buyClicks = result.buyClicks;
+    const variant = product ? selectedVariant(product) : null;
+    const result = await api(`/api/phantomstore/products/${encodeURIComponent(id)}/buy`, { method: "POST", body: JSON.stringify(variant ? { variantId: variant.id } : {}) });
+    if (product) {
+      product.buyClicks = result.buyClicks;
+      if (result.variantId && result.variantBuyClicks != null) {
+        product.variantBuyClicks = { ...(product.variantBuyClicks || {}), [result.variantId]: result.variantBuyClicks };
+      }
+    }
     ui.buyMessage = result.checkout?.note || "Purchase intent recorded.";
     const url = safeHref(result.checkout?.url);
     if (url) window.open(url, "_blank", "noopener,noreferrer");
@@ -416,6 +666,50 @@ async function recordBuy(id) {
     ui.buyMessage = error instanceof Error ? error.message : "Checkout could not be prepared.";
   }
   render();
+}
+
+async function saveProduct(form) {
+  ui.busy = true;
+  ui.adminProductMessage = "Saving product...";
+  render();
+  try {
+    const data = new FormData(form);
+    const csv = (name) => String(data.get(name) || "").split(",").map((item) => item.trim()).filter(Boolean);
+    const inventoryMode = String(data.get("inventoryMode") || "unlimited");
+    const payload = {
+      name: String(data.get("name") || ""),
+      summary: String(data.get("summary") || ""),
+      description: String(data.get("description") || ""),
+      category: String(data.get("category") || ""),
+      status: String(data.get("status") || "available"),
+      version: String(data.get("version") || ""),
+      priceLabel: String(data.get("priceLabel") || ""),
+      buyLabel: String(data.get("buyLabel") || ""),
+      delivery: String(data.get("delivery") || ""),
+      buyUrl: String(data.get("buyUrl") || ""),
+      imageUrl: String(data.get("imageUrl") || ""),
+      qualityNote: String(data.get("qualityNote") || ""),
+      tags: csv("tags"),
+      badges: csv("badges"),
+      variants: parseVariantLines(data.get("variants")),
+      inventory: inventoryMode === "tracked" ? { mode: "tracked", stock: Number(data.get("inventoryStock")) || 0 } : { mode: "unlimited" },
+      featured: data.get("featured") === "on",
+    };
+    const productId = form.dataset.productId || "";
+    await api(productId ? `/api/phantomstore/products/${encodeURIComponent(productId)}` : "/api/phantomstore/products", {
+      method: productId ? "PATCH" : "POST",
+      body: JSON.stringify(payload),
+    });
+    ui.adminProductMessage = productId ? "Product saved." : "Product created.";
+    ui.adminProductId = "";
+    await hydrate();
+  } catch (error) {
+    ui.adminProductMessage = error instanceof Error ? error.message : "Product could not be saved.";
+    render();
+  } finally {
+    ui.busy = false;
+    render();
+  }
 }
 
 async function moderate(id, decision) {
@@ -448,7 +742,7 @@ async function copyInstall(id) {
 
 function bind() {
   mountedRoot.querySelectorAll("[data-ps-tab]").forEach((button) => {
-    button.onclick = () => { ui.tab = button.dataset.psTab || "discover"; ui.message = ""; render(); };
+    button.onclick = () => { ui.tab = button.dataset.psTab || "discover"; ui.message = ""; ui.productId = ""; render(); };
   });
   mountedRoot.querySelector("[data-ps-refresh]")?.addEventListener("click", hydrate);
   mountedRoot.querySelector("[data-ps-search]")?.addEventListener("input", (event) => {
@@ -470,6 +764,30 @@ function bind() {
   });
   mountedRoot.querySelectorAll("[data-ps-buy]").forEach((button) => {
     button.onclick = () => recordBuy(button.dataset.psBuy || "");
+  });
+  mountedRoot.querySelectorAll("[data-ps-detail]").forEach((button) => {
+    button.onclick = () => { ui.productId = button.dataset.psDetail || ""; ui.buyMessage = ""; ui.buyingProductId = ""; render(); };
+  });
+  mountedRoot.querySelector("[data-ps-back]")?.addEventListener("click", () => { ui.productId = ""; ui.buyMessage = ""; ui.buyingProductId = ""; render(); });
+  mountedRoot.querySelectorAll("[data-ps-variant]").forEach((input) => {
+    input.onchange = () => {
+      ui.variantChoice = { ...ui.variantChoice, [input.dataset.psVariant || ""]: input.value };
+      render();
+    };
+  });
+  mountedRoot.querySelectorAll("[data-ps-product-edit]").forEach((button) => {
+    button.onclick = () => {
+      const target = button.dataset.psProductEdit || "";
+      ui.adminProductId = ui.adminProductId === target ? "" : target;
+      ui.adminProductMessage = "";
+      render();
+    };
+  });
+  mountedRoot.querySelectorAll("[data-ps-product-cancel]").forEach((button) => {
+    button.onclick = () => { ui.adminProductId = ""; ui.adminProductMessage = ""; render(); };
+  });
+  mountedRoot.querySelectorAll("[data-ps-product-form]").forEach((productForm) => {
+    productForm.onsubmit = (event) => { event.preventDefault(); saveProduct(productForm); };
   });
   mountedRoot.querySelectorAll("[data-ps-copy]").forEach((button) => {
     button.onclick = () => copyInstall(button.dataset.psCopy || "");
