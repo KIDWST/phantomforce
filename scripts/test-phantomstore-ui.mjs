@@ -45,7 +45,9 @@ assert.match(backendSource, /recordPhantomStoreProductBuyClick/u, "Backend must 
 
 /* Product model upgrades: real image fields, variants, inventory, and
    store-backed persistence with admin-gated editing. */
-assert.match(backendSource, /imageUrl: string \| null;[\s\S]*gallery: string\[\];[\s\S]*variants: PhantomStoreProductVariant\[\];[\s\S]*inventory: PhantomStoreProductInventory;/u, "Product model must carry imageUrl, gallery, variants, and inventory.");
+assert.match(backendSource, /imageUrl: string \| null;[\s\S]*gallery: string\[\];[\s\S]*videoUrl: string \| null;[\s\S]*media: PhantomStoreProductMedia\[\];[\s\S]*variants: PhantomStoreProductVariant\[\];[\s\S]*inventory: PhantomStoreProductInventory;/u, "Product model must carry imageUrl, gallery, videoUrl, media, variants, and inventory.");
+assert.match(backendSource, /type: "video"[\s\S]*AI-generated Termina showcase/u, "Termina must include a real generated showcase video media item.");
+assert.match(backendSource, /function syncSeededProductMedia/u, "Existing PhantomStore JSON stores must sync newly generated seeded product media.");
 assert.match(backendSource, /imageUrl: "\/app\/assets\/brand-phantom\.png"/u, "Business OS must use the real shipped brand image asset, not a fabricated photo.");
 assert.match(backendSource, /imageUrl: null/u, "Products without a real image asset must ship imageUrl null so the client renders a branded tile instead of a fake image.");
 assert.match(backendSource, /id: "termina-early-access", label: "Early access license", priceUsd: 20/u, "Termina must keep its real $20 early-access pricing as a variant.");
@@ -66,6 +68,8 @@ assert.doesNotMatch(storeSource, />Product page</u, "The UI must not show a dupl
 assert.match(storeSource, /function productWorkflowMatch/u, "Products must calculate an AI workflow match score.");
 assert.match(storeSource, /workflow match/u, "The product page must expose AI workflow match copy.");
 assert.match(storeSource, /function productGallery/u, "The product page must build a gallery/showcase from product media plus branded fallback frames.");
+assert.match(storeSource, /function productMedia/u, "The product page must render first-class product image/video media.");
+assert.match(storeSource, /<video src=/u, "Generated product videos must render directly inside the product detail page.");
 assert.match(storeSource, /function productShowcase/u, "The product page must explain the AI fit, prediction, and proof signals.");
 assert.match(storeSource, /variant \? \{ variantId: variant\.id \} : \{\}/u, "Buy requests must carry the selected variant id.");
 assert.match(storeSource, /ui\.snapshot\?\.canModerate \? adminProductsPanel\(\)/u, "The admin product editor must only render for moderation-capable sessions.");
@@ -73,7 +77,7 @@ assert.match(storeSource, /\/api\/phantomstore\/products\/\$\{encodeURIComponent
 assert.match(storeSource, /quality_hold/u, "Buy availability must respect quality_hold status.");
 assert.match(storeSource, /function outOfStock/u, "Buy availability must respect tracked inventory at zero stock.");
 
-for (const selector of [".ps-shell", ".ps-market-hero", ".ps-tool", ".ps-product", ".ps-seller", ".ps-reviews", ".ps-submit-layout", ".ps-moderate", ".ps-product-media", ".ps-detail", ".ps-variant", ".ps-admin-products", ".ps-match-chip", ".ps-card-gallery", ".ps-ai-fit-panel", ".ps-fit-meter", ".ps-showcase-strip", ".ps-detail-stage"]) {
+for (const selector of [".ps-shell", ".ps-market-hero", ".ps-tool", ".ps-product", ".ps-seller", ".ps-reviews", ".ps-submit-layout", ".ps-moderate", ".ps-product-media", ".ps-detail", ".ps-variant", ".ps-admin-products", ".ps-match-chip", ".ps-video-chip", ".ps-card-gallery", ".ps-ai-fit-panel", ".ps-fit-meter", ".ps-showcase-strip", ".ps-detail-stage", ".ps-media-strip"]) {
   assert.ok(storeCss.includes(selector), `${selector} style must be present.`);
 }
 

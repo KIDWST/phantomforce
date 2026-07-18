@@ -68,6 +68,12 @@ function productImageUrl(product) {
   return safeHref(url) || brandTileUrl(product);
 }
 
+function productVideoUrl(product) {
+  const url = String(product?.videoUrl || "").trim();
+  if (/^\/(?!\/)[\w\-./]+$/.test(url)) return url;
+  return safeHref(url);
+}
+
 function productText(product) {
   return `${product?.name || ""} ${product?.summary || ""} ${product?.description || ""} ${(product?.tags || []).join(" ")} ${(product?.badges || []).join(" ")} ${product?.category || ""} ${product?.seller?.name || ""}`.toLowerCase();
 }
@@ -136,6 +142,19 @@ function productGallery(product) {
     brandTileUrl(product, "Proof + delivery"),
   ];
   return [...new Set(frames)].slice(0, 6);
+}
+
+function productMedia(product) {
+  const media = Array.isArray(product?.media) ? product.media : [];
+  const normalized = media.flatMap((item) => {
+    const type = item?.type === "video" ? "video" : "image";
+    const url = type === "video" ? safeHref(item?.url) : productImageUrl({ ...product, imageUrl: item?.url });
+    if (!url) return [];
+    return [{ type, url, label: item?.label || (type === "video" ? "Showcase video" : "Showcase image"), source: item?.source || "brand" }];
+  });
+  const video = productVideoUrl(product);
+  if (video && !normalized.some((item) => item.url === video)) normalized.unshift({ type: "video", url: video, label: "Generated product video", source: "generated" });
+  return normalized;
 }
 
 function productShowcase(product, match) {
@@ -267,10 +286,12 @@ function productCard(product) {
   const available = productBuyable(product);
   const match = productWorkflowMatch(product);
   const gallery = productGallery(product).slice(0, 3);
+  const hasVideo = productMedia(product).some((item) => item.type === "video");
   return `<article class="ps-product ${product.featured ? "is-featured" : ""}">
     <button type="button" class="ps-product-media" data-ps-detail="${esc(product.id)}" aria-label="Open ${esc(product.name)} details">
       <img src="${productImageUrl(product)}" alt="${esc(product.name)} product image" loading="lazy" />
       <span class="ps-match-chip">${esc(match.label)}</span>
+      ${hasVideo ? `<span class="ps-video-chip">AI video</span>` : ""}
     </button>
     <div class="ps-card-gallery" aria-hidden="true">${gallery.map((src) => `<img src="${src}" alt="" loading="lazy" />`).join("")}</div>
     <header>
@@ -307,6 +328,8 @@ function renderProductDetail(product) {
   const chosen = selectedVariant(product);
   const match = productWorkflowMatch(product);
   const gallery = productGallery(product);
+  const media = productMedia(product);
+  const heroVideo = media.find((item) => item.type === "video");
   const showcase = productShowcase(product, match);
   const websiteUrl = safeHref(seller.websiteUrl);
   const supportUrl = safeHref(seller.supportUrl);
@@ -314,12 +337,13 @@ function renderProductDetail(product) {
     <button type="button" class="ps-secondary ps-detail-back" data-ps-back>&larr; Back to Discover</button>
     <div class="ps-detail-grid">
       <div class="ps-detail-media ps-detail-stage">
-        <img src="${gallery[0]}" alt="${esc(product.name)} product image" />
+        ${heroVideo ? `<video src="${esc(heroVideo.url)}" poster="${gallery[0]}" autoplay muted loop playsinline preload="metadata" aria-label="${esc(heroVideo.label)}"></video>` : `<img src="${gallery[0]}" alt="${esc(product.name)} product image" />`}
         <div class="ps-stage-orbit" aria-hidden="true"><i></i><i></i><i></i></div>
         <div class="ps-stage-copy">
           <b>${esc(match.label)}</b>
-          <span>AI-ranked for this operator workflow</span>
+          <span>${heroVideo ? "Generated media + AI-ranked workflow fit" : "AI-ranked for this operator workflow"}</span>
         </div>
+        ${media.length ? `<div class="ps-media-strip">${media.map((item) => `<span>${esc(item.type === "video" ? "Video" : "Image")} · ${esc(item.label)}</span>`).join("")}</div>` : ""}
         <div class="ps-detail-gallery">${gallery.map((src, index) => `<img src="${src}" alt="${esc(product.name)} gallery image ${index + 1}" loading="lazy" />`).join("")}</div>
       </div>
       <div class="ps-detail-info">

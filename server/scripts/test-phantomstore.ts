@@ -30,14 +30,16 @@ try {
   assert(initial.sellers.some((seller: { name?: string }) => seller.name === "PhantomForce"), "PhantomStore should include a PhantomForce seller profile.");
   assert(initial.products.every((product: { reviews?: unknown[] }) => Array.isArray(product.reviews)), "Product listings should carry product reviews.");
   assert(
-    initial.products.every((product: { imageUrl?: unknown; gallery?: unknown; variants?: unknown; inventory?: unknown }) =>
-      "imageUrl" in product && Array.isArray(product.gallery) && Array.isArray(product.variants) && typeof product.inventory === "object" && product.inventory !== null),
-    "Every seeded product must ship imageUrl, gallery, variants, and inventory fields.",
+    initial.products.every((product: { imageUrl?: unknown; gallery?: unknown; videoUrl?: unknown; media?: unknown; variants?: unknown; inventory?: unknown }) =>
+      "imageUrl" in product && Array.isArray(product.gallery) && "videoUrl" in product && Array.isArray(product.media) && Array.isArray(product.variants) && typeof product.inventory === "object" && product.inventory !== null),
+    "Every seeded product must ship imageUrl, gallery, videoUrl, media, variants, and inventory fields.",
   );
-  const seededTermina = initial.products.find((product: { id?: string }) => product.id === "product-termina") as { variants?: { id: string; priceUsd: number; available: boolean }[]; imageUrl?: string | null } | undefined;
+  const seededTermina = initial.products.find((product: { id?: string }) => product.id === "product-termina") as { variants?: { id: string; priceUsd: number; available: boolean }[]; imageUrl?: string | null; videoUrl?: string | null; media?: { type?: string; source?: string; url?: string }[] } | undefined;
   const terminaVariant = seededTermina?.variants?.[0];
   assert(terminaVariant?.id === "termina-early-access" && terminaVariant.priceUsd === 20 && terminaVariant.available === true, "Termina must keep its real $20 early-access pricing as a variant.");
   assert(seededTermina?.imageUrl === null, "Termina has no real product image asset yet, so imageUrl must stay null (branded tile fallback), not a fabricated URL.");
+  assert(typeof seededTermina?.videoUrl === "string" && seededTermina.videoUrl.endsWith(".mp4"), "Termina must include a real generated product showcase video URL.");
+  assert(seededTermina?.media?.some((item) => item.type === "video" && item.source === "generated"), "Termina media must include a generated video item.");
   const seededOs = initial.products.find((product: { id?: string }) => product.id === "product-phantomforce-os") as { imageUrl?: string | null } | undefined;
   assert(seededOs?.imageUrl === "/app/assets/brand-phantom.png", "Business OS should reference the real shipped brand image asset.");
   const seededFile = JSON.parse(await readFile(process.env.PHANTOMFORCE_PHANTOMSTORE_PATH, "utf8")) as { products?: { id?: string }[] };

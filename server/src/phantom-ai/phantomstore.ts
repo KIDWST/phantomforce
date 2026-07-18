@@ -130,6 +130,37 @@ function safeImageUrl(value: unknown): string | null {
   return safeUrl(url) || null;
 }
 
+function safeVideoUrl(value: unknown): string | null {
+  const url = clean(value, 900);
+  if (!url) return null;
+  if (/^\/(?!\/)[\w\-./]+\.(?:mp4|webm|mov)$/i.test(url)) return url;
+  return safeUrl(url) || null;
+}
+
+export type PhantomStoreProductMedia = {
+  type: "image" | "video";
+  url: string;
+  label: string;
+  source: "uploaded" | "generated" | "brand";
+};
+
+function safeProductMedia(value: unknown): PhantomStoreProductMedia[] {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, 12).flatMap((raw) => {
+    const media = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+    const type = clean(media.type, 12) === "video" ? "video" : "image";
+    const url = type === "video" ? safeVideoUrl(media.url) : safeImageUrl(media.url);
+    if (!url) return [];
+    const source = clean(media.source, 20);
+    return [{
+      type,
+      url,
+      label: clean(media.label, 80) || (type === "video" ? "Showcase video" : "Showcase image"),
+      source: source === "generated" || source === "uploaded" || source === "brand" ? source : "brand",
+    }];
+  });
+}
+
 export type PhantomStoreProductVariant = {
   id: string;
   label: string;
@@ -182,6 +213,8 @@ export type PhantomStoreProduct = {
   badges: string[];
   imageUrl: string | null;
   gallery: string[];
+  videoUrl: string | null;
+  media: PhantomStoreProductMedia[];
   variants: PhantomStoreProductVariant[];
   inventory: PhantomStoreProductInventory;
   rating: number;
@@ -286,6 +319,15 @@ const SEEDED_PRODUCTS: PhantomStoreProduct[] = [
        fabricated image. Same rule for the other imageUrl: null products. */
     imageUrl: null,
     gallery: [],
+    videoUrl: "https://d8j0ntlcm91z4.cloudfront.net/user_37oY2O0khZgAT1VGZoOC3epGZz2/hf_20260718_132128_b4103461-af4b-458c-ad62-4d687b2f499b.mp4",
+    media: [
+      {
+        type: "video",
+        url: "https://d8j0ntlcm91z4.cloudfront.net/user_37oY2O0khZgAT1VGZoOC3epGZz2/hf_20260718_132128_b4103461-af4b-458c-ad62-4d687b2f499b.mp4",
+        label: "AI-generated Termina showcase",
+        source: "generated",
+      },
+    ],
     variants: [{ id: "termina-early-access", label: "Early access license", priceUsd: 20, available: true }],
     inventory: { mode: "unlimited" },
     rating: 5,
@@ -314,6 +356,8 @@ const SEEDED_PRODUCTS: PhantomStoreProduct[] = [
     /* The PhantomForce brand mark is a real shipped asset in the admin app. */
     imageUrl: "/app/assets/brand-phantom.png",
     gallery: [],
+    videoUrl: null,
+    media: [],
     /* Plans are chosen inside the workspace's own plan picker, so the listing
        carries no fixed-price variants rather than inventing plan prices here. */
     variants: [],
@@ -343,6 +387,8 @@ const SEEDED_PRODUCTS: PhantomStoreProduct[] = [
     badges: ["Reaper", "Creator", "Prompt-first"],
     imageUrl: null,
     gallery: [],
+    videoUrl: null,
+    media: [],
     variants: [{ id: "vocal-ai-creator", label: "Creator license", priceUsd: 29, available: true }],
     inventory: { mode: "unlimited" },
     rating: 4.5,
@@ -371,6 +417,8 @@ const SEEDED_PRODUCTS: PhantomStoreProduct[] = [
     badges: ["Local-first", "Approval-gated", "Early access"],
     imageUrl: null,
     gallery: [],
+    videoUrl: null,
+    media: [],
     variants: [{ id: "phantombot-early-access", label: "Early access source bundle", priceUsd: 20, available: true }],
     inventory: { mode: "unlimited" },
     rating: 0,
@@ -399,6 +447,8 @@ const SEEDED_PRODUCTS: PhantomStoreProduct[] = [
     badges: ["Local-first", "Bring your own credits", "Early access"],
     imageUrl: null,
     gallery: [],
+    videoUrl: null,
+    media: [],
     variants: [{ id: "phantomcut-early-access", label: "Early access license", priceUsd: 20, available: true }],
     inventory: { mode: "unlimited" },
     rating: 0,
@@ -434,6 +484,8 @@ function normalizeStoredProduct(raw: unknown): PhantomStoreProduct | null {
     badges: Array.isArray(p.badges) ? p.badges.map((b) => clean(b, 40)).filter(Boolean).slice(0, 6) : [],
     imageUrl: safeImageUrl(p.imageUrl),
     gallery: Array.isArray(p.gallery) ? p.gallery.map(safeImageUrl).filter((g): g is string => Boolean(g)).slice(0, 8) : [],
+    videoUrl: safeVideoUrl(p.videoUrl),
+    media: safeProductMedia(p.media),
     variants: safeVariants(p.variants),
     inventory: safeInventory(p.inventory),
     rating: Number.isFinite(Number(p.rating)) ? Number(p.rating) : 0,
@@ -470,6 +522,7 @@ function seedProductsIfEmpty(store: PhantomStoreStore): boolean {
     tags: [...product.tags],
     badges: [...product.badges],
     gallery: [...product.gallery],
+    media: product.media.map((media) => ({ ...media })),
     variants: product.variants.map((variant) => ({ ...variant })),
     inventory: { ...product.inventory },
     reviews: product.reviews.map((review) => ({ ...review })),
@@ -477,9 +530,27 @@ function seedProductsIfEmpty(store: PhantomStoreStore): boolean {
   return true;
 }
 
+function syncSeededProductMedia(store: PhantomStoreStore): boolean {
+  let changed = false;
+  for (const seed of SEEDED_PRODUCTS) {
+    const product = store.products.find((item) => item.id === seed.id);
+    if (!product) continue;
+    if (!product.videoUrl && seed.videoUrl) {
+      product.videoUrl = seed.videoUrl;
+      changed = true;
+    }
+    if (!product.media.length && seed.media.length) {
+      product.media = seed.media.map((media) => ({ ...media }));
+      changed = true;
+    }
+  }
+  return changed;
+}
+
 async function readStoreWithProducts(): Promise<PhantomStoreStore> {
   const store = await readStore();
-  if (seedProductsIfEmpty(store)) await writeStore(store);
+  const changed = seedProductsIfEmpty(store) || syncSeededProductMedia(store);
+  if (changed) await writeStore(store);
   return store;
 }
 
@@ -700,6 +771,8 @@ function productInput(input: Record<string, unknown>) {
     badges: Array.isArray(input.badges) ? input.badges.map((b) => clean(b, 40)).filter(Boolean).slice(0, 6) : [],
     imageUrl: safeImageUrl(input.imageUrl),
     gallery: Array.isArray(input.gallery) ? input.gallery.map(safeImageUrl).filter((g): g is string => Boolean(g)).slice(0, 8) : [],
+    videoUrl: safeVideoUrl(input.videoUrl),
+    media: safeProductMedia(input.media),
     variants: safeVariants(input.variants),
     inventory: safeInventory(input.inventory),
     featured: input.featured === true,
