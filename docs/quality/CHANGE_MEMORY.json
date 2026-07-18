@@ -624,6 +624,16 @@
           "file": "server/scripts/test-instant-chat-live-model.ts",
           "pattern": "arithmeticVerified: true",
           "description": "A host-backed model gate checks corrected-subject continuity, natural preferences, arithmetic, latency, and business leakage."
+        },
+        {
+          "file": "server/src/phantom-ai/instant-chat-tools.ts",
+          "pattern": "phantom-calculator[\\s\\S]*phantom-reference-resolver",
+          "description": "Deterministic micro-tools handle arithmetic chains and exact ordinal list selection instead of gambling on model output."
+        },
+        {
+          "file": "server/scripts/test-instant-chat-http-live-model.ts",
+          "pattern": "contextRolloverVerified: true",
+          "description": "A self-starting authenticated HTTP gate exercises long conversation, topic switching, correction, arithmetic, exact output, and the bounded context rollover."
         }
       ],
       "forbiddenPatterns": [

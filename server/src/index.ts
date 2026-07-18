@@ -194,6 +194,7 @@ import { buildHermesLiveCallReceiptContract } from "./phantom-ai/hermes-live-rec
 import { buildHermesInteractionMemoryPreview } from "./phantom-ai/hermes-interaction-memory.js";
 import { recallHermesInteractionMemory } from "./phantom-ai/hermes-interaction-recall.js";
 import { buildInstantChatFallbackReply } from "./phantom-ai/instant-chat-fallback.js";
+import { buildInstantChatToolReply, enforceInstantOutputConstraints } from "./phantom-ai/instant-chat-tools.js";
 import { filterConversationModules, isSafeInstantConversationRequest, needsBusinessContext } from "./phantom-ai/conversation-policy.js";
 import { buildOpsDashboardContext } from "./phantom-ai/ops-context.js";
 import { buildAgentWorkforceStatus } from "./phantom-ai/agent-workforce.js";
@@ -3428,7 +3429,12 @@ function parseRecentConversation(value: unknown): RecentChatTurn[] {
       const source = entry as Record<string, unknown>;
       if (typeof source.user !== "string" || typeof source.assistant !== "string") return [];
       const user = redactSensitiveText(source.user).replace(/\s+/g, " ").trim().slice(0, 420);
-      const assistant = redactSensitiveText(source.assistant).replace(/\s+/g, " ").trim().slice(0, 520);
+      const assistant = redactSensitiveText(source.assistant)
+        .replace(/\r\n?/g, "\n")
+        .replace(/[^\S\n]+/g, " ")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim()
+        .slice(0, 520);
       return user && assistant ? [{ user, assistant }] : [];
     });
 }
@@ -8461,6 +8467,67 @@ app.post("/phantom-ai/chat", async (request, reply) => {
   }
 
   if (adminRouteTier === "instant" && isSafeInstantConversationRequest(normalized)) {
+    const toolReply = buildInstantChatToolReply(normalized.user_request, recentConversation);
+    if (toolReply) {
+      return {
+        ok: true,
+        session,
+        provider_choice: "phantom",
+        admin_model_lane: "local_ollama",
+        admin_model_label: "Phantom Instant",
+        admin_model_requested_lane: publicAdminPhantomAiModelLane(adminModelLane),
+        admin_execution_mode: adminExecutionMode,
+        model_id: toolReply.tool_id,
+        message: { role: "assistant", content: toolReply.output_text },
+        private_brain: null,
+        fallback: {
+          used: false,
+          all_failed: false,
+          local_response: false,
+          requested_provider: "Phantom Instant",
+          responding_provider: "Phantom Instant",
+          attempts: [],
+        },
+        hermes: {
+          context_used: recentConversation.length > 0,
+          ledger_written: false,
+          provider_route: "local",
+          route_tier: "instant",
+          recalled_memory_count: 0,
+        },
+        brain: {
+          context_used: false,
+          suggested_intent: normalized.task_type,
+          risk_level: "low",
+          needs_approval: false,
+          micro_prompt: "Deterministic instant micro-tool; business and durable memory context skipped.",
+          relevant_memory_count: 0,
+          used_memory_ids: [],
+          active_rules: [],
+          reasons: [toolReply.tool_id],
+        },
+        memory_scope: buildMemoryScopeProof(normalized),
+        memory_context: {
+          scope: normalized.memory_scope,
+          recalled_memory_count: 0,
+          compact_context_chars: 0,
+          redaction: "not_used_for_instant_route",
+        },
+        conversation_context: {
+          temporary_turn_count: recentConversation.length,
+          durable_memory_used: false,
+        },
+        provider_request_body_created: false,
+        live_provider_called: false,
+        network_call_performed: false,
+        approval_executed: false,
+        queue_written: false,
+        external_action_executed: false,
+        route_tier: "instant",
+        provider_timeout_ms: 0,
+        result_status: "called",
+      };
+    }
     const instantChat = await runAdminPhantomAiChatWithFallback(adminModelLane, {
       requestId: normalized.request_id,
       businessName: normalized.business_name,
@@ -8501,7 +8568,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
       model_id: localFallback?.model_id || ("model_id" in modelResult ? modelResult.model_id : respondingProviderId),
       message: {
         role: "assistant",
-        content: localFallback?.output_text || resultOutput,
+        content: localFallback?.output_text || enforceInstantOutputConstraints(normalized.user_request, resultOutput),
       },
       private_brain:
         respondingProviderId === "codex_cli" && "provider_id" in modelResult && modelResult.provider_id === "codex_cli"

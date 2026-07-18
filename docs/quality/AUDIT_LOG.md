@@ -653,3 +653,52 @@ Run the authenticated two-organization persistence proof in Recommended Cycle 6.
 ## Next Task
 
 Run the authenticated two-organization persistence proof in Recommended Cycle 7.
+
+# 2026-07-18 - Cycle 7: Tool-Assisted Instant Chat Reliability
+
+## Problems Verified
+
+- The earlier real-model gate covered one arithmetic chain but did not exercise
+  the complete authenticated HTTP route or a long bounded-context conversation.
+- A new browser-shaped HTTP stress run proved that `qwen2.5:14b` could calculate
+  three discounted `$45` tickets plus 8% tax as `$112.32`, `$114.24`, or `$117.44`
+  instead of the correct `$116.64` even after being asked to double-check.
+- The model also selected the first generated name when the user explicitly
+  requested the second one.
+- Conversation sanitization flattened assistant line breaks, destroying the list
+  structure that a deterministic reference resolver needed.
+- `no introduction` could still return a recap followed by a `Did you know` fact.
+
+## Corrections
+
+- Added a deterministic instant calculator for direct arithmetic, percent-of
+  questions, discount/quantity/tax chains, step-by-step verification, and exact
+  final-number requests.
+- Added an ordinal list resolver for first/second/third selection from the newest
+  assistant list. These micro-tools are action-free, use no business or durable
+  memory context, and return through the same instant route in 1-2 ms.
+- Preserved safe line breaks in temporary assistant context while retaining
+  redaction, whitespace normalization, character bounds, and the eight-turn
+  browser window.
+- Added exact-output cleanup for `no introduction` requests without changing
+  ordinary model answers.
+- Added unit coverage to the normal dashboard-chat suite and a self-starting,
+  authenticated HTTP real-model gate that drives both admin and customer sessions.
+
+## Verification
+
+- PASS: `npm run test:dashboard-chat` (31 browser prompts, 11 adversarial fallback
+  turns, and deterministic instant-tool checks).
+- PASS: `npm run test:change-memory` (106 protected checks before build stamping).
+- PASS: `npm run test:instant-chat:http-live-model` from `server`: 27 consecutive
+  authenticated HTTP requests, 443 ms average, 879 ms maximum, zero fallbacks,
+  zero business leakage, five deterministic tool responses, corrected-subject
+  continuity, topic switching, exact arithmetic, and context rollover verified.
+- PASS: the self-starting gate terminated its disposable port-5192 server after
+  completion.
+- PASS: `npm run typecheck`, `npm run build`, and `git diff --check` during the
+  focused correction pass.
+
+## Next Task
+
+Run the authenticated two-organization persistence proof in Recommended Cycle 8.

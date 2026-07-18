@@ -16,17 +16,17 @@ Do not restart the audit from zero unless the inventory is invalid. Continuation
 is scheduled in this same Codex task by heartbeat automation
 `continue-phantomforce-quality-program`.
 
-Cycle 6 hardened the conversational brain through a real multi-turn audit. Smart
-casual chat now routes to `qwen2.5:14b` with a compact conversation-only prompt,
-an 80-token response ceiling, a 24-hour warm lease, and no business or saved-memory
-modules. Authenticated customers can reach that action-free lane from the browser;
-standard/deep business work keeps its existing role, approval, and provider
-controls. Temporary context is blocked from durable memory at both intent and
-storage layers. A real-model gate now verifies corrected-subject continuity,
-preference style, arithmetic, exact output, leakage, and warm latency. Build
-`phantom-live-20260718-27` is the reconciled publish marker for this cycle.
+Cycle 7 hardened the complete authenticated instant-chat HTTP route. Ordinary
+conversation still uses the warmed `qwen2.5:14b` brain, while deterministic local
+micro-tools now handle arithmetic chains and exact ordinal list selection in
+1-2 ms. Temporary context preserves list line breaks without expanding its
+eight-turn browser bound or using durable/business memory. A self-starting gate
+now drives 27 mixed admin/customer requests through the real server and model,
+including corrections, topic switches, exact output, arithmetic, and context
+rollover. The final build number is assigned during publish after reconciling
+concurrent `main` work.
 
-## Recommended Cycle 7
+## Recommended Cycle 8
 
 Theme: authenticated cross-organization persistence proof.
 
