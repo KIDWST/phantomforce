@@ -9,13 +9,13 @@
 import {
   currentTenantId, isAdmin, session,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260717-4";
+} from "./store.js?v=phantom-live-20260717-6";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
 const mobilePlaySurface = () => typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;
 const controlsCopy = (game) => mobilePlaySurface() ? "" : String(game?.controls || "").trim();
 const FALLBACK_KEY = "pf.phantomplay.offline.v1";
-const CATEGORIES = ["All", "Arcade", "Puzzle", "Focus", "Strategy", "Creative"];
+const CATEGORIES = ["All", "Arcade", "Puzzle", "Focus", "Strategy", "Sports", "Creative"];
 const GAME_SORTS = ["All", "Solo", "Multiplayer", "Toddler", ...CATEGORIES.filter((cat) => cat !== "All")];
 const STATUSES = [["online", "Online"], ["away", "Away"], ["busy", "Busy"], ["invisible", "Invisible"]];
 // "Game Rating Exposure" — mirrors server PhantomPlayRating (phantomplay.ts).
@@ -67,8 +67,13 @@ const OFFLINE_GAMES = [
   ["signal-match", "Signal Match", "Puzzle", "/app/games/signal-match.html"],
   ["focus-stack", "Focus Stack", "Focus", "/app/games/focus-stack.html"],
   ["phantom-rumble", "Phantom Rumble", "Arcade", "/app/games/phantom-rumble.html?v=2.2.4"],
+  ["rift-frenzy", "Rift Frenzy", "Arcade", "/app/games/rift-frenzy.html?v=2.0.0"],
+  ["crown-circuit", "Crown Circuit", "Strategy", "/app/games/crown-circuit.html?v=1.0.0"],
+  ["kingdom-breakers", "Kingdom Breakers", "Strategy", "/app/games/kingdom-breakers.html?v=1.1.0"],
+  ["tidefront-tactics", "Tidefront Tactics", "Strategy", "/app/games/tidefront-tactics.html?v=1.1.0"],
+  ["skyguard-arena", "Skyguard Arena", "Strategy", "/app/games/skyguard-arena/index.html?v=1.1.0"],
   ["sudoku-signal", "Sudoku Signal", "Focus", "/app/games/sudoku-signal.html"],
-].map(([id, title, category, launchUrl]) => ({ id, title, summary: id === "phantom-rumble" ? "Premium local platform fighter with guard, parry, dodge, ledge-save recovery, bots, and local multiplayer." : "Offline built-in game.", description: "", category, tags: [], contentRating: "everyone", developer: "Tak", kind: "built_in", launchUrl, thumbnail: "", featured: id === "phantom-rumble", version: id === "phantom-rumble" ? "2.2.4" : "1.0.0", controls: id === "phantom-rumble" ? "Keyboard controls." : "", progressSupport: true, scoreSupport: true }));
+].map(([id, title, category, launchUrl]) => ({ id, title, summary: id === "phantom-rumble" ? "Premium local platform fighter with guard, parry, dodge, ledge-save recovery, bots, and local multiplayer." : id === "rift-frenzy" ? "School-to-grow fish survival with rival steals, absorb cooldown, hazards, and bots." : id === "crown-circuit" ? "Strict 1v1 lane-card crown duel." : id === "kingdom-breakers" ? "Physics castle siege with duel castles and wardens." : id === "tidefront-tactics" ? "Wind-read artillery tactics battle." : id === "skyguard-arena" ? "Sentinel defense with waves, upgrades, and duel pressure." : "Offline built-in game.", description: "", category, tags: [], contentRating: ["rift-frenzy", "crown-circuit", "kingdom-breakers", "tidefront-tactics", "skyguard-arena"].includes(id) ? "everyone10" : "everyone", developer: "Tak", kind: "built_in", launchUrl, thumbnail: "", featured: ["phantom-rumble", "rift-frenzy", "crown-circuit", "kingdom-breakers", "tidefront-tactics", "skyguard-arena"].includes(id), version: id === "phantom-rumble" ? "2.2.4" : id === "rift-frenzy" ? "2.0.0" : ["kingdom-breakers", "tidefront-tactics", "skyguard-arena"].includes(id) ? "1.1.0" : "1.0.0", controls: id === "phantom-rumble" ? "Keyboard controls." : "", progressSupport: true, scoreSupport: true }));
 
 function offlineState() {
   let saved = {};

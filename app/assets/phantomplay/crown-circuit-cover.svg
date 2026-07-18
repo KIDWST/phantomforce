@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 720" role="img" aria-labelledby="title desc">
+  <title id="title">Crown Circuit cover art</title>
+  <desc id="desc">Two neon crown towers facing each other across a card battle lane.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#132447"/>
+      <stop offset=".52" stop-color="#08120f"/>
+      <stop offset="1" stop-color="#3b111d"/>
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="7" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <rect width="1200" height="720" fill="url(#bg)"/>
+  <g opacity=".24" stroke="#fff" stroke-width="4" fill="none">
+    <path d="M80 166h1040M80 360h1040M80 554h1040"/>
+    <path d="M600 105v510"/>
+  </g>
+  <g filter="url(#glow)">
+    <path d="M164 530V292h150v238z" fill="#0f3b2c" stroke="#41ffa1" stroke-width="9"/>
+    <path d="M158 292 238 193l82 99z" fill="#1aff96" stroke="#dffff4" stroke-width="7"/>
+    <path d="M886 530V292h150v238z" fill="#401522" stroke="#ff5f7e" stroke-width="9"/>
+    <path d="m879 292 81-99 83 99z" fill="#ff5f7e" stroke="#ffe1ea" stroke-width="7"/>
+    <circle cx="238" cy="384" r="38" fill="#eafff5"/>
+    <circle cx="960" cy="384" r="38" fill="#eafff5"/>
+  </g>
+  <g filter="url(#glow)">
+    <rect x="396" y="224" width="118" height="160" rx="18" fill="#14395b" stroke="#7dd3ff" stroke-width="8"/>
+    <path d="M454 259 486 316l-32 38-32-38z" fill="#41ffa1"/>
+    <rect x="546" y="340" width="118" height="160" rx="18" fill="#4d2b10" stroke="#ffd166" stroke-width="8"/>
+    <path d="M604 372 638 442h-68z" fill="#ffad42"/>
+    <rect x="696" y="224" width="118" height="160" rx="18" fill="#4d1425" stroke="#ff6d8b" stroke-width="8"/>
+    <circle cx="755" cy="304" r="38" fill="#ff6d8b"/>
+  </g>
+  <g filter="url(#glow)" fill="none" stroke-linecap="round">
+    <path d="M337 358c79-89 139-93 202-13" stroke="#41ffa1" stroke-width="11"/>
+    <path d="M864 358c-79-89-139-93-202-13" stroke="#ff6d8b" stroke-width="11"/>
+  </g>
+  <text x="55" y="95" fill="#f4fff9" font-family="Arial Black,Arial,sans-serif" font-size="56" letter-spacing="3">CROWN CIRCUIT</text>
+  <text x="60" y="146" fill="#41ffa1" font-family="ui-monospace,Menlo,monospace" font-size="24" font-weight="900" letter-spacing="5">STRICT 1V1 LANE DUEL</text>
+</svg>

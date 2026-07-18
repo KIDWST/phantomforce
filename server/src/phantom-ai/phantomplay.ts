@@ -72,7 +72,7 @@ export type PhantomPlayGame = {
   engine?: PhantomPlayEngineProfile;
 };
 
-const PHANTOMPLAY_ART_VERSION = "phantomplay-art-20260712";
+const PHANTOMPLAY_ART_VERSION = "phantomplay-art-20260717";
 export const PHANTOMPLAY_ENGINE = {
   version: "2.0-large-map",
   saveStateBytes: 262_144,
@@ -88,8 +88,12 @@ const GAME_ART_BY_SLUG: Record<string, string> = {
   "word-weld": artUrl("word-weld-cover.webp"),
   "reflex-grid": artUrl("reflex-grid-cover.webp"),
   "penalty-kick": artUrl("penalty-kick-cover.webp"),
-  "rift-frenzy": artUrl("neon-drift-cover.webp"),
+  "rift-frenzy": artUrl("rift-frenzy-cover.svg"),
   "serpent-surge": artUrl("reflex-grid-cover.webp"),
+  "crown-circuit": artUrl("crown-circuit-cover.svg"),
+  "kingdom-breakers": artUrl("kingdom-breakers-cover.svg"),
+  "tidefront-tactics": artUrl("tidefront-tactics-cover.svg"),
+  "skyguard-arena": artUrl("skyguard-arena-cover.svg"),
 };
 const CATEGORY_ART: Record<string, string> = {
   Arcade: GAME_ART_BY_SLUG["neon-drift"],
@@ -444,19 +448,19 @@ export const PHANTOMPLAY_BUILT_IN_GAMES: PhantomPlayGame[] = [
   {
     id: "rift-frenzy",
     title: "Rift Frenzy",
-    summary: "Grow from reef bait to apex hunter in a neon multiplayer-style fish arena.",
-    description: "A modern eat-smaller-fish arena with rival schools, growth stages, boost windows, danger reads, and touch-friendly movement. It feels like a live arena even when running as a safe built-in sandbox.",
+    summary: "Carry a valuable fish school, steal from rivals, then absorb at the perfect moment to become enormous.",
+    description: "A school-to-grow ocean survival arena: collect smaller neutral fish into a visible school, protect it from rival steals, dash through exposed schools, absorb the school on a 10-second cooldown, grow permanently, survive predators and hazards, and eliminate every rival until one fish remains.",
     category: "Arcade",
-    tags: ["fish", "arena", "growth", "io", "touch"],
-    contentRating: "everyone",
+    tags: ["fish", "arena", "growth", "io", "multiplayer", "school"],
+    contentRating: "everyone10",
     developer: "Tak",
     developerAvatar: TAK_AVATAR,
     kind: "built_in",
-    launchUrl: "/app/games/rift-frenzy.html?v=1.1.0",
+    launchUrl: "/app/games/rift-frenzy.html?v=2.0.0",
     thumbnail: GAME_ART_BY_SLUG["rift-frenzy"],
     featured: true,
-    version: "1.1.0",
-    controls: "Move with WASD/arrow keys or touch-drag. Eat smaller fish, avoid bigger rivals, boost with Space.",
+    version: "2.0.0",
+    controls: "P1 WASD, Shift dash, Space absorb. P2 arrows, / dash, Enter absorb. P3 IJKL, O dash, U absorb. P4 TFGH, Y dash, R absorb.",
     progressSupport: true,
     scoreSupport: true,
     engine: { tier: "arena-large-map", minVersion: PHANTOMPLAY_ENGINE.version },

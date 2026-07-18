@@ -1,5 +1,109 @@
 # PhantomForce Audit Log
 
+## 2026-07-17 — Cycle 2: DB-Auth Organization Isolation + Browser Switcher Proof
+
+### Surfaces Audited
+
+- Required process docs: `AGENTS.md`, every file under `docs/quality/`,
+  `docs/DATABASE_SETUP.md`, and `docs/ADMIN_RECOVERY.md`.
+- Database-auth live fixture runner:
+  `server/scripts/test-auth-database-live.ps1`.
+- Database-auth API boundary probe:
+  `server/scripts/test-database-auth.mjs`.
+- Admin/customer shell auth and organization switching:
+  `app/js/main.js`, `app/js/orgs.js`, and `app/js/store.js`.
+- Full frontend ESM cache-bust graph under `app/index.html` and `app/js/*.js`.
+- New browser proof harness:
+  `scripts/test-database-auth-org-browser.mjs`.
+
+### Problems Verified
+
+- Q-0002: DB-auth API organization isolation had no browser proof even though
+  org leakage is a real security/business risk.
+- The disposable DB-auth live runner applied migrations but did not regenerate
+  Prisma Client before building the server, causing stale-client TypeScript
+  failures when schema enums/models changed.
+- The top-bar business switcher used local demo workspaces for database-auth
+  admins, which allowed the visible UI selector to drift away from the
+  server-scoped active organization.
+- Secondary app modules used mixed `?v=phantom-live-*` query strings, which
+  created multiple ESM instances of `store.js`/`ctx` and could make auth/org
+  state appear to update and then revert.
+- Newer server-backed modules imported `friendlyBackendError`, but `store.js`
+  did not export it, so the browser app could fail before the sign-in gate.
+
+### Problems Fixed
+
+- Added `npx prisma generate --schema server/prisma/schema.prisma` to the
+  disposable DB-auth live runner before the server build.
+- Added a DB-auth browser smoke harness that signs in as
+  `owner@chicagoshots.local`, verifies the header switcher and profile menu
+  only show `dev-org-chicagoshots`, confirms a direct cross-org switch to
+  `dev-org-phantomforce` returns 403, and proves a tampered local selector
+  cannot change the server active org.
+- Changed the top-bar organization switcher to render from
+  `ctx.session.memberships` for database-auth sessions and to route all DB
+  organization changes through `/auth/switch-org`.
+- Reused the same server-checked switch routine from the profile menu so the
+  header and account menu cannot diverge.
+- Normalized the app shell/module cache id to `phantom-live-20260717-5` across
+  `app/index.html` and all `app/js/*.js` import URLs.
+- Added `friendlyBackendError()` to `app/js/store.js`.
+
+### Commands Run
+
+- `docker --version; docker ps --format '{{.Names}} {{.Ports}}'`
+- `powershell -NoProfile -ExecutionPolicy Bypass -File server\scripts\test-auth-database-live.ps1`
+- `node --check app\js\store.js; node --check app\js\approvalpipeline.js; node --check app\js\main.js; node --check scripts\test-database-auth-org-browser.mjs`
+- `Get-ChildItem app\js -Filter *.js | ForEach-Object { node --check $_.FullName ... }`
+- `npm run test:organization-settings`
+- `git diff --check`
+- `npm run test:change-memory`
+
+### Results
+
+- PASS: disposable Postgres 16 fixture started and all 8 Prisma migrations
+  applied.
+- PASS: Prisma Client regenerated before server build.
+- PASS: `npm run build --workspace @phantomforce/server` completed inside the
+  live DB-auth runner.
+- PASS: DB-auth API probe reported `ALL 40 PASS`, including non-member
+  cross-org CRM/audit/entitlement/invite/switch denials, super-admin switching,
+  invitation lifecycle, role boundaries, plan gates, suspended-org write block,
+  and logout revocation.
+- PASS: Chrome browser proof reported `ok: true` with report:
+  `tmp/database-auth-org-browser/2026-07-17T15-33-25-314Z/report.json`.
+- PASS: browser proof checked database login, ChicagoShots owner sign-in,
+  header/profile switcher membership scoping, direct cross-org 403, and
+  tampered-selector recovery back to `dev-org-chicagoshots`.
+- PASS: `node --check` passed for every `app/js/*.js` file and the new browser
+  proof script.
+- PASS: `npm run test:organization-settings` reported "Organization Settings
+  boundary checks passed."
+- PASS: `git diff --check` exited 0. Git printed line-ending warnings for
+  touched files, but no whitespace errors.
+- FAIL, pre-existing backlog: `npm run test:change-memory` still reports 20
+  missing/forbidden memory-guard patterns across the public-site starter,
+  sidebar bottom zone, Kingdom Breakers, Phantom Rumble, Media Lab layer
+  controls, and customer plan switching.
+
+### Remaining P0/P1
+
+- No P0 verified in this cycle.
+- P1: customer plan switching is still listed by `test:change-memory` as
+  missing backend/frontend coverage and matches the current app-user report
+  that Free/Pro switching hangs.
+- P1: competitor intelligence still needs live endpoint verification and
+  graceful fallback proof for the user-reported 502.
+- P1: game and Media Lab memories remain red in `test:change-memory`; handle
+  them in focused batches rather than overwriting unrelated surfaces.
+
+### Next Task
+
+Resume with the customer-facing app failures: plan-tier switching first, then
+competitor-intelligence 502 handling. Keep the new DB-auth live/browser command
+as a regression check after any auth/org/session change.
+
 ## 2026-07-16 — Daily QA Sweep: PhantomPlay Catalog Restore + Responsive Proof
 
 ### Surfaces Audited

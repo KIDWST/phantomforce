@@ -6,46 +6,46 @@ import {
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260717-4";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260717-4";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260717-4";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260717-4";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260717-4";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260717-4";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260717-4";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260717-4";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260717-4";
-import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260717-4";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260717-4";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260717-4";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260717-4";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260717-4";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260717-4";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260717-4";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260717-4";
-import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260717-4";
-import { mountAmbient } from "./ambient.js?v=phantom-live-20260717-4";
-import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260717-4";
+} from "./store.js?v=phantom-live-20260717-6";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260717-6";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260717-6";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260717-6";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260717-6";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260717-6";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260717-6";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260717-6";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260717-6";
+import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260717-6";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260717-6";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260717-6";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260717-6";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260717-6";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260717-6";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260717-6";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260717-6";
+import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260717-6";
+import { mountAmbient } from "./ambient.js?v=phantom-live-20260717-6";
+import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260717-6";
 import {
   fetchAuthConfig, databaseLogin, databaseLogout, databaseSignup, databaseForgotUsername, databaseForgotPassword,
   databaseResetPassword, databaseVerify2fa, databaseStart2faSetup, databaseConfirm2fa, databaseRegenerate2faBackupCodes, databaseDisable2fa,
   switchOrg, fetchAuthMe, fetchEntitlementsSummary,
-} from "./orgs.js?v=phantom-live-20260717-4";
-import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260717-4";
-import { assetsAvailable } from "./orgs.js?v=phantom-live-20260717-4";
-import { renderPhantomStore } from "./phantomstore.js?v=phantom-live-20260717-4";
-import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260717-4";
+} from "./orgs.js?v=phantom-live-20260717-6";
+import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260717-6";
+import { assetsAvailable } from "./orgs.js?v=phantom-live-20260717-6";
+import { renderPhantomStore } from "./phantomstore.js?v=phantom-live-20260717-6";
+import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260717-6";
 // PhantomPlay V2 platform shell (Home/Solo/Friends/Workspace/Dev Hub) - opt-in
 // while it hardens: set localStorage "pf.phantomplay.v2" = "1" (the V2 shell has
 // a "Classic view" button to switch back). Classic stays the default experience.
-import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260717-4";
+import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260717-6";
 const phantomPlayV2Opted = () => { try { return localStorage.getItem("pf.phantomplay.v2") === "1"; } catch { return false; } };
-import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260717-4";
+import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260717-6";
 import {
   customizeNavigation,
   loadOrganizationCustomization,
-} from "./customization.js?v=phantom-live-20260717-4";
-import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260717-4";
+} from "./customization.js?v=phantom-live-20260717-6";
+import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260717-6";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -759,6 +759,36 @@ function topbarFallbackWorkers() {
   return 3 + (/(^|\.)admin\.phantomforce\.online$/i.test(location.hostname) ? 1 : 0);
 }
 
+function databaseOrgMemberships() {
+  if (!ctx.session?.database) return [];
+  return (ctx.session.memberships || [])
+    .filter((membership) => membership?.orgId)
+    .map((membership) => ({
+      orgId: String(membership.orgId),
+      orgName: String(membership.orgName || membership.orgId),
+      role: String(membership.role || "member"),
+    }));
+}
+
+function databaseOrgLabel(orgId = ctx.session?.orgId) {
+  const match = databaseOrgMemberships().find((membership) => membership.orgId === orgId);
+  return match?.orgName || orgId || "Business";
+}
+
+function orgSwitchOptions() {
+  if (ctx.session?.database) {
+    const memberships = databaseOrgMemberships();
+    if (!memberships.length && ctx.session.orgId) {
+      return `<option value="${esc(ctx.session.orgId)}" selected>${esc(ctx.session.orgId)}</option>`;
+    }
+    return memberships.map((membership) => `
+      <option value="${esc(membership.orgId)}" ${membership.orgId === ctx.session.orgId ? "selected" : ""}>
+        ${esc(membership.orgName)}
+      </option>`).join("");
+  }
+  return store.state.workspaces.map((w) => `<option value="${w.id}" ${w.id === currentWs() ? "selected" : ""}>${esc(w.name)}</option>`).join("");
+}
+
 function renderStatusPills() {
   const attention = store.state.security.some((s) => s.posture && s.posture !== "clean");
   const workforce = topbarBaselineWorkers();
@@ -773,8 +803,8 @@ function renderStatusPills() {
       <span class="pill-v">${p.dot ? `<i class="dot"></i>` : ""}${p.lock ? `<i class="lock" aria-hidden="true">🔒</i>` : ""}<span class="pill-v-text" title="${esc(p.value)}">${esc(p.value)}</span></span>
     </div>`).join("")
     + (isAdmin() ? `
-    <label class="ws-switch" title="Switch isolated business workspace">
-      <select data-org-select aria-label="Switch workspace">${store.state.workspaces.map((w) => `<option value="${w.id}" ${w.id === currentWs() ? "selected" : ""}>${esc(w.name)}</option>`).join("")}</select>
+    <label class="ws-switch" title="${ctx.session?.database ? "Switch active business organization" : "Switch isolated business workspace"}">
+      <select data-org-select aria-label="${ctx.session?.database ? "Switch active business organization" : "Switch workspace"}">${orgSwitchOptions()}</select>
     </label>` : "");
   const sel = $("[data-org-select]");
   if (sel) sel.onchange = () => switchWorkspace(sel.value);
@@ -795,12 +825,50 @@ function renderStatusPills() {
 }
 
 async function switchWorkspace(id) {
-  const before = currentWs();
   if (!isAdmin()) {
     renderStatusPills();
-    return;
+    return false;
   }
-  if (!setWorkspace(id)) { renderStatusPills(); return; }
+  if (ctx.session?.database) {
+    const memberships = databaseOrgMemberships();
+    const target = memberships.find((membership) => membership.orgId === id);
+    const before = ctx.session.orgId || null;
+    if (id === before) {
+      renderStatusPills();
+      return true;
+    }
+    if (!target) {
+      pushActivity("Security", `blocked business switch to ${id || "unknown"} because this account is not a member.`);
+      store.save();
+      renderStatusPills();
+      speak("That business is not available for this account.", "", "alert");
+      return false;
+    }
+    const result = await switchOrg(id);
+    accountMenuOpen = false;
+    notifOpen = false;
+    if (!result.ok) {
+      pushActivity("Security", "business switch was refused by the server - this account is not a member.");
+      store.save();
+      renderStatusPills();
+      renderAccountMenu();
+      speak("The server refused that business switch.", "", "alert");
+      return false;
+    }
+    await refreshNavEntitlements({ rerender: false });
+    pushActivity("Account", `switched active business to ${databaseOrgLabel(id)}.`);
+    store.save();
+    clearOverlayOnly();
+    stageReact("nav", 640);
+    setGhostMood("listening", { emotion: "bright", ms: 1200 });
+    speak(`${databaseOrgLabel(id)} is active. Organization data is isolated.`, "", "bright");
+    routeWorkspace("dashboard");
+    renderConsole();
+    console.info("[PhantomForce] database organization switched", { from: before, to: ctx.session.orgId, memberships: memberships.map((m) => m.orgId) });
+    return true;
+  }
+  const before = currentWs();
+  if (!setWorkspace(id)) { renderStatusPills(); return false; }
   await loadOrganizationCustomization({ onApplied: refreshCustomizedNavigation });
   await refreshNavEntitlements({ rerender: false });
   accountMenuOpen = false;
@@ -812,6 +880,7 @@ async function switchWorkspace(id) {
   if (activePageId) renderWorkspacePage(activePageId, false);
   else renderConsole();
   console.info("[PhantomForce] workspace switched", { from: before, to: currentWs(), tenant: currentTenantId() });
+  return true;
 }
 let clockTimer = 0;
 let accountMenuOpen = false;
@@ -978,19 +1047,7 @@ function renderAccountMenu() {
     btn.onclick = async () => {
       const orgId = btn.dataset.userMenuOrg;
       if (orgId === ctx.session?.orgId) { accountMenuOpen = false; renderAccountMenu(); return; }
-      const result = await switchOrg(orgId);
-      accountMenuOpen = false;
-      renderAccountMenu();
-      if (result.ok) {
-        await refreshNavEntitlements({ rerender: false });
-        pushActivity("Account", `switched active business to ${ctx.session.memberships.find((m) => m.orgId === orgId)?.orgName || orgId}.`);
-        store.save();
-        routeWorkspace("dashboard");
-        renderConsole();
-      } else {
-        pushActivity("Account", "business switch was refused by the server — this account is not a member.");
-        store.save();
-      }
+      await switchWorkspace(orgId);
     };
   });
 }
@@ -1229,7 +1286,7 @@ const MODES = {
   admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260717-4";
+const POSE_VERSION = "phantom-live-20260717-6";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;

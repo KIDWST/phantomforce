@@ -1,6 +1,6 @@
-/* PhantomForce — PhantomPlay Flagship Five.
+/* PhantomForce — PhantomPlay Flagship Games.
 
-   Five substantially deeper PhantomPlay games (real progression,
+   Substantially deeper PhantomPlay games (real progression,
    cross-network multiplayer via the existing workspace-relay room model,
    in-app tutorials) than any of the 23 existing built-in games. Following
    the exact precedent set by ./phantomplay-v2.ts: this file owns its own
@@ -19,7 +19,7 @@
 
 import { PHANTOMPLAY_BUILT_IN_GAMES, PHANTOMPLAY_ENGINE, type PhantomPlayGame } from "./phantomplay.js";
 
-// All 5 planned flagship games are now built and ready to ship. Each entry's
+// The flagship games are now built and ready to ship. Each entry's
 // launchUrl points at the real on-disk file verified under app/games/.
 // thumbnail points at an original placeholder SVG cover under
 // app/assets/phantomplay/ (a simple on-brand placeholder generated per game
@@ -67,6 +67,28 @@ export const PHANTOMPLAY_FLAGSHIP_GAMES: PhantomPlayGame[] = [
     featured: true,
     version: "1.1.0",
     controls: "Click/tap dock cards and lane slots to place and upgrade Sentinels. Q triggers Overcharge Pulse, P pauses, Escape deselects. Mouse and touch both work through the same pointer input.",
+    progressSupport: true,
+    scoreSupport: true,
+    engine: { tier: "arena-large-map", minVersion: PHANTOMPLAY_ENGINE.version },
+  },
+  {
+    id: "crown-circuit",
+    title: "Crown Circuit",
+    summary: "Strict 1v1 lane-card crown duel with elixir, towers, card picks, and PhantomPlay room support.",
+    description: "A royale-style lane battler: two players pick cards, spend elixir, deploy onto three lanes, and break the crown tower. It is deliberately not padded with a fake solo bot mode; play same-keyboard local or in a private PhantomPlay room with two signed-in players.",
+    category: "Strategy",
+    tags: ["card", "lane", "royale", "multiplayer", "pvp"],
+    contentRating: "everyone10",
+    contentDescriptors: ["strategic_complexity", "competitive_play"],
+    multiplayerDescriptor: "Local same-keyboard duel or two-player private room duel. No public matchmaking, chat, or voice.",
+    chatDescriptor: "No player chat or voice",
+    developer: "Tak",
+    kind: "built_in",
+    launchUrl: "/app/games/crown-circuit.html?v=1.0.0",
+    thumbnail: "/app/assets/phantomplay/crown-circuit-cover.svg?v=1.0.0",
+    featured: true,
+    version: "1.0.0",
+    controls: "Two-player only. Blue uses 1-4 and Q/W/E. Red uses 7-0 and I/O/P.",
     progressSupport: true,
     scoreSupport: true,
     engine: { tier: "arena-large-map", minVersion: PHANTOMPLAY_ENGINE.version },
