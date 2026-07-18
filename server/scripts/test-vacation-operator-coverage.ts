@@ -96,6 +96,62 @@ try {
   assert(untoggledType.task.status !== "blocked" || untoggledType.task.blockedReason !== "policy", "Task types with no coverage toggle must never be reported as policy-blocked.");
   if (untoggledType.task.status === "queued") await module.cancelVacationOperatorTask(session, untoggledType.task.id);
 
+  /* Pause-without-ending: pausing suspends coverage (check-ins and new
+     operator queueing) while keeping the away window, wallet, and settings
+     intact — and paused time must never be counted as covered. */
+  const beforePause = await module.getVacationModeStatus(session);
+  const pausedResult = await module.pauseVacationMode(session);
+  assert(pausedResult !== null, "Pausing an active Away Mode should succeed.");
+  assert(pausedResult.status.paused === true, "Status must report the paused state.");
+  assert(pausedResult.status.enabled === true, "Pausing must not end the away window.");
+  assert(pausedResult.status.startedAt === beforePause.startedAt, "Pausing must not restart the away window.");
+  assert(pausedResult.status.nextCheckInAt === null, "No check-in should be scheduled while paused.");
+  assert(pausedResult.status.operatorWallet.included === beforePause.operatorWallet.included, "Pausing must not touch the Operator Credit wallet.");
+
+  const pausedCheck = await module.runVacationModeCheckIn("paused-test");
+  assert(pausedCheck.active === 1, "A paused workspace is still an active away window.");
+  const statusWhilePaused = await module.getVacationModeStatus(session);
+  assert(statusWhilePaused.lastCheckInAt === beforePause.lastCheckInAt, "The check-in engine must skip a paused workspace instead of logging coverage checks.");
+
+  const pausedTask = await module.createVacationOperatorTask(session, {
+    type: "attend_meeting",
+    title: "Should not queue while coverage is paused",
+    instructions: "Paused coverage must refuse new operator work.",
+  });
+  assert(pausedTask.task.status === "blocked", "New operator work must be blocked while coverage is paused.");
+  assert(pausedTask.task.blockedReason === "paused", "The block must be reported as a pause block, not policy or credits.");
+  assert(pausedTask.wallet.reserved === 0, "A pause-blocked task must not reserve Operator Credits.");
+
+  await new Promise((resolveWait) => setTimeout(resolveWait, 25));
+  const resumedResult = await module.resumeVacationMode(session);
+  assert(resumedResult !== null, "Resuming an active Away Mode should succeed.");
+  assert(resumedResult.status.paused === false, "Resume should clear the paused state.");
+  assert(resumedResult.status.enabled === true, "Resume must keep the away window active.");
+  assert(resumedResult.status.pausedMs > 0, "Paused time must be counted separately so the digest never reports it as covered.");
+  assert(typeof resumedResult.status.nextCheckInAt === "string", "Resume should reschedule coverage check-ins.");
+
+  const afterResumeTask = await module.createVacationOperatorTask(session, {
+    type: "attend_meeting",
+    title: "Queues again after resume",
+    instructions: "Coverage is live again.",
+  });
+  assert(afterResumeTask.task.status === "queued", "Operator work must queue again after resume.");
+
+  /* Take over: the owner can mark a task owner-handled; it releases reserved
+     credits and is permanently excluded from operator processing. */
+  const takenOver = await module.takeOverVacationOperatorTask(session, afterResumeTask.task.id);
+  assert(takenOver?.status === "taken_over", "Take over must mark the task owner-handled.");
+  const afterTakeOver = await module.getVacationModeStatus(session);
+  assert(afterTakeOver.operatorWallet.reserved === 0, "Take over must release the task's reserved credits.");
+  assert(afterTakeOver.metrics.operatorTasksOpen === 0, "A taken-over task must not count as open operator work.");
+  let takeOverUpdateRejected = false;
+  try {
+    await module.updateVacationOperatorTask(session, afterResumeTask.task.id, { status: "in_progress" });
+  } catch {
+    takeOverUpdateRejected = true;
+  }
+  assert(takeOverUpdateRejected, "The operator desk must not be able to move a taken-over task.");
+
   const final = await module.getVacationModeStatus(session);
   assert(final.operatorWallet.reserved === 0, "No reserved credits should remain after the coverage-enforcement checks clean up.");
   await module.deactivateVacationMode(session);
@@ -166,6 +222,39 @@ try {
   });
   assert(ownerDecision.statusCode === 200, "The platform owner must retain cross-tenant review access.");
 
+  /* Pause/resume routes must be tenant-scoped exactly like activate/deactivate,
+     and take-over must 404 for a task id that belongs to another tenant. */
+  const pauseInactive = await app.inject({ method: "POST", url: "/api/vacation-mode/pause", headers: { Authorization: `Bearer ${clientToken}` } });
+  assert(pauseInactive.statusCode === 409, `Pausing an inactive Away Mode should 409 (got ${pauseInactive.statusCode}).`);
+
+  const clientActivate = await app.inject({ method: "POST", url: "/api/vacation-mode/activate", headers: { Authorization: `Bearer ${clientToken}` }, payload: {} });
+  assert(clientActivate.statusCode === 200, "A client should be able to activate its own Away Mode.");
+  const clientPause = await app.inject({ method: "POST", url: "/api/vacation-mode/pause", headers: { Authorization: `Bearer ${clientToken}` } });
+  assert(clientPause.statusCode === 200, "A client should be able to pause its own coverage.");
+  assert((clientPause.json() as { status: { paused: boolean } }).status.paused === true, "The pause route should report the paused state.");
+
+  const otherTenantStatus = await app.inject({ method: "GET", url: "/api/vacation-mode/status", headers: { Authorization: `Bearer ${otherClientToken}` } });
+  assert(otherTenantStatus.statusCode === 200, "The other tenant's status route should still work.");
+  assert((otherTenantStatus.json() as { paused?: boolean }).paused !== true, "Pausing one tenant must not pause another tenant's workspace.");
+
+  const clientResume = await app.inject({ method: "POST", url: "/api/vacation-mode/resume", headers: { Authorization: `Bearer ${clientToken}` } });
+  assert(clientResume.statusCode === 200, "A client should be able to resume its own coverage.");
+  assert((clientResume.json() as { status: { paused: boolean } }).status.paused === false, "The resume route should clear the paused state.");
+
+  const clientTask = await app.inject({ method: "POST", url: "/api/vacation-mode/operator-tasks", headers: { Authorization: `Bearer ${clientToken}` }, payload: { type: "lead_follow_up", title: "Tenant-scoped take-over target", instructions: "Cross-tenant take-over isolation proof." } });
+  assert(clientTask.statusCode === 200, "A client should be able to save an operator request.");
+  const clientTaskId = (clientTask.json() as { task: { id: string } }).task.id;
+
+  const crossTenantTakeOver = await app.inject({ method: "POST", url: `/api/vacation-mode/operator-tasks/${clientTaskId}/take-over`, headers: { Authorization: `Bearer ${otherClientToken}` } });
+  assert(crossTenantTakeOver.statusCode === 404, `A client of one org must not be able to take over another org's operator task (got ${crossTenantTakeOver.statusCode}).`);
+
+  const ownTakeOver = await app.inject({ method: "POST", url: `/api/vacation-mode/operator-tasks/${clientTaskId}/take-over`, headers: { Authorization: `Bearer ${clientToken}` } });
+  assert(ownTakeOver.statusCode === 200, "The owning tenant should be able to take over its own task.");
+  assert((ownTakeOver.json() as { task: { status: string } }).task.status === "taken_over", "The take-over route should mark the task owner-handled.");
+
+  const clientDeactivate = await app.inject({ method: "POST", url: "/api/vacation-mode/deactivate", headers: { Authorization: `Bearer ${clientToken}` } });
+  assert(clientDeactivate.statusCode === 200, "Client cleanup deactivate should succeed.");
+
   await app.close();
 
   console.log(JSON.stringify({
@@ -179,6 +268,11 @@ try {
     fakeApprovals: 0,
     finalReservedCredits: final.operatorWallet.reserved,
     clientWorkspaceIsolated: true,
+    pausedTaskBlockedReason: pausedTask.task.blockedReason,
+    pausedMsCounted: resumedResult.status.pausedMs > 0,
+    takeOverStatus: takenOver?.status,
+    takeOverExcludedFromOperatorProcessing: takeOverUpdateRejected,
+    pauseResumeTenantIsolated: true,
   }, null, 2));
 } finally {
   await rm(root, { recursive: true, force: true });

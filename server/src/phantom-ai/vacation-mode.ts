@@ -17,7 +17,7 @@ export type VacationApprovalDecision = "approve" | "reject" | "snooze";
 export type VacationRiskLevel = "low" | "medium" | "high" | "urgent";
 export type VacationEventType = "observed" | "drafted" | "queued_approval" | "completed" | "blocked" | "needs_setup" | "notification_sent";
 export type OperatorTaskType = "phone_call" | "attend_meeting" | "lead_follow_up" | "booking_coordination" | "client_message" | "research" | "exception_triage" | "other";
-export type OperatorTaskStatus = "needs_setup" | "blocked" | "queued" | "assigned" | "in_progress" | "completed" | "canceled";
+export type OperatorTaskStatus = "needs_setup" | "blocked" | "queued" | "assigned" | "in_progress" | "completed" | "canceled" | "taken_over";
 
 export type VacationPermissions = {
   watchInbox: boolean;
@@ -113,16 +113,24 @@ export type OperatorTask = {
   createdAt: string;
   updatedAt: string;
   // Distinguishes "blocked, out of Operator Credits" from "blocked, the
-  // owner's coverage plan doesn't authorize this kind of work" — both use
-  // status: "blocked", but the owner needs to know which one it is (one is
-  // solved by buying credits, the other by changing a policy toggle).
-  blockedReason?: "credits" | "policy" | null;
+  // owner's coverage plan doesn't authorize this kind of work" from
+  // "blocked, coverage is paused" — all use status: "blocked", but the owner
+  // needs to know which one it is (credits are solved by buying credits,
+  // policy by changing a toggle, paused by resuming coverage).
+  blockedReason?: "credits" | "policy" | "paused" | null;
 };
 
 type VacationWorkspaceState = {
   workspaceId: string;
   enabled: boolean;
   mode: VacationModeMode;
+  // Pause-without-ending: while paused, the away window, wallet, and settings
+  // stay intact, but coverage (check-ins and new operator-task queueing) is
+  // suspended. pausedTotalMs accumulates completed pause spans for the
+  // current away window so the digest never counts paused time as covered.
+  paused: boolean;
+  pausedAt: string | null;
+  pausedTotalMs: number;
   startedAt: string | null;
   endedAt: string | null;
   lastActivityAt: string | null;
@@ -249,6 +257,9 @@ function freshState(session: AccessSession): VacationWorkspaceState {
     workspaceId,
     enabled: false,
     mode: "off",
+    paused: false,
+    pausedAt: null,
+    pausedTotalMs: 0,
     startedAt: null,
     endedAt: null,
     lastActivityAt: createdAt,
@@ -277,6 +288,9 @@ function migrateState(raw: Record<string, unknown>, session: AccessSession): Vac
     ...raw,
     enabled,
     mode: enabled ? "hands_off" : "off",
+    paused: enabled && raw.paused === true,
+    pausedAt: enabled && raw.paused === true && typeof raw.pausedAt === "string" ? raw.pausedAt : null,
+    pausedTotalMs: Math.max(0, Number(raw.pausedTotalMs) || 0),
     permissions: { ...base.permissions, ...(raw.permissions as Partial<VacationPermissions> || {}) },
     outOfOffice: { ...base.outOfOffice, ...(raw.outOfOffice as Partial<OutOfOffice> || {}) },
     notificationPreferences: { ...base.notificationPreferences, ...(raw.notificationPreferences as Partial<NotificationPreferences> || {}) },
@@ -310,6 +324,27 @@ async function getState(session: AccessSession) {
   store.workspaces[id] = state;
   await writeStore(store);
   return { store, state };
+}
+
+/** Total paused time for the current away window, including a still-open pause. */
+function pausedMsFor(state: VacationWorkspaceState): number {
+  let open = 0;
+  if (state.enabled && state.paused && state.pausedAt) {
+    const since = Date.parse(state.pausedAt);
+    if (Number.isFinite(since)) open = Math.max(0, Date.now() - since);
+  }
+  return state.pausedTotalMs + open;
+}
+
+/** Close an open pause span into pausedTotalMs (on resume, deactivate, or auto-end). */
+function foldPause(state: VacationWorkspaceState, timestamp: string) {
+  if (state.paused && state.pausedAt) {
+    const since = Date.parse(state.pausedAt);
+    const until = Date.parse(timestamp);
+    if (Number.isFinite(since) && Number.isFinite(until)) state.pausedTotalMs += Math.max(0, until - since);
+  }
+  state.paused = false;
+  state.pausedAt = null;
 }
 
 function pushActivity(state: VacationWorkspaceState, event: VacationActivity) {
@@ -434,6 +469,9 @@ export async function getVacationModeStatus(session: AccessSession) {
   return {
     enabled: state.enabled,
     mode: state.enabled ? "hands_off" : "off",
+    paused: state.enabled && state.paused,
+    pausedAt: state.enabled && state.paused ? state.pausedAt : null,
+    pausedMs: pausedMsFor(state),
     startedAt: state.startedAt,
     endedAt: state.endedAt,
     lastActivityAt: state.lastActivityAt,
@@ -458,6 +496,9 @@ export async function activateVacationMode(session: AccessSession, body: unknown
   state.enabled = true;
   state.mode = "hands_off";
   state.operatorCoverage.enabled = true;
+  state.paused = false;
+  state.pausedAt = null;
+  state.pausedTotalMs = 0;
   state.startedAt = now();
   state.endedAt = null;
   state.nextCheckInAt = new Date(Date.now() + checkIntervalMs()).toISOString();
@@ -470,15 +511,56 @@ export async function activateVacationMode(session: AccessSession, body: unknown
 
 export async function deactivateVacationMode(session: AccessSession) {
   const { store, state } = await getState(session);
+  const endedAt = now();
+  foldPause(state, endedAt);
   state.enabled = false;
   state.mode = "off";
-  state.endedAt = now();
+  state.endedAt = endedAt;
   state.nextCheckInAt = null;
   const event = activity(state.workspaceId, { actor: "User", eventType: "blocked", riskLevel: "low", message: "Away Mode stopped. No new coverage work will start.", relatedEntity: "Instant stop" });
   pushActivity(state, event);
   await writeStore(store);
   const ledgerWritten = await ledger(session, state, event);
   return { status: await getVacationModeStatus(session), activity: event, ledgerWritten };
+}
+
+/** Suspend coverage without ending the away window. Wallet, window, and
+ *  settings are untouched; check-ins and new operator queueing stop until
+ *  resume. Returns null when Away Mode is not active (nothing to pause). */
+export async function pauseVacationMode(session: AccessSession) {
+  const { store, state } = await getState(session);
+  if (!state.enabled) return null;
+  if (!state.paused) {
+    state.paused = true;
+    state.pausedAt = now();
+    state.nextCheckInAt = null;
+    const event = activity(state.workspaceId, { actor: "User", eventType: "blocked", riskLevel: "low", message: "Coverage paused — nothing runs until you resume. The away window, Operator Credits, and coverage plan are unchanged.", relatedEntity: "Pause coverage" });
+    pushActivity(state, event);
+    await writeStore(store);
+    const ledgerWritten = await ledger(session, state, event);
+    return { status: await getVacationModeStatus(session), activity: event, ledgerWritten };
+  }
+  await writeStore(store);
+  return { status: await getVacationModeStatus(session), activity: null, ledgerWritten: false };
+}
+
+/** Resume coverage after a pause. Idempotent when not paused. Returns null
+ *  when Away Mode is not active. */
+export async function resumeVacationMode(session: AccessSession) {
+  const { store, state } = await getState(session);
+  if (!state.enabled) return null;
+  if (state.paused) {
+    const timestamp = now();
+    foldPause(state, timestamp);
+    state.nextCheckInAt = new Date(Date.now() + checkIntervalMs()).toISOString();
+    const event = activity(state.workspaceId, { actor: "User", eventType: "completed", riskLevel: "low", message: "Coverage resumed. Scheduled check-ins and operator queueing are back on; the paused time is not counted as covered.", relatedEntity: "Resume coverage" });
+    pushActivity(state, event);
+    await writeStore(store);
+    const ledgerWritten = await ledger(session, state, event);
+    return { status: await getVacationModeStatus(session), activity: event, ledgerWritten };
+  }
+  await writeStore(store);
+  return { status: await getVacationModeStatus(session), activity: null, ledgerWritten: false };
 }
 
 export async function updateVacationModeSettings(session: AccessSession, body: unknown) {
@@ -521,12 +603,16 @@ export async function createVacationOperatorTask(session: AccessSession, body: u
   // this kind of work while they're away? This is checked before the
   // credit-balance check so a policy block never gets misread as a billing
   // problem.
+  // Pause enforcement: while coverage is paused, the operator task processor
+  // must not accept new work — same enforcement point as the coverage-plan
+  // toggles, checked first because it is the broadest suspension.
+  const pausedBlocked = state.enabled && state.paused;
   const allowField = TASK_TYPE_ALLOW_FIELD[type];
-  const policyBlocked = allowField ? state.operatorCoverage[allowField] !== true : false;
+  const policyBlocked = !pausedBlocked && (allowField ? state.operatorCoverage[allowField] !== true : false);
   const available = state.operatorWallet.included - state.operatorWallet.used - state.operatorWallet.reserved;
-  const creditsBlocked = !policyBlocked && available < creditCost;
-  const status: OperatorTaskStatus = policyBlocked || creditsBlocked ? "blocked" : humanStaffingReady() ? "queued" : "needs_setup";
-  const blockedReason: OperatorTask["blockedReason"] = policyBlocked ? "policy" : creditsBlocked ? "credits" : null;
+  const creditsBlocked = !pausedBlocked && !policyBlocked && available < creditCost;
+  const status: OperatorTaskStatus = pausedBlocked || policyBlocked || creditsBlocked ? "blocked" : humanStaffingReady() ? "queued" : "needs_setup";
+  const blockedReason: OperatorTask["blockedReason"] = pausedBlocked ? "paused" : policyBlocked ? "policy" : creditsBlocked ? "credits" : null;
   const timestamp = now();
   const task: OperatorTask = { id: `vac-op-${randomUUID()}`, workspaceId: state.workspaceId, type, title, instructions: text(input.instructions, 1800), status, creditCost, scheduledFor: typeof input.scheduledFor === "string" && input.scheduledFor ? text(input.scheduledFor, 60) : null, assignedTo: null, outcome: null, createdAt: timestamp, updatedAt: timestamp, blockedReason };
   if (status !== "blocked") state.operatorWallet.reserved += creditCost;
@@ -535,9 +621,11 @@ export async function createVacationOperatorTask(session: AccessSession, body: u
     ? `Queued human operator work: ${title}.`
     : status === "needs_setup"
       ? `Saved operator request: ${title}. Human staffing must be connected before assignment.`
-      : policyBlocked
-        ? `Blocked operator request: ${title}. "${TASK_TYPE_LABEL[type]}" is turned off in your Away Mode coverage plan — enable it in the coverage plan if you want Phantom to queue this kind of work while you're away.`
-        : `Blocked operator request: ${title}. Not enough Operator Credits.`;
+      : pausedBlocked
+        ? `Blocked operator request: ${title}. Coverage is paused — nothing runs until you resume Away Mode coverage.`
+        : policyBlocked
+          ? `Blocked operator request: ${title}. "${TASK_TYPE_LABEL[type]}" is turned off in your Away Mode coverage plan — enable it in the coverage plan if you want Phantom to queue this kind of work while you're away.`
+          : `Blocked operator request: ${title}. Not enough Operator Credits.`;
   const event = activity(state.workspaceId, { actor: "Workflow", eventType: status === "blocked" ? "blocked" : status === "needs_setup" ? "needs_setup" : "queued_approval", riskLevel: status === "blocked" ? "medium" : "low", message, relatedEntity: title, metadata: { operatorTaskId: task.id, operatorCredits: creditCost, blockedReason } });
   pushActivity(state, event);
   await writeStore(store);
@@ -559,10 +647,33 @@ export async function cancelVacationOperatorTask(session: AccessSession, id: str
   return task;
 }
 
+/** "Take over": the owner marks a task owner-handled. Reserved credits are
+ *  released and the task is excluded from operator processing for good. */
+export async function takeOverVacationOperatorTask(session: AccessSession, id: string) {
+  const { store, state } = await getState(session);
+  const task = state.operatorTasks.find((item) => item.id === id);
+  if (!task) return null;
+  if (task.status === "completed" || task.status === "canceled") throw new Error("This request is already closed, so there is nothing to take over.");
+  if (task.status !== "taken_over") {
+    if (["queued", "assigned", "in_progress", "needs_setup"].includes(task.status)) state.operatorWallet.reserved = Math.max(0, state.operatorWallet.reserved - task.creditCost);
+    task.status = "taken_over";
+    task.assignedTo = "Owner";
+    task.updatedAt = now();
+    const event = activity(state.workspaceId, { actor: "User", eventType: "blocked", riskLevel: "low", message: `Owner took over: ${task.title}. The operator desk released it and any reserved credits were returned.`, relatedEntity: task.title, metadata: { operatorTaskId: task.id, takenOver: true } });
+    pushActivity(state, event);
+    await writeStore(store);
+    await ledger(session, state, event);
+  }
+  return task;
+}
+
 export async function updateVacationOperatorTask(session: AccessSession, id: string, body: unknown) {
   const { store, state } = await getState(session);
   const task = state.operatorTasks.find((item) => item.id === id);
   if (!task) return null;
+  // Take-over exclusion: once the owner takes a task over, the operator desk
+  // may not move it again — it is no longer operator work.
+  if (task.status === "taken_over") throw new Error("The owner took this task over; it is no longer operator work.");
   const input = body && typeof body === "object" ? body as Record<string, unknown> : {};
   const status = input.status as OperatorTaskStatus;
   if (!["assigned", "in_progress", "completed", "blocked"].includes(status)) throw new Error("Unsupported operator task status.");
@@ -615,6 +726,7 @@ export async function runVacationModeCheckIn(reason = "scheduled") {
     if (!state.enabled) continue;
     active += 1;
     if (state.operatorCoverage.awayEnd && Date.parse(state.operatorCoverage.awayEnd) <= Date.now()) {
+      foldPause(state, timestamp);
       state.enabled = false;
       state.mode = "off";
       state.endedAt = timestamp;
@@ -622,6 +734,10 @@ export async function runVacationModeCheckIn(reason = "scheduled") {
       pushActivity(state, activity(state.workspaceId, { actor: "Workflow", eventType: "completed", riskLevel: "low", message: "Away Mode ended at the planned return time.", relatedEntity: "Coverage schedule" }));
       continue;
     }
+    // Pause enforcement: a paused workspace gets no coverage checks and no
+    // check-in receipts — nothing runs until the owner resumes. Auto-end at
+    // the planned return time (above) still applies while paused.
+    if (state.paused) continue;
     const pending = await queueApprovals(state.workspaceId);
     const urgent = pending.filter((item) => item.riskLevel === "urgent" || item.riskLevel === "high").length;
     state.lastCheckInAt = timestamp;

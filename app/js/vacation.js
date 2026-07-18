@@ -1,10 +1,18 @@
-import { session as accessSession, ago } from "./store.js?v=phantom-live-20260718-1";
+import { session as accessSession, ago, friendlyBackendError } from "./store.js?v=phantom-live-20260718-3";
 
 const esc = (value = "") => String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 const cacheKey = "pf.vacation.statusCache.v2";
 const taskLabels = { phone_call: "Take a call", attend_meeting: "Attend a meeting", lead_follow_up: "Follow up with a lead", booking_coordination: "Handle a booking", client_message: "Handle a client message", research: "Research something", exception_triage: "Handle an exception", other: "Other human work" };
 
 let state = { loading: true, error: "", authRequired: false, status: null, activity: [], approvals: [], tasks: [] };
+
+// Live work view: honest polling (no websockets). While Away Mode is active
+// and the tab is visible, refresh every POLL_MS; polling is a no-op when the
+// document is hidden, the mode is off, or the owner is mid-typing in a form.
+const POLL_MS = 10_000;
+let pollTimer = null;
+let pollEl = null;
+let lastUpdatedAt = null;
 
 function authHeaders(extra = {}) {
   const token = typeof accessSession?.token === "function" ? accessSession.token() : "";
@@ -15,7 +23,10 @@ async function api(path, options = {}) {
   const response = await fetch(path, { ...options, headers: authHeaders({ ...(options.body ? { "Content-Type": "application/json" } : {}), ...(options.headers || {}) }) });
   const data = await response.json().catch(() => ({}));
   if (!response.ok || data.ok === false) {
-    const error = new Error(data.error || data.message || `Away Mode request failed (${response.status})`);
+    const error = new Error(friendlyBackendError(response.status, data.error || data.message, {
+      authMessage: "Sign in with your owner account to use Away Mode.",
+      fallbackPrefix: "Away Mode request failed",
+    }));
     error.status = response.status;
     throw error;
   }
@@ -41,7 +52,29 @@ async function load() {
     api("/api/vacation-mode/operator-tasks?limit=50"),
   ]);
   state = { loading: false, error: "", status, activity: activity.activity || [], approvals: approvals.approvals || [], tasks: tasks.tasks || [] };
+  lastUpdatedAt = Date.now();
   cacheStatus(status);
+}
+
+function pollingActive() {
+  return !!state.status?.enabled && !state.loading && !state.error && !state.authRequired;
+}
+
+function formBusy(el) {
+  const active = document.activeElement;
+  return !!(active && el.contains(active) && active.matches("input, textarea, select"));
+}
+
+async function backgroundRefresh(el) {
+  if (!el.isConnected) { clearInterval(pollTimer); pollTimer = null; return; }
+  if (document.hidden || !pollingActive() || formBusy(el)) return;
+  try {
+    await load();
+    render(el);
+  } catch {
+    /* Keep the last good view; the next poll tick retries. Hard errors
+       surface through the manual refresh path, not the background poll. */
+  }
 }
 
 function dateValue(value) {
@@ -57,6 +90,22 @@ function fmt(value) {
   try { return new Date(value).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }); } catch { return String(value); }
 }
 
+function dur(ms) {
+  if (!Number.isFinite(ms) || ms < 60_000) return "under a minute";
+  const minutes = Math.round(ms / 60_000);
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  if (hours < 24) return rest ? `${hours}h ${rest}m` : `${hours}h`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ${hours % 24}h`;
+}
+
+function updatedLabel() {
+  if (!lastUpdatedAt) return "";
+  try { return new Date(lastUpdatedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" }); } catch { return ""; }
+}
+
 function checkbox(key, label, detail, checked) {
   return `<label class="vm-cover-toggle"><input type="checkbox" data-cover="${esc(key)}" ${checked ? "checked" : ""}><span><b>${esc(label)}</b><i>${esc(detail)}</i></span></label>`;
 }
@@ -69,24 +118,27 @@ function sinceLine(status) {
 
 function statusHero(status) {
   const enabled = !!status.enabled;
+  const paused = enabled && !!status.paused;
   const plannedEnd = status.operatorCoverage?.awayEnd;
   return `<section class="vm-command ${enabled ? "is-active" : ""}">
     <div class="vm-command-copy">
       <span class="vm-kicker">Away Mode</span>
-      <h2>${enabled ? "ON — Phantom is covering." : "OFF — nothing runs without you."}</h2>
-      <p class="vm-since">${esc(sinceLine(status))}${enabled && plannedEnd ? ` · turns itself off ${fmt(plannedEnd)}` : ""}</p>
+      <h2>${paused ? "PAUSED — coverage is on hold." : enabled ? "ON — Phantom is covering." : "OFF — nothing runs without you."}</h2>
+      <p class="vm-since">${esc(sinceLine(status))}${enabled && plannedEnd ? ` · turns itself off ${fmt(plannedEnd)}` : ""}${paused ? ` · paused since ${fmt(status.pausedAt)}` : ""}</p>
       <ul class="vm-behaviors">
-        <li><b>Scheduled check-ins.</b> Phantom reviews the business on a timer and logs every check.${enabled ? ` Next check ${fmt(status.nextCheckInAt)}${status.lastCheckInAt ? `, last ${fmt(status.lastCheckInAt)}` : ""}.` : ""}</li>
+        ${paused ? `<li><b>Coverage paused — nothing runs until you resume.</b> Check-ins and operator queueing are suspended. Your away window, wallet, and coverage plan are untouched, and paused time is not counted as covered.</li>` : ""}
+        <li><b>Scheduled check-ins.</b> Phantom reviews the business on a timer and logs every check.${paused ? " Check-ins are paused right now." : enabled ? ` Next check ${fmt(status.nextCheckInAt)}${status.lastCheckInAt ? `, last ${fmt(status.lastCheckInAt)}` : ""}.` : ""}</li>
         <li><b>Exceptions only.</b> While away, only urgent and high-risk approvals reach you. Routine approvals wait for your return.</li>
         <li><b>Human work by request.</b> Jobs you queue go to the operator desk and spend Operator Credits — never AI credits.</li>
         <li><b>Nothing sent externally on its own.</b> Every outbound action still requires your approval, away or not.</li>
-        ${plannedEnd ? `<li><b>Automatic end.</b> Away Mode switches itself off at your planned return time (${fmt(plannedEnd)}).</li>` : ""}
+        ${plannedEnd ? `<li><b>Automatic end.</b> Away Mode switches itself off at your planned return time (${fmt(plannedEnd)})${paused ? ", even while paused" : ""}.</li>` : ""}
       </ul>
     </div>
     <div class="vm-command-state">
-      <span class="vm-state-pill ${enabled ? "on" : "off"}">${enabled ? "ON" : "OFF"}</span>
-      <strong>${enabled ? "Phantom is on duty" : "Away Mode is off"}</strong>
-      <small>${enabled ? `Away since ${fmt(status.startedAt)}` : "Coverage starts the moment you turn it on"}</small>
+      <span class="vm-state-pill ${enabled && !paused ? "on" : "off"}">${paused ? "PAUSED" : enabled ? "ON" : "OFF"}</span>
+      <strong>${paused ? "Coverage paused — nothing runs until you resume" : enabled ? "Phantom is on duty" : "Away Mode is off"}</strong>
+      <small>${paused ? `Paused since ${fmt(status.pausedAt)} · away since ${fmt(status.startedAt)}` : enabled ? `Away since ${fmt(status.startedAt)}` : "Coverage starts the moment you turn it on"}</small>
+      ${enabled ? `<button class="btn ${paused ? "btn-primary" : ""}" type="button" data-vm-pause>${paused ? "Resume coverage" : "Pause coverage"}</button>` : ""}
       <button class="btn ${enabled ? "vm-danger" : "btn-primary"}" type="button" data-vm-toggle>${enabled ? "Turn off Away Mode" : "Turn on Away Mode"}</button>
     </div>
   </section>`;
@@ -119,8 +171,13 @@ function digestCard(status, activity, approvals) {
   const queued = notable.filter((e) => e.eventType === "queued_approval").length;
   const flagged = notable.filter((e) => e.eventType === "blocked" || e.eventType === "needs_setup").length;
   const waiting = approvals.length;
-  const range = `${fmt(status.startedAt)} – ${win.live ? "now" : fmt(status.endedAt)}`;
+  // Honest coverage time: paused spans are not counted as covered.
+  const pausedMs = Math.max(0, Number(status.pausedMs) || 0);
+  const coveredMs = Math.max(0, (win.end - win.start) - pausedMs);
+  const range = `${fmt(status.startedAt)} – ${win.live ? (status.paused ? "now (paused)" : "now") : fmt(status.endedAt)}`;
   const stats = `<div class="vm-digest-stats">
+    <span><b>${esc(dur(coveredMs))}</b> covered</span>
+    ${pausedMs >= 60_000 ? `<span><b>${esc(dur(pausedMs))}</b> paused, not covered</span>` : ""}
     <span><b>${checkIns}</b> check-in${checkIns === 1 ? "" : "s"}</span>
     <span><b>${drafted}</b> drafted</span>
     <span><b>${completed}</b> completed</span>
@@ -199,6 +256,7 @@ function taskForm(coverage = {}) {
 
 function blockedReasonCopy(task) {
   if (task.status !== "blocked") return "";
+  if (task.blockedReason === "paused") return "Coverage is paused — resume Away Mode coverage to queue this.";
   if (task.blockedReason === "policy") return `Your coverage plan has "${esc(taskLabels[task.type] || "this type of work")}" turned off.`;
   if (task.blockedReason === "credits") return "Not enough Operator Credits reserved.";
   return "";
@@ -208,10 +266,12 @@ function tasksCard(tasks) {
   const visible = tasks.filter((task) => task.status !== "canceled").slice(0, 20);
   return `<section class="vm-card vm-wide"><div class="vm-card-head"><div><span class="vm-kicker">Operator desk</span><h3>Human work queue</h3></div><span>${visible.length} jobs</span></div>
     <div class="vm-op-list">${visible.length ? visible.map((task) => `<article class="vm-op-task">
-      <div class="vm-op-task-top"><span class="vm-state-pill ${task.status === "completed" ? "on" : task.status === "blocked" ? "off" : ""}">${esc(task.status.replaceAll("_", " "))}</span><button class="vm-task-x" type="button" data-op-cancel="${esc(task.id)}" title="Cancel request" aria-label="Cancel request">×</button></div>
+      <div class="vm-op-task-top"><span class="vm-state-pill ${task.status === "completed" ? "on" : task.status === "blocked" || task.status === "taken_over" ? "off" : ""}">${esc(task.status.replaceAll("_", " "))}</span>${task.status !== "taken_over" ? `<button class="vm-task-x" type="button" data-op-cancel="${esc(task.id)}" title="Cancel request" aria-label="Cancel request">×</button>` : ""}</div>
       <h4>${esc(task.title)}</h4><p>${esc(task.instructions || "No extra instructions.")}</p>
       ${task.status === "blocked" ? `<p class="vm-op-blocked-reason">${blockedReasonCopy(task)}</p>` : ""}
+      ${task.status === "taken_over" ? `<p class="vm-op-blocked-reason">You took this over — the operator desk will not touch it.</p>` : ""}
       <div class="vm-op-task-meta"><span>${esc(taskLabels[task.type] || "Human work")}</span><span>${task.creditCost} credits</span><span>${task.scheduledFor ? fmt(task.scheduledFor) : "As soon as possible"}</span></div>
+      ${!["completed", "canceled", "taken_over"].includes(task.status) ? `<div class="vm-op-task-actions"><button class="btn btn-quiet" type="button" data-op-takeover="${esc(task.id)}">Take over — I'll handle it myself</button></div>` : ""}
     </article>`).join("") : `<div class="vm-empty">No human work queued. Your operator desk starts clean.</div>`}</div>
   </section>`;
 }
@@ -222,8 +282,13 @@ function exceptionsCard(approvals) {
   </section>`;
 }
 
-function activityCard(events) {
-  return `<section class="vm-card"><div class="vm-card-head"><div><span class="vm-kicker">Proof</span><h3>Full activity log</h3></div><span>${events.length} receipts</span></div><div class="vm-feed">${events.slice(0, 25).map((event) => `<article class="vm-feed-item vm-event-${esc(event.eventType)}"><span></span><div><b>${esc(event.message)}</b><p>${esc(event.actor)} · ${esc(event.relatedEntity || event.eventType.replaceAll("_", " "))}</p></div><time>${ago(event.createdAt)}</time></article>`).join("") || `<div class="vm-empty">No activity yet.</div>`}</div></section>`;
+function activityCard(status, events) {
+  // Live work view: newest-first receipts, refreshed by honest polling while
+  // Away Mode is active and the tab is visible.
+  const live = !!status?.enabled && !document.hidden;
+  const sorted = events.slice().sort((a, b) => (Date.parse(b.createdAt) || 0) - (Date.parse(a.createdAt) || 0));
+  const updated = updatedLabel();
+  return `<section class="vm-card"><div class="vm-card-head"><div><span class="vm-kicker">Proof</span><h3>Full activity log</h3></div><span>${live ? `<span class="vm-state-pill on" title="Auto-refreshing every ${Math.round(POLL_MS / 1000)}s while this tab is visible">LIVE</span> ` : ""}${sorted.length} receipts${updated ? ` · updated ${esc(updated)}` : ""}</span></div><div class="vm-feed">${sorted.slice(0, 25).map((event) => `<article class="vm-feed-item vm-event-${esc(event.eventType)}"><span></span><div><b>${esc(event.message)}</b><p>${esc(event.actor)} · ${esc(event.relatedEntity || event.eventType.replaceAll("_", " "))}</p></div><time>${ago(event.createdAt)}</time></article>`).join("") || `<div class="vm-empty">No activity yet.</div>`}</div></section>`;
 }
 
 function readinessCard(items) {
@@ -238,7 +303,7 @@ function render(el) {
   }
   if (state.error) { el.innerHTML = `<div class="vm-error"><b>Away Mode could not load.</b><span>${esc(state.error)}</span><button class="btn" data-retry>Retry</button></div>`; return; }
   const s = state.status;
-  el.innerHTML = `<div class="vm">${statusHero(s)}${digestCard(s, state.activity, state.approvals)}<div class="vm-grid vm-grid-power">${coveragePlan(s)}${walletCard(s)}${taskForm(s.operatorCoverage || {})}${tasksCard(state.tasks)}${exceptionsCard(state.approvals)}${activityCard(state.activity)}${readinessCard(s.readiness || [])}</div></div>`;
+  el.innerHTML = `<div class="vm">${statusHero(s)}${digestCard(s, state.activity, state.approvals)}<div class="vm-grid vm-grid-power">${coveragePlan(s)}${walletCard(s)}${taskForm(s.operatorCoverage || {})}${tasksCard(state.tasks)}${exceptionsCard(state.approvals)}${activityCard(s, state.activity)}${readinessCard(s.readiness || [])}</div></div>`;
 }
 
 async function refresh(el) {
@@ -266,8 +331,18 @@ export function renderVacationMode(el, opts = {}) {
   const notify = opts.notify || (() => {});
   render(el);
   if (!state.status && !state.error) void refresh(el);
+  pollEl = el;
+  if (pollTimer) clearInterval(pollTimer);
+  pollTimer = setInterval(() => { if (pollEl) void backgroundRefresh(pollEl); }, POLL_MS);
   if (el.dataset.vmBound === "true") return;
   el.dataset.vmBound = "true";
+  // Catch up as soon as the tab becomes visible again (polling pauses while
+  // document.hidden), and drop the stale LIVE pill when it hides.
+  document.addEventListener("visibilitychange", () => {
+    if (!pollEl || !pollEl.isConnected) return;
+    if (!document.hidden) void backgroundRefresh(pollEl);
+    else if (pollingActive() && !formBusy(pollEl)) render(pollEl);
+  });
   el.addEventListener("click", async (event) => {
     const button = event.target.closest("button");
     if (!button) return;
@@ -278,6 +353,12 @@ export function renderVacationMode(el, opts = {}) {
         notify("Away Mode", state.status?.enabled ? "Away Mode is on. Phantom is covering." : "Away Mode is off.");
         return;
       }
+      if (button.matches("[data-vm-pause]")) {
+        const wasPaused = !!state.status?.paused;
+        await mutate(el, wasPaused ? "/api/vacation-mode/resume" : "/api/vacation-mode/pause");
+        notify("Away Mode", wasPaused ? "Coverage resumed. Check-ins and operator queueing are back on." : "Coverage paused — nothing runs until you resume.");
+        return;
+      }
       if (button.matches("[data-vm-save]")) { await mutate(el, "/api/vacation-mode/settings", "PATCH", payload(el)); notify("Away Mode", "Coverage plan saved."); return; }
       if (button.matches("[data-op-create]")) {
         const get = (name) => el.querySelector(`[data-op-field="${name}"]`)?.value || "";
@@ -285,6 +366,7 @@ export function renderVacationMode(el, opts = {}) {
         notify("Operator desk", "Human-work request saved."); return;
       }
       if (button.dataset.opCancel) { await mutate(el, `/api/vacation-mode/operator-tasks/${encodeURIComponent(button.dataset.opCancel)}/cancel`); notify("Operator desk", "Request canceled and reserved credits released."); return; }
+      if (button.dataset.opTakeover) { await mutate(el, `/api/vacation-mode/operator-tasks/${encodeURIComponent(button.dataset.opTakeover)}/take-over`); notify("Operator desk", "You took it over. The operator desk released it and returned any reserved credits."); return; }
       if (button.dataset.approval) { await mutate(el, `/api/vacation-mode/approvals/${encodeURIComponent(button.dataset.approval)}/decision`, "POST", { decision: button.dataset.decision }); notify("Away Mode", "Decision recorded."); }
     } catch (error) {
       if (error?.status === 401) {
