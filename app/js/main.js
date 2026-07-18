@@ -446,14 +446,14 @@ const BASE_NAV = [
   { id: "assets",     label: "Asset Cloud",  icon: "media", ws: "assets", dbOnly: true, dept: "Creative" },
   { id: "sites",      label: "Websites",     icon: "site",  ws: "sites", dept: "Technology" },
   { id: "money",      label: "Accounting",   icon: "dollar", ws: "money", dept: "Finance" },
-  { id: "automation", label: "Automations",  icon: "auto",  ws: "automation", dept: "Operations" },
+  { id: "automation", label: "Automations",  icon: "auto",  ws: "automation", dept: "Operations", navHidden: true },
   { id: "planner",    label: "Planner",       icon: "calendar", ws: "planner", dept: "Operations" },
   { id: "voicechannels", label: "Voice Channels", icon: "chat", ws: "voicechannels", dept: "Operations" },
   { id: "approvals",  label: "Approvals",    icon: "check", ws: "approvals", badge: true, dept: "Operations" },
-  { id: "workers",    label: "Workforce",    icon: "users", ws: "workforce", dept: "Operations" },
+  { id: "workers",    label: "Workforce",    icon: "users", ws: "workforce", dept: "Operations", navHidden: true },
   { id: "intelligence", label: "Competitor Intel", icon: "chart", ws: "intelligence", dept: "Intelligence" },
   { id: "analytics",  label: "Analytics",    icon: "chart", ws: "analytics", dept: "Intelligence" },
-  { id: "memory",     label: "Memory",       icon: "brain", ws: "memory", navZone: "bottom", quiet: true },
+  { id: "memory",     label: "Memory",       icon: "brain", ws: "memory", navZone: "bottom", quiet: true, navHidden: true },
   { id: "settings",   label: "Settings",     icon: "cog",   ws: "settings", navZone: "bottom" },
   { id: "developer",  label: "Developer",    icon: "dev",   ws: "developer", ownerOnly: true, navZone: "bottom" },
   { id: "vacation",   label: "Away Mode",    icon: "auto",  ws: "vacation", statusPill: true, navZone: "bottom" },
@@ -527,7 +527,9 @@ function navFeatureDisabled(item) {
 
 function orderedNavItems() {
   return NAV
-    .filter(canAccessSurface)
+    /* navHidden entries (Automations, Workforce, Memory) stay out of every
+       nav surface but remain reachable via dashboard widgets and deep links */
+    .filter((item) => !item.navHidden && canAccessSurface(item))
     .map((item) => ({ ...item, navDisabled: navFeatureDisabled(item) }))
     /* bottom-zone items always sit after the main list — a workspace
        customization order must never strand a tucked item mid-sidebar */
@@ -1603,9 +1605,40 @@ function setMode(id) {
   focusWithoutScroll(input);
 }
 
+function operatingBriefingText({ includePrompt = false } = {}) {
+  const m = moneyView();
+  const pend = visible(store.state.approvals).filter((a) => a.status === "pending").length;
+  const attention = attentionItems();
+  const tasks = todaysPlan().length;
+  const openSignals = attention.length;
+  const parts = [];
+  if (m.transactions.length) parts.push(`${signedMoney(m.netCash)} net cashflow`);
+  if (pend) parts.push(`${pend} approval${pend > 1 ? "s" : ""} waiting`);
+  if (tasks) parts.push(`${tasks} plan item${tasks > 1 ? "s" : ""}`);
+  if (openSignals && !pend) parts.push(`${openSignals} signal${openSignals > 1 ? "s" : ""} to review`);
+  const state = parts.length ? parts.slice(0, 3).join(" · ") : "No real work loaded yet";
+  return includePrompt ? `${state}. What do you want handled first?` : state;
+}
+
+function recentHandledProof() {
+  const activity = visible(store.state.activity || [])
+    .filter((item) => item?.title || item?.activity || item?.text)
+    .slice(0, 3);
+  if (!activity.length) return "";
+  return `Handled recently: ${activity.map((item) => esc(item.title || item.activity || item.text || "Activity recorded")).join(" · ")}`;
+}
+
 function renderHero() {
   const name = (ctx.session?.name || "there").split(/\s+/)[0];
   $("[data-hero-name]").textContent = `${name}.`;
+  const sub = $("[data-hero-sub]");
+  if (sub) sub.textContent = operatingBriefingText();
+  const proof = $("[data-hero-proof]");
+  if (proof) {
+    const text = recentHandledProof();
+    proof.hidden = !text;
+    proof.innerHTML = text ? `<span>${text}</span>` : "";
+  }
 }
 
 /* ============================ command briefing ============================
@@ -1773,21 +1806,21 @@ function renderPlan() {
   const plan = todaysPlan();
   if (!plan.length) {
     $("[data-plan]").innerHTML = `
-      <div class="section-head"><h2>Owner action</h2></div>
+      <div class="section-head"><h2>Need from you</h2></div>
       <button class="plan-inner" data-open-ws="settings">
         <svg class="plan-donut" viewBox="0 0 72 72" aria-hidden="true">
           <circle cx="36" cy="36" r="30" class="plan-track"/>
           <text x="36" y="40" class="plan-pct">0</text>
         </svg>
         <span class="plan-copy">
-          <b>No owner decision waiting.</b>
-          <i>Start from the prompt or create a task roadmap.</i>
+          <b>No real work loaded yet.</b>
+            <i>Open Settings to finish organization setup, plan testing, or tool connections.</i>
         </span>
         <span class="plan-arrow">${svg("arrow")}</span>
       </button>`;
     return;
   }
-  const msg = plan.length === 1 ? "One decision needs you." : "A few decisions need you.";
+  const msg = plan.length === 1 ? "One real thing needs you." : "A few real things need you.";
   /* Each plan item knows the surface it lives on. Hardcoding "approvals" here
      sent a task or lead straight to an empty approval queue — the count said
      one thing was waiting and the destination said nothing was. */
@@ -1796,7 +1829,7 @@ function renderPlan() {
     ? plan[0].text
     : `${plan.length} things need you.`;
   $("[data-plan]").innerHTML = `
-    <div class="section-head"><h2>Owner action</h2></div>
+    <div class="section-head"><h2>Need from you</h2></div>
     <button class="plan-inner" data-open-ws="${target}">
       <svg class="plan-donut" viewBox="0 0 72 72" aria-hidden="true">
         <circle cx="36" cy="36" r="30" class="plan-track"/>
@@ -1810,7 +1843,7 @@ function renderPlan() {
     </button>`;
 }
 
-/* ============================ mission queue ============================ */
+/* ============================ work in motion ============================ */
 const AGENT_STATE = {
   active: { label: "WORKING", cls: "run" },
   waiting: { label: "WAITING", cls: "wait" },
@@ -1818,49 +1851,67 @@ const AGENT_STATE = {
   blocked: { label: "BLOCKED", cls: "block" },
   idle: { label: "READY", cls: "queue" },
 };
-function dashboardWorkItems() {
-  const agentItems = (store.state.agents || []).map((a) => {
+function workInMotionItems() {
+  const items = [];
+  visible(store.state.agents || []).forEach((a) => {
     const st = AGENT_STATE[a.status] || AGENT_STATE.idle;
-    return {
-      title: a.name || "Phantom task",
-      sub: a.role || a.mission || "Ready for the next step",
-      open: "workforce",
+    items.push({
       icon: "auto",
-      status: st,
-    };
+      title: a.name,
+      sub: a.role || a.mission || "Worker lane",
+      badge: st.label,
+      cls: st.cls,
+      open: "workforce",
+      weight: a.status === "blocked" ? 50 : a.status === "needs-approval" ? 40 : a.status === "active" ? 30 : 10,
+    });
   });
-  const taskItems = visible(store.state.tasks || [])
+  /* owner task roadmap stays part of work in motion — real tasks only */
+  visible(store.state.tasks || [])
     .filter((t) => ["new", "working", "waiting", "needs-approval", "blocked"].includes(t.status || "new"))
-    .map((t) => {
+    .forEach((t) => {
       const st = t.status === "working" ? AGENT_STATE.active
         : t.status === "blocked" ? AGENT_STATE.blocked
         : t.status === "waiting" || t.status === "needs-approval" ? AGENT_STATE["needs-approval"]
         : AGENT_STATE.idle;
-      return {
+      items.push({
+        icon: "check",
         title: t.title || "Untitled task",
         sub: t.next || t.notes || "Task from the owner roadmap",
+        badge: st.label,
+        cls: st.cls,
         open: "workforce",
-        icon: "check",
-        status: st,
-      };
+        weight: t.status === "blocked" ? 45 : t.status === "working" ? 28 : 22,
+      });
     });
-  return [...taskItems, ...agentItems].slice(0, 4);
+  visible(store.state.activity || [])
+    .filter((item) => item?.title || item?.activity || item?.text)
+    .slice(0, 4)
+    .forEach((item) => items.push({
+      icon: "check",
+      title: item.title || item.activity || item.text || "Activity recorded",
+      sub: item.who || item.source || (item.at ? `Proof ${ago(item.at)}` : "Proof logged"),
+      badge: "PROOF",
+      cls: "run",
+      open: "activity",
+      weight: 20,
+    }));
+  return items
+    .sort((a, b) => (b.weight || 0) - (a.weight || 0))
+    .slice(0, 4);
 }
 function renderQueue() {
-  const items = dashboardWorkItems();
+  const items = workInMotionItems();
   $("[data-queue-count]").textContent = items.length;
-  $("[data-queue]").innerHTML = items.map((item) => {
-    const st = item.status || AGENT_STATE.idle;
-    return `
+  $("[data-queue]").innerHTML = items.map((item) => `
     <button class="queue-item" data-open-ws="${esc(item.open)}">
-      <span class="queue-ic">${svg(item.icon)}</span>
+      <span class="queue-ic">${svg(item.icon || "auto")}</span>
       <span class="queue-meta"><b>${esc(item.title)}</b><i>${esc(item.sub || "")}</i></span>
-      <span class="queue-badge q-${st.cls}">${st.label}</span>
-    </button>`;
-  }).join("") || `<div class="queue-empty">
-    <b>No active tasks.</b>
-    <span>Tell Phantom to create a task and it will map the next steps here.</span>
-  </div>`;
+      <span class="queue-badge q-${esc(item.cls)}">${esc(item.badge)}</span>
+    </button>`).join("") || `
+      <div class="queue-empty">
+        <b>No work moving yet.</b>
+        <i>Start an outcome or connect real business data.</i>
+      </div>`;
 }
 
 /* ============================ quick actions ============================ */
@@ -1871,11 +1922,54 @@ const QUICK = [
   { label: "Check live analytics", icon: "chart",   open: "analytics" },
   { label: "Open PhantomStore", icon: "spark",   open: "phantomstore" },
 ];
+let renderedNextMoves = [];
+function nextMoveActions() {
+  const moves = [];
+  const seen = new Set();
+  const add = (item) => {
+    if (!item?.label) return;
+    const key = `${item.open || ""}:${item.run || ""}:${item.label}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    moves.push(item);
+  };
+  attentionItems().slice(0, 3).forEach((item, index) => {
+    add({
+      label: index === 0 ? "Prepare decision packet" : decisionCtaLabel(item),
+      sub: item.title,
+      icon: item.icon || "arrow",
+      run: index === 0 ? decisionCommandText(item, "prepare") : "",
+      open: index === 0 ? "" : item.open || "activity",
+    });
+    if (index === 0) {
+      add({
+        label: decisionCtaLabel(item),
+        sub: "Review evidence and gate",
+        icon: item.icon || "arrow",
+        open: item.open || "activity",
+      });
+    }
+  });
+  todaysPlan().slice(0, 2).forEach((item) => add({
+    label: "Open plan item",
+    sub: item.text,
+    icon: "target",
+    open: item.open || "approvals",
+  }));
+  if (!moves.length) {
+    add({ label: "Add business context", sub: "Tell Phantom what this org sells, who it serves, and what matters.", icon: "cog", open: "settings" });
+    add({ label: "Create first outcome", sub: "Start from a result, not a tab.", icon: "target", run: "Create my first business outcome" });
+  }
+  return moves.slice(0, 5);
+}
 function renderQuick() {
-  $("[data-quick]").innerHTML = QUICK.map((q, i) => `
+  const title = $("[data-quick-title]");
+  if (title) title.textContent = "Next moves";
+  renderedNextMoves = nextMoveActions();
+  $("[data-quick]").innerHTML = renderedNextMoves.map((q, i) => `
     <button class="quick-item" data-quick="${i}">
       <span class="quick-ic">${svg(q.icon)}</span>
-      <span>${esc(q.label)}</span>
+      <span><b>${esc(q.label)}</b>${q.sub ? `<i>${esc(q.sub)}</i>` : ""}</span>
       <span class="quick-arrow">${svg("arrow")}</span>
     </button>`).join("");
 }
@@ -1931,29 +2025,29 @@ function serverAttentionItems() {
   const items = [];
   const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
   const pending = pulse?.approvals?.available ? pulse.approvals.pending || 0 : 0;
-  if (pending > 0) items.push({ icon: "check", tone: "warn", title: `${plural(pending, "approval")} waiting on you`, sub: "Server-confirmed approval queue", open: "approvals" });
+  if (pending > 0) items.push({ kind: "approval", weight: 400, icon: "check", tone: "warn", title: `${plural(pending, "approval")} waiting on you`, sub: "Server-confirmed approval queue", evidence: `/api/organization/pulse reports ${plural(pending, "pending approval")}.`, confidence: "High", why: "Owner-gated work cannot move until you decide.", open: "approvals" });
   const failed = pulse?.agentRuns?.available ? pulse.agentRuns.failed || 0 : 0;
-  if (failed > 0) items.push({ icon: "bolt", tone: "warn", title: `${plural(failed, "agent run")} failed — work stopped`, sub: "Open Automations to see what broke", open: "automation" });
+  if (failed > 0) items.push({ kind: "agent-failure", weight: 390, icon: "bolt", tone: "warn", title: `${plural(failed, "agent run")} failed — work stopped`, sub: "Open Automations to see what broke", evidence: `/api/organization/pulse reports ${plural(failed, "failed agent run")}.`, confidence: "High", why: "A failed run means a workflow needs inspection before the next move.", open: "automation" });
   const running = pulse?.agentRuns?.available ? pulse.agentRuns.running || 0 : 0;
-  if (running > 0) items.push({ icon: "clock", tone: "ok", title: `${plural(running, "job")} running now`, sub: "Agents are working in the background", open: "automation" });
+  if (running > 0) items.push({ kind: "running", weight: 120, icon: "clock", tone: "ok", title: `${plural(running, "job")} running now`, sub: "Agents are working in the background", evidence: `/api/organization/pulse reports ${plural(running, "running job")}.`, confidence: "High", why: "Work is already moving; monitor it before starting duplicate work.", open: "automation" });
   const failing = pulse?.automations?.available ? pulse.automations.failing || [] : [];
-  if (failing.length > 0) items.push({ icon: "bolt", tone: "warn", title: `Automation failing: ${failing[0].name || failing[0].id}`, sub: failing[0].lastSummary || `${failing.length} automation(s) reporting failures`, open: "automation" });
+  if (failing.length > 0) items.push({ kind: "automation-failure", weight: 300, icon: "bolt", tone: "warn", title: `Automation failing: ${failing[0].name || failing[0].id}`, sub: failing[0].lastSummary || `${failing.length} automation(s) reporting failures`, evidence: failing[0].lastSummary || `${failing.length} failing automation record(s) from server pulse.`, confidence: "High", why: "A broken automation can silently stop recurring business work.", open: "automation" });
   const opp = serverOpportunity && serverOpportunityTenant === currentTenantId() ? serverOpportunity : null;
-  if (opp) items.push({ icon: "bolt", tone: "ok", title: `Opportunity: ${opp.title}`, sub: `${opp.action.label || "Open"} — from live graph analysis`, open: opp.action.route });
+  if (opp) items.push({ kind: "opportunity", weight: 110, icon: "bolt", tone: "ok", title: `Opportunity: ${opp.title}`, sub: `${opp.action.label || "Open"} — from live graph analysis`, evidence: "Live graph analysis returned a high-impact opportunity.", confidence: "Medium", why: "This may become an outcome if the evidence checks out.", open: opp.action.route });
   return items;
 }
 function attentionItems() {
   const items = [];
   visible(store.state.approvals).filter((a) => a.status === "pending").slice(0, 3)
-    .forEach((a) => items.push({ icon: "check", tone: "warn", title: a.title, sub: "Waiting on your approval", open: "approvals" }));
+    .forEach((a) => items.push({ kind: "approval", weight: 400, icon: "check", tone: "warn", title: a.title, sub: "Waiting on your approval", evidence: `Approval queue status: ${a.status}.`, confidence: "High", why: "External or risky work remains blocked until you approve it.", open: "approvals" }));
   visible(store.state.security).filter((s) => s.posture && s.posture !== "clean")
-    .forEach(() => items.push({ icon: "shield", tone: "warn", title: "Security posture needs a look", sub: "Protect flagged attention", open: "protect" }));
+    .forEach((s) => items.push({ kind: "security", weight: 320, icon: "shield", tone: "warn", title: "Security posture needs a look", sub: "Protect flagged attention", evidence: `Protect posture: ${s.posture}.`, confidence: "Medium", why: "Security attention should be reviewed before more automation is trusted.", open: "protect" }));
   visible(store.state.leads).filter((l) => l.due && new Date(l.due).getTime() < Date.now() + 864e5 && l.status !== "won" && l.status !== "lost").slice(0, 2)
-    .forEach((l) => items.push({ icon: "users", tone: "warn", title: `Follow up: ${l.name}`, sub: l.next || "Due today", open: "leads" }));
+    .forEach((l) => items.push({ kind: "follow-up", weight: 310, icon: "users", tone: "warn", title: `Follow up: ${l.name}`, sub: l.next || "Due today", evidence: `CRM due date: ${l.due}. Status: ${l.status || "open"}.`, confidence: "High", why: "A due follow-up can turn into lost pipeline if it sits.", open: "leads" }));
   visible(store.state.proposals).filter((p) => p.status === "sent-ready").slice(0, 2)
-    .forEach((p) => items.push({ icon: "dollar", tone: "ok", title: `Quote ready to send: ${p.client}`, sub: fmtMoney(p.price), open: "proposals" }));
+    .forEach((p) => items.push({ kind: "quote-ready", weight: 220, icon: "dollar", tone: "ok", title: `Quote ready to send: ${p.client}`, sub: fmtMoney(p.price), evidence: `Proposal status: ${p.status}. Value: ${fmtMoney(p.price)}.`, confidence: "High", why: "A send-ready quote is prepared work waiting on a final human gate.", open: "proposals" }));
   items.push(...serverAttentionItems());
-  return items;
+  return items.sort((a, b) => (b.weight || 0) - (a.weight || 0));
 }
 /* ============================ notifications ============================ */
 let notifOpen = false;
@@ -1971,6 +2065,1028 @@ function renderNotifs() {
   menu.innerHTML = `<div class="notif-head">Notifications${items.length ? ` · ${items.length}` : ""}</div>` + (items.length
     ? items.map((it) => `<button class="notif-item" data-open-ws="${it.open}"><span class="notif-item-ic notif-${it.tone}">${svg(it.icon)}</span><span class="notif-item-body"><b>${esc(it.title)}</b><i>${esc(it.sub)}</i></span></button>`).join("")
     : `<div class="notif-empty">You're all caught up.</div>`);
+}
+
+/* ============================ attention strip ============================ */
+/* The dashboard leads with the same attentionItems() the bell uses — the
+   strip sits directly under the greeting so nothing waiting on the owner
+   can hide behind a menu. It renders nothing (stays hidden) when clean. */
+function renderAttentionStrip() {
+  const strip = $("[data-attention-strip]");
+  if (!strip) return;
+  const items = attentionItems().slice(0, 4);
+  strip.hidden = items.length === 0;
+  if (!items.length) { strip.innerHTML = ""; return; }
+  strip.innerHTML = `
+    <div class="attention-head">
+      <p>Needs your attention <span class="attention-count">${items.length}</span></p>
+    </div>
+    <div class="attention-row">
+      ${items.map((it) => `
+        <button class="attention-chip is-${esc(it.tone)}" data-open-ws="${esc(it.open)}" type="button">
+          <span class="attention-ic">${svg(it.icon)}</span>
+          <span class="attention-copy"><b>${esc(it.title)}</b><i>${esc(it.sub)}</i></span>
+        </button>`).join("")}
+    </div>`;
+}
+
+function commandSnapshotItems() {
+  const signals = attentionItems();
+  const blockers = unblockCenterItems();
+  const moving = workInMotionItems();
+  const next = nextMoveActions()[0];
+  const widgets = missionWidgets();
+  const byId = (id) => widgets.find((item) => item.id === id) || {};
+  const money = byId("money");
+  const media = byId("media");
+  const leads = byId("leads");
+  const result = money.stat && !["$0", "0"].includes(String(money.stat).trim())
+    ? { label: money.stat, sub: money.sub || "money tracked", open: "money" }
+    : media.stat && !/^0\b/.test(String(media.stat))
+      ? { label: media.stat, sub: media.sub || "media movement", open: "media" }
+      : leads.stat && !/^0\b/.test(String(leads.stat))
+        ? { label: leads.stat, sub: leads.sub || "pipeline movement", open: "leads" }
+        : { label: "none yet", sub: "no real result logged", open: "money" };
+  return [
+    {
+      key: "health",
+      label: "Health",
+      value: signals.length ? `${signals.length} signal${signals.length === 1 ? "" : "s"}` : "clear",
+      sub: signals[0]?.title || "No urgent signal is open.",
+      open: signals[0]?.open || "activity",
+      tone: signals.length ? "watch" : "ok",
+    },
+    {
+      key: "needs",
+      label: "Needs",
+      value: blockers.length ? `${blockers.length} gate${blockers.length === 1 ? "" : "s"}` : "none",
+      sub: blockers[0]?.need || "Nothing is blocked by you.",
+      open: blockers[0]?.open || "approvals",
+      tone: blockers.length ? "watch" : "ok",
+    },
+    {
+      key: "moving",
+      label: "Moving",
+      value: moving.length ? `${moving.length} lane${moving.length === 1 ? "" : "s"}` : "quiet",
+      sub: moving[0]?.title || "No worker run is active.",
+      open: moving[0]?.open || "activity",
+      tone: moving.length ? "ok" : "quiet",
+    },
+    {
+      key: "result",
+      label: "Result",
+      value: result.label,
+      sub: result.sub,
+      open: result.open,
+      tone: result.label === "none yet" ? "quiet" : "ok",
+    },
+    {
+      key: "next",
+      label: "Next",
+      value: next?.label || "add context",
+      sub: next?.sub || "Tell Phantom what matters for this business.",
+      open: next?.open || "settings",
+      run: next?.run || "",
+      tone: next ? "watch" : "quiet",
+    },
+  ];
+}
+
+function renderCommandSnapshot() {
+  const mount = $("[data-command-snapshot]");
+  if (!mount) return;
+  const items = commandSnapshotItems();
+  mount.innerHTML = `
+    <div class="snap-head">
+      <p>Command snapshot</p>
+      <span>${esc(operatingBriefingText({ includePrompt: false }))}</span>
+    </div>
+    <div class="snap-grid">
+      ${items.map((item) => `
+        <button class="snap-card is-${esc(item.tone)}" ${item.open ? `data-open-ws="${esc(item.open)}"` : `data-command-run="${esc(item.run || "")}"`} type="button">
+          <span>${esc(item.label)}</span>
+          <b>${esc(item.value)}</b>
+          <i>${esc(item.sub || "")}</i>
+        </button>`).join("")}
+    </div>`;
+}
+
+function operatingSpaceItems() {
+  const signals = attentionItems();
+  const outcomes = activeOutcomeItems();
+  const departments = operatingPulseItems();
+  const readyDepartments = departments.filter((dept) => dept.tone === "ok").length;
+  const mappedDepartments = departments.filter((dept) => dept.stat !== "0").length;
+  return [
+    {
+      id: "command",
+      label: "Command",
+      value: signals.length ? `${signals.length} signal${signals.length === 1 ? "" : "s"}` : "clear",
+      sub: "briefing, next move, and direct ask",
+      action: "Focus command",
+      attr: "data-command-focus",
+      tone: signals.length ? "watch" : "ok",
+    },
+    {
+      id: "outcomes",
+      label: "Outcomes",
+      value: outcomes.length ? `${outcomes.length} active` : "capture",
+      sub: "result-first rooms for real business goals",
+      action: "Capture outcome",
+      attr: 'data-command-run="Create my first business outcome"',
+      tone: outcomes.length ? "ok" : "quiet",
+    },
+    {
+      id: "workforce",
+      label: "Workforce",
+      value: mappedDepartments ? `${readyDepartments}/${mappedDepartments} ready` : "mapped",
+      sub: "departments expand here, not as raw worker inventory",
+      action: "Expand workforce",
+      attr: 'data-open-widget="workforce"',
+      tone: readyDepartments ? "ok" : "quiet",
+    },
+    {
+      id: "business",
+      label: "Business",
+      value: "records",
+      sub: "clients, media, sites, money, analytics, intel",
+      action: "Expand records",
+      attr: 'data-open-widget="business"',
+      tone: "ok",
+    },
+  ];
+}
+
+function renderOperatingSpaces() {
+  const mount = $("[data-operating-spaces]");
+  if (!mount) return;
+  const spaces = operatingSpaceItems();
+  mount.innerHTML = `
+    <div class="spaces-head">
+      <p>Operating spaces</p>
+      <span>Four doors. Everything else stays behind them.</span>
+    </div>
+    <div class="spaces-grid">
+      ${spaces.map((space, index) => `
+        <button class="space-card is-${esc(space.tone)}" data-space="${esc(space.id)}" ${space.attr} type="button" style="--space-index:${index}">
+          <span>${esc(space.label)}</span>
+          <b>${esc(space.value)}</b>
+          <i>${esc(space.sub)}</i>
+          <em>${esc(space.action)} ${svg("arrow")}</em>
+        </button>`).join("")}
+    </div>`;
+}
+
+function decisionCtaLabel(item = {}) {
+  if (item.open === "approvals") return "Review decision";
+  if (item.open === "automation") return "Inspect run";
+  if (item.open === "protect") return "Open Protect";
+  if (item.open === "leads") return "Review follow-up";
+  if (item.open === "proposals") return "Open quote";
+  return "Open workspace";
+}
+
+function decisionMetaLabel(item = {}) {
+  if (item.kind === "approval") return "approval required";
+  if (["agent-failure", "automation-failure"].includes(item.kind)) return "blocked work";
+  if (item.kind === "security") return "risk review";
+  if (["follow-up", "quote-ready", "opportunity"].includes(item.kind)) return "decision ready";
+  if (item.kind === "running") return "monitoring";
+  return "review safe";
+}
+
+function decisionWhyText(item = {}) {
+  if (item.why) return item.why;
+  if (item.kind === "opportunity") return "This could become a better outcome if the evidence is worth acting on.";
+  if (item.kind === "running") return "Work is already moving, so the useful move is to monitor progress.";
+  return "This signal may affect current work, money, risk, or follow-up timing.";
+}
+
+function decisionEvidenceText(item = {}) {
+  return item.evidence || item.sub || "Evidence comes from current PhantomForce state.";
+}
+
+function decisionConfidenceText(item = {}) {
+  return item.confidence || (item.kind === "opportunity" ? "Medium" : "High");
+}
+
+function decisionRecommendedAction(item = {}) {
+  if (item.kind === "approval") return "Make the call so blocked work can move.";
+  if (["agent-failure", "automation-failure"].includes(item.kind)) return "Inspect the failed run and decide whether to retry, pause, or revise it.";
+  if (item.kind === "security") return "Review the risk before trusting more automation.";
+  if (item.kind === "follow-up") return "Review the follow-up packet and approve the next client touch.";
+  if (item.kind === "quote-ready") return "Review the quote and approve the manual send.";
+  if (item.kind === "opportunity") return "Turn the finding into an outcome if the evidence is worth acting on.";
+  if (item.kind === "running") return "Monitor progress and avoid duplicate work.";
+  return "Open the workspace, review evidence, and choose the next move.";
+}
+
+function decisionHandleText(item = {}) {
+  if (["approval", "quote-ready", "follow-up", "opportunity"].includes(item.kind)) return "Phantom can prepare the work.";
+  if (["agent-failure", "automation-failure", "security"].includes(item.kind)) return "Phantom can diagnose and draft a fix.";
+  if (item.kind === "running") return "Phantom is already moving this lane.";
+  return "Phantom can organize the next step.";
+}
+
+function decisionGateText(item = {}) {
+  if (item.kind === "running") return "No new approval unless it touches outside systems.";
+  if (["approval", "quote-ready", "follow-up"].includes(item.kind)) return "Approval required before anything external happens.";
+  if (["agent-failure", "automation-failure", "security"].includes(item.kind)) return "Owner review required before retrying risky work.";
+  if (item.kind === "opportunity") return "Approval required before publishing, sending, spending, or changing live assets.";
+  return "External actions stay owner-gated.";
+}
+
+function decisionCommandText(item = {}, action = "prepare") {
+  const title = item.title || item.sub || "this decision";
+  if (action === "modify") {
+    return `Modify this Phantom decision before anything happens: ${title}. Keep it approval-safe and ask only for the missing owner choice.`;
+  }
+  if (action === "dismiss") {
+    return `Dismiss or monitor this Phantom decision for now: ${title}. Do not execute anything external; just explain what will keep watching.`;
+  }
+  return `Prepare an approval-safe action packet for this Phantom decision: ${title}. Include evidence, next steps, risk, and what needs my approval before anything external happens.`;
+}
+
+function renderDecisionDeck() {
+  const deck = $("[data-decision-deck]");
+  if (!deck) return;
+  const items = attentionItems().slice(0, 3);
+  deck.hidden = items.length === 0;
+  if (!items.length) { deck.innerHTML = ""; return; }
+  deck.innerHTML = `
+    <div class="decision-head">
+      <p>Recommended decisions</p>
+      <span>${items.length} real signal${items.length === 1 ? "" : "s"}</span>
+    </div>
+    <div class="decision-grid">
+      ${items.map((item, index) => `
+        <article class="decision-card is-${esc(item.tone || "ok")}">
+          <div class="decision-rank">${String(index + 1).padStart(2, "0")}</div>
+          <div class="decision-copy">
+            <p>${index === 0 ? "Next best move" : "Decision"}</p>
+            <h3>${esc(item.title)}</h3>
+            <span>${esc(item.sub || "Open for evidence and next action.")}</span>
+          </div>
+          <div class="decision-intel">
+            <p><b>Why</b><span>${esc(decisionWhyText(item))}</span></p>
+            <p><b>Evidence</b><span>${esc(decisionEvidenceText(item))}</span></p>
+          </div>
+          <div class="decision-meta">
+            <span>${esc(decisionMetaLabel(item))}</span>
+            <span>confidence: ${esc(decisionConfidenceText(item))}</span>
+          </div>
+          <div class="decision-action">
+            <p><b>Recommended</b><span>${esc(decisionRecommendedAction(item))}</span></p>
+            <p><b>Phantom</b><span>${esc(decisionHandleText(item))}</span></p>
+            <p><b>Gate</b><span>${esc(decisionGateText(item))}</span></p>
+          </div>
+          <div class="decision-buttons" aria-label="Decision actions">
+            <button class="decision-primary" data-command-run="${esc(decisionCommandText(item, "prepare"))}" type="button">
+              Prepare packet ${svg("arrow")}
+            </button>
+            <button class="decision-open" data-open-ws="${esc(item.open || "activity")}" type="button">
+              ${esc(decisionCtaLabel(item))}
+            </button>
+            <button class="decision-soft" data-command-run="${esc(decisionCommandText(item, "modify"))}" type="button">Modify</button>
+            <button class="decision-soft" data-command-run="${esc(decisionCommandText(item, "dismiss"))}" type="button">Dismiss</button>
+          </div>
+        </article>`).join("")}
+    </div>`;
+}
+
+function activeOutcomeItems() {
+  const plan = todaysPlan().slice(0, 3).map((item) => ({
+    kind: "plan",
+    title: item.text,
+    sub: "Owner input unlocks the next workstream.",
+    meta: "needs decision",
+    evidence: "Pulled from today's plan.",
+    next: "Decide whether Phantom should prepare the next packet.",
+    gate: "Owner input required before work moves.",
+    open: item.open || "approvals",
+    tone: "warn",
+  }));
+  const signals = attentionItems().slice(0, 3).map((item) => ({
+    kind: item.kind,
+    title: item.title,
+    sub: item.sub || "Evidence-backed signal ready to inspect.",
+    meta: decisionMetaLabel(item),
+    evidence: decisionEvidenceText(item),
+    next: decisionRecommendedAction(item),
+    gate: decisionGateText(item),
+    open: item.open || "activity",
+    tone: item.tone || "ok",
+  }));
+  const seen = new Set();
+  return [...plan, ...signals].filter((item) => {
+    const key = `${item.open}:${item.title}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).slice(0, 3);
+}
+
+function renderOutcomeStrip() {
+  const strip = $("[data-outcome-strip]");
+  if (!strip) return;
+  const outcomes = activeOutcomeItems();
+  const empty = outcomes.length === 0;
+  strip.innerHTML = `
+    <div class="outcome-head">
+      <div>
+        <p>Active outcomes</p>
+        <span>${empty ? "Start from a result, not a tab." : `${outcomes.length} operating thread${outcomes.length === 1 ? "" : "s"} live`}</span>
+      </div>
+      <button class="outcome-new" data-command-run="Create my first business outcome" type="button">Capture outcome ${svg("arrow")}</button>
+    </div>
+    ${empty ? `
+      <button class="outcome-empty" data-command-run="Create my first business outcome" type="button">
+        <b>No active outcome yet.</b>
+        <i>Tell Phantom the result you want, and it will organize signals, workers, proof, and approvals around it.</i>
+      </button>` : `
+      <div class="outcome-row">
+        ${outcomes.map((item, index) => `
+          <article class="outcome-card is-${esc(item.tone)}">
+            <div class="outcome-index">${String(index + 1).padStart(2, "0")}</div>
+            <div class="outcome-copy">
+              <b>${esc(item.title)}</b>
+              <i>${esc(item.sub)}</i>
+            </div>
+            <span>${esc(item.meta)}</span>
+            <div class="outcome-route">
+              <p><b>Evidence</b><i>${esc(item.evidence || "Current PhantomForce state.")}</i></p>
+              <p><b>Next</b><i>${esc(item.next || "Review the operation and choose the next move.")}</i></p>
+            </div>
+            <div class="outcome-gate">
+              <small>${esc(item.gate || "External actions stay owner-gated.")}</small>
+              <button data-open-ws="${esc(item.open)}" type="button">Open operation ${svg("arrow")}</button>
+            </div>
+          </article>`).join("")}
+      </div>`}`;
+}
+
+function handledProofItems() {
+  return visible(store.state.activity || [])
+    .filter((item) => item?.title || item?.activity || item?.text)
+    .slice(0, 4)
+    .map((item) => ({
+      who: item.who || item.source || "Phantom",
+      text: item.title || item.activity || item.text || "Activity recorded",
+      at: item.at,
+    }));
+}
+
+function renderHandledProofDeck() {
+  const deck = $("[data-handled-proof]");
+  if (!deck) return;
+  const items = handledProofItems();
+  deck.hidden = items.length === 0;
+  if (!items.length) { deck.innerHTML = ""; return; }
+  deck.innerHTML = `
+    <div class="handled-head">
+      <p>Handled while you were away</p>
+      <span>${items.length} proof point${items.length === 1 ? "" : "s"}</span>
+    </div>
+    <div class="handled-row">
+      ${items.map((item) => `
+        <article class="handled-card">
+          <span class="handled-dot" aria-hidden="true"></span>
+          <b>${esc(item.who)}</b>
+          <p>${esc(item.text)}</p>
+          <i>${esc(ago(item.at))}</i>
+        </article>`).join("")}
+    </div>`;
+}
+
+function commandDepartmentForTool(tool = {}) {
+  const haystack = `${tool.internal || ""} ${tool.name || ""} ${tool.worker || ""} ${tool.role || ""}`.toLowerCase();
+  if (/media|creative|brand|asset|content|video|image|site|build/.test(haystack)) return "Creative";
+  if (/lead|client|follow|proposal|booking|customer|review/.test(haystack)) return "Client Care";
+  if (/money|finance|invoice|payment|cash|accounting/.test(haystack)) return "Finance";
+  if (/intel|analytics|competitor|research|rank|signal|code/.test(haystack)) return "Intelligence";
+  if (/workflow|automation|relay|loop|ops|standard|process|vault/.test(haystack)) return "Operations";
+  if (/access|security|protect|gateway|route|model|provider|diagnostic/.test(haystack)) return "Technology";
+  return "Growth";
+}
+
+function commandDepartmentMap(tools = []) {
+  const departments = ["Growth", "Creative", "Operations", "Client Care", "Finance", "Intelligence", "Technology"];
+  const counts = new Map(departments.map((dept) => [dept, { total: 0, active: 0, watch: 0 }]));
+  tools.forEach((tool) => {
+    const dept = commandDepartmentForTool(tool);
+    const bucket = counts.get(dept) || { total: 0, active: 0, watch: 0 };
+    bucket.total += 1;
+    if (["active", "available", "owner-controlled"].includes(tool.mode)) bucket.active += 1;
+    if (["setup-ready", "planning", "scaffolded"].includes(tool.mode)) bucket.watch += 1;
+    counts.set(dept, bucket);
+  });
+  return departments.map((dept) => ({ dept, ...(counts.get(dept) || { total: 0, active: 0, watch: 0 }) }));
+}
+
+const DEPARTMENT_ACTIONS = {
+  Growth: { open: "leads", action: "Find revenue openings", gate: "outreach stays approval-gated" },
+  Creative: { open: "media", action: "Prepare content and sites", gate: "publishing waits for approval" },
+  Operations: { open: "automation", action: "Route recurring work", gate: "runs stay owner-controlled" },
+  "Client Care": { open: "leads", action: "Move follow-ups forward", gate: "client touches stay manual-send" },
+  Finance: { open: "money", action: "Watch money movement", gate: "payments and invoices need approval" },
+  Intelligence: { open: "intelligence", action: "Turn signals into moves", gate: "evidence first, action second" },
+  Technology: { open: "developer", action: "Keep systems healthy", gate: "developer controls stay behind the curtain" },
+};
+
+function departmentWorkspace(dept = "Growth") {
+  return DEPARTMENT_ACTIONS[dept]?.open || "activity";
+}
+
+const AUTOMATION_STARTERS = [
+  {
+    title: "Daily ideas",
+    cadence: "5 every morning",
+    config: "topic, style, platform, audience",
+    gate: "drafts only until approved",
+    command: "Create a daily content ideas automation with 5 ideas per day, daily replacement, configurable topic, style, platform, and audience. Keep it draft-only and approval-safe.",
+  },
+  {
+    title: "Security watch",
+    cadence: "daily check",
+    config: "domain, local health, exposed risk",
+    gate: "reports only; no destructive fixes",
+    command: "Create a daily security watch automation for domain, local health, exposed-route, malware, and leaked-data checks. Report findings only and queue any risky fix for approval.",
+  },
+  {
+    title: "Outreach drafts",
+    cadence: "10-20 leads/day",
+    config: "target client, tone, offer, channel",
+    gate: "manual-send required",
+    command: "Create an outreach draft automation for 10 to 20 prospects per day with configurable target client, tone, offer, and channel. Draft only; never send without approval.",
+  },
+  {
+    title: "Competitor pulse",
+    cadence: "daily scan",
+    config: "competitors, keywords, offers",
+    gate: "evidence before action",
+    command: "Create a competitor pulse automation that scans configured competitors, keywords, offers, and content gaps daily. Turn findings into approval-safe decisions with evidence.",
+  },
+];
+
+function renderDepartmentActionDock(departments = []) {
+  const rows = departments.filter((dept) => dept.total > 0).slice(0, 4);
+  if (!rows.length) return "";
+  return `
+    <div class="cw-dept-actions" aria-label="Department actions">
+      ${rows.map((dept) => {
+        const meta = DEPARTMENT_ACTIONS[dept.dept] || DEPARTMENT_ACTIONS.Growth;
+        const tone = dept.active ? "ok" : dept.watch ? "watch" : "quiet";
+        return `
+          <button class="cw-dept-action is-${tone}" data-open-ws="${esc(meta.open)}" type="button">
+            <span>
+              <b>${esc(dept.dept)}</b>
+              <i>${dept.active}/${dept.total} ready</i>
+            </span>
+            <em>${esc(meta.action)}</em>
+            <small>${esc(meta.gate)}</small>
+          </button>`;
+      }).join("")}
+    </div>`;
+}
+
+function operatingPulseItems() {
+  const tools = (TOOL_SPINE || [])
+    .filter((tool) => tool && tool.visibleToClients !== true)
+    .filter((tool) => ["active", "available", "owner-controlled", "setup-ready", "planning", "scaffolded"].includes(tool.mode));
+  return commandDepartmentMap(tools).map((dept) => {
+    const tone = dept.active > 0 ? "ok" : dept.watch > 0 ? "watch" : "quiet";
+    const sub = dept.total
+      ? `${dept.active} ready · ${dept.watch} watch · ${dept.total} mapped`
+      : "quiet until tools are configured";
+    return {
+      label: dept.dept,
+      stat: dept.total ? `${dept.active}/${dept.total}` : "0",
+      sub,
+      tone,
+      open: departmentWorkspace(dept.dept),
+    };
+  });
+}
+
+function renderOperatingPulse() {
+  const mount = $("[data-operating-pulse]");
+  if (!mount) return;
+  const departments = operatingPulseItems();
+  const approvals = visible(store.state.approvals || []).filter((a) => a.status === "pending").length;
+  const automations = (store.state.agents || []).filter((a) => a.kind === "automation");
+  const activeAutomations = automations.filter((a) => a.status === "active").length;
+  const proofCount = handledProofItems().length;
+  const signalCount = attentionItems().length;
+  const summary = [
+    { label: "Signals", value: signalCount, tone: signalCount ? "watch" : "ok", open: "activity" },
+    { label: "Approvals", value: approvals, tone: approvals ? "watch" : "ok", open: "approvals" },
+    { label: "Automations", value: activeAutomations, tone: activeAutomations ? "ok" : "quiet", open: "automation" },
+    { label: "Proof", value: proofCount, tone: proofCount ? "ok" : "quiet", open: "activity" },
+  ];
+  mount.innerHTML = `
+    <div class="op-pulse-head">
+      <div>
+        <p>Operating pulse</p>
+        <span>${signalCount ? `${signalCount} live signal${signalCount === 1 ? "" : "s"}` : "All departments quiet and ready"}</span>
+      </div>
+      <div class="op-pulse-summary" aria-label="Live operating counters">
+        ${summary.map((item) => `
+          <button class="op-summary is-${esc(item.tone)}" data-open-ws="${esc(item.open)}" type="button">
+            <b>${esc(String(item.value))}</b><i>${esc(item.label)}</i>
+          </button>`).join("")}
+      </div>
+    </div>
+    <div class="op-pulse-grid">
+      ${departments.map((item) => `
+        <button class="op-dept is-${esc(item.tone)}" data-open-ws="${esc(item.open)}" type="button">
+          <span class="op-dept-dot" aria-hidden="true"></span>
+          <b>${esc(item.label)}</b>
+          <strong>${esc(item.stat)}</strong>
+          <i>${esc(item.sub)}</i>
+        </button>`).join("")}
+    </div>`;
+}
+
+function executionTimelineLanes() {
+  const widgets = missionWidgets();
+  const byId = (id) => widgets.find((item) => item.id === id) || {};
+  const approvals = visible(store.state.approvals || []).filter((a) => a.status === "pending");
+  const plan = todaysPlan();
+  const agents = visible(store.state.agents || []);
+  const activeAgents = agents.filter((a) => ["active", "needs-approval", "blocked", "waiting"].includes(a.status));
+  const activity = visible(store.state.activity || []).filter((item) => item?.title || item?.activity || item?.text);
+  const media = byId("media");
+  const money = byId("money");
+  const leads = byId("leads");
+  const resultItems = [
+    money.stat && !["$0", "0"].includes(String(money.stat).trim()) ? { title: `${money.stat} tracked`, sub: money.sub || "Money movement logged", open: "money", state: "live" } : null,
+    media.stat && !/^0\b/.test(String(media.stat)) ? { title: `${media.stat} in media`, sub: media.sub || "Media activity exists", open: "media", state: "live" } : null,
+    leads.stat && !/^0\b/.test(String(leads.stat)) ? { title: `${leads.stat} in pipeline`, sub: leads.sub || "Client pipeline has records", open: "leads", state: "live" } : null,
+  ].filter(Boolean);
+  return [
+    {
+      lane: "You",
+      kicker: "decisions and owner gates",
+      state: approvals.length || plan.length ? "live" : "quiet",
+      open: approvals[0] ? "approvals" : plan[0]?.open || "settings",
+      items: (approvals.length || plan.length)
+        ? [
+          ...approvals.slice(0, 2).map((a) => ({ title: a.title, sub: a.detail || "Approval waiting", state: "watch", open: "approvals" })),
+          ...plan.slice(0, Math.max(0, 2 - Math.min(approvals.length, 2))).map((p) => ({ title: p.text, sub: "Owner input unlocks work", state: "watch", open: p.open || "approvals" })),
+        ]
+        : [{ title: "No owner gate waiting", sub: "Add context or start an outcome when ready.", state: "quiet", open: "settings" }],
+    },
+    {
+      lane: "Phantom",
+      kicker: "worker movement and proof",
+      state: activeAgents.length || activity.length ? "live" : "quiet",
+      open: activeAgents.length ? "workforce" : "activity",
+      items: activeAgents.length
+        ? activeAgents.slice(0, 2).map((a) => ({ title: a.name || "Worker lane", sub: a.role || a.mission || a.status || "Worker state", state: a.status === "blocked" ? "block" : "live", open: "workforce" }))
+        : activity.length
+          ? activity.slice(0, 2).map((a) => ({ title: a.title || a.activity || a.text || "Activity recorded", sub: a.who || a.source || ago(a.at), state: "live", open: "activity" }))
+          : [{ title: "No worker run active", sub: "Phantom waits for real data or an owner request.", state: "quiet", open: "activity" }],
+    },
+    {
+      lane: "Results",
+      kicker: "money, media, clients",
+      state: resultItems.length ? "live" : "quiet",
+      open: resultItems[0]?.open || "money",
+      items: resultItems.length
+        ? resultItems.slice(0, 2)
+        : [{ title: "No result logged yet", sub: "Results appear after money, media, client, or site activity is real.", state: "quiet", open: "money" }],
+    },
+  ];
+}
+
+function renderExecutionTimeline() {
+  const mount = $("[data-execution-timeline]");
+  if (!mount) return;
+  const lanes = executionTimelineLanes();
+  const live = lanes.filter((lane) => lane.state === "live").length;
+  mount.innerHTML = `
+    <div class="exec-head">
+      <div>
+        <p>Execution timeline</p>
+        <span>${live ? `${live} lane${live === 1 ? "" : "s"} moving` : "No execution lane is moving yet"}</span>
+      </div>
+      <button class="exec-open" data-open-ws="${esc(lanes.find((lane) => lane.state === "live")?.open || "activity")}" type="button">
+        Open live work ${svg("arrow")}
+      </button>
+    </div>
+    <div class="exec-lanes">
+      ${lanes.map((lane) => `
+        <article class="exec-lane is-${esc(lane.state)}">
+          <button class="exec-lane-head" data-open-ws="${esc(lane.open)}" type="button">
+            <span>${esc(lane.lane)}</span>
+            <i>${esc(lane.kicker)}</i>
+          </button>
+          <div class="exec-lane-items">
+            ${lane.items.map((item) => `
+              <button class="exec-item is-${esc(item.state || "quiet")}" data-open-ws="${esc(item.open || lane.open)}" type="button">
+                <b>${esc(item.title)}</b>
+                <i>${esc(item.sub || "")}</i>
+              </button>`).join("")}
+          </div>
+        </article>`).join("")}
+    </div>`;
+}
+
+function unblockCenterItems() {
+  const items = [];
+  const seen = new Set();
+  const add = (item) => {
+    if (!item?.title) return;
+    const key = `${item.open || ""}:${item.title}:${item.need || ""}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    items.push(item);
+  };
+  visible(store.state.approvals || [])
+    .filter((a) => a.status === "pending")
+    .slice(0, 3)
+    .forEach((a) => add({
+      title: a.title,
+      why: a.detail || "A human decision is required before Phantom can continue.",
+      need: "Approve, modify, or reject",
+      open: "approvals",
+      tone: "warn",
+      source: "approval queue",
+      weight: 500,
+    }));
+  visible(store.state.agents || [])
+    .filter((a) => ["blocked", "needs-approval", "waiting"].includes(a.status))
+    .slice(0, 3)
+    .forEach((a) => add({
+      title: a.name || a.title || "Worker lane waiting",
+      why: a.role || a.mission || "A worker lane is waiting for owner input, setup, or approval.",
+      need: a.status === "blocked" ? "Inspect blocker" : a.status === "needs-approval" ? "Review approval" : "Provide input",
+      open: a.status === "needs-approval" ? "approvals" : "workforce",
+      tone: a.status === "blocked" ? "bad" : "warn",
+      source: "workforce state",
+      weight: a.status === "blocked" ? 430 : 360,
+    }));
+  attentionItems()
+    .filter((item) => ["agent-failure", "automation-failure", "security", "follow-up"].includes(item.kind))
+    .slice(0, 4)
+    .forEach((item) => add({
+      title: item.title,
+      why: decisionWhyText(item),
+      need: decisionCtaLabel(item),
+      open: item.open || "activity",
+      tone: item.tone === "warn" ? "warn" : "ok",
+      source: decisionEvidenceText(item),
+      weight: item.weight || 200,
+    }));
+  return items.sort((a, b) => (b.weight || 0) - (a.weight || 0)).slice(0, 4);
+}
+
+function renderUnblockCenter() {
+  const mount = $("[data-unblock-center]");
+  if (!mount) return;
+  const items = unblockCenterItems();
+  mount.hidden = items.length === 0;
+  if (!items.length) { mount.innerHTML = ""; return; }
+  mount.innerHTML = `
+    <div class="unblock-head">
+      <div>
+        <p>Waiting on you</p>
+        <span>${items.length} blocker${items.length === 1 ? "" : "s"} Phantom cannot safely cross alone</span>
+      </div>
+      <button class="unblock-primary" data-open-ws="${esc(items[0].open || "approvals")}" type="button">
+        Unblock top item ${svg("arrow")}
+      </button>
+    </div>
+    <div class="unblock-grid">
+      ${items.map((item) => `
+        <article class="unblock-card is-${esc(item.tone || "warn")}">
+          <span class="unblock-source">${esc(item.source || "real state")}</span>
+          <h3>${esc(item.title)}</h3>
+          <p><b>Why</b><span>${esc(item.why || "This is stopping the next move.")}</span></p>
+          <p><b>Need</b><span>${esc(item.need || "Review")}</span></p>
+          <button data-open-ws="${esc(item.open || "approvals")}" type="button">${esc(item.need || "Review")} ${svg("arrow")}</button>
+        </article>`).join("")}
+    </div>`;
+}
+
+function renderCommandToolDock() {
+  const tools = (TOOL_SPINE || [])
+    .filter((tool) => tool && tool.visibleToClients !== true)
+    .filter((tool) => ["active", "available", "owner-controlled", "setup-ready", "planning", "scaffolded"].includes(tool.mode));
+  if (!tools.length) return "";
+  const departments = commandDepartmentMap(tools).filter((dept) => dept.total > 0);
+  const total = tools.length || 1;
+  return `
+    <div class="cw-dept-map" aria-label="Phantom departments">
+      ${departments.map((dept) => {
+        const pct = Math.max(12, Math.round((dept.total / total) * 100));
+        const tone = dept.active ? "ok" : dept.watch ? "watch" : "quiet";
+        return `
+          <span class="cw-dept-node is-${tone}" style="--dept-fill:${pct}%">
+            <b>${esc(dept.dept)}</b>
+            <i>${dept.active}/${dept.total} ready</i>
+          </span>`;
+      }).join("")}
+    </div>
+    ${renderDepartmentActionDock(departments)}`;
+}
+
+function renderAutomationStarterDock() {
+  return `
+    <div class="cw-auto-starters" aria-label="Automation starter recipes">
+      <p>
+        <b>Start with safe defaults.</b>
+        <span>Tell Phantom about the business, then create one of these draft-only automations. Every outside-world action still waits for approval.</span>
+      </p>
+      ${AUTOMATION_STARTERS.map((starter) => `
+        <button class="cw-auto-starter" data-command-run="${esc(starter.command)}" type="button">
+          <b>${esc(starter.title)}</b>
+          <span>${esc(starter.cadence)}</span>
+          <i>${esc(starter.config)}</i>
+          <em>${esc(starter.gate)}</em>
+        </button>`).join("")}
+    </div>`;
+}
+
+function renderAutomationDock(automations = []) {
+  const rows = automations.slice(0, 4);
+  if (!rows.length) {
+    return renderAutomationStarterDock();
+  }
+  const active = rows.filter((agent) => agent.status === "active").length;
+  const waiting = rows.length - active;
+  return `
+    <div class="cw-automation-meter" aria-label="Automation status">
+      <span style="--auto-fill:${Math.round((active / Math.max(rows.length, 1)) * 100)}%"><b>${active}</b><i>on</i></span>
+      <span><b>${waiting}</b><i>waiting</i></span>
+    </div>
+    <div class="cw-dock cw-automation-dock" aria-label="Configured automations">
+      ${rows.map((agent) => `
+        <button class="cw-dock-node is-${agent.status === "active" ? "ok" : "watch"}" data-open-ws="automation" type="button">
+          <b>${esc(agent.name || "Automation")}</b>
+          <i>${esc(agent.status || "waiting")}</i>
+        </button>`).join("")}
+    </div>`;
+}
+
+function renderPhantomWireDock(activity = []) {
+  if (!activity.length) return "";
+  return `
+    <div class="cw-dock cw-wire-dock" aria-label="Recent PhantomWire activity">
+      ${activity.map((item) => `
+        <span class="cw-dock-node is-ok">
+          <b>${esc(item.who || "Phantom")}</b>
+          <i>${esc(ago(item.at))}</i>
+        </span>`).join("")}
+    </div>`;
+}
+
+function renderBusinessRecordsDock(records = []) {
+  const rows = records.filter(Boolean).slice(0, 6);
+  if (!rows.length) return "";
+  return `
+    <div class="cw-record-grid" aria-label="Business records">
+      ${rows.map((record) => `
+        <button class="cw-record-node is-${esc(record.tone || "ok")}" data-open-ws="${esc(record.open || "leads")}" type="button">
+          <span class="cw-record-icon">${svg(record.icon || "grid")}</span>
+          <span>
+            <b>${esc(record.title || "Records")}</b>
+            <i>${esc(record.stat || "ready")}</i>
+          </span>
+          <em>${esc(record.sub || "Open")}</em>
+        </button>`).join("")}
+    </div>`;
+}
+
+function renderSignalStackDock(signals = []) {
+  const rows = signals.filter(Boolean).slice(0, 3);
+  if (!rows.length) {
+    return `
+      <div class="cw-signal-empty" aria-label="Signal desk clear">
+        <b>No live signal needs a decision.</b>
+        <span>PhantomWire will surface evidence-backed changes when real work, risk, or opportunity appears.</span>
+      </div>`;
+  }
+  return `
+    <div class="cw-signal-stack" aria-label="Signal evidence stack">
+      ${rows.map((signal) => `
+        <button class="cw-signal-node is-${esc(signal.tone || "ok")}" data-open-ws="${esc(signal.open || "activity")}" type="button">
+          <span class="cw-signal-top">
+            <i>${esc(decisionMetaLabel(signal))}</i>
+            <em>confidence ${esc(decisionConfidenceText(signal))}</em>
+          </span>
+          <b>${esc(signal.title || "Signal")}</b>
+          <span><strong>Why</strong>${esc(decisionWhyText(signal))}</span>
+          <span><strong>Evidence</strong>${esc(decisionEvidenceText(signal))}</span>
+          <small>${esc(decisionGateText(signal))}</small>
+        </button>`).join("")}
+    </div>`;
+}
+
+function renderOutcomePath({ plan = [], attention = [], approvals = [], automations = [], activity = [], leads = {}, media = {}, money = {} } = {}) {
+  const activeAutomations = automations.filter((a) => a.status === "active").length;
+  const mediaHasWork = media.stat && !/^0\b/.test(String(media.stat));
+  const moneyHasWork = money.stat && !["$0", "0"].includes(String(money.stat).trim());
+  const leadsHasWork = leads.stat && !/^0\b/.test(String(leads.stat));
+  const stages = [
+    {
+      label: "Signal",
+      title: attention[0]?.title || plan[0]?.text || "Waiting for live signal",
+      sub: attention[0]?.sub || "No urgent business change is open right now.",
+      state: attention.length || plan.length ? "live" : "quiet",
+    },
+    {
+      label: "Decision",
+      title: approvals[0]?.title || "No approval waiting",
+      sub: approvals[0]?.detail || "External sends, posts, spends, and uploads stay gated.",
+      state: approvals.length ? "live" : "quiet",
+    },
+    {
+      label: "Work",
+      title: activeAutomations ? `${activeAutomations} automation${activeAutomations === 1 ? "" : "s"} active` : activity[0]?.text || "No worker run active",
+      sub: activeAutomations ? "Automation lanes are moving under approval rules." : activity[0] ? `Last proof ${ago(activity[0].at)}` : "Phantom starts work when real data or an owner request exists.",
+      state: activeAutomations || activity.length ? "live" : "quiet",
+    },
+    {
+      label: "Result",
+      title: moneyHasWork ? `${money.stat} tracked` : mediaHasWork ? `${media.stat} in media` : leadsHasWork ? `${leads.stat} in pipeline` : "No result logged yet",
+      sub: moneyHasWork ? money.sub : mediaHasWork ? media.sub : leadsHasWork ? leads.sub : "Results appear after money, media, client, or site activity is real.",
+      state: moneyHasWork || mediaHasWork || leadsHasWork ? "live" : "quiet",
+    },
+  ];
+  return `
+    <div class="cw-flow" aria-label="Current operating path">
+      ${stages.map((stage, index) => `
+        <span class="cw-flow-node is-${esc(stage.state)}">
+          <i>${String(index + 1).padStart(2, "0")} · ${esc(stage.label)}</i>
+          <b>${esc(stage.title)}</b>
+          <em>${esc(stage.sub || "")}</em>
+        </span>`).join("")}
+    </div>`;
+}
+
+function renderCommandWidgets() {
+  const mount = $("[data-command-widgets]");
+  if (!mount) return;
+  const widgets = missionWidgets();
+  const byId = (id) => widgets.find((item) => item.id === id) || {};
+  const approvals = visible(store.state.approvals).filter((a) => a.status === "pending");
+  const automations = (store.state.agents || []).filter((a) => a.kind === "automation");
+  const automationActive = automations.filter((a) => a.status === "active").length;
+  const automationWaiting = automations.filter((a) => ["idle", "needs-approval", "waiting"].includes(a.status)).length;
+  const activity = visible(store.state.activity || []).slice(0, 3);
+  const attention = attentionItems();
+  const plan = todaysPlan();
+  const workforce = byId("workforce");
+  const media = byId("media");
+  const money = byId("money");
+  const leads = byId("leads");
+  const sites = byId("sites");
+  const analytics = byId("analytics");
+  const intelligence = byId("intelligence") || byId("competitor-intel") || {};
+  const businessRecords = [
+    { title: "Clients", icon: "users", stat: leads.stat || "0 open", sub: leads.sub || "pipeline current", open: "leads", tone: leads.alert ? "warn" : "ok" },
+    { title: "Media", icon: "media", stat: media.stat || "0 pending", sub: media.sub || "0 generated", open: "media", tone: media.alert ? "warn" : "ok" },
+    { title: "Sites", icon: "site", stat: sites.stat || "0 sites", sub: sites.sub || "site records", open: "sites", tone: sites.alert ? "warn" : "ok" },
+    { title: "Money", icon: "dollar", stat: money.stat || "books", sub: money.sub || "add/import transactions", open: "money", tone: money.alert ? "warn" : "ok" },
+    { title: "Analytics", icon: "chart", stat: analytics.stat || "open", sub: analytics.sub || "performance workspace", open: "analytics", tone: analytics.alert ? "warn" : "ok" },
+    { title: "Intel", icon: "bolt", stat: intelligence.stat || "open", sub: intelligence.sub || "competitor workspace", open: "intelligence", tone: intelligence.alert ? "warn" : "ok" },
+  ];
+
+  const card = ({ id, icon, title, stat, sub, open, tone = "ok", lines = [], dock = "" }, index) => `
+    <details class="command-widget is-${esc(tone)}" data-command-widget="${esc(id)}" ${index === 0 ? "open" : ""}>
+      <summary>
+        <span class="cw-ic">${svg(icon)}</span>
+        <span class="cw-copy">
+          <b>${esc(title)}</b>
+          <i>${esc(sub)}</i>
+        </span>
+        <span class="cw-stat">${esc(stat)}</span>
+      </summary>
+      <div class="cw-body">
+        ${lines.map((line) => `<p>${line}</p>`).join("")}
+        ${dock}
+        ${open ? `<button class="cw-open" data-open-ws="${esc(open)}" type="button">Open workspace ${svg("arrow")}</button>` : ""}
+      </div>
+    </details>`;
+
+  const cards = [
+    {
+      id: "outcomes",
+      icon: "target",
+      title: "Outcome board",
+      stat: plan.length ? `${plan.length} live` : "clear",
+      sub: plan[0]?.text || "No urgent business work loaded yet.",
+      open: plan[0]?.open || "leads",
+      tone: plan.length ? "warn" : "ok",
+      lines: [
+        `<b>Leads</b><span>${esc(leads.stat || "0 open")} · ${esc(leads.sub || "pipeline current")}</span>`,
+        `<b>Money</b><span>${esc(money.stat || "$0")} · ${esc(money.sub || "ledger empty")}</span>`,
+        `<b>Media</b><span>${esc(media.stat || "0 pending")} · ${esc(media.sub || "0 generated")}</span>`,
+      ],
+      dock: renderOutcomePath({ plan, attention, approvals, automations, activity, leads, media, money }),
+    },
+    {
+      id: "business",
+      icon: "grid",
+      title: "Business records",
+      stat: `${businessRecords.length} linked`,
+      sub: "Clients, media, sites, money, analytics, and intel stay one move away.",
+      open: "leads",
+      tone: "ok",
+      lines: [
+        "<b>Permanent</b><span>The records are still powerful, just organized behind one Business surface.</span>",
+        "<b>Live</b><span>Each tile opens the real workspace; no duplicate data and no fake counts.</span>",
+        "<b>Purpose</b><span>Use Command for decisions, Business for the underlying records.</span>",
+      ],
+      dock: renderBusinessRecordsDock(businessRecords),
+    },
+    {
+      id: "workforce",
+      icon: "users",
+      title: "Workforce",
+      stat: workforce.stat || "mapped",
+      sub: workforce.sub || "Departments stay behind the curtain until summoned.",
+      tone: "ok",
+      lines: [
+        "<b>Growth</b><span>finds opportunities, leads, competitor gaps, and revenue moves</span>",
+        "<b>Creative</b><span>creates media, sites, copy, campaign assets, and brand material</span>",
+        "<b>Operations</b><span>routes deadlines, proof, approvals, and execution flow</span>",
+      ],
+      dock: renderCommandToolDock(),
+    },
+    {
+      id: "automations",
+      icon: "auto",
+      title: "Automations",
+      stat: automations.length ? `${automationActive}/${automations.length} on` : "ready",
+      sub: automations.length ? `${automationWaiting} waiting or approval-gated` : "Create from chat; manage here when it exists.",
+      tone: automationWaiting ? "warn" : "ok",
+      lines: [
+        `<b>Active</b><span>${automationActive} running or enabled</span>`,
+        `<b>Waiting</b><span>${automationWaiting} off, queued, or approval-gated</span>`,
+        "<b>Rule</b><span>external sends, posts, spends, uploads, and destructive actions stay approval-gated</span>",
+      ],
+      dock: renderAutomationDock(automations),
+    },
+    {
+      id: "signals",
+      icon: "bolt",
+      title: "Signals",
+      stat: attention.length ? `${attention.length} needs you` : "quiet",
+      sub: attention[0]?.title || "No owner decision is waiting right now.",
+      open: attention[0]?.open || "activity",
+      tone: attention.length ? "warn" : "ok",
+      lines: attention.length
+        ? attention.slice(0, 3).map((item) => `<b>${esc(item.title)}</b><span>${esc(item.sub || "Open for evidence")}</span>`)
+        : ["<b>Clear</b><span>PhantomWire will surface live activity and evidence when something changes.</span>"],
+      dock: renderSignalStackDock(attention),
+    },
+    {
+      id: "phantomwire",
+      icon: "bolt",
+      title: "PhantomWire",
+      stat: activity.length ? `${activity.length} recent` : "listening",
+      sub: activity[0]?.text || "Worker and owner activity appears here when it happens.",
+      open: "activity",
+      tone: "ok",
+      lines: activity.length
+        ? activity.map((item) => `<b>${esc(item.who || "Phantom")}</b><span>${esc(item.text || "activity logged")} · ${esc(ago(item.at))}</span>`)
+        : [
+          "<b>Signals</b><span>Recent worker, automation, owner, and system events flow through PhantomWire.</span>",
+          "<b>Proof</b><span>Activity belongs here; memory stays inside Phantom's chat/brain layer.</span>",
+        ],
+      dock: renderPhantomWireDock(activity),
+    },
+    {
+      id: "approvals",
+      icon: "check",
+      title: "Decision cards",
+      stat: approvals.length ? `${approvals.length} waiting` : "clear",
+      sub: approvals[0]?.title || "Approval queue is clean.",
+      open: "approvals",
+      tone: approvals.length ? "warn" : "ok",
+      lines: approvals.length
+        ? approvals.slice(0, 3).map((a) => `<b>${esc(a.title)}</b><span>${esc(a.detail || "Needs your call")}</span>`)
+        : ["<b>Safe</b><span>Phantom can draft and prepare; you approve anything that touches the outside world.</span>"],
+    },
+  ];
+  mount.innerHTML = cards.map(card).join("");
+}
+
+function openCommandWidget(id = "") {
+  if (!id) return;
+  if (activePageId) renderDashboardPage(true);
+  const widget = document.querySelector(`[data-command-widget="${CSS.escape(id)}"]`);
+  if (!widget) return;
+  document.querySelectorAll(".command-widget").forEach((item) => {
+    if (item !== widget) item.removeAttribute("open");
+  });
+  widget.setAttribute("open", "");
+  widget.classList.remove("is-pulsing");
+  void widget.offsetWidth;
+  widget.classList.add("is-pulsing");
+  widget.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "center" });
 }
 
 /* ============================ ⌘K command palette ============================ */
@@ -2124,14 +3240,24 @@ function renderConsole() {
   renderPlanMeta();
   renderUser();
   renderNotifs();
-  /* Fire-and-forget: pull server truth for the bell, then repaint the badge
-     (and the open menu) once it lands. Failures change nothing. */
+  renderAttentionStrip();
+  renderCommandSnapshot();
+  renderOperatingSpaces();
+  renderDecisionDeck();
+  renderOutcomeStrip();
+  renderOperatingPulse();
+  renderExecutionTimeline();
+  renderUnblockCenter();
+  renderHandledProofDeck();
+  /* Fire-and-forget: pull server truth for the bell + attention surfaces, then
+     repaint them once it lands. Failures change nothing. */
   const pulseBefore = serverPulseAt;
-  fetchServerAttention().then(() => { if (serverPulseAt !== pulseBefore) renderNotifs(); }).catch(() => {});
+  fetchServerAttention().then(() => { if (serverPulseAt !== pulseBefore) { renderHero(); renderNotifs(); renderAttentionStrip(); renderCommandSnapshot(); renderOperatingSpaces(); renderDecisionDeck(); renderOutcomeStrip(); renderOperatingPulse(); renderExecutionTimeline(); renderUnblockCenter(); renderHandledProofDeck(); renderCommandWidgets(); renderQuick(); } }).catch(() => {});
   renderHero();
   renderCommandBriefing();
   renderChips();
   renderModePose(activeMode);
+  renderCommandWidgets();
   renderFlowMap();
   renderFlowCompactSummary();
   renderPlan();
@@ -2624,7 +3750,7 @@ function wireDeck() {
     if (navBtn) { goNav(navBtn.dataset.navId); setMobileNav(false); return; }
     const quick = e.target.closest("[data-quick]");
     if (quick) {
-      const q = QUICK[+quick.dataset.quick];
+      const q = renderedNextMoves[+quick.dataset.quick] || QUICK[+quick.dataset.quick];
       if (q?.run) runCommand(q.run);
       else if (q?.open) routeWorkspace(q.open);
       return;
@@ -2637,6 +3763,11 @@ function wireDeck() {
     if (e.target.closest("[data-notif-btn]")) { notifOpen = !notifOpen; renderNotifs(); return; }
     if (e.target.closest("[data-map-open]")) { openOperationsMap(); return; }
     if (e.target.closest("[data-map-close]")) { closeOperationsMap(); return; }
+    if (e.target.closest("[data-command-focus]")) { renderDashboardPage(true); focusCommandInput(60); return; }
+    const widgetOpen = e.target.closest("[data-open-widget]");
+    if (widgetOpen) { openCommandWidget(widgetOpen.dataset.openWidget || ""); return; }
+    const commandRun = e.target.closest("[data-command-run]");
+    if (commandRun) { runCommand(commandRun.dataset.commandRun || ""); return; }
     const mapPrompt = e.target.closest("[data-map-prompt]");
     if (mapPrompt) {
       const prompt = mapPrompt.dataset.mapPrompt || "";
@@ -2652,7 +3783,14 @@ function wireDeck() {
       return;
     }
     const opener = e.target.closest("[data-open-ws]");
-    if (opener) { if (notifOpen) { notifOpen = false; renderNotifs(); } routeWorkspace(opener.dataset.openWs); return; }
+    if (opener) {
+      if (opener.dataset.settingsTarget) {
+        try { localStorage.setItem("pf.settings.tab.v1", opener.dataset.settingsTarget); } catch {}
+      }
+      if (notifOpen) { notifOpen = false; renderNotifs(); }
+      routeWorkspace(opener.dataset.openWs);
+      return;
+    }
     if (mobileNavOpen && window.matchMedia("(max-width: 900px)").matches && !e.target.closest(".sidebar")) { setMobileNav(false); return; }
     if (accountMenuOpen && !e.target.closest(".user-menu-wrap")) { accountMenuOpen = false; renderAccountMenu(); }
     // click outside notif menu closes it

@@ -50,9 +50,26 @@
   const BEAT_SEC = 60 / BPM;
   const SONG_BEATS = 96; // ~45s at 128bpm
   const LANES = 5;
-  const NOTE_TRAVEL_SEC = 2.2; // how long a note is visible before it reaches the hit line
+  // Note-speed setting = approach time (seconds a note is visible before the
+  // hit line). Longer travel = slower, more readable notes. Persisted.
+  const NOTE_SPEEDS = { slow: 3.0, standard: 2.2, fast: 1.55 };
+  let noteSpeedName = "standard";
+  try {
+    const saved = localStorage.getItem("pf.beatstrike.notespeed");
+    if (saved && NOTE_SPEEDS[saved]) noteSpeedName = saved;
+  } catch (err) { /* storage unavailable in some embeds */ }
+  let noteTravelSec = NOTE_SPEEDS[noteSpeedName];
   const HIT_GOOD = 0.15, HIT_PERFECT = 0.06; // seconds of timing tolerance
   const ALPHABET = "qwertyuiopasdfghjklzxcvbnm".split("");
+
+  // Fixed key→lane mapping by physical keyboard column (two QWERTY columns
+  // per lane) so the on-screen guide and the falling lanes always agree:
+  // Q/A/Z + W/S/X = lane 1 … O/L + P = lane 5.
+  const KEY_COLS = ["qaz", "wsx", "edc", "rfv", "tgb", "yhn", "ujm", "ik", "ol", "p"];
+  const KEY_LANE = {};
+  KEY_COLS.forEach((col, i) => { for (const k of col) KEY_LANE[k] = Math.min(LANES - 1, Math.floor(i / 2)); });
+  const LANE_COLORS = ["#41ffa1", "#1ef0ff", "#ffd166", "#ff3d94", "#c084fc"];
+  const LANE_COLORS_RGB = ["65,255,161", "30,240,255", "255,209,102", "255,61,148", "192,132,252"];
 
   // ---- deterministic PRNG (mulberry32) so the beatmap is reproducible/testable ----
   function makeRandom(seed) {
@@ -80,18 +97,18 @@
       const roll = rand();
       if (roll < 0.12 && b < SONG_BEATS - 2) {
         const key = pickKey(rand, lastKey);
-        notes.push({ time: b * BEAT_SEC, key, type: "hold", duration: BEAT_SEC * 2, lane: Math.floor(rand() * LANES) });
+        notes.push({ time: b * BEAT_SEC, key, type: "hold", duration: BEAT_SEC * 2, lane: KEY_LANE[key] });
         lastKey = key; b += 2; continue;
       }
       if (roll < 0.32) {
         const k1 = pickKey(rand, lastKey);
-        notes.push({ time: b * BEAT_SEC, key: k1, type: "tap", lane: Math.floor(rand() * LANES) });
+        notes.push({ time: b * BEAT_SEC, key: k1, type: "tap", lane: KEY_LANE[k1] });
         const k2 = pickKey(rand, k1);
-        notes.push({ time: b * BEAT_SEC + BEAT_SEC / 2, key: k2, type: "tap", lane: Math.floor(rand() * LANES) });
+        notes.push({ time: b * BEAT_SEC + BEAT_SEC / 2, key: k2, type: "tap", lane: KEY_LANE[k2] });
         lastKey = k2; b += 1; continue;
       }
       const key = pickKey(rand, lastKey);
-      notes.push({ time: b * BEAT_SEC, key, type: "tap", lane: Math.floor(rand() * LANES) });
+      notes.push({ time: b * BEAT_SEC, key, type: "tap", lane: KEY_LANE[key] });
       lastKey = key; b += 1;
     }
     return notes.map((n) => ({ ...n, resolved: false, holding: false, judgement: null }));
@@ -185,8 +202,48 @@
   const startBtn = document.querySelector("[data-start-btn]");
   const pauseOverlay = document.querySelector("[data-pause-overlay]");
   const pauseTitle = document.querySelector("[data-pause-title]");
+  const keyboardEl = document.querySelector("[data-keyboard]");
+  const speedBtns = Array.from(document.querySelectorAll("[data-speed]"));
+  const guideBtn = document.querySelector("[data-guide-toggle]");
   const keyEls = {};
   document.querySelectorAll("[data-key]").forEach((el) => { keyEls[el.dataset.key] = el; });
+
+  // ---- settings UI: note speed + keyboard guide visibility ----
+  function setNoteSpeed(name, persist) {
+    if (!NOTE_SPEEDS[name]) return;
+    noteSpeedName = name;
+    noteTravelSec = NOTE_SPEEDS[name];
+    for (const b of speedBtns) b.setAttribute("aria-pressed", String(b.dataset.speed === name));
+    if (persist) try { localStorage.setItem("pf.beatstrike.notespeed", name); } catch (err) { /* ignore */ }
+  }
+  speedBtns.forEach((b) => b.addEventListener("click", () => setNoteSpeed(b.dataset.speed, true)));
+  setNoteSpeed(noteSpeedName, false);
+
+  // The key guide strip is fixed at the bottom and stays visible during play
+  // by default — it never auto-hides. The only way it disappears is this
+  // explicit settings toggle, which is persisted.
+  let guideVisible = true;
+  try { guideVisible = localStorage.getItem("pf.beatstrike.showguide") !== "0"; } catch (err) { /* ignore */ }
+  function applyGuide(persist) {
+    if (keyboardEl) keyboardEl.dataset.hidden = guideVisible ? "0" : "1";
+    if (guideBtn) {
+      guideBtn.setAttribute("aria-pressed", String(guideVisible));
+      guideBtn.textContent = guideVisible ? "Shown" : "Hidden";
+    }
+    if (persist) try { localStorage.setItem("pf.beatstrike.showguide", guideVisible ? "1" : "0"); } catch (err) { /* ignore */ }
+  }
+  if (guideBtn) guideBtn.addEventListener("click", () => { guideVisible = !guideVisible; applyGuide(true); });
+  applyGuide(false);
+
+  // Color every guide key by its lane so the strip is a true key→lane map,
+  // and make the keys playable touch targets (press/release = tap/hold).
+  for (const [k, el] of Object.entries(keyEls)) {
+    const lane = KEY_LANE[k];
+    if (lane !== undefined) el.style.borderBottom = "3px solid " + LANE_COLORS[lane];
+    el.addEventListener("pointerdown", (e) => { e.preventDefault(); if (!usingGamepadMap) pressKey(k); });
+    el.addEventListener("pointerup", () => { if (!usingGamepadMap) releaseKey(k); });
+    el.addEventListener("pointercancel", () => { if (!usingGamepadMap) releaseKey(k); });
+  }
 
   let audioCtx = null, scheduler = null;
   let songStartTimeRef = { value: 0 };
@@ -384,33 +441,77 @@
     ctx2d.clearRect(0, 0, innerWidth, innerHeight);
 
     const hitY = innerHeight * HIT_LINE_FRAC;
-    ctx2d.strokeStyle = "rgba(255,209,102,0.7)";
-    ctx2d.lineWidth = 2;
+    const laneHalf = (innerWidth * 0.76) / (LANES - 1) / 2;
+
+    // Lane separation: a faint tinted column per lane plus divider lines,
+    // so "which lane is this note in" is readable at a glance.
+    for (let l = 0; l < LANES; l++) {
+      const x = laneX(l);
+      ctx2d.fillStyle = `rgba(${LANE_COLORS_RGB[l]},0.045)`;
+      ctx2d.fillRect(x - laneHalf + 3, 0, laneHalf * 2 - 6, hitY);
+      ctx2d.strokeStyle = `rgba(${LANE_COLORS_RGB[l]},0.22)`;
+      ctx2d.lineWidth = 1;
+      ctx2d.beginPath(); ctx2d.moveTo(x, 0); ctx2d.lineTo(x, hitY); ctx2d.stroke();
+    }
+
+    // Subtle beat grid: one faint line per beat scrolling into the hit line,
+    // downbeats slightly brighter, so the pulse is visible even between notes.
+    const firstBeat = Math.ceil(t / BEAT_SEC);
+    for (let bi = firstBeat; bi * BEAT_SEC < t + noteTravelSec; bi++) {
+      const p = 1 - (bi * BEAT_SEC - t) / noteTravelSec;
+      if (p < 0) continue;
+      const y = p * hitY;
+      ctx2d.strokeStyle = bi % 4 === 0 ? "rgba(234,255,244,0.14)" : "rgba(234,255,244,0.06)";
+      ctx2d.lineWidth = 1;
+      ctx2d.beginPath(); ctx2d.moveTo(0, y); ctx2d.lineTo(innerWidth, y); ctx2d.stroke();
+    }
+
+    // Hit window made visible: outer band = "good" timing, inner brighter
+    // band = "perfect", sized from the actual tolerances and travel speed.
+    const goodPx = (HIT_GOOD / noteTravelSec) * hitY;
+    const perfectPx = (HIT_PERFECT / noteTravelSec) * hitY;
+    ctx2d.fillStyle = "rgba(255,209,102,0.09)";
+    ctx2d.fillRect(0, hitY - goodPx, innerWidth, goodPx * 2);
+    ctx2d.fillStyle = "rgba(65,255,161,0.12)";
+    ctx2d.fillRect(0, hitY - perfectPx, innerWidth, perfectPx * 2);
+    ctx2d.strokeStyle = "rgba(255,209,102,0.85)";
+    ctx2d.lineWidth = 3;
     ctx2d.beginPath(); ctx2d.moveTo(0, hitY); ctx2d.lineTo(innerWidth, hitY); ctx2d.stroke();
+    // Hit-line lane targets: an outlined receptor circle per lane.
+    for (let l = 0; l < LANES; l++) {
+      ctx2d.beginPath();
+      ctx2d.arc(laneX(l), hitY, 20, 0, Math.PI * 2);
+      ctx2d.strokeStyle = `rgba(${LANE_COLORS_RGB[l]},0.6)`;
+      ctx2d.lineWidth = 2;
+      ctx2d.stroke();
+    }
 
     for (const n of notes) {
       const dt = n.time - t;
-      if (dt > NOTE_TRAVEL_SEC || (n.resolved && n.judgement !== null && dt < -0.3)) continue;
+      if (dt > noteTravelSec || (n.resolved && n.judgement !== null && dt < -0.3)) continue;
       if (n.resolved && dt < -0.05) continue;
-      const progress = 1 - dt / NOTE_TRAVEL_SEC; // 0 at spawn, 1 at hit line
+      const progress = 1 - dt / noteTravelSec; // 0 at spawn, 1 at hit line
       if (progress < 0) continue;
       const y = progress * hitY;
       const x = laneX(n.lane);
       const holding = holdingKey && holdingKey.note === n;
+      const laneRgb = LANE_COLORS_RGB[n.lane] || LANE_COLORS_RGB[0];
 
       if (n.type === "hold") {
         const endDt = (n.time + n.duration) - t;
-        const endProgress = 1 - endDt / NOTE_TRAVEL_SEC;
+        const endProgress = 1 - endDt / noteTravelSec;
         const endY = Math.min(hitY, endProgress * hitY);
-        ctx2d.fillStyle = holding ? "rgba(255,209,102,0.55)" : "rgba(255,209,102,0.28)";
+        ctx2d.fillStyle = holding ? `rgba(${laneRgb},0.55)` : `rgba(${laneRgb},0.26)`;
         ctx2d.fillRect(x - 12, Math.min(y, endY), 24, Math.abs(endY - Math.min(y, hitY)));
       }
       ctx2d.beginPath();
       ctx2d.arc(x, y, 17, 0, Math.PI * 2);
-      ctx2d.fillStyle = n.resolved ? "rgba(255,255,255,0.08)" : (n.type === "hold" ? "#ffd166" : "#ff3d94");
+      ctx2d.fillStyle = n.resolved ? "rgba(255,255,255,0.08)" : (LANE_COLORS[n.lane] || LANE_COLORS[0]);
       ctx2d.fill();
-      ctx2d.strokeStyle = "rgba(255,255,255,0.5)";
+      ctx2d.strokeStyle = n.type === "hold" ? "#ffffff" : "rgba(255,255,255,0.5)";
+      ctx2d.lineWidth = n.type === "hold" ? 2.5 : 1;
       ctx2d.stroke();
+      ctx2d.lineWidth = 1;
       if (!n.resolved) {
         ctx2d.fillStyle = "#05030a";
         ctx2d.font = "700 14px 'DM Mono', monospace";

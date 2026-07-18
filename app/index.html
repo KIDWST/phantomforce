@@ -227,7 +227,8 @@
             <section class="hero2">
               <div class="hero2-copy">
                 <h1 class="hero2-title">Welcome back,<br /><span data-hero-name>Jordan.</span></h1>
-                <p class="hero2-sub">Tell me what you need<br />or choose a lane below.</p>
+                <p class="hero2-sub" data-hero-sub>Your operating briefing is loading.</p>
+                <div class="hero2-proof" data-hero-proof hidden></div>
 
                 <div class="cmd-chips" data-cmd-chips></div>
 
@@ -240,7 +241,7 @@
                     <button class="cmd-send" type="submit" aria-label="Send"><span aria-hidden="true">→</span></button>
                   </form>
                   <div class="chatbox-tools">
-                    <button class="cmd-tool" data-open-ws="memory"><span aria-hidden="true">◈</span> Memory</button>
+                    <button class="cmd-tool" data-open-ws="settings" data-settings-target="loop"><span aria-hidden="true">⚙</span> Settings</button>
                     <button class="cmd-tool" data-open-ws="promptlibrary"><span aria-hidden="true">▤</span> Prompt Library</button>
                     <button class="cmd-tool" data-map-open type="button"><span class="open-map-symbol" aria-hidden="true">&#128506;</span> Map</button>
                   </div>
@@ -265,6 +266,26 @@
               </div>
             </section>
 
+            <section class="attention-strip" data-attention-strip aria-label="Needs your attention" hidden></section>
+
+            <section class="command-snapshot" data-command-snapshot aria-label="Command snapshot"></section>
+
+            <section class="operating-spaces" data-operating-spaces aria-label="Primary operating spaces"></section>
+
+            <section class="decision-deck" data-decision-deck aria-label="Recommended decisions" hidden></section>
+
+            <section class="outcome-strip" data-outcome-strip aria-label="Active outcomes"></section>
+
+            <section class="operating-pulse" data-operating-pulse aria-label="Operating pulse"></section>
+
+            <section class="execution-timeline" data-execution-timeline aria-label="Execution timeline"></section>
+
+            <section class="unblock-center" data-unblock-center aria-label="What Phantom needs from you" hidden></section>
+
+            <section class="handled-proof" data-handled-proof aria-label="Handled while you were away" hidden></section>
+
+            <section class="command-widgets" data-command-widgets aria-label="Command center widgets"></section>
+
           </div>
 
           <!-- right rail -->
@@ -273,15 +294,15 @@
 
             <div class="queue-card">
               <div class="section-head">
-                <h2>Outcome tracker</h2>
+                <h2 data-work-title>Work in motion</h2>
                 <span class="queue-count" data-queue-count>0</span>
               </div>
               <div class="queue-list" data-queue></div>
-              <button class="rail-foot-btn" data-map-open type="button">Create task roadmap <span aria-hidden="true">→</span></button>
+              <button class="rail-foot-btn" data-map-open type="button">Open operating map <span aria-hidden="true">→</span></button>
             </div>
 
             <div class="quick-card">
-              <div class="section-head"><h2>Start something real</h2></div>
+              <div class="section-head"><h2 data-quick-title>Next moves</h2></div>
               <div class="quick-list" data-quick></div>
             </div>
           </aside>

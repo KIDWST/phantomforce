@@ -44,11 +44,16 @@ body.paused .pause{display:grid}
 <div class="touch" data-touch hidden><div><button data-t="left">◀</button><button data-t="right">▶</button></div><div><button data-t="jump">JUMP</button><button data-t="light">HIT</button><button data-t="heavy">SMASH</button><button data-t="shield">SHIELD</button><button data-t="dodge">DODGE</button></div></div>
 <div class="overlay" data-setup><div>
   <h1>PHANTOM RUMBLE</h1>
-  <p>Brawling chickens, one walled coop, no ring-outs. Damage raises a bird's percent — the higher it climbs, the harder a fence slam cracks them for the KO. Last chicken standing takes the rumble.</p>
+  <p>Brawling chickens across walled coops and open sky perches. Damage raises a bird's percent — in a walled coop a hard fence slam CRACKS them; on an open arena, big knockback launches them clean out for the RING OUT. Grab a ledge to save yourself. Last chicken standing takes the rumble.</p>
   <p class="pb" data-pb hidden></p>
-  <div class="mode-group"><i>SOLO / LOCAL</i><div class="modes">
+  <div class="mode-group"><i>SOLO</i><div class="modes">
+    <button data-mode="soloffa"><b>SOLO FFA</b>you vs three bots</button>
     <button data-mode="solo"><b>SOLO 1v1</b>you vs one bot</button>
+  </div></div>
+  <div class="mode-group"><i>LOCAL</i><div class="modes">
     <button data-mode="localffa"><b>LOCAL FFA</b>up to 4, split a keyboard</button>
+  </div></div>
+  <div class="mode-group"><i>RACE TO THE TOP</i><div class="modes">
     <button data-mode="racetop"><b>RACE TO THE TOP</b>up to 4, no health, climb or get left behind</button>
   </div></div>
   <div class="mode-group"><i>ONLINE</i><div class="modes">
@@ -61,6 +66,13 @@ body.paused .pause{display:grid}
     <button data-humans="1" type="button" role="radio" aria-checked="false">1</button>
     <button data-humans="2" type="button" role="radio" aria-checked="true">2</button>
     <button data-local-start type="button">START</button>
+  </div>
+  <div class="diffs" data-maps role="radiogroup" aria-label="Arena select">
+    <button data-map="random" type="button" role="radio" aria-checked="true">AUTO ROTATE</button>
+    <button data-map="coop" type="button" role="radio" aria-checked="false">THE COOP</button>
+    <button data-map="foundry" type="button" role="radio" aria-checked="false">SPARK FOUNDRY</button>
+    <button data-map="roost" type="button" role="radio" aria-checked="false">SKY ROOST</button>
+    <button data-map="drift" type="button" role="radio" aria-checked="false">DRIFT HARBOR</button>
   </div>
   <div class="diffs" data-diffs role="radiogroup" aria-label="Bot difficulty">
     <button data-diff="easy" type="button" role="radio" aria-checked="false">EASY</button>
@@ -89,19 +101,44 @@ addEventListener('resize',size);size();
 let stats={wins:0,matches:0,bestKos:0};
 function pushState(progress){host('progress',{progress,state:null})}
 
-/* ---------- arena ----------
-   The Coop: a walled arena, not an open void. There is no ring-out —
-   the arena floor and side fences are solid. Instead, a fighter is
-   KO'd ("CRACKED!") when a hit sends them into a fence hard enough
-   while their damage is high — same knockback-scales-with-percent
-   tension as a ring-out fighter, just resolved against a wall instead
-   of an off-screen blast zone. No ledge-grabbing exists because there
-   is nothing to fall off of.
+/* ---------- arenas ----------
+   Two archetypes now share the brawl ruleset:
+   - WALLED ("coop"): solid floor and side fences, no ring-out. A fighter
+     is KO'd ("CRACKED!") when a hit slams them into a fence hard enough
+     while their damage is high.
+   - OPEN ("sky"): no fences, no safety floor — platforms over a void.
+     Knockback that carries a fighter past the blast zones is a RING OUT
+     KO, and ledge-save recovery (tryLedgeGrab below) exists so close
+     calls stay playable.
    Normalized coordinates: x 0..1 of arena width, y 0..1 of arena height. */
 const ARENA={left:.07,right:.93,floor:.82,ceil:.05};
 const FLOOR={x:.5,y:ARENA.floor,w:ARENA.right-ARENA.left,h:.045};
 const SLAM_SPEED=.024; /* base impact speed (at 0% dmg) that starts to threaten a crack */
 const SPAWNS=[{x:.28,y:.58},{x:.72,y:.58},{x:.42,y:.58},{x:.58,y:.58}];
+const BLAST={l:-.07,r:1.07,b:1.08,t:-.3}; /* open-map ring-out bounds */
+/* ---------- named map roster (non-climb modes) ----------
+   Mixed walled-hazard and open fall-off archetypes with per-map theming.
+   Per-map features: 'laser' = telegraphed periodic laser sweep, 'portals'
+   = paired two-endpoint warp gates, plats[].move = drifting platform. */
+const MAPS=[
+  {id:'coop',name:'THE COOP',arch:'WALLED · FENCE-CRACK',open:false,
+   theme:{floor:'#0b2417',plat:'#0a1f14',stroke:'#2cff9b',accent:'#4ade80'}},
+  {id:'foundry',name:'SPARK FOUNDRY',arch:'WALLED · LASER SWEEP',open:false,laser:true,
+   theme:{floor:'#2a1508',plat:'#241408',stroke:'#fb923c',accent:'#fdba74'}},
+  {id:'roost',name:'SKY ROOST',arch:'OPEN · RING-OUT · PORTALS',open:true,
+   theme:{floor:'#0c2135',plat:'#0a1a2a',stroke:'#38bdf8',accent:'#7dd3fc'},
+   plats:[{x:.5,y:.74,w:.42,h:.05,edges:true},{x:.16,y:.56,w:.17,h:.03,edges:true},{x:.84,y:.56,w:.17,h:.03,edges:true},{x:.5,y:.44,w:.2,h:.03}],
+   portals:[{x:.09,y:.4},{x:.91,y:.4}],
+   spawns:[{x:.38,y:.6},{x:.62,y:.6},{x:.16,y:.45},{x:.84,y:.45}]},
+  {id:'drift',name:'DRIFT HARBOR',arch:'OPEN · RING-OUT · DRIFT',open:true,
+   theme:{floor:'#221338',plat:'#1c1030',stroke:'#a78bfa',accent:'#c4b5fd'},
+   plats:[{x:.26,y:.72,w:.3,h:.05,edges:true},{x:.74,y:.72,w:.3,h:.05,edges:true},{x:.5,y:.5,w:.16,h:.03,move:{range:.2,speed:.9,phase:0}},{x:.5,y:.3,w:.14,h:.03}],
+   spawns:[{x:.2,y:.58},{x:.8,y:.58},{x:.32,y:.58},{x:.68,y:.58}]},
+];
+let MAP=MAPS[0],LEDGES=[],PORTALS=[],matchTime=0;
+const laser={phase:'idle',t:0,y:.45,cd:6,hitMask:0};
+function mapSpawn(slot){return (MAP&&MAP.spawns&&MAP.spawns[slot])||SPAWNS[slot]}
+function placeFighters(){for(const f of fighters){const s=mapSpawn(f.slot);f.x=s.x;f.y=s.y;f.vx=0;f.vy=0}}
 
 /* ---------- modular chunk-based procedural platforms ----------
    A small library of relative platform "chunks." Each match seeds a
@@ -134,6 +171,38 @@ function buildPlatforms(seed){
   const chunk=CHUNKS[Math.floor(rand()*CHUNKS.length)];
   const cx=.5,cy=.56;
   PLATS=chunk.map(c=>({x:cx+c.dx,y:cy+c.dy,w:c.w,h:.03}));
+}
+/* Build the full arena for a named map: walled maps keep the seeded chunk
+   roost variety (buildPlatforms) over the solid floor; open maps use their
+   hand-authored fall-off layout and derive grabbable LEDGES from the edge-
+   flagged ground pieces. Paired portals and the laser cycle reset here. */
+function buildArena(map,seed){
+  MAP=map||MAPS[0];
+  LEDGES=[];PORTALS=[];matchTime=0;
+  laser.phase='idle';laser.t=0;laser.cd=5;laser.hitMask=0;
+  if(MAP.open){
+    PLATS=MAP.plats.map(p=>({x:p.x,y:p.y,w:p.w,h:p.h,edges:!!p.edges,move:p.move||null,baseX:p.x,_dx:0}));
+    for(const p of PLATS){
+      if(p.edges){
+        LEDGES.push({x:p.x-p.w/2,y:p.y-p.h/2,side:-1});
+        LEDGES.push({x:p.x+p.w/2,y:p.y-p.h/2,side:1});
+      }
+    }
+    if(MAP.portals)PORTALS=MAP.portals.map(p=>({x:p.x,y:p.y}));
+  }else{
+    buildPlatforms(seed);
+    for(const p of PLATS){p.baseX=p.x;p._dx=0}
+  }
+}
+/* Drifting platforms: driven off matchTime so motion is deterministic from
+   match start. Fighters standing on a mover are carried by its per-frame
+   delta (applied at landing resolution in step()). */
+function stepMovers(){
+  for(const s of PLATS){
+    if(!s.move)continue;
+    const nx=s.baseX+Math.sin(matchTime*s.move.speed+s.move.phase)*s.move.range;
+    s._dx=nx-s.x;s.x=nx;
+  }
 }
 /* ---------- Race to the Top: procedurally-generated tower ----------
    A separate seeded layout from the brawl arena's PLATS, built the same
@@ -233,6 +302,23 @@ function setDiff(d){
 for(const b of document.querySelectorAll('[data-diff]'))b.onclick=()=>setDiff(b.dataset.diff);
 setDiff(botDifficulty);
 
+/* ---------- arena select: explicit pick, or AUTO map rotation ---------- */
+let selectedMapId='random',mapRotation=-1;
+try{const savedMap=localStorage.getItem('pf.phantomrumble.map');if(savedMap==='random'||MAPS.some(m=>m.id===savedMap))selectedMapId=savedMap}catch{}
+function setMapChoice(id){
+  if(id!=='random'&&!MAPS.some(m=>m.id===id))return;
+  selectedMapId=id;
+  try{localStorage.setItem('pf.phantomrumble.map',id)}catch{}
+  for(const b of document.querySelectorAll('[data-map]'))b.setAttribute('aria-checked',String(b.dataset.map===id));
+}
+for(const b of document.querySelectorAll('[data-map]'))b.onclick=()=>setMapChoice(b.dataset.map);
+setMapChoice(selectedMapId);
+function pickMap(){
+  if(selectedMapId!=='random'){const m=MAPS.find(mm=>mm.id===selectedMapId);if(m)return m}
+  mapRotation=(mapRotation+1)%MAPS.length;
+  return MAPS[mapRotation];
+}
+
 /* ---------- procedural chicken-ninja SFX ---------- */
 let audioCtx=null;
 function audio(){
@@ -260,22 +346,27 @@ function makeFighter(slot,human){
   return {slot,human,name:PALETTE[slot].name,color:PALETTE[slot].c,glow:PALETTE[slot].glow,
     x:spawn.x,y:spawn.y,vx:0,vy:0,face:slot%2?-1:1,pct:0,stocks:3,
     grounded:false,jumps:2,stun:0,invuln:2,charge:0,power:false,shurikenArmed:false,smokeCooldown:0,speedBuff:0,dead:false,shieldHeld:false,parry:0,dodgeCd:0,
-    attackCd:0,anim:0,trail:[],ai:{dir:1,timer:0,jumpCd:0,diff:DIFFS[botDifficulty]},lastTap:{key:'',at:0},_gpDir:0};
+    ledge:0,ledgeSide:0,ledgeCooldown:0,portalCd:0,
+    attackCd:0,anim:0,trail:[],ai:{dir:1,timer:0,jumpCd:0,watchX:0,watchY:0,watchT:0,hold:0,diff:DIFFS[botDifficulty]},lastTap:{key:'',at:0},_gpDir:0};
 }
 function makeRaceFighter(slot,human){
   return {slot,human,name:PALETTE[slot].name,color:PALETTE[slot].c,glow:PALETTE[slot].glow,
     x:.5+(slot-1.5)*.06,y:TOWER_START_Y,vx:0,vy:0,face:slot%2?-1:1,altitude:0,finished:false,place:0,
     grounded:false,jumps:2,stun:0,invuln:2,dodgeCd:0,attackCd:0,anim:0,trail:[],grappleReady:false,shieldBubble:0,speedBuff:0,
-    ai:{dir:1,timer:0,jumpCd:0,diff:DIFFS[botDifficulty]},lastTap:{key:'',at:0},_gpDir:0};
+    ai:{dir:1,timer:0,jumpCd:0,watchX:0,watchY:0,watchT:0,hold:0,diff:DIFFS[botDifficulty]},lastTap:{key:'',at:0},_gpDir:0};
 }
 function startMatch(selected,options={}){
   mode=selected;
-  const humans=selected==='solo'?1:selected==='localffa'?(options.humans||2):selected==='net1v1'?2:1;
+  /* SOLO defaults to FFA (1 human + 3 bots); humans only replace bots in
+     networked play or when explicitly entering 1v1 / local FFA slots. */
+  const humans=selected==='soloffa'||selected==='solo'?1:selected==='localffa'?(options.humans||2):selected==='net1v1'?2:1;
   const count=selected==='solo'||selected==='net1v1'?2:4;
   fighters=[];
   for(let i=0;i<count;i++)fighters.push(makeFighter(i,i<humans));
-  buildPlatforms(nextSeed());
-  pickups=[];particles=[];floaters=[];rings=[];projectiles=[];matchKos=[0,0,0,0];pickupTimer=6;over=false;running=true;paused=false;
+  buildArena(pickMap(),nextSeed());
+  placeFighters();
+  pickups=[];particles=[];floaters=[];rings=[];projectiles=[];matchKos=[0,0,0,0];pickupTimer=6;over=false;running=true;paused=false;koFeed.length=0;
+  announceMap();
   setupEl.hidden=true;endEl.hidden=true;hudEl.hidden=false;
   document.querySelector('[data-touch]').hidden=fighters.some(f=>f.human&&f.slot===0)?false:true;
   buildHud();last=performance.now();if(raf)cancelAnimationFrame(raf);raf=requestAnimationFrame(loop);
@@ -468,8 +559,34 @@ function pollGamepadPause(){
 
 /* ---------- combat ---------- */
 function jump(f){
+  if(f.ledge>0){
+    /* ledge-jump: kick up and away from the edge, with a cooldown so the
+       fighter can't instantly re-grab the same ledge. */
+    const side=f.ledgeSide;
+    f.ledge=0;f.ledgeCooldown=.75;
+    f.vy=-.028;f.vx=-side*.014;f.x+=-side*.02;f.jumps=1;f.grounded=false;
+    spawnBurst(f.x,f.y,f.glow,10);addFloater(f.x,f.y-.1,'LEDGE JUMP!',f.glow,13);sfx('jump');
+    return;
+  }
   if(f.jumps<=0)return;
   f.vy=-.026;f.jumps-=1;f.grounded=false;spawnBurst(f.x,f.y+.02,f.glow,5);addFloater(f.x,f.y-.08,'HI-YA!',f.glow,12);sfx('jump');
+}
+/* ---------- ledge-save recovery (open fall-off maps only) ----------
+   A falling fighter passing an open edge snaps onto it ("LEDGE!") instead
+   of dropping straight into the void, then ledge-jumps back to safety.
+   Locked out while already hanging, on cooldown, or still rising. */
+function tryLedgeGrab(f){
+  if(f.ledge>0||f.ledgeCooldown>0||f.vy<0||f.stun>0)return false;
+  for(const L of LEDGES){
+    if((f.x-L.x)*L.side>-.01&&Math.abs(f.x-L.x)<.045&&f.y>L.y-.02&&f.y<L.y+.11){
+      f.ledge=2.1;f.ledgeSide=L.side;
+      f.x=L.x+L.side*.012;f.y=L.y+.03;f.vx=0;f.vy=0;f.jumps=1;
+      f.invuln=Math.max(f.invuln,.35);
+      spawnBurst(f.x,f.y,f.glow,8);addFloater(f.x,f.y-.1,'LEDGE!',f.glow,12);sfx('jump');
+      return true;
+    }
+  }
+  return false;
 }
 function dodge(f){
   if(f.dodgeCd>0||f.stun>0)return;
@@ -529,7 +646,12 @@ function applyPickupEffect(kind,fighter){
 function spawnPickup(){
   const kinds=['heart','spark','bomb','shuriken','smoke','speed'];
   const kind=kinds[Math.floor(Math.random()*kinds.length)];
-  const spot={x:FLOOR.x-FLOOR.w*.42+Math.random()*FLOOR.w*.84,y:FLOOR.y-.08};
+  let spot;
+  if(MAP&&MAP.open&&PLATS.length){
+    /* open maps have no safety floor — drop pickups onto a real platform */
+    const s=PLATS[Math.floor(Math.random()*PLATS.length)];
+    spot={x:s.x-s.w*.38+Math.random()*s.w*.76,y:s.y-s.h/2-.07};
+  }else spot={x:FLOOR.x-FLOOR.w*.42+Math.random()*FLOOR.w*.84,y:FLOOR.y-.08};
   pickups.push({kind,x:spot.x,y:spot.y,age:0,fuse:kind==='bomb'?0:null});
 }
 function grabPickups(f){
@@ -581,16 +703,54 @@ function botThink(f,dt){
   const foes=fighters.filter(t=>t!==f&&!t.dead);
   if(!foes.length)return;
   const foe=foes.reduce((a,b)=>Math.abs(a.x-f.x)<Math.abs(b.x-f.x)?a:b);
-  /* No off-stage recovery branch — the coop is walled, there is nowhere
-     to fall. A bot near a fence at high percent should back off rather
-     than press into it (avoiding a self-inflicted crack). */
-  const nearWall=f.x<ARENA.left+.1||f.x>ARENA.right-.1;
+  const open=MAP&&MAP.open;
+  /* Stall watchdog: if the bot has produced no meaningful position delta
+     over ~2s (oscillating at a wall, grinding at an unreachable target,
+     wedged under a platform), repath hard — reverse, burst, and hop —
+     instead of looping in place forever. */
+  f.ai.hold=Math.max(0,f.ai.hold-dt);
+  f.ai.watchT+=dt;
+  if(f.ai.watchT>=2){
+    if(Math.hypot(f.x-f.ai.watchX,f.y-f.ai.watchY)<.045){
+      f.ai.dir*=-1;f.ai.hold=.6;f.ai.timer=Math.min(f.ai.timer,.15);
+      f.vx+=f.ai.dir*.014;
+      if(f.jumps>0&&f.ai.jumpCd<=0){jump(f);f.ai.jumpCd=.4}
+    }
+    f.ai.watchX=f.x;f.ai.watchY=f.y;f.ai.watchT=0;
+  }
+  if(open&&!f.grounded&&f.ledge<=0&&f.y>.62){
+    /* Off-stage recovery: steer toward the nearest landable platform and
+       burn jumps to get back over it instead of drifting into the pit —
+       tryLedgeGrab() in step() is the last-chance save if this falls short. */
+    let best=null,bd=9;
+    for(const s of PLATS){const dd=Math.abs(s.x-f.x)+Math.abs(s.y-f.y)*.5;if(dd<bd){bd=dd;best=s}}
+    if(best){
+      f.ai.dir=best.x>f.x?1:-1;
+      if(f.vy>0&&f.jumps>0&&f.ai.jumpCd<=0&&f.y>best.y-.05){jump(f);f.ai.jumpCd=.32}
+    }
+    f.vx+=f.ai.dir*.002*d.accel*(dt*60);
+    return;
+  }
+  /* Walled maps only: a bot near a fence at high percent should back off
+     rather than press into it (avoiding a self-inflicted crack). */
+  const nearWall=!open&&(f.x<ARENA.left+.1||f.x>ARENA.right-.1);
   if(nearWall&&f.pct>60&&Math.random()<d.recoverSkill){
     f.ai.dir=f.x<ARENA.left+.1?1:-1;
   }else{
     const want=pickups.find(p=>!p.taken&&p.fuse===null);
     const target=want&&Math.random()<d.pickupGreed?want:foe;
-    f.ai.dir=target.x>f.x?1:-1;
+    if(f.ai.hold<=0)f.ai.dir=target.x>f.x?1:-1; /* respect a watchdog repath for a beat */
+    if(open&&f.grounded){
+      /* Edge guard: don't sprint off into the void unless the target is
+         close enough to be worth the leap (then jump the gap, don't walk it). */
+      const aheadX=f.x+f.ai.dir*.055;
+      let ground=false;
+      for(const s of PLATS){const top=s.y-s.h/2;if(Math.abs(aheadX-s.x)<s.w/2&&top>=f.y-.03&&top<f.y+.2){ground=true;break}}
+      if(!ground){
+        if(Math.abs(target.x-f.x)>.22)f.ai.dir*=-1;
+        else if(f.jumps>0&&f.ai.jumpCd<=0){jump(f);f.ai.jumpCd=d.jumpCd}
+      }
+    }
     if(f.ai.timer<=0){
       f.ai.timer=d.reaction[0]+Math.random()*(d.reaction[1]-d.reaction[0]);
       if(Math.abs(foe.x-f.x)<.07*d.attackReach&&Math.abs(foe.y-f.y)<.08*d.attackReach){f.face=f.ai.dir;attack(f,Math.random()<d.heavyChance)}
@@ -619,6 +779,16 @@ function step(f,dt){
     return;
   }
   f.invuln=Math.max(0,f.invuln-dt);f.stun=Math.max(0,f.stun-dt);f.attackCd=Math.max(0,f.attackCd-dt);f.anim=Math.max(0,f.anim-dt);f.parry=Math.max(0,f.parry-dt);f.dodgeCd=Math.max(0,f.dodgeCd-dt);f.smokeCooldown=Math.max(0,f.smokeCooldown-dt);f.speedBuff=Math.max(0,f.speedBuff-dt);
+  f.ledgeCooldown=Math.max(0,f.ledgeCooldown-dt);f.portalCd=Math.max(0,f.portalCd-dt);
+  if(f.ledge>0){
+    /* Hanging on a ledge: frozen in place until a ledge-jump (or the hang
+       expires and the fighter drops with a re-grab cooldown). Bots auto-
+       recover after a beat via jump() instead of hanging/regrab-looping. */
+    f.ledge-=dt;f.vx=0;f.vy=0;f.grounded=false;
+    if(!f.human&&f.ledge<1.7){jump(f);f.ai.jumpCd=.55}
+    else if(f.ledge<=0){f.ledgeCooldown=.75;f.vy=.002}
+    return;
+  }
   if(f.charge>0)f.charge=Math.min(1,f.charge+dt);
   if(f.stun<=0){
     if(f.human&&mode&&mode.startsWith('net')&&f.slot!==localSlot){
@@ -648,29 +818,85 @@ function step(f,dt){
   const incomingVx=f.vx;
   f.x+=f.vx*(dt*60);f.y+=f.vy*(dt*60);
   f.grounded=false;
-  const surfaces=[FLOOR,...PLATS];
-  for(const s of surfaces){
+  const open=MAP&&MAP.open;
+  if(!open){
+    const ftop=FLOOR.y-FLOOR.h/2;
+    if(f.vy>=0&&Math.abs(f.x-FLOOR.x)<FLOOR.w/2&&f.y>=ftop-.012&&f.y<=ftop+.05)land(f,ftop);
+  }
+  for(const s of PLATS){
     const top=s.y-s.h/2;
     if(f.vy>=0&&Math.abs(f.x-s.x)<s.w/2&&f.y>=top-.012&&f.y<=top+.05){
       land(f,top);
+      if(s._dx)f.x+=s._dx; /* ride a drifting platform */
     }
   }
-  if(f.y>ARENA.floor+.02)land(f,ARENA.floor); /* safety net — the floor is always solid */
-  if(f.y<ARENA.ceil){f.y=ARENA.ceil;if(f.vy<0)f.vy=0}
-  /* Fences, not a void: a soft touch just bonks off, but a hit that
-     lands you into a fence hard enough while you're already damaged
-     cracks you for the KO — the whole "one more good hit ends it"
-     tension of a ring-out, resolved without anyone ever leaving the
-     coop. */
-  if(f.x<ARENA.left||f.x>ARENA.right){
-    const side=f.x<ARENA.left?-1:1;
-    const impactSpeed=Math.abs(incomingVx);
-    const crackThreshold=SLAM_SPEED*(1-Math.min(.72,f.pct/260));
-    if(impactSpeed>crackThreshold&&f.pct>15)ko(f,side);
-    else wallBonk(f,side);
+  if(open){
+    /* Open fall-off arena: no fences, no safety floor. A falling fighter
+       near an open edge can ledge-save; past the blast zones it's a
+       RING OUT KO. */
+    if(!f.grounded)tryLedgeGrab(f);
+    if(f.x<BLAST.l||f.x>BLAST.r||f.y>BLAST.b||f.y<BLAST.t){ko(f,f.x<.5?-1:1,'ringout');return}
+  }else{
+    if(f.y>ARENA.floor+.02)land(f,ARENA.floor); /* safety net — the walled floor is always solid */
+    if(f.y<ARENA.ceil){f.y=ARENA.ceil;if(f.vy<0)f.vy=0}
+    /* Fences, not a void: a soft touch just bonks off, but a hit that
+       lands you into a fence hard enough while you're already damaged
+       cracks you for the KO — the whole "one more good hit ends it"
+       tension of a ring-out, resolved without anyone ever leaving the
+       coop. */
+    if(f.x<ARENA.left||f.x>ARENA.right){
+      const side=f.x<ARENA.left?-1:1;
+      const impactSpeed=Math.abs(incomingVx);
+      const crackThreshold=SLAM_SPEED*(1-Math.min(.72,f.pct/260));
+      if(impactSpeed>crackThreshold&&f.pct>15)ko(f,side);
+      else wallBonk(f,side);
+    }
   }
+  stepPortals(f);
   if(!reduced){f.trail.unshift({x:f.x,y:f.y});f.trail=f.trail.slice(0,8)}
   grabPickups(f);
+}
+/* Paired two-endpoint portals: enter one gate, exit the other, with a brief
+   per-fighter cooldown so momentum carries through without ping-ponging. */
+function stepPortals(f){
+  if(!PORTALS.length||f.portalCd>0||f.dead)return;
+  for(let i=0;i<PORTALS.length;i++){
+    const p=PORTALS[i];
+    if(Math.abs(f.x-p.x)<.04&&Math.abs(f.y-.06-p.y)<.08){
+      const dest=PORTALS[i%2?i-1:i+1]||p;
+      spawnBurst(f.x,f.y,'#c084fc',12);
+      f.x=dest.x;f.y=dest.y+.06;f.portalCd=1.4;f.invuln=Math.max(f.invuln,.35);
+      spawnBurst(f.x,f.y,'#c084fc',16);addFloater(f.x,f.y-.12,'WARP!','#c084fc',15);sfx('bomb');
+      return;
+    }
+  }
+}
+/* Telegraphed stage hazard (SPARK FOUNDRY): a horizontal laser sweep that
+   blinks a dashed warning line for ~1.1s before firing, then burns anyone
+   crossing the beam once per cycle. */
+function stepLaser(dt){
+  if(!MAP||!MAP.laser)return;
+  if(laser.phase==='idle'){
+    laser.cd-=dt;
+    if(laser.cd<=0){laser.phase='warn';laser.t=1.1;laser.y=.28+Math.random()*.42;laser.hitMask=0;sfx('squawk')}
+  }else if(laser.phase==='warn'){
+    laser.t-=dt;
+    if(laser.t<=0){laser.phase='fire';laser.t=.65;shake=Math.min(1,shake+.25);sfx('bomb')}
+  }else if(laser.phase==='fire'){
+    laser.t-=dt;
+    for(const f of fighters){
+      if(f.dead||f.invuln>0||(laser.hitMask&(1<<f.slot)))continue;
+      if(Math.abs((f.y-.06)-laser.y)<.055){
+        laser.hitMask|=1<<f.slot;
+        f.pct=Math.min(300,f.pct+16);
+        const kb=.012*(1+f.pct/60);
+        f.vx=(f.x<.5?1:-1)*kb;f.vy=-kb*.8;f.stun=.4;f.grounded=false;
+        spawnBurst(f.x,f.y,'#fb923c',20);addFloater(f.x,f.y-.1,'LASER +16%','#fb923c',16);sfx('hit');
+        updateHud();
+      }
+    }
+    if(laser.t<=0){laser.phase='idle';laser.cd=5.5+Math.random()*3.5}
+  }
 }
 let racePickupTimer=5;
 function raceSpawnPickup(){
@@ -764,7 +990,19 @@ function raceBotThink(f,dt,speedMul){
   const d=f.ai.diff||DIFFS.normal;
   f.ai.timer-=dt;f.ai.jumpCd-=dt;
   const target=TOWER.filter(s=>s.y<f.y-.05).sort((a,b)=>b.y-a.y)[0]||SUMMIT;
-  f.ai.dir=target.x>f.x?1:-1;
+  f.ai.hold=Math.max(0,f.ai.hold-dt);
+  if(f.ai.hold<=0)f.ai.dir=target.x>f.x?1:-1;
+  /* Stall watchdog (same contract as brawl bots): ~2s with no meaningful
+     position delta — pinned under an overhang, bouncing between two walls,
+     stuck above the hazard with a bad target — forces a repath + burst. */
+  f.ai.watchT+=dt;
+  if(f.ai.watchT>=2){
+    if(Math.hypot(f.x-f.ai.watchX,f.y-f.ai.watchY)<.05){
+      f.ai.dir*=-1;f.ai.hold=.6;f.vx+=f.ai.dir*.016;
+      if(f.jumps>0){jump(f);f.ai.jumpCd=.2}
+    }
+    f.ai.watchX=f.x;f.ai.watchY=f.y;f.ai.watchT=0;
+  }
   // Climb aggressively and reliably. Brawl bots gate jump behind a rare,
   // probabilistic reaction timer because for them it's an occasional
   // off-stage-recovery reflex — race bots need to jump constantly to
@@ -806,14 +1044,16 @@ function raceSabotage(f,heavy){
     }
   }
 }
-function ko(f,side=0){
+function ko(f,side=0,cause='crack'){
   f.stocks-=1;shake=1;slowmo=reduced?0:.35;
-  const kx=side<0?ARENA.left+.01:side>0?ARENA.right-.01:f.x,ky=Math.max(.05,Math.min(.95,f.y));
-  spawnBurst(kx,ky,f.glow,56);addRing(kx,ky,.2,f.glow);addFloater(.5,.24,`${f.name} CRACKED!`,f.glow,34);sfx('ko');
+  const kx=cause==='crack'&&side<0?ARENA.left+.01:cause==='crack'&&side>0?ARENA.right-.01:Math.max(.05,Math.min(.95,f.x)),ky=Math.max(.05,Math.min(.95,f.y));
+  const msg=cause==='ringout'?`${f.name} RING OUT!`:`${f.name} CRACKED!`;
+  spawnBurst(kx,ky,f.glow,56);addRing(kx,ky,.2,f.glow);addFloater(.5,.24,msg,f.glow,34);sfx('ko');
+  koFeedPush(msg,f.glow);
   const killer=fighters.find(t=>!t.dead&&t!==f&&Math.abs(t.x-f.x)<.4);
   if(killer)matchKos[killer.slot]+=1;
-  if(f.stocks<=0){f.dead=true}
-  else{const spawn=SPAWNS[f.slot];f.x=spawn.x;f.y=spawn.y;f.vx=0;f.vy=0;f.pct=0;f.invuln=2;f.jumps=2;f.stun=0;addFloater(f.x,f.y-.12,`${f.stocks} STOCKS`,f.color,13)}
+  if(f.stocks<=0){f.dead=true;koFeedPush(`${f.name} IS OUT`,f.color)}
+  else{const spawn=mapSpawn(f.slot);f.x=spawn.x;f.y=spawn.y;f.vx=0;f.vy=0;f.pct=0;f.invuln=2;f.jumps=2;f.stun=0;f.ledge=0;f.ledgeCooldown=0;f.portalCd=0;addFloater(f.x,f.y-.12,`${f.stocks} STOCKS`,f.color,13)}
   updateHud();
   const alive=fighters.filter(t=>!t.dead);
   const lost=fighters.reduce((sum,t)=>sum+(3-t.stocks),0);
@@ -868,6 +1108,19 @@ function addRing(x,y,r,color){
   if(reduced)return;
   rings.push({x,y,r,life:.45,color});
 }
+/* KO feed: short screen-space ticker of recent KO events (ring-outs,
+   fence cracks, eliminations), drawn under the top edge in draw(). */
+let koFeed=[];
+function koFeedPush(text,color){
+  koFeed.push({text,color,life:3.2});
+  if(koFeed.length>4)koFeed.shift();
+}
+/* Pre-match arena card: map name + archetype, echoed in the HUD too. */
+function announceMap(){
+  if(!MAP)return;
+  addFloater(.5,.3,MAP.name,MAP.theme.accent,30);
+  addFloater(.5,.37,MAP.arch,'#9bb7aa',14);
+}
 function stepParticles(dt){
   for(const p of particles){p.x+=p.vx*(dt*60);p.y+=p.vy*(dt*60);p.vy+=.0006*(dt*60);p.life-=dt}
   particles=particles.filter(p=>p.life>0);
@@ -875,6 +1128,8 @@ function stepParticles(dt){
   floaters=floaters.filter(f=>f.life>0);
   for(const r of rings){r.r+=dt*.28;r.life-=dt}
   rings=rings.filter(r=>r.life>0);
+  for(const k of koFeed)k.life-=dt;
+  if(koFeed.length&&koFeed[0].life<=0)koFeed=koFeed.filter(k=>k.life>0);
 }
 function stepProjectiles(dt){
   for(const p of projectiles){
@@ -893,14 +1148,15 @@ function stepProjectiles(dt){
         break;
       }
     }
-    if(p.x<ARENA.left-.02||p.x>ARENA.right+.02)p.life=0;
+    if(MAP&&MAP.open?(p.x<BLAST.l||p.x>BLAST.r):(p.x<ARENA.left-.02||p.x>ARENA.right+.02))p.life=0;
   }
   projectiles=projectiles.filter(p=>p.life>0);
 }
 
 /* ---------- HUD ---------- */
 function buildHud(){
-  hudEl.innerHTML=fighters.map(f=>`<div class="fighter-card" style="border-color:${f.color}55"><i style="color:${f.color}">${f.name}${f.human?'':` · BOT ${botDifficulty.toUpperCase()}`}</i><b data-pct="${f.slot}" style="color:${f.color}">0%</b><s data-stocks="${f.slot}" style="color:${f.color}">●●●</s><em data-buffs="${f.slot}" style="font-style:normal;display:block;font-size:11px;min-height:14px"></em></div>`).join('');
+  hudEl.innerHTML=fighters.map(f=>`<div class="fighter-card" style="border-color:${f.color}55"><i style="color:${f.color}">${f.name}${f.human?'':` · BOT ${botDifficulty.toUpperCase()}`}</i><b data-pct="${f.slot}" style="color:${f.color}">0%</b><s data-stocks="${f.slot}" style="color:${f.color}">●●●</s><em data-buffs="${f.slot}" style="font-style:normal;display:block;font-size:11px;min-height:14px"></em></div>`).join('')
+    +(MAP?`<div class="fighter-card" style="min-width:150px;border-color:${MAP.theme.stroke}55"><i style="color:${MAP.theme.accent}">ARENA</i><b style="font-size:13px;color:${MAP.theme.accent}">${MAP.name}</b><s style="color:${MAP.theme.accent};font-size:10px;letter-spacing:1px">${MAP.arch}</s></div>`:'');
   updateHud();
 }
 function updateHud(){
@@ -932,21 +1188,33 @@ function updateCamera(){
     // and zoom out as the vertical gap between them grows.
     const leader=live.reduce((a,b)=>a.y<b.y?a:b);
     const laggard=live.reduce((a,b)=>a.y>b.y?a:b);
-    const vertSpread=Math.max(.08,laggard.y-leader.y);
-    const midY=(leader.y+laggard.y)/2;
+    /* Pull the rising hazard line into frame once it's closing in on the
+       laggard, so the danger is always visible before it bites. */
+    const bottomY=hazardY<laggard.y+.4?Math.min(1,hazardY):laggard.y;
+    const vertSpread=Math.max(.08,bottomY-leader.y);
+    const midY=(leader.y+bottomY)/2;
     camera.x+=(.5-camera.x)*.05;
     camera.y+=(midY-camera.y)*.06;
     camera.z+=(Math.max(.42,Math.min(1,.95-vertSpread*.55))-camera.z)*.045;
     return;
   }
   if(!live.length){camera.x+=(.5-camera.x)*.04;camera.y+=(.56-camera.y)*.04;camera.z+=(1-camera.z)*.04;return}
-  const cx=live.reduce((s,f)=>s+f.x,0)/live.length,cy=live.reduce((s,f)=>s+f.y,0)/live.length;
-  const spread=Math.max(.35,...live.map(f=>Math.hypot(f.x-cx,f.y-cy)));
-  camera.x+=(cx-camera.x)*.045;camera.y+=(cy-camera.y)*.045;camera.z+=(Math.max(.82,Math.min(1.12,1.08-spread*.45))-camera.z)*.045;
+  /* Frame ALL live fighters (bounding box, not centroid distance) plus the
+     active laser hazard, with clamped zoom bounds. Overlapping fighters
+     collapse to the .35 spread floor, so the zoom target is constant there
+     — no jitter when a scrum stacks up on one spot. */
+  let minX=1,maxX=0,minY=1,maxY=0;
+  for(const f of live){if(f.x<minX)minX=f.x;if(f.x>maxX)maxX=f.x;if(f.y<minY)minY=f.y;if(f.y>maxY)maxY=f.y}
+  if(MAP&&MAP.laser&&laser.phase!=='idle'){if(laser.y<minY)minY=laser.y;if(laser.y>maxY)maxY=laser.y}
+  const cx=Math.max(.32,Math.min(.68,(minX+maxX)/2));
+  const cy=Math.max(.3,Math.min(.72,(minY+maxY)/2));
+  const spread=Math.max(.35,(maxX-minX)*.6,(maxY-minY)*.85);
+  const zt=Math.max(.66,Math.min(1.12,1.08-spread*.45));
+  camera.x+=(cx-camera.x)*.045;camera.y+=(cy-camera.y)*.045;camera.z+=(zt-camera.z)*.045;
 }
 function sx(x){return (x-camera.x)*W*camera.z+W/2}
 function px(x){return x*W}function py(y){return y*H}
-function drawStage(){
+function drawStage(t){
   if(mode==='racetop'){
     for(const s of TOWER){
       ctx.fillStyle=s.summit?'#2a1f0a':'#0a1f14';ctx.strokeStyle=s.summit?'#fde04799':'#2cff9b33';ctx.lineWidth=(s.summit?3:2)*DPR;
@@ -959,25 +1227,62 @@ function drawStage(){
     ctx.strokeStyle='#fb923c';ctx.lineWidth=2*DPR;ctx.beginPath();ctx.moveTo(0,hazardPx);ctx.lineTo(W,hazardPx);ctx.stroke();
     return;
   }
-  /* The coop: solid floor + side fences (no ring-out, nothing to fall
-     off of) with a set of seeded floating roosts (PLATS) in the middle. */
-  ctx.fillStyle='#0b2417';ctx.strokeStyle='#2cff9b44';ctx.lineWidth=2*DPR;
-  const fx=px(FLOOR.x-FLOOR.w/2),fy=py(FLOOR.y-FLOOR.h/2),fw=px(FLOOR.w),fh=Math.max(6*DPR,py(FLOOR.h));
-  ctx.beginPath();ctx.roundRect(fx,fy,fw,fh,8*DPR);ctx.fill();ctx.stroke();
-  ctx.fillStyle='#4ade8022';ctx.fillRect(fx,fy,fw,2*DPR);
-  /* fences */
-  ctx.strokeStyle='#2cff9b66';ctx.lineWidth=3*DPR;
-  for(const wallX of [ARENA.left,ARENA.right]){
-    const x=px(wallX),topY=py(ARENA.ceil),botY=py(ARENA.floor);
-    ctx.beginPath();ctx.moveTo(x,topY);ctx.lineTo(x,botY);ctx.stroke();
-    for(let i=0;i<8;i++){const railY=topY+(botY-topY)*i/7;ctx.beginPath();ctx.moveTo(x-6*DPR,railY);ctx.lineTo(x+6*DPR,railY);ctx.stroke()}
+  const th=(MAP||MAPS[0]).theme;
+  const open=MAP&&MAP.open;
+  if(!open){
+    /* Walled archetype: solid floor + side fences with seeded roosts. */
+    ctx.fillStyle=th.floor;ctx.strokeStyle=th.stroke+'44';ctx.lineWidth=2*DPR;
+    const fx=px(FLOOR.x-FLOOR.w/2),fy=py(FLOOR.y-FLOOR.h/2),fw=px(FLOOR.w),fh=Math.max(6*DPR,py(FLOOR.h));
+    ctx.beginPath();ctx.roundRect(fx,fy,fw,fh,8*DPR);ctx.fill();ctx.stroke();
+    ctx.fillStyle=th.accent+'22';ctx.fillRect(fx,fy,fw,2*DPR);
+    /* fences */
+    ctx.strokeStyle=th.stroke+'66';ctx.lineWidth=3*DPR;
+    for(const wallX of [ARENA.left,ARENA.right]){
+      const x=px(wallX),topY=py(ARENA.ceil),botY=py(ARENA.floor);
+      ctx.beginPath();ctx.moveTo(x,topY);ctx.lineTo(x,botY);ctx.stroke();
+      for(let i=0;i<8;i++){const railY=topY+(botY-topY)*i/7;ctx.beginPath();ctx.moveTo(x-6*DPR,railY);ctx.lineTo(x+6*DPR,railY);ctx.stroke()}
+    }
+  }else{
+    /* Open fall-off archetype: platforms over a void — a faint glow marks
+       the bottom blast zone instead of any floor. */
+    ctx.fillStyle=th.stroke+'14';ctx.fillRect(0,py(1.0),W,H);
+    ctx.strokeStyle=th.stroke+'33';ctx.lineWidth=1*DPR;
+    ctx.beginPath();ctx.moveTo(0,py(1.0));ctx.lineTo(W,py(1.0));ctx.stroke();
   }
   for(const s of PLATS){
-    ctx.fillStyle='#0a1f14';ctx.strokeStyle='#2cff9b33';ctx.lineWidth=2*DPR;
+    ctx.fillStyle=th.plat;ctx.strokeStyle=s.move?th.accent+'88':th.stroke+'33';ctx.lineWidth=2*DPR;
     const x=px(s.x-s.w/2),y=py(s.y-s.h/2),w=px(s.w),h=Math.max(6*DPR,py(s.h));
     ctx.beginPath();ctx.roundRect(x,y,w,h,6*DPR);ctx.fill();ctx.stroke();
   }
+  /* grabbable ledge markers */
+  if(open&&LEDGES.length){
+    ctx.fillStyle=th.accent;ctx.globalAlpha=.85;
+    for(const L of LEDGES)ctx.fillRect(px(L.x)-2*DPR,py(L.y)-2*DPR,4*DPR,4*DPR);
+    ctx.globalAlpha=1;
+  }
+  /* paired portal gates */
+  for(let i=0;i<PORTALS.length;i++){
+    const p=PORTALS[i];
+    ctx.strokeStyle='#c084fc';ctx.shadowColor='#c084fc';ctx.shadowBlur=18*DPR;ctx.lineWidth=3*DPR;
+    ctx.beginPath();ctx.ellipse(px(p.x),py(p.y),9*DPR,15*DPR,Math.sin(t*.003+i*Math.PI)*.4,0,Math.PI*2);ctx.stroke();
+    ctx.shadowBlur=0;
+  }
+  /* laser sweep: dashed blinking telegraph, then the live beam */
+  if(MAP&&MAP.laser&&laser.phase!=='idle'){
+    const ly=py(laser.y);
+    if(laser.phase==='warn'){
+      ctx.globalAlpha=.25+.35*(Math.floor(laser.t*8)%2);
+      ctx.strokeStyle='#fb923c';ctx.lineWidth=2*DPR;ctx.setLineDash(LASER_DASH);
+      ctx.beginPath();ctx.moveTo(px(ARENA.left),ly);ctx.lineTo(px(ARENA.right),ly);ctx.stroke();
+      ctx.setLineDash(EMPTY_DASH);ctx.globalAlpha=1;
+    }else{
+      ctx.globalAlpha=.85;ctx.fillStyle='#fb923c';ctx.shadowBlur=24*DPR;ctx.shadowColor='#fb923c';
+      ctx.fillRect(px(ARENA.left),ly-3*DPR,px(ARENA.right-ARENA.left),6*DPR);
+      ctx.shadowBlur=0;ctx.globalAlpha=1;
+    }
+  }
 }
+const LASER_DASH=[24,20],EMPTY_DASH=[];
 function drawFighter(f,t){
   if(f.dead)return;
   if(!reduced)for(let i=f.trail.length-1;i>0;i--){const tr=f.trail[i];ctx.globalAlpha=(1-i/f.trail.length)*.25;ctx.fillStyle=f.glow;ctx.beginPath();ctx.arc(px(tr.x),py(tr.y)-14*DPR,10*DPR,0,Math.PI*2);ctx.fill()}
@@ -1106,7 +1411,7 @@ function draw(t){
   ctx.strokeStyle='#183626';ctx.lineWidth=1*DPR;
   for(let i=0;i<=10;i++){ctx.globalAlpha=.35;ctx.beginPath();ctx.moveTo(W*i/10,0);ctx.lineTo(W*i/10,H);ctx.stroke();ctx.beginPath();ctx.moveTo(0,H*i/10);ctx.lineTo(W,H*i/10);ctx.stroke()}
   ctx.globalAlpha=1;
-  drawStage();
+  drawStage(t);
   for(const p of pickups)(mode==='racetop'?drawRacePickup:drawPickup)(p,t);
   for(const p of projectiles)drawProjectile(p);
   for(const r of rings){ctx.globalAlpha=Math.max(0,r.life/.45);ctx.strokeStyle=r.color;ctx.lineWidth=3*DPR;ctx.beginPath();ctx.arc(px(r.x),py(r.y),px(r.r),0,Math.PI*2);ctx.stroke()}
@@ -1115,6 +1420,17 @@ function draw(t){
   ctx.textAlign='center';ctx.textBaseline='middle';
   for(const fl of floaters){ctx.globalAlpha=Math.max(0,Math.min(1,fl.life));ctx.shadowBlur=18*DPR;ctx.shadowColor=fl.color;ctx.fillStyle=fl.color;ctx.font=`900 ${fl.size*DPR}px ui-monospace`;ctx.fillText(fl.text,px(fl.x),py(fl.y));ctx.shadowBlur=0}
   ctx.globalAlpha=1;ctx.restore();
+  /* KO feed ticker: screen-space, unaffected by camera/shake */
+  if(koFeed.length){
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    for(let i=0;i<koFeed.length;i++){
+      const k=koFeed[i];
+      ctx.globalAlpha=Math.max(0,Math.min(1,k.life));
+      ctx.fillStyle=k.color;ctx.font=`700 ${12*DPR}px ui-monospace`;
+      ctx.fillText(k.text,W/2,(34+i*20)*DPR);
+    }
+    ctx.globalAlpha=1;
+  }
 }
 
 /* ---------- main loop ---------- */
@@ -1137,10 +1453,13 @@ function loop(t){
   }
   if(slowmo>0){slowmo=Math.max(0,slowmo-dt);dt*=.35}
   shake=Math.max(0,shake-dt*3);
+  matchTime+=dt;
   pickupTimer-=dt;
   if(pickupTimer<=0){pickupTimer=7+Math.random()*5;if(pickups.length<3)spawnPickup()}
   for(const p of pickups)p.age+=dt;
   tickBombs(dt);
+  stepMovers();
+  stepLaser(dt);
   for(const f of fighters)step(f,dt);
   updateHud();
   stepParticles(dt);
@@ -1266,8 +1585,10 @@ function joinNetMatch(seed){
   const count=mode==='net2v2'||mode==='netffa'?4:2;
   fighters=[];
   for(let i=0;i<count;i++)fighters.push(makeFighter(i,i<humanCount));
-  buildPlatforms(seed);
-  pickups=[];particles=[];floaters=[];rings=[];projectiles=[];matchKos=[0,0,0,0];pickupTimer=6;over=false;running=true;paused=false;
+  buildArena(MAPS[seed%MAPS.length],seed); /* same seed→map derivation as hostStartNetMatch — both clients agree */
+  placeFighters();
+  pickups=[];particles=[];floaters=[];rings=[];projectiles=[];matchKos=[0,0,0,0];pickupTimer=6;over=false;running=true;paused=false;koFeed.length=0;
+  announceMap();
   setupEl.hidden=true;endEl.hidden=true;hudEl.hidden=false;
   buildHud();last=performance.now();if(raf)cancelAnimationFrame(raf);raf=requestAnimationFrame(loop);
 }
@@ -1294,8 +1615,10 @@ function hostStartNetMatch(){
   const count=mode==='net2v2'||mode==='netffa'?4:2;
   fighters=[];
   for(let i=0;i<count;i++)fighters.push(makeFighter(i,i<humanCount));
-  buildPlatforms(seed);
-  pickups=[];particles=[];floaters=[];rings=[];projectiles=[];matchKos=[0,0,0,0];pickupTimer=6;over=false;running=true;paused=false;
+  buildArena(MAPS[seed%MAPS.length],seed); /* map derived from the shared seed so every client builds the same arena */
+  placeFighters();
+  pickups=[];particles=[];floaters=[];rings=[];projectiles=[];matchKos=[0,0,0,0];pickupTimer=6;over=false;running=true;paused=false;koFeed.length=0;
+  announceMap();
   setupEl.hidden=true;endEl.hidden=true;hudEl.hidden=false;
   buildHud();last=performance.now();if(raf)cancelAnimationFrame(raf);raf=requestAnimationFrame(loop);
   sendMatchAction({phase:'active',seed,hostProbe:hostNonce},'merge');

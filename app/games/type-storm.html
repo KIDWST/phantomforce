@@ -25,6 +25,10 @@
     .overlay p{color:#9db8aa;line-height:1.55}
     .overlay .big{color:#effff6;font-size:20px;font-weight:800}
     .overlay button{min-width:150px;min-height:48px;border:0;border-radius:999px;background:#55ffa8;padding:14px 24px;font-weight:900;font-size:15px;cursor:pointer;color:#02150c}
+    .diffs{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:14px 0 18px}
+    .diffs button{min-width:0;min-height:40px;padding:9px 16px;font-size:13px;font-weight:800;background:#0a2c1d;color:#9fe8c4;border:1px solid #41ffa14d;border-radius:999px;cursor:pointer}
+    .diffs button[aria-pressed="true"]{background:#55ffa8;color:#02150c;border-color:#55ffa8}
+    .hud .storm b{color:#9fe8c4;font-size:18px}
     body.reduced .overlay h1{text-shadow:none}
     @media(max-width:420px){.overlay h1{font-size:36px}.hud b{font-size:19px}}
   </style>
@@ -32,13 +36,14 @@
 <body>
   <header class="hud">
     <div><span>SCORE</span><b data-score>0</b></div>
+    <div class="storm"><span data-diffname>MEDIUM</span><b data-mult>&times;1.00</b></div>
     <div><span>COMBO</span><b data-combo>0</b></div>
     <div class="shields"><span>SHIELDS</span><b data-shields>&#11041;&#11041;&#11041;</b></div>
   </header>
   <div class="stage"><canvas aria-label="Type Storm play field"></canvas></div>
   <button class="hint" type="button">&#9000; Tap to open keyboard &mdash; type a word's first letter to lock it, then finish it</button>
   <input class="kbd" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" aria-hidden="true" tabindex="-1">
-  <div class="overlay start"><div><h1>Type Storm</h1><p>Words drop fast. Type a word's first letter to lock on &mdash; a locked word freezes in place while you finish it, safe from the storm. Everything else keeps falling, so lock quick and clear the field. Watch for gold &#9889; Thunder Words: they never stop falling and never cost a shield, but finish one and you heal a shield and bank a big bonus.</p><button type="button">Start</button></div></div>
+  <div class="overlay start"><div><h1>Type Storm</h1><p>Words drop fast. Type a word's first letter to lock on &mdash; a locked word freezes in place while you finish it, safe from the storm. Everything else keeps falling, so lock quick and clear the field. Watch for gold &#9889; Thunder Words: they never stop falling and never cost a shield, but finish one and you heal a shield and bank a big bonus.</p><div class="diffs" role="group" aria-label="Difficulty"><button type="button" data-diff="easy">Easy</button><button type="button" data-diff="medium">Medium</button><button type="button" data-diff="hard">Hard</button><button type="button" data-diff="expert">Expert</button></div><button type="button">Start</button></div></div>
   <div class="overlay pause" hidden><div><h1>Paused</h1><p>The storm is holding its breath.</p><button type="button">Resume</button></div></div>
   <div class="overlay result" hidden><div><h1>Shields down</h1><p class="big" data-final></p><p data-detail></p><button type="button">Play again</button></div></div>
   <script>
@@ -51,10 +56,47 @@
     const startEl=document.querySelector('.start'),pauseEl=document.querySelector('.pause'),resultEl=document.querySelector('.result');
     const hintEl=document.querySelector('.hint');
     const FONT='700 20px ui-monospace,SFMono-Regular,Menlo,monospace';
+    /* Difficulty presets: base fall speed, ramp rates, spawn cadence, when
+       the harder word pools unlock, and the bounds the skill-aware speed
+       multiplier is allowed to roam inside. Easy can never be pushed past
+       ×1.22 no matter how hot the player runs; Expert never dips below ×1. */
+    const DIFFS={
+      easy:  {label:'EASY',  base:58, ramp:2.1, streakV:0.9, cap:190, int0:1.5,  intMin:0.55, intRamp:0.009, hardAt:30, stormAt:75, mMin:0.75, mMax:1.22},
+      medium:{label:'MEDIUM',base:88, ramp:3.6, streakV:1.6, cap:290, int0:1.1,  intMin:0.28, intRamp:0.013, hardAt:18, stormAt:42, mMin:0.85, mMax:1.45},
+      hard:  {label:'HARD',  base:118,ramp:4.6, streakV:2.0, cap:360, int0:0.92, intMin:0.24, intRamp:0.016, hardAt:10, stormAt:26, mMin:0.9,  mMax:1.65},
+      expert:{label:'EXPERT',base:150,ramp:5.8, streakV:2.4, cap:430, int0:0.78, intMin:0.2,  intRamp:0.02,  hardAt:6,  stormAt:14, mMin:1,    mMax:1.9}
+    };
+    let difficulty='medium';
+    try{const savedDiff=localStorage.getItem('pf.typestorm.difficulty');if(savedDiff&&DIFFS[savedDiff])difficulty=savedDiff}catch(err){}
     let cw=320,ch=480,baseY=420;
     let falling=[],active=null,phase='start',paused=false,completed=false;
     let score=0,shields=3,wordsDestroyed=0,streak=0,bestCombo=0,elapsed=0,spawnT=0,flash=0;
     let last=0,soundOn=true,reduced=false,audio=null,thunderT=0,thunderFlash=0;
+    /* Skill-aware pacing: keystrokes from the last ~20s (correct + missed)
+       feed a rolling accuracy and a recent-WPM estimate. Fast + accurate
+       play eases the multiplier up toward the difficulty's ceiling; misses
+       and shield losses knock it down immediately. */
+    let skillMult=1,keyLog=[],lastMultShown=-1;
+    const multEl=document.querySelector('[data-mult]'),diffNameEl=document.querySelector('[data-diffname]');
+    function logKey(ok){keyLog.push({t:elapsed,ok:ok?1:0})}
+    function pruneKeyLog(){while(keyLog.length&&elapsed-keyLog[0].t>20)keyLog.shift()}
+    function skillTarget(){
+      const D=DIFFS[difficulty];
+      pruneKeyLog();
+      if(keyLog.length<6)return Math.min(1,D.mMax)>D.mMin?Math.max(D.mMin,Math.min(1,skillMult)):D.mMin;
+      let ok=0,recent=0;
+      for(const k of keyLog){ok+=k.ok;if(k.ok&&elapsed-k.t<15)recent++}
+      const acc=ok/keyLog.length;
+      const wpm=recent*0.8; /* (chars/5) per 15s window -> words per minute */
+      const accN=Math.max(0,Math.min(1,(acc-0.82)/0.16));
+      const wpmN=Math.max(0,Math.min(1,(wpm-18)/42));
+      return D.mMin+(D.mMax-D.mMin)*accN*(0.35+0.65*wpmN);
+    }
+    function showMult(){
+      if(Math.abs(skillMult-lastMultShown)<0.01)return;
+      lastMultShown=skillMult;
+      multEl.textContent='×'+skillMult.toFixed(2);
+    }
 
     function beep(freq,dur=0.05,gain=0.03){
       if(!soundOn)return;
@@ -83,8 +125,9 @@
       document.querySelector('[data-shields]').textContent=shields>0?'⬢'.repeat(shields):'—';
     }
     function chooseText(){
-      if(elapsed>42&&Math.random()<0.42)return STORM_STRINGS[Math.floor(Math.random()*STORM_STRINGS.length)];
-      if(elapsed>18&&Math.random()<0.48)return HARD_WORDS[Math.floor(Math.random()*HARD_WORDS.length)];
+      const D=DIFFS[difficulty];
+      if(elapsed>D.stormAt&&Math.random()<0.42)return STORM_STRINGS[Math.floor(Math.random()*STORM_STRINGS.length)];
+      if(elapsed>D.hardAt&&Math.random()<0.48)return HARD_WORDS[Math.floor(Math.random()*HARD_WORDS.length)];
       return WORDS[Math.floor(Math.random()*WORDS.length)];
     }
     function findSpot(width,leftMargin=8){
@@ -106,8 +149,11 @@
       const width=ctx.measureText(text).width;
       /* Fast base fall from the very start — the pressure is "lock it
          quickly", not "watch it slowly arrive". Once locked, a word freezes,
-         so raw fall speed no longer punishes mid-typing the way it used to. */
-      const base=Math.min(290,88+elapsed*3.6+streak*1.6);
+         so raw fall speed no longer punishes mid-typing the way it used to.
+         The difficulty preset sets the base/ramp/cap, then the skill-aware
+         multiplier scales the result inside that difficulty's bounds. */
+      const D=DIFFS[difficulty];
+      const base=Math.min(D.cap,D.base+elapsed*D.ramp+streak*D.streakV)*skillMult;
       const x=findSpot(width);
       falling.push({text,matched:0,x,y:-14,width,speed:base*(0.9+Math.random()*0.42),isThunder:false});
     }
@@ -118,14 +164,17 @@
       const width=ctx.measureText(text).width;
       const x=findSpot(width,22);
       /* Thunder words never freeze and never cost a shield — pure risk/
-         reward. They fall hard and fast on purpose. */
-      falling.push({text,matched:0,x,y:-14,width,speed:340+Math.random()*60,isThunder:true});
+         reward. They fall hard and fast on purpose, scaled to difficulty. */
+      const tv=(280+DIFFS[difficulty].base*0.7+Math.random()*60)*Math.max(1,skillMult*0.92);
+      falling.push({text,matched:0,x,y:-14,width,speed:tv,isThunder:true});
       thunderFlash=0.4;
       beep(880,0.12,0.05);
     }
     function startRun(){
       falling=[];active=null;
       score=0;shields=3;wordsDestroyed=0;streak=0;bestCombo=0;elapsed=0;spawnT=0.9;flash=0;completed=false;
+      const D=DIFFS[difficulty];
+      keyLog=[];skillMult=Math.max(D.mMin,Math.min(D.mMax,1));lastMultShown=-1;showMult();
       thunderT=9+Math.random()*4;thunderFlash=0;
       phase='playing';paused=false;
       startEl.hidden=true;pauseEl.hidden=true;resultEl.hidden=true;
@@ -143,6 +192,11 @@
     }
     function miss(){
       streak=0;flash=Math.max(flash,0.25);
+      logKey(false);
+      /* A miss eases the storm off right away instead of waiting for the
+         rolling window to notice — bounded by the difficulty floor. */
+      skillMult=Math.max(DIFFS[difficulty].mMin,skillMult-0.06);
+      showMult();
       updateHud();beep(130,0.09,0.035);
     }
     function destroyWord(word){
@@ -167,7 +221,7 @@
       if(phase!=='playing'||paused)return;
       if(active&&falling.includes(active)){
         if(active.text[active.matched]===ch){
-          active.matched++;beep(500+active.matched*40,0.03,0.02);
+          active.matched++;logKey(true);beep(500+active.matched*40,0.03,0.02);
           if(active.matched>=active.text.length)destroyWord(active);
         }else miss();
         return;
@@ -175,7 +229,7 @@
       active=null;
       let target=null;
       for(const w of falling)if(w.text[0]===ch&&(!target||w.y>target.y))target=w;
-      if(target){target.matched=1;active=target;beep(520,0.03,0.02)}
+      if(target){target.matched=1;active=target;logKey(true);beep(520,0.03,0.02)}
       else miss();
     }
     function loseShield(word){
@@ -186,19 +240,28 @@
         return;
       }
       shields--;streak=0;flash=0.5;
+      /* Losing a shield is the strongest "too fast" signal — big ease-off. */
+      skillMult=Math.max(DIFFS[difficulty].mMin,skillMult-0.14);
+      showMult();
       updateHud();beep(110,0.3,0.05);
       if(shields<=0){gameOver();return}
       host('progress',{score,progress:Math.min(99,wordsDestroyed*3),state:{words:wordsDestroyed,bestCombo}});
     }
     function update(dt){
       elapsed+=dt;
+      const D=DIFFS[difficulty];
+      /* Glide the live multiplier toward the skill target over ~2.5s so
+         speed changes read as the storm "leaning in", not a jump cut. */
+      skillMult+=(skillTarget()-skillMult)*Math.min(1,dt*0.4);
+      skillMult=Math.max(D.mMin,Math.min(D.mMax,skillMult));
+      showMult();
       if(flash>0)flash=Math.max(0,flash-dt);
       if(thunderFlash>0)thunderFlash=Math.max(0,thunderFlash-dt);
       spawnT-=dt;
-      const interval=Math.max(0.28,1.1-elapsed*0.013-streak*0.008);
+      const interval=Math.max(D.intMin,D.int0-elapsed*D.intRamp-streak*0.008)/skillMult;
       if(spawnT<=0){
         spawn();
-        if(elapsed>20&&Math.random()<Math.min(0.72,0.22+elapsed*.008))spawn();
+        if(elapsed>D.hardAt+2&&Math.random()<Math.min(0.72,0.22+elapsed*.008))spawn();
         spawnT=interval*(0.82+Math.random()*0.32);
       }
       thunderT-=dt;
@@ -311,7 +374,17 @@
       if(event.data.type==='exit')setPaused(true);
       if(event.data.type==='restart')startRun();
     });
-    startEl.querySelector('button').onclick=startRun;
+    const diffBtns=[...document.querySelectorAll('.diffs button')];
+    function setDifficulty(d,persist){
+      if(!DIFFS[d])return;
+      difficulty=d;
+      for(const b of diffBtns)b.setAttribute('aria-pressed',String(b.dataset.diff===d));
+      diffNameEl.textContent=DIFFS[d].label;
+      if(persist)try{localStorage.setItem('pf.typestorm.difficulty',d)}catch(err){}
+    }
+    for(const b of diffBtns)b.addEventListener('click',()=>setDifficulty(b.dataset.diff,true));
+    setDifficulty(difficulty,false);
+    startEl.querySelector('.diffs+button').onclick=startRun;
     pauseEl.querySelector('button').onclick=()=>setPaused(false);
     resultEl.querySelector('button').onclick=startRun;
     fit();updateHud();
