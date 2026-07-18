@@ -708,3 +708,38 @@ Run the authenticated two-organization persistence proof in Recommended Cycle 7.
 ## Next Task
 
 Run the authenticated two-organization persistence proof in Recommended Cycle 8.
+
+# 2026-07-18 - Live Database Authentication Recovery
+
+## Failure Verified
+
+- The live backend booted with `owner-production` plus the legacy local customer
+  store while the unified account screen called `/auth/login`.
+- The approved PostgreSQL container was stopped, had no restart policy, and its
+  schema was six committed migrations behind the application.
+- Admin login was rejected before owner authentication, and database-backed
+  customer signup/recovery could not be used.
+
+## Corrections
+
+- Preserved the prior server env, local customer store, and a PostgreSQL dump in
+  the protected PhantomForce backup folder.
+- Applied the six pending committed Prisma migrations, migrated the owner and
+  customer test identities into separate organizations, and enabled database
+  auth in the live server env.
+- Added `Ensure-LocalDatabase` to Hermes startup and set the approved container
+  to `unless-stopped` so reboot recovery happens before the API binds.
+- Corrected `/sessions` metadata to advertise database signup and password-reset
+  routes instead of legacy local-account routes.
+
+## Verification
+
+- PASS: local and public owner login resolve to platform super-admin in the
+  PhantomForce internal organization.
+- PASS: local and public customer login resolve only to the Customer 1 tenant.
+- PASS: public admin/app `/sessions` report database auth reachable and
+  production-ready.
+- PASS: `npm run typecheck`, `npm run test:auth-boundaries`, and the 56-check
+  database-auth suite plus browser tenant-isolation proof.
+- PASS: stopped PostgreSQL deliberately; patched Hermes startup revived it and
+  restored database reachability with restart policy `unless-stopped`.

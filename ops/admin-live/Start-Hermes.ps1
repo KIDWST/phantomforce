@@ -52,6 +52,60 @@ function Read-DotEnvFile {
   return $values
 }
 
+function Ensure-LocalDatabase {
+  param([hashtable]$ServerEnv)
+
+  if ([string]$ServerEnv["PHANTOMFORCE_AUTH_PROVIDER"] -ne "database") {
+    return
+  }
+
+  $databaseUrl = [string]$ServerEnv["DATABASE_URL"]
+  if ($databaseUrl -notmatch '@(?:127\.0\.0\.1|localhost):5432(?:/|\?)') {
+    return
+  }
+
+  if (Test-NetConnection -ComputerName "127.0.0.1" -Port 5432 -InformationLevel Quiet -WarningAction SilentlyContinue) {
+    return
+  }
+
+  $docker = Get-Command docker -ErrorAction SilentlyContinue
+  if (-not $docker) {
+    throw "Database auth requires local PostgreSQL, but Docker was not found and port 5432 is closed."
+  }
+
+  $container = if ($env:PHANTOMFORCE_POSTGRES_CONTAINER) {
+    $env:PHANTOMFORCE_POSTGRES_CONTAINER
+  } else {
+    "phantomforce-postgres-launch"
+  }
+  $running = & $docker.Source container inspect --format "{{.State.Running}}" $container 2>$null
+  if ($LASTEXITCODE -ne 0) {
+    throw "Database auth requires the missing PostgreSQL container '$container'."
+  }
+
+  if ([string]$running -ne "true") {
+    & $docker.Source start $container | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+      throw "Failed to start PostgreSQL container '$container'."
+    }
+  }
+
+  & $docker.Source update --restart unless-stopped $container | Out-Null
+  if ($LASTEXITCODE -ne 0) {
+    throw "Failed to set the PostgreSQL restart policy for '$container'."
+  }
+
+  $deadline = (Get-Date).AddSeconds(30)
+  do {
+    if (Test-NetConnection -ComputerName "127.0.0.1" -Port 5432 -InformationLevel Quiet -WarningAction SilentlyContinue) {
+      return
+    }
+    Start-Sleep -Seconds 1
+  } while ((Get-Date) -lt $deadline)
+
+  throw "PostgreSQL container '$container' did not become reachable on 127.0.0.1:5432."
+}
+
 $repo = (Resolve-Path $RepoRoot).Path
 $serverDir = Join-Path $repo "server"
 if (!(Test-Path -LiteralPath (Join-Path $serverDir "src\index.ts"))) {
@@ -61,6 +115,8 @@ if (!(Test-Path -LiteralPath (Join-Path $serverDir ".env"))) {
   Write-Warning "server\.env not found - Hermes may fail closed on auth config. See docs\ADMIN_RECOVERY.md."
 }
 $serverEnvPath = Join-Path $serverDir ".env"
+$serverEnv = Read-DotEnvFile -Path $serverEnvPath
+Ensure-LocalDatabase -ServerEnv $serverEnv
 
 $node = (Get-Command node -ErrorAction Stop).Source
 $stateDir = Join-Path $env:LOCALAPPDATA "PhantomForce\admin-live"
@@ -101,7 +157,6 @@ $procArgs = @("--import", ([System.Uri]$tsxLoader).AbsoluteUri, "src\index.ts")
 
 $oldCommit = $env:PHANTOMFORCE_BUILD_COMMIT
 $oldPort = $env:PORT
-$serverEnv = Read-DotEnvFile -Path $serverEnvPath
 $oldServerEnv = @{}
 foreach ($name in $serverEnv.Keys) {
   $oldServerEnv[$name] = [Environment]::GetEnvironmentVariable($name, "Process")

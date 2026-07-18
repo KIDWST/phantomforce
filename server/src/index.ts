@@ -1446,9 +1446,21 @@ app.get("/sessions", async (request) => {
       customerAuthEnabled: databaseLoginUsable || localCustomerEnabled,
       localCustomerAuthEnabled: localCustomerEnabled,
       customerLoginEndpoint: scope !== "admin" && (databaseLoginUsable || localCustomerEnabled) ? "/auth/login" : undefined,
-      customerRegisterEndpoint: customerAccountActionsEnabled ? "/auth/register" : undefined,
-      customerPasswordResetRequestEndpoint: customerAccountActionsEnabled ? "/auth/password-reset/request" : undefined,
-      customerPasswordResetCompleteEndpoint: customerAccountActionsEnabled ? "/auth/password-reset/complete" : undefined,
+      customerRegisterEndpoint: customerAccountActionsEnabled
+        ? databaseLoginUsable
+          ? "/auth/signup"
+          : "/auth/register"
+        : undefined,
+      customerPasswordResetRequestEndpoint: customerAccountActionsEnabled
+        ? databaseLoginUsable
+          ? "/auth/forgot-password"
+          : "/auth/password-reset/request"
+        : undefined,
+      customerPasswordResetCompleteEndpoint: customerAccountActionsEnabled
+        ? databaseLoginUsable
+          ? "/auth/reset-password"
+          : "/auth/password-reset/complete"
+        : undefined,
       localCustomerStoreConfigured: localCustomerEnabled,
       localCustomerStorePath: localCustomerEnabled && publicHostScope(publicHost) === "local" ? localCustomerAuthStorePath() : undefined,
     },

@@ -683,6 +683,34 @@
           "description": "Redundant Memory, Prompt Library, and Map row must not return inside chat."
         }
       ]
+    },
+    {
+      "id": "database-auth-reboot-recovery",
+      "status": "active",
+      "title": "Live admin and customer auth depend on a self-recovering database",
+      "ownerDecision": "admin.phantomforce.online uses the database-backed platform super-admin account, while app.phantomforce.online uses tenant-scoped customer accounts. Hermes must revive the approved local PostgreSQL container before booting so a Windows restart cannot silently fall back to incompatible customer-only auth.",
+      "requiredPatterns": [
+        {
+          "file": "ops/admin-live/Start-Hermes.ps1",
+          "pattern": "function Ensure-LocalDatabase",
+          "description": "Hermes verifies or starts local PostgreSQL before binding the API."
+        },
+        {
+          "file": "ops/admin-live/Start-Hermes.ps1",
+          "pattern": "docker.Source update --restart unless-stopped",
+          "description": "The approved database container survives normal host restarts."
+        },
+        {
+          "file": "server/src/index.ts",
+          "pattern": "databaseLoginUsable[\\s\\S]*?/auth/signup",
+          "description": "Database auth advertises the real signup endpoint on the customer host."
+        },
+        {
+          "file": "server/src/index.ts",
+          "pattern": "databaseLoginUsable[\\s\\S]*?/auth/forgot-password",
+          "description": "Database auth advertises the real password-recovery endpoint."
+        }
+      ]
     }
   ]
 }
