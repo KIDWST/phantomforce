@@ -59,6 +59,24 @@
 - Mobile dashboard proof: `dashboard-chat-audit-20260717/04-after-dashboard-mobile.png`.
 - Before comparison: `dashboard-chat-audit-20260717/01-before-dashboard-desktop.png`.
 
+### Live Deployment Proof
+
+- Pushed `main` and moved production off the actively edited
+  `phantomforce-main-trunk-20260706` worktree onto the dedicated clean checkout
+  `C:\Users\jorda\Documents\Codex\deployments\phantomforce-live`.
+- Migrated the active `.phantom`, `server/.local`, and `server/data` records to
+  `%LOCALAPPDATA%\PhantomForce\live-data` and linked the deployment checkout to
+  that durable location so code updates do not replace live records.
+- Repointed the admin sync task, the three-minute hidden fallback watcher, the
+  five-minute remote-stack watchdog, PM2 defaults, and host verifier to the
+  deployment checkout. Active development worktrees are no longer deployment
+  sources.
+- Local static health reported the dedicated root; backend health reported the
+  pushed commit; both `admin.phantomforce.online` and
+  `app.phantomforce.online` returned build `phantom-live-20260718-20`.
+- In-app browser navigation to the live admin host loaded the real account gate
+  and `main.js?v=phantom-live-20260718-20`.
+
 ### Commands Run
 
 - `npm run build`
@@ -75,6 +93,10 @@
 - `npm run test:phantomplay`
 - `node --check` across 10 touched frontend modules.
 - `git diff --check`
+- `npm ci` and `npm run prisma:generate` in the clean deployment checkout.
+- `ops/admin-live/Sync-AdminMain.ps1 -RestartServer` against the clean checkout.
+- Local `/health` checks on ports 5177 and 5190 plus public HTTPS checks for
+  admin/app hosts.
 
 ### Results
 
@@ -93,6 +115,9 @@
   rooms, moderation, and route authorization.
 - PASS: frontend syntax and whitespace checks; Git emitted only Windows line-
   ending notices.
+- PASS: live UI and API serve the dedicated checkout, the backend reports the
+  pushed commit, public hosts report build `phantom-live-20260718-20`, and the
+  hidden sync/watchdog tasks are enabled against the same source.
 
 ### Remaining P0/P1
 
