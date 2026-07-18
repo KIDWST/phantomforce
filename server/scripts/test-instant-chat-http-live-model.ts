@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn, type ChildProcess } from "node:child_process";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const baseUrl = process.env.PHANTOM_TEST_SERVER_URL?.trim() || "http://127.0.0.1:5192";
 const model = process.env.PHANTOM_INSTANT_CHAT_MODEL?.trim() || "qwen2.5:14b";
@@ -35,7 +35,8 @@ async function serverReady() {
 async function ensureServer(): Promise<ChildProcess | null> {
   if (await serverReady()) return null;
   const serverRoot = fileURLToPath(new URL("../", import.meta.url));
-  const child = spawn(process.execPath, ["dist/index.js"], {
+  const tsxLoader = fileURLToPath(new URL("../../node_modules/tsx/dist/loader.mjs", import.meta.url));
+  const child = spawn(process.execPath, ["--import", pathToFileURL(tsxLoader).href, "src/index.ts"], {
     cwd: serverRoot,
     env: {
       ...process.env,

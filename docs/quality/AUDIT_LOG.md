@@ -682,6 +682,8 @@ Run the authenticated two-organization persistence proof in Recommended Cycle 7.
   browser window.
 - Added exact-output cleanup for `no introduction` requests without changing
   ordinary model answers.
+- Segmented temporary model context at explicit `new topic` / subject-change
+  turns so earlier topics cannot bleed into a new answer.
 - Added unit coverage to the normal dashboard-chat suite and a self-starting,
   authenticated HTTP real-model gate that prewarms the exact production model
   context and drives both admin and customer sessions.
@@ -693,12 +695,13 @@ Run the authenticated two-organization persistence proof in Recommended Cycle 7.
   turns, and deterministic instant-tool checks).
 - PASS: `npm run test:change-memory` (106 protected checks before build stamping).
 - PASS: `npm run test:instant-chat:http-live-model` from `server`: 27 consecutive
-  authenticated HTTP requests, 454 ms average, 827 ms maximum, zero fallbacks,
+  authenticated HTTP requests, 448 ms average, 887 ms maximum, zero fallbacks,
   zero business leakage, five deterministic tool responses, corrected-subject
   continuity, topic switching, exact arithmetic, and context rollover verified.
 - PASS: the self-starting gate terminated its disposable port-5192 server after
   completion. It explicitly skips the deployment's production `.env` only inside
-  the child test process so demo authentication cannot be replaced by live auth.
+  the child test process so demo authentication cannot be replaced by live auth,
+  and launches TypeScript through the same `tsx` source path as live Hermes.
 - PASS: `npm run typecheck`, `npm run build`, and `git diff --check` during the
   focused correction pass.
 

@@ -48,5 +48,16 @@ assert.equal(
   ),
   "Each arm can process information independently.",
 );
+assert.equal(
+  enforceInstantOutputConstraints("One fact, no intro.", "octopuses have three hearts"),
+  "Octopuses have three hearts.",
+);
+assert.equal(
+  enforceInstantOutputConstraints(
+    "One fact, no introduction.",
+    "Yes, both are intelligent; did you know that octopuses can open jars from the outside.",
+  ),
+  "Octopuses can open jars from the outside.",
+);
 
 console.log("instant chat deterministic tool checks passed");

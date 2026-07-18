@@ -3441,10 +3441,18 @@ function parseRecentConversation(value: unknown): RecentChatTurn[] {
 
 function buildInstantConversationContext(turns: RecentChatTurn[]) {
   const rule = "Answer the current casual request directly. Resolve pronouns and transformations from the newest relevant turn, preserve named subjects, and treat later corrections as authoritative. Follow exact format constraints such as 'only the number' without extra framing. Never volunteer ledger, pipeline, accounting, approvals, or dashboard status unless the current request explicitly asks for it.";
-  if (!turns.length) return `Fast casual chat. No business memory required. ${rule}`;
-  const transcript = turns.map((turn, index) =>
+  const topicReset = /\b(?:new topic|switch(?:ing)? topics?|change(?:ing)? (?:the )?subject|unrelated question)\b/i;
+  let activeTurns = turns;
+  for (let index = turns.length - 1; index >= 0; index -= 1) {
+    if (topicReset.test(turns[index].user)) {
+      activeTurns = turns.slice(index);
+      break;
+    }
+  }
+  if (!activeTurns.length) return `Fast casual chat. No business memory required. ${rule}`;
+  const transcript = activeTurns.map((turn, index) =>
     `Turn ${index + 1} user: ${turn.user}\nTurn ${index + 1} assistant: ${turn.assistant}`).join("\n");
-  return `Fast casual chat. The following is temporary recent conversation, not saved memory. Use it only to resolve references such as why, that, or tell me more.\n${transcript}\n${rule}`;
+  return `Fast casual chat. The following is temporary recent conversation from the active topic, not saved memory. Use it only to resolve references such as why, that, or tell me more.\n${transcript}\n${rule}`;
 }
 
 function buildMemoryScopeProof(normalized: {

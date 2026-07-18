@@ -163,11 +163,14 @@ export function enforceInstantOutputConstraints(userRequest: string, output: str
   if (!trimmed) return trimmed;
   if (/\b(?:no intro(?:duction)?|without (?:an? )?intro(?:duction)?)\b/i.test(userRequest)) {
     const sentences = trimmed.match(/[^.!?]+(?:[.!?]+|$)/g)?.map((value) => value.trim()).filter(Boolean) || [trimmed];
-    const fact = sentences.at(-1)!
+    const embeddedFact = trimmed.match(/(?:^|[;.!?]\s*)(?:did you know(?: that)?|surprising fact|fun fact)\s*[:,-]?\s*(.+)$/i)?.[1];
+    const fact = (embeddedFact || sentences.at(-1)!)
       .replace(/^(?:and\s+)?(?:did you know(?: that)?|surprising fact|fun fact)\s*[:,-]?\s*/i, "")
       .trim()
       .replace(/\?+$/, ".");
-    return fact ? `${fact.charAt(0).toUpperCase()}${fact.slice(1)}` : fact;
+    if (!fact) return fact;
+    const capitalized = `${fact.charAt(0).toUpperCase()}${fact.slice(1)}`;
+    return /[.!]$/.test(capitalized) ? capitalized : `${capitalized}.`;
   }
   return trimmed;
 }
