@@ -1193,6 +1193,20 @@ Run the authenticated two-organization persistence proof in Recommended Cycle 16
   `C:\Users\jorda\AppData\Local\Temp\phantomforce-cycle16-desktop-fixed.png`
   and `phantomforce-cycle16-mobile-fixed.png`; controls, text, and composer
   remained visible without overlap.
+- PASS after live sync: `ops/admin-live/Test-LiveAdminSource.ps1 -Strict`
+  reported canonical/deployment/origin/Hermes commit `655e0da`, public build
+  `phantom-live-20260718-32`, clean working trees, and 139 live assertions.
+- PASS after live sync: the same Playwright fallback gate against
+  `http://127.0.0.1:5177/app/?session=admin` retained exact 1440px/390px
+  widths, y=803..870 desktop and y=681..743 mobile composer bounds, internal
+  history scrolling, correct direct answers, and zero page errors.
+- PASS after live sync: `npm run test:instant-chat:http-fallback --workspace
+  @phantomforce/server` completed three forced-outage requests.
+- PASS after live sync: `npm run test:instant-chat:http-live-model --workspace
+  @phantomforce/server` completed 75 authenticated requests at 424 ms average
+  and 1,509 ms maximum, with zero fallback, zero business leakage, and all
+  continuity, topic-switch, correction, reasoning, formatting, and rapid-fire
+  assertions true.
 
 ## Next Task
 
