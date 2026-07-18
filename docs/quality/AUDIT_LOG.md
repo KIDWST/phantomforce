@@ -641,6 +641,14 @@ Run the authenticated two-organization persistence proof in Recommended Cycle 6.
 - PASS: `ops/admin-live/Start-PhantomInstantBrain.ps1` reported
   `Phantom Instant ready: qwen2.5:14b`; `ollama ps` showed 100% GPU, context 2048,
   and a 24-hour lease.
+- PASS: `ops/admin-live/Test-LiveAdminSource.ps1` after deployment: canonical
+  checkout, `origin/main`, sync manifest, served source, build
+  `phantom-live-20260718-27`, and Hermes commit all agreed; working tree clean.
+- PASS: Windows task `PhantomForce Ollama Service` returned result `0` after its
+  deployed action was registered and started.
+- PASS: browser reloads of `https://admin.phantomforce.online/app/?demo=1` and
+  `https://app.phantomforce.online/app/` both exposed build meta and
+  `main.js?v=phantom-live-20260718-27`.
 
 ## Next Task
 
