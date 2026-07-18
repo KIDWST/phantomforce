@@ -4,7 +4,7 @@ import {
   store, uid, visible, currentWs, wsName, pushActivity, ago, fmtMoney,
 } from "./store.js?v=phantom-live-20260718-1";
 import {
-  esc, baseSiteDraft, ensureSiteDesign, ensureSiteStore, applyWebsitePrompt, renderWebsitePreview,
+  esc, baseSiteDraft, ensureSiteDesign, ensureSiteStore, applyWebsitePrompt,
   SITE_TEMPLATES, applySiteTemplate, cadenceSuffix,
 } from "./workspaces.js?v=phantom-live-20260718-1";
 import {
@@ -41,6 +41,8 @@ function snapshotSite(site, label) {
       domainProvider: site.domainProvider || "",
       sourceUrl: site.sourceUrl || "",
       sourceCode: site.sourceCode || "",
+      sourceManual: site.sourceManual || "",
+      sourceFiles: JSON.parse(JSON.stringify(site.sourceFiles || [])),
       webBotLog: JSON.parse(JSON.stringify(site.webBotLog || [])),
     },
   });
@@ -57,6 +59,8 @@ function restoreSnapshot(site, index) {
   site.sections = [...snap.data.sections];
   site.catalog = JSON.parse(JSON.stringify(snap.data.catalog || []));
   site.store = JSON.parse(JSON.stringify(snap.data.store || {}));
+  site.sourceFiles = JSON.parse(JSON.stringify(snap.data.sourceFiles || []));
+  site.sourceManual = snap.data.sourceManual || "";
   site.webBotLog = JSON.parse(JSON.stringify(snap.data.webBotLog || []));
   site.updated = new Date().toISOString();
   /* drop the consumed snapshot (it now sits at index+1 after the unshift) */
@@ -272,6 +276,8 @@ function normalizeSite(site) {
   site.domainProvider = String(site.domainProvider || "");
   site.sourceUrl = String(site.sourceUrl || "");
   site.sourceCode = String(site.sourceCode || "");
+  site.sourceManual = String(site.sourceManual || "");
+  site.sourceFiles = Array.isArray(site.sourceFiles) ? site.sourceFiles : [];
   site.webBotLog = Array.isArray(site.webBotLog) ? site.webBotLog : [];
   /* server-truth domain records (connect/verify). Intentionally NOT part of
      snapshotSite history — like serverPublish, undo must never roll back what
@@ -283,7 +289,109 @@ function normalizeSite(site) {
 }
 
 const SOURCE_CODE_LIMIT = 120000;
+const SOURCE_FILE_LIMIT = 28;
+const SOURCE_FILE_SINGLE_LIMIT = 60000;
+const SOURCE_FILE_TOTAL_LIMIT = 220000;
+const SOURCE_EXTENSIONS = new Set([
+  "html", "htm", "css", "js", "jsx", "ts", "tsx", "json", "md", "mdx",
+  "liquid", "astro", "vue", "svelte", "php", "txt",
+]);
 const WEBBOT_PROVIDERS = ["Cloudflare", "GoDaddy", "Namecheap", "Squarespace", "Wix", "Shopify", "WordPress", "Webflow", "Other / unknown"];
+
+function sourcePath(file) {
+  return String(file?.webkitRelativePath || file?.relativePath || file?.name || "source.txt").replace(/\\/g, "/");
+}
+
+function sourceExtension(path) {
+  const match = String(path || "").toLowerCase().match(/\.([a-z0-9]+)$/);
+  return match ? match[1] : "";
+}
+
+function isReadableSourceFile(file) {
+  const path = sourcePath(file);
+  const lower = path.toLowerCase();
+  if (!file || file.size <= 0) return false;
+  if (file.size > 1000000) return false;
+  if (/(^|\/)(node_modules|\.git|dist|build|coverage|\.next|vendor|logs|tmp|temp)\//i.test(lower)) return false;
+  if (/(^|\/)\.(env|npmrc|pypirc|aws|dockerignore)$/i.test(lower)) return false;
+  if (/\.(png|jpe?g|gif|webp|avif|ico|pdf|zip|rar|7z|exe|dll|bin|mp4|mov|mp3|wav|woff2?|ttf)$/i.test(lower)) return false;
+  return SOURCE_EXTENSIONS.has(sourceExtension(path));
+}
+
+function sourceFileRank(path) {
+  const lower = String(path || "").toLowerCase();
+  let score = 0;
+  if (/(^|\/)(index|home|landing)\.html?$/.test(lower)) score += 100;
+  if (/(^|\/)(app|src|pages|routes|public)\//.test(lower)) score += 24;
+  if (/(^|\/)(app|main|index)\.(tsx|jsx|js|ts|vue|svelte|astro)$/.test(lower)) score += 32;
+  if (/(^|\/)(style|styles|global|globals|theme|main)\.css$/.test(lower)) score += 18;
+  if (/(package|vite|next|astro|svelte|tailwind)\.config\./.test(lower)) score += 10;
+  if (/(readme|notes|brief)\.md$/.test(lower)) score += 4;
+  if (/(lock|map|min)\./.test(lower)) score -= 80;
+  return score;
+}
+
+function compactSourceRecord(record) {
+  return {
+    id: record.id || uid("src"),
+    name: String(record.name || "source.txt").slice(0, 140),
+    path: String(record.path || record.name || "source.txt").replace(/\\/g, "/").slice(0, 260),
+    size: Math.max(0, Number(record.size || 0)),
+    type: String(record.type || "").slice(0, 80),
+    lastModified: Number(record.lastModified || 0),
+    content: String(record.content || "").slice(0, SOURCE_FILE_SINGLE_LIMIT),
+  };
+}
+
+async function readSourceFiles(fileList) {
+  const candidates = Array.from(fileList || [])
+    .filter(isReadableSourceFile)
+    .sort((a, b) => sourceFileRank(sourcePath(b)) - sourceFileRank(sourcePath(a)) || sourcePath(a).localeCompare(sourcePath(b)))
+    .slice(0, SOURCE_FILE_LIMIT * 2);
+  const records = [];
+  let total = 0;
+  for (const file of candidates) {
+    if (records.length >= SOURCE_FILE_LIMIT || total >= SOURCE_FILE_TOTAL_LIMIT) break;
+    const remaining = SOURCE_FILE_TOTAL_LIMIT - total;
+    const text = await file.text().catch(() => "");
+    if (!text.trim()) continue;
+    const content = text.slice(0, Math.min(SOURCE_FILE_SINGLE_LIMIT, remaining));
+    records.push(compactSourceRecord({
+      id: uid("src"),
+      name: file.name,
+      path: sourcePath(file),
+      size: file.size,
+      type: file.type,
+      lastModified: file.lastModified,
+      content,
+    }));
+    total += content.length;
+  }
+  return {
+    records,
+    skipped: Math.max(0, Array.from(fileList || []).length - records.length),
+  };
+}
+
+function sourceBundleText(files = [], manual = "") {
+  const chunks = [];
+  (Array.isArray(files) ? files : []).map(compactSourceRecord)
+    .sort((a, b) => sourceFileRank(b.path) - sourceFileRank(a.path) || a.path.localeCompare(b.path))
+    .slice(0, SOURCE_FILE_LIMIT)
+    .forEach((file) => {
+      chunks.push(`/* FILE: ${file.path} (${file.size} bytes) */\n${file.content}`);
+    });
+  const manualText = String(manual || "").trim();
+  if (manualText) chunks.push(`/* MANUAL NOTES OR PASTED SOURCE */\n${manualText}`);
+  return chunks.join("\n\n").slice(0, SOURCE_CODE_LIMIT);
+}
+
+function sourceFilesLabel(files = []) {
+  const count = Array.isArray(files) ? files.length : 0;
+  if (!count) return "No files attached yet.";
+  const total = files.reduce((sum, file) => sum + Math.max(0, Number(file.size || 0)), 0);
+  return `${count} file${count === 1 ? "" : "s"} attached · ${Math.ceil(total / 1024)} KB scanned`;
+}
 
 function cleanHtmlText(value) {
   return String(value || "")
@@ -385,9 +493,13 @@ function webBotMarkup(site, products, options = {}) {
   const domain = siteDomain(site);
   const intel = sourceIntel(site.sourceCode || "");
   const logs = Array.isArray(site.webBotLog) ? site.webBotLog : [];
-  const sourceLabel = site.sourceCode
-    ? `${intel.bytes.toLocaleString()} chars remembered${intel.sections.length ? ` · ${intel.sections.length} sections detected` : ""}`
-    : "Paste page code/source when we have it.";
+  const sourceFiles = (Array.isArray(site.sourceFiles) ? site.sourceFiles : []).map(compactSourceRecord);
+  const sourceLabel = sourceFiles.length
+    ? sourceFilesLabel(sourceFiles)
+    : site.sourceCode
+      ? `${intel.bytes.toLocaleString()} chars remembered${intel.sections.length ? ` · ${intel.sections.length} sections detected` : ""}`
+      : "Drop files or auto-detect a folder.";
+  const manualValue = sourceFiles.length ? (site.sourceManual || "") : (site.sourceManual || site.sourceCode || "");
   return `
     <section class="ss-webbot-panel" data-ss-webbot>
       <header>
@@ -397,7 +509,7 @@ function webBotMarkup(site, products, options = {}) {
         </div>
         <span>${esc(domain || "domain needed")}</span>
       </header>
-      <p class="ss-webbot-lede">Give Phantom the domain provider, the page code if we have it, and the outcome. It will update the local working copy, explain what changed, and keep publishing approval-gated.</p>
+      <p class="ss-webbot-lede">Drop the website files, pick a folder, or let Phantom work from the remembered source bundle. Paste is only the fallback.</p>
       <form class="ss-webbot-form" data-ss-webbot-form>
         <div class="ss-webbot-two">
           <label>
@@ -412,10 +524,39 @@ function webBotMarkup(site, products, options = {}) {
             </datalist>
           </label>
         </div>
-        <label>
-          <span>Page code/source if available</span>
-          <textarea data-ss-source-code rows="7" placeholder="Paste index.html, a React component, Shopify/Liquid, Webflow export, or notes about where the page code lives. Scripts are not executed here.">${esc(site.sourceCode || "")}</textarea>
-        </label>
+        <div class="ss-source-intake" data-ss-source-drop tabindex="0">
+          <input class="ss-source-input" type="file" multiple data-ss-source-files accept=".html,.htm,.css,.js,.jsx,.ts,.tsx,.json,.md,.mdx,.liquid,.astro,.vue,.svelte,.php,.txt" />
+          <input class="ss-source-input" type="file" multiple webkitdirectory directory data-ss-source-folder />
+          <div>
+            <span>Smart source intake</span>
+            <b>Drop website files or a folder</b>
+            <small>Phantom ranks homepage, components, CSS, and config automatically.</small>
+          </div>
+          <div>
+            <button class="btn btn-quiet" type="button" data-act="ss-pick-source-files">Choose files</button>
+            <button class="btn btn-primary" type="button" data-act="ss-pick-source-folder">Auto-detect folder</button>
+          </div>
+        </div>
+        <div class="ss-source-files">
+          ${sourceFiles.length ? sourceFiles.slice(0, 8).map((file, index) => `
+            <article class="${index === 0 ? "is-primary" : ""}">
+              <b>${esc(index === 0 ? "Primary" : "Source")}</b>
+              <span>${esc(file.path)}</span>
+              <small>${Math.ceil(file.size / 1024)} KB</small>
+            </article>`).join("") : `
+            <article>
+              <b>Waiting for source</b>
+              <span>Drop files, choose files, or auto-detect a folder.</span>
+              <small>local only</small>
+            </article>`}
+        </div>
+        <details class="ss-source-fallback">
+          <summary>Paste source manually</summary>
+          <label>
+            <span>Manual source / notes</span>
+            <textarea data-ss-source-manual rows="6" placeholder="Fallback: paste index.html, a component, CMS notes, or change notes here.">${esc(manualValue)}</textarea>
+          </label>
+        </details>
         <label>
           <span>Ask Phantom Web Bot</span>
           <textarea data-ss-webbot-prompt rows="4" placeholder="Example: make the hero clearer, add a bookings CTA, fix mobile spacing, implement the services section..."></textarea>
@@ -427,6 +568,7 @@ function webBotMarkup(site, products, options = {}) {
         <footer>
           <button class="btn btn-primary" type="submit">Run Phantom Web Bot</button>
           <small>${esc(sourceLabel)}</small>
+          ${sourceFiles.length || site.sourceCode ? `<button class="btn btn-quiet" type="button" data-act="ss-clear-source">Clear source</button>` : ""}
         </footer>
       </form>
       <div class="ss-webbot-log" aria-label="Phantom Web Bot results">
@@ -828,6 +970,71 @@ export function renderSiteStudio(el) {
   const liveLoadBtn = el.querySelector("[data-ss-live-load]");
   if (liveLoadBtn) liveLoadBtn.onclick = () => { siteUi.livePreviewLoaded = true; rerender(); };
 
+  const sourceFilesInput = el.querySelector("[data-ss-source-files]");
+  const sourceFolderInput = el.querySelector("[data-ss-source-folder]");
+  const sourceDrop = el.querySelector("[data-ss-source-drop]");
+  const sourceManualInput = el.querySelector("[data-ss-source-manual]");
+  const ingestSourceFiles = async (fileList, label = "source intake") => {
+    if (!active || !fileList?.length) return;
+    sourceDrop?.classList.add("is-reading");
+    const { records, skipped } = await readSourceFiles(fileList);
+    sourceDrop?.classList.remove("is-reading", "is-dragging");
+    if (!records.length) {
+      addWebBotLog(active, "No source files read", "I skipped binary, oversized, build, dependency, git, and secret-looking files. Drop HTML/CSS/JS/component files or paste source manually.");
+      store.save();
+      rerender();
+      return;
+    }
+    snapshotSite(active, label);
+    const manual = String(sourceManualInput?.value || active.sourceManual || "").slice(0, SOURCE_FILE_SINGLE_LIMIT);
+    active.sourceFiles = records;
+    active.sourceManual = manual;
+    const intel = applySourceCodeToSite(active, sourceBundleText(records, manual));
+    active.updated = new Date().toISOString();
+    const primary = records[0]?.path || "source";
+    addWebBotLog(
+      active,
+      "Source attached",
+      `Read ${records.length} file${records.length === 1 ? "" : "s"} and picked ${primary} first${intel.headline ? `; found "${intel.headline}"` : ""}. ${skipped ? `${skipped} file${skipped === 1 ? "" : "s"} skipped by safety filters. ` : ""}Kept local.`
+    );
+    pushActivity("Websites", `Phantom Web Bot attached ${records.length} source file${records.length === 1 ? "" : "s"} for ${active.title}.`, active.ws);
+    store.save();
+    rerender();
+  };
+  el.querySelectorAll("[data-act='ss-pick-source-files']").forEach((button) => {
+    button.onclick = () => sourceFilesInput?.click();
+  });
+  el.querySelectorAll("[data-act='ss-pick-source-folder']").forEach((button) => {
+    button.onclick = () => sourceFolderInput?.click();
+  });
+  if (sourceFilesInput) sourceFilesInput.onchange = () => ingestSourceFiles(sourceFilesInput.files, "attached website files");
+  if (sourceFolderInput) sourceFolderInput.onchange = () => ingestSourceFiles(sourceFolderInput.files, "auto-detected website folder");
+  if (sourceDrop) {
+    sourceDrop.ondragover = (event) => {
+      event.preventDefault();
+      sourceDrop.classList.add("is-dragging");
+    };
+    sourceDrop.ondragleave = () => sourceDrop.classList.remove("is-dragging");
+    sourceDrop.ondrop = (event) => {
+      event.preventDefault();
+      sourceDrop.classList.remove("is-dragging");
+      ingestSourceFiles(event.dataTransfer?.files, "dropped website source");
+    };
+  }
+  el.querySelectorAll("[data-act='ss-clear-source']").forEach((button) => {
+    button.onclick = () => {
+      if (!active) return;
+      snapshotSite(active, "clear source bundle");
+      active.sourceFiles = [];
+      active.sourceCode = "";
+      active.sourceManual = "";
+      active.updated = new Date().toISOString();
+      addWebBotLog(active, "Source cleared", "The remembered source bundle was cleared from this local workspace.");
+      store.save();
+      rerender();
+    };
+  });
+
   const webBotForm = el.querySelector("[data-ss-webbot-form]");
   if (webBotForm && active) {
     webBotForm.onsubmit = (event) => {
@@ -835,12 +1042,14 @@ export function renderSiteStudio(el) {
       const nextDomain = slugText(webBotForm.querySelector("[data-ss-domain]")?.value || "");
       const nextProvider = String(webBotForm.querySelector("[data-ss-provider]")?.value || "").trim().slice(0, 80);
       const nextSourceUrl = String(webBotForm.querySelector("[data-ss-source-url]")?.value || "").trim().slice(0, 400);
-      const nextSource = String(webBotForm.querySelector("[data-ss-source-code]")?.value || "").slice(0, SOURCE_CODE_LIMIT);
+      const nextManual = String(webBotForm.querySelector("[data-ss-source-manual]")?.value || "").slice(0, SOURCE_FILE_SINGLE_LIMIT);
+      const nextSource = sourceBundleText(active.sourceFiles || [], nextManual);
       const prompt = String(webBotForm.querySelector("[data-ss-webbot-prompt]")?.value || "").trim();
       const changedContext =
         nextDomain !== siteDomain(active) ||
         nextProvider !== (active.domainProvider || "") ||
         nextSourceUrl !== (active.sourceUrl || "") ||
+        nextManual !== (active.sourceManual || "") ||
         nextSource !== (active.sourceCode || "");
       if (!prompt && !changedContext) return;
 
@@ -848,6 +1057,7 @@ export function renderSiteStudio(el) {
       if (nextDomain !== siteDomain(active)) setSiteDomain(active, nextDomain);
       active.domainProvider = nextProvider;
       active.sourceUrl = nextSourceUrl;
+      active.sourceManual = nextManual;
       let intel = null;
       if (nextSource !== (active.sourceCode || "")) {
         intel = applySourceCodeToSite(active, nextSource);
@@ -858,7 +1068,7 @@ export function renderSiteStudio(el) {
       if (nextProvider) results.push(`Provider remembered: ${nextProvider}.`);
       if (nextSourceUrl) results.push(`Code location noted.`);
       if (intel) {
-        results.push(`Read ${intel.bytes.toLocaleString()} chars of page source${intel.headline ? ` and found "${intel.headline}"` : ""}.`);
+        results.push(`Read ${intel.bytes.toLocaleString()} chars from the source bundle${intel.headline ? ` and found "${intel.headline}"` : ""}.`);
       }
       if (prompt) results.push(applyWebsiteChange(active, prompt, false));
       results.push("Kept it local. Publish still requires approval.");
@@ -1105,6 +1315,8 @@ export function renderSiteStudio(el) {
     active.sections = [...snap.data.sections];
     active.catalog = JSON.parse(JSON.stringify(snap.data.catalog || []));
     active.store = JSON.parse(JSON.stringify(snap.data.store || {}));
+    active.sourceFiles = JSON.parse(JSON.stringify(snap.data.sourceFiles || []));
+    active.sourceManual = snap.data.sourceManual || "";
     active.webBotLog = JSON.parse(JSON.stringify(snap.data.webBotLog || []));
     active.updated = new Date().toISOString();
     pushActivity("Websites", `undid the last edit on ${active.title}.`, active.ws);
@@ -1166,62 +1378,4 @@ export function renderSiteStudio(el) {
   };
   if (active) refreshServerPublish(active, rerender);
 
-  /* ---- section selection + toolbar ---- */
-  const preview = el.querySelector("[data-ss-preview]");
-  if (preview) {
-    preview.addEventListener("click", (event) => {
-      const chip = event.target.closest("[data-ss-sec]");
-      if (!chip) return;
-      const index = Number(chip.dataset.ssSec);
-      siteUi.selectedSection = siteUi.selectedSection === index ? -1 : index;
-      rerender();
-    });
-  }
-  if (active && siteUi.selectedSection >= 0) {
-    const nameInput = el.querySelector("[data-ss-section-name]");
-    const bind = (act, fn) => { const b = el.querySelector(`[data-act='${act}']`); if (b) b.onclick = fn; };
-    bind("ss-section-rename", () => {
-      const next = (nameInput?.value || "").trim();
-      if (!next) return;
-      snapshotSite(active, `rename section to ${next}`);
-      active.sections[siteUi.selectedSection] = next.slice(0, 48);
-      active.updated = new Date().toISOString();
-      store.save(); rerender();
-    });
-    bind("ss-section-up", () => {
-      const i = siteUi.selectedSection;
-      if (i <= 0) return;
-      snapshotSite(active, `move ${active.sections[i]} up`);
-      [active.sections[i - 1], active.sections[i]] = [active.sections[i], active.sections[i - 1]];
-      siteUi.selectedSection = i - 1;
-      active.updated = new Date().toISOString();
-      store.save(); rerender();
-    });
-    bind("ss-section-down", () => {
-      const i = siteUi.selectedSection;
-      if (i >= active.sections.length - 1) return;
-      snapshotSite(active, `move ${active.sections[i]} down`);
-      [active.sections[i + 1], active.sections[i]] = [active.sections[i], active.sections[i + 1]];
-      siteUi.selectedSection = i + 1;
-      active.updated = new Date().toISOString();
-      store.save(); rerender();
-    });
-    bind("ss-section-remove", () => {
-      snapshotSite(active, `remove ${active.sections[siteUi.selectedSection]} section`);
-      active.sections.splice(siteUi.selectedSection, 1);
-      siteUi.selectedSection = -1;
-      active.updated = new Date().toISOString();
-      store.save(); rerender();
-    });
-    bind("ss-section-done", () => { siteUi.selectedSection = -1; rerender(); });
-  }
-
-  const promptInput = el.querySelector("[data-ss-prompt]");
-  if (promptInput && preview && active) {
-    promptInput.addEventListener("input", () => {
-      const clone = JSON.parse(JSON.stringify(active));
-      applyWebsiteChange(clone, promptInput.value, false);
-      preview.innerHTML = renderWebsitePreview(clone, productsFor(clone), { selected: siteUi.selectedSection, cart: clone.store?.cart || {} });
-    });
-  }
 }
