@@ -28,6 +28,12 @@ assert.match(localCustomers, /export async function getLocalCustomerPlanSummary\
   "Local customer accounts must resolve backend entitlement summaries.");
 assert.match(localCustomers, /export async function assignLocalCustomerPlan\(session: AccessSession, planKey: string\)/u,
   "Local customer accounts must be able to switch test tiers.");
+assert.match(localCustomers, /export async function loginLocalCustomer\(emailRaw: string, password: string\)/u,
+  "Local customer accounts must have a login primitive.");
+assert.match(localCustomers, /export async function registerLocalCustomer\(input: LocalCustomerRegisterInput\)/u,
+  "Local customer accounts must have a registration primitive.");
+assert.match(localCustomers, /export async function requestLocalCustomerPasswordReset\(emailRaw: string\)/u,
+  "Local customer accounts must have a password-reset request primitive.");
 assert.match(localCustomers, /planKey: DEFAULT_LOCAL_CUSTOMER_PLAN_KEY/u,
   "New local customer accounts must start on a deterministic default plan.");
 assert.doesNotMatch(localCustomers, /planKey:\s*"internal"/u,
@@ -37,6 +43,18 @@ assert.match(server, /app\.get\("\/customer\/plan-preview"/u,
   "Backend must expose a customer plan preview read endpoint.");
 assert.match(server, /app\.post\("\/customer\/plan-preview"/u,
   "Backend must expose a customer plan switching endpoint.");
+assert.match(server, /app\.post\("\/auth\/customer-login"/u,
+  "Backend must expose a local customer login route without replacing database /auth/login.");
+assert.match(server, /app\.post\("\/auth\/customer-signup"/u,
+  "Backend must expose a local customer registration route.");
+assert.match(server, /app\.post\("\/auth\/customer-forgot-password"/u,
+  "Backend must expose a local customer password reset request route.");
+assert.match(server, /app\.post\("\/auth\/customer-reset-password"/u,
+  "Backend must expose a local customer password reset completion route.");
+assert.match(server, /customerLoginEndpoint[\s\S]*\/auth\/customer-login/u,
+  "/sessions must advertise the local customer login endpoint on customer/local hosts.");
+assert.match(server, /customerAuthForbiddenOnHost\(request\)[\s\S]*localCustomerHostDenied/u,
+  "Local customer account routes must be denied on admin.phantomforce.online.");
 assert.match(server, /getLocalCustomerPlanSummary\(session\)/u,
   "Auth/me must include local customer entitlement truth.");
 assert.match(server, /Customer plan testing is only available on the customer app/u,
@@ -48,6 +66,10 @@ assert.match(orgs, /export async function switchCustomerPlan\(planKey\)/u,
   "Frontend org client must switch local customer tiers.");
 assert.match(orgs, /if \(ctx\.session\?\.localCustomer\) return fetchCustomerPlanPreview\(\);/u,
   "Local customer entitlement summaries must not return null.");
+assert.match(orgs, /customerAuthEndpoint\("customerLoginEndpoint", "\/auth\/login"\)/u,
+  "Frontend login must use the customer login endpoint advertised by /sessions.");
+assert.match(orgs, /customerAuthEndpoint\("customerSignupEndpoint", "\/auth\/signup"\)/u,
+  "Frontend signup must use the customer signup endpoint advertised by /sessions.");
 
 assert.match(settings, /id: "plan", label: "Plan & access", category: "Workspace"/u,
   "Settings must own plan and entitlement testing.");
@@ -60,6 +82,8 @@ assert.match(main, /const FEATURE_BY_NAV_ID = \{/u,
   "Navigation must know which workspace features are plan-gated.");
 assert.match(main, /!ctx\.session\?\.database && !ctx\.session\?\.localCustomer/u,
   "Plan gating must include local customer sessions.");
+assert.match(main, /localCustomerMode = !databaseMode && !!auth\?\.localCustomerAuthEnabled/u,
+  "Customer app login gate must render when local customer auth is enabled without database auth.");
 assert.match(main, /localStorage\.setItem\("pf\.settings\.tab\.v1", "plan"\)/u,
   "Clicking a locked nav item must open Plan & access.");
 assert.match(main, /data-open-ws="settings"[\s\S]*No real work loaded yet\./u,
@@ -69,5 +93,7 @@ assert.doesNotMatch(main, /data-open-ws="leads"[\s\S]*No real work loaded yet\./
 
 assert.match(packageJson, /"test:customer-plan-switching": "node scripts\/test-customer-plan-switching\.mjs"/u,
   "Package scripts must expose the customer plan switching guard.");
+assert.match(packageJson, /"test:local-customer-auth": "npm run test:local-customer-auth --workspace @phantomforce\/server"/u,
+  "Package scripts must expose the local customer auth route test.");
 
 console.log("Customer plan switching checks passed.");

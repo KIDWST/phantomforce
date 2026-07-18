@@ -30,6 +30,7 @@
     "test:client-setup-audit": "node scripts/audit-client-setup-data-model.mjs",
     "test:phantomstore": "node scripts/test-phantomstore-ui.mjs && npm run test:phantomstore --workspace @phantomforce/server",
     "test:customer-plan-switching": "node scripts/test-customer-plan-switching.mjs",
+    "test:local-customer-auth": "npm run test:local-customer-auth --workspace @phantomforce/server",
     "test:change-memory": "node scripts/guard-change-memory.mjs",
     "test:responsive-viewports": "node scripts/test-responsive-viewports.mjs",
     "test:command-surface": "node scripts/test-command-surface.mjs",

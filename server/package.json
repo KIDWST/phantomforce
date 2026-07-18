@@ -40,6 +40,7 @@
     "test:easy-crm": "tsx scripts/test-easy-crm.ts",
     "test:easy-crm:postgres": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-easy-crm-postgres.ps1",
     "test:auth:rate-limit": "tsx scripts/test-auth-rate-limit.ts",
+    "test:local-customer-auth": "tsx scripts/test-local-customer-auth-routes.ts",
     "start": "node dist/index.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev"
