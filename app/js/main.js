@@ -3,7 +3,7 @@
 import {
   store, ctx, session, resolveSession, isAdmin, currentWs, currentTenantId, setWorkspace, wsName,
   visible, todaysPlan, commandBriefing, moneyView, fmtMoney, ago, pushActivity, isLiveAdminHost, isClientPublicHost, isLocalDevHost, isStaticPublicHost,
-  ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
+  ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator, resolveApproval,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
 } from "./store.js?v=phantom-live-20260718-3";
@@ -3089,11 +3089,73 @@ function renderCommandWidgets() {
       open: "approvals",
       tone: approvals.length ? "warn" : "ok",
       lines: approvals.length
-        ? approvals.slice(0, 3).map((a) => `<b>${esc(a.title)}</b><span>${esc(a.detail || "Needs your call")}</span>`)
+        ? approvals.slice(0, 3).map((a) => `<b>${esc(a.title)}</b><span>${esc(a.detail || "Needs your call")}</span><span class="cw-approval-actions"><button class="btn btn-good" data-cw-approve="${esc(a.id)}" type="button">Approve</button><button class="btn btn-quiet" data-cw-decline="${esc(a.id)}" type="button">Decline</button></span>`)
         : ["<b>Safe</b><span>Phantom can draft and prepare; you approve anything that touches the outside world.</span>"],
     },
+    (() => {
+      /* Follow-ups widget: real due dates from the CRM only. */
+      const openLeads = visible(store.state.leads || []).filter((l) => !["won", "lost"].includes(l.status));
+      const dueLeads = openLeads.filter((l) => l.due && new Date(l.due).getTime() <= Date.now() + 864e5);
+      return {
+        id: "followups",
+        icon: "users",
+        title: "Follow-ups",
+        stat: dueLeads.length ? `${dueLeads.length} due` : "clear",
+        sub: dueLeads[0] ? `${dueLeads[0].name || dueLeads[0].company} is waiting` : "No follow-ups due in the next day.",
+        open: "leads",
+        tone: dueLeads.length ? "warn" : "ok",
+        lines: dueLeads.length
+          ? dueLeads.slice(0, 3).map((l) => `<b>${esc(l.name || l.company)}</b><span>${esc(l.next || "Set the next step")} · due ${esc(ago(l.due))}</span>`)
+          : ["<b>Clean</b><span>Due follow-ups from real CRM dates will appear here.</span>"],
+      };
+    })(),
+    (() => {
+      /* Token/API spend widget: measured window totals only — no estimates
+         invented when the backend has not answered yet. */
+      const summary = topbarWorkforce?.summary;
+      const hasData = summary && Number.isFinite(Number(summary.tokens_in_window));
+      return {
+        id: "spend",
+        icon: "dollar",
+        title: "AI spend",
+        stat: hasData ? `$${Number(summary.estimated_cost_usd_in_window || 0).toFixed(2)}` : "—",
+        sub: hasData
+          ? `${Number(summary.tokens_in_window).toLocaleString()} tokens / ${summary.window_hours || 24}h across all Phantom work`
+          : "Usage window loads from the backend; nothing is estimated in its place.",
+        open: "developer",
+        tone: "ok",
+        lines: hasData
+          ? [`<b>Window</b><span>last ${esc(String(summary.window_hours || 24))}h · est. $${esc(Number(summary.estimated_cost_usd_in_window || 0).toFixed(4))}</span>`,
+             "<b>Caps</b><span>Per-response cost cap lives in Settings → Loop routing.</span>"]
+          : ["<b>Waiting</b><span>Sign in with the backend reachable to see measured usage.</span>"],
+      };
+    })(),
+    (() => {
+      /* Away Mode widget: cached real status only. */
+      const away = cachedVacationStatus();
+      return {
+        id: "away",
+        icon: "auto",
+        title: "Away Mode",
+        stat: away ? (away.enabled ? "ON" : "off") : "—",
+        sub: away
+          ? (away.enabled ? "Phantom is covering within your approved boundaries." : "Off — configure coverage and activate when you leave.")
+          : "Status loads from the backend.",
+        open: "vacation",
+        tone: away?.enabled ? "warn" : "ok",
+        lines: [away?.enabled
+          ? "<b>Live</b><span>Open Away Mode to watch work, review exceptions, or pause coverage.</span>"
+          : "<b>Ready</b><span>Set call/meeting/lead permissions and a daily credit limit, then activate.</span>"],
+      };
+    })(),
   ];
   mount.innerHTML = cards.map(card).join("");
+  mount.querySelectorAll("[data-cw-approve]").forEach((button) => {
+    button.onclick = (event) => { event.preventDefault(); resolveApproval(button.dataset.cwApprove, true); renderCommandWidgets(); renderCommandBriefing?.(); };
+  });
+  mount.querySelectorAll("[data-cw-decline]").forEach((button) => {
+    button.onclick = (event) => { event.preventDefault(); resolveApproval(button.dataset.cwDecline, false); renderCommandWidgets(); renderCommandBriefing?.(); };
+  });
 }
 
 function openCommandWidget(id = "") {
