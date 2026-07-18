@@ -9,12 +9,24 @@ import {
   PACKAGES, RETAINERS, FINANCE_CATEGORIES, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS, CHAT_HISTORY_RETENTION_DAYS,
   addMemory, toggleMemoryRemember, forgetMemory, forgetChatHistory, memoryStats, memoryRetention, chatHistoryStats, chatHistoryRetention,
   session,
-} from "./store.js?v=phantom-live-20260718-24";
+} from "./store.js?v=phantom-live-20260718-25";
 import {
   isDatabaseSession, canManageActiveOrg, fetchServerApprovals, decideServerRun,
   activeOrgId,
   fetchOrgCrm, saveOrgCrmSettings, createOrgCrmContact, pullOrgCrmContacts, updateOrgCrmContact, deleteOrgCrmContact,
-} from "./orgs.js?v=phantom-live-20260718-24";
+} from "./orgs.js?v=phantom-live-20260718-25";
+import {
+  proposalServerAvailable, loadProposals,
+  createProposal as createServerProposal,
+  updateProposal as updateServerProposal,
+  deleteProposal as deleteServerProposal,
+} from "./proposalpipeline.js?v=phantom-live-20260718-25";
+import {
+  approvalServerAvailable, loadWorkspaceApprovals,
+  createWorkspaceApproval as createServerWorkspaceApproval,
+  decideWorkspaceApproval as decideServerWorkspaceApproval,
+  deleteWorkspaceApproval as deleteServerWorkspaceApproval,
+} from "./approvalpipeline.js?v=phantom-live-20260718-25";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -25,6 +37,8 @@ const empty = (msg) => `<div class="ws-empty">${esc(msg)}</div>`;
 const wsTag = (id) => (isAdmin() && currentWs() === "phantomforce") ? `<span class="ws-tag">${esc(wsName(id))}</span>` : "";
 const memoryUi = { query: "", category: "all", brainOpen: false };
 const leadsUi = { prompt: "", notice: "", selectedId: "", query: "", status: "all", loadedOrg: "", loadingOrg: "" };
+const proposalUi = { loadedTenant: "", loadingTenant: "", notice: "" };
+const approvalUi = { loadedTenant: "", loadingTenant: "", notice: "" };
 const workerUi = { filter: "all", notice: "", selectedId: "", tab: "overview", preview: null, view: "map" };
 // Transient pan/zoom/search state for the fullscreen Workers "web" canvas -
 // not persisted, resets whenever the user leaves and re-enters Web view.
@@ -80,93 +94,6 @@ async function copyText(el, text) {
 }
 
 /* =============================== LEADS =============================== */
-const LEAD_ARCHETYPES = [
-  {
-    match: /\b(school|schools|academy|academies|college|colleges|student|students|athletic|booster|pta)\b/i,
-    name: "School programs",
-    company: "Local schools and booster clubs",
-    source: "Phantom prospect prompt",
-    value: 1250,
-    next: "Research athletic directors, activities leads, and booster contacts; draft a season/event media offer.",
-    notes: "Best angle: event coverage, sponsor assets, team media days, parent-friendly photo/video packages.",
-    tags: ["schools", "seasonal", "community"],
-    fit: 84,
-    qualification: ["Current event or season coming up", "Decision maker listed publicly", "Budget from booster/PTA/sponsor lane"],
-    outreach: "Quick opener: noticed your upcoming season/events and can help turn them into sponsor-ready media plus parent-facing content.",
-  },
-  {
-    match: /\b(gym|gyms|fitness|trainer|trainers|training|martial|boxing|sports performance|coach|coaches)\b/i,
-    name: "Gym owners",
-    company: "Independent gyms and training studios",
-    source: "Phantom prospect prompt",
-    value: 950,
-    next: "Find owner/head coach, check current content cadence, and draft a membership-growth content offer.",
-    notes: "Best angle: transformation stories, class reels, lead capture, review push, and local SEO proof.",
-    tags: ["fitness", "local", "content"],
-    fit: 88,
-    qualification: ["Owner-visible contact path", "Recent classes/events posted", "Needs member acquisition or retention"],
-    outreach: "Quick opener: I can turn your classes/results into a weekly content and lead-follow-up engine without adding work to your staff.",
-  },
-  {
-    match: /\b(creator|creators|influencer|influencers|podcast|streamer|youtube|tiktok|instagram|content creator)\b/i,
-    name: "Creators",
-    company: "Local creators and coaches",
-    source: "Phantom prospect prompt",
-    value: 750,
-    next: "Identify creators with inconsistent packaging; draft a media-kit, clip, and sponsor-ready workflow.",
-    notes: "Best angle: polish their offer, repurpose clips, organize their content hub, and make brand outreach easier.",
-    tags: ["creator", "media", "sponsor"],
-    fit: 79,
-    qualification: ["Active public profile", "Clear niche", "Needs packaging, clips, or sponsor assets"],
-    outreach: "Quick opener: your content has the raw material; I can package it into clips, sponsor assets, and a cleaner offer path.",
-  },
-  {
-    match: /\b(service|services|plumber|plumbing|hvac|roof|roofing|landscap|electric|contractor|cleaning|home service|repair)\b/i,
-    name: "Service companies",
-    company: "Home and local service companies",
-    source: "Phantom prospect prompt",
-    value: 1500,
-    next: "Find businesses with weak websites or slow follow-up; draft a lead-capture and missed-call recovery offer.",
-    notes: "Best angle: more booked jobs, stronger reviews, faster quote follow-up, and a simple service landing page.",
-    tags: ["services", "lead capture", "reviews"],
-    fit: 91,
-    qualification: ["Website/contact form friction", "Review gaps or stale content", "High-value jobs with quote workflow"],
-    outreach: "Quick opener: I help service businesses stop losing quote requests by tightening the website, follow-up, and review loop.",
-  },
-  {
-    match: /\b(warm|referral|referred|past client|old client|previous client|follow.?up|followups|follow ups)\b/i,
-    name: "Warm prospects",
-    company: "Referral and warm-contact list",
-    source: "Phantom prospect prompt",
-    value: 1200,
-    next: "Gather names from referrals, past conversations, and warm DMs; draft low-pressure reactivation messages.",
-    notes: "Best angle: do not cold pitch. Re-open the relationship with proof, a specific helpful idea, and a simple next step.",
-    tags: ["warm", "referral", "follow-up"],
-    fit: 94,
-    qualification: ["Prior relationship exists", "Recent business trigger", "Permission-safe contact path"],
-    outreach: "Quick opener: thought of your business because I found a quick way to tighten your follow-up/content flow. Want me to send the idea?",
-  },
-  {
-    match: /\b(restaurant|restaurants|bar|bars|cafe|coffee|food|venue|salon|spa|retail|store|boutique)\b/i,
-    name: "Local storefronts",
-    company: "Restaurants, venues, and retail operators",
-    source: "Phantom prospect prompt",
-    value: 1050,
-    next: "Find owners with event/menu/service changes; draft a local promo and content refresh offer.",
-    notes: "Best angle: foot traffic, offers, seasonal promos, short-form video, and review recovery.",
-    tags: ["storefront", "promo", "local"],
-    fit: 82,
-    qualification: ["Public offer/menu/event activity", "Needs fresh content", "Clear booking or visit CTA"],
-    outreach: "Quick opener: I can turn your current specials/events into a cleaner local campaign and follow-up path.",
-  },
-];
-
-const LEAD_STOPWORDS = new Set(["find", "add", "want", "need", "looking", "for", "prospects", "clients", "client", "leads", "lead", "businesses", "business"]);
-
-function normalizeLeadKey(text) {
-  return String(text || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-}
-
 function leadWorkspaceId() {
   if (isDatabaseSession() && activeOrgId()) return activeOrgId();
   return currentWs() === "phantomforce" ? "phantomforce" : currentWs();
@@ -301,42 +228,21 @@ function applyCrmCommand(prompt) {
 }
 
 function crmPullIntent(prompt) {
-  const amount = String(prompt || "").match(/\b(?:pull|find|add|get)\s+(\d{1,5})\b/i)?.[1];
-  if (!amount) return null;
-  const audience = String(prompt || "")
-    .replace(/\b(?:pull|find|add|get)\s+\d{1,5}\s*(?:new\s+)?/i, "")
+  const text = String(prompt || "").trim();
+  const isDiscoveryRequest = /\b(find|add|build|create|start|research|discover|source|pull|get)\b/i.test(text)
+    && /\b(clients?|leads?|prospects?|contacts?|businesses?|organizations?|companies?|owners?|creators?|schools?|gyms?|coaches?)\b/i.test(text);
+  if (!isDiscoveryRequest) return null;
+  const requestedAmount = text.match(/\b(?:pull|find|add|get|build|create|start|research|discover|source)?\s*(\d{1,5})\b/i)?.[1];
+  const count = requestedAmount ? Number(requestedAmount) : Number(workspaceCrmSettings().dailyPullTarget || 5);
+  const audience = text
+    .replace(/\b(?:pull|find|add|get|build|create|start|research|discover|source)\s+\d{1,5}\s*(?:new\s+)?/i, "")
+    .replace(/\b(?:pull|find|add|get|build|create|start|research|discover|source)\b/gi, "")
     .replace(/\b(?:clients?|leads?|prospects?|contacts?)\b/gi, "")
+    .replace(/\b(?:a|an|the|list|base|of|who|could|might|would|consider|use|using)\b/gi, "")
     .replace(/\b(?:per|a|each)\s+day\b|\bdaily\b/gi, "")
     .replace(/\s+/g, " ")
     .trim();
-  return { count: Math.max(1, Math.min(2000, Number(amount))), audience: audience || "local businesses", prompt: String(prompt || "").trim() };
-}
-
-function splitLeadPrompt(prompt) {
-  return String(prompt || "")
-    .replace(/[.;]/g, ",")
-    .split(/,|\band\b|\bor\b|\+|&/i)
-    .map((part) => part.trim())
-    .filter(Boolean);
-}
-
-function templateFromSegment(segment) {
-  const found = LEAD_ARCHETYPES.find((item) => item.match.test(segment));
-  if (found) return found;
-  const words = normalizeLeadKey(segment).split(/\s+/).filter((w) => w && !LEAD_STOPWORDS.has(w));
-  const label = title(words.join(" ") || segment || "Custom prospects");
-  return {
-    name: label,
-    company: `${label} prospects`,
-    source: "Phantom prospect prompt",
-    value: 850,
-    next: `Research real ${label.toLowerCase()} targets, confirm fit, and draft a direct outreach angle.`,
-    notes: "Custom lane from your prompt. Phantom created the CRM card and next steps; add real names or connect discovery to enrich it.",
-    tags: ["custom", "needs-enrichment"],
-    fit: 72,
-    qualification: ["Real business/contact confirmed", "Clear problem PhantomForce can solve", "Approval-safe outreach path"],
-    outreach: `Quick opener: I found a practical way PhantomForce could help ${label.toLowerCase()} save time or win more work.`,
-  };
+  return { count: Math.max(1, Math.min(2000, count)), audience: audience || "local businesses", prompt: text };
 }
 
 function leadDraftText(lead) {
@@ -348,72 +254,6 @@ function leadDraftText(lead) {
     lead.outreach ? `Draft opener: ${lead.outreach}` : "",
     "Nothing sends until you approve it.",
   ].filter(Boolean).join("\n");
-}
-
-function createProspectsFromPrompt(prompt) {
-  const ws = leadWorkspaceId();
-  const commandNotice = applyCrmCommand(prompt);
-  const onlyDailyCommand = commandNotice && !/\b(school|gym|creator|restaurant|law|clinic|salon|realtor|contractor|agency|brand|shop|studio|church|nonprofit)\b/i.test(prompt);
-  if (onlyDailyCommand) return { created: [], skipped: 0, commandNotice };
-  const segments = splitLeadPrompt(prompt);
-  const templates = [];
-  segments.forEach((segment) => {
-    const template = templateFromSegment(segment);
-    const key = normalizeLeadKey(template.company || template.name);
-    if (!templates.some((item) => normalizeLeadKey(item.company || item.name) === key)) templates.push(template);
-  });
-  if (!templates.length) return { created: [], skipped: 0 };
-  const existing = new Set(store.state.leads.map((lead) => normalizeLeadKey(`${lead.ws}:${lead.company || lead.name}`)));
-  const created = [];
-  let skipped = 0;
-  templates.slice(0, 12).forEach((template, index) => {
-    const key = normalizeLeadKey(`${ws}:${template.company || template.name}`);
-    if (existing.has(key)) {
-      skipped += 1;
-      return;
-    }
-    const lead = {
-      id: uid("lead"),
-      ws,
-      name: template.name,
-      company: template.company,
-      source: template.source,
-      status: "new",
-      value: template.value,
-      next: template.next,
-      due: new Date(Date.now() + (index + 1) * 86400000).toISOString(),
-      owner: "Lead Hunter",
-      notes: template.notes,
-      proposalId: null,
-      tags: template.tags || [],
-      fitScore: template.fit,
-      qualification: template.qualification || [],
-      outreach: template.outreach || "",
-      promptSeed: prompt,
-      requiresApproval: true,
-      enriched: false,
-      type: "prospect",
-      socials: {},
-      avatarUrl: "",
-      website: "",
-      email: "",
-      phone: "",
-      lastTouch: "",
-      crmStage: "Prospect",
-    };
-    created.push(lead);
-    existing.add(key);
-  });
-  if (created.length) {
-    store.state.leads.unshift(...created);
-    if (isDatabaseSession()) created.forEach((lead) => createOrgCrmContact(crmPayload(lead)).then((result) => {
-      if (!result?.contact) return;
-      Object.assign(lead, result.contact);
-      store.save();
-    }).catch(() => {}));
-    pushActivity("Lead Hunter", `built ${created.length} prospect card${created.length === 1 ? "" : "s"} from the Clients prompt. Outreach is draft-only until approved.`, ws);
-  }
-  return { created, skipped, commandNotice };
 }
 
 function filteredCrmContacts() {
@@ -527,12 +367,12 @@ function renderLeads(el, rerender) {
             store.state.leads = [...merged, ...other];
             store.state.crmSettings[ws] = result.settings || workspaceCrmSettings(ws);
             leadsUi.selectedId = result.contacts?.[0]?.id || leadsUi.selectedId;
-            leadsUi.notice = `Pulled ${Number(result.created || 0).toLocaleString()} CRM candidate${result.created === 1 ? "" : "s"} into ${leadWorkspaceName()}. They are discovery records with social handles and still need enrichment before outreach.`;
+            leadsUi.notice = `Added ${Number(result.created || 0).toLocaleString()} verified public-research contact${result.created === 1 ? "" : "s"} to ${leadWorkspaceName()}. Review every record before drafting outreach.`;
             pushActivity("Easy CRM", `pulled ${Number(result.created || 0).toLocaleString()} CRM candidate${result.created === 1 ? "" : "s"} for ${leadWorkspaceName()}.`, ws);
             store.save();
             rerender();
           } else {
-            leadsUi.notice = `CRM pull failed: ${String(result?.error || "unknown error")}`;
+            leadsUi.notice = String(result?.error || "Public research is not connected. No placeholder contacts were added.");
             rerender();
           }
         } catch (error) {
@@ -541,10 +381,8 @@ function renderLeads(el, rerender) {
         }
         return;
       }
-      const { created, skipped, commandNotice } = createProspectsFromPrompt(prompt);
-      leadsUi.notice = commandNotice || (created.length
-        ? `Created ${created.length} prospect card${created.length === 1 ? "" : "s"} from your prompt${skipped ? ` and skipped ${skipped} duplicate${skipped === 1 ? "" : "s"}` : ""}. Outreach is draft-only until approved.`
-        : `No new cards created${skipped ? ` — ${skipped} matching prospect lane${skipped === 1 ? " already exists" : "s already exist"}` : ""}.`);
+      const commandNotice = applyCrmCommand(prompt);
+      leadsUi.notice = commandNotice || "Public research requires a signed-in organization and a connected provider. No placeholder or invented contacts were added. You can still capture a real contact manually.";
       store.save();
       rerender();
     });
@@ -605,7 +443,14 @@ function renderLeads(el, rerender) {
       store.state.proposals.unshift(p);
       l.status = "proposal"; l.proposalId = p.id; l.next = "Proposal drafted — review it in Proposal Forge";
       persistLead(l);
-      pushActivity("Proposal Forge", `opened a ${pkg.name} draft for ${l.company}.`, l.ws);
+      pushActivity("Proposal Forge", `opened a ${pkg.name} draft for ${l.company}. Nothing was sent.`, l.ws);
+      if (proposalServerAvailable()) createServerProposal({ ...p, leadId: l.id }).then((result) => {
+        if (!result?.proposal) return;
+        Object.assign(p, result.proposal);
+        l.proposalId = result.proposal.id;
+        proposalUi.notice = "Server proposal saved. Nothing was sent.";
+        store.save();
+      }).catch((error) => { proposalUi.notice = error?.message || "Server proposal save failed; the local draft remains available."; });
       store.save(); rerender();
     },
     won: (id) => { const l = find(id); l.status = "won"; l.next = "Kick off delivery"; const p = store.state.proposals.find((x) => x.id === l.proposalId); if (p) p.status = "won"; persistLead(l); pushActivity("Client CRM", `marked ${l.company} as won.`, l.ws); store.save(); rerender(); },
@@ -621,7 +466,29 @@ function renderLeads(el, rerender) {
 }
 
 /* ============================ PROPOSAL FORGE ============================ */
+function syncServerProposals(rerender) {
+  const tenant = activeOrgId() || "";
+  if (!proposalServerAvailable() || !tenant || proposalUi.loadedTenant === tenant || proposalUi.loadingTenant === tenant) return;
+  proposalUi.loadingTenant = tenant;
+  loadProposals().then((payload) => {
+    if (!payload?.ok) return;
+    const serverProposals = payload.document?.proposals || [];
+    const serverIds = new Set(serverProposals.map((proposal) => proposal.id));
+    const retainedLocal = store.state.proposals.filter((proposal) => !serverIds.has(proposal.id));
+    store.state.proposals = [...serverProposals, ...retainedLocal];
+    proposalUi.loadedTenant = tenant;
+    proposalUi.notice = "Server proposals saved. Drafts remain approval-only.";
+    store.save();
+    rerender();
+  }).catch((error) => {
+    proposalUi.notice = error?.message || "Server proposals are unavailable; local drafts remain visible.";
+  }).finally(() => {
+    if (proposalUi.loadingTenant === tenant) proposalUi.loadingTenant = "";
+  });
+}
+
 function renderProposals(el, rerender) {
+  syncServerProposals(rerender);
   const props = visible(store.state.proposals);
   const proposalText = (p) => {
     const pkg = PACKAGES.find((x) => x.id === p.pkg);
@@ -638,7 +505,7 @@ function renderProposals(el, rerender) {
   };
   el.innerHTML = `
     <div class="ws-toolbar">
-      <p class="ws-note">Offer ladder: ${PACKAGES.map((p) => `${p.name} ${fmtMoney(p.price)}`).join(" · ")} — retainers ${RETAINERS.map((r) => r.range || fmtMoney(r.price) + "/mo").join(" · ")}.</p>
+      <p class="ws-note">${esc(proposalUi.notice || "Draft-only proposal workspace. Nothing sends without approval.")}<br />Offer ladder: ${PACKAGES.map((p) => `${p.name} ${fmtMoney(p.price)}`).join(" · ")} — retainers ${RETAINERS.map((r) => r.range || fmtMoney(r.price) + "/mo").join(" · ")}.</p>
       <button class="btn btn-primary" data-act="add">+ New proposal</button>
     </div>
     <div class="stack">
@@ -673,7 +540,13 @@ function renderProposals(el, rerender) {
       if (!client) return;
       const p = { id: uid("prop"), ws: currentWs() === "phantomforce" ? "phantomforce" : currentWs(), client: client.trim(), contact: client.trim(), pkg: "core", price: 1500, retainer: "keeper", status: "draft", pain: "Capture the pain in one sentence.", scope: ["Build scoped to the outcome", "Lead capture + follow-up wiring", "Review engine", "30-day watch"], timeline: "2 weeks build, launch week 3", updated: new Date().toISOString() };
       store.state.proposals.unshift(p);
-      pushActivity("Proposal Forge", `opened a Core draft for ${client.trim()}.`);
+      pushActivity("Proposal Forge", `opened a Core draft for ${client.trim()}. Nothing was sent.`);
+      if (proposalServerAvailable()) createServerProposal(p).then((result) => {
+        if (!result?.proposal) return;
+        Object.assign(p, result.proposal);
+        proposalUi.notice = "Server proposal saved. Nothing was sent.";
+        store.save(); rerender();
+      }).catch((error) => { proposalUi.notice = error?.message || "Server proposal save failed; the local draft remains available."; rerender(); });
       store.save(); rerender();
     },
     copy: (id, btn) => copyText(btn, proposalText(find(id))),
@@ -682,12 +555,13 @@ function renderProposals(el, rerender) {
       store.state.proposals = store.state.proposals.filter((item) => item.id !== id);
       store.state.leads.forEach((lead) => { if (lead.proposalId === id) lead.proposalId = null; });
       if (p) pushActivity("Proposal Forge", `removed proposal: ${p.client}.`, p.ws);
+      if (p?.serverBacked && proposalServerAvailable()) deleteServerProposal(id).catch((error) => { proposalUi.notice = error?.message || "Server proposal delete failed."; });
       store.save(); rerender();
     },
-    ready: (id) => { const p = find(id); p.status = "sent-ready"; p.updated = new Date().toISOString(); pushActivity("Proposal Forge", `moved ${p.client} to send-ready.`, p.ws); store.save(); rerender(); },
-    won: (id) => { const p = find(id); p.status = "won"; pushActivity("Offer Desk", `${p.client} proposal won — ${fmtMoney(p.price)}.`, p.ws); store.save(); rerender(); },
-    lost: (id) => { const p = find(id); p.status = "lost"; store.save(); rerender(); },
-    invoice: (id) => { const p = find(id); p.status = "invoice-ready"; pushActivity("Accounting Ledger", `${p.client} marked invoice-ready.`, p.ws); store.save(); rerender(); },
+    ready: (id) => { const p = find(id); p.status = "sent-ready"; p.updated = new Date().toISOString(); pushActivity("Proposal Forge", `moved ${p.client} to send-ready. Nothing was sent.`, p.ws); if (p.serverBacked && proposalServerAvailable()) updateServerProposal(id, { status: p.status }).catch((error) => { proposalUi.notice = error?.message || "Server proposal update failed."; }); store.save(); rerender(); },
+    won: (id) => { const p = find(id); p.status = "won"; pushActivity("Offer Desk", `${p.client} proposal marked won — ${fmtMoney(p.price)}.`, p.ws); if (p.serverBacked && proposalServerAvailable()) updateServerProposal(id, { status: p.status }).catch((error) => { proposalUi.notice = error?.message || "Server proposal update failed."; }); store.save(); rerender(); },
+    lost: (id) => { const p = find(id); p.status = "lost"; if (p.serverBacked && proposalServerAvailable()) updateServerProposal(id, { status: p.status }).catch((error) => { proposalUi.notice = error?.message || "Server proposal update failed."; }); store.save(); rerender(); },
+    invoice: (id) => { const p = find(id); p.status = "invoice-ready"; pushActivity("Accounting Ledger", `${p.client} marked invoice-ready.`, p.ws); if (p.serverBacked && proposalServerAvailable()) updateServerProposal(id, { status: p.status }).catch((error) => { proposalUi.notice = error?.message || "Server proposal update failed."; }); store.save(); rerender(); },
   });
 }
 
@@ -744,7 +618,7 @@ function renderReviews(el, rerender) {
     },
     "queue-publish": (id) => {
       const r = find(id);
-      store.state.approvals.unshift({ id: uid("app"), ws: r.ws, type: "publish-review", title: `Publish ${r.client} testimonial to site`, detail: "Publishing adds this quote to the site's reviews wall.", ref: r.id, status: "pending", requestedBy: "Review Desk", at: new Date().toISOString() });
+      queueWorkspaceApproval({ id: uid("app"), ws: r.ws, type: "publish-review", title: `Publish ${r.client} testimonial to site`, detail: "Publishing adds this quote to the site's reviews wall.", ref: r.id, status: "pending", requestedBy: "Review Desk", at: new Date().toISOString() });
       pushActivity("Review Desk", `queued publish approval for ${r.client}'s testimonial.`, r.ws);
       store.save(); rerender();
     },
@@ -792,7 +666,7 @@ function renderBookings(el, rerender) {
     },
     queue: (id) => {
       const b = find(id);
-      store.state.approvals.unshift({ id: uid("app"), ws: b.ws, type: "booking", title: `Approve booking: ${b.type} with ${b.client}`, detail: `${fmtDateTime(b.when)} · ${b.duration} min · ${b.location}`, ref: b.id, status: "pending", requestedBy: "Booking Coordinator", at: new Date().toISOString() });
+      queueWorkspaceApproval({ id: uid("app"), ws: b.ws, type: "booking", title: `Approve booking: ${b.type} with ${b.client}`, detail: `${fmtDateTime(b.when)} · ${b.duration} min · ${b.location}`, ref: b.id, status: "pending", requestedBy: "Booking Coordinator", at: new Date().toISOString() });
       pushActivity("Booking Coordinator", `queued booking approval for ${b.client}.`, b.ws);
       store.save(); rerender();
     },
@@ -856,7 +730,7 @@ function renderMedia(el, rerender) {
     },
     "request-gen": (id) => {
       const m = find(id);
-      store.state.approvals.unshift({ id: uid("app"), ws: m.ws, type: "media-generation", title: `Run paid generation: ${m.title}`, detail: "One paid generation pass. Uses paid credits — approval required.", ref: m.id, status: "pending", requestedBy: "Media Factory", at: new Date().toISOString() });
+      queueWorkspaceApproval({ id: uid("app"), ws: m.ws, type: "media-generation", title: `Run paid generation: ${m.title}`, detail: "One paid generation pass. Uses paid credits — approval required.", ref: m.id, status: "pending", requestedBy: "Media Factory", at: new Date().toISOString() });
       pushActivity("Media Factory", `queued generation approval for ${m.title}.`, m.ws);
       store.save(); rerender();
     },
@@ -1791,7 +1665,7 @@ function renderMemory(el, rerender) {
       if (!brainPanel.open || brainPanel.dataset.mounted) return;
       brainPanel.dataset.mounted = "1";
       const mount = brainPanel.querySelector("[data-memory-brain-mount]");
-      import("./brain.js?v=phantom-live-20260718-24")
+      import("./brain.js?v=phantom-live-20260718-25")
         .then((mod) => { if (mount && mount.isConnected) mod.renderPhantomBrain(mount); })
         .catch(() => { if (mount) mount.innerHTML = `<p class="ws-note">The brain panel could not load. Check that the backend on the admin PC is running, then reopen this section.</p>`; });
     });
@@ -3323,6 +3197,58 @@ function renderWorkforce(el, rerender) {
 
 /* ============================= APPROVALS ============================= */
 const approvalChangesFormOpen = new Set();
+
+function queueWorkspaceApproval(approval) {
+  store.state.approvals.unshift(approval);
+  if (!approvalServerAvailable()) return approval;
+  createServerWorkspaceApproval(approval).then((result) => {
+    if (!result?.approval) return;
+    Object.assign(approval, result.approval);
+    approvalUi.notice = "Server approvals saved. Decisions change state only; nothing executes here.";
+    store.save();
+  }).catch((error) => {
+    approvalUi.notice = error?.message || "Server approval save failed; the local request remains available.";
+  });
+  return approval;
+}
+
+function hydrateWorkspaceApprovalRecords(rerender) {
+  const tenant = activeOrgId() || "";
+  if (!approvalServerAvailable() || !tenant || approvalUi.loadedTenant === tenant || approvalUi.loadingTenant === tenant) return;
+  approvalUi.loadingTenant = tenant;
+  loadWorkspaceApprovals().then((payload) => {
+    if (!payload?.ok) return;
+    const serverApprovals = payload.document?.approvals || [];
+    const serverIds = new Set(serverApprovals.map((approval) => approval.id));
+    const retainedLocal = store.state.approvals.filter((approval) => !serverIds.has(approval.id));
+    store.state.approvals = [...serverApprovals, ...retainedLocal];
+    approvalUi.loadedTenant = tenant;
+    approvalUi.notice = "Server approvals saved. Decisions change state only; nothing executes here.";
+    store.save();
+    rerender();
+  }).catch((error) => {
+    approvalUi.notice = error?.message || "Server approvals are unavailable; local requests remain visible.";
+  }).finally(() => {
+    if (approvalUi.loadingTenant === tenant) approvalUi.loadingTenant = "";
+  });
+}
+
+function applyApprovalSideEffects(id, approved, options = {}) {
+  resolveApproval(id, approved, options);
+  return store.state.approvals.find((approval) => approval.id === id) || null;
+}
+
+function decideWorkspaceApprovalRecord(id, approved, options = {}) {
+  const approval = applyApprovalSideEffects(id, approved, options);
+  if (!approval?.serverBacked || !approvalServerAvailable()) return;
+  decideServerWorkspaceApproval(id, {
+    status: approval.status,
+    ownerNotes: approval.ownerNotes || "",
+    decision: approval.decision || "",
+  }).catch((error) => {
+    approvalUi.notice = error?.message || "Server approval decision failed; local state was preserved.";
+  });
+}
 /* Server approvals: awaiting_approval agent runs for the active org —
    REAL external actions held by the backend until an org owner/admin (or
    the super-admin) decides. Rendered only for database-auth sessions;
@@ -3371,10 +3297,11 @@ async function hydrateServerApprovals(el, rerender) {
 }
 
 function renderApprovals(el, rerender) {
+  hydrateWorkspaceApprovalRecords(rerender);
   const pending = visible(store.state.approvals).filter((a) => a.status === "pending");
   const done = visible(store.state.approvals).filter((a) => a.status !== "pending").slice(0, 6);
   el.innerHTML = `
-    <div class="ws-toolbar"><p class="ws-note">Only outward-facing moves land here: sends, bookings, publishing, paid generation, invoices, deploys. Drafting never waits on you. Workers prepare — you release, send back for changes, or say no.</p></div>
+    <div class="ws-toolbar"><p class="ws-note">${esc(approvalUi.notice || "Only outward-facing moves land here: sends, bookings, publishing, paid generation, invoices, and deploys.")} Drafting never waits on you. Workspace decisions update state only; external execution requires its separate verified connector.</p></div>
     ${isDatabaseSession() ? `<div data-server-approvals></div>` : ""}
     ${pending.length ? `<div class="stack">
       ${pending.map((a) => `
@@ -3405,8 +3332,8 @@ function renderApprovals(el, rerender) {
       ${done.map((a) => `<article class="record record-row"><button class="record-x" data-act="remove" data-id="${a.id}" aria-label="Remove approval record">×</button>${wsTag(a.ws)}<h4>${esc(a.title)}</h4>${chip(a.status)}${a.ownerNotes ? `<p class="record-sub">Owner notes: ${esc(a.ownerNotes)}</p>` : ""}</article>`).join("")}
     </div>` : ""}`;
   bindActions(el, {
-    approve: (id) => { resolveApproval(id, true); rerender(); },
-    decline: (id) => { resolveApproval(id, false); rerender(); },
+    approve: (id) => { decideWorkspaceApprovalRecord(id, true); rerender(); },
+    decline: (id) => { decideWorkspaceApprovalRecord(id, false); rerender(); },
     "approve-changes": (id) => { approvalChangesFormOpen.add(id); rerender(); },
     "decline-changes": (id) => { approvalChangesFormOpen.add(id); rerender(); },
     "cancel-changes": (id) => { approvalChangesFormOpen.delete(id); rerender(); },
@@ -3415,6 +3342,7 @@ function renderApprovals(el, rerender) {
       store.state.approvals = store.state.approvals.filter((item) => item.id !== id);
       approvalChangesFormOpen.delete(id);
       if (a) pushActivity("Approval Desk", `removed approval request: ${a.title}.`, a.ws);
+      if (a?.serverBacked && approvalServerAvailable()) deleteServerWorkspaceApproval(id).catch((error) => { approvalUi.notice = error?.message || "Server approval delete failed."; });
       store.save(); rerender();
     },
   });
@@ -3425,7 +3353,7 @@ function renderApprovals(el, rerender) {
       const notes = form.querySelector("[data-changes-notes]")?.value.trim();
       const approved = event.submitter?.dataset.changesDecision === "approve";
       if (!notes) return;
-      resolveApproval(id, approved, { changesRequested: true, notes });
+      decideWorkspaceApprovalRecord(id, approved, { changesRequested: true, notes });
       approvalChangesFormOpen.delete(id);
       rerender();
     };

@@ -6,7 +6,7 @@
    when the backend doesn't advertise database auth, none of these
    surfaces render and the app behaves exactly as before. */
 
-import { ctx, session } from "./store.js?v=phantom-live-20260718-24";
+import { ctx, session } from "./store.js?v=phantom-live-20260718-25";
 
 export const isDatabaseSession = () => !!ctx.session?.database;
 export const isCustomerOrgSession = () => !!(ctx.session?.database || ctx.session?.localCustomer);
@@ -233,7 +233,7 @@ export async function pullOrgCrmContacts(payload) {
   const orgId = activeOrgId();
   if (!orgId) return { ok: false, error: "no_active_org" };
   const { ok, json } = await api(`/orgs/${encodeURIComponent(orgId)}/crm/pull`, { method: "POST", body: payload });
-  return ok ? json : { ok: false, error: json?.error || "crm_pull_failed" };
+  return ok ? json : { ...json, ok: false, error: json?.message || json?.error || "crm_pull_failed" };
 }
 
 export async function updateOrgCrmContact(contactId, patch) {

@@ -38,6 +38,7 @@
     "test:account-recovery-2fa:postgres": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-account-recovery-2fa-postgres.ps1",
     "test:easy-crm": "tsx scripts/test-easy-crm.ts",
     "test:easy-crm:postgres": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-easy-crm-postgres.ps1",
+    "test:managed-growth-report": "tsx scripts/test-managed-growth-report.ts",
     "start": "node dist/index.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev"

@@ -51,7 +51,8 @@ must(files.workspaces, /loadProposals/u, "Proposal Forge must load server propos
 must(files.workspaces, /createServerProposal/u, "Proposal Forge must create server proposals.");
 must(files.workspaces, /updateServerProposal/u, "Proposal Forge must update server proposals.");
 must(files.workspaces, /deleteServerProposal/u, "Proposal Forge must delete server proposals.");
-must(files.workspaces, /opened a server-backed/u, "Lead conversion must create server-backed proposal drafts when signed in.");
+must(files.workspaces, /proposalServerAvailable\(\)[\s\S]*createServerProposal\(\{ \.\.\.p, leadId: l\.id \}\)/u, "Lead conversion must create server-backed proposal drafts when signed in.");
+must(files.workspaces, /Nothing was sent/u, "Proposal Forge must clearly preserve the draft-only send boundary.");
 must(files.audit, /PERSIST-PROPOSALS/u, "Structured audit must report proposal persistence.");
 must(files.packageJson, /test:proposal-pipeline/u, "Root package must expose the proposal pipeline regression test.");
 

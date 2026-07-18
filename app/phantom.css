@@ -6324,6 +6324,104 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .ch-card { border: 1px solid var(--line); border-radius: 18px; padding: 16px 18px; background: var(--glass); }
 .ch-card-h { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
 .ch-card-h h3 { margin: 0; font-size: 14px; }
+
+/* Managed Growth stays visually distinct from social analytics: it reports
+   tenant-scoped operational records, never modeled reach or engagement. */
+.analytics-stack,
+.mg-report { display: grid; gap: 14px; min-width: 0; }
+.mg-report .ch-card { border-radius: 8px; }
+.mg-hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+.mg-hero h3,
+.mg-sources h3 { margin: 3px 0 7px; letter-spacing: 0; }
+.mg-hero p:not(.ch-eyebrow),
+.mg-row p,
+.mg-module p,
+.mg-metric p,
+.mg-sources small { margin: 0; color: var(--dim); line-height: 1.45; }
+.mg-setup,
+.mg-metrics,
+.mg-grid,
+.mg-module-grid { display: grid; gap: 10px; min-width: 0; }
+.mg-setup { grid-template-columns: repeat(3, minmax(90px, 1fr)); min-width: min(100%, 390px); }
+.mg-setup span,
+.mg-sources span {
+  display: grid;
+  gap: 3px;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--dim);
+  font-size: 11px;
+}
+.mg-setup b { color: var(--neon); font-size: 18px; }
+.mg-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.mg-metric { min-width: 0; }
+.mg-metric > span,
+.mg-metric small,
+.mg-row > span,
+.mg-module > div > span {
+  color: var(--neon);
+  font: 700 10px "DM Mono", monospace;
+  text-transform: uppercase;
+}
+.mg-metric > b { display: block; margin: 6px 0; font-size: 24px; overflow-wrap: anywhere; }
+.mg-module-grid { grid-template-columns: repeat(5, minmax(160px, 1fr)); }
+.mg-module {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--glass) 86%, transparent);
+  display: grid;
+  align-content: start;
+  gap: 9px;
+}
+.mg-module.is-needs_action { border-color: color-mix(in srgb, var(--warn) 50%, transparent); }
+.mg-module.is-live { border-color: color-mix(in srgb, var(--neon) 42%, transparent); }
+.mg-module > div:first-child { display: grid; gap: 3px; }
+.mg-module b,
+.mg-row b { overflow-wrap: anywhere; }
+.mg-module small { color: var(--warn); line-height: 1.35; }
+.mg-module dl { margin: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
+.mg-module dl div { min-width: 0; padding-top: 7px; border-top: 1px solid var(--line); }
+.mg-module dt { color: var(--dim); font-size: 9px; }
+.mg-module dd { margin: 2px 0 0; overflow-wrap: anywhere; font-size: 11px; }
+.mg-module .btn { width: 100%; min-height: 34px; white-space: normal; }
+.mg-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.mg-list { display: grid; gap: 8px; }
+.mg-row {
+  display: grid;
+  gap: 4px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+.mg-row:first-child { border-top: 0; }
+.mg-row.is-critical > span { color: var(--risk); }
+.mg-row.is-warning > span { color: var(--warn); }
+.mg-row .btn { justify-self: start; }
+.mg-sources { display: grid; grid-template-columns: minmax(160px, 0.6fr) minmax(0, 1.4fr); gap: 14px; }
+.mg-sources > div:nth-child(2) { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; }
+.mg-sources i { color: var(--dim); font-style: normal; font-size: 9px; overflow-wrap: anywhere; }
+.mg-sources small { grid-column: 1 / -1; }
+.mg-safe { color: var(--neon); font: 700 10px "DM Mono", monospace; }
+
+@media (max-width: 1280px) {
+  .mg-module-grid { grid-template-columns: repeat(3, minmax(160px, 1fr)); }
+  .mg-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 760px) {
+  .mg-hero { display: grid; }
+  .mg-setup { min-width: 0; width: 100%; }
+  .mg-module-grid,
+  .mg-grid,
+  .mg-sources,
+  .mg-sources > div:nth-child(2) { grid-template-columns: 1fr; }
+}
 .ch-bars { display: flex; flex-direction: column; gap: 10px; }
 .ch-bar-row { display: grid; grid-template-columns: 130px 1fr auto; align-items: center; gap: 10px; }
 .ch-bar-lab { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; color: #cfeeda; }

@@ -1,8 +1,53 @@
 {
   "schemaVersion": 1,
-  "lastUpdated": "2026-07-17",
+  "lastUpdated": "2026-07-18",
   "purpose": "Release integrity ledger for PhantomForce decisions that must not disappear, regress, or be resurrected by stale worktrees.",
   "rules": [
+    {
+      "id": "tenant-revenue-truth-no-synthetic-contacts",
+      "status": "active",
+      "title": "Revenue workflows persist by tenant and never invent contacts",
+      "ownerDecision": "CRM discovery must use a verified public-research provider or add zero contacts. Manual contacts, proposal drafts, approval records, and Managed Growth reporting persist in the active organization; draft and approval state never implies an external send or execution.",
+      "requiredPatterns": [
+        {
+          "file": "server/src/index.ts",
+          "pattern": "public_research_not_connected",
+          "description": "Unconnected CRM discovery returns an explicit blocked state instead of invented leads."
+        },
+        {
+          "file": "app/js/workspaces.js",
+          "pattern": "createServerProposal",
+          "description": "Visible proposal drafts use the tenant-scoped proposal service."
+        },
+        {
+          "file": "app/js/workspaces.js",
+          "pattern": "createServerWorkspaceApproval",
+          "description": "Visible approval cards use tenant-scoped server persistence."
+        },
+        {
+          "file": "app/js/main.js",
+          "pattern": "mountManagedGrowthReport",
+          "description": "Analytics mounts the source-backed Managed Growth report."
+        },
+        {
+          "file": "package.json",
+          "pattern": "test:release-full",
+          "description": "A complete release gate covers critical UI, database auth, tenant isolation, and Easy CRM."
+        }
+      ],
+      "forbiddenPatterns": [
+        {
+          "file": "server/src/index.ts",
+          "pattern": "CRM_PULL_ARCHETYPES|crmPullPlan|\\.example\\.local",
+          "description": "The server must never fabricate discoverable-looking CRM prospects."
+        },
+        {
+          "file": "app/js/workspaces.js",
+          "pattern": "LEAD_ARCHETYPES|createProspectsFromPrompt",
+          "description": "The browser must never synthesize contacts from a natural-language lead request."
+        }
+      ]
+    },
     {
       "id": "admin-live-canonical-worktree",
       "status": "active",

@@ -87,9 +87,11 @@ try {
       DATABASE_URL = $databaseUrl
       PHANTOMFORCE_AUTH_PROVIDER = "database"
       PHANTOMFORCE_ENABLE_DEMO_AUTH = "false"
+      PHANTOMFORCE_SKIP_SERVER_DOTENV = "true"
       PHANTOMFORCE_ALLOW_UNSIGNED_SESSION_HEADER = "false"
       PHANTOMFORCE_ACCESS_REPOSITORY = ""
       PHANTOMFORCE_SESSION_SECRET = "phantomforce-easy-crm-test-secret"
+      PHANTOMFORCE_DEV_SEED_PASSWORD = "phantomforce-easy-crm-dev-admin"
       PHANTOMFORCE_SERVER_LOGGER = "false"
       PHANTOMFORCE_SERVER_LISTEN = "true"
     }
@@ -126,14 +128,17 @@ try {
       }
 
       $previousBase = $env:BASE
+      $previousEasyCrmDevPassword = $env:PHANTOMFORCE_EASY_CRM_DEV_PASSWORD
       try {
         $env:BASE = $serverUrl
+        $env:PHANTOMFORCE_EASY_CRM_DEV_PASSWORD = "phantomforce-easy-crm-dev-admin"
         npx tsx server/scripts/test-easy-crm.ts
         if ($LASTEXITCODE -ne 0) {
           throw "Easy CRM API test failed."
         }
       } finally {
         $env:BASE = $previousBase
+        $env:PHANTOMFORCE_EASY_CRM_DEV_PASSWORD = $previousEasyCrmDevPassword
       }
     } finally {
       if ($serverProcess -and -not $serverProcess.HasExited) {

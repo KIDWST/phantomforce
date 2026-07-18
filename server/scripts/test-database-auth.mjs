@@ -125,7 +125,170 @@ check("suspended org: owner writes blocked by paywall (403)", writeWhileSuspende
 const restore = await api("/admin/orgs/dev-org-chicagoshots/plan", { method: "POST", token: jordan.token, body: { planKey: "professional", status: "active", note: "restore" } });
 check("super-admin restores plan", restore.status === 200 && restore.json.entitlements?.canWrite === true);
 
-/* ---- 8. logout + revocation ---- */
+/* ---- 8. CRM, proposal, and approval lifecycle + tenant isolation ---- */
+const foreignTenantId = "dev-org-phantomforce";
+const ownerTenantId = "dev-org-chicagoshots";
+const safetyFlagsAreClosed = (json) =>
+  json.provider_called === false &&
+  json.outbound_action_executed === false &&
+  json.public_exposure_changed === false;
+
+const leadCreate = await api("/api/crm/leads", {
+  method: "POST",
+  token: owner.token,
+  body: {
+    tenant_id: foreignTenantId,
+    lead: {
+      name: "Database auth lifecycle lead",
+      company: "ChicagoShots lifecycle proof",
+      source: "Disposable regression test",
+      status: "new",
+      value: 1500,
+      next: "Prepare an approval-only proposal.",
+      notes: "Created in a disposable database. No outreach is performed.",
+    },
+  },
+});
+const leadId = leadCreate.json.lead?.id;
+check(
+  "CRM create pins an org owner to their own tenant",
+  leadCreate.status === 200 && leadCreate.json.tenant_id === ownerTenantId && leadCreate.json.lead?.tenantId === ownerTenantId,
+);
+check("CRM create keeps provider/outbound/public actions closed", safetyFlagsAreClosed(leadCreate.json));
+
+const leadUpdate = await api(`/api/crm/leads/${leadId}`, {
+  method: "POST",
+  token: owner.token,
+  body: { tenant_id: foreignTenantId, patch: { status: "follow-up", value: 2000 } },
+});
+check(
+  "CRM edit persists inside the pinned tenant",
+  leadUpdate.status === 200 && leadUpdate.json.lead?.status === "follow-up" && leadUpdate.json.lead?.value === 2000 && leadUpdate.json.tenant_id === ownerTenantId,
+);
+
+const proposalCreate = await api("/api/proposals", {
+  method: "POST",
+  token: owner.token,
+  body: {
+    tenant_id: foreignTenantId,
+    proposal: {
+      client: "ChicagoShots lifecycle proof",
+      contact: "Approval-only test contact",
+      pkg: "core",
+      price: 2000,
+      status: "draft",
+      pain: "Needs a dependable content and operations workflow.",
+      scope: ["Workflow setup", "Approval queue", "Weekly report"],
+      timeline: "Two-week setup sprint",
+      leadId,
+    },
+  },
+});
+const proposalId = proposalCreate.json.proposal?.id;
+check(
+  "proposal create stays in the owner's tenant and links the CRM lead",
+  proposalCreate.status === 200 && proposalCreate.json.tenant_id === ownerTenantId && proposalCreate.json.proposal?.leadId === leadId,
+);
+check("proposal create keeps provider/outbound/public actions closed", safetyFlagsAreClosed(proposalCreate.json));
+
+const proposalUpdate = await api(`/api/proposals/${proposalId}`, {
+  method: "POST",
+  token: owner.token,
+  body: { tenant_id: foreignTenantId, patch: { status: "sent-ready", price: 2500 } },
+});
+check(
+  "proposal edit persists an approval-ready state without sending",
+  proposalUpdate.status === 200 && proposalUpdate.json.proposal?.status === "sent-ready" && proposalUpdate.json.proposal?.price === 2500 && safetyFlagsAreClosed(proposalUpdate.json),
+);
+
+const approvalCreate = await api("/api/workspace-approvals", {
+  method: "POST",
+  token: owner.token,
+  body: {
+    tenant_id: foreignTenantId,
+    approval: {
+      type: "proposal-review",
+      title: "Approve lifecycle proposal",
+      detail: "Approval proves state only. It must not send or publish anything.",
+      ref: proposalId,
+      status: "pending",
+      requestedBy: "Database auth regression",
+    },
+  },
+});
+const approvalId = approvalCreate.json.approval?.id;
+check(
+  "approval create is tenant-pinned and starts pending",
+  approvalCreate.status === 200 && approvalCreate.json.tenant_id === ownerTenantId && approvalCreate.json.approval?.status === "pending",
+);
+check(
+  "workspace approval is state-only and cannot execute external work",
+  approvalCreate.json.approval_execution_implemented === false && safetyFlagsAreClosed(approvalCreate.json),
+);
+
+const memberDecision = await api(`/api/workspace-approvals/${approvalId}`, {
+  method: "POST",
+  token: employee.token,
+  body: { patch: { status: "approved", decision: "approve" } },
+});
+check("ordinary member cannot decide workspace approvals (403)", memberDecision.status === 403);
+
+const ownerDecision = await api(`/api/workspace-approvals/${approvalId}`, {
+  method: "POST",
+  token: owner.token,
+  body: { tenant_id: foreignTenantId, patch: { status: "approved", decision: "approve", ownerNotes: "Approved for local proof only." } },
+});
+check(
+  "organization owner can decide their approval without executing it",
+  ownerDecision.status === 200 && ownerDecision.json.approval?.status === "approved" && ownerDecision.json.approval_execution_implemented === false && safetyFlagsAreClosed(ownerDecision.json),
+);
+
+const [leadRefresh, proposalRefresh, approvalRefresh] = await Promise.all([
+  api(`/api/crm/leads?tenant_id=${foreignTenantId}`, { token: owner.token }),
+  api(`/api/proposals?tenant_id=${foreignTenantId}`, { token: owner.token }),
+  api(`/api/workspace-approvals?tenant_id=${foreignTenantId}`, { token: owner.token }),
+]);
+check(
+  "refresh restores the owner's CRM, proposal, and approval records",
+  leadRefresh.json.tenant_id === ownerTenantId &&
+    leadRefresh.json.document?.leads?.some((lead) => lead.id === leadId && lead.status === "follow-up") &&
+    proposalRefresh.json.document?.proposals?.some((proposal) => proposal.id === proposalId && proposal.status === "sent-ready") &&
+    approvalRefresh.json.document?.approvals?.some((approval) => approval.id === approvalId && approval.status === "approved"),
+);
+
+const foreignLeadCreate = await api("/api/crm/leads", {
+  method: "POST",
+  token: jordan.token,
+  body: { tenant_id: foreignTenantId, lead: { name: "Foreign tenant proof", company: "PhantomForce isolated record", value: 750 } },
+});
+const foreignLeadId = foreignLeadCreate.json.lead?.id;
+check("platform owner can explicitly create a record in another managed tenant", foreignLeadCreate.status === 200 && foreignLeadCreate.json.tenant_id === foreignTenantId);
+check(
+  "org owner cannot read a foreign tenant record by requesting its tenant id",
+  !leadRefresh.json.document?.leads?.some((lead) => lead.id === foreignLeadId) &&
+    !(await api(`/api/crm/leads?tenant_id=${foreignTenantId}`, { token: owner.token })).json.document?.leads?.some((lead) => lead.id === foreignLeadId),
+);
+
+const growthReport = await api(`/api/managed-growth/report?tenant_id=${foreignTenantId}`, { token: owner.token });
+check(
+  "managed growth report stays tenant-pinned and performs no provider or outbound action",
+  growthReport.status === 200 && growthReport.json.tenant_id === ownerTenantId && growthReport.json.provider_called === false && growthReport.json.outbound_action_executed === false,
+);
+
+const [approvalDelete, proposalDelete, leadDelete, foreignLeadDelete] = await Promise.all([
+  api(`/api/workspace-approvals/${approvalId}?tenant_id=${foreignTenantId}`, { method: "DELETE", token: owner.token }),
+  api(`/api/proposals/${proposalId}?tenant_id=${foreignTenantId}`, { method: "DELETE", token: owner.token }),
+  api(`/api/crm/leads/${leadId}?tenant_id=${foreignTenantId}`, { method: "DELETE", token: owner.token }),
+  api(`/api/crm/leads/${foreignLeadId}?tenant_id=${foreignTenantId}`, { method: "DELETE", token: jordan.token }),
+]);
+check(
+  "lifecycle cleanup deletes only the intended tenant records",
+  [approvalDelete, proposalDelete, leadDelete, foreignLeadDelete].every(({ status }) => status === 200),
+);
+const cleanupRefresh = await api(`/api/crm/leads?tenant_id=${foreignTenantId}`, { token: owner.token });
+check("deleted CRM lead stays deleted after refresh", !cleanupRefresh.json.document?.leads?.some((lead) => lead.id === leadId));
+
+/* ---- 9. logout + revocation ---- */
 const logout = await api("/auth/logout", { method: "POST", token: newHire.token });
 check("logout revokes the session", logout.status === 200 && logout.json.revoked === true);
 await new Promise((r) => setTimeout(r, 100));

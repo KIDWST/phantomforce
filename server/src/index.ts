@@ -2428,15 +2428,6 @@ const CrmPullSchema = z.object({
   source: z.string().trim().max(120).optional().default("Phantom CRM Pull"),
 });
 
-const CRM_PULL_ARCHETYPES = [
-  { match: /\b(gym|fitness|trainer|coach|boxing|martial)\b/i, audience: "independent gym", tags: ["fitness", "local"], value: 950, social: "instagram" },
-  { match: /\b(school|academy|college|booster|team|athletic)\b/i, audience: "school program", tags: ["schools", "community"], value: 1250, social: "facebook" },
-  { match: /\b(creator|influencer|podcast|streamer|youtube|tiktok|instagram)\b/i, audience: "creator", tags: ["creator", "content"], value: 1100, social: "tiktok" },
-  { match: /\b(restaurant|bar|venue|food|coffee|cafe)\b/i, audience: "restaurant", tags: ["hospitality", "local"], value: 900, social: "instagram" },
-  { match: /\b(contractor|roofer|plumber|hvac|home service|landscap)\b/i, audience: "home service company", tags: ["home-services", "local"], value: 1500, social: "facebook" },
-  { match: /\b(law|clinic|dental|medical|professional)\b/i, audience: "professional service office", tags: ["professional-services"], value: 1750, social: "linkedin" },
-] as const;
-
 function crmDb(reply: FastifyReply) {
   if (prisma) return prisma;
   reply.code(503).send({ ok: false, error: "crm_database_unavailable", reason: "DATABASE_URL is required for org-scoped CRM." });
@@ -2550,47 +2541,6 @@ function crmContactWrite(data: z.infer<typeof CrmContactPatchSchema>) {
   return write;
 }
 
-function slugText(value: string) {
-  return String(value || "lead").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "lead";
-}
-
-function crmPullPlan(input: z.infer<typeof CrmPullSchema>, existingCount = 0) {
-  const prompt = input.prompt || input.audience || "";
-  const archetype = CRM_PULL_ARCHETYPES.find((item) => item.match.test(prompt)) || {
-    audience: input.audience || "local business",
-    tags: ["prospect", "needs-enrichment"],
-    value: 850,
-    social: "instagram",
-  };
-  const audience = input.audience && input.audience !== "local businesses" ? input.audience : archetype.audience;
-  const batchId = `pull-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-  const batchTag = `batch:${batchId}`;
-  const base = slugText(audience);
-  const rows = Array.from({ length: input.count }, (_, index) => {
-    const n = existingCount + index + 1;
-    const handle = `${base}-${n}`;
-    return {
-      name: `${audience.replace(/\b\w/g, (c) => c.toUpperCase())} Candidate ${n}`,
-      organization: `${audience.replace(/\b\w/g, (c) => c.toUpperCase())} Prospect ${n}`,
-      status: "new",
-      type: "prospect",
-      value: archetype.value,
-      nextStep: "Verify the real business/contact, enrich public profile details, then draft an approval-safe first touch.",
-      notes: `Generated from CRM pull request: "${prompt || audience}". This is an org-scoped discovery candidate, not a sent outreach or claimed relationship.`,
-      source: input.source || "Phantom CRM Pull",
-      website: `${handle}.example.local`,
-      socials: { [archetype.social]: handle },
-      tags: [...new Set([...archetype.tags, "crm-pull", "needs-enrichment", batchTag])],
-      fitScore: Math.max(60, Math.min(94, 72 + (index % 18))),
-      qualification: ["Confirm real public profile", "Find decision-maker/contact path", "Match offer to pain before outreach"],
-      outreach: `Draft only: I noticed a practical way PhantomForce could help ${audience} save time or win more work. Want me to send a concise idea?`,
-      crmStage: "Discovery",
-      dueAt: new Date(Date.now() + (index + 1) * 86400000).toISOString(),
-    };
-  });
-  return { batchId, batchTag, rows };
-}
-
 app.get("/orgs/:orgId/crm", async (request, reply) => {
   const { orgId } = request.params as { orgId: string };
   const dbSession = requireOrgMember(request, reply, orgId);
@@ -2669,57 +2619,52 @@ app.post("/orgs/:orgId/crm/pull", async (request, reply) => {
   if (!db) return reply;
   const parsed = CrmPullSchema.safeParse(request.body ?? {});
   if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
-  const existingCount = await db.contact.count({ where: { orgId, source: parsed.data.source } }).catch(() => 0);
-  const plan = crmPullPlan(parsed.data, existingCount);
-  await db.contact.createMany({
-    data: plan.rows.map((row) => ({
-      orgId,
-      ...row,
-      dueAt: new Date(row.dueAt),
-    })),
-  });
-  const contacts = await db.contact.findMany({
-    where: { orgId, tags: { has: plan.batchTag } },
-    orderBy: { createdAt: "asc" },
-  });
+  const discovery = getWebDiscoveryStatus();
   const settings = await db.crmSettings.upsert({
     where: { orgId },
     update: {
       dailyPullTarget: parsed.data.count,
-      sourceMode: "daily",
+      sourceMode: "research-required",
       notes: parsed.data.prompt || parsed.data.audience,
       brain: {
         kind: "phantomforce_org_crm_brain",
         version: 1,
         lastNaturalCommand: parsed.data.prompt || `pull ${parsed.data.count} ${parsed.data.audience}`,
-        lastPullBatchId: plan.batchId,
         dailyPullTarget: parsed.data.count,
+        discoveryStatus: discovery.connected ? "provider-configured-adapter-required" : "provider-required",
         updatedAt: new Date().toISOString(),
       } as Prisma.InputJsonValue,
     },
     create: {
       orgId,
       dailyPullTarget: parsed.data.count,
-      sourceMode: "daily",
+      sourceMode: "research-required",
       notes: parsed.data.prompt || parsed.data.audience,
       brain: {
         kind: "phantomforce_org_crm_brain",
         version: 1,
         lastNaturalCommand: parsed.data.prompt || `pull ${parsed.data.count} ${parsed.data.audience}`,
-        lastPullBatchId: plan.batchId,
         dailyPullTarget: parsed.data.count,
+        discoveryStatus: discovery.connected ? "provider-configured-adapter-required" : "provider-required",
         updatedAt: new Date().toISOString(),
       } as Prisma.InputJsonValue,
     },
   });
-  return {
-    ok: true,
-    batchId: plan.batchId,
+  return reply.code(409).send({
+    ok: false,
+    error: "public_research_not_connected",
+    message: discovery.connected
+      ? "A search credential is configured, but CRM discovery is not connected to a verified public-research adapter yet. No contacts were added."
+      : "Connect a supported public-research provider before Phantom discovers contacts. No placeholder or invented contacts were added.",
+    webDiscovery: discovery,
     requested: parsed.data.count,
-    created: contacts.length,
+    created: 0,
     settings: { dailyPullTarget: settings.dailyPullTarget, sourceMode: settings.sourceMode, notes: settings.notes || "", brain: settings.brain || {} },
-    contacts: contacts.map(crmContactView),
-  };
+    contacts: [],
+    provider_called: false,
+    outbound_action_executed: false,
+    public_exposure_changed: false,
+  });
 });
 
 app.patch("/orgs/:orgId/crm/contacts/:contactId", async (request, reply) => {

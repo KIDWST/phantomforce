@@ -48,6 +48,12 @@
   forbidden patterns there so another stale worktree cannot resurrect it.
 
 ## Recent, merged & live (newest first)
+- **Tenant-backed revenue truth + release gate (2026-07-18)** — build
+  `phantom-live-20260718-25`. CRM discovery refuses to invent contacts when no
+  verified public-research adapter is connected; manual CRM records, proposal
+  drafts, and workspace approvals persist by organization; Analytics restores the
+  source-backed Managed Growth report. `npm run test:release-full` covers the
+  19-check product gate plus disposable-Postgres auth/tenant and Easy CRM suites.
 - **Customer plan simulator + setup routing guard (2026-07-16)** — build
   `phantom-live-20260716-289`. Customer test accounts can switch public
   Free/Pro/Elite/Enterprise tiers from Settings → Plan & access, local customer
@@ -113,7 +119,7 @@
   (`app/index.html`, `app/phantom.css`, `app/js/main.js`).
 - **Living Phantom character** — `app/js/character.js`: 11 painted poses, emotional
   inertia (`governMood`), hologram depth. Shared by admin + public site.
-- Current cache-bust build id: **`phantom-live-20260715-276`**.
+- Current cache-bust build id: **`phantom-live-20260718-25`**.
 
 ## Repo map
 - `app/` — the **admin console** (`admin.phantomforce.online`). `index.html`,
