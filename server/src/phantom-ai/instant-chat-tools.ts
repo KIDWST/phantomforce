@@ -5,7 +5,7 @@ export type InstantChatToolTurn = {
 
 export type InstantChatToolReply = {
   output_text: string;
-  tool_id: "phantom-calculator" | "phantom-reference-resolver" | "phantom-identity";
+  tool_id: "phantom-calculator" | "phantom-reference-resolver" | "phantom-identity" | "phantom-personality";
 };
 
 export function instantResponseTokenBudget(userRequest: string) {
@@ -197,8 +197,20 @@ function identityReply(userRequest: string, modelId: string): InstantChatToolRep
   return null;
 }
 
+function personalityReply(userRequest: string): InstantChatToolReply | null {
+  const text = userRequest.trim();
+  if (/\b(?:what(?:'s| is)|tell me)\s+(?:your\s+)?favorite food\b|\bwhat food (?:is your favorite|would you (?:pick|choose))\b/i.test(text)) {
+    return {
+      output_text: "Spicy ramen - bold, comforting, and impossible to make boring.",
+      tool_id: "phantom-personality",
+    };
+  }
+  return null;
+}
+
 export function buildInstantChatToolReply(userRequest: string, turns: InstantChatToolTurn[] = [], modelId = "qwen2.5:14b") {
   return identityReply(userRequest, modelId)
+    || personalityReply(userRequest)
     || arithmeticReply(userRequest, turns)
     || listSelectionReply(userRequest, turns);
 }
@@ -230,10 +242,22 @@ function enforceExactWordCount(userRequest: string, output: string) {
   return `${words.join(" ")}${terminal}`;
 }
 
+function enforceShortOnlyAnswer(userRequest: string, output: string) {
+  if (!/\b(?:name|city|word|noun|gas|color|colour|dessert|food|title|number) only\b/i.test(userRequest)) return output;
+  return output
+    .split(/\r?\n/, 1)[0]
+    .replace(/^(?:the (?:answer|name|city|word|noun|gas|color|colour|dessert|food|title|number) is|answer)\s*:\s*/i, "")
+    .split(/\s+(?:-|\u2013|\u2014)\s+|\s*;\s*/, 1)[0]
+    .trim();
+}
+
 export function enforceInstantOutputConstraints(userRequest: string, output: string) {
-  const trimmed = enforceExactWordCount(
+  const trimmed = enforceShortOnlyAnswer(
     userRequest,
-    stripUnneededFollowUpQuestion(userRequest, output.trim()),
+    enforceExactWordCount(
+      userRequest,
+      stripUnneededFollowUpQuestion(userRequest, output.trim()),
+    ),
   );
   if (!trimmed) return trimmed;
   if (/\b(?:no intro(?:duction)?|without (?:an? )?intro(?:duction)?)\b/i.test(userRequest)) {

@@ -935,3 +935,38 @@ Run the authenticated two-organization persistence proof in Recommended Cycle 11
 ## Next Task
 
 Run the authenticated two-organization persistence proof in Recommended Cycle 12.
+
+# 2026-07-18 - Cycle 12: Natural Personality and Factual Restraint
+
+## Problems Verified
+
+- The green real-model gate concealed an invented claim that octopus hearts run
+  through their stomachs after a request for one surprising fact.
+- A direct favorite-food question still produced the sterile disclaimer that the
+  assistant had no preferences, despite explicit conversational prompt guidance.
+- `Dessert only` returned a dessert plus an unwanted explanation.
+
+## Corrections
+
+- Strengthened temporary context and the local model system contract so replacement
+  requests return only the replacement and factual requests avoid invented detail.
+- Added an instant deterministic Phantom personality response for direct favorite-
+  food questions; contextual follow-ups still use the conversational model.
+- Added bounded cleanup for short name, city, word, noun, gas, color, dessert,
+  food, title, and number-only requests without touching code-only or JSON-only.
+- Expanded the authenticated model gate with a verified-fact replacement and a
+  three-turn favorite-food, reason, and dessert conversation.
+- Added permanent change-memory guards for all three behaviors.
+
+## Focused Verification
+
+- PASS: `npm run test:instant-chat:tools --workspace @phantomforce/server`.
+- PASS: `npm run typecheck`.
+- PASS: `npm run test:instant-chat:http-live-model --workspace
+  @phantomforce/server`: 71 authenticated requests, 436 ms average, 2,211 ms
+  maximum, zero fallback, zero business leakage, and all behavior assertions.
+- PASS: `npm run test:release-critical` (19/19 critical checks).
+
+## Next Task
+
+Run the authenticated two-organization persistence proof in Recommended Cycle 13.

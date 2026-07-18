@@ -16,16 +16,17 @@ Do not restart the audit from zero unless the inventory is invalid. Continuation
 is scheduled in this same Codex task by heartbeat automation
 `continue-phantomforce-quality-program`.
 
-Cycle 11 fixed recency under context pressure. Browser history could provide about
-7,500 characters while the local transport retained only the first 5,000, allowing
-long old replies to cut off the newest correction and final behavior rules. Instant
-context now packs the active topic newest-first inside a 4,800-character budget,
-always preserving the newest turn and instruction tail while dropping oldest
-overflow first. The authenticated gate now drives 68 requests and proves a newest
-correction survives eight oversized prior turns. The public app remains build
-`phantom-live-20260718-29`; this cycle changes the live server brain.
+Cycle 12 strengthened personality, factual restraint, and exact short-answer
+compliance. A verbose real-model audit exposed a fabricated octopus fact and the
+same sterile favorite-food disclaimer the owner rejected. Phantom now answers
+direct favorite-food questions through a 2 ms deterministic personality lane,
+keeps model-backed follow-ups conversational, returns replacement facts without
+repeating old material, and strips explanations from short `dessert only` and
+similar requests. The authenticated gate now drives 71 requests with zero business
+leakage. The public app remains build `phantom-live-20260718-29`; this cycle changes
+the live server brain.
 
-## Recommended Cycle 12
+## Recommended Cycle 13
 
 Theme: authenticated cross-organization persistence proof.
 

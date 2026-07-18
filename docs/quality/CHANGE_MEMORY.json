@@ -689,6 +689,21 @@
             "file": "server/scripts/test-instant-chat-http-live-model.ts",
             "pattern": "recencyPackingVerified: true",
             "description": "The authenticated model gate proves a newest correction survives oversized prior turns."
+          },
+          {
+            "file": "server/src/phantom-ai/instant-chat-tools.ts",
+            "pattern": "function personalityReply\\(userRequest: string\\)[\\s\\S]*tool_id: \"phantom-personality\"",
+            "description": "Direct harmless personality questions receive an immediate Phantom-specific answer instead of an AI disclaimer or an expensive model call."
+          },
+          {
+            "file": "server/src/phantom-ai/instant-chat-tools.ts",
+            "pattern": "function enforceShortOnlyAnswer\\(userRequest: string, output: string\\)",
+            "description": "Short name, city, word, color, dessert, and similar only-requests deterministically remove explanatory tails."
+          },
+          {
+            "file": "server/scripts/test-instant-chat-http-live-model.ts",
+            "pattern": "factualReplacementVerified: true,[\\s\\S]*conversationalTasteVerified: true",
+            "description": "The authenticated real-model gate rejects a fabricated fact, protects replacement-only behavior, and proves a natural multi-turn taste conversation."
           }
       ],
       "forbiddenPatterns": [

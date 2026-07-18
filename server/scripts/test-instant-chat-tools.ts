@@ -112,6 +112,17 @@ assert.equal(instantResponseTokenBudget("Give exactly 5 bullet points."), 188);
 assert.equal(instantResponseTokenBudget("Write a detailed article about rainbows."), 320);
 assert.equal(instantResponseTokenBudget("Write exactly 900 words."), 592);
 
+const favoriteFood = buildInstantChatToolReply("What's your favorite food? Pick one.");
+assert.equal(favoriteFood?.tool_id, "phantom-personality");
+assert.match(favoriteFood?.output_text || "", /ramen/i);
+assert.equal(buildInstantChatToolReply("What's my favorite food?"), null);
+assert.equal(
+  enforceInstantOutputConstraints("Choose a dessert that pairs with it. Dessert only.", "Chocolate mousse - rich and creamy."),
+  "Chocolate mousse",
+);
+assert.equal(enforceInstantOutputConstraints("City only.", "Tokyo\nJapan's capital."), "Tokyo");
+assert.equal(enforceInstantOutputConstraints("Code only.", "const answer = 1;"), "const answer = 1;");
+
 const oversizedTurns = Array.from({ length: 8 }, (_, index) => ({
   user: `user-${index + 1} ${"u".repeat(400)}`,
   assistant: `assistant-${index + 1} ${"a".repeat(500)}`,
@@ -121,6 +132,8 @@ assert.ok(packedContext.length <= MAX_INSTANT_CONTEXT_CHARS);
 assert.match(packedContext, /user-8/);
 assert.match(packedContext, /assistant-8/);
 assert.match(packedContext, /later corrections as authoritative/);
+assert.match(packedContext, /replacement only/);
+assert.match(packedContext, /never invent a plausible-sounding detail/);
 assert.doesNotMatch(packedContext, /user-1/);
 
 const resetContext = buildInstantConversationContext([

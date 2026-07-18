@@ -6,7 +6,7 @@ export type InstantConversationTurn = {
 export const MAX_INSTANT_CONTEXT_CHARS = 4800;
 
 const CONTEXT_HEADER = "Fast casual chat. The following is temporary recent conversation from the active topic, not saved memory. Use it only to resolve references such as why, that, or tell me more.";
-const CONTEXT_RULE = "Answer the current casual request directly. Resolve pronouns and transformations from the newest relevant turn, preserve named subjects, and treat later corrections as authoritative. Follow exact format constraints such as 'only the number' without extra framing. Do not append a follow-up question unless missing information prevents a useful answer. Never volunteer ledger, pipeline, accounting, approvals, or dashboard status unless the current request explicitly asks for it.";
+const CONTEXT_RULE = "Answer the current casual request directly. Resolve pronouns and transformations from the newest relevant turn, preserve named subjects, and treat later corrections as authoritative. When the user asks for a replacement, shorter version, final item, or one new fact, return the replacement only instead of repeating earlier material. Follow exact format constraints such as 'only the number' without extra framing. For factual claims, use stable knowledge and never invent a plausible-sounding detail; say when you are unsure. Do not append a follow-up question unless missing information prevents a useful answer. Never volunteer ledger, pipeline, accounting, approvals, or dashboard status unless the current request explicitly asks for it.";
 const TOPIC_RESET = /\b(?:new topic|switch(?:ing)? topics?|change(?:ing)? (?:the )?subject|unrelated question)\b/i;
 
 function activeTopicTurns(turns: InstantConversationTurn[]) {

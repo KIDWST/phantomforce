@@ -127,7 +127,7 @@ async function ask(token: string, prompt: string, turns: Turn[]): Promise<Answer
   assert.doesNotMatch(answer, forbidden, `Business context leaked into: ${prompt}`);
   assert.equal(payload.route_tier, "instant", `${prompt}: left the instant route`);
   assert.ok(
-    [model, "phantom-calculator", "phantom-reference-resolver", "phantom-identity"].includes(String(payload.model_id)),
+    [model, "phantom-calculator", "phantom-reference-resolver", "phantom-identity", "phantom-personality"].includes(String(payload.model_id)),
     `${prompt}: unexpected responder ${payload.model_id}; fallback=${JSON.stringify(payload.fallback || null)}`,
   );
   assert.equal(payload.fallback?.all_failed, false, `${prompt}: model failed`);
@@ -203,12 +203,14 @@ for (const prompt of [
   "Now mention intelligence.",
   "Turn that into a question.",
   "Answer the question.",
-  "End with one surprising fact, no introduction.",
+  "End with one surprising, verified octopus fact, no introduction.",
 ]) rows.push(await ask(customerToken, prompt, rollover));
 assert.doesNotMatch(rows.at(-1)!.answer, forbidden);
 assert.doesNotMatch(rows.at(-1)!.answer, /^(?:yes|did you know|surprising fact|fun fact)\b/i);
 assert.doesNotMatch(rows.at(-1)!.answer, /did you know|surprising fact|fun fact/i);
 assert.equal((rows.at(-1)!.answer.match(/[.!?]+/g) || []).length, 1, "no-introduction request must return one fact only");
+assert.match(rows.at(-1)!.answer, /three hearts|blue blood|taste with (?:their )?suckers|neurons? in (?:their )?arms|have no bones|fit through|regrow (?:a |their )?arms/i);
+assert.doesNotMatch(rows.at(-1)!.answer, /dolphin|echolocation|hearts? (?:that )?(?:run|pass|travel) through (?:their )?stomachs?/i);
 
 const corrections: Turn[] = [];
 rows.push(await ask(adminToken, "For this chat only: the meeting is Tuesday at 2 PM in Room 4.", corrections));
@@ -277,6 +279,20 @@ for (const [prompt, expected] of rapidChecks) {
   rows.push(answer);
   assert.match(answer.answer.trim(), expected, `rapid-fire answer failed for: ${prompt}`);
 }
+
+const taste: Turn[] = [];
+const favoriteFood = await ask(customerToken, "What's your favorite food? Pick one and answer casually in one sentence.", taste);
+rows.push(favoriteFood);
+assert.equal(favoriteFood.modelId, "phantom-personality");
+assert.match(favoriteFood.answer, /ramen/i);
+assert.doesNotMatch(favoriteFood.answer, /(?:as an AI|I (?:do not|don't) (?:eat|have (?:a )?favorite|have preferences)|cannot taste)/i);
+assert.equal((favoriteFood.answer.match(/[.!?]+/g) || []).length, 1);
+const favoriteReason = await ask(customerToken, "Why that one? One sentence.", taste);
+rows.push(favoriteReason);
+assert.doesNotMatch(favoriteReason.answer, /(?:as an AI|I (?:do not|don't) (?:eat|have preferences)|cannot taste)/i);
+const pairedDessert = await ask(customerToken, "Choose a dessert that pairs with it. Dessert only.", taste);
+rows.push(pairedDessert);
+assert.ok(pairedDessert.answer.split(/\s+/).length <= 5, "dessert-only answer must stay compact");
 
 const uncertainty: Turn[] = [];
 const hiddenCoin = await ask(adminToken, "I flipped a coin where you cannot see it. Did it land heads or tails? Do not guess.", uncertainty);
@@ -387,6 +403,8 @@ assert.doesNotMatch(newestCorrection.answer, /Glacier/i);
     multilingualVerified: true,
     sourceHonestyVerified: true,
     recencyPackingVerified: true,
+    factualReplacementVerified: true,
+    conversationalTasteVerified: true,
   }, null, 2));
 } finally {
   ownedServer?.kill();
