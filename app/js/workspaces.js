@@ -8,7 +8,7 @@ import {
   moneyView, fmtMoney, fmtDate, fmtDateTime, ago, daysUntil, statusLabel, outcomesView,
   PACKAGES, RETAINERS, FINANCE_CATEGORIES, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS, CHAT_HISTORY_RETENTION_DAYS,
   addMemory, toggleMemoryRemember, forgetMemory, forgetChatHistory, memoryStats, memoryRetention, chatHistoryStats, chatHistoryRetention,
-  session,
+  session, friendlyBackendError,
 } from "./store.js?v=phantom-live-20260717-18";
 import {
   isDatabaseSession, canManageActiveOrg, fetchServerApprovals, decideServerRun,
@@ -1424,6 +1424,120 @@ function connectorLabel(connector) {
   return "Not connected";
 }
 
+/* ---- Accounting upgrades: receipt smart entry, invoices, reconciliation,
+   monthly reports. No bank/card connection required — receipts upload to the
+   local backend (receipt-asset-storage + finance-smart-entry connectors) and
+   everything else stays in the same local store as the manual ledger. ---- */
+const financeUi = {
+  filter: "all", // "all" | "unreconciled"
+  receiptBusy: false,
+  receiptNotice: "",
+  receiptDraft: null,
+  invoiceNotice: "",
+  invoiceItems: [{ description: "", amount: "" }],
+};
+// Matches MAX_UPLOAD_BYTES in server/src/connectors/receipt-asset-storage.ts.
+const RECEIPT_MAX_BYTES = 12 * 1024 * 1024;
+
+/* Normalizes the /phantom-ai/ops/finance/parse-receipt response into a draft
+   the user reviews before anything lands in the ledger. When AI extraction is
+   unavailable the fields stay blank and the backend's honest reason is shown —
+   extraction is never faked. */
+export function receiptDraftFromResponse(payload, filename = "") {
+  const draft = payload?.draft && typeof payload.draft === "object" ? payload.draft : null;
+  const amount = Number(draft?.amount);
+  return {
+    assetId: typeof payload?.assetId === "string" && payload.assetId ? payload.assetId : null,
+    filename: String(filename || "receipt").slice(0, 120),
+    aiAvailable: payload?.aiAvailable === true && Boolean(draft),
+    reason: String(payload?.reason || ""),
+    merchant: String(draft?.vendor || "").slice(0, 160),
+    date: /^\d{4}-\d{2}-\d{2}$/.test(String(draft?.date || "")) ? draft.date : todayInput(),
+    amount: Number.isFinite(amount) && amount > 0 ? amount : "",
+    direction: draft?.direction === "income" ? "income" : "expense",
+    category: FINANCE_CATEGORIES.includes(draft?.categoryGuess) ? draft.categoryGuess : "Uncategorized",
+    confidence: draft?.confidence || null,
+  };
+}
+
+/* Reconciliation: imported CSV rows and receipt-confirmed rows count as
+   unreconciled until a receipt or invoice is linked to them. Manual entries
+   are the owner's own word and never counted. */
+export function isUnreconciledTransaction(tx) {
+  if (!tx || (tx.source !== "csv" && tx.source !== "receipt")) return false;
+  return !tx.linkedReceiptId && !tx.linkedInvoiceId;
+}
+export function unreconciledCount(transactions) {
+  return (Array.isArray(transactions) ? transactions : []).filter(isUnreconciledTransaction).length;
+}
+
+export function invoiceDisplayStatus(invoice, today = todayInput()) {
+  if (!invoice) return "draft";
+  if (invoice.status === "paid") return "paid";
+  if (invoice.status === "overdue") return "overdue";
+  if (invoice.status === "sent") return invoice.dueDate && invoice.dueDate < today ? "overdue" : "sent";
+  return "draft";
+}
+
+export function invoiceTotal(invoice) {
+  return (invoice?.items || []).reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+}
+
+export function invoiceLedgerEntry(invoice, ws, today = todayInput()) {
+  return {
+    id: uid("txn"),
+    ws,
+    date: invoice.paidDate || today,
+    description: `Invoice ${invoice.number || invoice.id} — ${invoice.client}`.slice(0, 160),
+    amount: invoiceTotal(invoice),
+    category: "Service income",
+    account: "Invoices",
+    source: "invoice",
+    externalId: `invoice:${invoice.id}`,
+    linkedReceiptId: null,
+    linkedInvoiceId: invoice.id,
+    notes: "",
+    createdAt: new Date().toISOString(),
+  };
+}
+
+/* Marks an invoice paid and records the matching income ledger entry exactly
+   once. Dedup follows the CSV-import pattern: externalId membership in the
+   existing ledger ("invoice:<id>"), so re-marking can never double-count. */
+export function markInvoicePaid(invoice, transactions, ws, today = todayInput()) {
+  if (!invoice || !Array.isArray(transactions)) return { created: false, entry: null };
+  invoice.status = "paid";
+  invoice.paidDate = invoice.paidDate || today;
+  const entry = invoiceLedgerEntry(invoice, ws, today);
+  if (entry.amount <= 0) return { created: false, entry: null };
+  const existing = new Set(transactions.map((tx) => tx.externalId).filter(Boolean));
+  if (existing.has(entry.externalId)) return { created: false, entry: null };
+  transactions.unshift(entry);
+  return { created: true, entry };
+}
+
+/* Reports: income/expense/net per calendar month, derived only from real
+   ledger rows. Returns [] for an empty ledger — the table renders an honest
+   empty state instead of invented data. */
+export function monthlySummary(transactions) {
+  const months = {};
+  (Array.isArray(transactions) ? transactions : []).forEach((tx) => {
+    const month = String(tx?.date || "").slice(0, 7);
+    if (!/^\d{4}-\d{2}$/.test(month)) return;
+    const amount = Number(tx.amount);
+    if (!Number.isFinite(amount) || amount === 0) return;
+    const bucket = months[month] || (months[month] = { month, income: 0, expense: 0, net: 0 });
+    if (amount > 0) bucket.income += amount;
+    else bucket.expense += Math.abs(amount);
+    bucket.net += amount;
+  });
+  return Object.values(months).sort((a, b) => b.month.localeCompare(a.month));
+}
+function monthLabel(month) {
+  const d = new Date(`${month}-01T00:00:00Z`);
+  return Number.isNaN(d.getTime()) ? month : d.toLocaleDateString(undefined, { month: "short", year: "numeric", timeZone: "UTC" });
+}
+
 /* Explanatory Analytics: turns the stat tiles above into a plain-language
    "why" (derived only from real transactions/pipeline already in m — no
    invented commentary) plus a concrete "what to do about it" that links to
@@ -1479,15 +1593,146 @@ function financeExplainerHtml(m) {
   </section>`;
 }
 
+const INVOICE_STATUS_LABELS = { draft: "Draft", sent: "Sent", paid: "Paid", overdue: "Overdue" };
+
+function receiptDraftFormHtml(draft, m) {
+  const attachable = draft.assetId ? m.transactions.filter((tx) => !tx.linkedReceiptId && tx.source !== "receipt").slice(0, 40) : [];
+  return `
+    <form class="finance-entry finance-receipt-draft" data-receipt-draft-form>
+      <p class="finance-receipt-meta">
+        ${draft.assetId ? `Receipt stored on the local backend (${esc(draft.filename)}).` : esc(draft.filename)}
+        ${draft.aiAvailable ? ` Extraction confidence: ${esc(draft.confidence || "medium")} — review before confirming.` : draft.reason ? ` ${esc(draft.reason)}` : ""}
+      </p>
+      <label><span>Merchant</span><input type="text" name="merchant" value="${esc(draft.merchant)}" placeholder="Vendor on the receipt" required /></label>
+      <label><span>Date</span><input type="date" name="date" value="${esc(draft.date)}" required /></label>
+      <label><span>Direction</span><select name="direction">
+        <option value="expense" ${draft.direction === "expense" ? "selected" : ""}>Cash out</option>
+        <option value="income" ${draft.direction === "income" ? "selected" : ""}>Cash in</option>
+      </select></label>
+      <label><span>Amount</span><input type="number" name="amount" min="0.01" step="0.01" value="${draft.amount === "" ? "" : esc(String(draft.amount))}" placeholder="0.00" required /></label>
+      <label><span>Category</span><select name="category">${financeCategoryOptions(draft.category)}</select></label>
+      <div class="finance-receipt-actions">
+        <button class="btn btn-primary" type="submit">Confirm into ledger</button>
+        <button class="btn btn-quiet" type="button" data-act="discard-receipt">Discard draft</button>
+      </div>
+      ${attachable.length ? `
+        <label class="finance-attach"><span>…or attach this receipt to an existing transaction (reconcile)</span>
+          <select data-receipt-attach aria-label="Attach receipt to an existing ledger transaction">
+            <option value="">Choose a ledger transaction</option>
+            ${attachable.map((tx) => `<option value="${esc(tx.id)}">${esc(fmtDate(tx.date))} · ${esc(tx.description.slice(0, 48))} · ${esc(moneySigned(tx.amount))}</option>`).join("")}
+          </select>
+        </label>` : ""}
+    </form>`;
+}
+
+function receiptPanelHtml(m) {
+  return `
+    <section class="finance-panel finance-receipt-panel">
+      <div class="finance-panel-head">
+        <h3>Receipt smart entry</h3>
+        <span>photos, scans, PDFs — no bank needed</span>
+      </div>
+      <div class="finance-dropzone${financeUi.receiptBusy ? " is-busy" : ""}" data-receipt-drop>
+        <b>${financeUi.receiptBusy ? "Uploading receipt…" : "Drag & drop a receipt here"}</b>
+        <p>Photo or PDF up to 12MB. The local backend stores it for tax time and, when AI parsing is enabled, extracts merchant, date, and amount into a draft you confirm — nothing lands in the ledger on its own.</p>
+        <label class="btn btn-quiet finance-receipt-pick">Choose file<input type="file" accept="image/*,.pdf,application/pdf" data-receipt-file hidden /></label>
+      </div>
+      ${financeUi.receiptNotice ? `<p class="finance-receipt-notice" role="status">${esc(financeUi.receiptNotice)}</p>` : ""}
+      ${financeUi.receiptDraft ? receiptDraftFormHtml(financeUi.receiptDraft, m) : ""}
+    </section>`;
+}
+
+function invoicesPanelHtml(m) {
+  const invoices = m.invoices || [];
+  const today = todayInput();
+  const outstanding = invoices.filter((invoice) => invoiceDisplayStatus(invoice, today) !== "paid")
+    .reduce((sum, invoice) => sum + invoiceTotal(invoice), 0);
+  const clientOptions = [...new Set(visible(store.state.leads || []).flatMap((lead) => [lead.name, lead.company]).filter(Boolean))].slice(0, 60);
+  return `
+    <section class="finance-panel finance-invoices">
+      <div class="finance-panel-head">
+        <h3>Invoices</h3>
+        <span>${invoices.length ? `${invoices.length} invoice${invoices.length === 1 ? "" : "s"} · ${fmtMoney(outstanding)} outstanding` : "local records, no backend required"}</span>
+      </div>
+      <div class="finance-invoice-list">
+        ${invoices.map((invoice) => {
+          const status = invoiceDisplayStatus(invoice, today);
+          return `
+          <article class="finance-invoice is-${esc(status)}">
+            <div>
+              <b>${esc(invoice.number || "Invoice")} — ${esc(invoice.client)}</b>
+              <i>${esc(fmtMoney(invoiceTotal(invoice)))} · issued ${esc(fmtDate(invoice.issuedDate))} · due ${invoice.dueDate ? esc(fmtDate(invoice.dueDate)) : "—"}${invoice.paidDate ? ` · paid ${esc(fmtDate(invoice.paidDate))}` : ""}</i>
+            </div>
+            <span class="finance-invoice-status">${esc(INVOICE_STATUS_LABELS[status] || status)}</span>
+            <div class="finance-invoice-actions">
+              ${status === "draft" ? `<button class="btn btn-quiet" type="button" data-act="invoice-sent" data-id="${esc(invoice.id)}">Mark sent</button>` : ""}
+              ${status !== "paid" ? `<button class="btn btn-quiet" type="button" data-act="invoice-paid" data-id="${esc(invoice.id)}">Mark paid</button>` : ""}
+              <button class="record-x" type="button" data-act="delete-invoice" data-id="${esc(invoice.id)}" aria-label="Delete invoice">×</button>
+            </div>
+          </article>`;
+        }).join("") || empty("No invoices yet. Create the first one below — marking it paid records the income in the ledger automatically.")}
+      </div>
+      <form class="finance-entry finance-invoice-form" data-invoice-form>
+        <label><span>Client</span><input type="text" name="client" list="finance-invoice-clients" placeholder="Client or company" required /></label>
+        <datalist id="finance-invoice-clients">${clientOptions.map((name) => `<option value="${esc(name)}"></option>`).join("")}</datalist>
+        <label><span>Invoice #</span><input type="text" name="number" placeholder="INV-001 (auto if blank)" /></label>
+        <label><span>Due date</span><input type="date" name="due" /></label>
+        <div class="finance-invoice-items">
+          ${financeUi.invoiceItems.map((item, index) => `
+            <div class="finance-invoice-item">
+              <input type="text" data-item-desc="${index}" value="${esc(item.description)}" placeholder="Line item description" aria-label="Line item description" />
+              <input type="number" min="0.01" step="0.01" data-item-amount="${index}" value="${esc(String(item.amount))}" placeholder="0.00" aria-label="Line item amount" />
+              ${financeUi.invoiceItems.length > 1 ? `<button type="button" class="record-x" data-item-remove="${index}" aria-label="Remove line item">×</button>` : ""}
+            </div>`).join("")}
+        </div>
+        <div class="finance-receipt-actions">
+          <button type="button" class="btn btn-quiet" data-act="invoice-add-line">Add line item</button>
+          <button class="btn btn-primary" type="submit">Create invoice (draft)</button>
+        </div>
+        ${financeUi.invoiceNotice ? `<p class="finance-receipt-notice" role="status">${esc(financeUi.invoiceNotice)}</p>` : ""}
+      </form>
+    </section>`;
+}
+
+function monthlySummaryHtml(m) {
+  const rows = monthlySummary(m.transactions);
+  return `
+    <section class="finance-panel finance-monthly">
+      <div class="finance-panel-head">
+        <h3>Monthly summary</h3>
+        <span>${rows.length ? `${rows.length} month${rows.length === 1 ? "" : "s"} of real ledger data` : "real ledger data only"}</span>
+      </div>
+      ${rows.length ? `
+      <div class="finance-monthly-scroll">
+        <table class="finance-monthly-table">
+          <caption class="finance-sr-only">Income, expenses, and net cashflow by month, derived from recorded transactions</caption>
+          <thead><tr><th scope="col">Month</th><th scope="col">Cash in</th><th scope="col">Cash out</th><th scope="col">Net</th></tr></thead>
+          <tbody>
+            ${rows.map((row) => `
+            <tr>
+              <th scope="row">${esc(monthLabel(row.month))}</th>
+              <td>${esc(fmtMoney(row.income))}</td>
+              <td>${esc(fmtMoney(row.expense))}</td>
+              <td class="${row.net < 0 ? "is-out" : "is-in"}">${esc(moneySigned(row.net))}</td>
+            </tr>`).join("")}
+          </tbody>
+        </table>
+      </div>` : empty("Nothing to summarize yet — this report builds itself from real transactions as they land in the ledger.")}
+    </section>`;
+}
+
 function renderMoney(el, rerender) {
   const m = moneyView();
   const ws = currentWs() === "phantomforce" ? "phantomforce" : currentWs();
-  const recent = m.transactions.slice(0, 18);
+  const unreconciledTotal = unreconciledCount(m.transactions);
+  const ledgerRows = financeUi.filter === "unreconciled" ? m.transactions.filter(isUnreconciledTransaction) : m.transactions;
+  const recent = ledgerRows.slice(0, 18);
   const actualCount = m.transactions.length;
   const proposalGoal = m.opportunity;
   el.innerHTML = `
     <section class="finance-shell">
       <div class="finance-toolbar">
+        <button class="btn btn-quiet${financeUi.filter === "unreconciled" ? " is-active" : ""}" type="button" data-act="toggle-unreconciled" aria-pressed="${financeUi.filter === "unreconciled"}">Unreconciled only${unreconciledTotal ? ` (${unreconciledTotal})` : ""}</button>
         <button class="btn" type="button" data-act="export" aria-label="Export Accounting ledger as CSV">Export CSV</button>
       </div>
       <div class="stat-row finance-stats">
@@ -1495,6 +1740,7 @@ function renderMoney(el, rerender) {
         <div class="stat"><span>Operating spend</span><b>${fmtMoney(m.cashOut)}</b><i>${actualCount ? "expenses and withdrawals" : "no expenses recorded"}</i></div>
         <div class="stat"><span>Net cashflow</span><b>${moneySigned(m.netCash)}</b><i>${actualCount ? "income minus outflow" : "ledger empty"}</i></div>
         <div class="stat"><span>Book balance</span><b>${moneySigned(m.ledgerBalance)}</b><i>${m.uncategorizedCount} uncategorized</i></div>
+        <div class="stat"><span>Unreconciled</span><b>${unreconciledTotal}</b><i>${unreconciledTotal ? "imports awaiting receipt/invoice link" : "imports fully matched"}</i></div>
       </div>
 
       ${financeExplainerHtml(m)}
@@ -1540,24 +1786,42 @@ function renderMoney(el, rerender) {
         </section>
       </div>
 
+      <div class="finance-grid">
+        ${receiptPanelHtml(m)}
+        ${invoicesPanelHtml(m)}
+      </div>
+
       <section class="finance-panel">
         <div class="finance-panel-head">
           <h3>Accounting transaction reader</h3>
-          <span>${actualCount} actual record${actualCount === 1 ? "" : "s"}</span>
+          <span>${financeUi.filter === "unreconciled" ? `${ledgerRows.length} unreconciled of ${actualCount}` : `${actualCount} actual record${actualCount === 1 ? "" : "s"}`}</span>
         </div>
         <div class="finance-table" role="table" aria-label="Business transactions">
-          ${recent.map((tx) => `
-            <article class="finance-row ${tx.amount < 0 ? "is-out" : "is-in"}" role="row">
+          ${recent.map((tx) => {
+            const unreconciled = isUnreconciledTransaction(tx);
+            const linkable = (m.invoices || []).length && (unreconciled || tx.linkedInvoiceId);
+            return `
+            <article class="finance-row ${tx.amount < 0 ? "is-out" : "is-in"}${unreconciled ? " is-unreconciled" : ""}" role="row">
               <time>${esc(fmtDate(tx.date))}</time>
               <div>
                 <b>${esc(tx.description)}</b>
-                <i>${esc(tx.account)} · ${esc(tx.category)} · ${esc(tx.source)}</i>
+                <i>${esc(tx.account)} · ${esc(tx.category)} · ${esc(tx.source)}${tx.linkedReceiptId ? " · receipt ✓" : ""}${tx.linkedInvoiceId ? " · invoice ✓" : ""}${unreconciled ? " · unreconciled" : ""}</i>
+                ${linkable ? `
+                <select class="finance-link-select" data-link-invoice="${esc(tx.id)}" aria-label="Link an invoice to this transaction">
+                  <option value="">${tx.linkedInvoiceId ? "Unlink invoice" : "Link invoice…"}</option>
+                  ${(m.invoices || []).map((invoice) => `<option value="${esc(invoice.id)}" ${invoice.id === tx.linkedInvoiceId ? "selected" : ""}>${esc(invoice.number || "Invoice")} — ${esc(invoice.client)} (${esc(fmtMoney(invoiceTotal(invoice)))})</option>`).join("")}
+                </select>` : ""}
               </div>
               <strong>${moneySigned(tx.amount)}</strong>
               <button class="record-x" data-act="delete-tx" data-id="${esc(tx.id)}" type="button" aria-label="Delete transaction">×</button>
-            </article>`).join("") || empty("No transactions yet. Connect a bank/card, import a CSV export, or add the first one manually.")}
+            </article>`;
+          }).join("") || empty(financeUi.filter === "unreconciled"
+            ? "Nothing unreconciled — every imported transaction has a receipt or invoice behind it."
+            : "No transactions yet. Drop a receipt, import a CSV export, or add the first one manually.")}
         </div>
       </section>
+
+      ${monthlySummaryHtml(m)}
 
       <section class="finance-goal-note">
         <div>
@@ -1639,7 +1903,242 @@ function renderMoney(el, rerender) {
       rerender();
     };
   });
+  /* Receipt smart entry: upload to the local backend, then render the
+     extraction result as a draft the user confirms. If the session or backend
+     is unavailable this shows the standard sign-in/backend messaging —
+     extraction results are never fabricated client-side. */
+  const handleReceiptFile = async (file) => {
+    if (!file || financeUi.receiptBusy) return;
+    const isSupported = /^image\//.test(file.type) || file.type === "application/pdf" || /\.pdf$/i.test(file.name);
+    if (!isSupported) {
+      financeUi.receiptNotice = "Receipts must be an image (photo/scan) or a PDF.";
+      rerender(); return;
+    }
+    if (file.size > RECEIPT_MAX_BYTES) {
+      financeUi.receiptNotice = "That file is over the 12MB receipt limit.";
+      rerender(); return;
+    }
+    const token = session.token();
+    if (!token) {
+      financeUi.receiptNotice = "Sign in to upload receipts — storage and extraction run on the local backend.";
+      rerender(); return;
+    }
+    financeUi.receiptBusy = true;
+    financeUi.receiptNotice = "";
+    rerender();
+    try {
+      const dataUrl = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ""));
+        reader.onerror = () => reject(new Error("Could not read that file."));
+        reader.readAsDataURL(file);
+      });
+      const response = await fetch("/phantom-ai/ops/finance/parse-receipt", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ image: dataUrl, filename: file.name }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || payload?.ok !== true) {
+        throw new Error(friendlyBackendError(response.status, payload?.error?.message || payload?.error, {
+          authMessage: "Sign in to upload receipts — storage and extraction run on the local backend.",
+          fallbackPrefix: "Receipt upload failed",
+        }));
+      }
+      financeUi.receiptDraft = receiptDraftFromResponse(payload, file.name);
+      financeUi.receiptNotice = financeUi.receiptDraft.aiAvailable
+        ? "Extraction ready — review the draft before it touches the ledger."
+        : (financeUi.receiptDraft.reason || "Receipt stored. Fill in the details below.");
+    } catch (error) {
+      financeUi.receiptDraft = null;
+      financeUi.receiptNotice = error instanceof Error ? error.message : "Receipt upload failed: the local backend is unavailable.";
+    }
+    financeUi.receiptBusy = false;
+    rerender();
+  };
+  const dropzone = el.querySelector("[data-receipt-drop]");
+  if (dropzone) {
+    dropzone.ondragover = (event) => { event.preventDefault(); dropzone.classList.add("is-drag"); };
+    dropzone.ondragleave = () => dropzone.classList.remove("is-drag");
+    dropzone.ondrop = (event) => {
+      event.preventDefault();
+      dropzone.classList.remove("is-drag");
+      handleReceiptFile(event.dataTransfer?.files?.[0]);
+    };
+  }
+  const receiptInput = el.querySelector("[data-receipt-file]");
+  if (receiptInput) receiptInput.onchange = () => handleReceiptFile(receiptInput.files?.[0]);
+  const receiptDraftForm = el.querySelector("[data-receipt-draft-form]");
+  if (receiptDraftForm) {
+    receiptDraftForm.onsubmit = (event) => {
+      event.preventDefault();
+      const draft = financeUi.receiptDraft;
+      if (!draft) return;
+      const data = new FormData(receiptDraftForm);
+      const rawAmount = Number(data.get("amount"));
+      if (!Number.isFinite(rawAmount) || rawAmount <= 0) return;
+      const direction = data.get("direction") === "income" ? 1 : -1;
+      const description = String(data.get("merchant") || "Receipt").slice(0, 160);
+      const externalId = draft.assetId ? `receipt:${draft.assetId}` : null;
+      const finance = financeNow();
+      if (externalId && (finance.transactions || []).some((tx) => tx.externalId === externalId)) {
+        financeUi.receiptDraft = null;
+        financeUi.receiptNotice = "That receipt is already confirmed in the ledger.";
+        rerender(); return;
+      }
+      const account = ensureAccount("Receipts");
+      finance.transactions.unshift({
+        id: uid("txn"),
+        ws,
+        date: financeDate(data.get("date")),
+        description,
+        amount: direction * rawAmount,
+        category: String(data.get("category") || "Uncategorized"),
+        account,
+        source: "receipt",
+        externalId,
+        linkedReceiptId: draft.assetId || null,
+        linkedInvoiceId: null,
+        notes: draft.filename ? `Receipt file: ${draft.filename}`.slice(0, 300) : "",
+        createdAt: new Date().toISOString(),
+      });
+      pushActivity("Accounting Ledger", `confirmed a receipt into the ledger: ${description} (${moneySigned(direction * rawAmount)}).`, ws);
+      financeUi.receiptDraft = null;
+      financeUi.receiptNotice = "";
+      store.save();
+      rerender();
+    };
+    const attachSelect = el.querySelector("[data-receipt-attach]");
+    if (attachSelect) {
+      attachSelect.onchange = () => {
+        const draft = financeUi.receiptDraft;
+        const tx = (financeNow().transactions || []).find((item) => String(item.id) === attachSelect.value);
+        if (!draft?.assetId || !tx) return;
+        tx.linkedReceiptId = draft.assetId;
+        pushActivity("Accounting Ledger", `attached receipt ${draft.filename} to "${tx.description}" — transaction reconciled.`, ws);
+        financeUi.receiptDraft = null;
+        financeUi.receiptNotice = "Receipt attached — transaction reconciled.";
+        store.save();
+        rerender();
+      };
+    }
+  }
+  /* Invoices: client-store-backed (no invoice backend exists), following the
+     manual-ledger persistence pattern. */
+  const invoiceForm = el.querySelector("[data-invoice-form]");
+  if (invoiceForm) {
+    invoiceForm.querySelectorAll("[data-item-desc]").forEach((input) => {
+      input.oninput = () => {
+        const item = financeUi.invoiceItems[Number(input.dataset.itemDesc)];
+        if (item) item.description = input.value;
+      };
+    });
+    invoiceForm.querySelectorAll("[data-item-amount]").forEach((input) => {
+      input.oninput = () => {
+        const item = financeUi.invoiceItems[Number(input.dataset.itemAmount)];
+        if (item) item.amount = input.value;
+      };
+    });
+    invoiceForm.querySelectorAll("[data-item-remove]").forEach((button) => {
+      button.onclick = (event) => {
+        event.preventDefault();
+        financeUi.invoiceItems.splice(Number(button.dataset.itemRemove), 1);
+        if (!financeUi.invoiceItems.length) financeUi.invoiceItems.push({ description: "", amount: "" });
+        rerender();
+      };
+    });
+    invoiceForm.onsubmit = (event) => {
+      event.preventDefault();
+      const data = new FormData(invoiceForm);
+      const client = String(data.get("client") || "").trim().slice(0, 120);
+      const items = financeUi.invoiceItems
+        .map((item) => ({ description: String(item.description || "Line item").trim().slice(0, 160) || "Line item", amount: Number(item.amount) }))
+        .filter((item) => Number.isFinite(item.amount) && item.amount > 0);
+      if (!client || !items.length) {
+        financeUi.invoiceNotice = "An invoice needs a client and at least one line item with an amount.";
+        rerender(); return;
+      }
+      const finance = financeNow();
+      if (!Array.isArray(finance.invoices)) finance.invoices = [];
+      const number = String(data.get("number") || "").trim().slice(0, 40) || `INV-${String(finance.invoices.length + 1).padStart(3, "0")}`;
+      const invoice = {
+        id: uid("inv"),
+        ws,
+        number,
+        client,
+        items,
+        total: items.reduce((sum, item) => sum + item.amount, 0),
+        issuedDate: todayInput(),
+        dueDate: data.get("due") ? financeDate(data.get("due")) : null,
+        status: "draft",
+        paidDate: null,
+        notes: "",
+        createdAt: new Date().toISOString(),
+      };
+      finance.invoices.unshift(invoice);
+      pushActivity("Accounting Ledger", `created invoice ${number} for ${client} (${fmtMoney(invoice.total)}).`, ws);
+      financeUi.invoiceItems = [{ description: "", amount: "" }];
+      financeUi.invoiceNotice = "";
+      store.save();
+      rerender();
+    };
+  }
+  /* Reconciliation: link/unlink an invoice on a ledger row. */
+  el.querySelectorAll("[data-link-invoice]").forEach((select) => {
+    select.onchange = () => {
+      const finance = financeNow();
+      const tx = (finance.transactions || []).find((item) => String(item.id) === select.dataset.linkInvoice);
+      if (!tx) return;
+      const invoice = (finance.invoices || []).find((item) => item.id === select.value) || null;
+      tx.linkedInvoiceId = invoice ? invoice.id : null;
+      pushActivity("Accounting Ledger", invoice
+        ? `linked invoice ${invoice.number || invoice.id} to "${tx.description}" — transaction reconciled.`
+        : `unlinked the invoice from "${tx.description}".`, ws);
+      store.save();
+      rerender();
+    };
+  });
   bindActions(el, {
+    "toggle-unreconciled": () => {
+      financeUi.filter = financeUi.filter === "unreconciled" ? "all" : "unreconciled";
+      rerender();
+    },
+    "discard-receipt": () => {
+      financeUi.receiptDraft = null;
+      financeUi.receiptNotice = "";
+      rerender();
+    },
+    "invoice-add-line": () => {
+      financeUi.invoiceItems.push({ description: "", amount: "" });
+      rerender();
+    },
+    "invoice-sent": (id) => {
+      const invoice = (financeNow().invoices || []).find((item) => item.id === id);
+      if (!invoice || invoice.status !== "draft") return;
+      invoice.status = "sent";
+      pushActivity("Accounting Ledger", `marked invoice ${invoice.number || invoice.id} as sent to ${invoice.client}.`, ws);
+      store.save(); rerender();
+    },
+    "invoice-paid": (id) => {
+      const finance = financeNow();
+      const invoice = (finance.invoices || []).find((item) => item.id === id);
+      if (!invoice || invoice.status === "paid") return;
+      const result = markInvoicePaid(invoice, finance.transactions, ws);
+      if (result.created) ensureAccount("Invoices");
+      pushActivity("Accounting Ledger", result.created
+        ? `marked invoice ${invoice.number || invoice.id} paid — recorded ${fmtMoney(result.entry.amount)} income in the ledger.`
+        : `marked invoice ${invoice.number || invoice.id} paid (ledger entry already recorded).`, ws);
+      store.save(); rerender();
+    },
+    "delete-invoice": (id) => {
+      const finance = financeNow();
+      const invoice = (finance.invoices || []).find((item) => item.id === id);
+      if (invoice && !confirm(`Delete invoice ${invoice.number || invoice.id} for ${invoice.client}? Ledger entries stay.`)) return;
+      finance.invoices = (finance.invoices || []).filter((item) => item.id !== id);
+      (finance.transactions || []).forEach((tx) => { if (tx.linkedInvoiceId === id) tx.linkedInvoiceId = null; });
+      if (invoice) pushActivity("Accounting Ledger", `deleted invoice ${invoice.number || invoice.id} for ${invoice.client}.`, ws);
+      store.save(); rerender();
+    },
     connector: (id) => {
       const connector = financeNow().connectors.find((item) => item.id === id);
       if (!connector) return;

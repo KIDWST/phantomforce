@@ -442,9 +442,12 @@ function financeSeed() {
   return {
     accounts: [],
     transactions: [],
+    invoices: [],
     connectors: FINANCE_CONNECTORS,
   };
 }
+
+export const INVOICE_STATUSES = ["draft", "sent", "paid", "overdue"];
 
 function normalizeFinance(finance) {
   const input = finance && typeof finance === "object" ? finance : financeSeed();
@@ -473,11 +476,35 @@ function normalizeFinance(finance) {
       account: String(tx.account || "Manual ledger").slice(0, 80),
       source: tx.source || "manual",
       externalId: tx.externalId || null,
+      // Reconciliation links: a stored receipt asset id and/or a local
+      // invoice id proving the paper trail behind this ledger row.
+      linkedReceiptId: tx.linkedReceiptId || null,
+      linkedInvoiceId: tx.linkedInvoiceId || null,
       notes: String(tx.notes || "").slice(0, 300),
       createdAt: tx.createdAt || new Date().toISOString(),
     };
   }).filter((tx) => tx.amount !== 0) : [];
-  return { accounts, transactions, connectors };
+  const invoices = Array.isArray(input.invoices) ? input.invoices.map((invoice) => {
+    const items = Array.isArray(invoice.items) ? invoice.items.map((item) => ({
+      description: String(item?.description || "Line item").slice(0, 160),
+      amount: Number.isFinite(Number(item?.amount)) ? Number(item.amount) : 0,
+    })).filter((item) => item.amount > 0) : [];
+    return {
+      id: invoice.id || uid("inv"),
+      ws: invoice.ws || "phantomforce",
+      number: String(invoice.number || "").slice(0, 40),
+      client: String(invoice.client || "Client").slice(0, 120),
+      items,
+      total: items.reduce((sum, item) => sum + item.amount, 0),
+      issuedDate: invoice.issuedDate || new Date().toISOString().slice(0, 10),
+      dueDate: invoice.dueDate || null,
+      status: INVOICE_STATUSES.includes(invoice.status) ? invoice.status : "draft",
+      paidDate: invoice.paidDate || null,
+      notes: String(invoice.notes || "").slice(0, 300),
+      createdAt: invoice.createdAt || new Date().toISOString(),
+    };
+  }).filter((invoice) => invoice.items.length > 0) : [];
+  return { accounts, transactions, invoices, connectors };
 }
 
 // Normalizes in place and always returns the same object identity for a given
@@ -493,6 +520,7 @@ function ensureFinance() {
   }
   current.accounts = normalized.accounts;
   current.transactions = normalized.transactions;
+  current.invoices = normalized.invoices;
   current.connectors = normalized.connectors;
   return current;
 }
@@ -1076,6 +1104,9 @@ export function moneyView() {
     .slice()
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime() || String(b.createdAt).localeCompare(String(a.createdAt)));
   const accounts = visible(finance.accounts);
+  const invoices = visible(finance.invoices || [])
+    .slice()
+    .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
   const cashIn = transactions.filter((tx) => tx.amount > 0).reduce((sum, tx) => sum + tx.amount, 0);
   const cashOut = transactions.filter((tx) => tx.amount < 0).reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
   const netCash = cashIn - cashOut;
@@ -1092,6 +1123,7 @@ export function moneyView() {
     retainerMonthly,
     transactions,
     accounts,
+    invoices,
     connectors: finance.connectors,
     cashIn,
     cashOut,
