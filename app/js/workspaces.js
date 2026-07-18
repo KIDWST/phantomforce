@@ -24,7 +24,7 @@ const kv = (k, v) => `<div class="kv"><span>${esc(k)}</span><b>${v}</b></div>`;
 const empty = (msg) => `<div class="ws-empty">${esc(msg)}</div>`;
 const wsTag = (id) => (isAdmin() && currentWs() === "phantomforce") ? `<span class="ws-tag">${esc(wsName(id))}</span>` : "";
 const memoryUi = { query: "", category: "all", brainOpen: false };
-const leadsUi = { prompt: "", notice: "", selectedId: "", query: "", status: "all", loadedOrg: "", loadingOrg: "" };
+const leadsUi = { prompt: "", notice: "", selectedId: "", query: "", status: "all", loadedOrg: "", loadingOrg: "", editOpen: false };
 const workerUi = { filter: "all", notice: "", selectedId: "", tab: "overview", preview: null, view: "map" };
 // Transient pan/zoom/search state for the fullscreen Workers "web" canvas -
 // not persisted, resets whenever the user leaves and re-enters Web view.
@@ -416,10 +416,49 @@ function createProspectsFromPrompt(prompt) {
   return { created, skipped, commandNotice };
 }
 
+function crmFollowUpDue(lead) {
+  return !!lead.due && daysUntil(lead.due) <= 0 && !["won", "lost"].includes(lead.status);
+}
+
+function crmTimelineFor(lead) {
+  const needles = [lead.name, lead.company].filter(Boolean).map((v) => String(v).toLowerCase());
+  if (!needles.length) return [];
+  return (store.state.activity || [])
+    .filter((entry) => entry.ws === lead.ws && needles.some((n) => String(entry.text || "").toLowerCase().includes(n)))
+    .slice(0, 8);
+}
+
+/* A deterministic brief from real CRM fields only — no invented facts. The
+   suggested next action is a rule from pipeline stage, labeled as a draft. */
+function crmClientBrief(lead) {
+  const bits = [];
+  bits.push(`${lead.name || lead.company} is ${statusLabel(lead.status || "new").toLowerCase()} in the ${leadWorkspaceName(lead.ws)} pipeline`);
+  if (Number(lead.value)) bits.push(`est. value ${fmtMoney(Number(lead.value))}`);
+  if (lead.lastTouch) bits.push(`last contact ${ago(lead.lastTouch)}`);
+  else bits.push("no contact logged yet");
+  if (crmFollowUpDue(lead)) bits.push("follow-up is due now");
+  else if (lead.due) bits.push(`follow-up ${fmtDate(lead.due)}`);
+  if ((lead.qualification || []).length) bits.push(`${lead.qualification.length} qualification note${lead.qualification.length === 1 ? "" : "s"}`);
+  return `${bits.join(" · ")}.`;
+}
+
+function crmSuggestedNext(lead) {
+  if (crmFollowUpDue(lead)) return "Send the overdue follow-up today — reference the last touchpoint and offer one concrete time.";
+  switch (lead.status) {
+    case "new": return "Qualify need, budget, and best contact path, then set a follow-up date.";
+    case "follow-up": return lead.outreach ? "Use the saved outreach angle and ask for a short call." : "Draft a one-line value opener and ask for a short call.";
+    case "proposal": return "Nudge the open proposal with a proof point and a clear accept path.";
+    case "won": return "Kick off delivery and schedule the review request.";
+    case "lost": return "Set a 90-day re-engage reminder with one new proof point.";
+    default: return "Set the next concrete step.";
+  }
+}
+
 function filteredCrmContacts() {
   const ws = leadWorkspaceId();
   let leads = store.state.leads.filter((lead) => lead.ws === ws);
-  if (leadsUi.status !== "all") leads = leads.filter((lead) => lead.status === leadsUi.status);
+  if (leadsUi.status === "due") leads = leads.filter((lead) => crmFollowUpDue(lead));
+  else if (leadsUi.status !== "all") leads = leads.filter((lead) => lead.status === leadsUi.status);
   const q = leadsUi.query.trim().toLowerCase();
   if (q) {
     leads = leads.filter((lead) => `${lead.name} ${lead.company} ${lead.email || ""} ${lead.phone || ""} ${lead.website || ""} ${Object.values(lead.socials || {}).join(" ")} ${(lead.tags || []).join(" ")}`.toLowerCase().includes(q));
@@ -428,7 +467,7 @@ function filteredCrmContacts() {
 }
 
 function crmContactCard(l) {
-  const due = l.due && daysUntil(l.due) <= 0 && ["new", "follow-up"].includes(l.status);
+  const due = crmFollowUpDue(l);
   return `<article class="crm-card ${due ? "is-due" : ""} ${leadsUi.selectedId === l.id ? "is-selected" : ""}" data-act="select" data-id="${esc(l.id)}">
     <button class="record-x" data-act="remove" data-id="${esc(l.id)}" aria-label="Remove contact">×</button>
     <div class="crm-avatar">${crmAvatar(l)}</div>
@@ -442,6 +481,33 @@ function crmContactCard(l) {
     </div>
     <b>${fmtMoney(Number(l.value || 0))}</b>
   </article>`;
+}
+
+function crmEditFormMarkup(lead) {
+  const socials = lead.socials || {};
+  const field = (name, label, value, type = "text", placeholder = "") =>
+    `<label>${esc(label)}<input type="${esc(type)}" name="${esc(name)}" value="${esc(value ?? "")}" placeholder="${esc(placeholder)}" /></label>`;
+  return `<form class="approval-changes-form crm-edit-form" data-crm-edit-form="${esc(lead.id)}">
+    ${field("name", "Contact name", lead.name)}
+    ${field("company", "Company / brand", lead.company)}
+    ${field("email", "Email", lead.email, "email")}
+    ${field("phone", "Phone", lead.phone, "tel")}
+    ${field("website", "Website", lead.website)}
+    ${field("instagram", "Instagram", socials.instagram)}
+    ${field("tiktok", "TikTok", socials.tiktok)}
+    ${field("linkedin", "LinkedIn", socials.linkedin)}
+    ${field("avatarUrl", "Profile image URL", lead.avatarUrl)}
+    ${field("value", "Est. value (USD)", Number(lead.value || 0), "number")}
+    ${field("owner", "Owner", lead.owner, "text", "Who runs this relationship")}
+    ${field("due", "Follow-up date", lead.due ? String(lead.due).slice(0, 10) : "", "date")}
+    ${field("next", "Next step", lead.next)}
+    ${field("tags", "Tags (comma separated)", (lead.tags || []).join(", "))}
+    <label>Notes<textarea name="notes" rows="3">${esc(lead.notes || "")}</textarea></label>
+    <div class="record-actions">
+      <button class="btn btn-primary" type="submit">Save contact</button>
+      <button class="btn btn-quiet" type="button" data-act="edit" data-id="${esc(lead.id)}">Cancel</button>
+    </div>
+  </form>`;
 }
 
 function renderLeads(el, rerender) {
@@ -467,7 +533,7 @@ function renderLeads(el, rerender) {
     <div class="ws-toolbar crm-toolbar">
       <p class="ws-note">Daily pull target: <b>${Number(settings.dailyPullTarget || 0).toLocaleString()}</b> · Organization brain: <b>${esc(ws)}</b> · sends stay approval-gated.</p>
       <input class="crm-search" data-crm-search value="${esc(leadsUi.query)}" placeholder="Search clients, socials, emails, tags..." />
-      <select class="crm-filter" data-crm-status>${[["all", "All"], ...lanes].map(([id, label]) => `<option value="${esc(id)}" ${leadsUi.status === id ? "selected" : ""}>${esc(label)}</option>`).join("")}</select>
+      <select class="crm-filter" data-crm-status>${[["all", "All"], ["due", `Follow-up due (${store.state.leads.filter((lead) => lead.ws === ws && crmFollowUpDue(lead)).length})`], ...lanes].map(([id, label]) => `<option value="${esc(id)}" ${leadsUi.status === id ? "selected" : ""}>${esc(label)}</option>`).join("")}</select>
       <button class="btn btn-primary" data-act="add">+ New contact</button>
     </div>
     <div class="crm-layout">
@@ -480,13 +546,24 @@ function renderLeads(el, rerender) {
             <span><b>Phone</b><i>${esc(selected.phone || "—")}</i></span>
             <span><b>Website</b><i>${selected.website ? `<a href="${esc(socialUrl("website", selected.website))}" target="_blank" rel="noopener noreferrer">${esc(selected.website)}</a>` : "—"}</i></span>
             <span><b>Value</b><i>${fmtMoney(Number(selected.value || 0))}</i></span>
+            <span><b>Owner</b><i>${esc(selected.owner || "Unassigned")}</i></span>
+            <span><b>Source</b><i>${esc(selected.source || "—")}</i></span>
+            <span><b>Last contact</b><i>${selected.lastTouch ? esc(ago(selected.lastTouch)) : "None logged"}</i></span>
+            <span><b>Follow-up</b><i>${selected.due ? `${esc(fmtDate(selected.due))}${crmFollowUpDue(selected) ? " · DUE" : ""}` : "Not set"}</i></span>
           </div>
           <div class="crm-socials is-detail">${leadSocialLinks(selected) || "<span>No social handles saved yet.</span>"}</div>
+          <p class="record-sub">${esc(crmClientBrief(selected))}</p>
           <p class="record-next">▸ ${esc(selected.next || "No next step set")}</p>
           <p class="record-notes">${esc(selected.notes || "No notes yet.")}</p>
           ${(selected.qualification && selected.qualification.length) ? `<ul class="lead-checks">${selected.qualification.slice(0, 5).map((item) => `<li>${esc(item)}</li>`).join("")}</ul>` : ""}
+          ${(selected.files || []).length ? `<div class="crm-files"><b class="record-sub">Files &amp; links</b><ul class="lead-checks">${selected.files.map((file, index) => `<li><a href="${esc(file.url)}" target="_blank" rel="noopener noreferrer">${esc(file.name || file.url)}</a> <button class="record-x" data-act="remove-file" data-id="${esc(String(index))}" aria-label="Remove file link">×</button></li>`).join("")}</ul></div>` : ""}
+          ${leadsUi.editOpen ? crmEditFormMarkup(selected) : ""}
+          ${crmTimelineFor(selected).length ? `<div class="crm-timeline"><b class="record-sub">Timeline</b><ul class="lead-checks">${crmTimelineFor(selected).map((entry) => `<li>${esc(ago(entry.at))} — ${esc(entry.who || "Phantom")} ${esc(entry.text)}</li>`).join("")}</ul></div>` : ""}
           <div class="record-actions">
-            <button class="btn" data-act="edit" data-id="${esc(selected.id)}">Edit CRM fields</button>
+            <button class="btn" data-act="edit" data-id="${esc(selected.id)}">${leadsUi.editOpen ? "Close editor" : "Edit CRM fields"}</button>
+            <button class="btn" data-act="log-touch" data-id="${esc(selected.id)}">Log contact now</button>
+            <button class="btn" data-act="suggest-next" data-id="${esc(selected.id)}">Suggest next action</button>
+            <button class="btn" data-act="add-file" data-id="${esc(selected.id)}">Attach link</button>
             ${selected.outreach ? `<button class="btn" data-act="copy-outreach" data-id="${esc(selected.id)}">Copy outreach angle</button>` : ""}
             ${selected.status === "new" ? `<button class="btn" data-act="advance" data-id="${esc(selected.id)}">Start follow-up</button>` : ""}
             ${["new", "follow-up"].includes(selected.status) ? `<button class="btn" data-act="propose" data-id="${esc(selected.id)}">Convert to proposal</button>` : ""}
@@ -572,21 +649,32 @@ function renderLeads(el, rerender) {
       }).catch(() => {});
       store.save(); rerender();
     },
-    edit: (id) => {
+    edit: (id) => { leadsUi.selectedId = id; leadsUi.editOpen = !leadsUi.editOpen; rerender(); },
+    "log-touch": (id) => {
       const l = find(id); if (!l) return;
-      l.name = prompt("Contact name:", l.name || "") || l.name;
-      l.company = prompt("Company / brand:", l.company || l.name || "") || l.company;
-      l.email = prompt("Email:", l.email || "") || l.email || "";
-      l.phone = prompt("Phone:", l.phone || "") || l.phone || "";
-      l.website = prompt("Website:", l.website || "") || l.website || "";
-      l.socials = l.socials || {};
-      l.socials.instagram = normalizeSocialHandle(prompt("Instagram:", l.socials.instagram || "") || l.socials.instagram || "");
-      l.socials.tiktok = normalizeSocialHandle(prompt("TikTok:", l.socials.tiktok || "") || l.socials.tiktok || "");
-      l.socials.linkedin = prompt("LinkedIn handle or URL:", l.socials.linkedin || "") || l.socials.linkedin || "";
-      l.avatarUrl = prompt("Public profile image URL:", l.avatarUrl || "") || l.avatarUrl || "";
-      l.notes = prompt("Notes:", l.notes || "") || l.notes || "";
-      pushActivity("Easy CRM", `updated CRM profile: ${l.name || l.company}.`, l.ws);
-      if (isDatabaseSession()) updateOrgCrmContact(l.id, crmPayload(l)).catch(() => {});
+      l.lastTouch = new Date().toISOString();
+      pushActivity("Easy CRM", `logged a contact touchpoint with ${l.name || l.company}.`, l.ws);
+      persistLead(l); store.save(); rerender();
+    },
+    "suggest-next": (id) => {
+      const l = find(id); if (!l) return;
+      l.next = crmSuggestedNext(l);
+      pushActivity("Easy CRM", `drafted a next action for ${l.name || l.company}.`, l.ws);
+      persistLead(l); store.save(); rerender();
+    },
+    "add-file": (id) => {
+      const l = find(id); if (!l) return;
+      const url = prompt("Link to the file (Asset Cloud, Drive, proposal, contract...):");
+      if (!url || !/^https?:\/\//i.test(url.trim())) { if (url) leadsUi.notice = "File links must start with http(s)."; rerender(); return; }
+      const name = prompt("Label for this link:", "") || url.trim();
+      l.files = l.files || [];
+      l.files.push({ name: name.trim().slice(0, 120), url: url.trim().slice(0, 500) });
+      pushActivity("Easy CRM", `attached a file link to ${l.name || l.company}.`, l.ws);
+      store.save(); rerender();
+    },
+    "remove-file": (index) => {
+      const l = find(leadsUi.selectedId); if (!l || !Array.isArray(l.files)) return;
+      l.files.splice(Number(index), 1);
       store.save(); rerender();
     },
     remove: (id) => {
@@ -617,6 +705,33 @@ function renderLeads(el, rerender) {
       pushActivity("Review Desk", `drafted a review request for ${l.company}.`, l.ws);
       store.save(); rerender();
     },
+  });
+  el.querySelector("[data-crm-edit-form]")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const formEl = event.currentTarget;
+    const l = find(formEl.dataset.crmEditForm);
+    if (!l) return;
+    const value = (name) => formEl.querySelector(`[name="${name}"]`)?.value?.trim() ?? "";
+    l.name = value("name") || l.name;
+    l.company = value("company") || l.company;
+    l.email = value("email");
+    l.phone = value("phone");
+    l.website = value("website");
+    l.socials = l.socials || {};
+    l.socials.instagram = normalizeSocialHandle(value("instagram"));
+    l.socials.tiktok = normalizeSocialHandle(value("tiktok"));
+    l.socials.linkedin = value("linkedin");
+    l.avatarUrl = value("avatarUrl");
+    l.value = Number(value("value")) || 0;
+    l.owner = value("owner");
+    l.due = value("due") ? new Date(`${value("due")}T12:00:00`).toISOString() : null;
+    l.next = value("next");
+    l.tags = value("tags").split(",").map((tag) => tag.trim()).filter(Boolean).slice(0, 12);
+    l.notes = formEl.querySelector('[name="notes"]')?.value?.trim() ?? "";
+    leadsUi.editOpen = false;
+    pushActivity("Easy CRM", `updated CRM profile: ${l.name || l.company}.`, l.ws);
+    persistLead(l);
+    store.save(); rerender();
   });
 }
 

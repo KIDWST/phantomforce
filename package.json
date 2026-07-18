@@ -14,6 +14,7 @@
     "test:auth-boundaries": "node scripts/test-auth-boundaries.mjs",
     "test:memory": "node scripts/test-memory-retention.mjs",
     "test:accounting": "node scripts/test-accounting.mjs",
+    "test:crm-pipeline": "node scripts/test-crm-pipeline.mjs",
     "test:content-planner": "node scripts/test-content-planner.mjs",
     "test:medialab-editor": "node scripts/test-medialab-editor.mjs",
     "test:videocut-editor": "node scripts/test-videocut-editor.mjs",
