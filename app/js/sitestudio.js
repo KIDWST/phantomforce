@@ -9,11 +9,15 @@ import {
 } from "./workspaces.js?v=phantom-live-20260717-18";
 import {
   isDatabaseSession, requestServerPublish, fetchServerRun,
+  addServerSiteDomain, verifyServerSiteDomain,
 } from "./orgs.js?v=phantom-live-20260717-18";
 
 const siteUi = {
   activeSiteId: null, device: "desktop", selectedSection: -1,
   panel: "website", cartOpen: false, checkoutOpen: false, confirmation: null,
+  /* live-site + domain wiring: transient UI state only — the domain records
+     themselves live on the site draft (site.customDomains) so they persist */
+  livePreviewLoaded: false, verifyingDomainId: null, domainNotice: null,
 };
 
 /* ---- version history: a real, persisted undo trail per site ----
@@ -131,10 +135,139 @@ function setSiteDomain(site, value) {
   return domain;
 }
 
+/* ---- custom domains: real connect/verify against the server routes ----
+   POST /orgs/:orgId/sites/:siteId/domains returns the actual verification
+   token + TXT instructions; POST .../domains/:domainId/verify runs a real
+   DNS lookup (dns-adapter, read-only) server-side. The UI below renders
+   exactly what the server said and never invents a verified state.
+   Exported (with liveSiteMarkup) so scripts/test-workspace-site-builder.mjs
+   can assert the honest states without a DOM. */
+
+const DOMAIN_TXT_PREFIX = "_phantomforce-verify"; /* mirrors server VERIFICATION_RECORD_PREFIX */
+
+const DOMAIN_STATE_VIEW = {
+  verification_required: { label: "Awaiting TXT record", tone: "pending" },
+  dns_records_pending: { label: "Ownership verified — DNS not resolving yet", tone: "pending" },
+  verified: { label: "Verified", tone: "verified" },
+  misconfigured: { label: "Misconfigured", tone: "failed" },
+  failed: { label: "Verification failed", tone: "failed" },
+};
+
+const SSL_STATE_VIEW = { unknown: "SSL not checked", active: "SSL active", unreachable: "SSL unreachable" };
+
+/* Maps the connect route's response ({ id, domain, state, verificationToken,
+   instructions }) onto the persisted draft record. */
+export function domainRecordFromResponse(payload) {
+  return {
+    id: payload.id,
+    domain: payload.domain,
+    state: payload.state || "verification_required",
+    verificationToken: payload.verificationToken || "",
+    instructions: payload.instructions || "",
+    sslState: payload.sslState || "unknown",
+    checkedAt: payload.checkedAt || null,
+    detail: payload.lastError || null,
+    txtFound: false,
+    addressFound: false,
+  };
+}
+
+/* Applies a verify response to the stored record. A failed REQUEST (network,
+   404, auth) keeps the last real state — only a real DNS check moves it. */
+export function applyDomainVerifyResult(record, result) {
+  if (result?.ok && result.domain) {
+    record.state = result.domain.state || record.state;
+    record.sslState = result.domain.sslState || result.check?.sslState || "unknown";
+    record.checkedAt = result.check?.checkedAt || new Date().toISOString();
+    record.detail = result.check?.detail || null;
+    record.txtFound = !!result.check?.txtFound;
+    record.addressFound = !!result.check?.addressFound;
+  } else {
+    record.detail = `Verification request failed: ${result?.error || "unknown_error"}. State unchanged — nothing is marked verified without a real DNS check.`;
+  }
+  return record;
+}
+
+export function domainRecordMarkup(record, { verifying = false } = {}) {
+  const view = DOMAIN_STATE_VIEW[record.state] || { label: record.state || "unknown state", tone: "pending" };
+  const txtName = `${DOMAIN_TXT_PREFIX}.${record.domain}`;
+  return `
+    <article class="ss-domain-record" data-ss-domain-record="${esc(record.id)}">
+      <header>
+        <b>${esc(record.domain)}</b>
+        <span class="ss-domain-state is-${view.tone}">${esc(view.label)}</span>
+        <span class="ss-domain-ssl">${esc(SSL_STATE_VIEW[record.sslState] || SSL_STATE_VIEW.unknown)}</span>
+      </header>
+      ${record.state === "verified" ? `
+      <p class="ss-domain-detail">${esc(record.detail || "Ownership token verified and the domain resolves.")}</p>` : `
+      <div class="ss-domain-txt">
+        <p>Prove ownership by adding this TXT record at your DNS provider. PhantomForce only reads DNS — it never changes your records.</p>
+        <div class="ss-domain-copy"><span>TXT name</span><code>${esc(txtName)}</code><button class="btn btn-quiet" type="button" data-ss-copy="${esc(txtName)}">Copy</button></div>
+        <div class="ss-domain-copy"><span>TXT value</span><code>${esc(record.verificationToken)}</code><button class="btn btn-quiet" type="button" data-ss-copy="${esc(record.verificationToken)}">Copy</button></div>
+        <small>Also point the domain at your hosting so it resolves: an A record on the root domain, or a CNAME on a subdomain. Verification checks the TXT token, that the domain resolves, and probes SSL.</small>
+      </div>
+      ${record.detail ? `<p class="ss-domain-detail is-${view.tone}">${esc(record.detail)}</p>` : ""}`}
+      <footer>
+        <button class="btn btn-quiet" type="button" data-ss-domain-verify="${esc(record.id)}" ${verifying ? "disabled" : ""}>${verifying ? "Checking DNS…" : "Verify now"}</button>
+        <small>${record.checkedAt ? `Last checked ${ago(record.checkedAt)}` : "Not checked yet."}</small>
+      </footer>
+    </article>`;
+}
+
+export function domainManagerMarkup(site, { databaseSession = false, notice = "", verifyingDomainId = null } = {}) {
+  const records = Array.isArray(site.customDomains) ? site.customDomains : [];
+  let body;
+  if (!databaseSession) {
+    /* honest gating: same isDatabaseSession() boundary as server publishing —
+       local mode gets the truth, not a pretend flow */
+    body = `<p class="ss-domain-note">Local mode — domain connection is off. Sign in with a PhantomForce org account (database session) to connect a domain with real DNS verification. Nothing here fakes a verified state.</p>`;
+  } else if (!site.serverSiteId) {
+    body = `<p class="ss-domain-note">This draft has no server-side site record yet. Request a publish once — the server build registers the site, then a domain can attach to it for real TXT verification.</p>`;
+  } else {
+    body = `
+      <form class="ss-domain-connect" data-ss-domain-connect-form>
+        <input data-ss-domain-connect placeholder="yourdomain.com" aria-label="Domain to connect" />
+        <button class="btn btn-primary" type="submit">Connect domain</button>
+      </form>`;
+  }
+  return `
+    <div class="ss-domain-manager" data-ss-domain-manager>
+      <header><b>Custom domains</b><span>Real DNS verification · PhantomForce never writes DNS</span></header>
+      ${body}
+      ${notice ? `<p class="ss-domain-notice">${esc(notice)}</p>` : ""}
+      ${records.map((record) => domainRecordMarkup(record, { verifying: verifyingDomainId === record.id })).join("")}
+    </div>`;
+}
+
+/* ---- the real current site ----
+   phantomforce.online is live today. For the seeded public site this panel
+   links the actual URL and (only on click — no surprise network calls)
+   embeds the live page, clearly separated from the local draft below. */
+export const LIVE_SITE_DOMAIN = "phantomforce.online";
+
+export function liveSiteMarkup(site, { loaded = false } = {}) {
+  if (siteDomain(site) !== LIVE_SITE_DOMAIN) return "";
+  return `
+    <section class="ss-live-site" data-ss-live-site>
+      <header>
+        <div><p>Live site</p><h3>${esc(LIVE_SITE_DOMAIN)}</h3></div>
+        <a class="btn btn-quiet" href="https://${LIVE_SITE_DOMAIN}" target="_blank" rel="noopener">Open https://${LIVE_SITE_DOMAIN}</a>
+      </header>
+      <p>This is the real public site visitors see right now. The editor below is a <b>local working copy</b> — it is not synced to the live site, and nothing changes at ${esc(LIVE_SITE_DOMAIN)} until a publish run is approved.</p>
+      ${loaded
+        ? `<iframe class="ss-live-frame" src="https://${LIVE_SITE_DOMAIN}" title="Live ${LIVE_SITE_DOMAIN} preview" loading="lazy" referrerpolicy="no-referrer"></iframe>`
+        : `<button class="btn btn-quiet" type="button" data-ss-live-load>Load live preview</button>`}
+    </section>`;
+}
+
 function normalizeSite(site) {
   ensureSiteDesign(site);
   ensureSiteStore(site);
   site.domains = Array.isArray(site.domains) ? site.domains : [];
+  /* server-truth domain records (connect/verify). Intentionally NOT part of
+     snapshotSite history — like serverPublish, undo must never roll back what
+     the server knows about a domain's real DNS state. */
+  site.customDomains = Array.isArray(site.customDomains) ? site.customDomains : [];
   const domain = siteDomain(site);
   if (domain && !site.domains.includes(domain)) site.domains.unshift(domain);
   return site;
@@ -373,13 +506,19 @@ function shellMarkup(active, sites, products) {
       </div>
 
       <div class="ss-simple-domain">
+        ${liveSiteMarkup(active, { loaded: siteUi.livePreviewLoaded })}
         <form data-ss-domain-form>
           <label>
-            <span>Domain</span>
+            <span>Domain (local label)</span>
             <input data-ss-domain value="${esc(domain)}" placeholder="yourdomain.com" />
           </label>
           <button class="btn btn-quiet" type="submit">Save domain</button>
         </form>
+        ${domainManagerMarkup(active, {
+          databaseSession: isDatabaseSession(),
+          notice: siteUi.domainNotice || "",
+          verifyingDomainId: siteUi.verifyingDomainId,
+        })}
       </div>
 
       <div class="ss-editbar">
@@ -475,11 +614,11 @@ export function renderSiteStudio(el) {
   }
 
   el.querySelectorAll("[data-ss-switch]").forEach((select) => {
-    select.onchange = () => { siteUi.activeSiteId = select.value; siteUi.cartOpen = false; siteUi.checkoutOpen = false; siteUi.confirmation = null; rerender(); };
+    select.onchange = () => { siteUi.activeSiteId = select.value; siteUi.cartOpen = false; siteUi.checkoutOpen = false; siteUi.confirmation = null; siteUi.livePreviewLoaded = false; siteUi.domainNotice = null; rerender(); };
   });
 
   el.querySelectorAll("[data-ss-site]").forEach((button) => {
-    button.onclick = () => { siteUi.activeSiteId = button.dataset.ssSite; siteUi.cartOpen = false; siteUi.checkoutOpen = false; siteUi.confirmation = null; rerender(); };
+    button.onclick = () => { siteUi.activeSiteId = button.dataset.ssSite; siteUi.cartOpen = false; siteUi.checkoutOpen = false; siteUi.confirmation = null; siteUi.livePreviewLoaded = false; siteUi.domainNotice = null; rerender(); };
   });
 
   el.querySelectorAll("[data-ss-template]").forEach((button) => {
@@ -539,6 +678,67 @@ export function renderSiteStudio(el) {
       rerender();
     };
   }
+
+  /* ---- live-site surface: preview loads only on explicit click ---- */
+  const liveLoadBtn = el.querySelector("[data-ss-live-load]");
+  if (liveLoadBtn) liveLoadBtn.onclick = () => { siteUi.livePreviewLoaded = true; rerender(); };
+
+  /* ---- domain connect/verify wiring (real server routes) ---- */
+  el.querySelectorAll("[data-ss-copy]").forEach((button) => {
+    button.onclick = async () => {
+      try {
+        await navigator.clipboard.writeText(button.dataset.ssCopy || "");
+        const original = button.textContent;
+        button.textContent = "Copied";
+        setTimeout(() => { button.textContent = original; }, 1400);
+      } catch { /* clipboard unavailable — the value stays visible for manual copy */ }
+    };
+  });
+
+  const domainConnectForm = el.querySelector("[data-ss-domain-connect-form]");
+  if (domainConnectForm && active) domainConnectForm.onsubmit = async (event) => {
+    event.preventDefault();
+    const domain = slugText(domainConnectForm.querySelector("[data-ss-domain-connect]")?.value || "");
+    if (!domain) return;
+    const submit = domainConnectForm.querySelector("button[type='submit']");
+    if (submit) { submit.disabled = true; submit.textContent = "Connecting…"; }
+    const result = await addServerSiteDomain(active.serverSiteId, domain)
+      .catch((error) => ({ ok: false, error: String(error?.message || error) }));
+    if (result.ok) {
+      active.customDomains = Array.isArray(active.customDomains) ? active.customDomains : [];
+      active.customDomains.unshift(domainRecordFromResponse(result.domain));
+      siteUi.domainNotice = null;
+      pushActivity("Websites", `requested domain connection for ${result.domain.domain} — TXT verification pending.`, active.ws);
+    } else {
+      siteUi.domainNotice =
+        result.error === "feature_not_available" ? "Custom domains aren't included in this org's current plan."
+        : result.error === "invalid_domain" ? "That doesn't look like a valid domain name."
+        : result.error === "site_not_found_in_org" ? "The server has no record of this site yet — request a publish first."
+        : result.error === "no_active_org" ? "No active org on this session — switch into an org first."
+        : `The server refused the domain: ${result.error}.`;
+    }
+    store.save();
+    rerender();
+  };
+
+  el.querySelectorAll("[data-ss-domain-verify]").forEach((button) => {
+    button.onclick = async () => {
+      if (!active || siteUi.verifyingDomainId) return;
+      const record = (active.customDomains || []).find((item) => item.id === button.dataset.ssDomainVerify);
+      if (!record) return;
+      siteUi.verifyingDomainId = record.id;
+      rerender();
+      const result = await verifyServerSiteDomain(active.serverSiteId, record.id)
+        .catch((error) => ({ ok: false, error: String(error?.message || error) }));
+      siteUi.verifyingDomainId = null;
+      applyDomainVerifyResult(record, result);
+      if (result.ok) {
+        pushActivity("Websites", `DNS check for ${record.domain}: ${record.state}${record.sslState === "active" ? " · SSL active" : ""}.`, active.ws);
+      }
+      store.save();
+      rerender();
+    };
+  });
 
   el.querySelectorAll("[data-ss-prompt-form]").forEach((form) => {
     form.onsubmit = (event) => {

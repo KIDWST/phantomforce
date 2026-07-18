@@ -356,6 +356,47 @@ export async function fetchServerSites() {
   return ok ? json.sites || [] : [];
 }
 
+/* ---------------- custom domains (real DNS verification) ----------------
+   Both calls hit the real server routes behind the org session. The server
+   answers with actual TXT-record instructions and a live resolver check
+   (dns-adapter) — nothing is simulated client-side, and a domain is never
+   marked verified unless the server's DNS check said so. */
+
+export async function addServerSiteDomain(serverSiteId, domain) {
+  const orgId = activeOrgId();
+  if (!orgId) return { ok: false, error: "no_active_org" };
+  if (!serverSiteId) return { ok: false, error: "no_server_site" };
+  const { ok, status, json } = await api(
+    `/orgs/${encodeURIComponent(orgId)}/sites/${encodeURIComponent(serverSiteId)}/domains`,
+    { method: "POST", body: { domain } },
+  );
+  if (!ok) {
+    /* zod validation failures arrive as a flattened object — normalize so the
+       UI always has a string code to explain honestly */
+    const error = typeof json?.error === "string" ? json.error : "invalid_request";
+    return { ok: false, error, reason: json?.reason, detail: json };
+  }
+  /* json.domain: { id, domain, state, verificationToken, instructions } */
+  return { ok: true, domain: json.domain };
+}
+
+export async function verifyServerSiteDomain(serverSiteId, domainId) {
+  const orgId = activeOrgId();
+  if (!orgId) return { ok: false, error: "no_active_org" };
+  if (!serverSiteId) return { ok: false, error: "no_server_site" };
+  const { ok, status, json } = await api(
+    `/orgs/${encodeURIComponent(orgId)}/sites/${encodeURIComponent(serverSiteId)}/domains/${encodeURIComponent(domainId)}/verify`,
+    { method: "POST", body: {} },
+  );
+  if (!ok) {
+    const error = typeof json?.error === "string" ? json.error : `domain_verify_failed_${status}`;
+    return { ok: false, error };
+  }
+  /* json.domain: { id, domain, state, sslState }
+     json.check:  { state, detail, txtFound, addressFound, sslState, checkedAt } */
+  return { ok: true, domain: json.domain, check: json.check };
+}
+
 /* ---------------- Asset Cloud client ----------------
    The permanent org creative library. Fetches include the bearer token, so
    <img>/<video> must load bytes as blob URLs (assetBlobUrl) — the server

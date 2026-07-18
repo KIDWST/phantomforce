@@ -64,3 +64,108 @@ assert.equal(phantomForce.store.checkoutMode, "test", "checkout must remain expl
 assert.equal(phantomForce.store.paymentsConnected, false, "the builder must never imply a payment connection.");
 
 console.log("Workspace site builder prompt parsing checks passed.");
+
+/* ---- Sites: domain connect/verify wiring + live-site surface ----
+   These exercise the exported markup/state helpers from sitestudio.js with
+   MOCKED route responses shaped exactly like the real server routes
+   (POST /orgs/:orgId/sites/:siteId/domains and .../domains/:domainId/verify)
+   — no DOM and no network needed. */
+
+const {
+  domainRecordFromResponse, applyDomainVerifyResult,
+  domainRecordMarkup, domainManagerMarkup, liveSiteMarkup, LIVE_SITE_DOMAIN,
+} = await import("../app/js/sitestudio.js?v=test-workspace-site-builder");
+
+/* 1) Connect: a mocked POST .../domains response must render real TXT instructions. */
+const mockedConnectResponse = {
+  ok: true,
+  domain: {
+    id: "dom_test_1",
+    domain: "chicagoshots.com",
+    state: "verification_required",
+    verificationToken: "pf-verify-0123abcd0123abcd0123abcd0123abcd",
+    instructions: "Create a TXT record at _phantomforce-verify.chicagoshots.com with value pf-verify-0123abcd0123abcd0123abcd0123abcd, then call the verify endpoint. PhantomForce never changes your DNS.",
+  },
+};
+const record = domainRecordFromResponse(mockedConnectResponse.domain);
+assert.equal(record.state, "verification_required", "a freshly connected domain starts unverified.");
+assert.equal(record.verificationToken, mockedConnectResponse.domain.verificationToken, "the server token must be kept verbatim.");
+
+const pendingMarkup = domainRecordMarkup(record);
+assert.ok(pendingMarkup.includes("_phantomforce-verify.chicagoshots.com"), "TXT record name must be rendered.");
+assert.ok(pendingMarkup.includes(mockedConnectResponse.domain.verificationToken), "TXT record value must be rendered.");
+assert.ok(pendingMarkup.includes('data-ss-copy="_phantomforce-verify.chicagoshots.com"'), "TXT name must be copyable.");
+assert.ok(pendingMarkup.includes(`data-ss-copy="${mockedConnectResponse.domain.verificationToken}"`), "TXT value must be copyable.");
+assert.ok(pendingMarkup.includes("A record") && pendingMarkup.includes("CNAME"), "A/CNAME pointing guidance must be shown.");
+assert.ok(pendingMarkup.includes("Awaiting TXT record"), "pending state must be labeled honestly.");
+assert.ok(!pendingMarkup.includes(">Verified<"), "must never show Verified before a real DNS check.");
+assert.ok(pendingMarkup.includes("Verify now") && !pendingMarkup.includes("disabled"), "idle verify button must be enabled.");
+
+/* 2) Verify button state transitions. */
+const verifyingMarkup = domainRecordMarkup(record, { verifying: true });
+assert.ok(verifyingMarkup.includes("Checking DNS…") && verifyingMarkup.includes("disabled"), "in-flight verify must disable the button.");
+
+applyDomainVerifyResult(record, {
+  ok: true,
+  domain: { id: "dom_test_1", domain: "chicagoshots.com", state: "dns_records_pending", sslState: "unknown" },
+  check: { state: "dns_records_pending", detail: "Ownership verified, but the domain does not resolve to any address yet.", txtFound: true, addressFound: false, sslState: "unknown", checkedAt: "2026-07-17T00:00:00.000Z" },
+});
+assert.equal(record.state, "dns_records_pending", "verify result must move the record to the server's state.");
+assert.ok(domainRecordMarkup(record).includes("DNS not resolving yet"), "partial verification must be labeled as such.");
+
+applyDomainVerifyResult(record, {
+  ok: true,
+  domain: { id: "dom_test_1", domain: "chicagoshots.com", state: "verified", sslState: "active" },
+  check: { state: "verified", detail: "Ownership token verified and the domain resolves.", txtFound: true, addressFound: true, sslState: "active", checkedAt: "2026-07-17T00:01:00.000Z" },
+});
+assert.equal(record.state, "verified");
+const verifiedMarkup = domainRecordMarkup(record);
+assert.ok(verifiedMarkup.includes(">Verified<"), "verified state comes only from the server check.");
+assert.ok(verifiedMarkup.includes("SSL active"), "SSL status must be surfaced.");
+assert.ok(!verifiedMarkup.includes("data-ss-copy"), "verified domains no longer nag with TXT instructions.");
+
+const failedRecord = domainRecordFromResponse(mockedConnectResponse.domain);
+applyDomainVerifyResult(failedRecord, { ok: false, error: "domain_not_found" });
+assert.equal(failedRecord.state, "verification_required", "a failed verify REQUEST must not change the real state.");
+assert.ok(String(failedRecord.detail).includes("domain_not_found"), "the failure reason must be surfaced.");
+
+const misconfigured = domainRecordFromResponse(mockedConnectResponse.domain);
+applyDomainVerifyResult(misconfigured, {
+  ok: true,
+  domain: { id: "dom_test_1", domain: "chicagoshots.com", state: "misconfigured", sslState: "unknown" },
+  check: { state: "misconfigured", detail: "verification TXT record exists but does not match the expected token", txtFound: false, addressFound: true, sslState: "unknown", checkedAt: "2026-07-17T00:02:00.000Z" },
+});
+assert.ok(domainRecordMarkup(misconfigured).includes("Misconfigured"), "misconfigured DNS must be reported, not glossed over.");
+assert.ok(domainRecordMarkup(misconfigured).includes("does not match the expected token"), "the server's failure detail must be shown.");
+
+/* 3) Database-session gating: honest messaging, never a fake flow. */
+const draftSite = baseSiteDraft("ChicagoShots");
+draftSite.customDomains = [];
+const gated = domainManagerMarkup(draftSite, { databaseSession: false });
+assert.ok(gated.includes("Local mode"), "without a database session the panel must say it's local mode.");
+assert.ok(!gated.includes("data-ss-domain-connect-form"), "no connect form without a database session.");
+
+const noServerRecord = domainManagerMarkup(draftSite, { databaseSession: true });
+assert.ok(noServerRecord.includes("Request a publish"), "db session without a server site must explain the publish-first step.");
+assert.ok(!noServerRecord.includes("data-ss-domain-connect-form"), "no connect form before the server knows the site.");
+
+draftSite.serverSiteId = "site_srv_1";
+const connectable = domainManagerMarkup(draftSite, { databaseSession: true });
+assert.ok(connectable.includes("data-ss-domain-connect-form"), "connect form appears with a database session + server site record.");
+assert.ok(connectable.includes("never writes DNS"), "the read-only DNS promise stays visible.");
+
+/* 4) Live-site panel for the seeded phantomforce.online site. */
+assert.equal(LIVE_SITE_DOMAIN, "phantomforce.online");
+const seeded = baseSiteDraft("PhantomForce");
+applySiteTemplate(seeded, "phantomforce");
+const livePanel = liveSiteMarkup(seeded);
+assert.ok(livePanel.includes("data-ss-live-site"), "seeded public site must show the live-site panel.");
+assert.ok(livePanel.includes('href="https://phantomforce.online"'), "the real public URL must be linked.");
+assert.ok(livePanel.toLowerCase().includes("local working copy"), "the draft must be labeled a local working copy — no fake sync claims.");
+assert.ok(livePanel.includes("Load live preview"), "preview must be lazy behind a click.");
+assert.ok(!livePanel.includes("<iframe"), "no iframe (network call) before the user clicks load.");
+const loadedPanel = liveSiteMarkup(seeded, { loaded: true });
+assert.ok(loadedPanel.includes("<iframe") && loadedPanel.includes('src="https://phantomforce.online"'), "loading embeds the actual live site.");
+assert.equal(liveSiteMarkup(baseSiteDraft("SomethingElse")), "", "the live panel only appears for the real phantomforce.online site.");
+
+console.log("Sites domain connect/verify + live-site surface checks passed.");
