@@ -4,7 +4,24 @@ import { fileURLToPath } from "node:url";
 
 const baseUrl = process.env.PHANTOM_TEST_SERVER_URL?.trim() || "http://127.0.0.1:5192";
 const model = process.env.PHANTOM_INSTANT_CHAT_MODEL?.trim() || "qwen2.5:14b";
+const ollamaBaseUrl = process.env.OLLAMA_BASE_URL?.trim() || "http://127.0.0.1:11434";
 const forbidden = /\b(?:ledger|pipeline|invoice|approval queue|workspace status|cashflow|action card)\b/i;
+
+async function prewarmModel() {
+  const response = await fetch(`${ollamaBaseUrl}/api/generate`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      model,
+      prompt: "Respond with ready.",
+      stream: false,
+      keep_alive: "24h",
+      options: { num_predict: 2, temperature: 0, num_ctx: 2048 },
+    }),
+    signal: AbortSignal.timeout(120_000),
+  });
+  assert.equal(response.ok, true, `Could not prewarm ${model}: HTTP ${response.status}`);
+}
 
 async function serverReady() {
   try {
@@ -128,6 +145,7 @@ async function ask(token: string, prompt: string, turns: Turn[]): Promise<Answer
   };
 }
 
+await prewarmModel();
 const ownedServer = await ensureServer();
 try {
   const adminToken = await login("admin-jordan");
