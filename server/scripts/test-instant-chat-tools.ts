@@ -32,6 +32,10 @@ assert.deepEqual(
   buildInstantChatToolReply("Pick the second one.", listTurns),
   { output_text: "Pebble Pod", tool_id: "phantom-reference-resolver" },
 );
+assert.deepEqual(
+  buildInstantChatToolReply("Choose the third one.", [{ user: "Names only.", assistant: "Micro Rocket, Nano Voyager, Pico Cruiser" }]),
+  { output_text: "Pico Cruiser", tool_id: "phantom-reference-resolver" },
+);
 assert.equal(buildInstantChatToolReply("Tell me a joke.", listTurns), null);
 assert.deepEqual(
   buildInstantChatToolReply("What is 12 times 7?", []),

@@ -147,7 +147,10 @@ function listSelectionReply(userRequest: string, turns: InstantChatToolTurn[]): 
   if (!ordinalMatch) return null;
   const index = ORDINALS[ordinalMatch[1].toLowerCase()];
   const prior = [...turns].reverse().find((turn) => turn.assistant.trim())?.assistant || "";
-  const lines = prior.split(/\r?\n/).map(cleanListItem).filter(Boolean);
+  const lineItems = prior.split(/\r?\n/).map(cleanListItem).filter(Boolean);
+  const lines = lineItems.length >= 2
+    ? lineItems
+    : prior.split(/\s*(?:,|;|\|)\s*/).map(cleanListItem).filter(Boolean);
   if (lines.length <= index || lines.length < 2) return null;
   const selected = lines[index];
   if (!selected || selected.length > 120) return null;
