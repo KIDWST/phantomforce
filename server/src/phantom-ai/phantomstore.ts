@@ -356,8 +356,15 @@ const SEEDED_PRODUCTS: PhantomStoreProduct[] = [
     /* The PhantomForce brand mark is a real shipped asset in the admin app. */
     imageUrl: "/app/assets/brand-phantom.png",
     gallery: [],
-    videoUrl: null,
-    media: [],
+    videoUrl: "https://d8j0ntlcm91z4.cloudfront.net/user_37oY2O0khZgAT1VGZoOC3epGZz2/hf_20260718_133503_09ffb3bb-7164-4128-af6c-56bc5e60122d.mp4",
+    media: [
+      {
+        type: "video",
+        url: "https://d8j0ntlcm91z4.cloudfront.net/user_37oY2O0khZgAT1VGZoOC3epGZz2/hf_20260718_133503_09ffb3bb-7164-4128-af6c-56bc5e60122d.mp4",
+        label: "AI-generated Business OS showcase",
+        source: "generated",
+      },
+    ],
     /* Plans are chosen inside the workspace's own plan picker, so the listing
        carries no fixed-price variants rather than inventing plan prices here. */
     variants: [],
@@ -387,8 +394,15 @@ const SEEDED_PRODUCTS: PhantomStoreProduct[] = [
     badges: ["Reaper", "Creator", "Prompt-first"],
     imageUrl: null,
     gallery: [],
-    videoUrl: null,
-    media: [],
+    videoUrl: "https://d8j0ntlcm91z4.cloudfront.net/user_37oY2O0khZgAT1VGZoOC3epGZz2/hf_20260718_133738_abb156c6-ef09-43af-a626-3b064d3da9af.mp4",
+    media: [
+      {
+        type: "video",
+        url: "https://d8j0ntlcm91z4.cloudfront.net/user_37oY2O0khZgAT1VGZoOC3epGZz2/hf_20260718_133738_abb156c6-ef09-43af-a626-3b064d3da9af.mp4",
+        label: "AI-generated Vocal AI showcase",
+        source: "generated",
+      },
+    ],
     variants: [{ id: "vocal-ai-creator", label: "Creator license", priceUsd: 29, available: true }],
     inventory: { mode: "unlimited" },
     rating: 4.5,
@@ -417,8 +431,15 @@ const SEEDED_PRODUCTS: PhantomStoreProduct[] = [
     badges: ["Local-first", "Approval-gated", "Early access"],
     imageUrl: null,
     gallery: [],
-    videoUrl: null,
-    media: [],
+    videoUrl: "https://d8j0ntlcm91z4.cloudfront.net/user_37oY2O0khZgAT1VGZoOC3epGZz2/hf_20260718_133946_16ca6cb7-f21f-4a84-b0fe-a9ea6a82f430.mp4",
+    media: [
+      {
+        type: "video",
+        url: "https://d8j0ntlcm91z4.cloudfront.net/user_37oY2O0khZgAT1VGZoOC3epGZz2/hf_20260718_133946_16ca6cb7-f21f-4a84-b0fe-a9ea6a82f430.mp4",
+        label: "AI-generated Phantombot showcase",
+        source: "generated",
+      },
+    ],
     variants: [{ id: "phantombot-early-access", label: "Early access source bundle", priceUsd: 20, available: true }],
     inventory: { mode: "unlimited" },
     rating: 0,
@@ -447,8 +468,15 @@ const SEEDED_PRODUCTS: PhantomStoreProduct[] = [
     badges: ["Local-first", "Bring your own credits", "Early access"],
     imageUrl: null,
     gallery: [],
-    videoUrl: null,
-    media: [],
+    videoUrl: "https://d8j0ntlcm91z4.cloudfront.net/user_37oY2O0khZgAT1VGZoOC3epGZz2/hf_20260718_134156_8dc0b86a-c34c-48fd-8f45-e7b23287449b.mp4",
+    media: [
+      {
+        type: "video",
+        url: "https://d8j0ntlcm91z4.cloudfront.net/user_37oY2O0khZgAT1VGZoOC3epGZz2/hf_20260718_134156_8dc0b86a-c34c-48fd-8f45-e7b23287449b.mp4",
+        label: "AI-generated PhantomCut Studio showcase",
+        source: "generated",
+      },
+    ],
     variants: [{ id: "phantomcut-early-access", label: "Early access license", priceUsd: 20, available: true }],
     inventory: { mode: "unlimited" },
     rating: 0,

@@ -40,6 +40,11 @@ try {
   assert(seededTermina?.imageUrl === null, "Termina has no real product image asset yet, so imageUrl must stay null (branded tile fallback), not a fabricated URL.");
   assert(typeof seededTermina?.videoUrl === "string" && seededTermina.videoUrl.endsWith(".mp4"), "Termina must include a real generated product showcase video URL.");
   assert(seededTermina?.media?.some((item) => item.type === "video" && item.source === "generated"), "Termina media must include a generated video item.");
+  assert(
+    initial.products.every((product: { videoUrl?: unknown; media?: { type?: string; source?: string; url?: string }[] }) =>
+      typeof product.videoUrl === "string" && product.videoUrl.endsWith(".mp4") && product.media?.some((item) => item.type === "video" && item.source === "generated" && typeof item.url === "string" && item.url.endsWith(".mp4"))),
+    "Every seeded product should now have a generated PhantomStore showcase video.",
+  );
   const seededOs = initial.products.find((product: { id?: string }) => product.id === "product-phantomforce-os") as { imageUrl?: string | null } | undefined;
   assert(seededOs?.imageUrl === "/app/assets/brand-phantom.png", "Business OS should reference the real shipped brand image asset.");
   const seededFile = JSON.parse(await readFile(process.env.PHANTOMFORCE_PHANTOMSTORE_PATH, "utf8")) as { products?: { id?: string }[] };
