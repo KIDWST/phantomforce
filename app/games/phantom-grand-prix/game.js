@@ -47,6 +47,9 @@
   const TRACK_WIDTH = 260;
   const LAPS = 3;
   const COLORS = { p1: "#41ffa1", p2: "#1ef0ff", cpu1: "#ff3d94", cpu2: "#ffd166" };
+  // Livery accents — dark racing stripe + trim per racer so every car reads
+  // as a distinct machine, not a colored triangle.
+  const ACCENTS = { "#41ffa1": "#0a3d25", "#1ef0ff": "#083948", "#ff3d94": "#4d0f2c", "#ffd166": "#5c430c", "#ff9a5c": "#5e2a0c" };
   const ITEM_COLORS = { boost: "#ffd166", shield: "#41ffa1", surge: "#ff3d94", ooze: "#a06bff", bolt: "#ff5c74" };
   const ITEM_LABELS = { boost: "BST", shield: "SHD", surge: "SRG", ooze: "OOZ", bolt: "BLT" };
   const KEYS_P1 = { up: "KeyW", down: "KeyS", left: "KeyA", right: "KeyD", drift: "ShiftLeft", driftAlt: "ShiftRight", item: "Space" };
@@ -184,8 +187,10 @@
     const y = p0.y + n0.y * lateral - t0.y * behind;
     return {
       id, name, color, human, keys,
+      accent: ACCENTS[color] || "#1a1c24",
       x, y, angle: Math.atan2(t0.y, t0.x),
-      camX: x, camY: y,
+      camX: x, camY: y, camA: 0, camZoom: 0.62,
+      shakeT: 0, shakeMag: 0, visSteer: 0, visYaw: 0,
       speed: 0, inputSteer: 0, inputThrottle: 0, inputDrift: false,
       drifting: false, driftCharge: 0,
       boostTimer: 0, surgeTimer: 0, spinTimer: 0, shielded: false, shieldTimer: 0,
@@ -195,7 +200,7 @@
       finished: false, place: 0,
       aiOffset: human ? 0 : Math.random() * 80 - 40,
       aiDecisionT: Math.random() * 0.4,
-      _offTrack: false, _itemKeyWasDown: false,
+      _offTrack: false, _itemKeyWasDown: false, _wallT: 0,
     };
   }
 
@@ -228,8 +233,15 @@
   // Input
   // ---------------------------------------------------------------------
   const pressed = new Set();
+  // Per-viewport camera mode: false = north-up follow (default), true =
+  // rotate-with-car. Index 0 = P1 viewport, 1 = P2 viewport.
+  const camRotate = [false, false];
   window.addEventListener("keydown", (e) => {
     if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space", "Slash", "Enter"].includes(e.code)) e.preventDefault();
+    if (!e.repeat) {
+      if (e.code === "KeyC") camRotate[0] = !camRotate[0];
+      else if (e.code === "Period") camRotate[1] = !camRotate[1];
+    }
     pressed.add(e.code);
   });
   window.addEventListener("keyup", (e) => { pressed.delete(e.code); });
@@ -286,7 +298,7 @@
     while (diff > Math.PI) diff -= Math.PI * 2;
     while (diff < -Math.PI) diff += Math.PI * 2;
     kart.inputSteer = Math.max(-1, Math.min(1, diff / 0.5));
-    kart.inputThrottle = Math.abs(diff) > 1.0 ? 0.55 : 1;
+    kart.inputThrottle = Math.abs(diff) > 1.0 ? 0.45 : Math.abs(diff) > 0.55 ? 0.75 : 1;
     kart.inputDrift = Math.abs(diff) > 0.4 && kart.speed > 180;
   }
 
@@ -366,6 +378,7 @@
         if (kart.driftCharge >= 3.0) { boostAmt = 340; boostTime = 1.6; sparkColor = "#ffd166"; }
         else if (kart.driftCharge >= 1.8) { boostAmt = 230; boostTime = 1.1; sparkColor = "#ff3d94"; }
         else if (kart.driftCharge >= 0.8) { boostAmt = 140; boostTime = 0.75; sparkColor = "#1ef0ff"; }
+        else if (kart.driftCharge >= 0.4 && !kart._offTrack) { boostAmt = 80; boostTime = 0.45; sparkColor = "#9fffe0"; } // small clean-drift-exit reward
         if (boostAmt > 0) {
           kart.speed = Math.min(kart.speed + boostAmt * 0.5, MAX_SPEED * 1.5);
           kart.boostTimer = Math.max(kart.boostTimer, boostTime);
@@ -375,8 +388,10 @@
       }
       if (kart.drifting) kart.driftCharge += dt;
 
-      const speedFactor = Math.min(1, 0.35 + (Math.abs(kart.speed) / MAX_SPEED) * 0.85);
-      const turnRate = 2.5 * speedFactor * (kart.drifting ? 1.4 : 1);
+      // Turn model: responsive at low speed, tightens up (planted) near top
+      // speed instead of getting twitchier; drifting restores agility.
+      const sN = Math.min(1, Math.abs(kart.speed) / MAX_SPEED);
+      const turnRate = 2.8 * Math.min(1, 0.4 + sN * 1.4) * (1 - sN * 0.25) * (kart.drifting ? 1.35 : 1);
       kart.angle += steer * turnRate * dt * (kart.speed < 0 ? -1 : 1);
 
       let maxSpeed = MAX_SPEED;
@@ -385,7 +400,9 @@
       if (kart.surgeTimer > 0) maxSpeed *= 1.6;
 
       if (throttle !== 0) {
-        kart.speed += throttle * (throttle > 0 ? 620 : 520) * dt;
+        // Strong launch that tapers as the kart approaches its speed cap.
+        const accel = throttle > 0 ? 640 * (1 - 0.4 * Math.max(0, Math.min(1, kart.speed / maxSpeed))) : 520;
+        kart.speed += throttle * accel * dt;
       } else {
         const drag = kart._offTrack ? 520 : 300;
         if (kart.speed > 0) kart.speed = Math.max(0, kart.speed - drag * dt);
@@ -395,6 +412,14 @@
 
       if (kart.drifting && Math.random() < 0.6) spawnParticle(kart.x - Math.cos(kart.angle) * 14, kart.y - Math.sin(kart.angle) * 14, (Math.random() - 0.5) * 30, (Math.random() - 0.5) * 30, 0.3, "#fff", 2);
       if (kart.boostTimer > 0 && Math.random() < 0.7) spawnParticle(kart.x - Math.cos(kart.angle) * 22, kart.y - Math.sin(kart.angle) * 22, -Math.cos(kart.angle) * 60, -Math.sin(kart.angle) * 60, 0.3, "#ffd166", 3);
+      // Exhaust puffs while on the gas — subtle, pooled, cheap.
+      if (throttle > 0 && kart.speed > 60 && Math.random() < 0.22) {
+        spawnParticle(kart.x - Math.cos(kart.angle) * 26, kart.y - Math.sin(kart.angle) * 26, -Math.cos(kart.angle) * 40 + (Math.random() - 0.5) * 24, -Math.sin(kart.angle) * 40 + (Math.random() - 0.5) * 24, 0.35, "#8a8f98", 2.5);
+      }
+      // Dust kicked up while on the grass.
+      if (kart._offTrack && Math.abs(kart.speed) > 120 && Math.random() < 0.55) {
+        spawnParticle(kart.x - Math.cos(kart.angle) * 16, kart.y - Math.sin(kart.angle) * 16, (Math.random() - 0.5) * 90, (Math.random() - 0.5) * 90, 0.45, Math.random() < 0.5 ? "#7a6a3f" : "#5d6b3c", 3.5);
+      }
     }
 
     if (kart.boostTimer > 0) kart.boostTimer = Math.max(0, kart.boostTimer - dt);
@@ -406,15 +431,57 @@
 
     const idx = findNearestIndex({ x: kart.x, y: kart.y }, kart.hintIdx, TRACK.N, 14);
     const pt = TRACK.pts[idx], nor = TRACK.nor[idx];
-    const lateral = (kart.x - pt.x) * nor.x + (kart.y - pt.y) * nor.y;
+    let lateral = (kart.x - pt.x) * nor.x + (kart.y - pt.y) * nor.y;
+    const wasOff = kart._offTrack;
     kart._offTrack = Math.abs(lateral) > TRACK_WIDTH / 2;
+
+    // Grass: strong one-time scrub on entry (with dust burst + shake) so
+    // cutting corners hurts, then the 0.55x cap/drag keeps it recoverable.
+    if (kart._offTrack && !wasOff && Math.abs(kart.speed) > 200) {
+      kart.speed *= 0.72;
+      kart.shakeT = Math.max(kart.shakeT, 0.25); kart.shakeMag = Math.max(kart.shakeMag, 4);
+      for (let i = 0; i < 6; i++) spawnParticle(kart.x, kart.y, (Math.random() - 0.5) * 130, (Math.random() - 0.5) * 130, 0.5, Math.random() < 0.5 ? "#7a6a3f" : "#5d6b3c", 4);
+    }
+    if (kart._offTrack && Math.abs(kart.speed) > 150) { kart.shakeT = Math.max(kart.shakeT, 0.06); kart.shakeMag = Math.max(kart.shakeMag, 1.8); } // grass rumble
+
+    // Soft barrier: deep grass gently shepherds the kart back toward the road.
+    const softEdge = TRACK_WIDTH / 2 + 30;
+    if (Math.abs(lateral) > softEdge) {
+      const nudge = Math.min(90, (Math.abs(lateral) - softEdge) * 1.4) * dt * Math.sign(lateral);
+      kart.x -= nor.x * nudge;
+      kart.y -= nor.y * nudge;
+      lateral -= nudge;
+    }
+
+    // Hard outer boundary: clamp inside the wall, kill only the outward
+    // velocity component (so the kart slides along instead of sticking),
+    // and scrub speed once per impact — no repeat-drain, no tunneling.
     const hardWall = TRACK_WIDTH / 2 + 110;
     if (Math.abs(lateral) > hardWall) {
-      const clampLat = Math.sign(lateral) * hardWall;
-      kart.x = pt.x + nor.x * clampLat;
-      kart.y = pt.y + nor.y * clampLat;
-      kart.speed *= 0.35;
+      const side = Math.sign(lateral);
+      kart.x = pt.x + nor.x * side * (hardWall - 4);
+      kart.y = pt.y + nor.y * side * (hardWall - 4);
+      const outX = nor.x * side, outY = nor.y * side;
+      if (kart.speed > 0.001) {
+        let vx = Math.cos(kart.angle) * kart.speed, vy = Math.sin(kart.angle) * kart.speed;
+        const dot = vx * outX + vy * outY;
+        if (dot > 0) {
+          vx -= outX * dot * 1.25; vy -= outY * dot * 1.25; // deflect along wall with a slight bounce-in
+          kart.speed = Math.hypot(vx, vy);
+          if (kart.speed > 1) kart.angle = Math.atan2(vy, vx);
+        }
+      } else {
+        kart.speed *= 0.5; // reversing into the wall just deadens
+      }
+      if (kart._wallT <= 0) {
+        kart._wallT = 0.35;
+        kart.speed *= 0.6;
+        kart.shakeT = Math.max(kart.shakeT, 0.3); kart.shakeMag = Math.max(kart.shakeMag, 7);
+        for (let i = 0; i < 7; i++) spawnParticle(kart.x + outX * 18, kart.y + outY * 18, -outX * 90 + (Math.random() - 0.5) * 140, -outY * 90 + (Math.random() - 0.5) * 140, 0.35, "#ffe9a3", 2.5);
+      }
     }
+    if (kart._wallT > 0) kart._wallT -= dt;
+    if (kart.shakeT > 0) kart.shakeT -= dt; else kart.shakeMag = 0;
 
     const delta = wrapDelta(idx, kart.hintIdx, TRACK.N);
     kart.hintIdx = idx;
@@ -601,7 +668,7 @@
         ctx.rotate(b.spin);
         ctx.fillStyle = "#ffd166"; ctx.fillRect(-16, -16, 32, 32);
         ctx.strokeStyle = "#05030a"; ctx.lineWidth = 3; ctx.strokeRect(-16, -16, 32, 32);
-        ctx.rotate(-b.spin);
+        ctx.rotate(-b.spin - currentCamA);
         ctx.fillStyle = "#05030a"; ctx.font = "800 20px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
         ctx.fillText("?", 0, 1);
       } else {
@@ -644,46 +711,145 @@
     ctx.globalAlpha = 1;
   }
 
+  // Current viewport's camera rotation — labels counter-rotate against it so
+  // names stay upright in rotate-with-car mode.
+  let currentCamA = 0;
+
+  function drawCarBody(k, ghosted) {
+    // Local frame: +x = forward. ~46 long x ~26 wide open-wheel racer.
+    const body = ghosted ? "#888" : k.color;
+    const accent = ghosted ? "#555" : k.accent;
+    // Wheels first (under the body edges). Fronts visibly steer.
+    ctx.fillStyle = "#15161c";
+    ctx.strokeStyle = "#3a3d46"; ctx.lineWidth = 1;
+    for (const sy of [-1, 1]) {
+      ctx.fillRect(-19, sy * 10 - 4, 12, 8); ctx.strokeRect(-19, sy * 10 - 4, 12, 8); // rear
+      ctx.save();
+      ctx.translate(13, sy * 10);
+      ctx.rotate(k.visSteer);
+      ctx.fillRect(-5.5, -3.5, 11, 7); ctx.strokeRect(-5.5, -3.5, 11, 7); // front, steered
+      ctx.restore();
+    }
+    // Rear spoiler.
+    ctx.fillStyle = "#101218";
+    ctx.fillRect(-23, -14, 5, 28);
+    ctx.fillStyle = accent;
+    ctx.fillRect(-23, -14, 5, 5); ctx.fillRect(-23, 9, 5, 5);
+    // Body silhouette: pointed nose, waisted cockpit, wide side pods.
+    ctx.beginPath();
+    ctx.moveTo(24, 0);
+    ctx.quadraticCurveTo(23, -6, 15, -7);   // nose flank
+    ctx.quadraticCurveTo(9, -8, 6, -12);    // front pod flare
+    ctx.lineTo(-6, -13);                    // side pod
+    ctx.quadraticCurveTo(-14, -12, -18, -9);
+    ctx.lineTo(-18, 9);
+    ctx.quadraticCurveTo(-14, 12, -6, 13);
+    ctx.lineTo(6, 12);
+    ctx.quadraticCurveTo(9, 8, 15, 7);
+    ctx.quadraticCurveTo(23, 6, 24, 0);
+    ctx.closePath();
+    ctx.fillStyle = body; ctx.fill();
+    ctx.strokeStyle = "rgba(0,0,0,.45)"; ctx.lineWidth = 1.5; ctx.stroke();
+    // Center racing stripe down hood + engine cover.
+    ctx.fillStyle = accent;
+    ctx.fillRect(-18, -2.5, 40, 5);
+    // Cabin/windshield.
+    ctx.beginPath();
+    ctx.moveTo(9, -4); ctx.lineTo(3, -6); ctx.lineTo(-4, -5.5); ctx.lineTo(-6, 0); ctx.lineTo(-4, 5.5); ctx.lineTo(3, 6); ctx.lineTo(9, 4); ctx.closePath();
+    ctx.fillStyle = "rgba(12,18,28,.92)"; ctx.fill();
+    ctx.fillStyle = "rgba(180,220,255,.35)";
+    ctx.fillRect(4, -4, 3, 8); // glass glint
+    // Nose tip trim.
+    ctx.fillStyle = "#eafff4";
+    ctx.fillRect(20, -2, 4, 4);
+  }
+
   function drawKart(k) {
+    const ghosted = k.spinTimer > 0;
+    const yaw = k.angle + k.visYaw;
+    // Drop shadow (offset, same heading).
+    ctx.save();
+    ctx.translate(k.x + 3, k.y + 5);
+    ctx.rotate(yaw);
+    ctx.fillStyle = "rgba(0,0,0,.32)";
+    ctx.beginPath(); ctx.ellipse(0, 0, 25, 15, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+
     ctx.save();
     ctx.translate(k.x, k.y);
-    ctx.rotate(k.angle);
-    ctx.scale(1, k.drifting ? 0.85 : 1);
-    if (k.surgeTimer > 0) { ctx.fillStyle = "rgba(255,209,102,.25)"; ctx.beginPath(); ctx.arc(0, 0, 34, 0, Math.PI * 2); ctx.fill(); }
-    ctx.fillStyle = k.spinTimer > 0 ? "#888" : k.color;
-    ctx.beginPath();
-    ctx.moveTo(20, 0); ctx.lineTo(-14, -13); ctx.lineTo(-8, 0); ctx.lineTo(-14, 13); ctx.closePath();
-    ctx.fill();
-    ctx.strokeStyle = "rgba(0,0,0,.4)"; ctx.lineWidth = 2; ctx.stroke();
-    ctx.fillStyle = "rgba(255,255,255,.5)";
-    ctx.fillRect(-2, -6, 10, 12);
+    ctx.rotate(yaw);
+    if (k.surgeTimer > 0) { ctx.fillStyle = "rgba(255,209,102,.25)"; ctx.beginPath(); ctx.arc(0, 0, 36, 0, Math.PI * 2); ctx.fill(); }
+    // Boost exhaust flames behind the twin pipes.
+    if (k.boostTimer > 0) {
+      const flick = 0.7 + Math.random() * 0.6;
+      for (const sy of [-4.5, 4.5]) {
+        ctx.fillStyle = "rgba(255,150,40,.85)";
+        ctx.beginPath(); ctx.ellipse(-27 - 7 * flick, sy, 9 * flick, 3.2, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = "rgba(255,235,150,.9)";
+        ctx.beginPath(); ctx.ellipse(-25 - 3 * flick, sy, 4.5 * flick, 1.8, 0, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    drawCarBody(k, ghosted);
     if (k.shielded) {
-      ctx.rotate(-k.angle);
+      ctx.rotate(-yaw);
       ctx.strokeStyle = "rgba(65,255,161,.7)"; ctx.lineWidth = 3;
-      ctx.beginPath(); ctx.arc(0, 0, 32, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath(); ctx.arc(0, 0, 33, 0, Math.PI * 2); ctx.stroke();
     }
     ctx.restore();
+
     ctx.save();
-    ctx.translate(k.x, k.y - 30);
+    ctx.translate(k.x, k.y);
+    ctx.rotate(-currentCamA); // keep the label upright regardless of camera mode
     ctx.fillStyle = "rgba(255,255,255,.8)"; ctx.font = "700 11px monospace"; ctx.textAlign = "center";
-    ctx.fillText(k.name, 0, 0);
+    ctx.fillText(k.name, 0, -32);
     ctx.restore();
   }
 
+  // Minimap uses the real track geometry — precompute world bounds once.
+  const MINI_BOUNDS = (function () {
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const p of TRACK.pts) {
+      if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
+      if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
+    }
+    const pad = TRACK_WIDTH / 2 + 20;
+    return { minX: minX - pad, minY: minY - pad, w: maxX - minX + pad * 2, h: maxY - minY + pad * 2 };
+  })();
+
   function drawMinimap(mx, my, mw, mh, camKart) {
     ctx.save();
-    ctx.globalAlpha = 0.85;
-    ctx.fillStyle = "rgba(2,2,6,.5)"; ctx.fillRect(mx, my, mw, mh);
+    ctx.globalAlpha = 0.9;
+    ctx.fillStyle = "rgba(2,2,6,.55)"; ctx.fillRect(mx, my, mw, mh);
     ctx.strokeStyle = "rgba(255,255,255,.3)"; ctx.lineWidth = 2; ctx.strokeRect(mx, my, mw, mh);
-    const cx = mx + mw / 2, cy = my + mh / 2, rx = mw / 2 - 14, ry = mh / 2 - 14;
-    ctx.strokeStyle = "rgba(255,255,255,.4)";
-    ctx.beginPath(); ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2); ctx.stroke();
+    const inset = 8;
+    const s = Math.min((mw - inset * 2) / MINI_BOUNDS.w, (mh - inset * 2) / MINI_BOUNDS.h);
+    const offX = mx + (mw - MINI_BOUNDS.w * s) / 2, offY = my + (mh - MINI_BOUNDS.h * s) / 2;
+    // Track ribbon: reuse the cached Path2D under a scaled transform.
+    ctx.save();
+    ctx.translate(offX - MINI_BOUNDS.minX * s, offY - MINI_BOUNDS.minY * s);
+    ctx.scale(s, s);
+    ctx.lineJoin = "round"; ctx.lineCap = "round";
+    ctx.strokeStyle = "rgba(255,255,255,.28)"; ctx.lineWidth = TRACK_WIDTH; ctx.stroke(TRACK_PATH);
+    ctx.strokeStyle = "rgba(10,12,18,.9)"; ctx.lineWidth = TRACK_WIDTH * 0.55; ctx.stroke(TRACK_PATH);
+    // Start/finish tick.
+    const p0 = TRACK.pts[0], n0 = TRACK.nor[0];
+    ctx.strokeStyle = "#eafff4"; ctx.lineWidth = TRACK_WIDTH * 0.3;
+    ctx.beginPath();
+    ctx.moveTo(p0.x - n0.x * TRACK_WIDTH / 2, p0.y - n0.y * TRACK_WIDTH / 2);
+    ctx.lineTo(p0.x + n0.x * TRACK_WIDTH / 2, p0.y + n0.y * TRACK_WIDTH / 2);
+    ctx.stroke();
+    ctx.restore();
+    // Kart dots at their true positions; camera kart gets a ring + heading tick.
     for (const k of state.karts) {
-      const frac = ((k.unwrapped % TRACK.N) + TRACK.N) % TRACK.N / TRACK.N;
-      const ang = frac * Math.PI * 2 - Math.PI / 2;
-      const dx = cx + Math.cos(ang) * rx, dy = cy + Math.sin(ang) * ry;
+      const dx = offX + (k.x - MINI_BOUNDS.minX) * s, dy = offY + (k.y - MINI_BOUNDS.minY) * s;
       ctx.fillStyle = k.color;
-      ctx.beginPath(); ctx.arc(dx, dy, k === camKart ? 5 : 3.5, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(dx, dy, k === camKart ? 4.5 : 3, 0, Math.PI * 2); ctx.fill();
+      if (k === camKart) {
+        ctx.strokeStyle = "#fff"; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.arc(dx, dy, 6.5, 0, Math.PI * 2); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(dx, dy);
+        ctx.lineTo(dx + Math.cos(k.angle) * 10, dy + Math.sin(k.angle) * 10); ctx.stroke();
+      }
     }
     ctx.restore();
   }
@@ -715,17 +881,49 @@
       ctx.fillRect(vx + vw / 2 - w / 2, vy + vh - 30, w * Math.min(1, kart.driftCharge / 3), 10);
     }
     ctx.restore();
-    drawMinimap(vx + vw - 140, vy + 16, 124, 94, kart);
+    drawMinimap(vx + vw - 148, vy + 14, 132, 112, kart);
+  }
+
+  function updateCamera(k, dtReal, vw, vh, rotOn) {
+    // Position: lerp toward the kart plus a velocity look-ahead so the road
+    // ahead dominates the screen at speed.
+    const lead = 46 + Math.max(0, k.speed) * 0.22;
+    const tx = k.x + Math.cos(k.angle) * lead, ty = k.y + Math.sin(k.angle) * lead;
+    const f = Math.min(1, dtReal * 5.5);
+    k.camX += (tx - k.camX) * f;
+    k.camY += (ty - k.camY) * f;
+    // Zoom: sized to the viewport so a meaningful road stretch is always
+    // visible, easing out slightly at speed.
+    const sFrac = Math.min(1, Math.abs(k.speed) / MAX_SPEED);
+    const base = Math.max(0.5, Math.min(0.85, Math.min(vw, vh) / 620));
+    const zt = base * (1 - 0.2 * sFrac);
+    k.camZoom += (zt - k.camZoom) * Math.min(1, dtReal * 2.5);
+    // Rotation: north-up by default; rotate-with-car keeps the nose pointing
+    // screen-up. Smoothed with angle wrapping so toggling never snaps.
+    const targetA = rotOn ? (-Math.PI / 2 - k.angle) : 0;
+    let dA = targetA - k.camA;
+    while (dA > Math.PI) dA -= Math.PI * 2;
+    while (dA < -Math.PI) dA += Math.PI * 2;
+    k.camA += dA * Math.min(1, dtReal * 4);
+    while (k.camA > Math.PI) k.camA -= Math.PI * 2;
+    while (k.camA < -Math.PI) k.camA += Math.PI * 2;
   }
 
   function renderViewport(vx, vy, vw, vh, cameraKart) {
     ctx.save();
     ctx.beginPath(); ctx.rect(vx, vy, vw, vh); ctx.clip();
     ctx.fillStyle = "#0e2415"; ctx.fillRect(vx, vy, vw, vh);
-    const zoom = 0.62;
-    ctx.translate(vx + vw / 2, vy + vh / 2);
+    const zoom = cameraKart.camZoom;
+    let sx = 0, sy = 0;
+    if (cameraKart.shakeT > 0) {
+      sx = (Math.random() - 0.5) * 2 * cameraKart.shakeMag;
+      sy = (Math.random() - 0.5) * 2 * cameraKart.shakeMag;
+    }
+    ctx.translate(vx + vw / 2 + sx, vy + vh / 2 + sy);
     ctx.scale(zoom, zoom);
+    ctx.rotate(cameraKart.camA);
     ctx.translate(-cameraKart.camX, -cameraKart.camY);
+    currentCamA = cameraKart.camA;
     drawTrack();
     drawBoxes();
     drawHazards();
@@ -733,6 +931,7 @@
     drawParticles();
     for (const k of state.karts) drawKart(k);
     ctx.restore();
+    currentCamA = 0;
     drawViewportHUD(vx, vy, vw, vh, cameraKart);
   }
 
@@ -740,16 +939,21 @@
     resizeIfNeeded();
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     if (state.phase === "menu" || !state.karts.length) return;
+    // Visual-only smoothing (steer/drift yaw) for every drawn kart.
+    const vf = Math.min(1, dtReal * 10);
     for (const k of state.karts) {
-      const tx = k.x + Math.cos(k.angle) * 70, ty = k.y + Math.sin(k.angle) * 70;
-      k.camX += (tx - k.camX) * Math.min(1, dtReal * 4.5);
-      k.camY += (ty - k.camY) * Math.min(1, dtReal * 4.5);
+      k.visSteer += (k.inputSteer * 0.42 - k.visSteer) * vf;
+      k.visYaw += ((k.drifting ? k.inputSteer * 0.32 : 0) - k.visYaw) * vf;
     }
     const humans = state.karts.filter((k) => k.human);
     if (humans.length <= 1) {
-      renderViewport(0, 0, canvas.width, canvas.height, humans[0] || state.karts[0]);
+      const cam = humans[0] || state.karts[0];
+      updateCamera(cam, dtReal, canvas.width, canvas.height, camRotate[0]);
+      renderViewport(0, 0, canvas.width, canvas.height, cam);
     } else {
       const h = canvas.height / 2;
+      updateCamera(humans[0], dtReal, canvas.width, h, camRotate[0]);
+      updateCamera(humans[1], dtReal, canvas.width, h, camRotate[1]);
       renderViewport(0, 0, canvas.width, h, humans[0]);
       renderViewport(0, h, canvas.width, h, humans[1]);
       ctx.fillStyle = "#05030a"; ctx.fillRect(0, h - 2, canvas.width, 4);
