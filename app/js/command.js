@@ -12,9 +12,9 @@ import {
   recentChatTurns,
   ctx, session, loadPhantomLoop, savePhantomLoop, loopProviderName, modelDisplayLabel,
   getPhantomLaneTarget, loadPhantomLaneConfig, workspaceStorageGetItem, wsName,
-} from "./store.js?v=phantom-live-20260718-30";
-import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260718-30";
-import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260718-30";
+} from "./store.js?v=phantom-live-20260718-31";
+import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260718-31";
+import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260718-31";
 const classifyPhantomIntent = (text) => deriveActionContract(classifyRaw(text));
 
 /* Cross-surface handoff: chat tells the Websites page which project to focus
@@ -762,34 +762,6 @@ function approvalCount() {
   return visible(store.state.approvals).filter((a) => a.status === "pending").length;
 }
 
-function operatorSnapshot() {
-  const m = moneyView();
-  const plan = todaysPlan();
-  return {
-    pipeline: m.pipeline,
-    openProposals: m.open.length,
-    wonValue: m.wonValue,
-    retainerMonthly: m.retainerMonthly,
-    netCash: m.netCash,
-    transactionCount: m.transactions.length,
-    approvals: approvalCount(),
-    today: plan.length,
-    topPlan: plan[0] || null,
-  };
-}
-
-function readinessLine() {
-  const snap = operatorSnapshot();
-  const pieces = [
-    snap.transactionCount ? `${signedMoney(snap.netCash)} net cashflow` : "ledger empty",
-    `${fmtMoney(snap.pipeline)} quote potential`,
-    `${snap.openProposals} open proposal${snap.openProposals === 1 ? "" : "s"}`,
-    `${snap.approvals} approval${snap.approvals === 1 ? "" : "s"}`,
-    `${snap.today} item${snap.today === 1 ? "" : "s"} on today's board`,
-  ];
-  return `Ready, Jordan. ${pieces.join(" · ")}. Ask, draft, build, track, recall, approve, or route anything.`;
-}
-
 function currentInfoAnswer(text, settings = null) {
   const s = text.toLowerCase();
   if (!/\b(weather|forecast|temperature|rain|snow|news|headlines?|latest|current|score|stock|crypto|price of|exchange rate|traffic|sports)\b/.test(s)) {
@@ -817,12 +789,19 @@ function localQuestionAnswer(text, settings = null) {
   const live = currentInfoAnswer(text, settings);
   if (live) return live;
 
+  const asksForWorkspaceState = (nounPattern) => {
+    const owned = new RegExp(`\\b(?:my|our|this workspace(?:'s)?)\\b.{0,32}\\b(?:${nounPattern})\\b`, "i");
+    const stateVerb = new RegExp(`\\b(?:show|open|list|check|review|summarize|summarise|how many|what(?:'s| is) in)\\b.{0,40}\\b(?:${nounPattern})\\b`, "i");
+    const nounOnly = new RegExp(`^(?:${nounPattern})[.!?]*$`, "i");
+    return owned.test(text) || stateVerb.test(text) || nounOnly.test(text.trim());
+  };
+
   const recent = recentChatTurns(1)[0];
   if (/^(why|why not|how so|what do you mean|what does that mean|tell me more|and why|really)\b/i.test(text.trim()) && recent?.assistant) {
     const previous = recent.assistant;
     return {
-      say: /tacos?/i.test(previous)
-        ? "Because tacos can be simple or ambitious, they work for almost any mood, and the crunchy-to-soft ratio has excellent engineering. Mostly, though, they're just hard not to enjoy."
+      say: /spicy ramen/i.test(previous)
+        ? "Because it can be comforting and intense at the same time, and every bowl can have its own personality."
         : `I meant this part of my last answer: "${previous.slice(0, 180)}" Tell me which piece you want unpacked and I'll stay on that exact thread.`,
       cards: [],
       open: null,
@@ -847,9 +826,19 @@ function localQuestionAnswer(text, settings = null) {
     };
   }
 
+  const definition = [
+    [/\bwhat (?:is|are) (?:an? )?(?:business )?proposal\b/i, "A proposal is a document that explains an offer, scope, price, timeline, and why the recipient should choose it."],
+    [/\bwhat (?:is|are) (?:an? )?(?:sales )?(?:lead|prospect)\b/i, "A sales lead is a person or organization that may be a fit for an offer and still needs qualification."],
+    [/\bwhat (?:is|are) (?:an? )?invoice\b/i, "An invoice is a formal request for payment that lists what was provided, what is owed, and when payment is due."],
+    [/\bwhat (?:is|are) (?:an? )?approval workflow\b/i, "An approval workflow routes a proposed action to the right reviewer before anything consequential happens."],
+    [/\bwhat (?:is|are) accounting\b|\bhow does accounting work\b/i, "Accounting records and categorizes real financial activity so a business can understand cash, obligations, performance, and taxes."],
+    [/\bhow does (?:a )?bank work\b/i, "A bank holds deposits, moves money, lends part of its capital, and manages payment and risk systems under financial regulation."],
+  ].find(([pattern]) => pattern.test(text));
+  if (definition) return { say: definition[1], cards: [], open: null };
+
   if (/\b(favorite|favourite)\b.*\b(food|meal|snack|drink)\b|\bwhat'?s your (?:favorite|favourite) (?:food|meal|snack|drink)\b/i.test(text)) {
     return {
-      say: "If I had taste buds, I'd pick tacos: fast, flexible, and somehow always the correct answer.",
+      say: "Spicy ramen - bold, comforting, and impossible to make boring.",
       cards: [],
       open: null,
     };
@@ -887,7 +876,7 @@ function localQuestionAnswer(text, settings = null) {
     };
   }
 
-  if (/\b(proposals?|quotes?|pricing|estimates?|deals?)\b/.test(s)) {
+  if (/\b(proposals?|quotes?|pricing|estimates?|deals?)\b/.test(s) && asksForWorkspaceState("proposals?|quotes?|pricing|estimates?|deals?")) {
     const m = moneyView();
     const top = m.open[0];
     return {
@@ -899,7 +888,7 @@ function localQuestionAnswer(text, settings = null) {
     };
   }
 
-  if (/\b(lead|prospect|inquir|follow.?up|crm)\b/.test(s)) {
+  if (/\b(lead|prospect|inquir|follow.?up|crm)\b/.test(s) && asksForWorkspaceState("leads?|prospects?|inquir(?:y|ies)|follow.?ups?|crm")) {
     const leads = visible(store.state.leads || []);
     const due = leads.filter((l) => ["new", "follow-up"].includes(l.status) && daysUntil(l.due) <= 0);
     return {
@@ -911,7 +900,7 @@ function localQuestionAnswer(text, settings = null) {
     };
   }
 
-  if (/\b(approval|approve|pending|waiting on me|review queue)\b/.test(s)) {
+  if (/\b(approval|approve|pending|waiting on me|review queue)\b/.test(s) && asksForWorkspaceState("approvals?|pending|review queue")) {
     const pend = visible(store.state.approvals || []).filter((a) => a.status === "pending");
     return {
       say: pend.length ? `${pend.length} approval${pend.length === 1 ? "" : "s"} waiting on you. I won't approve anything from chat — that's your call, in the queue.` : "Approval queue is clear.",
@@ -928,7 +917,7 @@ function localQuestionAnswer(text, settings = null) {
     };
   }
 
-  if (/\b(content|video|reel|shoot|caption|post|media)\b/.test(s)) {
+  if (/\b(content|video|reel|shoot|caption|post|media)\b/.test(s) && asksForWorkspaceState("content|videos?|reels?|shoots?|captions?|posts?|media")) {
     const media = visible(store.state.media || []);
     return {
       say: media.length
@@ -948,7 +937,7 @@ function localQuestionAnswer(text, settings = null) {
   }
 
   return {
-    say: "I didn't get a clean model answer in time. Your question is still the active thread, and I won't swap in unrelated accounting or dashboard status. Try it once more or add one detail.",
+    say: "I didn't get a clean model answer in time. Your question is still the active thread. Try it once more or add one detail.",
     cards: [],
     open: null,
   };
@@ -960,8 +949,8 @@ function operatorContextAnswer(text) {
   if (isStatement) {
     return {
       say: model
-        ? `Got it — I’ll treat ${model} as operating context, not a task or ledger note. If the normal providers are down, I’ll keep the conversation useful and only ask for action when you actually give me one.`
-        : "Got it — I’ll treat that as operating context, not a task or ledger note. If a connection is down, I’ll say that clearly and keep helping instead of pretending it’s a quote or bookkeeping issue.",
+        ? `Got it - I'll treat ${model} as operating context, not a task. If the normal providers are down, I'll keep the conversation useful and only ask for action when you actually give me one.`
+        : "Got it - I'll treat that as operating context, not a task. If a connection is down, I'll say that clearly and keep helping instead of inventing an answer.",
       cards: [],
       open: null,
     };
@@ -1587,9 +1576,17 @@ export async function handleSmartCommand(raw) {
     return handleCommand(text);
   }
 
+  const instantConversation = isInstantChatRequest(text, intent);
   if (canAskHermes(text, intent, settings)) {
     const backend = await askHermesBrain(text, intent, settings);
     if (backend) return backend;
+  }
+
+  /* A failed instant request must remain conversation. Falling through the
+     command router lets ordinary nouns such as bank, proposal, lead, or media
+     accidentally open workspace data and is the source of status-dump leaks. */
+  if (instantConversation && ["question", "chat"].includes(intent.primaryIntent)) {
+    return shapeResponse({ ...localQuestionAnswer(text, settings), intent }, settings);
   }
 
   return handleCommand(text);

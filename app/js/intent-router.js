@@ -14,6 +14,8 @@ const GREETING = /^(hey|hi|hello|yo|sup|gm|gn|good morning|good afternoon|good e
 const GRATITUDE = /^(thanks|thank you|appreciate it|bet|cool|nice|ok|okay|got it|perfect)[\s.!?]*$/i;
 const IDENTITY = /\b(who are you|what are you|are you phantom|what is phantom|what is phantomforce ai|what's your job)\b/i;
 const CAPABILITY = /\b(what can you do|how can you help|what are you able to do|what can phantom do|what can phantomforce do|how smart are you|are you smart|how (good|capable|powerful) are you|what makes you (smart|good|different)|how do you compare)\b/i;
+const INFORMATIONAL_CONCEPT_QUESTION = /^(?:what (?:is|are)|how (?:does|do)|explain|define)\b.{0,72}\b(?:approval|workflow|memory|pipeline|accounting|invoice|proposal|quote|lead|prospect|automation|task|website|bank|transaction|crm)\b/i;
+const PRIVATE_CONCEPT_REFERENCE = /\b(?:my|our|this workspace(?:'s)?|this business(?:'s)?|this company(?:'s)?)\b.{0,32}\b(?:approval|workflow|memory|pipeline|accounting|invoice|proposal|quote|lead|prospect|automation|task|website|bank|transaction|crm)\b/i;
 const FEEDBACK = /\b(i hate|i don't like|this sucks|looks awful|looks bad|annoying|frustrating|disappointed|not what i wanted|too robotic|too cluttered)\b/i;
 const PLAN = /\b(make|create|give|draft|build)\s+(me\s+)?(a\s+)?(plan|roadmap|breakdown|strategy)|\b(break this down|roadmap this|plan this|help me plan)\b/i;
 const REMINDER = /\b(remind me|reminder|schedule (this|that|it)\b|check this every|every morning|every day|daily|weekly|monitor|tell me when|watch this)\b/i;
@@ -193,6 +195,9 @@ export function classifyPhantomIntent(raw = "") {
   }
   if (CAPABILITY.test(text)) {
     return { ...result, primaryIntent: "capability", confidence: 0.9, reasonCode: "capability_question" };
+  }
+  if (INFORMATIONAL_CONCEPT_QUESTION.test(text) && !PRIVATE_CONCEPT_REFERENCE.test(text)) {
+    return { ...result, primaryIntent: "question", confidence: 0.92, reasonCode: "informational_concept_question" };
   }
   if (MEMORY.test(text) && TEMPORARY_CONTEXT.test(text)) {
     return { ...result, primaryIntent: "chat", confidence: 0.94, reasonCode: "temporary_conversation_context" };

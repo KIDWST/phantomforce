@@ -16,16 +16,15 @@ Do not restart the audit from zero unless the inventory is invalid. Continuation
 is scheduled in this same Codex task by heartbeat automation
 `continue-phantomforce-quality-program`.
 
-Cycle 15 made the fast brain resilient when its local model restarts, times out,
-or is temporarily unreachable. Degraded replies now reuse Phantom's normal
-deterministic personality, tools, output constraints, and active semantic topic
-instead of behaving like a separate canned chatbot. A new authenticated HTTP
-gate deliberately points Ollama at a closed port and proves that direct answers
-and follow-ups remain useful, stale accounting history stays excluded, fallback
-metadata is truthful, and the disposable server exits cleanly. The public app
-remains build `phantom-live-20260718-30`; this cycle changes the live server brain.
+Cycle 16 closed the remaining browser-side status-dump path. If the chat API is
+briefly unreachable, safe questions and casual chat now stay inside a dedicated
+conversation fallback and cannot fall through command keywords such as bank,
+proposal, lead, approval, or media. Informational business-adjacent questions
+are distinguished from explicit private workspace-state requests, browser and
+server personality are aligned, and dead `ledger empty` chat copy is gone. The
+browser module graph is cache-busted as `phantom-live-20260718-31`.
 
-## Recommended Cycle 16
+## Recommended Cycle 17
 
 Theme: authenticated cross-organization persistence proof.
 

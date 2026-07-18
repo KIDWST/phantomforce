@@ -163,16 +163,47 @@ assert.notDeepEqual(proposalBody.allowed_providers, ["local_ollama"]);
 store.state.chatHistory = [];
 rememberConversation({
   prompt: "what's your favorite food?",
-  reply: "If I had taste buds, I'd pick tacos: fast, flexible, and somehow always the correct answer.",
+  reply: "Spicy ramen - bold, comforting, and impossible to make boring.",
   mode: "ask",
 });
 globalThis.fetch = async () => { throw new Error("offline regression"); };
-const degradedFollowUp = await handleSmartCommand("why tacos?");
-assert.match(degradedFollowUp.say, /crunchy-to-soft ratio/i, "offline follow-ups must answer the active topic instead of narrating a timeout");
+const degradedFollowUp = await handleSmartCommand("why?");
+assert.match(degradedFollowUp.say, /comforting and intense/i, "offline follow-ups must answer the active topic instead of narrating a timeout");
 assert.doesNotMatch(degradedFollowUp.say, forbiddenStatus);
+
+const offlineGeneralQuestions = [
+  ["what is a business proposal?", /document|offer|scope/i],
+  ["what is a sales lead?", /person|organization|qualification/i],
+  ["what is an invoice?", /request for payment/i],
+  ["what is an approval workflow?", /reviewer|consequential/i],
+  ["how does accounting work?", /records|financial activity/i],
+  ["how does a bank work?", /deposits|lends|payment/i],
+  ["tell me about bank robberies in movies", /active thread/i],
+];
+for (const [prompt] of offlineGeneralQuestions.slice(0, 6)) {
+  assert.equal(classifyPhantomIntent(prompt).primaryIntent, "question", `${prompt} must classify as information, not a workspace command`);
+}
+assert.equal(classifyPhantomIntent("how does an approval workflow help my school project?").primaryIntent, "question");
+assert.notEqual(classifyPhantomIntent("what is in my approval queue?").reasonCode, "informational_concept_question");
+const forbiddenOfflineStatus = /\b(?:ledger|pipeline|cashflow|open proposals?|leads? loaded|approval queue|media items? loaded|today'?s (?:plan|board)|workspace status)\b/i;
+for (const [prompt, expected] of offlineGeneralQuestions) {
+  const response = await handleSmartCommand(prompt);
+  assert.match(response.say, expected, `${prompt} should remain a general conversation answer while offline`);
+  assert.doesNotMatch(response.say, forbiddenOfflineStatus, `${prompt} must not become workspace status while offline`);
+  assert.deepEqual(response.cards || [], [], `${prompt} must not attach a workspace card while offline`);
+  assert.equal(response.open || null, null, `${prompt} must not navigate away from chat while offline`);
+}
+
+const degradedFood = await handleSmartCommand("what's your favorite food?");
+assert.match(degradedFood.say, /spicy ramen/i);
+assert.doesNotMatch(degradedFood.say, /tacos/i);
+
+const explicitWorkspaceQuestion = await handleSmartCommand("show my open proposals");
+assert.match(explicitWorkspaceQuestion.say, /proposal/i, "explicit workspace-state questions must still reach the business command surface");
 globalThis.fetch = originalFetch;
 
 assert.doesNotMatch(commandSrc, /Right now:.*ledger empty/i, "the rejected generic ledger fallback must stay deleted");
+assert.doesNotMatch(commandSrc, /"ledger empty"/i, "dead readiness copy must not reintroduce ledger language into chat");
 assert.doesNotMatch(commandSrc, /The connected brain didn't return a clean expansion in time/i);
 assert.match(commandSrc, /conversation_history:\s*recentConversation/);
 assert.match(serverSrc, /adminRouteTier !== "instant" && businessContextRelevant\) try/, "general questions must skip workspace pulse work");

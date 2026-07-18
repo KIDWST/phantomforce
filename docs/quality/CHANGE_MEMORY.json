@@ -736,6 +736,21 @@
             "description": "An authenticated HTTP gate forces Ollama offline and proves useful topic-safe local degradation without business leakage."
           },
           {
+            "file": "app/js/intent-router.js",
+            "pattern": "INFORMATIONAL_CONCEPT_QUESTION[\\s\\S]*informational_concept_question",
+            "description": "Questions about approval, memory, pipeline, accounting, proposals, leads, automation, and similar concepts stay informational unless the user explicitly references private workspace state."
+          },
+          {
+            "file": "app/js/command.js",
+            "pattern": "const instantConversation = isInstantChatRequest[\\s\\S]*if \\(instantConversation && \\[\"question\", \"chat\"\\]\\.includes[\\s\\S]*localQuestionAnswer",
+            "description": "A failed instant browser request remains in the conversation fallback and cannot fall through into business command keyword cascades."
+          },
+          {
+            "file": "scripts/test-dashboard-chat-quality.mjs",
+            "pattern": "offlineGeneralQuestions[\\s\\S]*tell me about bank robberies in movies[\\s\\S]*explicitWorkspaceQuestion",
+            "description": "Offline browser tests prove business-adjacent concept questions remain text-only while an explicit workspace-state request still reaches the business surface."
+          },
+          {
             "file": "server/src/phantom-ai/instant-chat-tools.ts",
             "pattern": "tool_id: \"phantom-stable-fact\"[\\s\\S]*function enforceCodeOnly",
             "description": "Explicit verified octopus facts use a curated stable answer, and code-only responses deterministically remove Markdown fences."

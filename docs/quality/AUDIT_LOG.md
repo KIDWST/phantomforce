@@ -1133,3 +1133,49 @@ Run the authenticated two-organization persistence proof in Recommended Cycle 15
 ## Next Task
 
 Run the authenticated two-organization persistence proof in Recommended Cycle 16.
+
+# 2026-07-18 - Cycle 16: Browser Fallback Conversation Isolation
+
+## Problems Verified
+
+- When `/phantom-ai/chat` was unreachable, safe browser conversation fell
+  through the broad command router, where ordinary words such as `bank`,
+  `proposal`, `lead`, `approval`, and `media` could surface workspace counters.
+- The browser fallback still preferred tacos while the server and normal
+  deterministic personality preferred spicy ramen.
+- Informational questions such as `what is an approval workflow?` were matched
+  as workspace commands before the intent router reached its question rule.
+- Dead readiness code still contained the exact `ledger empty` phrase even
+  though no current call site needed it.
+
+## Corrections
+
+- Added a hard browser boundary: failed instant `question` and `chat` requests
+  return through the local conversation responder and never enter command
+  keyword cascades.
+- Added concept-question intent recognition before memory, approval, status,
+  and automation command handling, while keeping private ownership references
+  on the workspace route.
+- Required explicit workspace-state language before local proposal, lead,
+  approval, or media counters can appear.
+- Added useful offline definitions for common business-adjacent concepts and
+  aligned the browser personality with Phantom's spicy-ramen answer.
+- Removed dead readiness/status copy and all generic fallback references to
+  accounting, dashboards, ledgers, or bookkeeping.
+- Added offline multi-turn browser coverage across seven business-adjacent
+  prompts, plus an explicit workspace-state control case.
+- Cache-busted the full browser module graph as `phantom-live-20260718-31`.
+- Added permanent change-memory guards for classification, isolation, and tests.
+
+## Focused Verification
+
+- PASS: `npm run test:dashboard-chat` (42 connected browser prompts, 11
+  degraded server turns, deterministic tool checks, and the new offline set).
+- PASS: `npm run test:intent`.
+- PASS: `npm run test:change-memory` (135 permanent assertions).
+- PASS: `npm run test:release-critical` (19/19 critical checks).
+- PASS: `git diff --check`.
+
+## Next Task
+
+Run the authenticated two-organization persistence proof in Recommended Cycle 17.
