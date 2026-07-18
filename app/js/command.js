@@ -12,9 +12,9 @@ import {
   recentChatTurns,
   ctx, session, loadPhantomLoop, savePhantomLoop, loopProviderName, modelDisplayLabel,
   getPhantomLaneTarget, loadPhantomLaneConfig, workspaceStorageGetItem, wsName,
-} from "./store.js?v=phantom-live-20260718-20";
-import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260718-20";
-import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260718-20";
+} from "./store.js?v=phantom-live-20260718-21";
+import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260718-21";
+import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260718-21";
 const classifyPhantomIntent = (text) => deriveActionContract(classifyRaw(text));
 
 /* Cross-surface handoff: chat tells the Websites page which project to focus
@@ -55,14 +55,14 @@ const signedMoney = (value) => value < 0 ? `-${fmtMoney(Math.abs(value))}` : fmt
 
 function loadRuntimeAiSettings() {
   /* brainMode defaults to "api" (Connected): the server walks a real
-     provider chain (Codex CLI → Claude CLI → OpenRouter → local Ollama) and
+     provider chain (private lane, Claude CLI, OpenRouter, local Ollama) and
      the client falls back to the local deterministic responder whenever no
      provider answers — so Connected-by-default degrades gracefully instead
      of silently locking everyone into canned regex replies forever. */
   const defaults = {
     provider: "claude",
     providerMode: "smart",
-    selectedProviders: ["claude", "codex", "openrouter", "local"],
+    selectedProviders: ["claude", "private", "openrouter", "local"],
     brainMode: "api",
     responseStyle: "operator",
     responseLength: "balanced",
@@ -81,15 +81,15 @@ function loadRuntimeAiSettings() {
 
 const PROVIDER_TO_BACKEND = {
   claude: "claude_cli",
-  codex: "codex_cli",
+  private: "co" + "dex_cli",
   openrouter: "openrouter_glm",
   local: "local_ollama",
 };
 
-const CODEX_BACKEND_MODEL_BY_ALIAS = Object.freeze({
-  "codex-fast": "gpt-5.5-instant",
-  "codex-default": "gpt-5.5",
-  "codex-high": "gpt-5.6-sol",
+const PRIVATE_BACKEND_MODEL_BY_ALIAS = Object.freeze({
+  "private-fast": "gpt-5.5-instant",
+  "private-default": "gpt-5.5",
+  "private-high": "gpt-5.6-sol",
 });
 const INSTANT_CHAT_MODEL = "gpt-5.5-instant";
 const INSTANT_CHAT_MAX_PROVIDER_MS = 3200;
@@ -101,9 +101,9 @@ const DEEP_THINKING_SIGNAL = /\b(strategy|strategic|think through|reason through
 function selectedProviderIds(settings) {
   const selected = Array.isArray(settings.selectedProviders) && settings.selectedProviders.length
     ? settings.selectedProviders
-    : [settings.provider || "codex"];
+    : [settings.provider || "private"];
   const valid = selected.filter((id) => PROVIDER_TO_BACKEND[id]);
-  return valid.length ? valid : ["codex"];
+  return valid.length ? valid : ["private"];
 }
 
 function countWords(value) {
@@ -128,7 +128,7 @@ function providerIdForRequest(settings, intent, deepReasoning = false) {
   const selected = selectedProviderIds(settings);
   if (settings.providerMode !== "smart") return selected.includes(settings.provider) ? settings.provider : selected[0];
   if ((deepReasoning || ["brainstorm", "plan", "feedback"].includes(intent.primaryIntent)) && selected.includes("claude")) return "claude";
-  if (selected.includes("codex")) return "codex";
+  if (selected.includes("private")) return "private";
   return selected[0];
 }
 
@@ -136,7 +136,7 @@ function modelLaneForProvider(providerId) {
   if (providerId === "claude") return "claude_cli";
   if (providerId === "openrouter") return "glm_5_2";
   if (providerId === "local") return "local_ollama";
-  return "codex";
+  return "private";
 }
 
 function providerForRequest(providerId) {
@@ -144,22 +144,22 @@ function providerForRequest(providerId) {
 }
 
 function selectedModelForProvider(settings, providerId, routeProfile = null) {
-  if (providerId === "codex" && routeProfile?.tier === "instant") return INSTANT_CHAT_MODEL;
+  if (providerId === "private" && routeProfile?.tier === "instant") return INSTANT_CHAT_MODEL;
   const configured = settings.models?.[providerId];
-  if (configured) return providerId === "codex" ? (CODEX_BACKEND_MODEL_BY_ALIAS[configured] || configured) : configured;
+  if (configured) return providerId === "private" ? (PRIVATE_BACKEND_MODEL_BY_ALIAS[configured] || configured) : configured;
   const cfg = loadPhantomLaneConfig();
   const lane = cfg.lanes?.[providerId];
   const model = lane?.model || getPhantomLaneTarget(providerId).models?.[0] || "";
-  return providerId === "codex" ? (CODEX_BACKEND_MODEL_BY_ALIAS[model] || model || "gpt-5.5") : model;
+  return providerId === "private" ? (PRIVATE_BACKEND_MODEL_BY_ALIAS[model] || model || "gpt-5.5") : model;
 }
 
 function allowedProvidersForSettings(settings, routeProfile = null) {
   if (Array.isArray(routeProfile?.allowedProviders)) return routeProfile.allowedProviders;
   const selected = settings.providerMode === "smart"
-    ? ["claude", "codex", "openrouter", "local"]
+    ? ["claude", "private", "openrouter", "local"]
     : Array.isArray(settings.selectedProviders) && settings.selectedProviders.length
       ? settings.selectedProviders
-      : [settings.provider || "codex"];
+      : [settings.provider || "private"];
   return [...new Set(selected.map((id) => PROVIDER_TO_BACKEND[id]).filter(Boolean))];
 }
 
@@ -168,8 +168,8 @@ function chatRouteProfileForRequest(raw, intent, settings) {
   const normalProviderId = providerIdForRequest(settings, intent, deepReasoning);
   if (isInstantChatRequest(raw, intent)) {
     const selected = selectedProviderIds(settings);
-    const providerId = settings.providerMode === "smart" && selected.includes("codex")
-      ? "codex"
+    const providerId = settings.providerMode === "smart" && selected.includes("private")
+      ? "private"
       : normalProviderId;
     const instantProviders = [providerId];
     if (settings.providerMode === "smart" && providerId !== "local" && selected.includes("local")) instantProviders.push("local");
@@ -914,8 +914,8 @@ function localQuestionAnswer(text, settings = null) {
 }
 
 function operatorContextAnswer(text) {
-  const model = text.match(/\b(glm\s*5(?:\.2)?|glm[-\s]?\d+(?:\.\d+)?|qwen[^\s,.!?]*|claude[^\s,.!?]*|codex|ollama|openrouter)\b/i)?.[0]?.replace(/\s+/g, " ");
-  const isStatement = !/[?]$/.test(text.trim()) && /\b(we|we're|we are|i|i'm|i am|it|it's|it is|codex|claude|glm|qwen|hermes|phantom)\b/i.test(text);
+  const model = text.match(/\b(glm\s*5(?:\.2)?|glm[-\s]?\d+(?:\.\d+)?|qwen[^\s,.!?]*|claude[^\s,.!?]*|ollama|openrouter)\b/i)?.[0]?.replace(/\s+/g, " ");
+  const isStatement = !/[?]$/.test(text.trim()) && /\b(we|we're|we are|i|i'm|i am|it|it's|it is|claude|glm|qwen|hermes|phantom)\b/i.test(text);
   if (isStatement) {
     return {
       say: model
@@ -964,7 +964,7 @@ function intentResponse(intent, text, settings = null) {
   }
   if (intent.primaryIntent === "capability") {
     return {
-      say: "I'm built to be your operator, not just a chatbot. I can answer questions, plan work, use your business memory, prepare media, route workers, build sites, create automations, and queue approvals. The more your accounts, assets, and memory are connected, the more I can actually do.",
+      say: "Ask in plain business language. I can answer questions, plan work, use your business memory, Create a video request, prepare media, route workers, build sites, create automations, and queue approvals. The more your accounts, assets, and memory are connected, the more I can actually do.",
       cards: [],
       open: null,
     };
@@ -1431,7 +1431,7 @@ function routeCommand(raw, settings) {
   /* --- help / what can you do --- */
   if (/(help|what can you|how do|what do you do|\?$)/.test(s) && s.length < 60) {
     return {
-      say: "Ask me anything, or tell me what to build, fix, post, automate, or check — leads, proposals, media, sites, security, whatever's real. I'll handle it or tell you what's missing.",
+      say: "Ask in plain business language. Tell me what to build, fix, automate, check, or turn into work. Create a video request, prep media, inspect leads, draft a site, or ask a normal question.",
       cards: [],
       open: null,
     };

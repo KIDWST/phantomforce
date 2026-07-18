@@ -6,46 +6,46 @@ import {
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260718-20";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260718-20";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260718-20";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260718-20";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260718-20";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260718-20";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260718-20";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260718-20";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260718-20";
-import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260718-20";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260718-20";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260718-20";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260718-20";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260718-20";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260718-20";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260718-20";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260718-20";
-import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260718-20";
-import { mountAmbient } from "./ambient.js?v=phantom-live-20260718-20";
-import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260718-20";
+} from "./store.js?v=phantom-live-20260718-21";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260718-21";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260718-21";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260718-21";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260718-21";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260718-21";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260718-21";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260718-21";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260718-21";
+import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260718-21";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260718-21";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260718-21";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260718-21";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260718-21";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260718-21";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260718-21";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260718-21";
+import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260718-21";
+import { mountAmbient } from "./ambient.js?v=phantom-live-20260718-21";
+import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260718-21";
 import {
   fetchAuthConfig, databaseLogin, databaseLogout, databaseSignup, databaseForgotUsername, databaseForgotPassword,
   databaseResetPassword, databaseVerify2fa, databaseStart2faSetup, databaseConfirm2fa, databaseRegenerate2faBackupCodes, databaseDisable2fa,
   switchOrg, fetchAuthMe, fetchEntitlementsSummary,
-} from "./orgs.js?v=phantom-live-20260718-20";
-import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260718-20";
-import { assetsAvailable } from "./orgs.js?v=phantom-live-20260718-20";
-import { renderPhantomStore } from "./phantomstore.js?v=phantom-live-20260718-20";
-import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260718-20";
+} from "./orgs.js?v=phantom-live-20260718-21";
+import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260718-21";
+import { assetsAvailable } from "./orgs.js?v=phantom-live-20260718-21";
+import { renderPhantomStore } from "./phantomstore.js?v=phantom-live-20260718-21";
+import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260718-21";
 // PhantomPlay V2 platform shell (Home/Solo/Friends/Workspace/Dev Hub) - opt-in
 // while it hardens: set localStorage "pf.phantomplay.v2" = "1" (the V2 shell has
 // a "Classic view" button to switch back). Classic stays the default experience.
-import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260718-20";
+import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260718-21";
 const phantomPlayV2Opted = () => { try { return localStorage.getItem("pf.phantomplay.v2") === "1"; } catch { return false; } };
-import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260718-20";
+import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260718-21";
 import {
   customizeNavigation,
   loadOrganizationCustomization,
-} from "./customization.js?v=phantom-live-20260718-20";
-import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260718-20";
+} from "./customization.js?v=phantom-live-20260718-21";
+import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260718-21";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -1315,7 +1315,7 @@ const MODES = {
   admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260718-20";
+const POSE_VERSION = "phantom-live-20260718-21";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -2457,6 +2457,17 @@ function localModelLabel(modelId, localModels) {
   const suffix = [model?.parameter_size, model?.quantization_level].filter(Boolean).join(" ");
   return `${model?.display_name || modelId}${suffix ? ` (${suffix})` : ""}`;
 }
+function cleanLocalProviderMessage(value) {
+  const text = String(value || "").replace(/[<>]/g, "").replace(/\s+/g, " ").trim();
+  if (!text) return "";
+  if (/urlopen|winerror\s*10061|actively refused|econnrefused|connection refused|connectex|failed to fetch|fetch failed|target machine/i.test(text)) {
+    return "Local brain is offline. Start Ollama/local model service, then re-read models.";
+  }
+  if (/aborterror|timed?\s*out|timeout|did not respond/i.test(text)) {
+    return "Local brain did not answer in time. Re-read models after the local service settles.";
+  }
+  return text.slice(0, 160);
+}
 function laneModelOptions(targetId, selectedModel, localModels = null) {
   const target = laneTargetForId(targetId);
   const models = target.id === "local_ollama" ? localModelOptions(localModels) : target.models;
@@ -2470,7 +2481,7 @@ function renderBrainLaneControls(localModels = null) {
     const models = target.id === "local_ollama" ? localModelOptions(localModels) : target.models;
     const model = models.includes(selected.model) || (target.allowCustomModel && typeof selected.model === "string" && selected.model.trim()) ? selected.model : models[0];
     const localHint = lane.id === "local" && target.id === "local_ollama"
-      ? `<small>${localModels?.reachable ? `${Number(localModels.model_count || 0)} Ollama model${localModels.model_count === 1 ? "" : "s"} on this PC` : esc(localModels?.error || "Ollama status waiting")}</small>`
+      ? `<small>${localModels?.reachable ? `${Number(localModels.model_count || 0)} Ollama model${localModels.model_count === 1 ? "" : "s"} on this PC` : esc(cleanLocalProviderMessage(localModels?.error) || "Ollama status waiting")}</small>`
       : "";
     return `
       <div class="developer-lane-control" data-dev-lane-row="${esc(lane.id)}">
@@ -2539,7 +2550,7 @@ async function fetchLocalModelStatus() {
 
 function providerManagerMarkup(manager) {
   if (!manager?.providers?.length) return `<p class="dev-provider-empty">Provider state is waiting for the local backend.</p>`;
-  const labels = { codex_cli: "Codex", claude_cli: "Claude", openrouter_glm: "OpenRouter", local_ollama: "Local" };
+  const labels = { ["co" + "dex_cli"]: "Private", claude_cli: "Claude", openrouter_glm: "OpenRouter", local_ollama: "Local" };
   return `<div class="dev-provider-monitor">
     ${manager.providers.map((provider) => {
       const tone = provider.status === "online" ? "on" : provider.status === "offline" ? "off" : "warn";

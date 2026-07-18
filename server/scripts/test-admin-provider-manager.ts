@@ -25,6 +25,11 @@ assert(offline?.quota === "exhausted", "Usage failures should be classified as e
 const publicAfterFailure = getPublicAdminProviderManagerStatus();
 assert(!/codex|codex_cli|run-codex|\.ps1/i.test(JSON.stringify(publicAfterFailure)), "Public provider monitor must redact internal private names and local CLI paths.");
 
+recordAdminProviderFailure("local_ollama", "<urlopen error [WinError 10061] No connection could be made because the target machine actively refused it>", 42);
+const localOffline = getAdminProviderManagerStatus().providers.find((provider) => provider.provider_id === "local_ollama");
+assert(localOffline?.detail === "Local brain is offline. Start Ollama/local model service or switch Phantom to another brain lane.", "Local provider refusal should be converted to product-safe guidance.");
+assert(!/urlopen|WinError|10061|actively refused/i.test(JSON.stringify(getAdminProviderManagerStatus())), "Provider monitor must not retain raw local transport refusal text.");
+
 recordAdminProviderSuccess("codex_cli", 84);
 assert(adminProviderAttemptOrder("codex_cli")[0] === "codex_cli", "Recovered preferred provider should resume automatically.");
 const recovered = getAdminProviderManagerStatus().providers.find((provider) => provider.provider_id === "codex_cli");

@@ -74,6 +74,29 @@ assert.equal(remoteBlocked.provider_called, false);
 assert.equal(remoteBlocked.network_call_performed, false);
 assert.match(remoteBlocked.blocked_reason ?? "", /localhost/);
 
+const refused = await callLocalOllamaChat(baseInput, {
+  env: {
+    OLLAMA_BASE_URL: "http://127.0.0.1:11434",
+    PHANTOM_OLLAMA_MODEL: "qwen2.5:14b",
+  },
+  fetchImpl: async (url) => {
+    if (url === "http://127.0.0.1:11434/api/tags") {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ models: [{ name: "qwen2.5:14b", model: "qwen2.5:14b" }] }),
+        text: async () => "",
+      };
+    }
+    throw new Error("<urlopen error [WinError 10061] No connection could be made because the target machine actively refused it>");
+  },
+});
+
+assert.equal(refused.status, "error");
+assert.equal(refused.error_message, "Local brain is offline. Start Ollama/local model service or switch Phantom to another brain lane.");
+assert.equal(refused.output_text, "Local brain is offline. Start the local model service or switch Phantom to another brain lane.");
+assert.doesNotMatch(JSON.stringify(refused), /urlopen|WinError|10061|actively refused/i);
+
 console.log(
   JSON.stringify(
     {
@@ -81,6 +104,7 @@ console.log(
       modelUsed: called.model_id,
       fallbackUsed: called.fallback_used,
       remoteBlocked: remoteBlocked.status,
+      refusalSanitized: refused.status,
       externalProviderCalled: called.external_provider_called,
     },
     null,

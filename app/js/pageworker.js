@@ -4,8 +4,8 @@
    draftable actions, and one blocking question max. External actions stay
    approval-gated. */
 
-import { store, visible, currentWs, wsName, pushActivity, session, currentTenantId } from "./store.js?v=phantom-live-20260718-20";
-import { createCrmProspectBuildout, isCrmProspectBuildout } from "./command.js?v=phantom-live-20260718-20";
+import { store, visible, currentWs, wsName, pushActivity, session, currentTenantId } from "./store.js?v=phantom-live-20260718-21";
+import { createCrmProspectBuildout, isCrmProspectBuildout } from "./command.js?v=phantom-live-20260718-21";
 
 const esc = (value = "") => String(value)
   .replaceAll("&", "&amp;")
@@ -589,8 +589,8 @@ async function askBackendForPageOutcome(pageId, prompt, analysis) {
         message: backendPrompt(pageId, prompt, analysis),
         user_request: prompt,
         provider: "phantom",
-        admin_model: "codex",
-        model_lane: "codex",
+        admin_model: "private",
+        model_lane: "private",
         route_tier: "standard",
         max_provider_ms: BACKEND_TIMEOUT_MS,
         allow_provider_fallback: true,

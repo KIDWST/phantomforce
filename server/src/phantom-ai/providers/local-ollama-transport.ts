@@ -1,4 +1,5 @@
 import { redactSensitiveText } from "../hermes-ledger.js";
+import { sanitizeProviderDetail } from "../provider-error.js";
 import type { SensitivityLevel } from "../types.js";
 
 type LocalOllamaFetchResponse = {
@@ -428,7 +429,9 @@ export async function callLocalOllamaChat(
     });
     const outputText = redactSensitiveText(extractOutputText(json)).slice(0, MAX_RESPONSE_CHARS);
     const errorValue = json && typeof json === "object" ? (json as Record<string, unknown>).error : null;
-    const errorText = response.ok ? null : redactSensitiveText(firstString(errorValue) ?? `HTTP ${response.status}`);
+    const errorText = response.ok
+      ? null
+      : sanitizeProviderDetail(redactSensitiveText(firstString(errorValue) ?? `HTTP ${response.status}`), { lane: "local" });
     const safeOutput =
       outputText ||
       (response.ok
@@ -475,9 +478,11 @@ export async function callLocalOllamaChat(
       status: "error",
       blocked_reason: null,
       error_message: timedOut
-        ? `Local Ollama did not respond within ${chatTimeoutMs}ms.`
-        : redactSensitiveText(error instanceof Error ? error.message : String(error)).slice(0, 1000),
-      output_text: "Local Ollama transport failed before Phantom AI received a model response.",
+        ? `Local brain did not answer within ${chatTimeoutMs}ms.`
+        : sanitizeProviderDetail(redactSensitiveText(error instanceof Error ? error.message : String(error)), { lane: "local" }),
+      output_text: timedOut
+        ? "Local brain timed out. Phantom can use another allowed route."
+        : "Local brain is offline. Start the local model service or switch Phantom to another brain lane.",
       provider_called: false,
       network_call_performed: true,
       request_body_prepared: true,

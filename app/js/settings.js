@@ -1,13 +1,13 @@
 /* PhantomForce admin settings.
    Local UI preferences only: no provider calls, sends, uploads, or billing. */
 
-import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260718-20";
-import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260718-20";
-import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260718-20";
-import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260718-20";
-import { fetchCustomerPlanPreview, fetchEntitlementsSummary, switchCustomerPlan } from "./orgs.js?v=phantom-live-20260718-20";
-import { currentTenantId, ctx, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260718-20";
-import { DEFAULT_COMPANION_PREFS, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260718-20";
+import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260718-21";
+import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260718-21";
+import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260718-21";
+import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260718-21";
+import { fetchCustomerPlanPreview, fetchEntitlementsSummary, switchCustomerPlan } from "./orgs.js?v=phantom-live-20260718-21";
+import { currentTenantId, ctx, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260718-21";
+import { DEFAULT_COMPANION_PREFS, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260718-21";
 
 const AI_SETTINGS_KEY = "pf.operator.settings.v1";
 const SETTINGS_TAB_KEY = "pf.settings.tab.v1";
@@ -54,11 +54,11 @@ const PROVIDERS = [
     models: ["claude-cli", "claude-sonnet", "claude-opus"],
   },
   {
-    id: "codex",
-    name: "Codex",
-    short: "CX",
+    id: "private",
+    name: "Private",
+    short: "PV",
     role: "Code, files, debugging, and implementation",
-    models: ["codex-default", "codex-high", "codex-fast"],
+    models: ["private-default", "private-high", "private-fast"],
   },
   {
     id: "openrouter",
@@ -100,11 +100,11 @@ function providerModels(provider) {
 const DEFAULT_SETTINGS = {
   provider: "claude",
   providerMode: "smart",
-  selectedProviders: ["claude", "codex", "openrouter", "local"],
+  selectedProviders: ["claude", "private", "openrouter", "local"],
   brainMode: "api",
   models: {
     claude: "claude-cli",
-    codex: "codex-default",
+    private: "private-default",
     openrouter: "openrouter-auto",
     local: "local-auto",
   },
@@ -154,6 +154,18 @@ function providerFor(id) {
   return PROVIDERS.find((provider) => provider.id === id) || PROVIDERS[0];
 }
 
+function cleanLocalProviderMessage(value) {
+  const text = String(value || "").replace(/[<>]/g, "").replace(/\s+/g, " ").trim();
+  if (!text) return "";
+  if (/urlopen|winerror\s*10061|actively refused|econnrefused|connection refused|connectex|failed to fetch|fetch failed|target machine/i.test(text)) {
+    return "Local brain is offline. Start Ollama/local model service, then re-read models.";
+  }
+  if (/aborterror|timed?\s*out|timeout|did not respond/i.test(text)) {
+    return "Local brain did not answer in time. Re-read models after the local service settles.";
+  }
+  return text.slice(0, 160);
+}
+
 function normalizeSettings(value) {
   const input = value && typeof value === "object" ? value : {};
   const provider = PROVIDERS.some((item) => item.id === input.provider) ? input.provider : DEFAULT_SETTINGS.provider;
@@ -171,7 +183,7 @@ function normalizeSettings(value) {
   if (providerMode === "single") selectedProviders = [provider];
   if (!selectedProviders.length) selectedProviders = [provider];
   if (providerMode === "multiple" && selectedProviders.length < 2) {
-    selectedProviders.push(selectedProviders[0] === "claude" ? "codex" : "claude");
+    selectedProviders.push(selectedProviders[0] === "claude" ? "private" : "claude");
   }
   const preferredProvider = selectedProviders.includes(provider) ? provider : selectedProviders[0];
   return {
@@ -230,7 +242,7 @@ function localProviderStatusText() {
   if (localModelStatus.loading) return "Checking Ollama on this PC...";
   if (localModelStatus.loaded && localModelStatus.models.length) return `${localModelStatus.models.length} Ollama model${localModelStatus.models.length === 1 ? "" : "s"} installed`;
   if (localModelStatus.loaded) return "Ollama reachable, no local models found";
-  if (localModelStatus.error) return localModelStatus.error;
+  if (localModelStatus.error) return cleanLocalProviderMessage(localModelStatus.error);
   return "Reads installed Ollama models from this computer";
 }
 
@@ -271,7 +283,7 @@ async function refreshLocalModels(el, opts, rerender = true) {
     localModelStatus = {
       loaded: true,
       loading: false,
-      error: ollama.error || null,
+      error: cleanLocalProviderMessage(ollama.error) || null,
       baseUrl: ollama.base_url || "http://127.0.0.1:11434",
       models: Array.isArray(ollama.installed_models) ? ollama.installed_models : [],
     };
@@ -280,7 +292,7 @@ async function refreshLocalModels(el, opts, rerender = true) {
       ...localModelStatus,
       loaded: true,
       loading: false,
-      error: error instanceof Error ? error.message : "Could not read Ollama on this PC.",
+      error: cleanLocalProviderMessage(error instanceof Error ? error.message : "Could not read Ollama on this PC.") || "Could not read Ollama on this PC.",
       models: [],
     };
   }
@@ -990,7 +1002,7 @@ export function renderOperatorSettings(el, opts = {}) {
       if (settings.providerMode === "smart") settings.selectedProviders = PROVIDERS.map((provider) => provider.id);
       if (settings.providerMode === "single") settings.selectedProviders = [settings.provider];
       if (settings.providerMode === "multiple" && settings.selectedProviders.length < 2) {
-        settings.selectedProviders = [settings.provider, settings.provider === "claude" ? "codex" : "claude"];
+        settings.selectedProviders = [settings.provider, settings.provider === "claude" ? "private" : "claude"];
       }
       saveAndRender();
     };

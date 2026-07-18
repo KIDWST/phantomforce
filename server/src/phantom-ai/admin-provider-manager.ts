@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import { promisify } from "node:util";
+import { sanitizeProviderDetail } from "./provider-error.js";
 
 export type AdminProviderId = "codex_cli" | "claude_cli" | "openrouter_glm" | "local_ollama";
 export type PublicAdminProviderId = "private" | "claude" | "openrouter" | "local";
@@ -70,7 +71,7 @@ function nowIso() {
 }
 
 function safeDetail(value: unknown) {
-  return String(value ?? "").replace(/\s+/g, " ").trim().slice(0, 180);
+  return sanitizeProviderDetail(value);
 }
 
 function quotaFromFailure(detail: string): AdminProviderQuota {

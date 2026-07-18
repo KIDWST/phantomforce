@@ -390,6 +390,7 @@ import { callClaudeCliChat } from "./phantom-ai/providers/claude-cli-transport.j
 import { callCodexCliChat } from "./phantom-ai/providers/codex-cli-transport.js";
 import { callLocalOllamaChat, getLocalOllamaStatus } from "./phantom-ai/providers/local-ollama-transport.js";
 import { callOpenRouterGlm52 } from "./phantom-ai/providers/openrouter-live-transport.js";
+import { sanitizeProviderDetail } from "./phantom-ai/provider-error.js";
 import {
   adminProviderAttemptOrder,
   getAdminProviderManagerStatus,
@@ -3787,8 +3788,10 @@ function isAdminPhantomAiResultUsable(result: { status: string }) {
 }
 
 function adminPhantomAiResultErrorMessage(result: Record<string, unknown>) {
-  if (typeof result.error_message === "string" && result.error_message) return result.error_message;
-  if (typeof result.blocked_reason === "string" && result.blocked_reason) return result.blocked_reason;
+  if (typeof result.error_message === "string" && result.error_message) {
+    return sanitizeProviderDetail(result.error_message, { lane: result.provider_id === "local_ollama" ? "local" : undefined });
+  }
+  if (typeof result.blocked_reason === "string" && result.blocked_reason) return sanitizeProviderDetail(result.blocked_reason);
   return `status: ${String(result.status ?? "unknown")}`;
 }
 
@@ -3807,7 +3810,9 @@ async function callAdminPhantomAiProviderSafe(providerId: AdminPhantomAiProvider
       model_id: providerId,
       status: "error" as const,
       output_text: "",
-      error_message: error instanceof Error ? error.message : String(error),
+      error_message: sanitizeProviderDetail(error instanceof Error ? error.message : String(error), {
+        lane: providerId === "local_ollama" ? "local" : undefined,
+      }),
     };
   }
 }
@@ -4331,10 +4336,23 @@ app.get("/phantom-ai/local-models/status", async (request, reply) => {
     return reply;
   }
 
+  const ollama = await getLocalOllamaStatus();
+  const baseUrl = ollama.endpoint.replace(/\/api\/tags$/, "");
+
   return {
     ok: true,
     session,
-    ollama: await getLocalOllamaStatus(),
+    ollama: {
+      ...ollama,
+      reachable: ollama.ok,
+      base_url: baseUrl,
+      model_count: ollama.models.length,
+      installed_models: ollama.models.map((model) => ({
+        name: model,
+        model,
+        display_name: model,
+      })),
+    },
     provider_manager: getAdminProviderManagerStatus(),
     provider_called: false,
     model_called: false,
