@@ -110,7 +110,7 @@ async function ask(token: string, prompt: string, turns: Turn[]): Promise<Answer
   assert.equal(payload.route_tier, "instant", `${prompt}: left the instant route`);
   assert.ok(
     [model, "phantom-calculator", "phantom-reference-resolver"].includes(String(payload.model_id)),
-    `${prompt}: unexpected responder ${payload.model_id}`,
+    `${prompt}: unexpected responder ${payload.model_id}; fallback=${JSON.stringify(payload.fallback || null)}`,
   );
   assert.equal(payload.fallback?.all_failed, false, `${prompt}: model failed`);
   assert.ok(latencyMs <= 5_500, `${prompt}: ${latencyMs}ms exceeded the warm HTTP budget`);
