@@ -231,6 +231,16 @@
           "file": "scripts/test-memory-retention.mjs",
           "pattern": "temporary history should stay within the context window cap",
           "description": "Retention tests cover temporary history limits."
+        },
+        {
+          "file": "app/js/store.js",
+          "pattern": "TEMPORARY_MEMORY_PATTERN",
+          "description": "Chat-only and do-not-save instructions can never promote temporary context into durable memory."
+        },
+        {
+          "file": "scripts/test-memory-retention.mjs",
+          "pattern": "chat-only context must never be promoted to durable memory",
+          "description": "Storage-level regression proves temporary context stays out of saved memory."
         }
       ]
     },
@@ -599,6 +609,21 @@
           "file": "scripts/test-dashboard-chat-quality.mjs",
           "pattern": "dashboard chat quality checks passed \\(\\$\\{casualPrompts.length\\} prompts\\)",
           "description": "The full dashboard brain is exercised across more than twenty casual prompts."
+        },
+        {
+          "file": "app/js/command.js",
+          "pattern": "const INSTANT_CHAT_MODEL = \"qwen2\\.5:14b\";",
+          "description": "Smart casual chat uses the quality-tested local 14B model instead of the failed CLI alias or weaker arithmetic lane."
+        },
+        {
+          "file": "app/js/command.js",
+          "pattern": "Every authenticated user gets the action-free instant brain",
+          "description": "Customer browsers as well as admins can reach safe instant conversation."
+        },
+        {
+          "file": "server/scripts/test-instant-chat-live-model.ts",
+          "pattern": "arithmeticVerified: true",
+          "description": "A host-backed model gate checks corrected-subject continuity, natural preferences, arithmetic, latency, and business leakage."
         }
       ],
       "forbiddenPatterns": [

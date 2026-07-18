@@ -91,10 +91,10 @@ const PRIVATE_BACKEND_MODEL_BY_ALIAS = Object.freeze({
   "private-default": "gpt-5.5",
   "private-high": "gpt-5.6-sol",
 });
-const INSTANT_CHAT_MODEL = "qwen2.5:7b";
+const INSTANT_CHAT_MODEL = "qwen2.5:14b";
 const INSTANT_CHAT_MAX_PROVIDER_MS = 4500;
 const INSTANT_CHAT_ALLOWED_INTENTS = new Set(["identity", "capability", "question", "chat"]);
-const INSTANT_CHAT_BLOCKLIST = /\b(?:build|create|draft|write|fix|debug|code|implement|research|plan|strategy|proposal|website|site|content|video|image|media|schedule|client|lead|transaction|accounting|bank|security|deploy|send|post|upload|delete|weather|forecast|current|latest|today|tomorrow|yesterday|price|stock|law|legal|medical|diagnosis|contract|tenant|isolation|phantomforce)\b/i;
+const INSTANT_CHAT_BLOCKLIST = /\b(?:debug|code|research|strategy|proposal|website|site|content|video|image|media|schedule|automation|task|client|customer|lead|transaction|accounting|bank|invoice|payment|security|deploy|send|post|upload|delete|weather|forecast|current|latest|stock|law|legal|medical|diagnosis|contract|tenant|isolation|phantomforce)\b|\bprice\s+of\b/i;
 const INSTANT_CHAT_SIGNAL = /\b(?:favorite|do you like|would you rather|tell me a joke|joke|how are you|what'?s your|what is your|who are you|are you|can you|what is \d|what'?s \d)\b/i;
 const DEEP_THINKING_SIGNAL = /\b(strategy|strategic|think through|reason through|break down|roadmap|plan|growth|business model|moat|positioning|prioriti[sz]e|compare|critique|diagnose|why is|why does|what should|how should)\b/i;
 
@@ -114,10 +114,10 @@ function isInstantChatRequest(raw, intent) {
   const text = String(raw || "").trim();
   if (!text || !INSTANT_CHAT_ALLOWED_INTENTS.has(intent.primaryIntent)) return false;
   if (intent.needsLiveData || intent.requiresAdminApproval || intent.shouldCreateTask || intent.shouldCreateAutomation) return false;
-  if (text.length > 140 || countWords(text) > 18) return false;
+  if (text.length > 600 || countWords(text) > 90) return false;
   if (INSTANT_CHAT_BLOCKLIST.test(text)) return false;
   return INSTANT_CHAT_SIGNAL.test(text)
-    || (["chat", "question"].includes(intent.primaryIntent) && countWords(text) <= 10);
+    || ["chat", "question"].includes(intent.primaryIntent);
 }
 
 function shouldUseDeepReasoning(raw, intent) {
@@ -190,7 +190,10 @@ function chatRouteProfileForRequest(raw, intent, settings) {
   };
 }
 
-function canAskHermes(intent, settings) {
+function canAskHermes(raw, intent, settings) {
+  /* Every authenticated user gets the action-free instant brain. Standard and
+     deep business lanes remain admin-only and keep their existing controls. */
+  if (isInstantChatRequest(raw, intent)) return Boolean(ctx.session);
   return isAdmin()
     && settings.brainMode !== "local"
     && !LOCAL_FIRST_INTENTS.has(intent.primaryIntent)
@@ -1578,7 +1581,7 @@ export async function handleSmartCommand(raw) {
     return handleCommand(text);
   }
 
-  if (canAskHermes(intent, settings)) {
+  if (canAskHermes(text, intent, settings)) {
     const backend = await askHermesBrain(text, intent, settings);
     if (backend) return backend;
   }

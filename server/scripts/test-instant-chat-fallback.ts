@@ -52,7 +52,15 @@ assert.equal(needsBusinessContext("why are tacos good?", "question"), false);
 assert.deepEqual(filterConversationModules(modules, "why are tacos good?", "question").map((item) => item.module), ["recent_conversation"]);
 assert.deepEqual(filterConversationModules(modules, "what is in my accounting ledger?", "question").map((item) => item.module), ["recent_conversation", "money", "active_business"]);
 assert.equal(isSafeInstantConversationRequest({ task_type: "chat", user_request: "make it funny" }), true);
+assert.equal(isSafeInstantConversationRequest({ task_type: "chat", user_request: "draft a friendly birthday message" }), true);
+assert.equal(isSafeInstantConversationRequest({ task_type: "chat", user_request: "create a silly name for my sandwich" }), true);
+assert.equal(isSafeInstantConversationRequest({ task_type: "chat", user_request: "fix the grammar in this sentence" }), true);
+assert.equal(isSafeInstantConversationRequest({ task_type: "chat", user_request: "what should I cook today?" }), true);
+assert.equal(isSafeInstantConversationRequest({ task_type: "question", user_request: "A shirt costs 80 dollars and is 25 percent off. What's the sale price?" }), true);
 assert.equal(isSafeInstantConversationRequest({ task_type: "create_website", user_request: "make a website" }), false);
 assert.equal(isSafeInstantConversationRequest({ task_type: "question", user_request: "show my accounting ledger" }), false);
+assert.equal(isSafeInstantConversationRequest({ task_type: "chat", user_request: "write a client proposal" }), false);
+assert.equal(isSafeInstantConversationRequest({ task_type: "chat", user_request: "create an invoice" }), false);
+assert.equal(isSafeInstantConversationRequest({ task_type: "question", user_request: "what is the price of bitcoin?" }), false);
 
 console.log(`instant chat fallback checks passed (${turns.length + directPrompts.length} adversarial turns)`);

@@ -235,12 +235,18 @@ globalThis.fetch = async (url, init) => {
 const instantQuestion = await handleSmartCommand("what's your favorite food?");
 assert.equal(instantQuestion.say, "I'd pick tacos.");
 assert.equal(capturedChatBody.route_tier, "instant");
-assert.equal(capturedChatBody.requested_model, "qwen2.5:7b");
+assert.equal(capturedChatBody.requested_model, "qwen2.5:14b");
 assert.equal(capturedChatBody.admin_model, "local_ollama");
 assert.deepEqual(capturedChatBody.allowed_providers, ["local_ollama"]);
 assert.equal(capturedChatBody.allow_provider_fallback, false);
 assert.ok(capturedChatBody.max_provider_ms <= 4500, "instant questions should cap one provider attempt tightly");
 globalThis.fetch = originalFetch;
+
+assert.equal(classifyPhantomIntent("why does rain happen?").needsLiveData, false, "stable rain science must not require a live lookup");
+assert.equal(classifyPhantomIntent("write a haiku about rain").needsLiveData, false, "creative rain writing must not require a live lookup");
+assert.equal(classifyPhantomIntent("will it rain tomorrow?").needsLiveData, true, "forecast questions must keep the live-data lane");
+assert.equal(classifyPhantomIntent("Remember for this chat only: my dog's name is Pixel.").primaryIntent, "chat", "chat-only facts must not become durable memory");
+assert.equal(classifyPhantomIntent("Remember that my dog's name is Pixel.").primaryIntent, "memory_update", "an explicit durable memory request must keep the memory lane");
 
 let broadChatBody = null;
 globalThis.fetch = async (url, init) => {

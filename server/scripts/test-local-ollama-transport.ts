@@ -96,10 +96,13 @@ const conversation = await callLocalOllamaChat(
 
 assert.equal(conversation.status, "called");
 assert.equal(conversation.model_id, "qwen2.5:7b");
-assert.equal(conversationBody.keep_alive, "30m");
+assert.equal(conversationBody.keep_alive, "24h");
 assert.equal(conversationBody.options.num_predict, 80);
 assert.equal(conversationBody.options.num_ctx, 2048);
 assert.match(conversationBody.messages[0].content, /general-purpose assistant/i);
+assert.match(conversationBody.messages[0].content, /preserve named subjects/i);
+assert.match(conversationBody.messages[0].content, /exact output constraints/i);
+assert.match(conversationBody.messages[0].content, /playful conversational choice/i);
 assert.doesNotMatch(conversationBody.messages[0].content, /business operator|ChicagoShots|action lanes/i);
 assert.doesNotMatch(conversationBody.messages[1].content, /Execution mode|action cards|backend ops/i);
 assert.match(conversationBody.messages[1].content, /Why is the sky blue/);

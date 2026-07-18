@@ -580,3 +580,67 @@ responsive viewport harness if database fixtures are unavailable.
 ## Next Task
 
 Run the authenticated two-organization persistence proof in Recommended Cycle 6.
+
+# 2026-07-18 - Cycle 6: Durable Conversational Brain
+
+## Problems Verified
+
+- A 30-answer, five-conversation real-model audit found no accounting leakage,
+  but the 7B model lost a named subject on a follow-up, used a robotic AI
+  disclaimer for a harmless preference, and produced inconsistent arithmetic.
+- Authenticated customers were allowed through the server's instant-chat policy,
+  but the browser's `canAskHermes` gate still restricted the model call to admin
+  sessions. Customer questions therefore never reached the fast conversational
+  brain.
+- `sale price` was classified as a generic live-price request. One customer turn
+  fell into the business offer path, and the 7B model later calculated two taxed
+  sale items as `$72` instead of `$132`.
+- `Remember for this chat only` was correctly classified as conversation after
+  the intent correction, but the storage layer could still promote the text into
+  durable memory.
+- Ollama warmup used a different context size than the conversation request. The
+  first real answer could therefore trigger a model reload and miss the latency
+  target despite an apparently successful warmup.
+
+## Corrections
+
+- Enabled the action-free instant lane for every authenticated session in the
+  browser while preserving admin-only standard/deep business work and approval
+  boundaries.
+- Expanded safe instant conversation and micro-writing coverage while continuing
+  to reject business actions, current-price lookups, legal/medical work, client
+  records, accounting, payments, publishing, and destructive requests.
+- Split stable rain questions and creative writing from live forecasts; split
+  ordinary sale-price arithmetic from `price of` lookups.
+- Added temporary-memory protection at both intent and storage layers for
+  chat-only, do-not-save, do-not-remember, and temporary-context language.
+- Strengthened subject continuity, correction authority, exact-output handling,
+  harmless preference style, arithmetic verification, and business-data
+  non-disclosure in both API context and local conversation prompts.
+- Upgraded the fast conversational model to `qwen2.5:14b`, extended its warm lease
+  to 24 hours, and added a hidden startup script that prewarms the exact 2048-token
+  production context on the GPU.
+- Added a real-model release gate covering subject correction, preference style,
+  multi-turn arithmetic, exact formatting, leakage, and warm latency.
+
+## Verification
+
+- PASS: `npm run test:release-critical` (19/19 critical checks).
+- PASS: `npm run test:dashboard-chat` (31 browser prompts and 11 adversarial
+  fallback turns), including customer access, micro-writing, sale arithmetic,
+  and temporary-memory handling.
+- PASS: `npm run test:intent`, `npm run test:memory`, `npm run typecheck`, and
+  `npm run build`.
+- PASS: `npm run test:change-memory` (104 protected checks).
+- PASS: `npx tsx scripts/test-local-ollama-transport.ts` from `server`.
+- PASS: `npm run test:instant-chat:live-model` from `server`: 10 real
+  `qwen2.5:14b` prompts, 540 ms average, 1,182 ms maximum, corrected subject
+  preserved, natural preference, `$132` arithmetic verified, and zero business
+  leakage.
+- PASS: `ops/admin-live/Start-PhantomInstantBrain.ps1` reported
+  `Phantom Instant ready: qwen2.5:14b`; `ollama ps` showed 100% GPU, context 2048,
+  and a 24-hour lease.
+
+## Next Task
+
+Run the authenticated two-organization persistence proof in Recommended Cycle 7.

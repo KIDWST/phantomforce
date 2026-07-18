@@ -103,6 +103,7 @@ const SECRET_REDACTIONS = [
 ];
 
 const EXPLICIT_MEMORY_SAVE_PATTERN = /\b(?:remember(?: this| that)?|save (?:this|that)(?: as (?:a )?memory)?|keep (?:this|that) in memory|add (?:this|that) to (?:your )?memory)\b/i;
+const TEMPORARY_MEMORY_PATTERN = /\b(?:for|just for)\s+(?:this|the)\s+(?:chat|conversation|session)\s+only\b|\b(?:do not|don'?t)\s+(?:save|remember|store)\s+(?:this|that|it)\b|\btemporary(?:ly)?\s+(?:only|context)\b/i;
 const FUTURE_RULE_PATTERN = /\b(?:from now on|going forward|in the future|every time|next time|do it this way next time|never do this again|always (?:use|do|keep|show|write|respond|route|ask|make)|never (?:use|do|show|write|respond|route|ask|make))\b/i;
 const STABLE_PREFERENCE_PATTERN = /\b(?:(?:my|our) (?:default|preference|preferred (?:style|format|workflow|model|tool|tone)) (?:is|should be)|(?:i|we) prefer\b|(?:my|our) (?:business|company|brand|workflow|process) (?:is|uses?|requires?)\b|we use\b)/i;
 const ONE_OFF_REQUEST_PATTERN = /\b(?:fix|change|update|remove|add|build|create|generate|move|open|close|check|look at|why (?:is|does|did|was)|what happened|isn't working|not working|still broken|still offline)\b/i;
@@ -152,6 +153,7 @@ function memoryTags(value = "", category = "conversation") {
 export function shouldAiRemember(value = "") {
   const text = sanitizeMemoryText(value);
   if (!text || isFailedMemoryInteraction(text, "")) return false;
+  if (TEMPORARY_MEMORY_PATTERN.test(text)) return false;
   const explicitSave = EXPLICIT_MEMORY_SAVE_PATTERN.test(text);
   if (explicitSave) return true;
   if (/[?]\s*$/.test(text) || /^(?:why|what|when|where|who|how|can|could|would|should|is|are|do|does|did)\b/i.test(text)) return false;

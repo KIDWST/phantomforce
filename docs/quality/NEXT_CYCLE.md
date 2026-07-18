@@ -16,16 +16,17 @@ Do not restart the audit from zero unless the inventory is invalid. Continuation
 is scheduled in this same Codex task by heartbeat automation
 `continue-phantomforce-quality-program`.
 
-Cycle 5 completed the real instant-brain correction. Smart-mode casual chat now
-routes to the installed `qwen2.5:7b` local model with a compact conversation-only
-prompt, an 80-token response ceiling, a 30-minute warm lease, and no business or
-saved-memory modules. The same action-free lane is available to authenticated
-customer sessions, while standard/deep work keeps its existing role, approval,
-and provider controls. A hidden Windows logon task keeps Ollama available after
-restart. Build `phantom-live-20260718-26` passed all 19 release-critical checks,
-including chat, auth, memory, command, organization data, build, and change memory.
+Cycle 6 hardened the conversational brain through a real multi-turn audit. Smart
+casual chat now routes to `qwen2.5:14b` with a compact conversation-only prompt,
+an 80-token response ceiling, a 24-hour warm lease, and no business or saved-memory
+modules. Authenticated customers can reach that action-free lane from the browser;
+standard/deep business work keeps its existing role, approval, and provider
+controls. Temporary context is blocked from durable memory at both intent and
+storage layers. A real-model gate now verifies corrected-subject continuity,
+preference style, arithmetic, exact output, leakage, and warm latency. The final
+build number is assigned during publish after reconciling concurrent `main` work.
 
-## Recommended Cycle 6
+## Recommended Cycle 7
 
 Theme: authenticated cross-organization persistence proof.
 

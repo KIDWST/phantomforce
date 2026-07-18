@@ -3434,7 +3434,7 @@ function parseRecentConversation(value: unknown): RecentChatTurn[] {
 }
 
 function buildInstantConversationContext(turns: RecentChatTurn[]) {
-  const rule = "Answer the current casual request directly. Never volunteer ledger, pipeline, accounting, approvals, or dashboard status unless the current request explicitly asks for it.";
+  const rule = "Answer the current casual request directly. Resolve pronouns and transformations from the newest relevant turn, preserve named subjects, and treat later corrections as authoritative. Follow exact format constraints such as 'only the number' without extra framing. Never volunteer ledger, pipeline, accounting, approvals, or dashboard status unless the current request explicitly asks for it.";
   if (!turns.length) return `Fast casual chat. No business memory required. ${rule}`;
   const transcript = turns.map((turn, index) =>
     `Turn ${index + 1} user: ${turn.user}\nTurn ${index + 1} assistant: ${turn.assistant}`).join("\n");

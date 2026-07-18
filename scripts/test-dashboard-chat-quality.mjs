@@ -57,6 +57,14 @@ const casualPrompts = [
   "what are you thinking?",
   "say something funny",
   "make it funny",
+  "write one funny sentence about her",
+  "draft a friendly birthday message",
+  "create a silly name for my sandwich",
+  "fix the grammar in this sentence",
+  "what should I cook today?",
+  "plan a three-day vacation",
+  "A shirt costs 80 dollars and is 25 percent off. What's the sale price?",
+  "Remember for this chat only: my dog's name is Pixel.",
 ];
 
 const forbiddenStatus = /\b(?:ledger|pipeline|cashflow|cash flow|approvals? waiting|today's plan|right now:)\b/i;
@@ -96,7 +104,7 @@ for (const prompt of casualPrompts) {
 assert.equal(capturedBodies.length, casualPrompts.length, "all casual prompts must exercise the backend route");
 for (const body of capturedBodies) {
   assert.equal(body.route_tier, "instant");
-  assert.equal(body.requested_model, "qwen2.5:7b");
+  assert.equal(body.requested_model, "qwen2.5:14b");
   assert.equal(body.admin_model, "local_ollama");
   assert.deepEqual(body.allowed_providers, ["local_ollama"]);
   assert.equal(body.allow_provider_fallback, false);
@@ -117,12 +125,28 @@ assert.equal(followUpBody.conversation_history.at(-1)?.user, "what's your favori
 assert.match(followUpBody.conversation_history.at(-1)?.assistant || "", /favorite food/i);
 assert.ok(recentChatTurns(8).length <= 8);
 assert.equal(store.state.memory.length, 0, "casual questions must not become durable memory");
+assert.equal(capturedBodies.at(-1).task_type, "chat", "chat-only facts must remain temporary conversation, not durable memory");
+
+const adminSession = ctx.session;
+ctx.session = { role: "client", name: "Customer One", ws: "customer-one" };
+const customerRequestCount = capturedBodies.length;
+const customerChat = await handleSmartCommand("tell me a joke about breakfast");
+assert.match(customerChat.say, /Direct answer/);
+assert.equal(capturedBodies.length, customerRequestCount + 1, "authenticated customers must reach the instant brain from the browser");
+assert.equal(capturedBodies.at(-1).route_tier, "instant");
+assert.deepEqual(capturedBodies.at(-1).allowed_providers, ["local_ollama"]);
+ctx.session = adminSession;
 
 await handleSmartCommand("what is in my accounting ledger?");
 const accountingBody = capturedBodies.at(-1);
 assert.equal(accountingBody.route_tier, "standard");
 assert.match(accountingBody.business_summary, /Business Manager workspace/i);
 assert.deepEqual(accountingBody.module_data.map((entry) => entry.module), ["active_business", "recent_conversation", "money"]);
+
+await handleSmartCommand("write a client proposal");
+const proposalBody = capturedBodies.at(-1);
+assert.equal(proposalBody.route_tier, "standard", "business artifacts must not use the casual instant lane");
+assert.notDeepEqual(proposalBody.allowed_providers, ["local_ollama"]);
 
 store.state.chatHistory = [];
 rememberConversation({

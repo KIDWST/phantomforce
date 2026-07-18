@@ -20,6 +20,7 @@ const REMINDER = /\b(remind me|reminder|schedule (this|that|it)\b|check this eve
 const AUTOMATION = /\b(automation|automate|workflow|autopilot|recurring|auto[- ]?follow|auto[- ]?post)\b/i;
 const APPROVAL = /\b(approve|approval|sign off|waiting on me|pending|review queue|needs my call)\b/i;
 const MEMORY = /\b(remember|save this memory|make sure you remember|from now on|always remember|forget this)\b/i;
+const TEMPORARY_CONTEXT = /\b(?:for|just for)\s+(?:this|the)\s+(?:chat|conversation|session)\s+only\b|\bdo not save (?:this|that)\b/i;
 /* "today" alone is NOT a status request — "I'm overwhelmed by everything
    today" is a person talking, not a report query. Only real status phrasing
    counts. */
@@ -32,7 +33,7 @@ const AGENT_RUN = /\brun\s+(a\s+|an\s+|the\s+)?(business\s+snapshot|snapshot\s+r
 /* live-world facts: these are QUESTIONS to answer (or route to a live brain),
    never tasks, plans, or board summaries — "what's the weather today" must
    not be hijacked by the \btoday\b status keyword */
-const CURRENT_INFO = /\b(weather|forecast|temperature|rain|snow|humidity|news|headlines?|stock|crypto|bitcoin|price of|exchange rate|score|game (last night|today|tonight)|traffic|time (is it|in)\b|what day is|sports)\b/i;
+const CURRENT_INFO = /\b(weather|forecast|temperature|humidity|news|headlines?|stock|crypto|bitcoin|price of|exchange rate|score|game (last night|today|tonight)|traffic|time (is it|in)\b|what day is|sports)\b|\b(?:is it|will it|did it|chance of|expected to)\b.{0,24}\b(?:rain(?:ing)?|snow(?:ing)?)\b|\b(?:rain|snow)\b.{0,24}\b(?:today|tonight|tomorrow|now|this week|this weekend)\b/i;
 /* Phantom Loop — a CHAT ROUTING toggle only (route this reply through another
    model, then bring the answer back). It is never a build packet, task, plan,
    or Site Studio action — explicit enable/disable phrasing only. */
@@ -192,6 +193,9 @@ export function classifyPhantomIntent(raw = "") {
   }
   if (CAPABILITY.test(text)) {
     return { ...result, primaryIntent: "capability", confidence: 0.9, reasonCode: "capability_question" };
+  }
+  if (MEMORY.test(text) && TEMPORARY_CONTEXT.test(text)) {
+    return { ...result, primaryIntent: "chat", confidence: 0.94, reasonCode: "temporary_conversation_context" };
   }
   if (MEMORY.test(text)) {
     return { ...result, primaryIntent: "memory_update", confidence: confidenceFor("memory_update", text), reasonCode: "memory_keyword" };
