@@ -205,7 +205,53 @@ for (const prompt of [
 ]) rows.push(await ask(customerToken, prompt, rollover));
 assert.doesNotMatch(rows.at(-1)!.answer, forbidden);
 assert.doesNotMatch(rows.at(-1)!.answer, /^(?:yes|did you know|surprising fact|fun fact)\b/i);
+assert.doesNotMatch(rows.at(-1)!.answer, /did you know|surprising fact|fun fact/i);
 assert.equal((rows.at(-1)!.answer.match(/[.!?]+/g) || []).length, 1, "no-introduction request must return one fact only");
+
+const corrections: Turn[] = [];
+rows.push(await ask(adminToken, "For this chat only: the meeting is Tuesday at 2 PM in Room 4.", corrections));
+rows.push(await ask(adminToken, "Correction: it is Thursday at 3 PM in Room 7.", corrections));
+const correctedMeeting = await ask(adminToken, "What are the final day, time, and room? Answer as DAY | TIME | ROOM.", corrections);
+rows.push(correctedMeeting);
+assert.match(correctedMeeting.answer, /Thursday\s*\|\s*3\s*PM\s*\|\s*Room\s*7/i);
+assert.doesNotMatch(correctedMeeting.answer, /Tuesday|2\s*PM|Room\s*4/i);
+
+const reasoning: Turn[] = [];
+const middleBox = await ask(customerToken, "The red box is left of the blue box. The blue box is left of the green box. Which box is in the middle? Answer only the color.", reasoning);
+rows.push(middleBox);
+assert.match(middleBox.answer.trim(), /^blue[.!]?$/i);
+const youngest = await ask(customerToken, "Ava is older than Ben. Ben is older than Cara. Who is youngest? Name only.", reasoning);
+rows.push(youngest);
+assert.match(youngest.answer.trim(), /^Cara[.!]?$/i);
+const prime = await ask(customerToken, "Answer only yes or no: is 17 a prime number?", reasoning);
+rows.push(prime);
+assert.match(prime.answer.trim(), /^yes[.!]?$/i);
+
+const formatting: Turn[] = [];
+const fruitList = await ask(adminToken, "Give exactly three fruits in alphabetical order, one per line, no bullets.", formatting);
+rows.push(fruitList);
+const fruits = fruitList.answer.split(/\r?\n/).map((value) => value.trim()).filter(Boolean);
+assert.equal(fruits.length, 3);
+assert.deepEqual(fruits, [...fruits].sort((a, b) => a.localeCompare(b, "en", { sensitivity: "base" })));
+const fiveWords = await ask(adminToken, "Write exactly five words about a rainy city.", formatting);
+rows.push(fiveWords);
+assert.equal(fiveWords.answer.replace(/[.!?]+$/g, "").trim().split(/\s+/).length, 5);
+const repeated = await ask(adminToken, "Repeat this exactly: cobalt moon 47", formatting);
+rows.push(repeated);
+assert.equal(repeated.answer, "cobalt moon 47");
+const marsPremise = await ask(adminToken, "What year did humans first land on Mars? If the premise is false, say so.", formatting);
+rows.push(marsPremise);
+assert.match(marsPremise.answer, /(?:have not|haven't|not yet|no humans|premise is false)/i);
+
+const entities: Turn[] = [];
+rows.push(await ask(customerToken, "For this chat only: my cats are Comet and Luna. Comet sleeps on the keyboard; Luna steals socks.", entities));
+const sockCat = await ask(customerToken, "Which one steals socks? Name only.", entities);
+rows.push(sockCat);
+assert.match(sockCat.answer.trim(), /^Luna[.!]?$/i);
+rows.push(await ask(customerToken, "Actually, switch those habits: Comet steals socks and Luna sleeps on the keyboard.", entities));
+const correctedSockCat = await ask(customerToken, "Now which one steals socks? Name only.", entities);
+rows.push(correctedSockCat);
+assert.match(correctedSockCat.answer.trim(), /^Comet[.!]?$/i);
 
   console.log(JSON.stringify({
     ok: true,
@@ -220,6 +266,10 @@ assert.equal((rows.at(-1)!.answer.match(/[.!?]+/g) || []).length, 1, "no-introdu
     topicSwitchVerified: true,
     arithmeticVerified: true,
     contextRolloverVerified: true,
+    correctionsVerified: true,
+    reasoningVerified: true,
+    exactFormattingVerified: true,
+    falsePremiseVerified: true,
   }, null, 2));
 } finally {
   ownedServer?.kill();

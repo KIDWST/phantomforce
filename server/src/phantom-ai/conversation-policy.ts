@@ -10,7 +10,11 @@ const BUSINESS_TASKS = new Set([
   "plan", "brainstorm", "feedback", "memory_update", "run_agent",
 ]);
 const INSTANT_TASKS = new Set(["identity", "capability", "question", "chat"]);
-const INSTANT_BLOCKLIST = /\b(?:debug|code|research|strategy|proposal|website|site|content|video|image|media|schedule|automation|task|client|customer|lead|transaction|accounting|bank|invoice|payment|security|deploy|send|post|upload|delete|weather|forecast|current|latest|stock|law|legal|medical|diagnosis|contract|tenant|isolation|phantomforce)\b|\bprice\s+of\b/i;
+const INSTANT_ALWAYS_BLOCKED = /\b(?:weather|forecast|current|latest|stock|crypto|exchange rate|diagnos(?:e|is)|medical advice|legal advice)\b|\bprice\s+of\b/i;
+const INSTANT_BUSINESS_ACTION = /\b(?:build|create|draft|write|fix|debug|code|implement|research|plan|strategize|design|make|generate|schedule|automate|review|open)\b.{0,48}\b(?:proposal|website|site|automation|task|client|customer|lead|transaction|accounting|invoice|payment|security scan|contract|tenant|organization|phantomforce)\b|\b(?:generate|create|edit|enhance|upload|publish|remove (?:the )?background)\b.{0,32}\b(?:content|video|image|media)\b/i;
+const INSTANT_EXTERNAL_ACTION = /(?:^|\b(?:please|can you|could you|would you|will you|i need you to|go ahead and)\s+)(?:deploy|delete|send|post|upload|publish)\b/i;
+const INSTANT_PRIVATE_BUSINESS = /\b(?:my|our|this)\s+(?:business|company|workspace|proposal|website|site|automation|task|client|customer|lead|transaction|accounting|bank(?: account)?|invoice|payment|security|contract|tenant|organization)\b/i;
+const INSTANT_DEEP_REASONING = /\b(?:strategy|strategic|think through|reason through|roadmap|business model|moat|positioning|prioriti[sz]e|critique)\b|\bcompare(?!\s+(?:them|these|those|it)\b)/i;
 
 const MODULE_RELEVANCE: Record<string, RegExp> = {
   money: /\b(?:money|cash|bank|card|transaction|accounting|ledger|invoice|payment|revenue|expense|profit|budget|tax|proposal|quote)\b/i,
@@ -35,7 +39,11 @@ export function isSafeInstantConversationRequest(input: { task_type: string; use
   const text = input.user_request.trim();
   if (!INSTANT_TASKS.has(input.task_type)) return false;
   if (!text || text.length > 600 || text.split(/\s+/).filter(Boolean).length > 90) return false;
-  return !INSTANT_BLOCKLIST.test(text);
+  return !INSTANT_ALWAYS_BLOCKED.test(text)
+    && !INSTANT_BUSINESS_ACTION.test(text)
+    && !INSTANT_EXTERNAL_ACTION.test(text)
+    && !INSTANT_PRIVATE_BUSINESS.test(text)
+    && !INSTANT_DEEP_REASONING.test(text);
 }
 
 export function filterConversationModules<T extends ConversationContextModule>(

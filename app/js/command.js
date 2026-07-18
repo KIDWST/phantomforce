@@ -94,9 +94,13 @@ const PRIVATE_BACKEND_MODEL_BY_ALIAS = Object.freeze({
 const INSTANT_CHAT_MODEL = "qwen2.5:14b";
 const INSTANT_CHAT_MAX_PROVIDER_MS = 4500;
 const INSTANT_CHAT_ALLOWED_INTENTS = new Set(["identity", "capability", "question", "chat"]);
-const INSTANT_CHAT_BLOCKLIST = /\b(?:debug|code|research|strategy|proposal|website|site|content|video|image|media|schedule|automation|task|client|customer|lead|transaction|accounting|bank|invoice|payment|security|deploy|send|post|upload|delete|weather|forecast|current|latest|stock|law|legal|medical|diagnosis|contract|tenant|isolation|phantomforce)\b|\bprice\s+of\b/i;
+const INSTANT_CHAT_ALWAYS_BLOCKED = /\b(?:weather|forecast|current|latest|stock|crypto|exchange rate|diagnos(?:e|is)|medical advice|legal advice)\b|\bprice\s+of\b/i;
+const INSTANT_CHAT_BUSINESS_ACTION = /\b(?:build|create|draft|write|fix|debug|code|implement|research|plan|strategize|design|make|generate|schedule|automate|review|open)\b.{0,48}\b(?:proposal|website|site|automation|task|client|customer|lead|transaction|accounting|invoice|payment|security scan|contract|tenant|organization|phantomforce)\b|\b(?:generate|create|edit|enhance|upload|publish|remove (?:the )?background)\b.{0,32}\b(?:content|video|image|media)\b/i;
+const INSTANT_CHAT_EXTERNAL_ACTION = /(?:^|\b(?:please|can you|could you|would you|will you|i need you to|go ahead and)\s+)(?:deploy|delete|send|post|upload|publish)\b/i;
+const INSTANT_CHAT_PRIVATE_BUSINESS = /\b(?:my|our|this)\s+(?:business|company|workspace|proposal|website|site|automation|task|client|customer|lead|transaction|accounting|bank(?: account)?|invoice|payment|security|contract|tenant|organization)\b/i;
 const INSTANT_CHAT_SIGNAL = /\b(?:favorite|do you like|would you rather|tell me a joke|joke|how are you|what'?s your|what is your|who are you|are you|can you|what is \d|what'?s \d)\b/i;
 const DEEP_THINKING_SIGNAL = /\b(strategy|strategic|think through|reason through|break down|roadmap|plan|growth|business model|moat|positioning|prioriti[sz]e|compare|critique|diagnose|why is|why does|what should|how should)\b/i;
+const INSTANT_DEEP_EXCLUSION = /\b(?:strategy|strategic|think through|reason through|roadmap|business model|moat|positioning|prioriti[sz]e|critique)\b|\bcompare(?!\s+(?:them|these|those|it)\b)/i;
 
 function selectedProviderIds(settings) {
   const selected = Array.isArray(settings.selectedProviders) && settings.selectedProviders.length
@@ -115,7 +119,8 @@ function isInstantChatRequest(raw, intent) {
   if (!text || !INSTANT_CHAT_ALLOWED_INTENTS.has(intent.primaryIntent)) return false;
   if (intent.needsLiveData || intent.requiresAdminApproval || intent.shouldCreateTask || intent.shouldCreateAutomation) return false;
   if (text.length > 600 || countWords(text) > 90) return false;
-  if (INSTANT_CHAT_BLOCKLIST.test(text)) return false;
+  if (INSTANT_DEEP_EXCLUSION.test(text)) return false;
+  if (INSTANT_CHAT_ALWAYS_BLOCKED.test(text) || INSTANT_CHAT_BUSINESS_ACTION.test(text) || INSTANT_CHAT_EXTERNAL_ACTION.test(text) || INSTANT_CHAT_PRIVATE_BUSINESS.test(text)) return false;
   return INSTANT_CHAT_SIGNAL.test(text)
     || ["chat", "question"].includes(intent.primaryIntent);
 }
@@ -221,6 +226,7 @@ function memoryMatchesRequest(memory, raw) {
 
 function needsBusinessContext(raw, intent) {
   if (intent?.requiresAdminApproval || intent?.shouldCreateTask || intent?.shouldCreateAutomation) return true;
+  if (isInstantChatRequest(raw, intent)) return false;
   return BUSINESS_CONTEXT_TERMS.test(String(raw || ""));
 }
 

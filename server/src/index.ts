@@ -8410,7 +8410,8 @@ app.post("/phantom-ai/chat", async (request, reply) => {
   const allowProviderFallback = parseAllowProviderFallback(body.allow_provider_fallback, adminRouteTier);
   const allowedAdminProviders = parseAllowedAdminProviders(body.allowed_providers);
   const recentConversation = parseRecentConversation(body.conversation_history);
-  const businessContextRelevant = needsBusinessContext(normalized.user_request, normalized.task_type);
+  const instantConversation = adminRouteTier === "instant" && isSafeInstantConversationRequest(normalized);
+  const businessContextRelevant = !instantConversation && needsBusinessContext(normalized.user_request, normalized.task_type);
   normalized.module_data = filterConversationModules(normalized.module_data, normalized.user_request, normalized.task_type);
   if (!businessContextRelevant) {
     normalized.business_summary = "General conversation. Business workspace status is intentionally excluded unless the current request asks for it.";
@@ -8486,7 +8487,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
     return privacyFirstLocationReply;
   }
 
-  if (adminRouteTier === "instant" && isSafeInstantConversationRequest(normalized)) {
+  if (instantConversation) {
     const toolReply = buildInstantChatToolReply(normalized.user_request, recentConversation);
     if (toolReply) {
       return {

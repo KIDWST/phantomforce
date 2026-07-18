@@ -63,5 +63,12 @@ assert.equal(
   ),
   "Octopuses can open jars from the outside.",
 );
+assert.equal(
+  enforceInstantOutputConstraints(
+    "One fact, no introduction.",
+    "Both are smart; both are unusual, but did you know octopuses have three hearts.",
+  ),
+  "Octopuses have three hearts.",
+);
 
 console.log("instant chat deterministic tool checks passed");

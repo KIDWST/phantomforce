@@ -62,5 +62,22 @@ assert.equal(isSafeInstantConversationRequest({ task_type: "question", user_requ
 assert.equal(isSafeInstantConversationRequest({ task_type: "chat", user_request: "write a client proposal" }), false);
 assert.equal(isSafeInstantConversationRequest({ task_type: "chat", user_request: "create an invoice" }), false);
 assert.equal(isSafeInstantConversationRequest({ task_type: "question", user_request: "what is the price of bitcoin?" }), false);
+assert.equal(isSafeInstantConversationRequest({ task_type: "question", user_request: "what is a website?" }), true);
+assert.equal(isSafeInstantConversationRequest({ task_type: "question", user_request: "why do images look blurry?" }), true);
+assert.equal(isSafeInstantConversationRequest({ task_type: "question", user_request: "how does a bank work?" }), true);
+assert.equal(isSafeInstantConversationRequest({ task_type: "question", user_request: "what is an invoice?" }), true);
+assert.equal(isSafeInstantConversationRequest({ task_type: "chat", user_request: "explain what a contract is" }), true);
+assert.equal(isSafeInstantConversationRequest({ task_type: "question", user_request: "what is a blog post?" }), true);
+assert.equal(isSafeInstantConversationRequest({ task_type: "question", user_request: "how does uploading work?" }), true);
+assert.equal(isSafeInstantConversationRequest({ task_type: "chat", user_request: "generate an image of a city" }), false);
+assert.equal(isSafeInstantConversationRequest({ task_type: "chat", user_request: "build a website for my company" }), false);
+assert.equal(isSafeInstantConversationRequest({ task_type: "question", user_request: "show my invoice" }), false);
+assert.equal(isSafeInstantConversationRequest({ task_type: "question", user_request: "what is my company name?" }), false);
+assert.equal(isSafeInstantConversationRequest({ task_type: "question", user_request: "show my bank account" }), false);
+assert.equal(isSafeInstantConversationRequest({ task_type: "chat", user_request: "send this email" }), false);
+assert.equal(isSafeInstantConversationRequest({ task_type: "chat", user_request: "please delete that file" }), false);
+assert.equal(isSafeInstantConversationRequest({ task_type: "question", user_request: "help me think through a growth strategy" }), false);
+assert.equal(isSafeInstantConversationRequest({ task_type: "chat", user_request: "compare them in one sentence" }), true);
+assert.equal(isSafeInstantConversationRequest({ task_type: "question", user_request: "compare CRM platforms for a growing agency" }), false);
 
 console.log(`instant chat fallback checks passed (${turns.length + directPrompts.length} adversarial turns)`);

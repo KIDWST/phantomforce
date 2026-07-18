@@ -65,6 +65,13 @@ const casualPrompts = [
   "plan a three-day vacation",
   "A shirt costs 80 dollars and is 25 percent off. What's the sale price?",
   "Remember for this chat only: my dog's name is Pixel.",
+  "what is a website?",
+  "why do images look blurry?",
+  "how does a bank work?",
+  "what is an invoice?",
+  "explain what a contract is",
+  "what is a blog post?",
+  "how does uploading work?",
 ];
 
 const forbiddenStatus = /\b(?:ledger|pipeline|cashflow|cash flow|approvals? waiting|today's plan|right now:)\b/i;
@@ -125,7 +132,8 @@ assert.equal(followUpBody.conversation_history.at(-1)?.user, "what's your favori
 assert.match(followUpBody.conversation_history.at(-1)?.assistant || "", /favorite food/i);
 assert.ok(recentChatTurns(8).length <= 8);
 assert.equal(store.state.memory.length, 0, "casual questions must not become durable memory");
-assert.equal(capturedBodies.at(-1).task_type, "chat", "chat-only facts must remain temporary conversation, not durable memory");
+const chatOnlyMemoryBody = capturedBodies.find((body) => /Remember for this chat only/i.test(body.message));
+assert.equal(chatOnlyMemoryBody?.task_type, "chat", "chat-only facts must remain temporary conversation, not durable memory");
 
 const adminSession = ctx.session;
 ctx.session = { role: "client", name: "Customer One", ws: "customer-one" };
