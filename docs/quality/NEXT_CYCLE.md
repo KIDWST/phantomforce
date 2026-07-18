@@ -23,8 +23,8 @@ modules. Authenticated customers can reach that action-free lane from the browse
 standard/deep business work keeps its existing role, approval, and provider
 controls. Temporary context is blocked from durable memory at both intent and
 storage layers. A real-model gate now verifies corrected-subject continuity,
-preference style, arithmetic, exact output, leakage, and warm latency. The final
-build number is assigned during publish after reconciling concurrent `main` work.
+preference style, arithmetic, exact output, leakage, and warm latency. Build
+`phantom-live-20260718-27` is the reconciled publish marker for this cycle.
 
 ## Recommended Cycle 7
 

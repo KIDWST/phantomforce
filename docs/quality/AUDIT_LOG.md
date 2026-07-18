@@ -622,6 +622,7 @@ Run the authenticated two-organization persistence proof in Recommended Cycle 6.
   production context on the GPU.
 - Added a real-model release gate covering subject correction, preference style,
   multi-turn arithmetic, exact formatting, leakage, and warm latency.
+- Cache-busted the application as `phantom-live-20260718-27`.
 
 ## Verification
 
