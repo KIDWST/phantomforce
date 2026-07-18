@@ -16,16 +16,16 @@ Do not restart the audit from zero unless the inventory is invalid. Continuation
 is scheduled in this same Codex task by heartbeat automation
 `continue-phantomforce-quality-program`.
 
-Cycle 10 made identity and formatting authoritative. Phantom no longer improvises
-which model is running: identity and fast-lane model questions resolve from route
-truth. Generic engagement questions are removed from straightforward context
-acknowledgments, and exact word-count requests are corrected deterministically.
-The authenticated gate now drives 67 requests and additionally verifies practical
-code help, debugging, sustained Spanish conversation, fictional DOI handling, and
-refusal to invent inaccessible quotations. The public app remains build
+Cycle 11 fixed recency under context pressure. Browser history could provide about
+7,500 characters while the local transport retained only the first 5,000, allowing
+long old replies to cut off the newest correction and final behavior rules. Instant
+context now packs the active topic newest-first inside a 4,800-character budget,
+always preserving the newest turn and instruction tail while dropping oldest
+overflow first. The authenticated gate now drives 68 requests and proves a newest
+correction survives eight oversized prior turns. The public app remains build
 `phantom-live-20260718-29`; this cycle changes the live server brain.
 
-## Recommended Cycle 11
+## Recommended Cycle 12
 
 Theme: authenticated cross-organization persistence proof.
 

@@ -195,6 +195,7 @@ import { buildHermesInteractionMemoryPreview } from "./phantom-ai/hermes-interac
 import { recallHermesInteractionMemory } from "./phantom-ai/hermes-interaction-recall.js";
 import { buildInstantChatFallbackReply } from "./phantom-ai/instant-chat-fallback.js";
 import { buildInstantChatToolReply, enforceInstantOutputConstraints, instantResponseTokenBudget } from "./phantom-ai/instant-chat-tools.js";
+import { buildInstantConversationContext, type InstantConversationTurn } from "./phantom-ai/instant-chat-context.js";
 import { filterConversationModules, isSafeInstantConversationRequest, needsBusinessContext } from "./phantom-ai/conversation-policy.js";
 import { buildOpsDashboardContext } from "./phantom-ai/ops-context.js";
 import { buildAgentWorkforceStatus } from "./phantom-ai/agent-workforce.js";
@@ -3427,10 +3428,7 @@ function buildModelRouterRequestFromBody(
   };
 }
 
-type RecentChatTurn = {
-  user: string;
-  assistant: string;
-};
+type RecentChatTurn = InstantConversationTurn;
 
 function parseRecentConversation(value: unknown): RecentChatTurn[] {
   if (!Array.isArray(value)) return [];
@@ -3449,22 +3447,6 @@ function parseRecentConversation(value: unknown): RecentChatTurn[] {
         .slice(0, 520);
       return user && assistant ? [{ user, assistant }] : [];
     });
-}
-
-function buildInstantConversationContext(turns: RecentChatTurn[]) {
-  const rule = "Answer the current casual request directly. Resolve pronouns and transformations from the newest relevant turn, preserve named subjects, and treat later corrections as authoritative. Follow exact format constraints such as 'only the number' without extra framing. Do not append a follow-up question unless missing information prevents a useful answer. Never volunteer ledger, pipeline, accounting, approvals, or dashboard status unless the current request explicitly asks for it.";
-  const topicReset = /\b(?:new topic|switch(?:ing)? topics?|change(?:ing)? (?:the )?subject|unrelated question)\b/i;
-  let activeTurns = turns;
-  for (let index = turns.length - 1; index >= 0; index -= 1) {
-    if (topicReset.test(turns[index].user)) {
-      activeTurns = turns.slice(index);
-      break;
-    }
-  }
-  if (!activeTurns.length) return `Fast casual chat. No business memory required. ${rule}`;
-  const transcript = activeTurns.map((turn, index) =>
-    `Turn ${index + 1} user: ${turn.user}\nTurn ${index + 1} assistant: ${turn.assistant}`).join("\n");
-  return `Fast casual chat. The following is temporary recent conversation from the active topic, not saved memory. Use it only to resolve references such as why, that, or tell me more.\n${transcript}\n${rule}`;
 }
 
 function buildMemoryScopeProof(normalized: {

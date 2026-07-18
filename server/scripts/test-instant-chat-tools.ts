@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 
 import { buildInstantChatToolReply, enforceInstantOutputConstraints, instantResponseTokenBudget } from "../src/phantom-ai/instant-chat-tools.js";
+import { buildInstantConversationContext, MAX_INSTANT_CONTEXT_CHARS } from "../src/phantom-ai/instant-chat-context.js";
 
 const ticketTurns = [
   { user: "A ticket is 45 dollars. Apply a 20 percent discount.", assistant: "The discounted price is $36." },
@@ -110,5 +111,24 @@ assert.equal(instantResponseTokenBudget("Explain rainbows in about 120 words."),
 assert.equal(instantResponseTokenBudget("Give exactly 5 bullet points."), 188);
 assert.equal(instantResponseTokenBudget("Write a detailed article about rainbows."), 320);
 assert.equal(instantResponseTokenBudget("Write exactly 900 words."), 592);
+
+const oversizedTurns = Array.from({ length: 8 }, (_, index) => ({
+  user: `user-${index + 1} ${"u".repeat(400)}`,
+  assistant: `assistant-${index + 1} ${"a".repeat(500)}`,
+}));
+const packedContext = buildInstantConversationContext(oversizedTurns);
+assert.ok(packedContext.length <= MAX_INSTANT_CONTEXT_CHARS);
+assert.match(packedContext, /user-8/);
+assert.match(packedContext, /assistant-8/);
+assert.match(packedContext, /later corrections as authoritative/);
+assert.doesNotMatch(packedContext, /user-1/);
+
+const resetContext = buildInstantConversationContext([
+  { user: "old-topic", assistant: "old-answer" },
+  { user: "New topic: blue moons", assistant: "new-answer" },
+  { user: "tell me more", assistant: "newest-answer" },
+]);
+assert.doesNotMatch(resetContext, /old-topic|old-answer/);
+assert.match(resetContext, /blue moons|newest-answer/);
 
 console.log("instant chat deterministic tool checks passed");

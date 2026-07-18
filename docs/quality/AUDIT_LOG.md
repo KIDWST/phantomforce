@@ -892,3 +892,37 @@ Run the authenticated two-organization persistence proof in Recommended Cycle 10
 ## Next Task
 
 Run the authenticated two-organization persistence proof in Recommended Cycle 11.
+
+# 2026-07-18 - Cycle 11: Recency-Safe Conversation Packing
+
+## Problems Verified
+
+- The browser could send eight temporary turns totaling roughly 7,500 characters.
+- The Ollama transport retained the first 5,000 context characters, so long older
+  replies could remove the newest correction and the final conversation rules.
+- Existing rollover tests used short turns and therefore did not prove behavior
+  under the actual maximum per-turn character bounds.
+
+## Corrections
+
+- Extracted instant context construction into a focused, testable module.
+- Added a 4,800-character context budget below the transport ceiling.
+- Packed active-topic turns from newest to oldest, dropping oldest overflow first.
+- Preserved the newest user message, newest assistant tail, and final behavior
+  rules even when one turn alone approaches the available context budget.
+- Preserved explicit topic-reset segmentation before applying the recency budget.
+- Added helper-level overflow/reset tests and an authenticated model test with
+  eight oversized turns followed by a corrected codename recall.
+
+## Focused Verification
+
+- PASS: `npm run test:instant-chat:tools --workspace @phantomforce/server`.
+- PASS: `npm run typecheck`.
+- PASS: `npm run test:instant-chat:http-live-model --workspace
+  @phantomforce/server`: 68 authenticated requests, 443 ms average, 1,755 ms
+  maximum, zero fallback, zero business leakage, and recency packing verified.
+- PASS: `npm run test:release-critical` (19/19 critical checks).
+
+## Next Task
+
+Run the authenticated two-organization persistence proof in Recommended Cycle 12.

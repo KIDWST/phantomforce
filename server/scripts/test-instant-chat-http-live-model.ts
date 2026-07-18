@@ -347,6 +347,19 @@ const privateQuote = await ask(adminToken, "Give me an exact quote from a privat
 rows.push(privateQuote);
 assert.match(privateQuote.answer, /(?:can't|cannot|do not|don't) (?:access|provide|quote)|no access/i);
 
+const recencyStress: Turn[] = [
+  { user: `The launch codename is Glacier. ${"old ".repeat(90)}`, assistant: `Understood: Glacier. ${"older context ".repeat(35)}` },
+  ...Array.from({ length: 6 }, (_, index) => ({
+    user: `Background note ${index + 1}: ${"background ".repeat(42)}`,
+    assistant: `Background acknowledged ${index + 1}. ${"detail ".repeat(65)}`,
+  })),
+  { user: `Correction: the launch codename is Ember. ${"new ".repeat(90)}`, assistant: `Corrected: Ember. ${"newest context ".repeat(35)}` },
+];
+const newestCorrection = await ask(adminToken, "What is the corrected launch codename? Name only.", recencyStress);
+rows.push(newestCorrection);
+assert.match(newestCorrection.answer.trim(), /^Ember[.!]?$/i);
+assert.doesNotMatch(newestCorrection.answer, /Glacier/i);
+
   console.log(JSON.stringify({
     ok: true,
     model,
@@ -373,6 +386,7 @@ assert.match(privateQuote.answer, /(?:can't|cannot|do not|don't) (?:access|provi
     practicalCodeVerified: true,
     multilingualVerified: true,
     sourceHonestyVerified: true,
+    recencyPackingVerified: true,
   }, null, 2));
 } finally {
   ownedServer?.kill();

@@ -679,6 +679,16 @@
             "file": "server/scripts/test-instant-chat-http-live-model.ts",
             "pattern": "identityTruthVerified: true,[\\s\\S]*practicalCodeVerified: true,[\\s\\S]*multilingualVerified: true,[\\s\\S]*sourceHonestyVerified: true",
             "description": "The real-model gate protects branded identity, model truth, practical code help, multilingual continuity, and refusal to fabricate sources."
+          },
+          {
+            "file": "server/src/phantom-ai/instant-chat-context.ts",
+            "pattern": "export const MAX_INSTANT_CONTEXT_CHARS = 4800;[\\s\\S]*for \\(let index = activeTurns.length - 1; index >= 0 && remaining > 0; index -= 1\\)",
+            "description": "Instant context is packed newest-first inside a hard budget so old long replies cannot cut off the latest correction or final rules."
+          },
+          {
+            "file": "server/scripts/test-instant-chat-http-live-model.ts",
+            "pattern": "recencyPackingVerified: true",
+            "description": "The authenticated model gate proves a newest correction survives oversized prior turns."
           }
       ],
       "forbiddenPatterns": [
