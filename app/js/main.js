@@ -6,7 +6,7 @@ import {
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator, resolveApproval,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260719-context-1";
+} from "./store.js?v=phantom-live-20260719-storefix-1";
 import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260718-4";
 import { WORKSPACE_DEFS, missionWidgets, esc, DEPARTMENTS } from "./workspaces.js?v=phantom-live-20260718-3";
 import { createPhantomCharacter } from "./character.js?v=phantom-live-20260718-3";
@@ -34,7 +34,7 @@ import {
 } from "./orgs.js?v=phantom-live-20260718-3";
 import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260718-3";
 import { assetsAvailable } from "./orgs.js?v=phantom-live-20260718-3";
-import { renderPhantomStore } from "./phantomstore.js?v=phantom-live-20260718-3";
+import { renderPhantomStore } from "./phantomstore.js?v=phantom-live-20260719-storefix-1";
 import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260718-3";
 // PhantomPlay V2 platform shell (Home/Solo/Friends/Workspace/Dev Hub) - opt-in
 // while it hardens: set localStorage "pf.phantomplay.v2" = "1" (the V2 shell has

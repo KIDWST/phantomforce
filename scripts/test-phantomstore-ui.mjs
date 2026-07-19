@@ -14,6 +14,10 @@ const backendTestSource = readFileSync(new URL("../server/scripts/test-phantomst
 
 assert.match(appHtml, /phantomstore\.css/u, "App shell must load PhantomStore styles.");
 assert.match(mainSource, /renderPhantomStore/u, "Main app must import PhantomStore renderer.");
+const mainStoreVersion = mainSource.match(/\.\/store\.js\?v=([^"]+)/u)?.[1];
+const phantomStoreVersion = storeSource.match(/\.\/store\.js\?v=([^"]+)/u)?.[1];
+assert.ok(mainStoreVersion && phantomStoreVersion && mainStoreVersion === phantomStoreVersion, "PhantomStore must import the same store.js build as the app shell so auth/session state is shared.");
+assert.match(mainSource, new RegExp(`\\.\\/phantomstore\\.js\\?v=${mainStoreVersion.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "u"), "Main app must cache-bust PhantomStore with the current shared store build.");
 /* Tolerates extra nav-entry properties (e.g. dept) added by other workstreams;
    the invariant is the id/label/icon/ws quadruple, not the exact object shape. */
 assert.match(mainSource, /\{\s*id:\s*"phantomstore",\s*label:\s*"PhantomStore",\s*icon:\s*"spark",\s*ws:\s*"phantomstore"[^}]*\}/u, "Sidebar must expose PhantomStore as its own clearly labeled workspace.");
