@@ -1503,6 +1503,19 @@ role-restricted navigation, and authorization-error recovery in Cycle 21.
 - PASS: `npm run test:change-memory` (157 assertions).
 - PASS: `git diff --check`.
 
+## Deployment Verification
+
+- Pushed `c881f7a0` to `origin/main` and synced the canonical
+  `deployments\phantomforce-live` checkout.
+- PASS: strict doctor aligned source, origin, manifest, UI server, and Hermes at
+  `c881f7a0`; public admin remained on `phantom-live-20260718-37` because this
+  correction changed backend context selection, not browser assets.
+- PASS: deployed live-model gate completed 90 requests at 539 ms average and
+  2,098 ms maximum with zero fallback and zero business leakage; natural
+  follow-up and named-topic-return checks remained true.
+- PASS: manually triggered `PhantomForce Admin Main Sync` returned result `0`;
+  the second strict doctor confirmed no old checkout or backend was resurrected.
+
 ## Next Task
 
 Exercise the complete browser account lifecycle and authorization-error
