@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <meta name="theme-color" content="#02060a" />
+    <title>PhantomForce</title>
+    <meta name="description" content="PhantomForce — the interface for a working organization." />
+    <!-- phantom.css carries the workspace-content design language (records,
+         chips, lanes, forms) that every desk renderer emits. os.css is the
+         organism around it: the Floor, Focus, Threadline, Desk, and Voice. -->
+    <link rel="stylesheet" href="../phantom.css" />
+    <link rel="stylesheet" href="os.css" />
+  </head>
+  <body class="os-body">
+    <!-- ========================= access gate ========================= -->
+    <div class="os-gate" data-gate hidden>
+      <div class="os-gate-card">
+        <p class="os-gate-word">PHANTOMFORCE</p>
+        <h1>One intelligence.<br />The whole organization.</h1>
+        <div class="os-gate-options">
+          <button class="os-gate-opt" data-enter="admin">
+            <b>Enter as Owner</b>
+            <i>Jordan — the operator's seat. Every workspace, every decision.</i>
+          </button>
+          <button class="os-gate-opt" data-enter="client">
+            <b>Enter as Client</b>
+            <i>Test Client — your organization as PhantomForce runs it for you.</i>
+          </button>
+        </div>
+        <p class="os-gate-note">Local preview gate. In production, sign-in happens at the private gateway before this surface loads.</p>
+      </div>
+    </div>
+
+    <!-- ========================= the organism ========================= -->
+    <div class="os" data-os hidden>
+      <!-- The Presence bar: the Voice's one line of present-tense truth,
+           the lens (workspace scope), and the person. Not a toolbar. -->
+      <header class="presence" data-presence>
+        <button class="sigil" data-sigil aria-label="Summon the Voice ( / )">
+          <span class="sigil-mark" aria-hidden="true"></span>
+        </button>
+        <div class="presence-line-wrap">
+          <p class="presence-line" data-presence-line aria-live="polite"></p>
+          <nav class="threadline" data-threadline aria-label="Context trail"></nav>
+        </div>
+        <div class="presence-right">
+          <label class="lens" data-lens-wrap hidden>
+            <span>Lens</span>
+            <select data-lens aria-label="Workspace lens"></select>
+          </label>
+          <span class="person" data-person></span>
+          <button class="leave" data-leave>Leave</button>
+        </div>
+      </header>
+
+      <!-- One-time orientation line (dismissible, never returns) -->
+      <p class="orient" data-orient hidden>
+        This surface reorders itself around what needs you. Nothing is hidden —
+        quiet desks rest on the shelf below. Press <kbd>/</kbd> anywhere to ask.
+        <button data-orient-x aria-label="Dismiss">✕</button>
+      </p>
+
+      <!-- ========================= the Floor ========================= -->
+      <main class="floor" data-floor>
+        <section class="band band-now" data-band-now aria-label="Needs you"></section>
+        <section class="band band-motion" data-band-motion aria-label="In motion"></section>
+        <section class="band band-shelf" data-band-shelf aria-label="Quiet"></section>
+      </main>
+
+      <!-- ========================= Focus ========================= -->
+      <main class="focus" data-focus hidden>
+        <div class="canvas-wrap">
+          <header class="canvas-head">
+            <div>
+              <p class="canvas-kicker" data-canvas-kicker></p>
+              <h2 data-canvas-title></h2>
+            </div>
+            <button class="canvas-back" data-canvas-back>◂ back</button>
+          </header>
+          <div class="voice-pins" data-voice-pins></div>
+          <div class="canvas" data-canvas></div>
+        </div>
+        <aside class="periphery" data-periphery aria-label="The rest of the organization"></aside>
+      </main>
+
+      <!-- ========================= the Desk ========================= -->
+      <footer class="desk" data-desk hidden aria-label="Held decisions"></footer>
+
+      <!-- ========================= the Voice ========================= -->
+      <div class="voice" data-voice hidden>
+        <button class="voice-backdrop" data-voice-close aria-label="Close"></button>
+        <div class="voice-panel">
+          <form class="voice-form" data-voice-form>
+            <span class="voice-caret" aria-hidden="true">›</span>
+            <input type="text" data-voice-input autocomplete="off" spellcheck="false"
+                   placeholder="ask for an outcome — a quote, a brief, a page, a check…"
+                   aria-label="Ask PhantomForce" />
+          </form>
+          <div class="voice-suggests" data-voice-suggests></div>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="../js/os.js"></script>
+  </body>
+</html>

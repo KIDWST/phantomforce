@@ -427,9 +427,9 @@ function renderOutcomes(el, rerender) {
           ${o.approvals ? `<p class="record-sub">${o.approvals} approval${o.approvals === 1 ? "" : "s"} pending on this outcome.</p>` : ""}
         </article>`).join("") || empty("No active outcomes yet. As leads, proposals, and workstreams form a clear target, they'll surface here.")}
     </div>`;
-  // Workstream buttons use the app's existing global [data-open-ws]
-  // delegation (see main.js) — same mechanism every other workspace's
-  // "open" buttons already use, no new wiring needed.
+  // Workstream buttons use the shell's global [data-open-ws] delegation
+  // (see os.js) — same mechanism every other workspace's "open" buttons
+  // already use, no new wiring needed.
 }
 
 /* ========================= PLAY (PhantomPlay) ========================= */
@@ -719,7 +719,7 @@ function renderAdmin(el, rerender) {
 }
 
 /* ============================ PHANTOM CONSOLE ============================ */
-/* Full-screen conversation surface — history handled by main.js, this is the shell. */
+/* Full-screen conversation surface — history handled by os.js, this is the shell. */
 function renderPhantom(el) {
   el.innerHTML = `
     <div class="phantom-console">
