@@ -1654,14 +1654,25 @@ in Cycle 22.
 - PASS: `npm run test:organization-record-isolation` (2 organizations).
 - PASS: `npm run test:customer-plan-switching` and `npm run
   test:local-customer-plan --workspace @phantomforce/server`.
-- PASS: `npm run test:change-memory` (162 checks).
+- PASS: `npm run test:change-memory` (164 checks).
 - PASS: `npm run build` and server TypeScript typecheck.
 - PASS: `git diff --check` (line-ending warnings only).
 
 ## Deployment Verification
 
-- Pending functional commit, push, canonical deployment sync, strict source
-  doctor, deployed model gate, and scheduled-sync resurrection check.
+- Pushed `e8486e3d` to `origin/main` and synced the canonical
+  `deployments\phantomforce-live` checkout.
+- PASS: strict live-source doctor aligned source, origin, deployment manifest,
+  static UI, Hermes, resurrection guards, and clean worktrees at `e8486e3d`;
+  the public admin served `phantom-live-20260718-41`.
+- PASS: deployed live-model gate completed 96 requests at 603 ms average and
+  2,499 ms maximum with zero fallback and zero business leakage; creative
+  reasoning, scoped advisory, provider pinning, continuity, corrections,
+  uncertainty, formatting, and every prior conversation-quality assertion
+  passed.
+- PASS: manually triggered `PhantomForce Admin Main Sync` ended in `Ready`
+  with result `0`; a second strict doctor confirmed the task preserved commit
+  `e8486e3d`, build 41, the canonical UI root, Hermes, and all 167 live guards.
 
 ## Next Task
 

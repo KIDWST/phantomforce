@@ -18,7 +18,9 @@ selector and composer until session, entitlements, isolated chat, and UI are
 aligned. Customer test mode now exposes real Free, Pro, and Elite transitions
 instead of the legacy Starter alias. The model gate passed 96 requests; database Chrome passed 57 API/auth
 checks plus the full browser journey and clean 1440x900/390x844 rendering. The
-full module graph is `phantom-live-20260718-41`.
+full module graph is `phantom-live-20260718-41`. Commit `e8486e3d` is deployed
+from the canonical checkout; the deployed 96-request gate passed with zero
+fallback or business leakage, and the recurring sync preserved the release.
 
 ## Recommended Cycle 23
 
