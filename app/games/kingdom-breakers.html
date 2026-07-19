@@ -91,10 +91,10 @@ h2{margin:0 0 10px;color:var(--gold);font-size:22px}
 .hud-title{flex:1;background:#0c1220cc;border:1px solid var(--line);border-radius:10px;padding:6px 12px;display:flex;flex-direction:column;line-height:1.2}
 .hud-title b{font-size:13px;color:var(--gold)}
 .hud-title span{font-size:11px;color:var(--ink-dim)}
-.hud-mid{display:flex;gap:10px;align-items:center;padding:0 12px;pointer-events:none}
-.meter{position:relative;flex:1;height:26px;background:#0c1220cc;border:1px solid var(--line);border-radius:999px;overflow:hidden}
+.hud-mid{position:absolute;top:58px;right:12px;display:flex;gap:8px;align-items:center;justify-content:flex-end;pointer-events:none}
+.meter{position:relative;flex:0 0 132px;height:34px;background:#0c1220dd;border:1px solid var(--line);border-radius:12px;overflow:hidden;box-shadow:0 10px 24px #00000033}
 .meter i{position:absolute;inset:0 auto 0 0;background:linear-gradient(90deg,var(--copper-dim),var(--copper));display:block;transition:width .25s}
-.meter span{position:relative;z-index:1;display:flex;height:100%;align-items:center;justify-content:center;gap:5px;font-size:11px;color:var(--ink)}
+.meter span{position:relative;z-index:1;display:flex;height:100%;align-items:center;justify-content:center;gap:5px;font-size:11px;color:var(--ink);text-shadow:0 1px 4px #000}
 .warden-status{background:#0c1220cc;border:1px solid var(--teal);border-radius:999px;padding:4px 10px;font-size:12px;display:flex;align-items:center;gap:5px;color:var(--teal);white-space:nowrap}
 .warden-status.harmed{border-color:var(--ember);color:var(--ember)}
 .clock{background:#0c1220cc;border:1px solid var(--line);border-radius:999px;padding:4px 10px;font-size:12px;display:flex;gap:5px}
@@ -120,6 +120,8 @@ body.reduced .meter i{transition:none}
 @media(max-width:420px){
   .level-grid{grid-template-columns:1fr}
   .hud-title{display:none}
+  .hud-mid{top:54px;right:8px;left:8px;justify-content:flex-end}
+  .meter{flex-basis:104px}
   .ammo-btn{min-width:52px;padding:6px 8px}
 }
 @media(max-height:520px){
@@ -606,10 +608,34 @@ function fireProjectile(ammoKey, angle, power, shooter){
   const spec=AMMO[ammoKey];
   const speed=spec.minSpeed+power*(spec.maxSpeed-spec.minSpeed);
   const p={ id:'p'+(projIdCounter++), kind:ammoKey, shooter, x:engineX(shooter), y:engineY(shooter),
-    vx:Math.cos(angle)*speed, vy:Math.sin(angle)*speed, alive:true, pierceLeft:spec.pierce, hitIds:new Set(), trail:[] };
+    vx:Math.cos(angle)*speed, vy:Math.sin(angle)*speed, alive:true, pierceLeft:spec.pierce, hitIds:new Set(), trail:[], gateThreaded:false };
   projectiles.push(p);
   playLaunch(ammoKey);
   return p;
+}
+
+function isCenterGateWindowY(y){
+  if(!level || !(level.barriers||[]).length) return false;
+  const spans=(level.barriers||[]).map(b=>({top:b.y-b.h/2, bottom:b.y+b.h/2})).sort((a,b)=>a.top-b.top);
+  for(let i=0;i<spans.length-1;i++){
+    if(y>spans[i].bottom && y<spans[i+1].top) return true;
+  }
+  return y<spans[0].top;
+}
+function maybeMarkGateThread(p,x0,y0,x1,y1){
+  if(mode!=='duel' || p.gateThreaded || !(level.barriers||[]).length) return;
+  const gateX=WORLD_W/2;
+  if((x0-gateX)*(x1-gateX)>0 || Math.abs(x1-x0)<1e-6) return;
+  const t=(gateX-x0)/(x1-x0);
+  if(t<0 || t>1) return;
+  const y=y0+(y1-y0)*t;
+  if(!isCenterGateWindowY(y)) return;
+  p.gateThreaded=true;
+  shake=Math.max(shake,4);
+  if(p.shooter==='player') toast('Gate thread!');
+  for(let i=0;i<(reducedMotion?4:12);i++){
+    particles.push({x:gateX,y:y+(Math.random()-0.5)*24,vx:(Math.random()-0.5)*180,vy:(Math.random()-0.5)*160,life:0.55,maxLife:0.55,size:3+Math.random()*4,color:'#3fe0c5',kind:'spark'});
+  }
 }
 
 function projectileTraceHit(p,spec,x0,y0,x1,y1,targetOwner=null){
@@ -651,9 +677,9 @@ function stepProjectile(p,dt){
   p.vy+=GRAVITY*spec.gravityScale*dt;
   p.x+=p.vx*dt; p.y+=p.vy*dt;
   activeShooter=p.shooter;
+  maybeMarkGateThread(p,x0,y0,p.x,p.y);
   const hit=projectileTraceHit(p,spec,x0,y0,p.x,p.y,targetOwner);
   if(hit){ p.x=hit.x; p.y=hit.y; resolveProjectileHit(p,hit.block,hit.barrier||null); return; }
-  if(p.x<-80 || p.x>WORLD_W+80 || p.y<-400){ p.alive=false; }
 }
 
 function resolveProjectileHit(p, block, barrier=null){
@@ -950,11 +976,21 @@ function drawWardens(){
   ctx.globalAlpha=1;
 }
 function drawProjectiles(){
+  const visibleTop=(-offY/cScale);
   for(const p of projectiles){
     const spec=AMMO[p.kind];
     for(let i=0;i<p.trail.length;i++){
       const t=p.trail[i]; ctx.globalAlpha=(i/p.trail.length)*0.4;
       ctx.fillStyle=spec.color; ctx.beginPath(); ctx.arc(t.x,t.y,spec.radius*0.6,0,Math.PI*2); ctx.fill();
+    }
+    if(p.y<visibleTop+8){
+      const markerX=clamp(p.x,26,WORLD_W-26), markerY=visibleTop+24;
+      ctx.save(); ctx.translate(markerX,markerY);
+      ctx.fillStyle=spec.color; ctx.beginPath(); ctx.moveTo(0,14); ctx.lineTo(-10,-8); ctx.lineTo(10,-8); ctx.closePath(); ctx.fill();
+      ctx.globalAlpha=0.78; ctx.fillStyle='#eef2fb'; ctx.font='800 10px system-ui'; ctx.textAlign='center'; ctx.fillText('INCOMING',0,-15);
+      ctx.restore();
+      ctx.globalAlpha=1;
+      continue;
     }
     ctx.globalAlpha=1; ctx.fillStyle=spec.color; ctx.beginPath(); ctx.arc(p.x,p.y,spec.radius,0,Math.PI*2); ctx.fill();
   }
