@@ -10,6 +10,12 @@ const FALLBACK_KEY = "pf.phantomplay.offline.v1";
 const DEV_SUPPORT_KEY = "pf.phantomplay.developerSupport.v1";
 const CATEGORIES = ["All", "Arcade", "Puzzle", "Focus", "Strategy", "Sports", "Creative"];
 const GAME_SORTS = ["All", "Solo", "Multiplayer", "Toddler", ...CATEGORIES.filter((category) => category !== "All")];
+const GAME_CONTROL_KEYS = new Set([
+  "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight",
+  " ", "Spacebar", "Space", "Enter",
+  "w", "W", "a", "A", "s", "S", "d", "D",
+  "j", "J", "k", "K", "l", "L",
+]);
 // "Game Rating Exposure" — mirrors server PhantomPlayRating (phantomplay.ts).
 // Order matches ratingRank there (gentlest first).
 const RATING_TIERS = [["toddler", "Toddler"], ["everyone", "Everyone"], ["everyone10", "Everyone 10+"], ["teen", "Teen"], ["mature", "Mature"]];
@@ -999,6 +1005,15 @@ function postToGame(type, data = {}) {
   if (focus !== false) frame?.focus?.({ preventScroll: true });
 }
 
+function focusGameFrame() {
+  mountedRoot?.querySelector("[data-pp-frame]")?.focus?.({ preventScroll: true });
+}
+
+function isGameControlKey(event) {
+  if (event.ctrlKey || event.metaKey || event.altKey) return false;
+  return GAME_CONTROL_KEYS.has(event.key) || GAME_CONTROL_KEYS.has(event.code);
+}
+
 // host -> game "match-state": the host pushes the latest polled matchState +
 // readyStates + botSlots (+ hostControls, for a game that wants to react to
 // bot-fill/maxHumans) down to the active iframe whenever the room changes.
@@ -1239,6 +1254,7 @@ export function renderPhantomPlay(root, opts = {}) {
       if (!ui.player) return;
       if (event.key === "Escape") { event.preventDefault(); closePlayer(); }
       if ((event.key === "r" || event.key === "R") && !event.ctrlKey && !event.metaKey) { event.preventDefault(); restartPlayer(); }
+      if (isGameControlKey(event)) { event.preventDefault(); focusGameFrame(); }
     });
   }
   render();

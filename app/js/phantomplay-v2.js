@@ -17,6 +17,12 @@ const controlsCopy = (game) => mobilePlaySurface() ? "" : String(game?.controls 
 const FALLBACK_KEY = "pf.phantomplay.offline.v1";
 const CATEGORIES = ["All", "Arcade", "Puzzle", "Focus", "Strategy", "Sports", "Creative"];
 const GAME_SORTS = ["All", "Solo", "Multiplayer", "Toddler", ...CATEGORIES.filter((cat) => cat !== "All")];
+const GAME_CONTROL_KEYS = new Set([
+  "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight",
+  " ", "Spacebar", "Space", "Enter",
+  "w", "W", "a", "A", "s", "S", "d", "D",
+  "j", "J", "k", "K", "l", "L",
+]);
 const STATUSES = [["online", "Online"], ["away", "Away"], ["busy", "Busy"], ["invisible", "Invisible"]];
 // "Game Rating Exposure" — mirrors server PhantomPlayRating (phantomplay.ts).
 // Kept in sync by hand with defaultAllowedRatings() there; no server "give me
@@ -521,6 +527,13 @@ function postToGame(type, extra = {}) {
   frame?.contentWindow?.postMessage({ source: "phantomplay-host", type, ...extra }, "*");
   frame?.focus?.({ preventScroll: true });
 }
+function focusGameFrame() {
+  mountedRoot?.querySelector("[data-pp2-frame]")?.focus?.({ preventScroll: true });
+}
+function isGameControlKey(event) {
+  if (event.ctrlKey || event.metaKey || event.altKey) return false;
+  return GAME_CONTROL_KEYS.has(event.key) || GAME_CONTROL_KEYS.has(event.code);
+}
 function onGameMessage(event) {
   const frame = mountedRoot?.querySelector("[data-pp2-frame]");
   if (!ui.player || !frame || event.source !== frame.contentWindow || !event.data || event.data.source !== "phantomplay-game") return;
@@ -733,6 +746,7 @@ export function renderPhantomPlay(root) {
     window.addEventListener("keydown", (event) => {
       if (ui.player) {
         if (event.key === "Escape") { event.preventDefault(); closePlayer(); }
+        if (isGameControlKey(event)) { event.preventDefault(); focusGameFrame(); }
         return;
       }
       if (event.key === "Escape" && ui.detailId) { ui.detailId = null; ui.detail = null; render(); }
