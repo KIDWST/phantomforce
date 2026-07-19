@@ -16,7 +16,18 @@ def route_chat(messages, on_delta, mode="general", on_fallback=None, cloud_model
     path is taken instead of cloud, so a UI can show a status indicator
     without treating it as an error.
     """
-    if cloud_client.is_configured():
+    if mode == "unleashed":
+        # Unleashed is the paywalled uncensored-local feature. Cloud
+        # providers today only offer censored models (e.g. gpt-4o-mini), so
+        # routing unleashed requests through cloud would silently defeat the
+        # feature with no error and no fallback ever firing. Stay local-only
+        # here until a future phase defines an uncensored-capable provider.
+        if on_fallback:
+            try:
+                on_fallback("unleashed mode is local-only in this phase")
+            except Exception:
+                pass
+    elif cloud_client.is_configured():
         try:
             return cloud_client.stream_chat(messages, on_delta, model=cloud_model)
         except Exception as exc:

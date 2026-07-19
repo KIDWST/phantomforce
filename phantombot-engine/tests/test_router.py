@@ -126,6 +126,29 @@ def test_route_chat_survives_on_fallback_callback_raising_after_cloud_failure(mo
     mock_local.assert_called_once()
 
 
+def test_route_chat_unleashed_mode_skips_cloud_even_when_configured(monkeypatch):
+    # Regression test: unleashed mode must be local-only in this phase, even
+    # when a cloud API key is configured — otherwise the paid uncensored
+    # feature silently gets routed to the censored cloud DEFAULT_MODEL with
+    # no error and no fallback ever firing.
+    monkeypatch.setenv("PHANTOMBOT_CLOUD_API_KEY", "sk-test-123")
+    fallback_calls = []
+    with patch("cloud_client.stream_chat") as mock_cloud, \
+         patch("ollama_client.stream_chat", return_value="local answer") as mock_local:
+        result = router.route_chat(
+            [{"role": "user", "content": "hi"}],
+            on_delta=lambda d: None,
+            mode="unleashed",
+            on_fallback=lambda reason: fallback_calls.append(reason),
+        )
+    assert result == "local answer"
+    mock_cloud.assert_not_called()
+    mock_local.assert_called_once()
+    _, kwargs = mock_local.call_args
+    assert kwargs.get("require_unleashed") is True
+    assert fallback_calls == ["unleashed mode is local-only in this phase"]
+
+
 def test_route_chat_survives_on_fallback_callback_raising_when_cloud_not_configured(monkeypatch):
     monkeypatch.delenv("PHANTOMBOT_CLOUD_API_KEY", raising=False)
 
