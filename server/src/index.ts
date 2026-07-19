@@ -200,6 +200,7 @@ import { buildInstantConversationContext, type InstantConversationTurn } from ".
 import {
   filterConversationModules,
   isSafeInstantConversationRequest,
+  isSafeAdvisoryConversationRequest,
   isSafeReasoningConversationRequest,
   needsBusinessContext,
 } from "./phantom-ai/conversation-policy.js";
@@ -3576,7 +3577,7 @@ function parsePhantomAiChatProvider(value: unknown) {
 }
 
 type AdminPhantomAiModelLane = "codex" | "glm_5_2" | "claude_cli" | "local_ollama";
-type AdminPhantomAiRouteTier = "instant" | "reasoning" | "standard" | "deep";
+type AdminPhantomAiRouteTier = "instant" | "reasoning" | "advisory" | "standard" | "deep";
 
 function parseAdminPhantomAiModelLane(value: unknown): AdminPhantomAiModelLane {
   if (value === "glm_5_2" || value === "openrouter_glm" || value === "glm") return "glm_5_2";
@@ -3586,7 +3587,7 @@ function parseAdminPhantomAiModelLane(value: unknown): AdminPhantomAiModelLane {
 }
 
 function parseAdminPhantomAiRouteTier(value: unknown): AdminPhantomAiRouteTier {
-  if (value === "instant" || value === "reasoning" || value === "standard" || value === "deep") return value;
+  if (value === "instant" || value === "reasoning" || value === "advisory" || value === "standard" || value === "deep") return value;
   return "standard";
 }
 
@@ -3609,7 +3610,7 @@ function parseAllowProviderFallback(value: unknown, routeTier: AdminPhantomAiRou
     if (value.toLowerCase() === "true") return true;
     if (value.toLowerCase() === "false") return false;
   }
-  return routeTier !== "instant" && routeTier !== "reasoning";
+  return !["instant", "reasoning", "advisory"].includes(routeTier);
 }
 
 function adminPhantomAiModelLabel(lane: AdminPhantomAiModelLane) {
@@ -3710,7 +3711,7 @@ function adminPhantomAiProviderTimeoutMs(providerId: AdminPhantomAiProviderId, c
   const tier = ctx.routeTier ?? "standard";
   const base = tier === "instant"
     ? ADMIN_CHAT_INSTANT_TIMEOUT_MS[providerId]
-    : tier === "reasoning"
+    : tier === "reasoning" || tier === "advisory"
       ? ADMIN_CHAT_REASONING_TIMEOUT_MS[providerId]
       : ADMIN_CHAT_FALLBACK_TIMEOUT_MS[providerId];
   if (typeof ctx.maxProviderMs === "number" && Number.isFinite(ctx.maxProviderMs)) {
@@ -3789,10 +3790,10 @@ async function callAdminPhantomAiProvider(providerId: AdminPhantomAiProviderId, 
       sensitivityLevel: ctx.sensitivityLevel,
       approvalRequired: ctx.approvalRequired,
       executionMode: ctx.executionMode,
-      conversationMode: ctx.routeTier === "instant" || ctx.routeTier === "reasoning",
+      conversationMode: ["instant", "reasoning", "advisory"].includes(ctx.routeTier || ""),
       maxTokens: ctx.routeTier === "instant"
         ? instantResponseTokenBudget(ctx.userMessage)
-        : ctx.routeTier === "reasoning"
+        : ctx.routeTier === "reasoning" || ctx.routeTier === "advisory"
           ? Math.max(220, instantResponseTokenBudget(ctx.userMessage))
           : undefined,
       adminOperatorLane: true,
@@ -8467,9 +8468,12 @@ app.post("/phantom-ai/chat", async (request, reply) => {
     ? "instant"
     : adminRouteTier === "reasoning" && isSafeReasoningConversationRequest(normalized)
       ? "reasoning"
+      : adminRouteTier === "advisory" && isSafeAdvisoryConversationRequest(normalized)
+        ? "advisory"
       : null;
   const actionFreeConversation = Boolean(actionFreeConversationTier);
-  const businessContextRelevant = !actionFreeConversation && needsBusinessContext(normalized.user_request, normalized.task_type);
+  const businessContextRelevant = (actionFreeConversationTier === "advisory" || !actionFreeConversation)
+    && needsBusinessContext(normalized.user_request, normalized.task_type);
   normalized.module_data = filterConversationModules(normalized.module_data, normalized.user_request, normalized.task_type);
   if (!businessContextRelevant) {
     normalized.business_summary = "General conversation. Business workspace status is intentionally excluded unless the current request asks for it.";
@@ -8546,10 +8550,11 @@ app.post("/phantom-ai/chat", async (request, reply) => {
   }
 
   if (actionFreeConversation) {
+    const actionFreeModelId = process.env.PHANTOM_INSTANT_CHAT_MODEL || "qwen2.5:14b";
     const toolReply = buildInstantChatToolReply(
       normalized.user_request,
       recentConversation,
-      requestedModelId || process.env.PHANTOM_INSTANT_CHAT_MODEL || "qwen2.5:14b",
+      actionFreeModelId,
     );
     if (toolReply) {
       return {
@@ -8558,7 +8563,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
         provider_choice: "phantom",
         admin_model_lane: "local_ollama",
         admin_model_label: "Phantom Instant",
-        admin_model_requested_lane: publicAdminPhantomAiModelLane(adminModelLane),
+        admin_model_requested_lane: "local_ollama",
         admin_execution_mode: adminExecutionMode,
         model_id: toolReply.tool_id,
         message: { role: "assistant", content: toolReply.output_text },
@@ -8611,19 +8616,28 @@ app.post("/phantom-ai/chat", async (request, reply) => {
         result_status: "called",
       };
     }
-    const instantChat = await runAdminPhantomAiChatWithFallback(adminModelLane, {
+    const actionFreeContext = actionFreeConversationTier === "advisory"
+      ? [
+          normalized.business_summary,
+          ...normalized.module_data.map((module) => [
+            `${module.module}: ${module.summary}`,
+            ...(module.items || []).map((item) => `${item.title}${item.status ? ` (${item.status})` : ""}${item.detail ? `: ${item.detail}` : ""}`),
+          ].join("\n")),
+        ].join("\n\n").slice(0, 6000)
+      : buildInstantConversationContext(recentConversation, normalized.user_request);
+    const instantChat = await runAdminPhantomAiChatWithFallback("local_ollama", {
       requestId: normalized.request_id,
       businessName: normalized.business_name,
       taskType: normalized.task_type,
       userMessage: normalized.user_request,
-      compactContext: buildInstantConversationContext(recentConversation, normalized.user_request),
+      compactContext: actionFreeContext,
       sensitivityLevel: normalized.sensitivity_level,
       approvalRequired: false,
       executionMode: adminExecutionMode,
-      requestedModelId,
+      requestedModelId: actionFreeModelId,
       routeTier: adminRouteTier,
       maxProviderMs,
-    }, allowedAdminProviders, { allowFallback: allowProviderFallback });
+    }, ["local_ollama"], { allowFallback: false });
     const respondingProviderId = instantChat.providerId;
     const respondingLane = adminPhantomAiLaneForProviderId(respondingProviderId);
     const respondingLabel = adminPhantomAiProviderLabel(respondingProviderId);
@@ -8646,7 +8660,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
       provider_choice: "phantom",
       admin_model_lane: publicAdminPhantomAiModelLane(respondingLane),
       admin_model_label: respondingLabel,
-      admin_model_requested_lane: publicAdminPhantomAiModelLane(adminModelLane),
+      admin_model_requested_lane: "local_ollama",
       admin_execution_mode: adminExecutionMode,
       model_id: localFallback?.model_id || ("model_id" in modelResult ? modelResult.model_id : respondingProviderId),
       message: {

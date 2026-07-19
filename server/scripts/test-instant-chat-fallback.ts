@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 
 import {
   filterConversationModules,
+  isSafeAdvisoryConversationRequest,
   isSafeInstantConversationRequest,
   isSafeReasoningConversationRequest,
   needsBusinessContext,
@@ -106,8 +107,17 @@ assert.equal(isSafeReasoningConversationRequest({ task_type: "chat", user_reques
 assert.equal(isSafeReasoningConversationRequest({ task_type: "chat", user_request: "Critique this idea: a neighborhood tool library." }), true);
 assert.equal(isSafeReasoningConversationRequest({ task_type: "chat", user_request: "Think through the pros and cons of moving closer to work." }), true);
 assert.equal(isSafeReasoningConversationRequest({ task_type: "question", user_request: "What strategy makes chess beginners improve faster?" }), true);
+assert.equal(isSafeReasoningConversationRequest({ task_type: "brainstorm", user_request: "Maybe we should start a neighborhood book club." }), true);
+assert.equal(isSafeReasoningConversationRequest({ task_type: "feedback", user_request: "This explanation feels too robotic." }), true);
+assert.equal(isSafeReasoningConversationRequest({ task_type: "plan", user_request: "Help me plan a low-cost birthday party." }), true);
 assert.equal(isSafeReasoningConversationRequest({ task_type: "question", user_request: "show my accounting ledger" }), false);
 assert.equal(isSafeReasoningConversationRequest({ task_type: "chat", user_request: "create a strategy for my business" }), false);
 assert.equal(isSafeReasoningConversationRequest({ task_type: "question", user_request: "what is the current Bitcoin price?" }), false);
+assert.equal(isSafeAdvisoryConversationRequest({ task_type: "plan", user_request: "Give me a plan for my business." }), true);
+assert.equal(isSafeAdvisoryConversationRequest({ task_type: "feedback", user_request: "I hate my sales pipeline." }), true);
+assert.equal(isSafeAdvisoryConversationRequest({ task_type: "brainstorm", user_request: "We should redesign my website." }), true);
+assert.equal(isSafeAdvisoryConversationRequest({ task_type: "plan", user_request: "Help me plan our content calendar." }), true);
+assert.equal(isSafeAdvisoryConversationRequest({ task_type: "create_task", user_request: "Create a task for my business." }), false);
+assert.equal(isSafeAdvisoryConversationRequest({ task_type: "brainstorm", user_request: "Send this email for my business." }), false);
 
 console.log(`instant chat fallback checks passed (${turns.length + directPrompts.length} adversarial turns)`);

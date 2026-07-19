@@ -12,9 +12,9 @@ import {
   recentChatTurns, addMemory,
   ctx, session, loadPhantomLoop, savePhantomLoop, loopProviderName, modelDisplayLabel,
   getPhantomLaneTarget, loadPhantomLaneConfig, workspaceStorageGetItem, wsName,
-} from "./store.js?v=phantom-live-20260718-40";
-import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260718-40";
-import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260718-40";
+} from "./store.js?v=phantom-live-20260718-41";
+import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260718-41";
+import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260718-41";
 const classifyPhantomIntent = (text) => deriveActionContract(classifyRaw(text));
 
 /* Cross-surface handoff: chat tells the Websites page which project to focus
@@ -102,10 +102,13 @@ const INSTANT_CHAT_MODEL = "qwen2.5:14b";
 const INSTANT_CHAT_MAX_PROVIDER_MS = 4500;
 const REASONING_CHAT_MAX_PROVIDER_MS = 12000;
 const INSTANT_CHAT_ALLOWED_INTENTS = new Set(["identity", "capability", "question", "chat"]);
+const REASONING_CHAT_ALLOWED_INTENTS = new Set(["identity", "capability", "question", "chat", "brainstorm", "feedback", "plan"]);
+const ADVISORY_CHAT_INTENTS = new Set(["brainstorm", "feedback", "plan"]);
 const INSTANT_CHAT_ALWAYS_BLOCKED = /\b(?:diagnos(?:e|is)|medical advice|legal advice)\b|\b(?:what(?:'s| is)|how(?:'s| is)|check|show me|give me)\b.{0,28}\b(?:weather|forecast|temperature|humidity)\b|\b(?:latest|current|today'?s?|breaking|live)\b.{0,28}\b(?:news|headlines?|score|price|quote|exchange rate|weather|forecast)\b|\b(?:stock|share|crypto|bitcoin|ethereum)\b.{0,28}\b(?:price|quote|value|rate|today|now|current|latest)\b|\b(?:price of|exchange rate)\b/i;
 const INSTANT_CHAT_BUSINESS_ACTION = /\b(?:build|create|draft|write|fix|debug|code|implement|research|plan|strategize|design|make|generate|schedule|automate|review|open)\s+(?:me\s+|us\s+)?(?:(?:an?|the|my|our|this)\s+)?(?:proposal|website|site|automation|task|client|customer|lead|transaction|accounting|invoice|payment|security scan|contract|tenant|organization|phantomforce)\b|\b(?:generate|create|edit|enhance|upload|publish|remove (?:the )?background)\s+(?:an?|the|my|our|this)?\s*(?:content|video|image|media)\b/i;
 const INSTANT_CHAT_EXTERNAL_ACTION = /(?:^|\b(?:please|can you|could you|would you|will you|i need you to|go ahead and)\s+)(?:deploy|delete|send|post|upload|publish)\b/i;
 const INSTANT_CHAT_PRIVATE_BUSINESS = /\b(?:my|our|this)\s+(?:business|company|workspace|proposal|website|site|automation|task|client|customer|lead|transaction|accounting|bank(?: account)?|invoice|payment|security|contract|tenant|organization)\b/i;
+const ADVISORY_PRIVATE_BUSINESS = /\b(?:my|our|this|the)\s+(?:[a-z]+\s+){0,2}(?:business|company|workspace|brand|proposal|website|site|pipeline|crm|client|customer|lead|accounting|content|campaign|calendar|project|team|offer|product|service|organization)\b/i;
 const INSTANT_CHAT_SIGNAL = /\b(?:favorite|do you like|would you rather|tell me a joke|joke|how are you|what'?s your|what is your|who are you|are you|can you|what is \d|what'?s \d)\b/i;
 const DEEP_THINKING_SIGNAL = /\b(strategy|strategic|think through|reason through|break down|roadmap|plan|growth|business model|moat|positioning|prioriti[sz]e|compare|critique|diagnose|why is|why does|what should|how should)\b/i;
 const INSTANT_DEEP_EXCLUSION = /\b(?:strategy|strategic|think through|reason through|roadmap|business model|moat|positioning|prioriti[sz]e|critique)\b|\bcompare(?!\s+(?:them|these|those|it)\b)/i;
@@ -135,17 +138,29 @@ function isInstantChatRequest(raw, intent) {
 
 function isReasoningChatRequest(raw, intent) {
   const text = String(raw || "").trim();
-  if (!text || !INSTANT_CHAT_ALLOWED_INTENTS.has(intent.primaryIntent)) return false;
+  if (!text || !REASONING_CHAT_ALLOWED_INTENTS.has(intent.primaryIntent)) return false;
   if (intent.needsLiveData || intent.requiresAdminApproval || intent.shouldCreateTask || intent.shouldCreateAutomation) return false;
-  if (text.length > 1200 || countWords(text) > 180 || !INSTANT_DEEP_EXCLUSION.test(text)) return false;
+  if (text.length > 1200 || countWords(text) > 180) return false;
+  if (!INSTANT_DEEP_EXCLUSION.test(text) && !ADVISORY_CHAT_INTENTS.has(intent.primaryIntent)) return false;
+  if (ADVISORY_PRIVATE_BUSINESS.test(text)) return false;
   return !INSTANT_CHAT_ALWAYS_BLOCKED.test(text)
     && !INSTANT_CHAT_BUSINESS_ACTION.test(text)
     && !INSTANT_CHAT_EXTERNAL_ACTION.test(text)
     && !INSTANT_CHAT_PRIVATE_BUSINESS.test(text);
 }
 
+function isAdvisoryChatRequest(raw, intent) {
+  const text = String(raw || "").trim();
+  if (!text || !ADVISORY_CHAT_INTENTS.has(intent.primaryIntent) || !ADVISORY_PRIVATE_BUSINESS.test(text)) return false;
+  if (intent.needsLiveData || intent.requiresAdminApproval || intent.shouldCreateTask || intent.shouldCreateAutomation) return false;
+  if (text.length > 1200 || countWords(text) > 180) return false;
+  return !INSTANT_CHAT_ALWAYS_BLOCKED.test(text)
+    && !INSTANT_CHAT_BUSINESS_ACTION.test(text)
+    && !INSTANT_CHAT_EXTERNAL_ACTION.test(text);
+}
+
 function isActionFreeModelRequest(raw, intent) {
-  return isInstantChatRequest(raw, intent) || isReasoningChatRequest(raw, intent);
+  return isInstantChatRequest(raw, intent) || isReasoningChatRequest(raw, intent) || isAdvisoryChatRequest(raw, intent);
 }
 
 function shouldUseDeepReasoning(raw, intent) {
@@ -172,7 +187,7 @@ function providerForRequest(providerId) {
 }
 
 function selectedModelForProvider(settings, providerId, routeProfile = null) {
-  if (providerId === "local" && ["instant", "reasoning"].includes(routeProfile?.tier)) return INSTANT_CHAT_MODEL;
+  if (providerId === "local" && ["instant", "reasoning", "advisory"].includes(routeProfile?.tier)) return INSTANT_CHAT_MODEL;
   const configured = settings.models?.[providerId];
   if (configured) return providerId === "private" ? (PRIVATE_BACKEND_MODEL_BY_ALIAS[configured] || configured) : configured;
   const cfg = loadPhantomLaneConfig();
@@ -218,6 +233,16 @@ function chatRouteProfileForRequest(raw, intent, settings) {
       maxProviderMs: REASONING_CHAT_MAX_PROVIDER_MS,
     };
   }
+  if (isAdvisoryChatRequest(raw, intent)) {
+    return {
+      tier: "advisory",
+      providerId: "local",
+      requestedModel: INSTANT_CHAT_MODEL,
+      allowedProviders: [PROVIDER_TO_BACKEND.local],
+      allowFallback: false,
+      maxProviderMs: REASONING_CHAT_MAX_PROVIDER_MS,
+    };
+  }
   return {
     tier: deepReasoning ? "deep" : "standard",
     providerId: normalProviderId,
@@ -229,7 +254,7 @@ function chatRouteProfileForRequest(raw, intent, settings) {
 }
 
 function canAskHermes(raw, intent, settings) {
-  /* Every authenticated user gets action-free chat and reasoning. Standard
+  /* Every authenticated user gets action-free chat, reasoning, and scoped advice. Standard
      business lanes remain admin-only and keep their existing controls. */
   if (isActionFreeModelRequest(raw, intent)) return Boolean(ctx.session);
   return isAdmin()
@@ -259,6 +284,7 @@ function memoryMatchesRequest(memory, raw) {
 
 function needsBusinessContext(raw, intent) {
   if (intent?.requiresAdminApproval || intent?.shouldCreateTask || intent?.shouldCreateAutomation) return true;
+  if (isAdvisoryChatRequest(raw, intent)) return true;
   if (isActionFreeModelRequest(raw, intent)) return false;
   return BUSINESS_CONTEXT_TERMS.test(String(raw || ""));
 }
@@ -284,6 +310,7 @@ function buildContextModules(settings, raw, intent, recentConversation = recentC
   ].filter((memory) => memoryMatchesRequest(memory, raw)).slice(0, 5);
   const m = moneyView();
   const plan = todaysPlan().slice(0, 5);
+  const advisoryOnly = isAdvisoryChatRequest(raw, intent);
   const modules = [
     {
       module: "active_business",
@@ -313,7 +340,7 @@ function buildContextModules(settings, raw, intent, recentConversation = recentC
       })),
     });
   }
-  if (MONEY_CONTEXT_TERMS.test(raw)) {
+  if (!advisoryOnly && MONEY_CONTEXT_TERMS.test(raw)) {
     modules.push({
       module: "money",
       summary: m.transactions.length
@@ -322,7 +349,7 @@ function buildContextModules(settings, raw, intent, recentConversation = recentC
       items: [],
     });
   }
-  if (plan.length && PLAN_CONTEXT_TERMS.test(raw)) {
+  if (!advisoryOnly && plan.length && PLAN_CONTEXT_TERMS.test(raw)) {
     modules.push({
       module: "today_plan",
       summary: `${plan.length} items on today's plan.`,
@@ -341,7 +368,7 @@ async function askHermesBrain(raw, intent, settings) {
   const controller = new AbortController();
   const timeout = setTimeout(
     () => controller.abort(),
-    routeProfile.tier === "instant" ? 6500 : routeProfile.tier === "reasoning" ? 16000 : 140000,
+    routeProfile.tier === "instant" ? 6500 : ["reasoning", "advisory"].includes(routeProfile.tier) ? 16000 : 140000,
   );
   const token = typeof session?.token === "function" ? session.token() : "";
   const headers = { "Content-Type": "application/json" };
@@ -1638,7 +1665,7 @@ export async function handleSmartCommand(raw) {
   /* A failed action-free request must remain conversation. Falling through the
      command router lets ordinary nouns such as bank, proposal, lead, or media
      accidentally open workspace data and is the source of status-dump leaks. */
-  if (actionFreeConversation && ["question", "chat"].includes(intent.primaryIntent)) {
+  if (actionFreeConversation && ["question", "chat", "brainstorm", "feedback", "plan"].includes(intent.primaryIntent)) {
     return shapeResponse({ ...localQuestionAnswer(text, settings), intent }, settings);
   }
 

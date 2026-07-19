@@ -1,13 +1,13 @@
 /* PhantomForce admin settings.
    Local UI preferences only: no provider calls, sends, uploads, or billing. */
 
-import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260718-40";
-import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260718-40";
-import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260718-40";
-import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260718-40";
-import { canManageActiveOrg, fetchCustomerPlanPreview, fetchEntitlementsSummary, switchCustomerPlan } from "./orgs.js?v=phantom-live-20260718-40";
-import { currentTenantId, ctx, isLiveAdminHost, isLocalDevHost, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260718-40";
-import { DEFAULT_COMPANION_PREFS, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260718-40";
+import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260718-41";
+import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260718-41";
+import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260718-41";
+import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260718-41";
+import { canManageActiveOrg, fetchCustomerPlanPreview, fetchEntitlementsSummary, switchCustomerPlan } from "./orgs.js?v=phantom-live-20260718-41";
+import { currentTenantId, ctx, isLiveAdminHost, isLocalDevHost, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260718-41";
+import { DEFAULT_COMPANION_PREFS, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260718-41";
 
 const AI_SETTINGS_KEY = "pf.operator.settings.v1";
 const SETTINGS_TAB_KEY = "pf.settings.tab.v1";
@@ -770,7 +770,7 @@ async function renderPlanAccessTab(el, opts = {}) {
     el.innerHTML = `
       <div class="set-section">
         <div class="set-section-head">
-          <div><p class="set-eyebrow">Plan & access</p><h3>${esc(entitlements.planName || entitlements.planKey || "Current tier")}</h3><p class="set-note">${canSwitchPlan ? "Switch Starter, Pro, and Elite instantly. Restrictions apply immediately; no charge or billing action runs." : "This workspace plan is managed by the owner or admin."}</p></div>
+          <div><p class="set-eyebrow">Plan & access</p><h3>${esc(entitlements.planName || entitlements.planKey || "Current tier")}</h3><p class="set-note">${canSwitchPlan ? "Switch Free, Pro, and Elite instantly. Restrictions apply immediately; no charge or billing action runs." : "This workspace plan is managed by the owner or admin."}</p></div>
           <span class="set-status-pill ${entitlements.canWrite === false ? "" : "is-on"}">${entitlements.canWrite === false ? "View only" : "Write access"}</span>
         </div>
         <p class="set-note" data-plan-message></p>

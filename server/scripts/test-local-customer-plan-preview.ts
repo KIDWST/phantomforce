@@ -1,6 +1,6 @@
 /*
  * Proves the customer-app tier simulator uses real plan keys and real
- * restrictions: Free/starter is view-only, Elite unlocks writes, and switching
+ * restrictions: Free is view-only, Pro and Elite unlock writes, and switching
  * back to Free immediately blocks writes again. No server or Docker required.
  */
 
@@ -28,8 +28,16 @@ const session = await accounts.loginLocalCustomer("customer1@phantomforce.test",
 assert(session, "customer1 can log in");
 
 let summary = await accounts.getLocalCustomerPlanSummary(session!);
-assert(summary?.entitlements.planKey === "starter", "seed starts on Starter");
-assert(summary?.entitlements.canWrite === false, "Starter is view-only");
+assert(summary?.entitlements.planKey === "free", "seed starts on Free Preview");
+assert(summary?.entitlements.canWrite === false, "Free Preview is view-only");
+assert(summary?.plans.map((plan) => plan.key).join(",") === "free,professional,elite", "customer can inspect exactly Free, Pro, and Elite");
+
+const pro = await accounts.assignLocalCustomerPlan(session!, "professional");
+assert(pro.ok === true, "customer1 can switch to Pro");
+assert(pro.ok && pro.entitlements.planKey === "professional", "Pro is current after switch");
+assert(pro.ok && pro.entitlements.canWrite === true, "Pro allows writes");
+assert(pro.ok && pro.entitlements.features.competitorIntelligence === true, "Pro unlocks competitor intelligence");
+assert(pro.ok && pro.entitlements.features.customDomains === false, "Pro keeps custom domains restricted");
 
 const elite = await accounts.assignLocalCustomerPlan(session!, "elite");
 assert(elite.ok === true, "customer1 can switch to Elite");
@@ -43,10 +51,10 @@ assert(
   "Elite has no locked feature flags",
 );
 
-const free = await accounts.assignLocalCustomerPlan(session!, "starter");
-assert(free.ok === true, "customer1 can switch back to Starter");
-assert(free.ok && free.entitlements.planKey === "starter", "Starter is current after switch back");
-assert(free.ok && free.entitlements.canWrite === false, "Starter blocks writes after switch back");
+const free = await accounts.assignLocalCustomerPlan(session!, "free");
+assert(free.ok === true, "customer1 can switch back to Free Preview");
+assert(free.ok && free.entitlements.planKey === "free", "Free Preview is current after switch back");
+assert(free.ok && free.entitlements.canWrite === false, "Free Preview blocks writes after switch back");
 
 console.log(
   JSON.stringify(
@@ -54,6 +62,7 @@ console.log(
       ok: true,
       customer1Login: true,
       freeViewOnly: true,
+      proUnlocksWrites: true,
       eliteUnlocksWrites: true,
       eliteHasNoLockedFeatures: true,
       switchBackRestricts: true,

@@ -59,6 +59,11 @@ const cases = {
     "catch me up",
     "what is next today?",
   ],
+  plan: [
+    "give me a plan for my business",
+    "give me a practical three-step plan for my business",
+    "create a simple actionable roadmap",
+  ],
   createTask: [
     "create a task to fix the chat box spacing",
     "add a task: update the profile card",
@@ -268,6 +273,12 @@ for (const prompt of [
 ]) {
   assert.ok(["question", "chat"].includes(classifyPhantomIntent(prompt).primaryIntent), prompt + " must remain normal conversation");
 }
+
+for (const text of cases.plan) {
+  const r = classifyPhantomIntent(text);
+  assert.equal(r.primaryIntent, "plan", `${text} should be plan`);
+  assert.equal(r.shouldCreateTask, false, `${text} should remain action-free`);
+}
 assert.equal(classifyPhantomIntent("What's in my approval queue?").primaryIntent, "approval_request");
 assert.equal(classifyPhantomIntent("Show my sales pipeline.").primaryIntent, "status_check");
 assert.equal(classifyPhantomIntent("Give me my weekly report.").primaryIntent, "status_check");
@@ -295,16 +306,16 @@ globalThis.fetch = async (url, init) => {
       ok: true,
       message: { role: "assistant", content: "Model-backed answer with a useful plan." },
       fallback: { all_failed: false },
-      hermes: { route_tier: "deep" },
+      hermes: { route_tier: "reasoning" },
     }),
   };
 };
 const broadThought = await handleSmartCommand("help me think through a school growth strategy for PhantomPlay");
 globalThis.fetch = originalFetch;
 assert.equal(broadThought.say, "Model-backed answer with a useful plan.");
-assert.equal(broadChatBody.route_tier, "deep", "broad strategy should get the deeper model lane");
-assert.equal(broadChatBody.allow_provider_fallback, true, "broad strategy should allow provider fallback");
-assert.ok(broadChatBody.allowed_providers.includes("claude_cli"), "broad strategy should include Claude in the provider chain");
+assert.equal(broadChatBody.route_tier, "reasoning", "action-free strategy should use the bounded reasoning lane");
+assert.equal(broadChatBody.allow_provider_fallback, false, "action-free strategy must not walk private provider fallbacks");
+assert.deepEqual(broadChatBody.allowed_providers, ["local_ollama"], "action-free strategy must stay on the local provider");
 
 globalThis.fetch = async (url, init) => {
   assert.match(String(url), /\/phantom-ai\/chat$/, "provider failures should still prove the backend was attempted");

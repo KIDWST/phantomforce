@@ -83,7 +83,14 @@ async function login(sessionId: string) {
   return payload.token;
 }
 
-async function ask(token: string, prompt: string, turns: Turn[], routeTier: "instant" | "reasoning" = "instant"): Promise<Answer> {
+async function ask(
+  token: string,
+  prompt: string,
+  turns: Turn[],
+  routeTier: "instant" | "reasoning" | "advisory" = "instant",
+  spoofPrivateProvider = false,
+  taskType = "chat",
+): Promise<Answer> {
   const recent = turns.slice(-8);
   const started = Date.now();
   const response = await fetch(`${baseUrl}/phantom-ai/chat`, {
@@ -95,26 +102,35 @@ async function ask(token: string, prompt: string, turns: Turn[], routeTier: "ins
     body: JSON.stringify({
       message: prompt,
       user_request: prompt,
-      provider: "ollama",
-      admin_model: "local_ollama",
-      model_lane: "local_ollama",
-      requested_model: model,
+      provider: spoofPrivateProvider ? "phantom" : "ollama",
+      admin_model: spoofPrivateProvider ? "codex" : "local_ollama",
+      model_lane: spoofPrivateProvider ? "codex" : "local_ollama",
+      requested_model: spoofPrivateProvider ? "gpt-5.6-sol" : model,
       route_tier: routeTier,
       max_provider_ms: routeTier === "instant" ? 4500 : 12000,
       allow_provider_fallback: false,
-      allowed_providers: ["local_ollama"],
+      allowed_providers: spoofPrivateProvider ? ["codex_cli"] : ["local_ollama"],
       execution_mode: "approval",
-      task_type: "chat",
+      task_type: taskType,
       tenant_id: "phantomforce",
       workspace_id: "phantomforce",
       business_name: "PhantomForce",
       actor_user_id: "chat-quality-test",
-      business_summary: "General conversation. Business workspace status is intentionally out of scope.",
-      module_data: recent.length ? [{
+      business_summary: routeTier === "advisory"
+        ? "Customer One is a neighborhood service business focused on reliable, friendly local work."
+        : "General conversation. Business workspace status is intentionally out of scope.",
+      module_data: [
+        ...(routeTier === "advisory" ? [{
+          module: "active_business",
+          summary: "Customer One is a neighborhood service business focused on reliable, friendly local work.",
+          items: [],
+        }] : []),
+        ...(recent.length ? [{
         module: "recent_conversation",
         summary: `${recent.length} temporary chat turns.`,
         items: recent.map((turn) => ({ title: turn.user, detail: turn.assistant })),
-      }] : [],
+        }] : []),
+      ],
       conversation_history: recent,
     }),
     signal: AbortSignal.timeout(routeTier === "instant" ? 7_000 : 15_000),
@@ -124,8 +140,16 @@ async function ask(token: string, prompt: string, turns: Turn[], routeTier: "ins
   const payload = await response.json() as Record<string, any>;
   const answer = String(payload.message?.content || "").trim();
   assert.ok(answer, `Empty answer for: ${prompt}`);
-  assert.doesNotMatch(answer, forbidden, `Business context leaked into: ${prompt}`);
+  if (routeTier === "advisory") {
+    assert.doesNotMatch(answer, /\b(?:ledger|invoice|approval queue|workspace status|cashflow|action card)\b/i, `Unrequested business status leaked into: ${prompt}`);
+  } else {
+    assert.doesNotMatch(answer, forbidden, `Business context leaked into: ${prompt}`);
+  }
   assert.equal(payload.route_tier, routeTier, `${prompt}: left the ${routeTier} route`);
+  if (spoofPrivateProvider) {
+    assert.equal(payload.admin_model_lane, "local_ollama", `${prompt}: forged provider changed the responding lane`);
+    assert.equal(payload.admin_model_requested_lane, "local_ollama", `${prompt}: forged provider leaked into the accepted lane metadata`);
+  }
   assert.ok(
     [model, "phantom-calculator", "phantom-reference-resolver", "phantom-identity", "phantom-personality", "phantom-stable-fact"].includes(String(payload.model_id)),
     `${prompt}: unexpected responder ${payload.model_id}; fallback=${JSON.stringify(payload.fallback || null)}`,
@@ -250,6 +274,23 @@ const toolLibraryCritique = await ask(customerToken, "Critique this idea: a neig
 rows.push(toolLibraryCritique);
 assert.match(toolLibraryCritique.answer, /strength|benefit|advantage/i);
 assert.match(toolLibraryCritique.answer, /risk|challenge|drawback/i);
+
+const creativeReasoning: Turn[] = [];
+const birthdayPlan = await ask(customerToken, "Help me plan a low-cost birthday party in five short steps.", creativeReasoning, "reasoning", false, "plan");
+rows.push(birthdayPlan);
+assert.match(birthdayPlan.answer, /budget|guest|food|activity|venue|home/i);
+const explanationFeedback = await ask(customerToken, "This explanation feels too robotic. Suggest two ways to make it warmer.", creativeReasoning, "reasoning", false, "feedback");
+rows.push(explanationFeedback);
+assert.match(explanationFeedback.answer, /warm|personal|natural|conversational|empathy|tone/i);
+
+const advisoryReasoning: Turn[] = [];
+const businessPlan = await ask(customerToken, "Give me a practical three-step plan for my business to earn more repeat customers.", advisoryReasoning, "advisory", true, "plan");
+rows.push(businessPlan);
+assert.match(businessPlan.answer, /customer|follow|service|repeat|loyal|referral/i);
+assert.equal(businessPlan.modelId, model, "a forged private-provider request must still run on the local action-free model");
+const pipelineFeedback = await ask(customerToken, "I hate my sales pipeline. Explain one likely cause and one simple improvement.", advisoryReasoning, "advisory", false, "feedback");
+rows.push(pipelineFeedback);
+assert.match(pipelineFeedback.answer, /cause|problem|likely|improve|simpl|follow|stage|lead/i);
 
 const formatting: Turn[] = [];
 const fruitList = await ask(adminToken, "Give exactly three fruits in alphabetical order, one per line, no bullets.", formatting);
@@ -470,6 +511,9 @@ assert.doesNotMatch(revisitedNova.answer, /yellow|volcano|jazz|Saturn/i);
     contextRolloverVerified: true,
     correctionsVerified: true,
     reasoningVerified: true,
+    creativeReasoningVerified: true,
+    advisoryReasoningVerified: true,
+    providerPinningVerified: true,
     exactFormattingVerified: true,
     falsePremiseVerified: true,
     rapidFireVerified: true,

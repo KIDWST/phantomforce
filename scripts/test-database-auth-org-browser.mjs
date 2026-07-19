@@ -409,6 +409,9 @@ async function switchBrowserOrg(cdp, orgId, diagnostics = null) {
     headers: { Authorization: "Bearer " + sessionStorage.getItem("pf.live.sessionToken.v1") },
   }).then((response) => response.json()).then((body) => body.activeOrg?.id === ${JSON.stringify(orgId)})`, `organization switch to ${orgId}`, 15_000, diagnostics);
   await waitForExpression(cdp, `document.querySelector("[data-org-select]")?.value === ${JSON.stringify(orgId)}`, `organization switcher value ${orgId}`, 10_000, diagnostics);
+  await waitForExpression(cdp, `document.documentElement.dataset.orgSwitching === "false"
+    && !document.querySelector("[data-org-select]")?.disabled
+    && !document.querySelector("[data-command-input]")?.disabled`, `organization switch UI ready ${orgId}`, 15_000, diagnostics);
 }
 
 async function browserApi(cdp, route, { method = "GET", body } = {}) {
@@ -690,6 +693,17 @@ async function main() {
       "Compare electric cars and hybrids for a city commuter in four concise bullets.",
       "Critique this idea: a neighborhood tool library. Give one strength and one risk.",
     ];
+    const creativePrompts = [
+      "Help me plan a low-cost birthday party in five short steps.",
+      "This explanation feels too robotic. Suggest two ways to make it warmer.",
+    ];
+    const advisoryPrompts = [
+      "Give me a practical three-step plan for my business to earn more repeat customers.",
+      "I hate my sales pipeline. Explain one likely cause and one simple improvement.",
+    ];
+    const localOnlyPrompts = [
+      "Remember for later that PhantomForce test color is emerald.",
+    ];
     const prompts = [
       "What's your favorite food?",
       "Why that one?",
@@ -697,11 +711,11 @@ async function main() {
       "What queue data structure should I use?",
       "Give me a summary of Hamlet.",
       reasoningPrompts[0],
-      "I remember my first bike.",
-      "Remind me how photosynthesis works.",
+      creativePrompts[0],
+      creativePrompts[1],
       reasoningPrompts[1],
-      "Write a poem about automation.",
-      "Make this sentence better: we was ready.",
+      advisoryPrompts[0],
+      advisoryPrompts[1],
       "What is 17 times 19?",
       "Explain recursion in one sentence.",
       "Actually, explain it like I'm twelve.",
@@ -709,14 +723,15 @@ async function main() {
       "Give me two names for a fictional moon.",
       "Tell me a short clean joke.",
       "My temporary code word is comet.",
-      "Remember for later that PhantomForce test color is emerald.",
+      localOnlyPrompts[0],
       "What was that temporary code word?",
     ];
     const promptResults = [];
     for (const prompt of prompts) promptResults.push(await submitChat(cdp, prompt, diagnostics));
     assert.equal(promptResults.length, 20, "browser must complete the full 20-turn conversation without reload.");
     assert.equal(promptResults.every((result) => result.cards === 0), true, "casual and memory prompts must not create business cards.");
-    assert.equal(promptResults.some((result) => /ledger|pipeline|actual cash|transaction reader/i.test(result.answer)), false, "ordinary browser conversation must not leak accounting language.");
+    assert.equal(promptResults.filter((result) => !advisoryPrompts.includes(result.prompt)).some((result) => /ledger|pipeline|actual cash|transaction reader/i.test(result.answer)), false, "ordinary browser conversation must not leak accounting language.");
+    assert.equal(promptResults.filter((result) => advisoryPrompts.includes(result.prompt)).some((result) => /ledger|actual cash|transaction reader|approval queue/i.test(result.answer)), false, "advisory answers must not add unrelated workspace status.");
     assert.match(promptResults.at(-1)?.answer || "", /comet/i, "the twentieth turn must retain the active temporary topic.");
 
     const reasoningResults = promptResults.filter((result) => reasoningPrompts.includes(result.prompt));
@@ -735,6 +750,34 @@ async function main() {
       assert.equal(request.max_provider_ms, 12000);
       assert.equal((request.module_data || []).every((entry) => entry.module === "recent_conversation"), true);
       assert.doesNotMatch(request.business_summary || "", /Business Manager workspace/i);
+    }
+
+    const creativeResults = promptResults.filter((result) => creativePrompts.includes(result.prompt));
+    assert.equal(creativeResults.every((result) => result.cards === 0 && !result.open), true, "creative customer prompts must stay in chat.");
+    assert.match(creativeResults[0]?.answer || "", /budget|guest|food|activity|venue|home/i);
+    assert.match(creativeResults[1]?.answer || "", /warm|personal|natural|conversational|empathy|tone/i);
+    const creativeRequests = chatRequests.filter((request) => creativePrompts.includes(request.user_request || request.message));
+    assert.equal(creativeRequests.length, 2, "planning and feedback must both reach the model endpoint.");
+    assert.equal(creativeRequests.every((request) => request.route_tier === "reasoning"), true);
+    assert.equal(creativeRequests.every((request) => request.allowed_providers?.length === 1 && request.allowed_providers[0] === "local_ollama"), true);
+    assert.equal(creativeRequests.every((request) => (request.module_data || []).every((entry) => entry.module === "recent_conversation")), true);
+
+    const advisoryResults = promptResults.filter((result) => advisoryPrompts.includes(result.prompt));
+    assert.equal(advisoryResults.every((result) => result.cards === 0 && !result.open), true, "business advice must stay action-free.");
+    assert.match(advisoryResults[0]?.answer || "", /customer|follow|service|repeat|loyal|referral/i);
+    assert.match(advisoryResults[1]?.answer || "", /cause|problem|likely|improve|simpl|follow|stage|lead/i);
+    const advisoryRequests = chatRequests.filter((request) => advisoryPrompts.includes(request.user_request || request.message));
+    assert.equal(advisoryRequests.length, 2, "both scoped business-advice prompts must reach the model endpoint.");
+    for (const request of advisoryRequests) {
+      assert.equal(request.route_tier, "advisory");
+      assert.equal(request.requested_model, "qwen2.5:14b");
+      assert.deepEqual(request.allowed_providers, ["local_ollama"]);
+      assert.equal(request.allow_provider_fallback, false);
+      assert.match(request.business_summary || "", /Business Manager workspace/i);
+      const modules = (request.module_data || []).map((entry) => entry.module);
+      assert.equal(modules.includes("active_business"), true);
+      assert.equal(modules.every((module) => ["active_business", "saved_memory", "recent_conversation"].includes(module)), true);
+      assert.equal(modules.includes("money") || modules.includes("today_plan"), false);
     }
 
     const continuityResults = [];
@@ -833,8 +876,11 @@ async function main() {
     assert.ok(desktop.composer && desktop.composer.bottom <= desktop.height, "desktop composer must remain visible.");
     assert.ok(mobile.composer && mobile.composer.bottom <= mobile.height, "mobile composer must remain visible.");
 
-    const instantRequests = chatRequests.filter((request) => prompts.includes(request.user_request || request.message) && !reasoningPrompts.includes(request.user_request || request.message));
-    assert.ok(instantRequests.length >= 15, "the mixed 20-turn sequence must exercise the authenticated model lane repeatedly.");
+    const instantRequests = chatRequests.filter((request) => prompts.includes(request.user_request || request.message)
+      && !reasoningPrompts.includes(request.user_request || request.message)
+      && !creativePrompts.includes(request.user_request || request.message)
+      && !advisoryPrompts.includes(request.user_request || request.message));
+    assert.equal(instantRequests.length, prompts.length - reasoningPrompts.length - creativePrompts.length - advisoryPrompts.length - localOnlyPrompts.length, "every model-backed ordinary prompt in the mixed sequence must exercise the authenticated instant lane.");
     assert.equal(instantRequests.every((request) => request.route_tier === "instant"), true, "ordinary 20-turn browser requests must remain on the instant lane.");
 
     const summary = {
@@ -855,6 +901,8 @@ async function main() {
         "active organization and its records survive reload without stale tenant rows",
         "20 mixed browser turns stay conversational without ledger leakage",
         "customer reasoning reaches the bounded local model lane without cards or business context",
+        "customer planning and feedback use real model answers instead of canned intent copy",
+        "organization advice remains action-free and excludes money, plan, asset, and pulse status",
         "natural follow-ups and named-topic returns stay coherent across 30 browser turns",
         "durable memory survives reload inside organization A",
         "organization B receives no A memory, history, request context, or visible chat",
@@ -869,6 +917,8 @@ async function main() {
       afterTamperState,
       promptResults,
       reasoningResults,
+      creativeResults,
+      advisoryResults,
       continuityResults,
       phantomContext,
       chicagoContext,

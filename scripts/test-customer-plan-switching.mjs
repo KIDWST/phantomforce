@@ -11,16 +11,18 @@ const settings = read("app/js/settings.js");
 const main = read("app/js/main.js");
 const packageJson = read("package.json");
 
-assert.match(entitlements, /name: "Free"[\s\S]*websitePublishing: false[\s\S]*customDomains: false/u,
-  "Free must clearly restrict publishing and custom domains.");
+assert.match(entitlements, /key: "free"[\s\S]*name: "Free Preview"[\s\S]*websitePublishing: false[\s\S]*customDomains: false/u,
+  "Free Preview must clearly restrict publishing and custom domains.");
 assert.match(entitlements, /name: "Pro"[\s\S]*competitorIntelligence: true[\s\S]*aggressiveIntelligence: false/u,
   "Pro must expose useful business intelligence without aggressive intelligence.");
 assert.match(entitlements, /name: "Elite"[\s\S]*customDomains: true[\s\S]*advancedWorkflows: true/u,
   "Elite must unlock the advanced operator tier.");
 assert.match(entitlements, /name: "Enterprise"[\s\S]*businesses: 25/u,
   "Enterprise must stay available for full-access customer testing.");
+assert.match(entitlements, /CUSTOMER_SWITCHABLE_PLAN_KEYS = new Set\(\["free", "professional", "elite"\]\)/u,
+  "Customer tier switching must expose exactly Free, Pro, and Elite.");
 
-assert.match(localCustomers, /PLAN_DEFINITIONS\.filter\(\(plan\) => !plan\.isInternal\)/u,
+assert.match(localCustomers, /listCustomerPlanDefinitions\(\)/u,
   "Customer tier switching must expose public plans only.");
 assert.match(localCustomers, /export function listLocalCustomerPlanDefinitions\(\)/u,
   "Local customer accounts must list public test plans.");
@@ -53,7 +55,7 @@ assert.match(settings, /id: "plan", label: "Plan & access", category: "Workspace
   "Settings must own plan and entitlement testing.");
 assert.match(settings, /data-plan-switch="\$\{esc\(plan\.key\)\}"/u,
   "Settings must render public tier switch controls.");
-assert.match(settings, /Customer test mode: switch tiers instantly/u,
+assert.match(settings, /Switch Free, Pro, and Elite instantly/u,
   "Settings must make clear this is a safe customer tier simulator.");
 
 assert.match(main, /const FEATURE_BY_NAV_ID = \{/u,

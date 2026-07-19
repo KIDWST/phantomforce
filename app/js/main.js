@@ -6,47 +6,47 @@ import {
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260718-40";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260718-40";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260718-40";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260718-40";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260718-40";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260718-40";
-import { mountManagedGrowthReport } from "./managedgrowth.js?v=phantom-live-20260718-40";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260718-40";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260718-40";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260718-40";
-import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260718-40";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260718-40";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260718-40";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260718-40";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260718-40";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260718-40";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260718-40";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260718-40";
-import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260718-40";
-import { mountAmbient } from "./ambient.js?v=phantom-live-20260718-40";
-import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260718-40";
+} from "./store.js?v=phantom-live-20260718-41";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260718-41";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260718-41";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260718-41";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260718-41";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260718-41";
+import { mountManagedGrowthReport } from "./managedgrowth.js?v=phantom-live-20260718-41";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260718-41";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260718-41";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260718-41";
+import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260718-41";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260718-41";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260718-41";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260718-41";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260718-41";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260718-41";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260718-41";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260718-41";
+import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260718-41";
+import { mountAmbient } from "./ambient.js?v=phantom-live-20260718-41";
+import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260718-41";
 import {
   fetchAuthConfig, databaseLogin, databaseLogout, databaseSignup, databaseForgotUsername, databaseForgotPassword,
   databaseResetPassword, databaseVerify2fa, databaseStart2faSetup, databaseConfirm2fa, databaseRegenerate2faBackupCodes, databaseDisable2fa,
   switchOrg, fetchAuthMe, fetchEntitlementsSummary,
-} from "./orgs.js?v=phantom-live-20260718-40";
-import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260718-40";
-import { assetsAvailable } from "./orgs.js?v=phantom-live-20260718-40";
-import { renderPhantomStore } from "./phantomstore.js?v=phantom-live-20260718-40";
-import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260718-40";
+} from "./orgs.js?v=phantom-live-20260718-41";
+import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260718-41";
+import { assetsAvailable } from "./orgs.js?v=phantom-live-20260718-41";
+import { renderPhantomStore } from "./phantomstore.js?v=phantom-live-20260718-41";
+import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260718-41";
 // PhantomPlay V2 platform shell (Home/Solo/Friends/Workspace/Dev Hub) - opt-in
 // while it hardens: set localStorage "pf.phantomplay.v2" = "1" (the V2 shell has
 // a "Classic view" button to switch back). Classic stays the default experience.
-import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260718-40";
+import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260718-41";
 const phantomPlayV2Opted = () => { try { return localStorage.getItem("pf.phantomplay.v2") === "1"; } catch { return false; } };
-import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260718-40";
+import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260718-41";
 import {
   customizeNavigation,
   loadOrganizationCustomization,
-} from "./customization.js?v=phantom-live-20260718-40";
-import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260718-40";
+} from "./customization.js?v=phantom-live-20260718-41";
+import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260718-41";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -883,32 +883,37 @@ async function switchWorkspace(id) {
       speak("That business is not available for this account.", "", "alert");
       return false;
     }
-    const result = await switchOrg(id);
-    accountMenuOpen = false;
-    notifOpen = false;
-    if (!result.ok) {
-      pushActivity("Security", "business switch was refused by the server - this account is not a member.");
+    setDatabaseOrganizationSwitching(true);
+    try {
+      const result = await switchOrg(id);
+      accountMenuOpen = false;
+      notifOpen = false;
+      if (!result.ok) {
+        pushActivity("Security", "business switch was refused by the server - this account is not a member.");
+        store.save();
+        renderStatusPills();
+        renderAccountMenu();
+        speak("The server refused that business switch.", "", "alert");
+        return false;
+      }
+      await refreshNavEntitlements({ rerender: false });
+      // Chat bubbles are an in-memory view, so reset them at the same boundary
+      // as the organization-scoped saved/temporary context. A valid org switch
+      // must never leave the previous business conversation visible onscreen.
+      chatHistory.length = 0;
+      pushActivity("Account", `switched active business to ${databaseOrgLabel(id)}.`);
       store.save();
-      renderStatusPills();
-      renderAccountMenu();
-      speak("The server refused that business switch.", "", "alert");
-      return false;
+      clearOverlayOnly();
+      stageReact("nav", 640);
+      setGhostMood("listening", { emotion: "bright", ms: 1200 });
+      speak(`${databaseOrgLabel(id)} is active. Organization data is isolated.`, "", "bright");
+      routeWorkspace("dashboard");
+      renderConsole();
+      console.info("[PhantomForce] database organization switched", { from: before, to: ctx.session.orgId, memberships: memberships.map((m) => m.orgId) });
+      return true;
+    } finally {
+      setDatabaseOrganizationSwitching(false);
     }
-    await refreshNavEntitlements({ rerender: false });
-    // Chat bubbles are an in-memory view, so reset them at the same boundary
-    // as the organization-scoped saved/temporary context. A valid org switch
-    // must never leave the previous business conversation visible onscreen.
-    chatHistory.length = 0;
-    pushActivity("Account", `switched active business to ${databaseOrgLabel(id)}.`);
-    store.save();
-    clearOverlayOnly();
-    stageReact("nav", 640);
-    setGhostMood("listening", { emotion: "bright", ms: 1200 });
-    speak(`${databaseOrgLabel(id)} is active. Organization data is isolated.`, "", "bright");
-    routeWorkspace("dashboard");
-    renderConsole();
-    console.info("[PhantomForce] database organization switched", { from: before, to: ctx.session.orgId, memberships: memberships.map((m) => m.orgId) });
-    return true;
   }
   const before = currentWs();
   if (!setWorkspace(id)) { renderStatusPills(); return false; }
@@ -925,6 +930,16 @@ async function switchWorkspace(id) {
   else renderConsole();
   console.info("[PhantomForce] workspace switched", { from: before, to: currentWs(), tenant: currentTenantId() });
   return true;
+}
+
+function setDatabaseOrganizationSwitching(active) {
+  document.documentElement.dataset.orgSwitching = active ? "true" : "false";
+  const select = $("[data-org-select]");
+  const input = $("[data-command-input]");
+  const form = $("[data-command-form]");
+  if (select) select.disabled = active;
+  if (input) input.disabled = active;
+  if (form) form.setAttribute("aria-busy", active ? "true" : "false");
 }
 let clockTimer = 0;
 let accountMenuOpen = false;
@@ -1330,7 +1345,7 @@ const MODES = {
   admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260718-40";
+const POSE_VERSION = "phantom-live-20260718-41";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;

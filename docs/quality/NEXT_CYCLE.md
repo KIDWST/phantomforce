@@ -8,15 +8,19 @@ Read `AGENTS.md` and every file under `docs/quality` before changing code. Do
 not restart the inventory unless it is invalid. Continue in this Codex task via
 heartbeat automation `continue-phantomforce-quality-program`.
 
-Cycle 21 added a real customer reasoning route. Safe comparisons, critiques,
-and strategy questions now reach local `qwen2.5:14b` with a bounded larger
-budget instead of falling into command logic. The server independently strips
-business context and blocks operational/private/live requests. The model gate
-passed 92 requests; real Chrome completed 30 turns, organization round trips,
-and clean 1440x900 plus 390x844 rendering. The full module graph is now
-`phantom-live-20260718-38`.
+Cycle 22 completed the customer conversation brain across three bounded local
+lanes. Creative planning and feedback now use `reasoning`; organization-aware
+planning and feedback use `advisory` with only relevant scoped context. The
+server pins all action-free routes to local `qwen2.5:14b` even when a client
+forges private provider fields. Natural modifiers such as `practical
+three-step plan` classify correctly. Organization switching now disables the
+selector and composer until session, entitlements, isolated chat, and UI are
+aligned. Customer test mode now exposes real Free, Pro, and Elite transitions
+instead of the legacy Starter alias. The model gate passed 96 requests; database Chrome passed 57 API/auth
+checks plus the full browser journey and clean 1440x900/390x844 rendering. The
+full module graph is `phantom-live-20260718-41`.
 
-## Recommended Cycle 22
+## Recommended Cycle 23
 
 Theme: authenticated account lifecycle and authorization-error recovery.
 

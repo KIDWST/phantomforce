@@ -1593,3 +1593,78 @@ in Cycle 21.
 Exercise the complete browser account lifecycle and authorization-error
 recovery across customer/admin hosts and owner, admin, member, and client roles
 in Cycle 22.
+# 2026-07-18 - Cycle 22: Creative And Scoped Advisory Brain
+
+## Problems Verified
+
+- Customer `brainstorm`, `feedback`, and `plan` prompts could still receive
+  canned command-surface copy instead of a real model answer.
+- Organization-specific advice needed business identity, but not unrelated
+  cash totals, today-plan items, assets, pulse status, or action cards.
+- The chat server validated action-free intent but still trusted browser-
+  supplied model/provider fields during execution, allowing a forged request
+  to ask for a private lane.
+- Natural wording such as `give me a practical three-step plan` missed the
+  old rigid planning regex.
+- The server could finish an organization switch before the browser completed
+  entitlement refresh and isolated-chat reset, allowing a very fast submit to
+  disappear during the final UI transition.
+
+## Corrections
+
+- Added model-backed creative planning/feedback to the bounded local
+  `reasoning` lane and added a separate action-free `advisory` lane for scoped
+  organization advice.
+- Advisory context includes the active organization and relevant saved/recent
+  context while suppressing accounting, today-plan, assets, and status pulse.
+- Server policy independently validates all three action-free lanes and pins
+  execution, allowed providers, requested model, fallback policy, and returned
+  lane metadata to local `qwen2.5:14b`.
+- Expanded planning intent parsing for practical, simple, actionable,
+  low-cost, numbered-step, and similar natural modifiers.
+- Added a real organization-switch busy boundary that disables the switcher
+  and composer until the session, entitlements, chat reset, and rendered shell
+  agree.
+- Reconciled the concurrent customer-plan work so the simulator exposes the
+  actual `free`, `professional`, and `elite` tiers; new customer accounts start
+  on Free Preview, Pro preserves its partial locks, Elite unlocks all features,
+  and returning to Free immediately restores view-only restrictions.
+- Advanced the complete browser graph to `phantom-live-20260718-41` and added
+  permanent overwrite guards for advisory routing, provider pinning, natural
+  planning language, and switch readiness.
+
+## Source Verification
+
+- PASS: `npm run test:instant-chat:http-live-model --workspace
+  @phantomforce/server` completed 96 authenticated requests at 607 ms average
+  and 2,384 ms maximum with zero fallback and zero business leakage; creative
+  reasoning, scoped advisory, and forged-provider pinning all verified.
+- PASS: `npm run test:database-auth` applied all eight migrations, passed all
+  57 API/auth checks, and completed the real Chrome journey across two
+  organizations, six isolated business surfaces, 20 mixed chat turns, durable
+  memory, temporary history, and organization round trips.
+- PASS: visual review of 1440x900 and 390x844 screenshots under
+  `tmp/database-auth-org-browser/2026-07-19T02-38-52-739Z`; composer,
+  navigation, text, and organization state were visible without overlap or
+  horizontal overflow.
+- PASS: `npm run test:intent`.
+- PASS: `npm run test:dashboard-chat` (56 browser-brain prompts, 11 adversarial
+  fallback turns, deterministic tools).
+- PASS: `npm run test:release-critical` (20/20).
+- PASS: `npm run test:organization-record-isolation` (2 organizations).
+- PASS: `npm run test:customer-plan-switching` and `npm run
+  test:local-customer-plan --workspace @phantomforce/server`.
+- PASS: `npm run test:change-memory` (162 checks).
+- PASS: `npm run build` and server TypeScript typecheck.
+- PASS: `git diff --check` (line-ending warnings only).
+
+## Deployment Verification
+
+- Pending functional commit, push, canonical deployment sync, strict source
+  doctor, deployed model gate, and scheduled-sync resurrection check.
+
+## Next Task
+
+Exercise the complete browser account lifecycle and authorization-error
+recovery across customer/admin hosts and owner, admin, member, and client roles
+in Cycle 23.

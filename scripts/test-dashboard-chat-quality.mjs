@@ -185,6 +185,48 @@ for (const prompt of customerReasoningPrompts) {
   assert.deepEqual(result.cards || [], []);
   assert.equal(result.open || null, null);
 }
+
+const customerCreativePrompts = [
+  "Maybe we should start a neighborhood book club.",
+  "What if I learn guitar for twenty minutes a day?",
+  "I hate how confusing airline boarding is.",
+  "This explanation feels too robotic.",
+  "Give me a plan to learn conversational Spanish.",
+  "Help me plan a low-cost birthday party.",
+];
+for (const prompt of customerCreativePrompts) {
+  const result = await handleSmartCommand(prompt);
+  const body = capturedBodies.at(-1);
+  assert.equal(result.hermes?.route_tier, "reasoning", `${prompt} must use a real model instead of canned intent copy`);
+  assert.equal(body.route_tier, "reasoning");
+  assert.equal(body.requested_model, "qwen2.5:14b");
+  assert.deepEqual(body.allowed_providers, ["local_ollama"]);
+  assert.equal(body.allow_provider_fallback, false);
+  assert.doesNotMatch(body.business_summary, /Business Manager workspace/i);
+  assert.ok(body.module_data.every((entry) => entry.module === "recent_conversation"));
+  assert.deepEqual(result.cards || [], []);
+  assert.equal(result.open || null, null);
+}
+
+const customerAdvisoryPrompts = [
+  "We should redesign my website.",
+  "I hate my sales pipeline.",
+  "Give me a plan for my business.",
+  "Help me plan our content calendar.",
+];
+for (const prompt of customerAdvisoryPrompts) {
+  const result = await handleSmartCommand(prompt);
+  const body = capturedBodies.at(-1);
+  assert.equal(result.hermes?.route_tier, "advisory", `${prompt} must use scoped business advice`);
+  assert.equal(body.route_tier, "advisory");
+  assert.equal(body.requested_model, "qwen2.5:14b");
+  assert.deepEqual(body.allowed_providers, ["local_ollama"]);
+  assert.equal(body.allow_provider_fallback, false);
+  assert.match(body.business_summary, /Business Manager workspace/i);
+  assert.deepEqual(body.module_data.map((entry) => entry.module), ["active_business"]);
+  assert.deepEqual(result.cards || [], []);
+  assert.equal(result.open || null, null);
+}
 ctx.session = adminSession;
 
 await handleSmartCommand("what is in my accounting ledger?");

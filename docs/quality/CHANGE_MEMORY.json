@@ -584,6 +584,16 @@
           "file": "scripts/test-customer-plan-switching.mjs",
           "pattern": "Customer plan switching checks passed",
           "description": "Static regression test covers backend/frontend/nav wiring."
+        },
+        {
+          "file": "server/src/access/entitlements.ts",
+          "pattern": "CUSTOMER_SWITCHABLE_PLAN_KEYS = new Set\\(\\[\"free\", \"professional\", \"elite\"\\]\\)",
+          "description": "Customer test mode exposes the actual Free, Pro, and Elite tiers, never the legacy Starter key."
+        },
+        {
+          "file": "server/scripts/test-local-customer-plan-preview.ts",
+          "pattern": "seed starts on Free Preview[\\s\\S]*customer1 can switch to Pro[\\s\\S]*customer1 can switch to Elite[\\s\\S]*switch back to Free Preview",
+          "description": "The executable local-customer test proves restrictions change immediately across all three public tiers."
         }
       ],
       "forbiddenPatterns": [
@@ -603,7 +613,7 @@
       "id": "dashboard-chat-context-and-fast-routing",
       "status": "active",
       "title": "Dashboard chat keeps the thread and uses the lightest capable brain",
-      "ownerDecision": "Normal questions and short follow-ups use the instant route; action-free comparisons, critiques, and strategy questions use the bounded local reasoning route. Both carry only temporary recent turns, skip business pulse work, and never degrade into an unrelated ledger or pipeline status dump.",
+      "ownerDecision": "Normal questions and short follow-ups use the instant route; action-free comparisons, critiques, creative planning, and feedback use bounded local reasoning; scoped business advice uses a local advisory route with only relevant organization context. All three stay action-free, never trust a browser-supplied private provider, and never degrade into an unrelated status dump.",
       "requiredPatterns": [
         {
           "file": "app/js/store.js",
@@ -637,7 +647,7 @@
         },
         {
           "file": "app/js/command.js",
-          "pattern": "Every authenticated user gets action-free chat and reasoning",
+          "pattern": "Every authenticated user gets action-free chat, reasoning, and scoped advice",
           "description": "Customer browsers as well as admins can reach safe instant and reasoning conversation."
         },
         {
@@ -662,8 +672,8 @@
           },
           {
             "file": "server/src/index.ts",
-            "pattern": "const actionFreeConversationTier = adminRouteTier === \"instant\"[\\s\\S]*isSafeReasoningConversationRequest\\(normalized\\)[\\s\\S]*const businessContextRelevant = !actionFreeConversation",
-            "description": "The server independently strips business context from verified instant and reasoning conversation even when a harmless question contains a business-related noun."
+          "pattern": "const actionFreeConversationTier = adminRouteTier === \"instant\"[\\s\\S]*isSafeReasoningConversationRequest\\(normalized\\)[\\s\\S]*isSafeAdvisoryConversationRequest\\(normalized\\)[\\s\\S]*const businessContextRelevant = \\(actionFreeConversationTier === \"advisory\" \\|\\| !actionFreeConversation\\)",
+          "description": "The server independently validates instant, reasoning, and advisory conversation; only scoped advisory chat receives relevant business context."
           },
           {
             "file": "server/src/phantom-ai/instant-chat-tools.ts",
@@ -762,8 +772,8 @@
           },
           {
             "file": "app/js/command.js",
-            "pattern": "const actionFreeConversation = isActionFreeModelRequest[\\s\\S]*if \\(actionFreeConversation && \\[\"question\", \"chat\"\\]\\.includes[\\s\\S]*localQuestionAnswer",
-            "description": "A failed instant or reasoning browser request remains in the conversation fallback and cannot fall through into business command keyword cascades."
+            "pattern": "const actionFreeConversation = isActionFreeModelRequest[\\s\\S]*if \\(actionFreeConversation && \\[\"question\", \"chat\", \"brainstorm\", \"feedback\", \"plan\"\\]\\.includes[\\s\\S]*localQuestionAnswer",
+            "description": "A failed instant, reasoning, or advisory browser request remains in the conversation fallback and cannot fall through into business command keyword cascades."
           },
           {
             "file": "scripts/test-dashboard-chat-quality.mjs",
@@ -809,6 +819,31 @@
           "file": "server/scripts/test-instant-chat-http-live-model.ts",
           "pattern": "naturalFollowUpVerified: true,[\\s\\S]*namedTopicRevisitVerified: true",
           "description": "The authenticated real-model gate proves a natural travel follow-up and a corrected named-topic return after several intervening subjects."
+        },
+        {
+          "file": "server/src/index.ts",
+          "pattern": "runAdminPhantomAiChatWithFallback\\(\"local_ollama\"[\\s\\S]*\\[\"local_ollama\"\\], \\{ allowFallback: false \\}\\)",
+          "description": "The server pins every validated action-free route to the local model even if an authenticated browser forges private model and provider fields."
+        },
+        {
+          "file": "app/js/command.js",
+          "pattern": "const advisoryOnly = isAdvisoryChatRequest[\\s\\S]*if \\(!advisoryOnly && MONEY_CONTEXT_TERMS[\\s\\S]*if \\(!advisoryOnly && plan.length && PLAN_CONTEXT_TERMS",
+          "description": "Scoped business advice can see the active organization while unrelated accounting totals and today-plan status remain excluded."
+        },
+        {
+          "file": "server/scripts/test-instant-chat-http-live-model.ts",
+          "pattern": "creativeReasoningVerified: true,[\\s\\S]*advisoryReasoningVerified: true,[\\s\\S]*providerPinningVerified: true",
+          "description": "The authenticated real-model gate proves creative planning, scoped organization advice, and forged-private-provider resistance."
+        },
+        {
+          "file": "scripts/test-phantom-intent-router.mjs",
+          "pattern": "give me a practical three-step plan for my business[\\s\\S]*should be plan",
+          "description": "Natural modifiers such as practical and three-step do not knock a planning request out of the advisory lane."
+        },
+        {
+          "file": "app/js/main.js",
+          "pattern": "setDatabaseOrganizationSwitching\\(true\\)[\\s\\S]*refreshNavEntitlements[\\s\\S]*setDatabaseOrganizationSwitching\\(false\\)[\\s\\S]*dataset\\.orgSwitching",
+          "description": "The organization switch keeps the selector and chat composer disabled until session, entitlements, and isolated chat UI have all crossed the same boundary."
         }
       ],
       "forbiddenPatterns": [

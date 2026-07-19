@@ -80,7 +80,7 @@ const exposeResetTokens = process.env.PHANTOMFORCE_LOCAL_CUSTOMER_RESET_EXPOSE_T
 const passwordIterations = 210_000;
 const passwordKeyLength = 32;
 const passwordDigest = "sha256";
-const DEFAULT_LOCAL_CUSTOMER_PLAN_KEY = "starter";
+const DEFAULT_LOCAL_CUSTOMER_PLAN_KEY = "free";
 const PLAN_STATUSES = new Set(["trial", "active", "grace", "suspended"]);
 
 let loaded = false;
@@ -131,7 +131,7 @@ function normalizePlanStatus(value: unknown): PlanStatus {
 function resolveLocalCustomerEntitlements(user: LocalCustomerUser): ResolvedEntitlements {
   const definition = publicPlanDefinition(user.planKey);
   const status = normalizePlanStatus(user.planStatus);
-  const freeViewOnly = definition.key === "starter";
+  const freeViewOnly = definition.key === "free" || definition.key === "starter";
   const canWrite = localCustomerWriteAccess && status !== "suspended" && !freeViewOnly;
   return {
     orgId: user.activeOrgId,

@@ -170,7 +170,8 @@ export const PLAN_DEFINITIONS: PlanDefinition[] = [
 ];
 
 const DEFAULT_PLAN_KEY = "starter";
-const CUSTOMER_SWITCHABLE_PLAN_KEYS = new Set(["starter", "professional", "elite"]);
+const CUSTOMER_SWITCHABLE_PLAN_KEYS = new Set(["free", "professional", "elite"]);
+const FREE_VIEW_ONLY_PLAN_KEYS = new Set(["free", "starter"]);
 const FULL_ACCESS_PLAN_KEYS = new Set(["elite", "enterprise", "internal"]);
 
 function forceFullAccessFeatures(features: PlanFeatures): PlanFeatures {
@@ -284,7 +285,7 @@ export async function getOrgEntitlements(orgId: string): Promise<ResolvedEntitle
   const overridesRaw = (orgPlan?.overrides ?? null) as { features?: unknown; limits?: unknown } | null;
   const features = applyOverrides(definition.features, overridesRaw?.features);
   const limits = applyOverrides(definition.limits, overridesRaw?.limits);
-  const freeViewOnly = definition.key === "starter";
+  const freeViewOnly = FREE_VIEW_ONLY_PLAN_KEYS.has(definition.key);
   const resolvedFeatures = FULL_ACCESS_PLAN_KEYS.has(definition.key)
     ? forceFullAccessFeatures(features.value)
     : features.value;
