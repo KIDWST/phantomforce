@@ -7231,6 +7231,60 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 }
 .phantom .nav-item.is-active .ic { color: var(--neon); }
 .phantom .nav-item.is-active .nav-badge { background: var(--warn); color: #1a1400; }
+.phantom .nav-item[data-nav-id="adminos"] {
+  position: relative;
+  color: #f9df9a;
+  border-color: rgba(255, 196, 82, 0.2);
+  background:
+    radial-gradient(circle at 18% 50%, rgba(255, 209, 102, 0.12), transparent 38%),
+    linear-gradient(135deg, rgba(47, 33, 8, 0.42), rgba(8, 12, 17, 0.28));
+  box-shadow: inset 0 1px rgba(255, 244, 196, 0.06), 0 0 18px rgba(255, 185, 69, 0.06);
+}
+.phantom .nav-item[data-nav-id="adminos"]::before {
+  content: "CORE";
+  margin-left: auto;
+  order: 4;
+  padding: 2px 6px;
+  border: 1px solid rgba(255, 209, 102, 0.28);
+  border-radius: 999px;
+  color: #ffd978;
+  background: rgba(255, 209, 102, 0.08);
+  font: 800 7px "DM Mono", monospace;
+  letter-spacing: 0.12em;
+}
+.phantom .nav-item[data-nav-id="adminos"] .ic {
+  color: #ffd166;
+  filter: drop-shadow(0 0 8px rgba(255, 209, 102, 0.45));
+}
+.phantom .nav-item[data-nav-id="adminos"]:hover {
+  color: #fff3c6;
+  border-color: rgba(255, 209, 102, 0.34);
+  background:
+    radial-gradient(circle at 18% 50%, rgba(255, 209, 102, 0.18), transparent 42%),
+    linear-gradient(135deg, rgba(78, 53, 10, 0.52), rgba(10, 12, 16, 0.34));
+}
+.phantom .nav-item[data-nav-id="adminos"].is-active {
+  color: #170f02;
+  border-color: rgba(255, 225, 138, 0.78);
+  background: linear-gradient(135deg, #fff1b8, #ffd166 48%, #c68621);
+  box-shadow:
+    inset 0 1px rgba(255, 255, 255, 0.52),
+    0 10px 30px rgba(255, 184, 55, 0.24),
+    0 0 0 1px rgba(255, 209, 102, 0.16);
+}
+.phantom .nav-item[data-nav-id="adminos"].is-active::after {
+  background: linear-gradient(180deg, #fff1b8, #ffd166, #c68621);
+  box-shadow: 0 0 16px rgba(255, 209, 102, 0.7);
+}
+.phantom .nav-item[data-nav-id="adminos"].is-active::before {
+  color: #2a1800;
+  border-color: rgba(42, 24, 0, 0.22);
+  background: rgba(42, 24, 0, 0.12);
+}
+.phantom .nav-item[data-nav-id="adminos"].is-active .ic {
+  color: #2a1800;
+  filter: none;
+}
 
 .pill { background: var(--glass); border: 1px solid var(--line); box-shadow: var(--edge-hi); }
 .pill-v { font-variant-numeric: tabular-nums; }
@@ -13465,4 +13519,39 @@ body .phantom .workspace-page :where(
   .console:not(.console-workspace) .chatbox-log { flex: 1 1 auto; min-height: 0; max-height: none; }
   .console:not(.console-workspace) .hero2-stage { display: none !important; }
   .chat-start-btn { min-height: 40px; }
+}
+
+/* Internal builder layer: Admin is a gold control, not a generic customer tab. */
+@media (max-width: 900px) {
+  .mobile-bottom-item[data-mobile-nav="adminos"] {
+    color: #ffe3a0;
+    border: 1px solid rgba(255, 209, 102, 0.22);
+    background:
+      radial-gradient(circle at 50% 12%, rgba(255, 209, 102, 0.18), transparent 42%),
+      linear-gradient(180deg, rgba(70, 45, 8, 0.5), rgba(7, 10, 14, 0.26));
+    box-shadow: inset 0 1px rgba(255, 244, 196, 0.08), 0 0 16px rgba(255, 184, 55, 0.08);
+  }
+  .mobile-bottom-item[data-mobile-nav="adminos"]::after {
+    content: "CORE";
+    position: absolute;
+    top: 5px;
+    right: 6px;
+    color: #ffd978;
+    font: 800 5.5px "DM Mono", monospace;
+    letter-spacing: 0.1em;
+  }
+  .mobile-bottom-item[data-mobile-nav="adminos"] .ic {
+    color: #ffd166;
+    filter: drop-shadow(0 0 7px rgba(255, 209, 102, 0.5));
+  }
+  .mobile-bottom-item[data-mobile-nav="adminos"].is-active {
+    color: #1d1100;
+    background: linear-gradient(135deg, #fff1b8, #ffd166 52%, #c68621);
+    box-shadow: inset 0 1px rgba(255, 255, 255, 0.48), 0 0 24px rgba(255, 184, 55, 0.25);
+  }
+  .mobile-bottom-item[data-mobile-nav="adminos"].is-active::after,
+  .mobile-bottom-item[data-mobile-nav="adminos"].is-active .ic {
+    color: #2a1800;
+    filter: none;
+  }
 }
