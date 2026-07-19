@@ -1152,6 +1152,29 @@
       ]
     },
     {
+      "id": "respectively-mapping-and-named-entity-rollback",
+      "status": "active",
+      "title": "Phantom preserves respectively mappings and rolls back only the named person's change",
+      "ownerDecision": "Respectively statements are exact ordered mappings: named, ordinal, and reverse callbacks must preserve the stated pairs. Unequal lists must produce one useful clarification instead of a guessed mapping. An undo naming one person restores only that person's original value while preserving every accepted change for the others. Handling remains bounded, extractive, temporary, and organization-scoped.",
+      "requiredPatterns": [
+        {
+          "file": "server/src/phantom-ai/instant-chat-tools.ts",
+          "pattern": "function respectivelyReferenceReply[\\s\\S]*mapping.subjects.length !== mapping.values.length[\\s\\S]*function namedPropertyRevisionReply",
+          "description": "Ordered mappings, mismatched-list clarification, and per-person rollback use bounded deterministic state."
+        },
+        {
+          "file": "server/scripts/test-instant-chat-http-live-model.ts",
+          "pattern": "respectivelyMappingVerified: true[\\s\\S]*unequalRespectivelyClarificationVerified: true[\\s\\S]*namedEntityRollbackVerified: true",
+          "description": "The 100-plus request gate covers forward, reverse, ordinal, unequal, and named rollback behavior."
+        },
+        {
+          "file": "scripts/test-database-auth-org-browser.mjs",
+          "pattern": "reverse respectively callback must return the value's actual owner[\\s\\S]*undoing Mina must not roll Theo back with her",
+          "description": "Authenticated Chrome proves the exact mappings and scoped undo through dashboard chat."
+        }
+      ]
+    },
+    {
       "id": "database-auth-reboot-recovery",
       "status": "active",
       "title": "Live admin and customer auth depend on a self-recovering database",

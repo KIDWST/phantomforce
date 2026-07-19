@@ -859,6 +859,28 @@ async function main() {
     const browserLatter = await submitChat(cdp, "What does the latter contain? Noun only.", diagnostics);
     continuityResults.push(browserLatter);
     assert.match(browserLatter.answer.trim(), /^contracts$/i, "latter must resolve to the second stated object value without invention");
+    continuityResults.push(await submitChat(cdp, "Mina, Theo, and Priya chose tea, coffee, and juice, respectively.", diagnostics));
+    const browserTheoChoice = await submitChat(cdp, "What did Theo choose? Drink only.", diagnostics);
+    continuityResults.push(browserTheoChoice);
+    assert.match(browserTheoChoice.answer.trim(), /^coffee[.!]?$/i, "a named respectively callback must return its exact paired value");
+    const browserJuiceOwner = await submitChat(cdp, "Who chose juice? Name only.", diagnostics);
+    continuityResults.push(browserJuiceOwner);
+    assert.match(browserJuiceOwner.answer.trim(), /^Priya[.!]?$/i, "a reverse respectively callback must return the value's actual owner");
+    const browserSecondPerson = await submitChat(cdp, "What did the second person choose? Drink only.", diagnostics);
+    continuityResults.push(browserSecondPerson);
+    assert.match(browserSecondPerson.answer.trim(), /^coffee[.!]?$/i, "an ordinal person callback must preserve respectively order");
+    continuityResults.push(await submitChat(cdp, "Mina and Theo chose tea, coffee, and juice, respectively.", diagnostics));
+    const browserUnequalMapping = await submitChat(cdp, "What did Theo choose?", diagnostics);
+    continuityResults.push(browserUnequalMapping);
+    assert.equal(browserUnequalMapping.answer, "I have 2 people and 3 choices. Which choice belongs to Theo?", "unequal respectively lists must clarify their unmatched pairing instead of guessing");
+    continuityResults.push(await submitChat(cdp, "Mina's badge is red and Theo's badge is blue.", diagnostics));
+    continuityResults.push(await submitChat(cdp, "Change Mina's badge to gold and Theo's to green.", diagnostics));
+    const browserNamedUndoAck = await submitChat(cdp, "Undo Mina's change but keep Theo's.", diagnostics);
+    continuityResults.push(browserNamedUndoAck);
+    assert.match(browserNamedUndoAck.answer, /Mina's badge to red[\s\S]*Theo's badge remains green/i, "named undo must immediately identify both the restored and preserved person state");
+    const browserNamedUndoFinal = await submitChat(cdp, "What are Mina's and Theo's final badge colors? MINA | THEO only.", diagnostics);
+    continuityResults.push(browserNamedUndoFinal);
+    assert.match(browserNamedUndoFinal.answer.trim(), /^red\s*\|\s*green[.!]?$/i, "undoing Mina must not roll Theo back with her");
     continuityResults.push(await submitChat(cdp, "Options: 1) email, 2) call, 3) meeting.", diagnostics));
     const browserReorder = await submitChat(cdp, "Move the third before the first. Return the reordered list only.", diagnostics);
     continuityResults.push(browserReorder);
@@ -1022,7 +1044,7 @@ async function main() {
         "customer reasoning reaches the bounded local model lane without cards or business context",
         "customer planning and feedback use real model answers instead of canned intent copy",
         "organization advice remains action-free and excludes money, plan, asset, and pulse status",
-        "natural follow-ups, exact object/list/causal references, full and partial correction rollback, and useful ambiguity clarification stay coherent across 63 browser turns",
+        "natural follow-ups, exact object/list/causal/respectively references, full, partial, and named-entity rollback, and useful ambiguity clarification stay coherent across 73 browser turns",
         "durable memory survives reload inside organization A",
         "organization B receives no A memory, history, request context, or visible chat",
         "organization A returns without organization B contamination",

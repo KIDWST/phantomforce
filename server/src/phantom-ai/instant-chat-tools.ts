@@ -228,6 +228,67 @@ function pairedReferenceReply(userRequest: string, turns: InstantChatToolTurn[])
   return null;
 }
 
+type RespectivelyMapping = {
+  subjects: string[];
+  values: string[];
+};
+
+function splitRespectivelyList(value: string) {
+  return value
+    .replace(/\s*,?\s+and\s+/gi, ",")
+    .split(/\s*,\s*/)
+    .map(cleanListItem)
+    .map((item) => item.replace(/^(?:the|a|an)\s+/i, "").trim())
+    .filter(Boolean);
+}
+
+function respectivelyMappingFromText(value: string): RespectivelyMapping | null {
+  const match = value.match(/^\s*(.{2,180}?)\s+(?:chose|selected|picked|received|were assigned)\s+(.{2,180}?)\s*,?\s+respectively[.!?]?\s*$/i);
+  if (!match) return null;
+  const subjects = splitRespectivelyList(match[1]);
+  const values = splitRespectivelyList(match[2]);
+  if (subjects.length < 2 || subjects.length > 10 || values.length < 2 || values.length > 10) return null;
+  if (!subjects.every((subject) => /^[A-Z][A-Za-z'-]{1,39}$/.test(subject))) return null;
+  if (!values.every((item) => item.length <= 80)) return null;
+  return { subjects, values };
+}
+
+function respectivelyReferenceReply(userRequest: string, turns: InstantChatToolTurn[]): InstantChatToolReply | null {
+  const mapping = [...turns].reverse()
+    .map((turn) => respectivelyMappingFromText(turn.user))
+    .find((item): item is RespectivelyMapping => Boolean(item));
+  if (!mapping) return null;
+
+  if (mapping.subjects.length !== mapping.values.length) {
+    const requestedSubject = mapping.subjects.find((subject) => new RegExp(`\\b${subject.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(userRequest));
+    const requestedValue = mapping.values.find((item) => userRequest.toLowerCase().includes(item.toLowerCase()));
+    const requestedOrdinal = /\b(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth)\s+(?:person|name|one|choice|value)\b/i.test(userRequest);
+    if (!requestedSubject && !requestedValue && !requestedOrdinal) return null;
+    return {
+      output_text: `I have ${mapping.subjects.length} people and ${mapping.values.length} choices. ${requestedSubject ? `Which choice belongs to ${requestedSubject}?` : requestedValue ? `Who chose ${requestedValue}?` : "How should I pair them?"}`,
+      tool_id: "phantom-clarifier",
+    };
+  }
+
+  const ordinal = userRequest.match(/\b(first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth)\s+(?:person|name|one)\b/i)?.[1]?.toLowerCase();
+  if (ordinal) {
+    const value = mapping.values[ORDINALS[ordinal]];
+    return value ? { output_text: value, tool_id: "phantom-reference-resolver" } : null;
+  }
+
+  const subjectIndex = mapping.subjects.findIndex((subject) => new RegExp(`\\b${subject.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(userRequest));
+  if (subjectIndex >= 0 && /\b(?:what|which)\b/i.test(userRequest)) {
+    return { output_text: mapping.values[subjectIndex], tool_id: "phantom-reference-resolver" };
+  }
+
+  if (/\bwho\b/i.test(userRequest)) {
+    const normalizedRequest = userRequest.toLowerCase();
+    const valueIndex = mapping.values.findIndex((item) => normalizedRequest.includes(item.toLowerCase()));
+    if (valueIndex >= 0) return { output_text: mapping.subjects[valueIndex], tool_id: "phantom-reference-resolver" };
+  }
+  return null;
+}
+
 type CausalPair = { outcome: string; cause: string };
 
 function cleanCausalPart(value: string) {
@@ -378,8 +439,58 @@ function posterRevisionReply(userRequest: string, turns: InstantChatToolTurn[]):
   };
 }
 
+type NamedPropertyBase = {
+  index: number;
+  property: string;
+  names: string[];
+  values: Record<string, string>;
+};
+
+function namedPropertyBaseFromTurns(turns: InstantChatToolTurn[]): NamedPropertyBase | null {
+  for (let index = turns.length - 1; index >= 0; index -= 1) {
+    if (/^\s*(?:change|update|set|undo|restore|actually|correction)\b/i.test(turns[index].user)) continue;
+    const entries = [...turns[index].user.matchAll(/\b([A-Z][A-Za-z'-]{1,39})'s\s+([a-z][a-z0-9-]{1,30})\s+is\s+([a-z0-9-]{1,40})\b/gi)];
+    if (entries.length < 2 || entries.length > 10) continue;
+    const property = entries[0][2].toLowerCase();
+    if (!entries.every((entry) => entry[2].toLowerCase() === property)) continue;
+    const names = entries.map((entry) => entry[1]);
+    const values = Object.fromEntries(entries.map((entry) => [entry[1].toLowerCase(), entry[3]]));
+    return { index, property, names, values };
+  }
+  return null;
+}
+
+function namedPropertyRevisionReply(userRequest: string, turns: InstantChatToolTurn[]): InstantChatToolReply | null {
+  const base = namedPropertyBaseFromTurns(turns);
+  if (!base) return null;
+  const asksFinal = /\bfinal\b[\s\S]*\b(?:colors?|values?|states?)\b/i.test(userRequest)
+    && base.names.every((name) => new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(userRequest));
+  const undoName = userRequest.match(/\b(?:undo|restore|revert)\s+([A-Z][A-Za-z'-]{1,39})'s(?:\s+change)?\b/i)?.[1];
+  if (!asksFinal && !undoName) return null;
+
+  const state = { ...base.values };
+  for (const message of turns.slice(base.index + 1).map((turn) => turn.user)) {
+    const restored = message.match(/\b(?:undo|restore|revert)\s+([A-Z][A-Za-z'-]{1,39})'s(?:\s+change)?\b/i)?.[1];
+    if (restored && state[restored.toLowerCase()] != null) state[restored.toLowerCase()] = base.values[restored.toLowerCase()];
+    for (const match of message.matchAll(/\b([A-Z][A-Za-z'-]{1,39})'s(?:\s+([a-z][a-z0-9-]{1,30}))?\s+(?:is|to)\s+([a-z0-9-]{1,40})\b/gi)) {
+      const name = match[1].toLowerCase();
+      if (state[name] == null || (match[2] && match[2].toLowerCase() !== base.property)) continue;
+      state[name] = match[3];
+    }
+  }
+  if (undoName) state[undoName.toLowerCase()] = base.values[undoName.toLowerCase()];
+
+  if (asksFinal) {
+    return { output_text: base.names.map((name) => state[name.toLowerCase()]).join(" | "), tool_id: "phantom-reference-resolver" };
+  }
+  const kept = base.names.find((name) => name.toLowerCase() !== undoName!.toLowerCase() && new RegExp(`\\bkeep\\s+${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}'s`, "i").test(userRequest));
+  const restoredValue = state[undoName!.toLowerCase()];
+  const keptText = kept ? ` ${kept}'s ${base.property} remains ${state[kept.toLowerCase()]}.` : "";
+  return { output_text: `Restored ${undoName}'s ${base.property} to ${restoredValue}.${keptText}`, tool_id: "phantom-reference-resolver" };
+}
+
 function structuredRevisionReply(userRequest: string, turns: InstantChatToolTurn[]) {
-  return meetingRevisionReply(userRequest, turns) || posterRevisionReply(userRequest, turns);
+  return meetingRevisionReply(userRequest, turns) || posterRevisionReply(userRequest, turns) || namedPropertyRevisionReply(userRequest, turns);
 }
 
 function crossAnswerStyleRepairReply(userRequest: string, turns: InstantChatToolTurn[]): InstantChatToolReply | null {
@@ -505,6 +616,7 @@ export function buildInstantChatToolReply(userRequest: string, turns: InstantCha
     || contextFactReply(userRequest, turns)
     || arithmeticReply(userRequest, turns)
     || pairedReferenceReply(userRequest, turns)
+    || respectivelyReferenceReply(userRequest, turns)
     || causalReferenceReply(userRequest, turns)
     || listReorderReply(userRequest, turns)
     || listSelectionReply(userRequest, turns);

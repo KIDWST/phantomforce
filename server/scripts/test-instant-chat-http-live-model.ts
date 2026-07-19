@@ -543,6 +543,40 @@ rows.push(latterFolder);
 assert.equal(latterFolder.modelId, "phantom-reference-resolver");
 assert.match(latterFolder.answer.trim(), /^contracts$/i);
 
+const respectivelyReferences: Turn[] = [];
+rows.push(await ask(customerToken, "Mina, Theo, and Priya chose tea, coffee, and juice, respectively.", respectivelyReferences));
+const theoChoice = await ask(customerToken, "What did Theo choose? Drink only.", respectivelyReferences);
+rows.push(theoChoice);
+assert.equal(theoChoice.modelId, "phantom-reference-resolver");
+assert.match(theoChoice.answer.trim(), /^coffee[.!]?$/i);
+const juiceOwner = await ask(customerToken, "Who chose juice? Name only.", respectivelyReferences);
+rows.push(juiceOwner);
+assert.equal(juiceOwner.modelId, "phantom-reference-resolver");
+assert.match(juiceOwner.answer.trim(), /^Priya[.!]?$/i);
+const secondPersonChoice = await ask(customerToken, "What did the second person choose? Drink only.", respectivelyReferences);
+rows.push(secondPersonChoice);
+assert.equal(secondPersonChoice.modelId, "phantom-reference-resolver");
+assert.match(secondPersonChoice.answer.trim(), /^coffee[.!]?$/i);
+
+const unequalRespectively: Turn[] = [];
+rows.push(await ask(customerToken, "Mina and Theo chose tea, coffee, and juice, respectively.", unequalRespectively));
+const unequalClarifier = await ask(customerToken, "What did Theo choose?", unequalRespectively);
+rows.push(unequalClarifier);
+assert.equal(unequalClarifier.modelId, "phantom-clarifier");
+assert.equal(unequalClarifier.answer, "I have 2 people and 3 choices. Which choice belongs to Theo?");
+
+const namedEntityRollback: Turn[] = [];
+rows.push(await ask(adminToken, "Mina's badge is red and Theo's badge is blue.", namedEntityRollback));
+rows.push(await ask(adminToken, "Change Mina's badge to gold and Theo's to green.", namedEntityRollback));
+const namedRollbackAck = await ask(adminToken, "Undo Mina's change but keep Theo's.", namedEntityRollback);
+rows.push(namedRollbackAck);
+assert.equal(namedRollbackAck.modelId, "phantom-reference-resolver");
+assert.match(namedRollbackAck.answer, /Mina's badge to red[\s\S]*Theo's badge remains green/i);
+const namedRollbackFinal = await ask(adminToken, "What are Mina's and Theo's final badge colors? MINA | THEO only.", namedEntityRollback);
+rows.push(namedRollbackFinal);
+assert.equal(namedRollbackFinal.modelId, "phantom-reference-resolver");
+assert.match(namedRollbackFinal.answer.trim(), /^red\s*\|\s*green[.!]?$/i);
+
 const reorderedOptions: Turn[] = [];
 rows.push(await ask(customerToken, "Options: 1) email, 2) call, 3) meeting.", reorderedOptions));
 const movedOption = await ask(customerToken, "Move the third before the first. Return the reordered list only.", reorderedOptions);
@@ -649,6 +683,9 @@ assert.doesNotMatch(partialRollbackFinal.answer, /black|gold|green/i);
     causalReferencesVerified: true,
     originalPlanRollbackVerified: true,
     partialRollbackVerified: true,
+    respectivelyMappingVerified: true,
+    unequalRespectivelyClarificationVerified: true,
+    namedEntityRollbackVerified: true,
   }, null, 2));
 } finally {
   ownedServer?.kill();

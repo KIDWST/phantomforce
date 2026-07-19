@@ -16,6 +16,7 @@ const CROSS_ANSWER_REFERENCE = /\b(?:first|second|third|fourth)\s+(?:idea|option
 const PAIRED_REFERENCE = /\b(?:former|latter)\b/i;
 const PLURAL_REFERENCE = /\b(?:they|them|their|theirs|those|these)\b/i;
 const CAUSAL_REFERENCE = /\b(?:first|second|third|fourth)\s+(?:result|outcome|effect|event)\b|\b(?:that|this)\s+(?:reason|cause|result|outcome)\b|\b(?:as a result|therefore)\b/i;
+const RESPECTIVELY_REFERENCE = /\brespectively\b|\b(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth)\s+(?:person|name|one)\b/i;
 const CONTEXT_STOP_WORDS = new Set([
   "about", "after", "again", "answer", "back", "before", "could", "current", "does", "explain", "favorite", "first", "from", "give", "have", "into", "just", "know", "latest", "make", "more", "next", "only", "please", "question", "recommend", "sentence", "should", "something", "stay", "tell", "that", "their", "then", "there", "these", "thing", "this", "those", "what", "when", "where", "which", "would", "write", "your",
 ]);
@@ -82,6 +83,7 @@ export function needsInstantConversationContext(turns: InstantConversationTurn[]
   return FOLLOW_UP_SIGNAL.test(text)
     || IMPLICIT_FOLLOW_UP.test(text)
     || CAUSAL_REFERENCE.test(text)
+    || RESPECTIVELY_REFERENCE.test(text)
     || CONTEXT_REFERENCE.test(text)
     || CONTEXT_OPERATION.test(text)
     || hasTopicOverlap(turns, text);
@@ -104,7 +106,7 @@ export function selectActiveInstantTopicTurns(turns: InstantConversationTurn[]) 
 export function selectRelevantInstantTurns(turns: InstantConversationTurn[], userRequest = "") {
   if (CROSS_ANSWER_REFERENCE.test(userRequest)) return turns.slice(-6);
   const activeTurns = selectActiveInstantTopicTurns(turns);
-  if (PAIRED_REFERENCE.test(userRequest) || PLURAL_REFERENCE.test(userRequest) || CAUSAL_REFERENCE.test(userRequest)) return activeTurns.slice(-6);
+  if (PAIRED_REFERENCE.test(userRequest) || PLURAL_REFERENCE.test(userRequest) || CAUSAL_REFERENCE.test(userRequest) || RESPECTIVELY_REFERENCE.test(userRequest)) return activeTurns.slice(-6);
   const requestTerms = meaningfulTerms(userRequest);
   if (!requestTerms.size) return activeTurns;
 

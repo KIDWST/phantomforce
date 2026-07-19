@@ -117,6 +117,50 @@ assert.deepEqual(
   }]),
   { output_text: "the sensor shut down", tool_id: "phantom-reference-resolver" },
 );
+const respectivelyTurns = [{
+  user: "Mina, Theo, and Priya chose tea, coffee, and juice, respectively.",
+  assistant: "Mina chose tea, Theo chose coffee, and Priya chose juice.",
+}];
+assert.deepEqual(
+  buildInstantChatToolReply("What did Theo choose? Drink only.", respectivelyTurns),
+  { output_text: "coffee", tool_id: "phantom-reference-resolver" },
+);
+assert.deepEqual(
+  buildInstantChatToolReply("Who chose juice? Name only.", respectivelyTurns),
+  { output_text: "Priya", tool_id: "phantom-reference-resolver" },
+);
+assert.deepEqual(
+  buildInstantChatToolReply("What did the second person choose? Drink only.", respectivelyTurns),
+  { output_text: "coffee", tool_id: "phantom-reference-resolver" },
+);
+assert.deepEqual(
+  buildInstantChatToolReply("What did Theo choose?", [{
+    user: "Mina and Theo chose tea, coffee, and juice, respectively.",
+    assistant: "I need clarification because the lists do not pair evenly.",
+  }]),
+  { output_text: "I have 2 people and 3 choices. Which choice belongs to Theo?", tool_id: "phantom-clarifier" },
+);
+assert.equal(
+  buildInstantChatToolReply("What did they pack? Name each person and item.", [
+    { user: "Mina and Theo chose tea, coffee, and juice, respectively.", assistant: "The lists do not pair evenly." },
+    { user: "Mina packed maps and Theo packed snacks.", assistant: "Mina packed maps; Theo packed snacks." },
+  ]),
+  null,
+  "an older unequal mapping must not hijack an unrelated plural follow-up",
+);
+const namedRevisionTurns = [
+  { user: "Mina's badge is red and Theo's badge is blue.", assistant: "Mina's badge is red; Theo's badge is blue." },
+  { user: "Change Mina's badge to gold and Theo's to green.", assistant: "Mina's badge is gold; Theo's badge is green." },
+  { user: "Undo Mina's change but keep Theo's.", assistant: "Mina's badge is red; Theo's badge remains green." },
+];
+assert.deepEqual(
+  buildInstantChatToolReply("Undo Mina's change but keep Theo's.", namedRevisionTurns.slice(0, 2)),
+  { output_text: "Restored Mina's badge to red. Theo's badge remains green.", tool_id: "phantom-reference-resolver" },
+);
+assert.deepEqual(
+  buildInstantChatToolReply("What are Mina's and Theo's final badge colors? MINA | THEO only.", namedRevisionTurns),
+  { output_text: "red | green", tool_id: "phantom-reference-resolver" },
+);
 const overlappingMeetingTurns = [
   { user: "The meeting is Tuesday at 2 PM in Room 4.", assistant: "Tuesday at 2 PM in Room 4." },
   { user: "Correction: Thursday at 4 PM in Room 9.", assistant: "Thursday at 4 PM in Room 9." },
