@@ -52,6 +52,13 @@
   forbidden patterns there so another stale worktree cannot resurrect it.
 
 ## Recent, merged & live (newest first)
+- **Useful ambiguity + correction repair (2026-07-18)** — server commit
+  `f1923f80`, browser build remains `phantom-live-20260718-43`. Phantom asks one
+  concise clarification naming genuinely ambiguous people, ignores format words
+  and older candidates when the current subject is explicit, and preserves a
+  selected idea when borrowing another answer's tone. The canonical 105-request
+  gate, 38-turn two-organization Chrome journey, scheduled sync, and 187 live
+  guards passed with zero fallback or business leakage.
 - **Bounded long-distance chat recall (2026-07-18)** — build
   `phantom-live-20260718-43`. The browser packs six newest temporary turns plus
   up to four turns from a named older thread, still capped at ten and scoped to

@@ -1883,8 +1883,21 @@ Cycle 25.
 
 ## Deployment Verification
 
-- Pending commit, push, canonical sync, deployed model gate, scheduled sync, and
-  strict post-sync source doctor.
+- Pushed `f1923f80` to `origin/main` and synced the canonical
+  `deployments\phantomforce-live` checkout.
+- PASS: strict live-source doctor aligned source, origin, deployment manifest,
+  static UI, Hermes, resurrection guards, and clean worktrees at `f1923f80`;
+  the public admin remained on `phantom-live-20260718-43` because this batch
+  changed server behavior and tests, not browser assets.
+- PASS: the canonical-checkout model gate completed 105 requests at 537 ms
+  average and 2,001 ms maximum with zero fallback and zero business leakage;
+  clarification, correction repair, and every prior assertion passed.
+- PASS: production Hermes rejected the demo-auth test login with 403, preserving
+  the production authentication boundary; the canonical disposable gate supplied
+  isolated test auth while the doctor proved live Hermes used the same commit.
+- PASS: manually triggered `PhantomForce Admin Main Sync` ended in `Ready` with
+  result `0`; the post-sync doctor confirmed no stale source was resurrected and
+  all 187 live guards remained aligned.
 
 ## Next Task
 

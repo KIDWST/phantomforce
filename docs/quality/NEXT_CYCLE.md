@@ -14,7 +14,8 @@ format words cannot trigger false clarification. Cross-answer corrections keep
 the selected idea separate from the referenced tone. A real Chrome journey
 proved 38 turns across two isolated organizations, and the expanded real-model
 gate passed 105 requests with zero fallback or leakage. Deployment evidence is
-recorded in `AUDIT_LOG.md` after canonical sync.
+recorded in `AUDIT_LOG.md`: `f1923f80` is live from the canonical checkout, the
+scheduled sync returned result `0`, and all 187 live guards passed.
 
 ## Recommended Cycle 26
 
