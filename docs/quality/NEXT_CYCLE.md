@@ -15,7 +15,9 @@ submit locking, and customer-safe outage copy. Completed chat answers render
 immediately. A startup timer can no longer overwrite a real answer with an
 accounting/approval briefing, and a dashboard restored after workspace
 navigation binds its command form before optional widgets render. The complete
-browser graph is `phantom-live-20260718-42`.
+browser graph is `phantom-live-20260718-42`. Commit `32926861` is deployed from
+the canonical checkout; its 96-request model gate and post-sync strict doctor
+passed with zero fallback, zero leakage, and all 177 live guards aligned.
 
 ## Recommended Cycle 24
 
@@ -58,4 +60,3 @@ Stop after one coherent implemented and browser-verified batch. The owner has
 authorized commit, push, and live deployment. Fetch and rebase `origin/main`,
 preserve concurrent work, sync the dedicated deployment, and run the strict
 live-source doctor before reporting the batch live.
-
