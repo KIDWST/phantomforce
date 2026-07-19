@@ -2202,3 +2202,77 @@ corrections in Cycle 29.
 ## Next Task
 
 Exercise negation, exceptions, and corrected group membership in Cycle 30.
+
+# 2026-07-19 - Cycle 30: Confirmation Exceptions And Corrected Membership
+
+## Problems Verified
+
+- Phantom had no exact set state for `everyone except`, `only`, or
+  `neither/nor`, so basic membership, count, and yes/no questions could depend
+  on model inference despite a fully stated roster.
+- The first expanded HTTP gate found that earlier questions such as `Who
+  confirmed?` could be reread as declarative updates and inflate the confirmed
+  count from three to four.
+- The relevance picker retained recent correction lines but could discard the
+  governing roster/base before a later negative-membership question.
+- A roster stated on the immediately prior turn could be treated as a separate
+  topic when the next sentence began `Everyone except...`.
+- Missing rosters, names outside the roster, and contradictory same-turn claims
+  had no fail-closed path and could be ignored or guessed.
+
+## Corrections
+
+- Added bounded tri-state confirmation state: confirmed, not confirmed, and
+  genuinely unknown. Full-set claims answer exact names/counts; partial
+  negative claims never silently promote the remaining people.
+- Added scoped person-level corrections, explicit add/remove handling, and
+  double-negation repair while preserving every unaffected member.
+- Restricted membership updates to declarative turns so prior questions cannot
+  mutate state.
+- Added missing-roster, unknown-person, out-of-roster-update, and contradictory
+  claim clarification instead of invented membership.
+- Added a structured context contract that retains the roster/base plus newest
+  corrections inside the existing ten-turn privacy cap, including a roster
+  stated one turn before the exception.
+- Recorded the behavior in permanent change memory. No app bundle changed in
+  this cycle; Jordan's concurrent gold admin navigation remained intact at
+  `phantom-live-20260719-45`.
+
+## Source Verification
+
+- PASS: `npm run test:instant-chat:http-live-model --workspace
+  @phantomforce/server` completed 187 authenticated requests at 425 ms average
+  and 2,141 ms maximum with zero fallback and zero business leakage.
+- PASS: `npm run test:database-auth` passed all 57 API/auth checks and a real
+  Chrome journey across two organizations and 116 conversational turns.
+- PASS: Chrome covered full exclusions, exact counts, only, neither/nor,
+  double negation, split rosters, named corrections, unknown people,
+  out-of-roster updates, contradictions, reload, tenant isolation, and tamper
+  rejection.
+- PASS: visual review at 1440x900 and 390x844 under
+  `tmp/database-auth-org-browser/2026-07-19T10-16-06-247Z`; the desktop command
+  surface and mobile composer/navigation had no overlap or horizontal overflow.
+- PASS: `npm run test:release-critical` (20/20), `npm run
+  test:dashboard-chat` (56 prompts plus 11 adversarial turns), `node
+  scripts/test-memory-retention.mjs`, typecheck, change memory, and `git diff
+  --check`.
+
+## Deployment Verification
+
+- Rebasing preserved Jordan's concurrent `eb091346` gold admin navigation;
+  pushed the Cycle 30 feature as `e15d6dc5` and synced the canonical
+  `deployments\phantomforce-live` checkout.
+- Repaired stale host-level watchdog defaults in
+  `Start-PhantomForce-RemoteStack.ps1`, `ecosystem.config.js`, and the user
+  `PHANTOMFORCE_DASHBOARD_REPO` value so they point to the canonical deployment
+  instead of the obsolete 2026-07-06 worktree.
+- PASS: strict live-source doctor aligned source, origin, deployment manifest,
+  Hermes, public build `phantom-live-20260719-45`, resurrection guards, sidebar
+  rules, and clean worktrees at `e15d6dc5`; all 205 live guards passed.
+- PASS: the canonical-checkout gate completed 187 requests at 415 ms average
+  and 1,939 ms maximum with zero fallback and zero business leakage.
+
+## Next Task
+
+Exercise explicit conditions, prerequisites, and corrected dependency rules in
+Cycle 31.

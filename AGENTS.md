@@ -52,6 +52,15 @@
   forbidden patterns there so another stale worktree cannot resurrect it.
 
 ## Recent, merged & live (newest first)
+- **Confirmation exceptions + corrected membership (2026-07-19)** — server
+  commit `e15d6dc5`, browser build `phantom-live-20260719-45` (the build was
+  advanced by Jordan's preserved gold admin navigation commit). Phantom now
+  resolves `everyone except`, `only`, and `neither/nor` as bounded tri-state
+  confirmation sets; returns exact names, counts, and yes/no answers; applies
+  person-level corrections and double negation; and clarifies missing rosters,
+  unknown people, out-of-roster updates, and contradictions. The canonical
+  187-request gate, 116-turn two-organization Chrome journey, strict live
+  doctor, and 205 live guards passed with zero fallback or business leakage.
 - **Isolated follow-ups + exact comparisons/events (2026-07-19)** — commit
   `5b9c713a`, browser build `phantom-live-20260718-44`. Vague transformations
   now carry only the immediately preceding topic instead of six unrelated
@@ -192,7 +201,7 @@
   (`app/index.html`, `app/phantom.css`, `app/js/main.js`).
 - **Living Phantom character** — `app/js/character.js`: 11 painted poses, emotional
   inertia (`governMood`), hologram depth. Shared by admin + public site.
-- Current cache-bust build id: **`phantom-live-20260718-44`**.
+- Current cache-bust build id: **`phantom-live-20260719-45`**.
 
 ## Repo map
 - `app/` — the **admin console** (`admin.phantomforce.online`). `index.html`,
