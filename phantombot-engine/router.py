@@ -28,12 +28,21 @@ def route_chat(messages, on_delta, mode="general", on_fallback=None, cloud_model
             except Exception:
                 pass
     elif cloud_client.is_configured():
+        emitted_any_delta = {"value": False}
+
+        def _tracking_on_delta(chunk):
+            emitted_any_delta["value"] = True
+            on_delta(chunk)
+
         try:
-            return cloud_client.stream_chat(messages, on_delta, model=cloud_model)
+            return cloud_client.stream_chat(messages, _tracking_on_delta, model=cloud_model)
         except Exception as exc:
+            reason = str(exc)
+            if emitted_any_delta["value"]:
+                reason += " (cloud emitted partial output before failing — UI should clear it)"
             if on_fallback:
                 try:
-                    on_fallback(str(exc))
+                    on_fallback(reason)
                 except Exception:
                     pass
     elif on_fallback:

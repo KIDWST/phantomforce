@@ -149,6 +149,50 @@ def test_route_chat_unleashed_mode_skips_cloud_even_when_configured(monkeypatch)
     assert fallback_calls == ["unleashed mode is local-only in this phase"]
 
 
+def test_route_chat_fallback_reason_notes_partial_output_when_cloud_emitted_deltas_before_failing(monkeypatch):
+    # Regression test: if cloud_client.stream_chat emitted one or more deltas
+    # via on_delta before failing partway through, the local fallback's
+    # on_fallback reason string must flag that stale partial output exists
+    # so a future UI consumer knows to clear it.
+    monkeypatch.setenv("PHANTOMBOT_CLOUD_API_KEY", "sk-test-123")
+    fallback_calls = []
+
+    def cloud_emits_then_fails(messages, on_delta, model=None):
+        on_delta("partial chunk")
+        raise RuntimeError("connection dropped")
+
+    with patch("cloud_client.stream_chat", side_effect=cloud_emits_then_fails), \
+         patch("ollama_client.stream_chat", return_value="local answer") as mock_local:
+        result = router.route_chat(
+            [{"role": "user", "content": "hi"}],
+            on_delta=lambda d: None,
+            on_fallback=lambda reason: fallback_calls.append(reason),
+        )
+    assert result == "local answer"
+    mock_local.assert_called_once()
+    assert len(fallback_calls) == 1
+    assert "connection dropped" in fallback_calls[0]
+    assert "cloud emitted partial output before failing" in fallback_calls[0]
+
+
+def test_route_chat_fallback_reason_has_no_partial_output_note_when_cloud_fails_immediately(monkeypatch):
+    # Contrast case: when cloud fails with zero deltas emitted, the reason
+    # string must be the plain exception message with no partial-output note.
+    monkeypatch.setenv("PHANTOMBOT_CLOUD_API_KEY", "sk-test-123")
+    fallback_calls = []
+    with patch("cloud_client.stream_chat", side_effect=RuntimeError("rate limited")), \
+         patch("ollama_client.stream_chat", return_value="local answer") as mock_local:
+        result = router.route_chat(
+            [{"role": "user", "content": "hi"}],
+            on_delta=lambda d: None,
+            on_fallback=lambda reason: fallback_calls.append(reason),
+        )
+    assert result == "local answer"
+    mock_local.assert_called_once()
+    assert fallback_calls == ["rate limited"]
+    assert "partial output" not in fallback_calls[0]
+
+
 def test_route_chat_survives_on_fallback_callback_raising_when_cloud_not_configured(monkeypatch):
     monkeypatch.delenv("PHANTOMBOT_CLOUD_API_KEY", raising=False)
 
