@@ -1,4 +1,4 @@
-import { currentTenantId, session } from "./store.js?v=phantom-live-20260718-39";
+import { currentTenantId, isLiveAdminHost, isLocalDevHost, session } from "./store.js?v=phantom-live-20260718-40";
 
 let activeConfiguration = null;
 let activeEntitlements = null;
@@ -45,6 +45,10 @@ const PLATFORM_MODULES = [
 ];
 const STRUCTURAL_NAV_MODULES = new Set(["memory", "settings", "developer", "vacation"]);
 const DEFAULT_ENTITLEMENTS = { coBranded: false, whiteLabel: false, internalPhantomForce: true, localFallback: true };
+const internalAdminSurface = () => {
+  const active = session.get?.() || {};
+  return isLiveAdminHost() || (isLocalDevHost() && active.role === "admin");
+};
 const authHeaders = (json = false) => {
   const token = session.token();
   return { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(json ? { "Content-Type": "application/json" } : {}) };
@@ -171,6 +175,7 @@ export function applyOrganizationCustomization(configuration = activeConfigurati
 }
 
 export function customizeNavigation(baseItems, role = "owner") {
+  if (internalAdminSurface()) return baseItems;
   if (!activeConfiguration) return baseItems.filter((item) => item.optionalModule !== true);
   const states = new Map(activeConfiguration.modules.map((module) => [module.id, module]));
   return baseItems

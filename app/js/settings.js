@@ -1,13 +1,13 @@
 /* PhantomForce admin settings.
    Local UI preferences only: no provider calls, sends, uploads, or billing. */
 
-import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260718-39";
-import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260718-39";
-import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260718-39";
-import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260718-39";
-import { canManageActiveOrg, fetchCustomerPlanPreview, fetchEntitlementsSummary, switchCustomerPlan } from "./orgs.js?v=phantom-live-20260718-39";
-import { currentTenantId, ctx, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260718-39";
-import { DEFAULT_COMPANION_PREFS, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260718-39";
+import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260718-40";
+import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260718-40";
+import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260718-40";
+import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260718-40";
+import { canManageActiveOrg, fetchCustomerPlanPreview, fetchEntitlementsSummary, switchCustomerPlan } from "./orgs.js?v=phantom-live-20260718-40";
+import { currentTenantId, ctx, isLiveAdminHost, isLocalDevHost, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260718-40";
+import { DEFAULT_COMPANION_PREFS, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260718-40";
 
 const AI_SETTINGS_KEY = "pf.operator.settings.v1";
 const SETTINGS_TAB_KEY = "pf.settings.tab.v1";
@@ -821,15 +821,16 @@ async function renderWorkspaceModulesTab(el, opts = {}) {
       activityEnabled: false,
       challengesEnabled: false,
     };
+    const internalAdminSurface = isLiveAdminHost() || (isLocalDevHost() && ctx.session?.role === "admin");
     const canManage = payload.can_manage === true;
-    const enabled = module.enabled === true;
+    const enabled = internalAdminSurface ? true : module.enabled === true;
     el.innerHTML = `
       <div class="set-section">
         <div class="set-section-head">
           <div>
             <p class="set-eyebrow">Workspace Modules</p>
-            <h3>Optional modules stay out of the way until enabled.</h3>
-            <p class="set-note">Core business tools remain prioritized. Optional modules can be enabled per organization without changing PhantomForce operations.</p>
+            <h3>${internalAdminSurface ? "Internal modules are always available here." : "Optional modules stay out of the way until enabled."}</h3>
+            <p class="set-note">${internalAdminSurface ? "This is the PhantomForce builder layer. PhantomPlay and internal admin tools cannot be hidden from the admin host." : "Core business tools remain prioritized. Optional modules can be enabled per organization without changing PhantomForce operations."}</p>
           </div>
           <span class="set-status-pill ${enabled ? "is-on" : ""}">${enabled ? "Enabled" : "Disabled"}</span>
         </div>
@@ -844,7 +845,7 @@ async function renderWorkspaceModulesTab(el, opts = {}) {
             </div>
           </div>
           <div class="set-grid set-grid-two">
-            <label class="set-inline"><input type="checkbox" data-module-enabled ${enabled ? "checked" : ""} ${canManage ? "" : "disabled"}/> PhantomPlay available</label>
+            <label class="set-inline"><input type="checkbox" data-module-enabled ${enabled ? "checked" : ""} ${canManage && !internalAdminSurface ? "" : "disabled"}/> PhantomPlay available${internalAdminSurface ? " · locked on" : ""}</label>
             <label class="set-field">
               <span>Access</span>
               <select data-module-access ${canManage && enabled ? "" : "disabled"}>
@@ -862,8 +863,8 @@ async function renderWorkspaceModulesTab(el, opts = {}) {
             <i>${esc(selectedMemberHelp(module))}</i>
           </label>
           <div class="set-actions-row">
-            <button class="btn btn-primary" type="button" data-module-save ${canManage ? "" : "disabled"}>${enabled ? "Save module access" : "Enable PhantomPlay"}</button>
-            ${enabled ? `<button class="btn btn-quiet" type="button" data-module-disable ${canManage ? "" : "disabled"}>Disable PhantomPlay</button>` : ""}
+            ${internalAdminSurface ? `<button class="btn btn-primary" type="button" disabled>Locked on for admin</button>` : `<button class="btn btn-primary" type="button" data-module-save ${canManage ? "" : "disabled"}>${enabled ? "Save module access" : "Enable PhantomPlay"}</button>`}
+            ${enabled && !internalAdminSurface ? `<button class="btn btn-quiet" type="button" data-module-disable ${canManage ? "" : "disabled"}>Disable PhantomPlay</button>` : ""}
           </div>
           <p class="set-note" data-module-message>${canManage ? "" : "Only organization owners and workspace administrators can configure this module."}</p>
         </article>
@@ -890,10 +891,10 @@ async function renderWorkspaceModulesTab(el, opts = {}) {
       const memberBox = el.querySelector("[data-module-member-ids]");
       const memberWrap = memberBox?.closest(".set-field");
       const selectedMode = access?.value || "owner_only";
-      if (access) access.disabled = !(canManage && enabledNow);
+      if (access) access.disabled = !(canManage && enabledNow) || internalAdminSurface;
       if (activity) activity.disabled = !(canManage && enabledNow);
       if (challenges) challenges.disabled = !(canManage && enabledNow);
-      if (memberBox) memberBox.disabled = !(canManage && enabledNow && selectedMode === "selected_members");
+      if (memberBox) memberBox.disabled = !(canManage && enabledNow && selectedMode === "selected_members") || internalAdminSurface;
       memberWrap?.classList.toggle("is-muted", selectedMode !== "selected_members");
       const save = el.querySelector("[data-module-save]");
       if (save) save.textContent = enabledNow ? (module.enabled === true ? "Save module access" : "Enable PhantomPlay") : "Save module access";
