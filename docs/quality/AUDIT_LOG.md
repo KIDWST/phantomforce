@@ -1574,6 +1574,20 @@ in Cycle 21.
 - PASS: `npm run build --workspace @phantomforce/server`.
 - PASS: `git diff --check`.
 
+## Deployment Verification
+
+- Pushed `0f566c9b` to `origin/main` and synced the canonical
+  `deployments\phantomforce-live` checkout.
+- PASS: strict live-source doctor aligned source, origin, deployment manifest,
+  static UI, Hermes, resurrection guards, and clean worktrees at `0f566c9b`;
+  the public admin served `phantom-live-20260718-38`.
+- PASS: deployed live-model gate completed 92 requests at 528 ms average and
+  1,935 ms maximum with zero fallback, zero business leakage, both reasoning
+  assertions true, and every prior conversation-quality assertion true.
+- PASS: manually triggered `PhantomForce Admin Main Sync` ended in `Ready`
+  with result `0`; a second strict doctor confirmed the task preserved commit
+  `0f566c9b`, build 38, the canonical UI root, and Hermes.
+
 ## Next Task
 
 Exercise the complete browser account lifecycle and authorization-error
