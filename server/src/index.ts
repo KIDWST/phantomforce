@@ -196,7 +196,12 @@ import { recallHermesInteractionMemory } from "./phantom-ai/hermes-interaction-r
 import { buildInstantChatFallbackReply } from "./phantom-ai/instant-chat-fallback.js";
 import { buildInstantChatToolReply, enforceInstantOutputConstraints, instantResponseTokenBudget } from "./phantom-ai/instant-chat-tools.js";
 import { buildInstantConversationContext, type InstantConversationTurn } from "./phantom-ai/instant-chat-context.js";
-import { filterConversationModules, isSafeInstantConversationRequest, needsBusinessContext } from "./phantom-ai/conversation-policy.js";
+import {
+  filterConversationModules,
+  isSafeInstantConversationRequest,
+  isSafeReasoningConversationRequest,
+  needsBusinessContext,
+} from "./phantom-ai/conversation-policy.js";
 import { buildOpsDashboardContext } from "./phantom-ai/ops-context.js";
 import { buildAgentWorkforceStatus } from "./phantom-ai/agent-workforce.js";
 import {
@@ -3547,7 +3552,7 @@ function parsePhantomAiChatProvider(value: unknown) {
 }
 
 type AdminPhantomAiModelLane = "codex" | "glm_5_2" | "claude_cli" | "local_ollama";
-type AdminPhantomAiRouteTier = "instant" | "standard" | "deep";
+type AdminPhantomAiRouteTier = "instant" | "reasoning" | "standard" | "deep";
 
 function parseAdminPhantomAiModelLane(value: unknown): AdminPhantomAiModelLane {
   if (value === "glm_5_2" || value === "openrouter_glm" || value === "glm") return "glm_5_2";
@@ -3557,7 +3562,7 @@ function parseAdminPhantomAiModelLane(value: unknown): AdminPhantomAiModelLane {
 }
 
 function parseAdminPhantomAiRouteTier(value: unknown): AdminPhantomAiRouteTier {
-  if (value === "instant" || value === "standard" || value === "deep") return value;
+  if (value === "instant" || value === "reasoning" || value === "standard" || value === "deep") return value;
   return "standard";
 }
 
@@ -3580,7 +3585,7 @@ function parseAllowProviderFallback(value: unknown, routeTier: AdminPhantomAiRou
     if (value.toLowerCase() === "true") return true;
     if (value.toLowerCase() === "false") return false;
   }
-  return routeTier !== "instant";
+  return routeTier !== "instant" && routeTier !== "reasoning";
 }
 
 function adminPhantomAiModelLabel(lane: AdminPhantomAiModelLane) {
@@ -3670,9 +3675,20 @@ const ADMIN_CHAT_INSTANT_TIMEOUT_MS = {
   local_ollama: 5000,
 } as const;
 
+const ADMIN_CHAT_REASONING_TIMEOUT_MS = {
+  codex_cli: 12000,
+  claude_cli: 12000,
+  openrouter_glm: 12000,
+  local_ollama: 12000,
+} as const;
+
 function adminPhantomAiProviderTimeoutMs(providerId: AdminPhantomAiProviderId, ctx: AdminPhantomAiChatContext) {
   const tier = ctx.routeTier ?? "standard";
-  const base = tier === "instant" ? ADMIN_CHAT_INSTANT_TIMEOUT_MS[providerId] : ADMIN_CHAT_FALLBACK_TIMEOUT_MS[providerId];
+  const base = tier === "instant"
+    ? ADMIN_CHAT_INSTANT_TIMEOUT_MS[providerId]
+    : tier === "reasoning"
+      ? ADMIN_CHAT_REASONING_TIMEOUT_MS[providerId]
+      : ADMIN_CHAT_FALLBACK_TIMEOUT_MS[providerId];
   if (typeof ctx.maxProviderMs === "number" && Number.isFinite(ctx.maxProviderMs)) {
     return Math.min(Math.max(Math.round(ctx.maxProviderMs), 3000), base);
   }
@@ -3749,8 +3765,12 @@ async function callAdminPhantomAiProvider(providerId: AdminPhantomAiProviderId, 
       sensitivityLevel: ctx.sensitivityLevel,
       approvalRequired: ctx.approvalRequired,
       executionMode: ctx.executionMode,
-      conversationMode: ctx.routeTier === "instant",
-      maxTokens: ctx.routeTier === "instant" ? instantResponseTokenBudget(ctx.userMessage) : undefined,
+      conversationMode: ctx.routeTier === "instant" || ctx.routeTier === "reasoning",
+      maxTokens: ctx.routeTier === "instant"
+        ? instantResponseTokenBudget(ctx.userMessage)
+        : ctx.routeTier === "reasoning"
+          ? Math.max(220, instantResponseTokenBudget(ctx.userMessage))
+          : undefined,
       adminOperatorLane: true,
     },
     {
@@ -8419,13 +8439,18 @@ app.post("/phantom-ai/chat", async (request, reply) => {
   const allowProviderFallback = parseAllowProviderFallback(body.allow_provider_fallback, adminRouteTier);
   const allowedAdminProviders = parseAllowedAdminProviders(body.allowed_providers);
   const recentConversation = parseRecentConversation(body.conversation_history);
-  const instantConversation = adminRouteTier === "instant" && isSafeInstantConversationRequest(normalized);
-  const businessContextRelevant = !instantConversation && needsBusinessContext(normalized.user_request, normalized.task_type);
+  const actionFreeConversationTier = adminRouteTier === "instant" && isSafeInstantConversationRequest(normalized)
+    ? "instant"
+    : adminRouteTier === "reasoning" && isSafeReasoningConversationRequest(normalized)
+      ? "reasoning"
+      : null;
+  const actionFreeConversation = Boolean(actionFreeConversationTier);
+  const businessContextRelevant = !actionFreeConversation && needsBusinessContext(normalized.user_request, normalized.task_type);
   normalized.module_data = filterConversationModules(normalized.module_data, normalized.user_request, normalized.task_type);
   if (!businessContextRelevant) {
     normalized.business_summary = "General conversation. Business workspace status is intentionally excluded unless the current request asks for it.";
   }
-  if (adminRouteTier !== "instant" && recentConversation.length && !normalized.module_data.some((module) => module.module === "recent_conversation")) {
+  if (!actionFreeConversation && recentConversation.length && !normalized.module_data.some((module) => module.module === "recent_conversation")) {
     normalized.module_data.push({
       module: "recent_conversation",
       summary: `${recentConversation.length} recent temporary chat turn(s). Use only to resolve the current request; do not treat this as durable memory or business status.`,
@@ -8440,7 +8465,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
      assets from THIS org's library ride into context as one compact module
      (never whole folders); assets flagged aiReferenceAllowed:false or
      deprecated are filtered inside the search. Failures never break chat. */
-  if (adminRouteTier !== "instant" && businessContextRelevant) {
+  if (!actionFreeConversation && businessContextRelevant) {
     const dbSession = asDatabaseSession(session);
     if (dbSession?.orgId && process.env.DATABASE_URL) {
       try {
@@ -8463,7 +8488,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
   /* Workspace pulse — live org state (approvals waiting, failed runs,
      competitor coverage, asset inventory) so Phantom answers from what the
      business is ACTUALLY doing right now, not memory alone. Additive only. */
-  if (adminRouteTier !== "instant" && businessContextRelevant) try {
+  if (!actionFreeConversation && businessContextRelevant) try {
     const dbSession = asDatabaseSession(session);
     const ciAccess = await competitorIntelligenceAccess(session);
     const pulse = await getOrganizationPulse(session, {
@@ -8496,7 +8521,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
     return privacyFirstLocationReply;
   }
 
-  if (instantConversation) {
+  if (actionFreeConversation) {
     const toolReply = buildInstantChatToolReply(
       normalized.user_request,
       recentConversation,
@@ -8526,7 +8551,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
           context_used: recentConversation.length > 0,
           ledger_written: false,
           provider_route: "local",
-          route_tier: "instant",
+          route_tier: actionFreeConversationTier,
           recalled_memory_count: 0,
         },
         brain: {
@@ -8534,7 +8559,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
           suggested_intent: normalized.task_type,
           risk_level: "low",
           needs_approval: false,
-          micro_prompt: "Deterministic instant micro-tool; business and durable memory context skipped.",
+          micro_prompt: `Deterministic ${actionFreeConversationTier} micro-tool; business and durable memory context skipped.`,
           relevant_memory_count: 0,
           used_memory_ids: [],
           active_rules: [],
@@ -8557,7 +8582,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
         approval_executed: false,
         queue_written: false,
         external_action_executed: false,
-        route_tier: "instant",
+        route_tier: actionFreeConversationTier,
         provider_timeout_ms: 0,
         result_status: "called",
       };
@@ -8630,7 +8655,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
         context_used: recentConversation.length > 0,
         ledger_written: false,
         provider_route: respondingProviderRoute,
-        route_tier: "instant",
+        route_tier: actionFreeConversationTier,
         recalled_memory_count: 0,
       },
       brain: {
@@ -8644,7 +8669,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
         relevant_memory_count: 0,
         used_memory_ids: [],
         active_rules: [],
-        reasons: ["instant_route"],
+        reasons: [`${actionFreeConversationTier}_route`],
       },
       memory_scope: buildMemoryScopeProof(normalized),
       memory_context: {

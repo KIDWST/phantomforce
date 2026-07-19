@@ -603,7 +603,7 @@
       "id": "dashboard-chat-context-and-fast-routing",
       "status": "active",
       "title": "Dashboard chat keeps the thread and uses the lightest capable brain",
-      "ownerDecision": "Normal questions and short follow-ups use the instant route, carry only a small temporary recent-turn window, skip business pulse work, and never degrade into an unrelated ledger or pipeline status dump.",
+      "ownerDecision": "Normal questions and short follow-ups use the instant route; action-free comparisons, critiques, and strategy questions use the bounded local reasoning route. Both carry only temporary recent turns, skip business pulse work, and never degrade into an unrelated ledger or pipeline status dump.",
       "requiredPatterns": [
         {
           "file": "app/js/store.js",
@@ -617,8 +617,8 @@
         },
         {
           "file": "server/src/index.ts",
-          "pattern": "if \\(adminRouteTier !== \"instant\" && businessContextRelevant\\) try",
-          "description": "Instant and non-business chat skip organization pulse and opportunity lookups."
+          "pattern": "if \\(!actionFreeConversation && businessContextRelevant\\) try",
+          "description": "Action-free instant and reasoning chat skip organization pulse and opportunity lookups."
         },
         {
           "file": "server/src/index.ts",
@@ -637,8 +637,8 @@
         },
         {
           "file": "app/js/command.js",
-          "pattern": "Every authenticated user gets the action-free instant brain",
-          "description": "Customer browsers as well as admins can reach safe instant conversation."
+          "pattern": "Every authenticated user gets action-free chat and reasoning",
+          "description": "Customer browsers as well as admins can reach safe instant and reasoning conversation."
         },
         {
           "file": "server/scripts/test-instant-chat-live-model.ts",
@@ -657,13 +657,13 @@
           },
           {
             "file": "app/js/command.js",
-            "pattern": "if \\(isInstantChatRequest\\(raw, intent\\)\\) return false;",
-            "description": "Harmless informational questions do not inherit business context merely because they mention a website, image, bank, invoice, contract, or post."
+            "pattern": "if \\(isActionFreeModelRequest\\(raw, intent\\)\\) return false;",
+            "description": "Harmless informational and reasoning questions do not inherit business context merely because they mention a website, image, bank, invoice, contract, or post."
           },
           {
             "file": "server/src/index.ts",
-            "pattern": "const instantConversation = adminRouteTier === \"instant\" && isSafeInstantConversationRequest\\(normalized\\);[\\s\\S]*const businessContextRelevant = !instantConversation",
-            "description": "The server independently strips business context from verified instant conversation even when a harmless question contains a business-related noun."
+            "pattern": "const actionFreeConversationTier = adminRouteTier === \"instant\"[\\s\\S]*isSafeReasoningConversationRequest\\(normalized\\)[\\s\\S]*const businessContextRelevant = !actionFreeConversation",
+            "description": "The server independently strips business context from verified instant and reasoning conversation even when a harmless question contains a business-related noun."
           },
           {
             "file": "server/src/phantom-ai/instant-chat-tools.ts",
@@ -762,8 +762,8 @@
           },
           {
             "file": "app/js/command.js",
-            "pattern": "const instantConversation = isInstantChatRequest[\\s\\S]*if \\(instantConversation && \\[\"question\", \"chat\"\\]\\.includes[\\s\\S]*localQuestionAnswer",
-            "description": "A failed instant browser request remains in the conversation fallback and cannot fall through into business command keyword cascades."
+            "pattern": "const actionFreeConversation = isActionFreeModelRequest[\\s\\S]*if \\(actionFreeConversation && \\[\"question\", \"chat\"\\]\\.includes[\\s\\S]*localQuestionAnswer",
+            "description": "A failed instant or reasoning browser request remains in the conversation fallback and cannot fall through into business command keyword cascades."
           },
           {
             "file": "scripts/test-dashboard-chat-quality.mjs",

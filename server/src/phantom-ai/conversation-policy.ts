@@ -46,6 +46,17 @@ export function isSafeInstantConversationRequest(input: { task_type: string; use
     && !INSTANT_DEEP_REASONING.test(text);
 }
 
+export function isSafeReasoningConversationRequest(input: { task_type: string; user_request: string }) {
+  const text = input.user_request.trim();
+  if (!INSTANT_TASKS.has(input.task_type)) return false;
+  if (!text || text.length > 1200 || text.split(/\s+/).filter(Boolean).length > 180) return false;
+  return INSTANT_DEEP_REASONING.test(text)
+    && !INSTANT_ALWAYS_BLOCKED.test(text)
+    && !INSTANT_BUSINESS_ACTION.test(text)
+    && !INSTANT_EXTERNAL_ACTION.test(text)
+    && !INSTANT_PRIVATE_BUSINESS.test(text);
+}
+
 export function filterConversationModules<T extends ConversationContextModule>(
   modules: T[],
   userRequest: string,

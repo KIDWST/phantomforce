@@ -1521,3 +1521,61 @@ role-restricted navigation, and authorization-error recovery in Cycle 21.
 Exercise the complete browser account lifecycle and authorization-error
 recovery across customer/admin hosts and owner, admin, member, and client roles
 in Cycle 21.
+
+# 2026-07-18 - Cycle 21: Customer Reasoning Model Lane
+
+## Problems Verified
+
+- Customer browsers could reach the instant model for basic chat, but a safe
+  comparison, critique, or strategy question rejected by the instant
+  classifier could not reach any model.
+- Those questions fell back into the older command surface, where ordinary
+  language could produce an irrelevant local response instead of a reasoned
+  answer.
+- The authenticated HTTP model test forced every request to `instant`, so its
+  90-request result did not prove the real browser classifier boundary.
+
+## Corrections
+
+- Added a separate action-free `reasoning` route for authenticated users.
+  Comparisons, critiques, and strategy questions use local `qwen2.5:14b` with
+  a 12-second provider ceiling, larger response budget, no provider fallback,
+  no cards, and no navigation.
+- Browser and server independently reject live-data, private-business,
+  operational, approval, task, automation, and external-action requests from
+  the reasoning route.
+- Both action-free routes carry only bounded temporary conversation. Business
+  summary, saved memory, workspace pulse, assets, accounting, plans, and
+  opportunity lookups remain excluded.
+- Failed instant or reasoning calls stay conversational instead of entering
+  the business keyword cascade.
+- Advanced the complete browser module graph to
+  `phantom-live-20260718-38` and updated the overwrite guard to protect the new
+  two-tier invariant.
+
+## Source Verification
+
+- PASS: `npm run test:dashboard-chat` (56 browser-brain prompts, including five
+  customer reasoning routes; 11 outage turns; deterministic tool checks).
+- PASS: `npm run test:instant-chat:http-live-model --workspace
+  @phantomforce/server` completed 92 requests at 575 ms average and 2,203 ms
+  maximum with zero fallback and zero business leakage.
+- PASS: `npm run test:database-auth` applied all eight migrations, passed all
+  57 authorization/API checks, and completed the real Chrome journey.
+- PASS: Chrome exercised both customer reasoning prompts inside the existing
+  20-turn plan budget, completed 30-turn continuity and two-organization
+  round trips, and proved local-only request policy with no business modules.
+- PASS: visual review at 1440x900 and 390x844; composer, messages, navigation,
+  and organization state had no overlap or horizontal page overflow:
+  `tmp/database-auth-org-browser/2026-07-19T01-24-40-082Z`.
+- PASS: `npm run test:release-critical` (20/20).
+- PASS: `npm run test:organization-record-isolation`.
+- PASS: `npm run test:change-memory` (157 assertions).
+- PASS: `npm run build --workspace @phantomforce/server`.
+- PASS: `git diff --check`.
+
+## Next Task
+
+Exercise the complete browser account lifecycle and authorization-error
+recovery across customer/admin hosts and owner, admin, member, and client roles
+in Cycle 22.

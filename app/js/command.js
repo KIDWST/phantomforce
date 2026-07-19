@@ -12,9 +12,9 @@ import {
   recentChatTurns, addMemory,
   ctx, session, loadPhantomLoop, savePhantomLoop, loopProviderName, modelDisplayLabel,
   getPhantomLaneTarget, loadPhantomLaneConfig, workspaceStorageGetItem, wsName,
-} from "./store.js?v=phantom-live-20260718-37";
-import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260718-37";
-import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260718-37";
+} from "./store.js?v=phantom-live-20260718-38";
+import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260718-38";
+import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260718-38";
 const classifyPhantomIntent = (text) => deriveActionContract(classifyRaw(text));
 
 /* Cross-surface handoff: chat tells the Websites page which project to focus
@@ -100,6 +100,7 @@ const PRIVATE_BACKEND_MODEL_BY_ALIAS = Object.freeze({
 });
 const INSTANT_CHAT_MODEL = "qwen2.5:14b";
 const INSTANT_CHAT_MAX_PROVIDER_MS = 4500;
+const REASONING_CHAT_MAX_PROVIDER_MS = 12000;
 const INSTANT_CHAT_ALLOWED_INTENTS = new Set(["identity", "capability", "question", "chat"]);
 const INSTANT_CHAT_ALWAYS_BLOCKED = /\b(?:diagnos(?:e|is)|medical advice|legal advice)\b|\b(?:what(?:'s| is)|how(?:'s| is)|check|show me|give me)\b.{0,28}\b(?:weather|forecast|temperature|humidity)\b|\b(?:latest|current|today'?s?|breaking|live)\b.{0,28}\b(?:news|headlines?|score|price|quote|exchange rate|weather|forecast)\b|\b(?:stock|share|crypto|bitcoin|ethereum)\b.{0,28}\b(?:price|quote|value|rate|today|now|current|latest)\b|\b(?:price of|exchange rate)\b/i;
 const INSTANT_CHAT_BUSINESS_ACTION = /\b(?:build|create|draft|write|fix|debug|code|implement|research|plan|strategize|design|make|generate|schedule|automate|review|open)\s+(?:me\s+|us\s+)?(?:(?:an?|the|my|our|this)\s+)?(?:proposal|website|site|automation|task|client|customer|lead|transaction|accounting|invoice|payment|security scan|contract|tenant|organization|phantomforce)\b|\b(?:generate|create|edit|enhance|upload|publish|remove (?:the )?background)\s+(?:an?|the|my|our|this)?\s*(?:content|video|image|media)\b/i;
@@ -132,6 +133,21 @@ function isInstantChatRequest(raw, intent) {
     || ["chat", "question"].includes(intent.primaryIntent);
 }
 
+function isReasoningChatRequest(raw, intent) {
+  const text = String(raw || "").trim();
+  if (!text || !INSTANT_CHAT_ALLOWED_INTENTS.has(intent.primaryIntent)) return false;
+  if (intent.needsLiveData || intent.requiresAdminApproval || intent.shouldCreateTask || intent.shouldCreateAutomation) return false;
+  if (text.length > 1200 || countWords(text) > 180 || !INSTANT_DEEP_EXCLUSION.test(text)) return false;
+  return !INSTANT_CHAT_ALWAYS_BLOCKED.test(text)
+    && !INSTANT_CHAT_BUSINESS_ACTION.test(text)
+    && !INSTANT_CHAT_EXTERNAL_ACTION.test(text)
+    && !INSTANT_CHAT_PRIVATE_BUSINESS.test(text);
+}
+
+function isActionFreeModelRequest(raw, intent) {
+  return isInstantChatRequest(raw, intent) || isReasoningChatRequest(raw, intent);
+}
+
 function shouldUseDeepReasoning(raw, intent) {
   return ["brainstorm", "plan"].includes(intent.primaryIntent) || DEEP_THINKING_SIGNAL.test(String(raw || ""));
 }
@@ -156,7 +172,7 @@ function providerForRequest(providerId) {
 }
 
 function selectedModelForProvider(settings, providerId, routeProfile = null) {
-  if (providerId === "local" && routeProfile?.tier === "instant") return INSTANT_CHAT_MODEL;
+  if (providerId === "local" && ["instant", "reasoning"].includes(routeProfile?.tier)) return INSTANT_CHAT_MODEL;
   const configured = settings.models?.[providerId];
   if (configured) return providerId === "private" ? (PRIVATE_BACKEND_MODEL_BY_ALIAS[configured] || configured) : configured;
   const cfg = loadPhantomLaneConfig();
@@ -192,6 +208,16 @@ function chatRouteProfileForRequest(raw, intent, settings) {
       maxProviderMs: INSTANT_CHAT_MAX_PROVIDER_MS,
     };
   }
+  if (isReasoningChatRequest(raw, intent)) {
+    return {
+      tier: "reasoning",
+      providerId: "local",
+      requestedModel: INSTANT_CHAT_MODEL,
+      allowedProviders: [PROVIDER_TO_BACKEND.local],
+      allowFallback: false,
+      maxProviderMs: REASONING_CHAT_MAX_PROVIDER_MS,
+    };
+  }
   return {
     tier: deepReasoning ? "deep" : "standard",
     providerId: normalProviderId,
@@ -203,9 +229,9 @@ function chatRouteProfileForRequest(raw, intent, settings) {
 }
 
 function canAskHermes(raw, intent, settings) {
-  /* Every authenticated user gets the action-free instant brain. Standard and
-     deep business lanes remain admin-only and keep their existing controls. */
-  if (isInstantChatRequest(raw, intent)) return Boolean(ctx.session);
+  /* Every authenticated user gets action-free chat and reasoning. Standard
+     business lanes remain admin-only and keep their existing controls. */
+  if (isActionFreeModelRequest(raw, intent)) return Boolean(ctx.session);
   return isAdmin()
     && settings.brainMode !== "local"
     && !LOCAL_FIRST_INTENTS.has(intent.primaryIntent)
@@ -233,7 +259,7 @@ function memoryMatchesRequest(memory, raw) {
 
 function needsBusinessContext(raw, intent) {
   if (intent?.requiresAdminApproval || intent?.shouldCreateTask || intent?.shouldCreateAutomation) return true;
-  if (isInstantChatRequest(raw, intent)) return false;
+  if (isActionFreeModelRequest(raw, intent)) return false;
   return BUSINESS_CONTEXT_TERMS.test(String(raw || ""));
 }
 
@@ -313,7 +339,10 @@ async function askHermesBrain(raw, intent, settings) {
   if (typeof fetch !== "function" || typeof AbortController === "undefined") return null;
   const routeProfile = chatRouteProfileForRequest(raw, intent, settings);
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), routeProfile.tier === "instant" ? 6500 : 140000);
+  const timeout = setTimeout(
+    () => controller.abort(),
+    routeProfile.tier === "instant" ? 6500 : routeProfile.tier === "reasoning" ? 16000 : 140000,
+  );
   const token = typeof session?.token === "function" ? session.token() : "";
   const headers = { "Content-Type": "application/json" };
   if (token) headers.Authorization = `Bearer ${token}`;
@@ -1600,16 +1629,16 @@ export async function handleSmartCommand(raw) {
     return handleCommand(text);
   }
 
-  const instantConversation = isInstantChatRequest(text, intent);
+  const actionFreeConversation = isActionFreeModelRequest(text, intent);
   if (canAskHermes(text, intent, settings)) {
     const backend = await askHermesBrain(text, intent, settings);
     if (backend) return backend;
   }
 
-  /* A failed instant request must remain conversation. Falling through the
+  /* A failed action-free request must remain conversation. Falling through the
      command router lets ordinary nouns such as bank, proposal, lead, or media
      accidentally open workspace data and is the source of status-dump leaks. */
-  if (instantConversation && ["question", "chat"].includes(intent.primaryIntent)) {
+  if (actionFreeConversation && ["question", "chat"].includes(intent.primaryIntent)) {
     return shapeResponse({ ...localQuestionAnswer(text, settings), intent }, settings);
   }
 

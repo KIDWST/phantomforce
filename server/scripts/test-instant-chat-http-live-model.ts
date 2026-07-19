@@ -83,7 +83,7 @@ async function login(sessionId: string) {
   return payload.token;
 }
 
-async function ask(token: string, prompt: string, turns: Turn[]): Promise<Answer> {
+async function ask(token: string, prompt: string, turns: Turn[], routeTier: "instant" | "reasoning" = "instant"): Promise<Answer> {
   const recent = turns.slice(-8);
   const started = Date.now();
   const response = await fetch(`${baseUrl}/phantom-ai/chat`, {
@@ -99,8 +99,8 @@ async function ask(token: string, prompt: string, turns: Turn[]): Promise<Answer
       admin_model: "local_ollama",
       model_lane: "local_ollama",
       requested_model: model,
-      route_tier: "instant",
-      max_provider_ms: 4500,
+      route_tier: routeTier,
+      max_provider_ms: routeTier === "instant" ? 4500 : 12000,
       allow_provider_fallback: false,
       allowed_providers: ["local_ollama"],
       execution_mode: "approval",
@@ -117,7 +117,7 @@ async function ask(token: string, prompt: string, turns: Turn[]): Promise<Answer
       }] : [],
       conversation_history: recent,
     }),
-    signal: AbortSignal.timeout(7_000),
+    signal: AbortSignal.timeout(routeTier === "instant" ? 7_000 : 15_000),
   });
   const latencyMs = Date.now() - started;
   assert.equal(response.ok, true, `${prompt}: HTTP ${response.status}`);
@@ -125,13 +125,13 @@ async function ask(token: string, prompt: string, turns: Turn[]): Promise<Answer
   const answer = String(payload.message?.content || "").trim();
   assert.ok(answer, `Empty answer for: ${prompt}`);
   assert.doesNotMatch(answer, forbidden, `Business context leaked into: ${prompt}`);
-  assert.equal(payload.route_tier, "instant", `${prompt}: left the instant route`);
+  assert.equal(payload.route_tier, routeTier, `${prompt}: left the ${routeTier} route`);
   assert.ok(
     [model, "phantom-calculator", "phantom-reference-resolver", "phantom-identity", "phantom-personality", "phantom-stable-fact"].includes(String(payload.model_id)),
     `${prompt}: unexpected responder ${payload.model_id}; fallback=${JSON.stringify(payload.fallback || null)}`,
   );
   assert.equal(payload.fallback?.all_failed, false, `${prompt}: model failed`);
-  assert.ok(latencyMs <= 5_500, `${prompt}: ${latencyMs}ms exceeded the warm HTTP budget`);
+  assert.ok(latencyMs <= (routeTier === "instant" ? 5_500 : 13_000), `${prompt}: ${latencyMs}ms exceeded the warm HTTP budget`);
   turns.push({ user: prompt, assistant: answer });
   if (process.env.PHANTOM_CHAT_EVAL_VERBOSE === "true") {
     console.log(JSON.stringify({ prompt, answer, latencyMs }));
@@ -240,6 +240,16 @@ assert.match(youngest.answer.trim(), /^Cara[.!]?$/i);
 const prime = await ask(customerToken, "Answer only yes or no: is 17 a prime number?", reasoning);
 rows.push(prime);
 assert.match(prime.answer.trim(), /^yes[.!]?$/i);
+
+const routedReasoning: Turn[] = [];
+const vehicleComparison = await ask(customerToken, "Compare electric cars and hybrids for a city commuter in four concise bullets.", routedReasoning, "reasoning");
+rows.push(vehicleComparison);
+assert.match(vehicleComparison.answer, /electric/i);
+assert.match(vehicleComparison.answer, /hybrid/i);
+const toolLibraryCritique = await ask(customerToken, "Critique this idea: a neighborhood tool library. Give one strength and one risk.", routedReasoning, "reasoning");
+rows.push(toolLibraryCritique);
+assert.match(toolLibraryCritique.answer, /strength|benefit|advantage/i);
+assert.match(toolLibraryCritique.answer, /risk|challenge|drawback/i);
 
 const formatting: Turn[] = [];
 const fruitList = await ask(adminToken, "Give exactly three fruits in alphabetical order, one per line, no bullets.", formatting);

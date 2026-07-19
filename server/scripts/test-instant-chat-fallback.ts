@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 
-import { filterConversationModules, isSafeInstantConversationRequest, needsBusinessContext } from "../src/phantom-ai/conversation-policy.js";
+import {
+  filterConversationModules,
+  isSafeInstantConversationRequest,
+  isSafeReasoningConversationRequest,
+  needsBusinessContext,
+} from "../src/phantom-ai/conversation-policy.js";
 import { buildInstantChatFallbackReply } from "../src/phantom-ai/instant-chat-fallback.js";
 
 const forbidden = /\b(?:ledger|pipeline|cashflow|cash flow|approval|invoice|workspace status)\b/i;
@@ -97,5 +102,12 @@ assert.equal(isSafeInstantConversationRequest({ task_type: "question", user_requ
 assert.equal(isSafeInstantConversationRequest({ task_type: "question", user_request: "what's the weather in Chicago?" }), false);
 assert.equal(isSafeInstantConversationRequest({ task_type: "question", user_request: "show me the latest headlines" }), false);
 assert.equal(isSafeInstantConversationRequest({ task_type: "question", user_request: "what was the Bulls score last night?" }), false);
+assert.equal(isSafeReasoningConversationRequest({ task_type: "chat", user_request: "Compare electric cars and hybrids for a city commuter." }), true);
+assert.equal(isSafeReasoningConversationRequest({ task_type: "chat", user_request: "Critique this idea: a neighborhood tool library." }), true);
+assert.equal(isSafeReasoningConversationRequest({ task_type: "chat", user_request: "Think through the pros and cons of moving closer to work." }), true);
+assert.equal(isSafeReasoningConversationRequest({ task_type: "question", user_request: "What strategy makes chess beginners improve faster?" }), true);
+assert.equal(isSafeReasoningConversationRequest({ task_type: "question", user_request: "show my accounting ledger" }), false);
+assert.equal(isSafeReasoningConversationRequest({ task_type: "chat", user_request: "create a strategy for my business" }), false);
+assert.equal(isSafeReasoningConversationRequest({ task_type: "question", user_request: "what is the current Bitcoin price?" }), false);
 
 console.log(`instant chat fallback checks passed (${turns.length + directPrompts.length} adversarial turns)`);

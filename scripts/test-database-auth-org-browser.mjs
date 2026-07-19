@@ -686,16 +686,20 @@ async function main() {
     await waitForExpression(cdp, `!!document.querySelector("[data-command-form]")`, "PhantomForce dashboard before chat", 10_000, diagnostics);
     await sleep(1700);
 
+    const reasoningPrompts = [
+      "Compare electric cars and hybrids for a city commuter in four concise bullets.",
+      "Critique this idea: a neighborhood tool library. Give one strength and one risk.",
+    ];
     const prompts = [
       "What's your favorite food?",
       "Why that one?",
       "Do you approve of pineapple on pizza?",
       "What queue data structure should I use?",
       "Give me a summary of Hamlet.",
-      "Report on the history of jazz.",
+      reasoningPrompts[0],
       "I remember my first bike.",
       "Remind me how photosynthesis works.",
-      "What do monitor lizards eat?",
+      reasoningPrompts[1],
       "Write a poem about automation.",
       "Make this sentence better: we was ready.",
       "What is 17 times 19?",
@@ -715,10 +719,28 @@ async function main() {
     assert.equal(promptResults.some((result) => /ledger|pipeline|actual cash|transaction reader/i.test(result.answer)), false, "ordinary browser conversation must not leak accounting language.");
     assert.match(promptResults.at(-1)?.answer || "", /comet/i, "the twentieth turn must retain the active temporary topic.");
 
+    const reasoningResults = promptResults.filter((result) => reasoningPrompts.includes(result.prompt));
+    assert.equal(reasoningResults.every((result) => result.cards === 0 && !result.open), true, "customer reasoning must stay in chat without cards or navigation.");
+    assert.match(reasoningResults[0]?.answer || "", /electric/i);
+    assert.match(reasoningResults[0]?.answer || "", /hybrid/i);
+    assert.match(reasoningResults[1]?.answer || "", /strength|benefit|advantage/i);
+    assert.match(reasoningResults[1]?.answer || "", /risk|challenge|drawback/i);
+    const reasoningRequests = chatRequests.filter((request) => reasoningPrompts.includes(request.user_request || request.message));
+    assert.equal(reasoningRequests.length, 2, "both customer reasoning prompts must reach the authenticated model endpoint.");
+    for (const request of reasoningRequests) {
+      assert.equal(request.route_tier, "reasoning");
+      assert.equal(request.requested_model, "qwen2.5:14b");
+      assert.deepEqual(request.allowed_providers, ["local_ollama"]);
+      assert.equal(request.allow_provider_fallback, false);
+      assert.equal(request.max_provider_ms, 12000);
+      assert.equal((request.module_data || []).every((entry) => entry.module === "recent_conversation"), true);
+      assert.doesNotMatch(request.business_summary || "", /Business Manager workspace/i);
+    }
+
     const continuityResults = [];
     continuityResults.push(await submitChat(cdp, "I want to visit Japan in spring and I have never been.", diagnostics));
     continuityResults.push(await submitChat(cdp, "How long should I stay? Answer in one sentence.", diagnostics));
-    assert.match(continuityResults.at(-1)?.answer || "", /(?:day|week)/i, "a natural follow-up must use the immediately preceding travel topic.");
+    assert.match(continuityResults.at(-1)?.answer || "", /(?:day|night|week)/i, "a natural follow-up must use the immediately preceding travel topic.");
 
     continuityResults.push(await submitChat(cdp, "For this chat only, my dog Nova wears a yellow raincoat.", diagnostics));
     continuityResults.push(await submitChat(cdp, "Correction: Nova's raincoat is purple.", diagnostics));
@@ -811,7 +833,7 @@ async function main() {
     assert.ok(desktop.composer && desktop.composer.bottom <= desktop.height, "desktop composer must remain visible.");
     assert.ok(mobile.composer && mobile.composer.bottom <= mobile.height, "mobile composer must remain visible.");
 
-    const instantRequests = chatRequests.filter((request) => prompts.includes(request.user_request || request.message));
+    const instantRequests = chatRequests.filter((request) => prompts.includes(request.user_request || request.message) && !reasoningPrompts.includes(request.user_request || request.message));
     assert.ok(instantRequests.length >= 15, "the mixed 20-turn sequence must exercise the authenticated model lane repeatedly.");
     assert.equal(instantRequests.every((request) => request.route_tier === "instant"), true, "ordinary 20-turn browser requests must remain on the instant lane.");
 
@@ -832,7 +854,8 @@ async function main() {
         "client-supplied foreign workspace labels are ignored by the server",
         "active organization and its records survive reload without stale tenant rows",
         "20 mixed browser turns stay conversational without ledger leakage",
-        "natural follow-ups and named-topic returns stay coherent across 28 browser turns",
+        "customer reasoning reaches the bounded local model lane without cards or business context",
+        "natural follow-ups and named-topic returns stay coherent across 30 browser turns",
         "durable memory survives reload inside organization A",
         "organization B receives no A memory, history, request context, or visible chat",
         "organization A returns without organization B contamination",
@@ -845,6 +868,7 @@ async function main() {
       menuState,
       afterTamperState,
       promptResults,
+      reasoningResults,
       continuityResults,
       phantomContext,
       chicagoContext,

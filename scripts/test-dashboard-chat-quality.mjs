@@ -113,7 +113,7 @@ globalThis.fetch = async (url, init) => {
           : `Direct answer ${capturedBodies.length}: ${body.message}`,
       },
       fallback: { used: true, all_failed: true, local_response: true },
-      hermes: { route_tier: "instant", context_used: Array.isArray(body.conversation_history) && body.conversation_history.length > 0 },
+      hermes: { route_tier: body.route_tier, context_used: Array.isArray(body.conversation_history) && body.conversation_history.length > 0 },
     }),
   };
 };
@@ -162,6 +162,29 @@ assert.match(customerChat.say, /Direct answer/);
 assert.equal(capturedBodies.length, customerRequestCount + 1, "authenticated customers must reach the instant brain from the browser");
 assert.equal(capturedBodies.at(-1).route_tier, "instant");
 assert.deepEqual(capturedBodies.at(-1).allowed_providers, ["local_ollama"]);
+
+const customerReasoningPrompts = [
+  "Compare electric cars and hybrids for a city commuter.",
+  "Critique this idea: a neighborhood tool library.",
+  "Think through the pros and cons of moving closer to work.",
+  "Compare a ledger and a journal in accounting.",
+  "What strategy makes chess beginners improve faster?",
+];
+for (const prompt of customerReasoningPrompts) {
+  const result = await handleSmartCommand(prompt);
+  const body = capturedBodies.at(-1);
+  assert.equal(result.hermes?.route_tier, "reasoning", `${prompt} must reach the reasoning model lane`);
+  assert.equal(body.route_tier, "reasoning");
+  assert.equal(body.requested_model, "qwen2.5:14b");
+  assert.equal(body.admin_model, "local_ollama");
+  assert.deepEqual(body.allowed_providers, ["local_ollama"]);
+  assert.equal(body.allow_provider_fallback, false);
+  assert.equal(body.max_provider_ms, 12000);
+  assert.doesNotMatch(body.business_summary, /Business Manager workspace/i);
+  assert.ok(body.module_data.every((entry) => entry.module === "recent_conversation"));
+  assert.deepEqual(result.cards || [], []);
+  assert.equal(result.open || null, null);
+}
 ctx.session = adminSession;
 
 await handleSmartCommand("what is in my accounting ledger?");
@@ -234,7 +257,7 @@ assert.doesNotMatch(commandSrc, /Right now:.*ledger empty/i, "the rejected gener
 assert.doesNotMatch(commandSrc, /"ledger empty"/i, "dead readiness copy must not reintroduce ledger language into chat");
 assert.doesNotMatch(commandSrc, /The connected brain didn't return a clean expansion in time/i);
 assert.match(commandSrc, /conversation_history:\s*recentConversation/);
-assert.match(serverSrc, /adminRouteTier !== "instant" && businessContextRelevant\) try/, "general questions must skip workspace pulse work");
+assert.match(serverSrc, /!actionFreeConversation && businessContextRelevant\) try/, "action-free questions must skip workspace pulse work");
 assert.match(serverSrc, /module_data: \[\.\.\.normalized\.module_data, \.\.\.businessBrainModules\]/, "general questions must not receive the business brain module");
 assert.match(serverSrc, /local_response:\s*Boolean\(localFallback\)/);
 assert.match(indexSrc, /data-dashboard-brief-metrics/);
