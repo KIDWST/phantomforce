@@ -577,6 +577,64 @@ rows.push(namedRollbackFinal);
 assert.equal(namedRollbackFinal.modelId, "phantom-reference-resolver");
 assert.match(namedRollbackFinal.answer.trim(), /^red\s*\|\s*green[.!]?$/i);
 
+const namedComparisons: Turn[] = [];
+rows.push(await ask(customerToken, "Mina logged 12 laps, Theo logged 18 laps, and Priya logged 15 laps.", namedComparisons));
+const comparisonWinner = await ask(customerToken, "Who logged the most? Name only.", namedComparisons);
+rows.push(comparisonWinner);
+assert.equal(comparisonWinner.modelId, "phantom-reference-resolver");
+assert.match(comparisonWinner.answer.trim(), /^Theo[.!]?$/i);
+const comparisonDifference = await ask(customerToken, "How many more laps did Theo log than Mina? Number and unit only.", namedComparisons);
+rows.push(comparisonDifference);
+assert.equal(comparisonDifference.modelId, "phantom-calculator");
+assert.match(comparisonDifference.answer.trim(), /^6 laps[.!]?$/i);
+const comparisonRanking = await ask(customerToken, "Rank them from most to least. Names only, separated by >.", namedComparisons);
+rows.push(comparisonRanking);
+assert.equal(comparisonRanking.modelId, "phantom-reference-resolver");
+assert.match(comparisonRanking.answer.trim(), /^Theo\s*>\s*Priya\s*>\s*Mina[.!]?$/i);
+rows.push(await ask(customerToken, "Correction: Mina logged 20 laps.", namedComparisons));
+const correctedWinner = await ask(customerToken, "Who logged the most now? Name only.", namedComparisons);
+rows.push(correctedWinner);
+assert.equal(correctedWinner.modelId, "phantom-reference-resolver");
+assert.match(correctedWinner.answer.trim(), /^Mina[.!]?$/i);
+const correctedDifference = await ask(customerToken, "How many more laps did Mina log than Theo? Number and unit only.", namedComparisons);
+rows.push(correctedDifference);
+assert.equal(correctedDifference.modelId, "phantom-calculator");
+assert.match(correctedDifference.answer.trim(), /^2 laps[.!]?$/i);
+
+const tiedComparison: Turn[] = [];
+rows.push(await ask(customerToken, "Mina has 4 points and Theo has 4 points.", tiedComparison));
+const tiedAnswer = await ask(customerToken, "Who has more?", tiedComparison);
+rows.push(tiedAnswer);
+assert.equal(tiedAnswer.modelId, "phantom-reference-resolver");
+assert.match(tiedAnswer.answer, /Mina and Theo are tied at 4 points/i);
+const incompatibleComparison: Turn[] = [];
+rows.push(await ask(customerToken, "Mina walked 5 miles and Theo worked 6 hours.", incompatibleComparison));
+const incompatibleAnswer = await ask(customerToken, "Who did more?", incompatibleComparison);
+rows.push(incompatibleAnswer);
+assert.equal(incompatibleAnswer.modelId, "phantom-clarifier");
+assert.equal(incompatibleAnswer.answer, "Those values use different units (miles and hours). What should I compare?");
+const missingComparison: Turn[] = [];
+rows.push(await ask(customerToken, "Mina logged 12 laps.", missingComparison));
+const missingAnswer = await ask(customerToken, "How many more laps did Mina log than Theo?", missingComparison);
+rows.push(missingAnswer);
+assert.equal(missingAnswer.modelId, "phantom-clarifier");
+assert.equal(missingAnswer.answer, "I have Mina's value, but not Theo's. What is Theo's value?");
+
+const orderedEvents: Turn[] = [];
+rows.push(await ask(adminToken, "Sequence: 1) Mina opened the gate. 2) Theo rang the bell. 3) Priya crossed the bridge. 4) Theo rang the bell again. 5) Mina closed the gate.", orderedEvents));
+const eventBefore = await ask(adminToken, "What happened immediately before Priya crossed the bridge? Event only.", orderedEvents);
+rows.push(eventBefore);
+assert.equal(eventBefore.modelId, "phantom-reference-resolver");
+assert.match(eventBefore.answer.trim(), /^Theo rang the bell[.!]?$/i);
+const eventAfter = await ask(adminToken, "What happened immediately after Priya crossed the bridge? Event only.", orderedEvents);
+rows.push(eventAfter);
+assert.equal(eventAfter.modelId, "phantom-reference-resolver");
+assert.match(eventAfter.answer.trim(), /^Theo rang the bell again[.!]?$/i);
+const repeatedEvent = await ask(adminToken, "What happened before Theo rang the bell?", orderedEvents);
+rows.push(repeatedEvent);
+assert.equal(repeatedEvent.modelId, "phantom-clarifier");
+assert.equal(repeatedEvent.answer, "Do you mean the first or second time Theo rang the bell?");
+
 const reorderedOptions: Turn[] = [];
 rows.push(await ask(customerToken, "Options: 1) email, 2) call, 3) meeting.", reorderedOptions));
 const movedOption = await ask(customerToken, "Move the third before the first. Return the reordered list only.", reorderedOptions);
@@ -686,6 +744,10 @@ assert.doesNotMatch(partialRollbackFinal.answer, /black|gold|green/i);
     respectivelyMappingVerified: true,
     unequalRespectivelyClarificationVerified: true,
     namedEntityRollbackVerified: true,
+    namedComparisonsVerified: true,
+    correctedComparisonVerified: true,
+    comparisonAmbiguityVerified: true,
+    orderedEventsVerified: true,
   }, null, 2));
 } finally {
   ownedServer?.kill();

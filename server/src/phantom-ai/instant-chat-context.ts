@@ -17,6 +17,8 @@ const PAIRED_REFERENCE = /\b(?:former|latter)\b/i;
 const PLURAL_REFERENCE = /\b(?:they|them|their|theirs|those|these)\b/i;
 const CAUSAL_REFERENCE = /\b(?:first|second|third|fourth)\s+(?:result|outcome|effect|event)\b|\b(?:that|this)\s+(?:reason|cause|result|outcome)\b|\b(?:as a result|therefore)\b/i;
 const RESPECTIVELY_REFERENCE = /\brespectively\b|\b(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth)\s+(?:person|name|one)\b/i;
+const COMPARATIVE_REFERENCE = /\bhow many more\b|\bwho\b.{0,30}\b(?:more|most|least|highest|lowest|fewest)\b|\brank\b.{0,40}\b(?:most|least|highest|lowest)\b/i;
+const ORDERED_EVENT_REFERENCE = /\b(?:immediately\s+)?(?:before|after)\b/i;
 const CONTEXT_STOP_WORDS = new Set([
   "about", "after", "again", "answer", "back", "before", "could", "current", "does", "explain", "favorite", "first", "from", "give", "have", "into", "just", "know", "latest", "make", "more", "next", "only", "please", "question", "recommend", "sentence", "should", "something", "stay", "tell", "that", "their", "then", "there", "these", "thing", "this", "those", "what", "when", "where", "which", "would", "write", "your",
 ]);
@@ -84,6 +86,8 @@ export function needsInstantConversationContext(turns: InstantConversationTurn[]
     || IMPLICIT_FOLLOW_UP.test(text)
     || CAUSAL_REFERENCE.test(text)
     || RESPECTIVELY_REFERENCE.test(text)
+    || COMPARATIVE_REFERENCE.test(text)
+    || ORDERED_EVENT_REFERENCE.test(text)
     || CONTEXT_REFERENCE.test(text)
     || CONTEXT_OPERATION.test(text)
     || hasTopicOverlap(turns, text);
@@ -106,7 +110,7 @@ export function selectActiveInstantTopicTurns(turns: InstantConversationTurn[]) 
 export function selectRelevantInstantTurns(turns: InstantConversationTurn[], userRequest = "") {
   if (CROSS_ANSWER_REFERENCE.test(userRequest)) return turns.slice(-6);
   const activeTurns = selectActiveInstantTopicTurns(turns);
-  if (PAIRED_REFERENCE.test(userRequest) || PLURAL_REFERENCE.test(userRequest) || CAUSAL_REFERENCE.test(userRequest) || RESPECTIVELY_REFERENCE.test(userRequest)) return activeTurns.slice(-6);
+  if (PAIRED_REFERENCE.test(userRequest) || PLURAL_REFERENCE.test(userRequest) || CAUSAL_REFERENCE.test(userRequest) || RESPECTIVELY_REFERENCE.test(userRequest) || COMPARATIVE_REFERENCE.test(userRequest) || ORDERED_EVENT_REFERENCE.test(userRequest)) return activeTurns.slice(-6);
   const requestTerms = meaningfulTerms(userRequest);
   if (!requestTerms.size) return activeTurns;
 

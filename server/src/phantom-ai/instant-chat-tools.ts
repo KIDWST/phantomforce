@@ -258,6 +258,9 @@ function respectivelyReferenceReply(userRequest: string, turns: InstantChatToolT
     .map((turn) => respectivelyMappingFromText(turn.user))
     .find((item): item is RespectivelyMapping => Boolean(item));
   if (!mapping) return null;
+  const referencesMapping = /\b(?:chose|choose|selected|select|picked|pick|received|assigned|choice)\b/i.test(userRequest)
+    || mapping.values.some((item) => userRequest.toLowerCase().includes(item.toLowerCase()));
+  if (!referencesMapping) return null;
 
   if (mapping.subjects.length !== mapping.values.length) {
     const requestedSubject = mapping.subjects.find((subject) => new RegExp(`\\b${subject.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(userRequest));
@@ -285,6 +288,170 @@ function respectivelyReferenceReply(userRequest: string, turns: InstantChatToolT
     const normalizedRequest = userRequest.toLowerCase();
     const valueIndex = mapping.values.findIndex((item) => normalizedRequest.includes(item.toLowerCase()));
     if (valueIndex >= 0) return { output_text: mapping.subjects[valueIndex], tool_id: "phantom-reference-resolver" };
+  }
+  return null;
+}
+
+type NamedQuantity = {
+  name: string;
+  value: number;
+  unit: string;
+};
+
+function namedQuantitiesFromText(value: string) {
+  return [...value.matchAll(/\b([A-Z][A-Za-z'-]{1,39})\s+(?:logged|has|had|walked|worked|completed|scored|recorded)\s+(-?\d+(?:\.\d+)?)\s+([a-z][a-z-]{0,30})\b/gi)]
+    .map((match) => ({ name: match[1], value: Number(match[2]), unit: match[3].toLowerCase() }))
+    .filter((item) => Number.isFinite(item.value));
+}
+
+function namedQuantityState(turns: InstantChatToolTurn[]) {
+  let baseIndex = -1;
+  let base: NamedQuantity[] = [];
+  for (let index = turns.length - 1; index >= 0; index -= 1) {
+    const facts = namedQuantitiesFromText(turns[index].user);
+    if (!facts.length || /^\s*(?:actually|change|correction|correct|instead|update)\b/i.test(turns[index].user)) continue;
+    if (facts.length) {
+      baseIndex = index;
+      base = facts;
+      break;
+    }
+  }
+  if (baseIndex < 0 || !base.length || base.length > 10) return [];
+  const state = new Map(base.map((item) => [item.name.toLowerCase(), { ...item }]));
+  for (const turn of turns.slice(baseIndex + 1)) {
+    for (const fact of namedQuantitiesFromText(turn.user)) {
+      const existing = state.get(fact.name.toLowerCase());
+      if (existing) state.set(fact.name.toLowerCase(), { ...fact, name: existing.name });
+    }
+  }
+  return [...state.values()];
+}
+
+function isQuantityComparisonRequest(value: string) {
+  return /\bhow many more\b|\bwho\b.{0,30}\b(?:more|most|least|highest|lowest|fewest)\b|\brank\b.{0,40}\b(?:most|least|highest|lowest)\b|\b(?:most|least|highest|lowest|fewest)\s+now\b/i.test(value);
+}
+
+function namedQuantityComparisonReply(userRequest: string, turns: InstantChatToolTurn[]): InstantChatToolReply | null {
+  if (!isQuantityComparisonRequest(userRequest)) return null;
+  const quantities = namedQuantityState(turns);
+  if (!quantities.length) return null;
+
+  const differenceRequest = /\bhow many more\b/i.test(userRequest);
+  const queryNames = [...userRequest.matchAll(/\b([A-Z][A-Za-z'-]{1,39})\b/g)]
+    .map((match) => match[1])
+    .filter((name) => !new Set(["Event", "How", "Name", "Names", "Number", "Rank", "Who"]).has(name));
+  const missing = differenceRequest
+    ? queryNames.find((name) => !quantities.some((item) => item.name.toLowerCase() === name.toLowerCase()))
+    : undefined;
+  if (missing) {
+    const known = queryNames.find((name) => quantities.some((item) => item.name.toLowerCase() === name.toLowerCase())) || quantities[0].name;
+    return { output_text: `I have ${known}'s value, but not ${missing}'s. What is ${missing}'s value?`, tool_id: "phantom-clarifier" };
+  }
+
+  const units = [...new Set(quantities.map((item) => item.unit))];
+  if (units.length !== 1) {
+    return { output_text: `Those values use different units (${units.join(" and ")}). What should I compare?`, tool_id: "phantom-clarifier" };
+  }
+  const unit = units[0];
+
+  if (differenceRequest) {
+    const selected = queryNames
+      .map((name) => quantities.find((item) => item.name.toLowerCase() === name.toLowerCase()))
+      .filter((item): item is NamedQuantity => Boolean(item));
+    if (selected.length !== 2) return null;
+    const difference = selected[0].value - selected[1].value;
+    if (difference < 0) {
+      return {
+        output_text: `${selected[0].name} has ${money(Math.abs(difference))} fewer ${unit} than ${selected[1].name}.`,
+        tool_id: "phantom-calculator",
+      };
+    }
+    return { output_text: `${money(difference)} ${unit}`, tool_id: "phantom-calculator" };
+  }
+
+  const descending = /\bfrom\s+(?:most|highest)\s+to\s+(?:least|lowest)\b/i.test(userRequest)
+    || !/\b(?:least|lowest|fewest)\b/i.test(userRequest);
+  const ranked = [...quantities].sort((left, right) => descending ? right.value - left.value : left.value - right.value);
+  if (/\brank\b/i.test(userRequest)) {
+    return { output_text: ranked.map((item) => item.name).join(" > "), tool_id: "phantom-reference-resolver" };
+  }
+  const bestValue = ranked[0].value;
+  const winners = ranked.filter((item) => item.value === bestValue);
+  if (winners.length > 1) {
+    return {
+      output_text: `${winners.map((item) => item.name).join(" and ")} are tied at ${money(bestValue)} ${unit}.`,
+      tool_id: "phantom-reference-resolver",
+    };
+  }
+  return { output_text: winners[0].name, tool_id: "phantom-reference-resolver" };
+}
+
+function orderedEventsFromText(value: string) {
+  if (!/\b(?:sequence|timeline|order)\s*:/i.test(value)) return [];
+  return [...value.matchAll(/\b\d+[.)]\s*([\s\S]*?)(?=\s+\d+[.)]\s*|$)/g)]
+    .map((match) => cleanListItem(match[1]))
+    .filter((item) => item.length >= 2 && item.length <= 180)
+    .slice(0, 10);
+}
+
+function normalizedEvent(value: string) {
+  return cleanListItem(value).toLowerCase().replace(/\b(?:again|event only)\b/g, "").replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function ordinalLabel(index: number) {
+  return Object.entries(ORDINALS).find(([, value]) => value === index)?.[0] || `${index + 1}th`;
+}
+
+function orderedEventReferenceReply(userRequest: string, turns: InstantChatToolTurn[]): InstantChatToolReply | null {
+  const relation = userRequest.match(/\b(?:immediately\s+)?(before|after)\s+(.+?)(?:\?|$)/i);
+  if (!relation) return null;
+  const events = [...turns].reverse().map((turn) => orderedEventsFromText(turn.user)).find((items) => items.length >= 2);
+  if (!events) return null;
+  const targetText = cleanListItem(relation[2].replace(/^(?:the\s+)?event\s+(?:where|when)\s+/i, ""));
+  const target = normalizedEvent(targetText);
+  if (!target) return null;
+  const matchingIndexes = events
+    .map((event, index) => ({ index, normalized: normalizedEvent(event) }))
+    .filter((item) => item.normalized === target || item.normalized.includes(target) || target.includes(item.normalized))
+    .map((item) => item.index);
+  if (!matchingIndexes.length) return null;
+  if (matchingIndexes.length > 1) {
+    const choices = matchingIndexes.map((_, index) => ordinalLabel(index)).join(" or ");
+    return { output_text: `Do you mean the ${choices} time ${targetText}?`, tool_id: "phantom-clarifier" };
+  }
+  const offset = relation[1].toLowerCase() === "before" ? -1 : 1;
+  const selected = events[matchingIndexes[0] + offset];
+  if (!selected) return {
+    output_text: `Nothing in the stated sequence happened ${relation[1].toLowerCase()} ${targetText}.`,
+    tool_id: "phantom-reference-resolver",
+  };
+  return { output_text: selected, tool_id: "phantom-reference-resolver" };
+}
+
+function namedPredicatesFromText(value: string) {
+  return [...value.matchAll(/(?:^|[.:;]\s*|\band\s+)([A-Z][a-z][A-Za-z'-]{1,38})\s+([^.;]+?)(?=\s+and\s+[A-Z]|[.;]|$)/g)]
+    .map((match) => ({ name: match[1], predicate: cleanListItem(match[2]) }))
+    .filter((item) => item.predicate.length >= 2 && item.predicate.length <= 120);
+}
+
+function normalizedPredicate(value: string) {
+  return cleanListItem(value).toLowerCase().replace(/^(?:does|did|is|was)\s+/, "").replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function namedPredicateReferenceReply(userRequest: string, turns: InstantChatToolTurn[]): InstantChatToolReply | null {
+  const query = userRequest.match(/\bwhich one\s+(.+?)(?:\?|$)/i);
+  if (!query) return null;
+  const target = normalizedPredicate(query[1]);
+  if (!target) return null;
+  for (const turn of [...turns].reverse()) {
+    const matches = namedPredicatesFromText(turn.user).filter((item) => {
+      const predicate = normalizedPredicate(item.predicate);
+      return predicate === target || predicate.includes(target) || target.includes(predicate);
+    });
+    if (matches.length === 1) return { output_text: matches[0].name, tool_id: "phantom-reference-resolver" };
+    if (matches.length > 1) {
+      return { output_text: `Do you mean ${matches.map((item) => item.name).join(" or ")}?`, tool_id: "phantom-clarifier" };
+    }
   }
   return null;
 }
@@ -617,6 +784,9 @@ export function buildInstantChatToolReply(userRequest: string, turns: InstantCha
     || arithmeticReply(userRequest, turns)
     || pairedReferenceReply(userRequest, turns)
     || respectivelyReferenceReply(userRequest, turns)
+    || namedQuantityComparisonReply(userRequest, turns)
+    || orderedEventReferenceReply(userRequest, turns)
+    || namedPredicateReferenceReply(userRequest, turns)
     || causalReferenceReply(userRequest, turns)
     || listReorderReply(userRequest, turns)
     || listSelectionReply(userRequest, turns);

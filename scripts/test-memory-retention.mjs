@@ -110,4 +110,13 @@ assert.equal(recentChatTurns()[0]?.user, "My temporary PhantomForce code word is
 ctx.session = { role: "admin", ws: "phantomforce" };
 assert.equal(currentWs(), "phantomforce", "legacy local admin sessions must keep their existing workspace behavior");
 
+store.state.chatHistory = [];
+rememberConversation({ prompt: "I hate my sales pipeline. Explain one likely cause.", reply: "Clarify each stage and next action." });
+rememberConversation({ prompt: "What is 17 times 19?", reply: "323" });
+rememberConversation({ prompt: "Explain recursion in one sentence.", reply: "Recursion is when a process solves a problem by calling a smaller version of itself." });
+const immediateExplanationContext = recentChatTurns(10, "Actually, explain it like I'm twelve.");
+assert.equal(immediateExplanationContext.length, 1, "a vague transformation follow-up must carry only the immediately preceding turn");
+assert.match(immediateExplanationContext[0]?.user || "", /recursion/i, "the immediate topic must remain available");
+assert.doesNotMatch(JSON.stringify(immediateExplanationContext), /pipeline|sales stage/i, "an older business topic must not leak through generic routing words");
+
 console.log("memory retention tests passed");

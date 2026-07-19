@@ -148,6 +148,14 @@ assert.equal(
   null,
   "an older unequal mapping must not hijack an unrelated plural follow-up",
 );
+assert.equal(
+  buildInstantChatToolReply("How many more laps did Theo log than Mina? Number and unit only.", [
+    { user: "Mina and Theo chose tea, coffee, and juice, respectively.", assistant: "The lists do not pair evenly." },
+    { user: "Mina logged 12 laps, Theo logged 18 laps, and Priya logged 15 laps.", assistant: "Values noted." },
+  ])?.output_text,
+  "6 laps",
+  "an older unequal mapping must not hijack a later named quantity comparison",
+);
 const namedRevisionTurns = [
   { user: "Mina's badge is red and Theo's badge is blue.", assistant: "Mina's badge is red; Theo's badge is blue." },
   { user: "Change Mina's badge to gold and Theo's to green.", assistant: "Mina's badge is gold; Theo's badge is green." },
@@ -160,6 +168,85 @@ assert.deepEqual(
 assert.deepEqual(
   buildInstantChatToolReply("What are Mina's and Theo's final badge colors? MINA | THEO only.", namedRevisionTurns),
   { output_text: "red | green", tool_id: "phantom-reference-resolver" },
+);
+const quantityTurns = [{
+  user: "Mina logged 12 laps, Theo logged 18 laps, and Priya logged 15 laps.",
+  assistant: "Mina logged 12 laps, Theo logged 18 laps, and Priya logged 15 laps.",
+}];
+assert.deepEqual(
+  buildInstantChatToolReply("Who logged the most? Name only.", quantityTurns),
+  { output_text: "Theo", tool_id: "phantom-reference-resolver" },
+);
+assert.deepEqual(
+  buildInstantChatToolReply("How many more laps did Theo log than Mina? Number and unit only.", quantityTurns),
+  { output_text: "6 laps", tool_id: "phantom-calculator" },
+);
+assert.deepEqual(
+  buildInstantChatToolReply("Rank them from most to least. Names only, separated by >.", quantityTurns),
+  { output_text: "Theo > Priya > Mina", tool_id: "phantom-reference-resolver" },
+);
+const correctedQuantityTurns = [
+  ...quantityTurns,
+  { user: "Correction: Mina logged 20 laps.", assistant: "Mina now has 20 laps." },
+];
+assert.deepEqual(
+  buildInstantChatToolReply("Who logged the most now? Name only.", correctedQuantityTurns),
+  { output_text: "Mina", tool_id: "phantom-reference-resolver" },
+);
+assert.deepEqual(
+  buildInstantChatToolReply("How many more laps did Mina log than Theo? Number and unit only.", correctedQuantityTurns),
+  { output_text: "2 laps", tool_id: "phantom-calculator" },
+);
+assert.deepEqual(
+  buildInstantChatToolReply("Who has more?", [{ user: "Mina has 4 points and Theo has 4 points.", assistant: "Both have 4 points." }]),
+  { output_text: "Mina and Theo are tied at 4 points.", tool_id: "phantom-reference-resolver" },
+);
+assert.deepEqual(
+  buildInstantChatToolReply("Who did more?", [{ user: "Mina walked 5 miles and Theo worked 6 hours.", assistant: "Noted." }]),
+  { output_text: "Those values use different units (miles and hours). What should I compare?", tool_id: "phantom-clarifier" },
+);
+assert.deepEqual(
+  buildInstantChatToolReply("How many more laps did Mina log than Theo?", [{ user: "Mina logged 12 laps.", assistant: "Mina logged 12 laps." }]),
+  { output_text: "I have Mina's value, but not Theo's. What is Theo's value?", tool_id: "phantom-clarifier" },
+);
+assert.deepEqual(
+  buildInstantChatToolReply("How many more laps did Mina log than Theo?", [
+    { user: "Mina walked 5 miles and Theo worked 6 hours.", assistant: "Noted." },
+    { user: "Mina logged 12 laps.", assistant: "Mina logged 12 laps." },
+  ]),
+  { output_text: "I have Mina's value, but not Theo's. What is Theo's value?", tool_id: "phantom-clarifier" },
+  "the newest explicit quantity topic must beat an older complete comparison",
+);
+const eventTurns = [{
+  user: "Sequence: 1) Mina opened the gate. 2) Theo rang the bell. 3) Priya crossed the bridge. 4) Theo rang the bell again. 5) Mina closed the gate.",
+  assistant: "Sequence noted.",
+}];
+assert.deepEqual(
+  buildInstantChatToolReply("What happened immediately before Priya crossed the bridge? Event only.", eventTurns),
+  { output_text: "Theo rang the bell", tool_id: "phantom-reference-resolver" },
+);
+assert.deepEqual(
+  buildInstantChatToolReply("What happened immediately after Priya crossed the bridge? Event only.", eventTurns),
+  { output_text: "Theo rang the bell again", tool_id: "phantom-reference-resolver" },
+);
+assert.deepEqual(
+  buildInstantChatToolReply("What happened before Theo rang the bell?", eventTurns),
+  { output_text: "Do you mean the first or second time Theo rang the bell?", tool_id: "phantom-clarifier" },
+);
+const namedPredicateTurns = [{
+  user: "For this chat only: my cats are Comet and Luna. Comet sleeps on the keyboard; Luna steals socks.",
+  assistant: "Comet sleeps on the keyboard, and Luna steals socks.",
+}];
+assert.deepEqual(
+  buildInstantChatToolReply("Which one steals socks? Name only.", namedPredicateTurns),
+  { output_text: "Luna", tool_id: "phantom-reference-resolver" },
+);
+assert.deepEqual(
+  buildInstantChatToolReply("Now which one steals socks? Name only.", [
+    ...namedPredicateTurns,
+    { user: "Actually, switch those habits: Comet steals socks and Luna sleeps on the keyboard.", assistant: "Switched." },
+  ]),
+  { output_text: "Comet", tool_id: "phantom-reference-resolver" },
 );
 const overlappingMeetingTurns = [
   { user: "The meeting is Tuesday at 2 PM in Room 4.", assistant: "Tuesday at 2 PM in Room 4." },

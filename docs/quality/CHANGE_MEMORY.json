@@ -1036,12 +1036,17 @@
       "id": "bounded-relevant-chat-thread-recall",
       "status": "active",
       "title": "Named earlier chat topics survive unrelated conversation without sending the whole history",
-      "ownerDecision": "Phantom must be able to return to a specifically named temporary topic after many unrelated turns and honor its latest correction. The browser may send no more than ten active-organization turns: six newest turns plus up to four relevant older thread turns. Temporary chat still shreds after ten days and never becomes durable memory unless it independently meets the explicit memory rules.",
+      "ownerDecision": "Phantom must be able to return to a specifically named temporary topic after many unrelated turns and honor its latest correction. Vague transformations such as explain it carry only the immediately preceding turn so an older business subject cannot hijack them. Other requests may send up to six newest active-organization turns plus four relevant older thread turns, always capped at ten. Temporary chat still shreds after ten days and never becomes durable memory unless it independently meets the explicit memory rules.",
       "requiredPatterns": [
         {
           "file": "app/js/store.js",
-          "pattern": "userRequest = \"\"[\\s\\S]*Math[.]min[(]6, boundedLimit[)][\\s\\S]*index [+] 1, index, index - 1, index - 2",
-          "description": "The client context pack reserves bounded space for a named older thread and nearby corrections."
+          "pattern": "IMMEDIATE_CHAT_FOLLOW_UP[\\s\\S]*immediateFollowUp [?] 1 : 6[\\s\\S]*index [+] 1, index, index - 1, index - 2",
+          "description": "The client context pack isolates vague immediate transformations while reserving bounded space for named older threads and nearby corrections."
+        },
+        {
+          "file": "scripts/test-memory-retention.mjs",
+          "pattern": "a vague transformation follow-up must carry only the immediately preceding turn[\\s\\S]*an older business topic must not leak through generic routing words",
+          "description": "A direct packet regression prevents explain-it follow-ups from reviving an older pipeline topic."
         },
         {
           "file": "app/js/command.js",
@@ -1171,6 +1176,29 @@
           "file": "scripts/test-database-auth-org-browser.mjs",
           "pattern": "reverse respectively callback must return the value's actual owner[\\s\\S]*undoing Mina must not roll Theo back with her",
           "description": "Authenticated Chrome proves the exact mappings and scoped undo through dashboard chat."
+        }
+      ]
+    },
+    {
+      "id": "named-comparison-and-ordered-event-recall",
+      "status": "active",
+      "title": "Phantom compares corrected named values and follows explicit event order without invention",
+      "ownerDecision": "Named quantities keep their owners and units through winner, difference, and ranking questions. A later correction updates only that person's value. Ties are reported honestly; incompatible units, repeated event targets, and missing values receive one concise clarification instead of guessed arithmetic or event selection. Explicit numbered timelines return only the adjacent stated event. All context remains temporary, bounded, and organization-scoped.",
+      "requiredPatterns": [
+        {
+          "file": "server/src/phantom-ai/instant-chat-tools.ts",
+          "pattern": "function namedQuantityComparisonReply[\\s\\S]*Those values use different units[\\s\\S]*function orderedEventReferenceReply",
+          "description": "Exact comparisons, scoped corrections, unit checks, and ordered-event callbacks use bounded deterministic state."
+        },
+        {
+          "file": "server/scripts/test-instant-chat-http-live-model.ts",
+          "pattern": "namedComparisonsVerified: true[\\s\\S]*correctedComparisonVerified: true[\\s\\S]*comparisonAmbiguityVerified: true[\\s\\S]*orderedEventsVerified: true",
+          "description": "The 100-plus authenticated gate covers rankings, differences, corrections, ties, missing values, units, and event order."
+        },
+        {
+          "file": "scripts/test-database-auth-org-browser.mjs",
+          "pattern": "equal values must report a tie instead of inventing a winner[\\s\\S]*a repeated event target must clarify the occurrence instead of choosing one",
+          "description": "Authenticated Chrome proves comparison and timeline behavior through the real dashboard."
         }
       ]
     },

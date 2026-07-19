@@ -1074,10 +1074,12 @@ export function chatHistoryStats(list = visible(store.state.chatHistory || [])) 
 }
 
 const CHAT_CONTEXT_STOP_WORDS = new Set([
-  "about", "after", "again", "answer", "back", "before", "could", "from", "have", "into", "just", "more",
+  "about", "actually", "after", "again", "answer", "back", "before", "could", "explain", "from", "have", "into", "just", "like", "more",
   "only", "please", "question", "that", "their", "there", "these", "thing", "this", "those", "what", "when",
   "where", "which", "with", "would", "your",
 ]);
+
+const IMMEDIATE_CHAT_FOLLOW_UP = /^(?:actually[, ]+)?(?:explain|say|phrase|rewrite|make)\s+(?:it|that|this)\b|^why\s+(?:that|it|this|one)\b|^(?:shorter|longer|again|continue|go on)\b/i;
 
 function chatContextTerms(value = "") {
   return new Set((sanitizeMemoryText(value).toLowerCase().match(/[a-z0-9]{4,}/g) || [])
@@ -1091,8 +1093,12 @@ function chatContextTerms(value = "") {
 export function recentChatTurns(limit = 8, userRequest = "") {
   const boundedLimit = Math.min(Math.max(Number(limit) || 8, 1), 10);
   const history = pruneChatHistory(visible(store.state.chatHistory || []));
+  const immediateFollowUp = IMMEDIATE_CHAT_FOLLOW_UP.test(String(userRequest || "").trim());
+  const recentCount = userRequest
+    ? Math.min(immediateFollowUp ? 1 : 6, boundedLimit)
+    : boundedLimit;
   const selected = new Set(Array.from(
-    { length: Math.min(history.length, userRequest ? Math.min(6, boundedLimit) : boundedLimit) },
+    { length: Math.min(history.length, recentCount) },
     (_, index) => index,
   ));
   const requestTerms = chatContextTerms(userRequest);

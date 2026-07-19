@@ -881,6 +881,49 @@ async function main() {
     const browserNamedUndoFinal = await submitChat(cdp, "What are Mina's and Theo's final badge colors? MINA | THEO only.", diagnostics);
     continuityResults.push(browserNamedUndoFinal);
     assert.match(browserNamedUndoFinal.answer.trim(), /^red\s*\|\s*green[.!]?$/i, "undoing Mina must not roll Theo back with her");
+    continuityResults.push(await submitChat(cdp, "Mina logged 12 laps, Theo logged 18 laps, and Priya logged 15 laps.", diagnostics));
+    const browserComparisonWinner = await submitChat(cdp, "Who logged the most? Name only.", diagnostics);
+    continuityResults.push(browserComparisonWinner);
+    assert.match(browserComparisonWinner.answer.trim(), /^Theo[.!]?$/i, "the largest named value must retain its owner");
+    const browserComparisonDifference = await submitChat(cdp, "How many more laps did Theo log than Mina? Number and unit only.", diagnostics);
+    continuityResults.push(browserComparisonDifference);
+    writeFileSync(path.join(runDir, "cycle29-comparison-request.json"), JSON.stringify({
+      result: browserComparisonDifference,
+      request: chatRequests.filter((request) => (request.user_request || request.message) === "How many more laps did Theo log than Mina? Number and unit only.").at(-1) || null,
+    }, null, 2));
+    assert.match(browserComparisonDifference.answer.trim(), /^6 laps[.!]?$/i, `named difference must use the stated values and unit: ${browserComparisonDifference.answer}`);
+    const browserComparisonRanking = await submitChat(cdp, "Rank them from most to least. Names only, separated by >.", diagnostics);
+    continuityResults.push(browserComparisonRanking);
+    assert.match(browserComparisonRanking.answer.trim(), /^Theo\s*>\s*Priya\s*>\s*Mina[.!]?$/i, "ranking must preserve value ownership and requested direction");
+    continuityResults.push(await submitChat(cdp, "Correction: Mina logged 20 laps.", diagnostics));
+    const browserCorrectedWinner = await submitChat(cdp, "Who logged the most now? Name only.", diagnostics);
+    continuityResults.push(browserCorrectedWinner);
+    assert.match(browserCorrectedWinner.answer.trim(), /^Mina[.!]?$/i, "comparison must use Mina's corrected value");
+    const browserCorrectedDifference = await submitChat(cdp, "How many more laps did Mina log than Theo? Number and unit only.", diagnostics);
+    continuityResults.push(browserCorrectedDifference);
+    assert.match(browserCorrectedDifference.answer.trim(), /^2 laps[.!]?$/i, "correcting Mina must preserve Theo's value and recompute the difference");
+    continuityResults.push(await submitChat(cdp, "Mina has 4 points and Theo has 4 points.", diagnostics));
+    const browserTie = await submitChat(cdp, "Who has more?", diagnostics);
+    continuityResults.push(browserTie);
+    assert.match(browserTie.answer, /Mina and Theo are tied at 4 points/i, "equal values must report a tie instead of inventing a winner");
+    continuityResults.push(await submitChat(cdp, "Mina walked 5 miles and Theo worked 6 hours.", diagnostics));
+    const browserIncompatibleUnits = await submitChat(cdp, "Who did more?", diagnostics);
+    continuityResults.push(browserIncompatibleUnits);
+    assert.equal(browserIncompatibleUnits.answer, "Those values use different units (miles and hours). What should I compare?", "incompatible units must clarify instead of performing meaningless arithmetic");
+    continuityResults.push(await submitChat(cdp, "Mina logged 12 laps.", diagnostics));
+    const browserMissingValue = await submitChat(cdp, "How many more laps did Mina log than Theo?", diagnostics);
+    continuityResults.push(browserMissingValue);
+    assert.equal(browserMissingValue.answer, "I have Mina's value, but not Theo's. What is Theo's value?", "a missing comparison value must be requested explicitly");
+    continuityResults.push(await submitChat(cdp, "Sequence: 1) Mina opened the gate. 2) Theo rang the bell. 3) Priya crossed the bridge. 4) Theo rang the bell again. 5) Mina closed the gate.", diagnostics));
+    const browserEventBefore = await submitChat(cdp, "What happened immediately before Priya crossed the bridge? Event only.", diagnostics);
+    continuityResults.push(browserEventBefore);
+    assert.match(browserEventBefore.answer.trim(), /^Theo rang the bell[.!]?$/i, "before must return the adjacent stated event");
+    const browserEventAfter = await submitChat(cdp, "What happened immediately after Priya crossed the bridge? Event only.", diagnostics);
+    continuityResults.push(browserEventAfter);
+    assert.match(browserEventAfter.answer.trim(), /^Theo rang the bell again[.!]?$/i, "after must return the adjacent stated event");
+    const browserRepeatedEvent = await submitChat(cdp, "What happened before Theo rang the bell?", diagnostics);
+    continuityResults.push(browserRepeatedEvent);
+    assert.equal(browserRepeatedEvent.answer, "Do you mean the first or second time Theo rang the bell?", "a repeated event target must clarify the occurrence instead of choosing one");
     continuityResults.push(await submitChat(cdp, "Options: 1) email, 2) call, 3) meeting.", diagnostics));
     const browserReorder = await submitChat(cdp, "Move the third before the first. Return the reordered list only.", diagnostics);
     continuityResults.push(browserReorder);
@@ -1044,7 +1087,7 @@ async function main() {
         "customer reasoning reaches the bounded local model lane without cards or business context",
         "customer planning and feedback use real model answers instead of canned intent copy",
         "organization advice remains action-free and excludes money, plan, asset, and pulse status",
-        "natural follow-ups, exact object/list/causal/respectively references, full, partial, and named-entity rollback, and useful ambiguity clarification stay coherent across 73 browser turns",
+        "natural follow-ups, exact object/list/causal/respectively/comparative/event references, scoped corrections, and useful ambiguity clarification stay coherent across 90 browser turns",
         "durable memory survives reload inside organization A",
         "organization B receives no A memory, history, request context, or visible chat",
         "organization A returns without organization B contamination",
