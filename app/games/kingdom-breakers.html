@@ -267,6 +267,7 @@ const MATERIALS={
   timber:{hp:24,mass:1.4,color:'#b9803f',dark:'#7d5527'},
   ironclad:{hp:70,mass:3.6,color:'#5c7fa8',dark:'#33445e'},
   core:{hp:170,mass:5.5,color:'#b78bff',dark:'#6a4a9c'},
+  barrier:{hp:9999,mass:99,color:'#263047',dark:'#5d6d92'},
 };
 
 const AMMO={
@@ -287,20 +288,21 @@ const AMMO_ORDER=['stonefall','splinter','ember'];
 const WARDEN_MAX_HP=90;
 
 const LEVELS=[
-  {key:'rustwatch',   name:'Rustwatch Post',      sub:'A crumbling watchtower guarding the marsh road.',       cols:4, rows:4, blockW:76, blockH:54, wardenCount:0, ironcladFrom:0, budget:{stonefall:4,splinter:3,ember:2}},
-  {key:'cinderdock',  name:'Cinderdock Hold',     sub:'A dockside granary stacked three stories high.',        cols:5, rows:5, blockW:70, blockH:50, wardenCount:1, ironcladFrom:0, budget:{stonefall:5,splinter:4,ember:2}},
-  {key:'graywall',    name:'Graywall Keep',       sub:'Iron-banded walls ring the old garrison.',              cols:6, rows:5, blockW:64, blockH:48, wardenCount:1, ironcladFrom:2, budget:{stonefall:5,splinter:5,ember:3}},
-  {key:'emberfall',   name:'Emberfall Bastion',   sub:'Wardens shelter on the ramparts — breach with care.',   cols:6, rows:6, blockW:62, blockH:46, wardenCount:2, ironcladFrom:2, budget:{stonefall:6,splinter:5,ember:3}},
-  {key:'thornspire',  name:'Thornspire Citadel',  sub:'Twin towers lashed together by an iron gate.',          cols:7, rows:6, blockW:56, blockH:44, wardenCount:2, ironcladFrom:3, budget:{stonefall:6,splinter:6,ember:4}},
-  {key:'warlord',     name:"Warlord's Anvil",     sub:'The Warlord Core beats behind a wall of ironclad.',     cols:8, rows:7, blockW:52, blockH:42, wardenCount:3, ironcladFrom:3, budget:{stonefall:8,splinter:6,ember:5}, boss:true},
+  {key:'rustwatch',   name:'Rustwatch Post',      sub:'A crumbling watchtower guarding the marsh road.',       cols:4, rows:4, blockW:76, blockH:54, wardenCount:0, ironcladFrom:0, budget:{stonefall:4,splinter:3,ember:2}, layout:['####','####',' ###','  ##']},
+  {key:'cinderdock',  name:'Cinderdock Hold',     sub:'A dockside granary stacked three stories high.',        cols:5, rows:5, blockW:70, blockH:50, wardenCount:1, ironcladFrom:0, budget:{stonefall:5,splinter:4,ember:2}, layout:['#####','#####',' ####','  ###','  ## ']},
+  {key:'graywall',    name:'Graywall Keep',       sub:'Iron-banded walls ring the old garrison.',              cols:6, rows:5, blockW:64, blockH:48, wardenCount:1, ironcladFrom:2, budget:{stonefall:5,splinter:5,ember:3}, layout:['######','######',' #### ','  ####','  ### ']},
+  {key:'emberfall',   name:'Emberfall Bastion',   sub:'Wardens shelter inside split tower stacks.',            cols:6, rows:6, blockW:62, blockH:46, wardenCount:2, ironcladFrom:2, budget:{stonefall:6,splinter:5,ember:3}, layout:['######','######','### ##',' ## ##',' ##  #','  #  #']},
+  {key:'thornspire',  name:'Thornspire Citadel',  sub:'Twin towers lashed together by an iron gate.',          cols:7, rows:6, blockW:56, blockH:44, wardenCount:2, ironcladFrom:3, budget:{stonefall:6,splinter:6,ember:4}, layout:['#######','#######','### ###',' ## ## ',' ## ## ',' #   # ']},
+  {key:'warlord',     name:"Warlord's Anvil",     sub:'The Warlord Core beats behind offset ironclad stacks.', cols:8, rows:7, blockW:52, blockH:42, wardenCount:3, ironcladFrom:3, budget:{stonefall:8,splinter:6,ember:5}, boss:true, layout:['########','########','### ####',' ## ####',' ###### ','  ###  #','   ##  ']},
 ];
-const DUEL_DEF={key:'duel-arena', name:'Duel Arena', sub:'', cols:6, rows:6, blockW:60, blockH:44, wardenCount:1, ironcladFrom:2, budget:{stonefall:3,splinter:3,ember:2}};
-const PARTY_DEF={key:'siege-party', name:'Siege Party Arena', sub:'', cols:6, rows:6, blockW:60, blockH:44, wardenCount:1, ironcladFrom:2, budget:{stonefall:5,splinter:4,ember:3}};
+const DUEL_DEF={key:'duel-arena', name:'Duel Arena', sub:'', cols:6, rows:6, blockW:60, blockH:44, wardenCount:1, ironcladFrom:2, budget:{stonefall:3,splinter:3,ember:2}, layout:['######','######',' #### ',' #### ','  ### ','  ##  ']};
+const PARTY_DEF={key:'siege-party', name:'Siege Party Arena', sub:'', cols:6, rows:6, blockW:60, blockH:44, wardenCount:1, ironcladFrom:2, budget:{stonefall:5,splinter:4,ember:3}, layout:['######','######',' #### ',' ###  ','  ### ','   ## ']};
 const PARTY_WINDOW_MS=90000;
 
 const TUTORIAL_SLIDES=[
   {icon:'🎯', h:'Aim your engine', p:'Press and drag anywhere on the field. The direction and distance from your siege engine set the angle and power — drag far for a long, flat shot; drag short and high for a lob.'},
   {icon:'🧨', h:'Three kinds of ammunition', p:'Stonefall Orb hits hard once. Splinter Lance pierces through several blocks in a line. Emberburst Charge explodes and damages everything nearby. Switch with the ammo rack or keys 1/2/3.'},
+  {icon:'🏰', h:'Do not shoot your own tower', p:'In duels, your shots are real: if you fire through your own blocks, you will crack your own castle and can drop your own Warden. Lob over the middle wall or thread a clean shot through the openings.'},
   {icon:'🛡', h:'Protect the Wardens', p:'Small Wardens shelter on some ledges. A direct hit — or destroying the block they stand on — costs your safety bonus, even if the hold still falls.'},
   {icon:'⭐', h:'Earn your stars', p:'Stars come from breach percentage, ammo left over, and keeping every Warden safe. Knock out the glowing keystone block for a slow-motion final blow.'},
 ];
@@ -370,8 +372,12 @@ function buildStructure(levelDef, seed, opts={}){
     grid[r]=[];
     for(let c=0;c<cols;c++){
       let keep=true;
-      if(r===rows-1 && (c===0||c===cols-1) && rng()<0.5) keep=false;
-      if(cols>=6 && r>=rows-2 && (c===0||c===cols-1)) keep=false;
+      const rowMask=Array.isArray(levelDef.layout) ? levelDef.layout[r] : null;
+      if(rowMask) keep = rowMask[c] === '#';
+      else {
+        if(r===rows-1 && (c===0||c===cols-1) && rng()<0.5) keep=false;
+        if(cols>=6 && r>=rows-2 && (c===0||c===cols-1)) keep=false;
+      }
       if(!keep){ grid[r][c]=null; continue; }
       const material=materialForRow(r,rows,levelDef.ironcladFrom);
       const spec=MATERIALS[material];
@@ -441,16 +447,29 @@ function buildStructure(levelDef, seed, opts={}){
     wardens.push({id:idPrefix+'w'+i, owner, blockId:b.id, x:b.x, y:b.y-b.h/2-16, radius:15, alive:true, harmed:false, hp:WARDEN_MAX_HP, maxHp:WARDEN_MAX_HP});
   }
   const totalMaxHp=blocks.reduce((s,b)=>s+b.maxHp,0);
-  return {blocks, wardens, grid, groundY, baseX, blockW, blockH, cols, rows, totalMaxHp, keystoneId: keystone?keystone.id:null, owner};
+  return {blocks, wardens, grid, barriers:[], groundY, baseX, blockW, blockH, cols, rows, totalMaxHp, keystoneId: keystone?keystone.id:null, owner};
+}
+
+function buildCenterBarrier(groundY){
+  const x=WORLD_W/2;
+  const width=24;
+  const segments=[
+    {id:'barrier-low', x, y:groundY-58, w:width, h:116},
+    {id:'barrier-mid', x, y:groundY-230, w:width, h:120},
+    {id:'barrier-high', x, y:groundY-430, w:width, h:210},
+  ];
+  return segments.map((seg)=>({ ...seg, material:'barrier', alive:true, isBarrier:true }));
 }
 
 function buildDuelLevel(seed){
   const structW=DUEL_DEF.cols*DUEL_DEF.blockW;
   const player=buildStructure(DUEL_DEF, seed^0x51f2a9, {baseX:230, owner:'player', idPrefix:'player-'});
   const bot=buildStructure(DUEL_DEF, seed^0xa72c4d, {baseX:WORLD_W-structW-230, owner:'bot', idPrefix:'bot-'});
+  const barriers=buildCenterBarrier(player.groundY);
   return {
     blocks:[...player.blocks,...bot.blocks],
     wardens:[...player.wardens,...bot.wardens],
+    barriers,
     grid:[],
     groundY:player.groundY,
     baseX:bot.baseX,
@@ -469,6 +488,10 @@ function buildDuelLevel(seed){
 function engineX(shooter='player'){ return mode==='duel' && shooter==='bot' ? WORLD_W-150 : 150; }
 function engineY(shooter='player'){ return level?level.groundY-34:WORLD_H-160; }
 function targetOwnerForShooter(shooter){ return mode==='duel' ? (shooter==='bot'?'player':'bot') : null; }
+function shouldCountDamageForShooter(block, shooter){
+  if(mode!=='duel') return true;
+  return block && block.owner===targetOwnerForShooter(shooter);
+}
 
 function startRun(levelDef, seed, runMode){
   level=runMode==='duel' ? buildDuelLevel(seed) : buildStructure(levelDef, seed);
@@ -486,7 +509,7 @@ function applyDamage(block,dmg,impX,impY){
   if(!block.alive) return;
   const actualDmg=Math.min(block.hp,dmg);
   block.hp-=dmg; block.hitFlash=1;
-  damageBy[activeShooter]=(damageBy[activeShooter]||0)+actualDmg;
+  if(shouldCountDamageForShooter(block, activeShooter)) damageBy[activeShooter]=(damageBy[activeShooter]||0)+actualDmg;
   block.vx+=impX/block.mass; block.vy+=impY/block.mass; block.resting=false;
   playImpact();
   if(block.hp<=0) destroyBlock(block);
@@ -607,8 +630,11 @@ function projectileTraceHit(p,spec,x0,y0,x1,y1,targetOwner=null){
       if(wardenLineOccluded(x0,y0,w.x,w.y,w.owner)) continue;
       return {x,y,block:null};
     }
+    for(const barrier of (level.barriers||[])){
+      if(!barrier.alive) continue;
+      if(Math.abs(x-barrier.x) <= barrier.w/2+spec.radius && Math.abs(y-barrier.y) <= barrier.h/2+spec.radius) return {x,y,block:null,barrier};
+    }
     for(const b of level.blocks){
-      if(targetOwner && b.owner!==targetOwner) continue;
       if(!b.alive || p.hitIds.has(b.id)) continue;
       if(Math.abs(x-b.x) <= b.w/2+spec.radius && Math.abs(y-b.y) <= b.h/2+spec.radius) return {x,y,block:b};
     }
@@ -626,18 +652,21 @@ function stepProjectile(p,dt){
   p.x+=p.vx*dt; p.y+=p.vy*dt;
   activeShooter=p.shooter;
   const hit=projectileTraceHit(p,spec,x0,y0,p.x,p.y,targetOwner);
-  if(hit){ p.x=hit.x; p.y=hit.y; resolveProjectileHit(p,hit.block); return; }
+  if(hit){ p.x=hit.x; p.y=hit.y; resolveProjectileHit(p,hit.block,hit.barrier||null); return; }
   if(p.x<-80 || p.x>WORLD_W+80 || p.y<-400){ p.alive=false; }
 }
 
-function resolveProjectileHit(p, block){
+function resolveProjectileHit(p, block, barrier=null){
   const spec=AMMO[p.kind];
-  const targetOwner=targetOwnerForShooter(p.shooter);
   activeShooter=p.shooter;
   spawnImpactSpark(p.x,p.y,spec.color);
+  if(barrier){
+    playImpact(); shake=Math.max(shake,6);
+    if(p.kind==='splinter' && p.pierceLeft>0){ p.pierceLeft--; p.vx*=0.42; p.vy*=0.42; return; }
+    p.alive=false; return;
+  }
   if(p.kind==='ember'){
     for(const b of level.blocks){
-      if(targetOwner && b.owner!==targetOwner) continue;
       if(!b.alive) continue;
       const d=Math.hypot(b.x-p.x,b.y-p.y);
       if(d<=spec.splash){
@@ -647,7 +676,7 @@ function resolveProjectileHit(p, block){
         applyDamage(b, dmg, dx/len*spec.impulse*falloff, dy/len*spec.impulse*falloff-140);
       }
     }
-    checkWardenHit(p.x,p.y,spec.splash,spec.damage,targetOwner,true);
+    checkWardenHit(p.x,p.y,spec.splash,spec.damage,null,true);
     spawnExplosion(p.x,p.y); playExplosion(); shake=Math.max(shake,10);
     p.alive=false; return;
   }
@@ -655,7 +684,7 @@ function resolveProjectileHit(p, block){
     applyDamage(block, spec.damage, p.vx*spec.impulse/900, p.vy*spec.impulse/900 - 60);
     p.hitIds.add(block.id);
   }
-  checkWardenHit(p.x,p.y,spec.radius,spec.damage,targetOwner,false);
+  checkWardenHit(p.x,p.y,spec.radius,spec.damage,null,false);
   if(p.kind==='splinter' && p.pierceLeft>0 && block){
     p.pierceLeft--; p.vx*=0.74; p.vy*=0.74; shake=Math.max(shake,4);
   } else {
@@ -839,11 +868,22 @@ function drawGround(){
   ctx.fillStyle='#161c2c'; ctx.fillRect(0,y,WORLD_W,WORLD_H-y);
   ctx.fillStyle='#20293e'; ctx.fillRect(0,y,WORLD_W,6);
 }
+function drawCrewMember(x,y,color,flip=1){
+  ctx.save(); ctx.translate(x,y); ctx.scale(flip,1);
+  ctx.fillStyle='#22304a'; roundRect(-6,0,12,18,5); ctx.fill();
+  ctx.fillStyle=color; ctx.beginPath(); ctx.arc(0,-6,8,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#121826'; ctx.beginPath(); ctx.arc(-3,-7,1.3,0,Math.PI*2); ctx.arc(3,-7,1.3,0,Math.PI*2); ctx.fill();
+  ctx.strokeStyle='#ffd479'; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(-5,6); ctx.lineTo(-16,15); ctx.moveTo(5,6); ctx.lineTo(16,13); ctx.stroke();
+  ctx.restore();
+}
 function drawEngine(shooter='player'){
   const ex=engineX(shooter), ey=engineY(shooter);
   ctx.save(); ctx.translate(ex,ey);
   if(shooter==='bot') ctx.scale(-1,1);
+  drawCrewMember(-38,20,'#ffd479',1);
+  drawCrewMember(42,24,'#7ee8ff',-1);
   ctx.fillStyle='#3a2a18'; ctx.beginPath(); ctx.moveTo(-34,40); ctx.lineTo(34,40); ctx.lineTo(18,0); ctx.lineTo(-18,0); ctx.closePath(); ctx.fill();
+  ctx.fillStyle='#24180e'; ctx.beginPath(); ctx.arc(-22,42,10,0,Math.PI*2); ctx.arc(22,42,10,0,Math.PI*2); ctx.fill();
   const armAngle = dragging ? aim.angle : -0.9;
   ctx.save(); ctx.rotate(armAngle+Math.PI/2);
   ctx.fillStyle='#c97f2f'; ctx.fillRect(-6,-58,12,64);
@@ -864,6 +904,18 @@ function drawBlocks(){
     }
     if(b.hitFlash>0){ ctx.fillStyle=`rgba(255,255,255,${b.hitFlash*0.5})`; roundRect(-b.w/2,-b.h/2,b.w,b.h,6); ctx.fill(); }
     if(b.isKeystone){ ctx.fillStyle='#ffe9a8'; ctx.beginPath(); ctx.arc(0,-b.h/2-10,5,0,Math.PI*2); ctx.fill(); }
+    ctx.restore();
+  }
+}
+function drawBarriers(){
+  const barriers=level.barriers||[];
+  for(const barrier of barriers){
+    if(!barrier.alive) continue;
+    ctx.save(); ctx.translate(barrier.x,barrier.y);
+    ctx.fillStyle='rgba(17,24,39,0.92)'; roundRect(-barrier.w/2,-barrier.h/2,barrier.w,barrier.h,8); ctx.fill();
+    ctx.strokeStyle='#5d6d92'; ctx.lineWidth=3; roundRect(-barrier.w/2,-barrier.h/2,barrier.w,barrier.h,8); ctx.stroke();
+    ctx.strokeStyle='rgba(255,212,121,0.45)'; ctx.lineWidth=2;
+    for(let y=-barrier.h/2+18;y<barrier.h/2;y+=28){ ctx.beginPath(); ctx.moveTo(-barrier.w/2+5,y); ctx.lineTo(barrier.w/2-5,y+8); ctx.stroke(); }
     ctx.restore();
   }
 }
@@ -888,8 +940,11 @@ function drawWardens(){
       fill=mixColor(baseColor,'#ff5d5d',dmgRatio*0.65);
     } else fill=baseColor;
     ctx.fillStyle = fill;
-    ctx.beginPath(); ctx.arc(0,0,w.radius,0,Math.PI*2); ctx.fill();
-    ctx.fillStyle='#0a0d13'; ctx.beginPath(); ctx.arc(-4,-2,1.6,0,Math.PI*2); ctx.arc(4,-2,1.6,0,Math.PI*2); ctx.fill();
+    roundRect(-w.radius*0.76,-w.radius*0.16,w.radius*1.52,w.radius*1.32,8); ctx.fill();
+    ctx.beginPath(); ctx.arc(0,-w.radius*0.45,w.radius*0.72,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#ffd479'; ctx.beginPath(); ctx.moveTo(-9,-w.radius*1.12); ctx.lineTo(0,-w.radius*1.42); ctx.lineTo(9,-w.radius*1.12); ctx.closePath(); ctx.fill();
+    ctx.fillStyle='#0a0d13'; ctx.beginPath(); ctx.arc(-4,-w.radius*0.52,1.6,0,Math.PI*2); ctx.arc(4,-w.radius*0.52,1.6,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle='#eef2fb'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(0,-w.radius*0.36,5,0.15*Math.PI,0.85*Math.PI); ctx.stroke();
     ctx.restore();
   }
   ctx.globalAlpha=1;
@@ -934,7 +989,7 @@ function draw(){
   }
   drawSky();
   if(level){
-    drawGround(); drawEngine('player'); if(mode==='duel') drawEngine('bot'); drawBlocks(); drawWardens(); drawProjectiles(); drawParticles();
+    drawGround(); drawEngine('player'); if(mode==='duel') drawEngine('bot'); drawBarriers(); drawBlocks(); drawWardens(); drawProjectiles(); drawParticles();
     if(dragging) drawTrajectoryPreview();
   }
   ctx.restore();

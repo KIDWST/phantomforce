@@ -88,6 +88,9 @@ assert.match(module, /document\.exitFullscreen/u, "Closing the player must escap
 assert.match(module, /PHANTOMPLAY_ENGINE/u, "The player must publish an engine capability profile.");
 assert.match(module, /saveStateBytes:\s*262144/u, "The engine must support larger save-state payloads for bigger games.");
 assert.match(module, /largeMap:\s*\{/u, "The engine must advertise large-map support.");
+assert.match(module, /desktop_player/u, "The engine must advertise a downloadable large-asset player profile.");
+assert.match(module, /developer_full/u, "The engine must advertise a full developer install profile.");
+assert.match(module, /cloudStreamingFromJordan:\s*false/u, "The engine must not imply Jordan-hosted cloud game streaming.");
 assert.match(module, /engine:\s*engineFor/u, "Game settings must include engine capabilities.");
 assert.match(module, /frame\.focus/u, "The active game frame must receive keyboard focus.");
 for (const slug of gameSlugs) {

@@ -19,6 +19,7 @@ export type PhantomPlaySubmissionStatus = "draft" | "submitted" | "changes_reque
 export type PhantomPlayEngineProfile = {
   tier: string;
   minVersion: string;
+  installProfile?: "webapp" | "desktop_player" | "developer_full";
 };
 
 // Content descriptors are additive tags alongside the single contentRating —
@@ -74,9 +75,49 @@ export type PhantomPlayGame = {
 
 const PHANTOMPLAY_ART_VERSION = "phantomplay-art-20260717";
 export const PHANTOMPLAY_ENGINE = {
-  version: "2.0-large-map",
+  version: "2.1-hybrid-install",
   saveStateBytes: 262_144,
   largeMap: { chunkSize: 1024, maxLoadedChunks: 64, streaming: true },
+  runtimeProfiles: {
+    webapp: {
+      targetUser: "standard_user",
+      installRequired: false,
+      supportsLargeAssets: false,
+      privacyMode: "browser_session",
+      notes: "Default lightweight PhantomPlay web runtime for small games and normal app use.",
+    },
+    desktop_player: {
+      targetUser: "privacy_or_game_user",
+      installRequired: true,
+      supportsLargeAssets: true,
+      maxAssetPackGb: 50,
+      privacyMode: "local_cache",
+      notes: "Downloadable app lane for users who want local game assets and more private local play.",
+    },
+    developer_full: {
+      targetUser: "developer",
+      installRequired: true,
+      supportsLargeAssets: true,
+      maxAssetPackGb: 250,
+      privacyMode: "local_workspace",
+      includes: ["PhantomPlay SDK", "large-asset pack manifest", "local preview runner", "developer submission checks"],
+      notes: "Full creator/dev install. Games and engine tooling live on the user's machine, not Jordan's cloud.",
+    },
+  },
+  distributedRuntime: {
+    status: "planned_safe_design",
+    userOwnedCompute: true,
+    cloudStreamingFromJordan: false,
+    directPeerConnectionDefault: false,
+    inboundDevicePortsDefault: false,
+    model: "signed workspace relay plus future opt-in user-owned edge nodes",
+    safety: [
+      "No hidden P2P.",
+      "No user machine becomes a server without explicit install-time consent.",
+      "No cloud streaming games from Jordan's hardware.",
+      "Large game assets are installed or cached on the user's device/profile.",
+    ],
+  },
   protocols: ["ready", "score", "progress", "complete", "paused", "exit", "settings", "save-state", "load-state"],
 } as const;
 const artUrl = (file: string) => `/app/assets/phantomplay/${file}?v=${PHANTOMPLAY_ART_VERSION}`;

@@ -34,8 +34,11 @@ try {
 
   const initial = await play.getPhantomPlaySnapshot(playerA, { entitled: true, dailyMinuteLimit: 30, canSubmitGames: false });
   assert(initial.catalog.length >= 28, "The full expanded built-in game catalog should ship.");
-  assert(play.PHANTOMPLAY_ENGINE.version === "2.0-large-map" && play.PHANTOMPLAY_ENGINE.saveStateBytes >= 262_144, "PhantomPlay should expose a large-map-capable engine profile.");
+  assert(play.PHANTOMPLAY_ENGINE.version === "2.1-hybrid-install" && play.PHANTOMPLAY_ENGINE.saveStateBytes >= 262_144, "PhantomPlay should expose a large-map-capable engine profile.");
   assert(initial.engine?.largeMap?.streaming === true, "Snapshots should publish large-map engine capabilities to the player shell.");
+  assert(initial.engine?.runtimeProfiles?.desktop_player?.supportsLargeAssets === true, "Snapshots should publish the desktop large-asset player profile.");
+  assert(initial.engine?.runtimeProfiles?.developer_full?.maxAssetPackGb >= 50, "Snapshots should publish the full developer install profile.");
+  assert(initial.engine?.distributedRuntime?.cloudStreamingFromJordan === false, "Distributed runtime must not imply Jordan-hosted cloud game streaming.");
   const builtInIds = new Set(initial.catalog.map((game) => game.id));
   assert(builtInIds.size === initial.catalog.length, "Built-in game IDs should not duplicate after catalog registration.");
   for (const gameId of ["neon-drift", "signal-match", "focus-stack", "word-weld", "reflex-grid", "penalty-kick", "rift-frenzy", "serpent-surge", "color-rush", "tile-flow", "tower-tactics", "breath-pacer", "court-vision", "pixel-bloom", "circuit-serpent", "echo-sequence", "signal-sweeper", "neon-breaker", "type-storm", "logic-lights", "phantom-rumble", "sudoku-signal", "cubetown", "skyguard-arena", "crown-circuit", "keyboardist-on-tour", "tidefront-tactics", "kingdom-breakers"]) {

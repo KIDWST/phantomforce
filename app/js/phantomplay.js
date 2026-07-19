@@ -34,9 +34,20 @@ const ROOM_POLL_MS = 1750;
 // without a dedicated heartbeat route.
 const ROOM_POLL_TOUCH_EVERY = 10;
 const PHANTOMPLAY_ENGINE = {
-  version: "2.0-large-map",
+  version: "2.1-hybrid-install",
   saveStateBytes: 262144,
   largeMap: { chunkSize: 1024, maxLoadedChunks: 64, streaming: true },
+  runtimeProfiles: {
+    webapp: { installRequired: false, supportsLargeAssets: false },
+    desktop_player: { installRequired: true, supportsLargeAssets: true, maxAssetPackGb: 50 },
+    developer_full: { installRequired: true, supportsLargeAssets: true, maxAssetPackGb: 250 },
+  },
+  distributedRuntime: {
+    status: "planned_safe_design",
+    userOwnedCompute: true,
+    cloudStreamingFromJordan: false,
+    directPeerConnectionDefault: false,
+  },
   protocols: ["ready", "score", "progress", "complete", "paused", "exit", "settings", "save-state", "load-state"],
 };
 const PHANTOMPLAY_ART_VERSION = "phantomplay-art-20260717";
