@@ -565,6 +565,42 @@ rows.push(correctionChainFinal);
 assert.match(correctionChainFinal.answer.trim(), /^Thursday\s*\|\s*4 PM\s*\|\s*Room 9[.!]?$/i);
 assert.doesNotMatch(correctionChainFinal.answer, /Tuesday|2 PM|3 PM|Room 4|Room 7/i);
 
+const causalReferences: Turn[] = [];
+rows.push(await ask(customerToken, "Two results: 1) The upload failed because the file was corrupt. 2) The report arrived late because the export queue stalled.", causalReferences));
+const secondCause = await ask(customerToken, "Why did the second result happen? Reason only.", causalReferences);
+rows.push(secondCause);
+assert.equal(secondCause.modelId, "phantom-reference-resolver");
+const causalOutcome = await ask(customerToken, "What outcome did that reason explain? Outcome only.", causalReferences);
+rows.push(causalOutcome);
+assert.equal(causalOutcome.modelId, "phantom-reference-resolver");
+assert.match(causalOutcome.answer.trim(), /^The report arrived late[.!]?$/i);
+const thereforeReference: Turn[] = [];
+rows.push(await ask(customerToken, "The battery was empty; therefore, the sensor shut down.", thereforeReference));
+const thereforeOutcome = await ask(customerToken, "What happened as a result? Outcome only.", thereforeReference);
+rows.push(thereforeOutcome);
+assert.equal(thereforeOutcome.modelId, "phantom-reference-resolver");
+assert.match(thereforeOutcome.answer.trim(), /^the sensor shut down[.!]?$/i);
+
+const originalPlanRollback: Turn[] = [];
+rows.push(await ask(customerToken, "The meeting is Tuesday at 2 PM in Room 4.", originalPlanRollback));
+rows.push(await ask(customerToken, "Correction: Thursday at 3 PM in Room 7.", originalPlanRollback));
+rows.push(await ask(customerToken, "Actually, keep the original plan after all.", originalPlanRollback));
+const restoredOriginalPlan = await ask(customerToken, "What are the final day, time, and room? DAY | TIME | ROOM only.", originalPlanRollback);
+rows.push(restoredOriginalPlan);
+
+const partialRollback: Turn[] = [];
+rows.push(await ask(adminToken, "The poster background is black, the title is white, and the button is green.", partialRollback));
+rows.push(await ask(adminToken, "Change the background to navy, the title to gold, and the button to orange.", partialRollback));
+rows.push(await ask(adminToken, "Actually restore the original title only. Keep the other changes.", partialRollback));
+const partialRollbackFinal = await ask(adminToken, "What are the final background, title, and button colors? BACKGROUND | TITLE | BUTTON only.", partialRollback);
+rows.push(partialRollbackFinal);
+assert.match(secondCause.answer.trim(), /^the export queue stalled[.!]?$/i);
+assert.doesNotMatch(secondCause.answer, /file was corrupt|upload failed/i);
+assert.match(restoredOriginalPlan.answer.trim(), /^Tuesday\s*\|\s*2 PM\s*\|\s*Room 4[.!]?$/i);
+assert.doesNotMatch(restoredOriginalPlan.answer, /Thursday|3 PM|Room 7/i);
+assert.match(partialRollbackFinal.answer.trim(), /^navy\s*\|\s*white\s*\|\s*orange[.!]?$/i);
+assert.doesNotMatch(partialRollbackFinal.answer, /black|gold|green/i);
+
   console.log(JSON.stringify({
     ok: true,
     model,
@@ -608,6 +644,9 @@ assert.doesNotMatch(correctionChainFinal.answer, /Tuesday|2 PM|3 PM|Room 4|Room 
     listReorderVerified: true,
     pluralOwnershipVerified: true,
     chainedCorrectionsVerified: true,
+    causalReferencesVerified: true,
+    originalPlanRollbackVerified: true,
+    partialRollbackVerified: true,
   }, null, 2));
 } finally {
   ownedServer?.kill();

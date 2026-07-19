@@ -95,6 +95,59 @@ assert.deepEqual(
   buildInstantChatToolReply("Swap the first and third. Return the reordered list only.", numberedOptions),
   { output_text: "meeting\ncall\nemail", tool_id: "phantom-reference-resolver" },
 );
+const causalTurns = [{
+  user: "Two results: 1) The upload failed because the file was corrupt. 2) The report arrived late because the export queue stalled.",
+  assistant: "The upload failed due to a corrupt file, and the report was late because the export queue stalled.",
+}];
+assert.deepEqual(
+  buildInstantChatToolReply("Why did the second result happen? Reason only.", causalTurns),
+  { output_text: "the export queue stalled", tool_id: "phantom-reference-resolver" },
+);
+assert.deepEqual(
+  buildInstantChatToolReply("What outcome did that reason explain? Outcome only.", [
+    ...causalTurns,
+    { user: "Why did the second result happen? Reason only.", assistant: "the export queue stalled" },
+  ]),
+  { output_text: "The report arrived late", tool_id: "phantom-reference-resolver" },
+);
+assert.deepEqual(
+  buildInstantChatToolReply("What happened as a result? Outcome only.", [{
+    user: "The battery was empty; therefore, the sensor shut down.",
+    assistant: "The empty battery caused the sensor to shut down.",
+  }]),
+  { output_text: "the sensor shut down", tool_id: "phantom-reference-resolver" },
+);
+const overlappingMeetingTurns = [
+  { user: "The meeting is Tuesday at 2 PM in Room 4.", assistant: "Tuesday at 2 PM in Room 4." },
+  { user: "Correction: Thursday at 4 PM in Room 9.", assistant: "Thursday at 4 PM in Room 9." },
+  { user: "Two results: 1) A happened because B. 2) C happened because D.", assistant: "Noted." },
+  { user: "The meeting is Tuesday at 2 PM in Room 4.", assistant: "Tuesday at 2 PM in Room 4." },
+  { user: "Correction: Thursday at 3 PM in Room 7.", assistant: "Thursday at 3 PM in Room 7." },
+];
+assert.deepEqual(
+  buildInstantChatToolReply("Actually, keep the original plan after all.", overlappingMeetingTurns),
+  { output_text: "Restored the original plan: Tuesday at 2 PM in Room 4.", tool_id: "phantom-reference-resolver" },
+);
+assert.deepEqual(
+  buildInstantChatToolReply("What are the final day, time, and room? DAY | TIME | ROOM only.", [
+    ...overlappingMeetingTurns,
+    { user: "Actually, keep the original plan after all.", assistant: "Restored the original plan: Tuesday at 2 PM in Room 4." },
+  ]),
+  { output_text: "Tuesday | 2 PM | Room 4", tool_id: "phantom-reference-resolver" },
+);
+const posterTurns = [
+  { user: "The poster background is black, the title is white, and the button is green.", assistant: "Noted." },
+  { user: "Change the background to navy, the title to gold, and the button to orange.", assistant: "Updated." },
+  { user: "Actually restore the original title only. Keep the other changes.", assistant: "Restored the original title. Current design: navy background, white title, orange button." },
+];
+assert.deepEqual(
+  buildInstantChatToolReply("Actually restore the original title only. Keep the other changes.", [...overlappingMeetingTurns, ...posterTurns.slice(0, 2)]),
+  { output_text: "Restored the original title. Current design: navy background, white title, orange button.", tool_id: "phantom-reference-resolver" },
+);
+assert.deepEqual(
+  buildInstantChatToolReply("What are the final background, title, and button colors? BACKGROUND | TITLE | BUTTON only.", posterTurns),
+  { output_text: "navy | white | orange", tool_id: "phantom-reference-resolver" },
+);
 assert.deepEqual(
   buildInstantChatToolReply("What did she choose?", [
     { user: "Help me plan a party.", assistant: "Choose a theme first." },

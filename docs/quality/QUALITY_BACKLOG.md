@@ -1,6 +1,6 @@
 # PhantomForce Quality Backlog
 
-Last updated: 2026-07-18
+Last updated: 2026-07-19
 
 ## Verified Issues
 
@@ -178,6 +178,27 @@ Last updated: 2026-07-18
   `npm run test:instant-chat:http-live-model --workspace @phantomforce/server`,
   and `npm run test:database-auth`.
 - Status: Fixed and verified in Cycle 20.
+
+### Q-0020 — P1 — Causal callbacks and rollback could invent or reuse the wrong thread
+
+- Route/component: instant causal reference and structured revision state.
+- Journey affected: asking why the second result happened, restoring an original
+  plan, or undoing only one design field in a long conversation.
+- Reproduction before fix: state two numbered cause/outcome pairs and ask why
+  the second happened; Phantom invented an abstract explanation. In authenticated
+  Chrome, a later `keep the original plan` reused Room 9 from an older meeting
+  thread still inside the ten-turn privacy window.
+- Expected: exact cause selection, reason-to-outcome callback, newest-base full
+  rollback, and named-field-only rollback with immediate truthful acknowledgment.
+- Correction: bounded causal extraction, causal context recognition, and
+  structured revision resolvers scoped to the newest explicit meeting or design
+  base and their own field vocabularies.
+- Evidence: deterministic cross-topic tests, 130 authenticated model requests,
+  and a 63-turn two-organization Chrome journey at 1440x900 and 390x844.
+- Regression requirement: `npm run test:instant-chat:http-live-model --workspace
+  @phantomforce/server`, `npm run test:database-auth`, and
+  `npm run test:change-memory`.
+- Status: Fixed and verified in Cycle 27.
 
 ## High-Priority Unfixed Issues
 

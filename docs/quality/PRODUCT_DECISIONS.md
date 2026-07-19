@@ -1,6 +1,6 @@
 # PhantomForce Product Decisions
 
-Last updated: 2026-07-18
+Last updated: 2026-07-19
 
 ## Active Principles
 
@@ -75,6 +75,19 @@ intervening unrelated subjects.
 Standalone topic changes still receive a clean context packet, and unrelated
 business/accounting turns must never be reintroduced into casual conversation.
 This improves continuity without turning ten-day history into model memory.
+
+### D-0007 — Exact causes and revision state are extracted, not guessed
+
+When the user explicitly supplies multiple cause/outcome pairs, ordinal and
+reason callbacks resolve from those pairs without asking a model to reconstruct
+them. When a structured plan or design is revised, `original` means the newest
+explicit base statement in that revision chain. Full rollback restores that
+base; named-field rollback restores only those fields and preserves the other
+accepted changes.
+
+These resolvers are bounded to explicit supported shapes. They must decline
+ambiguous input instead of inventing state, stay inside temporary
+organization-scoped context, and never perform an external action.
 
 ## Decisions Needed Later
 

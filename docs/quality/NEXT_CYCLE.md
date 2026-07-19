@@ -8,26 +8,27 @@ Read `AGENTS.md` and every file under `docs/quality` before changing code. Do
 not restart the inventory unless it is invalid. Continue in this Codex task via
 heartbeat automation `continue-phantomforce-quality-program`.
 
-Cycle 26 resolves exact multi-object references without handing simple facts to
-the model. Former/latter answers come only from explicit paired statements,
-numbered moves and swaps return the real options, plural ownership retains the
-active setup, and chained meeting corrections preserve only the newest values.
-A real Chrome journey proved 50 turns across two isolated organizations, and
-the expanded real-model gate passed 117 requests with zero fallback or leakage.
-Deployment evidence will be recorded in `AUDIT_LOG.md` after the canonical sync.
+Cycle 27 resolves explicit cause/outcome callbacks and revision rollback without
+model invention. Ordinal results return their attached causes, `that reason`
+returns the linked outcome, and the newest structured base statement owns full
+or named-field rollback even when an older same-topic thread remains in the
+privacy window. A real Chrome journey proved 63 turns across two isolated
+organizations, and the expanded real-model gate passed 130 requests with zero
+fallback or leakage. Deployment evidence will be recorded in `AUDIT_LOG.md`
+after the canonical sync.
 
-## Recommended Cycle 27
+## Recommended Cycle 28
 
-Theme: causal references and conflicting correction repair.
+Theme: respectively mappings and named-entity scoped undo.
 
-1. Exercise `because`, `therefore`, `that reason`, and `the second result` across
-   two competing explanations without inventing a causal link.
-2. Test corrections that explicitly reverse earlier corrections, including
-   `actually keep the original`, partial rollback, and conflicting negation.
-3. Verify clarification happens only when two surviving interpretations are
-   genuinely plausible and asks one concrete question.
-4. Keep exact resolution extractive and bounded; leave synthesis and judgment
-   on the lightest capable local model.
+1. Exercise two- and three-item `respectively` mappings, ordinal callbacks, and
+   queries that reverse from a value back to its named owner.
+2. Test `undo Mina's change but keep Theo's` and similar corrections where only
+   one named entity should roll back.
+3. Verify unequal respectively lists produce one useful clarification instead
+   of guessed pairings.
+4. Keep exact mapping extractive and bounded; leave synthesis and judgment on
+   the lightest capable local model.
 5. Run at least 100 real-model requests and the authenticated 390x844/1440x900
    browser journey, preserving corrections in change memory.
 

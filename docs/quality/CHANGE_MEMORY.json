@@ -1124,6 +1124,29 @@
       ]
     },
     {
+      "id": "causal-reference-and-correction-rollback",
+      "status": "active",
+      "title": "Phantom preserves explicit causes and rolls corrections back without reviving unrelated values",
+      "ownerDecision": "When multiple outcomes have different causes, Phantom must return the cause attached to the requested outcome and never invent a generic explanation or borrow another outcome's cause. A callback such as that reason must return the linked outcome. Explicit full rollback restores the original state; partial rollback restores only the named field and preserves every other accepted correction. All handling remains bounded, temporary, organization-scoped, and action-free.",
+      "requiredPatterns": [
+        {
+          "file": "server/src/phantom-ai/instant-chat-tools.ts",
+          "pattern": "function causalReferenceReply[\\s\\S]*phantom-reference-resolver[\\s\\S]*causalReferenceReply[(]userRequest, turns[)]",
+          "description": "Explicit ordinal causes and reason-to-outcome callbacks use bounded extraction instead of model invention."
+        },
+        {
+          "file": "server/scripts/test-instant-chat-http-live-model.ts",
+          "pattern": "causalReferencesVerified: true[\\s\\S]*originalPlanRollbackVerified: true[\\s\\S]*partialRollbackVerified: true",
+          "description": "The 100-plus request gate covers causal selection and both rollback forms."
+        },
+        {
+          "file": "scripts/test-database-auth-org-browser.mjs",
+          "pattern": "browser must extract the cause attached to the requested ordinal result[\\s\\S]*a partial rollback must restore only the named field",
+          "description": "Authenticated Chrome proves causal continuity and rollback through the real dashboard."
+        }
+      ]
+    },
+    {
       "id": "database-auth-reboot-recovery",
       "status": "active",
       "title": "Live admin and customer auth depend on a self-recovering database",

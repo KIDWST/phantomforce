@@ -876,6 +876,41 @@ async function main() {
     continuityResults.push(browserCorrectionChain);
     assert.match(browserCorrectionChain.answer.trim(), /^Thursday\s*\|\s*4 PM\s*\|\s*Room 9[.!]?$/i, "the browser must retain the latest value from every correction dimension");
     assert.doesNotMatch(browserCorrectionChain.answer, /Tuesday|2 PM|3 PM|Room 4|Room 7/i, "superseded meeting values must not return");
+    continuityResults.push(await submitChat(cdp, "Two results: 1) The upload failed because the file was corrupt. 2) The report arrived late because the export queue stalled.", diagnostics));
+    const browserSecondCause = await submitChat(cdp, "Why did the second result happen? Reason only.", diagnostics);
+    continuityResults.push(browserSecondCause);
+    assert.match(browserSecondCause.answer.trim(), /^the export queue stalled[.!]?$/i, "the browser must extract the cause attached to the requested ordinal result");
+    assert.doesNotMatch(browserSecondCause.answer, /file was corrupt|upload failed/i, "the browser must not borrow the competing result's cause");
+    const browserCausalOutcome = await submitChat(cdp, "What outcome did that reason explain? Outcome only.", diagnostics);
+    continuityResults.push(browserCausalOutcome);
+    assert.match(browserCausalOutcome.answer.trim(), /^The report arrived late[.!]?$/i, "that reason must point back to its actual outcome");
+    continuityResults.push(await submitChat(cdp, "The battery was empty; therefore, the sensor shut down.", diagnostics));
+    const browserTherefore = await submitChat(cdp, "What happened as a result? Outcome only.", diagnostics);
+    continuityResults.push(browserTherefore);
+    assert.match(browserTherefore.answer.trim(), /^the sensor shut down[.!]?$/i, "therefore must preserve the explicitly stated result");
+    continuityResults.push(await submitChat(cdp, "The meeting is Tuesday at 2 PM in Room 4.", diagnostics));
+    continuityResults.push(await submitChat(cdp, "Correction: Thursday at 3 PM in Room 7.", diagnostics));
+    const browserOriginalRollbackAck = await submitChat(cdp, "Actually, keep the original plan after all.", diagnostics);
+    continuityResults.push(browserOriginalRollbackAck);
+    assert.match(browserOriginalRollbackAck.answer, /Tuesday[\s\S]*2 PM[\s\S]*Room 4/i, "the rollback acknowledgement must immediately name the restored meeting state");
+    const browserOriginalRollback = await submitChat(cdp, "What are the final day, time, and room? DAY | TIME | ROOM only.", diagnostics);
+    continuityResults.push(browserOriginalRollback);
+    writeFileSync(path.join(runDir, "cycle27-rollback-request.json"), JSON.stringify({
+      result: browserOriginalRollback,
+      request: chatRequests.filter((request) => (request.user_request || request.message) === "What are the final day, time, and room? DAY | TIME | ROOM only.").at(-1) || null,
+    }, null, 2));
+    assert.match(browserOriginalRollback.answer.trim(), /^Tuesday\s*\|\s*2 PM\s*\|\s*Room 4[.!]?$/i, "an explicit original-plan rollback must restore every original field");
+    assert.doesNotMatch(browserOriginalRollback.answer, /Thursday|3 PM|Room 7/i, "a full rollback must not retain superseded correction values");
+    continuityResults.push(await submitChat(cdp, "The poster background is black, the title is white, and the button is green.", diagnostics));
+    continuityResults.push(await submitChat(cdp, "Change the background to navy, the title to gold, and the button to orange.", diagnostics));
+    const browserPartialRollbackAck = await submitChat(cdp, "Actually restore the original title only. Keep the other changes.", diagnostics);
+    continuityResults.push(browserPartialRollbackAck);
+    assert.match(browserPartialRollbackAck.answer, /original title[\s\S]*navy background[\s\S]*white title[\s\S]*orange button/i, "the partial rollback acknowledgement must immediately name the restored field and preserved changes");
+    assert.doesNotMatch(browserPartialRollbackAck.answer, /meeting|Tuesday|Room 4/i, "a design rollback must not inherit an older meeting thread");
+    const browserPartialRollback = await submitChat(cdp, "What are the final background, title, and button colors? BACKGROUND | TITLE | BUTTON only.", diagnostics);
+    continuityResults.push(browserPartialRollback);
+    assert.match(browserPartialRollback.answer.trim(), /^navy\s*\|\s*white\s*\|\s*orange[.!]?$/i, "a partial rollback must restore only the named field");
+    assert.doesNotMatch(browserPartialRollback.answer, /black|gold|green/i, "a partial rollback must not revive unrelated original values or the replaced field value");
     assert.equal(continuityResults.every((result) => result.cards === 0), true, "long conversation turns must stay in chat without business cards.");
     assert.equal(continuityResults.some((result) => /ledger|pipeline|actual cash|transaction reader/i.test(result.answer)), false, "long conversation must not leak accounting language.");
 
@@ -888,7 +923,7 @@ async function main() {
 
     const phantomMemoryText = await openMemory(cdp, diagnostics);
     assert.match(phantomMemoryText, /emerald/i, "PhantomForce memory must render in the Memory UI.");
-    assert.match(phantomMemoryText, /(?:Room 9|final day|Mina|packed maps)/i, "the Memory UI must render recent PhantomForce temporary history while older retained history remains state-verified.");
+    assert.match(phantomMemoryText, /(?:navy|white|orange|original title|sensor shut down)/i, "the Memory UI must render recent PhantomForce temporary history while older retained history remains state-verified.");
 
     const reloadMemory = cdp.waitEvent("Page.loadEventFired", 15_000).catch(() => null);
     await cdp.send("Page.reload", { ignoreCache: true });
@@ -936,7 +971,7 @@ async function main() {
     assert.equal(phantomRestored.history.some((item) => /comet/i.test(item.prompt)), true, "switching back must restore PhantomForce temporary context.");
     const restoredMemoryText = await openMemory(cdp, diagnostics);
     assert.match(restoredMemoryText, /emerald|comet/i, "restored PhantomForce context must render in the UI.");
-    assert.doesNotMatch(restoredMemoryText, /gold|lens/i, "restored PhantomForce UI must not contain ChicagoShots context.");
+    assert.doesNotMatch(restoredMemoryText, /ChicagoShots test color|\blens\b/i, "restored PhantomForce UI must not contain ChicagoShots context.");
 
     await evaluate(cdp, `document.querySelector('[data-nav-id="dashboard"]')?.click()`);
     await waitForExpression(cdp, `!!document.querySelector("[data-command-form]")`, "restored dashboard", 10_000, diagnostics);
@@ -944,7 +979,7 @@ async function main() {
     const restoredAnswer = await submitChat(cdp, "Back to Nova: what color is her raincoat? Color only.", diagnostics);
     const restoredRequest = chatRequests.slice(restoredRequestStart).at(-1);
     assert.match(JSON.stringify(restoredRequest), /Nova[\s\S]*purple/i, "restored PhantomForce request must receive its bounded recent topic and latest correction.");
-    assert.doesNotMatch(JSON.stringify(restoredRequest), /lens|gold/i, "restored PhantomForce request must not receive ChicagoShots context.");
+    assert.doesNotMatch(JSON.stringify(restoredRequest), /\blens\b|ChicagoShots test color/i, "restored PhantomForce request must not receive ChicagoShots context.");
     assert.match(restoredAnswer.answer, /^purple[.!]?$/i, "restored PhantomForce model answer must resolve its own corrected recent topic.");
 
     const desktop = await viewportState(cdp, 1440, 900);
@@ -987,7 +1022,7 @@ async function main() {
         "customer reasoning reaches the bounded local model lane without cards or business context",
         "customer planning and feedback use real model answers instead of canned intent copy",
         "organization advice remains action-free and excludes money, plan, asset, and pulse status",
-        "natural follow-ups, named-topic returns, exact object/list references, chained corrections, and useful ambiguity clarification stay coherent across 50 browser turns",
+        "natural follow-ups, exact object/list/causal references, full and partial correction rollback, and useful ambiguity clarification stay coherent across 63 browser turns",
         "durable memory survives reload inside organization A",
         "organization B receives no A memory, history, request context, or visible chat",
         "organization A returns without organization B contamination",

@@ -1973,3 +1973,63 @@ mix dates, lists, and named subjects in Cycle 26.
 
 Exercise causal references and correction conflicts that reverse or partially
 restore earlier values in Cycle 27.
+
+# 2026-07-19 - Cycle 27: Causal References And Scoped Rollback
+
+## Problems Verified
+
+- Given two numbered results with different causes, `Why did the second result
+  happen?` received no relevant context and the local model invented a generic
+  explanation about unspecified rules and circumstances.
+- Full and partial rollback worked in a short isolated model thread, but the
+  authenticated long conversation exposed a second failure: `keep the original
+  plan` restored Thursday, 3 PM, and Room 9 by mixing the current meeting with
+  an older meeting thread still inside the bounded privacy window.
+- The first structured resolver draft could mistake the output label `ROOM only`
+  for a room value and could let a poster-title rollback trigger an older meeting
+  rollback acknowledgment.
+- Existing browser coverage stopped at 50 turns and did not prove causal chains,
+  immediate rollback acknowledgments, or cross-domain correction isolation.
+
+## Corrections
+
+- Added bounded extraction for explicit numbered `because` pairs and
+  `cause; therefore, outcome` statements, including ordinal cause selection and
+  reason-to-outcome callbacks.
+- Classified ordinal results, `that reason`, and `as a result` as contextual so
+  unsupported causal phrasing still reaches the active temporary topic.
+- Added revision-state resolvers that start from the newest explicit meeting or
+  poster base, apply only subsequent changes, and support full or named-field
+  rollback without consulting older same-topic state.
+- Scoped meeting and design rollbacks to their own field vocabularies, excluded
+  summary-format labels from state mutation, and made immediate acknowledgments
+  state the values actually restored and preserved.
+- Expanded deterministic, 130-request live-model, and authenticated 63-turn
+  Chrome coverage and added permanent change-memory guards.
+
+## Source Verification
+
+- PASS: `npm run test:instant-chat:http-live-model --workspace
+  @phantomforce/server` completed 130 authenticated requests at 550 ms average
+  and 2,250 ms maximum with zero fallback and zero business leakage.
+- PASS: `npm run test:database-auth` passed all 57 API/auth checks and the real
+  Chrome journey across two organizations and 63 conversational turns.
+- PASS: Chrome proved ordinal causes, `that reason`, `therefore`, full rollback,
+  partial rollback, truthful immediate acknowledgments, cross-domain thread
+  isolation, durable-memory reload, tenant isolation, and tamper rejection.
+- PASS: visual review at 1440x900 and 390x844 under
+  `tmp/database-auth-org-browser/2026-07-19T06-32-48-114Z`; navigation, chat,
+  organization state, and composer had no overlap or horizontal overflow.
+- PASS: `npm run test:release-critical` (20/20).
+- PASS: `node scripts/test-memory-retention.mjs`.
+- PASS: `npm run test:change-memory` (190 checks).
+- PASS: `npm run typecheck` and `git diff --check` (line-ending warnings only).
+
+## Deployment Verification
+
+- Pending source commit, push, canonical sync, canonical model gate, scheduled
+  sync, and strict live doctor verification.
+
+## Next Task
+
+Exercise respectively mappings and named-entity scoped undo in Cycle 28.

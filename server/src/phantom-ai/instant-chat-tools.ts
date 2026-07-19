@@ -228,6 +228,160 @@ function pairedReferenceReply(userRequest: string, turns: InstantChatToolTurn[])
   return null;
 }
 
+type CausalPair = { outcome: string; cause: string };
+
+function cleanCausalPart(value: string) {
+  return cleanListItem(value)
+    .replace(/^(?:two\s+)?(?:results?|outcomes?|effects?|events?)\s*:\s*/i, "")
+    .replace(/^\d+[.)]\s*/, "")
+    .replace(/^(?:therefore|so)\s*,?\s*/i, "")
+    .trim();
+}
+
+function causalPairsFromText(value: string) {
+  const pairs: CausalPair[] = [];
+  const add = (outcome: string, cause: string) => {
+    const pair = { outcome: cleanCausalPart(outcome), cause: cleanCausalPart(cause) };
+    if (!pair.outcome || !pair.cause || pair.outcome.length > 160 || pair.cause.length > 160) return;
+    if (!pairs.some((item) => item.outcome === pair.outcome && item.cause === pair.cause)) pairs.push(pair);
+  };
+
+  for (const match of value.matchAll(/\b\d+[.)]\s*([^.!?\n]{2,160}?)\s+because\s+([^.!?\n]{2,160}?)(?=(?:[.!?]\s*(?:\d+[.)]|$))|$)/gi)) {
+    add(match[1], match[2]);
+  }
+  if (!pairs.length) {
+    for (const clause of value.split(/[.!?]\s*/).map((item) => item.trim()).filter(Boolean)) {
+      const direct = clause.match(/^(.{2,160}?)\s+because\s+(.{2,160})$/i);
+      if (direct) add(direct[1], direct[2]);
+      const becauseFirst = clause.match(/^(?:because|since)\s+([^,;]{2,160})[,;]\s*(.{2,160})$/i);
+      if (becauseFirst) add(becauseFirst[2], becauseFirst[1]);
+    }
+  }
+  for (const match of value.matchAll(/(?:^|[.!?]\s*)([^.;!?]{2,160}?);\s*(?:therefore|so)\s*,?\s*([^.!?]{2,160})(?=[.!?]|$)/gi)) {
+    add(match[2], match[1]);
+  }
+  return pairs;
+}
+
+function normalizedCausalText(value: string) {
+  return cleanCausalPart(value).toLowerCase().replace(/^(?:the|a|an)\s+/, "").replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function causalReferenceReply(userRequest: string, turns: InstantChatToolTurn[]): InstantChatToolReply | null {
+  if (!/\b(?:why|reason|cause|result|outcome|effect|event|therefore)\b/i.test(userRequest)) return null;
+  const source = [...turns].reverse()
+    .map((turn) => causalPairsFromText(turn.user))
+    .find((pairs) => pairs.length);
+  if (!source?.length || source.length > 10) return null;
+
+  const ordinal = userRequest.match(/\b(first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth)\s+(?:result|outcome|effect|event)\b/i)?.[1]?.toLowerCase();
+  if (ordinal && /\b(?:why|reason|cause)\b/i.test(userRequest)) {
+    const selected = source[ORDINALS[ordinal]];
+    return selected ? { output_text: selected.cause, tool_id: "phantom-reference-resolver" } : null;
+  }
+
+  if (/\b(?:that|this)\s+(?:reason|cause)\b/i.test(userRequest)) {
+    const referenced = [...turns].reverse().map((turn) => normalizedCausalText(turn.assistant)).find(Boolean);
+    const selected = referenced && source.find((pair) => {
+      const cause = normalizedCausalText(pair.cause);
+      return cause === referenced || cause.includes(referenced) || referenced.includes(cause);
+    });
+    if (selected) return { output_text: selected.outcome, tool_id: "phantom-reference-resolver" };
+  }
+
+  if (source.length === 1 && /\b(?:what happened as a result|what (?:was|is) the (?:result|outcome|effect))\b/i.test(userRequest)) {
+    return { output_text: source[0].outcome, tool_id: "phantom-reference-resolver" };
+  }
+  return null;
+}
+
+const WEEKDAY = "Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday";
+
+function meetingRevisionReply(userRequest: string, turns: InstantChatToolTurn[]): InstantChatToolReply | null {
+  const basePattern = new RegExp(`\\b(?:meeting|appointment|call)\\s+is\\s+(${WEEKDAY})\\s+at\\s+(\\d{1,2}(?::\\d{2})?\\s*(?:AM|PM))\\s+in\\s+(Room\\s+[A-Za-z0-9-]+)`, "i");
+  let baseIndex = -1;
+  let base: { day: string; time: string; room: string } | null = null;
+  for (let index = turns.length - 1; index >= 0; index -= 1) {
+    const match = turns[index].user.match(basePattern);
+    if (!match || /^(?:correction|actually|wait|change|instead)\b/i.test(turns[index].user.trim())) continue;
+    baseIndex = index;
+    base = { day: match[1], time: match[2].replace(/\s+/g, " "), room: match[3].replace(/\s+/g, " ") };
+    break;
+  }
+  if (!base || baseIndex < 0) return null;
+
+  const asksFinal = /\bfinal\s+day\b[\s\S]*\btime\b[\s\S]*\broom\b/i.test(userRequest);
+  const rollsBack = /\b(?:keep|restore|use|return to|go back to)\b[\s\S]*\boriginal\s+(?:plan|day|time|room)\b|\boriginal\s+(?:plan|day|time|room)\b/i.test(userRequest);
+  if (!asksFinal && !rollsBack) return null;
+
+  const state = { ...base };
+  const revisionMessages = turns.slice(baseIndex + 1).map((turn) => turn.user);
+  if (!asksFinal) revisionMessages.push(userRequest);
+  for (const message of revisionMessages) {
+    if (/\boriginal\s+plan\b|\b(?:keep|restore|use|return to|go back to)\s+(?:the\s+)?original\b(?!\s+(?:day|time|room))/i.test(message)) {
+      Object.assign(state, base);
+      continue;
+    }
+    const days = [...message.matchAll(new RegExp(`\\b(${WEEKDAY})\\b`, "gi"))];
+    const times = [...message.matchAll(/\b(\d{1,2}(?::\d{2})?\s*(?:AM|PM))\b/gi)];
+    const rooms = [...message.matchAll(/\b(Room\s+[A-Za-z0-9-]+)\b/gi)];
+    if (days.length) state.day = days.at(-1)![1];
+    if (times.length) state.time = times.at(-1)![1].replace(/\s+/g, " ");
+    if (rooms.length) state.room = rooms.at(-1)![1].replace(/\s+/g, " ");
+    if (/\boriginal\s+day\b/i.test(message)) state.day = base.day;
+    if (/\boriginal\s+time\b/i.test(message)) state.time = base.time;
+    if (/\boriginal\s+room\b/i.test(message)) state.room = base.room;
+  }
+
+  const summary = `${state.day} | ${state.time} | ${state.room}`;
+  return {
+    output_text: asksFinal ? summary : `Restored the original plan: ${state.day} at ${state.time} in ${state.room}.`,
+    tool_id: "phantom-reference-resolver",
+  };
+}
+
+function posterRevisionReply(userRequest: string, turns: InstantChatToolTurn[]): InstantChatToolReply | null {
+  const basePattern = /\b(?:poster\s+)?background\s+is\s+([a-z]+),\s*(?:the\s+)?title\s+is\s+([a-z]+),?\s+and\s+(?:the\s+)?button\s+is\s+([a-z]+)/i;
+  let baseIndex = -1;
+  let base: { background: string; title: string; button: string } | null = null;
+  for (let index = turns.length - 1; index >= 0; index -= 1) {
+    const match = turns[index].user.match(basePattern);
+    if (!match) continue;
+    baseIndex = index;
+    base = { background: match[1], title: match[2], button: match[3] };
+    break;
+  }
+  if (!base || baseIndex < 0) return null;
+
+  const asksFinal = /\bfinal\s+background\b[\s\S]*\btitle\b[\s\S]*\bbutton\b/i.test(userRequest);
+  const rollsBack = /\b(?:keep|restore|use|return to|go back to)\b[\s\S]*\boriginal\s+(?:poster|design|background|title|button)\b|\boriginal\s+(?:poster|design|background|title|button)\b/i.test(userRequest);
+  if (!asksFinal && !rollsBack) return null;
+
+  const state = { ...base };
+  const revisionMessages = turns.slice(baseIndex + 1).map((turn) => turn.user);
+  if (!asksFinal) revisionMessages.push(userRequest);
+  for (const message of revisionMessages) {
+    if (/\boriginal\s+(?:poster|design|plan)\b/i.test(message)) Object.assign(state, base);
+    for (const field of ["background", "title", "button"] as const) {
+      const values = [...message.matchAll(new RegExp(`\\b${field}\\s+(?:is|to)\\s+([a-z]+)`, "gi"))];
+      if (values.length) state[field] = values.at(-1)![1];
+      if (new RegExp(`\\boriginal\\s+${field}\\b`, "i").test(message)) state[field] = base[field];
+    }
+  }
+
+  const summary = `${state.background} | ${state.title} | ${state.button}`;
+  const restoredFields = (["background", "title", "button"] as const).filter((field) => new RegExp(`\\boriginal\\s+${field}\\b`, "i").test(userRequest));
+  const restoredLabel = restoredFields.length ? restoredFields.join(" and ") : "design";
+  return {
+    output_text: asksFinal ? summary : `Restored the original ${restoredLabel}. Current design: ${state.background} background, ${state.title} title, ${state.button} button.`,
+    tool_id: "phantom-reference-resolver",
+  };
+}
+
+function structuredRevisionReply(userRequest: string, turns: InstantChatToolTurn[]) {
+  return meetingRevisionReply(userRequest, turns) || posterRevisionReply(userRequest, turns);
+}
+
 function identityReply(userRequest: string, modelId: string): InstantChatToolReply | null {
   const text = userRequest.trim();
   if (/^(?:who|what) are you\b/i.test(text)) {
@@ -333,9 +487,11 @@ export function buildInstantChatToolReply(userRequest: string, turns: InstantCha
     || personalityReply(userRequest)
     || stableFactReply(userRequest)
     || ambiguityClarificationReply(userRequest, turns)
+    || structuredRevisionReply(userRequest, turns)
     || contextFactReply(userRequest, turns)
     || arithmeticReply(userRequest, turns)
     || pairedReferenceReply(userRequest, turns)
+    || causalReferenceReply(userRequest, turns)
     || listReorderReply(userRequest, turns)
     || listSelectionReply(userRequest, turns);
 }
