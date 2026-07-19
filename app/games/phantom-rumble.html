@@ -22,6 +22,16 @@ canvas{width:100%;height:100%;display:block}
 .overlay .keys{display:flex;gap:22px;justify-content:center;color:#6fae8d;font-size:12px;margin-top:14px}
 .overlay .keys span b{color:#a9ffce}
 .overlay .pb{color:#57ff9e;font-size:12px;letter-spacing:1px}
+.results-wrap{margin:14px auto 0;width:min(720px,94vw)}
+.podium{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;align-items:end;margin:10px 0 12px}
+.podium-card{border:1px solid #2cff9b33;border-radius:16px;background:#04140cdd;padding:10px 8px;min-height:108px;display:flex;flex-direction:column;justify-content:flex-end;box-shadow:0 16px 34px #0006}
+.podium-card.first{min-height:142px;border-color:#facc15aa;box-shadow:0 0 28px #facc1533}
+.podium-card.second{min-height:124px}.podium-card.third{min-height:112px}
+.podium-card i{font-style:normal;font-size:11px;color:#9bb7aa}.podium-card b{display:block;font-size:18px;margin:4px 0}.podium-card span{font-size:11px;color:#6fae8d}
+.stat-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;text-align:left}
+.stat-card{border:1px solid #ffffff18;border-radius:14px;background:#020b08d9;padding:9px 10px}
+.stat-card h3{margin:0 0 5px;font-size:13px}.stat-card p{margin:3px 0!important;font-size:11px!important;line-height:1.25!important;color:#9bb7aa!important}
+.stat-card p b{color:#eafff3}
 .pause{display:none}
 body.paused .pause{display:grid}
 .hud{position:fixed;left:0;right:0;bottom:14px;display:flex;justify-content:center;gap:14px;pointer-events:none;z-index:3}
@@ -33,7 +43,7 @@ body.paused .pause{display:grid}
 .touch div{display:flex;gap:10px}
 .touch button{width:64px;height:64px;border-radius:50%;border:1px solid #2cff9b66;background:#04140ccc;color:#7dffbd;font:700 11px ui-monospace}
 @media(pointer:coarse){.touch{display:flex}}
-@media(max-width:640px){.overlay h1{font-size:34px}}
+@media(max-width:640px){.overlay h1{font-size:34px}.podium{grid-template-columns:1fr}.podium-card,.podium-card.first,.podium-card.second,.podium-card.third{min-height:auto}.stat-grid{grid-template-columns:1fr 1fr}}
 .mute-btn{position:fixed;top:calc(10px + env(safe-area-inset-top));right:calc(10px + env(safe-area-inset-right));z-index:6;width:38px;height:38px;border-radius:50%;border:1px solid #2cff9b55;background:#04140ccc;color:#7dffbd;font-size:16px;cursor:pointer;display:grid;place-items:center}
 .mute-btn:hover{background:#0a2417}
 .mute-btn[aria-pressed="true"]{color:#5a7568;border-color:#ffffff22}
@@ -41,10 +51,10 @@ body.paused .pause{display:grid}
 <canvas></canvas>
 <button class="mute-btn" data-mute type="button" aria-pressed="false" aria-label="Mute sound">🔊</button>
 <div class="hud" data-hud hidden></div>
-<div class="touch" data-touch hidden><div><button data-t="left">◀</button><button data-t="right">▶</button></div><div><button data-t="jump">JUMP</button><button data-t="light">HIT</button><button data-t="heavy">SMASH</button><button data-t="shield">SHIELD</button><button data-t="dodge">DODGE</button></div></div>
+<div class="touch" data-touch hidden><div><button data-t="left">◀</button><button data-t="right">▶</button></div><div><button data-t="jump">JUMP</button><button data-t="light">HIT</button><button data-t="heavy">SMASH</button><button data-t="shield">SHIELD</button><button data-t="dodge">DODGE</button><button data-t="ninja">NINJA</button></div></div>
 <div class="overlay" data-setup><div>
   <h1>PHANTOM RUMBLE</h1>
-  <p>Brawling chickens across walled coops and open sky perches. Damage raises a bird's percent — in a walled coop a hard fence slam CRACKS them; on an open arena, big knockback launches them clean out for the RING OUT. Grab a ledge to save yourself. Last chicken standing takes the rumble.</p>
+  <p>Brawling chickens across walled coops and open sky perches. Damage raises a bird's percent — in a walled coop, only a genuinely huge fence slam at high percent CRACKS them; on an open arena, big knockback launches them clean out for the RING OUT. Grab a ledge to save yourself. Last chicken standing takes the rumble.</p>
   <p class="pb" data-pb hidden></p>
   <div class="mode-group"><i>SOLO</i><div class="modes">
     <button data-mode="soloffa"><b>SOLO FFA</b>you vs three bots</button>
@@ -79,20 +89,22 @@ body.paused .pause{display:grid}
     <button data-diff="normal" type="button" role="radio" aria-checked="true">NORMAL</button>
     <button data-diff="hard" type="button" role="radio" aria-checked="false">HARD</button>
   </div>
-  <div class="keys"><span><b>P1</b> WASD move · W jump · F hit · G smash · Q/E guard · C dodge</span><span><b>P2</b> Arrows · ↑ jump · K hit · L smash · I/O guard · M dodge</span></div>
-  <p style="font-size:12px;color:#557d68">Hold guard before contact to block; tap it at the last second for a PARRY. Two jumps each. Grab the pickups: ♥ heals · ✦ powers your next hit · ◉ is a pulse bomb.</p>
+  <div class="keys"><span><b>P1</b> WASD move · W jump · F hit · G smash · Q/E guard · C dodge</span><span><b>P2</b> Arrows · ↑ jump · K hit · L smash · I/O guard · M dodge</span><span><b>SPACE</b> 🥷 NINJA MODE</span></div>
+  <p style="font-size:12px;color:#557d68">Hold guard before contact to block; tap it at the last second for a PARRY. Two jumps each. Grab the pickups: ♥ heals · ✦ powers your next hit · ◉ is a pulse bomb. Weapon pickups (🥢 nunchucks · 🏒 bo staff · 🔱 sai · 🗡️ katana · 🔫 water gun · ✳️ ninja stars) arm a few big swings — attacking from higher ground hits harder.</p>
+  <p style="font-size:12px;color:#557d68"><b style="color:#f43f5e">🥷 NINJA MODE:</b> press SPACE near an airborne foe to lock a 3-second duel — time nearly freezes for them and everyone else while you keep juggling for 50% bonus damage. Nobody else can touch either of you until it ends. ~18s cooldown.</p>
 </div></div>
 <div class="overlay pause" data-pauseoverlay><div><h1>PAUSED</h1><p>The rumble is frozen. Resume from the player bar above.</p></div></div>
 <div class="overlay" data-end hidden><div>
   <h1 data-endtitle>VICTORY</h1>
   <p data-endcopy></p>
+  <div class="results-wrap" data-results></div>
   <div class="modes"><button data-again><b>REMATCH</b>same mode</button><button data-menu><b>ARENA MENU</b>change mode</button></div>
 </div></div>
 <script>
 'use strict';
 const host=(type,data={})=>parent.postMessage({source:'phantomplay-game',type,...data},'*');
 const canvas=document.querySelector('canvas'),ctx=canvas.getContext('2d');
-const hudEl=document.querySelector('[data-hud]'),setupEl=document.querySelector('[data-setup]'),endEl=document.querySelector('[data-end]'),pauseEl=document.querySelector('[data-pauseoverlay]'),touchEl=document.querySelector('[data-touch]');
+const hudEl=document.querySelector('[data-hud]'),setupEl=document.querySelector('[data-setup]'),endEl=document.querySelector('[data-end]'),pauseEl=document.querySelector('[data-pauseoverlay]'),touchEl=document.querySelector('[data-touch]'),resultsEl=document.querySelector('[data-results]');
 let W=0,H=0,DPR=1;
 function size(){DPR=Math.min(2,devicePixelRatio||1);W=canvas.width=Math.max(640,innerWidth*DPR);H=canvas.height=Math.max(420,innerHeight*DPR)}
 addEventListener('resize',size);size();
@@ -113,30 +125,60 @@ function pushState(progress){host('progress',{progress,state:null})}
    Normalized coordinates: x 0..1 of arena width, y 0..1 of arena height. */
 const ARENA={left:.07,right:.93,floor:.82,ceil:.05};
 const FLOOR={x:.5,y:ARENA.floor,w:ARENA.right-ARENA.left,h:.045};
+/* Fence-crack tuning: raised meaningfully from an earlier pass where any
+   fighter above ~15% damage could get cracked by a perfectly ordinary
+   wall bump — that read as "walls make it actually less fun," not fair
+   danger. CRACK_PCT_MIN gates it behind real damage (routine early-match
+   contact never cracks), and the threshold curve now needs a genuinely
+   big, high-percent hit to clear it — a full-charge heavy or a weapon
+   swing at high percent, not a graze. */
 const SLAM_SPEED=.024; /* base impact speed (at 0% dmg) that starts to threaten a crack */
+const CRACK_PCT_MIN=90; /* below this damage, a fence is just a wall — never lethal */
 const SPAWNS=[{x:.28,y:.58},{x:.72,y:.58},{x:.42,y:.58},{x:.58,y:.58}];
 const BLAST={l:-.07,r:1.07,b:1.08,t:-.3}; /* open-map ring-out bounds */
 /* ---------- named map roster (non-climb modes) ----------
    Mixed walled-hazard and open fall-off archetypes with per-map theming.
-   Per-map features: 'laser' = telegraphed periodic laser sweep, 'portals'
-   = paired two-endpoint warp gates, plats[].move = drifting platform. */
+   Per-map features: 'laser' = telegraphed periodic laser sweep, 'surge' =
+   a telegraphed floor hot-zone that migrates along THE COOP's floor,
+   'portals' = paired two-endpoint warp gates, plats[].move = drifting
+   platform. Every map now has some forcing-movement pressure so camping
+   one spot is never entirely free: coop=surge, foundry=laser (both
+   walled), roost/drift=a slowly shrinking ring-out zone (see
+   updateBlastZone) since they already have a blast-zone kill boundary
+   to tighten. */
+/* Each arena is now a real place, not just a wall color: a `time` label
+   (shown in the HUD arena card) and a `sky` gradient anchor the mood, and
+   drawBackdrop() (near drawStage) paints bespoke procedural scenery per
+   map id — no raster assets (CSP forbids external images), so it's all
+   canvas paths/gradients + emoji glyphs, matching how fighters/weapons/
+   pickups are already drawn everywhere else in this file. */
 const MAPS=[
-  {id:'coop',name:'THE COOP',arch:'WALLED · FENCE-CRACK',open:false,
-   theme:{floor:'#0b2417',plat:'#0a1f14',stroke:'#2cff9b',accent:'#4ade80'}},
-  {id:'foundry',name:'SPARK FOUNDRY',arch:'WALLED · LASER SWEEP',open:false,laser:true,
-   theme:{floor:'#2a1508',plat:'#241408',stroke:'#fb923c',accent:'#fdba74'}},
-  {id:'roost',name:'SKY ROOST',arch:'OPEN · RING-OUT · PORTALS',open:true,
+  {id:'coop',name:'THE COOP',arch:'WALLED · FLOOR SURGE',time:'GOLDEN DAWN',open:false,surge:true,
+   theme:{floor:'#0b2417',plat:'#0a1f14',stroke:'#2cff9b',accent:'#4ade80'},
+   sky:['#f5c563','#f08a4b','#3a2f4a','#1a1830']},
+  {id:'foundry',name:'SPARK FOUNDRY',arch:'WALLED · LASER SWEEP',time:'DEAD OF NIGHT',open:false,laser:true,
+   theme:{floor:'#2a1508',plat:'#241408',stroke:'#fb923c',accent:'#fdba74'},
+   sky:['#1a0e08','#160a10','#0a0812','#05050a']},
+  {id:'roost',name:'SKY ROOST',arch:'OPEN · RING-OUT · PORTALS',time:'HIGH NOON',open:true,
    theme:{floor:'#0c2135',plat:'#0a1a2a',stroke:'#38bdf8',accent:'#7dd3fc'},
-   plats:[{x:.5,y:.74,w:.42,h:.05,edges:true},{x:.16,y:.56,w:.17,h:.03,edges:true},{x:.84,y:.56,w:.17,h:.03,edges:true},{x:.5,y:.44,w:.2,h:.03}],
+   sky:['#bfe9ff','#7fcdf5','#4a9fd8','#1c5a86'],
+   plats:[{x:.5,y:.74,w:.42,h:.05,edges:true},{x:.16,y:.56,w:.17,h:.03,edges:true},{x:.84,y:.56,w:.17,h:.03,edges:true},{x:.5,y:.44,w:.2,h:.03,move:{range:.08,speed:.55,phase:0}}],
    portals:[{x:.09,y:.4},{x:.91,y:.4}],
    spawns:[{x:.38,y:.6},{x:.62,y:.6},{x:.16,y:.45},{x:.84,y:.45}]},
-  {id:'drift',name:'DRIFT HARBOR',arch:'OPEN · RING-OUT · DRIFT',open:true,
+  {id:'drift',name:'DRIFT HARBOR',arch:'OPEN · RING-OUT · DRIFT',time:'SUNSET TIDE',open:true,
    theme:{floor:'#221338',plat:'#1c1030',stroke:'#a78bfa',accent:'#c4b5fd'},
-   plats:[{x:.26,y:.72,w:.3,h:.05,edges:true},{x:.74,y:.72,w:.3,h:.05,edges:true},{x:.5,y:.5,w:.16,h:.03,move:{range:.2,speed:.9,phase:0}},{x:.5,y:.3,w:.14,h:.03}],
+   sky:['#ffb37a','#e8724f','#5c3a6b','#241533'],
+   plats:[{x:.26,y:.72,w:.3,h:.05,edges:true},{x:.74,y:.72,w:.3,h:.05,edges:true},{x:.5,y:.5,w:.16,h:.03,move:{range:.2,speed:.9,phase:0}},{x:.5,y:.3,w:.14,h:.03,move:{axis:'y',range:.045,speed:.8,phase:0}}],
    spawns:[{x:.2,y:.58},{x:.8,y:.58},{x:.32,y:.58},{x:.68,y:.58}]},
 ];
 let MAP=MAPS[0],LEDGES=[],PORTALS=[],matchTime=0;
 const laser={phase:'idle',t:0,y:.45,cd:6,hitMask:0};
+/* THE COOP's floor-surge hazard: a telegraphed hot patch that migrates
+   along the floor (mirrors the foundry laser's idle/warn/fire rhythm so
+   the two walled maps share one hazard "grammar" but read completely
+   differently) — forces fighters to keep moving instead of turtling in
+   a corner. */
+const surge={phase:'idle',t:0,x:.5,cd:5,hitMask:0};
 function mapSpawn(slot){return (MAP&&MAP.spawns&&MAP.spawns[slot])||SPAWNS[slot]}
 function placeFighters(){for(const f of fighters){const s=mapSpawn(f.slot);f.x=s.x;f.y=s.y;f.vx=0;f.vy=0}}
 
@@ -170,7 +212,23 @@ function buildPlatforms(seed){
   const rand=mulberry32(seed);
   const chunk=CHUNKS[Math.floor(rand()*CHUNKS.length)];
   const cx=.5,cy=.56;
-  PLATS=chunk.map(c=>({x:cx+c.dx,y:cy+c.dy,w:c.w,h:.03}));
+  /* Per-map movement flavor for the seeded roost chunk: SPARK FOUNDRY
+     drifts faster and wider (a hot, restless factory floor) than THE
+     COOP's slower, gentler pacing — so the two walled maps don't just
+     feel like reskins of the same drift. Randomness continues drawing
+     from the SAME seeded generator used to pick the chunk, so host and
+     any future networked client still agree on exactly which platforms
+     move and how (determinism is the whole point of the seed protocol). */
+  const flavor=(MAP&&MAP.id==='foundry')
+    ?{chance:.7,rMin:.08,rMax:.13,sMin:1.1,sMax:1.7}
+    :{chance:.55,rMin:.045,rMax:.085,sMin:.45,sMax:.8};
+  PLATS=chunk.map(c=>{
+    const p={x:cx+c.dx,y:cy+c.dy,w:c.w,h:.03};
+    if(rand()<flavor.chance){
+      p.move={range:flavor.rMin+rand()*(flavor.rMax-flavor.rMin),speed:flavor.sMin+rand()*(flavor.sMax-flavor.sMin),phase:rand()*Math.PI*2};
+    }
+    return p;
+  });
 }
 /* Build the full arena for a named map: walled maps keep the seeded chunk
    roost variety (buildPlatforms) over the solid floor; open maps use their
@@ -180,9 +238,14 @@ function buildArena(map,seed){
   MAP=map||MAPS[0];
   LEDGES=[];PORTALS=[];matchTime=0;
   laser.phase='idle';laser.t=0;laser.cd=5;laser.hitMask=0;
+  surge.phase='idle';surge.t=0;surge.cd=4;surge.hitMask=0;
+  blastWarned=false;
   if(MAP.open){
-    PLATS=MAP.plats.map(p=>({x:p.x,y:p.y,w:p.w,h:p.h,edges:!!p.edges,move:p.move||null,baseX:p.x,_dx:0}));
+    PLATS=MAP.plats.map(p=>({x:p.x,y:p.y,w:p.w,h:p.h,edges:!!p.edges,move:p.move||null,baseX:p.x,baseY:p.y,_dx:0,_dy:0}));
     for(const p of PLATS){
+      /* Ledge anchors are never movers (see MAPS roster comment) — LEDGES
+         snapshots their position once here, so a moving edge platform
+         would desync the grabbable point from what's drawn/collided. */
       if(p.edges){
         LEDGES.push({x:p.x-p.w/2,y:p.y-p.h/2,side:-1});
         LEDGES.push({x:p.x+p.w/2,y:p.y-p.h/2,side:1});
@@ -191,7 +254,7 @@ function buildArena(map,seed){
     if(MAP.portals)PORTALS=MAP.portals.map(p=>({x:p.x,y:p.y}));
   }else{
     buildPlatforms(seed);
-    for(const p of PLATS){p.baseX=p.x;p._dx=0}
+    for(const p of PLATS){p.baseX=p.x;p.baseY=p.y;p._dx=0;p._dy=0}
   }
 }
 /* Drifting platforms: driven off matchTime so motion is deterministic from
@@ -200,8 +263,17 @@ function buildArena(map,seed){
 function stepMovers(){
   for(const s of PLATS){
     if(!s.move)continue;
-    const nx=s.baseX+Math.sin(matchTime*s.move.speed+s.move.phase)*s.move.range;
-    s._dx=nx-s.x;s.x=nx;
+    if(s.move.axis==='y'){
+      /* Vertical bob — a "buoy" pattern. Riding it needs no special carry
+         code: land() below re-snaps a standing fighter's y to the
+         platform's current top every frame anyway, so once s.y moves,
+         anyone standing on it is carried up/down for free next frame. */
+      const ny=s.baseY+Math.sin(matchTime*s.move.speed+s.move.phase)*s.move.range;
+      s._dy=ny-s.y;s.y=ny;
+    }else{
+      const nx=s.baseX+Math.sin(matchTime*s.move.speed+s.move.phase)*s.move.range;
+      s._dx=nx-s.x;s.x=nx;
+    }
   }
 }
 /* ---------- Race to the Top: procedurally-generated tower ----------
@@ -264,7 +336,138 @@ function sendMatchAction(action,modeArg){
 
 /* ---------- fighters ---------- */
 const PALETTE=[{name:'EMBER',c:'#4ade80',glow:'#22c55e'},{name:'CIPHER',c:'#5eead4',glow:'#14b8a6'},{name:'HEX',c:'#f0abfc',glow:'#d946ef'},{name:'VOLT',c:'#fde047',glow:'#eab308'}];
-let fighters=[],pickups=[],particles=[],floaters=[],rings=[],projectiles=[],mode='',running=false,paused=false,over=false,last=0,shake=0,slowmo=0,pickupTimer=6,reduced=false,soundOn=true,matchKos=[0,0,0,0],raf=0;
+let fighters=[],pickups=[],particles=[],floaters=[],rings=[],impacts=[],projectiles=[],mode='',running=false,paused=false,over=false,last=0,shake=0,slowmo=0,pickupTimer=6,reduced=false,soundOn=true,matchKos=[0,0,0,0],matchStats=[],raf=0;
+
+/* ---------- NINJA MODE: the space-bar juggle special ----------
+   Press space near an airborne foe to lock a 3-real-second 1v1 duel: the
+   activator keeps acting at normal speed, the locked target is slowed to a
+   crawl (helpless, can't act, takes 50% bonus damage from the activator
+   only), and every other fighter/hazard on the arena is slowed to a near
+   freeze and physically CANNOT land a hit on either duel participant —
+   nobody can steal or interrupt the kill window in FFA. Only one duel can
+   run at a time (module-level state, not per-fighter flags) since that's
+   simpler to reason about than juggling paired flags across 4 fighters. */
+const NINJA_RANGE=.2; /* generous lock-on reach so the whole point ("grab a nearby airborne foe") doesn't require frame-perfect positioning */
+const NINJA_DUEL_DURATION=3; /* real, unscaled seconds regardless of the slow-mo look */
+const NINJA_TARGET_SLOWDOWN=.12; /* the locked target's own dt scale — near-frozen, not literally 0, so they still visibly fly around from hits */
+const NINJA_BYSTANDER_SLOWDOWN=.05; /* everyone/everything else's dt scale while a duel is live */
+const NINJA_DAMAGE_MULT=1.5;
+const NINJA_COOLDOWN=18;
+let ninjaDuel=null; /* {attackerSlot,targetSlot,timeLeft} | null */
+function isNinjaParticipant(slot){return!!ninjaDuel&&(ninjaDuel.attackerSlot===slot||ninjaDuel.targetSlot===slot)}
+/* Shared guard for every hit-resolution loop (fists, melee weapons,
+   projectiles, bombs, laser, surge): during an active duel, a participant
+   can only be legally hit by their exact paired partner — everyone else's
+   hits (and every hazard) simply miss them. Non-participants are untouched
+   by this check, so ordinary combat elsewhere on the arena is unaffected. */
+function ninjaBlocksHit(attackerSlot,targetSlot){
+  if(!ninjaDuel)return false;
+  if(!isNinjaParticipant(targetSlot))return false;
+  return!(ninjaDuel.attackerSlot===attackerSlot&&ninjaDuel.targetSlot===targetSlot);
+}
+function findNinjaTarget(f){
+  let best=null,bd=NINJA_RANGE;
+  for(const t of fighters){
+    if(t===f||t.dead||t.grounded||t.ledge>0||isNinjaParticipant(t.slot))continue;
+    const dist=Math.hypot(t.x-f.x,t.y-f.y);
+    if(dist<bd){bd=dist;best=t}
+  }
+  return best;
+}
+function tryActivateNinjaMode(f){
+  if(mode==='racetop'||ninjaDuel||f.dead||f.stun>0||f.ledge>0||f.ninjaCd>0)return false;
+  const target=findNinjaTarget(f);
+  if(!target)return false;
+  ninjaDuel={attackerSlot:f.slot,targetSlot:target.slot,timeLeft:NINJA_DUEL_DURATION};
+  f.ninjaCd=NINJA_COOLDOWN;
+  shake=Math.min(1,shake+.5);
+  spawnBurst(f.x,f.y,'#ffffff',20);spawnBurst(target.x,target.y,'#f43f5e',26);
+  addRing(target.x,target.y,.05,'#ffffff');addRing(target.x,target.y,.16,'#f43f5e');
+  addFloater(.5,.16,'NINJA MODE!','#f43f5e',30);
+  addFloater(target.x,target.y-.16,'LOCKED ON!',f.glow,15);
+  sfx('bomb');sfx('squawk');
+  updateHud();
+  return true;
+}
+function endNinjaDuel(){ninjaDuel=null}
+
+/* ---------- weapon roster ----------
+   Cartoony, deliberately oversized melee weapons plus the upgraded ninja
+   stars (the old single-throw shuriken, now folded into this same roster).
+   Every weapon is a temporary pickup — a fixed number of swings/throws
+   (`swings`), never a permanent stat change — so the existing pickup-
+   cadence and bot pickup-greed logic extend naturally instead of needing
+   a parallel "equipment" system. `ranged` weapons fire the existing
+   projectile pipeline (stepProjectiles); melee weapons run their own
+   attack (meleeWeaponAttack) that shares resolveHit with every other
+   damage source in the game. */
+const WEAPONS={
+  nunchucks:{name:'NUNCHUCKS',ranged:false,swings:6,reach:.075,dmgLight:4,dmgHeavy:7,kbLight:.006,kbHeavy:.0095,cdLight:.16,cdHeavy:.38,color:'#fbbf24'},
+  bostaff:{name:'BO STAFF',ranged:false,swings:5,reach:.13,dmgLight:8,dmgHeavy:15,kbLight:.009,kbHeavy:.016,cdLight:.32,cdHeavy:.6,color:'#c98a4b'},
+  sai:{name:'SAI',ranged:false,swings:7,reach:.07,dmgLight:5,dmgHeavy:9,kbLight:.006,kbHeavy:.012,cdLight:.2,cdHeavy:.42,color:'#93c5fd'},
+  katana:{name:'KATANA',ranged:false,swings:4,reach:.105,dmgLight:12,dmgHeavy:20,kbLight:.013,kbHeavy:.019,cdLight:.4,cdHeavy:.65,color:'#e5e7eb'},
+  watergun:{name:'WATER GUN',ranged:true,swings:6,dmg:3,kb:.009,projSpeed:.05,color:'#38bdf8'},
+  ninjastars:{name:'NINJA STARS',ranged:true,swings:4,dmg:6,kb:.011,projSpeed:.045,color:'#e8fff2'}
+};
+const WEAPON_ICON={nunchucks:'🥢',bostaff:'🏒',sai:'🔱',katana:'🗡️',watergun:'🔫',ninjastars:'✳️'};
+/* "High ground matters" — a real, if modest, platform-fighter incentive to
+   climb: attacking a target that is meaningfully below you (their y is
+   numerically bigger since y grows downward) lands harder. Applied to
+   every fighter-vs-fighter hit (fists, melee weapons, thrown weapons),
+   not to environmental hazards (bomb/laser) which have no attacker
+   "position" to reward. */
+function heightMult(attacker,target){return(attacker.y<target.y-.05)?1.18:1}
+/* While a sai is wielded, the paired-jab style rewards a tighter block —
+   a slightly longer parry window than bare-handed guard. */
+function parryWindow(f){return f.weapon&&f.weapon.type==='sai'?.28:.18}
+/* ---------- shared hit resolution ----------
+   Every damage source in the game (fists, melee weapons, thrown
+   projectiles, the pulse bomb, the foundry laser, the coop floor surge)
+   funnels through here: apply damage, scale knockback by the target's
+   current percent (the classic "the more damaged you are, the further
+   you fly" curve), set stun/grounded, fire the hit VFX, and refresh the
+   HUD. Screen-shake, the impact-star, and particle count are all
+   opt-in per-call so a big committed melee hit can look and feel very
+   different from a background hazard tick without four different copies
+   of this math existing across the file. */
+function resolveHit(attacker,target,opts){
+  const {dmg,kb,dirX,vyScale=-.75,stun=.22,color,impactColor,particles=10,impact=true,heavy=false,shakeAmt=0,sfxKind='hit',squawkChance=0,label}=opts;
+  target.pct=Math.min(300,target.pct+dmg);
+  recordDamage(attacker,target,dmg,heavy);
+  const scaledKb=kb*(1+target.pct/60);
+  target.vx=dirX*scaledKb;target.vy=vyScale*scaledKb;
+  target.stun=stun;target.grounded=false;
+  if(shakeAmt)shake=Math.min(1,shake+shakeAmt);
+  if(particles>0)spawnBurst(target.x,target.y,color,particles);
+  if(impact)addImpact(target.x,target.y,impactColor||color,heavy);
+  addFloater(target.x,target.y-.09,label!==undefined?label:`HIT +${Math.round(dmg)}%`,color,heavy?20:15);
+  if(sfxKind)sfx(sfxKind);
+  if(squawkChance>0&&Math.random()<squawkChance)sfx('squawk');
+  updateHud();
+  return scaledKb;
+}
+
+function resetMatchStats(count){
+  matchStats=Array.from({length:count},(_,slot)=>({
+    slot,damageDealt:0,damageTaken:0,hitsLanded:0,hitsTaken:0,heavyHits:0,kos:0,falls:0,pickups:0,peakPct:0,lastHitBy:null,lastHitAt:-999,
+  }));
+  if(resultsEl)resultsEl.innerHTML='';
+}
+function statFor(slot){
+  if(!matchStats[slot])matchStats[slot]={slot,damageDealt:0,damageTaken:0,hitsLanded:0,hitsTaken:0,heavyHits:0,kos:0,falls:0,pickups:0,peakPct:0,lastHitBy:null,lastHitAt:-999};
+  return matchStats[slot];
+}
+function recordDamage(attacker,target,dmg,heavy=false){
+  if(!target)return;
+  const taken=statFor(target.slot);
+  taken.damageTaken+=dmg; taken.hitsTaken+=1; taken.peakPct=Math.max(taken.peakPct,target.pct);
+  if(attacker&&attacker.slot!==target.slot){
+    const dealt=statFor(attacker.slot);
+    dealt.damageDealt+=dmg; dealt.hitsLanded+=1; if(heavy)dealt.heavyHits+=1;
+    taken.lastHitBy=attacker.slot; taken.lastHitAt=matchTime;
+  }
+}
+function recordPickup(f){ if(f)statFor(f.slot).pickups+=1; }
 
 /* ---------- persistent mute ----------
    A real always-visible mute control, not just a host settings toggle —
@@ -345,8 +548,8 @@ function makeFighter(slot,human){
   const spawn=SPAWNS[slot];
   return {slot,human,name:PALETTE[slot].name,color:PALETTE[slot].c,glow:PALETTE[slot].glow,
     x:spawn.x,y:spawn.y,vx:0,vy:0,face:slot%2?-1:1,pct:0,stocks:3,
-    grounded:false,jumps:2,stun:0,invuln:2,charge:0,power:false,shurikenArmed:false,smokeCooldown:0,speedBuff:0,dead:false,shieldHeld:false,parry:0,dodgeCd:0,
-    ledge:0,ledgeSide:0,ledgeCooldown:0,portalCd:0,
+    grounded:false,jumps:2,stun:0,invuln:2,charge:0,chargeHeld:false,power:false,weapon:null,soaked:0,smokeCooldown:0,speedBuff:0,dead:false,shieldHeld:false,parry:0,dodgeCd:0,
+    ledge:0,ledgeSide:0,ledgeCooldown:0,portalCd:0,ninjaCd:0,
     attackCd:0,anim:0,trail:[],ai:{dir:1,timer:0,jumpCd:0,watchX:0,watchY:0,watchT:0,hold:0,diff:DIFFS[botDifficulty]},lastTap:{key:'',at:0},_gpDir:0};
 }
 function makeRaceFighter(slot,human){
@@ -363,9 +566,10 @@ function startMatch(selected,options={}){
   const count=selected==='solo'||selected==='net1v1'?2:4;
   fighters=[];
   for(let i=0;i<count;i++)fighters.push(makeFighter(i,i<humans));
+  resetMatchStats(count);
   buildArena(pickMap(),nextSeed());
   placeFighters();
-  pickups=[];particles=[];floaters=[];rings=[];projectiles=[];matchKos=[0,0,0,0];pickupTimer=6;over=false;running=true;paused=false;koFeed.length=0;
+  pickups=[];particles=[];floaters=[];rings=[];impacts=[];projectiles=[];matchKos=[0,0,0,0];pickupTimer=6;over=false;running=true;paused=false;koFeed.length=0;ninjaDuel=null;
   announceMap();
   setupEl.hidden=true;endEl.hidden=true;hudEl.hidden=false;
   document.querySelector('[data-touch]').hidden=fighters.some(f=>f.human&&f.slot===0)?false:true;
@@ -427,9 +631,10 @@ function startRaceMatch(humanCount){
   const total=4;
   fighters=[];
   for(let i=0;i<total;i++)fighters.push(makeRaceFighter(i,i<(humanCount||1)));
+  resetMatchStats(total);
   buildTower(nextSeed());
   hazardY=1;hazardSpeed=.01;
-  pickups=[];particles=[];floaters=[];rings=[];projectiles=[];over=false;running=true;paused=false;raceFinishOrder=[];
+  pickups=[];particles=[];floaters=[];rings=[];impacts=[];projectiles=[];over=false;running=true;paused=false;raceFinishOrder=[];ninjaDuel=null;
   setupEl.hidden=true;endEl.hidden=true;hudEl.hidden=false;
   document.querySelector('[data-touch]').hidden=fighters.some(f=>f.human&&f.slot===0)?false:true;
   buildRaceHud();last=performance.now();if(raf)cancelAnimationFrame(raf);raf=requestAnimationFrame(loop);
@@ -442,6 +647,7 @@ const P2={left:['ArrowLeft'],right:['ArrowRight'],jump:['ArrowUp'],light:['k','K
 const keys=new Set();
 function padFor(f){return f.slot===0?P1:P2}
 addEventListener('keydown',e=>{
+  if(e.key===' '||e.code==='Space')e.preventDefault(); // never let space scroll the page
   if(e.repeat)return;keys.add(e.key);
   const localNetMode=mode&&mode.startsWith('net'); // gates "is this my own fighter" regardless of host/non-host
   const netMode=localNetMode&&!isHost; // gates "should I relay this" — the host's own presses apply straight to its authoritative simulation, no relay-to-self needed
@@ -449,6 +655,13 @@ addEventListener('keydown',e=>{
     if(!f.human||f.dead||f.stun>0||!running||paused)continue;
     if(localNetMode&&f.slot!==localSlot)continue; // in a net match, this client only drives its own fighter's local input
     const pad=padFor(f);
+    if((e.key===' '||e.code==='Space')&&mode!=='racetop'){
+      /* Shared across every human on this keyboard — whichever fighter
+         actually has a valid airborne foe nearby claims the activation
+         (tryActivateNinjaMode returns false and does nothing for anyone
+         else once a duel is already running this tick). */
+      if(tryActivateNinjaMode(f)&&netMode)sendMatchAction({type:'input',slot:localSlot,event:'ninja'},'merge');
+    }
     if(pad.jump.includes(e.key)){
       if(mode==='racetop'&&f.grappleReady){
         f.grappleReady=false;
@@ -460,8 +673,8 @@ addEventListener('keydown',e=>{
     }
     if(pad.light.includes(e.key)){if(mode==='racetop')raceSabotage(f);else attack(f,false);if(netMode)sendMatchAction({type:'input',slot:localSlot,event:'light'},'merge')}
     if(mode==='racetop'){if(pad.heavy.includes(e.key)){raceSabotage(f,true);if(netMode)sendMatchAction({type:'input',slot:localSlot,event:'heavy'},'merge')}}
-    else if(pad.heavy.includes(e.key))f.charge=.01;
-    if(mode!=='racetop'&&pad.shield.includes(e.key)){f.shieldHeld=true;f.parry=.18;addFloater(f.x,f.y-.1,'GUARD',f.glow,11)}
+    else if(pad.heavy.includes(e.key)){f.chargeHeld=true;f.charge=.01} /* press-and-hold begins the charge; release fires it below at whatever level was reached — no double-press ever needed */
+    if(mode!=='racetop'&&pad.shield.includes(e.key)){f.shieldHeld=true;f.parry=parryWindow(f);addFloater(f.x,f.y-.1,'GUARD',f.glow,11)}
     if(pad.dodge.includes(e.key)){dodge(f);if(netMode)sendMatchAction({type:'input',slot:localSlot,event:'dodge'},'merge')}
     if(pad.left.includes(e.key))tapDash(f,-1,e.key);
     if(pad.right.includes(e.key))tapDash(f,1,e.key);
@@ -475,8 +688,15 @@ addEventListener('keyup',e=>{
     if(!f.human)continue;
     if(localNetMode&&f.slot!==localSlot)continue;
     const pad=padFor(f);
-    if(mode==='racetop'){f.charge=0} // heavy attack has no meaning in this mode — reset the charge keydown may have armed, but never call brawl attack()
-    else if(pad.heavy.includes(e.key)&&f.charge>0&&!f.dead&&f.stun<=0){attack(f,true);f.charge=0;if(netMode)sendMatchAction({type:'input',slot:localSlot,event:'heavy'},'merge')}
+    if(mode==='racetop'){f.charge=0;f.chargeHeld=false} // heavy attack has no meaning in this mode — reset the charge keydown may have armed, but never call brawl attack()
+    else if(pad.heavy.includes(e.key)){
+      // Release-to-fire: whatever charge level was reached while the key was
+      // held fires exactly once, right here, then charge is unconditionally
+      // cleared — no second press/click is ever required to land the hit.
+      const wasCharging=f.chargeHeld;
+      f.chargeHeld=false;f.charge=0;
+      if(wasCharging&&!f.dead&&f.stun<=0){attack(f,true);if(netMode)sendMatchAction({type:'input',slot:localSlot,event:'heavy'},'merge')}
+    }
     if(pad.shield.includes(e.key))f.shieldHeld=false;
   }
 });
@@ -500,8 +720,8 @@ for(const b of document.querySelectorAll('[data-t]')){
       else if(act==='dodge')dodge(f);
       return;
     }
-    if(act==='left')touchState.left=true;else if(act==='right')touchState.right=true;else if(act==='shield'){touchState.shield=true;f.shieldHeld=true;f.parry=.18;addFloater(f.x,f.y-.1,'GUARD',f.glow,11)}
-    else if(act==='jump')jump(f);else if(act==='light')attack(f,false);else if(act==='heavy')attack(f,true);else if(act==='dodge')dodge(f);};
+    if(act==='left')touchState.left=true;else if(act==='right')touchState.right=true;else if(act==='shield'){touchState.shield=true;f.shieldHeld=true;f.parry=parryWindow(f);addFloater(f.x,f.y-.1,'GUARD',f.glow,11)}
+    else if(act==='jump')jump(f);else if(act==='light')attack(f,false);else if(act==='heavy')attack(f,true);else if(act==='dodge')dodge(f);else if(act==='ninja')tryActivateNinjaMode(f);};
   b.onpointerup=()=>{if(act==='left')touchState.left=false;if(act==='right')touchState.right=false;if(act==='shield'){touchState.shield=false;const f=fighters[0];if(f)f.shieldHeld=false}};
   b.onpointercancel=b.onpointerup;
 }
@@ -524,7 +744,7 @@ function heldDir(f){
    treats the same keyboard keys. */
 let gpEnabled=false;
 const GP_DEADZONE=.22;
-const gpPrev={0:{a:false,b:false,x:false,shield:false,up:false},1:{a:false,b:false,x:false,shield:false,up:false}};
+const gpPrev={0:{a:false,b:false,x:false,y:false,shield:false,up:false},1:{a:false,b:false,x:false,y:false,shield:false,up:false}};
 const gpStartPrev=[false,false];
 function gpPad(slot){const pads=navigator.getGamepads?navigator.getGamepads():[];return pads[slot]||null}
 function applyGamepadInput(f){
@@ -536,16 +756,17 @@ function applyGamepadInput(f){
   const stick=Math.abs(ax)>GP_DEADZONE?ax:0;
   f._gpDir=Math.max(-1,Math.min(1,stick+(dl?-1:0)+(dr?1:0)));
   const up=du||ay<-GP_DEADZONE;
-  const a=!!pad.buttons[0]?.pressed,b=!!pad.buttons[1]?.pressed,x=!!pad.buttons[2]?.pressed;
+  const a=!!pad.buttons[0]?.pressed,b=!!pad.buttons[1]?.pressed,x=!!pad.buttons[2]?.pressed,y=!!pad.buttons[3]?.pressed;
   const shield=!!pad.buttons[4]?.pressed||!!pad.buttons[5]?.pressed||!!pad.buttons[6]?.pressed||!!pad.buttons[7]?.pressed;
   if(up&&!prev.up)jump(f);
   if(a&&!prev.a)attack(f,false);
-  if(x&&!prev.x&&f.charge<=0)f.charge=.01;
-  if(!x&&prev.x){if(f.charge>0&&!f.dead&&f.stun<=0)attack(f,true);f.charge=0}
+  if(x&&!prev.x){f.chargeHeld=true;f.charge=.01}
+  if(!x&&prev.x){const wasCharging=f.chargeHeld;f.chargeHeld=false;f.charge=0;if(wasCharging&&!f.dead&&f.stun<=0)attack(f,true)}
   if(b&&!prev.b)dodge(f);
-  if(shield&&!prev.shield){f.shieldHeld=true;f.parry=.18;addFloater(f.x,f.y-.1,'GUARD',f.glow,11)}
+  if(y&&!prev.y&&mode!=='racetop')tryActivateNinjaMode(f);
+  if(shield&&!prev.shield){f.shieldHeld=true;f.parry=parryWindow(f);addFloater(f.x,f.y-.1,'GUARD',f.glow,11)}
   if(!shield&&prev.shield&&!padFor(f).shield.some(k=>keys.has(k)))f.shieldHeld=false;
-  prev.up=up;prev.a=a;prev.b=b;prev.x=x;prev.shield=shield;
+  prev.up=up;prev.a=a;prev.b=b;prev.x=x;prev.y=y;prev.shield=shield;
 }
 function pollGamepadPause(){
   if(!gpEnabled)return;
@@ -597,18 +818,16 @@ function dodge(f){
 function attack(f,heavy){
   if(f.attackCd>0)return;
   if(f.shieldHeld)return;
-  if(!heavy&&f.shurikenArmed){
-    f.shurikenArmed=false;f.attackCd=.28;f.anim=.14;
-    projectiles.push({x:f.x+f.face*.03,y:f.y-.14,vx:f.face*.045,owner:f.slot,color:f.color,life:1.4,dmg:6,kb:.011});
-    spawnBurst(f.x+f.face*.03,f.y-.14,f.color,6);sfx('hit');
-    return;
-  }
+  if(ninjaDuel&&f.slot===ninjaDuel.targetSlot)return; /* locked as a helpless juggle target — no attacks of your own until the duel ends */
+  const wdef=f.weapon&&WEAPONS[f.weapon.type];
+  if(wdef&&wdef.ranged){weaponRangedThrow(f,wdef);return}
+  if(wdef&&!wdef.ranged){meleeWeaponAttack(f,wdef,heavy);return}
   f.attackCd=(heavy?.55:.28)*(f.speedBuff>0?.75:1);f.anim=heavy?.3:.18;
   const reach=heavy?.085:.06;
   const power=f.power?2:1;
   if(f.power){f.power=false;spawnBurst(f.x,f.y,'#ffffff',14)}
   for(const t of fighters){
-    if(t===f||t.dead||t.invuln>0)continue;
+    if(t===f||t.dead||t.invuln>0||ninjaBlocksHit(f.slot,t.slot))continue;
     const dx=t.x-f.x,dy=t.y-f.y;
     if(Math.abs(dy)<.08&&dx*f.face>-.015&&Math.abs(dx)<reach){
       if(t.shieldHeld){
@@ -620,32 +839,88 @@ function attack(f,heavy){
         t.vx+=f.face*.0025;shake=Math.min(1,shake+.12);addRing(t.x,t.y,.08,t.glow);addFloater(t.x,t.y-.11,'BLOCK',t.glow,14);sfx('jump');
         continue;
       }
-      const dmg=(heavy?14:6)*power;
-      t.pct=Math.min(300,t.pct+dmg);
-      const kb=(heavy?.014:.007)*(1+t.pct/60)*power;
-      t.vx=f.face*kb;t.vy=-kb*.75;t.stun=heavy?.42:.22;t.grounded=false;
-      shake=Math.min(1,shake+(heavy?.7:.3));
-      spawnBurst(t.x,t.y,t.glow,heavy?26:14);
-      addRing(t.x,t.y,heavy?.12:.08,heavy?'#ffffff':t.glow);
-      addFloater(t.x,t.y-.09,`${heavy?'SMASH ':'HIT +'}${dmg}%`,heavy?'#ffffff':t.glow,heavy?20:15);
-      addFloater(t.x,t.y-.14,heavy?'BWAAK!':'cluck!',f.color,heavy?15:11);
-      sfx(heavy?'heavy':'hit'); if(Math.random()<.55)sfx('squawk');
-      updateHud();
+      const mult=heightMult(f,t)*(ninjaDuel&&f.slot===ninjaDuel.attackerSlot&&t.slot===ninjaDuel.targetSlot?NINJA_DAMAGE_MULT:1);
+      const dmg=Math.round((heavy?14:6)*power*mult);
+      const kb=(heavy?.014:.007)*power*mult;
+      resolveHit(f,t,{dmg,kb,dirX:f.face,vyScale:-.75,stun:heavy?.42:.22,color:t.glow,impactColor:heavy?'#ffffff':t.glow,
+        particles:heavy?13:7,heavy,shakeAmt:heavy?.35:.15,sfxKind:heavy?'heavy':'hit',squawkChance:.55,
+        label:`${heavy?'SMASH ':'HIT +'}${dmg}%`});
     }
   }
 }
+/* ---------- melee weapon attacks ----------
+   Each weapon runs the same block/parry gate the bare-fisted attack()
+   uses, then resolves through the shared resolveHit() with its own
+   reach/damage/knockback numbers. A limited number of swings is spent
+   per weapon (spawn-config'd in WEAPONS); the weapon breaks and falls
+   away once exhausted. */
+function meleeWeaponAttack(f,wdef,heavy){
+  const kind=f.weapon.type;
+  f.weapon.swingsLeft-=1;
+  f.attackCd=(heavy?wdef.cdHeavy:wdef.cdLight)*(f.speedBuff>0?.75:1);
+  f.anim=heavy?.32:.16;
+  const reach=wdef.reach;
+  for(const t of fighters){
+    if(t===f||t.dead||t.invuln>0||ninjaBlocksHit(f.slot,t.slot))continue;
+    const dx=t.x-f.x,dy=t.y-f.y;
+    if(Math.abs(dy)<.09&&dx*f.face>-.015&&Math.abs(dx)<reach){
+      if(t.shieldHeld){
+        if(t.parry>0){
+          f.stun=.36;f.vx=-f.face*.009;f.vy=-.006;shake=Math.min(1,shake+.45);
+          addRing(t.x,t.y,.11,'#ffffff');addFloater(t.x,t.y-.13,'PARRY','#ffffff',20);spawnBurst(t.x,t.y,'#ffffff',20);sfx('squawk');
+          continue;
+        }
+        t.vx+=f.face*.003;shake=Math.min(1,shake+.12);addRing(t.x,t.y,.08,t.glow);addFloater(t.x,t.y-.11,'BLOCK',t.glow,14);sfx('jump');
+        continue;
+      }
+      const mult=heightMult(f,t)*(ninjaDuel&&f.slot===ninjaDuel.attackerSlot&&t.slot===ninjaDuel.targetSlot?NINJA_DAMAGE_MULT:1);
+      const dmg=Math.round((heavy?wdef.dmgHeavy:wdef.dmgLight)*mult);
+      const kb=(heavy?wdef.kbHeavy:wdef.kbLight)*mult;
+      resolveHit(f,t,{dmg,kb,dirX:f.face,vyScale:-.75,stun:heavy?.44:.24,color:t.glow,impactColor:heavy?'#ffffff':t.glow,
+        particles:heavy?12:6,heavy,shakeAmt:heavy?.3:.12,sfxKind:heavy?'heavy':'hit',squawkChance:.4,
+        label:`${wdef.name} ${heavy?'SMASH':'HIT'} +${dmg}%`});
+    }
+  }
+  /* Nunchucks' one bit of risk/creativity: a fast-spinning improvised
+     weapon occasionally clips the wielder too. Small chip damage, a brief
+     self-stun, and a joke floater — never enough to actually punish using
+     it, just enough to read as "these are wild to swing." */
+  if(kind==='nunchucks'&&Math.random()<.15){
+    f.pct=Math.min(300,f.pct+2);f.stun=Math.max(f.stun,.12);
+    addFloater(f.x,f.y-.18,'OOF (self-bonk!)',wdef.color,11);spawnBurst(f.x,f.y,wdef.color,4);
+  }
+  if(f.weapon&&f.weapon.swingsLeft<=0){
+    addFloater(f.x,f.y-.15,`${wdef.name} BROKE!`,wdef.color,12);f.weapon=null;updateHud();
+  }
+}
+/* ---------- ranged weapons (water gun, ninja stars) ----------
+   Both reuse the exact same projectile object shape/physics the original
+   single-throw shuriken used (stepProjectiles is untouched) — only the
+   visuals and per-weapon dmg/kb/speed differ, plus a limited-throws
+   counter instead of the old one-shot shurikenArmed flag. */
+function weaponRangedThrow(f,wdef){
+  const kind=f.weapon.type;
+  f.weapon.swingsLeft-=1;
+  f.attackCd=.28*(f.speedBuff>0?.75:1);f.anim=.14;
+  projectiles.push({x:f.x+f.face*.03,y:f.y-.14,vx:f.face*wdef.projSpeed,owner:f.slot,color:wdef.color,life:1.4,dmg:wdef.dmg,kb:wdef.kb,kind});
+  spawnBurst(f.x+f.face*.03,f.y-.14,wdef.color,6);sfx('hit');
+  if(f.weapon&&f.weapon.swingsLeft<=0){
+    addFloater(f.x,f.y-.15,`${wdef.name} EMPTY`,wdef.color,12);f.weapon=null;
+  }
+  updateHud();
+}
 
-/* ---------- pickups: ♥ heal · ✦ spark core · ◉ pulse bomb ---------- */
+/* ---------- pickups: ♥ heal · ✦ spark core · ◉ pulse bomb · weapon roster ---------- */
 function applyPickupEffect(kind,fighter){
   if(kind==='heart')fighter.pct=Math.max(0,fighter.pct-30);
   if(kind==='spark')fighter.power=true;
-  if(kind==='shuriken')fighter.shurikenArmed=true;
   if(kind==='speed')fighter.speedBuff=6;
+  if(WEAPONS[kind])fighter.weapon={type:kind,swingsLeft:WEAPONS[kind].swings};
   return fighter;
 }
+const PICKUP_KINDS=['heart','spark','bomb','smoke','speed','nunchucks','bostaff','sai','katana','watergun','ninjastars'];
 function spawnPickup(){
-  const kinds=['heart','spark','bomb','shuriken','smoke','speed'];
-  const kind=kinds[Math.floor(Math.random()*kinds.length)];
+  const kind=PICKUP_KINDS[Math.floor(Math.random()*PICKUP_KINDS.length)];
   let spot;
   if(MAP&&MAP.open&&PLATS.length){
     /* open maps have no safety floor — drop pickups onto a real platform */
@@ -659,10 +934,15 @@ function grabPickups(f){
     if(p.taken)continue;
     if(Math.abs(p.x-f.x)<.04&&Math.abs(p.y-f.y)<.06){
       p.taken=true;
+      recordPickup(f);
       if(p.kind==='heart'){applyPickupEffect('heart',f);spawnBurst(f.x,f.y,'#f87171',14);addFloater(f.x,f.y-.09,'HEAL -30%', '#f87171',14);sfx('pickup')}
       if(p.kind==='spark'){applyPickupEffect('spark',f);spawnBurst(f.x,f.y,'#ffffff',16);addFloater(f.x,f.y-.09,'POWER UP', '#ffffff',14);sfx('pickup')}
       if(p.kind==='bomb'){p.taken=false;p.fuse=.9;p.owner=f.slot}
-      if(p.kind==='shuriken'){applyPickupEffect('shuriken',f);spawnBurst(f.x,f.y,'#e8fff2',14);addFloater(f.x,f.y-.09,'SHURIKEN', '#e8fff2',14);sfx('pickup')}
+      if(WEAPONS[p.kind]){
+        const wdef=WEAPONS[p.kind];
+        applyPickupEffect(p.kind,f);
+        spawnBurst(f.x,f.y,wdef.color,16);addFloater(f.x,f.y-.09,`${wdef.name}!`,wdef.color,14);sfx('pickup');
+      }
       if(p.kind==='speed'){applyPickupEffect('speed',f);spawnBurst(f.x,f.y,'#fde047',14);addFloater(f.x,f.y-.09,'SPEED UP', '#fde047',14);sfx('pickup')}
       if(p.kind==='smoke'){
         const dir=heldDir(f)||f.face||1;
@@ -681,13 +961,11 @@ function tickBombs(dt){
     if(p.fuse<=0){
       p.taken=true;shake=Math.min(1,shake+.9);spawnBurst(p.x,p.y,'#fb923c',40);addRing(p.x,p.y,.18,'#fb923c');addFloater(p.x,p.y-.1,'PULSE BOMB!', '#fb923c',18);sfx('bomb');
       for(const t of fighters){
-        if(t.dead||t.invuln>0)continue;
+        if(t.dead||t.invuln>0||isNinjaParticipant(t.slot))continue;
         const dx=t.x-p.x,dy=t.y-p.y,dist=Math.hypot(dx,dy);
         if(dist<.16&&t.slot!==p.owner){
-          t.pct=Math.min(300,t.pct+22);
-          const kb=.016*(1+t.pct/60);
-          t.vx=(dx/(dist||.01))*kb;t.vy=-Math.abs(kb)*.9;t.stun=.5;t.grounded=false;
-          addFloater(t.x,t.y-.1,'+22%', '#fb923c',15);
+          resolveHit(null,t,{dmg:22,kb:.016,dirX:dx/(dist||.01),vyScale:-.9,stun:.5,color:'#fb923c',
+            particles:0,impact:false,shakeAmt:0,sfxKind:null,label:'+22%'});
         }
       }
       updateHud();
@@ -737,7 +1015,14 @@ function botThink(f,dt){
   if(nearWall&&f.pct>60&&Math.random()<d.recoverSkill){
     f.ai.dir=f.x<ARENA.left+.1?1:-1;
   }else{
-    const want=pickups.find(p=>!p.taken&&p.fuse===null);
+    /* Weapon pickups get first pick over other pickups once a bot is
+       unarmed — otherwise a bot that already grabbed, say, a heal would
+       never bother detouring for nunchucks lying nearby, and weapon
+       variety would only ever be a human-side advantage. Still gated by
+       the same pickupGreed roll as every other pickup, so easy bots stay
+       casual about it and hard bots go get it. */
+    const wantWeapon=!f.weapon&&pickups.find(p=>!p.taken&&WEAPONS[p.kind]);
+    const want=wantWeapon||pickups.find(p=>!p.taken&&p.fuse===null);
     const target=want&&Math.random()<d.pickupGreed?want:foe;
     if(f.ai.hold<=0)f.ai.dir=target.x>f.x?1:-1; /* respect a watchdog repath for a beat */
     if(open&&f.grounded){
@@ -753,7 +1038,13 @@ function botThink(f,dt){
     }
     if(f.ai.timer<=0){
       f.ai.timer=d.reaction[0]+Math.random()*(d.reaction[1]-d.reaction[0]);
-      if(Math.abs(foe.x-f.x)<.07*d.attackReach&&Math.abs(foe.y-f.y)<.08*d.attackReach){f.face=f.ai.dir;attack(f,Math.random()<d.heavyChance)}
+      /* A ranged weapon (water gun / ninja stars) is worth throwing from
+         well outside fist range — otherwise a bot holding one would just
+         walk all the way into melee range and never actually use the
+         thing it's carrying. */
+      const rangedEquipped=f.weapon&&WEAPONS[f.weapon.type]&&WEAPONS[f.weapon.type].ranged;
+      const engageX=(rangedEquipped?.24:.07)*d.attackReach;
+      if(Math.abs(foe.x-f.x)<engageX&&Math.abs(foe.y-f.y)<.08*d.attackReach){f.face=f.ai.dir;attack(f,Math.random()<d.heavyChance)}
       if(foe.y<f.y-.12&&f.grounded&&f.ai.jumpCd<=0&&Math.random()<d.recoverSkill){jump(f);f.ai.jumpCd=d.jumpCd}
     }
   }
@@ -763,8 +1054,13 @@ function botThink(f,dt){
 /* ---------- physics + rounds ---------- */
 function land(f,top){f.y=top;f.vy=0;f.grounded=true;f.jumps=2}
 function wallBonk(f,side){
-  f.x=side<0?ARENA.left+.006:ARENA.right-.006;
-  f.vx*=-.35;shake=Math.min(1,shake+.15);
+  f.x=side<0?ARENA.left+.008:ARENA.right-.008;
+  /* A firmer, proportional kickback (with a guaranteed minimum) instead of
+     the old flat .35 damping — that read as "sticky," like the fence was
+     absorbing you rather than bouncing you off it. */
+  const bounce=Math.min(.05,Math.max(Math.abs(f.vx)*.55,.006));
+  f.vx=-side*bounce;
+  shake=Math.min(1,shake+.12);
   spawnBurst(f.x,f.y-.1,f.glow,8);sfx('squawk');
 }
 function step(f,dt){
@@ -779,7 +1075,7 @@ function step(f,dt){
     return;
   }
   f.invuln=Math.max(0,f.invuln-dt);f.stun=Math.max(0,f.stun-dt);f.attackCd=Math.max(0,f.attackCd-dt);f.anim=Math.max(0,f.anim-dt);f.parry=Math.max(0,f.parry-dt);f.dodgeCd=Math.max(0,f.dodgeCd-dt);f.smokeCooldown=Math.max(0,f.smokeCooldown-dt);f.speedBuff=Math.max(0,f.speedBuff-dt);
-  f.ledgeCooldown=Math.max(0,f.ledgeCooldown-dt);f.portalCd=Math.max(0,f.portalCd-dt);
+  f.ledgeCooldown=Math.max(0,f.ledgeCooldown-dt);f.portalCd=Math.max(0,f.portalCd-dt);f.soaked=Math.max(0,f.soaked-dt);f.ninjaCd=Math.max(0,f.ninjaCd-dt);
   if(f.ledge>0){
     /* Hanging on a ledge: frozen in place until a ledge-jump (or the hang
        expires and the fighter drops with a re-grab cooldown). Bots auto-
@@ -790,7 +1086,7 @@ function step(f,dt){
     }else if(f.ledge<=0){f.ledgeCooldown=.75;f.vy=.002}
     return;
   }
-  if(f.charge>0)f.charge=Math.min(1,f.charge+dt);
+  if(f.chargeHeld)f.charge=Math.min(1,f.charge+dt);
   if(f.stun<=0){
     if(f.human&&mode&&mode.startsWith('net')&&f.slot!==localSlot){
       // Host-side simulation of a remote human fighter: this branch only
@@ -806,6 +1102,7 @@ function step(f,dt){
       if(remote.event==='light'){attack(f,false);remote.event=null}
       if(remote.event==='heavy'){attack(f,true);remote.event=null}
       if(remote.event==='dodge'){dodge(f);remote.event=null}
+      if(remote.event==='ninja'){tryActivateNinjaMode(f);remote.event=null}
     }else if(f.human){
       if(gpEnabled)applyGamepadInput(f);
       const dir=heldDir(f);
@@ -814,7 +1111,11 @@ function step(f,dt){
       f.vx+=dir*(f.shieldHeld?.0007:.0018)*speedMul*(dt*60);
     }else botThink(f,dt);
   }
-  f.vx*=f.grounded?.82:.94;
+  /* A water-gun "soak" is a fun slippery gag, not real damage: less
+     friction for a couple seconds so a soaked fighter slides around
+     comically instead of stopping on a dime. */
+  const fric=f.soaked>0?(f.grounded?.93:.97):(f.grounded?.82:.94);
+  f.vx*=fric;
   f.vy=Math.min(.05,f.vy+.0011*(dt*60));
   const incomingVx=f.vx;
   f.x+=f.vx*(dt*60);f.y+=f.vy*(dt*60);
@@ -848,8 +1149,8 @@ function step(f,dt){
     if(f.x<ARENA.left||f.x>ARENA.right){
       const side=f.x<ARENA.left?-1:1;
       const impactSpeed=Math.abs(incomingVx);
-      const crackThreshold=SLAM_SPEED*(1-Math.min(.72,f.pct/260));
-      if(impactSpeed>crackThreshold&&f.pct>15)ko(f,side);
+      const crackThreshold=SLAM_SPEED*2.1*(1-Math.min(.45,f.pct/320));
+      if(impactSpeed>crackThreshold&&f.pct>CRACK_PCT_MIN)ko(f,side);
       else wallBonk(f,side);
     }
   }
@@ -872,6 +1173,25 @@ function stepPortals(f){
     }
   }
 }
+/* ---------- shrinking ring-out zone (SKY ROOST / DRIFT HARBOR) ----------
+   Both open maps already have a blast-zone kill boundary (BLAST), so a
+   slow, capped tightening of those same bounds over the match is a
+   natural "the arena itself is alive" pressure valve without inventing
+   any new collision code — after a grace period, the safe area creeps in,
+   discouraging edge-camping and forcing real movement as the match goes
+   on. Capped well short of crushing the whole stage so it's pressure, not
+   a death sentence. */
+let blastWarned=false;
+function updateBlastZone(){
+  if(!MAP||!MAP.open){BLAST.l=-.07;BLAST.r=1.07;BLAST.b=1.08;BLAST.t=-.3;return}
+  const grace=24,shrinkRate=.0022,maxShrink=.16;
+  const shrink=Math.max(0,Math.min(maxShrink,(matchTime-grace)*shrinkRate));
+  BLAST.l=-.07+shrink;BLAST.r=1.07-shrink;BLAST.b=1.08-shrink*.6;BLAST.t=-.3+shrink*.4;
+  if(!blastWarned&&shrink>.01){
+    blastWarned=true;
+    addFloater(.5,.2,'ZONE CLOSING!','#f87171',20);sfx('squawk');
+  }
+}
 /* Telegraphed stage hazard (SPARK FOUNDRY): a horizontal laser sweep that
    blinks a dashed warning line for ~1.1s before firing, then burns anyone
    crossing the beam once per cycle. */
@@ -886,17 +1206,41 @@ function stepLaser(dt){
   }else if(laser.phase==='fire'){
     laser.t-=dt;
     for(const f of fighters){
-      if(f.dead||f.invuln>0||(laser.hitMask&(1<<f.slot)))continue;
+      if(f.dead||f.invuln>0||isNinjaParticipant(f.slot)||(laser.hitMask&(1<<f.slot)))continue;
       if(Math.abs((f.y-.06)-laser.y)<.055){
         laser.hitMask|=1<<f.slot;
-        f.pct=Math.min(300,f.pct+16);
-        const kb=.012*(1+f.pct/60);
-        f.vx=(f.x<.5?1:-1)*kb;f.vy=-kb*.8;f.stun=.4;f.grounded=false;
-        spawnBurst(f.x,f.y,'#fb923c',20);addFloater(f.x,f.y-.1,'LASER +16%','#fb923c',16);sfx('hit');
-        updateHud();
+        resolveHit(null,f,{dmg:16,kb:.012,dirX:f.x<.5?1:-1,vyScale:-.8,stun:.4,color:'#fb923c',
+          particles:20,impact:false,shakeAmt:0,sfxKind:'hit',label:'LASER +16%'});
       }
     }
     if(laser.t<=0){laser.phase='idle';laser.cd=5.5+Math.random()*3.5}
+  }
+}
+/* THE COOP's floor surge: same idle/warn/fire rhythm as the foundry
+   laser, but a vertical-band-free hot patch that migrates along the
+   floor's x-axis instead of a full-width horizontal beam. Only threatens
+   fighters actually standing on the floor — hopping onto a platform is a
+   real, readable way to dodge it, which doubles as another reason to use
+   the platforms this match now moves and rewards fighting from. */
+function stepSurge(dt){
+  if(!MAP||!MAP.surge)return;
+  if(surge.phase==='idle'){
+    surge.cd-=dt;
+    if(surge.cd<=0){surge.phase='warn';surge.t=1;surge.x=ARENA.left+.15+Math.random()*(ARENA.right-ARENA.left-.3);surge.hitMask=0;sfx('squawk')}
+  }else if(surge.phase==='warn'){
+    surge.t-=dt;
+    if(surge.t<=0){surge.phase='fire';surge.t=.6;shake=Math.min(1,shake+.2);sfx('bomb')}
+  }else if(surge.phase==='fire'){
+    surge.t-=dt;
+    for(const f of fighters){
+      if(f.dead||f.invuln>0||!f.grounded||f.y<ARENA.floor-.05||isNinjaParticipant(f.slot)||(surge.hitMask&(1<<f.slot)))continue;
+      if(Math.abs(f.x-surge.x)<.09){
+        surge.hitMask|=1<<f.slot;
+        resolveHit(null,f,{dmg:14,kb:.013,dirX:f.x<surge.x?-1:1,vyScale:-.8,stun:.4,color:'#4ade80',
+          particles:18,impact:false,shakeAmt:0,sfxKind:'hit',label:'SURGE +14%'});
+      }
+    }
+    if(surge.t<=0){surge.phase='idle';surge.cd=5+Math.random()*3}
   }
 }
 let racePickupTimer=5;
@@ -1046,13 +1390,17 @@ function raceSabotage(f,heavy){
   }
 }
 function ko(f,side=0,cause='crack'){
+  if(isNinjaParticipant(f.slot))ninjaDuel=null; /* a KO'd duelist can't stay locked in a duel that no longer has both sides */
   f.stocks-=1;shake=1;slowmo=reduced?0:.35;
   const kx=cause==='crack'&&side<0?ARENA.left+.01:cause==='crack'&&side>0?ARENA.right-.01:Math.max(.05,Math.min(.95,f.x)),ky=Math.max(.05,Math.min(.95,f.y));
   const msg=cause==='ringout'?`${f.name} RING OUT!`:`${f.name} CRACKED!`;
   spawnBurst(kx,ky,f.glow,56);addRing(kx,ky,.2,f.glow);addFloater(.5,.24,msg,f.glow,34);sfx('ko');
   koFeedPush(msg,f.glow);
-  const killer=fighters.find(t=>!t.dead&&t!==f&&Math.abs(t.x-f.x)<.4);
-  if(killer)matchKos[killer.slot]+=1;
+  const st=statFor(f.slot);
+  st.falls+=1;
+  const creditedSlot=matchTime-st.lastHitAt<8?st.lastHitBy:null;
+  const killer=(creditedSlot!==null&&creditedSlot!==f.slot?fighters.find(t=>t.slot===creditedSlot):null)||fighters.find(t=>!t.dead&&t!==f&&Math.abs(t.x-f.x)<.4);
+  if(killer){matchKos[killer.slot]+=1;statFor(killer.slot).kos+=1}
   if(f.stocks<=0){f.dead=true;koFeedPush(`${f.name} IS OUT`,f.color)}
   else{const spawn=mapSpawn(f.slot);f.x=spawn.x;f.y=spawn.y;f.vx=0;f.vy=0;f.pct=0;f.invuln=2;f.jumps=2;f.stun=0;f.ledge=0;f.ledgeCooldown=0;f.portalCd=0;addFloater(f.x,f.y-.12,`${f.stocks} STOCKS`,f.color,13)}
   updateHud();
@@ -1060,6 +1408,46 @@ function ko(f,side=0,cause='crack'){
   const lost=fighters.reduce((sum,t)=>sum+(3-t.stocks),0);
   pushState(Math.min(99,Math.round(lost/(fighters.length*3)*100)));
   if(alive.length<=1)endMatch(alive[0]||null);
+}
+function fighterRankScore(f){
+  const s=statFor(f.slot);
+  return (f.stocks||0)*10000+s.kos*1200+s.damageDealt*7-s.damageTaken*2+(f.dead?-5000:0);
+}
+function orderedRumbleResults(winner){
+  const order=[...fighters].sort((a,b)=>{
+    if(winner&&a.slot===winner.slot)return-1;
+    if(winner&&b.slot===winner.slot)return 1;
+    return fighterRankScore(b)-fighterRankScore(a);
+  });
+  return order;
+}
+function renderRumbleResults(winner){
+  if(!resultsEl)return;
+  const order=orderedRumbleResults(winner);
+  const podiumOrder=[order[1],order[0],order[2]].filter(Boolean);
+  const placeClass=['second','first','third'];
+  const placeLabel=['2ND','1ST','3RD'];
+  const podium=podiumOrder.map((f,i)=>{
+    const s=statFor(f.slot);
+    return `<div class="podium-card ${placeClass[i]}" style="border-color:${f.color}88"><i>${placeLabel[i]}</i><b style="color:${f.color}">${f.name}${f.human?'':' · BOT'}</b><span>${s.kos} KOs · ${Math.round(s.damageDealt)}% dealt</span></div>`;
+  }).join('');
+  const statsHtml=order.map((f,i)=>{
+    const s=statFor(f.slot);
+    return `<section class="stat-card" style="border-color:${f.color}55"><h3 style="color:${f.color}">#${i+1} ${f.name}${f.human?'':' · BOT'}</h3><p><b>${Math.round(s.damageDealt)}%</b> damage dealt</p><p><b>${Math.round(s.damageTaken)}%</b> damage taken</p><p><b>${s.kos}</b> KOs · <b>${s.falls}</b> falls</p><p><b>${s.hitsLanded}</b> hits · <b>${s.heavyHits}</b> heavy</p><p><b>${s.pickups}</b> pickups · peak <b>${Math.round(s.peakPct)}%</b></p></section>`;
+  }).join('');
+  resultsEl.innerHTML=`<div class="podium">${podium}</div><div class="stat-grid">${statsHtml}</div>`;
+}
+function renderRaceResults(order){
+  if(!resultsEl)return;
+  const podiumOrder=[order[1],order[0],order[2]].filter(Boolean);
+  const placeClass=['second','first','third'];
+  const placeLabel=['2ND','1ST','3RD'];
+  const podium=podiumOrder.map((f,i)=>`<div class="podium-card ${placeClass[i]}" style="border-color:${f.color}88"><i>${placeLabel[i]}</i><b style="color:${f.color}">${f.name}${f.human?'':' · BOT'}</b><span>${f.finished?'Finished climb':'Still climbing'}</span></div>`).join('');
+  const statsHtml=order.map((f,i)=>{
+    const s=statFor(f.slot);
+    return `<section class="stat-card" style="border-color:${f.color}55"><h3 style="color:${f.color}">#${i+1} ${f.name}${f.human?'':' · BOT'}</h3><p><b>${f.finished?'Finished':'Caught'}</b></p><p><b>${Math.round(f.altitude||0)}</b> altitude</p><p><b>${s.pickups}</b> pickups</p><p><b>${s.falls}</b> washouts</p></section>`;
+  }).join('');
+  resultsEl.innerHTML=`<div class="podium">${podium}</div><div class="stat-grid">${statsHtml}</div>`;
 }
 function endMatch(winner){
   if(raf){cancelAnimationFrame(raf);raf=0}
@@ -1076,6 +1464,7 @@ function endMatch(winner){
   titleEl.style.color=winner?winner.color:'';
   titleEl.style.textShadow=winner?`0 0 28px ${winner.glow}`:'';
   document.querySelector('[data-endcopy]').textContent=winner?`${matchKos[winner.slot]} KOs this match. Session: ${stats.wins}/${stats.matches} rumbles won.`:`Everyone fell. Session: ${stats.wins}/${stats.matches} rumbles won.`;
+  renderRumbleResults(winner);
   endEl.hidden=false;hudEl.hidden=true;document.querySelector('[data-touch]').hidden=true;
 }
 function endRaceMatch(){
@@ -1093,6 +1482,7 @@ function endRaceMatch(){
   titleEl.style.color=winner?winner.color:'';
   titleEl.style.textShadow=winner?`0 0 28px ${winner.glow}`:'';
   document.querySelector('[data-endcopy]').textContent=order.map((f,i)=>`${i+1}. ${f.name}${f.human?'':' (bot)'}${f.finished?'':' — still climbing'}`).join('  ·  ');
+  renderRaceResults(order);
   endEl.hidden=false;hudEl.hidden=true;document.querySelector('[data-touch]').hidden=true;
   stopRaceMusic();
 }
@@ -1109,6 +1499,50 @@ function addRing(x,y,r,color){
   if(reduced)return;
   rings.push({x,y,r,life:.45,color});
 }
+/* ---------- cartoony hit-impact star ----------
+   Replaces the old giant slow-fading ring on a landed hit: a small spiky
+   "POW"-style burst, sized against the fighter sprite itself (whose body/
+   head radius is ~9-10*DPR) instead of a fraction of screen width, so it
+   reads as "that hit landed" rather than a screen-filling flash. Animates
+   in two snappy beats — a near-instant pop past full size, then a quick
+   shrink-and-fade — so the whole thing is gone in a few frames, not
+   lingering. */
+const IMPACT_POP=.05; /* fast pop-in window: ~3 frames at 60fps */
+function addImpact(x,y,color,heavy){
+  if(reduced)return;
+  const life=heavy?.26:.2;
+  impacts.push({x,y,color,heavy:!!heavy,life,maxLife:life,rot:Math.random()*Math.PI*2});
+}
+function stepImpacts(dt){
+  for(const im of impacts)im.life-=dt;
+  impacts=impacts.filter(im=>im.life>0);
+}
+function drawImpact(im){
+  const age=im.maxLife-im.life;
+  let scale,alpha;
+  if(age<IMPACT_POP){
+    scale=(age/IMPACT_POP)*1.2; /* quick pop, slight overshoot past full size */
+    alpha=1;
+  }else{
+    const p=Math.min(1,(age-IMPACT_POP)/(im.maxLife-IMPACT_POP));
+    scale=1.2-p*.9; /* snappy shrink back down */
+    alpha=Math.max(0,1-p);
+  }
+  const spikes=8,baseR=(im.heavy?9:6)*DPR;
+  const bx=px(im.x),by=py(im.y);
+  ctx.save();ctx.translate(bx,by);ctx.rotate(im.rot);ctx.globalAlpha=alpha;
+  ctx.beginPath();
+  for(let i=0;i<spikes*2;i++){
+    const r=(i%2===0?baseR:baseR*.42)*scale;
+    const a=(i/(spikes*2))*Math.PI*2;
+    const sx_=Math.cos(a)*r,sy_=Math.sin(a)*r;
+    if(i===0)ctx.moveTo(sx_,sy_);else ctx.lineTo(sx_,sy_);
+  }
+  ctx.closePath();
+  ctx.fillStyle=im.color;ctx.fill();
+  ctx.lineWidth=1.6*DPR;ctx.strokeStyle='#0b1210';ctx.stroke();
+  ctx.restore();
+}
 /* KO feed: short screen-space ticker of recent KO events (ring-outs,
    fence cracks, eliminations), drawn under the top edge in draw(). */
 let koFeed=[];
@@ -1120,7 +1554,7 @@ function koFeedPush(text,color){
 function announceMap(){
   if(!MAP)return;
   addFloater(.5,.3,MAP.name,MAP.theme.accent,30);
-  addFloater(.5,.37,MAP.arch,'#9bb7aa',14);
+  addFloater(.5,.37,MAP.time?`${MAP.arch} · ${MAP.time}`:MAP.arch,'#9bb7aa',14);
 }
 function stepParticles(dt){
   for(const p of particles){p.x+=p.vx*(dt*60);p.y+=p.vy*(dt*60);p.vy+=.0006*(dt*60);p.life-=dt}
@@ -1137,15 +1571,18 @@ function stepProjectiles(dt){
     p.x+=p.vx*(dt*60);p.life-=dt;
     if(p.hit)continue;
     for(const t of fighters){
-      if(t.dead||t.slot===p.owner||t.invuln>0)continue;
+      if(t.dead||t.slot===p.owner||t.invuln>0||ninjaBlocksHit(p.owner,t.slot))continue;
       if(Math.abs(t.x-p.x)<.025&&Math.abs(t.y-p.y)<.08){
         p.hit=true;p.life=0;
         if(t.shieldHeld){shake=Math.min(1,shake+.12);addFloater(t.x,t.y-.11,'BLOCK',t.glow,14);sfx('jump');break}
-        t.pct=Math.min(300,t.pct+p.dmg);
-        const kb=p.kb*(1+t.pct/60);
-        t.vx=Math.sign(p.vx||1)*kb;t.vy=-kb*.7;t.stun=.22;t.grounded=false;
-        spawnBurst(t.x,t.y,p.color,12);addFloater(t.x,t.y-.09,`HIT +${p.dmg}%`,p.color,15);sfx('hit');
-        updateHud();
+        const owner=fighters.find(x=>x.slot===p.owner);
+        const mult=(owner?heightMult(owner,t):1)*(ninjaDuel&&p.owner===ninjaDuel.attackerSlot&&t.slot===ninjaDuel.targetSlot?NINJA_DAMAGE_MULT:1);
+        const dmg=Math.round(p.dmg*mult),kb=p.kb*mult;
+        const soak=p.kind==='watergun';
+        resolveHit(owner,t,{dmg,kb,dirX:Math.sign(p.vx||1),vyScale:-.7,stun:.22,color:p.color,
+          particles:12,impact:true,heavy:false,shakeAmt:0,sfxKind:'hit',
+          label:soak?`SOAKED! +${dmg}%`:`HIT +${dmg}%`});
+        if(soak)t.soaked=1.4;
         break;
       }
     }
@@ -1157,7 +1594,7 @@ function stepProjectiles(dt){
 /* ---------- HUD ---------- */
 function buildHud(){
   hudEl.innerHTML=fighters.map(f=>`<div class="fighter-card" style="border-color:${f.color}55"><i style="color:${f.color}">${f.name}${f.human?'':` · BOT ${botDifficulty.toUpperCase()}`}</i><b data-pct="${f.slot}" style="color:${f.color}">0%</b><s data-stocks="${f.slot}" style="color:${f.color}">●●●</s><em data-buffs="${f.slot}" style="font-style:normal;display:block;font-size:11px;min-height:14px"></em></div>`).join('')
-    +(MAP?`<div class="fighter-card" style="min-width:150px;border-color:${MAP.theme.stroke}55"><i style="color:${MAP.theme.accent}">ARENA</i><b style="font-size:13px;color:${MAP.theme.accent}">${MAP.name}</b><s style="color:${MAP.theme.accent};font-size:10px;letter-spacing:1px">${MAP.arch}</s></div>`:'');
+    +(MAP?`<div class="fighter-card" style="min-width:150px;border-color:${MAP.theme.stroke}55"><i style="color:${MAP.theme.accent}">ARENA · ${MAP.time||''}</i><b style="font-size:13px;color:${MAP.theme.accent}">${MAP.name}</b><s style="color:${MAP.theme.accent};font-size:10px;letter-spacing:1px">${MAP.arch}</s></div>`:'');
   updateHud();
 }
 function updateHud(){
@@ -1169,8 +1606,9 @@ function updateHud(){
     if(buffs){
       const active=[];
       if(f.power)active.push('✦');
-      if(f.shurikenArmed)active.push('🗡');
+      if(f.weapon&&WEAPONS[f.weapon.type])active.push(`${WEAPON_ICON[f.weapon.type]}×${f.weapon.swingsLeft}`);
       if(f.speedBuff>0)active.push('📜');
+      if(f.human&&mode!=='racetop')active.push(f.ninjaCd>0?`🥷${Math.ceil(f.ninjaCd)}s`:'🥷READY');
       buffs.textContent=active.join(' ');
     }
   }
@@ -1215,6 +1653,134 @@ function updateCamera(){
 }
 function sx(x){return (x-camera.x)*W*camera.z+W/2}
 function px(x){return x*W}function py(y){return y*H}
+/* ---------- arena backdrops ----------
+   Bespoke procedural scenery per map — no raster assets (CSP has no
+   img-src beyond data:), so every set piece here is canvas paths/
+   gradients plus the same emoji-glyph technique already used for
+   weapons/pickups/portals elsewhere in this file. Each map gets its own
+   sky, silhouette skyline, and a couple of slow-parallax set dressing
+   elements so "the arena" reads as a real place with a time of day, not
+   a bare floor-and-fences wireframe. */
+function skyGradient(map){
+  const stops=map.sky||['#0b2c1d','#04110b','#010504','#010504'];
+  const g=ctx.createLinearGradient(0,0,0,H);
+  stops.forEach((c,i)=>g.addColorStop(i/(stops.length-1),c));
+  return g;
+}
+function drawCloudPuff(cx,cy,scale,color,alpha){
+  ctx.globalAlpha=alpha;ctx.fillStyle=color;
+  for(const[dx,dy,r]of[[0,0,1],[.6,.08,.72],[-.6,.1,.68],[1.15,.22,.42],[-1.15,.24,.4]]){
+    ctx.beginPath();ctx.arc(cx+dx*scale,cy+dy*scale,r*scale,0,Math.PI*2);ctx.fill();
+  }
+  ctx.globalAlpha=1;
+}
+function drawBackdrop(map,t){
+  ctx.fillStyle=skyGradient(map);ctx.fillRect(0,0,W,H);
+  if(map.id==='coop'){
+    /* Golden-dawn farmyard: low sun on the horizon, a barn + windmill
+       silhouette, drifting hay-scented haze, a couple of birds. */
+    const sunY=py(.5);
+    ctx.save();ctx.globalAlpha=.9;ctx.shadowBlur=60*DPR;ctx.shadowColor='#ffdd88';
+    ctx.fillStyle='#fff2c4';ctx.beginPath();ctx.arc(W*.24,sunY,H*.11,0,Math.PI*2);ctx.fill();ctx.restore();
+    ctx.fillStyle='#0d1c12';
+    // rolling hill horizon
+    ctx.beginPath();ctx.moveTo(0,py(.62));
+    ctx.quadraticCurveTo(W*.22,py(.56),W*.42,py(.6));
+    ctx.quadraticCurveTo(W*.64,py(.64),W*.8,py(.57));
+    ctx.quadraticCurveTo(W*.92,py(.53),W,py(.58));
+    ctx.lineTo(W,H);ctx.lineTo(0,H);ctx.closePath();ctx.fill();
+    // barn silhouette
+    const bx=W*.72,by=py(.58),bw=W*.14,bh=H*.16;
+    ctx.beginPath();ctx.moveTo(bx-bw/2,by);ctx.lineTo(bx,by-bh*.55);ctx.lineTo(bx+bw/2,by);ctx.closePath();ctx.fill();
+    ctx.fillRect(bx-bw/2,by,bw,bh);
+    ctx.fillStyle='#3a2416';ctx.fillRect(bx-bw*.12,by+bh*.4,bw*.24,bh*.6);
+    // windmill
+    const wx=W*.87,wy=py(.56);
+    ctx.strokeStyle='#0d1c12';ctx.lineWidth=4*DPR;ctx.beginPath();ctx.moveTo(wx,wy);ctx.lineTo(wx,wy+H*.14);ctx.stroke();
+    ctx.save();ctx.translate(wx,wy);ctx.rotate(t*.0004);
+    for(let i=0;i<4;i++){ctx.rotate(Math.PI/2);ctx.fillRect(-2*DPR,0,4*DPR,H*.07)}
+    ctx.restore();
+    // a couple of drifting hay-dust puffs
+    drawCloudPuff(W*.15+Math.sin(t*.00015)*W*.03,py(.22),W*.04,'#ffe9b3',.18);
+    drawCloudPuff(W*.55+Math.sin(t*.00012+2)*W*.04,py(.16),W*.05,'#ffe9b3',.14);
+  }else if(map.id==='foundry'){
+    /* Midnight factory floor: full moon, smokestack row with rising
+       embers, flickering window lights, faint gear silhouettes. */
+    ctx.save();ctx.globalAlpha=.95;ctx.shadowBlur=40*DPR;ctx.shadowColor='#cdd7ff';
+    ctx.fillStyle='#e8ecff';ctx.beginPath();ctx.arc(W*.82,py(.14),H*.06,0,Math.PI*2);ctx.fill();ctx.restore();
+    ctx.fillStyle='#120a08';
+    ctx.beginPath();ctx.moveTo(0,py(.66));ctx.lineTo(W,py(.66));ctx.lineTo(W,H);ctx.lineTo(0,H);ctx.closePath();ctx.fill();
+    for(let i=0;i<3;i++){
+      const sx=W*(.18+i*.22),sw=W*.055,sTop=py(.3+i%2*.04);
+      ctx.fillStyle='#160d0a';ctx.fillRect(sx-sw/2,sTop,sw,py(.66)-sTop);
+      // embers rising off each stack
+      for(let e=0;e<4;e++){
+        const phase=(t*.0006+e*.27+i*.5)%1;
+        const ex=sx+Math.sin(phase*8+i)*sw*.5,ey=sTop-phase*H*.22;
+        ctx.globalAlpha=(1-phase)*.8;ctx.fillStyle='#fb923c';ctx.beginPath();ctx.arc(ex,ey,2.4*DPR,0,Math.PI*2);ctx.fill();
+      }
+      ctx.globalAlpha=1;
+    }
+    // flickering window grid on a distant factory wall
+    ctx.fillStyle='#fb923c';
+    for(let r=0;r<3;r++)for(let c=0;c<6;c++){
+      if((Math.floor(t*.001+r*3+c*7)%5)===0)continue; /* some windows dark, "flicker" via time */
+      ctx.globalAlpha=.55;ctx.fillRect(W*(.03+c*.05),py(.48+r*.055),W*.018,H*.02);
+    }
+    ctx.globalAlpha=1;
+  }else if(map.id==='roost'){
+    /* High-noon open sky: bright sun, layered mountain silhouettes,
+       slow-drifting cloud puffs, a few distant birds. */
+    ctx.save();ctx.globalAlpha=.95;ctx.shadowBlur=50*DPR;ctx.shadowColor='#fff7d6';
+    ctx.fillStyle='#fffef0';ctx.beginPath();ctx.arc(W*.5,py(.1),H*.075,0,Math.PI*2);ctx.fill();ctx.restore();
+    ctx.fillStyle='#123a52';
+    ctx.beginPath();ctx.moveTo(0,py(.9));ctx.lineTo(W*.2,py(.72));ctx.lineTo(W*.38,py(.86));ctx.lineTo(W*.58,py(.68));ctx.lineTo(W*.78,py(.84));ctx.lineTo(W,py(.74));ctx.lineTo(W,H*2);ctx.lineTo(0,H*2);ctx.closePath();ctx.fill();
+    ctx.fillStyle='#0d2a3d';
+    ctx.beginPath();ctx.moveTo(0,py(.98));ctx.lineTo(W*.3,py(.86));ctx.lineTo(W*.5,py(.96));ctx.lineTo(W*.7,py(.82));ctx.lineTo(W,py(.94));ctx.lineTo(W,H*2);ctx.lineTo(0,H*2);ctx.closePath();ctx.fill();
+    for(let i=0;i<3;i++){
+      const cx=(W*(.15+i*.35)+t*.006*(i%2?1:-1))%(W*1.3)-W*.15;
+      drawCloudPuff(cx,py(.22+i*.06),W*.045,'#ffffff',.55);
+    }
+    ctx.fillStyle='#0d2a3d';ctx.globalAlpha=.6;
+    for(let i=0;i<2;i++){
+      const bx=(W*.3+i*W*.4+t*.01)%(W*1.2)-W*.1,by=py(.15+i*.05)+Math.sin(t*.003+i)*6*DPR;
+      ctx.beginPath();ctx.moveTo(bx-6*DPR,by);ctx.quadraticCurveTo(bx,by-5*DPR,bx+6*DPR,by);ctx.stroke?null:null;
+      ctx.strokeStyle='#0d2a3d';ctx.lineWidth=1.6*DPR;ctx.beginPath();ctx.moveTo(bx-6*DPR,by);ctx.quadraticCurveTo(bx-2*DPR,by-4*DPR,bx,by);ctx.quadraticCurveTo(bx+2*DPR,by-4*DPR,bx+6*DPR,by);ctx.stroke();
+    }
+    ctx.globalAlpha=1;
+  }else if(map.id==='drift'){
+    /* Sunset harbor: warm low sun over the water, bobbing boat
+       silhouettes, a lighthouse with a slow rotating beam, shimmering
+       water band along the bottom. */
+    ctx.save();ctx.globalAlpha=.9;ctx.shadowBlur=55*DPR;ctx.shadowColor='#ffcf9e';
+    ctx.fillStyle='#ffe3bd';ctx.beginPath();ctx.arc(W*.68,py(.42),H*.09,0,Math.PI*2);ctx.fill();ctx.restore();
+    // water band
+    const waterY=py(.7);
+    ctx.fillStyle='#150c22';ctx.fillRect(0,waterY,W,H-waterY);
+    ctx.globalAlpha=.35;ctx.strokeStyle='#ffcf9e';ctx.lineWidth=2*DPR;
+    for(let i=0;i<5;i++){
+      const ry=waterY+H*.03+i*H*.03,off=Math.sin(t*.0015+i)*W*.02;
+      ctx.beginPath();ctx.moveTo(off,ry);ctx.lineTo(W*.3+off,ry);ctx.moveTo(W*.45+off,ry);ctx.lineTo(W*.7+off,ry);ctx.moveTo(W*.82+off,ry);ctx.lineTo(W+off,ry);ctx.stroke();
+    }
+    ctx.globalAlpha=1;
+    // lighthouse on the left
+    const lx=W*.08,lby=waterY;
+    ctx.fillStyle='#1c1030';
+    ctx.beginPath();ctx.moveTo(lx-W*.018,lby);ctx.lineTo(lx-W*.01,lby-H*.22);ctx.lineTo(lx+W*.01,lby-H*.22);ctx.lineTo(lx+W*.018,lby);ctx.closePath();ctx.fill();
+    ctx.fillRect(lx-W*.022,lby-H*.25,W*.044,H*.035);
+    ctx.save();ctx.translate(lx,lby-H*.23);ctx.rotate(t*.0012);
+    ctx.globalAlpha=.35;ctx.fillStyle='#ffe3bd';
+    ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(W*.5,-H*.08);ctx.lineTo(W*.5,H*.08);ctx.closePath();ctx.fill();
+    ctx.restore();
+    // a couple of boat silhouettes bobbing near the horizon
+    for(let i=0;i<2;i++){
+      const bx=W*(.4+i*.28),bob=Math.sin(t*.0018+i*2)*3*DPR,by=waterY-2*DPR+bob;
+      ctx.fillStyle='#1c1030';
+      ctx.beginPath();ctx.moveTo(bx-W*.05,by);ctx.lineTo(bx+W*.05,by);ctx.lineTo(bx+W*.035,by+H*.02);ctx.lineTo(bx-W*.035,by+H*.02);ctx.closePath();ctx.fill();
+      ctx.beginPath();ctx.moveTo(bx,by-H*.05);ctx.lineTo(bx,by);ctx.lineTo(bx+W*.025,by);ctx.closePath();ctx.fill();
+    }
+  }
+}
 function drawStage(t){
   if(mode==='racetop'){
     for(const s of TOWER){
@@ -1243,12 +1809,37 @@ function drawStage(t){
       ctx.beginPath();ctx.moveTo(x,topY);ctx.lineTo(x,botY);ctx.stroke();
       for(let i=0;i<8;i++){const railY=topY+(botY-topY)*i/7;ctx.beginPath();ctx.moveTo(x-6*DPR,railY);ctx.lineTo(x+6*DPR,railY);ctx.stroke()}
     }
+    /* floor surge: dashed telegraph then a hot pulsing patch, migrating
+       along the floor's x-axis */
+    if(MAP&&MAP.surge&&surge.phase!=='idle'){
+      const sxp=px(surge.x),fy2=py(ARENA.floor-.02),fy3=py(ARENA.floor+.04);
+      if(surge.phase==='warn'){
+        ctx.globalAlpha=.3+.4*(Math.floor(surge.t*8)%2);
+        ctx.strokeStyle='#4ade80';ctx.lineWidth=2*DPR;ctx.setLineDash(LASER_DASH);
+        ctx.beginPath();ctx.moveTo(sxp,fy2);ctx.lineTo(sxp,fy3);ctx.stroke();
+        ctx.setLineDash(EMPTY_DASH);ctx.globalAlpha=1;
+      }else{
+        ctx.globalAlpha=.85;ctx.fillStyle='#4ade80';ctx.shadowBlur=22*DPR;ctx.shadowColor='#4ade80';
+        ctx.fillRect(sxp-px(.09),fy2,px(.18),fy3-fy2);
+        ctx.shadowBlur=0;ctx.globalAlpha=1;
+      }
+    }
   }else{
     /* Open fall-off archetype: platforms over a void — a faint glow marks
        the bottom blast zone instead of any floor. */
     ctx.fillStyle=th.stroke+'14';ctx.fillRect(0,py(1.0),W,H);
     ctx.strokeStyle=th.stroke+'33';ctx.lineWidth=1*DPR;
     ctx.beginPath();ctx.moveTo(0,py(1.0));ctx.lineTo(W,py(1.0));ctx.stroke();
+    /* the slowly shrinking ring-out boundary — brighter/more urgent the
+       further it's crept in from the original edges */
+    const shrinkAmt=BLAST.l-(-.07);
+    if(shrinkAmt>.002){
+      ctx.globalAlpha=Math.min(.9,.35+shrinkAmt*3);
+      ctx.strokeStyle='#f87171';ctx.lineWidth=2*DPR;ctx.setLineDash(LASER_DASH);
+      ctx.beginPath();ctx.moveTo(px(BLAST.l),0);ctx.lineTo(px(BLAST.l),H);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(px(BLAST.r),0);ctx.lineTo(px(BLAST.r),H);ctx.stroke();
+      ctx.setLineDash(EMPTY_DASH);ctx.globalAlpha=1;
+    }
   }
   for(const s of PLATS){
     ctx.fillStyle=th.plat;ctx.strokeStyle=s.move?th.accent+'88':th.stroke+'33';ctx.lineWidth=2*DPR;
@@ -1385,6 +1976,102 @@ function drawFighter(f,t){
   if(f.charge>0){ctx.globalAlpha=.7;ctx.strokeStyle='#fff';ctx.lineWidth=2*DPR;ctx.beginPath();ctx.arc(bx,by-7*DPR,(16+f.charge*10)*DPR,0,Math.PI*2*f.charge);ctx.stroke()}
   if(f.power){ctx.globalAlpha=.8;ctx.fillStyle='#ffffff';ctx.beginPath();ctx.arc(bx,by-27*DPR,3*DPR,0,Math.PI*2);ctx.fill()}
   ctx.globalAlpha=1;
+  drawWeapon(f,bx,by,face);
+}
+/* ---------- cartoony oversized weapons ----------
+   Deliberately big, thick-outlined, saturated-color silhouettes — the
+   goal is "you're clearly hitting someone with a big goofy weapon," not
+   a subtle animation. Drawn anchored near the fighter's hand, at rest
+   when idle-equipped and swept into an exaggerated arc while f.anim is
+   active (i.e. mid-swing), scaling every shape off the fighter's own
+   ~10*DPR body radius so it always reads oversized relative to the
+   sprite, at any screen size. */
+function drawWeapon(f,bx,by,face){
+  if(!f.weapon)return;
+  const wdef=WEAPONS[f.weapon.type];
+  if(!wdef)return;
+  const swing=f.anim>0?Math.min(1,f.anim*5):0;
+  const handX=bx+face*9*DPR,handY=by-6*DPR;
+  ctx.save();
+  ctx.translate(handX,handY);
+  ctx.scale(face,1); /* mirror geometry so "forward" (+x, drawn once below) always points toward face */
+  const restAngle=.5;
+  const swingAngle=-.85+swing*1.55;
+  ctx.rotate(swing>0?swingAngle:restAngle);
+  ctx.lineWidth=2.6*DPR;ctx.strokeStyle='#0b1210';
+  const big=1+swing*.35;
+  if(f.weapon.type==='nunchucks')drawNunchucks(big);
+  else if(f.weapon.type==='bostaff')drawBoStaff(big);
+  else if(f.weapon.type==='sai')drawSai(big);
+  else if(f.weapon.type==='katana')drawKatana(big);
+  else if(f.weapon.type==='watergun')drawWaterGunHeld(big);
+  else if(f.weapon.type==='ninjastars')drawNinjaStarsHeld(big);
+  ctx.restore();
+}
+function drawBoStaff(big){
+  const len=34*big*DPR,th=5*big*DPR;
+  ctx.fillStyle='#c98a4b';
+  ctx.beginPath();ctx.roundRect(-len*.3,-th/2,len,th,th/2);ctx.fill();ctx.stroke();
+  ctx.fillStyle='#8a5a2b';
+  ctx.beginPath();ctx.arc(-len*.3,0,th*.6,0,Math.PI*2);ctx.fill();ctx.stroke();
+  ctx.beginPath();ctx.arc(len*.7,0,th*.6,0,Math.PI*2);ctx.fill();ctx.stroke();
+}
+function drawKatana(big){
+  const len=38*big*DPR;
+  ctx.fillStyle='#2b2320';
+  ctx.beginPath();ctx.roundRect(-14*big*DPR,-2.6*big*DPR,14*big*DPR,5.2*big*DPR,2*DPR);ctx.fill();ctx.stroke();
+  ctx.fillStyle='#d4af37';
+  ctx.beginPath();ctx.ellipse(0,0,3*big*DPR,6.5*big*DPR,0,0,Math.PI*2);ctx.fill();ctx.stroke();
+  ctx.fillStyle='#e5e7eb';
+  ctx.beginPath();
+  ctx.moveTo(2*big*DPR,-2*big*DPR);
+  ctx.quadraticCurveTo(len*.55,-6*big*DPR,len,0);
+  ctx.quadraticCurveTo(len*.55,2*big*DPR,2*big*DPR,2*big*DPR);
+  ctx.closePath();ctx.fill();ctx.stroke();
+}
+function drawNunchucks(big){
+  const barLen=15*big*DPR,barTh=6*big*DPR;
+  ctx.fillStyle='#7c4a26';
+  ctx.beginPath();ctx.roundRect(-barLen/2,-barTh/2,barLen,barTh,barTh/2);ctx.fill();ctx.stroke();
+  ctx.save();ctx.translate(barLen*.85,0);ctx.rotate(1.1);
+  ctx.fillStyle='#a8672f';
+  ctx.beginPath();ctx.roundRect(-barLen/2,-barTh/2,barLen,barTh,barTh/2);ctx.fill();ctx.stroke();
+  ctx.restore();
+  ctx.strokeStyle='#4b4b4b';ctx.lineWidth=2*DPR;
+  ctx.beginPath();ctx.moveTo(barLen*.4,0);ctx.lineTo(barLen*.7,0);ctx.stroke();
+}
+function drawSai(big){
+  const len=30*big*DPR;
+  ctx.fillStyle='#cbd5e1';
+  ctx.beginPath();ctx.moveTo(-2*DPR,-2.4*big*DPR);ctx.lineTo(len,0);ctx.lineTo(-2*DPR,2.4*big*DPR);ctx.closePath();ctx.fill();ctx.stroke();
+  ctx.fillStyle='#94a3b8';
+  for(const dy of[-1,1]){
+    ctx.beginPath();
+    ctx.moveTo(0,0);
+    ctx.quadraticCurveTo(6*big*DPR,dy*8*big*DPR,2*big*DPR,dy*11*big*DPR);
+    ctx.lineTo(-1*DPR,dy*9*big*DPR);
+    ctx.closePath();ctx.fill();ctx.stroke();
+  }
+  ctx.fillStyle='#3f3f46';
+  ctx.beginPath();ctx.roundRect(-12*big*DPR,-2*big*DPR,10*big*DPR,4*big*DPR,2*DPR);ctx.fill();ctx.stroke();
+}
+function drawWaterGunHeld(big){
+  ctx.fillStyle='#fb923c';
+  ctx.beginPath();ctx.roundRect(-4*big*DPR,-6*big*DPR,26*big*DPR,10*big*DPR,4*DPR);ctx.fill();ctx.stroke();
+  ctx.fillStyle='#38bdf8';
+  ctx.beginPath();ctx.roundRect(2*big*DPR,-11*big*DPR,10*big*DPR,7*big*DPR,3*DPR);ctx.fill();ctx.stroke();
+  ctx.fillStyle='#0ea5e9';
+  ctx.beginPath();ctx.roundRect(20*big*DPR,-2.5*big*DPR,10*big*DPR,4*big*DPR,2*DPR);ctx.fill();ctx.stroke();
+  ctx.fillStyle='#c2410c';
+  ctx.beginPath();ctx.roundRect(-4*big*DPR,2*big*DPR,6*big*DPR,9*big*DPR,3*DPR);ctx.fill();ctx.stroke();
+}
+function drawNinjaStarsHeld(big){
+  ctx.save();ctx.translate(6*big*DPR,0);ctx.rotate(performance.now()*.01);
+  ctx.fillStyle='#e8fff2';
+  ctx.beginPath();
+  for(let i=0;i<4;i++){const a=i*Math.PI/2;ctx.lineTo(Math.cos(a)*9*big*DPR,Math.sin(a)*9*big*DPR);ctx.lineTo(Math.cos(a+Math.PI/4)*3.5*big*DPR,Math.sin(a+Math.PI/4)*3.5*big*DPR)}
+  ctx.closePath();ctx.fill();ctx.stroke();
+  ctx.restore();
 }
 function drawPickup(p,t){
   if(p.taken)return;
@@ -1393,18 +2080,33 @@ function drawPickup(p,t){
   if(p.kind==='heart'){ctx.shadowColor='#f87171';ctx.fillStyle='#f87171';ctx.font=`${16*DPR}px ui-monospace`;ctx.fillText('♥',bx-8*DPR,by)}
   if(p.kind==='spark'){ctx.shadowColor='#fff';ctx.fillStyle='#fff';ctx.font=`${16*DPR}px ui-monospace`;ctx.fillText('✦',bx-8*DPR,by)}
   if(p.kind==='bomb'){ctx.shadowColor='#fb923c';ctx.fillStyle=p.fuse!==null&&p.fuse>0?(Math.floor(p.fuse*10)%2?'#fb923c':'#fff'):'#fb923c';ctx.font=`${16*DPR}px ui-monospace`;ctx.fillText('◉',bx-8*DPR,by)}
+  if(WEAPONS[p.kind]){const wdef=WEAPONS[p.kind];ctx.shadowColor=wdef.color;ctx.fillStyle=wdef.color;ctx.font=`${18*DPR}px ui-monospace`;ctx.fillText(WEAPON_ICON[p.kind],bx-9*DPR,by)}
   ctx.shadowBlur=0;
 }
 function drawProjectile(p){
-  ctx.save();ctx.translate(px(p.x),py(p.y));ctx.rotate(performance.now()*.02);
-  ctx.fillStyle=p.color;ctx.shadowBlur=10*DPR;ctx.shadowColor=p.color;
-  ctx.beginPath();
-  for(let i=0;i<4;i++){const a=i*Math.PI/2;ctx.lineTo(Math.cos(a)*5*DPR,Math.sin(a)*5*DPR);ctx.lineTo(Math.cos(a+Math.PI/4)*2*DPR,Math.sin(a+Math.PI/4)*2*DPR)}
-  ctx.closePath();ctx.fill();ctx.shadowBlur=0;
+  ctx.save();ctx.translate(px(p.x),py(p.y));
+  if(p.kind==='watergun'){
+    ctx.rotate(Math.sin(performance.now()*.02)*.3);
+    ctx.fillStyle=p.color;ctx.shadowBlur=8*DPR;ctx.shadowColor=p.color;
+    ctx.beginPath();ctx.ellipse(0,0,6*DPR,3.4*DPR,0,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#bae6fd';ctx.beginPath();ctx.ellipse(-2*DPR,-1*DPR,2*DPR,1.2*DPR,0,0,Math.PI*2);ctx.fill();
+  }else{
+    ctx.rotate(performance.now()*.02);
+    ctx.fillStyle=p.color;ctx.shadowBlur=10*DPR;ctx.shadowColor=p.color;
+    ctx.beginPath();
+    for(let i=0;i<4;i++){const a=i*Math.PI/2;ctx.lineTo(Math.cos(a)*5*DPR,Math.sin(a)*5*DPR);ctx.lineTo(Math.cos(a+Math.PI/4)*2*DPR,Math.sin(a+Math.PI/4)*2*DPR)}
+    ctx.closePath();ctx.fill();
+  }
+  ctx.shadowBlur=0;
   ctx.restore();
 }
 function draw(t){
   ctx.clearRect(0,0,W,H);
+  /* Backdrop is screen-space, drawn BEFORE the camera transform below — a
+     sky/skyline has to stay a fixed backdrop as the camera pans/zooms
+     toward the fight, not scroll and scale along with the foreground
+     (which would tear a gap at the canvas edges on any zoom-out). */
+  if(mode!=='racetop')drawBackdrop(MAP||MAPS[0],t);
   ctx.save();
   updateCamera();
   if(shake>0&&!reduced)ctx.translate((Math.random()-.5)*shake*14*DPR,(Math.random()-.5)*shake*14*DPR);
@@ -1416,11 +2118,37 @@ function draw(t){
   for(const p of pickups)(mode==='racetop'?drawRacePickup:drawPickup)(p,t);
   for(const p of projectiles)drawProjectile(p);
   for(const r of rings){ctx.globalAlpha=Math.max(0,r.life/.45);ctx.strokeStyle=r.color;ctx.lineWidth=3*DPR;ctx.beginPath();ctx.arc(px(r.x),py(r.y),px(r.r),0,Math.PI*2);ctx.stroke()}
+  if(ninjaDuel){
+    const atk=fighters.find(x=>x.slot===ninjaDuel.attackerSlot),tgt=fighters.find(x=>x.slot===ninjaDuel.targetSlot);
+    if(atk&&tgt){
+      /* A pulsing "focus line" tethering the duel pair — the clearest
+         possible read that these two are locked into their own private
+         moment while everything else on the arena is frozen out. */
+      const pulse=.6+Math.sin(t*.02)*.4;
+      ctx.save();ctx.globalAlpha=pulse*.8;ctx.strokeStyle='#f43f5e';ctx.lineWidth=2*DPR;ctx.setLineDash([6*DPR,6*DPR]);
+      ctx.beginPath();ctx.moveTo(px(atk.x),py(atk.y));ctx.lineTo(px(tgt.x),py(tgt.y));ctx.stroke();
+      ctx.setLineDash([]);ctx.restore();
+    }
+  }
   for(const f of fighters)drawFighter(f,t);
+  for(const im of impacts)drawImpact(im);
   for(const p of particles){ctx.globalAlpha=Math.max(0,p.life);ctx.fillStyle=p.color;ctx.fillRect(px(p.x),py(p.y),p.size*DPR,p.size*DPR)}
   ctx.textAlign='center';ctx.textBaseline='middle';
   for(const fl of floaters){ctx.globalAlpha=Math.max(0,Math.min(1,fl.life));ctx.shadowBlur=18*DPR;ctx.shadowColor=fl.color;ctx.fillStyle=fl.color;ctx.font=`900 ${fl.size*DPR}px ui-monospace`;ctx.fillText(fl.text,px(fl.x),py(fl.y));ctx.shadowBlur=0}
   ctx.globalAlpha=1;ctx.restore();
+  /* Ninja Mode screen dressing: a dark vignette (sells "everything else is
+     frozen and far away") plus a persistent banner+countdown, both
+     screen-space so shake/zoom on the duel pair never distorts them. */
+  if(ninjaDuel){
+    const vg=ctx.createRadialGradient(W/2,H/2,H*.28,W/2,H/2,H*.72);
+    vg.addColorStop(0,'rgba(0,0,0,0)');vg.addColorStop(1,'rgba(5,2,4,.55)');
+    ctx.fillStyle=vg;ctx.fillRect(0,0,W,H);
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.shadowBlur=20*DPR;ctx.shadowColor='#f43f5e';ctx.fillStyle='#f43f5e';
+    ctx.font=`900 ${18*DPR}px ui-monospace`;
+    ctx.fillText(`NINJA MODE — ${ninjaDuel.timeLeft.toFixed(1)}s`,W/2,26*DPR);
+    ctx.shadowBlur=0;
+  }
   /* KO feed ticker: screen-space, unaffected by camera/shake */
   if(koFeed.length){
     ctx.textAlign='center';ctx.textBaseline='middle';
@@ -1448,23 +2176,48 @@ function loop(t){
     for(const f of fighters){raceStep(f,dt);if(over)break} // stop processing the instant a fighter's finish ends the match, so a same-tick simultaneous finisher isn't left stuck mid-loop and wrongly rendered as "still climbing"
     updateRaceHud();
     stepParticles(dt);
+    stepImpacts(dt);
     draw(t);
     raf=requestAnimationFrame(loop);
     return;
   }
+  const rawDt=dt; /* the duel clock always runs in real, unscaled time — "3 seconds" must mean 3 real seconds regardless of any slow-mo look */
   if(slowmo>0){slowmo=Math.max(0,slowmo-dt);dt*=.35}
-  shake=Math.max(0,shake-dt*3);
-  matchTime+=dt;
-  pickupTimer-=dt;
+  if(ninjaDuel){
+    ninjaDuel.timeLeft-=rawDt;
+    if(ninjaDuel.timeLeft<=0){
+      const atk=fighters.find(x=>x.slot===ninjaDuel.attackerSlot);
+      if(atk)addFloater(atk.x,atk.y-.14,'NINJA MODE END','#9bb7aa',14);
+      endNinjaDuel();
+    }
+  }
+  /* Everything that isn't one of the two duelists — hazards, movers,
+     pickup timers, particle/impact playback — runs at the bystander slow
+     rate while a duel is live, so the whole arena genuinely reads as
+     frozen around the two fighters actually still moving at speed. */
+  const worldDt=ninjaDuel?dt*NINJA_BYSTANDER_SLOWDOWN:dt;
+  shake=Math.max(0,shake-worldDt*3);
+  matchTime+=worldDt;
+  pickupTimer-=worldDt;
   if(pickupTimer<=0){pickupTimer=7+Math.random()*5;if(pickups.length<3)spawnPickup()}
-  for(const p of pickups)p.age+=dt;
-  tickBombs(dt);
+  for(const p of pickups)p.age+=worldDt;
+  tickBombs(worldDt);
   stepMovers();
-  stepLaser(dt);
-  for(const f of fighters)step(f,dt);
+  stepLaser(worldDt);
+  stepSurge(worldDt);
+  updateBlastZone();
+  for(const f of fighters){
+    let fdt=dt;
+    if(ninjaDuel){
+      if(f.slot===ninjaDuel.targetSlot)fdt=dt*NINJA_TARGET_SLOWDOWN;
+      else if(f.slot!==ninjaDuel.attackerSlot)fdt=worldDt;
+    }
+    step(f,fdt);
+  }
   updateHud();
-  stepParticles(dt);
-  stepProjectiles(dt);
+  stepParticles(worldDt);
+  stepImpacts(worldDt);
+  stepProjectiles(worldDt);
   draw(t);
   raf=requestAnimationFrame(loop);
 }
@@ -1497,7 +2250,8 @@ document.querySelector('[data-menu]').onclick=()=>resetToMenu();
 function resetToMenu(){
   cancelAnimationFrame(raf);
   running=false;paused=false;over=false;mode='';
-  fighters=[];pickups=[];particles=[];floaters=[];rings=[];projectiles=[];matchKos=[0,0,0,0];stats={wins:0,matches:0,bestKos:0};pickupTimer=6;shake=0;slowmo=0;keys.clear();
+  fighters=[];pickups=[];particles=[];floaters=[];rings=[];impacts=[];projectiles=[];matchKos=[0,0,0,0];matchStats=[];stats={wins:0,matches:0,bestKos:0};pickupTimer=6;shake=0;slowmo=0;ninjaDuel=null;keys.clear();
+  if(resultsEl)resultsEl.innerHTML='';
   // Net room state must reset here too, not just match state — otherwise
   // a client that hosted one net match carries isHost=true into whatever
   // room it enters next (it would wrongly believe it's still the host and
@@ -1584,9 +2338,10 @@ function joinNetMatch(seed){
   const count=mode==='net2v2'||mode==='netffa'?4:2;
   fighters=[];
   for(let i=0;i<count;i++)fighters.push(makeFighter(i,i<humanCount));
+  resetMatchStats(count);
   buildArena(MAPS[seed%MAPS.length],seed); /* same seed→map derivation as hostStartNetMatch — both clients agree */
   placeFighters();
-  pickups=[];particles=[];floaters=[];rings=[];projectiles=[];matchKos=[0,0,0,0];pickupTimer=6;over=false;running=true;paused=false;koFeed.length=0;
+  pickups=[];particles=[];floaters=[];rings=[];impacts=[];projectiles=[];matchKos=[0,0,0,0];pickupTimer=6;over=false;running=true;paused=false;koFeed.length=0;ninjaDuel=null;
   announceMap();
   setupEl.hidden=true;endEl.hidden=true;hudEl.hidden=false;
   buildHud();last=performance.now();if(raf)cancelAnimationFrame(raf);raf=requestAnimationFrame(loop);
@@ -1603,7 +2358,7 @@ function applyRemoteAction(d){
   const current=remoteInputs[action.slot]||{};
   // Two message shapes share this seam: periodic held-state ({held:{dir,
   // shield}}) merges in without disturbing a still-pending discrete event,
-  // and a discrete event ({event:'jump'/'light'/'heavy'/'dodge'}) sets
+  // and a discrete event ({event:'jump'/'light'/'heavy'/'dodge'/'ninja'}) sets
   // the event without disturbing the last-known held state.
   if(action.held)remoteInputs[action.slot]={...current,...action.held};
   else if(action.event)remoteInputs[action.slot]={...current,event:action.event};
@@ -1614,9 +2369,10 @@ function hostStartNetMatch(){
   const count=mode==='net2v2'||mode==='netffa'?4:2;
   fighters=[];
   for(let i=0;i<count;i++)fighters.push(makeFighter(i,i<humanCount));
+  resetMatchStats(count);
   buildArena(MAPS[seed%MAPS.length],seed); /* map derived from the shared seed so every client builds the same arena */
   placeFighters();
-  pickups=[];particles=[];floaters=[];rings=[];projectiles=[];matchKos=[0,0,0,0];pickupTimer=6;over=false;running=true;paused=false;koFeed.length=0;
+  pickups=[];particles=[];floaters=[];rings=[];impacts=[];projectiles=[];matchKos=[0,0,0,0];pickupTimer=6;over=false;running=true;paused=false;koFeed.length=0;ninjaDuel=null;
   announceMap();
   setupEl.hidden=true;endEl.hidden=true;hudEl.hidden=false;
   buildHud();last=performance.now();if(raf)cancelAnimationFrame(raf);raf=requestAnimationFrame(loop);
