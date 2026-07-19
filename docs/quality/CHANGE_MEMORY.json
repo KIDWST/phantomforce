@@ -1094,6 +1094,11 @@
           "description": "The real-model gate covers both ambiguity and first-idea/second-tone repair."
         },
         {
+          "file": "server/src/phantom-ai/instant-chat-tools.ts",
+          "pattern": "function crossAnswerStyleRepairReply[\\s\\S]*now with a little more spark[\\s\\S]*crossAnswerStyleRepairReply[(]userRequest, turns[)]",
+          "description": "Exact cross-answer playful repair cannot drift into another language, substitute content, or append model commentary."
+        },
+        {
           "file": "scripts/test-database-auth-org-browser.mjs",
           "pattern": "ambiguous browser pronoun must produce one useful clarification naming both candidates",
           "description": "Authenticated Chrome proves the clarification appears through the real dashboard chat path."

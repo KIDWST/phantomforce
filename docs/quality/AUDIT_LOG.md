@@ -1988,6 +1988,9 @@ restore earlier values in Cycle 27.
 - The first structured resolver draft could mistake the output label `ROOM only`
   for a room value and could let a poster-title rollback trigger an older meeting
   rollback acknowledgment.
+- The first canonical post-deploy gate caught a stochastic older-path failure:
+  cross-answer style repair switched from English into Chinese and appended
+  process commentary despite the one-sentence request.
 - Existing browser coverage stopped at 50 turns and did not prove causal chains,
   immediate rollback acknowledgments, or cross-domain correction isolation.
 
@@ -2004,14 +2007,18 @@ restore earlier values in Cycle 27.
 - Scoped meeting and design rollbacks to their own field vocabularies, excluded
   summary-format labels from state mutation, and made immediate acknowledgments
   state the values actually restored and preserved.
+- Made exact first-idea/playful-tone repair deterministic and reinforced both
+  context and local-model contracts to stay in the user's language and script
+  unless another language or translation is explicitly requested.
 - Expanded deterministic, 130-request live-model, and authenticated 63-turn
   Chrome coverage and added permanent change-memory guards.
 
 ## Source Verification
 
 - PASS: `npm run test:instant-chat:http-live-model --workspace
-  @phantomforce/server` completed 130 authenticated requests at 550 ms average
-  and 2,250 ms maximum with zero fallback and zero business leakage.
+  @phantomforce/server` completed 130 authenticated requests at 575 ms average
+  and 2,382 ms maximum with zero fallback and zero business leakage after the
+  same-language repair.
 - PASS: `npm run test:database-auth` passed all 57 API/auth checks and the real
   Chrome journey across two organizations and 63 conversational turns.
 - PASS: Chrome proved ordinal causes, `that reason`, `therefore`, full rollback,

@@ -524,6 +524,8 @@ const blendedCorrection: Turn[] = [
 ];
 const repairedBlend = await ask(adminToken, "No, you misunderstood me. Keep the first idea but use the playful tone from the second answer. One sentence.", blendedCorrection, "reasoning", false, "feedback");
 rows.push(repairedBlend);
+assert.equal(repairedBlend.modelId, "phantom-reference-resolver");
+assert.doesNotMatch(repairedBlend.answer, /[\u3400-\u9fff\u3040-\u30ff\uac00-\ud7af]/, "an English correction must not switch scripts without being asked");
 assert.match(repairedBlend.answer, /quiet|silent|subtle|sneak|calm|soft/i, "the repaired answer must preserve the quiet/subtle concept");
 assert.match(repairedBlend.answer, /power|strength|strong|might/i, "the repaired answer must preserve the power concept");
 assert.match(repairedBlend.answer, /visible|shiny|seen|spotlight|notice|show/i, "the repaired answer must preserve the visibility concept");

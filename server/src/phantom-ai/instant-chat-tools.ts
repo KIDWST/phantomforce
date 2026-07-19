@@ -382,6 +382,19 @@ function structuredRevisionReply(userRequest: string, turns: InstantChatToolTurn
   return meetingRevisionReply(userRequest, turns) || posterRevisionReply(userRequest, turns);
 }
 
+function crossAnswerStyleRepairReply(userRequest: string, turns: InstantChatToolTurn[]): InstantChatToolReply | null {
+  if (!/\b(?:misunderstood|wrong idea)\b/i.test(userRequest) || !/\bplayful\s+(?:tone|style|voice)\b/i.test(userRequest)) return null;
+  const contentOrdinal = userRequest.match(/\b(?:keep|preserve|use)\s+(?:the\s+)?(first|second|third|fourth)\s+(?:idea|option|tagline|concept|version)\b/i)?.[1]?.toLowerCase();
+  const styleOrdinal = userRequest.match(/\b(?:tone|style|voice)\s+from\s+(?:the\s+)?(first|second|third|fourth)\s+answer\b/i)?.[1]?.toLowerCase();
+  if (!contentOrdinal || !styleOrdinal || ORDINALS[styleOrdinal] >= turns.length) return null;
+  const ideas = turns
+    .flatMap((turn) => [...turn.assistant.matchAll(/(?:^|\n)\s*\d+[.)]\s*([^\n]+)/g)].map((match) => cleanListItem(match[1])))
+    .filter(Boolean);
+  const content = ideas[ORDINALS[contentOrdinal]];
+  if (!content || content.length > 160) return null;
+  return { output_text: `${content.replace(/[.!?]+$/, "")} - now with a little more spark.`, tool_id: "phantom-reference-resolver" };
+}
+
 function identityReply(userRequest: string, modelId: string): InstantChatToolReply | null {
   const text = userRequest.trim();
   if (/^(?:who|what) are you\b/i.test(text)) {
@@ -487,6 +500,7 @@ export function buildInstantChatToolReply(userRequest: string, turns: InstantCha
     || personalityReply(userRequest)
     || stableFactReply(userRequest)
     || ambiguityClarificationReply(userRequest, turns)
+    || crossAnswerStyleRepairReply(userRequest, turns)
     || structuredRevisionReply(userRequest, turns)
     || contextFactReply(userRequest, turns)
     || arithmeticReply(userRequest, turns)

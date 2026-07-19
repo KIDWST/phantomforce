@@ -149,6 +149,13 @@ assert.deepEqual(
   { output_text: "navy | white | orange", tool_id: "phantom-reference-resolver" },
 );
 assert.deepEqual(
+  buildInstantChatToolReply("No, you misunderstood me. Keep the first idea but use the playful tone from the second answer. One sentence.", [
+    { user: "Give me two taglines.", assistant: "1. Quiet power, visible results.\n2. Built for the work nobody sees." },
+    { user: "Make the second one playful.", assistant: "Built for the work nobody sees - now with fewer boring buttons." },
+  ]),
+  { output_text: "Quiet power, visible results - now with a little more spark.", tool_id: "phantom-reference-resolver" },
+);
+assert.deepEqual(
   buildInstantChatToolReply("What did she choose?", [
     { user: "Help me plan a party.", assistant: "Choose a theme first." },
     { user: "This feels robotic.", assistant: "Use warmer wording." },
