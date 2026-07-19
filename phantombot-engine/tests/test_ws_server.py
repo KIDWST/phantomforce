@@ -78,6 +78,29 @@ async def test_server_streams_events_before_final(tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_server_sends_error_instead_of_hanging_when_run_turn_raises(tmp_path, monkeypatch):
+    # Regression test: if agent.run_turn raises (e.g. route_chat exhausted
+    # both cloud and local), the worker() coroutine must not let the
+    # exception propagate past queue.put(("__done__", ...)) — otherwise the
+    # consumer's `while True: await queue.get()` loop blocks forever and the
+    # socket hangs with no response. A real deadlock must fail this test via
+    # timeout rather than hanging the whole suite.
+    monkeypatch.setattr(ws_server, "OUTPUT_DIR", str(tmp_path))
+
+    class FakeLoop:
+        def run_turn(self, messages, prompt):
+            raise RuntimeError("both cloud and local exhausted")
+
+    server = ws_server.PhantomBotServer(lambda on_event: FakeLoop(), host="127.0.0.1", port=8795)
+    async with server._serve():
+        async with websockets.connect("ws://127.0.0.1:8795") as ws:
+            await ws.send(json.dumps({"token": server.token, "prompt": "hi"}))
+            reply = json.loads(await asyncio.wait_for(ws.recv(), timeout=5))
+            assert reply["type"] == "error"
+            assert "both cloud and local exhausted" in reply["message"]
+
+
+@pytest.mark.asyncio
 async def test_server_does_not_double_send_final(tmp_path, monkeypatch):
     monkeypatch.setattr(ws_server, "OUTPUT_DIR", str(tmp_path))
 

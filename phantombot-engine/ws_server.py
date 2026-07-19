@@ -52,21 +52,34 @@ class PhantomBotServer:
         agent = self.agent_loop_factory(bridge)
 
         async def worker():
-            result = await loop.run_in_executor(None, agent.run_turn, messages, prompt)
+            try:
+                result = await loop.run_in_executor(None, agent.run_turn, messages, prompt)
+            except Exception as exc:
+                # Both cloud and local exhausted (or some other run_turn
+                # failure): surface it as a queue message instead of letting
+                # it propagate out of worker() unseen, which would leave the
+                # consumer loop below awaiting queue.get() forever and hang
+                # the socket with no response.
+                await queue.put(("__error__", str(exc)))
+                return
             await queue.put(("__done__", result))
 
         task = asyncio.ensure_future(worker())
         final_messages = messages
+        error_message = None
         while True:
             kind, payload = await queue.get()
             if kind == "__done__":
                 final_messages = payload
                 break
+            if kind == "__error__":
+                error_message = payload
+                break
             if kind == "final":
                 continue  # _handle_client sends the authoritative final message itself
             await websocket.send(json.dumps({"type": kind, "payload": payload}))
         await task
-        return final_messages
+        return final_messages, error_message
 
     async def _handle_client(self, websocket):
         session_id = id(websocket)
@@ -81,7 +94,10 @@ class PhantomBotServer:
                 if not prompt:
                     continue
                 messages = self._sessions[session_id]
-                updated = await self._run_turn_streaming(websocket, messages, prompt)
+                updated, error_message = await self._run_turn_streaming(websocket, messages, prompt)
+                if error_message is not None:
+                    await websocket.send(json.dumps({"type": "error", "message": error_message}))
+                    continue
                 self._sessions[session_id] = updated
                 final_text = updated[-1]["content"] if updated and updated[-1]["role"] == "assistant" else ""
                 await websocket.send(json.dumps({"type": "final", "message": final_text}))
