@@ -1,13 +1,13 @@
 /* PhantomForce admin settings.
    Local UI preferences only: no provider calls, sends, uploads, or billing. */
 
-import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260719-52";
-import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260719-52";
-import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260719-52";
-import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260719-52";
-import { canManageActiveOrg, fetchCustomerPlanPreview, fetchEntitlementsSummary, switchCustomerPlan } from "./orgs.js?v=phantom-live-20260719-52";
-import { currentTenantId, ctx, isLiveAdminHost, isLocalDevHost, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260719-52";
-import { DEFAULT_COMPANION_PREFS, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260719-52";
+import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260719-53";
+import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260719-53";
+import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260719-53";
+import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260719-53";
+import { canManageActiveOrg, fetchCustomerPlanPreview, fetchEntitlementsSummary, switchCustomerPlan } from "./orgs.js?v=phantom-live-20260719-53";
+import { currentTenantId, ctx, isLiveAdminHost, isLocalDevHost, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260719-53";
+import { DEFAULT_COMPANION_PREFS, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260719-53";
 
 const AI_SETTINGS_KEY = "pf.operator.settings.v1";
 const SETTINGS_TAB_KEY = "pf.settings.tab.v1";
@@ -567,7 +567,7 @@ function renderGhostModeSection() {
         <div>
           <h3>Ghost Mode</h3>
           <p class="set-note">${on
-            ? "On: Phantom AI chat only calls the local model on this PC. Cloud providers (Claude, OpenRouter, Codex) are never used, even as fallback."
+            ? "On: Phantom AI chat only calls the local model on this PC. Cloud providers (Claude, OpenRouter, and others) are never used, even as fallback."
             : "Off: Phantom AI chat may use cloud providers for better answer quality. Turn this on for a hard, verifiable local-only guarantee, at the cost of that quality."}</p>
         </div>
         <label class="set-switch set-switch-large">

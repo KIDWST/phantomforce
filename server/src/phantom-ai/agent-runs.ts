@@ -164,11 +164,29 @@ async function writeArtifact(run: AgentRun, name: string, content: string, summa
 }
 
 /* Rehydrate persisted runs at boot so approval queues survive restarts.
-   Runs that were mid-flight when the process died are honestly failed. */
-let rehydrated = false;
-export async function rehydrateAgentRuns() {
-  if (rehydrated) return;
-  rehydrated = true;
+   Runs that were mid-flight when the process died are honestly failed.
+
+   Guarded by a cached PROMISE, not a boolean: this module kicks off one
+   fire-and-forget call to this function at load time (see the bottom of
+   this file), and index.ts's own startup separately `await`s it to make
+   sure rehydration has actually finished before the server takes traffic.
+   A boolean guard alone is not safe for that: the first call would flip
+   the flag to true synchronously and then start its (still-pending) file
+   read, so a second, concurrent caller would see the flag already set and
+   return immediately -- appearing "done" while the real read was still in
+   flight, and getAgentRun()/listAgentRuns() would answer from a Map that
+   had not been rehydrated yet. Caching the promise itself means every
+   caller, no matter how many times or how soon they call this, awaits the
+   exact same underlying completion. */
+let rehydratePromise: Promise<void> | null = null;
+export function rehydrateAgentRuns(): Promise<void> {
+  if (!rehydratePromise) {
+    rehydratePromise = rehydrateAgentRunsOnce();
+  }
+  return rehydratePromise;
+}
+
+async function rehydrateAgentRunsOnce() {
   try {
     const raw = await readFile(RUNS_LOG_PATH, "utf8");
     const latest = new Map<string, AgentRun>();

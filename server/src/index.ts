@@ -200,6 +200,8 @@ import { buildInstantChatToolReply, enforceInstantOutputConstraints, instantResp
 import { buildInstantConversationContext, buildInstantConversationUserMessage, type InstantConversationTurn } from "./phantom-ai/instant-chat-context.js";
 import {
   filterConversationModules,
+  isExplicitMissionConfirmation,
+  isMissionWorthyRequest,
   isSafeInstantConversationRequest,
   isSafeAdvisoryConversationRequest,
   isSafeReasoningConversationRequest,
@@ -214,6 +216,8 @@ import {
 } from "./phantom-ai/agent-actions.js";
 import { getSalesConnectorStatus } from "./connectors/sales-connector.js";
 import { getFinanceConnectorStatus } from "./connectors/finance-connector.js";
+import { parseExpenseText, parseReceiptImage } from "./connectors/finance-smart-entry.js";
+import { getReceiptAssetStorageProvider } from "./connectors/receipt-asset-storage.js";
 import {
   completeSocialOAuthCallback,
   createSocialOAuthStart,
@@ -360,7 +364,10 @@ import {
   rejectAgentRun,
   requestAgentRunCancel,
   startAgentRun,
+  type AgentRun,
 } from "./phantom-ai/agent-runs.js";
+import { registerTerminaMissionExecutor, TERMINA_MISSION_OPERATION } from "./phantom-ai/termina-mission-executor.js";
+import { terminaWorkspaceRootFromEnv } from "./phantom-ai/termina-bridge.js";
 import {
   addSiteDomain,
   createSiteBuild,
@@ -900,6 +907,12 @@ try {
   if (process.env.DATABASE_URL) {
     registerPublishingExecutor();
   }
+  /* the Termina mission executor only calls out over HTTP to 127.0.0.1 — no
+     DB dependency, safe to register unconditionally. It stays inert (the
+     agent-run stays in awaiting_approval and never executes) until a real
+     approval action happens, and it fails cleanly at execute-time if
+     TERMINA_TOKEN is unset or Termina isn't reachable. */
+  registerTerminaMissionExecutor();
 } catch (error) {
   app.log.error(error, "PhantomForce server startup failed while loading access state.");
   await app.close();
@@ -3580,7 +3593,12 @@ function parsePhantomAiChatProvider(value: unknown) {
 }
 
 type AdminPhantomAiModelLane = "codex" | "glm_5_2" | "claude_cli" | "local_ollama";
-type AdminPhantomAiRouteTier = "instant" | "reasoning" | "advisory" | "standard" | "deep";
+/* "mission" never takes the actionFreeConversation fast path (see the
+   isSafe*ConversationRequest gates below) — a mission proposal needs full
+   business context and, above everything else, the approval gate, so it
+   always falls through to the full business-context branch and is handled
+   explicitly there. */
+type AdminPhantomAiRouteTier = "instant" | "reasoning" | "advisory" | "standard" | "deep" | "mission";
 
 function parseAdminPhantomAiModelLane(value: unknown): AdminPhantomAiModelLane {
   if (value === "glm_5_2" || value === "openrouter_glm" || value === "glm") return "glm_5_2";
@@ -3590,7 +3608,7 @@ function parseAdminPhantomAiModelLane(value: unknown): AdminPhantomAiModelLane {
 }
 
 function parseAdminPhantomAiRouteTier(value: unknown): AdminPhantomAiRouteTier {
-  if (value === "instant" || value === "reasoning" || value === "advisory" || value === "standard" || value === "deep") return value;
+  if (value === "instant" || value === "reasoning" || value === "advisory" || value === "standard" || value === "deep" || value === "mission") return value;
   return "standard";
 }
 
@@ -6932,6 +6950,35 @@ function canDecideRun(session: AccessSession, run: NonNullable<ReturnType<typeof
   return canManageOrg(dbSession, run.workspace);
 }
 
+/* ---- Termina mission chat helpers ----
+   Small, chat-endpoint-only helpers built on top of the same agent-run
+   engine/authorization used above — no parallel bookkeeping. */
+
+/* The most recent still-pending mission run this exact session proposed for
+   this workspace. Scoping by session_id (not just workspace) means one
+   admin's "yes" can only ever confirm a mission THEY were just offered in
+   THIS conversation, never a different admin's separately-proposed run. */
+function findLatestPendingMissionRun(sessionId: string, workspace: string): AgentRun | null {
+  const candidates = listAgentRuns({ workspace, state: "awaiting_approval", limit: 20 })
+    .filter((run) => run.operation === TERMINA_MISSION_OPERATION && run.session_id === sessionId);
+  return candidates[0] ?? null;
+}
+
+function publicMissionRunView(run: AgentRun) {
+  return {
+    id: run.id,
+    operation: run.operation,
+    state: run.state,
+    scope: run.scope,
+    expected_effect: run.expected_effect,
+    required_role: run.required_role,
+    approval_deadline: run.approval_deadline,
+    workspace: run.workspace,
+    created_at: run.created_at,
+    updated_at: run.updated_at,
+  };
+}
+
 app.post("/phantom-ai/runs/:id/approve", async (request, reply) => {
   const session = requireAccessSession(request, reply);
   if (!session) return reply;
@@ -7270,6 +7317,90 @@ app.get("/phantom-ai/ops/finance-connector/status", async (request, reply) => {
   }
 
   return { ok: true, session, read_only: true, finance_connector: getFinanceConnectorStatus() };
+});
+
+/* ---- Finance smart entry (natural-language expense line + receipt photo) ----
+   Admin-only, same as the rest of the finance connector surface: this
+   handles the owner's business books, not a client-scoped feature. Text
+   parsing is fully deterministic (see finance-smart-entry.ts) so it never
+   depends on a live AI provider. Receipt photos are always stored (they are
+   financial records the owner may need at tax time — see
+   receipt-asset-storage.ts) even when AI extraction is unavailable; the
+   caller falls back to filling the draft in manually. */
+const FINANCE_RECEIPT_OWNER_SCOPE = OWNER_MEMORY_TENANT_ID;
+
+const FinanceExpenseTextSchema = z.object({
+  text: z.string().trim().min(1).max(4000),
+});
+
+app.post("/phantom-ai/ops/finance/parse-expense-text", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+  if (!session) return reply;
+
+  const parsed = FinanceExpenseTextSchema.safeParse(request.body);
+  if (!parsed.success) {
+    return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  }
+
+  const result = parseExpenseText(parsed.data.text);
+  if (!result.ok) {
+    return reply.code(422).send({ ok: false, error: result.error });
+  }
+
+  return { ok: true, session, draft: result.draft };
+});
+
+const FinanceReceiptUploadSchema = z.object({
+  image: z.string().trim().min(1).max(24_000_000),
+  filename: z.string().trim().max(160).optional(),
+});
+
+app.post("/phantom-ai/ops/finance/parse-receipt", { bodyLimit: 24 * 1024 * 1024 }, async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+  if (!session) return reply;
+
+  const parsed = FinanceReceiptUploadSchema.safeParse(request.body);
+  if (!parsed.success) {
+    return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  }
+
+  const provider = getReceiptAssetStorageProvider();
+  const stored = await provider.putAsset({
+    ownerScope: FINANCE_RECEIPT_OWNER_SCOPE,
+    dataUrl: parsed.data.image,
+    originalName: parsed.data.filename,
+  });
+
+  if (!stored.ok) {
+    return reply.code(400).send({ ok: false, error: stored.error });
+  }
+
+  const aiResult = await parseReceiptImage(parsed.data.image, { env: process.env });
+
+  return {
+    ok: true,
+    session,
+    assetId: stored.asset.id,
+    asset: stored.asset,
+    aiAvailable: aiResult.available,
+    draft: aiResult.available ? aiResult.draft : null,
+    reason: aiResult.available ? undefined : aiResult.reason,
+  };
+});
+
+app.get("/phantom-ai/ops/finance/receipt/:id", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+  if (!session) return reply;
+
+  const { id } = request.params as { id: string };
+  const provider = getReceiptAssetStorageProvider();
+  const result = await provider.getAssetFile(id, FINANCE_RECEIPT_OWNER_SCOPE);
+
+  if (!result.ok) {
+    return reply.code(404).send({ ok: false, error: result.error });
+  }
+
+  return { ok: true, session, image: result.dataUrl, asset: result.asset };
 });
 
 app.get("/phantom-ai/ops/social-analytics/status", async (request, reply) => {
@@ -8881,6 +9012,122 @@ app.post("/phantom-ai/chat", async (request, reply) => {
         },
       };
     }
+
+    /* ---- Termina mission gate --------------------------------------------
+       NON-NEGOTIABLE: a Termina mission (real multi-agent coding agents,
+       real API/token cost, real filesystem/git changes) must NEVER start
+       from a heuristic alone — every dispatch requires an explicit,
+       per-instance user approval action, in a separate request from the one
+       that first proposed it. This block only ever does one of two things:
+
+       1. ASK — create an agent run in `awaiting_approval` state (the SAME
+          approval-gated engine already used for publish_site above; never a
+          parallel mechanism) and describe it back to the user. Nothing has
+          executed yet: `startAgentRun` does not call the executor at all
+          while the run requires approval (see phantom-ai/agent-runs.ts).
+
+       2. CONFIRM — only when THIS message, on its own, is an unambiguous,
+          narrowly-matched affirmation ("yes", "run it", …) AND there is a
+          still-pending, unexpired mission run that THIS session itself
+          proposed in an earlier, separate request, call the real
+          `approveAgentRun` — the exact function `/phantom-ai/runs/:id/
+          approve` calls — so authorization (`canDecideRun`) and the
+          single-use/expiry rules apply exactly as they do everywhere else.
+
+       Neither branch ever calls decompose()/createMission() directly from
+       here; that only happens inside the registered "termina_mission"
+       executor, which only agent-runs.ts's approveAgentRun() can invoke. */
+    const missionWorkspace = normalized.tenant_id || "phantomforce";
+    const pendingMissionRun = findLatestPendingMissionRun(session.id, missionWorkspace);
+    /* A bare "yes" deliberately does NOT match the mission-worthy phrasing
+       heuristic (it is a short affirmation, not a description of work) --
+       so the confirmation check must run independently of missionWorthy,
+       gated only on "is there something of mine actually pending right
+       now." Only once that is ruled out do we ask whether THIS message is
+       proposing a brand-new mission. */
+    if (pendingMissionRun && isExplicitMissionConfirmation(normalized.user_request)) {
+      if (!canDecideRun(session, pendingMissionRun)) {
+        return {
+          ok: true,
+          session,
+          message: {
+            role: "assistant",
+            content: "This session isn't authorized to approve that mission — a platform admin needs to confirm it.",
+          },
+          approval_required: true,
+          approval_status: "pending",
+          approval_executed: false,
+          mission_run: publicMissionRunView(pendingMissionRun),
+        };
+      }
+      const decision = await approveAgentRun(
+        pendingMissionRun.id,
+        { id: session.id, email: session.email ?? session.label },
+        { tenantId: normalized.tenant_id, businessName: normalized.business_name },
+      );
+      if (!decision.ok) {
+        return {
+          ok: true,
+          session,
+          message: {
+            role: "assistant",
+            content: `I couldn't confirm that mission (${decision.error}). It may have expired — ask again and I'll queue a fresh one.`,
+          },
+          approval_required: false,
+          approval_status: "not_required",
+          approval_executed: false,
+        };
+      }
+      return {
+        ok: true,
+        session,
+        message: {
+          role: "assistant",
+          content: `Confirmed — dispatching Termina mission run ${decision.run.id} now. This calls Termina's real decompose + create-mission API against ${terminaWorkspaceRootFromEnv()}, launched with launchMode "approval" so each worker still needs Termina's own per-step approval. Poll GET /phantom-ai/runs/${decision.run.id} (or Developer → Agent runs) for progress.`,
+        },
+        approval_required: false,
+        approval_status: "approved",
+        approval_executed: true,
+        mission_run: publicMissionRunView(decision.run),
+      };
+    } else if (adminRouteTier === "mission" || isMissionWorthyRequest(normalized)) {
+      if (!pendingMissionRun) {
+        const started = await startAgentRun({
+          operation: TERMINA_MISSION_OPERATION,
+          workspace: missionWorkspace,
+          sessionId: session.id,
+          request: normalized.user_request,
+          tenantId: normalized.tenant_id,
+          businessName: normalized.business_name,
+          requestedBy: session.email ?? session.label ?? session.id,
+          inputs: { objective: normalized.user_request },
+        });
+        if (!("id" in started)) {
+          return {
+            ok: false,
+            session,
+            error: started.error,
+            message: { role: "assistant", content: "Mission dispatch isn't available on this server right now." },
+          };
+        }
+        return {
+          ok: true,
+          session,
+          message: {
+            role: "assistant",
+            content: `This reads like a real multi-step build/execution task rather than a quick answer. I can run it as a background mission through Termina — real coding agents, real API cost, real file/git changes against ${terminaWorkspaceRootFromEnv()} — but nothing starts until you say so. Reply "yes, run it" to confirm, or just tell me to answer directly instead and I will.`,
+          },
+          approval_required: true,
+          approval_status: "pending",
+          approval_executed: false,
+          mission_run: publicMissionRunView(started),
+        };
+      }
+      /* A pending run already exists for this session but this particular
+         message wasn't a clear yes — fall through to a normal answer
+         instead of re-asking on every single turn. */
+    }
+
     const preview = previewModelRouterFoundation(normalized, {
       env: {
         ...process.env,

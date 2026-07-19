@@ -186,6 +186,22 @@ function extractOutputText(json: unknown) {
   return firstString(record.message) ?? firstString(record.response) ?? firstString(record.content) ?? "";
 }
 
+// Some local models still lead casual preference answers with a robotic
+// "I don't have preferences, but ..." hedge even when instructed not to —
+// prompting alone doesn't reliably suppress it. This strips only that exact
+// hedge-then-answer shape (a disclaimer immediately followed by "but/however"
+// and a real answer), so a genuine direct question about the AI's nature
+// ("do you have real preferences?") is left untouched — that phrasing has no
+// "but" continuation into an actual answer.
+const ROBOTIC_PREFERENCE_HEDGE =
+  /^(?:as an ai,?\s*)?i(?:'m| am)?\s*(?:don'?t|do not|can'?t|cannot)\s+have\s+(?:personal\s+)?(?:preferences|feelings|opinions|tastes?|favorites?)[^,;.]*[,;]?\s*(?:but|however)[,\s]+/i;
+
+function stripRoboticPreferenceHedge(text: string) {
+  const stripped = text.replace(ROBOTIC_PREFERENCE_HEDGE, "");
+  if (!stripped || stripped === text) return text;
+  return stripped.charAt(0).toUpperCase() + stripped.slice(1);
+}
+
 function extractUsage(json: unknown): LocalOllamaChatResult["usage"] {
   if (!json || typeof json !== "object") return emptyUsage();
   const record = json as Record<string, unknown>;
@@ -414,7 +430,7 @@ export async function callLocalOllamaChat(
       {
         role: "system",
         content: conversationMode
-          ? "You are Phantom AI, a fast, natural general-purpose assistant. Answer directly in 1-3 sentences unless the user requests another format. Stay in the user's current language and script unless they explicitly request translation or another language. Follow recent conversation precisely: preserve named subjects, resolve pronouns from the newest relevant turn, and obey later corrections. When asked for a replacement, shorter version, final item, or one new fact, return only that result instead of repeating earlier material. Honor exact output constraints without extra framing. When an approximate word count is requested, aim within 20 percent of it instead of stopping early. Use stable knowledge for factual claims and never invent a plausible-sounding detail; state uncertainty when needed. Do not append a follow-up question unless missing information prevents a useful answer. For harmless taste questions, make a playful conversational choice instead of disclaiming that AI lacks feelings; never claim real sensory experience. Recalculate arithmetic before answering. Do not mention business systems, action cards, memory, ledgers, pipelines, workspace status, or internal operations unless asked. Never expose hidden reasoning."
+          ? "You are Phantom AI, a fast, natural general-purpose assistant. Answer directly in 1-3 sentences unless the user requests another format. Stay in the user's current language and script unless they explicitly request translation or another language. Follow recent conversation precisely: preserve named subjects, resolve pronouns from the newest relevant turn, and obey later corrections. When asked for a replacement, shorter version, final item, or one new fact, return only that result instead of repeating earlier material. Honor exact output constraints without extra framing. When an approximate word count is requested, aim within 20 percent of it instead of stopping early. Use stable knowledge for factual claims and never invent a plausible-sounding detail; state uncertainty when needed. Do not append a follow-up question unless missing information prevents a useful answer. For harmless taste/preference questions, open with a real, specific conversational choice — never open with an I-dont-have-preferences disclaimer or any other AI-disclaimer sentence, even followed by an answer; never claim real sensory experience. Recalculate arithmetic before answering. Do not mention business systems, action cards, memory, ledgers, pipelines, workspace status, or internal operations unless asked. Never expose hidden reasoning."
           : "You are Phantom AI inside PhantomForce. You are a practical business operator for PhantomForce, ChicagoShots, image/video creation, sales, scheduling, websites, apps, dashboards, builds, local operator work, and backend ops. Answer naturally. Stay useful. Keep external actions receipt-based without sounding like a compliance log.",
       },
       {
@@ -444,7 +460,7 @@ export async function callLocalOllamaChat(
       const text = await response.text().catch(() => "");
       return { error: redactSensitiveText(text).slice(0, 1000) };
     });
-    const outputText = redactSensitiveText(extractOutputText(json)).slice(0, MAX_RESPONSE_CHARS);
+    const outputText = stripRoboticPreferenceHedge(redactSensitiveText(extractOutputText(json)).slice(0, MAX_RESPONSE_CHARS));
     const errorValue = json && typeof json === "object" ? (json as Record<string, unknown>).error : null;
     const errorText = response.ok
       ? null

@@ -2621,6 +2621,49 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 .phantom-reply { margin: 0; font-size: 15.5px; line-height: 1.5; color: #e2fff0; max-width: 720px; }
 .phantom-entry .rcard { max-width: 460px; }
 
+/* ---------------- phantom ai (chat / memory / activity tabs) ---------------- */
+/* Base styling for the previously-orphaned phantomai.js panel. The narrow
+   @media (min-width: 1181px) overrides further below (search
+   ".console:not(.console-workspace) .phantomai-tabs") only shrink padding
+   and font-size at that breakpoint and keep working unchanged on top of
+   this base layer. */
+.phantomai { display: flex; flex-direction: column; gap: 14px; min-height: min(64vh, 620px); }
+.phantomai-tabs {
+  display: flex; gap: 6px; padding: 4px; width: fit-content;
+  border: 1px solid var(--line); border-radius: 14px; background: rgba(0,0,0,0.22);
+}
+.phantomai-tab {
+  display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border: none; border-radius: 10px;
+  background: transparent; color: var(--dim); font: 600 12px "DM Mono", monospace; letter-spacing: 0.03em;
+  cursor: pointer; transition: background 0.15s ease, color 0.15s ease;
+}
+.phantomai-tab:hover { color: var(--ink); }
+.phantomai-tab.is-active { background: rgba(65,255,161,0.12); color: var(--neon); box-shadow: inset 0 0 0 1px var(--line-strong); }
+.phantomai-tab[hidden] { display: none; }
+.phantomai-pane { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.phantomai-pane[hidden] { display: none; }
+
+.phantomai-chat {
+  display: flex; flex-direction: column; gap: 14px; flex: 1; min-height: 0;
+  border: 1px solid var(--line); border-radius: 18px; padding: 16px;
+  background: linear-gradient(180deg, rgba(6,18,13,0.55), rgba(2,8,10,0.4));
+}
+.phantomai-chat-log { flex: 1; overflow-y: auto; display: grid; gap: 16px; align-content: start; padding: 4px 2px; min-height: 240px; }
+.phantomai-chat-hello { margin: 0; color: var(--dim); font-size: 13.5px; line-height: 1.6; max-width: 620px; }
+.phantomai-chat-entry { display: grid; gap: 8px; justify-items: start; }
+.phantomai-chat-user { margin: 0; font: 500 13px "DM Mono", monospace; color: var(--dim); }
+.phantomai-chat-reply { margin: 0; font-size: 15.5px; line-height: 1.5; color: #e2fff0; max-width: 720px; }
+.phantomai-chat-status { margin: 0; font: 500 11px "DM Mono", monospace; letter-spacing: 0.04em; color: var(--neon-2); }
+.phantomai-chat-entry .rcard { max-width: 460px; }
+.phantomai-chat-form { display: flex; gap: 10px; align-items: center; border-top: 1px solid var(--line); padding-top: 12px; }
+.phantomai-chat-input {
+  flex: 1; border: 1px solid var(--line); border-radius: 12px; background: rgba(0,0,0,0.3); color: var(--ink);
+  padding: 10px 14px; font-size: 13.5px; outline: none;
+}
+.phantomai-chat-input:focus { border-color: var(--line-strong); }
+
+.phantomai-memory-mount, .phantomai-activity-mount { flex: 1; min-height: 0; }
+
 /* ---------------- mobile ---------------- */
 @media (max-width: 980px) {
   .deck-body { grid-template-columns: 1fr; }

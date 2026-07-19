@@ -70,6 +70,62 @@ export function isSafeAdvisoryConversationRequest(input: { task_type: string; us
     && !INSTANT_EXTERNAL_ACTION.test(text);
 }
 
+/* Mission-worthy heuristic --------------------------------------------
+   Detects a request that reads as real, multi-step, agentic execution work
+   (build/implement/refactor something substantial, run it "in parallel",
+   spin up workers, explicit Termina phrasing) as opposed to a question, a
+   request for advice, or a request for a plan only. This heuristic is used
+   ONLY to decide whether the chat handler should ASK "want this as a
+   background mission?" — it is never consulted when actually starting a
+   mission (that path requires a separate, explicit approval regardless of
+   how the run was proposed). A false positive here costs nothing but an
+   extra question, so it can stay generous; it does not need to be
+   adversarially robust the way an execution gate would.
+
+   `task_type` classification for the *client's own message* already happens
+   upstream, in the browser (app/js/intent-router.js), which recognizes
+   explicit Termina phrasing ("split this across workers", "run planner /
+   builder / reviewer", …) as `termina_parallel`, and safe read-only agent
+   runs as `run_agent`. Since task_type arrives here as caller-supplied
+   input, it is treated as a hint, not authoritative — this function also
+   re-checks the raw text server-side with its own regex so the ask-to-
+   mission behavior does not depend entirely on trusting the client. */
+const EXPLICIT_MISSION_PHRASING =
+  /\b(?:open (?:this |that |it )?in termina|send (?:this|that|it) to termina|run (?:this|that|it) (?:as|through) a (?:background )?mission|split (?:this|that|it) across (?:multiple )?(?:agents|workers)|spin up (?:multiple )?(?:agents|workers)|create parallel workers?|dispatch (?:a |the )?mission|run planner[\s,/&-]*builder[\s,/&-]*reviewer)\b/i;
+const MISSION_HINT_TASK_TYPES = new Set(["termina_parallel"]);
+
+export function isMissionWorthyRequest(input: { task_type: string; user_request: string }) {
+  const text = input.user_request.trim();
+  if (!text) return false;
+  if (MISSION_HINT_TASK_TYPES.has(input.task_type)) return true;
+  return EXPLICIT_MISSION_PHRASING.test(text);
+}
+
+/* The one phrase-set allowed to move a mission from "proposed" to
+   "approved" via chat. Deliberately narrow and anchored — mirrors this
+   codebase's own VACATION_CONFIRM pattern (app/js/intent-router.js) for a
+   similarly irreversible, real-world action: exact short affirmations only,
+   never a loose substring match, so a longer message that happens to
+   contain the word "yes" cannot be misread as a confirmation. Same as
+   VACATION_CONFIRM's own `yes[, ]+confirm`, an optional leading "yes"
+   joined by a comma/space is allowed before the core phrase, so the
+   extremely common natural phrasing "yes, run it" (with the comma real
+   users actually type) is recognized -- without that, a real confirmation
+   would silently fail to match and fall through to a normal, non-mission
+   chat answer instead of confirming, which is worse for safety than
+   recognizing it: a would-be-confirmed mission stays stuck.
+
+   this remains just as narrow as before: the ENTIRE trimmed message must
+   still be nothing but this optional prefix plus exactly one recognized
+   short phrase, plus optional trailing punctuation -- still no bare
+   substring matching, still rejects any longer sentence. */
+const EXPLICIT_MISSION_CONFIRMATION =
+  /^(?:yes[, ]+)?(?:yes|yep|yeah|y|confirm|confirmed|approve|approved|do it|go ahead|run it|dispatch it|start it|launch it)[\s.!]*$/i;
+
+export function isExplicitMissionConfirmation(text: string) {
+  return EXPLICIT_MISSION_CONFIRMATION.test(text.trim());
+}
+
 export function filterConversationModules<T extends ConversationContextModule>(
   modules: T[],
   userRequest: string,
