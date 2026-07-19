@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; media-src 'none'; frame-src 'none'">
+    <title>PhantomCube — PhantomPlay</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="hud">
+      <div class="hud-stat"><b data-level-num>1</b><span>LEVEL</span></div>
+      <div class="hud-stat"><b data-moves>0</b><span>MOVES</span></div>
+      <div class="hud-stat"><b data-par>—</b><span>PAR</span></div>
+      <div class="hud-name" data-level-name></div>
+      <div class="hud-btns">
+        <button class="hud-btn" data-restart-btn title="Restart level (R)">↺ Restart</button>
+        <button class="hud-btn" data-levels-btn title="Level select (L)">▦ Levels</button>
+      </div>
+    </div>
+
+    <canvas id="stage"></canvas>
+
+    <p class="controls-hint">Arrows / WASD to slide. Tiles crumble behind you — clear every tile, then reach the glowing exit. <kbd>R</kbd> restart · <kbd>L</kbd> levels</p>
+
+    <div class="overlay" data-select-overlay>
+      <div class="panel">
+        <h2>PhantomCube</h2>
+        <p>Slide the cube. Tiles crumble behind you. Clear the whole board, then land on the exit.<br/>Beat a level to unlock the next.</p>
+        <div class="level-grid" data-level-grid></div>
+      </div>
+    </div>
+
+    <div class="overlay" data-win-overlay hidden>
+      <div class="panel">
+        <h2 data-win-title>Level Clear!</h2>
+        <p data-win-sub></p>
+        <button class="btn-primary" data-next-btn>Next Level ▸</button>
+        <button class="btn-ghost" data-win-levels-btn>Level Select</button>
+      </div>
+    </div>
+
+    <div class="overlay overlay-soft" data-stuck-overlay hidden>
+      <div class="panel">
+        <h2>Stuck!</h2>
+        <p>No tiles left to move to. The cube is stranded.</p>
+        <button class="btn-primary" data-stuck-restart-btn>↺ Try Again</button>
+      </div>
+    </div>
+
+    <script src="levels.js"></script>
+    <script src="game.js"></script>
+  </body>
+</html>

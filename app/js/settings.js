@@ -1,13 +1,13 @@
 /* PhantomForce admin settings.
    Local UI preferences only: no provider calls, sends, uploads, or billing. */
 
-import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260718-43";
-import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260718-43";
-import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260718-43";
-import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260718-43";
-import { canManageActiveOrg, fetchCustomerPlanPreview, fetchEntitlementsSummary, switchCustomerPlan } from "./orgs.js?v=phantom-live-20260718-43";
-import { currentTenantId, ctx, isLiveAdminHost, isLocalDevHost, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260718-43";
-import { DEFAULT_COMPANION_PREFS, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260718-43";
+import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260719-1";
+import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260719-1";
+import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260719-1";
+import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260719-1";
+import { canManageActiveOrg, fetchCustomerPlanPreview, fetchEntitlementsSummary, switchCustomerPlan } from "./orgs.js?v=phantom-live-20260719-1";
+import { currentTenantId, ctx, isLiveAdminHost, isLocalDevHost, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260719-1";
+import { DEFAULT_COMPANION_PREFS, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260719-1";
 
 const AI_SETTINGS_KEY = "pf.operator.settings.v1";
 const SETTINGS_TAB_KEY = "pf.settings.tab.v1";

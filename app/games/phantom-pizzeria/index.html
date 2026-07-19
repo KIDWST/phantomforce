@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; media-src 'none'; frame-src 'none'">
+    <title>Phantom Pizzeria — PhantomPlay</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="hud">
+      <div class="hud-stat"><b data-day>1</b><span>DAY</span></div>
+      <div class="hud-stat"><b data-coins>0</b><span>COINS</span></div>
+      <div class="hud-stat"><b data-served>0/5</b><span>ORDERS</span></div>
+      <div class="hud-name" data-shop-name>PHANTOM PIZZERIA</div>
+      <div class="hud-btns"><button class="hud-btn" data-menu-btn>▦ Menu</button></div>
+    </div>
+
+    <main class="shop">
+      <!-- Order ticket -->
+      <section class="station station-order">
+        <h3>Order Ticket</h3>
+        <div class="ticket" data-ticket>
+          <p class="ticket-customer" data-customer></p>
+          <ul class="ticket-lines" data-ticket-lines></ul>
+          <p class="ticket-bake">Bake: <b data-ticket-bake></b></p>
+        </div>
+        <div class="patience"><div class="patience-fill" data-patience></div></div>
+      </section>
+
+      <!-- Build station -->
+      <section class="station station-build">
+        <h3>Build Station</h3>
+        <div class="pizza-view" data-pizza-view>
+          <div class="pizza-base" data-pizza-base></div>
+        </div>
+        <div class="topping-bar" data-topping-bar></div>
+        <div class="build-actions">
+          <button class="act-btn" data-undo-btn>↩ Undo</button>
+          <button class="act-btn act-primary" data-to-oven-btn>To the Oven ▸</button>
+        </div>
+      </section>
+
+      <!-- Oven station -->
+      <section class="station station-oven">
+        <h3>Stone Oven</h3>
+        <div class="oven" data-oven>
+          <div class="oven-meter">
+            <div class="oven-zone" data-oven-zone></div>
+            <div class="oven-needle" data-oven-needle></div>
+          </div>
+          <p class="oven-label" data-oven-label>Empty</p>
+        </div>
+        <button class="act-btn act-primary" data-pull-btn disabled>Pull &amp; Serve!</button>
+      </section>
+    </main>
+
+    <div class="toast" data-toast hidden></div>
+
+    <div class="overlay" data-menu-overlay>
+      <div class="panel">
+        <h2>Phantom Pizzeria</h2>
+        <p>Read the ticket, build the pie, bake it in the window, serve it hot.<br/>
+           Accuracy + bake timing + speed = coins. Five orders a day; each day adds toppings and pickier ghosts.</p>
+        <button class="btn-primary" data-start-btn>Open the Shop</button>
+        <p class="best-line" data-best-line hidden></p>
+      </div>
+    </div>
+
+    <div class="overlay" data-day-overlay hidden>
+      <div class="panel">
+        <h2 data-day-title>Day Complete!</h2>
+        <div class="day-report" data-day-report></div>
+        <button class="btn-primary" data-next-day-btn>Next Day ▸</button>
+        <button class="btn-ghost" data-day-menu-btn>Menu</button>
+      </div>
+    </div>
+
+    <script src="game.js"></script>
+  </body>
+</html>

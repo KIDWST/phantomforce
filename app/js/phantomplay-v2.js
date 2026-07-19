@@ -9,7 +9,7 @@
 import {
   currentTenantId, isAdmin, session,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260718-43";
+} from "./store.js?v=phantom-live-20260719-1";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
 const mobilePlaySurface = () => typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;
@@ -73,7 +73,40 @@ const OFFLINE_GAMES = [
   ["tidefront-tactics", "Tidefront Tactics", "Strategy", "/app/games/tidefront-tactics.html?v=1.1.0"],
   ["skyguard-arena", "Skyguard Arena", "Strategy", "/app/games/skyguard-arena/index.html?v=1.1.0"],
   ["sudoku-signal", "Sudoku Signal", "Focus", "/app/games/sudoku-signal.html"],
-].map(([id, title, category, launchUrl]) => ({ id, title, summary: id === "phantom-rumble" ? "Premium local platform fighter with guard, parry, dodge, ledge-save recovery, bots, and local multiplayer." : id === "rift-frenzy" ? "School-to-grow fish survival with rival steals, absorb cooldown, hazards, and bots." : id === "crown-circuit" ? "Strict 1v1 lane-card crown duel." : id === "kingdom-breakers" ? "Physics castle siege with duel castles and wardens." : id === "tidefront-tactics" ? "Wind-read artillery tactics battle." : id === "skyguard-arena" ? "Sentinel defense with waves, upgrades, and duel pressure." : "Offline built-in game.", description: "", category, tags: [], contentRating: ["rift-frenzy", "crown-circuit", "kingdom-breakers", "tidefront-tactics", "skyguard-arena"].includes(id) ? "everyone10" : "everyone", developer: "Tak", kind: "built_in", launchUrl, thumbnail: "", featured: ["phantom-rumble", "rift-frenzy", "crown-circuit", "kingdom-breakers", "tidefront-tactics", "skyguard-arena"].includes(id), version: id === "phantom-rumble" ? "2.2.4" : id === "rift-frenzy" ? "2.0.0" : ["kingdom-breakers", "tidefront-tactics", "skyguard-arena"].includes(id) ? "1.1.0" : "1.0.0", controls: id === "phantom-rumble" ? "Keyboard controls." : "", progressSupport: true, scoreSupport: true }));
+].map(([id, title, category, launchUrl]) => ({ id, title, summary: id === "phantom-rumble" ? "Premium local platform fighter with guard, parry, dodge, ledge-save recovery, bots, and local multiplayer." : id === "rift-frenzy" ? "School-to-grow fish survival with rival steals, absorb cooldown, hazards, and bots." : id === "crown-circuit" ? "Strict 1v1 lane-card crown duel." : id === "kingdom-breakers" ? "Physics castle siege with duel castles and wardens." : id === "tidefront-tactics" ? "Wind-read artillery tactics battle." : id === "skyguard-arena" ? "Sentinel defense with waves, upgrades, and duel pressure." : "Offline built-in game.", description: "", category, tags: [], contentRating: ["rift-frenzy", "crown-circuit", "kingdom-breakers", "tidefront-tactics", "skyguard-arena"].includes(id) ? "everyone10" : "everyone", developer: "Tak", kind: "built_in", launchUrl, thumbnail: "", featured: ["phantom-rumble", "rift-frenzy", "crown-circuit", "kingdom-breakers", "tidefront-tactics", "skyguard-arena"].includes(id), version: id === "phantom-rumble" ? "2.2.4" : id === "rift-frenzy" ? "2.0.0" : ["kingdom-breakers", "tidefront-tactics", "skyguard-arena"].includes(id) ? "1.1.0" : "1.0.0", controls: id === "phantom-rumble" ? "Keyboard controls." : "", progressSupport: true, scoreSupport: true })).concat([
+  {
+    id: "phantom-grand-prix", title: "Phantom Grand Prix",
+    summary: "Kart racer with drift-charged mini-turbos, catch-up item odds, and local split-screen multiplayer.",
+    description: "", category: "Arcade", tags: ["racing", "multiplayer", "local-coop"], contentRating: "everyone",
+    developer: "Tak", kind: "built_in", launchUrl: "/app/games/phantom-grand-prix/index.html", thumbnail: "",
+    featured: false, version: "1.0.0", controls: "WASD/arrows to steer, Shift/. to drift, Space/Enter for items. 1P vs CPU or 2P split-screen.",
+    progressSupport: true, scoreSupport: true,
+  },
+  {
+    id: "phantom-cube", title: "PhantomCube",
+    summary: "Isometric tile-clearing puzzle — slide the cube, clear the board, reach the exit. 12 levels.",
+    description: "", category: "Puzzle", tags: ["puzzle", "levels"], contentRating: "everyone",
+    developer: "Tak", kind: "built_in", launchUrl: "/app/games/phantom-cube/index.html", thumbnail: "",
+    featured: false, version: "1.0.0", controls: "Arrows/WASD to slide. R restarts, L opens level select.",
+    progressSupport: true, scoreSupport: true,
+  },
+  {
+    id: "phantom-chess", title: "Phantom Chess",
+    summary: "Complete chess — castling, en passant, promotion — local 2-player or against the Phantom AI.",
+    description: "", category: "Strategy", tags: ["chess", "board", "multiplayer"], contentRating: "everyone",
+    developer: "Tak", kind: "built_in", launchUrl: "/app/games/phantom-chess/index.html", thumbnail: "",
+    featured: false, version: "1.0.0", controls: "Click a piece, then a highlighted square.",
+    progressSupport: true, scoreSupport: true,
+  },
+  {
+    id: "phantom-pizzeria", title: "Phantom Pizzeria",
+    summary: "Read the ticket, build the pie, bake it in the window, serve it hot. Five orders a day.",
+    description: "", category: "Focus", tags: ["time-management", "simulation"], contentRating: "everyone",
+    developer: "Tak", kind: "built_in", launchUrl: "/app/games/phantom-pizzeria/index.html", thumbnail: "",
+    featured: false, version: "1.0.0", controls: "Click toppings to place, click to bake and serve.",
+    progressSupport: true, scoreSupport: true,
+  },
+]);
 
 function offlineState() {
   let saved = {};

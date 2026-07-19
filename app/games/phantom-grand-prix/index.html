@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; media-src 'none'; frame-src 'none'">
+    <title>Phantom Grand Prix — PhantomPlay</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <canvas id="stage"></canvas>
+
+    <div class="overlay" data-start-overlay>
+      <div class="panel">
+        <h2>Phantom Grand Prix</h2>
+        <p>A kart race across a full circuit — drift for mini-turbos, grab item boxes, and take three laps of Ghostlight Speedway. Catch-up odds mean anyone can win off the last corner.</p>
+
+        <div class="mode-choice">
+          <button class="mode-btn" data-mode="1p">
+            <strong>1 Player</strong>
+            <span>You vs. 3 Phantom racers</span>
+          </button>
+          <button class="mode-btn" data-mode="2p">
+            <strong>2 Player — Split Screen</strong>
+            <span>You + a friend vs. 2 Phantom racers</span>
+          </button>
+        </div>
+
+        <div class="controls-grid">
+          <div>
+            <b>Player 1</b>
+            <span><kbd>W</kbd> gas · <kbd>S</kbd> brake · <kbd>A</kbd>/<kbd>D</kbd> steer</span>
+            <span><kbd>Shift</kbd> drift · <kbd>Space</kbd> use item</span>
+          </div>
+          <div>
+            <b>Player 2</b>
+            <span><kbd>↑</kbd> gas · <kbd>↓</kbd> brake · <kbd>←</kbd>/<kbd>→</kbd> steer</span>
+            <span><kbd>/</kbd> drift · <kbd>Enter</kbd> use item</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="overlay" data-countdown-overlay hidden>
+      <div class="countdown-num" data-countdown-num>3</div>
+    </div>
+
+    <div class="overlay" data-finish-overlay hidden>
+      <div class="panel">
+        <h2>Race Finished</h2>
+        <div class="standings" data-standings></div>
+        <button class="btn-primary" data-restart-btn>Race Again</button>
+        <button class="btn-ghost" data-menu-btn>Change Mode</button>
+      </div>
+    </div>
+
+    <script src="game.js"></script>
+  </body>
+</html>
