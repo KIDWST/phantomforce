@@ -269,6 +269,7 @@ import {
   updateVacationOperatorTask,
   updateVacationModeSettings,
 } from "./phantom-ai/vacation-mode.js";
+import { getGhostModeStatus, isGhostModeEnabled, setGhostMode } from "./phantom-ai/ghost-mode.js";
 import {
   applyPhantomPlayRatingOverride,
   createPhantomPlayRoom,
@@ -3699,7 +3700,16 @@ const ADMIN_CHAT_INSTANT_TIMEOUT_MS = {
   codex_cli: 5000,
   claude_cli: 7000,
   openrouter_glm: 5000,
-  local_ollama: 5000,
+  /* qwen2.5:14b requests keep_alive:"24h" on this call (see
+     local-ollama-transport.ts), so it stays resident across a normal
+     back-to-back chat session — but the GPU is shared with other local
+     models (vision, the prompt-injection guard, phantombot), any of which
+     can evict it to fit their own load. Measured directly on this machine:
+     a genuine cold load took 14.9s, a warm follow-up ~2.6s. A bare 5s
+     budget loses the cold-load race every time and always falls back to
+     canned text; 20s covers a real cold start (rare, once resident it
+     stays resident for 24h) while warm calls still return in ~2-3s. */
+  local_ollama: 20000,
 } as const;
 
 const ADMIN_CHAT_REASONING_TIMEOUT_MS = {
@@ -4997,6 +5007,37 @@ app.post("/phantom-ai/approvals/queue/:queueId/status", async (request, reply) =
     approval_execution_implemented: false,
     live_provider_called: false,
     ledger_written: false,
+  };
+});
+
+app.get("/api/ghost-mode/status", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  return {
+    ok: true,
+    session,
+    ...(await getGhostModeStatus(session)),
+  };
+});
+
+app.post("/api/ghost-mode/set", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const body = (request.body ?? {}) as { enabled?: unknown };
+  const enabled = body.enabled === true;
+
+  return {
+    ok: true,
+    session,
+    ...(await setGhostMode(session, enabled)),
   };
 });
 
@@ -8502,7 +8543,13 @@ app.post("/phantom-ai/chat", async (request, reply) => {
   const requestedModelId = parseRequestedAdminModel(body.requested_model);
   const maxProviderMs = parseAdminMaxProviderMs(body.max_provider_ms);
   const allowProviderFallback = parseAllowProviderFallback(body.allow_provider_fallback, adminRouteTier);
-  const allowedAdminProviders = parseAllowedAdminProviders(body.allowed_providers);
+  const requestedAllowedAdminProviders = parseAllowedAdminProviders(body.allowed_providers);
+  /* Ghost Mode overrides whatever the client asked for - it is a hard,
+     server-side privacy floor, not a preference the request body can widen. */
+  const ghostModeActive = await isGhostModeEnabled(session);
+  const allowedAdminProviders: AdminProviderId[] | undefined = ghostModeActive
+    ? ["local_ollama"]
+    : requestedAllowedAdminProviders;
   const recentConversation = parseRecentConversation(body.conversation_history);
   const actionFreeConversationTier = adminRouteTier === "instant" && isSafeInstantConversationRequest(normalized)
     ? "instant"

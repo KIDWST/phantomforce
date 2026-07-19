@@ -1,13 +1,13 @@
 /* PhantomForce admin settings.
    Local UI preferences only: no provider calls, sends, uploads, or billing. */
 
-import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260719-49";
-import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260719-49";
-import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260719-49";
-import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260719-49";
-import { canManageActiveOrg, fetchCustomerPlanPreview, fetchEntitlementsSummary, switchCustomerPlan } from "./orgs.js?v=phantom-live-20260719-49";
-import { currentTenantId, ctx, isLiveAdminHost, isLocalDevHost, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260719-49";
-import { DEFAULT_COMPANION_PREFS, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260719-49";
+import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260719-52";
+import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260719-52";
+import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260719-52";
+import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260719-52";
+import { canManageActiveOrg, fetchCustomerPlanPreview, fetchEntitlementsSummary, switchCustomerPlan } from "./orgs.js?v=phantom-live-20260719-52";
+import { currentTenantId, ctx, isLiveAdminHost, isLocalDevHost, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260719-52";
+import { DEFAULT_COMPANION_PREFS, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260719-52";
 
 const AI_SETTINGS_KEY = "pf.operator.settings.v1";
 const SETTINGS_TAB_KEY = "pf.settings.tab.v1";
@@ -83,6 +83,13 @@ let localModelStatus = {
   error: null,
   baseUrl: "http://127.0.0.1:11434",
   models: [],
+};
+
+let ghostModeStatus = {
+  loaded: false,
+  loading: false,
+  enabled: false,
+  detail: "",
 };
 
 const PROVIDER_MODES = [
@@ -297,6 +304,30 @@ async function refreshLocalModels(el, opts, rerender = true) {
     };
   }
   if (rerender && el?.isConnected) renderOperatorSettings(el, opts);
+}
+
+async function refreshGhostMode(el, opts, rerender = true) {
+  if (ghostModeStatus.loading) return;
+  ghostModeStatus = { ...ghostModeStatus, loading: true };
+  try {
+    const payload = await moduleApi("/api/ghost-mode/status");
+    ghostModeStatus = { loaded: true, loading: false, enabled: Boolean(payload.enabled), detail: payload.detail || "" };
+  } catch {
+    ghostModeStatus = { ...ghostModeStatus, loaded: true, loading: false };
+  }
+  if (rerender && el?.isConnected) renderOperatorSettings(el, opts);
+}
+
+async function setGhostModeAndRender(el, opts, enabled) {
+  ghostModeStatus = { ...ghostModeStatus, enabled, loading: true };
+  renderOperatorSettings(el, opts);
+  try {
+    const payload = await moduleApi("/api/ghost-mode/set", { method: "POST", body: JSON.stringify({ enabled }) });
+    ghostModeStatus = { loaded: true, loading: false, enabled: Boolean(payload.enabled), detail: payload.detail || "" };
+  } catch {
+    ghostModeStatus = { ...ghostModeStatus, loading: false };
+  }
+  if (el?.isConnected) renderOperatorSettings(el, opts);
 }
 
 function loopProviderName(id) {
@@ -528,9 +559,28 @@ function renderLoopAdvancedSection() {
     </div>`;
 }
 
+function renderGhostModeSection() {
+  const on = ghostModeStatus.enabled;
+  return `
+    <div class="set-section">
+      <div class="set-sec-head">
+        <div>
+          <h3>Ghost Mode</h3>
+          <p class="set-note">${on
+            ? "On: Phantom AI chat only calls the local model on this PC. Cloud providers (Claude, OpenRouter, Codex) are never used, even as fallback."
+            : "Off: Phantom AI chat may use cloud providers for better answer quality. Turn this on for a hard, verifiable local-only guarantee, at the cost of that quality."}</p>
+        </div>
+        <label class="set-switch set-switch-large">
+          <input type="checkbox" data-ghost-mode-toggle ${on ? "checked" : ""} ${ghostModeStatus.loading ? "disabled" : ""}/><span></span>
+        </label>
+      </div>
+    </div>`;
+}
+
 function renderModelTab(settings, activeProvider, activeModel) {
   const mode = PROVIDER_MODES.find((item) => item.id === settings.providerMode) || PROVIDER_MODES[0];
   return `
+      ${renderGhostModeSection()}
       <div class="set-section">
         <div class="set-sec-head">
           <div>
@@ -1092,6 +1142,10 @@ export function renderOperatorSettings(el, opts = {}) {
 
   const loopToggle = el.querySelector("[data-loop-toggle]");
   if (loopToggle) loopToggle.onchange = () => saveLoopAndRender({ enabled: loopToggle.checked });
+
+  const ghostModeToggle = el.querySelector("[data-ghost-mode-toggle]");
+  if (ghostModeToggle) ghostModeToggle.onchange = () => setGhostModeAndRender(el, opts, ghostModeToggle.checked);
+  if (!ghostModeStatus.loaded && !ghostModeStatus.loading) refreshGhostMode(el, opts);
 
   el.querySelectorAll("[data-loop-field]").forEach((field) => {
     field.onchange = () => saveLoopAndRender({ [field.dataset.loopField]: field.value });

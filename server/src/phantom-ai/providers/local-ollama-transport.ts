@@ -80,7 +80,13 @@ export type LocalOllamaChatResult = {
 };
 
 const DEFAULT_OLLAMA_BASE_URL = "http://127.0.0.1:11434";
-const DEFAULT_LOCAL_MODEL = "hf.co/unsloth/GLM-5.2-GGUF:UD-IQ1_S";
+/* Must name a model actually pulled on the target machine - this is the
+   last-resort default when no PHANTOM_LOCAL_GLM_MODEL/PHANTOM_OLLAMA_MODEL/
+   OLLAMA_MODEL override and no per-call requested model apply. The previous
+   default ("hf.co/unsloth/GLM-5.2-GGUF:UD-IQ1_S") was never pulled here, so
+   every call that reached this fallback was instantly blocked as
+   "not installed" and silently dropped to the canned instant-chat reply. */
+const DEFAULT_LOCAL_MODEL = "qwen2.5:14b";
 const MAX_CONTEXT_CHARS = 5000;
 const MAX_MESSAGE_CHARS = 1600;
 const MAX_RESPONSE_CHARS = 5000;
