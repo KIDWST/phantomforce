@@ -756,7 +756,77 @@ export function resolveSession() {
   return saved;
 }
 
+async function authConfigForLogin() {
+  try {
+    const response = await fetch("/sessions", { cache: "no-store" });
+    const payload = await response.json().catch(() => ({}));
+    return response.ok && payload?.auth ? payload.auth : null;
+  } catch {
+    return null;
+  }
+}
+
+function databaseSessionFromLogin(payload) {
+  const incoming = payload?.session || {};
+  const localCustomer = payload?.authMode === "local-customer" || String(incoming.id || "").startsWith("local:");
+  const managesOrg = incoming.isSuperAdmin || ["owner", "admin"].includes(incoming.orgRole || "");
+  return {
+    role: managesOrg ? "admin" : "employee",
+    name: incoming.label || incoming.name || incoming.email || "Operator",
+    label: incoming.label || "",
+    ws: "phantomforce",
+    sessionId: incoming.id || OWNER_SESSION_ID,
+    canManageAccess: !!incoming.canManageAccess,
+    database: !localCustomer,
+    localCustomer,
+    email: incoming.email || "",
+    username: incoming.username || "",
+    orgId: incoming.orgId || null,
+    orgRole: incoming.orgRole || null,
+    memberships: incoming.memberships || [],
+    isSuperAdmin: !!incoming.isSuperAdmin,
+    token: payload?.token,
+  };
+}
+
+async function databaseOwnerLogin(email, password) {
+  let response;
+  try {
+    response = await fetch("/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+  } catch {
+    throw new Error("Your password is probably fine - the backend on the admin PC is stopped. Start Hermes/backend, wait ~20 seconds, then sign in again.");
+  }
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const raw = String(payload?.error || "");
+    if (response.status === 401) throw new Error("Invalid email or password.");
+    if (response.status === 403) throw new Error(raw || "This account is not allowed to access admin.phantomforce.online.");
+    throw new Error(raw || `Database login failed (${response.status}).`);
+  }
+  if (payload?.requires2fa) {
+    throw new Error("Password accepted, but this admin account needs 2FA. Wait for the account sign-in form to load, then enter the 2FA code there.");
+  }
+  if (!payload?.token || !payload?.session) throw new Error("Database login did not return a usable session.");
+  const s = databaseSessionFromLogin(payload);
+  if (!s.canManageAccess) {
+    session.clear();
+    throw new Error("That account is real, but it is not allowed on admin.phantomforce.online. Customer and team accounts belong on app.phantomforce.online.");
+  }
+  session.set(s);
+  return s;
+}
+
 export async function ownerLogin(ownerKeyOrEmail, password) {
+  if (password !== undefined) {
+    const auth = await authConfigForLogin();
+    if (auth?.databaseAuthEnabled && !auth?.ownerProductionAuthEnabled) {
+      return databaseOwnerLogin(ownerKeyOrEmail, password);
+    }
+  }
   const body = password === undefined
     ? { sessionId: "owner-admin", ownerKey: ownerKeyOrEmail }
     : { sessionId: "owner-admin", email: ownerKeyOrEmail, password };
