@@ -715,6 +715,21 @@ async function main() {
     assert.equal(promptResults.some((result) => /ledger|pipeline|actual cash|transaction reader/i.test(result.answer)), false, "ordinary browser conversation must not leak accounting language.");
     assert.match(promptResults.at(-1)?.answer || "", /comet/i, "the twentieth turn must retain the active temporary topic.");
 
+    const continuityResults = [];
+    continuityResults.push(await submitChat(cdp, "I want to visit Japan in spring and I have never been.", diagnostics));
+    continuityResults.push(await submitChat(cdp, "How long should I stay? Answer in one sentence.", diagnostics));
+    assert.match(continuityResults.at(-1)?.answer || "", /(?:day|week)/i, "a natural follow-up must use the immediately preceding travel topic.");
+
+    continuityResults.push(await submitChat(cdp, "For this chat only, my dog Nova wears a yellow raincoat.", diagnostics));
+    continuityResults.push(await submitChat(cdp, "Correction: Nova's raincoat is purple.", diagnostics));
+    continuityResults.push(await submitChat(cdp, "Explain volcanoes in one sentence.", diagnostics));
+    continuityResults.push(await submitChat(cdp, "What makes jazz distinctive? One sentence.", diagnostics));
+    continuityResults.push(await submitChat(cdp, "Name one interesting thing about Saturn.", diagnostics));
+    continuityResults.push(await submitChat(cdp, "Back to Nova: what color is her raincoat? Color only.", diagnostics));
+    assert.match(continuityResults.at(-1)?.answer || "", /^purple[.!]?$/i, "a named recent topic must survive intervening subjects and retain its correction.");
+    assert.equal(continuityResults.every((result) => result.cards === 0), true, "long conversation turns must stay in chat without business cards.");
+    assert.equal(continuityResults.some((result) => /ledger|pipeline|actual cash|transaction reader/i.test(result.answer)), false, "long conversation must not leak accounting language.");
+
     const phantomContext = await localContextState(cdp);
     assert.equal(phantomContext.activeOrg, "dev-org-phantomforce");
     assert.equal(phantomContext.memory.some((text) => /emerald/i.test(text)), true, "explicit PhantomForce memory must be durable and organization-scoped.");
@@ -777,11 +792,11 @@ async function main() {
     await evaluate(cdp, `document.querySelector('[data-nav-id="dashboard"]')?.click()`);
     await waitForExpression(cdp, `!!document.querySelector("[data-command-form]")`, "restored dashboard", 10_000, diagnostics);
     const restoredRequestStart = chatRequests.length;
-    const restoredAnswer = await submitChat(cdp, "What temporary code word did I use earlier?", diagnostics);
+    const restoredAnswer = await submitChat(cdp, "Back to Nova: what color is her raincoat? Color only.", diagnostics);
     const restoredRequest = chatRequests.slice(restoredRequestStart).at(-1);
-    assert.match(JSON.stringify(restoredRequest), /comet/i, "restored PhantomForce request must receive PhantomForce temporary context.");
+    assert.match(JSON.stringify(restoredRequest), /Nova[\s\S]*purple/i, "restored PhantomForce request must receive its bounded recent topic and latest correction.");
     assert.doesNotMatch(JSON.stringify(restoredRequest), /lens|gold/i, "restored PhantomForce request must not receive ChicagoShots context.");
-    assert.match(restoredAnswer.answer, /comet/i, "restored PhantomForce model answer must resolve its own temporary context.");
+    assert.match(restoredAnswer.answer, /^purple[.!]?$/i, "restored PhantomForce model answer must resolve its own corrected recent topic.");
 
     const desktop = await viewportState(cdp, 1440, 900);
     const desktopCapture = await cdp.send("Page.captureScreenshot", { format: "png", captureBeyondViewport: false });
@@ -817,6 +832,7 @@ async function main() {
         "client-supplied foreign workspace labels are ignored by the server",
         "active organization and its records survive reload without stale tenant rows",
         "20 mixed browser turns stay conversational without ledger leakage",
+        "natural follow-ups and named-topic returns stay coherent across 28 browser turns",
         "durable memory survives reload inside organization A",
         "organization B receives no A memory, history, request context, or visible chat",
         "organization A returns without organization B contamination",
@@ -829,6 +845,7 @@ async function main() {
       menuState,
       afterTamperState,
       promptResults,
+      continuityResults,
       phantomContext,
       chicagoContext,
       phantomRestored,

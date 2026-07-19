@@ -156,6 +156,29 @@ Last updated: 2026-07-18
   `npm run test:database-auth`.
 - Status: Fixed and verified in Cycle 19.
 
+### Q-0013 — P1 — Long chat could recognize a return but pack the wrong topic
+
+- Route/component: instant chat context selection and provider-outage fallback.
+- Journey affected: natural follow-ups and returning to a named subject after
+  discussing several unrelated topics.
+- Reproduction before fix: discuss Nova's corrected purple raincoat, then
+  volcanoes, jazz, and Saturn; ask `Back to Nova: what color is her raincoat?`.
+- Expected: the bounded context contains Nova and the purple correction, with
+  none of the intervening subjects.
+- Actual before fix: the request was recognized as contextual, but the packer
+  supplied only the newest Saturn turn. `How long should I stay?` after a Japan
+  discussion was incorrectly classified as standalone.
+- Correction: detect natural implicit follow-ups and select lexically relevant
+  turns plus nearby corrections from the bounded temporary window; reuse the
+  same selector in provider-outage fallback.
+- Evidence: deterministic packet tests, 90 authenticated real-model requests,
+  and a 28-turn database-auth Chrome journey all pass with zero business
+  leakage; the named return answers `purple` after organization round trips.
+- Regression requirement: `npm run test:dashboard-chat`,
+  `npm run test:instant-chat:http-live-model --workspace @phantomforce/server`,
+  and `npm run test:database-auth`.
+- Status: Fixed and verified in Cycle 20.
+
 ## High-Priority Unfixed Issues
 
 ### Q-0003 — P1 — Mobile layout and scaling are not fully proven

@@ -168,5 +168,17 @@ assert.doesNotMatch(cleanFollowUpContext, /Review the accounting ledger|sales pi
 assert.equal(needsInstantConversationContext([{ user: "My dog is Nova.", assistant: "Nova sounds lovely." }], "Tell me about Nova."), true);
 assert.equal(needsInstantConversationContext([{ user: "Compare octopuses and dolphins.", assistant: "Octopuses hide; dolphins echolocate." }], "Make the comparison playful."), true);
 assert.equal(needsInstantConversationContext([{ user: "Name a tiny spaceship.", assistant: "Pocket Comet" }], "Give me three more, names only."), true);
+assert.equal(needsInstantConversationContext([{ user: "I want to visit Japan in spring.", assistant: "Spring is a beautiful season for Japan." }], "How long should I stay?"), true);
+assert.equal(needsInstantConversationContext([{ user: "I am thinking about adopting a greyhound.", assistant: "Greyhounds can be calm companions." }], "What should I know first?"), true);
+
+const revisitedNamedTopic = buildInstantConversationContext([
+  { user: "My dog Nova wears a yellow raincoat.", assistant: "Nova sounds stylish." },
+  { user: "Actually, Nova's raincoat is purple.", assistant: "Got it: Nova's raincoat is purple." },
+  { user: "Explain volcanoes.", assistant: "Volcanoes release magma." },
+  { user: "What is jazz?", assistant: "Jazz is improvisational music." },
+  { user: "Tell me about Saturn.", assistant: "Saturn is a gas giant." },
+], "Back to Nova: what color is her raincoat?");
+assert.match(revisitedNamedTopic, /Nova's raincoat is purple/i);
+assert.doesNotMatch(revisitedNamedTopic, /Volcanoes|Jazz|Saturn/i);
 
 console.log("instant chat deterministic tool checks passed");

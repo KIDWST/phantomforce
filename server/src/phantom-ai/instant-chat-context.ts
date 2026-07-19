@@ -9,10 +9,11 @@ const CONTEXT_HEADER = "Fast casual chat. The following is temporary recent conv
 const CONTEXT_RULE = "Answer the current casual request directly. Resolve pronouns and transformations from the newest relevant turn, preserve named subjects, and treat later corrections as authoritative. When the user asks for a replacement, shorter version, final item, or one new fact, return the replacement only instead of repeating earlier material. Follow exact format constraints such as 'only the number' without extra framing. When an approximate word count is requested, aim within 20 percent of it instead of stopping early. For factual claims, use stable knowledge and never invent a plausible-sounding detail; say when you are unsure. Do not append a follow-up question unless missing information prevents a useful answer. Never volunteer ledger, pipeline, accounting, approvals, or dashboard status unless the current request explicitly asks for it.";
 const TOPIC_RESET = /\b(?:new topic|switch(?:ing)? topics?|change(?:ing)? (?:the )?subject|unrelated question)\b/i;
 const FOLLOW_UP_SIGNAL = /^(?:why\s+(?:that|it|this|so|them|those|one)\b|why\s*\?|how (?:so|come|about)\b|another\b|more\b|shorter\b|longer\b|again\b|continue\b|go on\b|now\b|actually\b|correction\b|instead\b|same\b|pick\b|choose\b|use\b|do you agree\b|is that true\b|are you sure\b|make (?:it|that|this|them|(?:the )?(?:comparison|answer|sentence|story|list|version))\b|turn (?:it|that|this)\b|answer (?:it|that|the question)\b|what about\b|tell me more\b|(?:give|show) me (?:an? )?example\b|give me .{0,20}\bmore\b|give me (?:only )?(?:the )?(?:corrected|final|next|same|other|another|more)\b|end with\b|double-check\b|ahora\b|dilo\b|otra\b|m[a\u00e1]s corto\b)/i;
+const IMPLICIT_FOLLOW_UP = /^(?:how long should i (?:stay|wait|spend|plan for)\b|what should i (?:know|do|try|learn|read|watch|buy|make|say|ask|pick|choose)\s*(?:first|next)?\s*\??$|where should i (?:start|begin|go)\b|what (?:would|do) you recommend\s*\??$|any (?:advice|tips|recommendations?)\s*\??$)/i;
 const CONTEXT_REFERENCE = /\b(?:it|that|this|them|those|these|former|latter|above|previous|earlier|last answer|same one|which one|the other|her|hers|him|they|there|corrected|final)\b/i;
 const CONTEXT_OPERATION = /\b(?:then|also|instead|add|apply|remove|rephrase|rewrite|translate|summarize|simplify|expand|combine|compare them)\b/i;
 const CONTEXT_STOP_WORDS = new Set([
-  "about", "after", "again", "answer", "before", "could", "current", "does", "explain", "favorite", "from", "give", "have", "into", "just", "latest", "make", "more", "only", "please", "question", "sentence", "should", "something", "that", "their", "then", "there", "these", "thing", "this", "those", "what", "when", "where", "which", "would", "write", "your",
+  "about", "after", "again", "answer", "back", "before", "could", "current", "does", "explain", "favorite", "first", "from", "give", "have", "into", "just", "know", "latest", "make", "more", "next", "only", "please", "question", "recommend", "sentence", "should", "something", "stay", "tell", "that", "their", "then", "there", "these", "thing", "this", "those", "what", "when", "where", "which", "would", "write", "your",
 ]);
 
 function meaningfulTerms(value: string) {
@@ -30,6 +31,7 @@ export function needsInstantConversationContext(turns: InstantConversationTurn[]
   const text = userRequest.trim();
   if (!turns.length || !text || TOPIC_RESET.test(text)) return false;
   return FOLLOW_UP_SIGNAL.test(text)
+    || IMPLICIT_FOLLOW_UP.test(text)
     || CONTEXT_REFERENCE.test(text)
     || CONTEXT_OPERATION.test(text)
     || hasTopicOverlap(turns, text);
@@ -49,6 +51,35 @@ export function selectActiveInstantTopicTurns(turns: InstantConversationTurn[]) 
   return turns.slice(topicStart);
 }
 
+export function selectRelevantInstantTurns(turns: InstantConversationTurn[], userRequest = "") {
+  const activeTurns = selectActiveInstantTopicTurns(turns);
+  const requestTerms = meaningfulTerms(userRequest);
+  if (!requestTerms.size) return activeTurns;
+
+  const matchingIndexes: number[] = [];
+  for (let index = 0; index < turns.length; index += 1) {
+    const turnTerms = meaningfulTerms(`${turns[index].user} ${turns[index].assistant}`);
+    if ([...requestTerms].some((term) => turnTerms.has(term))) matchingIndexes.push(index);
+  }
+  if (!matchingIndexes.length) return activeTurns;
+
+  const selected = new Set<number>();
+  for (const index of matchingIndexes) {
+    selected.add(index);
+    // A correction or transformation immediately after a named turn often
+    // carries only a pronoun ("actually, it is purple"). Keep that local
+    // continuation, but stop as soon as the conversation starts a new topic.
+    for (let next = index + 1; next < Math.min(turns.length, index + 3); next += 1) {
+      if (TOPIC_RESET.test(turns[next].user)) break;
+      if (!needsInstantConversationContext(turns.slice(index, next), turns[next].user)) break;
+      selected.add(next);
+    }
+  }
+
+  const relevant = turns.filter((_, index) => selected.has(index));
+  return relevant.length ? relevant.slice(-6) : activeTurns;
+}
+
 export function buildInstantConversationContext(
   turns: InstantConversationTurn[],
   userRequest = "",
@@ -59,7 +90,7 @@ export function buildInstantConversationContext(
     return `Fast casual chat. The current request is standalone; do not carry over prior topics. No business memory required. ${CONTEXT_RULE}`.slice(0, budget);
   }
 
-  const activeTurns = selectActiveInstantTopicTurns(turns);
+  const activeTurns = selectRelevantInstantTurns(turns, userRequest);
   const fixedChars = CONTEXT_HEADER.length + CONTEXT_RULE.length + 2;
   let remaining = Math.max(budget - fixedChars, 0);
   const packed: string[] = [];

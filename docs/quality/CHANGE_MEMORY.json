@@ -747,8 +747,8 @@
           },
           {
             "file": "server/src/phantom-ai/instant-chat-fallback.ts",
-            "pattern": "selectActiveInstantTopicTurns[\\s\\S]*buildInstantChatToolReply[\\s\\S]*enforceInstantOutputConstraints",
-            "description": "Provider-outage replies reuse the active topic, deterministic personality/tools, and output constraints instead of behaving like a separate chatbot."
+          "pattern": "selectRelevantInstantTurns[\\s\\S]*buildInstantChatToolReply[\\s\\S]*enforceInstantOutputConstraints",
+          "description": "Provider-outage replies retrieve the relevant recent topic, deterministic personality/tools, and output constraints instead of behaving like a separate chatbot."
           },
           {
             "file": "server/scripts/test-instant-chat-http-fallback.ts",
@@ -795,11 +795,21 @@
             "pattern": "tool_id: \"phantom-stable-fact\"[\\s\\S]*function enforceCodeOnly",
             "description": "Explicit verified octopus facts use a curated stable answer, and code-only responses deterministically remove Markdown fences."
           },
-          {
-            "file": "server/scripts/test-instant-chat-http-live-model.ts",
-            "pattern": "topicIsolationVerified: true",
-            "description": "The authenticated model gate proves an accounting-to-penguin topic switch and its shorter follow-up never inherit stale business content."
-          }
+        {
+          "file": "server/scripts/test-instant-chat-http-live-model.ts",
+          "pattern": "topicIsolationVerified: true",
+          "description": "The authenticated model gate proves an accounting-to-penguin topic switch and its shorter follow-up never inherit stale business content."
+        },
+        {
+          "file": "server/src/phantom-ai/instant-chat-context.ts",
+          "pattern": "IMPLICIT_FOLLOW_UP[\\s\\S]*export function selectRelevantInstantTurns[\\s\\S]*return relevant.length",
+          "description": "Natural implicit follow-ups and named returns retrieve the relevant bounded thread instead of blindly using the newest unrelated topic."
+        },
+        {
+          "file": "server/scripts/test-instant-chat-http-live-model.ts",
+          "pattern": "naturalFollowUpVerified: true,[\\s\\S]*namedTopicRevisitVerified: true",
+          "description": "The authenticated real-model gate proves a natural travel follow-up and a corrected named-topic return after several intervening subjects."
+        }
       ],
       "forbiddenPatterns": [
         {

@@ -64,6 +64,18 @@ authoritative for the active organization. Missing server rows stay deleted;
 local fallback records may survive only when they are explicitly not
 server-backed.
 
+### D-0006 — Temporary chat retrieves the relevant thread, not merely the tail
+
+Instant conversation remains bounded, organization-scoped, and temporary, but
+`recent` does not mean `blindly use the final turn`. A natural implicit
+follow-up uses the active casual topic. A named return may retrieve matching
+turns and their nearby corrections from the bounded window while excluding
+intervening unrelated subjects.
+
+Standalone topic changes still receive a clean context packet, and unrelated
+business/accounting turns must never be reintroduced into casual conversation.
+This improves continuity without turning ten-day history into model memory.
+
 ## Decisions Needed Later
 
 - Exact subscription package names and module bundles.

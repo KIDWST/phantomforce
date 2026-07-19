@@ -8,15 +8,15 @@ Read `AGENTS.md` and every file under `docs/quality` before changing code. Do
 not restart the inventory unless it is invalid. Continue in this Codex task via
 heartbeat automation `continue-phantomforce-quality-program`.
 
-Cycle 19 closed the full business-record organization-isolation pass. One real
-database user with memberships in PhantomForce and ChicagoShots created unique
-CRM contacts, proposals, approvals, assets, accounting transactions, and bank
-connector requests in both organizations. The browser proved two-way UI and
-storage separation, reload persistence, forged `ws` rejection, direct
-nonmember 403 responses, aligned 20-turn chat, and clean 1440x900 plus 390x844
-rendering. The module graph is `phantom-live-20260718-37`.
+Cycle 20 corrected long-conversation topic selection. Natural implicit
+follow-ups now inherit the active casual subject; named returns retrieve their
+matching bounded thread and latest correction instead of packing the newest
+unrelated topic. The authenticated model gate passed 90 requests, and the real
+database browser completed 28 consecutive turns, organization round trips,
+and clean 1440x900 plus 390x844 rendering without business leakage. The module
+graph remains `phantom-live-20260718-37`; this was a backend-only correction.
 
-## Recommended Cycle 20
+## Recommended Cycle 21
 
 Theme: authenticated account lifecycle and authorization-error recovery.
 

@@ -41,7 +41,7 @@
     { "id": "settings", "label": "Settings", "group": "bottom", "purpose": "configuration" }
   ],
   "serverRouteGroups": [
-    { "group": "auth", "examples": ["/auth/owner-login", "/auth/login", "/auth/logout", "/auth/me", "/auth/switch-org"], "coverage": "56 API checks plus real two-organization browser proof" },
+    { "group": "auth", "examples": ["/auth/owner-login", "/auth/login", "/auth/logout", "/auth/me", "/auth/switch-org"], "coverage": "57 API checks plus real two-organization 28-turn browser proof" },
     { "group": "orgs", "examples": ["/orgs", "/orgs/:orgId/members", "/orgs/:orgId/invitations", "/orgs/:orgId/entitlements"], "coverage": "partial" },
     { "group": "crm", "examples": ["/api/crm/leads", "/api/crm/prospect-lanes"], "coverage": "runtime exercised" },
     { "group": "clientSetup", "examples": ["/api/client-setup", "/api/client-setup/slots/:slotId"], "coverage": "runtime exercised" },
@@ -59,7 +59,7 @@
     "mobile interaction matrix after responsive viewport baseline",
     "keyboard-only interaction",
     "screen-reader output",
-    "cross-tenant browser proof for CRM, proposals, approvals, assets, accounting, and connectors",
+    "complete browser account lifecycle and authorization-error recovery",
     "public pricing/product clarity",
     "404/deep-link/browser-history audit",
     "performance measurements"

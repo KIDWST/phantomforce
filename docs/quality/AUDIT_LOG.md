@@ -1460,4 +1460,51 @@ approvals, assets, accounting transactions, and connector state in Cycle 19.
 ## Next Task
 
 Exercise browser signup, invitations, recovery, logout/revocation, 2FA,
-role-restricted navigation, and authorization-error recovery in Cycle 20.
+role-restricted navigation, and authorization-error recovery in Cycle 21.
+
+# 2026-07-18 - Cycle 20: Relevant-Thread Conversational Continuity
+
+## Problems Verified
+
+- Instant chat could correctly recognize `Back to Nova` as contextual while
+  packing only the newest unrelated Saturn turn.
+- Natural follow-ups such as `How long should I stay?` after discussing a
+  first trip to Japan were labeled standalone and received no recent topic.
+- The provider-outage fallback used the same weaker active-tail selector.
+
+## Corrections
+
+- Added explicit recognition for natural implicit follow-ups that depend on the
+  immediately active casual subject.
+- Added bounded relevant-thread retrieval across the recent window. Named
+  returns include matching turns and nearby pronoun-based corrections, while
+  excluding unrelated intervening topics.
+- Reused the relevant selector in the local provider-outage fallback.
+- Added permanent change-memory guards for the stronger selector and model
+  proofs.
+
+## Source Verification
+
+- PASS: deterministic context proof packs Nova's corrected purple raincoat and
+  excludes volcanoes, jazz, and Saturn.
+- PASS: authenticated live-model gate completed 90 requests at 539 ms average
+  and 4,299 ms maximum with zero fallback and zero business leakage. Natural
+  follow-up and named-topic-return assertions are true.
+- PASS: disposable PostgreSQL auth passed all 57 API checks; real Chrome
+  completed 28 consecutive visible turns, returned `purple` after organization
+  round trips, and preserved two-way organization isolation.
+- PASS: visual review of desktop 1440x900 and mobile 390x844 screenshots under
+  `tmp/database-auth-org-browser/2026-07-19T00-52-39-046Z`; composer, text, and
+  bottom navigation remain visible without overlap or horizontal overflow.
+- PASS: `npm run test:dashboard-chat` (56 browser-brain prompts, 11 forced-
+  outage turns, and deterministic tool checks).
+- PASS: `npm run test:release-critical` (20/20).
+- PASS: `npm run typecheck --workspace @phantomforce/server`.
+- PASS: `npm run test:change-memory` (157 assertions).
+- PASS: `git diff --check`.
+
+## Next Task
+
+Exercise the complete browser account lifecycle and authorization-error
+recovery across customer/admin hosts and owner, admin, member, and client roles
+in Cycle 21.

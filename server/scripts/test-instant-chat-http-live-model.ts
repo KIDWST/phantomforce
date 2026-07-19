@@ -428,6 +428,23 @@ rows.push(newestCorrection);
 assert.match(newestCorrection.answer.trim(), /^Ember[.!]?$/i);
 assert.doesNotMatch(newestCorrection.answer, /Glacier/i);
 
+const naturalFollowUp: Turn[] = [];
+rows.push(await ask(customerToken, "I want to visit Japan in spring and I have never been.", naturalFollowUp));
+const japanStay = await ask(customerToken, "How long should I stay? Answer in one sentence.", naturalFollowUp);
+rows.push(japanStay);
+assert.match(japanStay.answer, /(?:day|week)/i);
+
+const topicRevisit: Turn[] = [];
+rows.push(await ask(adminToken, "For this chat only, my dog Nova wears a yellow raincoat.", topicRevisit));
+rows.push(await ask(adminToken, "Correction: Nova's raincoat is purple.", topicRevisit));
+rows.push(await ask(adminToken, "Explain volcanoes in one sentence.", topicRevisit));
+rows.push(await ask(adminToken, "What makes jazz distinctive? One sentence.", topicRevisit));
+rows.push(await ask(adminToken, "Name one interesting thing about Saturn.", topicRevisit));
+const revisitedNova = await ask(adminToken, "Back to Nova: what color is her raincoat? Color only.", topicRevisit);
+rows.push(revisitedNova);
+assert.match(revisitedNova.answer.trim(), /^purple[.!]?$/i);
+assert.doesNotMatch(revisitedNova.answer, /yellow|volcano|jazz|Saturn/i);
+
   console.log(JSON.stringify({
     ok: true,
     model,
@@ -459,6 +476,8 @@ assert.doesNotMatch(newestCorrection.answer, /Glacier/i);
     conversationalTasteVerified: true,
     lexicalRoutingVerified: true,
     topicIsolationVerified: true,
+    naturalFollowUpVerified: true,
+    namedTopicRevisitVerified: true,
   }, null, 2));
 } finally {
   ownedServer?.kill();

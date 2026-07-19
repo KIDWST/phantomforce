@@ -1,4 +1,4 @@
-import { needsInstantConversationContext, selectActiveInstantTopicTurns } from "./instant-chat-context.js";
+import { needsInstantConversationContext, selectRelevantInstantTurns } from "./instant-chat-context.js";
 import { buildInstantChatToolReply, enforceInstantOutputConstraints } from "./instant-chat-tools.js";
 
 const MAX_REPLY_CHARS = 520;
@@ -56,7 +56,7 @@ function topicalExample(previous: string, topicContext: string) {
 
 function followUpReply(request: string, recentConversation: RecentChatTurn[]) {
   if (!needsInstantConversationContext(recentConversation, request)) return "";
-  const activeConversation = selectActiveInstantTopicTurns(recentConversation);
+  const activeConversation = selectRelevantInstantTurns(recentConversation, request);
   const previous = previousAnswer(activeConversation);
   if (!previous) return "";
   const topicContext = activeConversation.slice(-6).map((turn) => `${turn.user} ${turn.assistant}`).join(" ");

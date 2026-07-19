@@ -52,6 +52,12 @@
   forbidden patterns there so another stale worktree cannot resurrect it.
 
 ## Recent, merged & live (newest first)
+- **Relevant-thread conversational recall (2026-07-18)** — backend-only Cycle
+  20 on app build `phantom-live-20260718-37`. Natural implicit follow-ups now
+  inherit the current casual topic, and named returns retrieve the matching
+  recent thread plus its correction instead of blindly packing the newest
+  unrelated subject. Real-model coverage is 90 requests; the authenticated
+  browser proof is 28 consecutive turns across two organizations.
 - **Business-record organization isolation (2026-07-18)** — build
   `phantom-live-20260718-37`. CRM leads, proposals, approvals, assets,
   accounting transactions, and connector requests are proven separate across
