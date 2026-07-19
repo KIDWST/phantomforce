@@ -68,9 +68,10 @@ function memoryRows(memories) {
   const filter = state.memoryType;
   const items = (memories || []).filter((memory) => filter === "all" || memory.type === filter);
   return items.map((memory) => `
-    <article class="brain-memory" data-memory-id="${esc(memory.id)}">
+    <article class="brain-memory ${memory.source === "business_context_profile" ? "is-gold" : ""}" data-memory-id="${esc(memory.id)}">
       <div>
         ${badge(memory.type)}
+        ${memory.source === "business_context_profile" ? badge("gold context", "warn") : ""}
         <p>${esc(memory.text)}</p>
         <small>${Math.round((memory.confidence || 0) * 100)}% confidence · weight ${Math.round((memory.weight || 0) * 100)} · used ${memory.useCount || 0}x</small>
       </div>
@@ -139,7 +140,7 @@ function renderShell(root) {
   const memories = brain.memoryVault?.memories || [];
   const profile = brain.behavioralProfile || {};
   const health = brain.systemBrainHealth || {};
-  const memoryTypes = ["all", "fact", "preference", "rule", "correction", "safety", "tool_state", "media_style", "workflow", "project"];
+  const memoryTypes = ["all", "brand", "fact", "preference", "rule", "correction", "safety", "tool_state", "media_style", "workflow", "project"];
 
   root.innerHTML = `
     <div class="brain-shell">

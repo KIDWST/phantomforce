@@ -6,7 +6,7 @@ import {
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator, resolveApproval,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260718-3";
+} from "./store.js?v=phantom-live-20260719-context-1";
 import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260718-4";
 import { WORKSPACE_DEFS, missionWidgets, esc, DEPARTMENTS } from "./workspaces.js?v=phantom-live-20260718-3";
 import { createPhantomCharacter } from "./character.js?v=phantom-live-20260718-3";
@@ -26,7 +26,7 @@ import { renderOperatorMiniSettings, renderOperatorSettings, renderOwnerAdminCon
 import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260718-3";
 import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260718-3";
 import { mountAmbient } from "./ambient.js?v=phantom-live-20260718-3";
-import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260718-3";
+import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260719-context-1";
 import {
   fetchAuthConfig, databaseLogin, databaseLogout, databaseSignup, databaseSignupDeveloper, databaseUpgradeDeveloperAccount, databaseForgotUsername, databaseForgotPassword,
   databaseResetPassword, databaseVerify2fa, databaseStart2faSetup, databaseConfirm2fa, databaseRegenerate2faBackupCodes, databaseDisable2fa,
@@ -788,6 +788,11 @@ function goNav(id) {
   if (item.view === "main") renderDashboardPage(true);
   else if (item.ws) renderWorkspacePage(item.ws, true);
 }
+
+window.addEventListener("phantom:navigate", (event) => {
+  const target = event?.detail?.nav || event?.detail?.workspace;
+  if (typeof target === "string" && target.trim()) goNav(target.trim());
+});
 
 function missionMapPrompts() {
   return [

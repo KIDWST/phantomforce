@@ -8,6 +8,8 @@ function assert(condition: unknown, message: string): asserts condition { if (!c
 
 const root = await mkdtemp(join(tmpdir(), "phantom-intelligence-"));
 process.env.PHANTOMFORCE_COMPETITOR_INTELLIGENCE_PATH = join(root, "intelligence.json");
+process.env.PHANTOM_BRAIN_MEMORY_PATH = join(root, "brain-memory.jsonl");
+process.env.PHANTOM_BRAIN_EVENTS_PATH = join(root, "brain-events.jsonl");
 process.env.NODE_ENV = "development";
 process.env.PHANTOMFORCE_SKIP_SERVER_DOTENV = "true";
 process.env.PHANTOMFORCE_SERVER_LISTEN = "false";
@@ -128,6 +130,24 @@ try {
   const token = (login.json() as { token: string }).token;
   const snapshotResponse = await app.inject({ method: "GET", url: "/api/competitor-intelligence", headers: { Authorization: `Bearer ${token}` } });
   assert(snapshotResponse.statusCode === 200 && snapshotResponse.json().access.aggressiveAvailable === true, "Admin API snapshot should expose aggressive mode readiness.");
+  const profileResponse = await app.inject({
+    method: "PUT",
+    url: "/api/competitor-intelligence/business-profile",
+    headers: { Authorization: `Bearer ${token}` },
+    payload: {
+      businessName: "PhantomForce",
+      category: "AI business operating system",
+      offering: "AI workspace, media tools, client pipeline, and automation",
+      audience: "small businesses, creators, and operators",
+      geography: "United States",
+      differentiators: ["operator memory", "local asset workflows"],
+      keywords: ["AI business manager", "automation"],
+      positioning: "A modern AI operating layer for business execution.",
+    },
+  });
+  assert(profileResponse.statusCode === 200 && profileResponse.json().memory?.source === "business_context_profile", "Saving a business profile must create gold business-context memory.");
+  const profileSnapshot = await app.inject({ method: "GET", url: "/api/competitor-intelligence", headers: { Authorization: `Bearer ${token}` } });
+  assert(profileSnapshot.statusCode === 200 && profileSnapshot.json().memoryContext?.count >= 1, "Intelligence snapshot must expose relevant business-context memories.");
   const scoutResponse = await app.inject({ method: "POST", url: "/api/competitor-intelligence/scout", headers: { Authorization: `Bearer ${token}` }, payload: { businessName: "Route Studio", offer: "AI website builder", location: "Chicago", audience: "small businesses" } });
   assert(scoutResponse.statusCode === 200 && scoutResponse.json().scout.status !== "needs_context", "Scout route should save market context and return active lanes.");
   const blockedResponse = await app.inject({ method: "POST", url: "/api/competitor-intelligence/policy-check", headers: { Authorization: `Bearer ${token}` }, payload: { action: "bypass a CAPTCHA and rotate IP addresses" } });

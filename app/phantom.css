@@ -1268,6 +1268,11 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: start;
   padding: 13px; border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; background: rgba(255,255,255,0.025);
 }
+.brain-memory.is-gold {
+  border-color: rgba(255, 211, 91, 0.42);
+  background: linear-gradient(135deg, rgba(255, 211, 91, 0.08), rgba(65, 255, 161, 0.035));
+  box-shadow: inset 3px 0 0 rgba(255, 211, 91, 0.72);
+}
 .brain-memory p { margin: 8px 0 7px; color: #eafff3; line-height: 1.45; }
 .brain-memory small, .brain-event small { display: block; color: var(--muted); font-size: 11px; line-height: 1.35; }
 .brain-memory-actions { display: flex; gap: 7px; }

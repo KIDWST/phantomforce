@@ -15,6 +15,8 @@ assert.match(index, /competitor-intelligence\.css\?v=phantom-live-/u, "The dedic
 assert.match(module, /Aggressive Intelligence/u, "Optional aggressive mode must be visible.");
 assert.match(module, /ON-DEMAND MARKET SCOUT|data-ci-scout-form/u, "The first-run experience must arm an on-demand market scout instead of waiting for manual competitor entry.");
 assert.match(module, /ci-market-board|momentumLabel/u, "The overview must render a stock-market-style competitor board.");
+assert.match(module, /data-ci-context-profile|Set business context|Confirm business context/u, "Competitor Intelligence must provide an obvious business-context setup button when context is incomplete.");
+assert.match(module, /data-ci-open-memory|Memory Vault/u, "Competitor Intelligence must expose the relevant memory vault from the context state.");
 assert.match(module, /ci-market-map|data-ci-focus-competitor|trendProfile|sparkline/u, "The overview must render an interactive market map with trend visuals.");
 assert.match(module, /directThreat|is-threat-|Red = direct competitor/u, "The market map must highlight direct competitors in red.");
 assert.match(module, /ci-map-heat|heatSpots/u, "The market map must render a heat-map layer, not just dots.");
@@ -34,6 +36,7 @@ assert.match(service, /AutoScoutReport|buildAutoScoutReport|phantomAngleFor|sour
 assert.match(service, /STARTER_COMPETITORS[\s\S]*ChatGPT[\s\S]*Claude[\s\S]*HubSpot[\s\S]*HighLevel[\s\S]*Zapier[\s\S]*Hootsuite/u, "The service must seed PhantomForce-relevant starter competitors.");
 assert.match(service, /marketBoardMode|starterCompetitors/u, "The snapshot must distinguish starter competitors from live tracked competitors.");
 assert.match(css, /ci-auto-scout|ci-auto-bars|ciBarLoad/u, "Automatic market intelligence graphics must be styled and animated.");
+assert.match(css, /ci-context-actions|needs-input/u, "Business-context calls to action must be styled as a visible card, not hidden in copy.");
 assert.match(css, /ci-market-map|ci-map-node|ciMapSpin|ci-sparkline/u, "The competitor map must be graphic, animated, and trend-oriented.");
 assert.match(css, /ci-map-stage\{[^}]*overflow:hidden/u, "The competitor map stage must clip internally instead of hanging off the page.");
 assert.match(css, /ci-map-heat|is-threat-direct|rgba\(255,84,95/u, "The competitor map must use red heat styling for direct competitors.");

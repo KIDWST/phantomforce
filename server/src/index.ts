@@ -5951,15 +5951,67 @@ function intelligenceError(reply: FastifyReply, error: unknown) {
   return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : "Competitor intelligence request could not be completed." });
 }
 
+function businessContextMemoryText(profile: Record<string, unknown>) {
+  const list = (value: unknown) => (Array.isArray(value) ? value : String(value ?? "").split(/[\n,]/)).map((entry) => String(entry ?? "").trim()).filter(Boolean).slice(0, 10).join(", ");
+  const name = String(profile.businessName || "This business").trim();
+  const category = String(profile.category || "business").trim();
+  const offering = String(profile.offering || "its offer").trim();
+  const audience = String(profile.audience || "its target customers").trim();
+  const geography = String(profile.geography || "its market").trim();
+  const positioning = String(profile.positioning || "Not specified").trim();
+  const differentiators = list(profile.differentiators) || "Not specified";
+  const keywords = list(profile.keywords) || "Not specified";
+  return `Business context profile: ${name} is a ${category} business offering ${offering} for ${audience} in ${geography}. Positioning: ${positioning}. Differentiators: ${differentiators}. Keywords: ${keywords}. Treat this manually confirmed context as gold context for targeting, routing, proposals, memories, and competitor intelligence.`;
+}
+
+function businessMemoryRelevant(memory: { text?: unknown; source?: unknown; type?: unknown; weight?: unknown }, profile?: Record<string, unknown> | null) {
+  if (memory.source === "business_context_profile") return true;
+  if (memory.type === "brand" && Number(memory.weight || 0) >= 0.8) return true;
+  const text = String(memory.text || "").toLowerCase();
+  const terms = [
+    profile?.businessName,
+    profile?.category,
+    profile?.offering,
+    profile?.audience,
+    "business context",
+    "positioning",
+    "differentiator",
+  ].map((value) => String(value || "").toLowerCase().trim()).filter((value) => value.length >= 4);
+  return terms.some((term) => text.includes(term.slice(0, 60)));
+}
+
 app.get("/api/competitor-intelligence", async (request, reply) => {
   const session = requireAccessSession(request, reply);
   if (!session) return reply;
   const query = (request.query ?? {}) as { tenant_id?: unknown };
   const access = await competitorIntelligenceAccess(session);
+  const snapshot = await getCompetitorIntelligenceSnapshot(session, { tenantId: query.tenant_id, ...access });
+  let memoryContext: { count: number; memories: Array<Record<string, unknown>>; unavailable?: boolean } = { count: 0, memories: [] };
+  try {
+    const tenantId = snapshot.businessProfile?.tenantId || (typeof query.tenant_id === "string" ? query.tenant_id : undefined);
+    const brainOptions = brainStoreOptionsForSession(session, { tenant_id: tenantId });
+    const memoryVault = await listBrainMemories(session, { ...brainOptions, limit: 80, readOnly: true });
+    const relevant = memoryVault.memories.filter((memory) => businessMemoryRelevant(memory, snapshot.businessProfile));
+    memoryContext = {
+      count: relevant.length,
+      memories: relevant.slice(0, 8).map((memory) => ({
+        id: memory.id,
+        type: memory.type,
+        text: memory.text,
+        source: memory.source,
+        weight: memory.weight,
+        confidence: memory.confidence,
+        updatedAt: memory.updatedAt,
+      })),
+    };
+  } catch {
+    memoryContext = { count: 0, memories: [], unavailable: true };
+  }
   return {
     ok: true,
     session,
-    ...(await getCompetitorIntelligenceSnapshot(session, { tenantId: query.tenant_id, ...access })),
+    ...snapshot,
+    memoryContext,
     webDiscovery: getWebDiscoveryStatus(),
     subscription: access,
     storage: session.canManageAccess ? await getCompetitorIntelligenceStoreStatus() : undefined,
@@ -5976,7 +6028,28 @@ app.get("/api/competitor-intelligence/business-profile", async (request, reply) 
 app.put("/api/competitor-intelligence/business-profile", async (request, reply) => {
   const session = requireAccessSession(request, reply); if (!session) return reply;
   const access = await competitorIntelligenceAccess(session); if (!access.entitled) return reply.code(403).send({ ok: false, error: "Competitor Intelligence is not available for this plan." });
-  try { return { ok: true, ...(await saveBusinessProfile(session, (request.body ?? {}) as Record<string, unknown>)) }; } catch (error) { return intelligenceError(reply, error); }
+  try {
+    const saved = await saveBusinessProfile(session, (request.body ?? {}) as Record<string, unknown>);
+    let memory: unknown = null;
+    let memory_warning: string | null = null;
+    try {
+      memory = await createBrainMemory(
+        session,
+        {
+          text: businessContextMemoryText(saved.profile as unknown as Record<string, unknown>),
+          type: "brand",
+          confidence: 0.97,
+          weight: 0.95,
+          source: "business_context_profile",
+        },
+        brainStoreOptionsForSession(session, { tenant_id: saved.profile.tenantId }),
+      );
+    } catch (memoryError) {
+      memory_warning = memoryError instanceof Error ? memoryError.message : "memory_save_failed";
+      request.log.warn({ err: memoryError }, "Business profile saved, but memory context write failed.");
+    }
+    return { ok: true, ...saved, memory, memory_warning };
+  } catch (error) { return intelligenceError(reply, error); }
 });
 
 app.post("/api/competitor-intelligence/discover", async (request, reply) => {

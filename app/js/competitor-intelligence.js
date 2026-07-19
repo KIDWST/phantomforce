@@ -116,6 +116,11 @@ function sourceStateLabel(item) {
 }
 function hostOf(value) { try { return new URL(value).hostname; } catch { return String(value || ""); } }
 function contextValue(field) { return ui.snapshot?.scout?.context?.[field] || ""; }
+function businessContextComplete() {
+  const p = ui.snapshot?.businessProfile;
+  const c = ui.snapshot?.scout?.context;
+  return Boolean((p?.businessName || c?.businessName) && (p?.offering || c?.offer) && (p?.audience || c?.audience));
+}
 function contextLine() {
   const p = ui.snapshot?.businessProfile;
   const c = ui.snapshot?.scout?.context;
@@ -123,8 +128,23 @@ function contextLine() {
   const offer = p?.offering || c?.offer || "";
   const audience = p?.audience || c?.audience || "";
   const where = p?.geography || c?.location || "";
-  if (!name && !offer) return "No business context yet — set up the profile and scout in Sources & settings so the radar targets the right market.";
+  if (!name && !offer) return "Business context needs confirmation. Phantom has starter signals, but the owner profile is the source of truth.";
   return [name, offer, audience ? `for ${audience}` : "", where].filter(Boolean).join(" · ");
+}
+function contextCard() {
+  const ready = businessContextComplete();
+  const memories = ui.snapshot?.memoryContext || {};
+  return `<div class="ci-context ${ready ? "is-ready" : "needs-input"}">
+    <div>
+      <b>${esc(ready ? "Business context active" : "Confirm business context")}</b>
+      <span>${esc(contextLine())}</span>
+      <small>${ready ? "This profile is treated as gold context for targeting, memory, and AI routing." : "One clean profile is the main input Phantom needs: what you sell, who buys it, where you operate, and what makes you different."}</small>
+    </div>
+    <div class="ci-context-actions">
+      <button class="ci-primary" type="button" data-ci-context-profile>${ready ? "Review context" : "Set business context"}</button>
+      <button class="ci-secondary" type="button" data-ci-open-memory>Memory Vault${memories.count ? ` · ${Number(memories.count)}` : ""}</button>
+    </div>
+  </div>`;
 }
 function viewHead(kicker, title, hint = "") { return `<header class="ci-view-head"><p class="ci-kicker">${esc(kicker)}</p><h3>${esc(title)}</h3>${hint ? `<p>${esc(hint)}</p>` : ""}</header>`; }
 
@@ -271,7 +291,7 @@ function radar() {
   const auto = s.autoScout || {};
   const widget = RADAR_WIDGETS.some(([id]) => id === ui.radarWidget) ? ui.radarWidget : "board";
   return `${viewHead("MARKET RADAR", auto.headline || "Where the market is moving")}
-    <div class="ci-context"><b>${esc(contextLine())}</b>${auto.sourceNote ? `<span>${esc(auto.sourceNote)}</span>` : ""}</div>
+    ${contextCard()}
     ${metrics()}${marketMap()}
     <nav class="ci-radar-widgets" aria-label="Competitor views">${RADAR_WIDGETS.map(([id, label]) => `<button type="button" class="${widget === id ? "is-active" : ""}" data-ci-widget="${id}">${label}${id === "alerts" && Number(s.metrics?.unreadAlerts || 0) ? `<i class="ci-widget-badge">${Number(s.metrics.unreadAlerts)}</i>` : ""}</button>`).join("")}</nav>
     <section class="ci-radar-panel">${radarWidgetPanel()}</section>`;
@@ -382,7 +402,7 @@ function sourcesView() {
     <section class="ci-two-col">
       <div>
         <div class="ci-settings-card"><div class="ci-settings-head"><h4 class="ci-sub">Market scout</h4>${statusPill(scoutStatusLabel(scout.status || "needs_context"), scout.status === "needs_context" ? "warn" : "good")}</div><p class="ci-hint">${esc(scout.briefing || "Public-source scouting is active.")}</p>${scout.missing?.length ? `<div class="ci-missing">${scout.missing.map((item) => `<span>${esc(item)}</span>`).join("")}</div>` : ""}${scoutForm()}<details class="ci-source-drawer"><summary>Source lanes Phantom is checking <span>${(scout.lanes || []).length}</span></summary><div class="ci-scout-lanes">${(scout.lanes || []).map(scoutLaneCard).join("")}</div></details></div>
-        <div class="ci-settings-card ${profile?.autoSeeded ? "is-seeded" : ""}"><div class="ci-settings-head"><h4 class="ci-sub">Business profile</h4>${profile?.autoSeeded ? statusPill("AUTO-DRAFTED — CONFIRM", "warn") : profile ? statusPill("SAVED", "good") : ""}</div><p class="ci-hint">Phantom uses this to find the right competitors and dig into each one. The more accurate it is, the sharper the leads.</p>${profileBlock}</div>
+        <div class="ci-settings-card ${profile?.autoSeeded ? "is-seeded" : ""}"><div class="ci-settings-head"><h4 class="ci-sub">Business context profile</h4>${profile?.autoSeeded ? statusPill("AUTO-DRAFTED — CONFIRM", "warn") : profile ? statusPill("SAVED TO MEMORY", "good") : ""}</div><p class="ci-hint">This is the gold context Phantom uses for competitor targeting, proposals, routing, and memories. Users can see or edit it from Memory.</p>${profileBlock}</div>
         ${webDiscoveryBanner()}
         <details class="ci-builder"><summary>Check a planned research action</summary><form data-ci-policy-form><label>Describe the planned action<textarea name="action" rows="4" maxlength="3000" required></textarea></label><button class="ci-primary">Check boundary</button></form></details>
         <div class="ci-boundaries"><h3>Hard boundaries</h3><p>Aggressive mode changes speed and synthesis, not access rights.</p><ul><li>Public and lawfully supplied evidence only</li><li>No identities, private groups, bypasses, or deception</li><li>No invasive targeting of individual commenters</li><li>No cloning protected expression</li><li>No outreach, publishing, or operational interference</li></ul></div>
@@ -458,6 +478,10 @@ function bind() {
   root.querySelector("[data-ci-signal-search]")?.addEventListener("input", (event) => { ui.signalQuery = event.target.value; render(); root.querySelector("[data-ci-signal-search]")?.focus(); });
   const filter = root.querySelector("[data-ci-competitor-filter]"); if (filter) { filter.value = ui.competitorFilter; filter.addEventListener("change", (event) => { ui.competitorFilter = event.target.value; render(); }); }
   root.querySelector("[data-ci-edit-profile]")?.addEventListener("click", () => { ui.editingProfile = true; render(); });
+  root.querySelector("[data-ci-context-profile]")?.addEventListener("click", () => { ui.tab = "sources"; ui.editingProfile = true; ui.notice = ""; ui.error = ""; render(); root.scrollIntoView({ behavior: "smooth", block: "start" }); });
+  root.querySelector("[data-ci-open-memory]")?.addEventListener("click", () => {
+    window.dispatchEvent(new CustomEvent("phantom:navigate", { detail: { nav: "memory" } }));
+  });
   root.querySelector("[data-ci-profile-cancel]")?.addEventListener("click", () => { ui.editingProfile = false; render(); });
   root.querySelector("[data-ci-discover]")?.addEventListener("click", async () => {
     ui.busy = "discover"; ui.error = ""; ui.notice = ""; render();
