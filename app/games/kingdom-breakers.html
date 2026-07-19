@@ -276,6 +276,16 @@ const AMMO={
 };
 const AMMO_ORDER=['stonefall','splinter','ember'];
 
+// A Warden's health pool. Typical single-hit damage across the ammo set is
+// stonefall 36, ember ~26-30 (direct/near-splash), splinter 16 (its pierce
+// trades single-target power for reach, so it fairly needs more grazes on
+// one small target). 90 HP sits at ~3.5x that spread's average (~26), which
+// works out to ~2-3 solid stonefall/ember hits or ~5-6 splinter grazes to
+// fully harm a Warden — enough to require real, repeated exposure rather
+// than the previous one-graze-and-done behavior, without turning the
+// Warden into a damage sponge.
+const WARDEN_MAX_HP=90;
+
 const LEVELS=[
   {key:'rustwatch',   name:'Rustwatch Post',      sub:'A crumbling watchtower guarding the marsh road.',       cols:4, rows:4, blockW:76, blockH:54, wardenCount:0, ironcladFrom:0, budget:{stonefall:4,splinter:3,ember:2}},
   {key:'cinderdock',  name:'Cinderdock Hold',     sub:'A dockside granary stacked three stories high.',        cols:5, rows:5, blockW:70, blockH:50, wardenCount:1, ironcladFrom:0, budget:{stonefall:5,splinter:4,ember:2}},
@@ -394,12 +404,41 @@ function buildStructure(levelDef, seed, opts={}){
     }
   }
   if(keystone) keystone.isKeystone=true;
-  const candidates=blocks.filter(b=>b!==keystone && !(grid[b.row+1] && grid[b.row+1][b.col]));
+  // Row index increases UPWARD (y: groundY-r*blockH-blockH/2, so a bigger r
+  // sits higher on screen) and col follows the grid array's own column
+  // index. A block is genuinely "protected" only if something is still
+  // standing directly above it (grid[row+1][col] — blocks lofted/vertical
+  // shots) AND to at least one side (grid[row][col-1] or [col+1] — blocks
+  // simple exposed-face shots). The old filter did the opposite: it picked
+  // blocks with NOTHING above them, i.e. always the exposed roofline.
+  function wardenCover(b){
+    const above=!!(grid[b.row+1] && grid[b.row+1][b.col]);
+    const left=!!(grid[b.row] && grid[b.row][b.col-1]);
+    const right=!!(grid[b.row] && grid[b.row][b.col+1]);
+    return {above, sideCount:(left?1:0)+(right?1:0)};
+  }
+  const nonKeystone=blocks.filter(b=>b!==keystone);
+  let candidates=nonKeystone.filter(b=>{ const c=wardenCover(b); return c.above && c.sideCount>0; });
   shuffleInPlace(candidates, rng);
+  if(candidates.length<levelDef.wardenCount){
+    // Small/simple structures may not have enough fully interior+covered
+    // blocks for the configured wardenCount — rather than crash or leave a
+    // Warden unspawned, fall back to the most-covered remaining blocks
+    // (prefers "has something above" over "has a side neighbor") so every
+    // level still spawns its full wardenCount.
+    const rest=nonKeystone.filter(b=>!candidates.includes(b));
+    shuffleInPlace(rest, rng);
+    rest.sort((a,b2)=>{
+      const ca=wardenCover(a), cb=wardenCover(b2);
+      const scoreA=(ca.above?2:0)+ca.sideCount, scoreB=(cb.above?2:0)+cb.sideCount;
+      return scoreB-scoreA;
+    });
+    candidates=candidates.concat(rest);
+  }
   const wardens=[];
   for(let i=0;i<levelDef.wardenCount && i<candidates.length;i++){
     const b=candidates[i];
-    wardens.push({id:idPrefix+'w'+i, owner, blockId:b.id, x:b.x, y:b.y-b.h/2-16, radius:15, alive:true, harmed:false});
+    wardens.push({id:idPrefix+'w'+i, owner, blockId:b.id, x:b.x, y:b.y-b.h/2-16, radius:15, alive:true, harmed:false, hp:WARDEN_MAX_HP, maxHp:WARDEN_MAX_HP});
   }
   const totalMaxHp=blocks.reduce((s,b)=>s+b.maxHp,0);
   return {blocks, wardens, grid, groundY, baseX, blockW, blockH, cols, rows, totalMaxHp, keystoneId: keystone?keystone.id:null, owner};
@@ -477,13 +516,65 @@ function triggerSlowMo(block){
 function block_lastKeystoneX(){ const ks=level.blocks.find(b=>b.id===level.keystoneId); return ks?ks.x:WORLD_W*0.7; }
 function block_lastKeystoneY(){ const ks=level.blocks.find(b=>b.id===level.keystoneId); return ks?ks.y:WORLD_H*0.5; }
 
-function checkWardenHit(x,y,radius,targetOwner=null){
+// Standard segment-vs-AABB test (slab method): true if the line from
+// (x0,y0) to (x1,y1) passes through the axis-aligned box centered at
+// (cx,cy) with the given half-width/half-height.
+function segmentIntersectsAABB(x0,y0,x1,y1,cx,cy,halfW,halfH){
+  const minX=cx-halfW, maxX=cx+halfW, minY=cy-halfH, maxY=cy+halfH;
+  let tmin=0, tmax=1;
+  const dx=x1-x0, dy=y1-y0;
+  if(Math.abs(dx)<1e-9){
+    if(x0<minX || x0>maxX) return false;
+  } else {
+    let t1=(minX-x0)/dx, t2=(maxX-x0)/dx;
+    if(t1>t2){ const tmp=t1; t1=t2; t2=tmp; }
+    tmin=Math.max(tmin,t1); tmax=Math.min(tmax,t2);
+    if(tmin>tmax) return false;
+  }
+  if(Math.abs(dy)<1e-9){
+    if(y0<minY || y0>maxY) return false;
+  } else {
+    let t1=(minY-y0)/dy, t2=(maxY-y0)/dy;
+    if(t1>t2){ const tmp=t1; t1=t2; t2=tmp; }
+    tmin=Math.max(tmin,t1); tmax=Math.min(tmax,t2);
+    if(tmin>tmax) return false;
+  }
+  return tmax>=tmin;
+}
+// True if ANY currently-alive block sits between (x0,y0) and (x1,y1) — used
+// to stop a shot/splash from reaching a Warden through a wall. Filtered to
+// blocks sharing the Warden's owner (its own castle side) since that's the
+// only geometry that could plausibly sit between a shot and it.
+function wardenLineOccluded(x0,y0,x1,y1,wardenOwner){
+  for(const b of level.blocks){
+    if(!b.alive) continue;
+    if(wardenOwner && b.owner!==wardenOwner) continue;
+    if(segmentIntersectsAABB(x0,y0,x1,y1,b.x,b.y,b.w/2,b.h/2)) return true;
+  }
+  return false;
+}
+
+function checkWardenHit(x,y,radius,damage,targetOwner=null,isSplash=false){
   for(const w of level.wardens){
     if(targetOwner && w.owner!==targetOwner) continue;
     if(!w.alive || w.harmed) continue;
-    if(Math.hypot(w.x-x,w.y-y) <= radius+w.radius){
+    const d=Math.hypot(w.x-x,w.y-y);
+    if(d > radius+w.radius) continue;
+    if(wardenLineOccluded(x,y,w.x,w.y,w.owner)) continue;
+    // Splash falls off with distance exactly like block damage does
+    // (resolveProjectileHit's ember loop); a direct hit deals full damage.
+    let dmg=damage;
+    if(isSplash){
+      const falloff=1-d/radius;
+      dmg=Math.round(damage*falloff*falloff+damage*0.15);
+    }
+    w.hp=Math.max(0,(w.hp==null?WARDEN_MAX_HP:w.hp)-dmg);
+    // Every hit that gets through cover triggers the alarm/alert feedback,
+    // even before the Warden is fully harmed — the player should know they
+    // grazed it. "Harmed" (the scoring penalty) only fires once HP is spent.
+    spawnWardenAlert(w); playWardenAlarm();
+    if(w.hp<=0){
       w.harmed=true; wardensHarmedCount++; wardensHarmedBy[activeShooter]=(wardensHarmedBy[activeShooter]||0)+1;
-      spawnWardenAlert(w); playWardenAlarm();
     }
   }
 }
@@ -507,7 +598,14 @@ function projectileTraceHit(p,spec,x0,y0,x1,y1,targetOwner=null){
     const y=y0+(y1-y0)*t;
     for(const w of level.wardens){
       if(targetOwner && w.owner!==targetOwner) continue;
-      if(w.alive && !w.harmed && Math.hypot(w.x-x,w.y-y) <= spec.radius+w.radius) return {x,y,block:null};
+      if(!w.alive || w.harmed) continue;
+      if(Math.hypot(w.x-x,w.y-y) > spec.radius+w.radius) continue;
+      // A wall between the shot's path (this frame's start) and the Warden
+      // means this sample doesn't count as reaching it — the projectile
+      // should keep going until it actually hits that wall via the block
+      // check below, instead of registering a phantom warden "hit" through it.
+      if(wardenLineOccluded(x0,y0,w.x,w.y,w.owner)) continue;
+      return {x,y,block:null};
     }
     for(const b of level.blocks){
       if(targetOwner && b.owner!==targetOwner) continue;
@@ -549,7 +647,7 @@ function resolveProjectileHit(p, block){
         applyDamage(b, dmg, dx/len*spec.impulse*falloff, dy/len*spec.impulse*falloff-140);
       }
     }
-    checkWardenHit(p.x,p.y,spec.splash,targetOwner);
+    checkWardenHit(p.x,p.y,spec.splash,spec.damage,targetOwner,true);
     spawnExplosion(p.x,p.y); playExplosion(); shake=Math.max(shake,10);
     p.alive=false; return;
   }
@@ -557,7 +655,7 @@ function resolveProjectileHit(p, block){
     applyDamage(block, spec.damage, p.vx*spec.impulse/900, p.vy*spec.impulse/900 - 60);
     p.hitIds.add(block.id);
   }
-  checkWardenHit(p.x,p.y,spec.radius,targetOwner);
+  checkWardenHit(p.x,p.y,spec.radius,spec.damage,targetOwner,false);
   if(p.kind==='splinter' && p.pierceLeft>0 && block){
     p.pierceLeft--; p.vx*=0.74; p.vy*=0.74; shake=Math.max(shake,4);
   } else {
@@ -769,10 +867,27 @@ function drawBlocks(){
     ctx.restore();
   }
 }
+function mixColor(hexA,hexB,t){
+  const a=parseInt(hexA.slice(1),16), b=parseInt(hexB.slice(1),16);
+  const ar=(a>>16)&255, ag=(a>>8)&255, ab=a&255;
+  const br=(b>>16)&255, bg=(b>>8)&255, bb=b&255;
+  const r=Math.round(ar+(br-ar)*t), g=Math.round(ag+(bg-ag)*t), bl=Math.round(ab+(bb-ab)*t);
+  return `rgb(${r},${g},${bl})`;
+}
 function drawWardens(){
   for(const w of level.wardens){
     ctx.save(); ctx.translate(w.x,w.y); ctx.globalAlpha = w.harmed?0.35:1;
-    ctx.fillStyle = w.harmed? '#5c6480' : (mode==='duel' && w.owner==='bot' ? '#ffb454' : '#3fe0c5');
+    const baseColor = mode==='duel' && w.owner==='bot' ? '#ffb454' : '#3fe0c5';
+    let fill;
+    if(w.harmed) fill='#5c6480';
+    else if(w.maxHp && w.hp<w.maxHp){
+      // Wounded but not down yet: nudge the base color toward ember red in
+      // proportion to damage taken, capped well short of the fully-harmed
+      // grey so it stays a distinct "hurt" read rather than duplicating it.
+      const dmgRatio=clamp(1-w.hp/w.maxHp,0,1);
+      fill=mixColor(baseColor,'#ff5d5d',dmgRatio*0.65);
+    } else fill=baseColor;
+    ctx.fillStyle = fill;
     ctx.beginPath(); ctx.arc(0,0,w.radius,0,Math.PI*2); ctx.fill();
     ctx.fillStyle='#0a0d13'; ctx.beginPath(); ctx.arc(-4,-2,1.6,0,Math.PI*2); ctx.arc(4,-2,1.6,0,Math.PI*2); ctx.fill();
     ctx.restore();
@@ -907,7 +1022,7 @@ addEventListener('keydown', e=>{
   else if(e.key==='ArrowLeft'){ aim.angle=clamp(aim.angle-0.03,-Math.PI*0.47,-Math.PI*0.03); showAimReadoutWorld(); }
   else if(e.key==='ArrowRight'){ aim.angle=clamp(aim.angle+0.03,-Math.PI*0.47,-Math.PI*0.03); showAimReadoutWorld(); }
   else if((e.key===' '||e.key==='Enter') && canAim()){ e.preventDefault(); commitShot(); }
-  else if(e.key==='p'||e.key==='P') togglePauseLocal();
+  else if(e.key==='Escape') togglePauseLocal();
 });
 function selectAmmo(key){ if((pools.player[key]||0)<=0) return; currentAmmo=key; refreshHud(); playUiClick(); }
 

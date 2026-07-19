@@ -648,7 +648,7 @@
       const k=e.key.toLowerCase();
       if(['arrowleft','arrowright','a','d'].includes(k)){e.preventDefault();keys.add(k)}
       if(e.code==='Space'||k==='arrowup'||e.code==='Enter'){e.preventDefault();launch()}
-      if(k==='p'){e.preventDefault();setPaused(!paused)}
+      if(k==='escape'){e.preventDefault();setPaused(!paused)}
     });
     addEventListener('keyup',e=>keys.delete(e.key.toLowerCase()));
     addEventListener('resize',fit);

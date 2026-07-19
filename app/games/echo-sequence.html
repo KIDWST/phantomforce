@@ -176,7 +176,7 @@
 
     pads.forEach((pad,i)=>pad.addEventListener('pointerdown',e=>{e.preventDefault();press(i)}));
     addEventListener('keydown',e=>{
-      if(e.key==='p'||e.key==='P'){e.preventDefault();setPaused(!paused);return}
+      if(e.key==='Escape'){e.preventDefault();setPaused(!paused);return}
       if(e.key>='1'&&e.key<='4'){e.preventDefault();press(Number(e.key)-1)}
     });
     startEl.querySelector('button').onclick=startRun;

@@ -124,7 +124,7 @@
     canvas.addEventListener('pointercancel',()=>{target.active=false;target.boost=false});
     document.querySelector('[data-touch-dash]').addEventListener('pointerdown',e=>{e.preventDefault();touchDash=true});document.querySelector('[data-touch-dash]').addEventListener('pointerup',()=>touchDash=false);document.querySelector('[data-touch-dash]').addEventListener('pointercancel',()=>touchDash=false);
     document.querySelector('[data-touch-absorb]').addEventListener('click',()=>{touchAbsorb=true;setTimeout(()=>touchAbsorb=false,80)});
-    addEventListener('keydown',event=>{const k=event.key.toLowerCase();if(["arrowleft","arrowright","arrowup","arrowdown","w","a","s","d"," ","enter","shift","/","i","j","k","l","u","o","t","f","g","h","r","y","p"].includes(k))event.preventDefault();if(k==="p")setPaused(!paused);keys.add(k)});
+    addEventListener('keydown',event=>{const k=event.key.toLowerCase();if(["arrowleft","arrowright","arrowup","arrowdown","w","a","s","d"," ","enter","shift","/","i","j","k","l","u","o","t","f","g","h","r","y"].includes(k))event.preventDefault();if(k==="escape")setPaused(!paused);keys.add(k)});
     addEventListener('keyup',event=>keys.delete(event.key.toLowerCase()));
     addEventListener('resize',resize);
     document.querySelectorAll("[data-mode-start]").forEach(btn=>btn.onclick=()=>start(Number(btn.dataset.modeStart)||1));

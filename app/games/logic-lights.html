@@ -224,7 +224,7 @@
     addEventListener('keydown',e=>{
       if(e.ctrlKey||e.metaKey||e.altKey)return;
       const k=e.key;
-      if(k==='p'||k==='P'){e.preventDefault();setPaused(!paused);return}
+      if(k==='Escape'){e.preventDefault();setPaused(!paused);return}
       if(paused)return;
       if(phase==='between'&&(k==='Enter'||k===' ')){e.preventDefault();nextLevel();return}
       if(phase!=='playing')return;

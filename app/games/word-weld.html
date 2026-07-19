@@ -71,7 +71,7 @@
     document.querySelectorAll('[data-start]').forEach(b=>b.onclick=()=>start(b.dataset.start));
     document.querySelectorAll('[data-mode-btn]').forEach(b=>b.onclick=()=>setMode(b.dataset.modeBtn));
     document.querySelectorAll('[data-enter]').forEach(b=>b.onclick=submit);document.querySelectorAll('[data-back]').forEach(b=>b.onclick=backspace);pauseEl.querySelector('button').onclick=()=>setPaused(false);
-    addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();submit()}else if(event.key==='Backspace'){event.preventDefault();backspace()}else if(event.key==='Escape'||event.key==='p'||event.key==='P'){setPaused(!paused)}else if(/^[a-z]$/i.test(event.key)){typeLetter(event.key.toLowerCase())}});
+    addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();submit()}else if(event.key==='Backspace'){event.preventDefault();backspace()}else if(event.key==='Escape'){setPaused(!paused)}else if(/^[a-z]$/i.test(event.key)){typeLetter(event.key.toLowerCase())}});
     document.addEventListener('visibilitychange',()=>{if(document.hidden)setPaused(true)});
     addEventListener('message',event=>{if(event.data?.source!=='phantomplay-host')return;if(event.data.type==='pause')setPaused(true);if(event.data.type==='resume')setPaused(false);if(event.data.type==='exit')setPaused(true);if(event.data.type==='restart')start(mode,true)});
     render();host('ready');

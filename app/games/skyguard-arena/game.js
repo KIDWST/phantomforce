@@ -748,7 +748,6 @@ commanderBtn.addEventListener('click', () => {
 addEventListener('keydown', (e) => {
   if (currentScreen !== 'game' || !running) return;
   if (e.key === 'q' || e.key === 'Q') { e.preventDefault(); commanderBtn.click(); }
-  if (e.key === 'p' || e.key === 'P') { e.preventDefault(); setPaused(!paused); }
   if (e.key === 'Escape') { e.preventDefault(); selectSlot(-1); placingDef = null; renderDock(); }
 });
 

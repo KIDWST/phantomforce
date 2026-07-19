@@ -67,9 +67,40 @@
   // Q/A/Z + W/S/X = lane 1 … O/L + P = lane 5.
   const KEY_COLS = ["qaz", "wsx", "edc", "rfv", "tgb", "yhn", "ujm", "ik", "ol", "p"];
   const KEY_LANE = {};
-  KEY_COLS.forEach((col, i) => { for (const k of col) KEY_LANE[k] = Math.min(LANES - 1, Math.floor(i / 2)); });
+  const LANE_KEYS = Array.from({ length: LANES }, () => []); // keys sharing each lane, in guide order
+  KEY_COLS.forEach((col, i) => {
+    const lane = Math.min(LANES - 1, Math.floor(i / 2));
+    for (const k of col) { KEY_LANE[k] = lane; LANE_KEYS[lane].push(k); }
+  });
+  // Up to 6 different letters share one lane (see LANE_KEYS above), so lane
+  // color alone can't tell them apart — the start-screen promise that keys
+  // are "color-matched to their lane" was only true at the lane level.
+  // KEY_SLOT/KEY_SLOT_COUNT record each key's position within its lane's key
+  // list; used below to give every key its own shade of the lane color and a
+  // small fixed x-offset, so within-lane keys are actually distinguishable at
+  // a glance instead of stacking identically (see tintTriple() and laneX()).
+  const KEY_SLOT = {}, KEY_SLOT_COUNT = {};
+  LANE_KEYS.forEach((keys) => keys.forEach((k, idx) => { KEY_SLOT[k] = idx; KEY_SLOT_COUNT[k] = keys.length; }));
   const LANE_COLORS = ["#41ffa1", "#1ef0ff", "#ffd166", "#ff3d94", "#c084fc"];
   const LANE_COLORS_RGB = ["65,255,161", "30,240,255", "255,209,102", "255,61,148", "192,132,252"];
+  // Per-key color = the lane's base color tinted lighter/darker by slot, so
+  // e.g. Q (lane 0, slot 0) and X (lane 0, slot 3) render as visibly
+  // different shades of the same lane hue rather than the identical color.
+  function tintTriple(rgbCsv, slot, count) {
+    const [r, g, b] = rgbCsv.split(",").map(Number);
+    if (count <= 1) return [r, g, b];
+    const mid = (count - 1) / 2;
+    const amt = (slot - mid) / mid; // -1 (earliest slot) .. +1 (latest slot)
+    const mix = Math.min(0.45, Math.abs(amt) * 0.45);
+    const toward = amt >= 0 ? 255 : 0;
+    return [r, g, b].map((c) => Math.round(c + (toward - c) * mix));
+  }
+  const KEY_COLOR_RGB = {}, KEY_COLOR = {};
+  for (const k of ALPHABET) {
+    const [r, g, b] = tintTriple(LANE_COLORS_RGB[KEY_LANE[k]], KEY_SLOT[k], KEY_SLOT_COUNT[k]);
+    KEY_COLOR_RGB[k] = `${r},${g},${b}`;
+    KEY_COLOR[k] = "#" + [r, g, b].map((v) => v.toString(16).padStart(2, "0")).join("");
+  }
 
   // ---- deterministic PRNG (mulberry32) so the beatmap is reproducible/testable ----
   function makeRandom(seed) {
@@ -82,32 +113,129 @@
     };
   }
 
-  function pickKey(rand, avoid) {
-    let key;
-    do { key = ALPHABET[Math.floor(rand() * ALPHABET.length)]; } while (key === avoid);
-    return key;
-  }
+  // ---- learnable phrase-based key patterns ----
+  // Previously every note's key came from a uniform random distribution
+  // over all 26 letters (only constrained to not repeat the immediately
+  // previous key) — that produces no learnable structure at all. Instead,
+  // the letter beatmap cycles through small "clusters" of keys — home-row
+  // anchors, then the full home row, then the top row, then the bottom row —
+  // and repeats a short hand-authored index-pattern within each cluster for
+  // a whole phrase before rotating to the next cluster and a new pattern.
+  // This mirrors the sibling game keyboardist-on-tour.html's lanePattern
+  // approach (small repeating index arrays cycled over a handful of lanes),
+  // adapted here to letters instead of lanes so "every letter key is live"
+  // stays the core hook while still being genuinely learnable: within any
+  // few-second window there's a literal repeating riff, and the full track
+  // still touches every one of the 26 letters as the clusters rotate.
+  const KEY_CLUSTERS = [
+    ["f", "j"],                                    // two-key anchor phrase
+    ["f", "j", "d", "k"],                           // expand to four fingers
+    ["a", "s", "d", "f", "g", "h", "j", "k", "l"],  // full home row
+    ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"], // top row
+    ["z", "x", "c", "v", "b", "n", "m"],            // bottom row
+  ];
+  // Beat-budget share of each cluster above (sums to 1) — earlier/smaller
+  // clusters get a shorter phrase since there's less to learn, later ones
+  // get more room since they cover more letters.
+  const CLUSTER_WEIGHTS = [0.10, 0.14, 0.22, 0.30, 0.24];
+  // Small library of hand-authored index-patterns (analogous to
+  // lanePattern), reused for whichever cluster is active. Adjacent entries
+  // are chosen to avoid back-to-back repeats of the same index.
+  const INDEX_PATTERNS = [
+    [0, 1, 0, 1, 1, 0, 1, 0],
+    [0, 1, 2, 1, 0, 1, 2, 1],
+    [0, 1, 2, 3, 2, 1, 0, 3],
+    [0, 2, 1, 3, 0, 2, 1, 3],
+    [0, 1, 2, 3, 4, 3, 2, 1, 0],
+    [0, 2, 4, 1, 3, 2, 0, 4],
+    [0, 1, 2, 3, 4, 5, 4, 3, 2, 1, 0, 5],
+    [0, 3, 1, 4, 2, 5, 6, 3, 0],
+  ];
 
   function generateBeatmap(seed) {
     const rand = makeRandom(seed);
     const notes = [];
     let lastKey = null;
     let b = 4; // 4-beat lead-in before the first note
+
+    // Precompute the beat at which each cluster's phrase ends, from
+    // CLUSTER_WEIGHTS, so cluster rotation is deterministic for a given seed.
+    const totalBeats = SONG_BEATS - b;
+    let acc = 0;
+    const clusterEndBeat = CLUSTER_WEIGHTS.map((w) => { acc += w; return b + Math.round(totalBeats * acc); });
+    clusterEndBeat[clusterEndBeat.length - 1] = SONG_BEATS; // avoid rounding leaving a sliver unassigned
+
+    let clusterIdx = 0;
+    let pattern = INDEX_PATTERNS[Math.floor(rand() * INDEX_PATTERNS.length)];
+    let cursor = 0;
+    // Letters in the active cluster the pattern hasn't produced yet this
+    // phrase (INDEX_PATTERNS' index range doesn't always span a whole
+    // cluster — e.g. the 10-letter top row can't be reached past index 6 by
+    // some patterns via modulo alone). Tracked so every letter in a cluster
+    // gets a guaranteed appearance before its phrase ends.
+    let unseenQueue = KEY_CLUSTERS[0].slice();
+
+    function nextPatternKey(cluster) {
+      let idx = pattern[cursor % pattern.length] % cluster.length;
+      let key = cluster[idx];
+      if (key === lastKey && cluster.length > 1) {
+        cursor++;
+        idx = pattern[cursor % pattern.length] % cluster.length;
+        key = cluster[idx];
+      }
+      cursor++;
+      return key;
+    }
+
+    // Picks the next key for the active cluster: mostly the repeating
+    // pattern above (so a player can learn and anticipate it), but once a
+    // phrase reaches its final stretch it sweeps through any cluster
+    // letters the pattern hasn't used yet — a short guaranteed-coverage
+    // run/fill leading into the next section, the same way a real riff
+    // often resolves with a quick run before the next section starts.
+    function takeKey(cluster, sweeping) {
+      // Re-check unseenQueue.length here (not just trust the passed flag):
+      // a double-tap note takes two keys per iteration, and the first call
+      // can drain the queue empty before the second call runs.
+      const key = (sweeping && unseenQueue.length > 0)
+        ? (unseenQueue[0] === lastKey && unseenQueue.length > 1 ? unseenQueue[1] : unseenQueue[0])
+        : nextPatternKey(cluster);
+      const qi = unseenQueue.indexOf(key);
+      if (qi !== -1) unseenQueue.splice(qi, 1);
+      return key;
+    }
+
     while (b < SONG_BEATS) {
+      // Phrase boundary: once the active cluster's beat budget is spent,
+      // rotate to the next cluster and pick a fresh pattern for it.
+      if (clusterIdx < KEY_CLUSTERS.length - 1 && b >= clusterEndBeat[clusterIdx]) {
+        clusterIdx++;
+        cursor = 0;
+        pattern = INDEX_PATTERNS[Math.floor(rand() * INDEX_PATTERNS.length)];
+        unseenQueue = KEY_CLUSTERS[clusterIdx].slice();
+      }
+      const cluster = KEY_CLUSTERS[clusterIdx];
+      const beatsLeftInPhrase = clusterEndBeat[clusterIdx] - b;
+      // A hold note spends 2 beats to cover only 1 letter, which can starve
+      // the coverage sweep of the beats it needs — so once we're sweeping,
+      // stick to (single- or double-) taps that spend 1 beat per letter.
+      const sweeping = unseenQueue.length > 0 && beatsLeftInPhrase <= unseenQueue.length + 1;
+
       const roll = rand();
-      if (roll < 0.12 && b < SONG_BEATS - 2) {
-        const key = pickKey(rand, lastKey);
+      if (!sweeping && roll < 0.12 && b < SONG_BEATS - 2) {
+        const key = takeKey(cluster, sweeping);
         notes.push({ time: b * BEAT_SEC, key, type: "hold", duration: BEAT_SEC * 2, lane: KEY_LANE[key] });
         lastKey = key; b += 2; continue;
       }
       if (roll < 0.32) {
-        const k1 = pickKey(rand, lastKey);
+        const k1 = takeKey(cluster, sweeping);
         notes.push({ time: b * BEAT_SEC, key: k1, type: "tap", lane: KEY_LANE[k1] });
-        const k2 = pickKey(rand, k1);
+        lastKey = k1;
+        const k2 = takeKey(cluster, sweeping);
         notes.push({ time: b * BEAT_SEC + BEAT_SEC / 2, key: k2, type: "tap", lane: KEY_LANE[k2] });
         lastKey = k2; b += 1; continue;
       }
-      const key = pickKey(rand, lastKey);
+      const key = takeKey(cluster, sweeping);
       notes.push({ time: b * BEAT_SEC, key, type: "tap", lane: KEY_LANE[key] });
       lastKey = key; b += 1;
     }
@@ -239,7 +367,7 @@
   // and make the keys playable touch targets (press/release = tap/hold).
   for (const [k, el] of Object.entries(keyEls)) {
     const lane = KEY_LANE[k];
-    if (lane !== undefined) el.style.borderBottom = "3px solid " + LANE_COLORS[lane];
+    if (lane !== undefined) el.style.borderBottom = "3px solid " + (KEY_COLOR[k] || LANE_COLORS[lane]);
     el.addEventListener("pointerdown", (e) => { e.preventDefault(); if (!usingGamepadMap) pressKey(k); });
     el.addEventListener("pointerup", () => { if (!usingGamepadMap) releaseKey(k); });
     el.addEventListener("pointercancel", () => { if (!usingGamepadMap) releaseKey(k); });
@@ -250,7 +378,12 @@
   let notes = [];
   let running = false, paused = false, pausedSongTime = 0;
   let score = 0, streak = 0, resolvedCount = 0, creditedCount = 0;
-  let holdingKey = null; // { note } currently being held
+  let holdingKey = {}; // per-key map: key -> { note, downAt } currently being held.
+  // A single shared variable would let pressing a second hold-note's key
+  // while already holding a different one overwrite tracking and orphan the
+  // first hold; keying by the actual key character keeps them independent
+  // even if a future beatmap ever overlaps two holds (today's generator
+  // never does, but this makes that safe rather than merely untested).
 
   const sparkPool = new ObjectPool(
     () => ({ x: 0, y: 0, life: 0, max: 0, color: "" }),
@@ -268,10 +401,21 @@
   window.addEventListener("resize", resize, { passive: true });
   resize();
 
-  function laneX(lane) {
+  function laneX(lane, key) {
     const w = innerWidth;
     const margin = w * 0.12;
-    return margin + ((w - margin * 2) / (LANES - 1)) * lane;
+    const pitch = (w - margin * 2) / (LANES - 1);
+    const base = margin + pitch * lane;
+    // Structural callers (lane dividers, receptor circles) omit `key` and
+    // get the lane's canonical center. Note-specific callers pass the note's
+    // key so keys sharing a lane get a small, fixed x-offset — combined with
+    // per-key color tinting (KEY_COLOR), this keeps same-lane keys visually
+    // distinct instead of stacking at an identical position.
+    const count = key !== undefined ? (KEY_SLOT_COUNT[key] || 1) : 1;
+    if (count <= 1) return base;
+    const mid = (count - 1) / 2;
+    const spread = Math.min(14, pitch * 0.16); // stay well inside the lane's own band
+    return base + ((KEY_SLOT[key] - mid) / mid) * spread;
   }
   const HIT_LINE_FRAC = 0.82;
 
@@ -293,6 +437,30 @@
     return null;
   }
 
+  // Hit/miss feedback tone — reuses the exact oscillator+gain envelope
+  // approach as AudioScheduler._blip (short attack ramp, exponential decay)
+  // so the feel matches the existing click track. Previously nothing fired
+  // here at all: only the fixed background click track ever made sound,
+  // so correct play felt unresponsive.
+  function playFeedbackTone(judgement) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    let freq, peak, dur, type;
+    if (judgement === "perfect") { freq = 1046.5; peak = 0.22; dur = 0.09; type = "triangle"; }
+    else if (judgement === "good") { freq = 784; peak = 0.18; dur = 0.08; type = "triangle"; }
+    else { freq = 150; peak = 0.1; dur = 0.13; type = "sine"; } // miss: quieter, lower thud
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.linearRampToValueAtTime(peak, t + 0.003);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t);
+    osc.stop(t + dur + 0.02);
+  }
+
   function resolveNote(note, judgement) {
     note.resolved = true;
     note.judgement = judgement;
@@ -300,6 +468,7 @@
     if (judgement === "perfect") { score += 300; streak++; creditedCount++; }
     else if (judgement === "good") { score += 100; streak++; creditedCount++; }
     else { streak = 0; }
+    playFeedbackTone(judgement);
     spawnSpark(note, judgement);
     updateHud();
     host("score", { score: Math.round(score), state: { streak, judgement } });
@@ -307,7 +476,7 @@
 
   function spawnSpark(note, judgement) {
     const s = sparkPool.acquire();
-    s.x = laneX(note.lane);
+    s.x = laneX(note.lane, note.key);
     s.y = innerHeight * HIT_LINE_FRAC;
     s.life = 0; s.max = 0.4;
     s.color = judgement === "perfect" ? "65,255,161" : judgement === "good" ? "30,240,255" : "255,77,99";
@@ -342,7 +511,7 @@
       const j = judgeHit(best, bestDt);
       resolveNote(best, j);
     } else if (best.type === "hold") {
-      holdingKey = { note: best, downAt: t };
+      holdingKey[key] = { note: best, downAt: t };
       flashKey(key, "hold-active");
     }
   }
@@ -350,21 +519,25 @@
   function releaseKey(key) {
     const el = keyEls[key];
     if (el) el.classList.remove("hold-active");
-    if (holdingKey && holdingKey.note.key === key && !holdingKey.note.resolved) {
-      const note = holdingKey.note;
+    const held = holdingKey[key];
+    if (held && !held.note.resolved) {
+      const note = held.note;
       const endTime = note.time + note.duration;
       const t = songTime();
-      const j = t >= endTime - HIT_GOOD ? (t <= endTime + HIT_GOOD ? "good" : null) : null;
-      // held long enough (within tolerance of the note's end) = credited; released early = miss
-      resolveNote(note, j || (t < endTime - HIT_GOOD ? null : "good"));
-      holdingKey = null;
+      // Credited only if released within tolerance of the note's end;
+      // anything outside that window — early OR late — is a genuine miss.
+      // (Previously a buggy `j || (...)` fallback re-derived the result from
+      // scratch and mistakenly credited "good" for a too-late release.)
+      const j = (t >= endTime - HIT_GOOD && t <= endTime + HIT_GOOD) ? "good" : null;
+      resolveNote(note, j);
+      delete holdingKey[key];
     }
   }
 
   function onKeyDown(e) {
     if (e.repeat) return;
     const key = e.key.toLowerCase();
-    if (key === "p" || key === "escape") { togglePause(); return; }
+    if (key === "escape") { togglePause(); return; }
     if (usingGamepadMap) return; // a gamepad beatmap is active — ignore literal keys to avoid ambiguity
     if (!ALPHABET.includes(key)) return;
     pressKey(key);
@@ -493,20 +666,21 @@
       const progress = 1 - dt / noteTravelSec; // 0 at spawn, 1 at hit line
       if (progress < 0) continue;
       const y = progress * hitY;
-      const x = laneX(n.lane);
-      const holding = holdingKey && holdingKey.note === n;
-      const laneRgb = LANE_COLORS_RGB[n.lane] || LANE_COLORS_RGB[0];
+      const x = laneX(n.lane, n.key);
+      const held = holdingKey[n.key];
+      const holding = held && held.note === n;
+      const keyRgb = KEY_COLOR_RGB[n.key] || LANE_COLORS_RGB[n.lane] || LANE_COLORS_RGB[0];
 
       if (n.type === "hold") {
         const endDt = (n.time + n.duration) - t;
         const endProgress = 1 - endDt / noteTravelSec;
         const endY = Math.min(hitY, endProgress * hitY);
-        ctx2d.fillStyle = holding ? `rgba(${laneRgb},0.55)` : `rgba(${laneRgb},0.26)`;
+        ctx2d.fillStyle = holding ? `rgba(${keyRgb},0.55)` : `rgba(${keyRgb},0.26)`;
         ctx2d.fillRect(x - 12, Math.min(y, endY), 24, Math.abs(endY - Math.min(y, hitY)));
       }
       ctx2d.beginPath();
       ctx2d.arc(x, y, 17, 0, Math.PI * 2);
-      ctx2d.fillStyle = n.resolved ? "rgba(255,255,255,0.08)" : (LANE_COLORS[n.lane] || LANE_COLORS[0]);
+      ctx2d.fillStyle = n.resolved ? "rgba(255,255,255,0.08)" : (KEY_COLOR[n.key] || LANE_COLORS[n.lane] || LANE_COLORS[0]);
       ctx2d.fill();
       ctx2d.strokeStyle = n.type === "hold" ? "#ffffff" : "rgba(255,255,255,0.5)";
       ctx2d.lineWidth = n.type === "hold" ? 2.5 : 1;
@@ -558,6 +732,7 @@
     usingGamepadMap = gpEnabled && !!gpPad();
     notes = usingGamepadMap ? generateBeatmapGamepad(1337) : generateBeatmap(1337);
     score = 0; streak = 0; resolvedCount = 0; creditedCount = 0;
+    holdingKey = {}; // clear any hold tracked from a previous run
     running = true; paused = false; pauseOverlay.hidden = true;
     updateHud();
     songStartTimeRef = { value: audioCtx.currentTime + 0.6 };

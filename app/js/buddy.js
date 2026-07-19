@@ -2,7 +2,7 @@
    One sidebar-docked Phantom system: preference-aware, drag-safe, always
    returns home, and tied to real chat/notification states. */
 
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260719-49";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260719-53";
 import {
   COMPANION_EVENT,
   clearCompanionSessionHide,
@@ -10,7 +10,7 @@ import {
   isCompanionHiddenForSession,
   loadCompanionPrefs,
   updateCompanionPrefs,
-} from "./companion-preferences.js?v=phantom-live-20260719-49";
+} from "./companion-preferences.js?v=phantom-live-20260719-53";
 
 const reduceMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
 const LEGACY_DOCK_KEY = "pf.buddy.docked.v1";
@@ -528,10 +528,23 @@ function createBuddyController() {
   }
 
   function focusChat() {
+    /* The dashboard hero command input only exists on the dashboard home
+       page. Everywhere else, "Ask Phantom" used to focus nothing. Route to
+       the Phantom AI workspace (same real nav mechanism openSurface() below
+       already uses for "approvals") and focus its chat input once the
+       workspace has mounted, matching how wirePhantomConsole in main.js
+       defers focus until after its own paint. */
     const input = document.querySelector("[data-command-input]");
-    input?.focus({ preventScroll: true });
     setState("listening", 1800);
     say("Ready.", 1600);
+    if (input) {
+      input.focus({ preventScroll: true });
+      return;
+    }
+    openSurface("phantomai");
+    setTimeout(() => {
+      document.querySelector("[data-phantomai-chat-input]")?.focus({ preventScroll: true });
+    }, 60);
   }
 
   function openSurface(id) {
