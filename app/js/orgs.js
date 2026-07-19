@@ -6,7 +6,7 @@
    when the backend doesn't advertise database auth, none of these
    surfaces render and the app behaves exactly as before. */
 
-import { ctx, session } from "./store.js?v=phantom-live-20260718-41";
+import { ctx, session } from "./store.js?v=phantom-live-20260718-42";
 
 export const isDatabaseSession = () => !!ctx.session?.database;
 export const isCustomerOrgSession = () => !!(ctx.session?.database || ctx.session?.localCustomer);
@@ -127,6 +127,24 @@ export async function databaseResetPassword(token, password) {
   const endpoint = localCustomer || "/auth/reset-password";
   const { ok, status, json } = await api(endpoint, { method: "POST", body: { token, password } });
   if (!ok) throw new Error(String(json?.error || `Password reset failed (${status}).`));
+  return json;
+}
+
+export async function databaseAcceptInvitation(token, payload = {}) {
+  const { ok, status, json } = await api("/auth/invitations/accept", {
+    method: "POST",
+    body: {
+      token,
+      name: String(payload.name || "").trim() || undefined,
+      password: String(payload.password || "") || undefined,
+    },
+  });
+  if (!ok) {
+    const message = status === 400 && /expired|invalid|accepted/i.test(String(json?.error || ""))
+      ? "This invitation link is invalid, expired, or already used. Ask the workspace owner for a new invitation."
+      : String(json?.error || `Invitation acceptance failed (${status}).`);
+    throw new Error(message);
+  }
   return json;
 }
 

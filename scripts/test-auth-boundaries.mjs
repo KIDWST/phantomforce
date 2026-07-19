@@ -22,7 +22,14 @@ assert.match(main, /if \(isClientPublicHost\(\)\) \{\s*renderCustomerAuthLoading
 assert.match(main, /if \(isLiveAdminHost\(\)\) \{[\s\S]*data-owner-login[\s\S]*ownerLogin\(email, password\)[\s\S]*maybeUpgradeGateToDatabaseLogin\(card, \{ internalAdmin: true \}\);[\s\S]*return;\s*\}\s*if \(isClientPublicHost\(\)/u, "admin.phantomforce.online must render the internal-admin login and return before the customer app panel can mount.");
 assert.match(main, /const \{ customerApp = false, internalAdmin = false, required = false \} = options;/u, "The shared account renderer must have an explicit internal-admin mode.");
 assert.match(main, /if \(internalAdmin && !\["signin", "2fa"\]\.includes\(state\.mode\)\) state\.mode = "signin";/u, "Internal admin auth must be forced back to sign-in/2FA if a signup or recovery mode is requested.");
-assert.match(main, /\$\{internalAdmin \? "" : `<div class="auth-tabs">/u, "Internal admin auth must not render the create/recovery/reset tab strip.");
+assert.match(main, /\$\{internalAdmin \|\| state\.mode === "invite" \? "" : `<div class="auth-tabs auth-tabs-primary">/u, "Internal admin auth must not render public account choices.");
+assert.match(main, /\$\{tab\("signin", "Sign in"\)\}\$\{tab\("signup", "Create account"\)\}/u, "Customer auth must keep only Sign in and Create account as primary choices.");
+assert.match(main, /data-auth-mode="forgot-user">Forgot username\?<\/button><button type="button" data-auth-mode="forgot-pass">Forgot password\?/u, "Recovery actions must be contextual links below sign in, not five competing primary tabs.");
+assert.match(main, /state\.mode === "2fa" \? "Use another account" : "Back to sign in"/u, "An expired or rejected 2FA challenge must always have an escape back to sign in.");
+assert.match(main, /if \(state\.busy\) return;[\s\S]*const data = new FormData\(form\);[\s\S]*form\.setAttribute\("aria-busy", "true"\)[\s\S]*control\.disabled = true/u, "Account forms must capture values, block duplicate submissions, and expose their busy state.");
+assert.match(main, /invite_token[\s\S]*databaseAcceptInvitation\(state\.inviteToken/u, "Invitation links must open a real one-time workspace acceptance flow.");
+assert.match(main, /Sign-in is temporarily unavailable\. Try again in a moment\./u, "Customer outages must use calm user-facing recovery copy instead of backend instructions.");
+assert.doesNotMatch(main, /The account system is not reachable\. Start the backend/u, "Customer auth must not expose backend-start instructions.");
 assert.doesNotMatch(main.match(/if \(isLiveAdminHost\(\)\) \{([\s\S]*?)\n  \}\n\n  if \(isClientPublicHost\(\)/u)?.[1] || "", /customerApp: true|data-auth-mode="signup"|Forgot password|Create account/u, "Admin login must not mount customer create-account/password-reset controls.");
 assert.match(main, /if \(isLocalDevHost\(\)\) \{\s*try \{/u, "Demo login must remain local-development only.");
 assert.match(main, /function renderCustomerAuthBlocked\(card, message = "Customer account login is not enabled on this backend\."\)/u, "Customer app must block when database auth is disabled.");
@@ -32,6 +39,7 @@ assert.match(main, /url\.searchParams\.delete\("session"\)/u, "Logout must remov
 
 assert.match(orgs, /const managesOrg = s\.isSuperAdmin \|\| \["owner", "admin"\]\.includes\(s\.orgRole \|\| ""\)/u, "Only org owners/admins may map to Business Manager.");
 assert.doesNotMatch(orgs, /\["owner", "admin", "member"\]\.includes\(s\.orgRole/u, "Plain org members must not map to Business Manager.");
+assert.match(orgs, /export async function databaseAcceptInvitation\(token, payload = \{\}\)[\s\S]*\/auth\/invitations\/accept/u, "The browser must accept workspace invitations through the server-owned route.");
 
 assert.doesNotMatch(index, /Business owner or workspace admin/u, "The public gate must not blur full admin access with customer workspace admins.");
 assert.match(index, /Full Force owner\/admin access/u, "Business Manager copy must make admin full-Force access explicit.");

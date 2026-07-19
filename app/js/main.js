@@ -6,47 +6,47 @@ import {
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260718-41";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260718-41";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260718-41";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260718-41";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260718-41";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260718-41";
-import { mountManagedGrowthReport } from "./managedgrowth.js?v=phantom-live-20260718-41";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260718-41";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260718-41";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260718-41";
-import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260718-41";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260718-41";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260718-41";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260718-41";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260718-41";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260718-41";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260718-41";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260718-41";
-import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260718-41";
-import { mountAmbient } from "./ambient.js?v=phantom-live-20260718-41";
-import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260718-41";
+} from "./store.js?v=phantom-live-20260718-42";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260718-42";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260718-42";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260718-42";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260718-42";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260718-42";
+import { mountManagedGrowthReport } from "./managedgrowth.js?v=phantom-live-20260718-42";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260718-42";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260718-42";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260718-42";
+import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260718-42";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260718-42";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260718-42";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260718-42";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260718-42";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260718-42";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260718-42";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260718-42";
+import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260718-42";
+import { mountAmbient } from "./ambient.js?v=phantom-live-20260718-42";
+import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260718-42";
 import {
   fetchAuthConfig, databaseLogin, databaseLogout, databaseSignup, databaseForgotUsername, databaseForgotPassword,
-  databaseResetPassword, databaseVerify2fa, databaseStart2faSetup, databaseConfirm2fa, databaseRegenerate2faBackupCodes, databaseDisable2fa,
+  databaseResetPassword, databaseAcceptInvitation, databaseVerify2fa, databaseStart2faSetup, databaseConfirm2fa, databaseRegenerate2faBackupCodes, databaseDisable2fa,
   switchOrg, fetchAuthMe, fetchEntitlementsSummary,
-} from "./orgs.js?v=phantom-live-20260718-41";
-import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260718-41";
-import { assetsAvailable } from "./orgs.js?v=phantom-live-20260718-41";
-import { renderPhantomStore } from "./phantomstore.js?v=phantom-live-20260718-41";
-import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260718-41";
+} from "./orgs.js?v=phantom-live-20260718-42";
+import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260718-42";
+import { assetsAvailable } from "./orgs.js?v=phantom-live-20260718-42";
+import { renderPhantomStore } from "./phantomstore.js?v=phantom-live-20260718-42";
+import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260718-42";
 // PhantomPlay V2 platform shell (Home/Solo/Friends/Workspace/Dev Hub) - opt-in
 // while it hardens: set localStorage "pf.phantomplay.v2" = "1" (the V2 shell has
 // a "Classic view" button to switch back). Classic stays the default experience.
-import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260718-41";
+import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260718-42";
 const phantomPlayV2Opted = () => { try { return localStorage.getItem("pf.phantomplay.v2") === "1"; } catch { return false; } };
-import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260718-41";
+import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260718-42";
 import {
   customizeNavigation,
   loadOrganizationCustomization,
-} from "./customization.js?v=phantom-live-20260718-41";
-import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260718-41";
+} from "./customization.js?v=phantom-live-20260718-42";
+import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260718-42";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -281,10 +281,28 @@ function maybeUpgradeGateToDatabaseLogin(card, options = {}) {
       if (required) renderCustomerAuthBlocked(card);
       return;
     }
-    const resetTokenFromUrl = (() => {
-      try { return new URLSearchParams(window.location.search).get("reset_token") || ""; } catch { return ""; }
+    const linkTokens = (() => {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        return {
+          reset: params.get("reset_token") || "",
+          invite: params.get("invite_token") || params.get("invitation_token") || "",
+        };
+      } catch { return { reset: "", invite: "" }; }
     })();
-    const state = { mode: resetTokenFromUrl ? "reset-pass" : "signin", challenge: null, message: resetTokenFromUrl ? "Password reset token detected. Enter your new password." : "", resetToken: resetTokenFromUrl };
+    const initialMode = linkTokens.invite ? "invite" : linkTokens.reset ? "reset-pass" : "signin";
+    const state = {
+      mode: initialMode,
+      challenge: null,
+      busy: false,
+      message: linkTokens.invite
+        ? "Invitation found. Set your name and password to join the workspace."
+        : linkTokens.reset
+          ? "Reset link found. Choose a new password."
+          : "",
+      resetToken: linkTokens.reset,
+      inviteToken: linkTokens.invite,
+    };
     const helper = customerApp
       ? "Owners/admins open Business Manager. Employees open Team Workspace. Permissions come from the business workspace."
       : internalAdmin
@@ -315,7 +333,12 @@ function maybeUpgradeGateToDatabaseLogin(card, options = {}) {
       const tab = (id, label) => `<button type="button" class="auth-tab ${state.mode === id ? "is-active" : ""}" data-auth-mode="${id}">${label}</button>`;
       const msg = state.message ? `<p class="gate-note">${esc(state.message)}</p>` : "";
       if (internalAdmin && !["signin", "2fa"].includes(state.mode)) state.mode = "signin";
-      const body = state.mode === "signup" && !internalAdmin ? `
+      const body = state.mode === "invite" && !internalAdmin ? `
+        <form class="owner-login" data-auth-form="invite">
+          <label><span>Your name</span><input name="name" autocomplete="name" placeholder="Your name" /></label>
+          <label><span>Create a password</span><input type="password" name="password" autocomplete="new-password" minlength="8" placeholder="At least 8 characters" /></label>
+          <button class="gate-opt gate-submit" type="submit"><span class="gate-opt-icon">+</span><b>Join workspace</b><i>This invitation can only be accepted once.</i></button>
+        </form>` : state.mode === "signup" && !internalAdmin ? `
         <form class="owner-login" data-auth-form="signup">
           <label><span>Email</span><input type="email" name="email" autocomplete="email" placeholder="you@business.com" required /></label>
           <label><span>Username</span><input name="username" autocomplete="username" placeholder="yourname" minlength="3" maxlength="32" /></label>
@@ -348,11 +371,13 @@ function maybeUpgradeGateToDatabaseLogin(card, options = {}) {
         </form>`;
       card.innerHTML = `
         <p class="gate-kicker">PHANTOMFORCE · ${internalAdmin ? "INTERNAL ACCESS" : "ACCOUNT ACCESS"}</p>
-        <h1>${state.mode === "signup" ? "Create your Phantom account." : state.mode === "2fa" ? "Enter your 2FA code." : customerApp ? "Sign in to your workspace." : internalAdmin ? "Internal admin sign-in." : "Sign in to Phantom."}</h1>
-        ${internalAdmin ? "" : `<div class="auth-tabs">${tab("signin", "Sign in")}${tab("signup", "Create user")}${tab("forgot-user", "Forgot username")}${tab("forgot-pass", "Forgot password")}${tab("reset-pass", "Reset")}</div>`}
+        <h1>${state.mode === "invite" ? "Join your workspace." : state.mode === "signup" ? "Create your Phantom account." : state.mode === "2fa" ? "Enter your 2FA code." : state.mode === "forgot-user" ? "Recover your username." : state.mode === "forgot-pass" ? "Reset your password." : state.mode === "reset-pass" ? "Choose a new password." : customerApp ? "Sign in to your workspace." : internalAdmin ? "Internal admin sign-in." : "Sign in to Phantom."}</h1>
+        ${internalAdmin || state.mode === "invite" ? "" : `<div class="auth-tabs auth-tabs-primary">${tab("signin", "Sign in")}${tab("signup", "Create account")}</div>`}
         ${body}
         <p class="gate-error" data-db-error hidden></p>
         ${msg}
+        ${state.mode === "signin" && !internalAdmin ? `<div class="auth-links"><button type="button" data-auth-mode="forgot-user">Forgot username?</button><button type="button" data-auth-mode="forgot-pass">Forgot password?</button></div>` : ""}
+        ${!["signin", "signup"].includes(state.mode) ? `<div class="auth-links"><button type="button" data-auth-mode="signin">${state.mode === "2fa" ? "Use another account" : "Back to sign in"}</button></div>` : ""}
         <p class="gate-note">${note}</p>`;
       card.querySelectorAll("[data-auth-mode]").forEach((btn) => {
         btn.onclick = () => { state.mode = btn.dataset.authMode; state.message = ""; render(); };
@@ -361,10 +386,14 @@ function maybeUpgradeGateToDatabaseLogin(card, options = {}) {
       if (!form) return;
       form.onsubmit = async (event) => {
       event.preventDefault();
+      if (state.busy) return;
+      state.busy = true;
       setError("");
+      const data = new FormData(form);
       form.classList.add("is-loading");
+      form.setAttribute("aria-busy", "true");
+      form.querySelectorAll("button, input").forEach((control) => { control.disabled = true; });
       try {
-        const data = new FormData(form);
         if (state.mode === "signin") {
           const nextSession = await databaseLogin(String(data.get("identifier") || "").trim(), String(data.get("password") || ""));
           if (nextSession?.requires2fa) {
@@ -392,25 +421,53 @@ function maybeUpgradeGateToDatabaseLogin(card, options = {}) {
           render();
         } else if (state.mode === "forgot-pass") {
           const result = await databaseForgotPassword(String(data.get("identifier") || "").trim());
-          state.mode = "reset-pass";
-          state.message = result?.preview?.resetToken ? `Reset queued. Dev preview token: ${result.preview.resetToken}` : "If that account exists, password reset has been queued.";
+          if (result?.preview?.resetToken) {
+            state.mode = "reset-pass";
+            state.resetToken = result.preview.resetToken;
+            state.message = "Reset ready in this test environment. Choose a new password.";
+          } else {
+            state.message = "If that account exists, a reset link is on its way. You can close this page and use the link in the email.";
+          }
           render();
         } else if (state.mode === "reset-pass") {
           await databaseResetPassword(String(data.get("token") || "").trim(), String(data.get("password") || ""));
+          try {
+            const url = new URL(location.href);
+            url.searchParams.delete("reset_token");
+            history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+          } catch {}
           state.mode = "signin"; state.resetToken = ""; state.message = "Password reset. Sign in with the new password."; render();
+        } else if (state.mode === "invite") {
+          await databaseAcceptInvitation(state.inviteToken, {
+            name: String(data.get("name") || "").trim(),
+            password: String(data.get("password") || ""),
+          });
+          try {
+            const url = new URL(location.href);
+            url.searchParams.delete("invite_token");
+            url.searchParams.delete("invitation_token");
+            history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+          } catch {}
+          state.mode = "signin";
+          state.inviteToken = "";
+          state.message = "Invitation accepted. Sign in to open the workspace.";
+          render();
         }
       } catch (err) {
         session.clear();
         ctx.session = null;
         setError(err?.message || "Account action failed.");
       } finally {
+        state.busy = false;
         form.classList.remove("is-loading");
+        form.removeAttribute("aria-busy");
+        form.querySelectorAll("button, input").forEach((control) => { control.disabled = false; });
       }
     };
     };
     render();
   }).catch(() => {
-    if (required && !gate.hidden) renderCustomerAuthBlocked(card, "The account system is not reachable. Start the backend, then sign in again.");
+    if (required && !gate.hidden) renderCustomerAuthBlocked(card, "Sign-in is temporarily unavailable. Try again in a moment.");
   });
 }
 
@@ -1345,7 +1402,7 @@ const MODES = {
   admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260718-41";
+const POSE_VERSION = "phantom-live-20260718-42";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -1899,14 +1956,8 @@ function execPalette(i = cmdkIdx) {
 const signedMoney = (value) => value < 0 ? `-${fmtMoney(Math.abs(value))}` : fmtMoney(value);
 
 function briefingText() {
-  const m = moneyView();
-  const pend = visible(store.state.approvals).filter((a) => a.status === "pending").length;
   const name = (ctx.session?.name || "there").split(/\s+/)[0];
-  const bits = [`${greeting()}, ${name}`];
-  if (m.transactions.length) bits.push(`${signedMoney(m.netCash)} net cashflow`);
-  if (pend) bits.push(`${pend} approval${pend > 1 ? "s" : ""} waiting on you`);
-  if (!pend && !m.transactions.length) bits.push("no real work loaded yet");
-  return bits.slice(0, 3).join(" · ") + ". What do you want handled first?";
+  return `${greeting()}, ${name}. What do you want handled first?`;
 }
 
 /* ============================ console render ============================ */
@@ -1954,6 +2005,10 @@ function renderConsole() {
     return;
   }
   ensureDashboardShell();
+  // Workspace pages replace the dashboard DOM. Rebind the restored command
+  // form before optional widgets render so a secondary panel failure can
+  // never leave the primary chat composer visible but inert.
+  bindCommandForm();
   renderNav();
   renderStatusPills();
   renderPlanMeta();
@@ -1971,7 +2026,6 @@ function renderConsole() {
   renderFlowCompactSummary();
   renderPlan();
   renderQueue();
-  bindCommandForm();
   const openIc = $("[data-cmdk-open-ic]"); if (openIc && !openIc.innerHTML) openIc.innerHTML = svg("search");
   mountPhantomWire($("[data-phantomwire]") || $("[data-agent-ticker]"));
   mountDesktopContextWidget($("[data-desktop-context]"), {
@@ -2138,6 +2192,7 @@ let ghostEmotion = "calm";
 let ghostMoodUntil = 0;
 let ghostMoodStartedAt = performance.now();
 let phantomHasActed = false;
+let briefingTimer = 0;
 
 function emotionForText(text = "") {
   const s = text.toLowerCase();
@@ -2208,10 +2263,16 @@ function speak(text, cls = "", emotionOverride = null, options = {}) {
     return;
   }
   let i = 0;
+  const revealFrameMs = 16;
+  const maxRevealMs = 900;
+  const charactersPerFrame = Math.max(1, Math.ceil(text.length / Math.max(1, Math.floor(maxRevealMs / revealFrameMs))));
   const tick = () => {
     entry.text = text.slice(0, i);
     paintLast();
-    if (i++ < text.length) typeTimer = setTimeout(tick, 11 + Math.random() * 16);
+    if (i < text.length) {
+      i = Math.min(text.length, i + charactersPerFrame);
+      typeTimer = setTimeout(tick, revealFrameMs);
+    }
     else {
       setGhostMood("talking", { emotion, ms: speechHoldMs(text) });
       setCompanionState(emotion === "alert" ? "warning" : emotion === "happy" || emotion === "excited" ? "success" : "speaking");
@@ -2247,6 +2308,10 @@ function bindCardRemovers(root, onRemove) {
 }
 function runCommand(raw) {
   phantomHasActed = true;
+  if (briefingTimer) {
+    clearTimeout(briefingTimer);
+    briefingTimer = 0;
+  }
   const loop = loadPhantomLoop();
   const loopArmed = companionMode() === "loop" && loop.enabled;
   const inferredMode = inferModeFromText(raw);
@@ -2286,9 +2351,10 @@ function runCommand(raw) {
         speak("Finishing the response...", "thinking");
         await new Promise((resolve) => setTimeout(resolve, reduceMotion ? 0 : 420));
       }
-      const instantAnswer = r?.hermes?.route_tier === "instant"
-        || ["chat", "question", "identity", "capability"].includes(r?.intent?.primaryIntent);
-      speak(r.say, "", null, { instant: instantAnswer });
+      // The thinking state already covers request latency. Once a result is
+      // complete, show it immediately so intent labels or answer length can
+      // never make a finished response feel slow.
+      speak(r.say, "", null, { instant: true });
       if (r.cards?.length) chatAttachCards(r.cards);
       rememberConversation({ prompt: raw, reply: r.say, mode: activeMode, route: r.open || "" });
       renderConsole();
@@ -3480,10 +3546,14 @@ function enterPhantom() {
   else if (m && workspaceDef(m[1])) routeWorkspace(m[1], false);
   else if (view && view !== "command" && workspaceDef(view)) routeWorkspace(view, false);
   // a data-driven spoken briefing once the reveal settles
-  setTimeout(() => {
+  if (briefingTimer) clearTimeout(briefingTimer);
+  briefingTimer = setTimeout(() => {
+    briefingTimer = 0;
     phantomBootSettled = true;
     setGhostMood("idle", { emotion: "happy" });
-    if (!openId && !activePageId) speak(briefingText(), "", "bright");
+    if (!phantomHasActed && chatHistory.length <= 1 && !openId && !activePageId) {
+      speak(briefingText(), "", "bright");
+    }
   }, 1400);
 }
 

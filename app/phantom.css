@@ -382,6 +382,7 @@ code { font: 500 0.92em "DM Mono", monospace; color: var(--neon); }
   gap: 7px;
   margin: -10px 0 14px;
 }
+.auth-tabs-primary { justify-content: center; }
 .auth-tab {
   min-height: 34px;
   padding: 7px 11px;
@@ -398,6 +399,23 @@ code { font: 500 0.92em "DM Mono", monospace; color: var(--neon); }
   background: var(--neon);
   border-color: var(--neon);
 }
+.auth-links {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-top: 14px;
+}
+.auth-links button {
+  padding: 4px;
+  border: 0;
+  background: transparent;
+  color: #9bd9b6;
+  font: 700 11px "DM Mono", monospace;
+  cursor: pointer;
+}
+.auth-links button:hover,
+.auth-links button:focus-visible { color: var(--neon); text-decoration: underline; }
 .gate-error { margin: 0; border: 1px solid rgba(255, 80, 80, 0.28); border-radius: 16px; background: rgba(255, 60, 60, 0.08); color: #ffb7b7; padding: 12px 14px; }
 
 /* ---------------- phantom shell ---------------- */

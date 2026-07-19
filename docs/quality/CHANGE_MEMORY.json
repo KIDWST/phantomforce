@@ -973,6 +973,66 @@
       ]
     },
     {
+      "id": "fast-chat-reveal-and-account-recovery",
+      "status": "active",
+      "title": "Finished answers and account recovery never leave users waiting or trapped",
+      "ownerDecision": "A completed Phantom answer must become readable in under one second regardless of length. A delayed startup greeting must never overwrite a real answer or volunteer accounting, pipeline, or approval data. Customer account access uses two primary choices, contextual recovery links, one-time invitation links, a 2FA escape, duplicate-submit locking, and calm user-facing outage copy.",
+      "requiredPatterns": [
+        {
+          "file": "app/js/main.js",
+          "pattern": "const maxRevealMs = 900[\\s\\S]*charactersPerFrame[\\s\\S]*speak[(]r[.]say, \"\", null, [{] instant: true [}][)]",
+          "description": "Long ambient speech reveals in bounded chunks, while completed command answers render immediately."
+        },
+        {
+          "file": "app/js/main.js",
+          "pattern": "phantomHasActed = true;[\\s\\S]*clearTimeout[(]briefingTimer[)][\\s\\S]*!phantomHasActed && chatHistory[.]length <= 1",
+          "description": "The first user action cancels the delayed startup greeting before it can overwrite a real answer."
+        },
+        {
+          "file": "app/js/main.js",
+          "pattern": "ensureDashboardShell[(][)];[\\s\\S]*bindCommandForm[(][)];[\\s\\S]*renderNav[(][)];",
+          "description": "A dashboard restored after workspace navigation binds its primary chat form before optional widgets can fail."
+        },
+        {
+          "file": "app/js/main.js",
+          "pattern": "auth-tabs auth-tabs-primary[\\s\\S]*Forgot username[?][\\s\\S]*Forgot password[?]",
+          "description": "The account gate keeps sign-in/create primary and recovery secondary."
+        },
+        {
+          "file": "app/js/main.js",
+          "pattern": "Use another account[\\s\\S]*if [(]state.busy[)] return[\\s\\S]*aria-busy",
+          "description": "2FA can restart and account forms cannot double-submit."
+        },
+        {
+          "file": "app/js/orgs.js",
+          "pattern": "databaseAcceptInvitation[\\s\\S]*/auth/invitations/accept",
+          "description": "Invitation links use the authoritative one-time server acceptance route."
+        },
+        {
+          "file": "scripts/test-auth-boundaries.mjs",
+          "pattern": "Recovery actions must be contextual links[\\s\\S]*Invitation links must open a real one-time workspace acceptance flow",
+          "description": "Permanent auth UI regression checks cover recovery, invitation, 2FA, and submission safety."
+        }
+      ],
+      "forbiddenPatterns": [
+        {
+          "file": "app/js/main.js",
+          "pattern": "11 \\+ Math[.]random[(][)] \\* 16",
+          "description": "The old unbounded one-character reveal delay made finished answers look slow."
+        },
+        {
+          "file": "app/js/main.js",
+          "pattern": "The account system is not reachable[.] Start the backend",
+          "description": "Customers must never receive operator-only backend instructions."
+        },
+        {
+          "file": "app/js/main.js",
+          "pattern": "bits[.]push[(]`[$][{]signedMoney[(]m[.]netCash[)][}] net cashflow`[)]",
+          "description": "The unsolicited greeting must never disclose accounting or approval metrics."
+        }
+      ]
+    },
+    {
       "id": "database-auth-reboot-recovery",
       "status": "active",
       "title": "Live admin and customer auth depend on a self-recovering database",

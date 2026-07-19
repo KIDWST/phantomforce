@@ -25,6 +25,11 @@ const { classifyPhantomIntent } = await import(`../app/js/intent-router.js${q}`)
 const { handleSmartCommand } = await import(`../app/js/command.js${q}`);
 const { ctx, store, rememberConversation, recentChatTurns } = await import(`../app/js/store.js${q}`);
 
+assert.match(mainSrc, /const maxRevealMs = 900;/u, "Completed chat answers must reveal in under one second.");
+assert.match(mainSrc, /charactersPerFrame = Math\.max\(1, Math\.ceil\(text\.length \/ Math\.max\(1, Math\.floor\(maxRevealMs \/ revealFrameMs\)\)\)\)/u, "Long answers must reveal in chunks instead of one character at a time.");
+assert.match(mainSrc, /speak\(r\.say, "", null, \{ instant: true \}\)/u, "A completed command answer must render immediately regardless of intent label or length.");
+assert.doesNotMatch(mainSrc, /11 \+ Math\.random\(\) \* 16/u, "The uncapped per-character reveal delay must not return.");
+
 ctx.session = { role: "admin", name: "Jordan", ws: "phantomforce" };
 store.state.chatHistory = [];
 store.state.memory = [];
@@ -308,6 +313,21 @@ assert.doesNotMatch(indexSrc, /class="quick-card"/, "duplicate dashboard quick a
 assert.doesNotMatch(indexSrc, /class="chatbox-tools"/, "duplicate chat utility row must stay removed");
 assert.match(mainSrc, /const bottomItems = items\.filter\(\(n\) => n\.navZone === "bottom"\)/);
 assert.match(mainSrc, /options\.instant/);
+assert.match(
+  mainSrc,
+  /ensureDashboardShell\(\);[\s\S]*?bindCommandForm\(\);[\s\S]*?renderNav\(\);/,
+  "the restored dashboard chat form must bind before optional widgets render",
+);
+assert.match(
+  mainSrc,
+  /phantomHasActed = true;[\s\S]*clearTimeout\(briefingTimer\)[\s\S]*!phantomHasActed && chatHistory\.length <= 1/,
+  "the delayed startup greeting must be cancelled after the first user action",
+);
+assert.doesNotMatch(
+  mainSrc.match(/function briefingText\(\)[\s\S]*?\n\}/)?.[0] || "",
+  /cashflow|approval|transaction|pipeline/i,
+  "the unsolicited greeting must not expose business metrics",
+);
 assert.match(
   phantomCss,
   /@media \(min-width: 1201px\)[\s\S]*?\.app-main:has\(> \.console:not\(\.console-workspace\)\) \.console \{[\s\S]*?grid-auto-rows: minmax\(0, 1fr\);[\s\S]*?align-items: stretch;[\s\S]*?\.console:not\(\.console-workspace\) \.console-center \{[\s\S]*?overflow: hidden;/,

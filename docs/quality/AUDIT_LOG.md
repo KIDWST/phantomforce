@@ -1679,3 +1679,64 @@ in Cycle 22.
 Exercise the complete browser account lifecycle and authorization-error
 recovery across customer/admin hosts and owner, admin, member, and client roles
 in Cycle 23.
+
+# 2026-07-18 - Cycle 23: Account Recovery And Reliable Chat Return
+
+## Problems Verified
+
+- The account gate presented five equal tabs, making ordinary sign-in feel more
+  complex than the underlying lifecycle.
+- Production password recovery exposed the raw token form before a reset link
+  existed, invitation links had no browser acceptance flow, 2FA had no clean
+  escape, and submits could be duplicated.
+- Customer auth outage copy exposed operator-only backend instructions.
+- Completed answers still used a slow character reveal.
+- A delayed 1.4-second startup greeting could append after the user's first
+  answer and replace it onscreen with cashflow and approval status.
+- Returning from a workspace could restore fresh dashboard markup, then leave
+  the visible chat composer inert if a later dashboard widget threw.
+
+## Corrections
+
+- Kept Sign in and Create account as the two primary choices; moved username
+  and password recovery to contextual links.
+- Added one-time invitation URL acceptance, 2FA restart, duplicate-submit
+  locking, production-safe reset behavior, and calm customer outage copy.
+- Capped ambient reveal at 900 ms and made completed command answers instant.
+- Cancelled the delayed startup greeting on the first user action and removed
+  accounting, pipeline, and approval details from unsolicited greetings.
+- Bound the restored dashboard command form immediately after shell creation,
+  before optional dashboard widgets render.
+- Expanded authenticated Chrome diagnostics with request routes and state
+  details and advanced the full module graph to
+  `phantom-live-20260718-42`.
+
+## Source Verification
+
+- PASS: `npm run test:database-auth`: all 57 API/auth checks and the real
+  Chrome journey passed.
+- PASS: Chrome completed 30 coherent browser turns, two-organization business
+  isolation, durable-memory reload, temporary-history isolation, tamper
+  rejection, and reload recovery.
+- PASS: visual review at 1440x900 and 390x844 under
+  `tmp/database-auth-org-browser/2026-07-19T03-27-53-238Z`; composer,
+  navigation, text, and organization state had no overlap or horizontal
+  overflow.
+- PASS: `npm run test:release-critical` (20/20).
+- PASS: `npm run test:account-recovery-2fa:postgres --workspace
+  @phantomforce/server` (14/14).
+- PASS: `npm run test:dashboard-chat` (56 prompts, 11 adversarial turns,
+  deterministic tools).
+- PASS: `npm run test:change-memory` (174 checks).
+- PASS: `npm run typecheck`.
+- PASS: `git diff --check` (line-ending warnings only).
+
+## Deployment Verification
+
+Pending commit, push, canonical sync, strict doctor, deployed model gate, and
+scheduled-sync resurrection check.
+
+## Next Task
+
+Exercise role, entitlement, deep-link, and expired-session recovery across
+customer/admin hosts in Cycle 24.

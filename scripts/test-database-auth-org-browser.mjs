@@ -251,6 +251,14 @@ function installDiagnostics(cdp) {
   cdp.on("Log.entryAdded", (message) => push("log", `${message.params?.entry?.level || ""}: ${message.params?.entry?.text || ""}`));
   cdp.on("Console.messageAdded", (message) => push("console", `${message.params?.message?.level || ""}: ${message.params?.message?.text || ""}`));
   cdp.on("Network.loadingFailed", (message) => push("network", `${message.params?.errorText || ""} ${message.params?.blockedReason || ""}`.trim()));
+  cdp.on("Network.responseReceived", (message) => {
+    const response = message.params?.response;
+    if (String(response?.url || "").includes("/phantom-ai/chat")) {
+      push("chat-http", `${response.status} ${message.params?.type || "request"} ${response.url}`);
+    } else if (Number(response?.status || 0) >= 400) {
+      push("http", `${response.status} ${message.params?.type || "request"} ${response.url || "unknown route"}`);
+    }
+  });
   return { messages, push };
 }
 
@@ -345,11 +353,26 @@ async function submitChat(cdp, prompt, diagnostics = null) {
   })()`);
   await waitForExpression(cdp, `(() => {
     const state = JSON.parse(localStorage.getItem("pf.phantom.v4") || "{}");
-    const activeOrg = JSON.parse(localStorage.getItem("pf.session.v3") || "{}").orgId || "";
+    const localSession = JSON.parse(localStorage.getItem("pf.session.v3") || "{}");
+    const activeOrg = localSession.orgId || "";
     const history = (state.chatHistory || []).filter((item) => item.ws === activeOrg);
-    return history.length > ${beforeHistoryCount}
+    const ok = history.length > ${beforeHistoryCount}
       && history[0]?.prompt === ${JSON.stringify(prompt)}
       && !!history[0]?.reply;
+    return {
+      ok,
+      activeOrg,
+      selectedOrg: document.querySelector("[data-org-select]")?.value || "",
+      formBound: document.querySelector("[data-command-form]")?.dataset.bound || "",
+      formBusy: document.querySelector("[data-command-form]")?.getAttribute("aria-busy") || "",
+      inputDisabled: !!document.querySelector("[data-command-input]")?.disabled,
+      historyCount: history.length,
+      newestPrompt: history[0]?.prompt || "",
+      newestReply: history[0]?.reply || "",
+      totalHistory: (state.chatHistory || []).length,
+      tokenPresent: !!sessionStorage.getItem("pf.live.sessionToken.v1"),
+      visibleMessages: [...document.querySelectorAll("[data-chat-log] .msg-text")].slice(-3).map((node) => node.textContent.trim()),
+    };
   })()`, `persisted chat answer for ${prompt}`, 20_000, diagnostics);
   const persistedReply = await evaluate(cdp, `(() => {
     const state = JSON.parse(localStorage.getItem("pf.phantom.v4") || "{}");
@@ -360,9 +383,19 @@ async function submitChat(cdp, prompt, diagnostics = null) {
     const users = [...document.querySelectorAll("[data-chat-log] .msg-user .msg-text")];
     const phantoms = [...document.querySelectorAll("[data-chat-log] .msg-phantom:not(.msg-typing) .msg-text")];
     const normalize = (value) => String(value || "").replace(/\\s+/g, " ").trim();
-    return users.at(-1)?.textContent.trim() === ${JSON.stringify(prompt)}
-      && normalize(phantoms.at(-1)?.textContent) === normalize(${JSON.stringify(persistedReply)})
-      && !document.querySelector("[data-chat-log] .msg-typing");
+    const visiblePrompt = users.at(-1)?.textContent.trim() || "";
+    const visibleReply = normalize(phantoms.at(-1)?.textContent);
+    const persistedReply = normalize(${JSON.stringify(persistedReply)});
+    return {
+      ok: visiblePrompt === ${JSON.stringify(prompt)}
+        && visibleReply === persistedReply
+        && !document.querySelector("[data-chat-log] .msg-typing"),
+      visiblePrompt,
+      visibleReply,
+      persistedReply,
+      typing: !!document.querySelector("[data-chat-log] .msg-typing"),
+      phantomRows: phantoms.length,
+    };
   })()`, `visible chat answer for ${prompt}`, 20_000, diagnostics);
   return evaluate(cdp, `(() => {
     const users = [...document.querySelectorAll("[data-chat-log] .msg-user .msg-text")];
