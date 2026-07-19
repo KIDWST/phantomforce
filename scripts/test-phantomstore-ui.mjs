@@ -46,6 +46,12 @@ assert.match(backendSource, /recordPhantomStoreProductBuyClick/u, "Backend must 
 /* Product model upgrades: real image fields, variants, inventory, and
    store-backed persistence with admin-gated editing. */
 assert.match(backendSource, /imageUrl: string \| null;[\s\S]*gallery: string\[\];[\s\S]*videoUrl: string \| null;[\s\S]*media: PhantomStoreProductMedia\[\];[\s\S]*variants: PhantomStoreProductVariant\[\];[\s\S]*inventory: PhantomStoreProductInventory;/u, "Product model must carry imageUrl, gallery, videoUrl, media, variants, and inventory.");
+assert.match(backendSource, /latestVersion: string;[\s\S]*releaseChannel: PhantomStoreReleaseChannel;[\s\S]*updatePolicy: PhantomStoreUpdatePolicy;[\s\S]*updateStatus: PhantomStoreUpdateStatus;[\s\S]*lastUpdateCheckAt: string;[\s\S]*nextUpdateCheckAt: string;[\s\S]*updateUrl: string;[\s\S]*releaseNotes: string;/u, "Product model must carry release/update metadata for marketplace freshness.");
+assert.match(backendSource, /const PRODUCT_UPDATE_CHECK_INTERVAL_MS = 6 \* 60 \* 60 \* 1000/u, "PhantomStore products must refresh update checks on a 6-hour cadence.");
+assert.match(backendSource, /function refreshProductUpdateChecks/u, "Existing PhantomStore JSON stores must refresh product update-check timestamps.");
+assert.match(backendSource, /function syncSeededProductReleases/u, "Existing PhantomStore JSON stores must sync seeded product release/version metadata.");
+assert.match(backendSource, /name: "PhantomVox"[\s\S]*releaseChannel: "preview"[\s\S]*updateStatus: "coming_soon"/u, "The Reaper plugin listing must be branded as PhantomVox and flagged close to launch.");
+assert.match(backendSource, /name: "Termina"[\s\S]*version: "0\.3\.0"[\s\S]*Prompt Scheduler\/Sender/u, "Termina must advertise the current scheduler-capable release.");
 assert.match(backendSource, /type: "video"[\s\S]*AI-generated Termina showcase/u, "Termina must include a real generated showcase video media item.");
 assert.match(backendSource, /function syncSeededProductMedia/u, "Existing PhantomStore JSON stores must sync newly generated seeded product media.");
 assert.match(backendSource, /imageUrl: "\/app\/assets\/brand-phantom\.png"/u, "Business OS must use the real shipped brand image asset, not a fabricated photo.");
@@ -71,13 +77,18 @@ assert.match(storeSource, /function productGallery/u, "The product page must bui
 assert.match(storeSource, /function productMedia/u, "The product page must render first-class product image/video media.");
 assert.match(storeSource, /<video src=/u, "Generated product videos must render directly inside the product detail page.");
 assert.match(storeSource, /function productShowcase/u, "The product page must explain the AI fit, prediction, and proof signals.");
+assert.match(storeSource, /function productUpdateState/u, "The product UI must compute product update/readiness state.");
+assert.match(storeSource, /VERSION HEALTH/u, "The product detail page must show release/update health.");
+assert.match(storeSource, /latest v/u, "Product cards must show the latest version signal.");
+assert.match(storeSource, /releaseNotes: String\(data\.get\("releaseNotes"\)/u, "The admin product editor must save release notes.");
+assert.match(storeSource, /updatePolicy: String\(data\.get\("updatePolicy"\)/u, "The admin product editor must save update policy.");
 assert.match(storeSource, /variant \? \{ variantId: variant\.id \} : \{\}/u, "Buy requests must carry the selected variant id.");
 assert.match(storeSource, /ui\.snapshot\?\.canModerate \? adminProductsPanel\(\)/u, "The admin product editor must only render for moderation-capable sessions.");
 assert.match(storeSource, /\/api\/phantomstore\/products\/\$\{encodeURIComponent\(productId\)\}/u, "The admin product editor must save through the product update endpoint.");
 assert.match(storeSource, /quality_hold/u, "Buy availability must respect quality_hold status.");
 assert.match(storeSource, /function outOfStock/u, "Buy availability must respect tracked inventory at zero stock.");
 
-for (const selector of [".ps-shell", ".ps-market-hero", ".ps-tool", ".ps-product", ".ps-seller", ".ps-reviews", ".ps-submit-layout", ".ps-moderate", ".ps-product-media", ".ps-detail", ".ps-variant", ".ps-admin-products", ".ps-match-chip", ".ps-video-chip", ".ps-card-gallery", ".ps-ai-fit-panel", ".ps-fit-meter", ".ps-showcase-strip", ".ps-detail-stage", ".ps-media-strip"]) {
+for (const selector of [".ps-shell", ".ps-market-hero", ".ps-tool", ".ps-product", ".ps-seller", ".ps-reviews", ".ps-submit-layout", ".ps-moderate", ".ps-product-media", ".ps-detail", ".ps-variant", ".ps-admin-products", ".ps-match-chip", ".ps-video-chip", ".ps-card-gallery", ".ps-ai-fit-panel", ".ps-fit-meter", ".ps-showcase-strip", ".ps-detail-stage", ".ps-media-strip", ".ps-update-chip", ".ps-update-panel", ".ps-release-notes"]) {
   assert.ok(storeCss.includes(selector), `${selector} style must be present.`);
 }
 

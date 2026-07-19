@@ -75,7 +75,7 @@ function productVideoUrl(product) {
 }
 
 function productText(product) {
-  return `${product?.name || ""} ${product?.summary || ""} ${product?.description || ""} ${(product?.tags || []).join(" ")} ${(product?.badges || []).join(" ")} ${product?.category || ""} ${product?.seller?.name || ""}`.toLowerCase();
+  return `${product?.name || ""} ${product?.summary || ""} ${product?.description || ""} ${product?.releaseNotes || ""} ${(product?.tags || []).join(" ")} ${(product?.badges || []).join(" ")} ${product?.category || ""} ${product?.seller?.name || ""}`.toLowerCase();
 }
 
 function workflowSignals() {
@@ -207,6 +207,39 @@ function productBuyable(product) {
   return !variant || variant.available === true;
 }
 
+function shortDate(value) {
+  const parsed = Date.parse(value || "");
+  if (!Number.isFinite(parsed)) return "not checked yet";
+  return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(parsed));
+}
+
+function productUpdateState(product) {
+  const current = String(product?.version || "1.0.0");
+  const latest = String(product?.latestVersion || current);
+  const status = String(product?.updateStatus || (latest === current ? "current" : "update_available"));
+  const channel = String(product?.releaseChannel || "stable").replaceAll("_", " ");
+  const policy = String(product?.updatePolicy || "auto_check").replaceAll("_", " ");
+  const labels = {
+    current: "Current",
+    update_available: "Update available",
+    coming_soon: "Close to launch",
+    quality_hold: "Quality hold",
+  };
+  return {
+    current,
+    latest,
+    status,
+    channel,
+    policy,
+    label: labels[status] || "Current",
+    tone: status === "current" ? "good" : status === "update_available" ? "warn" : status === "coming_soon" ? "soon" : "hold",
+    checked: shortDate(product?.lastUpdateCheckAt),
+    next: shortDate(product?.nextUpdateCheckAt),
+    updateUrl: safeHref(product?.updateUrl),
+    releaseNotes: String(product?.releaseNotes || "").trim(),
+  };
+}
+
 let mountedRoot = null;
 let searchTimer = 0;
 
@@ -287,6 +320,7 @@ function productCard(product) {
   const match = productWorkflowMatch(product);
   const gallery = productGallery(product).slice(0, 3);
   const hasVideo = productMedia(product).some((item) => item.type === "video");
+  const update = productUpdateState(product);
   return `<article class="ps-product ${product.featured ? "is-featured" : ""}">
     <button type="button" class="ps-product-media" data-ps-detail="${esc(product.id)}" aria-label="Open ${esc(product.name)} details">
       <img src="${productImageUrl(product)}" alt="${esc(product.name)} product image" loading="lazy" />
@@ -301,6 +335,11 @@ function productCard(product) {
       </div>
       <span>${esc(product.priceLabel || "Contact")}</span>
     </header>
+    <div class="ps-update-line">
+      <span class="ps-update-chip is-${esc(update.tone)}">${esc(update.label)}</span>
+      <span>v${esc(update.current)} / latest v${esc(update.latest)}</span>
+      <span>${esc(update.policy)} every 6h</span>
+    </div>
     <p>${esc(product.summary)}</p>
     <div class="ps-product-proof">
       <b>${esc(product.rating || "New")} / 5</b>
@@ -333,6 +372,7 @@ function renderProductDetail(product) {
   const showcase = productShowcase(product, match);
   const websiteUrl = safeHref(seller.websiteUrl);
   const supportUrl = safeHref(seller.supportUrl);
+  const update = productUpdateState(product);
   return `<section class="ps-detail" data-ps-product-view="${esc(product.id)}">
     <button type="button" class="ps-secondary ps-detail-back" data-ps-back>&larr; Back to Discover</button>
     <div class="ps-detail-grid">
@@ -350,6 +390,20 @@ function renderProductDetail(product) {
         <p class="ps-kicker">${esc(product.category)} / ${esc(product.delivery || "Digital delivery")} / v${esc(product.version || "1.0.0")}</p>
         <h2>${esc(product.name)}</h2>
         <p class="ps-detail-summary">${esc(product.summary)}</p>
+        <div class="ps-update-panel">
+          <div>
+            <p class="ps-kicker">VERSION HEALTH</p>
+            <strong>${esc(update.label)}</strong>
+            <span>Installed/store v${esc(update.current)} · latest v${esc(update.latest)} · ${esc(update.channel)}</span>
+          </div>
+          <div class="ps-update-meta">
+            <span>${esc(update.policy)} checks</span>
+            <span>Last: ${esc(update.checked)}</span>
+            <span>Next: ${esc(update.next)}</span>
+            ${update.updateUrl ? `<a href="${esc(update.updateUrl)}" target="_blank" rel="noopener noreferrer">Release page</a>` : ""}
+          </div>
+          ${update.releaseNotes ? `<p class="ps-release-notes">${esc(update.releaseNotes)}</p>` : ""}
+        </div>
         <div class="ps-ai-fit-panel">
           <div>
             <p class="ps-kicker">AI WORKFLOW MATCH</p>
@@ -597,6 +651,8 @@ function submissionCard(tool) {
 
 const PRODUCT_CATEGORIES = ["Desktop App", "AI Suite", "Plugin", "Automation", "Creative Tool"];
 const PRODUCT_STATUSES = ["available", "quality_hold"];
+const RELEASE_CHANNELS = ["stable", "early_access", "beta", "preview"];
+const UPDATE_POLICIES = ["auto_check", "manual", "managed"];
 
 /* Variants edit as one line each: id | label | priceUsd | yes/no (available).
    Line format keeps the admin form honest and diffable without a JSON editor. */
@@ -615,6 +671,7 @@ function adminProductForm(product) {
   const isNew = !product;
   const p = product || { status: "available", category: "Desktop App", inventory: { mode: "unlimited" } };
   const inventory = inventoryOf(p);
+  const update = productUpdateState(p);
   return `<form class="ps-form ps-product-form" data-ps-product-form data-product-id="${esc(isNew ? "" : p.id)}">
     <header>
       <div>
@@ -630,6 +687,18 @@ function adminProductForm(product) {
       <label>Category<select name="category">${PRODUCT_CATEGORIES.map((cat) => `<option ${p.category === cat ? "selected" : ""}>${esc(cat)}</option>`).join("")}</select></label>
       <label>Status<select name="status">${PRODUCT_STATUSES.map((status) => `<option ${p.status === status ? "selected" : ""}>${esc(status)}</option>`).join("")}</select></label>
       <label>Version<input name="version" maxlength="40" value="${esc(p.version || "1.0.0")}" /></label>
+    </div>
+    <div class="ps-row">
+      <label>Latest version<input name="latestVersion" maxlength="40" value="${esc(p.latestVersion || p.version || "1.0.0")}" /></label>
+      <label>Release channel<select name="releaseChannel">${RELEASE_CHANNELS.map((channel) => `<option value="${esc(channel)}" ${p.releaseChannel === channel ? "selected" : ""}>${esc(channel.replaceAll("_", " "))}</option>`).join("")}</select></label>
+      <label>Update policy<select name="updatePolicy">${UPDATE_POLICIES.map((policy) => `<option value="${esc(policy)}" ${p.updatePolicy === policy ? "selected" : ""}>${esc(policy.replaceAll("_", " "))}</option>`).join("")}</select></label>
+    </div>
+    <label>Update URL<input name="updateUrl" type="url" value="${esc(p.updateUrl || p.buyUrl || "")}" placeholder="https://..." /></label>
+    <label>Release notes<textarea name="releaseNotes" rows="3" maxlength="1000" placeholder="What changed, what is close, and what buyers should know.">${esc(p.releaseNotes || "")}</textarea></label>
+    <div class="ps-update-line">
+      <span class="ps-update-chip is-${esc(update.tone)}">${esc(update.label)}</span>
+      <span>last checked ${esc(update.checked)}</span>
+      <span>next ${esc(update.next)}</span>
     </div>
     <div class="ps-row">
       <label>Price label<input name="priceLabel" maxlength="60" value="${esc(p.priceLabel || "")}" /></label>
@@ -815,6 +884,11 @@ async function saveProduct(form) {
       category: String(data.get("category") || ""),
       status: String(data.get("status") || "available"),
       version: String(data.get("version") || ""),
+      latestVersion: String(data.get("latestVersion") || ""),
+      releaseChannel: String(data.get("releaseChannel") || ""),
+      updatePolicy: String(data.get("updatePolicy") || ""),
+      updateUrl: String(data.get("updateUrl") || ""),
+      releaseNotes: String(data.get("releaseNotes") || ""),
       priceLabel: String(data.get("priceLabel") || ""),
       buyLabel: String(data.get("buyLabel") || ""),
       delivery: String(data.get("delivery") || ""),

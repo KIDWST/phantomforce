@@ -25,12 +25,36 @@ const moduleDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(moduleDir, "../../..");
 const storePath = process.env.PHANTOMFORCE_PHANTOMSTORE_PATH || resolve(repoRoot, ".phantom", "phantomstore.json");
 const retryableWriteCodes = new Set(["EPERM", "EACCES", "EBUSY"]);
+const PRODUCT_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 
 /* Built from character codes rather than a \u escape literal, to avoid any
    editor/pipeline re-interpreting the escape sequence as a raw control byte. */
 const CONTROL_CHARS = new RegExp("[" + String.fromCharCode(0) + "-" + String.fromCharCode(31) + String.fromCharCode(127) + "]", "g");
 const clean = (value: unknown, max = 500) => String(value ?? "").trim().replace(CONTROL_CHARS, " ").slice(0, max);
 const now = () => new Date().toISOString();
+
+function validIso(value: unknown): string {
+  const raw = clean(value, 40);
+  if (!raw) return "";
+  const parsed = Date.parse(raw);
+  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : "";
+}
+
+function addMs(iso: string, ms: number): string {
+  const base = Date.parse(iso);
+  return new Date((Number.isFinite(base) ? base : Date.now()) + ms).toISOString();
+}
+
+function compareVersionLike(left: string, right: string): number {
+  const a = clean(left, 40).match(/\d+/g)?.map(Number) || [];
+  const b = clean(right, 40).match(/\d+/g)?.map(Number) || [];
+  const length = Math.max(a.length, b.length);
+  for (let index = 0; index < length; index++) {
+    const diff = (a[index] || 0) - (b[index] || 0);
+    if (diff !== 0) return diff;
+  }
+  return clean(left, 40).localeCompare(clean(right, 40));
+}
 
 export type PhantomStoreCategory = "AI Tool" | "Agent" | "CLI" | "Library" | "Extension" | "Model" | "Template" | "Dataset";
 const CATEGORIES: PhantomStoreCategory[] = ["AI Tool", "Agent", "CLI", "Library", "Extension", "Model", "Template", "Dataset"];
@@ -120,6 +144,26 @@ function safeProductStatus(value: unknown): PhantomStoreProductStatus {
   return clean(value, 20) === "quality_hold" ? "quality_hold" : "available";
 }
 
+export type PhantomStoreReleaseChannel = "stable" | "early_access" | "beta" | "preview";
+const RELEASE_CHANNELS: PhantomStoreReleaseChannel[] = ["stable", "early_access", "beta", "preview"];
+function safeReleaseChannel(value: unknown): PhantomStoreReleaseChannel {
+  const v = clean(value, 30).toLowerCase();
+  return (RELEASE_CHANNELS as string[]).includes(v) ? (v as PhantomStoreReleaseChannel) : "stable";
+}
+
+export type PhantomStoreUpdatePolicy = "auto_check" | "manual" | "managed";
+const UPDATE_POLICIES: PhantomStoreUpdatePolicy[] = ["auto_check", "manual", "managed"];
+function safeUpdatePolicy(value: unknown): PhantomStoreUpdatePolicy {
+  const v = clean(value, 30).toLowerCase();
+  return (UPDATE_POLICIES as string[]).includes(v) ? (v as PhantomStoreUpdatePolicy) : "auto_check";
+}
+
+export type PhantomStoreUpdateStatus = "current" | "update_available" | "coming_soon" | "quality_hold";
+function safeUpdateStatus(value: unknown): PhantomStoreUpdateStatus {
+  const v = clean(value, 30).toLowerCase();
+  return v === "update_available" || v === "coming_soon" || v === "quality_hold" ? v : "current";
+}
+
 /* Product images stay first-party: either an app-relative asset path that the
    admin shell already serves (e.g. /app/assets/...) or an http(s) URL. Anything
    else is dropped so a stored product can never render a javascript: image. */
@@ -195,6 +239,45 @@ function safeInventory(value: unknown): PhantomStoreProductInventory {
   return { mode: "unlimited" };
 }
 
+function deriveProductUpdateStatus(product: Pick<PhantomStoreProduct, "status" | "version" | "latestVersion" | "releaseChannel">): PhantomStoreUpdateStatus {
+  if (product.status === "quality_hold") return "quality_hold";
+  if (product.releaseChannel === "preview") return "coming_soon";
+  return compareVersionLike(product.latestVersion || product.version, product.version) > 0 ? "update_available" : "current";
+}
+
+function normalizeProductReleaseFields(product: Partial<PhantomStoreProduct> & Record<string, unknown>) {
+  const checked = validIso(product.lastUpdateCheckAt) || now();
+  const version = clean(product.version, 40) || "1.0.0";
+  return {
+    version,
+    latestVersion: clean(product.latestVersion, 40) || version,
+    releaseChannel: safeReleaseChannel(product.releaseChannel),
+    updatePolicy: safeUpdatePolicy(product.updatePolicy),
+    updateStatus: safeUpdateStatus(product.updateStatus),
+    lastUpdateCheckAt: checked,
+    nextUpdateCheckAt: validIso(product.nextUpdateCheckAt) || addMs(checked, PRODUCT_UPDATE_CHECK_INTERVAL_MS),
+    updateUrl: safeUrl(product.updateUrl) || safeUrl(product.buyUrl),
+    releaseNotes: clean(product.releaseNotes, 1000),
+  };
+}
+
+function refreshProductUpdateCheck(product: PhantomStoreProduct): boolean {
+  let changed = false;
+  const nextStatus = deriveProductUpdateStatus(product);
+  if (product.updateStatus !== nextStatus) {
+    product.updateStatus = nextStatus;
+    changed = true;
+  }
+  if (product.updatePolicy !== "auto_check") return changed;
+  const last = Date.parse(product.lastUpdateCheckAt);
+  const stale = !Number.isFinite(last) || Date.now() - last >= PRODUCT_UPDATE_CHECK_INTERVAL_MS;
+  if (!stale) return changed;
+  const checked = now();
+  product.lastUpdateCheckAt = checked;
+  product.nextUpdateCheckAt = addMs(checked, PRODUCT_UPDATE_CHECK_INTERVAL_MS);
+  return true;
+}
+
 export type PhantomStoreProduct = {
   id: string;
   sellerId: string;
@@ -207,6 +290,14 @@ export type PhantomStoreProduct = {
   buyUrl: string;
   delivery: string;
   version: string;
+  latestVersion: string;
+  releaseChannel: PhantomStoreReleaseChannel;
+  updatePolicy: PhantomStoreUpdatePolicy;
+  updateStatus: PhantomStoreUpdateStatus;
+  lastUpdateCheckAt: string;
+  nextUpdateCheckAt: string;
+  updateUrl: string;
+  releaseNotes: string;
   status: PhantomStoreProductStatus;
   qualityNote: string;
   tags: string[];
@@ -309,7 +400,15 @@ const SEEDED_PRODUCTS: PhantomStoreProduct[] = [
     buyLabel: "Buy Termina",
     buyUrl: "https://phantomforce.online/phantomstore/termina",
     delivery: "Windows desktop download",
-    version: "0.2.0",
+    version: "0.3.0",
+    latestVersion: "0.3.0",
+    releaseChannel: "early_access",
+    updatePolicy: "auto_check",
+    updateStatus: "current",
+    lastUpdateCheckAt: "2026-07-18T00:00:00.000Z",
+    nextUpdateCheckAt: "2026-07-18T06:00:00.000Z",
+    updateUrl: "https://phantomforce.online/phantomstore/termina",
+    releaseNotes: "Adds Prompt Scheduler/Sender for timed multi-tab prompt dispatch, with browser fallback now and server-side scheduler support after app restart.",
     status: "available",
     qualityNote: "Multi-CLI submit reliability is a launch gate and is covered by Termina's dispatch retry tests.",
     tags: ["local ai", "terminal wall", "multi-agent", "privacy"],
@@ -348,7 +447,15 @@ const SEEDED_PRODUCTS: PhantomStoreProduct[] = [
     buyLabel: "Choose plan",
     buyUrl: "https://app.phantomforce.online",
     delivery: "Web app workspace",
-    version: "2026.07",
+    version: "2026.07.18",
+    latestVersion: "2026.07.18",
+    releaseChannel: "stable",
+    updatePolicy: "managed",
+    updateStatus: "current",
+    lastUpdateCheckAt: "2026-07-18T00:00:00.000Z",
+    nextUpdateCheckAt: "2026-07-18T06:00:00.000Z",
+    updateUrl: "https://app.phantomforce.online",
+    releaseNotes: "Managed web release with PhantomStore protected in the workspace, admin-gated product editing, and marketplace product media.",
     status: "available",
     qualityNote: "Free plan remains available for previewing the workspace before upgrading.",
     tags: ["business os", "media lab", "analytics", "sites"],
@@ -378,16 +485,24 @@ const SEEDED_PRODUCTS: PhantomStoreProduct[] = [
   {
     id: "product-phantom-vocal-ai",
     sellerId: "seller-phantomforce",
-    name: "Phantom Vocal AI",
+    name: "PhantomVox",
     summary: "A prompt-first Reaper vocal-chain assistant for creators who want sound design without knob clutter.",
     description:
-      "Describe the vocal you want and Phantom Vocal AI prepares a modern vocal chain direction. Designed for a cleaner slider/prompter workflow inside Reaper.",
+      "Describe the vocal you want and PhantomVox prepares a modern vocal chain direction. Designed for a cleaner slider/prompter workflow inside Reaper.",
     category: "Plugin",
-    priceLabel: "$29 creator license",
-    buyLabel: "Buy plugin",
-    buyUrl: "https://phantomforce.online/phantomstore/vocal-ai",
+    priceLabel: "$29 launch license",
+    buyLabel: "Join launch list",
+    buyUrl: "https://phantomforce.online/phantomstore/phantomvox",
     delivery: "Reaper plugin download",
-    version: "0.1.0",
+    version: "0.8.0",
+    latestVersion: "0.9.0",
+    releaseChannel: "preview",
+    updatePolicy: "auto_check",
+    updateStatus: "coming_soon",
+    lastUpdateCheckAt: "2026-07-18T00:00:00.000Z",
+    nextUpdateCheckAt: "2026-07-18T06:00:00.000Z",
+    updateUrl: "https://phantomforce.online/phantomstore/phantomvox",
+    releaseNotes: "PhantomVox is close to launch: prompt-first UI, modern sliders, Reaper fit checks, and packaged install polish are the remaining gates.",
     status: "available",
     qualityNote: "UI refresh is focused on prompt-first controls, modern sliders, and better Reaper fit.",
     tags: ["reaper", "vocal chain", "creator tool", "audio"],
@@ -403,7 +518,7 @@ const SEEDED_PRODUCTS: PhantomStoreProduct[] = [
         source: "generated",
       },
     ],
-    variants: [{ id: "vocal-ai-creator", label: "Creator license", priceUsd: 29, available: true }],
+    variants: [{ id: "phantomvox-launch", label: "Launch license", priceUsd: 29, available: true }],
     inventory: { mode: "unlimited" },
     rating: 4.5,
     reviewCount: seededReviews.vocal.length,
@@ -425,6 +540,14 @@ const SEEDED_PRODUCTS: PhantomStoreProduct[] = [
     buyUrl: "https://phantomforce.online/phantomstore/phantombot",
     delivery: "Windows + Kali source bundle (download)",
     version: "1.0.0",
+    latestVersion: "1.0.0",
+    releaseChannel: "early_access",
+    updatePolicy: "auto_check",
+    updateStatus: "current",
+    lastUpdateCheckAt: "2026-07-18T00:00:00.000Z",
+    nextUpdateCheckAt: "2026-07-18T06:00:00.000Z",
+    updateUrl: "https://phantomforce.online/phantomstore/phantombot",
+    releaseNotes: "Early-access source bundle remains current; installer packaging is tracked separately from marketplace availability.",
     status: "available",
     qualityNote: "Early access: source-only delivery, requires Python and manual bridge-token setup. No packaged installer yet.",
     tags: ["automation", "remote control", "devops", "bridge"],
@@ -462,6 +585,14 @@ const SEEDED_PRODUCTS: PhantomStoreProduct[] = [
     buyUrl: "https://phantomforce.online/phantomstore/phantomcut-studio",
     delivery: "Local Python cockpit (download, requires your own Resolve + Higgsfield CLI)",
     version: "0.3.0",
+    latestVersion: "0.3.0",
+    releaseChannel: "early_access",
+    updatePolicy: "auto_check",
+    updateStatus: "current",
+    lastUpdateCheckAt: "2026-07-18T00:00:00.000Z",
+    nextUpdateCheckAt: "2026-07-18T06:00:00.000Z",
+    updateUrl: "https://phantomforce.online/phantomstore/phantomcut-studio",
+    releaseNotes: "Early-access local cockpit is current for BYO Resolve and Higgsfield CLI workflows.",
     status: "available",
     qualityNote: "Early access: bring your own DaVinci Resolve install and Higgsfield CLI login. No packaged installer yet.",
     tags: ["davinci resolve", "video generation", "higgsfield", "creator tool"],
@@ -494,6 +625,9 @@ function normalizeStoredProduct(raw: unknown): PhantomStoreProduct | null {
   if (!raw || typeof raw !== "object") return null;
   const p = raw as Partial<PhantomStoreProduct> & Record<string, unknown>;
   if (!clean(p.id, 120) || !clean(p.name, 90)) return null;
+  const release = normalizeProductReleaseFields(p);
+  const status = safeProductStatus(p.status);
+  const updateStatus = deriveProductUpdateStatus({ status, version: release.version, latestVersion: release.latestVersion, releaseChannel: release.releaseChannel });
   return {
     id: clean(p.id, 120),
     sellerId: clean(p.sellerId, 80) || "seller-phantomforce",
@@ -505,8 +639,9 @@ function normalizeStoredProduct(raw: unknown): PhantomStoreProduct | null {
     buyLabel: clean(p.buyLabel, 40) || "Buy now",
     buyUrl: safeUrl(p.buyUrl),
     delivery: clean(p.delivery, 120),
-    version: clean(p.version, 40) || "1.0.0",
-    status: safeProductStatus(p.status),
+    ...release,
+    updateStatus,
+    status,
     qualityNote: clean(p.qualityNote, 500),
     tags: Array.isArray(p.tags) ? p.tags.map((t) => clean(t, 30)).filter(Boolean).slice(0, 8) : [],
     badges: Array.isArray(p.badges) ? p.badges.map((b) => clean(b, 40)).filter(Boolean).slice(0, 6) : [],
@@ -575,9 +710,60 @@ function syncSeededProductMedia(store: PhantomStoreStore): boolean {
   return changed;
 }
 
+function syncSeededProductReleases(store: PhantomStoreStore): boolean {
+  let changed = false;
+  for (const seed of SEEDED_PRODUCTS) {
+    const product = store.products.find((item) => item.id === seed.id);
+    if (!product) continue;
+    const fields: (keyof PhantomStoreProduct)[] = [
+      "name",
+      "summary",
+      "description",
+      "buyLabel",
+      "buyUrl",
+      "delivery",
+      "version",
+      "latestVersion",
+      "releaseChannel",
+      "updatePolicy",
+      "updateUrl",
+      "releaseNotes",
+      "status",
+    ];
+    for (const field of fields) {
+      if (product[field] !== seed[field]) {
+        (product as Record<string, unknown>)[field] = seed[field];
+        changed = true;
+      }
+    }
+    if (JSON.stringify(product.tags) !== JSON.stringify(seed.tags)) {
+      product.tags = [...seed.tags];
+      changed = true;
+    }
+    if (JSON.stringify(product.badges) !== JSON.stringify(seed.badges)) {
+      product.badges = [...seed.badges];
+      changed = true;
+    }
+    const seedVariantIds = seed.variants.map((variant) => variant.id).join("|");
+    const productVariantIds = product.variants.map((variant) => variant.id).join("|");
+    if (productVariantIds !== seedVariantIds) {
+      product.variants = seed.variants.map((variant) => ({ ...variant }));
+      changed = true;
+    }
+  }
+  return changed;
+}
+
+function refreshProductUpdateChecks(store: PhantomStoreStore): boolean {
+  return store.products.reduce((changed, product) => refreshProductUpdateCheck(product) || changed, false);
+}
+
 async function readStoreWithProducts(): Promise<PhantomStoreStore> {
   const store = await readStore();
-  const changed = seedProductsIfEmpty(store) || syncSeededProductMedia(store);
+  let changed = seedProductsIfEmpty(store);
+  changed = syncSeededProductMedia(store) || changed;
+  changed = syncSeededProductReleases(store) || changed;
+  changed = refreshProductUpdateChecks(store) || changed;
   if (changed) await writeStore(store);
   return store;
 }
@@ -783,6 +969,8 @@ export async function recordPhantomStoreInstallClick(_session: AccessSession, to
    the same canManageAccess/isSuperAdmin check and the same "moderation access"
    error message the route layer already maps to a 403. */
 function productInput(input: Record<string, unknown>) {
+  const release = normalizeProductReleaseFields(input);
+  const status = safeProductStatus(input.status);
   return {
     name: clean(input.name, 90),
     summary: clean(input.summary, 300),
@@ -792,8 +980,9 @@ function productInput(input: Record<string, unknown>) {
     buyLabel: clean(input.buyLabel, 40) || "Buy now",
     buyUrl: safeUrl(input.buyUrl),
     delivery: clean(input.delivery, 120),
-    version: clean(input.version, 40) || "1.0.0",
-    status: safeProductStatus(input.status),
+    ...release,
+    updateStatus: deriveProductUpdateStatus({ status, version: release.version, latestVersion: release.latestVersion, releaseChannel: release.releaseChannel }),
+    status,
     qualityNote: clean(input.qualityNote, 500),
     tags: Array.isArray(input.tags) ? input.tags.map((t) => clean(t, 30)).filter(Boolean).slice(0, 8) : [],
     badges: Array.isArray(input.badges) ? input.badges.map((b) => clean(b, 40)).filter(Boolean).slice(0, 6) : [],
@@ -879,8 +1068,7 @@ export async function recordPhantomStoreProductBuyClick(_session: AccessSession,
 }
 
 export async function getPhantomStoreStatus() {
-  const store = await readStore();
-  seedProductsIfEmpty(store);
+  const store = await readStoreWithProducts();
   return {
     provider: "local_json",
     pathConfigured: Boolean(process.env.PHANTOMFORCE_PHANTOMSTORE_PATH),
@@ -888,6 +1076,9 @@ export async function getPhantomStoreStatus() {
     approvedTools: store.tools.filter((tool) => tool.status === "approved").length,
     sellers: SEEDED_SELLERS.length,
     products: store.products.length,
+    autoCheckedProducts: store.products.filter((product) => product.updatePolicy === "auto_check").length,
+    staleProducts: store.products.filter((product) => product.updateStatus === "update_available").length,
+    nextUpdateCheckAt: store.products.map((product) => product.nextUpdateCheckAt).sort()[0] || null,
     productBuyClicks: Object.values(store.productClicks || {}).reduce((sum, value) => sum + Number(value || 0), 0),
   };
 }

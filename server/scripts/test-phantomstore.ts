@@ -34,9 +34,16 @@ try {
       "imageUrl" in product && Array.isArray(product.gallery) && "videoUrl" in product && Array.isArray(product.media) && Array.isArray(product.variants) && typeof product.inventory === "object" && product.inventory !== null),
     "Every seeded product must ship imageUrl, gallery, videoUrl, media, variants, and inventory fields.",
   );
-  const seededTermina = initial.products.find((product: { id?: string }) => product.id === "product-termina") as { variants?: { id: string; priceUsd: number; available: boolean }[]; imageUrl?: string | null; videoUrl?: string | null; media?: { type?: string; source?: string; url?: string }[] } | undefined;
+  assert(
+    initial.products.every((product: { latestVersion?: unknown; releaseChannel?: unknown; updatePolicy?: unknown; updateStatus?: unknown; lastUpdateCheckAt?: unknown; nextUpdateCheckAt?: unknown; updateUrl?: unknown; releaseNotes?: unknown }) =>
+      typeof product.latestVersion === "string" && typeof product.releaseChannel === "string" && typeof product.updatePolicy === "string" && typeof product.updateStatus === "string" && typeof product.lastUpdateCheckAt === "string" && typeof product.nextUpdateCheckAt === "string" && typeof product.updateUrl === "string" && typeof product.releaseNotes === "string"),
+    "Every seeded product must ship release/update metadata for store freshness checks.",
+  );
+  const seededTermina = initial.products.find((product: { id?: string }) => product.id === "product-termina") as { version?: string; latestVersion?: string; updateStatus?: string; releaseNotes?: string; variants?: { id: string; priceUsd: number; available: boolean }[]; imageUrl?: string | null; videoUrl?: string | null; media?: { type?: string; source?: string; url?: string }[] } | undefined;
   const terminaVariant = seededTermina?.variants?.[0];
   assert(terminaVariant?.id === "termina-early-access" && terminaVariant.priceUsd === 20 && terminaVariant.available === true, "Termina must keep its real $20 early-access pricing as a variant.");
+  assert(seededTermina?.version === "0.3.0" && seededTermina.latestVersion === "0.3.0" && seededTermina.updateStatus === "current", "Termina must ship the current scheduler-capable release metadata.");
+  assert(Boolean(seededTermina?.releaseNotes?.includes("Prompt Scheduler/Sender")), "Termina release notes must mention the scheduled prompt sender.");
   assert(seededTermina?.imageUrl === null, "Termina has no real product image asset yet, so imageUrl must stay null (branded tile fallback), not a fabricated URL.");
   assert(typeof seededTermina?.videoUrl === "string" && seededTermina.videoUrl.endsWith(".mp4"), "Termina must include a real generated product showcase video URL.");
   assert(seededTermina?.media?.some((item) => item.type === "video" && item.source === "generated"), "Termina media must include a generated video item.");
@@ -47,6 +54,9 @@ try {
   );
   const seededOs = initial.products.find((product: { id?: string }) => product.id === "product-phantomforce-os") as { imageUrl?: string | null } | undefined;
   assert(seededOs?.imageUrl === "/app/assets/brand-phantom.png", "Business OS should reference the real shipped brand image asset.");
+  const seededPhantomVox = initial.products.find((product: { id?: string }) => product.id === "product-phantom-vocal-ai") as { name?: string; latestVersion?: string; updateStatus?: string; releaseChannel?: string; buyUrl?: string } | undefined;
+  assert(seededPhantomVox?.name === "PhantomVox" && seededPhantomVox.releaseChannel === "preview" && seededPhantomVox.updateStatus === "coming_soon", "The Reaper plugin must show as PhantomVox and clearly indicate close-to-launch status.");
+  assert(seededPhantomVox?.buyUrl?.includes("phantomvox"), "PhantomVox should point at the PhantomVox product path.");
   const seededFile = JSON.parse(await readFile(process.env.PHANTOMFORCE_PHANTOMSTORE_PATH, "utf8")) as { products?: { id?: string }[] };
   assert(Array.isArray(seededFile.products) && seededFile.products.some((product) => product.id === "product-termina"), "Products must be seeded into the JSON store on first read and served from the store after that.");
   assert(initial.sellers.every((seller: { reviews?: unknown[] }) => Array.isArray(seller.reviews)), "Seller listings should carry seller reviews.");
