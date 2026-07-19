@@ -153,7 +153,7 @@ async function ask(
     assert.equal(payload.admin_model_requested_lane, "local_ollama", `${prompt}: forged provider leaked into the accepted lane metadata`);
   }
   assert.ok(
-    [model, "phantom-calculator", "phantom-reference-resolver", "phantom-context-recall", "phantom-identity", "phantom-personality", "phantom-stable-fact"].includes(String(payload.model_id)),
+    [model, "phantom-calculator", "phantom-reference-resolver", "phantom-context-recall", "phantom-clarifier", "phantom-identity", "phantom-personality", "phantom-stable-fact"].includes(String(payload.model_id)),
     `${prompt}: unexpected responder ${payload.model_id}; fallback=${JSON.stringify(payload.fallback || null)}`,
   );
   assert.equal(payload.fallback?.all_failed, false, `${prompt}: model failed`);
@@ -504,6 +504,32 @@ rows.push(revisitedNova);
 assert.match(revisitedNova.answer.trim(), /^purple[.!]?$/i);
 assert.doesNotMatch(revisitedNova.answer, /yellow|volcano|jazz|Saturn/i);
 
+const ambiguity: Turn[] = [];
+rows.push(await ask(customerToken, "Dana chose tea and Priya chose coffee.", ambiguity));
+const ambiguousPronoun = await ask(customerToken, "What did she choose?", ambiguity);
+rows.push(ambiguousPronoun);
+assert.equal(ambiguousPronoun.modelId, "phantom-clarifier");
+assert.equal(ambiguousPronoun.answer, "Do you mean Dana or Priya?");
+assert.equal((ambiguousPronoun.answer.match(/\?/g) || []).length, 1);
+
+const blendedCorrection: Turn[] = [
+  {
+    user: "Give me two taglines.",
+    assistant: "1. Quiet power, visible results.\n2. Built for the work nobody sees.",
+  },
+  {
+    user: "Make the second one playful.",
+    assistant: "Built for the work nobody sees - now with fewer boring buttons.",
+  },
+];
+const repairedBlend = await ask(adminToken, "No, you misunderstood me. Keep the first idea but use the playful tone from the second answer. One sentence.", blendedCorrection, "reasoning", false, "feedback");
+rows.push(repairedBlend);
+assert.match(repairedBlend.answer, /quiet|silent|subtle|sneak|calm|soft/i, "the repaired answer must preserve the quiet/subtle concept");
+assert.match(repairedBlend.answer, /power|strength|strong|might/i, "the repaired answer must preserve the power concept");
+assert.match(repairedBlend.answer, /visible|shiny|seen|spotlight|notice|show/i, "the repaired answer must preserve the visibility concept");
+assert.match(repairedBlend.answer, /result|outcome|success|impact|win/i, "the repaired answer must preserve the results concept");
+assert.doesNotMatch(repairedBlend.answer, /nobody sees/i, "the repaired answer must not substitute the second idea's content");
+
   console.log(JSON.stringify({
     ok: true,
     model,
@@ -541,6 +567,8 @@ assert.doesNotMatch(revisitedNova.answer, /yellow|volcano|jazz|Saturn/i);
     naturalFollowUpVerified: true,
     namedTopicRevisitVerified: true,
     longDistanceTopicRevisitVerified: true,
+    ambiguityClarificationVerified: true,
+    misunderstandingRepairVerified: true,
   }, null, 2));
 } finally {
   ownedServer?.kill();

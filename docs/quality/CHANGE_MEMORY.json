@@ -1073,6 +1073,34 @@
       ]
     },
     {
+      "id": "conversational-ambiguity-and-repair",
+      "status": "active",
+      "title": "Phantom clarifies genuine ambiguity and repairs misunderstandings without changing the requested idea",
+      "ownerDecision": "When multiple named people make a pronoun genuinely ambiguous, Phantom asks exactly one concise question naming the candidates. When the user says an answer was misunderstood, Phantom follows the latest correction. Combining one answer's idea with another answer's tone must preserve the selected idea and borrow only style, never substitute the other content. None of these turns may introduce workspace status.",
+      "requiredPatterns": [
+        {
+          "file": "server/src/phantom-ai/instant-chat-context.ts",
+          "pattern": "When the user says you misunderstood[\\s\\S]*preserve the requested source idea[\\s\\S]*Ask one concise clarification question only when multiple interpretations are genuinely plausible",
+          "description": "The local-model context contract distinguishes correction, content source, style source, and true ambiguity."
+        },
+        {
+          "file": "server/src/phantom-ai/instant-chat-tools.ts",
+          "pattern": "function ambiguityClarificationReply[\\s\\S]*Do you mean [$][{]choices[}][?][\\s\\S]*phantom-clarifier",
+          "description": "Ambiguous person references produce one deterministic question naming the actual candidates."
+        },
+        {
+          "file": "server/scripts/test-instant-chat-http-live-model.ts",
+          "pattern": "Do you mean Dana or Priya[?][\\s\\S]*misunderstandingRepairVerified: true",
+          "description": "The real-model gate covers both ambiguity and first-idea/second-tone repair."
+        },
+        {
+          "file": "scripts/test-database-auth-org-browser.mjs",
+          "pattern": "ambiguous browser pronoun must produce one useful clarification naming both candidates",
+          "description": "Authenticated Chrome proves the clarification appears through the real dashboard chat path."
+        }
+      ]
+    },
+    {
       "id": "database-auth-reboot-recovery",
       "status": "active",
       "title": "Live admin and customer auth depend on a self-recovering database",

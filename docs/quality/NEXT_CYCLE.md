@@ -8,37 +8,30 @@ Read `AGENTS.md` and every file under `docs/quality` before changing code. Do
 not restart the inventory unless it is invalid. Continue in this Codex task via
 heartbeat automation `continue-phantomforce-quality-program`.
 
-Cycle 24 removed the browser's blind newest-eight-turn cutoff. Phantom now sends
-at most ten organization-scoped temporary turns: six newest turns plus up to
-four turns from a specifically named older thread and its nearby corrections.
-The server deterministically extracts exact recalled colors and codenames from
-that corrected thread instead of letting the model guess. A real Chrome journey
-proved the corrected Nova fact after nine unrelated topics, and the expanded
-real-model gate passed 102 requests. The complete browser graph is
-`phantom-live-20260718-43`. Commit `1e366afa` is deployed from the canonical
-checkout; its 102-request model gate and post-sync doctor passed with zero
-fallback, zero leakage, and all 183 live guards aligned.
+Cycle 25 makes genuine ambiguity useful instead of vague. Phantom asks one exact
+question naming multiple plausible people, but explicit named subjects and
+format words cannot trigger false clarification. Cross-answer corrections keep
+the selected idea separate from the referenced tone. A real Chrome journey
+proved 38 turns across two isolated organizations, and the expanded real-model
+gate passed 105 requests with zero fallback or leakage. Deployment evidence is
+recorded in `AUDIT_LOG.md` after canonical sync.
 
-## Recommended Cycle 25
+## Recommended Cycle 26
 
-Theme: ambiguous-reference resolution and conversational self-correction.
+Theme: multi-object reference resolution and chained corrections.
 
-1. Exercise references involving multiple people, objects, lists, dates, and
-   pronouns across topic switches, corrections, negation, and user typos.
-2. Verify Phantom asks one concise clarification only when multiple
-   interpretations are genuinely plausible; otherwise it should answer.
-3. Test user challenges such as “that is wrong,” “you misunderstood me,” and
-   “use the first answer but the second tone” without resetting the thread or
-   inventing workspace status.
-4. Expand deterministic tools only for exact extractive facts and calculations;
-   keep creative or judgment calls on the lightest capable local model.
+1. Exercise `it`, `they`, `those`, former/latter, numbered options, and multiple
+   objects without assuming every capitalized noun is a person.
+2. Test two and three consecutive corrections involving dates, locations,
+   negation, and list reordering.
+3. Verify explicit named subjects always outrank older ambiguous context.
+4. Keep deterministic handling extractive and bounded; leave creative judgment
+   on the lightest capable local model.
 5. Run at least 100 real-model requests and the authenticated 390x844/1440x900
-   browser journey, preserving each correction in change memory.
+   browser journey, preserving corrections in change memory.
 
 Likely files:
 
-- `app/js/store.js`
-- `app/js/command.js`
 - `server/src/phantom-ai/instant-chat-context.ts`
 - `server/src/phantom-ai/instant-chat-tools.ts`
 - `server/scripts/test-instant-chat-http-live-model.ts`

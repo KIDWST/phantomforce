@@ -6,15 +6,61 @@ export type InstantConversationTurn = {
 export const MAX_INSTANT_CONTEXT_CHARS = 4800;
 
 const CONTEXT_HEADER = "Fast casual chat. The following is temporary recent conversation from the active topic, not saved memory. Use it only to resolve references such as why, that, or tell me more.";
-const CONTEXT_RULE = "Answer the current casual request directly. Resolve pronouns and transformations from the newest relevant turn, preserve named subjects, and treat later corrections as authoritative. When the user asks for a replacement, shorter version, final item, or one new fact, return the replacement only instead of repeating earlier material. Follow exact format constraints such as 'only the number' without extra framing. When an approximate word count is requested, aim within 20 percent of it instead of stopping early. For factual claims, use stable knowledge and never invent a plausible-sounding detail; say when you are unsure. Do not append a follow-up question unless missing information prevents a useful answer. Never volunteer ledger, pipeline, accounting, approvals, or dashboard status unless the current request explicitly asks for it.";
+const CONTEXT_RULE = "Answer the current casual request directly. Resolve pronouns and transformations from the newest relevant turn, preserve named subjects, and treat later corrections as authoritative, including explicit negation. When the user says you misunderstood, repair the answer from their latest instruction instead of defending or repeating yourself. When combining one answer's idea or content with another answer's tone or style, preserve the requested source idea and borrow only the requested stylistic traits; never substitute the style-source content. When the user asks for a replacement, shorter version, final item, or one new fact, return the replacement only instead of repeating earlier material. Follow exact format constraints such as 'only the number' without extra framing. When an approximate word count is requested, aim within 20 percent of it instead of stopping early. For factual claims, use stable knowledge and never invent a plausible-sounding detail; say when you are unsure. Ask one concise clarification question only when multiple interpretations are genuinely plausible; otherwise answer without a follow-up question. Never volunteer ledger, pipeline, accounting, approvals, or dashboard status unless the current request explicitly asks for it.";
 const TOPIC_RESET = /\b(?:new topic|switch(?:ing)? topics?|change(?:ing)? (?:the )?subject|unrelated question)\b/i;
 const FOLLOW_UP_SIGNAL = /^(?:why\s+(?:that|it|this|so|them|those|one)\b|why\s*\?|how (?:so|come|about)\b|another\b|more\b|shorter\b|longer\b|again\b|continue\b|go on\b|now\b|actually\b|correction\b|instead\b|same\b|pick\b|choose\b|use\b|do you agree\b|is that true\b|are you sure\b|make (?:it|that|this|them|(?:the )?(?:comparison|answer|sentence|story|list|version))\b|turn (?:it|that|this)\b|answer (?:it|that|the question)\b|what about\b|tell me more\b|(?:give|show) me (?:an? )?example\b|give me .{0,20}\bmore\b|give me (?:only )?(?:the )?(?:corrected|final|next|same|other|another|more)\b|end with\b|double-check\b|ahora\b|dilo\b|otra\b|m[a\u00e1]s corto\b)/i;
 const IMPLICIT_FOLLOW_UP = /^(?:how long should i (?:stay|wait|spend|plan for)\b|what should i (?:know|do|try|learn|read|watch|buy|make|say|ask|pick|choose)\s*(?:first|next)?\s*\??$|where should i (?:start|begin|go)\b|what (?:would|do) you recommend\s*\??$|any (?:advice|tips|recommendations?)\s*\??$)/i;
 const CONTEXT_REFERENCE = /\b(?:it|that|this|them|those|these|former|latter|above|previous|earlier|last answer|same one|which one|the other|her|hers|him|they|there|corrected|final)\b/i;
 const CONTEXT_OPERATION = /\b(?:then|also|instead|add|apply|remove|rephrase|rewrite|translate|summarize|simplify|expand|combine|compare them)\b/i;
+const CROSS_ANSWER_REFERENCE = /\b(?:first|second|third|fourth)\s+(?:idea|option|tagline|concept|version)\b[\s\S]*\b(?:first|second|third|fourth)\s+answer\b/i;
 const CONTEXT_STOP_WORDS = new Set([
   "about", "after", "again", "answer", "back", "before", "could", "current", "does", "explain", "favorite", "first", "from", "give", "have", "into", "just", "know", "latest", "make", "more", "next", "only", "please", "question", "recommend", "sentence", "should", "something", "stay", "tell", "that", "their", "then", "there", "these", "thing", "this", "those", "what", "when", "where", "which", "would", "write", "your",
 ]);
+
+const ORDINAL_INDEX: Record<string, number> = {
+  first: 0,
+  second: 1,
+  third: 2,
+  fourth: 3,
+};
+
+function correctionSourceBrief(turns: InstantConversationTurn[], userRequest: string) {
+  if (!/\b(?:misunderstood|wrong idea|keep|preserve)\b/i.test(userRequest)
+    || !/\b(?:tone|style|voice)\b/i.test(userRequest)) return "";
+
+  const contentOrdinal = userRequest.match(/\b(first|second|third|fourth)\s+(?:idea|option|tagline|concept|version)\b/i)?.[1]?.toLowerCase();
+  const styleAnswerOrdinal = userRequest.match(/\b(?:tone|style|voice)\s+from\s+(?:the\s+)?(first|second|third|fourth)\s+answer\b/i)?.[1]?.toLowerCase();
+  if (!contentOrdinal || !styleAnswerOrdinal) return "";
+
+  const numberedIdeas = turns
+    .flatMap((turn) => [...turn.assistant.matchAll(/(?:^|\n)\s*\d+[.)]\s*([^\n]+)/g)].map((match) => match[1].trim()))
+    .filter(Boolean);
+  const content = numberedIdeas[ORDINAL_INDEX[contentOrdinal]];
+  const style = turns[ORDINAL_INDEX[styleAnswerOrdinal]]?.assistant.trim();
+  if (!content || !style) return "";
+
+  return [
+    "Authoritative correction brief:",
+    `CONTENT TO PRESERVE: ${content}`,
+    `STYLE REFERENCE ONLY: ${style}`,
+    "Rewrite the content-to-preserve in the style reference's tone. Do not reuse or substitute the style reference's subject, claim, or wording.",
+  ].join("\n");
+}
+
+export function buildInstantConversationUserMessage(turns: InstantConversationTurn[], userRequest: string) {
+  const correctionBrief = correctionSourceBrief(turns, userRequest);
+  if (!correctionBrief) return userRequest;
+  const content = correctionBrief.match(/^CONTENT TO PRESERVE:\s*(.+)$/m)?.[1]?.trim();
+  const requestedTone = userRequest.match(/\b(?:use|with|in)\s+(?:the\s+)?([a-z][a-z -]{0,30}?)\s+(?:tone|style|voice)\b/i)?.[1]?.trim();
+  if (!content) return userRequest;
+  return [
+    "Correction task. Rewrite this exact content while preserving its meaning and subject:",
+    content,
+    `Requested tone: ${requestedTone || "match the referenced answer's stylistic traits only"}.`,
+    userRequest.match(/\bone sentence\b/i) ? "Format: one sentence." : "",
+    "Return only the rewrite. Do not mention, quote, or substitute any other prior idea.",
+  ].filter(Boolean).join("\n");
+}
 
 function meaningfulTerms(value: string) {
   return new Set((value.toLowerCase().match(/[a-z0-9]{4,}/g) || []).filter((term) => !CONTEXT_STOP_WORDS.has(term)));
@@ -52,6 +98,7 @@ export function selectActiveInstantTopicTurns(turns: InstantConversationTurn[]) 
 }
 
 export function selectRelevantInstantTurns(turns: InstantConversationTurn[], userRequest = "") {
+  if (CROSS_ANSWER_REFERENCE.test(userRequest)) return turns.slice(-6);
   const activeTurns = selectActiveInstantTopicTurns(turns);
   const requestTerms = meaningfulTerms(userRequest);
   if (!requestTerms.size) return activeTurns;
@@ -91,7 +138,8 @@ export function buildInstantConversationContext(
   }
 
   const activeTurns = selectRelevantInstantTurns(turns, userRequest);
-  const fixedChars = CONTEXT_HEADER.length + CONTEXT_RULE.length + 2;
+  const correctionBrief = correctionSourceBrief(turns, userRequest);
+  const fixedChars = CONTEXT_HEADER.length + CONTEXT_RULE.length + correctionBrief.length + (correctionBrief ? 3 : 2);
   let remaining = Math.max(budget - fixedChars, 0);
   const packed: string[] = [];
 
@@ -114,5 +162,5 @@ export function buildInstantConversationContext(
     break;
   }
 
-  return `${CONTEXT_HEADER}\n${packed.join("\n")}\n${CONTEXT_RULE}`.slice(0, budget);
+  return `${CONTEXT_HEADER}\n${packed.join("\n")}${correctionBrief ? `\n${correctionBrief}` : ""}\n${CONTEXT_RULE}`.slice(0, budget);
 }

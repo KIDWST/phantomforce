@@ -7,7 +7,7 @@ export type InstantChatToolTurn = {
 
 export type InstantChatToolReply = {
   output_text: string;
-  tool_id: "phantom-calculator" | "phantom-reference-resolver" | "phantom-context-recall" | "phantom-identity" | "phantom-personality" | "phantom-stable-fact";
+  tool_id: "phantom-calculator" | "phantom-reference-resolver" | "phantom-context-recall" | "phantom-clarifier" | "phantom-identity" | "phantom-personality" | "phantom-stable-fact";
 };
 
 export function instantResponseTokenBudget(userRequest: string) {
@@ -245,10 +245,40 @@ function contextFactReply(userRequest: string, turns: InstantChatToolTurn[]): In
   return null;
 }
 
+const NON_PERSON_NAMES = new Set([
+  "Actually", "Answer", "Back", "City", "Code", "Color", "Corrected", "Correction", "Day", "Explain", "For", "Gas", "Give", "Make", "Name", "New", "Not", "Now", "Noun", "Number", "Remember", "Room",
+  "Tell", "The", "Then", "This", "Time", "Turn", "Understood", "Use", "What", "When", "Where", "Which", "Who", "Why", "Word", "Yes",
+]);
+
+function ambiguityClarificationReply(userRequest: string, turns: InstantChatToolTurn[]): InstantChatToolReply | null {
+  if (!turns.length || !/\b(?:she|her|hers|he|him|his)\b/i.test(userRequest)) return null;
+  const requestNames = [...userRequest.matchAll(/\b([A-Z][a-z]{2,24})\b/g)]
+    .map((match) => match[1])
+    .filter((name) => !NON_PERSON_NAMES.has(name));
+  if (requestNames.length) return null;
+  // Ambiguous pronouns normally refer to the newest setup statement. Topic
+  // keyword ranking can miss inflections such as choose/chose, so inspect the
+  // three newest user turns directly while retaining the same bounded packet.
+  for (const turn of turns.slice(-3).reverse()) {
+    const names: string[] = [];
+    for (const match of turn.user.matchAll(/\b([A-Z][a-z]{2,24})\b/g)) {
+      const name = match[1];
+      if (!NON_PERSON_NAMES.has(name) && !names.includes(name)) names.push(name);
+    }
+    if (names.length < 2 || names.length > 4) continue;
+    const choices = names.length === 2
+      ? `${names[0]} or ${names[1]}`
+      : `${names.slice(0, -1).join(", ")}, or ${names.at(-1)}`;
+    return { output_text: `Do you mean ${choices}?`, tool_id: "phantom-clarifier" };
+  }
+  return null;
+}
+
 export function buildInstantChatToolReply(userRequest: string, turns: InstantChatToolTurn[] = [], modelId = "qwen2.5:14b") {
   return identityReply(userRequest, modelId)
     || personalityReply(userRequest)
     || stableFactReply(userRequest)
+    || ambiguityClarificationReply(userRequest, turns)
     || contextFactReply(userRequest, turns)
     || arithmeticReply(userRequest, turns)
     || listSelectionReply(userRequest, turns);

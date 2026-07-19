@@ -196,7 +196,7 @@ import { buildHermesInteractionMemoryPreview } from "./phantom-ai/hermes-interac
 import { recallHermesInteractionMemory } from "./phantom-ai/hermes-interaction-recall.js";
 import { buildInstantChatFallbackReply } from "./phantom-ai/instant-chat-fallback.js";
 import { buildInstantChatToolReply, enforceInstantOutputConstraints, instantResponseTokenBudget } from "./phantom-ai/instant-chat-tools.js";
-import { buildInstantConversationContext, type InstantConversationTurn } from "./phantom-ai/instant-chat-context.js";
+import { buildInstantConversationContext, buildInstantConversationUserMessage, type InstantConversationTurn } from "./phantom-ai/instant-chat-context.js";
 import {
   filterConversationModules,
   isSafeInstantConversationRequest,
@@ -8629,7 +8629,9 @@ app.post("/phantom-ai/chat", async (request, reply) => {
       requestId: normalized.request_id,
       businessName: normalized.business_name,
       taskType: normalized.task_type,
-      userMessage: normalized.user_request,
+      userMessage: actionFreeConversationTier === "advisory"
+        ? normalized.user_request
+        : buildInstantConversationUserMessage(recentConversation, normalized.user_request),
       compactContext: actionFreeContext,
       sensitivityLevel: normalized.sensitivity_level,
       approvalRequired: false,

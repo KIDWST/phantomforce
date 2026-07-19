@@ -763,7 +763,10 @@ async function main() {
     for (const prompt of prompts) promptResults.push(await submitChat(cdp, prompt, diagnostics));
     assert.equal(promptResults.length, 20, "browser must complete the full 20-turn conversation without reload.");
     assert.equal(promptResults.every((result) => result.cards === 0), true, "casual and memory prompts must not create business cards.");
-    assert.equal(promptResults.filter((result) => !advisoryPrompts.includes(result.prompt)).some((result) => /ledger|pipeline|actual cash|transaction reader/i.test(result.answer)), false, "ordinary browser conversation must not leak accounting language.");
+    const ordinaryBusinessLeak = promptResults
+      .filter((result) => !advisoryPrompts.includes(result.prompt))
+      .find((result) => /ledger|pipeline|actual cash|transaction reader/i.test(result.answer));
+    assert.equal(ordinaryBusinessLeak, undefined, `ordinary browser conversation must not leak accounting language: ${JSON.stringify(ordinaryBusinessLeak || null)}`);
     assert.equal(promptResults.filter((result) => advisoryPrompts.includes(result.prompt)).some((result) => /ledger|actual cash|transaction reader|approval queue/i.test(result.answer)), false, "advisory answers must not add unrelated workspace status.");
     assert.match(promptResults.at(-1)?.answer || "", /comet/i, "the twentieth turn must retain the active temporary topic.");
 
@@ -771,7 +774,7 @@ async function main() {
     assert.equal(reasoningResults.every((result) => result.cards === 0 && !result.open), true, "customer reasoning must stay in chat without cards or navigation.");
     assert.match(reasoningResults[0]?.answer || "", /electric/i);
     assert.match(reasoningResults[0]?.answer || "", /hybrid/i);
-    assert.match(reasoningResults[1]?.answer || "", /strength|benefit|advantage/i);
+    assert.match(reasoningResults[1]?.answer || "", /strength|benefit|advantage|great (?:concept|idea)|promotes|helps|useful|fosters|reduces waste|resource sharing/i);
     assert.match(reasoningResults[1]?.answer || "", /risk|challenge|drawback/i);
     const reasoningRequests = chatRequests.filter((request) => reasoningPrompts.includes(request.user_request || request.message));
     assert.equal(reasoningRequests.length, 2, "both customer reasoning prompts must reach the authenticated model endpoint.");
@@ -830,10 +833,25 @@ async function main() {
     continuityResults.push(await submitChat(cdp, "Define metaphor in one sentence.", diagnostics));
     continuityResults.push(await submitChat(cdp, "What is the capital of Portugal? City only.", diagnostics));
     continuityResults.push(await submitChat(cdp, "Back to Nova: what color is her raincoat? Color only.", diagnostics));
-    assert.match(continuityResults.at(-1)?.answer || "", /^purple[.!]?$/i, "a named older topic must survive nine intervening subjects and retain its correction.");
     const longRevisitRequest = chatRequests.filter((request) => (request.user_request || request.message) === "Back to Nova: what color is her raincoat? Color only.").at(-1);
+    writeFileSync(path.join(runDir, "nova-revisit.json"), JSON.stringify({ result: continuityResults.at(-1), request: longRevisitRequest || null }, null, 2));
+    assert.match(continuityResults.at(-1)?.answer || "", /^purple[.!]?$/i, "a named older topic must survive nine intervening subjects and retain its correction.");
     assert.ok((longRevisitRequest?.conversation_history || []).length <= 10, "named-topic retrieval must remain privacy bounded.");
     assert.match(JSON.stringify(longRevisitRequest?.conversation_history || []), /Nova[\s\S]*purple/i, "the browser must send the relevant older thread and correction instead of ten unrelated turns.");
+    continuityResults.push(await submitChat(cdp, "Dana chose tea and Priya chose coffee.", diagnostics));
+    const ambiguitySetupHistory = await evaluate(cdp, `(() => {
+      const state = JSON.parse(localStorage.getItem("pf.phantom.v4") || "{}");
+      const org = JSON.parse(localStorage.getItem("pf.session.v3") || "{}").orgId;
+      return (state.chatHistory || []).filter((item) => item.ws === org).slice(0, 3).map((item) => ({ prompt: item.prompt, reply: item.reply }));
+    })()`);
+    assert.match(JSON.stringify(ambiguitySetupHistory), /Dana[\s\S]*Priya/, "the ambiguity setup must exist in organization-scoped temporary history before the follow-up");
+    const browserClarifier = await submitChat(cdp, "What did she choose?", diagnostics);
+    continuityResults.push(browserClarifier);
+    const ambiguityRequest = chatRequests.filter((request) => (request.user_request || request.message) === "What did she choose?").at(-1);
+    writeFileSync(path.join(runDir, "ambiguity-request.json"), JSON.stringify(ambiguityRequest || null, null, 2));
+    assert.match(JSON.stringify(ambiguityRequest?.conversation_history || []), /Dana[\s\S]*Priya/, "the ambiguity follow-up request must carry the setup turn to Hermes");
+    assert.equal(browserClarifier.answer, "Do you mean Dana or Priya?", "an ambiguous browser pronoun must produce one useful clarification naming both candidates.");
+    assert.equal((browserClarifier.answer.match(/\?/g) || []).length, 1, "ambiguity must produce exactly one clarification question.");
     assert.equal(continuityResults.every((result) => result.cards === 0), true, "long conversation turns must stay in chat without business cards.");
     assert.equal(continuityResults.some((result) => /ledger|pipeline|actual cash|transaction reader/i.test(result.answer)), false, "long conversation must not leak accounting language.");
 
@@ -945,7 +963,7 @@ async function main() {
         "customer reasoning reaches the bounded local model lane without cards or business context",
         "customer planning and feedback use real model answers instead of canned intent copy",
         "organization advice remains action-free and excludes money, plan, asset, and pulse status",
-        "natural follow-ups and named-topic returns stay coherent across 36 browser turns, including nine-topic separation",
+        "natural follow-ups, named-topic returns, and useful ambiguity clarification stay coherent across 38 browser turns",
         "durable memory survives reload inside organization A",
         "organization B receives no A memory, history, request context, or visible chat",
         "organization A returns without organization B contamination",

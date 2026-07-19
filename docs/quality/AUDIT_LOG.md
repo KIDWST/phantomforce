@@ -1823,3 +1823,70 @@ customer/admin hosts in Cycle 24.
 
 Exercise ambiguous-reference resolution and conversational self-correction in
 Cycle 25.
+
+# 2026-07-18 - Cycle 25: Useful Clarification And Correction Repair
+
+## Problems Verified
+
+- With `Dana chose tea and Priya chose coffee` in temporary context, Phantom
+  answered `What did she choose?` with a vague request for more context instead
+  of naming the two plausible subjects.
+- The first clarifier prototype treated capitalized instruction words such as
+  `For`, `City`, and `Color` as people and could interrupt an explicit Nova
+  callback with `Do you mean Portugal or City?`.
+- When asked to keep the first tagline's idea but borrow the second answer's
+  playful tone, the local model repeatedly substituted the second tagline's
+  content.
+- Cross-answer relevance reduction discarded the first answer before the model
+  request, so stronger wording alone could not repair the misunderstanding.
+- The authenticated browser's tool-library reasoning check accepted only three
+  literal positive words and rejected valid equivalent phrasing.
+
+## Corrections
+
+- Added a bounded deterministic `phantom-clarifier` that asks exactly one useful
+  question naming the candidates from the newest setup statement.
+- Explicitly named subjects now outrank older ambiguous people, and response
+  format words cannot become person candidates.
+- Cross-answer corrections retain at most six temporary turns and compile an
+  authoritative content/style brief.
+- The final local-model message contains only the exact content to preserve,
+  requested tone, and requested format; competing style-source content is not
+  presented as an answer candidate.
+- Added replayable browser diagnostics for the Nova and Dana/Priya request
+  packets and made existing reasoning assertions semantic instead of
+  exact-word dependent.
+- Added permanent change-memory protection for ambiguity and correction repair.
+
+## Source Verification
+
+- PASS: `npm run test:instant-chat:http-live-model --workspace
+  @phantomforce/server` completed 105 authenticated requests at 569 ms average
+  and 2,170 ms maximum with zero fallback and zero business leakage;
+  clarification and misunderstanding repair both passed.
+- PASS: `npm run test:database-auth` applied all eight migrations, passed all 57
+  API/auth checks, and completed the real Chrome journey across two
+  organizations and 38 conversational turns.
+- PASS: Chrome proved exact `Do you mean Dana or Priya?`, long-distance corrected
+  Nova recall, durable-memory reload, temporary-history isolation, tamper
+  rejection, and organization round trips.
+- PASS: visual review at 1440x900 and 390x844 under
+  `tmp/database-auth-org-browser/2026-07-19T05-13-43-456Z`; navigation, chat,
+  restored organization state, and composer had no overlap or horizontal
+  overflow.
+- PASS: `npm run test:release-critical` (20/20).
+- PASS: `npm run test:dashboard-chat` (56 prompts, 11 adversarial turns,
+  deterministic tools).
+- PASS: `node scripts/test-memory-retention.mjs`.
+- PASS: `npm run test:change-memory` (184 checks).
+- PASS: `npm run typecheck` and `git diff --check`.
+
+## Deployment Verification
+
+- Pending commit, push, canonical sync, deployed model gate, scheduled sync, and
+  strict post-sync source doctor.
+
+## Next Task
+
+Exercise multi-object references, plural pronouns, and correction chains that
+mix dates, lists, and named subjects in Cycle 26.

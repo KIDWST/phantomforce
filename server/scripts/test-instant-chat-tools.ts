@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 
 import { buildInstantChatToolReply, enforceInstantOutputConstraints, instantResponseTokenBudget } from "../src/phantom-ai/instant-chat-tools.js";
-import { buildInstantConversationContext, MAX_INSTANT_CONTEXT_CHARS, needsInstantConversationContext } from "../src/phantom-ai/instant-chat-context.js";
+import { buildInstantConversationContext, buildInstantConversationUserMessage, MAX_INSTANT_CONTEXT_CHARS, needsInstantConversationContext } from "../src/phantom-ai/instant-chat-context.js";
 
 const ticketTurns = [
   { user: "A ticket is 45 dollars. Apply a 20 percent discount.", assistant: "The discounted price is $36." },
@@ -56,6 +56,31 @@ assert.deepEqual(
     { user: "Correction: the launch codename is Ember.", assistant: "Corrected: Ember." },
   ]),
   { output_text: "Ember", tool_id: "phantom-context-recall" },
+);
+assert.deepEqual(
+  buildInstantChatToolReply("What did she choose?", [
+    { user: "Help me plan a party.", assistant: "Choose a theme first." },
+    { user: "This feels robotic.", assistant: "Use warmer wording." },
+    { user: "Dana chose tea and Priya chose coffee.", assistant: "Dana chose tea; Priya chose coffee." },
+  ]),
+  { output_text: "Do you mean Dana or Priya?", tool_id: "phantom-clarifier" },
+);
+assert.equal(
+  buildInstantChatToolReply("What did she choose?", [
+    { user: "Dana chose tea.", assistant: "Dana chose tea." },
+  ]),
+  null,
+  "one named subject is not genuinely ambiguous",
+);
+assert.equal(
+  buildInstantChatToolReply("Back to Nova: what color is her raincoat?", [
+    { user: "Nova wears a purple raincoat.", assistant: "Got it. Nova wears purple." },
+    { user: "For another topic, tell me about Saturn.", assistant: "Saturn is a gas giant." },
+    { user: "What is the capital of Portugal? City only.", assistant: "Lisbon" },
+    { user: "Dana chose tea and Priya chose coffee.", assistant: "Dana chose tea; Priya chose coffee." },
+  ])?.tool_id,
+  "phantom-context-recall",
+  "capitalized words from separate topics must not create false ambiguity",
 );
 assert.deepEqual(
   buildInstantChatToolReply("Who are you?", [], "qwen2.5:14b"),
@@ -166,6 +191,22 @@ const resetContext = buildInstantConversationContext([
 ]);
 assert.doesNotMatch(resetContext, /old-topic|old-answer/);
 assert.match(resetContext, /blue moons|newest-answer/);
+
+const correctedBlendContext = buildInstantConversationContext([
+  { user: "Give me two taglines.", assistant: "1. Quiet power, visible results.\n2. Built for the work nobody sees." },
+  { user: "Make the second one playful.", assistant: "Built for the work nobody sees - now with fewer boring buttons." },
+], "No, you misunderstood me. Keep the first idea but use the playful tone from the second answer.");
+assert.match(correctedBlendContext, /CONTENT TO PRESERVE: Quiet power, visible results[.]/);
+assert.match(correctedBlendContext, /STYLE REFERENCE ONLY: Built for the work nobody sees/);
+assert.match(correctedBlendContext, /Do not reuse or substitute the style reference's subject/);
+const correctedBlendMessage = buildInstantConversationUserMessage([
+  { user: "Give me two taglines.", assistant: "1. Quiet power, visible results.\n2. Built for the work nobody sees." },
+  { user: "Make the second one playful.", assistant: "Built for the work nobody sees - now with fewer boring buttons." },
+], "No, you misunderstood me. Keep the first idea but use the playful tone from the second answer.");
+assert.match(correctedBlendMessage, /Rewrite this exact content while preserving its meaning and subject/);
+assert.match(correctedBlendMessage, /Quiet power, visible results[.]/);
+assert.match(correctedBlendMessage, /Requested tone: playful[.]/);
+assert.doesNotMatch(correctedBlendMessage, /work nobody sees|boring buttons/);
 
 const staleBusinessTurns = [
   { user: "Review the accounting ledger.", assistant: "The ledger and sales pipeline need attention." },
