@@ -601,6 +601,96 @@ rows.push(correctedDifference);
 assert.equal(correctedDifference.modelId, "phantom-calculator");
 assert.match(correctedDifference.answer.trim(), /^2 laps[.!]?$/i);
 
+const exceptionMembership: Turn[] = [];
+rows.push(await ask(customerToken, "The launch team is Mina, Theo, Priya, and Omar. Everyone except Theo confirmed.", exceptionMembership));
+const confirmedNames = await ask(customerToken, "Who confirmed? Names only.", exceptionMembership);
+rows.push(confirmedNames);
+assert.equal(confirmedNames.modelId, "phantom-reference-resolver");
+assert.match(confirmedNames.answer.trim(), /^Mina, Priya, Omar[.!]?$/i);
+const unconfirmedNames = await ask(customerToken, "Who did not confirm? Name only.", exceptionMembership);
+rows.push(unconfirmedNames);
+assert.equal(unconfirmedNames.modelId, "phantom-reference-resolver");
+assert.match(unconfirmedNames.answer.trim(), /^Theo[.!]?$/i);
+const confirmedCount = await ask(customerToken, "How many confirmed? Number only.", exceptionMembership);
+rows.push(confirmedCount);
+assert.equal(confirmedCount.modelId, "phantom-calculator");
+assert.match(confirmedCount.answer.trim(), /^3[.!]?$/);
+const theoConfirmation = await ask(customerToken, "Did Theo confirm? Yes or no only.", exceptionMembership);
+rows.push(theoConfirmation);
+assert.equal(theoConfirmation.modelId, "phantom-reference-resolver");
+assert.match(theoConfirmation.answer.trim(), /^No[.!]?$/i);
+rows.push(await ask(customerToken, "Correction: Theo confirmed after all.", exceptionMembership));
+rows.push(await ask(customerToken, "Actually, Priya did not confirm.", exceptionMembership));
+const correctedConfirmedNames = await ask(customerToken, "Who confirmed now? Names only.", exceptionMembership);
+rows.push(correctedConfirmedNames);
+assert.equal(correctedConfirmedNames.modelId, "phantom-reference-resolver");
+assert.match(correctedConfirmedNames.answer.trim(), /^Mina, Theo, Omar[.!]?$/i);
+const correctedUnconfirmedNames = await ask(customerToken, "Who did not confirm now? Name only.", exceptionMembership);
+rows.push(correctedUnconfirmedNames);
+assert.equal(correctedUnconfirmedNames.modelId, "phantom-reference-resolver");
+assert.match(correctedUnconfirmedNames.answer.trim(), /^Priya[.!]?$/i);
+
+const onlyMembership: Turn[] = [];
+rows.push(await ask(adminToken, "The reviewers are Mina, Theo, Priya, and Omar. Only Mina and Priya confirmed.", onlyMembership));
+const onlyExcluded = await ask(adminToken, "Who did not confirm? Names only.", onlyMembership);
+rows.push(onlyExcluded);
+assert.equal(onlyExcluded.modelId, "phantom-reference-resolver");
+assert.match(onlyExcluded.answer.trim(), /^Theo, Omar[.!]?$/i);
+const neitherMembership: Turn[] = [];
+rows.push(await ask(adminToken, "The reviewers are Mina, Theo, Priya, and Omar. Neither Mina nor Theo confirmed.", neitherMembership));
+const neitherExcluded = await ask(adminToken, "Who did not confirm? Names only.", neitherMembership);
+rows.push(neitherExcluded);
+assert.equal(neitherExcluded.modelId, "phantom-reference-resolver");
+assert.match(neitherExcluded.answer.trim(), /^Mina, Theo[.!]?$/i);
+const neitherCount = await ask(adminToken, "How many confirmed? Number only.", neitherMembership);
+rows.push(neitherCount);
+assert.equal(neitherCount.modelId, "phantom-clarifier");
+assert.equal(neitherCount.answer, "I know Mina and Theo did not confirm, but confirmation is unknown for Priya and Omar. Did they confirm?");
+
+const doubleNegativeMembership: Turn[] = [];
+rows.push(await ask(adminToken, "The panel is Mina, Theo, and Priya. Everyone except Theo confirmed.", doubleNegativeMembership));
+rows.push(await ask(adminToken, "It is not true that Theo did not confirm.", doubleNegativeMembership));
+const doubleNegativeAnswer = await ask(adminToken, "Did Theo confirm? Yes or no only.", doubleNegativeMembership);
+rows.push(doubleNegativeAnswer);
+assert.equal(doubleNegativeAnswer.modelId, "phantom-reference-resolver");
+assert.match(doubleNegativeAnswer.answer.trim(), /^Yes[.!]?$/i);
+const unknownMember = await ask(customerToken, "Did Zara confirm? Yes or no only.", exceptionMembership);
+rows.push(unknownMember);
+assert.equal(unknownMember.modelId, "phantom-clarifier");
+assert.equal(unknownMember.answer, "Zara is not in the stated launch team. Who should Zara replace or join?");
+const missingUniverse: Turn[] = [];
+rows.push(await ask(customerToken, "Everyone except Theo confirmed.", missingUniverse));
+const missingUniverseAnswer = await ask(customerToken, "Who confirmed? Names only.", missingUniverse);
+rows.push(missingUniverseAnswer);
+assert.equal(missingUniverseAnswer.modelId, "phantom-clarifier");
+assert.equal(missingUniverseAnswer.answer, "I know Theo was excluded, but I do not know who 'everyone' includes. Who is in the group?");
+const conflictingMembership: Turn[] = [];
+rows.push(await ask(customerToken, "The launch team is Mina, Theo, and Priya. Everyone except Theo confirmed, but Theo also confirmed.", conflictingMembership));
+const conflictingMemberAnswer = await ask(customerToken, "Did Theo confirm? Yes or no only.", conflictingMembership);
+rows.push(conflictingMemberAnswer);
+assert.equal(conflictingMemberAnswer.modelId, "phantom-clarifier");
+assert.equal(conflictingMemberAnswer.answer, "I have conflicting confirmation updates for Theo. Did Theo confirm?");
+const splitRosterMembership: Turn[] = [];
+rows.push(await ask(customerToken, "Participants: Mina, Theo, Priya, and Omar.", splitRosterMembership));
+rows.push(await ask(customerToken, "Everyone except Omar confirmed.", splitRosterMembership));
+const splitRosterAnswer = await ask(customerToken, "Who confirmed? Names only.", splitRosterMembership);
+rows.push(splitRosterAnswer);
+assert.equal(splitRosterAnswer.modelId, "phantom-reference-resolver");
+assert.match(splitRosterAnswer.answer.trim(), /^Mina, Theo, Priya[.!]?$/i);
+const outsideRosterMembership: Turn[] = [];
+rows.push(await ask(customerToken, "The panel is Mina, Theo, and Priya. Everyone except Theo confirmed.", outsideRosterMembership));
+rows.push(await ask(customerToken, "Correction: Zara confirmed after all.", outsideRosterMembership));
+const outsideRosterAnswer = await ask(customerToken, "Who confirmed now? Names only.", outsideRosterMembership);
+rows.push(outsideRosterAnswer);
+assert.equal(outsideRosterAnswer.modelId, "phantom-clarifier");
+assert.equal(outsideRosterAnswer.answer, "Zara is not in the stated panel. Should Zara join the group?");
+const onlyMissingRoster: Turn[] = [];
+rows.push(await ask(customerToken, "Only Mina and Priya confirmed.", onlyMissingRoster));
+const onlyMissingRosterAnswer = await ask(customerToken, "Who did not confirm? Names only.", onlyMissingRoster);
+rows.push(onlyMissingRosterAnswer);
+assert.equal(onlyMissingRosterAnswer.modelId, "phantom-clarifier");
+assert.equal(onlyMissingRosterAnswer.answer, "I know only Mina and Priya confirmed, but I do not know who else is in the group. Who is in the group?");
+
 const tiedComparison: Turn[] = [];
 rows.push(await ask(customerToken, "Mina has 4 points and Theo has 4 points.", tiedComparison));
 const tiedAnswer = await ask(customerToken, "Who has more?", tiedComparison);
@@ -748,6 +838,11 @@ assert.doesNotMatch(partialRollbackFinal.answer, /black|gold|green/i);
     correctedComparisonVerified: true,
     comparisonAmbiguityVerified: true,
     orderedEventsVerified: true,
+    exceptionMembershipVerified: true,
+    correctedMembershipVerified: true,
+    triStateMembershipVerified: true,
+    splitRosterMembershipVerified: true,
+    outsideRosterClarificationVerified: true,
   }, null, 2));
 } finally {
   ownedServer?.kill();

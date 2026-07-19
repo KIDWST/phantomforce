@@ -1203,6 +1203,34 @@
       ]
     },
     {
+      "id": "confirmation-exceptions-and-corrected-membership",
+      "status": "active",
+      "title": "Phantom preserves confirmation sets, exclusions, and person-level corrections",
+      "ownerDecision": "Explicit confirmation sets are exact temporary facts. Everyone-except and only statements preserve the stated roster; neither/nor records known negatives without silently promoting everyone else. Later named corrections update only that person. Missing rosters, unknown people, out-of-roster updates, and contradictory same-turn claims receive one concise clarification instead of invented membership. Context remains bounded and organization-scoped.",
+      "requiredPatterns": [
+        {
+          "file": "server/src/phantom-ai/instant-chat-tools.ts",
+          "pattern": "function confirmationMembershipReply[\\s\\S]*outsideUniverse[\\s\\S]*confirmationMembershipReply[(]userRequest, turns[)]",
+          "description": "Tri-state confirmation membership, exceptions, corrections, contradictions, and roster checks use bounded deterministic state."
+        },
+        {
+          "file": "server/src/phantom-ai/instant-chat-context.ts",
+          "pattern": "CONFIRMATION_REFERENCE[\\s\\S]*CONFIRMATION_BASE[\\s\\S]*membershipTurns",
+          "description": "Long confirmation threads retain their governing roster/base inside the ten-turn privacy cap."
+        },
+        {
+          "file": "server/scripts/test-instant-chat-http-live-model.ts",
+          "pattern": "exceptionMembershipVerified: true[\\s\\S]*correctedMembershipVerified: true[\\s\\S]*triStateMembershipVerified: true[\\s\\S]*splitRosterMembershipVerified: true[\\s\\S]*outsideRosterClarificationVerified: true",
+          "description": "The 100-plus authenticated model gate covers full sets, corrections, unknown state, split rosters, and out-of-roster updates."
+        },
+        {
+          "file": "scripts/test-database-auth-org-browser.mjs",
+          "pattern": "everyone-except must preserve the stated universe and exclusion[\\s\\S]*an out-of-roster correction must clarify instead of disappearing or changing the group",
+          "description": "Authenticated Chrome proves exact membership behavior through the real dashboard and long temporary history."
+        }
+      ]
+    },
+    {
       "id": "database-auth-reboot-recovery",
       "status": "active",
       "title": "Live admin and customer auth depend on a self-recovering database",

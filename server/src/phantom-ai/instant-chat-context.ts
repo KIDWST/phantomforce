@@ -19,6 +19,8 @@ const CAUSAL_REFERENCE = /\b(?:first|second|third|fourth)\s+(?:result|outcome|ef
 const RESPECTIVELY_REFERENCE = /\brespectively\b|\b(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth)\s+(?:person|name|one)\b/i;
 const COMPARATIVE_REFERENCE = /\bhow many more\b|\bwho\b.{0,30}\b(?:more|most|least|highest|lowest|fewest)\b|\brank\b.{0,40}\b(?:most|least|highest|lowest)\b/i;
 const ORDERED_EVENT_REFERENCE = /\b(?:immediately\s+)?(?:before|after)\b/i;
+const CONFIRMATION_REFERENCE = /\b(?:who|how\s+many|did)\b[^?]{0,80}\bconfirm(?:ed)?\b/i;
+const CONFIRMATION_BASE = /\b(?:everyone\s+except\s+.+?|only\s+.+?|neither\s+.+?\s+nor\s+.+?)\s+confirmed\b/i;
 const CONTEXT_STOP_WORDS = new Set([
   "about", "after", "again", "answer", "back", "before", "could", "current", "does", "explain", "favorite", "first", "from", "give", "have", "into", "just", "know", "latest", "make", "more", "next", "only", "please", "question", "recommend", "sentence", "should", "something", "stay", "tell", "that", "their", "then", "there", "these", "thing", "this", "those", "what", "when", "where", "which", "would", "write", "your",
 ]);
@@ -88,6 +90,8 @@ export function needsInstantConversationContext(turns: InstantConversationTurn[]
     || RESPECTIVELY_REFERENCE.test(text)
     || COMPARATIVE_REFERENCE.test(text)
     || ORDERED_EVENT_REFERENCE.test(text)
+    || CONFIRMATION_REFERENCE.test(text)
+    || CONFIRMATION_BASE.test(text)
     || CONTEXT_REFERENCE.test(text)
     || CONTEXT_OPERATION.test(text)
     || hasTopicOverlap(turns, text);
@@ -110,6 +114,23 @@ export function selectActiveInstantTopicTurns(turns: InstantConversationTurn[]) 
 export function selectRelevantInstantTurns(turns: InstantConversationTurn[], userRequest = "") {
   if (CROSS_ANSWER_REFERENCE.test(userRequest)) return turns.slice(-6);
   const activeTurns = selectActiveInstantTopicTurns(turns);
+  if (CONFIRMATION_REFERENCE.test(userRequest)) {
+    let baseIndex = -1;
+    for (let index = activeTurns.length - 1; index >= 0; index -= 1) {
+      if (CONFIRMATION_BASE.test(activeTurns[index].user)) {
+        baseIndex = index;
+        break;
+      }
+    }
+    if (baseIndex >= 0) {
+      const start = Math.max(0, baseIndex - 1);
+      const membershipTurns = activeTurns.slice(start);
+      if (membershipTurns.length <= 10) return membershipTurns;
+      return [activeTurns[start], activeTurns[baseIndex], ...activeTurns.slice(-8)]
+        .filter((turn, index, selected) => selected.indexOf(turn) === index)
+        .slice(-10);
+    }
+  }
   if (PAIRED_REFERENCE.test(userRequest) || PLURAL_REFERENCE.test(userRequest) || CAUSAL_REFERENCE.test(userRequest) || RESPECTIVELY_REFERENCE.test(userRequest) || COMPARATIVE_REFERENCE.test(userRequest) || ORDERED_EVENT_REFERENCE.test(userRequest)) return activeTurns.slice(-6);
   const requestTerms = meaningfulTerms(userRequest);
   if (!requestTerms.size) return activeTurns;

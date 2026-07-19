@@ -924,6 +924,60 @@ async function main() {
     const browserRepeatedEvent = await submitChat(cdp, "What happened before Theo rang the bell?", diagnostics);
     continuityResults.push(browserRepeatedEvent);
     assert.equal(browserRepeatedEvent.answer, "Do you mean the first or second time Theo rang the bell?", "a repeated event target must clarify the occurrence instead of choosing one");
+    continuityResults.push(await submitChat(cdp, "The launch team is Mina, Theo, Priya, and Omar. Everyone except Theo confirmed.", diagnostics));
+    const browserConfirmedNames = await submitChat(cdp, "Who confirmed? Names only.", diagnostics);
+    continuityResults.push(browserConfirmedNames);
+    assert.match(browserConfirmedNames.answer.trim(), /^Mina, Priya, Omar[.!]?$/i, "everyone-except must preserve the stated universe and exclusion");
+    const browserUnconfirmedNames = await submitChat(cdp, "Who did not confirm? Name only.", diagnostics);
+    continuityResults.push(browserUnconfirmedNames);
+    assert.match(browserUnconfirmedNames.answer.trim(), /^Theo[.!]?$/i, "the excluded person must remain explicitly not confirmed");
+    const browserConfirmedCount = await submitChat(cdp, "How many confirmed? Number only.", diagnostics);
+    continuityResults.push(browserConfirmedCount);
+    assert.match(browserConfirmedCount.answer.trim(), /^3[.!]?$/, "full-set membership must produce an exact count");
+    const browserTheoConfirmation = await submitChat(cdp, "Did Theo confirm? Yes or no only.", diagnostics);
+    continuityResults.push(browserTheoConfirmation);
+    assert.match(browserTheoConfirmation.answer.trim(), /^No[.!]?$/i, "direct membership lookup must return the stated exclusion");
+    const browserUnknownMember = await submitChat(cdp, "Did Zara confirm? Yes or no only.", diagnostics);
+    continuityResults.push(browserUnknownMember);
+    assert.equal(browserUnknownMember.answer, "Zara is not in the stated launch team. Who should Zara replace or join?", "an unknown name must clarify instead of being assigned membership");
+    continuityResults.push(await submitChat(cdp, "Correction: Theo confirmed after all.", diagnostics));
+    continuityResults.push(await submitChat(cdp, "Actually, Priya did not confirm.", diagnostics));
+    const browserCorrectedConfirmed = await submitChat(cdp, "Who confirmed now? Names only.", diagnostics);
+    continuityResults.push(browserCorrectedConfirmed);
+    assert.match(browserCorrectedConfirmed.answer.trim(), /^Mina, Theo, Omar[.!]?$/i, "person-level corrections must update one member without replacing the set");
+    const browserCorrectedExcluded = await submitChat(cdp, "Who did not confirm now? Name only.", diagnostics);
+    continuityResults.push(browserCorrectedExcluded);
+    assert.match(browserCorrectedExcluded.answer.trim(), /^Priya[.!]?$/i, "the newest negative correction must replace only Priya's status");
+    continuityResults.push(await submitChat(cdp, "The reviewers are Mina, Theo, Priya, and Omar. Only Mina and Priya confirmed.", diagnostics));
+    const browserOnlyExcluded = await submitChat(cdp, "Who did not confirm? Names only.", diagnostics);
+    continuityResults.push(browserOnlyExcluded);
+    assert.match(browserOnlyExcluded.answer.trim(), /^Theo, Omar[.!]?$/i, "only must exclude every other named reviewer");
+    continuityResults.push(await submitChat(cdp, "The reviewers are Mina, Theo, Priya, and Omar. Neither Mina nor Theo confirmed.", diagnostics));
+    const browserNeitherExcluded = await submitChat(cdp, "Who did not confirm? Names only.", diagnostics);
+    continuityResults.push(browserNeitherExcluded);
+    assert.match(browserNeitherExcluded.answer.trim(), /^Mina, Theo[.!]?$/i, "neither/nor must retain both explicit negative members");
+    const browserNeitherCount = await submitChat(cdp, "How many confirmed? Number only.", diagnostics);
+    continuityResults.push(browserNeitherCount);
+    assert.equal(browserNeitherCount.answer, "I know Mina and Theo did not confirm, but confirmation is unknown for Priya and Omar. Did they confirm?", "neither/nor must not silently promote the remaining reviewers");
+    continuityResults.push(await submitChat(cdp, "The panel is Mina, Theo, and Priya. Everyone except Theo confirmed.", diagnostics));
+    continuityResults.push(await submitChat(cdp, "It is not true that Theo did not confirm.", diagnostics));
+    const browserDoubleNegative = await submitChat(cdp, "Did Theo confirm? Yes or no only.", diagnostics);
+    continuityResults.push(browserDoubleNegative);
+    assert.match(browserDoubleNegative.answer.trim(), /^Yes[.!]?$/i, "explicit double negation must update Theo to confirmed");
+    continuityResults.push(await submitChat(cdp, "The launch team is Mina, Theo, and Priya. Everyone except Theo confirmed, but Theo also confirmed.", diagnostics));
+    const browserMembershipConflict = await submitChat(cdp, "Did Theo confirm? Yes or no only.", diagnostics);
+    continuityResults.push(browserMembershipConflict);
+    assert.equal(browserMembershipConflict.answer, "I have conflicting confirmation updates for Theo. Did Theo confirm?", "conflicting same-turn membership must ask once instead of choosing a clause");
+    continuityResults.push(await submitChat(cdp, "Participants: Mina, Theo, Priya, and Omar.", diagnostics));
+    continuityResults.push(await submitChat(cdp, "Everyone except Omar confirmed.", diagnostics));
+    const browserSplitRoster = await submitChat(cdp, "Who confirmed? Names only.", diagnostics);
+    continuityResults.push(browserSplitRoster);
+    assert.match(browserSplitRoster.answer.trim(), /^Mina, Theo, Priya[.!]?$/i, "a roster on the prior turn must stay attached to its everyone-except statement");
+    continuityResults.push(await submitChat(cdp, "The panel is Mina, Theo, and Priya. Everyone except Theo confirmed.", diagnostics));
+    continuityResults.push(await submitChat(cdp, "Correction: Zara confirmed after all.", diagnostics));
+    const browserOutsideRoster = await submitChat(cdp, "Who confirmed now? Names only.", diagnostics);
+    continuityResults.push(browserOutsideRoster);
+    assert.equal(browserOutsideRoster.answer, "Zara is not in the stated panel. Should Zara join the group?", "an out-of-roster correction must clarify instead of disappearing or changing the group");
     continuityResults.push(await submitChat(cdp, "Options: 1) email, 2) call, 3) meeting.", diagnostics));
     const browserReorder = await submitChat(cdp, "Move the third before the first. Return the reordered list only.", diagnostics);
     continuityResults.push(browserReorder);
@@ -1087,7 +1141,7 @@ async function main() {
         "customer reasoning reaches the bounded local model lane without cards or business context",
         "customer planning and feedback use real model answers instead of canned intent copy",
         "organization advice remains action-free and excludes money, plan, asset, and pulse status",
-        "natural follow-ups, exact object/list/causal/respectively/comparative/event references, scoped corrections, and useful ambiguity clarification stay coherent across 90 browser turns",
+        "natural follow-ups, exact object/list/causal/respectively/comparative/event/membership references, scoped corrections, and useful ambiguity clarification stay coherent across 116 browser turns",
         "durable memory survives reload inside organization A",
         "organization B receives no A memory, history, request context, or visible chat",
         "organization A returns without organization B contamination",

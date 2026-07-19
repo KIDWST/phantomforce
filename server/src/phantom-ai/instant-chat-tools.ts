@@ -456,6 +456,216 @@ function namedPredicateReferenceReply(userRequest: string, turns: InstantChatToo
   return null;
 }
 
+type ConfirmationState = {
+  universe: string[];
+  confirmed: Set<string>;
+  notConfirmed: Set<string>;
+  unknown: Set<string>;
+  conflicts: Set<string>;
+  outsideUniverse: Set<string>;
+  excludedWithoutUniverse: string[];
+  baseKind: ConfirmationBase["kind"];
+  baseNames: string[];
+  groupLabel: string;
+};
+
+const MEMBERSHIP_NON_NAMES = new Set([
+  "Actually", "All", "Correction", "Did", "Everyone", "How", "It", "Name", "Names", "Neither", "No", "Not", "Now", "Number", "Only", "The", "Then", "They", "Who", "Yes",
+]);
+
+function membershipNames(value: string) {
+  const names: string[] = [];
+  for (const match of value.matchAll(/\b([A-Z][a-z][A-Za-z'-]{1,38})\b/g)) {
+    const name = match[1];
+    if (!MEMBERSHIP_NON_NAMES.has(name) && !names.some((item) => item.toLowerCase() === name.toLowerCase())) names.push(name);
+  }
+  return names.slice(0, 10);
+}
+
+function statedGroupFromText(value: string) {
+  const leading = value.match(/\b(?:the\s+)?([a-z][a-z -]{0,30}?(?:team|group)|reviewers|attendees|members|participants|crew|people|staff|panel|roster)\s*(?:is|are|includes?|contains?|consists\s+of|:)\s+([^.!?]+)/i);
+  if (leading) {
+    const names = membershipNames(leading[2]);
+    if (names.length >= 2) return { names, label: cleanListItem(leading[1]).toLowerCase() };
+  }
+  const trailing = value.match(/^\s*([^.!?]{2,180}?)\s+are\s+(?:the\s+)?([a-z][a-z -]{0,30}?(?:team|group)|reviewers|attendees|members|participants|crew|people|staff|panel|roster)\b/i);
+  if (trailing) {
+    const names = membershipNames(trailing[1]);
+    if (names.length >= 2) return { names, label: cleanListItem(trailing[2]).toLowerCase() };
+  }
+  return null;
+}
+
+type ConfirmationBase = {
+  kind: "everyone-except" | "only" | "neither";
+  named: string[];
+  matchEnd: number;
+};
+
+function confirmationBaseFromText(value: string): ConfirmationBase | null {
+  const everyone = value.match(/\beveryone\s+except\s+(.+?)\s+confirmed\b/i);
+  if (everyone) return { kind: "everyone-except", named: membershipNames(everyone[1]), matchEnd: (everyone.index || 0) + everyone[0].length };
+  const only = value.match(/\bonly\s+(.+?)\s+confirmed\b/i);
+  if (only) return { kind: "only", named: membershipNames(only[1]), matchEnd: (only.index || 0) + only[0].length };
+  const neither = value.match(/\bneither\s+(.+?)\s+nor\s+(.+?)\s+confirmed\b/i);
+  if (neither) return { kind: "neither", named: membershipNames(`${neither[1]} and ${neither[2]}`), matchEnd: (neither.index || 0) + neither[0].length };
+  return null;
+}
+
+function confirmationState(turns: InstantChatToolTurn[]): ConfirmationState | null {
+  let baseIndex = -1;
+  let base: ConfirmationBase | null = null;
+  for (let index = turns.length - 1; index >= 0; index -= 1) {
+    const candidate = confirmationBaseFromText(turns[index].user);
+    if (!candidate) continue;
+    baseIndex = index;
+    base = candidate;
+    break;
+  }
+  if (!base || baseIndex < 0 || !base.named.length) return null;
+
+  let group = statedGroupFromText(turns[baseIndex].user);
+  if (!group) {
+    for (let index = baseIndex - 1; index >= Math.max(0, baseIndex - 3); index -= 1) {
+      group = statedGroupFromText(turns[index].user);
+      if (group) break;
+    }
+  }
+  const universe = group?.names || [];
+  const canonical = (name: string) => universe.find((item) => item.toLowerCase() === name.toLowerCase()) || name;
+  const confirmed = new Set<string>();
+  const notConfirmed = new Set<string>();
+  const unknown = new Set<string>();
+  const conflicts = new Set<string>();
+  const outsideUniverse = new Set<string>();
+  const baseNames = base.named.map(canonical);
+
+  if (base.kind === "everyone-except") {
+    for (const name of universe) (baseNames.some((item) => item.toLowerCase() === name.toLowerCase()) ? notConfirmed : confirmed).add(name);
+    if (!universe.length) for (const name of baseNames) notConfirmed.add(name);
+  } else if (base.kind === "only") {
+    for (const name of baseNames) confirmed.add(name);
+    for (const name of universe) if (!confirmed.has(name)) notConfirmed.add(name);
+  } else {
+    for (const name of baseNames) notConfirmed.add(name);
+    for (const name of universe) if (!notConfirmed.has(name)) unknown.add(name);
+  }
+
+  const baseTail = turns[baseIndex].user.slice(base.matchEnd);
+  for (const name of baseNames) {
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    if (notConfirmed.has(name) && new RegExp(`\\b${escaped}\\s+(?:also\\s+)?confirmed\\b`, "i").test(baseTail)) conflicts.add(name);
+  }
+
+  for (const turn of turns.slice(baseIndex + 1)) {
+    if (/\?/.test(turn.user) || /^\s*(?:who|what|which|how|did|does|is|are)\b/i.test(turn.user)) continue;
+    const doubleNegative = [...turn.user.matchAll(/(?:not\s+true\s+that|isn['’]?t\s+true\s+that)\s+([A-Z][a-z][A-Za-z'-]{1,38})\s+(?:did\s+not|didn['’]?t)\s+confirm\b/g)].map((match) => canonical(match[1]));
+    const positive = [
+      ...doubleNegative,
+      ...[...turn.user.matchAll(/\b([A-Z][a-z][A-Za-z'-]{1,38})\s+confirmed(?:\s+(?:after\s+all|now))?\b/g)].map((match) => canonical(match[1])),
+      ...[...turn.user.matchAll(/\b[Aa]dd\s+([A-Z][a-z][A-Za-z'-]{1,38})\s+to\s+(?:the\s+)?confirmed\b/g)].map((match) => canonical(match[1])),
+    ];
+    const negative = [...turn.user.matchAll(/\b([A-Z][a-z][A-Za-z'-]{1,38})\s+(?:did\s+not|didn['’]?t)\s+confirm\b/g)]
+      .map((match) => canonical(match[1]))
+      .filter((name) => !doubleNegative.some((item) => item.toLowerCase() === name.toLowerCase()));
+    negative.push(...[...turn.user.matchAll(/\b[Rr]emove\s+([A-Z][a-z][A-Za-z'-]{1,38})\s+from\s+(?:the\s+)?confirmed\b/g)].map((match) => canonical(match[1])));
+    const overlap = positive.filter((name) => negative.some((item) => item.toLowerCase() === name.toLowerCase()));
+    for (const name of overlap) conflicts.add(name);
+    for (const name of positive.filter((item) => !overlap.includes(item))) {
+      if (universe.length && !universe.some((item) => item.toLowerCase() === name.toLowerCase())) {
+        outsideUniverse.add(name);
+        continue;
+      }
+      confirmed.add(name);
+      notConfirmed.delete(name);
+      unknown.delete(name);
+      conflicts.delete(name);
+    }
+    for (const name of negative.filter((item) => !overlap.includes(item))) {
+      if (universe.length && !universe.some((item) => item.toLowerCase() === name.toLowerCase())) {
+        outsideUniverse.add(name);
+        continue;
+      }
+      notConfirmed.add(name);
+      confirmed.delete(name);
+      unknown.delete(name);
+      conflicts.delete(name);
+    }
+  }
+
+  return {
+    universe,
+    confirmed,
+    notConfirmed,
+    unknown,
+    conflicts,
+    outsideUniverse,
+    excludedWithoutUniverse: base.kind === "everyone-except" && !universe.length ? baseNames : [],
+    baseKind: base.kind,
+    baseNames,
+    groupLabel: group?.label || "group",
+  };
+}
+
+function naturalNameList(names: string[]) {
+  if (names.length < 2) return names[0] || "no one";
+  if (names.length === 2) return `${names[0]} and ${names[1]}`;
+  return `${names.slice(0, -1).join(", ")}, and ${names.at(-1)}`;
+}
+
+function confirmationMembershipReply(userRequest: string, turns: InstantChatToolTurn[]): InstantChatToolReply | null {
+  if (!/\bconfirm(?:ed)?\b/i.test(userRequest) || !/\b(?:who|how\s+many|did)\b/i.test(userRequest)) return null;
+  const state = confirmationState(turns);
+  if (!state) return null;
+  if (state.conflicts.size) {
+    const names = naturalNameList([...state.conflicts]);
+    return { output_text: `I have conflicting confirmation updates for ${names}. Did ${names} confirm?`, tool_id: "phantom-clarifier" };
+  }
+  if (state.outsideUniverse.size) {
+    const names = naturalNameList([...state.outsideUniverse]);
+    return { output_text: `${names} ${state.outsideUniverse.size === 1 ? "is" : "are"} not in the stated ${state.groupLabel}. Should ${names} join the group?`, tool_id: "phantom-clarifier" };
+  }
+  if (state.excludedWithoutUniverse.length) {
+    const excluded = naturalNameList(state.excludedWithoutUniverse);
+    return { output_text: `I know ${excluded} ${state.excludedWithoutUniverse.length === 1 ? "was" : "were"} excluded, but I do not know who 'everyone' includes. Who is in the group?`, tool_id: "phantom-clarifier" };
+  }
+
+  const direct = userRequest.match(/\b[Dd]id\s+([A-Z][a-z][A-Za-z'-]{1,38})\s+confirm\b/)?.[1];
+  if (direct) {
+    const person = state.universe.find((name) => name.toLowerCase() === direct.toLowerCase());
+    if (!person) return { output_text: `${direct} is not in the stated ${state.groupLabel}. Who should ${direct} replace or join?`, tool_id: "phantom-clarifier" };
+    if (state.confirmed.has(person)) return { output_text: "Yes", tool_id: "phantom-reference-resolver" };
+    if (state.notConfirmed.has(person)) return { output_text: "No", tool_id: "phantom-reference-resolver" };
+    return { output_text: `I do not have ${person}'s confirmation status. Did ${person} confirm?`, tool_id: "phantom-clarifier" };
+  }
+
+  const asksNegative = /\bwho\s+(?:did\s+not|didn['’]?t)\s+confirm/i.test(userRequest);
+  if (asksNegative) {
+    if (!state.universe.length && state.baseKind === "only") {
+      return { output_text: `I know only ${naturalNameList(state.baseNames)} confirmed, but I do not know who else is in the group. Who is in the group?`, tool_id: "phantom-clarifier" };
+    }
+    const names = state.universe.filter((name) => state.notConfirmed.has(name));
+    return { output_text: names.join(", ") || "No one", tool_id: "phantom-reference-resolver" };
+  }
+  const asksCount = /\bhow\s+many\b/i.test(userRequest);
+  if (!state.universe.length && state.baseKind === "neither" && (asksCount || /\bwho\s+confirmed\b/i.test(userRequest))) {
+    return { output_text: `I know ${naturalNameList(state.baseNames)} did not confirm, but I do not know who else is in the group. Who is in the group?`, tool_id: "phantom-clarifier" };
+  }
+  if ((asksCount || /\bwho\s+confirmed\b/i.test(userRequest)) && state.unknown.size) {
+    const knownNegative = naturalNameList(state.universe.filter((name) => state.notConfirmed.has(name)));
+    const unknown = naturalNameList(state.universe.filter((name) => state.unknown.has(name)));
+    return { output_text: `I know ${knownNegative} did not confirm, but confirmation is unknown for ${unknown}. Did they confirm?`, tool_id: "phantom-clarifier" };
+  }
+  if (asksCount) return { output_text: String(state.confirmed.size), tool_id: "phantom-calculator" };
+  if (/\bwho\s+confirmed\b/i.test(userRequest)) {
+    const names = state.universe.length
+      ? state.universe.filter((name) => state.confirmed.has(name))
+      : [...state.confirmed];
+    return { output_text: names.join(", ") || "No one", tool_id: "phantom-reference-resolver" };
+  }
+  return null;
+}
+
 type CausalPair = { outcome: string; cause: string };
 
 function cleanCausalPart(value: string) {
@@ -784,6 +994,7 @@ export function buildInstantChatToolReply(userRequest: string, turns: InstantCha
     || arithmeticReply(userRequest, turns)
     || pairedReferenceReply(userRequest, turns)
     || respectivelyReferenceReply(userRequest, turns)
+    || confirmationMembershipReply(userRequest, turns)
     || namedQuantityComparisonReply(userRequest, turns)
     || orderedEventReferenceReply(userRequest, turns)
     || namedPredicateReferenceReply(userRequest, turns)

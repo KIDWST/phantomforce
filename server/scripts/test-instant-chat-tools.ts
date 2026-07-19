@@ -248,6 +248,139 @@ assert.deepEqual(
   ]),
   { output_text: "Comet", tool_id: "phantom-reference-resolver" },
 );
+const exceptionMembershipTurns = [{
+  user: "The launch team is Mina, Theo, Priya, and Omar. Everyone except Theo confirmed.",
+  assistant: "Mina, Priya, and Omar confirmed; Theo did not.",
+}];
+assert.deepEqual(
+  buildInstantChatToolReply("Who confirmed? Names only.", exceptionMembershipTurns),
+  { output_text: "Mina, Priya, Omar", tool_id: "phantom-reference-resolver" },
+);
+assert.deepEqual(
+  buildInstantChatToolReply("Who did not confirm? Name only.", exceptionMembershipTurns),
+  { output_text: "Theo", tool_id: "phantom-reference-resolver" },
+);
+assert.deepEqual(
+  buildInstantChatToolReply("How many confirmed? Number only.", exceptionMembershipTurns),
+  { output_text: "3", tool_id: "phantom-calculator" },
+);
+assert.deepEqual(
+  buildInstantChatToolReply("Did Theo confirm? Yes or no only.", exceptionMembershipTurns),
+  { output_text: "No", tool_id: "phantom-reference-resolver" },
+);
+
+const correctedMembershipTurns = [
+  ...exceptionMembershipTurns,
+  { user: "Correction: Theo confirmed after all.", assistant: "Theo is now confirmed." },
+  { user: "Actually, Priya did not confirm.", assistant: "Priya is now not confirmed." },
+];
+assert.deepEqual(
+  buildInstantChatToolReply("Who confirmed now? Names only.", correctedMembershipTurns),
+  { output_text: "Mina, Theo, Omar", tool_id: "phantom-reference-resolver" },
+);
+assert.deepEqual(
+  buildInstantChatToolReply("Who did not confirm now? Name only.", correctedMembershipTurns),
+  { output_text: "Priya", tool_id: "phantom-reference-resolver" },
+);
+
+const onlyMembershipTurns = [{
+  user: "The reviewers are Mina, Theo, Priya, and Omar. Only Mina and Priya confirmed.",
+  assistant: "Mina and Priya confirmed.",
+}];
+assert.deepEqual(
+  buildInstantChatToolReply("Who did not confirm? Names only.", onlyMembershipTurns),
+  { output_text: "Theo, Omar", tool_id: "phantom-reference-resolver" },
+);
+
+const neitherMembershipTurns = [{
+  user: "The reviewers are Mina, Theo, Priya, and Omar. Neither Mina nor Theo confirmed.",
+  assistant: "Mina and Theo did not confirm.",
+}];
+assert.deepEqual(
+  buildInstantChatToolReply("Who did not confirm? Names only.", neitherMembershipTurns),
+  { output_text: "Mina, Theo", tool_id: "phantom-reference-resolver" },
+);
+assert.deepEqual(
+  buildInstantChatToolReply("How many confirmed? Number only.", neitherMembershipTurns),
+  { output_text: "I know Mina and Theo did not confirm, but confirmation is unknown for Priya and Omar. Did they confirm?", tool_id: "phantom-clarifier" },
+);
+
+const doubleNegativeMembershipTurns = [
+  ...exceptionMembershipTurns,
+  { user: "It is not true that Theo did not confirm.", assistant: "Theo confirmed." },
+];
+assert.deepEqual(
+  buildInstantChatToolReply("Did Theo confirm? Yes or no only.", doubleNegativeMembershipTurns),
+  { output_text: "Yes", tool_id: "phantom-reference-resolver" },
+);
+assert.deepEqual(
+  buildInstantChatToolReply("Did Zara confirm? Yes or no only.", exceptionMembershipTurns),
+  { output_text: "Zara is not in the stated launch team. Who should Zara replace or join?", tool_id: "phantom-clarifier" },
+);
+assert.deepEqual(
+  buildInstantChatToolReply("Who confirmed? Names only.", [{ user: "Everyone except Theo confirmed.", assistant: "Noted." }]),
+  { output_text: "I know Theo was excluded, but I do not know who 'everyone' includes. Who is in the group?", tool_id: "phantom-clarifier" },
+);
+assert.deepEqual(
+  buildInstantChatToolReply("Who confirmed? Names only.", [
+    { user: "Participants: Mina, Theo, Priya, and Omar.", assistant: "Four participants." },
+    { user: "Everyone except Omar confirmed.", assistant: "Omar is the exception." },
+  ]),
+  { output_text: "Mina, Theo, Priya", tool_id: "phantom-reference-resolver" },
+);
+assert.deepEqual(
+  buildInstantChatToolReply("Who confirmed now? Names only.", [
+    ...exceptionMembershipTurns,
+    { user: "Add Theo to the confirmed group and remove Omar from the confirmed group.", assistant: "Updated." },
+  ]),
+  { output_text: "Mina, Theo, Priya", tool_id: "phantom-reference-resolver" },
+);
+assert.deepEqual(
+  buildInstantChatToolReply("Did Theo confirm? Yes or no only.", [{
+    user: "The launch team is Mina, Theo, and Priya. Everyone except Theo confirmed, but Theo also confirmed.",
+    assistant: "That conflicts.",
+  }]),
+  { output_text: "I have conflicting confirmation updates for Theo. Did Theo confirm?", tool_id: "phantom-clarifier" },
+);
+const longMembershipContext = [
+  ...exceptionMembershipTurns,
+  { user: "Who confirmed?", assistant: "Mina, Priya, Omar" },
+  { user: "Who did not confirm?", assistant: "Theo" },
+  { user: "How many confirmed?", assistant: "3" },
+  { user: "Did Theo confirm?", assistant: "No" },
+  { user: "Correction: Theo confirmed after all.", assistant: "Updated." },
+  { user: "Actually, Priya did not confirm.", assistant: "Updated." },
+  { user: "Who confirmed now?", assistant: "Mina, Theo, Omar" },
+];
+assert.equal(
+  selectRelevantInstantTurns(longMembershipContext, "Who did not confirm now? Names only.")[0].user,
+  exceptionMembershipTurns[0].user,
+  "membership follow-ups must retain their governing roster/base instead of only earlier questions",
+);
+const splitRosterContext = [
+  { user: "Participants: Mina, Theo, Priya, and Omar.", assistant: "Four participants." },
+  { user: "Everyone except Omar confirmed.", assistant: "Omar is the exception." },
+];
+assert.equal(
+  selectRelevantInstantTurns(splitRosterContext, "Who confirmed? Names only.")[0].user,
+  splitRosterContext[0].user,
+  "an everyone-except statement must remain attached to its immediately prior roster",
+);
+assert.deepEqual(
+  buildInstantChatToolReply("Who did not confirm? Names only.", [{ user: "Only Mina and Priya confirmed.", assistant: "Noted." }]),
+  { output_text: "I know only Mina and Priya confirmed, but I do not know who else is in the group. Who is in the group?", tool_id: "phantom-clarifier" },
+);
+assert.deepEqual(
+  buildInstantChatToolReply("How many confirmed? Number only.", [{ user: "Neither Mina nor Theo confirmed.", assistant: "Noted." }]),
+  { output_text: "I know Mina and Theo did not confirm, but I do not know who else is in the group. Who is in the group?", tool_id: "phantom-clarifier" },
+);
+assert.deepEqual(
+  buildInstantChatToolReply("Who confirmed now? Names only.", [
+    ...exceptionMembershipTurns,
+    { user: "Correction: Zara confirmed after all.", assistant: "Updated." },
+  ]),
+  { output_text: "Zara is not in the stated launch team. Should Zara join the group?", tool_id: "phantom-clarifier" },
+);
 const overlappingMeetingTurns = [
   { user: "The meeting is Tuesday at 2 PM in Room 4.", assistant: "Tuesday at 2 PM in Room 4." },
   { user: "Correction: Thursday at 4 PM in Room 9.", assistant: "Thursday at 4 PM in Room 9." },
