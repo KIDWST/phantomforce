@@ -15,7 +15,9 @@ The server deterministically extracts exact recalled colors and codenames from
 that corrected thread instead of letting the model guess. A real Chrome journey
 proved the corrected Nova fact after nine unrelated topics, and the expanded
 real-model gate passed 102 requests. The complete browser graph is
-`phantom-live-20260718-43`.
+`phantom-live-20260718-43`. Commit `1e366afa` is deployed from the canonical
+checkout; its 102-request model gate and post-sync doctor passed with zero
+fallback, zero leakage, and all 183 live guards aligned.
 
 ## Recommended Cycle 25
 
@@ -58,4 +60,3 @@ Stop after one coherent implemented and browser-verified batch. The owner has
 authorized commit, push, and live deployment. Fetch and rebase `origin/main`,
 preserve concurrent work, sync the dedicated deployment, and run the strict
 live-source doctor before reporting the batch live.
-

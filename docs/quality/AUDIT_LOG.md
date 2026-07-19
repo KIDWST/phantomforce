@@ -1807,8 +1807,17 @@ customer/admin hosts in Cycle 24.
 
 ## Deployment Verification
 
-Pending commit, push, canonical sync, deployed 102-request model gate, scheduled
-sync, and strict live-source doctor.
+- Pushed `1e366afa` to `origin/main` and synced the canonical
+  `deployments\phantomforce-live` checkout.
+- PASS: strict doctor aligned source, origin, deployment manifest, static UI,
+  Hermes, sidebar rules, and resurrection guards at `1e366afa`; the public
+  admin served `phantom-live-20260718-43`.
+- PASS: the deployed live-model gate completed 102 requests at 584 ms average
+  and 2,216 ms maximum with zero fallback and zero business leakage;
+  long-distance corrected recall and every prior model assertion passed.
+- PASS: manually triggered `PhantomForce Admin Main Sync` ended in `Ready`
+  with result `0`; the post-sync strict doctor passed all 183 live guards and
+  confirmed no stale source was resurrected.
 
 ## Next Task
 
