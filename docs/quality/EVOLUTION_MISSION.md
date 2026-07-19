@@ -3,6 +3,9 @@
 Mission window: 2026-07-19 08:00 through 2026-07-25 20:00 America/Chicago.
 The 21st scheduled cycle is the automatic stop condition.
 
+This is a finite scheduled product task. It is not an active Codex goal and
+must never be converted into indefinite background persistence.
+
 ## Product Thesis
 
 PhantomForce is an adaptive operator brain with controlled hands and feet. Its
