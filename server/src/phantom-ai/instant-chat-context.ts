@@ -13,6 +13,8 @@ const IMPLICIT_FOLLOW_UP = /^(?:how long should i (?:stay|wait|spend|plan for)\b
 const CONTEXT_REFERENCE = /\b(?:it|that|this|them|those|these|former|latter|above|previous|earlier|last answer|same one|which one|the other|her|hers|him|they|there|corrected|final)\b/i;
 const CONTEXT_OPERATION = /\b(?:then|also|instead|add|apply|remove|rephrase|rewrite|translate|summarize|simplify|expand|combine|compare them)\b/i;
 const CROSS_ANSWER_REFERENCE = /\b(?:first|second|third|fourth)\s+(?:idea|option|tagline|concept|version)\b[\s\S]*\b(?:first|second|third|fourth)\s+answer\b/i;
+const PAIRED_REFERENCE = /\b(?:former|latter)\b/i;
+const PLURAL_REFERENCE = /\b(?:they|them|their|theirs|those|these)\b/i;
 const CONTEXT_STOP_WORDS = new Set([
   "about", "after", "again", "answer", "back", "before", "could", "current", "does", "explain", "favorite", "first", "from", "give", "have", "into", "just", "know", "latest", "make", "more", "next", "only", "please", "question", "recommend", "sentence", "should", "something", "stay", "tell", "that", "their", "then", "there", "these", "thing", "this", "those", "what", "when", "where", "which", "would", "write", "your",
 ]);
@@ -100,6 +102,7 @@ export function selectActiveInstantTopicTurns(turns: InstantConversationTurn[]) 
 export function selectRelevantInstantTurns(turns: InstantConversationTurn[], userRequest = "") {
   if (CROSS_ANSWER_REFERENCE.test(userRequest)) return turns.slice(-6);
   const activeTurns = selectActiveInstantTopicTurns(turns);
+  if (PAIRED_REFERENCE.test(userRequest) || PLURAL_REFERENCE.test(userRequest)) return activeTurns.slice(-6);
   const requestTerms = meaningfulTerms(userRequest);
   if (!requestTerms.size) return activeTurns;
 

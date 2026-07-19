@@ -174,6 +174,60 @@ function listSelectionReply(userRequest: string, turns: InstantChatToolTurn[]): 
   return { output_text: selected, tool_id: "phantom-reference-resolver" };
 }
 
+function numberedItemsFromTurns(turns: InstantChatToolTurn[]) {
+  for (const turn of [...turns].reverse()) {
+    const items = [...turn.user.matchAll(/\b\d+[.)]\s*([^,;\n.]+)/g)]
+      .map((match) => cleanListItem(match[1]))
+      .filter(Boolean);
+    if (items.length >= 2 && items.length <= 10) return items;
+  }
+  return [];
+}
+
+function listReorderReply(userRequest: string, turns: InstantChatToolTurn[]): InstantChatToolReply | null {
+  const items = numberedItemsFromTurns(turns);
+  if (items.length < 2) return null;
+  const move = userRequest.match(/\bmove\s+(?:the\s+)?(first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth)\s+(before|after)\s+(?:the\s+)?(first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth)\b/i);
+  const swap = userRequest.match(/\bswap\s+(?:the\s+)?(first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth)\s+(?:and|with)\s+(?:the\s+)?(first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth)\b/i);
+  if (!move && !swap) return null;
+
+  const reordered = [...items];
+  if (move) {
+    const from = ORDINALS[move[1].toLowerCase()];
+    const target = ORDINALS[move[3].toLowerCase()];
+    if (from >= items.length || target >= items.length || from === target) return null;
+    const movedItem = items[from];
+    const targetItem = items[target];
+    reordered.splice(reordered.indexOf(movedItem), 1);
+    const targetIndex = reordered.indexOf(targetItem);
+    reordered.splice(targetIndex + (move[2].toLowerCase() === "after" ? 1 : 0), 0, movedItem);
+  } else if (swap) {
+    const left = ORDINALS[swap[1].toLowerCase()];
+    const right = ORDINALS[swap[2].toLowerCase()];
+    if (left >= items.length || right >= items.length || left === right) return null;
+    [reordered[left], reordered[right]] = [reordered[right], reordered[left]];
+  }
+  return { output_text: reordered.join("\n"), tool_id: "phantom-reference-resolver" };
+}
+
+function pairedReferenceReply(userRequest: string, turns: InstantChatToolTurn[]): InstantChatToolReply | null {
+  const reference = userRequest.match(/\b(former|latter)\b/i)?.[1]?.toLowerCase();
+  if (!reference) return null;
+  for (const turn of [...turns].reverse()) {
+    const clauses = turn.user.split(/[.;]\s*/).map((value) => value.trim()).filter(Boolean);
+    const pairs = clauses.flatMap((clause) => {
+      const match = clause.match(/^(?:the\s+)?(.{1,60}?)\s+(?:contains?|has|holds?|includes?)\s+(.{1,80})$/i);
+      if (!match) return [];
+      return [{ subject: cleanListItem(match[1]), value: cleanListItem(match[2]) }];
+    });
+    if (pairs.length !== 2) continue;
+    const selected = pairs[reference === "former" ? 0 : 1];
+    if (!selected?.value || selected.value.length > 120) return null;
+    return { output_text: selected.value, tool_id: "phantom-reference-resolver" };
+  }
+  return null;
+}
+
 function identityReply(userRequest: string, modelId: string): InstantChatToolReply | null {
   const text = userRequest.trim();
   if (/^(?:who|what) are you\b/i.test(text)) {
@@ -281,6 +335,8 @@ export function buildInstantChatToolReply(userRequest: string, turns: InstantCha
     || ambiguityClarificationReply(userRequest, turns)
     || contextFactReply(userRequest, turns)
     || arithmeticReply(userRequest, turns)
+    || pairedReferenceReply(userRequest, turns)
+    || listReorderReply(userRequest, turns)
     || listSelectionReply(userRequest, turns);
 }
 

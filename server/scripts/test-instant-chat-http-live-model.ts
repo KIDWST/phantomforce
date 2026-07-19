@@ -530,6 +530,41 @@ assert.match(repairedBlend.answer, /visible|shiny|seen|spotlight|notice|show/i, 
 assert.match(repairedBlend.answer, /result|outcome|success|impact|win/i, "the repaired answer must preserve the results concept");
 assert.doesNotMatch(repairedBlend.answer, /nobody sees/i, "the repaired answer must not substitute the second idea's content");
 
+const objectReferences: Turn[] = [];
+rows.push(await ask(customerToken, "The red folder contains invoices. The blue folder contains contracts.", objectReferences));
+const formerFolder = await ask(customerToken, "What does the former contain? Noun only.", objectReferences);
+rows.push(formerFolder);
+assert.equal(formerFolder.modelId, "phantom-reference-resolver");
+assert.match(formerFolder.answer.trim(), /^invoices$/i);
+const latterFolder = await ask(customerToken, "What does the latter contain? Noun only.", objectReferences);
+rows.push(latterFolder);
+assert.equal(latterFolder.modelId, "phantom-reference-resolver");
+assert.match(latterFolder.answer.trim(), /^contracts$/i);
+
+const reorderedOptions: Turn[] = [];
+rows.push(await ask(customerToken, "Options: 1) email, 2) call, 3) meeting.", reorderedOptions));
+const movedOption = await ask(customerToken, "Move the third before the first. Return the reordered list only.", reorderedOptions);
+rows.push(movedOption);
+assert.equal(movedOption.modelId, "phantom-reference-resolver");
+assert.deepEqual(movedOption.answer.split(/\r?\n/).map((item) => item.trim()), ["meeting", "email", "call"]);
+
+const pluralOwnership: Turn[] = [];
+rows.push(await ask(adminToken, "Mina packed maps and Theo packed snacks.", pluralOwnership));
+const pluralAnswer = await ask(adminToken, "What did they pack? Name each person and item.", pluralOwnership);
+rows.push(pluralAnswer);
+assert.match(pluralAnswer.answer, /Mina[\s\S]*maps/i);
+assert.match(pluralAnswer.answer, /Theo[\s\S]*snacks/i);
+
+const correctionChain: Turn[] = [];
+rows.push(await ask(adminToken, "The meeting is Tuesday at 2 PM in Room 4.", correctionChain));
+rows.push(await ask(adminToken, "Correction: Thursday at 3 PM in Room 7.", correctionChain));
+rows.push(await ask(adminToken, "Actually, not Room 7. Use Room 9.", correctionChain));
+rows.push(await ask(adminToken, "Wait, keep Thursday and Room 9, but change the time to 4 PM.", correctionChain));
+const correctionChainFinal = await ask(adminToken, "What are the final day, time, and room? DAY | TIME | ROOM only.", correctionChain);
+rows.push(correctionChainFinal);
+assert.match(correctionChainFinal.answer.trim(), /^Thursday\s*\|\s*4 PM\s*\|\s*Room 9[.!]?$/i);
+assert.doesNotMatch(correctionChainFinal.answer, /Tuesday|2 PM|3 PM|Room 4|Room 7/i);
+
   console.log(JSON.stringify({
     ok: true,
     model,
@@ -569,6 +604,10 @@ assert.doesNotMatch(repairedBlend.answer, /nobody sees/i, "the repaired answer m
     longDistanceTopicRevisitVerified: true,
     ambiguityClarificationVerified: true,
     misunderstandingRepairVerified: true,
+    formerLatterVerified: true,
+    listReorderVerified: true,
+    pluralOwnershipVerified: true,
+    chainedCorrectionsVerified: true,
   }, null, 2));
 } finally {
   ownedServer?.kill();

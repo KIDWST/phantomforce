@@ -1,6 +1,6 @@
 # Next Quality Cycle
 
-Last updated: 2026-07-18
+Last updated: 2026-07-19
 
 ## Start Here
 
@@ -8,25 +8,25 @@ Read `AGENTS.md` and every file under `docs/quality` before changing code. Do
 not restart the inventory unless it is invalid. Continue in this Codex task via
 heartbeat automation `continue-phantomforce-quality-program`.
 
-Cycle 25 makes genuine ambiguity useful instead of vague. Phantom asks one exact
-question naming multiple plausible people, but explicit named subjects and
-format words cannot trigger false clarification. Cross-answer corrections keep
-the selected idea separate from the referenced tone. A real Chrome journey
-proved 38 turns across two isolated organizations, and the expanded real-model
-gate passed 105 requests with zero fallback or leakage. Deployment evidence is
-recorded in `AUDIT_LOG.md`: `f1923f80` is live from the canonical checkout, the
-scheduled sync returned result `0`, and all 187 live guards passed.
+Cycle 26 resolves exact multi-object references without handing simple facts to
+the model. Former/latter answers come only from explicit paired statements,
+numbered moves and swaps return the real options, plural ownership retains the
+active setup, and chained meeting corrections preserve only the newest values.
+A real Chrome journey proved 50 turns across two isolated organizations, and
+the expanded real-model gate passed 117 requests with zero fallback or leakage.
+Deployment evidence will be recorded in `AUDIT_LOG.md` after the canonical sync.
 
-## Recommended Cycle 26
+## Recommended Cycle 27
 
-Theme: multi-object reference resolution and chained corrections.
+Theme: causal references and conflicting correction repair.
 
-1. Exercise `it`, `they`, `those`, former/latter, numbered options, and multiple
-   objects without assuming every capitalized noun is a person.
-2. Test two and three consecutive corrections involving dates, locations,
-   negation, and list reordering.
-3. Verify explicit named subjects always outrank older ambiguous context.
-4. Keep deterministic handling extractive and bounded; leave creative judgment
+1. Exercise `because`, `therefore`, `that reason`, and `the second result` across
+   two competing explanations without inventing a causal link.
+2. Test corrections that explicitly reverse earlier corrections, including
+   `actually keep the original`, partial rollback, and conflicting negation.
+3. Verify clarification happens only when two surviving interpretations are
+   genuinely plausible and asks one concrete question.
+4. Keep exact resolution extractive and bounded; leave synthesis and judgment
    on the lightest capable local model.
 5. Run at least 100 real-model requests and the authenticated 390x844/1440x900
    browser journey, preserving corrections in change memory.

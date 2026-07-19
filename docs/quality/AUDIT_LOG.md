@@ -1903,3 +1903,62 @@ Cycle 25.
 
 Exercise multi-object references, plural pronouns, and correction chains that
 mix dates, lists, and named subjects in Cycle 26.
+
+# 2026-07-19 - Cycle 26: Exact Multi-Object References And Correction Chains
+
+## Problems Verified
+
+- After the user stated that a red folder contained invoices and a blue folder
+  contained contracts, the first former/latter callback could succeed while a
+  later callback hallucinated `receipts` instead of using the stated value.
+- Moving the third numbered option before the first returned placeholder labels
+  such as `Third element` and `First element`, not the user's actual options.
+- Plural follow-ups could lose their setup because exact keyword matching did
+  not connect inflected words such as `pack` and `packed`.
+- Existing browser coverage stopped at 38 turns and did not prove mixed object
+  references, list operations, plural ownership, and four-step corrections in
+  one organization-scoped conversation.
+
+## Corrections
+
+- Added a bounded paired-reference resolver that reads exactly two explicit
+  `contains`, `has`, `holds`, or `includes` clauses and returns only the stated
+  former/latter value.
+- Added deterministic numbered-list move and swap operations that return the
+  real reordered items and decline invalid ordinals or ambiguous shapes.
+- Retained the bounded active topic for plural and paired references, avoiding
+  fragile exact-keyword dependence while keeping temporary history capped.
+- Expanded deterministic, 117-request live-model, and authenticated 50-turn
+  Chrome coverage for former/latter, real list reordering, plural ownership,
+  and day/time/room correction chains.
+- Added permanent change-memory guards so these behaviors cannot silently
+  regress or be replaced with plausible invented values.
+
+## Source Verification
+
+- PASS: `npm run test:instant-chat:http-live-model --workspace
+  @phantomforce/server` completed 117 authenticated requests at 518 ms average
+  and 2,013 ms maximum with zero fallback and zero business leakage.
+- PASS: `npm run test:database-auth` completed the real Chrome journey across
+  two organizations and 50 conversational turns; all object, list, plural,
+  correction, durable-memory, temporary-history, tamper, and isolation checks
+  passed.
+- PASS: visual review at 1440x900 and 390x844 under
+  `tmp/database-auth-org-browser/2026-07-19T05-46-42-470Z`; navigation, chat,
+  organization state, and composer had no overlap or horizontal overflow.
+- PASS: `npm run test:release-critical` (20/20).
+- PASS: `npm run test:dashboard-chat` (56 prompts, 11 adversarial turns,
+  deterministic tools).
+- PASS: `node scripts/test-memory-retention.mjs`.
+- PASS: `npm run test:change-memory` (187 checks).
+- PASS: `npm run typecheck` and `git diff --check` (line-ending warnings only).
+
+## Deployment Verification
+
+- Pending source commit, push, canonical sync, scheduled sync, and strict live
+  doctor verification.
+
+## Next Task
+
+Exercise causal references and correction conflicts that reverse or partially
+restore earlier values in Cycle 27.

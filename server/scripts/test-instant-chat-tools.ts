@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 
 import { buildInstantChatToolReply, enforceInstantOutputConstraints, instantResponseTokenBudget } from "../src/phantom-ai/instant-chat-tools.js";
-import { buildInstantConversationContext, buildInstantConversationUserMessage, MAX_INSTANT_CONTEXT_CHARS, needsInstantConversationContext } from "../src/phantom-ai/instant-chat-context.js";
+import { buildInstantConversationContext, buildInstantConversationUserMessage, MAX_INSTANT_CONTEXT_CHARS, needsInstantConversationContext, selectRelevantInstantTurns } from "../src/phantom-ai/instant-chat-context.js";
 
 const ticketTurns = [
   { user: "A ticket is 45 dollars. Apply a 20 percent discount.", assistant: "The discounted price is $36." },
@@ -56,6 +56,44 @@ assert.deepEqual(
     { user: "Correction: the launch codename is Ember.", assistant: "Corrected: Ember." },
   ]),
   { output_text: "Ember", tool_id: "phantom-context-recall" },
+);
+const folderTurns = [
+  { user: "The red folder contains invoices. The blue folder contains contracts.", assistant: "The red folder has invoices; the blue folder has contracts." },
+  { user: "What does the former contain? Noun only.", assistant: "invoices" },
+];
+assert.deepEqual(
+  buildInstantChatToolReply("What does the former contain? Noun only.", folderTurns.slice(0, 1)),
+  { output_text: "invoices", tool_id: "phantom-reference-resolver" },
+);
+assert.deepEqual(
+  buildInstantChatToolReply("What does the latter contain? Noun only.", folderTurns),
+  { output_text: "contracts", tool_id: "phantom-reference-resolver" },
+);
+assert.equal(
+  selectRelevantInstantTurns(folderTurns, "What does the latter contain? Noun only.").length,
+  2,
+  "a second paired reference must retain the original source turn",
+);
+const pluralReferenceTurns = [
+  { user: "Move the third before the first.", assistant: "meeting\nemail\ncall" },
+  { user: "Mina packed maps and Theo packed snacks.", assistant: "Mina brought maps; Theo packed snacks." },
+];
+assert.deepEqual(
+  selectRelevantInstantTurns(pluralReferenceTurns, "What did they pack? Name each person and item."),
+  pluralReferenceTurns.slice(-1),
+  "plural pronouns must retain the active setup despite pack/packed inflection",
+);
+const numberedOptions = [{
+  user: "Options: 1) email, 2) call, 3) meeting.",
+  assistant: "The options are email, call, and meeting.",
+}];
+assert.deepEqual(
+  buildInstantChatToolReply("Move the third before the first. Return the reordered list only.", numberedOptions),
+  { output_text: "meeting\nemail\ncall", tool_id: "phantom-reference-resolver" },
+);
+assert.deepEqual(
+  buildInstantChatToolReply("Swap the first and third. Return the reordered list only.", numberedOptions),
+  { output_text: "meeting\ncall\nemail", tool_id: "phantom-reference-resolver" },
 );
 assert.deepEqual(
   buildInstantChatToolReply("What did she choose?", [

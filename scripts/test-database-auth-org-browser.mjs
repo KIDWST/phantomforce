@@ -852,6 +852,30 @@ async function main() {
     assert.match(JSON.stringify(ambiguityRequest?.conversation_history || []), /Dana[\s\S]*Priya/, "the ambiguity follow-up request must carry the setup turn to Hermes");
     assert.equal(browserClarifier.answer, "Do you mean Dana or Priya?", "an ambiguous browser pronoun must produce one useful clarification naming both candidates.");
     assert.equal((browserClarifier.answer.match(/\?/g) || []).length, 1, "ambiguity must produce exactly one clarification question.");
+    continuityResults.push(await submitChat(cdp, "The red folder contains invoices. The blue folder contains contracts.", diagnostics));
+    const browserFormer = await submitChat(cdp, "What does the former contain? Noun only.", diagnostics);
+    continuityResults.push(browserFormer);
+    assert.match(browserFormer.answer.trim(), /^invoices$/i, "former must resolve to the first stated object value");
+    const browserLatter = await submitChat(cdp, "What does the latter contain? Noun only.", diagnostics);
+    continuityResults.push(browserLatter);
+    assert.match(browserLatter.answer.trim(), /^contracts$/i, "latter must resolve to the second stated object value without invention");
+    continuityResults.push(await submitChat(cdp, "Options: 1) email, 2) call, 3) meeting.", diagnostics));
+    const browserReorder = await submitChat(cdp, "Move the third before the first. Return the reordered list only.", diagnostics);
+    continuityResults.push(browserReorder);
+    assert.deepEqual(browserReorder.answer.split(/\r?\n/).map((item) => item.trim()), ["meeting", "email", "call"], "list reorder must return the actual moved options");
+    continuityResults.push(await submitChat(cdp, "Mina packed maps and Theo packed snacks.", diagnostics));
+    const browserPlural = await submitChat(cdp, "What did they pack? Name each person and item.", diagnostics);
+    continuityResults.push(browserPlural);
+    assert.match(browserPlural.answer, /(?:Mina.{0,50}maps|maps.{0,50}Mina)/i, `plural reference must retain Mina's item: ${browserPlural.answer}`);
+    assert.match(browserPlural.answer, /(?:Theo.{0,50}snacks|snacks.{0,50}Theo)/i, `plural reference must retain Theo's item: ${browserPlural.answer}`);
+    continuityResults.push(await submitChat(cdp, "The meeting is Tuesday at 2 PM in Room 4.", diagnostics));
+    continuityResults.push(await submitChat(cdp, "Correction: Thursday at 3 PM in Room 7.", diagnostics));
+    continuityResults.push(await submitChat(cdp, "Actually, not Room 7. Use Room 9.", diagnostics));
+    continuityResults.push(await submitChat(cdp, "Wait, keep Thursday and Room 9, but change the time to 4 PM.", diagnostics));
+    const browserCorrectionChain = await submitChat(cdp, "What are the final day, time, and room? DAY | TIME | ROOM only.", diagnostics);
+    continuityResults.push(browserCorrectionChain);
+    assert.match(browserCorrectionChain.answer.trim(), /^Thursday\s*\|\s*4 PM\s*\|\s*Room 9[.!]?$/i, "the browser must retain the latest value from every correction dimension");
+    assert.doesNotMatch(browserCorrectionChain.answer, /Tuesday|2 PM|3 PM|Room 4|Room 7/i, "superseded meeting values must not return");
     assert.equal(continuityResults.every((result) => result.cards === 0), true, "long conversation turns must stay in chat without business cards.");
     assert.equal(continuityResults.some((result) => /ledger|pipeline|actual cash|transaction reader/i.test(result.answer)), false, "long conversation must not leak accounting language.");
 
@@ -864,7 +888,7 @@ async function main() {
 
     const phantomMemoryText = await openMemory(cdp, diagnostics);
     assert.match(phantomMemoryText, /emerald/i, "PhantomForce memory must render in the Memory UI.");
-    assert.match(phantomMemoryText, /comet/i, "PhantomForce temporary history must render in the Memory UI.");
+    assert.match(phantomMemoryText, /(?:Room 9|final day|Mina|packed maps)/i, "the Memory UI must render recent PhantomForce temporary history while older retained history remains state-verified.");
 
     const reloadMemory = cdp.waitEvent("Page.loadEventFired", 15_000).catch(() => null);
     await cdp.send("Page.reload", { ignoreCache: true });
@@ -963,7 +987,7 @@ async function main() {
         "customer reasoning reaches the bounded local model lane without cards or business context",
         "customer planning and feedback use real model answers instead of canned intent copy",
         "organization advice remains action-free and excludes money, plan, asset, and pulse status",
-        "natural follow-ups, named-topic returns, and useful ambiguity clarification stay coherent across 38 browser turns",
+        "natural follow-ups, named-topic returns, exact object/list references, chained corrections, and useful ambiguity clarification stay coherent across 50 browser turns",
         "durable memory survives reload inside organization A",
         "organization B receives no A memory, history, request context, or visible chat",
         "organization A returns without organization B contamination",

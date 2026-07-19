@@ -1101,6 +1101,29 @@
       ]
     },
     {
+      "id": "multi-object-reference-and-correction-chain",
+      "status": "active",
+      "title": "Phantom resolves exact object references, reorders real options, and retains chained corrections",
+      "ownerDecision": "Former and latter must resolve to values explicitly stated by the user, never a plausible invented noun. Numbered list movement or swapping must return the actual reordered options, never placeholders. Plural ownership must retain every named subject and item. Consecutive corrections must preserve the newest day, time, and location while excluding superseded values. All context remains temporary, organization-scoped, and bounded.",
+      "requiredPatterns": [
+        {
+          "file": "server/src/phantom-ai/instant-chat-tools.ts",
+          "pattern": "function listReorderReply[\\s\\S]*function pairedReferenceReply[\\s\\S]*pairedReferenceReply[\\s\\S]*listReorderReply",
+          "description": "Exact former/latter and ordinal list operations run before generic model continuation."
+        },
+        {
+          "file": "server/scripts/test-instant-chat-http-live-model.ts",
+          "pattern": "formerLatterVerified: true[\\s\\S]*listReorderVerified: true[\\s\\S]*pluralOwnershipVerified: true[\\s\\S]*chainedCorrectionsVerified: true",
+          "description": "The 100-plus request local-model gate covers exact references and correction chains."
+        },
+        {
+          "file": "scripts/test-database-auth-org-browser.mjs",
+          "pattern": "latter must resolve to the second stated object value without invention[\\s\\S]*the browser must retain the latest value from every correction dimension",
+          "description": "Authenticated Chrome proves the behavior through the real organization-scoped dashboard path."
+        }
+      ]
+    },
+    {
       "id": "database-auth-reboot-recovery",
       "status": "active",
       "title": "Live admin and customer auth depend on a self-recovering database",
