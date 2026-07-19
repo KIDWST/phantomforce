@@ -1,0 +1,28 @@
+{
+  "mission": "phantomforce-seven-day-evolution",
+  "status": "active",
+  "codex_goal": false,
+  "timezone": "America/Chicago",
+  "starts_at": "2026-07-19T08:00:00-05:00",
+  "ends_after_cycle": 21,
+  "scheduled_times": ["08:00", "14:00", "20:00"],
+  "cycle": 0,
+  "authoritative_branch": "main",
+  "authoritative_remote": "https://github.com/KIDWST/phantomforce.git",
+  "edit_checkout": "C:\\Users\\jorda\\Documents\\Codex\\worktrees\\phantomforce-live-social-analytics-20260712",
+  "deployment_checkout": "C:\\Users\\jorda\\Documents\\Codex\\deployments\\phantomforce-live",
+  "latest_stable_commit": "5eff22ec8232c7582cb5fad574f98c61351ab07f",
+  "last_known_good_commit": "5eff22ec8232c7582cb5fad574f98c61351ab07f",
+  "current_work_in_progress": "Day 1 evidence baseline and first coherent evolution checkpoint",
+  "next_highest_value_action": "Capture a current desktop/mobile baseline of the real internal and customer shells, then improve the highest-friction shared operating transition without inventing data or weakening role boundaries.",
+  "known_risks": [
+    "Multiple agents push directly to main; fetch and rebase before every push.",
+    "Admin and customer hosts serve one bundle but must expose different authority and navigation.",
+    "Mobile interaction, accessibility, and performance evidence remain materially weaker than backend correctness evidence.",
+    "User-facing app changes require a full cache build-id bump and served-checkout sync."
+  ],
+  "blocked_dependencies": [],
+  "last_preflight_at": "2026-07-19T06:20:00-05:00",
+  "last_deployment_at": "2026-07-19T06:13:53-05:00",
+  "last_updated_at": "2026-07-19T06:20:00-05:00"
+}

@@ -4,6 +4,17 @@
 > touch files. Multiple agents work this repo in parallel; this note keeps us from
 > clobbering each other. Update the "Recent, merged & live" list when you land work.
 
+## Seven-day evolution mission (2026-07-19 through 2026-07-25)
+- Read `docs/quality/EVOLUTION_MISSION.md` and
+  `docs/quality/EVOLUTION_STATE.json` before UI or experience work.
+- Continue from `docs/quality/NEXT_CYCLE.md`; use the existing scorecard, site
+  inventory, decisions, audit log, and change-memory guard as source records.
+- Record each scheduled checkpoint in `docs/quality/EVOLUTION_CYCLES.md`.
+- Run `ops/evolution/Invoke-SevenDayEvolutionPreflight.ps1` before integrating,
+  pushing, deploying, or claiming a cycle complete.
+- This is a finite task, not an active Codex goal. The task schedule is limited
+  to 21 cycles and must not be converted into hidden or indefinite persistence.
+
 ## Source of truth
 - The canonical repo is **`github.com/KIDWST/phantomforce`**, branch **`main`**.
 - The canonical Windows editing checkout is
