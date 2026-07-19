@@ -92,7 +92,7 @@ body.paused .pause{display:grid}
 'use strict';
 const host=(type,data={})=>parent.postMessage({source:'phantomplay-game',type,...data},'*');
 const canvas=document.querySelector('canvas'),ctx=canvas.getContext('2d');
-const hudEl=document.querySelector('[data-hud]'),setupEl=document.querySelector('[data-setup]'),endEl=document.querySelector('[data-end]');
+const hudEl=document.querySelector('[data-hud]'),setupEl=document.querySelector('[data-setup]'),endEl=document.querySelector('[data-end]'),pauseEl=document.querySelector('[data-pauseoverlay]'),touchEl=document.querySelector('[data-touch]');
 let W=0,H=0,DPR=1;
 function size(){DPR=Math.min(2,devicePixelRatio||1);W=canvas.width=Math.max(640,innerWidth*DPR);H=canvas.height=Math.max(420,innerHeight*DPR)}
 addEventListener('resize',size);size();
@@ -785,8 +785,9 @@ function step(f,dt){
        expires and the fighter drops with a re-grab cooldown). Bots auto-
        recover after a beat via jump() instead of hanging/regrab-looping. */
     f.ledge-=dt;f.vx=0;f.vy=0;f.grounded=false;
-    if(!f.human&&f.ledge<1.7){jump(f);f.ai.jumpCd=.55}
-    else if(f.ledge<=0){f.ledgeCooldown=.75;f.vy=.002}
+    if(f.ledge<1.7){
+      if(!f.human){jump(f);f.ai.jumpCd=.55}else jump(f);
+    }else if(f.ledge<=0){f.ledgeCooldown=.75;f.vy=.002}
     return;
   }
   if(f.charge>0)f.charge=Math.min(1,f.charge+dt);
@@ -1504,9 +1505,7 @@ function resetToMenu(){
   isHost=false;inRoom=false;netMatchStarting=false;remoteInputs={};lastSnapshot=null;prevSnapshot=null;
   stopRaceMusic();
   document.body.classList.remove('paused');
-  hudEl.hidden=true;endEl.hidden=true;setupEl.hidden=false;
-  const touch=document.querySelector('[data-touch]');
-  if(touch)touch.hidden=true;
+  setupEl.hidden=false;endEl.hidden=true;pauseEl.hidden=true;hudEl.hidden=true;touchEl.hidden=true;
   showPb();
   draw(0);
 }
@@ -1519,7 +1518,7 @@ function showPb(){
 /* ---------- host protocol ---------- */
 function setPaused(value){
   if(!running||over)return;
-  paused=value;document.body.classList.toggle('paused',paused);
+  paused=value;pauseEl.hidden=!paused;document.body.classList.toggle('paused',paused);
   host('paused',{paused});
 }
 addEventListener('message',e=>{
