@@ -1435,13 +1435,27 @@ approvals, assets, accounting transactions, and connector state in Cycle 19.
   no accounting language leaked into ordinary conversation.
 - PASS: screenshots at 1440x900 and 390x844 had exact viewport widths, visible
   composers, no horizontal overflow, and no overlap:
-  `tmp/database-auth-org-browser/2026-07-19T00-05-27-831Z`.
+  `tmp/database-auth-org-browser/2026-07-19T00-32-17-781Z`.
 - PASS: `npm run test:release-critical` (20/20).
 - PASS: `npm run test:easy-crm:postgres --workspace @phantomforce/server`
   (18/18).
 - PASS: authenticated live-model gate completed 82 requests at 489 ms average
   and 1,542 ms maximum with zero fallback and zero business leakage.
 - PASS: `git diff --check`.
+
+## Deployment Verification
+
+- Pushed commit `c687eeef` to `origin/main` and synced the dedicated
+  `C:\Users\jorda\Documents\Codex\deployments\phantomforce-live` checkout.
+- PASS: strict live-source doctor reported source, origin, deployment manifest,
+  static server, and Hermes aligned at `c687eeef`; the public admin served
+  `phantom-live-20260718-37` and the deployment tree was clean.
+- PASS: deployed live-model gate completed 82 requests at 481 ms average and
+  1,840 ms maximum with zero fallback, zero business leakage, nine
+  deterministic tool responses, and every conversation-quality assertion true.
+- PASS: manually triggered scheduled task `PhantomForce Admin Main Sync` ended
+  in `Ready` with result `0`; a second strict doctor pass confirmed the task did
+  not resurrect an older checkout, build, UI process, or Hermes process.
 
 ## Next Task
 
