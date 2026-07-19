@@ -28,6 +28,11 @@ assert.match(main, /const leads = visible\(store\.state\.leads \|\| \[\]\)/u, "D
 assert.match(main, /const accounting = moneyView\(\)/u, "Dashboard brief must use confirmed accounting state.");
 assert.match(main, /renderDashboardBrief\(\);/u, "Console render must refresh the dashboard brief.");
 assert.match(main, /const bottomItems = items\.filter\(\(n\) => n\.navZone === "bottom"\)/u, "Utility navigation must stay in its own sidebar zone.");
+assert.match(main, /const MOBILE_DOCK_IDS = \["dashboard", "crm", "media", "sites", "money"\]/u, "Phone dock must keep the five core destinations stable.");
+assert.match(main, /data-mobile-more/u, "Phone dock must expose the complete navigation through More.");
+assert.match(main, /setMobileNav\(!mobileNavOpen\)/u, "More must open and close the existing mobile drawer.");
+assert.match(css, /\.mobile-bottom-nav\s*\{[\s\S]*?grid-template-columns:\s*repeat\(6, minmax\(0, 1fr\)\)/u, "Phone dock must fit six controls without horizontal clipping.");
+assert.doesNotMatch(css, /\.sidebar\s*\{\s*display:\s*none\s*!important;\s*\}/u, "Phone CSS must not disable the complete navigation drawer.");
 assert.match(css, /\.dashboard-brief\s*\{/u, "Compact business brief must have dashboard styling.");
 assert.match(css, /\.dashboard-brief-metrics\s*\{/u, "Business snapshot must have a stable responsive layout.");
 

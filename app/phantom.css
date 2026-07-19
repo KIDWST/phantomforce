@@ -7657,7 +7657,19 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
     border-radius: 99px;
   }
 
-  .sidebar { display: none !important; }
+  .sidebar {
+    display: flex !important;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transform: translateX(-12px);
+  }
+  .sidebar.is-expanded {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transform: none;
+  }
   .app-main { min-height: auto; width: 100%; max-width: 100%; }
 
   .topbar2 {
@@ -7927,7 +7939,7 @@ body.phantomplay-playing .buddy-say {
 /* Final phone chrome: one clean top bar, one fixed taskbar. */
 @media (max-width: 767px) {
   .mobile-admin-homebar { display: flex !important; }
-  .sidebar { display: none !important; }
+  .sidebar { display: flex !important; }
   .topbar2 { display: none !important; }
   .app-main { padding: 0 0 calc(82px + env(safe-area-inset-bottom, 0px)) !important; }
   .console {
@@ -10970,11 +10982,11 @@ details.ch-lb-section .ch-lb-slider:last-child, details.ch-lb-section .ch-lb-chi
   backdrop-filter: blur(8px); pointer-events: none;
 }
 .buddy[data-dock="sidebar"] .buddy-say {
-  left: 50%;
+  left: 0;
   top: auto;
   bottom: calc(100% + 8px);
   right: auto;
-  transform: translateX(-50%);
+  transform: none;
   width: max-content;
   max-width: min(190px, calc(100vw - 24px));
   padding: 6px 9px;
@@ -10991,9 +11003,14 @@ details.ch-lb-section .ch-lb-slider:last-child, details.ch-lb-section .ch-lb-chi
   filter: drop-shadow(0 12px 26px rgba(0, 0, 0, 0.42)) drop-shadow(0 0 30px rgba(65, 255, 161, 0.24));
 }
 .buddy-say.pop { animation: buddyPop 0.34s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.buddy[data-dock="sidebar"] .buddy-say.pop { animation-name: buddySidebarPop; }
 @keyframes buddyPop {
   0% { opacity: 0; transform: translateX(-50%) translateY(6px) scale(0.85); }
   100% { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+}
+@keyframes buddySidebarPop {
+  0% { opacity: 0; transform: translateY(6px) scale(0.85); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
 }
 .buddy-menu {
   position: fixed;
@@ -13553,5 +13570,67 @@ body .phantom .workspace-page :where(
   .mobile-bottom-item[data-mobile-nav="adminos"].is-active .ic {
     color: #2a1800;
     filter: none;
+  }
+}
+
+/* Phone navigation: five daily destinations stay one tap away. The sixth
+   control opens the complete, permission-aware sidebar instead of clipping a
+   long horizontal list off-screen. */
+@media (max-width: 767px) {
+  .sidebar {
+    z-index: 110;
+    transition:
+      width 0.22s ease,
+      height 0.22s ease,
+      max-height 0.22s ease,
+      border-radius 0.22s ease,
+      padding 0.22s ease,
+      opacity 0.16s ease,
+      transform 0.2s ease,
+      visibility 0s linear 0.2s;
+  }
+
+  .sidebar.is-expanded {
+    transition-delay: 0s;
+  }
+
+  .mobile-bottom-nav {
+    display: grid !important;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 2px;
+    overflow: hidden !important;
+    padding-inline: 7px;
+  }
+
+  .mobile-bottom-item,
+  .mobile-bottom-item.is-active {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    flex: none;
+    min-height: 52px;
+  }
+
+  .mobile-bottom-item span {
+    max-width: 100%;
+  }
+
+  .mobile-bottom-more .ic {
+    width: 17px;
+    height: 17px;
+  }
+
+  .phantom.nav-expanded .mobile-bottom-nav {
+    opacity: 0;
+    transform: translateY(120%);
+    pointer-events: none;
+  }
+}
+
+@media (max-width: 390px) {
+  .mobile-bottom-item,
+  .mobile-bottom-item.is-active {
+    min-height: 48px;
+    font-size: 8.5px;
   }
 }
