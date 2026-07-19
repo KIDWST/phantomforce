@@ -1,13 +1,13 @@
 /* PhantomForce admin settings.
    Local UI preferences only: no provider calls, sends, uploads, or billing. */
 
-import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260718-38";
-import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260718-38";
-import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260718-38";
-import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260718-38";
-import { fetchCustomerPlanPreview, fetchEntitlementsSummary, switchCustomerPlan } from "./orgs.js?v=phantom-live-20260718-38";
-import { currentTenantId, ctx, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260718-38";
-import { DEFAULT_COMPANION_PREFS, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260718-38";
+import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260718-39";
+import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260718-39";
+import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260718-39";
+import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260718-39";
+import { canManageActiveOrg, fetchCustomerPlanPreview, fetchEntitlementsSummary, switchCustomerPlan } from "./orgs.js?v=phantom-live-20260718-39";
+import { currentTenantId, ctx, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260718-39";
+import { DEFAULT_COMPANION_PREFS, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260718-39";
 
 const AI_SETTINGS_KEY = "pf.operator.settings.v1";
 const SETTINGS_TAB_KEY = "pf.settings.tab.v1";
@@ -766,17 +766,18 @@ async function renderPlanAccessTab(el, opts = {}) {
     const plans = Array.isArray(summary.plans) && summary.plans.length
       ? summary.plans
       : [{ key: entitlements.planKey, name: entitlements.planName, description: entitlements.note, features: entitlements.features, limits: entitlements.limits }];
+    const canSwitchPlan = localCustomer || canManageActiveOrg();
     el.innerHTML = `
       <div class="set-section">
         <div class="set-section-head">
-          <div><p class="set-eyebrow">Plan & access</p><h3>${esc(entitlements.planName || entitlements.planKey || "Current tier")}</h3><p class="set-note">${localCustomer ? "Customer test mode: switch tiers instantly. Restrictions apply immediately; no charge or billing action runs." : "This workspace plan is assigned by the backend and is read-only here."}</p></div>
+          <div><p class="set-eyebrow">Plan & access</p><h3>${esc(entitlements.planName || entitlements.planKey || "Current tier")}</h3><p class="set-note">${canSwitchPlan ? "Switch Starter, Pro, and Elite instantly. Restrictions apply immediately; no charge or billing action runs." : "This workspace plan is managed by the owner or admin."}</p></div>
           <span class="set-status-pill ${entitlements.canWrite === false ? "" : "is-on"}">${entitlements.canWrite === false ? "View only" : "Write access"}</span>
         </div>
         <p class="set-note" data-plan-message></p>
       </div>
       <div class="set-section">
-        <div class="set-card-head"><span>Tier simulator</span><b>${localCustomer ? "Live test" : "Read-only"}</b></div>
-        <div class="set-choice-grid set-plan-grid">${plans.map((plan) => renderPlanCard(plan, entitlements.planKey, localCustomer)).join("")}</div>
+        <div class="set-card-head"><span>Tier controls</span><b>${canSwitchPlan ? "Live switch" : "Read-only"}</b></div>
+        <div class="set-choice-grid set-plan-grid">${plans.map((plan) => renderPlanCard(plan, entitlements.planKey, canSwitchPlan)).join("")}</div>
       </div>`;
     const message = el.querySelector("[data-plan-message]");
     el.querySelectorAll("[data-plan-switch]").forEach((button) => {

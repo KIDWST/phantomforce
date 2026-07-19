@@ -6,7 +6,7 @@
    when the backend doesn't advertise database auth, none of these
    surfaces render and the app behaves exactly as before. */
 
-import { ctx, session } from "./store.js?v=phantom-live-20260718-38";
+import { ctx, session } from "./store.js?v=phantom-live-20260718-39";
 
 export const isDatabaseSession = () => !!ctx.session?.database;
 export const isCustomerOrgSession = () => !!(ctx.session?.database || ctx.session?.localCustomer);
@@ -171,7 +171,14 @@ export async function fetchCustomerPlanPreview() {
 }
 
 export async function switchCustomerPlan(planKey) {
-  const { ok, status, json } = await api("/customer/plan-preview", { method: "POST", body: { planKey } });
+  const orgId = activeOrgId();
+  const endpoint = ctx.session?.localCustomer
+    ? "/customer/plan-preview"
+    : canManageActiveOrg() && orgId
+      ? `/orgs/${encodeURIComponent(orgId)}/entitlements`
+      : null;
+  if (!endpoint) return { ok: false, status: 403, error: "owner_or_admin_required", available: [] };
+  const { ok, status, json } = await api(endpoint, { method: "POST", body: { planKey } });
   return ok
     ? { ok: true, ...json }
     : { ok: false, status, error: json?.error || "plan_switch_failed", available: json?.available || [] };

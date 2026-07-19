@@ -28,18 +28,25 @@ const session = await accounts.loginLocalCustomer("customer1@phantomforce.test",
 assert(session, "customer1 can log in");
 
 let summary = await accounts.getLocalCustomerPlanSummary(session!);
-assert(summary?.entitlements.planKey === "starter", "seed starts on Free/starter");
-assert(summary?.entitlements.canWrite === false, "Free/starter is view-only");
+assert(summary?.entitlements.planKey === "starter", "seed starts on Starter");
+assert(summary?.entitlements.canWrite === false, "Starter is view-only");
 
 const elite = await accounts.assignLocalCustomerPlan(session!, "elite");
 assert(elite.ok === true, "customer1 can switch to Elite");
 assert(elite.ok && elite.entitlements.planKey === "elite", "Elite is current after switch");
 assert(elite.ok && elite.entitlements.canWrite === true, "Elite allows writes");
+assert(
+  elite.ok &&
+    Object.entries(elite.entitlements.features).every(([key, value]) =>
+      key === "modelTier" ? value === "advanced" : value === true,
+    ),
+  "Elite has no locked feature flags",
+);
 
 const free = await accounts.assignLocalCustomerPlan(session!, "starter");
-assert(free.ok === true, "customer1 can switch back to Free");
-assert(free.ok && free.entitlements.planKey === "starter", "Free/starter is current after switch back");
-assert(free.ok && free.entitlements.canWrite === false, "Free/starter blocks writes after switch back");
+assert(free.ok === true, "customer1 can switch back to Starter");
+assert(free.ok && free.entitlements.planKey === "starter", "Starter is current after switch back");
+assert(free.ok && free.entitlements.canWrite === false, "Starter blocks writes after switch back");
 
 console.log(
   JSON.stringify(
@@ -48,6 +55,7 @@ console.log(
       customer1Login: true,
       freeViewOnly: true,
       eliteUnlocksWrites: true,
+      eliteHasNoLockedFeatures: true,
       switchBackRestricts: true,
       store: process.env.PHANTOMFORCE_LOCAL_CUSTOMER_STORE,
     },

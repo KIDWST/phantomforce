@@ -6,7 +6,7 @@ import { promisify } from "node:util";
 
 import type { PlanStatus } from "@prisma/client";
 
-import { PLAN_DEFINITIONS, type PlanDefinition, type ResolvedEntitlements } from "./entitlements.js";
+import { listCustomerPlanDefinitions, type PlanDefinition, type ResolvedEntitlements } from "./entitlements.js";
 import type { AccessSession } from "./session.js";
 
 export const LOCAL_CUSTOMER_SESSION_PREFIX = "local:";
@@ -114,7 +114,7 @@ function titleFromEmail(email: string) {
 }
 
 function publicPlanDefinitions(): PlanDefinition[] {
-  return PLAN_DEFINITIONS.filter((plan) => !plan.isInternal);
+  return listCustomerPlanDefinitions() as PlanDefinition[];
 }
 
 function publicPlanDefinition(planKey?: string | null): PlanDefinition {

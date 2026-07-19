@@ -2,7 +2,7 @@
    One sidebar-docked Phantom system: preference-aware, drag-safe, always
    returns home, and tied to real chat/notification states. */
 
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260718-38";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260718-39";
 import {
   COMPANION_EVENT,
   clearCompanionSessionHide,
@@ -10,7 +10,7 @@ import {
   isCompanionHiddenForSession,
   loadCompanionPrefs,
   updateCompanionPrefs,
-} from "./companion-preferences.js?v=phantom-live-20260718-38";
+} from "./companion-preferences.js?v=phantom-live-20260718-39";
 
 const reduceMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
 const LEGACY_DOCK_KEY = "pf.buddy.docked.v1";
@@ -110,7 +110,7 @@ function createBuddyController() {
   let nextIdleAt = 0;
   let nextWanderAt = 0;
   let lastPaintAt = 0;
-  let geometryRaf = 0;
+  let scrollHideTimer = 0;
   let revealAt = 0;
   let revealed = false;
 
@@ -339,6 +339,7 @@ function createBuddyController() {
 
   function removeLayer() {
     clearTimeout(sayTimer);
+    clearTimeout(scrollHideTimer);
     running = false;
     loopToken += 1;
     if (eventAbort) {
@@ -637,18 +638,22 @@ function createBuddyController() {
   function bindEvents() {
     eventAbort = new AbortController();
     const signal = eventAbort.signal;
-    const scheduleGeometryRefresh = () => {
-      if (geometryRaf) return;
-      geometryRaf = requestAnimationFrame(() => {
-        geometryRaf = 0;
+    const hideDuringScroll = () => {
+      if (!layer || dragging || (menu && !menu.hidden)) return;
+      layer.classList.add("is-scroll-hidden");
+      if (canvas) canvas.style.pointerEvents = "none";
+      clearTimeout(scrollHideTimer);
+      scrollHideTimer = setTimeout(() => {
         if (!layer) return;
         configureCanvas({ snap: false });
-        if (docked || mobile()) setTargetToDock();
-      });
+        dock();
+        layer.classList.remove("is-scroll-hidden");
+        updatePointerHitState(true);
+      }, 260);
     };
     window.addEventListener("pointermove", (event) => { lastPointer = { x: event.clientX, y: event.clientY }; updatePointerHitState(); }, { passive: true, signal });
     window.addEventListener("resize", () => { configureCanvas({ snap: true }); if (docked || mobile()) dock(); }, { passive: true, signal });
-    document.addEventListener("scroll", scheduleGeometryRefresh, { passive: true, capture: true, signal });
+    document.addEventListener("scroll", hideDuringScroll, { passive: true, capture: true, signal });
     document.addEventListener("pointerdown", (event) => {
       openMenuFromPointerEvent(event);
     }, { capture: true, signal });

@@ -108,6 +108,7 @@ import {
   consumeUsage,
   getOrgEntitlements,
   getUsageSummary,
+  listCustomerPlanDefinitions,
   listPlanDefinitions,
   recordUsage,
   upgradeRequiredBody,
@@ -2824,7 +2825,30 @@ app.get("/orgs/:orgId/entitlements", async (request, reply) => {
   const { orgId } = request.params as { orgId: string };
   const dbSession = requireOrgMember(request, reply, orgId);
   if (!dbSession) return reply;
-  return { ok: true, ...(await getUsageSummary(orgId)) };
+  return { ok: true, ...(await getUsageSummary(orgId)), plans: listCustomerPlanDefinitions() };
+});
+
+app.post("/orgs/:orgId/entitlements", async (request, reply) => {
+  const { orgId } = request.params as { orgId: string };
+  const dbSession = requireOrgManager(request, reply, orgId);
+  if (!dbSession) return reply;
+  const parsed = CustomerPlanPreviewSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  const allowedPlans = new Set(listCustomerPlanDefinitions().map((plan) => plan.key));
+  if (!allowedPlans.has(parsed.data.planKey)) {
+    return reply.code(400).send({ ok: false, error: "unknown_customer_plan", available: [...allowedPlans] });
+  }
+  const result = await assignOrgPlan({
+    orgId,
+    planKey: parsed.data.planKey,
+    status: "active",
+    overrides: null,
+    note: "Self-service tier switch. No billing action was run.",
+    assignedByUserId: dbSession.userId,
+  });
+  if (!result.ok) return reply.code(400).send({ ok: false, error: result.error, available: result.available });
+  await recordPlanAssignmentAudit(orgId, dbSession.email, parsed.data.planKey, "active");
+  return { ok: true, ...(await getUsageSummary(orgId)), plans: listCustomerPlanDefinitions() };
 });
 
 app.get("/admin/plans", async (request, reply) => {

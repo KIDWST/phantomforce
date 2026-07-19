@@ -89,7 +89,7 @@ export const PLAN_DEFINITIONS: PlanDefinition[] = [
   },
   {
     key: "starter",
-    name: "Free",
+    name: "Starter",
     description: "Entry plan for a single small business.",
     isInternal: false,
     trialDays: 14,
@@ -170,6 +170,27 @@ export const PLAN_DEFINITIONS: PlanDefinition[] = [
 ];
 
 const DEFAULT_PLAN_KEY = "starter";
+const CUSTOMER_SWITCHABLE_PLAN_KEYS = new Set(["starter", "professional", "elite"]);
+const FULL_ACCESS_PLAN_KEYS = new Set(["elite", "enterprise", "internal"]);
+
+function forceFullAccessFeatures(features: PlanFeatures): PlanFeatures {
+  return {
+    ...features,
+    chat: true,
+    mediaLab: true,
+    websites: true,
+    websitePublishing: true,
+    customDomains: true,
+    vacationMode: true,
+    phantomPlay: true,
+    competitorIntelligence: true,
+    aggressiveIntelligence: true,
+    advancedWorkflows: true,
+    assetPacks: true,
+    agentRuns: true,
+    modelTier: "advanced",
+  };
+}
 
 export function planDefinition(key: string): PlanDefinition {
   return PLAN_DEFINITIONS.find((plan) => plan.key === key) ?? PLAN_DEFINITIONS[0];
@@ -264,6 +285,9 @@ export async function getOrgEntitlements(orgId: string): Promise<ResolvedEntitle
   const features = applyOverrides(definition.features, overridesRaw?.features);
   const limits = applyOverrides(definition.limits, overridesRaw?.limits);
   const freeViewOnly = definition.key === "starter";
+  const resolvedFeatures = FULL_ACCESS_PLAN_KEYS.has(definition.key)
+    ? forceFullAccessFeatures(features.value)
+    : features.value;
 
   return {
     orgId,
@@ -275,7 +299,7 @@ export async function getOrgEntitlements(orgId: string): Promise<ResolvedEntitle
     graceUntil: graceUntil ? graceUntil.toISOString() : null,
     canWrite: effectiveStatus !== "suspended" && !freeViewOnly,
     upgradeRequired: freeViewOnly || effectiveStatus === "suspended" || effectiveStatus === "grace",
-    features: features.value,
+    features: resolvedFeatures,
     limits: limits.value,
     overridesApplied: features.applied || limits.applied,
     note: orgPlan?.note ?? null,
@@ -440,6 +464,19 @@ export function listPlanDefinitions() {
     trialDays: plan.trialDays,
     graceDays: plan.graceDays,
     features: plan.features,
+    limits: plan.limits,
+  }));
+}
+
+export function listCustomerPlanDefinitions() {
+  return PLAN_DEFINITIONS.filter((plan) => CUSTOMER_SWITCHABLE_PLAN_KEYS.has(plan.key)).map((plan) => ({
+    key: plan.key,
+    name: plan.name,
+    description: plan.description,
+    isInternal: false,
+    trialDays: plan.trialDays,
+    graceDays: plan.graceDays,
+    features: FULL_ACCESS_PLAN_KEYS.has(plan.key) ? forceFullAccessFeatures(plan.features) : plan.features,
     limits: plan.limits,
   }));
 }

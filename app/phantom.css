@@ -10863,6 +10863,13 @@ details.ch-lb-section .ch-lb-slider:last-child, details.ch-lb-section .ch-lb-chi
 .buddy.is-booting .buddy-canvas {
   pointer-events: none;
 }
+.buddy.is-scroll-hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+.buddy.is-scroll-hidden .buddy-canvas {
+  pointer-events: none !important;
+}
 .buddy-canvas {
   display: block; pointer-events: auto; cursor: grab; touch-action: none;
   border-radius: 999px;
