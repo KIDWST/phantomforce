@@ -2034,8 +2034,24 @@ restore earlier values in Cycle 27.
 
 ## Deployment Verification
 
-- Pending source commit, push, canonical sync, canonical model gate, scheduled
-  sync, and strict live doctor verification.
+- Pushed feature commit `d12ce4ce` and same-language repair commit `fcb62c8e`
+  to `origin/main`, then synced the canonical
+  `deployments\phantomforce-live` checkout.
+- PASS: strict live-source doctor aligned source, origin, deployment manifest,
+  static UI, Hermes, sidebar rules, resurrection guards, and clean worktrees at
+  `fcb62c8e`; the browser build remains `phantom-live-20260718-43` because this
+  cycle changes server behavior and tests, not browser assets.
+- The first canonical gate rejected an unsolicited English-to-Chinese script
+  switch in cross-answer correction repair. The follow-up commit made that
+  exact repair deterministic and reinforced the language contract rather than
+  rerunning until a stochastic answer passed.
+- PASS: the final canonical-checkout gate completed 130 requests at 587 ms
+  average and 2,397 ms maximum with zero fallback and zero business leakage;
+  causal references, rollback, same-language correction, and all prior
+  assertions passed.
+- PASS: manually triggered `PhantomForce Admin Main Sync` ended in `Ready` with
+  result `0`; the post-sync doctor confirmed no stale source was resurrected
+  and all 194 live guards remained aligned.
 
 ## Next Task
 

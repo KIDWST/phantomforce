@@ -14,8 +14,8 @@ returns the linked outcome, and the newest structured base statement owns full
 or named-field rollback even when an older same-topic thread remains in the
 privacy window. A real Chrome journey proved 63 turns across two isolated
 organizations, and the expanded real-model gate passed 130 requests with zero
-fallback or leakage. Deployment evidence will be recorded in `AUDIT_LOG.md`
-after the canonical sync.
+fallback or leakage. Canonical deployment and scheduled-sync evidence is
+recorded in `AUDIT_LOG.md`.
 
 ## Recommended Cycle 28
 

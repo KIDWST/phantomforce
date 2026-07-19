@@ -52,6 +52,14 @@
   forbidden patterns there so another stale worktree cannot resurrect it.
 
 ## Recent, merged & live (newest first)
+- **Causal references + scoped rollback (2026-07-19)** — server commits
+  `d12ce4ce` and `fcb62c8e`, browser build remains
+  `phantom-live-20260718-43`. Phantom extracts explicit causes, follows
+  reason-to-outcome callbacks, restores the newest structured base or only the
+  requested fields, and keeps exact correction repair in the user's language.
+  The canonical 130-request gate, 63-turn two-organization Chrome journey,
+  scheduled sync, and 194 live guards passed with zero fallback or business
+  leakage.
 - **Exact multi-object references + correction chains (2026-07-19)** — server
   commit `5439ffe2`, browser build remains `phantom-live-20260718-43`. Phantom
   resolves explicit former/latter facts, moves and swaps actual numbered

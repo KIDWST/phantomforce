@@ -1,29 +1,29 @@
 {
-  "cycle": 26,
+  "cycle": 27,
   "date": "2026-07-19",
-  "theme": "exact multi-object references and correction chains",
+  "theme": "causal references and scoped rollback",
   "finding": {
-    "id": "Q-0019",
+    "id": "Q-0020",
     "severity": "P1",
     "status": "fixed_verified",
-    "rootCause": "Former/latter and list-reorder prompts relied on model inference, allowing invented values and placeholder list labels; plural callbacks also depended on brittle exact-keyword relevance.",
-    "correction": "Bounded extractive tools now resolve explicit paired facts and real numbered-list operations, while plural and paired references retain only the active temporary topic."
+    "rootCause": "Ordinal causal callbacks were treated as standalone, while long-thread rollback could mix an older same-topic correction into the newest revision chain; exact style repair could also switch language stochastically.",
+    "correction": "Bounded causal extraction, newest-base structured revision state, field-scoped rollback, and deterministic same-language style repair now preserve explicit user state without model invention."
   },
   "verification": {
     "databaseApiChecks": 57,
     "browserBusinessModules": 6,
-    "mixedChatTurns": 50,
+    "mixedChatTurns": 63,
     "viewports": ["1440x900", "390x844"],
-    "report": "tmp/database-auth-org-browser/2026-07-19T05-46-42-470Z/report.json",
+    "report": "tmp/database-auth-org-browser/2026-07-19T06-32-48-114Z/report.json",
     "releaseCritical": "20/20",
-    "liveModelRequests": 117,
-    "liveModelAverageMs": 526,
-    "liveModelMaximumMs": 1746,
-    "formerLatterVerified": true,
-    "listReorderVerified": true,
-    "pluralOwnershipVerified": true,
-    "chainedCorrectionsVerified": true,
-    "deployedCommit": "5439ffe2",
+    "liveModelRequests": 130,
+    "liveModelAverageMs": 587,
+    "liveModelMaximumMs": 2397,
+    "causalReferencesVerified": true,
+    "originalPlanRollbackVerified": true,
+    "partialRollbackVerified": true,
+    "sameLanguageRepairVerified": true,
+    "deployedCommit": "fcb62c8e",
     "deployedBuild": "phantom-live-20260718-43",
     "scheduledSyncResult": 0,
     "strictDoctor": "pass_before_and_after_scheduled_sync",
@@ -37,5 +37,5 @@
       "git diff --check"
     ]
   },
-  "nextCycle": "Exercise causal references and correction conflicts that reverse or partially restore earlier values."
+  "nextCycle": "Exercise respectively mappings and named-entity scoped undo."
 }
