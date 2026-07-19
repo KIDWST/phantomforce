@@ -24,7 +24,7 @@ import { buildProductionReadinessReport } from "../access/production-readiness.j
 import { prisma } from "../access/prisma-runtime.js";
 import { getContentAssetStorageProvider } from "./content-asset-storage.js";
 import { getSalesConnectorStatus } from "../connectors/sales-connector.js";
-import { getGuardStatus, runGuardSelfTest } from "./prompt-injection-guard.js";
+import { getGuardStatus, getRecentAuditLogEntries, runGuardSelfTest } from "./prompt-injection-guard.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -329,20 +329,23 @@ const JOB_DEFINITIONS: AutomationJobDefinition[] = [
     name: "Prompt Injection Guard",
     category: "security",
     cadence: "daily",
-    description: "Screens agent-run requests for prompt injection, jailbreaks, and system-prompt extraction before they execute. Runs a live self-test every check — never a static claim.",
-    benefit: "Protects every automation and agent run from hostile instructions hidden in user or third-party text, without an external API key or a model parked in memory all day.",
-    output: "Daily guard self-test result plus lifetime pass/block counts.",
+    description: "Screens chat and agent-run requests for prompt injection, jailbreaks, and encoded/obfuscated attacks before they execute, and redacts personal data (emails, SSNs, cards, keys) from every ledger entry at rest. Runs a live self-test every check — never a static claim.",
+    benefit: "Protects every chat message and agent run from hostile instructions hidden in user or third-party text, and keeps personal data out of logs even on a pass verdict — without an external API key or a model parked in memory all day.",
+    output: "Daily guard self-test result, lifetime pass/block/unverified counts, and recent block reasons.",
     setup_fields: [],
     approval_required: false,
     external_action: false,
     run: async () => {
-      const [status, selfTest] = await Promise.all([getGuardStatus(), runGuardSelfTest()]);
+      const [status, selfTest, recentBlocks] = await Promise.all([getGuardStatus(), runGuardSelfTest(), getRecentAuditLogEntries(5)]);
       const modelPart = status.local_model_tier === "enabled" ? `deep tier: local model "${status.local_model}" (loaded on demand only)` : "deep tier: disabled (heuristics only)";
+      const recentPart = recentBlocks.length
+        ? ` Most recent: ${recentBlocks[0].classification} via ${recentBlocks[0].tier} (${recentBlocks[0].violation_types.join(", ") || "unverified"}).`
+        : "";
       return {
         ok: selfTest.ok,
         summary: selfTest.ok
-          ? `Guard is live — correctly passed a benign string and blocked a known injection string. ${modelPart}. Lifetime: ${status.total_checks} checked, ${status.total_blocked} blocked.`
-          : `Guard self-test failed (benign_passed=${selfTest.benign_passed}, injection_blocked=${selfTest.injection_blocked}) — review server logs.`,
+          ? `Guard is live — passed a benign string, blocked a known injection string and an encoded/base64 variant, and verified redaction works. ${modelPart}. Lifetime: ${status.total_checks} checked, ${status.total_blocked} blocked, ${status.total_unverified} unverified (deep tier unavailable, failed open).${recentPart}`
+          : `Guard self-test failed (${JSON.stringify(selfTest)}) — review server logs.`,
         next_action: selfTest.ok ? "No action needed." : "Check Ollama reachability or PHANTOM_GUARD_* environment settings.",
       };
     },

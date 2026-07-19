@@ -123,7 +123,7 @@ try {
   assert(!rawTransitions.includes("abc123456789"), "Transition file must not store raw key-like text.");
   assert(!rawTransitions.includes("4242 4242 4242 4242"), "Transition file must not store raw card-like text.");
   assert(rawTransitions.includes("API_KEY=[redacted]"), "Transition file should store redacted key marker.");
-  assert(rawTransitions.includes("[redacted-number]"), "Transition file should store redacted number marker.");
+  assert(rawTransitions.includes("[redacted-card]"), "Transition file should store redacted card marker.");
 
   const ledgerRecords = await readHermesLedgerRecords({ ledgerPath, limit: 10 });
   assert(ledgerRecords.length === 0, "Transition writes must not write the Hermes ledger.");

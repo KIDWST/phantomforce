@@ -115,7 +115,7 @@ try {
   assert(!rawQueue.includes("abc123456789"), "Queue file must not store raw key-like text.");
   assert(!rawQueue.includes("4242 4242 4242 4242"), "Queue file must not store raw card-like text.");
   assert(rawQueue.includes("API_KEY=[redacted]"), "Queue file should store redacted key marker.");
-  assert(rawQueue.includes("[redacted-number]"), "Queue file should store redacted number marker.");
+  assert(rawQueue.includes("[redacted-card]"), "Queue file should store redacted card marker.");
 
   const ledgerRecords = await readHermesLedgerRecords({ ledgerPath, limit: 10 });
   assert(ledgerRecords.length === 0, "Approval queue writes must not write the Hermes ledger.");

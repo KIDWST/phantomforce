@@ -8461,6 +8461,25 @@ app.post("/phantom-ai/chat", async (request, reply) => {
       : typeof body.user_request === "string"
         ? body.user_request
       : "Summarize the current PhantomForce workspace.";
+
+  /* Prompt Injection Guard: this is the main chat pipeline — the highest-
+     volume place free text (user-typed or otherwise) reaches a real model.
+     Heuristic tier is instant; the local-model tier only engages for
+     ambiguous text and never stays resident in memory. */
+  {
+    const verdict = await screenText(userMessage, "phantom_ai_chat");
+    if (verdict.classification === "block") {
+      return reply.code(400).send({
+        ok: false,
+        error: "blocked_by_prompt_guard",
+        violation_types: verdict.violation_types,
+        detail: verdict.reason,
+        provider_called: false,
+        network_call_performed: false,
+      });
+    }
+  }
+
   const normalized = buildModelRouterRequestFromBody(
     {
       ...body,
