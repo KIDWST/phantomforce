@@ -702,11 +702,69 @@
     }
   }
 
+  // ---------------------------------------------------------------------
+  // Visual-upgrade helpers (color math, lighting, particle glow). These are
+  // pure rendering utilities — no gameplay state is read or written here
+  // besides the pooled particle spawns, which are visual-only.
+  // ---------------------------------------------------------------------
+
+  // Fixed "sun" direction in world space (screen-up, slightly left) so every
+  // car reads as lit from the same consistent angle no matter which way it's
+  // facing — cheap trick for consistent lighting across a top-down track.
+  const SUN_X = -0.45, SUN_Y = -0.9;
+
+  function hexToRgb(hex) {
+    let h = hex.replace("#", "");
+    if (h.length === 3) h = h.split("").map((c) => c + c).join("");
+    const num = parseInt(h, 16);
+    return { r: (num >> 16) & 255, g: (num >> 8) & 255, b: num & 255 };
+  }
+  function shadeColor(hex, amt) {
+    // amt > 0 lightens toward white, amt < 0 darkens toward black.
+    const { r, g, b } = hexToRgb(hex);
+    const adj = (c) => (amt >= 0 ? Math.round(c + (255 - c) * amt) : Math.round(c * (1 + amt)));
+    return `rgb(${adj(r)}, ${adj(g)}, ${adj(b)})`;
+  }
+  function withAlpha(hex, a) {
+    const { r, g, b } = hexToRgb(hex);
+    return `rgba(${r},${g},${b},${a})`;
+  }
+  // Converts a point in a kart's local (+x = forward) frame to world space —
+  // used so new particle emitters spawn exactly where the matching visual
+  // (flame/aura/spark) is drawn.
+  function localToWorld(cx, cy, angle, lx, ly) {
+    const c = Math.cos(angle), s = Math.sin(angle);
+    return { x: cx + lx * c - ly * s, y: cy + lx * s + ly * c };
+  }
+  // Colors that render as an additive glow in drawParticles (embers, sparks,
+  // energy effects); everything else (dust, exhaust smoke) stays a flat,
+  // matte soft blob so grass/gravel effects don't look like fireworks.
+  const GLOW_PARTICLE_COLORS = new Set([
+    "#ffd166", "#ff3d94", "#1ef0ff", "#9fffe0", "#fff", "#ffe9a3",
+    "#ff9a4a", "#fff6d8", "#ffb3d9", "#41ffa1", "#ff5c74",
+  ]);
+
   function drawParticles() {
     for (const p of state.particles) {
-      ctx.globalAlpha = Math.max(0, p.life / p.maxLife);
-      ctx.fillStyle = p.color;
-      ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill();
+      const t = Math.max(0, Math.min(1, p.life / p.maxLife));
+      // Slight shrink-as-it-fades instead of a constant flat disc — reads
+      // more like a spark/ember than a dot.
+      const size = p.size * (0.55 + 0.55 * t);
+      if (GLOW_PARTICLE_COLORS.has(p.color)) {
+        ctx.save();
+        ctx.globalCompositeOperation = "lighter";
+        const rg = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, size * 1.8);
+        rg.addColorStop(0, withAlpha(p.color, t));
+        rg.addColorStop(0.5, withAlpha(p.color, t * 0.6));
+        rg.addColorStop(1, withAlpha(p.color, 0));
+        ctx.fillStyle = rg;
+        ctx.beginPath(); ctx.arc(p.x, p.y, size * 1.8, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+      } else {
+        ctx.globalAlpha = t;
+        ctx.fillStyle = p.color;
+        ctx.beginPath(); ctx.arc(p.x, p.y, size, 0, Math.PI * 2); ctx.fill();
+      }
     }
     ctx.globalAlpha = 1;
   }
@@ -715,19 +773,40 @@
   // names stay upright in rotate-with-car mode.
   let currentCamA = 0;
 
+  function drawWheel(w, h) {
+    // Draws a wheel centered on the current origin: dark tire tread ring
+    // around a lighter rim/hub, in place of the old single flat rectangle.
+    ctx.fillStyle = "#0c0d12";
+    ctx.fillRect(-w / 2, -h / 2, w, h);
+    ctx.strokeStyle = "#3a3d46"; ctx.lineWidth = 1;
+    ctx.strokeRect(-w / 2, -h / 2, w, h);
+    ctx.fillStyle = "#4a4e58";
+    ctx.fillRect(-w / 2 + 1.6, -h / 2 + 1.2, w - 3.2, h - 2.4);
+    ctx.fillStyle = "#9096a2";
+    ctx.fillRect(-w / 2 + 3, -h / 2 + 2.2, Math.max(1, w - 6), Math.max(1, h - 4.4));
+  }
+
   function drawCarBody(k, ghosted) {
     // Local frame: +x = forward. ~46 long x ~26 wide open-wheel racer.
     const body = ghosted ? "#888" : k.color;
     const accent = ghosted ? "#555" : k.accent;
+    const hi = shadeColor(body, 0.5);
+    const lo = shadeColor(body, -0.45);
+
+    // Local-space light direction: rotate the fixed world "sun" vector by
+    // the kart's inverse heading so every car is lit from the same
+    // on-screen direction (upper-left) regardless of which way it's facing.
+    const ca = Math.cos(k.angle), sa = Math.sin(k.angle);
+    const lx = SUN_X * ca + SUN_Y * sa;
+    const ly = -SUN_X * sa + SUN_Y * ca;
+
     // Wheels first (under the body edges). Fronts visibly steer.
-    ctx.fillStyle = "#15161c";
-    ctx.strokeStyle = "#3a3d46"; ctx.lineWidth = 1;
     for (const sy of [-1, 1]) {
-      ctx.fillRect(-19, sy * 10 - 4, 12, 8); ctx.strokeRect(-19, sy * 10 - 4, 12, 8); // rear
+      ctx.save(); ctx.translate(-13, sy * 10); drawWheel(12, 8); ctx.restore(); // rear
       ctx.save();
       ctx.translate(13, sy * 10);
       ctx.rotate(k.visSteer);
-      ctx.fillRect(-5.5, -3.5, 11, 7); ctx.strokeRect(-5.5, -3.5, 11, 7); // front, steered
+      drawWheel(11, 7); // front, steered
       ctx.restore();
     }
     // Rear spoiler.
@@ -748,8 +827,25 @@
     ctx.quadraticCurveTo(9, 8, 15, 7);
     ctx.quadraticCurveTo(23, 6, 24, 0);
     ctx.closePath();
-    ctx.fillStyle = body; ctx.fill();
+    // Glossy panel: gradient across the fixed light axis instead of a flat
+    // fill, so the curved body reads as lit metal rather than a cutout.
+    const grad = ctx.createLinearGradient(lx * 20, ly * 20, -lx * 20, -ly * 20);
+    grad.addColorStop(0, hi);
+    grad.addColorStop(0.45, body);
+    grad.addColorStop(1, lo);
+    ctx.fillStyle = grad;
+    ctx.fill();
     ctx.strokeStyle = "rgba(0,0,0,.45)"; ctx.lineWidth = 1.5; ctx.stroke();
+    // Highlight streak — thin glossy reflection along the lit side.
+    ctx.save();
+    ctx.beginPath();
+    const hx = lx * 9, hy = ly * 9;
+    ctx.moveTo(16 + hx, -2 + hy * 0.5);
+    ctx.quadraticCurveTo(2 + hx, -8 + hy, -14 + hx, -5 + hy * 0.5);
+    ctx.strokeStyle = "rgba(255,255,255,.32)";
+    ctx.lineWidth = 2.2; ctx.lineCap = "round";
+    ctx.stroke();
+    ctx.restore();
     // Center racing stripe down hood + engine cover.
     ctx.fillStyle = accent;
     ctx.fillRect(-18, -2.5, 40, 5);
@@ -759,39 +855,137 @@
     ctx.fillStyle = "rgba(12,18,28,.92)"; ctx.fill();
     ctx.fillStyle = "rgba(180,220,255,.35)";
     ctx.fillRect(4, -4, 3, 8); // glass glint
-    // Nose tip trim.
+    // Nose tip trim + headlights.
     ctx.fillStyle = "#eafff4";
     ctx.fillRect(20, -2, 4, 4);
+    ctx.fillStyle = "rgba(255,255,255,.95)";
+    ctx.beginPath(); ctx.ellipse(20, -3.3, 1.6, 1.1, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(20, 3.3, 1.6, 1.1, 0, 0, Math.PI * 2); ctx.fill();
+    // Taillights, mounted either side of the spoiler.
+    ctx.fillStyle = "rgba(255,70,70,.9)";
+    ctx.beginPath(); ctx.ellipse(-20.5, -11.5, 1.8, 1.4, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(-20.5, 11.5, 1.8, 1.4, 0, 0, Math.PI * 2); ctx.fill();
   }
 
   function drawKart(k) {
     const ghosted = k.spinTimer > 0;
     const yaw = k.angle + k.visYaw;
-    // Drop shadow (offset, same heading).
+    // Subtle weight-shift lean: a small horizontal skew of the body drawing
+    // proportional to steering input (visSteer is the already-smoothed
+    // visual steer value used elsewhere for the front wheels). Purely
+    // cosmetic — it never touches kart.angle/steering/physics.
+    const bank = ghosted ? 0 : k.visSteer * 0.32;
+    // 0..1 how "at speed" the kart is, above a threshold, for streaks/smear.
+    const speedN = Math.max(0, Math.min(1, (Math.abs(k.speed) - 380) / (MAX_SPEED * 1.5 - 380)));
+    // New particle emission below is gated to active, unpaused racing so a
+    // paused/finished frame can't leak particles (render runs every rAF
+    // frame regardless of pause, but updateParticles/aging only runs on the
+    // fixed-tick simulation).
+    const canEmit = !k.finished && state.phase === "racing" && !hostPaused && state.particles.length < 480;
+
+    // Drop shadow (offset, same heading; stretches slightly at high speed to
+    // help sell velocity).
     ctx.save();
-    ctx.translate(k.x + 3, k.y + 5);
+    ctx.translate(k.x + 3 + Math.cos(yaw + Math.PI) * speedN * 10, k.y + 5 + Math.sin(yaw + Math.PI) * speedN * 10);
     ctx.rotate(yaw);
     ctx.fillStyle = "rgba(0,0,0,.32)";
-    ctx.beginPath(); ctx.ellipse(0, 0, 25, 15, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(0, 0, 25 + speedN * 14, 15, 0, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
+
+    // Speed-blur streaks trailing behind at high velocity — pseudo-3D
+    // "juice" layered on the flat 2D camera, no physics involved.
+    if (speedN > 0.02) {
+      ctx.save();
+      ctx.translate(k.x, k.y);
+      ctx.rotate(yaw);
+      ctx.globalAlpha = Math.min(0.5, speedN * 0.55);
+      ctx.strokeStyle = "#eafff4";
+      ctx.lineWidth = 1.3;
+      for (const sy of [-9, -3, 3, 9]) {
+        const len = 12 + speedN * 30 + Math.random() * 6;
+        ctx.beginPath();
+        ctx.moveTo(-25, sy);
+        ctx.lineTo(-25 - len, sy);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      ctx.restore();
+    }
 
     ctx.save();
     ctx.translate(k.x, k.y);
     ctx.rotate(yaw);
-    if (k.surgeTimer > 0) { ctx.fillStyle = "rgba(255,209,102,.25)"; ctx.beginPath(); ctx.arc(0, 0, 36, 0, Math.PI * 2); ctx.fill(); }
-    // Boost exhaust flames behind the twin pipes.
+
+    if (k.surgeTimer > 0) {
+      const pulse = 1 + Math.sin(state.raceT * 14) * 0.12;
+      const rg = ctx.createRadialGradient(0, 0, 4, 0, 0, 38 * pulse);
+      rg.addColorStop(0, "rgba(255,120,185,.35)");
+      rg.addColorStop(0.7, "rgba(255,61,148,.22)");
+      rg.addColorStop(1, "rgba(255,61,148,0)");
+      ctx.fillStyle = rg;
+      ctx.beginPath(); ctx.arc(0, 0, 38 * pulse, 0, Math.PI * 2); ctx.fill();
+      // Sparkling energy particles orbiting the surge aura.
+      if (canEmit && Math.random() < 0.55) {
+        const ang = Math.random() * Math.PI * 2, r = 16 + Math.random() * 18;
+        const wp = localToWorld(k.x, k.y, yaw, Math.cos(ang) * r, Math.sin(ang) * r);
+        spawnParticle(wp.x, wp.y, Math.cos(ang) * 24, Math.sin(ang) * 24, 0.3 + Math.random() * 0.25, Math.random() < 0.5 ? "#ff3d94" : "#ffb3d9", 2 + Math.random() * 1.5);
+      }
+    }
+
+    // Boost exhaust: layered flame gradients (flicker via Math.random()) plus
+    // real ember/spark particles fired backward from the twin pipes.
     if (k.boostTimer > 0) {
       const flick = 0.7 + Math.random() * 0.6;
       for (const sy of [-4.5, 4.5]) {
-        ctx.fillStyle = "rgba(255,150,40,.85)";
-        ctx.beginPath(); ctx.ellipse(-27 - 7 * flick, sy, 9 * flick, 3.2, 0, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = "rgba(255,235,150,.9)";
-        ctx.beginPath(); ctx.ellipse(-25 - 3 * flick, sy, 4.5 * flick, 1.8, 0, 0, Math.PI * 2); ctx.fill();
+        const len = 8 * flick + Math.random() * 3;
+        const grad = ctx.createLinearGradient(-24, sy, -24 - (14 + len), sy);
+        grad.addColorStop(0, "rgba(255,255,255,.95)");
+        grad.addColorStop(0.25, "rgba(255,225,140,.9)");
+        grad.addColorStop(0.6, "rgba(255,140,40,.6)");
+        grad.addColorStop(1, "rgba(255,90,20,0)");
+        ctx.fillStyle = grad;
+        ctx.beginPath(); ctx.ellipse(-24 - len * 0.5, sy, 8 + len * 0.5, 3.4 * flick, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = "rgba(255,250,220,.9)";
+        ctx.beginPath(); ctx.ellipse(-25 - 3 * flick, sy, 4 * flick, 1.6, 0, 0, Math.PI * 2); ctx.fill();
+      }
+      if (canEmit && Math.random() < 0.85) {
+        for (const sy of [-4.5, 4.5]) {
+          if (Math.random() < 0.6) {
+            const wp = localToWorld(k.x, k.y, yaw, -30, sy);
+            const spreadA = yaw + Math.PI + (Math.random() - 0.5) * 0.9;
+            const spd = 60 + Math.random() * 90;
+            const col = Math.random() < 0.4 ? "#ffd166" : Math.random() < 0.7 ? "#ff9a4a" : "#fff6d8";
+            spawnParticle(wp.x, wp.y, Math.cos(spreadA) * spd, Math.sin(spreadA) * spd, 0.22 + Math.random() * 0.22, col, 2 + Math.random() * 2);
+          }
+        }
       }
     }
+
+    // Enriched drift smoke/sparks layered on top of the existing
+    // physics-driven spark (see updateKartPhysics) — density, brightness and
+    // size escalate through the same charge tiers already used for the HUD
+    // meter and mini-turbo payout, reinforcing the tier system visually.
+    if (k.drifting && canEmit) {
+      const tier = k.driftCharge >= 3.0 ? 3 : k.driftCharge >= 1.8 ? 2 : k.driftCharge >= 0.8 ? 1 : k.driftCharge >= 0.4 ? 0.5 : 0;
+      if (tier > 0 && Math.random() < 0.3 + tier * 0.15) {
+        const tierColor = tier >= 3 ? "#ffd166" : tier >= 2 ? "#ff3d94" : tier >= 1 ? "#1ef0ff" : "#9fffe0";
+        const count = 1 + Math.floor(tier);
+        for (let i = 0; i < count; i++) {
+          const wp = localToWorld(k.x, k.y, yaw, -16 - Math.random() * 6, (Math.random() - 0.5) * 14);
+          spawnParticle(wp.x, wp.y, (Math.random() - 0.5) * 50, (Math.random() - 0.5) * 50, 0.32 + tier * 0.06, tierColor, 2 + tier * 0.9);
+        }
+      }
+    }
+
+    // Body drawn with a subtle bank/lean shear proportional to steering —
+    // cheap pseudo-3D weight-shift. Isolated in its own save/restore so it
+    // never distorts the (rotation-invariant) shield ring below.
+    ctx.save();
+    ctx.transform(1, 0, bank, 1, 0, 0);
     drawCarBody(k, ghosted);
+    ctx.restore();
+
     if (k.shielded) {
-      ctx.rotate(-yaw);
       ctx.strokeStyle = "rgba(65,255,161,.7)"; ctx.lineWidth = 3;
       ctx.beginPath(); ctx.arc(0, 0, 33, 0, Math.PI * 2); ctx.stroke();
     }

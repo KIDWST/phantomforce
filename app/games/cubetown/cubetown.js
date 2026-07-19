@@ -67,6 +67,10 @@
     trialInput: $('[data-ct-trial-input]'),
     seedList: $('[data-ct-seed-list]'),
     farmNote: $('[data-ct-farm-note]'),
+    craftList: $('[data-ct-craft-list]'),
+    dlgFriend: $('[data-ct-dlg-friend]'),
+    dlgGiftList: $('[data-ct-dlg-gift-list]'),
+    returnHome: $('[data-ct-return-home]'),
   };
 
   // ---------------------------------------------------------------------
@@ -92,8 +96,13 @@
     { type: 'bed', label: 'Rest Nook', cost: { grain: 3, loom: 2 }, blocking: true, protect: true, color: '#7fd6b8' },
     { type: 'hearth', label: 'Hearth', cost: { shale: 3 }, blocking: true, protect: true, color: '#ff8a5c' },
     { type: 'garden', label: 'Garden Plot', cost: { loom: 2 }, blocking: true, protect: false, color: '#6fbf7a' },
+    { type: 'coop', label: 'Coop', cost: { grain: 3, shale: 1 }, blocking: true, protect: true, color: '#e8c27a' },
+    { type: 'watchtower', label: 'Watchtower', cost: { ingot: 3, plank: 1 }, blocking: true, protect: true, color: '#9bb3d6' },
   ];
   const PALETTE_BY_TYPE = Object.fromEntries(PALETTE.map((p) => [p.type, p]));
+  // Extra draw height (in tileH units) for blocking pieces that should read
+  // taller than the standard furniture block; anything absent defaults to 1.0.
+  const TALL_PIECES = { wall: 1.5, hearth: 1.5, bed: 1.5, chest: 1.5, watchtower: 2.4, coop: 1.1 };
 
   const RECIPES = [
     { key: 'cake', label: 'Grove Cake', cost: { grain: 2 }, spark: 18, ms: 1400, requiresQuest: null },
@@ -102,19 +111,69 @@
     { key: 'sunjam', label: 'Sunberry Jam', cost: { sunberry: 2 }, spark: 22, ms: 1600, requiresQuest: null },
     { key: 'moonloaf', label: 'Moonwheat Loaf', cost: { moonwheat: 2, grain: 1 }, spark: 34, ms: 2400, requiresQuest: null },
     { key: 'gourdstew', label: 'Glowgourd Stew', cost: { glowgourd: 1, driftfish: 1 }, spark: 50, ms: 3000, requiresQuest: 'sage' },
+    { key: 'omelet', label: 'Sunrise Omelet', cost: { egg: 2 }, spark: 40, ms: 2000, requiresQuest: null },
   ];
+
+  // Crafting: combine gathered resources into intermediate materials (Plank,
+  // Ingot), spend those on Fertilizer or on permanent gathering-tool tiers.
+  // Tool tiers are one-time purchases (state.tools.gatherTier) that must be
+  // bought in order — this is CubeTown's stand-in for a Minecraft-style
+  // crafting/tool-tier ladder without introducing a crafting grid.
+  const CRAFT_RECIPES = [
+    { key: 'plank', label: 'Plank Bundle', cost: { grain: 3 }, yields: { plank: 1 }, note: 'A sturdy building material milled from Grain stalks.' },
+    { key: 'ingot', label: 'Shale Ingot', cost: { shale: 3 }, yields: { ingot: 1 }, note: 'Smelted stone — strong enough for a tower or a tool.' },
+    { key: 'fertilizer', label: 'Rich Fertilizer', cost: { plank: 1, loom: 1 }, yields: { fertilizer: 1 }, note: 'Feeds a soil plot: faster growth and safe from wilting for a few days.' },
+    { key: 'tool2', label: 'Sturdy Tool', cost: { ingot: 2, plank: 2 }, unlockTool: 2, note: 'Gather faster and pull extra resources from every node.' },
+    { key: 'tool3', label: 'Masterwork Tool', cost: { ingot: 4, plank: 3, lumen: 1 }, unlockTool: 3, note: 'The finest gathering tool in CubeTown.' },
+  ];
+  const CRAFT_BY_KEY = Object.fromEntries(CRAFT_RECIPES.map((r) => [r.key, r]));
+  function gatherTier() { return (state.tools && state.tools.gatherTier) || 1; }
+  function gatherYieldN() { const t = gatherTier(); return t >= 3 ? 3 : t === 2 ? 2 : 1; }
+  function gatherDurationMs() { const t = gatherTier(); const base = 650; return Math.round(base * (t >= 3 ? 0.5 : t === 2 ? 0.75 : 1)); }
 
   // Farming: till grass into soil plots, plant seeds, water daily, harvest.
   // Growth is measured in in-game minutes (one full day = 1440). Watering
-  // speeds a crop up; a dry crop still grows — cozy, nothing ever dies.
+  // speeds a crop up; fertilizer speeds it up further and shields it from
+  // wilting; an unwatered, unfertilized crop left dry across two day-turns
+  // wilts and is lost — a real (if forgiving) fail-state.
   const CROPS = [
-    { key: 'sunberry', label: 'Sunberry', seed: 'sunberryseed', dur: 1200, color: '#ffb347', yieldN: 2, days: '~1 day' },
-    { key: 'moonwheat', label: 'Moonwheat', seed: 'moonwheatseed', dur: 2600, color: '#cfd8ff', yieldN: 2, days: '~2 days' },
-    { key: 'glowgourd', label: 'Glowgourd', seed: 'glowgourdseed', dur: 4200, color: '#a5f26f', yieldN: 1, days: '~3 days' },
+    { key: 'sunberry', label: 'Sunberry', seed: 'sunberryseed', dur: 1200, color: '#ffb347', yieldN: 2, days: '~1 day', season: 'summer' },
+    { key: 'moonwheat', label: 'Moonwheat', seed: 'moonwheatseed', dur: 2600, color: '#cfd8ff', yieldN: 2, days: '~2 days', season: 'autumn' },
+    { key: 'glowgourd', label: 'Glowgourd', seed: 'glowgourdseed', dur: 4200, color: '#a5f26f', yieldN: 1, days: '~3 days', season: 'spring' },
+    { key: 'stormcorn', label: 'Stormcorn', seed: 'stormcornseed', dur: 900, color: '#ffe27a', yieldN: 2, days: '~0.6 day', season: 'summer' },
+    { key: 'frostberry', label: 'Frostberry', seed: 'frostberryseed', dur: 3800, color: '#bfe9ff', yieldN: 3, days: '~2.6 days', season: 'winter' },
   ];
   const CROP_BY_KEY = Object.fromEntries(CROPS.map((c) => [c.key, c]));
   const FARM_WATERED_RATE = 1.6;
   const FARM_DRY_RATE = 1.0;
+  const FERTILIZER_RATE_BONUS = 1.35;
+  const FERTILIZER_DAYS = 3;
+  const WILT_THRESHOLD = 2; // consecutive unwatered, unfertilized day-turns before a crop wilts
+
+  // Seasons: a simple 4-season rotation tied to the day counter. Shifts crop
+  // growth rate (favored season grows fastest, opposite season slowest), the
+  // color of grass tiles in both town and wilds terrain, and a small line of
+  // resident small-talk (see SEASON_SMALLTALK / openNpcDialogue).
+  const SEASONS = ['spring', 'summer', 'autumn', 'winter'];
+  const SEASON_LEN_DAYS = 6;
+  const SEASON_LABEL = { spring: 'Spring', summer: 'Summer', autumn: 'Autumn', winter: 'Winter' };
+  const SEASON_GRASS = { spring: '#3f7a4a', summer: '#3a6b4a', autumn: '#7a6b3a', winter: '#7f93a0' };
+  const SEASON_WGRASS = { spring: '#3f6a40', summer: '#3a5a3a', autumn: '#6d5c34', winter: '#6f8290' };
+  const SEASON_SMALLTALK = {
+    spring: 'Everything’s budding again — good season for tilling a new plot.',
+    summer: 'This summer heat has the fields growing fast.',
+    autumn: 'Harvest air always makes me a little sentimental.',
+    winter: 'Cold season. Good for staying by the Hearth and telling stories.',
+  };
+  function seasonOf(day) { return SEASONS[Math.floor(Math.max(0, day - 1) / SEASON_LEN_DAYS) % SEASONS.length]; }
+  function seasonGrowthMultiplier(cropKey, season) {
+    const c = CROP_BY_KEY[cropKey];
+    if (!c || !c.season) return 1;
+    const idx = SEASONS.indexOf(c.season), cur = SEASONS.indexOf(season);
+    if (idx < 0 || cur < 0) return 1;
+    const dist = Math.min(Math.abs(idx - cur), SEASONS.length - Math.abs(idx - cur));
+    return dist === 0 ? 1.25 : dist === 1 ? 1.0 : 0.7;
+  }
 
   const HUES = [
     { key: 'coral', label: 'Coral', color: '#ff9466', lockedBy: null },
@@ -155,6 +214,16 @@
     { id: 'ori', name: 'Ori the Archivist', hue: '#8f7fff', resourceType: 'gate', quest: { need: { relic: 1, keystone: 4 }, unlockHue: 'void', unlockTopper: 'crown', reward: { relic: 1 }, text: 'When four Keystones and one Relic are yours, come back. The Prism Gate only opens for a town that helped its people.' } },
     { id: 'sage', name: 'Sage the Sower', hue: '#b6e26f', resourceType: 'grove', quest: { need: { sunberry: 3, moonwheat: 2 }, unlockHue: null, unlockTopper: null, reward: { glowgourdseed: 2, moonwheatseed: 1 }, text: 'A town grows best from its own soil. Till a plot, grow 3 Sunberries and 2 Moonwheat, and I’ll trade you my rare Glowgourd seeds — and teach you my stew.' } },
   ];
+  const NPC_BY_ID = Object.fromEntries(NPC_DEFS.map((n) => [n.id, n]));
+
+  // Harvest-Moon-style friendship: each resident also has a favorite gift —
+  // giving it back a bonus over a generic resource or cooked dish.
+  const GIFT_LOVED = { miro: 'shale', tally: 'loom', bo: 'driftfish', runa: 'grain', ivy: 'loom', fenn: 'lumen', nova: 'lumen', ori: 'relic', sage: 'grain' };
+  const FRIEND_LEVELS = [
+    { at: 20, label: 'Warm', reward: { lumen: 1 } },
+    { at: 50, label: 'Trusted', reward: { lumen: 2 } },
+    { at: 100, label: 'Beloved', reward: { lumen: 3 } },
+  ];
 
   const TRIAL_DEFS = [
     { id: 'grove', name: 'Grove Echo Trial', tile: { x: 2, y: 3 }, seq: ['up', 'right', 'down'], reward: { lumen: 1 }, text: 'Repeat the old trail rhythm to calm the grove shrine.' },
@@ -164,11 +233,31 @@
   ];
   const TRIAL_BY_ID = Object.fromEntries(TRIAL_DEFS.map((trial) => [trial.id, trial]));
   const GATE_TILE = { x: 8, y: 1 };
+  const TRAILHEAD_TILE = { x: 0, y: 8 }; // town-side doorway into the Wilds
   const NPC_HOME_POINTS = [
     { x: 6, y: 6 }, { x: 10, y: 6 }, { x: 6, y: 10 }, { x: 10, y: 10 },
     { x: 3, y: 7 }, { x: 13, y: 7 }, { x: 4, y: 13 }, { x: 12, y: 13 },
     { x: 5, y: 5 },
   ];
+
+  // ---------------------------------------------------------------------
+  // The Wilds — a separate, optional 17x17 exploration layer reached via the
+  // town trailhead. Real hazards (Thorn Sprites, a stationary Guardian),
+  // hidden treasure, and two tougher shrine trials live here; the peaceful
+  // town loop (build/farm/NPCs) is completely untouched while visiting.
+  // Spark doubles as a "health" meter out here — it only ever drifted down
+  // gently in town, but enemy contact hits it hard, and hitting 0 sends you
+  // straight back to town to recover.
+  // ---------------------------------------------------------------------
+  const WILDS_ENTRANCE = { x: 8, y: 8 };
+  const GUARDIAN_TILE = { x: 15, y: 1 };
+  const SPARK_WILDS_HIT = 9;
+  const WILDS_TRIAL_DEFS = [
+    { id: 'emberpeak', name: 'Ember Peak Trial', tile: { x: 1, y: 1 }, seq: ['up', 'right', 'up', 'left', 'down'], reward: { lumen: 2, shale: 3 }, text: 'A tougher rhythm echoes off the wilds — five beats, no mistakes.' },
+    { id: 'moonhollow', name: 'Moonhollow Trial', tile: { x: 15, y: 15 }, seq: ['down', 'left', 'down', 'right', 'up', 'left'], reward: { lumen: 2, keystone: 1 }, text: 'The deepest hollow remembers a six-step pattern. Get it right and it remembers you back — with a Keystone.' },
+  ];
+  const ALL_TRIAL_DEFS = TRIAL_DEFS.concat(WILDS_TRIAL_DEFS);
+  const WILDS_BLOCK_TYPES = new Set(['thicket', 'crag', 'glimmer', 'wshrine', 'treasure']);
 
   // ---------------------------------------------------------------------
   // Deterministic RNG + terrain generation (seed lives in save data, the
@@ -186,7 +275,7 @@
   function isCore(x, y) { return x >= CORE.x0 && x <= CORE.x1 && y >= CORE.y0 && y <= CORE.y1; }
   function inBounds(x, y) { return x >= 0 && y >= 0 && x < GRID && y < GRID; }
   function isLandmark(x, y) {
-    return (x === GATE_TILE.x && y === GATE_TILE.y) || TRIAL_DEFS.some((trial) => trial.tile.x === x && trial.tile.y === y);
+    return (x === GATE_TILE.x && y === GATE_TILE.y) || (x === TRAILHEAD_TILE.x && y === TRAILHEAD_TILE.y) || TRIAL_DEFS.some((trial) => trial.tile.x === x && trial.tile.y === y);
   }
   function genTerrain(seed) {
     const rnd = mulberry32(seed);
@@ -216,11 +305,65 @@
     }
     grid[GATE_TILE.y][GATE_TILE.x] = 'gate';
     for (const n of neighbors4(GATE_TILE.x, GATE_TILE.y)) if (inBounds(n.x, n.y)) grid[n.y][n.x] = 'grass';
+    grid[TRAILHEAD_TILE.y][TRAILHEAD_TILE.x] = 'trailhead';
+    for (const n of neighbors4(TRAILHEAD_TILE.x, TRAILHEAD_TILE.y)) if (inBounds(n.x, n.y)) grid[n.y][n.x] = 'grass';
     for (let i = 2; i <= 14; i += 2) {
       if (grid[8][i] === 'grass') grid[8][i] = 'trail';
       if (grid[i][8] === 'grass') grid[i][8] = 'trail';
     }
     return grid;
+  }
+  function wildsTrialAt(x, y) {
+    return WILDS_TRIAL_DEFS.find((trial) => trial.tile.x === x && trial.tile.y === y) || null;
+  }
+  function genWildsTerrain(seed) {
+    // A separate deterministic layer from the same seed (offset so it never
+    // matches the town's own scatter), regenerated on demand and never
+    // persisted — exactly like genTerrain() for the town.
+    const rnd = mulberry32((seed ^ 0x51ed270b) >>> 0);
+    const grid = [];
+    for (let y = 0; y < GRID; y++) grid.push(new Array(GRID).fill('wgrass'));
+    function nearEntrance(x, y, minDist) {
+      return Math.max(Math.abs(x - WILDS_ENTRANCE.x), Math.abs(y - WILDS_ENTRANCE.y)) < minDist;
+    }
+    function scatterWilds(type, count, minDist) {
+      let placed = 0, guard = 0;
+      while (placed < count && guard < 600) {
+        guard++;
+        const x = Math.floor(rnd() * GRID), y = Math.floor(rnd() * GRID);
+        if (nearEntrance(x, y, minDist) || grid[y][x] !== 'wgrass') continue;
+        grid[y][x] = type; placed++;
+      }
+    }
+    scatterWilds('thicket', 26, 1);
+    scatterWilds('crag', 16, 1);
+    scatterWilds('glimmer', 6, 2);
+    scatterWilds('treasure', 6, 3);
+    for (const trial of WILDS_TRIAL_DEFS) {
+      grid[trial.tile.y][trial.tile.x] = 'wshrine';
+      for (const n of neighbors4(trial.tile.x, trial.tile.y)) if (inBounds(n.x, n.y)) grid[n.y][n.x] = 'wgrass';
+    }
+    grid[WILDS_ENTRANCE.y][WILDS_ENTRANCE.x] = 'wgrass';
+    for (const n of neighbors4(WILDS_ENTRANCE.x, WILDS_ENTRANCE.y)) if (inBounds(n.x, n.y)) grid[n.y][n.x] = 'wgrass';
+    if (inBounds(GUARDIAN_TILE.x, GUARDIAN_TILE.y)) grid[GUARDIAN_TILE.y][GUARDIAN_TILE.x] = 'wgrass';
+    return grid;
+  }
+  // genWildsTerrain() is a pure function of the seed, so a treasure the
+  // player already looted (tracked in state.wilds.treasuresFound, which IS
+  // persisted) would otherwise re-glow as an untouched 'treasure' tile every
+  // time the Wilds layer is regenerated (new session, seed change, or
+  // reloading a save). collectTreasure() already clears the live grid at
+  // pickup time; this replays that same clearing against a freshly
+  // generated grid so it stays consistent across reloads. Call this every
+  // time `wildsTerrain = genWildsTerrain(...)` runs.
+  function clearFoundWildsTreasures() {
+    const found = state && state.wilds && Array.isArray(state.wilds.treasuresFound) ? state.wilds.treasuresFound : [];
+    for (const id of found) {
+      const m = /^t_(\d+)_(\d+)$/.exec(id);
+      if (!m) continue;
+      const tx = Number(m[1]), ty = Number(m[2]);
+      if (inBounds(tx, ty) && wildsTerrain[ty][tx] === 'treasure') wildsTerrain[ty][tx] = 'wgrass';
+    }
   }
   function findFirstOfType(terrain, type) {
     for (let y = 0; y < GRID; y++) for (let x = 0; x < GRID; x++) if (terrain[y][x] === type) return { x, y };
@@ -249,6 +392,7 @@
   // ---------------------------------------------------------------------
   let state = null;   // set by newGame() or applyState()
   let terrain = null; // regenerated from state.seed, never persisted directly
+  let wildsTerrain = null; // regenerated from state.seed, never persisted directly
   let npcs = [];       // runtime NPC objects (schedule targets derived from terrain + state.quests)
 
   const rt = {
@@ -277,9 +421,18 @@
     dialogueMode: null, // 'npc' | 'cook'
     fishing: { open: false, zoneStart: 0.4, zoneWidth: 0.22, marker: 0, dir: 1, speed: 0.55 },
     build: { open: false, tool: 'place', selected: null, rotation: 0, placing: false },
-    farmTool: null, // null | {mode:'till'} | {mode:'plant', crop}
+    farmTool: null, // null | {mode:'till'} | {mode:'plant', crop} | {mode:'fertilize'}
     tutorial: { step: 0 },
     trial: null, // {trial,input:[]}
+    // --- Wilds (see the block comment above WILDS_ENTRANCE) — all runtime-only,
+    // never persisted: leaving the game always drops you back in town on reload.
+    world: 'town', // 'town' | 'wilds'
+    wildsGx: WILDS_ENTRANCE.x, wildsGy: WILDS_ENTRANCE.y,
+    wildsFromX: WILDS_ENTRANCE.x, wildsFromY: WILDS_ENTRANCE.y, wildsToX: WILDS_ENTRANCE.x, wildsToY: WILDS_ENTRANCE.y,
+    wildsMoveT: 1, wildsMoveDur: 150, wildsPx: 0, wildsPy: 0,
+    wildsEnemies: [],
+    wildsInvulnUntil: 0,
+    lastAttackAt: 0,
   };
 
   const mp = {
@@ -294,33 +447,47 @@
   function defaultAdventureState() {
     return {
       gateOpen: false,
-      trials: Object.fromEntries(TRIAL_DEFS.map((trial) => [trial.id, { done: false }])),
+      trials: Object.fromEntries(ALL_TRIAL_DEFS.map((trial) => [trial.id, { done: false }])),
     };
+  }
+  function defaultFriendshipState() {
+    return Object.fromEntries(NPC_DEFS.map((npc) => [npc.id, { points: 0, lastChatDay: 0, claimed: [] }]));
   }
   function newGame(seed) {
     state = {
-      version: 3,
+      version: 4,
       seed: seed >>> 0,
       day: 1,
       minutes: 400, // ~6:40am
       player: { gx: 8, gy: 8, hue: 'coral', topper: 'none', trim: 'soft', name: 'Resident' },
       inventory: {
         grain: 3, shale: 2, loom: 1, driftfish: 0, lumen: 0, keystone: 0, relic: 0,
-        cake: 0, skewer: 0, chowder: 0, sunjam: 0, moonloaf: 0, gourdstew: 0,
-        sunberry: 0, moonwheat: 0, glowgourd: 0,
-        sunberryseed: 2, moonwheatseed: 1, glowgourdseed: 0,
+        cake: 0, skewer: 0, chowder: 0, sunjam: 0, moonloaf: 0, gourdstew: 0, omelet: 0,
+        sunberry: 0, moonwheat: 0, glowgourd: 0, stormcorn: 0, frostberry: 0,
+        sunberryseed: 2, moonwheatseed: 1, glowgourdseed: 0, stormcornseed: 0, frostberryseed: 0,
+        plank: 0, ingot: 0, fertilizer: 0, egg: 0,
       },
       spark: 78,
       town: [], // {id,type,gx,gy,rot}
-      farm: [], // {x,y,crop:null|cropKey,prog:in-game minutes grown,watered:bool}
+      farm: [], // {x,y,crop:null|cropKey,prog:in-game minutes grown,watered:bool,dryStreak:int,fertileUntilDay:int}
+      livestock: [], // {id,pieceId,gx,gy,fedToday:bool,readyToCollect:bool} — one per placed Coop
       quests: defaultQuestState(),
       adventure: defaultAdventureState(),
+      friendship: defaultFriendshipState(), // per-NPC {points,lastChatDay,claimed[]} — local only, never host-synced
+      tools: { gatherTier: 1 }, // 1 = bare hands, 2 = Sturdy Tool, 3 = Masterwork Tool
+      wilds: { treasuresFound: [], guardianDefeated: false }, // local only, never host-synced
       cosmeticsUnlocked: { hue: ['coral', 'mint', 'slate', 'sand'], topper: ['none', 'cap'], trim: ['soft', 'bold'] },
       tutorialSeen: false,
-      stats: { gathered: 0, built: 0, demolished: 0, fishCaught: 0, fishTried: 0, dishesCooked: 0, questsCompleted: 0, trialsCleared: 0, gatesOpened: 0, secondsPlayed: 0, cropsHarvested: 0 },
+      stats: {
+        gathered: 0, built: 0, demolished: 0, fishCaught: 0, fishTried: 0, dishesCooked: 0, questsCompleted: 0,
+        trialsCleared: 0, gatesOpened: 0, secondsPlayed: 0, cropsHarvested: 0,
+        enemiesDefeated: 0, treasuresFound: 0, itemsCrafted: 0, eggsCollected: 0,
+      },
       completedMilestone: false,
     };
     terrain = genTerrain(state.seed);
+    wildsTerrain = genWildsTerrain(state.seed);
+    clearFoundWildsTreasures();
     npcs = buildNpcRuntime();
   }
 
@@ -415,6 +582,19 @@
   function neighbors4(gx, gy) {
     return [{ x: gx + 1, y: gy }, { x: gx - 1, y: gy }, { x: gx, y: gy + 1 }, { x: gx, y: gy - 1 }];
   }
+  function isBlockedWildsTile(gx, gy) {
+    if (!inBounds(gx, gy)) return true;
+    return WILDS_BLOCK_TYPES.has(wildsTerrain[gy][gx]);
+  }
+  function currentLivestock() {
+    // Livestock follows the exact same rule as farm plots: a coop you placed
+    // yourself is a locally-owned entry you can feed/collect; a coop that
+    // came from the host's shared town (currentTown()) renders fine but has
+    // no matching entry in your own state.livestock, so it just isn't
+    // interactive for a guest — mirroring how guests can see but not
+    // water/harvest the host's shared farm rows.
+    return state.livestock;
+  }
 
   // ---------------------------------------------------------------------
   // Audio (Web Audio synth — no external/commercial samples)
@@ -480,11 +660,16 @@
   // Panels
   // ---------------------------------------------------------------------
   function openPanel(name) {
+    if (rt.world === 'wilds' && (name === 'build' || name === 'farming' || name === 'craft')) {
+      toast('Return to town first — building, farming, and crafting stay there.');
+      return;
+    }
     $all('.panel').forEach((p) => p.classList.remove('is-open'));
     const p = document.querySelector(`[data-ct-panel="${name}"]`);
     if (p) p.classList.add('is-open');
     if (name === 'build') renderBuildPanel();
     if (name === 'farming') renderFarmPanel();
+    if (name === 'craft') renderCraftPanel();
     if (name === 'inventory') renderInventoryPanel();
     if (name === 'customize') renderCustomizePanel();
     if (name === 'together') renderTogetherPanel();
@@ -528,22 +713,66 @@
     updateBuildNote();
   }
   function updateBuildNote() {
-    let note = 'Tap Demolish, then tap one of your own pieces to remove it (you get half the resources back).';
+    let note = 'Tap Demolish, then tap one of your own pieces to remove it (you get half the resources back). The Watchtower needs crafted Ingot and Plank — open Craft first.';
     if (mp.active && !mp.amIHost) note = mp.openBuilding === 'everyone' ? 'The host has building open — your placements stay local to your visit, layered over the host’s shared town.' : 'Only the room host can build the shared town right now. Ask them to open it from Together.';
     el.buildNote.textContent = note;
   }
 
   // ---------------------------------------------------------------------
-  // Farm panel + tilling / planting / watering / harvest actions
+  // Craft panel — resources into intermediate materials, tools, fertilizer
+  // ---------------------------------------------------------------------
+  function renderCraftPanel() {
+    if (!el.craftList) return;
+    el.craftList.innerHTML = CRAFT_RECIPES.map((r) => {
+      const tier = gatherTier();
+      const owned = r.unlockTool && tier >= r.unlockTool;
+      const locked = r.unlockTool && !owned && tier !== r.unlockTool - 1;
+      const afford = canAfford(r.cost);
+      const costTxt = Object.entries(r.cost).map(([k, v]) => `${v} ${RES_LABELS[k] || k}`).join(', ');
+      const disabled = owned || locked || !afford;
+      const status = owned ? 'Owned' : locked ? 'Craft the previous tier first' : costTxt;
+      return `<div class="inv-item" style="flex-direction:column;align-items:stretch;gap:4px">
+        <span><b>${r.label}</b></span>
+        <span style="color:var(--text-dim);font-size:11px">${r.note}</span>
+        <span style="color:var(--text-dim);font-size:11px">${status}</span>
+        <button type="button" data-ct-craft="${r.key}" ${disabled ? 'disabled' : ''}>${owned ? 'Owned' : 'Craft'}</button>
+      </div>`;
+    }).join('');
+    $all('[data-ct-craft]').forEach((b) => b.onclick = () => craftItem(b.dataset.ctCraft));
+  }
+  function craftItem(key) {
+    const r = CRAFT_BY_KEY[key];
+    if (!r) return;
+    if (r.unlockTool) {
+      const tier = gatherTier();
+      if (tier >= r.unlockTool) { toast('You already own that tool tier.'); return; }
+      if (tier !== r.unlockTool - 1) { toast('Craft the previous tool tier first.'); return; }
+    }
+    if (!canAfford(r.cost)) { toast('Not enough materials for that yet.'); return; }
+    for (const [k, v] of Object.entries(r.cost)) state.inventory[k] -= v;
+    if (r.yields) for (const [k, v] of Object.entries(r.yields)) state.inventory[k] = (state.inventory[k] || 0) + v;
+    if (r.unlockTool) state.tools.gatherTier = r.unlockTool;
+    state.stats.itemsCrafted = (state.stats.itemsCrafted || 0) + 1;
+    sfx.place();
+    toast(`Crafted ${r.label}.`);
+    renderCraftPanel();
+    updateHud();
+    schedulePush();
+  }
+
+  // ---------------------------------------------------------------------
+  // Farm panel + tilling / planting / watering / fertilizing / harvest
   // ---------------------------------------------------------------------
   function renderFarmPanel() {
+    const season = seasonOf(state.day);
     el.seedList.innerHTML = CROPS.map((c) => {
       const seeds = state.inventory[c.seed] || 0;
       const grown = state.inventory[c.key] || 0;
+      const favored = c.season === season ? ' · favored this season' : '';
       return `<button type="button" class="piece-btn ${seeds > 0 ? '' : 'is-locked'}" data-ct-seed="${c.key}">
         <span class="piece-swatch" style="background:${c.color}"></span>
         <span>${c.label}</span>
-        <span class="piece-cost">${seeds} seeds · ${c.days}${grown ? ` · ${grown} grown` : ''}</span>
+        <span class="piece-cost">${seeds} seeds · ${c.days}${grown ? ` · ${grown} grown` : ''}${favored}</span>
       </button>`;
     }).join('');
     $all('[data-ct-seed]').forEach((b) => b.onclick = () => {
@@ -560,7 +789,19 @@
       rt.farmTool = { mode: 'till' };
       toast('Tilling — tap open grass to make a soil plot. Esc or ● puts the hoe away.');
     };
-    let note = 'Water once a day to speed things up — dry crops still grow, just slower. Every harvest gives a spare seed back.';
+    const fertBtn = $('[data-ct-fertilize]');
+    if (fertBtn) {
+      const have = state.inventory.fertilizer || 0;
+      fertBtn.disabled = have <= 0;
+      fertBtn.textContent = `Use Fertilizer (${have})`;
+      fertBtn.onclick = () => {
+        if (have <= 0) { toast('Craft Rich Fertilizer first — open Craft.'); return; }
+        closePanels();
+        rt.farmTool = { mode: 'fertilize' };
+        toast('Fertilizing — tap a planted soil plot. Esc or ● puts it away.');
+      };
+    }
+    let note = `It's ${SEASON_LABEL[season]}. Water daily to speed growth; fertilize to speed it further and guard against wilting. Leave a crop dry (and unfertilized) for ${WILT_THRESHOLD} days running and it wilts away — a real fail-state, so don't wander off for too long.`;
     if (mp.active && !mp.amIHost) note = 'You’re visiting — your garden rows stay local previews on this device. The host’s farm is the shared one everyone sees.';
     el.farmNote.textContent = note;
   }
@@ -574,11 +815,16 @@
     const plot = farmPlotAt(gx, gy, state.farm);
     return !!(plot && !plot.crop);
   }
+  function canFertilizeAt(gx, gy) {
+    if ((state.inventory.fertilizer || 0) <= 0) return false;
+    const plot = farmPlotAt(gx, gy, state.farm);
+    return !!(plot && plot.crop);
+  }
   function farmTapAt(gx, gy) {
     if (!rt.farmTool) return;
     if (rt.farmTool.mode === 'till') {
       if (!canTillAt(gx, gy)) { toast('Soil needs open grass — try another tile.'); return; }
-      state.farm.push({ x: gx, y: gy, crop: null, prog: 0, watered: false });
+      state.farm.push({ x: gx, y: gy, crop: null, prog: 0, watered: false, dryStreak: 0, fertileUntilDay: 0 });
       sfx.till();
       spawnParticles(gx, gy, '#8a5f3c');
       toast('Tilled a soil plot. Plant a seed from the Farm panel!');
@@ -591,10 +837,20 @@
       state.inventory[crop.seed] -= 1;
       plot.crop = crop.key;
       plot.prog = 0;
+      plot.dryStreak = 0;
       sfx.place();
       spawnParticles(gx, gy, crop.color);
       toast(`Planted ${crop.label} — ${crop.days} to grow. Water it to hurry it along.`);
       if ((state.inventory[crop.seed] || 0) <= 0) { rt.farmTool = null; toast(`Planted the last ${crop.label} seed.`); }
+    } else if (rt.farmTool.mode === 'fertilize') {
+      if (!canFertilizeAt(gx, gy)) { toast('Fertilizer needs a plot with something already growing.'); return; }
+      const plot = farmPlotAt(gx, gy, state.farm);
+      state.inventory.fertilizer -= 1;
+      plot.fertileUntilDay = state.day + FERTILIZER_DAYS;
+      sfx.water();
+      spawnParticles(gx, gy, '#78d36f');
+      toast(`Fertilized — faster growth and safe from wilting for ${FERTILIZER_DAYS} days.`);
+      if ((state.inventory.fertilizer || 0) <= 0) { rt.farmTool = null; }
     }
     updateHud();
     schedulePush();
@@ -618,6 +874,7 @@
     plot.crop = null;
     plot.prog = 0;
     plot.watered = false;
+    plot.dryStreak = 0;
     state.stats.cropsHarvested = (state.stats.cropsHarvested || 0) + 1;
     state.spark = clamp(state.spark + 4, 0, 100);
     sfx.harvest();
@@ -627,30 +884,86 @@
     schedulePush();
     scheduleTownSync();
   }
+  function plotGrowthRate(plot, season) {
+    const base = plot.watered ? FARM_WATERED_RATE : FARM_DRY_RATE;
+    const seasonMult = seasonGrowthMultiplier(plot.crop, season);
+    const fertilized = (plot.fertileUntilDay || 0) >= state.day;
+    return base * seasonMult * (fertilized ? FERTILIZER_RATE_BONUS : 1);
+  }
   function stepFarm(dtMinutes) {
+    const season = seasonOf(state.day);
     for (const plot of state.farm) {
       if (!plot.crop) continue;
       const c = CROP_BY_KEY[plot.crop];
       if (!c || plot.prog >= c.dur) continue;
-      plot.prog += dtMinutes * (plot.watered ? FARM_WATERED_RATE : FARM_DRY_RATE);
+      plot.prog += dtMinutes * plotGrowthRate(plot, season);
       if (plot.prog >= c.dur) {
         sfx.cookDone();
         toast(`A ${c.label} is ready to harvest!`);
       }
     }
   }
+  // Called once per in-game day turn (from both the real-time loop rollover
+  // and doSleep's fast-forward) — resets watering and checks for wilting.
   function farmNewDay() {
-    for (const plot of state.farm) plot.watered = false;
+    const day = state.day;
+    for (const plot of state.farm) {
+      if (!plot.crop) { plot.watered = false; plot.dryStreak = 0; continue; }
+      const fertilized = (plot.fertileUntilDay || 0) >= day;
+      if (plot.watered || fertilized) {
+        plot.dryStreak = 0;
+      } else {
+        plot.dryStreak = (plot.dryStreak || 0) + 1;
+        if (plot.dryStreak >= WILT_THRESHOLD) {
+          const c = CROP_BY_KEY[plot.crop];
+          toast(`Your ${c ? c.label : 'crop'} wilted from neglect.`);
+          plot.crop = null;
+          plot.prog = 0;
+          plot.dryStreak = 0;
+        }
+      }
+      plot.watered = false;
+    }
+    for (const l of state.livestock) {
+      if (l.fedToday) l.readyToCollect = true;
+      l.fedToday = false;
+    }
+  }
+
+  // ---------------------------------------------------------------------
+  // Livestock (Coop) — a real Grain sink with a daily feed→collect loop
+  // ---------------------------------------------------------------------
+  function feedCoop(l) {
+    if (l.fedToday) return;
+    if ((state.inventory.grain || 0) < 2) { toast('Need 2 Grain to feed the coop.'); return; }
+    state.inventory.grain -= 2;
+    l.fedToday = true;
+    sfx.place();
+    toast('Fed the coop — check back tomorrow for eggs.');
+    updateHud();
+    schedulePush();
+  }
+  function collectEgg(l) {
+    if (!l.readyToCollect) return;
+    const n = 1 + (Math.random() < 0.3 ? 1 : 0);
+    state.inventory.egg = (state.inventory.egg || 0) + n;
+    l.readyToCollect = false;
+    state.stats.eggsCollected = (state.stats.eggsCollected || 0) + n;
+    sfx.harvest();
+    toast(`Collected ${n} Egg${n > 1 ? 's' : ''}!`);
+    updateHud();
+    schedulePush();
   }
 
   // ---------------------------------------------------------------------
   // Inventory panel
   // ---------------------------------------------------------------------
-  const FOOD_TYPES = { cake: 'Grove Cake', skewer: 'Ember Skewer', chowder: 'Tide Chowder', sunjam: 'Sunberry Jam', moonloaf: 'Moonwheat Loaf', gourdstew: 'Glowgourd Stew' };
+  const FOOD_TYPES = { cake: 'Grove Cake', skewer: 'Ember Skewer', chowder: 'Tide Chowder', sunjam: 'Sunberry Jam', moonloaf: 'Moonwheat Loaf', gourdstew: 'Glowgourd Stew', omelet: 'Sunrise Omelet' };
   const RES_LABELS = {
     grain: 'Grain', shale: 'Shale', loom: 'Loom', driftfish: 'Driftfish', lumen: 'Lumen', keystone: 'Keystone', relic: 'Relic',
-    sunberry: 'Sunberry', moonwheat: 'Moonwheat', glowgourd: 'Glowgourd',
-    sunberryseed: 'Sunberry Seed', moonwheatseed: 'Moonwheat Seed', glowgourdseed: 'Glowgourd Seed',
+    sunberry: 'Sunberry', moonwheat: 'Moonwheat', glowgourd: 'Glowgourd', stormcorn: 'Stormcorn', frostberry: 'Frostberry',
+    sunberryseed: 'Sunberry Seed', moonwheatseed: 'Moonwheat Seed', glowgourdseed: 'Glowgourd Seed', stormcornseed: 'Stormcorn Seed', frostberryseed: 'Frostberry Seed',
+    plank: 'Plank', ingot: 'Ingot', fertilizer: 'Fertilizer', egg: 'Egg',
   };
   function renderInventoryPanel() {
     const rows = [];
@@ -705,10 +1018,14 @@
     rt.dialogueMode = 'npc';
     rt.dialogueNpc = npc;
     el.dlgName.textContent = npc.name;
+    chatWithNpc(npc.id);
     const q = npc.quest;
     const def = npc.def.quest;
     if (q.done) {
-      el.dlgBody.textContent = 'Thanks again for the help — the town looks better for it.';
+      const f = friendshipOf(npc.id);
+      const flavor = f.points >= 100 ? ' You’ve become one of my dearest friends in this town.' : f.points >= 50 ? ' I always look forward to seeing you.' : f.points >= 20 ? ' Good to see a friendly face.' : '';
+      const seasonLine = ` ${SEASON_SMALLTALK[seasonOf(state.day)]}`;
+      el.dlgBody.textContent = `Thanks again for the help — the town looks better for it.${flavor}${seasonLine}`;
       el.dlgQuest.hidden = true;
       el.dlgTurnin.hidden = true;
     } else {
@@ -720,10 +1037,79 @@
       el.dlgQuest.textContent = `Needs: ${needTxt} — you have ${Object.entries(def.need).map(([k]) => state.inventory[k] || 0).join('/')}.${rewardTxt}`;
       el.dlgTurnin.hidden = !haveOk;
     }
+    if (el.dlgFriend) {
+      const f = friendshipOf(npc.id);
+      el.dlgFriend.hidden = false;
+      el.dlgFriend.textContent = `Friendship: ${friendshipLabel(f.points)} (${f.points} pts) — gifts they especially love: ${RES_LABELS[GIFT_LOVED[npc.id]] || GIFT_LOVED[npc.id]}.`;
+    }
+    renderGiftList(npc.id);
     openPanel('dialogue');
   }
   function questReady(need) {
     return Object.entries(need).every(([k, v]) => (state.inventory[k] || 0) >= v);
+  }
+
+  // ---------------------------------------------------------------------
+  // Harvest-Moon-style friendship: repeated chat (once/day) + gifts (using
+  // existing inventory) raise a per-NPC points total; milestones grant a
+  // one-time bonus. Entirely local/per-player — never part of the host-
+  // synced match-state, unlike town/farm (see the note above sendTownSync).
+  // ---------------------------------------------------------------------
+  function friendshipOf(npcId) {
+    if (!state.friendship) state.friendship = defaultFriendshipState();
+    if (!state.friendship[npcId]) state.friendship[npcId] = { points: 0, lastChatDay: 0, claimed: [] };
+    return state.friendship[npcId];
+  }
+  function friendshipLabel(points) {
+    if (points >= 100) return 'Beloved';
+    if (points >= 50) return 'Trusted';
+    if (points >= 20) return 'Warm';
+    return 'Acquaintance';
+  }
+  function maybeGrantFriendMilestones(npcId) {
+    const f = friendshipOf(npcId);
+    for (const lvl of FRIEND_LEVELS) {
+      if (f.points >= lvl.at && !f.claimed.includes(lvl.at)) {
+        f.claimed.push(lvl.at);
+        for (const [k, v] of Object.entries(lvl.reward)) state.inventory[k] = (state.inventory[k] || 0) + v;
+        const name = (NPC_BY_ID[npcId] && NPC_BY_ID[npcId].name) || 'A resident';
+        toast(`${name} feels ${lvl.label.toLowerCase()} toward you! (+${Object.entries(lvl.reward).map(([k, v]) => `${v} ${RES_LABELS[k] || k}`).join(', ')})`);
+        sfx.quest();
+      }
+    }
+  }
+  function chatWithNpc(npcId) {
+    const f = friendshipOf(npcId);
+    if (f.lastChatDay === state.day) return;
+    f.lastChatDay = state.day;
+    f.points += 1;
+    maybeGrantFriendMilestones(npcId);
+  }
+  const GIFTABLE_KEYS = ['grain', 'shale', 'loom', 'driftfish', 'sunberry', 'moonwheat', 'glowgourd', 'stormcorn', 'frostberry', 'egg', 'cake', 'skewer', 'chowder', 'sunjam', 'moonloaf', 'gourdstew', 'omelet'];
+  function renderGiftList(npcId) {
+    if (!el.dlgGiftList) return;
+    const items = GIFTABLE_KEYS.filter((k) => (state.inventory[k] || 0) > 0);
+    if (!items.length) { el.dlgGiftList.innerHTML = '<p class="small-note">You have nothing to gift right now.</p>'; return; }
+    el.dlgGiftList.innerHTML = items.map((k) => `<div class="inv-item"><span>${RES_LABELS[k] || FOOD_TYPES[k] || k} × ${state.inventory[k]}</span><button type="button" data-ct-gift="${k}">Gift</button></div>`).join('');
+    $all('[data-ct-gift]').forEach((b) => b.onclick = () => giveGift(npcId, b.dataset.ctGift));
+  }
+  function giveGift(npcId, itemKey) {
+    if ((state.inventory[itemKey] || 0) <= 0) return;
+    state.inventory[itemKey] -= 1;
+    const f = friendshipOf(npcId);
+    const isFood = !!FOOD_TYPES[itemKey];
+    const loved = GIFT_LOVED[npcId] === itemKey;
+    const gain = loved ? 6 : isFood ? 4 : 2;
+    f.points += gain;
+    sfx.quest();
+    toast(loved ? `They love this gift! (+${gain} friendship)` : `A gift given. (+${gain} friendship)`);
+    maybeGrantFriendMilestones(npcId);
+    if (rt.dialogueNpc && rt.dialogueNpc.id === npcId) {
+      if (el.dlgFriend) el.dlgFriend.textContent = `Friendship: ${friendshipLabel(f.points)} (${f.points} pts) — gifts they especially love: ${RES_LABELS[GIFT_LOVED[npcId]] || GIFT_LOVED[npcId]}.`;
+      renderGiftList(npcId);
+    }
+    updateHud();
+    schedulePush();
   }
   el.dlgTurnin.onclick = () => {
     const npc = rt.dialogueNpc;
@@ -757,6 +1143,8 @@
     el.dlgName.textContent = 'Hearth';
     el.dlgQuest.hidden = true;
     el.dlgTurnin.hidden = true;
+    if (el.dlgFriend) el.dlgFriend.hidden = true;
+    if (el.dlgGiftList) el.dlgGiftList.innerHTML = '';
     const rows = RECIPES.filter((r) => !r.requiresQuest || state.quests[r.requiresQuest].done).map((r) => {
       const afford = canAfford(r.cost);
       const costTxt = Object.entries(r.cost).map(([k, v]) => `${v} ${RES_LABELS[k] || k}`).join(', ');
@@ -942,16 +1330,17 @@
     return NPC_DEFS.filter((npc) => state.quests?.[npc.id]?.done).length;
   }
   function trialDoneCount() {
-    return TRIAL_DEFS.filter((trial) => state.adventure?.trials?.[trial.id]?.done).length;
+    return ALL_TRIAL_DEFS.filter((trial) => state.adventure?.trials?.[trial.id]?.done).length;
   }
   function computeScore() {
     const s = state.stats;
-    return s.built * 5 + questDoneCount() * 55 + trialDoneCount() * 35 + (s.gatesOpened || 0) * 180 + s.fishCaught * 4 + s.dishesCooked * 5 + (s.cropsHarvested || 0) * 4 + (state.day - 1) * 10;
+    return s.built * 5 + questDoneCount() * 55 + trialDoneCount() * 35 + (s.gatesOpened || 0) * 180 + s.fishCaught * 4 + s.dishesCooked * 5 + (s.cropsHarvested || 0) * 4 + (state.day - 1) * 10
+      + (s.enemiesDefeated || 0) * 8 + (s.treasuresFound || 0) * 12 + (s.itemsCrafted || 0) * 6 + (s.eggsCollected || 0) * 2;
   }
   function computeProgress() {
     if (state.completedMilestone) return 100;
     const questPart = (questDoneCount() / NPC_DEFS.length) * 48;
-    const trialPart = (trialDoneCount() / TRIAL_DEFS.length) * 24;
+    const trialPart = (trialDoneCount() / ALL_TRIAL_DEFS.length) * 24;
     const buildPart = Math.min(state.stats.built, 24) / 24 * 18;
     const gatePart = state.adventure?.gateOpen ? 10 : 0;
     return Math.min(99, Math.round(questPart + trialPart + buildPart + gatePart));
@@ -960,7 +1349,7 @@
     const qDone = questDoneCount();
     const tDone = trialDoneCount();
     el.reportTitle.textContent = milestone ? 'Prism Gate Opened!' : 'Town Report';
-    el.reportSub.textContent = milestone ? 'The full CubeTown playthrough is complete. Keep building, fishing, and hosting friends as long as you like.' : `Day ${state.day}, ${formatClock(state.minutes)} · ${qDone}/${NPC_DEFS.length} resident arcs · ${tDone}/${TRIAL_DEFS.length} shrine trials.`;
+    el.reportSub.textContent = milestone ? 'The full CubeTown playthrough is complete. Keep building, fishing, and hosting friends as long as you like.' : `Day ${state.day}, ${formatClock(state.minutes)} · ${qDone}/${NPC_DEFS.length} resident arcs · ${tDone}/${ALL_TRIAL_DEFS.length} shrine trials.`;
     el.statDay.textContent = state.day;
     el.statBuilt.textContent = state.stats.built;
     el.statFish.textContent = state.stats.fishCaught;
@@ -979,13 +1368,20 @@
         <span>${escapeHtml(need)} → ${escapeHtml(rewardLine(npc.quest.reward))}</span>
       </div>`;
     }).join('');
-    const trialRows = TRIAL_DEFS.map((trial) => {
+    const trialRow = (trial) => {
       const done = state.adventure?.trials?.[trial.id]?.done;
       return `<div class="quest-row ${done ? 'is-done' : ''}">
         <b>${done ? '✓' : '□'} ${escapeHtml(trial.name)}</b>
         <span>${trial.seq.map((dir) => DIR_LABEL[dir]).join(' ')} → ${escapeHtml(rewardLine(trial.reward))}</span>
       </div>`;
+    };
+    const trialRows = TRIAL_DEFS.map(trialRow).join('');
+    const wildsTrialRows = WILDS_TRIAL_DEFS.map(trialRow).join('');
+    const friendRows = NPC_DEFS.map((npc) => {
+      const f = friendshipOf(npc.id);
+      return `<div class="quest-row"><b>${escapeHtml(npc.name)}</b><span>${friendshipLabel(f.points)} · ${f.points} pts</span></div>`;
     }).join('');
+    const guardianStatus = state.wilds?.guardianDefeated ? 'The Wilds Guardian has fallen — its Relic is yours.' : 'A Guardian still watches over the deep Wilds, hoarding a Relic.';
     const gateReady = (state.inventory.keystone || 0) >= 4 && (state.inventory.relic || 0) >= 1;
     el.questLog.innerHTML = `
       <section class="quest-chapter">
@@ -993,8 +1389,10 @@
         <p>${state.adventure?.gateOpen ? 'The Prism Gate is open. CubeTown is awake.' : gateReady ? 'You have the pieces. Walk to the north gate and open it.' : 'Help residents, clear shrine trials, recover four Keystones, and bring one Relic to the north gate.'}</p>
       </section>
       <section class="quest-chapter"><h3>Residents</h3>${questRows}</section>
+      <section class="quest-chapter"><h3>Friendships</h3>${friendRows}</section>
       <section class="quest-chapter"><h3>Shrine Trials</h3>${trialRows}</section>
-      <section class="quest-chapter"><h3>Inventory Clues</h3><p>${state.inventory.keystone || 0}/4 Keystones · ${state.inventory.lumen || 0} Lumen · ${state.inventory.relic || 0}/1 Relic · ${state.stats.built || 0} pieces built</p></section>`;
+      <section class="quest-chapter"><h3>Wilds Trials</h3>${wildsTrialRows}<p>${escapeHtml(guardianStatus)}</p></section>
+      <section class="quest-chapter"><h3>Inventory Clues</h3><p>${state.inventory.keystone || 0}/4 Keystones · ${state.inventory.lumen || 0} Lumen · ${state.inventory.relic || 0}/1 Relic · ${state.stats.built || 0} pieces built · Gathering tool tier ${gatherTier()}</p></section>`;
   }
 
   // ---------------------------------------------------------------------
@@ -1005,11 +1403,16 @@
     'Open Quest Log when you need direction. The full playthrough is residents → shrine trials → Prism Gate.',
     'Walk next to a Grove, Quarry, or Reed patch and press the glowing action button to gather Grain, Shale, or Loom.',
     'Open Build to spend resources on floors, walls, furniture, and a Hearth. Pick a piece, then tap an open tile to place it — Demolish removes your own pieces for half the cost back.',
-    'Open Farm to till open grass into soil plots and plant Sunberry, Moonwheat, or Glowgourd seeds. Water them once a day to hurry them along — dry crops still grow, just slower — and harvest when they sparkle. Seeds turn up while gathering in groves and reeds.',
+    'Open Farm to till open grass into soil plots and plant seeds. Water daily to hurry things along, but don’t neglect a plot too long — an unwatered, unfertilized crop can wilt and die. Harvest when it sparkles.',
     'Find shrine blocks around the edges of the map. Each one has a short pattern trial that rewards Lumen, Relics, or story progress.',
     'Visit the pond and press the action button to fish for Driftfish. Tap Catch when the marker crosses the glowing zone.',
-    'Cook at a Hearth to turn resources into dishes that refill your Spark meter. Spark drifts down slowly over time — it’s a gentle nudge, never a fail state.',
+    'Cook at a Hearth to turn resources into dishes that refill your Spark meter. Spark drifts down slowly over time — it’s a gentle nudge, never a fail state in town.',
     'Talk to the residents around town. Each has a quest that unlocks looks, Keystones, or adventure rewards.',
+    'Open Craft to turn Grain and Shale into Plank and Ingot, then spend those on Rich Fertilizer, a Sturdy or Masterwork gathering tool, and the crafted-material Watchtower in Build.',
+    'Build a Coop straight from Grain and Shale, feed it 2 Grain, then come back the next day to collect Eggs for the Sunrise Omelet recipe.',
+    'CubeTown’s seasons turn every few days, shifting the grass color and which crops grow fastest — plant with the season for a real bonus.',
+    'Talk to residents often and give them gifts from your Inventory to build real friendship over time — favorite gifts count double, and friendship milestones return the favor.',
+    'Follow the trailhead at the town’s west edge into the Wilds for real risk: hostile creatures, hidden treasure, and two tougher shrine trials guarding rare rewards. Spark doubles as your health out there, and you can retreat to town anytime from the HUD button.',
     'When four Keystones and a Relic are yours, walk to the north Prism Gate and open the finale.',
     'CubeTown saves through PhantomPlay automatically, and you can invite up to two friends to visit your town together from the Together panel.',
   ];
@@ -1060,6 +1463,7 @@
   // Movement
   // ---------------------------------------------------------------------
   function tryMove(dx, dy) {
+    if (rt.world === 'wilds') { tryMoveWilds(dx, dy); return; }
     if (rt.paused || anyPanelOpen()) return;
     const nx = state.player.gx + dx, ny = state.player.gy + dy;
     rt.facing = dx > 0 ? 'right' : dx < 0 ? 'left' : dy > 0 ? 'down' : 'up';
@@ -1079,6 +1483,7 @@
     return TRIAL_DEFS.find((trial) => trial.tile.x === gx && trial.tile.y === gy) || null;
   }
   function findInteraction() {
+    if (rt.world === 'wilds') return findWildsInteraction();
     const p = state.player;
     if (rt.cooking) return { kind: 'cooking' };
     // adventure landmark adjacent?
@@ -1087,6 +1492,7 @@
       const t = terrain[n.y][n.x];
       if (t === 'shrine') return { kind: 'trial', trial: trialAt(n.x, n.y) };
       if (t === 'gate') return { kind: 'gate' };
+      if (t === 'trailhead') return { kind: 'enterWilds' };
     }
     // resource node adjacent?
     for (const n of neighbors4(p.gx, p.gy)) {
@@ -1095,11 +1501,18 @@
       if (t === 'water') return { kind: 'fish' };
       if (NODE_RESOURCE[t]) return { kind: 'gather', resource: NODE_RESOURCE[t] };
     }
-    // hearth adjacent (or standing near own)
+    // hearth / bed / coop adjacent (or standing near own)
     for (const n of [{ x: p.gx, y: p.gy }, ...neighbors4(p.gx, p.gy)]) {
       const piece = townPieceAt(n.x, n.y, currentTown());
       if (piece && piece.type === 'hearth') return { kind: 'cook' };
       if (piece && piece.type === 'bed' && daySegment(state.minutes) === 'night') return { kind: 'sleep' };
+      if (piece && piece.type === 'coop') {
+        const l = currentLivestock().find((x) => x.pieceId === piece.id);
+        if (l) {
+          if (l.readyToCollect) return { kind: 'collectEgg', livestock: l };
+          if (!l.fedToday) return { kind: 'feed', livestock: l };
+        }
+      }
     }
     // own farm plot adjacent (or underfoot): harvest > water > plant
     for (const n of [{ x: p.gx, y: p.gy }, ...neighbors4(p.gx, p.gy)]) {
@@ -1117,8 +1530,13 @@
     }
     return null;
   }
-  const CONTEXT_LABEL = { gather: 'Gather', fish: 'Fish', cook: 'Cook', sleep: 'Sleep', talk: 'Talk', trial: 'Trial', gate: 'Gate', harvest: 'Harvest', water: 'Water', plant: 'Plant' };
+  const CONTEXT_LABEL = {
+    gather: 'Gather', fish: 'Fish', cook: 'Cook', sleep: 'Sleep', talk: 'Talk', trial: 'Trial', gate: 'Gate',
+    harvest: 'Harvest', water: 'Water', plant: 'Plant', feed: 'Feed', collectEgg: 'Collect Eggs',
+    enterWilds: 'Into the Wilds', attack: 'Strike', treasure: 'Search', gatherGlimmer: 'Gather',
+  };
   function doContextAction() {
+    if (rt.world === 'wilds') { doWildsContextAction(); return; }
     if (rt.build.placing) return; // handled via canvas tap while placing
     if (rt.farmTool) { rt.farmTool = null; toast('Farm tools put away.'); updateHud(); return; }
     const it = findInteraction();
@@ -1133,21 +1551,24 @@
     else if (it.kind === 'harvest') harvestPlot(it.plot);
     else if (it.kind === 'water') waterPlot(it.plot);
     else if (it.kind === 'plant') openPanel('farming');
+    else if (it.kind === 'feed') feedCoop(it.livestock);
+    else if (it.kind === 'collectEgg') collectEgg(it.livestock);
+    else if (it.kind === 'enterWilds') enterWilds();
   }
   function doGather(resource) {
     if (rt.gathering) return;
-    rt.gathering = { t: 0, dur: rt.reducedMotion ? 250 : 650, resource };
+    rt.gathering = { t: 0, dur: rt.reducedMotion ? 250 : gatherDurationMs(), resource };
   }
   function finishGather() {
     const resource = rt.gathering.resource;
-    state.inventory[resource] = (state.inventory[resource] || 0) + 1;
+    state.inventory[resource] = (state.inventory[resource] || 0) + gatherYieldN();
     state.stats.gathered += 1;
     sfx.gather();
     spawnParticles(rt.playerToX, rt.playerToY, resource === 'grain' ? '#ffd54f' : resource === 'shale' ? '#9bb3d6' : '#c792ea');
     // Seeds hide in the greenery: grove and reed gathers sometimes turn one up.
     if ((resource === 'grain' || resource === 'loom') && Math.random() < 0.35) {
       const roll = Math.random();
-      const seedKey = roll < 0.5 ? 'sunberryseed' : roll < 0.85 ? 'moonwheatseed' : 'glowgourdseed';
+      const seedKey = roll < 0.32 ? 'sunberryseed' : roll < 0.56 ? 'moonwheatseed' : roll < 0.72 ? 'glowgourdseed' : roll < 0.86 ? 'stormcornseed' : 'frostberryseed';
       state.inventory[seedKey] = (state.inventory[seedKey] || 0) + 1;
       toast(`Found a ${RES_LABELS[seedKey]} tucked in the greenery!`);
     }
@@ -1156,15 +1577,18 @@
     schedulePush();
   }
   function doSleep() {
-    // Crops keep growing overnight — advance them by the skipped in-game minutes.
+    // Crops keep growing overnight — advance them by the skipped in-game
+    // minutes using the same season/fertilizer-aware rate as stepFarm — then
+    // run the shared day-turn logic (watering reset + wilt check + coop cycle).
     const nowMin = ((state.minutes % 1440) + 1440) % 1440;
     const skipped = nowMin > 380 ? (1440 - nowMin) + 380 : (380 - nowMin);
+    const season = seasonOf(state.day);
     for (const plot of state.farm) {
-      if (plot.crop && CROP_BY_KEY[plot.crop]) plot.prog += skipped * (plot.watered ? FARM_WATERED_RATE : FARM_DRY_RATE);
-      plot.watered = false;
+      if (plot.crop && CROP_BY_KEY[plot.crop]) plot.prog += skipped * plotGrowthRate(plot, season);
     }
-    state.spark = 100;
     state.day += 1;
+    farmNewDay();
+    state.spark = 100;
     state.minutes = 380;
     const gardenReady = state.farm.some((plot) => cropReady(plot));
     toast(gardenReady ? 'Slept well — and something in the garden looks ready!' : 'Slept well — a new day begins.');
@@ -1187,6 +1611,7 @@
     for (const [k, v] of Object.entries(def.cost)) state.inventory[k] -= v;
     const piece = { id: `p${Date.now().toString(36)}${pieceIdCounter++}`, type, gx, gy, rot: rt.build.rotation };
     state.town.push(piece);
+    if (type === 'coop') state.livestock.push({ id: `l${piece.id}`, pieceId: piece.id, gx, gy, fedToday: false, readyToCollect: false });
     state.stats.built += 1;
     sfx.place();
     spawnParticles(gx, gy, def.color);
@@ -1204,12 +1629,212 @@
     const piece = state.town[idx];
     const def = PALETTE_BY_TYPE[piece.type];
     state.town.splice(idx, 1);
+    state.livestock = state.livestock.filter((l) => l.pieceId !== piece.id);
     for (const [k, v] of Object.entries(def.cost)) state.inventory[k] = (state.inventory[k] || 0) + Math.floor(v / 2);
     state.stats.demolished += 1;
     sfx.demolish();
     updateHud();
     schedulePush();
     scheduleTownSync();
+  }
+
+  // ---------------------------------------------------------------------
+  // The Wilds — movement, interaction, enemies, treasure, entry/exit
+  // ---------------------------------------------------------------------
+  function tryMoveWilds(dx, dy) {
+    if (rt.paused || anyPanelOpen()) return;
+    const nx = rt.wildsGx + dx, ny = rt.wildsGy + dy;
+    rt.facing = dx > 0 ? 'right' : dx < 0 ? 'left' : dy > 0 ? 'down' : 'up';
+    if (!inBounds(nx, ny)) return;
+    const enemy = rt.wildsEnemies.find((e) => e.gx === nx && e.gy === ny && e.hp > 0);
+    if (enemy) { hitPlayerContact(SPARK_WILDS_HIT); return; }
+    if (isBlockedWildsTile(nx, ny)) return;
+    rt.wildsFromX = rt.wildsGx; rt.wildsFromY = rt.wildsGy;
+    rt.wildsGx = nx; rt.wildsGy = ny;
+    rt.wildsToX = nx; rt.wildsToY = ny;
+    rt.wildsMoveT = 0; rt.wildsMoveDur = rt.reducedMotion ? 40 : 150;
+    sfx.step();
+  }
+  function findWildsInteraction() {
+    const gx = rt.wildsGx, gy = rt.wildsGy;
+    for (const n of neighbors4(gx, gy)) {
+      if (!inBounds(n.x, n.y)) continue;
+      const t = wildsTerrain[n.y][n.x];
+      if (t === 'wshrine') { const trial = wildsTrialAt(n.x, n.y); if (trial) return { kind: 'trial', trial }; }
+      if (t === 'glimmer') return { kind: 'gatherGlimmer' };
+      if (t === 'treasure') {
+        const id = `t_${n.x}_${n.y}`;
+        if (!(state.wilds.treasuresFound || []).includes(id)) return { kind: 'treasure', tx: n.x, ty: n.y, id };
+      }
+    }
+    for (const en of rt.wildsEnemies) {
+      if (en.hp > 0 && Math.max(Math.abs(en.gx - gx), Math.abs(en.gy - gy)) <= 1 && !(en.gx === gx && en.gy === gy)) return { kind: 'attack', enemy: en };
+    }
+    return null;
+  }
+  function doWildsContextAction() {
+    const it = findWildsInteraction();
+    if (!it) return;
+    if (it.kind === 'trial') openTrial(it.trial);
+    else if (it.kind === 'gatherGlimmer') doGatherGlimmer();
+    else if (it.kind === 'treasure') collectTreasure(it.tx, it.ty, it.id);
+    else if (it.kind === 'attack') attackEnemy(it.enemy);
+  }
+  function doGatherGlimmer() {
+    state.inventory.lumen = (state.inventory.lumen || 0) + 1;
+    sfx.gather();
+    spawnParticles(rt.wildsGx, rt.wildsGy, '#c792ea');
+    toast('Found a glimmer of Lumen in the wilds!');
+    updateHud();
+    schedulePush();
+  }
+  function collectTreasure(tx, ty, id) {
+    if ((state.wilds.treasuresFound || []).includes(id)) return;
+    state.wilds.treasuresFound.push(id);
+    wildsTerrain[ty][tx] = 'wgrass';
+    const roll = Math.random();
+    let msg;
+    if (roll < 0.5) {
+      const n = 1 + Math.floor(Math.random() * 2);
+      const k = ['grain', 'shale', 'loom'][Math.floor(Math.random() * 3)];
+      state.inventory[k] = (state.inventory[k] || 0) + n;
+      msg = `Found ${n} ${RES_LABELS[k] || k} in a hidden cache!`;
+    } else if (roll < 0.8) {
+      state.inventory.lumen = (state.inventory.lumen || 0) + 1;
+      msg = 'Found a hidden Lumen shard!';
+    } else {
+      const seeds = ['sunberryseed', 'moonwheatseed', 'glowgourdseed', 'stormcornseed', 'frostberryseed'];
+      const s = seeds[Math.floor(Math.random() * seeds.length)];
+      state.inventory[s] = (state.inventory[s] || 0) + 1;
+      msg = `Found a rare ${RES_LABELS[s] || s}!`;
+    }
+    state.stats.treasuresFound = (state.stats.treasuresFound || 0) + 1;
+    sfx.quest();
+    spawnParticles(tx, ty, '#ffcf6b');
+    toast(msg);
+    updateHud();
+    schedulePush();
+  }
+  function attackEnemy(enemy) {
+    const now = Date.now();
+    if (rt.lastAttackAt && now - rt.lastAttackAt < 260) return;
+    rt.lastAttackAt = now;
+    enemy.hp -= 1;
+    spawnParticles(enemy.gx, enemy.gy, '#ff6b81');
+    sfx.demolish();
+    if (enemy.hp <= 0) {
+      rt.wildsEnemies = rt.wildsEnemies.filter((e) => e !== enemy);
+      state.stats.enemiesDefeated = (state.stats.enemiesDefeated || 0) + 1;
+      if (enemy.isGuardian) {
+        if (!state.wilds.guardianDefeated) {
+          state.wilds.guardianDefeated = true;
+          state.inventory.relic = (state.inventory.relic || 0) + 1;
+          sfx.quest();
+          toast('The Guardian falls — a Relic gleams where it stood!');
+        }
+      } else {
+        const n = 1 + Math.floor(Math.random() * 2);
+        const k = ['grain', 'shale', 'loom'][Math.floor(Math.random() * 3)];
+        state.inventory[k] = (state.inventory[k] || 0) + n;
+        if (Math.random() < 0.2) state.inventory.lumen = (state.inventory.lumen || 0) + 1;
+        toast('The wilds creature scatters, dropping some resources.');
+      }
+    } else if (enemy.isGuardian && Math.random() < 0.5) {
+      toast('The Guardian strikes back!');
+      hitPlayerContact(Math.round(SPARK_WILDS_HIT / 2));
+    } else {
+      toast(`Hit! (${Math.max(0, enemy.hp)}/${enemy.maxHp})`);
+    }
+    updateHud();
+    schedulePush();
+  }
+  function hitPlayerContact(amount) {
+    const now = Date.now();
+    if (rt.wildsInvulnUntil && now < rt.wildsInvulnUntil) return;
+    rt.wildsInvulnUntil = now + 900;
+    state.spark = clamp(state.spark - amount, 0, 100);
+    sfx.fishMiss();
+    spawnParticles(rt.wildsGx, rt.wildsGy, '#ff6b81');
+    updateHud();
+    if (state.spark <= 0) defeatedInWilds();
+  }
+  function defeatedInWilds() {
+    toast('The wilds overwhelm you — you stumble back to town to rest.');
+    exitWilds();
+    state.spark = 30;
+    updateHud();
+    schedulePush();
+  }
+  function spawnWildsEnemies() {
+    rt.wildsEnemies = [];
+    let placed = 0, guard = 0;
+    while (placed < 6 && guard < 400) {
+      guard++;
+      const x = Math.floor(Math.random() * GRID), y = Math.floor(Math.random() * GRID);
+      if (Math.max(Math.abs(x - WILDS_ENTRANCE.x), Math.abs(y - WILDS_ENTRANCE.y)) < 3) continue;
+      if (wildsTerrain[y][x] !== 'wgrass') continue;
+      rt.wildsEnemies.push({ gx: x, gy: y, hp: 2, maxHp: 2, cooldown: Math.random() * 0.6, isGuardian: false, stationary: false });
+      placed++;
+    }
+    if (!state.wilds.guardianDefeated && inBounds(GUARDIAN_TILE.x, GUARDIAN_TILE.y)) {
+      rt.wildsEnemies.push({ gx: GUARDIAN_TILE.x, gy: GUARDIAN_TILE.y, hp: 6, maxHp: 6, cooldown: 0, isGuardian: true, stationary: true });
+    }
+  }
+  function enterWilds() {
+    if (rt.world === 'wilds') return;
+    rt.world = 'wilds';
+    rt.build.placing = false;
+    rt.farmTool = null;
+    rt.wildsGx = WILDS_ENTRANCE.x; rt.wildsGy = WILDS_ENTRANCE.y;
+    rt.wildsFromX = rt.wildsGx; rt.wildsFromY = rt.wildsGy;
+    rt.wildsToX = rt.wildsGx; rt.wildsToY = rt.wildsGy;
+    rt.wildsMoveT = 1;
+    rt.wildsInvulnUntil = 0;
+    const p0 = tileToScreen(rt.wildsGx, rt.wildsGy);
+    rt.wildsPx = p0.x; rt.wildsPy = p0.y;
+    spawnWildsEnemies();
+    closePanels();
+    toast('You step into the wilds. Watch your Spark — leave anytime from the HUD.');
+    updateHud();
+  }
+  function exitWilds() {
+    if (rt.world !== 'wilds') return;
+    rt.world = 'town';
+    rt.wildsEnemies = [];
+    toast('Back in town, safe and sound.');
+    updateHud();
+  }
+  function stepWildsEnemies(dt) {
+    if (rt.world !== 'wilds') return;
+    for (const en of rt.wildsEnemies) {
+      if (en.stationary) continue;
+      en.cooldown -= dt;
+      if (en.cooldown > 0) continue;
+      en.cooldown = 0.8 + Math.random() * 0.6;
+      const dist = Math.max(Math.abs(en.gx - rt.wildsGx), Math.abs(en.gy - rt.wildsGy));
+      let dx = 0, dy = 0;
+      if (dist <= 3 && Math.random() < 0.7) {
+        dx = Math.sign(rt.wildsGx - en.gx); dy = Math.sign(rt.wildsGy - en.gy);
+        if (dx !== 0 && dy !== 0) { if (Math.random() < 0.5) dy = 0; else dx = 0; }
+      } else if (Math.random() < 0.4) {
+        const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+        const d = dirs[Math.floor(Math.random() * 4)];
+        dx = d[0]; dy = d[1];
+      }
+      if (dx === 0 && dy === 0) continue;
+      const nx = en.gx + dx, ny = en.gy + dy;
+      if (nx === rt.wildsGx && ny === rt.wildsGy) { hitPlayerContact(SPARK_WILDS_HIT); continue; }
+      if (!inBounds(nx, ny) || isBlockedWildsTile(nx, ny)) continue;
+      if (rt.wildsEnemies.some((o) => o !== en && o.gx === nx && o.gy === ny)) continue;
+      en.gx = nx; en.gy = ny;
+    }
+  }
+  function stepWildsMoveInterp(dt) {
+    if (rt.wildsMoveT < 1) rt.wildsMoveT = Math.min(1, rt.wildsMoveT + dt * 1000 / (rt.wildsMoveDur || 150));
+    const fx = tileToScreen(rt.wildsFromX, rt.wildsFromY), tx = tileToScreen(rt.wildsToX, rt.wildsToY);
+    const e = rt.wildsMoveT;
+    rt.wildsPx = fx.x + (tx.x - fx.x) * e;
+    rt.wildsPy = fx.y + (tx.y - fx.y) * e;
   }
 
   // ---------------------------------------------------------------------
@@ -1224,7 +1849,13 @@
   function sendTownSync() {
     if (!mp.active) return;
     const compactTown = state.town.map((p) => ({ id: p.id, type: p.type, gx: p.gx, gy: p.gy, rot: p.rot }));
-    const compactFarm = state.farm.map((p) => ({ x: p.x, y: p.y, crop: p.crop || null, prog: Math.round(p.prog || 0), watered: !!p.watered }));
+    // Farm plot fertility/dry-streak follow the exact same shared pattern as
+    // the rest of the farm row (see currentFarm()) — physical world state,
+    // host-authoritative, guest placements stay local. Livestock/friendship/
+    // tools/wilds progress are deliberately NOT here: they're per-player
+    // local (see the comments on state.livestock's feed/collect lookup,
+    // defaultFriendshipState, and state.wilds in newGame()).
+    const compactFarm = state.farm.map((p) => ({ x: p.x, y: p.y, crop: p.crop || null, prog: Math.round(p.prog || 0), watered: !!p.watered, dryStreak: p.dryStreak || 0, fertileUntilDay: p.fertileUntilDay || 0 }));
     host('match-action', { action: { town: compactTown, farm: compactFarm, seed: state.seed, openBuilding: mp.openBuilding, hostProbe: mp.pendingNonce || mp.confirmedNonce || null }, mode: 'merge' });
     mp.lastSyncAt = Date.now();
   }
@@ -1238,6 +1869,8 @@
   function adoptSharedSeed(seed) {
     state.seed = seed >>> 0;
     terrain = genTerrain(state.seed);
+    wildsTerrain = genWildsTerrain(state.seed);
+    clearFoundWildsTreasures();
     npcs = buildNpcRuntime();
     state.player.gx = clamp(state.player.gx, 0, GRID - 1);
     state.player.gy = clamp(state.player.gy, 0, GRID - 1);
@@ -1254,7 +1887,7 @@
     if (Array.isArray(ms.farm)) {
       mp.sharedFarm = ms.farm
         .filter((p) => p && Number.isFinite(p.x) && Number.isFinite(p.y) && (p.crop == null || CROP_BY_KEY[p.crop]))
-        .map((p) => ({ x: clamp(Math.floor(p.x), 0, GRID - 1), y: clamp(Math.floor(p.y), 0, GRID - 1), crop: p.crop || null, prog: Number.isFinite(p.prog) ? Math.max(0, p.prog) : 0, watered: !!p.watered }));
+        .map((p) => ({ x: clamp(Math.floor(p.x), 0, GRID - 1), y: clamp(Math.floor(p.y), 0, GRID - 1), crop: p.crop || null, prog: Number.isFinite(p.prog) ? Math.max(0, p.prog) : 0, watered: !!p.watered, dryStreak: Number.isFinite(p.dryStreak) ? p.dryStreak : 0, fertileUntilDay: Number.isFinite(p.fertileUntilDay) ? p.fertileUntilDay : 0 }));
     }
     if (ms.openBuilding === 'host_only' || ms.openBuilding === 'everyone') mp.openBuilding = ms.openBuilding;
     if (mp.pendingNonce && ms.hostProbe === mp.pendingNonce) {
@@ -1276,15 +1909,16 @@
   // HUD updates
   // ---------------------------------------------------------------------
   function updateHud() {
-    el.clock.textContent = `Day ${state.day} · ${formatClock(state.minutes)}`;
     const seg = daySegment(state.minutes);
-    el.clockNote.textContent = seg[0].toUpperCase() + seg.slice(1);
+    el.clock.textContent = `Day ${state.day} · ${formatClock(state.minutes)}`;
+    el.clockNote.textContent = `${seg[0].toUpperCase() + seg.slice(1)} · ${SEASON_LABEL[seasonOf(state.day)]}${rt.world === 'wilds' ? ' · In the Wilds' : ''}`;
     el.spark.style.width = `${clamp(state.spark, 0, 100)}%`;
     el.resGrain.textContent = state.inventory.grain || 0;
     el.resShale.textContent = state.inventory.shale || 0;
     el.resLoom.textContent = state.inventory.loom || 0;
     el.resFish.textContent = state.inventory.driftfish || 0;
     el.togetherBtn.hidden = !mp.active;
+    if (el.returnHome) el.returnHome.hidden = rt.world !== 'wilds';
     const it = (rt.build.placing || rt.farmTool) ? null : findInteraction();
     if (it && CONTEXT_LABEL[it.kind]) {
       el.context.textContent = CONTEXT_LABEL[it.kind];
@@ -1374,10 +2008,10 @@
     const f = (v) => clamp(Math.round(v * amt), 0, 255);
     return `rgb(${f(c.r)},${f(c.g)},${f(c.b)})`;
   }
-  const TERRAIN_COLOR = { grass: '#3a6b4a', trail: '#9f7f58', grove: '#2f7a4d', quarry: '#7b7f8c', reed: '#7fae59', water: '#3f8ec9', shrine: '#5b4aa8', gate: '#2f2448' };
+  const TERRAIN_COLOR = { grass: '#3a6b4a', trail: '#9f7f58', grove: '#2f7a4d', quarry: '#7b7f8c', reed: '#7fae59', water: '#3f8ec9', shrine: '#5b4aa8', gate: '#2f2448', trailhead: '#caa06a' };
   function drawTerrainTile(gx, gy, t) {
     const s = tileToScreen(gx, gy);
-    const top = TERRAIN_COLOR[t] || TERRAIN_COLOR.grass;
+    const top = t === 'grass' ? SEASON_GRASS[seasonOf(state.day)] : (TERRAIN_COLOR[t] || TERRAIN_COLOR.grass);
     drawDiamond(s.x, s.y, rt.tileW, rt.tileH, top, 'rgba(0,0,0,0.18)');
     if (t === 'grove' || t === 'quarry' || t === 'reed') {
       drawBlock(s.x, s.y, rt.tileW * 0.36, rt.tileH * 0.36, rt.tileH * (t === 'grove' ? 1.6 : 0.7), shade(top, 1.25), shade(top, 0.75), shade(top, 0.55));
@@ -1406,12 +2040,19 @@
       ctx.beginPath(); ctx.arc(s.x, s.y - rt.tileH * 2.25, rt.tileH * 0.52, 0, Math.PI * 2); ctx.stroke();
       ctx.restore();
     }
+    if (t === 'trailhead') {
+      drawBlock(s.x, s.y, rt.tileW * 0.5, rt.tileH * 0.5, rt.tileH * 1.2, shade(top, 1.2), shade(top, 0.72), shade(top, 0.5));
+      ctx.save();
+      ctx.strokeStyle = '#ffcf6b'; ctx.lineWidth = 2 * rt.dpr; ctx.globalAlpha = 0.7 + 0.2 * Math.sin(performance.now() / 400 + gx);
+      ctx.beginPath(); ctx.arc(s.x, s.y - rt.tileH * 1.6, rt.tileH * 0.32, 0, Math.PI * 2); ctx.stroke();
+      ctx.restore();
+    }
   }
   function drawPiece(piece, unsynced) {
     const def = PALETTE_BY_TYPE[piece.type];
     if (!def) return;
     const s = tileToScreen(piece.gx, piece.gy);
-    const hgt = def.blocking ? rt.tileH * (piece.type === 'wall' || piece.type === 'hearth' || piece.type === 'bed' || piece.type === 'chest' ? 1.5 : 1.0) : rt.tileH * 0.18;
+    const hgt = def.blocking ? rt.tileH * (TALL_PIECES[piece.type] || 1.0) : rt.tileH * 0.18;
     const color = def.color;
     if (def.blocking) {
       drawBlock(s.x, s.y, rt.tileW * 0.82, rt.tileH * 0.82, hgt, shade(color, 1.15), shade(color, 0.72), shade(color, 0.52));
@@ -1421,6 +2062,15 @@
     if (piece.type === 'lamp' && daySegment(state.minutes) !== 'day') {
       ctx.save(); ctx.globalAlpha = 0.5; ctx.fillStyle = '#ffe6a3';
       ctx.beginPath(); ctx.arc(s.x, s.y - hgt - rt.tileH * 0.4, rt.tileH * 1.1, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+    }
+    if (piece.type === 'coop') {
+      const l = currentLivestock().find((x) => x.pieceId === piece.id);
+      if (l && l.readyToCollect) {
+        ctx.save(); ctx.globalAlpha = 0.7 + 0.2 * Math.sin(performance.now() / 300);
+        ctx.fillStyle = '#ffe98a';
+        ctx.beginPath(); ctx.arc(s.x, s.y - hgt - rt.tileH * 0.6, rt.tileH * 0.22, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+      }
     }
     if (unsynced) {
       // Marks a guest's own local-only placement that hasn't (and, under the
@@ -1521,6 +2171,7 @@
   }
 
   function draw() {
+    if (rt.world === 'wilds') { drawWilds(); return; }
     const sky = skyColors(state.minutes);
     const grad = ctx.createLinearGradient(0, 0, 0, rt.H);
     grad.addColorStop(0, sky.top); grad.addColorStop(1, sky.hor);
@@ -1597,6 +2248,78 @@
     }
   }
 
+  // Wilds render pass — a distinct frame kept parallel to draw() rather than
+  // interleaved with it, so the well-tested town rendering path above is
+  // untouched. Reuses the same sky/particle/vignette/pause conventions so it
+  // still reads as "CubeTown", just a wilder corner of it.
+  function drawWilds() {
+    const sky = skyColors(state.minutes);
+    const grad = ctx.createLinearGradient(0, 0, 0, rt.H);
+    grad.addColorStop(0, sky.top); grad.addColorStop(1, sky.hor);
+    ctx.fillStyle = grad; ctx.fillRect(0, 0, rt.W, rt.H);
+    ctx.save(); ctx.fillStyle = 'rgba(20,4,28,0.22)'; ctx.fillRect(0, 0, rt.W, rt.H); ctx.restore();
+    drawAmbience();
+
+    const drawables = [];
+    for (let gy = 0; gy < GRID; gy++) for (let gx = 0; gx < GRID; gx++) drawables.push({ depth: gx + gy, kind: 'wterrain', gx, gy });
+    for (const en of rt.wildsEnemies) drawables.push({ depth: en.gx + en.gy + 0.4, kind: 'enemy', enemy: en });
+    drawables.push({ depth: rt.wildsGx + rt.wildsGy + 0.6, kind: 'wplayer' });
+    drawables.sort((a, b) => a.depth - b.depth);
+    for (const d of drawables) if (d.kind === 'wterrain') drawWildsTile(d.gx, d.gy, wildsTerrain[d.gy][d.gx]);
+    for (const d of drawables) {
+      if (d.kind === 'enemy') drawEnemy(d.enemy);
+      else if (d.kind === 'wplayer') drawCharacter(rt.wildsPx, rt.wildsPy, hueColorOf(state.player.hue), state.player.topper, trimColorOf(state.player.trim), null);
+    }
+
+    for (const p of rt.particles) {
+      ctx.save(); ctx.globalAlpha = Math.max(0, p.life); ctx.fillStyle = p.color;
+      ctx.fillRect(p.x - 2 * rt.dpr, p.y - 2 * rt.dpr, 4 * rt.dpr, 4 * rt.dpr);
+      ctx.restore();
+    }
+
+    if (state.spark < 25) {
+      const vg = ctx.createRadialGradient(rt.W / 2, rt.H / 2, rt.H * 0.2, rt.W / 2, rt.H / 2, rt.H * 0.7);
+      vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, `rgba(60,0,10,${(25 - state.spark) / 50})`);
+      ctx.fillStyle = vg; ctx.fillRect(0, 0, rt.W, rt.H);
+    }
+    if (rt.paused) { ctx.fillStyle = 'rgba(10,6,20,0.45)'; ctx.fillRect(0, 0, rt.W, rt.H); }
+  }
+  const WILDS_TILE_COLOR = { wgrass: '#3a5a3a', thicket: '#2c4a2f', crag: '#6b6a70', glimmer: '#5b4aa8', wshrine: '#8f7fff', treasure: '#caa06a' };
+  function drawWildsTile(gx, gy, t) {
+    const s = tileToScreen(gx, gy);
+    const top = t === 'wgrass' ? SEASON_WGRASS[seasonOf(state.day)] : (WILDS_TILE_COLOR[t] || WILDS_TILE_COLOR.wgrass);
+    drawDiamond(s.x, s.y, rt.tileW, rt.tileH, top, 'rgba(0,0,0,0.22)');
+    if (t === 'thicket' || t === 'crag') {
+      drawBlock(s.x, s.y, rt.tileW * 0.4, rt.tileH * 0.4, rt.tileH * (t === 'thicket' ? 1.3 : 0.9), shade(top, 1.2), shade(top, 0.7), shade(top, 0.5));
+    }
+    if (t === 'glimmer') {
+      ctx.save(); ctx.globalAlpha = 0.5 + 0.2 * Math.sin(performance.now() / 280 + gx + gy);
+      ctx.fillStyle = '#c792ea';
+      ctx.beginPath(); ctx.arc(s.x, s.y - rt.tileH * 0.9, rt.tileH * 0.3, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    }
+    if (t === 'wshrine') {
+      const trial = wildsTrialAt(gx, gy);
+      const done = trial && state.adventure?.trials?.[trial.id]?.done;
+      drawBlock(s.x, s.y, rt.tileW * 0.58, rt.tileH * 0.58, rt.tileH * 1.6, done ? '#5be3b5' : '#8f7fff', '#34255b', '#211638');
+    }
+    if (t === 'treasure') {
+      ctx.save(); ctx.globalAlpha = 0.6 + 0.2 * Math.sin(performance.now() / 240 + gx);
+      ctx.fillStyle = '#ffcf6b';
+      ctx.beginPath(); ctx.arc(s.x, s.y - rt.tileH * 0.6, rt.tileH * 0.22, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    }
+  }
+  function drawEnemy(en) {
+    const s = tileToScreen(en.gx, en.gy);
+    const color = en.isGuardian ? '#ff6b4a' : '#ff6b81';
+    drawBlock(s.x, s.y, rt.tileW * 0.5, rt.tileH * 0.5, rt.tileH * (en.isGuardian ? 1.4 : 0.9), shade(color, 1.15), shade(color, 0.7), shade(color, 0.5));
+    ctx.save();
+    ctx.fillStyle = '#fbe9d8'; ctx.font = `700 ${9 * rt.dpr}px ui-monospace,monospace`; ctx.textAlign = 'center';
+    ctx.fillText(`${Math.max(0, en.hp)}/${en.maxHp}`, s.x, s.y - rt.tileH * (en.isGuardian ? 2.2 : 1.6));
+    ctx.restore();
+  }
+
   function drawAmbience() {
     if (rt.reducedMotion) return;
     if (!rt.ambience.length) {
@@ -1649,6 +2372,8 @@
       state.stats.secondsPlayed += dt;
       rt.playSecondsAccum += dt;
       stepMoveInterp(dt);
+      stepWildsMoveInterp(dt);
+      stepWildsEnemies(dt);
       stepNpcs(dt);
       stepGatherCook(dt);
       stepFarm(dtMinutes);
@@ -1718,8 +2443,10 @@
     return JSON.parse(JSON.stringify({
       version: state.version, seed: state.seed, day: state.day, minutes: state.minutes,
       player: state.player, inventory: state.inventory, spark: state.spark, town: state.town, farm: state.farm,
+      livestock: state.livestock,
       quests: state.quests, adventure: state.adventure, cosmeticsUnlocked: state.cosmeticsUnlocked, tutorialSeen: state.tutorialSeen,
       stats: state.stats, completedMilestone: state.completedMilestone,
+      tools: state.tools, friendship: state.friendship, wilds: state.wilds,
     }));
   }
   function schedulePush() {
@@ -1737,7 +2464,7 @@
   function applyState(s) {
     if (!s || typeof s !== 'object') return;
     if (!state) newGame((Math.random() * 1e9) >>> 0);
-    if (typeof s.seed === 'number') { state.seed = s.seed >>> 0; terrain = genTerrain(state.seed); }
+    if (typeof s.seed === 'number') { state.seed = s.seed >>> 0; terrain = genTerrain(state.seed); wildsTerrain = genWildsTerrain(state.seed); }
     state.day = Number.isFinite(s.day) ? Math.max(1, Math.floor(s.day)) : state.day;
     state.minutes = Number.isFinite(s.minutes) ? clamp(s.minutes, 0, 1439) : state.minutes;
     if (s.player && typeof s.player === 'object') {
@@ -1761,6 +2488,10 @@
           crop: (typeof p.crop === 'string' && CROP_BY_KEY[p.crop]) ? p.crop : null,
           prog: Number.isFinite(p.prog) ? Math.max(0, p.prog) : 0,
           watered: !!p.watered,
+          // Missing on any save from before fertilizer/wilting shipped — 0 is
+          // the correct, safe default (not fertilized, no dry streak yet).
+          dryStreak: Number.isFinite(p.dryStreak) ? Math.max(0, Math.floor(p.dryStreak)) : 0,
+          fertileUntilDay: Number.isFinite(p.fertileUntilDay) ? Math.max(0, Math.floor(p.fertileUntilDay)) : 0,
         }))
         .filter((p) => {
           const key = `${p.x},${p.y}`;
@@ -1768,6 +2499,13 @@
           seenPlots.add(key);
           return true;
         });
+    }
+    if (Array.isArray(s.livestock)) {
+      state.livestock = s.livestock.filter((l) => l && typeof l === 'object' && typeof l.pieceId === 'string' && state.town.some((p) => p.id === l.pieceId))
+        .map((l) => ({ id: String(l.id || `l${pieceIdCounter++}`), pieceId: l.pieceId, gx: Number.isFinite(l.gx) ? l.gx : 0, gy: Number.isFinite(l.gy) ? l.gy : 0, fedToday: !!l.fedToday, readyToCollect: !!l.readyToCollect }));
+    } else {
+      // Old saves never had livestock at all — keep it empty rather than undefined.
+      state.livestock = Array.isArray(state.livestock) ? state.livestock : [];
     }
     if (s.quests && typeof s.quests === 'object') {
       for (const k of Object.keys(state.quests)) if (s.quests[k] && typeof s.quests[k] === 'object') state.quests[k].done = !!s.quests[k].done;
@@ -1777,7 +2515,10 @@
     if (s.adventure && typeof s.adventure === 'object') {
       state.adventure.gateOpen = !!s.adventure.gateOpen;
       if (s.adventure.trials && typeof s.adventure.trials === 'object') {
-        for (const trial of TRIAL_DEFS) {
+        // ALL_TRIAL_DEFS covers both the original town shrines and the newer
+        // Wilds trials — an old save's adventure.trials simply lacks the
+        // wilds ids, so they fall through to the {done:false} default below.
+        for (const trial of ALL_TRIAL_DEFS) {
           if (!state.adventure.trials[trial.id]) state.adventure.trials[trial.id] = { done: false };
           state.adventure.trials[trial.id].done = !!s.adventure.trials[trial.id]?.done;
         }
@@ -1797,11 +2538,42 @@
     if (s.stats && typeof s.stats === 'object') {
       for (const k of Object.keys(state.stats)) if (Number.isFinite(s.stats[k])) state.stats[k] = s.stats[k];
     }
+    // Tools/friendship/wilds are all brand-new top-level fields; state.tools /
+    // state.friendship / state.wilds already hold newGame()'s safe defaults at
+    // this point, so an old save (missing these entirely) simply keeps them.
+    if (s.tools && typeof s.tools === 'object' && [1, 2, 3].includes(s.tools.gatherTier)) {
+      state.tools.gatherTier = s.tools.gatherTier;
+    }
+    if (s.friendship && typeof s.friendship === 'object') {
+      for (const npc of NPC_DEFS) {
+        const fs = s.friendship[npc.id];
+        if (fs && typeof fs === 'object') {
+          state.friendship[npc.id] = {
+            points: Number.isFinite(fs.points) ? Math.max(0, fs.points) : 0,
+            lastChatDay: Number.isFinite(fs.lastChatDay) ? fs.lastChatDay : 0,
+            claimed: Array.isArray(fs.claimed) ? fs.claimed.filter((x) => typeof x === 'number') : [],
+          };
+        }
+      }
+    }
+    if (s.wilds && typeof s.wilds === 'object') {
+      state.wilds.treasuresFound = Array.isArray(s.wilds.treasuresFound) ? s.wilds.treasuresFound.filter((x) => typeof x === 'string') : [];
+      state.wilds.guardianDefeated = !!s.wilds.guardianDefeated;
+    }
     state.completedMilestone = !!(s.completedMilestone && state.adventure.gateOpen);
+    // Re-clear any already-looted Wilds treasure tiles now that
+    // state.wilds.treasuresFound reflects the just-loaded save (a seed change
+    // above regenerates wildsTerrain from scratch, which would otherwise make
+    // previously-found treasure glow again).
+    clearFoundWildsTreasures();
     npcs = buildNpcRuntime();
     for (const npc of npcs) npc.quest.done = state.quests[npc.id] ? state.quests[npc.id].done : false;
     rt.playerToX = state.player.gx; rt.playerToY = state.player.gy;
     rt.playerFromX = rt.playerToX; rt.playerFromY = rt.playerToY; rt.moveT = 1;
+    // A loaded/restored save always resumes in town — the Wilds are a
+    // runtime-only visit that never persists (see the comment on rt.world).
+    rt.world = 'town';
+    rt.wildsEnemies = [];
     updateHud();
   }
 
@@ -1827,6 +2599,12 @@
     const pt = canvasPointFromEvent(evt);
     const tile = screenToTile(pt.x, pt.y);
     if (!inBounds(tile.x, tile.y)) return;
+    if (rt.world === 'wilds') {
+      const dx = tile.x - rt.wildsGx, dy = tile.y - rt.wildsGy;
+      if (Math.abs(dx) + Math.abs(dy) === 1) tryMoveWilds(dx, dy);
+      else if (dx === 0 && dy === 0) doContextAction();
+      return;
+    }
     if (rt.farmTool) {
       // Farm tools stay armed (like Demolish) so rows can be worked tile by
       // tile; Esc, B, or the ● action button puts them away.
@@ -1878,6 +2656,7 @@
     else if (k === ' ' || k === 'e') { evt.preventDefault(); doContextAction(); }
     else if (k === 'b') openPanel('build');
     else if (k === 'f') openPanel('farming');
+    else if (k === 'c') openPanel('craft');
   });
 
   // ---------------------------------------------------------------------
@@ -1970,6 +2749,7 @@
   $('[data-ct-reduced]').onchange = (e) => { rt.reducedMotion = e.target.checked; };
   $('[data-ct-pause]').onclick = () => setPaused(!rt.paused);
   $('[data-ct-resume]').onclick = () => setPaused(false);
+  if (el.returnHome) el.returnHome.onclick = () => { unlockAudio(); exitWilds(); };
 
   function setPaused(p) {
     if (rt.paused === p) return;
@@ -1998,6 +2778,8 @@
     } else if (d.type === 'restart') {
       newGame((Math.random() * 1e9) >>> 0);
       closePanels();
+      rt.world = 'town';
+      rt.wildsEnemies = [];
       rt.playerToX = state.player.gx; rt.playerToY = state.player.gy; rt.playerFromX = rt.playerToX; rt.playerFromY = rt.playerToY; rt.moveT = 1;
       updateHud();
       if (!state.tutorialSeen) openPanel('tutorial');

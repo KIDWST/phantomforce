@@ -131,6 +131,7 @@ input[type=range]{width:150px}
     <div class="hud-actions">
       <button type="button" data-ct-open="build">Build</button>
       <button type="button" data-ct-open="farming">Farm</button>
+      <button type="button" data-ct-open="craft">Craft</button>
       <button type="button" data-ct-open="questlog">Quest Log</button>
       <button type="button" data-ct-open="inventory">Inventory</button>
       <button type="button" data-ct-open="customize">Customize</button>
@@ -138,6 +139,7 @@ input[type=range]{width:150px}
       <button type="button" data-ct-open="report">Report</button>
       <button type="button" data-ct-open="settings">Settings</button>
       <button type="button" data-ct-open="tutorial">Help</button>
+      <button type="button" data-ct-return-home hidden style="border-color:var(--danger);color:var(--danger)">Leave Wilds</button>
       <button type="button" data-ct-pause>Pause</button>
     </div>
   </div>
@@ -173,12 +175,22 @@ input[type=range]{width:150px}
   <div class="card">
     <button class="close" data-ct-close>×</button>
     <h2>Farm</h2>
-    <p class="sub">Till open grass into soil, plant seeds, water once a day, and harvest when the crop sparkles. Nothing ever wilts — dry crops just take a little longer.</p>
+    <p class="sub">Till open grass into soil, plant seeds, water daily, and harvest when the crop sparkles. Fertilize to grow faster and guard against wilting — leave a crop dry too long and it can die.</p>
     <div class="build-tools">
       <button type="button" data-ct-till>Till Soil</button>
+      <button type="button" data-ct-fertilize>Use Fertilizer</button>
     </div>
     <div class="grid-pieces" data-ct-seed-list></div>
     <p class="small-note" data-ct-farm-note></p>
+  </div>
+</div>
+
+<div class="panel" data-ct-panel="craft">
+  <div class="card">
+    <button class="close" data-ct-close>×</button>
+    <h2>Craft</h2>
+    <p class="sub">Turn Grain and Shale into Plank and Ingot, then spend those on Fertilizer, gathering-tool tiers, and new Build pieces like the Coop and Watchtower.</p>
+    <div class="inv-list" data-ct-craft-list></div>
   </div>
 </div>
 
@@ -211,6 +223,8 @@ input[type=range]{width:150px}
     <div class="dlg-name" data-ct-dlg-name></div>
     <div class="dlg-body" data-ct-dlg-body></div>
     <div class="dlg-quest" data-ct-dlg-quest hidden></div>
+    <p class="small-note" data-ct-dlg-friend hidden></p>
+    <div class="inv-list" data-ct-dlg-gift-list></div>
     <div class="dlg-actions">
       <button type="button" data-ct-dlg-turnin hidden>Hand over</button>
       <button type="button" class="secondary" data-ct-close>Bye for now</button>
