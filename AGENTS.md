@@ -52,6 +52,13 @@
   forbidden patterns there so another stale worktree cannot resurrect it.
 
 ## Recent, merged & live (newest first)
+- **Exact multi-object references + correction chains (2026-07-19)** — server
+  commit `5439ffe2`, browser build remains `phantom-live-20260718-43`. Phantom
+  resolves explicit former/latter facts, moves and swaps actual numbered
+  options, retains plural ownership, and preserves the newest values across
+  chained corrections. The canonical 117-request gate, 50-turn
+  two-organization Chrome journey, scheduled sync, and 190 live guards passed
+  with zero fallback or business leakage.
 - **Useful ambiguity + correction repair (2026-07-18)** — server commit
   `f1923f80`, browser build remains `phantom-live-20260718-43`. Phantom asks one
   concise clarification naming genuinely ambiguous people, ignores format words

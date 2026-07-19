@@ -1,39 +1,41 @@
 {
-  "cycle": 20,
-  "date": "2026-07-18",
-  "theme": "relevant-thread conversational continuity",
+  "cycle": 26,
+  "date": "2026-07-19",
+  "theme": "exact multi-object references and correction chains",
   "finding": {
-    "id": "Q-0013",
+    "id": "Q-0019",
     "severity": "P1",
     "status": "fixed_verified",
-    "rootCause": "Instant chat recognized some follow-ups but packed only the newest contiguous topic, so a named return could receive an unrelated turn and natural implicit follow-ups could receive no context.",
-    "correction": "The bounded selector now detects natural implicit follow-ups and retrieves matching recent turns plus nearby corrections while excluding intervening unrelated subjects."
+    "rootCause": "Former/latter and list-reorder prompts relied on model inference, allowing invented values and placeholder list labels; plural callbacks also depended on brittle exact-keyword relevance.",
+    "correction": "Bounded extractive tools now resolve explicit paired facts and real numbered-list operations, while plural and paired references retain only the active temporary topic."
   },
   "verification": {
     "databaseApiChecks": 57,
     "browserBusinessModules": 6,
-    "mixedChatTurns": 28,
+    "mixedChatTurns": 50,
     "viewports": ["1440x900", "390x844"],
-    "report": "tmp/database-auth-org-browser/2026-07-19T00-52-39-046Z/report.json",
+    "report": "tmp/database-auth-org-browser/2026-07-19T05-46-42-470Z/report.json",
     "releaseCritical": "20/20",
-    "liveModelRequests": 90,
-    "liveModelAverageMs": 539,
-    "liveModelMaximumMs": 2098,
-    "naturalFollowUpVerified": true,
-    "namedTopicRevisitVerified": true,
-    "deployedCommit": "c881f7a0",
-    "deployedBuild": "phantom-live-20260718-37",
+    "liveModelRequests": 117,
+    "liveModelAverageMs": 526,
+    "liveModelMaximumMs": 1746,
+    "formerLatterVerified": true,
+    "listReorderVerified": true,
+    "pluralOwnershipVerified": true,
+    "chainedCorrectionsVerified": true,
+    "deployedCommit": "5439ffe2",
+    "deployedBuild": "phantom-live-20260718-43",
     "scheduledSyncResult": 0,
     "strictDoctor": "pass_before_and_after_scheduled_sync",
     "commands": [
       "npm run test:database-auth",
-      "npm run test:organization-record-isolation",
+      "node scripts/test-memory-retention.mjs",
       "npm run test:release-critical",
-      "npm run test:easy-crm:postgres --workspace @phantomforce/server",
+      "npm run test:dashboard-chat",
       "npm run test:instant-chat:http-live-model --workspace @phantomforce/server",
       "npm run test:change-memory",
       "git diff --check"
     ]
   },
-  "nextCycle": "Exercise the complete browser account lifecycle and authorization-error recovery across customer/admin hosts and roles."
+  "nextCycle": "Exercise causal references and correction conflicts that reverse or partially restore earlier values."
 }

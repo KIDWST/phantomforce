@@ -1955,8 +1955,19 @@ mix dates, lists, and named subjects in Cycle 26.
 
 ## Deployment Verification
 
-- Pending source commit, push, canonical sync, scheduled sync, and strict live
-  doctor verification.
+- Pushed `5439ffe2` to `origin/main` and synced the canonical
+  `deployments\phantomforce-live` checkout.
+- PASS: strict live-source doctor aligned source, origin, deployment manifest,
+  static UI, Hermes, sidebar rules, resurrection guards, and clean worktrees at
+  `5439ffe2`; the public admin remains on `phantom-live-20260718-43` because
+  this batch changes server behavior and tests, not browser assets.
+- PASS: the canonical-checkout model gate completed 117 requests at 526 ms
+  average and 1,746 ms maximum with zero fallback and zero business leakage;
+  exact references, list operations, plural ownership, correction chains, and
+  every prior assertion passed.
+- PASS: manually triggered `PhantomForce Admin Main Sync` ended in `Ready` with
+  result `0`; the post-sync doctor confirmed no stale source was resurrected
+  and all 190 live guards remained aligned.
 
 ## Next Task
 
