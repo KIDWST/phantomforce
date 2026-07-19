@@ -81,7 +81,7 @@ const PROVIDERS = [
     id: "local",
     name: "Local / Ollama",
     short: "PC",
-    role: "Ollama models installed on this computer",
+    role: "Ollama on this PC, with safe supervisor loop available",
     models: ["local-auto"],
     allowCustomModel: true,
   },
@@ -112,6 +112,8 @@ const DEFAULT_SETTINGS = {
   providerMode: "smart",
   selectedProviders: ["claude", "codex", "openrouter", "local"],
   brainMode: "api",
+  localGuidedLoop: true,
+  localSupervisorProvider: "codex",
   models: {
     claude: "claude-cli",
     codex: "codex-default",
@@ -202,6 +204,9 @@ function normalizeSettings(value) {
   const provider = PROVIDERS.some((item) => item.id === input.provider) ? input.provider : DEFAULT_SETTINGS.provider;
   const providerMode = PROVIDER_MODES.some((item) => item.id === input.providerMode) ? input.providerMode : DEFAULT_SETTINGS.providerMode;
   const brainMode = ["local", "api", "subscription"].includes(input.brainMode) ? input.brainMode : DEFAULT_SETTINGS.brainMode;
+  const localSupervisorProvider = PROVIDERS.some((item) => item.id === input.localSupervisorProvider && item.id !== "local")
+    ? input.localSupervisorProvider
+    : DEFAULT_SETTINGS.localSupervisorProvider;
   const models = { ...DEFAULT_SETTINGS.models, ...(input.models || {}) };
   for (const option of PROVIDERS) {
     if (!providerModels(option).includes(models[option.id]) && !(option.allowCustomModel && typeof models[option.id] === "string" && models[option.id].trim())) {
@@ -224,6 +229,8 @@ function normalizeSettings(value) {
     providerMode,
     selectedProviders,
     brainMode,
+    localGuidedLoop: input.localGuidedLoop !== false,
+    localSupervisorProvider,
     models,
   };
 }
@@ -350,6 +357,7 @@ function renderSafetySummary(settings) {
     <div class="set-status-grid">
       <span><b>Loop</b><i>${loop.enabled ? esc(loopProviderName(loop.targetProvider)) : "Off"}</i></span>
       <span><b>Routing</b><i>${esc(routingLabel)} · ${esc(providerFor(settings.provider).name)}</i></span>
+      <span><b>Local</b><i>${settings.localGuidedLoop ? `Supervised by ${esc(providerFor(settings.localSupervisorProvider).name)}` : "Local-only"}</i></span>
       <span><b>Autopilot</b><i>${settings.autopilotScope === "safe_repeat" ? "Safe repeat work only" : "Manual only"}</i></span>
       <span><b>Boundary</b><i>${esc(externalLabel)}</i></span>
     </div>`;
@@ -584,8 +592,24 @@ function renderModelTab(settings, activeProvider, activeModel) {
         <p class="set-label">Models</p>
         <div class="set-control-grid set-provider-models">${renderSelectedModelControls(settings)}</div>
         ${settings.selectedProviders.includes("local") ? `
+          <div class="set-loop-brief">
+            <div>
+              <b>Local guided loop</b>
+              <span>When Local is selected, Phantom drafts on Ollama, asks an approved supervisor lane to critique it, then brings the final pass back to Local. No hidden ChatGPT browser sessions.</span>
+            </div>
+            <label class="set-switch">
+              <input type="checkbox" data-ai-toggle="localGuidedLoop" ${settings.localGuidedLoop ? "checked" : ""}/><span></span>
+            </label>
+          </div>
+          ${settings.localGuidedLoop ? `<label class="set-control set-preferred-provider"><span>Supervisor lane for Local</span>
+            <select data-ai-field="localSupervisorProvider">
+              ${PROVIDERS.filter((provider) => provider.id !== "local").map((provider) => `<option value="${esc(provider.id)}" ${provider.id === settings.localSupervisorProvider ? "selected" : ""}>${esc(provider.name)}</option>`).join("")}
+            </select>
+            <i>Use configured provider connectors only. Consumer web-chat automation stays blocked.</i>
+          </label>` : ""}
           <div class="set-rule-list">
             <span>Local means Ollama on this PC: ${esc(localModelStatus.baseUrl)}</span>
+            <span>${settings.localGuidedLoop ? `Local requests loop through ${esc(providerFor(settings.localSupervisorProvider).name)} before finalizing.` : "Local-only mode will not ask a supervisor lane."}</span>
             <span>${esc(localProviderStatusText())}</span>
             <button class="btn btn-quiet" type="button" data-local-model-refresh>Re-read Ollama models</button>
           </div>` : ""}

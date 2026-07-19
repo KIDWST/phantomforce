@@ -7,7 +7,7 @@ import {
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
 } from "./store.js?v=phantom-live-20260718-3";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260718-3";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260718-4";
 import { WORKSPACE_DEFS, missionWidgets, esc, DEPARTMENTS } from "./workspaces.js?v=phantom-live-20260718-3";
 import { createPhantomCharacter } from "./character.js?v=phantom-live-20260718-3";
 import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260718-3";
@@ -22,7 +22,7 @@ import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260718-3";
 import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260718-3";
 import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260718-3";
 import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260718-3";
-import { renderOperatorMiniSettings, renderOperatorSettings, renderOwnerAdminControl } from "./settings.js?v=phantom-live-20260718-3";
+import { renderOperatorMiniSettings, renderOperatorSettings, renderOwnerAdminControl } from "./settings.js?v=phantom-live-20260718-4";
 import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260718-3";
 import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260718-3";
 import { mountAmbient } from "./ambient.js?v=phantom-live-20260718-3";

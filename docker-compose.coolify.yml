@@ -1,0 +1,43 @@
+services:
+  phantomforce:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "${PORT:-5190}:5190"
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 5190
+      PHANTOMFORCE_DEPLOYMENT_TARGET: coolify
+      PHANTOMFORCE_SERVER_LOGGER: "${PHANTOMFORCE_SERVER_LOGGER:-true}"
+      PHANTOMFORCE_AUTH_PROVIDER: "${PHANTOMFORCE_AUTH_PROVIDER:-owner-production}"
+      PHANTOMFORCE_PUBLIC_APP_URL: "${PHANTOMFORCE_PUBLIC_APP_URL:-https://app.phantomforce.online}"
+      SOCIAL_OAUTH_REDIRECT_URI: "${SOCIAL_OAUTH_REDIRECT_URI:-https://admin.phantomforce.online/phantom-ai/ops/social-oauth/callback}"
+      PHANTOMFORCE_ACCESS_DATA_DIR: /data/phantomforce/access
+      PHANTOMFORCE_CONTENT_ASSET_DIR: /data/phantomforce/content-assets
+      PHANTOMFORCE_CUSTOMIZATION_DIR: /data/phantomforce/customization
+      PHANTOMFORCE_PHANTOMSTORE_PATH: /data/phantomforce/phantomstore/phantomstore.json
+      PHANTOMFORCE_PHANTOMPLAY_PATH: /data/phantomforce/phantomplay/phantomplay.json
+      PHANTOMFORCE_COMPETITOR_INTELLIGENCE_PATH: /data/phantomforce/competitor-intelligence/store.json
+      PHANTOMFORCE_AUTOMATION_STATE_DIR: /data/phantomforce/automation
+      PHANTOMFORCE_INSTALL_ACCEPTANCE_LOG: /data/phantomforce/install-acceptance.ndjson
+      DATABASE_URL: "${DATABASE_URL:-}"
+      PHANTOMFORCE_SESSION_SECRET: "${PHANTOMFORCE_SESSION_SECRET:?Set PHANTOMFORCE_SESSION_SECRET in Coolify secrets}"
+      PHANTOMFORCE_OWNER_EMAIL: "${PHANTOMFORCE_OWNER_EMAIL:-}"
+      PHANTOMFORCE_OWNER_LOGIN_KEY: "${PHANTOMFORCE_OWNER_LOGIN_KEY:-}"
+      PHANTOMFORCE_GATEWAY_SHARED_SECRET: "${PHANTOMFORCE_GATEWAY_SHARED_SECRET:-}"
+      PHANTOMFORCE_GATEWAY_ADMIN_USERS: "${PHANTOMFORCE_GATEWAY_ADMIN_USERS:-}"
+      PHANTOMFORCE_GATEWAY_CLIENT_MAP: "${PHANTOMFORCE_GATEWAY_CLIENT_MAP:-}"
+    volumes:
+      - phantomforce-data:/data/phantomforce
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5190/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  phantomforce-data:

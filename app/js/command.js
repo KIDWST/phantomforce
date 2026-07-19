@@ -63,6 +63,8 @@ function loadRuntimeAiSettings() {
     providerMode: "smart",
     selectedProviders: ["claude", "codex", "openrouter", "local"],
     brainMode: "api",
+    localGuidedLoop: true,
+    localSupervisorProvider: "codex",
     responseStyle: "operator",
     responseLength: "balanced",
     memoryMode: "business",
@@ -84,6 +86,8 @@ const PROVIDER_TO_BACKEND = {
   openrouter: "openrouter_glm",
   local: "local_ollama",
 };
+
+const LOCAL_SUPERVISOR_FALLBACK_PROVIDER = "codex";
 
 const CODEX_BACKEND_MODEL_BY_ALIAS = Object.freeze({
   "codex-fast": "gpt-5.5-instant",
@@ -124,6 +128,7 @@ function shouldUseDeepReasoning(raw, intent) {
 
 function providerIdForRequest(settings, intent, deepReasoning = false) {
   const selected = selectedProviderIds(settings);
+  if (settings.brainMode === "local" && selected.includes("local")) return "local";
   if (settings.providerMode !== "smart") return selected.includes(settings.provider) ? settings.provider : selected[0];
   if ((deepReasoning || ["brainstorm", "plan", "feedback"].includes(intent.primaryIntent)) && selected.includes("claude")) return "claude";
   if (selected.includes("codex")) return "codex";
@@ -161,9 +166,64 @@ function allowedProvidersForSettings(settings, routeProfile = null) {
   return [...new Set(selected.map((id) => PROVIDER_TO_BACKEND[id]).filter(Boolean))];
 }
 
+function supervisorProviderForSettings(settings) {
+  const preferred = PROVIDER_TO_BACKEND[settings.localSupervisorProvider] ? settings.localSupervisorProvider : LOCAL_SUPERVISOR_FALLBACK_PROVIDER;
+  return preferred === "local" ? LOCAL_SUPERVISOR_FALLBACK_PROVIDER : preferred;
+}
+
+function localGuidedAllowedProviders(settings) {
+  const supervisor = supervisorProviderForSettings(settings);
+  return [...new Set([
+    "local_ollama",
+    PROVIDER_TO_BACKEND[supervisor],
+    "codex_cli",
+    "claude_cli",
+    "openrouter_glm",
+  ].filter(Boolean))];
+}
+
+function buildPhantomLoopPayload(loop, settings, routeProfile) {
+  if (routeProfile?.localGuidedLoop) {
+    const supervisor = supervisorProviderForSettings(settings);
+    return {
+      enabled: true,
+      source: "local_auto_supervisor",
+      local_auto_supervisor: true,
+      target_provider: supervisor,
+      target_model: selectedModelForProvider(settings, supervisor),
+      depth: "two_pass",
+      approval_mode: "ask_external",
+      max_cost_per_response: loop.maxCostPerResponse,
+      routing_mode: "local_to_supervisor_to_local",
+      max_passes: 3,
+      timeout_ms: Math.max(45000, Number(loop.advanced?.timeoutMs || 45000)),
+      share_private_context: false,
+      allow_tool_calls: false,
+      proof_logging: true,
+      consumer_chatgpt_browser_automation: false,
+    };
+  }
+  if (!loop.enabled) return null;
+  return {
+    target_provider: loop.targetProvider,
+    target_model: loop.targetModel,
+    depth: loop.depth,
+    approval_mode: loop.approvalMode,
+    max_cost_per_response: loop.maxCostPerResponse,
+    routing_mode: loop.advanced.routingMode,
+    max_passes: loop.advanced.maxPasses,
+    timeout_ms: loop.advanced.timeoutMs,
+    share_private_context: loop.advanced.sharePrivateContext,
+    allow_tool_calls: loop.advanced.allowToolCalls,
+    proof_logging: loop.advanced.proofLogging,
+    consumer_chatgpt_browser_automation: false,
+  };
+}
+
 function chatRouteProfileForRequest(raw, intent, settings) {
   const deepReasoning = shouldUseDeepReasoning(raw, intent);
   const normalProviderId = providerIdForRequest(settings, intent, deepReasoning);
+  const localGuidedLoop = normalProviderId === "local" && settings.localGuidedLoop !== false;
   if (isInstantChatRequest(raw, intent)) {
     const selected = selectedProviderIds(settings);
     const providerId = settings.providerMode === "smart" && selected.includes("codex")
@@ -182,15 +242,16 @@ function chatRouteProfileForRequest(raw, intent, settings) {
     tier: deepReasoning ? "deep" : "standard",
     providerId: normalProviderId,
     requestedModel: selectedModelForProvider(settings, normalProviderId),
-    allowedProviders: allowedProvidersForSettings(settings),
+    allowedProviders: localGuidedLoop ? localGuidedAllowedProviders(settings) : allowedProvidersForSettings(settings),
     allowFallback: true,
     maxProviderMs: null,
+    localGuidedLoop,
   };
 }
 
 function canAskHermes(intent, settings) {
   return isAdmin()
-    && settings.brainMode !== "local"
+    && (settings.brainMode !== "local" || settings.localGuidedLoop === true)
     && !LOCAL_FIRST_INTENTS.has(intent.primaryIntent)
     && !intent.requiresAdminApproval
     && !intent.shouldCreateTask
@@ -256,6 +317,7 @@ async function askHermesBrain(raw, intent, settings) {
   if (token) headers.Authorization = `Bearer ${token}`;
   const loop = loadPhantomLoop();
   const requestedProviderId = routeProfile.providerId;
+  const phantomLoop = buildPhantomLoopPayload(loop, settings, routeProfile);
   try {
     const response = await fetch("/phantom-ai/chat", {
       method: "POST",
@@ -286,18 +348,7 @@ async function askHermesBrain(raw, intent, settings) {
            memories (workspace-scoped, pinned first), money and today's plan
            — real context, not just counts. */
         module_data: buildContextModules(settings),
-        phantom_loop: loop.enabled ? {
-          target_provider: loop.targetProvider,
-          target_model: loop.targetModel,
-          depth: loop.depth,
-          approval_mode: loop.approvalMode,
-          max_cost_per_response: loop.maxCostPerResponse,
-          routing_mode: loop.advanced.routingMode,
-          max_passes: loop.advanced.maxPasses,
-          timeout_ms: loop.advanced.timeoutMs,
-          share_private_context: loop.advanced.sharePrivateContext,
-          allow_tool_calls: loop.advanced.allowToolCalls,
-        } : null,
+        phantom_loop: phantomLoop,
       }),
     });
     const payload = await response.json().catch(() => ({}));

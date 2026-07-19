@@ -23,6 +23,7 @@
     "test:agent-workforce": "tsx scripts/test-agent-workforce-status.ts",
     "test:vacation-operator": "tsx scripts/test-vacation-operator-coverage.ts",
     "test:neural-spine": "tsx scripts/test-neural-spine.ts",
+    "test:guided-local-loop": "tsx scripts/test-guided-local-loop.ts",
     "test:internal-harness": "tsx scripts/test-internal-harness-router.ts",
     "test:customization": "tsx scripts/test-customization-platform.ts",
     "test:phantomplay": "tsx scripts/test-phantomplay.ts",

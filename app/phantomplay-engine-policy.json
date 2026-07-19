@@ -1,0 +1,54 @@
+{
+  "id": "phantomplay-native-live-policy",
+  "version": "3.0-native-live",
+  "updatedAt": "2026-07-19T00:00:00.000Z",
+  "delivery": {
+    "desktopShell": true,
+    "liveAppUrlDefault": "https://admin.phantomforce.online/app/",
+    "localFallback": "/app/index.html",
+    "serverEditableCatalog": true,
+    "requiresRedownloadForContentChanges": false
+  },
+  "allowedGameRuntimeTypes": [
+    "html5",
+    "javascript",
+    "webassembly",
+    "webgl",
+    "godot-web",
+    "phantomplay-native-module"
+  ],
+  "blockedGameRuntimeTypes": [
+    "windows-exe",
+    "macos-app",
+    "linux-elf",
+    "native-installer",
+    "browser-extension"
+  ],
+  "limits": {
+    "webGameBundleBytes": 52428800,
+    "nativeApprovedBundleBytes": 524288000,
+    "saveStateBytes": 1048576,
+    "maxLoadedChunks": 256,
+    "maxFrameRate": 144,
+    "defaultFrameRate": 60
+  },
+  "capabilities": {
+    "localGameCache": true,
+    "signedManifestUpdates": true,
+    "serverDrivenCatalog": true,
+    "controllerInput": true,
+    "keyboardCapture": true,
+    "fullscreen": true,
+    "offlineBuiltIns": true,
+    "backgroundJobNotifications": true,
+    "nativeBridge": true
+  },
+  "security": {
+    "gameSandboxRequired": true,
+    "externalNetworkingDefault": "blocked",
+    "localFileAccessDefault": "blocked",
+    "nativeModuleApprovalRequired": true,
+    "unsignedGameBundles": "reject",
+    "destructiveLocalActions": "not_allowed"
+  }
+}

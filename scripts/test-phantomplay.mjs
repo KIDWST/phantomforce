@@ -86,8 +86,11 @@ assert.match(module, /data-pp-player-close/u, "The player must expose close cont
 assert.match(module, /postToGame\("exit"/u, "Closing the player must notify the game before teardown.");
 assert.match(module, /document\.exitFullscreen/u, "Closing the player must escape fullscreen mode.");
 assert.match(module, /PHANTOMPLAY_ENGINE/u, "The player must publish an engine capability profile.");
-assert.match(module, /saveStateBytes:\s*262144/u, "The engine must support larger save-state payloads for bigger games.");
+assert.match(module, /saveStateBytes:\s*1048576/u, "The engine must support native-live save-state payloads for bigger games.");
 assert.match(module, /largeMap:\s*\{/u, "The engine must advertise large-map support.");
+assert.match(module, /version:\s*"3\.0-native-live"/u, "The engine must advertise the packaged native-live runtime.");
+assert.match(module, /nativeRuntime:[\s\S]*requiresRedownloadForContentChanges:\s*false/u, "The engine must keep content server-editable after desktop packaging.");
+assert.match(module, /allowedRuntimeTypes:[\s\S]*"webassembly"[\s\S]*"godot-web"/u, "The engine must support browser-first larger game runtimes.");
 assert.match(module, /engine:\s*engineFor/u, "Game settings must include engine capabilities.");
 assert.match(module, /frame\.focus/u, "The active game frame must receive keyboard focus.");
 for (const slug of gameSlugs) {

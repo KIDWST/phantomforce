@@ -34,7 +34,10 @@ try {
 
   const initial = await play.getPhantomPlaySnapshot(playerA, { entitled: true, dailyMinuteLimit: 30, canSubmitGames: false });
   assert(initial.catalog.length >= 28, "The full expanded built-in game catalog should ship.");
-  assert(play.PHANTOMPLAY_ENGINE.version === "2.0-large-map" && play.PHANTOMPLAY_ENGINE.saveStateBytes >= 262_144, "PhantomPlay should expose a large-map-capable engine profile.");
+  assert(play.PHANTOMPLAY_ENGINE.version === "3.0-native-live" && play.PHANTOMPLAY_ENGINE.saveStateBytes >= 1_048_576, "PhantomPlay should expose a packaged native-live engine profile.");
+  assert(play.PHANTOMPLAY_ENGINE.nativeRuntime?.serverEditableCatalog === true, "PhantomPlay desktop packaging should keep the catalog server-editable.");
+  assert(play.PHANTOMPLAY_ENGINE.nativeRuntime?.requiresRedownloadForContentChanges === false, "PhantomPlay content changes should not require user redownloads.");
+  assert(play.PHANTOMPLAY_ENGINE.allowedRuntimeTypes.includes("webassembly") && play.PHANTOMPLAY_ENGINE.allowedRuntimeTypes.includes("godot-web"), "PhantomPlay should support larger browser-first runtime lanes.");
   assert(initial.engine?.largeMap?.streaming === true, "Snapshots should publish large-map engine capabilities to the player shell.");
   const builtInIds = new Set(initial.catalog.map((game) => game.id));
   assert(builtInIds.size === initial.catalog.length, "Built-in game IDs should not duplicate after catalog registration.");

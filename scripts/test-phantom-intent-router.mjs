@@ -24,7 +24,7 @@ const buildId = commandSrc.match(/store\.js\?v=([^"']+)/)?.[1] || "";
 const q = buildId ? `?v=${buildId}` : "";
 const { classifyPhantomIntent } = await import(`../app/js/intent-router.js${q}`);
 const { handleCommand, handleSmartCommand } = await import(`../app/js/command.js${q}`);
-const { ctx, store, VACATION_POLICY } = await import(`../app/js/store.js${q}`);
+const { ctx, store, VACATION_POLICY, workspaceStorageSetItem } = await import(`../app/js/store.js${q}`);
 
 ctx.session = { role: "admin", name: "Jordan", ws: "phantomforce" };
 
@@ -261,6 +261,47 @@ assert.equal(broadThought.say, "Model-backed answer with a useful plan.");
 assert.equal(broadChatBody.route_tier, "deep", "broad strategy should get the deeper model lane");
 assert.equal(broadChatBody.allow_provider_fallback, true, "broad strategy should allow provider fallback");
 assert.ok(broadChatBody.allowed_providers.includes("claude_cli"), "broad strategy should include Claude in the provider chain");
+
+workspaceStorageSetItem("pf.operator.settings.v1", JSON.stringify({
+  provider: "local",
+  providerMode: "single",
+  selectedProviders: ["local"],
+  brainMode: "local",
+  localGuidedLoop: true,
+  localSupervisorProvider: "codex",
+  models: { local: "local-auto", codex: "codex-default" },
+}));
+let localGuidedBody = null;
+globalThis.fetch = async (url, init) => {
+  assert.match(String(url), /\/phantom-ai\/chat$/, "local guided mode should still use the audited chat backend");
+  localGuidedBody = JSON.parse(init.body);
+  return {
+    ok: true,
+    json: async () => ({
+      ok: true,
+      message: { role: "assistant", content: "Local draft checked by a supervisor and finalized." },
+      fallback: { all_failed: false },
+      hermes: { route_tier: "deep" },
+      phantom_loop: { status: "completed", source: "local_auto_supervisor" },
+    }),
+  };
+};
+const localGuided = await handleSmartCommand("help me think through the PhantomBot local model supervisor strategy");
+globalThis.fetch = originalFetch;
+assert.equal(localGuided.say, "Local draft checked by a supervisor and finalized.");
+assert.equal(localGuidedBody.admin_model, "local_ollama", "local choice should start from the local model lane");
+assert.equal(localGuidedBody.phantom_loop.source, "local_auto_supervisor", "Local mode should auto-request the guided supervisor loop");
+assert.equal(localGuidedBody.phantom_loop.local_auto_supervisor, true);
+assert.equal(localGuidedBody.phantom_loop.consumer_chatgpt_browser_automation, false);
+assert.deepEqual(localGuidedBody.allowed_providers.slice(0, 2), ["local_ollama", "codex_cli"], "Local guided mode should run local first, then an approved supervisor lane");
+workspaceStorageSetItem("pf.operator.settings.v1", JSON.stringify({
+  provider: "claude",
+  providerMode: "smart",
+  selectedProviders: ["claude", "codex", "openrouter", "local"],
+  brainMode: "api",
+  localGuidedLoop: true,
+  localSupervisorProvider: "codex",
+}));
 
 globalThis.fetch = async (url, init) => {
   assert.match(String(url), /\/phantom-ai\/chat$/, "provider failures should still prove the backend was attempted");

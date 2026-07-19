@@ -74,9 +74,20 @@ export type PhantomPlayGame = {
 
 const PHANTOMPLAY_ART_VERSION = "phantomplay-art-20260717";
 export const PHANTOMPLAY_ENGINE = {
-  version: "2.0-large-map",
-  saveStateBytes: 262_144,
-  largeMap: { chunkSize: 1024, maxLoadedChunks: 64, streaming: true },
+  version: "3.0-native-live",
+  saveStateBytes: 1_048_576,
+  largeMap: { chunkSize: 1024, maxLoadedChunks: 256, streaming: true },
+  allowedRuntimeTypes: ["html5", "javascript", "webassembly", "webgl", "godot-web", "phantomplay-native-module"],
+  nativeRuntime: {
+    packagedShell: "optional",
+    bridgeAvailable: false,
+    localGameCache: true,
+    signedManifestUpdates: true,
+    serverEditableCatalog: true,
+    requiresRedownloadForContentChanges: false,
+    maxWebBundleBytes: 52_428_800,
+    maxNativeApprovedBundleBytes: 524_288_000,
+  },
   protocols: ["ready", "score", "progress", "complete", "paused", "exit", "settings", "save-state", "load-state"],
 } as const;
 const artUrl = (file: string) => `/app/assets/phantomplay/${file}?v=${PHANTOMPLAY_ART_VERSION}`;

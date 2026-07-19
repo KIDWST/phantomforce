@@ -429,6 +429,11 @@ import {
   startAdminProviderHealthMonitor,
   type AdminProviderId,
 } from "./phantom-ai/admin-provider-manager.js";
+import {
+  normalizeGuidedLoopConfig,
+  runGuidedLocalSupervisorLoop,
+  type GuidedLoopRun,
+} from "./phantom-ai/guided-local-loop.js";
 import { evaluateProviderLiveReceiptLedgerContract } from "./phantom-ai/provider-live-receipt-ledger-contract.js";
 import {
   evaluateProviderBudgetPolicy,
@@ -899,6 +904,8 @@ app.get("/health", async () => {
     /* the commit this API process is running — the sync watches this to know
        when a git pull delivered new server code and Hermes must restart */
     commit: runningCommit,
+    deploymentTarget: process.env.PHANTOMFORCE_DEPLOYMENT_TARGET || "local",
+    checkedAt: new Date().toISOString(),
     contracts: {
       actions: Object.keys(ACTION_SCHEMAS),
       falconJobs: Object.keys(FALCON_JOB_SCHEMAS),
@@ -8726,6 +8733,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
     route_tier?: unknown;
     max_provider_ms?: unknown;
     allow_provider_fallback?: unknown;
+    phantom_loop?: unknown;
     user_request?: unknown;
     business_summary?: unknown;
     module_data?: unknown;
@@ -8761,7 +8769,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
   const adminModelLane = parseAdminPhantomAiModelLane(body.admin_model ?? body.model_lane ?? body.provider);
   const adminProviderRoute = adminPhantomAiProviderRoute(adminModelLane);
   const adminModelLabel = adminPhantomAiModelLabel(adminModelLane);
-  const adminExecutionMode = body.execution_mode === "auto" ? "auto" : "approval";
+  const adminExecutionMode: "approval" | "auto" = body.execution_mode === "auto" ? "auto" : "approval";
   const adminRouteTier = parseAdminPhantomAiRouteTier(body.route_tier);
   const requestedModelId = parseRequestedAdminModel(body.requested_model);
   const maxProviderMs = parseAdminMaxProviderMs(body.max_provider_ms);
@@ -9009,7 +9017,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
         : [],
     });
     const approvalRequired = brainContext.needsApproval || preview.decision.approval_required || preview.action_preview.approval_required;
-    const fallbackChat = await runAdminPhantomAiChatWithFallback(adminModelLane, {
+    const chatContext = {
       requestId: normalized.request_id,
       businessName: normalized.business_name,
       taskType: normalized.task_type,
@@ -9021,13 +9029,24 @@ app.post("/phantom-ai/chat", async (request, reply) => {
       requestedModelId,
       routeTier: adminRouteTier,
       maxProviderMs,
-    }, allowedAdminProviders, { allowFallback: allowProviderFallback });
+    };
+    const guidedLoopConfig = normalizeGuidedLoopConfig(body.phantom_loop, {
+      requestedProviderId: adminPhantomAiProviderIdForLane(adminModelLane),
+      defaultSupervisorProviderId: "codex_cli",
+      localAutoSupervisor: Boolean((body.phantom_loop as { local_auto_supervisor?: unknown } | null)?.local_auto_supervisor),
+    });
+    const fallbackChat: Awaited<ReturnType<typeof runAdminPhantomAiChatWithFallback>> | GuidedLoopRun = guidedLoopConfig
+      ? await runGuidedLocalSupervisorLoop(guidedLoopConfig, chatContext, callAdminPhantomAiProviderSafe)
+      : await runAdminPhantomAiChatWithFallback(adminModelLane, chatContext, allowedAdminProviders, { allowFallback: allowProviderFallback });
     const respondingProviderId = fallbackChat.providerId;
     const respondingLane = adminPhantomAiLaneForProviderId(respondingProviderId);
     const respondingLabel = adminPhantomAiProviderLabel(respondingProviderId);
     const respondingProviderRoute = adminPhantomAiProviderRoute(respondingLane);
     const fallbackSwitched = fallbackChat.fallbackUsed && !fallbackChat.allFailed;
     const allProvidersFailed = fallbackChat.allFailed;
+    const guidedLoop: GuidedLoopRun["guidedLoop"] | null = "guidedLoop" in fallbackChat
+      ? (fallbackChat as GuidedLoopRun).guidedLoop
+      : null;
     const modelResult = fallbackChat.result;
     const resultStatus = "status" in modelResult ? modelResult.status : "called";
     const resultError =
@@ -9096,6 +9115,8 @@ app.post("/phantom-ai/chat", async (request, reply) => {
         modelLane: respondingLane,
         requestedModelLane: adminModelLane,
         fallbackUsed: fallbackSwitched,
+        guidedLoopStatus: guidedLoop?.status ?? null,
+        guidedLoopSupervisor: guidedLoop?.supervisor_provider_id ?? null,
         allProvidersFailed,
         approvalRequired,
         providerCalled,
@@ -9156,6 +9177,21 @@ app.post("/phantom-ai/chat", async (request, reply) => {
         responding_provider: respondingLabel,
         attempts: fallbackChat.attempts,
       },
+      phantom_loop: guidedLoop
+        ? {
+            status: guidedLoop.status,
+            source: guidedLoop.source,
+            local_first: guidedLoop.local_first,
+            supervisor_provider: adminPhantomAiProviderLabel(guidedLoop.supervisor_provider_id),
+            final_provider: guidedLoop.final_provider_id ? adminPhantomAiProviderLabel(guidedLoop.final_provider_id) : null,
+            consumer_chatgpt_browser_automation: false,
+            share_private_context: guidedLoop.share_private_context,
+            allow_tool_calls: guidedLoop.allow_tool_calls,
+            proof_logging: guidedLoop.proof_logging,
+            stages: guidedLoop.stages,
+            safety_flags: guidedLoop.safety_flags,
+          }
+        : null,
       hermes: {
         context_used: true,
         ledger_written: true,

@@ -1,0 +1,16 @@
+node_modules
+packages/*/dist
+server/dist
+server/node_modules
+.git
+.phantom
+.local
+server/.local
+tmp
+run-evidence
+*.log
+.env
+.env.local
+.env.*.local
+server/.env
+ai-proxy/.env
