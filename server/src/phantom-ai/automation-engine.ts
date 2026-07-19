@@ -24,6 +24,7 @@ import { buildProductionReadinessReport } from "../access/production-readiness.j
 import { prisma } from "../access/prisma-runtime.js";
 import { getContentAssetStorageProvider } from "./content-asset-storage.js";
 import { getSalesConnectorStatus } from "../connectors/sales-connector.js";
+import { getGuardStatus, runGuardSelfTest } from "./prompt-injection-guard.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -320,6 +321,29 @@ const JOB_DEFINITIONS: AutomationJobDefinition[] = [
         ok,
         summary: parts.join(" · ").slice(0, 340),
         next_action: ok ? "No action needed." : "Install/enable ClamAV or verify OS antivirus protection.",
+      };
+    },
+  },
+  {
+    id: "prompt-injection-guard-health",
+    name: "Prompt Injection Guard",
+    category: "security",
+    cadence: "daily",
+    description: "Screens agent-run requests for prompt injection, jailbreaks, and system-prompt extraction before they execute. Runs a live self-test every check — never a static claim.",
+    benefit: "Protects every automation and agent run from hostile instructions hidden in user or third-party text, without an external API key or a model parked in memory all day.",
+    output: "Daily guard self-test result plus lifetime pass/block counts.",
+    setup_fields: [],
+    approval_required: false,
+    external_action: false,
+    run: async () => {
+      const [status, selfTest] = await Promise.all([getGuardStatus(), runGuardSelfTest()]);
+      const modelPart = status.local_model_tier === "enabled" ? `deep tier: local model "${status.local_model}" (loaded on demand only)` : "deep tier: disabled (heuristics only)";
+      return {
+        ok: selfTest.ok,
+        summary: selfTest.ok
+          ? `Guard is live — correctly passed a benign string and blocked a known injection string. ${modelPart}. Lifetime: ${status.total_checks} checked, ${status.total_blocked} blocked.`
+          : `Guard self-test failed (benign_passed=${selfTest.benign_passed}, injection_blocked=${selfTest.injection_blocked}) — review server logs.`,
+        next_action: selfTest.ok ? "No action needed." : "Check Ollama reachability or PHANTOM_GUARD_* environment settings.",
       };
     },
   },

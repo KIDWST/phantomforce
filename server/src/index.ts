@@ -348,6 +348,7 @@ import {
   setAutomationJobEnabled,
   startAutomationEngine,
 } from "./phantom-ai/automation-engine.js";
+import { screenText } from "./phantom-ai/prompt-injection-guard.js";
 import {
   approveAgentRun,
   getAgentRun,
@@ -6824,6 +6825,20 @@ app.post("/phantom-ai/runs", async (request, reply) => {
   const parsed = AgentRunStartSchema.safeParse(request.body ?? {});
   if (!parsed.success) {
     return reply.code(400).send({ ok: false, error: "bad_request", detail: parsed.error.flatten() });
+  }
+  /* Prompt Injection Guard: screen free-text run requests before anything
+     executes. Heuristic tier is instant; the local-model tier only engages
+     for ambiguous text and never stays resident in memory. */
+  if (parsed.data.request) {
+    const verdict = await screenText(parsed.data.request, "agent_run_request");
+    if (verdict.classification === "block") {
+      return reply.code(400).send({
+        ok: false,
+        error: "blocked_by_prompt_guard",
+        violation_types: verdict.violation_types,
+        detail: verdict.reason,
+      });
+    }
   }
   /* Entitlement gate (database-auth orgs only): agent runs metered per day. */
   {

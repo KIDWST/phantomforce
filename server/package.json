@@ -33,6 +33,7 @@
     "test:phantomplay": "tsx scripts/test-phantomplay.ts",
     "test:phantomstore": "tsx scripts/test-phantomstore.ts",
     "test:competitor-intelligence": "tsx scripts/test-competitor-intelligence.ts",
+    "test:prompt-injection-guard": "tsx scripts/test-prompt-injection-guard.ts",
     "test:local-customer-plan": "tsx scripts/test-local-customer-plan-preview.ts",
     "test:site-store-render": "tsx scripts/test-site-store-render.ts",
     "test:auth:prisma-dev": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-auth-prisma-dev.ps1",
