@@ -1390,3 +1390,60 @@ Recommended Cycle 18.
 
 Extend the same authenticated two-organization proof to CRM leads, proposals,
 approvals, assets, accounting transactions, and connector state in Cycle 19.
+
+# 2026-07-18 - Cycle 19: Authenticated Business-Record Isolation
+
+## Problems Verified
+
+- CRM, proposal, and workspace-approval normalizers accepted a client-supplied
+  `ws` even after the server authorized a different tenant.
+- Proposal and approval hydration retained active-organization server-backed
+  rows that disappeared from the server response, allowing deleted records to
+  reappear from browser state.
+- Accounting connector requests were global browser state, so a bank setup
+  request in one organization appeared in another.
+- Generic workspace APIs treated an unauthorized requested tenant as a hint,
+  silently used the active tenant, and returned 200. The response did not leak
+  foreign data, but it made a wrong-business request look successful.
+
+## Corrections
+
+- All three server record stores derive `ws` from the authorized tenant id.
+- Database membership is now required for every explicit generic workspace
+  tenant; nonmember requests return `403 TENANT_MEMBERSHIP_REQUIRED`.
+- Active-organization proposal and approval hydration treats server-backed
+  collections as authoritative while preserving only genuine local fallback
+  rows and rows from other organizations.
+- Finance connector state now carries `ws`, migrates legacy entries to the
+  original PhantomForce workspace, and renders/updates only the active org.
+- Added `test:organization-record-isolation` to the permanent release gate.
+- Expanded the real database browser journey across CRM, proposals, approvals,
+  Asset Cloud, Accounting, connectors, forged labels, direct tampering, reload,
+  and aligned visible chat replies.
+- Cache-busted the full browser graph as `phantom-live-20260718-37`.
+
+## Source Verification
+
+- PASS: `npm run test:database-auth` applied all eight migrations, passed all
+  57 authorization/API checks, and completed the authenticated Chrome journey.
+- PASS: distinct Aegis and Beacon records remained isolated across six business
+  modules; forged `ws` labels were ignored and direct nonmember requests were
+  denied with 403.
+- PASS: reload retained only ChicagoShots rows; switching back restored only
+  PhantomForce rows.
+- PASS: all 20 visible chat bubbles matched their newly persisted prompt/reply;
+  no accounting language leaked into ordinary conversation.
+- PASS: screenshots at 1440x900 and 390x844 had exact viewport widths, visible
+  composers, no horizontal overflow, and no overlap:
+  `tmp/database-auth-org-browser/2026-07-19T00-05-27-831Z`.
+- PASS: `npm run test:release-critical` (20/20).
+- PASS: `npm run test:easy-crm:postgres --workspace @phantomforce/server`
+  (18/18).
+- PASS: authenticated live-model gate completed 82 requests at 489 ms average
+  and 1,542 ms maximum with zero fallback and zero business leakage.
+- PASS: `git diff --check`.
+
+## Next Task
+
+Exercise browser signup, invitations, recovery, logout/revocation, 2FA,
+role-restricted navigation, and authorization-error recovery in Cycle 20.

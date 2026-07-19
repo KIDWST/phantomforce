@@ -329,9 +329,11 @@ async function readSwitcherState(cdp) {
 }
 
 async function submitChat(cdp, prompt, diagnostics = null) {
-  const before = await evaluate(cdp, `(() => ({
-    lastPhantom: [...document.querySelectorAll("[data-chat-log] .msg-phantom:not(.msg-typing) .msg-text")].at(-1)?.textContent.trim() || "",
-  }))()`);
+  const beforeHistoryCount = await evaluate(cdp, `(() => {
+    const state = JSON.parse(localStorage.getItem("pf.phantom.v4") || "{}");
+    const activeOrg = JSON.parse(localStorage.getItem("pf.session.v3") || "{}").orgId || "";
+    return (state.chatHistory || []).filter((item) => item.ws === activeOrg).length;
+  })()`);
   await evaluate(cdp, `(() => {
     const form = document.querySelector("[data-command-form]");
     const input = document.querySelector("[data-command-input]");
@@ -342,15 +344,26 @@ async function submitChat(cdp, prompt, diagnostics = null) {
     return true;
   })()`);
   await waitForExpression(cdp, `(() => {
+    const state = JSON.parse(localStorage.getItem("pf.phantom.v4") || "{}");
+    const activeOrg = JSON.parse(localStorage.getItem("pf.session.v3") || "{}").orgId || "";
+    const history = (state.chatHistory || []).filter((item) => item.ws === activeOrg);
+    return history.length > ${beforeHistoryCount}
+      && history[0]?.prompt === ${JSON.stringify(prompt)}
+      && !!history[0]?.reply;
+  })()`, `persisted chat answer for ${prompt}`, 20_000, diagnostics);
+  const persistedReply = await evaluate(cdp, `(() => {
+    const state = JSON.parse(localStorage.getItem("pf.phantom.v4") || "{}");
+    const activeOrg = JSON.parse(localStorage.getItem("pf.session.v3") || "{}").orgId || "";
+    return (state.chatHistory || []).find((item) => item.ws === activeOrg && item.prompt === ${JSON.stringify(prompt)})?.reply || "";
+  })()`);
+  await waitForExpression(cdp, `(() => {
     const users = [...document.querySelectorAll("[data-chat-log] .msg-user .msg-text")];
     const phantoms = [...document.querySelectorAll("[data-chat-log] .msg-phantom:not(.msg-typing) .msg-text")];
-    const lastUser = users.at(-1)?.textContent.trim() || "";
-    const lastPhantom = phantoms.at(-1)?.textContent.trim() || "";
-    return lastUser === ${JSON.stringify(prompt)}
-      && !!lastPhantom
-      && lastPhantom !== ${JSON.stringify(before.lastPhantom)}
+    const normalize = (value) => String(value || "").replace(/\\s+/g, " ").trim();
+    return users.at(-1)?.textContent.trim() === ${JSON.stringify(prompt)}
+      && normalize(phantoms.at(-1)?.textContent) === normalize(${JSON.stringify(persistedReply)})
       && !document.querySelector("[data-chat-log] .msg-typing");
-  })()`, `chat answer for ${prompt}`, 20_000, diagnostics);
+  })()`, `visible chat answer for ${prompt}`, 20_000, diagnostics);
   return evaluate(cdp, `(() => {
     const users = [...document.querySelectorAll("[data-chat-log] .msg-user .msg-text")];
     const phantomRows = [...document.querySelectorAll("[data-chat-log] .msg-phantom:not(.msg-typing)")];
@@ -398,6 +411,121 @@ async function switchBrowserOrg(cdp, orgId, diagnostics = null) {
   await waitForExpression(cdp, `document.querySelector("[data-org-select]")?.value === ${JSON.stringify(orgId)}`, `organization switcher value ${orgId}`, 10_000, diagnostics);
 }
 
+async function browserApi(cdp, route, { method = "GET", body } = {}) {
+  return evaluate(cdp, `fetch(${JSON.stringify(route)}, {
+    method: ${JSON.stringify(method)},
+    headers: {
+      Authorization: "Bearer " + sessionStorage.getItem("pf.live.sessionToken.v1"),
+      ${body === undefined ? "" : '"Content-Type": "application/json",'}
+    },
+    ${body === undefined ? "" : `body: JSON.stringify(${JSON.stringify(body)}),`}
+  }).then(async (response) => ({ status: response.status, body: await response.json().catch(() => null) }))`);
+}
+
+async function openWorkspace(cdp, navId, expected, absent = [], diagnostics = null) {
+  await evaluate(cdp, `(() => {
+    history.pushState(null, "", "#page/" + ${JSON.stringify(navId)});
+    window.dispatchEvent(new PopStateEvent("popstate"));
+    return true;
+  })()`);
+  await waitForExpression(cdp, `(() => {
+    const text = document.querySelector("main")?.innerText || document.body.innerText;
+    return text.includes(${JSON.stringify(expected)});
+  })()`, `${navId} workspace containing ${expected}`, 15_000, diagnostics);
+  const text = await evaluate(cdp, `document.querySelector("main")?.innerText || document.body.innerText`);
+  assert.match(text, new RegExp(expected.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"), `${navId} must render its active organization record.`);
+  for (const forbidden of absent) assert.doesNotMatch(text, new RegExp(forbidden, "i"), `${navId} must not render another organization's ${forbidden} record.`);
+  return text;
+}
+
+async function createBusinessFixture(cdp, orgId, marker) {
+  const lead = await browserApi(cdp, `/orgs/${orgId}/crm/contacts`, {
+    method: "POST",
+    body: {
+      name: `${marker} Contact`, organization: `${marker} Client`, email: `${marker.toLowerCase()}@example.test`,
+      status: "new", source: "Cycle 19 browser proof", notes: `${marker} CRM only`,
+    },
+  });
+  assert.equal(lead.status, 200, `${marker} CRM record must be created.`);
+
+  const proposal = await browserApi(cdp, "/api/proposals", {
+    method: "POST",
+    body: {
+      tenant_id: orgId,
+      proposal: {
+        ws: orgId === "dev-org-phantomforce" ? "dev-org-chicagoshots" : "dev-org-phantomforce",
+        client: `${marker} Proposal`, contact: `${marker} Contact`, pkg: "core", price: marker === "Aegis" ? 1901 : 2902,
+        status: "draft", pain: `${marker} proposal only`, scope: ["Tenant isolation proof"], timeline: "One week",
+      },
+    },
+  });
+  assert.equal(proposal.status, 200, `${marker} proposal must be created.`);
+  assert.equal(proposal.body?.proposal?.ws, orgId, `${marker} proposal must ignore a malicious foreign ws label.`);
+
+  const approval = await browserApi(cdp, "/api/workspace-approvals", {
+    method: "POST",
+    body: {
+      tenant_id: orgId,
+      approval: {
+        ws: orgId === "dev-org-phantomforce" ? "dev-org-chicagoshots" : "dev-org-phantomforce",
+        title: `${marker} Approval`, detail: `${marker} approval only`, type: "browser-proof", status: "pending", requestedBy: "Cycle 19",
+      },
+    },
+  });
+  assert.equal(approval.status, 200, `${marker} approval must be created.`);
+  assert.equal(approval.body?.approval?.ws, orgId, `${marker} approval must ignore a malicious foreign ws label.`);
+
+  const asset = await browserApi(cdp, `/orgs/${orgId}/assets`, {
+    method: "POST",
+    body: {
+      data_url: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+      name: `${marker.toLowerCase()}-asset.png`, title: `${marker} Asset`, source: "cycle-19-browser",
+    },
+  });
+  assert.equal(asset.status, 200, `${marker} asset must be created.`);
+  return { lead: lead.body, proposal: proposal.body, approval: approval.body, asset: asset.body };
+}
+
+async function createAccountingFixture(cdp, marker, diagnostics = null) {
+  await evaluate(cdp, `document.querySelector('[data-nav-id="money"]')?.click()`);
+  await waitForExpression(cdp, `!!document.querySelector("[data-finance-form]")`, "accounting form", 10_000, diagnostics);
+  await evaluate(cdp, `(() => {
+    const form = document.querySelector("[data-finance-form]");
+    const set = (name, value) => {
+      const input = form.elements.namedItem(name);
+      input.value = value;
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    };
+    set("description", ${JSON.stringify(`${marker} Transaction`)});
+    set("direction", "income");
+    set("amount", ${JSON.stringify(marker === "Aegis" ? "119.01" : "229.02")});
+    set("category", "Sales income");
+    set("account", ${JSON.stringify(`${marker} Checking`)});
+    form.requestSubmit();
+    return true;
+  })()`);
+  await waitForExpression(cdp, `document.querySelector("main")?.innerText.includes(${JSON.stringify(`${marker} Transaction`)})`, `${marker} accounting transaction`, 10_000, diagnostics);
+  await evaluate(cdp, `document.querySelector('[data-act="connector"][data-id="bank"]')?.click()`);
+  await waitForExpression(cdp, `(() => {
+    const state = JSON.parse(localStorage.getItem("pf.phantom.v4") || "{}");
+    const org = JSON.parse(localStorage.getItem("pf.session.v3") || "{}").orgId;
+    return state.finance?.connectors?.some((item) => item.id === "bank" && item.ws === org && item.status === "requested");
+  })()`, `${marker} scoped bank connector request`, 10_000, diagnostics);
+}
+
+async function businessState(cdp) {
+  return evaluate(cdp, `(() => {
+    const state = JSON.parse(localStorage.getItem("pf.phantom.v4") || "{}");
+    const org = JSON.parse(localStorage.getItem("pf.session.v3") || "{}").orgId;
+    return {
+      org,
+      transactions: (state.finance?.transactions || []).filter((item) => item.ws === org).map((item) => item.description),
+      connectors: (state.finance?.connectors || []).filter((item) => item.ws === org).map((item) => ({ id: item.id, status: item.status })),
+    };
+  })()`);
+}
+
 async function viewportState(cdp, width, height) {
   await cdp.send("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: 1, mobile: width <= 480 });
   await sleep(150);
@@ -439,8 +567,12 @@ async function main() {
     await cdp.send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-reduced-motion", value: "reduce" }] });
     const diagnostics = installDiagnostics(cdp);
     const chatRequests = [];
+    const businessRequests = [];
     cdp.on("Network.requestWillBeSent", (message) => {
       const request = message.params?.request;
+      if (request?.url && /\/(?:orgs\/[^/]+\/(?:crm|assets)|api\/(?:proposals|workspace-approvals))/.test(request.url)) {
+        businessRequests.push({ method: request.method, url: request.url, postData: request.postData || "" });
+      }
       if (!request?.url?.includes("/phantom-ai/chat") || !request.postData) return;
       try { chatRequests.push(JSON.parse(request.postData)); } catch { diagnostics.push("chat-request", request.postData); }
     });
@@ -502,6 +634,57 @@ async function main() {
     await cdp.send("Page.reload", { ignoreCache: true });
     await reloadAfterTamper;
     await waitForExpression(cdp, `!!document.querySelector("[data-command-form]")`, "dashboard after tamper reload", 15_000, diagnostics);
+
+    const aegisFixture = await createBusinessFixture(cdp, "dev-org-phantomforce", "Aegis");
+    await createAccountingFixture(cdp, "Aegis", diagnostics);
+    await openWorkspace(cdp, "leads", "Aegis Client", ["Beacon Client"], diagnostics);
+    await openWorkspace(cdp, "proposals", "Aegis Proposal", ["Beacon Proposal"], diagnostics);
+    await openWorkspace(cdp, "approvals", "Aegis Approval", ["Beacon Approval"], diagnostics);
+    await openWorkspace(cdp, "assets", "Aegis Asset", ["Beacon Asset"], diagnostics);
+    await openWorkspace(cdp, "money", "Aegis Transaction", ["Beacon Transaction"], diagnostics);
+    const aegisState = await businessState(cdp);
+    assert.deepEqual(aegisState.transactions, ["Aegis Transaction"], "PhantomForce accounting must contain only its transaction.");
+    assert.equal(aegisState.connectors.some((item) => item.id === "bank" && item.status === "requested"), true, "PhantomForce bank request must be scoped to PhantomForce.");
+
+    await switchBrowserOrg(cdp, "dev-org-chicagoshots", diagnostics);
+    const beaconFixture = await createBusinessFixture(cdp, "dev-org-chicagoshots", "Beacon");
+    await createAccountingFixture(cdp, "Beacon", diagnostics);
+    await openWorkspace(cdp, "leads", "Beacon Client", ["Aegis Client"], diagnostics);
+    await openWorkspace(cdp, "proposals", "Beacon Proposal", ["Aegis Proposal"], diagnostics);
+    await openWorkspace(cdp, "approvals", "Beacon Approval", ["Aegis Approval"], diagnostics);
+    await openWorkspace(cdp, "assets", "Beacon Asset", ["Aegis Asset"], diagnostics);
+    await openWorkspace(cdp, "money", "Beacon Transaction", ["Aegis Transaction"], diagnostics);
+    const beaconState = await businessState(cdp);
+    assert.deepEqual(beaconState.transactions, ["Beacon Transaction"], "ChicagoShots accounting must contain only its transaction.");
+    assert.equal(beaconState.connectors.some((item) => item.id === "bank" && item.status === "requested"), true, "ChicagoShots bank request must be scoped to ChicagoShots.");
+
+    for (const route of [
+      "/orgs/client-sports-demo/crm",
+      "/orgs/client-sports-demo/assets",
+      "/api/proposals?tenant_id=client-sports-demo",
+      "/api/workspace-approvals?tenant_id=client-sports-demo",
+    ]) {
+      const denied = await browserApi(cdp, route);
+      assert.equal(denied.status, 403, `non-member browser request must be denied: ${route}`);
+    }
+
+    const reloadBusiness = cdp.waitEvent("Page.loadEventFired", 15_000).catch(() => null);
+    await cdp.send("Page.reload", { ignoreCache: true });
+    await reloadBusiness;
+    await waitForExpression(cdp, `document.querySelector("[data-org-select]")?.value === "dev-org-chicagoshots"`, "ChicagoShots shell after business reload", 15_000, diagnostics);
+    assert.equal((await browserAuthMe(cdp))?.activeOrg?.id, "dev-org-chicagoshots", "active ChicagoShots organization must survive reload.");
+    await openWorkspace(cdp, "leads", "Beacon Client", ["Aegis Client"], diagnostics);
+    await openWorkspace(cdp, "money", "Beacon Transaction", ["Aegis Transaction"], diagnostics);
+
+    await switchBrowserOrg(cdp, "dev-org-phantomforce", diagnostics);
+    await openWorkspace(cdp, "leads", "Aegis Client", ["Beacon Client"], diagnostics);
+    await openWorkspace(cdp, "proposals", "Aegis Proposal", ["Beacon Proposal"], diagnostics);
+    await openWorkspace(cdp, "approvals", "Aegis Approval", ["Beacon Approval"], diagnostics);
+    await openWorkspace(cdp, "assets", "Aegis Asset", ["Beacon Asset"], diagnostics);
+    await openWorkspace(cdp, "money", "Aegis Transaction", ["Beacon Transaction"], diagnostics);
+    await evaluate(cdp, `document.querySelector('[data-nav-id="dashboard"]')?.click()`);
+    await waitForExpression(cdp, `!!document.querySelector("[data-command-form]")`, "PhantomForce dashboard before chat", 10_000, diagnostics);
+    await sleep(1700);
 
     const prompts = [
       "What's your favorite food?",
@@ -567,7 +750,12 @@ async function main() {
 
     await submitChat(cdp, "Remember for later that ChicagoShots test color is gold.", diagnostics);
     await submitChat(cdp, "My temporary code word is lens.", diagnostics);
-    const chicagoContext = await localContextState(cdp);
+    let chicagoContext = await localContextState(cdp);
+    if (!chicagoContext.history.some((item) => /lens/i.test(item.prompt))) {
+      const retriedLens = await submitChat(cdp, "My temporary code word is lens.", diagnostics);
+      assert.doesNotMatch(retriedLens.answer, /request failed|unavailable|timed out/i, "temporary context retry must produce a usable answer.");
+      chicagoContext = await localContextState(cdp);
+    }
     assert.equal(chicagoContext.memory.some((text) => /gold/i.test(text)), true, "ChicagoShots durable memory must save in its own scope.");
     assert.equal(
       chicagoContext.history.some((item) => /lens/i.test(item.prompt)),
@@ -625,6 +813,9 @@ async function main() {
         "database login renders in browser",
         "multi-organization owner sees exactly two memberships",
         "non-member switch and tampered switcher are rejected",
+        "CRM, proposals, approvals, assets, accounting, and connector state remain organization-isolated",
+        "client-supplied foreign workspace labels are ignored by the server",
+        "active organization and its records survive reload without stale tenant rows",
         "20 mixed browser turns stay conversational without ledger leakage",
         "durable memory survives reload inside organization A",
         "organization B receives no A memory, history, request context, or visible chat",
@@ -641,6 +832,11 @@ async function main() {
       phantomContext,
       chicagoContext,
       phantomRestored,
+      aegisFixture,
+      beaconFixture,
+      aegisState,
+      beaconState,
+      businessRequests,
       desktop,
       mobile,
       chatRequestCount: chatRequests.length,

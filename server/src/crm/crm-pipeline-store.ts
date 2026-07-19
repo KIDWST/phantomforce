@@ -138,7 +138,9 @@ export function normalizeCrmLead(value: unknown, tenantId: string, actor: string
   return {
     id: cleanText(source.id ?? existing?.id, 90) || randomUUID(),
     tenantId: safeTenantId(tenantId),
-    ws: cleanText(source.ws ?? existing?.ws ?? tenantId, 90) || safeTenantId(tenantId),
+    // The authenticated tenant is authoritative. Never let a request body
+    // relabel a record as another workspace and poison the browser cache.
+    ws: safeTenantId(tenantId),
     name: name || company,
     company,
     source: cleanText(source.source ?? existing?.source, 120) || "Manual capture",

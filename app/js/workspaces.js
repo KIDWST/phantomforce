@@ -6,27 +6,27 @@
 import {
   store, uid, visible, isAdmin, isOwnerOperator, currentWs, wsName, pushActivity, resolveApproval,
   moneyView, fmtMoney, fmtDate, fmtDateTime, ago, daysUntil, statusLabel,
-  PACKAGES, RETAINERS, FINANCE_CATEGORIES, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS, CHAT_HISTORY_RETENTION_DAYS,
+  PACKAGES, RETAINERS, FINANCE_CATEGORIES, FINANCE_CONNECTORS, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS, CHAT_HISTORY_RETENTION_DAYS,
   addMemory, toggleMemoryRemember, forgetMemory, forgetChatHistory, memoryStats, memoryRetention, chatHistoryStats, chatHistoryRetention,
   session,
-} from "./store.js?v=phantom-live-20260718-36";
+} from "./store.js?v=phantom-live-20260718-37";
 import {
   isDatabaseSession, canManageActiveOrg, fetchServerApprovals, decideServerRun,
   activeOrgId,
   fetchOrgCrm, saveOrgCrmSettings, createOrgCrmContact, pullOrgCrmContacts, updateOrgCrmContact, deleteOrgCrmContact,
-} from "./orgs.js?v=phantom-live-20260718-36";
+} from "./orgs.js?v=phantom-live-20260718-37";
 import {
   proposalServerAvailable, loadProposals,
   createProposal as createServerProposal,
   updateProposal as updateServerProposal,
   deleteProposal as deleteServerProposal,
-} from "./proposalpipeline.js?v=phantom-live-20260718-36";
+} from "./proposalpipeline.js?v=phantom-live-20260718-37";
 import {
   approvalServerAvailable, loadWorkspaceApprovals,
   createWorkspaceApproval as createServerWorkspaceApproval,
   decideWorkspaceApproval as decideServerWorkspaceApproval,
   deleteWorkspaceApproval as deleteServerWorkspaceApproval,
-} from "./approvalpipeline.js?v=phantom-live-20260718-36";
+} from "./approvalpipeline.js?v=phantom-live-20260718-37";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -473,8 +473,9 @@ function syncServerProposals(rerender) {
   loadProposals().then((payload) => {
     if (!payload?.ok) return;
     const serverProposals = payload.document?.proposals || [];
-    const serverIds = new Set(serverProposals.map((proposal) => proposal.id));
-    const retainedLocal = store.state.proposals.filter((proposal) => !serverIds.has(proposal.id));
+    // Replace the complete server-backed slice for this tenant. Retaining a
+    // missing server row resurrected deleted proposals from browser storage.
+    const retainedLocal = store.state.proposals.filter((proposal) => proposal.ws !== tenant || !proposal.serverBacked);
     store.state.proposals = [...serverProposals, ...retainedLocal];
     proposalUi.loadedTenant = tenant;
     proposalUi.notice = "Server proposals saved. Drafts remain approval-only.";
@@ -1461,8 +1462,14 @@ function renderMoney(el, rerender) {
   });
   bindActions(el, {
     connector: (id) => {
-      const connector = financeNow().connectors.find((item) => item.id === id);
-      if (!connector) return;
+      const finance = financeNow();
+      let connector = finance.connectors.find((item) => item.ws === ws && item.id === id);
+      if (!connector) {
+        const definition = FINANCE_CONNECTORS.find((item) => item.id === id);
+        if (!definition) return;
+        connector = { ...definition, ws };
+        finance.connectors.push(connector);
+      }
       connector.status = "requested";
       connector.requestedAt = new Date().toISOString();
       pushActivity("Accounting Ledger", `${connector.name} setup requested. Sync will stay off until the secure connector backend is configured.`, ws);
@@ -1665,7 +1672,7 @@ function renderMemory(el, rerender) {
       if (!brainPanel.open || brainPanel.dataset.mounted) return;
       brainPanel.dataset.mounted = "1";
       const mount = brainPanel.querySelector("[data-memory-brain-mount]");
-      import("./brain.js?v=phantom-live-20260718-36")
+      import("./brain.js?v=phantom-live-20260718-37")
         .then((mod) => { if (mount && mount.isConnected) mod.renderPhantomBrain(mount); })
         .catch(() => { if (mount) mount.innerHTML = `<p class="ws-note">The brain panel could not load. Check that the backend on the admin PC is running, then reopen this section.</p>`; });
     });
@@ -3219,8 +3226,7 @@ function hydrateWorkspaceApprovalRecords(rerender) {
   loadWorkspaceApprovals().then((payload) => {
     if (!payload?.ok) return;
     const serverApprovals = payload.document?.approvals || [];
-    const serverIds = new Set(serverApprovals.map((approval) => approval.id));
-    const retainedLocal = store.state.approvals.filter((approval) => !serverIds.has(approval.id));
+    const retainedLocal = store.state.approvals.filter((approval) => approval.ws !== tenant || !approval.serverBacked);
     store.state.approvals = [...serverApprovals, ...retainedLocal];
     approvalUi.loadedTenant = tenant;
     approvalUi.notice = "Server approvals saved. Decisions change state only; nothing executes here.";

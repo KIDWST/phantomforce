@@ -51,6 +51,19 @@ The database-auth browser fixture must prove two-way isolation and non-member
 rejection. A successful organization switch clears the visible transcript
 before the new organization's context is rendered.
 
+### D-0005 — Tenant mismatch is an authorization error
+
+An explicit tenant id is a security boundary, not a routing hint. If a
+database-auth user requests an organization outside their memberships, the
+server returns 403 instead of silently substituting the active organization.
+All accepted records derive their tenant/workspace label from that authorized
+server tenant, never from a client-supplied `ws` field.
+
+On hydration, server-backed CRM, proposal, and approval collections are
+authoritative for the active organization. Missing server rows stay deleted;
+local fallback records may survive only when they are explicitly not
+server-backed.
+
 ## Decisions Needed Later
 
 - Exact subscription package names and module bundles.

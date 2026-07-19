@@ -1,13 +1,13 @@
 /* PhantomForce admin settings.
    Local UI preferences only: no provider calls, sends, uploads, or billing. */
 
-import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260718-36";
-import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260718-36";
-import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260718-36";
-import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260718-36";
-import { fetchCustomerPlanPreview, fetchEntitlementsSummary, switchCustomerPlan } from "./orgs.js?v=phantom-live-20260718-36";
-import { currentTenantId, ctx, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260718-36";
-import { DEFAULT_COMPANION_PREFS, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260718-36";
+import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260718-37";
+import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260718-37";
+import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260718-37";
+import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260718-37";
+import { fetchCustomerPlanPreview, fetchEntitlementsSummary, switchCustomerPlan } from "./orgs.js?v=phantom-live-20260718-37";
+import { currentTenantId, ctx, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260718-37";
+import { DEFAULT_COMPANION_PREFS, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260718-37";
 
 const AI_SETTINGS_KEY = "pf.operator.settings.v1";
 const SETTINGS_TAB_KEY = "pf.settings.tab.v1";

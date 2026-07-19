@@ -890,6 +890,44 @@
       ]
     },
     {
+      "id": "database-business-record-organization-isolation",
+      "status": "active",
+      "title": "Business records obey the authorized organization",
+      "ownerDecision": "CRM, proposals, approvals, assets, accounting transactions, and connector state are separate for every organization. The server derives record workspace identity from the authorized tenant, rejects nonmember tenant ids with 403, and browser hydration cannot resurrect a server-backed row that is missing or deleted.",
+      "requiredPatterns": [
+        {
+          "file": "server/src/index.ts",
+          "pattern": "Array.isArray[(]session.memberships[)][\\s\\S]*TENANT_MEMBERSHIP_REQUIRED",
+          "description": "Database sessions treat an explicit tenant id as a membership authorization decision."
+        },
+        {
+          "file": "server/src/proposals/proposal-store.ts",
+          "pattern": "ws: safeTenantId[(]tenantId[)]",
+          "description": "Proposal workspace identity comes from the authorized server tenant, not a client field."
+        },
+        {
+          "file": "server/src/workspace-approvals/workspace-approval-store.ts",
+          "pattern": "ws: safeTenantId[(]tenantId[)]",
+          "description": "Approval workspace identity comes from the authorized server tenant."
+        },
+        {
+          "file": "app/js/workspaces.js",
+          "pattern": "proposal.ws !== tenant [|][|] !proposal.serverBacked[\\s\\S]*approval.ws !== tenant [|][|] !approval.serverBacked",
+          "description": "Active-organization server collections replace stale server-backed proposal and approval rows."
+        },
+        {
+          "file": "scripts/test-organization-record-isolation.mjs",
+          "pattern": "organization-record-isolation[\\s\\S]*organizations: 2",
+          "description": "A permanent source/store regression covers two organizations and all corrected boundaries."
+        },
+        {
+          "file": "scripts/test-database-auth-org-browser.mjs",
+          "pattern": "CRM, proposals, approvals, assets, accounting, and connector state remain organization-isolated[\\s\\S]*client-supplied foreign workspace labels are ignored by the server",
+          "description": "The authenticated Chrome fixture proves distinct business records, forged labels, reload, and direct nonmember denial."
+        }
+      ]
+    },
+    {
       "id": "database-auth-reboot-recovery",
       "status": "active",
       "title": "Live admin and customer auth depend on a self-recovering database",

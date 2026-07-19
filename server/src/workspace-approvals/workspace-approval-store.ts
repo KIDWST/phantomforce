@@ -137,7 +137,8 @@ export function normalizeWorkspaceApproval(value: unknown, tenantId: string, act
   return {
     id: cleanText(source.id ?? existing?.id, 90) || randomUUID(),
     tenantId: safeTenantId(tenantId),
-    ws: cleanText(source.ws ?? existing?.ws ?? tenantId, 90) || safeTenantId(tenantId),
+    // Approval ownership comes from the authorized tenant, not request data.
+    ws: safeTenantId(tenantId),
     type: cleanText(source.type ?? existing?.type, 90) || "workspace-approval",
     title: cleanText(source.title ?? existing?.title, 180) || "Approval request",
     detail: cleanNotes(source.detail ?? existing?.detail, 1400),

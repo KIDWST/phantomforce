@@ -450,10 +450,16 @@ function financeSeed() {
 
 function normalizeFinance(finance) {
   const input = finance && typeof finance === "object" ? finance : financeSeed();
-  const connectors = FINANCE_CONNECTORS.map((connector) => ({
-    ...connector,
-    ...((input.connectors || []).find((item) => item?.id === connector.id) || {}),
-  }));
+  // Connector requests are business records too. Older builds stored one
+  // global connector state, so migrate those entries into PhantomForce only
+  // and keep every subsequent status change explicitly workspace-scoped.
+  const connectors = Array.isArray(input.connectors) ? input.connectors
+    .filter((item) => FINANCE_CONNECTORS.some((definition) => definition.id === item?.id))
+    .map((item) => ({
+      ...FINANCE_CONNECTORS.find((definition) => definition.id === item.id),
+      ...item,
+      ws: item.ws || "phantomforce",
+    })) : [];
   const accounts = Array.isArray(input.accounts) ? input.accounts.map((account) => ({
     id: account.id || uid("acct"),
     ws: account.ws || "phantomforce",
@@ -1103,7 +1109,13 @@ export function moneyView() {
   const ledgerBalance = transactions.reduce((sum, tx) => sum + tx.amount, 0);
   const uncategorizedCount = transactions.filter((tx) => !tx.category || tx.category === "Uncategorized").length;
   const connectedAccounts = accounts.filter((account) => account.status === "connected");
-  const readySources = finance.connectors.filter((connector) => connector.status === "ready" || connector.status === "connected").length;
+  const ws = currentWs();
+  const connectors = FINANCE_CONNECTORS.map((definition) => ({
+    ...definition,
+    ...(finance.connectors.find((connector) => connector.ws === ws && connector.id === definition.id) || {}),
+    ws,
+  }));
+  const readySources = connectors.filter((connector) => connector.status === "ready" || connector.status === "connected").length;
   return {
     open,
     won,
@@ -1113,7 +1125,7 @@ export function moneyView() {
     retainerMonthly,
     transactions,
     accounts,
-    connectors: finance.connectors,
+    connectors,
     cashIn,
     cashOut,
     netCash,

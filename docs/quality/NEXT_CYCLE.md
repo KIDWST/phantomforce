@@ -4,72 +4,56 @@ Last updated: 2026-07-18
 
 ## Start Here
 
-Read:
+Read `AGENTS.md` and every file under `docs/quality` before changing code. Do
+not restart the inventory unless it is invalid. Continue in this Codex task via
+heartbeat automation `continue-phantomforce-quality-program`.
 
-1. `AGENTS.md`
-2. `docs/quality/CONTINUOUS_QUALITY_PROGRAM.md`
-3. `docs/quality/SITE_INVENTORY.md`
-4. `docs/quality/QUALITY_BACKLOG.md`
-5. `docs/quality/AUDIT_LOG.md`
+Cycle 19 closed the full business-record organization-isolation pass. One real
+database user with memberships in PhantomForce and ChicagoShots created unique
+CRM contacts, proposals, approvals, assets, accounting transactions, and bank
+connector requests in both organizations. The browser proved two-way UI and
+storage separation, reload persistence, forged `ws` rejection, direct
+nonmember 403 responses, aligned 20-turn chat, and clean 1440x900 plus 390x844
+rendering. The module graph is `phantom-live-20260718-37`.
 
-Do not restart the audit from zero unless the inventory is invalid. Continuation
-is scheduled in this same Codex task by heartbeat automation
-`continue-phantomforce-quality-program`.
+## Recommended Cycle 20
 
-Cycle 18 closed a real cross-organization browser-context defect. Database and
-local-customer sessions now scope browser memory and temporary history to the
-active `orgId`, successful switches clear the old visible transcript, and
-database membership names render correctly. A legitimate two-organization
-user passed 20 mixed chat turns, reload persistence, two-way organization
-switches, request/model isolation, forged non-member rejection, and desktop
-plus mobile browser checks. The module graph is cache-busted as
-`phantom-live-20260718-34`.
+Theme: authenticated account lifecycle and authorization-error recovery.
 
-## Recommended Cycle 19
-
-Theme: full business-record organization-isolation browser proof.
-
-Memory and chat now have strong authenticated browser evidence. Extend the
-same proof to records that could cause business harm if crossed: CRM leads,
-proposals, approvals, assets, accounting transactions, and connector state.
-
-### Required Pass
-
-1. Use one database-auth user with legitimate memberships in two organizations.
-2. Create distinct CRM leads, proposals, approvals, assets, and accounting
-   transactions in A and B through real UI/API paths.
-3. Require every module to rerender on switch and show only the active tenant.
-4. Capture network requests and require every tenant-aware request to carry or
-   resolve the active organization, never a legacy global workspace.
-5. Attempt URL, body, local-storage, and switcher tampering for a non-member
-   organization and require fail-closed 401/403 behavior.
-6. Reload in each organization and prove persistence without contamination.
-7. Browser-check desktop and mobile module states with zero overflow, stale
-   labels, stale counts, console errors, or fake records.
+1. Exercise customer signup, login, invitation acceptance, logout, expired or
+   revoked session, forgot username/password, reset, and 2FA challenge in a
+   disposable database through the real browser UI.
+2. Verify customer and admin hosts never accept the wrong account class and
+   every denied state explains the next safe action without exposing internals.
+3. Exercise owner, admin, member, and client roles against visible navigation,
+   deep links, direct requests, and plan restrictions.
+4. Require form busy/error/success states to recover without reload, duplicate
+   submission, stale credentials, clipped mobile text, or dead controls.
+5. Browser-check 390x844 and 1440x900, then add permanent tests for every
+   defect found.
 
 Likely files:
 
-- `server/src/index.ts`
+- `app/js/main.js`
+- `app/js/orgs.js`
 - `app/js/store.js`
-- `app/js/serverrecords.js`
-- `app/js/crmpipeline.js`
-- `app/js/workspaces.js`
+- `server/src/index.ts`
+- `server/src/access/user-accounts.ts`
 - `scripts/test-database-auth-org-browser.mjs`
 
 ## Regression Commands To Keep
 
-- `powershell -NoProfile -ExecutionPolicy Bypass -File server\scripts\test-auth-database-live.ps1`
-- `npm run test:client-setup-audit`
-- `npm run test:dashboard-chat`
+- `npm run test:database-auth`
+- `npm run test:organization-record-isolation`
 - `npm run test:release-critical`
+- `npm run test:easy-crm:postgres --workspace @phantomforce/server`
+- `npm run test:instant-chat:http-live-model --workspace @phantomforce/server`
 - `npm run test:change-memory`
-- `npm run test:auth-boundaries`
-- `npm run build`
 - `git diff --check`
 
 ## Stop Condition
 
-Stop after one coherent improvement batch with tests and docs updated. The user
-has explicitly authorized commit, push, and live deployment; still fetch/rebase
-first, preserve concurrent work, and verify the deployed commit/build id before
-reporting completion.
+Stop after one coherent implemented and browser-verified batch. The owner has
+authorized commit, push, and live deployment. Fetch and rebase `origin/main`,
+preserve concurrent work, sync the dedicated deployment, and run the strict
+live-source doctor before reporting the batch live.

@@ -131,6 +131,31 @@ Last updated: 2026-07-18
 - Regression requirement: `ops/admin-live/Test-LiveAdminSource.ps1 -Strict`.
 - Status: Fixed and verified in Cycle 18.
 
+### Q-0012 — P1 — Business records could be mislabeled or retained across organizations
+
+- Route/component: CRM, proposals, approvals, Asset Cloud, Accounting, and
+  connection requests during authenticated organization switching.
+- Journey affected: a user legitimately manages two separate businesses.
+- Reproduction before fix: send an authorized tenant id with a forged foreign
+  `ws`, delete a server-backed row, or request a nonmember tenant through one
+  of the generic workspace APIs.
+- Expected: server tenant authority wins, deleted server rows stay deleted,
+  connector/accounting state uses the active organization, and nonmember
+  requests fail visibly.
+- Actual before fix: three stores trusted client `ws`; proposal/approval
+  hydration retained missing server rows; finance connector state was global;
+  generic APIs silently substituted the active tenant and returned 200.
+- Correction: derive record `ws` from authorized tenant, replace active-org
+  server-backed collections authoritatively, scope finance connectors by org,
+  and reject database nonmember tenant ids with 403.
+- Evidence: 57/57 disposable database API checks and a real two-membership
+  Chrome journey covering distinct CRM, proposal, approval, asset,
+  transaction, and connector fixtures in both organizations, reload, forged
+  labels, direct nonmember requests, and 1440x900 plus 390x844 layouts.
+- Regression requirement: `npm run test:organization-record-isolation` and
+  `npm run test:database-auth`.
+- Status: Fixed and verified in Cycle 19.
+
 ## High-Priority Unfixed Issues
 
 ### Q-0003 — P1 — Mobile layout and scaling are not fully proven

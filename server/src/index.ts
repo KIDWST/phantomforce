@@ -556,8 +556,31 @@ function safeCustomizationTenantId(value: unknown, fallback: string) {
 }
 
 function customizationTenantForSession(session: AccessSession, requestedTenantId?: string) {
-  if (session.canManageAccess) return safeCustomizationTenantId(requestedTenantId, "phantomforce-owner");
-  return safeCustomizationTenantId(session.clientId, `client-${session.id}`);
+  const fallback = safeCustomizationTenantId(session.orgId || session.clientId, `client-${session.id}`);
+  if (!requestedTenantId) return session.canManageAccess ? "phantomforce-owner" : fallback;
+  const requested = safeCustomizationTenantId(requestedTenantId, fallback);
+
+  // Database identities carry their complete membership set. Treat a
+  // requested tenant as an authorization decision, never as a hint that can
+  // silently fall back to another business and make the wrong write look OK.
+  if (Array.isArray(session.memberships)) {
+    if (session.isSuperAdmin || session.memberships.some((membership) => membership.orgId === requested)) return requested;
+    throw Object.assign(new Error("Organization membership is required for the requested tenant."), {
+      statusCode: 403,
+      code: "TENANT_MEMBERSHIP_REQUIRED",
+    });
+  }
+
+  // Preserve the explicit cross-tenant owner lane for legacy local admin
+  // sessions; ordinary client sessions remain pinned to their own tenant.
+  if (session.canManageAccess) return requested;
+  if (requested !== fallback) {
+    throw Object.assign(new Error("Organization membership is required for the requested tenant."), {
+      statusCode: 403,
+      code: "TENANT_MEMBERSHIP_REQUIRED",
+    });
+  }
+  return fallback;
 }
 
 function customizationEntitlements(session: AccessSession, tenantId: string): CustomizationEntitlements {

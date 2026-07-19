@@ -1,38 +1,33 @@
 {
-  "cycle": 18,
+  "cycle": 19,
   "date": "2026-07-18",
-  "theme": "authenticated organization context isolation",
+  "theme": "authenticated business-record organization isolation",
   "finding": {
-    "id": "Q-0002",
+    "id": "Q-0012",
     "severity": "P1",
     "status": "fixed_verified",
-    "rootCause": "Database sessions retained a legacy phantomforce workspace id, browser storage preferred it over active orgId, and in-memory chat was not cleared on organization switch.",
-    "correction": "Database and local-customer browser context now derives from active orgId; membership names resolve correctly; successful organization switches clear the visible transcript."
-  },
-  "deploymentFinding": {
-    "id": "Q-0011",
-    "severity": "P1",
-    "status": "fixed_verified",
-    "rootCause": "Mutable VBS launchers, watchdog configuration, a persisted repository environment override, and a running watcher still referenced the July 6 worktree and repeatedly reclaimed ports 5177/5190.",
-    "correction": "Watchdogs and environment are pinned to the deployment; recurring sync uses a tracked self-locating hidden runner; stale processes were removed; the strict doctor audits resurrection sources."
+    "rootCause": "Three record stores trusted client workspace labels, proposal and approval hydration retained missing server-backed rows, accounting connectors were global, and generic workspace APIs silently substituted the active tenant for an unauthorized requested tenant.",
+    "correction": "Server tenant authority now controls record workspace identity, nonmember tenant ids fail with 403, active-org server collections hydrate authoritatively, and transactions plus connector state are organization-scoped."
   },
   "verification": {
-    "databaseApiChecks": 56,
-    "browserChecks": 8,
+    "databaseApiChecks": 57,
+    "browserBusinessModules": 6,
     "mixedChatTurns": 20,
     "viewports": ["1440x900", "390x844"],
-    "report": "tmp/database-auth-org-browser/2026-07-18T22-38-16-176Z/report.json",
+    "report": "tmp/database-auth-org-browser/2026-07-19T00-05-27-831Z/report.json",
+    "releaseCritical": "20/20",
+    "liveModelRequests": 82,
+    "liveModelAverageMs": 489,
+    "liveModelMaximumMs": 1542,
     "commands": [
-      "powershell -NoProfile -ExecutionPolicy Bypass -File server\\scripts\\test-auth-database-live.ps1",
-      "npm run test:memory",
-      "npm run test:intent",
-      "npm run test:dashboard-chat",
-      "npm run test:change-memory",
+      "npm run test:database-auth",
+      "npm run test:organization-record-isolation",
       "npm run test:release-critical",
-      "npm run typecheck --workspace @phantomforce/server",
+      "npm run test:easy-crm:postgres --workspace @phantomforce/server",
       "npm run test:instant-chat:http-live-model --workspace @phantomforce/server",
+      "npm run test:change-memory",
       "git diff --check"
     ]
   },
-  "nextCycle": "Extend the same authenticated two-organization browser proof to CRM, proposals, approvals, assets, accounting transactions, and connectors."
+  "nextCycle": "Exercise the complete browser account lifecycle and authorization-error recovery across customer/admin hosts and roles."
 }

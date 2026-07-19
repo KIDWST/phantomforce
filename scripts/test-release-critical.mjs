@@ -13,6 +13,7 @@ const checks = [
   "test:client-setup-audit",
   "test:workspace-site-builder",
   "test:organization-settings",
+  "test:organization-record-isolation",
   "test:medialab-editor",
   "test:videocut-editor",
   "test:topbar-media",

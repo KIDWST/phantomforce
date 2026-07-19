@@ -23,6 +23,7 @@
     "test:competitor-intelligence": "node scripts/test-competitor-intelligence.mjs && npm run test:competitor-intelligence --workspace @phantomforce/server",
     "test:workspace-site-builder": "node scripts/test-workspace-site-builder.mjs",
     "test:organization-settings": "node scripts/test-organization-settings.mjs",
+    "test:organization-record-isolation": "node scripts/test-organization-record-isolation.mjs",
     "test:client-setup-console": "node scripts/test-client-setup-console.mjs",
     "test:customization-ui": "node scripts/test-customization-ui.mjs",
     "test:client-setup-audit": "node scripts/audit-client-setup-data-model.mjs",

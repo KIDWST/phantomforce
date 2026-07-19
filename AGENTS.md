@@ -52,6 +52,12 @@
   forbidden patterns there so another stale worktree cannot resurrect it.
 
 ## Recent, merged & live (newest first)
+- **Business-record organization isolation (2026-07-18)** — build
+  `phantom-live-20260718-37`. CRM leads, proposals, approvals, assets,
+  accounting transactions, and connector requests are proven separate across
+  two legitimate database organizations. Server records ignore forged `ws`
+  labels, nonmember tenant requests fail with 403, and reload cannot resurrect
+  stale server-backed rows.
 - **Authenticated organization context isolation (2026-07-18)** — build
   `phantom-live-20260718-34`. Database/customer sessions scope local memory and
   temporary chat to active `orgId`, switches clear stale visible transcripts,
@@ -136,7 +142,7 @@
   (`app/index.html`, `app/phantom.css`, `app/js/main.js`).
 - **Living Phantom character** — `app/js/character.js`: 11 painted poses, emotional
   inertia (`governMood`), hologram depth. Shared by admin + public site.
-- Current cache-bust build id: **`phantom-live-20260718-34`**.
+- Current cache-bust build id: **`phantom-live-20260718-37`**.
 
 ## Repo map
 - `app/` — the **admin console** (`admin.phantomforce.online`). `index.html`,

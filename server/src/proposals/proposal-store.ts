@@ -127,7 +127,9 @@ export function normalizeProposalDraft(value: unknown, tenantId: string, actor: 
   return {
     id: cleanText(source.id ?? existing?.id, 90) || randomUUID(),
     tenantId: safeTenantId(tenantId),
-    ws: cleanText(source.ws ?? existing?.ws ?? tenantId, 90) || safeTenantId(tenantId),
+    // The authenticated tenant is authoritative. A client-supplied ws value
+    // must never make this record appear under another organization.
+    ws: safeTenantId(tenantId),
     client,
     contact: cleanText(source.contact ?? existing?.contact, 140) || client,
     pkg: cleanText(source.pkg ?? existing?.pkg, 80) || "core",
