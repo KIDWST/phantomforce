@@ -13371,6 +13371,138 @@ body .phantom .workspace-page :where(
   white-space: nowrap;
 }
 
+/* ============================ attention deck ============================
+   Decisions arriving on the Command home (docs/CURRENT_MISSION.md gap #5).
+   Motion here reinforces operations per docs/PHANTOM_VISION.md — cards
+   ARRIVE (staggered rise), waiting decisions breathe at the edge — and all
+   of it stands down under prefers-reduced-motion. */
+.console-brief-stack { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.attention-deck {
+  min-width: 0;
+  padding: 12px 14px 13px;
+  border: 1px solid rgba(255, 209, 102, 0.22);
+  border-radius: 8px;
+  background: linear-gradient(150deg, rgba(23, 18, 6, 0.82), rgba(6, 9, 8, 0.9));
+}
+.atd-head { display: flex; align-items: baseline; gap: 10px; margin: 0 0 9px; }
+.atd-head h2 {
+  margin: 0;
+  color: #ffedc2;
+  font: 700 13px "Space Grotesk", sans-serif;
+  letter-spacing: .01em;
+}
+.atd-sub {
+  color: rgba(214, 204, 168, 0.55);
+  font: 700 8.5px "DM Mono", monospace;
+  letter-spacing: .13em;
+  text-transform: uppercase;
+}
+.atd-cards { display: flex; flex-direction: column; gap: 7px; }
+.atd-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+  padding: 9px 12px 9px 14px;
+  border: 1px solid rgba(255, 209, 102, 0.16);
+  border-radius: 7px;
+  background: rgba(0, 0, 0, 0.22);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  animation: atdArrive .42s cubic-bezier(.22, 1, .36, 1) both;
+  animation-delay: calc(var(--atd-i, 0) * 90ms);
+  transition: border-color .18s ease, background .18s ease, transform .14s ease;
+}
+.atd-card:hover, .atd-card:focus-visible { border-color: rgba(255, 209, 102, 0.5); background: rgba(255, 209, 102, 0.06); transform: translateY(-1px); outline: none; }
+.atd-card::before {
+  content: "";
+  position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+  background: var(--warn, #ffd166);
+  opacity: .75;
+}
+.atd-warn::before { animation: atdBreathe 3.2s ease-in-out infinite; }
+.atd-ok { border-color: rgba(65, 255, 161, 0.16); }
+.atd-ok::before { background: var(--neon); }
+.atd-num {
+  flex: 0 0 auto;
+  width: 20px; height: 20px;
+  display: grid; place-items: center;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 237, 194, 0.35);
+  color: #ffedc2;
+  font: 700 10px "DM Mono", monospace;
+}
+.atd-ok .atd-num { border-color: rgba(65, 255, 161, 0.4); color: var(--neon); }
+.atd-ic { flex: 0 0 auto; display: grid; place-items: center; width: 16px; color: rgba(255, 237, 194, 0.8); }
+.atd-ic svg { width: 15px; height: 15px; }
+.atd-ok .atd-ic { color: var(--neon); }
+.atd-body { display: grid; gap: 1px; min-width: 0; flex: 1; }
+.atd-body b { color: #f4fff9; font-size: 12.5px; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.atd-body i { color: rgba(192, 216, 203, 0.6); font-size: 10.5px; font-style: normal; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.atd-go { flex: 0 0 auto; color: rgba(255, 237, 194, 0.5); font-size: 13px; transition: transform .18s ease, color .18s ease; }
+.atd-card:hover .atd-go { transform: translateX(3px); color: #ffedc2; }
+.atd-more {
+  align-self: flex-start;
+  margin-top: 2px;
+  padding: 4px 10px;
+  border: 1px solid rgba(255, 209, 102, 0.25);
+  border-radius: 999px;
+  background: transparent;
+  color: rgba(255, 237, 194, 0.75);
+  font: 700 9.5px "DM Mono", monospace;
+  letter-spacing: .08em;
+  cursor: pointer;
+}
+.atd-more:hover { border-color: rgba(255, 209, 102, 0.5); color: #ffedc2; }
+@keyframes atdArrive {
+  from { opacity: 0; transform: translateY(9px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes atdBreathe {
+  0%, 100% { opacity: .75; box-shadow: none; }
+  50% { opacity: 1; box-shadow: 0 0 10px rgba(255, 209, 102, 0.45); }
+}
+
+/* ============================ away report ============================
+   Real ledger entries since the last visit — checkmarks land one by one.
+   Hidden entirely when nothing real happened. */
+.away-report {
+  min-width: 0;
+  padding: 10px 14px 11px;
+  border: 1px solid rgba(65, 255, 161, 0.14);
+  border-radius: 8px;
+  background: rgba(4, 12, 9, 0.72);
+}
+.away-head {
+  margin: 0 0 7px;
+  color: var(--neon);
+  font: 700 9px "DM Mono", monospace;
+  letter-spacing: .15em;
+  text-transform: uppercase;
+}
+.away-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 5px; }
+.away-item {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  min-width: 0;
+  animation: atdArrive .38s ease both;
+  animation-delay: calc(var(--away-i, 0) * 80ms + 120ms);
+}
+.away-check { flex: 0 0 auto; color: var(--neon); font-size: 11px; }
+.away-text { flex: 1; min-width: 0; color: rgba(210, 232, 220, 0.8); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.away-text b { color: #effff6; font-weight: 600; }
+.away-when { flex: 0 0 auto; color: rgba(192, 216, 203, 0.45); font: 400 9.5px "DM Mono", monospace; }
+
+@media (prefers-reduced-motion: reduce) {
+  .atd-card, .away-item { animation: none; }
+  .atd-warn::before { animation: none; }
+  .atd-card, .atd-go { transition: none; }
+}
+
 @media (min-width: 1201px) {
   .app-main:has(> .console:not(.console-workspace)) .console {
     min-height: 0;

@@ -6,47 +6,47 @@ import {
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260719-1";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260719-1";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260719-1";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260719-1";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260719-1";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260719-1";
-import { mountManagedGrowthReport } from "./managedgrowth.js?v=phantom-live-20260719-1";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260719-1";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260719-1";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260719-1";
-import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260719-1";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260719-1";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260719-1";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260719-1";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260719-1";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260719-1";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260719-1";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260719-1";
-import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260719-1";
-import { mountAmbient } from "./ambient.js?v=phantom-live-20260719-1";
-import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260719-1";
+} from "./store.js?v=phantom-live-20260719-2";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260719-2";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260719-2";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260719-2";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260719-2";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260719-2";
+import { mountManagedGrowthReport } from "./managedgrowth.js?v=phantom-live-20260719-2";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260719-2";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260719-2";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260719-2";
+import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260719-2";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260719-2";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260719-2";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260719-2";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260719-2";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260719-2";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260719-2";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260719-2";
+import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260719-2";
+import { mountAmbient } from "./ambient.js?v=phantom-live-20260719-2";
+import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260719-2";
 import {
   fetchAuthConfig, databaseLogin, databaseLogout, databaseSignup, databaseForgotUsername, databaseForgotPassword,
   databaseResetPassword, databaseAcceptInvitation, databaseVerify2fa, databaseStart2faSetup, databaseConfirm2fa, databaseRegenerate2faBackupCodes, databaseDisable2fa,
   switchOrg, fetchAuthMe, fetchEntitlementsSummary,
-} from "./orgs.js?v=phantom-live-20260719-1";
-import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260719-1";
-import { assetsAvailable } from "./orgs.js?v=phantom-live-20260719-1";
-import { renderPhantomStore } from "./phantomstore.js?v=phantom-live-20260719-1";
-import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260719-1";
+} from "./orgs.js?v=phantom-live-20260719-2";
+import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260719-2";
+import { assetsAvailable } from "./orgs.js?v=phantom-live-20260719-2";
+import { renderPhantomStore } from "./phantomstore.js?v=phantom-live-20260719-2";
+import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260719-2";
 // PhantomPlay V2 platform shell (Home/Solo/Friends/Workspace/Dev Hub) - opt-in
 // while it hardens: set localStorage "pf.phantomplay.v2" = "1" (the V2 shell has
 // a "Classic view" button to switch back). Classic stays the default experience.
-import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260719-1";
+import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260719-2";
 const phantomPlayV2Opted = () => { try { return localStorage.getItem("pf.phantomplay.v2") === "1"; } catch { return false; } };
-import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260719-1";
+import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260719-2";
 import {
   customizeNavigation,
   loadOrganizationCustomization,
-} from "./customization.js?v=phantom-live-20260719-1";
-import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260719-1";
+} from "./customization.js?v=phantom-live-20260719-2";
+import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260719-2";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -1402,7 +1402,7 @@ const MODES = {
   admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260719-1";
+const POSE_VERSION = "phantom-live-20260719-2";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -1689,7 +1689,105 @@ function renderDashboardBrief() {
     <button class="dashboard-brief-metric" type="button" data-open-ws="${item.open}">
       <span>${esc(item.label)}</span><b>${esc(item.value)}</b><i>${esc(item.detail)}</i>
     </button>`).join("");
+  animateBriefCounts(metrics);
 }
+
+/* Count real small integers up from zero on arrival — a transition to a true
+   value, never an invented one. Money and non-numeric values never animate.
+   Skipped entirely under reduced motion. */
+function animateBriefCounts(metrics) {
+  if (reduceMotion || !metrics) return;
+  metrics.querySelectorAll(".dashboard-brief-metric b").forEach((el) => {
+    const target = el.textContent.trim();
+    if (!/^\d{1,3}$/.test(target)) return;
+    const n = Number(target);
+    if (n <= 0) return;
+    const t0 = performance.now();
+    const dur = 420;
+    const tick = (now) => {
+      const p = Math.min(1, (now - t0) / dur);
+      el.textContent = String(Math.round(n * (1 - Math.pow(1 - p, 3))));
+      if (p < 1 && el.isConnected) requestAnimationFrame(tick);
+    };
+    el.textContent = "0";
+    requestAnimationFrame(tick);
+  });
+}
+
+/* ============================ attention deck ============================
+   Mission gap #5 (docs/CURRENT_MISSION.md): the Command home must read as
+   "N things need attention", not a generic dashboard. This surfaces the
+   SAME real items the notification bell already trusts — attentionItems()
+   composes pending approvals, due follow-ups, send-ready quotes, and
+   server-pulse facts (failed runs, failing automations, live opportunities).
+   Nothing here is invented; when there is nothing real, the deck hides and
+   the brief's honest calm line stands alone. Cards route to the surface
+   that owns the record — approvals stay the one approval path. */
+function renderAttentionDeck() {
+  const deck = $("[data-attention-deck]");
+  if (!deck) return;
+  const items = attentionItems();
+  if (!items.length) { deck.hidden = true; deck.innerHTML = ""; return; }
+  const shown = items.slice(0, 3);
+  const extra = items.length - shown.length;
+  deck.hidden = false;
+  deck.innerHTML = `
+    <div class="atd-head">
+      <h2>${items.length === 1 ? "One decision is waiting" : `${items.length} decisions are waiting`}</h2>
+      <span class="atd-sub">real records, ready for your call</span>
+    </div>
+    <div class="atd-cards">
+      ${shown.map((it, i) => `
+        <button class="atd-card deck-${it.tone === "warn" ? "warn" : "ok"}" type="button" data-open-ws="${esc(it.open)}" style="--atd-i:${i}">
+          <span class="atd-num">${i + 1}</span>
+          <span class="atd-ic">${svg(it.icon)}</span>
+          <span class="atd-body"><b>${esc(it.title)}</b><i>${esc(it.sub)}</i></span>
+          <span class="atd-go" aria-hidden="true">→</span>
+        </button>`).join("")}
+      ${extra > 0 ? `<button class="atd-more" type="button" data-atd-more>+${extra} more waiting</button>` : ""}
+    </div>`;
+  const more = deck.querySelector("[data-atd-more]");
+  if (more) more.onclick = () => { notifOpen = true; renderNotifs(); };
+}
+
+/* ============================ handled while you were away ============================
+   Composed ONLY from the real activity ledger (pushActivity writes ISO
+   timestamps): entries newer than this tenant's last-visit marker. The
+   marker is written on pagehide, so a whole session reads as one visit.
+   When nothing real happened, the section stays hidden — no fake
+   diligence, per docs/PRINCIPLES.md. */
+const awayMarkKey = () => `pf.awaymark.${currentTenantId()}`;
+let awaySnapshot = null; // computed once per session so it doesn't melt away mid-visit
+function computeAwaySnapshot() {
+  if (awaySnapshot) return awaySnapshot;
+  let since = 0;
+  try { since = Date.parse(localStorage.getItem(awayMarkKey()) || "") || 0; } catch {}
+  const entries = since
+    ? visible(store.state.activity || []).filter((a) => Date.parse(a.at || "") > since).slice(0, 5)
+    : [];
+  awaySnapshot = { since, entries };
+  return awaySnapshot;
+}
+function renderAwayReport() {
+  const box = $("[data-away-report]");
+  if (!box) return;
+  const snap = computeAwaySnapshot();
+  if (!snap.entries.length) { box.hidden = true; box.innerHTML = ""; return; }
+  box.hidden = false;
+  box.innerHTML = `
+    <p class="away-head">Handled while you were away</p>
+    <ul class="away-list">
+      ${snap.entries.map((a, i) => `
+        <li class="away-item" style="--away-i:${i}">
+          <span class="away-check" aria-hidden="true">✓</span>
+          <span class="away-text"><b>${esc(a.who || "Phantom")}</b> ${esc(a.text || "")}</span>
+          <span class="away-when">${esc(ago(a.at))}</span>
+        </li>`).join("")}
+    </ul>`;
+}
+window.addEventListener("pagehide", () => {
+  try { localStorage.setItem(awayMarkKey(), new Date().toISOString()); } catch {}
+});
 
 /* ============================ today's plan (donut) ============================ */
 function renderPlan() {
@@ -2017,9 +2115,18 @@ function renderConsole() {
   /* Fire-and-forget: pull server truth for the bell, then repaint the badge
      (and the open menu) once it lands. Failures change nothing. */
   const pulseBefore = serverPulseAt;
-  fetchServerAttention().then(() => { if (serverPulseAt !== pulseBefore) renderNotifs(); }).catch(() => {});
+  fetchServerAttention().then(() => {
+    if (serverPulseAt !== pulseBefore) {
+      renderNotifs();
+      // The deck trusts the same attentionItems() engine as the bell —
+      // when server truth lands, decisions arrive on the home too.
+      if (!activePageId) renderAttentionDeck();
+    }
+  }).catch(() => {});
   renderHero();
   renderDashboardBrief();
+  renderAttentionDeck();
+  renderAwayReport();
   renderChips();
   renderModePose(activeMode);
   renderFlowMap();
