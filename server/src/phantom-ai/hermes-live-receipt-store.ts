@@ -3,7 +3,7 @@ import { appendFile, mkdir, readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { redactSensitiveText } from "./hermes-ledger.js";
+import { redactPersonalDataText } from "./hermes-ledger.js";
 import type {
   HermesLiveCallReceiptBlockedBooleans,
   HermesLiveCallReceiptContract,
@@ -50,7 +50,7 @@ function isLocalDevReceiptStoreAllowed(env: NodeJS.ProcessEnv | Record<string, s
 
 function redactValue<T>(value: T): T {
   if (typeof value === "string") {
-    return redactSensitiveText(value) as T;
+    return redactPersonalDataText(value) as T;
   }
 
   if (Array.isArray(value)) {

@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-import { redactSensitiveText } from "./hermes-ledger.js";
+import { redactSensitiveText, redactPersonalDataText } from "./hermes-ledger.js";
 import type {
   ProviderBudgetApprovalRecordContract,
   ProviderBudgetApprovalState,
@@ -258,7 +258,7 @@ export function evaluateProviderFundingApprovalContract(
     "A separate reviewed transport implementation must keep request body preparation disabled until all live gates pass.",
     "OpenRouter payment or funding remains outside this code path and must never be collected here.",
     "Approval execution and queue execution remain unimplemented by this contract.",
-  ].map((item) => redactSensitiveText(item));
+  ].map((item) => redactPersonalDataText(item));
 
   return {
     contract_id: contractId,
@@ -284,7 +284,7 @@ export function evaluateProviderFundingApprovalContract(
     execution_disabled: true,
     ready_for_send: false,
     blocked_reasons: blockedReasons,
-    blocked_reason_details: blockedReasons.map((reason) => redactSensitiveText(detailForReason(reason))),
+    blocked_reason_details: blockedReasons.map((reason) => redactPersonalDataText(detailForReason(reason))),
     required_before_transport: requiredBeforeTransport,
     funding_record: redactFundingRecord(input.funding_record),
     approval_record: redactApprovalRecord(input.approval_record),
@@ -302,7 +302,7 @@ export function evaluateProviderFundingApprovalContract(
     client_safe_summary: fundingPreflightAllowed
       ? "A future provider budget preflight is satisfied, but live AI transport is still disabled."
       : "A future provider budget preflight is blocked. No live AI transport can run.",
-    admin_debug_summary: redactSensitiveText(
+    admin_debug_summary: redactPersonalDataText(
       `Funding approval contract ${contractId} ${status} for ${input.provider_id}/${input.model_id} tenant ${input.tenant_id}.`,
     ),
     safety_flags: {

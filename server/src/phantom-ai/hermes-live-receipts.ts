@@ -1,4 +1,4 @@
-import { redactSensitiveText } from "./hermes-ledger.js";
+import { redactSensitiveText, redactPersonalDataText } from "./hermes-ledger.js";
 import {
   OPENROUTER_CHAT_COMPLETIONS_ENDPOINT,
   OPENROUTER_GLM_52_MODEL_ID,
@@ -170,7 +170,7 @@ export function buildHermesLiveCallReceiptContract(input: {
       "Hermes must append the redacted request receipt before any live provider request.",
       "Hermes must append the redacted response receipt after any provider response or failure.",
       "Receipts must keep provider, budget, approval, preflight, and endpoint correlation IDs together.",
-    ].map((item) => redactSensitiveText(item))),
+    ].map((item) => redactPersonalDataText(item))),
   );
   const requestReceipt = {
     ...blockedBooleans,
@@ -183,8 +183,8 @@ export function buildHermesLiveCallReceiptContract(input: {
     endpoint_contract: endpointContract,
     gate_linkage: gateLinkage,
     redaction,
-    redacted_request_summary: redactSensitiveText(input.preview.context_packet.user_request_summary),
-    redacted_context_preview: redactSensitiveText(input.preview.context_packet.compact_context),
+    redacted_request_summary: redactPersonalDataText(input.preview.context_packet.user_request_summary),
+    redacted_context_preview: redactPersonalDataText(input.preview.context_packet.compact_context),
     request_payload_prepared: false as const,
     request_body_ready_for_send: false as const,
     raw_prompt_stored: false as const,
@@ -229,7 +229,7 @@ export function buildHermesLiveCallReceiptContract(input: {
     queue_write_mode: "not_written_contract_only",
     approval_execution_mode: "not_implemented",
     required_before_live: requiredBeforeLive,
-    admin_debug_summary: redactSensitiveText(
+    admin_debug_summary: redactPersonalDataText(
       `Hermes live-call receipt contract for ${provider.provider_name}/${provider.model_id}; request and response receipts are required but not written.`,
     ),
     client_safe_summary: "Phantom AI is in preview mode. No external AI provider was called.",

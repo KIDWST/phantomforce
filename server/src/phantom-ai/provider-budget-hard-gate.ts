@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-import { redactSensitiveText } from "./hermes-ledger.js";
+import { redactSensitiveText, redactPersonalDataText } from "./hermes-ledger.js";
 import {
   buildProviderBudgetApprovalRecordContract,
   buildProviderFundingRecordContract,
@@ -188,7 +188,7 @@ export function evaluateProviderBudgetHardGate(
     "Record explicit budget approval without enabling approval execution here.",
     "Enforce per-request, daily, and monthly limits before transport.",
     "Keep provider transport blocked until this hard gate reports pass in a separately reviewed patch.",
-  ].map((item) => redactSensitiveText(item));
+  ].map((item) => redactPersonalDataText(item));
 
   return {
     gate_id: gateId,
@@ -211,7 +211,7 @@ export function evaluateProviderBudgetHardGate(
     approval_status: input.approval_status,
     funding_approval_contract: fundingApprovalContract,
     blocked_reasons: blockedReasons,
-    blocked_reason_details: blockedReasons.map((reason) => redactSensitiveText(detailForReason(reason))),
+    blocked_reason_details: blockedReasons.map((reason) => redactPersonalDataText(detailForReason(reason))),
     required_before_transport: requiredBeforeTransport,
     machine_check: {
       required_before_provider_transport: true,
@@ -222,7 +222,7 @@ export function evaluateProviderBudgetHardGate(
       failure_code: "provider_budget_hard_gate_blocked",
     },
     client_safe_summary: "Phantom AI can preview this safely, but live provider budget approval is not active.",
-    admin_debug_summary: redactSensitiveText(
+    admin_debug_summary: redactPersonalDataText(
       `Budget hard gate ${gateId} blocked ${input.provider_id}/${input.model_id} for tenant ${input.tenant_id}.`,
     ),
     safety_flags: {

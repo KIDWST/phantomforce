@@ -38,16 +38,15 @@ assert(!/API_KEY\s*=|TOKEN\s*=|SECRET\s*=|PASSWORD\s*=/i.test(envExample), "n8n 
 
 const startScript = read(resolve(scaffoldPath, "scripts/start-local.ps1"));
 assert(startScript.includes("127.0.0.1"), "start script must force localhost.");
-assert(startScript.includes("Start-Process"), "start script should support local runtime launch.");
-assert(startScript.includes("-WindowStyle Hidden"), "start script should launch hidden if used.");
+assert(startScript.includes("npx n8n start"), "start script should launch n8n locally via npx.");
 assert(!/0\.0\.0\.0|--tunnel|ngrok|localhost\.run/i.test(startScript), "start script must not expose public tunnels.");
 
 const stopScript = read(resolve(scaffoldPath, "scripts/stop-local.ps1"));
-assert(stopScript.includes("n8n.pid"), "stop script must use the local pid file.");
-assert(stopScript.includes("CommandLine -notmatch \"n8n\""), "stop script must avoid stopping unrelated processes.");
+assert(stopScript.includes("Win32_Process"), "stop script must enumerate real local processes, not guess a pid.");
+assert(stopScript.includes("CommandLine -match 'n8n'"), "stop script must scope to n8n processes only.");
 
 const healthScript = read(resolve(scaffoldPath, "scripts/health-check.ps1"));
-assert(healthScript.includes("http://127.0.0.1:$port/healthz"), "health check must use localhost healthz.");
+assert(healthScript.includes("http://127.0.0.1:5678"), "health check must use the local n8n URL.");
 assert(!/https?:\/\/(?!127\.0\.0\.1)/i.test(healthScript), "health check must not call non-local URLs.");
 
 const workflowPath = resolve(scaffoldPath, "workflows/chicagoshots-lead-intake-dry-run.json");

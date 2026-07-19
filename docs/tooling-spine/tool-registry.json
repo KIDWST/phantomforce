@@ -13,7 +13,7 @@
       "display_name": "n8n",
       "intended_role": "Local workflow automation — draft and stage multi-step workflows before anything runs for real.",
       "allowed_mode": "dry_run_draft_only",
-      "blocked_actions": ["execute_workflow", "start_n8n_process", "open_public_webhook", "use_credentials"],
+      "blocked_actions": ["execute_workflow", "active_workflows", "start_n8n_process", "public_webhooks", "use_credentials"],
       "next_phase": "Owner reviews drafted workflow JSON manually before any execution is enabled."
     },
     {

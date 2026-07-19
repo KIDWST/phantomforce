@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 
 import type { AccessSession } from "../access/session.js";
 import { appendApprovalQueueTransition, readApprovalQueueWithTransitions } from "./approval-queue.js";
-import { appendHermesLedgerRecord, getHermesLedgerStatus, redactSensitiveText } from "./hermes-ledger.js";
+import { appendHermesLedgerRecord, getHermesLedgerStatus, redactPersonalDataText } from "./hermes-ledger.js";
 import type { ApprovalQueueTransitionStatus, HermesLedgerRecord } from "./types.js";
 
 const moduleDir = dirname(fileURLToPath(import.meta.url));
@@ -198,7 +198,7 @@ const TASK_COST: Record<OperatorTaskType, number> = {
 const RISK_ORDER: Record<VacationRiskLevel, number> = { urgent: 4, high: 3, medium: 2, low: 1 };
 
 const now = () => new Date().toISOString();
-const text = (value: unknown, max = 800) => redactSensitiveText(String(value ?? "")).trim().slice(0, max);
+const text = (value: unknown, max = 800) => redactPersonalDataText(String(value ?? "")).trim().slice(0, max);
 const workspaceIdFor = (session: AccessSession) => session.clientId || session.id || "owner-admin";
 const businessNameFor = (session: AccessSession) => session.clientId === "client-chicagoshots" ? "ChicagoShots" : session.clientId || "PhantomForce";
 const defaultCredits = (session: AccessSession) => Number(session.canManageAccess ? process.env.PHANTOMFORCE_OWNER_OPERATOR_CREDITS || 100 : process.env.PHANTOMFORCE_DEFAULT_OPERATOR_CREDITS || 0);

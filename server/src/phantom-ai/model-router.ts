@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 
 import { compileHermesContext } from "./context-compiler.js";
-import { appendHermesLedgerRecord, redactSensitiveText, resolveHermesLedgerPath } from "./hermes-ledger.js";
+import { appendHermesLedgerRecord, redactSensitiveText, redactPersonalDataText, resolveHermesLedgerPath } from "./hermes-ledger.js";
 import { evaluateProviderBudgetPolicy } from "./provider-policy.js";
 import { evaluateProviderInvocationFirewall } from "./provider-invocation-firewall.js";
 import { getProviderReadinessReport } from "./provider-readiness.js";
@@ -327,8 +327,8 @@ function buildApprovalRequestPreview(
     action_type: redactSensitiveText(request.task_type),
     risk_level: getRiskLevel(decision, actionPreview),
     status,
-    summary: redactSensitiveText(buildApprovalSummary(request, actionPreview)),
-    approval_reason: redactSensitiveText(actionPreview.reasons.join(" ")),
+    summary: redactPersonalDataText(buildApprovalSummary(request, actionPreview)),
+    approval_reason: redactPersonalDataText(actionPreview.reasons.join(" ")),
     requested_by: {
       actor_user_id: redactSensitiveText(request.actor_user_id),
       actor_role: request.actor_role,
@@ -347,7 +347,7 @@ function buildApprovalRequestPreview(
       estimated_cost_usd: decision.estimated_cost_usd,
       budget_status: budgetStatus,
     },
-    redacted_context_preview: redactSensitiveText(compactContext),
+    redacted_context_preview: redactPersonalDataText(compactContext),
     safety_flags: {
       dry_run: true,
       execution_disabled: true,

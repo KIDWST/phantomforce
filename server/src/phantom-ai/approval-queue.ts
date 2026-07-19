@@ -72,6 +72,19 @@ export function isForbiddenApprovalTransitionStatus(value: unknown) {
   return typeof value === "string" && FORBIDDEN_APPROVAL_TRANSITION_PATTERN.test(value);
 }
 
+/* This walker only strips secrets (keys/tokens/cards), not emails/phones/SSNs,
+   because it recurses over the WHOLE ApprovalRequestPreview/queue record —
+   including actor_user_id/tenant_id/request_id, which must stay intact.
+   That's safe today only because every current caller (see the two
+   redactApprovalRequestPreview/redactApprovalQueueRecord call sites below,
+   and every index.ts caller) passes an object already built by
+   model-router.ts's buildApprovalRequestPreview(), which broad-redacts the
+   narrative fields (summary, approval_reason, redacted_context_preview) at
+   construction time before they ever reach this function. If a future
+   caller ever constructs an ApprovalRequestPreview WITHOUT going through
+   that function, this walker alone would NOT catch PII in its narrative
+   fields — splitting this into an identifier-aware walker (redact by field
+   path, not by type) would be needed at that point. */
 function redactValue<T>(value: T): T {
   if (typeof value === "string") {
     return redactSensitiveText(value) as T;

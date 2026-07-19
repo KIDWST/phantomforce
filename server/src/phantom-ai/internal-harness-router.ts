@@ -3,7 +3,7 @@ import { homedir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { redactSensitiveText } from "./hermes-ledger.js";
+import { redactPersonalDataText } from "./hermes-ledger.js";
 import type { SensitivityLevel } from "./types.js";
 
 const moduleDir = dirname(fileURLToPath(import.meta.url));
@@ -78,7 +78,7 @@ async function pathExists(path: string) {
 }
 
 function redactPath(path: string) {
-  return redactSensitiveText(path).replace(homedir(), "~").slice(0, 220);
+  return redactPersonalDataText(path).replace(homedir(), "~").slice(0, 220);
 }
 
 async function resolvePiCommand(
@@ -109,7 +109,7 @@ async function resolvePiCommand(
     return {
       installed: true,
       command_source: "path_lookup_only" as const,
-      command_preview: redactSensitiveText(configured).slice(0, 80),
+      command_preview: redactPersonalDataText(configured).slice(0, 80),
     };
   }
 

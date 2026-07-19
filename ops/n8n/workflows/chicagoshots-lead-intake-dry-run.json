@@ -11,27 +11,36 @@
     },
     {
       "parameters": {},
-      "id": "new-lead-captured",
-      "name": "New Lead Captured (placeholder)",
-      "notes": "Represents a new lead coming in. No trigger, credential, or webhook is wired up — replace with a real source when you're ready to build this for real.",
+      "id": "lead-intake-sample",
+      "name": "Lead Intake Sample",
+      "notes": "A sample lead payload mirroring buildChicagoShotsLeadIntakePreview's input shape (client name, contact, event type, budget, notes). No trigger, credential, or webhook is wired up — replace with a real source when you're ready to build this for real.",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
       "position": [460, 300]
     },
     {
       "parameters": {},
-      "id": "draft-followup",
-      "name": "Draft Follow-Up (placeholder)",
-      "notes": "Where a follow-up message would be drafted. No send action is configured — this is intentionally a dead end until reviewed.",
+      "id": "task-draft",
+      "name": "Task Draft",
+      "notes": "Represents the task_draft step of the real ops-workflow pipeline (steps, priority, deliverables checklist). Preview-only — nothing is scheduled or assigned here.",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
-      "position": [680, 300]
+      "position": [680, 200]
     },
     {
       "parameters": {},
-      "id": "queue-for-approval",
-      "name": "Queue for Owner Approval (placeholder)",
-      "notes": "Represents handing the draft to a human for review before anything sends. No integration is connected.",
+      "id": "followup-draft",
+      "name": "Follow-up Draft",
+      "notes": "Represents the follow_up_draft step (subject/body/channel_hint). No send action is configured — this is intentionally a dead end until reviewed.",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [680, 400]
+    },
+    {
+      "parameters": {},
+      "id": "approval-preview",
+      "name": "Approval Preview",
+      "notes": "Represents handing the drafts to a human for review before anything sends, matching approval_preview.status = preview-only / execution_disabled = true. No integration is connected.",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
       "position": [900, 300]
@@ -39,13 +48,21 @@
   ],
   "connections": {
     "Manual Trigger": {
-      "main": [[{ "node": "New Lead Captured (placeholder)", "type": "main", "index": 0 }]]
+      "main": [[{ "node": "Lead Intake Sample", "type": "main", "index": 0 }]]
     },
-    "New Lead Captured (placeholder)": {
-      "main": [[{ "node": "Draft Follow-Up (placeholder)", "type": "main", "index": 0 }]]
+    "Lead Intake Sample": {
+      "main": [
+        [
+          { "node": "Task Draft", "type": "main", "index": 0 },
+          { "node": "Follow-up Draft", "type": "main", "index": 0 }
+        ]
+      ]
     },
-    "Draft Follow-Up (placeholder)": {
-      "main": [[{ "node": "Queue for Owner Approval (placeholder)", "type": "main", "index": 0 }]]
+    "Task Draft": {
+      "main": [[{ "node": "Approval Preview", "type": "main", "index": 0 }]]
+    },
+    "Follow-up Draft": {
+      "main": [[{ "node": "Approval Preview", "type": "main", "index": 0 }]]
     }
   },
   "active": false,
@@ -53,6 +70,6 @@
     "executionOrder": "v1"
   },
   "meta": {
-    "note": "Dry-run draft only. No credentials, no webhook, no live trigger. Owner reviews and rebuilds this by hand in the n8n editor before anything is wired up for real."
+    "note": "Dry-run draft only. No credentials, no webhook, no live trigger. Owner reviews and rebuilds this by hand in the n8n editor before anything is wired up for real. See ../CHICAGOSHOTS_DRY_RUN_WORKFLOW.md."
   }
 }

@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-import { redactSensitiveText } from "./hermes-ledger.js";
+import { redactSensitiveText, redactPersonalDataText } from "./hermes-ledger.js";
 import { evaluateProviderBudgetHardGateFromPolicy } from "./provider-budget-hard-gate.js";
 import {
   buildOpenRouterGlmAdapterDryRunPreview,
@@ -41,7 +41,7 @@ function createInvocationId(input: ProviderInvocationFirewallInput) {
 }
 
 function uniqRedacted(values: string[]) {
-  return Array.from(new Set(values.map((value) => redactSensitiveText(value)).filter(Boolean)));
+  return Array.from(new Set(values.map((value) => redactPersonalDataText(value)).filter(Boolean)));
 }
 
 function findReadinessRoute(input: ProviderInvocationFirewallInput): ProviderReadinessRoute | null {
@@ -161,7 +161,7 @@ export function evaluateProviderInvocationFirewall(
       approval_required: input.policy_result.approval_required || input.approval_request.status !== "preview-only",
       approval_status: input.approval_request.status,
       risk_level: input.approval_request.risk_level,
-      reason: redactSensitiveText(input.approval_request.approval_reason),
+      reason: redactPersonalDataText(input.approval_request.approval_reason),
     },
     budget_hard_gate: budgetHardGate,
     live_call_allowed: false,
@@ -179,7 +179,7 @@ export function evaluateProviderInvocationFirewall(
     },
     openrouter_adapter: openRouterAdapter,
     client_safe_summary: "Phantom AI previewed this request safely. No external AI call or live action was taken.",
-    admin_debug_summary: redactSensitiveText(
+    admin_debug_summary: redactPersonalDataText(
       `Invocation ${input.requested_route}/${input.requested_model_id} blocked. Policy allowed=false; readiness configured=${readinessConfigured}; approval=${input.approval_request.status}.`,
     ),
     safety_flags: {

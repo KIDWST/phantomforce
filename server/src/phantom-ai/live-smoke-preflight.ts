@@ -1,4 +1,4 @@
-import { getHermesLedgerStatus, redactSensitiveText } from "./hermes-ledger.js";
+import { getHermesLedgerStatus, redactSensitiveText, redactPersonalDataText } from "./hermes-ledger.js";
 import type {
   BudgetGuardStatus,
   LiveSmokePreflightGateStatus,
@@ -7,7 +7,7 @@ import type {
 } from "./types.js";
 
 function uniqRedacted(values: string[]) {
-  return Array.from(new Set(values.map((value) => redactSensitiveText(value)).filter(Boolean)));
+  return Array.from(new Set(values.map((value) => redactPersonalDataText(value)).filter(Boolean)));
 }
 
 function createPreflightId(requestId: string) {
@@ -143,10 +143,10 @@ export async function buildLiveSmokePreflightReport(
       firewall_permits_call: false,
       dry_run_envelope_ready_for_send: adapter?.dry_run_request_envelope.ready_for_send ?? false,
       network_payload_prepared: adapter?.dry_run_request_envelope.network_payload_prepared ?? false,
-      reason: redactSensitiveText(transportReason),
+      reason: redactPersonalDataText(transportReason),
     },
     required_before_live_smoke_test: requiredBeforeLiveSmokeTest,
-    admin_debug_summary: redactSensitiveText(
+    admin_debug_summary: redactPersonalDataText(
       `Live smoke preflight blocked for ${preview.decision.provider_route}/${preview.decision.model_id}; budget=${preview.provider_policy.budget.status}; ledger_write=false; approval_execution=false; transport=false.`,
     ),
     client_safe_summary: "Phantom AI is in preview mode. No external AI call or live action was run.",

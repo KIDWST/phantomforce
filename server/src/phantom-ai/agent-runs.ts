@@ -22,7 +22,7 @@ import { fileURLToPath } from "node:url";
 
 import { listAutomationJobs } from "./automation-engine.js";
 import { getProviderReadinessReport } from "./provider-readiness.js";
-import { appendHermesLedgerRecord, readHermesLedgerRecords, redactSensitiveText } from "./hermes-ledger.js";
+import { appendHermesLedgerRecord, readHermesLedgerRecords, redactSensitiveText, redactPersonalDataText } from "./hermes-ledger.js";
 
 const moduleDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(moduleDir, "../../..");
@@ -250,10 +250,10 @@ const EXECUTORS: Record<string, AgentRunExecutor> = {
         `## Automations`,
         `- ${enabledJobs.length} of ${jobs.length} scheduled jobs enabled`,
         `- ${failing.length} job(s) currently reporting errors${failing.length ? `: ${failing.map((j) => j.name).join(", ")}` : ""}`,
-        ...jobs.slice(0, 15).map((j) => `- ${j.name}: ${j.last_status ?? "never run"}${j.last_summary ? ` — ${redactSensitiveText(String(j.last_summary)).slice(0, 140)}` : ""}`),
+        ...jobs.slice(0, 15).map((j) => `- ${j.name}: ${j.last_status ?? "never run"}${j.last_summary ? ` — ${redactPersonalDataText(String(j.last_summary)).slice(0, 140)}` : ""}`),
         ``,
         `## Recent activity (Hermes ledger, last ${ledger.length})`,
-        ...ledger.slice(-10).map((r) => `- ${r.timestamp} · ${r.task_type} · ${redactSensitiveText(r.result_summary || r.user_request_summary || "").slice(0, 120)}`),
+        ...ledger.slice(-10).map((r) => `- ${r.timestamp} · ${r.task_type} · ${redactPersonalDataText(r.result_summary || r.user_request_summary || "").slice(0, 120)}`),
         ``,
         `## AI provider readiness`,
         `- Router mode: ${providers.router_mode}`,

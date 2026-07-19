@@ -3,7 +3,7 @@ import { appendFile, mkdir, readFile, stat } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { redactSensitiveText } from "./hermes-ledger.js";
+import { redactPersonalDataText } from "./hermes-ledger.js";
 import type { ChicagoShotsLeadIntakePreview } from "./ops-workflow.js";
 
 const moduleDir = dirname(fileURLToPath(import.meta.url));
@@ -125,11 +125,11 @@ function isLocalProposalHistoryWriteAllowed(env: NodeJS.ProcessEnv | Record<stri
 }
 
 function clean(value: unknown, max = 240) {
-  return typeof value === "string" ? redactSensitiveText(value.replace(/\s+/g, " ").trim()).slice(0, max) : "";
+  return typeof value === "string" ? redactPersonalDataText(value.replace(/\s+/g, " ").trim()).slice(0, max) : "";
 }
 
 function cleanMultiline(value: unknown, max: number) {
-  return typeof value === "string" ? redactSensitiveText(value).trim().slice(0, max) : "";
+  return typeof value === "string" ? redactPersonalDataText(value).trim().slice(0, max) : "";
 }
 
 function safetyFlags(): ChicagoShotsProposalHistorySafetyFlags {

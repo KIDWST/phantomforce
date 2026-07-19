@@ -4,7 +4,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import type { AccessSession } from "../access/session.js";
-import { redactSensitiveText } from "./hermes-ledger.js";
+import { redactPersonalDataText } from "./hermes-ledger.js";
 
 const moduleDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(moduleDir, "../../..");
@@ -137,7 +137,7 @@ function normalizeTenantState(state: TenantState): TenantState {
   return state;
 }
 
-function clean(value: unknown, max = 1000) { return redactSensitiveText(String(value ?? "").replace(/\s+/g, " ").trim()).slice(0, max); }
+function clean(value: unknown, max = 1000) { return redactPersonalDataText(String(value ?? "").replace(/\s+/g, " ").trim()).slice(0, max); }
 function url(value: unknown, required = true) {
   const raw = clean(value, 1000);
   if (!raw && !required) return "";

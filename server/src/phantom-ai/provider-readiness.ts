@@ -1,4 +1,4 @@
-import { redactSensitiveText } from "./hermes-ledger.js";
+import { redactSensitiveText, redactPersonalDataText } from "./hermes-ledger.js";
 import { getProviderSetupStatus } from "./model-router.js";
 import { getProviderBudgetPolicyStatus } from "./provider-policy.js";
 import type {
@@ -18,7 +18,7 @@ import type {
 // getProviderBudgetPolicyStatus, so no API key value can flow into the report.
 
 function redactStrings(values: string[]): string[] {
-  return values.map((value) => redactSensitiveText(value));
+  return values.map((value) => redactPersonalDataText(value));
 }
 
 function hasEnvValue(env: NodeJS.ProcessEnv, key: string) {
@@ -69,16 +69,16 @@ function buildRoute(options: {
     status: options.status,
     key_source: options.keySource,
     key_present: options.keyPresent,
-    key_preview: redactSensitiveText(options.keyPreview),
+    key_preview: redactPersonalDataText(options.keyPreview),
     model_id: options.modelId ? redactSensitiveText(options.modelId) : null,
     setup_required: options.setupRequired,
-    disabled_reason: redactSensitiveText(options.disabledReason),
+    disabled_reason: redactPersonalDataText(options.disabledReason),
     required_before_live: redactStrings(options.requiredBeforeLive),
     last_checked_at: options.lastCheckedAt,
     live_call_allowed: false,
     is_default_safe_route: options.isDefaultSafeRoute,
     missing: redactStrings(options.missing),
-    detail: redactSensitiveText(options.detail),
+    detail: redactPersonalDataText(options.detail),
     safety_flags: getRouteSafetyFlags(),
   };
 }
@@ -237,7 +237,7 @@ export function getProviderReadinessReport(
     required_before_live: redactStrings(policy.required_before_live_calls),
     client_safe_summary:
       "Phantom AI runs in safe preview mode. No external AI providers are called and no provider keys are stored.",
-    admin_debug_summary: redactSensitiveText(
+    admin_debug_summary: redactPersonalDataText(
       `Router mode ${setup.router_mode}; live providers ${
         policy.live_providers_globally_enabled ? "flagged-on-but-still-dry-run" : "disabled"
       }; live route credentials ${anyLiveRouteConfigured ? "present" : "absent"}; production_ready false.`,

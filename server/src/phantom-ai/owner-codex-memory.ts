@@ -3,7 +3,7 @@ import { extname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { dirname } from "node:path";
 
-import { getHermesLedgerStatus, readRedactedHermesLedgerRecords, redactSensitiveText } from "./hermes-ledger.js";
+import { getHermesLedgerStatus, readRedactedHermesLedgerRecords, redactPersonalDataText } from "./hermes-ledger.js";
 import {
   getHermesInteractionMemoryStoreStatus,
   readHermesInteractionMemoryStoreRecords,
@@ -97,7 +97,7 @@ async function walkArtifacts(
       let match_snippet: string | undefined;
       if (query) {
         const raw = await readFile(fullPath, "utf8").catch(() => "");
-        const redacted = redactSensitiveText(raw);
+        const redacted = redactPersonalDataText(raw);
         const idx = redacted.toLowerCase().indexOf(query);
         if (idx < 0) continue;
         const start = Math.max(0, idx - 70);
@@ -193,7 +193,7 @@ export async function buildOwnerCodexMemoryStatus(options: {
       actor_user_id: record.actor_user_id,
       interaction_type: record.interaction_type,
       captured_at: record.captured_at,
-      safe_summary: redactSensitiveText(record.memory_record.safe_summary),
+      safe_summary: redactPersonalDataText(record.memory_record.safe_summary),
     })),
     safety_flags: {
       admin_only: true,

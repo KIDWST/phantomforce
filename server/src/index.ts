@@ -185,6 +185,7 @@ import {
   readRedactedHermesLedgerRecords,
   redactHermesLedgerRecord,
   redactSensitiveText,
+  redactPersonalDataText,
 } from "./phantom-ai/hermes-ledger.js";
 import {
   normalizeHermesLiveReceiptStoreLimit,
@@ -4619,8 +4620,8 @@ app.post("/phantom-ai/provider-invocation/preview", async (request, reply) => {
     provider_readiness: result.provider_invocation.readiness_result,
     action_preview: {
       ...result.action_preview,
-      reasons: result.action_preview.reasons.map((reason) => redactSensitiveText(reason)),
-      next_action: redactSensitiveText(result.action_preview.next_action),
+      reasons: result.action_preview.reasons.map((reason) => redactPersonalDataText(reason)),
+      next_action: redactPersonalDataText(result.action_preview.next_action),
     },
     approval_requirement: result.provider_invocation.approval_requirement,
     context: {
@@ -8298,13 +8299,13 @@ app.post("/phantom-ai/context-preview", async (request, reply) => {
     live_provider_called: result.live_provider_called,
     decision: {
       ...result.decision,
-      risks: result.decision.risks.map((risk) => redactSensitiveText(risk)),
-      next_action: redactSensitiveText(result.decision.next_action),
+      risks: result.decision.risks.map((risk) => redactPersonalDataText(risk)),
+      next_action: redactPersonalDataText(result.decision.next_action),
     },
     action_preview: {
       ...result.action_preview,
-      reasons: result.action_preview.reasons.map((reason) => redactSensitiveText(reason)),
-      next_action: redactSensitiveText(result.action_preview.next_action),
+      reasons: result.action_preview.reasons.map((reason) => redactPersonalDataText(reason)),
+      next_action: redactPersonalDataText(result.action_preview.next_action),
     },
     approval_request: redactApprovalRequestPreview(result.approval_request),
     provider_policy: result.provider_policy,
@@ -8313,9 +8314,14 @@ app.post("/phantom-ai/context-preview", async (request, reply) => {
     memory_context: memoryContext,
     memory_scope: buildMemoryScopeProof(normalized),
     context: {
-      compact_context: redactSensitiveText(memoryContext.augmented_context_preview),
-      base_compact_context: redactSensitiveText(result.context_packet.compact_context),
-      user_request_summary: redactSensitiveText(result.context_packet.user_request_summary),
+      // This is a standalone, dry-run preview endpoint (live_provider_called
+      // is always false here) — the values below are never re-consumed as
+      // live provider input, unlike the same augmented_context_preview
+      // mechanism when it's built fresh inside the real chat endpoints, so
+      // broader redaction is safe here specifically.
+      compact_context: redactPersonalDataText(memoryContext.augmented_context_preview),
+      base_compact_context: redactPersonalDataText(result.context_packet.compact_context),
+      user_request_summary: redactPersonalDataText(result.context_packet.user_request_summary),
       context_chars: memoryContext.augmented_context_chars,
       estimated_tokens: Math.ceil(memoryContext.augmented_context_chars / 4),
       base_context_chars: result.context_packet.context_chars,
@@ -8372,13 +8378,13 @@ app.post("/phantom-ai/approvals/preview", async (request, reply) => {
     approval_execution_implemented: false,
     decision: {
       ...result.decision,
-      risks: result.decision.risks.map((risk) => redactSensitiveText(risk)),
-      next_action: redactSensitiveText(result.decision.next_action),
+      risks: result.decision.risks.map((risk) => redactPersonalDataText(risk)),
+      next_action: redactPersonalDataText(result.decision.next_action),
     },
     action_preview: {
       ...result.action_preview,
-      reasons: result.action_preview.reasons.map((reason) => redactSensitiveText(reason)),
-      next_action: redactSensitiveText(result.action_preview.next_action),
+      reasons: result.action_preview.reasons.map((reason) => redactPersonalDataText(reason)),
+      next_action: redactPersonalDataText(result.action_preview.next_action),
     },
     approval_request: redactApprovalRequestPreview(result.approval_request),
     provider_policy: result.provider_policy,

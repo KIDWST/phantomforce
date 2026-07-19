@@ -3,7 +3,7 @@ import { createConnection } from "node:net";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { redactSensitiveText } from "./hermes-ledger.js";
+import { redactSensitiveText, redactPersonalDataText } from "./hermes-ledger.js";
 
 // n8n Sprint 1: dry-run Tool Lane contract.
 //
@@ -120,7 +120,7 @@ export type LocalN8nStatus = {
 
 function asString(value: unknown, maxChars = MAX_FIELD_CHARS): string {
   if (typeof value !== "string") return "";
-  return redactSensitiveText(value).slice(0, maxChars);
+  return redactPersonalDataText(value).slice(0, maxChars);
 }
 
 function asBlockedActions(value: unknown): string[] {
@@ -128,7 +128,7 @@ function asBlockedActions(value: unknown): string[] {
   return value
     .slice(0, MAX_BLOCKED_ACTIONS)
     .filter((item): item is string => typeof item === "string")
-    .map((item) => redactSensitiveText(item).slice(0, 80));
+    .map((item) => redactPersonalDataText(item).slice(0, 80));
 }
 
 function validateEntry(raw: unknown): ToolRegistryEntry {
@@ -204,7 +204,7 @@ export async function loadToolRegistry(
       valid_tool_count: 0,
       malformed_entries: 0,
       loaded: false,
-      load_error: redactSensitiveText((error as Error)?.message ?? "registry_load_failed").slice(0, 200),
+      load_error: redactPersonalDataText((error as Error)?.message ?? "registry_load_failed").slice(0, 200),
     };
   }
 }
@@ -263,7 +263,7 @@ async function probeLocalTcpPort(options: {
       socket.destroy();
       resolveProbe({
         running,
-        error: error ? redactSensitiveText(error).slice(0, 120) : null,
+        error: error ? redactPersonalDataText(error).slice(0, 120) : null,
       });
     };
 

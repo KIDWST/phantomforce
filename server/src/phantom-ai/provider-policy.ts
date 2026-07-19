@@ -1,4 +1,4 @@
-import { redactSensitiveText } from "./hermes-ledger.js";
+import { redactPersonalDataText } from "./hermes-ledger.js";
 import type {
   ActionPreviewStatus,
   BudgetGuardEnforcementMode,
@@ -284,16 +284,16 @@ export function evaluateProviderBudgetPolicy(
     route_allowed: false,
     policy_status: policyStatus,
     approval_required: approvalRequired,
-    live_call_disabled_reason: redactSensitiveText(liveCallDisabledReason),
+    live_call_disabled_reason: redactPersonalDataText(liveCallDisabledReason),
     client_safe_summary: "Phantom AI can preview this safely, but no live action or external AI call will run.",
-    admin_debug_summary: redactSensitiveText(
+    admin_debug_summary: redactPersonalDataText(
       `Route ${input.route_candidate} is ${routeStatus}; policy ${policyStatus}; budget ${budget.status}.`,
     ),
-    required_before_live_calls: policy.required_before_live_calls.map((item) => redactSensitiveText(item)),
+    required_before_live_calls: policy.required_before_live_calls.map((item) => redactPersonalDataText(item)),
     policy,
     budget: {
       ...budget,
-      reasons: budget.reasons.map((reason) => redactSensitiveText(reason)),
+      reasons: budget.reasons.map((reason) => redactPersonalDataText(reason)),
     },
     safety_flags: {
       live_providers_globally_disabled: !policy.live_providers_globally_enabled,

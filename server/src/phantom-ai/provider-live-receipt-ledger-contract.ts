@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-import { redactSensitiveText } from "./hermes-ledger.js";
+import { redactSensitiveText, redactPersonalDataText } from "./hermes-ledger.js";
 import type {
   ProviderLiveReceiptLedgerBlockedReason,
   ProviderLiveReceiptLedgerContract,
@@ -251,7 +251,7 @@ export function evaluateProviderLiveReceiptLedgerContract(
     queue_written: false,
     approval_executed: false,
     blocked_reasons: blockedReasons,
-    blocked_reason_details: blockedReasons.map((reason) => redactSensitiveText(detailForReason(reason))),
+    blocked_reason_details: blockedReasons.map((reason) => redactPersonalDataText(detailForReason(reason))),
     allowed_ledger_record_kinds: preflightAuditPreviewAllowed ? ["redacted_preflight_audit_preview"] : [],
     blocked_ledger_record_kinds: [
       "completed_live_call_receipt",
@@ -281,7 +281,7 @@ export function evaluateProviderLiveReceiptLedgerContract(
       transport_proof_required: true,
       transport_proof_present: Boolean(input.transport_proof),
       provider_result_record_allowed: false,
-      blocked_reason: redactSensitiveText(
+      blocked_reason: redactPersonalDataText(
         input.transport_proof
           ? "Provider result recording remains disabled until a separate production ledger implementation exists."
           : "Provider result recording requires future transport proof. Transport proof does not exist in this patch.",
@@ -311,7 +311,7 @@ export function evaluateProviderLiveReceiptLedgerContract(
       failure_code: failureCode(state),
     },
     client_safe_summary: "Phantom AI can preview safety state. No external AI call, send, or live ledger write happened.",
-    admin_debug_summary: redactSensitiveText(
+    admin_debug_summary: redactPersonalDataText(
       `Live receipt ledger semantics ${contractId} is ${state} for ${input.provider_route}/${input.model_id}.`,
     ),
     safety_flags: {
