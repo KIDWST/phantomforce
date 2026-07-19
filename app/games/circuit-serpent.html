@@ -37,7 +37,7 @@
     const N=17,canvas=document.querySelector('canvas'),g=canvas.getContext('2d');
     const startEl=document.querySelector('.start'),pauseEl=document.querySelector('.pause'),resultEl=document.querySelector('.result');
     const scoreEl=document.querySelector('[data-score]'),packetsEl=document.querySelector('[data-packets]'),levelEl=document.querySelector('[data-level]');
-    let snake=[],dir={x:1,y:0},queue=[],food=null,bursts=[],score=0,packets=0,level=1,stepMs=160,acc=0,lastT=null,phase='idle',paused=false,soundOn=true,reduced=false,ac=null;
+    let snake=[],dir={x:1,y:0},queue=[],food=null,bursts=[],score=0,packets=0,level=1,stepMs=160,acc=0,lastT=null,phase='idle',paused=false,soundOn=true,reduced=false,ac=null,gpEnabled=false,gpIdx=null;
 
     function tone(f,d=.08,type='square',vol=.05){
       if(!soundOn)return;
@@ -168,6 +168,7 @@
       if(e.data.type==='settings'){
         soundOn=e.data.sound!==false;
         reduced=!!e.data.reducedMotion;
+        gpEnabled=!!e.data.gamepad;
         document.body.classList.toggle('reduced',reduced);
         draw();
       }
@@ -176,6 +177,28 @@
       if(e.data.type==='restart')start();
     });
     addEventListener('resize',resize);
+
+    // --- Gamepad (PhantomPlay standard mapping): d-pad/stick steers, Start pauses ---
+    function gpPad(){const p=navigator.getGamepads?navigator.getGamepads():[];if(gpIdx===null)for(let i=0;i<p.length;i++)if(p[i]){gpIdx=i;break}return gpIdx===null?null:p[gpIdx]}
+    let gpPrevUp=false,gpPrevDown=false,gpPrevLeft=false,gpPrevRight=false,gpPrevStart=false;
+    function gpPoll(){
+      if(gpEnabled){
+        const pad=gpPad();
+        if(pad){
+          const b=pad.buttons,ax=pad.axes[0]||0,ay=pad.axes[1]||0;
+          const up=!!(b[12]&&b[12].pressed)||ay<-.5,down=!!(b[13]&&b[13].pressed)||ay>.5,left=!!(b[14]&&b[14].pressed)||ax<-.5,right=!!(b[15]&&b[15].pressed)||ax>.5,start=!!(b[9]&&b[9].pressed);
+          if(up&&!gpPrevUp)pushDir(0,-1);
+          else if(down&&!gpPrevDown)pushDir(0,1);
+          else if(left&&!gpPrevLeft)pushDir(-1,0);
+          else if(right&&!gpPrevRight)pushDir(1,0);
+          if(start&&!gpPrevStart)setPaused(!paused);
+          gpPrevUp=up;gpPrevDown=down;gpPrevLeft=left;gpPrevRight=right;gpPrevStart=start;
+        }
+      }
+      requestAnimationFrame(gpPoll);
+    }
+    requestAnimationFrame(gpPoll);
+
     resize();requestAnimationFrame(loop);host('ready');
   </script>
 </body>

@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; media-src 'none'; frame-src 'none'">
+    <title>BeatStrike — PhantomPlay</title>
+    <link rel="stylesheet" href="style.css" />
+    <style>
+      .opts { display: flex; flex-direction: column; gap: 10px; margin: 0 auto 20px; max-width: 420px; }
+      .opt-row { display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: wrap; }
+      .opt-label { font: 500 10px "DM Mono", monospace; letter-spacing: .12em; color: rgba(234,255,244,.5); margin-right: 6px; }
+      .opt-row button { padding: 7px 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,.18); background: rgba(255,255,255,.04); color: #eafff4; font: 700 12px inherit; cursor: pointer; min-height: 34px; }
+      .opt-row button[aria-pressed="true"] { border-color: rgba(65,255,161,.7); background: rgba(65,255,161,.16); }
+      .keyboard[data-hidden="1"] { display: none; }
+      .krow span { touch-action: none; }
+    </style>
+  </head>
+  <body>
+    <div class="hud">
+      <div class="hud-stat"><b data-score>0</b><span>SCORE</span></div>
+      <div class="hud-stat"><b data-streak>0</b><span>STREAK</span></div>
+      <div class="hud-stat"><b data-acc>100%</b><span>ACC</span></div>
+      <div class="hud-hint">Tap notes = press. Hold notes (long capsules) = press &amp; hold until they clear the line. Every letter key is live. <kbd>P</kbd> / <kbd>Esc</kbd> pauses.</div>
+    </div>
+    <canvas id="stage"></canvas>
+    <div class="keyboard" data-keyboard>
+      <div class="krow">
+        <span data-key="q">Q</span><span data-key="w">W</span><span data-key="e">E</span><span data-key="r">R</span><span data-key="t">T</span>
+        <span data-key="y">Y</span><span data-key="u">U</span><span data-key="i">I</span><span data-key="o">O</span><span data-key="p">P</span>
+      </div>
+      <div class="krow">
+        <span data-key="a">A</span><span data-key="s">S</span><span data-key="d">D</span><span data-key="f">F</span><span data-key="g">G</span>
+        <span data-key="h">H</span><span data-key="j">J</span><span data-key="k">K</span><span data-key="l">L</span>
+      </div>
+      <div class="krow">
+        <span data-key="z">Z</span><span data-key="x">X</span><span data-key="c">C</span><span data-key="v">V</span>
+        <span data-key="b">B</span><span data-key="n">N</span><span data-key="m">M</span>
+      </div>
+    </div>
+    <div class="overlay" data-pause-overlay hidden>
+      <div>
+        <h2 data-pause-title>Paused</h2>
+        <p>Press <kbd>P</kbd> or <kbd>Esc</kbd> to resume.</p>
+      </div>
+    </div>
+    <div class="overlay" data-start-overlay>
+      <div>
+        <h2>BeatStrike</h2>
+        <p>A generated 128 BPM beatmap across the full keyboard — no words, no lyrics, just notes on the beat. Keys are color-matched to their lane on the guide strip below.<br>Real songs can be dropped in later once real audio files are provided (see game.js).</p>
+        <div class="opts">
+          <div class="opt-row" role="group" aria-label="Note speed">
+            <span class="opt-label">NOTE SPEED</span>
+            <button type="button" data-speed="slow">Slow</button>
+            <button type="button" data-speed="standard">Standard</button>
+            <button type="button" data-speed="fast">Fast</button>
+          </div>
+          <div class="opt-row">
+            <span class="opt-label">KEY GUIDE</span>
+            <button type="button" data-guide-toggle aria-pressed="true">Shown</button>
+          </div>
+        </div>
+        <button data-start-btn>▶ Start</button>
+      </div>
+    </div>
+    <script src="game.js"></script>
+  </body>
+</html>

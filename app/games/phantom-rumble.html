@@ -11,6 +11,11 @@ canvas{width:100%;height:100%;display:block}
 .overlay .modes button{border:1px solid #2cff9b55;border-radius:12px;background:#04140c;color:#7dffbd;padding:14px 18px;font:700 13px ui-monospace;cursor:pointer;min-width:150px}
 .overlay .modes button:hover{background:#0a2417;box-shadow:0 0 18px #22c55e44}
 .overlay .modes button b{display:block;font-size:16px;margin-bottom:4px;color:#baffdb}
+.overlay .mode-group{margin:14px 0 2px}
+.overlay .mode-group>i{display:block;font-size:11px;letter-spacing:2px;color:#5a7568;margin-bottom:6px;font-style:normal}
+.overlay .local-slots{display:flex;gap:8px;align-items:center;justify-content:center;margin:4px 0 10px;font-size:12px;color:#6fae8d}
+.overlay .local-slots button{border:1px solid #2cff9b33;border-radius:16px;background:#04140c;color:#6fae8d;padding:4px 12px;font:700 11px ui-monospace;cursor:pointer}
+.overlay .local-slots button[aria-checked="true"]{background:#123423;color:#baffdb;border-color:#2cff9baa}
 .overlay .diffs{display:flex;gap:8px;justify-content:center;margin:2px 0 14px}
 .overlay .diffs button{border:1px solid #2cff9b33;border-radius:20px;background:#04140c;color:#6fae8d;padding:6px 16px;font:700 11px ui-monospace;letter-spacing:1px;cursor:pointer}
 .overlay .diffs button[aria-checked="true"]{background:#123423;color:#baffdb;border-color:#2cff9baa;box-shadow:0 0 12px #22c55e33}
@@ -29,19 +34,45 @@ body.paused .pause{display:grid}
 .touch button{width:64px;height:64px;border-radius:50%;border:1px solid #2cff9b66;background:#04140ccc;color:#7dffbd;font:700 11px ui-monospace}
 @media(pointer:coarse){.touch{display:flex}}
 @media(max-width:640px){.overlay h1{font-size:34px}}
+.mute-btn{position:fixed;top:calc(10px + env(safe-area-inset-top));right:calc(10px + env(safe-area-inset-right));z-index:6;width:38px;height:38px;border-radius:50%;border:1px solid #2cff9b55;background:#04140ccc;color:#7dffbd;font-size:16px;cursor:pointer;display:grid;place-items:center}
+.mute-btn:hover{background:#0a2417}
+.mute-btn[aria-pressed="true"]{color:#5a7568;border-color:#ffffff22}
 </style></head><body>
 <canvas></canvas>
+<button class="mute-btn" data-mute type="button" aria-pressed="false" aria-label="Mute sound">🔊</button>
 <div class="hud" data-hud hidden></div>
 <div class="touch" data-touch hidden><div><button data-t="left">◀</button><button data-t="right">▶</button></div><div><button data-t="jump">JUMP</button><button data-t="light">HIT</button><button data-t="heavy">SMASH</button><button data-t="shield">SHIELD</button><button data-t="dodge">DODGE</button></div></div>
 <div class="overlay" data-setup><div>
   <h1>PHANTOM RUMBLE</h1>
-  <p>Knock the other phantoms off the arena. Damage raises their percent — the higher it climbs, the further they fly. Last phantom standing takes the rumble.</p>
+  <p>Brawling chickens across walled coops and open sky perches. Damage raises a bird's percent — in a walled coop a hard fence slam CRACKS them; on an open arena, big knockback launches them clean out for the RING OUT. Grab a ledge to save yourself. Last chicken standing takes the rumble.</p>
   <p class="pb" data-pb hidden></p>
-  <div class="modes">
-    <button data-mode="duel"><b>DUEL</b>you vs one bot</button>
-    <button data-mode="versus"><b>VERSUS</b>2 players, one keyboard</button>
-    <button data-mode="rumble"><b>RUMBLE</b>2 players + 2 bots</button>
-    <button data-mode="botbrawl"><b>BOT BRAWL</b>you vs three bots</button>
+  <div class="mode-group"><i>SOLO</i><div class="modes">
+    <button data-mode="soloffa"><b>SOLO FFA</b>you vs three bots</button>
+    <button data-mode="solo"><b>SOLO 1v1</b>you vs one bot</button>
+  </div></div>
+  <div class="mode-group"><i>LOCAL</i><div class="modes">
+    <button data-mode="localffa"><b>LOCAL FFA</b>up to 4, split a keyboard</button>
+  </div></div>
+  <div class="mode-group"><i>RACE TO THE TOP</i><div class="modes">
+    <button data-mode="racetop"><b>RACE TO THE TOP</b>up to 4, no health, climb or get left behind</button>
+  </div></div>
+  <div class="mode-group"><i>ONLINE</i><div class="modes">
+    <button data-mode="net1v1"><b>NET 1v1</b>invite a friend</button>
+    <button data-mode="net2v2"><b>NET 2v2</b>teams, invite code</button>
+    <button data-mode="netffa"><b>NET FFA</b>up to 4, invite code</button>
+  </div></div>
+  <div class="local-slots" data-local-slots hidden>
+    <span>Humans on this keyboard:</span>
+    <button data-humans="1" type="button" role="radio" aria-checked="false">1</button>
+    <button data-humans="2" type="button" role="radio" aria-checked="true">2</button>
+    <button data-local-start type="button">START</button>
+  </div>
+  <div class="diffs" data-maps role="radiogroup" aria-label="Arena select">
+    <button data-map="random" type="button" role="radio" aria-checked="true">AUTO ROTATE</button>
+    <button data-map="coop" type="button" role="radio" aria-checked="false">THE COOP</button>
+    <button data-map="foundry" type="button" role="radio" aria-checked="false">SPARK FOUNDRY</button>
+    <button data-map="roost" type="button" role="radio" aria-checked="false">SKY ROOST</button>
+    <button data-map="drift" type="button" role="radio" aria-checked="false">DRIFT HARBOR</button>
   </div>
   <div class="diffs" data-diffs role="radiogroup" aria-label="Bot difficulty">
     <button data-diff="easy" type="button" role="radio" aria-checked="false">EASY</button>
@@ -61,7 +92,7 @@ body.paused .pause{display:grid}
 'use strict';
 const host=(type,data={})=>parent.postMessage({source:'phantomplay-game',type,...data},'*');
 const canvas=document.querySelector('canvas'),ctx=canvas.getContext('2d');
-const hudEl=document.querySelector('[data-hud]'),setupEl=document.querySelector('[data-setup]'),endEl=document.querySelector('[data-end]'),pauseEl=document.querySelector('[data-pauseoverlay]'),touchEl=document.querySelector('[data-touch]');
+const hudEl=document.querySelector('[data-hud]'),setupEl=document.querySelector('[data-setup]'),endEl=document.querySelector('[data-end]');
 let W=0,H=0,DPR=1;
 function size(){DPR=Math.min(2,devicePixelRatio||1);W=canvas.width=Math.max(640,innerWidth*DPR);H=canvas.height=Math.max(420,innerHeight*DPR)}
 addEventListener('resize',size);size();
@@ -70,16 +101,189 @@ addEventListener('resize',size);size();
 let stats={wins:0,matches:0,bestKos:0};
 function pushState(progress){host('progress',{progress,state:null})}
 
-/* ---------- arena ---------- */
-/* Normalized coordinates: x 0..1 of arena width, y 0..1 of arena height. */
-const STAGE={x:.5,y:.72,w:.74,h:.045};
-const PLATS=[];
-const BLAST={left:-.18,right:1.18,top:-.3,bottom:1.25};
+/* ---------- arenas ----------
+   Two archetypes now share the brawl ruleset:
+   - WALLED ("coop"): solid floor and side fences, no ring-out. A fighter
+     is KO'd ("CRACKED!") when a hit slams them into a fence hard enough
+     while their damage is high.
+   - OPEN ("sky"): no fences, no safety floor — platforms over a void.
+     Knockback that carries a fighter past the blast zones is a RING OUT
+     KO, and ledge-save recovery (tryLedgeGrab below) exists so close
+     calls stay playable.
+   Normalized coordinates: x 0..1 of arena width, y 0..1 of arena height. */
+const ARENA={left:.07,right:.93,floor:.82,ceil:.05};
+const FLOOR={x:.5,y:ARENA.floor,w:ARENA.right-ARENA.left,h:.045};
+const SLAM_SPEED=.024; /* base impact speed (at 0% dmg) that starts to threaten a crack */
 const SPAWNS=[{x:.28,y:.58},{x:.72,y:.58},{x:.42,y:.58},{x:.58,y:.58}];
+const BLAST={l:-.07,r:1.07,b:1.08,t:-.3}; /* open-map ring-out bounds */
+/* ---------- named map roster (non-climb modes) ----------
+   Mixed walled-hazard and open fall-off archetypes with per-map theming.
+   Per-map features: 'laser' = telegraphed periodic laser sweep, 'portals'
+   = paired two-endpoint warp gates, plats[].move = drifting platform. */
+const MAPS=[
+  {id:'coop',name:'THE COOP',arch:'WALLED · FENCE-CRACK',open:false,
+   theme:{floor:'#0b2417',plat:'#0a1f14',stroke:'#2cff9b',accent:'#4ade80'}},
+  {id:'foundry',name:'SPARK FOUNDRY',arch:'WALLED · LASER SWEEP',open:false,laser:true,
+   theme:{floor:'#2a1508',plat:'#241408',stroke:'#fb923c',accent:'#fdba74'}},
+  {id:'roost',name:'SKY ROOST',arch:'OPEN · RING-OUT · PORTALS',open:true,
+   theme:{floor:'#0c2135',plat:'#0a1a2a',stroke:'#38bdf8',accent:'#7dd3fc'},
+   plats:[{x:.5,y:.74,w:.42,h:.05,edges:true},{x:.16,y:.56,w:.17,h:.03,edges:true},{x:.84,y:.56,w:.17,h:.03,edges:true},{x:.5,y:.44,w:.2,h:.03}],
+   portals:[{x:.09,y:.4},{x:.91,y:.4}],
+   spawns:[{x:.38,y:.6},{x:.62,y:.6},{x:.16,y:.45},{x:.84,y:.45}]},
+  {id:'drift',name:'DRIFT HARBOR',arch:'OPEN · RING-OUT · DRIFT',open:true,
+   theme:{floor:'#221338',plat:'#1c1030',stroke:'#a78bfa',accent:'#c4b5fd'},
+   plats:[{x:.26,y:.72,w:.3,h:.05,edges:true},{x:.74,y:.72,w:.3,h:.05,edges:true},{x:.5,y:.5,w:.16,h:.03,move:{range:.2,speed:.9,phase:0}},{x:.5,y:.3,w:.14,h:.03}],
+   spawns:[{x:.2,y:.58},{x:.8,y:.58},{x:.32,y:.58},{x:.68,y:.58}]},
+];
+let MAP=MAPS[0],LEDGES=[],PORTALS=[],matchTime=0;
+const laser={phase:'idle',t:0,y:.45,cd:6,hitMask:0};
+function mapSpawn(slot){return (MAP&&MAP.spawns&&MAP.spawns[slot])||SPAWNS[slot]}
+function placeFighters(){for(const f of fighters){const s=mapSpawn(f.slot);f.x=s.x;f.y=s.y;f.vx=0;f.vy=0}}
+
+/* ---------- modular chunk-based procedural platforms ----------
+   A small library of relative platform "chunks." Each match seeds a
+   fresh, deterministic layout from a handful of chunks so the coop
+   never looks exactly the same twice, without hand-authoring dozens of
+   full maps. The seed is requested from the trusted host shell (see
+   host protocol below) rather than generated in-page, so a future
+   networked match can hand every client the same seed and guarantee
+   everyone plays the same layout — this game has no client-side
+   "roll your own map" step. */
+const CHUNKS=[
+  [{dx:-.16,dy:-.15,w:.16},{dx:.16,dy:-.15,w:.16}],
+  [{dx:0,dy:-.2,w:.22}],
+  [{dx:-.2,dy:-.1,w:.14},{dx:0,dy:-.22,w:.14},{dx:.2,dy:-.1,w:.14}],
+  [{dx:-.22,dy:-.18,w:.18},{dx:.22,dy:-.18,w:.18}],
+  [{dx:0,dy:-.12,w:.3}],
+  [{dx:-.28,dy:-.08,w:.12},{dx:.28,dy:-.24,w:.12}], // steep zigzag stagger
+  [{dx:-.25,dy:-.1,w:.1},{dx:0,dy:-.2,w:.1},{dx:.25,dy:-.1,w:.1},{dx:0,dy:-.28,w:.14}], // 4-step staircase weave
+  [{dx:0,dy:-.06,w:.1}], // a single narrow precision platform, close by
+  [{dx:-.3,dy:-.16,w:.22},{dx:.3,dy:-.16,w:.22}], // wide twin platforms, far apart
+  [{dx:-.12,dy:-.14,w:.13},{dx:.12,dy:-.28,w:.13},{dx:-.12,dy:-.42,w:.13}], // tight vertical spiral
+];
+function mulberry32(seed){
+  let s=seed>>>0;
+  return function(){s|=0;s=(s+0x6d2b79f5)|0;let t=Math.imul(s^(s>>>15),1|s);t=(t+Math.imul(t^(t>>>7),61|t))^t;return((t^(t>>>14))>>>0)/4294967296};
+}
+let PLATS=[];
+function buildPlatforms(seed){
+  const rand=mulberry32(seed);
+  const chunk=CHUNKS[Math.floor(rand()*CHUNKS.length)];
+  const cx=.5,cy=.56;
+  PLATS=chunk.map(c=>({x:cx+c.dx,y:cy+c.dy,w:c.w,h:.03}));
+}
+/* Build the full arena for a named map: walled maps keep the seeded chunk
+   roost variety (buildPlatforms) over the solid floor; open maps use their
+   hand-authored fall-off layout and derive grabbable LEDGES from the edge-
+   flagged ground pieces. Paired portals and the laser cycle reset here. */
+function buildArena(map,seed){
+  MAP=map||MAPS[0];
+  LEDGES=[];PORTALS=[];matchTime=0;
+  laser.phase='idle';laser.t=0;laser.cd=5;laser.hitMask=0;
+  if(MAP.open){
+    PLATS=MAP.plats.map(p=>({x:p.x,y:p.y,w:p.w,h:p.h,edges:!!p.edges,move:p.move||null,baseX:p.x,_dx:0}));
+    for(const p of PLATS){
+      if(p.edges){
+        LEDGES.push({x:p.x-p.w/2,y:p.y-p.h/2,side:-1});
+        LEDGES.push({x:p.x+p.w/2,y:p.y-p.h/2,side:1});
+      }
+    }
+    if(MAP.portals)PORTALS=MAP.portals.map(p=>({x:p.x,y:p.y}));
+  }else{
+    buildPlatforms(seed);
+    for(const p of PLATS){p.baseX=p.x;p._dx=0}
+  }
+}
+/* Drifting platforms: driven off matchTime so motion is deterministic from
+   match start. Fighters standing on a mover are carried by its per-frame
+   delta (applied at landing resolution in step()). */
+function stepMovers(){
+  for(const s of PLATS){
+    if(!s.move)continue;
+    const nx=s.baseX+Math.sin(matchTime*s.move.speed+s.move.phase)*s.move.range;
+    s._dx=nx-s.x;s.x=nx;
+  }
+}
+/* ---------- Race to the Top: procedurally-generated tower ----------
+   A separate seeded layout from the brawl arena's PLATS, built the same
+   deterministic way (mulberry32 from the shared match seed) so local and
+   networked matches agree on the tower without transmitting it. */
+const TOWER_ROWS=45,ROW_STEP=.16,TOWER_START_Y=.56;
+let TOWER=[],SUMMIT=null;
+function buildTower(seed){
+  const rand=mulberry32(seed);
+  TOWER=[{x:.5,y:TOWER_START_Y,w:.5,h:.03}]; // shared start platform, wider than a normal chunk so all racers can spawn on it
+  for(let row=1;row<=TOWER_ROWS;row++){
+    const chunk=CHUNKS[Math.floor(rand()*CHUNKS.length)];
+    const cy=TOWER_START_Y-row*ROW_STEP;
+    for(const c of chunk)TOWER.push({x:.5+c.dx,y:cy+c.dy*.4,w:c.w,h:.03});
+  }
+  const summitY=TOWER_START_Y-(TOWER_ROWS+1)*ROW_STEP;
+  SUMMIT={x:.5,y:summitY,w:.4,h:.035,summit:true};
+  TOWER.push(SUMMIT);
+}
+/* Server-authoritative-ready seeding: this game is local-only today (no
+   client to desync from), but the seed still comes from the trusted
+   host shell rather than being rolled in-page, so a future networked
+   room can hand every client the exact same seed and no one ever
+   generates their own map. hostSeed wins if the host answered before
+   this match started; otherwise a real random seed is drawn locally
+   (never a predictable one) so solo/local play never stalls waiting on
+   a host that doesn't implement this yet. */
+let hostSeed=null;
+function localSeed(){
+  try{const a=new Uint32Array(1);crypto.getRandomValues(a);return a[0]}catch{return Math.floor(Math.random()*4294967296)}
+}
+function nextSeed(){const s=hostSeed;hostSeed=null;return s??localSeed()}
+host('request-seed');
+
+/* ---------- networked rooms (NET 1v1 / NET 2v2 / NET FFA) ----------
+   Host election mirrors kingdom-breakers.html's proven pattern: every
+   client posts a random hostNonce as a matchState probe on entering the
+   lobby; only the room's real host's PATCH ever survives to become the
+   room's persisted matchState (updatePhantomPlayRoomMatchState enforces
+   that), so only the real host ever sees its own nonce echoed back via
+   the next match-state push and sets isHost=true.
+   Real-time sync over a ~5Hz channel: each client always simulates its
+   own controlled fighter locally/immediately (so local input never feels
+   delayed); every other fighter is rendered by interpolating between the
+   host's periodic snapshots. The host is authoritative for percent/
+   stocks/KOs/pickups — it resolves hits for every fighter, including
+   ones it doesn't locally control, using input relayed to it via
+   match-action-relay (see applyRemoteAction below). */
+let inRoom=false,isHost=false,hostNonce=Math.random().toString(36).slice(2,10);
+let roomParticipants=[],remoteInputs={},lastActionAt=0;
+let lastSnapshot=null,prevSnapshot=null,snapshotAt=0,prevSnapshotAt=0;
+let localSlot=0,selfActorId=null;
+function sendMatchAction(action,modeArg){
+  const t=performance.now();
+  if(t-lastActionAt<220){setTimeout(()=>sendMatchAction(action,modeArg),220-(t-lastActionAt));return}
+  lastActionAt=performance.now();
+  host('match-action',{action,mode:modeArg==='replace'?'replace':'merge'});
+}
 
 /* ---------- fighters ---------- */
 const PALETTE=[{name:'EMBER',c:'#4ade80',glow:'#22c55e'},{name:'CIPHER',c:'#5eead4',glow:'#14b8a6'},{name:'HEX',c:'#f0abfc',glow:'#d946ef'},{name:'VOLT',c:'#fde047',glow:'#eab308'}];
-let fighters=[],pickups=[],particles=[],floaters=[],rings=[],mode='',running=false,paused=false,over=false,last=0,shake=0,slowmo=0,pickupTimer=6,reduced=false,soundOn=true,matchKos=[0,0,0,0],raf=0;
+let fighters=[],pickups=[],particles=[],floaters=[],rings=[],projectiles=[],mode='',running=false,paused=false,over=false,last=0,shake=0,slowmo=0,pickupTimer=6,reduced=false,soundOn=true,matchKos=[0,0,0,0],raf=0;
+
+/* ---------- persistent mute ----------
+   A real always-visible mute control, not just a host settings toggle —
+   available on the setup screen, mid-match, everywhere — and remembered
+   across sessions the same way bot difficulty is. */
+try{soundOn=localStorage.getItem('pf.phantomrumble.mute')!=='1'}catch{}
+const muteBtn=document.querySelector('[data-mute]');
+function applyMuteUi(){
+  if(!muteBtn)return;
+  muteBtn.textContent=soundOn?'🔊':'🔇';
+  muteBtn.setAttribute('aria-pressed',String(!soundOn));
+  muteBtn.setAttribute('aria-label',soundOn?'Mute sound':'Unmute sound');
+}
+if(muteBtn)muteBtn.onclick=()=>{
+  soundOn=!soundOn;
+  try{localStorage.setItem('pf.phantomrumble.mute',soundOn?'0':'1')}catch{}
+  applyMuteUi();
+};
+applyMuteUi();
 
 /* ---------- bot difficulty ---------- */
 const DIFFS={
@@ -97,6 +301,23 @@ function setDiff(d){
 }
 for(const b of document.querySelectorAll('[data-diff]'))b.onclick=()=>setDiff(b.dataset.diff);
 setDiff(botDifficulty);
+
+/* ---------- arena select: explicit pick, or AUTO map rotation ---------- */
+let selectedMapId='random',mapRotation=-1;
+try{const savedMap=localStorage.getItem('pf.phantomrumble.map');if(savedMap==='random'||MAPS.some(m=>m.id===savedMap))selectedMapId=savedMap}catch{}
+function setMapChoice(id){
+  if(id!=='random'&&!MAPS.some(m=>m.id===id))return;
+  selectedMapId=id;
+  try{localStorage.setItem('pf.phantomrumble.map',id)}catch{}
+  for(const b of document.querySelectorAll('[data-map]'))b.setAttribute('aria-checked',String(b.dataset.map===id));
+}
+for(const b of document.querySelectorAll('[data-map]'))b.onclick=()=>setMapChoice(b.dataset.map);
+setMapChoice(selectedMapId);
+function pickMap(){
+  if(selectedMapId!=='random'){const m=MAPS.find(mm=>mm.id===selectedMapId);if(m)return m}
+  mapRotation=(mapRotation+1)%MAPS.length;
+  return MAPS[mapRotation];
+}
 
 /* ---------- procedural chicken-ninja SFX ---------- */
 let audioCtx=null;
@@ -124,19 +345,95 @@ function makeFighter(slot,human){
   const spawn=SPAWNS[slot];
   return {slot,human,name:PALETTE[slot].name,color:PALETTE[slot].c,glow:PALETTE[slot].glow,
     x:spawn.x,y:spawn.y,vx:0,vy:0,face:slot%2?-1:1,pct:0,stocks:3,
-    grounded:false,jumps:2,stun:0,invuln:2,charge:0,power:false,dead:false,shieldHeld:false,parry:0,dodgeCd:0,ledge:0,ledgeSide:0,ledgeCooldown:0,
-    attackCd:0,anim:0,trail:[],ai:{dir:1,timer:0,jumpCd:0,diff:DIFFS[botDifficulty]},lastTap:{key:'',at:0}};
+    grounded:false,jumps:2,stun:0,invuln:2,charge:0,power:false,shurikenArmed:false,smokeCooldown:0,speedBuff:0,dead:false,shieldHeld:false,parry:0,dodgeCd:0,
+    ledge:0,ledgeSide:0,ledgeCooldown:0,portalCd:0,
+    attackCd:0,anim:0,trail:[],ai:{dir:1,timer:0,jumpCd:0,watchX:0,watchY:0,watchT:0,hold:0,diff:DIFFS[botDifficulty]},lastTap:{key:'',at:0},_gpDir:0};
 }
-function startMatch(selected){
+function makeRaceFighter(slot,human){
+  return {slot,human,name:PALETTE[slot].name,color:PALETTE[slot].c,glow:PALETTE[slot].glow,
+    x:.5+(slot-1.5)*.06,y:TOWER_START_Y,vx:0,vy:0,face:slot%2?-1:1,altitude:0,finished:false,place:0,
+    grounded:false,jumps:2,stun:0,invuln:2,dodgeCd:0,attackCd:0,anim:0,trail:[],grappleReady:false,shieldBubble:0,speedBuff:0,
+    ai:{dir:1,timer:0,jumpCd:0,watchX:0,watchY:0,watchT:0,hold:0,diff:DIFFS[botDifficulty]},lastTap:{key:'',at:0},_gpDir:0};
+}
+function startMatch(selected,options={}){
   mode=selected;
-  const humans=mode==='versus'||mode==='rumble'?2:1;
-  const count=mode==='duel'?2:mode==='versus'?2:4;
+  /* SOLO defaults to FFA (1 human + 3 bots); humans only replace bots in
+     networked play or when explicitly entering 1v1 / local FFA slots. */
+  const humans=selected==='soloffa'||selected==='solo'?1:selected==='localffa'?(options.humans||2):selected==='net1v1'?2:1;
+  const count=selected==='solo'||selected==='net1v1'?2:4;
   fighters=[];
   for(let i=0;i<count;i++)fighters.push(makeFighter(i,i<humans));
-  pickups=[];particles=[];floaters=[];rings=[];matchKos=[0,0,0,0];pickupTimer=6;over=false;running=true;paused=false;
+  buildArena(pickMap(),nextSeed());
+  placeFighters();
+  pickups=[];particles=[];floaters=[];rings=[];projectiles=[];matchKos=[0,0,0,0];pickupTimer=6;over=false;running=true;paused=false;koFeed.length=0;
+  announceMap();
   setupEl.hidden=true;endEl.hidden=true;hudEl.hidden=false;
-  pauseEl.hidden=true;touchEl.hidden=fighters.some(f=>f.human&&f.slot===0)?false:true;
+  document.querySelector('[data-touch]').hidden=fighters.some(f=>f.human&&f.slot===0)?false:true;
   buildHud();last=performance.now();if(raf)cancelAnimationFrame(raf);raf=requestAnimationFrame(loop);
+}
+function buildRaceHud(){
+  hudEl.innerHTML=fighters.map(f=>`<div class="fighter-card" style="border-color:${f.color}55"><i style="color:${f.color}">${f.name}${f.human?'':' · BOT'}</i><b data-alt="${f.slot}" style="color:${f.color}">0%</b><s data-place="${f.slot}" style="color:${f.color}"></s></div>`).join('')
+    +`<div class="fighter-card" style="min-width:160px"><i>DANGER</i><b data-danger style="color:#fb923c">0%</b></div>`;
+}
+function updateRaceHud(){
+  const towerHeight=(TOWER_ROWS+1)*ROW_STEP;
+  for(const f of fighters){
+    const alt=hudEl.querySelector(`[data-alt="${f.slot}"]`),place=hudEl.querySelector(`[data-place="${f.slot}"]`);
+    if(alt)alt.textContent=`${Math.round(Math.min(100,f.altitude/towerHeight*100))}%`;
+    if(place)place.textContent=f.finished?`#${f.place}`:'';
+  }
+  // Danger = how close the hazard line is to the most-endangered living
+  // player. hazardCatch()'s own check is f.y>hazardY (caught once the
+  // hazard's altitude value drops below the player's), so the safety
+  // margin for a given player is hazardY-f.y — positive while safe,
+  // shrinking toward 0 (then negative) as the hazard closes in. Take the
+  // SMALLEST such margin across all living players, not the largest.
+  const living=fighters.filter(f=>!f.finished);
+  const minGap=living.length?Math.min(...living.map(f=>hazardY-f.y)):.3;
+  const dangerEl=hudEl.querySelector('[data-danger]');
+  if(dangerEl)dangerEl.textContent=`${Math.max(0,Math.min(100,Math.round(100-minGap/.3*100)))}%`;
+}
+/* ---------- Race to the Top soundtrack: procedural 8-bit sequencer ----------
+   No audio files (CSP: media-src 'none') — same oscillator approach as the
+   existing tone()/sfx() SFX, just scheduled as a loop. Melody (square) +
+   bass (triangle) + a short noise-like square blip for percussion, tempo
+   creeping up as the danger meter closes in. Only runs during Race to the
+   Top; brawl-mode audio is untouched. */
+const RACE_MELODY=[659,784,880,784,988,880,784,659,880,784,659,587,659,784,988,1175];
+const RACE_BASS=[220,220,247,247,262,262,220,196];
+let raceMusicTimer=null,raceMusicStep=0;
+function raceMusicTick(){
+  if(!soundOn||mode!=='racetop'){return}
+  const urgency=Math.min(1,(hazardSpeed-.01)/.04); // 0 at match start, approaches 1 as hazardSpeed nears its cap
+  const stepMs=Math.max(95,150-urgency*55);
+  const note=RACE_MELODY[raceMusicStep%RACE_MELODY.length];
+  tone(note,.09,'square',.02,1);
+  if(raceMusicStep%2===0)tone(RACE_BASS[(raceMusicStep/2|0)%RACE_BASS.length],.14,'triangle',.03,1);
+  if(raceMusicStep%4===0)tone(90,.03,'square',.018,.3);
+  raceMusicStep+=1;
+  raceMusicTimer=setTimeout(raceMusicTick,stepMs);
+}
+function startRaceMusic(){
+  stopRaceMusic();
+  raceMusicStep=0;
+  raceMusicTick();
+}
+function stopRaceMusic(){
+  if(raceMusicTimer){clearTimeout(raceMusicTimer);raceMusicTimer=null}
+}
+let raceFinishOrder=[];
+function startRaceMatch(humanCount){
+  mode='racetop';
+  const total=4;
+  fighters=[];
+  for(let i=0;i<total;i++)fighters.push(makeRaceFighter(i,i<(humanCount||1)));
+  buildTower(nextSeed());
+  hazardY=1;hazardSpeed=.01;
+  pickups=[];particles=[];floaters=[];rings=[];projectiles=[];over=false;running=true;paused=false;raceFinishOrder=[];
+  setupEl.hidden=true;endEl.hidden=true;hudEl.hidden=false;
+  document.querySelector('[data-touch]').hidden=fighters.some(f=>f.human&&f.slot===0)?false:true;
+  buildRaceHud();last=performance.now();if(raf)cancelAnimationFrame(raf);raf=requestAnimationFrame(loop);
+  startRaceMusic();
 }
 
 /* ---------- input ---------- */
@@ -146,24 +443,40 @@ const keys=new Set();
 function padFor(f){return f.slot===0?P1:P2}
 addEventListener('keydown',e=>{
   if(e.repeat)return;keys.add(e.key);
+  const localNetMode=mode&&mode.startsWith('net'); // gates "is this my own fighter" regardless of host/non-host
+  const netMode=localNetMode&&!isHost; // gates "should I relay this" — the host's own presses apply straight to its authoritative simulation, no relay-to-self needed
   for(const f of fighters){
     if(!f.human||f.dead||f.stun>0||!running||paused)continue;
+    if(localNetMode&&f.slot!==localSlot)continue; // in a net match, this client only drives its own fighter's local input
     const pad=padFor(f);
-    if(pad.jump.includes(e.key))jump(f);
-    if(pad.light.includes(e.key))attack(f,false);
-    if(pad.heavy.includes(e.key))f.charge=.01;
-    if(pad.shield.includes(e.key)){f.shieldHeld=true;f.parry=.18;addFloater(f.x,f.y-.1,'GUARD',f.glow,11)}
-    if(pad.dodge.includes(e.key))dodge(f);
+    if(pad.jump.includes(e.key)){
+      if(mode==='racetop'&&f.grappleReady){
+        f.grappleReady=false;
+        const dir=heldDir(f)||f.face||1;
+        f.vx=dir*.03;f.vy=-.032;f.jumps=1;
+        spawnBurst(f.x,f.y,'#5eead4',16);addFloater(f.x,f.y-.1,'GRAPPLE!','#5eead4',15);sfx('jump');
+      }else jump(f);
+      if(netMode)sendMatchAction({type:'input',slot:localSlot,event:'jump'},'merge');
+    }
+    if(pad.light.includes(e.key)){if(mode==='racetop')raceSabotage(f);else attack(f,false);if(netMode)sendMatchAction({type:'input',slot:localSlot,event:'light'},'merge')}
+    if(mode==='racetop'){if(pad.heavy.includes(e.key)){raceSabotage(f,true);if(netMode)sendMatchAction({type:'input',slot:localSlot,event:'heavy'},'merge')}}
+    else if(pad.heavy.includes(e.key))f.charge=.01;
+    if(mode!=='racetop'&&pad.shield.includes(e.key)){f.shieldHeld=true;f.parry=.18;addFloater(f.x,f.y-.1,'GUARD',f.glow,11)}
+    if(pad.dodge.includes(e.key)){dodge(f);if(netMode)sendMatchAction({type:'input',slot:localSlot,event:'dodge'},'merge')}
     if(pad.left.includes(e.key))tapDash(f,-1,e.key);
     if(pad.right.includes(e.key))tapDash(f,1,e.key);
   }
 });
 addEventListener('keyup',e=>{
   keys.delete(e.key);
+  const localNetMode=mode&&mode.startsWith('net');
+  const netMode=localNetMode&&!isHost;
   for(const f of fighters){
     if(!f.human)continue;
+    if(localNetMode&&f.slot!==localSlot)continue;
     const pad=padFor(f);
-    if(pad.heavy.includes(e.key)&&f.charge>0&&!f.dead&&f.stun<=0){attack(f,true);f.charge=0}
+    if(mode==='racetop'){f.charge=0} // heavy attack has no meaning in this mode — reset the charge keydown may have armed, but never call brawl attack()
+    else if(pad.heavy.includes(e.key)&&f.charge>0&&!f.dead&&f.stun<=0){attack(f,true);f.charge=0;if(netMode)sendMatchAction({type:'input',slot:localSlot,event:'heavy'},'merge')}
     if(pad.shield.includes(e.key))f.shieldHeld=false;
   }
 });
@@ -176,6 +489,17 @@ const touchState={left:false,right:false,shield:false};
 for(const b of document.querySelectorAll('[data-t]')){
   const act=b.dataset.t;
   b.onpointerdown=ev=>{ev.preventDefault();const f=fighters[0];if(!f||!f.human||f.dead||paused||!running)return;
+    if(mode==='racetop'){
+      if(act==='left')touchState.left=true;else if(act==='right')touchState.right=true;
+      else if(act==='jump'){
+        if(f.grappleReady){f.grappleReady=false;const dir=heldDir(f)||f.face||1;f.vx=dir*.03;f.vy=-.032;f.jumps=1;spawnBurst(f.x,f.y,'#5eead4',16);addFloater(f.x,f.y-.1,'GRAPPLE!','#5eead4',15);sfx('jump')}else jump(f);
+      }
+      else if(act==='light')raceSabotage(f);
+      else if(act==='heavy')raceSabotage(f,true);
+      // 'shield' has no meaning in this mode
+      else if(act==='dodge')dodge(f);
+      return;
+    }
     if(act==='left')touchState.left=true;else if(act==='right')touchState.right=true;else if(act==='shield'){touchState.shield=true;f.shieldHeld=true;f.parry=.18;addFloater(f.x,f.y-.1,'GUARD',f.glow,11)}
     else if(act==='jump')jump(f);else if(act==='light')attack(f,false);else if(act==='heavy')attack(f,true);else if(act==='dodge')dodge(f);};
   b.onpointerup=()=>{if(act==='left')touchState.left=false;if(act==='right')touchState.right=false;if(act==='shield'){touchState.shield=false;const f=fighters[0];if(f)f.shieldHeld=false}};
@@ -187,14 +511,82 @@ function heldDir(f){
   if(pad.left.some(k=>keys.has(k)))dir-=1;
   if(pad.right.some(k=>keys.has(k)))dir+=1;
   if(f.slot===0){if(touchState.left)dir-=1;if(touchState.right)dir+=1}
+  if(gpEnabled&&f._gpDir)dir=Math.max(-1,Math.min(1,dir+f._gpDir));
   return dir;
+}
+
+/* ---------- gamepad (PhantomPlay standard mapping) ----------
+   First connected controller drives P1 (slot 0), second connected drives
+   P2 (slot 1) — layered on top of keyboard, never replacing it, so either
+   input source works standalone or together. Discrete actions (jump,
+   light/heavy hit, guard, dodge) use press-edge detection against the
+   previous frame's button state, mirroring how the keydown handler above
+   treats the same keyboard keys. */
+let gpEnabled=false;
+const GP_DEADZONE=.22;
+const gpPrev={0:{a:false,b:false,x:false,shield:false,up:false},1:{a:false,b:false,x:false,shield:false,up:false}};
+const gpStartPrev=[false,false];
+function gpPad(slot){const pads=navigator.getGamepads?navigator.getGamepads():[];return pads[slot]||null}
+function applyGamepadInput(f){
+  const pad=gpPad(f.slot);
+  if(!pad){f._gpDir=0;return}
+  const prev=gpPrev[f.slot];
+  const ax=pad.axes[0]||0,ay=pad.axes[1]||0;
+  const dl=!!pad.buttons[14]?.pressed,dr=!!pad.buttons[15]?.pressed,du=!!pad.buttons[12]?.pressed;
+  const stick=Math.abs(ax)>GP_DEADZONE?ax:0;
+  f._gpDir=Math.max(-1,Math.min(1,stick+(dl?-1:0)+(dr?1:0)));
+  const up=du||ay<-GP_DEADZONE;
+  const a=!!pad.buttons[0]?.pressed,b=!!pad.buttons[1]?.pressed,x=!!pad.buttons[2]?.pressed;
+  const shield=!!pad.buttons[4]?.pressed||!!pad.buttons[5]?.pressed||!!pad.buttons[6]?.pressed||!!pad.buttons[7]?.pressed;
+  if(up&&!prev.up)jump(f);
+  if(a&&!prev.a)attack(f,false);
+  if(x&&!prev.x&&f.charge<=0)f.charge=.01;
+  if(!x&&prev.x){if(f.charge>0&&!f.dead&&f.stun<=0)attack(f,true);f.charge=0}
+  if(b&&!prev.b)dodge(f);
+  if(shield&&!prev.shield){f.shieldHeld=true;f.parry=.18;addFloater(f.x,f.y-.1,'GUARD',f.glow,11)}
+  if(!shield&&prev.shield&&!padFor(f).shield.some(k=>keys.has(k)))f.shieldHeld=false;
+  prev.up=up;prev.a=a;prev.b=b;prev.x=x;prev.shield=shield;
+}
+function pollGamepadPause(){
+  if(!gpEnabled)return;
+  for(let slot=0;slot<2;slot++){
+    const pad=gpPad(slot);
+    const start=!!(pad&&pad.buttons[9]&&pad.buttons[9].pressed);
+    if(start&&!gpStartPrev[slot])setPaused(!paused);
+    gpStartPrev[slot]=start;
+  }
 }
 
 /* ---------- combat ---------- */
 function jump(f){
-  if(f.ledge>0){const side=f.ledgeSide||1;f.ledge=0;f.ledgeCooldown=.75;f.x+=-side*.02;f.vx=-side*.018;f.vy=-.024;f.jumps=1;spawnBurst(f.x,f.y,f.glow,9);sfx('jump');return}
+  if(f.ledge>0){
+    /* ledge-jump: kick up and away from the edge, with a cooldown so the
+       fighter can't instantly re-grab the same ledge. */
+    const side=f.ledgeSide;
+    f.ledge=0;f.ledgeCooldown=.75;
+    f.vy=-.028;f.vx=-side*.014;f.x+=-side*.02;f.jumps=1;f.grounded=false;
+    spawnBurst(f.x,f.y,f.glow,10);addFloater(f.x,f.y-.1,'LEDGE JUMP!',f.glow,13);sfx('jump');
+    return;
+  }
   if(f.jumps<=0)return;
   f.vy=-.026;f.jumps-=1;f.grounded=false;spawnBurst(f.x,f.y+.02,f.glow,5);addFloater(f.x,f.y-.08,'HI-YA!',f.glow,12);sfx('jump');
+}
+/* ---------- ledge-save recovery (open fall-off maps only) ----------
+   A falling fighter passing an open edge snaps onto it ("LEDGE!") instead
+   of dropping straight into the void, then ledge-jumps back to safety.
+   Locked out while already hanging, on cooldown, or still rising. */
+function tryLedgeGrab(f){
+  if(f.ledge>0||f.ledgeCooldown>0||f.vy<0||f.stun>0)return false;
+  for(const L of LEDGES){
+    if((f.x-L.x)*L.side>-.01&&Math.abs(f.x-L.x)<.045&&f.y>L.y-.02&&f.y<L.y+.11){
+      f.ledge=2.1;f.ledgeSide=L.side;
+      f.x=L.x+L.side*.012;f.y=L.y+.03;f.vx=0;f.vy=0;f.jumps=1;
+      f.invuln=Math.max(f.invuln,.35);
+      spawnBurst(f.x,f.y,f.glow,8);addFloater(f.x,f.y-.1,'LEDGE!',f.glow,12);sfx('jump');
+      return true;
+    }
+  }
+  return false;
 }
 function dodge(f){
   if(f.dodgeCd>0||f.stun>0)return;
@@ -202,21 +594,16 @@ function dodge(f){
   f.dodgeCd=.75;f.invuln=Math.max(f.invuln,.22);f.shieldHeld=false;f.parry=0;
   f.vx=dir*.018;f.vy-=.003;spawnBurst(f.x,f.y,f.glow,12);addRing(f.x,f.y,.09,f.glow);addFloater(f.x,f.y-.12,'DODGE',f.glow,13);sfx('jump');
 }
-function tryLedgeGrab(f){
-  const edgePad=.055,top=STAGE.y-STAGE.h/2;
-  if(f.ledge>0||f.ledgeCooldown>0||f.vy<0)return false;
-  const ledgeSide=f.x<STAGE.x?-1:1;
-  const edgeX=STAGE.x+ledgeSide*STAGE.w/2;
-  const close=Math.abs(f.x-edgeX)<edgePad&&f.y>top-.08&&f.y<top+.12&&f.vy>=0&&f.stun<=.08;
-  if(!close)return false;
-  f.ledge=.32;f.ledgeSide=ledgeSide;f.ledgeCooldown=1.1;f.x=edgeX-ledgeSide*.012;f.y=top;f.vx=0;f.vy=0;f.jumps=1;f.invuln=Math.max(f.invuln,.3);
-  spawnBurst(f.x,f.y,f.glow,7);addRing(f.x,f.y,.065,f.glow); /* internal LEDGE save, no noisy label */
-  return true;
-}
 function attack(f,heavy){
   if(f.attackCd>0)return;
   if(f.shieldHeld)return;
-  f.attackCd=heavy?.55:.28;f.anim=heavy?.3:.18;
+  if(!heavy&&f.shurikenArmed){
+    f.shurikenArmed=false;f.attackCd=.28;f.anim=.14;
+    projectiles.push({x:f.x+f.face*.03,y:f.y-.14,vx:f.face*.045,owner:f.slot,color:f.color,life:1.4,dmg:6,kb:.011});
+    spawnBurst(f.x+f.face*.03,f.y-.14,f.color,6);sfx('hit');
+    return;
+  }
+  f.attackCd=(heavy?.55:.28)*(f.speedBuff>0?.75:1);f.anim=heavy?.3:.18;
   const reach=heavy?.085:.06;
   const power=f.power?2:1;
   if(f.power){f.power=false;spawnBurst(f.x,f.y,'#ffffff',14)}
@@ -249,10 +636,22 @@ function attack(f,heavy){
 }
 
 /* ---------- pickups: ♥ heal · ✦ spark core · ◉ pulse bomb ---------- */
+function applyPickupEffect(kind,fighter){
+  if(kind==='heart')fighter.pct=Math.max(0,fighter.pct-30);
+  if(kind==='spark')fighter.power=true;
+  if(kind==='shuriken')fighter.shurikenArmed=true;
+  if(kind==='speed')fighter.speedBuff=6;
+  return fighter;
+}
 function spawnPickup(){
-  const kinds=['heart','spark','bomb'];
+  const kinds=['heart','spark','bomb','shuriken','smoke','speed'];
   const kind=kinds[Math.floor(Math.random()*kinds.length)];
-  const spot={x:STAGE.x-STAGE.w*.42+Math.random()*STAGE.w*.84,y:STAGE.y-.08};
+  let spot;
+  if(MAP&&MAP.open&&PLATS.length){
+    /* open maps have no safety floor — drop pickups onto a real platform */
+    const s=PLATS[Math.floor(Math.random()*PLATS.length)];
+    spot={x:s.x-s.w*.38+Math.random()*s.w*.76,y:s.y-s.h/2-.07};
+  }else spot={x:FLOOR.x-FLOOR.w*.42+Math.random()*FLOOR.w*.84,y:FLOOR.y-.08};
   pickups.push({kind,x:spot.x,y:spot.y,age:0,fuse:kind==='bomb'?0:null});
 }
 function grabPickups(f){
@@ -260,9 +659,17 @@ function grabPickups(f){
     if(p.taken)continue;
     if(Math.abs(p.x-f.x)<.04&&Math.abs(p.y-f.y)<.06){
       p.taken=true;
-      if(p.kind==='heart'){f.pct=Math.max(0,f.pct-30);spawnBurst(f.x,f.y,'#f87171',14);addFloater(f.x,f.y-.09,'HEAL -30%', '#f87171',14);sfx('pickup')}
-      if(p.kind==='spark'){f.power=true;spawnBurst(f.x,f.y,'#ffffff',16);addFloater(f.x,f.y-.09,'POWER UP', '#ffffff',14);sfx('pickup')}
+      if(p.kind==='heart'){applyPickupEffect('heart',f);spawnBurst(f.x,f.y,'#f87171',14);addFloater(f.x,f.y-.09,'HEAL -30%', '#f87171',14);sfx('pickup')}
+      if(p.kind==='spark'){applyPickupEffect('spark',f);spawnBurst(f.x,f.y,'#ffffff',16);addFloater(f.x,f.y-.09,'POWER UP', '#ffffff',14);sfx('pickup')}
       if(p.kind==='bomb'){p.taken=false;p.fuse=.9;p.owner=f.slot}
+      if(p.kind==='shuriken'){applyPickupEffect('shuriken',f);spawnBurst(f.x,f.y,'#e8fff2',14);addFloater(f.x,f.y-.09,'SHURIKEN', '#e8fff2',14);sfx('pickup')}
+      if(p.kind==='speed'){applyPickupEffect('speed',f);spawnBurst(f.x,f.y,'#fde047',14);addFloater(f.x,f.y-.09,'SPEED UP', '#fde047',14);sfx('pickup')}
+      if(p.kind==='smoke'){
+        const dir=heldDir(f)||f.face||1;
+        f.x=Math.max(ARENA.left+.02,Math.min(ARENA.right-.02,f.x+dir*.14));
+        f.invuln=Math.max(f.invuln,.3);
+        spawnBurst(f.x,f.y,'#9aa0a6',22);addFloater(f.x,f.y-.09,'SMOKE!', '#9aa0a6',14);sfx('pickup');
+      }
       updateHud();
     }
   }
@@ -296,14 +703,54 @@ function botThink(f,dt){
   const foes=fighters.filter(t=>t!==f&&!t.dead);
   if(!foes.length)return;
   const foe=foes.reduce((a,b)=>Math.abs(a.x-f.x)<Math.abs(b.x-f.x)?a:b);
-  const offstage=f.x<STAGE.x-STAGE.w/2-.02||f.x>STAGE.x+STAGE.w/2+.02;
-  if(offstage){ /* recover toward stage, skill gates how promptly */
-    f.ai.dir=f.x<STAGE.x?1:-1;
-    if(f.vy>0&&f.jumps>0&&f.ai.jumpCd<=0&&Math.random()<d.recoverSkill){jump(f);f.ai.jumpCd=d.jumpCd}
+  const open=MAP&&MAP.open;
+  /* Stall watchdog: if the bot has produced no meaningful position delta
+     over ~2s (oscillating at a wall, grinding at an unreachable target,
+     wedged under a platform), repath hard — reverse, burst, and hop —
+     instead of looping in place forever. */
+  f.ai.hold=Math.max(0,f.ai.hold-dt);
+  f.ai.watchT+=dt;
+  if(f.ai.watchT>=2){
+    if(Math.hypot(f.x-f.ai.watchX,f.y-f.ai.watchY)<.045){
+      f.ai.dir*=-1;f.ai.hold=.6;f.ai.timer=Math.min(f.ai.timer,.15);
+      f.vx+=f.ai.dir*.014;
+      if(f.jumps>0&&f.ai.jumpCd<=0){jump(f);f.ai.jumpCd=.4}
+    }
+    f.ai.watchX=f.x;f.ai.watchY=f.y;f.ai.watchT=0;
+  }
+  if(open&&!f.grounded&&f.ledge<=0&&f.y>.62){
+    /* Off-stage recovery: steer toward the nearest landable platform and
+       burn jumps to get back over it instead of drifting into the pit —
+       tryLedgeGrab() in step() is the last-chance save if this falls short. */
+    let best=null,bd=9;
+    for(const s of PLATS){const dd=Math.abs(s.x-f.x)+Math.abs(s.y-f.y)*.5;if(dd<bd){bd=dd;best=s}}
+    if(best){
+      f.ai.dir=best.x>f.x?1:-1;
+      if(f.vy>0&&f.jumps>0&&f.ai.jumpCd<=0&&f.y>best.y-.05){jump(f);f.ai.jumpCd=.32}
+    }
+    f.vx+=f.ai.dir*.002*d.accel*(dt*60);
+    return;
+  }
+  /* Walled maps only: a bot near a fence at high percent should back off
+     rather than press into it (avoiding a self-inflicted crack). */
+  const nearWall=!open&&(f.x<ARENA.left+.1||f.x>ARENA.right-.1);
+  if(nearWall&&f.pct>60&&Math.random()<d.recoverSkill){
+    f.ai.dir=f.x<ARENA.left+.1?1:-1;
   }else{
     const want=pickups.find(p=>!p.taken&&p.fuse===null);
     const target=want&&Math.random()<d.pickupGreed?want:foe;
-    f.ai.dir=target.x>f.x?1:-1;
+    if(f.ai.hold<=0)f.ai.dir=target.x>f.x?1:-1; /* respect a watchdog repath for a beat */
+    if(open&&f.grounded){
+      /* Edge guard: don't sprint off into the void unless the target is
+         close enough to be worth the leap (then jump the gap, don't walk it). */
+      const aheadX=f.x+f.ai.dir*.055;
+      let ground=false;
+      for(const s of PLATS){const top=s.y-s.h/2;if(Math.abs(aheadX-s.x)<s.w/2&&top>=f.y-.03&&top<f.y+.2){ground=true;break}}
+      if(!ground){
+        if(Math.abs(target.x-f.x)>.22)f.ai.dir*=-1;
+        else if(f.jumps>0&&f.ai.jumpCd<=0){jump(f);f.ai.jumpCd=d.jumpCd}
+      }
+    }
     if(f.ai.timer<=0){
       f.ai.timer=d.reaction[0]+Math.random()*(d.reaction[1]-d.reaction[0]);
       if(Math.abs(foe.x-f.x)<.07*d.attackReach&&Math.abs(foe.y-f.y)<.08*d.attackReach){f.face=f.ai.dir;attack(f,Math.random()<d.heavyChance)}
@@ -315,41 +762,298 @@ function botThink(f,dt){
 
 /* ---------- physics + rounds ---------- */
 function land(f,top){f.y=top;f.vy=0;f.grounded=true;f.jumps=2}
+function wallBonk(f,side){
+  f.x=side<0?ARENA.left+.006:ARENA.right-.006;
+  f.vx*=-.35;shake=Math.min(1,shake+.15);
+  spawnBurst(f.x,f.y-.1,f.glow,8);sfx('squawk');
+}
 function step(f,dt){
   if(f.dead)return;
-  f.invuln=Math.max(0,f.invuln-dt);f.stun=Math.max(0,f.stun-dt);f.attackCd=Math.max(0,f.attackCd-dt);f.anim=Math.max(0,f.anim-dt);f.parry=Math.max(0,f.parry-dt);f.dodgeCd=Math.max(0,f.dodgeCd-dt);f.ledgeCooldown=Math.max(0,f.ledgeCooldown-dt);f.ledge=Math.max(0,f.ledge-dt);
-  if(f.ledge>0){if(!f.human){jump(f);f.ai.jumpCd=.55}else jump(f);return}
+  if(mode&&mode.startsWith('net')&&!isHost&&f.slot!==localSlot&&typeof f.targetX==='number'){
+    // Non-host client, non-local fighter: this fighter's true physics runs
+    // on the host — here it's display-only, eased toward the last snapshot
+    // instead of run through local physics/AI (which would double-simulate
+    // and fight the incoming snapshot data every ~200ms).
+    f.x+=(f.targetX-f.x)*Math.min(1,dt*8);f.y+=(f.targetY-f.y)*Math.min(1,dt*8);
+    if(!reduced){f.trail.unshift({x:f.x,y:f.y});f.trail=f.trail.slice(0,8)}
+    return;
+  }
+  f.invuln=Math.max(0,f.invuln-dt);f.stun=Math.max(0,f.stun-dt);f.attackCd=Math.max(0,f.attackCd-dt);f.anim=Math.max(0,f.anim-dt);f.parry=Math.max(0,f.parry-dt);f.dodgeCd=Math.max(0,f.dodgeCd-dt);f.smokeCooldown=Math.max(0,f.smokeCooldown-dt);f.speedBuff=Math.max(0,f.speedBuff-dt);
+  f.ledgeCooldown=Math.max(0,f.ledgeCooldown-dt);f.portalCd=Math.max(0,f.portalCd-dt);
+  if(f.ledge>0){
+    /* Hanging on a ledge: frozen in place until a ledge-jump (or the hang
+       expires and the fighter drops with a re-grab cooldown). Bots auto-
+       recover after a beat via jump() instead of hanging/regrab-looping. */
+    f.ledge-=dt;f.vx=0;f.vy=0;f.grounded=false;
+    if(!f.human&&f.ledge<1.7){jump(f);f.ai.jumpCd=.55}
+    else if(f.ledge<=0){f.ledgeCooldown=.75;f.vy=.002}
+    return;
+  }
   if(f.charge>0)f.charge=Math.min(1,f.charge+dt);
   if(f.stun<=0){
-    if(f.human){
+    if(f.human&&mode&&mode.startsWith('net')&&f.slot!==localSlot){
+      // Host-side simulation of a remote human fighter: this branch only
+      // ever matters on the room host's own client (the only one that
+      // resolves authoritative hits) — everyone else's copy of this
+      // fighter is display-only, driven by applySnapshotToNonLocalFighters.
+      const remote=remoteInputs[f.slot]||{};
+      if(remote.dir)f.face=remote.dir;
+      const speedMul=f.speedBuff>0?1.35:1;
+      f.vx+=(remote.dir||0)*(remote.shield?.0007:.0018)*speedMul*(dt*60);
+      f.shieldHeld=!!remote.shield;
+      if(remote.event==='jump'){jump(f);remote.event=null}
+      if(remote.event==='light'){attack(f,false);remote.event=null}
+      if(remote.event==='heavy'){attack(f,true);remote.event=null}
+      if(remote.event==='dodge'){dodge(f);remote.event=null}
+    }else if(f.human){
+      if(gpEnabled)applyGamepadInput(f);
       const dir=heldDir(f);
       if(dir)f.face=dir;
-      f.vx+=dir*(f.shieldHeld?.0007:.0018)*(dt*60);
+      const speedMul=f.speedBuff>0?1.35:1;
+      f.vx+=dir*(f.shieldHeld?.0007:.0018)*speedMul*(dt*60);
     }else botThink(f,dt);
+  }
+  f.vx*=f.grounded?.82:.94;
+  f.vy=Math.min(.05,f.vy+.0011*(dt*60));
+  const incomingVx=f.vx;
+  f.x+=f.vx*(dt*60);f.y+=f.vy*(dt*60);
+  f.grounded=false;
+  const open=MAP&&MAP.open;
+  if(!open){
+    const ftop=FLOOR.y-FLOOR.h/2;
+    if(f.vy>=0&&Math.abs(f.x-FLOOR.x)<FLOOR.w/2&&f.y>=ftop-.012&&f.y<=ftop+.05)land(f,ftop);
+  }
+  for(const s of PLATS){
+    const top=s.y-s.h/2;
+    if(f.vy>=0&&Math.abs(f.x-s.x)<s.w/2&&f.y>=top-.012&&f.y<=top+.05){
+      land(f,top);
+      if(s._dx)f.x+=s._dx; /* ride a drifting platform */
+    }
+  }
+  if(open){
+    /* Open fall-off arena: no fences, no safety floor. A falling fighter
+       near an open edge can ledge-save; past the blast zones it's a
+       RING OUT KO. */
+    if(!f.grounded)tryLedgeGrab(f);
+    if(f.x<BLAST.l||f.x>BLAST.r||f.y>BLAST.b||f.y<BLAST.t){ko(f,f.x<.5?-1:1,'ringout');return}
+  }else{
+    if(f.y>ARENA.floor+.02)land(f,ARENA.floor); /* safety net — the walled floor is always solid */
+    if(f.y<ARENA.ceil){f.y=ARENA.ceil;if(f.vy<0)f.vy=0}
+    /* Fences, not a void: a soft touch just bonks off, but a hit that
+       lands you into a fence hard enough while you're already damaged
+       cracks you for the KO — the whole "one more good hit ends it"
+       tension of a ring-out, resolved without anyone ever leaving the
+       coop. */
+    if(f.x<ARENA.left||f.x>ARENA.right){
+      const side=f.x<ARENA.left?-1:1;
+      const impactSpeed=Math.abs(incomingVx);
+      const crackThreshold=SLAM_SPEED*(1-Math.min(.72,f.pct/260));
+      if(impactSpeed>crackThreshold&&f.pct>15)ko(f,side);
+      else wallBonk(f,side);
+    }
+  }
+  stepPortals(f);
+  if(!reduced){f.trail.unshift({x:f.x,y:f.y});f.trail=f.trail.slice(0,8)}
+  grabPickups(f);
+}
+/* Paired two-endpoint portals: enter one gate, exit the other, with a brief
+   per-fighter cooldown so momentum carries through without ping-ponging. */
+function stepPortals(f){
+  if(!PORTALS.length||f.portalCd>0||f.dead)return;
+  for(let i=0;i<PORTALS.length;i++){
+    const p=PORTALS[i];
+    if(Math.abs(f.x-p.x)<.04&&Math.abs(f.y-.06-p.y)<.08){
+      const dest=PORTALS[i%2?i-1:i+1]||p;
+      spawnBurst(f.x,f.y,'#c084fc',12);
+      f.x=dest.x;f.y=dest.y+.06;f.portalCd=1.4;f.invuln=Math.max(f.invuln,.35);
+      spawnBurst(f.x,f.y,'#c084fc',16);addFloater(f.x,f.y-.12,'WARP!','#c084fc',15);sfx('bomb');
+      return;
+    }
+  }
+}
+/* Telegraphed stage hazard (SPARK FOUNDRY): a horizontal laser sweep that
+   blinks a dashed warning line for ~1.1s before firing, then burns anyone
+   crossing the beam once per cycle. */
+function stepLaser(dt){
+  if(!MAP||!MAP.laser)return;
+  if(laser.phase==='idle'){
+    laser.cd-=dt;
+    if(laser.cd<=0){laser.phase='warn';laser.t=1.1;laser.y=.28+Math.random()*.42;laser.hitMask=0;sfx('squawk')}
+  }else if(laser.phase==='warn'){
+    laser.t-=dt;
+    if(laser.t<=0){laser.phase='fire';laser.t=.65;shake=Math.min(1,shake+.25);sfx('bomb')}
+  }else if(laser.phase==='fire'){
+    laser.t-=dt;
+    for(const f of fighters){
+      if(f.dead||f.invuln>0||(laser.hitMask&(1<<f.slot)))continue;
+      if(Math.abs((f.y-.06)-laser.y)<.055){
+        laser.hitMask|=1<<f.slot;
+        f.pct=Math.min(300,f.pct+16);
+        const kb=.012*(1+f.pct/60);
+        f.vx=(f.x<.5?1:-1)*kb;f.vy=-kb*.8;f.stun=.4;f.grounded=false;
+        spawnBurst(f.x,f.y,'#fb923c',20);addFloater(f.x,f.y-.1,'LASER +16%','#fb923c',16);sfx('hit');
+        updateHud();
+      }
+    }
+    if(laser.t<=0){laser.phase='idle';laser.cd=5.5+Math.random()*3.5}
+  }
+}
+let racePickupTimer=5;
+function raceSpawnPickup(){
+  const kinds=['grapple','bubble','portal','dash'];
+  const kind=kinds[Math.floor(Math.random()*kinds.length)];
+  const platform=TOWER[Math.floor(Math.random()*(TOWER.length-1))]; // never the summit
+  pickups.push({kind,x:platform.x,y:platform.y-.06,age:0,fuse:null});
+}
+function raceGrabPickups(f){
+  for(const p of pickups){
+    if(p.taken)continue;
+    if(Math.abs(p.x-f.x)<.04&&Math.abs(p.y-f.y)<.06){
+      p.taken=true;
+      if(p.kind==='grapple'){f.grappleReady=true;spawnBurst(f.x,f.y,'#5eead4',14);addFloater(f.x,f.y-.09,'GRAPPLE READY','#5eead4',14);sfx('pickup')}
+      if(p.kind==='bubble'){f.shieldBubble=8;spawnBurst(f.x,f.y,'#a78bfa',14);addFloater(f.x,f.y-.09,'SHIELD UP','#a78bfa',14);sfx('pickup')}
+      if(p.kind==='portal'){
+        // Instant reality-bend: warp straight up to a random platform
+        // higher than where you are now — a big, exciting swing of
+        // fortune rather than a two-endpoint portal pair to traverse.
+        const above=TOWER.filter(s=>s.y<f.y-.1&&!s.summit);
+        const dest=above.length?above[Math.floor(Math.random()*above.length)]:null;
+        if(dest){
+          spawnBurst(f.x,f.y,'#c084fc',20);
+          f.x=dest.x;f.y=dest.y-.07;f.vx=0;f.vy=0;f.invuln=.5;
+          spawnBurst(f.x,f.y,'#c084fc',24);addFloater(f.x,f.y-.1,'PORTAL WARP!','#c084fc',18);sfx('bomb');
+        }
+      }
+      if(p.kind==='dash'){f.speedBuff=6;spawnBurst(f.x,f.y,'#fde047',14);addFloater(f.x,f.y-.09,'SPEED UP','#fde047',14);sfx('pickup')}
+    }
+  }
+  pickups=pickups.filter(item=>!item.taken);
+}
+function drawRacePickup(p,t){
+  if(p.taken)return;
+  const bx=px(p.x),by=py(p.y)-(reduced?0:Math.sin(t*.004+p.age)*4*DPR);
+  ctx.shadowBlur=16*DPR;
+  if(p.kind==='grapple'){ctx.shadowColor='#5eead4';ctx.fillStyle='#5eead4';ctx.font=`${16*DPR}px ui-monospace`;ctx.fillText('🪝',bx-8*DPR,by)}
+  if(p.kind==='bubble'){ctx.shadowColor='#a78bfa';ctx.fillStyle='#a78bfa';ctx.font=`${16*DPR}px ui-monospace`;ctx.fillText('🛡',bx-8*DPR,by)}
+  if(p.kind==='portal'){ctx.shadowColor='#c084fc';ctx.fillStyle='#c084fc';ctx.font=`${16*DPR}px ui-monospace`;ctx.fillText('◐',bx-8*DPR,by)}
+  if(p.kind==='dash'){ctx.shadowColor='#fde047';ctx.fillStyle='#fde047';ctx.font=`${16*DPR}px ui-monospace`;ctx.fillText('📜',bx-8*DPR,by)}
+  ctx.shadowBlur=0;
+}
+function finishRace(f){
+  if(f.finished)return;
+  f.finished=true;f.place=raceFinishOrder.length+1;
+  raceFinishOrder.push(f.slot);
+  addFloater(f.x,f.y-.14,f.place===1?'1st!':f.place===2?'2nd!':f.place===3?'3rd!':'4th!',f.color,f.place===1?26:18);
+  sfx(f.place===1?'ko':'pickup');
+  const remaining=fighters.filter(t=>!t.finished);
+  if(f.place===1||remaining.length===0)endRaceMatch();
+}
+let hazardY=1,hazardSpeed=.01;
+function stepHazard(dt){
+  hazardY-=hazardSpeed*dt;
+  hazardSpeed=Math.min(.05,hazardSpeed+.0004*dt); // accelerates over the match, capped so it never becomes unfair-instant
+}
+function raceStep(f,dt){
+  if(f.finished)return;
+  f.invuln=Math.max(0,f.invuln-dt);f.stun=Math.max(0,f.stun-dt);f.attackCd=Math.max(0,f.attackCd-dt);f.anim=Math.max(0,f.anim-dt);f.dodgeCd=Math.max(0,f.dodgeCd-dt);f.shieldBubble=Math.max(0,f.shieldBubble-dt);f.speedBuff=Math.max(0,f.speedBuff-dt);
+  const speedMul=f.speedBuff>0?1.35:1;
+  if(f.stun<=0){
+    if(f.human){
+      // Keyboard/touch only, by scope decision — applyGamepadInput() (and
+      // therefore f._gpDir, which heldDir() would otherwise read) is only
+      // ever called from brawl step(), not here. Wiring gamepad support
+      // for this mode is a real follow-up, not a silent oversight.
+      const dir=heldDir(f);
+      if(dir)f.face=dir;
+      f.vx+=dir*.0018*speedMul*(dt*60);
+    }else raceBotThink(f,dt,speedMul);
   }
   f.vx*=f.grounded?.82:.94;
   f.vy=Math.min(.05,f.vy+.0011*(dt*60));
   f.x+=f.vx*(dt*60);f.y+=f.vy*(dt*60);
   f.grounded=false;
-  const surfaces=[STAGE];
-  for(const s of surfaces){
+  for(const s of TOWER){
     const top=s.y-s.h/2;
     if(f.vy>=0&&Math.abs(f.x-s.x)<s.w/2&&f.y>=top-.012&&f.y<=top+.05){
-      land(f,top);
+      f.y=top;f.vy=0;f.grounded=true;f.jumps=2;
+      if(s.summit&&!f.finished)finishRace(f);
     }
   }
+  if(f.x<ARENA.left)f.x=ARENA.left;
+  if(f.x>ARENA.right)f.x=ARENA.right;
+  f.altitude=Math.max(f.altitude,TOWER_START_Y-f.y);
   if(!reduced){f.trail.unshift({x:f.x,y:f.y});f.trail=f.trail.slice(0,8)}
-  grabPickups(f);
-  if(f.x<BLAST.left||f.x>BLAST.right||f.y>BLAST.bottom||f.y<BLAST.top){if(!tryLedgeGrab(f))ko(f)}
+  if(f.y>hazardY&&f.invuln<=0)hazardCatch(f);
+  raceGrabPickups(f);
 }
-function ko(f){
+function raceBotThink(f,dt,speedMul){
+  const d=f.ai.diff||DIFFS.normal;
+  f.ai.timer-=dt;f.ai.jumpCd-=dt;
+  const target=TOWER.filter(s=>s.y<f.y-.05).sort((a,b)=>b.y-a.y)[0]||SUMMIT;
+  f.ai.hold=Math.max(0,f.ai.hold-dt);
+  if(f.ai.hold<=0)f.ai.dir=target.x>f.x?1:-1;
+  /* Stall watchdog (same contract as brawl bots): ~2s with no meaningful
+     position delta — pinned under an overhang, bouncing between two walls,
+     stuck above the hazard with a bad target — forces a repath + burst. */
+  f.ai.watchT+=dt;
+  if(f.ai.watchT>=2){
+    if(Math.hypot(f.x-f.ai.watchX,f.y-f.ai.watchY)<.05){
+      f.ai.dir*=-1;f.ai.hold=.6;f.vx+=f.ai.dir*.016;
+      if(f.jumps>0){jump(f);f.ai.jumpCd=.2}
+    }
+    f.ai.watchX=f.x;f.ai.watchY=f.y;f.ai.watchT=0;
+  }
+  // Climb aggressively and reliably. Brawl bots gate jump behind a rare,
+  // probabilistic reaction timer because for them it's an occasional
+  // off-stage-recovery reflex — race bots need to jump constantly to
+  // ascend at all, so that same gating left them walking back and forth
+  // under a platform without ever climbing it ("going in circles").
+  if(f.jumps>0&&f.ai.jumpCd<=0){
+    const wasGrounded=f.grounded;
+    jump(f);
+    f.ai.jumpCd=wasGrounded?.15:.35; // quick re-tap to use the second jump, longer once both are spent
+  }
+  if(f.ai.timer<=0){
+    f.ai.timer=d.reaction[0]+Math.random()*(d.reaction[1]-d.reaction[0]);
+    const rival=fighters.find(t=>t!==f&&!t.finished&&Math.abs(t.x-f.x)<.06&&Math.abs(t.y-f.y)<.08);
+    if(rival&&Math.random()<d.heavyChance){f.face=rival.x>f.x?1:-1;raceSabotage(f,Math.random()<d.heavyChance)}
+  }
+  f.vx+=f.ai.dir*.0016*d.accel*(speedMul||1)*(dt*60);
+}
+function slideDown(f,rows){
+  f.y=Math.min(TOWER_START_Y,f.y+rows*ROW_STEP);
+  f.vx=0;f.vy=0;f.stun=.4;f.invuln=.6;f.grounded=false;
+  spawnBurst(f.x,f.y,f.glow,18);addFloater(f.x,f.y-.1,rows>=4?'WASHED OUT!':'KNOCKED DOWN!',f.glow,16);sfx('ko');
+}
+function hazardCatch(f){
+  slideDown(f,4);
+}
+function raceSabotage(f,heavy){
+  if(f.attackCd>0)return;
+  // Light: quick precise poke (attack()'s exact light reach, no aim-assist,
+  // small slide). Heavy (the 'g' key, previously a no-op in this mode):
+  // wider reach matching attack()'s heavy reach, bigger cooldown, and a
+  // much harder slide — a real, if riskier, tool alongside light sabotage.
+  f.attackCd=heavy?.55:.28;f.anim=heavy?.3:.18;
+  const reach=heavy?.085:.06;
+  for(const t of fighters){
+    if(t===f||t.finished||t.invuln>0||t.shieldBubble>0)continue;
+    const dx=t.x-f.x,dy=t.y-f.y;
+    if(Math.abs(dy)<.08&&dx*f.face>-.015&&Math.abs(dx)<reach){
+      slideDown(t,heavy?5:2); // slideDown already handles the burst/floater/sfx, including the "WASHED OUT!" label a 5-row heavy shove earns
+    }
+  }
+}
+function ko(f,side=0,cause='crack'){
   f.stocks-=1;shake=1;slowmo=reduced?0:.35;
-  const kx=f.x<0?.02:f.x>1?.98:f.x,ky=Math.max(.05,Math.min(.95,f.y));
-  spawnBurst(kx,ky,f.glow,56);addRing(kx,ky,.2,f.glow);addFloater(.5,.24,`${f.name} KO!`,f.glow,34);sfx('ko');
+  const kx=cause==='crack'&&side<0?ARENA.left+.01:cause==='crack'&&side>0?ARENA.right-.01:Math.max(.05,Math.min(.95,f.x)),ky=Math.max(.05,Math.min(.95,f.y));
+  const msg=cause==='ringout'?`${f.name} RING OUT!`:`${f.name} CRACKED!`;
+  spawnBurst(kx,ky,f.glow,56);addRing(kx,ky,.2,f.glow);addFloater(.5,.24,msg,f.glow,34);sfx('ko');
+  koFeedPush(msg,f.glow);
   const killer=fighters.find(t=>!t.dead&&t!==f&&Math.abs(t.x-f.x)<.4);
   if(killer)matchKos[killer.slot]+=1;
-  if(f.stocks<=0){f.dead=true}
-  else{const spawn=SPAWNS[f.slot];f.x=spawn.x;f.y=spawn.y;f.vx=0;f.vy=0;f.pct=0;f.invuln=2;f.jumps=2;f.stun=0;addFloater(f.x,f.y-.12,`${f.stocks} STOCKS`,f.color,13)}
+  if(f.stocks<=0){f.dead=true;koFeedPush(`${f.name} IS OUT`,f.color)}
+  else{const spawn=mapSpawn(f.slot);f.x=spawn.x;f.y=spawn.y;f.vx=0;f.vy=0;f.pct=0;f.invuln=2;f.jumps=2;f.stun=0;f.ledge=0;f.ledgeCooldown=0;f.portalCd=0;addFloater(f.x,f.y-.12,`${f.stocks} STOCKS`,f.color,13)}
   updateHud();
   const alive=fighters.filter(t=>!t.dead);
   const lost=fighters.reduce((sum,t)=>sum+(3-t.stocks),0);
@@ -366,9 +1070,30 @@ function endMatch(winner){
   const score=humanKos*100+(winner&&winner.human?winner.stocks*50:0);
   host('score',{score});
   host('complete',{score,progress:100,state:null});
-  document.querySelector('[data-endtitle]').textContent=winner?(winner.human?`${winner.name} WINS`:`${winner.name} (BOT) WINS`):'DRAW';
+  const titleEl=document.querySelector('[data-endtitle]');
+  titleEl.textContent=winner?(winner.human?`${winner.name} WINS`:`${winner.name} (BOT) WINS`):'DRAW';
+  titleEl.style.color=winner?winner.color:'';
+  titleEl.style.textShadow=winner?`0 0 28px ${winner.glow}`:'';
   document.querySelector('[data-endcopy]').textContent=winner?`${matchKos[winner.slot]} KOs this match. Session: ${stats.wins}/${stats.matches} rumbles won.`:`Everyone fell. Session: ${stats.wins}/${stats.matches} rumbles won.`;
   endEl.hidden=false;hudEl.hidden=true;document.querySelector('[data-touch]').hidden=true;
+}
+function endRaceMatch(){
+  if(over)return; // idempotency guard — finishRace can trigger this once per fighter that crosses the win condition in the same tick
+  if(raf){cancelAnimationFrame(raf);raf=0}
+  running=false;over=true;stats.matches+=1;
+  const finishedHuman=fighters.find(f=>f.human&&f.place===1);
+  if(finishedHuman)stats.wins+=1;
+  host('score',{score:400});
+  host('complete',{score:400,progress:100,state:null});
+  const order=fighters.filter(f=>f.finished).sort((a,b)=>a.place-b.place).concat(fighters.filter(f=>!f.finished));
+  const titleEl=document.querySelector('[data-endtitle]');
+  const winner=order[0];
+  titleEl.textContent=winner&&winner.finished?`${winner.name} REACHES THE TOP`:'RACE OVER';
+  titleEl.style.color=winner?winner.color:'';
+  titleEl.style.textShadow=winner?`0 0 28px ${winner.glow}`:'';
+  document.querySelector('[data-endcopy]').textContent=order.map((f,i)=>`${i+1}. ${f.name}${f.human?'':' (bot)'}${f.finished?'':' — still climbing'}`).join('  ·  ');
+  endEl.hidden=false;hudEl.hidden=true;document.querySelector('[data-touch]').hidden=true;
+  stopRaceMusic();
 }
 
 /* ---------- particles / juice ---------- */
@@ -383,6 +1108,19 @@ function addRing(x,y,r,color){
   if(reduced)return;
   rings.push({x,y,r,life:.45,color});
 }
+/* KO feed: short screen-space ticker of recent KO events (ring-outs,
+   fence cracks, eliminations), drawn under the top edge in draw(). */
+let koFeed=[];
+function koFeedPush(text,color){
+  koFeed.push({text,color,life:3.2});
+  if(koFeed.length>4)koFeed.shift();
+}
+/* Pre-match arena card: map name + archetype, echoed in the HUD too. */
+function announceMap(){
+  if(!MAP)return;
+  addFloater(.5,.3,MAP.name,MAP.theme.accent,30);
+  addFloater(.5,.37,MAP.arch,'#9bb7aa',14);
+}
 function stepParticles(dt){
   for(const p of particles){p.x+=p.vx*(dt*60);p.y+=p.vy*(dt*60);p.vy+=.0006*(dt*60);p.life-=dt}
   particles=particles.filter(p=>p.life>0);
@@ -390,62 +1128,261 @@ function stepParticles(dt){
   floaters=floaters.filter(f=>f.life>0);
   for(const r of rings){r.r+=dt*.28;r.life-=dt}
   rings=rings.filter(r=>r.life>0);
+  for(const k of koFeed)k.life-=dt;
+  if(koFeed.length&&koFeed[0].life<=0)koFeed=koFeed.filter(k=>k.life>0);
+}
+function stepProjectiles(dt){
+  for(const p of projectiles){
+    p.x+=p.vx*(dt*60);p.life-=dt;
+    if(p.hit)continue;
+    for(const t of fighters){
+      if(t.dead||t.slot===p.owner||t.invuln>0)continue;
+      if(Math.abs(t.x-p.x)<.025&&Math.abs(t.y-p.y)<.08){
+        p.hit=true;p.life=0;
+        if(t.shieldHeld){shake=Math.min(1,shake+.12);addFloater(t.x,t.y-.11,'BLOCK',t.glow,14);sfx('jump');break}
+        t.pct=Math.min(300,t.pct+p.dmg);
+        const kb=p.kb*(1+t.pct/60);
+        t.vx=Math.sign(p.vx||1)*kb;t.vy=-kb*.7;t.stun=.22;t.grounded=false;
+        spawnBurst(t.x,t.y,p.color,12);addFloater(t.x,t.y-.09,`HIT +${p.dmg}%`,p.color,15);sfx('hit');
+        updateHud();
+        break;
+      }
+    }
+    if(MAP&&MAP.open?(p.x<BLAST.l||p.x>BLAST.r):(p.x<ARENA.left-.02||p.x>ARENA.right+.02))p.life=0;
+  }
+  projectiles=projectiles.filter(p=>p.life>0);
 }
 
 /* ---------- HUD ---------- */
 function buildHud(){
-  hudEl.innerHTML=fighters.map(f=>`<div class="fighter-card" style="border-color:${f.color}55"><i style="color:${f.color}">${f.name}${f.human?'':` · BOT ${botDifficulty.toUpperCase()}`}</i><b data-pct="${f.slot}" style="color:${f.color}">0%</b><s data-stocks="${f.slot}" style="color:${f.color}">●●●</s></div>`).join('');
+  hudEl.innerHTML=fighters.map(f=>`<div class="fighter-card" style="border-color:${f.color}55"><i style="color:${f.color}">${f.name}${f.human?'':` · BOT ${botDifficulty.toUpperCase()}`}</i><b data-pct="${f.slot}" style="color:${f.color}">0%</b><s data-stocks="${f.slot}" style="color:${f.color}">●●●</s><em data-buffs="${f.slot}" style="font-style:normal;display:block;font-size:11px;min-height:14px"></em></div>`).join('')
+    +(MAP?`<div class="fighter-card" style="min-width:150px;border-color:${MAP.theme.stroke}55"><i style="color:${MAP.theme.accent}">ARENA</i><b style="font-size:13px;color:${MAP.theme.accent}">${MAP.name}</b><s style="color:${MAP.theme.accent};font-size:10px;letter-spacing:1px">${MAP.arch}</s></div>`:'');
   updateHud();
 }
 function updateHud(){
   for(const f of fighters){
-    const pct=hudEl.querySelector(`[data-pct="${f.slot}"]`),st=hudEl.querySelector(`[data-stocks="${f.slot}"]`);
+    const pct=hudEl.querySelector(`[data-pct="${f.slot}"]`),st=hudEl.querySelector(`[data-stocks="${f.slot}"]`),buffs=hudEl.querySelector(`[data-buffs="${f.slot}"]`);
     if(pct)pct.textContent=`${Math.round(f.pct)}%`;
     if(pct){pct.style.transform=f.stun>0?'scale(1.18)':'scale(1)';pct.style.textShadow=f.stun>0?`0 0 16px ${f.color}`:''}
     if(st)st.textContent=f.dead?'OUT':'●'.repeat(Math.max(0,f.stocks));
+    if(buffs){
+      const active=[];
+      if(f.power)active.push('✦');
+      if(f.shurikenArmed)active.push('🗡');
+      if(f.speedBuff>0)active.push('📜');
+      buffs.textContent=active.join(' ');
+    }
   }
 }
 
 /* ---------- draw ---------- */
 const camera={x:.5,y:.56,z:1};
 function updateCamera(){
-  const live=fighters.filter(f=>!f.dead);
+  const live=fighters.filter(f=>!f.dead&&!f.finished);
+  if(mode==='racetop'){
+    if(!live.length){camera.x+=(.5-camera.x)*.04;camera.y+=(TOWER_START_Y-camera.y)*.04;camera.z+=(1-camera.z)*.04;return}
+    // Frame the WHOLE pack, not just the leader — locking onto the leader
+    // alone left anyone who fell behind scrolling off-screen and out of
+    // view entirely (looked like they'd "disappeared," even though they
+    // were still climbing). Center between the leader and the laggard,
+    // and zoom out as the vertical gap between them grows.
+    const leader=live.reduce((a,b)=>a.y<b.y?a:b);
+    const laggard=live.reduce((a,b)=>a.y>b.y?a:b);
+    /* Pull the rising hazard line into frame once it's closing in on the
+       laggard, so the danger is always visible before it bites. */
+    const bottomY=hazardY<laggard.y+.4?Math.min(1,hazardY):laggard.y;
+    const vertSpread=Math.max(.08,bottomY-leader.y);
+    const midY=(leader.y+bottomY)/2;
+    camera.x+=(.5-camera.x)*.05;
+    camera.y+=(midY-camera.y)*.06;
+    camera.z+=(Math.max(.42,Math.min(1,.95-vertSpread*.55))-camera.z)*.045;
+    return;
+  }
   if(!live.length){camera.x+=(.5-camera.x)*.04;camera.y+=(.56-camera.y)*.04;camera.z+=(1-camera.z)*.04;return}
-  const cx=live.reduce((s,f)=>s+f.x,0)/live.length,cy=live.reduce((s,f)=>s+f.y,0)/live.length;
-  const spread=Math.max(.35,...live.map(f=>Math.hypot(f.x-cx,f.y-cy)));
-  camera.x+=(cx-camera.x)*.045;camera.y+=(cy-camera.y)*.045;camera.z+=(Math.max(.82,Math.min(1.12,1.08-spread*.45))-camera.z)*.045;
+  /* Frame ALL live fighters (bounding box, not centroid distance) plus the
+     active laser hazard, with clamped zoom bounds. Overlapping fighters
+     collapse to the .35 spread floor, so the zoom target is constant there
+     — no jitter when a scrum stacks up on one spot. */
+  let minX=1,maxX=0,minY=1,maxY=0;
+  for(const f of live){if(f.x<minX)minX=f.x;if(f.x>maxX)maxX=f.x;if(f.y<minY)minY=f.y;if(f.y>maxY)maxY=f.y}
+  if(MAP&&MAP.laser&&laser.phase!=='idle'){if(laser.y<minY)minY=laser.y;if(laser.y>maxY)maxY=laser.y}
+  const cx=Math.max(.32,Math.min(.68,(minX+maxX)/2));
+  const cy=Math.max(.3,Math.min(.72,(minY+maxY)/2));
+  const spread=Math.max(.35,(maxX-minX)*.6,(maxY-minY)*.85);
+  const zt=Math.max(.66,Math.min(1.12,1.08-spread*.45));
+  camera.x+=(cx-camera.x)*.045;camera.y+=(cy-camera.y)*.045;camera.z+=(zt-camera.z)*.045;
 }
 function sx(x){return (x-camera.x)*W*camera.z+W/2}
 function px(x){return x*W}function py(y){return y*H}
-function drawStage(){
-  for(const s of [STAGE]){
-    ctx.fillStyle=s===STAGE?'#0b2417':'#0a1f14';
-    ctx.strokeStyle='#2cff9b44';ctx.lineWidth=2*DPR;
+function drawStage(t){
+  if(mode==='racetop'){
+    for(const s of TOWER){
+      ctx.fillStyle=s.summit?'#2a1f0a':'#0a1f14';ctx.strokeStyle=s.summit?'#fde04799':'#2cff9b33';ctx.lineWidth=(s.summit?3:2)*DPR;
+      const x=px(s.x-s.w/2),y=py(s.y-s.h/2),w=px(s.w),h=Math.max(6*DPR,py(s.h));
+      ctx.beginPath();ctx.roundRect(x,y,w,h,6*DPR);ctx.fill();ctx.stroke();
+      if(s.summit){ctx.fillStyle='#fde047';ctx.font=`900 ${14*DPR}px ui-monospace`;ctx.textAlign='center';ctx.fillText('SUMMIT',px(s.x),y-8*DPR)}
+    }
+    const hazardPx=py(hazardY);
+    ctx.fillStyle='#3a1a0a99';ctx.fillRect(0,hazardPx,W,H*4);
+    ctx.strokeStyle='#fb923c';ctx.lineWidth=2*DPR;ctx.beginPath();ctx.moveTo(0,hazardPx);ctx.lineTo(W,hazardPx);ctx.stroke();
+    return;
+  }
+  const th=(MAP||MAPS[0]).theme;
+  const open=MAP&&MAP.open;
+  if(!open){
+    /* Walled archetype: solid floor + side fences with seeded roosts. */
+    ctx.fillStyle=th.floor;ctx.strokeStyle=th.stroke+'44';ctx.lineWidth=2*DPR;
+    const fx=px(FLOOR.x-FLOOR.w/2),fy=py(FLOOR.y-FLOOR.h/2),fw=px(FLOOR.w),fh=Math.max(6*DPR,py(FLOOR.h));
+    ctx.beginPath();ctx.roundRect(fx,fy,fw,fh,8*DPR);ctx.fill();ctx.stroke();
+    ctx.fillStyle=th.accent+'22';ctx.fillRect(fx,fy,fw,2*DPR);
+    /* fences */
+    ctx.strokeStyle=th.stroke+'66';ctx.lineWidth=3*DPR;
+    for(const wallX of [ARENA.left,ARENA.right]){
+      const x=px(wallX),topY=py(ARENA.ceil),botY=py(ARENA.floor);
+      ctx.beginPath();ctx.moveTo(x,topY);ctx.lineTo(x,botY);ctx.stroke();
+      for(let i=0;i<8;i++){const railY=topY+(botY-topY)*i/7;ctx.beginPath();ctx.moveTo(x-6*DPR,railY);ctx.lineTo(x+6*DPR,railY);ctx.stroke()}
+    }
+  }else{
+    /* Open fall-off archetype: platforms over a void — a faint glow marks
+       the bottom blast zone instead of any floor. */
+    ctx.fillStyle=th.stroke+'14';ctx.fillRect(0,py(1.0),W,H);
+    ctx.strokeStyle=th.stroke+'33';ctx.lineWidth=1*DPR;
+    ctx.beginPath();ctx.moveTo(0,py(1.0));ctx.lineTo(W,py(1.0));ctx.stroke();
+  }
+  for(const s of PLATS){
+    ctx.fillStyle=th.plat;ctx.strokeStyle=s.move?th.accent+'88':th.stroke+'33';ctx.lineWidth=2*DPR;
     const x=px(s.x-s.w/2),y=py(s.y-s.h/2),w=px(s.w),h=Math.max(6*DPR,py(s.h));
-    ctx.beginPath();ctx.roundRect(x,y,w,h,8*DPR);ctx.fill();ctx.stroke();
-    ctx.fillStyle='#4ade8022';ctx.fillRect(x,y,w,2*DPR);
+    ctx.beginPath();ctx.roundRect(x,y,w,h,6*DPR);ctx.fill();ctx.stroke();
+  }
+  /* grabbable ledge markers */
+  if(open&&LEDGES.length){
+    ctx.fillStyle=th.accent;ctx.globalAlpha=.85;
+    for(const L of LEDGES)ctx.fillRect(px(L.x)-2*DPR,py(L.y)-2*DPR,4*DPR,4*DPR);
+    ctx.globalAlpha=1;
+  }
+  /* paired portal gates */
+  for(let i=0;i<PORTALS.length;i++){
+    const p=PORTALS[i];
+    ctx.strokeStyle='#c084fc';ctx.shadowColor='#c084fc';ctx.shadowBlur=18*DPR;ctx.lineWidth=3*DPR;
+    ctx.beginPath();ctx.ellipse(px(p.x),py(p.y),9*DPR,15*DPR,Math.sin(t*.003+i*Math.PI)*.4,0,Math.PI*2);ctx.stroke();
+    ctx.shadowBlur=0;
+  }
+  /* laser sweep: dashed blinking telegraph, then the live beam */
+  if(MAP&&MAP.laser&&laser.phase!=='idle'){
+    const ly=py(laser.y);
+    if(laser.phase==='warn'){
+      ctx.globalAlpha=.25+.35*(Math.floor(laser.t*8)%2);
+      ctx.strokeStyle='#fb923c';ctx.lineWidth=2*DPR;ctx.setLineDash(LASER_DASH);
+      ctx.beginPath();ctx.moveTo(px(ARENA.left),ly);ctx.lineTo(px(ARENA.right),ly);ctx.stroke();
+      ctx.setLineDash(EMPTY_DASH);ctx.globalAlpha=1;
+    }else{
+      ctx.globalAlpha=.85;ctx.fillStyle='#fb923c';ctx.shadowBlur=24*DPR;ctx.shadowColor='#fb923c';
+      ctx.fillRect(px(ARENA.left),ly-3*DPR,px(ARENA.right-ARENA.left),6*DPR);
+      ctx.shadowBlur=0;ctx.globalAlpha=1;
+    }
   }
 }
+const LASER_DASH=[24,20],EMPTY_DASH=[];
 function drawFighter(f,t){
   if(f.dead)return;
   if(!reduced)for(let i=f.trail.length-1;i>0;i--){const tr=f.trail[i];ctx.globalAlpha=(1-i/f.trail.length)*.25;ctx.fillStyle=f.glow;ctx.beginPath();ctx.arc(px(tr.x),py(tr.y)-14*DPR,10*DPR,0,Math.PI*2);ctx.fill()}
   ctx.globalAlpha=f.invuln>0?.45+.3*Math.sin(t*.02):1;
   ctx.shadowBlur=22*DPR;ctx.shadowColor=f.glow;
-  const bx=px(f.x),by=py(f.y);
-  ctx.fillStyle=f.color;
-  ctx.beginPath();
-  ctx.arc(bx,by-16*DPR,11*DPR,Math.PI,0);
+  const bx=px(f.x),by=py(f.y),face=f.face;
   const sway=reduced?0:Math.sin(t*.008+f.slot)*3*DPR;
-  ctx.bezierCurveTo(bx+11*DPR,by+2*DPR,bx+6*DPR+sway,by+6*DPR,bx,by+2*DPR);
-  ctx.bezierCurveTo(bx-6*DPR-sway,by+6*DPR,bx-11*DPR,by+2*DPR,bx-11*DPR,by-16*DPR);
-  ctx.fill();
-  ctx.shadowBlur=0;ctx.fillStyle='#02110a';
-  ctx.fillRect(bx+f.face*3*DPR-4*DPR,by-20*DPR,4*DPR,5*DPR);ctx.fillRect(bx+f.face*3*DPR+2*DPR,by-20*DPR,4*DPR,5*DPR);
-  if(f.anim>0){ctx.strokeStyle=f.power?'#ffffff':f.glow;ctx.lineWidth=3*DPR;ctx.globalAlpha=f.anim*4;ctx.beginPath();ctx.arc(bx+f.face*16*DPR,by-12*DPR,10*DPR,-.7,.7);ctx.stroke()}
-  if(f.shieldHeld){ctx.globalAlpha=f.parry>0?.82:.42;ctx.strokeStyle=f.parry>0?'#ffffff':f.glow;ctx.lineWidth=(f.parry>0?4:2)*DPR;ctx.beginPath();ctx.arc(bx,by-15*DPR,(23+(f.parry>0?5:0))*DPR,0,Math.PI*2);ctx.stroke()}
-  ctx.globalAlpha=1;ctx.shadowBlur=0;ctx.font=`900 ${13*DPR}px ui-monospace`;ctx.textAlign='center';ctx.fillStyle=f.stun>0?'#ffffff':f.color;ctx.fillText(`${Math.round(f.pct)}%`,bx,by-38*DPR);
-  if(f.charge>0){ctx.globalAlpha=.7;ctx.strokeStyle='#fff';ctx.lineWidth=2*DPR;ctx.beginPath();ctx.arc(bx,by-14*DPR,(16+f.charge*10)*DPR,0,Math.PI*2*f.charge);ctx.stroke()}
-  if(f.power){ctx.globalAlpha=.8;ctx.fillStyle='#ffffff';ctx.beginPath();ctx.arc(bx,by-34*DPR,3*DPR,0,Math.PI*2);ctx.fill()}
+  const bob=reduced?0:(f.grounded?Math.sin(t*.012+f.slot)*1.4*DPR:0);
+  /* Cartoon outline color, reused on every solid shape below — a bold
+     dark outline around each silhouette is the single biggest lever for
+     reading as an illustrated cartoon character rather than a flat vector
+     blob. No wings on this design: the owner asked for them removed so
+     the whole silhouette reads as rounder and simpler. */
+  const OUTLINE='#0b1210';
+  /* back-scarf: whips out further during a dash/dodge/attack, using the
+     existing motion trail's speed as a stand-in for "how fast am I moving"
+     since the sprite has no separate speed field */
+  const scarfKick=Math.min(1,Math.hypot(f.vx,f.vy)*30);
+  ctx.fillStyle='#181c1f';
+  ctx.save();ctx.translate(bx-face*8*DPR,by-7*DPR+bob);ctx.rotate(-face*(.35+scarfKick*.5));
+  ctx.beginPath();ctx.moveTo(0,-2.4*DPR);ctx.lineTo(-face*(16+scarfKick*11)*DPR,-1.6*DPR);ctx.lineTo(-face*(16+scarfKick*11)*DPR,3.2*DPR);ctx.lineTo(0,2.4*DPR);ctx.closePath();ctx.fill();
+  ctx.restore();
+  /* tail feathers, behind the body — rounded into soft petal shapes
+     (a curve to a blunt tip) instead of sharp triangles, for a cartoonier,
+     less spiky silhouette */
+  ctx.fillStyle=f.color;ctx.strokeStyle=OUTLINE;ctx.lineWidth=1.4*DPR;
+  for(let i=0;i<3;i++){
+    ctx.save();ctx.translate(bx-face*7*DPR,by-4.5*DPR-i*2.5*DPR+bob);ctx.rotate(-face*(.5+i*.24));
+    ctx.beginPath();ctx.moveTo(0,-2.6*DPR);ctx.quadraticCurveTo(-face*13*DPR,0,0,2.6*DPR);ctx.closePath();ctx.fill();ctx.stroke();
+    ctx.restore();
+  }
+  /* plump body — rounder and slightly bigger now that the wing is gone,
+     with a bold cartoon outline. Kept smaller than the head on purpose: a
+     "chicklet" (baby chick) reads as cute from oversized-head proportions,
+     not from the body shape, so the head is the star here, not this. */
+  ctx.fillStyle=f.color;
+  ctx.beginPath();ctx.ellipse(bx,by-8*DPR+bob,10*DPR,9*DPR,0,0,Math.PI*2);ctx.fill();
+  ctx.strokeStyle=OUTLINE;ctx.lineWidth=2*DPR;ctx.stroke();
+  /* sash, diagonal across the body */
+  ctx.strokeStyle='#181c1f';ctx.lineWidth=2.6*DPR;ctx.globalAlpha=.85;
+  ctx.beginPath();ctx.moveTo(bx-6*DPR,by-12*DPR+bob);ctx.lineTo(bx+5*DPR,by-3*DPR+bob);ctx.stroke();
+  ctx.strokeStyle=f.glow;ctx.lineWidth=.9*DPR;
+  ctx.beginPath();ctx.moveTo(bx-6*DPR,by-12*DPR+bob);ctx.lineTo(bx+5*DPR,by-3*DPR+bob);ctx.stroke();
+  ctx.globalAlpha=f.invuln>0?.45+.3*Math.sin(t*.02):1;
+  /* head — bigger than the body and pulled DOWN close against it (barely
+     any "neck" gap) rather than perched high above on a long body, so the
+     whole silhouette reads as a squat, little, round baby chick instead
+     of something tall/elongated. This — height, not just head-vs-body
+     size — is the actual lever for "little and cute." */
+  const hx=bx+face*4*DPR,hy=by-13*DPR+bob;
+  ctx.fillStyle=f.color;
+  ctx.beginPath();ctx.arc(hx,hy,10*DPR,0,Math.PI*2);ctx.fill();
+  ctx.shadowBlur=0;ctx.strokeStyle=OUTLINE;ctx.lineWidth=2*DPR;ctx.stroke();
+  /* comb — three soft rounded bumps instead of a jagged crown, reads as
+     a friendly cartoon comb rather than a spiky adult rooster's; kept
+     deliberately small rather than scaled up with the bigger head: real
+     chicks don't have a full comb yet, and a small comb on a big round
+     head reinforces "baby," not "miniature adult." */
+  ctx.fillStyle='#ff3d5a';ctx.strokeStyle=OUTLINE;ctx.lineWidth=1.3*DPR;
+  for(const bump of [{x:-2.6,y:0},{x:0,y:-1.6},{x:2.6,y:0}]){
+    ctx.beginPath();ctx.ellipse(hx+bump.x*DPR,hy-9*DPR+bump.y*DPR,1.9*DPR,2.3*DPR,0,0,Math.PI*2);ctx.fill();ctx.stroke();
+  }
+  /* ninja headband: a band across the brow plus two trailing tails that
+     whip out based on the same sway calc the body/scarf use, amplified
+     during an active attack/dodge so it visibly reacts to fast action —
+     rescaled to the bigger head */
+  const bandWhip=(reduced?0:Math.sin(t*.01+f.slot)*5*DPR)+(f.anim>0||f.dodgeCd>.5?face*8*DPR:0);
+  ctx.fillStyle='#181c1f';
+  ctx.beginPath();ctx.ellipse(hx,hy-3*DPR,10.4*DPR,4.4*DPR,0,Math.PI*1.08,Math.PI*1.92);ctx.fill();
+  ctx.strokeStyle=f.glow;ctx.lineWidth=1.5*DPR;
+  ctx.beginPath();ctx.moveTo(hx-8.5*DPR,hy-4.2*DPR);ctx.lineTo(hx+8.5*DPR,hy-4.2*DPR);ctx.stroke();
+  for(const dir of [-1,1]){
+    ctx.beginPath();
+    ctx.moveTo(hx-face*6*DPR,hy-4*DPR);
+    ctx.quadraticCurveTo(hx-face*14*DPR+bandWhip*dir*.4,hy-1*DPR+dir*4*DPR,hx-face*21*DPR+bandWhip*dir,hy+3*DPR+dir*5*DPR);
+    ctx.lineWidth=2.4*DPR;ctx.strokeStyle='#181c1f';ctx.stroke();
+  }
+  /* beak — small and rounded, a cute button rather than a sharp point */
+  ctx.fillStyle='#ffb454';ctx.strokeStyle=OUTLINE;ctx.lineWidth=1.1*DPR;
+  ctx.beginPath();ctx.moveTo(hx+face*7*DPR,hy+1*DPR);ctx.lineTo(hx+face*12*DPR,hy);ctx.lineTo(hx+face*7*DPR,hy+3.4*DPR);ctx.closePath();ctx.fill();ctx.stroke();
+  /* blush: two soft cheek marks — the other big lever for "cute" alongside
+     the oversized head/eyes */
+  ctx.globalAlpha=.45;ctx.fillStyle='#ff8fa3';
+  ctx.beginPath();ctx.ellipse(hx-face*2*DPR,hy+3.5*DPR,2.6*DPR,1.6*DPR,0,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.ellipse(hx+face*9*DPR,hy+3.5*DPR,2*DPR,1.3*DPR,0,0,Math.PI*2);ctx.fill();
+  ctx.globalAlpha=f.invuln>0?.45+.3*Math.sin(t*.02):1; // restore the invuln-flicker value, not a flat 1 — otherwise the eyes/mask drawn after this stop flickering with the rest of the sprite
+  /* eye mask stays behind a big glossy eye rather than obscuring it — the
+     mask reads as "ninja," the oversized eye underneath (with a pupil and
+     a sparkle highlight) is what reads as "cute." */
+  ctx.fillStyle='#181c1f';
+  ctx.beginPath();ctx.ellipse(hx+face*1*DPR,hy-.5*DPR,4.6*DPR,3.2*DPR,0,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#e8fff2';ctx.beginPath();ctx.arc(hx+face*2*DPR,hy-.5*DPR,2.4*DPR,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#0b1210';ctx.beginPath();ctx.arc(hx+face*2.8*DPR,hy-.2*DPR,1.3*DPR,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#ffffff';ctx.beginPath();ctx.arc(hx+face*3.3*DPR,hy-1*DPR,.55*DPR,0,Math.PI*2);ctx.fill();
+  if(f.anim>0){ctx.strokeStyle=f.power?'#ffffff':f.glow;ctx.lineWidth=3*DPR;ctx.globalAlpha=f.anim*4;ctx.beginPath();ctx.arc(bx+f.face*16*DPR,by-7*DPR,10*DPR,-.7,.7);ctx.stroke()}
+  if(f.shieldHeld){ctx.globalAlpha=f.parry>0?.82:.42;ctx.strokeStyle=f.parry>0?'#ffffff':f.glow;ctx.lineWidth=(f.parry>0?4:2)*DPR;ctx.beginPath();ctx.arc(bx,by-10*DPR,(24+(f.parry>0?5:0))*DPR,0,Math.PI*2);ctx.stroke()}
+  ctx.globalAlpha=1;ctx.shadowBlur=0;
+  if(mode!=='racetop'){ctx.font=`900 ${13*DPR}px ui-monospace`;ctx.textAlign='center';ctx.fillStyle=f.stun>0?'#ffffff':f.color;ctx.fillText(`${Math.round(f.pct)}%`,bx,by-35*DPR)}
+  if(f.charge>0){ctx.globalAlpha=.7;ctx.strokeStyle='#fff';ctx.lineWidth=2*DPR;ctx.beginPath();ctx.arc(bx,by-7*DPR,(16+f.charge*10)*DPR,0,Math.PI*2*f.charge);ctx.stroke()}
+  if(f.power){ctx.globalAlpha=.8;ctx.fillStyle='#ffffff';ctx.beginPath();ctx.arc(bx,by-27*DPR,3*DPR,0,Math.PI*2);ctx.fill()}
   ctx.globalAlpha=1;
 }
 function drawPickup(p,t){
@@ -457,6 +1394,14 @@ function drawPickup(p,t){
   if(p.kind==='bomb'){ctx.shadowColor='#fb923c';ctx.fillStyle=p.fuse!==null&&p.fuse>0?(Math.floor(p.fuse*10)%2?'#fb923c':'#fff'):'#fb923c';ctx.font=`${16*DPR}px ui-monospace`;ctx.fillText('◉',bx-8*DPR,by)}
   ctx.shadowBlur=0;
 }
+function drawProjectile(p){
+  ctx.save();ctx.translate(px(p.x),py(p.y));ctx.rotate(performance.now()*.02);
+  ctx.fillStyle=p.color;ctx.shadowBlur=10*DPR;ctx.shadowColor=p.color;
+  ctx.beginPath();
+  for(let i=0;i<4;i++){const a=i*Math.PI/2;ctx.lineTo(Math.cos(a)*5*DPR,Math.sin(a)*5*DPR);ctx.lineTo(Math.cos(a+Math.PI/4)*2*DPR,Math.sin(a+Math.PI/4)*2*DPR)}
+  ctx.closePath();ctx.fill();ctx.shadowBlur=0;
+  ctx.restore();
+}
 function draw(t){
   ctx.clearRect(0,0,W,H);
   ctx.save();
@@ -466,43 +1411,102 @@ function draw(t){
   ctx.strokeStyle='#183626';ctx.lineWidth=1*DPR;
   for(let i=0;i<=10;i++){ctx.globalAlpha=.35;ctx.beginPath();ctx.moveTo(W*i/10,0);ctx.lineTo(W*i/10,H);ctx.stroke();ctx.beginPath();ctx.moveTo(0,H*i/10);ctx.lineTo(W,H*i/10);ctx.stroke()}
   ctx.globalAlpha=1;
-  drawStage();
-  for(const p of pickups)drawPickup(p,t);
+  drawStage(t);
+  for(const p of pickups)(mode==='racetop'?drawRacePickup:drawPickup)(p,t);
+  for(const p of projectiles)drawProjectile(p);
   for(const r of rings){ctx.globalAlpha=Math.max(0,r.life/.45);ctx.strokeStyle=r.color;ctx.lineWidth=3*DPR;ctx.beginPath();ctx.arc(px(r.x),py(r.y),px(r.r),0,Math.PI*2);ctx.stroke()}
   for(const f of fighters)drawFighter(f,t);
   for(const p of particles){ctx.globalAlpha=Math.max(0,p.life);ctx.fillStyle=p.color;ctx.fillRect(px(p.x),py(p.y),p.size*DPR,p.size*DPR)}
   ctx.textAlign='center';ctx.textBaseline='middle';
   for(const fl of floaters){ctx.globalAlpha=Math.max(0,Math.min(1,fl.life));ctx.shadowBlur=18*DPR;ctx.shadowColor=fl.color;ctx.fillStyle=fl.color;ctx.font=`900 ${fl.size*DPR}px ui-monospace`;ctx.fillText(fl.text,px(fl.x),py(fl.y));ctx.shadowBlur=0}
   ctx.globalAlpha=1;ctx.restore();
+  /* KO feed ticker: screen-space, unaffected by camera/shake */
+  if(koFeed.length){
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    for(let i=0;i<koFeed.length;i++){
+      const k=koFeed[i];
+      ctx.globalAlpha=Math.max(0,Math.min(1,k.life));
+      ctx.fillStyle=k.color;ctx.font=`700 ${12*DPR}px ui-monospace`;
+      ctx.fillText(k.text,W/2,(34+i*20)*DPR);
+    }
+    ctx.globalAlpha=1;
+  }
 }
 
 /* ---------- main loop ---------- */
 function loop(t){
   if(!running)return;
+  pollGamepadPause();
   let dt=Math.min(.033,(t-last)/1000);last=t;
   if(paused){raf=requestAnimationFrame(loop);return}
+  if(mode==='racetop'){
+    stepHazard(dt);
+    racePickupTimer-=dt;
+    if(racePickupTimer<=0){racePickupTimer=6+Math.random()*4;if(pickups.filter(p=>!p.taken).length<2)raceSpawnPickup()}
+    for(const p of pickups)p.age+=dt;
+    for(const f of fighters){raceStep(f,dt);if(over)break} // stop processing the instant a fighter's finish ends the match, so a same-tick simultaneous finisher isn't left stuck mid-loop and wrongly rendered as "still climbing"
+    updateRaceHud();
+    stepParticles(dt);
+    draw(t);
+    raf=requestAnimationFrame(loop);
+    return;
+  }
   if(slowmo>0){slowmo=Math.max(0,slowmo-dt);dt*=.35}
   shake=Math.max(0,shake-dt*3);
+  matchTime+=dt;
   pickupTimer-=dt;
   if(pickupTimer<=0){pickupTimer=7+Math.random()*5;if(pickups.length<3)spawnPickup()}
   for(const p of pickups)p.age+=dt;
   tickBombs(dt);
+  stepMovers();
+  stepLaser(dt);
   for(const f of fighters)step(f,dt);
+  updateHud();
   stepParticles(dt);
+  stepProjectiles(dt);
   draw(t);
   raf=requestAnimationFrame(loop);
 }
 
 /* ---------- overlays ---------- */
-for(const b of document.querySelectorAll('[data-mode]'))b.onclick=()=>startMatch(b.dataset.mode);
-document.querySelector('[data-again]').onclick=()=>startMatch(mode);
+let localHumans=2;
+const localSlotsEl=document.querySelector('[data-local-slots]');
+for(const b of document.querySelectorAll('[data-humans]'))b.onclick=()=>{
+  localHumans=Number(b.dataset.humans);
+  for(const btn of document.querySelectorAll('[data-humans]'))btn.setAttribute('aria-checked',String(Number(btn.dataset.humans)===localHumans));
+};
+for(const b of document.querySelectorAll('[data-mode]'))b.onclick=()=>{
+  if(b.dataset.mode==='localffa'){localSlotsEl.hidden=false;return}
+  if(b.dataset.mode==='racetop'){startRaceMatch(localHumans);return}
+  if(b.dataset.mode.startsWith('net')){mode=b.dataset.mode;netMatchStarting=false;sendMatchAction({hostProbe:hostNonce});return}
+  startMatch(b.dataset.mode,{humans:localHumans});
+};
+document.querySelector('[data-local-start]').onclick=()=>startMatch('localffa',{humans:localHumans});
+document.querySelector('[data-again]').onclick=()=>{
+  // Same routing as the host 'restart' postMessage handler below: net
+  // modes can't just re-run the local startMatch (wrong roster, no host
+  // election/snapshots), and racetop needs its own starter (startMatch
+  // builds brawl fighters via makeFighter, which race-mode physics can't
+  // run on — e.g. raceStep reads f.altitude, which brawl fighters lack).
+  if(mode==='racetop')startRaceMatch(localHumans);
+  else if(mode&&mode.startsWith('net'))resetToMenu();
+  else startMatch(mode,{humans:localHumans});
+};
 document.querySelector('[data-menu]').onclick=()=>resetToMenu();
 function resetToMenu(){
   cancelAnimationFrame(raf);
   running=false;paused=false;over=false;mode='';
-  fighters=[];pickups=[];particles=[];floaters=[];rings=[];matchKos=[0,0,0,0];stats={wins:0,matches:0,bestKos:0};pickupTimer=6;shake=0;slowmo=0;keys.clear();
+  fighters=[];pickups=[];particles=[];floaters=[];rings=[];projectiles=[];matchKos=[0,0,0,0];stats={wins:0,matches:0,bestKos:0};pickupTimer=6;shake=0;slowmo=0;keys.clear();
+  // Net room state must reset here too, not just match state — otherwise
+  // a client that hosted one net match carries isHost=true into whatever
+  // room it enters next (it would wrongly believe it's still the host and
+  // try to broadcast into someone else's room).
+  isHost=false;inRoom=false;netMatchStarting=false;remoteInputs={};lastSnapshot=null;prevSnapshot=null;
+  stopRaceMusic();
   document.body.classList.remove('paused');
-  setupEl.hidden=false;endEl.hidden=true;pauseEl.hidden=true;hudEl.hidden=true;touchEl.hidden=true;
+  hudEl.hidden=true;endEl.hidden=true;setupEl.hidden=false;
+  const touch=document.querySelector('[data-touch]');
+  if(touch)touch.hidden=true;
   showPb();
   draw(0);
 }
@@ -515,19 +1519,150 @@ function showPb(){
 /* ---------- host protocol ---------- */
 function setPaused(value){
   if(!running||over)return;
-  paused=value;pauseEl.hidden=!paused;document.body.classList.toggle('paused',paused);
+  paused=value;document.body.classList.toggle('paused',paused);
   host('paused',{paused});
 }
 addEventListener('message',e=>{
   const d=e.data;
   if(!d||d.source!=='phantomplay-host')return;
-  if(d.type==='settings'){reduced=!!d.reducedMotion;soundOn=d.sound!==false}
+  if(d.type==='settings'){reduced=!!d.reducedMotion;let muted=false;try{muted=localStorage.getItem('pf.phantomrumble.mute')==='1'}catch{}soundOn=!muted&&d.sound!==false;applyMuteUi();gpEnabled=!!d.gamepad}
+  if(d.type==='seed'&&typeof d.value==='number')hostSeed=d.value>>>0;
   if(d.type==='pause')setPaused(true);
   if(d.type==='resume')setPaused(false);
   if(d.type==='exit')resetToMenu();
-  if(d.type==='restart'){if(mode)startMatch(mode);else resetToMenu()}
+  if(d.type==='restart'){
+    // A net-mode restart can't just re-run startMatch — that's the LOCAL
+    // match starter and would boot a broken match with no host election,
+    // no snapshots, and a wrong roster. Re-entering a net match cleanly
+    // needs the room lobby flow, which this handler doesn't build here —
+    // fall back to the menu instead of silently starting something broken.
+    // racetop also can't use startMatch — it builds brawl fighters via
+    // makeFighter, which race-mode physics (raceStep reads f.altitude,
+    // which brawl fighters lack) can't run on.
+    if(mode==='racetop')startRaceMatch(localHumans);
+    else if(mode&&mode.startsWith('net'))resetToMenu();
+    else if(mode)startMatch(mode,{humans:localHumans});
+    else resetToMenu();
+  }
   if(d.type==='restore')resetToMenu();
+  if(d.type==='match-state')applyMatchState(d);
+  if(d.type==='match-action-relay')applyRemoteAction(d);
 });
+let netMatchStarting=false;
+function applyMatchState(d){
+  inRoom=true;
+  roomParticipants=d.participants||[];
+  if(d.selfActorId)selfActorId=d.selfActorId;
+  const ms=d.matchState||{};
+  if(ms.hostProbe===hostNonce)isHost=true;
+  if(selfActorId){const idx=roomParticipants.findIndex(p=>p.actorId===selfActorId);if(idx>=0)localSlot=idx}
+  if(!mode||!mode.startsWith('net'))return;
+  // The host starts the match itself once enough players have joined —
+  // this game provides its own start trigger (matching kingdom-breakers.
+  // html's own self-contained btnPartyStart pattern) rather than waiting
+  // on a generic platform "start" affordance this game doesn't render.
+  if(isHost&&!running&&!netMatchStarting&&ms.phase!=='active'&&roomParticipants.length>=2){
+    netMatchStarting=true;hostStartNetMatch();
+  }
+  if(ms.phase==='active'){
+    if(!isHost&&!running&&typeof ms.seed==='number')joinNetMatch(ms.seed);
+    if(!isHost&&ms.snapshot){
+      prevSnapshot=lastSnapshot;prevSnapshotAt=snapshotAt;
+      lastSnapshot=ms.snapshot;snapshotAt=performance.now();
+      applySnapshotToNonLocalFighters(ms.snapshot);
+    }
+  }
+}
+// A non-host client never gets its own hostStartNetMatch() call (that
+// function is host-only, since only the host may PATCH matchState) — this
+// is its counterpart: once the host's phase:'active' broadcast (with the
+// shared seed) arrives, build the same fighters/platforms locally so both
+// sides agree on layout, and start the render loop. Never broadcasts
+// anything itself; it's a mirror of hostStartNetMatch's setup, not a
+// second source of truth.
+function joinNetMatch(seed){
+  const humanCount=roomParticipants.length;
+  const count=mode==='net2v2'||mode==='netffa'?4:2;
+  fighters=[];
+  for(let i=0;i<count;i++)fighters.push(makeFighter(i,i<humanCount));
+  buildArena(MAPS[seed%MAPS.length],seed); /* same seed→map derivation as hostStartNetMatch — both clients agree */
+  placeFighters();
+  pickups=[];particles=[];floaters=[];rings=[];projectiles=[];matchKos=[0,0,0,0];pickupTimer=6;over=false;running=true;paused=false;koFeed.length=0;
+  announceMap();
+  setupEl.hidden=true;endEl.hidden=true;hudEl.hidden=false;
+  buildHud();last=performance.now();if(raf)cancelAnimationFrame(raf);raf=requestAnimationFrame(loop);
+}
+// match-action-relay only ever reaches the room's actual host (the
+// phantomplay.js host shell gates delivery to the host's own stream
+// connection before this message is even posted) — this is the host's
+// simulation receiving a non-host participant's current held-input
+// state, so it can compute that participant's fighter's movement/
+// attacks authoritatively.
+function applyRemoteAction(d){
+  const action=d.action||{};
+  if(action.type!=='input'||typeof action.slot!=='number')return;
+  const current=remoteInputs[action.slot]||{};
+  // Two message shapes share this seam: periodic held-state ({held:{dir,
+  // shield}}) merges in without disturbing a still-pending discrete event,
+  // and a discrete event ({event:'jump'/'light'/'heavy'/'dodge'}) sets
+  // the event without disturbing the last-known held state.
+  if(action.held)remoteInputs[action.slot]={...current,...action.held};
+  else if(action.event)remoteInputs[action.slot]={...current,event:action.event};
+}
+function hostStartNetMatch(){
+  const seed=nextSeed();
+  const humanCount=roomParticipants.length;
+  const count=mode==='net2v2'||mode==='netffa'?4:2;
+  fighters=[];
+  for(let i=0;i<count;i++)fighters.push(makeFighter(i,i<humanCount));
+  buildArena(MAPS[seed%MAPS.length],seed); /* map derived from the shared seed so every client builds the same arena */
+  placeFighters();
+  pickups=[];particles=[];floaters=[];rings=[];projectiles=[];matchKos=[0,0,0,0];pickupTimer=6;over=false;running=true;paused=false;koFeed.length=0;
+  announceMap();
+  setupEl.hidden=true;endEl.hidden=true;hudEl.hidden=false;
+  buildHud();last=performance.now();if(raf)cancelAnimationFrame(raf);raf=requestAnimationFrame(loop);
+  sendMatchAction({phase:'active',seed,hostProbe:hostNonce},'merge');
+  setInterval(()=>{
+    if(!isHost||!running)return;
+    const snapshot=fighters.map(f=>({x:f.x,y:f.y,vx:f.vx,vy:f.vy,face:f.face,pct:f.pct,stocks:f.stocks,dead:f.dead}));
+    sendMatchAction({snapshot},'merge');
+  },200);
+}
+function applySnapshotToNonLocalFighters(snapshot){
+  snapshot.forEach((s,i)=>{
+    const f=fighters[i];
+    if(!f)return;
+    // pct/stocks/dead are host-authoritative for EVERY fighter, including
+    // this client's own — the local client only predicts movement, never
+    // damage/KO resolution, so these always apply even for localSlot.
+    f.pct=s.pct;f.stocks=s.stocks;f.dead=s.dead;
+    if(i===localSlot)return; // position stays locally-predicted; only non-local fighters get eased toward the snapshot
+    f.targetX=s.x;f.targetY=s.y;f.face=s.face;
+  });
+}
+// Held-state uses its own drop-if-busy send (not sendMatchAction's
+// retry-via-setTimeout queue) and its own throttle timer, independent of
+// discrete jump/light/heavy/dodge events. Retrying every 120ms tick
+// against a 220ms floor would otherwise queue faster than it drains,
+// growing an ever-staler backlog for the whole match — dropping a held-
+// state tick is harmless since the next one 120ms later has fresher data,
+// but a discrete keypress must never be silently dropped, so it keeps
+// sendMatchAction's guaranteed-delivery retry on its own separate timer.
+let lastHeldSentAt=0;
+function sendHeldState(held){
+  const t=performance.now();
+  if(t-lastHeldSentAt<220)return;
+  lastHeldSentAt=t;
+  host('match-action',{action:{type:'input',slot:localSlot,held},mode:'merge'});
+}
+function startInputRelay(){
+  setInterval(()=>{
+    if(isHost||!running||mode==='')return;
+    const f=fighters[localSlot];if(!f)return;
+    sendHeldState({dir:heldDir(f),shield:f.shieldHeld});
+  },120);
+}
+startInputRelay();
 document.addEventListener('visibilitychange',()=>{if(document.hidden)setPaused(true)});
 setInterval(()=>{if(running&&!over)pushState(Math.min(99,Math.round(fighters.reduce((sum,t)=>sum+(3-t.stocks),0)/(fighters.length*3)*100)))},8000);
 draw(0);

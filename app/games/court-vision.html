@@ -78,6 +78,11 @@ function act(){ensureAudio();if(!running)return;if(phase==='aim')shoot();}
 c.addEventListener('pointerdown',e=>{e.preventDefault();act()});
 addEventListener('keydown',e=>{if(e.code==='Space'||e.code==='Enter'){e.preventDefault();act()}});
 document.querySelector('.over button').onclick=restart;
-addEventListener('message',e=>{if(e.data?.source==='phantomplay-host'&&e.data.type==='settings')reduced=!!e.data.reducedMotion});
+addEventListener('message',e=>{if(e.data?.source==='phantomplay-host'&&e.data.type==='settings'){reduced=!!e.data.reducedMotion;gpOn=!!e.data.gamepad}});
+// --- Gamepad (PhantomPlay standard mapping): A/Cross = restart/shoot ---
+let gpOn=false,gpIdx=null,gpPrevA=false;
+function gpPad(){const p=navigator.getGamepads?navigator.getGamepads():[];if(gpIdx===null)for(let i=0;i<p.length;i++)if(p[i]){gpIdx=i;break}return gpIdx===null?null:p[gpIdx]}
+function gpAction(){if(!running)restart();else act()}
+(function gpLoop(){if(gpOn){const pad=gpPad();if(pad){const a=!!(pad.buttons[0]&&pad.buttons[0].pressed);if(a&&!gpPrevA)gpAction();gpPrevA=a}}requestAnimationFrame(gpLoop)})();
 size();makeCrowd();setupShot();raf=requestAnimationFrame(loop);host('ready');
 </script></body></html>

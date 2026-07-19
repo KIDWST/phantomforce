@@ -14,8 +14,8 @@
 <div class="board" id="board"><div class="cols" id="cols"></div><div class="catch"></div></div>
 <div class="status" id="status">Tap start to begin.</div><button class="btn" id="btn">Start</button></main><script>
 const host=(type,data={})=>parent.postMessage({source:'phantomplay-game',type,...data},'*');
-let reduced=false,sound=true;
-addEventListener('message',e=>{if(e.data?.source==='phantomplay-host'&&e.data.type==='settings'){reduced=!!e.data.reducedMotion;sound=!!e.data.sound}});
+let reduced=false,sound=true,gpOn=false,gpIdx=null,gpPrev=[false,false,false,false];
+addEventListener('message',e=>{if(e.data?.source==='phantomplay-host'&&e.data.type==='settings'){reduced=!!e.data.reducedMotion;sound=!!e.data.sound;gpOn=!!e.data.gamepad}});
 const COLORS=[{n:'GREEN',c:'#41ffa1'},{n:'CYAN',c:'#42d9ff'},{n:'AMBER',c:'#ffc24d'},{n:'MAGENTA',c:'#ff5cc8'},{n:'VIOLET',c:'#b078ff'}];
 const KEYS=['A','S','D','F'];
 const board=document.getElementById('board'),cols=document.getElementById('cols'),targetBox=document.getElementById('targetBox'),swatch=document.getElementById('swatch'),cname=document.getElementById('cname'),scoreEl=document.getElementById('score'),comboEl=document.getElementById('combo'),livesEl=document.getElementById('lives'),statusEl=document.getElementById('status'),btn=document.getElementById('btn');
@@ -38,6 +38,8 @@ function start(){measure();tiles.forEach(t=>t.el.remove());tiles=[];score=0;comb
 btn.onclick=start;
 colEls.forEach((d,i)=>d.addEventListener('pointerdown',e=>{e.preventDefault();tapCol(i)}));
 addEventListener('keydown',e=>{const k=e.key.toLowerCase(),i=['a','s','d','f'].indexOf(k);if(i>=0){e.preventDefault();tapCol(i)}else if(e.key==='Enter'&&!playing)start()});
+function gpPad(){const p=navigator.getGamepads?navigator.getGamepads():[];if(gpIdx===null)for(let i=0;i<p.length;i++)if(p[i]){gpIdx=i;break}return gpIdx===null?null:p[gpIdx]}
+(function gpLoop(){if(gpOn&&playing){const pad=gpPad();if(pad){for(let i=0;i<4;i++){const pressed=!!(pad.buttons[i]&&pad.buttons[i].pressed);if(pressed&&!gpPrev[i])tapCol(i);gpPrev[i]=pressed}}}requestAnimationFrame(gpLoop)})();
 addEventListener('resize',()=>{if(playing)measure()});
 document.addEventListener('visibilitychange',()=>{if(document.hidden){cancelAnimationFrame(req)}else if(playing){lastT=0;req=requestAnimationFrame(loop)}});
 measure();render();host('ready');

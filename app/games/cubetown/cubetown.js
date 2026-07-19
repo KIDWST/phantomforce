@@ -65,6 +65,8 @@
     trialBody: $('[data-ct-trial-body]'),
     trialSeq: $('[data-ct-trial-seq]'),
     trialInput: $('[data-ct-trial-input]'),
+    seedList: $('[data-ct-seed-list]'),
+    farmNote: $('[data-ct-farm-note]'),
   };
 
   // ---------------------------------------------------------------------
@@ -97,7 +99,22 @@
     { key: 'cake', label: 'Grove Cake', cost: { grain: 2 }, spark: 18, ms: 1400, requiresQuest: null },
     { key: 'skewer', label: 'Ember Skewer', cost: { grain: 1, driftfish: 1 }, spark: 32, ms: 2200, requiresQuest: null },
     { key: 'chowder', label: 'Tide Chowder', cost: { driftfish: 2, loom: 1 }, spark: 45, ms: 3200, requiresQuest: 'bo' },
+    { key: 'sunjam', label: 'Sunberry Jam', cost: { sunberry: 2 }, spark: 22, ms: 1600, requiresQuest: null },
+    { key: 'moonloaf', label: 'Moonwheat Loaf', cost: { moonwheat: 2, grain: 1 }, spark: 34, ms: 2400, requiresQuest: null },
+    { key: 'gourdstew', label: 'Glowgourd Stew', cost: { glowgourd: 1, driftfish: 1 }, spark: 50, ms: 3000, requiresQuest: 'sage' },
   ];
+
+  // Farming: till grass into soil plots, plant seeds, water daily, harvest.
+  // Growth is measured in in-game minutes (one full day = 1440). Watering
+  // speeds a crop up; a dry crop still grows — cozy, nothing ever dies.
+  const CROPS = [
+    { key: 'sunberry', label: 'Sunberry', seed: 'sunberryseed', dur: 1200, color: '#ffb347', yieldN: 2, days: '~1 day' },
+    { key: 'moonwheat', label: 'Moonwheat', seed: 'moonwheatseed', dur: 2600, color: '#cfd8ff', yieldN: 2, days: '~2 days' },
+    { key: 'glowgourd', label: 'Glowgourd', seed: 'glowgourdseed', dur: 4200, color: '#a5f26f', yieldN: 1, days: '~3 days' },
+  ];
+  const CROP_BY_KEY = Object.fromEntries(CROPS.map((c) => [c.key, c]));
+  const FARM_WATERED_RATE = 1.6;
+  const FARM_DRY_RATE = 1.0;
 
   const HUES = [
     { key: 'coral', label: 'Coral', color: '#ff9466', lockedBy: null },
@@ -136,6 +153,7 @@
     { id: 'fenn', name: 'Fenn the Gatekeeper', hue: '#9bb3d6', resourceType: 'shrine', quest: { need: { lumen: 2 }, unlockHue: null, unlockTopper: 'crest', reward: { keystone: 1 }, text: 'Clear two shrine trials and bring me 2 Lumen. Then I’ll hand over the Star Keystone for the Prism Gate.' } },
     { id: 'nova', name: 'Nova the Cartographer', hue: '#b8c8ff', resourceType: 'shrine', quest: { need: { driftfish: 5, lumen: 1 }, unlockHue: 'moon', unlockTopper: null, reward: { relic: 1 }, text: 'I’m mapping the tide ruins. Bring 5 Driftfish and 1 Lumen and I’ll give you a relic compass.' } },
     { id: 'ori', name: 'Ori the Archivist', hue: '#8f7fff', resourceType: 'gate', quest: { need: { relic: 1, keystone: 4 }, unlockHue: 'void', unlockTopper: 'crown', reward: { relic: 1 }, text: 'When four Keystones and one Relic are yours, come back. The Prism Gate only opens for a town that helped its people.' } },
+    { id: 'sage', name: 'Sage the Sower', hue: '#b6e26f', resourceType: 'grove', quest: { need: { sunberry: 3, moonwheat: 2 }, unlockHue: null, unlockTopper: null, reward: { glowgourdseed: 2, moonwheatseed: 1 }, text: 'A town grows best from its own soil. Till a plot, grow 3 Sunberries and 2 Moonwheat, and I’ll trade you my rare Glowgourd seeds — and teach you my stew.' } },
   ];
 
   const TRIAL_DEFS = [
@@ -149,6 +167,7 @@
   const NPC_HOME_POINTS = [
     { x: 6, y: 6 }, { x: 10, y: 6 }, { x: 6, y: 10 }, { x: 10, y: 10 },
     { x: 3, y: 7 }, { x: 13, y: 7 }, { x: 4, y: 13 }, { x: 12, y: 13 },
+    { x: 5, y: 5 },
   ];
 
   // ---------------------------------------------------------------------
@@ -244,6 +263,11 @@
     paused: false,
     reducedMotion: false,
     hostSound: true,
+    gpEnabled: false, // captured from the host 'settings' message (d.gamepad)
+    gp: { // edge-detection state for the gamepad poll, mirrors keydown's evt.repeat guard
+      prevDir: { up: false, down: false, left: false, right: false },
+      prevA: false, prevB: false, prevStart: false,
+    },
     running: true,
     lastSparkTick: 0,
     lastPushAt: 0,
@@ -253,12 +277,13 @@
     dialogueMode: null, // 'npc' | 'cook'
     fishing: { open: false, zoneStart: 0.4, zoneWidth: 0.22, marker: 0, dir: 1, speed: 0.55 },
     build: { open: false, tool: 'place', selected: null, rotation: 0, placing: false },
+    farmTool: null, // null | {mode:'till'} | {mode:'plant', crop}
     tutorial: { step: 0 },
     trial: null, // {trial,input:[]}
   };
 
   const mp = {
-    active: false, participants: [], sharedTown: [], openBuilding: 'host_only',
+    active: false, participants: [], sharedTown: [], sharedFarm: [], openBuilding: 'host_only',
     amIHost: false, hostStatus: 'n/a', probeSent: false, pendingNonce: null, hostCheckAt: 0,
     lastSyncAt: 0,
   };
@@ -274,19 +299,25 @@
   }
   function newGame(seed) {
     state = {
-      version: 2,
+      version: 3,
       seed: seed >>> 0,
       day: 1,
       minutes: 400, // ~6:40am
       player: { gx: 8, gy: 8, hue: 'coral', topper: 'none', trim: 'soft', name: 'Resident' },
-      inventory: { grain: 3, shale: 2, loom: 1, driftfish: 0, lumen: 0, keystone: 0, relic: 0, cake: 0, skewer: 0, chowder: 0 },
+      inventory: {
+        grain: 3, shale: 2, loom: 1, driftfish: 0, lumen: 0, keystone: 0, relic: 0,
+        cake: 0, skewer: 0, chowder: 0, sunjam: 0, moonloaf: 0, gourdstew: 0,
+        sunberry: 0, moonwheat: 0, glowgourd: 0,
+        sunberryseed: 2, moonwheatseed: 1, glowgourdseed: 0,
+      },
       spark: 78,
       town: [], // {id,type,gx,gy,rot}
+      farm: [], // {x,y,crop:null|cropKey,prog:in-game minutes grown,watered:bool}
       quests: defaultQuestState(),
       adventure: defaultAdventureState(),
       cosmeticsUnlocked: { hue: ['coral', 'mint', 'slate', 'sand'], topper: ['none', 'cap'], trim: ['soft', 'bold'] },
       tutorialSeen: false,
-      stats: { gathered: 0, built: 0, demolished: 0, fishCaught: 0, fishTried: 0, dishesCooked: 0, questsCompleted: 0, trialsCleared: 0, gatesOpened: 0, secondsPlayed: 0 },
+      stats: { gathered: 0, built: 0, demolished: 0, fishCaught: 0, fishTried: 0, dishesCooked: 0, questsCompleted: 0, trialsCleared: 0, gatesOpened: 0, secondsPlayed: 0, cropsHarvested: 0 },
       completedMilestone: false,
     };
     terrain = genTerrain(state.seed);
@@ -343,6 +374,25 @@
     if (!mp.active || mp.amIHost) return state.town;
     return state.town.concat(mp.sharedTown);
   }
+  function currentFarm() {
+    // Mirrors currentTown(): the host's farm is the shared one; a guest's own
+    // tilled rows stay local previews layered over the host's shared farm.
+    if (!mp.active || mp.amIHost) return state.farm;
+    return state.farm.concat(mp.sharedFarm);
+  }
+  function farmPlotAt(x, y, farm) {
+    for (const p of farm) if (p.x === x && p.y === y) return p;
+    return null;
+  }
+  function cropReady(plot) {
+    return !!(plot.crop && CROP_BY_KEY[plot.crop] && plot.prog >= CROP_BY_KEY[plot.crop].dur);
+  }
+  function cropStage(plot) {
+    const c = CROP_BY_KEY[plot.crop];
+    if (!c) return 0;
+    if (plot.prog >= c.dur) return 3;
+    return Math.min(2, Math.floor((plot.prog / c.dur) * 3));
+  }
   function isBlockedTile(gx, gy) {
     if (!inBounds(gx, gy)) return true;
     const t = terrain[gy][gx];
@@ -359,6 +409,7 @@
     if (gx === state.player.gx && gy === state.player.gy) return false;
     if (townPieceAt(gx, gy, state.town)) return false;
     if (mp.active && !mp.amIHost && townPieceAt(gx, gy, mp.sharedTown)) return false;
+    if (farmPlotAt(gx, gy, currentFarm())) return false;
     return true;
   }
   function neighbors4(gx, gy) {
@@ -409,6 +460,9 @@
     cookDone: () => { beep(500, 0.14, 'sine', 0.2); setTimeout(() => beep(700, 0.18, 'sine', 0.2), 100); },
     quest: () => { beep(440, 0.16, 'triangle', 0.24); setTimeout(() => beep(660, 0.16, 'triangle', 0.24), 120); setTimeout(() => beep(880, 0.22, 'triangle', 0.24), 240); },
     step: () => beep(220, 0.05, 'square', 0.05),
+    till: () => beep(240, 0.16, 'triangle', 0.16),
+    water: () => { beep(430, 0.14, 'sine', 0.16); setTimeout(() => beep(320, 0.18, 'sine', 0.12), 80); },
+    harvest: () => { beep(560, 0.14, 'triangle', 0.22); setTimeout(() => beep(760, 0.18, 'triangle', 0.2), 100); },
   };
 
   // ---------------------------------------------------------------------
@@ -430,6 +484,7 @@
     const p = document.querySelector(`[data-ct-panel="${name}"]`);
     if (p) p.classList.add('is-open');
     if (name === 'build') renderBuildPanel();
+    if (name === 'farming') renderFarmPanel();
     if (name === 'inventory') renderInventoryPanel();
     if (name === 'customize') renderCustomizePanel();
     if (name === 'together') renderTogetherPanel();
@@ -479,10 +534,124 @@
   }
 
   // ---------------------------------------------------------------------
+  // Farm panel + tilling / planting / watering / harvest actions
+  // ---------------------------------------------------------------------
+  function renderFarmPanel() {
+    el.seedList.innerHTML = CROPS.map((c) => {
+      const seeds = state.inventory[c.seed] || 0;
+      const grown = state.inventory[c.key] || 0;
+      return `<button type="button" class="piece-btn ${seeds > 0 ? '' : 'is-locked'}" data-ct-seed="${c.key}">
+        <span class="piece-swatch" style="background:${c.color}"></span>
+        <span>${c.label}</span>
+        <span class="piece-cost">${seeds} seeds · ${c.days}${grown ? ` · ${grown} grown` : ''}</span>
+      </button>`;
+    }).join('');
+    $all('[data-ct-seed]').forEach((b) => b.onclick = () => {
+      const crop = CROP_BY_KEY[b.dataset.ctSeed];
+      if (!crop) return;
+      if ((state.inventory[crop.seed] || 0) <= 0) { toast(`No ${crop.label} seeds yet — look for them while gathering, or trade with Sage.`); return; }
+      closePanels();
+      rt.farmTool = { mode: 'plant', crop: crop.key };
+      toast(`Planting ${crop.label} — tap a tilled soil plot. Esc or ● puts the seeds away.`);
+    });
+    const tillBtn = $('[data-ct-till]');
+    if (tillBtn) tillBtn.onclick = () => {
+      closePanels();
+      rt.farmTool = { mode: 'till' };
+      toast('Tilling — tap open grass to make a soil plot. Esc or ● puts the hoe away.');
+    };
+    let note = 'Water once a day to speed things up — dry crops still grow, just slower. Every harvest gives a spare seed back.';
+    if (mp.active && !mp.amIHost) note = 'You’re visiting — your garden rows stay local previews on this device. The host’s farm is the shared one everyone sees.';
+    el.farmNote.textContent = note;
+  }
+  function canTillAt(gx, gy) {
+    return isBuildableGround(gx, gy);
+  }
+  function canPlantAt(gx, gy) {
+    if (!rt.farmTool || rt.farmTool.mode !== 'plant') return false;
+    const crop = CROP_BY_KEY[rt.farmTool.crop];
+    if (!crop || (state.inventory[crop.seed] || 0) <= 0) return false;
+    const plot = farmPlotAt(gx, gy, state.farm);
+    return !!(plot && !plot.crop);
+  }
+  function farmTapAt(gx, gy) {
+    if (!rt.farmTool) return;
+    if (rt.farmTool.mode === 'till') {
+      if (!canTillAt(gx, gy)) { toast('Soil needs open grass — try another tile.'); return; }
+      state.farm.push({ x: gx, y: gy, crop: null, prog: 0, watered: false });
+      sfx.till();
+      spawnParticles(gx, gy, '#8a5f3c');
+      toast('Tilled a soil plot. Plant a seed from the Farm panel!');
+    } else if (rt.farmTool.mode === 'plant') {
+      const crop = CROP_BY_KEY[rt.farmTool.crop];
+      const plot = farmPlotAt(gx, gy, state.farm);
+      if (!plot) { toast('Seeds need tilled soil — till a grass tile first.'); return; }
+      if (plot.crop) { toast('Something is already growing there.'); return; }
+      if (!crop || (state.inventory[crop.seed] || 0) <= 0) { rt.farmTool = null; updateHud(); return; }
+      state.inventory[crop.seed] -= 1;
+      plot.crop = crop.key;
+      plot.prog = 0;
+      sfx.place();
+      spawnParticles(gx, gy, crop.color);
+      toast(`Planted ${crop.label} — ${crop.days} to grow. Water it to hurry it along.`);
+      if ((state.inventory[crop.seed] || 0) <= 0) { rt.farmTool = null; toast(`Planted the last ${crop.label} seed.`); }
+    }
+    updateHud();
+    schedulePush();
+    scheduleTownSync();
+  }
+  function waterPlot(plot) {
+    if (plot.watered) return;
+    plot.watered = true;
+    sfx.water();
+    spawnParticles(plot.x, plot.y, '#4fd1e8');
+    toast('Watered — it will grow faster until tomorrow.');
+    updateHud();
+    schedulePush();
+    scheduleTownSync();
+  }
+  function harvestPlot(plot) {
+    const crop = CROP_BY_KEY[plot.crop];
+    if (!crop || !cropReady(plot)) return;
+    state.inventory[crop.key] = (state.inventory[crop.key] || 0) + crop.yieldN;
+    state.inventory[crop.seed] = (state.inventory[crop.seed] || 0) + 1;
+    plot.crop = null;
+    plot.prog = 0;
+    plot.watered = false;
+    state.stats.cropsHarvested = (state.stats.cropsHarvested || 0) + 1;
+    state.spark = clamp(state.spark + 4, 0, 100);
+    sfx.harvest();
+    spawnParticles(plot.x, plot.y, crop.color);
+    toast(`Harvested ${crop.yieldN} ${crop.label}${crop.yieldN > 1 ? 's' : ''} — and found a spare seed!`);
+    updateHud();
+    schedulePush();
+    scheduleTownSync();
+  }
+  function stepFarm(dtMinutes) {
+    for (const plot of state.farm) {
+      if (!plot.crop) continue;
+      const c = CROP_BY_KEY[plot.crop];
+      if (!c || plot.prog >= c.dur) continue;
+      plot.prog += dtMinutes * (plot.watered ? FARM_WATERED_RATE : FARM_DRY_RATE);
+      if (plot.prog >= c.dur) {
+        sfx.cookDone();
+        toast(`A ${c.label} is ready to harvest!`);
+      }
+    }
+  }
+  function farmNewDay() {
+    for (const plot of state.farm) plot.watered = false;
+  }
+
+  // ---------------------------------------------------------------------
   // Inventory panel
   // ---------------------------------------------------------------------
-  const FOOD_TYPES = { cake: 'Grove Cake', skewer: 'Ember Skewer', chowder: 'Tide Chowder' };
-  const RES_LABELS = { grain: 'Grain', shale: 'Shale', loom: 'Loom', driftfish: 'Driftfish', lumen: 'Lumen', keystone: 'Keystone', relic: 'Relic' };
+  const FOOD_TYPES = { cake: 'Grove Cake', skewer: 'Ember Skewer', chowder: 'Tide Chowder', sunjam: 'Sunberry Jam', moonloaf: 'Moonwheat Loaf', gourdstew: 'Glowgourd Stew' };
+  const RES_LABELS = {
+    grain: 'Grain', shale: 'Shale', loom: 'Loom', driftfish: 'Driftfish', lumen: 'Lumen', keystone: 'Keystone', relic: 'Relic',
+    sunberry: 'Sunberry', moonwheat: 'Moonwheat', glowgourd: 'Glowgourd',
+    sunberryseed: 'Sunberry Seed', moonwheatseed: 'Moonwheat Seed', glowgourdseed: 'Glowgourd Seed',
+  };
   function renderInventoryPanel() {
     const rows = [];
     for (const [k, label] of Object.entries(RES_LABELS)) rows.push({ key: k, label, count: state.inventory[k] || 0, food: false });
@@ -777,7 +946,7 @@
   }
   function computeScore() {
     const s = state.stats;
-    return s.built * 5 + questDoneCount() * 55 + trialDoneCount() * 35 + (s.gatesOpened || 0) * 180 + s.fishCaught * 4 + s.dishesCooked * 5 + (state.day - 1) * 10;
+    return s.built * 5 + questDoneCount() * 55 + trialDoneCount() * 35 + (s.gatesOpened || 0) * 180 + s.fishCaught * 4 + s.dishesCooked * 5 + (s.cropsHarvested || 0) * 4 + (state.day - 1) * 10;
   }
   function computeProgress() {
     if (state.completedMilestone) return 100;
@@ -836,6 +1005,7 @@
     'Open Quest Log when you need direction. The full playthrough is residents → shrine trials → Prism Gate.',
     'Walk next to a Grove, Quarry, or Reed patch and press the glowing action button to gather Grain, Shale, or Loom.',
     'Open Build to spend resources on floors, walls, furniture, and a Hearth. Pick a piece, then tap an open tile to place it — Demolish removes your own pieces for half the cost back.',
+    'Open Farm to till open grass into soil plots and plant Sunberry, Moonwheat, or Glowgourd seeds. Water them once a day to hurry them along — dry crops still grow, just slower — and harvest when they sparkle. Seeds turn up while gathering in groves and reeds.',
     'Find shrine blocks around the edges of the map. Each one has a short pattern trial that rewards Lumen, Relics, or story progress.',
     'Visit the pond and press the action button to fish for Driftfish. Tap Catch when the marker crosses the glowing zone.',
     'Cook at a Hearth to turn resources into dishes that refill your Spark meter. Spark drifts down slowly over time — it’s a gentle nudge, never a fail state.',
@@ -931,6 +1101,14 @@
       if (piece && piece.type === 'hearth') return { kind: 'cook' };
       if (piece && piece.type === 'bed' && daySegment(state.minutes) === 'night') return { kind: 'sleep' };
     }
+    // own farm plot adjacent (or underfoot): harvest > water > plant
+    for (const n of [{ x: p.gx, y: p.gy }, ...neighbors4(p.gx, p.gy)]) {
+      const plot = farmPlotAt(n.x, n.y, state.farm);
+      if (!plot) continue;
+      if (plot.crop && cropReady(plot)) return { kind: 'harvest', plot };
+      if (plot.crop && !plot.watered) return { kind: 'water', plot };
+      if (!plot.crop) return { kind: 'plant' };
+    }
     // npc adjacent
     for (const npc of npcs) {
       if (Math.max(Math.abs(npc.gx - p.gx), Math.abs(npc.gy - p.gy)) <= 1 && !(npc.gx === p.gx && npc.gy === p.gy)) {
@@ -939,9 +1117,10 @@
     }
     return null;
   }
-  const CONTEXT_LABEL = { gather: 'Gather', fish: 'Fish', cook: 'Cook', sleep: 'Sleep', talk: 'Talk', trial: 'Trial', gate: 'Gate' };
+  const CONTEXT_LABEL = { gather: 'Gather', fish: 'Fish', cook: 'Cook', sleep: 'Sleep', talk: 'Talk', trial: 'Trial', gate: 'Gate', harvest: 'Harvest', water: 'Water', plant: 'Plant' };
   function doContextAction() {
     if (rt.build.placing) return; // handled via canvas tap while placing
+    if (rt.farmTool) { rt.farmTool = null; toast('Farm tools put away.'); updateHud(); return; }
     const it = findInteraction();
     if (!it) return;
     if (it.kind === 'gather') doGather(it.resource);
@@ -951,6 +1130,9 @@
     else if (it.kind === 'talk') openNpcDialogue(it.npc);
     else if (it.kind === 'trial') openTrial(it.trial);
     else if (it.kind === 'gate') openGate();
+    else if (it.kind === 'harvest') harvestPlot(it.plot);
+    else if (it.kind === 'water') waterPlot(it.plot);
+    else if (it.kind === 'plant') openPanel('farming');
   }
   function doGather(resource) {
     if (rt.gathering) return;
@@ -962,17 +1144,33 @@
     state.stats.gathered += 1;
     sfx.gather();
     spawnParticles(rt.playerToX, rt.playerToY, resource === 'grain' ? '#ffd54f' : resource === 'shale' ? '#9bb3d6' : '#c792ea');
+    // Seeds hide in the greenery: grove and reed gathers sometimes turn one up.
+    if ((resource === 'grain' || resource === 'loom') && Math.random() < 0.35) {
+      const roll = Math.random();
+      const seedKey = roll < 0.5 ? 'sunberryseed' : roll < 0.85 ? 'moonwheatseed' : 'glowgourdseed';
+      state.inventory[seedKey] = (state.inventory[seedKey] || 0) + 1;
+      toast(`Found a ${RES_LABELS[seedKey]} tucked in the greenery!`);
+    }
     rt.gathering = null;
     updateHud();
     schedulePush();
   }
   function doSleep() {
+    // Crops keep growing overnight — advance them by the skipped in-game minutes.
+    const nowMin = ((state.minutes % 1440) + 1440) % 1440;
+    const skipped = nowMin > 380 ? (1440 - nowMin) + 380 : (380 - nowMin);
+    for (const plot of state.farm) {
+      if (plot.crop && CROP_BY_KEY[plot.crop]) plot.prog += skipped * (plot.watered ? FARM_WATERED_RATE : FARM_DRY_RATE);
+      plot.watered = false;
+    }
     state.spark = 100;
     state.day += 1;
     state.minutes = 380;
-    toast('Slept well — a new day begins.');
+    const gardenReady = state.farm.some((plot) => cropReady(plot));
+    toast(gardenReady ? 'Slept well — and something in the garden looks ready!' : 'Slept well — a new day begins.');
     updateHud();
     schedulePush();
+    scheduleTownSync();
   }
 
   // ---------------------------------------------------------------------
@@ -1026,7 +1224,8 @@
   function sendTownSync() {
     if (!mp.active) return;
     const compactTown = state.town.map((p) => ({ id: p.id, type: p.type, gx: p.gx, gy: p.gy, rot: p.rot }));
-    host('match-action', { action: { town: compactTown, seed: state.seed, openBuilding: mp.openBuilding, hostProbe: mp.pendingNonce || mp.confirmedNonce || null }, mode: 'merge' });
+    const compactFarm = state.farm.map((p) => ({ x: p.x, y: p.y, crop: p.crop || null, prog: Math.round(p.prog || 0), watered: !!p.watered }));
+    host('match-action', { action: { town: compactTown, farm: compactFarm, seed: state.seed, openBuilding: mp.openBuilding, hostProbe: mp.pendingNonce || mp.confirmedNonce || null }, mode: 'merge' });
     mp.lastSyncAt = Date.now();
   }
   function sendHostProbe() {
@@ -1052,6 +1251,11 @@
     const ms = d.matchState && typeof d.matchState === 'object' ? d.matchState : {};
     if (typeof ms.seed === 'number' && ms.seed !== state.seed && !mp.amIHost) adoptSharedSeed(ms.seed);
     if (Array.isArray(ms.town)) mp.sharedTown = ms.town.filter((p) => p && PALETTE_BY_TYPE[p.type]);
+    if (Array.isArray(ms.farm)) {
+      mp.sharedFarm = ms.farm
+        .filter((p) => p && Number.isFinite(p.x) && Number.isFinite(p.y) && (p.crop == null || CROP_BY_KEY[p.crop]))
+        .map((p) => ({ x: clamp(Math.floor(p.x), 0, GRID - 1), y: clamp(Math.floor(p.y), 0, GRID - 1), crop: p.crop || null, prog: Number.isFinite(p.prog) ? Math.max(0, p.prog) : 0, watered: !!p.watered }));
+    }
     if (ms.openBuilding === 'host_only' || ms.openBuilding === 'everyone') mp.openBuilding = ms.openBuilding;
     if (mp.pendingNonce && ms.hostProbe === mp.pendingNonce) {
       mp.amIHost = true; mp.hostStatus = 'host'; mp.confirmedNonce = mp.pendingNonce; mp.pendingNonce = null;
@@ -1081,7 +1285,7 @@
     el.resLoom.textContent = state.inventory.loom || 0;
     el.resFish.textContent = state.inventory.driftfish || 0;
     el.togetherBtn.hidden = !mp.active;
-    const it = rt.build.placing ? null : findInteraction();
+    const it = (rt.build.placing || rt.farmTool) ? null : findInteraction();
     if (it && CONTEXT_LABEL[it.kind]) {
       el.context.textContent = CONTEXT_LABEL[it.kind];
       el.context.classList.add('is-visible');
@@ -1226,6 +1430,38 @@
       ctx.restore();
     }
   }
+  function drawFarmPlot(plot, guestLocal) {
+    const s = tileToScreen(plot.x, plot.y);
+    // soil bed: darker when watered
+    drawDiamond(s.x, s.y, rt.tileW * 0.92, rt.tileH * 0.92, plot.watered ? '#4a3324' : '#6d4c33', 'rgba(0,0,0,0.25)');
+    ctx.save();
+    ctx.globalAlpha = 0.35;
+    drawDiamond(s.x, s.y, rt.tileW * 0.55, rt.tileH * 0.55, plot.watered ? '#3a2719' : '#5b3e28', null);
+    ctx.restore();
+    if (plot.crop && CROP_BY_KEY[plot.crop]) {
+      const c = CROP_BY_KEY[plot.crop];
+      const stage = cropStage(plot);
+      const stageColor = stage === 0 ? '#8fd97f' : stage === 1 ? '#66b45e' : stage === 2 ? shade(c.color, 0.8) : c.color;
+      const w = rt.tileW * (0.2 + stage * 0.07);
+      const hgt = rt.tileH * (0.35 + stage * 0.35);
+      drawBlock(s.x, s.y, w, w / 2, hgt, stageColor, shade(stageColor, 0.7), shade(stageColor, 0.5));
+      if (stage >= 3) {
+        // ready-to-harvest sparkle, same gentle pulse language as the shrines
+        ctx.save();
+        ctx.globalAlpha = 0.55 + 0.2 * Math.sin(performance.now() / 320 + plot.x + plot.y);
+        ctx.fillStyle = '#ffe98a';
+        ctx.beginPath(); ctx.arc(s.x, s.y - hgt - rt.tileH * 0.4, rt.tileH * 0.2, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+      }
+    }
+    if (guestLocal) {
+      // Same gold-dot marker as guest-local build pieces: this plot is a local
+      // preview that can't sync into the host's shared farm under the protocol.
+      ctx.save(); ctx.fillStyle = '#ffcf6b'; ctx.globalAlpha = 0.9;
+      ctx.beginPath(); ctx.arc(s.x, s.y - rt.tileH * 1.2, 3 * rt.dpr, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    }
+  }
   function drawCharacter(px, py, hueColor, topper, trimColor, label, mini) {
     const scale = mini ? 0.72 : 1;
     const bw = rt.tileW * 0.42 * scale, bh = rt.tileH * 1.3 * scale;
@@ -1296,6 +1532,11 @@
     for (let gy = 0; gy < GRID; gy++) for (let gx = 0; gx < GRID; gx++) {
       drawables.push({ depth: gx + gy, kind: 'terrain', gx, gy });
     }
+    for (const plot of currentFarm()) {
+      // Guests' own tilled rows are local previews (same rule as guest builds).
+      const guestLocal = mp.active && !mp.amIHost && state.farm.includes(plot);
+      drawables.push({ depth: plot.x + plot.y + 0.3, kind: 'plot', plot, guestLocal });
+    }
     const town = currentTown();
     for (const p of town) {
       // A guest's own placements (state.town) never sync out to the shared
@@ -1311,7 +1552,8 @@
     // terrain must be drawn strictly first regardless of interleave for correctness of base layer
     for (const d of drawables) if (d.kind === 'terrain') drawTerrainTile(d.gx, d.gy, terrain[d.gy][d.gx]);
     for (const d of drawables) {
-      if (d.kind === 'piece') drawPiece(d.piece, d.guestLocal);
+      if (d.kind === 'plot') drawFarmPlot(d.plot, d.guestLocal);
+      else if (d.kind === 'piece') drawPiece(d.piece, d.guestLocal);
       else if (d.kind === 'npc') {
         const n = d.npc;
         drawCharacter(n.screenPx, n.screenPy, n.hue, 'none', 'rgba(255,255,255,0.35)', n.name.split(' ')[0]);
@@ -1320,10 +1562,13 @@
       }
     }
 
-    // build placement ghost
-    if (rt.build.placing && rt.build.hoverTile) {
-      const ok = isBuildableGround(rt.build.hoverTile.x, rt.build.hoverTile.y);
-      const s = tileToScreen(rt.build.hoverTile.x, rt.build.hoverTile.y);
+    // build / farm placement ghost
+    if ((rt.build.placing || rt.farmTool) && rt.build.hoverTile) {
+      const hx = rt.build.hoverTile.x, hy = rt.build.hoverTile.y;
+      const ok = rt.farmTool
+        ? (rt.farmTool.mode === 'till' ? canTillAt(hx, hy) : canPlantAt(hx, hy))
+        : isBuildableGround(hx, hy);
+      const s = tileToScreen(hx, hy);
       ctx.save(); ctx.globalAlpha = 0.55;
       drawDiamond(s.x, s.y, rt.tileW, rt.tileH, ok ? '#5be3b5' : '#ff6b81', null);
       ctx.restore();
@@ -1396,14 +1641,17 @@
     let dt = (t - rt.lastFrame) / 1000;
     rt.lastFrame = t;
     dt = Math.min(dt, 0.05);
+    pollGamepad();
     if (!rt.paused && !anyPanelOpenBlocking()) {
-      state.minutes += (dt * 1000) * (1440 / DAY_LENGTH_MS);
-      if (state.minutes >= 1440) { state.minutes -= 1440; state.day += 1; }
+      const dtMinutes = (dt * 1000) * (1440 / DAY_LENGTH_MS);
+      state.minutes += dtMinutes;
+      if (state.minutes >= 1440) { state.minutes -= 1440; state.day += 1; farmNewDay(); }
       state.stats.secondsPlayed += dt;
       rt.playSecondsAccum += dt;
       stepMoveInterp(dt);
       stepNpcs(dt);
       stepGatherCook(dt);
+      stepFarm(dtMinutes);
       stepSpark(t);
     }
     stepParticles(dt);
@@ -1469,7 +1717,7 @@
   function captureState() {
     return JSON.parse(JSON.stringify({
       version: state.version, seed: state.seed, day: state.day, minutes: state.minutes,
-      player: state.player, inventory: state.inventory, spark: state.spark, town: state.town,
+      player: state.player, inventory: state.inventory, spark: state.spark, town: state.town, farm: state.farm,
       quests: state.quests, adventure: state.adventure, cosmeticsUnlocked: state.cosmeticsUnlocked, tutorialSeen: state.tutorialSeen,
       stats: state.stats, completedMilestone: state.completedMilestone,
     }));
@@ -1504,6 +1752,22 @@
     if (Array.isArray(s.town)) {
       state.town = s.town.filter((p) => p && typeof p === 'object' && PALETTE_BY_TYPE[p.type] && Number.isFinite(p.gx) && Number.isFinite(p.gy))
         .map((p) => ({ id: String(p.id || `p${pieceIdCounter++}`), type: p.type, gx: clamp(Math.floor(p.gx), 0, GRID - 1), gy: clamp(Math.floor(p.gy), 0, GRID - 1), rot: Number.isFinite(p.rot) ? p.rot % 4 : 0 }));
+    }
+    if (Array.isArray(s.farm)) {
+      const seenPlots = new Set();
+      state.farm = s.farm.filter((p) => p && typeof p === 'object' && Number.isFinite(p.x) && Number.isFinite(p.y))
+        .map((p) => ({
+          x: clamp(Math.floor(p.x), 0, GRID - 1), y: clamp(Math.floor(p.y), 0, GRID - 1),
+          crop: (typeof p.crop === 'string' && CROP_BY_KEY[p.crop]) ? p.crop : null,
+          prog: Number.isFinite(p.prog) ? Math.max(0, p.prog) : 0,
+          watered: !!p.watered,
+        }))
+        .filter((p) => {
+          const key = `${p.x},${p.y}`;
+          if (seenPlots.has(key)) return false;
+          seenPlots.add(key);
+          return true;
+        });
     }
     if (s.quests && typeof s.quests === 'object') {
       for (const k of Object.keys(state.quests)) if (s.quests[k] && typeof s.quests[k] === 'object') state.quests[k].done = !!s.quests[k].done;
@@ -1559,10 +1823,16 @@
   }
   canvas.addEventListener('pointerdown', (evt) => {
     unlockAudio();
-    if (anyPanelOpen() && !rt.build.placing) return;
+    if (anyPanelOpen() && !rt.build.placing && !rt.farmTool) return;
     const pt = canvasPointFromEvent(evt);
     const tile = screenToTile(pt.x, pt.y);
     if (!inBounds(tile.x, tile.y)) return;
+    if (rt.farmTool) {
+      // Farm tools stay armed (like Demolish) so rows can be worked tile by
+      // tile; Esc, B, or the ● action button puts them away.
+      farmTapAt(tile.x, tile.y);
+      return;
+    }
     if (rt.build.placing) {
       placeAt(tile.x, tile.y);
       rt.build.placing = false;
@@ -1579,7 +1849,7 @@
     else if (dx === 0 && dy === 0) doContextAction();
   });
   canvas.addEventListener('pointermove', (evt) => {
-    if (!rt.build.placing) return;
+    if (!rt.build.placing && !rt.farmTool) return;
     const pt = canvasPointFromEvent(evt);
     rt.build.hoverTile = screenToTile(pt.x, pt.y);
   });
@@ -1591,6 +1861,7 @@
     unlockAudio();
     if (evt.repeat) return;
     if (evt.key === 'Escape') {
+      if (rt.farmTool) { rt.farmTool = null; toast('Farm tools put away.'); updateHud(); return; }
       if (rt.build.placing) { rt.build.placing = false; toast('Placement canceled.'); updateHud(); return; }
       if (anyPanelOpen()) { closePanels(); return; }
     }
@@ -1606,7 +1877,65 @@
     else if (k === 'd' || k === 'arrowright') tryMove(1, 0);
     else if (k === ' ' || k === 'e') { evt.preventDefault(); doContextAction(); }
     else if (k === 'b') openPanel('build');
+    else if (k === 'f') openPanel('farming');
   });
+
+  // ---------------------------------------------------------------------
+  // Gamepad input (Standard layout — DualSense/DualShock/Xbox alike)
+  // Left stick / d-pad = movement, A/Cross = interact, B/Circle = cancel,
+  // Start = pause. Movement is edge-triggered per press, exactly like the
+  // keydown handler above (tryMove is a discrete single-tile step, so a
+  // held direction must not repeat every frame).
+  // ---------------------------------------------------------------------
+  function gpPad() {
+    if (!navigator.getGamepads) return null;
+    const pads = navigator.getGamepads();
+    for (const p of pads) if (p && p.connected !== false) return p;
+    return null;
+  }
+  function pollGamepad() {
+    if (!rt.gpEnabled) return;
+    const pad = gpPad();
+    if (!pad) return;
+    const btn = (i) => !!(pad.buttons[i] && pad.buttons[i].pressed);
+    const AXIS_DEAD = 0.5;
+    const ax = pad.axes[0] || 0, ay = pad.axes[1] || 0;
+    const dir = {
+      up: btn(12) || ay < -AXIS_DEAD,
+      down: btn(13) || ay > AXIS_DEAD,
+      left: btn(14) || ax < -AXIS_DEAD,
+      right: btn(15) || ax > AXIS_DEAD,
+    };
+    const a = btn(0), b = btn(1), start = btn(9);
+
+    // Start toggles pause regardless of open panels, mirroring the on-screen Pause button.
+    if (start && !rt.gp.prevStart) setPaused(!rt.paused);
+    rt.gp.prevStart = start;
+
+    // B cancels an in-progress placement or closes an open panel, mirroring Escape.
+    if (b && !rt.gp.prevB) {
+      if (rt.farmTool) { rt.farmTool = null; toast('Farm tools put away.'); updateHud(); }
+      else if (rt.build.placing) { rt.build.placing = false; toast('Placement canceled.'); updateHud(); }
+      else if (anyPanelOpen()) closePanels();
+    }
+    rt.gp.prevB = b;
+
+    // A mirrors Space/E: catches fish while the fishing panel is open,
+    // otherwise triggers the context action — same gating as the keydown handler.
+    if (a && !rt.gp.prevA) {
+      if (anyPanelOpen()) { if (rt.fishing.open) fishCatch(); }
+      else if (!rt.paused) doContextAction();
+    }
+    rt.gp.prevA = a;
+
+    if (!anyPanelOpen() && !rt.paused) {
+      if (dir.up && !rt.gp.prevDir.up) tryMove(0, -1);
+      if (dir.down && !rt.gp.prevDir.down) tryMove(0, 1);
+      if (dir.left && !rt.gp.prevDir.left) tryMove(-1, 0);
+      if (dir.right && !rt.gp.prevDir.right) tryMove(1, 0);
+    }
+    rt.gp.prevDir = dir;
+  }
 
   // ---------------------------------------------------------------------
   // DOM bindings
@@ -1659,6 +1988,7 @@
     if (d.type === 'settings') {
       rt.hostSound = d.sound !== false;
       if (typeof d.reducedMotion === 'boolean') { rt.reducedMotion = rt.reducedMotion || d.reducedMotion; el.reduced.checked = rt.reducedMotion; }
+      rt.gpEnabled = !!d.gamepad;
     } else if (d.type === 'pause') {
       setPaused(true);
     } else if (d.type === 'resume') {
