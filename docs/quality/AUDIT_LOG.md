@@ -2056,3 +2056,73 @@ restore earlier values in Cycle 27.
 ## Next Task
 
 Exercise respectively mappings and named-entity scoped undo in Cycle 28.
+
+# 2026-07-19 - Cycle 28: Respectively Mappings And Named-Entity Undo
+
+## Problems Verified
+
+- Phantom had no exact representation for `respectively`, so named, ordinal,
+  and reverse callbacks depended on model inference even though the user had
+  already supplied an ordered mapping.
+- Unequal subject/value lists could invite a plausible but unsupported pairing
+  instead of identifying the mismatch and asking one useful question.
+- Existing rollback state was scoped to meeting and poster fields; it could not
+  restore Mina's value while preserving Theo's newer value.
+- The first authenticated Chrome run exposed a cross-topic bug in the new
+  mismatch clarifier: an older unequal mapping intercepted a later unrelated
+  plural packing question.
+
+## Corrections
+
+- Added bounded two-to-ten-item `respectively` extraction with forward lookup
+  by name, reverse lookup by value, and ordinal lookup by person position.
+- Added unequal-list clarification that reports both counts and asks about the
+  specifically referenced person or value without guessing a pair.
+- Added a bounded named-property state timeline that applies later changes and
+  restores only the person named by `undo`, retaining every other person's
+  accepted value.
+- Restricted mismatch activation to a named subject, mapped value, or explicit
+  ordinal in the current request, preventing older mapping state from hijacking
+  unrelated follow-ups.
+- Expanded deterministic, 140-request HTTP, and authenticated 73-turn Chrome
+  coverage, plus permanent change-memory protection.
+
+## Source Verification
+
+- PASS: `npm run test:instant-chat:http-live-model --workspace
+  @phantomforce/server` completed 140 authenticated requests at 503 ms average
+  and 1,880 ms maximum with zero fallback and zero business leakage.
+- PASS: `npm run test:database-auth` passed all 57 API/auth checks and the real
+  Chrome journey across two organizations and 73 conversational turns.
+- PASS: Chrome proved named, reverse, and ordinal mappings; unequal-list
+  clarification; named-person undo; durable-memory reload; tenant isolation;
+  tamper rejection; and the cross-topic plural regression repair.
+- PASS: visual review at 1440x900 and 390x844 under
+  `tmp/database-auth-org-browser/2026-07-19T07-06-30-375Z`; navigation, chat,
+  organization state, bottom navigation, and composer had no overlap or
+  horizontal overflow.
+- PASS: `npm run test:release-critical` (20/20).
+- PASS: `npm run test:dashboard-chat` (56 prompts, 11 adversarial turns, and
+  deterministic tools).
+- PASS: `node scripts/test-memory-retention.mjs`.
+- PASS: `npm run test:change-memory` and `git diff --check` (line-ending
+  warnings only).
+
+## Deployment Verification
+
+- Pushed `315608de` to `origin/main` and synced the canonical
+  `deployments\phantomforce-live` checkout.
+- PASS: strict live-source doctor aligned source, origin, deployment manifest,
+  static UI, Hermes, sidebar rules, resurrection guards, and clean worktrees at
+  `315608de`; the browser build remains `phantom-live-20260718-43` because this
+  cycle changes server behavior and tests, not browser assets.
+- PASS: the canonical-checkout gate completed 140 requests at 480 ms average
+  and 2,057 ms maximum with zero fallback and zero business leakage.
+- PASS: manually triggered `PhantomForce Admin Main Sync` ended in `Ready` with
+  result `0`; the post-sync doctor confirmed no stale source was resurrected
+  and all 197 live guards remained aligned.
+
+## Next Task
+
+Exercise comparative facts, ordered event callbacks, and person-scoped
+corrections in Cycle 29.

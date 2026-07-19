@@ -52,6 +52,14 @@
   forbidden patterns there so another stale worktree cannot resurrect it.
 
 ## Recent, merged & live (newest first)
+- **Respectively mappings + named-entity undo (2026-07-19)** — server commit
+  `315608de`, browser build remains `phantom-live-20260718-43`. Phantom now
+  preserves ordered mappings for named, ordinal, and reverse callbacks, asks a
+  useful question when list lengths conflict, and rolls back only the named
+  person's property while retaining everyone else's accepted changes. The
+  canonical 140-request gate, 73-turn two-organization Chrome journey,
+  scheduled sync, and 197 live guards passed with zero fallback or business
+  leakage.
 - **Causal references + scoped rollback (2026-07-19)** — server commits
   `d12ce4ce` and `fcb62c8e`, browser build remains
   `phantom-live-20260718-43`. Phantom extracts explicit causes, follows
