@@ -7,7 +7,7 @@
       if (location.protocol === "http:" && location.hostname.indexOf("phantomforce.online") !== -1) {
         location.replace("https://" + location.host + location.pathname + location.search + location.hash);
       }
-      window.PHANTOM_BUILD = "phantom-live-20260718-4";
+      window.PHANTOM_BUILD = "phantom-live-20260719-chatghost-1";
       if ("serviceWorker" in navigator) {
         navigator.serviceWorker
           .getRegistrations()
@@ -23,7 +23,7 @@
     </script>
     <title>PhantomForce — AI Operations Console</title>
     <meta name="description" content="PhantomForce — your AI business operating system." />
-    <meta name="phantom-build" content="phantom-live-20260718-4" />
+    <meta name="phantom-build" content="phantom-live-20260719-chatghost-1" />
     <meta name="robots" content="noindex" />
     <meta name="theme-color" content="#02060a" />
     <style>
@@ -106,7 +106,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/app/phantom.css?v=phantom-live-20260719-medialabfix-1" />
+    <link rel="stylesheet" href="/app/phantom.css?v=phantom-live-20260719-chatghost-1" />
     <link rel="stylesheet" href="/app/phantomplay.css?v=phantom-live-20260718-3" />
     <link rel="stylesheet" href="/app/phantomplay-v2.css?v=phantom-live-20260718-3" />
     <link rel="stylesheet" href="/app/phantomstore.css?v=phantom-live-20260719-storefix-1" />
@@ -234,6 +234,21 @@
 
                 <div class="chatbox" data-chatbox>
                   <div class="chatbox-head"></div>
+                  <div class="hero2-stage" aria-hidden="true">
+                    <canvas class="phantom-webgl" data-phantom-3d aria-hidden="true"></canvas>
+                    <figure class="phantom-mode-stage" data-mode-stage data-pose="ask" data-mood="idle">
+                      <img
+                        class="phantom-mode-pose"
+                        data-mode-pose
+                        src="/app/assets/poses/chin.webp?v=phantom-live-20260719-chatghost-1"
+                        alt=""
+                        decoding="async"
+                        fetchpriority="high"
+                      />
+                      <figcaption class="phantom-mode-caption" data-mode-caption>Listening</figcaption>
+                    </figure>
+                    <canvas class="ghost-canvas" data-ghost width="10" height="10" aria-hidden="true"></canvas>
+                  </div>
                   <div class="chatbox-log" data-chat-log aria-live="polite"></div>
                   <form class="chatbox-composer" data-command-form>
                     <input type="text" data-command-input autocomplete="off" spellcheck="false"
@@ -249,21 +264,6 @@
                 </div>
               </div>
 
-              <div class="hero2-stage">
-                <canvas class="phantom-webgl" data-phantom-3d aria-hidden="true"></canvas>
-                <figure class="phantom-mode-stage" data-mode-stage data-pose="ask" data-mood="idle">
-                  <img
-                    class="phantom-mode-pose"
-                    data-mode-pose
-                    src="/app/assets/poses/chin.webp?v=phantom-live-20260718-3"
-                    alt="Phantom listening"
-                    decoding="async"
-                    fetchpriority="high"
-                  />
-                  <figcaption class="phantom-mode-caption" data-mode-caption>Listening</figcaption>
-                </figure>
-                <canvas class="ghost-canvas" data-ghost width="10" height="10" aria-hidden="true"></canvas>
-              </div>
             </section>
 
             <section class="attention-strip" data-attention-strip aria-label="Needs your attention" hidden></section>
@@ -474,6 +474,6 @@
     <!-- workspace overlays mount here, above the blurred console -->
     <div class="overlay-root" data-overlay-root></div>
 
-    <script type="module" src="/app/js/main.js?v=phantom-live-20260718-4"></script>
+    <script type="module" src="/app/js/main.js?v=phantom-live-20260719-chatghost-1"></script>
   </body>
 </html>

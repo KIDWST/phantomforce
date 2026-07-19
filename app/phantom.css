@@ -15748,3 +15748,101 @@ button.cw-dock-node:hover {
 @media (max-width: 767px) {
   .phantom:has(.app-main > .console:not(.console-workspace)) .attention-strip { display: none !important; }
 }
+
+/* Dashboard conversation stage: Phantom lives inside the chat instead of
+   taking a separate column. The existing pose controller still owns every
+   gesture; this pass only turns that live character into a quiet watermark. */
+.console:not(.console-workspace) .hero2-copy {
+  width: 100% !important;
+  max-width: none !important;
+}
+
+.console:not(.console-workspace) .chatbox {
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.console:not(.console-workspace) .chatbox > .hero2-stage {
+  position: absolute !important;
+  inset: 52px clamp(-18px, -1vw, -4px) 62px auto !important;
+  display: grid !important;
+  width: clamp(320px, 43%, 620px) !important;
+  height: auto !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  opacity: 0.28 !important;
+  z-index: 1 !important;
+  pointer-events: none !important;
+  mix-blend-mode: screen;
+  overflow: hidden !important;
+  transform: none !important;
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 18%, #000 82%, transparent 100%) !important;
+  mask-image: linear-gradient(90deg, transparent 0, #000 18%, #000 82%, transparent 100%) !important;
+}
+
+.console:not(.console-workspace) .chatbox > .hero2-stage .phantom-mode-stage {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  margin: 0 !important;
+  display: grid !important;
+  place-items: end center !important;
+  filter: brightness(1.18) saturate(1.2) contrast(1.08) drop-shadow(0 0 42px rgba(65,255,161,.3));
+}
+
+.console:not(.console-workspace) .chatbox > .hero2-stage .phantom-mode-pose {
+  width: 100% !important;
+  max-width: none !important;
+  height: 100% !important;
+  max-height: none !important;
+  object-fit: cover !important;
+  object-position: center top !important;
+  opacity: 1 !important;
+}
+
+.console:not(.console-workspace) .chatbox > .hero2-stage .phantom-webgl,
+.console:not(.console-workspace) .chatbox > .hero2-stage .ghost-canvas,
+.console:not(.console-workspace) .chatbox > .hero2-stage .phantom-mode-caption {
+  display: none !important;
+}
+
+.console:not(.console-workspace) .chatbox-head,
+.console:not(.console-workspace) .chatbox-log,
+.console:not(.console-workspace) .chatbox-composer,
+.console:not(.console-workspace) .chatbox-tools,
+.console:not(.console-workspace) .chatbox-trust {
+  position: relative;
+  z-index: 3;
+}
+
+.console:not(.console-workspace) .chatbox-log {
+  padding-right: clamp(16px, 2.2vw, 24px) !important;
+}
+
+@media (max-width: 900px) {
+  .console:not(.console-workspace) .chatbox > .hero2-stage {
+    inset: 54px -34px 68px auto !important;
+    width: min(58%, 410px) !important;
+    opacity: 0.16 !important;
+  }
+}
+
+@media (max-width: 767px) {
+  .phantom:has(.app-main > .console:not(.console-workspace)) .chatbox > .hero2-stage {
+    position: absolute !important;
+    inset: 56px -42px 70px auto !important;
+    display: grid !important;
+    width: min(72%, 310px) !important;
+    height: auto !important;
+    min-height: 0 !important;
+    opacity: 0.13 !important;
+    order: initial !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .console:not(.console-workspace) .chatbox > .hero2-stage {
+    transition: none !important;
+  }
+}

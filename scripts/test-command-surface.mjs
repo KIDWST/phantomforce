@@ -25,6 +25,10 @@ assert.match(index, /data-work-title>Work in motion</u, "Right rail should show 
 assert.match(index, /Open operating map/u, "Right rail map entry should read like an operating system, not a mission list.");
 assert.match(index, /data-open-ws="settings" data-settings-target="loop"/u,
   "Chat tools must expose Loop/model settings directly.");
+assert.match(index, /class="chatbox" data-chatbox>[\s\S]*?class="hero2-stage"[\s\S]*?data-mode-pose[\s\S]*?class="chatbox-log"/u,
+  "The live Phantom gesture stage must live inside the dashboard conversation card.");
+assert.equal((index.match(/class="hero2-stage"/gu) || []).length, 1,
+  "Dashboard must render one gesture stage, not a separate duplicate companion column.");
 assert.doesNotMatch(index, /class="cmd-tool" data-open-ws="memory"/u,
   "Memory must not be a dashboard/chat shortcut; it belongs inside Phantom's brain layer.");
 assert.doesNotMatch(index, /Tell me what you need<br \/>or choose a lane below/u,
@@ -211,6 +215,10 @@ assert.match(css, /\.cw-auto-starters\s*\{/u, "Automation widget must have a com
 assert.match(css, /\.cw-auto-starter\s*\{/u, "Automation starter recipe cards must be styled.");
 assert.match(css, /\.cw-dock-node::before/u, "Command dock nodes should expose visible status dots.");
 assert.match(css, /\.hero2-proof\s*\{/u, "Recent handled proof line must have compact dashboard styling.");
+assert.match(css, /\.console:not\(\.console-workspace\) \.hero2-copy\s*\{[\s\S]*?width:\s*100%\s*!important/u,
+  "Dashboard chat must use the complete hero width.");
+assert.match(css, /\.chatbox > \.hero2-stage\s*\{[\s\S]*?opacity:\s*0\.28\s*!important/u,
+  "The live Phantom stage must render as a low-opacity presence inside chat.");
 assert.match(css, /\.decision-deck\s*\{/u, "Decision deck must have compact command-center styling.");
 assert.match(css, /\.decision-intel\s*\{/u, "Decision deck must style why/evidence context compactly.");
 assert.match(css, /\.decision-action\s*\{/u, "Decision deck must style recommended action and approval gate context.");
