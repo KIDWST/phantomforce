@@ -219,8 +219,28 @@ function formatBackupCode(raw: string) {
   return `${clean.slice(0, 4)}-${clean.slice(4, 8)}-${clean.slice(8, 12)}`;
 }
 
+/* base64url's alphabet includes "-" and "_", which normalizeBackupCode()
+   strips out (it only keeps A-Z0-9). Sourcing raw codes from base64url meant
+   some freshly generated codes randomly lost 1-3 characters to that
+   stripping and fell under consumeBackupCode()'s 10-char minimum — a
+   legitimately issued backup code that could never be redeemed. Generating
+   directly from the same A-Z0-9 alphabet the validator expects removes any
+   character for normalization to strip, so every code is always exactly
+   BACKUP_CODE_LENGTH significant characters. */
+const BACKUP_CODE_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+const BACKUP_CODE_LENGTH = 12;
+
+function randomBackupCodeRaw() {
+  const bytes = randomBytes(BACKUP_CODE_LENGTH);
+  let out = "";
+  for (let i = 0; i < BACKUP_CODE_LENGTH; i++) {
+    out += BACKUP_CODE_ALPHABET[bytes[i] % BACKUP_CODE_ALPHABET.length];
+  }
+  return out;
+}
+
 function generateBackupCodes() {
-  const codes = Array.from({ length: TWO_FACTOR_BACKUP_CODE_COUNT }, () => formatBackupCode(randomBytes(8).toString("base64url")));
+  const codes = Array.from({ length: TWO_FACTOR_BACKUP_CODE_COUNT }, () => formatBackupCode(randomBackupCodeRaw()));
   return {
     codes,
     hashes: codes.map(backupCodeHash),

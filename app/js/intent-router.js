@@ -6,7 +6,7 @@
 const clean = (value = "") => String(value || "").replace(/\s+/g, " ").trim();
 const lower = (value = "") => clean(value).toLowerCase();
 
-const EXPLICIT_TASK = /\b(create|add|make|assign|track|put|save|log)\s+(a\s+)?(task|todo|to-do|work item)\b|\b(make|add|put|save|track)\s+(this|that|it).{0,30}\b(task list|todo|to-do|tasks?)\b|\bmake\s+(this|that|it)\s+a\s+(todo|to-do|task)\b|\bturn\s+(this|that|it)\s+into\s+a\s+(task|todo|to-do)\b|\bassign\s+(phantom|codex|claude)\s+a\s+task\b|\btrack this as\b/i;
+const EXPLICIT_TASK = /\b(create|add|make|assign|track|put|save|log)\s+(a\s+)?(task|todo|to-do|work item)\b|\b(make|add|put|save|track)\s+(this|that|it).{0,30}\b(task list|todo|to-do|tasks?)\b|\bmake\s+(this|that|it)\s+a\s+(todo|to-do|task)\b|\bturn\s+(this|that|it)\s+into\s+a\s+(task|todo|to-do)\b|\bassign\s+(phantom|claude)\s+a\s+task\b|\btrack this as\b/i;
 const TASK_CANDIDATE = /\b(needs?|should|someone should|we need to|have to|must)\s+(to\s+)?(fix|fixing|update|change|improve|make|clean|polish|repair|redo|adjust|better)\b|\bneeds?\s+(better|fixing|spacing|polish|cleanup|work)\b|\bmake\s+.{2,80}\s+better\b|\b(is|looks|feels)\s+(broken|off|bad|ugly|wrong|annoying|confusing)\b/i;
 const TASK_SURFACE = /\b(app|website|site|dashboard|page|screen|sidebar|navbar|nav|chat ?box|profile card|media lab|editor|button|form|layout|spacing|billing|automation|workflow|phantomforce)\b/i;
 const BRAINSTORM = /\b(we should|maybe|what if|it would be cool|i think|i want|could we|should we)\b/i;
@@ -78,7 +78,7 @@ function confidenceFor(kind, text) {
 }
 
 function isTaskCandidate(text) {
-  const explicitObligation = /\b(?:we|someone|the team|phantom|codex|claude)\s+(?:need(?:s)? to|should|must|has to|have to)\s+(?:fix|update|change|improve|clean|polish|repair|redo|adjust)\b/i;
+  const explicitObligation = /\b(?:we|someone|the team|phantom|claude)\s+(?:need(?:s)? to|should|must|has to|have to)\s+(?:fix|update|change|improve|clean|polish|repair|redo|adjust)\b/i;
   const directBrokenReference = /^(?:this|that|it)\s+(?:is|looks|feels)\s+(?:broken|off|bad|ugly|wrong|annoying|confusing)[.!?]*$/i;
   return explicitObligation.test(text)
     || directBrokenReference.test(text)
@@ -93,7 +93,7 @@ function taskDraft(text) {
     ? quoted[1]
     : source
       .replace(/^.*?\b(task|todo|to-do|work item)\s*(to|:)?\s*/i, "")
-      .replace(/^assign\s+(phantom|codex|claude)\s+a\s+task\s+(to|for)?\s*/i, "")
+      .replace(/^assign\s+(phantom|claude)\s+a\s+task\s+(to|for)?\s*/i, "")
       .replace(/^track this as\s+/i, "")
       /* "…a task called X" / "named X" / "titled X" previously left the
          connective word glued to the front: title became "called X". */

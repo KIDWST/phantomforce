@@ -11,6 +11,7 @@ function assert(condition: unknown, message: string): asserts condition {
 const root = await mkdtemp(join(tmpdir(), "phantomplay-v2-"));
 process.env.PHANTOMFORCE_PHANTOMPLAY_PATH = join(root, "phantomplay.json");
 process.env.PHANTOMFORCE_PHANTOMPLAY_V2_PATH = join(root, "phantomplay-v2.json");
+process.env.PHANTOMFORCE_SKIP_SERVER_DOTENV = "true";
 process.env.NODE_ENV = "development";
 process.env.PHANTOMFORCE_SERVER_LISTEN = "false";
 process.env.PHANTOMFORCE_SERVER_LOGGER = "false";

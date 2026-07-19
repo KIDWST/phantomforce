@@ -69,7 +69,7 @@ const cases = {
     "add a task: update the profile card",
     "make this a todo",
     "turn this into a task",
-    "assign Codex a task to inspect the navbar",
+    "assign Claude a task to inspect the navbar",
     "track this as high priority",
     "put this on my task list",
   ],
