@@ -21,13 +21,19 @@ def route_chat(messages, on_delta, mode="general", on_fallback=None, cloud_model
             return cloud_client.stream_chat(messages, on_delta, model=cloud_model)
         except Exception as exc:
             if on_fallback:
-                on_fallback(str(exc))
+                try:
+                    on_fallback(str(exc))
+                except Exception:
+                    pass
     elif on_fallback:
-        on_fallback("no cloud provider configured")
+        try:
+            on_fallback("no cloud provider configured")
+        except Exception:
+            pass
 
     endpoint = local_endpoint or ollama_client.default_endpoint()
     require_unleashed = mode == "unleashed"
-    model = local_model or (ollama_client.MODEL if require_unleashed else (local_model or _default_general_model()))
+    model = local_model or (ollama_client.MODEL if require_unleashed else _default_general_model())
     return ollama_client.stream_chat(
         endpoint,
         model,

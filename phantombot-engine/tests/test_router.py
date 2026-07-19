@@ -5,6 +5,7 @@ from unittest.mock import patch
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+import ollama_client  # noqa: E402
 import router  # noqa: E402
 
 
@@ -77,3 +78,65 @@ def test_route_chat_never_raises_when_both_cloud_and_local_are_tried(monkeypatch
         result = router.route_chat([{"role": "user", "content": "hi"}], on_delta=lambda d: None)
     assert result == "local answer"
     assert mock_local.call_count == 1
+
+
+def test_route_chat_unleashed_mode_resolves_unleashed_model(monkeypatch):
+    monkeypatch.delenv("PHANTOMBOT_CLOUD_API_KEY", raising=False)
+    with patch("ollama_client.stream_chat", return_value="local answer") as mock_local:
+        router.route_chat(
+            [{"role": "user", "content": "hi"}],
+            on_delta=lambda d: None,
+            mode="unleashed",
+        )
+    args, kwargs = mock_local.call_args
+    # signature: stream_chat(endpoint, model, messages, on_delta, require_unleashed=...)
+    assert args[1] == ollama_client.MODEL
+
+
+def test_route_chat_general_mode_resolves_default_general_model(monkeypatch):
+    monkeypatch.delenv("PHANTOMBOT_CLOUD_API_KEY", raising=False)
+    monkeypatch.setenv("PHANTOMPT_MODEL", "phantompt-test-model")
+    with patch("ollama_client.stream_chat", return_value="local answer") as mock_local:
+        router.route_chat(
+            [{"role": "user", "content": "hi"}],
+            on_delta=lambda d: None,
+            mode="general",
+        )
+    args, kwargs = mock_local.call_args
+    assert args[1] == "phantompt-test-model"
+
+
+def test_route_chat_survives_on_fallback_callback_raising_after_cloud_failure(monkeypatch):
+    # Regression test for the "never ever fallout" guarantee: on_fallback is
+    # a cosmetic side channel (e.g. a UI status indicator). If it raises, the
+    # local fallback must still be attempted and its result returned.
+    monkeypatch.setenv("PHANTOMBOT_CLOUD_API_KEY", "sk-test-123")
+
+    def broken_on_fallback(reason):
+        raise RuntimeError("stale widget update boom")
+
+    with patch("cloud_client.stream_chat", side_effect=RuntimeError("network down")), \
+         patch("ollama_client.stream_chat", return_value="local answer") as mock_local:
+        result = router.route_chat(
+            [{"role": "user", "content": "hi"}],
+            on_delta=lambda d: None,
+            on_fallback=broken_on_fallback,
+        )
+    assert result == "local answer"
+    mock_local.assert_called_once()
+
+
+def test_route_chat_survives_on_fallback_callback_raising_when_cloud_not_configured(monkeypatch):
+    monkeypatch.delenv("PHANTOMBOT_CLOUD_API_KEY", raising=False)
+
+    def broken_on_fallback(reason):
+        raise RuntimeError("stale widget update boom")
+
+    with patch("ollama_client.stream_chat", return_value="local answer") as mock_local:
+        result = router.route_chat(
+            [{"role": "user", "content": "hi"}],
+            on_delta=lambda d: None,
+            on_fallback=broken_on_fallback,
+        )
+    assert result == "local answer"
+    mock_local.assert_called_once()
