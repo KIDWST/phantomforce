@@ -41,14 +41,15 @@ def build_tool_dispatch():
 
 def main():
     endpoint = os.environ.get("PHANTOMBOT_OLLAMA_ENDPOINT", default_endpoint())
-    model = os.environ.get("PHANTOMBOT_MODEL", MODEL)
+    mode = os.environ.get("PHANTOMBOT_MODE", "general")
+    model = os.environ.get("PHANTOMBOT_MODEL", MODEL if mode == "unleashed" else os.environ.get("PHANTOMPT_MODEL", "llama3.1:8b"))
     dispatch = build_tool_dispatch()
 
     def agent_loop_factory(on_event):
-        return AgentLoop(endpoint=endpoint, model=model, tool_dispatch=dispatch, on_event=on_event)
+        return AgentLoop(endpoint=endpoint, model=model, tool_dispatch=dispatch, on_event=on_event, mode=mode)
 
     server = PhantomBotServer(agent_loop_factory=agent_loop_factory, host="127.0.0.1", port=int(os.environ.get("PHANTOMBOT_WS_PORT", "8766")))
-    print(f"PhantomBot engine listening on ws://127.0.0.1:{server.port} (token in {os.path.join(tools.OUTPUT_DIR, 'phantombot-ws-token.txt')})")
+    print(f"PhantomBot engine ({mode} mode) listening on ws://127.0.0.1:{server.port} (token in {os.path.join(tools.OUTPUT_DIR, 'phantombot-ws-token.txt')})")
     asyncio.run(server.start())
 
 

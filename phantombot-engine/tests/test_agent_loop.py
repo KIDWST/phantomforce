@@ -31,7 +31,7 @@ def test_compact_messages_keeps_system_and_trims_middle():
 def test_run_turn_executes_tool_then_returns_final_answer():
     events = []
 
-    def fake_stream_chat(endpoint, model, messages, on_delta, **kwargs):
+    def fake_route_chat(messages, on_delta, mode=None, on_fallback=None, **kwargs):
         # First call: model asks to list_dir. Second call: model gives final answer.
         if len(messages) == 2:  # system + user
             text = '{"tool": "list_dir", "path": "."}'
@@ -49,7 +49,7 @@ def test_run_turn_executes_tool_then_returns_final_answer():
         tool_dispatch={"list_dir": fake_list_dir},
         on_event=lambda kind, payload: events.append((kind, payload)),
     )
-    with patch("agent_loop.stream_chat", side_effect=fake_stream_chat):
+    with patch("agent_loop.route_chat", side_effect=fake_route_chat):
         messages = [{"role": "system", "content": "sys"}]
         result = loop.run_turn(messages, "list the current directory")
 
@@ -58,3 +58,27 @@ def test_run_turn_executes_tool_then_returns_final_answer():
     assert any(kind == "tool_call" for kind, _ in events)
     assert any(kind == "tool_result" for kind, _ in events)
     assert any(kind == "final" for kind, _ in events)
+
+
+def test_agent_loop_calls_router_and_forwards_fallback_events():
+    events = []
+
+    def fake_route_chat(messages, on_delta, mode=None, on_fallback=None, **kwargs):
+        if on_fallback:
+            on_fallback("no cloud provider configured")
+        text = "Done, no tools needed."
+        on_delta(text)
+        return text
+
+    loop = agent_loop.AgentLoop(
+        endpoint="http://fake",
+        model="llama3.1:8b",
+        tool_dispatch={},
+        on_event=lambda kind, payload: events.append((kind, payload)),
+        mode="general",
+    )
+    with patch("agent_loop.route_chat", side_effect=fake_route_chat):
+        result = loop.run_turn([{"role": "system", "content": "sys"}], "hello")
+
+    assert result[-1]["content"] == "Done, no tools needed."
+    assert any(kind == "fallback" and payload == "no cloud provider configured" for kind, payload in events)

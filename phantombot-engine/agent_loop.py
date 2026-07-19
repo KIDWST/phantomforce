@@ -1,6 +1,6 @@
 import json
 
-from ollama_client import stream_chat
+from router import route_chat
 
 MAX_TOOL_CALLS = 60
 
@@ -48,11 +48,12 @@ def compact_messages(messages, max_chars=60000):
 
 
 class AgentLoop:
-    def __init__(self, endpoint, model, tool_dispatch, on_event):
+    def __init__(self, endpoint, model, tool_dispatch, on_event, mode="general"):
         self.endpoint = endpoint
         self.model = model
         self.tool_dispatch = tool_dispatch
         self.on_event = on_event
+        self.mode = mode
 
     def _call_model(self, messages):
         chunks = []
@@ -61,7 +62,17 @@ class AgentLoop:
             chunks.append(delta)
             self.on_event("delta", delta)
 
-        return stream_chat(self.endpoint, self.model, messages, on_delta=handle_delta)
+        def handle_fallback(reason):
+            self.on_event("fallback", reason)
+
+        return route_chat(
+            messages,
+            on_delta=handle_delta,
+            mode=self.mode,
+            on_fallback=handle_fallback,
+            local_model=self.model,
+            local_endpoint=self.endpoint,
+        )
 
     def run_turn(self, messages, user_prompt):
         messages = compact_messages(messages)
