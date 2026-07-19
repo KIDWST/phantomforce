@@ -85,3 +85,29 @@ def test_stream_chat_sends_num_ctx_option():
             num_ctx=8192,
         )
     assert captured["body"]["options"]["num_ctx"] == 8192
+
+
+def test_stream_chat_allows_non_uncensored_model_when_require_unleashed_false():
+    sse_lines = [
+        b'data: {"choices":[{"delta":{"content":"hi"}}]}\n',
+        b'data: [DONE]\n',
+    ]
+    with patch("urllib.request.urlopen", return_value=_FakeResponse(sse_lines)):
+        result = ollama_client.stream_chat(
+            "http://127.0.0.1:11434/v1",
+            "llama3.1:8b",
+            [{"role": "user", "content": "hi"}],
+            on_delta=lambda d: None,
+            require_unleashed=False,
+        )
+    assert result == "hi"
+
+
+def test_stream_chat_still_validates_unleashed_by_default():
+    with pytest.raises(RuntimeError):
+        ollama_client.stream_chat(
+            "http://127.0.0.1:11434/v1",
+            "llama3.1:8b",
+            [{"role": "user", "content": "hi"}],
+            on_delta=lambda d: None,
+        )

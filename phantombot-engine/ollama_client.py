@@ -16,12 +16,16 @@ def validate_unleashed(model):
         raise RuntimeError(f"Blocked: PhantomBot only allows unleashed/uncensored models, got '{model}'.")
 
 
-def stream_chat(endpoint, model, messages, on_delta, temperature=0.35, max_tokens=4096, timeout=300, num_ctx=8192):
+def stream_chat(endpoint, model, messages, on_delta, temperature=0.35, max_tokens=4096, timeout=300, num_ctx=8192, require_unleashed=True):
     """Streams a chat completion. Calls on_delta(text_chunk) for each token
     chunk as it arrives and returns the full accumulated response text.
     num_ctx defaults to 8192 (down from the model's max 32768) to leave more
-    VRAM headroom for GPU-resident weight layers on a 12GB card."""
-    validate_unleashed(model)
+    VRAM headroom for GPU-resident weight layers on a 12GB card.
+    require_unleashed=False lets the general PhantomPT model slot (not
+    required to be uncensored) use this same client; Unleashed-mode callers
+    must leave it at the default True."""
+    if require_unleashed:
+        validate_unleashed(model)
     url = endpoint.rstrip("/") + "/chat/completions"
     body = {
         "model": model,
