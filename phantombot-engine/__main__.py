@@ -4,6 +4,7 @@ import os
 import tools
 from agent_loop import AgentLoop
 from ollama_client import MODEL, default_endpoint
+from router import default_general_model
 from ws_server import PhantomBotServer
 
 
@@ -42,7 +43,7 @@ def build_tool_dispatch():
 def main():
     endpoint = os.environ.get("PHANTOMBOT_OLLAMA_ENDPOINT", default_endpoint())
     mode = os.environ.get("PHANTOMBOT_MODE", "general")
-    model = os.environ.get("PHANTOMBOT_MODEL", MODEL if mode == "unleashed" else os.environ.get("PHANTOMPT_MODEL", "llama3.1:8b"))
+    model = os.environ.get("PHANTOMBOT_MODEL", MODEL if mode == "unleashed" else default_general_model())
     dispatch = build_tool_dispatch()
 
     def agent_loop_factory(on_event):

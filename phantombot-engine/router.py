@@ -33,7 +33,7 @@ def route_chat(messages, on_delta, mode="general", on_fallback=None, cloud_model
 
     endpoint = local_endpoint or ollama_client.default_endpoint()
     require_unleashed = mode == "unleashed"
-    model = local_model or (ollama_client.MODEL if require_unleashed else _default_general_model())
+    model = local_model or (ollama_client.MODEL if require_unleashed else default_general_model())
     return ollama_client.stream_chat(
         endpoint,
         model,
@@ -43,6 +43,6 @@ def route_chat(messages, on_delta, mode="general", on_fallback=None, cloud_model
     )
 
 
-def _default_general_model():
+def default_general_model():
     import os
     return os.environ.get("PHANTOMPT_MODEL", "llama3.1:8b")
