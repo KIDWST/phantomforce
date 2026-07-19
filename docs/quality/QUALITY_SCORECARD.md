@@ -7,7 +7,7 @@ it is an honest map of what is proven today.
 
 | Dimension | Score | Evidence | Current Risk |
 |---|---:|---|---|
-| Functional correctness | 4 | Cycle 27 passed 57 disposable-database API checks, a real two-organization 63-turn browser journey, a 130-request local-model gate, and the 20/20 release-critical gate. | Billing, redirects, expired-session recovery, and deeper module interactions remain under-tested. |
+| Functional correctness | 4 | Cycle 29 passed 57 disposable-database API checks, a real two-organization 90-turn browser journey, a 157-request local-model gate, and the 20/20 release-critical gate. | Billing, redirects, expired-session recovery, and deeper module interactions remain under-tested. |
 | Product clarity | 2 | Product principles documented; current UI has PhantomForce/PhantomPlay split in nav. | Public site and onboarding do not yet have a full role/profile/module/subscription clarity audit. |
 | Information architecture | 2 | Sidebar split restored and verified in Headless Edge: business sections and operations/settings groups render separately. | PhantomForce vs PhantomPlay responsibilities and Developer-as-role need ongoing cleanup. |
 | Visual consistency | 2 | Desktop 1280x720 sweep had 0 horizontal overflow pages; Cycle 1 desktop sidebar screenshot shows the split lower group. | User has reported repeated mobile/scaling problems; no comprehensive visual baseline exists. |
@@ -19,7 +19,7 @@ it is an honest map of what is proven today.
 | Content quality | 2 | Some copy has been business-ified; memory/history copy is clearer. | Public copy, pricing, CTA destination text, and product claims need systematic review. |
 | Search visibility | 1 | `robots.txt` and `sitemap.xml` exist. | Sitemap likely under-covers public routes; OG/canonical/structured data not audited. |
 | Conversion clarity | 1 | Site builder and Business Manager surfaces exist. | Pricing/subscription/module clarity is under-tested and likely incomplete. |
-| Test coverage | 4 | Targeted suites now include real database login, 63-turn aligned browser chat, 130-request live-model evaluation, exact object/list/causal references, overlapping-topic rollback, durable-memory reload, two-organization CRUD, tamper rejection, and desktop/mobile screenshots. | Accessibility, public-site behavior, and deeper editor/game interactions are still thin. |
+| Test coverage | 4 | Targeted suites now include real database login, 90-turn aligned browser chat, 157-request live-model evaluation, isolated vague follow-ups, exact object/list/causal/comparison/event references, scoped rollback, durable-memory reload, two-organization CRUD, tamper rejection, and desktop/mobile screenshots. | Accessibility, public-site behavior, and deeper editor/game interactions are still thin. |
 | Maintainability | 2 | Feature modules are split; route inventory exists. | `server/src/index.ts` is very large; quality docs only began this cycle. |
 | Observability | 2 | Hermes ledger, automation receipts, run records, and evidence files exist. | No product funnel analytics quality map or production telemetry audit yet. |
 

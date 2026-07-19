@@ -5,8 +5,8 @@ Last updated: 2026-07-19
 Scope: static repository discovery, server route extraction from
 `server/src/index.ts`, application navigation from `app/js/main.js`, local
 runtime evidence in `run-evidence/first-real-run-20260714-153002`, Cycle 1
-Headless Edge smoke, the 2026-07-16 responsive matrix, and Cycle 27's real
-database-auth two-organization 63-turn conversation proof at 1440x900 and
+Headless Edge smoke, the 2026-07-16 responsive matrix, and Cycle 29's real
+database-auth two-organization 90-turn conversation proof at 1440x900 and
 390x844.
 
 ## Public Web
@@ -44,7 +44,7 @@ database-auth two-organization 63-turn conversation proof at 1440x900 and
 
 | Workspace | Auth | Primary purpose | Main actions | Important states | Related tests | Last audit | Known problems |
 |---|---:|---|---|---|---|---|---|
-| Dashboard | Yes | Operating summary and chat entry. | Ask Phantom, review plan. | Empty data, live pulse, long temporary conversation, named-topic return, causal callback, scoped rollback. | 56-prompt brain suite; 130-request live-model gate; Cycle 27 63-turn browser journey. | 2026-07-19 | Needs accessibility/keyboard pass. |
+| Dashboard | Yes | Operating summary and chat entry. | Ask Phantom, review plan. | Empty data, live pulse, isolated immediate follow-up, named-topic return, causal/comparison/event callback, scoped rollback. | 56-prompt brain suite; 157-request live-model gate; Cycle 29 90-turn browser journey. | 2026-07-19 | Needs accessibility/keyboard pass. |
 | Clients | Yes | CRM pipeline. | Create/update leads, statuses. | Empty, lead list, proposal-linked. | `test:crm-pipeline`; Cycle 19 two-org browser. | 2026-07-18 | Two-way tenant isolation, forged-label authority, and reload verified. |
 | Client Setup | Owner/admin | Client/workspace setup slots. | Configure packages, modules, lead sources. | Active, pending, empty. | `test:client-setup-console`; API harness. | 2026-07-14 | Needs long-content/mobile form audit. |
 | Media Lab | Yes | Media generation/editing. | Create, edit, rembg, provider status. | Provider ready/off, pending jobs. | Media tests exist; 2026-07-16 responsive matrix. | 2026-07-16 | Needs interaction-level editor/mobile form audit. |

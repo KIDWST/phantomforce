@@ -52,6 +52,14 @@
   forbidden patterns there so another stale worktree cannot resurrect it.
 
 ## Recent, merged & live (newest first)
+- **Isolated follow-ups + exact comparisons/events (2026-07-19)** — commit
+  `5b9c713a`, browser build `phantom-live-20260718-44`. Vague transformations
+  now carry only the immediately preceding topic instead of six unrelated
+  turns; named quantities support winners, rankings, differences, ties,
+  corrections, missing values, and unit checks; explicit timelines support
+  before/after callbacks and repeated-event clarification. The canonical
+  157-request gate, 90-turn two-organization Chrome journey, scheduled sync,
+  and 201 live guards passed with zero fallback or business leakage.
 - **Respectively mappings + named-entity undo (2026-07-19)** — server commit
   `315608de`, browser build remains `phantom-live-20260718-43`. Phantom now
   preserves ordered mappings for named, ordinal, and reverse callbacks, asks a
@@ -184,7 +192,7 @@
   (`app/index.html`, `app/phantom.css`, `app/js/main.js`).
 - **Living Phantom character** — `app/js/character.js`: 11 painted poses, emotional
   inertia (`governMood`), hologram depth. Shared by admin + public site.
-- Current cache-bust build id: **`phantom-live-20260718-43`**.
+- Current cache-bust build id: **`phantom-live-20260718-44`**.
 
 ## Repo map
 - `app/` — the **admin console** (`admin.phantomforce.online`). `index.html`,

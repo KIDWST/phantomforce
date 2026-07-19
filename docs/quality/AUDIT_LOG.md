@@ -2126,3 +2126,79 @@ Exercise respectively mappings and named-entity scoped undo in Cycle 28.
 
 Exercise comparative facts, ordered event callbacks, and person-scoped
 corrections in Cycle 29.
+
+# 2026-07-19 - Cycle 29: Isolated Follow-Ups, Comparisons, And Event Order
+
+## Problems Verified
+
+- Phantom had no exact named-quantity state, so winner, difference, ranking,
+  tie, and corrected-value questions depended on model inference despite the
+  user supplying every value and unit.
+- Explicit numbered timelines had no before/after resolver and repeated event
+  targets could be selected arbitrarily instead of clarified.
+- The first expanded model gate exposed an older format defect: `Name only`
+  returned `Luna steals socks.` rather than the named subject.
+- The first authenticated Chrome run reproduced the owner's core complaint:
+  after a pipeline question, arithmetic, and recursion, `Actually, explain it
+  like I'm twelve` revived the older sales-pipeline answer.
+- Later Chrome runs exposed two more long-history conflicts: an older unequal
+  `respectively` mapping intercepted a lap calculation, and an older complete
+  miles/hours comparison displaced a newer one-person lap setup.
+
+## Corrections
+
+- Added bounded named-quantity extraction with exact winner, rank, difference,
+  tie, unit compatibility, missing-value, and per-person correction behavior.
+- Made the newest explicit non-correction quantity statement own the topic;
+  correction lines still walk back to and update their actual base.
+- Added bounded numbered-event extraction with immediate-before/after answers
+  and one concise clarification for repeated target events.
+- Added named-predicate lookup so newest explicit subject/action facts and
+  later swaps satisfy `which one` plus `Name only` without stochastic prose.
+- Changed the browser context packet so vague transformations such as `explain
+  it` carry only the immediately preceding turn. Generic routing words no
+  longer retrieve an older business topic, while named returns retain the
+  existing six-newest-plus-four-relevant, ten-turn privacy bound.
+- Restricted `respectively` callbacks to mapping language or mapped values so
+  an old mismatch cannot intercept an unrelated numeric or plural question.
+- Advanced the app build to `phantom-live-20260718-44` and proved all other app
+  edits were mechanical cache-version replacements.
+
+## Source Verification
+
+- PASS: `npm run test:instant-chat:http-live-model --workspace
+  @phantomforce/server` completed 157 authenticated requests at 465 ms average
+  and 2,217 ms maximum with zero fallback and zero business leakage.
+- PASS: `npm run test:database-auth` passed all 57 API/auth checks and the real
+  Chrome journey across two organizations and 90 conversational turns.
+- PASS: Chrome proved the original 20-turn no-ledger sequence, exact rankings
+  and differences, corrected values, ties, incompatible units, missing values,
+  event adjacency, repeated-event clarification, tenant isolation, reload,
+  and tamper rejection.
+- PASS: visual review at 1440x900 and 390x844 under
+  `tmp/database-auth-org-browser/2026-07-19T07-44-50-652Z`; the desktop command
+  surface and mobile composer/navigation had no overlap or horizontal overflow.
+- PASS: `npm run test:release-critical` (20/20).
+- PASS: `npm run test:dashboard-chat` (56 prompts, 11 adversarial turns, and
+  deterministic tools).
+- PASS: `node scripts/test-memory-retention.mjs`.
+- PASS: cache-bust audit normalized `-44` back to `-43` across 41 app files and
+  found zero unintended content changes outside `store.js`.
+- PASS: `npm run test:change-memory`, typecheck, and `git diff --check`.
+
+## Deployment Verification
+
+- Pushed `5b9c713a` to `origin/main` and synced the canonical
+  `deployments\phantomforce-live` checkout.
+- PASS: strict live-source doctor aligned source, origin, deployment manifest,
+  public build `phantom-live-20260718-44`, Hermes, sidebar rules, resurrection
+  guards, and clean worktrees at `5b9c713a`.
+- PASS: the canonical-checkout gate completed 157 requests at 490 ms average
+  and 2,116 ms maximum with zero fallback and zero business leakage.
+- PASS: manually triggered `PhantomForce Admin Main Sync` ended in `Ready` with
+  result `0`; the post-sync doctor confirmed no stale source was resurrected
+  and all 201 live guards remained aligned.
+
+## Next Task
+
+Exercise negation, exceptions, and corrected group membership in Cycle 30.
