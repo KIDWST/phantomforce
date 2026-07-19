@@ -432,6 +432,13 @@ function renderOutcomes(el, rerender) {
   // already use, no new wiring needed.
 }
 
+/* Game URLs are seeded app-root-relative ("games/…") and also persist
+   that way in saved local state, but the shell document lives one level
+   deeper (app/os/). Resolve at render time so both fresh seeds and
+   already-persisted catalogs launch correctly. */
+const playHref = (u) =>
+  u && !/^(https?:)?\/\//.test(u) && !u.startsWith("/") && !u.startsWith("../") ? `../${u}` : u;
+
 /* ========================= PLAY (PhantomPlay) ========================= */
 /* Platform-wide game catalog — not scoped per client workspace, every
    account browses the same catalog. Kids-tagged titles stay out of the
@@ -458,7 +465,7 @@ function renderPlay(el, rerender) {
           <p class="record-sub">${esc(g.genre)} · ${g.audience === "kids" ? "Kids" : "General audience"}</p>
           <p class="record-notes">${g.plays30d.toLocaleString()} plays in the last 30 days.</p>
           <div class="record-actions">
-            ${g.playUrl ? `<a class="btn btn-good" href="${esc(g.playUrl)}" target="_blank" rel="noopener">${esc(g.playLabel || "▶ Play")}</a>` : ""}
+            ${g.playUrl ? `<a class="btn btn-good" href="${esc(playHref(g.playUrl))}" target="_blank" rel="noopener">${esc(g.playLabel || "▶ Play")}</a>` : ""}
             ${isAdmin() && g.status === "pending-review" ? `<button class="btn btn-good" data-act="approve" data-id="${g.id}">Approve to catalog</button>` : ""}
             ${isAdmin() ? (g.active ? `<button class="btn btn-quiet" data-act="retire" data-id="${g.id}">Retire</button>` : `<button class="btn btn-good" data-act="retire" data-id="${g.id}">Restore</button>`) : ""}
           </div>

@@ -433,7 +433,7 @@ function renderDesk() {
   deskEl.hidden = false;
   const shown = pending.slice(0, DESK_VISIBLE);
   const extra = pending.length - shown.length;
-  deskEl.innerHTML = `<span class="desk-label">Held for you</span>` +
+  deskEl.innerHTML = `<button class="desk-label" data-desk-all title="Open the full decision queue">Held for you ▸</button>` +
     shown.map((a) => `
       <div class="held" data-held="${a.id}">
         <span class="held-title">${esc(a.title)}</span>
