@@ -4691,6 +4691,21 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 }
 .ml-canvas.is-picking { cursor: crosshair; outline: 2px dashed rgba(65,255,161,0.65); outline-offset: 4px; }
 .ml-canvas.is-painting { cursor: crosshair; }
+.ml-layer-overlay {
+  position: absolute;
+  inset: 14px;
+  z-index: 3;
+  max-width: calc(100% - 28px);
+  max-height: calc(58vh);
+  width: auto;
+  height: auto;
+  pointer-events: none;
+  touch-action: none;
+}
+.ml-layer-overlay.is-active {
+  pointer-events: auto;
+  cursor: move;
+}
 .ml-edit-topbar {
   position: absolute; z-index: 4; top: 12px; left: 12px; display: flex; gap: 6px; padding: 5px;
   border: 1px solid rgba(65,255,161,.2); border-radius: 12px; background: rgba(1,9,7,.86); backdrop-filter: blur(14px);
@@ -4811,7 +4826,7 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 }
 .ml-layer-actions {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(76px, 1fr));
   gap: 6px;
 }
 .ml-layer-actions button,
@@ -4842,6 +4857,10 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 }
 .ml-layer-row.is-selected { border-color: rgba(65,255,161,.56); background: rgba(65,255,161,.09); box-shadow: inset 3px 0 var(--neon); }
 .ml-layer-row.is-off { opacity: .58; }
+.ml-layer-row.is-drop-target { border-color: var(--neon); background: rgba(65,255,161,.14); }
+.ml-layer-row.is-locked { opacity: .72; border-style: dashed; }
+.ml-layer-row[draggable="true"] { cursor: grab; }
+.ml-layer-row[draggable="true"]:active { cursor: grabbing; }
 .ml-layer-name {
   width: auto;
   display: flex;
@@ -4875,6 +4894,16 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
   gap: 6px;
   margin-bottom: 9px;
 }
+.ml-layer-transform-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(68px, 1fr));
+  gap: 6px;
+}
+.ml-layer-align-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(68px, 1fr));
+  gap: 6px;
+}
 .ml-layer-transform-actions button,
 .ml-layer-align-actions button {
   min-width: 0;
@@ -4891,7 +4920,8 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .ml-layer-align-actions button:disabled { opacity: .45; cursor: default; }
 .ml-layer-field { display: grid; gap: 5px; margin-bottom: 9px; color: var(--dim); font-size: 10px; }
 .ml-layer-field input,
-.ml-layer-field textarea {
+.ml-layer-field textarea,
+.ml-layer-field select {
   width: 100%;
   min-width: 0;
   border: 1px solid var(--line);
@@ -4903,6 +4933,9 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
   resize: vertical;
   font: 500 11px "Space Grotesk", sans-serif;
 }
+.ml-layer-text-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.ml-layer-toggle-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.ml-layer-toggle-row button.is-on { border-color: var(--neon); color: var(--neon); background: rgba(65,255,161,.12); }
 .ml-paint-controls { display: grid; gap: 9px; }
 .ml-paint-controls .ml-field { margin: 0; }
 .ml-paint-controls input[type="color"] {
@@ -12386,6 +12419,55 @@ body .phantom .workspace-page :where(
   min-height: 0 !important;
   max-height: none !important;
   overflow: visible !important;
+}
+
+/* Media Lab is an actual workbench, not a normal long document. The global
+   natural-scroll rescue above is correct for most admin pages, but it was
+   flattening Media Lab's internal scroll containers and making edited assets,
+   lower controls, and Media Pool rows unreachable. Keep the page itself stable
+   while the studio body/editor/tools own their own overflow. */
+@media (min-width: 901px) {
+  body .phantom .app-main:has(.workspace-page[data-workspace-page="media"]) {
+    height: 100dvh !important;
+    overflow: hidden !important;
+  }
+
+  body .phantom .app-main:has(.workspace-page[data-workspace-page="media"]) .console-workspace,
+  body .phantom .workspace-page[data-workspace-page="media"] {
+    min-height: 0 !important;
+    height: 100% !important;
+    max-height: 100% !important;
+    overflow: hidden !important;
+  }
+
+  body .phantom .workspace-page[data-workspace-page="media"] .workspace-page-body,
+  body .phantom .workspace-page[data-workspace-page="media"] .media-suite-body,
+  body .phantom .workspace-page[data-workspace-page="media"] .ml-body {
+    min-height: 0 !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: auto !important;
+    padding-bottom: calc(112px + env(safe-area-inset-bottom, 0px)) !important;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+  }
+
+  body .phantom .workspace-page[data-workspace-page="media"] .media-suite,
+  body .phantom .workspace-page[data-workspace-page="media"] .ml {
+    min-height: 0 !important;
+    height: 100% !important;
+    max-height: 100% !important;
+    overflow: hidden !important;
+  }
+
+  body .phantom .workspace-page[data-workspace-page="media"] .ml-tools,
+  body .phantom .workspace-page[data-workspace-page="media"] .ml-stage-grid,
+  body .phantom .workspace-page[data-workspace-page="media"] .ml-grid-lib {
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: auto !important;
+    scrollbar-width: thin;
+  }
 }
 
 @media (max-width: 767px) {

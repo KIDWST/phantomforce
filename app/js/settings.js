@@ -1,7 +1,7 @@
 /* PhantomForce admin settings.
    Local UI preferences only: no provider calls, sends, uploads, or billing. */
 
-import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260718-3";
+import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260719-medialabfix-1";
 import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260718-3";
 import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260718-3";
 import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260718-3";

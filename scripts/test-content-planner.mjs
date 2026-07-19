@@ -41,5 +41,6 @@ assert.match(css, /\.ch-pub-drop/u, "Publish drop zone must be styled.");
 assert.match(css, /\.workspace-page-first\[data-workspace-page="content"\][\s\S]*?\.media-suite-body\s*\{[\s\S]*?overflow:\s*auto/u, "Content Hub must scroll inside the full-page Media Lab shell instead of being clipped.");
 assert.match(css, /\.workspace-page-first\[data-workspace-page="content"\][\s\S]*?\.media-suite-body\s*\{[\s\S]*?padding-bottom:\s*calc\(112px/u, "Content Hub needs bottom scroll padding so the taskbar/browser chrome cannot hide the last controls.");
 assert.match(css, /\.media-suite-body > \.ch\s*\{[\s\S]*?min-height:\s*max-content/u, "Content Hub must be allowed to grow beyond the visible viewport inside the scroll area.");
+assert.match(source, /previewUrl[\s\S]*contentAssetDisplayUrl\(asset\)[\s\S]*asset\.url \|\| contentAssetUrlCache\.get\(asset\.id\) \|\| asset\.previewUrl/u, "Content assets must keep a small previewUrl fallback so oversized edited images remain visible after trimming.");
 
 console.log("Content Hub planner checks passed.");

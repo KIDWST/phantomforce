@@ -171,5 +171,9 @@ assert.match(cssSrc, /\.ml-body:has\(\.ml-grid-lib\)\s*\{[\s\S]*overflow:\s*auto
 assert.match(cssSrc, /\.workspace-page\[data-workspace-page="media"\]\s+\.workspace-page-body\s*\{[\s\S]*overflow:\s*auto/u, "Media Lab page body must scroll when controls extend below the viewport");
 assert.match(cssSrc, /\.workspace-page\[data-workspace-page="media"\]\s+\.workspace-page-body\s*\{[\s\S]*padding-bottom:\s*calc\(96px/u, "Media Lab needs bottom scroll padding so hidden lower controls stay reachable");
 assert.match(cssSrc, /\.workspace-page\[data-workspace-page="media"\]\s+\.ml-body\s*\{[\s\S]*overflow:\s*auto/u, "Media Lab internal body must be scrollable for dense create/edit states");
+assert.match(cssSrc, /app-main:has\(\.workspace-page\[data-workspace-page="media"\]\)[\s\S]*overflow:\s*hidden\s*!important/u, "Media Lab must override the global natural-scroll rescue and keep its app workbench from flattening.");
+assert.match(cssSrc, /\.workspace-page\[data-workspace-page="media"\]\s+\.media-suite-body[\s\S]*overflow:\s*auto\s*!important/u, "Media Lab suite body must remain a reachable scroll container after global page overrides.");
+assert.match(mediaSrc, /const editPreviewUrl = \(\) =>[\s\S]*toDataURL\("image\/webp", 0\.68\)/u, "Edited Media Lab images must save a lightweight persistent preview thumbnail.");
+assert.match(mediaSrc, /previewUrl:\s*editPreviewUrl\(\)[\s\S]*title: "Edited image"/u, "Save to Media Pool must persist a previewUrl for edited images so trimmed originals still display.");
 
 console.log("medialab editor tests passed");

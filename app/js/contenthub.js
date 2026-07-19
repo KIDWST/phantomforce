@@ -268,11 +268,13 @@ function normalizeContentAsset(input = {}) {
   const rawType = String(input.type || input.kind || "image").toLowerCase();
   const type = isVideo(rawType) ? "video" : "image";
   let url = typeof input.url === "string" ? input.url : "";
+  let previewUrl = typeof input.previewUrl === "string" ? input.previewUrl : "";
   let trimmed = !!input.trimmed;
   if (url.startsWith("data:") && url.length > CONTENT_ASSET_LIMITS.maxInlineChars) {
     url = "";
     trimmed = true;
   }
+  if (previewUrl.startsWith("data:") && previewUrl.length > Math.min(420000, CONTENT_ASSET_LIMITS.maxInlineChars)) previewUrl = "";
   return {
     id: String(input.id || `media-${createdAt}-${Math.random().toString(36).slice(2, 8)}`),
     type,
@@ -288,13 +290,14 @@ function normalizeContentAsset(input = {}) {
     createdAt,
     expiresAt: createdAt + CONTENT_ASSET_LIMITS.retentionDays * DAY,
     url,
+    previewUrl,
     trimmed,
     live: !!input.live,
     saved: !!input.saved,
     batchLabel: String(input.batchLabel || ""),
     aiEditPlan: String(input.aiEditPlan || ""),
     updatedAt: Number(input.updatedAt || 0) || 0,
-    bytes: dataBytes(url),
+    bytes: dataBytes(url) + dataBytes(previewUrl),
     syncedId: String(input.syncedId || ""),
   };
 }
@@ -433,7 +436,7 @@ export function purgeRecycledContentAssets(ids = []) {
 const contentAssetUrlCache = new Map();
 export function contentAssetDisplayUrl(asset) {
   if (!asset) return "";
-  return asset.url || contentAssetUrlCache.get(asset.id) || "";
+  return asset.url || contentAssetUrlCache.get(asset.id) || asset.previewUrl || "";
 }
 export async function hydrateContentAssetUrl(asset) {
   const known = contentAssetDisplayUrl(asset);

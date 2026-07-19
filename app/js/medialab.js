@@ -10,11 +10,11 @@ import { currentTenantId, session as accessSession, workspaceStorageGetItem, wor
 import {
   PLATFORMS, registerContentAsset, loadSocialAccounts, saveSocialAccounts, socialStatus,
   loadContentAssets, saveContentAssets, contentAssetDisplayUrl, hydrateContentAssetUrl,
-} from "./contenthub.js?v=phantom-live-20260718-3";
+} from "./contenthub.js?v=phantom-live-20260719-medialabfix-1";
 import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260718-3";
 import {
-  addImageLayer, addTextLayer, alignSelectedLayers, cloneImageEditState, compositionSnapshot, distributeSelectedLayers, duplicateLayer,
-  freshComposition, hitTestLayer, loadCompositionImages, moveLayerOrder, pushEditorSnapshot,
+  addImageLayer, addTextLayer, alignSelectedLayers, applyLayerDragWithSnap, cloneImageEditState, compositionSnapshot, distributeSelectedLayers, drawCompositionOverlay, duplicateLayer,
+  freshComposition, hitTestLayer, hitTestResizeHandle, loadCompositionImages, moveLayerOrder, moveLayerToIndex, pushEditorSnapshot,
   removeSelectedLayers, renderComposition, restoreComposition, selectAllLayers, selectLayer, selectedLayers,
 } from "./content-editor.js?v=phantom-live-20260718-3";
 import { loadImageForEditing, exportCanvas, requestAiEdit, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260718-3";
@@ -2469,6 +2469,11 @@ let mlPaintMode = "select";
 let mlPaintColor = "#41ffa1";
 let mlAssetCache = { tenant: "", loading: false, loaded: false, assets: [], error: "" };
 let mlAssetPicker = { search: "", source: "all" };
+let mlLayerClipboard = [];
+let mlSnapGuides = [];
+let mlEditKeyHandler = null;
+
+const isEditorTypingTarget = (target) => !!target?.closest?.("input, textarea, select, button, [contenteditable]");
 
 function cloneEditState(source = editState) {
   return cloneImageEditState(source);
@@ -2642,6 +2647,26 @@ function layerKindLabel(layer) {
   if (layer.type === "text") return "Text";
   return layer.type || "Layer";
 }
+const resetLayerTransformDefaults = (layer) => {
+  if (!layer || layer.locked) return false;
+  layer.x = 0.5;
+  layer.y = 0.5;
+  layer.rotation = 0;
+  layer.opacity = 1;
+  layer.blend = "source-over";
+  if (layer.type === "text") {
+    layer.w = 0.78;
+    layer.h = 0.18;
+  } else if (layer.type === "image") {
+    layer.w = 0.52;
+    layer.h = 0.52;
+    layer.fit = "contain";
+  } else {
+    layer.w = 1;
+    layer.h = 1;
+  }
+  return true;
+};
 function selectedLayerPanelHtml(esc) {
   ensureEditorComposition();
   const active = selectedEditLayer();
@@ -2658,6 +2683,8 @@ function selectedLayerPanelHtml(esc) {
         <div class="ml-layer-actions">
           <button type="button" data-ml-layer-add-text>${svgIc("edit")} Text</button>
           <button type="button" data-ml-layer-select-all ${canSelectAll ? "" : "disabled"}>Select all</button>
+          <button type="button" data-ml-layer-copy ${editableSelection.length ? "" : "disabled"}>${svgIc("copy")} Copy</button>
+          <button type="button" data-ml-layer-paste ${mlLayerClipboard.length ? "" : "disabled"}>Paste</button>
           <button type="button" data-ml-layer-duplicate ${canDelete ? "" : "disabled"}>${svgIc("copy")} Duplicate</button>
           <button type="button" data-ml-layer-delete ${canDelete ? "" : "disabled"}>${svgIc("close")} Delete</button>
         </div>
@@ -2665,12 +2692,13 @@ function selectedLayerPanelHtml(esc) {
           ${[...mlComposition.layers].reverse().map((layer) => {
             const realIndex = mlComposition.layers.findIndex((item) => item.id === layer.id);
             const selected = mlComposition.selectedIds.includes(layer.id);
-            return `<div class="ml-layer-row ${selected ? "is-selected" : ""} ${layer.visible === false ? "is-off" : ""}" data-ml-layer-row="${esc(layer.id)}">
+            return `<div class="ml-layer-row ${selected ? "is-selected" : ""} ${layer.visible === false ? "is-off" : ""} ${layer.locked ? "is-locked" : ""}" data-ml-layer-row="${esc(layer.id)}" data-ml-layer-index="${realIndex}" draggable="${layer.locked ? "false" : "true"}">
               <button type="button" data-ml-layer-visible="${esc(layer.id)}" title="${layer.visible === false ? "Show layer" : "Hide layer"}">${layer.visible === false ? "○" : "●"}</button>
               <button type="button" class="ml-layer-name" data-ml-layer-select="${esc(layer.id)}"><b>${esc(layer.name || layerKindLabel(layer))}</b><i>${esc(layerKindLabel(layer))}</i></button>
               <span class="ml-layer-row-actions">
-                <button type="button" data-ml-layer-order="-1" data-layer-id="${esc(layer.id)}" ${realIndex <= 0 ? "disabled" : ""} title="Move down">↓</button>
-                <button type="button" data-ml-layer-order="1" data-layer-id="${esc(layer.id)}" ${realIndex >= mlComposition.layers.length - 1 ? "disabled" : ""} title="Move up">↑</button>
+                <button type="button" data-ml-layer-lock="${esc(layer.id)}" title="${layer.locked ? "Unlock layer" : "Lock layer"}">${layer.locked ? "🔒" : "🔓"}</button>
+                <button type="button" data-ml-layer-order="-1" data-layer-id="${esc(layer.id)}" ${layer.locked || realIndex <= 0 ? "disabled" : ""} title="Move down">↓</button>
+                <button type="button" data-ml-layer-order="1" data-layer-id="${esc(layer.id)}" ${layer.locked || realIndex >= mlComposition.layers.length - 1 ? "disabled" : ""} title="Move up">↑</button>
               </span>
             </div>`;
           }).join("")}
@@ -2679,6 +2707,8 @@ function selectedLayerPanelHtml(esc) {
           <div class="ml-layer-inspector-head"><b>${esc(active.name || layerKindLabel(active))}</b><span>${esc(layerKindLabel(active))}</span></div>
           <div class="ml-layer-transform-actions">
             <button type="button" data-ml-layer-reset-transform ${activeLocked ? "disabled" : ""}>Reset</button>
+            <button type="button" data-ml-layer-center ${activeLocked ? "disabled" : ""}>Center</button>
+            <button type="button" data-ml-layer-fit-canvas ${activeLocked ? "disabled" : ""}>Fill canvas</button>
           </div>
           <div class="ml-layer-align-actions" role="group" aria-label="Align selected layers">
             ${[
@@ -2699,7 +2729,12 @@ function selectedLayerPanelHtml(esc) {
           <label class="ml-slider"><span>Height <b data-layer-out="h">${Math.round(active.h * 100)}</b></span><input type="range" min="5" max="200" value="${Math.round(active.h * 100)}" data-ml-layer-prop="h"/></label>
           <label class="ml-slider"><span>Opacity <b data-layer-out="opacity">${Math.round((active.opacity ?? 1) * 100)}</b></span><input type="range" min="0" max="100" value="${Math.round((active.opacity ?? 1) * 100)}" data-ml-layer-prop="opacity"/></label>
           <label class="ml-slider"><span>Rotate <b data-layer-out="rotation">${Math.round(active.rotation || 0)}</b></span><input type="range" min="-180" max="180" value="${Math.round(active.rotation || 0)}" data-ml-layer-prop="rotation"/></label>
-          ${active.type === "text" ? `<label class="ml-layer-field"><span>Text</span><textarea rows="3" data-ml-layer-field="text">${esc(active.text || "")}</textarea></label>` : ""}
+          <label class="ml-layer-field"><span>Blend</span><select data-ml-layer-field="blend" ${activeLocked ? "disabled" : ""}>${[["source-over", "Normal"], ["multiply", "Multiply"], ["screen", "Screen"], ["overlay", "Overlay"], ["soft-light", "Soft light"]].map(([mode, label]) => `<option value="${mode}" ${(active.blend || "source-over") === mode ? "selected" : ""}>${label}</option>`).join("")}</select></label>
+          ${active.type === "text" ? `<label class="ml-layer-field"><span>Text</span><textarea rows="3" data-ml-layer-field="text">${esc(active.text || "")}</textarea></label>
+          <label class="ml-slider"><span>Type size <b data-layer-out="fontSize">${Math.round(active.fontSize || 8)}</b></span><input type="range" min="2" max="24" value="${Math.round(active.fontSize || 8)}" data-ml-layer-prop="fontSize"/></label>
+          <label class="ml-layer-field"><span>Color</span><input type="color" data-ml-layer-field="color" value="${esc(active.color || "#ffffff")}"/></label>
+          <label class="ml-layer-field"><span>Shadow</span><input type="checkbox" data-ml-layer-toggle="shadow" ${active.shadow ? "checked" : ""}/></label>` : ""}
+          ${active.type === "image" || active.type === "base" ? `<label class="ml-layer-field"><span>Fit</span><select data-ml-layer-field="fit" ${activeLocked ? "disabled" : ""}><option value="cover" ${(active.fit || "cover") === "cover" ? "selected" : ""}>Cover</option><option value="contain" ${active.fit === "contain" ? "selected" : ""}>Contain</option></select></label>` : ""}
         </div>` : ""}
       </div>
     </details>`;
@@ -2931,6 +2966,7 @@ function renderEdit(body, cfg, opts, root) {
           <button type="button" data-ml-before title="Hold to see original">Before</button>
         </div>
         <canvas class="ml-canvas ${mlPaintMode !== "select" ? "is-painting" : ""}" data-ml-canvas></canvas>
+        <canvas class="ml-layer-overlay ${mlPaintMode === "select" ? "is-active" : ""}" data-ml-layer-overlay></canvas>
         <div class="ch-lb-bokeh-markers" data-ml-bokeh-markers></div>
         <div class="ch-lb-pick-hint" data-ml-pick-hint hidden>${svgIc("spark")} Click to add focus, right-click a spot to remove it</div>
       </div>
@@ -3024,6 +3060,7 @@ function renderEdit(body, cfg, opts, root) {
       </div>
     </div>`;
   const canvas = body.querySelector("[data-ml-canvas]");
+  const overlay = body.querySelector("[data-ml-layer-overlay]");
   const markerLayer = body.querySelector("[data-ml-bokeh-markers]");
   loadEditorAssetCache(root, opts);
   const repaint = () => {
@@ -3033,6 +3070,7 @@ function renderEdit(body, cfg, opts, root) {
       if (!canvas.isConnected || !canvas._img) return;
       renderComposition(canvas, canvas._img, editState, mlComposition, mlLayerEffects);
       fitEditorCanvas(canvas);
+      drawCompositionOverlay(overlay, canvas, mlComposition, mlSnapGuides);
       positionMarkers();
     });
   };
@@ -3084,22 +3122,35 @@ function renderEdit(body, cfg, opts, root) {
   if (mlEditResizeHandler) window.removeEventListener("resize", mlEditResizeHandler);
   mlEditResizeHandler = () => positionMarkers();
   window.addEventListener("resize", mlEditResizeHandler);
+  const undoPhotoEdit = () => {
+    if (!mlEditHistory.length) return false;
+    mlEditFuture.push(fullEditorSnapshot());
+    restoreEdit(mlEditHistory.pop());
+    refreshEditor();
+    return true;
+  };
+  const redoPhotoEdit = () => {
+    if (!mlEditFuture.length) return false;
+    mlEditHistory.push(fullEditorSnapshot());
+    restoreEdit(mlEditFuture.pop());
+    refreshEditor();
+    return true;
+  };
+  const duplicateActiveLayer = () => {
+    const active = selectedEditLayer();
+    if (!active || active.id === "base" || active.locked) return false;
+    rememberEdit();
+    const copy = duplicateLayer(mlComposition, active.id);
+    if (copy && mlLayerEffects[active.id]) mlLayerEffects[copy.id] = cloneImageEditState(mlLayerEffects[active.id]);
+    renderMediaStudio(root, opts);
+    return true;
+  };
   // wire tools
   body.querySelector("[data-ml-tutorial]")?.addEventListener("click", () => { mlShowTutorial = !mlShowTutorial; renderMediaStudio(root, opts); });
   body.querySelector("[data-ml-edit-back]")?.addEventListener("click", () => { session.editMode = null; renderMediaStudio(root, opts); });
   updateEditHistoryControls(body);
-  body.querySelector("[data-ml-undo]")?.addEventListener("click", () => {
-    if (!mlEditHistory.length) return;
-    mlEditFuture.push(fullEditorSnapshot());
-    restoreEdit(mlEditHistory.pop());
-    refreshEditor();
-  });
-  body.querySelector("[data-ml-redo]")?.addEventListener("click", () => {
-    if (!mlEditFuture.length) return;
-    mlEditHistory.push(fullEditorSnapshot());
-    restoreEdit(mlEditFuture.pop());
-    refreshEditor();
-  });
+  body.querySelector("[data-ml-undo]")?.addEventListener("click", () => undoPhotoEdit());
+  body.querySelector("[data-ml-redo]")?.addEventListener("click", () => redoPhotoEdit());
   const before = body.querySelector("[data-ml-before]");
   const showBefore = () => { if (canvas._img) paintEdit(canvas, canvas._img, { ...freshEditState(), loadedUrl: editState.loadedUrl }); fitEditorCanvas(canvas); };
   if (before) {
@@ -3262,44 +3313,53 @@ function renderEdit(body, cfg, opts, root) {
     moveLayerOrder(mlComposition, button.dataset.layerId, Number(button.dataset.mlLayerOrder));
     renderMediaStudio(root, opts);
   });
+  body.querySelectorAll("[data-ml-layer-row]").forEach((row) => {
+    row.addEventListener("dragstart", (event) => {
+      const layer = mlComposition.layers.find((item) => item.id === row.dataset.mlLayerRow);
+      if (!layer || layer.locked) {
+        event.preventDefault();
+        return;
+      }
+      event.dataTransfer?.setData("text/x-phantom-layer", layer.id);
+      event.dataTransfer?.setData("text/plain", layer.id);
+      event.dataTransfer?.setDragImage?.(row, 18, 18);
+      row.classList.add("is-dragging");
+    });
+    row.addEventListener("dragover", (event) => {
+      if (row.getAttribute("draggable") !== "true") return;
+      event.preventDefault();
+      row.classList.add("is-drop-target");
+    });
+    row.addEventListener("dragleave", () => row.classList.remove("is-drop-target"));
+    row.addEventListener("drop", (event) => {
+      const draggedId = event.dataTransfer?.getData("text/x-phantom-layer") || event.dataTransfer?.getData("text/plain");
+      const targetIndex = Number(row.dataset.mlLayerIndex);
+      row.classList.remove("is-drop-target");
+      if (!draggedId || !Number.isFinite(targetIndex) || draggedId === row.dataset.mlLayerRow) return;
+      event.preventDefault();
+      rememberEdit();
+      moveLayerToIndex(mlComposition, draggedId, targetIndex);
+      renderMediaStudio(root, opts);
+    });
+    row.addEventListener("dragend", () => {
+      body.querySelectorAll(".ml-layer-row.is-drop-target, .ml-layer-row.is-dragging").forEach((item) => item.classList.remove("is-drop-target", "is-dragging"));
+    });
+  });
   body.querySelector("[data-ml-layer-add-text]")?.addEventListener("click", () => {
     rememberEdit();
     addTextLayer(mlComposition, "Your headline");
     renderMediaStudio(root, opts);
   });
   body.querySelector("[data-ml-layer-duplicate]")?.addEventListener("click", () => {
-    const active = selectedEditLayer();
-    if (!active || active.id === "base") return;
-    rememberEdit();
-    const copy = duplicateLayer(mlComposition, active.id);
-    if (copy && mlLayerEffects[active.id]) mlLayerEffects[copy.id] = cloneImageEditState(mlLayerEffects[active.id]);
-    renderMediaStudio(root, opts);
+    duplicateActiveLayer();
   });
   body.querySelector("[data-ml-layer-delete]")?.addEventListener("click", () => {
-    rememberEdit();
-    removeSelectedLayers(mlComposition);
-    renderMediaStudio(root, opts);
+    deleteSelectedEditableLayers();
   });
   body.querySelector("[data-ml-layer-reset-transform]")?.addEventListener("click", () => {
     const layer = selectedEditLayer();
-    if (!layer || layer.locked) return;
     rememberEdit();
-    layer.x = 0.5;
-    layer.y = 0.5;
-    layer.rotation = 0;
-    layer.opacity = 1;
-    layer.blend = "source-over";
-    if (layer.type === "text") {
-      layer.w = 0.78;
-      layer.h = 0.18;
-    } else if (layer.type === "image") {
-      layer.w = 0.52;
-      layer.h = 0.52;
-      layer.fit = "contain";
-    } else {
-      layer.w = 1;
-      layer.h = 1;
-    }
+    resetLayerTransformDefaults(layer);
     renderMediaStudio(root, opts);
   });
   body.querySelectorAll("[data-ml-layer-align]").forEach((button) => {
@@ -3338,11 +3398,19 @@ function renderEdit(body, cfg, opts, root) {
   body.querySelector("[data-ml-layer-select-all]")?.addEventListener("click", () => {
     selectAllEditableLayers();
   });
+  let fieldRemembered = false;
+  const rememberLayerFieldEdit = () => {
+    if (fieldRemembered) return;
+    fieldRemembered = true;
+    rememberEdit();
+    updateEditHistoryControls(body);
+  };
   body.querySelectorAll("[data-ml-layer-prop]").forEach((input) => {
-    input.onpointerdown = () => rememberEdit();
+    input.onfocus = rememberLayerFieldEdit;
+    input.onpointerdown = rememberLayerFieldEdit;
     input.oninput = () => {
       const layer = selectedEditLayer();
-      if (!layer) return;
+      if (!layer || layer.locked) return;
       const key = input.dataset.mlLayerProp;
       const raw = Number(input.value);
       layer[key] = ["x", "y", "w", "h", "opacity"].includes(key) ? raw / 100 : raw;
@@ -3352,13 +3420,152 @@ function renderEdit(body, cfg, opts, root) {
     };
   });
   body.querySelectorAll("[data-ml-layer-field]").forEach((field) => {
+    field.onfocus = rememberLayerFieldEdit;
+    field.onpointerdown = rememberLayerFieldEdit;
     field.onchange = field.oninput = () => {
       const layer = selectedEditLayer();
-      if (!layer) return;
+      if (!layer || layer.locked) return;
       layer[field.dataset.mlLayerField] = field.value;
       repaint();
     };
   });
+  body.querySelectorAll("[data-ml-layer-toggle]").forEach((field) => {
+    field.onchange = () => {
+      const layer = selectedEditLayer();
+      if (!layer || layer.locked) return;
+      rememberEdit();
+      layer[field.dataset.mlLayerToggle] = !!field.checked;
+      repaint();
+    };
+  });
+  body.querySelectorAll("[data-ml-layer-lock]").forEach((button) => button.onclick = () => {
+    const layer = mlComposition.layers.find((item) => item.id === button.dataset.mlLayerLock);
+    if (!layer) return;
+    rememberEdit();
+    layer.locked = !layer.locked;
+    renderMediaStudio(root, opts);
+  });
+  const copySelectedEditableLayers = () => {
+    const targets = selectedLayers(mlComposition).filter((layer) => layer.id !== "base" && !layer.locked);
+    if (!targets.length) return false;
+    mlLayerClipboard = targets.map((item) => ({ layer: JSON.parse(JSON.stringify(item)), effect: mlLayerEffects[item.id] ? cloneImageEditState(mlLayerEffects[item.id], { includeMask: false }) : null }));
+    return true;
+  };
+  const pasteLayerClipboard = () => {
+    if (!mlLayerClipboard.length) return false;
+    rememberEdit();
+    const pastedIds = [];
+    mlLayerClipboard.forEach((item) => {
+      const copy = { ...JSON.parse(JSON.stringify(item.layer)), id: `layer-${Date.now()}-${Math.random().toString(16).slice(2)}`, name: `${item.layer.name || layerKindLabel(item.layer)} copy`, locked: false, x: Math.min(1, (item.layer.x || 0.5) + 0.03), y: Math.min(1, (item.layer.y || 0.5) + 0.03) };
+      mlComposition.layers.push(copy);
+      if (item.effect) mlLayerEffects[copy.id] = cloneImageEditState(item.effect, { includeMask: false });
+      pastedIds.push(copy.id);
+    });
+    mlComposition.selectedIds = pastedIds;
+    renderMediaStudio(root, opts);
+    return true;
+  };
+  const deleteSelectedEditableLayers = () => {
+    if (!selectedLayers(mlComposition).some((layer) => layer.id !== "base" && !layer.locked)) return false;
+    rememberEdit();
+    removeSelectedLayers(mlComposition);
+    renderMediaStudio(root, opts);
+    return true;
+  };
+  const nudgeSelectedLayers = (dx, dy) => {
+    const targets = selectedLayers(mlComposition).filter((layer) => layer.id !== "base" && !layer.locked);
+    if (!targets.length) return false;
+    rememberEdit();
+    targets.forEach((layer) => {
+      layer.x = Math.max(0, Math.min(1, (layer.x || 0.5) + dx));
+      layer.y = Math.max(0, Math.min(1, (layer.y || 0.5) + dy));
+    });
+    renderMediaStudio(root, opts);
+    return true;
+  };
+  if (mlEditKeyHandler) document.removeEventListener("keydown", mlEditKeyHandler);
+  mlEditKeyHandler = (event) => {
+    if (isEditorTypingTarget(event.target)) return;
+    const key = String(event.key || "").toLowerCase();
+    let handled = false;
+    if ((event.ctrlKey || event.metaKey) && key === "z" && !event.shiftKey) handled = undoPhotoEdit();
+    else if ((event.ctrlKey || event.metaKey) && (key === "y" || (key === "z" && event.shiftKey))) handled = redoPhotoEdit();
+    else if ((event.ctrlKey || event.metaKey) && key === "a") handled = selectAllEditableLayers();
+    else if ((event.ctrlKey || event.metaKey) && key === "c") handled = copySelectedEditableLayers();
+    else if ((event.ctrlKey || event.metaKey) && key === "v") handled = pasteLayerClipboard();
+    else if ((event.ctrlKey || event.metaKey) && key === "d") handled = duplicateActiveLayer();
+    else if (key === "delete" || key === "backspace") handled = deleteSelectedEditableLayers();
+    else if (key === "arrowleft") handled = nudgeSelectedLayers(event.shiftKey ? -0.025 : -0.005, 0);
+    else if (key === "arrowright") handled = nudgeSelectedLayers(event.shiftKey ? 0.025 : 0.005, 0);
+    else if (key === "arrowup") handled = nudgeSelectedLayers(0, event.shiftKey ? -0.025 : -0.005);
+    else if (key === "arrowdown") handled = nudgeSelectedLayers(0, event.shiftKey ? 0.025 : 0.005);
+    if (handled) event.preventDefault();
+  };
+  document.addEventListener("keydown", mlEditKeyHandler);
+  body.querySelector("[data-ml-layer-copy]")?.addEventListener("click", () => {
+    copySelectedEditableLayers();
+    renderMediaStudio(root, opts);
+  });
+  body.querySelector("[data-ml-layer-paste]")?.addEventListener("click", () => pasteLayerClipboard());
+  body.querySelector("[data-ml-layer-center]")?.addEventListener("click", () => {
+    const layer = selectedEditLayer();
+    if (!layer || layer.locked) return;
+    rememberEdit();
+    layer.x = 0.5;
+    layer.y = 0.5;
+    renderMediaStudio(root, opts);
+  });
+  body.querySelector("[data-ml-layer-fit-canvas]")?.addEventListener("click", () => {
+    const layer = selectedEditLayer();
+    if (!layer || layer.locked) return;
+    rememberEdit();
+    layer.x = 0.5;
+    layer.y = 0.5;
+    layer.w = 1;
+    layer.h = 1;
+    layer.fit = "cover";
+    renderMediaStudio(root, opts);
+  });
+  if (overlay) {
+    overlay.onpointerdown = (event) => {
+      if (mlPaintMode !== "select" || mlBokehPicking) return;
+      const base = canvasEditPoint(event, canvas);
+      const point = { ...base, px: base.x * canvas.width, py: base.y * canvas.height };
+      const cssScale = canvas.width / Math.max(1, canvas.getBoundingClientRect().width);
+      const resizeHit = hitTestResizeHandle(mlComposition, point, canvas, cssScale);
+      const hit = resizeHit?.layer || hitTestLayer(mlComposition, point, canvas);
+      if (!hit) return;
+      event.preventDefault();
+      rememberEdit();
+      selectLayer(mlComposition, hit.id, event.shiftKey || event.ctrlKey || event.metaKey);
+      const starts = selectedLayers(mlComposition).filter((layer) => !layer.locked).map((layer) => ({ layer, x: layer.x, y: layer.y, w: layer.w, h: layer.h }));
+      const start = point;
+      overlay.setPointerCapture?.(event.pointerId);
+      overlay.onpointermove = (moveEvent) => {
+        const nowBase = canvasEditPoint(moveEvent, canvas);
+        const p = { ...nowBase, px: nowBase.x * canvas.width, py: nowBase.y * canvas.height };
+        const dx = (p.px - start.px) / Math.max(1, canvas.width);
+        const dy = (p.py - start.py) / Math.max(1, canvas.height);
+        if (resizeHit) {
+          starts.forEach((item) => {
+            item.layer.w = Math.max(0.05, Math.min(2, item.w + dx * (resizeHit.index === 0 || resizeHit.index === 3 ? -1 : 1) * 2));
+            item.layer.h = Math.max(0.05, Math.min(2, item.h + dy * (resizeHit.index < 2 ? -1 : 1) * 2));
+          });
+          mlSnapGuides = [];
+        } else {
+          mlSnapGuides = applyLayerDragWithSnap(mlComposition, starts, dx, dy);
+        }
+        repaint();
+      };
+      overlay.onpointerup = overlay.onpointercancel = () => {
+        mlSnapGuides = [];
+        overlay.onpointermove = null;
+        overlay.onpointerup = null;
+        overlay.onpointercancel = null;
+        renderMediaStudio(root, opts);
+      };
+    };
+  }
   canvas.onpointerdown = (event) => {
     if (mlPaintMode === "select" && !mlBokehPicking) {
       const point = { ...canvasEditPoint(event, canvas), px: canvasEditPoint(event, canvas).x * canvas.width, py: canvasEditPoint(event, canvas).y * canvas.height };
@@ -3452,11 +3659,24 @@ function renderEdit(body, cfg, opts, root) {
   body.querySelector("[data-ml-resetedit]").onclick = () => { resetEdit(); renderMediaStudio(root, opts); };
   body.querySelector("[data-ml-changeedit]").onclick = () => { session.edit = null; mlBokehPicking = false; renderMediaStudio(root, opts); };
   const repaintWithImg = (img) => { canvas._img = img; repaint(); };
+  const editPreviewUrl = () => {
+    try {
+      const maxSide = 720;
+      const scale = Math.min(1, maxSide / Math.max(1, canvas.width, canvas.height));
+      const out = document.createElement("canvas");
+      out.width = Math.max(1, Math.round(canvas.width * scale));
+      out.height = Math.max(1, Math.round(canvas.height * scale));
+      out.getContext("2d").drawImage(canvas, 0, 0, out.width, out.height);
+      return out.toDataURL("image/webp", 0.68);
+    } catch {
+      return "";
+    }
+  };
   const duplicateCurrentEdit = async () => {
     const exported = await exportCanvas(canvas, repaintWithImg, "image/webp", 0.9);
     if (!exported.ok) { opts.notify?.("Media Factory", `Couldn't duplicate this image: ${exported.error}`); return; }
     const at = Date.now();
-    const asset = { id: `dup-${at}`, type: "image", url: exported.url, saved: true, at, meta: { edited: true, prompt: editState.text || "Duplicated image" } };
+    const asset = { id: `dup-${at}`, type: "image", url: exported.url, previewUrl: editPreviewUrl(), saved: true, at, meta: { edited: true, prompt: editState.text || "Duplicated image" } };
     session.assets.unshift(asset);
     saveMediaPoolSource(asset, { title: "Duplicated image", prompt: editState.text || "Duplicated image" });
     opts.notify?.("Media Factory", "duplicated the current image into Media Pool.");
@@ -3467,7 +3687,7 @@ function renderEdit(body, cfg, opts, root) {
     const exported = await exportCanvas(canvas, repaintWithImg, "image/webp", 0.9);
     if (!exported.ok) { if (opts.notify) opts.notify("Media Factory", `Couldn't save this edit: ${exported.error}`); return; }
     const at = Date.now();
-    const asset = { id: `edit-${at}`, type: "image", url: exported.url, saved: true, at, meta: { edited: true, prompt: editState.text || "Edited image" } };
+    const asset = { id: `edit-${at}`, type: "image", url: exported.url, previewUrl: editPreviewUrl(), saved: true, at, meta: { edited: true, prompt: editState.text || "Edited image" } };
     session.assets.unshift(asset);
     saveMediaPoolSource(asset, { title: "Edited image", prompt: editState.text || "Edited image" });
     // switch tab (and its rerender) before notify(): notify() triggers a global store-change
@@ -3495,6 +3715,7 @@ function renderEdit(body, cfg, opts, root) {
       prompt: editState.text || "Opened from Media Lab quick editor.",
       source: "Media Lab quick editor",
       url: exported.url,
+      previewUrl: editPreviewUrl(),
       createdAt: at,
       saved: true,
     }, { skipSync: true });
