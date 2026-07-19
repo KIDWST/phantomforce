@@ -823,8 +823,17 @@ async function main() {
     continuityResults.push(await submitChat(cdp, "Explain volcanoes in one sentence.", diagnostics));
     continuityResults.push(await submitChat(cdp, "What makes jazz distinctive? One sentence.", diagnostics));
     continuityResults.push(await submitChat(cdp, "Name one interesting thing about Saturn.", diagnostics));
+    continuityResults.push(await submitChat(cdp, "What is the difference between a comet and a meteor? One sentence.", diagnostics));
+    continuityResults.push(await submitChat(cdp, "Why does bread rise? One sentence.", diagnostics));
+    continuityResults.push(await submitChat(cdp, "Give me one fact about honeybees.", diagnostics));
+    continuityResults.push(await submitChat(cdp, "What causes ocean tides? One sentence.", diagnostics));
+    continuityResults.push(await submitChat(cdp, "Define metaphor in one sentence.", diagnostics));
+    continuityResults.push(await submitChat(cdp, "What is the capital of Portugal? City only.", diagnostics));
     continuityResults.push(await submitChat(cdp, "Back to Nova: what color is her raincoat? Color only.", diagnostics));
-    assert.match(continuityResults.at(-1)?.answer || "", /^purple[.!]?$/i, "a named recent topic must survive intervening subjects and retain its correction.");
+    assert.match(continuityResults.at(-1)?.answer || "", /^purple[.!]?$/i, "a named older topic must survive nine intervening subjects and retain its correction.");
+    const longRevisitRequest = chatRequests.filter((request) => (request.user_request || request.message) === "Back to Nova: what color is her raincoat? Color only.").at(-1);
+    assert.ok((longRevisitRequest?.conversation_history || []).length <= 10, "named-topic retrieval must remain privacy bounded.");
+    assert.match(JSON.stringify(longRevisitRequest?.conversation_history || []), /Nova[\s\S]*purple/i, "the browser must send the relevant older thread and correction instead of ten unrelated turns.");
     assert.equal(continuityResults.every((result) => result.cards === 0), true, "long conversation turns must stay in chat without business cards.");
     assert.equal(continuityResults.some((result) => /ledger|pipeline|actual cash|transaction reader/i.test(result.answer)), false, "long conversation must not leak accounting language.");
 
@@ -936,7 +945,7 @@ async function main() {
         "customer reasoning reaches the bounded local model lane without cards or business context",
         "customer planning and feedback use real model answers instead of canned intent copy",
         "organization advice remains action-free and excludes money, plan, asset, and pulse status",
-        "natural follow-ups and named-topic returns stay coherent across 30 browser turns",
+        "natural follow-ups and named-topic returns stay coherent across 36 browser turns, including nine-topic separation",
         "durable memory survives reload inside organization A",
         "organization B receives no A memory, history, request context, or visible chat",
         "organization A returns without organization B contamination",

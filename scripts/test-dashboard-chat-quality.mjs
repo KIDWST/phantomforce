@@ -141,7 +141,7 @@ for (const body of capturedBodies) {
   assert.equal(body.allow_provider_fallback, false);
   assert.ok(body.max_provider_ms <= 4500, "instant provider time must stay tightly bounded");
   assert.ok(Array.isArray(body.conversation_history));
-  assert.ok(body.conversation_history.length <= 8, "only a bounded recent-turn window may leave the browser");
+  assert.ok(body.conversation_history.length <= 10, "only a bounded relevant-turn window may leave the browser");
   assert.doesNotMatch(body.business_summary, /accounting|bookings|offer desk|approval gates/i);
   assert.deepEqual(
     body.module_data.map((entry) => entry.module),
@@ -155,6 +155,37 @@ assert.equal(followUpBody.message, "why tacos?");
 assert.equal(followUpBody.conversation_history.at(-1)?.user, "what's your favorite food?");
 assert.match(followUpBody.conversation_history.at(-1)?.assistant || "", /favorite food/i);
 assert.ok(recentChatTurns(8).length <= 8);
+const priorHistory = store.state.chatHistory;
+store.state.chatHistory = [
+  ...Array.from({ length: 9 }, (_, index) => ({
+    id: `noise-${index}`,
+    ws: "phantomforce",
+    source: "temporary-chat",
+    prompt: `Unrelated topic ${index + 1}`,
+    reply: `Unrelated answer ${index + 1}`,
+    createdAt: new Date(Date.now() - index * 1000).toISOString(),
+  })),
+  {
+    id: "nova-correction",
+    ws: "phantomforce",
+    source: "temporary-chat",
+    prompt: "Correction: her raincoat is purple.",
+    reply: "Nova's raincoat is purple.",
+    createdAt: new Date(Date.now() - 10_000).toISOString(),
+  },
+  {
+    id: "nova-setup",
+    ws: "phantomforce",
+    source: "temporary-chat",
+    prompt: "My dog Nova wears a yellow raincoat.",
+    reply: "Understood.",
+    createdAt: new Date(Date.now() - 11_000).toISOString(),
+  },
+];
+const relevantOlderThread = recentChatTurns(10, "Back to Nova: what color is her raincoat?");
+assert.ok(relevantOlderThread.length <= 10);
+assert.match(JSON.stringify(relevantOlderThread), /Nova[\s\S]*purple/i, "a named older topic and its correction must replace irrelevant recent turns");
+store.state.chatHistory = priorHistory;
 assert.equal(store.state.memory.length, 0, "casual questions must not become durable memory");
 const chatOnlyMemoryBody = capturedBodies.find((body) => /Remember for this chat only/i.test(body.message));
 assert.equal(chatOnlyMemoryBody?.task_type, "chat", "chat-only facts must remain temporary conversation, not durable memory");

@@ -19,7 +19,7 @@ it is an honest map of what is proven today.
 | Content quality | 2 | Some copy has been business-ified; memory/history copy is clearer. | Public copy, pricing, CTA destination text, and product claims need systematic review. |
 | Search visibility | 1 | `robots.txt` and `sitemap.xml` exist. | Sitemap likely under-covers public routes; OG/canonical/structured data not audited. |
 | Conversion clarity | 1 | Site builder and Business Manager surfaces exist. | Pricing/subscription/module clarity is under-tested and likely incomplete. |
-| Test coverage | 4 | Targeted suites now include real database login, 28-turn aligned browser chat, 90-request live-model evaluation, durable-memory reload, business-record CRUD in two organizations, tamper rejection, and desktop/mobile screenshots. | Accessibility, public-site behavior, and deeper editor/game interactions are still thin. |
+| Test coverage | 4 | Targeted suites now include real database login, 36-turn aligned browser chat, 102-request live-model evaluation, long-distance corrected recall, durable-memory reload, two-organization CRUD, tamper rejection, and desktop/mobile screenshots. | Accessibility, public-site behavior, and deeper editor/game interactions are still thin. |
 | Maintainability | 2 | Feature modules are split; route inventory exists. | `server/src/index.ts` is very large; quality docs only began this cycle. |
 | Observability | 2 | Hermes ledger, automation receipts, run records, and evidence files exist. | No product funnel analytics quality map or production telemetry audit yet. |
 

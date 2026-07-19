@@ -38,6 +38,25 @@ assert.deepEqual(
   { output_text: "Pico Cruiser", tool_id: "phantom-reference-resolver" },
 );
 assert.equal(buildInstantChatToolReply("Tell me a joke.", listTurns), null);
+const longNovaTurns = [
+  { user: "My dog Nova wears a yellow raincoat.", assistant: "Nova wears yellow." },
+  { user: "Correction: Nova's raincoat is purple.", assistant: "Nova's raincoat is purple." },
+  ...Array.from({ length: 9 }, (_, index) => ({
+    user: `Unrelated subject ${index + 1}.`,
+    assistant: `Unrelated answer ${index + 1}.`,
+  })),
+];
+assert.deepEqual(
+  buildInstantChatToolReply("Back to Nova: what color is her raincoat? Color only.", longNovaTurns),
+  { output_text: "purple", tool_id: "phantom-context-recall" },
+);
+assert.deepEqual(
+  buildInstantChatToolReply("What was the launch codename? Name only.", [
+    { user: "The launch codename is Glacier.", assistant: "Understood: Glacier." },
+    { user: "Correction: the launch codename is Ember.", assistant: "Corrected: Ember." },
+  ]),
+  { output_text: "Ember", tool_id: "phantom-context-recall" },
+);
 assert.deepEqual(
   buildInstantChatToolReply("Who are you?", [], "qwen2.5:14b"),
   { output_text: "I'm Phantom AI, the general-purpose assistant inside PhantomForce.", tool_id: "phantom-identity" },

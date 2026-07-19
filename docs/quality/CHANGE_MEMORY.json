@@ -617,7 +617,7 @@
       "requiredPatterns": [
         {
           "file": "app/js/store.js",
-          "pattern": "export function recentChatTurns\\(limit = 8\\)",
+          "pattern": "export function recentChatTurns\\(limit = 8, userRequest = \\\"\\\"\\)",
           "description": "Temporary recent turns are exposed as a bounded, workspace-scoped context window."
         },
         {
@@ -1029,6 +1029,46 @@
           "file": "app/js/main.js",
           "pattern": "bits[.]push[(]`[$][{]signedMoney[(]m[.]netCash[)][}] net cashflow`[)]",
           "description": "The unsolicited greeting must never disclose accounting or approval metrics."
+        }
+      ]
+    },
+    {
+      "id": "bounded-relevant-chat-thread-recall",
+      "status": "active",
+      "title": "Named earlier chat topics survive unrelated conversation without sending the whole history",
+      "ownerDecision": "Phantom must be able to return to a specifically named temporary topic after many unrelated turns and honor its latest correction. The browser may send no more than ten active-organization turns: six newest turns plus up to four relevant older thread turns. Temporary chat still shreds after ten days and never becomes durable memory unless it independently meets the explicit memory rules.",
+      "requiredPatterns": [
+        {
+          "file": "app/js/store.js",
+          "pattern": "userRequest = \"\"[\\s\\S]*Math[.]min[(]6, boundedLimit[)][\\s\\S]*index [+] 1, index, index - 1, index - 2",
+          "description": "The client context pack reserves bounded space for a named older thread and nearby corrections."
+        },
+        {
+          "file": "app/js/command.js",
+          "pattern": "recentChatTurns[(]10, raw[)]",
+          "description": "Every model route receives the request-aware bounded context packet."
+        },
+        {
+          "file": "scripts/test-database-auth-org-browser.mjs",
+          "pattern": "named older topic must survive nine intervening subjects[\\s\\S]*named-topic retrieval must remain privacy bounded",
+          "description": "Authenticated Chrome proves the earlier topic and correction survive beyond the old eight-turn window."
+        },
+        {
+          "file": "server/scripts/test-instant-chat-http-live-model.ts",
+          "pattern": "Back to Nova: what color is her raincoat[?] Color only[.][\\s\\S]*longDistanceTopicRevisitVerified: true",
+          "description": "The deployed real-model gate permanently covers the long-distance named-topic return."
+        },
+        {
+          "file": "server/src/phantom-ai/instant-chat-tools.ts",
+          "pattern": "function contextFactReply[\\s\\S]*phantom-context-recall[\\s\\S]*contextFactReply[(]userRequest, turns[)]",
+          "description": "Exact recalled colors and codenames are extracted from the relevant corrected thread instead of guessed by the model."
+        }
+      ],
+      "forbiddenPatterns": [
+        {
+          "file": "app/js/command.js",
+          "pattern": "const recentConversation = recentChatTurns[(]8[)]",
+          "description": "Blindly truncating to eight newest turns discards a specifically named earlier thread."
         }
       ]
     },

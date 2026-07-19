@@ -1,3 +1,5 @@
+import { selectRelevantInstantTurns } from "./instant-chat-context.js";
+
 export type InstantChatToolTurn = {
   user: string;
   assistant: string;
@@ -5,7 +7,7 @@ export type InstantChatToolTurn = {
 
 export type InstantChatToolReply = {
   output_text: string;
-  tool_id: "phantom-calculator" | "phantom-reference-resolver" | "phantom-identity" | "phantom-personality" | "phantom-stable-fact";
+  tool_id: "phantom-calculator" | "phantom-reference-resolver" | "phantom-context-recall" | "phantom-identity" | "phantom-personality" | "phantom-stable-fact";
 };
 
 export function instantResponseTokenBudget(userRequest: string) {
@@ -218,10 +220,36 @@ function stableFactReply(userRequest: string): InstantChatToolReply | null {
   return null;
 }
 
+const RECALL_COLORS = /\b(?:black|white|red|orange|yellow|green|blue|purple|pink|brown|gray|grey|silver|gold|golden|teal|cyan|magenta|violet|indigo|beige)\b/gi;
+
+function contextFactReply(userRequest: string, turns: InstantChatToolTurn[]): InstantChatToolReply | null {
+  if (!turns.length) return null;
+  const relevant = selectRelevantInstantTurns(turns, userRequest);
+  if (!relevant.length) return null;
+
+  if (/\b(?:what|which)\b.{0,60}\bcolou?r\b|\bcolou?r only\b/i.test(userRequest)) {
+    for (let index = relevant.length - 1; index >= 0; index -= 1) {
+      const matches = [...`${relevant[index].user} ${relevant[index].assistant}`.matchAll(RECALL_COLORS)];
+      const value = matches.at(-1)?.[0];
+      if (value) return { output_text: value, tool_id: "phantom-context-recall" };
+    }
+  }
+
+  if (/\b(?:code word|codeword|codename)\b/i.test(userRequest)) {
+    for (let index = relevant.length - 1; index >= 0; index -= 1) {
+      const matches = [...`${relevant[index].user} ${relevant[index].assistant}`.matchAll(/\b(?:code word|codeword|codename)\s*(?:is|was|:|=)\s*([a-z0-9_-]{1,40})\b/gi)];
+      const value = matches.at(-1)?.[1];
+      if (value) return { output_text: value, tool_id: "phantom-context-recall" };
+    }
+  }
+  return null;
+}
+
 export function buildInstantChatToolReply(userRequest: string, turns: InstantChatToolTurn[] = [], modelId = "qwen2.5:14b") {
   return identityReply(userRequest, modelId)
     || personalityReply(userRequest)
     || stableFactReply(userRequest)
+    || contextFactReply(userRequest, turns)
     || arithmeticReply(userRequest, turns)
     || listSelectionReply(userRequest, turns);
 }

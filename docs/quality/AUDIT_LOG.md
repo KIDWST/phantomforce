@@ -1751,3 +1751,66 @@ in Cycle 23.
 
 Exercise role, entitlement, deep-link, and expired-session recovery across
 customer/admin hosts in Cycle 24.
+
+# 2026-07-18 - Cycle 24: Bounded Long-Distance Thread Recall
+
+## Problems Verified
+
+- The browser always sent only the newest eight temporary turns. The server's
+  relevant-thread selector therefore could not recover a specifically named
+  topic once enough unrelated conversation pushed it out of that packet.
+- Extending the real-model test to nine intervening subjects reproduced a
+  second failure: even with the relevant Nova setup and correction available,
+  the local model guessed `Red` instead of honoring the corrected `purple`
+  fact.
+- The previous browser proof used only three intervening subjects, which was
+  insufficient evidence for long-distance conversational continuity.
+
+## Corrections
+
+- Replaced blind recency packing with a request-aware, organization-scoped
+  packet: six newest turns plus up to four matching older thread/correction
+  turns, hard-capped at ten.
+- Kept temporary history separate from durable memory and retained the existing
+  ten-day shred policy.
+- Added deterministic extractive recall for exact corrected colors and
+  codenames. Creative, advisory, and open-ended questions still use the
+  lightest capable local model.
+- Expanded the authenticated Chrome journey and real-model gate to nine
+  unrelated subjects before returning to Nova.
+- Advanced the complete browser module graph to
+  `phantom-live-20260718-43` and added permanent overwrite guards.
+
+## Source Verification
+
+- PASS: `npm run test:instant-chat:http-live-model --workspace
+  @phantomforce/server` completed 102 requests at 602 ms average and 2,489 ms
+  maximum with zero fallback and zero business leakage; long-distance topic
+  revisit passed.
+- PASS: `npm run test:database-auth` passed all 57 API/auth checks and the
+  source-backed real Chrome journey, including 36 conversational turns and
+  nine-topic corrected recall.
+- PASS: Chrome request inspection proved the relevant older thread and
+  correction were present while `conversation_history` remained at or below
+  ten turns.
+- PASS: visual review at 1440x900 and 390x844 under
+  `tmp/database-auth-org-browser/2026-07-19T03-57-52-596Z`; the composer,
+  recalled answer, navigation, and organization state had no overlap or
+  horizontal overflow.
+- PASS: `npm run test:release-critical` (20/20).
+- PASS: `npm run test:dashboard-chat` (56 prompts, 11 adversarial turns,
+  deterministic tools).
+- PASS: `node scripts/test-memory-retention.mjs`.
+- PASS: `npm run test:change-memory` (180 checks).
+- PASS: `npm run typecheck`.
+- PASS: `git diff --check` (line-ending warnings only).
+
+## Deployment Verification
+
+Pending commit, push, canonical sync, deployed 102-request model gate, scheduled
+sync, and strict live-source doctor.
+
+## Next Task
+
+Exercise ambiguous-reference resolution and conversational self-correction in
+Cycle 25.

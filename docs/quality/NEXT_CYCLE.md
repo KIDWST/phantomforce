@@ -8,49 +8,47 @@ Read `AGENTS.md` and every file under `docs/quality` before changing code. Do
 not restart the inventory unless it is invalid. Continue in this Codex task via
 heartbeat automation `continue-phantomforce-quality-program`.
 
-Cycle 23 repaired the browser account gate and the primary dashboard chat
-lifecycle. Account access now has two primary choices, contextual username and
-password recovery, a 2FA escape, one-time invitation-link acceptance, duplicate
-submit locking, and customer-safe outage copy. Completed chat answers render
-immediately. A startup timer can no longer overwrite a real answer with an
-accounting/approval briefing, and a dashboard restored after workspace
-navigation binds its command form before optional widgets render. The complete
-browser graph is `phantom-live-20260718-42`. Commit `32926861` is deployed from
-the canonical checkout; its 96-request model gate and post-sync strict doctor
-passed with zero fallback, zero leakage, and all 177 live guards aligned.
+Cycle 24 removed the browser's blind newest-eight-turn cutoff. Phantom now sends
+at most ten organization-scoped temporary turns: six newest turns plus up to
+four turns from a specifically named older thread and its nearby corrections.
+The server deterministically extracts exact recalled colors and codenames from
+that corrected thread instead of letting the model guess. A real Chrome journey
+proved the corrected Nova fact after nine unrelated topics, and the expanded
+real-model gate passed 102 requests. The complete browser graph is
+`phantom-live-20260718-43`.
 
-## Recommended Cycle 24
+## Recommended Cycle 25
 
-Theme: role, entitlement, and expired-session recovery through visible UI.
+Theme: ambiguous-reference resolution and conversational self-correction.
 
-1. Exercise owner, admin, member, and client accounts against every visible nav
-   item and representative deep links on customer and admin hosts.
-2. Expire and revoke sessions while users are submitting chat, editing CRM,
-   accepting approvals, switching plans, and navigating; recover to sign-in
-   without stale data, dead controls, or lost local-safe drafts.
-3. Verify Free, Pro, and Elite restrictions match visible navigation, disabled
-   controls, direct API authorization, and upgrade explanations.
-4. Test slow/failed auth and entitlement requests, browser back/forward, two
-   tabs, and re-authentication into a different organization.
-5. Browser-check 390x844 and 1440x900 and preserve each correction in permanent
-   policy and regression tests.
+1. Exercise references involving multiple people, objects, lists, dates, and
+   pronouns across topic switches, corrections, negation, and user typos.
+2. Verify Phantom asks one concise clarification only when multiple
+   interpretations are genuinely plausible; otherwise it should answer.
+3. Test user challenges such as “that is wrong,” “you misunderstood me,” and
+   “use the first answer but the second tone” without resetting the thread or
+   inventing workspace status.
+4. Expand deterministic tools only for exact extractive facts and calculations;
+   keep creative or judgment calls on the lightest capable local model.
+5. Run at least 100 real-model requests and the authenticated 390x844/1440x900
+   browser journey, preserving each correction in change memory.
 
 Likely files:
 
-- `app/js/main.js`
-- `app/js/orgs.js`
-- `app/js/settings.js`
-- `server/src/index.ts`
-- `server/src/access/user-accounts.ts`
+- `app/js/store.js`
+- `app/js/command.js`
+- `server/src/phantom-ai/instant-chat-context.ts`
+- `server/src/phantom-ai/instant-chat-tools.ts`
+- `server/scripts/test-instant-chat-http-live-model.ts`
 - `scripts/test-database-auth-org-browser.mjs`
 
 ## Regression Commands To Keep
 
-- `npm run test:database-auth`
-- `npm run test:account-recovery-2fa:postgres --workspace @phantomforce/server`
-- `npm run test:release-critical`
-- `npm run test:organization-record-isolation`
 - `npm run test:instant-chat:http-live-model --workspace @phantomforce/server`
+- `npm run test:database-auth`
+- `npm run test:dashboard-chat`
+- `node scripts/test-memory-retention.mjs`
+- `npm run test:release-critical`
 - `npm run test:change-memory`
 - `git diff --check`
 
@@ -60,3 +58,4 @@ Stop after one coherent implemented and browser-verified batch. The owner has
 authorized commit, push, and live deployment. Fetch and rebase `origin/main`,
 preserve concurrent work, sync the dedicated deployment, and run the strict
 live-source doctor before reporting the batch live.
+

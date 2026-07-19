@@ -52,6 +52,12 @@
   forbidden patterns there so another stale worktree cannot resurrect it.
 
 ## Recent, merged & live (newest first)
+- **Bounded long-distance chat recall (2026-07-18)** — build
+  `phantom-live-20260718-43`. The browser packs six newest temporary turns plus
+  up to four turns from a named older thread, still capped at ten and scoped to
+  the active organization. Exact corrected colors and codenames use an
+  extractive context tool instead of model guessing. Chrome proves a corrected
+  fact after nine unrelated subjects; the live-model gate covers 102 requests.
 - **Relevant-thread conversational recall (2026-07-18)** — backend-only Cycle
   20 on app build `phantom-live-20260718-37`. Natural implicit follow-ups now
   inherit the current casual topic, and named returns retrieve the matching
@@ -148,7 +154,7 @@
   (`app/index.html`, `app/phantom.css`, `app/js/main.js`).
 - **Living Phantom character** — `app/js/character.js`: 11 painted poses, emotional
   inertia (`governMood`), hologram depth. Shared by admin + public site.
-- Current cache-bust build id: **`phantom-live-20260718-37`**.
+- Current cache-bust build id: **`phantom-live-20260718-43`**.
 
 ## Repo map
 - `app/` — the **admin console** (`admin.phantomforce.online`). `index.html`,

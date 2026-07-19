@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { spawn, type ChildProcess } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { selectRelevantInstantTurns } from "../src/phantom-ai/instant-chat-context.js";
 
 const baseUrl = process.env.PHANTOM_TEST_SERVER_URL?.trim() || "http://127.0.0.1:5192";
 const model = process.env.PHANTOM_INSTANT_CHAT_MODEL?.trim() || "qwen2.5:14b";
@@ -91,7 +92,8 @@ async function ask(
   spoofPrivateProvider = false,
   taskType = "chat",
 ): Promise<Answer> {
-  const recent = turns.slice(-8);
+  const relevant = selectRelevantInstantTurns(turns, prompt);
+  const recent = (relevant.length ? relevant : turns).slice(-10);
   const started = Date.now();
   const response = await fetch(`${baseUrl}/phantom-ai/chat`, {
     method: "POST",
@@ -151,7 +153,7 @@ async function ask(
     assert.equal(payload.admin_model_requested_lane, "local_ollama", `${prompt}: forged provider leaked into the accepted lane metadata`);
   }
   assert.ok(
-    [model, "phantom-calculator", "phantom-reference-resolver", "phantom-identity", "phantom-personality", "phantom-stable-fact"].includes(String(payload.model_id)),
+    [model, "phantom-calculator", "phantom-reference-resolver", "phantom-context-recall", "phantom-identity", "phantom-personality", "phantom-stable-fact"].includes(String(payload.model_id)),
     `${prompt}: unexpected responder ${payload.model_id}; fallback=${JSON.stringify(payload.fallback || null)}`,
   );
   assert.equal(payload.fallback?.all_failed, false, `${prompt}: model failed`);
@@ -491,6 +493,12 @@ rows.push(await ask(adminToken, "Correction: Nova's raincoat is purple.", topicR
 rows.push(await ask(adminToken, "Explain volcanoes in one sentence.", topicRevisit));
 rows.push(await ask(adminToken, "What makes jazz distinctive? One sentence.", topicRevisit));
 rows.push(await ask(adminToken, "Name one interesting thing about Saturn.", topicRevisit));
+rows.push(await ask(adminToken, "What is the difference between a comet and a meteor? One sentence.", topicRevisit));
+rows.push(await ask(adminToken, "Why does bread rise? One sentence.", topicRevisit));
+rows.push(await ask(adminToken, "Give me one fact about honeybees.", topicRevisit));
+rows.push(await ask(adminToken, "What causes ocean tides? One sentence.", topicRevisit));
+rows.push(await ask(adminToken, "Define metaphor in one sentence.", topicRevisit));
+rows.push(await ask(adminToken, "What is the capital of Portugal? City only.", topicRevisit));
 const revisitedNova = await ask(adminToken, "Back to Nova: what color is her raincoat? Color only.", topicRevisit);
 rows.push(revisitedNova);
 assert.match(revisitedNova.answer.trim(), /^purple[.!]?$/i);
@@ -532,6 +540,7 @@ assert.doesNotMatch(revisitedNova.answer, /yellow|volcano|jazz|Saturn/i);
     topicIsolationVerified: true,
     naturalFollowUpVerified: true,
     namedTopicRevisitVerified: true,
+    longDistanceTopicRevisitVerified: true,
   }, null, 2));
 } finally {
   ownedServer?.kill();

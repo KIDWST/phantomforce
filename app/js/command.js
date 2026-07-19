@@ -12,9 +12,9 @@ import {
   recentChatTurns, addMemory,
   ctx, session, loadPhantomLoop, savePhantomLoop, loopProviderName, modelDisplayLabel,
   getPhantomLaneTarget, loadPhantomLaneConfig, workspaceStorageGetItem, wsName,
-} from "./store.js?v=phantom-live-20260718-42";
-import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260718-42";
-import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260718-42";
+} from "./store.js?v=phantom-live-20260718-43";
+import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260718-43";
+import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260718-43";
 const classifyPhantomIntent = (text) => deriveActionContract(classifyRaw(text));
 
 /* Cross-surface handoff: chat tells the Websites page which project to focus
@@ -375,7 +375,7 @@ async function askHermesBrain(raw, intent, settings) {
   if (token) headers.Authorization = `Bearer ${token}`;
   const loop = loadPhantomLoop();
   const requestedProviderId = routeProfile.providerId;
-  const recentConversation = recentChatTurns(8);
+  const recentConversation = recentChatTurns(10, raw);
   const includeBusinessContext = needsBusinessContext(raw, intent);
   try {
     const response = await fetch("/phantom-ai/chat", {

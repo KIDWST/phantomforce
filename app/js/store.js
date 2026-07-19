@@ -1073,14 +1073,45 @@ export function chatHistoryStats(list = visible(store.state.chatHistory || [])) 
   return { total: items.length, categories, expiresSoon };
 }
 
+const CHAT_CONTEXT_STOP_WORDS = new Set([
+  "about", "after", "again", "answer", "back", "before", "could", "from", "have", "into", "just", "more",
+  "only", "please", "question", "that", "their", "there", "these", "thing", "this", "those", "what", "when",
+  "where", "which", "with", "would", "your",
+]);
+
+function chatContextTerms(value = "") {
+  return new Set((sanitizeMemoryText(value).toLowerCase().match(/[a-z0-9]{4,}/g) || [])
+    .filter((term) => !CHAT_CONTEXT_STOP_WORDS.has(term)));
+}
+
 /* Recent chat is temporary working context, never durable memory. Keep the
-   window small, workspace-scoped, redacted, and oldest-first so a model can
-   resolve short follow-ups without receiving the full 10-day history. */
-export function recentChatTurns(limit = 8) {
+   packet small, workspace-scoped, redacted, and oldest-first. A named return
+   may replace four generic recent turns with the matching older thread and
+   its nearby corrections, but no request can receive more than ten turns. */
+export function recentChatTurns(limit = 8, userRequest = "") {
   const boundedLimit = Math.min(Math.max(Number(limit) || 8, 1), 10);
-  return pruneChatHistory(visible(store.state.chatHistory || []))
-    .slice(0, boundedLimit)
-    .reverse()
+  const history = pruneChatHistory(visible(store.state.chatHistory || []));
+  const selected = new Set(Array.from(
+    { length: Math.min(history.length, userRequest ? Math.min(6, boundedLimit) : boundedLimit) },
+    (_, index) => index,
+  ));
+  const requestTerms = chatContextTerms(userRequest);
+
+  if (requestTerms.size && selected.size < boundedLimit) {
+    for (let index = selected.size; index < history.length && selected.size < boundedLimit; index += 1) {
+      const entryTerms = chatContextTerms(`${history[index].prompt} ${history[index].reply}`);
+      if (![...requestTerms].some((term) => entryTerms.has(term))) continue;
+      // History is newest-first. Include the named turn, the turn immediately
+      // before it, and up to two newer corrections or transformations.
+      for (const nearby of [index + 1, index, index - 1, index - 2]) {
+        if (nearby >= 0 && nearby < history.length && selected.size < boundedLimit) selected.add(nearby);
+      }
+    }
+  }
+
+  return [...selected]
+    .sort((a, b) => b - a)
+    .map((index) => history[index])
     .map((entry) => ({
       user: sanitizeMemoryText(entry.prompt).slice(0, 420),
       assistant: sanitizeMemoryText(entry.reply).slice(0, 520),
