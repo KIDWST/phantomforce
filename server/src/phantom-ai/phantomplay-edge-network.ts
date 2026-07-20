@@ -6,8 +6,13 @@ import { fileURLToPath } from "node:url";
 const moduleDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(moduleDir, "../../..");
 const storePath = process.env.PHANTOMFORCE_EDGE_NETWORK_PATH || resolve(repoRoot, ".phantom", "phantomplay-edge-network.json");
+const storageRoot = process.env.PHANTOMFORCE_EDGE_STORAGE_PATH || resolve(repoRoot, ".phantom", "phantomplay-edge-storage");
 const heartbeatTtlMs = 120_000;
 const leaseTtlMs = 10 * 60_000;
+/* Chunks flow as base64 JSON bodies (matches the rest of this codebase's upload convention,
+   see /orgs/:orgId/assets), so this stays well under Fastify's per-route bodyLimit. Managers
+   re-chunk larger asset packs rather than this limit growing — see architecture doc. */
+export const EDGE_CHUNK_MAX_UPLOAD_BYTES = 12 * 1024 * 1024;
 
 export type EdgeNetworkContext = {
   tenantId: string;
@@ -304,6 +309,68 @@ export async function registerPhantomPlayEdgeManifest(context: EdgeNetworkContex
     store.manifests.push(manifest);
     return { manifest };
   });
+}
+
+function safeIdSegment(value: string, label: string) {
+  if (!/^[a-zA-Z0-9_-]{1,180}$/.test(value)) throw new Error(`Invalid ${label}.`);
+  return value;
+}
+
+function chunkPath(manifestId: string, hash: string) {
+  if (!/^[a-f0-9]{64}$/.test(hash)) throw new Error("Invalid chunk hash.");
+  return resolve(storageRoot, safeIdSegment(manifestId, "manifest id"), hash);
+}
+
+/* Approved game storage for the edge network: chunk bytes never touch the JSON control-plane
+   store above, only their hash/size metadata does. A manager uploads bytes for a chunk that
+   already exists (by hash) in a signed manifest; anything else is rejected before it reaches disk. */
+export async function saveManifestChunkBytes(context: EdgeNetworkContext, manifestId: string, sha256Param: string, bytes: Buffer) {
+  if (!context.canManage) throw new Error("Only a workspace manager can upload trusted asset chunks.");
+  const hash = String(sha256Param || "").toLowerCase();
+  const store = await loadStore();
+  const manifest = store.manifests.find((candidate) => candidate.id === manifestId && candidate.tenantId === context.tenantId);
+  if (!manifest || !validSignature(manifest)) throw new Error("Trusted asset manifest was not found or failed signature verification.");
+  const chunk = manifest.chunks.find((candidate) => candidate.sha256 === hash);
+  if (!chunk) throw new Error("Chunk hash is not part of this manifest.");
+  if (bytes.length > EDGE_CHUNK_MAX_UPLOAD_BYTES) {
+    throw new Error(`Chunk exceeds the ${EDGE_CHUNK_MAX_UPLOAD_BYTES}-byte upload limit; re-chunk the asset pack smaller.`);
+  }
+  if (bytes.length !== chunk.bytes) throw new Error("Uploaded chunk size does not match the signed manifest.");
+  if (createHash("sha256").update(bytes).digest("hex") !== hash) {
+    throw new Error("Uploaded chunk bytes do not match the declared SHA-256 hash.");
+  }
+  const target = chunkPath(manifest.id, hash);
+  await mkdir(dirname(target), { recursive: true });
+  const temporary = `${target}.${process.pid}.${randomUUID()}.tmp`;
+  await writeFile(temporary, bytes);
+  await rename(temporary, target);
+  return { manifestId: manifest.id, sha256: hash, bytes: bytes.length, stored: true };
+}
+
+/* Serves chunk bytes only to the node actually holding an active (non-expired, non-completed)
+   lease naming that exact hash, re-verifies the hash server-side on every read (defense in depth
+   against on-disk tampering/bit-rot), and never interprets the bytes as anything but opaque data. */
+export async function readLeasedChunkBytes(context: EdgeNetworkContext, leaseId: string, sha256Param: string) {
+  const hash = String(sha256Param || "").toLowerCase();
+  await mutationQueue;
+  const store = await loadStore();
+  expireLeases(store);
+  const lease = store.leases.find((candidate) => candidate.id === leaseId && candidate.tenantId === context.tenantId);
+  if (!lease) throw new Error("Asset lease was not found.");
+  requireNode(store, context, lease.nodeId);
+  if (lease.status !== "assigned") throw new Error(`Asset lease is ${lease.status}.`);
+  if (!lease.chunkHashes.includes(hash)) throw new Error("Chunk hash is not part of this lease.");
+  const manifest = store.manifests.find((candidate) => candidate.id === lease.manifestId);
+  if (!manifest) throw new Error("Trusted asset manifest was not found.");
+  let bytes: Buffer;
+  try {
+    bytes = await readFile(chunkPath(manifest.id, hash));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") throw new Error("Chunk is not yet available from storage.");
+    throw error;
+  }
+  if (createHash("sha256").update(bytes).digest("hex") !== hash) throw new Error("Stored chunk failed integrity verification.");
+  return { bytes, sha256: hash };
 }
 
 export async function createPhantomPlayAssetLease(context: EdgeNetworkContext, input: Record<string, unknown>) {

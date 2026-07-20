@@ -1,0 +1,14 @@
+{
+  "name": "@phantomforce/phantomplay-edge-worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Packaged data-plane worker for the PhantomPlay edge network: downloads leased asset chunks, verifies them, throttles usage, admits them into the local cache. Never executes anything it caches.",
+  "bin": {
+    "phantomplay-edge-worker": "bin/worker.mjs"
+  },
+  "scripts": {
+    "start": "node bin/worker.mjs",
+    "test": "node scripts/test-worker.mjs"
+  }
+}

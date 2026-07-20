@@ -297,10 +297,13 @@ import {
 import {
   completePhantomPlayAssetLease,
   createPhantomPlayAssetLease,
+  EDGE_CHUNK_MAX_UPLOAD_BYTES,
   enrollPhantomPlayEdgeNode,
   getPhantomPlayEdgeNetworkSnapshot,
   heartbeatPhantomPlayEdgeNode,
+  readLeasedChunkBytes,
   registerPhantomPlayEdgeManifest,
+  saveManifestChunkBytes,
   updatePhantomPlayEdgeNode,
 } from "./phantom-ai/phantomplay-edge-network.js";
 import {
@@ -5453,6 +5456,31 @@ app.post("/api/phantomplay/edge/manifests", async (request, reply) => {
   catch (error) { return phantomPlayEdgeError(reply, error); }
 });
 
+app.post(
+  "/api/phantomplay/edge/manifests/:id/chunks/:sha256",
+  { bodyLimit: 18 * 1024 * 1024 },
+  async (request, reply) => {
+    const session = requireAccessSession(request, reply);
+    if (!session) return reply;
+    const query = (request.query ?? {}) as { tenant_id?: unknown };
+    const access = await phantomPlayAccess(session, query.tenant_id);
+    if (!access.entitled) return reply.code(403).send({ ok: false, error: "PhantomPlay is not available to this account.", reason: access.reason });
+    const params = request.params as { id?: string; sha256?: string };
+    const body = (request.body ?? {}) as { data?: unknown };
+    const encoded = typeof body.data === "string" ? body.data : "";
+    if (!encoded) return reply.code(400).send({ ok: false, error: "Chunk upload requires a base64 data field." });
+    let bytes: Buffer;
+    try { bytes = Buffer.from(encoded, "base64"); }
+    catch { return reply.code(400).send({ ok: false, error: "Chunk data is not valid base64." }); }
+    try {
+      return {
+        ok: true,
+        ...(await saveManifestChunkBytes(phantomPlayEdgeContext(session, access), String(params.id || "").slice(0, 180), String(params.sha256 || "").slice(0, 80), bytes)),
+      };
+    } catch (error) { return phantomPlayEdgeError(reply, error); }
+  },
+);
+
 app.post("/api/phantomplay/edge/leases", async (request, reply) => {
   const session = requireAccessSession(request, reply);
   if (!session) return reply;
@@ -5460,6 +5488,18 @@ app.post("/api/phantomplay/edge/leases", async (request, reply) => {
   if (!access.entitled) return reply.code(403).send({ ok: false, error: "PhantomPlay is not available to this account.", reason: access.reason });
   try { return { ok: true, ...(await createPhantomPlayAssetLease(phantomPlayEdgeContext(session, access), (request.body ?? {}) as Record<string, unknown>)) }; }
   catch (error) { return phantomPlayEdgeError(reply, error); }
+});
+
+app.get("/api/phantomplay/edge/leases/:id/chunks/:sha256", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const access = await phantomPlayAccess(session);
+  if (!access.entitled) return reply.code(403).send({ ok: false, error: "PhantomPlay is not available to this account.", reason: access.reason });
+  const params = request.params as { id?: string; sha256?: string };
+  try {
+    const { bytes, sha256 } = await readLeasedChunkBytes(phantomPlayEdgeContext(session, access), String(params.id || "").slice(0, 180), String(params.sha256 || "").slice(0, 80));
+    return reply.type("application/octet-stream").header("x-phantomplay-chunk-sha256", sha256).send(bytes);
+  } catch (error) { return phantomPlayEdgeError(reply, error); }
 });
 
 app.post("/api/phantomplay/edge/leases/:id/complete", async (request, reply) => {
