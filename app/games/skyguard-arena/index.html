@@ -1,181 +1,210 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; media-src 'none'; frame-src 'none'">
-<title>Skyguard Arena</title>
-<link rel="stylesheet" href="style.css">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; media-src 'none'; frame-src 'none'">
+  <title>Skyguard Arena</title>
+  <link rel="stylesheet" href="style.css">
 </head>
-<body>
+<body data-screen="title" data-commander="astra">
 <div id="app" class="sg-app">
-  <div class="sg-toast" data-toast hidden></div>
+  <div class="sg-toast" data-toast hidden role="status"></div>
 
-  <!-- ============== MAIN MENU ============== -->
-  <section id="screenMenu" class="sg-screen sg-menu">
-    <div class="sg-menu-inner">
+  <section id="screenMenu" class="sg-screen sg-title">
+    <div class="sg-title-inner">
       <header class="sg-brand">
-        <span class="sg-brand-mark" aria-hidden="true"></span>
+        <span class="sg-brand-mark" aria-hidden="true"><i></i></span>
         <div>
+          <p class="sg-kicker">Stage 1 / Mission Select</p>
           <h1>Skyguard Arena</h1>
-          <p>Hold the Skyline Route. Break the raid before it breaks your Spire.</p>
+          <p>Build a four-defense wing, appoint a commander, and hold a living sky route against formation raids.</p>
         </div>
       </header>
 
       <div class="sg-rank-strip">
-        <span class="sg-rank-badge"><b data-rank>1</b><i>Command Rank</i></span>
-        <div class="sg-rank-bar"><i data-rank-fill style="width:0%"></i></div>
-        <span class="sg-rank-stat"><b data-best-campaign>0</b><i>Best campaign wave</i></span>
-        <span class="sg-rank-stat"><b data-best-endless>0</b><i>Best endless wave</i></span>
+        <span class="sg-rank-badge"><b data-rank>1</b><i>Command rank</i></span>
+        <div class="sg-rank-bar"><i data-rank-fill></i></div>
+        <span class="sg-rank-stat"><b data-best-campaign>0</b><i>Campaign best</i></span>
+        <span class="sg-rank-stat"><b data-best-endless>0</b><i>Endless best</i></span>
       </div>
 
-      <nav class="sg-mode-grid">
+      <nav class="sg-mode-grid" aria-label="Battle modes">
         <button type="button" class="sg-mode-card" data-mode="campaign">
-          <b>Campaign</b><span>8 scripted waves, one boss, one route.</span>
+          <i class="sg-mode-icon">I</i><b>Frontier Campaign</b><span>Eight authored assaults with formations, counter checks, and a colossal flagship.</span>
         </button>
         <button type="button" class="sg-mode-card" data-mode="endless">
-          <b>Endless Watch</b><span>Waves keep escalating. Survive as long as you can.</span>
+          <i class="sg-mode-icon">E</i><b>Endless Watch</b><span>Escalating routes and mixed armor until your command finally breaks.</span>
         </button>
         <button type="button" class="sg-mode-card" data-mode="skirmish">
-          <b>Skirmish vs Bot</b><span>Practice the duel format against a local AI rival.</span>
+          <i class="sg-mode-icon">V</i><b>War Game vs AI</b><span>A rival commander builds, counters, and launches pressure raids into your route.</span>
         </button>
-        <button type="button" class="sg-mode-card is-duel" data-mode="battle" data-pp-duel-card hidden>
-          <b>Room Duel</b><span data-duel-card-sub>Waiting for a Playtest Room…</span>
+        <button type="button" class="sg-mode-card is-room" data-mode="battle" data-room-mode hidden>
+          <i class="sg-mode-icon">R</i><b>Private Room War</b><span data-room-mode-copy>Room link acquired. Prepare your defense wing.</span>
         </button>
       </nav>
 
-      <div class="sg-menu-foot">
-        <button type="button" class="sg-ghost" data-open-tutorial>How to play</button>
-        <button type="button" class="sg-ghost" data-open-settings>Settings</button>
-        <span class="sg-unlock-note" data-unlock-note></span>
-      </div>
+      <footer class="sg-title-foot">
+        <button type="button" class="sg-icon-text" data-open-tutorial><i>?</i><span>Field manual</span></button>
+        <button type="button" class="sg-icon-text" data-open-settings><i>*</i><span>Settings</span></button>
+        <span data-unlock-note>All defense chassis are available for tactical drafting.</span>
+      </footer>
     </div>
   </section>
 
-  <!-- ============== TUTORIAL ============== -->
-  <section id="screenTutorial" class="sg-screen sg-tutorial" hidden>
-    <div class="sg-tutorial-card">
-      <div class="sg-tutorial-body" data-tutorial-body></div>
-      <div class="sg-tutorial-dots" data-tutorial-dots></div>
-      <div class="sg-tutorial-actions">
-        <button type="button" class="sg-ghost" data-tutorial-skip>Skip</button>
+  <section id="screenLoadout" class="sg-screen sg-loadout" hidden>
+    <header class="sg-loadout-head">
+      <div>
+        <p class="sg-kicker">Stage 2 / Command Bay</p>
+        <h2>Four defenses. One commander.</h2>
+        <p data-loadout-sub>Draft a wing whose counters fit the selected route.</p>
+      </div>
+      <span class="sg-mode-stamp" data-loadout-mode>CAMPAIGN</span>
+    </header>
+
+    <div class="sg-loadout-scroll">
+      <section class="sg-loadout-section">
+        <div class="sg-section-head"><h3>Defense wing</h3><b data-defense-count>4 / 4</b></div>
+        <div class="sg-defense-grid" data-defense-grid></div>
+      </section>
+
+      <section class="sg-loadout-section">
+        <div class="sg-section-head"><h3>Commander</h3><b>1 / 1</b></div>
+        <div class="sg-commander-grid" data-commander-grid></div>
+      </section>
+
+      <section class="sg-loadout-section">
+        <div class="sg-section-head"><h3>Sky theater</h3><b data-map-objective>ROUTE DEFENSE</b></div>
+        <div class="sg-map-grid" data-map-grid></div>
+      </section>
+
+      <section class="sg-room-ready" data-room-ready hidden>
         <div>
-          <button type="button" class="sg-ghost" data-tutorial-back>Back</button>
-          <button type="button" class="sg-primary" data-tutorial-next>Next</button>
+          <p class="sg-kicker">PRIVATE ROOM</p>
+          <h3 data-room-title>Waiting for defenders</h3>
+          <p data-room-note>Ready up in the PhantomPlay room panel.</p>
         </div>
-      </div>
+        <ul data-room-roster></ul>
+      </section>
     </div>
+
+    <footer class="sg-loadout-actions">
+      <button type="button" class="sg-secondary" data-loadout-back>Back</button>
+      <div class="sg-loadout-summary" data-loadout-summary></div>
+      <button type="button" class="sg-primary" data-loadout-start>Launch defense</button>
+    </footer>
   </section>
 
-  <!-- ============== DUEL LOBBY ============== -->
-  <section id="screenDuelLobby" class="sg-screen sg-lobby" hidden>
-    <div class="sg-lobby-card">
-      <p class="sg-kicker">PRIVATE ROOM DUEL</p>
-      <h2 data-lobby-title>Waiting for both defenders…</h2>
-      <p data-lobby-copy>Ready up from the Playtest Room panel outside this window. The duel begins once both sides are ready.</p>
-      <ul class="sg-lobby-roster" data-lobby-roster></ul>
-      <p class="sg-lobby-note" data-lobby-note></p>
-      <div class="sg-lobby-actions">
-        <button type="button" class="sg-primary" data-lobby-start hidden>Start duel</button>
-        <button type="button" class="sg-ghost" data-lobby-back>Back to menu</button>
-      </div>
-    </div>
-  </section>
-
-  <!-- ============== GAME SCREEN ============== -->
   <section id="screenGame" class="sg-screen sg-game" hidden>
     <header class="sg-hud">
       <div class="sg-hud-left">
-        <span class="sg-chip sg-chip-gold"><i data-hud-gold>0</i>Glint</span>
-        <span class="sg-chip"><i data-hud-wave>0/0</i>Wave</span>
-        <span class="sg-chip sg-chip-lives"><i data-hud-lives>0</i>Spire</span>
-        <span class="sg-chip"><i data-hud-score>0</i>Score</span>
+        <span class="sg-chip sg-chip-gold"><i data-hud-gold>0</i><b>Glint</b></span>
+        <span class="sg-chip"><i data-hud-wave>0/0</i><b>Wave</b></span>
+        <span class="sg-chip sg-chip-lives"><i data-hud-lives>0</i><b>Spire</b></span>
+        <span class="sg-chip"><i data-hud-score>0</i><b>Score</b></span>
       </div>
-      <div class="sg-hud-mid" data-hud-mode>Campaign</div>
+      <div class="sg-hud-mid">
+        <b data-hud-mode>Campaign</b>
+        <span data-hud-objective>Hold the route</span>
+      </div>
       <div class="sg-hud-right">
-        <button type="button" class="sg-icon-btn" data-pause-btn title="Pause">❚❚</button>
-        <button type="button" class="sg-icon-btn" data-exit-btn title="Exit to menu">✕</button>
+        <button type="button" class="sg-icon-btn" data-pause-btn title="Pause" aria-label="Pause">||</button>
+        <button type="button" class="sg-icon-btn" data-exit-btn title="Exit to mission select" aria-label="Exit">X</button>
       </div>
     </header>
 
     <div class="sg-field-wrap">
       <div class="sg-field" data-field>
-        <canvas data-canvas></canvas>
+        <canvas data-canvas tabindex="0" aria-label="Skyguard tactical battlefield"></canvas>
         <div class="sg-wave-banner" data-wave-banner hidden></div>
-        <div class="sg-boss-banner" data-boss-banner hidden>BOSS SIGNAL — VOIDMAW COLOSSUS</div>
+        <div class="sg-boss-banner" data-boss-banner hidden>FLAGSHIP SIGNAL / VOIDMAW COLOSSUS</div>
+        <div class="sg-map-event" data-map-event hidden></div>
       </div>
 
       <aside class="sg-opponent-panel" data-opponent-panel hidden>
-        <p class="sg-kicker">OPPONENT LANE</p>
-        <div class="sg-opp-row"><span>Name</span><b data-opp-name>—</b></div>
-        <div class="sg-opp-row"><span>Spire</span><b data-opp-lives>—</b></div>
-        <div class="sg-opp-row"><span>Wave</span><b data-opp-wave>—</b></div>
-        <div class="sg-opp-row"><span>Status</span><b data-opp-status>Syncing…</b></div>
-        <div class="sg-opp-bar"><i data-opp-bar style="width:0%"></i></div>
+        <p class="sg-kicker">RIVAL COMMAND</p>
+        <div class="sg-opp-row"><span>Callsign</span><b data-opp-name>-</b></div>
+        <div class="sg-opp-row"><span>Spire</span><b data-opp-lives>-</b></div>
+        <div class="sg-opp-row"><span>Wave</span><b data-opp-wave>-</b></div>
+        <div class="sg-opp-row"><span>Status</span><b data-opp-status>Syncing</b></div>
+        <div class="sg-opp-bar"><i data-opp-bar></i></div>
         <p class="sg-opp-note" data-opp-note></p>
       </aside>
     </div>
 
     <footer class="sg-dock">
-      <div class="sg-dock-defenders" data-dock-defenders></div>
+      <div class="sg-dock-defenses" data-dock-defenses></div>
       <div class="sg-dock-selected" data-dock-selected hidden></div>
-      <div class="sg-dock-commander">
-        <button type="button" class="sg-commander-btn" data-commander-btn>
-          <span>Overcharge Pulse</span>
-          <i data-commander-fill></i>
-        </button>
-      </div>
-      <div class="sg-dock-pressure" data-dock-pressure hidden></div>
+      <button type="button" class="sg-ability-btn" data-commander-btn>
+        <i class="sg-ability-sigil" data-ability-sigil>A</i>
+        <span><b data-ability-name>Overcharge Pulse</b><small data-ability-copy>Ready</small></span>
+        <em data-commander-fill></em>
+      </button>
+      <div class="sg-pressure-dock" data-pressure-dock hidden></div>
     </footer>
   </section>
 
-  <!-- ============== PAUSE OVERLAY ============== -->
+  <section id="screenResults" class="sg-screen sg-results" hidden>
+    <div class="sg-results-inner">
+      <header>
+        <p class="sg-kicker">Stage 4 / Battle Record</p>
+        <h2 data-results-title>Route held</h2>
+        <p data-results-sub></p>
+      </header>
+      <div class="sg-results-layout">
+        <div class="sg-verdict" data-verdict>
+          <b data-verdict-word>VICTORY</b>
+          <span data-verdict-copy>The skyline remains under your command.</span>
+        </div>
+        <div class="sg-results-grid" data-results-grid></div>
+      </div>
+      <div class="sg-results-actions">
+        <button type="button" class="sg-secondary" data-results-menu>Mission select</button>
+        <button type="button" class="sg-primary" data-results-again>Rebuild wing</button>
+        <button type="button" class="sg-secondary" data-results-rematch hidden>Room rematch</button>
+      </div>
+    </div>
+  </section>
+
   <div class="sg-overlay" data-overlay-pause hidden>
-    <div class="sg-overlay-card">
-      <h2>Paused</h2>
+    <div class="sg-dialog">
+      <h2>Command paused</h2>
       <div class="sg-settings-block">
-        <label class="sg-switch"><input type="checkbox" data-vol-mute> Mute in-game sound</label>
+        <label class="sg-switch"><input type="checkbox" data-vol-mute> Mute battle sound</label>
         <label class="sg-slide">Volume<input type="range" min="0" max="100" value="70" data-vol-slider></label>
         <label class="sg-switch"><input type="checkbox" data-reduced-toggle> Reduce motion</label>
       </div>
-      <div class="sg-overlay-actions">
+      <div class="sg-dialog-actions">
         <button type="button" class="sg-primary" data-resume-btn>Resume</button>
-        <button type="button" class="sg-ghost" data-restart-btn>Restart run</button>
-        <button type="button" class="sg-ghost" data-menu-btn>Exit to menu</button>
+        <button type="button" class="sg-secondary" data-restart-btn>Restart battle</button>
+        <button type="button" class="sg-secondary" data-menu-btn>Mission select</button>
       </div>
     </div>
   </div>
 
-  <!-- ============== SETTINGS OVERLAY (from menu) ============== -->
   <div class="sg-overlay" data-overlay-settings hidden>
-    <div class="sg-overlay-card">
+    <div class="sg-dialog">
       <h2>Settings</h2>
       <div class="sg-settings-block">
-        <label class="sg-switch"><input type="checkbox" data-vol-mute-menu> Mute in-game sound</label>
+        <label class="sg-switch"><input type="checkbox" data-vol-mute-menu> Mute battle sound</label>
         <label class="sg-slide">Volume<input type="range" min="0" max="100" value="70" data-vol-slider-menu></label>
         <label class="sg-switch"><input type="checkbox" data-reduced-toggle-menu> Reduce motion</label>
       </div>
-      <p class="sg-settings-note">Sound also follows PhantomPlay's own sound switch — turning that off always mutes Skyguard Arena.</p>
-      <div class="sg-overlay-actions">
-        <button type="button" class="sg-primary" data-settings-close>Done</button>
-      </div>
+      <button type="button" class="sg-primary" data-settings-close>Done</button>
     </div>
   </div>
 
-  <!-- ============== RESULTS OVERLAY ============== -->
-  <div class="sg-overlay" data-overlay-results hidden>
-    <div class="sg-overlay-card sg-results-card">
-      <h2 data-results-title>Run complete</h2>
-      <p data-results-sub></p>
-      <div class="sg-results-grid" data-results-grid></div>
-      <div class="sg-overlay-actions">
-        <button type="button" class="sg-primary" data-results-again>Play again</button>
-        <button type="button" class="sg-ghost" data-results-menu>Main menu</button>
-        <button type="button" class="sg-ghost" data-results-rematch hidden>Rematch</button>
+  <div class="sg-overlay" data-overlay-tutorial hidden>
+    <div class="sg-dialog sg-manual">
+      <div data-tutorial-body></div>
+      <div class="sg-tutorial-dots" data-tutorial-dots></div>
+      <div class="sg-dialog-actions">
+        <button type="button" class="sg-secondary" data-tutorial-back>Back</button>
+        <button type="button" class="sg-secondary" data-tutorial-skip>Close</button>
+        <button type="button" class="sg-primary" data-tutorial-next>Next</button>
       </div>
     </div>
   </div>
-
 </div>
 <script src="game.js"></script>
 </body>

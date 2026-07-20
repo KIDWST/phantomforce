@@ -9,20 +9,20 @@ import {
   freshEditState, applyFilterPreset, renderBaseFrame,
   addBokehSpot, removeBokehSpotNear, removeBokehSpotAt, nearestBokehSpot, moveBokehSpot, resizeBokehSpot,
   setBokehMask, freshTextStyle, TEXT_FONTS, TEXT_PRESETS, applyTextPreset,
-} from "./imagefilters.js?v=phantom-live-20260719-59";
-import { getRembgStatus, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260719-59";
-import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260719-59";
-import { parseAnalyticsReport } from "./social-analytics.js?v=phantom-live-20260719-59";
+} from "./imagefilters.js?v=phantom-live-20260719-60";
+import { getRembgStatus, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260719-60";
+import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260719-60";
+import { parseAnalyticsReport } from "./social-analytics.js?v=phantom-live-20260719-60";
 import {
   freshComposition, compositionSnapshot, restoreComposition, addImageLayer, replaceImageLayerSource, addTextLayer, addColorLayer,
   duplicateLayer, removeSelectedLayers, moveLayerOrder, selectedLayers, selectLayer, selectAllLayers,
   loadCompositionImages, renderComposition, drawCompositionOverlay, drawDetectedSubjectOverlay, canvasPoint, hitTestLayer, hitTestResizeHandle,
   setCanvasPreset, zoomComposition, canvasPointToLayer, layerPointToCanvas,
   imageEditSnapshot, restoreImageEditSnapshot, pushEditorSnapshot,
-} from "./content-editor.js?v=phantom-live-20260719-59";
+} from "./content-editor.js?v=phantom-live-20260719-60";
 import {
   currentTenantId, currentWs, ctx, session, store, visible, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem, wsName,
-} from "./store.js?v=phantom-live-20260719-59";
+} from "./store.js?v=phantom-live-20260719-60";
 
 const CH_KEY = "pf.contenthub.v2";
 const CH_REMOVED_KEY = "pf.contenthub.removed.v1";
@@ -3399,11 +3399,22 @@ function analyticsAuthHeaders(extra = {}) {
   const token = typeof session?.token === "function" ? session.token() : "";
   return { ...extra, ...(token ? { Authorization: `Bearer ${token}` } : {}) };
 }
+function analyticsTenantId() {
+  try { return currentTenantId(); } catch { return currentWs(); }
+}
+function withAnalyticsTenant(path) {
+  const tenant = analyticsTenantId();
+  if (!tenant) return path;
+  return `${path}${path.includes("?") ? "&" : "?"}tenant_id=${encodeURIComponent(tenant)}`;
+}
 async function analyticsApi(path, { method = "GET", body } = {}) {
+  const requestBody = body && typeof body === "object" && method !== "GET"
+    ? { tenant_id: analyticsTenantId(), ...body }
+    : body;
   const response = await fetch(path, {
     method,
-    headers: analyticsAuthHeaders(body === undefined ? {} : { "Content-Type": "application/json" }),
-    body: body === undefined ? undefined : JSON.stringify(body),
+    headers: analyticsAuthHeaders(requestBody === undefined ? {} : { "Content-Type": "application/json" }),
+    body: requestBody === undefined ? undefined : JSON.stringify(requestBody),
   });
   const json = await response.json().catch(() => ({}));
   if (!response.ok) {
@@ -3416,13 +3427,55 @@ async function analyticsApi(path, { method = "GET", body } = {}) {
 function connectorStatus(platformId) {
   return analyticsConnectorState.connectors.find((connector) => connector.id === platformId) || null;
 }
+function applyConnectorToSocialAccount(account, connector) {
+  if (!account || !connector) return false;
+  let changed = false;
+  const set = (key, value) => {
+    if (value !== undefined && value !== null && String(value) && account[key] !== value) {
+      account[key] = value;
+      changed = true;
+    }
+  };
+  if (connector.configured) {
+    if (!account.enabled) { account.enabled = true; changed = true; }
+    if (account.connectMode !== "live-api" && account.connectMode !== "oauth-connected") {
+      account.connectMode = "oauth-connected";
+      changed = true;
+    }
+    if (account.officialConnectState !== "connected") {
+      account.officialConnectState = "connected";
+      changed = true;
+    }
+    set("lastConnectAt", connector.savedConnection?.updatedAt || connector.savedConnection?.connectedAt || account.lastConnectAt || new Date().toISOString());
+  } else if (connector.oauthConfigured && account.officialConnectState === "not_configured") {
+    account.officialConnectState = "oauth_ready";
+    changed = true;
+  }
+  set("handle", connector.savedConnection?.accountHandle || connector.handle);
+  set("loginIdentity", connector.personalProfilePostingBlocked
+    ? "Personal login for access only"
+    : connector.savedConnection?.accountName || account.loginIdentity);
+  set("publishTargetKind", connector.publishTargetKind);
+  set("publishTargetLabel", connector.targetLabel || connector.savedConnection?.pageName || connector.savedConnection?.accountName || "");
+  set("publishTargetId", connector.targetId || "");
+  set("targetSafetyCopy", connector.targetSafetyCopy || "");
+  return changed;
+}
+function syncAccountsFromConnectors(accounts = loadSocialAccounts()) {
+  let changed = false;
+  for (const account of accounts) {
+    changed = applyConnectorToSocialAccount(account, connectorStatus(account.id)) || changed;
+  }
+  if (changed) saveSocialAccounts(accounts);
+  return accounts;
+}
 async function refreshAnalyticsOAuthSetup({ force = false } = {}) {
   if (analyticsOAuthSetupState.loading) return analyticsOAuthSetupState.setup;
   if (analyticsOAuthSetupState.loaded && !force) return analyticsOAuthSetupState.setup;
   analyticsOAuthSetupState.loading = true;
   analyticsOAuthSetupState.error = "";
   try {
-    const response = await analyticsApi("/phantom-ai/ops/social-oauth/setup");
+    const response = await analyticsApi(withAnalyticsTenant("/phantom-ai/ops/social-oauth/setup"));
     analyticsOAuthSetupState.setup = response?.setup || null;
     analyticsOAuthSetupState.loaded = true;
   } catch (error) {
@@ -3471,12 +3524,13 @@ async function refreshLiveAnalytics(el, accounts, opts, { force = false, platfor
   analyticsConnectorState.error = "";
   try {
     if (!analyticsConnectorState.loaded || force) {
-      const response = await analyticsApi("/phantom-ai/ops/social-analytics/status");
+      const response = await analyticsApi(withAnalyticsTenant("/phantom-ai/ops/social-analytics/status"));
       analyticsConnectorState.connectors = Array.isArray(response?.social_analytics?.connectors)
         ? response.social_analytics.connectors
         : [];
       analyticsConnectorState.preflight = response?.social_analytics?.oauthPreflight || null;
       analyticsConnectorState.loaded = true;
+      syncAccountsFromConnectors(accounts);
     }
     const ready = analyticsConnectorState.connectors.filter((connector) => connector.configured && (!platform || connector.id === platform));
     const failed = [];
@@ -3608,12 +3662,13 @@ let socialOAuthListenerReady = false;
 let analyticsOAuthPollTimer = 0;
 
 async function refreshAnalyticsConnectorStatus() {
-  const response = await analyticsApi("/phantom-ai/ops/social-analytics/status");
+  const response = await analyticsApi(withAnalyticsTenant("/phantom-ai/ops/social-analytics/status"));
   analyticsConnectorState.connectors = Array.isArray(response?.social_analytics?.connectors)
     ? response.social_analytics.connectors
     : [];
   analyticsConnectorState.preflight = response?.social_analytics?.oauthPreflight || null;
   analyticsConnectorState.loaded = true;
+  syncAccountsFromConnectors();
   return analyticsConnectorState.connectors;
 }
 
@@ -3687,7 +3742,6 @@ function ensureSocialOAuthListener() {
   if (socialOAuthListenerReady || typeof window === "undefined") return;
   socialOAuthListenerReady = true;
   window.addEventListener("message", (event) => {
-    if (event.origin !== window.location.origin) return;
     const data = parseSocialOAuthPayload(event.data);
     if (data?.protocol === "phantomforce.social-oauth.v1" && data.type === "connected") handleSocialOAuthComplete(data);
   });
@@ -3724,6 +3778,10 @@ function accountAnalyticsRow(row, esc) {
     : oauthReady
       ? "OAuth app credentials exist; finish account authorization before stats appear."
       : "This channel needs the PhantomForce OAuth app configured before live analytics or posting approval can run.";
+  const safetyCopy = connector?.targetSafetyCopy || account.targetSafetyCopy || "";
+  const targetKind = String(connector?.publishTargetKind || account.publishTargetKind || "").replaceAll("_", " ");
+  const targetLabel = connector?.targetLabel || account.publishTargetLabel || "";
+  const targetCopy = targetLabel ? `${targetKind || "target"}: ${targetLabel}` : safetyCopy;
   const primaryAction = canSync
     ? `<button class="btn btn-primary" type="button" data-an-sync="${account.id}">${analyticsConnectorState.loading ? "Syncing…" : live ? "Sync now" : "Start live sync"}</button>`
     : oauthReady
@@ -3736,7 +3794,7 @@ function accountAnalyticsRow(row, esc) {
     ${feed ? `<div class="an-channel-metrics">
       <span><b>${K(feed.reach)}</b>reach</span><span><b>${K(feed.impressions)}</b>views</span><span><b>${K(feed.engagement)}</b>engagement</span><span><b>${K(feed.followers)}</b>followers</span>
     </div><div class="an-channel-source"><b>${live ? "Live · " : "Report · "}${esc(feed.source)}</b><i>${feed.syncedAt ? `Synced ${esc(ago(feed.syncedAt))}` : "current"}</i>${syncFailed ? `<em class="an-sync-error">${esc(syncOutcome.error)}</em>` : ""}</div>`
-    : `<div class="an-channel-empty${syncFailed ? " is-sync-error" : ""}"><b>${esc(sourceState)}</b><span>${esc(sourceCopy)}</span></div>`}
+    : `<div class="an-channel-empty${syncFailed ? " is-sync-error" : ""}"><b>${esc(sourceState)}</b><span>${esc(sourceCopy)}</span>${targetCopy ? `<em class="an-target-safe">${esc(targetCopy)}</em>` : ""}</div>`}
     <div class="an-channel-actions">
       ${primaryAction}
       ${feed ? `<button class="btn btn-ghost" type="button" data-an-clear="${account.id}">Clear data</button>` : ""}
@@ -3769,9 +3827,9 @@ function analyticsReadinessCopy({ hasLiveMetrics, configuredCount, oauthReadyCou
   if (oauthReadyCount) {
     return {
       tone: "ready",
-      title: "Provider apps are ready. Connect accounts.",
-      body: "Use the signed-in browser buttons below once per channel. PhantomForce stores tokens server-side and keeps outbound posting gated.",
-      action: `<button class="btn btn-primary" type="button" data-an-scroll-sources>Connect accounts</button>`,
+      title: "Provider apps are ready. Connect the accounts.",
+      body: "Use the signed-in browser once per channel. Meta uses your personal login only to find Pages and Instagram business assets; personal profile posting is blocked.",
+      action: `<button class="btn btn-primary" type="button" data-an-connect-all>${analyticsConnectorState.loading ? "Connecting…" : "Connect all accounts"}</button>`,
     };
   }
   return {
@@ -3831,6 +3889,44 @@ function wireAnalyticsActions(el, accounts, opts) {
       renderAnalytics(el, opts);
     }
   });
+  el.querySelectorAll("[data-an-connect-all]").forEach((button) => button.onclick = async () => {
+    const targets = analyticsConnectorState.connectors.filter((connector) => connector.oauthConfigured && !connector.configured);
+    if (!targets.length) {
+      analyticsNotice = "No unconnected OAuth-ready channels are waiting.";
+      renderAnalytics(el, opts, { skipAutoRefresh: true });
+      return;
+    }
+    button.disabled = true;
+    analyticsNotice = `Opening ${targets.length} social sign-in flow${targets.length === 1 ? "" : "s"}…`;
+    const placeholders = targets.map(() => {
+      try { return window.open("about:blank", "_blank"); } catch { return null; }
+    });
+    let opened = 0;
+    for (const [index, connector] of targets.entries()) {
+      try {
+        const response = await analyticsApi("/phantom-ai/ops/social-oauth/start", {
+          method: "POST",
+          body: { platform: connector.id },
+        });
+        const authUrl = response?.oauth?.authorizationUrl || response?.oauth?.url;
+        if (authUrl) {
+          if (placeholders[index]) placeholders[index].location.href = authUrl;
+          else window.open(authUrl, "_blank", "noopener,noreferrer");
+          opened += 1;
+        } else if (placeholders[index]) {
+          placeholders[index].close();
+        }
+      } catch (error) {
+        if (placeholders[index]) placeholders[index].close();
+        analyticsConnectorState.sync[connector.id] = { state: "error", error: error?.message || "Connection could not start.", syncedAt: "" };
+      }
+    }
+    analyticsNotice = opened
+      ? `${opened} sign-in flow${opened === 1 ? "" : "s"} opened. Approve the business/page targets and PhantomForce will sync when callbacks return.`
+      : "No social sign-in windows could be opened. Check provider app setup in Settings.";
+    startAnalyticsOAuthPolling(targets[0]?.id);
+    renderAnalytics(el, opts, { skipAutoRefresh: true });
+  });
   el.querySelectorAll("[data-an-import]").forEach((input) => input.onchange = async () => {
     const account = accounts.find((row) => row.id === input.dataset.anImport);
     const file = input.files?.[0];
@@ -3869,7 +3965,7 @@ export function renderAnalytics(el, opts = {}, renderOptions = {}) {
   analyticsOpts = opts;
   ensureSocialOAuthListener();
   const esc = opts.esc || ((s) => String(s));
-  const accounts = loadSocialAccounts();
+  const accounts = syncAccountsFromConnectors(loadSocialAccounts());
   if (canManageSocialOAuthApps() && !analyticsOAuthSetupState.loaded && !analyticsOAuthSetupState.loading) {
     void refreshAnalyticsOAuthSetup().then(() => {
       if (el?.isConnected) renderAnalytics(el, opts, { skipAutoRefresh: true });

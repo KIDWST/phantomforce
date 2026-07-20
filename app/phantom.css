@@ -7074,6 +7074,21 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .an-channel-source, .an-channel-empty { display: grid; gap: 3px; min-width: 0; }
 .an-channel-source b, .an-channel-empty b { color: #dff7ec; font-size: 11.5px; }
 .an-channel-source i, .an-channel-empty span { color: var(--dim); font-size: 10.5px; font-style: normal; }
+.an-target-safe {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  margin-top: 3px;
+  padding: 4px 7px;
+  border: 1px solid rgba(65,255,161,.22);
+  border-radius: 999px;
+  background: rgba(65,255,161,.055);
+  color: #bfffd8;
+  font: 700 8.5px "DM Mono", monospace;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  white-space: normal;
+}
 .an-channel-actions { display: flex; justify-content: flex-end; gap: 7px; }
 .an-channel-actions .btn { min-height: 36px; white-space: nowrap; cursor: pointer; }
 .an-wide { grid-column: auto; }

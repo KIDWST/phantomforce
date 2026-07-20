@@ -222,7 +222,9 @@ import {
   completeSocialOAuthCallback,
   createSocialOAuthStart,
   getSocialAnalyticsConnectorStatus,
+  getSocialOAuthSetupStatus,
   isSocialAnalyticsPlatform,
+  saveSocialOAuthSetup,
   syncSocialAnalytics,
 } from "./connectors/social-analytics-connector.js";
 import {
@@ -574,6 +576,12 @@ const CrmProspectLanesBodySchema = z.object({
 });
 const SocialAnalyticsSyncSchema = z.object({
   platform: z.enum(["youtube", "instagram", "facebook", "tiktok", "x", "linkedin", "pinterest"]),
+});
+const SocialOAuthSetupSchema = z.object({
+  platform: z.enum(["youtube", "instagram", "facebook", "tiktok", "x", "linkedin", "pinterest"]),
+  clientId: z.string().trim().max(2000).optional().default(""),
+  clientSecret: z.string().trim().max(4000).optional().default(""),
+  redirectUri: z.string().trim().max(2000).optional().default(""),
 });
 
 function safeCustomizationTenantId(value: unknown, fallback: string) {
@@ -7493,37 +7501,75 @@ app.get("/phantom-ai/ops/finance/receipt/:id", async (request, reply) => {
   return { ok: true, session, image: result.dataUrl, asset: result.asset };
 });
 
-app.get("/phantom-ai/ops/social-analytics/status", async (request, reply) => {
+app.get("/phantom-ai/ops/social-oauth/setup", async (request, reply) => {
   const session = requireAdminAccessSession(request, reply);
   if (!session) return reply;
   return {
     ok: true,
     session,
+    setup: getSocialOAuthSetupStatus(),
+    social_analytics: getSocialAnalyticsConnectorStatus(customizationTenantForSession(session)),
+  };
+});
+
+app.post("/phantom-ai/ops/social-oauth/setup", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+  if (!session) return reply;
+  const parsed = SocialOAuthSetupSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  try {
+    const setup = saveSocialOAuthSetup(parsed.data);
+    return {
+      ok: true,
+      session,
+      setup,
+      social_analytics: getSocialAnalyticsConnectorStatus(customizationTenantForSession(session)),
+      secretsExposed: false,
+    };
+  } catch (error) {
+    return reply.code(400).send({
+      ok: false,
+      error: error instanceof Error ? error.message.slice(0, 400) : "OAuth setup could not be saved.",
+      secretsExposed: false,
+    });
+  }
+});
+
+app.get("/phantom-ai/ops/social-analytics/status", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const tenantId = customizationTenantForSession(session, (request.query as { tenant_id?: string } | undefined)?.tenant_id);
+  return {
+    ok: true,
+    session,
+    tenant_id: tenantId,
     read_only: true,
-    social_analytics: getSocialAnalyticsConnectorStatus(),
+    social_analytics: getSocialAnalyticsConnectorStatus(tenantId),
   };
 });
 
 app.post("/phantom-ai/ops/social-oauth/start", async (request, reply) => {
-  const session = requireAdminAccessSession(request, reply);
+  const session = requireAccessSession(request, reply);
   if (!session) return reply;
-  const body = (request.body ?? {}) as { platform?: unknown };
+  const body = (request.body ?? {}) as { platform?: unknown; tenant_id?: unknown };
   if (!isSocialAnalyticsPlatform(body.platform)) {
     return reply.code(400).send({ ok: false, error: "Unsupported social platform." });
   }
+  const tenantId = customizationTenantForSession(session, typeof body.tenant_id === "string" ? body.tenant_id : undefined);
   try {
     return {
       ok: true,
       session,
+      tenant_id: tenantId,
       external_send: false,
       approval_executed: false,
-      oauth: createSocialOAuthStart(body.platform),
+      oauth: createSocialOAuthStart(body.platform, tenantId),
     };
   } catch (error) {
     return reply.code(409).send({
       ok: false,
       error: error instanceof Error ? error.message.slice(0, 400) : "OAuth start is not configured.",
-      connector: getSocialAnalyticsConnectorStatus().connectors.find((item) => item.id === body.platform),
+      connector: getSocialAnalyticsConnectorStatus(tenantId).connectors.find((item) => item.id === body.platform),
     });
   }
 });
@@ -7549,7 +7595,17 @@ app.get("/phantom-ai/ops/social-oauth/callback", async (request, reply) => {
       <p style="letter-spacing:.24em;text-transform:uppercase;color:#45ffad;font-weight:800;">Connection saved</p>
       <h1>${String(result.platform).replace(/</g, "&lt;")} is connected to PhantomForce.</h1>
       <p>Return to the admin app and press <code>Sync analytics</code>. Tokens were stored locally and were not printed in this page.</p>
-      <script>setTimeout(() => { try { window.close(); } catch {} }, 1800);</script>
+      <script>
+        const payload = {
+          protocol: "phantomforce.social-oauth.v1",
+          type: "connected",
+          platform: ${JSON.stringify(result.platform)},
+          connectedAt: new Date().toISOString()
+        };
+        try { localStorage.setItem("pf.social.oauth.last", JSON.stringify(payload)); } catch {}
+        try { if (window.opener) window.opener.postMessage(payload, "*"); } catch {}
+        setTimeout(() => { try { window.close(); } catch {} }, 1800);
+      </script>
     </main>
   </body>
 </html>`);
@@ -7566,11 +7622,12 @@ app.get("/phantom-ai/ops/social-oauth/callback", async (request, reply) => {
 });
 
 app.post("/phantom-ai/ops/social-analytics/sync", async (request, reply) => {
-  const session = requireAdminAccessSession(request, reply);
+  const session = requireAccessSession(request, reply);
   if (!session) return reply;
   const parsed = SocialAnalyticsSyncSchema.safeParse(request.body ?? {});
   if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
-  const status = getSocialAnalyticsConnectorStatus();
+  const tenantId = customizationTenantForSession(session, (request.body as { tenant_id?: string } | undefined)?.tenant_id);
+  const status = getSocialAnalyticsConnectorStatus(tenantId);
   const connector = status.connectors.find((item) => item.id === parsed.data.platform);
   if (!connector?.configured) {
     return reply.code(409).send({
@@ -7580,8 +7637,8 @@ app.post("/phantom-ai/ops/social-analytics/sync", async (request, reply) => {
     });
   }
   try {
-    const analytics = await syncSocialAnalytics(parsed.data.platform);
-    return { ok: true, session, read_only: true, analytics };
+    const analytics = await syncSocialAnalytics(parsed.data.platform, fetch, tenantId);
+    return { ok: true, session, tenant_id: tenantId, read_only: true, analytics };
   } catch (error) {
     return reply.code(502).send({
       ok: false,

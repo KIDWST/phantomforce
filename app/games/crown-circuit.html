@@ -6,797 +6,2360 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:; connect-src 'none'; media-src 'none'; frame-src 'none'">
   <title>Crown Circuit</title>
   <style>
+    :root {
+      --faction: #ffc857;
+      --faction-soft: #fff0b3;
+      --faction-deep: #6b3412;
+      --rival: #ff6578;
+      --ink: #f8f4e8;
+      --muted: #b9b4a8;
+      --panel: #11120ff2;
+      --line: #ffffff24;
+      --good: #62e6a7;
+      --bad: #ff6578;
+    }
     * { box-sizing: border-box; }
     html, body {
-      margin: 0; width: 100%; height: 100%; overflow: hidden;
-      background: #05070d; color: #eef8f2;
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #080907;
+      color: var(--ink);
       font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-      touch-action: none; user-select: none;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
     }
     body {
-      position: fixed; inset: 0;
-      background: radial-gradient(circle at 50% 45%, #16223a 0, #07100e 62%, #020304 100%);
+      position: fixed;
+      inset: 0;
+      background:
+        linear-gradient(130deg, #15170f 0 31%, #251516 31% 68%, #081411 68%),
+        #080907;
     }
-    canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; outline: 0; touch-action: none; }
+    button { color: inherit; font: inherit; }
+    [hidden] { display: none !important; }
+    canvas[data-field] {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+      outline: 0;
+      touch-action: none;
+    }
 
+    .battle-ui {
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .2s ease;
+    }
+    body[data-stage="battle"] .battle-ui {
+      opacity: 1;
+      pointer-events: auto;
+    }
     .hud {
-      position: fixed; z-index: 4; inset: 10px 10px auto;
-      display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; align-items: start;
+      position: fixed;
+      z-index: 5;
+      inset: 10px 10px auto;
+      display: grid;
+      grid-template-columns: minmax(150px, 1fr) auto minmax(150px, 1fr);
+      gap: 10px;
+      align-items: start;
       pointer-events: none;
     }
-    .side { border: 1px solid #ffffff1e; border-radius: 14px; background: #08110dcc; padding: 9px 11px; box-shadow: 0 0 30px #0008; }
+    .side {
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #0c0d0bdd;
+      padding: 8px 11px;
+      box-shadow: 0 10px 30px #0009, inset 0 1px #ffffff0d;
+    }
     .side.red { text-align: right; }
-    .side b { display: block; font-size: 14px; color: #8fffd2; }
-    .side.red b { color: #ff8a9a; }
-    .side span { display: block; margin-top: 4px; font: 800 11px ui-monospace, monospace; color: #a7bcb5; }
-    .bar { height: 7px; margin-top: 8px; border-radius: 999px; background: #0008; overflow: hidden; }
-    .bar i { display: block; height: 100%; width: 50%; background: linear-gradient(90deg, #31ff9d, #7dffcf); }
-    .red .bar i { margin-left: auto; background: linear-gradient(90deg, #ff5772, #ffb06b); }
-    .score { min-width: 150px; border: 1px solid #41ffa155; border-radius: 999px; background: #020805dd; padding: 8px 14px; text-align: center; font: 950 11px ui-monospace, monospace; color: #dffff5; }
-
-    .hint {
-      position: fixed; z-index: 6; left: 50%; top: 74px; transform: translateX(-50%);
-      max-width: min(860px, calc(100vw - 24px));
-      border: 1px solid #41ffa133; border-radius: 999px; background: #020805dd;
-      padding: 9px 14px; text-align: center; font: 850 11px ui-monospace, monospace; color: #d5fff0;
+    .side b { display: block; overflow: hidden; color: var(--faction-soft); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+    .side.red b { color: #ffadb8; }
+    .side span { display: block; margin-top: 3px; color: var(--muted); font: 800 10px ui-monospace, monospace; }
+    .bar { height: 6px; margin-top: 7px; overflow: hidden; background: #000b; }
+    .bar i { display: block; height: 100%; width: 100%; background: linear-gradient(90deg, var(--faction-deep), var(--faction), var(--faction-soft)); transition: width .16s linear; }
+    .red .bar i { margin-left: auto; background: linear-gradient(90deg, #ffb04c, var(--rival), #a62954); }
+    .score {
+      min-width: 174px;
+      border: 1px solid color-mix(in srgb, var(--faction) 56%, transparent);
+      border-radius: 8px;
+      background: #090a08ee;
+      padding: 8px 13px;
+      color: var(--ink);
+      text-align: center;
+      font: 950 10px ui-monospace, monospace;
+      box-shadow: 0 8px 28px #0008;
+    }
+    .objective {
+      position: fixed;
+      z-index: 5;
+      top: 68px;
+      left: 50%;
+      width: min(650px, calc(100vw - 24px));
+      transform: translateX(-50%);
+      border: 1px solid #ffffff1c;
+      border-radius: 6px;
+      background: #090a08dd;
+      padding: 7px 12px;
+      color: #e9e0ca;
+      text-align: center;
+      font: 800 10px ui-monospace, monospace;
       pointer-events: none;
     }
 
+    .battle-controls {
+      position: fixed;
+      z-index: 7;
+      right: 10px;
+      bottom: max(104px, calc(env(safe-area-inset-bottom) + 104px));
+      display: grid;
+      width: min(220px, 36vw);
+      gap: 7px;
+    }
+    .hero-power {
+      position: relative;
+      min-height: 48px;
+      overflow: hidden;
+      border: 1px solid var(--faction);
+      border-radius: 7px;
+      background: linear-gradient(145deg, var(--faction-deep), #12130f 62%);
+      box-shadow: 0 12px 30px #000a, inset 0 1px #ffffff24;
+      cursor: pointer;
+    }
+    .hero-power:disabled { cursor: not-allowed; filter: saturate(.5); opacity: .62; }
+    .hero-power i {
+      position: absolute;
+      inset: auto 0 0;
+      height: 4px;
+      background: var(--faction);
+      transform-origin: left;
+    }
+    .hero-power b, .hero-power span { position: relative; z-index: 1; display: block; }
+    .hero-power b { font-size: 11px; }
+    .hero-power span { margin-top: 2px; color: var(--muted); font-size: 9px; }
     .cards {
-      position: fixed; z-index: 5; left: 50%; bottom: max(10px, env(safe-area-inset-bottom));
+      position: fixed;
+      z-index: 7;
+      left: 50%;
+      bottom: max(8px, env(safe-area-inset-bottom));
+      display: grid;
+      grid-template-columns: repeat(4, minmax(70px, 92px));
+      gap: 7px;
       transform: translateX(-50%);
-      display: grid; grid-template-columns: repeat(4, 84px); gap: 8px;
     }
     .card {
       position: relative;
-      border: 1px solid #ffffff22; border-radius: 14px; background: #08110ddd;
-      padding: 8px 7px; text-align: center; min-height: 78px;
-      box-shadow: 0 12px 32px #0008;
-      cursor: grab; touch-action: none;
-      transition: transform .12s, opacity .12s, box-shadow .12s;
+      min-height: 86px;
+      overflow: hidden;
+      border: 1px solid #ffffff24;
+      border-radius: 7px;
+      background: linear-gradient(155deg, #24251fef, #0d0e0ced 72%);
+      padding: 6px 5px;
+      box-shadow: 0 12px 32px #000a, inset 0 1px #ffffff12;
+      cursor: grab;
+      touch-action: none;
+      transition: transform .12s ease, opacity .12s ease, border-color .12s ease;
     }
-    .card .glyph { width: 30px; height: 30px; margin: 0 auto 4px; display: block; }
-    .card b { display: block; font-size: 11px; }
-    .card span { display: block; margin-top: 3px; font: 900 10px ui-monospace, monospace; color: #41ffa1; }
-    .card.affordable:active { cursor: grabbing; transform: translateY(-3px) scale(1.04); box-shadow: 0 0 0 1px #41ffa155, 0 16px 40px #000a; }
-    .card.unaffordable { opacity: .38; cursor: not-allowed; }
-    .card.dragging { opacity: .25; }
-
+    .card::before {
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: 3px;
+      background: var(--unit-color, var(--faction));
+      content: "";
+    }
+    .card .glyph { display: block; width: 35px; height: 35px; margin: 0 auto 2px; }
+    .card b { display: block; overflow: hidden; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+    .card span { display: block; margin-top: 2px; color: var(--faction-soft); font: 900 9px ui-monospace, monospace; }
+    .card.affordable:active, .card.is-keyed { transform: translateY(-4px); border-color: var(--faction); }
+    .card.unaffordable { cursor: not-allowed; opacity: .4; }
+    .card.dragging { opacity: .2; }
     .ghost {
-      position: fixed; z-index: 9; left: 0; top: 0; width: 54px; height: 54px;
-      margin: -27px 0 0 -27px;
-      border-radius: 50%; pointer-events: none; display: none;
-      border: 2px solid #fff8; box-shadow: 0 0 24px #0009;
+      position: fixed;
+      z-index: 20;
+      left: 0;
+      top: 0;
+      display: none;
+      width: 58px;
+      height: 58px;
+      margin: -29px 0 0 -29px;
+      border: 2px solid #fff9;
+      border-radius: 50%;
+      pointer-events: none;
+      box-shadow: 0 12px 30px #000c;
     }
     .ghost.show { display: block; }
-    .ghost.valid { box-shadow: 0 0 0 3px #41ffa1aa, 0 0 24px #41ffa155; }
-    .ghost.invalid { box-shadow: 0 0 0 3px #ff5772aa, 0 0 24px #ff577255; opacity: .55; }
-
+    .ghost.valid { box-shadow: 0 0 0 4px var(--good), 0 0 28px color-mix(in srgb, var(--good) 55%, transparent); }
+    .ghost.invalid { opacity: .5; box-shadow: 0 0 0 4px var(--bad), 0 0 28px #ff657866; }
     .toast {
-      position: fixed; z-index: 8; left: 50%; bottom: 106px; transform: translateX(-50%);
-      border: 1px solid #ffd16655; border-radius: 999px; background: #100c04dd; color: #ffe6a4;
-      padding: 9px 13px; font: 900 11px ui-monospace, monospace; opacity: 0; transition: opacity .18s;
+      position: fixed;
+      z-index: 30;
+      left: 50%;
+      bottom: 112px;
+      max-width: calc(100vw - 24px);
+      transform: translateX(-50%) translateY(8px);
+      border: 1px solid var(--faction);
+      border-radius: 6px;
+      background: #11120ff3;
+      padding: 8px 12px;
+      color: var(--ink);
+      font: 850 10px ui-monospace, monospace;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .16s ease, transform .16s ease;
     }
-    .toast.show { opacity: 1; }
+    .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
 
-    .screen {
-      position: fixed; z-index: 10; inset: 0; display: grid; place-items: center; padding: 18px;
-      background: #020304cc; backdrop-filter: blur(8px);
+    .stage-shell {
+      position: fixed;
+      z-index: 15;
+      inset: 0;
+      overflow: auto;
+      background:
+        linear-gradient(90deg, #080907e8, #080907a6 48%, #080907e8),
+        linear-gradient(145deg, #3f2419, #16241d 46%, #2c1720);
+      padding: max(18px, env(safe-area-inset-top)) 18px max(18px, env(safe-area-inset-bottom));
     }
-    .screen[hidden] { display: none; }
-    .panel {
-      width: min(560px, 94vw); border: 1px solid #41ffa144; border-radius: 20px;
-      background: linear-gradient(180deg, #101827, #05090d); padding: 28px; text-align: center;
-      box-shadow: 0 24px 80px #000c;
+    body[data-stage="battle"] .stage-shell { display: none; }
+    .stage {
+      width: min(1040px, 100%);
+      min-height: 100%;
+      margin: auto;
+      display: grid;
+      align-content: center;
+      gap: 18px;
     }
-    .kicker { margin: 0 0 10px; font: 950 11px ui-monospace, monospace; letter-spacing: .16em; color: #41ffa1; text-transform: uppercase; }
-    .panel h1 { margin: 0; font-size: 42px; line-height: 1; color: #f4fff9; }
-    .panel p { color: #9fb8b1; line-height: 1.5; }
-    .mode-actions {
-      display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px;
+    .stage[hidden] { display: none; }
+    .topline {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 20px;
+      border-bottom: 1px solid #ffffff20;
+      padding-bottom: 14px;
     }
-    .panel button {
-      min-width: 210px; min-height: 48px; border: 0; border-radius: 999px;
-      background: #41ffa1; color: #021109; font-weight: 950; cursor: pointer;
+    .kicker { margin: 0 0 7px; color: var(--faction); font: 900 10px ui-monospace, monospace; letter-spacing: .14em; text-transform: uppercase; }
+    .topline h1, .topline h2 { margin: 0; letter-spacing: 0; line-height: .94; }
+    .topline h1 { font-size: clamp(38px, 7vw, 74px); }
+    .topline h2 { font-size: clamp(28px, 5vw, 50px); }
+    .topline p { max-width: 460px; margin: 7px 0 0; color: var(--muted); font-size: 13px; line-height: 1.45; }
+    .room-code {
+      flex: 0 0 auto;
+      border: 1px solid #ffffff20;
+      border-radius: 6px;
+      background: #0007;
+      padding: 9px 12px;
+      color: #ffe29c;
+      font: 900 12px ui-monospace, monospace;
     }
-    .panel button.secondary { border: 1px solid #41ffa155; background: #07130f; color: #dffff5; }
-    .panel button:disabled { opacity: .45; cursor: not-allowed; }
-    .roomcode {
-      display: inline-block; margin: 14px 0; padding: 8px 16px; border-radius: 12px;
-      background: #0006; border: 1px solid #ffffff18; font: 900 20px ui-monospace, monospace;
-      letter-spacing: .08em; color: #ffe6a4;
+    .mode-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .mode-button {
+      min-height: 114px;
+      border: 1px solid #ffffff24;
+      border-radius: 7px;
+      background: linear-gradient(145deg, #22231ee8, #10110ee8);
+      padding: 17px;
+      text-align: left;
+      cursor: pointer;
+      box-shadow: 0 18px 45px #0008, inset 0 1px #ffffff10;
     }
+    .mode-button:hover, .mode-button:focus-visible { border-color: var(--faction); outline: 0; }
+    .mode-button:disabled { cursor: not-allowed; opacity: .5; }
+    .mode-button b { display: block; font-size: 18px; }
+    .mode-button span { display: block; margin-top: 7px; color: var(--muted); font-size: 12px; line-height: 1.4; }
+    .section-label { margin: 0; color: #efe8d7; font-size: 12px; }
+    .map-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    .map-option {
+      min-height: 96px;
+      border: 1px solid #ffffff20;
+      border-radius: 6px;
+      background: #10110ed9;
+      padding: 13px;
+      text-align: left;
+      cursor: pointer;
+    }
+    .map-option.is-selected { border-color: var(--faction); box-shadow: inset 0 -3px var(--faction); }
+    .map-option b, .map-option span, .map-option small { display: block; }
+    .map-option b { font-size: 13px; }
+    .map-option span { margin-top: 5px; color: var(--muted); font-size: 10px; line-height: 1.35; }
+    .map-option small { margin-top: 8px; color: var(--faction-soft); font: 800 9px ui-monospace, monospace; text-transform: uppercase; }
+    .stage-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .primary, .secondary {
+      min-height: 44px;
+      border-radius: 6px;
+      padding: 10px 18px;
+      font-weight: 900;
+      cursor: pointer;
+    }
+    .primary { border: 0; background: var(--faction); color: #1c1404; box-shadow: 0 8px 24px color-mix(in srgb, var(--faction) 30%, transparent); }
+    .secondary { border: 1px solid #ffffff28; background: #12130f; color: var(--ink); }
+    .primary:disabled, .secondary:disabled { cursor: not-allowed; opacity: .45; box-shadow: none; }
 
-    @media (max-width: 720px) {
-      .hud { grid-template-columns: 1fr; inset: 8px; }
-      .score { order: -1; }
-      .cards { grid-template-columns: repeat(4, 68px); }
-      .card { min-height: 66px; padding: 6px 4px; }
-      .card .glyph { width: 24px; height: 24px; }
-      .panel h1 { font-size: 32px; }
-      .mode-actions { grid-template-columns: 1fr; }
-      .hint { top: auto; bottom: 168px; border-radius: 14px; }
+    .loadout-layout { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(260px, .8fr); gap: 16px; }
+    .roster-panel, .hero-panel {
+      border-top: 1px solid #ffffff24;
+      padding-top: 12px;
     }
+    .roster-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+    .roster-head h3 { margin: 0; font-size: 15px; }
+    .roster-head span { color: var(--muted); font: 800 10px ui-monospace, monospace; }
+    .unit-grid { display: grid; grid-template-columns: repeat(5, minmax(105px, 1fr)); gap: 8px; }
+    .unit-option {
+      position: relative;
+      min-height: 108px;
+      border: 1px solid #ffffff1f;
+      border-radius: 6px;
+      background: #11120fe8;
+      padding: 10px;
+      text-align: left;
+      cursor: pointer;
+    }
+    .unit-option::after { position: absolute; inset: auto 0 0; height: 3px; background: var(--unit-color); content: ""; }
+    .unit-option.is-selected { border-color: var(--unit-color); background: #23231ce8; }
+    .unit-option b, .unit-option span, .unit-option small { display: block; }
+    .unit-option b { padding-right: 24px; font-size: 12px; }
+    .unit-option span { margin-top: 5px; color: var(--muted); font-size: 9px; line-height: 1.35; }
+    .unit-option small { margin-top: 8px; color: var(--unit-color); font: 900 9px ui-monospace, monospace; }
+    .pick-number {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      display: grid;
+      width: 20px;
+      height: 20px;
+      place-items: center;
+      border-radius: 50%;
+      background: var(--unit-color);
+      color: #090a08;
+      font-size: 10px;
+      font-weight: 950;
+    }
+    .hero-list { display: grid; gap: 8px; }
+    .hero-option {
+      display: grid;
+      grid-template-columns: 40px 1fr;
+      gap: 10px;
+      min-height: 78px;
+      align-items: center;
+      border: 1px solid #ffffff20;
+      border-radius: 6px;
+      background: #11120fe8;
+      padding: 10px;
+      text-align: left;
+      cursor: pointer;
+    }
+    .hero-option.is-selected { border-color: var(--hero-color); box-shadow: inset 3px 0 var(--hero-color); }
+    .hero-sigil {
+      display: grid;
+      width: 38px;
+      height: 38px;
+      place-items: center;
+      border: 1px solid #ffffff45;
+      background: linear-gradient(145deg, var(--hero-color), #151610);
+      color: #fff;
+      font: 950 16px ui-monospace, monospace;
+      box-shadow: 0 7px 18px #0008;
+    }
+    .hero-option b, .hero-option span { display: block; }
+    .hero-option b { font-size: 12px; }
+    .hero-option span { margin-top: 3px; color: var(--muted); font-size: 9px; line-height: 1.35; }
+    .loadout-summary {
+      border: 1px solid #ffffff20;
+      border-radius: 6px;
+      background: #090a08bb;
+      padding: 10px 12px;
+      color: var(--muted);
+      font-size: 10px;
+      line-height: 1.45;
+    }
+    .loadout-summary b { color: var(--ink); }
+
+    .results-band {
+      display: grid;
+      grid-template-columns: .9fr 1.4fr;
+      gap: 18px;
+      align-items: stretch;
+    }
+    .result-verdict {
+      display: grid;
+      align-content: end;
+      min-height: 260px;
+      border-left: 5px solid var(--faction);
+      background: linear-gradient(155deg, #25251d, #0c0d0b);
+      padding: 24px;
+      box-shadow: 0 22px 60px #0009;
+    }
+    .result-verdict.loss { border-color: var(--bad); }
+    .result-verdict h2 { margin: 0; font-size: clamp(38px, 7vw, 70px); line-height: .9; }
+    .result-verdict p { margin: 12px 0 0; color: var(--muted); font-size: 12px; line-height: 1.45; }
+    .stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .stat {
+      min-height: 84px;
+      border: 1px solid #ffffff20;
+      border-radius: 6px;
+      background: #11120fe8;
+      padding: 13px;
+    }
+    .stat b, .stat span { display: block; }
+    .stat b { color: var(--faction-soft); font-size: 22px; }
+    .stat span { margin-top: 5px; color: var(--muted); font: 800 9px ui-monospace, monospace; text-transform: uppercase; }
+
+    @media (max-width: 780px) {
+      .stage-shell { padding: 12px; }
+      .stage { align-content: start; }
+      .topline { align-items: start; flex-direction: column; }
+      .mode-grid, .loadout-layout, .results-band { grid-template-columns: 1fr; }
+      .unit-grid { grid-template-columns: repeat(2, minmax(120px, 1fr)); }
+      .map-grid { grid-template-columns: 1fr; }
+      .hud { grid-template-columns: 1fr auto 1fr; gap: 5px; inset: 6px; }
+      .side { padding: 6px; }
+      .side b { font-size: 10px; }
+      .side span { font-size: 8px; }
+      .score { min-width: 92px; padding: 6px; font-size: 8px; }
+      .objective { top: 57px; font-size: 8px; }
+      .cards { grid-template-columns: repeat(4, minmax(58px, 72px)); gap: 4px; }
+      .card { min-height: 68px; padding: 4px 3px; }
+      .card .glyph { width: 27px; height: 27px; }
+      .card b { font-size: 8px; }
+      .battle-controls { right: 6px; bottom: 84px; width: min(180px, 46vw); }
+      .hero-power { min-height: 38px; }
+      .hero-power b { font-size: 9px; }
+      .hero-power span { display: none; }
+    }
+    @media (max-height: 620px) and (orientation: landscape) {
+      .stage-shell { padding: 10px 14px; }
+      .stage { align-content: start; gap: 10px; }
+      .topline { padding-bottom: 8px; }
+      .topline h1 { font-size: 42px; }
+      .topline h2 { font-size: 32px; }
+      .mode-button { min-height: 80px; padding: 12px; }
+      .map-option { min-height: 72px; padding: 9px; }
+      .unit-option { min-height: 88px; }
+      .hero-option { min-height: 62px; }
+      .cards { left: 12px; transform: none; grid-template-columns: repeat(4, 68px); }
+      .battle-controls { bottom: 8px; }
+      .objective { top: 54px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; animation: none !important; transition: none !important; }
+    }
+    body.reduced *, body.reduced *::before, body.reduced *::after { animation: none !important; transition: none !important; }
   </style>
 </head>
-<body>
-  <canvas tabindex="0" aria-label="Crown Circuit solo training and online duel"></canvas>
-  <div class="hud">
-    <div class="side blue"><b>Blue Crown</b><span data-blue>Elixir 5.0 · Towers 3</span><div class="bar"><i data-bluebar></i></div></div>
-    <div class="score" data-score>ROOM · 180</div>
-    <div class="side red"><b>Red Crown</b><span data-red>Elixir 5.0 · Towers 3</span><div class="bar"><i data-redbar></i></div></div>
-  </div>
-  <div class="hint" data-hint>Drag a card onto your side of the field to deploy it.</div>
-  <div class="cards" data-cards></div>
-  <div class="ghost" data-ghost></div>
-  <div class="toast" data-toast></div>
-  <div class="screen" data-screen>
-    <div class="panel">
-      <p class="kicker">Solo Training + Room Multiplayer</p>
-      <h1>Crown Circuit</h1>
-      <p data-intro>Start Solo Training now against Crown Bot, or create/join a PhantomPlay room with a friend. Drag troops onto your side, learn lane timing, break the crown tower.</p>
-      <div class="roomcode" data-roomcode hidden></div>
-      <div class="mode-actions">
-        <button type="button" data-solo>Solo Training vs Bot</button>
-        <button type="button" class="secondary" data-start disabled>Waiting for room...</button>
+<body data-stage="title">
+  <canvas data-field tabindex="0" aria-label="Crown Circuit tactical battlefield"></canvas>
+
+  <div class="battle-ui">
+    <header class="hud">
+      <div class="side blue">
+        <b data-blue-name>Blue Crown</b>
+        <span data-blue>Elixir 5.0 · Towers 3</span>
+        <div class="bar"><i data-bluebar></i></div>
       </div>
+      <div class="score" data-score>SOLO · 180</div>
+      <div class="side red">
+        <b data-red-name>Red Crown</b>
+        <span data-red>Elixir 5.0 · Towers 3</span>
+        <div class="bar"><i data-redbar></i></div>
+      </div>
+    </header>
+    <div class="objective" data-objective>Break the rival crown tower.</div>
+    <div class="battle-controls">
+      <button type="button" class="hero-power" data-hero-power title="Use hero ability">
+        <b data-hero-power-name>Hero ability</b>
+        <span data-hero-power-copy>Ready</span>
+        <i data-hero-power-fill></i>
+      </button>
     </div>
+    <div class="cards" data-cards aria-label="Selected troop deck"></div>
+    <div class="ghost" data-ghost></div>
   </div>
+  <div class="toast" data-toast role="status"></div>
+
+  <main class="stage-shell">
+    <section class="stage" data-stage-screen="title">
+      <div class="topline">
+        <div>
+          <p class="kicker">Solo Training + Room Multiplayer</p>
+          <h1>Crown Circuit</h1>
+          <p>Command a four-unit warband, bind your crown to a hero, and fight across arenas where routes, hazards, and objectives change every battle.</p>
+        </div>
+        <div class="room-code" data-room-code hidden>PRIVATE ROOM</div>
+      </div>
+      <div class="mode-grid">
+        <button type="button" class="mode-button" data-mode-choice="solo">
+          <b>Solo Training vs Bot</b>
+          <span>Crown Bot reads lane pressure, drafts counters, protects weak towers, and commits its hero at decisive moments.</span>
+        </button>
+        <button type="button" class="mode-button" data-mode-choice="room" disabled>
+          <b>Private Room Duel</b>
+          <span data-room-copy>Open this game from a PhantomPlay room to challenge another signed-in player.</span>
+        </button>
+      </div>
+      <p class="section-label">Battlefield</p>
+      <div class="map-grid" data-title-maps></div>
+    </section>
+
+    <section class="stage" data-stage-screen="loadout" hidden>
+      <div class="topline">
+        <div>
+          <p class="kicker">Stage 2 · War Council</p>
+          <h2>Choose four troops and one hero</h2>
+          <p>Every troop has a counter. Your hero changes tower behavior, crown defenses, faction colors, and the ability you can call during battle.</p>
+        </div>
+        <div class="room-code" data-loadout-mode>SOLO</div>
+      </div>
+      <div class="loadout-layout">
+        <div class="roster-panel">
+          <div class="roster-head"><h3>Troop roster</h3><span data-pick-count>4 / 4 selected</span></div>
+          <div class="unit-grid" data-unit-grid></div>
+        </div>
+        <aside class="hero-panel">
+          <div class="roster-head"><h3>Crown hero</h3><span>1 / 1 selected</span></div>
+          <div class="hero-list" data-hero-list></div>
+        </aside>
+      </div>
+      <div class="loadout-summary" data-loadout-summary></div>
+      <div class="stage-actions">
+        <button type="button" class="secondary" data-loadout-back>Back</button>
+        <button type="button" class="primary" data-loadout-start>Deploy to battle</button>
+      </div>
+    </section>
+
+    <section class="stage" data-stage-screen="results" hidden>
+      <div class="topline">
+        <div>
+          <p class="kicker">Stage 4 · Battle Report</p>
+          <h2 data-report-heading>Victory</h2>
+          <p data-report-copy>The rival crown has fallen.</p>
+        </div>
+        <div class="room-code" data-report-map>EMBER CROSSING</div>
+      </div>
+      <div class="results-band">
+        <div class="result-verdict" data-result-verdict>
+          <h2 data-result-word>VICTORY</h2>
+          <p data-result-detail>Your formation broke the final defense.</p>
+        </div>
+        <div class="stat-grid" data-stat-grid></div>
+      </div>
+      <div class="stage-actions">
+        <button type="button" class="secondary" data-results-menu>Mode selection</button>
+        <button type="button" class="primary" data-results-again>Rebuild loadout</button>
+      </div>
+    </section>
+  </main>
+
   <script>
   (() => {
-    const host = (type, data = {}) => parent.postMessage({ source: 'phantomplay-game', type, ...data }, '*');
-    const c = document.querySelector('canvas');
-    const x = c.getContext('2d');
-    const screen = document.querySelector('[data-screen]');
-    const startBtn = document.querySelector('[data-start]');
-    const soloBtn = document.querySelector('[data-solo]');
-    const intro = document.querySelector('[data-intro]');
-    const roomCodeEl = document.querySelector('[data-roomcode]');
-    const scoreEl = document.querySelector('[data-score]');
-    const blueEl = document.querySelector('[data-blue]');
-    const redEl = document.querySelector('[data-red]');
-    const blueBar = document.querySelector('[data-bluebar]');
-    const redBar = document.querySelector('[data-redbar]');
-    const hint = document.querySelector('[data-hint]');
-    const cardsEl = document.querySelector('[data-cards]');
-    const ghostEl = document.querySelector('[data-ghost]');
-    const toastEl = document.querySelector('[data-toast]');
+    "use strict";
 
-    let W = 0, H = 0, D = 1, last = 0;
-    let running = false, paused = false, over = false;
-    let actorId = '', room = null, mySide = 'blue', lastSeq = 0, roomReady = false;
-    let matchMode = 'menu';
-    const bot = { think: 0.8, lastLane: 1, lesson: 0 };
+    const host = (type, data = {}) => parent.postMessage({ source: "phantomplay-game", type, ...data }, "*");
+    const $ = (selector) => document.querySelector(selector);
+    const canvas = $("[data-field]");
+    const ctx = canvas.getContext("2d");
+    const stageShell = $(".stage-shell");
+    const stageScreens = {
+      title: $("[data-stage-screen=title]"),
+      loadout: $("[data-stage-screen=loadout]"),
+      results: $("[data-stage-screen=results]")
+    };
+    const cardsEl = $("[data-cards]");
+    const ghostEl = $("[data-ghost]");
+    const toastEl = $("[data-toast]");
+    const mapGridEl = $("[data-title-maps]");
+    const unitGridEl = $("[data-unit-grid]");
+    const heroListEl = $("[data-hero-list]");
+    const loadoutStartBtn = $("[data-loadout-start]");
+    const loadoutModeEl = $("[data-loadout-mode]");
+    const roomCodeEls = [$("[data-room-code]")];
+    const roomModeBtn = $("[data-mode-choice=room]");
+    const roomCopyEl = $("[data-room-copy]");
+    const hud = {
+      blue: $("[data-blue]"),
+      red: $("[data-red]"),
+      blueBar: $("[data-bluebar]"),
+      redBar: $("[data-redbar]"),
+      blueName: $("[data-blue-name]"),
+      redName: $("[data-red-name]"),
+      score: $("[data-score]"),
+      objective: $("[data-objective]")
+    };
+    const powerBtn = $("[data-hero-power]");
+    const powerName = $("[data-hero-power-name]");
+    const powerCopy = $("[data-hero-power-copy]");
+    const powerFill = $("[data-hero-power-fill]");
 
-    const lanes = [0.28, 0.5, 0.72];
-    const units = [], shots = [], particles = [];
+    const REF_W = 1000;
+    const REF_H = 600;
+    const MATCH_SECONDS = 180;
+    const ABILITY_COOLDOWN = 28;
+    const MAX_UNITS = 160;
+    const ALLOWED_ACTIONS = new Set(["hello", "start", "deploy", "ability"]);
 
-    // Troop defs: `dark` is a shading anchor used for outlines/shadows so
-    // each troop reads as lit rather than a flat silhouette. `draw` for each
-    // is implemented as its own function below (drawSpark/drawGuard/etc.),
-    // replacing the old circle-with-a-letter placeholder look entirely.
-    const CARD = [
-      { id: 'spark',   name: 'Spark',   cost: 2, hp: 58,  dmg: 10, spd: 52, range: 22,  rate: 0.78, color: '#41ffa1', dark: '#0f5c3a' },
-      { id: 'guard',   name: 'Guard',   cost: 3, hp: 118, dmg: 18, spd: 32, range: 24,  rate: 0.95, color: '#7dd3ff', dark: '#154a63' },
-      { id: 'archer',  name: 'Archer',  cost: 3, hp: 52,  dmg: 11, spd: 34, range: 118, rate: 0.72, color: '#ffd166', dark: '#6b4c14' },
-      { id: 'breaker', name: 'Breaker', cost: 5, hp: 220, dmg: 34, spd: 22, range: 26,  rate: 1.25, color: '#ff8a5b', dark: '#6b2f14' },
+    const TROOPS = [
+      { id: "vanguard", name: "Crestguard", role: "Frontline", desc: "Armored shield line. Counters light volleys.", cost: 3, hp: 190, dmg: 16, speed: 48, range: 30, rate: .88, armor: 5, count: 2, heavy: true, color: "#f5c451", dark: "#61401b" },
+      { id: "pike", name: "Sunlance", role: "Anti-heavy", desc: "Long melee reach and brutal damage to heavy troops.", cost: 3, hp: 105, dmg: 25, speed: 54, range: 48, rate: 1.05, count: 2, antiHeavy: 1.75, color: "#73d7b2", dark: "#174d43" },
+      { id: "ranger", name: "Ridgebow", role: "Ranged", desc: "Reliable ranged pressure. Vulnerable to divers.", cost: 3, hp: 82, dmg: 15, speed: 50, range: 150, rate: .72, projectile: 560, count: 2, antiAir: true, color: "#f0df8d", dark: "#66501d" },
+      { id: "bombard", name: "Cask Mortar", role: "Siege splash", desc: "Slow arcing blast punishes swarms and towers.", cost: 5, hp: 128, dmg: 40, speed: 34, range: 192, rate: 1.65, projectile: 330, splash: 58, towerBonus: 1.35, count: 1, heavy: true, color: "#ff8b4f", dark: "#6d2d1f" },
+      { id: "wisps", name: "Banner Wisps", role: "Swarm", desc: "Six quick spirits surround isolated attackers.", cost: 2, hp: 31, dmg: 7, speed: 76, range: 25, rate: .48, count: 6, swarm: true, flying: true, color: "#7df4d0", dark: "#14584e" },
+      { id: "medic", name: "Dawn Mender", role: "Support", desc: "Heals the most wounded nearby ally while advancing.", cost: 4, hp: 96, dmg: 7, heal: 18, speed: 46, range: 124, rate: .9, projectile: 500, count: 1, antiAir: true, color: "#ffdc75", dark: "#715023" },
+      { id: "gryphon", name: "Gale Rider", role: "Air diver", desc: "Flies over choke slowdowns and hunts ranged troops.", cost: 4, hp: 126, dmg: 24, speed: 82, range: 35, rate: .8, count: 1, flying: true, antiRanged: 1.6, color: "#70c9ff", dark: "#245372" },
+      { id: "sapper", name: "Gate Sapper", role: "Objective", desc: "Ignores troops when a tower is near and shatters masonry.", cost: 4, hp: 112, dmg: 25, speed: 62, range: 28, rate: .78, towerBonus: 2.15, buildingHunter: true, count: 2, color: "#ff6f72", dark: "#72282f" },
+      { id: "warden", name: "Storm Warden", role: "Anti-air", desc: "Chain bolts counter flying groups and shields.", cost: 4, hp: 115, dmg: 18, speed: 44, range: 138, rate: .84, projectile: 650, antiAir: true, chain: 1, shieldBreak: 2, count: 1, color: "#9c8cff", dark: "#403372" },
+      { id: "charger", name: "Ember Cavalry", role: "Flanker", desc: "Fast opening charge knocks formations off tempo.", cost: 5, hp: 178, dmg: 30, speed: 91, range: 34, rate: 1.08, armor: 2, charge: 1.7, count: 1, heavy: true, color: "#ffb347", dark: "#713713" }
     ];
-    const CARD_BY_ID = Object.fromEntries(CARD.map(cd => [cd.id, cd]));
+    const TROOP_BY_ID = Object.fromEntries(TROOPS.map((troop) => [troop.id, troop]));
 
-    const elixir = { blue: 5, red: 5 };
-    const towers = [];
-    const state = { time: 180, winner: '' };
+    const HEROES = [
+      { id: "solara", name: "Solara, Dawn Regent", sigil: "S", tower: "sunburst", passive: "Tower shots splash; victories at the beacon charge faster.", ability: "Solar Salvo", abilityCopy: "Three crownfire impacts strike the deepest enemy formation.", color: "#ffc857", soft: "#fff0b3", deep: "#6b3412" },
+      { id: "nyx", name: "Nyx, Veil Marshal", sigil: "N", tower: "veil", passive: "Troops move faster in friendly territory and enter with a veil shield.", ability: "Veil March", abilityCopy: "Shield and hasten every surviving troop for six seconds.", color: "#b88cff", soft: "#ead8ff", deep: "#4a286d" },
+      { id: "thorne", name: "Thorne, Iron Warden", sigil: "T", tower: "bastion", passive: "Crown structures gain armor and larger ward shields.", ability: "Holdfast", abilityCopy: "Rebuild tower shields and brace frontline troops.", color: "#78c58c", soft: "#d7f4c9", deep: "#28543c" },
+      { id: "mira", name: "Mira, Tempest Crown", sigil: "M", tower: "tempest", passive: "Tower bolts chain once; air troops take full damage.", ability: "Skybreak", abilityCopy: "Lightning strikes the six highest-threat enemies.", color: "#52d6d0", soft: "#c9ffef", deep: "#19545b" }
+    ];
+    const HERO_BY_ID = Object.fromEntries(HEROES.map((hero) => [hero.id, hero]));
 
-    function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
-
-    function show(t) {
-      toastEl.textContent = t;
-      toastEl.classList.add('show');
-      clearTimeout(show.t);
-      show.t = setTimeout(() => toastEl.classList.remove('show'), 1100);
-    }
-
-    function size() {
-      D = devicePixelRatio || 1;
-      W = c.width = Math.max(360, innerWidth * D);
-      H = c.height = Math.max(480, innerHeight * D);
-      draw();
-    }
-
-    function reset() {
-      units.length = 0; shots.length = 0; particles.length = 0;
-      over = false; state.time = 180; state.winner = '';
-      elixir.blue = 5; elixir.red = 5;
-      bot.think = 0.85; bot.lastLane = 1; bot.lesson = 0;
-      towers.length = 0;
-      for (const side of ['blue', 'red']) {
-        const xPos = side === 'blue' ? 0.11 : 0.89;
-        towers.push({ side, lane: 0, x: xPos, y: lanes[0], hp: 430, max: 430, king: false });
-        towers.push({ side, lane: 1, x: xPos, y: lanes[1], hp: 760, max: 760, king: true });
-        towers.push({ side, lane: 2, x: xPos, y: lanes[2], hp: 430, max: 430, king: false });
+    const MAPS = [
+      {
+        id: "ember",
+        name: "Ember Crossing",
+        rule: "Three bridge lanes tighten at the river. Ground troops slow in the choke; air units pass cleanly.",
+        objective: "crown",
+        routes: [
+          { lane: 0, points: [[.07,.28],[.25,.23],[.42,.31],[.50,.31],[.66,.22],[.93,.28]] },
+          { lane: 0, points: [[.07,.28],[.24,.34],[.42,.31],[.50,.31],[.70,.35],[.93,.28]] },
+          { lane: 1, points: [[.07,.50],[.28,.50],[.42,.46],[.50,.50],[.58,.54],[.72,.50],[.93,.50]] },
+          { lane: 2, points: [[.07,.72],[.25,.77],[.42,.69],[.50,.69],[.66,.78],[.93,.72]] },
+          { lane: 2, points: [[.07,.72],[.24,.66],[.42,.69],[.50,.69],[.70,.65],[.93,.72]] }
+        ]
+      },
+      {
+        id: "shard",
+        name: "Shardfall Basin",
+        rule: "Capture the center relay to 100. Falling shards punish clumped formations on either side.",
+        objective: "beacon",
+        routes: [
+          { lane: 0, points: [[.07,.31],[.23,.20],[.39,.24],[.49,.40],[.63,.22],[.79,.18],[.93,.31]] },
+          { lane: 0, points: [[.07,.31],[.24,.37],[.42,.35],[.49,.40],[.64,.36],[.80,.39],[.93,.31]] },
+          { lane: 1, points: [[.07,.50],[.26,.48],[.38,.62],[.50,.50],[.62,.38],[.76,.52],[.93,.50]] },
+          { lane: 2, points: [[.07,.69],[.23,.80],[.39,.76],[.51,.60],[.63,.78],[.79,.82],[.93,.69]] },
+          { lane: 2, points: [[.07,.69],[.24,.63],[.42,.65],[.51,.60],[.64,.64],[.80,.61],[.93,.69]] }
+        ]
+      },
+      {
+        id: "verdant",
+        name: "Verdant Siege",
+        rule: "Healing groves reward route control. The enemy crown is warded until both outer keeps fall.",
+        objective: "siege",
+        routes: [
+          { lane: 0, points: [[.07,.27],[.19,.18],[.34,.20],[.44,.34],[.57,.26],[.73,.18],[.93,.27]] },
+          { lane: 0, points: [[.07,.27],[.21,.36],[.36,.37],[.48,.43],[.61,.34],[.78,.37],[.93,.27]] },
+          { lane: 1, points: [[.07,.50],[.28,.50],[.39,.43],[.50,.50],[.61,.57],[.72,.50],[.93,.50]] },
+          { lane: 2, points: [[.07,.73],[.19,.82],[.34,.80],[.44,.66],[.57,.74],[.73,.82],[.93,.73]] },
+          { lane: 2, points: [[.07,.73],[.21,.64],[.36,.63],[.48,.57],[.61,.66],[.78,.63],[.93,.73]] }
+        ]
       }
-      renderCards();
-      updateHud();
-      draw();
-    }
+    ];
+    const MAP_BY_ID = Object.fromEntries(MAPS.map((map) => [map.id, map]));
 
-    function beginMatch(mode = 'room') {
-      matchMode = mode;
-      running = true; paused = false; over = false;
-      screen.hidden = true;
-      reset();
-      last = performance.now();
-      requestAnimationFrame(loop);
-      c.focus?.();
-      show(mode === 'solo' ? 'Solo Training: Crown Bot is live' : `You are ${mySide.toUpperCase()}`);
+    function clamp(value, min, max) { return Math.max(min, Math.min(max, value)); }
+    function esc(value) {
+      return String(value == null ? "" : value).replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[char]));
     }
-
-    function startSolo() {
-      mySide = 'blue';
-      lastSeq = 0;
-      beginMatch('solo');
+    function shade(hex, amount) {
+      const clean = hex.replace("#", "");
+      const n = parseInt(clean.length === 3 ? clean.split("").map((c) => c + c).join("") : clean, 16);
+      const channels = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => amount >= 0 ? Math.round(v + (255 - v) * amount) : Math.round(v * (1 + amount)));
+      return "rgb(" + channels.map((v) => clamp(v, 0, 255)).join(",") + ")";
     }
-
-    function startRoom() {
-      if (!roomReady) { show('Need two room players'); return; }
-      matchMode = 'room';
-      sendMatch('start', { seed: Date.now() });
+    function routeLength(points) {
+      let total = 0;
+      for (let i = 1; i < points.length; i++) total += Math.hypot((points[i][0] - points[i - 1][0]) * REF_W, (points[i][1] - points[i - 1][1]) * REF_H);
+      return total;
     }
-
-    // ---------------------------------------------------------------------
-    // Card tray + drag-and-drop deploy (mouse, trackpad, and touch all go
-    // through Pointer Events so one code path covers laptop/Chromebook/phone).
-    // ---------------------------------------------------------------------
-    function renderCards() {
-      cardsEl.innerHTML = CARD.map((cd, i) => {
-        const afford = elixir[mySide] >= cd.cost;
-        return `<div class="card ${afford ? 'affordable' : 'unaffordable'}" data-card-index="${i}">
-          <canvas class="glyph" width="60" height="60" data-glyph="${i}"></canvas>
-          <b>${cd.name}</b><span>${cd.cost}⚡</span>
-        </div>`;
-      }).join('');
-      for (const el of cardsEl.querySelectorAll('[data-glyph]')) {
-        drawCardGlyph(el.getContext('2d'), CARD[Number(el.dataset.glyph)]);
-      }
-      for (const el of cardsEl.querySelectorAll('.card')) {
-        el.addEventListener('pointerdown', onCardPointerDown);
-      }
+    function compileMaps() {
+      MAPS.forEach((map) => map.routes.forEach((route) => {
+        route.length = routeLength(route.points);
+        route.segments = [];
+        let total = 0;
+        for (let i = 1; i < route.points.length; i++) {
+          const len = Math.hypot((route.points[i][0] - route.points[i - 1][0]) * REF_W, (route.points[i][1] - route.points[i - 1][1]) * REF_H);
+          route.segments.push({ start: total, len });
+          total += len;
+        }
+      }));
     }
-
-    let drag = null; // { cardIndex, pointerId, el }
-
-    function onCardPointerDown(e) {
-      if (over || paused || !running) return;
-      const el = e.currentTarget;
-      if (!el.classList.contains('affordable')) { show('Not enough elixir'); return; }
-      const cardIndex = Number(el.dataset.cardIndex);
-      drag = { cardIndex, pointerId: e.pointerId, el };
-      el.classList.add('dragging');
-      el.setPointerCapture(e.pointerId);
-      ghostEl.style.background = CARD[cardIndex].color;
-      ghostEl.classList.add('show');
-      moveGhost(e.clientX, e.clientY);
-      el.addEventListener('pointermove', onCardPointerMove);
-      el.addEventListener('pointerup', onCardPointerUp);
-      el.addEventListener('pointercancel', onCardPointerCancel);
-      e.preventDefault();
-    }
-
-    function fieldDropInfo(clientX, clientY) {
-      const rect = c.getBoundingClientRect();
-      const fx = (clientX - rect.left) / rect.width;
-      const fy = (clientY - rect.top) / rect.height;
-      const onOwnHalf = mySide === 'blue' ? fx < 0.5 : fx > 0.5;
-      const inField = fy > 0.14 && fy < 0.9 && fx > 0.03 && fx < 0.97;
-      let laneIdx = 0, bestD = Infinity;
-      for (let i = 0; i < lanes.length; i++) {
-        const d = Math.abs(fy - lanes[i]);
-        if (d < bestD) { bestD = d; laneIdx = i; }
-      }
-      const xMin = mySide === 'blue' ? 0.08 : 0.52;
-      const xMax = mySide === 'blue' ? 0.48 : 0.92;
-      return { valid: inField && onOwnHalf, lane: laneIdx, x: clamp(fx, xMin, xMax) };
-    }
-
-    function moveGhost(clientX, clientY) {
-      ghostEl.style.left = `${clientX}px`;
-      ghostEl.style.top = `${clientY}px`;
-      const info = fieldDropInfo(clientX, clientY);
-      ghostEl.classList.toggle('valid', info.valid);
-      ghostEl.classList.toggle('invalid', !info.valid);
-    }
-
-    function onCardPointerMove(e) {
-      if (!drag || e.pointerId !== drag.pointerId) return;
-      moveGhost(e.clientX, e.clientY);
-    }
-
-    function onCardPointerUp(e) {
-      if (!drag || e.pointerId !== drag.pointerId) return;
-      const info = fieldDropInfo(e.clientX, e.clientY);
-      const cardIndex = drag.cardIndex;
-      endDrag();
-      if (info.valid) deploy(mySide, info.lane, cardIndex, false, info.x);
-    }
-
-    function onCardPointerCancel() { endDrag(); }
-
-    function endDrag() {
-      if (drag) {
-        drag.el.classList.remove('dragging');
-        drag.el.removeEventListener('pointermove', onCardPointerMove);
-        drag.el.removeEventListener('pointerup', onCardPointerUp);
-        drag.el.removeEventListener('pointercancel', onCardPointerCancel);
-      }
-      ghostEl.classList.remove('show', 'valid', 'invalid');
-      drag = null;
-    }
-
-    // ---------------------------------------------------------------------
-    // Simulation (elixir, towers, combat) — unchanged rules from the old
-    // keyboard-driven version; only the deploy() entry point changed shape
-    // (lane + a drop-x position instead of a fixed spawn edge).
-    // ---------------------------------------------------------------------
-    function towerCount(side) { return towers.filter(t => t.side === side && t.hp > 0).length; }
-    function hpPct(side) {
-      const mine = towers.filter(t => t.side === side);
-      return mine.reduce((s, t) => s + Math.max(0, t.hp), 0) / mine.reduce((s, t) => s + t.max, 0);
-    }
-    function updateHud() {
-      blueEl.textContent = `Elixir ${elixir.blue.toFixed(1)} · Towers ${towerCount('blue')}`;
-      redEl.textContent = `Elixir ${elixir.red.toFixed(1)} · Towers ${towerCount('red')}`;
-      blueBar.style.width = `${hpPct('blue') * 100}%`;
-      redBar.style.width = `${hpPct('red') * 100}%`;
-      scoreEl.textContent = `${matchMode === 'solo' ? 'SOLO' : 'ROOM'} · ${Math.ceil(state.time)}`;
-      for (const el of cardsEl.querySelectorAll('.card')) {
-        const cd = CARD[Number(el.dataset.cardIndex)];
-        const afford = elixir[mySide] >= cd.cost;
-        el.classList.toggle('affordable', afford);
-        el.classList.toggle('unaffordable', !afford);
-      }
-    }
-    function score() {
-      return Math.round((hpPct('blue') - hpPct('red')) * 1000) + (state.winner === 'blue' ? 5000 : state.winner === 'red' ? -5000 : 0);
-    }
-    function laneY(i) { return lanes[i]; }
-    function sideDir(side) { return side === 'blue' ? 1 : -1; }
-
-    function deploy(side, lane, cardIndex, remote = false, dropX = null) {
-      if (over || paused || !running) return;
-      if (!remote) {
-        if (matchMode === 'solo') { deploy(side, lane, cardIndex, true, dropX); return; }
-        sendMatch('deploy', { side, lane, cardIndex, dropX }); return;
-      }
-      const cd = CARD[cardIndex] || CARD[0];
-      if (elixir[side] < cd.cost) return;
-      elixir[side] -= cd.cost;
-      const jitter = (Math.random() - 0.5) * 0.025;
-      const fallbackX = side === 'blue' ? 0.19 : 0.81;
-      const spawnX = typeof dropX === 'number' ? dropX : fallbackX;
-      units.push({
-        id: `u${Date.now()}${Math.random()}`, side, lane, card: cd.id,
-        x: spawnX, y: laneY(lane) + jitter, hp: cd.hp, max: cd.hp,
-        cool: 0, phase: Math.random() * 10, moving: true, atkFlash: 0, hitFlash: 0,
-      });
-      show(`${side === mySide ? 'You' : 'Rival'} deployed ${cd.name}`);
-      renderCards();
-    }
-
-    function nearestEnemy(u) {
-      let best = null, bd = 999;
-      for (const e of units) {
-        if (e.side === u.side || e.hp <= 0) continue;
-        const d = Math.hypot((e.x - u.x) * 900, (e.y - u.y) * 520);
-        if (d < bd) { bd = d; best = e; }
-      }
-      for (const t of towers) {
-        if (t.side === u.side || t.hp <= 0 || t.lane !== u.lane) continue;
-        const d = Math.hypot((t.x - u.x) * 900, (t.y - u.y) * 520);
-        if (d < bd) { bd = d; best = t; }
-      }
-      return { target: best, dist: bd };
-    }
-
-    function fire(u, target, cd) {
-      shots.push({ x: u.x, y: u.y, tx: target.x, ty: target.y, side: u.side, dmg: cd.dmg, target, life: 0.22, color: cd.color });
-      if (u.card) u.atkFlash = 0.22;
-    }
-    function damage(target, amount) {
-      target.hp -= amount;
-      target.hitFlash = 0.18;
-      const tc = target.card ? CARD_BY_ID[target.card] : null;
-      particles.push({ x: target.x, y: target.y, t: 0.28, color: tc ? tc.color : '#fff' });
-      if (target.hp <= 0 && tc && !target.deathBurst) {
-        target.deathBurst = true;
-        for (let i = 0; i < 8; i++) {
-          const a = (i / 8) * Math.PI * 2;
-          particles.push({ x: target.x, y: target.y, t: 0.4, burst: true, ang: a, color: tc.color });
+    function pointAtRoute(route, t) {
+      const progress = clamp(t, 0, 1);
+      const target = progress * route.length;
+      for (let i = 0; i < route.segments.length; i++) {
+        const segment = route.segments[i];
+        if (target <= segment.start + segment.len || i === route.segments.length - 1) {
+          const a = route.points[i];
+          const b = route.points[i + 1];
+          const f = segment.len ? clamp((target - segment.start) / segment.len, 0, 1) : 0;
+          return { x: a[0] + (b[0] - a[0]) * f, y: a[1] + (b[1] - a[1]) * f };
         }
       }
-      if (target.king && target.hp <= 0 && !over) finish(target.side === 'blue' ? 'red' : 'blue');
+      const p = route.points[route.points.length - 1];
+      return { x: p[0], y: p[1] };
+    }
+    function pathTangent(route, t) {
+      const a = pointAtRoute(route, clamp(t - .006, 0, 1));
+      const b = pointAtRoute(route, clamp(t + .006, 0, 1));
+      const len = Math.hypot((b.x - a.x) * REF_W, (b.y - a.y) * REF_H) || 1;
+      return { x: (b.x - a.x) * REF_W / len, y: (b.y - a.y) * REF_H / len };
+    }
+    function worldDistance(a, b) {
+      return Math.hypot((a.x - b.x) * REF_W, (a.y - b.y) * REF_H);
+    }
+    compileMaps();
+
+    let W = 1;
+    let H = 1;
+    let DPR = 1;
+    let currentStage = "title";
+    let chosenMode = "solo";
+    let selectedMapId = "ember";
+    let selectedTroops = ["vanguard", "ranger", "bombard", "wisps"];
+    let selectedHeroId = "solara";
+    let matchMode = "menu";
+    let mySide = "blue";
+    let running = false;
+    let paused = false;
+    let over = false;
+    let lastFrame = 0;
+    let simTime = 0;
+    let rngState = 1;
+    let selectedCardIndex = -1;
+    let drag = null;
+    let reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    const units = [];
+    const towers = [];
+    const projectiles = [];
+    const effects = [];
+    const floaters = [];
+    const elixir = { blue: 5, red: 5 };
+    const activeDeck = { blue: [], red: [] };
+    const activeHero = { blue: "solara", red: "thorne" };
+    const ability = { blue: { cooldown: 0, active: 0 }, red: { cooldown: 0, active: 0 } };
+    const battleStats = {
+      blue: { deployed: 0, kills: 0, damage: 0, towers: 0, abilities: 0, spent: 0 },
+      red: { deployed: 0, kills: 0, damage: 0, towers: 0, abilities: 0, spent: 0 }
+    };
+    const state = { time: MATCH_SECONDS, winner: "", beaconBlue: 0, beaconRed: 0, hazardClock: 7, shake: 0 };
+    const bot = { think: .9, lastLane: 1, lesson: 0, deck: [], hero: "thorne", abilityThink: 4 };
+
+    const roomState = {
+      active: false,
+      room: null,
+      participants: [],
+      readyStates: {},
+      hostControls: null,
+      botSlots: [],
+      ready: false,
+      roleKnown: false,
+      amIHost: false,
+      probe: "",
+      probeAt: 0,
+      seen: new Set(),
+      lastSeq: 0
+    };
+
+    function rand() {
+      rngState |= 0;
+      rngState = rngState + 0x6D2B79F5 | 0;
+      let t = rngState;
+      t = Math.imul(t ^ t >>> 15, t | 1);
+      t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    }
+    function setSeed(seed) {
+      const n = Number(seed);
+      rngState = Number.isFinite(n) ? (n | 0) || 1 : 1;
+    }
+    function currentMap() { return MAP_BY_ID[selectedMapId] || MAPS[0]; }
+    function sideDir(side) { return side === "blue" ? 1 : -1; }
+    function enemySide(side) { return side === "blue" ? "red" : "blue"; }
+    function safeMap(value) { return MAP_BY_ID[value] ? value : "ember"; }
+    function safeHero(value) { return HERO_BY_ID[value] ? value : "solara"; }
+    function safeDeck(value, fallback) {
+      const list = Array.isArray(value) ? value.filter((id) => TROOP_BY_ID[id]) : [];
+      const unique = [...new Set(list)].slice(0, 4);
+      return unique.length === 4 ? unique : fallback.slice(0, 4);
+    }
+    function safeLane(value) {
+      const lane = Math.round(Number(value));
+      return clamp(Number.isFinite(lane) ? lane : 1, 0, 2);
+    }
+    function safeDrop(value, side) {
+      const n = Number(value);
+      const fallback = side === "blue" ? .16 : .84;
+      if (!Number.isFinite(n)) return fallback;
+      return side === "blue" ? clamp(n, .075, .47) : clamp(n, .53, .925);
+    }
+    function show(message) {
+      toastEl.textContent = message;
+      toastEl.classList.add("show");
+      clearTimeout(show.timer);
+      show.timer = setTimeout(() => toastEl.classList.remove("show"), 1700);
+    }
+    function setStage(name) {
+      currentStage = name;
+      document.body.dataset.stage = name;
+      Object.keys(stageScreens).forEach((key) => { stageScreens[key].hidden = key !== name; });
+      if (name !== "battle") endDrag();
+    }
+    function applyFaction(heroId) {
+      const hero = HERO_BY_ID[heroId] || HEROES[0];
+      document.documentElement.style.setProperty("--faction", hero.color);
+      document.documentElement.style.setProperty("--faction-soft", hero.soft);
+      document.documentElement.style.setProperty("--faction-deep", hero.deep);
     }
 
+    function renderMapChoices() {
+      mapGridEl.innerHTML = MAPS.map((map) =>
+        '<button type="button" class="map-option ' + (map.id === selectedMapId ? "is-selected" : "") + '" data-map="' + map.id + '">' +
+          "<b>" + esc(map.name) + "</b><span>" + esc(map.rule) + "</span><small>" +
+          (map.objective === "beacon" ? "Relay capture" : map.objective === "siege" ? "Warded siege" : "Crown assault") +
+          "</small></button>"
+      ).join("");
+      mapGridEl.querySelectorAll("[data-map]").forEach((button) => {
+        button.addEventListener("click", () => {
+          selectedMapId = safeMap(button.dataset.map);
+          renderMapChoices();
+          renderLoadoutSummary();
+          draw();
+        });
+      });
+    }
+    function renderLoadout() {
+      const pickMap = new Map(selectedTroops.map((id, index) => [id, index + 1]));
+      unitGridEl.innerHTML = TROOPS.map((troop) => {
+        const selected = pickMap.has(troop.id);
+        return '<button type="button" class="unit-option ' + (selected ? "is-selected" : "") + '" data-troop="' + troop.id + '" style="--unit-color:' + troop.color + '">' +
+          (selected ? '<i class="pick-number">' + pickMap.get(troop.id) + "</i>" : "") +
+          "<b>" + esc(troop.name) + "</b><span>" + esc(troop.desc) + "</span><small>" + troop.cost + " spark · " + esc(troop.role) + "</small></button>";
+      }).join("");
+      heroListEl.innerHTML = HEROES.map((hero) =>
+        '<button type="button" class="hero-option ' + (hero.id === selectedHeroId ? "is-selected" : "") + '" data-hero="' + hero.id + '" style="--hero-color:' + hero.color + '">' +
+          '<i class="hero-sigil">' + hero.sigil + "</i><span><b>" + esc(hero.name) + "</b><span>" + esc(hero.passive + " " + hero.ability + ": " + hero.abilityCopy) + "</span></span></button>"
+      ).join("");
+      unitGridEl.querySelectorAll("[data-troop]").forEach((button) => button.addEventListener("click", () => chooseTroop(button.dataset.troop)));
+      heroListEl.querySelectorAll("[data-hero]").forEach((button) => button.addEventListener("click", () => {
+        selectedHeroId = safeHero(button.dataset.hero);
+        applyFaction(selectedHeroId);
+        renderLoadout();
+      }));
+      $("[data-pick-count]").textContent = selectedTroops.length + " / 4 selected";
+      renderLoadoutSummary();
+    }
+    function chooseTroop(id) {
+      if (!TROOP_BY_ID[id]) return;
+      const at = selectedTroops.indexOf(id);
+      if (at >= 0) {
+        show("Your warband must keep exactly four troops.");
+        return;
+      }
+      selectedTroops = selectedTroops.slice(1).concat(id);
+      renderLoadout();
+    }
+    function renderLoadoutSummary() {
+      const map = currentMap();
+      const hero = HERO_BY_ID[selectedHeroId];
+      const names = selectedTroops.map((id) => TROOP_BY_ID[id].name).join(" · ");
+      $("[data-loadout-summary]").innerHTML = "<b>" + esc(map.name) + "</b> · " + esc(map.rule) + "<br><b>" + esc(hero.name) + "</b> commands " + esc(names) + ".";
+      loadoutModeEl.textContent = chosenMode === "solo" ? "SOLO · " + map.name.toUpperCase() : "ROOM · " + map.name.toUpperCase();
+      loadoutStartBtn.textContent = chosenMode === "room" ? (roomState.amIHost ? "Start room match" : "Waiting for room host") : "Deploy to battle";
+      loadoutStartBtn.disabled = chosenMode === "room" && (!roomState.ready || !roomState.amIHost);
+    }
+    function openLoadout(mode) {
+      chosenMode = mode === "room" ? "room" : "solo";
+      if (chosenMode === "room" && !roomState.active) { show("Open Crown Circuit from a private room first."); return; }
+      renderLoadout();
+      setStage("loadout");
+    }
+
+    function pickBotLoadout() {
+      const player = selectedTroops.map((id) => TROOP_BY_ID[id]);
+      const picks = [];
+      if (player.some((troop) => troop.heavy)) picks.push("pike");
+      if (player.some((troop) => troop.flying || troop.swarm)) picks.push("warden");
+      if (player.some((troop) => troop.range > 100)) picks.push("gryphon");
+      if (!picks.includes("vanguard")) picks.push("vanguard");
+      ["ranger", "bombard", "sapper", "wisps", "medic", "charger"].forEach((id) => {
+        if (picks.length < 4 && !picks.includes(id)) picks.push(id);
+      });
+      bot.deck = picks.slice(0, 4);
+      bot.hero = currentMap().objective === "siege" ? "thorne" : currentMap().objective === "beacon" ? "mira" : (rand() < .5 ? "nyx" : "solara");
+    }
+    function routeForLane(lane, branchHint) {
+      const choices = currentMap().routes.map((route, index) => ({ route, index })).filter((item) => item.route.lane === lane);
+      if (!choices.length) return 0;
+      return choices[Math.abs(Math.round(branchHint || 0)) % choices.length].index;
+    }
+    function createTower(side, lane) {
+      const route = currentMap().routes[routeForLane(lane, 0)];
+      const t = side === "blue" ? .075 : .925;
+      const p = pointAtRoute(route, t);
+      const hero = HERO_BY_ID[activeHero[side]];
+      const king = lane === 1;
+      let max = king ? 1040 : 620;
+      if (hero.id === "thorne") max *= 1.18;
+      return {
+        id: side + "-tower-" + lane,
+        side,
+        lane,
+        x: p.x,
+        y: p.y,
+        hp: max,
+        max,
+        shield: hero.id === "thorne" ? (king ? 220 : 130) : 0,
+        king,
+        cooldown: rand() * .4,
+        hitFlash: 0,
+        alive: true
+      };
+    }
+    function resetBattle(seed) {
+      setSeed(seed);
+      units.length = 0;
+      towers.length = 0;
+      projectiles.length = 0;
+      effects.length = 0;
+      floaters.length = 0;
+      state.time = MATCH_SECONDS;
+      state.winner = "";
+      state.beaconBlue = 0;
+      state.beaconRed = 0;
+      state.hazardClock = 7;
+      state.shake = 0;
+      simTime = 0;
+      over = false;
+      paused = false;
+      elixir.blue = 5;
+      elixir.red = 5;
+      ["blue", "red"].forEach((side) => {
+        ability[side].cooldown = 0;
+        ability[side].active = 0;
+        Object.keys(battleStats[side]).forEach((key) => { battleStats[side][key] = 0; });
+        for (let lane = 0; lane < 3; lane++) towers.push(createTower(side, lane));
+      });
+      bot.think = .8;
+      bot.lastLane = 1;
+      bot.lesson = 0;
+      bot.abilityThink = 4;
+      renderCards();
+      updateHud();
+    }
+    function beginMatch(mode, config) {
+      const safeConfig = config || {};
+      matchMode = mode === "room" ? "room" : "solo";
+      mySide = matchMode === "solo" ? "blue" : (roomState.amIHost ? "blue" : "red");
+      selectedMapId = safeMap(safeConfig.mapId || selectedMapId);
+      activeDeck.blue = safeDeck(safeConfig.blueDeck || (mySide === "blue" ? selectedTroops : ["vanguard", "ranger", "pike", "bombard"]), ["vanguard", "ranger", "bombard", "wisps"]);
+      activeHero.blue = safeHero(safeConfig.blueHero || (mySide === "blue" ? selectedHeroId : "solara"));
+      if (matchMode === "solo") {
+        pickBotLoadout();
+        activeDeck.red = bot.deck.slice();
+        activeHero.red = bot.hero;
+      } else {
+        activeDeck.red = safeDeck(safeConfig.redDeck || (mySide === "red" ? selectedTroops : ["pike", "ranger", "warden", "sapper"]), ["pike", "ranger", "warden", "sapper"]);
+        activeHero.red = safeHero(safeConfig.redHero || (mySide === "red" ? selectedHeroId : "nyx"));
+      }
+      applyFaction(activeHero[mySide]);
+      resetBattle(safeConfig.seed || Date.now());
+      running = true;
+      setStage("battle");
+      lastFrame = performance.now();
+      canvas.focus({ preventScroll: true });
+      requestAnimationFrame(loop);
+      show(matchMode === "solo" ? "Crown Bot has entered the circuit." : "Room battle · you are " + mySide.toUpperCase());
+    }
+    function startSolo() {
+      beginMatch("solo", { mapId: selectedMapId, blueDeck: selectedTroops, blueHero: selectedHeroId, seed: Date.now() });
+    }
+    function startRoom() {
+      if (!roomState.ready || !roomState.amIHost) { show("The room host starts when both players are ready."); return; }
+      sendMatch("start", {
+        mapId: selectedMapId,
+        blueDeck: selectedTroops,
+        blueHero: selectedHeroId,
+        redDeck: ["pike", "ranger", "warden", "sapper"],
+        redHero: "nyx",
+        seed: Date.now()
+      });
+    }
+
+    function renderCards() {
+      const deck = activeDeck[mySide].length ? activeDeck[mySide] : selectedTroops;
+      cardsEl.innerHTML = deck.map((id, index) => {
+        const troop = TROOP_BY_ID[id];
+        const affordable = elixir[mySide] >= troop.cost;
+        return '<button type="button" class="card ' + (affordable ? "affordable" : "unaffordable") + (selectedCardIndex === index ? " is-keyed" : "") +
+          '" data-card-index="' + index + '" style="--unit-color:' + troop.color + '" aria-label="' + esc(troop.name + ", " + troop.cost + " spark") + '">' +
+          '<canvas class="glyph" width="70" height="70" data-glyph="' + index + '"></canvas><b>' + esc(troop.name) + "</b><span>" + troop.cost + " SPARK</span></button>";
+      }).join("");
+      cardsEl.querySelectorAll("[data-glyph]").forEach((glyph) => {
+        drawCardGlyph(glyph.getContext("2d"), TROOP_BY_ID[deck[Number(glyph.dataset.glyph)]]);
+      });
+      cardsEl.querySelectorAll("[data-card-index]").forEach((button) => {
+        button.addEventListener("pointerdown", onCardPointerDown);
+        button.addEventListener("click", (event) => {
+          if (event.detail === 0) {
+            selectedCardIndex = Number(button.dataset.cardIndex);
+            renderCards();
+            show("Troop selected. Choose a friendly route.");
+          }
+        });
+      });
+    }
+    function updateCardAffordability() {
+      const deck = activeDeck[mySide];
+      cardsEl.querySelectorAll("[data-card-index]").forEach((button) => {
+        const troop = TROOP_BY_ID[deck[Number(button.dataset.cardIndex)]];
+        const affordable = troop && elixir[mySide] >= troop.cost;
+        button.classList.toggle("affordable", affordable);
+        button.classList.toggle("unaffordable", !affordable);
+      });
+    }
+    function drawCardGlyph(g, troop) {
+      g.clearRect(0, 0, 70, 70);
+      g.save();
+      g.translate(35, 42);
+      g.scale(1.35, 1.35);
+      drawTroopBody(g, troop, { phase: 0, side: "blue", moving: false, attack: 0, flying: troop.flying });
+      g.restore();
+    }
+
+    function nearestRouteDrop(clientX, clientY) {
+      const rect = canvas.getBoundingClientRect();
+      const nx = clamp((clientX - rect.left) / rect.width, 0, 1);
+      const ny = clamp((clientY - rect.top) / rect.height, 0, 1);
+      let best = { route: 0, t: mySide === "blue" ? .16 : .84, lane: 1, dist: Infinity };
+      currentMap().routes.forEach((route, routeIndex) => {
+        for (let step = 2; step <= 38; step++) {
+          const t = step / 40;
+          const p = pointAtRoute(route, t);
+          const dist = Math.hypot((p.x - nx) * rect.width, (p.y - ny) * rect.height);
+          if (dist < best.dist) best = { route: routeIndex, t, lane: route.lane, dist };
+        }
+      });
+      const own = mySide === "blue" ? best.t <= .47 : best.t >= .53;
+      return { ...best, valid: own && best.dist < Math.max(70, rect.height * .12) };
+    }
+    function onCardPointerDown(event) {
+      if (!running || paused || over) return;
+      const button = event.currentTarget;
+      const cardIndex = Number(button.dataset.cardIndex);
+      const troopId = activeDeck[mySide][cardIndex];
+      const troop = TROOP_BY_ID[troopId];
+      if (!troop || elixir[mySide] < troop.cost) { show("Not enough spark."); return; }
+      drag = { cardIndex, pointerId: event.pointerId, button };
+      button.classList.add("dragging");
+      button.setPointerCapture(event.pointerId);
+      button.addEventListener("pointermove", onCardPointerMove);
+      button.addEventListener("pointerup", onCardPointerUp);
+      button.addEventListener("pointercancel", endDrag);
+      ghostEl.style.background = "radial-gradient(circle at 35% 30%," + shade(troop.color, .55) + "," + troop.color + " 44%," + troop.dark + ")";
+      ghostEl.classList.add("show");
+      moveGhost(event.clientX, event.clientY);
+      event.preventDefault();
+    }
+    function moveGhost(clientX, clientY) {
+      ghostEl.style.left = clientX + "px";
+      ghostEl.style.top = clientY + "px";
+      const info = nearestRouteDrop(clientX, clientY);
+      ghostEl.classList.toggle("valid", info.valid);
+      ghostEl.classList.toggle("invalid", !info.valid);
+    }
+    function onCardPointerMove(event) {
+      if (!drag || event.pointerId !== drag.pointerId) return;
+      moveGhost(event.clientX, event.clientY);
+    }
+    function onCardPointerUp(event) {
+      if (!drag || event.pointerId !== drag.pointerId) return;
+      const info = nearestRouteDrop(event.clientX, event.clientY);
+      const cardIndex = drag.cardIndex;
+      endDrag();
+      if (info.valid) deploy(mySide, info.lane, cardIndex, false, info.t, info.route);
+      else show("Deploy on a highlighted friendly route.");
+    }
+    function endDrag() {
+      if (drag) {
+        drag.button.classList.remove("dragging");
+        drag.button.removeEventListener("pointermove", onCardPointerMove);
+        drag.button.removeEventListener("pointerup", onCardPointerUp);
+        drag.button.removeEventListener("pointercancel", endDrag);
+      }
+      drag = null;
+      ghostEl.classList.remove("show", "valid", "invalid");
+    }
+    canvas.addEventListener("pointerdown", (event) => {
+      if (!running || paused || over || selectedCardIndex < 0 || drag) return;
+      const info = nearestRouteDrop(event.clientX, event.clientY);
+      if (info.valid) {
+        deploy(mySide, info.lane, selectedCardIndex, false, info.t, info.route);
+        selectedCardIndex = -1;
+        renderCards();
+      } else show("Choose a route on your side of the arena.");
+    });
+
+    function spawnTroop(side, lane, troop, dropT, routeIndex, formationIndex) {
+      if (units.length >= MAX_UNITS) return;
+      const route = currentMap().routes[routeIndex] || currentMap().routes[routeForLane(lane, formationIndex)];
+      const dir = sideDir(side);
+      const spacing = troop.count > 3 ? .007 : .012;
+      const t = clamp(dropT - dir * formationIndex * spacing, .02, .98);
+      const hero = HERO_BY_ID[activeHero[side]];
+      const veilShield = hero.id === "nyx" ? 18 : 0;
+      const unit = {
+        id: side + "-" + Math.floor(simTime * 1000) + "-" + formationIndex + "-" + Math.floor(rand() * 99999),
+        side,
+        lane,
+        routeIndex: currentMap().routes.indexOf(route),
+        troopId: troop.id,
+        t,
+        x: 0,
+        y: 0,
+        lateral: (formationIndex - (troop.count - 1) / 2) * (troop.count > 3 ? 7 : 11),
+        hp: troop.hp,
+        maxHp: troop.hp,
+        shield: veilShield,
+        cooldown: rand() * .25,
+        phase: rand() * 8,
+        moving: true,
+        attackFlash: 0,
+        hitFlash: 0,
+        slow: 0,
+        haste: 0,
+        chargeReady: !!troop.charge,
+        alive: true,
+        death: 0
+      };
+      updateUnitPosition(unit);
+      units.push(unit);
+    }
+    function deploy(side, lane, cardIndex, remote = false, dropT = null, routeIndex = null) {
+      if (!running || paused || over || (side !== "blue" && side !== "red")) return false;
+      const deck = activeDeck[side];
+      const safeIndex = clamp(Math.round(Number(cardIndex) || 0), 0, 3);
+      const troop = TROOP_BY_ID[deck[safeIndex]];
+      if (!troop || elixir[side] + .001 < troop.cost) return false;
+      const safeLaneValue = safeLane(lane);
+      const safeT = safeDrop(dropT, side);
+      let safeRouteIndex = Math.round(Number(routeIndex));
+      if (!Number.isInteger(safeRouteIndex) || !currentMap().routes[safeRouteIndex] || currentMap().routes[safeRouteIndex].lane !== safeLaneValue) safeRouteIndex = routeForLane(safeLaneValue, Math.floor(rand() * 3));
+      if (!remote) {
+        if (matchMode === "solo") return deploy(side, safeLaneValue, safeIndex, true, safeT, safeRouteIndex);
+        sendMatch("deploy", { side, lane: safeLaneValue, cardIndex: safeIndex, dropT: safeT, routeIndex: safeRouteIndex });
+        return true;
+      }
+      elixir[side] -= troop.cost;
+      battleStats[side].deployed += troop.count;
+      battleStats[side].spent += troop.cost;
+      for (let i = 0; i < troop.count; i++) spawnTroop(side, safeLaneValue, troop, safeT, safeRouteIndex, i);
+      if (side === mySide) show(troop.name + " deployed.");
+      renderCards();
+      return true;
+    }
+    function updateUnitPosition(unit) {
+      const route = currentMap().routes[unit.routeIndex] || currentMap().routes[0];
+      const point = pointAtRoute(route, unit.t);
+      const tangent = pathTangent(route, unit.t);
+      unit.x = point.x - tangent.y * unit.lateral / REF_W;
+      unit.y = point.y + tangent.x * unit.lateral / REF_H;
+    }
+    function validUnitTarget(attacker, target, troop) {
+      if (!target.alive || target.side === attacker.side) return false;
+      const targetDef = TROOP_BY_ID[target.troopId];
+      if (targetDef.flying && !troop.antiAir && !troop.flying && troop.range < 80) return false;
+      return true;
+    }
+    function nearestEnemy(unit) {
+      const troop = TROOP_BY_ID[unit.troopId];
+      let best = null;
+      let bestScore = Infinity;
+      if (!troop.buildingHunter) {
+        units.forEach((target) => {
+          if (!validUnitTarget(unit, target, troop)) return;
+          const dist = worldDistance(unit, target);
+          if (dist > Math.max(troop.range + 85, 126)) return;
+          const targetDef = TROOP_BY_ID[target.troopId];
+          let score = dist;
+          if (troop.antiHeavy && targetDef.heavy) score -= 42;
+          if (troop.antiRanged && targetDef.range > 90) score -= 48;
+          if (troop.splash && targetDef.swarm) score -= 35;
+          if (score < bestScore) { best = target; bestScore = score; }
+        });
+      }
+      towers.forEach((tower) => {
+        if (!tower.alive || tower.side === unit.side) return;
+        if (!tower.king && tower.lane !== unit.lane) return;
+        const outerAlive = towers.some((item) => item.side === tower.side && !item.king && item.lane === unit.lane && item.alive);
+        if (tower.king && outerAlive && currentMap().objective !== "beacon") return;
+        const dist = worldDistance(unit, tower);
+        if (dist < bestScore && dist < Math.max(troop.range + 90, 135)) { best = tower; bestScore = dist; }
+      });
+      return { target: best, distance: bestScore };
+    }
+    function woundedFriend(unit, troop) {
+      if (!troop.heal) return null;
+      let best = null;
+      let ratio = 1;
+      units.forEach((friend) => {
+        if (!friend.alive || friend.side !== unit.side || friend === unit) return;
+        const nextRatio = (friend.hp + friend.shield) / (friend.maxHp + 30);
+        if (nextRatio < ratio && worldDistance(unit, friend) <= troop.range) { best = friend; ratio = nextRatio; }
+      });
+      return best;
+    }
+    function towerDefenseStats(tower) {
+      const hero = HERO_BY_ID[activeHero[tower.side]];
+      const stats = { damage: tower.king ? 29 : 21, range: tower.king ? 205 : 178, rate: tower.king ? .58 : .74, splash: 0, chain: 0, armor: 0, color: hero.color };
+      if (hero.id === "solara") stats.splash = 32;
+      if (hero.id === "thorne") stats.armor = 4;
+      if (hero.id === "mira") stats.chain = 1;
+      if (hero.id === "nyx") { stats.range += 24; stats.rate *= .88; }
+      return stats;
+    }
+    function damageMultiplier(sourceTroop, target) {
+      if (!sourceTroop || !target.troopId) return 1;
+      const targetTroop = TROOP_BY_ID[target.troopId];
+      let multiplier = 1;
+      if (sourceTroop.antiHeavy && targetTroop.heavy) multiplier *= sourceTroop.antiHeavy;
+      if (sourceTroop.antiRanged && targetTroop.range > 90) multiplier *= sourceTroop.antiRanged;
+      if (sourceTroop.splash && targetTroop.swarm) multiplier *= 1.35;
+      if (sourceTroop.charge && sourceTroop.chargeReady) multiplier *= sourceTroop.charge;
+      return multiplier;
+    }
+    function applyDamage(target, amount, sourceSide, options) {
+      if (!target || !target.alive || amount <= 0) return;
+      const opts = options || {};
+      const sourceTroop = opts.sourceTroop;
+      let damage = amount * damageMultiplier(sourceTroop, target);
+      if (target.king && currentMap().objective === "siege") {
+        const wards = towers.filter((tower) => tower.side === target.side && !tower.king && tower.alive).length;
+        if (wards) damage *= .25;
+      }
+      const armor = target.troopId ? (TROOP_BY_ID[target.troopId].armor || 0) : towerDefenseStats(target).armor;
+      damage = Math.max(1, damage - Math.max(0, armor - (opts.pierce || 0)));
+      if (sourceTroop && sourceTroop.towerBonus && !target.troopId) damage *= sourceTroop.towerBonus;
+      if (sourceTroop && sourceTroop.shieldBreak && target.shield > 0) damage *= sourceTroop.shieldBreak;
+      if (target.shield > 0) {
+        const absorbed = Math.min(target.shield, damage);
+        target.shield -= absorbed;
+        damage -= absorbed;
+      }
+      if (damage > 0) target.hp -= damage;
+      target.hitFlash = .17;
+      state.shake = Math.min(.35, state.shake + (target.king ? .14 : .035));
+      battleStats[sourceSide].damage += Math.round(amount);
+      floaters.push({ x: target.x, y: target.y - .025, text: String(Math.round(amount)), color: opts.color || "#fff4d2", life: .55, age: 0 });
+      effects.push({ type: "impact", x: target.x, y: target.y, color: opts.color || "#fff", life: .3, age: 0, radius: opts.splash || 22 });
+      if (target.hp <= 0) killTarget(target, sourceSide);
+    }
+    function killTarget(target, sourceSide) {
+      if (!target.alive) return;
+      target.alive = false;
+      target.death = .36;
+      battleStats[sourceSide].kills += target.troopId ? 1 : 0;
+      if (!target.troopId) {
+        battleStats[sourceSide].towers += 1;
+        if (target.king && !over) finishBattle(sourceSide);
+      }
+      if (!reducedMotion) {
+        for (let i = 0; i < 8; i++) effects.push({ type: "spark", x: target.x, y: target.y, vx: (rand() - .5) * .14, vy: (rand() - .7) * .14, color: target.side === "blue" ? HERO_BY_ID[activeHero.blue].color : HERO_BY_ID[activeHero.red].color, life: .48, age: 0 });
+      }
+    }
+    function launchProjectile(source, target, data) {
+      const distance = worldDistance(source, target);
+      projectiles.push({
+        x: source.x,
+        y: source.y,
+        sx: source.x,
+        sy: source.y,
+        tx: target.x,
+        ty: target.y,
+        target,
+        sourceSide: source.side,
+        damage: data.damage,
+        color: data.color,
+        splash: data.splash || 0,
+        chain: data.chain || 0,
+        pierce: data.pierce || 0,
+        sourceTroop: data.sourceTroop || null,
+        duration: clamp(distance / (data.speed || 520), .12, .72),
+        age: 0,
+        arc: data.arc || 0,
+        alive: true
+      });
+    }
+    function resolveProjectile(projectile) {
+      const target = projectile.target;
+      const impact = target && target.alive ? target : { x: projectile.tx, y: projectile.ty, alive: false };
+      if (target && target.alive) applyDamage(target, projectile.damage, projectile.sourceSide, projectile);
+      if (projectile.splash > 0) {
+        units.forEach((unit) => {
+          if (!unit.alive || unit.side === projectile.sourceSide || unit === target) return;
+          if (worldDistance(unit, impact) <= projectile.splash) applyDamage(unit, projectile.damage * .62, projectile.sourceSide, projectile);
+        });
+      }
+      if (projectile.chain > 0 && target) {
+        const next = units.filter((unit) => unit.alive && unit.side !== projectile.sourceSide && unit !== target && worldDistance(unit, target) < 105)
+          .sort((a, b) => worldDistance(a, target) - worldDistance(b, target))[0];
+        if (next) {
+          launchProjectile(target, next, { damage: projectile.damage * .62, color: projectile.color, speed: 800, sourceTroop: projectile.sourceTroop });
+        }
+      }
+      projectile.alive = false;
+    }
+    function performAttack(unit, target, troop) {
+      unit.attackFlash = .22;
+      unit.moving = false;
+      unit.cooldown = troop.rate;
+      if (troop.charge && unit.chargeReady) unit.chargeReady = false;
+      if (troop.range > 60 || troop.projectile) {
+        launchProjectile(unit, target, { damage: troop.dmg, color: troop.color, speed: troop.projectile || 520, splash: troop.splash, chain: troop.chain, sourceTroop: troop, arc: troop.id === "bombard" ? .08 : 0 });
+      } else {
+        applyDamage(target, troop.dmg, unit.side, { color: troop.color, sourceTroop: troop, splash: troop.splash });
+        if (troop.splash) units.forEach((other) => {
+          if (other !== target && other.alive && other.side !== unit.side && worldDistance(other, target) < troop.splash) applyDamage(other, troop.dmg * .5, unit.side, { color: troop.color, sourceTroop: troop });
+        });
+      }
+    }
+    function healTarget(unit, target, troop) {
+      unit.attackFlash = .2;
+      unit.cooldown = troop.rate;
+      target.hp = Math.min(target.maxHp, target.hp + troop.heal);
+      effects.push({ type: "beam", x: unit.x, y: unit.y, tx: target.x, ty: target.y, color: troop.color, life: .18, age: 0 });
+      floaters.push({ x: target.x, y: target.y - .025, text: "+" + troop.heal, color: troop.color, life: .5, age: 0 });
+    }
+    function speedModifier(unit, troop) {
+      let multiplier = 1;
+      if (unit.slow > 0) multiplier *= .62;
+      if (unit.haste > 0) multiplier *= 1.32;
+      if (HERO_BY_ID[activeHero[unit.side]].id === "nyx" && (unit.side === "blue" ? unit.t < .5 : unit.t > .5)) multiplier *= 1.1;
+      if (currentMap().id === "ember" && !troop.flying && unit.t > .44 && unit.t < .56) multiplier *= .72;
+      if (currentMap().id === "shard" && troop.flying) multiplier *= 1.08;
+      return multiplier;
+    }
+    function updateUnits(dt) {
+      units.forEach((unit) => {
+        if (!unit.alive) { unit.death -= dt; return; }
+        const troop = TROOP_BY_ID[unit.troopId];
+        unit.cooldown -= dt;
+        unit.attackFlash = Math.max(0, unit.attackFlash - dt);
+        unit.hitFlash = Math.max(0, unit.hitFlash - dt);
+        unit.slow = Math.max(0, unit.slow - dt);
+        unit.haste = Math.max(0, unit.haste - dt);
+        unit.phase += dt * (2.6 + troop.speed / 20);
+        const friend = woundedFriend(unit, troop);
+        if (friend && unit.cooldown <= 0) {
+          healTarget(unit, friend, troop);
+          return;
+        }
+        const near = nearestEnemy(unit);
+        if (near.target && near.distance <= troop.range + (near.target.troopId ? 0 : 24)) {
+          if (unit.cooldown <= 0) performAttack(unit, near.target, troop);
+          else unit.moving = false;
+          return;
+        }
+        unit.moving = true;
+        const route = currentMap().routes[unit.routeIndex];
+        unit.t += sideDir(unit.side) * troop.speed * speedModifier(unit, troop) / route.length * dt;
+        updateUnitPosition(unit);
+        if (unit.t <= .005 || unit.t >= .995) {
+          const king = towers.find((tower) => tower.side !== unit.side && tower.king && tower.alive);
+          if (king) applyDamage(king, troop.dmg * (troop.towerBonus || 1), unit.side, { color: troop.color, sourceTroop: troop });
+          killTarget(unit, enemySide(unit.side));
+        }
+      });
+      for (let i = units.length - 1; i >= 0; i--) if (!units[i].alive && units[i].death <= 0) units.splice(i, 1);
+    }
+    function updateTowers(dt) {
+      towers.forEach((tower) => {
+        if (!tower.alive) { tower.death -= dt; return; }
+        tower.cooldown -= dt;
+        tower.hitFlash = Math.max(0, tower.hitFlash - dt);
+        const stats = towerDefenseStats(tower);
+        const candidates = units.filter((unit) => unit.alive && unit.side !== tower.side && worldDistance(unit, tower) <= stats.range)
+          .sort((a, b) => {
+            const pa = tower.side === "blue" ? 1 - a.t : a.t;
+            const pb = tower.side === "blue" ? 1 - b.t : b.t;
+            return pa - pb;
+          });
+        const target = candidates[0];
+        if (target && tower.cooldown <= 0) {
+          tower.cooldown = stats.rate;
+          launchProjectile(tower, target, { damage: stats.damage, color: stats.color, speed: 700, splash: stats.splash, chain: stats.chain, pierce: stats.armor });
+        }
+      });
+    }
+    function updateProjectiles(dt) {
+      projectiles.forEach((projectile) => {
+        if (!projectile.alive) return;
+        projectile.age += dt;
+        if (projectile.target && projectile.target.alive) { projectile.tx = projectile.target.x; projectile.ty = projectile.target.y; }
+        const f = clamp(projectile.age / projectile.duration, 0, 1);
+        projectile.x = projectile.sx + (projectile.tx - projectile.sx) * f;
+        projectile.y = projectile.sy + (projectile.ty - projectile.sy) * f - Math.sin(f * Math.PI) * projectile.arc;
+        if (f >= 1) resolveProjectile(projectile);
+      });
+      for (let i = projectiles.length - 1; i >= 0; i--) if (!projectiles[i].alive) projectiles.splice(i, 1);
+    }
+    function updateEffects(dt) {
+      effects.forEach((effect) => {
+        effect.age += dt;
+        if (effect.type === "spark") { effect.x += effect.vx * dt; effect.y += effect.vy * dt; effect.vy += .17 * dt; }
+      });
+      floaters.forEach((floater) => { floater.age += dt; floater.y -= .025 * dt; });
+      for (let i = effects.length - 1; i >= 0; i--) if (effects[i].age >= effects[i].life) effects.splice(i, 1);
+      for (let i = floaters.length - 1; i >= 0; i--) if (floaters[i].age >= floaters[i].life) floaters.splice(i, 1);
+      state.shake = Math.max(0, state.shake - dt);
+    }
+    function triggerMeteor() {
+      const alive = units.filter((unit) => unit.alive);
+      let target = alive[Math.floor(rand() * Math.max(1, alive.length))] || { x: .5, y: .5 };
+      let bestCluster = -1;
+      alive.forEach((candidate) => {
+        const cluster = alive.filter((unit) => worldDistance(unit, candidate) < 95).length;
+        if (cluster > bestCluster) { bestCluster = cluster; target = candidate; }
+      });
+      effects.push({ type: "meteor", x: target.x, y: target.y, color: "#ff9d57", life: 1.35, age: 0, struck: false });
+    }
+    function updateMapRules(dt) {
+      const map = currentMap();
+      if (map.objective === "beacon") {
+        const center = { x: .5, y: .5 };
+        let blue = 0;
+        let red = 0;
+        units.forEach((unit) => {
+          if (!unit.alive || worldDistance(unit, center) > 105) return;
+          const value = TROOP_BY_ID[unit.troopId].heavy ? 1.6 : 1;
+          if (unit.side === "blue") blue += value; else red += value;
+        });
+        if (blue > red) state.beaconBlue = clamp(state.beaconBlue + (blue - red) * dt * 1.15, 0, 100);
+        if (red > blue) state.beaconRed = clamp(state.beaconRed + (red - blue) * dt * 1.15, 0, 100);
+        if (state.beaconBlue >= 100) finishBattle("blue");
+        if (state.beaconRed >= 100) finishBattle("red");
+        state.hazardClock -= dt;
+        if (state.hazardClock <= 0) { state.hazardClock = 8 + rand() * 3; triggerMeteor(); }
+      }
+      if (map.id === "verdant") {
+        const groves = [{ x: .33, y: .28 }, { x: .67, y: .72 }];
+        units.forEach((unit) => {
+          if (!unit.alive || unit.hp >= unit.maxHp) return;
+          if (groves.some((grove) => worldDistance(unit, grove) < 70)) unit.hp = Math.min(unit.maxHp, unit.hp + dt * 5);
+        });
+      }
+      effects.filter((effect) => effect.type === "meteor" && !effect.struck && effect.age >= 1).forEach((meteor) => {
+        meteor.struck = true;
+        units.forEach((unit) => {
+          if (unit.alive && worldDistance(unit, meteor) < 88) applyDamage(unit, 45, enemySide(unit.side), { color: "#ff9d57" });
+        });
+        state.shake = .34;
+      });
+    }
+    function towerCount(side) { return towers.filter((tower) => tower.side === side && tower.alive).length; }
+    function hpPct(side) {
+      const list = towers.filter((tower) => tower.side === side);
+      const total = list.reduce((sum, tower) => sum + tower.max, 0);
+      return total ? list.reduce((sum, tower) => sum + Math.max(0, tower.hp), 0) / total : 0;
+    }
+    function laneThreat(lane, side) {
+      return units.filter((unit) => unit.side === side && unit.alive && unit.lane === lane).reduce((score, unit) => {
+        const troop = TROOP_BY_ID[unit.troopId];
+        const forward = side === "blue" ? unit.t : 1 - unit.t;
+        return score + troop.cost * (unit.hp / unit.maxHp) * (.6 + forward);
+      }, 0);
+    }
+    function counterScore(troop, lane) {
+      let score = 1 + rand() * .45;
+      units.filter((unit) => unit.side === "blue" && unit.alive && unit.lane === lane).forEach((unit) => {
+        const enemy = TROOP_BY_ID[unit.troopId];
+        if (troop.antiHeavy && enemy.heavy) score += 2.2;
+        if (troop.antiRanged && enemy.range > 90) score += 1.8;
+        if (troop.splash && enemy.swarm) score += 2;
+        if (troop.antiAir && enemy.flying) score += 2.1;
+        if (troop.buildingHunter && laneThreat(lane, "blue") < 2) score += .55;
+      });
+      return score;
+    }
+    function chooseBotCard(lane) {
+      const options = activeDeck.red.map((id, index) => ({ troop: TROOP_BY_ID[id], index })).filter((item) => elixir.red >= item.troop.cost);
+      if (!options.length) return -1;
+      options.sort((a, b) => counterScore(b.troop, lane) - counterScore(a.troop, lane));
+      return options[0].index;
+    }
+    function thinkBot(dt) {
+      if (matchMode !== "solo" || !running || paused || over) return;
+      bot.think -= dt;
+      bot.abilityThink -= dt;
+      if (bot.abilityThink <= 0 && ability.red.cooldown <= 0) {
+        const pressure = Math.max(...[0, 1, 2].map((lane) => laneThreat(lane, "blue")));
+        const damaged = towers.some((tower) => tower.side === "red" && tower.alive && tower.hp / tower.max < .55);
+        if (pressure > 5 || damaged || state.time < 45) activateHeroAbility("red", true);
+        bot.abilityThink = 5;
+      }
+      if (bot.think > 0) return;
+      const scores = [0, 1, 2].map((lane) => {
+        const incoming = laneThreat(lane, "blue");
+        const support = laneThreat(lane, "red");
+        const target = towers.find((tower) => tower.side === "blue" && tower.lane === lane && tower.alive);
+        const weakness = target ? 1 - target.hp / target.max : 1.4;
+        return incoming * 1.35 + weakness * 2.1 + support * .18 + (bot.lastLane === lane ? -.35 : 0) + rand() * .7;
+      });
+      const lane = scores.indexOf(Math.max(...scores));
+      const cardIndex = chooseBotCard(lane);
+      if (cardIndex < 0) { bot.think = .42; return; }
+      const threat = laneThreat(lane, "blue");
+      const dropT = clamp(.84 - (threat > 4 ? .16 : 0) + rand() * .05, .56, .91);
+      const routeIndex = routeForLane(lane, Math.floor(rand() * 2));
+      deploy('red', lane, cardIndex, true, dropT, routeIndex);
+      bot.lastLane = lane;
+      bot.lesson += 1;
+      if (bot.lesson === 2) show("Crown Bot is counter-drafting your strongest lane.");
+      if (bot.lesson === 5) show("Split pressure before the bot builds a formation.");
+      bot.think = clamp(1.6 - (MATCH_SECONDS - state.time) / 180 + rand() * .65, .62, 1.8);
+    }
+    function activateHeroAbility(side, remote) {
+      if (!running || paused || over || ability[side].cooldown > 0) return false;
+      if (!remote) {
+        if (matchMode === "solo") return activateHeroAbility(side, true);
+        sendMatch("ability", { side });
+        return true;
+      }
+      const hero = HERO_BY_ID[activeHero[side]];
+      ability[side].cooldown = ABILITY_COOLDOWN;
+      ability[side].active = 6;
+      battleStats[side].abilities += 1;
+      if (hero.id === "solara") {
+        const targets = units.filter((unit) => unit.alive && unit.side !== side).sort((a, b) => (side === "blue" ? b.t - a.t : a.t - b.t)).slice(0, 3);
+        (targets.length ? targets : towers.filter((tower) => tower.alive && tower.side !== side).slice(0, 3)).forEach((target, index) => {
+          effects.push({ type: "strike", x: target.x, y: target.y, target, sourceSide: side, color: hero.color, life: .85 + index * .08, age: 0, struck: false });
+        });
+      } else if (hero.id === "nyx") {
+        units.filter((unit) => unit.alive && unit.side === side).forEach((unit) => { unit.shield += 30; unit.haste = Math.max(unit.haste, 6); });
+      } else if (hero.id === "thorne") {
+        towers.filter((tower) => tower.alive && tower.side === side).forEach((tower) => { tower.shield += tower.king ? 210 : 145; });
+        units.filter((unit) => unit.alive && unit.side === side && TROOP_BY_ID[unit.troopId].heavy).forEach((unit) => { unit.shield += 45; });
+      } else if (hero.id === "mira") {
+        units.filter((unit) => unit.alive && unit.side !== side)
+          .sort((a, b) => TROOP_BY_ID[b.troopId].cost - TROOP_BY_ID[a.troopId].cost)
+          .slice(0, 6).forEach((unit, index) => {
+            applyDamage(unit, 52 - index * 3, side, { color: hero.color, pierce: 5 });
+            unit.slow = Math.max(unit.slow, 2.2);
+          });
+      }
+      effects.push({ type: "crownwave", x: side === "blue" ? .11 : .89, y: .5, color: hero.color, life: .75, age: 0 });
+      if (side === mySide) show(hero.ability + " unleashed.");
+      updateHud();
+      return true;
+    }
+    function updateAbilities(dt) {
+      ["blue", "red"].forEach((side) => {
+        ability[side].cooldown = Math.max(0, ability[side].cooldown - dt);
+        ability[side].active = Math.max(0, ability[side].active - dt);
+      });
+      effects.filter((effect) => effect.type === "strike" && !effect.struck && effect.age >= effect.life * .58).forEach((strike) => {
+        strike.struck = true;
+        if (strike.target && strike.target.alive) applyDamage(strike.target, 70, strike.sourceSide, { color: strike.color, splash: 55, pierce: 4 });
+        units.forEach((unit) => {
+          if (unit.alive && unit.side !== strike.sourceSide && worldDistance(unit, strike) < 58 && unit !== strike.target) applyDamage(unit, 38, strike.sourceSide, { color: strike.color, pierce: 2 });
+        });
+      });
+    }
+    function objectiveText() {
+      const map = currentMap();
+      if (map.objective === "beacon") return "CENTER RELAY · BLUE " + Math.floor(state.beaconBlue) + " · " + Math.floor(state.beaconRed) + " RED";
+      if (map.objective === "siege") {
+        const enemy = enemySide(mySide);
+        const wards = towers.filter((tower) => tower.side === enemy && !tower.king && tower.alive).length;
+        return wards ? "OUTER WARDS ACTIVE · BREAK " + wards + " KEEP" + (wards === 1 ? "" : "S") : "CROWN WARD DOWN · STRIKE THE KING";
+      }
+      return "BREAK THE RIVAL CROWN · BRIDGE CHOKES SLOW GROUND FORMATIONS";
+    }
+    function updateHud() {
+      const blueHero = HERO_BY_ID[activeHero.blue] || HEROES[0];
+      const redHero = HERO_BY_ID[activeHero.red] || HEROES[2];
+      hud.blueName.textContent = blueHero.name;
+      hud.redName.textContent = redHero.name;
+      hud.blue.textContent = "Spark " + elixir.blue.toFixed(1) + " · Keeps " + towerCount("blue");
+      hud.red.textContent = "Spark " + elixir.red.toFixed(1) + " · Keeps " + towerCount("red");
+      hud.blueBar.style.width = Math.round(hpPct("blue") * 100) + "%";
+      hud.redBar.style.width = Math.round(hpPct("red") * 100) + "%";
+      hud.score.textContent = (matchMode === "solo" ? "SOLO" : "ROOM") + " · " + currentMap().name.toUpperCase() + " · " + Math.max(0, Math.ceil(state.time));
+      hud.objective.textContent = objectiveText();
+      const hero = HERO_BY_ID[activeHero[mySide]] || HEROES[0];
+      const cooldown = ability[mySide].cooldown;
+      powerName.textContent = hero.ability;
+      powerCopy.textContent = cooldown > 0 ? "Reforming in " + Math.ceil(cooldown) + "s" : hero.abilityCopy;
+      powerFill.style.width = Math.round((1 - cooldown / ABILITY_COOLDOWN) * 100) + "%";
+      powerBtn.disabled = cooldown > 0 || !running || paused;
+      updateCardAffordability();
+    }
+    function gameScore() {
+      const own = hpPct(mySide);
+      const rival = hpPct(enemySide(mySide));
+      return Math.max(0, Math.round(1000 + (own - rival) * 1400 + battleStats[mySide].kills * 18 + battleStats[mySide].towers * 500));
+    }
     function step(dt) {
       state.time -= dt;
       if (state.time <= 0 && !over) {
-        const b = hpPct('blue'), r = hpPct('red');
-        finish(b === r ? 'draw' : b > r ? 'blue' : 'red');
+        const blueValue = hpPct("blue") + state.beaconBlue / 250;
+        const redValue = hpPct("red") + state.beaconRed / 250;
+        finishBattle(Math.abs(blueValue - redValue) < .005 ? "draw" : blueValue > redValue ? "blue" : "red");
+        return;
       }
-      elixir.blue = clamp(elixir.blue + dt * 0.48, 0, 10);
-      elixir.red = clamp(elixir.red + dt * 0.48, 0, 10);
+      elixir.blue = clamp(elixir.blue + dt * (activeHero.blue === "solara" && currentMap().objective === "beacon" ? .59 : .52), 0, 10);
+      elixir.red = clamp(elixir.red + dt * (activeHero.red === "solara" && currentMap().objective === "beacon" ? .59 : .52), 0, 10);
       thinkBot(dt);
-
-      for (const u of units) {
-        if (u.hp <= 0) continue;
-        const cd = CARD_BY_ID[u.card] || CARD[0];
-        u.cool = Math.max(0, u.cool - dt);
-        u.atkFlash = Math.max(0, u.atkFlash - dt);
-        u.hitFlash = Math.max(0, u.hitFlash - dt);
-        const near = nearestEnemy(u);
-        if (near.target && near.dist < cd.range) {
-          u.moving = false;
-          if (u.cool <= 0) {
-            u.cool = cd.rate;
-            if (cd.range > 40) fire(u, near.target, cd);
-            else { damage(near.target, cd.dmg); u.atkFlash = 0.18; }
-          }
-        } else {
-          u.moving = true;
-          u.x += sideDir(u.side) * cd.spd / 900 * dt;
-          u.phase += dt * (2.6 + cd.spd / 40);
-        }
-      }
-      for (const s of shots) { s.life -= dt; if (s.life <= 0 && !s.done) { s.done = true; damage(s.target, s.dmg); } }
-      for (const p of particles) p.t -= dt;
-
-      for (const t of towers) {
-        if (t.hp <= 0 || over) continue;
-        t.cool = (t.cool || 0) - dt;
-        const target = units.filter(u => u.side !== t.side && u.hp > 0 && Math.abs(u.y - t.y) < 0.12)
-          .sort((a, b) => Math.abs(a.x - t.x) - Math.abs(b.x - t.x))[0];
-        if (target && Math.abs(target.x - t.x) < 0.22 && t.cool <= 0) {
-          t.cool = t.king ? 0.55 : 0.8;
-          fire(t, target, { dmg: t.king ? 22 : 14, color: t.side === 'blue' ? '#41ffa1' : '#ff5772' });
-        }
-      }
-
-      for (let i = units.length - 1; i >= 0; i--) if (units[i].hp <= 0 || units[i].x < -0.1 || units[i].x > 1.1) units.splice(i, 1);
-      for (let i = shots.length - 1; i >= 0; i--) if (shots[i].life <= -0.1) shots.splice(i, 1);
-      for (let i = particles.length - 1; i >= 0; i--) if (particles[i].t <= 0) particles.splice(i, 1);
-
+      updateUnits(dt);
+      updateTowers(dt);
+      updateProjectiles(dt);
+      updateAbilities(dt);
+      updateMapRules(dt);
+      updateEffects(dt);
       updateHud();
-      host('score', { score: Math.abs(score()), progress: 0, state: { winner: state.winner || '', time: Math.ceil(state.time), blue: Math.round(hpPct('blue') * 100), red: Math.round(hpPct('red') * 100) } });
+      if (Math.floor(simTime * 2) !== Math.floor((simTime - dt) * 2)) {
+        host("score", {
+          score: gameScore(),
+          progress: Math.round((1 - state.time / MATCH_SECONDS) * 100),
+          state: { winner: state.winner, map: selectedMapId, time: Math.ceil(state.time), blue: Math.round(hpPct("blue") * 100), red: Math.round(hpPct("red") * 100) }
+        });
+      }
+    }
+    function finishBattle(winner) {
+      if (over) return;
+      over = true;
+      running = false;
+      state.winner = winner;
+      const won = winner === mySide;
+      const drawResult = winner === "draw";
+      const elapsed = Math.max(0, MATCH_SECONDS - state.time);
+      const verdict = $("[data-result-verdict]");
+      verdict.classList.toggle("loss", !won && !drawResult);
+      $("[data-report-heading]").textContent = drawResult ? "Stalemate" : won ? "Victory" : "Defeat";
+      $("[data-report-copy]").textContent = drawResult ? "Both crowns endured the final bell." : won ? "Your warband claimed the circuit." : "The rival formation broke through your crown line.";
+      $("[data-report-map]").textContent = currentMap().name.toUpperCase();
+      $("[data-result-word]").textContent = drawResult ? "DRAW" : won ? "VICTORY" : "DEFEAT";
+      $("[data-result-detail]").textContent = HERO_BY_ID[activeHero[mySide]].name + " led " + battleStats[mySide].deployed + " troops across " + currentMap().name + ".";
+      const stats = [
+        [Math.floor(elapsed / 60) + ":" + String(Math.floor(elapsed % 60)).padStart(2, "0"), "Battle time"],
+        [battleStats[mySide].deployed, "Troops deployed"],
+        [battleStats[mySide].kills, "Enemy troops broken"],
+        [battleStats[mySide].damage, "Damage dealt"],
+        [battleStats[mySide].towers, "Keeps destroyed"],
+        [battleStats[mySide].abilities, "Hero abilities"]
+      ];
+      $("[data-stat-grid]").innerHTML = stats.map((item) => '<div class="stat"><b>' + esc(item[0]) + "</b><span>" + esc(item[1]) + "</span></div>").join("");
+      setStage("results");
+      host("complete", { score: gameScore(), progress: 100, state: { winner, map: selectedMapId, hero: activeHero[mySide], kills: battleStats[mySide].kills } });
     }
 
-    function finish(winner) {
-      over = true; state.winner = winner; running = false;
-      screen.hidden = false;
-      intro.textContent = winner === 'draw'
-        ? 'Draw. Neither crown fell. Run it back with sharper deploy timing.'
-        : `${winner.toUpperCase()} wins the crown!`;
-      soloBtn.textContent = 'Solo rematch vs Bot';
-      startBtn.textContent = 'Start room rematch';
-      startBtn.disabled = !roomReady;
-      host('complete', { score: Math.abs(score()), progress: 100, state: { winner } });
-    }
-
-    function livingTower(side, lane) {
-      return towers.find(t => t.side === side && t.lane === lane && t.hp > 0)
-        || towers.find(t => t.side === side && t.king && t.hp > 0)
-        || null;
-    }
-
-    function laneThreat(lane, side) {
-      return units.filter(u => u.side === side && u.hp > 0 && u.lane === lane)
-        .reduce((sum, u) => {
-          const forward = side === 'blue' ? u.x : 1 - u.x;
-          const cd = CARD_BY_ID[u.card] || CARD[0];
-          return sum + forward * (cd.cost + u.hp / cd.hp);
-        }, 0);
-    }
-
-    function chooseBotCard(lane, pressure) {
-      const affordable = CARD.map((cd, i) => ({ cd, i })).filter(item => elixir.red >= item.cd.cost);
-      if (!affordable.length) return -1;
-      const target = livingTower('blue', lane);
-      const weakTower = target ? 1 - Math.max(0, target.hp) / target.max : 0;
-      if (pressure > 2.6 && elixir.red >= 3) return Math.random() < 0.58 ? 1 : 2;
-      if (weakTower > 0.45 && elixir.red >= 5) return 3;
-      if (elixir.red >= 5 && Math.random() < 0.22) return 3;
-      if (elixir.red >= 3 && Math.random() < 0.38) return pressure > 1.2 ? 1 : 2;
-      return affordable[Math.floor(Math.random() * affordable.length)].i;
-    }
-
-    function thinkBot(dt) {
-      if (matchMode !== 'solo' || over || paused || !running) return;
-      bot.think -= dt;
-      if (bot.think > 0) return;
-      const laneScores = lanes.map((_, lane) => {
-        const pressure = laneThreat(lane, 'blue');
-        const redSupport = laneThreat(lane, 'red') * 0.35;
-        const target = livingTower('blue', lane);
-        const towerWeakness = target ? (1 - Math.max(0, target.hp) / target.max) * 2.4 : 0;
-        const repeatPenalty = bot.lastLane === lane ? -0.18 : 0;
-        return pressure * 1.45 + towerWeakness + redSupport + repeatPenalty + Math.random() * 0.48;
-      });
-      const lane = laneScores.indexOf(Math.max(...laneScores));
-      const cardIndex = chooseBotCard(lane, laneThreat(lane, 'blue'));
-      if (cardIndex < 0) { bot.think = 0.45; return; }
-      const dropX = clamp(0.76 + Math.random() * 0.14 - (laneThreat(lane, 'blue') > 2 ? 0.13 : 0), 0.56, 0.9);
-      deploy('red', lane, cardIndex, true, dropX);
-      bot.lastLane = lane;
-      bot.lesson += 1;
-      if (bot.lesson === 2) hint.textContent = 'Bot tip: it answers pressure first. Split lanes to make it choose.';
-      else if (bot.lesson === 5) hint.textContent = 'Bot tip: Breaker punishes weak towers. Save elixir before it crosses mid.';
-      bot.think = clamp(1.85 - state.time / 260 + Math.random() * 0.8, 0.72, 2.15);
-    }
-
-    // ---------------------------------------------------------------------
-    // Rendering — cartoony procedural troop sprites (chibi proportions,
-    // thick outlines, a light walk-cycle bob, and an attack lunge/swing),
-    // replacing the old flat circle-with-a-letter placeholder.
-    // ---------------------------------------------------------------------
-    function shade(hex, amt) {
-      const h = hex.replace('#', '');
-      const num = parseInt(h.length === 3 ? h.split('').map(ch => ch + ch).join('') : h, 16);
-      const r = (num >> 16) & 255, g = (num >> 8) & 255, b = num & 255;
-      const adj = v => amt >= 0 ? Math.round(v + (255 - v) * amt) : Math.round(v * (1 + amt));
-      return `rgb(${clamp(adj(r), 0, 255)},${clamp(adj(g), 0, 255)},${clamp(adj(b), 0, 255)})`;
-    }
-
-    function drawCardGlyph(ctx, cd) {
-      ctx.clearRect(0, 0, 60, 60);
-      ctx.save();
-      ctx.translate(30, 34);
-      drawTroopBody(ctx, cd, { scale: 1.15, phase: 0, moving: false, atkFlash: 0, facing: 1 });
-      ctx.restore();
-    }
-
-    // Draws one troop centered at the origin of the current transform, at
-    // "logical" pixel scale (caller translates into place first). `opts`
-    // carries the small bits of per-frame animation state.
-    function drawTroopBody(ctx, cd, opts) {
-      const { scale: s, phase, moving, atkFlash, facing } = opts;
-      const bob = moving ? Math.sin(phase * 6) * 1.6 : Math.sin(phase * 2) * 0.5;
-      const punch = atkFlash > 0 ? Math.sin((0.22 - atkFlash) / 0.22 * Math.PI) : 0;
-      ctx.save();
-      ctx.scale(facing, 1);
-      ctx.translate(0, bob * s);
-      if (cd.id === 'spark') drawSpark(ctx, cd, s, phase, moving, punch);
-      else if (cd.id === 'guard') drawGuard(ctx, cd, s, phase, moving, punch);
-      else if (cd.id === 'archer') drawArcher(ctx, cd, s, phase, moving, punch);
-      else drawBreaker(ctx, cd, s, phase, moving, punch);
-      ctx.restore();
-    }
-
-    function legs(ctx, phase, spread, len, color) {
-      const swing = Math.sin(phase * 6) * spread;
-      ctx.strokeStyle = color; ctx.lineWidth = 3; ctx.lineCap = 'round';
-      ctx.beginPath(); ctx.moveTo(-3, 6); ctx.lineTo(-3 + swing, 6 + len); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(3, 6); ctx.lineTo(3 - swing, 6 + len); ctx.stroke();
-    }
-
-    function drawSpark(ctx, cd, s, phase, moving, punch) {
-      legs(ctx, phase, moving ? 3 : 0.5, 6 * s, shade(cd.dark, -0.1));
-      ctx.fillStyle = cd.dark; ctx.beginPath(); ctx.ellipse(0, 2, 7 * s, 6 * s, 0, 0, Math.PI * 2); ctx.fill();
-      const g = ctx.createRadialGradient(-2 * s, -8 * s, 1, 0, -6 * s, 9 * s);
-      g.addColorStop(0, shade(cd.color, 0.55)); g.addColorStop(1, cd.color);
-      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, -6 * s - punch * 2, 8 * s, 0, Math.PI * 2); ctx.fill();
-      ctx.strokeStyle = shade(cd.color, -0.5); ctx.lineWidth = 1.6; ctx.stroke();
-      ctx.strokeStyle = cd.color; ctx.lineWidth = 2.2; ctx.lineCap = 'round';
-      ctx.beginPath(); ctx.moveTo(0, -12 * s); ctx.lineTo(punch * 4, -19 * s - punch * 4); ctx.stroke();
-      ctx.fillStyle = '#08110d';
-      ctx.beginPath(); ctx.arc(-2.6 * s, -6.5 * s, 1.3 * s, 0, Math.PI * 2); ctx.arc(2.6 * s, -6.5 * s, 1.3 * s, 0, Math.PI * 2); ctx.fill();
-    }
-
-    function drawGuard(ctx, cd, s, phase, moving, punch) {
-      legs(ctx, phase, moving ? 2 : 0.4, 7 * s, shade(cd.dark, -0.1));
-      ctx.fillStyle = cd.dark; ctx.beginPath(); ctx.roundRect(-8 * s, -3 * s, 16 * s, 12 * s, 4 * s); ctx.fill();
-      const bodyG = ctx.createLinearGradient(-8 * s, 0, 8 * s, 0);
-      bodyG.addColorStop(0, shade(cd.color, 0.35)); bodyG.addColorStop(1, shade(cd.color, -0.25));
-      ctx.fillStyle = bodyG; ctx.beginPath(); ctx.roundRect(-7 * s, -4 * s, 14 * s, 11 * s, 3 * s); ctx.fill();
-      ctx.fillStyle = shade(cd.dark, 0.1); ctx.beginPath(); ctx.arc(0, -10 * s, 7 * s, Math.PI, 0); ctx.fill();
-      ctx.fillStyle = cd.color; ctx.fillRect(-7 * s, -10 * s, 14 * s, 3 * s);
-      ctx.save();
-      ctx.translate(6 * s + punch * 3, -2 * s);
-      ctx.rotate(punch * 0.35);
-      ctx.fillStyle = shade(cd.color, -0.1); ctx.strokeStyle = '#08110d'; ctx.lineWidth = 1.4;
-      ctx.beginPath(); ctx.roundRect(-3 * s, -6 * s, 6 * s, 12 * s, 3 * s); ctx.fill(); ctx.stroke();
-      ctx.restore();
-    }
-
-    function drawArcher(ctx, cd, s, phase, moving, punch) {
-      legs(ctx, phase, moving ? 2.4 : 0.4, 7 * s, shade(cd.dark, -0.1));
-      ctx.fillStyle = shade(cd.dark, -0.1);
-      ctx.beginPath(); ctx.moveTo(-4 * s, -2 * s); ctx.quadraticCurveTo(-9 * s - punch * 2, 4 * s, -6 * s, 10 * s); ctx.lineTo(0, 5 * s); ctx.closePath(); ctx.fill();
-      ctx.fillStyle = cd.dark; ctx.beginPath(); ctx.ellipse(0, 1 * s, 5 * s, 9 * s, 0, 0, Math.PI * 2); ctx.fill();
-      const g = ctx.createLinearGradient(0, -6 * s, 0, 8 * s);
-      g.addColorStop(0, shade(cd.color, 0.3)); g.addColorStop(1, cd.color);
-      ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(0, 0, 4.5 * s, 8 * s, 0, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = shade(cd.color, 0.4); ctx.beginPath(); ctx.arc(0, -8 * s, 4.4 * s, 0, Math.PI * 2); ctx.fill();
-      const drawback = 3 + punch * 4;
-      ctx.strokeStyle = cd.dark; ctx.lineWidth = 1.6;
-      ctx.beginPath(); ctx.arc(5 * s, -1 * s, 7 * s, -1.1, 1.1); ctx.stroke();
-      ctx.strokeStyle = '#eafff4dd'; ctx.lineWidth = 1;
+    function screenPoint(point) { return { x: point.x * W, y: point.y * H }; }
+    function traceRoute(route) {
       ctx.beginPath();
-      ctx.moveTo(5 * s + 6.5 * s * Math.cos(-1.1), -1 * s + 6.5 * s * Math.sin(-1.1));
-      ctx.lineTo(5 * s - drawback * s, -1 * s);
-      ctx.lineTo(5 * s + 6.5 * s * Math.cos(1.1), -1 * s + 6.5 * s * Math.sin(1.1));
-      ctx.stroke();
+      route.points.forEach((point, index) => {
+        const px = point[0] * W;
+        const py = point[1] * H;
+        if (index === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      });
     }
+    function drawArena() {
+      const map = currentMap();
+      const playerHero = HERO_BY_ID[activeHero[mySide]] || HERO_BY_ID[selectedHeroId];
+      const gradient = ctx.createLinearGradient(0, 0, W, H);
+      if (map.id === "ember") {
+        gradient.addColorStop(0, "#1b271d");
+        gradient.addColorStop(.5, "#39251b");
+        gradient.addColorStop(1, "#25151c");
+      } else if (map.id === "shard") {
+        gradient.addColorStop(0, "#17272a");
+        gradient.addColorStop(.5, "#3b3041");
+        gradient.addColorStop(1, "#25181d");
+      } else {
+        gradient.addColorStop(0, "#173325");
+        gradient.addColorStop(.5, "#4a3820");
+        gradient.addColorStop(1, "#26331e");
+      }
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, W, H);
+      const vignette = ctx.createRadialGradient(W * .5, H * .48, H * .08, W * .5, H * .48, Math.max(W, H) * .7);
+      vignette.addColorStop(0, "#ffffff0c");
+      vignette.addColorStop(1, "#000000a8");
+      ctx.fillStyle = vignette;
+      ctx.fillRect(0, 0, W, H);
 
-    function drawBreaker(ctx, cd, s, phase, moving, punch) {
-      legs(ctx, phase, moving ? 1.6 : 0.3, 8 * s, shade(cd.dark, -0.1));
-      ctx.fillStyle = cd.dark; ctx.beginPath(); ctx.roundRect(-10 * s, -4 * s, 20 * s, 15 * s, 5 * s); ctx.fill();
-      const g = ctx.createLinearGradient(-10 * s, 0, 10 * s, 0);
-      g.addColorStop(0, shade(cd.color, 0.3)); g.addColorStop(0.5, cd.color); g.addColorStop(1, shade(cd.color, -0.3));
-      ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(-9 * s, -5 * s, 18 * s, 14 * s, 4 * s); ctx.fill();
-      ctx.fillStyle = shade(cd.color, 0.5); ctx.beginPath(); ctx.arc(0, -11 * s, 6 * s, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#08110d'; ctx.beginPath(); ctx.arc(-2.4 * s, -11.5 * s, 1.4 * s, 0, Math.PI * 2); ctx.arc(2.4 * s, -11.5 * s, 1.4 * s, 0, Math.PI * 2); ctx.fill();
-      const swing = -0.7 + punch * 1.9;
+      if (map.id === "ember") {
+        const river = ctx.createLinearGradient(W * .43, 0, W * .57, 0);
+        river.addColorStop(0, "#102627");
+        river.addColorStop(.5, "#2b6d66");
+        river.addColorStop(1, "#102627");
+        ctx.fillStyle = river;
+        ctx.fillRect(W * .445, H * .13, W * .11, H * .74);
+        for (let i = 0; i < 3; i++) {
+          const y = [.31, .5, .69][i] * H;
+          ctx.fillStyle = "#120d08aa";
+          ctx.fillRect(W * .424, y - 15 * DPR + 8 * DPR, W * .152, 30 * DPR);
+          const bridge = ctx.createLinearGradient(0, y - 15 * DPR, 0, y + 15 * DPR);
+          bridge.addColorStop(0, "#b47a45");
+          bridge.addColorStop(.45, "#654126");
+          bridge.addColorStop(1, "#2b1c13");
+          ctx.fillStyle = bridge;
+          ctx.fillRect(W * .424, y - 15 * DPR, W * .152, 26 * DPR);
+        }
+      } else if (map.id === "shard") {
+        [{ x: .34, y: .5, r: .105 }, { x: .69, y: .5, r: .09 }].forEach((crater) => {
+          const px = crater.x * W;
+          const py = crater.y * H;
+          const r = crater.r * Math.min(W, H);
+          const craterGradient = ctx.createRadialGradient(px - r * .2, py - r * .25, r * .05, px, py, r);
+          craterGradient.addColorStop(0, "#b785ff44");
+          craterGradient.addColorStop(.42, "#271c31");
+          craterGradient.addColorStop(1, "#080907");
+          ctx.fillStyle = craterGradient;
+          ctx.beginPath();
+          ctx.ellipse(px, py, r * 1.25, r, 0, 0, Math.PI * 2);
+          ctx.fill();
+        });
+      } else {
+        [{ x: .33, y: .28 }, { x: .67, y: .72 }].forEach((grove) => {
+          const px = grove.x * W;
+          const py = grove.y * H;
+          const r = Math.min(W, H) * .1;
+          const glow = ctx.createRadialGradient(px, py, 0, px, py, r);
+          glow.addColorStop(0, "#8cffb438");
+          glow.addColorStop(1, "#16362000");
+          ctx.fillStyle = glow;
+          ctx.beginPath();
+          ctx.arc(px, py, r, 0, Math.PI * 2);
+          ctx.fill();
+          for (let i = 0; i < 7; i++) {
+            const angle = i * .9;
+            ctx.fillStyle = i % 2 ? "#24491f" : "#356126";
+            ctx.beginPath();
+            ctx.arc(px + Math.cos(angle) * r * .58, py + Math.sin(angle) * r * .45, 8 * DPR, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        });
+      }
+
+      map.routes.forEach((route, index) => {
+        ctx.save();
+        ctx.lineJoin = "round";
+        ctx.lineCap = "round";
+        ctx.strokeStyle = "#070806b8";
+        ctx.lineWidth = (index % 2 ? 23 : 27) * DPR;
+        ctx.translate(0, 7 * DPR);
+        traceRoute(route);
+        ctx.stroke();
+        ctx.translate(0, -7 * DPR);
+        const road = ctx.createLinearGradient(0, 0, 0, H);
+        road.addColorStop(0, "#6f6046");
+        road.addColorStop(.5, "#897351");
+        road.addColorStop(1, "#50452f");
+        ctx.strokeStyle = road;
+        ctx.lineWidth = (index % 2 ? 15 : 18) * DPR;
+        traceRoute(route);
+        ctx.stroke();
+        ctx.strokeStyle = index % 2 ? "#ffe3a018" : "#fff3c72b";
+        ctx.lineWidth = 2 * DPR;
+        ctx.setLineDash([10 * DPR, 12 * DPR]);
+        traceRoute(route);
+        ctx.stroke();
+        ctx.restore();
+      });
+
+      if (map.objective === "beacon") drawBeacon();
+      ctx.fillStyle = playerHero.color + "09";
+      ctx.fillRect(mySide === "blue" ? 0 : W * .5, H * .12, W * .5, H * .75);
+    }
+    function drawBeacon() {
+      const x = W * .5;
+      const y = H * .5;
+      const pulse = reducedMotion ? .5 : (Math.sin(simTime * 3) + 1) / 2;
       ctx.save();
-      ctx.translate(9 * s, -4 * s);
-      ctx.rotate(swing);
-      ctx.strokeStyle = shade(cd.dark, -0.2); ctx.lineWidth = 3 * s; ctx.lineCap = 'round';
-      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, 12 * s); ctx.stroke();
-      ctx.fillStyle = shade(cd.color, -0.1); ctx.strokeStyle = '#08110d'; ctx.lineWidth = 1.4;
-      ctx.beginPath(); ctx.roundRect(-5 * s, 10 * s, 10 * s, 7 * s, 2 * s); ctx.fill(); ctx.stroke();
+      ctx.shadowBlur = (16 + pulse * 12) * DPR;
+      ctx.shadowColor = state.beaconBlue >= state.beaconRed ? HERO_BY_ID[activeHero.blue].color : HERO_BY_ID[activeHero.red].color;
+      ctx.fillStyle = "#10120f";
+      ctx.beginPath();
+      ctx.ellipse(x, y + 15 * DPR, 28 * DPR, 12 * DPR, 0, 0, Math.PI * 2);
+      ctx.fill();
+      const color = state.beaconBlue >= state.beaconRed ? HERO_BY_ID[activeHero.blue].color : HERO_BY_ID[activeHero.red].color;
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.moveTo(x, y - 25 * DPR);
+      ctx.lineTo(x + 14 * DPR, y);
+      ctx.lineTo(x, y + 13 * DPR);
+      ctx.lineTo(x - 14 * DPR, y);
+      ctx.closePath();
+      ctx.fill();
       ctx.restore();
     }
-
-    function drawTroop(ctx, u) {
-      const cd = CARD_BY_ID[u.card] || CARD[0];
-      const px = u.x * W, py = u.y * H;
-      const scale = (cd.id === 'breaker' ? 1.55 : cd.id === 'guard' ? 1.25 : 1) * D;
+    function drawCrown(ctx2, x, y, size, color, heroId) {
+      ctx2.fillStyle = color;
+      ctx2.beginPath();
+      if (heroId === "nyx") {
+        ctx2.moveTo(x - size, y);
+        ctx2.quadraticCurveTo(x, y - size * 1.4, x + size, y);
+        ctx2.lineTo(x + size * .55, y + size * .42);
+        ctx2.lineTo(x - size * .55, y + size * .42);
+      } else if (heroId === "thorne") {
+        ctx2.moveTo(x - size, y + size * .4);
+        ctx2.lineTo(x - size * .8, y - size);
+        ctx2.lineTo(x, y - size * .35);
+        ctx2.lineTo(x + size * .8, y - size);
+        ctx2.lineTo(x + size, y + size * .4);
+      } else if (heroId === "mira") {
+        ctx2.moveTo(x - size, y + size * .3);
+        ctx2.lineTo(x - size * .25, y - size);
+        ctx2.lineTo(x + size * .05, y - size * .18);
+        ctx2.lineTo(x + size, y - size * .7);
+        ctx2.lineTo(x + size * .6, y + size * .45);
+      } else {
+        ctx2.moveTo(x - size, y + size * .35);
+        ctx2.lineTo(x - size * .72, y - size);
+        ctx2.lineTo(x, y - size * .2);
+        ctx2.lineTo(x + size * .72, y - size);
+        ctx2.lineTo(x + size, y + size * .35);
+      }
+      ctx2.closePath();
+      ctx2.fill();
+    }
+    function drawTower(tower) {
+      const hero = HERO_BY_ID[activeHero[tower.side]];
+      const px = tower.x * W;
+      const py = tower.y * H;
+      const scale = (tower.king ? 1.35 : 1) * DPR;
+      const fade = tower.alive ? 1 : clamp(tower.death / .36, 0, 1);
       ctx.save();
+      ctx.globalAlpha = fade;
       ctx.translate(px, py);
-      if (u.hitFlash > 0) ctx.filter = 'brightness(1.7)';
-      drawTroopBody(ctx, cd, { scale, phase: u.phase, moving: u.moving, atkFlash: u.atkFlash, facing: sideDir(u.side) });
-      ctx.filter = 'none';
+      ctx.fillStyle = "#00000066";
+      ctx.beginPath();
+      ctx.ellipse(0, 20 * scale, 28 * scale, 11 * scale, 0, 0, Math.PI * 2);
+      ctx.fill();
+      const base = ctx.createLinearGradient(-22 * scale, 0, 24 * scale, 0);
+      base.addColorStop(0, shade(hero.deep, -.35));
+      base.addColorStop(.45, hero.deep);
+      base.addColorStop(1, shade(hero.color, -.28));
+      ctx.fillStyle = base;
+      ctx.strokeStyle = tower.hitFlash > 0 ? "#ffffff" : shade(hero.color, .2);
+      ctx.lineWidth = 2 * scale;
+      ctx.beginPath();
+      ctx.moveTo(-23 * scale, 17 * scale);
+      ctx.lineTo(-19 * scale, -17 * scale);
+      ctx.lineTo(17 * scale, -21 * scale);
+      ctx.lineTo(24 * scale, 13 * scale);
+      ctx.lineTo(12 * scale, 24 * scale);
+      ctx.lineTo(-14 * scale, 24 * scale);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = shade(hero.color, .18);
+      ctx.beginPath();
+      ctx.moveTo(-19 * scale, -17 * scale);
+      ctx.lineTo(0, -30 * scale);
+      ctx.lineTo(17 * scale, -21 * scale);
+      ctx.lineTo(0, -7 * scale);
+      ctx.closePath();
+      ctx.fill();
+      if (tower.king) {
+        ctx.fillStyle = "#16150f";
+        ctx.beginPath();
+        ctx.arc(0, -27 * scale, 9 * scale, 0, Math.PI * 2);
+        ctx.fill();
+        drawCrown(ctx, 0, -40 * scale, 9 * scale, hero.soft, hero.id);
+      } else {
+        ctx.strokeStyle = hero.soft;
+        ctx.lineWidth = 3 * scale;
+        ctx.beginPath();
+        ctx.moveTo(-8 * scale, -24 * scale);
+        ctx.lineTo(10 * scale, -32 * scale);
+        ctx.stroke();
+      }
+      if (tower.shield > 0) {
+        ctx.strokeStyle = hero.soft + "99";
+        ctx.lineWidth = 3 * scale;
+        ctx.beginPath();
+        ctx.ellipse(0, -3 * scale, 33 * scale, 39 * scale, 0, Math.PI * 1.05, Math.PI * 1.95);
+        ctx.stroke();
+      }
+      const ratio = clamp(tower.hp / tower.max, 0, 1);
+      ctx.fillStyle = "#050604cc";
+      ctx.fillRect(-25 * scale, -48 * scale, 50 * scale, 5 * scale);
+      ctx.fillStyle = ratio > .4 ? hero.color : "#ff6578";
+      ctx.fillRect(-25 * scale, -48 * scale, 50 * scale * ratio, 5 * scale);
       ctx.restore();
-      const r = 11 * scale;
-      ctx.fillStyle = '#0008'; ctx.fillRect(px - r, py - r - 9 * D, r * 2, 3 * D);
-      ctx.fillStyle = u.side === 'blue' ? '#41ffa1' : '#ff5772';
-      ctx.fillRect(px - r, py - r - 9 * D, r * 2 * Math.max(0, u.hp / u.max), 3 * D);
     }
-
+    function drawTroopBody(context, troop, options) {
+      const phase = options.phase || 0;
+      const direction = options.side === "blue" ? 1 : -1;
+      const bob = reducedMotion ? 0 : options.moving ? Math.sin(phase * 5) * 1.5 : Math.sin(phase * 2) * .4;
+      const punch = options.attack > 0 ? Math.sin(clamp((.22 - options.attack) / .22, 0, 1) * Math.PI) : 0;
+      context.save();
+      context.scale(direction, 1);
+      context.translate(0, bob - (troop.flying ? 7 : 0));
+      context.strokeStyle = shade(troop.dark, -.28);
+      context.lineCap = "round";
+      context.lineWidth = 3;
+      if (!troop.flying) {
+        const stride = options.moving && !reducedMotion ? Math.sin(phase * 6) * 3 : 0;
+        context.beginPath();
+        context.moveTo(-4, 7);
+        context.lineTo(-4 + stride, 14);
+        context.moveTo(4, 7);
+        context.lineTo(4 - stride, 14);
+        context.stroke();
+      } else {
+        context.fillStyle = troop.color + "88";
+        context.beginPath();
+        context.ellipse(-8, 0, 8 + punch * 2, 3, -.35, 0, Math.PI * 2);
+        context.ellipse(8, 0, 8 + punch * 2, 3, .35, 0, Math.PI * 2);
+        context.fill();
+      }
+      const body = context.createLinearGradient(-10, -7, 10, 7);
+      body.addColorStop(0, shade(troop.color, .4));
+      body.addColorStop(.48, troop.color);
+      body.addColorStop(1, troop.dark);
+      context.fillStyle = body;
+      context.strokeStyle = shade(troop.dark, -.35);
+      context.lineWidth = 1.6;
+      if (troop.swarm) {
+        context.beginPath();
+        context.arc(0, -2, 7, 0, Math.PI * 2);
+      } else if (troop.heavy) {
+        context.beginPath();
+        context.roundRect(-10, -8, 20, 18, 5);
+      } else {
+        context.beginPath();
+        context.ellipse(0, 0, 8, 11, 0, 0, Math.PI * 2);
+      }
+      context.fill();
+      context.stroke();
+      context.fillStyle = shade(troop.color, .52);
+      context.beginPath();
+      context.arc(0, -9, troop.heavy ? 7 : 5.5, 0, Math.PI * 2);
+      context.fill();
+      context.fillStyle = "#14140f";
+      context.beginPath();
+      context.arc(-2, -10, 1.2, 0, Math.PI * 2);
+      context.arc(2, -10, 1.2, 0, Math.PI * 2);
+      context.fill();
+      context.strokeStyle = troop.color;
+      context.lineWidth = 2.2;
+      if (troop.id === "pike") {
+        context.beginPath();
+        context.moveTo(6, 1);
+        context.lineTo(23 + punch * 5, -8);
+        context.stroke();
+      } else if (troop.id === "ranger") {
+        context.beginPath();
+        context.arc(8, -2, 8, -1.2, 1.2);
+        context.stroke();
+      } else if (troop.id === "bombard") {
+        context.fillStyle = troop.dark;
+        context.beginPath();
+        context.arc(11 + punch * 3, 0, 7, 0, Math.PI * 2);
+        context.fill();
+      } else if (troop.id === "medic") {
+        context.fillStyle = troop.color;
+        context.fillRect(-2, -4, 4, 12);
+        context.fillRect(-6, 0, 12, 4);
+      } else if (troop.id === "sapper") {
+        context.strokeStyle = "#20150e";
+        context.lineWidth = 3;
+        context.beginPath();
+        context.moveTo(7, 0);
+        context.lineTo(15 + punch * 5, 10);
+        context.stroke();
+      } else if (troop.id === "warden") {
+        context.beginPath();
+        context.moveTo(8, 3);
+        context.lineTo(16 + punch * 4, -10);
+        context.lineTo(19, -3);
+        context.stroke();
+      } else if (troop.id === "charger" || troop.id === "gryphon") {
+        context.fillStyle = troop.dark;
+        context.beginPath();
+        context.moveTo(-10, 4);
+        context.lineTo(-18, -3);
+        context.lineTo(-13, 9);
+        context.closePath();
+        context.fill();
+      } else {
+        context.fillStyle = troop.dark;
+        context.beginPath();
+        context.roundRect(7 + punch * 3, -5, 6, 12, 2);
+        context.fill();
+      }
+      context.restore();
+    }
+    function drawUnit(unit) {
+      const troop = TROOP_BY_ID[unit.troopId];
+      const px = unit.x * W;
+      const py = unit.y * H;
+      const size = troop.swarm ? .72 : troop.heavy ? 1.18 : 1;
+      const fade = unit.alive ? 1 : clamp(unit.death / .36, 0, 1);
+      ctx.save();
+      ctx.globalAlpha = fade;
+      ctx.translate(px, py);
+      ctx.scale(DPR * size, DPR * size);
+      ctx.fillStyle = "#00000055";
+      ctx.beginPath();
+      ctx.ellipse(0, troop.flying ? 14 : 12, troop.heavy ? 14 : 10, 5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      if (unit.hitFlash > 0) ctx.filter = "brightness(1.8)";
+      drawTroopBody(ctx, troop, { phase: unit.phase, side: unit.side, moving: unit.moving, attack: unit.attackFlash, flying: troop.flying });
+      ctx.filter = "none";
+      if (unit.shield > 0) {
+        ctx.strokeStyle = HERO_BY_ID[activeHero[unit.side]].soft + "aa";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(0, -1, 16, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.restore();
+      const barW = (troop.heavy ? 28 : 22) * DPR;
+      const barY = py - (troop.flying ? 28 : 24) * DPR;
+      ctx.fillStyle = "#050604cc";
+      ctx.fillRect(px - barW / 2, barY, barW, 3 * DPR);
+      ctx.fillStyle = unit.side === "blue" ? HERO_BY_ID[activeHero.blue].color : HERO_BY_ID[activeHero.red].color;
+      ctx.fillRect(px - barW / 2, barY, barW * clamp(unit.hp / unit.maxHp, 0, 1), 3 * DPR);
+    }
+    function drawProjectiles() {
+      projectiles.forEach((projectile) => {
+        const px = projectile.x * W;
+        const py = projectile.y * H;
+        const sx = projectile.sx * W;
+        const sy = projectile.sy * H;
+        ctx.save();
+        ctx.globalCompositeOperation = "screen";
+        ctx.strokeStyle = projectile.color + "88";
+        ctx.lineWidth = 3 * DPR;
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.lineTo(px, py);
+        ctx.stroke();
+        ctx.shadowBlur = 14 * DPR;
+        ctx.shadowColor = projectile.color;
+        ctx.fillStyle = shade(projectile.color, .45);
+        ctx.beginPath();
+        ctx.arc(px, py, (projectile.arc ? 6 : 4) * DPR, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      });
+    }
+    function drawEffects() {
+      effects.forEach((effect) => {
+        const f = clamp(effect.age / effect.life, 0, 1);
+        const alpha = 1 - f;
+        const px = effect.x * W;
+        const py = effect.y * H;
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        if (effect.type === "impact") {
+          ctx.strokeStyle = effect.color;
+          ctx.lineWidth = 2 * DPR;
+          ctx.beginPath();
+          ctx.ellipse(px, py, effect.radius * DPR * f, effect.radius * .45 * DPR * f, 0, 0, Math.PI * 2);
+          ctx.stroke();
+        } else if (effect.type === "spark") {
+          ctx.fillStyle = effect.color;
+          ctx.fillRect(px, py, 3 * DPR, 3 * DPR);
+        } else if (effect.type === "beam") {
+          ctx.strokeStyle = effect.color;
+          ctx.lineWidth = 4 * DPR * alpha;
+          ctx.beginPath();
+          ctx.moveTo(px, py);
+          ctx.lineTo(effect.tx * W, effect.ty * H);
+          ctx.stroke();
+        } else if (effect.type === "meteor") {
+          const warning = effect.age < 1;
+          ctx.strokeStyle = warning ? "#ffb15c" : "#ffffff";
+          ctx.lineWidth = (2 + f * 5) * DPR;
+          ctx.beginPath();
+          ctx.arc(px, py, (22 + f * 48) * DPR, 0, Math.PI * 2);
+          ctx.stroke();
+          if (!warning) {
+            ctx.fillStyle = "#ff8b4f66";
+            ctx.beginPath();
+            ctx.arc(px, py, 55 * DPR * alpha, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        } else if (effect.type === "strike") {
+          ctx.strokeStyle = effect.color;
+          ctx.lineWidth = (3 + f * 8) * DPR;
+          ctx.beginPath();
+          ctx.moveTo(px + Math.sin(f * 19) * 12 * DPR, 0);
+          ctx.lineTo(px, py);
+          ctx.stroke();
+        } else if (effect.type === "crownwave") {
+          ctx.strokeStyle = effect.color;
+          ctx.lineWidth = 4 * DPR * alpha;
+          ctx.beginPath();
+          ctx.arc(px, py, f * Math.min(W, H) * .35, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        ctx.restore();
+      });
+      floaters.forEach((floater) => {
+        ctx.save();
+        ctx.globalAlpha = 1 - floater.age / floater.life;
+        ctx.fillStyle = floater.color;
+        ctx.font = "900 " + 11 * DPR + "px ui-monospace,monospace";
+        ctx.textAlign = "center";
+        ctx.fillText(floater.text, floater.x * W, floater.y * H);
+        ctx.restore();
+      });
+    }
     function draw() {
-      x.clearRect(0, 0, W, H);
-      x.fillStyle = '#05070d'; x.fillRect(0, 0, W, H);
-      const gx = x.createLinearGradient(0, 0, W, H);
-      gx.addColorStop(0, '#0b1c22'); gx.addColorStop(0.5, '#142234'); gx.addColorStop(1, '#210f17');
-      x.fillStyle = gx; x.fillRect(W * 0.08, H * 0.16, W * 0.84, H * 0.72);
-
-      x.strokeStyle = '#ffffff18'; x.lineWidth = 2 * D;
-      for (const l of lanes) { x.beginPath(); x.moveTo(W * 0.12, H * l); x.lineTo(W * 0.88, H * l); x.stroke(); }
-      x.strokeStyle = '#41ffa122'; x.beginPath(); x.moveTo(W * 0.5, H * 0.17); x.lineTo(W * 0.5, H * 0.88); x.stroke();
-
+      ctx.clearRect(0, 0, W, H);
+      ctx.save();
+      if (state.shake > 0 && !reducedMotion) ctx.translate((rand() - .5) * state.shake * 14 * DPR, (rand() - .5) * state.shake * 9 * DPR);
+      drawArena();
+      const layers = [];
+      towers.forEach((tower) => layers.push({ y: tower.y, type: "tower", value: tower }));
+      units.forEach((unit) => layers.push({ y: unit.y, type: "unit", value: unit }));
+      layers.sort((a, b) => a.y - b.y).forEach((layer) => {
+        if (layer.type === "tower") drawTower(layer.value); else drawUnit(layer.value);
+      });
+      drawProjectiles();
+      drawEffects();
       if (drag) {
-        x.fillStyle = mySide === 'blue' ? '#41ffa112' : '#ff577212';
-        const zx = mySide === 'blue' ? W * 0.08 : W * 0.5;
-        x.fillRect(zx, H * 0.14, W * 0.42, H * 0.76);
+        const hero = HERO_BY_ID[activeHero[mySide]] || HEROES[0];
+        ctx.fillStyle = hero.color + "10";
+        ctx.fillRect(mySide === "blue" ? 0 : W * .5, H * .12, W * .5, H * .75);
       }
-
-      for (const t of towers) {
-        const r = (t.king ? 30 : 23) * D;
-        x.shadowBlur = 22 * D; x.shadowColor = t.side === 'blue' ? '#41ffa1' : '#ff5772';
-        x.fillStyle = t.side === 'blue' ? '#103b2a' : '#421321';
-        x.strokeStyle = t.side === 'blue' ? '#41ffa1' : '#ff5772'; x.lineWidth = 3 * D;
-        x.beginPath(); x.roundRect(t.x * W - r, t.y * H - r, r * 2, r * 2, 8 * D); x.fill(); x.stroke();
-        x.shadowBlur = 0;
-        if (t.king) {
-          x.fillStyle = '#ffe6a4';
-          const cy = t.y * H - r - 4 * D, cx = t.x * W;
-          x.beginPath();
-          x.moveTo(cx - 8 * D, cy); x.lineTo(cx - 5 * D, cy - 7 * D); x.lineTo(cx, cy - 1 * D);
-          x.lineTo(cx + 5 * D, cy - 7 * D); x.lineTo(cx + 8 * D, cy); x.closePath(); x.fill();
-        }
-        x.fillStyle = '#eafff4'; x.font = `900 ${11 * D}px ui-monospace,monospace`; x.textAlign = 'center';
-        x.fillText(Math.max(0, Math.ceil(t.hp)), t.x * W, t.y * H + 4 * D);
-      }
-
-      for (const u of units) drawTroop(x, u);
-
-      for (const s of shots) {
-        const p = 1 - clamp(s.life / 0.22, 0, 1);
-        x.strokeStyle = s.color; x.lineWidth = 3 * D;
-        x.beginPath(); x.moveTo(s.x * W, s.y * H); x.lineTo((s.x + (s.tx - s.x) * p) * W, (s.y + (s.ty - s.y) * p) * H); x.stroke();
-      }
-      for (const p of particles) {
-        if (p.burst) {
-          const t = 1 - clamp(p.t / 0.4, 0, 1);
-          const dist = t * 18 * D;
-          x.globalAlpha = clamp(p.t / 0.4, 0, 1);
-          x.fillStyle = p.color || '#fff';
-          x.beginPath(); x.arc(p.x * W + Math.cos(p.ang) * dist, p.y * H + Math.sin(p.ang) * dist, 3 * D * (1 - t), 0, Math.PI * 2); x.fill();
-        } else {
-          x.globalAlpha = clamp(p.t / 0.28, 0, 1);
-          x.strokeStyle = '#fff7'; x.lineWidth = 2 * D;
-          x.beginPath(); x.arc(p.x * W, p.y * H, (1 - p.t / 0.28) * 26 * D, 0, Math.PI * 2); x.stroke();
-        }
-        x.globalAlpha = 1;
-      }
+      ctx.restore();
     }
-
-    function loop(t) {
-      if (!running) return;
-      if (paused) { last = t; requestAnimationFrame(loop); return; }
-      const dt = Math.min(0.05, Math.max(0, (t - last) / 1000));
-      last = t;
-      step(dt);
+    function loop(timestamp) {
+      if (!running) { draw(); return; }
+      if (!lastFrame) lastFrame = timestamp;
+      const dt = clamp((timestamp - lastFrame) / 1000, 0, .05);
+      lastFrame = timestamp;
+      if (!paused && !document.hidden) {
+        simTime += dt;
+        step(dt);
+      }
       draw();
-      requestAnimationFrame(loop);
+      if (running) requestAnimationFrame(loop);
+    }
+    function resize() {
+      DPR = Math.min(devicePixelRatio || 1, 2);
+      W = canvas.width = Math.max(360, Math.round(innerWidth * DPR));
+      H = canvas.height = Math.max(420, Math.round(innerHeight * DPR));
+      draw();
     }
 
-    function sendMatch(type, payload) { if (matchMode !== 'solo') host('match-action', { action: { type, payload } }); }
+    function actionFingerprint(action) {
+      if (Number.isFinite(Number(action.seq))) return "seq:" + Number(action.seq);
+      const payload = action.payload || {};
+      return String(action.type || "") + ":" + String(payload.nonce || payload.seed || payload.token || JSON.stringify(payload));
+    }
+    function sendMatch(type, payload) {
+      if (matchMode === "solo" || !roomState.active || !ALLOWED_ACTIONS.has(type)) return;
+      const cleanPayload = { ...(payload || {}), nonce: Date.now() + "-" + Math.floor(Math.random() * 100000) };
+      host("match-action", { action: { type, payload: cleanPayload } });
+    }
     function applyRemote(action) {
-      if (!action || action.seq <= lastSeq) return;
-      lastSeq = action.seq;
-      if (action.type === 'start') { if (!running) beginMatch(); return; }
-      if (action.type === 'deploy') {
-        const p = action.payload || {};
-        deploy(p.side, p.lane, p.cardIndex, true, typeof p.dropX === 'number' ? p.dropX : null);
+      if (!action || typeof action !== "object" || !ALLOWED_ACTIONS.has(action.type)) return;
+      const fingerprint = actionFingerprint(action);
+      if (roomState.seen.has(fingerprint)) return;
+      if (roomState.seen.size > 160) roomState.seen.clear();
+      roomState.seen.add(fingerprint);
+      if (Number.isFinite(Number(action.seq))) {
+        if (Number(action.seq) <= roomState.lastSeq) return;
+        roomState.lastSeq = Number(action.seq);
+      }
+      const payload = action.payload && typeof action.payload === "object" ? action.payload : {};
+      if (action.type === "hello") {
+        if (payload.token === roomState.probe) { roomState.amIHost = true; roomState.roleKnown = true; mySide = "blue"; }
+        else if (payload.token) { roomState.amIHost = false; roomState.roleKnown = true; mySide = "red"; }
+        renderRoomState();
+        return;
+      }
+      if (action.type === "start") {
+        if (running) return;
+        beginMatch("room", {
+          mapId: safeMap(payload.mapId),
+          blueDeck: safeDeck(payload.blueDeck, ["vanguard", "ranger", "bombard", "wisps"]),
+          blueHero: safeHero(payload.blueHero),
+          redDeck: roomState.amIHost ? safeDeck(payload.redDeck, ["pike", "ranger", "warden", "sapper"]) : selectedTroops,
+          redHero: roomState.amIHost ? safeHero(payload.redHero) : selectedHeroId,
+          seed: Number(payload.seed) || 1
+        });
+        return;
+      }
+      if (!running || matchMode !== "room") return;
+      if (action.type === "deploy") {
+        const side = payload.side === "red" ? "red" : "blue";
+        deploy(side, safeLane(payload.lane), payload.cardIndex, true, safeDrop(payload.dropT, side), payload.routeIndex);
+      } else if (action.type === "ability") {
+        const side = payload.side === "red" ? "red" : "blue";
+        activateHeroAbility(side, true);
       }
     }
-
-    function applyRoom(nextRoom, match) {
-      room = nextRoom || room;
-      const participants = room?.participants || [];
-      roomReady = participants.filter(p => p.status === 'online').length >= 2;
-      const idx = Math.max(0, participants.findIndex(p => p.actorId === actorId));
-      mySide = idx === 1 ? 'red' : 'blue';
-
-      if (matchMode === 'solo' && running) return;
-      hint.textContent = running
-        ? 'Drag a card onto your side of the field to deploy it.'
-        : `You are ${mySide.toUpperCase()}. Drag cards onto your side once the match starts.`;
-      roomCodeEl.hidden = !room;
-      if (room) roomCodeEl.textContent = `Room ${room.code}`;
-      startBtn.textContent = roomReady ? 'Start room match' : 'Waiting for player two…';
-      startBtn.disabled = !roomReady;
-      intro.textContent = room
-        ? (roomReady
-          ? 'Both players are here. Drag cards onto your own side of the field to deploy troops — no keyboard needed.'
-          : 'Waiting for one more signed-in player to join this room.')
-        : 'Start Solo Training now against Crown Bot, or create/join a PhantomPlay room with a friend. Drag troops onto the field to deploy them.';
-
-      if (match?.actions) for (const a of match.actions) applyRemote(a);
-      renderCards();
-      updateHud();
+    function processMatchState(matchState) {
+      if (!matchState || typeof matchState !== "object") return;
+      if (!roomState.roleKnown) resolveRoomRole(matchState);
+      if (Array.isArray(matchState.actions)) matchState.actions.slice(-120).forEach(applyRemote);
+      if (matchState.type) applyRemote(matchState);
+      if (matchState.action) applyRemote(matchState.action);
+      if (matchState.crown && Array.isArray(matchState.crown.actions)) matchState.crown.actions.slice(-120).forEach(applyRemote);
+    }
+    function resolveRoomRole(matchState) {
+      const candidate = matchState.action || (matchState.type ? matchState : null);
+      if (candidate && candidate.type === "hello" && candidate.payload && candidate.payload.token) {
+        if (candidate.payload.token === roomState.probe) { roomState.amIHost = true; roomState.roleKnown = true; mySide = "blue"; }
+        else { roomState.amIHost = false; roomState.roleKnown = true; mySide = "red"; }
+        return;
+      }
+      if (!roomState.probe) {
+        roomState.probe = "cc-" + Math.random().toString(36).slice(2, 10);
+        roomState.probeAt = Date.now();
+        matchMode = "room";
+        sendMatch("hello", { token: roomState.probe });
+      } else if (Date.now() - roomState.probeAt > 8000) {
+        roomState.roleKnown = true;
+        roomState.amIHost = false;
+        mySide = "red";
+      }
+    }
+    function applyRoomEnvelope(data) {
+      roomState.active = true;
+      roomState.participants = Array.isArray(data.participants) ? data.participants.slice(0, 8) : [];
+      roomState.readyStates = data.readyStates && typeof data.readyStates === "object" ? data.readyStates : {};
+      roomState.hostControls = data.hostControls || null;
+      roomState.botSlots = Array.isArray(data.botSlots) ? data.botSlots.slice(0, 4) : [];
+      const humans = roomState.participants.filter((participant) => participant && participant.status !== "left");
+      const allReady = humans.length >= 2 ? humans.slice(0, 2).every((participant) => roomState.readyStates[participant.actorId] === true) : false;
+      const botFill = humans.length === 1 && roomState.hostControls && roomState.hostControls.allowBotFill && roomState.botSlots.length > 0;
+      roomState.ready = allReady || botFill || humans.filter((participant) => participant.status === "online").length >= 2;
+      resolveRoomRole(data.matchState || {});
+      processMatchState(data.matchState);
+      renderRoomState();
+    }
+    function applyLegacyRoom(room, match, actorId) {
+      if (!room) return;
+      roomState.active = true;
+      roomState.room = room;
+      roomState.participants = Array.isArray(room.participants) ? room.participants : [];
+      roomState.ready = roomState.participants.filter((participant) => participant.status === "online").length >= 2;
+      const index = roomState.participants.findIndex((participant) => participant.actorId === actorId);
+      if (index >= 0) {
+        roomState.roleKnown = true;
+        roomState.amIHost = roomState.participants[index].role === "host" || index === 0;
+        mySide = roomState.amIHost ? "blue" : "red";
+      }
+      const legacyActions = match && match.actions ? match.actions : room.match && room.match.actions;
+      if (Array.isArray(legacyActions)) legacyActions.forEach(applyRemote);
+      renderRoomState();
+    }
+    function renderRoomState() {
+      roomModeBtn.disabled = !roomState.active;
+      const online = roomState.participants.filter((participant) => participant && participant.status !== "left").length;
+      roomCopyEl.textContent = !roomState.active ? "Open this game from a PhantomPlay room to challenge another signed-in player." :
+        roomState.ready ? (roomState.amIHost ? "Both crowns are ready. Build your warband, then start the match." : "Both crowns are ready. Build your red-side warband while the host prepares the field.") :
+        "Room connected · " + online + " defender" + (online === 1 ? "" : "s") + " present.";
+      roomCodeEls.forEach((element) => {
+        element.hidden = !roomState.active;
+        const code = roomState.room && roomState.room.code ? " · " + roomState.room.code : "";
+        element.textContent = "PRIVATE ROOM" + code + (roomState.roleKnown ? " · " + (roomState.amIHost ? "HOST" : "CHALLENGER") : " · SYNCING");
+      });
+      renderLoadoutSummary();
     }
 
-    soloBtn.onclick = () => startSolo();
-    startBtn.onclick = () => startRoom();
+    document.querySelectorAll("[data-mode-choice]").forEach((button) => button.addEventListener("click", () => openLoadout(button.dataset.modeChoice)));
+    $("[data-loadout-back]").addEventListener("click", () => setStage("title"));
+    loadoutStartBtn.addEventListener("click", () => chosenMode === "room" ? startRoom() : startSolo());
+    $("[data-results-menu]").addEventListener("click", () => {
+      matchMode = "menu";
+      selectedCardIndex = -1;
+      setStage("title");
+      renderMapChoices();
+    });
+    $("[data-results-again]").addEventListener("click", () => openLoadout(chosenMode));
+    powerBtn.addEventListener("click", () => activateHeroAbility(mySide, false));
 
-    addEventListener('resize', size);
-    addEventListener('message', event => {
-      if (!event.data || event.data.source !== 'phantomplay-host') return;
-      const d = event.data;
-      if (d.type === 'settings') {
-        actorId = d.actorId || '';
-        if (d.room) applyRoom(d.room, d.room.match);
-      } else if (d.type === 'match-state') {
-        if (matchMode === 'solo' && running) return;
-        actorId = d.actorId || actorId;
-        applyRoom(d.room, d.match);
-      } else if (d.type === 'pause') {
-        paused = true; host('paused', { paused: true });
-      } else if (d.type === 'resume') {
-        paused = false; host('paused', { paused: false });
-        last = performance.now();
+    addEventListener("keydown", (event) => {
+      if (currentStage !== "battle" || !running || paused) return;
+      if (/^[1-4]$/.test(event.key)) {
+        selectedCardIndex = Number(event.key) - 1;
+        renderCards();
+        show(TROOP_BY_ID[activeDeck[mySide][selectedCardIndex]].name + " selected.");
+        event.preventDefault();
+      } else if (event.key === " " || event.key.toLowerCase() === "f") {
+        powerBtn.click();
+        event.preventDefault();
+      } else if (["q", "w", "e"].includes(event.key.toLowerCase()) && selectedCardIndex >= 0) {
+        const lane = { q: 0, w: 1, e: 2 }[event.key.toLowerCase()];
+        const t = mySide === "blue" ? .18 : .82;
+        deploy(mySide, lane, selectedCardIndex, false, t, routeForLane(lane, 0));
+        event.preventDefault();
+      } else if (event.key === "Escape") {
+        endDrag();
+        selectedCardIndex = -1;
+        renderCards();
+      }
+    });
+    addEventListener("resize", resize);
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden && running && !paused) { paused = true; host("paused", { paused: true }); }
+    });
+    addEventListener("message", (event) => {
+      const data = event.data;
+      if (!data || data.source !== "phantomplay-host") return;
+      if (data.type === "settings") {
+        reducedMotion = !!data.reducedMotion || matchMedia("(prefers-reduced-motion: reduce)").matches;
+        document.body.classList.toggle("reduced", reducedMotion);
+        if (data.room) applyLegacyRoom(data.room, data.room.match, data.actorId || "");
+      } else if (data.type === "match-state") {
+        if (data.room) applyLegacyRoom(data.room, data.match, data.actorId || "");
+        else applyRoomEnvelope(data);
+      } else if (data.type === "pause") {
+        paused = true;
+        host("paused", { paused: true });
+      } else if (data.type === "resume") {
+        paused = false;
+        lastFrame = performance.now();
+        host("paused", { paused: false });
         if (running) requestAnimationFrame(loop);
-      } else if (d.type === 'restart') {
-        if (matchMode === 'solo') startSolo();
-        else startRoom();
-      } else if (d.type === 'exit') {
-        host('exit');
+      } else if (data.type === "restart") {
+        if (chosenMode === "solo") startSolo();
+        else if (roomState.amIHost) startRoom();
+      } else if (data.type === "exit") {
+        host("exit");
       }
     });
 
-    size();
-    renderCards();
-    updateHud();
-    host('ready');
+    function runInternalChecks() {
+      const errors = [];
+      if (TROOPS.length < 8) errors.push("troop roster");
+      if (HEROES.length < 3) errors.push("hero roster");
+      if (selectedTroops.length !== 4 || new Set(selectedTroops).size !== 4) errors.push("four-card loadout");
+      MAPS.forEach((map) => {
+        if (map.routes.length < 4 || ![0, 1, 2].every((lane) => map.routes.some((route) => route.lane === lane))) errors.push(map.id + " routes");
+        map.routes.forEach((route) => {
+          if (!Number.isFinite(route.length) || route.length < 300) errors.push(map.id + " route length");
+        });
+      });
+      if (errors.length) throw new Error("Crown Circuit internal check failed: " + errors.join(", "));
+      return true;
+    }
+
+    runInternalChecks();
+    renderMapChoices();
+    renderLoadout();
+    applyFaction(selectedHeroId);
+    resize();
+    setStage("title");
+    host("ready");
   })();
   </script>
 </body>

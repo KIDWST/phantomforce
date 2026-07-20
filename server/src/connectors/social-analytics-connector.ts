@@ -55,6 +55,12 @@ type SocialAnalyticsConnectorStatusRow = {
   id: SocialAnalyticsPlatform;
   name: string;
   provider: string;
+  loginKind: "oauth_identity" | "oauth_identity_plus_business_assets";
+  publishTargetKind: "channel" | "facebook_page" | "instagram_business_account" | "linkedin_organization";
+  personalProfilePostingBlocked: boolean;
+  targetLabel: string;
+  targetId: string;
+  targetSafetyCopy: string;
   configured: boolean;
   live: boolean;
   oauthConfigured: boolean;
@@ -85,6 +91,36 @@ const metaOauthConfigured = () => Boolean(env("META_APP_ID") && env("META_APP_SE
 const socialPlatforms = ["youtube", "instagram", "facebook", "tiktok", "x", "linkedin", "pinterest"] as const;
 const base64Url = (input: Buffer) => input.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 const basicAuth = (clientId: string, clientSecret: string) => `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`;
+
+function publishTargetKind(platform: SocialAnalyticsPlatform) {
+  if (platform === "facebook") return "facebook_page" as const;
+  if (platform === "instagram") return "instagram_business_account" as const;
+  if (platform === "linkedin") return "linkedin_organization" as const;
+  return "channel" as const;
+}
+
+function connectionTargetLabel(platform: SocialAnalyticsPlatform, workspaceKey = DEFAULT_SOCIAL_WORKSPACE) {
+  const connection = getStoredSocialConnection(platform, workspaceKey);
+  if (!connection) return "";
+  if (platform === "facebook") return text(connection.pageName || connection.accountName || connection.accountHandle);
+  if (platform === "instagram") return text(connection.accountHandle || connection.accountName || connection.pageName);
+  return text(connection.accountName || connection.accountHandle);
+}
+
+function connectionTargetId(platform: SocialAnalyticsPlatform, workspaceKey = DEFAULT_SOCIAL_WORKSPACE) {
+  const connection = getStoredSocialConnection(platform, workspaceKey);
+  if (!connection) return "";
+  if (platform === "facebook") return text(connection.pageId || connection.accountId);
+  if (platform === "instagram") return text(connection.businessAccountId || connection.accountId);
+  return text(connection.accountId);
+}
+
+function targetSafetyCopy(platform: SocialAnalyticsPlatform) {
+  if (platform === "facebook") return "Meta login proves identity, but PhantomForce only stores and posts to Facebook Pages returned by Meta Page access tokens. Personal profile posting is not a selectable target.";
+  if (platform === "instagram") return "Instagram is connected through the Meta Page's Instagram business account. Personal Facebook profile posting stays blocked.";
+  if (platform === "linkedin") return "LinkedIn posting targets the authorized organization when available, not the person's private profile.";
+  return "This channel requires an authorized account token and still stays approval-gated before any external post.";
+}
 
 type SocialOAuthSetupProvider = {
   id: SocialAnalyticsPlatform;
@@ -238,6 +274,14 @@ export function getSocialAnalyticsConnectorStatus(workspaceKey = DEFAULT_SOCIAL_
     id: connector.id,
     name: connector.name,
     provider: connector.provider,
+    loginKind: connector.id === "facebook" || connector.id === "instagram" || connector.id === "linkedin"
+      ? "oauth_identity_plus_business_assets"
+      : "oauth_identity",
+    publishTargetKind: publishTargetKind(connector.id),
+    personalProfilePostingBlocked: connector.id === "facebook" || connector.id === "instagram" || connector.id === "linkedin",
+    targetLabel: connectionTargetLabel(connector.id, scope),
+    targetId: connectionTargetId(connector.id, scope),
+    targetSafetyCopy: targetSafetyCopy(connector.id),
     configured: connector.configured(scope),
     live: connector.configured(scope),
     oauthConfigured: connector.oauthConfigured(),
@@ -318,6 +362,12 @@ function buildSocialOAuthPreflight(
       nextDetail: next.detail,
       callbackUrl: requiredOAuthRedirectUri(connector.id),
       consoleUrl: setup?.consoleUrl || "",
+      loginKind: connector.loginKind,
+      publishTargetKind: connector.publishTargetKind,
+      personalProfilePostingBlocked: connector.personalProfilePostingBlocked,
+      targetLabel: connector.targetLabel,
+      targetId: connector.targetId,
+      targetSafetyCopy: connector.targetSafetyCopy,
       missingAppEnv: setup ? [
         ...(env(setup.idEnv) ? [] : [setup.idEnv]),
         ...(env(setup.secretEnv) ? [] : [setup.secretEnv]),
