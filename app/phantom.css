@@ -13812,6 +13812,26 @@ body { background: radial-gradient(120% 90% at 50% 0%, #03100b 0%, #010508 55%, 
   .workspace-page.page-enter { animation: bridgeWarp 0.38s cubic-bezier(0.22, 1, 0.36, 1) both; }
 }
 
+@media (min-width: 901px) {
+  /* module overlays are hailing panels, not web modals — shared class, so
+     every popup workspace gets the deck treatment at once */
+  .overlay-panel {
+    border-radius: 16px;
+    clip-path: polygon(20px 0, calc(100% - 20px) 0, 100% 20px, 100% calc(100% - 20px), calc(100% - 20px) 100%, 20px 100%, 0 calc(100% - 20px), 0 20px);
+  }
+  .overlay-panel::before {
+    content: ""; position: absolute; left: 10%; right: 10%; top: 0; height: 1px; z-index: 2;
+    background: linear-gradient(90deg, transparent, rgba(65, 255, 161, 0.65), transparent);
+    pointer-events: none;
+  }
+  .overlay-head { position: relative; }
+  .overlay-head::before {
+    content: "INCOMING SYSTEM"; position: absolute; right: 64px; top: 50%; transform: translateY(-50%);
+    font: 500 8px "DM Mono", monospace; letter-spacing: 0.4em; color: var(--dim-2);
+    pointer-events: none;
+  }
+}
+
 @media (max-width: 900px) {
   .bridge-dock { display: none; }
 }
