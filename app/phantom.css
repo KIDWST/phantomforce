@@ -8493,7 +8493,7 @@ body.phantomplay-playing .buddy-say {
 }
 .chat-mini-heading span { color: var(--dim); font-size: 11px; white-space: nowrap; }
 .chat-mini-summary {
-  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px;
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px;
   margin: 11px 0; border: 1px solid rgba(65, 255, 161, 0.13); border-radius: 13px;
   background: rgba(65, 255, 161, 0.04); overflow: hidden;
 }
@@ -8504,7 +8504,7 @@ body.phantomplay-playing .buddy-say {
 }
 .chat-mini-summary i {
   display: block; overflow: hidden; color: #e9fff1; font-style: normal; font-size: 11.5px;
-  line-height: 1.25; text-overflow: ellipsis; white-space: nowrap;
+  line-height: 1.25; text-overflow: ellipsis;
 }
 .chat-mini-fields {
   display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px;
@@ -8526,6 +8526,17 @@ body.phantomplay-playing .buddy-say {
 .chat-mini-actions:has(.chat-mini-full:only-child) { grid-template-columns: 1fr; }
 .chat-mini-loop { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
 .chat-mini-loop .chat-mini-fields { margin-top: 0; }
+.chat-mini-hands {
+  display: grid; gap: 10px; margin-top: 10px; padding: 10px; border: 1px solid rgba(65, 255, 161, 0.13);
+  border-radius: 13px; background: rgba(65, 255, 161, 0.032);
+}
+.chat-mini-subhead { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.chat-mini-subhead b {
+  color: #eafff4; font: 700 10px "DM Mono", monospace; letter-spacing: 0.09em; text-transform: uppercase;
+}
+.chat-mini-subhead span {
+  color: var(--dim); font-size: 11px; line-height: 1.25; text-align: right;
+}
 .chat-mini-switch {
   min-width: 0; display: flex; align-items: center; gap: 10px; padding: 10px;
   border: 1px solid rgba(65, 255, 161, 0.15); border-radius: 12px;
@@ -8560,7 +8571,7 @@ body.phantomplay-playing .buddy-say {
 .pc[data-state="error"] .pc-avatar,
 .pc[data-state="paused"] .pc-avatar { box-shadow: inset 0 0 0 1px rgba(255, 77, 99, 0.5), 0 0 20px rgba(255, 77, 99, 0.28); }
 @keyframes pcThink { 50% { box-shadow: inset 0 0 0 1px rgba(65, 255, 161, 0.5), 0 0 26px rgba(65, 255, 161, 0.42); } }
-.pc-meta { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.pc-meta { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
 .pc-title { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .pc-title b { font: 600 13.5px "Space Grotesk", sans-serif; letter-spacing: 0.01em; color: var(--ink); }
 .pc-dot { width: 7px; height: 7px; border-radius: 50%; flex: 0 0 auto; }
@@ -8569,6 +8580,20 @@ body.phantomplay-playing .buddy-say {
 .pc-dot-err { background: var(--risk); box-shadow: 0 0 8px rgba(255, 77, 99, 0.6); animation: none; }
 .pc-label { font: 600 9px "DM Mono", monospace; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dim); white-space: nowrap; }
 .pc-caption { margin: 0; font-size: 12px; color: #9fc4b1; line-height: 1.35; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pc-core {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; max-width: 520px;
+}
+.pc-core span {
+  min-width: 0; display: grid; gap: 1px; padding: 5px 7px; border: 1px solid rgba(65, 255, 161, 0.13);
+  border-radius: 9px; background: linear-gradient(180deg, rgba(65, 255, 161, 0.07), rgba(65, 255, 161, 0.025));
+}
+.pc-core b {
+  color: rgba(65, 255, 161, 0.95); font: 800 7.5px "DM Mono", monospace; letter-spacing: 0.13em; text-transform: uppercase;
+}
+.pc-core i {
+  overflow: hidden; color: #dfffea; font: 600 10px "Space Grotesk", sans-serif; font-style: normal; line-height: 1.1;
+  text-overflow: ellipsis; white-space: nowrap;
+}
 .pc-actions { position: relative; flex: 0 0 auto; display: inline-flex; align-items: center; gap: 8px; }
 .pc-mode {
   flex: 0 0 auto; display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px; border-radius: 999px; cursor: pointer;
@@ -8596,7 +8621,7 @@ body.phantomplay-playing .buddy-say {
 }
 .pc-menu {
   position: absolute; top: calc(100% + 10px); right: 0; z-index: 60;
-  width: min(430px, calc(100vw - 42px)); padding: 13px; border: 1px solid rgba(65, 255, 161, 0.28);
+  width: min(560px, calc(100vw - 42px)); padding: 13px; border: 1px solid rgba(65, 255, 161, 0.28);
   border-radius: 16px;
   background-color: #05100b;   /* solid floor — the panel is NEVER see-through */
   background-image: linear-gradient(180deg, rgba(8, 22, 16, 0.98), rgba(2, 8, 9, 0.98));
@@ -8643,6 +8668,7 @@ body.phantomplay-playing .buddy-say {
   .msg-body { max-width: 88%; }
   .pc { gap: 9px; }
   .pc-caption { display: none; }
+  .pc-core { display: none; }
   .pc-mode { padding: 5px 10px; }
   .pc-settings { width: 34px; height: 34px; min-height: 34px; font-size: 15px; }
   .pc-actions { gap: 6px; position: static; }
@@ -8657,7 +8683,8 @@ body.phantomplay-playing .buddy-say {
     max-height: min(62vh, 520px); overflow-y: auto; overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
   }
-  .chat-mini-heading { align-items: flex-start; flex-direction: column; gap: 3px; }
+  .chat-mini-heading, .chat-mini-subhead { align-items: flex-start; flex-direction: column; gap: 3px; }
+  .chat-mini-subhead span { text-align: left; }
   .chat-mini-summary, .chat-mini-fields, .chat-mini-actions { grid-template-columns: 1fr; }
   .chat-mini-switch, .chat-mini-full { width: 100%; }
   .chat-mini-full { justify-content: center; }

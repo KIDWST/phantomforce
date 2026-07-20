@@ -92,10 +92,14 @@
     .kicker { margin: 0 0 10px; font: 950 11px ui-monospace, monospace; letter-spacing: .16em; color: #41ffa1; text-transform: uppercase; }
     .panel h1 { margin: 0; font-size: 42px; line-height: 1; color: #f4fff9; }
     .panel p { color: #9fb8b1; line-height: 1.5; }
+    .mode-actions {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px;
+    }
     .panel button {
       min-width: 210px; min-height: 48px; border: 0; border-radius: 999px;
-      background: #41ffa1; color: #021109; font-weight: 950; cursor: pointer; margin-top: 8px;
+      background: #41ffa1; color: #021109; font-weight: 950; cursor: pointer;
     }
+    .panel button.secondary { border: 1px solid #41ffa155; background: #07130f; color: #dffff5; }
     .panel button:disabled { opacity: .45; cursor: not-allowed; }
     .roomcode {
       display: inline-block; margin: 14px 0; padding: 8px 16px; border-radius: 12px;
@@ -110,12 +114,13 @@
       .card { min-height: 66px; padding: 6px 4px; }
       .card .glyph { width: 24px; height: 24px; }
       .panel h1 { font-size: 32px; }
+      .mode-actions { grid-template-columns: 1fr; }
       .hint { top: auto; bottom: 168px; border-radius: 14px; }
     }
   </style>
 </head>
 <body>
-  <canvas tabindex="0" aria-label="Crown Circuit online duel"></canvas>
+  <canvas tabindex="0" aria-label="Crown Circuit solo training and online duel"></canvas>
   <div class="hud">
     <div class="side blue"><b>Blue Crown</b><span data-blue>Elixir 5.0 · Towers 3</span><div class="bar"><i data-bluebar></i></div></div>
     <div class="score" data-score>ROOM · 180</div>
@@ -127,11 +132,14 @@
   <div class="toast" data-toast></div>
   <div class="screen" data-screen>
     <div class="panel">
-      <p class="kicker">Room Multiplayer</p>
+      <p class="kicker">Solo Training + Room Multiplayer</p>
       <h1>Crown Circuit</h1>
-      <p data-intro>Create or join a PhantomPlay room with a friend. One device each — laptop, Chromebook, or phone all work. Drag troops onto the field to deploy them. Break the crown tower to win.</p>
+      <p data-intro>Start Solo Training now against Crown Bot, or create/join a PhantomPlay room with a friend. Drag troops onto your side, learn lane timing, break the crown tower.</p>
       <div class="roomcode" data-roomcode hidden></div>
-      <button type="button" data-start disabled>Waiting for a room…</button>
+      <div class="mode-actions">
+        <button type="button" data-solo>Solo Training vs Bot</button>
+        <button type="button" class="secondary" data-start disabled>Waiting for room...</button>
+      </div>
     </div>
   </div>
   <script>
@@ -141,6 +149,7 @@
     const x = c.getContext('2d');
     const screen = document.querySelector('[data-screen]');
     const startBtn = document.querySelector('[data-start]');
+    const soloBtn = document.querySelector('[data-solo]');
     const intro = document.querySelector('[data-intro]');
     const roomCodeEl = document.querySelector('[data-roomcode]');
     const scoreEl = document.querySelector('[data-score]');
@@ -156,6 +165,8 @@
     let W = 0, H = 0, D = 1, last = 0;
     let running = false, paused = false, over = false;
     let actorId = '', room = null, mySide = 'blue', lastSeq = 0, roomReady = false;
+    let matchMode = 'menu';
+    const bot = { think: 0.8, lastLane: 1, lesson: 0 };
 
     const lanes = [0.28, 0.5, 0.72];
     const units = [], shots = [], particles = [];
@@ -196,6 +207,7 @@
       units.length = 0; shots.length = 0; particles.length = 0;
       over = false; state.time = 180; state.winner = '';
       elixir.blue = 5; elixir.red = 5;
+      bot.think = 0.85; bot.lastLane = 1; bot.lesson = 0;
       towers.length = 0;
       for (const side of ['blue', 'red']) {
         const xPos = side === 'blue' ? 0.11 : 0.89;
@@ -208,18 +220,26 @@
       draw();
     }
 
-    function beginMatch() {
+    function beginMatch(mode = 'room') {
+      matchMode = mode;
       running = true; paused = false; over = false;
       screen.hidden = true;
       reset();
       last = performance.now();
       requestAnimationFrame(loop);
       c.focus?.();
-      show(`You are ${mySide.toUpperCase()}`);
+      show(mode === 'solo' ? 'Solo Training: Crown Bot is live' : `You are ${mySide.toUpperCase()}`);
+    }
+
+    function startSolo() {
+      mySide = 'blue';
+      lastSeq = 0;
+      beginMatch('solo');
     }
 
     function startRoom() {
       if (!roomReady) { show('Need two room players'); return; }
+      matchMode = 'room';
       sendMatch('start', { seed: Date.now() });
     }
 
@@ -327,7 +347,7 @@
       redEl.textContent = `Elixir ${elixir.red.toFixed(1)} · Towers ${towerCount('red')}`;
       blueBar.style.width = `${hpPct('blue') * 100}%`;
       redBar.style.width = `${hpPct('red') * 100}%`;
-      scoreEl.textContent = `ROOM · ${Math.ceil(state.time)}`;
+      scoreEl.textContent = `${matchMode === 'solo' ? 'SOLO' : 'ROOM'} · ${Math.ceil(state.time)}`;
       for (const el of cardsEl.querySelectorAll('.card')) {
         const cd = CARD[Number(el.dataset.cardIndex)];
         const afford = elixir[mySide] >= cd.cost;
@@ -343,7 +363,10 @@
 
     function deploy(side, lane, cardIndex, remote = false, dropX = null) {
       if (over || paused || !running) return;
-      if (!remote) { sendMatch('deploy', { side, lane, cardIndex, dropX }); return; }
+      if (!remote) {
+        if (matchMode === 'solo') { deploy(side, lane, cardIndex, true, dropX); return; }
+        sendMatch('deploy', { side, lane, cardIndex, dropX }); return;
+      }
       const cd = CARD[cardIndex] || CARD[0];
       if (elixir[side] < cd.cost) return;
       elixir[side] -= cd.cost;
@@ -401,6 +424,7 @@
       }
       elixir.blue = clamp(elixir.blue + dt * 0.48, 0, 10);
       elixir.red = clamp(elixir.red + dt * 0.48, 0, 10);
+      thinkBot(dt);
 
       for (const u of units) {
         if (u.hp <= 0) continue;
@@ -450,9 +474,61 @@
       intro.textContent = winner === 'draw'
         ? 'Draw. Neither crown fell. Run it back with sharper deploy timing.'
         : `${winner.toUpperCase()} wins the crown!`;
+      soloBtn.textContent = 'Solo rematch vs Bot';
       startBtn.textContent = 'Start room rematch';
       startBtn.disabled = !roomReady;
       host('complete', { score: Math.abs(score()), progress: 100, state: { winner } });
+    }
+
+    function livingTower(side, lane) {
+      return towers.find(t => t.side === side && t.lane === lane && t.hp > 0)
+        || towers.find(t => t.side === side && t.king && t.hp > 0)
+        || null;
+    }
+
+    function laneThreat(lane, side) {
+      return units.filter(u => u.side === side && u.hp > 0 && u.lane === lane)
+        .reduce((sum, u) => {
+          const forward = side === 'blue' ? u.x : 1 - u.x;
+          const cd = CARD_BY_ID[u.card] || CARD[0];
+          return sum + forward * (cd.cost + u.hp / cd.hp);
+        }, 0);
+    }
+
+    function chooseBotCard(lane, pressure) {
+      const affordable = CARD.map((cd, i) => ({ cd, i })).filter(item => elixir.red >= item.cd.cost);
+      if (!affordable.length) return -1;
+      const target = livingTower('blue', lane);
+      const weakTower = target ? 1 - Math.max(0, target.hp) / target.max : 0;
+      if (pressure > 2.6 && elixir.red >= 3) return Math.random() < 0.58 ? 1 : 2;
+      if (weakTower > 0.45 && elixir.red >= 5) return 3;
+      if (elixir.red >= 5 && Math.random() < 0.22) return 3;
+      if (elixir.red >= 3 && Math.random() < 0.38) return pressure > 1.2 ? 1 : 2;
+      return affordable[Math.floor(Math.random() * affordable.length)].i;
+    }
+
+    function thinkBot(dt) {
+      if (matchMode !== 'solo' || over || paused || !running) return;
+      bot.think -= dt;
+      if (bot.think > 0) return;
+      const laneScores = lanes.map((_, lane) => {
+        const pressure = laneThreat(lane, 'blue');
+        const redSupport = laneThreat(lane, 'red') * 0.35;
+        const target = livingTower('blue', lane);
+        const towerWeakness = target ? (1 - Math.max(0, target.hp) / target.max) * 2.4 : 0;
+        const repeatPenalty = bot.lastLane === lane ? -0.18 : 0;
+        return pressure * 1.45 + towerWeakness + redSupport + repeatPenalty + Math.random() * 0.48;
+      });
+      const lane = laneScores.indexOf(Math.max(...laneScores));
+      const cardIndex = chooseBotCard(lane, laneThreat(lane, 'blue'));
+      if (cardIndex < 0) { bot.think = 0.45; return; }
+      const dropX = clamp(0.76 + Math.random() * 0.14 - (laneThreat(lane, 'blue') > 2 ? 0.13 : 0), 0.56, 0.9);
+      deploy('red', lane, cardIndex, true, dropX);
+      bot.lastLane = lane;
+      bot.lesson += 1;
+      if (bot.lesson === 2) hint.textContent = 'Bot tip: it answers pressure first. Split lanes to make it choose.';
+      else if (bot.lesson === 5) hint.textContent = 'Bot tip: Breaker punishes weak towers. Save elixir before it crosses mid.';
+      bot.think = clamp(1.85 - state.time / 260 + Math.random() * 0.8, 0.72, 2.15);
     }
 
     // ---------------------------------------------------------------------
@@ -652,7 +728,7 @@
       requestAnimationFrame(loop);
     }
 
-    function sendMatch(type, payload) { host('match-action', { action: { type, payload } }); }
+    function sendMatch(type, payload) { if (matchMode !== 'solo') host('match-action', { action: { type, payload } }); }
     function applyRemote(action) {
       if (!action || action.seq <= lastSeq) return;
       lastSeq = action.seq;
@@ -670,6 +746,7 @@
       const idx = Math.max(0, participants.findIndex(p => p.actorId === actorId));
       mySide = idx === 1 ? 'red' : 'blue';
 
+      if (matchMode === 'solo' && running) return;
       hint.textContent = running
         ? 'Drag a card onto your side of the field to deploy it.'
         : `You are ${mySide.toUpperCase()}. Drag cards onto your side once the match starts.`;
@@ -681,13 +758,14 @@
         ? (roomReady
           ? 'Both players are here. Drag cards onto your own side of the field to deploy troops — no keyboard needed.'
           : 'Waiting for one more signed-in player to join this room.')
-        : 'Create or join a PhantomPlay room with a friend. One device each — laptop, Chromebook, or phone all work. Drag troops onto the field to deploy them.';
+        : 'Start Solo Training now against Crown Bot, or create/join a PhantomPlay room with a friend. Drag troops onto the field to deploy them.';
 
       if (match?.actions) for (const a of match.actions) applyRemote(a);
       renderCards();
       updateHud();
     }
 
+    soloBtn.onclick = () => startSolo();
     startBtn.onclick = () => startRoom();
 
     addEventListener('resize', size);
@@ -698,6 +776,7 @@
         actorId = d.actorId || '';
         if (d.room) applyRoom(d.room, d.room.match);
       } else if (d.type === 'match-state') {
+        if (matchMode === 'solo' && running) return;
         actorId = d.actorId || actorId;
         applyRoom(d.room, d.match);
       } else if (d.type === 'pause') {
@@ -707,7 +786,8 @@
         last = performance.now();
         if (running) requestAnimationFrame(loop);
       } else if (d.type === 'restart') {
-        startRoom();
+        if (matchMode === 'solo') startSolo();
+        else startRoom();
       } else if (d.type === 'exit') {
         host('exit');
       }

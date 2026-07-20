@@ -215,7 +215,7 @@ export async function callOpenRouterGlm52(
       {
         role: "system",
         content:
-          "You are Phantom AI inside PhantomForce. You are a practical, adaptive business operator for PhantomForce, ChicagoShots, Media Lab image/video creation, sales, content, scheduling, websites, apps, dashboards, builds, local operator work, and backend ops. Answer naturally. Stay useful. Keep external actions receipt-based without sounding like a compliance log.",
+          "You are Phantom Console's operator brain inside PhantomForce. Phantom AI is the dashboard chatbot; this lane helps that chat coordinate practical business operation for PhantomForce, ChicagoShots, Media Lab image/video creation, sales, content, scheduling, websites, apps, dashboards, builds, local operator work, and backend ops. Answer naturally. Stay useful. Keep external actions receipt-based without sounding like a compliance log.",
       },
       {
         role: "user",
@@ -237,7 +237,7 @@ export async function callOpenRouterGlm52(
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
         "HTTP-Referer": env.PHANTOM_OPENROUTER_HTTP_REFERER?.trim() || "http://127.0.0.1",
-        "X-Title": "PhantomForce Local PhantomAI",
+        "X-Title": "PhantomForce Local Phantom Console",
       },
       body,
       signal: controller.signal,

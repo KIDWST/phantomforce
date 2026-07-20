@@ -1,9 +1,34 @@
 # PhantomForce Live Admin Source
 
+## Mandatory live-admin shipping gate
+
+For any user-visible admin/app change, do not report "pushed", "shipped", or "fixed on live" manually.
+
+Run exactly this from the canonical checkout:
+
+```powershell
+cd C:\Users\jorda\Documents\Codex\deployments\phantomforce-live
+npm run ship:live-admin -- --commit "Short useful commit message"
+```
+
+Only claim success if the command prints:
+
+```text
+LIVE ADMIN SHIP PASSED
+```
+
+That command bumps the `phantom-live-YYYYMMDD-N` cache id, stages the allowed app/server/script files, runs the live-admin guards, commits, pushes `origin/main`, syncs the local admin/Hermes services, and verifies all three live surfaces:
+
+- `http://127.0.0.1:5177/`
+- `http://127.0.0.1:5190/`
+- `https://admin.phantomforce.online/`
+
+If the command fails, report the exact failing step and do not claim the change is visible.
+
 This checkout is the live admin source for `admin.phantomforce.online` and local `127.0.0.1:5177`.
 
 ```text
-C:\Users\jorda\Documents\Codex\worktrees\phantomforce-live-social-analytics-20260712
+C:\Users\jorda\Documents\Codex\deployments\phantomforce-live
 ```
 
 Before editing owner-facing admin UI, verify:
@@ -25,4 +50,4 @@ Sidebar rule:
 
 Cache rule:
 - Any edit to `app/index.html`, `app/phantom.css`, or `app/js/*.js` must bump the `phantom-live-YYYYMMDD-N` build id everywhere.
-- Commit and push after verification. The owner does not want local-only changes.
+- Use `npm run ship:live-admin -- --commit "message"` so the bump, commit, push, service sync, and public proof happen together. The owner does not want local-only changes.

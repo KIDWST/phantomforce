@@ -1,13 +1,13 @@
 /* PhantomForce admin settings.
    Local UI preferences only: no provider calls, sends, uploads, or billing. */
 
-import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260719-56";
-import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260719-56";
-import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260719-56";
-import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260719-56";
-import { canManageActiveOrg, fetchCustomerPlanPreview, fetchEntitlementsSummary, switchCustomerPlan } from "./orgs.js?v=phantom-live-20260719-56";
-import { currentTenantId, ctx, isLiveAdminHost, isLocalDevHost, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260719-56";
-import { DEFAULT_COMPANION_PREFS, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260719-56";
+import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260719-59";
+import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260719-59";
+import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260719-59";
+import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260719-59";
+import { canManageActiveOrg, fetchCustomerPlanPreview, fetchEntitlementsSummary, switchCustomerPlan } from "./orgs.js?v=phantom-live-20260719-59";
+import { currentTenantId, ctx, isLiveAdminHost, isLocalDevHost, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260719-59";
+import { DEFAULT_COMPANION_PREFS, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260719-59";
 
 const AI_SETTINGS_KEY = "pf.operator.settings.v1";
 const SETTINGS_TAB_KEY = "pf.settings.tab.v1";
@@ -93,7 +93,7 @@ let ghostModeStatus = {
 };
 
 const PROVIDER_MODES = [
-  { id: "smart", name: "Smart Mix", note: "Phantom picks the best provider and falls back automatically." },
+  { id: "smart", name: "Phantom Hybrid", note: "Phantom routes across the allowed brain lanes and falls back when a lane is unavailable." },
   { id: "single", name: "One provider", note: "Use only the provider you choose." },
   { id: "multiple", name: "Multiple", note: "Choose the providers Phantom is allowed to use." },
 ];
@@ -342,8 +342,8 @@ function renderSafetySummary(settings) {
     owner_rules: "Use owner rules",
   }[settings.externalActionMode] || "External actions ask first";
   const routingLabel = {
-    local: "Instant routing (no backend)",
-    api: "Connected backend",
+    local: "Ghost Mode local-only",
+    api: "Phantom Hybrid backend",
     subscription: "Subscription managed",
   }[settings.brainMode] || "Instant routing (no backend)";
   return `
@@ -375,7 +375,7 @@ export function renderOperatorMiniSettings(el, opts = {}) {
   const activeModel = settings.models[activeProvider.id] || activeProviderModels[0] || activeProvider.models[0];
   const loop = loadPhantomLoop();
   const brainLabel = settings.providerMode === "smart"
-    ? "Smart Mix"
+    ? "Phantom Hybrid"
     : settings.providerMode === "multiple"
       ? `${settings.selectedProviders.length} providers`
       : activeProvider.name;
@@ -384,18 +384,19 @@ export function renderOperatorMiniSettings(el, opts = {}) {
   el.innerHTML = `
     <div class="chat-mini-settings">
       <div class="chat-mini-heading">
-        <b>Chat settings</b>
-        <span>Operator brain</span>
+        <b>Console settings</b>
+        <span>Brain, loop, hands</span>
         <em class="chat-mini-saved" data-mini-saved hidden>Saved — applies to the next message</em>
       </div>
       <div class="chat-mini-summary">
-        <span><b>${esc(brainLabel)}</b><i>${settings.providerMode === "smart" ? "Automatic routing and fallback" : `${esc(activeProvider.name)} · ${esc(activeProvider.id === "local" ? localModelLabel(activeModel) : modelDisplayLabel(activeModel))}`}</i></span>
-        <span><b>${loop.enabled ? "Loop on" : "Loop off"}</b><i>${loop.enabled ? esc(loopProviderName(loop.targetProvider)) : "Replies stay with Phantom"}</i></span>
+        <span><b>Brain</b><i>${esc(brainLabel)} · ${settings.providerMode === "smart" ? "automatic fallback" : `${esc(activeProvider.name)} / ${esc(activeProvider.id === "local" ? localModelLabel(activeModel) : modelDisplayLabel(activeModel))}`}</i></span>
+        <span><b>Loop</b><i>${loop.enabled ? esc(loopProviderName(loop.targetProvider)) : "Off"}</i></span>
+        <span><b>Hands</b><i>${settings.externalActionMode === "owner_rules" ? "Autopilot rules" : settings.externalActionMode === "blocked" ? "Blocked" : "Approval gated"}</i></span>
       </div>
       <div class="chat-mini-fields">
         <label class="chat-mini-field"><span>AI routing</span>
           <select data-mini-provider>
-            <option value="smart" ${settings.providerMode === "smart" ? "selected" : ""}>Smart Mix</option>
+            <option value="smart" ${settings.providerMode === "smart" ? "selected" : ""}>Phantom Hybrid</option>
             ${PROVIDERS.map((provider) => `<option value="${esc(provider.id)}" ${settings.providerMode === "single" && provider.id === settings.provider ? "selected" : ""}>${esc(provider.name)} only</option>`).join("")}
             <option value="multiple" ${settings.providerMode === "multiple" ? "selected" : ""}>Multiple providers</option>
           </select>
@@ -432,6 +433,27 @@ export function renderOperatorMiniSettings(el, opts = {}) {
             ], loop.approvalMode)}</select>
           </label>
         </div>` : ""}
+      </div>
+      <div class="chat-mini-hands">
+        <div class="chat-mini-subhead">
+          <b>Hands / execution</b>
+          <span>Termina and external work stay controlled.</span>
+        </div>
+        <div class="chat-mini-fields">
+          <label class="chat-mini-field"><span>Action boundary</span>
+            <select data-mini-ai-field="externalActionMode">${optionList([
+              { id: "approval", label: "Approval before external actions" },
+              { id: "blocked", label: "Block external actions" },
+              { id: "owner_rules", label: "Approval or autopilot rules" },
+            ], settings.externalActionMode)}</select>
+          </label>
+          <label class="chat-mini-field"><span>Autopilot scope</span>
+            <select data-mini-ai-field="autopilotScope">${optionList([
+              { id: "safe_repeat", label: "Safe repeat work only" },
+              { id: "manual_only", label: "Manual until approved" },
+            ], settings.autopilotScope)}</select>
+          </label>
+        </div>
       </div>
       <div class="chat-mini-actions">
         <button class="chat-mini-full" type="button" data-mini-full-settings>Advanced loop routing</button>
@@ -484,6 +506,13 @@ export function renderOperatorMiniSettings(el, opts = {}) {
 
   const loopApprovalSelect = el.querySelector("[data-mini-loop-approval]");
   if (loopApprovalSelect) loopApprovalSelect.onchange = () => saveLoop({ approvalMode: loopApprovalSelect.value });
+
+  el.querySelectorAll("[data-mini-ai-field]").forEach((field) => {
+    field.onchange = () => {
+      settings[field.dataset.miniAiField] = field.value;
+      saveMiniAndRender(el, opts, settings);
+    };
+  });
 
   const full = el.querySelector("[data-mini-full-settings]");
   if (full) full.onclick = () => {
@@ -567,8 +596,8 @@ function renderGhostModeSection() {
         <div>
           <h3>Ghost Mode</h3>
           <p class="set-note">${on
-            ? "On: Phantom AI chat only calls the local model on this PC. Cloud providers (Claude, OpenRouter, and others) are never used, even as fallback."
-            : "Off: Phantom AI chat may use cloud providers for better answer quality. Turn this on for a hard, verifiable local-only guarantee, at the cost of that quality."}</p>
+            ? "On: Ghost Mode keeps Phantom AI chat on the local model path for this PC. Cloud providers are never used, even as fallback."
+            : "Off: Phantom Hybrid may use allowed cloud/operator lanes for better answer quality. Turn Ghost Mode on for a hard local-only boundary, at the cost of that quality."}</p>
         </div>
         <label class="set-switch set-switch-large">
           <input type="checkbox" data-ghost-mode-toggle ${on ? "checked" : ""} ${ghostModeStatus.loading ? "disabled" : ""}/><span></span>
@@ -585,7 +614,7 @@ function renderModelTab(settings, activeProvider, activeModel) {
         <div class="set-sec-head">
           <div>
             <h3>AI models</h3>
-            <p class="set-note">Choose one provider, several providers, or let Phantom select the best one for each request.</p>
+            <p class="set-note">Choose Ghost/local behavior, one provider, several providers, or Phantom Hybrid routing across the allowed lanes.</p>
           </div>
         </div>
         <p class="set-label">How Phantom chooses</p>
@@ -1003,8 +1032,8 @@ export function renderOperatorSettings(el, opts = {}) {
       <div class="set-section set-ai-hero">
         <div>
           <p class="set-eyebrow">Operator brain</p>
-          <h3>Phantom AI settings</h3>
-          <p class="set-note">Choose the default brain, loop behavior, memory depth, and autopilot boundary for the Business Manager. These are local owner settings; the public demo chat still cannot send, upload, charge, or touch private systems.</p>
+          <h3>Phantom Console settings</h3>
+          <p class="set-note">Phantom AI is the chatbot. Phantom Console is the operating layer around it: brain routing, Phantom Loop, memory depth, Termina hands, and the approval/autopilot boundary. These are local owner settings; the public demo chat still cannot send, upload, charge, or touch private systems.</p>
         </div>
         ${renderSafetySummary(settings)}
       </div>

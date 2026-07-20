@@ -6,48 +6,48 @@ import {
   redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260719-56";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260719-56";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260719-56";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260719-56";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260719-56";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260719-56";
-import { mountManagedGrowthReport } from "./managedgrowth.js?v=phantom-live-20260719-56";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260719-56";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260719-56";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260719-56";
-import { mountPhantomAI } from "./phantomai.js?v=phantom-live-20260719-56";
-import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260719-56";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260719-56";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260719-56";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260719-56";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260719-56";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260719-56";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260719-56";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260719-56";
-import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260719-56";
-import { mountAmbient } from "./ambient.js?v=phantom-live-20260719-56";
-import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260719-56";
+} from "./store.js?v=phantom-live-20260719-59";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260719-59";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260719-59";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260719-59";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260719-59";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260719-59";
+import { mountManagedGrowthReport } from "./managedgrowth.js?v=phantom-live-20260719-59";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260719-59";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260719-59";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260719-59";
+import { mountPhantomAI } from "./phantomai.js?v=phantom-live-20260719-59";
+import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260719-59";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260719-59";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260719-59";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260719-59";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode, refreshCompanionCore } from "./companion.js?v=phantom-live-20260719-59";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260719-59";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260719-59";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260719-59";
+import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260719-59";
+import { mountAmbient } from "./ambient.js?v=phantom-live-20260719-59";
+import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260719-59";
 import {
   fetchAuthConfig, databaseLogin, databaseLogout, databaseSignup, databaseForgotUsername, databaseForgotPassword,
   databaseResetPassword, databaseAcceptInvitation, databaseVerify2fa, databaseStart2faSetup, databaseConfirm2fa, databaseRegenerate2faBackupCodes, databaseDisable2fa,
   switchOrg, fetchAuthMe, fetchEntitlementsSummary,
-} from "./orgs.js?v=phantom-live-20260719-56";
-import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260719-56";
-import { assetsAvailable } from "./orgs.js?v=phantom-live-20260719-56";
-import { renderPhantomStore } from "./phantomstore.js?v=phantom-live-20260719-56";
-import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260719-56";
+} from "./orgs.js?v=phantom-live-20260719-59";
+import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260719-59";
+import { assetsAvailable } from "./orgs.js?v=phantom-live-20260719-59";
+import { renderPhantomStore } from "./phantomstore.js?v=phantom-live-20260719-59";
+import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260719-59";
 // PhantomPlay V2 platform shell (Home/Solo/Friends/Workspace/Dev Hub) - opt-in
 // while it hardens: set localStorage "pf.phantomplay.v2" = "1" (the V2 shell has
 // a "Classic view" button to switch back). Classic stays the default experience.
-import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260719-56";
+import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260719-59";
 const phantomPlayV2Opted = () => { try { return localStorage.getItem("pf.phantomplay.v2") === "1"; } catch { return false; } };
-import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260719-56";
+import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260719-59";
 import {
   customizeNavigation,
   loadOrganizationCustomization,
-} from "./customization.js?v=phantom-live-20260719-56";
-import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260719-56";
+} from "./customization.js?v=phantom-live-20260719-59";
+import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260719-59";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -1100,6 +1100,41 @@ function canUsePhantomLoop() {
 function phantomLoopUnavailableMessage() {
   return "Phantom Loop needs a target model picked first — open chat settings to choose one.";
 }
+const OPERATOR_SETTINGS_KEY = "pf.operator.settings.v1";
+function loadConsoleSettingsSnapshot() {
+  try {
+    return JSON.parse(localStorage.getItem(OPERATOR_SETTINGS_KEY) || "{}") || {};
+  } catch {
+    return {};
+  }
+}
+function renderConsoleCoreStatus(activeCompanionMode = companionMode()) {
+  const settings = loadConsoleSettingsSnapshot();
+  const loop = loadPhantomLoop();
+  const providerNames = { claude: "Claude", private: "Private Operator", openrouter: "OpenRouter", local: "Local Ollama" };
+  const selected = Array.isArray(settings.selectedProviders) && settings.selectedProviders.length ? settings.selectedProviders : ["claude", "private", "openrouter", "local"];
+  const brainMode = settings.brainMode === "local"
+    ? "Ghost/local"
+    : settings.providerMode === "single"
+      ? providerNames[settings.provider] || "Single lane"
+      : settings.providerMode === "multiple"
+        ? `${selected.length} lanes`
+        : "Phantom Hybrid";
+  const hands = activeCompanionMode === "loop"
+    ? "Loop armed"
+    : settings.externalActionMode === "owner_rules"
+      ? "Autopilot rules"
+      : "Termina gated";
+  const guard = settings.externalActionMode === "blocked"
+    ? "Actions blocked"
+    : settings.externalActionMode === "owner_rules"
+      ? "Owner rules"
+      : "Approval gate";
+  return `
+    <span><b>Brain</b><i>${esc(brainMode)}</i></span>
+    <span><b>Hands</b><i>${esc(hands)}</i></span>
+    <span><b>Guard</b><i>${esc(guard)}</i></span>`;
+}
 function accountRenewalLabel() {
   return new Date(Date.now() + ACCOUNT_PLAN.renewalOffsetDays * 864e5).toLocaleDateString([], { month: "long", day: "numeric", year: "numeric" });
 }
@@ -1394,7 +1429,7 @@ const MODES = {
   admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260719-56";
+const POSE_VERSION = "phantom-live-20260719-59";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -2031,6 +2066,7 @@ function renderConsole() {
     canLoop: canUsePhantomLoop,
     onLoopUnavailable: () => speak(phantomLoopUnavailableMessage(), "", "alert"),
     renderSettings: renderChatSettingsPanel,
+    renderCore: renderConsoleCoreStatus,
   });
   renderChatLog();
   mountMissionControl($("[data-mission-control]"), {
@@ -2088,10 +2124,11 @@ function renderChatSettingsPanel(target) {
       /* the change must be VISIBLE immediately, not just saved */
       const caption = document.querySelector("[data-pc-caption]");
       if (caption && settings) {
-        const brain = settings.brainMode === "api" ? "Connected" : settings.brainMode === "subscription" ? "Subscription" : "Instant";
+        const brain = settings.brainMode === "api" ? "Phantom Hybrid" : settings.brainMode === "subscription" ? "Subscription" : "Ghost/local";
         const model = settings.models?.[settings.provider] || "";
         caption.textContent = `Settings applied — ${brain} · ${model}`;
       }
+      refreshCompanionCore();
     },
     onLoopChange: (loop) => {
       if (!loop.enabled && companionMode() === "loop") setCompanionMode("chat");
@@ -2099,6 +2136,7 @@ function renderChatSettingsPanel(target) {
       applyCompanionMode(companionMode());
       const caption = document.querySelector("[data-pc-caption]");
       if (caption) caption.textContent = loop.enabled ? "Phantom Loop on — deeper pass ready" : "Phantom Loop off";
+      refreshCompanionCore();
     },
   });
 }

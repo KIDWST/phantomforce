@@ -3,7 +3,7 @@
    It uses the real character engine for blinking, eye tracking, and moods,
    respects reduced motion, and keeps every status dot paired with text. */
 
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260719-56";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260719-59";
 
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -39,6 +39,7 @@ let onModeChange = null;
 let canUseLoop = () => true;
 let onLoopUnavailable = null;
 let renderSettingsPanel = null;
+let renderCorePanel = null;
 
 export function setCompanionState(state, caption) {
   const def = PRESENCE_STATES[state] || PRESENCE_STATES.idle;
@@ -79,12 +80,18 @@ export function setCompanionMode(next) {
   }
   if (el?.root) el.root.dataset.mode = mode;
   if (el?.menuLoop) el.menuLoop.setAttribute("aria-pressed", mode === "loop" ? "true" : "false");
+  refreshCompanionCore();
   const targetState = mode === "loop" ? "building" : "idle";
   if (modeChanged || current !== targetState) setCompanionState(targetState);
   if (modeChanged && onModeChange) onModeChange(mode);
 }
 
 export const companionMode = () => mode;
+
+export function refreshCompanionCore() {
+  if (!el?.core || typeof renderCorePanel !== "function") return;
+  el.core.innerHTML = renderCorePanel(mode);
+}
 
 function closeSettings() {
   if (!el?.settingsPanel || !el?.settingsBtn) return;
@@ -181,18 +188,24 @@ export function mountCompanion(headEl, opts = {}) {
   canUseLoop = typeof opts.canLoop === "function" ? opts.canLoop : () => true;
   onLoopUnavailable = typeof opts.onLoopUnavailable === "function" ? opts.onLoopUnavailable : null;
   renderSettingsPanel = typeof opts.renderSettings === "function" ? opts.renderSettings : null;
+  renderCorePanel = typeof opts.renderCore === "function" ? opts.renderCore : null;
 
   headEl.innerHTML = `
     <div class="pc" data-pc>
       <canvas class="pc-avatar" data-pc-avatar width="10" height="10" role="img"
-        aria-label="Phantom AI companion portrait"></canvas>
+        aria-label="Phantom AI chatbot portrait"></canvas>
       <div class="pc-meta">
         <div class="pc-title">
-          <b>Phantom AI</b>
+          <b>Phantom Console</b>
           <i class="pc-dot pc-dot-ok" data-pc-dot aria-hidden="true"></i>
-          <span class="pc-label" data-pc-label>Systems online</span>
+          <span class="pc-label" data-pc-label>Brain + hands online</span>
         </div>
-        <p class="pc-caption" data-pc-caption aria-live="polite">Ready when you are.</p>
+        <p class="pc-caption" data-pc-caption aria-live="polite">Phantom AI chat plus Termina hands, approval-gated.</p>
+        <div class="pc-core" data-pc-core>
+          ${renderCorePanel ? renderCorePanel(mode) : `
+            <span><b>Brain</b><i>Phantom Hybrid</i></span>
+            <span><b>Hands</b><i>Termina gated</i></span>`}
+        </div>
       </div>
       <div class="pc-actions">
         <button class="pc-mode" data-pc-mode type="button" aria-pressed="false" title="Toggle Phantom Loop">
@@ -212,6 +225,7 @@ export function mountCompanion(headEl, opts = {}) {
     dot: root.querySelector("[data-pc-dot]"),
     label: root.querySelector("[data-pc-label]"),
     caption: root.querySelector("[data-pc-caption]"),
+    core: root.querySelector("[data-pc-core]"),
     modeChip: root.querySelector("[data-pc-mode]"),
     settingsBtn: root.querySelector("[data-pc-settings]"),
     settingsPanel: root.querySelector("[data-pc-menu]"),

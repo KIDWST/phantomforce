@@ -174,7 +174,9 @@ for (const slug of ["crown-circuit", "kingdom-breakers", "tidefront-tactics", "s
   assert.match(module, new RegExp(`GAME_ART_BY_SLUG\\["${slug}"\\]`, "u"), `${slug} must use dedicated PhantomPlay game art.`);
   assert.match(flagshipCatalog, new RegExp(`id:\\s*"${slug}"`, "u"), `${slug} must be registered as a server-side flagship game.`);
 }
-assert.match(crownCircuit, /STRICTLY MULTIPLAYER|Start 2-player match|Room .*you are/u, "Crown Circuit must be the restored royale-style 1v1 game.");
+assert.match(crownCircuit, /Solo Training \+ Room Multiplayer|Solo Training vs Bot|Crown Bot/u, "Crown Circuit must start with solo bot training, not a room-only dead end.");
+assert.match(crownCircuit, /function thinkBot\(dt\)[\s\S]*laneThreat[\s\S]*deploy\('red'/u, "Crown Circuit solo mode must include a real bot that deploys against the player.");
+assert.match(crownCircuit, /Start room match|Room .*you are/u, "Crown Circuit must still keep private room duel support.");
 assert.doesNotThrow(() => new Function(crownCircuitScript), "Crown Circuit script must parse.");
 assert.match(tidefrontTactics, /Arrow keys to adjust angle\/power|Space to fire|Fleet Room/u, "Tidefront Tactics must remain the restored artillery battle.");
 assert.match(games[gameSlugs.indexOf("serpent-surge")], /storm|boost|rival|serpent|trail/u, "Serpent Surge must play as a modern snake arena, not a static old mini-game.");
