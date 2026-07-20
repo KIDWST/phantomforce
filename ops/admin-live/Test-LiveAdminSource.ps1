@@ -131,17 +131,42 @@ $repoOverride = [Environment]::GetEnvironmentVariable("PHANTOMFORCE_DASHBOARD_RE
 $overrideOk = [string]::IsNullOrWhiteSpace($repoOverride) -or ((Resolve-Path -LiteralPath $repoOverride -ErrorAction SilentlyContinue).Path -eq $RepoRoot)
 $states.Add((Result ($(if ($overrideOk) { "OK" } else { "FAIL" })) ($(if ($overrideOk) { "Dashboard repository environment override is empty or canonical." } else { "PHANTOMFORCE_DASHBOARD_REPO points at $repoOverride" }))))
 
-$syncTaskOk = $false
+$combinedLauncher = Join-Path $RepoRoot "ops\admin-live\Run-AdminMainSyncHidden.vbs"
+$combinedTaskOk = $false
 try {
-  $syncTask = Get-ScheduledTask -TaskName "PhantomForce Admin Main Sync" -ErrorAction Stop
-  $syncActionText = (($syncTask.Actions | ForEach-Object { "$($_.Execute) $($_.Arguments)" }) -join " ")
-  $syncTaskOk = $syncActionText.Contains((Join-Path $RepoRoot "ops\admin-live\Run-AdminMainSyncHidden.vbs"))
+  $combinedTask = Get-ScheduledTask -TaskName "PhantomForce Admin Main Sync" -ErrorAction Stop
+  $combinedAction = (($combinedTask.Actions | ForEach-Object { "$($_.Execute) $($_.Arguments)" }) -join " ")
+  $combinedHasLogon = @($combinedTask.Triggers | Where-Object { $_.CimClass.CimClassName -eq "MSFT_TaskLogonTrigger" -and $_.Enabled }).Count -gt 0
+  $combinedHasHourly = @($combinedTask.Triggers | Where-Object { $_.Repetition.Interval -eq "PT1H" -and $_.Enabled }).Count -gt 0
+  $combinedTaskOk = $combinedTask.Settings.Hidden -and $combinedAction.Contains($combinedLauncher) -and $combinedHasLogon -and $combinedHasHourly
 } catch {}
-$states.Add((Result ($(if ($syncTaskOk) { "OK" } else { "FAIL" })) ($(if ($syncTaskOk) { "Recurring admin sync launches the tracked canonical hidden runner." } else { "Recurring admin sync task is missing or points outside the canonical deployment." }))))
 
+$fallbackPath = Join-Path $env:LOCALAPPDATA "PhantomForce\admin-live\start-admin-live-watch.vbs"
 $fallbackWatch = (Get-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name "PhantomForceAdminLiveSync" -ErrorAction SilentlyContinue).PhantomForceAdminLiveSync
-$fallbackOk = [string]::IsNullOrWhiteSpace($fallbackWatch) -or $fallbackWatch.Contains($RepoRoot)
-$states.Add((Result ($(if ($fallbackOk) { "OK" } else { "FAIL" })) ($(if ($fallbackOk) { "Legacy login fallback watcher is absent or canonical." } else { "Legacy login fallback watcher points outside the canonical deployment." }))))
+$fallbackBody = if (Test-Path -LiteralPath $fallbackPath) { Get-Content -Raw -LiteralPath $fallbackPath } else { "" }
+$fallbackActive = -not [string]::IsNullOrWhiteSpace($fallbackWatch)
+$fallbackOk = $fallbackActive -and $fallbackWatch.Contains($fallbackPath) -and $fallbackBody.Contains($RepoRoot) -and $fallbackBody.Contains("Watch-AdminMain.ps1")
+$combinedCoverage = $combinedTaskOk -or $fallbackOk
+
+$startupTaskSpecs = @(
+  @{ Name = "PhantomForce Admin Live Server"; Launcher = (Join-Path $env:LOCALAPPDATA "PhantomForce\admin-live\run-admin-live-start.vbs") },
+  @{ Name = "PhantomForce Hermes API"; Launcher = (Join-Path $env:LOCALAPPDATA "PhantomForce\admin-live\run-hermes-start.vbs") }
+)
+foreach ($taskSpec in $startupTaskSpecs) {
+  $taskOk = $false
+  $hasLogon = $false
+  try {
+    $scheduledTask = Get-ScheduledTask -TaskName $taskSpec.Name -ErrorAction Stop
+    $actionText = (($scheduledTask.Actions | ForEach-Object { "$($_.Execute) $($_.Arguments)" }) -join " ")
+    $hasLogon = @($scheduledTask.Triggers | Where-Object { $_.CimClass.CimClassName -eq "MSFT_TaskLogonTrigger" -and $_.Enabled }).Count -gt 0
+    $taskOk = $scheduledTask.Settings.Hidden -and $actionText.Contains($taskSpec.Launcher) -and $hasLogon
+  } catch {}
+  $covered = $taskOk -or $combinedCoverage
+  $states.Add((Result ($(if ($covered) { "OK" } else { "FAIL" })) ($(if ($taskOk) { "$($taskSpec.Name) is hidden, canonical, and starts at login." } elseif ($combinedTaskOk) { "$($taskSpec.Name) is covered by the hidden login + hourly self-repair task." } elseif ($fallbackOk) { "$($taskSpec.Name) is covered by the hidden login + hourly watcher." } else { "$($taskSpec.Name) has no valid startup repair path." }))))
+}
+
+$fallbackStateOk = (-not $fallbackActive) -or $fallbackOk
+$states.Add((Result ($(if ($fallbackStateOk) { "OK" } else { "FAIL" })) ($(if (-not $fallbackActive) { "Fallback watcher is not needed." } elseif ($fallbackOk) { "Fallback login/hourly watcher is canonical." } else { "Fallback watcher is present but invalid." }))))
 
 $badProcesses = @()
 try {

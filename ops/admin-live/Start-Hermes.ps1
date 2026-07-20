@@ -52,6 +52,48 @@ function Read-DotEnvFile {
   return $values
 }
 
+function Test-DockerEngine {
+  param([System.Management.Automation.CommandInfo]$DockerCommand)
+
+  try {
+    & $DockerCommand.Source info --format "{{.ServerVersion}}" 2>$null | Out-Null
+    return ($LASTEXITCODE -eq 0)
+  } catch {
+    # Docker CLI writes the normal "desktop engine is not ready" condition to
+    # stderr. Under ErrorActionPreference=Stop Windows PowerShell promotes it
+    # to an exception; that is a health result, not a launcher failure.
+    return $false
+  }
+}
+
+function Ensure-DockerEngine {
+  param([System.Management.Automation.CommandInfo]$DockerCommand)
+
+  if (Test-DockerEngine -DockerCommand $DockerCommand) {
+    return
+  }
+
+  $dockerDesktop = Join-Path $env:ProgramFiles "Docker\Docker\Docker Desktop.exe"
+  if (!(Test-Path -LiteralPath $dockerDesktop)) {
+    throw "Local database recovery needs Docker Desktop, but Docker Desktop is not installed."
+  }
+
+  $desktopRunning = Get-Process -Name "Docker Desktop" -ErrorAction SilentlyContinue
+  if (-not $desktopRunning) {
+    Start-Process -FilePath $dockerDesktop -ArgumentList "--minimized" -WindowStyle Hidden | Out-Null
+  }
+
+  $deadline = (Get-Date).AddSeconds(150)
+  do {
+    Start-Sleep -Seconds 2
+    if (Test-DockerEngine -DockerCommand $DockerCommand) {
+      return
+    }
+  } while ((Get-Date) -lt $deadline)
+
+  throw "Docker Desktop did not make its engine available within 150 seconds."
+}
+
 function Ensure-LocalDatabase {
   param([hashtable]$ServerEnv)
 
@@ -72,6 +114,11 @@ function Ensure-LocalDatabase {
   if (-not $docker) {
     throw "Database auth requires local PostgreSQL, but Docker was not found and port 5432 is closed."
   }
+
+  # Windows can launch this task before Docker Desktop has opened its engine.
+  # Bring the dependency up silently and wait for it instead of making the
+  # owner start Codex or Docker by hand after every reboot.
+  Ensure-DockerEngine -DockerCommand $docker
 
   $container = if ($env:PHANTOMFORCE_POSTGRES_CONTAINER) {
     $env:PHANTOMFORCE_POSTGRES_CONTAINER

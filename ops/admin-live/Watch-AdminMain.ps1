@@ -1,10 +1,8 @@
 param(
   [string]$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path,
   [int]$Port = 5177,
-  # 15 minutes meant up to 15 minutes of downtime if either process crashed
-  # between syncs — the health check itself is two cheap HTTP GETs plus a
-  # git fetch, so there's no real cost to checking far more often.
-  [int]$EveryMinutes = 3
+  [int]$HermesPort = 5190,
+  [int]$EveryMinutes = 60
 )
 
 $ErrorActionPreference = "Stop"
@@ -23,7 +21,7 @@ try {
 try {
   while ($true) {
     try {
-      & (Join-Path $PSScriptRoot "Sync-AdminMain.ps1") -RepoRoot $RepoRoot -Port $Port
+      & (Join-Path $PSScriptRoot "Sync-AdminMain.ps1") -RepoRoot $RepoRoot -Port $Port -HermesPort $HermesPort
       Add-Content -LiteralPath $log -Value "$(Get-Date -Format o) sync ok"
     } catch {
       Add-Content -LiteralPath $log -Value "$(Get-Date -Format o) sync failed: $($_.Exception.Message)"

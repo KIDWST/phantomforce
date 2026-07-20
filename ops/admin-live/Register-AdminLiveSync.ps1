@@ -2,10 +2,9 @@ param(
   [string]$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path,
   [int]$Port = 5177,
   [int]$HermesPort = 5190,
-  # 15 minutes meant up to 15 minutes of downtime if either process crashed
-  # between syncs — the health check itself is two cheap HTTP GETs plus a
-  # git fetch, so there's no real cost to checking far more often.
-  [int]$EveryMinutes = 3
+  # Startup handles reboot recovery immediately. This recurring pass keeps the
+  # live checkout and both local services healthy without constant polling.
+  [int]$EveryMinutes = 60
 )
 
 $ErrorActionPreference = "Stop"
@@ -51,29 +50,42 @@ $syncAction = New-ScheduledTaskAction -Execute $wscript -Argument "`"$syncVbs`""
 
 $startTrigger = New-ScheduledTaskTrigger -AtLogOn
 $hermesTrigger = New-ScheduledTaskTrigger -AtLogOn
-$syncTrigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes $EveryMinutes) -RepetitionDuration (New-TimeSpan -Days 3650)
+$syncLogonTrigger = New-ScheduledTaskTrigger -AtLogOn
+$syncLogonTrigger.Delay = "PT45S"
+$syncTimerTrigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes $EveryMinutes) -RepetitionDuration (New-TimeSpan -Days 3650)
 
-$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Minutes 10) -Hidden -MultipleInstances IgnoreNew
+$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Minutes 10) -Hidden -MultipleInstances IgnoreNew -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 2)
 $principal = New-ScheduledTaskPrincipal -UserId ([System.Security.Principal.WindowsIdentity]::GetCurrent().Name) -LogonType Interactive -RunLevel Limited
 
 try {
   Register-ScheduledTask -TaskName "PhantomForce Admin Live Server" -Action $startAction -Trigger $startTrigger -Settings $settings -Principal $principal -Description "Starts the local static admin server for admin.phantomforce.online." -Force -ErrorAction Stop | Out-Null
   Register-ScheduledTask -TaskName "PhantomForce Hermes API" -Action $hermesAction -Trigger $hermesTrigger -Settings $settings -Principal $principal -Description "Starts the Hermes API backend (5190) so new server routes go live." -Force -ErrorAction Stop | Out-Null
-  Register-ScheduledTask -TaskName "PhantomForce Admin Main Sync" -Action $syncAction -Trigger $syncTrigger -Settings $settings -Principal $principal -Description "Fast-forwards PhantomForce main and restarts the UI + Hermes so the admin site follows GitHub." -Force -ErrorAction Stop | Out-Null
+  Register-ScheduledTask -TaskName "PhantomForce Admin Main Sync" -Action $syncAction -Trigger @($syncLogonTrigger, $syncTimerTrigger) -Settings $settings -Principal $principal -Description "At login and hourly, fast-forwards PhantomForce main and repairs the UI, API, database dependency, and health checks." -Force -ErrorAction Stop | Out-Null
 } catch {
-  $watchScript = Join-Path $PSScriptRoot "Watch-AdminMain.ps1"
-  $vbs = Join-Path $stateDir "start-admin-live-watch.vbs"
-  $watchArgs = "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$watchScript`" -RepoRoot `"$repo`" -Port $Port -EveryMinutes $EveryMinutes"
-  $vbsCommand = ("$ps $watchArgs").Replace('"', '""')
-  $vbsBody = @"
+  # Standard users may be allowed to update an existing task but denied new
+  # task creation. One combined login/hourly sync is sufficient because its
+  # health pass starts and repairs both the UI and API.
+  try {
+    Get-ScheduledTask -TaskName "PhantomForce Admin Main Sync" -ErrorAction Stop | Out-Null
+    Set-ScheduledTask -TaskName "PhantomForce Admin Main Sync" -Action $syncAction -Trigger @($syncLogonTrigger, $syncTimerTrigger) -Settings $settings -ErrorAction Stop | Out-Null
+    Remove-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name "PhantomForceAdminLiveSync" -ErrorAction SilentlyContinue
+    Write-Output "Updated the combined PhantomForce login + hourly self-repair task."
+    exit 0
+  } catch {
+    $watchScript = Join-Path $PSScriptRoot "Watch-AdminMain.ps1"
+    $vbs = Join-Path $stateDir "start-admin-live-watch.vbs"
+    $watchArgs = "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$watchScript`" -RepoRoot `"$repo`" -Port $Port -HermesPort $HermesPort -EveryMinutes $EveryMinutes"
+    $vbsCommand = ("$ps $watchArgs").Replace('"', '""')
+    $vbsBody = @"
 Set WshShell = CreateObject("WScript.Shell")
 WshShell.Run "$vbsCommand", 0, False
 "@
-  Set-Content -LiteralPath $vbs -Value $vbsBody -Encoding ascii
-  New-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name "PhantomForceAdminLiveSync" -Value "wscript.exe `"$vbs`"" -PropertyType String -Force | Out-Null
-  Start-Process -FilePath "wscript.exe" -ArgumentList "`"$vbs`"" -WindowStyle Hidden
-  Write-Output "Scheduled Tasks were denied, so registered HKCU startup watcher instead."
-  exit 0
+    Set-Content -LiteralPath $vbs -Value $vbsBody -Encoding ascii
+    New-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name "PhantomForceAdminLiveSync" -Value "wscript.exe `"$vbs`"" -PropertyType String -Force | Out-Null
+    Start-Process -FilePath "wscript.exe" -ArgumentList "`"$vbs`"" -WindowStyle Hidden
+    Write-Output "Scheduled Tasks were denied, so registered the hidden login/hourly watcher instead."
+    exit 0
+  }
 }
 
-Write-Output "Registered PhantomForce admin live server at logon and main sync every $EveryMinutes minutes."
+Write-Output "Registered PhantomForce UI + API at logon and hidden health/sync repair every $EveryMinutes minutes."

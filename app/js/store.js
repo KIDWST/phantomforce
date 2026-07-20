@@ -798,7 +798,7 @@ async function databaseOwnerLogin(email, password) {
       body: JSON.stringify({ email, password }),
     });
   } catch {
-    throw new Error("Your password is probably fine - the backend on the admin PC is stopped. Start Hermes/backend, wait ~20 seconds, then sign in again.");
+    throw new Error("Your password is probably fine — the PhantomForce backend is recovering automatically. Wait about a minute, then sign in again.");
   }
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
@@ -808,7 +808,12 @@ async function databaseOwnerLogin(email, password) {
     throw new Error(raw || `Database login failed (${response.status}).`);
   }
   if (payload?.requires2fa) {
-    throw new Error("Password accepted, but this admin account needs 2FA. Wait for the account sign-in form to load, then enter the 2FA code there.");
+    return {
+      requires2fa: true,
+      challengeToken: payload.challengeToken,
+      expiresAt: payload.expiresAt,
+      user: payload.user,
+    };
   }
   if (!payload?.token || !payload?.session) throw new Error("Database login did not return a usable session.");
   const s = databaseSessionFromLogin(payload);
@@ -838,14 +843,14 @@ export async function ownerLogin(ownerKeyOrEmail, password) {
       body: JSON.stringify(body),
     });
   } catch {
-    throw new Error("Your password is probably fine — the backend on the admin PC isn't answering at all. Start Hermes/backend, wait ~20 seconds, then sign in again.");
+    throw new Error("Your password is probably fine — the PhantomForce backend is recovering automatically. Wait about a minute, then sign in again.");
   }
   const payload = await response.json().catch(() => ({}));
   if (!response.ok || !payload?.token || !payload?.session) {
     const raw = String(payload?.error || "");
     // a down backend must never read as "wrong password"
     if (response.status === 502 || /unavailable|ECONNREFUSED|fetch failed/i.test(raw)) {
-      throw new Error("Your password is probably fine — the backend on the admin PC is stopped. Start Hermes/backend, wait ~20 seconds, then sign in again.");
+      throw new Error("Your password is probably fine — the PhantomForce backend is recovering automatically. Wait about a minute, then sign in again.");
     }
     if (response.status === 401 || response.status === 403) {
       // auto-diagnose: is the backend even holding an owner key right now?
