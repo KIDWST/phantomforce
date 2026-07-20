@@ -1,5 +1,6 @@
 import { needsInstantConversationContext, selectRelevantInstantTurns } from "./instant-chat-context.js";
 import { buildInstantChatToolReply, enforceInstantOutputConstraints } from "./instant-chat-tools.js";
+import { needsBusinessContext } from "./conversation-policy.js";
 
 const MAX_REPLY_CHARS = 520;
 
@@ -84,7 +85,23 @@ function followUpReply(request: string, recentConversation: RecentChatTurn[]) {
     return `The core idea is: ${firstSentence(previous)} I'm staying with that thread, not switching to workspace status.`;
   }
   if (/^(do you agree|is that true|are you sure)\b/i.test(request)) return `Broadly, yes, with normal exceptions. The claim I'm standing behind is: ${firstSentence(previous)}`;
+  // Only claim continuity when the new request actually shares the thread's
+  // topic. Echoing an unrelated old answer at a new question reads as a
+  // memory malfunction (owner-reported: a CRM request got a stale reply
+  // about an old software thread).
+  if (!sharesTopic(request, `${topicContext}`)) {
+    return "The instant model timed out before I could answer that accurately, so I won't invent one. Ask again in a moment and I'll take it fresh.";
+  }
   return `I'm still with this thread: ${firstSentence(previous)} The instant model timed out before I could answer the new part accurately, so I won't invent one.`;
+}
+
+/* Cheap lexical topic check: does the new request share any meaningful term
+   with the recent thread? Mirrors conversation-policy's overlap trick. */
+function sharesTopic(request: string, threadText: string) {
+  const requestTerms = new Set(request.toLowerCase().match(/[a-z0-9]{4,}/g) || []);
+  if (!requestTerms.size) return true; // ultra-short follow-ups ("why?") keep the thread
+  const threadTerms = new Set(threadText.toLowerCase().match(/[a-z0-9]{4,}/g) || []);
+  return [...requestTerms].some((term) => threadTerms.has(term));
 }
 
 function directAnswer(request: string, businessName: string) {
@@ -119,6 +136,22 @@ export function buildInstantChatFallbackReply(
   recentConversation: RecentChatTurn[] = [],
 ) {
   const request = cleanText(userRequest);
+  // Defense in depth behind conversation-policy's lane gate: if a business
+  // request ever reaches the quick lane (a routing miss, not a feature),
+  // say so honestly instead of parroting whatever thread came before.
+  // Never guess at records, actions, or business state from this lane.
+  const businessAsk = needsBusinessContext(request);
+  if (businessAsk) {
+    return {
+      status: "local_fallback" as const,
+      model_id: "phantom-instant-local-fallback",
+      output_text: "That's real business work, not quick chat — I won't guess at records or actions from this lane. Ask me again and the operational brain will take it, with your actual data in front of it.",
+      provider_called: false as const,
+      network_call_performed: false as const,
+      provider_request_body_created: false as const,
+      reason: "safe_instant_provider_unavailable" as const,
+    };
+  }
   const toolReply = buildInstantChatToolReply(request, recentConversation);
   const content = toolReply?.output_text || followUpReply(request, recentConversation) || directAnswer(request, businessName);
   return {

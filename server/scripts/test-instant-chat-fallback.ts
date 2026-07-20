@@ -120,4 +120,31 @@ assert.equal(isSafeAdvisoryConversationRequest({ task_type: "plan", user_request
 assert.equal(isSafeAdvisoryConversationRequest({ task_type: "create_task", user_request: "Create a task for my business." }), false);
 assert.equal(isSafeAdvisoryConversationRequest({ task_type: "brainstorm", user_request: "Send this email for my business." }), false);
 
+/* Owner-reported regression (2026-07-19): "capture 5 clients and put them
+   into our crm" was treated as casual chat, glued to a stale unrelated
+   thread, and answered with the old thread's content. Guard both layers:
+   the lane gate must block CRM/work intents (verbs like capture/add/
+   import/put, counted and plural objects, crm/pipeline nouns), and the
+   fallback must never parrot an unrelated thread at a business ask. */
+assert.equal(isSafeInstantConversationRequest({ task_type: "chat", user_request: "capture 5 clients and put them into our crm" }), false);
+assert.equal(isSafeInstantConversationRequest({ task_type: "chat", user_request: "capture five new leads for me" }), false);
+assert.equal(isSafeInstantConversationRequest({ task_type: "chat", user_request: "add 3 leads to the crm" }), false);
+assert.equal(isSafeInstantConversationRequest({ task_type: "chat", user_request: "import contacts into our pipeline" }), false);
+assert.equal(isSafeInstantConversationRequest({ task_type: "chat", user_request: "put them into our crm" }), false);
+assert.equal(isSafeInstantConversationRequest({ task_type: "chat", user_request: "track 12 prospects" }), false);
+assert.equal(isSafeInstantConversationRequest({ task_type: "chat", user_request: "book 2 clients for friday" }), false);
+assert.equal(isSafeInstantConversationRequest({ task_type: "chat", user_request: "add some humor to that" }), true);
+assert.equal(isSafeInstantConversationRequest({ task_type: "chat", user_request: "put that another way" }), true);
+assert.equal(isSafeInstantConversationRequest({ task_type: "chat", user_request: "track and field is fun right" }), true);
+
+const staleUnrelatedThread = [{ user: "how do I run a matrix terminal on my pc", assistant: "You can use desktop chat software that supports the Matrix protocol." }];
+const businessInQuickLane = buildInstantChatFallbackReply("capture 5 clients and put them into our crm", "PhantomForce", staleUnrelatedThread).output_text;
+assert.doesNotMatch(businessInQuickLane, /matrix|still with this thread/i, "stale thread must not be parroted at a business ask");
+assert.match(businessInQuickLane, /business work|operational brain/i, "business ask in the quick lane must get an honest lane refusal");
+assert.doesNotMatch(businessInQuickLane, /\b(?:captured|created|added|imported|done)\b/i, "the refusal must not imply the work happened");
+
+const tacoThreadForMismatch = [{ user: "best taco filling?", assistant: "Grilled fish with a crunchy slaw is hard to beat." }];
+const offTopicTimeout = buildInstantChatFallbackReply("keep going about skiing", "PhantomForce", tacoThreadForMismatch).output_text;
+assert.doesNotMatch(offTopicTimeout, /taco|grilled fish|still with this thread/i, "off-topic timeout must not echo the previous thread");
+
 console.log(`instant chat fallback checks passed (${turns.length + directPrompts.length} adversarial turns)`);
