@@ -7,7 +7,7 @@
       if (location.protocol === "http:" && location.hostname.indexOf("phantomforce.online") !== -1) {
         location.replace("https://" + location.host + location.pathname + location.search + location.hash);
       }
-      window.PHANTOM_BUILD = "phantom-live-20260719-64";
+      window.PHANTOM_BUILD = "phantom-live-20260719-65";
       if ("serviceWorker" in navigator) {
         navigator.serviceWorker
           .getRegistrations()
@@ -44,18 +44,18 @@
     </script>
     <title>PhantomForce — AI Operations Console</title>
     <meta name="description" content="PhantomForce — your AI business operating system." />
-    <meta name="phantom-build" content="phantom-live-20260719-64" />
+    <meta name="phantom-build" content="phantom-live-20260719-65" />
     <meta name="robots" content="noindex" />
-    <meta name="theme-color" content="#02060a" />
+    <meta name="theme-color" content="#f3f2fa" />
     <style>
       html,
       body {
         margin: 0;
         min-height: 100%;
-        background: #02060a;
-        color: #eafff4;
+        background: #f3f2fa;
+        color: #241f3f;
         font-family:
-          "Space Grotesk",
+          "Instrument Sans",
           system-ui,
           -apple-system,
           BlinkMacSystemFont,
@@ -71,9 +71,9 @@
         place-items: center;
         padding: 24px;
         background:
-          radial-gradient(circle at 50% 56%, rgba(0, 255, 181, 0.22), transparent 30%),
-          radial-gradient(circle at 50% 80%, rgba(14, 255, 127, 0.14), transparent 34%),
-          #02060a;
+          radial-gradient(circle at 50% 56%, rgba(91, 76, 255, 0.14), transparent 30%),
+          radial-gradient(circle at 50% 80%, rgba(180, 75, 240, 0.1), transparent 34%),
+          #f3f2fa;
       }
 
       .boot-fallback { align-content: center; justify-items: center; row-gap: 18px; }
@@ -84,24 +84,24 @@
         display: grid;
         place-items: center;
         border-radius: 50%;
-        border: 1px solid rgba(77, 255, 171, 0.32);
-        background: radial-gradient(circle at 50% 42%, rgba(18, 97, 60, 0.5), rgba(3, 19, 13, 0.92));
+        border: 1px solid rgba(91, 76, 255, 0.3);
+        background: radial-gradient(circle at 50% 42%, rgba(91, 76, 255, 0.16), rgba(255, 255, 255, 0.94));
         box-shadow:
-          0 0 44px rgba(65, 255, 161, 0.28),
-          inset 0 0 24px rgba(65, 255, 161, 0.1),
-          0 24px 80px rgba(0, 0, 0, 0.45);
+          0 0 44px rgba(91, 76, 255, 0.2),
+          inset 0 0 24px rgba(91, 76, 255, 0.08),
+          0 24px 80px rgba(36, 31, 63, 0.14);
         overflow: hidden;
       }
 
-      .boot-mark { width: 100%; height: 100%; display: block; }
+      .boot-mark { width: 100%; height: 100%; display: block; filter: hue-rotate(115deg) saturate(0.9); }
 
       .boot-word {
         margin: 0;
-        font: 500 12px "DM Mono", ui-monospace, monospace;
+        font: 500 12px "Spline Sans Mono", ui-monospace, monospace;
         letter-spacing: 0.46em;
         text-indent: 0.46em;
-        color: #a9cbb9;
-        text-shadow: 0 0 22px rgba(77, 255, 171, 0.35);
+        color: #5d5880;
+        text-shadow: none;
       }
 
       .gate:not([hidden]) ~ .boot-fallback,
@@ -116,23 +116,24 @@
       @keyframes bootAvatarPulse {
         50% {
           box-shadow:
-            0 0 18px rgba(65, 255, 161, 0.56),
-            inset 0 0 0 1px rgba(65, 255, 161, 0.48);
+            0 0 18px rgba(91, 76, 255, 0.5),
+            inset 0 0 0 1px rgba(91, 76, 255, 0.44);
         }
       }
 
 
     </style>
-    <link rel="icon" type="image/png" href="/app/assets/brand-phantom-favicon.png?v=phantom-live-20260719-64" />
+    <link rel="icon" type="image/png" href="/app/assets/brand-phantom-favicon.png?v=phantom-live-20260719-65" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/app/phantom.css?v=phantom-live-20260719-64" />
-    <link rel="stylesheet" href="/app/phantomplay.css?v=phantom-live-20260719-64" />
-    <link rel="stylesheet" href="/app/phantomplay-v2.css?v=phantom-live-20260719-64" />
-    <link rel="stylesheet" href="/app/phantomstore.css?v=phantom-live-20260719-64" />
-    <link rel="stylesheet" href="/app/competitor-intelligence.css?v=phantom-live-20260719-64" />
-    <link rel="stylesheet" href="/app/orggraph.css?v=phantom-live-20260719-64" />
+    <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700;12..96,800&family=Instrument+Sans:wght@400;500;600;700&family=Spline+Sans+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/app/phantom.css?v=phantom-live-20260719-65" />
+    <link rel="stylesheet" href="/app/phantomplay.css?v=phantom-live-20260719-65" />
+    <link rel="stylesheet" href="/app/phantomplay-v2.css?v=phantom-live-20260719-65" />
+    <link rel="stylesheet" href="/app/phantomstore.css?v=phantom-live-20260719-65" />
+    <link rel="stylesheet" href="/app/competitor-intelligence.css?v=phantom-live-20260719-65" />
+    <link rel="stylesheet" href="/app/orggraph.css?v=phantom-live-20260719-65" />
+    <link rel="stylesheet" href="/app/phantom-skin.css?v=phantom-live-20260719-65" />
   </head>
   <body>
     <div class="bg-grid" aria-hidden="true"></div>
@@ -165,7 +166,7 @@
     <div class="phantom" data-phantom hidden>
       <header class="mobile-admin-homebar" aria-label="Mobile admin home">
         <button class="mobile-admin-brand" data-mobile-home type="button" aria-label="Open Dashboard">
-          <img class="brand-ghost" src="/app/assets/brand-phantom.png?v=phantom-live-20260719-64" alt="" aria-hidden="true" />
+          <img class="brand-ghost" src="/app/assets/brand-phantom.png?v=phantom-live-20260719-65" alt="" aria-hidden="true" />
           <span>
             <b>PhantomForce</b>
             <i>Business</i>
@@ -188,7 +189,7 @@
       <!-- ---------- sidebar ---------- -->
       <aside class="sidebar" aria-label="Primary">
         <div class="side-brand">
-          <img class="brand-ghost" src="/app/assets/brand-phantom.png?v=phantom-live-20260719-64" alt="" aria-hidden="true" />
+          <img class="brand-ghost" src="/app/assets/brand-phantom.png?v=phantom-live-20260719-65" alt="" aria-hidden="true" />
           <span class="side-brand-text">
             <b>PHANTOMFORCE</b>
             <i>BUSINESS MANAGER</i>
@@ -280,7 +281,7 @@
                   <img
                     class="phantom-mode-pose"
                     data-mode-pose
-                    src="/app/assets/poses/chin.webp?v=phantom-live-20260719-64"
+                    src="/app/assets/poses/chin.webp?v=phantom-live-20260719-65"
                     alt="Phantom listening"
                     decoding="async"
                     fetchpriority="high"
@@ -355,28 +356,28 @@
           // floor puddle — the projector he lives over
           ctx.globalCompositeOperation = "lighter";
           const pg = ctx.createRadialGradient(0, 0.62 * s, 0, 0, 0.62 * s, 0.72 * s);
-          pg.addColorStop(0, "rgba(47,191,122,0.30)");
-          pg.addColorStop(1, "rgba(47,191,122,0)");
+          pg.addColorStop(0, "rgba(91,76,255,0.30)");
+          pg.addColorStop(1, "rgba(91,76,255,0)");
           ctx.fillStyle = pg;
           ctx.beginPath(); ctx.ellipse(0, 0.62 * s, 0.72 * s, 0.20 * s, 0, 0, Math.PI * 2); ctx.fill();
           // void body with mint rim glow
           ctx.globalCompositeOperation = "source-over";
           body();
-          ctx.fillStyle = "rgba(1,8,6,0.94)";
-          ctx.shadowColor = "rgba(90,255,180,0.85)";
+          ctx.fillStyle = "rgba(30,26,58,0.94)";
+          ctx.shadowColor = "rgba(122,110,255,0.85)";
           ctx.shadowBlur = s * 0.20;
           ctx.fill();
           ctx.shadowBlur = 0;
           ctx.globalCompositeOperation = "lighter";
           body();
-          ctx.strokeStyle = "rgba(120,255,200,0.35)";
+          ctx.strokeStyle = "rgba(140,130,255,0.5)";
           ctx.lineWidth = Math.max(1, s * 0.02);
           ctx.stroke();
           // spirit particles drifting through the body
           for (let i = 0; i < 44; i++) {
             const rx = Math.sin(i * 12.9898) * 0.56, ry = Math.sin(i * 78.233) * 0.6 - 0.34;
             const tw = 0.35 + 0.55 * Math.abs(Math.sin(t * 2.1 + i * 1.7));
-            ctx.fillStyle = `rgba(150,255,210,${0.16 + tw * 0.4})`;
+            ctx.fillStyle = `rgba(160,150,255,${0.16 + tw * 0.4})`;
             const d = 1 + tw * 1.6;
             ctx.fillRect(rx * s + Math.sin(t * 1.3 + i) * 2, ry * s + Math.cos(t * 1.1 + i * 2) * 2, d, d);
           }
@@ -384,9 +385,9 @@
           for (const side of [-1, 1]) {
             const ex = side * 0.24 * s, ey = -0.08 * s, ew = 0.15 * s, eh2 = 0.105 * s;
             const eg = ctx.createRadialGradient(ex, ey, 0, ex, ey, ew);
-            eg.addColorStop(0, "rgba(238,255,248,0.96)");
-            eg.addColorStop(0.6, "rgba(150,255,210,0.85)");
-            eg.addColorStop(1, "rgba(150,255,210,0.1)");
+            eg.addColorStop(0, "rgba(244,242,255,0.96)");
+            eg.addColorStop(0.6, "rgba(170,160,255,0.85)");
+            eg.addColorStop(1, "rgba(170,160,255,0.1)");
             ctx.fillStyle = eg;
             ctx.beginPath();
             ctx.moveTo(ex - ew, ey);
@@ -394,9 +395,9 @@
             ctx.quadraticCurveTo(ex, ey + eh2 * 1.15, ex - ew, ey);
             ctx.fill();
             ctx.globalCompositeOperation = "source-over";
-            ctx.fillStyle = "rgba(2,12,9,0.9)";
+            ctx.fillStyle = "rgba(24,20,48,0.9)";
             ctx.beginPath(); ctx.ellipse(ex, ey, eh2 * 0.55, eh2 * 0.65, 0, 0, Math.PI * 2); ctx.fill();
-            ctx.fillStyle = "rgba(240,255,250,0.9)";
+            ctx.fillStyle = "rgba(250,249,255,0.95)";
             ctx.beginPath(); ctx.arc(ex - eh2 * 0.18, ey - eh2 * 0.22, Math.max(0.7, eh2 * 0.14), 0, Math.PI * 2); ctx.fill();
             ctx.globalCompositeOperation = "lighter";
           }
@@ -474,6 +475,6 @@
     <!-- workspace overlays mount here, above the blurred console -->
     <div class="overlay-root" data-overlay-root></div>
 
-    <script type="module" src="/app/js/main.js?v=phantom-live-20260719-64"></script>
+    <script type="module" src="/app/js/main.js?v=phantom-live-20260719-65"></script>
   </body>
 </html>

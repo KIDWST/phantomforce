@@ -1,4 +1,4 @@
-import { freshEditState, freshTextStyle, paintEdit } from "./imagefilters.js?v=phantom-live-20260719-64";
+import { freshEditState, freshTextStyle, paintEdit } from "./imagefilters.js?v=phantom-live-20260719-65";
 
 let layerSequence = 0;
 
@@ -31,7 +31,7 @@ export function cloneImageEditState(source = {}, opts = {}) {
     strokes: Array.isArray(state.paint.strokes)
       ? state.paint.strokes.map((stroke) => ({
           mode: stroke.mode === "erase" ? "erase" : "paint",
-          color: stroke.color || "#41ffa1",
+          color: stroke.color || "#6649f7",
           size: Number(stroke.size || state.paint.size || 26),
           opacity: Number(stroke.opacity || state.paint.opacity || 84),
           points: Array.isArray(stroke.points) ? stroke.points.map((point) => ({ x: Number(point.x) || 0, y: Number(point.y) || 0 })) : [],
@@ -164,7 +164,7 @@ export function addTextLayer(composition, text = "Your headline") {
     rotation: 0,
     opacity: 1,
     blend: "source-over",
-    font: "Space Grotesk",
+    font: "Instrument Sans",
     fontSize: 8,
     color: "#ffffff",
     background: "#000000",
@@ -178,7 +178,7 @@ export function addTextLayer(composition, text = "Your headline") {
   return layer;
 }
 
-export function addColorLayer(composition, color = "#10251c") {
+export function addColorLayer(composition, color = "#141025") {
   const layer = {
     id: id("color"),
     type: "color",
@@ -306,7 +306,7 @@ function drawText(ctx, layer, width, height) {
   const boxW = layer.w * width;
   const boxH = layer.h * height;
   const fontSize = Math.max(12, width * (layer.fontSize / 100));
-  ctx.font = `${layer.bold ? 700 : 400} ${fontSize}px "${layer.font || "Space Grotesk"}", sans-serif`;
+  ctx.font = `${layer.bold ? 700 : 400} ${fontSize}px "${layer.font || "Instrument Sans"}", sans-serif`;
   ctx.textAlign = layer.align || "center";
   ctx.textBaseline = "middle";
   if ((layer.backgroundOpacity || 0) > 0) {
@@ -366,7 +366,7 @@ export function renderComposition(canvas, baseImage, editState, composition, lay
         drawImageFit(ctx, rendered, -boxW / 2, -boxH / 2, boxW, boxH, layer.fit || "contain");
       }
     } else if (layer.type === "color") {
-      ctx.fillStyle = layer.color || "#10251c";
+      ctx.fillStyle = layer.color || "#141025";
       roundedRect(ctx, -boxW / 2, -boxH / 2, boxW, boxH, Math.min(boxW, boxH) * clamp(layer.radius || 0, 0, 0.5));
       ctx.fill();
     } else if (layer.type === "text") drawText(ctx, layer, canvas.width, canvas.height);
@@ -521,7 +521,7 @@ export function drawCompositionOverlay(overlay, canvas, composition, guides = []
   selected.forEach((layer) => {
     const bounds = layerBounds(layer, canvas.width, canvas.height);
     ctx.save();
-    ctx.strokeStyle = "#41ffa1";
+    ctx.strokeStyle = "#6649f7";
     ctx.lineWidth = Math.max(2, canvas.width / 700);
     ctx.setLineDash(layer.locked ? [10, 8] : []);
     ctx.beginPath();
@@ -529,8 +529,8 @@ export function drawCompositionOverlay(overlay, canvas, composition, guides = []
     ctx.closePath();
     ctx.stroke();
     if (selected.length === 1 && !layer.locked) bounds.corners.forEach((point) => {
-      ctx.fillStyle = "#07130e";
-      ctx.strokeStyle = "#41ffa1";
+      ctx.fillStyle = "#090713";
+      ctx.strokeStyle = "#6649f7";
       ctx.lineWidth = Math.max(2, canvas.width / 700);
       ctx.beginPath();
       ctx.arc(point.x, point.y, Math.max(8, canvas.width / 140), 0, Math.PI * 2);
@@ -561,13 +561,13 @@ export function drawDetectedSubjectOverlay(overlay, canvas, composition, maskIma
   drawImageFit(ctx, maskImage, -boxW / 2, -boxH / 2, boxW, boxH, baseLayer.fit || "cover");
   ctx.restore();
   ctx.globalCompositeOperation = "source-in";
-  ctx.fillStyle = "rgba(65,255,161,.14)";
+  ctx.fillStyle = "rgba(102,73,247,.14)";
   ctx.fillRect(0, 0, mask.width, mask.height);
 
   const out = overlay.getContext("2d");
   out.save();
   out.globalCompositeOperation = "source-over";
-  out.filter = `drop-shadow(0 0 ${Math.max(2, canvas.width / 420)}px rgba(65,255,161,.96)) drop-shadow(0 0 ${Math.max(5, canvas.width / 150)}px rgba(65,255,161,.68))`;
+  out.filter = `drop-shadow(0 0 ${Math.max(2, canvas.width / 420)}px rgba(102,73,247,.96)) drop-shadow(0 0 ${Math.max(5, canvas.width / 150)}px rgba(102,73,247,.68))`;
   out.drawImage(mask, 0, 0);
   out.restore();
 }

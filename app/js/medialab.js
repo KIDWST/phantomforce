@@ -6,22 +6,22 @@
  * instead of sending people out to another product.
  */
 
-import { currentTenantId, ctx, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260719-64";
+import { currentTenantId, ctx, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260719-65";
 import {
   PLATFORMS, registerContentAsset, loadSocialAccounts, saveSocialAccounts, socialStatus,
   loadContentAssets, saveContentAssets, contentAssetDisplayUrl, hydrateContentAssetUrl,
   loadRecycledContentAssets, recycleContentAssets, restoreRecycledContentAssets, purgeRecycledContentAssets,
-} from "./contenthub.js?v=phantom-live-20260719-64";
-import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260719-64";
+} from "./contenthub.js?v=phantom-live-20260719-65";
+import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260719-65";
 import {
   addImageLayer, addTextLayer, alignSelectedLayers, applyLayerDragWithSnap, cloneImageEditState, compositionSnapshot, distributeSelectedLayers, duplicateLayer,
   canvasPoint, drawCompositionOverlay, freshComposition, hitTestLayer, hitTestResizeHandle,
   loadCompositionImages, moveLayerOrder, moveLayerToIndex, pushEditorSnapshot, removeSelectedLayers,
   renderComposition, restoreComposition, selectAllLayers, selectLayer, selectedLayers,
-} from "./content-editor.js?v=phantom-live-20260719-64";
-import { loadImageForEditing, exportCanvas, requestAiEdit, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260719-64";
-import { mountVideoEditor } from "./videocut.js?v=phantom-live-20260719-64";
-import { assetsAvailable, assetBlobUrl, listAssets, recordAssetUsage, saveToAssetCloud, listLocalAssets, refreshLocalAssets, localAssetBlobUrl } from "./orgs.js?v=phantom-live-20260719-64";
+} from "./content-editor.js?v=phantom-live-20260719-65";
+import { loadImageForEditing, exportCanvas, requestAiEdit, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260719-65";
+import { mountVideoEditor } from "./videocut.js?v=phantom-live-20260719-65";
+import { assetsAvailable, assetBlobUrl, listAssets, recordAssetUsage, saveToAssetCloud, listLocalAssets, refreshLocalAssets, localAssetBlobUrl } from "./orgs.js?v=phantom-live-20260719-65";
 
 const CFG_KEY = "pf.medialab.v1";
 const EDIT_INTENT_KEY = "pf.medialab.editIntent.v1";
@@ -53,7 +53,7 @@ export const DEFAULT_PROVIDERS = [
   },
   {
     id: "openai", name: "Image Engine", tagline: "Stills, video, and inline edits",
-    brand: "#10a37f", keyEnv: "OPENAI_API_KEY", enabled: false,
+    brand: "#3210a3", keyEnv: "OPENAI_API_KEY", enabled: false,
     modalities: ["image", "video", "edit"],
     models: { image: ["gpt-image-1"], video: ["sora-2"], edit: ["gpt-image-1"] },
   },
@@ -1065,17 +1065,17 @@ function drawWrappedText(ctx, text, x, y, maxWidth, lineHeight, maxLines = 4) {
    directional storyboard frame instead of generic brand-colored noise. ---- */
 const SCENE_PALETTES = [
   [/sunset|golden hour|dusk|dawn|sunrise|warm light|amber/i, ["#160802", "#5c1f06", "#c95d1a", "#ffb45e", "#ffe3b3"]],
-  [/ocean|sea|beach|underwater|lake|river|wave|water/i, ["#02121f", "#053655", "#0f6f8f", "#2fb3c9", "#a8ecf5"]],
-  [/forest|jungle|garden|moss|greenery/i, ["#04140a", "#0d3a1c", "#1f6b33", "#4faf5d", "#c0f0b0"]],
-  [/night|midnight|neon|cyber|synth|club|glow/i, ["#070313", "#1d0f3d", "#452a8a", "#8f5cff", "#4ef0ff"]],
+  [/ocean|sea|beach|underwater|lake|river|wave|water/i, ["#0e021f", "#240555", "#3c0f8f", "#612fc9", "#2b2649"]],
+  [/forest|jungle|garden|moss|greenery/i, ["#060414", "#130d3a", "#271f6b", "#564faf", "#2b2649"]],
+  [/night|midnight|neon|cyber|synth|club|glow/i, ["#070313", "#1d0f3d", "#452a8a", "#8f5cff", "#8855f8"]],
   [/fire|flame|lava|explosion|crimson/i, ["#160303", "#4d0e05", "#a3300e", "#ff7a2f", "#ffd0a0"]],
-  [/snow|winter|ice|arctic|frozen/i, ["#04101c", "#12374e", "#3d7ba0", "#9cc9e8", "#eef8ff"]],
+  [/snow|winter|ice|arctic|frozen/i, ["#0e041c", "#29124e", "#633da0", "#2b2649", "#2b2649"]],
   [/luxury|gold|premium|elegant|champagne/i, ["#0a0804", "#2a2008", "#6b5316", "#c9a227", "#f4e3a1"]],
-  [/city|urban|downtown|skyline|street|chicago|new york|architecture/i, ["#050a12", "#101d31", "#23405e", "#3f6f96", "#9fd0ef"]],
+  [/city|urban|downtown|skyline|street|chicago|new york|architecture/i, ["#050a12", "#101d31", "#3c235e", "#623f96", "#2b2649"]],
 ];
 function scenePalette(prompt) {
   for (const [re, pal] of SCENE_PALETTES) if (re.test(prompt)) return pal;
-  return ["#03130d", "#07301f", "#12613c", "#2fbf7a", "#b6ffd9"];   // brand emerald default
+  return ["#060313", "#0f0730", "#201261", "#482fbf", "#2b2649"];   // brand emerald default
 }
 function sceneKind(prompt) {
   const s = String(prompt).toLowerCase();
@@ -1197,8 +1197,8 @@ function previewAsset(req, i, context = {}) {
   g.fillStyle = vg; g.fillRect(0, 0, W, H);
   // video affordance
   if (req.modality === "video") {
-    g.fillStyle = "rgba(2,10,8,0.5)"; g.beginPath(); g.arc(W / 2, H / 2, 34, 0, TAU); g.fill();
-    g.fillStyle = "rgba(120,255,190,0.95)"; g.beginPath();
+    g.fillStyle = "rgba(4,2,10,0.5)"; g.beginPath(); g.arc(W / 2, H / 2, 34, 0, TAU); g.fill();
+    g.fillStyle = "rgba(43,38,73,0.95)"; g.beginPath();
     g.moveTo(W / 2 - 10, H / 2 - 15); g.lineTo(W / 2 + 18, H / 2); g.lineTo(W / 2 - 10, H / 2 + 15); g.closePath(); g.fill();
   }
   // spec plate: the fallback should prove what was requested instead of posing
@@ -1207,26 +1207,26 @@ function previewAsset(req, i, context = {}) {
   const plateH = Math.min(H - 36, Math.max(118, H * 0.28));
   const px = 16;
   const py = Math.max(16, H - plateH - 18);
-  g.fillStyle = "rgba(3, 12, 10, 0.72)";
+  g.fillStyle = "rgba(5,3,12, 0.72)";
   roundRect(g, px, py, plateW, plateH, 18);
   g.fill();
-  g.strokeStyle = "rgba(120,255,190,0.36)";
+  g.strokeStyle = "rgba(43,38,73,0.36)";
   g.lineWidth = 1;
   roundRect(g, px, py, plateW, plateH, 18);
   g.stroke();
-  g.fillStyle = "rgba(120,255,190,0.88)";
-  g.font = "800 10px 'DM Mono', monospace";
+  g.fillStyle = "rgba(43,38,73,0.88)";
+  g.font = "800 10px 'Spline Sans Mono', monospace";
   const plateTag = context.queued
     ? (context.via === "hermes" ? "QUEUED · FINAL REVIEW" : "RENDERING IN PHANTOMFORCE")
     : context.fallbackReason
       ? "OFFLINE SKETCH · " + String(context.fallbackReason).replace(/^provider_/i, "").replace(/_/g, " ").toUpperCase().slice(0, 26)
       : "PREVIEW";
   g.fillText(`${plateTag} · ${String(spec.aspect || "").toUpperCase()}`, px + 16, py + 25);
-  g.fillStyle = "rgba(236,255,246,0.95)";
-  g.font = "700 18px 'Space Grotesk', sans-serif";
+  g.fillStyle = "rgba(43,38,73,0.95)";
+  g.font = "700 18px 'Instrument Sans', sans-serif";
   drawWrappedText(g, spec.original_prompt || req.prompt || "Untitled media generation", px + 16, py + 52, plateW - 32, 22, 3);
-  g.fillStyle = "rgba(180,210,205,0.86)";
-  g.font = "600 11px 'DM Mono', monospace";
+  g.fillStyle = "rgba(43,38,73,0.86)";
+  g.font = "600 11px 'Spline Sans Mono', monospace";
   const tail = [
     spec.modality,
     spec.model ? laneLabel(spec.model) : "",
@@ -2688,7 +2688,7 @@ let mlEditLoadError = null;
 let mlEditHistory = [];
 let mlEditFuture = [];
 let mlPaintMode = "select";
-let mlPaintColor = "#41ffa1";
+let mlPaintColor = "#6649f7";
 let mlAssetCache = { tenant: "", loading: false, loaded: false, assets: [], error: "" };
 let mlAssetPicker = { search: "", source: "all" };
 let mlLayerClipboard = [];
@@ -2957,7 +2957,7 @@ function selectedLayerPanelHtml(esc) {
             <label class="ml-slider"><span>Type size <b data-layer-out="fontSize">${Math.round(active.fontSize || 8)}</b></span><input type="range" min="3" max="18" value="${Math.round(active.fontSize || 8)}" data-ml-layer-prop="fontSize" ${activeLocked ? "disabled" : ""}/></label>
             <div class="ml-layer-text-grid">
               <label class="ml-layer-field"><span>Font</span><select data-ml-layer-field="font" ${activeLocked ? "disabled" : ""}>
-                ${["Space Grotesk", "DM Sans", "Inter", "Georgia", "Arial Black"].map((font) => `<option value="${esc(font)}" ${(active.font || "Space Grotesk") === font ? "selected" : ""}>${esc(font)}</option>`).join("")}
+                ${["Instrument Sans", "DM Sans", "Inter", "Georgia", "Arial Black"].map((font) => `<option value="${esc(font)}" ${(active.font || "Instrument Sans") === font ? "selected" : ""}>${esc(font)}</option>`).join("")}
               </select></label>
               <label class="ml-layer-field"><span>Align</span><select data-ml-layer-field="align" ${activeLocked ? "disabled" : ""}>
                 ${["left", "center", "right"].map((align) => `<option value="${esc(align)}" ${(active.align || "center") === align ? "selected" : ""}>${esc(align)}</option>`).join("")}

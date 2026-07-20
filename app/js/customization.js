@@ -1,4 +1,4 @@
-import { currentTenantId, isLiveAdminHost, isLocalDevHost, session } from "./store.js?v=phantom-live-20260719-64";
+import { currentTenantId, isLiveAdminHost, isLocalDevHost, session } from "./store.js?v=phantom-live-20260719-65";
 
 let activeConfiguration = null;
 let activeEntitlements = null;
@@ -84,11 +84,11 @@ function defaultConfiguration(tenantId = currentTenantId()) {
       poweredByPhantomForce: true,
     },
     theme: {
-      primary: "#2eff9f",
-      secondary: "#42e9ff",
+      primary: "#5836f7",
+      secondary: "#814af7",
       accent: "#ffd166",
       radius: 14,
-      font: "Space Grotesk",
+      font: "Instrument Sans",
       colorMode: "dark",
       density: "comfortable",
       surfaceStyle: "terminal",
@@ -161,7 +161,7 @@ export function applyOrganizationCustomization(configuration = activeConfigurati
   root.style.setProperty("--neon-2", configuration.theme.secondary);
   root.style.setProperty("--warn", configuration.theme.accent);
   root.style.setProperty("--org-radius", `${configuration.theme.radius}px`);
-  root.style.setProperty("--org-font", `"${configuration.theme.font}", "Space Grotesk", sans-serif`);
+  root.style.setProperty("--org-font", `"${configuration.theme.font}", "Instrument Sans", sans-serif`);
   root.dataset.orgColorMode = configuration.theme.colorMode;
   root.dataset.orgDensity = configuration.theme.density;
   root.dataset.orgSurface = configuration.theme.surfaceStyle;
@@ -275,7 +275,7 @@ function renderStudio(el, state, opts) {
     ${draft.localFallback ? `<div class="cust-message">Workspace Studio is using local defaults while the backend reconnects. Modules are available now; publishing waits for the server.</div>` : ""}
     ${message ? `<div class="cust-message">${esc(message)}</div>` : ""}
     <section class="cust-ai">
-      <div><p class="cust-kicker">ASK PHANTOM</p><h3>Describe the workspace you want.</h3><p>Try “Change Leads to Athletes,” “Use #22ee88,” or “Make the assistant more professional.”</p></div>
+      <div><p class="cust-kicker">ASK PHANTOM</p><h3>Describe the workspace you want.</h3><p>Try “Change Leads to Athletes,” “Use #4422ee,” or “Make the assistant more professional.”</p></div>
       <form data-cust-ai-form><textarea name="message" rows="2" maxlength="1200" placeholder="Make this workspace feel like a football recruiting platform…"></textarea><button class="cust-primary" ${busy ? "disabled" : ""}>Create preview</button></form>
     </section>
     <div class="cust-grid">
@@ -284,7 +284,7 @@ function renderStudio(el, state, opts) {
           <label>Business name<input data-cust-field="brand.organizationName" value="${esc(draft.brand.organizationName)}" maxlength="40"/></label>
           <label>Workspace name<input data-cust-field="brand.workspaceName" value="${esc(draft.brand.workspaceName)}" maxlength="40"/></label>
           <label>Brand mode<select data-cust-field="brand.mode"><option value="standard" ${draft.brand.mode === "standard" ? "selected" : ""}>Standard</option><option value="co_branded" ${draft.brand.mode === "co_branded" ? "selected" : ""}>Co-branded</option><option value="white_label" ${draft.brand.mode === "white_label" ? "selected" : ""} ${whiteLabelAllowed ? "" : "disabled"}>White-label · enterprise</option><option value="internal_phantomforce" ${draft.brand.mode === "internal_phantomforce" ? "selected" : ""} ${activeEntitlements?.internalPhantomForce ? "" : "disabled"}>Internal PhantomForce</option></select></label>
-          <label>Font<select data-cust-field="theme.font">${["Space Grotesk", "Inter", "DM Sans", "IBM Plex Sans", "Source Sans 3"].map((font) => `<option ${font === draft.theme.font ? "selected" : ""}>${font}</option>`).join("")}</select></label>
+          <label>Font<select data-cust-field="theme.font">${["Instrument Sans", "Inter", "DM Sans", "IBM Plex Sans", "Source Sans 3"].map((font) => `<option ${font === draft.theme.font ? "selected" : ""}>${font}</option>`).join("")}</select></label>
           <label>Primary color<input type="color" data-cust-field="theme.primary" value="${esc(draft.theme.primary)}"/></label>
           <label>Accent color<input type="color" data-cust-field="theme.accent" value="${esc(draft.theme.accent)}"/></label>
           <label>Density<select data-cust-field="theme.density"><option value="comfortable" ${draft.theme.density === "comfortable" ? "selected" : ""}>Comfortable</option><option value="compact" ${draft.theme.density === "compact" ? "selected" : ""}>Compact</option></select></label>

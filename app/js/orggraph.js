@@ -5,19 +5,19 @@
    prefers-reduced-motion and body.freeze by drawing the settled layout
    instantly. No fabricated data: gaps and disconnection reasons come straight
    from the server payload. */
-import { currentTenantId, session } from "./store.js?v=phantom-live-20260719-64";
+import { currentTenantId, session } from "./store.js?v=phantom-live-20260719-65";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (ch) => (
   { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]
 ));
 
-/* Validated on #020806 (dataviz six-checks): chroma + contrast PASS, worst
+/* Validated on #030208 (dataviz six-checks): chroma + contrast PASS, worst
    adjacent CVD pair 9.5 ΔE — floor band, legal because every node carries a
    direct text label and the legend/details panel restate identity in text.
    "system" is deliberately neutral slate: infrastructure, not identity. */
 const TYPE_COLORS = {
-  organization: "#41ffa1",
-  "business-profile": "#2fd0c0",
+  organization: "#6649f7",
+  "business-profile": "#5a2fd0",
   website: "#3b82f6",
   asset: "#9ac232",
   competitor: "#ff7a8f",
@@ -26,11 +26,11 @@ const TYPE_COLORS = {
   insight: "#e04fd0",
   dossier: "#ff8fd2",
   memory: "#c4a5ff",
-  "brain-event": "#3aa8c9",
-  "agent-run": "#74e4f7",
-  system: "#94a9c4",
+  "brain-event": "#6c3ac9",
+  "agent-run": "#9f74f7",
+  system: "#a994c4",
 };
-const FALLBACK_COLOR = "#94a9c4";
+const FALLBACK_COLOR = "#a994c4";
 const AMBER = "#ffd166";
 const nodeColor = (type) => TYPE_COLORS[type] || FALLBACK_COLOR;
 const nodeRadius = (node) => (node.type === "organization" ? 24
@@ -298,8 +298,8 @@ function mountCanvas(stage, graph, cached) {
       const a = toScreen(edge.a); const b = toScreen(edge.b);
       const lit = active && (edge.a === active || edge.b === active);
       const faded = filtering && (!passesFilter(edge.a) || !passesFilter(edge.b));
-      ctx.strokeStyle = faded ? "rgba(65,255,161,.05)"
-        : lit ? "rgba(65,255,161,.85)" : active ? "rgba(65,255,161,.10)" : "rgba(65,255,161,.26)";
+      ctx.strokeStyle = faded ? "rgba(102,73,247,.05)"
+        : lit ? "rgba(102,73,247,.85)" : active ? "rgba(102,73,247,.10)" : "rgba(102,73,247,.26)";
       ctx.lineWidth = lit ? 1.8 : 1;
       ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
     }
@@ -317,7 +317,7 @@ function mountCanvas(stage, graph, cached) {
       ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2); ctx.fill();
       ctx.shadowBlur = 0;
       if (node === selected) {
-        ctx.strokeStyle = "#effff6"; ctx.lineWidth = 1.6;
+        ctx.strokeStyle = "#2b2649"; ctx.lineWidth = 1.6;
         ctx.beginPath(); ctx.arc(p.x, p.y, r + 2.5, 0, Math.PI * 2); ctx.stroke();
       }
       if (node.disconnected) {
@@ -326,10 +326,10 @@ function mountCanvas(stage, graph, cached) {
         ctx.beginPath(); ctx.arc(p.x, p.y, r + 4.5, 0, Math.PI * 2); ctx.stroke();
         ctx.setLineDash([]);
       }
-      ctx.font = node.type === "organization" ? '700 11px "DM Mono", monospace' : '10px "DM Mono", monospace';
+      ctx.font = node.type === "organization" ? '700 11px "Spline Sans Mono", monospace' : '10px "Spline Sans Mono", monospace';
       /* While filtering, matching nodes keep their labels at full brightness. */
-      ctx.fillStyle = filtering && !passes ? "rgba(143,181,162,.4)"
-        : isActive || filtering ? "#effff6" : dimmed ? "rgba(143,181,162,.5)" : "#8fb5a2";
+      ctx.fillStyle = filtering && !passes ? "rgba(149,143,181,.4)"
+        : isActive || filtering ? "#2b2649" : dimmed ? "rgba(149,143,181,.5)" : "#958fb5";
       ctx.fillText(truncate(node.label), p.x, p.y + r + (node.disconnected ? 8 : 5));
       ctx.globalAlpha = 1;
     }

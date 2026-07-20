@@ -51,3 +51,9 @@ Sidebar rule:
 Cache rule:
 - Any edit to `app/index.html`, `app/phantom.css`, or `app/js/*.js` must bump the `phantom-live-YYYYMMDD-N` build id everywhere.
 - Use `npm run ship:live-admin -- --commit "message"` so the bump, commit, push, service sync, and public proof happen together. The owner does not want local-only changes.
+
+Branch-sprawl check (do this at the start of any session, it's cheap):
+- This checkout's fetch refspec was widened on 2026-07-20 to `+refs/heads/*:refs/remotes/origin/*` (it used to fetch only `main`, which is a real reason finished work went unnoticed for days). A plain `git fetch origin` now shows every branch.
+- Run `git log --oneline origin/main..origin/<branch>` on branches that sound relevant to what you're about to build — if real, tested work is already sitting there, port or merge it instead of re-doing it from scratch (this exact thing happened twice with a games catalog and a CRM-routing fix).
+- Multiple agent sessions may be editing this exact checkout concurrently — that's expected, not a conflict. If `git status` is dirty from someone else's WIP, don't stash or discard it; wait for it to commit, or scope your own `git add`/`git commit` to only the files you touched.
+- `ops\admin-live\Sync-AdminMain.ps1` refuses to restart the live server while tracked files are dirty (safety, not a bug) — an independent hidden watcher retries it every ~60s, so a clean commit anywhere in this checkout self-heals the deploy within a minute without anyone needing to run it by hand.

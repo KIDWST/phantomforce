@@ -205,7 +205,7 @@ function drawFaceFeatures(ctx2, s, F) {
     }
     if (eh > 0.012 && eyeHappy < 0.9) {
       const eg = ctx2.createRadialGradient(0, 0, 0, 0, 0, ew);
-      eg.addColorStop(0, `rgba(238,255,248,${(0.95 + pulse * 0.05) * (1 - eyeHappy)})`);
+      eg.addColorStop(0, `rgba(43,38,73,${(0.95 + pulse * 0.05) * (1 - eyeHappy)})`);
       eg.addColorStop(0.55, A(0.9 * (1 - eyeHappy)));
       eg.addColorStop(1, A(0.15 * (1 - eyeHappy)));
       ctx2.fillStyle = eg;
@@ -217,9 +217,9 @@ function drawFaceFeatures(ctx2, s, F) {
       const pxp = Math.max(-1, Math.min(1, lookX)) * ew * 0.4;
       const pyp = Math.max(-1, Math.min(1, lookY)) * eh * 0.5 + E.browSad * eh * 0.3;
       ctx2.shadowBlur = 0;
-      ctx2.fillStyle = "rgba(2,12,9,0.9)";
+      ctx2.fillStyle = "rgba(4,2,12,0.9)";
       ctx2.beginPath(); ctx2.ellipse(pxp, pyp, eh * 0.55, eh * 0.65, 0, 0, TAU); ctx2.fill();
-      ctx2.fillStyle = "rgba(240,255,250,0.9)";
+      ctx2.fillStyle = "rgba(43,38,73,0.9)";
       ctx2.beginPath(); ctx2.arc(pxp - eh * 0.18, pyp - eh * 0.22, Math.max(0.6, eh * 0.13), 0, TAU); ctx2.fill();
       ctx2.shadowColor = A(0.9);
       ctx2.shadowBlur = 10 + pulse * 8;
@@ -234,7 +234,7 @@ function drawFaceFeatures(ctx2, s, F) {
   if (E.browSad > 0.55) {
     const tp = (t * 0.45) % 1;
     const ty = 0.06 * s + tp * 0.24 * s;
-    ctx2.fillStyle = `rgba(190,255,235,${(1 - tp) * 0.85 * (E.browSad - 0.55) * 2.2})`;
+    ctx2.fillStyle = `rgba(43,38,73,${(1 - tp) * 0.85 * (E.browSad - 0.55) * 2.2})`;
     ctx2.beginPath();
     ctx2.ellipse(-0.27 * s, ty, s * 0.02, s * 0.03, 0, 0, TAU);
     ctx2.fill();
@@ -242,7 +242,7 @@ function drawFaceFeatures(ctx2, s, F) {
 
   if (wink > 0.5) {
     const wx = 0.40 * s, wy = -0.16 * s, wl = s * 0.09 * (wink - 0.5) * 2;
-    ctx2.strokeStyle = `rgba(240,255,250,${(wink - 0.5) * 2})`;
+    ctx2.strokeStyle = `rgba(43,38,73,${(wink - 0.5) * 2})`;
     ctx2.lineWidth = 1.5;
     ctx2.beginPath();
     ctx2.moveTo(wx - wl, wy); ctx2.lineTo(wx + wl, wy);
@@ -268,13 +268,13 @@ function drawFaceFeatures(ctx2, s, F) {
     ctx2.quadraticCurveTo(0, topC, mw, cornR);
     ctx2.quadraticCurveTo(0, botC, -mw, cornL);
     ctx2.closePath();
-    ctx2.fillStyle = "rgba(1,8,6,0.88)";
+    ctx2.fillStyle = "rgba(3,1,8,0.88)";
     ctx2.fill();
     ctx2.strokeStyle = A(0.92);
     ctx2.lineWidth = Math.max(1.2, s * 0.03);
     ctx2.stroke();
     if (E.curve > 0.3) {
-      ctx2.fillStyle = "rgba(240,255,250,0.92)";
+      ctx2.fillStyle = "rgba(43,38,73,0.92)";
       for (const fx of [-mw * 0.42, mw * 0.34]) {
         const fy = topC * 0.5;
         ctx2.beginPath();
@@ -786,7 +786,7 @@ export function createPhantomCharacter({ small = false, preload = [], settled = 
       const fly = FACE_Y * scale + (cur.flame.y - cur.face.cy) * cur.h * k;
       const fr = scale * (0.11 + Math.sin(t * 6.4) * 0.02 + pulse * 0.04) * flameHold * poseBlend;
       const g = ctx2.createRadialGradient(flx, fly, 0, flx, fly, fr * 3);
-      g.addColorStop(0, `rgba(235,255,246,${0.45 * flameHold * poseBlend})`);
+      g.addColorStop(0, `rgba(43,38,73,${0.45 * flameHold * poseBlend})`);
       g.addColorStop(0.4, A(0.28 * flameHold * poseBlend));
       g.addColorStop(1, A(0));
       ctx2.fillStyle = g;
@@ -942,9 +942,9 @@ export function createPhantomCharacter({ small = false, preload = [], settled = 
     ctx2.translate(X(VOID_CX + 0.05 * sinR), Y(VOID_CY - E.drop * 0.5));
     ctx2.rotate(E.tilt * 0.5);
     const vg = ctx2.createRadialGradient(0, 0, 0, 0, 0, VOID_RX * scale * breath);
-    vg.addColorStop(0, "rgba(1,7,5,0.92)");
-    vg.addColorStop(0.75, "rgba(1,7,5,0.85)");
-    vg.addColorStop(1, "rgba(1,7,5,0)");
+    vg.addColorStop(0, "rgba(2,1,7,0.92)");
+    vg.addColorStop(0.75, "rgba(2,1,7,0.85)");
+    vg.addColorStop(1, "rgba(2,1,7,0)");
     ctx2.fillStyle = vg;
     ctx2.beginPath();
     ctx2.ellipse(0, 0, VOID_RX * 0.97 * scale * breath * S.bodySx, VOID_RY * 0.97 * scale * breath * S.bodySy, 0, 0, TAU);
@@ -989,7 +989,7 @@ export function createPhantomCharacter({ small = false, preload = [], settled = 
         ctx2.shadowColor = A(0.85);
         ctx2.shadowBlur = 10 + pulse * 6;
         const hg = ctx2.createRadialGradient(0, 0, 0, 0, 0, hs * 2.4);
-        hg.addColorStop(0, `rgba(220,255,240,${0.9 * faceAlpha})`);
+        hg.addColorStop(0, `rgba(43,38,73,${0.9 * faceAlpha})`);
         hg.addColorStop(1, A(0.5 * faceAlpha));
         ctx2.fillStyle = hg;
         ctx2.strokeStyle = hg;
@@ -1025,7 +1025,7 @@ export function createPhantomCharacter({ small = false, preload = [], settled = 
         for (let l = 3; l >= 0; l--) {
           const lr = fr * (1 + l * 0.55);
           const g = ctx2.createRadialGradient(fx, fy - l * fr * 0.35, 0, fx, fy - l * fr * 0.35, lr);
-          g.addColorStop(0, l === 0 ? `rgba(235,255,246,${0.9 * flameHold * faceAlpha})` : A(0.28 * flameHold * faceAlpha / l));
+          g.addColorStop(0, l === 0 ? `rgba(43,38,73,${0.9 * flameHold * faceAlpha})` : A(0.28 * flameHold * faceAlpha / l));
           g.addColorStop(1, A(0));
           ctx2.fillStyle = g;
           ctx2.beginPath(); ctx2.arc(fx, fy - l * fr * 0.35, lr, 0, TAU); ctx2.fill();
@@ -1048,7 +1048,7 @@ export function createPhantomCharacter({ small = false, preload = [], settled = 
       ctx2.translate(ax, ay);
       ctx2.rotate(Math.sin(t * 0.9) * 0.06);
       const ag = ctx2.createLinearGradient(0, -ar, 0, ar);
-      ag.addColorStop(0, `rgba(235,255,246,${0.92 * faceAlpha})`);
+      ag.addColorStop(0, `rgba(43,38,73,${0.92 * faceAlpha})`);
       ag.addColorStop(1, A(0.65 * faceAlpha));
       ctx2.fillStyle = ag;
       ctx2.shadowColor = A(0.9);

@@ -5,7 +5,7 @@
    the field. Live stats from the store; every node opens its workspace.
    Two layouts: wide wave spine and phone snake. Reduced motion → static. */
 
-import { store, visible, moneyView, fmtMoney } from "./store.js?v=phantom-live-20260719-64";
+import { store, visible, moneyView, fmtMoney } from "./store.js?v=phantom-live-20260719-65";
 
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const NARROW_AT = 620;
@@ -170,9 +170,9 @@ export function renderFlowMap() {
     <svg viewBox="${L.viewBox}" role="group" aria-label="Live map of Phantom systems">
       <defs>
         <radialGradient id="flowNodeFill" cx="50%" cy="36%" r="72%">
-          <stop offset="0%" stop-color="rgba(150,255,205,0.30)"/>
-          <stop offset="55%" stop-color="rgba(10,42,28,0.94)"/>
-          <stop offset="100%" stop-color="rgba(4,14,10,0.98)"/>
+          <stop offset="0%" stop-color="rgba(43,38,73,0.30)"/>
+          <stop offset="55%" stop-color="rgba(16,10,42,0.94)"/>
+          <stop offset="100%" stop-color="rgba(6,4,14,0.98)"/>
         </radialGradient>
       </defs>
       ${sparkSvg(L.viewBox)}

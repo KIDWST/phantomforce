@@ -7,8 +7,8 @@
 
 export function freshTextStyle() {
   return {
-    font: "Space Grotesk", size: 6, bold: true, italic: false,
-    color: "#eafff4", align: "center", x: 50, y: 90, width: 86, opacity: 100,
+    font: "Instrument Sans", size: 6, bold: true, italic: false,
+    color: "#2b2649", align: "center", x: 50, y: 90, width: 86, opacity: 100,
     outline: true, outlineColor: "#000000", outlineWidth: 14, shadow: true,
     preset: "custom",
   };
@@ -25,7 +25,7 @@ export function freshEditState() {
 
 /* System/app fonts only — nothing that can silently fail to load. Brand Kit
    fonts aren't a real feature yet; when that lands, its fonts append here. */
-export const TEXT_FONTS = ["Space Grotesk", "DM Mono", "Arial", "Georgia", "Impact", "Courier New"];
+export const TEXT_FONTS = ["Instrument Sans", "Spline Sans Mono", "Arial", "Georgia", "Impact", "Courier New"];
 
 /* Layout presets: position, size, and typography only — no background
    shapes, so nothing here can misrepresent itself as a full graphic template. */
@@ -34,11 +34,11 @@ export const TEXT_PRESETS = {
   "lower-third": { size: 5, x: 8, y: 88, width: 60, align: "left", bold: true, italic: false, color: "#ffffff", outline: false, outlineWidth: 0, shadow: true },
   "top-banner": { size: 6, x: 50, y: 10, width: 90, align: "center", bold: true, italic: false, color: "#ffffff", outline: true, outlineWidth: 12, shadow: false },
   "center-headline": { size: 10, x: 50, y: 50, width: 80, align: "center", bold: true, italic: false, color: "#ffffff", outline: true, outlineWidth: 16, shadow: true },
-  "sale-badge": { size: 8, x: 82, y: 18, width: 32, align: "center", bold: true, italic: false, color: "#02140b", outline: false, outlineWidth: 0, shadow: false },
-  "quote-card": { size: 5.5, x: 50, y: 50, width: 74, align: "center", bold: false, italic: true, color: "#eafff4", outline: false, outlineWidth: 0, shadow: false },
+  "sale-badge": { size: 8, x: 82, y: 18, width: 32, align: "center", bold: true, italic: false, color: "#050214", outline: false, outlineWidth: 0, shadow: false },
+  "quote-card": { size: 5.5, x: 50, y: 50, width: 74, align: "center", bold: false, italic: true, color: "#2b2649", outline: false, outlineWidth: 0, shadow: false },
   "sports-graphic": { size: 9, x: 50, y: 82, width: 92, align: "center", bold: true, italic: true, color: "#ffe14d", outline: true, outlineWidth: 20, shadow: true },
   "product-label": { size: 4.5, x: 50, y: 92, width: 70, align: "center", bold: true, italic: false, color: "#ffffff", outline: false, outlineWidth: 0, shadow: true },
-  "clean-caption": { size: 4, x: 50, y: 94, width: 80, align: "center", bold: false, italic: false, color: "#eafff4", outline: false, outlineWidth: 0, shadow: true },
+  "clean-caption": { size: 4, x: 50, y: 94, width: 80, align: "center", bold: false, italic: false, color: "#2b2649", outline: false, outlineWidth: 0, shadow: true },
 };
 export function applyTextPreset(state, presetId) {
   const preset = TEXT_PRESETS[presetId];
@@ -314,8 +314,8 @@ function drawTextOverlay(g, canvas, state) {
   const fs = Math.max(12, canvas.width * (st.size / 100));
   const weight = st.bold ? "700" : "400";
   const style = st.italic ? "italic" : "normal";
-  const fontStack = st.font === "Space Grotesk" ? '"Space Grotesk", sans-serif'
-    : st.font === "DM Mono" ? '"DM Mono", monospace'
+  const fontStack = st.font === "Instrument Sans" ? '"Instrument Sans", sans-serif'
+    : st.font === "Spline Sans Mono" ? '"Spline Sans Mono", monospace'
     : `"${st.font}", sans-serif`;
   g.font = `${style} ${weight} ${fs}px ${fontStack}`;
   g.textAlign = st.align === "left" ? "left" : st.align === "right" ? "right" : "center";
@@ -346,7 +346,7 @@ function drawTextOverlay(g, canvas, state) {
       g.lineJoin = "round";
       g.strokeText(line, anchorX, y);
     }
-    g.fillStyle = st.color || "#eafff4";
+    g.fillStyle = st.color || "#2b2649";
     g.fillText(line, anchorX, y);
   });
   g.restore();

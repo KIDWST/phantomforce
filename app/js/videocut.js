@@ -565,20 +565,20 @@ export function mountVideoEditor(host, opts = {}) {
   }
   function drawEmptyFrame() {
     const W = cv.width, H = cv.height;
-    ctx.fillStyle = "#050b09";
+    ctx.fillStyle = "#06050b";
     ctx.fillRect(0, 0, W, H);
-    ctx.fillStyle = "rgba(111,154,131,0.75)";
-    ctx.font = `500 ${Math.max(11, Math.round(H * 0.035))}px "DM Mono", monospace`;
+    ctx.fillStyle = "rgba(118,111,154,0.75)";
+    ctx.font = `500 ${Math.max(11, Math.round(H * 0.035))}px "Spline Sans Mono", monospace`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText("PHANTOMCUT — ADD MEDIA TO BEGIN", W / 2, H / 2);
   }
   function drawPlaceholder(clip) {
     const W = cv.width, H = cv.height;
-    ctx.fillStyle = "#050b09";
+    ctx.fillStyle = "#06050b";
     ctx.fillRect(0, 0, W, H);
-    ctx.fillStyle = clip.ready === "error" ? "rgba(255,77,99,0.85)" : "rgba(111,154,131,0.85)";
-    ctx.font = `500 ${Math.max(11, Math.round(H * 0.033))}px "DM Mono", monospace`;
+    ctx.fillStyle = clip.ready === "error" ? "rgba(255,77,99,0.85)" : "rgba(118,111,154,0.85)";
+    ctx.font = `500 ${Math.max(11, Math.round(H * 0.033))}px "Spline Sans Mono", monospace`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(clip.ready === "error" ? "MEDIA FAILED TO LOAD" : "LOADING MEDIA…", W / 2, H / 2);
@@ -589,7 +589,7 @@ export function mountVideoEditor(host, opts = {}) {
     const W = cv.width, H = cv.height;
     ctx.save();
     ctx.globalAlpha = clamp(alpha, 0, 1);
-    ctx.font = `600 ${Math.round(H * 0.055)}px "Space Grotesk", system-ui, sans-serif`;
+    ctx.font = `600 ${Math.round(H * 0.055)}px "Instrument Sans", system-ui, sans-serif`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.shadowColor = "rgba(0,0,0,0.75)";

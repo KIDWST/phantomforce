@@ -58,8 +58,8 @@ export function mountAmbient() {
       const glow = 0.5 + 0.5 * Math.sin(t * m.tw + m.phase);
       const a = (m.ember ? 0.32 : 0.15) * (0.35 + 0.65 * glow);
       ctx.beginPath();
-      ctx.fillStyle = m.cyan ? `rgba(30,240,255,${a.toFixed(3)})` : `rgba(65,255,161,${a.toFixed(3)})`;
-      ctx.shadowColor = m.cyan ? "rgba(30,240,255,0.7)" : "rgba(65,255,161,0.7)";
+      ctx.fillStyle = m.cyan ? `rgba(103,39,246,${a.toFixed(3)})` : `rgba(102,73,247,${a.toFixed(3)})`;
+      ctx.shadowColor = m.cyan ? "rgba(103,39,246,0.7)" : "rgba(102,73,247,0.7)";
       ctx.shadowBlur = m.ember ? 10 : 5;
       ctx.arc(x, m.y, m.r * (m.ember ? 1.5 : 1), 0, Math.PI * 2);
       ctx.fill();

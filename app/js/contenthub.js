@@ -9,20 +9,20 @@ import {
   freshEditState, applyFilterPreset, renderBaseFrame,
   addBokehSpot, removeBokehSpotNear, removeBokehSpotAt, nearestBokehSpot, moveBokehSpot, resizeBokehSpot,
   setBokehMask, freshTextStyle, TEXT_FONTS, TEXT_PRESETS, applyTextPreset,
-} from "./imagefilters.js?v=phantom-live-20260719-64";
-import { getRembgStatus, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260719-64";
-import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260719-64";
-import { parseAnalyticsReport } from "./social-analytics.js?v=phantom-live-20260719-64";
+} from "./imagefilters.js?v=phantom-live-20260719-65";
+import { getRembgStatus, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260719-65";
+import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260719-65";
+import { parseAnalyticsReport } from "./social-analytics.js?v=phantom-live-20260719-65";
 import {
   freshComposition, compositionSnapshot, restoreComposition, addImageLayer, replaceImageLayerSource, addTextLayer, addColorLayer,
   duplicateLayer, removeSelectedLayers, moveLayerOrder, selectedLayers, selectLayer, selectAllLayers,
   loadCompositionImages, renderComposition, drawCompositionOverlay, drawDetectedSubjectOverlay, canvasPoint, hitTestLayer, hitTestResizeHandle,
   setCanvasPreset, zoomComposition, canvasPointToLayer, layerPointToCanvas,
   imageEditSnapshot, restoreImageEditSnapshot, pushEditorSnapshot,
-} from "./content-editor.js?v=phantom-live-20260719-64";
+} from "./content-editor.js?v=phantom-live-20260719-65";
 import {
   currentTenantId, currentWs, ctx, session, store, visible, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem, wsName,
-} from "./store.js?v=phantom-live-20260719-64";
+} from "./store.js?v=phantom-live-20260719-65";
 
 const CH_KEY = "pf.contenthub.v2";
 const CH_REMOVED_KEY = "pf.contenthub.removed.v1";
@@ -46,9 +46,9 @@ export const PLATFORMS = [
   { id: "instagram", name: "Instagram", color: "#e1306c", handle: "officialchicagoshots", types: ["image", "carousel", "reel", "story"] },
   { id: "tiktok",    name: "TikTok",    color: "#ff2b55", handle: "officialchicagoshots", types: ["short", "video"] },
   { id: "youtube",   name: "YouTube",   color: "#ff3b30", handle: "officialchicagoshots", types: ["video", "short"] },
-  { id: "facebook",  name: "Facebook",  color: "#1877f2", handle: "officialchicagoshots", types: ["image", "video", "text", "carousel"] },
-  { id: "x",         name: "X",         color: "#9fb0bd", handle: "officialchicagoshots", types: ["text", "image", "video"] },
-  { id: "linkedin",  name: "LinkedIn",  color: "#3b9dff", handle: "officialchicagoshots", types: ["text", "image", "article"] },
+  { id: "facebook",  name: "Facebook",  color: "#7618f2", handle: "officialchicagoshots", types: ["image", "video", "text", "carousel"] },
+  { id: "x",         name: "X",         color: "#ab9fbd", handle: "officialchicagoshots", types: ["text", "image", "video"] },
+  { id: "linkedin",  name: "LinkedIn",  color: "#8e43f7", handle: "officialchicagoshots", types: ["text", "image", "article"] },
   { id: "pinterest", name: "Pinterest", color: "#e60023", handle: "officialchicagoshots", types: ["image", "carousel"] },
 ];
 export const TYPES = { image: "Image", carousel: "Carousel", reel: "Reel", short: "Short", video: "Video", story: "Story", text: "Post", article: "Article" };
@@ -769,14 +769,14 @@ function thumb(post) {
   return `background:
     radial-gradient(80% 90% at 25% 15%, hsla(${post.hue},70%,55%,0.5), transparent 60%),
     radial-gradient(70% 80% at 85% 90%, ${c}55, transparent 60%),
-    linear-gradient(150deg, #08120e, #050b09);`;
+    linear-gradient(150deg, #0a0812, #06050b);`;
 }
 function assetBg(asset) {
   const hue = Number(asset.hue || 155);
   return `background:
     radial-gradient(80% 90% at 25% 10%, hsla(${hue},80%,58%,0.46), transparent 62%),
-    radial-gradient(70% 80% at 86% 90%, rgba(65,255,161,.28), transparent 60%),
-    linear-gradient(145deg, #08120e, #020807);`;
+    radial-gradient(70% 80% at 86% 90%, rgba(102,73,247,.28), transparent 60%),
+    linear-gradient(145deg, #0a0812, #040208);`;
 }
 function formatBytes(bytes) {
   if (!bytes) return "0 MB";
@@ -1910,11 +1910,11 @@ function layerPropertySlider(label, key, value, min, max, step = 1) {
 }
 
 const COLOR_LAYER_PALETTE = [
-  "#000000", "#ffffff", "#111827", "#334155", "#64748b", "#e2e8f0",
-  "#ef4444", "#f97316", "#f59e0b", "#eab308", "#84cc16", "#22c55e",
-  "#10b981", "#14b8a6", "#06b6d4", "#0ea5e9", "#3b82f6", "#6366f1",
+  "#000000", "#ffffff", "#111827", "#334155", "#64748b", "#2b2649",
+  "#ef4444", "#f97316", "#f59e0b", "#eab308", "#162acc", "#3822c5",
+  "#3310b9", "#3f14b8", "#4b09d1", "#5f0ee9", "#3b82f6", "#6366f1",
   "#8b5cf6", "#a855f7", "#d946ef", "#ec4899", "#f43f5e", "#7f1d1d",
-  "#78350f", "#14532d", "#134e4a", "#164e63", "#1e3a8a", "#4c1d95"
+  "#78350f", "#1d1453", "#23134e", "#321663", "#1e3a8a", "#4c1d95"
 ];
 
 function selectedLayerInspector(lb, esc) {
@@ -1947,7 +1947,7 @@ function selectedLayerInspector(lb, esc) {
       ${layerPropertySlider("Box fill", "backgroundOpacity", Math.round((layer.backgroundOpacity || 0) * 100), 0, 100)}
       <div class="ch-lb-chips"><button type="button" data-ch-layer-toggle="bold" class="${layer.bold ? "is-on" : ""}"><b>B</b></button><button type="button" data-ch-layer-toggle="shadow" class="${layer.shadow ? "is-on" : ""}">Shadow</button></div>`;
   } else if (layer.type === "color") {
-    const current = layer.color || "#10251c";
+    const current = layer.color || "#141025";
     typeFields = `
       <label class="ch-layer-field"><span>Fill color</span><input type="color" data-ch-layer-field="color" value="${esc(current)}"/></label>
       <div class="ch-color-palette" aria-label="Color palette">
@@ -3648,10 +3648,10 @@ function analyticsCoverage(feedRows = []) {
   const stops = feedRows.map((row, index) => {
     const start = (index / count * 100).toFixed(2);
     const end = ((index + 1) / count * 100).toFixed(2);
-    return `${row.feed ? row.account.color : "rgba(135,165,151,.13)"} ${start}% ${end}%`;
+    return `${row.feed ? row.account.color : "rgba(140,135,165,.13)"} ${start}% ${end}%`;
   }).join(",");
   return `<div class="an-coverage">
-    <div class="an-coverage-ring" style="background:conic-gradient(${stops || "rgba(135,165,151,.13) 0 100%"})"><span><b>${live}/${feedRows.length}</b><i>reporting</i></span></div>
+    <div class="an-coverage-ring" style="background:conic-gradient(${stops || "rgba(140,135,165,.13) 0 100%"})"><span><b>${live}/${feedRows.length}</b><i>reporting</i></span></div>
     <div class="an-coverage-copy"><b>Channel coverage</b><p>${live ? `${live} verified data source${live === 1 ? "" : "s"} active.` : "Connect your channels to activate reporting."}</p></div>
   </div>`;
 }

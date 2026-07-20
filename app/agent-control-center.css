@@ -2,7 +2,7 @@
   position: fixed;
   inset: auto 22px 22px auto;
   z-index: 70;
-  font-family: "Space Grotesk", system-ui, sans-serif;
+  font-family: "Instrument Sans", system-ui, sans-serif;
 }
 
 .acc-root[hidden],
@@ -16,18 +16,18 @@
   gap: 11px;
   min-width: 0;
   padding: 11px 14px;
-  border: 1px solid rgba(122, 255, 203, 0.34);
+  border: 1px solid rgba(43, 38, 73, 0.34);
   border-radius: 999px;
-  background: rgba(3, 13, 12, 0.82);
-  color: #eafff4;
-  box-shadow: 0 18px 55px rgba(0, 0, 0, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.82);
+  color: #241f3f;
+  box-shadow: 0 18px 55px rgba(36, 31, 63, 0.147), inset 0 1px 0 rgba(255, 255, 255, 0.08);
   cursor: pointer;
   backdrop-filter: blur(18px);
 }
 
 .acc-launcher:hover {
-  border-color: rgba(122, 255, 203, 0.7);
-  background: rgba(8, 24, 21, 0.92);
+  border-color: rgba(43, 38, 73, 0.7);
+  background: rgba(255, 255, 255, 0.92);
 }
 
 .acc-launcher span:last-child {
@@ -43,8 +43,8 @@
 }
 
 .acc-launcher i {
-  color: rgba(207, 245, 229, 0.68);
-  font: 500 9px/1.1 "DM Mono", monospace;
+  color: rgba(43, 38, 73, 0.68);
+  font: 500 9px/1.1 "Spline Sans Mono", monospace;
   font-style: normal;
   letter-spacing: 0.13em;
   text-transform: uppercase;
@@ -55,8 +55,8 @@
   height: 10px;
   flex: 0 0 auto;
   border-radius: 50%;
-  background: #4dffb8;
-  box-shadow: 0 0 0 7px rgba(77, 255, 184, 0.12), 0 0 24px rgba(77, 255, 184, 0.72);
+  background: #7454f8;
+  box-shadow: 0 0 0 7px rgba(116, 84, 248, 0.12), 0 0 24px rgba(116, 84, 248, 0.72);
 }
 
 .acc-panel {
@@ -72,7 +72,7 @@
   position: fixed;
   inset: 0;
   border: 0;
-  background: rgba(0, 0, 0, 0.62);
+  background: rgba(36, 31, 63, 0.07);
   cursor: pointer;
 }
 
@@ -84,14 +84,14 @@
   display: grid;
   grid-template-rows: auto auto auto auto minmax(360px, 1fr);
   overflow: hidden;
-  border: 1px solid rgba(122, 255, 203, 0.22);
+  border: 1px solid rgba(43, 38, 73, 0.22);
   border-radius: 24px;
   background:
-    radial-gradient(circle at 18% 0%, rgba(89, 255, 204, 0.16), transparent 32%),
+    radial-gradient(circle at 18% 0%, rgba(128, 96, 248, 0.16), transparent 32%),
     radial-gradient(circle at 88% 12%, rgba(80, 146, 255, 0.14), transparent 28%),
-    #030807;
-  color: #eafff4;
-  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.55);
+    #ffffff;
+  color: #241f3f;
+  box-shadow: 0 28px 90px rgba(36, 31, 63, 0.16);
 }
 
 .acc-head {
@@ -108,8 +108,8 @@
 .acc-frame-head span,
 .acc-frame-head code {
   margin: 0;
-  color: rgba(196, 236, 219, 0.64);
-  font: 600 10px/1.2 "DM Mono", monospace;
+  color: rgba(43, 38, 73, 0.64);
+  font: 600 10px/1.2 "Spline Sans Mono", monospace;
   letter-spacing: 0.16em;
   text-transform: uppercase;
 }
@@ -133,18 +133,18 @@
   justify-content: center;
   min-height: 38px;
   padding: 0 13px;
-  border: 1px solid rgba(122, 255, 203, 0.24);
+  border: 1px solid rgba(43, 38, 73, 0.24);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.06);
-  color: #eafff4;
-  font: 700 12px "Space Grotesk", sans-serif;
+  color: #241f3f;
+  font: 700 12px "Instrument Sans", sans-serif;
   text-decoration: none;
   cursor: pointer;
 }
 
 .acc-link:hover,
 .acc-close:hover {
-  border-color: rgba(122, 255, 203, 0.62);
+  border-color: rgba(43, 38, 73, 0.62);
 }
 
 .acc-signal-tape {
@@ -170,8 +170,8 @@
 }
 
 .acc-signal-tape i {
-  color: rgba(207, 245, 229, 0.62);
-  font: 500 10px "DM Mono", monospace;
+  color: rgba(43, 38, 73, 0.62);
+  font: 500 10px "Spline Sans Mono", monospace;
   font-style: normal;
   text-transform: uppercase;
 }
@@ -193,7 +193,7 @@
 
 .acc-command-main {
   background:
-    linear-gradient(135deg, rgba(72, 255, 185, 0.12), rgba(255, 255, 255, 0.045)) !important;
+    linear-gradient(135deg, rgba(112, 79, 248, 0.12), rgba(255, 255, 255, 0.045)) !important;
 }
 
 .acc-command-board strong {
@@ -205,7 +205,7 @@
 
 .acc-command-board p {
   margin: 0;
-  color: rgba(223, 247, 237, 0.68);
+  color: rgba(43, 38, 73, 0.68);
   font-size: 12px;
   line-height: 1.45;
 }
@@ -220,20 +220,20 @@
 }
 
 .acc-frame-head [data-tone="ok"] {
-  color: #6dffc5;
+  color: #8d73f9;
 }
 
 .acc-frame-head [data-tone="loading"] {
-  color: #c7e6ff;
+  color: #2b2649;
 }
 
 .acc-frame-wrap {
   margin: 0 22px 22px;
   min-height: 360px;
   overflow: hidden;
-  border: 1px solid rgba(122, 255, 203, 0.18);
+  border: 1px solid rgba(43, 38, 73, 0.18);
   border-radius: 20px;
-  background: #020605;
+  background: #ffffff;
 }
 
 .acc-mirror {
@@ -253,11 +253,11 @@
 .acc-mirror-hero,
 .acc-agent-panel {
   min-width: 0;
-  border: 1px solid rgba(122, 255, 203, 0.16);
+  border: 1px solid rgba(43, 38, 73, 0.16);
   border-radius: 18px;
   background:
-    linear-gradient(145deg, rgba(67, 255, 181, 0.09), rgba(255, 255, 255, 0.035)),
-    rgba(3, 12, 10, 0.72);
+    linear-gradient(145deg, rgba(108, 75, 247, 0.09), rgba(255, 255, 255, 0.035)),
+    rgba(255, 255, 255, 0.72);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045);
 }
 
@@ -268,13 +268,13 @@
 .acc-mirror-local {
   background:
     linear-gradient(145deg, rgba(80, 146, 255, 0.12), rgba(255, 255, 255, 0.035)),
-    rgba(5, 12, 16, 0.72);
+    rgba(255, 255, 255, 0.72);
 }
 
 .acc-mirror-hero span,
 .acc-panel-title span {
-  color: rgba(174, 229, 205, 0.68);
-  font: 700 10px/1.2 "DM Mono", monospace;
+  color: rgba(43, 38, 73, 0.68);
+  font: 700 10px/1.2 "Spline Sans Mono", monospace;
   letter-spacing: 0.16em;
   text-transform: uppercase;
 }
@@ -282,7 +282,7 @@
 .acc-mirror-hero strong {
   display: block;
   margin: 7px 0 8px;
-  color: #f2fff8;
+  color: #241f3f;
   font-size: clamp(18px, 2vw, 26px);
   line-height: 1.04;
   letter-spacing: -0.03em;
@@ -290,7 +290,7 @@
 
 .acc-mirror-hero p {
   margin: 0;
-  color: rgba(223, 247, 237, 0.68);
+  color: rgba(43, 38, 73, 0.68);
   font-size: 12.5px;
   line-height: 1.45;
 }
@@ -308,11 +308,11 @@
   align-items: center;
   min-height: 30px;
   padding: 0 10px;
-  border: 1px solid rgba(122, 255, 203, 0.2);
+  border: 1px solid rgba(43, 38, 73, 0.2);
   border-radius: 999px;
-  background: rgba(0, 0, 0, 0.22);
-  color: #dffff2;
-  font: 800 11px "Space Grotesk", sans-serif;
+  background: rgba(36, 31, 63, 0.044);
+  color: #2b2649;
+  font: 800 11px "Instrument Sans", sans-serif;
 }
 
 .acc-try-local {
@@ -321,7 +321,7 @@
 }
 
 .acc-try-local:hover {
-  border-color: rgba(122, 255, 203, 0.58);
+  border-color: rgba(43, 38, 73, 0.58);
 }
 
 .acc-agent-panel {
@@ -337,8 +337,8 @@
 }
 
 .acc-panel-title b {
-  color: #67ffc3;
-  font: 700 11px "DM Mono", monospace;
+  color: #886df9;
+  font: 700 11px "Spline Sans Mono", monospace;
   text-transform: uppercase;
 }
 
@@ -365,12 +365,12 @@
   place-items: center;
   width: 34px;
   height: 34px;
-  border: 1px solid rgba(103, 255, 195, 0.34);
+  border: 1px solid rgba(136, 109, 249, 0.34);
   border-radius: 12px;
-  background: rgba(103, 255, 195, 0.09);
-  color: #eafff4;
-  font: 900 10px "DM Mono", monospace;
-  box-shadow: 0 0 22px rgba(103, 255, 195, 0.1);
+  background: rgba(136, 109, 249, 0.09);
+  color: #241f3f;
+  font: 900 10px "Spline Sans Mono", monospace;
+  box-shadow: 0 0 22px rgba(136, 109, 249, 0.1);
 }
 
 .acc-agent-copy {
@@ -392,7 +392,7 @@
 .acc-agent-copy i,
 .acc-tool i {
   overflow: hidden;
-  color: rgba(221, 248, 237, 0.68);
+  color: rgba(43, 38, 73, 0.68);
   font-size: 11px;
   font-style: normal;
   line-height: 1.22;
@@ -403,8 +403,8 @@
 .acc-agent-copy small,
 .acc-tool small {
   overflow: hidden;
-  color: rgba(177, 223, 204, 0.48);
-  font: 600 8px/1.2 "DM Mono", monospace;
+  color: rgba(43, 38, 73, 0.48);
+  font: 600 8px/1.2 "Spline Sans Mono", monospace;
   letter-spacing: 0.08em;
   text-overflow: ellipsis;
   text-transform: uppercase;
@@ -412,8 +412,8 @@
 }
 
 .acc-agent em {
-  color: #67ffc3;
-  font: 800 8px "DM Mono", monospace;
+  color: #886df9;
+  font: 800 8px "Spline Sans Mono", monospace;
   font-style: normal;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -442,8 +442,8 @@
   height: 9px;
   margin-top: 3px;
   border-radius: 50%;
-  background: #67ffc3;
-  box-shadow: 0 0 0 6px rgba(103, 255, 195, 0.08), 0 0 18px rgba(103, 255, 195, 0.42);
+  background: #886df9;
+  box-shadow: 0 0 0 6px rgba(136, 109, 249, 0.08), 0 0 18px rgba(136, 109, 249, 0.42);
 }
 
 .acc-frame-wrap iframe {
@@ -452,7 +452,7 @@
   height: min(62vh, 620px);
   min-height: 360px;
   border: 0;
-  background: #020605;
+  background: #ffffff;
 }
 
 @media (max-width: 860px) {

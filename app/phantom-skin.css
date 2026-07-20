@@ -1,0 +1,124 @@
+/* PhantomForce — Ultraviolet Daylight skin.
+   Loaded after every base sheet: typography, shape language, and the
+   spectrum-edge signature for the light violet identity. The base sheets
+   carry layout; this layer carries the look. */
+
+:root {
+  --uv: #5b4cff;
+  --uv-deep: #3f30d9;
+  --orchid: #b44bf0;
+  --ember: #ff7a45;
+  --skin-radius: 16px;
+  --skin-shadow: 0 1px 2px rgba(36, 31, 63, 0.05), 0 10px 34px rgba(70, 58, 194, 0.09);
+}
+
+/* ---------- typography ---------- */
+body {
+  font-family: var(--org-font, "Instrument Sans", system-ui, sans-serif);
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2,
+.hero h1, .hero h2,
+.gate-card h1,
+.cust-hero h2,
+.workspace-page h2 {
+  font-family: "Bricolage Grotesque", "Instrument Sans", system-ui, sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+}
+h3, h4 {
+  font-family: "Bricolage Grotesque", "Instrument Sans", system-ui, sans-serif;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+}
+
+/* ---------- the signature: spectrum edge ---------- */
+body::before {
+  content: "";
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  z-index: 200;
+  pointer-events: none;
+  background: linear-gradient(90deg, var(--uv-deep), var(--uv) 30%, var(--orchid) 62%, var(--ember) 100%);
+}
+
+/* ---------- ghost goes ultraviolet ---------- */
+img.brand-ghost,
+img[src*="brand-phantom"] {
+  filter: hue-rotate(115deg) saturate(0.85) drop-shadow(0 0 10px rgba(91, 76, 255, 0.35));
+}
+canvas[data-ghost],
+.ghost-canvas {
+  filter: hue-rotate(115deg) saturate(0.85);
+}
+
+/* ---------- surface + shape language ---------- */
+.topbar {
+  background: rgba(255, 255, 255, 0.82);
+  border-bottom: 1px solid rgba(70, 58, 194, 0.12);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.7) inset;
+}
+.sidebar {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(248, 247, 255, 0.86));
+  border-right: 1px solid rgba(70, 58, 194, 0.1);
+}
+.nav-item { border-radius: 12px; }
+.nav-item.is-active {
+  background: linear-gradient(120deg, var(--uv), var(--uv-deep));
+  box-shadow: 0 8px 22px rgba(91, 76, 255, 0.3);
+}
+.nav-item-bottom { background: transparent; color: var(--dim); }
+
+.gate-card {
+  box-shadow: 0 30px 90px rgba(36, 31, 63, 0.18), 0 0 90px rgba(91, 76, 255, 0.1);
+}
+
+/* Cards and consoles: soft porcelain, roomier corners, gentle depth */
+.card, .panel, .console, .side-plan, .cust-panel, .cust-ai,
+.hero, .pc, .ml-next-card, .mg-module, .mc-setup {
+  box-shadow: var(--skin-shadow);
+}
+
+/* ---------- controls ---------- */
+.btn { font-weight: 600; }
+.btn-primary {
+  background: linear-gradient(120deg, var(--uv), var(--uv-deep));
+  color: #ffffff;
+  box-shadow: 0 6px 20px rgba(91, 76, 255, 0.32);
+}
+.btn-primary:hover {
+  background: linear-gradient(120deg, #6c5eff, var(--uv));
+  color: #ffffff;
+  box-shadow: 0 8px 26px rgba(91, 76, 255, 0.4);
+}
+
+input, select, textarea {
+  accent-color: var(--uv);
+}
+:focus-visible {
+  outline: 2px solid var(--uv);
+  outline-offset: 2px;
+}
+
+/* ---------- scrollbars ---------- */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(91, 76, 255, 0.35) transparent;
+}
+*::-webkit-scrollbar { width: 9px; height: 9px; }
+*::-webkit-scrollbar-thumb {
+  background: rgba(91, 76, 255, 0.28);
+  border-radius: 99px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover { background-color: rgba(91, 76, 255, 0.45); }
+*::-webkit-scrollbar-track { background: transparent; }
+
+/* ---------- selection ---------- */
+::selection { background: rgba(91, 76, 255, 0.22); color: var(--ink); }
+
+@media (prefers-reduced-motion: reduce) {
+  body::before { background: var(--uv); }
+}

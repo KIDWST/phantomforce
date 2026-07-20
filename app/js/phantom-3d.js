@@ -11,13 +11,13 @@ const MOOD = {
 };
 
 const ACCENTS = {
-  calm: 0x41ffa1,
-  content: 0x60ffb4,
-  happy: 0x84ffcf,
-  bright: 0x60ff8c,
+  calm: 0x6649f7,
+  content: 0x8066f9,
+  happy: 0x2b2649,
+  bright: 0x7766f9,
   alert: 0xff5c74,
-  sad: 0x3ac89e,
-  excited: 0x84ffcf,
+  sad: 0x593ac8,
+  excited: 0x2b2649,
 };
 
 export function createPhantomStage3D({ canvas, reduceMotion = false } = {}) {
@@ -64,7 +64,7 @@ export function createPhantomStage3D({ canvas, reduceMotion = false } = {}) {
     { inner: 1.44, outer: 1.455, y: -0.18, z: -0.36, sx: 1.08, sy: 1.46, opacity: 0.055 },
   ].forEach((spec) => {
     const mat = new THREE.MeshBasicMaterial({
-      color: 0x41ffa1,
+      color: 0x6649f7,
       transparent: true,
       opacity: spec.opacity,
       blending: THREE.AdditiveBlending,
@@ -92,7 +92,7 @@ export function createPhantomStage3D({ canvas, reduceMotion = false } = {}) {
   const rings = [];
   for (let i = 0; i < 4; i++) {
     const mat = new THREE.MeshBasicMaterial({
-      color: 0x41ffa1,
+      color: 0x6649f7,
       transparent: true,
       opacity: 0.17 - i * 0.025,
       blending: THREE.AdditiveBlending,
@@ -121,7 +121,7 @@ export function createPhantomStage3D({ canvas, reduceMotion = false } = {}) {
   const particleGeo = new THREE.BufferGeometry();
   particleGeo.setAttribute("position", new THREE.BufferAttribute(particlePositions, 3));
   const particleMat = new THREE.PointsMaterial({
-    color: 0x41ffa1,
+    color: 0x6649f7,
     transparent: true,
     opacity: 0.55,
     size: 0.018,
