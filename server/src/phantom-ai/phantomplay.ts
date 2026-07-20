@@ -789,6 +789,26 @@ export const PHANTOMPLAY_BUILT_IN_GAMES: PhantomPlayGame[] = [
     progressSupport: true,
     scoreSupport: true,
   },
+  {
+    id: "phantom-strike",
+    title: "Phantom Strike",
+    summary: "First-person arena shooter — hold the Rift Yard against five waves of spectral raiders.",
+    description: "A real-time 3D raycast first-person shooter: hold a walled arena against five escalating waves of drifters, spitters, and wardens. Three weapons (infinite pulse pistol, close-range scatter, piercing lance), health and ammo pickups, a live minimap, and a synthesized soundscape. Full control coverage — keyboard + pointer-lock mouse, gamepad with analog sticks and triggers, and a touch layout with a movement stick, drag-aim, and fire/swap buttons. Wave, score, and best-run progress persist between sessions.",
+    category: "Arcade",
+    tags: ["shooter", "fps", "3d", "waves", "gamepad", "touch"],
+    contentRating: "everyone10",
+    contentDescriptors: ["fantasy_conflict", "intense_action"],
+    developer: "Tak",
+    developerAvatar: TAK_AVATAR,
+    kind: "built_in",
+    launchUrl: "/app/games/phantom-strike/index.html?v=1.0.0",
+    thumbnail: CATEGORY_ART["Arcade"],
+    featured: true,
+    version: "1.0.0",
+    controls: "WASD moves, mouse aims (click to lock), click fires, 1-3 or Q swaps weapons. Full gamepad support: left stick moves, right stick aims, RT fires, Y swaps. Touch: left stick, drag to aim, fire button.",
+    progressSupport: true,
+    scoreSupport: true,
+  },
 ];
 
 const ratingRank: Record<PhantomPlayRating, number> = { toddler: 0, everyone: 1, everyone10: 2, teen: 3, mature: 4 };

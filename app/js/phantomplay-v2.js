@@ -9,7 +9,7 @@
 import {
   currentTenantId, isAdmin, session,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260719-2";
+} from "./store.js?v=phantom-live-20260720-1";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
 const mobilePlaySurface = () => typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;
@@ -104,6 +104,14 @@ const OFFLINE_GAMES = [
     description: "", category: "Focus", tags: ["time-management", "simulation"], contentRating: "everyone",
     developer: "Tak", kind: "built_in", launchUrl: "/app/games/phantom-pizzeria/index.html", thumbnail: "",
     featured: false, version: "1.0.0", controls: "Click toppings to place, click to bake and serve.",
+    progressSupport: true, scoreSupport: true,
+  },
+  {
+    id: "phantom-strike", title: "Phantom Strike",
+    summary: "First-person arena shooter — hold the Rift Yard against five waves of spectral raiders.",
+    description: "", category: "Arcade", tags: ["shooter", "fps", "3d", "gamepad"], contentRating: "everyone10",
+    developer: "Tak", kind: "built_in", launchUrl: "/app/games/phantom-strike/index.html", thumbnail: "",
+    featured: true, version: "1.0.0", controls: "WASD + mouse, gamepad, or touch stick. 1-3/Q/Y swaps weapons.",
     progressSupport: true, scoreSupport: true,
   },
 ]);
@@ -472,7 +480,7 @@ function playerMarkup() {
   const controls = controlsCopy(game);
   return `<div class="pp2-player" role="dialog" aria-modal="true" aria-label="Playing ${esc(game.title)}"><header><div><b>${esc(game.title)}</b>${controls ? `<i>${esc(controls)}</i>` : ""}</div><div><button data-pp2-player-restart>Restart</button><button data-pp2-player-pause>${ui.playerPaused ? "Resume" : "Pause"}</button><button data-pp2-player-full>Full screen</button><button data-pp2-player-close aria-label="Close">×</button></div></header>
     <div class="pp2-stage"><div class="pp2-stage-loading" ${ui.playerReady ? "hidden" : ""}><i></i><b>Loading ${esc(game.title)}…</b><span>Opening in a private sandbox.</span></div>
-    <iframe src="${esc(game.launchUrl)}" title="${esc(game.title)}" sandbox="allow-scripts" referrerpolicy="no-referrer" allow="fullscreen" data-pp2-frame></iframe></div>
+    <iframe src="${esc(game.launchUrl)}" title="${esc(game.title)}" sandbox="allow-scripts allow-pointer-lock" referrerpolicy="no-referrer" allow="fullscreen; gamepad" data-pp2-frame></iframe></div>
     <footer><span>Session ${esc(String(play.id).slice(-8))}</span><span data-pp2-live-score>Score —</span><span>${ui.resume?.state ? "Resume state loaded" : "Progress saves automatically"}</span></footer></div>`;
 }
 

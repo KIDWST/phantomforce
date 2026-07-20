@@ -1,0 +1,61 @@
+:root { color-scheme: dark; --lime: #41ffa1; --cyan: #1ef0ff; --gold: #ffd166; --red: #ff5c74; }
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #020604; color: #effff6; font-family: "Space Grotesk", system-ui, sans-serif; }
+.ps-app { position: fixed; inset: 0; }
+.ps-view { position: absolute; inset: 0; width: 100%; height: 100%; display: block; image-rendering: pixelated; cursor: crosshair; }
+.ps-hudfx { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+
+/* ============== HUD ============== */
+.ps-hud { position: absolute; inset: 0; pointer-events: none; }
+.ps-hud-left { position: absolute; left: 14px; bottom: 14px; display: grid; gap: 7px; }
+.ps-hud-right { position: absolute; right: 14px; bottom: 14px; display: grid; gap: 7px; justify-items: end; }
+.ps-stat { display: flex; align-items: center; gap: 8px; }
+.ps-stat span { font: 700 9px ui-monospace, monospace; letter-spacing: .16em; color: rgba(190, 230, 208, .6); }
+.ps-stat b { font-size: 17px; color: #effff6; text-shadow: 0 0 12px rgba(65, 255, 161, .35); min-width: 34px; }
+.ps-bar { width: 120px; height: 9px; border: 1px solid rgba(65, 255, 161, .35); border-radius: 5px; overflow: hidden; background: rgba(0, 0, 0, .5); }
+.ps-bar i { display: block; height: 100%; width: 100%; background: linear-gradient(90deg, #1fd47f, var(--lime)); transition: width .15s ease; }
+.ps-bar i.low { background: linear-gradient(90deg, #c23, var(--red)); }
+.ps-hud-mid { position: absolute; left: 50%; top: 0; transform: translateX(-50%); height: 100%; pointer-events: none; }
+.ps-wave { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); font: 700 11px ui-monospace, monospace; letter-spacing: .3em; color: var(--lime); text-shadow: 0 0 14px rgba(65, 255, 161, .5); white-space: nowrap; }
+.ps-crosshair { position: absolute; top: 50%; left: 50%; width: 22px; height: 22px; transform: translate(-50%, -50%); }
+.ps-crosshair::before, .ps-crosshair::after { content: ""; position: absolute; background: rgba(65, 255, 161, .9); box-shadow: 0 0 6px rgba(65, 255, 161, .8); }
+.ps-crosshair::before { left: 50%; top: 0; width: 2px; height: 100%; transform: translateX(-50%); clip-path: polygon(0 0, 100% 0, 100% 32%, 0 32%, 0 68%, 100% 68%, 100% 100%, 0 100%); }
+.ps-crosshair::after { top: 50%; left: 0; height: 2px; width: 100%; transform: translateY(-50%); clip-path: polygon(0 0, 32% 0, 32% 100%, 0 100%, 68% 0, 100% 0, 100% 100%, 68% 100%); }
+.ps-crosshair.hit::before, .ps-crosshair.hit::after { background: var(--gold); box-shadow: 0 0 10px var(--gold); }
+.ps-weapons { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); display: flex; gap: 6px; pointer-events: none; }
+.ps-weapon { padding: 4px 10px; border: 1px solid rgba(65, 255, 161, .25); border-radius: 6px; background: rgba(2, 10, 6, .72); font: 700 10px ui-monospace, monospace; letter-spacing: .1em; color: rgba(190, 230, 208, .55); }
+.ps-weapon.active { color: #041; background: var(--lime); box-shadow: 0 0 14px rgba(65, 255, 161, .5); border-color: var(--lime); }
+.ps-hint { position: absolute; top: 34px; left: 50%; transform: translateX(-50%); font-size: 11px; color: rgba(190, 230, 208, .5); white-space: nowrap; }
+.ps-mute { pointer-events: auto; width: 30px; height: 30px; border-radius: 8px; border: 1px solid rgba(65, 255, 161, .3); background: rgba(2, 10, 6, .7); color: var(--lime); font-size: 14px; cursor: pointer; }
+.ps-mute.off { color: rgba(190, 230, 208, .35); text-decoration: line-through; }
+
+/* ============== touch ============== */
+.ps-touch { position: absolute; inset: 0; pointer-events: none; }
+.ps-stick { position: absolute; left: 18px; bottom: 64px; width: 108px; height: 108px; border: 1px solid rgba(65, 255, 161, .3); border-radius: 50%; background: rgba(2, 10, 6, .35); pointer-events: auto; touch-action: none; }
+.ps-stick i { position: absolute; left: 50%; top: 50%; width: 42px; height: 42px; margin: -21px 0 0 -21px; border-radius: 50%; background: rgba(65, 255, 161, .35); border: 1px solid rgba(65, 255, 161, .6); }
+.ps-fire { position: absolute; right: 22px; bottom: 84px; width: 74px; height: 74px; border-radius: 50%; border: 1px solid rgba(255, 209, 102, .5); background: rgba(30, 14, 2, .55); color: var(--gold); font-size: 26px; pointer-events: auto; touch-action: none; }
+.ps-fire:active { background: rgba(255, 209, 102, .3); }
+.ps-swap { position: absolute; right: 36px; bottom: 178px; width: 46px; height: 46px; border-radius: 50%; border: 1px solid rgba(65, 255, 161, .4); background: rgba(2, 10, 6, .55); color: var(--lime); font-size: 18px; pointer-events: auto; touch-action: none; }
+
+/* ============== overlays ============== */
+.ps-overlay { position: absolute; inset: 0; display: grid; place-items: center; padding: 18px; background: radial-gradient(80% 70% at 50% 40%, rgba(4, 24, 14, .88), rgba(1, 4, 2, .96)); z-index: 5; }
+.ps-overlay[hidden] { display: none; }
+.ps-panel { max-width: 560px; text-align: center; }
+.ps-kicker { margin: 0 0 6px; font: 700 10px ui-monospace, monospace; letter-spacing: .3em; color: var(--lime); }
+.ps-panel h1 { margin: 0 0 10px; font-size: clamp(30px, 7vw, 44px); letter-spacing: -.01em; text-shadow: 0 0 30px rgba(65, 255, 161, .35); }
+.ps-sub { margin: 0 auto 18px; max-width: 46ch; color: rgba(210, 236, 222, .75); font-size: 14px; line-height: 1.5; }
+.ps-btn { padding: 13px 30px; border: 0; border-radius: 999px; background: var(--lime); color: #032; font: 800 15px "Space Grotesk", sans-serif; cursor: pointer; box-shadow: 0 0 30px rgba(65, 255, 161, .35); }
+.ps-btn:hover { transform: translateY(-1px); }
+.ps-controls { margin: 20px auto 0; max-width: 58ch; font-size: 11px; line-height: 1.7; color: rgba(190, 230, 208, .55); }
+.ps-controls b { color: rgba(65, 255, 161, .8); font: 700 9px ui-monospace, monospace; letter-spacing: .12em; margin-right: 4px; }
+
+.ps-toast { position: absolute; left: 50%; top: 18%; transform: translateX(-50%); padding: 9px 18px; border: 1px solid rgba(65, 255, 161, .4); border-radius: 999px; background: rgba(2, 12, 7, .9); font: 700 12px ui-monospace, monospace; letter-spacing: .12em; color: var(--lime); z-index: 4; }
+.ps-toast[hidden] { display: none; }
+
+@media (max-width: 700px) {
+  .ps-hint { display: none; }
+  .ps-bar { width: 84px; }
+  .ps-weapons { bottom: 8px; }
+  .ps-hud-left { bottom: 10px; left: 10px; }
+  .ps-hud-right { bottom: 10px; right: 10px; }
+}

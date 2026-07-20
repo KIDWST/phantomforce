@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; media-src 'none'; frame-src 'none'">
+<title>Phantom Strike</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app" class="ps-app">
+
+  <!-- ============== 3D VIEW ============== -->
+  <canvas id="view" class="ps-view"></canvas>
+  <canvas id="hudfx" class="ps-hudfx" aria-hidden="true"></canvas>
+
+  <!-- ============== HUD ============== -->
+  <div class="ps-hud" data-hud hidden>
+    <div class="ps-hud-left">
+      <div class="ps-stat"><span>HP</span><div class="ps-bar"><i data-hp-bar></i></div><b data-hp>100</b></div>
+      <div class="ps-stat"><span>AMMO</span><b data-ammo>—</b></div>
+    </div>
+    <div class="ps-hud-mid">
+      <div class="ps-wave" data-wave-label>WAVE 1</div>
+      <div class="ps-crosshair" data-crosshair aria-hidden="true"></div>
+    </div>
+    <div class="ps-hud-right">
+      <div class="ps-stat"><span>SCORE</span><b data-score>0</b></div>
+      <div class="ps-stat"><span>LEFT</span><b data-left>0</b></div>
+      <button class="ps-mute" data-mute type="button" aria-label="Toggle sound">♪</button>
+    </div>
+    <div class="ps-weapons" data-weapons></div>
+    <div class="ps-hint" data-hint>Click to lock aim · WASD move · 1/2/3 weapons · P pause</div>
+  </div>
+
+  <!-- ============== TOUCH CONTROLS ============== -->
+  <div class="ps-touch" data-touch hidden>
+    <div class="ps-stick" data-stick><i data-stick-nub></i></div>
+    <button class="ps-fire" data-touch-fire type="button" aria-label="Fire">◉</button>
+    <button class="ps-swap" data-touch-swap type="button" aria-label="Switch weapon">⇄</button>
+  </div>
+
+  <!-- ============== OVERLAYS ============== -->
+  <div class="ps-overlay" data-start-overlay>
+    <div class="ps-panel">
+      <p class="ps-kicker">PHANTOMPLAY · FIRST-PERSON</p>
+      <h1>Phantom Strike</h1>
+      <p class="ps-sub">Rogue processes breached the vault. Purge five waves before they reach the core.<br>
+      Mouse-look + WASD · full gamepad support · touch sticks on mobile.</p>
+      <button class="ps-btn" data-start-btn type="button">Enter the Breach</button>
+      <p class="ps-controls">
+        <b>Keyboard</b> WASD move · mouse aim (click to lock) · click/Space fire · 1/2/3 weapons · M mute · P pause<br>
+        <b>Gamepad</b> left stick move · right stick aim · RT/A fire · LB/RB weapons · Start pause<br>
+        <b>Touch</b> left stick move · drag right side to aim · ◉ fire
+      </p>
+    </div>
+  </div>
+
+  <div class="ps-overlay" data-pause-overlay hidden>
+    <div class="ps-panel">
+      <h1>Paused</h1>
+      <p class="ps-sub">P / Start resumes.</p>
+      <button class="ps-btn" data-resume-btn type="button">Resume</button>
+    </div>
+  </div>
+
+  <div class="ps-overlay" data-dead-overlay hidden>
+    <div class="ps-panel">
+      <h1>Core Breached</h1>
+      <p class="ps-sub" data-dead-line>The phantoms got through.</p>
+      <button class="ps-btn" data-retry-btn type="button">Play again</button>
+    </div>
+  </div>
+
+  <div class="ps-overlay" data-win-overlay hidden>
+    <div class="ps-panel">
+      <h1>Vault Purged</h1>
+      <p class="ps-sub" data-win-line>All five waves cleared.</p>
+      <button class="ps-btn" data-again-btn type="button">Play again</button>
+    </div>
+  </div>
+
+  <div class="ps-toast" data-toast hidden></div>
+</div>
+<script src="game.js"></script>
+</body>
+</html>
