@@ -9,7 +9,7 @@
 import {
   currentTenantId, isAdmin, session,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260719-60";
+} from "./store.js?v=phantom-live-20260719-61";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
 const mobilePlaySurface = () => typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;
@@ -79,6 +79,9 @@ const OFFLINE_GAMES = [
   ["tidefront-tactics", "Tidefront Tactics", "Strategy", "/app/games/tidefront-tactics.html?v=1.1.0"],
   ["skyguard-arena", "Skyguard Arena", "Strategy", "/app/games/skyguard-arena/index.html?v=1.1.0"],
   ["sudoku-signal", "Sudoku Signal", "Focus", "/app/games/sudoku-signal.html"],
+  ["phantom-cube", "PhantomCube", "Puzzle", "/app/games/phantom-cube/index.html?v=1.0.0"],
+  ["phantom-chess", "Phantom Chess", "Strategy", "/app/games/phantom-chess/index.html?v=1.0.0"],
+  ["phantom-pizzeria", "Phantom Pizzeria", "Creative", "/app/games/phantom-pizzeria/index.html?v=1.0.0"],
 ].map(([id, title, category, launchUrl]) => ({ id, title, summary: id === "phantom-rumble" ? "Premium local platform fighter with guard, parry, dodge, ledge-save recovery, bots, and local multiplayer." : id === "rift-frenzy" ? "School-to-grow fish survival with rival steals, absorb cooldown, hazards, and bots." : id === "crown-circuit" ? "Solo bot training plus 1v1 lane-card crown room duels." : id === "kingdom-breakers" ? "Physics castle siege with duel castles and wardens." : id === "tidefront-tactics" ? "Wind-read artillery tactics battle." : id === "skyguard-arena" ? "Sentinel defense with waves, upgrades, and duel pressure." : "Offline built-in game.", description: "", category, tags: [], contentRating: ["rift-frenzy", "crown-circuit", "kingdom-breakers", "tidefront-tactics", "skyguard-arena"].includes(id) ? "everyone10" : "everyone", developer: "Tak", kind: "built_in", launchUrl, thumbnail: "", featured: ["phantom-rumble", "rift-frenzy", "crown-circuit", "kingdom-breakers", "tidefront-tactics", "skyguard-arena"].includes(id), version: id === "phantom-rumble" ? "2.2.4" : id === "rift-frenzy" ? "2.0.0" : id === "crown-circuit" ? "1.2.0" : ["kingdom-breakers", "tidefront-tactics", "skyguard-arena"].includes(id) ? "1.1.0" : "1.0.0", controls: id === "phantom-rumble" ? "Keyboard controls." : "", progressSupport: true, scoreSupport: true }));
 
 function offlineState() {
