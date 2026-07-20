@@ -33,6 +33,7 @@
     "test:phantomplay": "tsx scripts/test-phantomplay.ts",
     "test:phantomplay:edge": "tsx scripts/test-phantomplay-edge-network.ts",
     "test:phantomplay:edge:storage": "tsx scripts/test-phantomplay-edge-storage.ts",
+    "test:phantomplay:dev-mode": "tsx scripts/test-phantomplay-dev-mode.ts",
     "test:phantomstore": "tsx scripts/test-phantomstore.ts",
     "test:competitor-intelligence": "tsx scripts/test-competitor-intelligence.ts",
     "test:prompt-injection-guard": "tsx scripts/test-prompt-injection-guard.ts",

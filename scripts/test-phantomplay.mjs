@@ -210,4 +210,15 @@ assert.match(phantomStrike, /outpost:\[[\s\S]*foundry:\[[\s\S]*harbor:\[/u, "Pha
 assert.match(phantomStrike, /function cast\([\s\S]*function renderView\(/u, "Phantom Strike must use a real first-person ray-cast renderer.");
 assert.match(phantomStrike, /if\(mode==='duel'\)\{renderView\(players\[0\][\s\S]*renderView\(players\[1\]/u, "Phantom Strike local duel must render genuine split-screen views.");
 
+// Dev Mode (docs/architecture/PHANTOMPLAY_DEV_MODE.md): the entry point must
+// only ever render server-gated, and the preview iframe must always be as
+// tightly sandboxed as the real player iframe. This is a static guardrail,
+// not the actual security boundary (the server re-checks access on every
+// route) — but a regression here would be the first sign the boundary is
+// eroding.
+assert.match(module, /game\.devModeAvailable \? `<button class="pp-devmode-open"/u, "The Dev Mode entry point must only render when the server-reported devModeAvailable flag is true.");
+assert.match(module, /<iframe src="\$\{esc\(d\.previewUrl\)\}" sandbox="allow-scripts"/u, "The Dev Mode preview iframe must be sandboxed.");
+assert.match(module, /const blob = new Blob\(\[nextSource\], \{ type: "text\/html" \}\)/u, "Dev Mode edits must apply via a local blob URL, never a same-origin write.");
+assert.doesNotMatch(module, /devmode[\s\S]{0,200}(child_process|new Function|\.eval\()/iu, "The host page's Dev Mode code must never itself execute the edited source — only the sandboxed iframe does, by loading it as a document.");
+
 console.log("PhantomPlay frontend and game safety checks passed.");

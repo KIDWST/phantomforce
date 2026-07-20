@@ -280,6 +280,7 @@ import {
   applyPhantomPlayRatingOverride,
   createPhantomPlayRoom,
   createPhantomPlaySubmission,
+  getPhantomPlayDevModeSource,
   getPhantomPlayRatingChangeHistory,
   getPhantomPlayRoom,
   getPhantomPlaySnapshot,
@@ -5392,6 +5393,22 @@ app.get("/api/phantomplay", async (request, reply) => {
     subscription: access,
     storage: session.canManageAccess ? await getPhantomPlayStoreStatus() : undefined,
   };
+});
+
+app.get("/api/phantomplay/dev-mode/:gameId/source", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const query = (request.query ?? {}) as { tenant_id?: unknown };
+  const access = await phantomPlayAccess(session, query.tenant_id);
+  if (!access.entitled) return reply.code(403).send({ ok: false, error: "PhantomPlay is not available to this account.", reason: access.reason });
+  const params = request.params as { gameId?: string };
+  try {
+    return { ok: true, ...(await getPhantomPlayDevModeSource(session, String(params.gameId || "").slice(0, 180))) };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Dev Mode source could not be loaded.";
+    const status = /Dev Mode is not available/i.test(message) ? 403 : /no editable source/i.test(message) ? 404 : 400;
+    return reply.code(status).send({ ok: false, error: message });
+  }
 });
 
 function phantomPlayEdgeContext(session: AccessSession, access: Awaited<ReturnType<typeof phantomPlayAccess>>) {

@@ -1310,7 +1310,7 @@ export async function getPhantomPlaySnapshot(session: AccessSession, options: { 
       canSubmitGames: options.canSubmitGames ?? (session.canManageAccess || session.orgRole === "owner" || session.orgRole === "admin"),
       canModerate: session.canManageAccess || session.isSuperAdmin === true,
     },
-    catalog,
+    catalog: catalog.map((game) => ({ ...game, devModeAvailable: phantomPlayDevModeAccessFromStore(store, session, game.id).allowed })),
     leaderboards: phantomLeaderboards(store, catalog, actorId),
     favorites: profile.favorites,
     history: historySummary(profile),
@@ -1838,6 +1838,49 @@ export async function applyPhantomPlayRatingOverride(session: AccessSession, inp
 export async function getPhantomPlayRatingChangeHistory(limit = 200) {
   const store = await readStore();
   return store.ratingChangeHistory.slice(0, Math.max(0, Math.min(2000, limit)));
+}
+
+/* Dev Mode gate — see docs/architecture/PHANTOMPLAY_DEV_MODE.md. Reuses the same ownership
+   model the rest of this module already enforces (developerId for community submissions,
+   canManageAccess for everything else) instead of a new permission system. Server-side only:
+   the client never decides whether to show the entry point, it just reflects the
+   `devModeAvailable` flag this produces in the snapshot catalog. */
+export type PhantomPlayDevModeAccess = { allowed: boolean; kind: "built_in" | "community" | "unknown" };
+
+function phantomPlayDevModeAccessFromStore(store: PhantomPlayStore, session: AccessSession, gameId: string): PhantomPlayDevModeAccess {
+  if (gameId.startsWith("community:")) {
+    const submission = store.submissions.find((item) => item.id === gameId.slice("community:".length));
+    if (!submission) return { allowed: false, kind: "unknown" };
+    return { allowed: session.canManageAccess === true || submission.developerId === actorIdFor(session), kind: "community" };
+  }
+  if (!PHANTOMPLAY_BUILT_IN_GAMES.some((game) => game.id === gameId)) return { allowed: false, kind: "unknown" };
+  // Built-in games ship in this repo, not owned by any one tenant's developer account —
+  // only a workspace manager may hot-edit them, matching registerPhantomPlayEdgeManifest's bar.
+  return { allowed: session.canManageAccess === true, kind: "built_in" };
+}
+
+export async function phantomPlayDevModeAccess(session: AccessSession, gameId: string) {
+  return phantomPlayDevModeAccessFromStore(await readStore(), session, gameId);
+}
+
+/* v1 scope: source is only fetchable for built-in games, whose HTML lives in this repo at a
+   server-trusted path (see PHANTOMPLAY_BUILT_IN_GAMES). Community submissions only ever store an
+   external launchUrl (no embedded source), so there is nothing for this endpoint to read for
+   them yet — extending Dev Mode to community games needs a real game-content hosting mechanism
+   first, which does not exist in this codebase today. That gap is intentional, not an oversight;
+   see docs/architecture/PHANTOMPLAY_DEV_MODE.md. */
+export async function getPhantomPlayDevModeSource(session: AccessSession, gameId: string) {
+  const access = await phantomPlayDevModeAccess(session, gameId);
+  if (!access.allowed) throw new Error("Dev Mode is not available for this game.");
+  if (access.kind !== "built_in") throw new Error("Dev Mode source editing is available for built-in games only in this release.");
+  const game = PHANTOMPLAY_BUILT_IN_GAMES.find((item) => item.id === gameId);
+  const launchPath = game?.launchUrl.split("?")[0] || "";
+  if (!game || !launchPath.startsWith("/app/games/")) throw new Error("This game has no editable source file.");
+  const gamesRoot = resolve(repoRoot, "app", "games");
+  const filePath = resolve(repoRoot, "app", launchPath.replace(/^\/app\//, ""));
+  if (!filePath.startsWith(gamesRoot)) throw new Error("Refusing to read outside the games directory.");
+  const source = await readFile(filePath, "utf8");
+  return { gameId, title: game.title, launchUrl: game.launchUrl, source };
 }
 
 export async function getPhantomPlayStoreStatus() {

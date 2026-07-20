@@ -1,7 +1,7 @@
 import {
   currentTenantId, isAdmin, isOwnerOperator, session,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260719-63";
+} from "./store.js?v=phantom-live-20260719-64";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 const mobilePlaySurface = () => typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;
@@ -152,6 +152,7 @@ const ui = {
   developerMessage: "",
   guardianMessage: "",
   ratingBusy: false,
+  devMode: null,
 };
 
 let mountedRoot = null;
@@ -409,8 +410,35 @@ function gameCard(game, variant = "") {
     <p>${esc(game.summary)}</p>
     <div class="pp-game-meta"><span>${esc(game.contentRating === "everyone" ? "Everyone" : game.contentRating)}</span><span>v${esc(game.version)}</span>${history?.score != null ? `<span>Best ${history.score}</span>` : ""}</div>
     ${history?.canContinue ? `<div class="pp-progress"><i style="width:${Math.max(3, Math.min(100, history.progress))}%"></i></div>` : ""}
-    <div class="pp-game-actions"><button class="pp-play" type="button" data-pp-play="${esc(game.id)}">${icon("play")} ${history?.canContinue ? "Continue" : "Play now"}</button><button class="pp-support" type="button" data-pp-support="${esc(game.developer)}">Support this creator</button></div></div>
+    <div class="pp-game-actions"><button class="pp-play" type="button" data-pp-play="${esc(game.id)}">${icon("play")} ${history?.canContinue ? "Continue" : "Play now"}</button><button class="pp-support" type="button" data-pp-support="${esc(game.developer)}">Support this creator</button>${game.devModeAvailable ? `<button class="pp-devmode-open" type="button" data-pp-devmode-open="${esc(game.id)}" title="Hot-edit this game's code and assets, sandboxed, visible only to you">Dev Mode</button>` : ""}</div></div>
   </article>`;
+}
+
+function devModeMarkup() {
+  const d = ui.devMode;
+  if (!d) return "";
+  return `<div class="pp-devmode" role="dialog" aria-modal="true" aria-label="Dev Mode: ${esc(d.title)}">
+    <header>
+      <div><b>DEV MODE</b><span>${esc(d.title)}</span></div>
+      <button type="button" data-pp-devmode-close aria-label="Close Dev Mode">×</button>
+    </header>
+    <p class="pp-devmode-note">Only visible to you because you can manage this workspace. Sandboxed local preview only — nothing here is saved, published, or shown to other players.</p>
+    ${d.error ? `<div class="pp-devmode-error">${esc(d.error)}</div>` : ""}
+    ${d.loading ? `<div class="pp-devmode-loading"><i></i><b>Loading source…</b></div>` : `
+    <div class="pp-devmode-body">
+      <div class="pp-devmode-editor">
+        <label>Source (HTML/JS)<textarea data-pp-devmode-source spellcheck="false">${esc(d.editedSource)}</textarea></label>
+        <div class="pp-devmode-actions">
+          <button type="button" class="pp-primary" data-pp-devmode-apply">Apply and preview</button>
+          <button type="button" class="pp-secondary" data-pp-devmode-reset">Reset to original</button>
+        </div>
+      </div>
+      <div class="pp-devmode-preview">
+        <p class="pp-kicker">Sandboxed preview</p>
+        ${d.previewUrl ? `<iframe src="${esc(d.previewUrl)}" sandbox="allow-scripts" referrerpolicy="no-referrer" title="Dev Mode preview" data-pp-devmode-frame></iframe>` : `<div class="pp-devmode-empty">Apply an edit to see it run here.</div>`}
+      </div>
+    </div>`}
+  </div>`;
 }
 
 function empty(title, copy) {
@@ -729,7 +757,7 @@ function render() {
     ${ui.notice ? `<div class="pp-banner is-notice"><b>Creator support</b><span>${esc(ui.notice)}</span><button data-pp-clear-notice>OK</button></div>` : ""}
     <nav class="pp-tabs" aria-label="PhantomPlay sections">${tabs.map(([id, label]) => `<button type="button" class="${ui.tab === id ? "is-active" : ""}" data-pp-tab="${id}">${esc(label)}</button>`).join("")}</nav>
     <main class="pp-content">${snapshot.access.enabled ? content : empty("PhantomPlay is unavailable", "This optional workspace module is separate from core PhantomForce operations. Ask a workspace owner to enable access if your team uses it.")}</main>
-    ${settingsMarkup()}${playerMarkup()}
+    ${settingsMarkup()}${playerMarkup()}${devModeMarkup()}
   </div>`;
   bind();
   syncRoomPolling();
@@ -1007,6 +1035,55 @@ async function closePlayer() {
   render();
 }
 
+// Dev Mode: a local, sandboxed hot-reload preview loop. See
+// docs/architecture/PHANTOMPLAY_DEV_MODE.md — the entry point only ever
+// renders when the server already said `devModeAvailable` for this exact
+// game (see `gameCard`), and every fetch below hits a route that re-checks
+// that server-side, so this is UX convenience, not the actual security
+// boundary. The preview iframe reuses the exact sandbox attribute the real
+// player iframe already uses in `playerMarkup()` (see the shared safety
+// assertion in scripts/test-phantomplay.mjs guarding against origin/form/
+// popup grants) — same opaque-origin isolation, just loading a blob: URL of
+// the developer's in-progress edit instead of the reviewed launchUrl.
+function revokeDevModePreview() {
+  if (ui.devMode?.previewUrl) URL.revokeObjectURL(ui.devMode.previewUrl);
+}
+
+async function openDevMode(gameId) {
+  ui.devMode = { gameId, title: gameId, source: "", editedSource: "", previewUrl: "", loading: true, error: "" };
+  render();
+  try {
+    const result = await api(`/api/phantomplay/dev-mode/${encodeURIComponent(gameId)}/source?tenant_id=${encodeURIComponent(currentTenantId())}`);
+    ui.devMode = { gameId, title: result.title || gameId, source: result.source, editedSource: result.source, previewUrl: "", loading: false, error: "" };
+  } catch (error) {
+    ui.devMode = { gameId, title: gameId, source: "", editedSource: "", previewUrl: "", loading: false, error: error instanceof Error ? error.message : "Dev Mode source could not be loaded." };
+  }
+  render();
+}
+
+function applyDevModeEdit() {
+  if (!ui.devMode) return;
+  const textarea = mountedRoot?.querySelector("[data-pp-devmode-source]");
+  const nextSource = typeof textarea?.value === "string" ? textarea.value : ui.devMode.editedSource;
+  revokeDevModePreview();
+  const blob = new Blob([nextSource], { type: "text/html" });
+  ui.devMode = { ...ui.devMode, editedSource: nextSource, previewUrl: URL.createObjectURL(blob) };
+  render();
+}
+
+function resetDevModeEdit() {
+  if (!ui.devMode) return;
+  revokeDevModePreview();
+  ui.devMode = { ...ui.devMode, editedSource: ui.devMode.source, previewUrl: "" };
+  render();
+}
+
+function closeDevMode() {
+  revokeDevModePreview();
+  ui.devMode = null;
+  render();
+}
+
 // `data` may include `focus: false` to skip stealing focus (e.g. a
 // background match-state push); every other key is spread onto the posted
 // message as-is.
@@ -1208,6 +1285,10 @@ function bind() {
   mountedRoot.querySelectorAll("[data-pp-support]").forEach((button) => button.onclick = (event) => { event.stopPropagation(); ui.notice = `${button.dataset.ppSupport || "This creator"} support is queued for the creator profile/payments layer. For now, favorites and leaderboard plays help boost discovery.`; render(); });
   mountedRoot.querySelector("[data-pp-clear-notice]")?.addEventListener("click", () => { ui.notice = ""; render(); });
   mountedRoot.querySelectorAll("[data-pp-play]").forEach((button) => button.onclick = () => launch(button.dataset.ppPlay));
+  mountedRoot.querySelectorAll("[data-pp-devmode-open]").forEach((button) => button.onclick = (event) => { event.stopPropagation(); openDevMode(button.dataset.ppDevmodeOpen); });
+  mountedRoot.querySelector("[data-pp-devmode-close]")?.addEventListener("click", closeDevMode);
+  mountedRoot.querySelector("[data-pp-devmode-apply]")?.addEventListener("click", applyDevModeEdit);
+  mountedRoot.querySelector("[data-pp-devmode-reset]")?.addEventListener("click", resetDevModeEdit);
   mountedRoot.querySelectorAll("[data-pp-favorite]").forEach((button) => button.onclick = (event) => { event.stopPropagation(); updateFavorite(button.dataset.ppFavorite); });
   mountedRoot.querySelectorAll("[data-pp-category]").forEach((button) => button.onclick = () => { ui.category = button.dataset.ppCategory; render(); });
   mountedRoot.querySelector("[data-pp-search]")?.addEventListener("input", (event) => { ui.query = event.target.value; const list = mountedRoot.querySelector(".pp-game-grid-full"); if (list) list.innerHTML = filteredCatalog().map((game) => gameCard(game)).join("") || empty("No matching builds", "Try a different search or category."); bind(); });
