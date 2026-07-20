@@ -49,10 +49,12 @@ const PHANTOMPLAY_ENGINE = {
     developer_full: { installRequired: true, supportsLargeAssets: true, maxAssetPackGb: 250 },
   },
   distributedRuntime: {
-    status: "planned_safe_design",
+    status: "foundation_active",
     userOwnedCompute: true,
     cloudStreamingFromJordan: false,
     directPeerConnectionDefault: false,
+    inboundDevicePortsDefault: false,
+    activeContributionLane: "asset_cache",
   },
   protocols: ["ready", "score", "progress", "complete", "paused", "exit", "settings", "save-state", "load-state"],
 };

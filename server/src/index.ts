@@ -293,6 +293,15 @@ import {
   updatePhantomPlaySubmission,
 } from "./phantom-ai/phantomplay.js";
 import {
+  completePhantomPlayAssetLease,
+  createPhantomPlayAssetLease,
+  enrollPhantomPlayEdgeNode,
+  getPhantomPlayEdgeNetworkSnapshot,
+  heartbeatPhantomPlayEdgeNode,
+  registerPhantomPlayEdgeManifest,
+  updatePhantomPlayEdgeNode,
+} from "./phantom-ai/phantomplay-edge-network.js";
+import {
   getPhantomStoreSnapshot,
   moderatePhantomStoreTool,
   recordPhantomStoreInstallClick,
@@ -5372,6 +5381,87 @@ app.get("/api/phantomplay", async (request, reply) => {
     subscription: access,
     storage: session.canManageAccess ? await getPhantomPlayStoreStatus() : undefined,
   };
+});
+
+function phantomPlayEdgeContext(session: AccessSession, access: Awaited<ReturnType<typeof phantomPlayAccess>>) {
+  return {
+    tenantId: access.moduleAccess.tenantId,
+    actorId: session.userId || session.id,
+    canManage: Boolean(session.canManageAccess || session.isSuperAdmin || access.moduleAccess.canManage),
+  };
+}
+
+function phantomPlayEdgeError(reply: { code: (statusCode: number) => { send: (payload: unknown) => unknown } }, error: unknown) {
+  const message = error instanceof Error ? error.message : "PhantomPlay edge-network request failed.";
+  const status = /not found/i.test(message) ? 404 : /Only a workspace manager/i.test(message) ? 403 : 400;
+  return reply.code(status).send({ ok: false, error: message });
+}
+
+app.get("/api/phantomplay/edge", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const query = (request.query ?? {}) as { tenant_id?: unknown };
+  const access = await phantomPlayAccess(session, query.tenant_id);
+  if (!access.entitled) return reply.code(403).send({ ok: false, error: "PhantomPlay is not available to this account.", reason: access.reason });
+  return { ok: true, ...(await getPhantomPlayEdgeNetworkSnapshot(phantomPlayEdgeContext(session, access))) };
+});
+
+app.post("/api/phantomplay/edge/nodes", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const access = await phantomPlayAccess(session);
+  if (!access.entitled) return reply.code(403).send({ ok: false, error: "PhantomPlay is not available to this account.", reason: access.reason });
+  try { return { ok: true, ...(await enrollPhantomPlayEdgeNode(phantomPlayEdgeContext(session, access), (request.body ?? {}) as Record<string, unknown>)) }; }
+  catch (error) { return phantomPlayEdgeError(reply, error); }
+});
+
+app.post("/api/phantomplay/edge/nodes/:id/heartbeat", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const access = await phantomPlayAccess(session);
+  if (!access.entitled) return reply.code(403).send({ ok: false, error: "PhantomPlay is not available to this account.", reason: access.reason });
+  const params = request.params as { id?: string };
+  try { return { ok: true, ...(await heartbeatPhantomPlayEdgeNode(phantomPlayEdgeContext(session, access), String(params.id || "").slice(0, 180), (request.body ?? {}) as Record<string, unknown>)) }; }
+  catch (error) { return phantomPlayEdgeError(reply, error); }
+});
+
+app.patch("/api/phantomplay/edge/nodes/:id", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const access = await phantomPlayAccess(session);
+  if (!access.entitled) return reply.code(403).send({ ok: false, error: "PhantomPlay is not available to this account.", reason: access.reason });
+  const params = request.params as { id?: string };
+  try { return { ok: true, ...(await updatePhantomPlayEdgeNode(phantomPlayEdgeContext(session, access), String(params.id || "").slice(0, 180), (request.body ?? {}) as Record<string, unknown>)) }; }
+  catch (error) { return phantomPlayEdgeError(reply, error); }
+});
+
+app.post("/api/phantomplay/edge/manifests", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const query = (request.query ?? {}) as { tenant_id?: unknown };
+  const access = await phantomPlayAccess(session, query.tenant_id);
+  if (!access.entitled) return reply.code(403).send({ ok: false, error: "PhantomPlay is not available to this account.", reason: access.reason });
+  try { return { ok: true, ...(await registerPhantomPlayEdgeManifest(phantomPlayEdgeContext(session, access), (request.body ?? {}) as Record<string, unknown>)) }; }
+  catch (error) { return phantomPlayEdgeError(reply, error); }
+});
+
+app.post("/api/phantomplay/edge/leases", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const access = await phantomPlayAccess(session);
+  if (!access.entitled) return reply.code(403).send({ ok: false, error: "PhantomPlay is not available to this account.", reason: access.reason });
+  try { return { ok: true, ...(await createPhantomPlayAssetLease(phantomPlayEdgeContext(session, access), (request.body ?? {}) as Record<string, unknown>)) }; }
+  catch (error) { return phantomPlayEdgeError(reply, error); }
+});
+
+app.post("/api/phantomplay/edge/leases/:id/complete", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const access = await phantomPlayAccess(session);
+  if (!access.entitled) return reply.code(403).send({ ok: false, error: "PhantomPlay is not available to this account.", reason: access.reason });
+  const params = request.params as { id?: string };
+  try { return { ok: true, ...(await completePhantomPlayAssetLease(phantomPlayEdgeContext(session, access), String(params.id || "").slice(0, 180), (request.body ?? {}) as Record<string, unknown>)) }; }
+  catch (error) { return phantomPlayEdgeError(reply, error); }
 });
 
 app.patch("/api/phantomplay/profile", async (request, reply) => {
