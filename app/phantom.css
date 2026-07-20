@@ -13631,36 +13631,17 @@ body { background: radial-gradient(120% 90% at 50% 0%, #03100b 0%, #010508 55%, 
     padding-bottom: 92px; /* clearance for the command dock */
   }
 
-  /* viewport corner brackets — the frame of the bridge canopy */
-  .app-main::before, .app-main::after {
-    content: ""; position: fixed; width: 26px; height: 26px; z-index: 40;
-    pointer-events: none; opacity: 0.7;
-  }
-  .app-main::before {
-    left: 10px; top: 10px;
-    border-left: 1px solid var(--line-strong); border-top: 1px solid var(--line-strong);
-  }
-  .app-main::after {
-    right: 10px; top: 10px;
-    border-right: 1px solid var(--line-strong); border-top: 1px solid var(--line-strong);
-  }
-
-  /* ---------- HUD topbar: floating glass strip, not a webpage header ---------- */
+  /* ---------- topbar: a precise floating glass bar ---------- */
   .topbar2 {
-    position: sticky; top: 8px; z-index: 30;
-    margin: 8px clamp(14px, 1.6vw, 28px) 0;
+    position: sticky; top: 10px; z-index: 30;
+    margin: 10px clamp(14px, 1.6vw, 28px) 0;
     width: auto; border-bottom: 0;
-    border: 1px solid var(--line);
-    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 13px;
     padding: 9px clamp(14px, 1.6vw, 22px);
-    background: linear-gradient(180deg, rgba(4, 14, 10, 0.78), rgba(2, 8, 6, 0.62));
-    clip-path: polygon(14px 0, calc(100% - 14px) 0, 100% 45%, 100% 100%, 0 100%, 0 45%);
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(65, 255, 161, 0.12);
-  }
-  .topbar2::after {
-    content: ""; position: absolute; left: 8%; right: 8%; top: -1px; height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(65, 255, 161, 0.55), transparent);
-    pointer-events: none;
+    background: linear-gradient(180deg, rgba(10, 20, 15, 0.72), rgba(5, 12, 9, 0.66));
+    -webkit-backdrop-filter: blur(22px) saturate(1.5); backdrop-filter: blur(22px) saturate(1.5);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 12px 40px rgba(0, 0, 0, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.05);
   }
 
   /* the ticker reads as a comms line under the HUD */
@@ -13704,9 +13685,9 @@ body { background: radial-gradient(120% 90% at 50% 0%, #03100b 0%, #010508 55%, 
   .side-nav-main { overflow-y: visible; }
   .side-nav-utility { margin-top: 0; border-top: 0; }
   .side-nav::before {
-    content: "NAVIGATOR DECK — ALL SYSTEMS";
+    content: "ALL MODULES";
     display: block; text-align: center; margin: 10px 0 2px;
-    font: 500 9px "DM Mono", monospace; letter-spacing: 0.42em; color: var(--dim);
+    font: 500 9px "DM Mono", monospace; letter-spacing: 0.34em; color: var(--dim);
   }
 
   /* module tiles */
@@ -13715,8 +13696,8 @@ body { background: radial-gradient(120% 90% at 50% 0%, #03100b 0%, #010508 55%, 
   }
   .side-nav-utility { position: relative; padding-top: 26px; }
   .side-nav-utility::before {
-    content: "UTILITY DECK"; position: absolute; top: 0; left: 50%; transform: translateX(-50%);
-    font: 500 8.5px "DM Mono", monospace; letter-spacing: 0.42em; color: var(--dim-2);
+    content: "UTILITIES"; position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+    font: 500 8.5px "DM Mono", monospace; letter-spacing: 0.34em; color: var(--dim-2);
   }
   .side-nav-utility::after {
     content: ""; position: absolute; top: 13px; left: 8%; right: 8%; height: 1px;
@@ -13726,17 +13707,18 @@ body { background: radial-gradient(120% 90% at 50% 0%, #03100b 0%, #010508 55%, 
   .sidebar .nav-item {
     flex-direction: column; align-items: center; justify-content: center; text-align: center;
     gap: 8px; min-height: 92px; padding: 14px 10px 12px;
-    border: 1px solid rgba(65, 255, 161, 0.13); border-radius: 12px;
-    background: linear-gradient(165deg, rgba(9, 26, 18, 0.55), rgba(3, 10, 7, 0.72));
-    clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+    border: 1px solid rgba(255, 255, 255, 0.07); border-radius: 14px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.012));
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.045);
     font-size: 12.5px;
     transition: background 0.18s, color 0.18s, border-color 0.18s, transform 0.18s, box-shadow 0.18s;
   }
   .sidebar .nav-item .ic { width: 20px; height: 20px; flex: 0 0 auto; }
   .sidebar .nav-item:hover {
-    transform: translateY(-2px);
-    border-color: rgba(65, 255, 161, 0.45);
-    box-shadow: 0 8px 30px rgba(65, 255, 161, 0.12), inset 0 0 24px rgba(65, 255, 161, 0.05);
+    transform: translateY(-1px);
+    border-color: rgba(65, 255, 161, 0.35);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.02));
+    box-shadow: 0 6px 22px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.06);
   }
   .sidebar .nav-item.is-active { transform: none; }
   .sidebar .nav-badge, .sidebar .nav-pill { margin-left: 0; }
@@ -13758,17 +13740,12 @@ body { background: radial-gradient(120% 90% at 50% 0%, #03100b 0%, #010508 55%, 
   .bridge-dock {
     position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%);
     z-index: 70; display: flex; align-items: flex-end; gap: 10px;
-    padding: 10px 18px 9px;
-    border: 1px solid var(--line);
-    border-radius: 18px;
-    background: linear-gradient(180deg, rgba(5, 16, 11, 0.86), rgba(2, 7, 5, 0.92));
-    -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
-    clip-path: polygon(22px 0, calc(100% - 22px) 0, 100% 55%, 100% 100%, 0 100%, 0 55%);
-    box-shadow: 0 18px 60px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(65, 255, 161, 0.14);
-  }
-  .bridge-dock::before {
-    content: ""; position: absolute; left: 12%; right: 12%; top: -1px; height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(65, 255, 161, 0.6), transparent);
+    padding: 10px 16px 9px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 20px;
+    background: linear-gradient(180deg, rgba(12, 22, 17, 0.78), rgba(5, 11, 8, 0.86));
+    -webkit-backdrop-filter: blur(24px) saturate(1.5); backdrop-filter: blur(24px) saturate(1.5);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 22px 60px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.06);
   }
   .bridge-dock-side { display: flex; gap: 6px; align-items: flex-end; }
   .bridge-dock-btn {
@@ -13791,44 +13768,33 @@ body { background: radial-gradient(120% 90% at 50% 0%, #03100b 0%, #010508 55%, 
     min-width: 15px; padding: 0 4px; border-radius: 999px; background: var(--warn); color: #1a1400; font-style: normal;
   }
   .bridge-sigil {
-    position: relative; width: 58px; height: 58px; margin: 0 6px -14px; cursor: pointer;
+    position: relative; width: 54px; height: 54px; margin: 0 6px -10px; cursor: pointer;
     display: grid; place-items: center;
-    border: 1px solid var(--line-strong); border-radius: 16px;
-    background: radial-gradient(circle at 50% 30%, rgba(16, 48, 32, 0.95), rgba(2, 10, 6, 0.98));
-    clip-path: polygon(50% 0, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%);
-    box-shadow: 0 0 30px rgba(65, 255, 161, 0.25), inset 0 0 18px rgba(65, 255, 161, 0.1);
-    transition: transform 0.2s, box-shadow 0.2s;
+    border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 17px;
+    background:
+      radial-gradient(circle at 50% 26%, rgba(30, 70, 50, 0.85), transparent 70%),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.015));
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 8px 26px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
   }
-  .bridge-sigil img { width: 30px; height: 30px; filter: drop-shadow(0 0 8px rgba(65, 255, 161, 0.7)); transition: transform 0.25s; }
-  .bridge-sigil:hover { transform: translateY(-3px); box-shadow: 0 0 44px rgba(65, 255, 161, 0.4), inset 0 0 20px rgba(65, 255, 161, 0.16); }
-  .bridge-sigil[aria-expanded="true"] img { transform: rotate(180deg) scale(0.92); }
-  .bridge-sigil-ring {
-    position: absolute; inset: -5px; border: 1px solid rgba(65, 255, 161, 0.35); border-radius: 18px;
-    clip-path: polygon(50% 0, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%);
-    animation: sigilPulse 3.2s ease-in-out infinite; pointer-events: none;
-  }
+  .bridge-sigil img { width: 28px; height: 28px; filter: drop-shadow(0 0 6px rgba(65, 255, 161, 0.55)); transition: transform 0.25s; }
+  .bridge-sigil:hover { transform: translateY(-2px); border-color: rgba(65, 255, 161, 0.4); }
+  .bridge-sigil[aria-expanded="true"] { border-color: rgba(65, 255, 161, 0.55); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 0 22px rgba(65, 255, 161, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.08); }
+  .bridge-sigil[aria-expanded="true"] img { transform: rotate(180deg) scale(0.94); }
+  .bridge-sigil-ring { display: none; }
 
-  /* ---------- warp transition on workspace change ---------- */
-  .workspace-page.page-enter { animation: bridgeWarp 0.38s cubic-bezier(0.22, 1, 0.36, 1) both; }
+  /* ---------- workspace change: settle, don't flash ---------- */
+  .workspace-page.page-enter { animation: bridgeSettle 0.32s cubic-bezier(0.22, 1, 0.36, 1) both; }
 }
 
 @media (min-width: 901px) {
-  /* module overlays are hailing panels, not web modals — shared class, so
-     every popup workspace gets the deck treatment at once */
+  /* module overlays: precise sheet panels — hairline border, layered depth,
+     a restrained inner top-light. Shared class, so every popup workspace
+     gets the same material at once. */
   .overlay-panel {
-    border-radius: 16px;
-    clip-path: polygon(20px 0, calc(100% - 20px) 0, 100% 20px, 100% calc(100% - 20px), calc(100% - 20px) 100%, 20px 100%, 0 calc(100% - 20px), 0 20px);
-  }
-  .overlay-panel::before {
-    content: ""; position: absolute; left: 10%; right: 10%; top: 0; height: 1px; z-index: 2;
-    background: linear-gradient(90deg, transparent, rgba(65, 255, 161, 0.65), transparent);
-    pointer-events: none;
-  }
-  .overlay-head { position: relative; }
-  .overlay-head::before {
-    content: "INCOMING SYSTEM"; position: absolute; right: 64px; top: 50%; transform: translateY(-50%);
-    font: 500 8px "DM Mono", monospace; letter-spacing: 0.4em; color: var(--dim-2);
-    pointer-events: none;
+    border-radius: 18px;
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.55), 0 40px 120px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.05);
   }
 }
 
@@ -13837,23 +13803,107 @@ body { background: radial-gradient(120% 90% at 50% 0%, #03100b 0%, #010508 55%, 
 }
 
 @keyframes bridgeTileIn {
-  from { opacity: 0; transform: translateY(14px) scale(0.96); }
+  from { opacity: 0; transform: translateY(10px) scale(0.98); }
   to { opacity: 1; transform: none; }
 }
-@keyframes sigilPulse {
-  0%, 100% { opacity: 0.8; transform: scale(1); }
-  50% { opacity: 0.25; transform: scale(1.09); }
-}
-@keyframes bridgeWarp {
-  from { opacity: 0; transform: translateY(10px) scale(0.992); filter: brightness(1.6) saturate(1.3); }
-  60% { filter: brightness(1.08) saturate(1.05); }
-  to { opacity: 1; transform: none; filter: none; }
+@keyframes bridgeSettle {
+  from { opacity: 0; transform: translateY(8px) scale(0.996); }
+  to { opacity: 1; transform: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .sidebar { transition: none; }
   .sidebar.is-expanded .nav-item { animation: none; }
-  .bridge-sigil-ring { animation: none; }
   .workspace-page.page-enter { animation: none; }
   .bridge-dock-btn:hover, .bridge-sigil:hover, .sidebar .nav-item:hover { transform: none; }
 }
+
+/* ======================================================================
+   PRECISION — the material system. One pass over the tokens and shared
+   primitives (buttons, inputs, focus, scrollbars, type) that every module
+   is built from, so the whole product reads as one precise, professional
+   instrument: hairline borders, layered depth, restrained accent color,
+   disciplined typography. Emerald stays the brand accent; it stops being
+   the wash over everything.
+   ====================================================================== */
+
+/* ---------- tokens: neutralize the wash, keep the accent ---------- */
+:root {
+  --line: rgba(158, 205, 182, 0.13);
+  --line-strong: rgba(170, 220, 196, 0.26);
+  --glass: rgba(10, 18, 14, 0.72);
+  --glass-2: rgba(6, 12, 9, 0.58);
+  --dim: #7ea892;
+}
+
+/* ---------- typography: quiet confidence ---------- */
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-variant-numeric: tabular-nums;
+}
+h1, h2, h3 { letter-spacing: -0.015em; }
+::selection { background: rgba(65, 255, 161, 0.28); color: #eafff2; }
+
+/* ---------- scrollbars: thin, neutral, everywhere ---------- */
+* { scrollbar-width: thin; scrollbar-color: rgba(158, 205, 182, 0.22) transparent; }
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { background: rgba(158, 205, 182, 0.22); border-radius: 8px; }
+*::-webkit-scrollbar-thumb:hover { background: rgba(158, 205, 182, 0.36); }
+
+/* ---------- focus: one consistent, accessible ring ---------- */
+:where(button, [role="button"], a, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid rgba(65, 255, 161, 0.55);
+  outline-offset: 2px;
+}
+
+/* ---------- buttons: capsule instrument keys ---------- */
+.btn {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.02));
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  font-weight: 600;
+}
+.btn:hover {
+  border-color: rgba(65, 255, 161, 0.4);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.03));
+  transform: translateY(-1px);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+.btn:active { transform: translateY(0) scale(0.985); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.04); }
+.btn-primary {
+  background: linear-gradient(180deg, #52ffab, #1fd985);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.45), 0 4px 16px rgba(65, 255, 161, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  border: 0; color: #03140b;
+}
+.btn-primary:hover {
+  background: linear-gradient(180deg, #6dffb8, #27e890);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.45), 0 6px 22px rgba(65, 255, 161, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+/* ---------- inputs: recessed, precise, consistent focus ---------- */
+:where(input[type="text"], input[type="search"], input[type="email"], input[type="password"],
+       input[type="number"], input[type="url"], input[type="tel"], input[type="date"], select, textarea) {
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  background: rgba(0, 0, 0, 0.32);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
+  padding: 8px 12px;
+  transition: border-color 0.16s, box-shadow 0.16s, background 0.16s;
+}
+:where(input[type="text"], input[type="search"], input[type="email"], input[type="password"],
+       input[type="number"], input[type="url"], input[type="tel"], input[type="date"], select, textarea):focus {
+  outline: none;
+  border-color: rgba(65, 255, 161, 0.55);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3), 0 0 0 3px rgba(65, 255, 161, 0.13);
+  background: rgba(0, 0, 0, 0.42);
+}
+
+/* ---------- shared panels: one material ---------- */
+.widget, .rcard, .plan-card, .queue-card {
+  border-color: rgba(255, 255, 255, 0.07);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+.section-head h2 { letter-spacing: -0.01em; }

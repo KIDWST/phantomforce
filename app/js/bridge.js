@@ -23,29 +23,31 @@
   const space = document.querySelector("[data-bridge-space]");
   if (space) {
     const ctx = space.getContext("2d");
-    let W = 0, H = 0, stars = [], nebulae = [], comet = null, nextCometAt = 0;
+    let W = 0, H = 0, stars = [], nebulae = [];
     let running = false, lastT = 0;
 
     const rand = (a, b) => a + Math.random() * (b - a);
+    /* Restraint over spectacle: a sparse, dim field that reads as depth
+       behind the product, never as a screensaver competing with it. */
     const seed = () => {
       stars = [];
-      const count = Math.min(190, Math.round((W * H) / 11000));
+      const count = Math.min(90, Math.round((W * H) / 26000));
       for (let i = 0; i < count; i++) {
         const depth = Math.random();                    // 0 far … 1 near
         stars.push({
           x: Math.random() * W, y: Math.random() * H, depth,
-          r: 0.4 + depth * 1.3,
+          r: 0.4 + depth * 1.0,
           hue: Math.random() < 0.82 ? "160,255,205" : "120,225,255",
-          base: 0.25 + depth * 0.5,
-          tw: rand(0.4, 1.6), ph: rand(0, Math.PI * 2),
+          base: 0.10 + depth * 0.22,
+          tw: rand(0.2, 0.7), ph: rand(0, Math.PI * 2),
         });
       }
-      nebulae = [0, 1, 2].map((i) => ({
-        x: rand(0.1, 0.9) * W, y: rand(0.1, 0.9) * H,
-        r: rand(0.28, 0.5) * Math.max(W, H),
+      nebulae = [0, 1].map((i) => ({
+        x: rand(0.15, 0.85) * W, y: rand(0.1, 0.9) * H,
+        r: rand(0.32, 0.5) * Math.max(W, H),
         hue: i === 1 ? "20,90,120" : "18,110,70",
-        a: rand(0.05, 0.085),
-        vx: rand(-2.2, 2.2), vy: rand(-1.4, 1.4),
+        a: rand(0.03, 0.05),
+        vx: rand(-1.1, 1.1), vy: rand(-0.7, 0.7),
       }));
     };
     const resize = () => {
@@ -72,29 +74,12 @@
       }
       for (const s of stars) {
         if (dt) {
-          s.x -= (0.9 + s.depth * 3.4) * dt;              // slow parallax drift
+          s.x -= (0.4 + s.depth * 1.6) * dt;              // slow parallax drift
           if (s.x < -2) { s.x = W + 2; s.y = Math.random() * H; }
         }
-        const a = reduceMotion ? s.base : s.base * (0.7 + 0.3 * Math.sin(t * s.tw + s.ph));
+        const a = reduceMotion ? s.base : s.base * (0.75 + 0.25 * Math.sin(t * s.tw + s.ph));
         ctx.fillStyle = `rgba(${s.hue},${a})`;
         ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2); ctx.fill();
-      }
-      if (comet) {
-        comet.x += comet.vx * dt; comet.y += comet.vy * dt; comet.life -= dt;
-        if (comet.life <= 0 || comet.x > W + 80 || comet.y > H + 80) comet = null;
-        else {
-          const tail = 90;
-          const g = ctx.createLinearGradient(comet.x, comet.y, comet.x - comet.vx * 0.16, comet.y - comet.vy * 0.16);
-          g.addColorStop(0, "rgba(190,255,225,0.85)");
-          g.addColorStop(1, "rgba(190,255,225,0)");
-          ctx.strokeStyle = g; ctx.lineWidth = 1.4; ctx.lineCap = "round";
-          ctx.beginPath(); ctx.moveTo(comet.x, comet.y);
-          ctx.lineTo(comet.x - (comet.vx / Math.hypot(comet.vx, comet.vy)) * tail, comet.y - (comet.vy / Math.hypot(comet.vx, comet.vy)) * tail);
-          ctx.stroke();
-        }
-      } else if (dt && t > nextCometAt) {
-        nextCometAt = t + rand(16, 34);
-        comet = { x: rand(-0.1, 0.5) * W, y: rand(-0.05, 0.3) * H, vx: rand(280, 420), vy: rand(120, 220), life: 1.6 };
       }
     }
 
