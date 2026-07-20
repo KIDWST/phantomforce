@@ -3,7 +3,7 @@
 import {
   store, ctx, session, resolveSession, isAdmin, currentWs, currentTenantId, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, pushActivity, isLiveAdminHost, isClientPublicHost, isLocalDevHost, isStaticPublicHost,
-  ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
+  redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
 } from "./store.js?v=phantom-live-20260719-56";
@@ -154,59 +154,8 @@ function showGate() {
   phantom.hidden = true;
   const card = gate.querySelector(".gate-card");
   if (isLiveAdminHost()) {
-    card.innerHTML = `
-      <p class="gate-kicker">PHANTOMFORCE · LIVE OWNER ACCESS</p>
-      <h1>Sign in to Phantom.</h1>
-      <form class="owner-login" data-owner-login>
-        <label>
-          <span>Owner email</span>
-          <input type="email" data-owner-email name="phantomforce-owner-email" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="phantomforcesupport@gmail.com" autofocus required />
-        </label>
-        <label>
-          <span>Owner password</span>
-          <input type="password" data-owner-password name="phantomforce-owner-password" autocomplete="off" placeholder="Owner password" required />
-        </label>
-        <button class="gate-opt gate-submit" type="submit">
-          <span class="gate-opt-icon">⌘</span>
-          <b>Launch Business Manager</b>
-          <i>Owner/admin account required. Admin always opens full Force, not a customer workspace.</i>
-        </button>
-        <p class="gate-error" data-owner-error hidden></p>
-      </form>
-      <p class="gate-note">The private gateway protects this route. Sign-in lands in the PhantomForce HQ workspace with full operator access across clients, modules, approvals, and routing.</p>`;
-    const form = card.querySelector("[data-owner-login]");
-    const emailInput = card.querySelector("[data-owner-email]");
-    const passwordInput = card.querySelector("[data-owner-password]");
-    const error = card.querySelector("[data-owner-error]");
-    form.onsubmit = async (event) => {
-      event.preventDefault();
-      error.hidden = true;
-      const email = emailInput.value.trim();
-      const password = passwordInput.value;
-      if (!email || !password) { error.textContent = "Enter your email and password."; error.hidden = false; return; }
-      if (/(^|[._+-])(customer|client|test-client|sports)([._+-]|@)|@(customer|client|test-client|sports)\./i.test(email)) {
-        error.textContent = "This is the owner-only admin login. Use the PhantomForce owner account here. Client/test accounts belong on the client app, not admin.phantomforce.online.";
-        error.hidden = false;
-        return;
-      }
-      form.classList.add("is-loading");
-      try {
-        const nextSession = await ownerLogin(email, password);
-        if (nextSession?.requires2fa) {
-          renderOwnerTwoFactorGate(card, nextSession.challengeToken);
-          return;
-        }
-        ctx.session = nextSession;
-        enterPhantom();
-      } catch (err) {
-        session.clear();
-        error.textContent = err?.message || "Owner login failed.";
-        error.hidden = false;
-      } finally {
-        form.classList.remove("is-loading");
-      }
-    };
-    maybeUpgradeGateToDatabaseLogin(card, { internalAdmin: true });
+    renderInternalAdminAuthLoading(card);
+    maybeUpgradeGateToDatabaseLogin(card, { internalAdmin: true, required: true });
     return;
   }
 
@@ -257,54 +206,6 @@ function showGate() {
   maybeUpgradeGateToDatabaseLogin(card);
 }
 
-function renderOwnerTwoFactorGate(card, challengeToken) {
-  card.innerHTML = `
-    <p class="gate-kicker">PHANTOMFORCE · LIVE OWNER ACCESS</p>
-    <h1>Verify it's you.</h1>
-    <form class="owner-login" data-owner-2fa>
-      <label>
-        <span>Authenticator code</span>
-        <input name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" maxlength="8" placeholder="000000" autofocus required />
-      </label>
-      <button class="gate-opt gate-submit" type="submit">
-        <span class="gate-opt-icon">⌁</span>
-        <b>Verify and launch</b>
-        <i>Enter the current code from your authenticator app.</i>
-      </button>
-      <p class="gate-error" data-owner-2fa-error hidden></p>
-    </form>
-    <div class="auth-links"><button type="button" data-owner-2fa-back>Back to sign in</button></div>
-    <p class="gate-note">Your password was accepted. This second step protects full owner access.</p>`;
-
-  const form = card.querySelector("[data-owner-2fa]");
-  const error = card.querySelector("[data-owner-2fa-error]");
-  card.querySelector("[data-owner-2fa-back]").onclick = () => showGate();
-  form.onsubmit = async (event) => {
-    event.preventDefault();
-    error.hidden = true;
-    const code = String(new FormData(form).get("code") || "").trim();
-    if (!code) return;
-    form.classList.add("is-loading");
-    form.querySelectorAll("button, input").forEach((control) => { control.disabled = true; });
-    try {
-      const nextSession = await databaseVerify2fa(challengeToken, code);
-      if (!nextSession?.canManageAccess && !nextSession?.isSuperAdmin) {
-        await databaseLogout();
-        session.clear();
-        throw new Error("This account is not allowed to access the owner console.");
-      }
-      ctx.session = nextSession;
-      enterPhantom();
-    } catch (err) {
-      error.textContent = err?.message || "Invalid or expired 2FA code.";
-      error.hidden = false;
-      form.classList.remove("is-loading");
-      form.querySelectorAll("button, input").forEach((control) => { control.disabled = false; });
-      form.querySelector("input")?.focus();
-    }
-  };
-}
-
 /* When the backend runs real multi-user auth (database provider), the
    gate becomes an email/password sign-in — accounts, orgs, and roles
    live in Postgres, not in this shell. Checked live, never assumed. */
@@ -318,6 +219,16 @@ function renderCustomerAuthLoading(card) {
     <p class="gate-note">Business owners open Business Manager here. Invited team members open Team Workspace under the same business workspace.</p>`;
 }
 
+function renderInternalAdminAuthLoading(card, message = "Connecting to the PhantomForce account system...") {
+  card.innerHTML = `
+    <p class="gate-kicker">PHANTOMFORCE · INTERNAL ACCESS</p>
+    <h1>Internal admin sign-in.</h1>
+    <div class="owner-login">
+      <p class="gate-note">${esc(message)}</p>
+    </div>
+    <p class="gate-note">Admin opens full Force with platform access. Customer workspaces live on app.phantomforce.online.</p>`;
+}
+
 function renderCustomerAuthBlocked(card, message = "Customer account login is not enabled on this backend.") {
   card.innerHTML = `
     <p class="gate-kicker">PHANTOMFORCE · CUSTOMER WORKSPACE</p>
@@ -329,11 +240,26 @@ function renderCustomerAuthBlocked(card, message = "Customer account login is no
 }
 
 function maybeUpgradeGateToDatabaseLogin(card, options = {}) {
-  const { customerApp = false, internalAdmin = false, required = false } = options;
+  const { customerApp = false, internalAdmin = false, required = false, attempt = 0 } = options;
+  const retryAuthUpgrade = (message) => {
+    if (!required || gate.hidden) return false;
+    if (internalAdmin) {
+      renderInternalAdminAuthLoading(card, message);
+    } else {
+      renderCustomerAuthBlocked(card, message);
+    }
+    if (attempt >= 20) return true;
+    window.setTimeout(() => maybeUpgradeGateToDatabaseLogin(card, { ...options, attempt: attempt + 1 }), 3000);
+    return true;
+  };
   fetchAuthConfig().then((auth) => {
     if (gate.hidden) return;
     if (!auth?.customerAuthEnabled && !auth?.databaseAuthEnabled) {
-      if (required) renderCustomerAuthBlocked(card);
+      if (required) {
+        retryAuthUpgrade(attempt >= 20
+          ? "Sign-in is temporarily unavailable. Try again in a moment."
+          : "Account sign-in is starting. Retrying automatically...");
+      }
       return;
     }
     const linkTokens = (() => {
@@ -522,7 +448,9 @@ function maybeUpgradeGateToDatabaseLogin(card, options = {}) {
     };
     render();
   }).catch(() => {
-    if (required && !gate.hidden) renderCustomerAuthBlocked(card, "Sign-in is temporarily unavailable. Try again in a moment.");
+    retryAuthUpgrade(attempt >= 20
+      ? "Sign-in is temporarily unavailable. Try again in a moment."
+      : "Account sign-in is starting. Retrying automatically...");
   });
 }
 

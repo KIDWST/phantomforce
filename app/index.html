@@ -20,6 +20,27 @@
           .then((keys) => Promise.all(keys.map((key) => caches.delete(key))))
           .catch(() => {});
       }
+      (function keepLiveBuildFresh() {
+        const currentBuild = window.PHANTOM_BUILD || "";
+        if (!currentBuild || location.protocol === "file:") return;
+        const findBuild = (html) => String(html || "").match(/phantom-live-\d{8}-\d+/)?.[0] || "";
+        const reloadToBuild = (nextBuild) => {
+          if (!nextBuild || nextBuild === currentBuild || sessionStorage.getItem("pf.build.reload") === nextBuild) return;
+          sessionStorage.setItem("pf.build.reload", nextBuild);
+          const nextUrl = new URL(location.href);
+          nextUrl.searchParams.set("_pf_build", nextBuild);
+          location.replace(nextUrl.href);
+        };
+        const checkBuild = async () => {
+          try {
+            const response = await fetch(`/app/index.html?pf_build_probe=${Date.now()}`, { cache: "no-store" });
+            if (!response.ok) return;
+            reloadToBuild(findBuild(await response.text()));
+          } catch {}
+        };
+        window.addEventListener("pageshow", checkBuild, { once: true });
+        window.setInterval(checkBuild, 60000);
+      })();
     </script>
     <title>PhantomForce — AI Operations Console</title>
     <meta name="description" content="PhantomForce — your AI business operating system." />

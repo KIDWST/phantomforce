@@ -828,7 +828,8 @@ async function databaseOwnerLogin(email, password) {
 export async function ownerLogin(ownerKeyOrEmail, password) {
   if (password !== undefined) {
     const auth = await authConfigForLogin();
-    if (auth?.databaseAuthEnabled && !auth?.ownerProductionAuthEnabled) {
+    const liveAdminDatabaseLane = isLiveAdminHost() && auth?.ownerProductionAuthEnabled !== true;
+    if ((auth?.databaseAuthEnabled || liveAdminDatabaseLane) && !auth?.ownerProductionAuthEnabled) {
       return databaseOwnerLogin(ownerKeyOrEmail, password);
     }
   }
