@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self'; img-src data:; connect-src 'none'; media-src 'none'; frame-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src data:; connect-src 'none'; media-src 'none'; frame-src 'none'">
 <title>CubeTown</title>
 <style>
 :root{
@@ -111,6 +111,7 @@ input[type=range]{width:150px}
 ::-webkit-scrollbar{width:8px}::-webkit-scrollbar-thumb{background:#ffffff22;border-radius:4px}
 @media(prefers-reduced-motion:reduce){.spark-fill{transition:none}}
 </style>
+<link rel="stylesheet" href="./style.css">
 </head>
 <body>
 <canvas id="stage"></canvas>
@@ -132,6 +133,7 @@ input[type=range]{width:150px}
       <button type="button" data-ct-open="build">Build</button>
       <button type="button" data-ct-open="farming">Farm</button>
       <button type="button" data-ct-open="craft">Craft</button>
+      <button type="button" data-ct-open="map">Map</button>
       <button type="button" data-ct-open="questlog">Quest Log</button>
       <button type="button" data-ct-open="inventory">Inventory</button>
       <button type="button" data-ct-open="customize">Customize</button>
@@ -143,6 +145,16 @@ input[type=range]{width:150px}
       <button type="button" data-ct-pause>Pause</button>
     </div>
   </div>
+  <div class="world-nav" data-ct-nav>
+    <button type="button" class="minimap-button" data-ct-open="map" title="Open trail map" aria-label="Open trail map">
+      <canvas width="144" height="144" data-ct-minimap></canvas>
+    </button>
+    <div class="nav-copy">
+      <b data-ct-location>Hearthward</b>
+      <span data-ct-nav-note>Home district</span>
+      <span data-ct-weather>Clear skies</span>
+    </div>
+  </div>
   <div class="hud-bottom">
     <div class="toast" data-ct-toast></div>
     <button type="button" class="context-btn" data-ct-context>Gather</button>
@@ -151,6 +163,27 @@ input[type=range]{width:150px}
         <span></span><button data-ct-move="up">▲</button><span></span>
         <button data-ct-move="left">◀</button><button data-ct-move="act">●</button><button data-ct-move="right">▶</button>
         <span></span><button data-ct-move="down">▼</button><span></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="panel" data-ct-panel="map">
+  <div class="card map-card">
+    <button class="close" data-ct-close aria-label="Close map">×</button>
+    <h2>Trail Map</h2>
+    <p class="sub" data-ct-map-sub>Hearthward region · 128 × 128 tiles</p>
+    <div class="map-layout">
+      <button type="button" class="world-map-button" data-ct-map-target title="Set a trail marker" aria-label="Set a trail marker">
+        <canvas width="512" height="512" data-ct-world-map></canvas>
+      </button>
+      <div class="map-sidebar">
+        <div class="map-position">
+          <b data-ct-map-location>Hearthward</b>
+          <span data-ct-map-coords>8, 8</span>
+        </div>
+        <div class="map-landmarks" data-ct-map-landmarks></div>
+        <button type="button" class="map-clear" data-ct-map-clear>Clear trail marker</button>
       </div>
     </div>
   </div>
@@ -293,6 +326,8 @@ input[type=range]{width:150px}
       <div class="stat-box"><b data-ct-stat-dish>0</b><span>Dishes cooked</span></div>
       <div class="stat-box"><b data-ct-stat-quests>0/3</b><span>Quests done</span></div>
       <div class="stat-box"><b data-ct-stat-score>0</b><span>Town score</span></div>
+      <div class="stat-box"><b data-ct-stat-discovered>1</b><span>Places found</span></div>
+      <div class="stat-box"><b data-ct-stat-caches>0</b><span>Trail caches</span></div>
     </div>
   </div>
 </div>

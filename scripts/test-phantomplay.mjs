@@ -9,7 +9,7 @@ const index = read("../app/index.html");
 const css = read("../app/phantomplay.css");
 const v2Css = read("../app/phantomplay-v2.css");
 const staticServer = read("../ops/admin-live/admin-static-server.mjs");
-const gameSlugs = ["neon-drift", "signal-match", "focus-stack", "word-weld", "reflex-grid", "rift-frenzy", "serpent-surge", "pixel-bloom", "type-storm"];
+const gameSlugs = ["neon-drift", "signal-match", "focus-stack", "word-weld", "reflex-grid", "rift-frenzy", "serpent-surge", "pixel-bloom", "type-storm", "im-baked", "phantom-strike"];
 const games = gameSlugs.map((name) => read(`../app/games/${name}.html`));
 const neonDrift = games[gameSlugs.indexOf("neon-drift")];
 const phantomRumble = read("../app/games/phantom-rumble.html");
@@ -88,6 +88,8 @@ assert.match(module, /document\.exitFullscreen/u, "Closing the player must escap
 assert.match(module, /PHANTOMPLAY_ENGINE/u, "The player must publish an engine capability profile.");
 assert.match(module, /saveStateBytes:\s*262144/u, "The engine must support larger save-state payloads for bigger games.");
 assert.match(module, /largeMap:\s*\{/u, "The engine must advertise large-map support.");
+assert.match(module, /screenFlow:\s*\["title", "loadout", "match", "results"\]/u, "The engine must advertise the complete game screen flow.");
+assert.match(module, /updateChannel:\s*\{\s*kind:\s*"web_build",\s*checkSeconds:\s*60,\s*reinstallRequired:\s*false\s*\}/u, "Web game updates must stay reinstall-free and build-driven.");
 assert.match(module, /desktop_player/u, "The engine must advertise a downloadable large-asset player profile.");
 assert.match(module, /developer_full/u, "The engine must advertise a full developer install profile.");
 assert.match(module, /cloudStreamingFromJordan:\s*false/u, "The engine must not imply Jordan-hosted cloud game streaming.");
@@ -196,5 +198,16 @@ assert.match(kingdomBreakers, /function targetOwnerForShooter\(shooter\)/u, "Kin
 assert.match(kingdomBreakers, /predictTrajectory\(ammoKey,ang,pw,220,'bot'\)/u, "Kingdom Breakers bot aim prediction must originate from the bot engine.");
 assert.match(kingdomBreakers, /function duelWardenDown\(owner\)/u, "Kingdom Breakers duel mode must end around Warden defeat, not shared breach score.");
 assert.match(kingdomBreakers, /duelWardenDown\('bot'\)[\s\S]*duelWardenDown\('player'\)/u, "Kingdom Breakers duel end checks must inspect both Wardens.");
+
+const imBaked = games[gameSlugs.indexOf("im-baked")];
+assert.match(imBaked, /Story Shift[\s\S]*Rush Counter/u, "I'm Baked must provide two real shift modes.");
+assert.match(imBaked, /function makeOrder\(\)[\s\S]*function scoreCake\(\)/u, "I'm Baked must generate and score customer orders.");
+assert.match(imBaked, /phase==='build'[\s\S]*phase==='bake'[\s\S]*phase==='decorate'[\s\S]*phase==='serve'/u, "I'm Baked must implement build, bake, decorate, and serve stations.");
+
+const phantomStrike = games[gameSlugs.indexOf("phantom-strike")];
+assert.match(phantomStrike, /Solo Ops[\s\S]*Local 1v1/u, "Phantom Strike must clearly distinguish bots from real local multiplayer.");
+assert.match(phantomStrike, /outpost:\[[\s\S]*foundry:\[[\s\S]*harbor:\[/u, "Phantom Strike must ship three distinct arena maps.");
+assert.match(phantomStrike, /function cast\([\s\S]*function renderView\(/u, "Phantom Strike must use a real first-person ray-cast renderer.");
+assert.match(phantomStrike, /if\(mode==='duel'\)\{renderView\(players\[0\][\s\S]*renderView\(players\[1\]/u, "Phantom Strike local duel must render genuine split-screen views.");
 
 console.log("PhantomPlay frontend and game safety checks passed.");

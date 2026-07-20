@@ -71,12 +71,29 @@
     dlgFriend: $('[data-ct-dlg-friend]'),
     dlgGiftList: $('[data-ct-dlg-gift-list]'),
     returnHome: $('[data-ct-return-home]'),
+    minimap: $('[data-ct-minimap]'),
+    worldMap: $('[data-ct-world-map]'),
+    mapSub: $('[data-ct-map-sub]'),
+    mapLocation: $('[data-ct-map-location]'),
+    mapCoords: $('[data-ct-map-coords]'),
+    mapLandmarks: $('[data-ct-map-landmarks]'),
+    location: $('[data-ct-location]'),
+    navNote: $('[data-ct-nav-note]'),
+    weather: $('[data-ct-weather]'),
+    statDiscovered: $('[data-ct-stat-discovered]'),
+    statCaches: $('[data-ct-stat-caches]'),
   };
 
   // ---------------------------------------------------------------------
   // Constants: world, resources, palette, npcs, cosmetics
   // ---------------------------------------------------------------------
   const GRID = 17;
+  const WORLD_SIZE = 128;
+  const WORLD_MIN = 8 - WORLD_SIZE / 2;
+  const WORLD_MAX = WORLD_MIN + WORLD_SIZE - 1;
+  const CHUNK_SIZE = 16;
+  const MAX_CHUNK_CACHE = 36;
+  const HOME_TILE = { x: 8, y: 8 };
   const CORE = { x0: 7, x1: 9, y0: 7, y1: 9 }; // always-grass buildable core
   const DAY_LENGTH_MS = 5 * 60 * 1000; // one full in-game day per 5 real minutes
   const SPARK_DECAY_EVERY_MS = 45000;
@@ -240,6 +257,53 @@
     { x: 5, y: 5 },
   ];
 
+  // The original 17x17 district remains byte-for-byte compatible in world
+  // coordinates 0..16. Around it is a 128x128 region (56.7x the playable
+  // area) streamed in deterministic 16x16 chunks. Fixed destinations anchor
+  // the procedural country so roads and exploration have a readable purpose.
+  const BIOME_DEFS = {
+    hearthland: { label: 'Hearthward Vale', ground: '#4f7c4b', map: '#668e58' },
+    meadow: { label: 'Windmeadow', ground: '#5d8d53', map: '#78a966' },
+    forest: { label: 'Mosswood', ground: '#3f7048', map: '#426f47' },
+    highlands: { label: 'Cloudbreak Ridge', ground: '#69746c', map: '#778079' },
+    wetlands: { label: 'Reedglass Fen', ground: '#52765d', map: '#548072' },
+    sunfields: { label: 'Amber Prairie', ground: '#878348', map: '#a49b52' },
+    frostwood: { label: 'Frostbell Wood', ground: '#69848a', map: '#789ca4' },
+  };
+  const BIOME_REWARDS = {
+    meadow: { sunberryseed: 1 }, forest: { grain: 2 }, highlands: { shale: 2 },
+    wetlands: { loom: 2 }, sunfields: { stormcornseed: 1 }, frostwood: { frostberryseed: 1 },
+  };
+  const WORLD_POIS = [
+    { id: 'hearthward', name: 'Hearthward', kind: 'home', x: 8, y: 8, biome: 'hearthland', reward: null },
+    { id: 'mossmere', name: 'Mossmere Village', kind: 'settlement', x: -34, y: -27, biome: 'forest', reward: { grain: 5, sunberryseed: 2 } },
+    { id: 'stonecross', name: 'Stonecross', kind: 'settlement', x: 48, y: -31, biome: 'highlands', reward: { shale: 5, ingot: 1 } },
+    { id: 'tidewharf', name: 'Tidelantern Wharf', kind: 'settlement', x: -39, y: 41, biome: 'wetlands', reward: { driftfish: 2, loom: 3 } },
+    { id: 'sunstep', name: 'Sunstep Farm', kind: 'farm', x: 43, y: 39, biome: 'sunfields', reward: { grain: 4, stormcornseed: 2 } },
+    { id: 'frostbell', name: 'Frostbell Observatory', kind: 'landmark', x: 7, y: -48, biome: 'frostwood', reward: { frostberryseed: 2, lumen: 1 } },
+    { id: 'reedglass', name: 'Reedglass Sanctuary', kind: 'landmark', x: -47, y: 5, biome: 'wetlands', reward: { loom: 3, glowgourdseed: 1 } },
+    { id: 'starfall', name: 'Starfall Mesa', kind: 'landmark', x: 57, y: 8, biome: 'highlands', reward: { shale: 3, lumen: 1 } },
+  ];
+  const WORLD_POI_BY_ID = Object.fromEntries(WORLD_POIS.map((poi) => [poi.id, poi]));
+  const WORLD_ROUTES = [
+    [{ x: 8, y: 8 }, { x: 8, y: 7 }, { x: -34, y: 7 }, { x: -34, y: -27 }],
+    [{ x: 8, y: 8 }, { x: 16, y: 8 }, { x: 48, y: 8 }, { x: 48, y: -31 }],
+    [{ x: 8, y: 8 }, { x: 8, y: 16 }, { x: 8, y: 41 }, { x: -39, y: 41 }],
+    [{ x: 8, y: 8 }, { x: 16, y: 8 }, { x: 43, y: 8 }, { x: 43, y: 39 }],
+    [{ x: 8, y: 7 }, { x: 7, y: 7 }, { x: 7, y: -48 }],
+    [{ x: 0, y: 7 }, { x: -47, y: 7 }, { x: -47, y: 5 }],
+    [{ x: 16, y: 8 }, { x: 57, y: 8 }],
+  ];
+  const SETTLEMENT_RESIDENTS = [
+    { id: 'pippa', name: 'Pippa', poi: 'mossmere', dx: 0, dy: 2, hue: '#dc7f71', line: 'The moss paths remember every season. I like that about them.' },
+    { id: 'cal', name: 'Cal', poi: 'stonecross', dx: -2, dy: 0, hue: '#7196c8', line: 'Stonecross keeps its doors open for builders with dust on their sleeves.' },
+    { id: 'nell', name: 'Nell', poi: 'tidewharf', dx: 2, dy: 0, hue: '#52b7b0', line: 'The tide road looks long on a map, but the lanterns make it feel close.' },
+    { id: 'sol', name: 'Sol', poi: 'sunstep', dx: 0, dy: -2, hue: '#dca64d', line: 'Our field rows are old, but every harvest makes them new again.' },
+    { id: 'wren', name: 'Wren', poi: 'frostbell', dx: 1, dy: 2, hue: '#8f91d8', line: 'On clear nights, the whole region fits between two stars.' },
+    { id: 'mina', name: 'Mina', poi: 'reedglass', dx: 0, dy: 2, hue: '#62a275', line: 'Walk softly here. Even the reeds have stories in progress.' },
+    { id: 'kit', name: 'Kit', poi: 'starfall', dx: -1, dy: 2, hue: '#c97878', line: 'The mesa hums after dusk. No one agrees on the tune.' },
+  ];
+
   // ---------------------------------------------------------------------
   // The Wilds — a separate, optional 17x17 exploration layer reached via the
   // town trailhead. Real hazards (Thorn Sprites, a stationary Guardian),
@@ -273,7 +337,8 @@
     };
   }
   function isCore(x, y) { return x >= CORE.x0 && x <= CORE.x1 && y >= CORE.y0 && y <= CORE.y1; }
-  function inBounds(x, y) { return x >= 0 && y >= 0 && x < GRID && y < GRID; }
+  function inLegacyBounds(x, y) { return x >= 0 && y >= 0 && x < GRID && y < GRID; }
+  function inBounds(x, y) { return x >= WORLD_MIN && y >= WORLD_MIN && x <= WORLD_MAX && y <= WORLD_MAX; }
   function isLandmark(x, y) {
     return (x === GATE_TILE.x && y === GATE_TILE.y) || (x === TRAILHEAD_TILE.x && y === TRAILHEAD_TILE.y) || TRIAL_DEFS.some((trial) => trial.tile.x === x && trial.tile.y === y);
   }
@@ -301,16 +366,21 @@
     scatter('grove', 22); scatter('quarry', 18); scatter('reed', 18);
     for (const trial of TRIAL_DEFS) {
       grid[trial.tile.y][trial.tile.x] = 'shrine';
-      for (const n of neighbors4(trial.tile.x, trial.tile.y)) if (inBounds(n.x, n.y) && !isCore(n.x, n.y)) grid[n.y][n.x] = 'grass';
+      for (const n of neighbors4(trial.tile.x, trial.tile.y)) if (inLegacyBounds(n.x, n.y) && !isCore(n.x, n.y)) grid[n.y][n.x] = 'grass';
     }
     grid[GATE_TILE.y][GATE_TILE.x] = 'gate';
-    for (const n of neighbors4(GATE_TILE.x, GATE_TILE.y)) if (inBounds(n.x, n.y)) grid[n.y][n.x] = 'grass';
+    for (const n of neighbors4(GATE_TILE.x, GATE_TILE.y)) if (inLegacyBounds(n.x, n.y)) grid[n.y][n.x] = 'grass';
     grid[TRAILHEAD_TILE.y][TRAILHEAD_TILE.x] = 'trailhead';
-    for (const n of neighbors4(TRAILHEAD_TILE.x, TRAILHEAD_TILE.y)) if (inBounds(n.x, n.y)) grid[n.y][n.x] = 'grass';
+    for (const n of neighbors4(TRAILHEAD_TILE.x, TRAILHEAD_TILE.y)) if (inLegacyBounds(n.x, n.y)) grid[n.y][n.x] = 'grass';
     for (let i = 2; i <= 14; i += 2) {
       if (grid[8][i] === 'grass') grid[8][i] = 'trail';
       if (grid[i][8] === 'grass') grid[i][8] = 'trail';
     }
+    // Three guaranteed roads connect the preserved district to the larger
+    // country. The west route skirts the existing Wilds trailhead at 0,8.
+    for (let x = 0; x <= 8; x++) if (!isLandmark(x, 7)) grid[7][x] = 'trail';
+    grid[8][16] = 'trail';
+    grid[16][8] = 'trail';
     return grid;
   }
   function wildsTrialAt(x, y) {
@@ -341,11 +411,11 @@
     scatterWilds('treasure', 6, 3);
     for (const trial of WILDS_TRIAL_DEFS) {
       grid[trial.tile.y][trial.tile.x] = 'wshrine';
-      for (const n of neighbors4(trial.tile.x, trial.tile.y)) if (inBounds(n.x, n.y)) grid[n.y][n.x] = 'wgrass';
+      for (const n of neighbors4(trial.tile.x, trial.tile.y)) if (inLegacyBounds(n.x, n.y)) grid[n.y][n.x] = 'wgrass';
     }
     grid[WILDS_ENTRANCE.y][WILDS_ENTRANCE.x] = 'wgrass';
-    for (const n of neighbors4(WILDS_ENTRANCE.x, WILDS_ENTRANCE.y)) if (inBounds(n.x, n.y)) grid[n.y][n.x] = 'wgrass';
-    if (inBounds(GUARDIAN_TILE.x, GUARDIAN_TILE.y)) grid[GUARDIAN_TILE.y][GUARDIAN_TILE.x] = 'wgrass';
+    for (const n of neighbors4(WILDS_ENTRANCE.x, WILDS_ENTRANCE.y)) if (inLegacyBounds(n.x, n.y)) grid[n.y][n.x] = 'wgrass';
+    if (inLegacyBounds(GUARDIAN_TILE.x, GUARDIAN_TILE.y)) grid[GUARDIAN_TILE.y][GUARDIAN_TILE.x] = 'wgrass';
     return grid;
   }
   // genWildsTerrain() is a pure function of the seed, so a treasure the
@@ -362,7 +432,7 @@
       const m = /^t_(\d+)_(\d+)$/.exec(id);
       if (!m) continue;
       const tx = Number(m[1]), ty = Number(m[2]);
-      if (inBounds(tx, ty) && wildsTerrain[ty][tx] === 'treasure') wildsTerrain[ty][tx] = 'wgrass';
+      if (inLegacyBounds(tx, ty) && wildsTerrain[ty][tx] === 'treasure') wildsTerrain[ty][tx] = 'wgrass';
     }
   }
   function findFirstOfType(terrain, type) {
@@ -370,12 +440,12 @@
     return null;
   }
   function nearestGrass(terrain, x, y) {
-    if (inBounds(x, y) && terrain[y][x] === 'grass') return { x, y };
+    if (inLegacyBounds(x, y) && terrain[y][x] === 'grass') return { x, y };
     for (let r = 1; r < GRID; r++) {
       for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
         const nx = x + dx, ny = y + dy;
         if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
-        if (inBounds(nx, ny) && terrain[ny][nx] === 'grass') return { x: nx, y: ny };
+        if (inLegacyBounds(nx, ny) && terrain[ny][nx] === 'grass') return { x: nx, y: ny };
       }
     }
     return { x: 8, y: 8 };
@@ -383,8 +453,162 @@
   function adjacentGrassTo(terrain, tile) {
     if (!tile) return { x: 8, y: 8 };
     const opts = [{ x: tile.x + 1, y: tile.y }, { x: tile.x - 1, y: tile.y }, { x: tile.x, y: tile.y + 1 }, { x: tile.x, y: tile.y - 1 }];
-    for (const o of opts) if (inBounds(o.x, o.y) && terrain[o.y][o.x] === 'grass') return o;
+    for (const o of opts) if (inLegacyBounds(o.x, o.y) && terrain[o.y][o.x] === 'grass') return o;
     return nearestGrass(terrain, tile.x, tile.y);
+  }
+
+  // ---------------------------------------------------------------------
+  // Chunked overworld generation
+  // ---------------------------------------------------------------------
+  const worldChunks = new Map();
+  function hashU32(x, y, seed, salt = 0) {
+    let h = (seed ^ salt ^ Math.imul(x | 0, 0x27d4eb2d) ^ Math.imul(y | 0, 0x165667b1)) >>> 0;
+    h = Math.imul(h ^ (h >>> 15), 0x85ebca6b) >>> 0;
+    h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35) >>> 0;
+    return (h ^ (h >>> 16)) >>> 0;
+  }
+  function hash01(x, y, seed, salt = 0) { return hashU32(x, y, seed, salt) / 4294967295; }
+  function smooth01(t) { return t * t * (3 - 2 * t); }
+  function valueNoise(x, y, seed, scale, salt) {
+    const sx = x / scale, sy = y / scale;
+    const x0 = Math.floor(sx), y0 = Math.floor(sy);
+    const fx = smooth01(sx - x0), fy = smooth01(sy - y0);
+    const a = hash01(x0, y0, seed, salt), b = hash01(x0 + 1, y0, seed, salt);
+    const c = hash01(x0, y0 + 1, seed, salt), d = hash01(x0 + 1, y0 + 1, seed, salt);
+    const top = a + (b - a) * fx, bottom = c + (d - c) * fx;
+    return top + (bottom - top) * fy;
+  }
+  function worldNoise(x, y, seed, salt) {
+    return valueNoise(x, y, seed, 28, salt) * 0.58
+      + valueNoise(x, y, seed, 13, salt ^ 0x9e3779b9) * 0.29
+      + valueNoise(x, y, seed, 6, salt ^ 0x7f4a7c15) * 0.13;
+  }
+  function poiNear(x, y, radius = 9) {
+    let best = null, bestDist = Infinity;
+    for (const poi of WORLD_POIS) {
+      if (poi.id === 'hearthward') continue;
+      const dist = Math.max(Math.abs(x - poi.x), Math.abs(y - poi.y));
+      if (dist <= radius && dist < bestDist) { best = poi; bestDist = dist; }
+    }
+    return best;
+  }
+  function proceduralBiomeAt(x, y, seed) {
+    if (inLegacyBounds(x, y)) return 'hearthland';
+    const anchor = poiNear(x, y, 10);
+    if (anchor) return anchor.biome;
+    const moisture = worldNoise(x, y, seed, 0x31415926);
+    const elevation = worldNoise(x, y, seed, 0x27182818);
+    const temperature = worldNoise(x, y, seed, 0x6a09e667) - (y - 8) / 390;
+    if (elevation > 0.67) return 'highlands';
+    if (temperature < 0.31) return 'frostwood';
+    if (moisture > 0.64) return 'wetlands';
+    if (moisture < 0.36) return 'sunfields';
+    if (worldNoise(x + 31, y - 19, seed, 0xbb67ae85) > 0.57) return 'forest';
+    return 'meadow';
+  }
+  function routeAt(x, y) {
+    for (const route of WORLD_ROUTES) {
+      for (let i = 0; i < route.length - 1; i++) {
+        const a = route[i], b = route[i + 1];
+        if (a.x === b.x && x === a.x && y >= Math.min(a.y, b.y) && y <= Math.max(a.y, b.y)) return true;
+        if (a.y === b.y && y === a.y && x >= Math.min(a.x, b.x) && x <= Math.max(a.x, b.x)) return true;
+      }
+    }
+    return false;
+  }
+  function poiTileAt(x, y) {
+    for (const poi of WORLD_POIS) {
+      if (poi.id === 'hearthward') continue;
+      const dx = x - poi.x, dy = y - poi.y;
+      if (dx === 0 && dy === 0) return { type: 'landmark', poiId: poi.id };
+      if (Math.abs(dx) > 5 || Math.abs(dy) > 5) continue;
+      if (dx === 0 || dy === 0) return { type: 'road', poiId: poi.id };
+      if ((poi.kind === 'settlement' || poi.kind === 'farm')
+          && [[-2, -2], [2, -2], [-2, 2], [2, 2]].some(([px, py]) => dx === px && dy === py)) {
+        return { type: 'cottage', poiId: poi.id };
+      }
+      if (poi.kind === 'farm' && Math.abs(dx) <= 4 && Math.abs(dy) <= 4) return { type: 'field', poiId: poi.id };
+      if (poi.kind === 'settlement' && Math.abs(dx) <= 4 && Math.abs(dy) <= 4 && (Math.abs(dx + dy) % 3 === 0)) return { type: 'field', poiId: poi.id };
+      if (poi.kind === 'landmark' && Math.max(Math.abs(dx), Math.abs(dy)) <= 2) return { type: 'meadow', poiId: poi.id };
+    }
+    return null;
+  }
+  function proceduralWorldTile(x, y, seed) {
+    const biome = proceduralBiomeAt(x, y, seed);
+    const elevation = worldNoise(x, y, seed, 0x27182818);
+    const moisture = worldNoise(x, y, seed, 0x31415926);
+    const detail = hash01(x, y, seed, 0xa54ff53a);
+    let type = biome === 'meadow' ? 'meadow' : 'grass';
+
+    if (x === WORLD_MIN || y === WORLD_MIN || x === WORLD_MAX || y === WORLD_MAX) type = elevation < 0.5 ? 'water' : 'cliff';
+    else if (moisture > 0.665 && elevation < 0.61) type = 'water';
+    else if (moisture > 0.625 && elevation < 0.64) type = detail > 0.48 ? 'reed' : 'marsh';
+    else if (biome === 'highlands') type = elevation > 0.71 ? 'cliff' : (detail > 0.69 ? 'quarry' : 'stonegrass');
+    else if (biome === 'forest') type = detail > 0.56 ? 'grove' : 'forestfloor';
+    else if (biome === 'wetlands') type = detail > 0.71 ? 'reed' : 'marsh';
+    else if (biome === 'sunfields') type = detail > 0.82 ? 'field' : 'sungrass';
+    else if (biome === 'frostwood') type = detail > 0.63 ? 'grove' : 'frostgrass';
+    else if (detail > 0.91) type = 'grove';
+
+    const poiTile = poiTileAt(x, y);
+    if (poiTile) type = poiTile.type;
+    else if (routeAt(x, y)) type = type === 'water' || type === 'marsh' ? 'bridge' : 'road';
+
+    const cx = Math.floor(x / CHUNK_SIZE), cy = Math.floor(y / CHUNK_SIZE);
+    const lx = x - cx * CHUNK_SIZE, ly = y - cy * CHUNK_SIZE;
+    const cacheX = 2 + Math.floor(hash01(cx, cy, seed, 0x510e527f) * (CHUNK_SIZE - 4));
+    const cacheY = 2 + Math.floor(hash01(cx, cy, seed, 0x1f83d9ab) * (CHUNK_SIZE - 4));
+    const cacheChunk = hash01(cx, cy, seed, 0x5be0cd19) > 0.42;
+    const passable = ['grass', 'meadow', 'forestfloor', 'stonegrass', 'sungrass', 'frostgrass', 'field'].includes(type);
+    const farFromHome = Math.max(Math.abs(x - HOME_TILE.x), Math.abs(y - HOME_TILE.y)) > 11;
+    const baseType = type;
+    if (cacheChunk && farFromHome && lx === cacheX && ly === cacheY && passable && !poiTile) type = 'cache';
+
+    return {
+      type, baseType, biome, elevation, moisture, variant: detail,
+      poiId: poiTile ? poiTile.poiId : null,
+      cacheId: type === 'cache' ? `c_${x}_${y}` : null,
+    };
+  }
+  function resetWorldChunks() {
+    worldChunks.clear();
+    if (rt) { rt.mapSeed = null; rt.lastMiniMapKey = ''; }
+  }
+  function getWorldChunk(cx, cy) {
+    const key = `${cx},${cy}`;
+    if (worldChunks.has(key)) {
+      const cached = worldChunks.get(key);
+      worldChunks.delete(key);
+      worldChunks.set(key, cached);
+      return cached;
+    }
+    const seed = state ? state.seed : 0;
+    const tiles = new Array(CHUNK_SIZE * CHUNK_SIZE);
+    for (let ly = 0; ly < CHUNK_SIZE; ly++) for (let lx = 0; lx < CHUNK_SIZE; lx++) {
+      const x = cx * CHUNK_SIZE + lx, y = cy * CHUNK_SIZE + ly;
+      tiles[ly * CHUNK_SIZE + lx] = inBounds(x, y) ? proceduralWorldTile(x, y, seed) : null;
+    }
+    const chunk = { cx, cy, tiles };
+    worldChunks.set(key, chunk);
+    while (worldChunks.size > MAX_CHUNK_CACHE) worldChunks.delete(worldChunks.keys().next().value);
+    return chunk;
+  }
+  function worldTileAt(x, y) {
+    if (!inBounds(x, y)) return { type: 'void', baseType: 'void', biome: 'hearthland', elevation: 0, moisture: 0, variant: 0, poiId: null, cacheId: null };
+    if (inLegacyBounds(x, y)) {
+      const type = terrain && terrain[y] ? terrain[y][x] : 'grass';
+      return { type, baseType: type, biome: 'hearthland', elevation: 0.48, moisture: 0.5, variant: hash01(x, y, state ? state.seed : 0, 0x3c6ef372), poiId: null, cacheId: null };
+    }
+    const cx = Math.floor(x / CHUNK_SIZE), cy = Math.floor(y / CHUNK_SIZE);
+    const lx = x - cx * CHUNK_SIZE, ly = y - cy * CHUNK_SIZE;
+    return getWorldChunk(cx, cy).tiles[ly * CHUNK_SIZE + lx];
+  }
+  function isWorldCacheFound(id) {
+    return !!(id && state && state.exploration && state.exploration.cachesFound.includes(id));
+  }
+  function terrainAt(x, y) {
+    const tile = worldTileAt(x, y);
+    return tile.type === 'cache' && isWorldCacheFound(tile.cacheId) ? tile.baseType : tile.type;
   }
 
   // ---------------------------------------------------------------------
@@ -397,6 +621,7 @@
 
   const rt = {
     playerPx: 0, playerPy: 0, playerFromX: 0, playerFromY: 0, playerToX: 0, playerToY: 0, moveT: 1, moveDur: 160,
+    cameraX: HOME_TILE.x, cameraY: HOME_TILE.y,
     facing: 'down',
     gathering: null, // {x,y,t,dur}
     cooking: null,   // {recipe,t,dur}
@@ -424,12 +649,19 @@
     farmTool: null, // null | {mode:'till'} | {mode:'plant', crop} | {mode:'fertilize'}
     tutorial: { step: 0 },
     trial: null, // {trial,input:[]}
+    waypoint: null, // {x,y,label}; runtime-only trail marker
+    mapSeed: null,
+    lastMiniMapKey: '',
+    heldKeys: new Set(),
+    nextHeldMoveAt: 0,
+    touchMoveTimer: null,
     // --- Wilds (see the block comment above WILDS_ENTRANCE) — all runtime-only,
     // never persisted: leaving the game always drops you back in town on reload.
     world: 'town', // 'town' | 'wilds'
     wildsGx: WILDS_ENTRANCE.x, wildsGy: WILDS_ENTRANCE.y,
     wildsFromX: WILDS_ENTRANCE.x, wildsFromY: WILDS_ENTRANCE.y, wildsToX: WILDS_ENTRANCE.x, wildsToY: WILDS_ENTRANCE.y,
     wildsMoveT: 1, wildsMoveDur: 150, wildsPx: 0, wildsPy: 0,
+    wildsCameraX: WILDS_ENTRANCE.x, wildsCameraY: WILDS_ENTRANCE.y,
     wildsEnemies: [],
     wildsInvulnUntil: 0,
     lastAttackAt: 0,
@@ -453,9 +685,12 @@
   function defaultFriendshipState() {
     return Object.fromEntries(NPC_DEFS.map((npc) => [npc.id, { points: 0, lastChatDay: 0, claimed: [] }]));
   }
+  function defaultExplorationState() {
+    return { discovered: ['hearthward'], biomes: ['hearthland'], cachesFound: [] };
+  }
   function newGame(seed) {
     state = {
-      version: 4,
+      version: 5,
       seed: seed >>> 0,
       day: 1,
       minutes: 400, // ~6:40am
@@ -476,17 +711,20 @@
       friendship: defaultFriendshipState(), // per-NPC {points,lastChatDay,claimed[]} — local only, never host-synced
       tools: { gatherTier: 1 }, // 1 = bare hands, 2 = Sturdy Tool, 3 = Masterwork Tool
       wilds: { treasuresFound: [], guardianDefeated: false }, // local only, never host-synced
+      exploration: defaultExplorationState(),
       cosmeticsUnlocked: { hue: ['coral', 'mint', 'slate', 'sand'], topper: ['none', 'cap'], trim: ['soft', 'bold'] },
       tutorialSeen: false,
       stats: {
         gathered: 0, built: 0, demolished: 0, fishCaught: 0, fishTried: 0, dishesCooked: 0, questsCompleted: 0,
         trialsCleared: 0, gatesOpened: 0, secondsPlayed: 0, cropsHarvested: 0,
         enemiesDefeated: 0, treasuresFound: 0, itemsCrafted: 0, eggsCollected: 0,
+        regionsDiscovered: 1, cachesFound: 0,
       },
       completedMilestone: false,
     };
     terrain = genTerrain(state.seed);
     wildsTerrain = genWildsTerrain(state.seed);
+    resetWorldChunks();
     clearFoundWildsTreasures();
     npcs = buildNpcRuntime();
   }
@@ -516,17 +754,21 @@
     rt.dpr = Math.min(2, window.devicePixelRatio || 1);
     rt.W = canvas.width = Math.max(640, innerWidth * rt.dpr);
     rt.H = canvas.height = Math.max(420, innerHeight * rt.dpr);
-    rt.tileW = Math.max(30, Math.min(64, rt.W / (GRID * 1.05))) ;
+    rt.tileW = clamp(46 * rt.dpr, 42, 78);
     rt.tileH = rt.tileW / 2;
     rt.originX = rt.W / 2;
-    rt.originY = rt.H * 0.24;
+    rt.originY = rt.H * 0.57;
+    rt.lastMiniMapKey = '';
   }
   addEventListener('resize', size);
 
   function tileToScreen(gx, gy) {
+    const cameraX = rt.world === 'wilds' ? rt.wildsCameraX : rt.cameraX;
+    const cameraY = rt.world === 'wilds' ? rt.wildsCameraY : rt.cameraY;
+    const lx = gx - cameraX, ly = gy - cameraY;
     return {
-      x: rt.originX + (gx - gy) * (rt.tileW / 2),
-      y: rt.originY + (gx + gy) * (rt.tileH / 2),
+      x: rt.originX + (lx - ly) * (rt.tileW / 2),
+      y: rt.originY + (lx + ly) * (rt.tileH / 2),
     };
   }
 
@@ -560,10 +802,12 @@
     if (plot.prog >= c.dur) return 3;
     return Math.min(2, Math.floor((plot.prog / c.dur) * 3));
   }
+  const WORLD_BLOCK_TYPES = new Set(['void', 'water', 'grove', 'quarry', 'reed', 'cliff', 'shrine', 'cottage', 'landmark', 'cache']);
+  const BUILDABLE_TYPES = new Set(['grass', 'meadow', 'forestfloor', 'stonegrass', 'sungrass', 'frostgrass']);
   function isBlockedTile(gx, gy) {
     if (!inBounds(gx, gy)) return true;
-    const t = terrain[gy][gx];
-    if (t === 'water' || t === 'grove' || t === 'quarry' || t === 'reed' || t === 'shrine') return true;
+    const t = terrainAt(gx, gy);
+    if (WORLD_BLOCK_TYPES.has(t)) return true;
     if (t === 'gate' && !state.adventure?.gateOpen) return true;
     const piece = townPieceAt(gx, gy, currentTown());
     if (piece && PALETTE_BY_TYPE[piece.type] && PALETTE_BY_TYPE[piece.type].blocking) return true;
@@ -571,8 +815,8 @@
   }
   function isBuildableGround(gx, gy) {
     if (!inBounds(gx, gy)) return false;
-    const t = terrain[gy][gx];
-    if (t !== 'grass') return false;
+    const t = terrainAt(gx, gy);
+    if (!BUILDABLE_TYPES.has(t)) return false;
     if (gx === state.player.gx && gy === state.player.gy) return false;
     if (townPieceAt(gx, gy, state.town)) return false;
     if (mp.active && !mp.amIHost && townPieceAt(gx, gy, mp.sharedTown)) return false;
@@ -583,7 +827,7 @@
     return [{ x: gx + 1, y: gy }, { x: gx - 1, y: gy }, { x: gx, y: gy + 1 }, { x: gx, y: gy - 1 }];
   }
   function isBlockedWildsTile(gx, gy) {
-    if (!inBounds(gx, gy)) return true;
+    if (!inLegacyBounds(gx, gy)) return true;
     return WILDS_BLOCK_TYPES.has(wildsTerrain[gy][gx]);
   }
   function currentLivestock() {
@@ -675,6 +919,7 @@
     if (name === 'together') renderTogetherPanel();
     if (name === 'report') renderReportPanel(false);
     if (name === 'questlog') renderQuestLogPanel();
+    if (name === 'map') renderMapPanel();
     if (name === 'tutorial') { rt.tutorial.step = 0; renderTutorial(); }
   }
   function closePanels() {
@@ -907,6 +1152,7 @@
   // and doSleep's fast-forward) — resets watering and checks for wilting.
   function farmNewDay() {
     const day = state.day;
+    const weather = weatherForDay(day);
     for (const plot of state.farm) {
       if (!plot.crop) { plot.watered = false; plot.dryStreak = 0; continue; }
       const fertilized = (plot.fertileUntilDay || 0) >= day;
@@ -923,6 +1169,9 @@
         }
       }
       plot.watered = false;
+    }
+    if (weather.kind === 'rain') {
+      for (const plot of state.farm) if (plot.crop) plot.watered = true;
     }
     for (const l of state.livestock) {
       if (l.fedToday) l.readyToCollect = true;
@@ -1335,7 +1584,8 @@
   function computeScore() {
     const s = state.stats;
     return s.built * 5 + questDoneCount() * 55 + trialDoneCount() * 35 + (s.gatesOpened || 0) * 180 + s.fishCaught * 4 + s.dishesCooked * 5 + (s.cropsHarvested || 0) * 4 + (state.day - 1) * 10
-      + (s.enemiesDefeated || 0) * 8 + (s.treasuresFound || 0) * 12 + (s.itemsCrafted || 0) * 6 + (s.eggsCollected || 0) * 2;
+      + (s.enemiesDefeated || 0) * 8 + (s.treasuresFound || 0) * 12 + (s.itemsCrafted || 0) * 6 + (s.eggsCollected || 0) * 2
+      + (s.regionsDiscovered || 0) * 20 + (s.cachesFound || 0) * 9;
   }
   function computeProgress() {
     if (state.completedMilestone) return 100;
@@ -1349,14 +1599,18 @@
     const qDone = questDoneCount();
     const tDone = trialDoneCount();
     el.reportTitle.textContent = milestone ? 'Prism Gate Opened!' : 'Town Report';
-    el.reportSub.textContent = milestone ? 'The full CubeTown playthrough is complete. Keep building, fishing, and hosting friends as long as you like.' : `Day ${state.day}, ${formatClock(state.minutes)} · ${qDone}/${NPC_DEFS.length} resident arcs · ${tDone}/${ALL_TRIAL_DEFS.length} shrine trials.`;
+    el.reportSub.textContent = milestone ? 'The Prism story is complete, while the roads and settlements remain yours to explore and build.' : `Day ${state.day}, ${formatClock(state.minutes)} · ${qDone}/${NPC_DEFS.length} resident arcs · ${tDone}/${ALL_TRIAL_DEFS.length} shrine trials · ${state.exploration.discovered.length}/${WORLD_POIS.length} places.`;
     el.statDay.textContent = state.day;
     el.statBuilt.textContent = state.stats.built;
     el.statFish.textContent = state.stats.fishCaught;
     el.statDish.textContent = state.stats.dishesCooked;
     el.statQuests.textContent = `${qDone}/${NPC_DEFS.length}`;
     el.statScore.textContent = computeScore();
-    openPanel('report');
+    if (el.statDiscovered) el.statDiscovered.textContent = state.exploration.discovered.length;
+    if (el.statCaches) el.statCaches.textContent = state.exploration.cachesFound.length;
+    $all('.panel').forEach((panel) => panel.classList.remove('is-open'));
+    const reportPanel = document.querySelector('[data-ct-panel="report"]');
+    if (reportPanel) reportPanel.classList.add('is-open');
   }
   function renderQuestLogPanel() {
     const rewardLine = (reward) => reward ? Object.entries(reward).map(([k, v]) => `${v} ${RES_LABELS[k] || k}`).join(', ') : 'Town trust';
@@ -1383,6 +1637,7 @@
     }).join('');
     const guardianStatus = state.wilds?.guardianDefeated ? 'The Wilds Guardian has fallen — its Relic is yours.' : 'A Guardian still watches over the deep Wilds, hoarding a Relic.';
     const gateReady = (state.inventory.keystone || 0) >= 4 && (state.inventory.relic || 0) >= 1;
+    const foundPlaces = WORLD_POIS.filter((poi) => state.exploration.discovered.includes(poi.id)).map((poi) => poi.name).join(', ');
     el.questLog.innerHTML = `
       <section class="quest-chapter">
         <h3>Chapter ${state.adventure?.gateOpen ? 'Complete' : gateReady ? 'Final' : 'I'} · The Prism Gate</h3>
@@ -1392,15 +1647,267 @@
       <section class="quest-chapter"><h3>Friendships</h3>${friendRows}</section>
       <section class="quest-chapter"><h3>Shrine Trials</h3>${trialRows}</section>
       <section class="quest-chapter"><h3>Wilds Trials</h3>${wildsTrialRows}<p>${escapeHtml(guardianStatus)}</p></section>
+      <section class="quest-chapter"><h3>Exploration</h3><p>${state.exploration.discovered.length}/${WORLD_POIS.length} places · ${state.exploration.biomes.length}/${Object.keys(BIOME_DEFS).length} biomes · ${state.exploration.cachesFound.length} trail caches. ${escapeHtml(foundPlaces)}</p></section>
       <section class="quest-chapter"><h3>Inventory Clues</h3><p>${state.inventory.keystone || 0}/4 Keystones · ${state.inventory.lumen || 0} Lumen · ${state.inventory.relic || 0}/1 Relic · ${state.stats.built || 0} pieces built · Gathering tool tier ${gatherTier()}</p></section>`;
+  }
+
+  // ---------------------------------------------------------------------
+  // Overworld exploration, map, weather, and navigation
+  // ---------------------------------------------------------------------
+  function ensureExplorationState() {
+    if (!state.exploration || typeof state.exploration !== 'object') state.exploration = defaultExplorationState();
+    for (const key of ['discovered', 'biomes', 'cachesFound']) {
+      if (!Array.isArray(state.exploration[key])) state.exploration[key] = [];
+      state.exploration[key] = Array.from(new Set(state.exploration[key].filter((v) => typeof v === 'string')));
+    }
+    if (!state.exploration.discovered.includes('hearthward')) state.exploration.discovered.unshift('hearthward');
+    if (!state.exploration.biomes.includes('hearthland')) state.exploration.biomes.unshift('hearthland');
+  }
+  function rewardText(reward) {
+    return Object.entries(reward || {}).map(([key, amount]) => `${amount} ${RES_LABELS[key] || key}`).join(', ');
+  }
+  function grantExplorationReward(reward) {
+    for (const [key, amount] of Object.entries(reward || {})) state.inventory[key] = (state.inventory[key] || 0) + amount;
+  }
+  function nearestWorldPoi(x, y, maxDistance = Infinity) {
+    let nearest = null, distance = Infinity;
+    for (const poi of WORLD_POIS) {
+      const d = Math.max(Math.abs(x - poi.x), Math.abs(y - poi.y));
+      if (d < distance && d <= maxDistance) { nearest = poi; distance = d; }
+    }
+    return nearest ? { poi: nearest, distance } : null;
+  }
+  function locationInfoAt(x, y) {
+    const close = nearestWorldPoi(x, y, 5);
+    const biome = worldTileAt(x, y).biome;
+    return {
+      name: close ? close.poi.name : (BIOME_DEFS[biome]?.label || 'Open Country'),
+      biome,
+      detail: close ? (close.poi.kind === 'home' ? 'Home district' : close.poi.kind[0].toUpperCase() + close.poi.kind.slice(1)) : `${x}, ${y}`,
+    };
+  }
+  function weatherForDay(day) {
+    const season = seasonOf(day);
+    const roll = hash01(day, Math.floor(day / 5), state.seed, 0xc1059ed8);
+    if (season === 'winter' && roll < 0.38) return { kind: 'snow', label: 'Soft snow' };
+    if (season === 'spring' && roll < 0.34) return { kind: 'rain', label: 'Spring rain' };
+    if (season === 'summer' && roll < 0.16) return { kind: 'rain', label: 'Warm shower' };
+    if (season === 'autumn' && roll < 0.28) return { kind: 'mist', label: 'Harvest mist' };
+    if (roll > 0.84) return { kind: 'wind', label: 'Breezy' };
+    return { kind: 'clear', label: 'Clear skies' };
+  }
+  function directionLabel(dx, dy) {
+    const ns = Math.abs(dy) > 2 ? (dy < 0 ? 'N' : 'S') : '';
+    const ew = Math.abs(dx) > 2 ? (dx < 0 ? 'W' : 'E') : '';
+    return ns + ew || (Math.abs(dx) >= Math.abs(dy) ? (dx < 0 ? 'W' : 'E') : (dy < 0 ? 'N' : 'S'));
+  }
+  function checkWorldDiscovery() {
+    if (rt.world !== 'town') return;
+    ensureExplorationState();
+    const x = state.player.gx, y = state.player.gy;
+    const tile = worldTileAt(x, y);
+    const messages = [];
+    if (!state.exploration.biomes.includes(tile.biome)) {
+      state.exploration.biomes.push(tile.biome);
+      const reward = BIOME_REWARDS[tile.biome] || {};
+      grantExplorationReward(reward);
+      state.spark = clamp(state.spark + 5, 0, 100);
+      messages.push(`Discovered ${BIOME_DEFS[tile.biome]?.label || tile.biome}${rewardText(reward) ? ` · ${rewardText(reward)}` : ''}`);
+    }
+    const close = nearestWorldPoi(x, y, 3);
+    if (close && !state.exploration.discovered.includes(close.poi.id)) {
+      state.exploration.discovered.push(close.poi.id);
+      grantExplorationReward(close.poi.reward);
+      state.stats.regionsDiscovered = (state.stats.regionsDiscovered || 1) + 1;
+      messages.push(`${close.poi.name} found · ${rewardText(close.poi.reward)}`);
+      if (rt.waypoint && rt.waypoint.poiId === close.poi.id) rt.waypoint = null;
+    }
+    if (messages.length) {
+      sfx.quest();
+      spawnParticles(x, y, '#ffcf6b');
+      toast(messages.join('  '));
+      updateHud();
+      schedulePush();
+    }
+  }
+  function collectWorldCache(tile, x, y) {
+    if (!tile || tile.type !== 'cache' || isWorldCacheFound(tile.cacheId)) return;
+    ensureExplorationState();
+    state.exploration.cachesFound.push(tile.cacheId);
+    const roll = hash01(x, y, state.seed, 0x428a2f98);
+    const reward = roll < 0.33 ? { grain: 3 } : roll < 0.66 ? { shale: 2, loom: 1 } : { lumen: 1 };
+    grantExplorationReward(reward);
+    state.stats.cachesFound = (state.stats.cachesFound || 0) + 1;
+    state.spark = clamp(state.spark + 8, 0, 100);
+    sfx.quest();
+    spawnParticles(x, y, '#ffcf6b');
+    toast(`Trail cache opened · ${rewardText(reward)} · +8 Spark`);
+    updateHud();
+    schedulePush();
+  }
+  function settlementResidentPosition(resident) {
+    const poi = WORLD_POI_BY_ID[resident.poi];
+    return { ...resident, gx: poi.x + resident.dx, gy: poi.y + resident.dy };
+  }
+  function openLocalDialogue(resident) {
+    rt.dialogueMode = 'local';
+    rt.dialogueNpc = null;
+    el.dlgName.textContent = resident.name;
+    el.dlgBody.textContent = resident.line;
+    el.dlgQuest.hidden = true;
+    el.dlgTurnin.hidden = true;
+    if (el.dlgFriend) el.dlgFriend.hidden = true;
+    if (el.dlgGiftList) el.dlgGiftList.innerHTML = '';
+    openPanel('dialogue');
+  }
+  const MAP_TERRAIN_COLOR = {
+    water: '#3c82ad', bridge: '#d3b27b', road: '#bd9b69', trail: '#bd9b69', grove: '#285c39', quarry: '#747880', reed: '#5c8661',
+    cliff: '#5d6265', cottage: '#d98967', landmark: '#f2cc67', field: '#9e8c43', marsh: '#4c7465', shrine: '#8f7fff', gate: '#6b5d8d', trailhead: '#c49365',
+  };
+  function mapColorForTile(tile) {
+    const effective = tile.type === 'cache' && isWorldCacheFound(tile.cacheId) ? tile.baseType : tile.type;
+    return MAP_TERRAIN_COLOR[effective] || BIOME_DEFS[tile.biome]?.map || '#64845d';
+  }
+  function mapPoint(x, y, size) {
+    const unit = size / WORLD_SIZE;
+    return { x: (x - WORLD_MIN + 0.5) * unit, y: (y - WORLD_MIN + 0.5) * unit };
+  }
+  function buildMapBackground() {
+    if (rt.mapSeed === state.seed && rt.mapBackground) return;
+    const background = document.createElement('canvas');
+    background.width = 512; background.height = 512;
+    const mctx = background.getContext('2d');
+    const unit = background.width / WORLD_SIZE;
+    for (let y = WORLD_MIN; y <= WORLD_MAX; y++) for (let x = WORLD_MIN; x <= WORLD_MAX; x++) {
+      const tile = inLegacyBounds(x, y) ? worldTileAt(x, y) : proceduralWorldTile(x, y, state.seed);
+      mctx.fillStyle = mapColorForTile(tile);
+      mctx.fillRect((x - WORLD_MIN) * unit, (y - WORLD_MIN) * unit, Math.ceil(unit), Math.ceil(unit));
+    }
+    rt.mapBackground = background;
+    rt.mapSeed = state.seed;
+  }
+  function renderWorldMap() {
+    if (!el.worldMap) return;
+    buildMapBackground();
+    const mctx = el.worldMap.getContext('2d');
+    mctx.clearRect(0, 0, el.worldMap.width, el.worldMap.height);
+    mctx.drawImage(rt.mapBackground, 0, 0, el.worldMap.width, el.worldMap.height);
+    for (const poi of WORLD_POIS) {
+      if (!state.exploration.discovered.includes(poi.id)) continue;
+      const p = mapPoint(poi.x, poi.y, el.worldMap.width);
+      mctx.fillStyle = poi.id === 'hearthward' ? '#fbe9d8' : '#ffcf6b';
+      mctx.strokeStyle = '#20142f'; mctx.lineWidth = 3;
+      mctx.beginPath(); mctx.arc(p.x, p.y, poi.id === 'hearthward' ? 6 : 5, 0, Math.PI * 2); mctx.fill(); mctx.stroke();
+    }
+    if (rt.waypoint) {
+      const p = mapPoint(rt.waypoint.x, rt.waypoint.y, el.worldMap.width);
+      mctx.strokeStyle = '#fbe9d8'; mctx.lineWidth = 3;
+      mctx.beginPath(); mctx.arc(p.x, p.y, 9, 0, Math.PI * 2); mctx.stroke();
+    }
+    const player = mapPoint(state.player.gx, state.player.gy, el.worldMap.width);
+    mctx.fillStyle = '#ff6b81'; mctx.strokeStyle = '#ffffff'; mctx.lineWidth = 2;
+    mctx.beginPath(); mctx.arc(player.x, player.y, 5, 0, Math.PI * 2); mctx.fill(); mctx.stroke();
+  }
+  function renderMapPanel() {
+    ensureExplorationState();
+    const info = locationInfoAt(state.player.gx, state.player.gy);
+    el.mapSub.textContent = `${WORLD_SIZE} × ${WORLD_SIZE} region · ${(WORLD_SIZE * WORLD_SIZE / (GRID * GRID)).toFixed(1)}× the old district · ${state.exploration.discovered.length}/${WORLD_POIS.length} places found`;
+    el.mapLocation.textContent = info.name;
+    el.mapCoords.textContent = `${state.player.gx}, ${state.player.gy}`;
+    el.mapLandmarks.innerHTML = WORLD_POIS.filter((poi) => state.exploration.discovered.includes(poi.id)).map((poi) => {
+      const distance = Math.abs(poi.x - state.player.gx) + Math.abs(poi.y - state.player.gy);
+      return `<div class="map-destination"><b>${escapeHtml(poi.name)}</b><span>${poi.x}, ${poi.y} · ${distance} steps</span><button type="button" data-ct-travel="${poi.id}" ${rt.world === 'wilds' ? 'disabled' : ''}>Travel</button></div>`;
+    }).join('');
+    $all('[data-ct-travel]').forEach((button) => button.onclick = () => fastTravelToPoi(button.dataset.ctTravel));
+    renderWorldMap();
+  }
+  function nearestPassableWorld(x, y) {
+    for (let radius = 1; radius <= 7; radius++) {
+      for (let dy = -radius; dy <= radius; dy++) for (let dx = -radius; dx <= radius; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== radius) continue;
+        const nx = x + dx, ny = y + dy;
+        if (inBounds(nx, ny) && !isBlockedTile(nx, ny)) return { x: nx, y: ny };
+      }
+    }
+    return HOME_TILE;
+  }
+  function fastTravelToPoi(id) {
+    const poi = WORLD_POI_BY_ID[id];
+    if (!poi || !state.exploration.discovered.includes(id)) return;
+    if (rt.world !== 'town') { toast('Return from the Wilds before using the road signs.'); return; }
+    const target = id === 'hearthward' ? HOME_TILE : nearestPassableWorld(poi.x, poi.y);
+    state.player.gx = target.x; state.player.gy = target.y;
+    rt.playerFromX = target.x; rt.playerFromY = target.y; rt.playerToX = target.x; rt.playerToY = target.y; rt.moveT = 1;
+    rt.cameraX = target.x; rt.cameraY = target.y;
+    state.spark = clamp(state.spark - (id === 'hearthward' ? 0 : 4), 0, 100);
+    rt.waypoint = null;
+    closePanels();
+    checkWorldDiscovery();
+    toast(`${poi.name} · arrived by signpost${id === 'hearthward' ? '' : ' · -4 Spark'}`);
+    updateHud();
+    schedulePush();
+  }
+  function setWaypoint(x, y, label = 'Trail marker') {
+    rt.waypoint = { x: clamp(Math.round(x), WORLD_MIN, WORLD_MAX), y: clamp(Math.round(y), WORLD_MIN, WORLD_MAX), label };
+    toast(`Trail marker set · ${rt.waypoint.x}, ${rt.waypoint.y}`);
+    updateHud();
+    renderWorldMap();
+  }
+  function renderMiniMap() {
+    if (!el.minimap || !state) return;
+    const key = `${rt.world}:${state.seed}:${state.player.gx}:${state.player.gy}:${rt.wildsGx}:${rt.wildsGy}:${state.exploration.cachesFound.length}:${rt.waypoint ? `${rt.waypoint.x},${rt.waypoint.y}` : '-'}`;
+    if (key === rt.lastMiniMapKey) return;
+    rt.lastMiniMapKey = key;
+    const mctx = el.minimap.getContext('2d'), w = el.minimap.width, h = el.minimap.height;
+    mctx.fillStyle = '#100b1c'; mctx.fillRect(0, 0, w, h);
+    const radius = 9, unit = w / (radius * 2 + 1);
+    const px = rt.world === 'wilds' ? rt.wildsGx : state.player.gx;
+    const py = rt.world === 'wilds' ? rt.wildsGy : state.player.gy;
+    for (let dy = -radius; dy <= radius; dy++) for (let dx = -radius; dx <= radius; dx++) {
+      const x = px + dx, y = py + dy;
+      if (rt.world === 'wilds') {
+        if (!inLegacyBounds(x, y)) continue;
+        mctx.fillStyle = WILDS_TILE_COLOR[wildsTerrain[y][x]] || WILDS_TILE_COLOR.wgrass;
+      } else {
+        if (!inBounds(x, y)) continue;
+        mctx.fillStyle = mapColorForTile(worldTileAt(x, y));
+      }
+      mctx.fillRect((dx + radius) * unit, (dy + radius) * unit, Math.ceil(unit), Math.ceil(unit));
+    }
+    mctx.fillStyle = '#ff6b81'; mctx.strokeStyle = '#ffffff'; mctx.lineWidth = 2;
+    mctx.beginPath(); mctx.arc(w / 2, h / 2, 5, 0, Math.PI * 2); mctx.fill(); mctx.stroke();
+    if (rt.world === 'town' && rt.waypoint) {
+      const dx = rt.waypoint.x - px, dy = rt.waypoint.y - py;
+      const edgeX = clamp(dx, -radius, radius), edgeY = clamp(dy, -radius, radius);
+      mctx.strokeStyle = '#ffcf6b'; mctx.lineWidth = 3;
+      mctx.beginPath(); mctx.arc((edgeX + radius + 0.5) * unit, (edgeY + radius + 0.5) * unit, 5, 0, Math.PI * 2); mctx.stroke();
+    }
+  }
+  function updateNavigationHud() {
+    if (!el.location || !state) return;
+    if (rt.world === 'wilds') {
+      el.location.textContent = 'Deep Wilds';
+      el.navNote.textContent = `${rt.wildsGx}, ${rt.wildsGy} · trailhead SE`;
+    } else {
+      const info = locationInfoAt(state.player.gx, state.player.gy);
+      el.location.textContent = info.name;
+      if (rt.waypoint) {
+        const dx = rt.waypoint.x - state.player.gx, dy = rt.waypoint.y - state.player.gy;
+        el.navNote.textContent = `${directionLabel(dx, dy)} · ${Math.abs(dx) + Math.abs(dy)} steps · ${rt.waypoint.label}`;
+      } else {
+        el.navNote.textContent = `${info.detail} · ${state.player.gx}, ${state.player.gy}`;
+      }
+    }
+    el.weather.textContent = `${SEASON_LABEL[seasonOf(state.day)]} · ${weatherForDay(state.day).label}`;
+    renderMiniMap();
   }
 
   // ---------------------------------------------------------------------
   // Tutorial
   // ---------------------------------------------------------------------
   const TUTORIAL_STEPS = [
-    'Move around the expanded island with WASD / arrow keys, or the on-screen pad on touch devices.',
-    'Open Quest Log when you need direction. The full playthrough is residents → shrine trials → Prism Gate.',
+    'Explore the 128 × 128 region with WASD / arrow keys, held directions, or the on-screen pad. The camera follows while nearby chunks stream in.',
+    'Open Map or press M for roads, coordinates, discovered signpost travel, and a trail marker. Open Quest Log for the resident → shrine → Prism Gate path.',
     'Walk next to a Grove, Quarry, or Reed patch and press the glowing action button to gather Grain, Shale, or Loom.',
     'Open Build to spend resources on floors, walls, furniture, and a Hearth. Pick a piece, then tap an open tile to place it — Demolish removes your own pieces for half the cost back.',
     'Open Farm to till open grass into soil plots and plant seeds. Water daily to hurry things along, but don’t neglect a plot too long — an unwatered, unfertilized crop can wilt and die. Harvest when it sparkles.',
@@ -1411,6 +1918,7 @@
     'Open Craft to turn Grain and Shale into Plank and Ingot, then spend those on Rich Fertilizer, a Sturdy or Masterwork gathering tool, and the crafted-material Watchtower in Build.',
     'Build a Coop straight from Grain and Shale, feed it 2 Grain, then come back the next day to collect Eggs for the Sunrise Omelet recipe.',
     'CubeTown’s seasons turn every few days, shifting the grass color and which crops grow fastest — plant with the season for a real bonus.',
+    'Weather changes by day. Spring and summer rain water growing plots for you; mist, wind, and winter snow change the feel of the road.',
     'Talk to residents often and give them gifts from your Inventory to build real friendship over time — favorite gifts count double, and friendship milestones return the favor.',
     'Follow the trailhead at the town’s west edge into the Wilds for real risk: hostile creatures, hidden treasure, and two tougher shrine trials guarding rare rewards. Spark doubles as your health out there, and you can retreat to town anytime from the HUD button.',
     'When four Keystones and a Relic are yours, walk to the north Prism Gate and open the finale.',
@@ -1464,7 +1972,7 @@
   // ---------------------------------------------------------------------
   function tryMove(dx, dy) {
     if (rt.world === 'wilds') { tryMoveWilds(dx, dy); return; }
-    if (rt.paused || anyPanelOpen()) return;
+    if (rt.paused || anyPanelOpen() || rt.moveT < 0.72) return;
     const nx = state.player.gx + dx, ny = state.player.gy + dy;
     rt.facing = dx > 0 ? 'right' : dx < 0 ? 'left' : dy > 0 ? 'down' : 'up';
     if (isBlockedTile(nx, ny)) { return; }
@@ -1473,6 +1981,9 @@
     rt.playerToX = nx; rt.playerToY = ny;
     rt.moveT = 0; rt.moveDur = rt.reducedMotion ? 40 : 150;
     sfx.step();
+    rt.lastMiniMapKey = '';
+    checkWorldDiscovery();
+    updateNavigationHud();
   }
 
   // ---------------------------------------------------------------------
@@ -1489,15 +2000,17 @@
     // adventure landmark adjacent?
     for (const n of neighbors4(p.gx, p.gy)) {
       if (!inBounds(n.x, n.y)) continue;
-      const t = terrain[n.y][n.x];
+      const t = terrainAt(n.x, n.y);
       if (t === 'shrine') return { kind: 'trial', trial: trialAt(n.x, n.y) };
       if (t === 'gate') return { kind: 'gate' };
       if (t === 'trailhead') return { kind: 'enterWilds' };
+      const worldTile = worldTileAt(n.x, n.y);
+      if (t === 'cache' && !isWorldCacheFound(worldTile.cacheId)) return { kind: 'worldCache', tile: worldTile, x: n.x, y: n.y };
     }
     // resource node adjacent?
     for (const n of neighbors4(p.gx, p.gy)) {
       if (!inBounds(n.x, n.y)) continue;
-      const t = terrain[n.y][n.x];
+      const t = terrainAt(n.x, n.y);
       if (t === 'water') return { kind: 'fish' };
       if (NODE_RESOURCE[t]) return { kind: 'gather', resource: NODE_RESOURCE[t] };
     }
@@ -1528,12 +2041,18 @@
         return { kind: 'talk', npc };
       }
     }
+    for (const def of SETTLEMENT_RESIDENTS) {
+      const resident = settlementResidentPosition(def);
+      if (Math.max(Math.abs(resident.gx - p.gx), Math.abs(resident.gy - p.gy)) <= 1 && !(resident.gx === p.gx && resident.gy === p.gy)) {
+        return { kind: 'localTalk', resident };
+      }
+    }
     return null;
   }
   const CONTEXT_LABEL = {
     gather: 'Gather', fish: 'Fish', cook: 'Cook', sleep: 'Sleep', talk: 'Talk', trial: 'Trial', gate: 'Gate',
     harvest: 'Harvest', water: 'Water', plant: 'Plant', feed: 'Feed', collectEgg: 'Collect Eggs',
-    enterWilds: 'Into the Wilds', attack: 'Strike', treasure: 'Search', gatherGlimmer: 'Gather',
+    enterWilds: 'Into the Wilds', attack: 'Strike', treasure: 'Search', gatherGlimmer: 'Gather', worldCache: 'Open Cache', localTalk: 'Talk',
   };
   function doContextAction() {
     if (rt.world === 'wilds') { doWildsContextAction(); return; }
@@ -1546,6 +2065,7 @@
     else if (it.kind === 'cook') openCookPrompt();
     else if (it.kind === 'sleep') doSleep();
     else if (it.kind === 'talk') openNpcDialogue(it.npc);
+    else if (it.kind === 'localTalk') openLocalDialogue(it.resident);
     else if (it.kind === 'trial') openTrial(it.trial);
     else if (it.kind === 'gate') openGate();
     else if (it.kind === 'harvest') harvestPlot(it.plot);
@@ -1554,6 +2074,7 @@
     else if (it.kind === 'feed') feedCoop(it.livestock);
     else if (it.kind === 'collectEgg') collectEgg(it.livestock);
     else if (it.kind === 'enterWilds') enterWilds();
+    else if (it.kind === 'worldCache') collectWorldCache(it.tile, it.x, it.y);
   }
   function doGather(resource) {
     if (rt.gathering) return;
@@ -1642,10 +2163,10 @@
   // The Wilds — movement, interaction, enemies, treasure, entry/exit
   // ---------------------------------------------------------------------
   function tryMoveWilds(dx, dy) {
-    if (rt.paused || anyPanelOpen()) return;
+    if (rt.paused || anyPanelOpen() || rt.wildsMoveT < 0.72) return;
     const nx = rt.wildsGx + dx, ny = rt.wildsGy + dy;
     rt.facing = dx > 0 ? 'right' : dx < 0 ? 'left' : dy > 0 ? 'down' : 'up';
-    if (!inBounds(nx, ny)) return;
+    if (!inLegacyBounds(nx, ny)) return;
     const enemy = rt.wildsEnemies.find((e) => e.gx === nx && e.gy === ny && e.hp > 0);
     if (enemy) { hitPlayerContact(SPARK_WILDS_HIT); return; }
     if (isBlockedWildsTile(nx, ny)) return;
@@ -1654,11 +2175,13 @@
     rt.wildsToX = nx; rt.wildsToY = ny;
     rt.wildsMoveT = 0; rt.wildsMoveDur = rt.reducedMotion ? 40 : 150;
     sfx.step();
+    rt.lastMiniMapKey = '';
+    updateNavigationHud();
   }
   function findWildsInteraction() {
     const gx = rt.wildsGx, gy = rt.wildsGy;
     for (const n of neighbors4(gx, gy)) {
-      if (!inBounds(n.x, n.y)) continue;
+      if (!inLegacyBounds(n.x, n.y)) continue;
       const t = wildsTerrain[n.y][n.x];
       if (t === 'wshrine') { const trial = wildsTrialAt(n.x, n.y); if (trial) return { kind: 'trial', trial }; }
       if (t === 'glimmer') return { kind: 'gatherGlimmer' };
@@ -1776,7 +2299,7 @@
       rt.wildsEnemies.push({ gx: x, gy: y, hp: 2, maxHp: 2, cooldown: Math.random() * 0.6, isGuardian: false, stationary: false });
       placed++;
     }
-    if (!state.wilds.guardianDefeated && inBounds(GUARDIAN_TILE.x, GUARDIAN_TILE.y)) {
+    if (!state.wilds.guardianDefeated && inLegacyBounds(GUARDIAN_TILE.x, GUARDIAN_TILE.y)) {
       rt.wildsEnemies.push({ gx: GUARDIAN_TILE.x, gy: GUARDIAN_TILE.y, hp: 6, maxHp: 6, cooldown: 0, isGuardian: true, stationary: true });
     }
   }
@@ -1789,6 +2312,7 @@
     rt.wildsFromX = rt.wildsGx; rt.wildsFromY = rt.wildsGy;
     rt.wildsToX = rt.wildsGx; rt.wildsToY = rt.wildsGy;
     rt.wildsMoveT = 1;
+    rt.wildsCameraX = rt.wildsGx; rt.wildsCameraY = rt.wildsGy;
     rt.wildsInvulnUntil = 0;
     const p0 = tileToScreen(rt.wildsGx, rt.wildsGy);
     rt.wildsPx = p0.x; rt.wildsPy = p0.y;
@@ -1801,6 +2325,8 @@
     if (rt.world !== 'wilds') return;
     rt.world = 'town';
     rt.wildsEnemies = [];
+    rt.cameraX = state.player.gx; rt.cameraY = state.player.gy;
+    rt.lastMiniMapKey = '';
     toast('Back in town, safe and sound.');
     updateHud();
   }
@@ -1824,17 +2350,19 @@
       if (dx === 0 && dy === 0) continue;
       const nx = en.gx + dx, ny = en.gy + dy;
       if (nx === rt.wildsGx && ny === rt.wildsGy) { hitPlayerContact(SPARK_WILDS_HIT); continue; }
-      if (!inBounds(nx, ny) || isBlockedWildsTile(nx, ny)) continue;
+      if (!inLegacyBounds(nx, ny) || isBlockedWildsTile(nx, ny)) continue;
       if (rt.wildsEnemies.some((o) => o !== en && o.gx === nx && o.gy === ny)) continue;
       en.gx = nx; en.gy = ny;
     }
   }
   function stepWildsMoveInterp(dt) {
     if (rt.wildsMoveT < 1) rt.wildsMoveT = Math.min(1, rt.wildsMoveT + dt * 1000 / (rt.wildsMoveDur || 150));
-    const fx = tileToScreen(rt.wildsFromX, rt.wildsFromY), tx = tileToScreen(rt.wildsToX, rt.wildsToY);
     const e = rt.wildsMoveT;
-    rt.wildsPx = fx.x + (tx.x - fx.x) * e;
-    rt.wildsPy = fx.y + (tx.y - fx.y) * e;
+    const worldX = rt.wildsFromX + (rt.wildsToX - rt.wildsFromX) * e;
+    const worldY = rt.wildsFromY + (rt.wildsToY - rt.wildsFromY) * e;
+    rt.wildsCameraX = worldX; rt.wildsCameraY = worldY;
+    const screen = tileToScreen(worldX, worldY);
+    rt.wildsPx = screen.x; rt.wildsPy = screen.y;
   }
 
   // ---------------------------------------------------------------------
@@ -1870,12 +2398,14 @@
     state.seed = seed >>> 0;
     terrain = genTerrain(state.seed);
     wildsTerrain = genWildsTerrain(state.seed);
+    resetWorldChunks();
     clearFoundWildsTreasures();
     npcs = buildNpcRuntime();
-    state.player.gx = clamp(state.player.gx, 0, GRID - 1);
-    state.player.gy = clamp(state.player.gy, 0, GRID - 1);
+    state.player.gx = clamp(state.player.gx, WORLD_MIN, WORLD_MAX);
+    state.player.gy = clamp(state.player.gy, WORLD_MIN, WORLD_MAX);
     if (isBlockedTile(state.player.gx, state.player.gy)) { state.player.gx = 8; state.player.gy = 8; }
     rt.playerToX = state.player.gx; rt.playerToY = state.player.gy; rt.moveT = 1;
+    rt.cameraX = state.player.gx; rt.cameraY = state.player.gy;
   }
   function onMatchState(d) {
     const wasActive = mp.active;
@@ -1883,11 +2413,12 @@
     mp.participants = Array.isArray(d.participants) ? d.participants : mp.participants;
     const ms = d.matchState && typeof d.matchState === 'object' ? d.matchState : {};
     if (typeof ms.seed === 'number' && ms.seed !== state.seed && !mp.amIHost) adoptSharedSeed(ms.seed);
-    if (Array.isArray(ms.town)) mp.sharedTown = ms.town.filter((p) => p && PALETTE_BY_TYPE[p.type]);
+    if (Array.isArray(ms.town)) mp.sharedTown = ms.town.filter((p) => p && PALETTE_BY_TYPE[p.type] && Number.isFinite(p.gx) && Number.isFinite(p.gy))
+      .map((p) => ({ ...p, gx: clamp(Math.floor(p.gx), WORLD_MIN, WORLD_MAX), gy: clamp(Math.floor(p.gy), WORLD_MIN, WORLD_MAX) }));
     if (Array.isArray(ms.farm)) {
       mp.sharedFarm = ms.farm
         .filter((p) => p && Number.isFinite(p.x) && Number.isFinite(p.y) && (p.crop == null || CROP_BY_KEY[p.crop]))
-        .map((p) => ({ x: clamp(Math.floor(p.x), 0, GRID - 1), y: clamp(Math.floor(p.y), 0, GRID - 1), crop: p.crop || null, prog: Number.isFinite(p.prog) ? Math.max(0, p.prog) : 0, watered: !!p.watered, dryStreak: Number.isFinite(p.dryStreak) ? p.dryStreak : 0, fertileUntilDay: Number.isFinite(p.fertileUntilDay) ? p.fertileUntilDay : 0 }));
+        .map((p) => ({ x: clamp(Math.floor(p.x), WORLD_MIN, WORLD_MAX), y: clamp(Math.floor(p.y), WORLD_MIN, WORLD_MAX), crop: p.crop || null, prog: Number.isFinite(p.prog) ? Math.max(0, p.prog) : 0, watered: !!p.watered, dryStreak: Number.isFinite(p.dryStreak) ? p.dryStreak : 0, fertileUntilDay: Number.isFinite(p.fertileUntilDay) ? p.fertileUntilDay : 0 }));
     }
     if (ms.openBuilding === 'host_only' || ms.openBuilding === 'everyone') mp.openBuilding = ms.openBuilding;
     if (mp.pendingNonce && ms.hostProbe === mp.pendingNonce) {
@@ -1911,7 +2442,7 @@
   function updateHud() {
     const seg = daySegment(state.minutes);
     el.clock.textContent = `Day ${state.day} · ${formatClock(state.minutes)}`;
-    el.clockNote.textContent = `${seg[0].toUpperCase() + seg.slice(1)} · ${SEASON_LABEL[seasonOf(state.day)]}${rt.world === 'wilds' ? ' · In the Wilds' : ''}`;
+    el.clockNote.textContent = `${seg[0].toUpperCase() + seg.slice(1)} · ${weatherForDay(state.day).label}${rt.world === 'wilds' ? ' · In the Wilds' : ''}`;
     el.spark.style.width = `${clamp(state.spark, 0, 100)}%`;
     el.resGrain.textContent = state.inventory.grain || 0;
     el.resShale.textContent = state.inventory.shale || 0;
@@ -1926,6 +2457,22 @@
     } else {
       el.context.classList.remove('is-visible');
     }
+    updateNavigationHud();
+  }
+  function stepHeldMovement(t) {
+    if (!rt.heldKeys.size || rt.paused || anyPanelOpen() || t < rt.nextHeldMoveAt) return;
+    const ordered = Array.from(rt.heldKeys).reverse();
+    let move = null;
+    for (const key of ordered) {
+      if (key === 'w' || key === 'arrowup') { move = [0, -1]; break; }
+      if (key === 's' || key === 'arrowdown') { move = [0, 1]; break; }
+      if (key === 'a' || key === 'arrowleft') { move = [-1, 0]; break; }
+      if (key === 'd' || key === 'arrowright') { move = [1, 0]; break; }
+    }
+    if (!move) return;
+    tryMove(move[0], move[1]);
+    const onRoad = rt.world === 'town' && ['road', 'trail', 'bridge'].includes(terrainAt(state.player.gx, state.player.gy));
+    rt.nextHeldMoveAt = t + (rt.reducedMotion ? 70 : onRoad ? 112 : 148);
   }
 
   // ---------------------------------------------------------------------
@@ -2008,25 +2555,92 @@
     const f = (v) => clamp(Math.round(v * amt), 0, 255);
     return `rgb(${f(c.r)},${f(c.g)},${f(c.b)})`;
   }
-  const TERRAIN_COLOR = { grass: '#3a6b4a', trail: '#9f7f58', grove: '#2f7a4d', quarry: '#7b7f8c', reed: '#7fae59', water: '#3f8ec9', shrine: '#5b4aa8', gate: '#2f2448', trailhead: '#caa06a' };
-  function drawTerrainTile(gx, gy, t) {
+  function motionPulse(speed, phase = 0, base = 0.6, amount = 0.15) {
+    return rt.reducedMotion ? base : base + amount * Math.sin(performance.now() / speed + phase);
+  }
+  const TERRAIN_COLOR = {
+    grass: '#3a6b4a', meadow: '#5d8d53', forestfloor: '#426f47', stonegrass: '#727c73', sungrass: '#878348', frostgrass: '#738f95',
+    trail: '#9f7f58', road: '#a9855c', bridge: '#ba9564', grove: '#2f7a4d', quarry: '#7b7f8c', reed: '#6d995e', water: '#3f8ec9',
+    marsh: '#557969', cliff: '#646a6e', field: '#8e7a3f', cottage: '#c97b61', landmark: '#b99a59', shrine: '#5b4aa8', gate: '#2f2448', trailhead: '#caa06a', cache: '#7b6847',
+  };
+  const NATURAL_GROUND_TYPES = new Set(['grass', 'meadow', 'forestfloor', 'stonegrass', 'sungrass', 'frostgrass']);
+  function drawTerrainTile(gx, gy, tileInput) {
+    const tile = typeof tileInput === 'string' ? { type: tileInput, baseType: tileInput, biome: 'hearthland', variant: 0.5, poiId: null, cacheId: null } : tileInput;
+    const t = tile.type === 'cache' && isWorldCacheFound(tile.cacheId) ? tile.baseType : tile.type;
     const s = tileToScreen(gx, gy);
-    const top = t === 'grass' ? SEASON_GRASS[seasonOf(state.day)] : (TERRAIN_COLOR[t] || TERRAIN_COLOR.grass);
+    const biomeGround = BIOME_DEFS[tile.biome]?.ground || TERRAIN_COLOR.grass;
+    const top = t === 'grass' ? SEASON_GRASS[seasonOf(state.day)] : NATURAL_GROUND_TYPES.has(t) ? biomeGround : (TERRAIN_COLOR[t] || biomeGround);
     drawDiamond(s.x, s.y, rt.tileW, rt.tileH, top, 'rgba(0,0,0,0.18)');
-    if (t === 'grove' || t === 'quarry' || t === 'reed') {
-      drawBlock(s.x, s.y, rt.tileW * 0.36, rt.tileH * 0.36, rt.tileH * (t === 'grove' ? 1.6 : 0.7), shade(top, 1.25), shade(top, 0.75), shade(top, 0.55));
+    if (t === 'grove') {
+      drawBlock(s.x, s.y, rt.tileW * 0.18, rt.tileH * 0.18, rt.tileH * 1.15, '#8c6245', '#68442f', '#4f3427');
+      ctx.fillStyle = shade(top, 1.1);
+      ctx.beginPath(); ctx.arc(s.x, s.y - rt.tileH * 1.65, rt.tileH * 0.68, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = shade(top, 0.88);
+      ctx.beginPath(); ctx.arc(s.x - rt.tileH * 0.36, s.y - rt.tileH * 1.35, rt.tileH * 0.48, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(s.x + rt.tileH * 0.4, s.y - rt.tileH * 1.4, rt.tileH * 0.5, 0, Math.PI * 2); ctx.fill();
+    } else if (t === 'quarry' || t === 'reed') {
+      drawBlock(s.x, s.y, rt.tileW * 0.36, rt.tileH * 0.36, rt.tileH * (t === 'reed' ? 0.85 : 0.7), shade(top, 1.25), shade(top, 0.75), shade(top, 0.55));
+    } else if (t === 'cliff') {
+      drawBlock(s.x, s.y, rt.tileW * 0.9, rt.tileH * 0.9, rt.tileH * (1.0 + tile.variant * 0.65), shade(top, 1.1), shade(top, 0.72), shade(top, 0.56));
     }
     if (t === 'water') {
-      ctx.save(); ctx.globalAlpha = 0.35 + 0.1 * Math.sin(performance.now() / 500 + gx + gy);
+      ctx.save(); ctx.globalAlpha = motionPulse(500, gx + gy, 0.35, 0.1);
       drawDiamond(s.x, s.y, rt.tileW * 0.7, rt.tileH * 0.7, '#bfe9ff', null);
       ctx.restore();
+    }
+    if (t === 'marsh') {
+      ctx.save(); ctx.strokeStyle = '#9bc6a2'; ctx.lineWidth = 1.5 * rt.dpr; ctx.globalAlpha = 0.7;
+      for (let i = -1; i <= 1; i++) {
+        ctx.beginPath(); ctx.moveTo(s.x + i * rt.tileW * 0.14, s.y); ctx.lineTo(s.x + i * rt.tileW * 0.1, s.y - rt.tileH * (0.35 + (i + 1) * 0.12)); ctx.stroke();
+      }
+      ctx.restore();
+    }
+    if (t === 'field') {
+      ctx.save(); ctx.strokeStyle = '#e1c66a'; ctx.globalAlpha = 0.58; ctx.lineWidth = 1.25 * rt.dpr;
+      for (let i = -2; i <= 2; i++) {
+        ctx.beginPath(); ctx.moveTo(s.x - rt.tileW * 0.28 + i * rt.tileW * 0.08, s.y - rt.tileH * 0.05); ctx.lineTo(s.x + i * rt.tileW * 0.08, s.y + rt.tileH * 0.22); ctx.stroke();
+      }
+      ctx.restore();
+    }
+    if (t === 'road' || t === 'trail') {
+      ctx.save(); ctx.globalAlpha = 0.32; ctx.fillStyle = '#f2d59a';
+      const ox = (tile.variant - 0.5) * rt.tileW * 0.28;
+      ctx.beginPath(); ctx.arc(s.x + ox, s.y, 1.5 * rt.dpr, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+    }
+    if (t === 'bridge') {
+      ctx.save(); ctx.strokeStyle = '#6f4d35'; ctx.lineWidth = 2 * rt.dpr;
+      ctx.beginPath(); ctx.moveTo(s.x - rt.tileW * 0.32, s.y - rt.tileH * 0.04); ctx.lineTo(s.x, s.y + rt.tileH * 0.27); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(s.x, s.y - rt.tileH * 0.27); ctx.lineTo(s.x + rt.tileW * 0.32, s.y + rt.tileH * 0.04); ctx.stroke(); ctx.restore();
+    }
+    if (t === 'cottage') {
+      const wall = '#e9c590', roof = tile.variant > 0.5 ? '#c85f5d' : '#5f8f91';
+      drawBlock(s.x, s.y, rt.tileW * 0.74, rt.tileH * 0.74, rt.tileH * 1.25, wall, shade(wall, 0.78), shade(wall, 0.62));
+      drawBlock(s.x, s.y - rt.tileH * 1.22, rt.tileW * 0.84, rt.tileH * 0.84, rt.tileH * 0.35, shade(roof, 1.08), shade(roof, 0.75), shade(roof, 0.58));
+      ctx.fillStyle = '#402b2d'; ctx.fillRect(s.x - 2 * rt.dpr, s.y - rt.tileH * 0.95, 4 * rt.dpr, rt.tileH * 0.62);
+    }
+    if (t === 'landmark') {
+      const poi = WORLD_POI_BY_ID[tile.poiId];
+      const discovered = poi && state.exploration.discovered.includes(poi.id);
+      const color = poi?.kind === 'farm' ? '#e4b84f' : poi?.kind === 'settlement' ? '#e67d68' : '#8f91d8';
+      drawBlock(s.x, s.y, rt.tileW * 0.34, rt.tileH * 0.34, rt.tileH * 1.7, shade(color, 1.15), shade(color, 0.72), shade(color, 0.55));
+      ctx.save(); ctx.strokeStyle = discovered ? '#fbe9d8' : '#ffcf6b'; ctx.lineWidth = 2 * rt.dpr; ctx.globalAlpha = motionPulse(430, gx, 0.7, 0.18);
+      ctx.beginPath(); ctx.arc(s.x, s.y - rt.tileH * 2.0, rt.tileH * 0.28, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
+    }
+    if (tile.type === 'cache' && !isWorldCacheFound(tile.cacheId)) {
+      drawBlock(s.x, s.y, rt.tileW * 0.38, rt.tileH * 0.38, rt.tileH * 0.45, '#d2a65f', '#80593d', '#65432f');
+      ctx.save(); ctx.fillStyle = '#ffcf6b'; ctx.globalAlpha = motionPulse(300, gx + gy, 0.68, 0.2);
+      ctx.beginPath(); ctx.arc(s.x, s.y - rt.tileH * 0.9, rt.tileH * 0.13, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+    }
+    if (NATURAL_GROUND_TYPES.has(t) && tile.variant > 0.965) {
+      ctx.save(); ctx.fillStyle = tile.biome === 'frostwood' ? '#d7f4ff' : '#ffd27f'; ctx.globalAlpha = 0.8;
+      ctx.beginPath(); ctx.arc(s.x + rt.tileW * 0.16, s.y - rt.tileH * 0.17, 1.6 * rt.dpr, 0, Math.PI * 2); ctx.fill(); ctx.restore();
     }
     if (t === 'shrine') {
       const trial = trialAt(gx, gy);
       const done = trial && state.adventure?.trials?.[trial.id]?.done;
       drawBlock(s.x, s.y, rt.tileW * 0.58, rt.tileH * 0.58, rt.tileH * 1.55, done ? '#5be3b5' : '#c792ea', '#34255b', '#211638');
       ctx.save();
-      ctx.globalAlpha = done ? 0.35 : 0.55 + 0.15 * Math.sin(performance.now() / 360 + gx);
+      ctx.globalAlpha = done ? 0.35 : motionPulse(360, gx, 0.55, 0.15);
       ctx.fillStyle = done ? '#5be3b5' : '#ffcf6b';
       ctx.beginPath(); ctx.arc(s.x, s.y - rt.tileH * 1.95, rt.tileH * 0.28, 0, Math.PI * 2); ctx.fill();
       ctx.restore();
@@ -2043,7 +2657,7 @@
     if (t === 'trailhead') {
       drawBlock(s.x, s.y, rt.tileW * 0.5, rt.tileH * 0.5, rt.tileH * 1.2, shade(top, 1.2), shade(top, 0.72), shade(top, 0.5));
       ctx.save();
-      ctx.strokeStyle = '#ffcf6b'; ctx.lineWidth = 2 * rt.dpr; ctx.globalAlpha = 0.7 + 0.2 * Math.sin(performance.now() / 400 + gx);
+      ctx.strokeStyle = '#ffcf6b'; ctx.lineWidth = 2 * rt.dpr; ctx.globalAlpha = motionPulse(400, gx, 0.7, 0.2);
       ctx.beginPath(); ctx.arc(s.x, s.y - rt.tileH * 1.6, rt.tileH * 0.32, 0, Math.PI * 2); ctx.stroke();
       ctx.restore();
     }
@@ -2066,7 +2680,7 @@
     if (piece.type === 'coop') {
       const l = currentLivestock().find((x) => x.pieceId === piece.id);
       if (l && l.readyToCollect) {
-        ctx.save(); ctx.globalAlpha = 0.7 + 0.2 * Math.sin(performance.now() / 300);
+        ctx.save(); ctx.globalAlpha = motionPulse(300, piece.gx + piece.gy, 0.7, 0.2);
         ctx.fillStyle = '#ffe98a';
         ctx.beginPath(); ctx.arc(s.x, s.y - hgt - rt.tileH * 0.6, rt.tileH * 0.22, 0, Math.PI * 2); ctx.fill();
         ctx.restore();
@@ -2098,7 +2712,7 @@
       if (stage >= 3) {
         // ready-to-harvest sparkle, same gentle pulse language as the shrines
         ctx.save();
-        ctx.globalAlpha = 0.55 + 0.2 * Math.sin(performance.now() / 320 + plot.x + plot.y);
+        ctx.globalAlpha = motionPulse(320, plot.x + plot.y, 0.55, 0.2);
         ctx.fillStyle = '#ffe98a';
         ctx.beginPath(); ctx.arc(s.x, s.y - hgt - rt.tileH * 0.4, rt.tileH * 0.2, 0, Math.PI * 2); ctx.fill();
         ctx.restore();
@@ -2112,51 +2726,110 @@
       ctx.restore();
     }
   }
-  function drawCharacter(px, py, hueColor, topper, trimColor, label, mini) {
+  function characterLook(key) {
+    let h = 2166136261;
+    for (const ch of String(key || 'resident')) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); }
+    const skins = ['#f7d7bd', '#e8b88f', '#c98d68', '#8d5d48', '#f0c6a2'];
+    const hairs = ['#3a2928', '#6b4635', '#d6a64d', '#202735', '#8a4e35', '#d7d2c6'];
+    return { skin: skins[(h >>> 0) % skins.length], hair: hairs[((h >>> 5) >>> 0) % hairs.length], style: ((h >>> 11) >>> 0) % 4 };
+  }
+  function drawCharacter(px, py, hueColor, topper, trimColor, label, mini, characterKey = 'resident', expression = 'calm') {
     const scale = mini ? 0.72 : 1;
-    const bw = rt.tileW * 0.42 * scale, bh = rt.tileH * 1.3 * scale;
+    const u = rt.tileH * scale;
+    const look = characterLook(characterKey);
+    const bob = rt.reducedMotion ? 0 : Math.sin(rt.playSecondsAccum * 2.4 + (characterKey.length || 1)) * u * 0.025;
+    const groundY = py - 2 * rt.dpr + bob;
+    const headY = groundY - u * 1.78;
+    const headRx = u * 0.48, headRy = u * 0.55;
+    const shoulderY = groundY - u * 1.24;
     ctx.save();
-    ctx.globalAlpha = 0.28;
-    drawDiamond(px, py + 3 * rt.dpr, rt.tileW * 0.5 * scale, rt.tileH * 0.4 * scale, '#000000', null);
+
+    // Soft shadow and separate feet/legs keep the silhouette human at tiny scale.
+    ctx.globalAlpha = 0.25;
+    ctx.fillStyle = '#08060e';
+    ctx.beginPath(); ctx.ellipse(px, py + 2 * rt.dpr, u * 0.56, u * 0.2, 0, 0, Math.PI * 2); ctx.fill();
     ctx.globalAlpha = 1;
-    // body
-    const bx = px, by = py - bh * 0.5;
+    ctx.strokeStyle = shade(hueColor, 0.52); ctx.lineWidth = u * 0.18; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(px - u * 0.18, groundY - u * 0.58); ctx.lineTo(px - u * 0.2, groundY - u * 0.12); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(px + u * 0.18, groundY - u * 0.58); ctx.lineTo(px + u * 0.2, groundY - u * 0.12); ctx.stroke();
+    ctx.fillStyle = '#332d3e';
+    ctx.beginPath(); ctx.ellipse(px - u * 0.23, groundY - u * 0.04, u * 0.2, u * 0.11, -0.1, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(px + u * 0.23, groundY - u * 0.04, u * 0.2, u * 0.11, 0.1, 0, Math.PI * 2); ctx.fill();
+
+    // Rounded shoulders, tapered torso, arms, and hands.
     ctx.fillStyle = hueColor;
-    roundRect(bx - bw / 2, by - bh / 2, bw, bh, 6 * rt.dpr);
-    ctx.fill();
-    ctx.strokeStyle = trimColor; ctx.lineWidth = 2 * rt.dpr; ctx.stroke();
-    // head
-    const headSize = bw * 1.05;
-    ctx.fillStyle = hueColor;
-    roundRect(bx - headSize / 2, by - bh / 2 - headSize * 0.9, headSize, headSize * 0.9, 5 * rt.dpr);
-    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(px - u * 0.5, shoulderY + u * 0.12);
+    ctx.quadraticCurveTo(px, shoulderY - u * 0.2, px + u * 0.5, shoulderY + u * 0.12);
+    ctx.lineTo(px + u * 0.35, groundY - u * 0.52);
+    ctx.quadraticCurveTo(px, groundY - u * 0.38, px - u * 0.35, groundY - u * 0.52);
+    ctx.closePath(); ctx.fill();
     ctx.strokeStyle = trimColor; ctx.lineWidth = 1.5 * rt.dpr; ctx.stroke();
-    // topper
-    const headTopY = by - bh / 2 - headSize * 0.9;
+    ctx.strokeStyle = shade(hueColor, 0.78); ctx.lineWidth = u * 0.16;
+    ctx.beginPath(); ctx.moveTo(px - u * 0.4, shoulderY + u * 0.16); ctx.lineTo(px - u * 0.53, groundY - u * 0.56); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(px + u * 0.4, shoulderY + u * 0.16); ctx.lineTo(px + u * 0.53, groundY - u * 0.56); ctx.stroke();
+    ctx.fillStyle = look.skin;
+    ctx.beginPath(); ctx.arc(px - u * 0.54, groundY - u * 0.5, u * 0.1, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(px + u * 0.54, groundY - u * 0.5, u * 0.1, 0, Math.PI * 2); ctx.fill();
+    ctx.fillRect(px - u * 0.09, shoulderY - u * 0.08, u * 0.18, u * 0.23);
+
+    // Oval head, ears, hair, brows, eyes, blush, and a readable expression.
+    ctx.fillStyle = look.skin;
+    ctx.beginPath(); ctx.ellipse(px - headRx * 0.98, headY, headRx * 0.18, headRy * 0.28, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(px + headRx * 0.98, headY, headRx * 0.18, headRy * 0.28, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(px, headY, headRx, headRy, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(70,42,40,0.28)'; ctx.lineWidth = 1.2 * rt.dpr; ctx.stroke();
+    ctx.fillStyle = look.hair;
+    ctx.beginPath();
+    ctx.arc(px, headY - headRy * 0.2, headRx * 1.02, Math.PI, Math.PI * 2);
+    if (look.style === 0) ctx.quadraticCurveTo(px + headRx * 0.2, headY - headRy * 0.14, px - headRx * 0.62, headY - headRy * 0.02);
+    else if (look.style === 1) ctx.quadraticCurveTo(px, headY + headRy * 0.05, px - headRx * 0.82, headY - headRy * 0.05);
+    else if (look.style === 2) ctx.quadraticCurveTo(px - headRx * 0.15, headY - headRy * 0.3, px - headRx * 0.78, headY + headRy * 0.05);
+    else ctx.quadraticCurveTo(px + headRx * 0.55, headY - headRy * 0.25, px - headRx * 0.72, headY);
+    ctx.closePath(); ctx.fill();
+    if (look.style === 1 || look.style === 3) {
+      ctx.beginPath(); ctx.ellipse(px + headRx * 0.86, headY + headRy * 0.1, headRx * 0.2, headRy * 0.55, 0.08, 0, Math.PI * 2); ctx.fill();
+    }
+    const eyeY = headY + headRy * 0.06;
+    ctx.strokeStyle = shade(look.hair, 0.72); ctx.lineWidth = 1.3 * rt.dpr; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(px - headRx * 0.32, eyeY - headRy * 0.22); ctx.lineTo(px - headRx * 0.08, eyeY - headRy * 0.2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(px + headRx * 0.08, eyeY - headRy * 0.2); ctx.lineTo(px + headRx * 0.32, eyeY - headRy * 0.22); ctx.stroke();
+    ctx.fillStyle = '#fffaf2';
+    ctx.beginPath(); ctx.ellipse(px - headRx * 0.22, eyeY, headRx * 0.14, headRy * 0.12, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(px + headRx * 0.22, eyeY, headRx * 0.14, headRy * 0.12, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#302538';
+    ctx.beginPath(); ctx.arc(px - headRx * 0.2, eyeY, headRx * 0.065, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(px + headRx * 0.2, eyeY, headRx * 0.065, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(224,103,111,0.3)';
+    ctx.beginPath(); ctx.ellipse(px - headRx * 0.48, eyeY + headRy * 0.22, headRx * 0.12, headRy * 0.07, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(px + headRx * 0.48, eyeY + headRy * 0.22, headRx * 0.12, headRy * 0.07, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#814f55'; ctx.lineWidth = 1.4 * rt.dpr;
+    ctx.beginPath();
+    if (expression === 'happy' || expression === 'bright') ctx.arc(px, eyeY + headRy * 0.18, headRx * 0.18, 0.08, Math.PI - 0.08);
+    else { ctx.moveTo(px - headRx * 0.12, eyeY + headRy * 0.28); ctx.quadraticCurveTo(px, eyeY + headRy * 0.34, px + headRx * 0.12, eyeY + headRy * 0.27); }
+    ctx.stroke();
+
+    const headTopY = headY - headRy;
+    const headSize = headRx * 2;
     if (topper === 'cap') {
       ctx.fillStyle = shade(hueColor, 0.6);
-      ctx.beginPath(); ctx.moveTo(bx - headSize / 2, headTopY + 4 * rt.dpr); ctx.lineTo(bx + headSize / 2, headTopY + 4 * rt.dpr); ctx.lineTo(bx, headTopY - headSize * 0.4); ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(px, headTopY + headRy * 0.12, headRx * 0.92, headRy * 0.28, 0, Math.PI, Math.PI * 2); ctx.fill();
+      ctx.fillRect(px - headRx * 0.08, headTopY - headRy * 0.24, headRx * 0.8, headRy * 0.13);
     } else if (topper === 'bloom') {
-      ctx.fillStyle = '#ff7fb0';
-      ctx.beginPath(); ctx.arc(bx, headTopY, headSize * 0.22, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#ffe27a';
-      ctx.beginPath(); ctx.arc(bx, headTopY, headSize * 0.08, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#ff7fb0'; ctx.beginPath(); ctx.arc(px, headTopY, headSize * 0.22, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#ffe27a'; ctx.beginPath(); ctx.arc(px, headTopY, headSize * 0.08, 0, Math.PI * 2); ctx.fill();
     } else if (topper === 'halo') {
-      ctx.strokeStyle = '#ffe27a'; ctx.lineWidth = 2.5 * rt.dpr;
-      ctx.beginPath(); ctx.ellipse(bx, headTopY - headSize * 0.15, headSize * 0.4, headSize * 0.14, 0, 0, Math.PI * 2); ctx.stroke();
-    } else if (topper === 'crest') {
-      ctx.fillStyle = '#ffcf6b';
-      ctx.beginPath(); ctx.moveTo(bx - headSize * 0.38, headTopY + headSize * 0.08); ctx.lineTo(bx - headSize * 0.12, headTopY - headSize * 0.38); ctx.lineTo(bx + headSize * 0.12, headTopY + headSize * 0.08); ctx.lineTo(bx + headSize * 0.38, headTopY - headSize * 0.3); ctx.lineTo(bx + headSize * 0.3, headTopY + headSize * 0.18); ctx.lineTo(bx - headSize * 0.38, headTopY + headSize * 0.18); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = '#ffe27a'; ctx.lineWidth = 2.5 * rt.dpr; ctx.beginPath(); ctx.ellipse(px, headTopY - headSize * 0.15, headSize * 0.4, headSize * 0.14, 0, 0, Math.PI * 2); ctx.stroke();
+    } else if (topper === 'crest' || topper === 'crown') {
+      ctx.fillStyle = '#ffd54f'; ctx.beginPath(); ctx.moveTo(px - headSize * 0.42, headTopY + headSize * 0.13); ctx.lineTo(px - headSize * 0.25, headTopY - headSize * 0.25); ctx.lineTo(px, headTopY + headSize * 0.02); ctx.lineTo(px + headSize * 0.26, headTopY - headSize * 0.25); ctx.lineTo(px + headSize * 0.42, headTopY + headSize * 0.13); ctx.closePath(); ctx.fill();
     } else if (topper === 'leaf') {
-      ctx.fillStyle = '#78d36f';
-      ctx.beginPath(); ctx.ellipse(bx, headTopY - headSize * 0.12, headSize * 0.34, headSize * 0.16, -0.55, 0, Math.PI * 2); ctx.fill();
-    } else if (topper === 'crown') {
-      ctx.fillStyle = '#ffd54f';
-      ctx.beginPath(); ctx.moveTo(bx - headSize * 0.46, headTopY + headSize * 0.16); ctx.lineTo(bx - headSize * 0.28, headTopY - headSize * 0.28); ctx.lineTo(bx, headTopY + headSize * 0.04); ctx.lineTo(bx + headSize * 0.28, headTopY - headSize * 0.28); ctx.lineTo(bx + headSize * 0.46, headTopY + headSize * 0.16); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#78d36f'; ctx.beginPath(); ctx.ellipse(px, headTopY - headSize * 0.12, headSize * 0.34, headSize * 0.16, -0.55, 0, Math.PI * 2); ctx.fill();
     }
     if (label) {
-      ctx.fillStyle = '#fbe9d8'; ctx.font = `700 ${11 * rt.dpr}px ui-monospace,monospace`; ctx.textAlign = 'center';
-      ctx.fillText(label, bx, headTopY - headSize * 0.55);
+      ctx.font = `700 ${10 * rt.dpr}px ui-monospace,monospace`; ctx.textAlign = 'center';
+      const width = ctx.measureText(label).width + 9 * rt.dpr;
+      ctx.fillStyle = 'rgba(25,16,38,0.76)'; roundRect(px - width / 2, headTopY - headSize * 0.72, width, 15 * rt.dpr, 4 * rt.dpr); ctx.fill();
+      ctx.fillStyle = '#fbe9d8'; ctx.fillText(label, px, headTopY - headSize * 0.72 + 11 * rt.dpr);
     }
     ctx.restore();
   }
@@ -2170,46 +2843,181 @@
     ctx.closePath();
   }
 
+  function rawScreenToWorld(px, py, cameraX, cameraY) {
+    const relX = px - rt.originX, relY = py - rt.originY;
+    return {
+      x: cameraX + (relX / (rt.tileW / 2) + relY / (rt.tileH / 2)) / 2,
+      y: cameraY + (relY / (rt.tileH / 2) - relX / (rt.tileW / 2)) / 2,
+    };
+  }
+  function visibleWorldBounds(cameraX, cameraY, legacy) {
+    const margin = rt.tileW * 3;
+    const corners = [
+      rawScreenToWorld(-margin, -margin, cameraX, cameraY),
+      rawScreenToWorld(rt.W + margin, -margin, cameraX, cameraY),
+      rawScreenToWorld(-margin, rt.H + margin, cameraX, cameraY),
+      rawScreenToWorld(rt.W + margin, rt.H + margin, cameraX, cameraY),
+    ];
+    const low = legacy ? 0 : WORLD_MIN, high = legacy ? GRID - 1 : WORLD_MAX;
+    return {
+      minX: clamp(Math.floor(Math.min(...corners.map((p) => p.x))) - 2, low, high),
+      maxX: clamp(Math.ceil(Math.max(...corners.map((p) => p.x))) + 2, low, high),
+      minY: clamp(Math.floor(Math.min(...corners.map((p) => p.y))) - 2, low, high),
+      maxY: clamp(Math.ceil(Math.max(...corners.map((p) => p.y))) + 2, low, high),
+    };
+  }
+  function tileWithinBounds(x, y, bounds, pad = 0) {
+    return x >= bounds.minX - pad && x <= bounds.maxX + pad && y >= bounds.minY - pad && y <= bounds.maxY + pad;
+  }
+  function drawDistantLandscape(sky) {
+    const horizon = rt.H * 0.39;
+    const night = state.minutes < 360 || state.minutes > 1240;
+    const celestialX = rt.W * (0.18 + ((state.minutes % 1440) / 1440) * 0.64);
+    ctx.save();
+    ctx.globalAlpha = night ? 0.72 : 0.82;
+    ctx.fillStyle = night ? '#e9e0c7' : '#fff0a8';
+    ctx.beginPath(); ctx.arc(celestialX, horizon * 0.5, rt.tileH * 0.62, 0, Math.PI * 2); ctx.fill();
+    const ridgeSeed = state.seed % 19;
+    for (let layer = 0; layer < 3; layer++) {
+      ctx.globalAlpha = 0.18 + layer * 0.12;
+      ctx.fillStyle = layer === 0 ? '#6f7891' : layer === 1 ? '#485f61' : '#334a48';
+      ctx.beginPath(); ctx.moveTo(0, horizon + layer * rt.tileH * 0.4);
+      const steps = 12;
+      for (let i = 0; i <= steps; i++) {
+        const x = (i / steps) * rt.W;
+        const n = hash01(i + ridgeSeed, layer, state.seed, 0x71374491);
+        const y = horizon - n * rt.H * (0.11 + layer * 0.025) + layer * rt.tileH * 0.8;
+        ctx.lineTo(x, y);
+      }
+      ctx.lineTo(rt.W, rt.H); ctx.lineTo(0, rt.H); ctx.closePath(); ctx.fill();
+    }
+    ctx.restore();
+  }
+  function drawWorldLighting() {
+    const m = ((state.minutes % 1440) + 1440) % 1440;
+    let alpha = 0;
+    if (m < 330) alpha = 0.34;
+    else if (m < 450) alpha = 0.34 * (450 - m) / 120;
+    else if (m > 1260) alpha = 0.34;
+    else if (m > 1110) alpha = 0.34 * (m - 1110) / 150;
+    if (alpha <= 0) return;
+    ctx.save(); ctx.fillStyle = `rgba(23,18,57,${alpha})`; ctx.fillRect(0, 0, rt.W, rt.H); ctx.restore();
+  }
+  function drawWeather() {
+    const weather = weatherForDay(state.day);
+    if (weather.kind === 'clear') return;
+    const phase = rt.reducedMotion ? 0 : rt.playSecondsAccum;
+    ctx.save();
+    if (weather.kind === 'mist') {
+      const fog = ctx.createLinearGradient(0, rt.H * 0.28, 0, rt.H);
+      fog.addColorStop(0, 'rgba(225,235,232,0)'); fog.addColorStop(0.62, 'rgba(225,235,232,0.13)'); fog.addColorStop(1, 'rgba(225,235,232,0.2)');
+      ctx.fillStyle = fog; ctx.fillRect(0, 0, rt.W, rt.H);
+    } else if (weather.kind === 'rain') {
+      ctx.fillStyle = 'rgba(40,68,88,0.09)'; ctx.fillRect(0, 0, rt.W, rt.H);
+      ctx.strokeStyle = 'rgba(184,222,238,0.48)'; ctx.lineWidth = 1.2 * rt.dpr;
+      const count = rt.reducedMotion ? 24 : 56;
+      for (let i = 0; i < count; i++) {
+        const seedX = hash01(i, state.day, state.seed, 0xb5c0fbcf);
+        const seedY = hash01(state.day, i, state.seed, 0xe9b5dba5);
+        const x = ((seedX * rt.W + phase * 90 * rt.dpr) % (rt.W + 40)) - 20;
+        const y = ((seedY * rt.H + phase * 270 * rt.dpr) % (rt.H + 60)) - 30;
+        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - 8 * rt.dpr, y + 17 * rt.dpr); ctx.stroke();
+      }
+    } else if (weather.kind === 'snow') {
+      ctx.fillStyle = 'rgba(225,241,247,0.76)';
+      const count = rt.reducedMotion ? 22 : 48;
+      for (let i = 0; i < count; i++) {
+        const sx = hash01(i, state.day, state.seed, 0x3956c25b), sy = hash01(state.day, i, state.seed, 0x59f111f1);
+        const x = (sx * rt.W + Math.sin(phase * 0.7 + i) * 20 * rt.dpr + rt.W) % rt.W;
+        const y = (sy * rt.H + phase * (22 + (i % 5) * 5) * rt.dpr) % rt.H;
+        ctx.beginPath(); ctx.arc(x, y, (1.2 + (i % 3) * 0.45) * rt.dpr, 0, Math.PI * 2); ctx.fill();
+      }
+    } else if (weather.kind === 'wind' && !rt.reducedMotion) {
+      ctx.strokeStyle = 'rgba(245,238,218,0.2)'; ctx.lineWidth = 1.5 * rt.dpr;
+      for (let i = 0; i < 8; i++) {
+        const x = ((hash01(i, state.day, state.seed, 0x923f82a4) * rt.W + phase * 55 * rt.dpr) % (rt.W + 120)) - 60;
+        const y = rt.H * (0.3 + hash01(state.day, i, state.seed, 0xab1c5ed5) * 0.58);
+        ctx.beginPath(); ctx.moveTo(x, y); ctx.quadraticCurveTo(x + 30 * rt.dpr, y - 5 * rt.dpr, x + 62 * rt.dpr, y); ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+  function drawWaypointGuide(bounds) {
+    if (!rt.waypoint || !tileWithinBounds(rt.waypoint.x, rt.waypoint.y, bounds, 1)) return;
+    const s = tileToScreen(rt.waypoint.x, rt.waypoint.y);
+    ctx.save(); ctx.strokeStyle = '#ffcf6b'; ctx.lineWidth = 2 * rt.dpr; ctx.globalAlpha = motionPulse(420, 0, 0.62, 0.18);
+    ctx.beginPath(); ctx.moveTo(s.x, s.y - rt.tileH * 0.2); ctx.lineTo(s.x, s.y - rt.tileH * 2.4); ctx.stroke();
+    ctx.fillStyle = '#ffcf6b'; ctx.beginPath(); ctx.arc(s.x, s.y - rt.tileH * 2.5, rt.tileH * 0.16, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+  }
+
   function draw() {
     if (rt.world === 'wilds') { drawWilds(); return; }
     const sky = skyColors(state.minutes);
     const grad = ctx.createLinearGradient(0, 0, 0, rt.H);
     grad.addColorStop(0, sky.top); grad.addColorStop(1, sky.hor);
     ctx.fillStyle = grad; ctx.fillRect(0, 0, rt.W, rt.H);
+    drawDistantLandscape(sky);
     drawAmbience();
 
-    // draw order: terrain back-to-front, then pieces+npcs+player interleaved by depth
+    // Stream and draw only tiles intersecting the camera. Even at the widest
+    // supported viewport this is a small fraction of the 16,384-tile world.
+    const bounds = visibleWorldBounds(rt.cameraX, rt.cameraY, false);
+    for (let depth = bounds.minX + bounds.minY; depth <= bounds.maxX + bounds.maxY; depth++) {
+      const startX = Math.max(bounds.minX, depth - bounds.maxY);
+      const endX = Math.min(bounds.maxX, depth - bounds.minY);
+      for (let gx = startX; gx <= endX; gx++) {
+        const gy = depth - gx;
+        const s = tileToScreen(gx, gy);
+        if (s.x < -rt.tileW * 2 || s.x > rt.W + rt.tileW * 2 || s.y < rt.H * 0.24 || s.y > rt.H + rt.tileH * 3) continue;
+        drawTerrainTile(gx, gy, worldTileAt(gx, gy));
+      }
+    }
+
     const drawables = [];
-    for (let gy = 0; gy < GRID; gy++) for (let gx = 0; gx < GRID; gx++) {
-      drawables.push({ depth: gx + gy, kind: 'terrain', gx, gy });
+    let focusedResidentId = null, focusedDistance = Infinity;
+    for (const npc of npcs) {
+      const distance = Math.max(Math.abs(npc.gx - state.player.gx), Math.abs(npc.gy - state.player.gy));
+      if (distance < focusedDistance && distance <= 3) { focusedResidentId = npc.id; focusedDistance = distance; }
+    }
+    for (const def of SETTLEMENT_RESIDENTS) {
+      const resident = settlementResidentPosition(def);
+      const distance = Math.max(Math.abs(resident.gx - state.player.gx), Math.abs(resident.gy - state.player.gy));
+      if (distance < focusedDistance && distance <= 3) { focusedResidentId = resident.id; focusedDistance = distance; }
     }
     for (const plot of currentFarm()) {
+      if (!tileWithinBounds(plot.x, plot.y, bounds, 2) || tileToScreen(plot.x, plot.y).y < rt.H * 0.22) continue;
       // Guests' own tilled rows are local previews (same rule as guest builds).
       const guestLocal = mp.active && !mp.amIHost && state.farm.includes(plot);
       drawables.push({ depth: plot.x + plot.y + 0.3, kind: 'plot', plot, guestLocal });
     }
     const town = currentTown();
     for (const p of town) {
+      if (!tileWithinBounds(p.gx, p.gy, bounds, 2) || tileToScreen(p.gx, p.gy).y < rt.H * 0.22) continue;
       // A guest's own placements (state.town) never sync out to the shared
       // room town under the current host-authoritative match-state protocol
       // (see scheduleTownSync/onMatchState) — tag them so that's visible.
       const guestLocal = mp.active && !mp.amIHost && state.town.includes(p);
       drawables.push({ depth: p.gx + p.gy + 0.4, kind: 'piece', piece: p, guestLocal });
     }
-    for (const npc of npcs) drawables.push({ depth: npc.gx + npc.gy + 0.5, kind: 'npc', npc });
+    for (const npc of npcs) if (tileWithinBounds(npc.gx, npc.gy, bounds, 3) && tileToScreen(npc.gx, npc.gy).y >= rt.H * 0.22) drawables.push({ depth: npc.gx + npc.gy + 0.5, kind: 'npc', npc });
+    for (const def of SETTLEMENT_RESIDENTS) {
+      const resident = settlementResidentPosition(def);
+      if (tileWithinBounds(resident.gx, resident.gy, bounds, 2) && tileToScreen(resident.gx, resident.gy).y >= rt.H * 0.22) drawables.push({ depth: resident.gx + resident.gy + 0.5, kind: 'localNpc', resident });
+    }
     drawables.push({ depth: rt.playerToX + rt.playerToY + 0.6, kind: 'player' });
 
     drawables.sort((a, b) => a.depth - b.depth);
-    // terrain must be drawn strictly first regardless of interleave for correctness of base layer
-    for (const d of drawables) if (d.kind === 'terrain') drawTerrainTile(d.gx, d.gy, terrain[d.gy][d.gx]);
     for (const d of drawables) {
       if (d.kind === 'plot') drawFarmPlot(d.plot, d.guestLocal);
       else if (d.kind === 'piece') drawPiece(d.piece, d.guestLocal);
       else if (d.kind === 'npc') {
         const n = d.npc;
-        drawCharacter(n.screenPx, n.screenPy, n.hue, 'none', 'rgba(255,255,255,0.35)', n.name.split(' ')[0]);
+        drawCharacter(n.screenPx, n.screenPy, n.hue, 'none', 'rgba(255,255,255,0.35)', focusedResidentId === n.id ? n.name.split(' ')[0] : null, false, n.id, n.quest.done ? 'happy' : 'calm');
+      } else if (d.kind === 'localNpc') {
+        const n = d.resident, s = tileToScreen(n.gx, n.gy);
+        drawCharacter(s.x, s.y, n.hue, 'none', 'rgba(255,255,255,0.35)', focusedResidentId === n.id ? n.name : null, false, n.id, 'happy');
       } else if (d.kind === 'player') {
-        drawCharacter(rt.playerPx, rt.playerPy, hueColorOf(state.player.hue), state.player.topper, trimColorOf(state.player.trim), null);
+        drawCharacter(rt.playerPx, rt.playerPy, hueColorOf(state.player.hue), state.player.topper, trimColorOf(state.player.trim), null, false, 'player', 'bright');
       }
     }
 
@@ -2228,6 +3036,7 @@
     // gather/cook progress ring
     if (rt.gathering) drawProgressRing(rt.playerToX, rt.playerToY, rt.gathering.t / rt.gathering.dur, '#ffd54f');
     if (rt.cooking) drawProgressRing(rt.playerToX, rt.playerToY, rt.cooking.t / rt.cooking.dur, '#ff8a5c');
+    drawWaypointGuide(bounds);
 
     // particles
     for (const p of rt.particles) {
@@ -2235,6 +3044,9 @@
       ctx.fillRect(p.x - 2 * rt.dpr, p.y - 2 * rt.dpr, 4 * rt.dpr, 4 * rt.dpr);
       ctx.restore();
     }
+
+    drawWorldLighting();
+    drawWeather();
 
     // low-spark vignette
     if (state.spark < 25) {
@@ -2257,6 +3069,7 @@
     const grad = ctx.createLinearGradient(0, 0, 0, rt.H);
     grad.addColorStop(0, sky.top); grad.addColorStop(1, sky.hor);
     ctx.fillStyle = grad; ctx.fillRect(0, 0, rt.W, rt.H);
+    drawDistantLandscape(sky);
     ctx.save(); ctx.fillStyle = 'rgba(20,4,28,0.22)'; ctx.fillRect(0, 0, rt.W, rt.H); ctx.restore();
     drawAmbience();
 
@@ -2268,7 +3081,7 @@
     for (const d of drawables) if (d.kind === 'wterrain') drawWildsTile(d.gx, d.gy, wildsTerrain[d.gy][d.gx]);
     for (const d of drawables) {
       if (d.kind === 'enemy') drawEnemy(d.enemy);
-      else if (d.kind === 'wplayer') drawCharacter(rt.wildsPx, rt.wildsPy, hueColorOf(state.player.hue), state.player.topper, trimColorOf(state.player.trim), null);
+      else if (d.kind === 'wplayer') drawCharacter(rt.wildsPx, rt.wildsPy, hueColorOf(state.player.hue), state.player.topper, trimColorOf(state.player.trim), null, false, 'player', 'bright');
     }
 
     for (const p of rt.particles) {
@@ -2276,6 +3089,8 @@
       ctx.fillRect(p.x - 2 * rt.dpr, p.y - 2 * rt.dpr, 4 * rt.dpr, 4 * rt.dpr);
       ctx.restore();
     }
+    drawWorldLighting();
+    drawWeather();
 
     if (state.spark < 25) {
       const vg = ctx.createRadialGradient(rt.W / 2, rt.H / 2, rt.H * 0.2, rt.W / 2, rt.H / 2, rt.H * 0.7);
@@ -2293,7 +3108,7 @@
       drawBlock(s.x, s.y, rt.tileW * 0.4, rt.tileH * 0.4, rt.tileH * (t === 'thicket' ? 1.3 : 0.9), shade(top, 1.2), shade(top, 0.7), shade(top, 0.5));
     }
     if (t === 'glimmer') {
-      ctx.save(); ctx.globalAlpha = 0.5 + 0.2 * Math.sin(performance.now() / 280 + gx + gy);
+      ctx.save(); ctx.globalAlpha = motionPulse(280, gx + gy, 0.5, 0.2);
       ctx.fillStyle = '#c792ea';
       ctx.beginPath(); ctx.arc(s.x, s.y - rt.tileH * 0.9, rt.tileH * 0.3, 0, Math.PI * 2); ctx.fill();
       ctx.restore();
@@ -2304,7 +3119,7 @@
       drawBlock(s.x, s.y, rt.tileW * 0.58, rt.tileH * 0.58, rt.tileH * 1.6, done ? '#5be3b5' : '#8f7fff', '#34255b', '#211638');
     }
     if (t === 'treasure') {
-      ctx.save(); ctx.globalAlpha = 0.6 + 0.2 * Math.sin(performance.now() / 240 + gx);
+      ctx.save(); ctx.globalAlpha = motionPulse(240, gx, 0.6, 0.2);
       ctx.fillStyle = '#ffcf6b';
       ctx.beginPath(); ctx.arc(s.x, s.y - rt.tileH * 0.6, rt.tileH * 0.22, 0, Math.PI * 2); ctx.fill();
       ctx.restore();
@@ -2330,8 +3145,18 @@
     }
     const night = state.minutes < 360 || state.minutes > 1120;
     const dusk = state.minutes > 980 || state.minutes < 480;
-    if (!night && !dusk) return;
     const t = rt.playSecondsAccum;
+    if (!night && !dusk) {
+      ctx.save(); ctx.strokeStyle = 'rgba(48,48,68,0.42)'; ctx.lineWidth = 1.5 * rt.dpr; ctx.lineCap = 'round';
+      for (let i = 0; i < 6; i++) {
+        const x = ((rt.ambience[i].x * rt.W + t * (8 + i) * rt.dpr) % (rt.W + 80)) - 40;
+        const y = rt.H * (0.12 + rt.ambience[i].y * 0.24);
+        const wing = 4 * rt.dpr + Math.sin(t * 3 + i) * rt.dpr;
+        ctx.beginPath(); ctx.moveTo(x - wing, y + wing * 0.35); ctx.quadraticCurveTo(x, y - wing * 0.35, x, y); ctx.quadraticCurveTo(x, y - wing * 0.35, x + wing, y + wing * 0.35); ctx.stroke();
+      }
+      ctx.restore();
+      return;
+    }
     ctx.save();
     for (const f of rt.ambience) {
       const x = ((f.x + Math.sin(t * 0.025 * f.drift + f.phase) * 0.02) % 1) * rt.W;
@@ -2371,6 +3196,7 @@
       if (state.minutes >= 1440) { state.minutes -= 1440; state.day += 1; farmNewDay(); }
       state.stats.secondsPlayed += dt;
       rt.playSecondsAccum += dt;
+      stepHeldMovement(t);
       stepMoveInterp(dt);
       stepWildsMoveInterp(dt);
       stepWildsEnemies(dt);
@@ -2391,11 +3217,12 @@
     if (rt.moveT < 1) {
       rt.moveT = Math.min(1, rt.moveT + dt * 1000 / rt.moveDur);
     }
-    const fx = tileToScreen(rt.playerFromX, rt.playerFromY);
-    const tx = tileToScreen(rt.playerToX, rt.playerToY);
     const e = rt.moveT;
-    rt.playerPx = fx.x + (tx.x - fx.x) * e;
-    rt.playerPy = fx.y + (tx.y - fx.y) * e;
+    const worldX = rt.playerFromX + (rt.playerToX - rt.playerFromX) * e;
+    const worldY = rt.playerFromY + (rt.playerToY - rt.playerFromY) * e;
+    rt.cameraX = worldX; rt.cameraY = worldY;
+    const screen = tileToScreen(worldX, worldY);
+    rt.playerPx = screen.x; rt.playerPy = screen.y;
   }
   function stepNpcs(dt) {
     const seg = npcSegment(state.minutes);
@@ -2446,7 +3273,7 @@
       livestock: state.livestock,
       quests: state.quests, adventure: state.adventure, cosmeticsUnlocked: state.cosmeticsUnlocked, tutorialSeen: state.tutorialSeen,
       stats: state.stats, completedMilestone: state.completedMilestone,
-      tools: state.tools, friendship: state.friendship, wilds: state.wilds,
+      tools: state.tools, friendship: state.friendship, wilds: state.wilds, exploration: state.exploration,
     }));
   }
   function schedulePush() {
@@ -2464,12 +3291,12 @@
   function applyState(s) {
     if (!s || typeof s !== 'object') return;
     if (!state) newGame((Math.random() * 1e9) >>> 0);
-    if (typeof s.seed === 'number') { state.seed = s.seed >>> 0; terrain = genTerrain(state.seed); wildsTerrain = genWildsTerrain(state.seed); }
+    if (typeof s.seed === 'number') { state.seed = s.seed >>> 0; terrain = genTerrain(state.seed); wildsTerrain = genWildsTerrain(state.seed); resetWorldChunks(); }
     state.day = Number.isFinite(s.day) ? Math.max(1, Math.floor(s.day)) : state.day;
     state.minutes = Number.isFinite(s.minutes) ? clamp(s.minutes, 0, 1439) : state.minutes;
     if (s.player && typeof s.player === 'object') {
-      state.player.gx = Number.isFinite(s.player.gx) ? clamp(Math.floor(s.player.gx), 0, GRID - 1) : state.player.gx;
-      state.player.gy = Number.isFinite(s.player.gy) ? clamp(Math.floor(s.player.gy), 0, GRID - 1) : state.player.gy;
+      state.player.gx = Number.isFinite(s.player.gx) ? clamp(Math.floor(s.player.gx), WORLD_MIN, WORLD_MAX) : state.player.gx;
+      state.player.gy = Number.isFinite(s.player.gy) ? clamp(Math.floor(s.player.gy), WORLD_MIN, WORLD_MAX) : state.player.gy;
       for (const k of ['hue', 'topper', 'trim', 'name']) if (typeof s.player[k] === 'string') state.player[k] = s.player[k];
     }
     if (s.inventory && typeof s.inventory === 'object') {
@@ -2478,13 +3305,13 @@
     state.spark = Number.isFinite(s.spark) ? clamp(s.spark, 0, 100) : state.spark;
     if (Array.isArray(s.town)) {
       state.town = s.town.filter((p) => p && typeof p === 'object' && PALETTE_BY_TYPE[p.type] && Number.isFinite(p.gx) && Number.isFinite(p.gy))
-        .map((p) => ({ id: String(p.id || `p${pieceIdCounter++}`), type: p.type, gx: clamp(Math.floor(p.gx), 0, GRID - 1), gy: clamp(Math.floor(p.gy), 0, GRID - 1), rot: Number.isFinite(p.rot) ? p.rot % 4 : 0 }));
+        .map((p) => ({ id: String(p.id || `p${pieceIdCounter++}`), type: p.type, gx: clamp(Math.floor(p.gx), WORLD_MIN, WORLD_MAX), gy: clamp(Math.floor(p.gy), WORLD_MIN, WORLD_MAX), rot: Number.isFinite(p.rot) ? p.rot % 4 : 0 }));
     }
     if (Array.isArray(s.farm)) {
       const seenPlots = new Set();
       state.farm = s.farm.filter((p) => p && typeof p === 'object' && Number.isFinite(p.x) && Number.isFinite(p.y))
         .map((p) => ({
-          x: clamp(Math.floor(p.x), 0, GRID - 1), y: clamp(Math.floor(p.y), 0, GRID - 1),
+          x: clamp(Math.floor(p.x), WORLD_MIN, WORLD_MAX), y: clamp(Math.floor(p.y), WORLD_MIN, WORLD_MAX),
           crop: (typeof p.crop === 'string' && CROP_BY_KEY[p.crop]) ? p.crop : null,
           prog: Number.isFinite(p.prog) ? Math.max(0, p.prog) : 0,
           watered: !!p.watered,
@@ -2560,6 +3387,16 @@
       state.wilds.treasuresFound = Array.isArray(s.wilds.treasuresFound) ? s.wilds.treasuresFound.filter((x) => typeof x === 'string') : [];
       state.wilds.guardianDefeated = !!s.wilds.guardianDefeated;
     }
+    if (s.exploration && typeof s.exploration === 'object') {
+      state.exploration = {
+        discovered: Array.isArray(s.exploration.discovered) ? s.exploration.discovered : [],
+        biomes: Array.isArray(s.exploration.biomes) ? s.exploration.biomes : [],
+        cachesFound: Array.isArray(s.exploration.cachesFound) ? s.exploration.cachesFound : [],
+      };
+    }
+    ensureExplorationState();
+    state.stats.regionsDiscovered = Math.max(state.stats.regionsDiscovered || 1, state.exploration.discovered.length);
+    state.stats.cachesFound = Math.max(state.stats.cachesFound || 0, state.exploration.cachesFound.length);
     state.completedMilestone = !!(s.completedMilestone && state.adventure.gateOpen);
     // Re-clear any already-looted Wilds treasure tiles now that
     // state.wilds.treasuresFound reflects the just-loaded save (a seed change
@@ -2570,6 +3407,7 @@
     for (const npc of npcs) npc.quest.done = state.quests[npc.id] ? state.quests[npc.id].done : false;
     rt.playerToX = state.player.gx; rt.playerToY = state.player.gy;
     rt.playerFromX = rt.playerToX; rt.playerFromY = rt.playerToY; rt.moveT = 1;
+    rt.cameraX = state.player.gx; rt.cameraY = state.player.gy;
     // A loaded/restored save always resumes in town — the Wilds are a
     // runtime-only visit that never persists (see the comment on rt.world).
     rt.world = 'town';
@@ -2583,8 +3421,10 @@
   function screenToTile(px, py) {
     // invert iso projection
     const relX = px - rt.originX, relY = py - rt.originY;
-    const gx = (relX / (rt.tileW / 2) + relY / (rt.tileH / 2)) / 2;
-    const gy = (relY / (rt.tileH / 2) - relX / (rt.tileW / 2)) / 2;
+    const cameraX = rt.world === 'wilds' ? rt.wildsCameraX : rt.cameraX;
+    const cameraY = rt.world === 'wilds' ? rt.wildsCameraY : rt.cameraY;
+    const gx = cameraX + (relX / (rt.tileW / 2) + relY / (rt.tileH / 2)) / 2;
+    const gy = cameraY + (relY / (rt.tileH / 2) - relX / (rt.tileW / 2)) / 2;
     return { x: Math.round(gx), y: Math.round(gy) };
   }
   function canvasPointFromEvent(evt) {
@@ -2598,13 +3438,14 @@
     if (anyPanelOpen() && !rt.build.placing && !rt.farmTool) return;
     const pt = canvasPointFromEvent(evt);
     const tile = screenToTile(pt.x, pt.y);
-    if (!inBounds(tile.x, tile.y)) return;
     if (rt.world === 'wilds') {
+      if (!inLegacyBounds(tile.x, tile.y)) return;
       const dx = tile.x - rt.wildsGx, dy = tile.y - rt.wildsGy;
       if (Math.abs(dx) + Math.abs(dy) === 1) tryMoveWilds(dx, dy);
       else if (dx === 0 && dy === 0) doContextAction();
       return;
     }
+    if (!inBounds(tile.x, tile.y)) return;
     if (rt.farmTool) {
       // Farm tools stay armed (like Demolish) so rows can be worked tile by
       // tile; Esc, B, or the ● action button puts them away.
@@ -2637,6 +3478,20 @@
   // ---------------------------------------------------------------------
   addEventListener('keydown', (evt) => {
     unlockAudio();
+    const k = evt.key.toLowerCase();
+    const move = (k === 'w' || k === 'arrowup') ? [0, -1]
+      : (k === 's' || k === 'arrowdown') ? [0, 1]
+        : (k === 'a' || k === 'arrowleft') ? [-1, 0]
+          : (k === 'd' || k === 'arrowright') ? [1, 0] : null;
+    if (move) {
+      evt.preventDefault();
+      rt.heldKeys.add(k);
+      if (!evt.repeat && !anyPanelOpen() && !rt.paused) {
+        tryMove(move[0], move[1]);
+        rt.nextHeldMoveAt = performance.now() + (rt.reducedMotion ? 70 : 155);
+      }
+      return;
+    }
     if (evt.repeat) return;
     if (evt.key === 'Escape') {
       if (rt.farmTool) { rt.farmTool = null; toast('Farm tools put away.'); updateHud(); return; }
@@ -2648,16 +3503,14 @@
       return;
     }
     if (rt.paused) return;
-    const k = evt.key.toLowerCase();
-    if (k === 'w' || k === 'arrowup') tryMove(0, -1);
-    else if (k === 's' || k === 'arrowdown') tryMove(0, 1);
-    else if (k === 'a' || k === 'arrowleft') tryMove(-1, 0);
-    else if (k === 'd' || k === 'arrowright') tryMove(1, 0);
-    else if (k === ' ' || k === 'e') { evt.preventDefault(); doContextAction(); }
+    if (k === ' ' || k === 'e') { evt.preventDefault(); doContextAction(); }
     else if (k === 'b') openPanel('build');
     else if (k === 'f') openPanel('farming');
     else if (k === 'c') openPanel('craft');
+    else if (k === 'm') openPanel('map');
   });
+  addEventListener('keyup', (evt) => rt.heldKeys.delete(evt.key.toLowerCase()));
+  addEventListener('blur', () => rt.heldKeys.clear());
 
   // ---------------------------------------------------------------------
   // Gamepad input (Standard layout — DualSense/DualShock/Xbox alike)
@@ -2722,14 +3575,37 @@
   $all('[data-ct-open]').forEach((b) => b.onclick = () => { unlockAudio(); openPanel(b.dataset.ctOpen); });
   $all('[data-ct-close]').forEach((b) => b.onclick = () => closePanels());
   $('[data-ct-context]').onclick = () => { unlockAudio(); doContextAction(); };
-  $all('[data-ct-move]').forEach((b) => b.onclick = () => {
-    unlockAudio();
-    const dir = b.dataset.ctMove;
+  function moveFromPad(dir) {
     if (dir === 'up') tryMove(0, -1);
     else if (dir === 'down') tryMove(0, 1);
     else if (dir === 'left') tryMove(-1, 0);
     else if (dir === 'right') tryMove(1, 0);
-    else if (dir === 'act') doContextAction();
+  }
+  function stopTouchMove() {
+    if (rt.touchMoveTimer) clearInterval(rt.touchMoveTimer);
+    rt.touchMoveTimer = null;
+  }
+  $all('[data-ct-move]').forEach((button) => {
+    const dir = button.dataset.ctMove;
+    if (dir === 'act') {
+      button.onclick = () => { unlockAudio(); doContextAction(); };
+      return;
+    }
+    button.addEventListener('pointerdown', (evt) => {
+      evt.preventDefault();
+      unlockAudio();
+      stopTouchMove();
+      moveFromPad(dir);
+      const delay = rt.reducedMotion ? 80 : 160;
+      setTimeout(() => {
+        if (!button.matches(':active')) return;
+        rt.touchMoveTimer = setInterval(() => moveFromPad(dir), delay);
+      }, 230);
+    });
+    button.addEventListener('pointerup', stopTouchMove);
+    button.addEventListener('pointercancel', stopTouchMove);
+    button.addEventListener('pointerleave', stopTouchMove);
+    button.onclick = (evt) => evt.preventDefault();
   });
   $all('[data-ct-buildmode]').forEach((b) => b.onclick = () => {
     rt.build.tool = b.dataset.ctBuildmode;
@@ -2746,10 +3622,19 @@
   $('[data-ct-replay-tutorial]').onclick = () => openPanel('tutorial');
   $('[data-ct-volume]').oninput = (e) => { audio.volume = Number(e.target.value) / 100; };
   $('[data-ct-mute]').onchange = (e) => { audio.mute = e.target.checked; };
-  $('[data-ct-reduced]').onchange = (e) => { rt.reducedMotion = e.target.checked; };
+  $('[data-ct-reduced]').onchange = (e) => { rt.reducedMotion = e.target.checked; rt.ambience = []; };
   $('[data-ct-pause]').onclick = () => setPaused(!rt.paused);
   $('[data-ct-resume]').onclick = () => setPaused(false);
   if (el.returnHome) el.returnHome.onclick = () => { unlockAudio(); exitWilds(); };
+  const mapTarget = $('[data-ct-map-target]');
+  if (mapTarget && el.worldMap) mapTarget.addEventListener('pointerdown', (evt) => {
+    const rect = el.worldMap.getBoundingClientRect();
+    const x = WORLD_MIN + ((evt.clientX - rect.left) / rect.width) * WORLD_SIZE;
+    const y = WORLD_MIN + ((evt.clientY - rect.top) / rect.height) * WORLD_SIZE;
+    setWaypoint(x, y);
+  });
+  const mapClear = $('[data-ct-map-clear]');
+  if (mapClear) mapClear.onclick = () => { rt.waypoint = null; updateHud(); renderWorldMap(); toast('Trail marker cleared.'); };
 
   function setPaused(p) {
     if (rt.paused === p) return;
@@ -2781,6 +3666,8 @@
       rt.world = 'town';
       rt.wildsEnemies = [];
       rt.playerToX = state.player.gx; rt.playerToY = state.player.gy; rt.playerFromX = rt.playerToX; rt.playerFromY = rt.playerToY; rt.moveT = 1;
+      rt.cameraX = state.player.gx; rt.cameraY = state.player.gy; rt.playerPx = rt.originX; rt.playerPy = rt.originY;
+      rt.waypoint = null;
       updateHud();
       if (!state.tutorialSeen) openPanel('tutorial');
     } else if (d.type === 'save-state') {
@@ -2795,6 +3682,29 @@
   // ---------------------------------------------------------------------
   // Boot
   // ---------------------------------------------------------------------
+  function validateGeneratedWorld() {
+    const areaRatio = (WORLD_SIZE * WORLD_SIZE) / (GRID * GRID);
+    const biomeSet = new Set(), typeSet = new Set();
+    let roadTiles = 0, waterTiles = 0, deterministic = true;
+    for (let y = WORLD_MIN; y <= WORLD_MAX; y += 4) for (let x = WORLD_MIN; x <= WORLD_MAX; x += 4) {
+      const a = proceduralWorldTile(x, y, state.seed), b = proceduralWorldTile(x, y, state.seed);
+      biomeSet.add(a.biome); typeSet.add(a.type);
+      if (a.type === 'road' || a.type === 'bridge') roadTiles++;
+      if (a.type === 'water') waterTiles++;
+      if (a.type !== b.type || a.biome !== b.biome || a.variant !== b.variant) deterministic = false;
+    }
+    return {
+      ok: areaRatio >= 50 && deterministic && biomeSet.size >= 5 && typeSet.size >= 8 && roadTiles > 0 && waterTiles > 0,
+      worldSize: WORLD_SIZE, legacySize: GRID, areaRatio, chunkSize: CHUNK_SIZE,
+      biomes: Array.from(biomeSet).sort(), terrainTypes: Array.from(typeSet).sort(), roadTiles, waterTiles, deterministic,
+      destinations: WORLD_POIS.length,
+    };
+  }
+  window.__CUBETOWN_TEST__ = Object.freeze({
+    validateWorld: () => validateGeneratedWorld(),
+    sampleTile: (x, y) => ({ ...worldTileAt(clamp(Math.floor(x), WORLD_MIN, WORLD_MAX), clamp(Math.floor(y), WORLD_MIN, WORLD_MAX)) }),
+    worldBounds: Object.freeze({ min: WORLD_MIN, max: WORLD_MAX, size: WORLD_SIZE, chunkSize: CHUNK_SIZE }),
+  });
   function boot() {
     size();
     try { rt.reducedMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) { rt.reducedMotion = false; }
@@ -2802,6 +3712,11 @@
     newGame((Math.random() * 1e9) >>> 0);
     rt.playerToX = state.player.gx; rt.playerToY = state.player.gy;
     rt.playerFromX = rt.playerToX; rt.playerFromY = rt.playerToY; rt.moveT = 1;
+    rt.cameraX = state.player.gx; rt.cameraY = state.player.gy; rt.playerPx = rt.originX; rt.playerPy = rt.originY;
+    const worldCheck = validateGeneratedWorld();
+    console.assert(worldCheck.ok, 'CubeTown overworld generation invariant failed', worldCheck);
+    canvas.dataset.ctWorldCheck = worldCheck.ok ? 'ok' : 'failed';
+    canvas.dataset.ctWorldAreaRatio = worldCheck.areaRatio.toFixed(1);
     updateHud();
     draw();
     requestAnimationFrame(loop);

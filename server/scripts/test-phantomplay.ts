@@ -34,7 +34,7 @@ try {
 
   const initial = await play.getPhantomPlaySnapshot(playerA, { entitled: true, dailyMinuteLimit: 30, canSubmitGames: false });
   assert(initial.catalog.length >= 28, "The full expanded built-in game catalog should ship.");
-  assert(play.PHANTOMPLAY_ENGINE.version === "2.1-hybrid-install" && play.PHANTOMPLAY_ENGINE.saveStateBytes >= 262_144, "PhantomPlay should expose a large-map-capable engine profile.");
+  assert(play.PHANTOMPLAY_ENGINE.version === "2.2-ascension" && play.PHANTOMPLAY_ENGINE.saveStateBytes >= 262_144, "PhantomPlay should expose the current large-map-capable engine profile.");
   assert(initial.engine?.largeMap?.streaming === true, "Snapshots should publish large-map engine capabilities to the player shell.");
   assert(initial.engine?.runtimeProfiles?.desktop_player?.supportsLargeAssets === true, "Snapshots should publish the desktop large-asset player profile.");
   assert(initial.engine?.runtimeProfiles?.developer_full?.maxAssetPackGb >= 50, "Snapshots should publish the full developer install profile.");

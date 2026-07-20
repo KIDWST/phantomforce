@@ -1,36 +1,49 @@
-:root { color-scheme: dark; --lime: #41ffa1; --cyan: #1ef0ff; --pink: #ff3d94; --gold: #ffd166; }
-* { box-sizing: border-box; }
-html, body { margin: 0; height: 100%; background: #05030a; color: #eafff4; font-family: "Space Grotesk", system-ui, sans-serif; overflow: hidden; }
-
-.hud { position: fixed; top: 0; left: 0; right: 0; z-index: 5; display: flex; align-items: center; gap: 28px; padding: 14px 20px; background: rgba(5,3,10,.7); border-bottom: 1px solid rgba(255,255,255,.08); backdrop-filter: blur(6px); }
-.hud-stat { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.1; }
-.hud-stat b { font-size: 22px; }
-.hud-stat span { font: 500 10px "DM Mono", monospace; letter-spacing: .1em; color: rgba(234,255,244,.5); }
-.hud-hint { margin-left: auto; font-size: 11px; color: rgba(234,255,244,.45); max-width: 46%; text-align: right; }
-.hud-hint kbd { border: 1px solid rgba(255,255,255,.25); border-radius: 4px; padding: 0 4px; font-family: "DM Mono", monospace; }
-
-#stage { position: fixed; inset: 0; display: block; width: 100%; height: 100%; }
-
-.keyboard { position: fixed; left: 0; right: 0; bottom: 0; z-index: 5; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 8px 16px; background: linear-gradient(to top, rgba(5,3,10,.9), transparent); }
-.krow { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; max-width: 620px; width: 100%; }
-.krow span { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 8px; border: 1px solid rgba(255,255,255,.15); background: rgba(255,255,255,.03); font: 700 13px "DM Mono", monospace; transition: transform .06s ease, background .06s ease, border-color .06s ease; flex: 0 0 auto; }
-.krow span.active { background: rgba(65,255,161,.22); border-color: var(--lime); transform: translateY(-2px); }
-.krow span.hold-active { background: rgba(255,209,102,.28); border-color: var(--gold); }
-
-/* Narrow/mobile viewports: the top row alone is ~454px wide at full size —
-   without wrap+shrink it silently clipped under html/body's overflow:hidden
-   with no way to see the hidden keys. flex-wrap above already keeps it from
-   clipping; this just keeps the guide compact and centered on small screens. */
-@media (max-width: 680px) {
-  .keyboard { gap: 4px; padding: 8px 4px 12px; }
-  .krow { gap: 4px; max-width: 100%; }
-  .krow span { width: 30px; height: 30px; font-size: 11px; border-radius: 6px; }
+:root{color-scheme:dark;--mint:#58ffac;--cyan:#4de8ff;--gold:#ffd166;--pink:#ff5b83;--violet:#c69cff}
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#030407;color:#effff6;font-family:Inter,system-ui,sans-serif;user-select:none;touch-action:manipulation}
+body{background:linear-gradient(180deg,#09131c 0,#080a12 54%,#030407 100%)}
+#stage{position:fixed;inset:0;display:block;width:100%;height:100%;touch-action:none}
+.hud{position:fixed;z-index:5;top:0;left:0;right:0;display:flex;align-items:center;gap:clamp(9px,3vw,28px);min-height:66px;padding:max(9px,env(safe-area-inset-top)) 14px 9px;background:#04070be8;border-bottom:1px solid #ffffff14;box-shadow:0 10px 35px #0008}
+.hud-stat{display:flex;flex-direction:column;min-width:54px;line-height:1.05}
+.hud-stat b{overflow:hidden;color:#effff6;font:900 clamp(16px,3vw,22px) ui-monospace,monospace;font-variant-numeric:tabular-nums;white-space:nowrap}
+.hud-stat span{color:#849b94;font:800 9px ui-monospace,monospace}
+.hud-stat.track b{color:var(--cyan);font-size:15px}
+.pause-control{position:relative;margin-left:auto;width:40px;height:40px;flex:0 0 40px;border:1px solid #ffffff26;border-radius:6px;background:#0a1118;cursor:pointer}
+.pause-control::before,.pause-control::after{content:"";position:absolute;top:11px;width:5px;height:17px;border-radius:1px;background:#dfffee}
+.pause-control::before{left:12px}.pause-control::after{right:12px}
+.keyboard{position:fixed;z-index:5;left:50%;bottom:max(6px,env(safe-area-inset-bottom));transform:translateX(-50%);width:min(900px,94%);display:flex;flex-direction:column;gap:5px;padding:7px;background:#05080bd9;border:1px solid #ffffff16;border-radius:8px;box-shadow:0 -12px 35px #0008}
+.keyboard[data-hidden="1"]{display:none}
+.krow{display:grid;gap:5px}
+.krow.top{grid-template-columns:repeat(10,1fr)}
+.krow.home{grid-template-columns:repeat(9,1fr);margin-inline:4%}
+.krow.bottom{grid-template-columns:repeat(7,1fr);margin-inline:10%}
+.krow button{min-width:0;height:34px;border:1px solid #ffffff22;border-bottom:3px solid var(--key-color,#ffffff55);border-radius:5px;background:#0b1116;color:#cbdad4;font:900 12px ui-monospace,monospace;cursor:pointer;touch-action:none}
+.krow button.active{background:color-mix(in srgb,var(--key-color) 32%,#0b1116);border-color:var(--key-color);color:#fff;transform:translateY(-2px)}
+.feedback{position:fixed;z-index:4;top:22%;left:50%;transform:translateX(-50%);min-width:130px;text-align:center;color:#effff6;font:900 clamp(18px,4vw,30px) ui-monospace,monospace;opacity:0;pointer-events:none;text-shadow:0 0 18px currentColor}
+.feedback.show{opacity:1}.feedback.good{color:var(--cyan)}.feedback.perfect{color:var(--mint)}.feedback.miss{color:var(--pink)}
+.overlay{position:fixed;z-index:10;inset:0;display:grid;place-items:center;overflow:auto;background:#020407ed;backdrop-filter:blur(6px);text-align:center}
+.overlay[hidden]{display:none}
+.panel{width:min(650px,100%);padding:24px}
+.panel.compact{max-width:420px}
+.overlay h2{margin:0 0 8px;color:#effff6;font-size:clamp(38px,8vw,62px);line-height:1;text-shadow:0 0 28px #4de8ff38}
+.overlay p{max-width:480px;margin:0 auto 16px;color:#9db1aa;font-size:13px;line-height:1.5}
+.onboard{display:flex;align-items:center;justify-content:center;gap:9px;margin:15px auto 20px}
+.onboard span{display:grid;place-items:center;width:44px;height:44px;border:2px solid var(--gold);border-radius:50%;background:#251e08;color:#fff1bc;font:900 19px ui-monospace,monospace;box-shadow:0 0 18px #ffd1662e}
+.onboard i{width:30px;height:2px;background:#ffffff2b}
+.opts{display:flex;flex-direction:column;gap:10px;margin:0 auto 20px;max-width:520px}
+.opt-row{display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap}
+.opt-label{min-width:80px;text-align:right;color:#879b94;font:800 9px ui-monospace,monospace}
+.opt-row button,.overlay button{min-height:38px;border:1px solid #ffffff27;border-radius:6px;background:#0a1015;color:#eafff4;padding:7px 13px;font:800 12px system-ui,sans-serif;cursor:pointer}
+.opt-row button[aria-pressed="true"]{border-color:#4de8ffb0;background:#0b2934;color:#d7faff}
+.overlay .start-button,.overlay [data-resume-btn]{min-width:170px;min-height:48px;border-color:#58ffac88;background:var(--mint);color:#02100a;font:900 14px ui-monospace,monospace}
+body.reduced *{transition:none!important}
+@media(max-width:620px){
+  .hud{min-height:58px;padding-left:8px;padding-right:8px}.hud-stat{min-width:46px}.hud-stat.track{display:none}
+  .keyboard{width:98%;gap:3px;padding:4px}.krow{gap:3px}.krow button{height:29px;font-size:10px}
+  .panel{padding:18px}.opts{gap:8px}.opt-label{width:100%;text-align:center}
+  .onboard{margin-block:10px 14px}.onboard span{width:38px;height:38px}
 }
-
-.overlay { position: fixed; inset: 0; z-index: 10; display: flex; align-items: center; justify-content: center; background: rgba(2,2,6,.86); text-align: center; }
-.overlay[hidden] { display: none; }
-.overlay h2 { font-size: 28px; margin-bottom: 8px; }
-.overlay p { color: rgba(234,255,244,.6); font-size: 13px; max-width: 420px; margin: 0 auto 20px; line-height: 1.5; }
-.overlay button { padding: 12px 26px; border-radius: 10px; border: 1px solid rgba(65,255,161,.5); background: rgba(65,255,161,.12); color: #eafff4; font: 700 14px inherit; cursor: pointer; }
-.overlay button:hover { background: rgba(65,255,161,.22); }
-.overlay kbd { border: 1px solid rgba(255,255,255,.25); border-radius: 4px; padding: 0 5px; font-family: "DM Mono", monospace; }
+@media(max-height:560px){
+  .keyboard{gap:2px;padding:3px}.krow{gap:2px}.krow button{height:25px}
+  .overlay h2{font-size:36px}.onboard{display:none}.opts{margin-bottom:10px}.panel{padding:12px}
+}

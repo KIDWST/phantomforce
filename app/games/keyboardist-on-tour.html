@@ -8,7 +8,7 @@
 <style>
   *{box-sizing:border-box}
   html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#080b10;color:#eaf3ef;font-family:system-ui,-apple-system,Segoe UI,sans-serif;touch-action:manipulation;user-select:none;overscroll-behavior:none;-webkit-tap-highlight-color:transparent}
-  body{background:radial-gradient(circle at 50% -10%,#132229,#080b10 62%)}
+  body{background:radial-gradient(circle at 50% -10%,#183440,#080b10 62%)}
   #app{position:fixed;inset:0;display:flex;flex-direction:column}
   .scr{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:max(14px,env(safe-area-inset-top)) 16px max(14px,env(safe-area-inset-bottom));overflow:auto}
   .scr[hidden]{display:none}
@@ -16,10 +16,10 @@
   h1{margin:0;font-size:clamp(28px,2.5rem,44px);background:linear-gradient(90deg,#2dd4bf,#ffb454);-webkit-background-clip:text;background-clip:text;color:transparent;letter-spacing:.01em}
   h2{margin:0;font-size:22px;color:#eaf3ef}
   p.sub{margin:0;color:#9fb3ad;font-size:13px;text-align:center;max-width:520px}
-  .panel{width:min(560px,94vw);background:#0f161acc;border:1px solid #2dd4bf33;border-radius:16px;padding:18px;display:flex;flex-direction:column;gap:12px;box-shadow:0 10px 40px #00000055}
+  .panel{width:min(620px,94vw);background:#0f161acc;border:1px solid #2dd4bf33;border-radius:8px;padding:18px;display:flex;flex-direction:column;gap:12px;box-shadow:0 10px 40px #00000055}
   .row{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
   button{font:inherit;cursor:pointer;touch-action:manipulation}
-  .btn{min-height:46px;padding:10px 18px;border-radius:999px;border:1px solid #2dd4bf55;background:#101a1e;color:#eaf3ef;font-weight:800;letter-spacing:.02em;transition:transform .12s,background .15s}
+  .btn{min-height:46px;padding:10px 18px;border-radius:7px;border:1px solid #2dd4bf55;background:#101a1e;color:#eaf3ef;font-weight:800;letter-spacing:.02em;transition:transform .12s,background .15s}
   .btn:hover,.btn:focus-visible{transform:translateY(-1px);background:#152227}
   .btn.primary{background:linear-gradient(90deg,#2dd4bf,#3b82f6);border-color:transparent;color:#04140f}
   .btn.gold{background:linear-gradient(90deg,#ffb454,#ff7a45);border-color:transparent;color:#241236}
@@ -30,29 +30,35 @@
   input[type=range]{width:100%;accent-color:#2dd4bf}
   .switch{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13px}
   .switch input{width:38px;height:22px;accent-color:#2dd4bf}
-  .tut-step{width:min(520px,92vw);background:#0f161a;border:1px solid #2dd4bf55;border-radius:16px;padding:20px;display:flex;flex-direction:column;gap:12px}
+  .tut-step{width:min(520px,92vw);background:#0f161a;border:1px solid #2dd4bf55;border-radius:8px;padding:20px;display:flex;flex-direction:column;gap:12px}
   .tut-step .dots{display:flex;gap:6px;justify-content:center}
   .tut-step .dots span{width:6px;height:6px;border-radius:50%;background:#1c2a2e}
   .tut-step .dots span.on{background:#2dd4bf}
   .summaryLine{font-size:12px;color:#9fb3ad}
+  .difficultyGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;width:min(680px,94vw)}
+  .difficultyCard{min-height:180px;border:1px solid #2dd4bf44;border-radius:8px;background:#0f181d;padding:18px;text-align:left;display:flex;flex-direction:column;gap:8px}
+  .difficultyCard:hover,.difficultyCard:focus-visible{border-color:#ffb454;background:#152329}
+  .difficultyCard strong{font-size:22px;color:#ffb454}.difficultyCard span{color:#9fb3ad;font-size:13px;line-height:1.5}.difficultyCard b{margin-top:auto;color:#2dd4bf;font-size:11px;text-transform:uppercase;letter-spacing:.08em}
+  .storyPanel{width:min(720px,94vw);border-left:5px solid #ffb454;padding:8px 0 8px 22px;text-align:left}
+  .storyPanel h2{font-size:42px;color:#ffcf87}.storyPanel p{color:#c5d8d2;line-height:1.7;font-size:15px}
   /* gameplay */
   #playScreen{padding:0;justify-content:flex-start}
   .hud{width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 14px;flex:0 0 auto;flex-wrap:wrap}
   .hud .depth{font-size:13px;font-weight:800;color:#ffb454}
-  .hud .stats{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+  .hud .stats{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
   .meter{display:flex;flex-direction:column;gap:2px;min-width:96px}
   .meter span{font-size:9px;color:#9fb3ad;text-transform:uppercase;letter-spacing:.06em}
   .meter .bar{height:8px;border-radius:99px;background:#1c2a2e;overflow:hidden;border:1px solid #2dd4bf33}
   .meter .bar i{display:block;height:100%;transition:width .12s linear}
   #hpFill{background:linear-gradient(90deg,#ff5470,#ff8a65)}
   #inkFill{background:linear-gradient(90deg,#2dd4bf,#3b82f6)}
-  .stat{display:flex;gap:14px;align-items:baseline}
+  .stat{display:flex;gap:11px;align-items:baseline}
   .stat b{font-size:20px}
   .stat span{font-size:10px;color:#9fb3ad;text-transform:uppercase}
-  .mapWrap{width:100%;padding:0 10px;flex:0 0 auto}
-  canvas{width:100%;max-width:640px;height:110px;background:#060a0d;border-radius:14px;border:1px solid #2dd4bf33;display:block;margin:0 auto}
-  .stageArea{flex:1;min-height:0;width:100%;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:6px 10px 4px;overflow:auto}
-  .encounterCard{width:min(560px,96vw);background:#0f161acc;border:1px solid #2dd4bf33;border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:10px;align-items:center}
+  .mapWrap{width:100%;padding:0 10px;flex:1 1 auto;min-height:220px;display:flex;align-items:stretch}
+  canvas{width:100%;max-width:980px;height:auto;min-height:220px;background:#060a0d;border-radius:8px;border:1px solid #2dd4bf33;display:block;margin:0 auto}
+  .stageArea{width:100%;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:5px 10px 4px;overflow-y:auto;overflow-x:hidden;flex:0 0 auto}
+  .encounterCard{width:min(820px,100%);background:#0f161aee;border-top:1px solid #2dd4bf44;border-bottom:1px solid #2dd4bf33;padding:10px 16px;display:flex;flex-direction:column;gap:7px;align-items:center}
   .encounterCard .kicker{margin:0}
   .bar{height:10px;border-radius:99px;background:#1c2a2e;overflow:hidden;border:1px solid #2dd4bf33;width:100%}
   .bar i{display:block;height:100%;width:100%;transition:width .1s linear}
@@ -67,13 +73,15 @@
   .typedWord.dimmed{opacity:.35}
   .typedWord.locked{filter:drop-shadow(0 0 6px #2dd4bf55)}
   .pathRow{display:flex;gap:12px;width:100%;justify-content:center;flex-wrap:wrap}
-  .nodePreview{background:#0a1215;border:1px solid #2dd4bf33;border-radius:12px;padding:10px 14px;display:flex;flex-direction:column;gap:6px;align-items:center;min-width:130px}
+  .nodePreview{background:#0a1215;border:1px solid #2dd4bf33;border-radius:7px;padding:8px 13px;display:flex;flex-direction:column;gap:5px;align-items:center;min-width:150px}
   .nodeTag{font-size:11px;font-weight:800;letter-spacing:.08em}
   .incantSlot{width:100%;display:flex;flex-direction:column;align-items:center;gap:4px;border-top:1px dashed #2dd4bf33;padding-top:8px;margin-top:2px}
   .incantSlot.off{opacity:.3}
   .incantSlot .tag{font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:#ffb454}
   .relicRow{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;width:100%}
-  .relicCard{background:#0a1215;border:1px solid #2dd4bf33;border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:6px;align-items:center;min-width:120px;max-width:150px}
+  .relicCard{background:#0a1215;border:1px solid #2dd4bf33;border-radius:7px;padding:10px 12px;display:flex;flex-direction:column;gap:6px;align-items:center;min-width:120px;max-width:150px}
+  .sceneLine{font-size:12px;color:#c5d8d2;text-align:center;margin:0;max-width:720px;line-height:1.45}
+  .lesson{min-height:18px;color:#ffcc82;font-size:11px;text-align:center;margin:0}
   .relicDesc{font-size:11px;color:#9fb3ad;text-align:center;margin:0}
   .vkeyboard{width:100%;max-width:640px;margin:0 auto;padding:4px 6px max(6px,env(safe-area-inset-bottom));flex:0 0 auto}
   .vkeyboard.hide{display:none}
@@ -89,8 +97,10 @@
   .breakdown div{background:#0f161a;border-radius:10px;padding:8px 4px;text-align:center}
   .breakdown div b{display:block;font-size:18px}
   .breakdown div span{font-size:10px;color:#9fb3ad}
-  .toast{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);background:#0f161aee;border:1px solid #2dd4bf55;padding:8px 16px;border-radius:999px;font-size:12px;z-index:20;pointer-events:none;opacity:0;transition:opacity .25s;max-width:90vw;text-align:center}
+  .toast{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);background:#0f161aee;border:1px solid #2dd4bf55;padding:8px 16px;border-radius:6px;font-size:12px;z-index:20;pointer-events:none;opacity:0;transition:opacity .25s;max-width:90vw;text-align:center}
   .toast.show{opacity:1}
+  @media(max-width:680px){.difficultyGrid{grid-template-columns:1fr}.difficultyCard{min-height:130px}.hud{padding:6px 8px}.hud .stats{gap:7px}.meter{min-width:75px}.stat b{font-size:16px}.stat span{font-size:8px}.mapWrap{min-height:190px}.typedWord{font-size:18px}.vkey{min-height:34px}.storyPanel{padding-left:14px}.storyPanel h2{font-size:30px}}
+  @media(max-height:700px){.mapWrap{min-height:170px}.vkey{min-height:31px}.encounterCard{padding:7px 12px}.hud{padding-top:5px;padding-bottom:5px}}
   @media(prefers-reduced-motion:reduce){.btn{transition:none}}
   .reduced .btn,.reduced .bar i,.reduced .meter .bar i{transition:none}
 </style>
@@ -101,17 +111,34 @@
   <section class="scr" id="menuScreen" data-screen="menu">
     <p class="kicker">PhantomPlay Original</p>
     <h1>Cipher Keep</h1>
-    <p class="sub">Type words to move through a shifting dungeon, strike foes with typed attacks, and crack vaults before their fuse burns out. Speed lands harder hits; clean accuracy builds Combo and Ink. There is no extra life — how deep can you descend?</p>
+    <p class="sub">The Echo Warden has stolen every word from tomorrow's stories. Step inside the Keep, name what you see, solve its whispering clues, and bring the Dawn Lexicon home.</p>
     <div class="panel">
       <p class="summaryLine" id="menuSummary"></p>
       <div class="row">
-        <button class="btn primary" data-descend>Descend</button>
-        <button class="btn gold" data-tutorial>How To Play</button>
+        <button class="btn primary" data-descend>Begin Story</button>
+        <button class="btn gold" data-tutorial>Field Guide</button>
       </div>
       <div class="row">
         <button class="btn" data-go="settings">Settings</button>
       </div>
     </div>
+  </section>
+
+  <section class="scr" id="difficultyScreen" data-screen="difficulty" hidden>
+    <p class="kicker">Choose Your Reading Path</p>
+    <h2>Who is entering the Keep?</h2>
+    <p class="sub">Both paths tell the complete story and teach vocabulary. Challenge changes word length, clue complexity, typing forgiveness, and encounter speed.</p>
+    <div class="difficultyGrid">
+      <button class="difficultyCard" data-difficulty="child"><strong>Story Scout</strong><span>Shorter words, gentle foes, helpful clues, and wrong keys that wait for a correction.</span><b>Child-friendly</b></button>
+      <button class="difficultyCard" data-difficulty="adult"><strong>Master Scribe</strong><span>Longer vocabulary, phrase riddles, strict input, faster encounters, and deeper scoring.</span><b>Adult challenge</b></button>
+    </div>
+    <button class="btn" data-go="menu">Back</button>
+  </section>
+
+  <section class="scr" id="storyScreen" data-screen="story" hidden>
+    <p class="kicker" id="storyKicker">Chapter One</p>
+    <div class="storyPanel"><h2 id="storyTitle">The Missing Morning</h2><p id="storyBody"></p></div>
+    <div class="row"><button class="btn" data-go="difficulty">Back</button><button class="btn primary" data-begin-adventure>Enter the Keep</button></div>
   </section>
 
   <section class="scr" id="settingsScreen" data-screen="settings" hidden>
@@ -137,15 +164,15 @@
 
   <section class="scr" id="playScreen" data-screen="play" hidden>
     <div class="hud">
-      <div class="depth" id="hudDepth">Floor 1</div>
+      <div class="depth" id="hudDepth">Chapter 1</div>
       <div class="stats">
-        <div class="meter"><span>Vitality <b id="hpNum">100/100</b></span><div class="bar"><i id="hpFill" style="width:100%"></i></div></div>
-        <div class="meter"><span>Ink <b id="inkNum">0/100</b></span><div class="bar"><i id="inkFill" style="width:0%"></i></div></div>
-        <div class="stat"><div><b id="hudScore">0</b><span>Score</span></div><div><b id="hudCombo">0</b><span>Combo</span></div></div>
+        <div class="meter"><span>Courage <b id="hpNum">100/100</b></span><div class="bar"><i id="hpFill" style="width:100%"></i></div></div>
+        <div class="meter"><span>Insight <b id="inkNum">0/100</b></span><div class="bar"><i id="inkFill" style="width:0%"></i></div></div>
+        <div class="stat"><div><b id="hudScore">0</b><span>Score</span></div><div><b id="hudCombo">0</b><span>Combo</span></div><div><b id="hudWpm">0</b><span>WPM</span></div><div><b id="hudAccuracy">100%</b><span>Accuracy</span></div><div><b id="hudVocab">0</b><span>Words</span></div></div>
       </div>
       <button class="btn small" data-pause>Pause</button>
     </div>
-    <div class="mapWrap"><canvas id="mapStage" aria-label="Cipher Keep dungeon map"></canvas></div>
+    <div class="mapWrap"><canvas id="mapStage" aria-label="First-person view inside Cipher Keep"></canvas></div>
     <div class="stageArea">
       <div class="encounterCard" id="encounterCard"></div>
     </div>
@@ -163,7 +190,7 @@
     <p class="sub" id="resCause"></p>
     <div class="breakdown" id="resBreakdown"></div>
     <div class="row">
-      <button class="btn primary" data-again>Descend again</button>
+      <button class="btn primary" data-again>Read it again</button>
       <button class="btn" data-menu>Main menu</button>
     </div>
   </section>
@@ -175,33 +202,46 @@
 "use strict";
 var host=function(type,data){ data=data||{}; var msg={source:'phantomplay-game',type:type}; for(var k in data) msg[k]=data[k]; parent.postMessage(msg,'*'); };
 
-/* ------------------------------------------------------------------
-   CIPHER KEEP — a typing roguelike dungeon crawler.
-   Core loop: procedurally generated dungeon floors made of nodes
-   (enemy / elite / cache-vault / rest / boss) connected by short
-   traversal paths. You move by typing the path word into the next
-   room. Combat is a real-time race: an enemy's strike meter fills
-   continuously while you type its attack word — finish the word to
-   land a hit and reset the meter, or eat a hit and get a fresh word.
-   Typing speed scales damage; typing with zero mistakes ("Clean")
-   builds a Combo multiplier and fills an Ink meter that can be spent
-   on a Focus Surge (stun + heal + guaranteed next-hit crit). Vault
-   rooms race a fuse; Rest shrines reward mistake-free typing with
-   healing; Elites and Floor Bosses drop a relic choice. HP hits zero
-   -> permadeath -> full results screen. Every run reshuffles the
-   dungeon from a fresh seed, so no two descents type the same.
------------------------------------------------------------------- */
-
-// ---- Word banks (all plain ASCII; phrases only ever appear as
-// stand-alone typing targets, never mixed into fixed lane keys) ----
-var TIER1=['cat','dog','fox','owl','bat','rat','wolf','bear','imp','orc','elf','fae','moth','wisp','husk','pyre','ash','fen','bog','cave','rune','gem','key','fang','claw','gale','frost','spark','gloom','murk'];
-var TIER2=['shadow','dagger','ember','goblin','lantern','hollow','cinder','wraith','talon','thicket','specter','ashfall','bramble','ironclad','serpent','obelisk','kindred','hexbind','gravel','copper','stinger','chalice','forsaken','tallow','clatter','ravine','cobweb','sulphur','mildew','wretch'];
-var TIER3=['skeleton','crossbow','obsidian','wanderer','catacomb','gargoyle','phantasm','labyrinth','chimerical','gravemind','brimstone','nightshade','cauldron','banshee','direwolf','stonewarden','moonlantern','ashenveil','wyrmscale','thornback','hexweaver','ironmaiden','tombkeeper','voidwalker','emberlord','frostbound'];
-var TIER4=['iron gate','blood moon','ash and ember','dont flinch','hollow crown','the last ward','ember tide','wyrms breath','gravebound oath','silent cairn','thorned veil','obsidian throne','the deep hunger','salt and bone','widows lantern','the hexbound king','cinder and frost','the undertow','forsaken hymn','stormglass keep'];
-var INCANT_WORDS=['illuminate','restoration','shatterpoint','emberburst','clarity','overclock','ironwill','bloomlight','stormcall','wardbreak','truename','stillwater'];
-var ENEMY_NAMES=['Ash Wisp','Bog Ghoul','Rune Moth','Iron Jackal','Cinder Bat','Hollow Wolf','Grave Sprite','Thorn Serpent','Mire Lurker','Ember Imp','Husk Wraith','Frost Fang'];
-var ELITE_NAMES=['Ashfall Reaver','Ironclad Sentinel','Hollow Duke','Gravemind Herald','Cindergale Warden'];
-var BOSS_NAMES=['The Cindergaunt','Warden of Ash','The Hollow Choir','Grimsire','The Rootless King','Duskmaw','The Gravetide','Ashenclaw Sovereign','The Whispering Bulk','Ironveil Tyrant'];
+/* Cipher Keep is a first-person typing adventure. The procedural rooms
+   preserve replayability while four authored chapters give every run a
+   beginning, escalation, reveal, and ending. */
+var STORY_CHAPTERS=[
+  {k:'Chapter One',title:'The Missing Morning',body:'At sunrise, every unfinished story in the village turns blank. Archivist Sable gives you a silver quill and points toward Cipher Keep. Somewhere inside, the Echo Warden is feeding the stolen words to a machine that can erase tomorrow.'},
+  {k:'Chapter Two',title:'The Listening Wood',body:'The Keep grows roots and branches around you. The trees remember every name ever spoken beneath them. Read their clues, name what stands in your path, and follow the paper birds carrying scraps of the Dawn Lexicon.'},
+  {k:'Chapter Three',title:'The Clockwork Archive',body:'Behind the copper doors, shelves move like gears. The Warden was once the Archive keeper. Afraid that people would misuse words, he locked every story away. Your clear typing teaches the machines that words are meant to be shared.'},
+  {k:'Final Chapter',title:'The Room Before Tomorrow',body:'The Dawn Lexicon glows beyond the last gate. The Echo Warden waits beside it, wrapped in all the sentences he stole. Recover the final phrases and show him that careful words can make a kinder future.'}
+];
+var CHILD_TIER1=['key','owl','moss','star','moon','tree','door','book','lamp','bridge','river','acorn','map','bell','cloud','stone','fern','fox','rune','gate','candle','feather','shell','pond','path','song','rope','chest','clock','garden'];
+var CHILD_TIER2=['lantern','library','compass','whisper','silver','window','meadow','puzzle','crystal','willow','journey','kindness','morning','bravery','storyteller','starlight','rainbow','treasure','clockwork','friendship'];
+var ADULT_TIER1=['quill','cipher','mosaic','archive','threshold','luminous','wayfinder','resonance','tapestry','keystone','celestial','parchment','verdant','curiosity','compassion','steadfast','silhouette','constellation','meticulous','harmonious'];
+var ADULT_TIER2=['silver lantern','the patient key','follow the starlight','stories belong to everyone','kind words open doors','listen before you answer','tomorrow begins here','the archive remembers','courage can be quiet','name what you can see','carry the dawn home','wonder is a compass'];
+var TIER1=CHILD_TIER1,TIER2=CHILD_TIER2,TIER3=ADULT_TIER1,TIER4=ADULT_TIER2;
+var PATH_OBJECTS_CHILD=[
+  {word:'key',object:'key',clue:'I have teeth but never bite. I help a locked door open.'},
+  {word:'lantern',object:'lantern',clue:'I carry a tiny sun and make dark paths bright.'},
+  {word:'bridge',object:'bridge',clue:'I let your feet cross water without getting wet.'},
+  {word:'book',object:'book',clue:'I have a spine and many pages, but I am not alive.'},
+  {word:'tree',object:'tree',clue:'I wear leaves above and roots below.'},
+  {word:'bell',object:'bell',clue:'I speak with a ring when someone gives me a shake.'},
+  {word:'compass',object:'compass',clue:'My needle helps travelers choose a direction.'},
+  {word:'window',object:'window',clue:'Look through me while I stay in the wall.'}
+];
+var PATH_OBJECTS_ADULT=[
+  {word:'silver lantern',object:'lantern',clue:'Name the two-word beacon whose pale flame reveals honest paths.'},
+  {word:'the patient key',object:'key',clue:'The lock opens for no hurried hand. Type the title engraved on its key.'},
+  {word:'follow the starlight',object:'stars',clue:'Complete the instruction traced by the constellation above the gate.'},
+  {word:'kind words open doors',object:'door',clue:'The door asks for the rule that turns language into welcome.'},
+  {word:'the archive remembers',object:'book',clue:'Read the promise embossed across the living book.'},
+  {word:'courage can be quiet',object:'tree',clue:'The oldest tree offers a calm truth. Type its four-word lesson.'},
+  {word:'wonder is a compass',object:'compass',clue:'Name the idea that guides a curious traveler without a map.'},
+  {word:'carry the dawn home',object:'bridge',clue:'The bridge reveals your mission in four words.'}
+];
+var DEFINITIONS={archive:'a collection of records kept for the future',cipher:'a system for hiding or revealing meaning',luminous:'giving off light',resonance:'a sound or idea that continues and grows',threshold:'the entrance or beginning of something',verdant:'green with growing plants',meticulous:'very careful about small details',harmonious:'working together in a pleasing way',compassion:'noticing another person\'s difficulty and wanting to help',constellation:'a named pattern of stars',parchment:'a writing surface used for old documents',wayfinder:'a person or sign that helps others find a route',curiosity:'a strong wish to learn or know',steadfast:'loyal, calm, and determined',tapestry:'a picture woven from colored threads',keystone:'the central piece that helps an arch stay strong',mosaic:'a picture made from many small pieces',quill:'a feather once used as a writing pen',lantern:'a protected light that can be carried',compass:'a tool that shows direction'};
+var INCANT_WORDS=['illuminate','restoration','clarity','bloomlight','stillwater','true name','patient focus','bright memory'];
+var ENEMY_NAMES=['Paper Wisp','Moss Knight','Clockwork Crow','Riddle Moth','Ink Fox','Copper Beetle','Hush Hound','Tangle Sprite','Bookmark Bat','Echo Hare'];
+var ELITE_NAMES=['The Margin Guardian','Copper Sentinel','Keeper of Commas','The Wandering Index','Starlight Curator'];
+var BOSS_NAMES=['The Echo Warden','The Great Redactor','Keeper of the Blank Page','The Clockwork Librarian'];
+var DIFFICULTY={child:{hp:140,enemyRate:.56,enemyAttack:.65,vaultTime:1.55,label:'Story Scout'},adult:{hp:100,enemyRate:1.08,enemyAttack:1.08,vaultTime:.88,label:'Master Scribe'}};
 var RELICS=[
   {id:'vigor',label:'Vigor',desc:'+25 max HP, healed instantly.'},
   {id:'haste',label:'Haste',desc:'Foes fill their strike meter 18% slower.'},
@@ -234,8 +274,17 @@ function pickUniqueN(rng,arr,n){
   for(var i=copy.length-1;i>0;i--){ var j=Math.floor(rng()*(i+1)); var tmp=copy[i]; copy[i]=copy[j]; copy[j]=tmp; }
   return copy.slice(0,n);
 }
-function wordPoolForTier(tier){ return tier<=1?TIER1: tier===2?TIER2: tier===3?TIER3: TIER4; }
+function difficulty(){ return DIFFICULTY[G.settings.difficulty]||DIFFICULTY.child; }
+function wordPoolForTier(tier){
+  if(G.settings.difficulty==='child') return tier<=1?CHILD_TIER1:CHILD_TIER2;
+  return tier<=1?ADULT_TIER1:ADULT_TIER2;
+}
 function wordTierForDepth(depth){ return Math.min(4, 1+Math.floor((depth-1)/3)); }
+function pathPool(){ return G.settings.difficulty==='child'?PATH_OBJECTS_CHILD:PATH_OBJECTS_ADULT; }
+function pathTarget(rng,excludeInitial){
+  var pool=pathPool().filter(function(o){ return !excludeInitial||o.word.charAt(0)!==excludeInitial; });
+  var src=pool.length?pool:pathPool(),o=pick(rng,src);return {word:o.word,object:o.object,clue:o.clue};
+}
 
 // ---- Dungeon generation ----
 function pickNodeKind(depth,rng){
@@ -252,39 +301,35 @@ function makeEnemy(kind,depth,rng){
   var hpMult = kind==='elite'?1.6 : kind==='boss'?2.6 : 1;
   var hp=Math.round((10+tier*7+depth*3)*hpMult);
   var atkMult = kind==='boss'?1.3 : kind==='elite'?1.15 : 1;
-  var atk=Math.round((5+depth*1.15)*atkMult);
-  var chargeRate=Math.min(70,20+depth*1.6)*(kind==='boss'?1.1:1);
+  var atk=Math.round((5+depth*1.15)*atkMult*difficulty().enemyAttack);
+  var chargeRate=Math.min(70,20+depth*1.6)*(kind==='boss'?1.1:1)*difficulty().enemyRate;
   var namePool= kind==='boss'?BOSS_NAMES : kind==='elite'?ELITE_NAMES : ENEMY_NAMES;
   return {kind:kind,tier:tier,hp:hp,hpMax:hp,atk:atk,chargeRate:chargeRate,charge:0,freezeUntil:0,name:pick(rng,namePool)};
 }
 function makeNode(kind,depth,rng){
   if(kind==='enemy'||kind==='elite'||kind==='boss') return {kind:kind, enemy:makeEnemy(kind,depth,rng)};
-  if(kind==='cache') return {kind:'cache', fuse:Math.max(4.5, 8-depth*0.12)};
+  if(kind==='cache') return {kind:'cache', fuse:Math.max(4.5, 8-depth*0.12)*difficulty().vaultTime};
   return {kind:'rest'};
 }
 function generateFloor(depth,rng){
   var steps=[]; var STEP_COUNT=5;
   for(var i=0;i<STEP_COUNT;i++){
     var isBranch = i>0 && rng()<0.32;
-    var tier=wordTierForDepth(depth);
     if(isBranch){
       var kindA=pickNodeKind(depth,rng), kindB=pickNodeKind(depth,rng);
-      var pool=wordPoolForTier(tier);
-      var wordA=pick(rng,pool);
-      var pool2=pool.filter(function(w){ return w.charAt(0)!==wordA.charAt(0); });
-      var wordB=pick(rng, pool2.length?pool2:pool);
+      var targetA=pathTarget(rng),targetB=pathTarget(rng,targetA.word.charAt(0));
       steps.push({type:'branch', options:[
-        {word:wordA, node:makeNode(kindA,depth,rng)},
-        {word:wordB, node:makeNode(kindB,depth,rng)}
+        {word:targetA.word, object:targetA.object, clue:targetA.clue, node:makeNode(kindA,depth,rng)},
+        {word:targetB.word, object:targetB.object, clue:targetB.clue, node:makeNode(kindB,depth,rng)}
       ]});
     } else {
       var kind=pickNodeKind(depth,rng);
-      var word=pick(rng, wordPoolForTier(tier));
-      steps.push({type:'single', word:word, node:makeNode(kind,depth,rng)});
+      var target=pathTarget(rng);
+      steps.push({type:'single', word:target.word, object:target.object, clue:target.clue, node:makeNode(kind,depth,rng)});
     }
   }
-  var bossWord=pick(rng,TIER4);
-  steps.push({type:'single', word:bossWord, node:makeNode('boss',depth,rng)});
+  var bossTarget=pathTarget(rng);
+  steps.push({type:'single', word:bossTarget.word, object:bossTarget.object, clue:'The chapter seal asks one final clue: '+bossTarget.clue, node:makeNode('boss',depth,rng)});
   return {steps:steps, pos:-1, pendingIndex:0};
 }
 
@@ -311,6 +356,8 @@ function typeChar(ch){
   var correct = target.charAt(pos)===ch;
   if(typeof SESS!=='undefined' && SESS){ SESS.charsTyped=(SESS.charsTyped||0)+1; if(!correct) SESS.charErrors=(SESS.charErrors||0)+1; }
   if(!correct) TYPE.mistakes++;
+  if(!correct && typeof SESS!=='undefined' && SESS) SESS.lesson=G.settings.difficulty==='child'?'Try the highlighted letter next. The wrong key was not added.':'Mismatch found. Use Backspace, then continue carefully.';
+  if(!correct && typeof G!=='undefined' && G.settings.difficulty==='child'){ if(!TYPE.buffer) TYPE.lockedIdx=null; return {idx:idx,id:TYPE.targets[idx].id,correct:false,completed:false}; }
   TYPE.buffer+=ch;
   var completed=(TYPE.buffer===target);
   return {idx:idx, id:TYPE.targets[idx].id, correct:correct, completed:completed};
@@ -322,26 +369,30 @@ function typeBackspace(){
 }
 
 // ---- Persistent state ----
-var DEFAULTS={ progression:{bestDepth:0,bestScore:0,totalRuns:0,tutorialSeen:false}, settings:{volume:0.8,colorblind:false,reducedMotionLocal:false,keyboardGuide:true} };
+var DEFAULTS={ progression:{bestDepth:0,bestScore:0,bestWpm:0,totalRuns:0,storiesCompleted:0,tutorialSeen:false,vocabulary:[]}, settings:{volume:0.8,colorblind:false,reducedMotionLocal:false,keyboardGuide:true,difficulty:'child'} };
 var G=JSON.parse(JSON.stringify(DEFAULTS));
 var hostSound=true, hostReducedMotion=false;
 function effectiveVolume(){ return hostSound?G.settings.volume:0; }
 function effectiveReducedMotion(){ return hostReducedMotion||G.settings.reducedMotionLocal; }
-function serializeState(){ return {v:1, progression:G.progression, settings:G.settings}; }
+function serializeState(){ return {v:2, progression:G.progression, settings:G.settings}; }
 function mergeState(state){
   if(!state||typeof state!=='object') return;
   try{
     if(state.progression && typeof state.progression==='object'){
       if(typeof state.progression.bestDepth==='number') G.progression.bestDepth=state.progression.bestDepth;
       if(typeof state.progression.bestScore==='number') G.progression.bestScore=state.progression.bestScore;
+      if(typeof state.progression.bestWpm==='number') G.progression.bestWpm=state.progression.bestWpm;
       if(typeof state.progression.totalRuns==='number') G.progression.totalRuns=state.progression.totalRuns;
+      if(typeof state.progression.storiesCompleted==='number') G.progression.storiesCompleted=state.progression.storiesCompleted;
       if(typeof state.progression.tutorialSeen==='boolean') G.progression.tutorialSeen=state.progression.tutorialSeen;
+      if(Array.isArray(state.progression.vocabulary)) G.progression.vocabulary=state.progression.vocabulary.filter(function(w){return typeof w==='string';}).slice(0,240);
     }
     if(state.settings && typeof state.settings==='object'){
       if(typeof state.settings.volume==='number') G.settings.volume=Math.max(0,Math.min(1,state.settings.volume));
       if(typeof state.settings.colorblind==='boolean') G.settings.colorblind=state.settings.colorblind;
       if(typeof state.settings.reducedMotionLocal==='boolean') G.settings.reducedMotionLocal=state.settings.reducedMotionLocal;
       if(typeof state.settings.keyboardGuide==='boolean') G.settings.keyboardGuide=state.settings.keyboardGuide;
+      if(state.settings.difficulty==='child'||state.settings.difficulty==='adult') G.settings.difficulty=state.settings.difficulty;
     }
   }catch(e){}
 }
@@ -351,7 +402,7 @@ var saveTimer=null;
 function persistSoon(){
   clearTimeout(saveTimer);
   saveTimer=setTimeout(function(){
-    var progressPct=Math.min(100, Math.round((G.progression.bestDepth||0)/25*100));
+    var progressPct=Math.min(100, Math.round((G.progression.bestDepth||0)/STORY_CHAPTERS.length*100));
     host('progress',{score: SESS?SESS.score:0, progress:progressPct, state:serializeState()});
     mirrorLocal();
   },400);
@@ -393,7 +444,7 @@ function playSfx(name){
 }
 
 // ---- Screen management ----
-var SCREENS=['menu','settings','tutorial','play','results'];
+var SCREENS=['menu','settings','difficulty','story','tutorial','play','results'];
 function showScreen(name){
   SCREENS.forEach(function(s){ var el=document.querySelector('[data-screen="'+s+'"]'); if(el) el.hidden=(s!==name); });
 }
@@ -407,12 +458,12 @@ function escapeHtml(s){ return String(s).replace(/[&<>"']/g,function(c){ return 
 
 // ---- Tutorial ----
 var TUT_STEPS=[
-  {t:'Type to move', b:'Every path forward is a word. Type it exactly (letters, and sometimes a space or apostrophe for tougher rooms) to step into that room. Backspace fixes mistakes.'},
-  {t:'Combat is a race', b:'Foes charge a strike meter while you type their attack word. Finish the word before the meter fills to land your hit and reset it — a full meter means you take damage and get a fresh word instead.'},
-  {t:'Speed and accuracy do different jobs', b:'Faster typing means harder hits. Typing a word with zero mistakes ("Clean") builds your Combo, which multiplies damage, and fills your Ink faster. Mistakes never stop you — they just cost you the Clean bonus.'},
-  {t:'Ink and Focus Surge', b:'Clean, fast typing fills your Ink bar. Once you can afford it, a Focus Surge word appears alongside the attack word — typing it freezes the foe, heals you, and empowers your next strike.'},
-  {t:'Vaults, rests, and relics', b:'Vault rooms want one word before their fuse burns out. Rest shrines reward a mistake-free word with healing. Elites and Floor Bosses drop a relic choice — type the relic word you want to permanently empower your run.'},
-  {t:'Permadeath, real stakes', b:'There is no extra life. When your Vitality hits zero the run ends and you get a full results screen — score, depth reached, accuracy, and rank. Every run reshuffles the dungeon, so no two descents type the same.'}
+  {t:'Look, read, then type', b:'You see the Keep through your own eyes. Doors, trees, creatures, and objects carry names or clues. Type the matching word or phrase to move closer, and use Backspace when you want to revise.'},
+  {t:'Clues build vocabulary', b:'Path riddles describe the object in front of you. New vocabulary appears with a short meaning after you type it. Your Words counter tracks how many different targets you have learned.'},
+  {t:'Accuracy and WPM', b:'Accuracy measures correct keys. WPM measures your pace for each completed target. Fast typing strengthens your answer, while careful mistake-free typing builds Combo and Insight.'},
+  {t:'Encounters stay readable', b:'Echo creatures prepare a disruption while you type. Finish the shown word before their meter fills. Story Scout gives more time and ignores a wrong key until the right one arrives.'},
+  {t:'Insight and Focus', b:'Accurate words fill Insight. When the Focus phrase appears, typing it calms the room, restores Courage, and empowers your next answer.'},
+  {t:'Finish the four chapters', b:'Recover each page of the Dawn Lexicon and reach the Room Before Tomorrow. A complete results screen records score, accuracy, WPM, vocabulary, and story progress locally.'}
 ];
 var tutStep=0;
 function openTutorial(){ tutStep=0; renderTutStep(); showScreen('tutorial'); }
@@ -426,11 +477,19 @@ function renderTutStep(){
 }
 function finishTutorial(){ G.progression.tutorialSeen=true; mirrorLocal(); showScreen('menu'); renderMenuSummary(); }
 
+function showStoryIntro(){
+  var s=STORY_CHAPTERS[0];
+  document.getElementById('storyKicker').textContent=s.k+' - '+difficulty().label;
+  document.getElementById('storyTitle').textContent=s.title;
+  document.getElementById('storyBody').textContent=s.body;
+  showScreen('story');
+}
+
 // ---- Menu ----
 function renderMenuSummary(){
   var el=document.getElementById('menuSummary');
-  if(!G.progression.totalRuns){ el.textContent='No descents yet — the Keep awaits.'; return; }
-  el.textContent='Runs: '+G.progression.totalRuns+' · Best depth: Floor '+G.progression.bestDepth+' · Best score: '+G.progression.bestScore;
+  if(!G.progression.totalRuns){ el.textContent='No journeys yet. The first page is waiting.'; return; }
+  el.textContent='Journeys: '+G.progression.totalRuns+' · Chapters: '+G.progression.bestDepth+'/4 · Best WPM: '+Math.round(G.progression.bestWpm||0)+' · Vocabulary: '+G.progression.vocabulary.length;
 }
 
 // ---- Settings ----
@@ -444,21 +503,37 @@ function renderSettings(){
 
 // ---- Session (core gameplay) ----
 var SESS=null;
-var PLAYER_BASE_HP=100, PLAYER_BASE_INK=100;
+var PLAYER_BASE_INK=100;
 var INK_PER_CLEAN=6, INK_PER_MISS=2;
-function newPlayerState(){ return {hp:PLAYER_BASE_HP, hpMax:PLAYER_BASE_HP, ink:0, inkMax:PLAYER_BASE_INK, relics:{}, wardUsedThisFloor:false, critNext:false}; }
+function newPlayerState(){ var hp=difficulty().hp; return {hp:hp, hpMax:hp, ink:0, inkMax:PLAYER_BASE_INK, relics:{}, wardUsedThisFloor:false, critNext:false}; }
 function incantCost(){ return 40-(SESS.player.relics.focus?12:0); }
 function comboMultiplier(streak){ if(streak>=15) return 2.0; if(streak>=8) return 1.6; if(streak>=4) return 1.3; if(streak>=1) return 1.1; return 1.0; }
 function speedMultiplier(wpm){ if(wpm>=90) return 1.4; if(wpm>=65) return 1.2; if(wpm>=40) return 1.0; return 0.85; }
+
+function recordCompletedTarget(result){
+  if(!SESS||!TYPE.targets[result.idx]) return;
+  var text=TYPE.targets[result.idx].text;
+  var wpm=Math.round((text.length/5)/(typeElapsedSec()/60));
+  var clean=TYPE.mistakes===0;
+  var isNew=!SESS.vocabulary[text]&&G.progression.vocabulary.indexOf(text)<0;
+  SESS.lastWpm=Math.max(0,Math.min(240,wpm));
+  SESS.bestWpm=Math.max(SESS.bestWpm,SESS.lastWpm);
+  SESS.wordsTyped++; if(clean) SESS.cleanWords++;
+  SESS.vocabulary[text]=true;
+  var words=text.split(' '),meaning=DEFINITIONS[text]||DEFINITIONS[words[0]]||'';
+  SESS.lesson='"'+text+'" - '+SESS.lastWpm+' WPM, '+(clean?'perfect accuracy':'corrected')+(meaning?'. Meaning: '+meaning+'.':'.');
+  if(isNew&&meaning) toast('New word: '+text+' - '+meaning+'.');
+  SESS.sceneFlash=clean?0.35:0.15;
+}
 
 function newRun(seed){
   SESS={
     rng:mulberry32(seed>>>0), seed:seed>>>0, depth:1,
     player:newPlayerState(), score:0, combo:0, bestCombo:0,
     wordsTyped:0, cleanWords:0, relicsCollected:0, vaultsOpened:0, enemiesDefeated:0, floorsCleared:0,
-    charsTyped:0, charErrors:0,
+    charsTyped:0, charErrors:0, lastWpm:0, bestWpm:0, vocabulary:{}, lesson:'', victory:false,
     phase:'transition', paused:false, startTs:performance.now(), lastTs:0, raf:0,
-    currentNode:null, floor:null, incantWord:null, deathCause:null, enemyPhaseWarned:false
+    currentNode:null, floor:null, incantWord:null, deathCause:null, enemyPhaseWarned:false,cameraPulse:1,sceneFlash:0
   };
   SESS.floor=generateFloor(1, SESS.rng);
   showScreen('play');
@@ -476,6 +551,7 @@ function beginTransitionTo(stepIndex){
   var step=SESS.floor.steps[stepIndex];
   if(step.type==='single'){ typeSetTargets([{id:'go', text:step.word}]); }
   else { typeSetTargets(step.options.map(function(o,i){ return {id:'opt'+i, text:o.word}; })); }
+  SESS.lesson='Read the clue, then type the object or phrase you see.';
   renderEncounterStatic();
 }
 function onTransitionComplete(result){
@@ -484,6 +560,7 @@ function onTransitionComplete(result){
   var node = step.type==='single' ? step.node : step.options[Number(result.id.slice(3))].node;
   SESS.floor.pos=stepIndex;
   SESS.currentNode=node;
+  SESS.cameraPulse=1;
   enterNode(node);
 }
 function enterNode(node){
@@ -498,6 +575,7 @@ function startCombat(node){
   SESS.enemy=node.enemy; SESS.enemy.charge=0; SESS.enemy.freezeUntil=0;
   SESS.enemyPhaseWarned=false;
   SESS.incantWord=pick(SESS.rng, INCANT_WORDS);
+  SESS.lesson='Type the glowing word before the Echo meter fills.';
   newCombatWord();
 }
 function newCombatWord(){
@@ -544,7 +622,6 @@ function onCombatWordComplete(result){
     var base=6+SESS.enemy.tier*3;
     var dmg=Math.max(1, Math.round(base*comboMult*speedMult*cleanMult*critMult*(SESS.player.relics.quickdraw?1.08:1)));
     SESS.enemy.hp -= dmg;
-    SESS.wordsTyped++; if(clean) SESS.cleanWords++;
     SESS.score += Math.round(dmg*1.5);
     var inkGain=(clean?INK_PER_CLEAN:INK_PER_MISS)*(SESS.player.relics.echo?1.5:1);
     SESS.player.ink=Math.min(SESS.player.inkMax, SESS.player.ink+inkGain);
@@ -576,6 +653,7 @@ function startVault(node){
   SESS.vault={fuse:node.fuse, fuseMax:node.fuse};
   var tier=wordTierForDepth(SESS.depth);
   var word=pick(SESS.rng, wordPoolForTier(tier));
+  SESS.lesson='The chest listens for a precise name. Finish before its light fades.';
   typeSetTargets([{id:'open', text:word}]);
   renderEncounterStatic();
 }
@@ -611,6 +689,7 @@ function startRest(node){
   SESS.phase='rest';
   var tier=Math.max(1, wordTierForDepth(SESS.depth)-1);
   var word=pick(SESS.rng, wordPoolForTier(tier));
+  SESS.lesson='Breathe, read the whole word, and type it at a steady pace.';
   typeSetTargets([{id:'rest', text:word}]);
   renderEncounterStatic();
 }
@@ -632,6 +711,7 @@ function triggerRelicPick(afterFn){
   if(avail.length===0){ toast('All relics already bound!'); afterFn(); return; }
   var offers=pickUniqueN(SESS.rng, avail, Math.min(3, avail.length));
   SESS.relicOffers=offers;
+  SESS.lesson='Type the keepsake name you want to carry into the next room.';
   typeSetTargets(offers.map(function(r){ return {id:r.id, text:r.label}; }));
   renderEncounterStatic();
 }
@@ -659,12 +739,20 @@ function resolveNodeAndContinue(stepIndex, node){
 function floorComplete(){
   SESS.score += 150*SESS.depth;
   SESS.floorsCleared++;
-  toast('Floor '+SESS.depth+' cleared!');
+  toast('Chapter '+SESS.depth+' restored!');
   playSfx('descend');
+  if(SESS.depth>=STORY_CHAPTERS.length){
+    SESS.victory=true;
+    SESS.deathCause='';
+    finalizeRun();
+    return;
+  }
   SESS.depth++;
   SESS.player.wardUsedThisFloor=false;
   SESS.floor=generateFloor(SESS.depth, SESS.rng);
+  SESS.lesson=STORY_CHAPTERS[SESS.depth-1].body;
   beginTransitionTo(0);
+  toast(STORY_CHAPTERS[SESS.depth-1].title);
   persistSoon();
 }
 
@@ -681,7 +769,7 @@ function computeResults(){
   var rankPoints = SESS.score + SESS.floorsCleared*120 + SESS.bestCombo*15 + Math.round(accuracy*5);
   var grade = rankPoints>=3600?'S': rankPoints>=2200?'A': rankPoints>=1200?'B': rankPoints>=500?'C':'D';
   var stars={S:3,A:3,B:2,C:1,D:1}[grade];
-  return {score:SESS.score, depth:SESS.depth, accuracy:accuracy, bestCombo:SESS.bestCombo, wordsTyped:SESS.wordsTyped, relics:SESS.relicsCollected, grade:grade, stars:stars, cause:SESS.deathCause||'the dark'};
+  return {score:SESS.score, depth:Math.min(STORY_CHAPTERS.length,SESS.depth), accuracy:accuracy, bestCombo:SESS.bestCombo, wordsTyped:SESS.wordsTyped, vocab:Object.keys(SESS.vocabulary).length,wpm:Math.round(SESS.bestWpm),relics:SESS.relicsCollected, grade:grade, stars:stars, cause:SESS.deathCause||'',victory:SESS.victory};
 }
 function finalizeRun(){
   cancelAnimationFrame(SESS.raf);
@@ -689,17 +777,21 @@ function finalizeRun(){
   G.progression.totalRuns++;
   if(res.depth>G.progression.bestDepth) G.progression.bestDepth=res.depth;
   if(res.score>G.progression.bestScore) G.progression.bestScore=res.score;
+  if(res.wpm>G.progression.bestWpm) G.progression.bestWpm=res.wpm;
+  if(res.victory) G.progression.storiesCompleted++;
+  Object.keys(SESS.vocabulary).forEach(function(w){ if(G.progression.vocabulary.indexOf(w)<0) G.progression.vocabulary.push(w); });
+  G.progression.vocabulary=G.progression.vocabulary.slice(-240);
   mirrorLocal();
   host('score',{score:res.score});
   host('complete',{score:res.score, progress:100, state:serializeState()});
   showResults(res);
 }
 function showResults(res){
-  document.getElementById('resKicker').textContent='Run ended — Floor '+res.depth;
+  document.getElementById('resKicker').textContent=res.victory?'The Dawn Lexicon is whole':'Journey paused - Chapter '+res.depth;
   document.getElementById('resGrade').textContent=res.grade;
-  document.getElementById('resCause').textContent='Slain by '+res.cause+'. '+repeat('★',res.stars)+repeat('☆',3-res.stars);
+  document.getElementById('resCause').textContent=(res.victory?'You return every stolen story to its reader.':'Your Courage faded near '+res.cause+', but every learned word came home with you.')+' '+repeat('★',res.stars)+repeat('☆',3-res.stars);
   var bd=document.getElementById('resBreakdown'); bd.innerHTML='';
-  var rows=[['Score',res.score],['Depth reached','Floor '+res.depth],['Accuracy',res.accuracy+'%'],['Best combo',res.bestCombo],['Words typed',res.wordsTyped],['Relics found',res.relics]];
+  var rows=[['Score',res.score],['Story progress',res.depth+'/4'],['Accuracy',res.accuracy+'%'],['Best WPM',res.wpm],['Words typed',res.wordsTyped],['Vocabulary',res.vocab],['Best combo',res.bestCombo],['Keepsakes',res.relics]];
   rows.forEach(function(r){
     var d=document.createElement('div'); var b=document.createElement('b'); b.textContent=r[1]; var s=document.createElement('span'); s.textContent=r[0];
     d.appendChild(b); d.appendChild(s); bd.appendChild(d);
@@ -709,9 +801,10 @@ function showResults(res){
 function repeat(ch,n){ var s=''; for(var i=0;i<Math.max(0,n);i++) s+=ch; return s; }
 
 // ---- Rendering: encounter card ----
-function nodePreviewHtml(node,id){
+function nodePreviewHtml(node,id,option){
   var colors=nodeColors();
-  return '<div class="nodePreview"><span class="nodeTag" style="color:'+colors[node.kind]+'">'+node.kind.toUpperCase()+'</span><div class="typedWord" id="typedWord_'+id+'" data-target="'+id+'"></div></div>';
+  var label=node.kind==='cache'?'WORD CHEST':node.kind==='rest'?'MEMORY TREE':node.kind==='boss'?'CHAPTER SEAL':node.kind.toUpperCase();
+  return '<div class="nodePreview"><span class="nodeTag" style="color:'+colors[node.kind]+'">'+label+'</span><div class="typedWord" id="typedWord_'+id+'" data-target="'+id+'"></div>'+(option?'<span class="nodeTag">'+escapeHtml(option.object.toUpperCase())+'</span>':'')+'</div>';
 }
 function renderEncounterStatic(){
   var card=document.getElementById('encounterCard');
@@ -719,21 +812,22 @@ function renderEncounterStatic(){
   var html='';
   if(SESS.phase==='transition'){
     var step=SESS.floor.steps[SESS.floor.pendingIndex];
-    html+='<p class="kicker">Choose your path</p>';
-    if(step.type==='single'){ html+='<div class="pathRow">'+nodePreviewHtml(step.node,'go')+'</div>'; }
-    else { html+='<div class="pathRow">'+nodePreviewHtml(step.options[0].node,'opt0')+nodePreviewHtml(step.options[1].node,'opt1')+'</div>'; }
+    html+='<p class="kicker">'+escapeHtml(STORY_CHAPTERS[SESS.depth-1].title)+' - Read the Room</p>';
+    if(step.type==='single'){ html+='<p class="sceneLine">'+escapeHtml(step.clue)+'</p><div class="pathRow">'+nodePreviewHtml(step.node,'go',step)+'</div>'; }
+    else { html+='<p class="sceneLine">Left: '+escapeHtml(step.options[0].clue)+' Right: '+escapeHtml(step.options[1].clue)+'</p><div class="pathRow">'+nodePreviewHtml(step.options[0].node,'opt0',step.options[0])+nodePreviewHtml(step.options[1].node,'opt1',step.options[1])+'</div>'; }
   } else if(SESS.phase==='combat'){
     html+='<p class="kicker">'+escapeHtml(SESS.enemy.name)+' ('+SESS.enemy.kind.toUpperCase()+')</p>';
+    html+='<p class="sceneLine">The Echo creature blocks the corridor. Complete its bright word to return it to the story.</p>';
     html+='<div class="bar enemyBar"><i id="enemyHpFill" style="width:100%"></i></div>';
     html+='<div class="bar chargeBar"><i id="enemyChargeFill" style="width:0%"></i></div>';
     html+='<div class="typedWord" id="typedWord_attack" data-target="attack"></div>';
     var incantOn=TYPE.targets.some(function(t){ return t.id==='incant'; });
     html+='<div class="incantSlot'+(incantOn?'':' off')+'"><span class="tag">Focus Surge</span><div class="typedWord small" id="typedWord_incant" data-target="incant"></div></div>';
   } else if(SESS.phase==='vault'){
-    html+='<p class="kicker">Sealed Vault</p><div class="bar fuseBar"><i id="vaultFuseFill" style="width:100%"></i></div>';
+    html+='<p class="kicker">Listening Word Chest</p><p class="sceneLine">Its lock dims while you think. Type the name etched into the copper plate.</p><div class="bar fuseBar"><i id="vaultFuseFill" style="width:100%"></i></div>';
     html+='<div class="typedWord" id="typedWord_open" data-target="open"></div>';
   } else if(SESS.phase==='rest'){
-    html+='<p class="kicker">Rest Shrine</p><p class="sub">Type calmly — mistakes cost you healing.</p>';
+    html+='<p class="kicker">Memory Tree</p><p class="sceneLine">The silver leaves repeat one peaceful word. Type calmly for the strongest Courage return.</p>';
     html+='<div class="typedWord" id="typedWord_rest" data-target="rest"></div>';
   } else if(SESS.phase==='relicpick'){
     html+='<p class="kicker">Choose a relic</p><div class="relicRow">';
@@ -742,6 +836,7 @@ function renderEncounterStatic(){
     });
     html+='</div>';
   }
+  html+='<p class="lesson" id="lessonLine">'+escapeHtml(SESS.lesson||'Every careful word reveals more of the Keep.')+'</p>';
   card.innerHTML=html;
   renderTypedDisplay();
 }
@@ -767,59 +862,72 @@ function renderTypedDisplay(){
     el.classList.toggle('locked', isLocked);
     el.classList.toggle('dimmed', isOtherLocked);
   });
+  var lesson=document.getElementById('lessonLine'); if(lesson&&SESS) lesson.textContent=SESS.lesson||'';
 }
 
-// ---- Dungeon map canvas ----
+// ---- First-person scene canvas ----
 var cv,cx,dpr=1;
 function setupCanvas(){ cv=document.getElementById('mapStage'); cx=cv.getContext('2d'); resizeCanvas(); }
 function resizeCanvas(){
   if(!cv) return;
   dpr=Math.max(1,Math.min(2,window.devicePixelRatio||1));
   var rect=cv.getBoundingClientRect();
-  cv.width=Math.max(240,rect.width)*dpr; cv.height=Math.max(80,rect.height)*dpr;
+  cv.width=Math.max(240,rect.width)*dpr; cv.height=Math.max(170,rect.height)*dpr;
 }
 window.addEventListener('resize', resizeCanvas);
-function drawMap(){
-  if(!cx||!SESS||!SESS.floor) return;
-  var colors=nodeColors();
-  var w=cv.width,h=cv.height; cx.clearRect(0,0,w,h);
-  var steps=SESS.floor.steps, n=steps.length;
-  var padX=w*0.07, usableW=w-padX*2;
-  var midY=h*0.5, forkOff=h*0.24;
-  var xs=[]; for(var i=0;i<n;i++) xs.push(padX+usableW*(n>1?(i/(n-1)):0));
-  var pts=[];
-  for(i=0;i<n;i++){
-    if(steps[i].type==='branch') pts.push([{x:xs[i],y:midY-forkOff},{x:xs[i],y:midY+forkOff}]);
-    else pts.push([{x:xs[i],y:midY}]);
-  }
-  cx.strokeStyle='#2dd4bf33'; cx.lineWidth=Math.max(2,2*dpr);
-  for(i=0;i<n-1;i++){
-    var from=pts[i], to=pts[i+1];
-    from.forEach(function(fp){ to.forEach(function(tp){ cx.beginPath(); cx.moveTo(fp.x,fp.y); cx.lineTo(tp.x,tp.y); cx.stroke(); }); });
-  }
-  var pendingIdx=SESS.floor.pendingIndex, curIdx=SESS.floor.pos;
-  for(i=0;i<n;i++){
-    var revealed = i<=pendingIdx;
-    var step=steps[i];
-    var nodeInfos = step.type==='branch' ? [step.options[0].node, step.options[1].node] : [step.node];
-    pts[i].forEach(function(p,oi){
-      var kind = revealed ? nodeInfos[oi].kind : 'fog';
-      var r=Math.min(usableW/Math.max(1,n)*0.28, 20*dpr);
-      cx.beginPath(); cx.arc(p.x,p.y,r,0,Math.PI*2);
-      cx.fillStyle = colors[kind]+(revealed?'cc':'55');
-      cx.fill();
-      if(i===curIdx){ cx.lineWidth=3*dpr; cx.strokeStyle='#fff'; cx.stroke(); }
-      cx.fillStyle='#060a0d'; cx.font=(r*0.9)+'px ui-monospace, monospace'; cx.textAlign='center'; cx.textBaseline='middle';
-      cx.fillText(NODE_LETTER[kind], p.x, p.y+1*dpr);
-    });
-  }
+var SCENE_PALETTES=[
+  {sky:'#132733',far:'#24505a',wall:'#26363b',floor:'#162227',accent:'#ffb454',mist:'#8bd8d0'},
+  {sky:'#10291f',far:'#32634a',wall:'#1d3b2f',floor:'#14261e',accent:'#f4d35e',mist:'#9fe3bd'},
+  {sky:'#241b2f',far:'#6b4a48',wall:'#433a43',floor:'#241f2a',accent:'#f0a95b',mist:'#9fc7ff'},
+  {sky:'#11152e',far:'#343d72',wall:'#252946',floor:'#171a30',accent:'#8ee3ff',mist:'#e8c7ff'}
+];
+function poly(points,fill,stroke){cx.beginPath();cx.moveTo(points[0][0],points[0][1]);for(var i=1;i<points.length;i++)cx.lineTo(points[i][0],points[i][1]);cx.closePath();if(fill){cx.fillStyle=fill;cx.fill();}if(stroke){cx.strokeStyle=stroke;cx.stroke();}}
+function rectPath(x,y,w,h,r){r=Math.min(r,w/2,h/2);cx.beginPath();cx.moveTo(x+r,y);cx.lineTo(x+w-r,y);cx.quadraticCurveTo(x+w,y,x+w,y+r);cx.lineTo(x+w,y+h-r);cx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);cx.lineTo(x+r,y+h);cx.quadraticCurveTo(x,y+h,x,y+h-r);cx.lineTo(x,y+r);cx.quadraticCurveTo(x,y,x+r,y);cx.closePath();}
+function drawDoor(x,y,s,pal,glow){
+  var w=115*s,h=180*s;cx.save();cx.translate(x,y);cx.shadowColor=pal.accent;cx.shadowBlur=glow?24:0;cx.fillStyle='#101419';cx.strokeStyle=pal.accent;cx.lineWidth=Math.max(2,4*s);rectPath(-w/2,-h,w,h,8*s);cx.fill();cx.stroke();cx.shadowBlur=0;cx.fillStyle=pal.wall;rectPath(-w*.38,-h*.88,w*.76,h*.88,5*s);cx.fill();cx.strokeStyle='#ffffff24';cx.stroke();cx.fillStyle=pal.accent;cx.beginPath();cx.arc(w*.24,-h*.42,4*s,0,Math.PI*2);cx.fill();cx.restore();
+}
+function drawObject(x,y,s,type,pal,label){
+  cx.save();cx.translate(x,y);cx.shadowColor=pal.accent;cx.shadowBlur=16;cx.lineWidth=Math.max(2,3*s);cx.strokeStyle=pal.accent;cx.fillStyle='#172127';
+  if(type==='key'){cx.rotate(-.25);cx.beginPath();cx.arc(0,-42*s,22*s,0,Math.PI*2);cx.stroke();cx.fillRect(-5*s,-20*s,10*s,75*s);cx.fillRect(0,28*s,22*s,10*s);cx.fillRect(0,45*s,15*s,10*s);}
+  else if(type==='lantern'){rectPath(-30*s,-55*s,60*s,86*s,8*s);cx.fill();cx.stroke();cx.beginPath();cx.arc(0,-55*s,25*s,Math.PI,0);cx.stroke();cx.fillStyle=pal.accent;cx.globalAlpha=.65;cx.beginPath();cx.ellipse(0,-8*s,16*s,28*s,0,0,Math.PI*2);cx.fill();cx.globalAlpha=1;}
+  else if(type==='tree'){cx.fillStyle='#5b3d2a';cx.fillRect(-14*s,-18*s,28*s,80*s);cx.strokeStyle=pal.mist;cx.lineWidth=8*s;for(var a=-2;a<=2;a++){cx.beginPath();cx.moveTo(0,-5*s);cx.quadraticCurveTo(a*24*s,-50*s,Math.sin(a)*48*s,-86*s);cx.stroke();}cx.fillStyle=pal.mist;for(var j=0;j<9;j++){cx.beginPath();cx.arc((j%3-1)*31*s,-75*s-Math.floor(j/3)*18*s,14*s,0,Math.PI*2);cx.fill();}}
+  else if(type==='book'){cx.fillStyle='#9b3654';poly([[-48*s,-24*s],[0,-36*s],[0,30*s],[-48*s,18*s]],'#9b3654',pal.accent);poly([[0,-36*s],[48*s,-24*s],[48*s,18*s],[0,30*s]],'#7b2943',pal.accent);}
+  else if(type==='bridge'){cx.strokeStyle=pal.accent;cx.lineWidth=5*s;cx.beginPath();cx.moveTo(-65*s,35*s);cx.quadraticCurveTo(0,-30*s,65*s,35*s);cx.stroke();for(var k=-2;k<=2;k++){cx.beginPath();cx.moveTo(k*22*s,7*s+Math.abs(k)*6*s);cx.lineTo(k*22*s,48*s);cx.stroke();}}
+  else if(type==='stars'){cx.fillStyle=pal.accent;for(var q=0;q<7;q++){var ax=(q-3)*20*s,ay=-45*s-Math.sin(q*1.7)*25*s;cx.beginPath();cx.arc(ax,ay,4*s,0,Math.PI*2);cx.fill();if(q){cx.strokeStyle='#ffffff66';cx.lineWidth=1;cx.beginPath();cx.moveTo((q-4)*20*s,-45*s-Math.sin((q-1)*1.7)*25*s);cx.lineTo(ax,ay);cx.stroke();}}}
+  else if(type==='compass'){cx.beginPath();cx.arc(0,-20*s,48*s,0,Math.PI*2);cx.fill();cx.stroke();poly([[0,-58*s],[12*s,-12*s],[0,-23*s],[-12*s,-12*s]],pal.accent);cx.fillStyle='#fff';cx.font=(16*s)+'px ui-monospace';cx.textAlign='center';cx.fillText('N',0,-71*s);}
+  else if(type==='bell'){cx.fillStyle='#c99c4a';cx.beginPath();cx.moveTo(-38*s,20*s);cx.quadraticCurveTo(-25*s,4*s,-20*s,-48*s);cx.quadraticCurveTo(0,-70*s,20*s,-48*s);cx.quadraticCurveTo(25*s,4*s,38*s,20*s);cx.closePath();cx.fill();cx.stroke();cx.beginPath();cx.arc(0,27*s,7*s,0,Math.PI*2);cx.fill();}
+  else if(type==='window'){cx.fillStyle='#80cfff66';rectPath(-48*s,-70*s,96*s,120*s,45*s);cx.fill();cx.stroke();cx.beginPath();cx.moveTo(0,-68*s);cx.lineTo(0,48*s);cx.moveTo(-46*s,-8*s);cx.lineTo(46*s,-8*s);cx.stroke();}
+  else {cx.fillStyle=pal.accent;cx.beginPath();cx.arc(0,-18*s,38*s,0,Math.PI*2);cx.fill();}
+  cx.shadowBlur=0;if(label){cx.fillStyle='#071014d9';rectPath(-62*s,66*s,124*s,25*s,4*s);cx.fill();cx.fillStyle='#eaf3ef';cx.font='800 '+Math.max(9,12*s)+'px ui-monospace,monospace';cx.textAlign='center';cx.textBaseline='middle';cx.fillText(label.toUpperCase(),0,78*s);}cx.restore();
+}
+function drawEnemy(w,h,pal){
+  var e=SESS.enemy,pulse=effectiveReducedMotion()?0:Math.sin(performance.now()/230)*5,scale=Math.min(w,h)/430,x=w/2,y=h*.62+pulse;cx.save();cx.translate(x,y);cx.shadowColor=nodeColors()[e.kind];cx.shadowBlur=28;cx.fillStyle=e.kind==='boss'?'#492d63':e.kind==='elite'?'#5d3154':'#263d45';cx.beginPath();cx.moveTo(-70*scale,55*scale);cx.quadraticCurveTo(-58*scale,-80*scale,0,-112*scale);cx.quadraticCurveTo(58*scale,-80*scale,70*scale,55*scale);cx.closePath();cx.fill();cx.strokeStyle=nodeColors()[e.kind];cx.lineWidth=4;cx.stroke();cx.fillStyle=pal.accent;cx.beginPath();cx.arc(-21*scale,-42*scale,7*scale,0,Math.PI*2);cx.arc(21*scale,-42*scale,7*scale,0,Math.PI*2);cx.fill();cx.shadowBlur=0;cx.strokeStyle='#ffffff55';for(var i=-2;i<=2;i++){cx.beginPath();cx.moveTo(i*20*scale,45*scale);cx.lineTo(i*24*scale,80*scale);cx.stroke();}cx.restore();
+}
+function drawChest(w,h,pal){var s=Math.min(w,h)/430,x=w/2,y=h*.68;cx.save();cx.translate(x,y);cx.fillStyle='#51351f';cx.strokeStyle=pal.accent;cx.lineWidth=4;rectPath(-78*s,-32*s,156*s,88*s,7*s);cx.fill();cx.stroke();cx.beginPath();cx.arc(0,-30*s,78*s,Math.PI,0);cx.lineTo(78*s,-28*s);cx.lineTo(-78*s,-28*s);cx.closePath();cx.fill();cx.stroke();cx.fillStyle=pal.accent;cx.fillRect(-10*s,-14*s,20*s,28*s);cx.restore();}
+function drawRelics(w,h,pal){var offers=SESS.relicOffers||[];for(var i=0;i<offers.length;i++){var x=w*(.28+i*.22),s=Math.min(w,h)/520;cx.fillStyle='#28343a';poly([[x-45*s,h*.76],[x+45*s,h*.76],[x+31*s,h*.58],[x-31*s,h*.58]],'#28343a','#ffffff35');cx.fillStyle=i===0?'#ffb454':i===1?'#2dd4bf':'#8bc7ff';cx.beginPath();cx.arc(x,h*.54,18*s,0,Math.PI*2);cx.fill();}}
+function drawFirstPerson(){
+  if(!cx||!SESS||!SESS.floor)return;var w=cv.width/dpr,h=cv.height/dpr,pal=SCENE_PALETTES[Math.min(3,SESS.depth-1)];cx.setTransform(dpr,0,0,dpr,0,0);cx.clearRect(0,0,w,h);var pulse=effectiveReducedMotion()?0:SESS.cameraPulse*18,hy=h*.42+pulse;
+  var sky=cx.createLinearGradient(0,0,0,h);sky.addColorStop(0,pal.sky);sky.addColorStop(.56,pal.far);sky.addColorStop(1,pal.floor);cx.fillStyle=sky;cx.fillRect(0,0,w,h);
+  poly([[0,0],[w,0],[w*.64,hy],[w*.36,hy]],pal.wall);poly([[0,h],[w,h],[w*.64,hy],[w*.36,hy]],pal.floor);poly([[0,0],[0,h],[w*.36,hy],[w*.36,hy]],pal.wall);poly([[w,0],[w,h],[w*.64,hy],[w*.64,hy]],pal.wall);
+  cx.strokeStyle='#ffffff16';cx.lineWidth=1;for(var i=1;i<7;i++){var t=i/7,y=hy+(h-hy)*t*t;cx.beginPath();cx.moveTo(w*(.36-.36*t),y);cx.lineTo(w*(.64+.36*t),y);cx.stroke();}for(i=-4;i<=4;i++){cx.beginPath();cx.moveTo(w/2+i*w*.05,hy);cx.lineTo(w/2+i*w*.16,h);cx.stroke();}
+  if(SESS.depth===2){for(i=0;i<6;i++){cx.fillStyle=i%2?pal.mist:'#476d43';cx.fillRect((i%2?w*.08:w*.88)+(i%3)*9,h*.12+i*18,12,h*.65);}}
+  if(SESS.depth===3){cx.strokeStyle=pal.accent;cx.globalAlpha=.32;for(i=0;i<5;i++){cx.beginPath();cx.arc(i%2?w*.14:w*.86,h*(.18+i*.15),28+i*5,0,Math.PI*2);cx.stroke();}cx.globalAlpha=1;}
+  if(SESS.depth===4){cx.fillStyle='#fff';for(i=0;i<34;i++){cx.globalAlpha=.25+(i%5)*.12;cx.fillRect((i*79)%w,(i*47)%Math.max(30,hy),2,2);}cx.globalAlpha=1;}
+  if(SESS.phase==='transition'){var step=SESS.floor.steps[SESS.floor.pendingIndex];if(step.type==='single'){drawDoor(w/2,hy+82,Math.min(w,h)/520,pal,true);drawObject(w/2,hy+28,Math.min(w,h)/520,step.object,pal,step.object);}else{var s=Math.min(w,h)/610;drawDoor(w*.32,hy+78,s,pal,TYPE.lockedIdx===0);drawDoor(w*.68,hy+78,s,pal,TYPE.lockedIdx===1);drawObject(w*.32,hy+34,s,step.options[0].object,pal,step.options[0].object);drawObject(w*.68,hy+34,s,step.options[1].object,pal,step.options[1].object);}}
+  else if(SESS.phase==='combat')drawEnemy(w,h,pal);else if(SESS.phase==='vault')drawChest(w,h,pal);else if(SESS.phase==='rest')drawObject(w/2,h*.65,Math.min(w,h)/440,'tree',pal,'memory tree');else if(SESS.phase==='relicpick')drawRelics(w,h,pal);
+  cx.fillStyle='#0b1117';poly([[w*.34,h],[w*.43,h*.88],[w*.57,h*.88],[w*.66,h]],'#0b1117');cx.save();cx.translate(w*.57,h*.93);cx.rotate(-.42);cx.fillStyle='#f1e3bc';cx.fillRect(-5,-76,10,92);cx.fillStyle=pal.accent;cx.beginPath();cx.moveTo(-5,-76);cx.lineTo(0,-104);cx.lineTo(5,-76);cx.closePath();cx.fill();cx.restore();
+  if(SESS.sceneFlash>0){cx.globalAlpha=Math.min(.35,SESS.sceneFlash);cx.fillStyle=pal.mist;cx.fillRect(0,0,w,h);cx.globalAlpha=1;}
 }
 
 // ---- HUD ----
 function updateHud(){
-  document.getElementById('hudDepth').textContent='Floor '+SESS.depth;
+  document.getElementById('hudDepth').textContent='Chapter '+SESS.depth+' - '+STORY_CHAPTERS[SESS.depth-1].title;
   document.getElementById('hudScore').textContent=SESS.score;
   document.getElementById('hudCombo').textContent=SESS.combo;
+  document.getElementById('hudWpm').textContent=Math.round(SESS.lastWpm||0);
+  var accuracy=SESS.charsTyped?Math.max(0,Math.round((1-SESS.charErrors/SESS.charsTyped)*100)):100;
+  document.getElementById('hudAccuracy').textContent=accuracy+'%';
+  document.getElementById('hudVocab').textContent=Object.keys(SESS.vocabulary||{}).length;
   var hpPct=Math.max(0,Math.round(SESS.player.hp/SESS.player.hpMax*100));
   document.getElementById('hpFill').style.width=hpPct+'%';
   document.getElementById('hpNum').textContent=Math.max(0,Math.round(SESS.player.hp))+'/'+SESS.player.hpMax;
@@ -850,7 +958,9 @@ function gameLoop(ts){
     var tSec=(ts-SESS.startTs)/1000;
     if(SESS.phase==='combat') combatTick(dt,tSec);
     else if(SESS.phase==='vault') vaultTick(dt);
-    drawMap();
+    if(SESS.cameraPulse>0) SESS.cameraPulse=Math.max(0,SESS.cameraPulse-dt*2.8);
+    if(SESS.sceneFlash>0) SESS.sceneFlash=Math.max(0,SESS.sceneFlash-dt*2.4);
+    drawFirstPerson();
     updateHud();
   }
   SESS.lastTs=ts;
@@ -859,6 +969,7 @@ function gameLoop(ts){
 
 // ---- Completion dispatcher ----
 function dispatchCompletion(result){
+  recordCompletedTarget(result);
   if(SESS.phase==='combat') onCombatWordComplete(result);
   else if(SESS.phase==='vault') onVaultComplete();
   else if(SESS.phase==='rest') onRestComplete();
@@ -953,7 +1064,7 @@ window.addEventListener('message', function(event){
   } else if(type==='restore' || type==='load-state'){
     mergeState(event.data.state); mirrorLocal(); renderMenuSummary();
   } else if(type==='save-state'){
-    host('progress',{score: SESS?SESS.score:0, progress:Math.min(100,Math.round((G.progression.bestDepth||0)/25*100)), state:serializeState()});
+    host('progress',{score: SESS?SESS.score:0, progress:Math.min(100,Math.round((G.progression.bestDepth||0)/STORY_CHAPTERS.length*100)), state:serializeState()});
   }
 });
 
@@ -971,6 +1082,12 @@ document.querySelector('[data-tut-next]').addEventListener('click', function(){
   if(tutStep<TUT_STEPS.length-1){ tutStep++; renderTutStep(); } else { finishTutorial(); }
 });
 document.querySelector('[data-descend]').addEventListener('click', function(){
+  showScreen('difficulty');
+});
+document.querySelectorAll('[data-difficulty]').forEach(function(btn){ btn.addEventListener('click',function(){
+  G.settings.difficulty=btn.getAttribute('data-difficulty'); mirrorLocal(); persistSoon(); showStoryIntro();
+}); });
+document.querySelector('[data-begin-adventure]').addEventListener('click', function(){
   ensureAudio(); if(actx && actx.state==='suspended') actx.resume();
   newRun((Date.now()^Math.floor(Math.random()*1e9))>>>0);
 });
@@ -997,7 +1114,7 @@ document.getElementById('pVolRange').addEventListener('input', function(){ G.set
 document.body.classList.toggle('reduced', effectiveReducedMotion());
 buildVirtualKeyboard();
 renderMenuSummary();
-if(!G.progression.tutorialSeen){ openTutorial(); } else { showScreen('menu'); }
+showScreen('menu');
 host('ready');
 })();
 </script>

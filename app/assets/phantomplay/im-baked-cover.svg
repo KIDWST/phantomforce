@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 675" role="img" aria-labelledby="t d">
+  <title id="t">I'm Baked</title><desc id="d">A futuristic decorated cake on a dramatic bakery counter.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#281627"/><stop offset=".52" stop-color="#111517"/><stop offset="1" stop-color="#102620"/></linearGradient>
+    <linearGradient id="cake" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#ffb2cf"/><stop offset="1" stop-color="#b92d65"/></linearGradient>
+    <radialGradient id="glow"><stop stop-color="#fff5bd" stop-opacity=".7"/><stop offset="1" stop-color="#ff5f9e" stop-opacity="0"/></radialGradient>
+    <filter id="soft"><feGaussianBlur stdDeviation="24"/></filter>
+  </defs>
+  <rect width="1200" height="675" fill="url(#bg)"/><circle cx="820" cy="310" r="280" fill="url(#glow)" filter="url(#soft)"/>
+  <g opacity=".28" fill="none" stroke="#63f5c5"><path d="M0 120h430M0 550h520M900 90h300M1030 560h170"/><circle cx="1050" cy="190" r="90"/><circle cx="1050" cy="190" r="120"/></g>
+  <ellipse cx="816" cy="560" rx="250" ry="52" fill="#050707" opacity=".7"/>
+  <g transform="translate(815 455)"><ellipse rx="235" ry="72" fill="#7c224a"/><rect x="-235" y="-95" width="470" height="100" fill="url(#cake)"/><ellipse cy="-95" rx="235" ry="72" fill="#ffb8d3"/><path d="M-210-96q22 110 44 0t44 0t44 0t44 0t44 0t44 0t44 0t44 0t44 0t44 0" fill="none" stroke="#63f5c5" stroke-width="18" stroke-linecap="round"/><ellipse cy="-150" rx="175" ry="53" fill="#54223e"/><rect x="-175" y="-230" width="350" height="80" fill="#67305a"/><ellipse cy="-230" rx="175" ry="53" fill="#8f457b"/>
+    <g fill="#ffd36a"><path d="M0-255l-28-100 35 42 32-76 18 85 62-39-36 92z"/><circle cx="-110" cy="-238" r="18"/><circle cx="112" cy="-238" r="18"/></g><g fill="none" stroke="#63f5c5" stroke-width="8"><ellipse cy="-300" rx="115" ry="36" transform="rotate(-12)"/><ellipse cy="-300" rx="145" ry="48" transform="rotate(22)"/></g>
+  </g>
+  <g font-family="Inter,Segoe UI,sans-serif"><text x="70" y="190" fill="#63f5c5" font-size="26" font-weight="800" letter-spacing="5">FUTURE CAKE SHOP</text><text x="65" y="300" fill="#fff8f0" font-size="105" font-weight="950">I'M</text><text x="65" y="400" fill="#ff5f9e" font-size="105" font-weight="950">BAKED</text><text x="72" y="455" fill="#c9b9b2" font-size="28">Bake it. Build it. Make it iconic.</text></g>
+</svg>

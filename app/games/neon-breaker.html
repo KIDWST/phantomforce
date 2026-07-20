@@ -37,7 +37,7 @@
     </header>
     <div class="stage"><canvas aria-label="Neon Breaker play field"></canvas></div>
   </main>
-  <div class="overlay start"><div><h1>Neon Breaker</h1><p>Slide the paddle (drag or Arrow keys / A-D), tap or press Space to launch, and smash every brick. Catch capsules for multiball, lasers, catch-paddle, pierce and more &mdash; dodge the red ones. A boss guards every 4th floor: break its shield, pound its core, and sidestep its telegraphed shots. High combos pull better drops.</p><button type="button">Start</button></div></div>
+  <div class="overlay start"><div><h1>Neon Breaker</h1><p>Slide the paddle, launch, and build combo to unlock dramatic capsules: multiball storms, full-field laser sweeps, magnet catches, phase balls, overdrive, gravity wells, and a last-line shield. Duplicate capsules extend their timer up to the shown cap; shield pickups stack to three charges. A boss guards every 4th floor.</p><button type="button">Start</button></div></div>
   <div class="overlay pause" hidden><div><h1>Paused</h1><p>The ball is frozen mid-flight.</p><button type="button">Resume</button></div></div>
   <div class="overlay result" hidden><div><h1>Run over</h1><p class="big" data-final></p><p data-detail></p><button type="button">Play again</button></div></div>
   <script>
@@ -51,28 +51,29 @@
     /* Serve lane: PADDLE_Y=H-88 keeps the paddle and pre-launch ball fully
        visible inside embedded frames (fix from the visible-paddle build) —
        do not push the serve position back to the clipped bottom edge. */
-    const BASE_SPEED=300,MAX_SPEED=560,PADDLE_SPEED=470,PADDLE_Y=H-88,MAX_BALLS=6,MAX_LIVES=5;
-    /* Powerup catalog — distinct color + glyph per type; shrink and fast are
-       intentionally hostile so capsule-catching stays a read, not a reflex. */
+    const BASE_SPEED=300,MAX_SPEED=560,PADDLE_SPEED=470,PADDLE_Y=H-88,MAX_BALLS=12,MAX_LIVES=5;
+    /* Modern capsules are all beneficial. Timed duplicates extend, rather
+       than replace, the current effect up to each catalog entry's max. */
     const PUPS={
-      wide:  {c:'#5eead4',g:'W',label:'WIDE',  good:true},
-      slow:  {c:'#facc15',g:'S',label:'SLOW',  good:true},
-      multi: {c:'#c084fc',g:'M',label:'MULTI', good:true},
-      laser: {c:'#fb7185',g:'L',label:'LASER', good:true},
-      sticky:{c:'#22d3ee',g:'C',label:'CATCH', good:true},
-      pierce:{c:'#f8fafc',g:'P',label:'PIERCE',good:true},
-      life:  {c:'#4ade80',g:'+',label:'LIFE',  good:true},
-      shrink:{c:'#f43f5e',g:'-',label:'SHRINK',good:false},
-      fast:  {c:'#fb923c',g:'F',label:'FAST',  good:false}
+      wide:     {c:'#5eead4',g:'W',label:'WIDE',     dur:7,max:18},
+      slow:     {c:'#ffd166',g:'F',label:'FOCUS',    dur:6,max:14},
+      storm:    {c:'#c69cff',g:'3',label:'STORM',    dur:6,max:12},
+      sweep:    {c:'#ff6685',g:'=',label:'SWEEP',    dur:6,max:12},
+      magnet:   {c:'#4de8ff',g:'U',label:'MAGNET',   dur:9,max:20},
+      phase:    {c:'#f8fafc',g:'P',label:'PHASE',    dur:7,max:16},
+      overdrive:{c:'#ffab62',g:'X',label:'3X DRIVE', dur:7,max:16},
+      well:     {c:'#58b7ff',g:'O',label:'WELL',     dur:9,max:18},
+      shield:   {c:'#58ffac',g:'D',label:'SHIELD',   dur:16,max:30},
+      life:     {c:'#9dffd9',g:'+',label:'LIFE',     dur:0,max:0}
     };
-    const GOOD_PUPS=['wide','slow','multi','laser','sticky','pierce'];
-    const BAD_PUPS=['shrink','fast'];
+    const COMMON_PUPS=['wide','slow','magnet','shield'];
+    const DRAMATIC_PUPS=['storm','sweep','phase','overdrive','well'];
 
-    let bricks=[],balls=[],lasers=[],bossShots=[],powerups=[],particles=[],trail=[];
+    let bricks=[],balls=[],sweeps=[],bossShots=[],powerups=[],particles=[],trail=[];
     let boss=null;
     let score=0,level=1,lives=3,destroyed=0,total=0,totalDestroyed=0,combo=0;
-    let effects={wide:0,slow:0,laser:0,sticky:0,pierce:0,shrink:0,fast:0};
-    let laserT=0;
+    let effects={wide:0,slow:0,storm:0,sweep:0,magnet:0,phase:0,overdrive:0,well:0,shield:0};
+    let stormT=0,sweepT=0,shieldCharges=0,wellX=W/2,wellY=H*.32,pity=0,powerCall=null,powerPulse=0,screenShake=0;
     let phase='start',paused=false,completed=false,serving=true;
     let paddle={x:W/2-46,y:PADDLE_Y,w:92,baseW:92,h:13};
     let speed=BASE_SPEED,last=0,levelFlash=0,levelFlashText='LEVEL 1';
@@ -140,7 +141,7 @@
     const LAYOUTS=[layoutRows,layoutCheckers,layoutDiamond,layoutPillars,layoutFortress,layoutZigzag,layoutChevron];
 
     function buildLevel(){
-      bricks=[];boss=null;bossShots=[];lasers=[];
+      bricks=[];boss=null;bossShots=[];sweeps=[];
       brickShift=0;tiltAngle=0;fieldEvent=null;eventTimer=16+Math.random()*8;
       if(level%4===0){
         /* Boss floor: big multi-hit core behind a moving shield row. It
@@ -180,8 +181,9 @@
     }
     function startRun(){
       score=0;level=1;lives=3;totalDestroyed=0;combo=0;speed=BASE_SPEED;completed=false;
-      levelFlash=0;levelFlashText='LEVEL 1';particles=[];powerups=[];trail=[];elapsedT=0;laserT=0;
-      effects={wide:0,slow:0,laser:0,sticky:0,pierce:0,shrink:0,fast:0};
+      levelFlash=0;levelFlashText='LEVEL 1';particles=[];powerups=[];trail=[];elapsedT=0;stormT=0;sweepT=0;
+      effects={wide:0,slow:0,storm:0,sweep:0,magnet:0,phase:0,overdrive:0,well:0,shield:0};
+      shieldCharges=0;wellX=W/2;wellY=H*.32;pity=0;powerCall=null;powerPulse=0;screenShake=0;sweeps=[];
       paddle.w=paddle.baseW;
       buildLevel();serve();
       phase='playing';paused=false;
@@ -194,8 +196,8 @@
       combo=0;
       paddle.y=PADDLE_Y;
       paddle.x=Math.min(Math.max(paddle.x,8),W-8-paddle.w);
-      balls=[{x:paddle.x+paddle.w/2,y:paddle.y-9,vx:0,vy:0,r:7,stuck:true,off:0,dead:false}];
-      bossShots=[];lasers=[];trail=[];
+      balls=[{x:paddle.x+paddle.w/2,y:paddle.y-9,vx:0,vy:0,r:7,stuck:true,off:0,dead:false,phaseBrick:null,bossCooldown:0}];
+      bossShots=[];sweeps=[];trail=[];
       updateHud();
     }
     function placeStuck(){
@@ -211,15 +213,11 @@
         fired=true;
       }
       if(fired){serving=false;beep(520,0.06)}
-      else if(effects.laser>0&&!serving)fireLaser();
-    }
-    function fireLaser(){
-      lasers.push({x:paddle.x+7,y:paddle.y-4,dead:false},{x:paddle.x+paddle.w-7,y:paddle.y-4,dead:false});
-      beep(940,0.05,0.03);
     }
     function loseLife(){
       lives--;updateHud();beep(150,0.22,0.05);
-      effects={wide:0,slow:0,laser:0,sticky:0,pierce:0,shrink:0,fast:0};
+      effects={wide:0,slow:0,storm:0,sweep:0,magnet:0,phase:0,overdrive:0,well:0,shield:0};
+      shieldCharges=0;sweeps=[];stormT=0;sweepT=0;
       if(lives<=0){gameOver();return}
       serve();
     }
@@ -240,27 +238,34 @@
       updateHud();beep(760,0.14,0.05);
       host('progress',{score,progress:0,state:{level,bricks:totalDestroyed}});
     }
-    /* Combo-tier drops: hot combos raise both the drop chance and the drop
-       quality (tier 1 = combo 8+, tier 2 = combo 16+ adds LIFE odds and
-       filters out the hostile capsules entirely). */
+    /* Drop progression: support powers appear immediately, dramatic powers
+       unlock across the first three floors, and a pity counter guarantees a
+       capsule after a dry stretch. Hot combos bias toward dramatic drops. */
     function dropRoll(x,y){
-      const tier=combo>=16?2:combo>=8?1:0;
-      const chance=.12+Math.min(.18,combo*.01)+tier*.04;
-      if(Math.random()>=chance)return;
+      pity++;
+      if(powerups.length>=6)return;
+      const tier=combo>=16?2:combo>=8?1:0,chance=.10+Math.min(.12,combo*.006)+tier*.035;
+      if(pity<12&&Math.random()>=chance)return;
+      const dramatic=DRAMATIC_PUPS.filter(type=>{
+        if(type==='storm'||type==='phase')return level>=2;
+        return level>=3;
+      });
       let type;
-      const r=Math.random();
-      if(tier===2)type=r<.18?'life':GOOD_PUPS[Math.floor(Math.random()*GOOD_PUPS.length)];
-      else if(tier===1)type=r<.12?BAD_PUPS[Math.floor(Math.random()*BAD_PUPS.length)]:GOOD_PUPS[Math.floor(Math.random()*GOOD_PUPS.length)];
-      else type=r<.28?BAD_PUPS[Math.floor(Math.random()*BAD_PUPS.length)]:GOOD_PUPS[Math.floor(Math.random()*GOOD_PUPS.length)];
+      if(tier===2&&Math.random()<.1)type='life';
+      else if(dramatic.length&&Math.random()<(tier===2?.72:tier===1?.52:.30))type=dramatic[Math.floor(Math.random()*dramatic.length)];
+      else type=COMMON_PUPS[Math.floor(Math.random()*COMMON_PUPS.length)];
+      pity=0;
       powerups.push({x,y,vy:80,type,dead:false});
     }
     function damageBrick(b){
       b.hp--;
+      const multiplier=effects.overdrive>0?3:1;
       if(b.hp>0){
-        score+=5;burst(b.x+BW/2,b.y+BH/2,b.color,6);updateHud();beep(300,0.03);
+        score+=5*multiplier;burst(b.x+BW/2,b.y+BH/2,b.color,6);updateHud();beep(300,0.03);
         return false;
       }
-      b.alive=false;destroyed++;totalDestroyed++;combo++;score+=b.value+combo*4;
+      b.alive=false;destroyed++;totalDestroyed++;combo+=effects.overdrive>0?2:1;score+=(b.value+combo*4)*multiplier;
+      screenShake=reduced?0:Math.min(4,1+combo*.04);
       burst(b.x+BW/2,b.y+BH/2,b.color,18);
       dropRoll(b.x+BW/2,b.y+BH/2);
       updateHud();beep(340+b.value*2,0.05);
@@ -272,29 +277,40 @@
       if(reduced)return;
       for(let i=0;i<n;i++)particles.push({x,y,vx:(Math.random()*2-1)*130,vy:(Math.random()*2-1)*110,a:1,c:color,s:2+Math.random()*3});
     }
-    function applyPowerup(type){
-      if(type==='wide'){effects.wide=8;effects.shrink=0;beep(760,0.09,0.045)}
-      else if(type==='shrink'){effects.shrink=7;effects.wide=0;beep(180,0.12,0.05)}
-      else if(type==='slow'){effects.slow=6;effects.fast=0;beep(520,0.08,0.04)}
-      else if(type==='fast'){effects.fast=7;effects.slow=0;beep(220,0.1,0.05)}
-      else if(type==='laser'){effects.laser=7;laserT=0;beep(880,0.08,0.04)}
-      else if(type==='sticky'){effects.sticky=9;beep(640,0.08,0.04)}
-      else if(type==='pierce'){effects.pierce=7;beep(700,0.08,0.04)}
-      else if(type==='life'){lives=Math.min(MAX_LIVES,lives+1);updateHud();beep(980,0.12,0.05)}
-      else if(type==='multi'){
-        const flying=balls.filter(b=>!b.stuck&&!b.dead);
-        const src=flying.length?flying:balls.filter(b=>!b.dead);
-        for(const b of [...src]){
-          if(balls.length>=MAX_BALLS)break;
-          for(let i=0;i<2&&balls.length<MAX_BALLS;i++){
-            const cur=Math.max(BASE_SPEED*.8,Math.hypot(b.vx,b.vy))||speed;
-            const ang=Math.atan2(b.vx,-b.vy)+(i?0.55:-0.55);
-            balls.push({x:b.x,y:b.y-(b.stuck?4:0),vx:Math.sin(ang)*cur,vy:-Math.cos(ang)*cur,r:7,stuck:false,dead:false,off:0});
-          }
-        }
-        serving=false;
-        beep(820,0.1,0.05);
+    function extendEffect(type){
+      const def=PUPS[type],stacked=effects[type]>0;
+      effects[type]=Math.min(def.max,effects[type]+def.dur);
+      powerCall={text:def.label+(stacked?' STACKED':''),sub:`+${def.dur}s / ${def.max}s max`,c:def.c,t:1.5};
+      powerPulse=1;screenShake=reduced?0:5;
+      return stacked;
+    }
+    function spawnStormVolley(count=2){
+      if(serving)launch();
+      const source=balls.filter(b=>!b.dead&&!b.stuck);
+      if(!source.length)return;
+      for(let i=0;i<count&&balls.length<MAX_BALLS;i++){
+        const b=source[Math.floor(Math.random()*source.length)],cur=Math.max(BASE_SPEED*.86,Math.hypot(b.vx,b.vy)||speed);
+        const ang=-1.05+Math.random()*2.1;
+        balls.push({x:b.x,y:b.y,vx:Math.sin(ang)*cur,vy:-Math.abs(Math.cos(ang)*cur),r:7,stuck:false,dead:false,off:0,phaseBrick:null,bossCooldown:0});
       }
+      serving=false;beep(820,0.1,0.05);
+    }
+    function applyPowerup(type){
+      if(type==='life'){
+        lives=Math.min(MAX_LIVES,lives+1);updateHud();beep(980,0.12,0.05);
+        powerCall={text:'EXTRA LIFE',sub:`${lives} lives ready`,c:PUPS.life.c,t:1.5};powerPulse=1;
+        return;
+      }
+      extendEffect(type);
+      if(type==='wide')beep(760,0.09,0.045);
+      else if(type==='slow')beep(520,0.08,0.04);
+      else if(type==='storm'){stormT=0;spawnStormVolley(3);beep(860,0.12,0.05)}
+      else if(type==='sweep'){sweepT=0;beep(940,0.12,0.05)}
+      else if(type==='magnet')beep(640,0.1,0.045);
+      else if(type==='phase')beep(700,0.1,0.045);
+      else if(type==='overdrive'){beep(480,0.08,0.045);setTimeout(()=>beep(960,0.11,0.045),65)}
+      else if(type==='well')beep(390,0.14,0.05);
+      else if(type==='shield'){shieldCharges=Math.min(3,shieldCharges+1);beep(880,0.12,0.045);powerCall.sub=`${shieldCharges}/3 charges / duplicates extend`}
     }
 
     /* ---- telegraphed short field events ---- */
@@ -342,7 +358,8 @@
       }
     }
     function hitBoss(dmg,x,y){
-      boss.hp-=dmg;boss.hitFlash=0.14;score+=15;
+      boss.hp-=dmg;boss.hitFlash=0.14;score+=15*dmg*(effects.overdrive>0?3:1);combo+=effects.overdrive>0?2:1;
+      screenShake=reduced?0:Math.min(5,2+dmg);
       burst(x,y,'#ff9dc4',10);updateHud();beep(500,0.05,0.04);
       if(boss.hp<=0){
         burst(boss.x+boss.w/2,boss.y+boss.h/2,'#ff9dc4',60);
@@ -353,15 +370,23 @@
     }
 
     function step(b,sdt){
-      const f=effects.fast>0?1.15:effects.slow>0?0.82:1;
+      const f=effects.slow>0?0.84:1;
+      b.bossCooldown=Math.max(0,(b.bossCooldown||0)-sdt);
       if(fieldEvent&&!fieldEvent.telegraph&&fieldEvent.type==='gravity')b.vy+=Math.sin(elapsedT*3.1)*300*sdt;
+      if(effects.well>0){
+        const dx=wellX-b.x,dy=wellY-b.y,dist=Math.max(42,Math.hypot(dx,dy)),pull=760/(1+dist/150);
+        b.vx+=dx/dist*pull*sdt;b.vy+=dy/dist*pull*sdt;
+      }
+      if(effects.magnet>0&&b.vy>0&&b.y>paddle.y-150){
+        b.vx+=(paddle.x+paddle.w/2-b.x)*3.4*sdt;
+      }
       b.x+=b.vx*sdt*f;b.y+=b.vy*sdt*f;
       trail.push({x:b.x,y:b.y,a:.45}); if(trail.length>26)trail.shift();
       if(b.x<b.r+3){b.x=b.r+3;b.vx=Math.abs(b.vx);beep(240,0.03)}
       else if(b.x>W-3-b.r){b.x=W-3-b.r;b.vx=-Math.abs(b.vx);beep(240,0.03)}
       if(b.y<b.r+3){b.y=b.r+3;b.vy=Math.abs(b.vy);beep(240,0.03)}
       if(b.vy>0&&b.y+b.r>=paddle.y&&b.y-b.r<=paddle.y+paddle.h&&b.x>paddle.x-b.r&&b.x<paddle.x+paddle.w+b.r){
-        if(effects.sticky>0){
+        if(effects.magnet>0){
           b.stuck=true;b.vx=0;b.vy=0;
           b.off=Math.max(-paddle.w/2+8,Math.min(paddle.w/2-8,b.x-(paddle.x+paddle.w/2)));
           b.y=paddle.y-b.r-2;
@@ -379,27 +404,37 @@
         const cx=Math.max(boss.x,Math.min(b.x,boss.x+boss.w)),cy=Math.max(boss.y,Math.min(b.y,boss.y+boss.h));
         const dx=b.x-cx,dy=b.y-cy;
         if(dx*dx+dy*dy<=b.r*b.r){
-          if(Math.abs(dx)>Math.abs(dy)){b.vx=dx>0?Math.abs(b.vx):-Math.abs(b.vx);b.x=cx+Math.sign(dx)*b.r}
-          else{b.vy=dy>0?Math.abs(b.vy):-Math.abs(b.vy);b.y=cy+Math.sign(dy)*b.r}
-          hitBoss(1,b.x,b.y);
+          if(effects.phase<=0){
+            if(Math.abs(dx)>Math.abs(dy)){b.vx=dx>0?Math.abs(b.vx):-Math.abs(b.vx);b.x=cx+Math.sign(dx)*b.r}
+            else{b.vy=dy>0?Math.abs(b.vy):-Math.abs(b.vy);b.y=cy+Math.sign(dy)*b.r}
+          }
+          if(b.bossCooldown<=0){hitBoss(1,b.x,b.y);b.bossCooldown=effects.phase>0?.12:.03}
           if(!boss)return;
         }
       }
+      let touchingPhase=false;
       for(const br of bricks){
         if(!br.alive)continue;
         const cx=Math.max(br.x,Math.min(b.x,br.x+BW)),cy=Math.max(br.y,Math.min(b.y,br.y+BH));
         const dx=b.x-cx,dy=b.y-cy;
         if(dx*dx+dy*dy>b.r*b.r)continue;
-        const willDestroy=br.hp<=1;
-        /* Pierce: destroyed bricks don't deflect the ball; armored bricks
-           that survive the hit still bounce it. */
-        if(!(effects.pierce>0&&willDestroy)){
-          if(dx===0&&dy===0){b.vy=-b.vy}
-          else if(Math.abs(dx)>Math.abs(dy)){b.vx=dx>0?Math.abs(b.vx):-Math.abs(b.vx);b.x=cx+Math.sign(dx)*b.r}
-          else{b.vy=dy>0?Math.abs(b.vy):-Math.abs(b.vy);b.y=cy+Math.sign(dy)*b.r}
+        if(effects.phase>0){
+          touchingPhase=true;
+          if(b.phaseBrick!==br){b.phaseBrick=br;damageBrick(br);if(phase!=='playing'||serving)return}
+          break;
         }
+        if(dx===0&&dy===0){b.vy=-b.vy}
+        else if(Math.abs(dx)>Math.abs(dy)){b.vx=dx>0?Math.abs(b.vx):-Math.abs(b.vx);b.x=cx+Math.sign(dx)*b.r}
+        else{b.vy=dy>0?Math.abs(b.vy):-Math.abs(b.vy);b.y=cy+Math.sign(dy)*b.r}
         damageBrick(br);
         break;
+      }
+      if(!touchingPhase)b.phaseBrick=null;
+      if(b.vy>0&&b.y+b.r>=H-24&&effects.shield>0&&shieldCharges>0){
+        b.y=H-25-b.r;b.vy=-Math.abs(b.vy);shieldCharges--;screenShake=reduced?0:7;powerPulse=1;
+        burst(b.x,b.y,'#58ffac',30);beep(720,0.12,0.05);
+        powerCall={text:'SHIELD SAVE',sub:`${shieldCharges}/3 charges remain`,c:PUPS.shield.c,t:1.2};
+        if(shieldCharges<=0)effects.shield=0;
       }
       if(b.y-b.r>H)b.dead=true;
     }
@@ -428,8 +463,12 @@
       move+=gpUpdate();
       move=Math.max(-1,Math.min(1,move));
       if(move)paddle.x=Math.min(Math.max(paddle.x+move*PADDLE_SPEED*dt,8),W-8-paddle.w);
+      const shieldWas=effects.shield;
       for(const k of Object.keys(effects))if(effects[k]>0)effects[k]=Math.max(0,effects[k]-dt);
-      const targetW=paddle.baseW*(effects.wide>0?1.5:1)*(effects.shrink>0?0.62:1);
+      if(shieldWas>0&&effects.shield<=0)shieldCharges=0;
+      if(powerCall){powerCall.t-=dt;if(powerCall.t<=0)powerCall=null}
+      powerPulse=Math.max(0,powerPulse-dt*2.1);screenShake=Math.max(0,screenShake-dt*22);
+      const targetW=paddle.baseW*(effects.wide>0?1.5:1)*(effects.overdrive>0?1.08:1);
       if(Math.abs(paddle.w-targetW)>0.5){
         const c=paddle.x+paddle.w/2;
         paddle.w=targetW;
@@ -443,10 +482,19 @@
         const wob=br.move?Math.sin(elapsedT*br.move.sp+br.move.ph)*br.move.amp:0;
         br.x=Math.min(W-BW-2,Math.max(2,br.baseX+wob+brickShift));
       }
+      const targets=bricks.filter(br=>br.alive);
+      const targetWell=boss?{x:boss.x+boss.w/2,y:boss.y+boss.h/2}:targets.length?{
+        x:targets.reduce((sum,br)=>sum+br.x+BW/2,0)/targets.length,
+        y:targets.reduce((sum,br)=>sum+br.y+BH/2,0)/targets.length
+      }:{x:W/2,y:H*.3};
+      wellX+=(targetWell.x-wellX)*Math.min(1,dt*2.8);wellY+=(targetWell.y-wellY)*Math.min(1,dt*2.8);
       placeStuck();
-      if(effects.laser>0&&!serving){
-        laserT-=dt;
-        if(laserT<=0){fireLaser();laserT=0.5}
+      if(effects.storm>0&&!serving&&balls.length<MAX_BALLS){
+        stormT-=dt;if(stormT<=0){spawnStormVolley(1);stormT=.72}
+      }
+      if(effects.sweep>0&&!serving){
+        sweepT-=dt;
+        if(sweepT<=0){sweeps.push({y:paddle.y-10,vy:-300,dead:false,hit:new Set(),bossHit:false});sweepT=1.05;beep(920,0.05,0.03)}
       }
       if(!serving){
         for(const b of balls){
@@ -463,22 +511,26 @@
           balls=balls.filter(b=>!b.dead);
           if(balls.length===0){loseLife();return}
         }
-        for(const l of lasers){
-          l.y-=680*dt;
-          if(l.y<-16){l.dead=true;continue}
-          if(boss&&l.x>boss.x&&l.x<boss.x+boss.w&&l.y<boss.y+boss.h&&l.y>boss.y-10){l.dead=true;hitBoss(1,l.x,l.y);continue}
+        for(const sweep of sweeps){
+          const oldY=sweep.y;sweep.y+=sweep.vy*dt;
           for(const br of bricks){
-            if(!br.alive)continue;
-            if(l.x>br.x&&l.x<br.x+BW&&l.y<br.y+BH&&l.y>br.y-6){l.dead=true;damageBrick(br);break}
+            if(!br.alive||sweep.hit.has(br))continue;
+            const center=br.y+BH/2;
+            if(center<=oldY&&center>=sweep.y){sweep.hit.add(br);damageBrick(br);if(phase!=='playing'||serving)return}
           }
-          if(phase!=='playing')return;
+          if(boss&&!sweep.bossHit&&boss.y+boss.h>=sweep.y&&boss.y<=oldY){sweep.bossHit=true;hitBoss(2,W/2,sweep.y);if(!boss||serving)return}
+          if(sweep.y<-20)sweep.dead=true;
         }
-        lasers=lasers.filter(l=>!l.dead);
+        sweeps=sweeps.filter(sweep=>!sweep.dead);
         for(const s of bossShots){
           s.y+=s.vy*dt;
           if(s.y>H+20){s.dead=true;score+=8;continue}
           if(s.y+s.r>paddle.y&&s.y-s.r<paddle.y+paddle.h&&s.x>paddle.x-s.r&&s.x<paddle.x+paddle.w+s.r){
-            s.dead=true;burst(s.x,s.y,'#ff6b7d',26);loseLife();return;
+            s.dead=true;burst(s.x,s.y,'#ff6b7d',26);
+            if(effects.shield>0&&shieldCharges>0){
+              shieldCharges--;powerCall={text:'SHIELD BLOCK',sub:`${shieldCharges}/3 charges remain`,c:PUPS.shield.c,t:1.2};beep(720,0.1,0.05);
+              if(shieldCharges<=0)effects.shield=0;
+            }else{loseLife();return}
           }
         }
         bossShots=bossShots.filter(s=>!s.dead);
@@ -495,9 +547,21 @@
     function draw(){
       ctx.clearRect(0,0,W,H);
       ctx.save();
+      if(screenShake&&!reduced)ctx.translate((Math.random()*2-1)*screenShake,(Math.random()*2-1)*screenShake);
+      if(powerPulse&&!reduced){const s=1+powerPulse*.006;ctx.translate(W/2,H/2);ctx.scale(s,s);ctx.translate(-W/2,-H/2)}
       if(tiltAngle){ctx.translate(W/2,H/2);ctx.rotate(tiltAngle);ctx.translate(-W/2,-H/2)}
       ctx.strokeStyle='#36ff9414';ctx.lineWidth=1;
       for(let y=40;y<H;y+=48){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}
+      if(effects.well>0){
+        const pulse=reduced?1:.86+.14*Math.sin(elapsedT*7);
+        ctx.strokeStyle='#58b7ff88';ctx.lineWidth=2;
+        for(let r=16;r<=50;r+=12){ctx.globalAlpha=(1-r/70)*pulse;ctx.beginPath();ctx.arc(wellX,wellY,r,0,Math.PI*2);ctx.stroke()}
+        ctx.globalAlpha=1;ctx.fillStyle='#0a2a58';ctx.shadowColor='#58b7ff';ctx.shadowBlur=reduced?0:18;ctx.beginPath();ctx.arc(wellX,wellY,8,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;
+      }
+      if(effects.storm>0&&!reduced){
+        ctx.strokeStyle='#c69cff42';ctx.lineWidth=1;
+        for(let i=0;i<8;i++){const x=(i*73+elapsedT*90)%W;ctx.beginPath();ctx.moveTo(x,35);ctx.lineTo(x-28,120);ctx.stroke()}
+      }
       for(const b of bricks){
         if(!b.alive)continue;
         ctx.fillStyle=b.color;
@@ -540,42 +604,47 @@
         ctx.fillStyle='#ff6b7d';ctx.shadowColor='#ff6b7d';ctx.shadowBlur=reduced?0:12;ctx.fill();
         ctx.shadowBlur=0;
       }
-      for(const l of lasers){
-        ctx.fillStyle='#ffb3c0';ctx.shadowColor='#fb7185';ctx.shadowBlur=reduced?0:10;
-        ctx.fillRect(l.x-1.5,l.y-14,3,14);
-        ctx.shadowBlur=0;
+      for(const sweep of sweeps){
+        ctx.shadowColor='#ff6685';ctx.shadowBlur=reduced?0:22;ctx.fillStyle='#fff0f3';ctx.fillRect(0,sweep.y-2,W,4);
+        ctx.fillStyle='#ff668566';ctx.fillRect(0,sweep.y-8,W,16);ctx.shadowBlur=0;
       }
       for(const p of powerups){
         const d=PUPS[p.type];
         ctx.shadowColor=d.c;ctx.shadowBlur=reduced?0:12;
         ctx.fillStyle=d.c;
-        if(ctx.roundRect){ctx.beginPath();ctx.roundRect(p.x-10,p.y-10,20,20,5);ctx.fill()}
-        else ctx.fillRect(p.x-10,p.y-10,20,20);
+        if(ctx.roundRect){ctx.beginPath();ctx.roundRect(p.x-15,p.y-11,30,22,5);ctx.fill()}
+        else ctx.fillRect(p.x-15,p.y-11,30,22);
         ctx.shadowBlur=0;
-        if(!d.good){ctx.strokeStyle='#2b0208';ctx.lineWidth=2;ctx.strokeRect(p.x-10,p.y-10,20,20)}
-        ctx.fillStyle='#03110c';ctx.font='900 12px ui-monospace,monospace';ctx.textAlign='center';ctx.fillText(d.g,p.x,p.y+4);
+        ctx.fillStyle='#03110c';ctx.font='900 12px ui-monospace,monospace';ctx.textAlign='center';ctx.fillText(d.g,p.x,p.y+3);
+        ctx.fillStyle=d.c;ctx.font='900 6px ui-monospace,monospace';ctx.fillText(d.label,p.x,p.y+18);
       }
       ctx.save();
       ctx.shadowColor='#58ffa8';ctx.shadowBlur=reduced?0:18;
-      ctx.fillStyle=effects.laser>0?'#c74b5e':'#19c779';
+      ctx.fillStyle=effects.overdrive>0?'#ff8b4f':effects.magnet>0?'#168eb0':'#19c779';
       ctx.fillRect(paddle.x,paddle.y,paddle.w,paddle.h);
-      ctx.fillStyle=effects.sticky>0?'#7df3ff':'#b8ffdd';
+      ctx.fillStyle=effects.magnet>0?'#a9f7ff':'#b8ffdd';
       ctx.fillRect(paddle.x,paddle.y,paddle.w,3);
-      ctx.strokeStyle=effects.laser>0?'#ff8fa0':'#6dffc0';ctx.lineWidth=1.5;ctx.strokeRect(paddle.x+.75,paddle.y+.75,paddle.w-1.5,paddle.h-1.5);
-      if(effects.laser>0){
-        ctx.fillStyle='#fb7185';
-        ctx.fillRect(paddle.x+3,paddle.y-4,6,4);ctx.fillRect(paddle.x+paddle.w-9,paddle.y-4,6,4);
+      ctx.strokeStyle=effects.overdrive>0?'#ffd1b5':'#6dffc0';ctx.lineWidth=1.5;ctx.strokeRect(paddle.x+.75,paddle.y+.75,paddle.w-1.5,paddle.h-1.5);
+      if(effects.magnet>0){
+        ctx.strokeStyle='#4de8ff';ctx.lineWidth=2;
+        ctx.beginPath();ctx.arc(paddle.x+8,paddle.y-2,10,Math.PI,Math.PI*2);ctx.arc(paddle.x+paddle.w-8,paddle.y-2,10,Math.PI,Math.PI*2);ctx.stroke();
       }
       ctx.restore();
-      for(const t of trail){ctx.globalAlpha=t.a;ctx.beginPath();ctx.arc(t.x,t.y,5,0,Math.PI*2);ctx.fillStyle='#41ffa1';ctx.fill();t.a*=.92}
+      const trailColor=effects.phase>0?'#f8fafc':effects.overdrive>0?'#ffab62':effects.well>0?'#58b7ff':'#41ffa1';
+      for(const t of trail){ctx.globalAlpha=t.a;ctx.beginPath();ctx.arc(t.x,t.y,5,0,Math.PI*2);ctx.fillStyle=trailColor;ctx.fill();t.a*=.92}
       ctx.globalAlpha=1;
       for(const b of balls){
         ctx.beginPath();ctx.arc(b.x,b.y,b.r,0,Math.PI*2);
-        ctx.fillStyle='#effff6';
-        ctx.shadowColor=effects.pierce>0?'#f8fafc':'#41ffa1';
-        ctx.shadowBlur=reduced?0:(effects.pierce>0?24:16);
+        ctx.fillStyle=effects.phase>0?'#d8f4ff':effects.overdrive>0?'#fff0c7':'#effff6';
+        ctx.shadowColor=effects.phase>0?'#f8fafc':effects.overdrive>0?'#ffab62':'#41ffa1';
+        ctx.shadowBlur=reduced?0:(effects.phase>0?25:16);
         ctx.fill();
-        if(effects.pierce>0){ctx.shadowBlur=0;ctx.strokeStyle='#f8fafc';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(b.x,b.y,b.r+3,0,Math.PI*2);ctx.stroke()}
+        if(effects.phase>0){ctx.shadowBlur=0;ctx.strokeStyle='#f8fafc';ctx.lineWidth=1.5;ctx.setLineDash([3,3]);ctx.beginPath();ctx.arc(b.x,b.y,b.r+4,0,Math.PI*2);ctx.stroke();ctx.setLineDash([])}
+      }
+      if(effects.shield>0&&shieldCharges>0){
+        const y=H-24;ctx.shadowColor='#58ffac';ctx.shadowBlur=reduced?0:18;ctx.strokeStyle='#58ffac';ctx.lineWidth=3;ctx.setLineDash([18,7]);
+        ctx.beginPath();ctx.moveTo(8,y);ctx.lineTo(W-8,y);ctx.stroke();ctx.setLineDash([]);ctx.shadowBlur=0;
+        ctx.fillStyle='#bfffdc';ctx.font='900 10px ui-monospace,monospace';ctx.textAlign='right';ctx.fillText(`SHIELD ${shieldCharges}/3`,W-10,y-8);
       }
       for(const p of particles){ctx.globalAlpha=Math.max(0,p.a);ctx.shadowColor=p.c;ctx.shadowBlur=reduced?0:8;ctx.fillStyle=p.c;ctx.fillRect(p.x,p.y,p.s,p.s)}
       ctx.globalAlpha=1;
@@ -583,21 +652,27 @@
       ctx.restore();
       /* Active-effect chips — drawn unrotated so the HUD stays readable
          even mid field-tilt. */
-      let chipX=8;
-      for(const k of ['wide','slow','multi','laser','sticky','pierce','shrink','fast']){
+      let chipX=8,chipY=8;
+      for(const k of ['wide','slow','storm','sweep','magnet','phase','overdrive','well','shield']){
         if(!(effects[k]>0))continue;
-        const d=PUPS[k],rem=effects[k],max=k==='sticky'?9:8;
+        const d=PUPS[k],rem=effects[k],max=d.max;
+        if(chipX+52>W){chipX=8;chipY+=24}
         ctx.fillStyle='#03110cd9';
-        if(ctx.roundRect){ctx.beginPath();ctx.roundRect(chipX,8,46,20,6);ctx.fill()}
-        else ctx.fillRect(chipX,8,46,20);
-        ctx.strokeStyle=d.c;ctx.lineWidth=1;ctx.strokeRect(chipX+.5,8.5,45,19);
+        if(ctx.roundRect){ctx.beginPath();ctx.roundRect(chipX,chipY,48,20,5);ctx.fill()}
+        else ctx.fillRect(chipX,chipY,48,20);
+        ctx.strokeStyle=d.c;ctx.lineWidth=1;ctx.strokeRect(chipX+.5,chipY+.5,47,19);
         ctx.fillStyle=d.c;ctx.font='900 11px ui-monospace,monospace';ctx.textAlign='left';
-        ctx.fillText(d.g,chipX+5,22);
-        ctx.fillStyle='#0a3323';ctx.fillRect(chipX+16,14,26,3);
-        ctx.fillStyle=d.c;ctx.fillRect(chipX+16,14,26*Math.min(1,rem/max),3);
+        ctx.fillText(d.g,chipX+5,chipY+14);
+        ctx.fillStyle='#10241b';ctx.fillRect(chipX+16,chipY+6,27,3);
+        ctx.fillStyle=d.c;ctx.fillRect(chipX+16,chipY+6,27*Math.min(1,rem/max),3);
         ctx.fillStyle=d.c;ctx.font='700 7px ui-monospace,monospace';
-        ctx.fillText(d.label,chipX+16,25);
-        chipX+=50;
+        ctx.fillText(k==='shield'?`${shieldCharges}/3`:d.label,chipX+16,chipY+17);
+        chipX+=52;
+      }
+      if(powerCall){
+        const alpha=Math.min(1,powerCall.t*2);ctx.globalAlpha=alpha;ctx.textAlign='center';
+        ctx.fillStyle=powerCall.c;ctx.font='900 25px ui-monospace,monospace';ctx.fillText(powerCall.text,W/2,H*.44);
+        ctx.fillStyle='#effff6';ctx.font='800 10px ui-monospace,monospace';ctx.fillText(powerCall.sub,W/2,H*.44+18);ctx.globalAlpha=1;
       }
       if(fieldEvent&&fieldEvent.telegraph){
         ctx.fillStyle=`rgba(255,224,102,${0.5+0.4*Math.abs(Math.sin(elapsedT*14))})`;

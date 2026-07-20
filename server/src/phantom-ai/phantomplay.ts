@@ -75,9 +75,12 @@ export type PhantomPlayGame = {
 
 const PHANTOMPLAY_ART_VERSION = "phantomplay-art-20260717";
 export const PHANTOMPLAY_ENGINE = {
-  version: "2.1-hybrid-install",
+  version: "2.2-ascension",
   saveStateBytes: 262_144,
   largeMap: { chunkSize: 1024, maxLoadedChunks: 64, streaming: true },
+  screenFlow: ["title", "loadout", "match", "results"],
+  localMultiplayer: { supported: true, maxPlayers: 6, splitScreen: true },
+  updateChannel: { kind: "web_build", checkSeconds: 60, reinstallRequired: false },
   runtimeProfiles: {
     webapp: {
       targetUser: "standard_user",
@@ -136,6 +139,8 @@ const GAME_ART_BY_SLUG: Record<string, string> = {
   "kingdom-breakers": artUrl("kingdom-breakers-cover.svg"),
   "tidefront-tactics": artUrl("tidefront-tactics-cover.svg"),
   "skyguard-arena": artUrl("skyguard-arena-cover.svg"),
+  "im-baked": artUrl("im-baked-cover.svg"),
+  "phantom-strike": artUrl("phantom-strike-cover.svg"),
 };
 const CATEGORY_ART: Record<string, string> = {
   Arcade: GAME_ART_BY_SLUG["neon-drift"],
@@ -812,6 +817,49 @@ export const PHANTOMPLAY_BUILT_IN_GAMES: PhantomPlayGame[] = [
     controls: "Click or tap toppings, then Oven and Pull & Serve",
     progressSupport: true,
     scoreSupport: true,
+  },
+  {
+    id: "im-baked",
+    title: "I'm Baked",
+    summary: "Run a future cake shop: read orders, time the oven, decorate showpieces, and grow the shift.",
+    description: "A complete cake-shop day loop with distinct customers, order tickets, bake timing, layered procedural cakes, visual finishes, customer patience, grades, coins, streaks, Story Shift, and Rush Counter modes.",
+    category: "Creative",
+    tags: ["cooking", "cakes", "shop", "creative", "simulation", "touch"],
+    contentRating: "everyone",
+    contentDescriptors: ["simulated_economy"],
+    developer: "Tak",
+    developerAvatar: TAK_AVATAR,
+    kind: "built_in",
+    launchUrl: "/app/games/im-baked.html?v=1.0.0",
+    thumbnail: GAME_ART_BY_SLUG["im-baked"],
+    featured: true,
+    version: "1.0.0",
+    controls: "Choose the ticketed ingredients, stop the oven in the green, decorate, and serve.",
+    progressSupport: true,
+    scoreSupport: true,
+    engine: { tier: "creative-sim", minVersion: PHANTOMPLAY_ENGINE.version },
+  },
+  {
+    id: "phantom-strike",
+    title: "Phantom Strike",
+    summary: "First-person tactical arena combat with weapon builds, bots, three maps, and real local split-screen.",
+    description: "A network-silent first-person ray-cast shooter with Solo Ops against a bot squad, genuine same-device 1v1 split-screen, three compact maps, rifle/SMG/shotgun builds, optics, barrels, hit feedback, respawns, and an after-action report.",
+    category: "Arcade",
+    tags: ["fps", "shooter", "first-person", "bots", "multiplayer", "split-screen"],
+    contentRating: "teen",
+    contentDescriptors: ["intense_action", "competitive_play"],
+    multiplayerDescriptor: "Local 1v1 is real same-device split-screen. Solo Ops uses clearly labeled bots. No public matchmaking, chat, voice, or external networking.",
+    developer: "Tak",
+    developerAvatar: TAK_AVATAR,
+    kind: "built_in",
+    launchUrl: "/app/games/phantom-strike.html?v=1.0.0",
+    thumbnail: GAME_ART_BY_SLUG["phantom-strike"],
+    featured: true,
+    version: "1.0.0",
+    controls: "P1 WASD, Q/E turn, F or Space fire. P2 arrows turn/move, comma/period strafe, Enter or slash fire.",
+    progressSupport: true,
+    scoreSupport: true,
+    engine: { tier: "raycast-fps", minVersion: PHANTOMPLAY_ENGINE.version },
   },
 ];
 

@@ -6,283 +6,278 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'none'; img-src data:">
   <title>Type Storm</title>
   <style>
+    :root{color-scheme:dark;--mint:#58ffac;--cyan:#4de8ff;--gold:#ffd166;--pink:#ff5b83}
     *{box-sizing:border-box}
-    html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#020806;color:#effff6;font-family:system-ui,sans-serif;user-select:none}
-    body{display:grid;grid-template-rows:auto minmax(0,1fr) auto;padding:max(10px,env(safe-area-inset-top)) 12px max(10px,env(safe-area-inset-bottom));background:radial-gradient(circle at 50% 0,#154332,#020806 58%),linear-gradient(180deg,#071b14,#010403)}
-    .hud{display:flex;justify-content:space-between;align-items:center;gap:10px;width:min(760px,100%);margin:0 auto;padding:2px 4px}
-    .hud span{display:block;color:#8ba99a;font:700 10px ui-monospace,monospace;letter-spacing:.14em}
-    .hud b{color:#63ffad;font-size:24px;font-variant-numeric:tabular-nums}
-    .hud .shields b{color:#41ffa1;letter-spacing:3px}
-    .stage{position:relative;width:min(760px,100%);margin:0 auto;min-height:0}
-    canvas{display:block;width:100%;height:100%;border:1px solid #42ff9a57;border-radius:18px;background:linear-gradient(180deg,#071a14,#020806);box-shadow:inset 0 0 80px #41ffa10f,0 18px 70px #0008;touch-action:none}
+    html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#030608;color:#effff6;font-family:system-ui,sans-serif;user-select:none}
+    body{display:grid;grid-template-rows:auto minmax(0,1fr) auto;padding:max(9px,env(safe-area-inset-top)) 10px max(9px,env(safe-area-inset-bottom));background:linear-gradient(180deg,#091820,#06110f 50%,#020405)}
+    .hud{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;width:min(800px,100%);margin:0 auto;padding:2px 0 8px}
+    .hud div{min-width:0;padding:7px 9px;border:1px solid #58ffac30;border-radius:7px;background:#03090bcf}
+    .hud span{display:block;color:#89a89a;font:800 9px ui-monospace,monospace}
+    .hud b{display:block;overflow:hidden;color:var(--mint);font:900 clamp(15px,3.5vw,23px) ui-monospace,monospace;font-variant-numeric:tabular-nums;white-space:nowrap}
+    .hud .pace{border-color:#4de8ff3d}.hud .pace b{color:#a7f5ff}
+    .hud .shields{border-color:#ffd1663d}.hud .shields b{color:#ffe19a}
+    .stage{position:relative;width:min(800px,100%);margin:0 auto;min-height:0}
+    canvas{display:block;width:100%;height:100%;border:1px solid #4de8ff45;border-radius:8px;background:#040b0e;box-shadow:inset 0 0 80px #4de8ff0b,0 18px 60px #0008;touch-action:none}
     .kbd{position:fixed;bottom:0;left:0;width:2px;height:2px;opacity:0;border:0;padding:0;background:transparent;color:transparent;caret-color:transparent}
-    .hint{width:min(760px,100%);margin:8px auto 0;min-height:44px;padding:10px 16px;border:1px solid #4dffa36b;border-radius:999px;background:#03110ce8;color:#caffdf;font-weight:800;font-size:13px;cursor:pointer;box-shadow:0 0 26px #41ffa11d}
-    .hint:active{background:#41ffa124}
-    .overlay{position:fixed;z-index:6;inset:0;display:grid;place-items:center;background:#010504dc;backdrop-filter:blur(4px)}
+    .hint{width:min(800px,100%);margin:8px auto 0;min-height:44px;padding:10px 14px;border:1px solid #58ffac52;border-radius:7px;background:#04100de8;color:#cffff0;font-weight:800;font-size:12px;cursor:pointer;box-shadow:0 0 24px #58ffac12}
+    .hint.bad{border-color:#ff5b8370;color:#ffc2d0}.hint.good{border-color:#ffd16680;color:#ffe7a8}
+    .overlay{position:fixed;z-index:6;inset:0;display:grid;place-items:center;background:#020507ed;backdrop-filter:blur(5px);overflow:auto}
     .overlay[hidden]{display:none}
-    .overlay>div{text-align:center;padding:26px;max-width:470px}
-    .overlay h1{font-size:48px;line-height:1;margin:0;color:#5affa9;text-shadow:0 0 26px #41ffa155}
-    .overlay p{color:#9db8aa;line-height:1.55}
+    .panel{width:min(650px,100%);padding:24px;text-align:center}
+    .overlay h1{font-size:clamp(40px,9vw,64px);line-height:1;margin:0;color:#effff6;text-shadow:0 0 26px #58ffac55}
+    .overlay p{color:#a5bcb1;line-height:1.5}
     .overlay .big{color:#effff6;font-size:20px;font-weight:800}
-    .overlay button{min-width:150px;min-height:48px;border:0;border-radius:999px;background:#55ffa8;padding:14px 24px;font-weight:900;font-size:15px;cursor:pointer;color:#02150c}
-    body.reduced .overlay h1{text-shadow:none}
-    @media(max-width:420px){.overlay h1{font-size:36px}.hud b{font-size:19px}}
+    .modes{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin:18px auto;width:min(600px,100%)}
+    .mode{min-width:0;min-height:70px;border:1px solid #ffffff24;border-radius:7px;background:#081013;color:#dfffee;padding:9px 5px;cursor:pointer}
+    .mode b,.mode small{display:block}.mode b{font:900 13px ui-monospace,monospace}.mode small{margin-top:5px;color:#8da99c;font:700 9px ui-monospace,monospace;line-height:1.35}
+    .mode[aria-pressed="true"]{border-color:var(--cyan);background:#09212a;color:#d9fbff;box-shadow:0 0 20px #4de8ff26}
+    .start-run,.overlay .action{min-width:160px;min-height:48px;border:1px solid #58ffac66;border-radius:7px;background:var(--mint);color:#02100a;padding:12px 20px;font:900 14px ui-monospace,monospace;cursor:pointer}
+    .mode-copy{min-height:38px;margin:-6px auto 12px!important;color:#c9ddd4!important}
+    body.reduced .overlay h1{ text-shadow:none }
+    @media(max-width:620px){
+      .modes{grid-template-columns:repeat(2,1fr)}
+      .hud{grid-template-columns:repeat(2,1fr)}
+      .hud div{padding:5px 8px}
+      .panel{padding:18px}
+    }
   </style>
 </head>
 <body>
   <header class="hud">
     <div><span>SCORE</span><b data-score>0</b></div>
     <div><span>COMBO</span><b data-combo>0</b></div>
-    <div class="shields"><span>SHIELDS</span><b data-shields>&#11041;&#11041;&#11041;</b></div>
+    <div class="shields"><span>SHIELDS</span><b data-shields>5</b></div>
+    <div class="pace"><span>PACE</span><b data-pace>16 WPM</b></div>
   </header>
   <div class="stage"><canvas aria-label="Type Storm play field"></canvas></div>
-  <button class="hint" type="button">&#9000; Tap to open keyboard &mdash; type a word's first letter to lock it, then finish it</button>
-  <input class="kbd" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" aria-hidden="true" tabindex="-1">
-  <div class="overlay start"><div><h1>Type Storm</h1><p>Words drop fast. Type a word's first letter to lock on &mdash; a locked word freezes in place while you finish it, safe from the storm. Everything else keeps falling, so lock quick and clear the field. Watch for gold &#9889; Thunder Words: they never stop falling and never cost a shield, but finish one and you heal a shield and bank a big bonus.</p><button type="button">Start</button></div></div>
-  <div class="overlay pause" hidden><div><h1>Paused</h1><p>The storm is holding its breath.</p><button type="button">Resume</button></div></div>
-  <div class="overlay result" hidden><div><h1>Shields down</h1><p class="big" data-final></p><p data-detail></p><button type="button">Play again</button></div></div>
+  <button class="hint" data-hint type="button">Tap here for the keyboard. Type the highlighted word; Backspace releases a lock.</button>
+  <input class="kbd" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" aria-label="Type Storm keyboard input">
+
+  <div class="overlay start">
+    <div class="panel">
+      <h1>Type Storm</h1>
+      <p>Choose a pace, then clear each real word before it reaches the baseline. Its first letter locks the word safely while you finish.</p>
+      <div class="modes" role="group" aria-label="Difficulty">
+        <button type="button" class="mode" data-mode="easy"><b>EASY</b><small>YOUNG READERS<br>16-28 WPM</small></button>
+        <button type="button" class="mode" data-mode="medium"><b>MEDIUM</b><small>TEENS / SCHOOL<br>34-54 WPM</small></button>
+        <button type="button" class="mode" data-mode="hard"><b>HARD</b><small>FAST TYPISTS<br>58-78 WPM</small></button>
+        <button type="button" class="mode" data-mode="expert"><b>EXPERT</b><small>MAX CHALLENGE<br>76-100 WPM</small></button>
+      </div>
+      <p class="mode-copy" data-mode-copy></p>
+      <button type="button" class="start-run" data-start>START EASY</button>
+    </div>
+  </div>
+  <div class="overlay pause" hidden><div class="panel"><h1>Paused</h1><p>The storm is holding.</p><button type="button" class="action">RESUME</button></div></div>
+  <div class="overlay result" hidden><div class="panel"><h1 data-result-title>Storm clear</h1><p class="big" data-final></p><p data-detail></p><button type="button" class="action">PLAY AGAIN</button></div></div>
+
   <script>
     'use strict';
     const host=(type,data={})=>parent.postMessage({source:'phantomplay-game',type,...data},'*');
-    const WORDS=['able','about','above','acorn','actor','adapt','after','again','agent','alarm','alert','alien','alpha','amber','angle','ankle','apple','arch','area','arrow','atlas','atom','audio','autumn','award','axis','badge','baker','basic','basket','beach','beacon','begin','bell','below','bench','berry','binary','bird','black','blade','blaze','block','bloom','blue','board','bonus','boost','bottle','brain','brave','bread','break','brick','bridge','bright','bring','brook','brush','buffer','build','cabin','cable','cache','camera','candle','canyon','carbon','cargo','castle','cedar','chain','chair','chalk','charm','chart','chase','check','chess','chief','chord','cider','cipher','circle','city','claim','clean','clear','clever','cliff','climb','clock','cloud','clover','coast','cobalt','code','coin','comet','coral','cosmic','count','cover','crane','crater','creek','crisp','cross','crown','curve','cycle','daisy','dance','dark','dawn','decode','delta','denim','depth','desert','design','digit','dome','door','draft','dragon','dream','drift','drive','drop','dusk','dust','eagle','early','earth','echo','edge','eight','elbow','ember','empty','energy','engine','enter','equal','event','exact','exit','extra','fable','falcon','fast','fern','field','film','final','fire','first','five','flame','flash','fleet','flint','float','floor','flow','fluid','flux','focus','fold','forest','forge','form','forum','found','four','frame','fresh','frost','fruit','galaxy','game','gamma','garden','gate','gear','giant','gift','glass','gleam','glide','globe','glow','gold','grain','grand','grape','graph','grass','green'];
-    const HARD_WORDS=['backstage','blackout','breakpoint','campaign','checksum','deadline','dispatch','download','feedback','framework','frequency','keyboard','launcher','midnight','operator','playlist','protocol','shortcut','signalize','starfield','subsystem','terminal','timeline','workflow','zeppelin'];
-    const STORM_STRINGS=['fasdjkl','jksdlfk','zxcmop','asdfjkl','qwerasdf','mkkcsik','skczaom','fjdkals','zxcjklm','asdfghjk','jklsdfaa','codexrun','stormkey','neonrush'];
+    const EASY_WORDS='cat dog sun moon red blue pink green run hop skip jump play ball book tree leaf fish bird frog duck bear lion star rain snow cake milk home smile happy hand foot nose bike kite boat farm park one two three four five'.split(' ');
+    const MEDIUM_WORDS='after apple beach brave bring build chair cloud dance dream earth flame fresh game glow heart light magic music ocean paint pizza plant quick river robot school smart smile space sport storm story tiger train water world young skate comic movie friend class study lunch team level'.split(' ');
+    const HARD_WORDS='absorb active balance bright browser capture circuit climate create curious design digital energy focus future galaxy impact keyboard logic matrix memory motion network pattern planet process rhythm signal system theory vector visual archive contrast discover equation gravity library project science subject velocity'.split(' ');
+    const EXPERT_WORDS='accuracy algorithm cadence complex compose dynamic entropy function harmony interval kinetic language momentum optimize precision quantum resolve sequence strategy structure syncopate velocity waveform abstract calculate challenge frequency geometry improvise knowledge parallel technique variable'.split(' ');
+    const MODES={
+      easy:{label:'EASY',min:16,max:28,ramp:72,fall:14,maxWords:6,shields:5,font:26,pool:EASY_WORDS,copy:'Large type, short familiar words, five shields, and a gentle ramp.'},
+      medium:{label:'MEDIUM',min:34,max:54,ramp:70,fall:10.5,maxWords:8,shields:4,font:23,pool:MEDIUM_WORDS,copy:'Everyday school-age vocabulary with room to scan and recover.'},
+      hard:{label:'HARD',min:58,max:78,ramp:62,fall:8.4,maxWords:11,shields:3,font:21,pool:HARD_WORDS,copy:'A controlled climb that tops out at 78 WPM equivalent.'},
+      expert:{label:'EXPERT',min:76,max:100,ramp:60,fall:7.2,maxWords:14,shields:3,font:20,pool:EXPERT_WORDS,copy:'Dense advanced vocabulary, capped at 100 WPM equivalent.'}
+    };
+    const RUN_SECONDS=75;
     const cvs=document.querySelector('canvas'),ctx=cvs.getContext('2d'),kbd=document.querySelector('.kbd');
-    const startEl=document.querySelector('.start'),pauseEl=document.querySelector('.pause'),resultEl=document.querySelector('.result');
-    const hintEl=document.querySelector('.hint');
-    const FONT='700 20px ui-monospace,SFMono-Regular,Menlo,monospace';
-    let cw=320,ch=480,baseY=420;
-    let falling=[],active=null,phase='start',paused=false,completed=false;
-    let score=0,shields=3,wordsDestroyed=0,streak=0,bestCombo=0,elapsed=0,spawnT=0,flash=0;
-    let last=0,soundOn=true,reduced=false,audio=null,thunderT=0,thunderFlash=0;
+    const startEl=document.querySelector('.start'),pauseEl=document.querySelector('.pause'),resultEl=document.querySelector('.result'),hintEl=document.querySelector('[data-hint]');
+    let cw=320,ch=480,baseY=420,falling=[],active=null,phase='start',paused=false,completed=false;
+    let score=0,shields=5,wordsDestroyed=0,streak=0,bestCombo=0,elapsed=0,spawnT=0,flash=0,last=0,status='',statusT=0;
+    let soundOn=true,reduced=matchMedia('(prefers-reduced-motion: reduce)').matches,audio=null,selectedMode='easy',cfg=MODES.easy;
 
-    function beep(freq,dur=0.05,gain=0.03){
+    try{const saved=localStorage.getItem('pf.typeStorm.mode');if(MODES[saved])selectedMode=saved}catch(err){}
+    function clamp(v,a,b){return Math.max(a,Math.min(b,v))}
+    function currentWpm(){
+      const p=Math.min(1,elapsed/cfg.ramp),smooth=p*p*(3-2*p);
+      return Math.round(cfg.min+(cfg.max-cfg.min)*smooth);
+    }
+    function beep(freq,dur=.05,gain=.03,type='triangle'){
       if(!soundOn)return;
       try{
         audio=audio||new (window.AudioContext||window.webkitAudioContext)();
         if(audio.state==='suspended')audio.resume();
-        const o=audio.createOscillator(),g=audio.createGain();
-        o.type='triangle';o.frequency.value=freq;
-        g.gain.setValueAtTime(gain,audio.currentTime);
-        g.gain.exponentialRampToValueAtTime(0.0001,audio.currentTime+dur);
+        const o=audio.createOscillator(),g=audio.createGain();o.type=type;o.frequency.value=freq;
+        g.gain.setValueAtTime(gain,audio.currentTime);g.gain.exponentialRampToValueAtTime(.0001,audio.currentTime+dur);
         o.connect(g).connect(audio.destination);o.start();o.stop(audio.currentTime+dur);
       }catch(err){}
     }
+    function font(){return `800 ${cfg.font}px ui-monospace,SFMono-Regular,Menlo,monospace`}
     function fit(){
       const dpr=Math.min(2.5,devicePixelRatio||1),rect=cvs.getBoundingClientRect();
       cw=Math.max(280,rect.width);ch=Math.max(300,rect.height);
-      cvs.width=Math.round(cw*dpr);cvs.height=Math.round(ch*dpr);
-      ctx.setTransform(dpr,0,0,dpr,0,0);
-      baseY=ch-46;
-      for(const w of falling)w.x=Math.min(w.x,Math.max(8,cw-8-w.width));
+      cvs.width=Math.round(cw*dpr);cvs.height=Math.round(ch*dpr);ctx.setTransform(dpr,0,0,dpr,0,0);
+      baseY=ch-43;
+      for(const w of falling)w.x=Math.min(w.x,Math.max(10,cw-w.width-10));
       draw();
     }
+    function setStatus(text,kind='',seconds=1){
+      status=text;statusT=seconds;hintEl.textContent=text;hintEl.classList.toggle('bad',kind==='bad');hintEl.classList.toggle('good',kind==='good');
+    }
+    function defaultHint(){
+      setStatus(active?`Locked: ${active.text.toUpperCase()}  ${active.matched}/${active.text.length}`:'Type a first letter to lock the lowest matching word.','',999);
+    }
     function updateHud(){
-      document.querySelector('[data-score]').textContent=score;
-      document.querySelector('[data-combo]').textContent=streak;
-      document.querySelector('[data-shields]').textContent=shields>0?'⬢'.repeat(shields):'—';
+      document.querySelector('[data-score]').textContent=String(score);
+      document.querySelector('[data-combo]').textContent=String(streak);
+      document.querySelector('[data-shields]').textContent=shields>0?String(shields):'-';
+      document.querySelector('[data-pace]').textContent=`${currentWpm()} WPM`;
     }
+    function setMode(name,persist=true){
+      if(!MODES[name])return;
+      selectedMode=name;cfg=MODES[name];
+      document.querySelectorAll('[data-mode]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.mode===name)));
+      document.querySelector('[data-mode-copy]').textContent=cfg.copy;
+      document.querySelector('[data-start]').textContent=`START ${cfg.label}`;
+      if(persist)try{localStorage.setItem('pf.typeStorm.mode',name)}catch(err){}
+      updateHud();fit();
+    }
+    document.querySelectorAll('[data-mode]').forEach(b=>b.addEventListener('click',()=>setMode(b.dataset.mode)));
+
     function chooseText(){
-      if(elapsed>42&&Math.random()<0.42)return STORM_STRINGS[Math.floor(Math.random()*STORM_STRINGS.length)];
-      if(elapsed>18&&Math.random()<0.48)return HARD_WORDS[Math.floor(Math.random()*HARD_WORDS.length)];
-      return WORDS[Math.floor(Math.random()*WORDS.length)];
+      const used=new Set(falling.map(w=>w.text)),initials=new Set(falling.map(w=>w.text[0]));
+      let choices=cfg.pool.filter(w=>!used.has(w)&&!initials.has(w[0]));
+      if(!choices.length)choices=cfg.pool.filter(w=>!used.has(w));
+      if(!choices.length)choices=cfg.pool;
+      return choices[Math.floor(Math.random()*choices.length)];
     }
-    function findSpot(width,leftMargin=8){
-      const min=leftMargin;
-      let x=min+Math.random()*Math.max(1,cw-8-min-width);
-      for(let tries=0;tries<4;tries++){
-        const clash=falling.some(w=>w.y<60&&x<w.x+w.width+18&&x+width+18>w.x);
+    function findSpot(width){
+      let x=10+Math.random()*Math.max(1,cw-width-20);
+      for(let tries=0;tries<12;tries++){
+        const clash=falling.some(w=>w.y<76&&x<w.x+w.width+18&&x+width+18>w.x);
         if(!clash)break;
-        x=min+Math.random()*Math.max(1,cw-8-min-width);
+        x=10+Math.random()*Math.max(1,cw-width-20);
       }
       return x;
     }
     function spawn(){
-      const maxFalling=elapsed>50?18:elapsed>25?15:12;
-      if(falling.length>=maxFalling)return;
-      const text=chooseText();
-      if(falling.some(w=>w.text===text))return;
-      ctx.font=FONT;
-      const width=ctx.measureText(text).width;
-      /* Fast base fall from the very start — the pressure is "lock it
-         quickly", not "watch it slowly arrive". Once locked, a word freezes,
-         so raw fall speed no longer punishes mid-typing the way it used to. */
-      const base=Math.min(290,88+elapsed*3.6+streak*1.6);
-      const x=findSpot(width);
-      falling.push({text,matched:0,x,y:-14,width,speed:base*(0.9+Math.random()*0.42),isThunder:false});
-    }
-    function spawnThunder(){
-      const pool=WORDS.filter(w=>w.length<=6);
-      const text=pool[Math.floor(Math.random()*pool.length)]||WORDS[0];
-      ctx.font=FONT;
-      const width=ctx.measureText(text).width;
-      const x=findSpot(width,22);
-      /* Thunder words never freeze and never cost a shield — pure risk/
-         reward. They fall hard and fast on purpose. */
-      falling.push({text,matched:0,x,y:-14,width,speed:340+Math.random()*60,isThunder:true});
-      thunderFlash=0.4;
-      beep(880,0.12,0.05);
+      if(falling.length>=cfg.maxWords)return;
+      const text=chooseText();ctx.font=font();
+      const width=ctx.measureText(text.toUpperCase()).width;
+      const speed=(baseY+40)/cfg.fall*(.92+Math.random()*.14);
+      falling.push({text,matched:0,x:findSpot(width),y:-25,width,height:cfg.font+15,speed});
     }
     function startRun(){
-      falling=[];active=null;
-      score=0;shields=3;wordsDestroyed=0;streak=0;bestCombo=0;elapsed=0;spawnT=0.9;flash=0;completed=false;
-      thunderT=9+Math.random()*4;thunderFlash=0;
-      phase='playing';paused=false;
-      startEl.hidden=true;pauseEl.hidden=true;resultEl.hidden=true;
-      updateHud();
-      host('progress',{score:0,progress:0,state:{words:0,bestCombo:0}});
-      kbd.focus({preventScroll:true});
+      cfg=MODES[selectedMode];falling=[];active=null;score=0;shields=cfg.shields;wordsDestroyed=0;streak=0;bestCombo=0;elapsed=0;spawnT=.35;flash=0;statusT=0;completed=false;
+      phase='playing';paused=false;startEl.hidden=true;pauseEl.hidden=true;resultEl.hidden=true;
+      setStatus('Find the lowest word, type its first letter, then finish it.','',3);
+      updateHud();host('progress',{score:0,progress:0,state:{words:0,bestCombo:0,difficulty:selectedMode}});
+      kbd.focus({preventScroll:true});beep(330,.06,.035,'square');setTimeout(()=>beep(520,.08,.035),70);
     }
-    function gameOver(){
+    function finish(cleared){
       if(completed||phase==='over')return;
       phase='over';completed=true;active=null;
-      resultEl.querySelector('[data-final]').textContent=`Final score ${score}`;
-      resultEl.querySelector('[data-detail]').textContent=`${wordsDestroyed} word${wordsDestroyed===1?'':'s'} destroyed · best combo ${bestCombo}.`;
-      resultEl.hidden=false;
-      host('complete',{score,progress:100,state:{words:wordsDestroyed,bestCombo}});
+      if(cleared)score+=shields*250+bestCombo*10;
+      resultEl.querySelector('[data-result-title]').textContent=cleared?'Storm clear':'Shields down';
+      resultEl.querySelector('[data-final]').textContent=`${cfg.label} score ${score}`;
+      resultEl.querySelector('[data-detail]').textContent=`${wordsDestroyed} word${wordsDestroyed===1?'':'s'} cleared / best combo ${bestCombo} / peak pace ${currentWpm()} WPM.`;
+      resultEl.hidden=false;updateHud();
+      host('complete',{score,progress:100,state:{words:wordsDestroyed,bestCombo,difficulty:selectedMode,cleared}});
+      beep(cleared?880:120,cleared?.18:.25,.05,cleared?'triangle':'sawtooth');
     }
-    function miss(){
-      streak=0;flash=Math.max(flash,0.25);
-      updateHud();beep(130,0.09,0.035);
+    function wrong(){
+      if(selectedMode!=='easy')streak=0;
+      flash=Math.max(flash,.2);updateHud();setStatus('Not that key. Keep the lock and try the next letter.','bad',.85);beep(145,.07,.025);
     }
     function destroyWord(word){
-      falling=falling.filter(w=>w!==word);
-      if(active===word)active=null;
-      wordsDestroyed++;
-      if(word.isThunder){
-        score+=word.text.length*10+150;
-        shields=Math.min(3,shields+1);
-        streak++;bestCombo=Math.max(bestCombo,streak);
-        updateHud();beep(1040,0.16,0.055);beep(1320,0.1,0.04);
-        host('score',{score,progress:Math.min(99,wordsDestroyed*3),state:{words:wordsDestroyed,bestCombo}});
-        return;
-      }
-      const bonus=Math.min(50,streak*5);
-      score+=word.text.length*5+bonus;
-      streak++;bestCombo=Math.max(bestCombo,streak);
-      updateHud();beep(660+Math.min(400,streak*30),0.07,0.04);
-      host('score',{score,progress:Math.min(99,wordsDestroyed*3),state:{words:wordsDestroyed,bestCombo}});
+      falling=falling.filter(w=>w!==word);if(active===word)active=null;
+      wordsDestroyed++;streak++;bestCombo=Math.max(bestCombo,streak);
+      const paceBonus=Math.round(currentWpm()/5),add=word.text.length*12+Math.min(120,streak*6)+paceBonus;
+      score+=add;updateHud();setStatus(`CLEAR +${add}`,'good',.65);
+      beep(620+Math.min(520,streak*24),.07,.04);setTimeout(()=>beep(880,.05,.025),45);
+      host('score',{score,progress:Math.min(99,Math.round(elapsed/RUN_SECONDS*100)),state:{words:wordsDestroyed,bestCombo,difficulty:selectedMode}});
     }
     function handleLetter(ch){
       if(phase!=='playing'||paused)return;
       if(active&&falling.includes(active)){
         if(active.text[active.matched]===ch){
-          active.matched++;beep(500+active.matched*40,0.03,0.02);
-          if(active.matched>=active.text.length)destroyWord(active);
-        }else miss();
+          active.matched++;beep(470+active.matched*38,.03,.018);
+          if(active.matched>=active.text.length)destroyWord(active);else defaultHint();
+        }else wrong();
         return;
       }
       active=null;
       let target=null;
       for(const w of falling)if(w.text[0]===ch&&(!target||w.y>target.y))target=w;
-      if(target){target.matched=1;active=target;beep(520,0.03,0.02)}
-      else miss();
+      if(target){
+        target.matched=1;active=target;beep(520,.04,.025);
+        if(target.text.length===1)destroyWord(target);else defaultHint();
+      }else wrong();
+    }
+    function releaseLock(){
+      if(!active)return;
+      active.matched=0;active=null;streak=0;updateHud();setStatus('Lock released. Choose another first letter.','',1);
     }
     function loseShield(word){
-      falling=falling.filter(w=>w!==word);
-      if(active===word)active=null;
-      if(word.isThunder){
-        beep(200,0.12,0.03);
-        return;
-      }
-      shields--;streak=0;flash=0.5;
-      updateHud();beep(110,0.3,0.05);
-      if(shields<=0){gameOver();return}
-      host('progress',{score,progress:Math.min(99,wordsDestroyed*3),state:{words:wordsDestroyed,bestCombo}});
+      falling=falling.filter(w=>w!==word);if(active===word)active=null;
+      shields--;streak=0;flash=.55;updateHud();setStatus(`${word.text.toUpperCase()} reached the baseline. ${shields} shield${shields===1?'':'s'} left.`,'bad',1.4);
+      beep(110,.25,.05,'sawtooth');
+      if(shields<=0)finish(false);
     }
     function update(dt){
-      elapsed+=dt;
-      if(flash>0)flash=Math.max(0,flash-dt);
-      if(thunderFlash>0)thunderFlash=Math.max(0,thunderFlash-dt);
+      elapsed+=dt;if(elapsed>=RUN_SECONDS){finish(true);return}
+      flash=Math.max(0,flash-dt);if(statusT>0&&statusT<900){statusT-=dt;if(statusT<=0)defaultHint()}
       spawnT-=dt;
-      const interval=Math.max(0.28,1.1-elapsed*0.013-streak*0.008);
       if(spawnT<=0){
         spawn();
-        if(elapsed>20&&Math.random()<Math.min(0.72,0.22+elapsed*.008))spawn();
-        spawnT=interval*(0.82+Math.random()*0.32);
-      }
-      thunderT-=dt;
-      if(thunderT<=0&&elapsed>6){
-        spawnThunder();
-        thunderT=13+Math.random()*7;
+        spawnT=60/currentWpm()*(.9+Math.random()*.2);
       }
       for(const w of [...falling]){
-        /* A locked word freezes — the fall is only a threat while you're
-           deciding what to type next, not while you're mid-word. Thunder
-           words are the exception: they're a pure race, lock or not. */
-        if(w===active&&!w.isThunder)continue;
+        if(w===active)continue;
         w.y+=w.speed*dt;
-        if(w.y+(w.height||24)>=baseY){loseShield(w);if(phase!=='playing')return}
+        if(w.y+w.height*.45>=baseY){loseShield(w);if(phase!=='playing')return}
       }
+      updateHud();
+      if(Math.floor((elapsed-dt)*4)!==Math.floor(elapsed*4))host('progress',{score,progress:Math.min(99,Math.round(elapsed/RUN_SECONDS*100)),state:{words:wordsDestroyed,bestCombo,difficulty:selectedMode,pace:currentWpm()}});
+    }
+    function roundRect(x,y,w,h,r){
+      ctx.beginPath();
+      if(ctx.roundRect)ctx.roundRect(x,y,w,h,r);else ctx.rect(x,y,w,h);
     }
     function draw(){
       ctx.clearRect(0,0,cw,ch);
-      ctx.strokeStyle='#36ff9414';ctx.lineWidth=1;
-      for(let y=30;y<ch;y+=44){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(cw,y);ctx.stroke()}
-      const stormAlpha=Math.min(0.28,0.08+elapsed*0.002);
-      ctx.fillStyle=`rgba(65,255,161,${stormAlpha})`;
-      for(let i=0;i<36;i++){
-        const x=(i*83+elapsed*18)%cw;
-        ctx.fillRect(x,((i*137+elapsed*58)%(ch+80))-80,1,26+(i%5)*5);
+      const bg=ctx.createLinearGradient(0,0,0,ch);bg.addColorStop(0,'#081820');bg.addColorStop(.55,'#071310');bg.addColorStop(1,'#030607');
+      ctx.fillStyle=bg;ctx.fillRect(0,0,cw,ch);
+      ctx.strokeStyle='#4de8ff12';ctx.lineWidth=1;
+      for(let y=34;y<ch;y+=48){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(cw,y);ctx.stroke()}
+      if(!reduced){
+        ctx.fillStyle='#4de8ff2b';
+        for(let i=0;i<24;i++){const x=(i*97+elapsed*14)%cw,y=((i*131+elapsed*46)%(ch+70))-70;ctx.fillRect(x,y,1,18+i%4*5)}
       }
-      ctx.strokeStyle=flash>0?'#effff6':'#41ffa1';
-      ctx.lineWidth=2;
-      if(!reduced){ctx.shadowColor='#41ffa1';ctx.shadowBlur=flash>0?22:10}
-      ctx.beginPath();ctx.moveTo(0,baseY);ctx.lineTo(cw,baseY);ctx.stroke();
-      ctx.shadowBlur=0;
-      ctx.fillStyle='#5f8371';ctx.font='700 10px ui-monospace,monospace';ctx.textAlign='left';
-      ctx.fillText('BASELINE',8,baseY+16);
-      ctx.font=FONT;
-      const pulse=reduced?0:0.5+0.5*Math.sin(elapsed*4.4);
+      ctx.fillStyle='#ff5b8316';ctx.fillRect(0,baseY-14,cw,28);
+      ctx.strokeStyle=flash>0?'#effff6':'#58ffac';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(0,baseY);ctx.lineTo(cw,baseY);ctx.stroke();
+      ctx.fillStyle='#749388';ctx.font='800 10px ui-monospace,monospace';ctx.textAlign='left';ctx.fillText('BASELINE',9,baseY+17);
+      ctx.font=font();ctx.textBaseline='alphabetic';
       for(const w of falling){
-        const isActive=w===active;
-        if(w.isThunder){
-          ctx.fillStyle='#3a2e05';
-          if(!reduced){ctx.shadowColor='#ffe066';ctx.shadowBlur=isActive?18:10}
-          ctx.beginPath();
-          if(ctx.roundRect)ctx.roundRect(w.x-7,w.y-19,w.width+14,27,8);
-          else ctx.rect(w.x-7,w.y-19,w.width+14,27);
-          ctx.fill();ctx.shadowBlur=0;
-          ctx.strokeStyle='#ffe066';ctx.lineWidth=isActive?2:1;ctx.stroke();
-        }else if(isActive){
-          /* Locked and frozen — a calm, breathing glow instead of a static
-             box, so it reads as "held safe" rather than "stuck". */
-          ctx.fillStyle='#0b3424';
-          if(!reduced){ctx.shadowColor='#41ffa1';ctx.shadowBlur=10+pulse*10}
-          ctx.beginPath();
-          if(ctx.roundRect)ctx.roundRect(w.x-10,w.y-20,w.width+20,(w.height||30)+18,12);
-          else ctx.rect(w.x-10,w.y-20,w.width+20,(w.height||30)+18);
-          ctx.fill();ctx.shadowBlur=0;
-          ctx.strokeStyle='#58ffa8';ctx.lineWidth=1;ctx.stroke();
-        }
-        const pre=w.text.slice(0,w.matched),rest=w.text.slice(w.matched);
-        ctx.fillStyle=w.isThunder?'#fff3b0':'#58ffa8';
-        ctx.fillText(pre,w.x,w.y);
-        ctx.fillStyle=w.isThunder?(isActive?'#fff9db':'#ffe066'):(isActive?'#effff6':'#a9c5b7');
-        ctx.fillText(rest,w.x+ctx.measureText(pre).width,w.y);
-        if(w.isThunder){
-          ctx.fillStyle='#ffe066';ctx.font='700 14px ui-monospace,monospace';
-          ctx.fillText('⚡',w.x-16,w.y);
-          ctx.font=FONT;
+        const locked=w===active,urgency=clamp(w.y/baseY,0,1);
+        const color=locked?'#4de8ff':urgency>.78?'#ff8aa5':urgency>.58?'#ffd166':'#a9c5b7';
+        ctx.shadowColor=color;ctx.shadowBlur=reduced?0:(locked?14:urgency>.75?9:3);
+        ctx.fillStyle=locked?'#09212a':urgency>.78?'#291019':'#07110f';
+        roundRect(w.x-10,w.y-cfg.font,w.width+20,w.height,7);ctx.fill();
+        ctx.shadowBlur=0;ctx.strokeStyle=color;ctx.lineWidth=locked?2:1;ctx.stroke();
+        const pre=w.text.slice(0,w.matched).toUpperCase(),rest=w.text.slice(w.matched).toUpperCase();
+        ctx.fillStyle=locked?'#4de8ff':'#58ffac';ctx.fillText(pre,w.x,w.y);
+        ctx.fillStyle=color;ctx.fillText(rest,w.x+ctx.measureText(pre).width,w.y);
+        if(locked){
+          const pct=w.matched/w.text.length;
+          ctx.fillStyle='#15323a';ctx.fillRect(w.x-4,w.y+7,w.width+8,3);
+          ctx.fillStyle='#4de8ff';ctx.fillRect(w.x-4,w.y+7,(w.width+8)*pct,3);
         }
       }
-      if(thunderFlash>0){
-        ctx.fillStyle=`rgba(255,224,102,${thunderFlash*0.12})`;
-        ctx.fillRect(0,0,cw,ch);
-      }
+      if(flash>0){ctx.fillStyle=`rgba(255,91,131,${flash*.13})`;ctx.fillRect(0,0,cw,ch)}
     }
-    function loop(t){
+    function loop(ts){
       requestAnimationFrame(loop);
-      if(paused||phase!=='playing'){last=t;return}
-      const dt=Math.min(0.05,Math.max(0,(t-last)/1000));
-      last=t;
-      update(dt);
-      if(phase==='playing')draw();
+      if(paused||phase!=='playing'){last=ts;return}
+      const dt=Math.min(.05,Math.max(0,(ts-last)/1000));last=ts;update(dt);draw();
     }
     function setPaused(next){
-      if(phase!=='playing')return;
-      paused=next;pauseEl.hidden=!paused;
-      host('paused',{paused});
+      if(phase!=='playing'||paused===next)return;
+      paused=next;pauseEl.hidden=!paused;host('paused',{paused});
     }
     kbd.addEventListener('input',()=>{
       const v=kbd.value.toLowerCase();
@@ -292,31 +287,29 @@
     addEventListener('keydown',e=>{
       if(e.ctrlKey||e.metaKey||e.altKey)return;
       if(e.key==='Escape'){e.preventDefault();setPaused(!paused);return}
+      if(e.key==='Backspace'){e.preventDefault();releaseLock();return}
       if(e.target===kbd)return;
-      const k=e.key.toLowerCase();
-      if(k.length===1&&k>='a'&&k<='z'){e.preventDefault();handleLetter(k)}
+      const k=e.key.toLowerCase();if(k.length===1&&k>='a'&&k<='z'){e.preventDefault();handleLetter(k)}
     });
     hintEl.addEventListener('click',()=>kbd.focus({preventScroll:true}));
     cvs.addEventListener('pointerdown',()=>{if(phase==='playing')kbd.focus({preventScroll:true})});
     addEventListener('resize',fit);
     document.addEventListener('visibilitychange',()=>{if(document.hidden&&phase==='playing'&&!paused)setPaused(true)});
     addEventListener('message',event=>{
-      if(event.data?.source!=='phantomplay-host')return;
-      if(event.data.type==='settings'){
-        if('sound' in event.data)soundOn=!!event.data.sound;
-        if('reducedMotion' in event.data){reduced=!!event.data.reducedMotion;document.body.classList.toggle('reduced',reduced)}
+      const d=event.data;if(d?.source!=='phantomplay-host')return;
+      if(d.type==='settings'){
+        if('sound' in d)soundOn=!!d.sound;
+        if('reducedMotion' in d){reduced=!!d.reducedMotion;document.body.classList.toggle('reduced',reduced)}
       }
-      if(event.data.type==='pause')setPaused(true);
-      if(event.data.type==='resume')setPaused(false);
-      if(event.data.type==='exit')setPaused(true);
-      if(event.data.type==='restart')startRun();
+      if(d.type==='pause')setPaused(true);
+      if(d.type==='resume')setPaused(false);
+      if(d.type==='exit')setPaused(true);
+      if(d.type==='restart')startRun();
     });
-    startEl.querySelector('button').onclick=startRun;
+    document.querySelector('[data-start]').onclick=startRun;
     pauseEl.querySelector('button').onclick=()=>setPaused(false);
-    resultEl.querySelector('button').onclick=startRun;
-    fit();updateHud();
-    requestAnimationFrame(loop);
-    host('ready');
+    resultEl.querySelector('button').onclick=()=>{resultEl.hidden=true;startEl.hidden=false;phase='start'};
+    setMode(selectedMode,false);fit();updateHud();requestAnimationFrame(loop);host('ready');
   </script>
 </body>
 </html>

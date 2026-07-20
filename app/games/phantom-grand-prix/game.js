@@ -1,9 +1,7 @@
-/* Phantom Grand Prix — an original kart racer for PhantomPlay.
- * Top-down arcade physics, drift-charged mini-turbos, catch-up item
- * odds, and local split-screen multiplayer (2 humans + CPU racers
- * filling the rest of the 4-kart grid). No external art assets —
- * everything is canvas-drawn shapes, same approach as the other
- * PhantomPlay titles in this repo.
+/* Phantom Grand Prix - an original cockpit-view racer for PhantomPlay.
+ * Arcade physics, drift-charged mini-turbos, catch-up items, CPU rivals,
+ * and local split-screen remain simulation-driven in world space. The
+ * renderer projects that world into each driver's first-person viewport.
  *
  * Perf discipline: fixed-timestep simulation decoupled from render
  * rate, pooled particles/projectiles (ObjectPool, below), a cached
@@ -62,13 +60,25 @@
   };
 
   // ---------------------------------------------------------------------
-  // Track — closed Catmull-Rom spline through hand-placed control points.
+  // Tracks - closed Catmull-Rom splines with distinct cockpit scenery.
   // ---------------------------------------------------------------------
-  const CONTROL = [
-    { x: 220, y: 1000 }, { x: 220, y: 300 }, { x: 620, y: 90 }, { x: 1400, y: 90 },
-    { x: 1950, y: 280 }, { x: 1520, y: 560 }, { x: 1950, y: 840 }, { x: 1950, y: 1420 },
-    { x: 1500, y: 1820 }, { x: 680, y: 1920 }, { x: 230, y: 1700 },
-  ];
+  const TRACK_DEFS = {
+    ghostlight: {
+      label: "Ghostlight Speedway", scene: "city",
+      skyTop: "#081024", skyBottom: "#4f2c63", ground: "#101a22", road: "#252a31", edge: "#1ef0ff", accent: "#ff3d94",
+      control: [{x:220,y:1000},{x:220,y:300},{x:620,y:90},{x:1400,y:90},{x:1950,y:280},{x:1520,y:560},{x:1950,y:840},{x:1950,y:1420},{x:1500,y:1820},{x:680,y:1920},{x:230,y:1700}]
+    },
+    redwood: {
+      label: "Redwood Run", scene: "forest",
+      skyTop: "#6aa5b1", skyBottom: "#f4ba70", ground: "#173326", road: "#34383a", edge: "#ffd166", accent: "#41ffa1",
+      control: [{x:230,y:1050},{x:160,y:430},{x:520,y:120},{x:1260,y:80},{x:1880,y:310},{x:1600,y:720},{x:1990,y:1190},{x:1750,y:1710},{x:1120,y:1910},{x:470,y:1770},{x:120,y:1410}]
+    },
+    aurora: {
+      label: "Aurora Ring", scene: "ice",
+      skyTop: "#07152f", skyBottom: "#365a87", ground: "#b4d9de", road: "#2a3442", edge: "#7fffd4", accent: "#d6a8ff",
+      control: [{x:300,y:1080},{x:120,y:520},{x:460,y:120},{x:1080,y:210},{x:1680,y:90},{x:2000,y:620},{x:1570,y:980},{x:1980,y:1440},{x:1450,y:1880},{x:790,y:1710},{x:320,y:1910},{x:90,y:1460}]
+    }
+  };
 
   function catmullRom(p0, p1, p2, p3, t) {
     const t2 = t * t, t3 = t2 * t;
@@ -97,20 +107,34 @@
     }
     return { pts, tan, nor, N };
   }
-  const TRACK = buildTrack(CONTROL, 18); // N = 198 samples
-  const AVG_SAMPLE_SPACING = (function () {
+  let selectedTrackId = "ghostlight";
+  let TRACK = buildTrack(TRACK_DEFS[selectedTrackId].control, 18);
+  let AVG_SAMPLE_SPACING = (function () {
     let total = 0;
     for (let i = 0; i < TRACK.N; i++) total += Math.hypot(TRACK.pts[(i + 1) % TRACK.N].x - TRACK.pts[i].x, TRACK.pts[(i + 1) % TRACK.N].y - TRACK.pts[i].y);
     return total / TRACK.N;
   })();
 
-  const TRACK_PATH = (function () {
+  let TRACK_PATH = (function () {
     const p = new Path2D();
     p.moveTo(TRACK.pts[0].x, TRACK.pts[0].y);
     for (let i = 1; i < TRACK.N; i++) p.lineTo(TRACK.pts[i].x, TRACK.pts[i].y);
     p.closePath();
     return p;
   })();
+
+  function rebuildTrack(id) {
+    selectedTrackId = TRACK_DEFS[id] ? id : "ghostlight";
+    TRACK = buildTrack(TRACK_DEFS[selectedTrackId].control, 18);
+    let total = 0;
+    for (let i = 0; i < TRACK.N; i++) total += Math.hypot(TRACK.pts[(i + 1) % TRACK.N].x - TRACK.pts[i].x, TRACK.pts[(i + 1) % TRACK.N].y - TRACK.pts[i].y);
+    AVG_SAMPLE_SPACING = total / TRACK.N;
+    const path = new Path2D();
+    path.moveTo(TRACK.pts[0].x, TRACK.pts[0].y);
+    for (let i = 1; i < TRACK.N; i++) path.lineTo(TRACK.pts[i].x, TRACK.pts[i].y);
+    path.closePath();
+    TRACK_PATH = path;
+  }
 
   function makeItemBoxes() {
     const boxes = [];
@@ -177,7 +201,14 @@
   // ---------------------------------------------------------------------
   // State + kart factory
   // ---------------------------------------------------------------------
-  const state = { mode: null, karts: [], boxes: [], hazards: [], bolts: [], particles: [], phase: "menu", countdownT: 0, raceT: 0, finishOrder: [] };
+  const state = { mode: null, trackId: selectedTrackId, karts: [], boxes: [], hazards: [], bolts: [], particles: [], phase: "title", countdownT: 0, raceT: 0, finishOrder: [] };
+  let career = { races: 0, wins: 0, bestPlace: 0, selectedTrack: "ghostlight" };
+  try {
+    const stored = JSON.parse(localStorage.getItem("phantomGrandPrix.v2") || "null");
+    if (stored && typeof stored === "object") career = Object.assign(career, stored);
+  } catch (_) {}
+  if (TRACK_DEFS[career.selectedTrack]) { selectedTrackId = career.selectedTrack; rebuildTrack(selectedTrackId); }
+  function saveCareer() { try { localStorage.setItem("phantomGrandPrix.v2", JSON.stringify(career)); } catch (_) {} }
 
   function makeKart(id, name, color, human, keys, slot) {
     const lateral = slot % 2 === 0 ? -70 : 70;
@@ -200,12 +231,14 @@
       finished: false, place: 0,
       aiOffset: human ? 0 : Math.random() * 80 - 40,
       aiDecisionT: Math.random() * 0.4,
-      _offTrack: false, _itemKeyWasDown: false, _wallT: 0,
+      _offTrack: false, _itemKeyWasDown: false, _wallT: 0, _reportedLap: 0,
     };
   }
 
   function startRace(mode) {
+    rebuildTrack(selectedTrackId);
     state.mode = mode;
+    state.trackId = selectedTrackId;
     state.boxes = makeItemBoxes();
     state.hazards = [];
     for (const b of state.bolts) boltPool.release(b);
@@ -224,7 +257,7 @@
          { name: "Nyra", human: false, color: COLORS.cpu2 }];
     state.karts = roster.map((r, i) => makeKart(i, r.name, r.color, r.human, r.keys || null, i));
     state.phase = "countdown";
-    state.countdownT = 3.999;
+    state.countdownT = 3.15;
     state.raceT = 0;
     finishReported = false;
   }
@@ -233,11 +266,18 @@
   // Input
   // ---------------------------------------------------------------------
   const pressed = new Set();
+  const touchInput = { left: false, right: false, gas: false, brake: false, drift: false };
+  let reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   // Per-viewport camera mode: false = north-up follow (default), true =
   // rotate-with-car. Index 0 = P1 viewport, 1 = P2 viewport.
   const camRotate = [false, false];
   window.addEventListener("keydown", (e) => {
     if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space", "Slash", "Enter"].includes(e.code)) e.preventDefault();
+    if (e.code === "Escape" && !e.repeat && state.phase !== "title" && state.phase !== "setup" && state.phase !== "finished") {
+      e.preventDefault();
+      setHostPaused(!hostPaused);
+      return;
+    }
     if (!e.repeat) {
       if (e.code === "KeyC") camRotate[0] = !camRotate[0];
       else if (e.code === "Period") camRotate[1] = !camRotate[1];
@@ -252,6 +292,11 @@
     kart.inputThrottle = (keyIsDown(k.up) ? 1 : 0) - (keyIsDown(k.down) ? 1 : 0);
     kart.inputSteer = (keyIsDown(k.right) ? 1 : 0) - (keyIsDown(k.left) ? 1 : 0);
     kart.inputDrift = keyIsDown(k.drift) || (k.driftAlt && keyIsDown(k.driftAlt));
+    if (kart.id === 0) {
+      kart.inputThrottle = Math.max(-1, Math.min(1, kart.inputThrottle + (touchInput.gas ? 1 : 0) - (touchInput.brake ? 1 : 0)));
+      kart.inputSteer = Math.max(-1, Math.min(1, kart.inputSteer + (touchInput.right ? 1 : 0) - (touchInput.left ? 1 : 0)));
+      kart.inputDrift = kart.inputDrift || touchInput.drift;
+    }
     const itemDown = keyIsDown(k.item);
     if (itemDown && !kart._itemKeyWasDown) useItem(kart);
     kart._itemKeyWasDown = itemDown;
@@ -487,6 +532,14 @@
     kart.hintIdx = idx;
     kart.unwrapped += delta;
 
+    if (kart.id === 0 && kart.human) {
+      const completedLap = Math.max(0, Math.min(LAPS, Math.floor(kart.unwrapped / TRACK.N)));
+      if (completedLap > kart._reportedLap) {
+        kart._reportedLap = completedLap;
+        host("progress", { progress: Math.round(completedLap / LAPS * 100), score: Math.max(0, 5 - (kart.rank || 4)) * 100, state: raceState() });
+      }
+    }
+
     if (!kart.finished && kart.unwrapped >= LAPS * TRACK.N) {
       kart.finished = true;
       kart.place = state.finishOrder.length + 1;
@@ -631,7 +684,17 @@
     if (finishReported) return;
     finishReported = true;
     const you = state.karts.find((k) => k.human);
-    host("complete", { progress: 100, score: you ? Math.max(0, 5 - (you.place || 5)) * 100 : undefined, state: { place: you?.place, standings: computeStandings().map((k) => ({ name: k.name, rank: k.rank, human: k.human })) } });
+    career.races++;
+    if (you?.place === 1) career.wins++;
+    if (you?.place && (!career.bestPlace || you.place < career.bestPlace)) career.bestPlace = you.place;
+    career.selectedTrack = selectedTrackId;
+    saveCareer();
+    host("complete", { progress: 100, score: you ? Math.max(0, 5 - (you.place || 5)) * 100 : undefined, state: raceState() });
+  }
+
+  function raceState() {
+    const you = state.karts.find((k) => k.human);
+    return { v: 2, track: state.trackId, mode: state.mode, place: you?.place || you?.rank, career, standings: computeStandings().map((k) => ({ name: k.name, rank: k.rank, human: k.human })) };
   }
 
   // ---------------------------------------------------------------------
@@ -1129,10 +1192,170 @@
     drawViewportHUD(vx, vy, vw, vh, cameraKart);
   }
 
+  // ---------------------------------------------------------------------
+  // Cockpit projection renderer. Physics remains on the 2D spline; these
+  // functions treat the active kart as a camera and perspective-project the
+  // road, scenery, pickups, hazards, and rivals into its windshield.
+  // ---------------------------------------------------------------------
+  function quad(a, b, c, d, fill) {
+    ctx.fillStyle = fill;
+    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.lineTo(c.x, c.y); ctx.lineTo(d.x, d.y); ctx.closePath(); ctx.fill();
+  }
+
+  function cameraProjection(kart, x, y, vw, vh, horizon) {
+    const a = kart.angle + kart.visYaw * 0.22;
+    const ca = Math.cos(a), sa = Math.sin(a);
+    const dx = x - kart.x, dy = y - kart.y;
+    const forward = dx * ca + dy * sa;
+    if (forward < 24) return null;
+    const side = -dx * sa + dy * ca;
+    const focal = Math.min(vw * 1.05, vh * 1.85);
+    return { x: vw / 2 + side / forward * focal, y: horizon + 78 / forward * focal, scale: focal / forward, forward };
+  }
+
+  function projectedRoadSample(kart, idx, vw, vh, horizon) {
+    const p = TRACK.pts[idx], n = TRACK.nor[idx];
+    const l = cameraProjection(kart, p.x - n.x * TRACK_WIDTH / 2, p.y - n.y * TRACK_WIDTH / 2, vw, vh, horizon);
+    const r = cameraProjection(kart, p.x + n.x * TRACK_WIDTH / 2, p.y + n.y * TRACK_WIDTH / 2, vw, vh, horizon);
+    if (!l || !r) return null;
+    return { l: { x: l.x, y: Math.min(vh * 1.16, l.y) }, r: { x: r.x, y: Math.min(vh * 1.16, r.y) }, idx, forward: (l.forward + r.forward) / 2 };
+  }
+
+  function drawProjectedRoad(kart, vw, vh, horizon, theme) {
+    const center = TRACK.pts[kart.hintIdx], normal = TRACK.nor[kart.hintIdx];
+    const lateral = (kart.x - center.x) * normal.x + (kart.y - center.y) * normal.y;
+    const nearCenter = vw / 2 - lateral / (TRACK_WIDTH / 2) * vw * 0.31;
+    const samples = [{ l: { x: nearCenter - vw * 0.63, y: vh * 1.08 }, r: { x: nearCenter + vw * 0.63, y: vh * 1.08 }, idx: kart.hintIdx, forward: 1 }];
+    for (let step = 3; step <= 48; step += 2) {
+      const idx = (kart.hintIdx + step) % TRACK.N;
+      const sample = projectedRoadSample(kart, idx, vw, vh, horizon);
+      if (sample && sample.forward < 1700 && sample.l.x < vw * 2.5 && sample.r.x > -vw * 1.5) samples.push(sample);
+    }
+    for (let i = samples.length - 1; i > 0; i--) {
+      const far = samples[i], near = samples[i - 1];
+      const fw = Math.abs(far.r.x - far.l.x), nw = Math.abs(near.r.x - near.l.x);
+      const stripe = ((Math.floor(far.idx / 3) & 1) === 0) ? theme.edge : "#e9f2ed";
+      quad({x:far.l.x-fw*.1,y:far.l.y},{x:far.r.x+fw*.1,y:far.r.y},{x:near.r.x+nw*.1,y:near.r.y},{x:near.l.x-nw*.1,y:near.l.y},stripe);
+      const roadShade = (Math.floor(far.idx / 4) & 1) ? theme.road : shadeColor(theme.road, .045);
+      quad(far.l, far.r, near.r, near.l, roadShade);
+      if ((Math.floor(far.idx / 4) & 1) === 0) {
+        const fc = (far.l.x + far.r.x) / 2, nc = (near.l.x + near.r.x) / 2;
+        const fLine = Math.max(1, fw * .012), nLine = Math.max(2, nw * .012);
+        quad({x:fc-fLine,y:far.l.y},{x:fc+fLine,y:far.r.y},{x:nc+nLine,y:near.r.y},{x:nc-nLine,y:near.l.y},"rgba(255,255,255,.5)");
+      }
+    }
+    return samples;
+  }
+
+  function drawBillboard(scene, p, side, seed, theme, vh) {
+    const s = Math.max(.12, Math.min(2.2, p.scale));
+    const base = Math.min(vh * 1.04, p.y);
+    ctx.save(); ctx.translate(p.x, base);
+    if (scene === "forest") {
+      const h = 105 * s + (seed % 3) * 12 * s;
+      ctx.fillStyle = "#4b2f24"; ctx.fillRect(-6*s, -h*.58, 12*s, h*.58);
+      ctx.fillStyle = seed % 2 ? "#174f39" : "#236447";
+      ctx.beginPath(); ctx.moveTo(0,-h); ctx.lineTo(-32*s,-h*.35); ctx.lineTo(32*s,-h*.35); ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(0,-h*.78); ctx.lineTo(-38*s,-h*.16); ctx.lineTo(38*s,-h*.16); ctx.closePath(); ctx.fill();
+    } else if (scene === "ice") {
+      const h = (70 + seed % 4 * 17) * s;
+      const ice = ctx.createLinearGradient(-20*s,-h,20*s,0); ice.addColorStop(0,"#ecffff"); ice.addColorStop(1,"#70b8d0");
+      quad({x:-25*s,y:0},{x:0,y:-h},{x:19*s,y:0},{x:7*s,y:-h*.2},ice);
+    } else {
+      const h = (70 + seed % 5 * 18) * s, w = (35 + seed % 3 * 10) * s;
+      ctx.fillStyle = seed % 2 ? "#111a29" : "#182033"; ctx.fillRect(-w/2,-h,w,h);
+      ctx.fillStyle = seed % 2 ? theme.accent : theme.edge;
+      for (let y = -h + 12*s; y < -8*s; y += 15*s) for (let x = -w/2 + 7*s; x < w/2 - 3*s; x += 12*s) ctx.fillRect(x,y,4*s,5*s);
+    }
+    ctx.restore();
+  }
+
+  function drawScenery(kart, vw, vh, horizon, theme) {
+    const objects = [];
+    for (let step = 8; step <= 46; step += 4) {
+      const idx = (kart.hintIdx + step) % TRACK.N, point = TRACK.pts[idx], normal = TRACK.nor[idx];
+      for (const side of [-1, 1]) {
+        if (((idx + side + 3) % 3) === 0 && theme.scene === "city") continue;
+        const off = TRACK_WIDTH / 2 + 95 + (idx % 4) * 28;
+        const p = cameraProjection(kart, point.x + normal.x * off * side, point.y + normal.y * off * side, vw, vh, horizon);
+        if (p && p.x > -vw*.3 && p.x < vw*1.3) objects.push({p,side,idx});
+      }
+    }
+    objects.sort((a,b)=>b.p.forward-a.p.forward);
+    for (const o of objects) drawBillboard(theme.scene,o.p,o.side,o.idx,theme,vh);
+  }
+
+  function drawProjectedPickup(kart, box, vw, vh, horizon) {
+    if (!box.active) return;
+    const p = cameraProjection(kart,box.x,box.y,vw,vh,horizon); if (!p || p.x < -80 || p.x > vw+80) return;
+    const s = Math.max(5,Math.min(34,22*p.scale)); ctx.save();ctx.translate(p.x,p.y-s*.55);ctx.rotate(box.spin*.35);ctx.fillStyle="#ffd166";ctx.fillRect(-s/2,-s/2,s,s);ctx.strokeStyle="#fff";ctx.lineWidth=2;ctx.strokeRect(-s/2,-s/2,s,s);ctx.rotate(-box.spin*.35);ctx.fillStyle="#15110a";ctx.font=`900 ${Math.max(8,s*.55)}px sans-serif`;ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText("?",0,1);ctx.restore();
+  }
+
+  function drawProjectedRival(cameraKart, rival, vw, vh, horizon) {
+    const p = cameraProjection(cameraKart,rival.x,rival.y,vw,vh,horizon); if (!p || p.x < -vw*.3 || p.x > vw*1.3) return;
+    const s = Math.max(.22,Math.min(2.8,p.scale)), w=42*s,h=24*s;
+    ctx.save();ctx.translate(p.x,p.y);ctx.shadowColor=rival.boostTimer>0?"#ffd166":rival.color;ctx.shadowBlur=rival.boostTimer>0?18:7;
+    ctx.fillStyle="#090b0f";ctx.fillRect(-w*.58,-h*.12,w*.18,h*.8);ctx.fillRect(w*.4,-h*.12,w*.18,h*.8);
+    ctx.fillStyle=rival.color;ctx.beginPath();ctx.moveTo(-w*.48,h*.5);ctx.lineTo(-w*.34,-h*.48);ctx.lineTo(w*.34,-h*.48);ctx.lineTo(w*.48,h*.5);ctx.closePath();ctx.fill();
+    ctx.fillStyle=rival.accent;ctx.fillRect(-w*.38,-h*.32,w*.76,h*.18);ctx.fillStyle="#ff4d59";ctx.fillRect(-w*.31,h*.25,w*.18,h*.12);ctx.fillRect(w*.13,h*.25,w*.18,h*.12);
+    if(rival.shielded){ctx.strokeStyle="#41ffa1";ctx.lineWidth=3;ctx.beginPath();ctx.ellipse(0,0,w*.68,h,0,0,Math.PI*2);ctx.stroke();}
+    ctx.shadowBlur=0;ctx.fillStyle="#fff";ctx.font=`800 ${Math.max(8,10*s)}px ui-monospace,monospace`;ctx.textAlign="center";ctx.fillText(rival.name,0,-h*.72);ctx.restore();
+  }
+
+  function drawRaceObjects(kart, vw, vh, horizon) {
+    for (const box of state.boxes) drawProjectedPickup(kart,box,vw,vh,horizon);
+    for (const hazard of state.hazards) {
+      const p=cameraProjection(kart,hazard.x,hazard.y,vw,vh,horizon);if(!p)continue;const s=Math.max(5,Math.min(70,38*p.scale));ctx.fillStyle="rgba(161,83,235,.72)";ctx.beginPath();ctx.ellipse(p.x,p.y,s,s*.22,0,0,Math.PI*2);ctx.fill();
+    }
+    const rivals=state.karts.filter(k=>k!==kart&&!k.finished).map(k=>({k,p:cameraProjection(kart,k.x,k.y,vw,vh,horizon)})).filter(o=>o.p).sort((a,b)=>b.p.forward-a.p.forward);
+    for(const o of rivals)drawProjectedRival(kart,o.k,vw,vh,horizon);
+    for(const bolt of state.bolts){const p=cameraProjection(kart,bolt.x,bolt.y,vw,vh,horizon);if(!p)continue;ctx.fillStyle="#ff5c74";ctx.beginPath();ctx.arc(p.x,p.y,Math.max(3,8*p.scale),0,Math.PI*2);ctx.fill();}
+  }
+
+  function drawRearMirror(kart, vw, vh) {
+    const mw=Math.min(240,vw*.36),mh=Math.min(62,vh*.13),mx=vw/2-mw/2,my=8;
+    ctx.fillStyle="#05080c";ctx.fillRect(mx,my,mw,mh);ctx.strokeStyle="#b7c2c4";ctx.lineWidth=3;ctx.strokeRect(mx,my,mw,mh);ctx.fillStyle="#24394a";ctx.fillRect(mx+4,my+4,mw-8,mh*.45);
+    const behind=state.karts.filter(k=>k!==kart&&!k.finished&&k.unwrapped<kart.unwrapped).sort((a,b)=>b.unwrapped-a.unwrapped)[0];
+    if(behind){const diff=Math.max(1,kart.unwrapped-behind.unwrapped),size=Math.max(8,Math.min(28,38/diff));ctx.fillStyle=behind.color;ctx.fillRect(vw/2-size/2,my+mh-size*.7,size,size*.65);ctx.fillStyle="#fff";ctx.font="700 9px ui-monospace,monospace";ctx.textAlign="center";ctx.fillText(behind.name+"  "+Math.round(diff*AVG_SAMPLE_SPACING/10)+"m",vw/2,my+mh-6);}else{ctx.fillStyle="#93a2a5";ctx.font="700 9px ui-monospace,monospace";ctx.textAlign="center";ctx.fillText("CLEAR",vw/2,my+mh-10);}
+  }
+
+  function drawCockpit(kart, vw, vh, theme) {
+    const dashY=vh*.79, steerX=vw*.5, steerY=vh*.89, wheelR=Math.min(vw,vh)*.105;
+    ctx.fillStyle="#05070a";quad({x:0,y:vh},{x:0,y:dashY},{x:vw*.31,y:dashY-22},{x:vw*.39,y:vh},"#05070a");quad({x:vw,y:vh},{x:vw,y:dashY},{x:vw*.69,y:dashY-22},{x:vw*.61,y:vh},"#05070a");
+    const dash=ctx.createLinearGradient(0,dashY,0,vh);dash.addColorStop(0,"#202831");dash.addColorStop(1,"#07090d");ctx.fillStyle=dash;ctx.beginPath();ctx.moveTo(0,vh);ctx.lineTo(0,dashY);ctx.quadraticCurveTo(vw/2,dashY-45,vw,dashY);ctx.lineTo(vw,vh);ctx.closePath();ctx.fill();
+    ctx.fillStyle=kart.color;ctx.beginPath();ctx.moveTo(vw*.35,vh);ctx.lineTo(vw*.43,dashY-18);ctx.lineTo(vw*.57,dashY-18);ctx.lineTo(vw*.65,vh);ctx.closePath();ctx.fill();ctx.fillStyle=kart.accent;ctx.fillRect(vw*.485,dashY-18,vw*.03,vh-dashY+18);
+    ctx.save();ctx.translate(steerX,steerY);ctx.rotate(kart.visSteer*1.8);ctx.strokeStyle="#11151a";ctx.lineWidth=Math.max(10,wheelR*.2);ctx.beginPath();ctx.arc(0,0,wheelR,0,Math.PI*2);ctx.stroke();ctx.strokeStyle="#818b91";ctx.lineWidth=Math.max(3,wheelR*.055);ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(-wheelR*.72,-wheelR*.55);ctx.moveTo(0,0);ctx.lineTo(wheelR*.72,-wheelR*.55);ctx.moveTo(0,0);ctx.lineTo(0,wheelR*.86);ctx.stroke();ctx.fillStyle="#20262b";ctx.beginPath();ctx.arc(0,0,wheelR*.28,0,Math.PI*2);ctx.fill();ctx.restore();
+    ctx.fillStyle="#20262b";ctx.beginPath();ctx.ellipse(steerX-wheelR*.85,steerY-wheelR*.25,wheelR*.28,wheelR*.18,-.2,0,Math.PI*2);ctx.ellipse(steerX+wheelR*.85,steerY-wheelR*.25,wheelR*.28,wheelR*.18,.2,0,Math.PI*2);ctx.fill();
+    if(kart.boostTimer>0||kart.surgeTimer>0){ctx.strokeStyle=kart.surgeTimer>0?"#ff3d94":"#ffd166";ctx.lineWidth=Math.max(5,vw*.012);ctx.strokeRect(3,3,vw-6,vh-6);}
+  }
+
+  function drawCockpitHud(kart, vw, vh, theme) {
+    const ord=["","1ST","2ND","3RD","4TH"][kart.rank||1],lap=Math.min(LAPS,Math.max(1,Math.floor(kart.unwrapped/TRACK.N)+1));
+    ctx.textBaseline="top";ctx.textAlign="left";ctx.fillStyle="#effff7";ctx.font=`1000 ${Math.max(24,Math.min(42,vh*.09))}px system-ui`;ctx.fillText(ord,14,12);ctx.fillStyle="#b8c9c5";ctx.font=`800 ${Math.max(9,Math.min(13,vh*.027))}px ui-monospace,monospace`;ctx.fillText(`LAP ${lap}/${LAPS}`,16,Math.max(48,vh*.105));ctx.fillText(TRACK_DEFS[state.trackId].label.toUpperCase(),16,Math.max(63,vh*.14));
+    const mph=Math.max(0,Math.round(Math.abs(kart.speed)/MAX_SPEED*168));ctx.textAlign="center";ctx.fillStyle=kart.boostTimer>0?"#ffd166":"#effff7";ctx.font=`1000 ${Math.max(24,Math.min(48,vh*.1))}px ui-monospace,monospace`;ctx.fillText(String(mph),vw/2,vh*.72);ctx.font=`800 ${Math.max(8,Math.min(11,vh*.024))}px ui-monospace,monospace`;ctx.fillStyle="#9cafaf";ctx.fillText("MPH",vw/2,vh*.72+Math.max(32,vh*.09));
+    const ix=vw-74,iy=vh-74;ctx.strokeStyle="#ffffff55";ctx.lineWidth=2;ctx.strokeRect(ix,iy,56,56);if(kart.item){ctx.fillStyle=ITEM_COLORS[kart.item]||"#fff";ctx.fillRect(ix+4,iy+4,48,48);ctx.fillStyle="#090b0f";ctx.font="900 11px ui-monospace,monospace";ctx.textAlign="center";ctx.fillText(ITEM_LABELS[kart.item]||"",ix+28,iy+22);}
+    if(kart.drifting){const meterW=Math.min(180,vw*.32),x=vw/2-meterW/2,y=vh*.68;ctx.fillStyle="#ffffff22";ctx.fillRect(x,y,meterW,8);ctx.fillStyle=kart.driftCharge>=3?"#ffd166":kart.driftCharge>=1.8?"#ff3d94":"#1ef0ff";ctx.fillRect(x,y,meterW*Math.min(1,kart.driftCharge/3),8);ctx.fillStyle="#fff";ctx.font="800 9px ui-monospace,monospace";ctx.textAlign="center";ctx.fillText("DRIFT CHARGE",vw/2,y-14);}
+  }
+
+  function drawSpeedLines(kart, vw, vh, horizon) {
+    if(reducedMotion)return;const speedN=Math.max(0,Math.min(1,(Math.abs(kart.speed)-360)/(MAX_SPEED*.8)));if(speedN<=0)return;ctx.strokeStyle=`rgba(255,255,255,${speedN*.32})`;ctx.lineWidth=1.5;for(let i=0;i<12;i++){const side=i%2?-1:1,startX=vw/2+side*(vw*.2+(i%6)*vw*.06),startY=horizon+(i%4)*vh*.08,len=20+speedN*70;ctx.beginPath();ctx.moveTo(startX,startY);ctx.lineTo(startX+side*len,startY+len*.4);ctx.stroke();}}
+
+  function renderCockpitViewport(vx,vy,vw,vh,kart){
+    const theme=TRACK_DEFS[state.trackId]||TRACK_DEFS.ghostlight,horizon=vh*.37;ctx.save();ctx.beginPath();ctx.rect(vx,vy,vw,vh);ctx.clip();ctx.translate(vx,vy);
+    let sx=0,sy=0;if(!reducedMotion&&kart.shakeT>0){sx=(Math.random()-.5)*kart.shakeMag;sy=(Math.random()-.5)*kart.shakeMag;}ctx.translate(sx,sy);
+    const sky=ctx.createLinearGradient(0,0,0,horizon+vh*.2);sky.addColorStop(0,theme.skyTop);sky.addColorStop(1,theme.skyBottom);ctx.fillStyle=sky;ctx.fillRect(-20,-20,vw+40,horizon+40);ctx.fillStyle=theme.ground;ctx.fillRect(-20,horizon,vw+40,vh-horizon+20);
+    if(theme.scene==="ice"){ctx.fillStyle="#b7f5df33";ctx.beginPath();ctx.moveTo(0,horizon*.45);ctx.quadraticCurveTo(vw*.25,horizon*.08,vw*.52,horizon*.42);ctx.quadraticCurveTo(vw*.75,horizon*.72,vw,horizon*.2);ctx.lineTo(vw,0);ctx.lineTo(0,0);ctx.fill();}
+    const bank=reducedMotion?0:(kart.drifting?kart.inputSteer*.035:kart.inputSteer*.015);ctx.save();ctx.translate(vw/2,vh*.58);ctx.rotate(bank);ctx.translate(-vw/2,-vh*.58);drawScenery(kart,vw,vh,horizon,theme);drawProjectedRoad(kart,vw,vh,horizon,theme);drawRaceObjects(kart,vw,vh,horizon);drawSpeedLines(kart,vw,vh,horizon);ctx.restore();drawRearMirror(kart,vw,vh);drawCockpit(kart,vw,vh,theme);drawCockpitHud(kart,vw,vh,theme);ctx.restore();
+  }
+
+  function drawMenuBackdrop(){
+    const theme=TRACK_DEFS[selectedTrackId]||TRACK_DEFS.ghostlight,w=canvas.width,h=canvas.height,hy=h*.42;const sky=ctx.createLinearGradient(0,0,0,hy);sky.addColorStop(0,theme.skyTop);sky.addColorStop(1,theme.skyBottom);ctx.fillStyle=sky;ctx.fillRect(0,0,w,hy);ctx.fillStyle=theme.ground;ctx.fillRect(0,hy,w,h-hy);quad({x:w*.47,y:hy},{x:w*.53,y:hy},{x:w*.9,y:h},{x:w*.1,y:h},theme.edge);quad({x:w*.475,y:hy},{x:w*.525,y:hy},{x:w*.82,y:h},{x:w*.18,y:h},theme.road);ctx.strokeStyle="#ffffff55";ctx.setLineDash([18,20]);ctx.beginPath();ctx.moveTo(w/2,hy);ctx.lineTo(w/2,h);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle="#05070a";ctx.beginPath();ctx.moveTo(0,h);ctx.lineTo(0,h*.82);ctx.quadraticCurveTo(w/2,h*.75,w,h*.82);ctx.lineTo(w,h);ctx.fill();
+  }
+
   function render(dtReal) {
     resizeIfNeeded();
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    if (state.phase === "menu" || !state.karts.length) return;
+    if (state.phase === "title" || state.phase === "setup" || !state.karts.length) { drawMenuBackdrop(); return; }
     // Visual-only smoothing (steer/drift yaw) for every drawn kart.
     const vf = Math.min(1, dtReal * 10);
     for (const k of state.karts) {
@@ -1142,14 +1365,11 @@
     const humans = state.karts.filter((k) => k.human);
     if (humans.length <= 1) {
       const cam = humans[0] || state.karts[0];
-      updateCamera(cam, dtReal, canvas.width, canvas.height, camRotate[0]);
-      renderViewport(0, 0, canvas.width, canvas.height, cam);
+      renderCockpitViewport(0,0,canvas.width,canvas.height,cam);
     } else {
       const h = canvas.height / 2;
-      updateCamera(humans[0], dtReal, canvas.width, h, camRotate[0]);
-      updateCamera(humans[1], dtReal, canvas.width, h, camRotate[1]);
-      renderViewport(0, 0, canvas.width, h, humans[0]);
-      renderViewport(0, h, canvas.width, h, humans[1]);
+      renderCockpitViewport(0,0,canvas.width,h,humans[0]);
+      renderCockpitViewport(0,h,canvas.width,h,humans[1]);
       ctx.fillStyle = "#05030a"; ctx.fillRect(0, h - 2, canvas.width, 4);
     }
   }
@@ -1157,12 +1377,15 @@
   // ---------------------------------------------------------------------
   // DOM wiring
   // ---------------------------------------------------------------------
+  const titleOverlay = document.querySelector("[data-title-overlay]");
   const startOverlay = document.querySelector("[data-start-overlay]");
   const countdownOverlay = document.querySelector("[data-countdown-overlay]");
   const countdownNumEl = document.querySelector("[data-countdown-num]");
   const finishOverlay = document.querySelector("[data-finish-overlay]");
   const pauseOverlay = document.querySelector("[data-pause-overlay]");
   const standingsEl = document.querySelector("[data-standings]");
+  const touchControls = document.querySelector("[data-touch-controls]");
+  const finishTrackEl = document.querySelector("[data-finish-track]");
   let hostPaused = false;
   let finishReported = false;
 
@@ -1183,12 +1406,13 @@
         <span class="standing-name">${k.name}${k.human ? " (you)" : ""}</span>
       </div>`;
     }).join("");
+    finishTrackEl.textContent = TRACK_DEFS[state.trackId].label + " | " + LAPS + " laps";
   }
 
   function updateDomOverlays() {
     if (state.phase === "countdown") {
       countdownOverlay.hidden = false;
-      const n = Math.ceil(state.countdownT);
+      const n = Math.min(3,Math.ceil(state.countdownT));
       countdownNumEl.textContent = n > 0 ? String(n) : "GO!";
       countdownNumEl.classList.toggle("go", n <= 0);
     } else {
@@ -1199,13 +1423,32 @@
     } else {
       finishOverlay.hidden = true;
     }
+    touchControls.hidden = !((state.phase === "racing" || state.phase === "countdown") && state.mode === "1p" && !hostPaused);
   }
 
+  document.querySelector("[data-garage-btn]").addEventListener("click", () => { titleOverlay.hidden = true; startOverlay.hidden = false; state.phase = "setup"; });
+  document.querySelector("[data-title-btn]").addEventListener("click", () => { startOverlay.hidden = true; titleOverlay.hidden = false; state.phase = "title"; });
+  document.querySelectorAll("[data-track]").forEach((btn) => {
+    btn.setAttribute("aria-pressed",String(btn.dataset.track===selectedTrackId));
+    btn.addEventListener("click", () => {
+      selectedTrackId = TRACK_DEFS[btn.dataset.track] ? btn.dataset.track : "ghostlight";
+      career.selectedTrack = selectedTrackId; saveCareer(); rebuildTrack(selectedTrackId);
+      document.querySelectorAll("[data-track]").forEach((b) => b.setAttribute("aria-pressed", String(b === btn)));
+    });
+  });
   document.querySelectorAll("[data-mode]").forEach((btn) => {
     btn.addEventListener("click", () => { startOverlay.hidden = true; startRace(btn.dataset.mode); });
   });
   document.querySelector("[data-restart-btn]").addEventListener("click", () => { finishOverlay.hidden = true; startRace(state.mode); });
-  document.querySelector("[data-menu-btn]").addEventListener("click", () => { finishOverlay.hidden = true; state.phase = "menu"; startOverlay.hidden = false; });
+  document.querySelector("[data-menu-btn]").addEventListener("click", () => { finishOverlay.hidden = true; state.phase = "setup"; startOverlay.hidden = false; });
+  document.querySelector("[data-resume-btn]").addEventListener("click", () => setHostPaused(false));
+
+  document.querySelectorAll("[data-touch]").forEach((btn) => {
+    const action = btn.dataset.touch;
+    const on = (e) => { e.preventDefault(); if (action === "item") { const kart=state.karts[0]; if(kart) useItem(kart); return; } touchInput[action] = true; btn.setPointerCapture?.(e.pointerId); };
+    const off = (e) => { e.preventDefault(); if (action !== "item") touchInput[action] = false; };
+    btn.addEventListener("pointerdown", on); btn.addEventListener("pointerup", off); btn.addEventListener("pointercancel", off); btn.addEventListener("pointerleave", off);
+  });
 
   // ---------------------------------------------------------------------
   // Main loop — fixed timestep simulation, rAF-driven render.
@@ -1232,16 +1475,24 @@
   window.addEventListener("message", (evt) => {
     const d = evt.data;
     if (!d || d.source !== "phantomplay-host") return;
-    if (d.type === "settings") gpEnabled = !!d.gamepad;
+    if (d.type === "settings") { gpEnabled = !!d.gamepad; reducedMotion = !!d.reducedMotion || window.matchMedia("(prefers-reduced-motion: reduce)").matches; }
     else if (d.type === "pause") setHostPaused(true);
     else if (d.type === "resume") setHostPaused(false);
     else if (d.type === "restart") {
       finishOverlay.hidden = true;
       setHostPaused(false);
       if (state.mode) startRace(state.mode);
-      else { state.phase = "menu"; startOverlay.hidden = false; }
+      else { state.phase = "title"; titleOverlay.hidden = false; startOverlay.hidden = true; }
     } else if (d.type === "exit") {
       setHostPaused(true);
+    } else if (d.type === "restore" || d.type === "load-state") {
+      const incoming=d.state;if(incoming&&typeof incoming==="object"){
+        if(incoming.career&&typeof incoming.career==="object")career=Object.assign(career,incoming.career);
+        const track=incoming.track||incoming.career?.selectedTrack;if(TRACK_DEFS[track]){selectedTrackId=track;rebuildTrack(track);document.querySelectorAll("[data-track]").forEach((b)=>b.setAttribute("aria-pressed",String(b.dataset.track===track)));}
+        saveCareer();
+      }
+    } else if (d.type === "save-state") {
+      host("progress",{progress:state.karts[0]?Math.max(0,Math.min(99,Math.round(state.karts[0].unwrapped/(TRACK.N*LAPS)*100))):0,score:state.karts[0]?Math.max(0,5-(state.karts[0].rank||4))*100:0,state:raceState()});
     }
   });
   host("ready");

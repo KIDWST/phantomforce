@@ -2,63 +2,62 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; media-src 'none'; frame-src 'none'">
-<title>Phantom Grand Prix — PhantomPlay</title>
-<link rel="stylesheet" href="style.css" />
+<title>Phantom Grand Prix - PhantomPlay</title>
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
-<canvas id="stage"></canvas>
+<canvas id="stage" aria-label="First-person Phantom Grand Prix race view"></canvas>
 
-<div class="overlay" data-start-overlay>
-  <div class="panel">
-    <h2>Phantom Grand Prix</h2>
-    <p>A kart race across a full circuit — drift for mini-turbos, grab item boxes, and take three laps of Ghostlight Speedway. Catch-up odds mean anyone can win off the last corner.</p>
-
-    <div class="mode-choice">
-      <button class="mode-btn" data-mode="1p">
-        <strong>1 Player</strong>
-        <span>You vs. 3 Phantom racers</span>
-      </button>
-      <button class="mode-btn" data-mode="2p">
-        <strong>2 Player — Split Screen</strong>
-        <span>You + a friend vs. 2 Phantom racers</span>
-      </button>
-    </div>
-
-    <div class="controls-grid">
-      <div>
-        <b>Player 1</b>
-        <span><kbd>W</kbd> gas · <kbd>S</kbd> brake · <kbd>A</kbd>/<kbd>D</kbd> steer</span>
-        <span><kbd>Shift</kbd> drift · <kbd>Space</kbd> use item · <kbd>C</kbd> camera</span>
-      </div>
-      <div>
-        <b>Player 2</b>
-        <span><kbd>↑</kbd> gas · <kbd>↓</kbd> brake · <kbd>←</kbd>/<kbd>→</kbd> steer</span>
-        <span><kbd>/</kbd> drift · <kbd>Enter</kbd> use item · <kbd>.</kbd> camera</span>
-      </div>
-    </div>
+<section class="overlay title-overlay" data-title-overlay>
+  <div class="title-lockup">
+    <p class="kicker">PhantomPlay Motorsport</p>
+    <h1>Phantom<br><span>Grand Prix</span></h1>
+    <p>Drift the impossible line. Fire the boost. Take the flag.</p>
+    <button class="btn-primary" data-garage-btn>Enter Garage</button>
   </div>
-</div>
+</section>
 
-<div class="overlay" data-countdown-overlay hidden>
-  <div class="countdown-num" data-countdown-num>3</div>
-</div>
+<section class="overlay" data-start-overlay hidden>
+  <div class="panel setup-panel">
+    <p class="kicker">Race Setup</p>
+    <h2>Choose Your Circuit</h2>
+    <div class="track-choice">
+      <button class="track-btn" data-track="ghostlight" aria-pressed="true"><strong>Ghostlight</strong><span>Night city</span></button>
+      <button class="track-btn" data-track="redwood" aria-pressed="false"><strong>Redwood Run</strong><span>Forest dawn</span></button>
+      <button class="track-btn" data-track="aurora" aria-pressed="false"><strong>Aurora Ring</strong><span>Polar sky</span></button>
+    </div>
+    <h2>Starting Grid</h2>
+    <div class="mode-choice">
+      <button class="mode-btn" data-mode="1p"><strong>Solo Grand Prix</strong><span>1 driver + 3 CPU rivals</span></button>
+      <button class="mode-btn" data-mode="2p"><strong>Local Split Race</strong><span>2 drivers + 2 CPU rivals</span></button>
+    </div>
+    <div class="controls-grid">
+      <div><b>Driver 1</b><span>WASD / Shift / Space</span></div>
+      <div><b>Driver 2</b><span>Arrows / Slash / Enter</span></div>
+    </div>
+    <button class="btn-ghost" data-title-btn>Back</button>
+  </div>
+</section>
+
+<div class="overlay countdown-overlay" data-countdown-overlay hidden><div class="countdown-num" data-countdown-num>3</div></div>
 
 <div class="overlay" data-pause-overlay hidden>
-  <div class="panel">
-    <h2>Paused</h2>
-    <p>Waiting to resume…</p>
-  </div>
+  <div class="panel"><p class="kicker">Yellow Flag</p><h2>Race Paused</h2><button class="btn-primary" data-resume-btn>Resume</button></div>
 </div>
 
-<div class="overlay" data-finish-overlay hidden>
-  <div class="panel">
-    <h2>Race Finished</h2>
+<section class="overlay" data-finish-overlay hidden>
+  <div class="panel results-panel">
+    <p class="kicker">Official Classification</p><h2>Race Finished</h2><p data-finish-track></p>
     <div class="standings" data-standings></div>
-    <button class="btn-primary" data-restart-btn>Race Again</button>
-    <button class="btn-ghost" data-menu-btn>Change Mode</button>
+    <button class="btn-primary" data-restart-btn>Race Again</button><button class="btn-ghost" data-menu-btn>Change Setup</button>
   </div>
+</section>
+
+<div class="touch-controls" data-touch-controls hidden>
+  <div class="touch-steer"><button data-touch="left" aria-label="Steer left">&#9664;</button><button data-touch="right" aria-label="Steer right">&#9654;</button></div>
+  <div class="touch-actions"><button data-touch="drift">Drift</button><button class="gas" data-touch="gas">Gas</button><button data-touch="item">Item</button></div>
 </div>
 
 <script src="game.js"></script>
