@@ -1,4 +1,4 @@
-import { currentTenantId, friendlyBackendError, session } from "./store.js?v=phantom-live-20260719-54";
+import { currentTenantId, friendlyBackendError, session } from "./store.js?v=phantom-live-20260719-56";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 const CATEGORIES = ["All", "AI Tool", "Agent", "CLI", "Library", "Extension", "Model", "Template", "Dataset"];
@@ -108,7 +108,9 @@ function productCard(product) {
   const buyUrl = safeHref(product.buyUrl);
   const isBuying = ui.buyingProductId === product.id;
   const available = product.status === "available";
+  const imageUrl = String(product.imageUrl || "").trim();
   return `<article class="ps-product ${product.featured ? "is-featured" : ""}">
+    ${imageUrl ? `<div class="ps-product-media"><img src="${esc(imageUrl)}" alt="${esc(product.name)} screenshot" loading="lazy" /></div>` : ""}
     <header>
       <div>
         <p class="ps-kicker">${esc(product.category)} / ${esc(product.delivery || "Digital delivery")}</p>
