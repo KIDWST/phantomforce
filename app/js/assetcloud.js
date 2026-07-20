@@ -5,12 +5,12 @@
    decorative button. Renders only for database-auth sessions with an active
    org (assetsAvailable) — otherwise the surface shows a clear sign-in note. */
 
-import { ctx } from "./store.js?v=phantom-live-20260720-1";
+import { ctx } from "./store.js?v=phantom-live-20260720-2";
 import {
   assetsAvailable, canManageActiveOrg, uploadAsset, listAssets, fetchAsset,
   patchAsset, assetLifecycle, deleteAsset, restoreAssetVersion,
   listAssetFolders, createAssetFolder, assetBlobUrl, saveToAssetCloud,
-} from "./orgs.js?v=phantom-live-20260720-1";
+} from "./orgs.js?v=phantom-live-20260720-2";
 
 export { saveToAssetCloud };
 
