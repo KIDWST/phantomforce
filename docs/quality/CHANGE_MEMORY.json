@@ -71,8 +71,8 @@
         },
         {
           "file": "ops/admin-live/Test-LiveAdminSource.ps1",
-          "pattern": "Resurrection guard[\\s\\S]*Dashboard repository environment override is empty or canonical[\\s\\S]*Recurring admin sync launches the tracked canonical hidden runner[\\s\\S]*Legacy login fallback watcher is absent or canonical[\\s\\S]*No stale admin watcher process can reclaim the live ports",
-          "description": "The strict doctor rejects dormant helpers or running watchers that can restore a stale worktree after an apparently successful deploy."
+          "pattern": "Resurrection guard[\\s\\S]*Dashboard repository environment override is empty or canonical[\\s\\S]*PhantomForce Admin Live Server[\\s\\S]*PhantomForce Hermes API[\\s\\S]*Fallback login/hourly watcher is canonical[\\s\\S]*No stale admin watcher process can reclaim the live ports",
+          "description": "The strict doctor requires a canonical hidden startup/hourly repair path and rejects stale watchers that can restore an old worktree."
         },
         {
           "file": "ops/admin-live/Sync-AdminMain.ps1",
