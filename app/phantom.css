@@ -2963,28 +2963,41 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
    a wrapped user pill reads as broken, not responsive. Everything left of
    the clock is allowed to shrink/truncate; clock, notifications, and the
    user menu are pinned and never compress. */
+/* Three-zone topbar: left (workspace + status), center (search/command),
+   right (media chip · clock · notifications · user). A grid keeps the search
+   bar optically centred regardless of how wide the flanking clusters get,
+   and each zone can shrink independently before anything collides. */
 .topbar2 {
-  display: flex; align-items: center; gap: 14px; flex-wrap: nowrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 560px) minmax(0, 1fr);
+  align-items: center; gap: clamp(12px, 1.6vw, 22px);
   width: 100%; min-width: 0;
-  padding: 14px clamp(16px, 2vw, 26px); border-bottom: 1px solid var(--line);
+  padding: 12px clamp(16px, 2vw, 26px); border-bottom: 1px solid var(--line);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.3));
   position: sticky; top: 0; z-index: 20;
   -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
 }
+.topbar-zone { display: flex; align-items: center; min-width: 0; gap: 10px; }
+.topbar-left { justify-content: flex-start; }
+.topbar-center { justify-content: center; }
+.topbar-right { justify-content: flex-end; }
 /* Browser zoom changes the effective CSS width, so every left-side topbar
    group must be allowed to shrink before it crashes into clock/user controls. */
-.status-pills { display: flex; gap: 10px; flex-wrap: nowrap; align-items: center; min-width: 0; flex: 1 1 0; }
-.topbar-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 10px;
-  flex: 0 1 auto;
-  min-width: 0;
-  margin-left: auto;
+.status-pills { display: flex; gap: 10px; flex-wrap: nowrap; align-items: center; min-width: 0; flex: 0 1 auto; }
+.topbar-center .cmdk-open {
+  flex: 1 1 auto; width: 100%; max-width: 560px;
+  padding: 10px 12px 10px 15px; border-radius: 13px;
 }
-.topbar-actions .cmdk-open { flex: 0 1 240px; }
-.topbar-actions .topbar-clock { margin-left: clamp(6px, 0.8vw, 18px); }
+.topbar-center .cmdk-open .cmdk-open-label { font-size: 13.5px; }
+/* The centred search is a real bar at every desktop/tablet width, so keep its
+   placeholder visible — override the legacy icon-collapse rules that hid the
+   label when the search lived crammed in the right cluster. Below 901px the
+   bar folds to a 42px icon (mobile block) and the label hides again. */
+@media (min-width: 901px) {
+  .topbar-center .cmdk-open { flex: 1 1 auto; width: 100%; padding: 10px 12px 10px 15px; }
+  .topbar-center .cmdk-open .cmdk-open-label { display: block; }
+}
+.topbar-right .topbar-clock { margin-left: clamp(4px, 0.6vw, 12px); }
 .pill { display: flex; flex-direction: column; gap: 2px; padding: 7px 13px; border: 1px solid var(--line); border-radius: 12px; background: var(--glass); min-width: 0; }
 .status-pills .pill { flex: 0 1 178px; }
 .pill-link { cursor: pointer; transition: border-color 0.15s, background 0.15s; }
@@ -3704,7 +3717,6 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 }
 @media (max-width: 720px) {
   .topbar2 { gap: 10px; padding: 10px 12px; }
-  .topbar-actions { margin-left: auto; }
   .topbar-clock { margin-left: auto; }
   .status-pills { order: 3; flex-basis: 100%; }
   .console-workspace { padding: 12px; }
@@ -3858,9 +3870,16 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
     min-height: 70px;
     padding: calc(env(safe-area-inset-top, 0px) + 10px) 12px 10px 78px;
     gap: 8px;
+    display: flex;
     flex-wrap: wrap;
+    align-items: center;
     background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(255, 255, 255, 0.72));
   }
+  /* Flatten the three zone wrappers so the leaf elements become direct flex
+     children again — the order/flex mobile rules below then reflow them as a
+     single wrapping row, exactly as the pre-zone markup did. */
+  .topbar-zone { display: contents; }
+  .desktop-context-top { display: none; }
   .cmdk-open {
     order: 1;
     min-width: 42px;
@@ -4018,21 +4037,14 @@ kbd { font: 600 10px "Spline Sans Mono", monospace; padding: 2px 6px; border-rad
   .user-meta i { display: none; }
 }
 @media (max-width: 1700px) {
-  .topbar2 { gap: 10px; padding-inline: 16px; }
+  .topbar2 { gap: clamp(10px, 1.2vw, 16px); padding-inline: 16px; }
   .status-pills { gap: 8px; }
   .status-pills .pill { flex-basis: 150px; padding-inline: 10px; }
   .status-pills .ws-switch { flex-basis: 158px; }
-  .desktop-context-top { flex: 0 1 330px; min-width: 260px; max-width: 360px; }
-  .topbar-actions { gap: 8px; }
-  .topbar-actions .cmdk-open { flex: 0 0 44px; width: 44px; padding-inline: 8px; justify-content: center; }
-  .cmdk-open-label, .cmdk-open-kbd { display: none; }
-  .topbar-actions .topbar-clock { margin-left: 4px; }
+  .topbar-right { gap: 8px; }
+  .desktop-context-top { flex: 0 1 240px; min-width: 0; max-width: 260px; }
+  .topbar-right .topbar-clock { margin-left: 4px; }
   .topbar-clock i { display: none; }
-}
-@media (min-width: 1800px) {
-  .topbar2 { justify-content: flex-start; }
-  .topbar-actions { margin-left: auto; }
-  .topbar-actions .topbar-clock { margin-left: clamp(8px, 0.9vw, 22px); }
 }
 @media (max-width: 1320px) {
   .desktop-context-top { flex-basis: 320px; min-width: 240px; }
@@ -4047,7 +4059,7 @@ kbd { font: 600 10px "Spline Sans Mono", monospace; padding: 2px 6px; border-rad
   .dc-mini-controls button { width: 27px; height: 27px; border-radius: 9px; }
 }
 @media (min-width: 901px) and (max-width: 1450px) {
-  .topbar2 { gap: 8px; padding-inline: 12px; }
+  .topbar2 { gap: 10px; padding-inline: 12px; grid-template-columns: minmax(0, auto) minmax(220px, 1fr) minmax(0, auto); }
   .status-pills { flex: 0 1 auto; max-width: min(35vw, 430px); }
   .status-pills .pill:not(.ws-switch) { display: none; }
   .status-pills .ws-switch { flex: 0 1 150px; max-width: 150px; }
@@ -4089,12 +4101,12 @@ kbd { font: 600 10px "Spline Sans Mono", monospace; padding: 2px 6px; border-rad
   }
   .desktop-context-top .dc-mini-shell.is-expanded .dc-mini-copy { display: grid; }
   .desktop-context-top .dc-mini-shell.is-expanded .dc-mini-controls { display: inline-flex; }
-  .topbar-actions { flex: 1 1 auto; min-width: 0; }
-  .topbar-actions .cmdk-open { flex: 0 1 180px; min-width: 44px; }
+  .topbar-right { flex: 0 0 auto; min-width: 0; }
+  .topbar-center .cmdk-open { max-width: none; }
 }
 @media (min-width: 901px) and (max-width: 1180px) {
   .status-pills { display: none; }
-  .topbar-actions .topbar-clock { margin-left: 0; }
+  .topbar-right .topbar-clock { margin-left: 0; }
   .topbar-user { width: 48px; padding: 5px; justify-content: center; }
   .topbar-user .user-meta,
   .topbar-user .user-caret { display: none; }
@@ -7502,13 +7514,36 @@ kbd { font: 600 10px "Spline Sans Mono", monospace; padding: 2px 6px; border-rad
 .dc-empty b { color: #241f3f; }
 .dc-safe { margin: 0; color: var(--dim-2); font-size: 10.5px; line-height: 1.35; }
 .desktop-context-top {
-  flex: 0 1 390px;
-  min-width: 260px;
-  max-width: 430px;
+  flex: 0 1 260px;
+  min-width: 0;
+  max-width: 300px;
   padding: 0;
-  border-radius: 16px;
+  border-radius: 14px;
   overflow: hidden;
-  align-self: stretch;
+  align-self: center;
+}
+/* Idle state renders only the ♪ placeholder thumb (class is-empty), so collapse
+   the whole chip to a single 40px control — no sprawling "No media playing" box
+   dominating the bar. It expands back to the full media chip the moment a track
+   is detected. */
+.desktop-context-top:has(.dc-mini-thumb.is-empty) {
+  flex: 0 0 auto;
+  max-width: none;
+  border-color: transparent;
+  background: none;
+  box-shadow: none;
+}
+.dc-mini-shell:has(.dc-mini-thumb.is-empty) {
+  grid-template-columns: auto;
+  gap: 0;
+  padding: 0;
+  min-height: 0;
+  background: none;
+}
+.dc-mini-shell:has(.dc-mini-thumb.is-empty) .dc-mini-copy,
+.dc-mini-shell:has(.dc-mini-thumb.is-empty) .dc-mini-controls { display: none; }
+.desktop-context-top:has(.dc-mini-thumb.is-empty) .dc-mini-thumb {
+  width: 40px; height: 40px;
 }
 .dc-mini-shell {
   min-height: 52px;
@@ -7741,12 +7776,9 @@ kbd { font: 600 10px "Spline Sans Mono", monospace; padding: 2px 6px; border-rad
     background: transparent !important;
     box-shadow: none;
   }
-  .topbar2 > .topbar-actions,
-  .topbar2 > .cmdk-open,
-  .topbar2 > .topbar-clock,
-  .topbar2 > .notif-wrap,
-  .topbar2 > .topbar-user,
-  .topbar2 > .user-menu-wrap { display: none !important; }
+  .topbar-center,
+  .topbar-right { display: none !important; }
+  .topbar-left { display: block; width: 100%; min-width: 0; }
 
   .status-pills {
     display: grid !important;
@@ -13574,8 +13606,6 @@ body .phantom .workspace-page :where(
 }
 
 @media (max-width: 1450px) and (min-width: 901px) {
-  .topbar-actions .cmdk-open { flex-basis: 44px; width: 44px; padding-inline: 12px; }
-  .cmdk-open-label,
   .cmdk-open-kbd,
   .topbar-clock i,
   .user-meta i { display: none; }

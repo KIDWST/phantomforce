@@ -7,7 +7,7 @@
       if (location.protocol === "http:" && location.hostname.indexOf("phantomforce.online") !== -1) {
         location.replace("https://" + location.host + location.pathname + location.search + location.hash);
       }
-      window.PHANTOM_BUILD = "phantom-live-20260719-71";
+      window.PHANTOM_BUILD = "phantom-live-20260721-1";
       if ("serviceWorker" in navigator) {
         navigator.serviceWorker
           .getRegistrations()
@@ -44,7 +44,7 @@
     </script>
     <title>PhantomForce — AI Operations Console</title>
     <meta name="description" content="PhantomForce — your AI business operating system." />
-    <meta name="phantom-build" content="phantom-live-20260719-71" />
+    <meta name="phantom-build" content="phantom-live-20260721-1" />
     <meta name="robots" content="noindex" />
     <meta name="theme-color" content="#f3f2fa" />
     <style>
@@ -123,17 +123,17 @@
 
 
     </style>
-    <link rel="icon" type="image/png" href="/app/assets/brand-phantom-favicon.png?v=phantom-live-20260719-71" />
+    <link rel="icon" type="image/png" href="/app/assets/brand-phantom-favicon.png?v=phantom-live-20260721-1" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700;12..96,800&family=Instrument+Sans:wght@400;500;600;700&family=Spline+Sans+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/app/phantom.css?v=phantom-live-20260719-71" />
-    <link rel="stylesheet" href="/app/phantomplay.css?v=phantom-live-20260719-71" />
-    <link rel="stylesheet" href="/app/phantomplay-v2.css?v=phantom-live-20260719-71" />
-    <link rel="stylesheet" href="/app/phantomstore.css?v=phantom-live-20260719-71" />
-    <link rel="stylesheet" href="/app/competitor-intelligence.css?v=phantom-live-20260719-71" />
-    <link rel="stylesheet" href="/app/orggraph.css?v=phantom-live-20260719-71" />
-    <link rel="stylesheet" href="/app/phantom-skin.css?v=phantom-live-20260719-71" />
+    <link rel="stylesheet" href="/app/phantom.css?v=phantom-live-20260721-1" />
+    <link rel="stylesheet" href="/app/phantomplay.css?v=phantom-live-20260721-1" />
+    <link rel="stylesheet" href="/app/phantomplay-v2.css?v=phantom-live-20260721-1" />
+    <link rel="stylesheet" href="/app/phantomstore.css?v=phantom-live-20260721-1" />
+    <link rel="stylesheet" href="/app/competitor-intelligence.css?v=phantom-live-20260721-1" />
+    <link rel="stylesheet" href="/app/orggraph.css?v=phantom-live-20260721-1" />
+    <link rel="stylesheet" href="/app/phantom-skin.css?v=phantom-live-20260721-1" />
   </head>
   <body>
     <div class="bg-grid" aria-hidden="true"></div>
@@ -166,7 +166,7 @@
     <div class="phantom" data-phantom hidden>
       <header class="mobile-admin-homebar" aria-label="Mobile admin home">
         <button class="mobile-admin-brand" data-mobile-home type="button" aria-label="Open Dashboard">
-          <img class="brand-ghost" src="/app/assets/brand-phantom.png?v=phantom-live-20260719-71" alt="" aria-hidden="true" />
+          <img class="brand-ghost" src="/app/assets/brand-phantom.png?v=phantom-live-20260721-1" alt="" aria-hidden="true" />
           <span>
             <b>PhantomForce</b>
             <i>Business</i>
@@ -189,7 +189,7 @@
       <!-- ---------- sidebar ---------- -->
       <aside class="sidebar" aria-label="Primary">
         <div class="side-brand">
-          <img class="brand-ghost" src="/app/assets/brand-phantom.png?v=phantom-live-20260719-71" alt="" aria-hidden="true" />
+          <img class="brand-ghost" src="/app/assets/brand-phantom.png?v=phantom-live-20260721-1" alt="" aria-hidden="true" />
           <span class="side-brand-text">
             <b>PHANTOMFORCE</b>
             <i>BUSINESS MANAGER</i>
@@ -211,14 +211,18 @@
       <!-- ---------- main ---------- -->
       <div class="app-main">
         <header class="topbar2">
-          <div class="status-pills" data-status-pills></div>
-          <section class="desktop-context-card desktop-context-top" data-desktop-context data-dc-layout="mini" aria-label="Desktop media bridge"></section>
-          <div class="topbar-actions" aria-label="Quick actions">
+          <div class="topbar-zone topbar-left">
+            <div class="status-pills" data-status-pills></div>
+          </div>
+          <div class="topbar-zone topbar-center">
             <button class="cmdk-open" data-cmdk-open aria-label="Open command palette">
               <span class="cmdk-open-ic" data-cmdk-open-ic></span>
-              <span class="cmdk-open-label">Search or command…</span>
+              <span class="cmdk-open-label">Search or run a command…</span>
               <kbd class="cmdk-open-kbd">⌘K</kbd>
             </button>
+          </div>
+          <div class="topbar-zone topbar-right" aria-label="Quick actions">
+            <section class="desktop-context-card desktop-context-top" data-desktop-context data-dc-layout="mini" aria-label="Desktop media bridge"></section>
             <div class="topbar-clock">
               <b data-clock-time>—</b>
               <i data-clock-date>—</i>
@@ -282,7 +286,7 @@
                   <img
                     class="phantom-mode-pose"
                     data-mode-pose
-                    src="/app/assets/poses/chin.webp?v=phantom-live-20260719-71"
+                    src="/app/assets/poses/chin.webp?v=phantom-live-20260721-1"
                     alt="Phantom listening"
                     decoding="async"
                     fetchpriority="high"
@@ -476,6 +480,6 @@
     <!-- workspace overlays mount here, above the blurred console -->
     <div class="overlay-root" data-overlay-root></div>
 
-    <script type="module" src="/app/js/main.js?v=phantom-live-20260719-71"></script>
+    <script type="module" src="/app/js/main.js?v=phantom-live-20260721-1"></script>
   </body>
 </html>
