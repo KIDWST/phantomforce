@@ -1,28 +1,17 @@
-# PhantomForce Live Admin Source
+# STOP — this is NOT the live admin checkout
 
-This checkout is the live admin source for `admin.phantomforce.online` and local `127.0.0.1:5177`.
+This worktree previously claimed to be the live admin source. It is not, and never reliably was — that claim was stale boilerplate copied across several worktrees (including this one), which is exactly the kind of confusion that caused finished work (games, fixes) to sit invisible on unmerged branches for days. Verified against the live `/health.root`, the real live source is:
 
 ```text
-C:\Users\jorda\Documents\Codex\worktrees\phantomforce-live-social-analytics-20260712
+C:\Users\jorda\Documents\Codex\deployments\phantomforce-live
 ```
 
-Before editing owner-facing admin UI, verify:
+Go there and read its CLAUDE.md — it has the mandatory `npm run ship:live-admin -- --commit "..."` shipping gate. Do not edit app/server/script files in this worktree for owner-facing changes; they will not reach `admin.phantomforce.online` or `app.phantomforce.online` no matter how correct they are, until explicitly merged to `main` and shipped from the canonical checkout.
+
+Before trusting ANY path (including the one above) as "the live one," verify it yourself — docs go stale, `/health` does not:
 
 ```powershell
 (Invoke-WebRequest -UseBasicParsing "https://admin.phantomforce.online/health").Content
-git status --short --branch
-git log -1 --oneline
 ```
 
-If `/health` reports a different `root`, do not claim the change is live. Fix the served root or move the change into this checkout first.
-
-Do not edit sibling PhantomForce worktrees for owner-facing admin UI unless the owner explicitly asked for that branch. There are many stale experimental worktrees on this PC, and changes made there will not appear on `admin.phantomforce.online`.
-
-Sidebar rule:
-- Main business modules live in the upper sidebar.
-- Utility/operator modules stay separated at the bottom: `Memory`, `Settings`, `Developer`, `Away Mode`, and optional tucked tools.
-- Do not reintroduce a single long nav list.
-
-Cache rule:
-- Any edit to `app/index.html`, `app/phantom.css`, or `app/js/*.js` must bump the `phantom-live-YYYYMMDD-N` build id everywhere.
-- Commit and push after verification. The owner does not want local-only changes.
+Only the checkout whose path matches the returned `root` is live.
