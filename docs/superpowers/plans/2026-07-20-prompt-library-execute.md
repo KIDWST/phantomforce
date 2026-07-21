@@ -703,7 +703,7 @@ This task is UI-heavy (no server round-trip to unit-test meaningfully beyond wha
 In `app/js/promptlibrary.js`, replace the import line and remove the `PROMPT_SEED` constant (the entire `export const PROMPT_SEED = [...]` block, now that Task 1/2 own that data), replacing them with:
 
 ```js
-import { isAdmin, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260719-68";
+import { isAdmin, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260719-69";
 
 const LIB_KEY = "pf.promptlibrary.v1";
 const MEDIA_INTENT_KEY = "pf.medialab.promptIntent.v1";
@@ -987,13 +987,13 @@ Expected: `LIVE ADMIN SHIP PASSED`.
 In `app/js/phantomai.js`, change:
 
 ```js
-import { isOwnerOperator, rememberConversation } from "./store.js?v=phantom-live-20260719-68";
+import { isOwnerOperator, rememberConversation } from "./store.js?v=phantom-live-20260719-69";
 ```
 
 to:
 
 ```js
-import { isOwnerOperator, rememberConversation, workspaceStorageGetItem, workspaceStorageRemoveItem } from "./store.js?v=phantom-live-20260719-68";
+import { isOwnerOperator, rememberConversation, workspaceStorageGetItem, workspaceStorageRemoveItem } from "./store.js?v=phantom-live-20260719-69";
 ```
 
 And add, near the top-level consts (after `const chatHistory = [];`):

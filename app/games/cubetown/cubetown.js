@@ -893,6 +893,80 @@
       osc.start(t0); osc.stop(t0 + dur + 0.02);
     } catch (e) { /* ignore */ }
   }
+  // ---------------------------------------------------------------------
+  // Generative soundscape: a soft wind bed, daytime music-box plucks on a
+  // pentatonic scale, birdsong by day and crickets by night. Everything is
+  // synthesized here, gated by the same masterGain() as the beeps, and it
+  // goes fully silent while paused or muted. No loops run until the first
+  // user gesture unlocks the AudioContext.
+  // ---------------------------------------------------------------------
+  const ambient = { started: false, windGain: null, nextPluck: 0, nextChirp: 0 };
+  function ensureAmbient() {
+    if (ambient.started || !audio.ctx) return;
+    ambient.started = true;
+    try {
+      const ctx = audio.ctx;
+      const len = ctx.sampleRate * 2;
+      const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+      const d = buf.getChannelData(0);
+      let run = 0;
+      for (let i = 0; i < len; i++) { run += (Math.random() * 2 - 1) * 0.02; run *= 0.985; d[i] = run; }
+      const src = ctx.createBufferSource();
+      src.buffer = buf; src.loop = true;
+      const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 420;
+      const g = ctx.createGain(); g.gain.value = 0;
+      src.connect(lp).connect(g).connect(ctx.destination);
+      src.start();
+      ambient.windGain = g;
+    } catch (e) { ambient.windGain = null; }
+  }
+  function pluck(freq, dur = 0.9, vol = 0.05) {
+    if (!audio.ctx) return;
+    const g0 = masterGain(); if (g0 <= 0) return;
+    try {
+      const ctx = audio.ctx, t0 = ctx.currentTime;
+      const osc = ctx.createOscillator(), gain = ctx.createGain();
+      osc.type = 'triangle'; osc.frequency.value = freq;
+      gain.gain.setValueAtTime(vol * g0, t0);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      const o2 = ctx.createOscillator(), g2 = ctx.createGain();
+      o2.type = 'sine'; o2.frequency.value = freq * 2; g2.gain.setValueAtTime(vol * g0 * 0.25, t0);
+      g2.gain.exponentialRampToValueAtTime(0.0001, t0 + dur * 0.6);
+      osc.connect(gain).connect(ctx.destination); o2.connect(g2).connect(ctx.destination);
+      osc.start(t0); osc.stop(t0 + dur + 0.05); o2.start(t0); o2.stop(t0 + dur * 0.6 + 0.05);
+    } catch (e) { /* ignore */ }
+  }
+  const DAY_SCALE = [523.3, 587.3, 659.3, 784, 880, 1046.5];
+  const NIGHT_SCALE = [261.6, 293.7, 329.6, 392, 440];
+  function stepAmbientAudio(dt) {
+    if (!audio.ctx) return;
+    ensureAmbient();
+    const seg = daySegment(state.minutes);
+    const silent = rt.paused || masterGain() <= 0;
+    if (ambient.windGain) {
+      const target = silent ? 0 : masterGain() * (seg === 'night' ? 0.05 : 0.09) * (weatherForDay(state.day).kind === 'rain' ? 1.8 : 1);
+      ambient.windGain.gain.setTargetAtTime(target, audio.ctx.currentTime, 0.6);
+    }
+    if (silent) return;
+    ambient.nextPluck -= dt;
+    if (ambient.nextPluck <= 0) {
+      const night = seg === 'night' || seg === 'dusk';
+      const scale = night ? NIGHT_SCALE : DAY_SCALE;
+      pluck(scale[Math.floor(Math.random() * scale.length)], night ? 1.4 : 0.9, night ? 0.035 : 0.05);
+      ambient.nextPluck = (night ? 3.4 : 2.1) + Math.random() * (night ? 4 : 2.6);
+    }
+    ambient.nextChirp -= dt;
+    if (ambient.nextChirp <= 0) {
+      if (seg === 'day' || seg === 'dawn') {
+        const f = 1900 + Math.random() * 900;
+        beep(f, 0.06, 'sine', 0.03); setTimeout(() => beep(f * 1.15, 0.05, 'sine', 0.025), 90);
+      } else if (seg === 'night') {
+        const f = 1450 + Math.random() * 250;
+        beep(f, 0.045, 'triangle', 0.022); setTimeout(() => beep(f, 0.045, 'triangle', 0.02), 120);
+      }
+      ambient.nextChirp = 2.6 + Math.random() * 5;
+    }
+  }
   const sfx = {
     gather: () => beep(520, 0.18, 'triangle', 0.22),
     place: () => beep(340, 0.14, 'square', 0.16),
@@ -3711,6 +3785,7 @@
       stepSpark(t);
     }
     stepParticles(dt);
+    stepAmbientAudio(dt);
     draw();
     maybeAutoPush(t);
   }

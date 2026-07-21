@@ -23,7 +23,7 @@
 </head>
 <body>
 <div class="app"><header><div class="logo">PHANTOM <span>STRIKE</span></div><div class="status">local combat simulation / no public network</div><div class="hud"><div class="chip">MAP <b data-map-label>Blackridge</b></div><div class="chip">MODE <b data-mode-label>Solo Ops</b></div><div class="chip">SCORE <b data-score>0</b></div></div></header><main>
-  <section class="screen menu active" data-screen="menu"><div class="brief"><div class="eyebrow">First-person tactical arcade · v2</div><h1>ENTER.<span>CLEAR.</span>REPEAT.</h1><p>Full mouse-look with real vertical aim, sprint, jump, crouch, aim-down-sights, reloads, and bigger military maps with buildings and cover. Real bots, same-device split-screen, zero public network.</p><div class="choices"><button class="select on" data-mode="solo"><b>Solo Ops</b><small>Fight a four-soldier bot squad. First to 15.</small></button><button class="select" data-mode="duel"><b>Local 1v1</b><small>Real split-screen duel on one keyboard. First to 10.</small></button></div><div class="choices maps"><button class="select on" data-map="blackridge"><b>Blackridge Compound</b><small>Central bunker, side barracks, sandbag lines.</small></button><button class="select" data-map="ironworks"><b>Ironworks</b><small>Tight industrial corridors and crossfires.</small></button><button class="select" data-map="dockyard"><b>Dockyard Night</b><small>Long container lanes and open killzones.</small></button></div><button class="primary" data-open-loadout>BUILD LOADOUT</button></div><div class="holo"><div class="soldier"><i class="helmet"></i><b class="visor"></b><i class="torso"></i><i class="arm a"></i><i class="arm b"></i><b class="rifle"></b><i class="leg a"></i><i class="leg b"></i></div><div class="holo-label">PH-7 operator / simulation ready</div></div></section>
+  <section class="screen menu active" data-screen="menu"><div class="brief"><div class="eyebrow">First-person tactical arcade · v2</div><h1>ENTER.<span>CLEAR.</span>REPEAT.</h1><p>Full mouse-look with real vertical aim, sprint, jump, crouch, aim-down-sights, reloads, and bigger military maps with buildings and cover. Real bots, same-device split-screen, zero public network.</p><div class="choices"><button class="select on" data-mode="solo"><b>Solo Ops</b><small>Fight a four-soldier bot squad. First to 15.</small></button><button class="select" data-mode="duel"><b>Local 1v1</b><small>Real split-screen duel on one keyboard. First to 10.</small></button></div><div class="choices maps"><button class="select on" data-map="blackridge"><b>Blackridge Compound</b><small>Central bunker, side barracks, sandbag lines.</small></button><button class="select" data-map="ironworks"><b>Ironworks</b><small>Tight industrial corridors and crossfires.</small></button><button class="select" data-map="dockyard"><b>Dockyard Night</b><small>Long container lanes and open killzones.</small></button></div><div class="choices maps" data-diff-row><button class="select" data-diff="recruit"><b>Recruit</b><small>Slower bots, looser aim. Learn the maps.</small></button><button class="select on" data-diff="regular"><b>Regular</b><small>The intended fight.</small></button><button class="select" data-diff="veteran"><b>Veteran</b><small>Fast reactions, tight aim, aggressive pushes.</small></button></div><button class="primary" data-open-loadout>BUILD LOADOUT</button></div><div class="holo"><div class="soldier"><i class="helmet"></i><b class="visor"></b><i class="torso"></i><i class="arm a"></i><i class="arm b"></i><b class="rifle"></b><i class="leg a"></i><i class="leg b"></i></div><div class="holo-label">PH-7 operator / simulation ready</div></div></section>
   <section class="screen loadout" data-screen="loadout"><div class="panel"><div class="panel-head"><div><div class="eyebrow">Choose one primary</div><h2>WEAPON BUILD</h2><p>Weapon, optic, and barrel change the handling you feel in the match.</p></div><button class="back" data-back>Back</button></div><div class="loadout-grid" data-weapons></div><div class="attachments"><div class="attachment"><h3>OPTIC</h3><div class="row"><button class="tag on" data-optic="iron">Iron</button><button class="tag" data-optic="reflex">Reflex + accuracy</button><button class="tag" data-optic="holo">Holo + range</button></div></div><div class="attachment"><h3>BARREL</h3><div class="row"><button class="tag on" data-barrel="standard">Standard</button><button class="tag" data-barrel="comp">Compensator</button><button class="tag" data-barrel="short">Short + speed</button></div></div></div><button class="primary" data-deploy>DEPLOY TO ARENA</button></div></section>
   <section class="screen game" data-screen="game"><div class="stage"><canvas id="game" width="1280" height="720" aria-label="First person combat arena"></canvas></div><div class="game-hud"><div class="chip">TIME <b data-time>3:00</b></div><div class="chip">P1 <b data-p1>0 / 100</b></div><div class="chip right" data-p2-chip>HOSTILES <b data-p2>4</b></div></div><div class="reticle" data-reticle></div><div class="announce" data-announce></div><div class="touch"><div class="touch-group"><button data-touch="left">L</button><button data-touch="up">UP</button><button data-touch="right">R</button><button data-touch="turn-left">TURN</button><button data-touch="down">BACK</button><button data-touch="turn-right">TURN</button></div><button class="jump" data-touch="jump">JUMP</button><button class="fire" data-touch="fire">FIRE</button></div></section>
   <section class="screen results" data-screen="results"><div class="results-card"><div class="eyebrow">After-action report</div><div class="verdict" data-verdict>VICTORY</div><h2 data-result-title>COMPOUND SECURED</h2><p data-result-copy></p><div class="result-grid"><div><b data-result-score>0</b><span>Eliminations</span></div><div><b data-result-deaths>0</b><span>Deaths</span></div><div><b data-result-accuracy>0%</b><span>Accuracy</span></div></div><button class="primary" data-replay>RETURN TO OPERATIONS</button></div></section>
@@ -117,16 +117,40 @@ const WEAPONS={
  rifle:{name:'VXR-7 RIFLE',desc:'Balanced automatic rifle for every lane.',damage:26,rate:.115,spread:.02,range:16,speed:3.1,mag:30,reserve:90,reload:1.7,auto:true,color:'#43f7a0',kick:.011},
  smg:{name:'KITE-9 SMG',desc:'Fast handling and close-range pressure.',damage:17,rate:.075,spread:.038,range:11,speed:3.5,mag:36,reserve:108,reload:1.4,auto:true,color:'#38dffc',kick:.008},
  shotgun:{name:'BREACH-12',desc:'Heavy close burst with eight pellets.',damage:12,rate:.75,spread:.11,range:7,speed:2.85,mag:6,reserve:24,reload:2.2,auto:false,color:'#ffd45a',kick:.03}};
-let mode='solo',mapKey='blackridge',weaponKey='rifle',optic='iron',barrel='standard',MAP=MAPS.blackridge,map=MAP.rows,MS=24,
+const DIFFS={recruit:{think:.34,spread:1.9,hp:100,label:'RECRUIT'},regular:{think:.14,spread:1,hp:100,label:'REGULAR'},veteran:{think:.07,spread:.55,hp:100,label:'VETERAN'}};
+let mode='solo',mapKey='blackridge',weaponKey='rifle',optic='iron',barrel='standard',diffKey='regular',MAP=MAPS.blackridge,map=MAP.rows,MS=24,
  players=[],bots=[],keys={},touch={},paused=false,running=false,last=0,timeLeft=180,raf=0,audio=null,shots=0,hits=0,winner='',padSeen=false,
- feed=[],tracers=[],sparks=[],hitmarkT=0;
+ feed=[],tracers=[],sparks=[],hitmarkT=0,pickups=[],lastTick=99,heartT=0;
+/* symmetric field pickups per map: med restores 50, ammo refills one mag of
+   reserve. 12s respawn. Chosen on open tiles; validated at match start. */
+const PICKUP_SPOTS={
+ blackridge:[{x:12,y:2.5,kind:'med'},{x:12,y:21.5,kind:'med'},{x:2.5,y:12,kind:'ammo'},{x:21.5,y:12,kind:'ammo'}],
+ ironworks:[{x:12,y:1.5,kind:'med'},{x:12,y:22.5,kind:'med'},{x:1.5,y:12,kind:'ammo'},{x:22.5,y:12,kind:'ammo'}],
+ dockyard:[{x:12,y:1.5,kind:'med'},{x:12,y:22.5,kind:'med'},{x:1.5,y:12,kind:'ammo'},{x:22.5,y:12,kind:'ammo'}]};
 const padDz=v=>Math.abs(v)<.16?0:v;
 function padState(i){const list=navigator.getGamepads?navigator.getGamepads():[];const pad=list[i];if(!pad||!pad.connected)return null;if(!padSeen){padSeen=true;announce('CONTROLLER CONNECTED')}
  return{f:-padDz(pad.axes[1]||0),s:padDz(pad.axes[0]||0),r:padDz(pad.axes[2]||0)*2.4,p:-padDz(pad.axes[3]||0)*1.6,
   fire:!!pad.buttons[7]?.pressed,ads:!!pad.buttons[6]?.pressed,jump:!!pad.buttons[0]?.pressed,crouch:!!pad.buttons[1]?.pressed,reload:!!pad.buttons[2]?.pressed,sprint:!!pad.buttons[10]?.pressed}}
 function show(name){$$('[data-screen]').forEach(x=>x.classList.toggle('active',x.dataset.screen===name))}
 function select(group,value){$$(`[data-${group}]`).forEach(b=>b.classList.toggle('on',b.dataset[group]===value))}
-function sound(freq=220,d=.05,type='square',vol=.045){try{audio=audio||new AudioContext();const o=audio.createOscillator(),q=audio.createBiquadFilter(),n=audio.createGain();o.type=type;o.frequency.value=freq;q.type='lowpass';q.frequency.value=1400;n.gain.setValueAtTime(vol,audio.currentTime);n.gain.exponentialRampToValueAtTime(.001,audio.currentTime+d);o.connect(q).connect(n).connect(audio.destination);o.start();o.stop(audio.currentTime+d)}catch{}}
+/* ---- layered combat audio: noise-transient gunshots, spatial enemy fire,
+   reload foley, heartbeat, countdown, stingers. All synthesized in-page. ---- */
+let noiseBuf=null;
+let soundOn=true;
+function actx(){if(!soundOn)return null;try{audio=audio||new AudioContext();if(audio.state==='suspended')audio.resume().catch(()=>{});return audio}catch{return null}}
+function noise(){const a=actx();if(!a)return null;if(!noiseBuf){noiseBuf=a.createBuffer(1,a.sampleRate*.5,a.sampleRate);const d=noiseBuf.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1}return noiseBuf}
+function out(a,pan){if(pan&&a.createStereoPanner){const p=a.createStereoPanner();p.pan.value=Math.max(-1,Math.min(1,pan));p.connect(a.destination);return p}return a.destination}
+function sound(freq=220,d=.05,type='square',vol=.045,pan=0){const a=actx();if(!a)return;try{const o=a.createOscillator(),q=a.createBiquadFilter(),n=a.createGain();o.type=type;o.frequency.value=freq;q.type='lowpass';q.frequency.value=1400;n.gain.setValueAtTime(vol,a.currentTime);n.gain.exponentialRampToValueAtTime(.001,a.currentTime+d);o.connect(q).connect(n).connect(out(a,pan));o.start();o.stop(a.currentTime+d)}catch{}}
+function burst(dur,lp,vol,pan=0,hp=0){const a=actx();if(!a||!noise())return;try{const s=a.createBufferSource();s.buffer=noiseBuf;const f=a.createBiquadFilter();f.type='lowpass';f.frequency.value=lp;const n=a.createGain();n.gain.setValueAtTime(vol,a.currentTime);n.gain.exponentialRampToValueAtTime(.001,a.currentTime+dur);let chain=s;chain.connect(f);let tail=f;if(hp){const h=a.createBiquadFilter();h.type='highpass';h.frequency.value=hp;f.connect(h);tail=h}tail.connect(n);n.connect(out(a,pan));s.start();s.stop(a.currentTime+dur+.02)}catch{}}
+function gunSound(wk,vol=1,pan=0){ /* transient click + body + mech tail per weapon */
+ if(wk==='shotgun'){burst(.16,900,.22*vol,pan);burst(.3,320,.16*vol,pan);sound(70,.14,'sawtooth',.05*vol,pan)}
+ else if(wk==='smg'){burst(.06,2400,.13*vol,pan,300);sound(150,.045,'sawtooth',.04*vol,pan)}
+ else{burst(.09,1800,.17*vol,pan,200);sound(110,.06,'sawtooth',.05*vol,pan)}}
+function enemyShot(shooter){const p=players[0];if(!p)return;const dx=shooter.x-p.x,dy=shooter.y-p.y,d=Math.hypot(dx,dy);if(d>20)return;
+ const rel=Math.atan2(Math.sin(Math.atan2(dy,dx)-p.a),Math.cos(Math.atan2(dy,dx)-p.a));
+ gunSound(shooter.weapon,Math.max(.12,1-d/20)*.7,Math.sin(rel)*.85)}
+function reloadFoley(){sound(300,.05,'square',.03);setTimeout(()=>burst(.05,1200,.06),120);setTimeout(()=>sound(430,.05,'square',.035),260)}
+function stinger(won){const seq=won?[392,523,659,784]:[330,262,196];seq.forEach((f,i)=>setTimeout(()=>sound(f,.22,'triangle',.06),i*130))}
 function announce(t){const n=$('[data-announce]');n.textContent=t;n.classList.add('show');clearTimeout(announce.t);announce.t=setTimeout(()=>n.classList.remove('show'),900)}
 function killfeed(t){feed.unshift({t,age:0});feed=feed.slice(0,4)}
 function renderWeapons(){const root=$('[data-weapons]');root.innerHTML=Object.entries(WEAPONS).map(([k,w])=>`<button class="weapon${k===weaponKey?' on':''}" data-weapon="${k}"><div class="eyebrow">${w.name}</div><div class="gun" style="filter:drop-shadow(0 0 10px ${w.color})"></div><h3>${w.name}</h3><p>${w.desc} Mag ${w.mag}.</p><div class="stats"><span>POWER<i style="--v:${Math.min(100,w.damage*3)}%"></i></span><span>RATE<i style="--v:${Math.min(100,9/w.rate)}%"></i></span><span>RANGE<i style="--v:${Math.min(100,w.range*6)}%"></i></span></div></button>`).join('');$$('[data-weapon]').forEach(b=>b.onclick=()=>{weaponKey=b.dataset.weapon;renderWeapons();sound(420,.04)})}
@@ -142,7 +166,8 @@ function spawn(slot=0){const spots=spawnSpots(),p=spots[(slot*7+Math.floor(Math.
 function spawnBot(i){const p=spawn(i+2);const wk=['smg','rifle','rifle','shotgun'][i%4];const w=WEAPONS[wk];
  return{...p,human:false,weapon:wk,ammo:w.mag,reserve:9999,color:['#ff5468','#ff8b5d','#c36cff','#ffd45a'][i%4],think:0,strafe:i%2?1:-1,repos:0}}
 function start(){MAP=MAPS[mapKey];map=MAP.rows;players=[spawn(0)];bots=[];if(mode==='duel')players.push(spawn(1));else bots=[0,1,2,3].map(spawnBot);
- timeLeft=180;shots=0;hits=0;winner='';feed=[];tracers=[];sparks=[];running=true;paused=false;last=performance.now();show('game');resize();
+ pickups=(PICKUP_SPOTS[mapKey]||[]).filter(s=>walkable(s.x,s.y)).map(s=>({...s,t:0}));
+ timeLeft=180;lastTick=99;heartT=0;shots=0;hits=0;winner='';feed=[];tracers=[];sparks=[];running=true;paused=false;last=performance.now();show('game');resize();
  $('[data-p2-chip]').firstChild.textContent=mode==='duel'?'P2 ':'HOSTILES ';announce('MATCH LIVE');host('score',{score:0});cancelAnimationFrame(raf);raf=requestAnimationFrame(loop)}
 /* ---- movement: velocity + friction, sprint, jump gravity, crouch ---- */
 function move(p,fwd,str,turn,dt,wants){if(p.hp<=0)return;
@@ -166,12 +191,12 @@ function headZ(p){return p.crouch?.62:.92}
 function lineClear(a,b){const dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy),steps=Math.ceil(d*12);for(let i=1;i<steps;i++){const t=i/steps;if(solid(a.x+dx*t,a.y+dy*t))return false}return true}
 /* low cover between shooter and a crouched target protects the target */
 function coveredFrom(shooter,target){if(!target.crouch)return false;const dx=target.x-shooter.x,dy=target.y-shooter.y,d=Math.hypot(dx,dy),steps=Math.ceil(d*12);for(let i=1;i<steps;i++){const t=i/steps;if(t<.55)continue;if(cell(shooter.x+dx*t,shooter.y+dy*t)==='5')return true}return false}
-function weaponStats(p){const w={...WEAPONS[p.weapon]};if(optic==='reflex')w.spread*=.72;if(optic==='holo')w.range*=1.18;if(barrel==='comp'){w.spread*=.7;w.rate*=1.08}if(barrel==='short'){w.range*=.85;w.rate*=.92}if(p.ads>.5)w.spread*=.45;if(p.sprint)w.spread*=2.2;if(p.z>0)w.spread*=1.8;return w}
-function startReload(p){const w=WEAPONS[p.weapon];if(p.reloadT>0||p.ammo>=w.mag||p.reserve<=0)return;p.reloadT=w.reload;sound(300,.07,'square',.03);if(p.human&&p.slot===0)announce('RELOADING')}
+function weaponStats(p){const w={...WEAPONS[p.weapon]};if(optic==='reflex')w.spread*=.72;if(optic==='holo')w.range*=1.18;if(barrel==='comp'){w.spread*=.7;w.rate*=1.08}if(barrel==='short'){w.range*=.85;w.rate*=.92}if(p.ads>.5)w.spread*=.45;if(p.sprint)w.spread*=2.2;if(p.z>0)w.spread*=1.8;if(!p.human)w.spread*=DIFFS[diffKey].spread;return w}
+function startReload(p){const w=WEAPONS[p.weapon];if(p.reloadT>0||p.ammo>=w.mag||p.reserve<=0)return;p.reloadT=w.reload;if(p.human&&p.slot===0){reloadFoley();announce('RELOADING')}}
 function shoot(p){if(!running||paused||p.hp<=0||p.fireCd>0||p.reloadT>0)return;const w=weaponStats(p);
  if(p.ammo<=0){startReload(p);sound(520,.03,'square',.02);return}
  p.ammo--;p.fireCd=w.rate;p.recoil=1;p.pitch=Math.min(.6,p.pitch+w.kick);if(p.human)shots++;
- sound(p.weapon==='shotgun'?88:p.weapon==='smg'?145:118,p.weapon==='shotgun'?.11:.055,'sawtooth',.065);
+ if(p.human)gunSound(p.weapon,p.slot===0?1:.8);else enemyShot(p);
  const targets=[...players,...bots].filter(x=>x!==p&&x.hp>0);let landed=false;const pellets=p.weapon==='shotgun'?8:1;
  for(let q=0;q<pellets;q++){let best=null,bestD=w.range;const shotA=p.a+(Math.random()-.5)*w.spread*2,shotP=p.pitch+(Math.random()-.5)*w.spread;
   for(const t of targets){const dx=t.x-p.x,dy=t.y-p.y,d=Math.hypot(dx,dy);if(d>bestD)continue;
@@ -212,16 +237,26 @@ function humanInput(dt){const p=players[0],pad=padState(0);
   move(p2,f2,s2,r2,dt,{sprint:pad2&&pad2.sprint,jump:keys.KeyM||(pad2&&pad2.jump),crouch:pad2&&pad2.crouch});
   if(p2.reloadT>0){p2.reloadT-=dt;if(p2.reloadT<=0){const w=WEAPONS[p2.weapon],take=Math.min(w.mag-p2.ammo,p2.reserve);p2.ammo+=take;p2.reserve-=take}}
   if(keys.Enter||keys.Slash||(pad2&&pad2.fire))shoot(p2)}}
-function botAI(b,dt){if(b.hp<=0)return;b.think-=dt;b.repos-=dt;
+function botAI(b,dt){if(b.hp<=0)return;b.think-=dt;b.repos-=dt;const D=DIFFS[diffKey];
  const targets=players.filter(p=>p.hp>0);const target=targets.sort((a,z)=>Math.hypot(a.x-b.x,a.y-b.y)-Math.hypot(z.x-b.x,z.y-b.y))[0];if(!target)return;
+ /* wounded bots contest the nearest live medkit instead of face-tanking */
+ let goal=target;const med=b.hp<40?pickups.filter(k=>k.kind==='med'&&k.t<=0).sort((a,z)=>Math.hypot(a.x-b.x,a.y-b.y)-Math.hypot(z.x-b.x,z.y-b.y))[0]:null;
+ if(med&&Math.hypot(med.x-b.x,med.y-b.y)<9)goal=med;
  const dx=target.x-b.x,dy=target.y-b.y,d=Math.hypot(dx,dy),want=Math.atan2(dy,dx),diff=Math.atan2(Math.sin(want-b.a),Math.cos(want-b.a));
  b.a+=Math.max(-2*dt,Math.min(2*dt,diff));
  const clear=lineClear(b,target)&&!coveredFrom(b,target);
  if(b.repos<=0){b.strafe=-b.strafe;b.repos=1.2+Math.random()*1.6}
- const retreat=b.hp<30&&clear;
- move(b,retreat?-.7:d>4.5?1:d<1.8?-.4:0,clear&&d<7?b.strafe*.5:0,0,dt,{sprint:d>8&&!clear,jump:false,crouch:b.hp<45&&clear&&d>3});
+ /* unstick: if the bot barely moved while trying to advance, take a detour */
+ b._stuck=(b._stuck||0);const moved=Math.hypot(b.x-(b._lx??b.x),b.y-(b._ly??b.y));b._lx=b.x;b._ly=b.y;
+ if(moved<.012&&d>2){b._stuck+=dt;if(b._stuck>.5){b._detour=.7;b._dSide=Math.random()<.5?1:-1;b._stuck=0}}else b._stuck=Math.max(0,b._stuck-dt);
+ if(b._detour>0)b._detour-=dt;
+ const retreat=b.hp<30&&clear&&goal===target;
+ let fwd=retreat?-.7:d>4.5?1:d<1.8?-.4:0,str=clear&&d<7?b.strafe*.5:0;
+ if(goal!==target){const ga=Math.atan2(goal.y-b.y,goal.x-b.x),gd=Math.atan2(Math.sin(ga-b.a),Math.cos(ga-b.a));fwd=Math.cos(gd);str=Math.sin(gd)}
+ if(b._detour>0){fwd=.6;str=b._dSide}
+ move(b,fwd,str,0,dt,{sprint:d>8&&!clear,jump:false,crouch:b.hp<45&&clear&&d>3});
  if(b.reloadT>0){b.reloadT-=dt;if(b.reloadT<=0){b.ammo=WEAPONS[b.weapon].mag}}
- if(clear&&Math.abs(diff)<.14&&d<weaponStats(b).range&&b.think<=0){shoot(b);b.think=.14+Math.random()*.3}}
+ if(clear&&Math.abs(diff)<.14&&d<weaponStats(b).range&&b.think<=0){shoot(b);b.think=D.think+Math.random()*(D.think*2+.06)}}
 function castRay(px,py,a,max=26){let d=.02;while(d<max){const x=px+Math.cos(a)*d,y=py+Math.sin(a)*d;if(solid(x,y))return{d,hit:cell(x,y)};d+=.03}return{d:max,hit:'1'}}
 /* collect low-cover hits along a ray (nearest 3), for half-height rendering */
 function castLow(px,py,a,maxD){const out=[];let d=.06,inside=false;while(d<maxD&&out.length<3){const x=px+Math.cos(a)*d,y=py+Math.sin(a)*d;const c=cell(x,y);if(solid(x,y))break;if(c==='5'&&!inside){out.push(d);inside=true}else if(c!=='5')inside=false;d+=.05}return out}
@@ -249,6 +284,17 @@ function renderView(p,left,width,label){const height=H,FOV=(Math.PI/3)*(1-p.ads*
    g.fillStyle=`rgb(${lc[0]*lsh+MAP.fog[0]*lf},${lc[1]*lsh+MAP.fog[1]*lf},${lc[2]*lsh+MAP.fog[2]*lf})`;
    g.fillRect(left+sx,ly,step+1,lH);g.fillStyle=`rgba(0,0,0,.28)`;g.fillRect(left+sx,ly,step+1,2);
    depth[Math.floor(sx/step)]=Math.min(depth[Math.floor(sx/step)],lD+0)} }
+ /* field pickups: ground billboards with a slow pulse */
+ for(const k of pickups){if(k.t>0)continue;const dx=k.x-p.x,dy=k.y-p.y,d=Math.hypot(dx,dy);if(d<.3||d>18)continue;
+  const rel=Math.atan2(Math.sin(Math.atan2(dy,dx)-p.a),Math.cos(Math.atan2(dy,dx)-p.a));if(Math.abs(rel)>FOV*.62)continue;
+  const sx=(.5+rel/FOV)*width,di=Math.max(0,Math.min(depth.length-1,Math.floor(sx/step)));if(d>(depth[di]||99)+.2)continue;
+  const unit=height/(d*.72),feetY=hz+unit*eyeZ(p),s2=unit*.16,pulse=.75+Math.sin(performance.now()/300)*.25;
+  g.globalAlpha=Math.max(.25,1-d/18);
+  if(k.kind==='med'){g.fillStyle='rgba(240,255,248,.92)';g.fillRect(left+sx-s2*.55,feetY-s2*1.15,s2*1.1,s2*1.1);g.fillStyle='#2fbf7a';g.fillRect(left+sx-s2*.38,feetY-s2*.72,s2*.76,s2*.24);g.fillRect(left+sx-s2*.12,feetY-s2*.98,s2*.24,s2*.76);
+   g.strokeStyle=`rgba(67,247,160,${.5*pulse})`;g.lineWidth=2;g.strokeRect(left+sx-s2*.7,feetY-s2*1.3,s2*1.4,s2*1.4)}
+  else{g.fillStyle='#3a3324';g.fillRect(left+sx-s2*.6,feetY-s2*.9,s2*1.2,s2*.9);g.fillStyle='#ffd45a';g.fillRect(left+sx-s2*.6,feetY-s2*.58,s2*1.2,s2*.14);
+   g.strokeStyle=`rgba(255,212,90,${.5*pulse})`;g.lineWidth=2;g.strokeRect(left+sx-s2*.75,feetY-s2*1.05,s2*1.5,s2*1.2)}
+  g.globalAlpha=1}
  /* actors */
  const actors=[...players,...bots].filter(t=>t!==p&&t.hp>0).map(t=>{const dx=t.x-p.x,dy=t.y-p.y;return{t,d:Math.hypot(dx,dy),a:Math.atan2(Math.sin(Math.atan2(dy,dx)-p.a),Math.cos(Math.atan2(dy,dx)-p.a))}}).filter(o=>Math.abs(o.a)<FOV*.68).sort((a,b)=>b.d-a.d);
  for(const o of actors){const sx=(.5+o.a/FOV)*width,di=Math.max(0,Math.min(depth.length-1,Math.floor(sx/step)));if(o.d>(depth[di]||99)+.25)continue;
@@ -299,12 +345,23 @@ function renderView(p,left,width,label){const height=H,FOV=(Math.PI/3)*(1-p.ads*
  const mm=Math.min(120,width*.14),cs2=mm/MS,mx=left+width-mm-12,my=40;
  g.save();g.globalAlpha=.85;g.fillStyle='rgba(3,8,8,.8)';g.fillRect(mx-4,my-4,mm+8,mm+8);
  for(let yy=0;yy<MS;yy++)for(let xx=0;xx<MS;xx++){const c=map[yy][xx];if(c==='0')continue;const pc=PALETTE[c];g.fillStyle=c==='5'?'rgba(180,150,80,.8)':`rgb(${pc[0]+30},${pc[1]+30},${pc[2]+30})`;g.fillRect(mx+xx*cs2,my+yy*cs2,cs2,cs2)}
+ for(const k of pickups){if(k.t>0)continue;g.fillStyle=k.kind==='med'?'#43f7a0':'#ffd45a';g.fillRect(mx+k.x*cs2-1.5,my+k.y*cs2-1.5,3,3)}
  for(const t of [...players,...bots]){if(t.hp<=0)continue;const mine=t===p;if(!mine&&!lineClear(p,t))continue;g.fillStyle=mine?'#43f7a0':t.human?'#38dffc':'#ff5468';g.beginPath();g.arc(mx+t.x*cs2,my+t.y*cs2,mine?3.4:2.6,0,TAU);g.fill();
   if(mine){g.strokeStyle='#43f7a0';g.beginPath();g.moveTo(mx+t.x*cs2,my+t.y*cs2);g.lineTo(mx+t.x*cs2+Math.cos(t.a)*9,my+t.y*cs2+Math.sin(t.a)*9);g.stroke()}}
  g.restore();
  g.font=`800 ${Math.max(10,11*devicePixelRatio)}px ui-monospace`;feed.forEach((f,i)=>{g.fillStyle=`rgba(0,0,0,${.5-f.age*.1})`;g.fillRect(mx-89,my+mm+14+i*20,mm+93,16);g.fillStyle=`rgba(237,248,242,${1-f.age*.25})`;g.fillText(f.t,mx-82,my+mm+26+i*20)});
  if(mode==='duel'){g.strokeStyle='rgba(255,255,255,.2)';g.strokeRect(left+.5,0,width-1,height)}}
 function update(dt){timeLeft-=dt;if(timeLeft<=0){winner=players[0].score>Math.max(players[1]?.score||0,...bots.map(b=>b.score))?'p1':'hostiles';finish();return}
+ /* endgame urgency: 30s call + final five tick */
+ const sec=Math.ceil(timeLeft);if(sec!==lastTick){if(sec===30)announce('THIRTY SECONDS');if(sec<=5&&sec>0){sound(sec===1?980:760,.07,'square',.05);if(sec===5)announce('FIVE SECONDS')}lastTick=sec}
+ /* low-hp heartbeat for P1 */
+ if(players[0].hp>0&&players[0].hp<30){heartT-=dt;if(heartT<=0){sound(58,.1,'sine',.07);setTimeout(()=>sound(52,.09,'sine',.05),140);heartT=.9}}
+ /* field pickups */
+ for(const k of pickups){if(k.t>0){k.t-=dt;continue}
+  for(const p of [...players,...bots]){if(p.hp<=0)continue;if(Math.hypot(p.x-k.x,p.y-k.y)>.62)continue;
+   if(k.kind==='med'){if(p.hp>=100)continue;p.hp=Math.min(100,p.hp+50)}
+   else{if(!p.human)continue;const w=WEAPONS[p.weapon];p.reserve+=w.mag}
+   k.t=12;if(p.human&&p.slot===0){sound(k.kind==='med'?640:480,.09,'triangle',.06);setTimeout(()=>sound(k.kind==='med'?860:600,.11,'triangle',.05),90);announce(k.kind==='med'?'+50 HEALTH':'+AMMO')}break}}
  for(const p of [...players,...bots]){p.fireCd=Math.max(0,p.fireCd-dt);p.recoil=Math.max(0,p.recoil-dt*7);p.hurtT=Math.max(0,p.hurtT-dt);if(p.hp<=0){p.respawn-=dt;if(p.respawn<=0)respawn(p,p.slot)}}
  humanInput(dt);bots.forEach(b=>botAI(b,dt));
  tracers.forEach(t=>t.age+=dt);tracers=tracers.filter(t=>t.age<.2);sparks.forEach(s=>s.age+=dt);sparks=sparks.filter(s=>s.age<.2);feed.forEach(f=>f.age+=dt);feed=feed.filter(f=>f.age<4);hitmarkT=Math.max(0,hitmarkT-dt);
@@ -320,11 +377,12 @@ function finish(){if(!running)return;running=false;cancelAnimationFrame(raf);doc
  $('[data-result-title]').textContent=won?`${mapKey.toUpperCase()} SECURED`:'OPPOSITION HELD THE FIELD';
  $('[data-result-copy]').textContent=mode==='duel'?`P1 ${p.score} - ${players[1].score} P2. The match stayed entirely on this device.`:`You cleared ${p.score} hostiles with the ${WEAPONS[p.weapon].name}.`;
  $('[data-result-score]').textContent=p.score;$('[data-result-deaths]').textContent=p.deaths;$('[data-result-accuracy]').textContent=`${acc}%`;
- show('results');host('complete',{score:p.score*100,progress:1,state:{map:mapKey,mode,weapon:weaponKey,winner}})}
+ stinger(won);show('results');host('complete',{score:p.score*100,progress:1,state:{map:mapKey,mode,weapon:weaponKey,diff:diffKey,winner}})}
 $$('[data-mode]').forEach(b=>b.onclick=()=>{mode=b.dataset.mode;select('mode',mode);$('[data-mode-label]').textContent=mode==='duel'?'Local 1v1':'Solo Ops';sound(350,.04)});
 $$('[data-map]').forEach(b=>b.onclick=()=>{mapKey=b.dataset.map;select('map',mapKey);$('[data-map-label]').textContent=b.querySelector('b').textContent;sound(390,.04)});
 $('[data-open-loadout]').onclick=()=>{renderWeapons();show('loadout')};$('[data-back]').onclick=()=>show('menu');$('[data-deploy]').onclick=start;$('[data-replay]').onclick=()=>show('menu');
 $$('[data-optic]').forEach(b=>b.onclick=()=>{optic=b.dataset.optic;select('optic',optic)});$$('[data-barrel]').forEach(b=>b.onclick=()=>{barrel=b.dataset.barrel;select('barrel',barrel)});
+$$('[data-diff]').forEach(b=>b.onclick=()=>{diffKey=b.dataset.diff;select('diff',diffKey);sound(370,.04)});
 window.addEventListener('keydown',e=>{keys[e.code]=true;if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code))e.preventDefault()});
 window.addEventListener('keyup',e=>keys[e.code]=false);window.addEventListener('resize',resize);
 let dragX=null,dragY=null,mouseLocked=false,mouseDown=false,rightDown=false;
@@ -342,9 +400,11 @@ window.addEventListener('message',event=>{if(!event.data||typeof event.data!=='o
  if(event.data.type==='resume'){paused=false;host('paused',{paused:false})}
  if(event.data.type==='restart'){start()}
  if(event.data.type==='exit'){running=false;cancelAnimationFrame(raf)}
- if(event.data.type==='settings'&&event.data.sound===false){audio=null}
- if(event.data.type==='load-state'&&event.data.state?.weapon&&WEAPONS[event.data.state.weapon])weaponKey=event.data.state.weapon});
-window.__PhantomStrikeLegacyTest={state(){return{screen:$('.screen.active')?.dataset.screen,players:players.map(p=>({x:+p.x.toFixed(2),y:+p.y.toFixed(2),a:+p.a.toFixed(3),pitch:+p.pitch.toFixed(3),z:+p.z.toFixed(2),hp:p.hp,score:p.score,ammo:p.ammo})),bots:bots.map(b=>({x:+b.x.toFixed(2),y:+b.y.toFixed(2),hp:b.hp})),shots,hits,padSeen,mouseLocked}}};
+ if(event.data.type==='settings'&&typeof event.data.sound==='boolean'){soundOn=event.data.sound;if(!soundOn)audio=null}
+ if(event.data.type==='load-state'&&event.data.state?.weapon&&WEAPONS[event.data.state.weapon])weaponKey=event.data.state.weapon;
+ if(event.data.type==='load-state'&&event.data.state?.diff&&DIFFS[event.data.state.diff]){diffKey=event.data.state.diff;select('diff',diffKey)}});
+window.__PhantomStrikeLegacyTest={state(){return{screen:$('.screen.active')?.dataset.screen,players:players.map(p=>({x:+p.x.toFixed(2),y:+p.y.toFixed(2),a:+p.a.toFixed(3),pitch:+p.pitch.toFixed(3),z:+p.z.toFixed(2),hp:p.hp,score:p.score,ammo:p.ammo,reserve:p.reserve})),bots:bots.map(b=>({x:+b.x.toFixed(2),y:+b.y.toFixed(2),hp:b.hp})),pickups:pickups.map(k=>({x:k.x,y:k.y,kind:k.kind,t:+k.t.toFixed(1)})),diff:diffKey,shots,hits,padSeen,mouseLocked}},
+ setHp(v){if(players[0])players[0].hp=v},teleport(x,y){if(players[0]){players[0].x=x;players[0].y=y}},setDiff(k){if(DIFFS[k])diffKey=k}};
 renderWeapons();host('ready',{title:'Phantom Strike'});host('score',{score:0});
 })();
 </script>
