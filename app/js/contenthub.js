@@ -3772,7 +3772,7 @@ function accountAnalyticsRow(row, esc) {
   const syncFailed = syncOutcome?.state === "error";
   const sourceState = canSync
     ? (syncFailed ? "Live sync failed" : "Ready to sync")
-    : oauthReady ? "Authorize account" : saved ? "Profile saved, analytics not connected" : account.handle ? "Handle saved, analytics not connected" : "Needs social connection";
+    : oauthReady ? "Connect account" : saved ? "Handle saved — not connected" : account.handle ? "Handle saved — not connected" : "Needs social connection";
   const sourceCopy = canSync
     ? (syncFailed ? syncOutcome.error : "Official read-only analytics are ready.")
     : oauthReady
@@ -3790,7 +3790,7 @@ function accountAnalyticsRow(row, esc) {
         ? `<button class="btn btn-ghost" type="button" data-open-ws="settings" data-settings-target="media">Open Settings</button>`
         : `<button class="btn btn-ghost" type="button" disabled>Owner setup needed</button>`;
   return `<article class="an-channel-row ${feed ? "is-live" : "is-missing"}">
-    <div class="an-channel-id"><span class="ch-dot" style="background:${account.color}"></span><span><b>${esc(account.name)}</b><i>${esc(account.handle || account.loginIdentity || "profile saved")}</i></span></div>
+    <div class="an-channel-id"><span class="ch-dot" style="background:${account.color}"></span><span><b>${esc(account.name)}</b><i>${esc(account.handle || account.loginIdentity || "handle saved — not connected")}</i></span></div>
     ${feed ? `<div class="an-channel-metrics">
       <span><b>${K(feed.reach)}</b>reach</span><span><b>${K(feed.impressions)}</b>views</span><span><b>${K(feed.engagement)}</b>engagement</span><span><b>${K(feed.followers)}</b>followers</span>
     </div><div class="an-channel-source"><b>${live ? "Live · " : "Report · "}${esc(feed.source)}</b><i>${feed.syncedAt ? `Synced ${esc(ago(feed.syncedAt))}` : "current"}</i>${syncFailed ? `<em class="an-sync-error">${esc(syncOutcome.error)}</em>` : ""}</div>`

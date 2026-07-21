@@ -13,6 +13,7 @@ import {
   socialConnectionStoreStatus,
 } from "./social-connection-store.js";
 import { ADMIN_PUBLIC_URL } from "../access/public-hosts.js";
+import { buildCustomerSocialStatus, type InternalConnectorRow } from "./social-customer-view.js";
 
 export type SocialAnalyticsPlatform = "youtube" | "instagram" | "facebook" | "tiktok" | "x" | "linkedin" | "pinterest";
 
@@ -315,6 +316,102 @@ export function getSocialAnalyticsConnectorStatus(workspaceKey = DEFAULT_SOCIAL_
     crossPostingRequiresApproval: true,
     postingMode: "approval_gated" as const,
     tokenStore: socialConnectionStoreStatus(scope),
+  };
+}
+
+/* ------------------------------------------------------------------------
+   P0: customer-safe status + feature flag + super-admin diagnostics.
+
+   SOCIAL_CONNECT_V2 gates the sanitized customer projection. It defaults ON
+   but can be flipped OFF (env SOCIAL_CONNECT_V2="0") as a reversible rollback
+   that returns the legacy status WITHOUT ever restoring a customer credential
+   form. Rollback removes the new customer projection, not the safety.
+   ------------------------------------------------------------------------ */
+export function socialConnectV2Enabled(): boolean {
+  const raw = env("SOCIAL_CONNECT_V2").toLowerCase();
+  return raw !== "0" && raw !== "false" && raw !== "off";
+}
+
+/** Whether a specific provider is rolled out (per-provider flag, defaults to
+    the global flag). SOCIAL_CONNECT_V2_DISABLED="tiktok,x" disables those. */
+export function socialProviderRolledOut(platform: SocialAnalyticsPlatform): boolean {
+  if (!socialConnectV2Enabled()) return false;
+  const disabled = env("SOCIAL_CONNECT_V2_DISABLED").toLowerCase().split(/[,\s]+/).filter(Boolean);
+  return !disabled.includes(platform);
+}
+
+/**
+ * The ONLY status shape an ordinary workspace user is allowed to receive.
+ * Contains no credentials, tokens, redirect/callback URLs, console URLs, or
+ * environment-variable names — enforced by assertNoForbiddenKeys inside
+ * buildCustomerSocialStatus. A saved public handle never counts as connected.
+ */
+export function getCustomerSocialConnectionStatus(workspaceKey = DEFAULT_SOCIAL_WORKSPACE) {
+  const scope = safeSocialWorkspaceKey(workspaceKey);
+  const rows: InternalConnectorRow[] = CONNECTORS.map((connector) => {
+    const connection = getStoredSocialConnection(connector.id, scope);
+    const hasToken = Boolean(connection && (connection as { accessToken?: string }).accessToken);
+    const scopes = (connection?.scopes || []) as string[];
+    const analyticsReady = hasToken && scopes.some((s) => /read|analytics|insights|basic|profile|list|user\.info/i.test(s));
+    const publishReady = hasToken && scopes.some((s) => /write|upload|publish|manage_posts/i.test(s));
+    const requiresAssetSelection = connector.id === "facebook" || connector.id === "instagram" || connector.id === "linkedin" || connector.id === "pinterest";
+    const assetSelected = Boolean(connectionTargetId(connector.id, scope));
+    // A typed handle that is not backed by a stored token is a public reference only.
+    const typedHandle = !hasToken ? cleanHandle(connector.handle(scope)) : "";
+    return {
+      id: connector.id,
+      name: connector.name,
+      oauthConfigured: socialProviderRolledOut(connector.id) && connector.oauthConfigured(),
+      live: connector.configured(scope),
+      handle: connector.handle(scope),
+      typedHandleReference: typedHandle && typedHandle !== defaultHandle ? typedHandle : "",
+      savedConnection: hasToken
+        ? {
+            connected: true,
+            accountName: text(connection?.accountName),
+            accountHandle: text(connection?.accountHandle),
+            avatarUrl: text((connection as { avatarUrl?: string } | null)?.avatarUrl),
+            selectedAssetName: connectionTargetLabel(connector.id, scope),
+            tokenExpired: connection?.expiresAt ? new Date(connection.expiresAt).getTime() < Date.now() : false,
+            reauthRequired: Boolean((connection as { reauthRequired?: boolean } | null)?.reauthRequired),
+            degraded: Boolean((connection as { degraded?: boolean } | null)?.degraded),
+            grantedScopes: scopes,
+            verifiedIdentity: Boolean(connection?.accountId || connection?.accountHandle || connection?.accountName),
+            requiresAssetSelection,
+            assetSelected,
+            analyticsReady,
+            publishReady,
+            providerReviewPending: false,
+          }
+        : null,
+    };
+  });
+  return buildCustomerSocialStatus(rows);
+}
+
+/**
+ * Super-admin diagnostics — keeps operational fields (redirect URI, whether
+ * credentials are present) but NEVER the secret values themselves. Restricted
+ * to authenticated super-admins at the route layer.
+ */
+export function getSuperAdminSocialDiagnostics() {
+  return {
+    featureFlagEnabled: socialConnectV2Enabled(),
+    canonicalCallbackBase: `${ADMIN_PUBLIC_URL}/phantom-ai/ops/social-oauth/callback`,
+    providers: CONNECTORS.map((connector) => {
+      const setup = OAUTH_SETUP_PROVIDERS.find((s) => s.id === connector.id);
+      return {
+        provider: connector.id,
+        name: connector.name,
+        globallyEnabled: socialProviderRolledOut(connector.id),
+        credentialsPresent: connector.oauthConfigured(), // boolean only, never the value
+        redirectUri: requiredOAuthRedirectUri(connector.id),
+        requiredEnvNames: setup ? [setup.idEnv, setup.secretEnv] : [], // names, not values
+        sandboxOrProduction: env("NODE_ENV") === "production" ? "production" : "sandbox",
+        lastConnectionTestAt: "",
+        sanitizedErrorReason: "",
+      };
+    }),
   };
 }
 

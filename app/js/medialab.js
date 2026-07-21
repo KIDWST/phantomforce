@@ -405,8 +405,8 @@ function socialStatusLabel(account) {
   if (socialOAuthState.loading) return "checking OAuth";
   const st = socialStatus(account);
   if (account.connectMode === "live-api" && account.analytics?.live) return "live OAuth";
-  if (st === "linked") return "profile saved";
-  if (account.handle) return "handle ready";
+  if (st === "linked") return "handle saved — not connected";
+  if (account.handle) return "handle saved — not connected";
   if (st === "pending") return "finish setup";
   return "not saved";
 }
@@ -429,7 +429,9 @@ function socialActionLabel(account) {
   if (connector?.configured) return `Reconnect ${account.name}`;
   if (connector?.oauthConfigured) return `Connect ${account.name}`;
   if (socialOAuthState.loading) return "Checking…";
-  return "OAuth setup needed";
+  // Non-managers must never see "OAuth setup needed" — for them a provider
+  // that is not globally configured is simply temporarily unavailable.
+  return canManageSocialOAuthApps() ? "Provider app setup needed" : "Temporarily unavailable";
 }
 function clampHermesText(value = "", limit = 180) {
   const text = String(value || "").replace(/\s+/g, " ").trim();
@@ -4322,17 +4324,18 @@ function socialCard(account, esc) {
     : connector?.oauthConfigured
       ? "OAuth app ready. Connect the account once."
       : status === "linked"
-    ? (profile ? `Saved profile: ${profile}` : "Profile saved locally")
+    ? (profile ? `Handle saved — not connected: ${profile}` : "Handle saved — not connected")
   : status === "pending"
       ? "Confirm your handle below once you're signed in, or clear this to start over."
       : account.handle
         ? `Default handle ready: ${account.handle}`
         : "Save a public handle or profile URL";
+  const providerUnavailableCopy = canManageSocialOAuthApps() ? "Provider app setup needed" : "Temporarily unavailable";
   const oauthDetail = connector
-    ? `<div class="set-social-hermes-proof">${svgIc(connector.configured ? "check" : connector.oauthConfigured ? "lock" : "spark")} ${esc(connector.configured ? "Live analytics authorized" : connector.oauthConfigured ? "OAuth app ready for authorization" : "OAuth app setup needed")}</div>`
-    : socialOAuthState.loading ? `<div class="set-social-hermes-proof">${svgIc("refresh")} Checking OAuth setup…</div>` : "";
+    ? `<div class="set-social-hermes-proof">${svgIc(connector.configured ? "check" : connector.oauthConfigured ? "lock" : "spark")} ${esc(connector.configured ? "Connected" : connector.oauthConfigured ? "Ready to connect" : providerUnavailableCopy)}</div>`
+    : socialOAuthState.loading ? `<div class="set-social-hermes-proof">${svgIc("refresh")} Checking…</div>` : "";
   const hermesProof = account.hermesProof
-    ? `<div class="set-social-hermes-proof">${svgIc("spark")} Saved profile · ${esc(account.hermesProof.displayName || account.hermesProof.handle || account.name)}</div>`
+    ? `<div class="set-social-hermes-proof">${svgIc("spark")} Handle saved — not connected · ${esc(account.hermesProof.displayName || account.hermesProof.handle || account.name)}</div>`
     : "";
   return `<article class="set-social-card is-${status}" data-social-card="${account.id}">
     <button class="set-card-x" data-social-clear aria-label="Clear ${esc(account.name)} link" title="Clear ${esc(account.name)} link" type="button">×</button>
