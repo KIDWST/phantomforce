@@ -1,0 +1,76 @@
+{
+  "note_to_relay": "This is Atlas's (Worker 1) proposed vertical-slice ownership plan, submitted for Relay to merge into the authoritative .termina/file-ownership.json (which Relay already owns/claimed as of 2026-07-21T13:30:00-05:00). Atlas did not edit that file directly out of respect for the active claim. Merge, edit, or discard at Relay's discretion.",
+  "generated_by": "Atlas",
+  "generated_at_commit": "a05590741b1e94e6fc3d7d6bb6b411e84542c181",
+  "rollback_tag": "pre-admin-completion-20260721-1332",
+  "critical_context_for_relay": [
+    "This repo already has its own separate, longer-running 'seven-day evolution mission' (docs/quality/EVOLUTION_MISSION.md, EVOLUTION_STATE.json, window 2026-07-19 through 2026-07-25) using a DIFFERENT edit checkout (C:\\Users\\jorda\\Documents\\Codex\\worktrees\\phantomforce-live-social-analytics-20260712) that fast-forwards into THIS served checkout. That mission is not part of this four-day Termina roster but pushes to the same origin/main. Expect main to move under this mission; rebase before every push, per AGENTS.md.",
+    "There is pre-existing untracked/modified WIP in this checkout right now (app/js/phantomplay.js, server/src/phantom-ai/phantomplay.ts, 18 new app/assets/phantomplay/*-cover.svg files) from a session that is neither Atlas nor (presumably) any of the six mission workers. It is additive game-cover-art wiring, unrelated to the P0 test failure below. Do not stash/revert/claim those paths — leave them for whoever is running that session to commit.",
+    "AGENTS.md documents 'direct pushes to main' as the normal working convention here, with rebase-not-branch as the default flow for many contributors. The mission template's worktree/branch model (mission/admin-experience etc.) can coexist with this but Relay should decide once whether mission workers use dedicated branches or follow the repo's existing direct-to-main + rebase convention, and state that decision once so workers don't diverge."
+  ],
+  "proposed_claims": [
+    {
+      "agent": "Forge Systems (Worker 3)",
+      "task": "Backend/data/auth vertical slices",
+      "claimed_paths": [
+        "server/src/access/**",
+        "server/src/approval/**",
+        "server/src/crm/**",
+        "server/src/customization/**",
+        "server/src/proposals/**",
+        "server/src/sites/**",
+        "server/src/workspace-approvals/**",
+        "server/prisma/schema.prisma (additive model/field changes only; migration registry stays with Relay)"
+      ]
+    },
+    {
+      "agent": "Forge Experience (Worker 2)",
+      "task": "Admin UI vertical slices over the same domains",
+      "claimed_paths": [
+        "app/js/crmpipeline.js",
+        "app/js/crmprospects.js",
+        "app/js/customization.js",
+        "app/js/approvalpipeline.js",
+        "app/js/proposalpipeline.js",
+        "app/js/sitestudio.js",
+        "app/js/workspaces.js",
+        "app/js/clientsetup.js"
+      ],
+      "explicitly_excluded_paths": [
+        "app/js/phantomplay*.js — owned by the pre-existing untracked WIP session, not this mission"
+      ]
+    },
+    {
+      "agent": "Beacon (Worker 4)",
+      "task": "Route crawl, mechanical repair, test authoring, defect ledger",
+      "claimed_paths": [
+        "scripts/test-*.mjs (new/updated only)",
+        "server/scripts/test-*.ts (new/updated only)",
+        ".termina/artifacts/**"
+      ]
+    },
+    {
+      "agent": "Relay (Worker 5)",
+      "task": "Integration owner, shared/root infra, release gates",
+      "claimed_paths_confirmed_already_held": [
+        ".termina/*"
+      ],
+      "recommended_additional_claims": [
+        "package.json",
+        "server/package.json",
+        "app/index.html",
+        "app/js/main.js",
+        "app/phantom.css / app/phantom-skin.css",
+        "AGENTS.md / CLAUDE.md",
+        "ops/**",
+        "server/prisma/migrations/**",
+        "scripts/ship-live-admin.mjs"
+      ]
+    }
+  ],
+  "unowned_modules_flagged_for_relay_assignment": [
+    "server/src/phantom-ai/** — largest module (50+ files: agent-runs/execution, media-lab, brain/neural-spine, security/guard, phantomplay/phantomstore). Recommend Relay split into sub-slices before assigning; do not hand the whole directory to one worker.",
+    "server/src/managed-growth/**, server/src/client-setup/**, server/src/connectors/**, server/src/falcon/** — not in Atlas's audited scope, unassigned.",
+    "app/js/phantomplay*.js, phantomplay-v2.js, phantomstore.js — customer game/store surface, not core admin scope per mission brief, but currently blocks the release-critical test gate (see ADMIN_COMPLETION_MATRIX.md P0-1). Recommend Beacon reproduces/fixes narrowly rather than a full vertical-slice owner, since it's a test-assertion bug, not a feature gap."
+  ]
+}

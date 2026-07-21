@@ -27,6 +27,27 @@
       "claimedAt": "2026-07-21T13:30:00-05:00",
       "expectedReleaseAt": null,
       "status": "active"
+    },
+    {
+      "agent": "w2-forge-experience",
+      "branch": null,
+      "task": "P0-1 release-gate fix (done) + admin UI vertical slices: CRM pipeline/prospects, customization, approval pipeline, proposal pipeline, site studio, workspaces, client setup",
+      "claimedPaths": [
+        "app/games/type-storm.html",
+        "scripts/test-phantomplay.mjs",
+        "app/js/crmpipeline.js",
+        "app/js/crmprospects.js",
+        "app/js/customization.js",
+        "app/js/approvalpipeline.js",
+        "app/js/proposalpipeline.js",
+        "app/js/sitestudio.js",
+        "app/js/workspaces.js",
+        "app/js/clientsetup.js"
+      ],
+      "claimedAt": "2026-07-21T13:40:00-05:00",
+      "expectedReleaseAt": null,
+      "status": "active",
+      "note": "CORRECTION to the WIP list above: app/games/type-storm.html and scripts/test-phantomplay.mjs were NOT part of the pre-existing external phantomplay WIP (mission-state.json's own baseline, captured before this worker started, does not list type-storm.html as dirty). These two files were modified by w2 mid-audit to fix P0-1 (font-size:clamp(...vw...) regression + two stale test assertions from the blackridge/ironworks/dockyard and castRay renames in commit 3e3435bb). Verified: `npm run test:release-critical` now passes 20/20. The true untouched pre-existing WIP remains app/js/phantomplay.js, server/src/phantom-ai/phantomplay.ts, and app/assets/phantomplay/*-cover.svg — w2 has not touched those."
     }
   ]
 }
