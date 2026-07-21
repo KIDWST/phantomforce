@@ -225,12 +225,14 @@ assert.match(skyguardArena, /id:\s*"neontangle"[\s\S]*Neon Tangle[\s\S]*Braided 
 assert.match(skyguardArena, /function triggerRelaySurge\(\)[\s\S]*surge:\s*true/u, "Skyguard Neon Tangle must have a distinct relay surge event.");
 assert.match(skyguardArena, /currentMap\(\)\.id === "neontangle"[\s\S]*triggerRelaySurge\(\)/u, "Skyguard Neon Tangle hazard clock must trigger the relay surge.");
 assert.match(skyguardArena, /effect\.type === "relay" && effect\.surge[\s\S]*dealDamage\(enemy, 18[\s\S]*enemy\.slowUntil/u, "Skyguard Neon Tangle relay surge must damage and slow clustered enemies.");
+assert.match(skyguardArena, /function seedOpeningDefenses\(\)[\s\S]*starter:\s*true/u, "Skyguard Arena must auto-seed starter sentries so round one cannot begin naked.");
+assert.match(skyguardArena, /if \(n >= 2\) entries\.push\(\{ type: "skiff"/u, "Skyguard Century Watch round one must not start with surprise air units.");
 assert.match(module, /id: "crown-circuit"[\s\S]*Obsidian Relay[\s\S]*launchUrl: "\/app\/games\/crown-circuit\.html\?v=1\.3\.0"[\s\S]*version: "1\.3\.0"/u, "Default catalog must launch and describe the upgraded Crown Circuit 1.3.0 build.");
-assert.match(module, /id: "skyguard-arena"[\s\S]*Neon Tangle[\s\S]*launchUrl: "\/app\/games\/skyguard-arena\/index\.html\?v=1\.3\.0"[\s\S]*version: "1\.3\.0"/u, "Default catalog must launch and describe the upgraded Skyguard Arena 1.3.0 build.");
+assert.match(module, /id: "skyguard-arena"[\s\S]*starter sentries[\s\S]*launchUrl: "\/app\/games\/skyguard-arena\/index\.html\?v=1\.3\.1"[\s\S]*version: "1\.3\.1"/u, "Default catalog must launch and describe the upgraded Skyguard Arena 1.3.1 build.");
 assert.match(v2Module, /\["crown-circuit", "Crown Circuit", "Strategy", "\/app\/games\/crown-circuit\.html\?v=1\.3\.0"\]/u, "V2 offline catalog must launch upgraded Crown Circuit.");
-assert.match(v2Module, /\["skyguard-arena", "Skyguard Arena", "Strategy", "\/app\/games\/skyguard-arena\/index\.html\?v=1\.3\.0"\]/u, "V2 offline catalog must launch upgraded Skyguard Arena.");
-assert.match(v2Module, /\["crown-circuit", "skyguard-arena"\]\.includes\(id\) \? "1\.3\.0"/u, "V2 offline catalog must expose Crown/Skyguard upgraded versions.");
-assert.match(flagshipCatalog, /id:\s*"skyguard-arena"[\s\S]*Neon Tangle[\s\S]*version:\s*"1\.3\.0"/u, "Server flagship catalog must describe the upgraded Skyguard Arena 1.3.0 build.");
+assert.match(v2Module, /\["skyguard-arena", "Skyguard Arena", "Strategy", "\/app\/games\/skyguard-arena\/index\.html\?v=1\.3\.1"\]/u, "V2 offline catalog must launch upgraded Skyguard Arena.");
+assert.match(v2Module, /id === "skyguard-arena" \? "1\.3\.1" : id === "crown-circuit" \? "1\.3\.0"/u, "V2 offline catalog must expose Skyguard 1.3.1 without bumping Crown Circuit.");
+assert.match(flagshipCatalog, /id:\s*"skyguard-arena"[\s\S]*starter sentries[\s\S]*version:\s*"1\.3\.1"/u, "Server flagship catalog must describe the upgraded Skyguard Arena 1.3.1 build.");
 assert.match(flagshipCatalog, /id:\s*"crown-circuit"[\s\S]*Obsidian Relay[\s\S]*version:\s*"1\.3\.0"/u, "Server flagship catalog must describe the upgraded Crown Circuit 1.3.0 build.");
 assert.match(tidefrontTactics, /Arrow keys to adjust angle\/power|Space to fire|Fleet Room/u, "Tidefront Tactics must remain the restored artillery battle.");
 assert.match(games[gameSlugs.indexOf("serpent-surge")], /storm|boost|rival|serpent|trail/u, "Serpent Surge must play as a modern snake arena, not a static old mini-game.");

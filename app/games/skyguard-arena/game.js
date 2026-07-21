@@ -187,7 +187,7 @@ const ENEMIES = {
 };
 
 const CAMPAIGN_WAVES = [
-  [{ type: "driftling", count: 10, gap: 520, formation: 3 }],
+  [{ type: "driftling", count: 8, gap: 680, formation: 2 }],
   [{ type: "skiff", count: 8, gap: 430, formation: 4 }, { type: "driftling", count: 8, gap: 520, delay: 1200 }],
   [{ type: "bulwark", count: 5, gap: 900 }, { type: "splitter", count: 6, gap: 620, delay: 700 }],
   [{ type: "phase", count: 7, gap: 620, formation: 2 }, { type: "skiff", count: 10, gap: 380, delay: 900 }],
@@ -227,9 +227,9 @@ function endlessWave(number) {
   const bountyMul = 1 + n * .02;
   const gapScale = Math.max(.42, 1 - n * .006);
   const entries = [
-    { type: "driftling", count: Math.min(26, 8 + Math.floor(n * .45)), gap: Math.round(520 * gapScale), formation: 3 },
-    { type: "skiff", count: Math.min(20, 4 + Math.floor(n * .35)), gap: Math.round(430 * gapScale), delay: 700, formation: 4 }
+    { type: "driftling", count: Math.min(26, n === 1 ? 7 : 8 + Math.floor(n * .45)), gap: Math.round((n === 1 ? 650 : 520) * gapScale), formation: n === 1 ? 2 : 3 }
   ];
+  if (n >= 2) entries.push({ type: "skiff", count: Math.min(20, 3 + Math.floor(n * .35)), gap: Math.round(430 * gapScale), delay: n === 2 ? 1250 : 700, formation: 4 });
   if (n >= 3) entries.push({ type: "bulwark", count: Math.min(12, 2 + Math.floor(n / 4)), gap: Math.round(820 * gapScale), delay: 1100 });
   if (n >= 5) entries.push({ type: "splitter", count: Math.min(9, 2 + Math.floor(n / 6)), gap: Math.round(600 * gapScale), delay: 1450 });
   if (n >= 9) entries.push({ type: "phase", count: Math.min(9, 2 + Math.floor(n / 6)), gap: Math.round(560 * gapScale), delay: 1700 });
@@ -811,9 +811,69 @@ function objectiveStart() {
   if (map.objective === "shield") return { shield: commander.id === "ilex" ? 12 : 8, maxShield: commander.id === "ilex" ? 12 : 8 };
   return { gates: [{ t: .39, hp: commander.id === "rook" ? 300 : 240, max: commander.id === "rook" ? 300 : 240 }, { t: .67, hp: commander.id === "rook" ? 270 : 215, max: commander.id === "rook" ? 270 : 215 }] };
 }
+function defenseOpeningScore(defId) {
+  const def = DEFENSES[defId];
+  if (!def) return 0;
+  let score = def.target === "any" ? 5 : 2;
+  if (def.role === "Kinetic") score += 4;
+  if (def.role === "Splash" || def.role === "Control") score += 3;
+  if (def.role === "Anti-air") score += 2;
+  score += Math.min(4, def.tiers[0].range / 50);
+  return score;
+}
+function starterDefenseIds() {
+  return selectedDefenses
+    .slice()
+    .sort((a, b) => defenseOpeningScore(b) - defenseOpeningScore(a))
+    .slice(0, 2);
+}
+function openingSlotScore(slotIndex) {
+  const origin = slotPoint(slotIndex);
+  let score = 0;
+  currentMap().routes.forEach((route) => {
+    [.20, .28, .36, .44, .54, .64].forEach((t) => {
+      const point = pointAt(route, t);
+      const distance = Math.hypot(point.x - origin.x, point.y - origin.y);
+      if (distance <= 185) score += (185 - distance) / 185 + (t <= .44 ? .38 : 0);
+    });
+  });
+  return score;
+}
+function seedOpeningDefenses() {
+  const starterIds = starterDefenseIds();
+  const selected = [];
+  const rankedSlots = currentMap().slots
+    .map((_, index) => ({ index, score: openingSlotScore(index) }))
+    .sort((a, b) => b.score - a.score);
+  starterIds.forEach((defId) => {
+    const pick = rankedSlots.find((candidate) => {
+      if (selected.includes(candidate.index)) return false;
+      const point = slotPoint(candidate.index);
+      return selected.every((slotIndex) => {
+        const other = slotPoint(slotIndex);
+        return Math.hypot(point.x - other.x, point.y - other.y) >= 170;
+      });
+    }) || rankedSlots.find((candidate) => !selected.includes(candidate.index));
+    if (!pick) return;
+    selected.push(pick.index);
+    sentinels.push({
+      id: uid(),
+      defId,
+      tier: 0,
+      slotIndex: pick.index,
+      cooldown: 0,
+      recoil: 0,
+      jammed: 0,
+      aim: 0,
+      spent: 0,
+      starter: true
+    });
+  });
+  if (sentinels.length) toast("Starter sentries are covering the first route.");
+}
 function startRun(nextMode) {
   mode = nextMode;
-  gold = mode === "endless" ? 255 : 230;
+  gold = mode === "endless" ? 300 : 270;
   lives = maxLives = 20;
   wave = 0;
   score = 0;
@@ -850,6 +910,7 @@ function startRun(nextMode) {
   paused = false;
   totalWaves = mode === "endless" ? CENTURY_ROUNDS : CAMPAIGN_WAVES.length;
   bot = mode === "skirmish" ? newBot("standard") : null;
+  seedOpeningDefenses();
   hud.mode.textContent = modeLabel(mode);
   opponentPanel.hidden = !(mode === "skirmish" || mode === "battle");
   overlayPause.hidden = true;
@@ -860,7 +921,7 @@ function startRun(nextMode) {
   renderPressureDock();
   updateHud();
   renderOpponent();
-  beginPrep(2.8);
+  beginPrep(4.5);
   host("progress", { score: 0, progress: 0 });
 }
 function beginPrep(seconds) {
