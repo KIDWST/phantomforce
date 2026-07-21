@@ -12,9 +12,10 @@ import {
   recentChatTurns, addMemory,
   ctx, session, loadPhantomLoop, savePhantomLoop, loopProviderName, modelDisplayLabel,
   getPhantomLaneTarget, loadPhantomLaneConfig, workspaceStorageGetItem, wsName,
-} from "./store.js?v=phantom-live-20260721-1";
-import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260721-1";
-import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260721-1";
+} from "./store.js?v=phantom-live-20260721-2";
+import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260721-2";
+import { reportBrainReply } from "./brain-state.js?v=phantom-live-20260721-2";
+import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260721-2";
 const classifyPhantomIntent = (text) => deriveActionContract(classifyRaw(text));
 
 /* Cross-surface handoff: chat tells the Websites page which project to focus
@@ -422,6 +423,18 @@ async function askHermesBrain(raw, intent, settings) {
       }),
     });
     const payload = await response.json().catch(() => ({}));
+    /* Surface the REAL provider/fallback truth shell-wide — never discard it.
+       The status card must not look healthier than the last reply proved. */
+    const fb = payload?.fallback || {};
+    reportBrainReply({
+      respondingProvider: fb.responding_provider || null,
+      requestedProvider: fb.requested_provider || null,
+      fallbackUsed: Boolean(fb.used),
+      localResponse: Boolean(fb.local_response),
+      allFailed: Boolean(fb.all_failed),
+      attempts: Array.isArray(fb.attempts) ? fb.attempts.length : 0,
+      ok: response.ok,
+    });
     if (payload?.fallback?.all_failed && !payload?.fallback?.local_response) return null;
     if (!response.ok || !payload?.message?.content) return null;
     const say = String(payload.message.content || "").replace(/\s+\n/g, "\n").trim();
@@ -438,6 +451,9 @@ async function askHermesBrain(raw, intent, settings) {
       skills: (payload.brain?.engaged_skills || []).map((skill) => skill?.name).filter(Boolean),
     };
   } catch {
+    /* Network/timeout failure: the backend never answered — that is an honest
+       offline signal, not something to hide behind a canned local reply. */
+    reportBrainReply({ offline: true, ok: false });
     return null;
   } finally {
     clearTimeout(timeout);

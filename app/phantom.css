@@ -8575,9 +8575,12 @@ body.phantomplay-playing .buddy-say {
   color: rgba(91, 76, 255, 0.95); font: 800 7.5px "Spline Sans Mono", monospace; letter-spacing: 0.13em; text-transform: uppercase;
 }
 .pc-core i {
-  overflow: hidden; color: #2b2649; font: 600 10px "Instrument Sans", sans-serif; font-style: normal; line-height: 1.1;
+  overflow: hidden; color: var(--ink); font: 600 10px "Instrument Sans", sans-serif; font-style: normal; line-height: 1.1;
   text-overflow: ellipsis; white-space: nowrap;
 }
+/* Honest brain state: degraded/offline is never dressed up as healthy. */
+.pc-core i.core-warn { color: var(--warn); }
+.pc-core i.core-risk { color: var(--risk); }
 .pc-actions { position: relative; flex: 0 0 auto; display: inline-flex; align-items: center; gap: 8px; }
 .pc-mode {
   flex: 0 0 auto; display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px; border-radius: 999px; cursor: pointer;
