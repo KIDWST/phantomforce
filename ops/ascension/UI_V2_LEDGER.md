@@ -24,7 +24,7 @@ None migrated yet — shell v2 restyle is the next prerequisite.
 ## Next work queue
 1. Shell v2 restyle on tokens (sidebar/topbar2/cards; keep mandated split sidebar: business modules top, Memory/Settings/Developer/Away Mode bottom).
 2. Sweep hardcoded rgba(91,76,255,...) accent literals → var() (file-by-file).
-3. Overlay engine a11y: focus trap/restore, inert background, skip link.
+3. ~~Overlay engine a11y~~ DONE — slice 3 (`387df784`): focus trap/restore, inert [data-phantom], skip link, panel initial focus. Build phantom-live-20260721-3.
 4. Replace fabricated PhantomWire/agentops telemetry with real activity + brain-state feed.
 5. Shared API client to replace 19 duplicated authHeaders()/api() wrappers.
 6. Route migrations per cluster order.
