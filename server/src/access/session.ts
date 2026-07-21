@@ -18,6 +18,7 @@ export type AccessSession = {
   clientId?: string;
   canManageAccess: boolean;
   visibleOnLogin?: boolean;
+  secondFactorPolicy?: "required" | "optional";
   /** Paid access, resolved server-side from the subscription store. Never client-set. */
   subscriptionActive?: boolean;
 };
@@ -33,8 +34,10 @@ const enableOwnerProductionAuth = authProvider === "owner-production";
 const enableGatewayForwardedAuth = authProvider === "gateway-forwarded";
 const ownerEmail = (process.env.PHANTOMFORCE_OWNER_EMAIL ?? "").trim().toLowerCase();
 const ownerLoginKey = process.env.PHANTOMFORCE_OWNER_LOGIN_KEY ?? "";
+const ownerSecondFactorCode = process.env.PHANTOMFORCE_OWNER_SECOND_FACTOR_CODE ?? "";
 const allowShortOwnerLoginKey = process.env.PHANTOMFORCE_ALLOW_SHORT_OWNER_LOGIN_KEY === "true";
 const MIN_OWNER_LOGIN_KEY_LENGTH = allowShortOwnerLoginKey ? 5 : 16;
+const MIN_OWNER_SECOND_FACTOR_CODE_LENGTH = 6;
 const MIN_SESSION_SECRET_LENGTH = 32;
 const enableLocalSessionLogin = enableDemoAuth || enablePrismaDevAuth || enableOwnerProductionAuth;
 
@@ -45,6 +48,7 @@ const demoSessions: AccessSession[] = [
     role: "admin",
     canManageAccess: true,
     visibleOnLogin: true,
+    secondFactorPolicy: "required",
   },
   {
     id: "client-chicagoshots",
@@ -53,6 +57,7 @@ const demoSessions: AccessSession[] = [
     clientId: "client-chicagoshots",
     canManageAccess: false,
     visibleOnLogin: false,
+    secondFactorPolicy: "optional",
   },
   {
     id: "client-sports-demo",
@@ -61,6 +66,7 @@ const demoSessions: AccessSession[] = [
     clientId: "client-sports-demo",
     canManageAccess: false,
     visibleOnLogin: true,
+    secondFactorPolicy: "optional",
   },
   {
     id: "client-past-due",
@@ -69,6 +75,7 @@ const demoSessions: AccessSession[] = [
     clientId: "client-past-due",
     canManageAccess: false,
     visibleOnLogin: false,
+    secondFactorPolicy: "optional",
   },
 ];
 
@@ -80,6 +87,7 @@ const ownerSession: AccessSession = {
   label: "PhantomForce Owner",
   role: "admin",
   canManageAccess: true,
+  secondFactorPolicy: "required",
 };
 
 let accessSessions: AccessSession[] = enableDemoAuth
@@ -99,6 +107,7 @@ const ownerProductionConfigured =
   sessionSecretIsStrong &&
   Boolean(ownerEmail) &&
   ownerLoginKey.length >= MIN_OWNER_LOGIN_KEY_LENGTH &&
+  ownerSecondFactorCode.length >= MIN_OWNER_SECOND_FACTOR_CODE_LENGTH &&
   !enableDemoAuth &&
   !allowUnsignedSessionHeader;
 
@@ -148,6 +157,7 @@ const AccessSessionTokenPayloadSchema = z.object({
 export const AccessLoginSchema = z.object({
   sessionId: z.string().min(1),
   ownerKey: z.string().optional(),
+  secondFactorCode: z.string().optional(),
 });
 
 export function getAccessAuthConfiguration() {
@@ -179,6 +189,9 @@ export function getAccessAuthConfiguration() {
     sessionSecretIsStrong,
     ownerEmailConfigured: Boolean(ownerEmail),
     ownerLoginKeyConfigured: ownerLoginKey.length >= MIN_OWNER_LOGIN_KEY_LENGTH,
+    ownerSecondFactorConfigured: ownerSecondFactorCode.length >= MIN_OWNER_SECOND_FACTOR_CODE_LENGTH,
+    adminSecondFactorRequired: true,
+    clientSecondFactorPolicy: "optional" as const,
     tokenTtlMs,
     loginEndpoint: enableLocalSessionLogin ? "/auth/session-login" : undefined,
     ownerLoginEndpoint: enableOwnerProductionAuth ? "/auth/owner-login" : undefined,
@@ -252,6 +265,12 @@ export function assertAccessAuthConfiguration() {
     if (ownerLoginKey.length < MIN_OWNER_LOGIN_KEY_LENGTH) {
       throw new Error(
         `PHANTOMFORCE_OWNER_LOGIN_KEY must be set to a valid value (at least ${MIN_OWNER_LOGIN_KEY_LENGTH} characters) for owner-production auth.`,
+      );
+    }
+
+    if (ownerSecondFactorCode.length < MIN_OWNER_SECOND_FACTOR_CODE_LENGTH) {
+      throw new Error(
+        `PHANTOMFORCE_OWNER_SECOND_FACTOR_CODE must be set to a valid value (at least ${MIN_OWNER_SECOND_FACTOR_CODE_LENGTH} characters) for owner-production admin login.`,
       );
     }
 
@@ -363,19 +382,43 @@ export function verifyOwnerKey(provided: string | undefined): boolean {
   return safeEqual(provided, ownerLoginKey);
 }
 
-export function issueAccessSessionToken(sessionId: string, options?: { ownerKey?: string }) {
-  if (!enableLocalSessionLogin) {
-    return undefined;
+export function verifyOwnerSecondFactorCode(provided: string | undefined): boolean {
+  if (!enableOwnerProductionAuth) {
+    return false;
   }
 
-  // Owner-production requires the owner login key before any token is minted.
-  if (enableOwnerProductionAuth && !verifyOwnerKey(options?.ownerKey)) {
+  if (ownerSecondFactorCode.length < MIN_OWNER_SECOND_FACTOR_CODE_LENGTH) {
+    return false;
+  }
+
+  if (!provided) {
+    return false;
+  }
+
+  return safeEqual(provided, ownerSecondFactorCode);
+}
+
+export function issueAccessSessionToken(
+  sessionId: string,
+  options?: { ownerKey?: string; secondFactorCode?: string },
+) {
+  if (!enableLocalSessionLogin) {
     return undefined;
   }
 
   const session = getAccessSession(sessionId);
 
   if (!session) {
+    return undefined;
+  }
+
+  // Owner-production admin login requires both the owner key and a second factor
+  // before any bearer token is minted. Client 2FA remains opt-in by policy.
+  if (
+    enableOwnerProductionAuth &&
+    session.canManageAccess &&
+    (!verifyOwnerKey(options?.ownerKey) || !verifyOwnerSecondFactorCode(options?.secondFactorCode))
+  ) {
     return undefined;
   }
 
@@ -438,6 +481,7 @@ function resolveGatewayForwardedSession(request: FastifyRequest): AccessSession 
       label: "Operator",
       role: "admin",
       canManageAccess: true,
+      secondFactorPolicy: "required",
     };
   }
 
@@ -452,6 +496,7 @@ function resolveGatewayForwardedSession(request: FastifyRequest): AccessSession 
     role: "client",
     clientId,
     canManageAccess: false,
+    secondFactorPolicy: "optional",
     subscriptionActive: isSubscriptionActive(user),
   };
 }

@@ -56,7 +56,7 @@ These stay off by design. Each must be turned on deliberately, one at a time:
 When you drop the go-live prompt, name explicitly which of these you are
 authorizing, because none flip automatically:
 
-1. Production auth provider (owner-production) + strong secrets.
+1. Production auth provider (owner-production) + strong secrets + admin 2FA code.
 2. Postgres-backed persistence (`DATABASE_URL`).
 3. Deployment target + private-edge (Pangolin) exposure.
 4. Any live provider / connector / send (each separately).

@@ -147,6 +147,7 @@ export async function initializeAccessIdentityState() {
       role: canManageAccess ? "admin" : "client",
       clientId: canManageAccess ? undefined : membership.orgId,
       canManageAccess,
+      secondFactorPolicy: canManageAccess ? "required" : "optional",
     };
   });
 

@@ -57,7 +57,7 @@ CRM, public webhooks, external sending.
 
 ## Gates to authorize before going beyond internal
 
-1. Production auth (owner-production) + strong secrets.
+1. Production auth (owner-production) + strong secrets + admin 2FA code.
 2. Postgres persistence (`DATABASE_URL`).
 3. Deployment target + private-edge (Pangolin) exposure.
 4. Any live provider / connector / send (each separately).

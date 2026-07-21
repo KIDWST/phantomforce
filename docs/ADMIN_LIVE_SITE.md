@@ -32,6 +32,8 @@ Product requirement:
 - Pangolin should not present a branded resource-auth page for PhantomForce Phantom.
 - PhantomForce owns the visible authentication and session boundary.
 - Admin production should use `PHANTOMFORCE_AUTH_PROVIDER=owner-production`.
+- Admin owner login requires both `PHANTOMFORCE_OWNER_LOGIN_KEY` and
+  `PHANTOMFORCE_OWNER_SECOND_FACTOR_CODE`; client 2FA remains optional.
 - Demo auth stays disabled for public/admin use.
 
 Do not expose `127.0.0.1:5190` as a separate public resource. Keep the backend behind the frontend proxy and server auth guards.

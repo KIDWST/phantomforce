@@ -474,11 +474,11 @@ export function resolveSession() {
   return saved;
 }
 
-export async function ownerLogin(ownerKey) {
+export async function ownerLogin(ownerKey, secondFactorCode) {
   const response = await fetch("/auth/owner-login", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ sessionId: "owner-admin", ownerKey }),
+    body: JSON.stringify({ sessionId: "owner-admin", ownerKey, secondFactorCode }),
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok || !payload?.token || !payload?.session) {
@@ -493,6 +493,7 @@ export async function ownerLogin(ownerKey) {
     ws: "phantomforce",
     sessionId,
     canManageAccess: !!payload.session.canManageAccess,
+    secondFactorPolicy: payload.session.secondFactorPolicy || "required",
     token: payload.token,
   };
   session.set(s);
@@ -524,6 +525,7 @@ export async function verifyLiveSession() {
     ws: "phantomforce",
     sessionId,
     canManageAccess: !!payload.session.canManageAccess,
+    secondFactorPolicy: payload.session.secondFactorPolicy || "required",
     token,
   };
   session.set(s);

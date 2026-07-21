@@ -71,6 +71,7 @@ const admin = session.resolveAccessSession(withSecret({ "remote-user": ADMIN_USE
 assert(admin !== undefined, "admin user resolves to a session");
 assert(admin!.role === "admin" && admin!.canManageAccess === true, "admin user gets admin + manage rights");
 assert(admin!.clientId === undefined, "admin session is not scoped to a client");
+assert(admin!.secondFactorPolicy === "required", "admin session marks second factor required");
 
 // 6. Admin match is case-insensitive (Pangolin may forward mixed case).
 const adminCased = session.resolveAccessSession(withSecret({ "remote-user": "Jordan@PhantomForce.Online" }));
@@ -83,6 +84,7 @@ assert(
   force!.role === "client" && force!.clientId === "client-past-due" && force!.canManageAccess === false,
   "client maps to The Force workspace with no manage rights",
 );
+assert(force!.secondFactorPolicy === "optional", "client second factor is optional");
 
 // 8. Mapped client (ChicagoShots) → its own scoped org.
 const shots = session.resolveAccessSession(withSecret({ "remote-user": SHOTS_USER }));
@@ -120,7 +122,9 @@ console.log(
       gatewayConfigured: config.gatewayConfigured,
       productionReady: config.productionReady,
       adminRole: admin!.role,
+      adminSecondFactorPolicy: admin!.secondFactorPolicy,
       forceClientId: force!.clientId,
+      clientSecondFactorPolicy: force!.secondFactorPolicy,
       shotsClientId: shots!.clientId,
       failClosed: {
         missingSecret: true,

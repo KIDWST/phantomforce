@@ -7,6 +7,7 @@ $serverUrl = "http://127.0.0.1:$serverPort"
 
 $strongSecret = "owner-production-test-secret-with-more-than-32-characters-1234567890"
 $ownerKey = "owner-login-key-strong-1234567890"
+$ownerSecondFactorCode = "123456"
 $ownerEmail = "jordan@phantomforce.local"
 
 $nodeCommand = Get-Command node.exe -ErrorAction SilentlyContinue
@@ -49,6 +50,7 @@ function Base-Env([hashtable]$overrides) {
     PHANTOMFORCE_SESSION_SECRET = $strongSecret
     PHANTOMFORCE_OWNER_EMAIL = $ownerEmail
     PHANTOMFORCE_OWNER_LOGIN_KEY = $ownerKey
+    PHANTOMFORCE_OWNER_SECOND_FACTOR_CODE = $ownerSecondFactorCode
     PHANTOMFORCE_SERVER_LOGGER = "false"
   }
   if ($overrides) { foreach ($k in $overrides.Keys) { $base[$k] = $overrides[$k] } }
@@ -63,6 +65,8 @@ try {
   $booted = $false
   $ownerLoginOk = $false
   $wrongKeyRejected = $false
+  $missingSecondFactorRejected = $false
+  $wrongSecondFactorRejected = $false
   $demoLoginDisabled = $false
   $readinessOk = $false
   $authProductionReady = $false
@@ -76,10 +80,10 @@ try {
     $booted = Wait-Health $proc
     if (-not $booted) { throw "owner-production failed to boot in production." }
 
-    $body = @{ sessionId = "owner-admin"; ownerKey = $ownerKey } | ConvertTo-Json
+    $body = @{ sessionId = "owner-admin"; ownerKey = $ownerKey; secondFactorCode = $ownerSecondFactorCode } | ConvertTo-Json
     $login = Invoke-RestMethod -Uri "$serverUrl/auth/owner-login" -Method Post -Body $body -ContentType "application/json"
     $token = $login.token
-    if ($token) { $ownerLoginOk = $true }
+    if ($token -and $login.session.secondFactorPolicy -eq "required") { $ownerLoginOk = $true }
 
     $headers = @{ Authorization = "Bearer $token" }
     $readiness = Invoke-RestMethod -Uri "$serverUrl/readiness" -Headers $headers
@@ -117,7 +121,21 @@ try {
     }
 
     try {
-      $demoBody = @{ sessionId = "owner-admin"; ownerKey = $ownerKey } | ConvertTo-Json
+      $missingSecondFactorBody = @{ sessionId = "owner-admin"; ownerKey = $ownerKey } | ConvertTo-Json
+      Invoke-RestMethod -Uri "$serverUrl/auth/owner-login" -Method Post -Body $missingSecondFactorBody -ContentType "application/json" | Out-Null
+    } catch {
+      if ((Get-StatusCode $_) -eq 401) { $missingSecondFactorRejected = $true }
+    }
+
+    try {
+      $wrongSecondFactorBody = @{ sessionId = "owner-admin"; ownerKey = $ownerKey; secondFactorCode = "000000" } | ConvertTo-Json
+      Invoke-RestMethod -Uri "$serverUrl/auth/owner-login" -Method Post -Body $wrongSecondFactorBody -ContentType "application/json" | Out-Null
+    } catch {
+      if ((Get-StatusCode $_) -eq 401) { $wrongSecondFactorRejected = $true }
+    }
+
+    try {
+      $demoBody = @{ sessionId = "owner-admin"; ownerKey = $ownerKey; secondFactorCode = $ownerSecondFactorCode } | ConvertTo-Json
       Invoke-RestMethod -Uri "$serverUrl/auth/demo-login" -Method Post -Body $demoBody -ContentType "application/json" | Out-Null
     } catch {
       if ((Get-StatusCode $_) -eq 403) { $demoLoginDisabled = $true }
@@ -146,15 +164,27 @@ try {
     if ($noKeyProc -and -not $noKeyProc.HasExited) { Stop-Process -Id $noKeyProc.Id -Force }
   }
 
-  $allOk = $booted -and $ownerLoginOk -and $wrongKeyRejected -and $demoLoginDisabled -and `
+  # ---- Fail-closed: missing owner second factor code ----
+  $noSecondFactorProc = Start-Server (Base-Env @{ PHANTOMFORCE_OWNER_SECOND_FACTOR_CODE = "" })
+  $missingSecondFactorFailedClosed = $false
+  try {
+    $noSecondFactorBooted = Wait-Health $noSecondFactorProc
+    $missingSecondFactorFailedClosed = (-not $noSecondFactorBooted) -and $noSecondFactorProc.HasExited -and ($noSecondFactorProc.ExitCode -ne 0)
+  } finally {
+    if ($noSecondFactorProc -and -not $noSecondFactorProc.HasExited) { Stop-Process -Id $noSecondFactorProc.Id -Force }
+  }
+
+  $allOk = $booted -and $ownerLoginOk -and $wrongKeyRejected -and $missingSecondFactorRejected -and $wrongSecondFactorRejected -and $demoLoginDisabled -and `
     $readinessOk -and $authProductionReady -and $anonymousFalconRejected -and $ownerFalconValidationOk -and ($sessionCount -eq 1) -and `
-    $weakSecretFailedClosed -and $missingKeyFailedClosed
+    $weakSecretFailedClosed -and $missingKeyFailedClosed -and $missingSecondFactorFailedClosed
 
   $summary = [pscustomobject]@{
     ok = $allOk
     bootedInProduction = $booted
     ownerLoginOk = $ownerLoginOk
     wrongKeyRejected = $wrongKeyRejected
+    missingSecondFactorRejected = $missingSecondFactorRejected
+    wrongSecondFactorRejected = $wrongSecondFactorRejected
     demoLoginDisabled = $demoLoginDisabled
     readinessAdminOk = $readinessOk
     productionAuthGateReady = $authProductionReady
@@ -163,6 +193,7 @@ try {
     ownerSessionCount = $sessionCount
     weakSecretFailedClosed = $weakSecretFailedClosed
     missingKeyFailedClosed = $missingKeyFailedClosed
+    missingSecondFactorFailedClosed = $missingSecondFactorFailedClosed
     server = $serverUrl
     authProvider = "owner-production"
   }

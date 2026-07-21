@@ -126,25 +126,32 @@ function showGate() {
           <span>Owner key</span>
           <input type="password" data-owner-key autocomplete="current-password" placeholder="Enter owner key" autofocus />
         </label>
+        <label>
+          <span>2FA code</span>
+          <input type="text" data-owner-second-factor inputmode="numeric" autocomplete="one-time-code" placeholder="Enter 2FA code" />
+        </label>
         <button class="gate-opt gate-submit" type="submit">
           <span class="gate-opt-icon">⌘</span>
           <b>Launch Admin Phantom</b>
-          <i>Backend session required. Owner login is enforced on this host.</i>
+          <i>Backend session and 2FA are required for admin.</i>
         </button>
         <p class="gate-error" data-owner-error hidden></p>
       </form>
       <p class="gate-note">The private gateway protects this route. PhantomForce owns the visible login and session.</p>`;
     const form = card.querySelector("[data-owner-login]");
     const input = card.querySelector("[data-owner-key]");
+    const secondFactor = card.querySelector("[data-owner-second-factor]");
     const error = card.querySelector("[data-owner-error]");
     form.onsubmit = async (event) => {
       event.preventDefault();
       error.hidden = true;
       const ownerKey = input.value.trim();
+      const secondFactorCode = secondFactor.value.trim();
       if (!ownerKey) { error.textContent = "Enter the owner key."; error.hidden = false; return; }
+      if (!secondFactorCode) { error.textContent = "Enter the 2FA code."; error.hidden = false; return; }
       form.classList.add("is-loading");
       try {
-        ctx.session = await ownerLogin(ownerKey);
+        ctx.session = await ownerLogin(ownerKey, secondFactorCode);
         enterPhantom();
       } catch (err) {
         session.clear();

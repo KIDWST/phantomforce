@@ -389,6 +389,7 @@ async function handleSessionLogin(request: FastifyRequest, reply: FastifyReply) 
 
   const token = issueAccessSessionToken(parsed.data.sessionId, {
     ownerKey: parsed.data.ownerKey,
+    secondFactorCode: parsed.data.secondFactorCode,
   });
 
   if (!token) {

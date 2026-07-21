@@ -88,8 +88,9 @@ production still requires Postgres.
 - `PHANTOMFORCE_AUTH_PROVIDER=owner-production` is the owner-controlled launch
   auth candidate. It seeds one owner admin session, requires a strong
   `PHANTOMFORCE_SESSION_SECRET`, `PHANTOMFORCE_OWNER_EMAIL`, and
-  `PHANTOMFORCE_OWNER_LOGIN_KEY`, disables demo auth, and exposes
-  `POST /auth/owner-login`.
+  `PHANTOMFORCE_OWNER_LOGIN_KEY` plus `PHANTOMFORCE_OWNER_SECOND_FACTOR_CODE`,
+  disables demo auth, and exposes `POST /auth/owner-login`. Admin login is
+  2FA-required; client session 2FA remains optional policy.
 - `NODE_ENV=production` refuses to serve demo sessions and exits before
   `/health` responds.
 - `PHANTOMFORCE_SESSION_SECRET` must be a strong non-default value before any
