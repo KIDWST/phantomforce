@@ -1,21 +1,8 @@
 /* PhantomForce Phantom — black glass, neon command console.
    One visual system for admin and client; full-width on desktop, clean on phone. */
 
-:root {
-  --neon: #5b4cff;
-  --neon-2: #b44bf0;
-  --risk: #e0345e;
-  --warn: #c77e00;
-  --ink: #241f3f;
-  --dim: #5d5880;
-  --dim-2: #8b87a8;
-  --bg: #f3f2fa;
-  --glass: rgba(255, 255, 255, 0.86);
-  --glass-2: rgba(250, 249, 255, 0.72);
-  --line: rgba(91, 76, 255, 0.16);
-  --line-strong: rgba(91, 76, 255, 0.34);
-  --phantom-keyboard-offset: 0px;
-}
+/* Design tokens live in phantom-tokens.css (loaded first) — the ONLY :root
+   palette source. Do not add :root palette blocks to this file again. */
 
 * { box-sizing: border-box; }
 html, body {
@@ -7220,21 +7207,9 @@ kbd { font: 600 10px "Spline Sans Mono", monospace; padding: 2px 6px; border-rad
 }
 
 /* ================= PREMIUM MATERIAL REFINEMENT ================= */
-:root {
-  --bg: #ffffff;
-  --glass: rgba(255, 255, 255, 0.66);
-  --glass-2: rgba(255, 255, 255, 0.5);
-  --line: rgba(165, 150, 190, 0.11);
-  --line-strong: rgba(139, 120, 220, 0.24);
-  --ink: #2b2649;
-  --dim: #8b87a8;
-  --dim-2: #6e6992;
-  --card-grad: linear-gradient(180deg, rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0.62));
-  --edge-hi: inset 0 1px 0 rgba(255, 255, 255, 0.055);
-  --depth-1: 0 1px 2px rgba(36, 31, 63, 0.112), 0 10px 26px -12px rgba(255, 255, 255, 0.41);
-  --depth-2: 0 2px 5px rgba(255, 255, 255, 0.39), 0 20px 46px -18px rgba(255, 255, 255, 0.41);
-  --accent-soft: rgba(91, 76, 255, 0.10);
-}
+/* Palette override block removed (Ascension UI v2): it swapped --dim/--dim-2
+   below AA contrast and carried white rebrand-artifact drop shadows.
+   Canonical values now live in phantom-tokens.css. */
 
 .bg-glow {
   background:
@@ -8110,13 +8085,7 @@ body.phantomplay-playing .buddy-say {
 /* ============================================================= */
 /* (Codex's base material stays canonical; these only fill gaps) */
 /* ============================================================= */
-:root {
-  --card-grad: linear-gradient(180deg, rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0.62));
-  --edge-hi: inset 0 1px 0 rgba(255, 255, 255, 0.055);
-  --depth-1: 0 1px 2px rgba(36, 31, 63, 0.112), 0 10px 26px -12px rgba(255, 255, 255, 0.41);
-  --depth-2: 0 2px 5px rgba(255, 255, 255, 0.39), 0 20px 46px -18px rgba(255, 255, 255, 0.41);
-  --accent-soft: rgba(91, 76, 255, 0.10);
-}
+/* Duplicate depth-token block removed (Ascension UI v2) — see phantom-tokens.css. */
 
 /* ============================================================= */
 /* ========================  PHANTOMWIRE  ===================== */

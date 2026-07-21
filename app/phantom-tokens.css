@@ -1,0 +1,64 @@
+/* PhantomForce — canonical semantic design tokens (UI v2, Ascension).
+   THE single source of truth for the admin app palette, depth, shape, and type
+   scale. Loaded FIRST in app/index.html; the legacy :root blocks that used to
+   compete inside phantom.css (former lines 4 / 7223 / 8113) have been removed,
+   so these values are authoritative unless deliberately overridden by the
+   org-theming hooks (html[data-org-*] in phantom.css) or phantom-skin.css.
+
+   Contrast contract: every *-text-capable color here holds >= 4.5:1 on --bg.
+   Do not reintroduce #8b87a8 as body/secondary text — it fails AA on white. */
+
+:root {
+  /* ---- brand accent (violet identity) ---- */
+  --neon: #5b4cff;            /* primary accent; legacy name kept — used everywhere */
+  --neon-2: #b44bf0;          /* orchid companion accent */
+  --accent: var(--neon);
+  --accent-deep: #3f30d9;
+  --accent-soft: rgba(91, 76, 255, 0.10);
+
+  /* ---- semantic status families ---- */
+  --risk: #e0345e;            /* destructive / error */
+  --risk-soft: rgba(224, 52, 94, 0.10);
+  --warn: #9a6200;            /* caution — AA on white at small sizes */
+  --warn-soft: rgba(199, 126, 0, 0.12);
+  --ok: #1f7a4d;              /* success — semantic only, not brand green */
+  --ok-soft: rgba(31, 122, 77, 0.10);
+  --info: var(--accent);
+  --info-soft: var(--accent-soft);
+
+  /* ---- surfaces ---- */
+  --bg: #fbfbfd;              /* porcelain, not stark white */
+  --glass: rgba(255, 255, 255, 0.72);
+  --glass-2: rgba(255, 255, 255, 0.55);
+  --card-grad: linear-gradient(180deg, rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.66));
+  --line: rgba(165, 150, 190, 0.14);
+  --line-strong: rgba(139, 120, 220, 0.26);
+
+  /* ---- ink ---- */
+  --ink: #26213f;             /* primary text — 13.4:1 on --bg */
+  --dim: #5d5880;             /* secondary text — 6.0:1 on --bg */
+  --dim-2: #6e6992;           /* tertiary text — 4.6:1 on --bg (AA floor) */
+  --ink-disabled: #8b87a8;    /* disabled/decoration ONLY, never running text */
+
+  /* ---- depth (ink-based; the white rebrand-artifact shadows are dead) ---- */
+  --edge-hi: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+  --depth-1: 0 1px 2px rgba(36, 31, 63, 0.10), 0 10px 26px -12px rgba(36, 31, 63, 0.16);
+  --depth-2: 0 2px 5px rgba(36, 31, 63, 0.09), 0 20px 46px -18px rgba(36, 31, 63, 0.22);
+
+  /* ---- shape ---- */
+  --radius-s: 8px;
+  --radius-m: 12px;
+  --radius-l: 16px;
+
+  /* ---- type ---- */
+  --font-ui: var(--org-font, "Instrument Sans", system-ui, sans-serif);
+  --font-display: "Bricolage Grotesque", "Instrument Sans", system-ui, sans-serif;
+  --font-mono: "Spline Sans Mono", ui-monospace, monospace;
+  --text-xs: 11px;            /* floor — nothing user-readable below this */
+  --text-s: 12.5px;
+  --text-m: 14px;
+  --text-l: 16px;
+
+  /* ---- platform ---- */
+  --phantom-keyboard-offset: 0px;
+}
