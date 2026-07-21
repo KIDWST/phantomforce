@@ -187,7 +187,19 @@ function cell(x,y){return map[Math.floor(y)]?.[Math.floor(x)]||'1'}
 function solid(x,y){const c=cell(x,y);return c!=='0'&&c!=='5'}          /* blocks sight + bullets */
 function walkable(x,y){return cell(x,y)==='0'}                          /* low cover also blocks feet */
 function spawnSpots(){const spots=[];for(let y=1;y<MS-1;y++)for(let x=1;x<MS-1;x++){if(walkable(x+.5,y+.5)&&(x<4||x>MS-5||y<4||y>MS-5))spots.push([x+.5,y+.5])}return spots}
-function spawn(slot=0){const spots=spawnSpots(),p=spots[(slot*7+Math.floor(Math.random()*5))%spots.length]||[1.5,1.5];const w=WEAPONS[weaponKey];
+/* Farthest-point spawn selection: every call (initial spawn AND every
+   mid-match respawn) picks the candidate spot that maximizes the minimum
+   distance to every currently-alive entity, instead of a fixed slot*7 index
+   into the same deterministic list. That old scheme always gave the human
+   player one of the first ~5 array entries and each bot a fixed +7 offset,
+   with no distance guarantee — on many maps that put the player and a bot
+   close together, sometimes facing each other, every match. The very first
+   spawn of a match (nobody alive yet) still uses a random pick since there
+   is nothing to avoid yet. */
+function spawn(slot=0){const spots=spawnSpots();const alive=[...players,...bots].filter(e=>e&&e.hp>0);let p;
+ if(!alive.length){p=spots[Math.floor(Math.random()*Math.min(5,spots.length))]||[1.5,1.5]}
+ else{let best=null,bestScore=-1;for(const s of spots){const d=Math.min(...alive.map(e=>Math.hypot(e.x-s[0],e.y-s[1])));if(d>bestScore){bestScore=d;best=s}}p=best||spots[0]||[1.5,1.5]}
+ const w=WEAPONS[weaponKey];
  return{x:p[0],y:p[1],vx:0,vy:0,a:Math.atan2(MS/2-p[1],MS/2-p[0]),pitch:0,z:0,vz:0,crouch:false,sprint:false,ads:0,
   hp:100,score:0,deaths:0,fireCd:0,recoil:0,bob:0,weapon:weaponKey,ammo:w.mag,reserve:w.reserve,reloadT:0,
   human:true,slot,respawn:0,hurtT:0,hurtA:0,color:slot?'#38dffc':'#43f7a0'}}
