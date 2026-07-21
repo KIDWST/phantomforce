@@ -93,6 +93,25 @@
       for (const [k, v] of this.cooldown) { const nv = v - dt; if (nv <= 0) this.cooldown.delete(k); else this.cooldown.set(k, nv); }
     }
 
+    /* A point is inside an active gate's "hole" if it sits within the wall
+     * footprint directly behind the gate mouth (within one tile of depth and
+     * inside the mouth width). Collision treats this as open space, so
+     * walking into a portal is walking through a doorway — this is THE fix
+     * for the old "invisible wall over the portal" bug. Only meaningful when
+     * both gates are open (a lone gate teleports nothing, so its wall stays
+     * a wall — no walking into solid stone). */
+    holeAt(x, y, depth = 18) {
+      if (!this.bothOpen()) return false;
+      for (const g of this.gates) {
+        if (g.open < 0.5) continue;
+        const relx = x - g.x, rely = y - g.y;
+        const along = relx * g.nx + rely * g.ny;   // + in front, - inside wall
+        const tan = relx * g.tx + rely * g.ty;
+        if (Math.abs(tan) <= g.half && along <= 2 && along >= -depth) return true;
+      }
+      return false;
+    }
+
     /* Core: given an entity {x,y,vx,vy,r}, if it crosses the plane of an
      * active gate (moving inward through the mouth), transform it to the other
      * gate. Returns true if teleported. `key` identifies the entity for the

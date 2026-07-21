@@ -123,6 +123,10 @@ export type PhantomStoreProduct = {
   status: "available" | "quality_hold";
   qualityNote: string;
   imageUrl: string;
+  /* The untouched product screenshot the AI key art was rendered from. Kept
+     side by side with imageUrl so the marketing art never has to pretend to
+     be a raw screenshot — the UI links buyers to the real thing. */
+  referenceImageUrl: string;
   tags: string[];
   badges: string[];
   rating: number;
@@ -218,7 +222,8 @@ const SEEDED_PRODUCTS: PhantomStoreProduct[] = [
     version: "0.2.0",
     status: "available",
     qualityNote: "Multi-CLI submit reliability is a launch gate and is covered by Termina's dispatch retry tests.",
-    imageUrl: "/app/assets/phantomstore/termina-cover.png",
+    imageUrl: "/app/assets/phantomstore/termina-cover-ai.webp?v=20260721",
+    referenceImageUrl: "/app/assets/phantomstore/termina-cover.png",
     tags: ["local ai", "terminal wall", "multi-agent", "privacy"],
     badges: ["Local-first", "Desktop", "Launch-ready QA"],
     rating: 5,
@@ -242,7 +247,8 @@ const SEEDED_PRODUCTS: PhantomStoreProduct[] = [
     version: "2026.07",
     status: "available",
     qualityNote: "Free plan remains available for previewing the workspace before upgrading.",
-    imageUrl: "/app/assets/phantomstore/phantomforce-os-cover.jpg",
+    imageUrl: "/app/assets/phantomstore/phantomforce-os-cover-ai.webp?v=20260721",
+    referenceImageUrl: "/app/assets/phantomstore/phantomforce-os-cover.jpg",
     tags: ["business os", "media lab", "analytics", "sites"],
     badges: ["Free plan", "Workspace", "Owner gated"],
     rating: 5,
@@ -266,7 +272,8 @@ const SEEDED_PRODUCTS: PhantomStoreProduct[] = [
     version: "0.1.0",
     status: "available",
     qualityNote: "UI refresh is focused on prompt-first controls, modern sliders, and better Reaper fit.",
-    imageUrl: "/app/assets/phantomstore/phantom-vocal-ai-cover.jpg",
+    imageUrl: "/app/assets/phantomstore/phantom-vocal-ai-cover-ai.webp?v=20260721",
+    referenceImageUrl: "/app/assets/phantomstore/phantom-vocal-ai-cover.jpg",
     tags: ["reaper", "vocal chain", "creator tool", "audio"],
     badges: ["Reaper", "Creator", "Prompt-first"],
     rating: 4.5,

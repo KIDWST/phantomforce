@@ -317,6 +317,7 @@ import {
   recordPhantomStoreInstallClick,
   recordPhantomStoreProductBuyClick,
   submitPhantomStoreTool,
+  updatePhantomStoreTool,
 } from "./phantom-ai/phantomstore.js";
 import { registerPhantomPlayFlagshipGames } from "./phantom-ai/phantomplay-flagship.js";
 import {
@@ -5300,6 +5301,18 @@ app.post("/api/phantomstore/tools", async (request, reply) => {
     return { ok: true, session, ...(await submitPhantomStoreTool(session, (request.body ?? {}) as Record<string, unknown>)) };
   } catch (error) {
     return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : "Tool submission could not be saved." });
+  }
+});
+
+app.post("/api/phantomstore/tools/:id", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const params = request.params as { id?: string };
+  try {
+    const result = params.id ? await updatePhantomStoreTool(session, params.id.slice(0, 180), (request.body ?? {}) as Record<string, unknown>) : null;
+    return result ? { ok: true, session, ...result } : reply.code(404).send({ ok: false, error: "Tool submission was not found." });
+  } catch (error) {
+    return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : "Tool update could not be saved." });
   }
 });
 

@@ -51,7 +51,7 @@ assert.match(worker, /data-page-worker-form/u, "Worker prompt form must be binda
 assert.match(worker, /opts\.notify/u, "Worker prompt should log/notify without executing external actions.");
 
 assert.match(main, /import \{ pageWorkerHtml, mountPageWorkers \} from "\.\/pageworker\.js\?v=phantom-live-\d{8}-\d+"/u, "main.js must import the current page worker module.");
-assert.match(main, /\$\{pageWorkerHtml\(key, def\)\}/u, "Workspace pages must mount the worker prompt.");
+assert.match(main, /\$\{key === "phantomplay" \? "" : pageWorkerHtml\(key, def\)\}/u, "Workspace pages must mount the worker prompt (PhantomPlay renders its own interface and intentionally skips the generic overlay).");
 assert.match(main, /mountPageWorkers\(root, mediaOpts\(\)\)/u, "Workspace pages must bind worker prompt events.");
 assert.match(main, /mountPageWorkers\(overlayRoot, mediaOpts\(\)\)/u, "Overlay pages must bind worker prompt events.");
 

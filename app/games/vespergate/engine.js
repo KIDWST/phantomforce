@@ -36,10 +36,12 @@ window.VG = window.VG || {};
   VG.saveSettings = () => { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(VG.settings)); } catch {} };
 
   /* ============ save (versioned, resumable) ============ */
-  const SAVE_KEY = "vespergate.save.v1";
+  /* v2: the top-down Vesper Hand rebuild. v1 saves reference platformer rooms
+     that no longer exist, so they are deliberately not migrated. */
+  const SAVE_KEY = "vespergate.save.v2";
   VG.save = {
-    read() { try { const s = JSON.parse(localStorage.getItem(SAVE_KEY) || "null"); return s && s.version === 1 ? s : null; } catch { return null; } },
-    write(data) { try { localStorage.setItem(SAVE_KEY, JSON.stringify({ version: 1, at: Date.now(), ...data })); } catch {} },
+    read() { try { const s = JSON.parse(localStorage.getItem(SAVE_KEY) || "null"); return s && s.version === 2 ? s : null; } catch { return null; } },
+    write(data) { try { localStorage.setItem(SAVE_KEY, JSON.stringify({ version: 2, at: Date.now(), ...data })); } catch {} },
     clear() { try { localStorage.removeItem(SAVE_KEY); } catch {} },
   };
 

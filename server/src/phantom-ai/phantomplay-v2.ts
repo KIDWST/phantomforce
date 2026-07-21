@@ -31,6 +31,8 @@ import { fileURLToPath } from "node:url";
 import type { AccessSession } from "../access/session.js";
 import {
   isRatingAllowed,
+  isKidsLaneGame,
+  kidsLaneGame,
   mergeGameRatingOverride,
   PHANTOMPLAY_BUILT_IN_GAMES,
   type PhantomPlayGame,
@@ -192,7 +194,9 @@ function fullCatalog(submissions: PhantomPlaySubmission[], gameOverrides: Record
     kind: "community" as const, launchUrl: item.launchUrl, thumbnail: item.screenshots[0] || "", featured: item.featured,
     version: item.version, controls: item.controls, progressSupport: true, scoreSupport: true,
   }));
-  return [...PHANTOMPLAY_BUILT_IN_GAMES, ...community].map((game) => mergeGameRatingOverride(game, gameOverrides[game.id]));
+  return [...PHANTOMPLAY_BUILT_IN_GAMES, ...community]
+    .map((game) => mergeGameRatingOverride(game, gameOverrides[game.id]))
+    .map(kidsLaneGame);
 }
 
 // Full workspace-ceiling + profile-allow-set filter, shared by every surface
@@ -423,7 +427,9 @@ export async function getPhantomPlayGamePage(session: AccessSession, gameId: str
     reviews: ratings.reviews,
     myReview: store.reviews.find((item) => item.tenantId === tenantId && item.gameId === gameId && item.actorId === actorId) || null,
     patchNotes,
-    related: catalog.filter((item) => item.category === game.category && item.id !== gameId).slice(0, 4),
+    related: (isKidsLaneGame(game) ? catalog.filter(isKidsLaneGame) : catalog.filter((item) => !isKidsLaneGame(item)))
+      .filter((item) => item.category === game.category && item.id !== gameId)
+      .slice(0, 4),
     wishlisted: (store.wishlists[key] || []).includes(gameId),
     developerFollowed: (store.follows[key] || []).includes(game.developer),
     leaderboard: leaderboardRows(profiles, store, tenantId, gameId).slice(0, 5),
@@ -452,7 +458,10 @@ function leaderboardRows(profiles: V1Profile[], store: V2Store, tenantId: string
 
 export async function getPhantomPlayLeaderboard(session: AccessSession, gameId: string, options: { tenantId?: unknown } = {}) {
   const tenantId = tenantIdFor(session, options.tenantId);
+  const actorId = actorIdFor(session);
   const [store, v1] = await Promise.all([readStore(), readV1Store()]);
+  const game = visibleCatalogFor(store, v1, tenantId, actorId).find((item) => item.id === gameId);
+  if (!game) return { gameId, rows: [] };
   return { gameId, rows: leaderboardRows(tenantProfiles(v1.profiles, tenantId), store, tenantId, gameId) };
 }
 
@@ -467,7 +476,8 @@ export async function getPhantomPlayDiscovery(session: AccessSession, options: {
   // never surface through a secondary discovery row even if it has plays,
   // reviews, or is a brand-new community release.
   const catalog = visibleCatalogFor(store, v1, tenantId, actorId);
-  const visibleIds = new Set(catalog.map((game) => game.id));
+  const discoveryCatalog = catalog.filter((game) => !isKidsLaneGame(game));
+  const visibleIds = new Set(discoveryCatalog.map((game) => game.id));
   const profiles = tenantProfiles(v1.profiles, tenantId);
   const weekCutoff = Date.now() - 7 * 86400_000;
   const playCounts = new Map<string, number>();
@@ -483,8 +493,8 @@ export async function getPhantomPlayDiscovery(session: AccessSession, options: {
     .map((entry) => ({ gameId: entry.gameId, actorId: entry.actorId, label: entry.label }));
   return {
     trending: [...playCounts.entries()].filter(([id]) => known(id)).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([gameId, plays]) => ({ gameId, plays })),
-    topRated: catalog.map((game) => ({ gameId: game.id, ...avg(game.id) })).filter((row) => row.reviewCount >= 2 && (row.averageRating ?? 0) >= 3.5).sort((a, b) => (b.averageRating ?? 0) - (a.averageRating ?? 0)).slice(0, 6).map(({ gameId, averageRating }) => ({ gameId, averageRating })),
-    hiddenGems: catalog.map((game) => ({ gameId: game.id, plays: playCounts.get(game.id) || 0, ...avg(game.id) })).filter((row) => (row.averageRating ?? 0) >= 4 && row.plays < 10).slice(0, 6).map(({ gameId, averageRating }) => ({ gameId, averageRating })),
+    topRated: discoveryCatalog.map((game) => ({ gameId: game.id, ...avg(game.id) })).filter((row) => row.reviewCount >= 2 && (row.averageRating ?? 0) >= 3.5).sort((a, b) => (b.averageRating ?? 0) - (a.averageRating ?? 0)).slice(0, 6).map(({ gameId, averageRating }) => ({ gameId, averageRating })),
+    hiddenGems: discoveryCatalog.map((game) => ({ gameId: game.id, plays: playCounts.get(game.id) || 0, ...avg(game.id) })).filter((row) => (row.averageRating ?? 0) >= 4 && row.plays < 10).slice(0, 6).map(({ gameId, averageRating }) => ({ gameId, averageRating })),
     newReleases: v1.submissions.filter((item) => item.status === "approved" && visibleIds.has(`community:${item.id}`)).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 6).map((item) => ({ gameId: `community:${item.id}` })),
     friendsPlaying,
   };

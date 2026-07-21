@@ -1,4 +1,4 @@
-import { currentTenantId, isLiveAdminHost, isLocalDevHost, session } from "./store.js?v=phantom-live-20260721-10";
+import { currentTenantId, isLiveAdminHost, isLocalDevHost, session } from "./store.js?v=phantom-live-20260721-12";
 
 let activeConfiguration = null;
 let activeEntitlements = null;
@@ -287,6 +287,7 @@ function renderStudio(el, state, opts) {
           <label>Font<select data-cust-field="theme.font">${["Instrument Sans", "Inter", "DM Sans", "IBM Plex Sans", "Source Sans 3"].map((font) => `<option ${font === draft.theme.font ? "selected" : ""}>${font}</option>`).join("")}</select></label>
           <label>Primary color<input type="color" data-cust-field="theme.primary" value="${esc(draft.theme.primary)}"/></label>
           <label>Accent color<input type="color" data-cust-field="theme.accent" value="${esc(draft.theme.accent)}"/></label>
+          <label>Appearance<select data-cust-field="theme.colorMode"><option value="dark" ${draft.theme.colorMode === "dark" ? "selected" : ""}>Dark</option><option value="light" ${draft.theme.colorMode === "light" ? "selected" : ""}>Light</option></select></label>
           <label>Density<select data-cust-field="theme.density"><option value="comfortable" ${draft.theme.density === "comfortable" ? "selected" : ""}>Comfortable</option><option value="compact" ${draft.theme.density === "compact" ? "selected" : ""}>Compact</option></select></label>
           <label>Assistant tone<select data-cust-field="assistant.tone">${["direct", "professional", "friendly", "energetic", "concise"].map((tone) => `<option ${tone === draft.assistant.tone ? "selected" : ""}>${tone}</option>`).join("")}</select></label>
         </div>

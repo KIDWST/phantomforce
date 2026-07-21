@@ -1,4 +1,4 @@
-import { currentTenantId, friendlyBackendError, session } from "./store.js?v=phantom-live-20260721-10";
+import { currentTenantId, friendlyBackendError, session } from "./store.js?v=phantom-live-20260721-12";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 const CATEGORIES = ["All", "AI Tool", "Agent", "CLI", "Library", "Extension", "Model", "Template", "Dataset"];
@@ -28,6 +28,15 @@ const ui = {
   installMessage: "",
   buyingProductId: "",
   buyMessage: "",
+  editingToolId: "",
+};
+
+// Local asset paths (e.g. /app/assets/...) are safe to render as-is; anything
+// else must survive the same http(s) parse as external marketplace links.
+const safeAssetHref = (value) => {
+  const url = String(value ?? "").trim();
+  if (url.startsWith("/app/")) return url;
+  return safeHref(url);
 };
 
 let mountedRoot = null;
@@ -108,9 +117,10 @@ function productCard(product) {
   const buyUrl = safeHref(product.buyUrl);
   const isBuying = ui.buyingProductId === product.id;
   const available = product.status === "available";
-  const imageUrl = String(product.imageUrl || "").trim();
+  const imageUrl = safeAssetHref(product.imageUrl);
+  const referenceUrl = safeAssetHref(product.referenceImageUrl);
   return `<article class="ps-product ${product.featured ? "is-featured" : ""}">
-    ${imageUrl ? `<div class="ps-product-media"><img src="${esc(imageUrl)}" alt="${esc(product.name)} screenshot" loading="lazy" /></div>` : ""}
+    ${imageUrl ? `<div class="ps-product-media"><img src="${esc(imageUrl)}" alt="${esc(product.name)} key art" loading="lazy" />${referenceUrl ? `<span class="ps-media-note">AI key art from the real product UI · <a href="${esc(referenceUrl)}" target="_blank" rel="noopener noreferrer">View real UI</a></span>` : ""}</div>` : ""}
     <header>
       <div>
         <p class="ps-kicker">${esc(product.category)} / ${esc(product.delivery || "Digital delivery")}</p>
@@ -254,33 +264,36 @@ function renderDiscover() {
 
 function renderSubmit() {
   const remaining = Math.max(0, Number(ui.snapshot?.submissionLimit || 0) - Number((ui.snapshot?.submissions || []).length));
+  const editing = ui.editingToolId ? (ui.snapshot?.submissions || []).find((tool) => tool.id === ui.editingToolId) : null;
   return `<section class="ps-submit-layout">
-    <form class="ps-form" data-ps-tool-form>
+    <form class="ps-form" data-ps-tool-form data-ps-editing="${esc(editing?.id || "")}">
       <header>
         <div>
-          <p class="ps-kicker">SUBMIT AI TOOL</p>
-          <h2>Add to PhantomStore review</h2>
+          <p class="ps-kicker">${editing ? "EDIT AI TOOL" : "SUBMIT AI TOOL"}</p>
+          <h2>${editing ? `Revise "${esc(editing.name || "Untitled tool")}"` : "Add to PhantomStore review"}</h2>
         </div>
-        <span>${remaining} slots left</span>
+        <span>${editing ? esc(statusLabel(editing.status)) : `${remaining} slots left`}</span>
       </header>
-      <label>Name<input name="name" maxlength="90" required placeholder="Agent Brief Builder" /></label>
-      <label>One-line summary<input name="summary" maxlength="220" required placeholder="Turns messy notes into clean operator briefs." /></label>
-      <label>Description<textarea name="description" rows="5" maxlength="4000" required placeholder="What it does, who it helps, setup notes, and why it belongs in an AI marketplace."></textarea></label>
+      ${editing?.moderationNote ? `<blockquote class="ps-edit-note">Reviewer note: ${esc(editing.moderationNote)}</blockquote>` : ""}
+      <label>Name<input name="name" maxlength="90" required placeholder="Agent Brief Builder" value="${esc(editing?.name || "")}" /></label>
+      <label>One-line summary<input name="summary" maxlength="220" required placeholder="Turns messy notes into clean operator briefs." value="${esc(editing?.summary || "")}" /></label>
+      <label>Description<textarea name="description" rows="5" maxlength="4000" required placeholder="What it does, who it helps, setup notes, and why it belongs in an AI marketplace.">${esc(editing?.description || "")}</textarea></label>
       <div class="ps-row">
-        <label>Category<select name="category">${CATEGORIES.filter((cat) => cat !== "All").map((cat) => `<option>${esc(cat)}</option>`).join("")}</select></label>
-        <label>Install method<select name="installMethod">${INSTALL_METHODS.map((method) => `<option>${esc(method)}</option>`).join("")}</select></label>
-        <label>Version<input name="version" maxlength="40" value="1.0.0" /></label>
+        <label>Category<select name="category">${CATEGORIES.filter((cat) => cat !== "All").map((cat) => `<option ${editing?.category === cat ? "selected" : ""}>${esc(cat)}</option>`).join("")}</select></label>
+        <label>Install method<select name="installMethod">${INSTALL_METHODS.map((method) => `<option ${editing?.installMethod === method ? "selected" : ""}>${esc(method)}</option>`).join("")}</select></label>
+        <label>Version<input name="version" maxlength="40" value="${esc(editing?.version || "1.0.0")}" /></label>
       </div>
-      <label>Source / repo URL<input name="repoUrl" type="url" required placeholder="https://github.com/you/tool" /></label>
-      <label>Homepage URL<input name="homepageUrl" type="url" placeholder="https://yourtool.example" /></label>
-      <label>Install command<input name="installCommand" maxlength="400" placeholder="npm install -g your-tool" /></label>
+      <label>Source / repo URL<input name="repoUrl" type="url" required placeholder="https://github.com/you/tool" value="${esc(editing?.repoUrl || "")}" /></label>
+      <label>Homepage URL<input name="homepageUrl" type="url" placeholder="https://yourtool.example" value="${esc(editing?.homepageUrl || "")}" /></label>
+      <label>Install command<input name="installCommand" maxlength="400" placeholder="npm install -g your-tool" value="${esc(editing?.installCommand || "")}" /></label>
       <div class="ps-row ps-row-small">
-        <label>Tags<input name="tags" maxlength="240" placeholder="agent, crm, captions" /></label>
-        <label>License<input name="license" maxlength="60" placeholder="MIT" /></label>
+        <label>Tags<input name="tags" maxlength="240" placeholder="agent, crm, captions" value="${esc((editing?.tags || []).join(", "))}" /></label>
+        <label>License<input name="license" maxlength="60" placeholder="MIT" value="${esc(editing?.license || "")}" /></label>
       </div>
       <div class="ps-form-actions">
+        ${editing ? `<button type="button" class="ps-secondary" data-ps-cancel-edit ${ui.busy ? "disabled" : ""}>Cancel edit</button>` : ""}
         <button type="submit" class="ps-secondary" data-submit-mode="draft" ${ui.busy ? "disabled" : ""}>Save draft</button>
-        <button type="submit" class="ps-primary" data-submit-mode="submit" ${ui.busy ? "disabled" : ""}>Submit for review</button>
+        <button type="submit" class="ps-primary" data-submit-mode="submit" ${ui.busy ? "disabled" : ""}>${editing ? "Resubmit for review" : "Submit for review"}</button>
       </div>
       <p data-ps-form-message>${esc(ui.message)}</p>
     </form>
@@ -298,6 +311,8 @@ function renderSubmit() {
 
 function submissionCard(tool) {
   const canModerate = !!ui.snapshot?.canModerate;
+  const isMine = tool.developerId === ui.snapshot?.actorId;
+  const editable = (isMine || canModerate) && (canModerate || !["approved", "disabled"].includes(tool.status));
   return `<article class="ps-submission">
     <header>
       <div>
@@ -309,6 +324,7 @@ function submissionCard(tool) {
     <p>${esc(tool.summary || "No summary yet.")}</p>
     <div class="ps-tags">${(tool.tags || []).map((tag) => `<em>${esc(tag)}</em>`).join("")}</div>
     ${tool.moderationNote ? `<blockquote>${esc(tool.moderationNote)}</blockquote>` : ""}
+    ${editable ? `<div class="ps-card-actions"><button type="button" class="ps-secondary" data-ps-edit="${esc(tool.id)}">Edit &amp; resubmit</button></div>` : ""}
     ${canModerate ? `<div class="ps-moderate">
       <input data-ps-note="${esc(tool.id)}" maxlength="1000" placeholder="Review note" />
       <label><input type="checkbox" data-ps-featured="${esc(tool.id)}" ${tool.featured ? "checked" : ""}/> Featured</label>
@@ -368,6 +384,7 @@ function render() {
 
 async function submitForm(form, submit) {
   ui.busy = true;
+  const editingId = form.dataset.psEditing || "";
   ui.message = submit ? "Submitting to review..." : "Saving draft...";
   render();
   try {
@@ -375,8 +392,10 @@ async function submitForm(form, submit) {
     const payload = Object.fromEntries(data.entries());
     payload.tags = String(payload.tags || "").split(",").map((tag) => tag.trim()).filter(Boolean);
     payload.submit = submit;
-    const result = await api("/api/phantomstore/tools", { method: "POST", body: JSON.stringify(payload) });
-    ui.message = submit ? "Submitted for review." : `Draft saved. ${result.issues?.length ? result.issues.join(" ") : ""}`;
+    const endpoint = editingId ? `/api/phantomstore/tools/${encodeURIComponent(editingId)}` : "/api/phantomstore/tools";
+    const result = await api(endpoint, { method: "POST", body: JSON.stringify(payload) });
+    ui.message = submit ? (editingId ? "Resubmitted for review." : "Submitted for review.") : `Draft saved. ${result.issues?.length ? result.issues.join(" ") : ""}`;
+    ui.editingToolId = "";
     ui.tab = submit ? "review" : "submit";
     await hydrate();
   } catch (error) {
@@ -450,7 +469,16 @@ async function copyInstall(id) {
 
 function bind() {
   mountedRoot.querySelectorAll("[data-ps-tab]").forEach((button) => {
-    button.onclick = () => { ui.tab = button.dataset.psTab || "discover"; ui.message = ""; render(); };
+    button.onclick = () => { ui.tab = button.dataset.psTab || "discover"; ui.message = ""; if (ui.tab !== "submit") ui.editingToolId = ""; render(); };
+  });
+  mountedRoot.querySelectorAll("[data-ps-edit]").forEach((button) => {
+    button.onclick = () => { ui.editingToolId = button.dataset.psEdit || ""; ui.message = ""; ui.tab = "submit"; render(); };
+  });
+  mountedRoot.querySelector("[data-ps-cancel-edit]")?.addEventListener("click", () => {
+    ui.editingToolId = "";
+    ui.message = "";
+    ui.tab = "review";
+    render();
   });
   mountedRoot.querySelector("[data-ps-refresh]")?.addEventListener("click", hydrate);
   mountedRoot.querySelector("[data-ps-search]")?.addEventListener("input", (event) => {

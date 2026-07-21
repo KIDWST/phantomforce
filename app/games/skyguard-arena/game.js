@@ -78,6 +78,20 @@ const MAPS = [
       [[.02,.50],[.18,.71],[.33,.71],[.40,.57],[.55,.57],[.66,.75],[.82,.75],[.98,.47]]
     ],
     slots: [[.10,.19],[.10,.81],[.22,.40],[.22,.60],[.34,.20],[.34,.80],[.44,.36],[.44,.64],[.57,.34],[.57,.66],[.68,.15],[.68,.85],[.80,.39],[.82,.62]]
+  },
+  {
+    id: "neontangle",
+    name: "Neon Tangle",
+    objectiveLabel: "Braided relay race",
+    rule: "Four braided flight corridors cross one relay spine. Fast air raids arrive early, but the middle can be locked down by smart range overlap.",
+    objective: "relay",
+    routes: [
+      [[.02,.44],[.13,.25],[.30,.18],[.46,.34],[.58,.26],[.73,.31],[.98,.49]],
+      [[.02,.56],[.17,.45],[.30,.52],[.43,.47],[.56,.55],[.72,.46],[.98,.49]],
+      [[.02,.50],[.16,.66],[.34,.78],[.48,.62],[.62,.70],[.80,.72],[.98,.49]],
+      [[.02,.50],[.20,.50],[.36,.37],[.50,.50],[.64,.63],[.80,.50],[.98,.49]]
+    ],
+    slots: [[.09,.29],[.10,.70],[.21,.20],[.23,.57],[.30,.82],[.38,.33],[.42,.66],[.50,.25],[.52,.75],[.60,.45],[.66,.60],[.72,.26],[.78,.73],[.88,.40],[.89,.62]]
   }
 ];
 const MAP_BY_ID = Object.fromEntries(MAPS.map((map) => [map.id, map]));
@@ -637,7 +651,7 @@ function botAdvanceWave(theBot, waveNo, isBoss) {
 function objectiveStart() {
   const commander = currentCommander();
   const map = currentMap();
-  if (map.objective === "relay") return { relay: commander.id === "ilex" ? 17 : 14 };
+  if (map.objective === "relay") return { relay: commander.id === "ilex" ? 18 : map.id === "neontangle" ? 16 : 14 };
   if (map.objective === "shield") return { shield: commander.id === "ilex" ? 12 : 8, maxShield: commander.id === "ilex" ? 12 : 8 };
   return { gates: [{ t: .39, hp: commander.id === "rook" ? 300 : 240, max: commander.id === "rook" ? 300 : 240 }, { t: .67, hp: commander.id === "rook" ? 270 : 215, max: commander.id === "rook" ? 270 : 215 }] };
 }
@@ -932,6 +946,12 @@ function triggerStormStrike() {
   targets.forEach((target) => effects.push({ type: "lightning", ...target, color: "#65d8cf", life: 1.15, age: 0, struck: false, size: 58 }));
   announceMapEvent("Stormglass discharge telegraphed");
 }
+function triggerRelaySurge() {
+  const route = currentMap().routes[3] || currentMap().routes[1] || currentMap().routes[0];
+  const point = pointAt(route, .5);
+  effects.push({ type: "relay", x: point.x, y: point.y, color: "#35f7ff", life: .95, age: 0, struck: false, surge: true, size: 118 });
+  announceMapEvent("Neon relay surge charging center lane");
+}
 function updateMapHazards(dt) {
   mapHazardClock -= dt;
   if (currentMap().id === "cloudbreak" && mapHazardClock <= 0) {
@@ -946,6 +966,9 @@ function updateMapHazards(dt) {
     mapHazardClock = 9;
     const intact = mapObjective.gates.filter((gate) => gate.hp > 0).length;
     announceMapEvent(intact ? intact + " gate lines holding" : "All gate lines breached");
+  } else if (currentMap().id === "neontangle" && mapHazardClock <= 0) {
+    mapHazardClock = 6.5 + Math.random() * 2.2;
+    triggerRelaySurge();
   }
   effects.filter((effect) => effect.type === "lightning" && !effect.struck && effect.age >= .78).forEach((effect) => {
     effect.struck = true;
@@ -954,6 +977,16 @@ function updateMapHazards(dt) {
       if (enemy.alive && Math.hypot(enemy.x - effect.x, enemy.y - effect.y) < 62) dealDamage(enemy, 34, { pierce: 3, color: "#65d8cf" });
     });
     cameraShake = .28;
+  });
+  effects.filter((effect) => effect.type === "relay" && effect.surge && !effect.struck && effect.age >= .45).forEach((effect) => {
+    effect.struck = true;
+    enemies.forEach((enemy) => {
+      if (!enemy.alive || Math.hypot(enemy.x - effect.x, enemy.y - effect.y) > 116) return;
+      dealDamage(enemy, 18, { pierce: 2, color: "#35f7ff" });
+      enemy.slowAmount = Math.max(enemy.slowAmount, .5);
+      enemy.slowUntil = Math.max(enemy.slowUntil, simTime + 2.4);
+    });
+    cameraShake = Math.min(.3, cameraShake + .12);
   });
 }
 
@@ -2580,10 +2613,5 @@ showScreen("title");
 requestAnimationFrame(resizeCanvas);
 requestAnimationFrame(frame);
 host("ready");
-setTimeout(() => {
-  if (!meta.tutorialSeen && currentScreen === "title") {
-    tutorialIndex = 0;
-    renderTutorial();
-    overlayTutorial.hidden = false;
-  }
-}, 180);
+// Do not block the title screen with the manual. The field manual stays available
+// from the title footer, but first load must let the player draft and launch.

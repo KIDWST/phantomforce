@@ -104,6 +104,20 @@ try {
   try { await store.updatePhantomStoreTool(devA, created.tool.id, { summary: "Sneaky re-edit." }); } catch { staleUpdateBlocked = true; }
   assert(staleUpdateBlocked, "A developer must not silently re-edit a tool that has already left draft/submitted state without review.");
 
+  const crossEdit = await store.updatePhantomStoreTool(devB, draft.tool.id, { summary: "Hijacked." });
+  assert(crossEdit === null, "A developer must not edit another developer's submission.");
+
+  const revised = await store.updatePhantomStoreTool(devA, draft.tool.id, {
+    name: "Draft Only",
+    summary: "Now finished and ready.",
+    description: "The draft was completed through the edit flow and resubmitted for review.",
+    repoUrl: "https://github.com/example/draft-only",
+    installMethod: "manual",
+    submit: true,
+  });
+  assert(revised?.tool.status === "submitted", "A developer should be able to finish a draft through the edit flow and resubmit it.");
+  assert(revised?.tool.summary === "Now finished and ready.", "The edit flow should persist revised fields.");
+
   const status = await store.getPhantomStoreStatus();
   assert(status.tools === 2 && status.approvedTools === 0, "Status should reflect total tools written and current approved count (rejected submissions never get stored).");
   assert(status.products >= 3 && status.sellers >= 1, "Status should include seeded product and seller counts.");
@@ -140,6 +154,10 @@ try {
   assert(ownerModeration.statusCode === 200 && ownerModeration.json().tool.status === "approved", "The moderation route should approve a tool for an admin session.");
   const installRoute = await app.inject({ method: "POST", url: `/api/phantomstore/tools/${routeToolId}/install`, headers: { Authorization: `Bearer ${ownerToken}` } });
   assert(installRoute.statusCode === 200 && installRoute.json().installClicks === 1, "The install-click route should record a click for an approved tool.");
+  const routeEdit = await app.inject({ method: "POST", url: `/api/phantomstore/tools/${routeToolId}`, headers: { Authorization: `Bearer ${ownerToken}` }, payload: { summary: "Edited through the update route.", submit: true } });
+  assert(routeEdit.statusCode === 200 && routeEdit.json().tool.summary === "Edited through the update route.", "The update route should save edits for an authorized session.");
+  const routeEditMissing = await app.inject({ method: "POST", url: "/api/phantomstore/tools/tool-does-not-exist", headers: { Authorization: `Bearer ${ownerToken}` }, payload: { summary: "Nope." } });
+  assert(routeEditMissing.statusCode === 404, "The update route should 404 for unknown tools.");
   const productBuyRoute = await app.inject({ method: "POST", url: "/api/phantomstore/products/product-termina/buy", headers: { Authorization: `Bearer ${ownerToken}` } });
   assert(productBuyRoute.statusCode === 200 && productBuyRoute.json().checkout.url.includes("termina"), "The product buy route should prepare the Termina checkout target.");
   await app.close();

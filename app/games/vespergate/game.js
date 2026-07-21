@@ -305,8 +305,8 @@
     host("progress", { progress: Math.round(progressPct()), state: { room: id } });
   }
   function progressPct() {
-    const order = ["fall", "teach", "bells", "boss"];
-    const i = order.indexOf(state.roomId);
+    const order = ["fall", "teach", "bells", "boss", "ossuary1", "ossuary2", "belfry"];
+    const i = Math.max(0, order.indexOf(state.roomId));
     return (i / order.length) * 100 + (state.roomId === "boss" && boss ? (1 - boss.hp / boss.maxHp) * (100 / order.length) : 0);
   }
 
@@ -528,6 +528,7 @@
       if (ex.needBossDead && !(boss && boss.dead) && !state.completeSent) continue;
       const ex0 = ex.gx * T, ey0 = ex.gy * T;
       if (player.x > ex0 - 4 && player.x < ex0 + T + 4 && player.y > ey0 - 12 && player.y < ey0 + T + 12) {
+        if (ex.complete) { onFinalWin(); return; }
         loadRoom(ex.to, ex.toSpawn); return;
       }
     }
@@ -543,6 +544,14 @@
     VG.save.write({ roomId: "boss", hp: player.hp, ash: player.ash, score: state.score, kills: state.kills, bossDead: true });
     toast("THE BRONZE IS SILENT — a path opens east", player.x, player.y - 30, "#8fe9ff");
     setHint("Bellmother has fallen. A route into the Glass Ossuary opens to the east.");
+  }
+  function onFinalWin() {
+    state.score += 1500;
+    VG.sfxBell(330, 0.28);
+    VG.save.write({ roomId: "belfry", hp: player.hp, ash: player.ash, score: state.score, kills: state.kills, bossDead: true, belfryComplete: true });
+    host("complete", { score: state.score, progress: 100, state: { kills: state.kills, relic: "upper-belfry", region: "glass-ossuary" } });
+    state.phase = "win";
+    showOverlay("win");
   }
   function onDead() {
     player.dead = true; state.phase = "dead"; VG.sfx(90, 0.4, "sawtooth", 0.06);
@@ -798,7 +807,7 @@
     } else if (kind === "dead") {
       el.innerHTML = `<div class="vg-panel"><p class="vg-kick" style="color:#ff5c74">THE FOLD TOOK YOU</p><h1>COLLAPSED</h1><p class="vg-sub">Wake at the last shrine.</p><div class="vg-btns"><button class="vg-btn vg-primary" data-vg-retry>Wake</button><button class="vg-btn" data-vg-title>Title</button></div></div>`;
     } else if (kind === "win") {
-      el.innerHTML = `<div class="vg-panel"><p class="vg-kick" style="color:#8fe9ff">THE BRONZE IS SILENT</p><h1>BELLMOTHER FELL</h1><p class="vg-sub">The Cathedral quiets. A shortcut to the Belfry opens — the slice ends here. Score ${state.score}.</p><div class="vg-btns"><button class="vg-btn vg-primary" data-vg-title>Return</button></div></div>`;
+      el.innerHTML = `<div class="vg-panel"><p class="vg-kick" style="color:#8fe9ff">THE BELFRY IS OPEN</p><h1>VESPERGATE CLEARED</h1><p class="vg-sub">You carried the Bellmother's silence through the Glass Ossuary and reached the upper aperture. Score ${state.score}.</p><div class="vg-btns"><button class="vg-btn vg-primary" data-vg-title>Return</button></div></div>`;
     } else if (kind === "settings") {
       const s = VG.settings;
       const row = (label, key, min, max, step) => `<label class="vg-set"><span>${label}</span><input type="range" min="${min}" max="${max}" step="${step}" value="${s[key]}" data-vg-set="${key}"/></label>`;

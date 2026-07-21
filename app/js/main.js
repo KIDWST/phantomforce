@@ -6,48 +6,48 @@ import {
   redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260721-10";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260721-10";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260721-10";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260721-10";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260721-10";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260721-10";
-import { mountManagedGrowthReport } from "./managedgrowth.js?v=phantom-live-20260721-10";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260721-10";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260721-10";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260721-10";
-import { mountPhantomAI } from "./phantomai.js?v=phantom-live-20260721-10";
-import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260721-10";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260721-10";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260721-10";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260721-10";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode, refreshCompanionCore } from "./companion.js?v=phantom-live-20260721-10";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260721-10";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260721-10";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260721-10";
-import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260721-10";
-import { mountAmbient } from "./ambient.js?v=phantom-live-20260721-10";
-import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260721-10";
+} from "./store.js?v=phantom-live-20260721-12";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260721-12";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260721-12";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260721-12";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260721-12";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260721-12";
+import { mountManagedGrowthReport } from "./managedgrowth.js?v=phantom-live-20260721-12";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260721-12";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260721-12";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260721-12";
+import { mountPhantomAI } from "./phantomai.js?v=phantom-live-20260721-12";
+import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260721-12";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260721-12";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260721-12";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260721-12";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode, refreshCompanionCore } from "./companion.js?v=phantom-live-20260721-12";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260721-12";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260721-12";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260721-12";
+import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260721-12";
+import { mountAmbient } from "./ambient.js?v=phantom-live-20260721-12";
+import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260721-12";
 import {
   fetchAuthConfig, databaseLogin, databaseLogout, databaseSignup, databaseForgotUsername, databaseForgotPassword,
   databaseResetPassword, databaseAcceptInvitation, databaseVerify2fa, databaseStart2faSetup, databaseConfirm2fa, databaseRegenerate2faBackupCodes, databaseDisable2fa,
   switchOrg, fetchAuthMe, fetchEntitlementsSummary,
-} from "./orgs.js?v=phantom-live-20260721-10";
-import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260721-10";
-import { assetsAvailable } from "./orgs.js?v=phantom-live-20260721-10";
-import { renderPhantomStore } from "./phantomstore.js?v=phantom-live-20260721-10";
-import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260721-10";
+} from "./orgs.js?v=phantom-live-20260721-12";
+import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260721-12";
+import { assetsAvailable } from "./orgs.js?v=phantom-live-20260721-12";
+import { renderPhantomStore } from "./phantomstore.js?v=phantom-live-20260721-12";
+import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260721-12";
 // PhantomPlay V2 platform shell (Home/Solo/Friends/Workspace/Dev Hub) - opt-in
 // while it hardens: set localStorage "pf.phantomplay.v2" = "1" (the V2 shell has
 // a "Classic view" button to switch back). Classic stays the default experience.
-import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260721-10";
+import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260721-12";
 const phantomPlayV2Opted = () => { try { return localStorage.getItem("pf.phantomplay.v2") === "1"; } catch { return false; } };
-import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260721-10";
+import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260721-12";
 import {
   customizeNavigation,
   loadOrganizationCustomization,
-} from "./customization.js?v=phantom-live-20260721-10";
-import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260721-10";
+} from "./customization.js?v=phantom-live-20260721-12";
+import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260721-12";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -594,6 +594,12 @@ async function refreshNavEntitlements({ rerender = true } = {}) {
 }
 let activeNav = "dashboard";
 let activePageId = null;
+/* The right-hand deck is the launcher. The left-hand rail is a working set:
+   destinations only become tabs after somebody opens them. */
+const openNavTabs = new Set(["dashboard"]);
+function markNavTabOpen(id) {
+  if (NAV.some((item) => item.id === id && canAccessSurface(item))) openNavTabs.add(id);
+}
 /* which page last played its entrance animation — store-change rerenders
    rebuild the same page's DOM constantly, and replaying the transition on
    every save would make the UI feel broken instead of alive. Only a real
@@ -653,18 +659,18 @@ function renderNav() {
   const bottomNav = $("[data-nav-bottom]");
   const pending = visible(store.state.approvals).filter((a) => a.status === "pending").length;
   const items = orderedNavItems();
-  const mainItems = items.filter((n) => n.navZone !== "bottom");
-  const bottomItems = items.filter((n) => n.navZone === "bottom");
+  const mainItems = items.filter((n) => openNavTabs.has(n.id));
+  const bottomItems = items;
   MOBILE_NAV = mobileItemsFromNav(items);
-  const itemHtml = (n) => `
-    <button class="nav-item ${activeNav === n.id ? "is-active" : ""} ${n.navZone === "bottom" ? "nav-item-bottom" : ""} ${n.quiet ? "nav-item-quiet" : ""} ${n.navDisabled ? "nav-item-disabled" : ""}" data-nav-id="${n.id}" ${activeNav === n.id ? 'aria-current="page"' : ""} ${n.navDisabled ? 'aria-disabled="true" title="Disabled for this plan; the owner can enable it later."' : ""}>
+  const itemHtml = (n, launcher = false) => `
+    <button class="nav-item ${activeNav === n.id ? "is-active" : ""} ${launcher ? "nav-launcher" : "nav-open-tab"} ${n.quiet ? "nav-item-quiet" : ""} ${n.navDisabled ? "nav-item-disabled" : ""}" data-nav-id="${n.id}" ${activeNav === n.id && !launcher ? 'aria-current="page"' : ""} ${n.navDisabled ? 'aria-disabled="true" title="Disabled for this plan; the owner can enable it later."' : `title="${launcher ? `Open ${esc(n.label)}` : esc(n.label)}"`}>
       ${svg(n.icon)}
       <span>${n.label}</span>
       ${n.badge && pending ? `<em class="nav-badge">${pending}</em>` : ""}
       ${n.navDisabled ? `<em class="nav-pill is-locked">OFF</em>` : navStatusPill(n)}
     </button>`;
-  nav.innerHTML = mainItems.map(itemHtml).join("");
-  if (bottomNav) bottomNav.innerHTML = bottomItems.map(itemHtml).join("");
+  nav.innerHTML = mainItems.map((item) => itemHtml(item)).join("");
+  if (bottomNav) bottomNav.innerHTML = bottomItems.map((item) => itemHtml(item, true)).join("");
   renderMobileBottomNav();
 }
 
@@ -725,6 +731,7 @@ function goNav(id) {
     speak(`${item.label} is not included in this test tier. Plan & access is open so you can switch tiers.`, "", "alert");
     return;
   }
+  markNavTabOpen(id);
   activeNav = id;
   renderNav();
   if (id !== "dashboard") {
@@ -1433,7 +1440,7 @@ const MODES = {
   admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260721-10";
+const POSE_VERSION = "phantom-live-20260721-12";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -3499,6 +3506,7 @@ async function checkBuildFreshness() {
 function renderDashboardPage(pushHash = true) {
   activePageId = null;
   activeNav = "dashboard";
+  markNavTabOpen("dashboard");
   clearOverlayOnly();
   ensureDashboardShell();
   setGhostMood("idle", { emotion: "happy", ms: 1200 });
@@ -3520,7 +3528,10 @@ function renderWorkspacePage(id, pushHash = true) {
   const root = $("[data-console]");
   if (!root) return;
   const navHit = navForWorkspace(key);
-  if (navHit) activeNav = navHit.id;
+  if (navHit) {
+    activeNav = navHit.id;
+    markNavTabOpen(navHit.id);
+  }
   activePageId = key;
   clearOverlayOnly();
   root.className = `console console-workspace ${def.wide ? "console-workspace-wide" : ""}`.trim();
@@ -3537,7 +3548,7 @@ function renderWorkspacePage(id, pushHash = true) {
           <h1>${esc(def.title)}</h1>
         </div>
       </header>`}
-      ${pageWorkerHtml(key, def)}
+      ${key === "phantomplay" ? "" : pageWorkerHtml(key, def)}
       <div class="workspace-page-body" data-workspace-page-body></div>
     </section>`;
   renderNav();
@@ -3586,7 +3597,7 @@ function openWorkspace(id, pushHash = true) {
           </div>
           <button class="overlay-x" data-overlay-close aria-label="Close workspace">✕</button>
         </header>
-        ${pageWorkerHtml(key, def)}
+        ${key === "phantomplay" ? "" : pageWorkerHtml(key, def)}
         <div class="overlay-body" data-overlay-body></div>
       </section>
     </div>`;

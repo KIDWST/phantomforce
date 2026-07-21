@@ -411,8 +411,12 @@ export const PHANTOMPLAY_KIDS_ONLY_GAME_IDS = new Set([
   "sudoku-signal",
 ]);
 
-function kidsLaneGame(game: PhantomPlayGame): PhantomPlayGame {
-  const kidsOnly = PHANTOMPLAY_KIDS_ONLY_GAME_IDS.has(game.id) || game.category.toLowerCase() === "kids";
+export function isKidsLaneGame(game: PhantomPlayGame): boolean {
+  return PHANTOMPLAY_KIDS_ONLY_GAME_IDS.has(game.id) || game.category.toLowerCase() === "kids";
+}
+
+export function kidsLaneGame(game: PhantomPlayGame): PhantomPlayGame {
+  const kidsOnly = isKidsLaneGame(game);
   if (!kidsOnly) return game;
   const tags = Array.from(new Set(["kids", ...(game.tags || [])]));
   return { ...game, category: "Kids", tags, featured: false };
@@ -903,8 +907,8 @@ export const PHANTOMPLAY_BUILT_IN_GAMES: PhantomPlayGame[] = [
   {
     id: "phantom-strike",
     title: "Phantom Strike",
-    summary: "First-person combat with full mouse-look, sprint/jump/crouch, ADS, reloads, bots, three military maps, and real local split-screen.",
-    description: "A network-silent first-person shooter with real vertical aim (shots respect where you point, including over cover), sprint, jump, crouch, aim-down-sights, ammo and reloads, low sandbag cover that protects crouching fighters, three 24x24 military maps with buildings and containers, medkit and ammo field pickups that bots also contest, three bot difficulty tiers, layered synthesized combat audio with positional enemy fire, a rotating minimap, compass, killfeed, Solo Ops against a labeled four-bot squad, and genuine same-device 1v1 split-screen.",
+    summary: "First-person combat with full mouse-look, sprint/jump/crouch, ADS, reloads, bots, four military maps, a DMR, and real local split-screen.",
+    description: "A network-silent first-person shooter with real vertical aim (shots respect where you point, including over cover), sprint, jump, crouch, aim-down-sights, ammo and reloads, low sandbag cover that protects crouching fighters, four 24x24 military maps with buildings, containers, the new Neon Bazaar lane maze, medkit and ammo field pickups that bots also contest, four primary weapon builds, three bot difficulty tiers, layered synthesized combat audio with positional enemy fire, a rotating minimap, compass, killfeed, Solo Ops against a labeled four-bot squad, and genuine same-device 1v1 split-screen.",
     category: "Arcade",
     tags: ["fps", "shooter", "first-person", "bots", "multiplayer", "split-screen", "gamepad"],
     contentRating: "teen",
@@ -913,10 +917,10 @@ export const PHANTOMPLAY_BUILT_IN_GAMES: PhantomPlayGame[] = [
     developer: "Tak",
     developerAvatar: TAK_AVATAR,
     kind: "built_in",
-    launchUrl: "/app/games/phantom-strike.html?v=2.1.0",
+    launchUrl: "/app/games/phantom-strike.html?v=2.2.0",
     thumbnail: GAME_ART_BY_SLUG["phantom-strike"],
     featured: true,
-    version: "2.1.0",
+    version: "2.2.0",
     controls: "P1: click to lock the mouse - full look including up/down, WASD moves, Shift sprints, Space jumps, Ctrl/C crouches, left mouse fires, right mouse aims down sights, R reloads (F fires without the mouse, Q/E turn). Gamepad: sticks move/look, RT fire, LT ADS, A jump, B crouch, X reload, L3 sprint. P2 (split-screen): arrows turn/move, comma/period strafe, M jumps, Enter or slash fires, or a second gamepad.",
     progressSupport: true,
     scoreSupport: true,
@@ -925,8 +929,8 @@ export const PHANTOMPLAY_BUILT_IN_GAMES: PhantomPlayGame[] = [
   {
     id: "vespergate",
     title: "Vespergate: The Hollow Geometry",
-    summary: "Gothic portal-action: the left hand makes force, the right hand folds space — turn the room into a weapon.",
-    description: "An original 2D gothic action-adventure. Fire the Cinder Hand from the left while opening two linked Vesper Gates with the right — a real basis-transform portal system where a shot, an enemy, a bell shockwave, or you keep momentum through the fold. Cross gates to preserve speed, redirect projectiles behind shields, and weaponize spatial strain. The Cathedral of Falling Bells vertical slice: an opening fall, a teaching threshold, a bell dungeon with shielded guards, snipers and gate leeches, and the Bellmother boss across three phases, then a secondary Glass Ossuary region (mirror-bone that banks your shots, saint-glass, Glass Mourners, and the Mirror Litany relic). Keyboard + mouse or gamepad, with accessibility settings, save/resume, and a synthesized cathedral soundscape.",
+    summary: "Gothic portal-action with a longer Cathedral-to-Glass-Ossuary campaign, mirror rooms, and a real finish.",
+    description: "An original 2D gothic action-adventure. Fire the Cinder Hand from the left while opening two linked Vesper Gates with the right — a real basis-transform portal system where a shot, an enemy, a bell shockwave, or you keep momentum through the fold. Cross gates to preserve speed, redirect projectiles behind shields, and weaponize spatial strain. The campaign runs from the Cathedral of Falling Bells into the Glass Ossuary and Upper Belfry: shielded guards, snipers, gate leeches, Bellmother, mirror-bone bank shots, saint-glass gate surfaces, Glass Mourners, and a true final aperture. Keyboard + mouse or gamepad, with accessibility settings, save/resume, and a synthesized cathedral soundscape.",
     category: "Arcade",
     tags: ["action-adventure", "portal", "metroidvania", "gothic", "twin-stick", "gamepad", "touch"],
     contentRating: "teen",
@@ -934,10 +938,10 @@ export const PHANTOMPLAY_BUILT_IN_GAMES: PhantomPlayGame[] = [
     developer: "Tak",
     developerAvatar: TAK_AVATAR,
     kind: "built_in",
-    launchUrl: "/app/games/vespergate/index.html?v=1.1.0",
+    launchUrl: "/app/games/vespergate/index.html?v=1.2.0",
     thumbnail: CATEGORY_ART["Arcade"],
     featured: true,
-    version: "1.1.0",
+    version: "1.2.0",
     controls: "Move WASD, jump Space, dash Shift. Left-click / Left Trigger fires the Cinder Hand; right-click / Right Trigger places a Vesper Gate; Q or RB swaps gate endpoint; F or Y vents portal strain; E interacts; 1/2 or LB swaps shot. Full gamepad support.",
     progressSupport: true,
     scoreSupport: true,
@@ -1262,12 +1266,13 @@ function historySummary(profile: PlayerProfile) {
 }
 
 function phantomLeaderboards(store: PhantomPlayStore, catalog: PhantomPlayGame[], actorId: string) {
-  const gameIds = new Set(catalog.map((game) => game.id));
+  const visibleCatalog = catalog.filter((game) => !isKidsLaneGame(game));
+  const gameIds = new Set(visibleCatalog.map((game) => game.id));
   const scores: Array<{ gameId: string; gameTitle: string; player: string; score: number; seconds: number; updatedAt: string; isYou: boolean }> = [];
   for (const profile of Object.values(store.profiles)) {
     for (const session of profile.sessions) {
       if (!gameIds.has(session.gameId) || session.score === null) continue;
-      const gameTitle = catalog.find((game) => game.id === session.gameId)?.title || session.gameId;
+      const gameTitle = visibleCatalog.find((game) => game.id === session.gameId)?.title || session.gameId;
       scores.push({
         gameId: session.gameId,
         gameTitle,
@@ -1280,7 +1285,7 @@ function phantomLeaderboards(store: PhantomPlayStore, catalog: PhantomPlayGame[]
     }
   }
   const sortScores = (rows: typeof scores) => rows.sort((a, b) => b.score - a.score || a.seconds - b.seconds || b.updatedAt.localeCompare(a.updatedAt));
-  const byGame = catalog.map((game) => ({
+  const byGame = visibleCatalog.map((game) => ({
     gameId: game.id,
     gameTitle: game.title,
     rows: sortScores(scores.filter((row) => row.gameId === game.id)).slice(0, 5),

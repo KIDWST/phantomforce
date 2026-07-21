@@ -16,10 +16,15 @@ const phantomRumble = read("../app/games/phantom-rumble.html");
 const cubeTown = read("../app/games/cubetown/cubetown.js");
 const cubeTownIndex = read("../app/games/cubetown/index.html");
 const flagshipCatalog = read("../server/src/phantom-ai/phantomplay-flagship.ts");
+const serverCatalog = read("../server/src/phantom-ai/phantomplay.ts");
+const serverV2Catalog = read("../server/src/phantom-ai/phantomplay-v2.ts");
 const kingdomBreakers = read("../app/games/kingdom-breakers.html");
 const kingdomBreakersScript = kingdomBreakers.match(/<script>([\s\S]*)<\/script>/u)?.[1] || "";
 const crownCircuit = read("../app/games/crown-circuit.html");
 const crownCircuitScript = crownCircuit.match(/<script>([\s\S]*)<\/script>/u)?.[1] || "";
+const skyguardArena = read("../app/games/skyguard-arena/game.js");
+const vespergateGame = read("../app/games/vespergate/game.js");
+const vespergateRooms = read("../app/games/vespergate/rooms.js");
 const tidefrontTactics = read("../app/games/tidefront-tactics.html");
 const appFiles = [index, main, module, v2Module, ...games];
 const kidsOnlyGameIds = [
@@ -51,10 +56,13 @@ for (const gameId of kidsOnlyGameIds) {
   assert.match(v2Module, new RegExp(JSON.stringify(gameId).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "u"), `PhantomPlay V2 must include ${gameId} in the kids-only ID set.`);
 }
 assert.match(module, /return generalPlayGames\(games\)/u, "Default PhantomPlay must hide kids-only games from normal catalog views.");
+assert.match(module, /function fallbackLeaderboards\(snapshot = ui\.snapshot\)[\s\S]*generalPlayGames\(Array\.isArray\(snapshot\?\.catalog\)/u, "Default PhantomPlay leaderboards must not surface kids-only games outside Kids.");
 assert.match(module, /function renderFavorites\(\)[\s\S]*generalPlayGames\(ui\.snapshot\.catalog\)/u, "Default PhantomPlay Saved tab must not re-surface kids-only games outside Kids.");
-assert.match(module, /return sortGames\(ui\.snapshot\.catalog\)\.filter/u, "Default PhantomPlay search must reuse the same sort pipeline as Games.");
+assert.match(module, /const classroomGames = generalPlayGames\(ui\.snapshot\.catalog\)\.filter/u, "Default PhantomPlay private room picker must not leak kids-only games.");
+assert.match(module, /return sortGames\(ui\.snapshot\.catalog, "All"\)/u, "Default PhantomPlay must render the full general catalog without search/filter chrome.");
+assert.doesNotMatch(module, /data-pp-search|Search games, modes, categories, creators/u, "Default PhantomPlay must not restore the redundant game search bar.");
 assert.doesNotMatch(module, /renderToddlerSpace|pp-shell-toddler|pp-toddler-space|data-pp-toddler-play/u, "Default PhantomPlay must not keep a separate Toddler Space page.");
-assert.match(css, /\.pp-play-header/u, "Default PhantomPlay game-first library header must be styled.");
+assert.match(css, /\.pp-library\{padding-top:10px\}/u, "Default PhantomPlay must keep the condensed game-first library spacing.");
 assert.doesNotMatch(css, /Toddler Space|pp-toddler-space|pp-shell-toddler/u, "Default PhantomPlay stylesheet must not preserve a separate Toddler Space destination.");
 assert.match(v2Module, /tab:\s*"solo"/u, "PhantomPlay V2 must open straight to games, not a marketing/home screen.");
 assert.match(v2Module, /const GAME_SORTS = \["All", "Solo", "Multiplayer", "Kids"/u, "Kids must be a sort chip, not a separate destination.");
@@ -62,17 +70,28 @@ assert.match(v2Module, /const tabs = \[\["solo", "Games"\], \["friends", "Multip
 assert.match(v2Module, /function sortGames\(games, sort = ui\.category\)[\s\S]*sort === "Kids"[\s\S]*kidsPick/u, "V2 must sort kids-only games through the sorter.");
 assert.match(v2Module, /KIDS_ONLY_GAME_IDS[\s\S]*signal-match[\s\S]*logic-lights[\s\S]*sudoku-signal/u, "V2 must keep the requested kids-only game list.");
 assert.match(v2Module, /return generalPlayGames\(games\)/u, "V2 must hide kids-only games from normal catalog views.");
+assert.match(v2Module, /const builtIns = generalPlayGames\(ui\.snapshot\.catalog\)\.filter/u, "V2 workspace policy and leaderboard selectors must not leak kids-only games.");
 assert.match(v2Module, /return sortGames\(ui\.snapshot\.catalog\)\.filter/u, "V2 library search must reuse the same sort pipeline as the Games tab.");
 assert.doesNotMatch(v2Module, /renderToddlerSpace|pp2-shell-toddler|pp2-toddler-space/u, "V2 must not bring back a separate Toddler Space page.");
 assert.match(v2Css, /\.pp2-play-header/u, "V2 game-first landing header must be styled.");
 assert.match(v2Css, /\.pp2-cats button\.is-active/u, "V2 sort chips must be visibly styled.");
 assert.doesNotMatch(v2Css, /Toddler Space|pp2-toddler-space|pp2-shell-toddler/u, "V2 stylesheet must not preserve a separate Toddler Space destination.");
-assert.match(module, /sandbox="allow-scripts"/u, "Games must launch in a script-only sandbox.");
+assert.match(serverCatalog, /function isKidsLaneGame\(game: PhantomPlayGame\): boolean[\s\S]*PHANTOMPLAY_KIDS_ONLY_GAME_IDS/u, "Server catalog must have one kids-lane detector.");
+assert.match(serverCatalog, /function kidsLaneGame\(game: PhantomPlayGame\)[\s\S]*category: "Kids"[\s\S]*featured: false/u, "Server catalog must remap kids-only games into the Kids lane.");
+assert.match(serverCatalog, /function phantomLeaderboards\(store: PhantomPlayStore, catalog: PhantomPlayGame\[\], actorId: string\)[\s\S]*visibleCatalog = catalog\.filter\(\(game\) => !isKidsLaneGame\(game\)\)/u, "Server leaderboards must not surface kids-only games outside Kids.");
+assert.match(serverV2Catalog, /isKidsLaneGame,[\s\S]*kidsLaneGame,/u, "V2 server must use the shared kids-lane detector instead of inventing a second list.");
+assert.match(serverV2Catalog, /function fullCatalog[\s\S]*\.map\(kidsLaneGame\)/u, "V2 server must remap kids-only titles into the Kids category at the catalog source.");
+assert.match(serverV2Catalog, /const discoveryCatalog = catalog\.filter\(\(game\) => !isKidsLaneGame\(game\)\)/u, "V2 discovery must exclude kids-only games from general rows.");
+assert.match(serverV2Catalog, /topRated: discoveryCatalog\.map/u, "V2 top-rated discovery must use the general-only catalog.");
+assert.match(serverV2Catalog, /hiddenGems: discoveryCatalog\.map/u, "V2 hidden-gem discovery must use the general-only catalog.");
+assert.match(serverV2Catalog, /related: \(isKidsLaneGame\(game\) \? catalog\.filter\(isKidsLaneGame\) : catalog\.filter\(\(item\) => !isKidsLaneGame\(item\)\)\)/u, "V2 related games must keep kids-only related titles inside Kids context only.");
+assert.match(serverV2Catalog, /const game = visibleCatalogFor\(store, v1, tenantId, actorId\)\.find\(\(item\) => item\.id === gameId\)/u, "V2 leaderboard endpoint must respect the viewer's visible catalog before returning scores.");
+assert.match(module, /sandbox="allow-scripts allow-pointer-lock"/u, "Games must launch in an opaque-origin sandbox with scripts and pointer lock only.");
 assert.doesNotMatch(module, /allow-same-origin|allow-forms|allow-popups/u, "The player must not grant origin, form, or popup powers.");
 assert.match(module, /event\.source !== frame\.contentWindow/u, "Game messages must be bound to the active frame.");
 assert.match(module, /data\.source !== "phantomplay-game"/u, "Game messages must use the PhantomPlay protocol marker.");
 assert.match(module, /Offline mode/u, "An honest offline state must exist.");
-assert.match(module, /No matching builds/u, "A real search empty state must exist.");
+assert.match(module, /No games ready/u, "The condensed library must retain a useful empty state.");
 assert.match(module, /not a marketplace/u, "PhantomPlay must be positioned as a sandbox, not a marketplace.");
 assert.match(module, /Play together with friends in this workspace\./u, "PhantomPlay must expose the private multiplayer room surface.");
 assert.match(module, /Start a private room/u, "PhantomPlay must expose private room creation.");
@@ -127,7 +146,7 @@ assert.match(cubeTown, /const TRIAL_DEFS = \[[\s\S]*Spire Heart Trial/u, "CubeTo
 assert.match(cubeTown, /function openGate\(\)/u, "CubeTown must include the Prism Gate finale.");
 assert.match(cubeTownIndex, /data-ct-open="questlog"/u, "CubeTown must expose a Quest Log for the larger playthrough.");
 assert.match(cubeTownIndex, /data-ct-panel="trial"/u, "CubeTown must expose a playable shrine trial panel.");
-assert.match(flagshipCatalog, /id:\s*"cubetown"[\s\S]*version:\s*"1\.2\.0"/u, "CubeTown catalog metadata must advertise the expanded version.");
+assert.match(flagshipCatalog, /id:\s*"cubetown"[\s\S]*version:\s*"1\.3\.0"/u, "CubeTown catalog metadata must advertise the expanded version.");
 
 const buildIds = new Set(appFiles.flatMap((source) => source.match(/phantom-live-\d{8}-\d+/gu) || []));
 assert.equal(buildIds.size, 1, `The PhantomPlay module graph must use one build ID, found: ${[...buildIds].join(", ")}`);
@@ -192,7 +211,25 @@ for (const slug of ["crown-circuit", "kingdom-breakers", "tidefront-tactics", "s
 assert.match(crownCircuit, /Solo Training \+ Room Multiplayer|Solo Training vs Bot|Crown Bot/u, "Crown Circuit must start with solo bot training, not a room-only dead end.");
 assert.match(crownCircuit, /function thinkBot\(dt\)[\s\S]*laneThreat[\s\S]*deploy\('red'/u, "Crown Circuit solo mode must include a real bot that deploys against the player.");
 assert.match(crownCircuit, /Start room match|Room .*you are/u, "Crown Circuit must still keep private room duel support.");
+assert.match(crownCircuit, /id:\s*"obsidian"[\s\S]*Obsidian Relay/u, "Crown Circuit must include the new Obsidian Relay map.");
+assert.match(crownCircuit, /id:\s*"oracle"[\s\S]*slow:\s*1\.9[\s\S]*shieldBreak/u, "Crown Circuit Oracle must be a real slowing/control troop, not just card copy.");
+assert.match(crownCircuit, /id:\s*"ram"[\s\S]*towerBonus:\s*2\.65[\s\S]*buildingHunter:\s*true/u, "Crown Circuit Ram must be a real siege-tank troop.");
+assert.match(crownCircuit, /launchProjectile\(unit, target,[\s\S]*slow:\s*troop\.slow[\s\S]*sourceTroop:\s*troop/u, "Crown Circuit projectile attacks must carry troop-specific control effects.");
+assert.match(crownCircuit, /target\.slow = Math\.max\(target\.slow, projectile\.slow\)/u, "Crown Circuit Oracle slow must actually apply to hit units.");
+assert.match(crownCircuit, /\["ranger", "bombard", "sapper", "wisps", "medic", "charger", "oracle", "ram"\]/u, "Crown Circuit bot loadouts must know the new Oracle/Ram cards.");
 assert.doesNotThrow(() => new Function(crownCircuitScript), "Crown Circuit script must parse.");
+assert.doesNotThrow(() => new Function(skyguardArena), "Skyguard Arena script must parse.");
+assert.match(skyguardArena, /id:\s*"neontangle"[\s\S]*Neon Tangle[\s\S]*Braided relay race/u, "Skyguard Arena must include the new Neon Tangle map.");
+assert.match(skyguardArena, /function triggerRelaySurge\(\)[\s\S]*surge:\s*true/u, "Skyguard Neon Tangle must have a distinct relay surge event.");
+assert.match(skyguardArena, /currentMap\(\)\.id === "neontangle"[\s\S]*triggerRelaySurge\(\)/u, "Skyguard Neon Tangle hazard clock must trigger the relay surge.");
+assert.match(skyguardArena, /effect\.type === "relay" && effect\.surge[\s\S]*dealDamage\(enemy, 18[\s\S]*enemy\.slowUntil/u, "Skyguard Neon Tangle relay surge must damage and slow clustered enemies.");
+assert.match(module, /id: "crown-circuit"[\s\S]*Obsidian Relay[\s\S]*launchUrl: "\/app\/games\/crown-circuit\.html\?v=1\.3\.0"[\s\S]*version: "1\.3\.0"/u, "Default catalog must launch and describe the upgraded Crown Circuit 1.3.0 build.");
+assert.match(module, /id: "skyguard-arena"[\s\S]*Neon Tangle[\s\S]*launchUrl: "\/app\/games\/skyguard-arena\/index\.html\?v=1\.3\.0"[\s\S]*version: "1\.3\.0"/u, "Default catalog must launch and describe the upgraded Skyguard Arena 1.3.0 build.");
+assert.match(v2Module, /\["crown-circuit", "Crown Circuit", "Strategy", "\/app\/games\/crown-circuit\.html\?v=1\.3\.0"\]/u, "V2 offline catalog must launch upgraded Crown Circuit.");
+assert.match(v2Module, /\["skyguard-arena", "Skyguard Arena", "Strategy", "\/app\/games\/skyguard-arena\/index\.html\?v=1\.3\.0"\]/u, "V2 offline catalog must launch upgraded Skyguard Arena.");
+assert.match(v2Module, /\["crown-circuit", "skyguard-arena"\]\.includes\(id\) \? "1\.3\.0"/u, "V2 offline catalog must expose Crown/Skyguard upgraded versions.");
+assert.match(flagshipCatalog, /id:\s*"skyguard-arena"[\s\S]*Neon Tangle[\s\S]*version:\s*"1\.3\.0"/u, "Server flagship catalog must describe the upgraded Skyguard Arena 1.3.0 build.");
+assert.match(flagshipCatalog, /id:\s*"crown-circuit"[\s\S]*Obsidian Relay[\s\S]*version:\s*"1\.3\.0"/u, "Server flagship catalog must describe the upgraded Crown Circuit 1.3.0 build.");
 assert.match(tidefrontTactics, /Arrow keys to adjust angle\/power|Space to fire|Fleet Room/u, "Tidefront Tactics must remain the restored artillery battle.");
 assert.match(games[gameSlugs.indexOf("serpent-surge")], /storm|boost|rival|serpent|trail/u, "Serpent Surge must play as a modern snake arena, not a static old mini-game.");
 assert.match(phantomRumble, /shieldHeld|data-t="shield"|PARRY/u, "Phantom Rumble must have real guard and parry mechanics.");
@@ -219,9 +256,18 @@ assert.match(imBaked, /phase==='build'[\s\S]*phase==='bake'[\s\S]*phase==='decor
 
 const phantomStrike = games[gameSlugs.indexOf("phantom-strike")];
 assert.match(phantomStrike, /Solo Ops[\s\S]*Local 1v1/u, "Phantom Strike must clearly distinguish bots from real local multiplayer.");
-assert.match(phantomStrike, /blackridge:\{[\s\S]*ironworks:\{[\s\S]*dockyard:\{/u, "Phantom Strike must ship three distinct arena maps.");
+assert.match(phantomStrike, /blackridge:\{[\s\S]*ironworks:\{[\s\S]*dockyard:\{[\s\S]*bazaar:\{/u, "Phantom Strike must ship four distinct arena maps.");
+assert.match(phantomStrike, /data-map="bazaar"[\s\S]*Neon Bazaar/u, "Phantom Strike must expose the new Neon Bazaar map in the UI.");
+assert.match(phantomStrike, /marksman:\{name:'KRAKEN DMR'[\s\S]*damage:42/u, "Phantom Strike must include the new DMR weapon build.");
+assert.match(phantomStrike, /const wk=\['smg','rifle','marksman','shotgun'\]/u, "Phantom Strike bots must use the new DMR instead of ignoring it.");
 assert.match(phantomStrike, /function castRay\([\s\S]*function renderView\(/u, "Phantom Strike must use a real first-person ray-cast renderer.");
 assert.match(phantomStrike, /if\(mode==='duel'\)\{renderView\(players\[0\][\s\S]*renderView\(players\[1\]/u, "Phantom Strike local duel must render genuine split-screen views.");
+assert.doesNotThrow(() => new Function(vespergateGame), "Vespergate game script must parse.");
+assert.doesNotThrow(() => new Function(vespergateRooms), "Vespergate room script must parse.");
+assert.match(vespergateRooms, /id:\s*"belfry"[\s\S]*Glass Ossuary — Upper Belfry/u, "Vespergate must include the new Upper Belfry room.");
+assert.match(vespergateRooms, /to:\s*"belfry"[\s\S]*complete:\s*true/u, "Vespergate must route through Upper Belfry to a real final exit.");
+assert.match(vespergateGame, /const order = \["fall", "teach", "bells", "boss", "ossuary1", "ossuary2", "belfry"\]/u, "Vespergate progress must cover the full expanded campaign.");
+assert.match(vespergateGame, /function onFinalWin\(\)[\s\S]*host\("complete"[\s\S]*upper-belfry/u, "Vespergate must report a true final completion from the Upper Belfry.");
 
 // Dev Mode (docs/architecture/PHANTOMPLAY_DEV_MODE.md): the entry point must
 // only ever render server-gated, and the preview iframe must always be as
@@ -229,8 +275,8 @@ assert.match(phantomStrike, /if\(mode==='duel'\)\{renderView\(players\[0\][\s\S]
 // not the actual security boundary (the server re-checks access on every
 // route) — but a regression here would be the first sign the boundary is
 // eroding.
-assert.match(module, /game\.devModeAvailable \? `<button class="pp-devmode-open"/u, "The Dev Mode entry point must only render when the server-reported devModeAvailable flag is true.");
-assert.match(module, /<iframe src="\$\{esc\(d\.previewUrl\)\}" sandbox="allow-scripts"/u, "The Dev Mode preview iframe must be sandboxed.");
+assert.match(module, /game\.devModeAvailable \? `<button class="pp-devsandbox-open"/u, "The Dev Sandbox entry point must only render when the server-reported devModeAvailable flag is true.");
+assert.match(module, /sandbox="allow-scripts allow-pointer-lock"[^>]*data-pp-frame/u, "The Dev Sandbox player iframe must remain opaque-origin sandboxed.");
 assert.match(module, /const blob = new Blob\(\[nextSource\], \{ type: "text\/html" \}\)/u, "Dev Mode edits must apply via a local blob URL, never a same-origin write.");
 assert.doesNotMatch(module, /devmode[\s\S]{0,200}(child_process|new Function|\.eval\()/iu, "The host page's Dev Mode code must never itself execute the edited source — only the sandboxed iframe does, by loading it as a document.");
 

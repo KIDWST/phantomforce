@@ -17,6 +17,19 @@
   --phantom-keyboard-offset: 0px;
 }
 
+html[data-org-color-mode="dark"],
+html:not([data-org-color-mode]) {
+  color-scheme: dark;
+  --bg: #070611;
+  --ink: #f4f0ff;
+  --dim: #aaa2c8;
+  --dim-2: #7f789d;
+  --glass: rgba(18, 14, 31, 0.9);
+  --glass-2: rgba(12, 9, 23, 0.94);
+  --line: color-mix(in srgb, var(--neon) 30%, transparent);
+  --line-strong: color-mix(in srgb, var(--neon) 58%, transparent);
+}
+
 * { box-sizing: border-box; }
 html, body {
   margin: 0; min-height: 100%; background: var(--bg); color: var(--ink);
@@ -29,6 +42,7 @@ html, body {
 /* Organization themes are validated design tokens. They may shape the
    workspace, but they cannot inject CSS or overwrite protected semantics. */
 html[data-org-color-mode="light"] {
+  color-scheme: light;
   --bg: #f3f2fa;
   --ink: #211d3a;
   --dim: #5d5880;
@@ -13955,7 +13969,11 @@ body .phantom .workspace-page :where(
     padding: 0 0 0 clamp(8px, 1.2vw, 14px);
     border-top: 0;
     border-left: 1px solid rgba(124, 108, 255, 0.16);
+    max-width:54%;
+    overflow-x:auto;
+    scrollbar-width:none;
   }
+  .side-nav-utility::-webkit-scrollbar { display:none; }
 
   /* ---- nav modules: clipped plates, not website pills ---- */
   .sidebar .nav-item {
@@ -14039,11 +14057,7 @@ body .phantom .workspace-page :where(
      resolves against app-main's top edge — which already sits below the
      deck. A --deck-h inset here would double-offset it into a dead band. */
   .topbar2 {
-    position: sticky;
-    top: 0;
-    z-index: 24;
-    padding-top: 8px;
-    padding-bottom: 8px;
+    display:none;
   }
 
   /* ---- canopy: HUD frame you look through, never touch ---- */
@@ -14074,8 +14088,8 @@ body .phantom .workspace-page :where(
   .app-main:has(.workspace-page-first) { height: calc(100dvh - var(--deck-h, 52px)); }
   .app-main:has(.workspace-page[data-workspace-page="media"]) { height: calc(100dvh - var(--deck-h, 52px)); }
   .app-main:has(.workspace-page[data-workspace-page="sites"]) { height: calc(100dvh - var(--deck-h, 52px)); }
-  .workspace-page { min-height: calc(100vh - 126px - var(--deck-h, 52px)); }
-  .console .hero2 { min-height: clamp(360px, calc(100vh - 345px - var(--deck-h, 52px)), 920px); }
+  .workspace-page { min-height: calc(100vh - 52px - var(--deck-h, 52px)); }
+  .console .hero2 { min-height: clamp(360px, calc(100vh - 275px - var(--deck-h, 52px)), 920px); }
 
   /* ---- power-on: modules energize left to right ---- */
   .phantom.booted .sidebar .nav-item { animation: deckPower 0.4s cubic-bezier(0.22, 1, 0.36, 1) backwards; }
