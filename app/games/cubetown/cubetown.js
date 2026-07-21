@@ -1728,6 +1728,15 @@
       const f = friendshipOf(npc.id);
       return `<div class="quest-row"><b>${escapeHtml(npc.name)}</b><span>${friendshipLabel(f.points)} · ${f.points} pts</span></div>`;
     }).join('');
+    const party = ensurePartyState();
+    const partyRows = COMPANION_DEFS.map((comp) => {
+      const recruited = party.recruited.includes(comp.id);
+      const active = party.active.includes(comp.id);
+      return `<div class="quest-row ${recruited ? 'is-done' : ''}">
+        <b>${recruited ? '✓' : '□'} ${escapeHtml(comp.name)}</b>
+        <span>${active ? 'Active party' : recruited ? 'Resting in town' : `Bond with ${escapeHtml(NPC_BY_ID[comp.npcId]?.name || 'a resident')}`} · ${escapeHtml(comp.trait)}</span>
+      </div>`;
+    }).join('');
     const guardianStatus = state.wilds?.guardianDefeated ? 'The Wilds Guardian has fallen — its Relic is yours.' : 'A Guardian still watches over the deep Wilds, hoarding a Relic.';
     const gateReady = (state.inventory.keystone || 0) >= 4 && (state.inventory.relic || 0) >= 1;
     const foundPlaces = WORLD_POIS.filter((poi) => state.exploration.discovered.includes(poi.id)).map((poi) => poi.name).join(', ');
@@ -1738,6 +1747,7 @@
       </section>
       <section class="quest-chapter"><h3>Residents</h3>${questRows}</section>
       <section class="quest-chapter"><h3>Friendships</h3>${friendRows}</section>
+      <section class="quest-chapter"><h3>Travel Party</h3><p>${party.active.length}/${PARTY_LIMIT} active companions. Up to three follow you and assist in Wilds fights.</p>${partyRows}</section>
       <section class="quest-chapter"><h3>Shrine Trials</h3>${trialRows}</section>
       <section class="quest-chapter"><h3>Wilds Trials</h3>${wildsTrialRows}<p>${escapeHtml(guardianStatus)}</p></section>
       <section class="quest-chapter"><h3>Exploration</h3><p>${state.exploration.discovered.length}/${WORLD_POIS.length} places · ${state.exploration.biomes.length}/${Object.keys(BIOME_DEFS).length} biomes · ${state.exploration.cachesFound.length} trail caches. ${escapeHtml(foundPlaces)}</p></section>
@@ -3062,6 +3072,63 @@
     }
     ctx.restore();
   }
+  function drawPartyFollowers(px, py, wilds = false) {
+    const members = activeCompanions();
+    if (!members.length) return;
+    const spread = rt.tileW * (wilds ? 0.34 : 0.28);
+    const bobBase = rt.reducedMotion ? 0 : Math.sin(rt.playSecondsAccum * 3.1) * rt.tileH * 0.08;
+    const offsets = [
+      { x: -spread, y: rt.tileH * 0.46 },
+      { x: spread, y: rt.tileH * 0.5 },
+      { x: 0, y: rt.tileH * 0.83 },
+    ];
+    for (let i = 0; i < members.length; i++) {
+      const off = offsets[i] || offsets[offsets.length - 1];
+      drawCompanion(members[i], px + off.x, py + off.y + bobBase * (i % 2 ? -0.6 : 1), i, wilds);
+    }
+  }
+  function drawCompanion(comp, px, py, index = 0, wilds = false) {
+    const u = rt.tileH * (wilds ? 0.78 : 0.68);
+    const t = rt.playSecondsAccum + index * 0.9;
+    const hover = rt.reducedMotion ? 0 : Math.sin(t * 4.2) * u * 0.08;
+    const y = py + hover;
+    ctx.save();
+    ctx.globalAlpha = 0.26;
+    ctx.fillStyle = '#06040a';
+    ctx.beginPath(); ctx.ellipse(px, py + u * 0.28, u * 0.62, u * 0.2, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
+
+    const glow = ctx.createRadialGradient(px, y - u * 0.45, u * 0.05, px, y - u * 0.45, u * 1.1);
+    glow.addColorStop(0, `${comp.color}88`);
+    glow.addColorStop(1, `${comp.color}00`);
+    ctx.fillStyle = glow;
+    ctx.beginPath(); ctx.arc(px, y - u * 0.42, u * 1.05, 0, Math.PI * 2); ctx.fill();
+
+    ctx.fillStyle = shade(comp.color, 0.82);
+    if (comp.id.includes('moth') || comp.id.includes('wisp')) {
+      ctx.beginPath(); ctx.ellipse(px - u * 0.48, y - u * 0.48, u * 0.38, u * 0.24, -0.55, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(px + u * 0.48, y - u * 0.48, u * 0.38, u * 0.24, 0.55, 0, Math.PI * 2); ctx.fill();
+    } else {
+      ctx.beginPath(); ctx.moveTo(px - u * 0.34, y - u * 0.72); ctx.lineTo(px - u * 0.08, y - u * 1.06); ctx.lineTo(px + u * 0.08, y - u * 0.7); ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(px + u * 0.34, y - u * 0.72); ctx.lineTo(px + u * 0.08, y - u * 1.06); ctx.lineTo(px - u * 0.08, y - u * 0.7); ctx.closePath(); ctx.fill();
+    }
+    ctx.fillStyle = comp.color;
+    ctx.beginPath(); ctx.ellipse(px, y - u * 0.52, u * 0.46, u * 0.38, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.38)'; ctx.lineWidth = 1.2 * rt.dpr; ctx.stroke();
+    ctx.fillStyle = '#fbe9d8';
+    ctx.beginPath(); ctx.arc(px - u * 0.14, y - u * 0.57, u * 0.045, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(px + u * 0.14, y - u * 0.57, u * 0.045, 0, Math.PI * 2); ctx.fill();
+    ctx.font = `800 ${Math.max(8, 9 * rt.dpr)}px ui-monospace,monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#130c20';
+    ctx.fillText(comp.glyph, px, y - u * 0.31);
+    if (wilds) {
+      ctx.font = `800 ${8 * rt.dpr}px ui-monospace,monospace`;
+      ctx.fillStyle = comp.color;
+      ctx.fillText(comp.short, px, y - u * 1.06);
+    }
+    ctx.restore();
+  }
   function roundRect(x, y, w, h, r) {
     ctx.beginPath();
     ctx.moveTo(x + r, y);
@@ -3666,6 +3733,7 @@
         drawCharacter(s.x, s.y, n.hue, 'none', 'rgba(255,255,255,0.35)', focusedResidentId === n.id ? n.name : null, false, n.id, 'happy', lopts);
       } else if (d.kind === 'player') {
         drawCharacter(rt.playerPx, rt.playerPy, hueColorOf(state.player.hue), state.player.topper, trimColorOf(state.player.trim), null, false, 'player', 'bright', { facing: rt.facing });
+        drawPartyFollowers(rt.playerPx, rt.playerPy, false);
       } else if (d.kind === 'bird') {
         drawBird(d.bird);
       }
@@ -3733,7 +3801,10 @@
     drawables.sort((a, b) => a.depth - b.depth);
     for (const d of drawables) {
       if (d.kind === 'enemy') drawEnemy(d.enemy);
-      else if (d.kind === 'wplayer') drawCharacter(rt.wildsPx, rt.wildsPy, hueColorOf(state.player.hue), state.player.topper, trimColorOf(state.player.trim), null, false, 'player', 'bright', { facing: rt.facing });
+      else if (d.kind === 'wplayer') {
+        drawCharacter(rt.wildsPx, rt.wildsPy, hueColorOf(state.player.hue), state.player.topper, trimColorOf(state.player.trim), null, false, 'player', 'bright', { facing: rt.facing });
+        drawPartyFollowers(rt.wildsPx, rt.wildsPy, true);
+      }
     }
 
     for (const p of rt.particles) {
@@ -4055,7 +4126,7 @@
       livestock: state.livestock,
       quests: state.quests, adventure: state.adventure, cosmeticsUnlocked: state.cosmeticsUnlocked, tutorialSeen: state.tutorialSeen,
       stats: state.stats, completedMilestone: state.completedMilestone,
-      tools: state.tools, friendship: state.friendship, wilds: state.wilds, exploration: state.exploration,
+      tools: state.tools, friendship: state.friendship, party: state.party, wilds: state.wilds, exploration: state.exploration,
     }));
   }
   function schedulePush() {
@@ -4164,6 +4235,15 @@
           };
         }
       }
+    }
+    if (s.party && typeof s.party === 'object') {
+      state.party = {
+        recruited: Array.isArray(s.party.recruited) ? s.party.recruited.filter((id) => !!COMPANION_BY_ID[id]) : [],
+        active: Array.isArray(s.party.active) ? s.party.active.filter((id) => !!COMPANION_BY_ID[id]) : [],
+      };
+      ensurePartyState();
+    } else {
+      ensurePartyState();
     }
     if (s.wilds && typeof s.wilds === 'object') {
       state.wilds.treasuresFound = Array.isArray(s.wilds.treasuresFound) ? s.wilds.treasuresFound.filter((x) => typeof x === 'string') : [];
