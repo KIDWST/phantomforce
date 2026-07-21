@@ -24,7 +24,7 @@
     .overlay{position:fixed;z-index:6;inset:0;display:grid;place-items:center;background:#020507ed;backdrop-filter:blur(5px);overflow:auto}
     .overlay[hidden]{display:none}
     .panel{width:min(650px,100%);padding:24px;text-align:center}
-    .overlay h1{font-size:clamp(40px,9vw,64px);line-height:1;margin:0;color:#effff6;text-shadow:0 0 26px #58ffac55}
+    .overlay h1{font-size:64px;line-height:1;margin:0;color:#effff6;text-shadow:0 0 26px #58ffac55}
     .overlay p{color:#a5bcb1;line-height:1.5}
     .overlay .big{color:#effff6;font-size:20px;font-weight:800}
     .modes{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin:18px auto;width:min(600px,100%)}
@@ -39,6 +39,7 @@
       .hud{grid-template-columns:repeat(2,1fr)}
       .hud div{padding:5px 8px}
       .panel{padding:18px}
+      .overlay h1{font-size:44px}
     }
   </style>
 </head>
@@ -296,15 +297,15 @@
     addEventListener('resize',fit);
     document.addEventListener('visibilitychange',()=>{if(document.hidden&&phase==='playing'&&!paused)setPaused(true)});
     addEventListener('message',event=>{
-      const d=event.data;if(d?.source!=='phantomplay-host')return;
-      if(d.type==='settings'){
-        if('sound' in d)soundOn=!!d.sound;
-        if('reducedMotion' in d){reduced=!!d.reducedMotion;document.body.classList.toggle('reduced',reduced)}
+      if(event.data?.source!=='phantomplay-host')return;
+      if(event.data.type==='settings'){
+        if('sound' in event.data)soundOn=!!event.data.sound;
+        if('reducedMotion' in event.data){reduced=!!event.data.reducedMotion;document.body.classList.toggle('reduced',reduced)}
       }
-      if(d.type==='pause')setPaused(true);
-      if(d.type==='resume')setPaused(false);
-      if(d.type==='exit')setPaused(true);
-      if(d.type==='restart')startRun();
+      if(event.data.type==='pause')setPaused(true);
+      if(event.data.type==='resume')setPaused(false);
+      if(event.data.type==='exit')setPaused(true);
+      if(event.data.type==='restart')startRun();
     });
     document.querySelector('[data-start]').onclick=startRun;
     pauseEl.querySelector('button').onclick=()=>setPaused(false);

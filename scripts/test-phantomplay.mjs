@@ -206,8 +206,8 @@ assert.match(imBaked, /phase==='build'[\s\S]*phase==='bake'[\s\S]*phase==='decor
 
 const phantomStrike = games[gameSlugs.indexOf("phantom-strike")];
 assert.match(phantomStrike, /Solo Ops[\s\S]*Local 1v1/u, "Phantom Strike must clearly distinguish bots from real local multiplayer.");
-assert.match(phantomStrike, /outpost:\[[\s\S]*foundry:\[[\s\S]*harbor:\[/u, "Phantom Strike must ship three distinct arena maps.");
-assert.match(phantomStrike, /function cast\([\s\S]*function renderView\(/u, "Phantom Strike must use a real first-person ray-cast renderer.");
+assert.match(phantomStrike, /blackridge:\{[\s\S]*ironworks:\{[\s\S]*dockyard:\{/u, "Phantom Strike must ship three distinct arena maps.");
+assert.match(phantomStrike, /function castRay\([\s\S]*function renderView\(/u, "Phantom Strike must use a real first-person ray-cast renderer.");
 assert.match(phantomStrike, /if\(mode==='duel'\)\{renderView\(players\[0\][\s\S]*renderView\(players\[1\]/u, "Phantom Strike local duel must render genuine split-screen views.");
 
 // Dev Mode (docs/architecture/PHANTOMPLAY_DEV_MODE.md): the entry point must
