@@ -280,6 +280,8 @@ import {
   applyPhantomPlayRatingOverride,
   createPhantomPlayRoom,
   createPhantomPlaySubmission,
+  discardPhantomPlayDevModeOverride,
+  getPhantomPlayDevModeOverride,
   getPhantomPlayDevModeSource,
   getPhantomPlayRatingChangeHistory,
   getPhantomPlayRoom,
@@ -288,6 +290,8 @@ import {
   joinPhantomPlayRoom,
   leavePhantomPlayRoom,
   moderatePhantomPlaySubmission,
+  publishPhantomPlayDevModeSource,
+  savePhantomPlayDevModeOverride,
   setPhantomPlayRoomReady,
   startPhantomPlaySession,
   updatePhantomPlayProfile,
@@ -5413,6 +5417,73 @@ app.get("/api/phantomplay/dev-mode/:gameId/source", async (request, reply) => {
   } catch (error) {
     const message = error instanceof Error ? error.message : "Dev Mode source could not be loaded.";
     const status = /Dev Mode is not available/i.test(message) ? 403 : /no editable source/i.test(message) ? 404 : 400;
+    return reply.code(status).send({ ok: false, error: message });
+  }
+});
+
+// Dev Sandbox — the in-player live-edit surface (docs/architecture/PHANTOMPLAY_DEV_MODE.md).
+// GET/POST/DELETE "override" is the safe default: a workspace's own saved edit, stored only in
+// the JSON store, never touching the real game file — regular players are unaffected either way.
+app.get("/api/phantomplay/dev-mode/:gameId/override", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const query = (request.query ?? {}) as { tenant_id?: unknown };
+  const access = await phantomPlayAccess(session, query.tenant_id);
+  if (!access.entitled) return reply.code(403).send({ ok: false, error: "PhantomPlay is not available to this account.", reason: access.reason });
+  const params = request.params as { gameId?: string };
+  try {
+    return { ok: true, ...(await getPhantomPlayDevModeOverride(session, String(params.gameId || "").slice(0, 180))) };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Dev Sandbox override could not be loaded.";
+    return reply.code(/Dev Mode is not available/i.test(message) ? 403 : 400).send({ ok: false, error: message });
+  }
+});
+
+app.post("/api/phantomplay/dev-mode/:gameId/override", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const body = (request.body ?? {}) as { tenantId?: unknown; source?: unknown };
+  const access = await phantomPlayAccess(session, body.tenantId);
+  if (!access.entitled) return reply.code(403).send({ ok: false, error: "PhantomPlay is not available to this account.", reason: access.reason });
+  const params = request.params as { gameId?: string };
+  try {
+    return { ok: true, ...(await savePhantomPlayDevModeOverride(session, String(params.gameId || "").slice(0, 180), body.source)) };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Dev Sandbox edit could not be saved.";
+    return reply.code(/Dev Mode is not available/i.test(message) ? 403 : 400).send({ ok: false, error: message });
+  }
+});
+
+app.delete("/api/phantomplay/dev-mode/:gameId/override", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const query = (request.query ?? {}) as { tenant_id?: unknown };
+  const access = await phantomPlayAccess(session, query.tenant_id);
+  if (!access.entitled) return reply.code(403).send({ ok: false, error: "PhantomPlay is not available to this account.", reason: access.reason });
+  const params = request.params as { gameId?: string };
+  try {
+    return { ok: true, ...(await discardPhantomPlayDevModeOverride(session, String(params.gameId || "").slice(0, 180))) };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Dev Sandbox override could not be discarded.";
+    return reply.code(/Dev Mode is not available/i.test(message) ? 403 : 400).send({ ok: false, error: message });
+  }
+});
+
+// Publish to live — maximum power, owner-only, and requires an explicit confirm flag so this can
+// never fire from an accidental double-click or a non-confirming client integration.
+app.post("/api/phantomplay/dev-mode/:gameId/publish", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const body = (request.body ?? {}) as { tenantId?: unknown; source?: unknown; confirm?: unknown };
+  const access = await phantomPlayAccess(session, body.tenantId);
+  if (!access.entitled) return reply.code(403).send({ ok: false, error: "PhantomPlay is not available to this account.", reason: access.reason });
+  if (body.confirm !== true) return reply.code(400).send({ ok: false, error: "Publishing live requires an explicit confirmation." });
+  const params = request.params as { gameId?: string };
+  try {
+    return { ok: true, ...(await publishPhantomPlayDevModeSource(session, String(params.gameId || "").slice(0, 180), body.source)) };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "This edit could not be published live.";
+    const status = /Only the workspace owner/i.test(message) ? 403 : /only available for built-in/i.test(message) ? 403 : 400;
     return reply.code(status).send({ ok: false, error: message });
   }
 });

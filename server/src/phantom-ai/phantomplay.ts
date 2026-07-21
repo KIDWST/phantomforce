@@ -166,6 +166,7 @@ const GAME_ART_BY_SLUG: Record<string, string> = {
   "phantom-chess": artUrl("phantom-chess-cover.svg"),
 };
 const CATEGORY_ART: Record<string, string> = {
+  Kids: GAME_ART_BY_SLUG["signal-match"],
   Arcade: GAME_ART_BY_SLUG["neon-drift"],
   Puzzle: GAME_ART_BY_SLUG["signal-match"],
   Focus: GAME_ART_BY_SLUG["focus-stack"],
@@ -403,6 +404,19 @@ type PhantomPlayStore = {
 };
 
 const TAK_CREATOR = "Tak";
+export const PHANTOMPLAY_KIDS_ONLY_GAME_IDS = new Set([
+  "signal-match", "focus-stack", "reflex-grid", "penalty-kick", "rift-frenzy", "serpent-surge",
+  "color-rush", "tile-flow", "tower-tactics", "breath-pacer", "court-vision", "pixel-bloom",
+  "circuit-serpent", "echo-sequence", "signal-sweeper", "neon-breaker", "type-storm", "logic-lights",
+  "sudoku-signal",
+]);
+
+function kidsLaneGame(game: PhantomPlayGame): PhantomPlayGame {
+  const kidsOnly = PHANTOMPLAY_KIDS_ONLY_GAME_IDS.has(game.id) || game.category.toLowerCase() === "kids";
+  if (!kidsOnly) return game;
+  const tags = Array.from(new Set(["kids", ...(game.tags || [])]));
+  return { ...game, category: "Kids", tags, featured: false };
+}
 
 export const PHANTOMPLAY_BUILT_IN_GAMES: PhantomPlayGame[] = [
   {
@@ -1217,6 +1231,7 @@ function communityGames(store: PhantomPlayStore): PhantomPlayGame[] {
 function catalogFor(store: PhantomPlayStore, profile: PlayerProfile) {
   const all = [...PHANTOMPLAY_BUILT_IN_GAMES, ...(profile.preferences.allowCommunityGames ? communityGames(store) : [])]
     .map((game) => applyGameOverride(store, game))
+    .map(kidsLaneGame)
     .map(normalizeGameArt);
   const allowedRatings = new Set(safeAllowedRatings(profile.preferences.allowedRatings, defaultAllowedRatings(profile.profileType)));
   return all
@@ -1378,6 +1393,10 @@ export async function getPhantomPlaySnapshot(session: AccessSession, options: { 
       remainingMinutesToday: Math.max(0, dailyMinuteLimit - Math.ceil(usedSeconds / 60)),
       canSubmitGames: options.canSubmitGames ?? (session.canManageAccess || session.orgRole === "owner" || session.orgRole === "admin"),
       canModerate: session.canManageAccess || session.isSuperAdmin === true,
+      // Gates the client's "Publish to live" Dev Sandbox button — mirrors the
+      // exact same check publishPhantomPlayDevModeSource enforces server-side,
+      // so the client only ever offers a control the server will actually honor.
+      isOwner: session.orgRole === "owner",
     },
     catalog: catalog.map((game) => ({
       ...game,
