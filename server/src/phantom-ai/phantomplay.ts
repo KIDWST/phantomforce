@@ -1975,6 +1975,10 @@ function phantomPlayDevModeAccessFromStore(store: PhantomPlayStore, session: Acc
   if (!PHANTOMPLAY_BUILT_IN_GAMES.some((game) => game.id === gameId)) return { allowed: false, kind: "unknown" };
   // Built-in games ship in this repo, not owned by any one tenant's developer account —
   // only a workspace manager may hot-edit them, matching registerPhantomPlayEdgeManifest's bar.
+  // Deliberately platform-super-admin only (canManageAccess), NOT any org
+  // owner/admin: gameOverrides and the submission moderation queue are
+  // global, not tenant-scoped, so a random paying customer's own workspace
+  // "owner" role must never gain platform-wide catalog/moderation power.
   return { allowed: session.canManageAccess === true && devModeEnabledForGame(store, gameId), kind: "built_in" };
 }
 

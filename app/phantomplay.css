@@ -1093,7 +1093,9 @@ html[data-org-color-mode="light"] .pp-game-art img{
 /* Creator-first PhantomPlay: games are by indie creators, not bundled corporate filler. */
 .pp-banner.is-notice{border-color:#42e9ff66!important;background:#42e9ff0d!important}
 .pp-banner.is-notice b{color:var(--pp-cyan)!important}
-.pp-game-actions{display:grid;grid-template-columns:1fr;gap:7px}
+.pp-game-actions{display:flex;flex-wrap:wrap;align-items:center;gap:7px}
+.pp-game-actions .pp-play{flex:1 1 100%}
+.pp-game-actions .pp-support{flex:1 1 auto;min-width:0}
 .pp-support{min-height:34px;border:1px solid #42e9ff3d;border-radius:9px;background:#42e9ff0b;color:#2b2649;font-weight:800;cursor:pointer}
 .pp-support:hover,.pp-support:focus-visible{border-color:#42e9ff88;color:#2b2649;outline:none}
 .pp-leaderboard{display:grid;gap:12px;padding:14px;border:1px solid var(--line);border-radius:13px;background:linear-gradient(145deg,#05120ef5,#020807fa)}
