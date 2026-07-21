@@ -392,6 +392,9 @@
       { pages: ["Seven bearers before you, and every one of them walked out that door scared.", "Gates open where the stone remembers being a door. Liminal stone, bell-brass, saint-glass. Never null iron.", "Go and be the eighth. The Vale is south."] },
     ],
     maren_plaza: [
+      { when: { questDone: "q_bell", questDoneB: "q_glass", notQuestDone: "q_evensong" },
+        pages: ["Both voices home. My mother rang evensong the night she handed the Hand to me.", "Go to the bell, little bearer. Duskhollow is listening."],
+        do: { accept: "q_evensong" } },
       { when: { questActive: "q_evensong" }, pages: ["Ring it. I'll be right here."] },
       { pages: ["Evensong sounds different from the plaza. Better."] },
     ],

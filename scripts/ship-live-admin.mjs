@@ -186,6 +186,7 @@ async function main() {
   run(process.execPath, ["scripts/test-claude-live-ship.mjs"]);
   run(process.execPath, ["scripts/test-auth-boundaries.mjs"]);
   run(process.execPath, ["scripts/test-page-worker.mjs"]);
+  run(process.execPath, ["scripts/test-vespergate-world.mjs"]);
   const lateBuildFixes = setAppBuild(build);
   if (lateBuildFixes) console.log(`\nNormalized ${lateBuildFixes} late app file(s) back to ${build}`);
   stageAllowedChanges();
