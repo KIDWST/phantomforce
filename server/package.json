@@ -11,6 +11,7 @@
     "test:access": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-access-workflow.ps1",
     "test:access:postgres": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-access-workflow-postgres.ps1",
     "test:access:postgres-fail-closed": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-access-postgres-fail-closed.ps1",
+    "test:decisions": "tsx scripts/test-decisions.ts",
     "test:connector-boundary": "tsx scripts/test-connector-boundary.ts",
     "test:deployment-model": "tsx scripts/test-deployment-model-status.ts",
     "test:security-scanner": "tsx scripts/test-security-scanner-route.ts",

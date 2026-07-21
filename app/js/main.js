@@ -1718,6 +1718,111 @@ function renderDashboardBrief() {
     </button>`).join("");
 }
 
+/* ============================ decision cards ============================ */
+/* Decision Cards are the owner-state layer over the server's cross-department
+   Signal feed (/phantom-ai/decisions). Server truth only: on fetch failure we
+   render nothing — never a fake card, never an optimistic count. Approve and
+   Modify honestly navigate to the recommended surface; nothing external
+   executes from this deck. */
+let decisionFeed = null;
+let decisionFeedTenant = "";
+let decisionFeedAt = 0;
+let decisionFeedInFlight = null;
+let decisionBusyId = "";
+
+async function fetchDecisions(force = false) {
+  const tenant = currentTenantId();
+  if (!force && decisionFeed && decisionFeedTenant === tenant && Date.now() - decisionFeedAt < 60000) return decisionFeed;
+  if (decisionFeedInFlight) return decisionFeedInFlight;
+  decisionFeedInFlight = (async () => {
+    const token = session.token();
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 8000);
+    try {
+      const r = await fetch(`/phantom-ai/decisions?tenant_id=${encodeURIComponent(tenant)}`, { headers, signal: ctrl.signal });
+      const d = await r.json().catch(() => null);
+      if (r.ok && d?.ok) { decisionFeed = d; decisionFeedTenant = tenant; decisionFeedAt = Date.now(); }
+    } catch { /* keep last known feed; never invent cards */ }
+    finally { clearTimeout(timer); decisionFeedInFlight = null; }
+    return decisionFeed;
+  })();
+  return decisionFeedInFlight;
+}
+
+const DECISION_DEPT_ICON = {
+  Growth: "chart", Creative: "spark", Operations: "check", "Client Care": "users",
+  Finance: "dollar", Intelligence: "shield", Technology: "bolt",
+};
+
+function renderDecisions() {
+  const deck = $("[data-decisions]");
+  if (!deck) return;
+  const feed = decisionFeed && decisionFeedTenant === currentTenantId() ? decisionFeed : null;
+  const open = feed?.open || [];
+  if (!open.length) { deck.hidden = true; deck.innerHTML = ""; return; }
+  deck.hidden = false;
+  deck.innerHTML = `
+    <div class="decision-head">
+      <h2>Decisions</h2>
+      <span class="decision-count">${open.length}</span>
+      <i>Signals packaged for one motion — approve, adjust, or dismiss.</i>
+    </div>
+    <div class="decision-list">
+      ${open.slice(0, 4).map((d) => {
+        const busy = decisionBusyId === d.id;
+        return `
+        <article class="decision-card dc-${esc(d.impact)}" data-decision-id="${esc(d.id)}">
+          <header class="decision-meta">
+            <span class="decision-dept">${svg(DECISION_DEPT_ICON[d.department] || "bolt")} ${esc(d.department)}</span>
+            <span class="decision-impact di-${esc(d.impact)}">${esc(d.impact)} impact</span>
+            <span class="decision-conf">confidence: ${esc(d.confidence)}</span>
+          </header>
+          <h3>${esc(d.title)}</h3>
+          <p>${esc(d.whatHappened)}</p>
+          <p class="decision-evidence">Evidence: ${esc(d.evidence?.source || "server records")}</p>
+          <footer class="decision-actions">
+            <button class="btn btn-primary" type="button" data-decision-act="approve" ${busy ? "disabled" : ""}>
+              ${d.recommendation ? `Approve · ${esc(d.recommendation.label)}` : "Acknowledge"}
+            </button>
+            <button class="btn" type="button" data-decision-act="modify" ${busy ? "disabled" : ""}>Adjust</button>
+            <button class="btn btn-quiet" type="button" data-decision-act="dismiss" ${busy ? "disabled" : ""}>Dismiss</button>
+          </footer>
+        </article>`;
+      }).join("")}
+    </div>`;
+}
+
+async function decideDecision(id, action) {
+  const card = (decisionFeed?.open || []).find((d) => d.id === id);
+  if (!card || decisionBusyId) return;
+  let note = "";
+  if (action === "modify") {
+    note = window.prompt("What should change about this recommendation?", "") || "";
+    if (!note.trim()) return; // owner backed out — leave the card open
+  }
+  decisionBusyId = id;
+  renderDecisions();
+  try {
+    const token = session.token();
+    const r = await fetch(`/phantom-ai/decisions/${encodeURIComponent(id)}/decide`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify({ action, note: note || undefined, tenant_id: currentTenantId() }),
+    });
+    const d = await r.json().catch(() => null);
+    if (!r.ok || !d?.ok) throw new Error(d?.error || "Decision could not be recorded.");
+    await fetchDecisions(true);
+    const route = d.decision?.followThrough?.route;
+    if ((action === "approve" || action === "modify") && route) routeWorkspace(route);
+  } catch (error) {
+    speak(`That decision didn't record: ${error?.message || "server unreachable"}. The card stays open.`, "", "alert");
+  } finally {
+    decisionBusyId = "";
+    renderDecisions();
+  }
+}
+
 /* ============================ today's plan (donut) ============================ */
 function renderPlan() {
   const plan = todaysPlan();
@@ -2047,6 +2152,8 @@ function renderConsole() {
   fetchServerAttention().then(() => { if (serverPulseAt !== pulseBefore) renderNotifs(); }).catch(() => {});
   renderHero();
   renderDashboardBrief();
+  renderDecisions();
+  fetchDecisions().then(() => renderDecisions()).catch(() => {});
   renderChips();
   renderModePose(activeMode);
   renderFlowMap();
@@ -2504,6 +2611,12 @@ function wireDeck() {
         input.dispatchEvent(new Event("input", { bubbles: true }));
         focusCommandInput();
       }, reduceMotion ? 0 : 80);
+      return;
+    }
+    const decisionAct = e.target.closest("[data-decision-act]");
+    if (decisionAct) {
+      const decisionCard = decisionAct.closest("[data-decision-id]");
+      if (decisionCard) decideDecision(decisionCard.dataset.decisionId, decisionAct.dataset.decisionAct);
       return;
     }
     const opener = e.target.closest("[data-open-ws]");

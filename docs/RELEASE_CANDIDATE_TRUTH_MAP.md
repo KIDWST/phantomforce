@@ -26,6 +26,7 @@ gate. That is a feature, not debt.
 | Paid media generation | `ai-proxy` `/generate` (Higgsfield + OpenAI image), admin-static-server `/generate` + `/generate/job/:id` async jobs | production topology: served from the owner box |
 | Content assets store (30-day server store) | `/phantom-ai/content/assets`, `content-asset-storage.ts` | pluggable provider seam, not permanent cloud |
 | Scheduled server automations (read-only jobs + Hermes ledger) | `automation-engine.ts`, Developer → Autopilot | |
+| Decision Cards (Signal feed → approve/modify/dismiss + Command deck) | `decisions.ts`, `/phantom-ai/decisions`, `renderDecisions` | follow-through is navigation only — no external execution from this layer |
 | Live chat transports | OpenRouter (env-gated), Claude CLI, Codex CLI, local Ollama | fail-closed chain |
 | GitHub Pages public site + admin static server + auto-sync | `ops/admin-live/*`, `CNAME` | push-to-deploy |
 

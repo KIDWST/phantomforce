@@ -45,9 +45,14 @@ table, the named gaps are:
 2. **Signal** exists only inside Competitor Intelligence. Needs to become a
    cross-department object (content, finance, CRM, automation health all
    need to emit Signals, not just competitors).
-3. **Decision Card** doesn't exist as a packaging layer yet — Signals need a
-   recommendation + evidence + approve/modify/dismiss surface distinct from
-   the Approval Queue's risk-gate role.
+3. ~~**Decision Card** doesn't exist as a packaging layer yet~~ — DONE
+   (2026-07-20): `server/src/phantom-ai/decisions.ts` packages the Signal
+   feed into approve/modify/dismiss Decision Cards with suppression and
+   evidence-change reopening; the Command home renders the deck
+   (`renderDecisions` in `app/js/main.js`); `/api/brain/signals` +
+   `/api/brain/contract` now actually expose `signals.ts` (they were
+   documented but unwired). Next depth: run-capable follow-through via
+   `agent-runs.ts` once Signals carry executable actions.
 4. **Editable Memory Vault, behavioral profile, and context-preview
    endpoint** are the named-missing pieces of the Brain (`neural-spine.ts`)
    per the gap map — the ledger/ingestion side already exists.

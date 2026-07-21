@@ -13719,3 +13719,61 @@ body .phantom .workspace-page :where(
     font-size: 8.5px;
   }
 }
+
+/* ---------------- decision deck (Command home) ---------------- */
+/* Decision Cards are the product's signature object: a Signal packaged for
+   one-motion approval. The deck sits directly under the business brief and
+   uses a left evidence-spine accent per impact instead of another identical
+   rectangle. Hidden entirely when no decisions are open — no giant empty
+   panel, no fake cards. */
+.decision-deck { display: grid; gap: 12px; margin: 2px 0 4px; }
+.decision-head { display: flex; align-items: baseline; gap: 10px; }
+.decision-head h2 {
+  margin: 0;
+  font-size: 17px;
+  letter-spacing: -0.01em;
+}
+.decision-count {
+  min-width: 22px; text-align: center; padding: 1px 8px; border-radius: 999px;
+  font: 600 11px "Spline Sans Mono", monospace;
+  background: var(--neon); color: #ffffff;
+}
+.decision-head i {
+  font-style: normal; font-size: 12px; color: var(--dim);
+}
+.decision-list { display: grid; gap: 10px; }
+.decision-card {
+  position: relative;
+  display: grid; gap: 7px;
+  padding: 13px 16px 12px 18px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--glass);
+  box-shadow: 0 1px 2px rgba(36, 31, 63, 0.05), 0 8px 26px rgba(70, 58, 194, 0.07);
+}
+.decision-card::before {
+  content: ""; position: absolute; left: 0; top: 10px; bottom: 10px; width: 3px;
+  border-radius: 999px; background: var(--neon);
+}
+.decision-card.dc-high::before { background: var(--risk); }
+.decision-card.dc-medium::before { background: var(--warn); }
+.decision-meta {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+  font: 500 10px "Spline Sans Mono", monospace; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--dim);
+}
+.decision-dept { display: inline-flex; align-items: center; gap: 5px; color: var(--neon); }
+.decision-dept svg { width: 12px; height: 12px; }
+.decision-impact.di-high { color: var(--risk); }
+.decision-impact.di-medium { color: var(--warn); }
+.decision-card h3 { margin: 0; font-size: 14.5px; line-height: 1.3; }
+.decision-card p { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--dim); }
+.decision-evidence {
+  font: 400 11px "Spline Sans Mono", monospace; color: var(--dim-2);
+}
+.decision-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 3px; }
+.decision-actions .btn { font-size: 12px; padding: 7px 13px; }
+@media (max-width: 900px) {
+  .decision-card { padding: 12px 13px 11px 15px; }
+  .decision-actions .btn { flex: 1 1 auto; }
+}

@@ -359,6 +359,8 @@ import {
   getOrganizationOpportunities,
   getOrganizationPulse,
 } from "./phantom-ai/organization-pulse.js";
+import { getBrainContract, getSignals } from "./phantom-ai/signals.js";
+import { decide, listDecisions, type DecideAction } from "./phantom-ai/decisions.js";
 import {
   getAutonomousSecurityScanStatus,
   startAutonomousSecurityScanScheduler,
@@ -5996,6 +5998,73 @@ app.get("/api/organization/opportunities", async (request, reply) => {
     return { ok: true, ...(await getOrganizationOpportunities(session, await pulseAccessFor(session, query.tenant_id))) };
   } catch (error) {
     return reply.code(500).send({ ok: false, error: error instanceof Error ? error.message : "Opportunities could not be assembled." });
+  }
+});
+
+/* ============================================================================
+   BRAIN SIGNALS + DECISION CARDS
+   signals.ts is the cross-department Signal feed (docs/BRAIN_SIGNAL_CONTRACT
+   .md); decisions.ts packages those signals into approve/modify/dismiss
+   Decision Cards (docs/ARCHITECTURE.md "Decision"). Detection lives in the
+   signal layer, owner state lives in the decision layer, and no external
+   action executes from either — follow-through is honest navigation. */
+
+app.get("/api/brain/signals", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const query = (request.query ?? {}) as { tenant_id?: unknown };
+  try {
+    return { ok: true, feed: await getSignals(session, await pulseAccessFor(session, query.tenant_id)) };
+  } catch (error) {
+    return reply.code(500).send({ ok: false, error: error instanceof Error ? error.message : "Signals could not be assembled." });
+  }
+});
+
+app.get("/api/brain/contract", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const query = (request.query ?? {}) as { tenant_id?: unknown };
+  try {
+    return { ok: true, contract: await getBrainContract(session, await pulseAccessFor(session, query.tenant_id)) };
+  } catch (error) {
+    return reply.code(500).send({ ok: false, error: error instanceof Error ? error.message : "Brain contract could not be assembled." });
+  }
+});
+
+app.get("/phantom-ai/decisions", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const query = (request.query ?? {}) as { tenant_id?: unknown };
+  try {
+    return { ok: true, ...(await listDecisions(session, await pulseAccessFor(session, query.tenant_id))) };
+  } catch (error) {
+    return reply.code(500).send({ ok: false, error: error instanceof Error ? error.message : "Decisions could not be assembled." });
+  }
+});
+
+app.post("/phantom-ai/decisions/:id/decide", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const params = (request.params ?? {}) as { id?: string };
+  const body = (request.body ?? {}) as { action?: unknown; note?: unknown; tenant_id?: unknown };
+  const action = typeof body.action === "string" ? body.action : "";
+  if (action !== "approve" && action !== "modify" && action !== "dismiss") {
+    return reply.code(400).send({ ok: false, error: "action must be approve, modify, or dismiss." });
+  }
+  try {
+    const access = await pulseAccessFor(session, body.tenant_id);
+    const decision = await decide(
+      session,
+      access,
+      String(params.id || ""),
+      action as DecideAction,
+      typeof body.note === "string" ? body.note : undefined,
+    );
+    return { ok: true, decision };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Decision could not be recorded.";
+    const code = /not found/i.test(message) ? 404 : /already/i.test(message) ? 409 : 500;
+    return reply.code(code).send({ ok: false, error: message });
   }
 });
 
