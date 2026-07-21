@@ -4,6 +4,16 @@
 /* Design tokens live in phantom-tokens.css (loaded first) — the ONLY :root
    palette source. Do not add :root palette blocks to this file again. */
 
+/* Keyboard skip link: invisible until focused, then a clear pill above all chrome. */
+.skip-link {
+  position: fixed; top: 10px; left: 10px; z-index: 400;
+  padding: 8px 14px; border-radius: var(--radius-s);
+  background: var(--ink); color: #fff; font: 600 12px var(--font-ui);
+  text-decoration: none; transform: translateY(-300%);
+}
+.skip-link:focus-visible { transform: none; outline: 2px solid var(--neon); outline-offset: 2px; }
+.overlay-panel:focus { outline: none; }
+
 * { box-sizing: border-box; }
 html, body {
   margin: 0; min-height: 100%; background: var(--bg); color: var(--ink);

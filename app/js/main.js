@@ -6,49 +6,49 @@ import {
   redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260721-2";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260721-2";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260721-2";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260721-2";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260721-2";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260721-2";
-import { mountManagedGrowthReport } from "./managedgrowth.js?v=phantom-live-20260721-2";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260721-2";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260721-2";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260721-2";
-import { mountPhantomAI } from "./phantomai.js?v=phantom-live-20260721-2";
-import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260721-2";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260721-2";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260721-2";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260721-2";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode, refreshCompanionCore } from "./companion.js?v=phantom-live-20260721-2";
-import { brainLiveLabel, onBrainState } from "./brain-state.js?v=phantom-live-20260721-2";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260721-2";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260721-2";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260721-2";
-import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260721-2";
-import { mountAmbient } from "./ambient.js?v=phantom-live-20260721-2";
-import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260721-2";
+} from "./store.js?v=phantom-live-20260721-3";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260721-3";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260721-3";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260721-3";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260721-3";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260721-3";
+import { mountManagedGrowthReport } from "./managedgrowth.js?v=phantom-live-20260721-3";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260721-3";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260721-3";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260721-3";
+import { mountPhantomAI } from "./phantomai.js?v=phantom-live-20260721-3";
+import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260721-3";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260721-3";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260721-3";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260721-3";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode, refreshCompanionCore } from "./companion.js?v=phantom-live-20260721-3";
+import { brainLiveLabel, onBrainState } from "./brain-state.js?v=phantom-live-20260721-3";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260721-3";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260721-3";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260721-3";
+import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260721-3";
+import { mountAmbient } from "./ambient.js?v=phantom-live-20260721-3";
+import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260721-3";
 import {
   fetchAuthConfig, databaseLogin, databaseLogout, databaseSignup, databaseForgotUsername, databaseForgotPassword,
   databaseResetPassword, databaseAcceptInvitation, databaseVerify2fa, databaseStart2faSetup, databaseConfirm2fa, databaseRegenerate2faBackupCodes, databaseDisable2fa,
   switchOrg, fetchAuthMe, fetchEntitlementsSummary,
-} from "./orgs.js?v=phantom-live-20260721-2";
-import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260721-2";
-import { assetsAvailable } from "./orgs.js?v=phantom-live-20260721-2";
-import { renderPhantomStore } from "./phantomstore.js?v=phantom-live-20260721-2";
-import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260721-2";
+} from "./orgs.js?v=phantom-live-20260721-3";
+import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260721-3";
+import { assetsAvailable } from "./orgs.js?v=phantom-live-20260721-3";
+import { renderPhantomStore } from "./phantomstore.js?v=phantom-live-20260721-3";
+import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260721-3";
 // PhantomPlay V2 platform shell (Home/Solo/Friends/Workspace/Dev Hub) - opt-in
 // while it hardens: set localStorage "pf.phantomplay.v2" = "1" (the V2 shell has
 // a "Classic view" button to switch back). Classic stays the default experience.
-import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260721-2";
+import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260721-3";
 const phantomPlayV2Opted = () => { try { return localStorage.getItem("pf.phantomplay.v2") === "1"; } catch { return false; } };
-import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260721-2";
+import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260721-3";
 import {
   customizeNavigation,
   loadOrganizationCustomization,
-} from "./customization.js?v=phantom-live-20260721-2";
-import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260721-2";
+} from "./customization.js?v=phantom-live-20260721-3";
+import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260721-3";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -1435,7 +1435,7 @@ const MODES = {
   admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260721-2";
+const POSE_VERSION = "phantom-live-20260721-3";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -3535,11 +3535,12 @@ function openWorkspace(id, pushHash = true) {
   openId = key;
   const navHit = navForWorkspace(key);
   if (navHit) activeNav = navHit.id;
+  overlayReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   document.body.classList.add("overlay-open");
   overlayRoot.innerHTML = `
     <div class="overlay ${def.wide ? "overlay-wide" : ""}" role="dialog" aria-modal="true" aria-label="${esc(def.title)}">
       <button class="overlay-backdrop" data-overlay-close aria-label="Back to console"></button>
-      <section class="overlay-panel">
+      <section class="overlay-panel" tabindex="-1">
         <header class="overlay-head">
           <div>
             <p class="overlay-kicker">${esc(def.kicker)}${!def.custom && isAdmin() && currentWs() !== "phantomforce" ? ` · ${esc(wsName(currentWs()))}` : ""}</p>
@@ -3559,6 +3560,9 @@ function openWorkspace(id, pushHash = true) {
   };
   rerender();
   overlayRoot.querySelectorAll("[data-overlay-close]").forEach((b) => b.addEventListener("click", () => closeOverlay(true)));
+  /* Modal contract: background shell is inert, focus moves into the dialog. */
+  document.querySelector("[data-phantom]")?.setAttribute("inert", "");
+  overlayRoot.querySelector(".overlay-panel")?.focus({ preventScroll: true });
   if (pushHash && location.hash !== `#ws/${key}`) {
     try { history.pushState(null, "", `#ws/${key}`); } catch {}
   }
@@ -3569,6 +3573,11 @@ function closeOverlay(clearHash) {
   openId = null;
   overlayRoot.innerHTML = "";
   document.body.classList.remove("overlay-open");
+  document.querySelector("[data-phantom]")?.removeAttribute("inert");
+  if (overlayReturnFocus && document.contains(overlayReturnFocus)) {
+    try { overlayReturnFocus.focus({ preventScroll: true }); } catch {}
+  }
+  overlayReturnFocus = null;
   if (clearHash && location.hash.startsWith("#ws/")) {
     try { history.pushState(null, "", activePageId ? `#page/${activePageId}` : location.pathname + location.search); } catch {}
   }
@@ -3591,6 +3600,23 @@ function syncNavToView() {
   if (hit) { activeNav = hit.id; renderNav(); }
 }
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && openId) closeOverlay(true); });
+let overlayReturnFocus = null;
+const OVERLAY_FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Tab" || !openId) return;
+  const items = [...overlayRoot.querySelectorAll(OVERLAY_FOCUSABLE)].filter((n) => n.offsetParent !== null);
+  if (!items.length) return;
+  const first = items[0];
+  const last = items[items.length - 1];
+  const inside = overlayRoot.contains(document.activeElement);
+  if (e.shiftKey && (document.activeElement === first || !inside)) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && (document.activeElement === last || !inside)) { e.preventDefault(); first.focus(); }
+});
+document.querySelector("[data-skip-link]")?.addEventListener("click", (e) => {
+  e.preventDefault();
+  const main = document.querySelector("[data-console]");
+  if (main) { main.focus({ preventScroll: true }); main.scrollIntoView({ block: "start" }); }
+});
 window.addEventListener("popstate", () => {
   const page = location.hash.match(/^#page\/([a-z-]+)/);
   const ws = location.hash.match(/^#ws\/([a-z-]+)/);
