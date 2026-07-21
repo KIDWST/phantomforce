@@ -1,0 +1,35 @@
+{
+  "missionId": "e839b278b7c1",
+  "missionName": "Phantom Admin: Four-Day Ship Sprint",
+  "repoRoot": "C:\\Users\\jorda\\Documents\\Codex\\deployments\\phantomforce-live",
+  "liveHealthVerifiedAt": "2026-07-21T13:29:00-05:00",
+  "liveHealthRoot": "C:\\Users\\jorda\\Documents\\Codex\\deployments\\phantomforce-live",
+  "baselineBranch": "main",
+  "baselineCommit": "8745f7a1",
+  "baselineTag": "pre-admin-completion-20260721-1330",
+  "baselineNotes": {
+    "gitAheadBehindOrigin": "in sync at fetch time",
+    "uncommittedAtMissionStart": [
+      "app/js/phantomplay.js (modified, pre-existing, not mission work)",
+      "server/src/phantom-ai/phantomplay.ts (modified, pre-existing, not mission work)",
+      "app/assets/phantomplay/*.svg (20 new untracked cover assets, pre-existing, not mission work)"
+    ],
+    "uncommittedWorkPolicy": "Preserved, not discarded, not touched by Relay. Presumed in-progress work from a concurrent session per this repo's established concurrent-session convention (CLAUDE.md).",
+    "verifyLiveAdmin": "PASSED at mission start (npm run verify:live-admin -> LIVE ADMIN VERIFY PASSED, build phantom-live-20260721-8)",
+    "shipScript": "scripts/ship-live-admin.mjs (npm run ship:live-admin) — bumps build id, runs gates, commits, pushes origin/main, verifies live URLs. Relay-only per this repo's CLAUDE.md.",
+    "authSystem": "server/src/access/session.ts — multi-provider (demo/prisma-dev/owner-production/gateway-forwarded/database). Production auth provider configured via PHANTOMFORCE_AUTH_PROVIDER.",
+    "existingTestGates": [
+      "npm run test:release-critical",
+      "npm run test:release-full",
+      "npm run test:auth-boundaries",
+      "npm run test:database-auth",
+      "npm run typecheck"
+    ]
+  },
+  "relay": {
+    "workerId": "w5",
+    "status": "monitoring",
+    "lastCheckpointAt": null,
+    "pendingReviews": []
+  }
+}

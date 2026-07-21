@@ -1,0 +1,27 @@
+{
+  "schema": {
+    "agent": "which worker (w1-w6 / role name)",
+    "branch": "git branch, if a dedicated branch/worktree is in use; null if working directly on main per this repo's concurrent-session convention",
+    "task": "short task description",
+    "claimedPaths": ["glob or exact paths"],
+    "claimedAt": "ISO 8601",
+    "expectedReleaseAt": "ISO 8601 or null",
+    "status": "active | released | expired"
+  },
+  "conventions": [
+    "This repo's CLAUDE.md establishes that concurrent sessions committing directly to main is the normal, expected workflow here — not a conflict. Claims below are advisory scoping to avoid two agents editing the same files at once; they are not a substitute for reading git status/log before editing.",
+    "Relay (w5) owns: root package.json, package-lock.json (only when a dependency change is unavoidable), tsconfig.base.json, server/prisma/schema.prisma + migrations directory (registry-level changes only, not feature-scoped model additions which stay with Forge Systems), central navigation registration in app/index.html's nav shell, server/src/index.ts route registration, global auth middleware in server/src/access/, ops/admin-live/*, scripts/ship-live-admin.mjs, and this .termina/ directory.",
+    "Vertical-slice owners (w2 Forge Experience, w3 Forge Systems) claim their own feature paths here before editing them; Relay reviews and releases claims at each integration checkpoint."
+  ],
+  "claims": [
+    {
+      "agent": "w5-relay",
+      "branch": null,
+      "task": "Baseline snapshot, rollback tag, mission-state scaffolding, root-scope survey (read-only)",
+      "claimedPaths": [".termina/*"],
+      "claimedAt": "2026-07-21T13:30:00-05:00",
+      "expectedReleaseAt": null,
+      "status": "active"
+    }
+  ]
+}
