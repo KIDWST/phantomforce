@@ -99,6 +99,17 @@
   .breakdown div span{font-size:10px;color:#9fb3ad}
   .toast{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);background:#0f161aee;border:1px solid #2dd4bf55;padding:8px 16px;border-radius:6px;font-size:12px;z-index:20;pointer-events:none;opacity:0;transition:opacity .25s;max-width:90vw;text-align:center}
   .toast.show{opacity:1}
+  .evList{width:min(600px,92vw);max-height:52vh;overflow:auto;display:flex;flex-direction:column;gap:5px;text-align:left}
+  .evList.inline{max-height:118px;width:100%}
+  .evChapter{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#ffb454;margin:6px 0 0}
+  .evItem{font-size:12.5px;color:#c5d8d2;border-left:3px solid #2dd4bf66;padding:4px 9px;background:#0f161a;border-radius:4px;line-height:1.45}
+  .evItem.missing{color:#4d6560;border-left-color:#3a4250;font-style:italic}
+  .evItem.note{border-left-color:#ffb454;color:#ffe2b8}
+  .evItem.choice{border-left-color:#b98aff;color:#d9c8ff}
+  .evCount{font-size:12px;color:#9fb3ad;margin:0}
+  .choiceDesc{font-size:11px;color:#9fb3ad;text-align:center;margin:0;max-width:170px;line-height:1.4}
+  .endingName{font-size:22px;color:#ffcf87;font-weight:800;margin:0;letter-spacing:.02em}
+  .storyRecap{font-size:13px;color:#c5d8d2;max-width:600px;line-height:1.65;text-align:center;margin:0}
   @media(max-width:680px){.difficultyGrid{grid-template-columns:1fr}.difficultyCard{min-height:130px}.hud{padding:6px 8px}.hud .stats{gap:7px}.meter{min-width:75px}.stat b{font-size:16px}.stat span{font-size:8px}.mapWrap{min-height:190px}.typedWord{font-size:18px}.vkey{min-height:34px}.storyPanel{padding-left:14px}.storyPanel h2{font-size:30px}}
   @media(max-height:700px){.mapWrap{min-height:170px}.vkey{min-height:31px}.encounterCard{padding:7px 12px}.hud{padding-top:5px;padding-bottom:5px}}
   @media(prefers-reduced-motion:reduce){.btn{transition:none}}
@@ -168,8 +179,9 @@
       <div class="stats">
         <div class="meter"><span>Courage <b id="hpNum">100/100</b></span><div class="bar"><i id="hpFill" style="width:100%"></i></div></div>
         <div class="meter"><span>Insight <b id="inkNum">0/100</b></span><div class="bar"><i id="inkFill" style="width:0%"></i></div></div>
-        <div class="stat"><div><b id="hudScore">0</b><span>Score</span></div><div><b id="hudCombo">0</b><span>Combo</span></div><div><b id="hudWpm">0</b><span>WPM</span></div><div><b id="hudAccuracy">100%</b><span>Accuracy</span></div><div><b id="hudVocab">0</b><span>Words</span></div></div>
+        <div class="stat"><div><b id="hudScore">0</b><span>Score</span></div><div><b id="hudCombo">0</b><span>Combo</span></div><div><b id="hudWpm">0</b><span>WPM</span></div><div><b id="hudAccuracy">100%</b><span>Accuracy</span></div><div><b id="hudVocab">0</b><span>Words</span></div><div><b id="hudEvidence">0/16</b><span>Evidence</span></div></div>
       </div>
+      <button class="btn small" data-journal>Journal</button>
       <button class="btn small" data-pause>Pause</button>
     </div>
     <div class="mapWrap"><canvas id="mapStage" aria-label="First-person view inside Cipher Keep"></canvas></div>
@@ -182,12 +194,20 @@
       <div class="field" style="width:min(320px,80vw)"><label>Volume<span id="pVolLbl">80%</span></label><input type="range" id="pVolRange" min="0" max="1" step="0.01" value="0.8"></div>
       <div class="row"><button class="btn primary" data-resume>Resume</button><button class="btn" data-quit>Quit to menu</button></div>
     </div>
+    <div class="overlay" id="journalOverlay" hidden>
+      <h2>Clue Journal</h2>
+      <p class="evCount" id="journalCount"></p>
+      <div class="evList" id="journalList"></div>
+      <div class="row"><button class="btn primary" data-journal-close>Back to the Keep</button></div>
+    </div>
   </section>
 
   <section class="scr" id="resultsScreen" data-screen="results" hidden>
     <p class="kicker" id="resKicker">Run ended</p>
     <div class="grade" id="resGrade">S</div>
+    <p class="endingName" id="resEnding" hidden></p>
     <p class="sub" id="resCause"></p>
+    <p class="storyRecap" id="resStory"></p>
     <div class="breakdown" id="resBreakdown"></div>
     <div class="row">
       <button class="btn primary" data-again>Read it again</button>
@@ -254,6 +274,91 @@ var RELICS=[
   {id:'quickdraw',label:'Quickdraw',desc:'+8% damage on every clean strike.'},
   {id:'mend',label:'Mend',desc:'Resting heals 15% more HP.'}
 ];
+/* ---- Investigation layer: evidence fragments, deductions, choices, endings ----
+   Fragments are EVIDENCE the player recovers by clearing rooms. Chapter gates ask
+   the player to TYPE a deduction assembled from that evidence. Wrong answers cost
+   Courage and reveal a hint, never a dead end. The final confrontation is a typed
+   choice with three distinct endings. All content is self-contained. */
+var FRAGMENTS=[
+  ['a wax seal pressed with the old archive crest',
+   'the scriptorium bolt was drawn back from the inside',
+   'fresh ink still drying on the retired keeper\'s desk',
+   'dust on every shelf, yet not one window broken'],
+  ['paper birds all flying toward the copper doors',
+   'a nest woven entirely from unfinished sentences',
+   'bark scarred with the words "I can keep them safe"',
+   'root-ink flowing uphill, pulled by a machine\'s hum'],
+  ['a portrait of the keeper before he became the Warden',
+   'a ledger entry: "borrowed words, to be returned when people are kind"',
+   'the Blank Engine\'s manual, signed in a shaking hand',
+   'a child\'s thank-you letter the keeper kept for forty years'],
+  ['the Dawn Lexicon\'s lock listens for honest voices',
+   'the Warden\'s cloak is stitched from old apologies',
+   'the Engine only erases what no one will speak for',
+   'a quiet space inside the machine the size of one choice']
+];
+var FRAG_STEP_INDICES=[0,1,3,4];
+var FRAG_TOTAL=16;
+function fragmentForStep(depth,stepIndex){
+  var slot=FRAG_STEP_INDICES.indexOf(stepIndex);
+  if(slot<0||depth<1||depth>FRAGMENTS.length) return null;
+  return {chapter:depth, slot:slot, text:FRAGMENTS[depth-1][slot]};
+}
+var DEDUCTIONS=[
+  {question:'Who could have opened the scriptorium on the missing morning?',
+   answer:'the old keeper',
+   options:[
+     {key:'night porter',hint:'The porter\'s ring holds no scriptorium key, and the bolt was drawn from the inside.'},
+     {key:'archivist sable',hint:'Sable stood beside you at sunrise, handing you the silver quill.'},
+     {key:'the old keeper',hint:''}
+   ],
+   success:'Sable goes pale. "The old keeper... he built that bolt. He never really left. Then the Echo Warden wears a face I know."',
+   note:'The scriptorium was opened from inside by the old keeper - the man who became the Echo Warden.'},
+  {question:'Where are the paper birds delivering the stolen words?',
+   answer:'the blank engine',
+   options:[
+     {key:'a hungry furnace',hint:'There is no ash and no smoke anywhere in the wood. Nothing was burned.'},
+     {key:'paper nests',hint:'Every nest you found was woven from sentences, yet empty by dawn.'},
+     {key:'the blank engine',hint:''}
+   ],
+   success:'"The Blank Engine," Sable whispers. "He is not destroying the words. He is storing them where no one can mis-speak them."',
+   note:'The stolen words are being fed into the Blank Engine beneath the Clockwork Archive.'},
+  {question:'Why did the keeper lock every story away?',
+   answer:'out of fear',
+   options:[
+     {key:'for gold',hint:'His ledger prices nothing. Every entry ends with "to be returned."'},
+     {key:'by royal decree',hint:'No crown seal appears on a single order - only his own shaking signature.'},
+     {key:'out of fear',hint:''}
+   ],
+   success:'"Fear," Sable says softly. "He watched words wound people and decided silence was safer. Remember that when you face him."',
+   note:'The Warden locked the words away out of fear of what words can do - not out of malice.'}
+];
+var MOMENTS={
+  bird:{id:'bird',
+    kicker:'The Listening Wood - a small choice',
+    prompt:'A paper bird hangs tangled in the brambles, one stolen sentence still folded in its wing. Type release to set it free, or follow to trail it quietly to its master.',
+    options:[
+      {key:'release',toast:'The bird spirals free. Courage +15.',line:'You tear the brambles open. The bird circles you once, drops the sentence at your feet, and vanishes into the canopy. Something in the wood approves.'},
+      {key:'follow',toast:'You mark the flight path. Insight +35.',line:'You leave the bird bound and shadow its keeper\'s route instead. A path of bent grass points straight at the copper doors, and your Insight sharpens.'}
+    ]}
+};
+var ENDINGS={
+  mercy:{name:'The Lantern Ending', recap:'You spared the Echo Warden.',
+    line:'You lower your quill. "Mercy," you say, and mean it. The stolen sentences settle around the Warden like falling leaves. He unpins the Dawn Lexicon from the Engine with his own hands and asks, very quietly, whether the village might ever want a librarian again.',
+    closing:'light the lanterns'},
+  bind:{name:'The Iron Ending', recap:'You bound the Echo Warden into his own archive.',
+    line:'"Bind," you write, and the word becomes chains of bright text. The Warden does not struggle. The Keep seals him among the shelves he loved too much - a keeper, kept. The Dawn Lexicon is yours to carry home, heavier than it looks.',
+    closing:'seal the archive'},
+  teach:{name:'The Dawn Ending', recap:'You taught the Echo Warden that words are meant to be shared.',
+    line:'"Teach," you type, and offer him the silver quill. Letter by letter the Warden copies your steady hand, and the Blank Engine hums backwards, returning every story it swallowed. Dawn arrives early, and it arrives spelled correctly.',
+    closing:'begin again'}
+};
+var FINAL_CHOICES=[
+  {id:'mercy',desc:'Spare him. Answer fear with kindness.'},
+  {id:'bind',desc:'Bind him into the archive he built.'},
+  {id:'teach',desc:'Hand him the quill and teach him.'}
+];
+
 var NODE_COLORS_STD={enemy:'#ff6b6b',elite:'#ff3fae',cache:'#ffd23f',rest:'#3ddc97',boss:'#b93cff',fog:'#3a4250'};
 var NODE_COLORS_CB={enemy:'#E69F00',elite:'#CC79A7',cache:'#F0E442',rest:'#009E73',boss:'#56B4E9',fog:'#555555'};
 var NODE_LETTER={enemy:'E',elite:'X',cache:'$',rest:'+',boss:'B',fog:'?'};
@@ -369,12 +474,12 @@ function typeBackspace(){
 }
 
 // ---- Persistent state ----
-var DEFAULTS={ progression:{bestDepth:0,bestScore:0,bestWpm:0,totalRuns:0,storiesCompleted:0,tutorialSeen:false,vocabulary:[]}, settings:{volume:0.8,colorblind:false,reducedMotionLocal:false,keyboardGuide:true,difficulty:'child'} };
+var DEFAULTS={ progression:{bestDepth:0,bestScore:0,bestWpm:0,totalRuns:0,storiesCompleted:0,tutorialSeen:false,vocabulary:[],bestFragments:0,casesSolved:0,endingsSeen:{}}, settings:{volume:0.8,colorblind:false,reducedMotionLocal:false,keyboardGuide:true,difficulty:'child'} };
 var G=JSON.parse(JSON.stringify(DEFAULTS));
 var hostSound=true, hostReducedMotion=false;
 function effectiveVolume(){ return hostSound?G.settings.volume:0; }
 function effectiveReducedMotion(){ return hostReducedMotion||G.settings.reducedMotionLocal; }
-function serializeState(){ return {v:2, progression:G.progression, settings:G.settings}; }
+function serializeState(){ return {v:3, progression:G.progression, settings:G.settings}; }
 function mergeState(state){
   if(!state||typeof state!=='object') return;
   try{
@@ -386,6 +491,11 @@ function mergeState(state){
       if(typeof state.progression.storiesCompleted==='number') G.progression.storiesCompleted=state.progression.storiesCompleted;
       if(typeof state.progression.tutorialSeen==='boolean') G.progression.tutorialSeen=state.progression.tutorialSeen;
       if(Array.isArray(state.progression.vocabulary)) G.progression.vocabulary=state.progression.vocabulary.filter(function(w){return typeof w==='string';}).slice(0,240);
+      if(typeof state.progression.bestFragments==='number') G.progression.bestFragments=Math.max(0,Math.min(FRAG_TOTAL,state.progression.bestFragments));
+      if(typeof state.progression.casesSolved==='number') G.progression.casesSolved=Math.max(0,state.progression.casesSolved);
+      if(state.progression.endingsSeen && typeof state.progression.endingsSeen==='object'){
+        ['mercy','bind','teach'].forEach(function(k){ if(typeof state.progression.endingsSeen[k]==='number') G.progression.endingsSeen[k]=state.progression.endingsSeen[k]; });
+      }
     }
     if(state.settings && typeof state.settings==='object'){
       if(typeof state.settings.volume==='number') G.settings.volume=Math.max(0,Math.min(1,state.settings.volume));
@@ -461,9 +571,10 @@ var TUT_STEPS=[
   {t:'Look, read, then type', b:'You see the Keep through your own eyes. Doors, trees, creatures, and objects carry names or clues. Type the matching word or phrase to move closer, and use Backspace when you want to revise.'},
   {t:'Clues build vocabulary', b:'Path riddles describe the object in front of you. New vocabulary appears with a short meaning after you type it. Your Words counter tracks how many different targets you have learned.'},
   {t:'Accuracy and WPM', b:'Accuracy measures correct keys. WPM measures your pace for each completed target. Fast typing strengthens your answer, while careful mistake-free typing builds Combo and Insight.'},
+  {t:'Evidence and deduction', b:'Clearing rooms recovers evidence fragments into your Clue Journal (button in the top bar). At the end of each chapter, Archivist Sable asks what the evidence means: type your deduction. A wrong guess costs Courage and removes that answer, but she always leaves a hint - the investigation never dead-ends.'},
   {t:'Encounters stay readable', b:'Echo creatures prepare a disruption while you type. Finish the shown word before their meter fills. Story Scout gives more time and ignores a wrong key until the right one arrives.'},
   {t:'Insight and Focus', b:'Accurate words fill Insight. When the Focus phrase appears, typing it calms the room, restores Courage, and empowers your next answer.'},
-  {t:'Finish the four chapters', b:'Recover each page of the Dawn Lexicon and reach the Room Before Tomorrow. A complete results screen records score, accuracy, WPM, vocabulary, and story progress locally.'}
+  {t:'Finish the four chapters', b:'Recover each page of the Dawn Lexicon and reach the Room Before Tomorrow. At the final gate, what you type - mercy, bind, or teach - decides the ending, and the results screen recaps your choices, deductions, and evidence.'}
 ];
 var tutStep=0;
 function openTutorial(){ tutStep=0; renderTutStep(); showScreen('tutorial'); }
@@ -489,7 +600,9 @@ function showStoryIntro(){
 function renderMenuSummary(){
   var el=document.getElementById('menuSummary');
   if(!G.progression.totalRuns){ el.textContent='No journeys yet. The first page is waiting.'; return; }
-  el.textContent='Journeys: '+G.progression.totalRuns+' · Chapters: '+G.progression.bestDepth+'/4 · Best WPM: '+Math.round(G.progression.bestWpm||0)+' · Vocabulary: '+G.progression.vocabulary.length;
+  var endingsFound=0;
+  ['mercy','bind','teach'].forEach(function(k){ if((G.progression.endingsSeen&&G.progression.endingsSeen[k])>0) endingsFound++; });
+  el.textContent='Journeys: '+G.progression.totalRuns+' · Chapters: '+G.progression.bestDepth+'/4 · Best WPM: '+Math.round(G.progression.bestWpm||0)+' · Vocabulary: '+G.progression.vocabulary.length+(endingsFound?' · Endings: '+endingsFound+'/3':'');
 }
 
 // ---- Settings ----
@@ -533,7 +646,9 @@ function newRun(seed){
     wordsTyped:0, cleanWords:0, relicsCollected:0, vaultsOpened:0, enemiesDefeated:0, floorsCleared:0,
     charsTyped:0, charErrors:0, lastWpm:0, bestWpm:0, vocabulary:{}, lesson:'', victory:false,
     phase:'transition', paused:false, startTs:performance.now(), lastTs:0, raf:0,
-    currentNode:null, floor:null, incantWord:null, deathCause:null, enemyPhaseWarned:false,cameraPulse:1,sceneFlash:0
+    currentNode:null, floor:null, incantWord:null, deathCause:null, enemyPhaseWarned:false,cameraPulse:1,sceneFlash:0,
+    fragments:[], caseNotes:[], fragmentsFound:0, fragmentsMissed:0, deductions:[], choiceLog:[], ending:null,
+    journalOpen:false, deduction:null, afterDeduction:null, moment:null, sablePassage:false
   };
   SESS.floor=generateFloor(1, SESS.rng);
   showScreen('play');
@@ -551,7 +666,8 @@ function beginTransitionTo(stepIndex){
   var step=SESS.floor.steps[stepIndex];
   if(step.type==='single'){ typeSetTargets([{id:'go', text:step.word}]); }
   else { typeSetTargets(step.options.map(function(o,i){ return {id:'opt'+i, text:o.word}; })); }
-  SESS.lesson='Read the clue, then type the object or phrase you see.';
+  if(SESS.holdLesson){ SESS.holdLesson=false; }
+  else { SESS.lesson='Read the clue, then type the object or phrase you see.'; }
   renderEncounterStatic();
 }
 function onTransitionComplete(result){
@@ -626,7 +742,11 @@ function onCombatWordComplete(result){
     var inkGain=(clean?INK_PER_CLEAN:INK_PER_MISS)*(SESS.player.relics.echo?1.5:1);
     SESS.player.ink=Math.min(SESS.player.inkMax, SESS.player.ink+inkGain);
     playSfx(clean?'hitClean':'hit2');
-    if(SESS.enemy.hp<=0){ combatWon(); return; }
+    if(SESS.enemy.hp<=0){
+      if(SESS.enemy.kind==='boss' && SESS.depth>=STORY_CHAPTERS.length){ startFinalChoice(); }
+      else combatWon();
+      return;
+    }
     if(!SESS.enemyPhaseWarned && SESS.enemy.kind==='boss' && SESS.enemy.hp<=SESS.enemy.hpMax*0.5){ SESS.enemyPhaseWarned=true; toast(SESS.enemy.name+' grows desperate!'); }
     newCombatWord();
   } else if(result.id==='incant'){
@@ -664,6 +784,7 @@ function vaultTick(dtSec){
 function vaultExpired(){
   toast('The vault seals shut...');
   playSfx('fail');
+  if(SESS.currentNode) SESS.currentNode.expired=true;
   resolveNodeAndContinue(SESS.floor.pos, SESS.currentNode);
 }
 function onVaultComplete(){
@@ -727,9 +848,29 @@ function onRelicPicked(id){
 }
 
 // -- floor / node progression --
+function awardFragment(stepIndex,node){
+  var frag=fragmentForStep(SESS.depth,stepIndex);
+  if(!frag) return;
+  if(node && node.expired){
+    SESS.fragmentsMissed++;
+    SESS.lesson='The chest sealed before you finished - a page of evidence dissolved with its light.';
+    toast('Evidence lost: a fragment dissolved inside the vault.');
+    return;
+  }
+  SESS.fragments.push(frag);
+  SESS.fragmentsFound++;
+  SESS.lesson='Journal updated - evidence recovered: "'+frag.text+'"';
+  SESS.holdLesson=true;
+  toast('Evidence: "'+frag.text+'"');
+  playSfx('vault');
+}
 function resolveNodeAndContinue(stepIndex, node){
+  awardFragment(stepIndex,node);
   function proceed(){
-    if(node.kind==='boss'){ floorComplete(); }
+    if(node.kind==='boss'){
+      if(SESS.depth<STORY_CHAPTERS.length){ startDeduction(function(){ floorComplete(); }); }
+      else { floorComplete(); }
+    }
     else if(stepIndex+1>=SESS.floor.steps.length){ floorComplete(); }
     else { beginTransitionTo(stepIndex+1); }
   }
@@ -750,10 +891,169 @@ function floorComplete(){
   SESS.depth++;
   SESS.player.wardUsedThisFloor=false;
   SESS.floor=generateFloor(SESS.depth, SESS.rng);
+  if(SESS.sablePassage){
+    SESS.sablePassage=false;
+    var safe=SESS.floor.steps[2];
+    if(safe){
+      if(safe.type==='single'){ safe.node={kind:'rest'}; }
+      else { safe.options.forEach(function(o){ o.node={kind:'rest'}; }); }
+      toast('Sable marked a safe passage - a Memory Tree waits ahead.');
+    }
+  }
   SESS.lesson=STORY_CHAPTERS[SESS.depth-1].body;
-  beginTransitionTo(0);
   toast(STORY_CHAPTERS[SESS.depth-1].title);
+  if(SESS.depth===2){ startMoment('bird'); }
+  else { beginTransitionTo(0); }
   persistSoon();
+}
+
+// -- deduction gates, choices, endings --
+function accuracyPctNow(){ return SESS.charsTyped?Math.max(0,Math.round((1-SESS.charErrors/SESS.charsTyped)*100)):100; }
+function chapterFragmentsFound(ch){ return SESS.fragments.filter(function(f){ return f.chapter===ch; }).length; }
+function firstTryCount(){ return SESS.deductions.filter(function(d){ return d.firstTry; }).length; }
+function sableGreeting(d){
+  var found=chapterFragmentsFound(SESS.depth);
+  var line='Archivist Sable steps out of the shadows, lantern low. ';
+  if(found>=4) line+='"Four fragments - a complete page of evidence. I knew your eyes were sharp." ';
+  else if(found>=2) line+='"'+found+' fragments recovered. Enough to reason with." ';
+  else line+='"Little evidence survived this chapter, but think back - you saw more than you kept." ';
+  var acc=accuracyPctNow();
+  if(acc>=97) line+='"Your quill hand barely trembles." ';
+  else if(acc<85) line+='"Steady your hand; the Keep listens for certainty." ';
+  return line+d.question;
+}
+function startDeduction(afterFn){
+  SESS.phase='deduction';
+  SESS.afterDeduction=afterFn;
+  var d=DEDUCTIONS[SESS.depth-1];
+  SESS.deduction={data:d, tries:0, remaining:d.options.slice()};
+  SESS.lesson=sableGreeting(d);
+  setDeductionTargets();
+  renderEncounterStatic();
+}
+function setDeductionTargets(){
+  typeSetTargets(SESS.deduction.remaining.map(function(o){ return {id:'ded:'+o.key, text:o.key}; }));
+}
+function onDeductionAnswer(result){
+  var key=result.id.slice(4);
+  var d=SESS.deduction;
+  if(key===d.data.answer){
+    var firstTry=(d.tries===0);
+    SESS.deductions.push({chapter:SESS.depth, answer:key, tries:d.tries, firstTry:firstTry});
+    SESS.caseNotes.push({chapter:SESS.depth, text:d.data.note});
+    var bonus=(firstTry?200:80)*SESS.depth;
+    SESS.score+=bonus;
+    SESS.player.hp=Math.min(SESS.player.hpMax, SESS.player.hp+(firstTry?20:8));
+    if(firstTry) SESS.sablePassage=true;
+    playSfx('incant');
+    toast(firstTry?('Deduction confirmed first try! +'+bonus+' - Sable will mark a safe passage.'):('Deduction confirmed. +'+bonus));
+    SESS.lesson=d.data.success+(firstTry?' "You reasoned it out at once. Take the quiet road I know."':'');
+    var fn=SESS.afterDeduction; SESS.afterDeduction=null; SESS.deduction=null;
+    fn();
+  } else {
+    d.tries++;
+    var opt=null;
+    d.data.options.forEach(function(o){ if(o.key===key) opt=o; });
+    d.remaining=d.remaining.filter(function(o){ return o.key!==key; });
+    var pen=G.settings.difficulty==='child'?8:14;
+    SESS.player.hp=Math.max(1,SESS.player.hp-pen);
+    playSfx('fail');
+    SESS.lesson='Sable shakes her head. '+((opt&&opt.hint)?opt.hint:'The evidence points elsewhere.')+' Try again - she never lets the trail go cold.';
+    toast('Not quite. Courage -'+pen+'. Sable leaves a hint.');
+    setDeductionTargets();
+    renderEncounterStatic();
+  }
+}
+function startMoment(id){
+  SESS.phase='moment';
+  SESS.moment=MOMENTS[id];
+  SESS.lesson=SESS.moment.prompt;
+  typeSetTargets(SESS.moment.options.map(function(o){ return {id:'mo:'+o.key, text:o.key}; }));
+  renderEncounterStatic();
+}
+function onMomentChoice(result){
+  var key=result.id.slice(3), m=SESS.moment, opt=null;
+  m.options.forEach(function(o){ if(o.key===key) opt=o; });
+  SESS.choiceLog.push({at:m.id, choice:key});
+  if(key==='release'){ SESS.player.hp=Math.min(SESS.player.hpMax,SESS.player.hp+15); }
+  else { SESS.player.ink=Math.min(SESS.player.inkMax,SESS.player.ink+35); }
+  SESS.lesson=opt?opt.line:'';
+  toast(opt?opt.toast:'');
+  playSfx('heal');
+  SESS.moment=null;
+  beginTransitionTo(0);
+}
+function finalChoiceLine(){
+  var s='The Echo Warden sinks to one knee, sentences bleeding light from his cloak. ';
+  var ft=firstTryCount();
+  if(ft>=3) s+='"You solved every question I buried. You already know why I did it." ';
+  else if(SESS.deductions.length) s+='"You followed my trail further than anyone ever has." ';
+  var bird=null;
+  SESS.choiceLog.forEach(function(c){ if(c.at==='bird') bird=c; });
+  if(bird&&bird.choice==='release') s+='"You freed my courier when you could have crushed it." ';
+  if(bird&&bird.choice==='follow') s+='"You tracked my courier all the way here. Thorough." ';
+  s+='"'+SESS.fragmentsFound+' fragments in your journal. So - what do you do with me?" Type mercy, bind, or teach.';
+  return s;
+}
+function startFinalChoice(){
+  SESS.enemiesDefeated++;
+  SESS.phase='choice';
+  playSfx('defeat');
+  SESS.lesson=finalChoiceLine();
+  typeSetTargets(FINAL_CHOICES.map(function(o){ return {id:'ch:'+o.id, text:o.id}; }));
+  renderEncounterStatic();
+}
+function onFinalChoice(result){
+  var id=result.id.slice(3);
+  SESS.ending=id;
+  SESS.choiceLog.push({at:'final', choice:id});
+  var end=ENDINGS[id];
+  SESS.phase='epilogue';
+  var ft=firstTryCount();
+  SESS.lesson=end.line+(ft>=3?' Because you understood him first, the Keep\'s doors open a little wider behind you.':'');
+  typeSetTargets([{id:'end', text:end.closing}]);
+  renderEncounterStatic();
+  toast(end.name);
+  playSfx('descend');
+}
+function onEpilogueComplete(){
+  SESS.victory=true;
+  SESS.deathCause='';
+  SESS.score+=600;
+  SESS.floorsCleared++;
+  finalizeRun();
+}
+// -- clue journal --
+function renderJournal(){
+  var list=document.getElementById('journalList'), html='';
+  var maxCh=Math.min(STORY_CHAPTERS.length,SESS.depth);
+  for(var ch=1; ch<=maxCh; ch++){
+    html+='<p class="evChapter">'+escapeHtml(STORY_CHAPTERS[ch-1].k+' - '+STORY_CHAPTERS[ch-1].title)+'</p>';
+    for(var slot=0; slot<4; slot++){
+      var found=null;
+      SESS.fragments.forEach(function(f){ if(f.chapter===ch&&f.slot===slot) found=f; });
+      if(found) html+='<div class="evItem">'+escapeHtml(found.text)+'</div>';
+      else if(ch<SESS.depth) html+='<div class="evItem missing">A fragment dissolved unrecovered.</div>';
+      else html+='<div class="evItem missing">Not yet found.</div>';
+    }
+    SESS.caseNotes.forEach(function(n){ if(n.chapter===ch) html+='<div class="evItem note">Case note: '+escapeHtml(n.text)+'</div>'; });
+  }
+  SESS.choiceLog.forEach(function(c){
+    if(c.at==='bird') html+='<div class="evItem choice">'+(c.choice==='release'?'You released the paper bird from the brambles.':'You followed the paper bird to the copper doors.')+'</div>';
+    if(c.at==='final') html+='<div class="evItem choice">Final choice: '+escapeHtml(c.choice)+'.</div>';
+  });
+  list.innerHTML=html;
+  document.getElementById('journalCount').textContent='Evidence: '+SESS.fragmentsFound+'/'+FRAG_TOTAL+' · Deductions solved: '+SESS.deductions.length+'/3';
+}
+function openJournal(){
+  if(!SESS||SESS.phase==='dead'||SESS.paused) return;
+  SESS.journalOpen=true;
+  renderJournal();
+  document.getElementById('journalOverlay').hidden=false;
+}
+function closeJournal(){
+  if(SESS) SESS.journalOpen=false;
+  document.getElementById('journalOverlay').hidden=true;
 }
 
 // -- death / results --
@@ -766,10 +1066,11 @@ function playerDied(killerName){
 function computeResults(){
   var typed=SESS.charsTyped||0, errs=SESS.charErrors||0;
   var accuracy = typed ? Math.max(0, Math.round((1-errs/typed)*1000)/10) : 100;
-  var rankPoints = SESS.score + SESS.floorsCleared*120 + SESS.bestCombo*15 + Math.round(accuracy*5);
+  var rankPoints = SESS.score + SESS.floorsCleared*120 + SESS.bestCombo*15 + Math.round(accuracy*5) + SESS.fragmentsFound*40 + firstTryCount()*100;
   var grade = rankPoints>=3600?'S': rankPoints>=2200?'A': rankPoints>=1200?'B': rankPoints>=500?'C':'D';
   var stars={S:3,A:3,B:2,C:1,D:1}[grade];
-  return {score:SESS.score, depth:Math.min(STORY_CHAPTERS.length,SESS.depth), accuracy:accuracy, bestCombo:SESS.bestCombo, wordsTyped:SESS.wordsTyped, vocab:Object.keys(SESS.vocabulary).length,wpm:Math.round(SESS.bestWpm),relics:SESS.relicsCollected, grade:grade, stars:stars, cause:SESS.deathCause||'',victory:SESS.victory};
+  return {score:SESS.score, depth:Math.min(STORY_CHAPTERS.length,SESS.depth), accuracy:accuracy, bestCombo:SESS.bestCombo, wordsTyped:SESS.wordsTyped, vocab:Object.keys(SESS.vocabulary).length,wpm:Math.round(SESS.bestWpm),relics:SESS.relicsCollected, grade:grade, stars:stars, cause:SESS.deathCause||'',victory:SESS.victory,
+    fragments:SESS.fragmentsFound, deductions:SESS.deductions.slice(), choices:SESS.choiceLog.slice(), ending:SESS.ending};
 }
 function finalizeRun(){
   cancelAnimationFrame(SESS.raf);
@@ -779,6 +1080,9 @@ function finalizeRun(){
   if(res.score>G.progression.bestScore) G.progression.bestScore=res.score;
   if(res.wpm>G.progression.bestWpm) G.progression.bestWpm=res.wpm;
   if(res.victory) G.progression.storiesCompleted++;
+  if(res.fragments>G.progression.bestFragments) G.progression.bestFragments=res.fragments;
+  G.progression.casesSolved += firstTryCount();
+  if(res.victory && res.ending) G.progression.endingsSeen[res.ending]=(G.progression.endingsSeen[res.ending]||0)+1;
   Object.keys(SESS.vocabulary).forEach(function(w){ if(G.progression.vocabulary.indexOf(w)<0) G.progression.vocabulary.push(w); });
   G.progression.vocabulary=G.progression.vocabulary.slice(-240);
   mirrorLocal();
@@ -789,9 +1093,22 @@ function finalizeRun(){
 function showResults(res){
   document.getElementById('resKicker').textContent=res.victory?'The Dawn Lexicon is whole':'Journey paused - Chapter '+res.depth;
   document.getElementById('resGrade').textContent=res.grade;
-  document.getElementById('resCause').textContent=(res.victory?'You return every stolen story to its reader.':'Your Courage faded near '+res.cause+', but every learned word came home with you.')+' '+repeat('★',res.stars)+repeat('☆',3-res.stars);
+  document.getElementById('resCause').textContent=(res.victory?'You return every stolen story to its reader.':'Your Courage faded near '+res.cause+', but every learned word and every page of evidence came home with you.')+' '+repeat('★',res.stars)+repeat('☆',3-res.stars);
+  var endEl=document.getElementById('resEnding');
+  if(res.victory && res.ending && ENDINGS[res.ending]){ endEl.hidden=false; endEl.textContent=ENDINGS[res.ending].name; }
+  else { endEl.hidden=true; endEl.textContent=''; }
+  var recap=[];
+  if(res.victory && res.ending && ENDINGS[res.ending]) recap.push(ENDINGS[res.ending].recap);
+  recap.push('You found '+res.fragments+'/'+FRAG_TOTAL+' evidence fragments.');
+  if(res.deductions.length){
+    var ft=0; res.deductions.forEach(function(d){ if(d.firstTry) ft++; });
+    recap.push('Deductions solved: '+res.deductions.length+'/3'+(ft?' ('+ft+' on the first try).':'.'));
+    res.deductions.forEach(function(d){ recap.push('Ch.'+d.chapter+': "'+d.answer+'"'+(d.firstTry?' - first try.':' - after '+d.tries+' wrong guess'+(d.tries>1?'es.':'.'))); });
+  }
+  res.choices.forEach(function(c){ if(c.at==='bird') recap.push(c.choice==='release'?'You released the paper bird.':'You followed the paper bird.'); });
+  document.getElementById('resStory').textContent=recap.join(' ');
   var bd=document.getElementById('resBreakdown'); bd.innerHTML='';
-  var rows=[['Score',res.score],['Story progress',res.depth+'/4'],['Accuracy',res.accuracy+'%'],['Best WPM',res.wpm],['Words typed',res.wordsTyped],['Vocabulary',res.vocab],['Best combo',res.bestCombo],['Keepsakes',res.relics]];
+  var rows=[['Score',res.score],['Story progress',res.depth+'/4'],['Accuracy',res.accuracy+'%'],['Best WPM',res.wpm],['Words typed',res.wordsTyped],['Evidence',res.fragments+'/'+FRAG_TOTAL],['Vocabulary',res.vocab],['Best combo',res.bestCombo],['Keepsakes',res.relics]];
   rows.forEach(function(r){
     var d=document.createElement('div'); var b=document.createElement('b'); b.textContent=r[1]; var s=document.createElement('span'); s.textContent=r[0];
     d.appendChild(b); d.appendChild(s); bd.appendChild(d);
@@ -835,6 +1152,42 @@ function renderEncounterStatic(){
       html+='<div class="relicCard"><div class="typedWord" id="typedWord_'+r.id+'" data-target="'+r.id+'"></div><p class="relicDesc">'+escapeHtml(r.desc)+'</p></div>';
     });
     html+='</div>';
+  } else if(SESS.phase==='deduction'){
+    var d=SESS.deduction;
+    html+='<p class="kicker">Chapter Deduction - Sable\'s Question</p>';
+    html+='<p class="sceneLine">'+escapeHtml(d.data.question)+'</p>';
+    html+='<div class="evList inline">';
+    for(var slot=0; slot<4; slot++){
+      var found=null;
+      SESS.fragments.forEach(function(f){ if(f.chapter===SESS.depth&&f.slot===slot) found=f; });
+      html+= found ? '<div class="evItem">'+escapeHtml(found.text)+'</div>'
+                   : '<div class="evItem missing">A fragment you never recovered.</div>';
+    }
+    html+='</div><div class="pathRow">';
+    d.remaining.forEach(function(o){
+      html+='<div class="nodePreview"><span class="nodeTag" style="color:#ffb454">TYPE YOUR DEDUCTION</span><div class="typedWord small" data-target="ded:'+escapeHtml(o.key)+'"></div></div>';
+    });
+    html+='</div>';
+  } else if(SESS.phase==='moment'){
+    html+='<p class="kicker">'+escapeHtml(SESS.moment.kicker)+'</p>';
+    html+='<p class="sceneLine">'+escapeHtml(SESS.moment.prompt)+'</p><div class="pathRow">';
+    SESS.moment.options.forEach(function(o){
+      html+='<div class="nodePreview"><span class="nodeTag" style="color:#b98aff">CHOICE</span><div class="typedWord small" data-target="mo:'+escapeHtml(o.key)+'"></div></div>';
+    });
+    html+='</div>';
+  } else if(SESS.phase==='choice'){
+    html+='<p class="kicker">The Room Before Tomorrow - Your Choice</p>';
+    html+='<p class="sceneLine">The Echo Warden kneels before the Dawn Lexicon. What you type next decides the ending.</p><div class="pathRow">';
+    FINAL_CHOICES.forEach(function(o){
+      html+='<div class="nodePreview"><span class="nodeTag" style="color:#b98aff">'+escapeHtml(o.id.toUpperCase())+'</span><div class="typedWord small" data-target="ch:'+escapeHtml(o.id)+'"></div><p class="choiceDesc">'+escapeHtml(o.desc)+'</p></div>';
+    });
+    html+='</div>';
+  } else if(SESS.phase==='epilogue'){
+    var end=ENDINGS[SESS.ending];
+    html+='<p class="kicker">'+escapeHtml(end.name)+'</p>';
+    html+='<p class="sceneLine">'+escapeHtml(end.line)+'</p>';
+    html+='<p class="sceneLine">Type the closing words to end the story:</p>';
+    html+='<div class="typedWord" data-target="end"></div>';
   }
   html+='<p class="lesson" id="lessonLine">'+escapeHtml(SESS.lesson||'Every careful word reveals more of the Keep.')+'</p>';
   card.innerHTML=html;
@@ -867,30 +1220,371 @@ function renderTypedDisplay(){
 
 // ---- First-person scene canvas ----
 var cv,cx,dpr=1;
-function setupCanvas(){ cv=document.getElementById('mapStage'); cx=cv.getContext('2d'); resizeCanvas(); }
+var SCENE={key:'',cache:null,cctx:null,torches:[],shaft:null,candle:null,fireflies:false,stars:[],glyphs:[],pendulum:null};
+function setupCanvas(){ cv=document.getElementById('mapStage'); cx=cv.getContext('2d'); SCENE.key=''; resizeCanvas(); }
 function resizeCanvas(){
   if(!cv) return;
   dpr=Math.max(1,Math.min(2,window.devicePixelRatio||1));
   var rect=cv.getBoundingClientRect();
   cv.width=Math.max(240,rect.width)*dpr; cv.height=Math.max(170,rect.height)*dpr;
+  SCENE.key='';
 }
 window.addEventListener('resize', resizeCanvas);
-var SCENE_PALETTES=[
-  {sky:'#132733',far:'#24505a',wall:'#26363b',floor:'#162227',accent:'#ffb454',mist:'#8bd8d0'},
-  {sky:'#10291f',far:'#32634a',wall:'#1d3b2f',floor:'#14261e',accent:'#f4d35e',mist:'#9fe3bd'},
-  {sky:'#241b2f',far:'#6b4a48',wall:'#433a43',floor:'#241f2a',accent:'#f0a95b',mist:'#9fc7ff'},
-  {sky:'#11152e',far:'#343d72',wall:'#252946',floor:'#171a30',accent:'#8ee3ff',mist:'#e8c7ff'}
+/* Painterly room themes. Each chapter is a distinct place: the silenced library,
+   the listening wood, the clockwork archive, the room before tomorrow.
+   Static room geometry is pre-rendered ONCE per room to an offscreen canvas;
+   only light, motes, smoke, and actors are drawn per frame. */
+var ROOM_THEMES=[
+  {name:'library', skyTop:'#0b1420', skyMid:'#16303c', horizon:'#27505b',
+   stone:[52,66,72], stoneVar:16, mortar:'rgba(8,14,18,0.55)',
+   floor:[26,37,42], floorNear:[15,22,26],
+   accent:'#ffb454', mistC:'#8bd8d0', mistA:'rgba(139,216,208,', grade:'rgba(255,180,84,0.05)',
+   wallC:'#26363b', torch:true, window:true, banner:'#7c3b46'},
+  {name:'wood', skyTop:'#0a1f16', skyMid:'#173a2a', horizon:'#2f5c40',
+   stone:[43,58,46], stoneVar:14, mortar:'rgba(10,18,12,0.5)',
+   floor:[24,34,26], floorNear:[13,20,15],
+   accent:'#f4d35e', mistC:'#9fe3bd', mistA:'rgba(159,227,189,', grade:'rgba(120,220,150,0.05)',
+   wallC:'#1d3b2f', torch:false, window:true, banner:null},
+  {name:'clock', skyTop:'#1c1524', skyMid:'#33243a', horizon:'#5c4340',
+   stone:[64,54,56], stoneVar:14, mortar:'rgba(20,12,16,0.55)',
+   floor:[36,29,32], floorNear:[20,16,19],
+   accent:'#f0a95b', mistC:'#e8bd8a', mistA:'rgba(240,169,91,', grade:'rgba(240,169,91,0.06)',
+   wallC:'#433a43', torch:true, window:false, banner:'#3c5d75'},
+  {name:'dawn', skyTop:'#070a1e', skyMid:'#17204a', horizon:'#33406f',
+   stone:[40,44,66], stoneVar:12, mortar:'rgba(8,10,24,0.6)',
+   floor:[26,29,46], floorNear:[13,15,28],
+   accent:'#8ee3ff', mistC:'#e8c7ff', mistA:'rgba(232,199,255,', grade:'rgba(142,227,255,0.06)',
+   wallC:'#252946', torch:true, window:false, banner:'#584a8a'}
 ];
+function theme(){ return ROOM_THEMES[Math.min(3,SESS.depth-1)]; }
+function lerp(a,b,t){ return a+(b-a)*t; }
+function clamp8(v){ return Math.max(0,Math.min(255,Math.round(v))); }
+function shadeRGB(c,j){ return 'rgb('+clamp8(c[0]+j)+','+clamp8(c[1]+j)+','+clamp8(c[2]+j)+')'; }
+function hexTone(hex,d){ var n=parseInt(hex.slice(1),16); return 'rgb('+clamp8(((n>>16)&255)+d)+','+clamp8(((n>>8)&255)+d)+','+clamp8((n&255)+d)+')'; }
+function roomSeedNow(){
+  var idx=SESS.floor?Math.max(SESS.floor.pos,SESS.floor.pendingIndex):0;
+  return (SESS.seed ^ (SESS.depth*2654435761) ^ ((idx+1)*40503))>>>0;
+}
+function gpoly(g,pts,fill){
+  g.beginPath(); g.moveTo(pts[0][0],pts[0][1]);
+  for(var i=1;i<pts.length;i++) g.lineTo(pts[i][0],pts[i][1]);
+  g.closePath();
+  if(fill){ g.fillStyle=fill; g.fill(); }
+}
+function archPath(g,cx0,baseY,halfW,ht){
+  g.beginPath(); g.moveTo(cx0-halfW,baseY); g.lineTo(cx0-halfW,baseY-ht*0.62);
+  g.quadraticCurveTo(cx0,baseY-ht*1.18,cx0+halfW,baseY-ht*0.62);
+  g.lineTo(cx0+halfW,baseY); g.closePath();
+}
+function groundShadowOn(g,x,y,rx,ry,alpha){
+  var grd=g.createRadialGradient(x,y,0,x,y,rx);
+  grd.addColorStop(0,'rgba(0,0,0,'+alpha+')'); grd.addColorStop(1,'rgba(0,0,0,0)');
+  g.save(); g.translate(x,y); g.scale(1,Math.max(0.05,ry/rx)); g.translate(-x,-y);
+  g.fillStyle=grd; g.beginPath(); g.arc(x,y,rx,0,Math.PI*2); g.fill(); g.restore();
+}
+function groundShadow(x,y,rx,ry,alpha){ groundShadowOn(cx,x,y,rx,ry,alpha); }
+function floorPoint(w,h,x1,x2,y2,u,v){
+  var xl=lerp(x1,0,u), xr=lerp(x2,w,u);
+  return [lerp(xl,xr,v), lerp(y2,h,u)];
+}
+function drawBackWall(g,pal,rr,x1,x2,y1,y2){
+  g.fillStyle=pal.mortar; g.fillRect(x1,y1,x2-x1,y2-y1);
+  var rows=6, cols=7;
+  for(var r=0;r<rows;r++){
+    var yA=lerp(y1,y2,r/rows), yB=lerp(y1,y2,(r+1)/rows);
+    var off=(r%2)?0.5:0;
+    for(var c=-1;c<cols;c++){
+      var tA=Math.max(0,(c+off)/cols), tB=Math.min(1,(c+1+off)/cols);
+      if(tB<=tA) continue;
+      var xA=lerp(x1,x2,tA), xB=lerp(x1,x2,tB);
+      g.fillStyle=shadeRGB(pal.stone,(rr()-0.5)*2*pal.stoneVar-14);
+      g.fillRect(xA,yA,Math.max(0.5,xB-xA-1),Math.max(0.5,yB-yA-1));
+    }
+  }
+}
+function drawSideWall(g,pal,rr,w,h,left,xEdge,y1,y2){
+  var xN=left?0:w, xF=xEdge;
+  gpoly(g,[[xN,0],[xF,y1],[xF,y2],[xN,h]],pal.mortar);
+  var rows=7, cols=6;
+  for(var r=0;r<rows;r++){
+    var f0=r/rows, f1=(r+1)/rows, off=(r%2)?0.5:0;
+    for(var k=-1;k<cols;k++){
+      var a=Math.max(0,(k+off)/cols), b=Math.min(1,(k+1+off)/cols);
+      if(b<=a) continue;
+      var tA=Math.pow(a,0.8), tB=Math.pow(b,0.8);
+      var xA=lerp(xN,xF,tA), xB=lerp(xN,xF,tB);
+      var yTA=lerp(0,y1,tA), yTB=lerp(0,y1,tB);
+      var yBA=lerp(h,y2,tA), yBB=lerp(h,y2,tB);
+      var jit=(rr()-0.5)*2*pal.stoneVar-6-tA*20;
+      gpoly(g,[[xA,lerp(yTA,yBA,f0)],[xB,lerp(yTB,yBB,f0)],[xB,lerp(yTB,yBB,f1)],[xA,lerp(yTA,yBA,f1)]],shadeRGB(pal.stone,jit));
+      g.strokeStyle=pal.mortar; g.lineWidth=1; g.stroke();
+    }
+  }
+}
+function drawFloorStones(g,pal,rr,w,h,x1,x2,y2){
+  gpoly(g,[[0,h],[w,h],[x2,y2],[x1,y2]],shadeRGB(pal.floorNear,0));
+  var rows=6, cols=7;
+  for(var r=0;r<rows;r++){
+    var u0=Math.pow(r/rows,1.6), u1=Math.pow((r+1)/rows,1.6);
+    var off=(r%2)?0.5:0;
+    for(var c=-1;c<cols;c++){
+      var v0=Math.max(0,(c+off)/cols), v1=Math.min(1,(c+1+off)/cols);
+      if(v1<=v0) continue;
+      var base=lerp(6,-10,u0)+(rr()-0.5)*10;
+      gpoly(g,[floorPoint(w,h,x1,x2,y2,u0,v0),floorPoint(w,h,x1,x2,y2,u0,v1),floorPoint(w,h,x1,x2,y2,u1,v1),floorPoint(w,h,x1,x2,y2,u1,v0)],shadeRGB(pal.floor,base));
+      g.strokeStyle='rgba(0,0,0,0.35)'; g.lineWidth=1; g.stroke();
+    }
+  }
+  var sheen=g.createLinearGradient(0,y2,0,h);
+  sheen.addColorStop(0,'rgba(255,255,255,0.05)'); sheen.addColorStop(1,'rgba(0,0,0,0.18)');
+  gpoly(g,[[0,h],[w,h],[x2,y2],[x1,y2]],sheen);
+}
+function drawPassage(g,pal,x1,x2,y1,y2){
+  var cxm=(x1+x2)/2, pw=(x2-x1)*0.32, top=lerp(y1,y2,0.10), ht=y2-top;
+  g.fillStyle='rgba(4,7,10,0.92)';
+  archPath(g,cxm,y2,pw,ht); g.fill();
+  g.fillStyle='rgba(14,22,30,0.8)';
+  archPath(g,cxm,y2,pw*0.68,ht*0.72); g.fill();
+  g.fillStyle='rgba(22,34,44,0.75)';
+  archPath(g,cxm,y2,pw*0.42,ht*0.48); g.fill();
+  var gl=g.createRadialGradient(cxm,y2-ht*0.16,2,cxm,y2-ht*0.16,pw*0.8);
+  gl.addColorStop(0,pal.mistA+'0.32)'); gl.addColorStop(1,'rgba(0,0,0,0)');
+  g.fillStyle=gl; archPath(g,cxm,y2,pw*0.42,ht*0.48); g.fill();
+  g.strokeStyle='rgba(255,255,255,0.07)'; g.lineWidth=1;
+  for(var i=1;i<=3;i++){
+    var sy=y2-i*3.2;
+    g.beginPath(); g.moveTo(cxm-pw*0.42*(1-i*0.12),sy); g.lineTo(cxm+pw*0.42*(1-i*0.12),sy); g.stroke();
+  }
+}
+function drawBanner(g,pal,x,yTop,ww,hh,color){
+  g.save();
+  g.beginPath();
+  g.moveTo(x,yTop); g.lineTo(x+ww,yTop); g.lineTo(x+ww,yTop+hh);
+  g.lineTo(x+ww/2,yTop+hh*0.86); g.lineTo(x,yTop+hh); g.closePath();
+  g.clip();
+  var strips=6;
+  for(var i=0;i<strips;i++){
+    var sx=x+ww*i/strips;
+    var grd=g.createLinearGradient(sx,0,sx+ww/strips,0);
+    grd.addColorStop(0,hexTone(color,-20)); grd.addColorStop(0.5,hexTone(color,12)); grd.addColorStop(1,hexTone(color,-26));
+    g.fillStyle=grd; g.fillRect(sx,yTop,ww/strips+0.6,hh);
+  }
+  g.fillStyle='rgba(255,244,214,0.8)';
+  g.beginPath(); g.arc(x+ww/2,yTop+hh*0.4,ww*0.17,0,Math.PI*2); g.fill();
+  g.fillStyle=hexTone(color,-30);
+  g.beginPath(); g.arc(x+ww/2,yTop+hh*0.4,ww*0.09,0,Math.PI*2); g.fill();
+  g.restore();
+  g.strokeStyle='rgba(30,22,14,0.9)'; g.lineWidth=3;
+  g.beginPath(); g.moveTo(x-3,yTop); g.lineTo(x+ww+3,yTop); g.stroke();
+}
+function drawMoonShaft(g,pal,w,h){
+  var wx=w*0.80, wy=h*0.185, ws=Math.min(w,h)*0.085;
+  g.fillStyle='rgba(188,216,255,0.78)';
+  archPath(g,wx,wy+ws*1.5,ws*0.62,ws*1.5); g.fill();
+  g.strokeStyle='rgba(15,24,34,0.9)'; g.lineWidth=2; g.stroke();
+  g.beginPath(); g.moveTo(wx,wy-ws*0.2); g.lineTo(wx,wy+ws*1.5);
+  g.moveTo(wx-ws*0.62,wy+ws*0.7); g.lineTo(wx+ws*0.62,wy+ws*0.7); g.stroke();
+  var fx=w*0.56, fy=h*0.86;
+  var shaft=[[wx-ws*0.62,wy+ws*1.4],[wx+ws*0.62,wy+ws*0.5],[fx+w*0.13,fy],[fx-w*0.10,fy]];
+  var sg=g.createLinearGradient(wx,wy,fx,fy);
+  sg.addColorStop(0,'rgba(190,220,255,0.20)'); sg.addColorStop(1,'rgba(190,220,255,0)');
+  gpoly(g,shaft,sg);
+  g.fillStyle='rgba(190,220,255,0.08)';
+  g.beginPath(); g.ellipse(fx+w*0.01,fy,w*0.14,h*0.035,0,0,Math.PI*2); g.fill();
+  SCENE.shaft={x0:wx,y0:wy+ws,x1:fx,y1:fy,spread:w*0.10};
+}
+function addTorch(g,pal,x,y,w,h){
+  var s=Math.min(w,h)/430;
+  g.save(); g.translate(x,y);
+  g.fillStyle='#241a10'; g.fillRect(-3.5*s*3,0,7*s*3,26*s*2);
+  g.strokeStyle='rgba(0,0,0,0.6)'; g.lineWidth=2;
+  g.strokeRect(-3.5*s*3,0,7*s*3,26*s*2);
+  g.fillStyle='#3a2c1a';
+  g.beginPath(); g.arc(0,0,8*s,0,Math.PI,true); g.fill();
+  g.restore();
+  SCENE.torches.push({x:x,y:y,s:s,ph:x*0.13+y*0.07});
+}
+function shelfBand(g,rr,x,y,ww,hh){
+  g.fillStyle='rgba(30,22,14,0.92)'; g.fillRect(x,y,ww,hh);
+  var rows=3, hues=['#7c4a3a','#5d6b4a','#4a5d7c','#8a6a3a','#6b4a6b','#9b6b4a','#a08050'];
+  for(var r=0;r<rows;r++){
+    var sy=y+hh*(r/rows)+3, sh=hh/rows-6, bx=x+2;
+    while(bx<x+ww-3){
+      var bw=3+rr()*5, bh=sh*(0.72+rr()*0.28);
+      g.fillStyle=hues[Math.floor(rr()*hues.length)];
+      g.fillRect(bx,sy+sh-bh,bw,bh);
+      bx+=bw+1;
+    }
+    g.fillStyle='#241a10'; g.fillRect(x,sy+sh,ww,3);
+  }
+}
+function dressLibrary(g,pal,rr,w,h,x1,x2,y1,y2){
+  var bw=(x2-x1)*0.26;
+  shelfBand(g,rr,x1+(x2-x1)*0.035,y1+(y2-y1)*0.12,bw,(y2-y1)*0.64);
+  shelfBand(g,rr,x2-(x2-x1)*0.035-bw,y1+(y2-y1)*0.12,bw,(y2-y1)*0.64);
+  for(var i=0;i<6;i++){
+    var p=floorPoint(w,h,x1,x2,y2,0.15+rr()*0.55,0.12+rr()*0.76);
+    g.save(); g.translate(p[0],p[1]); g.rotate((rr()-0.5)*0.9);
+    g.globalAlpha=0.5; g.fillStyle='#d8d2bd';
+    g.fillRect(-9,-5,18,10);
+    g.strokeStyle='rgba(60,60,60,0.5)'; g.lineWidth=0.8;
+    g.beginPath(); g.moveTo(-6,-2); g.lineTo(6,-2); g.moveTo(-6,1); g.lineTo(5,1); g.stroke();
+    g.restore(); g.globalAlpha=1;
+  }
+  var s=Math.min(w,h)/430, lx=w*0.76, ly=h*0.80;
+  groundShadowOn(g,lx,ly+6*s,44*s,11*s,0.35);
+  g.fillStyle='#3a2a1c'; g.fillRect(lx-6*s,ly-64*s,12*s,64*s);
+  gpoly(g,[[lx-26*s,ly-64*s],[lx+26*s,ly-74*s],[lx+26*s,ly-58*s],[lx-26*s,ly-48*s]],'#4a3624');
+  g.fillStyle='#e8dcc0'; g.fillRect(lx+4*s,ly-90*s,5*s,17*s);
+  SCENE.candle={x:lx+6.5*s,y:ly-90*s,s:s};
+}
+function drawTrunk(g,rr,xc,baseY,halfW,ht){
+  gpoly(g,[[xc-halfW,baseY],[xc-halfW*0.55,baseY-ht],[xc+halfW*0.55,baseY-ht],[xc+halfW,baseY]],'#2c1e13');
+  g.strokeStyle='rgba(96,68,42,0.55)'; g.lineWidth=1.4;
+  for(var i=0;i<6;i++){
+    var t=(i+0.5)/6, x=lerp(xc-halfW*0.8,xc+halfW*0.8,t);
+    g.beginPath(); g.moveTo(x,baseY);
+    g.quadraticCurveTo(x+(rr()-0.5)*12,baseY-ht*0.5,lerp(xc-halfW*0.45,xc+halfW*0.45,t),baseY-ht);
+    g.stroke();
+  }
+}
+function dressWood(g,pal,rr,w,h,x1,x2,y1,y2){
+  drawTrunk(g,rr,x1*0.5,h,x1*0.17,h*0.96);
+  drawTrunk(g,rr,w-x1*0.5,h,x1*0.17,h*0.96);
+  drawTrunk(g,rr,x1+(x2-x1)*0.12,y2,(x2-x1)*0.05,(y2-y1)*1.15);
+  drawTrunk(g,rr,x2-(x2-x1)*0.12,y2,(x2-x1)*0.05,(y2-y1)*1.15);
+  g.strokeStyle='rgba(40,28,18,0.8)';
+  for(var i=0;i<5;i++){
+    g.lineWidth=2+rr()*3;
+    var sx=rr()*w;
+    g.beginPath(); g.moveTo(sx,h);
+    g.bezierCurveTo(sx+(rr()-0.5)*120,h*0.9,w/2+(rr()-0.5)*180,y2+(h-y2)*0.4,w/2+(rr()-0.5)*60,y2+4);
+    g.stroke();
+  }
+  for(var c=0;c<10;c++){
+    var cxp=rr()*w, cyp=rr()*h*0.14, rad=14+rr()*22;
+    g.fillStyle='rgba('+(50+Math.floor(rr()*30))+','+(96+Math.floor(rr()*30))+',62,0.8)';
+    g.beginPath(); g.arc(cxp,cyp,rad,0,Math.PI); g.fill();
+  }
+  SCENE.fireflies=true;
+}
+function drawGear(g,x,y,rad,teeth,color){
+  g.save(); g.translate(x,y);
+  g.fillStyle=color; g.beginPath();
+  for(var i=0;i<teeth*2;i++){
+    var r=(i%2)?rad:rad*1.16, a=i/(teeth*2)*Math.PI*2;
+    if(i) g.lineTo(Math.cos(a)*r,Math.sin(a)*r); else g.moveTo(Math.cos(a)*r,Math.sin(a)*r);
+  }
+  g.closePath(); g.fill();
+  g.fillStyle='rgba(0,0,0,0.45)'; g.beginPath(); g.arc(0,0,rad*0.4,0,Math.PI*2); g.fill();
+  g.strokeStyle='rgba(0,0,0,0.35)'; g.lineWidth=2;
+  for(var sp=0;sp<3;sp++){
+    var sa=sp/3*Math.PI*2;
+    g.beginPath(); g.moveTo(Math.cos(sa)*rad*0.4,Math.sin(sa)*rad*0.4); g.lineTo(Math.cos(sa)*rad*0.92,Math.sin(sa)*rad*0.92); g.stroke();
+  }
+  g.restore();
+}
+function dressClock(g,pal,rr,w,h,x1,x2,y1,y2){
+  drawGear(g,x1+(x2-x1)*0.16,lerp(y1,y2,0.42),(y2-y1)*0.30,10,'#8a5a34');
+  drawGear(g,x2-(x2-x1)*0.14,lerp(y1,y2,0.60),(y2-y1)*0.24,8,'#6e4a2c');
+  drawGear(g,w*0.055,h*0.42,h*0.19,12,'rgba(60,40,24,0.85)');
+  drawGear(g,w*0.95,h*0.60,h*0.15,9,'rgba(60,40,24,0.8)');
+  g.strokeStyle='#5c4330'; g.lineWidth=6;
+  g.beginPath(); g.moveTo(0,h*0.10); g.lineTo(x1,y1*0.82); g.stroke();
+  g.beginPath(); g.moveTo(w,h*0.10); g.lineTo(x2,y1*0.82); g.stroke();
+  g.fillStyle='#c9a35a';
+  for(var i=0;i<5;i++){
+    g.beginPath(); g.arc(lerp(0,x1,i/5),lerp(h*0.10,y1*0.82,i/5),2.2,0,Math.PI*2); g.fill();
+    g.beginPath(); g.arc(lerp(w,x2,i/5),lerp(h*0.10,y1*0.82,i/5),2.2,0,Math.PI*2); g.fill();
+  }
+  SCENE.pendulum={x:w*0.5,y:y1*0.34,len:h*0.20};
+}
+function dressDawn(g,pal,rr,w,h,x1,x2,y1,y2){
+  gpoly(g,[[w*0.30,0],[w*0.70,0],[x2-(x2-x1)*0.1,y1*0.75],[x1+(x2-x1)*0.1,y1*0.75]],'#05081c');
+  for(var i=0;i<42;i++){
+    var sx=w*0.30+rr()*w*0.4, sy=rr()*y1*0.72, al=0.3+rr()*0.7;
+    g.globalAlpha=al; g.fillStyle='#fff'; g.fillRect(sx,sy,1.6,1.6);
+    if(i<10) SCENE.stars.push({x:sx,y:sy,ph:rr()*6});
+  }
+  g.globalAlpha=1;
+  var cxm=(x1+x2)/2;
+  var pg=g.createRadialGradient(cxm,y2-6,2,cxm,y2-6,(x2-x1)*0.5);
+  pg.addColorStop(0,'rgba(142,227,255,0.35)'); pg.addColorStop(1,'rgba(0,0,0,0)');
+  g.fillStyle=pg; g.beginPath(); g.arc(cxm,y2-6,(x2-x1)*0.5,0,Math.PI*2); g.fill();
+  for(var j=0;j<7;j++){
+    SCENE.glyphs.push({x:x1+rr()*(x2-x1),y:lerp(y1,y2,0.18+rr()*0.5),s:6+rr()*8,ph:rr()*6,ch:String.fromCharCode(97+Math.floor(rr()*26))});
+  }
+}
+function drawForegroundArch(g,pal,w,h){
+  g.fillStyle='rgba(5,8,11,0.9)';
+  g.beginPath(); g.moveTo(0,0); g.lineTo(w*0.075,0); g.quadraticCurveTo(w*0.052,h*0.5,w*0.085,h); g.lineTo(0,h); g.closePath(); g.fill();
+  g.beginPath(); g.moveTo(w,0); g.lineTo(w*0.925,0); g.quadraticCurveTo(w*0.948,h*0.5,w*0.915,h); g.lineTo(w,h); g.closePath(); g.fill();
+  g.beginPath(); g.moveTo(0,0); g.lineTo(w,0); g.lineTo(w,h*0.07); g.quadraticCurveTo(w/2,h*0.135,0,h*0.07); g.closePath(); g.fill();
+  g.strokeStyle='rgba(255,214,150,0.10)'; g.lineWidth=2;
+  g.beginPath(); g.moveTo(w*0.075,0); g.quadraticCurveTo(w*0.052,h*0.5,w*0.085,h); g.stroke();
+  g.beginPath(); g.moveTo(w*0.925,0); g.quadraticCurveTo(w*0.948,h*0.5,w*0.915,h); g.stroke();
+  g.beginPath(); g.moveTo(0,h*0.07); g.quadraticCurveTo(w/2,h*0.135,w,h*0.07); g.stroke();
+  g.strokeStyle='rgba(0,0,0,0.5)'; g.lineWidth=1;
+  for(var i=1;i<5;i++){
+    g.beginPath(); g.moveTo(0,h*i/5); g.lineTo(w*0.06,h*i/5+3); g.stroke();
+    g.beginPath(); g.moveTo(w,h*i/5); g.lineTo(w*0.94,h*i/5+3); g.stroke();
+  }
+}
+function renderRoomStatic(w,h){
+  if(!SCENE.cache){ SCENE.cache=document.createElement('canvas'); SCENE.cctx=SCENE.cache.getContext('2d'); }
+  SCENE.cache.width=cv.width; SCENE.cache.height=cv.height;
+  var g=SCENE.cctx;
+  g.setTransform(dpr,0,0,dpr,0,0); g.clearRect(0,0,w,h);
+  var pal=theme(), rr=mulberry32(roomSeedNow());
+  SCENE.torches=[]; SCENE.shaft=null; SCENE.candle=null; SCENE.fireflies=false; SCENE.stars=[]; SCENE.glyphs=[]; SCENE.pendulum=null;
+  var x1=w*0.34, x2=w*0.66, y1=h*0.30, y2=h*0.64;
+  var sky=g.createLinearGradient(0,0,0,h);
+  sky.addColorStop(0,pal.skyTop); sky.addColorStop(0.5,pal.skyMid); sky.addColorStop(1,pal.horizon);
+  g.fillStyle=sky; g.fillRect(0,0,w,h);
+  var ceil=g.createLinearGradient(0,0,0,y1);
+  ceil.addColorStop(0,shadeRGB(pal.stone,-28)); ceil.addColorStop(1,shadeRGB(pal.stone,-8));
+  gpoly(g,[[0,0],[w,0],[x2,y1],[x1,y1]],ceil);
+  g.strokeStyle='rgba(0,0,0,0.25)'; g.lineWidth=3;
+  for(var i=1;i<4;i++){
+    var t=i/4;
+    g.beginPath(); g.moveTo(lerp(0,x1,t),lerp(0,y1,t));
+    g.quadraticCurveTo(w/2,lerp(0,y1,t)-h*0.05*(1-t),lerp(w,x2,t),lerp(0,y1,t));
+    g.stroke();
+  }
+  drawBackWall(g,pal,rr,x1,x2,y1,y2);
+  drawPassage(g,pal,x1,x2,y1,y2);
+  drawSideWall(g,pal,rr,w,h,true,x1,y1,y2);
+  drawSideWall(g,pal,rr,w,h,false,x2,y1,y2);
+  drawFloorStones(g,pal,rr,w,h,x1,x2,y2);
+  if(pal.name==='library') dressLibrary(g,pal,rr,w,h,x1,x2,y1,y2);
+  else if(pal.name==='wood') dressWood(g,pal,rr,w,h,x1,x2,y1,y2);
+  else if(pal.name==='clock') dressClock(g,pal,rr,w,h,x1,x2,y1,y2);
+  else dressDawn(g,pal,rr,w,h,x1,x2,y1,y2);
+  if(pal.banner){
+    drawBanner(g,pal,w*0.135,h*0.10,w*0.055,h*0.30,pal.banner);
+    drawBanner(g,pal,w*0.81,h*0.10,w*0.055,h*0.30,pal.banner);
+  }
+  if(pal.window) drawMoonShaft(g,pal,w,h);
+  if(pal.torch){ addTorch(g,pal,w*0.115,h*0.36,w,h); addTorch(g,pal,w*0.885,h*0.36,w,h); }
+  var fog=g.createLinearGradient(0,y1,0,h*0.85);
+  fog.addColorStop(0,pal.mistA+'0.26)'); fog.addColorStop(0.45,pal.mistA+'0.10)'); fog.addColorStop(1,pal.mistA+'0)');
+  g.fillStyle=fog; g.fillRect(0,y1*0.6,w,h);
+  g.fillStyle=pal.grade; g.fillRect(0,0,w,h);
+  drawForegroundArch(g,pal,w,h);
+  var vg=g.createRadialGradient(w/2,h*0.48,Math.min(w,h)*0.36,w/2,h*0.52,Math.max(w,h)*0.75);
+  vg.addColorStop(0,'rgba(0,0,0,0)'); vg.addColorStop(1,'rgba(0,0,0,0.5)');
+  g.fillStyle=vg; g.fillRect(0,0,w,h);
+}
 function poly(points,fill,stroke){cx.beginPath();cx.moveTo(points[0][0],points[0][1]);for(var i=1;i<points.length;i++)cx.lineTo(points[i][0],points[i][1]);cx.closePath();if(fill){cx.fillStyle=fill;cx.fill();}if(stroke){cx.strokeStyle=stroke;cx.stroke();}}
 function rectPath(x,y,w,h,r){r=Math.min(r,w/2,h/2);cx.beginPath();cx.moveTo(x+r,y);cx.lineTo(x+w-r,y);cx.quadraticCurveTo(x+w,y,x+w,y+r);cx.lineTo(x+w,y+h-r);cx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);cx.lineTo(x+r,y+h);cx.quadraticCurveTo(x,y+h,x,y+h-r);cx.lineTo(x,y+r);cx.quadraticCurveTo(x,y,x+r,y);cx.closePath();}
 function drawDoor(x,y,s,pal,glow){
-  var w=115*s,h=180*s;cx.save();cx.translate(x,y);cx.shadowColor=pal.accent;cx.shadowBlur=glow?24:0;cx.fillStyle='#101419';cx.strokeStyle=pal.accent;cx.lineWidth=Math.max(2,4*s);rectPath(-w/2,-h,w,h,8*s);cx.fill();cx.stroke();cx.shadowBlur=0;cx.fillStyle=pal.wall;rectPath(-w*.38,-h*.88,w*.76,h*.88,5*s);cx.fill();cx.strokeStyle='#ffffff24';cx.stroke();cx.fillStyle=pal.accent;cx.beginPath();cx.arc(w*.24,-h*.42,4*s,0,Math.PI*2);cx.fill();cx.restore();
+  var w=115*s,h=180*s;cx.save();cx.translate(x,y);cx.shadowColor=pal.accent;cx.shadowBlur=glow?24:0;cx.fillStyle='#101419';cx.strokeStyle=pal.accent;cx.lineWidth=Math.max(2,4*s);rectPath(-w/2,-h,w,h,8*s);cx.fill();cx.stroke();cx.shadowBlur=0;cx.fillStyle=pal.wallC;rectPath(-w*.38,-h*.88,w*.76,h*.88,5*s);cx.fill();cx.strokeStyle='#ffffff24';cx.stroke();cx.fillStyle=pal.accent;cx.beginPath();cx.arc(w*.24,-h*.42,4*s,0,Math.PI*2);cx.fill();cx.restore();
 }
 function drawObject(x,y,s,type,pal,label){
   cx.save();cx.translate(x,y);cx.shadowColor=pal.accent;cx.shadowBlur=16;cx.lineWidth=Math.max(2,3*s);cx.strokeStyle=pal.accent;cx.fillStyle='#172127';
   if(type==='key'){cx.rotate(-.25);cx.beginPath();cx.arc(0,-42*s,22*s,0,Math.PI*2);cx.stroke();cx.fillRect(-5*s,-20*s,10*s,75*s);cx.fillRect(0,28*s,22*s,10*s);cx.fillRect(0,45*s,15*s,10*s);}
   else if(type==='lantern'){rectPath(-30*s,-55*s,60*s,86*s,8*s);cx.fill();cx.stroke();cx.beginPath();cx.arc(0,-55*s,25*s,Math.PI,0);cx.stroke();cx.fillStyle=pal.accent;cx.globalAlpha=.65;cx.beginPath();cx.ellipse(0,-8*s,16*s,28*s,0,0,Math.PI*2);cx.fill();cx.globalAlpha=1;}
-  else if(type==='tree'){cx.fillStyle='#5b3d2a';cx.fillRect(-14*s,-18*s,28*s,80*s);cx.strokeStyle=pal.mist;cx.lineWidth=8*s;for(var a=-2;a<=2;a++){cx.beginPath();cx.moveTo(0,-5*s);cx.quadraticCurveTo(a*24*s,-50*s,Math.sin(a)*48*s,-86*s);cx.stroke();}cx.fillStyle=pal.mist;for(var j=0;j<9;j++){cx.beginPath();cx.arc((j%3-1)*31*s,-75*s-Math.floor(j/3)*18*s,14*s,0,Math.PI*2);cx.fill();}}
+  else if(type==='tree'){cx.fillStyle='#5b3d2a';cx.fillRect(-14*s,-18*s,28*s,80*s);cx.strokeStyle=pal.mistC;cx.lineWidth=8*s;for(var a=-2;a<=2;a++){cx.beginPath();cx.moveTo(0,-5*s);cx.quadraticCurveTo(a*24*s,-50*s,Math.sin(a)*48*s,-86*s);cx.stroke();}cx.fillStyle=pal.mistC;for(var j=0;j<9;j++){cx.beginPath();cx.arc((j%3-1)*31*s,-75*s-Math.floor(j/3)*18*s,14*s,0,Math.PI*2);cx.fill();}}
   else if(type==='book'){cx.fillStyle='#9b3654';poly([[-48*s,-24*s],[0,-36*s],[0,30*s],[-48*s,18*s]],'#9b3654',pal.accent);poly([[0,-36*s],[48*s,-24*s],[48*s,18*s],[0,30*s]],'#7b2943',pal.accent);}
   else if(type==='bridge'){cx.strokeStyle=pal.accent;cx.lineWidth=5*s;cx.beginPath();cx.moveTo(-65*s,35*s);cx.quadraticCurveTo(0,-30*s,65*s,35*s);cx.stroke();for(var k=-2;k<=2;k++){cx.beginPath();cx.moveTo(k*22*s,7*s+Math.abs(k)*6*s);cx.lineTo(k*22*s,48*s);cx.stroke();}}
   else if(type==='stars'){cx.fillStyle=pal.accent;for(var q=0;q<7;q++){var ax=(q-3)*20*s,ay=-45*s-Math.sin(q*1.7)*25*s;cx.beginPath();cx.arc(ax,ay,4*s,0,Math.PI*2);cx.fill();if(q){cx.strokeStyle='#ffffff66';cx.lineWidth=1;cx.beginPath();cx.moveTo((q-4)*20*s,-45*s-Math.sin((q-1)*1.7)*25*s);cx.lineTo(ax,ay);cx.stroke();}}}
@@ -905,18 +1599,244 @@ function drawEnemy(w,h,pal){
 }
 function drawChest(w,h,pal){var s=Math.min(w,h)/430,x=w/2,y=h*.68;cx.save();cx.translate(x,y);cx.fillStyle='#51351f';cx.strokeStyle=pal.accent;cx.lineWidth=4;rectPath(-78*s,-32*s,156*s,88*s,7*s);cx.fill();cx.stroke();cx.beginPath();cx.arc(0,-30*s,78*s,Math.PI,0);cx.lineTo(78*s,-28*s);cx.lineTo(-78*s,-28*s);cx.closePath();cx.fill();cx.stroke();cx.fillStyle=pal.accent;cx.fillRect(-10*s,-14*s,20*s,28*s);cx.restore();}
 function drawRelics(w,h,pal){var offers=SESS.relicOffers||[];for(var i=0;i<offers.length;i++){var x=w*(.28+i*.22),s=Math.min(w,h)/520;cx.fillStyle='#28343a';poly([[x-45*s,h*.76],[x+45*s,h*.76],[x+31*s,h*.58],[x-31*s,h*.58]],'#28343a','#ffffff35');cx.fillStyle=i===0?'#ffb454':i===1?'#2dd4bf':'#8bc7ff';cx.beginPath();cx.arc(x,h*.54,18*s,0,Math.PI*2);cx.fill();}}
+function drawFlame(tor,t,rm){
+  var f=rm?0.85:(0.72+0.18*Math.sin(t*11+tor.ph)+0.10*Math.sin(t*23+tor.ph*1.7));
+  var x=tor.x,y=tor.y,s=tor.s;
+  cx.save(); cx.globalCompositeOperation='lighter';
+  var g1=cx.createRadialGradient(x,y-14*s,2,x,y-14*s,95*s*f);
+  g1.addColorStop(0,'rgba(255,190,110,0.30)'); g1.addColorStop(0.4,'rgba(255,150,60,0.12)'); g1.addColorStop(1,'rgba(255,120,40,0)');
+  cx.fillStyle=g1; cx.beginPath(); cx.arc(x,y-14*s,95*s*f,0,Math.PI*2); cx.fill();
+  cx.restore();
+  var wob=rm?0:Math.sin(t*17+tor.ph)*2.4*s;
+  cx.fillStyle='rgba(255,170,70,0.95)';
+  cx.beginPath(); cx.moveTo(x-5*s,y); cx.quadraticCurveTo(x-6*s,y-14*s,x+wob,y-26*s*f-6*s); cx.quadraticCurveTo(x+6*s,y-14*s,x+5*s,y); cx.closePath(); cx.fill();
+  cx.fillStyle='rgba(255,236,170,0.9)';
+  cx.beginPath(); cx.moveTo(x-2.4*s,y); cx.quadraticCurveTo(x-3*s,y-8*s,x+wob*0.6,y-14*s*f-3*s); cx.quadraticCurveTo(x+3*s,y-8*s,x+2.4*s,y); cx.closePath(); cx.fill();
+}
+function drawCandleFlame(t,rm){
+  var c=SCENE.candle, s=c.s;
+  var f=rm?0.9:(0.8+0.2*Math.sin(t*13+2));
+  cx.save(); cx.globalCompositeOperation='lighter';
+  var g1=cx.createRadialGradient(c.x,c.y-6*s,1,c.x,c.y-6*s,40*s*f);
+  g1.addColorStop(0,'rgba(255,210,140,0.35)'); g1.addColorStop(1,'rgba(255,150,60,0)');
+  cx.fillStyle=g1; cx.beginPath(); cx.arc(c.x,c.y-6*s,40*s*f,0,Math.PI*2); cx.fill();
+  cx.restore();
+  cx.fillStyle='rgba(255,236,170,0.95)';
+  cx.beginPath(); cx.ellipse(c.x,c.y-6*s,2.4*s,6*s*f,0,0,Math.PI*2); cx.fill();
+  if(!rm){
+    cx.strokeStyle='rgba(200,200,210,0.10)'; cx.lineWidth=1.6;
+    cx.beginPath();
+    for(var k=0;k<=14;k++){
+      var yy=c.y-12*s-k*3.2, xx=c.x+Math.sin(t*0.9+k*0.55)*(1.8+k*0.5);
+      if(k) cx.lineTo(xx,yy); else cx.moveTo(xx,yy);
+    }
+    cx.stroke();
+  }
+}
+function drawMotes(t,rm){
+  var sh=SCENE.shaft;
+  cx.fillStyle='rgba(220,235,255,0.55)';
+  for(var i=0;i<22;i++){
+    var p=rm?((i*0.045)%1):((t*0.03+i*0.137)%1);
+    var lat=Math.sin(i*2.3+(rm?0:t*0.7))*0.5+0.5;
+    var x=lerp(sh.x0,sh.x1,p)+(lat-0.5)*sh.spread*(0.4+p);
+    var y=lerp(sh.y0,sh.y1,p);
+    cx.globalAlpha=0.10+0.30*Math.sin(Math.PI*p);
+    cx.fillRect(x,y,1.6,1.6);
+  }
+  cx.globalAlpha=1;
+}
+function drawFireflies(w,h,t,rm){
+  cx.save(); cx.globalCompositeOperation='lighter';
+  for(var i=0;i<9;i++){
+    var x=w*(0.1+0.8*(0.5+0.5*Math.sin(i*2.7+(rm?0:t*0.23+i))));
+    var y=h*(0.25+0.4*(0.5+0.5*Math.sin(i*1.9+(rm?0:t*0.31))));
+    var a=rm?0.5:(0.25+0.45*(0.5+0.5*Math.sin(t*2.1+i*1.3)));
+    var g1=cx.createRadialGradient(x,y,0,x,y,7);
+    g1.addColorStop(0,'rgba(244,211,94,'+a+')'); g1.addColorStop(1,'rgba(244,211,94,0)');
+    cx.fillStyle=g1; cx.beginPath(); cx.arc(x,y,7,0,Math.PI*2); cx.fill();
+  }
+  cx.restore();
+}
+function drawPendulum(t,rm){
+  var p=SCENE.pendulum, a=rm?0.3:Math.sin(t*1.5)*0.42;
+  var bx=p.x+Math.sin(a)*p.len, by=p.y+Math.cos(a)*p.len;
+  cx.strokeStyle='rgba(201,163,90,0.85)'; cx.lineWidth=2;
+  cx.beginPath(); cx.moveTo(p.x,p.y); cx.lineTo(bx,by); cx.stroke();
+  cx.fillStyle='#c9a35a'; cx.beginPath(); cx.arc(bx,by,6,0,Math.PI*2); cx.fill();
+  cx.fillStyle='rgba(255,240,200,0.5)'; cx.beginPath(); cx.arc(bx-1.6,by-1.6,2,0,Math.PI*2); cx.fill();
+}
+function drawGlyphs(t,rm,pal){
+  cx.save();
+  cx.font='700 11px ui-monospace,monospace'; cx.textAlign='center'; cx.textBaseline='middle';
+  for(var i=0;i<SCENE.glyphs.length;i++){
+    var gl=SCENE.glyphs[i];
+    var dy=rm?0:Math.sin(t*0.8+gl.ph)*5;
+    cx.globalAlpha=0.35+0.25*Math.sin(gl.ph+(rm?0:t));
+    cx.fillStyle='rgba(20,26,52,0.9)';
+    cx.fillRect(gl.x-gl.s*0.8,gl.y+dy-gl.s*0.8,gl.s*1.6,gl.s*1.6);
+    cx.strokeStyle=pal.accent; cx.lineWidth=1;
+    cx.strokeRect(gl.x-gl.s*0.8,gl.y+dy-gl.s*0.8,gl.s*1.6,gl.s*1.6);
+    cx.fillStyle=pal.accent;
+    cx.fillText(gl.ch,gl.x,gl.y+dy);
+  }
+  cx.restore(); cx.globalAlpha=1;
+}
+function twinkleStars(t,rm){
+  cx.fillStyle='#fff';
+  for(var i=0;i<SCENE.stars.length;i++){
+    var st=SCENE.stars[i];
+    cx.globalAlpha=rm?0.6:(0.3+0.6*(0.5+0.5*Math.sin(t*2+st.ph)));
+    cx.fillRect(st.x,st.y,2,2);
+  }
+  cx.globalAlpha=1;
+}
+function drawSable(w,h,pal,t,rm){
+  var s=Math.min(w,h)/430, x=w/2, y=h*0.66, bob=rm?0:Math.sin(t*1.6)*2;
+  groundShadow(x,y+60*s,72*s,16*s,0.4);
+  cx.save(); cx.translate(x,y+bob);
+  cx.fillStyle='#1d3a3f';
+  cx.beginPath(); cx.moveTo(-52*s,60*s); cx.quadraticCurveTo(-46*s,-52*s,0,-96*s); cx.quadraticCurveTo(46*s,-52*s,52*s,60*s); cx.closePath(); cx.fill();
+  cx.strokeStyle='rgba(45,212,191,0.4)'; cx.lineWidth=2; cx.stroke();
+  cx.strokeStyle='rgba(0,0,0,0.3)'; cx.lineWidth=1.5;
+  cx.beginPath(); cx.moveTo(-18*s,58*s); cx.quadraticCurveTo(-14*s,-10*s,-6*s,-60*s); cx.stroke();
+  cx.beginPath(); cx.moveTo(20*s,58*s); cx.quadraticCurveTo(15*s,-8*s,8*s,-58*s); cx.stroke();
+  cx.fillStyle='#152b2f'; cx.beginPath(); cx.arc(0,-78*s,24*s,0,Math.PI*2); cx.fill();
+  cx.fillStyle='#0a1518'; cx.beginPath(); cx.ellipse(0,-74*s,15*s,17*s,0,0,Math.PI*2); cx.fill();
+  cx.fillStyle='#ffd9a0';
+  cx.beginPath(); cx.arc(-5*s,-76*s,2*s,0,Math.PI*2); cx.arc(5*s,-76*s,2*s,0,Math.PI*2); cx.fill();
+  cx.strokeStyle='#1d3a3f'; cx.lineWidth=7*s;
+  cx.beginPath(); cx.moveTo(-30*s,-30*s); cx.lineTo(-52*s,-4*s); cx.stroke();
+  var lf=rm?0.9:(0.8+0.2*Math.sin(t*9));
+  cx.save(); cx.globalCompositeOperation='lighter';
+  var g1=cx.createRadialGradient(-56*s,6*s,2,-56*s,6*s,55*s*lf);
+  g1.addColorStop(0,'rgba(255,200,120,0.4)'); g1.addColorStop(1,'rgba(255,150,60,0)');
+  cx.fillStyle=g1; cx.beginPath(); cx.arc(-56*s,6*s,55*s*lf,0,Math.PI*2); cx.fill();
+  cx.restore();
+  cx.fillStyle='#101419'; cx.strokeStyle=pal.accent; cx.lineWidth=2;
+  rectPath(-64*s,-6*s,16*s,24*s,3*s); cx.fill(); cx.stroke();
+  cx.fillStyle='rgba(255,220,150,0.9)'; cx.fillRect(-60*s,0,8*s,12*s);
+  cx.save(); cx.translate(40*s,-16*s); cx.rotate(0.5);
+  cx.fillStyle='#d7dee6'; cx.beginPath(); cx.moveTo(0,14*s); cx.quadraticCurveTo(6*s,-6*s,2*s,-22*s); cx.quadraticCurveTo(-3*s,-8*s,-3*s,10*s); cx.closePath(); cx.fill();
+  cx.restore();
+  cx.restore();
+}
+function drawWarden(w,h,pal,t,rm){
+  var s=Math.min(w,h)/400, x=w/2, y=h*0.62;
+  var kneel=SESS.phase==='epilogue'&&SESS.ending==='mercy';
+  var bound=SESS.phase==='epilogue'&&SESS.ending==='bind';
+  var taught=SESS.phase==='epilogue'&&SESS.ending==='teach';
+  var ht=kneel?0.7:1;
+  if(taught){
+    cx.save(); cx.globalCompositeOperation='lighter';
+    var dawn=cx.createRadialGradient(x,h*0.2,10,x,h*0.2,h*0.9);
+    dawn.addColorStop(0,'rgba(255,214,150,0.20)'); dawn.addColorStop(1,'rgba(255,180,84,0)');
+    cx.fillStyle=dawn; cx.fillRect(0,0,w,h);
+    cx.restore();
+  }
+  groundShadow(x,y+72*s,88*s,18*s,0.45);
+  cx.save(); cx.translate(x,y);
+  cx.fillStyle=taught?'#2c4456':'#241b30';
+  cx.beginPath(); cx.moveTo(-62*s,70*s); cx.quadraticCurveTo(-52*s,-90*s*ht,0,-128*s*ht); cx.quadraticCurveTo(52*s,-90*s*ht,62*s,70*s); cx.closePath(); cx.fill();
+  cx.strokeStyle=taught?'rgba(142,227,255,0.55)':'rgba(185,60,255,0.4)'; cx.lineWidth=3; cx.stroke();
+  cx.fillStyle=taught?'#bfe9ff':'#e8c7ff';
+  cx.beginPath(); cx.arc(-13*s,-96*s*ht,4*s,0,Math.PI*2); cx.arc(13*s,-96*s*ht,4*s,0,Math.PI*2); cx.fill();
+  var strips=bound?0:8;
+  for(var i=0;i<strips;i++){
+    var a=(rm?i*0.785:(t*0.5+i*0.785)), rad=(74+(i%3)*14)*s;
+    var sx=Math.cos(a)*rad, sy=-60*s*ht+Math.sin(a)*rad*0.38;
+    cx.save(); cx.translate(sx,sy); cx.rotate(Math.sin(a)*0.3);
+    cx.fillStyle='rgba(240,236,220,0.75)'; cx.fillRect(-16*s,-4*s,32*s,8*s);
+    cx.fillStyle='rgba(40,40,50,0.8)';
+    for(var m=0;m<4;m++) cx.fillRect(-13*s+m*8*s,-1.5*s,5*s,2.4*s);
+    cx.restore();
+  }
+  if(bound){
+    cx.strokeStyle='#9aa5b1'; cx.lineWidth=4*s;
+    cx.beginPath(); cx.moveTo(-60*s,-40*s); cx.quadraticCurveTo(0,10*s,60*s,-52*s); cx.stroke();
+    cx.beginPath(); cx.moveTo(-58*s,10*s); cx.quadraticCurveTo(0,54*s,58*s,0); cx.stroke();
+    cx.fillStyle='#c8d2dc';
+    for(var k2=0;k2<6;k2++){
+      var lx=lerp(-56*s,56*s,k2/5);
+      cx.beginPath(); cx.arc(lx,-40*s+Math.sin(k2*1.1)*26*s,3*s,0,Math.PI*2); cx.fill();
+    }
+  }
+  cx.restore();
+}
+function drawBirdMoment(w,h,pal,t,rm){
+  var s=Math.min(w,h)/430, x=w/2, y=h*0.52;
+  var flap=rm?0.4:Math.sin(t*7)*0.7;
+  cx.strokeStyle='rgba(52,38,24,0.9)'; cx.lineWidth=2.4;
+  for(var i=0;i<7;i++){
+    cx.beginPath(); cx.moveTo(x-70*s+i*22*s,y+70*s);
+    cx.quadraticCurveTo(x-50*s+i*18*s,y+10*s+((i%3)-1)*18*s,x-30*s+i*14*s,y+34*s);
+    cx.stroke();
+  }
+  groundShadow(x,y+74*s,60*s,13*s,0.35);
+  cx.save(); cx.translate(x,y);
+  cx.fillStyle='#f2ecdc';
+  cx.beginPath(); cx.moveTo(-8*s,6*s); cx.lineTo(26*s,0); cx.lineTo(-4*s,-8*s); cx.closePath(); cx.fill();
+  cx.beginPath(); cx.moveTo(0,-2*s); cx.lineTo(-26*s,-24*s*(1+flap)); cx.lineTo(8*s,-4*s); cx.closePath(); cx.fill();
+  cx.strokeStyle='rgba(120,110,90,0.8)'; cx.lineWidth=1; cx.stroke();
+  cx.fillStyle='rgba(40,40,50,0.85)';
+  cx.fillRect(14*s,-2.4*s,9*s,1.6*s);
+  cx.restore();
+  cx.save(); cx.globalCompositeOperation='lighter';
+  var g1=cx.createRadialGradient(x,y,2,x,y,80*s);
+  g1.addColorStop(0,'rgba(244,211,94,0.16)'); g1.addColorStop(1,'rgba(244,211,94,0)');
+  cx.fillStyle=g1; cx.beginPath(); cx.arc(x,y,80*s,0,Math.PI*2); cx.fill();
+  cx.restore();
+}
 function drawFirstPerson(){
-  if(!cx||!SESS||!SESS.floor)return;var w=cv.width/dpr,h=cv.height/dpr,pal=SCENE_PALETTES[Math.min(3,SESS.depth-1)];cx.setTransform(dpr,0,0,dpr,0,0);cx.clearRect(0,0,w,h);var pulse=effectiveReducedMotion()?0:SESS.cameraPulse*18,hy=h*.42+pulse;
-  var sky=cx.createLinearGradient(0,0,0,h);sky.addColorStop(0,pal.sky);sky.addColorStop(.56,pal.far);sky.addColorStop(1,pal.floor);cx.fillStyle=sky;cx.fillRect(0,0,w,h);
-  poly([[0,0],[w,0],[w*.64,hy],[w*.36,hy]],pal.wall);poly([[0,h],[w,h],[w*.64,hy],[w*.36,hy]],pal.floor);poly([[0,0],[0,h],[w*.36,hy],[w*.36,hy]],pal.wall);poly([[w,0],[w,h],[w*.64,hy],[w*.64,hy]],pal.wall);
-  cx.strokeStyle='#ffffff16';cx.lineWidth=1;for(var i=1;i<7;i++){var t=i/7,y=hy+(h-hy)*t*t;cx.beginPath();cx.moveTo(w*(.36-.36*t),y);cx.lineTo(w*(.64+.36*t),y);cx.stroke();}for(i=-4;i<=4;i++){cx.beginPath();cx.moveTo(w/2+i*w*.05,hy);cx.lineTo(w/2+i*w*.16,h);cx.stroke();}
-  if(SESS.depth===2){for(i=0;i<6;i++){cx.fillStyle=i%2?pal.mist:'#476d43';cx.fillRect((i%2?w*.08:w*.88)+(i%3)*9,h*.12+i*18,12,h*.65);}}
-  if(SESS.depth===3){cx.strokeStyle=pal.accent;cx.globalAlpha=.32;for(i=0;i<5;i++){cx.beginPath();cx.arc(i%2?w*.14:w*.86,h*(.18+i*.15),28+i*5,0,Math.PI*2);cx.stroke();}cx.globalAlpha=1;}
-  if(SESS.depth===4){cx.fillStyle='#fff';for(i=0;i<34;i++){cx.globalAlpha=.25+(i%5)*.12;cx.fillRect((i*79)%w,(i*47)%Math.max(30,hy),2,2);}cx.globalAlpha=1;}
-  if(SESS.phase==='transition'){var step=SESS.floor.steps[SESS.floor.pendingIndex];if(step.type==='single'){drawDoor(w/2,hy+82,Math.min(w,h)/520,pal,true);drawObject(w/2,hy+28,Math.min(w,h)/520,step.object,pal,step.object);}else{var s=Math.min(w,h)/610;drawDoor(w*.32,hy+78,s,pal,TYPE.lockedIdx===0);drawDoor(w*.68,hy+78,s,pal,TYPE.lockedIdx===1);drawObject(w*.32,hy+34,s,step.options[0].object,pal,step.options[0].object);drawObject(w*.68,hy+34,s,step.options[1].object,pal,step.options[1].object);}}
-  else if(SESS.phase==='combat')drawEnemy(w,h,pal);else if(SESS.phase==='vault')drawChest(w,h,pal);else if(SESS.phase==='rest')drawObject(w/2,h*.65,Math.min(w,h)/440,'tree',pal,'memory tree');else if(SESS.phase==='relicpick')drawRelics(w,h,pal);
+  if(!cx||!SESS||!SESS.floor)return;
+  var w=cv.width/dpr,h=cv.height/dpr,pal=theme();
+  var key=[cv.width,cv.height,SESS.depth,Math.max(SESS.floor.pos,SESS.floor.pendingIndex),G.settings.colorblind?1:0].join('|');
+  if(key!==SCENE.key){ renderRoomStatic(w,h); SCENE.key=key; }
+  var rm=effectiveReducedMotion(), t=performance.now()/1000;
+  cx.setTransform(1,0,0,1,0,0); cx.clearRect(0,0,cv.width,cv.height);
+  var pulse=rm?0:SESS.cameraPulse;
+  if(pulse>0.01){
+    var sc=1+pulse*0.012;
+    cx.save();
+    cx.translate(cv.width*(1-sc)/2,cv.height*(1-sc)/2+pulse*10*dpr);
+    cx.scale(sc,sc);
+    cx.drawImage(SCENE.cache,0,0);
+    cx.restore();
+  } else { cx.drawImage(SCENE.cache,0,0); }
+  cx.setTransform(dpr,0,0,dpr,0,0);
+  var hy=h*0.42;
+  for(var i=0;i<SCENE.torches.length;i++) drawFlame(SCENE.torches[i],t,rm);
+  if(SCENE.candle) drawCandleFlame(t,rm);
+  if(SCENE.shaft) drawMotes(t,rm);
+  if(SCENE.fireflies) drawFireflies(w,h,t,rm);
+  if(SCENE.pendulum) drawPendulum(t,rm);
+  if(SCENE.glyphs.length) drawGlyphs(t,rm,pal);
+  if(SCENE.stars.length) twinkleStars(t,rm);
+  if(SESS.phase==='transition'){
+    var step=SESS.floor.steps[SESS.floor.pendingIndex];
+    if(step.type==='single'){
+      groundShadow(w/2,hy+86,66,15,0.4);
+      drawDoor(w/2,hy+82,Math.min(w,h)/520,pal,true);
+      drawObject(w/2,hy+28,Math.min(w,h)/520,step.object,pal,step.object);
+    } else {
+      var s=Math.min(w,h)/610;
+      groundShadow(w*0.32,hy+82,54,13,0.38);
+      groundShadow(w*0.68,hy+82,54,13,0.38);
+      drawDoor(w*.32,hy+78,s,pal,TYPE.lockedIdx===0);
+      drawDoor(w*.68,hy+78,s,pal,TYPE.lockedIdx===1);
+      drawObject(w*.32,hy+34,s,step.options[0].object,pal,step.options[0].object);
+      drawObject(w*.68,hy+34,s,step.options[1].object,pal,step.options[1].object);
+    }
+  }
+  else if(SESS.phase==='combat'){ groundShadow(w/2,h*0.62+56,82,17,0.45); drawEnemy(w,h,pal); }
+  else if(SESS.phase==='vault'){ groundShadow(w/2,h*0.68+60,88,17,0.42); drawChest(w,h,pal); }
+  else if(SESS.phase==='rest'){ groundShadow(w/2,h*0.65+62,74,16,0.4); drawObject(w/2,h*.65,Math.min(w,h)/440,'tree',pal,'memory tree'); }
+  else if(SESS.phase==='relicpick') drawRelics(w,h,pal);
+  else if(SESS.phase==='deduction') drawSable(w,h,pal,t,rm);
+  else if(SESS.phase==='choice'||SESS.phase==='epilogue') drawWarden(w,h,pal,t,rm);
+  else if(SESS.phase==='moment') drawBirdMoment(w,h,pal,t,rm);
   cx.fillStyle='#0b1117';poly([[w*.34,h],[w*.43,h*.88],[w*.57,h*.88],[w*.66,h]],'#0b1117');cx.save();cx.translate(w*.57,h*.93);cx.rotate(-.42);cx.fillStyle='#f1e3bc';cx.fillRect(-5,-76,10,92);cx.fillStyle=pal.accent;cx.beginPath();cx.moveTo(-5,-76);cx.lineTo(0,-104);cx.lineTo(5,-76);cx.closePath();cx.fill();cx.restore();
-  if(SESS.sceneFlash>0){cx.globalAlpha=Math.min(.35,SESS.sceneFlash);cx.fillStyle=pal.mist;cx.fillRect(0,0,w,h);cx.globalAlpha=1;}
+  if(SESS.sceneFlash>0){cx.globalAlpha=Math.min(.35,SESS.sceneFlash);cx.fillStyle=pal.mistC;cx.fillRect(0,0,w,h);cx.globalAlpha=1;}
 }
 
 // ---- HUD ----
@@ -928,6 +1848,7 @@ function updateHud(){
   var accuracy=SESS.charsTyped?Math.max(0,Math.round((1-SESS.charErrors/SESS.charsTyped)*100)):100;
   document.getElementById('hudAccuracy').textContent=accuracy+'%';
   document.getElementById('hudVocab').textContent=Object.keys(SESS.vocabulary||{}).length;
+  document.getElementById('hudEvidence').textContent=SESS.fragmentsFound+'/'+FRAG_TOTAL;
   var hpPct=Math.max(0,Math.round(SESS.player.hp/SESS.player.hpMax*100));
   document.getElementById('hpFill').style.width=hpPct+'%';
   document.getElementById('hpNum').textContent=Math.max(0,Math.round(SESS.player.hp))+'/'+SESS.player.hpMax;
@@ -953,7 +1874,7 @@ function updateEncounterDynamic(){
 function gameLoop(ts){
   if(!SESS || SESS.phase==='dead') return;
   if(!SESS.lastTs) SESS.lastTs=ts;
-  if(!SESS.paused){
+  if(!SESS.paused && !SESS.journalOpen){
     var dt=Math.min(0.12,(ts-SESS.lastTs)/1000);
     var tSec=(ts-SESS.startTs)/1000;
     if(SESS.phase==='combat') combatTick(dt,tSec);
@@ -975,6 +1896,10 @@ function dispatchCompletion(result){
   else if(SESS.phase==='rest') onRestComplete();
   else if(SESS.phase==='relicpick') onRelicPicked(result.id);
   else if(SESS.phase==='transition') onTransitionComplete(result);
+  else if(SESS.phase==='deduction') onDeductionAnswer(result);
+  else if(SESS.phase==='moment') onMomentChoice(result);
+  else if(SESS.phase==='choice') onFinalChoice(result);
+  else if(SESS.phase==='epilogue') onEpilogueComplete();
 }
 
 // ---- Pause ----
@@ -1011,7 +1936,7 @@ function buildVirtualKeyboard(){
     if(!btn) return;
     e.preventDefault();
     ensureAudio(); if(actx && actx.state==='suspended') actx.resume();
-    if(!SESS || SESS.paused || SESS.phase==='dead') return;
+    if(!SESS || SESS.paused || SESS.journalOpen || SESS.phase==='dead') return;
     var k=btn.getAttribute('data-vk');
     if(k==='back'){ typeBackspace(); renderTypedDisplay(); return; }
     var res=typeChar(k);
@@ -1026,6 +1951,10 @@ function applyKeyboardGuide(){
 
 // ---- Physical keyboard input ----
 window.addEventListener('keydown', function(e){
+  if(SESS && SESS.journalOpen){
+    if(e.code==='Escape'){ e.preventDefault(); closeJournal(); }
+    return;
+  }
   if(e.code==='Escape'){
     if(SESS && SESS.phase!=='dead'){ e.preventDefault(); setPaused(!SESS.paused); }
     return;
@@ -1097,10 +2026,13 @@ document.querySelector('[data-again]').addEventListener('click', function(){
 });
 document.querySelector('[data-menu]').addEventListener('click', function(){ showScreen('menu'); renderMenuSummary(); });
 document.querySelector('[data-pause]').addEventListener('click', function(){ if(SESS) setPaused(true); });
+document.querySelector('[data-journal]').addEventListener('click', function(){ if(SESS && SESS.journalOpen){ closeJournal(); } else { openJournal(); } });
+document.querySelector('[data-journal-close]').addEventListener('click', closeJournal);
 document.querySelector('[data-resume]').addEventListener('click', function(){ if(SESS) setPaused(false); });
 document.querySelector('[data-quit]').addEventListener('click', function(){
   if(SESS){ cancelAnimationFrame(SESS.raf); SESS=null; }
   document.getElementById('pauseOverlay').hidden=true;
+  document.getElementById('journalOverlay').hidden=true;
   showScreen('menu');
   renderMenuSummary();
 });

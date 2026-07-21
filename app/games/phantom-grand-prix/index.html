@@ -24,18 +24,21 @@
     <p class="kicker">Race Setup</p>
     <h2>Choose Your Circuit</h2>
     <div class="track-choice">
-      <button class="track-btn" data-track="ghostlight" aria-pressed="true"><strong>Ghostlight</strong><span>Night city</span></button>
-      <button class="track-btn" data-track="redwood" aria-pressed="false"><strong>Redwood Run</strong><span>Forest dawn</span></button>
-      <button class="track-btn" data-track="aurora" aria-pressed="false"><strong>Aurora Ring</strong><span>Polar sky</span></button>
+      <button class="track-btn" data-track="ghostlight" aria-pressed="true"><strong>Ghostlight</strong><span>Night city &middot; boost pads</span></button>
+      <button class="track-btn" data-track="redwood" aria-pressed="false"><strong>Redwood Run</strong><span>Forest dawn &middot; dirt shortcut</span></button>
+      <button class="track-btn" data-track="aurora" aria-pressed="false"><strong>Aurora Ring</strong><span>Polar sky &middot; icy corners</span></button>
+      <button class="track-btn" data-track="meltdown" aria-pressed="false"><strong>Meltdown</strong><span>Caldera &middot; lava hazards</span></button>
     </div>
     <h2>Starting Grid</h2>
     <div class="mode-choice">
-      <button class="mode-btn" data-mode="1p"><strong>Solo Grand Prix</strong><span>1 driver + 3 CPU rivals</span></button>
-      <button class="mode-btn" data-mode="2p"><strong>Local Split Race</strong><span>2 drivers + 2 CPU rivals</span></button>
+      <button class="mode-btn" data-mode="1p"><strong>Single Race</strong><span>1 driver + 7 CPU rivals</span></button>
+      <button class="mode-btn" data-mode="cup"><strong>Grand Prix Cup</strong><span>4 circuits &middot; cumulative points</span></button>
+      <button class="mode-btn" data-mode="2p"><strong>Local Split Race</strong><span>2 drivers + 6 CPU rivals</span></button>
     </div>
     <div class="controls-grid">
-      <div><b>Driver 1</b><span>WASD / Shift / Space</span></div>
+      <div><b>Driver 1</b><span>WASD / Shift hop-drift / Space item</span></div>
       <div><b>Driver 2</b><span>Arrows / Slash / Enter</span></div>
+      <div><b>Extras</b><span>Hold gas at "1" for a boost start / M mute</span></div>
     </div>
     <button class="btn-ghost" data-title-btn>Back</button>
   </div>
@@ -49,8 +52,9 @@
 
 <section class="overlay" data-finish-overlay hidden>
   <div class="panel results-panel">
-    <p class="kicker">Official Classification</p><h2>Race Finished</h2><p data-finish-track></p>
+    <p class="kicker">Official Classification</p><h2 data-finish-title>Race Finished</h2><p data-finish-track></p>
     <div class="standings" data-standings></div>
+    <button class="btn-primary" data-next-btn hidden>Next Race</button>
     <button class="btn-primary" data-restart-btn>Race Again</button><button class="btn-ghost" data-menu-btn>Change Setup</button>
   </div>
 </section>

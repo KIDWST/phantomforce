@@ -17,7 +17,9 @@
   // DOM references
   // ---------------------------------------------------------------------
   const canvas = document.getElementById('stage');
-  const ctx = canvas.getContext('2d');
+  // `let` (not const): drawing helpers all target this binding, so the cached
+  // terrain-layer rebuild can temporarily retarget them at an offscreen canvas.
+  let ctx = canvas.getContext('2d');
   const $ = (sel) => document.querySelector(sel);
   const $all = (sel) => Array.from(document.querySelectorAll(sel));
 
@@ -627,6 +629,9 @@
     cooking: null,   // {recipe,t,dur}
     particles: [],
     ambience: [],
+    // Ambient world life (birds/butterflies) — runtime-only, visual-only,
+    // never persisted or synced; fully cleared under reduced motion.
+    life: { birds: [], butterflies: [], nextBirdAt: 0, nextButterflyAt: 0 },
     lastFrame: 0,
     dpr: 1, W: 0, H: 0, tileW: 48, tileH: 24, originX: 0, originY: 0,
     paused: false,
@@ -730,19 +735,33 @@
   }
 
   function buildNpcRuntime() {
+    // Leisure spot (living-world spec §4): a pond-side stop at dusk, derived
+    // from terrain exactly like workplace/square — deterministic per seed.
+    const pond = findFirstOfType(terrain, 'water');
+    const leisureBase = pond ? adjacentGrassTo(terrain, pond) : nearestGrass(terrain, 8, 7);
     return NPC_DEFS.map((def, i) => {
       const resTile = findFirstOfType(terrain, def.resourceType);
       const workplace = adjacentGrassTo(terrain, resTile);
       const homeHint = NPC_HOME_POINTS[i % NPC_HOME_POINTS.length];
       const home = nearestGrass(terrain, homeHint.x, homeHint.y);
-      const square = nearestGrass(terrain, 8, 7);
+      // Spread residents around the square/pond instead of stacking all nine
+      // on one tile — spreads deterministically from the index, and puts
+      // pairs adjacent so the idle chat behavior has partners.
+      const square = nearestGrass(terrain, 8 + (i % 3) - 1, 7 + (Math.floor(i / 3) % 2));
+      const leisure = nearestGrass(terrain, leisureBase.x + (i % 3) - 1, leisureBase.y + (Math.floor(i / 3) % 3) - 1);
       const quest = state.quests[def.id] || { done: false };
       const gx = home.x, gy = home.y;
       return {
         id: def.id, name: def.name, hue: def.hue, def,
-        home, workplace, square,
-        gx, gy, screenPx: 0, screenPy: 0, targetGx: gx, targetGy: gy, moveFrom: { x: gx, y: gy }, moveT: 1, moveDur: 3000,
-        segment: 'night', quest,
+        home, workplace, square, leisure, resTile,
+        leisureFocus: pond || { x: 8, y: 7 },
+        workFace: resTile ? faceToward(workplace.x, workplace.y, resTile.x, resTile.y) : 'down',
+        gx, gy, screenPx: 0, screenPy: 0, targetGx: gx, targetGy: gy, moveFrom: { x: gx, y: gy }, moveT: 1, moveDur: 380,
+        finalTarget: home,
+        segment: 'boot', quest,
+        facing: 'down', idlePhase: i * 1.73, idleBucket: -1,
+        glanceUntil: 0, wasNearPlayer: false, stretchUntil: 0,
+        carrying: null, chatWith: null, stuck: 0, noProgress: 0, pauseUntil: 0, lastChipAt: 0,
       };
     });
   }
@@ -1963,8 +1982,27 @@
   function npcSegment(minutes) {
     const m = minutes % 1440;
     if (m >= 420 && m < 1080) return 'work';
-    if (m >= 1080 && m < 1260) return 'square';
+    if (m >= 1080 && m < 1170) return 'square';
+    if (m >= 1170 && m < 1290) return 'leisure';
     return 'home';
+  }
+  // Weather-aware override (living-world spec §3): on rain/snow days the
+  // residents skip the plaza and pond-side leisure and head home instead.
+  // Pure function of (minutes, day) plus the already-shared seed via
+  // weatherForDay — co-op guests derive the identical answer with zero new
+  // sync messages, same free-consistency property terrain already has.
+  function effectiveNpcSegment(minutes, day) {
+    const seg = npcSegment(minutes);
+    if (seg === 'square' || seg === 'leisure') {
+      const w = weatherForDay(day).kind;
+      if (w === 'rain' || w === 'snow') return 'home';
+    }
+    return seg;
+  }
+  function faceToward(x0, y0, x1, y1) {
+    const dx = x1 - x0, dy = y1 - y0;
+    if (dx === 0 && dy === 0) return 'down';
+    return Math.abs(dx) >= Math.abs(dy) ? (dx < 0 ? 'left' : 'right') : (dy < 0 ? 'up' : 'down');
   }
 
   // ---------------------------------------------------------------------
@@ -2484,6 +2522,8 @@
     for (let i = 0; i < 10; i++) {
       rt.particles.push({ x: s.x, y: s.y - rt.tileH, vx: (Math.random() - 0.5) * 60, vy: -Math.random() * 90 - 20, life: 0.5 + Math.random() * 0.3, color });
     }
+    // Hard cap so burst-heavy moments can never grow the particle array unbounded.
+    if (rt.particles.length > 240) rt.particles.splice(0, rt.particles.length - 240);
   }
   function stepParticles(dt) {
     for (const p of rt.particles) { p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 140 * dt; p.life -= dt; }
@@ -2583,11 +2623,10 @@
     } else if (t === 'cliff') {
       drawBlock(s.x, s.y, rt.tileW * 0.9, rt.tileH * 0.9, rt.tileH * (1.0 + tile.variant * 0.65), shade(top, 1.1), shade(top, 0.72), shade(top, 0.56));
     }
-    if (t === 'water') {
-      ctx.save(); ctx.globalAlpha = motionPulse(500, gx + gy, 0.35, 0.1);
-      drawDiamond(s.x, s.y, rt.tileW * 0.7, rt.tileH * 0.7, '#bfe9ff', null);
-      ctx.restore();
-    }
+    // NOTE: animated adornments (water shimmer, shrine/landmark/cache/
+    // trailhead pulses, cottage windows/smoke) are drawn per-frame by
+    // drawAnimatedTiles(); this function renders only the static body so its
+    // output can be cached in the offscreen terrain layer.
     if (t === 'marsh') {
       ctx.save(); ctx.strokeStyle = '#9bc6a2'; ctx.lineWidth = 1.5 * rt.dpr; ctx.globalAlpha = 0.7;
       for (let i = -1; i <= 1; i++) {
@@ -2623,13 +2662,10 @@
       const discovered = poi && state.exploration.discovered.includes(poi.id);
       const color = poi?.kind === 'farm' ? '#e4b84f' : poi?.kind === 'settlement' ? '#e67d68' : '#8f91d8';
       drawBlock(s.x, s.y, rt.tileW * 0.34, rt.tileH * 0.34, rt.tileH * 1.7, shade(color, 1.15), shade(color, 0.72), shade(color, 0.55));
-      ctx.save(); ctx.strokeStyle = discovered ? '#fbe9d8' : '#ffcf6b'; ctx.lineWidth = 2 * rt.dpr; ctx.globalAlpha = motionPulse(430, gx, 0.7, 0.18);
-      ctx.beginPath(); ctx.arc(s.x, s.y - rt.tileH * 2.0, rt.tileH * 0.28, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
+      void discovered; // discovery ring is animated → drawAnimatedTiles()
     }
     if (tile.type === 'cache' && !isWorldCacheFound(tile.cacheId)) {
       drawBlock(s.x, s.y, rt.tileW * 0.38, rt.tileH * 0.38, rt.tileH * 0.45, '#d2a65f', '#80593d', '#65432f');
-      ctx.save(); ctx.fillStyle = '#ffcf6b'; ctx.globalAlpha = motionPulse(300, gx + gy, 0.68, 0.2);
-      ctx.beginPath(); ctx.arc(s.x, s.y - rt.tileH * 0.9, rt.tileH * 0.13, 0, Math.PI * 2); ctx.fill(); ctx.restore();
     }
     if (NATURAL_GROUND_TYPES.has(t) && tile.variant > 0.965) {
       ctx.save(); ctx.fillStyle = tile.biome === 'frostwood' ? '#d7f4ff' : '#ffd27f'; ctx.globalAlpha = 0.8;
@@ -2639,11 +2675,6 @@
       const trial = trialAt(gx, gy);
       const done = trial && state.adventure?.trials?.[trial.id]?.done;
       drawBlock(s.x, s.y, rt.tileW * 0.58, rt.tileH * 0.58, rt.tileH * 1.55, done ? '#5be3b5' : '#c792ea', '#34255b', '#211638');
-      ctx.save();
-      ctx.globalAlpha = done ? 0.35 : motionPulse(360, gx, 0.55, 0.15);
-      ctx.fillStyle = done ? '#5be3b5' : '#ffcf6b';
-      ctx.beginPath(); ctx.arc(s.x, s.y - rt.tileH * 1.95, rt.tileH * 0.28, 0, Math.PI * 2); ctx.fill();
-      ctx.restore();
     }
     if (t === 'gate') {
       const open = state.adventure?.gateOpen;
@@ -2656,10 +2687,6 @@
     }
     if (t === 'trailhead') {
       drawBlock(s.x, s.y, rt.tileW * 0.5, rt.tileH * 0.5, rt.tileH * 1.2, shade(top, 1.2), shade(top, 0.72), shade(top, 0.5));
-      ctx.save();
-      ctx.strokeStyle = '#ffcf6b'; ctx.lineWidth = 2 * rt.dpr; ctx.globalAlpha = motionPulse(400, gx, 0.7, 0.2);
-      ctx.beginPath(); ctx.arc(s.x, s.y - rt.tileH * 1.6, rt.tileH * 0.32, 0, Math.PI * 2); ctx.stroke();
-      ctx.restore();
     }
   }
   function drawPiece(piece, unsynced) {
@@ -2676,6 +2703,21 @@
     if (piece.type === 'lamp' && daySegment(state.minutes) !== 'day') {
       ctx.save(); ctx.globalAlpha = 0.5; ctx.fillStyle = '#ffe6a3';
       ctx.beginPath(); ctx.arc(s.x, s.y - hgt - rt.tileH * 0.4, rt.tileH * 1.1, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+    }
+    if (piece.type === 'hearth' && !rt.reducedMotion) {
+      // A lived-in hearth smokes gently — "someone lives here."
+      drawSmoke(s.x, s.y - hgt - rt.tileH * 0.25, piece.gx * 5 + piece.gy * 11);
+    }
+    if (piece.type === 'watchtower') {
+      // Rippling flag atop the tower.
+      const fx = s.x + rt.tileW * 0.06, fy = s.y - hgt - rt.tileH * 0.95;
+      ctx.save();
+      ctx.strokeStyle = '#6f5a3c'; ctx.lineWidth = 1.6 * rt.dpr;
+      ctx.beginPath(); ctx.moveTo(fx, fy + rt.tileH * 0.95); ctx.lineTo(fx, fy); ctx.stroke();
+      const rip = rt.reducedMotion ? 0 : Math.sin(rt.playSecondsAccum * 3.1 + piece.gx) * rt.tileH * 0.09;
+      ctx.fillStyle = '#ff8a5c';
+      ctx.beginPath(); ctx.moveTo(fx, fy); ctx.lineTo(fx + rt.tileW * 0.24, fy + rt.tileH * 0.14 + rip); ctx.lineTo(fx, fy + rt.tileH * 0.3); ctx.closePath(); ctx.fill();
+      ctx.restore();
     }
     if (piece.type === 'coop') {
       const l = currentLivestock().find((x) => x.pieceId === piece.id);
@@ -2733,14 +2775,22 @@
     const hairs = ['#3a2928', '#6b4635', '#d6a64d', '#202735', '#8a4e35', '#d7d2c6'];
     return { skin: skins[(h >>> 0) % skins.length], hair: hairs[((h >>> 5) >>> 0) % hairs.length], style: ((h >>> 11) >>> 0) % 4 };
   }
-  function drawCharacter(px, py, hueColor, topper, trimColor, label, mini, characterKey = 'resident', expression = 'calm') {
+  // opts: { facing: 'down'|'left'|'right'|'up', sway: px head-lean for idle
+  // weight shifts, stretch: arms-overhead idle pose }. Facing is the fix for
+  // the "everyone stares at the player" complaint: 'up' renders the back of
+  // the head (no face), left/right render an offset three-quarter profile.
+  function drawCharacter(px, py, hueColor, topper, trimColor, label, mini, characterKey = 'resident', expression = 'calm', opts = null) {
     const scale = mini ? 0.72 : 1;
     const u = rt.tileH * scale;
     const look = characterLook(characterKey);
+    const face = (opts && opts.facing) || 'down';
+    const sway = (opts && opts.sway) || 0;
+    const stretch = !!(opts && opts.stretch);
     const bob = rt.reducedMotion ? 0 : Math.sin(rt.playSecondsAccum * 2.4 + (characterKey.length || 1)) * u * 0.025;
     const groundY = py - 2 * rt.dpr + bob;
     const headY = groundY - u * 1.78;
     const headRx = u * 0.48, headRy = u * 0.55;
+    const hx = px + sway;
     const shoulderY = groundY - u * 1.24;
     ctx.save();
 
@@ -2766,64 +2816,85 @@
     ctx.closePath(); ctx.fill();
     ctx.strokeStyle = trimColor; ctx.lineWidth = 1.5 * rt.dpr; ctx.stroke();
     ctx.strokeStyle = shade(hueColor, 0.78); ctx.lineWidth = u * 0.16;
-    ctx.beginPath(); ctx.moveTo(px - u * 0.4, shoulderY + u * 0.16); ctx.lineTo(px - u * 0.53, groundY - u * 0.56); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(px + u * 0.4, shoulderY + u * 0.16); ctx.lineTo(px + u * 0.53, groundY - u * 0.56); ctx.stroke();
+    if (stretch) {
+      // Arms raised overhead — the idle stretch pose.
+      ctx.beginPath(); ctx.moveTo(px - u * 0.4, shoulderY + u * 0.16); ctx.lineTo(px - u * 0.34, headY - headRy * 1.05); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(px + u * 0.4, shoulderY + u * 0.16); ctx.lineTo(px + u * 0.34, headY - headRy * 1.05); ctx.stroke();
+      ctx.fillStyle = look.skin;
+      ctx.beginPath(); ctx.arc(px - u * 0.34, headY - headRy * 1.1, u * 0.1, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(px + u * 0.34, headY - headRy * 1.1, u * 0.1, 0, Math.PI * 2); ctx.fill();
+    } else {
+      ctx.beginPath(); ctx.moveTo(px - u * 0.4, shoulderY + u * 0.16); ctx.lineTo(px - u * 0.53, groundY - u * 0.56); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(px + u * 0.4, shoulderY + u * 0.16); ctx.lineTo(px + u * 0.53, groundY - u * 0.56); ctx.stroke();
+      ctx.fillStyle = look.skin;
+      ctx.beginPath(); ctx.arc(px - u * 0.54, groundY - u * 0.5, u * 0.1, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(px + u * 0.54, groundY - u * 0.5, u * 0.1, 0, Math.PI * 2); ctx.fill();
+    }
     ctx.fillStyle = look.skin;
-    ctx.beginPath(); ctx.arc(px - u * 0.54, groundY - u * 0.5, u * 0.1, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(px + u * 0.54, groundY - u * 0.5, u * 0.1, 0, Math.PI * 2); ctx.fill();
-    ctx.fillRect(px - u * 0.09, shoulderY - u * 0.08, u * 0.18, u * 0.23);
+    ctx.fillRect(hx - u * 0.09, shoulderY - u * 0.08, u * 0.18, u * 0.23);
 
-    // Oval head, ears, hair, brows, eyes, blush, and a readable expression.
+    // Oval head + ears (head leans by `sway` for idle weight shifts).
     ctx.fillStyle = look.skin;
-    ctx.beginPath(); ctx.ellipse(px - headRx * 0.98, headY, headRx * 0.18, headRy * 0.28, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.ellipse(px + headRx * 0.98, headY, headRx * 0.18, headRy * 0.28, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.ellipse(px, headY, headRx, headRy, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(hx - headRx * 0.98, headY, headRx * 0.18, headRy * 0.28, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(hx + headRx * 0.98, headY, headRx * 0.18, headRy * 0.28, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(hx, headY, headRx, headRy, 0, 0, Math.PI * 2); ctx.fill();
     ctx.strokeStyle = 'rgba(70,42,40,0.28)'; ctx.lineWidth = 1.2 * rt.dpr; ctx.stroke();
     ctx.fillStyle = look.hair;
-    ctx.beginPath();
-    ctx.arc(px, headY - headRy * 0.2, headRx * 1.02, Math.PI, Math.PI * 2);
-    if (look.style === 0) ctx.quadraticCurveTo(px + headRx * 0.2, headY - headRy * 0.14, px - headRx * 0.62, headY - headRy * 0.02);
-    else if (look.style === 1) ctx.quadraticCurveTo(px, headY + headRy * 0.05, px - headRx * 0.82, headY - headRy * 0.05);
-    else if (look.style === 2) ctx.quadraticCurveTo(px - headRx * 0.15, headY - headRy * 0.3, px - headRx * 0.78, headY + headRy * 0.05);
-    else ctx.quadraticCurveTo(px + headRx * 0.55, headY - headRy * 0.25, px - headRx * 0.72, headY);
-    ctx.closePath(); ctx.fill();
-    if (look.style === 1 || look.style === 3) {
-      ctx.beginPath(); ctx.ellipse(px + headRx * 0.86, headY + headRy * 0.1, headRx * 0.2, headRy * 0.55, 0.08, 0, Math.PI * 2); ctx.fill();
+    if (face === 'up') {
+      // Back of the head: hair covers where the face would be.
+      ctx.beginPath(); ctx.ellipse(hx, headY - headRy * 0.04, headRx, headRy * 0.97, 0, 0, Math.PI * 2); ctx.fill();
+    } else {
+      ctx.beginPath();
+      ctx.arc(hx, headY - headRy * 0.2, headRx * 1.02, Math.PI, Math.PI * 2);
+      if (look.style === 0) ctx.quadraticCurveTo(hx + headRx * 0.2, headY - headRy * 0.14, hx - headRx * 0.62, headY - headRy * 0.02);
+      else if (look.style === 1) ctx.quadraticCurveTo(hx, headY + headRy * 0.05, hx - headRx * 0.82, headY - headRy * 0.05);
+      else if (look.style === 2) ctx.quadraticCurveTo(hx - headRx * 0.15, headY - headRy * 0.3, hx - headRx * 0.78, headY + headRy * 0.05);
+      else ctx.quadraticCurveTo(hx + headRx * 0.55, headY - headRy * 0.25, hx - headRx * 0.72, headY);
+      ctx.closePath(); ctx.fill();
+      if (look.style === 1 || look.style === 3) {
+        ctx.beginPath(); ctx.ellipse(hx + headRx * 0.86, headY + headRy * 0.1, headRx * 0.2, headRy * 0.55, 0.08, 0, Math.PI * 2); ctx.fill();
+      }
     }
-    const eyeY = headY + headRy * 0.06;
-    ctx.strokeStyle = shade(look.hair, 0.72); ctx.lineWidth = 1.3 * rt.dpr; ctx.lineCap = 'round';
-    ctx.beginPath(); ctx.moveTo(px - headRx * 0.32, eyeY - headRy * 0.22); ctx.lineTo(px - headRx * 0.08, eyeY - headRy * 0.2); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(px + headRx * 0.08, eyeY - headRy * 0.2); ctx.lineTo(px + headRx * 0.32, eyeY - headRy * 0.22); ctx.stroke();
-    ctx.fillStyle = '#fffaf2';
-    ctx.beginPath(); ctx.ellipse(px - headRx * 0.22, eyeY, headRx * 0.14, headRy * 0.12, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.ellipse(px + headRx * 0.22, eyeY, headRx * 0.14, headRy * 0.12, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#302538';
-    ctx.beginPath(); ctx.arc(px - headRx * 0.2, eyeY, headRx * 0.065, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(px + headRx * 0.2, eyeY, headRx * 0.065, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = 'rgba(224,103,111,0.3)';
-    ctx.beginPath(); ctx.ellipse(px - headRx * 0.48, eyeY + headRy * 0.22, headRx * 0.12, headRy * 0.07, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.ellipse(px + headRx * 0.48, eyeY + headRy * 0.22, headRx * 0.12, headRy * 0.07, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = '#814f55'; ctx.lineWidth = 1.4 * rt.dpr;
-    ctx.beginPath();
-    if (expression === 'happy' || expression === 'bright') ctx.arc(px, eyeY + headRy * 0.18, headRx * 0.18, 0.08, Math.PI - 0.08);
-    else { ctx.moveTo(px - headRx * 0.12, eyeY + headRy * 0.28); ctx.quadraticCurveTo(px, eyeY + headRy * 0.34, px + headRx * 0.12, eyeY + headRy * 0.27); }
-    ctx.stroke();
+    if (face !== 'up') {
+      const side = face === 'left' ? -1 : face === 'right' ? 1 : 0;
+      const ex = hx + side * headRx * 0.3;
+      const spread = side === 0 ? 0.22 : 0.15;
+      const eyeY = headY + headRy * 0.06;
+      ctx.strokeStyle = shade(look.hair, 0.72); ctx.lineWidth = 1.3 * rt.dpr; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(ex - headRx * (spread + 0.1), eyeY - headRy * 0.22); ctx.lineTo(ex - headRx * (spread - 0.08), eyeY - headRy * 0.2); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(ex + headRx * (spread - 0.08), eyeY - headRy * 0.2); ctx.lineTo(ex + headRx * (spread + 0.1), eyeY - headRy * 0.22); ctx.stroke();
+      ctx.fillStyle = '#fffaf2';
+      ctx.beginPath(); ctx.ellipse(ex - headRx * spread, eyeY, headRx * 0.14, headRy * 0.12, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(ex + headRx * spread, eyeY, headRx * 0.14, headRy * 0.12, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#302538';
+      const pupilShift = side * headRx * 0.04;
+      ctx.beginPath(); ctx.arc(ex - headRx * spread + pupilShift, eyeY, headRx * 0.065, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(ex + headRx * spread + pupilShift, eyeY, headRx * 0.065, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = 'rgba(224,103,111,0.3)';
+      if (side <= 0) { ctx.beginPath(); ctx.ellipse(hx - headRx * 0.48, eyeY + headRy * 0.22, headRx * 0.12, headRy * 0.07, 0, 0, Math.PI * 2); ctx.fill(); }
+      if (side >= 0) { ctx.beginPath(); ctx.ellipse(hx + headRx * 0.48, eyeY + headRy * 0.22, headRx * 0.12, headRy * 0.07, 0, 0, Math.PI * 2); ctx.fill(); }
+      ctx.strokeStyle = '#814f55'; ctx.lineWidth = 1.4 * rt.dpr;
+      ctx.beginPath();
+      if (expression === 'happy' || expression === 'bright') ctx.arc(ex, eyeY + headRy * 0.18, headRx * 0.18, 0.08, Math.PI - 0.08);
+      else { ctx.moveTo(ex - headRx * 0.12, eyeY + headRy * 0.28); ctx.quadraticCurveTo(ex, eyeY + headRy * 0.34, ex + headRx * 0.12, eyeY + headRy * 0.27); }
+      ctx.stroke();
+    }
 
     const headTopY = headY - headRy;
     const headSize = headRx * 2;
     if (topper === 'cap') {
       ctx.fillStyle = shade(hueColor, 0.6);
-      ctx.beginPath(); ctx.ellipse(px, headTopY + headRy * 0.12, headRx * 0.92, headRy * 0.28, 0, Math.PI, Math.PI * 2); ctx.fill();
-      ctx.fillRect(px - headRx * 0.08, headTopY - headRy * 0.24, headRx * 0.8, headRy * 0.13);
+      ctx.beginPath(); ctx.ellipse(hx, headTopY + headRy * 0.12, headRx * 0.92, headRy * 0.28, 0, Math.PI, Math.PI * 2); ctx.fill();
+      ctx.fillRect(hx - headRx * 0.08, headTopY - headRy * 0.24, headRx * 0.8, headRy * 0.13);
     } else if (topper === 'bloom') {
-      ctx.fillStyle = '#ff7fb0'; ctx.beginPath(); ctx.arc(px, headTopY, headSize * 0.22, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#ffe27a'; ctx.beginPath(); ctx.arc(px, headTopY, headSize * 0.08, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#ff7fb0'; ctx.beginPath(); ctx.arc(hx, headTopY, headSize * 0.22, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#ffe27a'; ctx.beginPath(); ctx.arc(hx, headTopY, headSize * 0.08, 0, Math.PI * 2); ctx.fill();
     } else if (topper === 'halo') {
-      ctx.strokeStyle = '#ffe27a'; ctx.lineWidth = 2.5 * rt.dpr; ctx.beginPath(); ctx.ellipse(px, headTopY - headSize * 0.15, headSize * 0.4, headSize * 0.14, 0, 0, Math.PI * 2); ctx.stroke();
+      ctx.strokeStyle = '#ffe27a'; ctx.lineWidth = 2.5 * rt.dpr; ctx.beginPath(); ctx.ellipse(hx, headTopY - headSize * 0.15, headSize * 0.4, headSize * 0.14, 0, 0, Math.PI * 2); ctx.stroke();
     } else if (topper === 'crest' || topper === 'crown') {
-      ctx.fillStyle = '#ffd54f'; ctx.beginPath(); ctx.moveTo(px - headSize * 0.42, headTopY + headSize * 0.13); ctx.lineTo(px - headSize * 0.25, headTopY - headSize * 0.25); ctx.lineTo(px, headTopY + headSize * 0.02); ctx.lineTo(px + headSize * 0.26, headTopY - headSize * 0.25); ctx.lineTo(px + headSize * 0.42, headTopY + headSize * 0.13); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#ffd54f'; ctx.beginPath(); ctx.moveTo(hx - headSize * 0.42, headTopY + headSize * 0.13); ctx.lineTo(hx - headSize * 0.25, headTopY - headSize * 0.25); ctx.lineTo(hx, headTopY + headSize * 0.02); ctx.lineTo(hx + headSize * 0.26, headTopY - headSize * 0.25); ctx.lineTo(hx + headSize * 0.42, headTopY + headSize * 0.13); ctx.closePath(); ctx.fill();
     } else if (topper === 'leaf') {
-      ctx.fillStyle = '#78d36f'; ctx.beginPath(); ctx.ellipse(px, headTopY - headSize * 0.12, headSize * 0.34, headSize * 0.16, -0.55, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#78d36f'; ctx.beginPath(); ctx.ellipse(hx, headTopY - headSize * 0.12, headSize * 0.34, headSize * 0.16, -0.55, 0, Math.PI * 2); ctx.fill();
     }
     if (label) {
       ctx.font = `700 ${10 * rt.dpr}px ui-monospace,monospace`; ctx.textAlign = 'center';
@@ -2841,6 +2912,225 @@
     ctx.arcTo(x, y + h, x, y, r);
     ctx.arcTo(x, y, x + w, y, r);
     ctx.closePath();
+  }
+
+  // -------------------------------------------------------------------
+  // NPC activity props: tools swung at work, carried goods while walking
+  // between buildings, and idle chat speech bubbles. All visual-only.
+  // -------------------------------------------------------------------
+  function spawnWorkChips(x, y, color, count = 3) {
+    if (rt.reducedMotion) return;
+    for (let i = 0; i < count; i++) {
+      rt.particles.push({ x, y, vx: (Math.random() - 0.5) * 46, vy: -Math.random() * 60 - 24, life: 0.35 + Math.random() * 0.25, color });
+    }
+    if (rt.particles.length > 240) rt.particles.splice(0, rt.particles.length - 240);
+  }
+  const NPC_ACTIVITY = { grove: 'chop', quarry: 'mine', reed: 'reap', water: 'fish', shrine: 'sweep', gate: 'scribe' };
+  function drawChatBubble(px, topY, glyph) {
+    ctx.save();
+    ctx.font = `700 ${9 * rt.dpr}px ui-monospace,monospace`;
+    ctx.textAlign = 'center';
+    const w = ctx.measureText(glyph).width + 10 * rt.dpr;
+    const h = 13 * rt.dpr;
+    ctx.fillStyle = 'rgba(251,233,216,0.92)';
+    roundRect(px + 7 * rt.dpr - w / 2, topY - h, w, h, 4 * rt.dpr);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(px + 3 * rt.dpr, topY); ctx.lineTo(px + 9 * rt.dpr, topY); ctx.lineTo(px + 4 * rt.dpr, topY + 4 * rt.dpr); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#3a2a44';
+    ctx.fillText(glyph, px + 7 * rt.dpr, topY - 3.6 * rt.dpr);
+    ctx.restore();
+  }
+  function drawNpcExtras(n) {
+    const u = rt.tileH;
+    const px = n.screenPx, py = n.screenPy;
+    const t = rt.playSecondsAccum;
+    const groundY = py - 2 * rt.dpr;
+    const idle = npcIsIdle(n);
+    if (n.carrying && !idle) {
+      // Visible carried bundle while walking goods away from the workplace.
+      ctx.save();
+      ctx.fillStyle = n.carrying;
+      const bx = px + (n.facing === 'left' ? -u * 0.55 : u * 0.55);
+      roundRect(bx - u * 0.22, groundY - u * 0.95, u * 0.44, u * 0.4, 2 * rt.dpr); ctx.fill();
+      ctx.strokeStyle = 'rgba(0,0,0,0.25)'; ctx.lineWidth = 1 * rt.dpr; ctx.stroke();
+      ctx.restore();
+    }
+    if (n.chatWith) {
+      const speakerFirst = n.id < n.chatWith;
+      const bucket = Math.floor(t / 2.4);
+      if ((bucket % 2 === 0) === speakerFirst) {
+        const glyph = ['…', '!', '♪'][hashU32(bucket, n.id.length, state.seed, 0xc4a7) % 3];
+        drawChatBubble(px, groundY - u * 2.75, glyph);
+      }
+    }
+    if (!idle || n.segment !== 'work') return;
+    const act = NPC_ACTIVITY[n.def.resourceType];
+    if (!act) return;
+    const side = n.workFace === 'left' ? -1 : 1;
+    const swing = rt.reducedMotion ? 0.35 : Math.sin(t * 4.4 + n.idlePhase);
+    if (act === 'mine' || act === 'chop') {
+      // Pick/axe swing arc toward the resource node, with chips at the apex.
+      ctx.save();
+      ctx.translate(px + side * u * 0.42, groundY - u * 0.85);
+      ctx.rotate(side * (0.55 + swing * 0.65));
+      ctx.strokeStyle = '#8a5f3c'; ctx.lineWidth = u * 0.1; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, -u * 0.78); ctx.stroke();
+      ctx.fillStyle = act === 'mine' ? '#aeb9cf' : '#8f979f';
+      if (act === 'mine') { roundRect(-u * 0.3, -u * 0.94, u * 0.6, u * 0.16, 2 * rt.dpr); ctx.fill(); }
+      else { ctx.beginPath(); ctx.moveTo(0, -u * 0.92); ctx.lineTo(side * u * 0.34, -u * 0.8); ctx.lineTo(0, -u * 0.62); ctx.closePath(); ctx.fill(); }
+      ctx.restore();
+      if (!rt.reducedMotion && swing > 0.94 && t - n.lastChipAt > 1.0) {
+        n.lastChipAt = t;
+        const s2 = n.resTile ? tileToScreen(n.resTile.x, n.resTile.y) : { x: px + side * u, y: py };
+        spawnWorkChips(s2.x, s2.y - u * 0.7, act === 'mine' ? '#aeb9cf' : '#caa06a');
+      }
+    } else if (act === 'fish' && n.resTile) {
+      // Rod, line down to the water tile, bobbing float, and lapping ripple.
+      const s2 = tileToScreen(n.resTile.x, n.resTile.y);
+      const hx2 = px + side * u * 0.5, hy2 = groundY - u * 0.95;
+      const tipX = hx2 + side * u * 0.85, tipY = hy2 - u * 0.75;
+      ctx.save();
+      ctx.strokeStyle = '#8a5f3c'; ctx.lineWidth = u * 0.08; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(hx2, hy2); ctx.lineTo(tipX, tipY); ctx.stroke();
+      const bobY = s2.y + (rt.reducedMotion ? 0 : Math.sin(t * 2.1 + n.idlePhase) * 1.8 * rt.dpr);
+      ctx.strokeStyle = 'rgba(255,255,255,0.45)'; ctx.lineWidth = 1 * rt.dpr;
+      ctx.beginPath(); ctx.moveTo(tipX, tipY); ctx.quadraticCurveTo(tipX, (tipY + bobY) / 2 + u * 0.3, s2.x, bobY); ctx.stroke();
+      ctx.fillStyle = '#ff6b4a';
+      ctx.beginPath(); ctx.arc(s2.x, bobY, 1.8 * rt.dpr, 0, Math.PI * 2); ctx.fill();
+      if (!rt.reducedMotion) {
+        const k = ((t * 0.6 + n.idlePhase) % 2.6) / 2.6;
+        if (k < 0.6) {
+          ctx.globalAlpha = (1 - k / 0.6) * 0.45;
+          ctx.strokeStyle = '#dff4ff';
+          ctx.beginPath(); ctx.ellipse(s2.x, s2.y, u * (0.14 + k * 0.5), u * (0.07 + k * 0.25), 0, 0, Math.PI * 2); ctx.stroke();
+        }
+      }
+      ctx.restore();
+    } else if (act === 'sweep' || act === 'reap') {
+      // Broom / sickle sweep with occasional dust or reed wisps.
+      ctx.save();
+      ctx.translate(px + side * u * 0.4, groundY - u * 0.7);
+      ctx.rotate(side * (0.9 + (rt.reducedMotion ? 0 : Math.sin(t * 3.1 + n.idlePhase) * 0.28)));
+      ctx.strokeStyle = '#8a5f3c'; ctx.lineWidth = u * 0.08; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(0, -u * 0.5); ctx.lineTo(0, u * 0.55); ctx.stroke();
+      ctx.fillStyle = act === 'sweep' ? '#caa06a' : '#78d36f';
+      roundRect(-u * 0.16, u * 0.5, u * 0.32, u * 0.2, 2 * rt.dpr); ctx.fill();
+      ctx.restore();
+      if (!rt.reducedMotion && t - n.lastChipAt > 2.4) {
+        n.lastChipAt = t;
+        spawnWorkChips(px + side * u * 0.8, groundY - u * 0.2, act === 'sweep' ? '#cbb691' : '#9fe08f', 2);
+      }
+    } else if (act === 'scribe') {
+      // Open ledger held in front — the archivist reads at his post.
+      ctx.save();
+      ctx.fillStyle = '#fbe9d8';
+      const bx = px + side * u * 0.42;
+      roundRect(bx - u * 0.26, groundY - u * 1.05, u * 0.52, u * 0.34, 1.5 * rt.dpr); ctx.fill();
+      ctx.strokeStyle = 'rgba(60,40,60,0.6)'; ctx.lineWidth = 1 * rt.dpr;
+      ctx.beginPath(); ctx.moveTo(bx, groundY - u * 1.05); ctx.lineTo(bx, groundY - u * 0.71); ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  // -------------------------------------------------------------------
+  // Ambient world life: birds that land, peck, and fly off; butterflies in
+  // spring/summer; chimney smoke. Visual-only, reduced-motion aware, never
+  // persisted or synced (same standing as the firefly ambience).
+  // -------------------------------------------------------------------
+  function stepAmbientLife(dt) {
+    if (rt.reducedMotion || rt.world !== 'town') {
+      rt.life.birds.length = 0;
+      rt.life.butterflies.length = 0;
+      return;
+    }
+    const t = rt.playSecondsAccum;
+    const camX = rt.cameraX, camY = rt.cameraY;
+    if (rt.life.birds.length < 3 && t > rt.life.nextBirdAt) {
+      rt.life.nextBirdAt = t + 4 + Math.random() * 6;
+      const gx = Math.round(camX + (Math.random() - 0.5) * 12);
+      const gy = Math.round(camY + (Math.random() - 0.5) * 12);
+      if (inBounds(gx, gy) && NATURAL_GROUND_TYPES.has(terrainAt(gx, gy))) {
+        rt.life.birds.push({ gx, gy, phase: Math.random() * 6, state: 'in', t: 0, stay: 3 + Math.random() * 4, hue: Math.random() < 0.5 ? '#5d6a86' : '#8a6b5d' });
+      }
+    }
+    for (const b of rt.life.birds) {
+      b.t += dt;
+      if (b.state === 'in' && b.t > 1.2) { b.state = 'ground'; b.t = 0; }
+      else if (b.state === 'ground' && (b.t > b.stay || Math.max(Math.abs(b.gx - state.player.gx), Math.abs(b.gy - state.player.gy)) <= 2)) {
+        b.state = 'out'; b.t = 0; // startled by the player, or just done pecking
+      }
+    }
+    rt.life.birds = rt.life.birds.filter((b) => !(b.state === 'out' && b.t > 1.4));
+    const season = seasonOf(state.day);
+    if ((season === 'spring' || season === 'summer') && daySegment(state.minutes) === 'day') {
+      if (rt.life.butterflies.length < 4 && t > rt.life.nextButterflyAt) {
+        rt.life.nextButterflyAt = t + 3 + Math.random() * 5;
+        rt.life.butterflies.push({
+          gx: camX + (Math.random() - 0.5) * 10, gy: camY + (Math.random() - 0.5) * 10,
+          phase: Math.random() * 6.28, born: t,
+          hue: ['#ffd54f', '#ff9ecb', '#bfe9ff'][Math.floor(Math.random() * 3)],
+        });
+      }
+      rt.life.butterflies = rt.life.butterflies.filter((bf) => t - bf.born < 26 && Math.abs(bf.gx - camX) < 16 && Math.abs(bf.gy - camY) < 16);
+    } else {
+      rt.life.butterflies.length = 0;
+    }
+  }
+  function drawBird(b) {
+    const t = rt.playSecondsAccum;
+    const s = tileToScreen(b.gx, b.gy);
+    let x = s.x, y = s.y;
+    let airK = 0;
+    if (b.state === 'in') { airK = 1 - Math.min(1, b.t / 1.2); x += airK * rt.tileW * 0.9; }
+    else if (b.state === 'out') { airK = Math.min(1, b.t / 1.4); x -= airK * rt.tileW * 0.9; }
+    y -= airK * rt.tileH * 4.2;
+    const u = rt.tileH * 0.3;
+    ctx.save();
+    if (airK === 0) {
+      ctx.globalAlpha = 0.2; ctx.fillStyle = '#08060e';
+      ctx.beginPath(); ctx.ellipse(x, y, u * 0.7, u * 0.24, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+    const peck = airK === 0 && Math.sin(t * 5.2 + b.phase) > 0.45 ? u * 0.4 : 0;
+    ctx.fillStyle = b.hue;
+    ctx.beginPath(); ctx.ellipse(x, y - u * 0.75, u * 0.62, u * 0.45, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(x + u * 0.6, y - u * 1.05 + peck, u * 0.3, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#ffcf6b';
+    ctx.beginPath(); ctx.moveTo(x + u * 0.85, y - u * 1.05 + peck); ctx.lineTo(x + u * 1.15, y - u * 0.95 + peck); ctx.lineTo(x + u * 0.85, y - u * 0.88 + peck); ctx.closePath(); ctx.fill();
+    if (airK > 0) {
+      const flap = Math.sin(t * 16 + b.phase) * u * 0.6;
+      ctx.strokeStyle = b.hue; ctx.lineWidth = 1.6 * rt.dpr; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(x - u * 0.1, y - u * 0.85); ctx.lineTo(x - u * 0.75, y - u * 0.95 - flap); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x + u * 0.1, y - u * 0.85); ctx.lineTo(x + u * 0.75, y - u * 0.95 - flap); ctx.stroke();
+    }
+    ctx.restore();
+  }
+  function drawButterfly(bf) {
+    const t = rt.playSecondsAccum;
+    const wx = bf.gx + Math.sin(t * 0.45 + bf.phase) * 1.7;
+    const wy = bf.gy + Math.cos(t * 0.36 + bf.phase) * 1.3;
+    const s = tileToScreen(wx, wy);
+    const y = s.y - rt.tileH * 1.05 + Math.sin(t * 2.4 + bf.phase) * rt.tileH * 0.16;
+    if (s.x < -20 || s.x > rt.W + 20 || y < 0 || y > rt.H) return;
+    const flap = 0.35 + Math.abs(Math.sin(t * 9 + bf.phase)) * 0.65;
+    const u = rt.tileH * 0.16;
+    ctx.save();
+    ctx.fillStyle = bf.hue;
+    ctx.beginPath(); ctx.ellipse(s.x - u * flap, y, u * flap, u * 0.55, -0.4, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(s.x + u * flap, y, u * flap, u * 0.55, 0.4, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+  function drawSmoke(x, y, saltPhase) {
+    for (let i = 0; i < 3; i++) {
+      const k = ((rt.playSecondsAccum * 0.32 + i * 0.34 + saltPhase * 0.077) % 1);
+      ctx.globalAlpha = 0.26 * (1 - k);
+      ctx.fillStyle = '#cfc9da';
+      ctx.beginPath();
+      ctx.arc(x + Math.sin(k * 5 + i * 2.1) * rt.tileH * 0.16, y - k * rt.tileH * 1.5, rt.tileH * (0.09 + k * 0.15), 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
   }
 
   function rawScreenToWorld(px, py, cameraX, cameraY) {
@@ -2869,7 +3159,10 @@
   function tileWithinBounds(x, y, bounds, pad = 0) {
     return x >= bounds.minX - pad && x <= bounds.maxX + pad && y >= bounds.minY - pad && y <= bounds.maxY + pad;
   }
-  function drawDistantLandscape(sky) {
+  // Ridge silhouettes are static per (seed, viewport) — bake them once into
+  // an offscreen canvas instead of re-tracing three filled paths per frame.
+  const ridgeCache = { canvas: null, key: '' };
+  function drawDistantLandscape() {
     const horizon = rt.H * 0.39;
     const night = state.minutes < 360 || state.minutes > 1240;
     const celestialX = rt.W * (0.18 + ((state.minutes % 1440) / 1440) * 0.64);
@@ -2877,21 +3170,29 @@
     ctx.globalAlpha = night ? 0.72 : 0.82;
     ctx.fillStyle = night ? '#e9e0c7' : '#fff0a8';
     ctx.beginPath(); ctx.arc(celestialX, horizon * 0.5, rt.tileH * 0.62, 0, Math.PI * 2); ctx.fill();
-    const ridgeSeed = state.seed % 19;
-    for (let layer = 0; layer < 3; layer++) {
-      ctx.globalAlpha = 0.18 + layer * 0.12;
-      ctx.fillStyle = layer === 0 ? '#6f7891' : layer === 1 ? '#485f61' : '#334a48';
-      ctx.beginPath(); ctx.moveTo(0, horizon + layer * rt.tileH * 0.4);
-      const steps = 12;
-      for (let i = 0; i <= steps; i++) {
-        const x = (i / steps) * rt.W;
-        const n = hash01(i + ridgeSeed, layer, state.seed, 0x71374491);
-        const y = horizon - n * rt.H * (0.11 + layer * 0.025) + layer * rt.tileH * 0.8;
-        ctx.lineTo(x, y);
-      }
-      ctx.lineTo(rt.W, rt.H); ctx.lineTo(0, rt.H); ctx.closePath(); ctx.fill();
-    }
     ctx.restore();
+    const key = `${rt.W}|${rt.H}|${state.seed}`;
+    if (ridgeCache.key !== key) {
+      if (!ridgeCache.canvas) ridgeCache.canvas = document.createElement('canvas');
+      ridgeCache.canvas.width = Math.max(1, rt.W); ridgeCache.canvas.height = Math.max(1, rt.H);
+      const g = ridgeCache.canvas.getContext('2d');
+      const ridgeSeed = state.seed % 19;
+      for (let layer = 0; layer < 3; layer++) {
+        g.globalAlpha = 0.18 + layer * 0.12;
+        g.fillStyle = layer === 0 ? '#6f7891' : layer === 1 ? '#485f61' : '#334a48';
+        g.beginPath(); g.moveTo(0, horizon + layer * rt.tileH * 0.4);
+        const steps = 12;
+        for (let i = 0; i <= steps; i++) {
+          const x = (i / steps) * rt.W;
+          const n = hash01(i + ridgeSeed, layer, state.seed, 0x71374491);
+          const y = horizon - n * rt.H * (0.11 + layer * 0.025) + layer * rt.tileH * 0.8;
+          g.lineTo(x, y);
+        }
+        g.lineTo(rt.W, rt.H); g.lineTo(0, rt.H); g.closePath(); g.fill();
+      }
+      ridgeCache.key = key;
+    }
+    ctx.drawImage(ridgeCache.canvas, 0, 0);
   }
   function drawWorldLighting() {
     const m = ((state.minutes % 1440) + 1440) % 1440;
@@ -2950,28 +3251,201 @@
     ctx.fillStyle = '#ffcf6b'; ctx.beginPath(); ctx.arc(s.x, s.y - rt.tileH * 2.5, rt.tileH * 0.16, 0, Math.PI * 2); ctx.fill(); ctx.restore();
   }
 
-  function draw() {
-    if (rt.world === 'wilds') { drawWilds(); return; }
-    const sky = skyColors(state.minutes);
-    const grad = ctx.createLinearGradient(0, 0, 0, rt.H);
-    grad.addColorStop(0, sky.top); grad.addColorStop(1, sky.hor);
-    ctx.fillStyle = grad; ctx.fillRect(0, 0, rt.W, rt.H);
-    drawDistantLandscape(sky);
-    drawAmbience();
-
-    // Stream and draw only tiles intersecting the camera. Even at the widest
-    // supported viewport this is a small fraction of the 16,384-tile world.
-    const bounds = visibleWorldBounds(rt.cameraX, rt.cameraY, false);
-    for (let depth = bounds.minX + bounds.minY; depth <= bounds.maxX + bounds.maxY; depth++) {
-      const startX = Math.max(bounds.minX, depth - bounds.maxY);
-      const endX = Math.min(bounds.maxX, depth - bounds.minY);
-      for (let gx = startX; gx <= endX; gx++) {
-        const gy = depth - gx;
-        const s = tileToScreen(gx, gy);
-        if (s.x < -rt.tileW * 2 || s.x > rt.W + rt.tileW * 2 || s.y < rt.H * 0.24 || s.y > rt.H + rt.tileH * 3) continue;
-        drawTerrainTile(gx, gy, worldTileAt(gx, gy));
+  // -------------------------------------------------------------------
+  // Cached terrain layer: the static terrain (base diamonds, trees, rocks,
+  // buildings, roads) is rendered once into an offscreen canvas anchored at
+  // an integer camera tile, then re-composited each frame as a single
+  // drawImage. It only rebuilds when the camera drifts more than ~1.6 tiles
+  // from the anchor or when the world visually changes (season, seed, cache
+  // opened, trial cleared, gate opened, resize). This removes thousands of
+  // per-frame path fills — the single biggest frame cost in the old build.
+  // Animated adornments are re-drawn live by drawAnimatedTiles() from the
+  // small list of special tiles collected during the rebuild.
+  // -------------------------------------------------------------------
+  const terrainLayer = { canvas: null, lctx: null, ax: 0, ay: 0, key: '', padX: 0, padY: 0, animTiles: [] };
+  const ANIMATED_TILE_TYPES = new Set(['water', 'shrine', 'landmark', 'trailhead', 'cottage']);
+  function terrainLayerKey() {
+    const worldBit = rt.world === 'wilds'
+      ? `w:${(state.wilds && state.wilds.treasuresFound ? state.wilds.treasuresFound.length : 0)}`
+      : `t:${state.exploration.cachesFound.length}:${state.adventure?.gateOpen ? 1 : 0}`;
+    return [rt.world, state.seed, seasonOf(state.day), trialDoneCount(), rt.W, rt.H, rt.tileW, rt.dpr, worldBit].join('|');
+  }
+  function ensureTerrainLayer() {
+    const wilds = rt.world === 'wilds';
+    const camX = wilds ? rt.wildsCameraX : rt.cameraX;
+    const camY = wilds ? rt.wildsCameraY : rt.cameraY;
+    const key = terrainLayerKey();
+    if (terrainLayer.canvas && terrainLayer.key === key
+      && Math.abs(camX - terrainLayer.ax) < 1.6 && Math.abs(camY - terrainLayer.ay) < 1.6) return;
+    const padX = Math.ceil(rt.tileW * 2.5), padY = Math.ceil(rt.tileH * 7);
+    if (!terrainLayer.canvas) terrainLayer.canvas = document.createElement('canvas');
+    const lw = Math.ceil(rt.W + padX * 2), lh = Math.ceil(rt.H + padY * 2);
+    if (terrainLayer.canvas.width !== lw || terrainLayer.canvas.height !== lh || !terrainLayer.lctx) {
+      terrainLayer.canvas.width = lw; terrainLayer.canvas.height = lh;
+      terrainLayer.lctx = terrainLayer.canvas.getContext('2d');
+    }
+    const ax = Math.round(camX), ay = Math.round(camY);
+    // Retarget the shared drawing helpers at the layer, render, then restore.
+    const mainCtx = ctx, mainOX = rt.originX, mainOY = rt.originY;
+    const mainCamX = rt.cameraX, mainCamY = rt.cameraY;
+    const mainWCamX = rt.wildsCameraX, mainWCamY = rt.wildsCameraY;
+    ctx = terrainLayer.lctx;
+    ctx.clearRect(0, 0, lw, lh);
+    rt.originX = mainOX + padX; rt.originY = mainOY + padY;
+    if (wilds) { rt.wildsCameraX = ax; rt.wildsCameraY = ay; } else { rt.cameraX = ax; rt.cameraY = ay; }
+    terrainLayer.animTiles.length = 0;
+    if (wilds) {
+      for (let gy = 0; gy < GRID; gy++) for (let gx = 0; gx < GRID; gx++) {
+        const t = wildsTerrain[gy][gx];
+        drawWildsTile(gx, gy, t);
+        if (t === 'glimmer' || t === 'treasure') terrainLayer.animTiles.push({ gx, gy, type: t, variant: 0, poiId: null, cacheId: null });
+      }
+    } else {
+      const bounds = visibleWorldBounds(ax, ay, false);
+      const minX = clamp(bounds.minX - 3, WORLD_MIN, WORLD_MAX), maxX = clamp(bounds.maxX + 3, WORLD_MIN, WORLD_MAX);
+      const minY = clamp(bounds.minY - 3, WORLD_MIN, WORLD_MAX), maxY = clamp(bounds.maxY + 3, WORLD_MIN, WORLD_MAX);
+      const yCut = rt.H * 0.24 + padY - rt.tileH * 2;
+      for (let depth = minX + minY; depth <= maxX + maxY; depth++) {
+        const startX = Math.max(minX, depth - maxY);
+        const endX = Math.min(maxX, depth - minY);
+        for (let gx = startX; gx <= endX; gx++) {
+          const gy = depth - gx;
+          const tile = worldTileAt(gx, gy);
+          const s = tileToScreen(gx, gy);
+          if (s.x < -rt.tileW * 2 || s.x > lw + rt.tileW * 2 || s.y < yCut || s.y > lh + rt.tileH * 3) continue;
+          drawTerrainTile(gx, gy, tile);
+          const eff = tile.type === 'cache' && isWorldCacheFound(tile.cacheId) ? tile.baseType : tile.type;
+          if (ANIMATED_TILE_TYPES.has(eff) || tile.type === 'cache') {
+            terrainLayer.animTiles.push({ gx, gy, type: tile.type === 'cache' ? 'cache' : eff, variant: tile.variant, poiId: tile.poiId, cacheId: tile.cacheId });
+          }
+        }
       }
     }
+    ctx = mainCtx;
+    rt.originX = mainOX; rt.originY = mainOY;
+    rt.cameraX = mainCamX; rt.cameraY = mainCamY;
+    rt.wildsCameraX = mainWCamX; rt.wildsCameraY = mainWCamY;
+    terrainLayer.ax = ax; terrainLayer.ay = ay; terrainLayer.key = key;
+    terrainLayer.padX = padX; terrainLayer.padY = padY;
+  }
+  function blitTerrainLayer() {
+    const wilds = rt.world === 'wilds';
+    const camX = wilds ? rt.wildsCameraX : rt.cameraX;
+    const camY = wilds ? rt.wildsCameraY : rt.cameraY;
+    const offX = ((terrainLayer.ax - camX) - (terrainLayer.ay - camY)) * (rt.tileW / 2);
+    const offY = ((terrainLayer.ax - camX) + (terrainLayer.ay - camY)) * (rt.tileH / 2);
+    ctx.drawImage(terrainLayer.canvas, offX - terrainLayer.padX, offY - terrainLayer.padY);
+  }
+  // Live pulses/shimmer/windows for the handful of special tiles in view.
+  function drawAnimatedTiles() {
+    const t = rt.playSecondsAccum;
+    const seg = daySegment(state.minutes);
+    const homeSeg = npcSegment(state.minutes) === 'home';
+    const eveningGlow = seg === 'dusk' || seg === 'night';
+    for (const a of terrainLayer.animTiles) {
+      const s = tileToScreen(a.gx, a.gy);
+      if (s.x < -rt.tileW * 2 || s.x > rt.W + rt.tileW * 2 || s.y < -rt.tileH * 4 || s.y > rt.H + rt.tileH * 4) continue;
+      if (a.type === 'water') {
+        ctx.globalAlpha = motionPulse(500, a.gx + a.gy, 0.35, 0.1);
+        drawDiamond(s.x, s.y, rt.tileW * 0.7, rt.tileH * 0.7, '#bfe9ff', null);
+        ctx.globalAlpha = 1;
+        // Occasional fish ripple on a deterministic subset of water tiles.
+        if (!rt.reducedMotion && a.variant > 0.9) {
+          const k = ((t * 0.45 + a.variant * 9) % 3.4) / 3.4;
+          if (k < 0.75) {
+            ctx.globalAlpha = (1 - k / 0.75) * 0.5;
+            ctx.strokeStyle = '#dff4ff'; ctx.lineWidth = 1.2 * rt.dpr;
+            ctx.beginPath(); ctx.ellipse(s.x, s.y, rt.tileW * 0.08 + k * rt.tileW * 0.26, rt.tileH * 0.08 + k * rt.tileH * 0.26, 0, 0, Math.PI * 2); ctx.stroke();
+            ctx.globalAlpha = 1;
+          }
+        }
+      } else if (a.type === 'shrine') {
+        const trial = trialAt(a.gx, a.gy);
+        const done = trial && state.adventure?.trials?.[trial.id]?.done;
+        ctx.globalAlpha = done ? 0.35 : motionPulse(360, a.gx, 0.55, 0.15);
+        ctx.fillStyle = done ? '#5be3b5' : '#ffcf6b';
+        ctx.beginPath(); ctx.arc(s.x, s.y - rt.tileH * 1.95, rt.tileH * 0.28, 0, Math.PI * 2); ctx.fill();
+        ctx.globalAlpha = 1;
+      } else if (a.type === 'landmark') {
+        const poi = WORLD_POI_BY_ID[a.poiId];
+        const discovered = poi && state.exploration.discovered.includes(poi.id);
+        ctx.globalAlpha = motionPulse(430, a.gx, 0.7, 0.18);
+        ctx.strokeStyle = discovered ? '#fbe9d8' : '#ffcf6b'; ctx.lineWidth = 2 * rt.dpr;
+        ctx.beginPath(); ctx.arc(s.x, s.y - rt.tileH * 2.0, rt.tileH * 0.28, 0, Math.PI * 2); ctx.stroke();
+        ctx.globalAlpha = 1;
+        if (poi && poi.kind === 'farm') {
+          // Turning windmill blades on the farm spire — visible from afar.
+          const cxm = s.x, cym = s.y - rt.tileH * 2.35;
+          const rot = rt.reducedMotion ? 0.65 : t * 0.9;
+          ctx.strokeStyle = '#f0e2c4'; ctx.lineWidth = 1.6 * rt.dpr;
+          for (let i = 0; i < 4; i++) {
+            const ang = rot + i * Math.PI / 2;
+            ctx.beginPath(); ctx.moveTo(cxm, cym); ctx.lineTo(cxm + Math.cos(ang) * rt.tileH * 0.85, cym + Math.sin(ang) * rt.tileH * 0.85); ctx.stroke();
+          }
+        }
+      } else if (a.type === 'cache') {
+        if (!isWorldCacheFound(a.cacheId)) {
+          ctx.globalAlpha = motionPulse(300, a.gx + a.gy, 0.68, 0.2);
+          ctx.fillStyle = '#ffcf6b';
+          ctx.beginPath(); ctx.arc(s.x, s.y - rt.tileH * 0.9, rt.tileH * 0.13, 0, Math.PI * 2); ctx.fill();
+          ctx.globalAlpha = 1;
+        }
+      } else if (a.type === 'trailhead') {
+        ctx.globalAlpha = motionPulse(400, a.gx, 0.7, 0.2);
+        ctx.strokeStyle = '#ffcf6b'; ctx.lineWidth = 2 * rt.dpr;
+        ctx.beginPath(); ctx.arc(s.x, s.y - rt.tileH * 1.6, rt.tileH * 0.32, 0, Math.PI * 2); ctx.stroke();
+        ctx.globalAlpha = 1;
+      } else if (a.type === 'cottage') {
+        // Windows warm up at dusk; chimneys smoke while residents are home.
+        if (eveningGlow) {
+          ctx.globalAlpha = 0.85;
+          ctx.fillStyle = '#ffd98a';
+          ctx.fillRect(s.x + rt.tileW * 0.1, s.y - rt.tileH * 0.98, 3.4 * rt.dpr, 4.2 * rt.dpr);
+          ctx.globalAlpha = 1;
+        }
+        if (!rt.reducedMotion && (homeSeg || eveningGlow)) {
+          drawSmoke(s.x + rt.tileW * 0.16, s.y - rt.tileH * 1.62, a.gx * 7 + a.gy * 13);
+        }
+      } else if (a.type === 'glimmer') {
+        ctx.globalAlpha = motionPulse(280, a.gx + a.gy, 0.5, 0.2);
+        ctx.fillStyle = '#c792ea';
+        ctx.beginPath(); ctx.arc(s.x, s.y - rt.tileH * 0.9, rt.tileH * 0.3, 0, Math.PI * 2); ctx.fill();
+        ctx.globalAlpha = 1;
+      } else if (a.type === 'treasure') {
+        ctx.globalAlpha = motionPulse(240, a.gx, 0.6, 0.2);
+        ctx.fillStyle = '#ffcf6b';
+        ctx.beginPath(); ctx.arc(s.x, s.y - rt.tileH * 0.6, rt.tileH * 0.22, 0, Math.PI * 2); ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+    }
+  }
+  // Sky gradient cache: rebuilt only when the in-game minute ticks over
+  // (~5×/sec) instead of allocating a fresh gradient every frame.
+  const skyCache = { key: '', grad: null };
+  function fillSky() {
+    const m = Math.round(((state.minutes % 1440) + 1440) % 1440);
+    const key = `${m}|${rt.H}`;
+    if (skyCache.key !== key) {
+      const sky = skyColors(state.minutes);
+      const grad = ctx.createLinearGradient(0, 0, 0, rt.H);
+      grad.addColorStop(0, sky.top); grad.addColorStop(1, sky.hor);
+      skyCache.key = key; skyCache.grad = grad;
+    }
+    ctx.fillStyle = skyCache.grad; ctx.fillRect(0, 0, rt.W, rt.H);
+  }
+
+  function draw() {
+    if (rt.world === 'wilds') { drawWilds(); return; }
+    fillSky();
+    drawDistantLandscape();
+    drawAmbience();
+
+    // Terrain composites from the cached offscreen layer (see above);
+    // animated tile adornments draw live on top.
+    ensureTerrainLayer();
+    blitTerrainLayer();
+    drawAnimatedTiles();
+    const bounds = visibleWorldBounds(rt.cameraX, rt.cameraY, false);
 
     const drawables = [];
     let focusedResidentId = null, focusedDistance = Infinity;
@@ -3005,6 +3479,9 @@
       if (tileWithinBounds(resident.gx, resident.gy, bounds, 2) && tileToScreen(resident.gx, resident.gy).y >= rt.H * 0.22) drawables.push({ depth: resident.gx + resident.gy + 0.5, kind: 'localNpc', resident });
     }
     drawables.push({ depth: rt.playerToX + rt.playerToY + 0.6, kind: 'player' });
+    for (const b of rt.life.birds) {
+      if (b.state === 'ground' && tileWithinBounds(b.gx, b.gy, bounds, 1)) drawables.push({ depth: b.gx + b.gy + 0.45, kind: 'bird', bird: b });
+    }
 
     drawables.sort((a, b) => a.depth - b.depth);
     for (const d of drawables) {
@@ -3012,14 +3489,33 @@
       else if (d.kind === 'piece') drawPiece(d.piece, d.guestLocal);
       else if (d.kind === 'npc') {
         const n = d.npc;
-        drawCharacter(n.screenPx, n.screenPy, n.hue, 'none', 'rgba(255,255,255,0.35)', focusedResidentId === n.id ? n.name.split(' ')[0] : null, false, n.id, n.quest.done ? 'happy' : 'calm');
+        const idle = npcIsIdle(n);
+        const opts = {
+          facing: n.facing,
+          sway: (!rt.reducedMotion && idle) ? Math.sin(rt.playSecondsAccum * 1.15 + n.idlePhase * 2.3) * rt.tileH * 0.05 : 0,
+          stretch: rt.playSecondsAccum < n.stretchUntil,
+        };
+        drawCharacter(n.screenPx, n.screenPy, n.hue, 'none', 'rgba(255,255,255,0.35)', focusedResidentId === n.id ? n.name.split(' ')[0] : null, false, n.id, n.quest.done ? 'happy' : 'calm', opts);
+        drawNpcExtras(n);
       } else if (d.kind === 'localNpc') {
         const n = d.resident, s = tileToScreen(n.gx, n.gy);
-        drawCharacter(s.x, s.y, n.hue, 'none', 'rgba(255,255,255,0.35)', focusedResidentId === n.id ? n.name : null, false, n.id, 'happy');
+        // Settlement folk look around on their own deterministic rhythm and
+        // only face the player while actually adjacent (talk range).
+        const nearP = Math.max(Math.abs(n.gx - state.player.gx), Math.abs(n.gy - state.player.gy)) <= 1;
+        const lb = Math.floor(rt.playSecondsAccum / 4.1 + (n.name.length || 1));
+        const lf = nearP
+          ? faceToward(n.gx, n.gy, state.player.gx, state.player.gy)
+          : ['down', 'left', 'right', 'down'][hashU32(lb, n.name.length, state.seed, 0x5e11a) % 4];
+        const lopts = { facing: lf, sway: rt.reducedMotion ? 0 : Math.sin(rt.playSecondsAccum * 1.05 + n.name.length) * rt.tileH * 0.05 };
+        drawCharacter(s.x, s.y, n.hue, 'none', 'rgba(255,255,255,0.35)', focusedResidentId === n.id ? n.name : null, false, n.id, 'happy', lopts);
       } else if (d.kind === 'player') {
-        drawCharacter(rt.playerPx, rt.playerPy, hueColorOf(state.player.hue), state.player.topper, trimColorOf(state.player.trim), null, false, 'player', 'bright');
+        drawCharacter(rt.playerPx, rt.playerPy, hueColorOf(state.player.hue), state.player.topper, trimColorOf(state.player.trim), null, false, 'player', 'bright', { facing: rt.facing });
+      } else if (d.kind === 'bird') {
+        drawBird(d.bird);
       }
     }
+    for (const b of rt.life.birds) if (b.state !== 'ground') drawBird(b);
+    for (const bf of rt.life.butterflies) drawButterfly(bf);
 
     // build / farm placement ghost
     if ((rt.build.placing || rt.farmTool) && rt.build.hoverTile) {
@@ -3065,23 +3561,23 @@
   // untouched. Reuses the same sky/particle/vignette/pause conventions so it
   // still reads as "CubeTown", just a wilder corner of it.
   function drawWilds() {
-    const sky = skyColors(state.minutes);
-    const grad = ctx.createLinearGradient(0, 0, 0, rt.H);
-    grad.addColorStop(0, sky.top); grad.addColorStop(1, sky.hor);
-    ctx.fillStyle = grad; ctx.fillRect(0, 0, rt.W, rt.H);
-    drawDistantLandscape(sky);
+    fillSky();
+    drawDistantLandscape();
     ctx.save(); ctx.fillStyle = 'rgba(20,4,28,0.22)'; ctx.fillRect(0, 0, rt.W, rt.H); ctx.restore();
     drawAmbience();
 
+    // Static wilds terrain comes from the same cached layer machinery as the
+    // town (previously all 289 tiles were re-pathed every frame).
+    ensureTerrainLayer();
+    blitTerrainLayer();
+    drawAnimatedTiles();
     const drawables = [];
-    for (let gy = 0; gy < GRID; gy++) for (let gx = 0; gx < GRID; gx++) drawables.push({ depth: gx + gy, kind: 'wterrain', gx, gy });
     for (const en of rt.wildsEnemies) drawables.push({ depth: en.gx + en.gy + 0.4, kind: 'enemy', enemy: en });
     drawables.push({ depth: rt.wildsGx + rt.wildsGy + 0.6, kind: 'wplayer' });
     drawables.sort((a, b) => a.depth - b.depth);
-    for (const d of drawables) if (d.kind === 'wterrain') drawWildsTile(d.gx, d.gy, wildsTerrain[d.gy][d.gx]);
     for (const d of drawables) {
       if (d.kind === 'enemy') drawEnemy(d.enemy);
-      else if (d.kind === 'wplayer') drawCharacter(rt.wildsPx, rt.wildsPy, hueColorOf(state.player.hue), state.player.topper, trimColorOf(state.player.trim), null, false, 'player', 'bright');
+      else if (d.kind === 'wplayer') drawCharacter(rt.wildsPx, rt.wildsPy, hueColorOf(state.player.hue), state.player.topper, trimColorOf(state.player.trim), null, false, 'player', 'bright', { facing: rt.facing });
     }
 
     for (const p of rt.particles) {
@@ -3107,23 +3603,12 @@
     if (t === 'thicket' || t === 'crag') {
       drawBlock(s.x, s.y, rt.tileW * 0.4, rt.tileH * 0.4, rt.tileH * (t === 'thicket' ? 1.3 : 0.9), shade(top, 1.2), shade(top, 0.7), shade(top, 0.5));
     }
-    if (t === 'glimmer') {
-      ctx.save(); ctx.globalAlpha = motionPulse(280, gx + gy, 0.5, 0.2);
-      ctx.fillStyle = '#c792ea';
-      ctx.beginPath(); ctx.arc(s.x, s.y - rt.tileH * 0.9, rt.tileH * 0.3, 0, Math.PI * 2); ctx.fill();
-      ctx.restore();
-    }
     if (t === 'wshrine') {
       const trial = wildsTrialAt(gx, gy);
       const done = trial && state.adventure?.trials?.[trial.id]?.done;
       drawBlock(s.x, s.y, rt.tileW * 0.58, rt.tileH * 0.58, rt.tileH * 1.6, done ? '#5be3b5' : '#8f7fff', '#34255b', '#211638');
     }
-    if (t === 'treasure') {
-      ctx.save(); ctx.globalAlpha = motionPulse(240, gx, 0.6, 0.2);
-      ctx.fillStyle = '#ffcf6b';
-      ctx.beginPath(); ctx.arc(s.x, s.y - rt.tileH * 0.6, rt.tileH * 0.22, 0, Math.PI * 2); ctx.fill();
-      ctx.restore();
-    }
+    // glimmer/treasure glow orbs are animated → drawAnimatedTiles()
   }
   function drawEnemy(en) {
     const s = tileToScreen(en.gx, en.gy);
@@ -3157,17 +3642,36 @@
       ctx.restore();
       return;
     }
+    // Fireflies draw from one pre-rendered radial-glow sprite instead of a
+    // per-particle shadowBlur (shadowBlur forces a slow blur pass per fill
+    // and was one of the most expensive calls in the whole frame).
+    const spr = glowSprite();
     ctx.save();
     for (const f of rt.ambience) {
       const x = ((f.x + Math.sin(t * 0.025 * f.drift + f.phase) * 0.02) % 1) * rt.W;
       const y = ((f.y + Math.cos(t * 0.018 * f.drift + f.phase) * 0.018) % 1) * rt.H;
       const a = (night ? 0.55 : 0.22) + Math.sin(t * 2.2 + f.phase) * 0.18;
       ctx.globalAlpha = Math.max(0.05, a);
-      ctx.shadowBlur = 12 * rt.dpr; ctx.shadowColor = '#ffe98a';
-      ctx.fillStyle = '#fff2a8';
-      ctx.beginPath(); ctx.arc(x, y, f.size * rt.dpr, 0, Math.PI * 2); ctx.fill();
+      const sz = f.size * rt.dpr * 2.6;
+      ctx.drawImage(spr, x - sz, y - sz, sz * 2, sz * 2);
     }
     ctx.restore();
+  }
+  let glowSpriteCanvas = null;
+  function glowSprite() {
+    if (glowSpriteCanvas) return glowSpriteCanvas;
+    const c = document.createElement('canvas');
+    const rad = 24;
+    c.width = c.height = rad * 2;
+    const g = c.getContext('2d');
+    const grad = g.createRadialGradient(rad, rad, 0, rad, rad, rad);
+    grad.addColorStop(0, 'rgba(255,242,168,1)');
+    grad.addColorStop(0.35, 'rgba(255,233,138,0.55)');
+    grad.addColorStop(1, 'rgba(255,233,138,0)');
+    g.fillStyle = grad;
+    g.beginPath(); g.arc(rad, rad, rad, 0, Math.PI * 2); g.fill();
+    glowSpriteCanvas = c;
+    return c;
   }
   function drawProgressRing(gx, gy, t, color) {
     const s = tileToScreen(gx, gy);
@@ -3201,6 +3705,7 @@
       stepWildsMoveInterp(dt);
       stepWildsEnemies(dt);
       stepNpcs(dt);
+      stepAmbientLife(dt);
       stepGatherCook(dt);
       stepFarm(dtMinutes);
       stepSpark(t);
@@ -3224,24 +3729,144 @@
     const screen = tileToScreen(worldX, worldY);
     rt.playerPx = screen.x; rt.playerPy = screen.y;
   }
+  // -------------------------------------------------------------------
+  // NPC routine engine: residents walk tile-by-tile between their daily
+  // stops (home → work → square → leisure → home), face what they're doing
+  // (never the player, except a brief glance when the player walks up or
+  // talks to them), and get idle variety + paired chatting at stops.
+  // -------------------------------------------------------------------
+  const NPC_CARRY_COLOR = { grove: '#ffd54f', quarry: '#9bb3d6', reed: '#c792ea', water: '#4fd1e8', shrine: '#c9b8ff', gate: '#e3c27a' };
+  function npcWalkable(x, y) {
+    if (!inLegacyBounds(x, y)) return false;
+    const t = terrain[y][x];
+    if (t === 'water' || t === 'grove' || t === 'quarry' || t === 'reed' || t === 'shrine' || t === 'gate') return false;
+    const piece = townPieceAt(x, y, state.town);
+    if (piece && PALETTE_BY_TYPE[piece.type] && PALETTE_BY_TYPE[piece.type].blocking) return false;
+    return true;
+  }
+  function npcIsIdle(n) {
+    return n.moveT >= 1 && !!n.finalTarget && n.gx === n.finalTarget.x && n.gy === n.finalTarget.y;
+  }
+  function npcGlideTo(n) {
+    // Fallback for genuinely stuck residents: the pre-rework direct glide,
+    // so nobody can ever be stranded behind a pond or a player-built wall.
+    n.moveFrom = { x: n.gx, y: n.gy };
+    n.targetGx = n.finalTarget.x; n.targetGy = n.finalTarget.y;
+    n.moveT = 0; n.moveDur = rt.reducedMotion ? 260 : 2400;
+    n.stuck = 0; n.noProgress = 0;
+    n.facing = faceToward(n.gx, n.gy, n.targetGx, n.targetGy);
+  }
+  function startNextNpcHop(n) {
+    if (rt.playSecondsAccum < n.pauseUntil) return;
+    const tx = n.finalTarget.x, ty = n.finalTarget.y;
+    const adx = Math.abs(tx - n.gx), ady = Math.abs(ty - n.gy);
+    const sx = Math.sign(tx - n.gx), sy = Math.sign(ty - n.gy);
+    const cand = [];
+    if (adx >= ady) {
+      if (sx) cand.push([sx, 0]);
+      if (sy) cand.push([0, sy]);
+      cand.push([0, 1], [0, -1]);
+    } else {
+      if (sy) cand.push([0, sy]);
+      if (sx) cand.push([sx, 0]);
+      cand.push([1, 0], [-1, 0]);
+    }
+    let pick = null;
+    for (const c of cand) {
+      const nx = n.gx + c[0], ny = n.gy + c[1];
+      if (nx === n.moveFrom.x && ny === n.moveFrom.y) continue; // no instant backtrack
+      if (npcWalkable(nx, ny)) { pick = c; break; }
+    }
+    if (!pick) {
+      n.stuck += 1;
+      if (n.stuck > 2) { npcGlideTo(n); return; }
+      n.pauseUntil = rt.playSecondsAccum + 0.5;
+      return;
+    }
+    const nx = n.gx + pick[0], ny = n.gy + pick[1];
+    const before = adx + ady;
+    const after = Math.abs(tx - nx) + Math.abs(ty - ny);
+    n.noProgress = after >= before ? n.noProgress + 1 : 0;
+    if (n.noProgress > 6) { npcGlideTo(n); return; }
+    n.stuck = 0;
+    n.moveFrom = { x: n.gx, y: n.gy };
+    n.targetGx = nx; n.targetGy = ny;
+    n.moveT = 0;
+    n.moveDur = rt.reducedMotion ? 130 : 340 + (hashU32(nx, ny, state.seed, 0x77aa11) % 120);
+    n.facing = pick[0] > 0 ? 'right' : pick[0] < 0 ? 'left' : pick[1] > 0 ? 'down' : 'up';
+  }
+  function stepNpcIdle(n, i, now) {
+    // Deterministic idle variety on ~3s buckets: face the work node while
+    // working, look around / stretch at other stops. Never player-locked.
+    const bucket = Math.floor(now / 3.2 + n.idlePhase);
+    if (bucket === n.idleBucket) return;
+    n.idleBucket = bucket;
+    if (n.segment === 'work') { n.facing = n.workFace; return; }
+    const r = hashU32(bucket, i, state.seed, 0x9d2c5680) % 100;
+    if (r < 16) { n.stretchUntil = now + 1.2; return; }
+    if (n.segment === 'leisure') {
+      n.facing = r < 72 ? faceToward(n.gx, n.gy, n.leisureFocus.x, n.leisureFocus.y) : ['left', 'right', 'down'][r % 3];
+      return;
+    }
+    n.facing = ['down', 'left', 'right', 'up'][r % 4];
+  }
   function stepNpcs(dt) {
-    const seg = npcSegment(state.minutes);
-    for (const n of npcs) {
+    const seg = effectiveNpcSegment(state.minutes, state.day);
+    const now = rt.playSecondsAccum;
+    const p = state.player;
+    const panelOpen = anyPanelOpen();
+    for (let i = 0; i < npcs.length; i++) {
+      const n = npcs[i];
       if (n.segment !== seg) {
+        const prev = n.segment;
         n.segment = seg;
-        const target = seg === 'work' ? n.workplace : seg === 'square' ? n.square : n.home;
-        n.moveFrom = { x: n.gx, y: n.gy };
-        n.targetGx = target.x; n.targetGy = target.y;
-        n.moveT = 0; n.moveDur = rt.reducedMotion ? 300 : 3200;
+        n.finalTarget = seg === 'work' ? n.workplace : seg === 'square' ? n.square : seg === 'leisure' ? n.leisure : n.home;
+        // Visible carried goods while walking away from the workplace.
+        n.carrying = prev === 'work' ? (NPC_CARRY_COLOR[n.def.resourceType] || '#ffd54f') : null;
+        n.stuck = 0; n.noProgress = 0; n.pauseUntil = 0;
       }
       if (n.moveT < 1) {
         n.moveT = Math.min(1, n.moveT + dt * 1000 / n.moveDur);
         if (n.moveT >= 1) { n.gx = n.targetGx; n.gy = n.targetGy; }
+      } else if (!npcIsIdle(n)) {
+        startNextNpcHop(n);
+      } else {
+        n.carrying = null;
+        stepNpcIdle(n, i, now);
+      }
+      // Brief glance when the player walks up (edge-triggered), or while the
+      // player is actually talking to them — then back to their own business.
+      const near = rt.world === 'town' && Math.max(Math.abs(n.gx - p.gx), Math.abs(n.gy - p.gy)) <= 1;
+      if (near && !n.wasNearPlayer) n.glanceUntil = now + 1.5;
+      n.wasNearPlayer = near;
+      if ((panelOpen && rt.dialogueNpc === n && rt.dialogueMode === 'npc') || now < n.glanceUntil) {
+        n.facing = faceToward(n.gx, n.gy, p.gx, p.gy);
       }
       const fx = tileToScreen(n.moveFrom.x, n.moveFrom.y);
-      const tx = tileToScreen(n.targetGx, n.targetGy);
-      n.screenPx = fx.x + (tx.x - fx.x) * n.moveT;
-      n.screenPy = fx.y + (tx.y - fx.y) * n.moveT;
+      const tx2 = tileToScreen(n.targetGx, n.targetGy);
+      n.screenPx = fx.x + (tx2.x - fx.x) * n.moveT;
+      n.screenPy = fx.y + (tx2.y - fx.y) * n.moveT;
+    }
+    // Idle chatting: two idle residents on adjacent tiles face each other and
+    // trade little speech-bubble glyphs (skipped while working or glancing).
+    for (const n of npcs) n.chatWith = null;
+    if (seg !== 'work') {
+      for (let i = 0; i < npcs.length; i++) {
+        const a = npcs[i];
+        if (a.chatWith || !npcIsIdle(a) || now < a.glanceUntil) continue;
+        if (panelOpen && rt.dialogueNpc === a) continue;
+        for (let j = i + 1; j < npcs.length; j++) {
+          const b = npcs[j];
+          if (b.chatWith || !npcIsIdle(b) || now < b.glanceUntil) continue;
+          if (panelOpen && rt.dialogueNpc === b) continue;
+          if (Math.max(Math.abs(a.gx - b.gx), Math.abs(a.gy - b.gy)) === 1) {
+            a.chatWith = b.id; b.chatWith = a.id;
+            a.facing = faceToward(a.gx, a.gy, b.gx, b.gy);
+            b.facing = faceToward(b.gx, b.gy, a.gx, a.gy);
+            break;
+          }
+        }
+      }
     }
   }
   function stepGatherCook(dt) {
@@ -3622,7 +4247,7 @@
   $('[data-ct-replay-tutorial]').onclick = () => openPanel('tutorial');
   $('[data-ct-volume]').oninput = (e) => { audio.volume = Number(e.target.value) / 100; };
   $('[data-ct-mute]').onchange = (e) => { audio.mute = e.target.checked; };
-  $('[data-ct-reduced]').onchange = (e) => { rt.reducedMotion = e.target.checked; rt.ambience = []; };
+  $('[data-ct-reduced]').onchange = (e) => { rt.reducedMotion = e.target.checked; rt.ambience = []; rt.life.birds.length = 0; rt.life.butterflies.length = 0; };
   $('[data-ct-pause]').onclick = () => setPaused(!rt.paused);
   $('[data-ct-resume]').onclick = () => setPaused(false);
   if (el.returnHome) el.returnHome.onclick = () => { unlockAudio(); exitWilds(); };
@@ -3704,6 +4329,20 @@
     validateWorld: () => validateGeneratedWorld(),
     sampleTile: (x, y) => ({ ...worldTileAt(clamp(Math.floor(x), WORLD_MIN, WORLD_MAX), clamp(Math.floor(y), WORLD_MIN, WORLD_MAX)) }),
     worldBounds: Object.freeze({ min: WORLD_MIN, max: WORLD_MAX, size: WORLD_SIZE, chunkSize: CHUNK_SIZE }),
+    // Living-world/NPC hooks (used by the offline verification harness):
+    seasonAt: (day) => seasonOf(day),
+    weatherAt: (day) => ({ ...weatherForDay(day) }),
+    npcSegmentAt: (minutes, day) => effectiveNpcSegment(minutes, day),
+    npcSnapshot: () => npcs.map((n) => ({
+      id: n.id, gx: n.gx, gy: n.gy, segment: n.segment, facing: n.facing,
+      home: { ...n.home }, workplace: { ...n.workplace }, square: { ...n.square }, leisure: { ...n.leisure },
+    })),
+    npcWalkable: (x, y) => npcWalkable(x, y),
+    stepNpcs: (dt) => { rt.playSecondsAccum += dt; stepNpcs(dt); },
+    setClock: (minutes, day) => { state.minutes = minutes; if (Number.isFinite(day)) state.day = day; },
+    captureState: () => captureState(),
+    applyState: (s) => applyState(s),
+    seed: () => state.seed,
   });
   function boot() {
     size();

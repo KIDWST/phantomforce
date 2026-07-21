@@ -84,40 +84,40 @@ const MAP_BY_ID = Object.fromEntries(MAPS.map((map) => [map.id, map]));
 
 const DEFENSES = {
   glare: {
-    id: "glare", name: "Glare Repeater", role: "Kinetic", desc: "Fast all-purpose fire. Reliable into unarmored lines.", cost: 55, upgradeCost: 55, color: "#ffc857", shape: "round", target: "any",
-    tiers: [{ dmg: 10, rof: 3.2, range: 128, projectile: 690 }, { dmg: 16, rof: 4, range: 146, projectile: 760 }]
+    id: "glare", name: "Glare Repeater", role: "Kinetic", desc: "Fast all-purpose fire. Reliable into unarmored lines.", cost: 55, upgradeCosts: [60, 130], color: "#ffc857", shape: "round", target: "any",
+    tiers: [{ dmg: 12, rof: 3.4, range: 132, projectile: 700 }, { dmg: 19, rof: 4.3, range: 150, projectile: 780 }, { dmg: 30, rof: 5.4, range: 168, projectile: 860 }]
   },
   arc: {
-    id: "arc", name: "Arc Diffuser", role: "Splash", desc: "Ground bursts erase tight swarms but struggle into armor.", cost: 80, upgradeCost: 70, color: "#ff7165", shape: "hex", target: "ground",
-    tiers: [{ dmg: 15, rof: 1.15, range: 124, projectile: 430, splash: 52 }, { dmg: 23, rof: 1.35, range: 142, projectile: 470, splash: 67 }]
+    id: "arc", name: "Arc Diffuser", role: "Splash", desc: "Ground bursts erase tight swarms but struggle into armor.", cost: 80, upgradeCosts: [75, 150], color: "#ff7165", shape: "hex", target: "ground",
+    tiers: [{ dmg: 17, rof: 1.2, range: 128, projectile: 440, splash: 56 }, { dmg: 27, rof: 1.45, range: 146, projectile: 480, splash: 72 }, { dmg: 44, rof: 1.7, range: 164, projectile: 520, splash: 92 }]
   },
   frost: {
-    id: "frost", name: "Frost Prism", role: "Control", desc: "Slows air or ground and exposes fast raiders to focus fire.", cost: 70, upgradeCost: 60, color: "#65d8cf", shape: "tri", target: "any",
-    tiers: [{ dmg: 5, rof: 1.25, range: 148, projectile: 610, slow: .38, slowDur: 1.7 }, { dmg: 9, rof: 1.45, range: 168, projectile: 680, slow: .52, slowDur: 2.2 }]
+    id: "frost", name: "Frost Prism", role: "Control", desc: "Slows air or ground and exposes fast raiders to focus fire.", cost: 70, upgradeCosts: [65, 140], color: "#65d8cf", shape: "tri", target: "any",
+    tiers: [{ dmg: 6, rof: 1.3, range: 152, projectile: 620, slow: .4, slowDur: 1.8 }, { dmg: 11, rof: 1.55, range: 172, projectile: 690, slow: .55, slowDur: 2.3 }, { dmg: 18, rof: 1.85, range: 192, projectile: 760, slow: .68, slowDur: 3 }]
   },
   vane: {
-    id: "vane", name: "Vane Rail", role: "Anti-armor", desc: "Long-range penetrator deletes plated targets one at a time.", cost: 125, upgradeCost: 100, color: "#b792ff", shape: "diamond", target: "any",
-    tiers: [{ dmg: 58, rof: .52, range: 235, projectile: 920, pierce: 7 }, { dmg: 91, rof: .62, range: 265, projectile: 1040, pierce: 11 }]
+    id: "vane", name: "Vane Rail", role: "Anti-armor", desc: "Long-range penetrator deletes plated targets one at a time.", cost: 125, upgradeCosts: [110, 220], color: "#b792ff", shape: "diamond", target: "any",
+    tiers: [{ dmg: 66, rof: .55, range: 240, projectile: 940, pierce: 8 }, { dmg: 104, rof: .66, range: 270, projectile: 1060, pierce: 12 }, { dmg: 170, rof: .8, range: 300, projectile: 1200, pierce: 18 }]
   },
   flak: {
-    id: "flak", name: "Kestrel Flak", role: "Anti-air", desc: "Airburst clusters hard-counter skiffs and airborne swarms.", cost: 90, upgradeCost: 75, color: "#ff9651", shape: "burst", target: "air",
-    tiers: [{ dmg: 24, rof: 1.65, range: 165, projectile: 720, splash: 46, airBonus: 1.8 }, { dmg: 38, rof: 1.9, range: 185, projectile: 800, splash: 58, airBonus: 2 }]
+    id: "flak", name: "Kestrel Flak", role: "Anti-air", desc: "Airburst clusters hard-counter skiffs and airborne swarms.", cost: 90, upgradeCosts: [80, 165], color: "#ff9651", shape: "burst", target: "air",
+    tiers: [{ dmg: 27, rof: 1.7, range: 170, projectile: 730, splash: 50, airBonus: 1.8 }, { dmg: 43, rof: 2, range: 190, projectile: 810, splash: 62, airBonus: 2 }, { dmg: 68, rof: 2.4, range: 210, projectile: 900, splash: 78, airBonus: 2.2 }]
   },
   null: {
-    id: "null", name: "Null Lantern", role: "Shield break", desc: "Collapses shields and reveals phase craft to control effects.", cost: 85, upgradeCost: 70, color: "#73e69e", shape: "square", target: "any",
-    tiers: [{ dmg: 12, rof: 1.7, range: 140, projectile: 650, shieldDamage: 3, reveal: 2.4 }, { dmg: 20, rof: 2.1, range: 157, projectile: 710, shieldDamage: 4, reveal: 3.2 }]
+    id: "null", name: "Null Lantern", role: "Shield break", desc: "Collapses shields and reveals phase craft to control effects.", cost: 85, upgradeCosts: [75, 155], color: "#73e69e", shape: "square", target: "any",
+    tiers: [{ dmg: 14, rof: 1.8, range: 144, projectile: 660, shieldDamage: 3, reveal: 2.5 }, { dmg: 23, rof: 2.2, range: 162, projectile: 720, shieldDamage: 4, reveal: 3.3 }, { dmg: 37, rof: 2.7, range: 182, projectile: 790, shieldDamage: 6, reveal: 4.2 }]
   },
   drone: {
-    id: "drone", name: "Marshal Drone", role: "Support", desc: "Boosts nearby rate of fire while adding light anti-air shots.", cost: 95, upgradeCost: 80, color: "#6ca8ff", shape: "wing", target: "any",
-    tiers: [{ dmg: 7, rof: 1.5, range: 118, projectile: 720, boost: .18, boostRange: 120 }, { dmg: 12, rof: 1.9, range: 135, projectile: 790, boost: .27, boostRange: 140 }]
+    id: "drone", name: "Marshal Drone", role: "Support", desc: "Boosts nearby rate of fire while adding light anti-air shots.", cost: 95, upgradeCosts: [85, 170], color: "#6ca8ff", shape: "wing", target: "any",
+    tiers: [{ dmg: 8, rof: 1.6, range: 122, projectile: 730, boost: .2, boostRange: 125 }, { dmg: 14, rof: 2, range: 140, projectile: 800, boost: .3, boostRange: 145 }, { dmg: 24, rof: 2.5, range: 160, projectile: 880, boost: .42, boostRange: 170 }]
   },
   gravity: {
-    id: "gravity", name: "Gravity Well", role: "Displace", desc: "Pulls non-boss ground units backward and bunches them for splash.", cost: 110, upgradeCost: 90, color: "#d077ff", shape: "orb", target: "ground",
-    tiers: [{ dmg: 8, rof: .85, range: 155, projectile: 480, pull: .024, slow: .2, slowDur: 1 }, { dmg: 14, rof: 1.05, range: 178, projectile: 520, pull: .038, slow: .28, slowDur: 1.3 }]
+    id: "gravity", name: "Gravity Well", role: "Displace", desc: "Pulls non-boss ground units backward and bunches them for splash.", cost: 110, upgradeCosts: [95, 185], color: "#d077ff", shape: "orb", target: "ground",
+    tiers: [{ dmg: 9, rof: .9, range: 160, projectile: 490, pull: .026, slow: .22, slowDur: 1.1 }, { dmg: 16, rof: 1.1, range: 182, projectile: 530, pull: .04, slow: .3, slowDur: 1.4 }, { dmg: 27, rof: 1.35, range: 205, projectile: 580, pull: .056, slow: .4, slowDur: 1.8 }]
   },
   mortar: {
-    id: "mortar", name: "Comet Mortar", role: "Siege", desc: "Huge delayed ground impact rewards chokepoint prediction.", cost: 135, upgradeCost: 105, color: "#f2da79", shape: "barrel", target: "ground",
-    tiers: [{ dmg: 48, rof: .48, range: 225, minRange: 72, projectile: 310, splash: 76, arc: 56 }, { dmg: 76, rof: .58, range: 250, minRange: 64, projectile: 340, splash: 92, arc: 70 }]
+    id: "mortar", name: "Comet Mortar", role: "Siege", desc: "Huge delayed ground impact rewards chokepoint prediction.", cost: 135, upgradeCosts: [115, 230], color: "#f2da79", shape: "barrel", target: "ground",
+    tiers: [{ dmg: 54, rof: .5, range: 230, minRange: 70, projectile: 320, splash: 82, arc: 58 }, { dmg: 86, rof: .6, range: 255, minRange: 62, projectile: 350, splash: 100, arc: 72 }, { dmg: 140, rof: .72, range: 280, minRange: 54, projectile: 380, splash: 122, arc: 86 }]
   }
 };
 const DEFENSE_ORDER = ["glare", "arc", "frost", "vane", "flak", "null", "drone", "gravity", "mortar"];
@@ -154,7 +154,22 @@ const ENEMIES = {
   shard: { name: "Shardling", hp: 12, speed: .118, armor: 0, bounty: 2, color: "#f4e69a", size: 6, ground: true, swarm: true },
   phase: { name: "Phase Corsair", hp: 72, speed: .075, armor: 2, shield: 45, bounty: 14, color: "#a878e8", size: 11, air: true, phase: true },
   saboteur: { name: "Wire Saboteur", hp: 46, speed: .091, armor: 0, bounty: 10, color: "#63c9bb", size: 9, ground: true, saboteur: true },
-  colossus: { name: "Voidmaw Colossus", hp: 1550, speed: .025, armor: 9, shield: 260, bounty: 220, color: "#ff5e73", size: 25, air: true, boss: true, heavy: true }
+  raptor: { name: "Raptor Diver", hp: 60, speed: .135, armor: 1, bounty: 11, color: "#ffa94d", size: 9, air: true },
+  warden: { name: "Aegis Warden", hp: 240, speed: .036, armor: 10, shield: 90, bounty: 22, color: "#8fb3ff", size: 14, ground: true, heavy: true },
+  hive: { name: "Hive Carrier", hp: 150, speed: .05, armor: 3, bounty: 18, color: "#d7ff6e", size: 13, air: true, splitInto: { type: "skiff", count: 3 } },
+  revenant: { name: "Revenant Shell", hp: 210, speed: .058, armor: 4, bounty: 24, color: "#8ce8b4", size: 12, ground: true, regen: .035 },
+  juggernaut: { name: "Juggernaut Frame", hp: 620, speed: .028, armor: 14, bounty: 40, color: "#e08b5a", size: 17, ground: true, heavy: true },
+  wisp: { name: "Ion Wisp", hp: 46, speed: .155, armor: 0, bounty: 8, color: "#9ef2ff", size: 7, air: true, swarm: true },
+  colossus: { name: "Voidmaw Colossus", hp: 1550, speed: .025, armor: 9, shield: 260, bounty: 220, color: "#ff5e73", size: 25, air: true, boss: true, heavy: true },
+  shatterlord: { name: "Shatterlord", hp: 2300, speed: .024, armor: 8, bounty: 260, color: "#e6d36f", size: 24, ground: true, boss: true, heavy: true, splitInto: { type: "splitter", count: 4 } },
+  nullbringer: { name: "Nullbringer", hp: 3100, speed: .023, armor: 10, shield: 320, bounty: 300, color: "#73e69e", size: 25, ground: true, boss: true, heavy: true, mech: "aura" },
+  stormcaller: { name: "Stormcaller", hp: 3600, speed: .027, armor: 8, bounty: 340, color: "#6ca8ff", size: 24, air: true, boss: true, mech: "summon" },
+  gravemind: { name: "Gravemind", hp: 4300, speed: .022, armor: 11, bounty: 380, color: "#8ce8b4", size: 26, ground: true, boss: true, heavy: true, mech: "heal" },
+  moleking: { name: "Barrow King", hp: 4800, speed: .026, armor: 13, bounty: 420, color: "#c68f56", size: 25, ground: true, boss: true, heavy: true, mech: "burrow" },
+  mirrorwarden: { name: "Mirror Warden", hp: 5200, speed: .024, armor: 12, shield: 420, bounty: 460, color: "#b792ff", size: 26, air: true, boss: true, mech: "shieldPhase" },
+  fury: { name: "Twin Fury", hp: 3400, speed: .033, armor: 10, bounty: 300, color: "#ff7165", size: 22, air: true, boss: true, mech: "twin" },
+  aegisprime: { name: "Aegis Prime", hp: 6400, speed: .022, armor: 16, shield: 700, bounty: 560, color: "#8fb3ff", size: 27, ground: true, boss: true, heavy: true, mech: "regen" },
+  sovereign: { name: "The Sovereign", hp: 5200, speed: .02, armor: 18, shield: 900, bounty: 900, color: "#ff5e73", size: 30, air: true, boss: true, mech: "finale", leakDrain: 20 }
 };
 
 const CAMPAIGN_WAVES = [
@@ -167,18 +182,53 @@ const CAMPAIGN_WAVES = [
   [{ type: "bulwark", count: 10, gap: 650 }, { type: "skiff", count: 16, gap: 310, formation: 4, delay: 800 }, { type: "saboteur", count: 8, gap: 500, delay: 1700 }],
   [{ type: "colossus", count: 1, gap: 0, route: 1 }, { type: "phase", count: 10, gap: 480, delay: 500 }, { type: "splitter", count: 10, gap: 450, delay: 1200 }]
 ];
+/* Century Watch: endless mode runs to round 100. Every round scales health,
+   speed, armor, count, and bounty; new raider types unlock as rounds pass and
+   a new boss with a distinct mechanic arrives every 10 rounds. These
+   functions stay DOM-free so a node harness can verify all 100 rounds. */
+const CENTURY_ROUNDS = 100;
+const BOSS_SCHEDULE = [
+  { round: 10, type: "colossus", count: 1, title: "VOIDMAW COLOSSUS", tag: "SHIELDED FLAGSHIP" },
+  { round: 20, type: "shatterlord", count: 1, title: "SHATTERLORD", tag: "SPLITS WHEN DESTROYED" },
+  { round: 30, type: "nullbringer", count: 1, title: "NULLBRINGER", tag: "JAMS NEARBY DEFENSES" },
+  { round: 40, type: "stormcaller", count: 1, title: "STORMCALLER", tag: "SUMMONS ESCORT WINGS" },
+  { round: 50, type: "gravemind", count: 1, title: "GRAVEMIND", tag: "HEALS THE RAID" },
+  { round: 60, type: "moleking", count: 1, title: "BARROW KING", tag: "BURROWS PAST FIRE" },
+  { round: 70, type: "mirrorwarden", count: 1, title: "MIRROR WARDEN", tag: "PHASING SHIELD" },
+  { round: 80, type: "fury", count: 2, title: "TWIN FURIES", tag: "ENRAGE TOGETHER" },
+  { round: 90, type: "aegisprime", count: 1, title: "AEGIS PRIME", tag: "REGENERATING AEGIS" },
+  { round: 100, type: "sovereign", count: 1, title: "THE SOVEREIGN", tag: "CENTURY FINALE" }
+];
+function bossForRound(number) {
+  if (number < 10 || number % 10 !== 0) return null;
+  const exact = BOSS_SCHEDULE.find((entry) => entry.round === number);
+  if (exact) return exact;
+  return BOSS_SCHEDULE[(Math.floor(number / 10) - 1) % BOSS_SCHEDULE.length];
+}
 function endlessWave(number) {
-  const tier = Math.floor((number - 1) / 3);
-  const hpMul = 1 + tier * .2;
+  const n = clampInt(number, 1, 9999, 1);
+  const hpMul = 1 + (n - 1) * .085 + Math.pow(Math.max(0, n - 10), 1.62) * .012;
+  const speedMul = 1 + Math.min(.85, n * .0065);
+  const armorBonus = Math.floor(n / 12);
+  const bountyMul = 1 + n * .02;
+  const gapScale = Math.max(.42, 1 - n * .006);
   const entries = [
-    { type: "driftling", count: 8 + tier * 2, gap: Math.max(240, 520 - tier * 20), formation: 3 },
-    { type: "skiff", count: 4 + tier, gap: Math.max(230, 440 - tier * 16), delay: 650, formation: 4 }
+    { type: "driftling", count: Math.min(26, 8 + Math.floor(n * .45)), gap: Math.round(520 * gapScale), formation: 3 },
+    { type: "skiff", count: Math.min(20, 4 + Math.floor(n * .35)), gap: Math.round(430 * gapScale), delay: 700, formation: 4 }
   ];
-  if (number >= 3) entries.push({ type: "bulwark", count: 2 + tier, gap: 820, delay: 1100 });
-  if (number >= 5) entries.push({ type: number % 2 ? "phase" : "splitter", count: 3 + tier, gap: 570, delay: 1450 });
-  if (number >= 7) entries.push({ type: "saboteur", count: 2 + Math.floor(tier / 2), gap: 620, delay: 1800 });
-  if (number % 6 === 0) entries.push({ type: "colossus", count: 1, gap: 0, delay: 500, route: number % 3 });
-  return { entries, hpMul };
+  if (n >= 3) entries.push({ type: "bulwark", count: Math.min(12, 2 + Math.floor(n / 4)), gap: Math.round(820 * gapScale), delay: 1100 });
+  if (n >= 5) entries.push({ type: "splitter", count: Math.min(9, 2 + Math.floor(n / 6)), gap: Math.round(600 * gapScale), delay: 1450 });
+  if (n >= 9) entries.push({ type: "phase", count: Math.min(9, 2 + Math.floor(n / 6)), gap: Math.round(560 * gapScale), delay: 1700 });
+  if (n >= 7) entries.push({ type: "saboteur", count: Math.min(8, 2 + Math.floor(n / 9)), gap: Math.round(620 * gapScale), delay: 1800 });
+  if (n >= 12) entries.push({ type: "raptor", count: Math.min(14, 3 + Math.floor((n - 12) / 6)), gap: Math.round(460 * gapScale), delay: 2100, formation: 2 });
+  if (n >= 18) entries.push({ type: "warden", count: Math.min(8, 2 + Math.floor((n - 18) / 10)), gap: Math.round(900 * gapScale), delay: 2400 });
+  if (n >= 24) entries.push({ type: "hive", count: Math.min(7, 2 + Math.floor((n - 24) / 12)), gap: Math.round(880 * gapScale), delay: 2700 });
+  if (n >= 30) entries.push({ type: "revenant", count: Math.min(7, 2 + Math.floor((n - 30) / 12)), gap: Math.round(760 * gapScale), delay: 3000 });
+  if (n >= 40) entries.push({ type: "juggernaut", count: Math.min(6, 1 + Math.floor((n - 40) / 12)), gap: Math.round(1100 * gapScale), delay: 3300 });
+  if (n >= 50) entries.push({ type: "wisp", count: Math.min(18, 6 + Math.floor((n - 50) / 4)), gap: Math.round(280 * gapScale), delay: 3600, formation: 4 });
+  const boss = bossForRound(n);
+  if (boss) entries.push({ type: boss.type, count: boss.count, gap: 1200, delay: 600, route: boss.count > 1 ? undefined : n % 3 });
+  return { entries, hpMul, speedMul, armorBonus, bountyMul, boss };
 }
 
 function routeLength(points) {
@@ -327,12 +377,21 @@ function tone(frequency, duration, type, amount, delay) {
   oscillator.start(start);
   oscillator.stop(start + duration + .02);
 }
+const sfxGate = { fire: 0, fire2: 0, impact: 0, heavy: 0 };
+const SFX_GAP_MS = { fire: 45, fire2: 45, impact: 60, heavy: 70 };
 function sfx(name) {
+  if (name in sfxGate) {
+    const now = performance.now();
+    if (now - sfxGate[name] < SFX_GAP_MS[name]) return;
+    sfxGate[name] = now;
+  }
   if (name === "place") { tone(430, .07, "triangle", .6); tone(650, .06, "triangle", .4, .03); }
   else if (name === "upgrade") { tone(420, .08, "square", .5); tone(630, .09, "square", .45, .07); tone(860, .1, "square", .4, .14); }
   else if (name === "fire") tone(790, .035, "square", .16);
+  else if (name === "fire2") { tone(620, .05, "square", .26); tone(240, .06, "triangle", .3, .01); }
   else if (name === "heavy") tone(160, .1, "sawtooth", .3);
   else if (name === "impact") tone(230, .055, "triangle", .22);
+  else if (name === "bossdown") { tone(180, .18, "sawtooth", .6); tone(360, .16, "triangle", .55, .12); tone(540, .2, "triangle", .5, .26); }
   else if (name === "leak") { tone(150, .22, "sawtooth", .6); tone(105, .3, "sawtooth", .5, .08); }
   else if (name === "wave") { tone(390, .12, "triangle", .55); tone(580, .16, "triangle", .5, .12); }
   else if (name === "ability") { tone(560, .08, "square", .6); tone(840, .12, "square", .55, .07); tone(1120, .16, "square", .5, .15); }
@@ -486,7 +545,7 @@ function openLoadout(nextMode) {
   showScreen("loadout");
 }
 function modeLabel(value) {
-  return ({ campaign: "Frontier Campaign", endless: "Endless Watch", skirmish: "War Game vs AI", battle: "Private Room War" })[value] || "Battle";
+  return ({ campaign: "Frontier Campaign", endless: "Century Watch", skirmish: "War Game vs AI", battle: "Private Room War" })[value] || "Battle";
 }
 
 // ---------------------------------------------------------------------------
@@ -619,7 +678,7 @@ function startRun(nextMode) {
   resultKind = null;
   running = true;
   paused = false;
-  totalWaves = mode === "endless" ? Infinity : CAMPAIGN_WAVES.length;
+  totalWaves = mode === "endless" ? CENTURY_ROUNDS : CAMPAIGN_WAVES.length;
   bot = mode === "skirmish" ? newBot("standard") : null;
   hud.mode.textContent = modeLabel(mode);
   opponentPanel.hidden = !(mode === "skirmish" || mode === "battle");
@@ -652,11 +711,18 @@ function enemyPosition(enemy) {
   enemy.y = point.y + tangent.x * enemy.lateral;
   enemy.angle = Math.atan2(tangent.y, tangent.x);
 }
-function spawnEnemy(type, hpMultiplier, routeIndex, lateral, startT) {
+function spawnEnemy(type, hpMultiplier, routeIndex, lateral, startT, mods) {
   const base = ENEMIES[type];
   if (!base || enemies.length >= MAX_ENEMIES) return null;
   const route = clampInt(routeIndex, 0, currentMap().routes.length - 1, 0);
-  const hp = base.hp * (hpMultiplier || 1);
+  const rawMul = Math.max(.1, Number(hpMultiplier) || 1);
+  /* Bosses take a damped share of the century curve so late milestones stay killable. */
+  const mul = base.boss ? 1 + (rawMul - 1) * .5 : rawMul;
+  const m = mods && typeof mods === "object" ? mods : null;
+  const speedMul = m && Number.isFinite(m.speedMul) ? (base.boss ? 1 + (m.speedMul - 1) * .5 : m.speedMul) : 1;
+  const armorBonus = m && Number.isFinite(m.armorBonus) ? m.armorBonus : 0;
+  const bountyMul = m && Number.isFinite(m.bountyMul) ? m.bountyMul : 1;
+  const hp = base.hp * mul;
   const enemy = {
     id: uid(),
     type,
@@ -668,11 +734,13 @@ function spawnEnemy(type, hpMultiplier, routeIndex, lateral, startT) {
     angle: 0,
     hp,
     maxHp: hp,
-    shield: (base.shield || 0) * (hpMultiplier || 1),
-    maxShield: (base.shield || 0) * (hpMultiplier || 1),
-    armor: base.armor || 0,
-    speed: base.speed,
-    bounty: base.bounty,
+    shield: (base.shield || 0) * mul,
+    maxShield: (base.shield || 0) * mul,
+    armor: (base.armor || 0) + (base.swarm ? 0 : armorBonus),
+    speed: base.speed * speedMul,
+    bounty: Math.round(base.bounty * bountyMul),
+    hpMul: rawMul,
+    mods: m,
     alive: true,
     death: 0,
     hitFlash: 0,
@@ -682,13 +750,18 @@ function spawnEnemy(type, hpMultiplier, routeIndex, lateral, startT) {
     gateMask: 0,
     relayMask: 0,
     attackCooldown: 0,
-    sabotageDone: false
+    sabotageDone: false,
+    mechClock: 3.5,
+    phaseStep: 0,
+    burrowUntil: 0,
+    invulnUntil: 0,
+    enraged: false
   };
   enemyPosition(enemy);
   enemies.push(enemy);
   return enemy;
 }
-function queueWave(entries, hpMultiplier) {
+function queueWave(entries, hpMultiplier, mods) {
   spawnQueue = [];
   entries.forEach((entry, entryIndex) => {
     const count = Math.max(0, Math.floor(entry.count));
@@ -702,7 +775,8 @@ function queueWave(entries, hpMultiplier) {
         type: entry.type,
         hpMultiplier: hpMultiplier || 1,
         route,
-        lateral
+        lateral,
+        mods: mods || null
       });
     }
   });
@@ -714,30 +788,42 @@ function scheduleWave(number) {
   wave = number;
   let entries;
   let hpMultiplier = 1;
+  let mods = null;
+  let bossInfo = null;
   if (mode === "endless") {
     const generated = endlessWave(number);
     entries = generated.entries;
     hpMultiplier = generated.hpMul;
+    mods = { speedMul: generated.speedMul, armorBonus: generated.armorBonus, bountyMul: generated.bountyMul };
+    if (generated.boss) bossInfo = generated.boss;
   } else {
     entries = CAMPAIGN_WAVES[number - 1];
   }
   if (!entries) return;
-  const boss = entries.some((entry) => entry.type === "colossus");
+  const boss = entries.some((entry) => ENEMIES[entry.type] && ENEMIES[entry.type].boss);
   waveBanner.hidden = boss;
   bossBanner.hidden = !boss;
-  if (boss) sfx("heavy");
-  else {
-    waveBanner.textContent = "Wave " + number + (mode === "endless" ? "" : "/" + totalWaves) + " inbound";
+  if (boss) {
+    bossBanner.textContent = bossInfo
+      ? "ROUND " + number + " SIGNAL / " + bossInfo.title + " / " + bossInfo.tag
+      : "FLAGSHIP SIGNAL / VOIDMAW COLOSSUS";
+    sfx("heavy");
+  } else {
+    waveBanner.textContent = (mode === "endless" ? "Round " + number + "/" + totalWaves : "Wave " + number + "/" + totalWaves) + " inbound";
     waveBanner.hidden = false;
   }
-  queueWave(entries, hpMultiplier);
+  queueWave(entries, hpMultiplier, mods);
   updateHud();
 }
 function handleWaveCleared() {
-  const bossWave = wave % 8 === 0;
-  const bonus = 28 + wave * 7;
+  const bossWave = mode === "endless" ? wave % 10 === 0 : wave % 8 === 0;
+  /* Century economy: flat bonus scales with round, boss rounds pay extra, and
+     held Glint earns capped interest so upgrades stay reachable to round 100. */
+  const interest = Math.min(90, Math.floor(gold * .06));
+  const bonus = 30 + wave * 8 + (bossWave ? 40 + wave * 2 : 0) + interest;
   gold += bonus;
-  score += wave * 45;
+  score += wave * 45 + (bossWave ? 250 : 0);
+  if (mode === "endless") toast("Round " + wave + " cleared / +" + bonus + " Glint (" + interest + " interest)");
   if (currentMap().objective === "relay") mapObjective.relay = Math.min(18, mapObjective.relay + 1);
   if (currentMap().objective === "shield") mapObjective.shield = Math.min(mapObjective.maxShield, mapObjective.shield + 1);
   if (currentMap().objective === "gates") {
@@ -751,7 +837,7 @@ function handleWaveCleared() {
     if (!bot.alive) { finishRun("victory"); return; }
   }
   if (mode === "battle") maybeBroadcastHostStatus(false);
-  const isLast = mode !== "endless" && wave >= totalWaves;
+  const isLast = wave >= totalWaves;
   if (isLast) {
     if (mode === "skirmish" && bot && bot.alive && lives < bot.lives) finishRun("defeat");
     else finishRun("victory");
@@ -762,7 +848,8 @@ function handleWaveCleared() {
 function leakEnemy(enemy) {
   enemy.alive = false;
   leakCount += 1;
-  let drain = ENEMIES[enemy.type].boss ? 5 : ENEMIES[enemy.type].heavy ? 2 : 1;
+  const leakBase = ENEMIES[enemy.type];
+  let drain = leakBase.leakDrain || (leakBase.boss ? 5 : leakBase.heavy ? 2 : 1);
   if (currentMap().objective === "shield" && mapObjective.shield > 0) {
     const absorbed = Math.min(mapObjective.shield, drain);
     mapObjective.shield -= absorbed;
@@ -908,6 +995,7 @@ function currentStats(sentinel) {
 function validDefenseTarget(defense, enemy) {
   const base = ENEMIES[enemy.type];
   if (!enemy.alive) return false;
+  if (enemy.burrowUntil > simTime) return false;
   if (defense.target === "air" && !base.air) return false;
   if (defense.target === "ground" && base.air) return false;
   return true;
@@ -917,10 +1005,11 @@ function findTarget(sentinel, stats) {
   const defense = DEFENSES[sentinel.defId];
   let best = null;
   let bestScore = -Infinity;
-  enemies.forEach((enemy) => {
-    if (!validDefenseTarget(defense, enemy)) return;
+  for (let i = 0; i < enemies.length; i++) {
+    const enemy = enemies[i];
+    if (!validDefenseTarget(defense, enemy)) continue;
     const distance = Math.hypot(enemy.x - origin.x, enemy.y - origin.y);
-    if (distance > stats.range || (stats.minRange && distance < stats.minRange)) return;
+    if (distance > stats.range || (stats.minRange && distance < stats.minRange)) continue;
     let threat = enemy.t * 100;
     if (defense.airBonus && ENEMIES[enemy.type].air) threat += 35;
     if (stats.pierce && enemy.armor > 3) threat += 22;
@@ -928,7 +1017,7 @@ function findTarget(sentinel, stats) {
     if (stats.splash && ENEMIES[enemy.type].swarm) threat += 20;
     if (ENEMIES[enemy.type].boss) threat += 18;
     if (threat > bestScore) { best = enemy; bestScore = threat; }
-  });
+  }
   return best;
 }
 function fireSentinel(sentinel, stats, target) {
@@ -962,11 +1051,18 @@ function fireSentinel(sentinel, stats, target) {
     age: 0,
     traveled: 0
   });
-  sfx(def.id === "vane" || def.id === "mortar" ? "heavy" : "fire");
+  if (!reducedMotion() && effects.length < 170) {
+    effects.push({ type: "muzzle", x: origin.x, y: origin.y - 8, angle: sentinel.aim, color: def.color, life: .09, age: 0, size: 12 + sentinel.tier * 5 });
+  }
+  sfx(def.id === "vane" || def.id === "mortar" ? "heavy" : sentinel.tier >= 2 ? "fire2" : "fire");
 }
 function dealDamage(enemy, amount, attack) {
   if (!enemy || !enemy.alive) return;
   const info = attack || {};
+  if (enemy.invulnUntil > simTime) {
+    if (floaters.length < 48) floaters.push({ x: enemy.x, y: enemy.y - 17, text: "IMMUNE", color: "#b792ff", life: .5, age: 0 });
+    return;
+  }
   let damage = amount;
   if (enemy.shield > 0) {
     const shieldMultiplier = info.shieldDamage || 1;
@@ -978,8 +1074,8 @@ function dealDamage(enemy, amount, attack) {
   enemy.hp -= damage;
   enemy.hitFlash = .15;
   damageDealt += Math.round(amount);
-  floaters.push({ x: enemy.x, y: enemy.y - 17, text: String(Math.round(amount)), color: info.color || "#fff", life: .55, age: 0 });
-  effects.push({ type: "impact", x: enemy.x, y: enemy.y, color: info.color || "#fff", life: .28, age: 0, size: info.splash || 22 });
+  if (floaters.length < 48) floaters.push({ x: enemy.x, y: enemy.y - 17, text: String(Math.round(amount)), color: info.color || "#fff", life: .55, age: 0 });
+  if (effects.length < 160) effects.push({ type: "impact", x: enemy.x, y: enemy.y, color: info.color || "#fff", life: .28, age: 0, size: info.splash || 22 });
   cameraShake = Math.min(.28, cameraShake + (ENEMIES[enemy.type].boss ? .09 : .018));
   if (enemy.hp <= 0) killEnemy(enemy);
 }
@@ -996,17 +1092,20 @@ function applyProjectileImpact(projectile) {
     if (projectile.pull && !ENEMIES[target.type].boss) target.t = Math.max(0, target.t - projectile.pull);
   }
   if (projectile.splash > 0) {
-    enemies.forEach((enemy) => {
-      if (!enemy.alive || enemy === target || Math.hypot(enemy.x - impact.x, enemy.y - impact.y) > projectile.splash) return;
-      dealDamage(enemy, projectile.damage * .62, { ...projectile, damage: projectile.damage * .62 });
-    });
+    for (let i = 0; i < enemies.length; i++) {
+      const enemy = enemies[i];
+      if (!enemy.alive || enemy === target || Math.hypot(enemy.x - impact.x, enemy.y - impact.y) > projectile.splash) continue;
+      dealDamage(enemy, projectile.damage * .62, projectile);
+    }
   }
   projectile.alive = false;
   sfx("impact");
 }
 function updateProjectiles(dt) {
-  projectiles.forEach((projectile) => {
-    if (!projectile.alive) return;
+  let write = 0;
+  for (let i = 0; i < projectiles.length; i++) {
+    const projectile = projectiles[i];
+    if (!projectile.alive) continue;
     projectile.age += dt;
     if (projectile.target && projectile.target.alive) {
       projectile.tx = projectile.target.x;
@@ -1025,8 +1124,9 @@ function updateProjectiles(dt) {
       projectile.y += dy / distance * step;
       projectile.traveled += step;
     }
-  });
-  projectiles = projectiles.filter((projectile) => projectile.alive);
+    if (projectile.alive) projectiles[write++] = projectile;
+  }
+  projectiles.length = write;
 }
 function killEnemy(enemy) {
   if (!enemy.alive) return;
@@ -1038,9 +1138,20 @@ function killEnemy(enemy) {
   score += Math.round(enemy.bounty * 3 + (base.boss ? 300 : 0));
   killCount += 1;
   if (base.split) {
-    for (let i = 0; i < 3; i++) spawnEnemy("shard", enemy.maxHp / base.hp, enemy.routeIndex, (i - 1) * 9, enemy.t - i * .002);
+    for (let i = 0; i < 3; i++) spawnEnemy("shard", enemy.hpMul || 1, enemy.routeIndex, (i - 1) * 9, enemy.t - i * .002, enemy.mods);
   }
-  if (!reducedMotion()) {
+  if (base.splitInto) {
+    for (let i = 0; i < base.splitInto.count; i++) {
+      spawnEnemy(base.splitInto.type, (enemy.hpMul || 1) * (base.boss ? .8 : 1), (enemy.routeIndex + i) % currentMap().routes.length, (i % 3 - 1) * 10, Math.max(0, enemy.t - i * .008), enemy.mods);
+    }
+  }
+  if (base.boss) {
+    sfx("bossdown");
+    cameraShake = .45;
+    announceMapEvent(base.name + " destroyed");
+    if (effects.length < 200) effects.push({ type: "command", x: enemy.x, y: enemy.y, color: base.color, life: .9, age: 0, size: 150 });
+  }
+  if (!reducedMotion() && effects.length < 150) {
     for (let i = 0; i < 7; i++) effects.push({
       type: "spark",
       x: enemy.x,
@@ -1067,23 +1178,106 @@ function updateSentinels(dt) {
     sentinel.cooldown = 1 / Math.max(.1, stats.rof);
   });
 }
+function bossPulse(enemy, act) {
+  if (act === "aura") {
+    let jammedCount = 0;
+    sentinels
+      .map((sentinel) => ({ sentinel, distance: distanceToSentinel(enemy, sentinel) }))
+      .filter((item) => item.distance < 240)
+      .sort((a, b) => a.distance - b.distance)
+      .slice(0, 2)
+      .forEach((item) => {
+        item.sentinel.jammed = Math.max(item.sentinel.jammed, 3.6);
+        jammedCount += 1;
+      });
+    if (jammedCount) {
+      announceMapEvent(ENEMIES[enemy.type].name + " jammed " + jammedCount + " defense" + (jammedCount === 1 ? "" : "s"));
+      if (effects.length < 200) effects.push({ type: "jam", x: enemy.x, y: enemy.y, color: "#73e69e", life: .7, age: 0, size: 60 });
+    }
+  } else if (act === "summon") {
+    for (let i = 0; i < 3; i++) {
+      spawnEnemy("skiff", (enemy.hpMul || 1) * .55, (enemy.routeIndex + i) % currentMap().routes.length, (i - 1) * 9, Math.max(0, enemy.t - .03 * i), enemy.mods);
+    }
+    if (effects.length < 200) effects.push({ type: "command", x: enemy.x, y: enemy.y, color: "#6ca8ff", life: .6, age: 0, size: 70 });
+  } else if (act === "heal") {
+    enemy.hp = Math.min(enemy.maxHp, enemy.hp + enemy.maxHp * .05);
+    for (let i = 0; i < enemies.length; i++) {
+      const ally = enemies[i];
+      if (!ally.alive || ally === enemy || Math.hypot(ally.x - enemy.x, ally.y - enemy.y) > 130) continue;
+      ally.hp = Math.min(ally.maxHp, ally.hp + ally.maxHp * .15);
+    }
+    if (effects.length < 200) effects.push({ type: "command", x: enemy.x, y: enemy.y, color: "#8ce8b4", life: .7, age: 0, size: 130 });
+  } else if (act === "burrow") {
+    enemy.burrowUntil = simTime + 2.2;
+    enemy.invulnUntil = simTime + 2.2;
+    if (effects.length < 200) effects.push({ type: "jam", x: enemy.x, y: enemy.y, color: "#c68f56", life: .6, age: 0, size: 44 });
+  } else if (act === "shieldPhase") {
+    enemy.invulnUntil = simTime + 2.6;
+    if (effects.length < 200) effects.push({ type: "command", x: enemy.x, y: enemy.y, color: "#b792ff", life: .7, age: 0, size: 60 });
+  }
+}
+function updateBossMech(enemy, dt) {
+  const base = ENEMIES[enemy.type];
+  const mech = base.mech;
+  if (!mech) return;
+  if (mech === "twin") {
+    if (!enemy.enraged) {
+      let partnerAlive = false;
+      for (let i = 0; i < enemies.length; i++) {
+        if (enemies[i] !== enemy && enemies[i].alive && enemies[i].type === enemy.type) { partnerAlive = true; break; }
+      }
+      if (!partnerAlive) {
+        enemy.enraged = true;
+        announceMapEvent("Twin Fury enraged");
+        enemy.hitFlash = .3;
+      }
+    }
+    return;
+  }
+  if (mech === "regen") {
+    if (enemy.shield < enemy.maxShield) enemy.shield = Math.min(enemy.maxShield, enemy.shield + enemy.maxShield * .04 * dt);
+    return;
+  }
+  enemy.mechClock -= dt;
+  if (enemy.mechClock > 0) return;
+  let act = mech;
+  if (mech === "finale") {
+    act = ["aura", "summon", "shieldPhase"][enemy.phaseStep % 3];
+    enemy.phaseStep += 1;
+    enemy.mechClock = 6;
+  } else {
+    enemy.mechClock = ({ aura: 7, summon: 6.5, heal: 5.5, burrow: 8, shieldPhase: 6.5 })[mech] || 7;
+  }
+  bossPulse(enemy, act);
+}
 function updateEnemies(dt) {
-  enemies.forEach((enemy) => {
-    if (!enemy.alive) { enemy.death -= dt; return; }
+  let write = 0;
+  for (let i = 0; i < enemies.length; i++) {
+    const enemy = enemies[i];
+    if (!enemy.alive) {
+      enemy.death -= dt;
+      if (enemy.death > 0) enemies[write++] = enemy;
+      continue;
+    }
     enemy.hitFlash = Math.max(0, enemy.hitFlash - dt);
     enemy.attackCooldown -= dt;
-    saboteurStrike(enemy);
-    if (gateHolding(enemy, dt)) return;
     const base = ENEMIES[enemy.type];
+    if (base.regen && enemy.hp < enemy.maxHp) enemy.hp = Math.min(enemy.maxHp, enemy.hp + enemy.maxHp * base.regen * dt);
+    if (base.mech) updateBossMech(enemy, dt);
+    saboteurStrike(enemy);
+    if (gateHolding(enemy, dt)) { enemies[write++] = enemy; continue; }
     let speedMultiplier = enemy.slowUntil > simTime ? Math.max(.18, 1 - enemy.slowAmount) : 1;
     if (currentMap().id === "cloudbreak" && base.air && !base.heavy) speedMultiplier *= mapWind > 0 ? 1.2 : .92;
     if (abilityActive > 0 && currentCommander().id === "ilex") speedMultiplier *= .62;
+    if (enemy.burrowUntil > simTime) speedMultiplier *= 2.3;
+    if (enemy.enraged) speedMultiplier *= 1.6;
     enemy.t += enemy.speed * speedMultiplier * dt;
     enemyPosition(enemy);
     checkRelayCrossing(enemy);
     if (enemy.t >= 1) leakEnemy(enemy);
-  });
-  enemies = enemies.filter((enemy) => enemy.alive || enemy.death > 0);
+    if (enemy.alive || enemy.death > 0) enemies[write++] = enemy;
+  }
+  enemies.length = write;
 }
 
 // ---------------------------------------------------------------------------
@@ -1198,20 +1392,26 @@ function onPressureClick(kind) {
 // Main simulation
 // ---------------------------------------------------------------------------
 function updateEffects(dt) {
-  effects.forEach((effect) => {
+  let write = 0;
+  for (let i = 0; i < effects.length; i++) {
+    const effect = effects[i];
     effect.age += dt;
     if (effect.type === "spark") {
       effect.x += effect.vx * dt;
       effect.y += effect.vy * dt;
       effect.vy += 170 * dt;
     }
-  });
-  floaters.forEach((floater) => {
+    if (effect.age < effect.life) effects[write++] = effect;
+  }
+  effects.length = write;
+  write = 0;
+  for (let i = 0; i < floaters.length; i++) {
+    const floater = floaters[i];
     floater.age += dt;
     floater.y -= 24 * dt;
-  });
-  effects = effects.filter((effect) => effect.age < effect.life);
-  floaters = floaters.filter((floater) => floater.age < floater.life);
+    if (floater.age < floater.life) floaters[write++] = floater;
+  }
+  floaters.length = write;
   spireFlash = Math.max(0, spireFlash - dt);
   cameraShake = Math.max(0, cameraShake - dt);
 }
@@ -1240,7 +1440,7 @@ function tick(dt) {
   waveClockMs += dt * 1000;
   while (spawnQueue.length && spawnQueue[0].time <= waveClockMs) {
     const item = spawnQueue.shift();
-    spawnEnemy(item.type, item.hpMultiplier, item.route, item.lateral, 0);
+    spawnEnemy(item.type, item.hpMultiplier, item.route, item.lateral, 0, item.mods);
   }
   updateEnemies(dt);
   updateSentinels(dt);
@@ -1277,10 +1477,11 @@ function renderSelected() {
   if (!sentinel) { dockSelected.hidden = true; return; }
   const def = DEFENSES[sentinel.defId];
   const maxTier = def.tiers.length - 1;
+  const nextCost = sentinel.tier < maxTier ? def.upgradeCosts[sentinel.tier] : 0;
   dockSelected.hidden = false;
-  dockSelected.innerHTML = "<b>" + esc(def.name) + " T" + (sentinel.tier + 1) + "</b>" +
+  dockSelected.innerHTML = "<b>" + esc(def.name) + " T" + (sentinel.tier + 1) + "/" + def.tiers.length + "</b>" +
     (sentinel.jammed > 0 ? "<span>JAMMED " + sentinel.jammed.toFixed(1) + "s</span>" : "") +
-    (sentinel.tier < maxTier ? '<button type="button" data-upgrade ' + (gold < def.upgradeCost ? "disabled" : "") + ">Upgrade " + def.upgradeCost + "</button>" : "<span>Max tier</span>") +
+    (sentinel.tier < maxTier ? '<button type="button" data-upgrade ' + (gold < nextCost ? "disabled" : "") + ">Upgrade " + nextCost + "</button>" : "<span>Max tier</span>") +
     '<button type="button" data-sell>Sell +' + Math.round(sentinel.spent * .6) + '</button><button type="button" data-close-selection>Close</button>';
   dockSelected.querySelector("[data-upgrade]")?.addEventListener("click", upgradeSelected);
   dockSelected.querySelector("[data-sell]").addEventListener("click", sellSelected);
@@ -1319,10 +1520,12 @@ function upgradeSelected() {
   const sentinel = sentinels.find((item) => item.slotIndex === selectedSlot);
   if (!sentinel) return;
   const def = DEFENSES[sentinel.defId];
-  if (sentinel.tier >= def.tiers.length - 1 || gold < def.upgradeCost) return;
-  gold -= def.upgradeCost;
-  glintSpent += def.upgradeCost;
-  sentinel.spent += def.upgradeCost;
+  if (sentinel.tier >= def.tiers.length - 1) return;
+  const cost = def.upgradeCosts[sentinel.tier];
+  if (gold < cost) return;
+  gold -= cost;
+  glintSpent += cost;
+  sentinel.spent += cost;
   sentinel.tier += 1;
   sfx("upgrade");
   updateHud();
@@ -1401,7 +1604,7 @@ function objectiveText() {
 }
 function updateHud() {
   hud.gold.textContent = String(Math.floor(gold));
-  hud.wave.textContent = mode === "endless" ? String(wave) : Math.min(wave, totalWaves) + "/" + totalWaves;
+  hud.wave.textContent = Math.min(wave, totalWaves) + "/" + totalWaves;
   hud.lives.textContent = String(lives);
   hud.score.textContent = String(score);
   hud.objective.textContent = objectiveText();
@@ -1458,8 +1661,8 @@ function renderOpponent() {
 }
 function reportProgress() {
   if (!running) return;
-  const progress = mode === "endless" ? Math.min(99, Math.round(wave / 20 * 100)) : Math.min(99, Math.round(Math.max(0, wave - 1) / totalWaves * 100));
-  host("score", { score, progress, state: metaPayload() });
+  const progress = Math.min(99, Math.round(Math.max(0, wave - 1) / totalWaves * 100));
+  host("score", { score, progress, wave, state: metaPayload() });
 }
 function finishRun(kind, options) {
   if (runCompleted) return;
@@ -1467,7 +1670,7 @@ function finishRun(kind, options) {
   running = false;
   resultKind = kind;
   const won = kind === "victory";
-  const reachedWave = mode === "endless" ? Math.max(0, wave - 1) : (won ? Math.min(wave, totalWaves) : Math.max(0, wave - 1));
+  const reachedWave = won ? Math.min(wave, totalWaves) : Math.max(0, wave - 1);
   if (mode === "campaign") meta.bestWaveCampaign = Math.max(meta.bestWaveCampaign, reachedWave);
   if (mode === "endless") meta.bestWaveEndless = Math.max(meta.bestWaveEndless, reachedWave);
   if (mode === "battle") {
@@ -1479,7 +1682,7 @@ function finishRun(kind, options) {
   waveBanner.hidden = true;
   bossBanner.hidden = true;
   showResults(kind, reward, !!(options && options.surrendered));
-  host("complete", { score, progress: 100, state: metaPayload() });
+  host("complete", { score, progress: 100, wave: reachedWave, state: metaPayload() });
 }
 function surrender() {
   if (!running || runCompleted) return;
@@ -1491,14 +1694,16 @@ function surrender() {
 }
 function showResults(kind, reward, surrendered) {
   const won = kind === "victory";
-  $("[data-results-title]").textContent = won ? (mode === "battle" ? "Room war won" : "Skyline secured") : (surrendered ? "Command withdrawn" : "Defense line broken");
-  $("[data-results-sub]").textContent = modeLabel(mode) + " on " + currentMap().name + " ended at wave " + wave + ".";
+  $("[data-results-title]").textContent = won ? (mode === "battle" ? "Room war won" : mode === "endless" ? "Century secured" : "Skyline secured") : (surrendered ? "Command withdrawn" : "Defense line broken");
+  $("[data-results-sub]").textContent = modeLabel(mode) + " on " + currentMap().name + " ended at " + (mode === "endless" ? "round" : "wave") + " " + Math.min(wave, totalWaves) + ".";
   const verdict = $("[data-verdict]");
   verdict.classList.toggle("is-loss", !won);
   $("[data-verdict-word]").textContent = won ? "VICTORY" : "DEFEAT";
-  $("[data-verdict-copy]").textContent = won ? currentCommander().name + " held the route with a four-defense wing." : "The raid reached the Anchor Spire. Rebuild around the counters that broke through.";
+  $("[data-verdict-copy]").textContent = won ?
+    (mode === "endless" ? currentCommander().name + " survived all 100 rounds of the Century Watch and broke The Sovereign." : currentCommander().name + " held the route with a four-defense wing.") :
+    "The raid reached the Anchor Spire. Rebuild around the counters that broke through.";
   const stats = [
-    [mode === "endless" ? Math.max(0, wave - 1) : Math.min(wave, totalWaves), "Waves survived"],
+    [won ? Math.min(wave, totalWaves) : Math.max(0, wave - 1), mode === "endless" ? "Rounds survived" : "Waves survived"],
     [killCount, "Raiders defeated"],
     [damageDealt, "Damage dealt"],
     [glintSpent, "Glint committed"],
@@ -1909,7 +2114,7 @@ function drawSentinel(sentinel) {
   const slot = slotPoint(sentinel.slotIndex);
   const screen = toScreen(slot.x, slot.y);
   const def = DEFENSES[sentinel.defId];
-  const radius = (sentinel.tier ? 13 : 11) * worldScale;
+  const radius = (11 + sentinel.tier * 2) * worldScale;
   if (sentinel.slotIndex === selectedSlot) {
     const range = currentStats(sentinel).range * worldScale;
     ctx.strokeStyle = def.color + "45";
@@ -1933,19 +2138,37 @@ function drawSentinel(sentinel) {
   ctx.lineWidth = 1.3 * worldScale;
   ctx.save();
   ctx.translate(0, -5 * worldScale);
+  if (sentinel.tier >= 2 && !reducedMotion()) {
+    ctx.shadowBlur = 14 * worldScale;
+    ctx.shadowColor = def.color;
+  }
   defenseShape(ctx, def.shape, radius);
   ctx.fill();
   ctx.stroke();
   ctx.restore();
   const recoil = sentinel.recoil > 0 && !reducedMotion() ? sentinel.recoil / .16 * 5 : 0;
+  ctx.save();
   ctx.rotate(sentinel.aim || 0);
   ctx.strokeStyle = shade(def.color, .3);
-  ctx.lineWidth = (sentinel.defId === "mortar" ? 6 : 3) * worldScale;
+  ctx.lineWidth = ((sentinel.defId === "mortar" ? 6 : 3) + sentinel.tier) * worldScale;
   ctx.lineCap = "round";
   ctx.beginPath();
   ctx.moveTo(-recoil * worldScale, -5 * worldScale);
-  ctx.lineTo((19 - recoil) * worldScale, -5 * worldScale);
+  ctx.lineTo((19 + sentinel.tier * 3 - recoil) * worldScale, -5 * worldScale);
   ctx.stroke();
+  if (sentinel.tier >= 1) {
+    ctx.strokeStyle = shade(def.color, .55);
+    ctx.lineWidth = 1.5 * worldScale;
+    ctx.beginPath();
+    ctx.moveTo(2 * worldScale, -9 * worldScale);
+    ctx.lineTo((15 + sentinel.tier * 3) * worldScale, -9 * worldScale);
+    ctx.stroke();
+  }
+  ctx.restore();
+  ctx.fillStyle = "#ffffffcc";
+  for (let pip = 0; pip <= sentinel.tier; pip++) {
+    ctx.fillRect((pip * 5 - sentinel.tier * 2.5 - 1.5) * worldScale, 12 * worldScale, 3 * worldScale, 3 * worldScale);
+  }
   ctx.restore();
   if (sentinel.jammed > 0) {
     ctx.strokeStyle = "#ff7165";
@@ -1992,7 +2215,7 @@ function drawEnemy(enemy) {
   const base = ENEMIES[enemy.type];
   const screen = toScreen(enemy.x, enemy.y);
   const size = (base.size + (base.boss ? 5 : 0)) * worldScale;
-  const fade = enemy.alive ? 1 : clamp(enemy.death / .36, 0, 1);
+  const fade = (enemy.alive ? 1 : clamp(enemy.death / .36, 0, 1)) * (enemy.burrowUntil > simTime ? .35 : 1);
   ctx.save();
   ctx.globalAlpha = fade;
   ctx.translate(screen.x, screen.y);
@@ -2020,6 +2243,20 @@ function drawEnemy(enemy) {
     ctx.lineWidth = 2 * worldScale;
     ctx.beginPath();
     ctx.ellipse(screen.x, screen.y, size * 1.45, size, 0, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  if (enemy.invulnUntil > simTime && enemy.burrowUntil <= simTime) {
+    ctx.strokeStyle = "#eadcff";
+    ctx.lineWidth = 3 * worldScale;
+    ctx.beginPath();
+    ctx.ellipse(screen.x, screen.y, size * 1.7, size * 1.25, 0, simTime * 3, simTime * 3 + Math.PI * 1.5);
+    ctx.stroke();
+  }
+  if (enemy.enraged) {
+    ctx.strokeStyle = "#ff5e73cc";
+    ctx.lineWidth = 2 * worldScale;
+    ctx.beginPath();
+    ctx.ellipse(screen.x, screen.y, size * 1.55, size * 1.1, 0, -simTime * 4, -simTime * 4 + Math.PI);
     ctx.stroke();
   }
   const barWidth = Math.max(22, base.size * 2.2) * worldScale;
@@ -2062,6 +2299,15 @@ function drawEffects() {
     if (effect.type === "spark") {
       ctx.fillStyle = effect.color;
       ctx.fillRect(screen.x, screen.y, effect.size * worldScale, effect.size * worldScale);
+    } else if (effect.type === "muzzle") {
+      ctx.globalCompositeOperation = "screen";
+      ctx.strokeStyle = effect.color;
+      ctx.lineWidth = 4 * worldScale;
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(screen.x + Math.cos(effect.angle) * 12 * worldScale, screen.y + Math.sin(effect.angle) * 12 * worldScale);
+      ctx.lineTo(screen.x + Math.cos(effect.angle) * (12 + effect.size) * worldScale, screen.y + Math.sin(effect.angle) * (12 + effect.size) * worldScale);
+      ctx.stroke();
     } else if (effect.type === "impact" || effect.type === "relay" || effect.type === "jam") {
       ctx.strokeStyle = effect.color;
       ctx.lineWidth = 2 * worldScale;
@@ -2116,6 +2362,36 @@ function drawEffects() {
     ctx.restore();
   });
 }
+function drawBossBars() {
+  let index = 0;
+  for (let i = 0; i < enemies.length && index < 2; i++) {
+    const enemy = enemies[i];
+    const base = ENEMIES[enemy.type];
+    if (!enemy.alive || !base.boss) continue;
+    const barWidth = Math.min(430, cssWidth * .55);
+    const x = (cssWidth - barWidth) / 2;
+    const y = 44 + index * 26;
+    ctx.save();
+    ctx.fillStyle = "#050605d8";
+    ctx.fillRect(x - 2, y - 2, barWidth + 4, 14);
+    const hpRatio = clamp(enemy.hp / enemy.maxHp, 0, 1);
+    ctx.fillStyle = hpRatio > .4 ? base.color : "#ff5e73";
+    ctx.fillRect(x, y, barWidth * hpRatio, 7);
+    if (enemy.maxShield > 0) {
+      ctx.fillStyle = "#b792ff";
+      ctx.fillRect(x, y + 8, barWidth * clamp(enemy.shield / enemy.maxShield, 0, 1), 2);
+    }
+    ctx.strokeStyle = "#ffffff40";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x - 2, y - 2, barWidth + 4, 14);
+    ctx.fillStyle = "#f5f1e7";
+    ctx.font = "900 9px ui-monospace,monospace";
+    ctx.textAlign = "left";
+    ctx.fillText(base.name.toUpperCase() + (enemy.invulnUntil > simTime ? " / IMMUNE" : enemy.enraged ? " / ENRAGED" : ""), x, y - 5);
+    ctx.restore();
+    index += 1;
+  }
+}
 function draw() {
   ctx.clearRect(0, 0, cssWidth, cssHeight);
   ctx.save();
@@ -2133,6 +2409,7 @@ function draw() {
   });
   drawProjectiles();
   drawEffects();
+  drawBossBars();
   if (spireFlash > 0) {
     ctx.fillStyle = "rgba(255,94,115," + spireFlash * .22 + ")";
     ctx.fillRect(0, 0, cssWidth, cssHeight);
@@ -2271,8 +2548,18 @@ addEventListener("resize", resizeCanvas);
 function runInternalChecks() {
   const errors = [];
   if (DEFENSE_ORDER.length < 8 || DEFENSE_ORDER.some((id) => !DEFENSES[id])) errors.push("defense roster");
+  if (DEFENSE_ORDER.some((id) => DEFENSES[id].tiers.length !== 3 || DEFENSES[id].upgradeCosts.length !== 2)) errors.push("defense tier tables");
   if (COMMANDER_ORDER.length < 4 || COMMANDER_ORDER.some((id) => !COMMANDERS[id])) errors.push("commander roster");
   if (selectedDefenses.length !== 4 || new Set(selectedDefenses).size !== 4) errors.push("four-defense loadout");
+  if (BOSS_SCHEDULE.length !== 10 || BOSS_SCHEDULE.some((entry) => !ENEMIES[entry.type] || !ENEMIES[entry.type].boss)) errors.push("boss schedule");
+  let previousHpMul = 0;
+  for (let round = 1; round <= CENTURY_ROUNDS; round++) {
+    const generated = endlessWave(round);
+    if (!generated.entries.length || generated.entries.some((entry) => !ENEMIES[entry.type] || !Number.isFinite(entry.count) || entry.count < 1)) errors.push("round " + round + " entries");
+    if (!Number.isFinite(generated.hpMul) || generated.hpMul <= previousHpMul) errors.push("round " + round + " curve");
+    previousHpMul = generated.hpMul;
+    if ((round % 10 === 0) !== !!generated.boss) errors.push("round " + round + " boss cadence");
+  }
   MAPS.forEach((map) => {
     if (map.routes.length < 2 || map.slots.length < 10) errors.push(map.id + " topology");
     map.routes.forEach((route) => {

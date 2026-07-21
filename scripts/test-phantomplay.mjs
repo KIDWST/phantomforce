@@ -114,7 +114,7 @@ assert.match(cubeTown, /const TRIAL_DEFS = \[[\s\S]*Spire Heart Trial/u, "CubeTo
 assert.match(cubeTown, /function openGate\(\)/u, "CubeTown must include the Prism Gate finale.");
 assert.match(cubeTownIndex, /data-ct-open="questlog"/u, "CubeTown must expose a Quest Log for the larger playthrough.");
 assert.match(cubeTownIndex, /data-ct-panel="trial"/u, "CubeTown must expose a playable shrine trial panel.");
-assert.match(flagshipCatalog, /id:\s*"cubetown"[\s\S]*version:\s*"1\.1\.0"/u, "CubeTown catalog metadata must advertise the expanded version.");
+assert.match(flagshipCatalog, /id:\s*"cubetown"[\s\S]*version:\s*"1\.2\.0"/u, "CubeTown catalog metadata must advertise the expanded version.");
 
 const buildIds = new Set(appFiles.flatMap((source) => source.match(/phantom-live-\d{8}-\d+/gu) || []));
 assert.equal(buildIds.size, 1, `The PhantomPlay module graph must use one build ID, found: ${[...buildIds].join(", ")}`);
