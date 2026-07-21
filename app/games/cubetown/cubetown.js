@@ -1037,6 +1037,7 @@
     if (name === 'together') renderTogetherPanel();
     if (name === 'report') renderReportPanel(false);
     if (name === 'questlog') renderQuestLogPanel();
+    if (name === 'party') renderPartyPanel();
     if (name === 'map') renderMapPanel();
     if (name === 'tutorial') { rt.tutorial.step = 0; renderTutorial(); }
   }
@@ -1805,6 +1806,7 @@
       el.dlgQuest.hidden = false;
       el.dlgQuest.textContent = `Needed: 4 Keystones and 1 Relic — you have ${state.inventory.keystone || 0} Keystones and ${state.inventory.relic || 0} Relic.`;
       el.dlgTurnin.hidden = true;
+      if (el.dlgParty) el.dlgParty.hidden = true;
       openPanel('dialogue');
       return;
     }
@@ -2543,7 +2545,8 @@
     const now = Date.now();
     if (rt.lastAttackAt && now - rt.lastAttackAt < 260) return;
     rt.lastAttackAt = now;
-    enemy.hp -= 1;
+    const assist = partyAssistDamage(enemy);
+    enemy.hp -= 1 + assist.damage;
     spawnParticles(enemy.gx, enemy.gy, '#ff6b81');
     sfx.demolish();
     if (enemy.hp <= 0) {
@@ -2554,20 +2557,21 @@
           state.wilds.guardianDefeated = true;
           state.inventory.relic = (state.inventory.relic || 0) + 1;
           sfx.quest();
-          toast('The Guardian falls — a Relic gleams where it stood!');
+          toast(`The Guardian falls with party help${assist.names.length ? ` (${assist.names.join(', ')})` : ''} — a Relic gleams where it stood!`);
         }
       } else {
         const n = 1 + Math.floor(Math.random() * 2);
         const k = ['grain', 'shale', 'loom'][Math.floor(Math.random() * 3)];
         state.inventory[k] = (state.inventory[k] || 0) + n;
         if (Math.random() < 0.2) state.inventory.lumen = (state.inventory.lumen || 0) + 1;
-        toast('The wilds creature scatters, dropping some resources.');
+        const recovery = partyVictoryRecovery();
+        toast(`The wilds creature scatters${assist.names.length ? ` — ${assist.names.join(', ')} assisted` : ''}.${recovery}`);
       }
     } else if (enemy.isGuardian && Math.random() < 0.5) {
       toast('The Guardian strikes back!');
       hitPlayerContact(Math.round(SPARK_WILDS_HIT / 2));
     } else {
-      toast(`Hit! (${Math.max(0, enemy.hp)}/${enemy.maxHp})`);
+      toast(`Hit${assist.names.length ? ` + ${assist.names.join(', ')}` : ''}! (${Math.max(0, enemy.hp)}/${enemy.maxHp})`);
     }
     updateHud();
     schedulePush();
@@ -2576,9 +2580,11 @@
     const now = Date.now();
     if (rt.wildsInvulnUntil && now < rt.wildsInvulnUntil) return;
     rt.wildsInvulnUntil = now + 900;
-    state.spark = clamp(state.spark - amount, 0, 100);
+    const guarded = partyGuard(amount);
+    state.spark = clamp(state.spark - guarded.amount, 0, 100);
     sfx.fishMiss();
     spawnParticles(rt.wildsGx, rt.wildsGy, '#ff6b81');
+    if (guarded.names.length && guarded.amount < amount) toast(`${guarded.names.join(', ')} guarded you — ${guarded.amount} Spark lost.`);
     updateHud();
     if (state.spark <= 0) defeatedInWilds();
   }

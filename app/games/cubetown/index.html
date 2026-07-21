@@ -135,6 +135,7 @@ input[type=range]{width:150px}
       <button type="button" data-ct-open="craft">Craft</button>
       <button type="button" data-ct-open="map">Map</button>
       <button type="button" data-ct-open="questlog">Quest Log</button>
+      <button type="button" data-ct-open="party">Party</button>
       <button type="button" data-ct-open="inventory">Inventory</button>
       <button type="button" data-ct-open="customize">Customize</button>
       <button type="button" data-ct-open="together" data-ct-together-btn hidden>Together</button>
@@ -260,8 +261,19 @@ input[type=range]{width:150px}
     <div class="inv-list" data-ct-dlg-gift-list></div>
     <div class="dlg-actions">
       <button type="button" data-ct-dlg-turnin hidden>Hand over</button>
+      <button type="button" data-ct-dlg-party hidden>Invite companion</button>
       <button type="button" class="secondary" data-ct-close>Bye for now</button>
     </div>
+  </div>
+</div>
+
+<div class="panel" data-ct-panel="party">
+  <div class="card">
+    <button class="close" data-ct-close>×</button>
+    <h2>Party</h2>
+    <p class="sub" data-ct-party-sub>Recruit resident companions and bring up to three into the Wilds.</p>
+    <div class="party-list" data-ct-party-list></div>
+    <p class="small-note">CubeTown companions are town friends who choose to travel with you. No catching, no monster collection — just bonds, quests, and allies in a Zelda-style adventure loop.</p>
   </div>
 </div>
 
