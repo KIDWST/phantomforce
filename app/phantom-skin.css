@@ -1,15 +1,50 @@
-/* PhantomForce — Ultraviolet Daylight skin.
+/* PhantomForce — Séance Console skin.
    Loaded after every base sheet: typography, shape language, and the
-   spectrum-edge signature for the light violet identity. The base sheets
-   carry layout; this layer carries the look. */
+   spectral signature for the dark violet/mint identity. The base sheets
+   carry layout; this layer carries the look. This file is the single
+   source of truth for the shared color tokens (--bg/--ink/--glass/--line/
+   --neon/--neon-2/--dim) — override them here, not upstream, or a later
+   pass will just silently win again like this file used to. */
 
 :root {
-  --uv: #5b4cff;
-  --uv-deep: #3f30d9;
-  --orchid: #b44bf0;
-  --ember: #ff7a45;
+  /* ---- accent tokens: safe to change everywhere, don't depend on a dark
+     backdrop for contrast, so these apply app-wide (workspaces included) ---- */
+  --neon: #7c6cff;
+  --neon-2: #45e6bd;
+  --risk: #ff5577;
+  --warn: #e3a53f;
+
+  /* ---- skin-local tokens ---- */
+  --uv: #7c6cff;
+  --uv-deep: #4a3ad9;
+  --orchid: #9c6bff;
+  --ember: #45e6bd;
   --skin-radius: 16px;
-  --skin-shadow: 0 1px 2px rgba(36, 31, 63, 0.05), 0 10px 34px rgba(70, 58, 194, 0.09);
+  --skin-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 10px 34px rgba(0, 0, 0, 0.35);
+}
+
+/* ---- contrast-dependent tokens (bg/ink/glass/line): scoped to the
+   dashboard + global shell only. Workspace pages (Media Lab, Content Hub,
+   Settings, etc.) haven't been redesigned yet and still assume the old
+   light --glass/--ink pair on their own hardcoded cards — inheriting a
+   flipped --ink there means light text on a light card, unreadable. This
+   is the same `:has()` hook phantom.css itself already uses to detect
+   "home dashboard, not inside a workspace." */
+.phantom:has(.app-main > .console:not(.console-workspace)) {
+  --bg: #0a0912;
+  --bg-2: #14121f;
+  --glass: rgba(24, 21, 38, 0.74);
+  --glass-2: rgba(30, 27, 46, 0.58);
+  --line: rgba(139, 122, 255, 0.22);
+  --line-strong: rgba(139, 122, 255, 0.44);
+  --ink: #f1eefc;
+  --dim: #a89fcf;
+  --dim-2: #776d97;
+  --card-grad: linear-gradient(180deg, rgba(38, 34, 60, 0.68), rgba(16, 14, 26, 0.58));
+  --edge-hi: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  --depth-1: 0 1px 2px rgba(0, 0, 0, 0.35), 0 14px 34px -16px rgba(0, 0, 0, 0.6);
+  --depth-2: 0 2px 8px rgba(0, 0, 0, 0.4), 0 26px 60px -22px rgba(0, 0, 0, 0.65);
+  --accent-soft: rgba(139, 122, 255, 0.16);
 }
 
 /* ---------- typography ---------- */
@@ -32,49 +67,95 @@ h3, h4 {
   letter-spacing: -0.005em;
 }
 
-/* ---------- the signature: spectrum edge ---------- */
+/* ---------- the signature: a slow spectral pulse, not a static rainbow ---------- */
 body::before {
   content: "";
   position: fixed;
   top: 0; left: 0; right: 0;
-  height: 3px;
+  height: 2px;
   z-index: 200;
   pointer-events: none;
-  background: linear-gradient(90deg, var(--uv-deep), var(--uv) 30%, var(--orchid) 62%, var(--ember) 100%);
+  background: linear-gradient(90deg, var(--uv-deep), var(--uv) 35%, var(--orchid) 62%, var(--ember) 100%);
+  background-size: 200% 100%;
+  animation: signalPulse 9s ease-in-out infinite;
+  opacity: 0.85;
+}
+@keyframes signalPulse {
+  0%, 100% { background-position: 0% 0; }
+  50% { background-position: 100% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  body::before { background: var(--uv); animation: none; }
 }
 
-/* ---------- ghost goes ultraviolet ---------- */
+/* ---------- void backdrop: faint grid + drifting spectral glow ---------- */
+.bg-grid {
+  opacity: 1;
+  background:
+    linear-gradient(rgba(139, 122, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(139, 122, 255, 0.05) 1px, transparent 1px);
+}
+.bg-glow {
+  background:
+    radial-gradient(46% 34% at 50% 4%, rgba(124, 108, 255, 0.16), transparent 65%),
+    radial-gradient(42% 42% at 92% 92%, rgba(69, 230, 189, 0.05), transparent 62%),
+    radial-gradient(40% 40% at 6% 88%, rgba(124, 108, 255, 0.07), transparent 60%);
+}
+/* literal, not var(--bg): body is an ancestor of .phantom, so it can never
+   see --bg's scoped value below — and every dark panel here is partially
+   transparent, expecting a dark void behind it regardless of which console
+   view (dashboard or workspace) is showing. */
+html, body { background: #0a0912; }
+
+/* ---------- the ghost stays true violet/mint (no daylight hue-rotate) ---------- */
 img.brand-ghost,
 img[src*="brand-phantom"] {
-  filter: hue-rotate(115deg) saturate(0.85) drop-shadow(0 0 10px rgba(91, 76, 255, 0.35));
+  filter: drop-shadow(0 0 10px rgba(124, 108, 255, 0.45));
 }
 canvas[data-ghost],
 .ghost-canvas {
-  filter: hue-rotate(115deg) saturate(0.85);
+  filter: none;
 }
 
-/* ---------- surface + shape language ---------- */
-.topbar {
-  background: rgba(255, 255, 255, 0.82);
-  border-bottom: 1px solid rgba(70, 58, 194, 0.12);
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.7) inset;
+/* ---------- surface + shape language: dark glass, not porcelain ---------- */
+.topbar, .topbar2 {
+  background: linear-gradient(180deg, rgba(20, 18, 32, 0.85), rgba(12, 11, 20, 0.7));
+  border-bottom: 1px solid var(--line);
+  box-shadow: none;
+  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
 }
 .sidebar {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(248, 247, 255, 0.86));
-  border-right: 1px solid rgba(70, 58, 194, 0.1);
+  background: linear-gradient(180deg, rgba(16, 14, 26, 0.92), rgba(10, 9, 16, 0.88));
+  border-right: 1px solid var(--line);
 }
-.nav-item { border-radius: 12px; }
+.side-brand-text b { color: var(--ink); }
+.side-brand-text i { color: var(--dim-2); }
+.nav-item { border-radius: 12px; color: var(--dim); }
+.nav-item:hover { background: rgba(139, 122, 255, 0.09); color: var(--ink); }
 .nav-item.is-active {
   background: linear-gradient(120deg, var(--uv), var(--uv-deep));
-  box-shadow: 0 8px 22px rgba(91, 76, 255, 0.3);
+  color: #fbfaff;
+  box-shadow: 0 8px 22px rgba(124, 108, 255, 0.32);
 }
 .nav-item-bottom { background: transparent; color: var(--dim); }
-
-.gate-card {
-  box-shadow: 0 30px 90px rgba(36, 31, 63, 0.18), 0 0 90px rgba(91, 76, 255, 0.1);
+.side-profile-name { color: var(--ink); }
+.side-profile-avatar {
+  background: radial-gradient(circle at 32% 24%, rgba(255, 255, 255, 0.14), rgba(124, 108, 255, 0.28) 40%, rgba(20, 18, 32, 0.9));
+  color: var(--ink);
 }
 
-/* Cards and consoles: soft porcelain, roomier corners, gentle depth */
+.gate {
+  background: radial-gradient(80% 60% at 50% 20%, rgba(124, 108, 255, 0.08), var(--bg) 70%);
+}
+.gate-card {
+  background: linear-gradient(180deg, rgba(22, 20, 36, 0.92), rgba(12, 11, 20, 0.94));
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.45), 0 0 90px rgba(124, 108, 255, 0.14);
+  color: var(--ink);
+}
+.gate-opt { background: rgba(124, 108, 255, 0.06); }
+.gate-opt:hover { background: rgba(124, 108, 255, 0.13); }
+
+/* Cards and consoles: dark glass, gentle violet depth */
 .card, .panel, .console, .side-plan, .cust-panel, .cust-ai,
 .hero, .pc, .ml-next-card, .mg-module, .mc-setup {
   box-shadow: var(--skin-shadow);
@@ -85,16 +166,18 @@ canvas[data-ghost],
 .btn-primary {
   background: linear-gradient(120deg, var(--uv), var(--uv-deep));
   color: #ffffff;
-  box-shadow: 0 6px 20px rgba(91, 76, 255, 0.32);
+  box-shadow: 0 6px 20px rgba(124, 108, 255, 0.36);
 }
 .btn-primary:hover {
-  background: linear-gradient(120deg, #6c5eff, var(--uv));
+  background: linear-gradient(120deg, #9186ff, var(--uv));
   color: #ffffff;
-  box-shadow: 0 8px 26px rgba(91, 76, 255, 0.4);
+  box-shadow: 0 8px 26px rgba(124, 108, 255, 0.46);
 }
+.btn-quiet { border-color: rgba(168, 159, 207, 0.22); background: rgba(255, 255, 255, 0.03); color: var(--dim); }
 
 input, select, textarea {
   accent-color: var(--uv);
+  color-scheme: dark;
 }
 :focus-visible {
   outline: 2px solid var(--uv);
@@ -104,21 +187,115 @@ input, select, textarea {
 /* ---------- scrollbars ---------- */
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(91, 76, 255, 0.35) transparent;
+  scrollbar-color: rgba(139, 122, 255, 0.38) transparent;
 }
 *::-webkit-scrollbar { width: 9px; height: 9px; }
 *::-webkit-scrollbar-thumb {
-  background: rgba(91, 76, 255, 0.28);
+  background: rgba(139, 122, 255, 0.32);
   border-radius: 99px;
   border: 2px solid transparent;
   background-clip: content-box;
 }
-*::-webkit-scrollbar-thumb:hover { background-color: rgba(91, 76, 255, 0.45); }
+*::-webkit-scrollbar-thumb:hover { background-color: rgba(139, 122, 255, 0.5); }
 *::-webkit-scrollbar-track { background: transparent; }
 
 /* ---------- selection ---------- */
-::selection { background: rgba(91, 76, 255, 0.22); color: var(--ink); }
+::selection { background: rgba(139, 122, 255, 0.32); color: var(--ink); }
 
-@media (prefers-reduced-motion: reduce) {
-  body::before { background: var(--uv); }
+/* =============================================================
+   DASHBOARD + SHELL — literal (non-token) fixes.
+   Everything above cascades through var(--bg/--ink/--dim/--glass/--line),
+   which covers most of the app already. These selectors hardcode their
+   own light-mode colors instead of using those tokens, so they need a
+   direct override to actually go dark.
+   ============================================================= */
+
+/* topbar search pill + popovers */
+.cmdk-open { background: rgba(255, 255, 255, 0.045); color: var(--dim); }
+.cmdk-open:hover { background: rgba(139, 122, 255, 0.09); }
+.notif-btn { color: var(--dim); }
+.notif-menu,
+.cmdk-panel,
+.user-menu {
+  background: linear-gradient(180deg, rgba(22, 20, 36, 0.98), rgba(14, 13, 22, 0.98));
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.5), 0 0 40px rgba(124, 108, 255, 0.12);
 }
+.cmdk-backdrop { background: radial-gradient(70% 60% at 50% 30%, rgba(124, 108, 255, 0.1), rgba(6, 6, 10, 0.72) 70%); }
+.user-menu-link { background: rgba(255, 255, 255, 0.02); color: var(--dim); }
+.user-menu-link:hover { color: var(--ink); background: rgba(255, 255, 255, 0.05); }
+.org-switch option, .ws-switch option { background: #16141f; color: var(--ink); }
+
+/* phantomwire ticker */
+.phantomwire, .agent-ticker {
+  background:
+    repeating-linear-gradient(90deg, transparent 0 2px, rgba(139, 122, 255, 0.05) 2px 4px),
+    linear-gradient(180deg, rgba(18, 16, 28, 0.92), rgba(12, 11, 20, 0.85));
+}
+.atk-view::before { background: linear-gradient(90deg, rgba(12, 11, 20, 0.95), transparent); }
+.atk-view::after { background: linear-gradient(270deg, rgba(12, 11, 20, 0.95), transparent); }
+
+/* dashboard brief */
+.dashboard-brief {
+  background: linear-gradient(145deg, rgba(30, 27, 46, 0.7), rgba(16, 14, 26, 0.6));
+  border-color: var(--line);
+}
+.dashboard-brief h1 { color: var(--ink); }
+.dashboard-brief-metrics { background: rgba(139, 122, 255, 0.05); border-color: var(--line); }
+.dashboard-brief-metric b { color: var(--ink); }
+.dashboard-brief-metric i { color: var(--dim-2); }
+.dashboard-brief-metric:hover, .dashboard-brief-metric:focus-visible { background: rgba(139, 122, 255, 0.09); }
+
+/* decisions */
+.decision-card { background: var(--card-grad); }
+
+/* desktop context mini widget */
+.dc-mini-shell {
+  background:
+    radial-gradient(circle at 15% 45%, rgba(139, 122, 255, 0.14), transparent 45%),
+    linear-gradient(135deg, rgba(30, 27, 46, 0.85), rgba(16, 14, 26, 0.8));
+}
+.dc-mini-copy span { color: var(--dim-2); }
+.dc-mini-copy b { color: var(--ink); }
+.dc-mini-thumb { background: rgba(139, 122, 255, 0.1); }
+.dc-empty b { color: var(--ink); }
+
+/* chat: persona console + message bubbles */
+.chatbox-head .pc-caption,
+.console .chatbox-head .pc-caption,
+.phantom-mode-caption {
+  background: rgba(20, 18, 32, 0.92) !important;
+  color: var(--ink) !important;
+  border-color: var(--line) !important;
+}
+.msg-text { color: var(--ink); }
+.msg-user .msg-text { color: var(--ink); }
+.msg-user .msg-body { background: rgba(255, 255, 255, 0.05); border-color: rgba(255, 255, 255, 0.09); }
+.rcard-body { color: var(--dim); }
+
+/* hero2 is the outer frame behind .chatbox — chatbox doesn't span its full
+   width (the ghost stage sits in the remaining gap), so hero2's own
+   background shows through there too. */
+.hero2 {
+  background:
+    radial-gradient(58% 86% at 88% 36%, rgba(124, 108, 255, 0.16), transparent 68%),
+    radial-gradient(64% 130% at 0% 0%, rgba(124, 108, 255, 0.08), transparent 58%),
+    linear-gradient(135deg, rgba(20, 18, 32, 0.85), rgba(10, 9, 16, 0.9)) !important;
+}
+
+/* chat surface itself (the big console card behind the persona header) */
+.console .chatbox,
+.console:not(.console-workspace) .chatbox {
+  background:
+    radial-gradient(circle at 76% 48%, rgba(124, 108, 255, 0.16), rgba(124, 108, 255, 0.04) 27%, transparent 57%),
+    linear-gradient(180deg, rgba(24, 21, 38, 0.7), rgba(14, 13, 22, 0.82)) !important;
+}
+.rcard-x { background: rgba(255, 255, 255, 0.08); color: var(--dim); border-color: var(--line); }
+.rcard-x:hover { background: rgba(224, 52, 94, 0.16); color: #ff8fa8; }
+
+/* rail: plan / queue / quick / desktop-context cards */
+.plan-card, .queue-card, .quick-card, .desktop-context-card {
+  background: var(--card-grad);
+  border-color: var(--line);
+}
+.rail-foot-btn { color: var(--dim); }
+.section-head h2 { color: var(--dim-2); }

@@ -3087,7 +3087,13 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 
 /* ---------------- console grid ---------------- */
 .console { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 330px); gap: clamp(10px, 1vw, 16px); padding: clamp(16px, 1.6vw, 22px); align-items: start; }
-.console-center { min-width: 0; display: flex; flex-direction: column; gap: clamp(16px, 1.8vw, 22px); }
+.console-center { min-width: 0; display: flex; flex-direction: column; gap: clamp(16px, 1.8vw, 22px); overflow-y: auto; overflow-x: hidden; }
+/* dashboard-brief and decision-deck must never be crushed to height:0 by
+   hero2's fixed viewport-based height budget below — that silent collapse
+   (content still painting via overflow:visible) is what made the Decisions
+   header read as overlapped/unreadable. Let the column scroll instead. */
+.console-center > .dashboard-brief,
+.console-center > .decision-deck { flex: none; }
 .console-rail { display: flex; flex-direction: column; gap: 16px; }
 
 /* Dashboard (chat + inline map) is a single screen, never a scrolling page —
@@ -3617,6 +3623,22 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 .quick-item:hover { border-color: var(--line-strong); background: rgba(91, 76, 255, 0.05); }
 .quick-ic { flex: 0 0 auto; color: var(--neon); display: grid; place-items: center; }
 .quick-arrow { margin-left: auto; color: var(--dim); }
+
+/* ---------------- dashboard quick-widgets (demoted modules) ---------------- */
+.quickwidgets-card { border: 1px solid var(--line); border-radius: 20px; padding: 18px; background: var(--glass); }
+.quickwidgets-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 4px; }
+.quickwidget { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px; cursor: pointer; text-align: left; border: 1px solid var(--line); border-radius: 12px; background: rgba(91, 76, 255, 0.03); transition: border-color 0.2s, background 0.2s; }
+.quickwidget:hover { border-color: var(--line-strong); background: rgba(91, 76, 255, 0.07); }
+.quickwidget.is-alert { border-color: rgba(199, 126, 0, 0.4); background: rgba(199, 126, 0, 0.07); }
+.qw-ic { flex: 0 0 auto; width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; color: var(--neon); background: rgba(91, 76, 255, 0.08); }
+.qw-ic .ic { width: 15px; height: 15px; }
+.qw-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.qw-text b { font-size: 12.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qw-text i { font-size: 11px; font-style: normal; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qw-val { flex: 0 0 auto; font: 600 12px "Spline Sans Mono", monospace; color: var(--neon); background: rgba(91, 76, 255, 0.12); border-radius: 999px; padding: 2px 8px; }
+.quickwidget.is-alert .qw-val { color: var(--warn); background: rgba(199, 126, 0, 0.14); }
+.qw-arrow { flex: 0 0 auto; color: var(--dim); font-size: 13px; }
+@media (max-width: 520px) { .quickwidgets-grid { grid-template-columns: 1fr; } }
 
 /* ---------------- phase-2 responsive ---------------- */
 @media (max-width: 1200px) {
@@ -8763,7 +8785,8 @@ body.phantomplay-playing .buddy-say {
      needs a scroll to reach it — see .app-main:has(> .console…). The
      chatbox's own flexible log area (flex:1, min-height:0) absorbs the
      difference by shrinking, rather than the hero growing past its budget. */
-  height: clamp(360px, calc(100vh - 345px), 920px);
+  min-height: clamp(360px, calc(100vh - 345px), 920px);
+  flex: 1 1 auto;
   position: relative;
   display: block;
   padding: clamp(14px, 1.4vw, 24px);
@@ -13571,10 +13594,11 @@ body .phantom .workspace-page :where(
   }
   .console:not(.console-workspace) .console-center {
     display: grid;
-    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(280px, 1fr);
     gap: 10px;
     min-height: 0;
-    overflow: hidden;
+    overflow-y: auto;
+    overflow-x: hidden;
   }
   .console:not(.console-workspace) .hero2 {
     height: auto;
