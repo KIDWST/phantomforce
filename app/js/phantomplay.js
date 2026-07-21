@@ -543,7 +543,7 @@ function renderLibrary() {
 }
 
 function renderFavorites() {
-  const games = ui.snapshot.catalog.filter((game) => ui.snapshot.favorites.includes(game.id));
+  const games = generalPlayGames(ui.snapshot.catalog).filter((game) => ui.snapshot.favorites.includes(game.id));
   return games.length ? `<div class="pp-game-grid pp-game-grid-full">${games.map((game) => gameCard(game)).join("")}</div>` : empty("No favorites yet", "Tap the heart on any game to save it here.");
 }
 

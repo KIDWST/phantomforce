@@ -22,6 +22,12 @@ const crownCircuit = read("../app/games/crown-circuit.html");
 const crownCircuitScript = crownCircuit.match(/<script>([\s\S]*)<\/script>/u)?.[1] || "";
 const tidefrontTactics = read("../app/games/tidefront-tactics.html");
 const appFiles = [index, main, module, v2Module, ...games];
+const kidsOnlyGameIds = [
+  "signal-match", "focus-stack", "reflex-grid", "penalty-kick", "rift-frenzy", "serpent-surge",
+  "color-rush", "tile-flow", "tower-tactics", "breath-pacer", "court-vision", "pixel-bloom",
+  "circuit-serpent", "echo-sequence", "signal-sweeper", "neon-breaker", "type-storm", "logic-lights",
+  "sudoku-signal",
+];
 
 assert.match(main, /id:\s*"phantomplay"[\s\S]*label:\s*"PhantomPlay"/u, "PhantomPlay must be in the native navigation.");
 assert.match(main, /renderPhantomPlay/u, "The workspace must use the PhantomPlay renderer.");
@@ -40,7 +46,12 @@ assert.match(module, /const GAME_SORTS = \["All", "Solo", "Multiplayer", "Kids"/
 assert.match(module, /const tabs = \[\["library", "Games"\], \["together", "Multiplayer"\], \["favorites", "Saved"\]/u, "Default PhantomPlay tabs must start with Games, Multiplayer, and Saved.");
 assert.match(module, /function sortGames\(games, sort = ui\.category\)[\s\S]*sort === "Kids"[\s\S]*kidsPick/u, "Default PhantomPlay must sort kids-only games through the sorter.");
 assert.match(module, /KIDS_ONLY_GAME_IDS[\s\S]*signal-match[\s\S]*logic-lights[\s\S]*sudoku-signal/u, "Default PhantomPlay must keep the requested kids-only game list.");
+for (const gameId of kidsOnlyGameIds) {
+  assert.match(module, new RegExp(JSON.stringify(gameId).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "u"), `Default PhantomPlay must include ${gameId} in the kids-only ID set.`);
+  assert.match(v2Module, new RegExp(JSON.stringify(gameId).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "u"), `PhantomPlay V2 must include ${gameId} in the kids-only ID set.`);
+}
 assert.match(module, /return generalPlayGames\(games\)/u, "Default PhantomPlay must hide kids-only games from normal catalog views.");
+assert.match(module, /function renderFavorites\(\)[\s\S]*generalPlayGames\(ui\.snapshot\.catalog\)/u, "Default PhantomPlay Saved tab must not re-surface kids-only games outside Kids.");
 assert.match(module, /return sortGames\(ui\.snapshot\.catalog\)\.filter/u, "Default PhantomPlay search must reuse the same sort pipeline as Games.");
 assert.doesNotMatch(module, /renderToddlerSpace|pp-shell-toddler|pp-toddler-space|data-pp-toddler-play/u, "Default PhantomPlay must not keep a separate Toddler Space page.");
 assert.match(css, /\.pp-play-header/u, "Default PhantomPlay game-first library header must be styled.");
