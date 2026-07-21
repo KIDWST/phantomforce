@@ -6,40 +6,86 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src data:; connect-src 'none'; media-src 'none'; font-src 'none'; base-uri 'none'; form-action 'none'" />
 <title>Vespergate: The Vesper Hand</title>
 <style>
-  :root { color-scheme: dark; --ink:#eaf2ff; --dim:#8a9ac0; --dawn:#8fe9ff; --dusk:#ff9ad0; --gold:#ffcf6b; }
-  * { box-sizing: border-box; }
-  html, body { margin:0; width:100%; height:100%; overflow:hidden; background:#05040c; color:var(--ink);
-    font-family:"Georgia", "Times New Roman", serif; -webkit-tap-highlight-color:transparent; user-select:none; }
-  .vg-app { position:fixed; inset:0; display:grid; place-items:center; background:
-    radial-gradient(120% 90% at 50% 0%, #0c0a1a, #05040c 70%); }
-  canvas#vg { display:block; image-rendering:pixelated; box-shadow:0 0 80px rgba(80,60,160,0.2); }
-  [data-vg-hint] { position:fixed; left:50%; bottom:14px; transform:translateX(-50%); z-index:4;
-    font:500 12px/1.4 "Georgia", serif; color:var(--dim); background:rgba(6,5,16,0.7);
-    padding:6px 14px; border:1px solid rgba(120,140,220,0.2); border-radius:10px; max-width:80vw; text-align:center; }
-  [data-vg-overlay] { position:fixed; inset:0; z-index:6; display:grid; place-items:center; padding:20px;
-    background:radial-gradient(90% 80% at 50% 40%, rgba(10,8,24,0.82), rgba(3,2,9,0.96)); }
+  :root { color-scheme:dark; --ink:#f4f0ff; --dim:#9ca7c2; --dawn:#8fe9ff; --dusk:#ff9ad0; --gold:#ffcf6b; --panel:rgba(8,7,19,.86); }
+  * { box-sizing:border-box; }
+  html, body { margin:0; width:100%; height:100%; overflow:hidden; background:#030208; color:var(--ink);
+    font-family:Georgia,"Times New Roman",serif; -webkit-tap-highlight-color:transparent; user-select:none; touch-action:none; }
+  button, input { font:inherit; }
+  button:focus-visible, input:focus-visible { outline:2px solid var(--dawn); outline-offset:3px; }
+  .vg-app { position:fixed; inset:0; display:grid; place-items:center; isolation:isolate; overflow:hidden;
+    background:radial-gradient(120% 100% at 50% 0%,#15102a 0%,#070511 55%,#030208 100%); }
+  .vg-app::after { content:""; position:absolute; inset:0; pointer-events:none; z-index:2;
+    background:linear-gradient(180deg,rgba(2,1,8,.08),transparent 16%,transparent 78%,rgba(2,1,8,.56)),
+      repeating-linear-gradient(180deg,rgba(255,255,255,.012) 0,rgba(255,255,255,.012) 1px,transparent 1px,transparent 4px); }
+  canvas#vg { display:block; max-width:100vw; max-height:100vh; image-rendering:auto; cursor:crosshair;
+    box-shadow:0 0 100px rgba(83,55,160,.24); }
+  .vg-status { position:fixed; left:max(14px,env(safe-area-inset-left)); top:max(12px,env(safe-area-inset-top)); z-index:5;
+    display:flex; align-items:center; gap:9px; color:rgba(234,242,255,.72); font:700 10px/1 monospace; letter-spacing:.12em;
+    text-transform:uppercase; pointer-events:none; text-shadow:0 1px 8px #030208; }
+  .vg-status::before { content:""; width:7px; height:7px; border-radius:50%; background:var(--dawn); box-shadow:0 0 14px var(--dawn); }
+  .vg-toolbar { position:fixed; right:max(12px,env(safe-area-inset-right)); top:max(10px,env(safe-area-inset-top)); z-index:8;
+    display:flex; align-items:center; gap:6px; padding:5px; border:1px solid rgba(143,233,255,.16); border-radius:8px;
+    background:rgba(5,4,13,.74); box-shadow:0 12px 28px rgba(0,0,0,.3); backdrop-filter:blur(14px); }
+  .vg-tool { min-width:38px; height:34px; border:1px solid transparent; border-radius:6px; cursor:pointer; color:var(--ink);
+    background:transparent; font:700 10px/1 monospace; letter-spacing:.04em; }
+  .vg-tool:hover { color:var(--dawn); border-color:rgba(143,233,255,.28); background:rgba(143,233,255,.08); }
+  .vg-tool[data-vg-fullscreen] { min-width:96px; padding:0 12px; }
+  [data-vg-hint] { position:fixed; left:50%; bottom:max(14px,env(safe-area-inset-bottom)); transform:translateX(-50%); z-index:5;
+    font:600 12px/1.4 Georgia,serif; color:#c7d2ea; background:rgba(6,5,16,.84); padding:8px 14px;
+    border:1px solid rgba(143,233,255,.2); border-radius:7px; max-width:min(700px,82vw); text-align:center; box-shadow:0 12px 28px rgba(0,0,0,.28); }
+  [data-vg-overlay] { position:fixed; inset:0; z-index:7; display:grid; align-items:center; justify-items:start; padding:clamp(28px,6vw,84px);
+    overflow:auto; background:linear-gradient(90deg,rgba(3,2,9,.97) 0%,rgba(3,2,9,.86) 40%,rgba(3,2,9,.22) 72%,rgba(3,2,9,.5) 100%); }
   [data-vg-overlay][hidden] { display:none; }
-  .vg-panel { max-width:560px; text-align:center; }
-  .vg-kick { margin:0 0 6px; letter-spacing:0.4em; font:600 11px monospace; color:var(--dawn); }
-  .vg-panel h1 { margin:0 0 12px; font-size:clamp(38px,8vw,64px); letter-spacing:0.04em;
-    background:linear-gradient(180deg,#eaf2ff,#9fb4e8); -webkit-background-clip:text; background-clip:text; color:transparent;
-    text-shadow:0 0 40px rgba(143,233,255,0.2); }
-  .vg-sub { margin:0 auto 22px; max-width:44ch; color:var(--dim); font-size:15px; line-height:1.6; }
-  .vg-btns { display:flex; flex-direction:column; gap:10px; max-width:280px; margin:0 auto; }
-  .vg-btn { padding:12px 22px; border:1px solid rgba(143,233,255,0.25); border-radius:12px; cursor:pointer;
-    background:rgba(20,18,40,0.6); color:var(--ink); font:600 15px "Georgia", serif; transition:.15s; }
-  .vg-btn:hover { border-color:var(--dawn); background:rgba(40,50,90,0.5); transform:translateY(-1px); }
-  .vg-primary { background:linear-gradient(180deg,#3a5a9a,#243a6a); border:0; box-shadow:0 6px 24px rgba(60,90,160,0.3); }
-  .vg-controls { margin:22px auto 0; max-width:52ch; font-size:11px; color:var(--dim); line-height:1.7; }
-  .vg-settings { max-width:420px; }
-  .vg-set { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:8px 0; font-size:13px; color:var(--dim); }
-  .vg-set input[type=range] { flex:0 0 160px; accent-color:var(--dawn); }
-  .vg-set input[type=checkbox] { accent-color:var(--dawn); width:18px; height:18px; }
+  .vg-panel { width:min(650px,100%); text-align:left; }
+  .vg-kick { margin:0 0 10px; letter-spacing:.34em; font:700 11px/1.2 monospace; color:var(--dawn); }
+  .vg-panel h1 { margin:0 0 14px; max-width:100%; font-size:clamp(44px,7vw,86px); line-height:.92; letter-spacing:0;
+    background:linear-gradient(180deg,#fff 0%,#d9e3ff 54%,#91a6d9 100%); -webkit-background-clip:text; background-clip:text; color:transparent;
+    text-shadow:0 0 46px rgba(143,233,255,.16); }
+  .vg-sub { margin:0 0 22px; max-width:58ch; color:#b1bdd5; font-size:clamp(14px,1.4vw,17px); line-height:1.55; }
+  .vg-campaign { display:flex; gap:8px; flex-wrap:wrap; margin:0 0 24px; }
+  .vg-campaign span { padding:7px 9px; border-left:2px solid var(--dawn); background:rgba(143,233,255,.06); color:#cbd7ed;
+    font:700 10px/1 monospace; letter-spacing:.06em; text-transform:uppercase; }
+  .vg-btns { display:flex; flex-wrap:wrap; gap:9px; margin:0; }
+  .vg-btn { min-height:46px; padding:0 20px; border:1px solid rgba(143,233,255,.25); border-radius:7px; cursor:pointer;
+    background:rgba(17,14,34,.72); color:var(--ink); font:700 14px Georgia,serif; transition:background .15s,border-color .15s,transform .15s; }
+  .vg-btn:hover { border-color:var(--dawn); background:rgba(40,50,90,.62); transform:translateY(-1px); }
+  .vg-primary { min-width:190px; color:#07111a; background:linear-gradient(180deg,#a7efff,#6ebbd8); border-color:transparent;
+    box-shadow:0 8px 30px rgba(93,193,225,.22); }
+  .vg-primary:hover { color:#07111a; background:linear-gradient(180deg,#c5f5ff,#8bd3eb); }
+  .vg-controls { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:7px; margin:24px 0 0; max-width:620px; }
+  .vg-control { min-width:0; padding:8px 10px; border:1px solid rgba(156,167,194,.13); background:rgba(5,4,13,.46); color:#9ca7c2;
+    font:600 10px/1.35 monospace; }
+  .vg-control b { display:block; margin-bottom:3px; color:#e9efff; font-size:10px; letter-spacing:.06em; }
+  [data-kind="settings"] { justify-items:center; background:rgba(3,2,9,.9); }
+  .vg-settings, [data-kind="pause"] .vg-panel, [data-kind="dead"] .vg-panel, [data-kind="win"] .vg-panel {
+    max-width:520px; padding:28px; border:1px solid rgba(143,233,255,.18); border-radius:8px; background:var(--panel);
+    box-shadow:0 28px 80px rgba(0,0,0,.45); backdrop-filter:blur(18px); }
+  .vg-settings h1, [data-kind="pause"] .vg-panel h1, [data-kind="dead"] .vg-panel h1, [data-kind="win"] .vg-panel h1 { font-size:clamp(36px,6vw,58px); }
+  .vg-set { display:flex; align-items:center; justify-content:space-between; gap:18px; margin:12px 0; color:#bac5dc; font-size:14px; }
+  .vg-set input[type=range] { flex:0 0 min(190px,45vw); accent-color:var(--dawn); }
+  .vg-set input[type=checkbox] { accent-color:var(--dawn); width:19px; height:19px; }
+  @media (max-width:700px) {
+    [data-vg-overlay] { align-items:end; padding:72px 18px max(24px,env(safe-area-inset-bottom)); background:linear-gradient(0deg,rgba(3,2,9,.98),rgba(3,2,9,.72) 64%,rgba(3,2,9,.26)); }
+    .vg-panel h1 { font-size:clamp(42px,14vw,66px); }
+    .vg-sub { font-size:13px; }
+    .vg-controls { grid-template-columns:repeat(2,minmax(0,1fr)); margin-top:16px; }
+    .vg-control:nth-child(n+5) { display:none; }
+    .vg-status { display:none; }
+    .vg-toolbar { top:max(8px,env(safe-area-inset-top)); }
+    .vg-tool[data-vg-fullscreen] { min-width:82px; }
+    .vg-settings { padding:20px; }
+  }
 </style>
 </head>
 <body>
 <div class="vg-app">
   <canvas id="vg" width="640" height="360" aria-label="Vespergate game"></canvas>
+</div>
+<div class="vg-status" data-vg-status>Vespergate · HD</div>
+<div class="vg-toolbar" role="toolbar" aria-label="Game controls">
+  <button class="vg-tool" type="button" data-vg-sound aria-label="Mute sound" title="Mute sound">SOUND</button>
+  <button class="vg-tool" type="button" data-vg-pause aria-label="Pause game" title="Pause game">PAUSE</button>
+  <button class="vg-tool" type="button" data-vg-fullscreen aria-label="Enter fullscreen" title="Enter fullscreen">FULLSCREEN</button>
 </div>
 <div data-vg-hint hidden></div>
 <div data-vg-overlay data-kind="title"></div>

@@ -2641,13 +2641,16 @@
   // ---------------------------------------------------------------------
   // Drawing
   // ---------------------------------------------------------------------
-  function drawDiamond(cx, cy, w, h, fill, stroke) {
+  function diamondPath(cx, cy, w, h) {
     ctx.beginPath();
     ctx.moveTo(cx, cy - h / 2);
     ctx.lineTo(cx + w / 2, cy);
     ctx.lineTo(cx, cy + h / 2);
     ctx.lineTo(cx - w / 2, cy);
     ctx.closePath();
+  }
+  function drawDiamond(cx, cy, w, h, fill, stroke) {
+    diamondPath(cx, cy, w, h);
     if (fill) { ctx.fillStyle = fill; ctx.fill(); }
     if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 1 * rt.dpr; ctx.stroke(); }
   }
@@ -2672,6 +2675,74 @@
   function motionPulse(speed, phase = 0, base = 0.6, amount = 0.15) {
     return rt.reducedMotion ? base : base + amount * Math.sin(performance.now() / speed + phase);
   }
+  function drawWaterSurface(cx, cy, w, h, variant = 0.5, phase = 0, live = false) {
+    const wobble = rt.reducedMotion ? 0 : phase;
+    ctx.save();
+    diamondPath(cx, cy, w, h);
+    ctx.clip();
+    const grad = ctx.createLinearGradient(0, cy - h * 0.55, 0, cy + h * 0.55);
+    grad.addColorStop(0, live ? '#69dcf4' : '#45bde0');
+    grad.addColorStop(0.55, '#2088c1');
+    grad.addColorStop(1, '#106194');
+    ctx.fillStyle = grad;
+    ctx.fillRect(cx - w / 2, cy - h / 2, w, h);
+    const glow = ctx.createRadialGradient(cx - w * 0.08, cy - h * 0.1, h * 0.02, cx - w * 0.08, cy - h * 0.1, w * 0.5);
+    glow.addColorStop(0, live ? 'rgba(240,255,255,0.34)' : 'rgba(240,255,255,0.2)');
+    glow.addColorStop(0.45, 'rgba(92,223,255,0.12)');
+    glow.addColorStop(1, 'rgba(8,36,78,0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(cx - w / 2, cy - h / 2, w, h);
+    ctx.lineCap = 'round';
+    ctx.lineWidth = Math.max(1, 1.05 * rt.dpr);
+    const lineCount = live ? 2 : 1;
+    for (let i = 0; i < lineCount; i++) {
+      const drift = Math.sin(wobble * (0.7 + i * 0.12) + variant * 5 + i) * w * 0.08;
+      const y = cy + (i - 0.5) * h * 0.15 + Math.cos(wobble * 0.6 + i) * h * 0.035;
+      ctx.globalAlpha = live ? 0.16 : 0.07;
+      ctx.strokeStyle = i % 2 ? '#d8fbff' : '#8defff';
+      ctx.beginPath();
+      ctx.moveTo(cx - w * 0.38 + drift, y);
+      ctx.bezierCurveTo(cx - w * 0.1 + drift * 0.25, y - h * 0.055, cx + w * 0.12 - drift, y + h * 0.055, cx + w * 0.38 - drift * 0.3, y);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+  function drawLivingFire(cx, baseY, scale = 1, phase = 0) {
+    const u = rt.tileH * scale;
+    const flicker = rt.reducedMotion ? 0 : Math.sin(phase * 7.2) * 0.12 + Math.sin(phase * 12.9) * 0.06;
+    ctx.save();
+    const glow = ctx.createRadialGradient(cx, baseY - u * 0.5, u * 0.05, cx, baseY - u * 0.45, u * 1.35);
+    glow.addColorStop(0, 'rgba(255,220,102,0.48)');
+    glow.addColorStop(0.35, 'rgba(255,96,48,0.24)');
+    glow.addColorStop(1, 'rgba(255,60,20,0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath(); ctx.arc(cx, baseY - u * 0.42, u * 1.35, 0, Math.PI * 2); ctx.fill();
+    const flame = (offset, width, height, color, alpha) => {
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.moveTo(cx + offset - width * 0.5, baseY);
+      ctx.bezierCurveTo(cx + offset - width * 0.8, baseY - height * 0.34, cx + offset - width * 0.22, baseY - height * 0.76, cx + offset + flicker * u, baseY - height);
+      ctx.bezierCurveTo(cx + offset + width * 0.42, baseY - height * 0.62, cx + offset + width * 0.78, baseY - height * 0.24, cx + offset + width * 0.46, baseY);
+      ctx.closePath();
+      ctx.fill();
+    };
+    flame(-u * 0.06, u * 0.62, u * 1.38, '#ff5a2e', 0.9);
+    flame(u * 0.1, u * 0.42, u * 1.03, '#ffb32d', 0.86);
+    flame(-u * 0.02, u * 0.22, u * 0.66, '#fff1a0', 0.88);
+    if (!rt.reducedMotion) {
+      for (let i = 0; i < 5; i++) {
+        const k = ((phase * 0.7 + i * 0.21) % 1);
+        ctx.globalAlpha = (1 - k) * 0.62;
+        ctx.fillStyle = i % 2 ? '#ffd45a' : '#ff8054';
+        ctx.beginPath();
+        ctx.arc(cx + Math.sin(phase * 2 + i * 1.7) * u * 0.42, baseY - u * (0.5 + k * 1.15), Math.max(1.2 * rt.dpr, u * (0.035 + k * 0.015)), 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.restore();
+    ctx.globalAlpha = 1;
+  }
   const TERRAIN_COLOR = {
     grass: '#3a6b4a', meadow: '#5d8d53', forestfloor: '#426f47', stonegrass: '#727c73', sungrass: '#878348', frostgrass: '#738f95',
     trail: '#9f7f58', road: '#a9855c', bridge: '#ba9564', grove: '#2f7a4d', quarry: '#7b7f8c', reed: '#6d995e', water: '#3f8ec9',
@@ -2684,7 +2755,11 @@
     const s = tileToScreen(gx, gy);
     const biomeGround = BIOME_DEFS[tile.biome]?.ground || TERRAIN_COLOR.grass;
     const top = t === 'grass' ? SEASON_GRASS[seasonOf(state.day)] : NATURAL_GROUND_TYPES.has(t) ? biomeGround : (TERRAIN_COLOR[t] || biomeGround);
-    drawDiamond(s.x, s.y, rt.tileW, rt.tileH, top, 'rgba(0,0,0,0.18)');
+    if (t === 'water') {
+      drawWaterSurface(s.x, s.y, rt.tileW * 1.12, rt.tileH * 1.12, tile.variant, 0, false);
+    } else {
+      drawDiamond(s.x, s.y, rt.tileW, rt.tileH, top, 'rgba(0,0,0,0.18)');
+    }
     if (t === 'grove') {
       drawBlock(s.x, s.y, rt.tileW * 0.18, rt.tileH * 0.18, rt.tileH * 1.15, '#8c6245', '#68442f', '#4f3427');
       ctx.fillStyle = shade(top, 1.1);
@@ -2778,9 +2853,18 @@
       ctx.save(); ctx.globalAlpha = 0.5; ctx.fillStyle = '#ffe6a3';
       ctx.beginPath(); ctx.arc(s.x, s.y - hgt - rt.tileH * 0.4, rt.tileH * 1.1, 0, Math.PI * 2); ctx.fill(); ctx.restore();
     }
-    if (piece.type === 'hearth' && !rt.reducedMotion) {
-      // A lived-in hearth smokes gently — "someone lives here."
-      drawSmoke(s.x, s.y - hgt - rt.tileH * 0.25, piece.gx * 5 + piece.gy * 11);
+    if (piece.type === 'hearth') {
+      // The hearth should read as flame and warmth, not an orange block.
+      const phase = rt.playSecondsAccum + piece.gx * 0.41 + piece.gy * 0.29;
+      ctx.save();
+      ctx.fillStyle = '#301811';
+      ctx.globalAlpha = 0.78;
+      ctx.beginPath();
+      ctx.ellipse(s.x, s.y - hgt - rt.tileH * 0.08, rt.tileW * 0.18, rt.tileH * 0.13, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+      drawLivingFire(s.x, s.y - hgt - rt.tileH * 0.02, 0.62, phase);
+      if (!rt.reducedMotion) drawSmoke(s.x, s.y - hgt - rt.tileH * 0.9, piece.gx * 5 + piece.gy * 11);
     }
     if (piece.type === 'watchtower') {
       // Rippling flag atop the tower.
@@ -3420,9 +3504,7 @@
       const s = tileToScreen(a.gx, a.gy);
       if (s.x < -rt.tileW * 2 || s.x > rt.W + rt.tileW * 2 || s.y < -rt.tileH * 4 || s.y > rt.H + rt.tileH * 4) continue;
       if (a.type === 'water') {
-        ctx.globalAlpha = motionPulse(500, a.gx + a.gy, 0.35, 0.1);
-        drawDiamond(s.x, s.y, rt.tileW * 0.7, rt.tileH * 0.7, '#bfe9ff', null);
-        ctx.globalAlpha = 1;
+        drawWaterSurface(s.x, s.y, rt.tileW * 1.08, rt.tileH * 1.08, a.variant, t + a.gx * 0.27 + a.gy * 0.19, true);
         // Occasional fish ripple on a deterministic subset of water tiles.
         if (!rt.reducedMotion && a.variant > 0.9) {
           const k = ((t * 0.45 + a.variant * 9) % 3.4) / 3.4;
