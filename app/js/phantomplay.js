@@ -1,13 +1,24 @@
 import {
   currentTenantId, isAdmin, isOwnerOperator, session,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260721-10";
+} from "./store.js?v=phantom-live-20260721-11";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 const mobilePlaySurface = () => typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;
 const controlsCopy = (game) => mobilePlaySurface() ? "" : String(game?.controls || "").trim();
 const FALLBACK_KEY = "pf.phantomplay.offline.v1";
 const DEV_SUPPORT_KEY = "pf.phantomplay.developerSupport.v1";
+const COLOR_MODE_KEY = "pf.colorMode.v1";
+function currentColorMode() {
+  const saved = workspaceStorageGetItem(COLOR_MODE_KEY);
+  return saved === "light" ? "light" : "dark";
+}
+function applyColorMode(mode) {
+  const next = mode === "light" ? "light" : "dark";
+  workspaceStorageSetItem(COLOR_MODE_KEY, next);
+  document.documentElement.dataset.orgColorMode = next;
+}
+applyColorMode(currentColorMode());
 const CATEGORIES = ["All", "Kids", "Arcade", "Puzzle", "Focus", "Strategy", "Sports", "Creative"];
 const GAME_SORTS = ["All", "Solo", "Multiplayer", "Kids", ...CATEGORIES.filter((category) => category !== "All" && category !== "Kids")];
 const KIDS_ONLY_GAME_IDS = new Set([
@@ -124,10 +135,10 @@ const BUILT_INS = [
   { id: "word-weld", title: "Word Weld", summary: "Daily Wordle-inspired puzzle plus buddy-duel word runs for PhantomForce friends.", description: "A Wordle-inspired daily weld: everyone gets the same five-letter puzzle once per day on this workspace device, or you can start a pass-and-play buddy duel for private PhantomForce friends.", category: "Puzzle", tags: ["word", "daily", "puzzle", "multiplayer", "friends", "touch"], contentRating: "everyone", multiplayerDescriptor: "Buddy Duel is pass-and-play today; ready for private PhantomPlay room relay without public discovery.", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/word-weld.html?v=2.0.0", thumbnail: GAME_ART_BY_SLUG["word-weld"], featured: true, version: "2.0.0", controls: "Keyboard, tap letters, Enter to submit", progressSupport: true, scoreSupport: true },
   { id: "reflex-grid", title: "Reflex Grid", summary: "Hit the live cells before the grid burns out.", description: "A fast aim-and-reaction grid for short focus breaks, with mistakes, streaks, and a real finish.", category: "Strategy", tags: ["reaction", "strategy", "touch", "aim"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/reflex-grid.html?v=1.0.0", thumbnail: GAME_ART_BY_SLUG["reflex-grid"], featured: true, version: "1.0.0", controls: "Click, tap, or use number keys", progressSupport: true, scoreSupport: true },
   { id: "rift-frenzy", title: "Rift Frenzy", summary: "Carry a valuable fish school, steal from rivals, then absorb at the perfect moment to become enormous.", description: "A school-to-grow ocean survival arena: collect smaller neutral fish into a visible school, protect it from rival steals, dash through exposed schools, absorb the school on a 10-second cooldown, grow permanently, survive predators and hazards, and eliminate every rival until one fish remains.", category: "Arcade", tags: ["fish", "arena", "growth", "io", "multiplayer", "school"], contentRating: "everyone10", multiplayerDescriptor: "Solo fills rival slots with bots; local 1-4 player keyboard mode replaces bots with humans.", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/rift-frenzy.html?v=2.0.0", thumbnail: GAME_ART_BY_SLUG["rift-frenzy"], featured: true, version: "2.0.0", controls: "P1 WASD, Shift dash, Space absorb. P2 arrows, / dash, Enter absorb. P3 IJKL, O dash, U absorb. P4 TFGH, Y dash, R absorb.", progressSupport: true, scoreSupport: true, engine: { tier: "arena-large-map", minVersion: PHANTOMPLAY_ENGINE.version } },
-  { id: "crown-circuit", title: "Crown Circuit", summary: "Solo bot training plus 1v1 room lane-card crown duels with elixir, towers, and drag-and-drop deploy.", description: "A royale-style lane battler you can actually learn alone: start Solo Training against Crown Bot, practice lane pressure and elixir timing, then take the same drag-and-drop troop duel into a private PhantomPlay room with a friend.", category: "Strategy", tags: ["card", "lane", "royale", "solo", "bots", "training", "multiplayer", "pvp", "drag-and-drop", "touch"], contentRating: "everyone10", contentDescriptors: ["strategic_complexity", "competitive_play"], multiplayerDescriptor: "Solo Training fills the rival side with Crown Bot. Room mode supports a two-player private PhantomPlay duel, one device each, with no public matchmaking, chat, or voice.", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/crown-circuit.html?v=1.2.0", thumbnail: GAME_ART_BY_SLUG["crown-circuit"], featured: true, version: "1.2.0", controls: "Drag a card from your hand onto your side of the field to deploy that troop. Touch or mouse.", progressSupport: true, scoreSupport: true, engine: { tier: "arena-large-map", minVersion: PHANTOMPLAY_ENGINE.version } },
+  { id: "crown-circuit", title: "Crown Circuit", summary: "Solo bot training plus 1v1 lane-card crown duels with Obsidian Relay, Oracle slows, Ram sieges, and drag-and-drop deploy.", description: "A royale-style lane battler you can actually learn alone: start Solo Training against Crown Bot, practice lane pressure and elixir timing on multiple arenas including Obsidian Relay, then take the same drag-and-drop troop duel into a private PhantomPlay room. Oracle cards now slow threats, Ram cards actually pressure towers, and bots know the upgraded deck.", category: "Strategy", tags: ["card", "lane", "royale", "solo", "bots", "training", "multiplayer", "pvp", "drag-and-drop", "touch"], contentRating: "everyone10", contentDescriptors: ["strategic_complexity", "competitive_play"], multiplayerDescriptor: "Solo Training fills the rival side with Crown Bot. Room mode supports a two-player private PhantomPlay duel, one device each, with no public matchmaking, chat, or voice.", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/crown-circuit.html?v=1.3.0", thumbnail: GAME_ART_BY_SLUG["crown-circuit"], featured: true, version: "1.3.0", controls: "Drag a card from your hand onto your side of the field to deploy that troop. Touch or mouse.", progressSupport: true, scoreSupport: true, engine: { tier: "arena-large-map", minVersion: PHANTOMPLAY_ENGINE.version } },
   { id: "kingdom-breakers", title: "Kingdom Breakers", summary: "Physics siege duels with two castles, wardens, Stonefall Orbs, Splinter Lances, and Emberburst shots.", description: "A real castle-breaker: campaign holds, duel mode with one player castle and one bot castle, destructible blocks, ammo choice, and Warden defeat as the core win condition. This restores the hard-work siege game to the main PhantomPlay fallback catalog.", category: "Strategy", tags: ["siege", "destruction", "physics", "artillery", "campaign", "pvp"], contentRating: "everyone10", contentDescriptors: ["cartoon_action", "mild_destruction", "competitive_play"], developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/kingdom-breakers.html?v=1.1.0", thumbnail: GAME_ART_BY_SLUG["kingdom-breakers"], featured: true, version: "1.1.0", controls: "Drag to aim and release to fire. 1/2/3 switch ammo. Space or Enter fires while aiming.", progressSupport: true, scoreSupport: true, engine: { tier: "physics-siege", minVersion: PHANTOMPLAY_ENGINE.version } },
   { id: "tidefront-tactics", title: "Tidefront Tactics", summary: "Wind-read artillery battles with angle, power, weapons, skiffs, bots, and room duels.", description: "The spear-like artillery battle you remembered: set angle and power, fire tactical tools across a deformable sea, read wind, crater cover, and beat rival skiffs through campaign, skirmish, or Fleet Room play.", category: "Strategy", tags: ["artillery", "tactics", "turn-based", "battle", "pvp"], contentRating: "everyone10", contentDescriptors: ["strategic_complexity", "mild_destruction", "competitive_play"], developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/tidefront-tactics.html?v=1.1.0", thumbnail: GAME_ART_BY_SLUG["tidefront-tactics"], featured: true, version: "1.1.0", controls: "Arrow keys adjust angle and power. Space fires. 1/2/3 switch tools.", progressSupport: true, scoreSupport: true, engine: { tier: "artillery-large-map", minVersion: PHANTOMPLAY_ENGINE.version } },
-  { id: "skyguard-arena", title: "Skyguard Arena", summary: "Sentinel defense with 3-tier towers and a Century Watch: 100 escalating rounds, a new boss every 10.", description: "A tower-defense battle rebuilt around the Century Watch: rounds keep coming and keep getting harder all the way to round 100, with new enemy types unlocking as you climb and a brand-new boss mechanic every 10 rounds — shield phases, splitters, tower jammers, burrowers, twin furies, and the round-100 Sovereign finale. All nine Sentinels now upgrade through three visible tiers with heavier hits, plus Glint interest, Overcharge, and private room duels.", category: "Strategy", tags: ["tower-defense", "strategy", "endless", "bosses", "pvp", "waves"], contentRating: "everyone10", contentDescriptors: ["cartoon_action", "strategic_complexity", "competitive_play"], developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/skyguard-arena/index.html?v=1.2.0", thumbnail: GAME_ART_BY_SLUG["skyguard-arena"], featured: true, version: "1.2.0", controls: "Choose Sentinel cards, place on lane slots, upgrade, and trigger Overcharge with Q.", progressSupport: true, scoreSupport: true, engine: { tier: "arena-large-map", minVersion: PHANTOMPLAY_ENGINE.version } },
+  { id: "skyguard-arena", title: "Skyguard Arena", summary: "Sentinel defense with 3-tier towers, Century Watch bosses, Neon Tangle, relay surges, and Overcharge.", description: "A tower-defense battle rebuilt around the Century Watch: rounds keep coming and keep getting harder all the way to round 100, with new enemy types unlocking as you climb and a boss mechanic every 10 rounds. The Neon Tangle arena adds a braided relay route and timed relay surges that punish clustered enemies, while all nine Sentinels upgrade through three visible tiers with heavier hits, Glint interest, Overcharge, and private room duels.", category: "Strategy", tags: ["tower-defense", "strategy", "endless", "bosses", "pvp", "waves"], contentRating: "everyone10", contentDescriptors: ["cartoon_action", "strategic_complexity", "competitive_play"], developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/skyguard-arena/index.html?v=1.3.0", thumbnail: GAME_ART_BY_SLUG["skyguard-arena"], featured: true, version: "1.3.0", controls: "Choose Sentinel cards, place on lane slots, upgrade, and trigger Overcharge with Q.", progressSupport: true, scoreSupport: true, engine: { tier: "arena-large-map", minVersion: PHANTOMPLAY_ENGINE.version } },
   { id: "serpent-surge", title: "Serpent Surge", summary: "A fast snake arena with rivals, pickups, cutoffs, boost trails, and storm pressure across a sprawling scrollable map.", description: "A PhantomPlay take on snake arena games: orbit energy, grow long, bait rival serpents, use boost carefully, and survive a closing storm ring across a map many times bigger than the screen, with a camera that follows and zooms as you grow, plus a corner minimap.", category: "Strategy", tags: ["snake", "arena", "io", "survival", "touch"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/serpent-surge.html?v=1.1.0", thumbnail: GAME_ART_BY_SLUG["serpent-surge"], featured: true, version: "1.1.0", controls: "Steer with mouse, WASD, or arrows. Hold Space to boost.", progressSupport: true, scoreSupport: true, engine: { tier: "arena-large-map", minVersion: PHANTOMPLAY_ENGINE.version } },
   { id: "pixel-bloom", title: "Pixel Bloom", summary: "Toddler-friendly neon bloom toy — no timer, no pressure, just gentle pattern play.", description: "A calm toddler-friendly creative toy with mirrored petals, no reading pressure, no timer, and no failure state.", category: "Creative", tags: ["toddler", "calm", "creative", "relax", "touch"], contentRating: "toddler", contentDescriptors: ["no_reading_required"], developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/pixel-bloom.html", thumbnail: CATEGORY_ART["Creative"], featured: false, version: "1.0.0", controls: "Tap cells or arrows + Space", progressSupport: true, scoreSupport: true },
   { id: "type-storm", title: "Type Storm", summary: "Vertical word-rain typing: words actually fall, streaks glow, and the ramp stays readable.", description: "A revamped typing storm where words rain downward in vertical columns. Type the highlighted letters, chase combos, and survive a readable-but-serious speed ramp.", category: "Focus", tags: ["typing", "word-rain", "speed", "keyboard", "words"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/type-storm.html?v=1.1.0", thumbnail: CATEGORY_ART["Focus"], featured: false, version: "1.1.0", controls: "Just type — tap first on mobile", progressSupport: true, scoreSupport: true },
@@ -150,8 +161,8 @@ const BUILT_INS = [
   { id: "phantom-grand-prix", title: "Phantom Grand Prix", summary: "8-kart racing with hop-drift mini-turbos, slipstream, six items, four tracks, and a full Cup mode.", description: "An arcade kart racer grown into a real grand prix: hop into drifts to charge tiered mini-turbos, draft rivals for slipstream boosts, and fight an 8-kart field of named CPU racers through Ghostlight, Redwood, Aurora ice, and the new Meltdown Caldera lava track — boost pads, shortcuts, and hazards included. Grab item boxes for boosts, homing bolts, traps, shields, surges, and the field-zapping tempest, then chase the 4-round Grand Prix Cup to a podium finish. Solo or two-player split-screen.", category: "Arcade", tags: ["racing", "kart", "arcade", "drift", "cup", "multiplayer", "touch"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/phantom-grand-prix/index.html?v=2.0.0", thumbnail: GAME_ART_BY_SLUG["phantom-grand-prix"], featured: true, version: "2.0.0", controls: "P1: W/S/A/D, Shift drift, Space item, M mute. P2: arrows, slash drift, Enter item.", progressSupport: true, scoreSupport: true },
   { id: "beat-strike", title: "BeatStrike", summary: "Full-keyboard tap/hold rhythm game on a generated 128 BPM beatmap.", description: "Every letter key is live: tap and hold notes falling toward the hit line on a synthesized click track.", category: "Focus", tags: ["rhythm", "music", "keyboard", "timing"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/beat-strike/index.html?v=1.0.0", thumbnail: GAME_ART_BY_SLUG["beat-strike"], featured: false, version: "1.0.0", controls: "Every letter key is live.", progressSupport: false, scoreSupport: false },
   { id: "im-baked", title: "I'm Baked", summary: "Run a future cake shop: read orders, time the oven, decorate showpieces, and grow the shift.", description: "A complete cake-shop day loop with distinct customers, order tickets, bake timing, layered procedural cakes, visual finishes, customer patience, grades, coins, streaks, Story Shift, and Rush Counter modes.", category: "Creative", tags: ["cooking", "cakes", "shop", "creative", "simulation", "touch"], contentRating: "everyone", contentDescriptors: ["simulated_economy"], developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/im-baked.html?v=1.0.0", thumbnail: GAME_ART_BY_SLUG["im-baked"], featured: true, version: "1.0.0", controls: "Choose the ticketed ingredients, stop the oven in the green, decorate, and serve.", progressSupport: true, scoreSupport: true, engine: { tier: "creative-sim", minVersion: PHANTOMPLAY_ENGINE.version } },
-  { id: "vespergate", title: "Vespergate: The Hollow Geometry", summary: "Gothic portal-action: the left hand makes force, the right hand folds space — turn the room into a weapon.", description: "An original 2D gothic action-adventure with a real basis-transform portal system: fire the Cinder Hand from the left while opening two linked Vesper Gates with the right, keeping momentum through the fold. The Cathedral of Falling Bells slice with shielded guards, snipers, gate leeches, and the three-phase Bellmother boss.", category: "Arcade", tags: ["action-adventure", "portal", "gothic", "metroidvania", "gamepad", "touch"], contentRating: "teen", contentDescriptors: ["fantasy_conflict", "intense_action"], developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/vespergate/index.html?v=1.1.0", thumbnail: CATEGORY_ART["Arcade"], featured: true, version: "1.1.0", controls: "WASD move, Space jump, Shift dash. Left-click fires, right-click places a gate, Q swaps gate, F vents strain. Full gamepad support.", progressSupport: true, scoreSupport: true },
-  { id: "phantom-strike", title: "Phantom Strike", summary: "First-person tactical arena combat with weapon builds, bots, three maps, and real local split-screen.", description: "A network-silent first-person ray-cast shooter with Solo Ops against a bot squad, genuine same-device 1v1 split-screen, three compact maps, rifle/SMG/shotgun builds, optics, barrels, hit feedback, respawns, and an after-action report.", category: "Arcade", tags: ["fps", "shooter", "first-person", "bots", "multiplayer", "split-screen", "gamepad"], contentRating: "teen", contentDescriptors: ["intense_action", "competitive_play"], multiplayerDescriptor: "Local 1v1 is real same-device split-screen. Solo Ops uses clearly labeled bots. No public matchmaking, chat, voice, or external networking.", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/phantom-strike.html?v=2.1.0", thumbnail: GAME_ART_BY_SLUG["phantom-strike"], featured: true, version: "2.1.0", controls: "Click to lock the mouse and look, WASD moves, click or Space fires. Gamepad: left stick moves, right stick turns, RT or A fires.", progressSupport: true, scoreSupport: true, engine: { tier: "raycast-fps", minVersion: PHANTOMPLAY_ENGINE.version } },
+  { id: "vespergate", title: "Vespergate: The Hollow Geometry", summary: "Gothic portal-action with a longer Cathedral-to-Glass-Ossuary campaign, mirror rooms, and a real finish.", description: "An original 2D gothic action-adventure with a real basis-transform portal system: fire the Cinder Hand from the left while opening two linked Vesper Gates with the right, keeping momentum through the fold. The campaign now runs from the Cathedral of Falling Bells into the Glass Ossuary and Upper Belfry, with shielded guards, snipers, gate leeches, Glass Mourners, mirror-bone bank shots, saint-glass gates, Bellmother, and a real end-state.", category: "Arcade", tags: ["action-adventure", "portal", "gothic", "metroidvania", "gamepad", "touch"], contentRating: "teen", contentDescriptors: ["fantasy_conflict", "intense_action"], developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/vespergate/index.html?v=1.2.0", thumbnail: CATEGORY_ART["Arcade"], featured: true, version: "1.2.0", controls: "WASD move, Space jump, Shift dash. Left-click fires, right-click places a gate, Q swaps gate, F vents strain. Full gamepad support.", progressSupport: true, scoreSupport: true },
+  { id: "phantom-strike", title: "Phantom Strike", summary: "First-person tactical arena combat with weapon builds, bots, four maps, and real local split-screen.", description: "A network-silent first-person ray-cast shooter with Solo Ops against a bot squad, genuine same-device 1v1 split-screen, four compact maps including Neon Bazaar, rifle/SMG/shotgun/DMR builds, optics, barrels, hit feedback, respawns, and an after-action report.", category: "Arcade", tags: ["fps", "shooter", "first-person", "bots", "multiplayer", "split-screen", "gamepad"], contentRating: "teen", contentDescriptors: ["intense_action", "competitive_play"], multiplayerDescriptor: "Local 1v1 is real same-device split-screen. Solo Ops uses clearly labeled bots. No public matchmaking, chat, voice, or external networking.", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/phantom-strike.html?v=2.2.0", thumbnail: GAME_ART_BY_SLUG["phantom-strike"], featured: true, version: "2.2.0", controls: "Click to lock the mouse and look, WASD moves, click or Space fires. Gamepad: left stick moves, right stick turns, RT or A fires.", progressSupport: true, scoreSupport: true, engine: { tier: "raycast-fps", minVersion: PHANTOMPLAY_ENGINE.version } },
   { id: "phantom-cube", title: "PhantomCube", summary: "Slide the cube across crumbling isometric tiles, clear the board, then reach the glowing exit.", description: "An original B-Cubed-style puzzle: 12 hand-designed levels, every one solver-proven beatable with a true minimum move count shown as par. Mechanics ramp from plain crumbling tiles to double-pass tiles, teleporter pairs, and combined finales. Numbered level-select grid with beat-one-to-unlock-the-next progression saved locally.", category: "Puzzle", tags: ["puzzle", "isometric", "tile-clearing", "levels"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/phantom-cube/index.html?v=1.0.0", thumbnail: CATEGORY_ART["Puzzle"], featured: true, version: "1.0.0", controls: "Arrows or WASD to slide, R to restart, L for level select", progressSupport: true, scoreSupport: true },
   { id: "phantom-chess", title: "Phantom Chess", summary: "Full-rules chess — local 2-player or against the Phantom AI.", description: "Complete chess with castling (including through-check rules), en passant, all four promotions, and check/checkmate/stalemate detection. The move generator passes the standard published perft node counts on four reference positions. The AI opponent is negamax with alpha-beta pruning at depth 3.", category: "Strategy", tags: ["chess", "board game", "ai", "local multiplayer"], contentRating: "everyone", multiplayerDescriptor: "Local 2-player, same device — no networking", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/phantom-chess/index.html?v=1.0.0", thumbnail: CATEGORY_ART["Strategy"], featured: true, version: "1.0.0", controls: "Click or tap a piece, then a highlighted square", progressSupport: false, scoreSupport: true },
   { id: "phantom-pizzeria", title: "Phantom Pizzeria", summary: "Read the ticket, build the pie, bake it in the window, serve it hot — five orders a day.", description: "An original pizza-shop time-management game: order tickets with per-topping quantities, a patience meter, click-to-place toppings with undo, an oven timing window that tightens as days pass, and scoring split across topping accuracy, bake timing, and speed. New toppings unlock by day; best run is saved locally.", category: "Creative", tags: ["time-management", "cooking", "arcade", "touch"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/phantom-pizzeria/index.html?v=1.0.0", thumbnail: CATEGORY_ART["Creative"], featured: false, version: "1.0.0", controls: "Click or tap toppings, then Oven and Pull & Serve", progressSupport: true, scoreSupport: true },
@@ -179,12 +190,15 @@ const ui = {
   developerMessage: "",
   guardianMessage: "",
   ratingBusy: false,
-  devMode: null,
-  // In-player Dev Sandbox — a live, hot-reloading editor docked beside the
-  // running game (distinct from ui.devMode's standalone preview modal, which
-  // stays exactly as it was). See openDevSandbox/applyDevSandboxEdit.
+  // In-player Dev Sandbox — a live, hot-reloading editor + mod menu docked
+  // beside the running game. See openDevSandbox/applyDevSandboxEditLive.
   devSandbox: null,
 };
+// Set by launchWithDevSandbox(); consumed once the launched game reports
+// "ready" (see onGameMessage) to auto-open Dev Sandbox after a normal launch,
+// so Dev Sandbox is never a separate, differently-styled experience — it's
+// the exact same player, just with the sidebar opened automatically.
+let pendingDevSandboxGameId = null;
 
 let mountedRoot = null;
 let mountedOpts = null;
@@ -354,8 +368,9 @@ function historyFor(gameId) {
 
 function fallbackLeaderboards(snapshot = ui.snapshot) {
   const history = Array.isArray(snapshot?.history) ? snapshot.history : [];
-  const catalog = Array.isArray(snapshot?.catalog) ? snapshot.catalog : [];
-  const rows = history.filter((item) => item.score != null).map((item) => {
+  const catalog = generalPlayGames(Array.isArray(snapshot?.catalog) ? snapshot.catalog : []);
+  const catalogIds = new Set(catalog.map((game) => game.id));
+  const rows = history.filter((item) => item.score != null && catalogIds.has(item.gameId)).map((item) => {
     const game = catalog.find((entry) => entry.id === item.gameId);
     return { gameId: item.gameId, gameTitle: game?.title || item.gameId, player: "You", score: Number(item.score) || 0, seconds: Number(item.seconds) || 0, updatedAt: item.lastPlayedAt, isYou: true };
   }).sort((a, b) => b.score - a.score || a.seconds - b.seconds);
@@ -443,35 +458,8 @@ function gameCard(game, variant = "") {
     <p>${esc(game.summary)}</p>
     <div class="pp-game-meta"><span>${esc(game.contentRating === "everyone" ? "Everyone" : game.contentRating)}</span><span>v${esc(game.version)}</span>${history?.score != null ? `<span>Best ${history.score}</span>` : ""}</div>
     ${history?.canContinue ? `<div class="pp-progress"><i style="width:${Math.max(3, Math.min(100, history.progress))}%"></i></div>` : ""}
-    <div class="pp-game-actions"><button class="pp-play" type="button" data-pp-play="${esc(game.id)}">${icon("play")} ${history?.canContinue ? "Continue" : "Play now"}</button><button class="pp-support" type="button" data-pp-support="${esc(game.developer)}">Support this creator</button>${game.devModeAvailable ? `<button class="pp-devmode-open" type="button" data-pp-devmode-open="${esc(game.id)}" title="Hot-edit this game's code and assets, sandboxed, visible only to you">Dev Mode</button>` : ""}${ui.snapshot.access.canModerate ? `<button class="pp-devmode-toggle ${game.devModeEnabled !== false ? "is-on" : "is-off"}" type="button" data-pp-devmode-toggle="${esc(game.id)}" data-pp-devmode-toggle-next="${game.devModeEnabled !== false ? "off" : "on"}" title="Choose whether Dev Mode / Dev Sandbox is available on this specific game">${icon("dev")} Dev Mode: ${game.devModeEnabled !== false ? "On" : "Off"}</button>` : ""}</div></div>
+    <div class="pp-game-actions"><button class="pp-play" type="button" data-pp-play="${esc(game.id)}">${icon("play")} ${history?.canContinue ? "Continue" : "Play now"}</button><button class="pp-support" type="button" data-pp-support="${esc(game.developer)}">Support this creator</button>${game.devModeAvailable ? `<button class="pp-devsandbox-card-open" type="button" data-pp-devsandbox-card-open="${esc(game.id)}" aria-label="Dev Sandbox" title="Play with Dev Sandbox — live code editing and mod menus, sandboxed and visible only to you">${icon("dev")}</button>` : ""}${ui.snapshot.access.canModerate ? `<button class="pp-devmode-toggle ${game.devModeEnabled !== false ? "is-on" : "is-off"}" type="button" data-pp-devmode-toggle="${esc(game.id)}" data-pp-devmode-toggle-next="${game.devModeEnabled !== false ? "off" : "on"}" aria-label="Dev Sandbox is ${game.devModeEnabled !== false ? "on" : "off"} for this game" title="Choose whether Dev Sandbox is available on this specific game (currently ${game.devModeEnabled !== false ? "on" : "off"})">${icon("dev")}<i></i></button>` : ""}</div></div>
   </article>`;
-}
-
-function devModeMarkup() {
-  const d = ui.devMode;
-  if (!d) return "";
-  return `<div class="pp-devmode" role="dialog" aria-modal="true" aria-label="Dev Mode: ${esc(d.title)}">
-    <header>
-      <div><b>DEV MODE</b><span>${esc(d.title)}</span></div>
-      <button type="button" data-pp-devmode-close aria-label="Close Dev Mode">×</button>
-    </header>
-    <p class="pp-devmode-note">Only visible to you because you can manage this workspace. Sandboxed local preview only — nothing here is saved, published, or shown to other players.</p>
-    ${d.error ? `<div class="pp-devmode-error">${esc(d.error)}</div>` : ""}
-    ${d.loading ? `<div class="pp-devmode-loading"><i></i><b>Loading source…</b></div>` : `
-    <div class="pp-devmode-body">
-      <div class="pp-devmode-editor">
-        <label>Source (HTML/JS)<textarea data-pp-devmode-source spellcheck="false">${esc(d.editedSource)}</textarea></label>
-        <div class="pp-devmode-actions">
-          <button type="button" class="pp-primary" data-pp-devmode-apply">Apply and preview</button>
-          <button type="button" class="pp-secondary" data-pp-devmode-reset">Reset to original</button>
-        </div>
-      </div>
-      <div class="pp-devmode-preview">
-        <p class="pp-kicker">Sandboxed preview</p>
-        ${d.previewUrl ? `<iframe src="${esc(d.previewUrl)}" sandbox="allow-scripts" referrerpolicy="no-referrer" title="Dev Mode preview" data-pp-devmode-frame></iframe>` : `<div class="pp-devmode-empty">Apply an edit to see it run here.</div>`}
-      </div>
-    </div>`}
-  </div>`;
 }
 
 function empty(title, copy) {
@@ -533,13 +521,12 @@ function renderLeaderboard() {
 }
 
 function filteredCatalog() {
-  const query = ui.query.toLowerCase();
-  return sortGames(ui.snapshot.catalog).filter((game) => !query || `${game.title} ${game.summary} ${developerNameFor(game)} ${game.tags.join(" ")}`.toLowerCase().includes(query));
+  return sortGames(ui.snapshot.catalog, "All");
 }
 
 function renderLibrary() {
   const games = filteredCatalog();
-  return `<section class="pp-library"><div class="pp-play-header"><div><p class="pp-kicker">PLAY NOW</p><h2>Games</h2></div><span>${games.length} ready</span></div><div class="pp-library-tools"><label>${icon("search")}<input type="search" data-pp-search value="${esc(ui.query)}" placeholder="Search games, modes, categories, creators…"/></label><div class="pp-categories">${GAME_SORTS.map((category) => `<button type="button" class="${ui.category === category ? "is-active" : ""}" data-pp-category="${esc(category)}">${esc(category)}</button>`).join("")}</div></div>${games.length ? `<div class="pp-game-grid pp-game-grid-full">${games.map((game) => gameCard(game)).join("")}</div>` : empty("No matching builds", "Try a different search or category.")}</section>`;
+  return `<section class="pp-library">${games.length ? `<div class="pp-game-grid pp-game-grid-full">${games.map((game) => gameCard(game)).join("")}</div>` : empty("No games ready", "New builds will appear here when they are available.")}</section>`;
 }
 
 function renderFavorites() {
@@ -610,7 +597,7 @@ function roomCard(room) {
 
 function renderTogether() {
   const rooms = Array.isArray(ui.snapshot.rooms) ? ui.snapshot.rooms : [];
-  const classroomGames = ui.snapshot.catalog.filter((game) => ui.roomMode !== "classroom" || game.contentRating === "everyone");
+  const classroomGames = generalPlayGames(ui.snapshot.catalog).filter((game) => ui.roomMode !== "classroom" || game.contentRating === "everyone");
   const selectedGameId = classroomGames.some((game) => game.id === ui.roomGameId) ? ui.roomGameId : (classroomGames[0]?.id || "");
   return `<div class="pp-together" data-pp-private-rooms>
     <section class="pp-room-hero">
@@ -805,7 +792,8 @@ function ratingExposureMarkup() {
 
 function settingsMarkup() {
   const p = ui.snapshot.preferences;
-  return `<aside class="pp-settings ${ui.settingsOpen ? "is-open" : ""}" ${ui.settingsOpen ? "" : "hidden"}><header><div><p class="pp-kicker">PLAY SETTINGS</p><h2>Your break, your limits.</h2></div><button data-pp-settings-close aria-label="Close settings">×</button></header><label>Content allowed<select data-pp-pref="contentRating"><option value="everyone" ${p.contentRating === "everyone" ? "selected" : ""}>Everyone</option><option value="teen" ${p.contentRating === "teen" ? "selected" : ""}>Teen</option><option value="mature" ${p.contentRating === "mature" ? "selected" : ""}>Mature</option></select></label><label class="pp-switch"><input type="checkbox" data-pp-pref="sound" ${p.sound ? "checked" : ""}/><span></span>Sound</label><label class="pp-switch"><input type="checkbox" data-pp-pref="reducedMotion" ${p.reducedMotion ? "checked" : ""}/><span></span>Reduce motion</label><label class="pp-switch"><input type="checkbox" data-pp-pref="allowCommunityGames" ${p.allowCommunityGames ? "checked" : ""}/><span></span>Show reviewed prototypes</label>${ratingExposureMarkup()}<p>PhantomPlay never changes your work, agents, files, or business data while you play.</p></aside>`;
+  const colorMode = currentColorMode();
+  return `<aside class="pp-settings ${ui.settingsOpen ? "is-open" : ""}" ${ui.settingsOpen ? "" : "hidden"}><header><div><p class="pp-kicker">PLAY SETTINGS</p><h2>Your break, your limits.</h2></div><button data-pp-settings-close aria-label="Close settings">×</button></header><label>Appearance<select data-pp-theme><option value="dark" ${colorMode === "dark" ? "selected" : ""}>Dark</option><option value="light" ${colorMode === "light" ? "selected" : ""}>Light</option></select></label><label>Content allowed<select data-pp-pref="contentRating"><option value="everyone" ${p.contentRating === "everyone" ? "selected" : ""}>Everyone</option><option value="teen" ${p.contentRating === "teen" ? "selected" : ""}>Teen</option><option value="mature" ${p.contentRating === "mature" ? "selected" : ""}>Mature</option></select></label><label class="pp-switch"><input type="checkbox" data-pp-pref="sound" ${p.sound ? "checked" : ""}/><span></span>Sound</label><label class="pp-switch"><input type="checkbox" data-pp-pref="reducedMotion" ${p.reducedMotion ? "checked" : ""}/><span></span>Reduce motion</label><label class="pp-switch"><input type="checkbox" data-pp-pref="allowCommunityGames" ${p.allowCommunityGames ? "checked" : ""}/><span></span>Show reviewed prototypes</label>${ratingExposureMarkup()}<p>PhantomPlay never changes your work, agents, files, or business data while you play.</p></aside>`;
 }
 
 function engineFor(game) {
@@ -830,25 +818,123 @@ async function toggleGameDevMode(gameId, nextEnabled) {
   }
 }
 
-// Dev Sandbox — the in-player, live-editing "overpowered" mode: distinct
-// from the standalone preview modal above (unchanged, still pinned by
-// scripts/test-phantomplay.mjs's guardrails). This panel docks beside the
-// actual running game and hot-reloads that same iframe via a blob: URL as
-// the admin types. The host page itself never runs the edited text at all —
-// it only ever builds a Blob and reassigns an already-sandboxed iframe's src,
-// same as the existing preview above; execution happens solely inside that
-// opaque-origin, script-only sandboxed frame.
+// Dev Sandbox — the in-player, live-editing "overpowered" mode. This panel
+// docks beside the actual running game and hot-reloads that same iframe via
+// a blob: URL as the admin types or toggles a mod. The host page itself
+// never runs the edited text at all — it only ever builds a Blob and
+// reassigns an already-sandboxed iframe's src; execution happens solely
+// inside that opaque-origin, script-only sandboxed frame. Mods work the same
+// way: they are text patches applied to the source before it becomes a Blob,
+// never eval'd or executed by the host.
+
+// Universal — works on ANY game without knowing its internals. Prepended to
+// every Dev Sandbox blob. Provides window.__ppMods (live per-mod flags set
+// by postMessage, read by the per-game patches below) and a genuine game-
+// speed control: it rewrites the timestamp every requestAnimationFrame
+// callback receives, so any game's own internal dt = t - lastT math slows
+// down or speeds up automatically — no per-game code required.
+function modBootstrapScript() {
+  return `<script>(function(){
+window.__ppMods = window.__ppMods || {};
+window.__ppSpeed = 1;
+var _raf = window.requestAnimationFrame.bind(window);
+var _virtualT = null, _lastReal = null;
+window.requestAnimationFrame = function(cb){
+  return _raf(function(real){
+    if (_lastReal === null) { _lastReal = real; _virtualT = real; }
+    var delta = real - _lastReal;
+    _lastReal = real;
+    _virtualT += delta * (window.__ppSpeed || 1);
+    cb(_virtualT);
+  });
+};
+window.addEventListener('message', function(e){
+  if (!e.data || e.data.source !== 'phantomplay-host') return;
+  if (e.data.type === 'mod') window.__ppMods[e.data.key] = e.data.value;
+  if (e.data.type === 'modspeed') window.__ppSpeed = Number(e.data.value) || 1;
+});
+})();<\/script>`;
+}
+
+// Per-game mods — each patch is a plain text substitution verified against
+// that exact game's real source (see the anchor comments below). A patch
+// that no longer finds its anchor (e.g. after a manual code edit removed it)
+// silently no-ops rather than breaking anything, since .replace() on a
+// non-matching string just returns the string unchanged.
+const MOD_PRESETS = {
+  "neon-drift": [
+    { id: "god", label: "God Mode", description: "Hits never register — the ship cannot take damage." },
+    { id: "maxPower", label: "Max Power", description: "Rapid fire, spread shot, shield, and magnet are always active." },
+  ],
+  "rift-frenzy": [
+    { id: "god", label: "God Mode", description: "Full HP and permanent invulnerability." },
+    { id: "noCooldown", label: "No Cooldowns", description: "Absorb and dash are always ready." },
+    { id: "maxGrow", label: "Max Size", description: "Instantly grow to a huge size." },
+  ],
+  "phantom-rumble": [
+    { id: "god", label: "God Mode", description: "Permanent invulnerability to every hit." },
+    { id: "noCooldown", label: "No Cooldowns", description: "Attack, dodge, and parry are always ready." },
+    { id: "infiniteStocks", label: "Infinite Stocks", description: "Stocks never run out." },
+  ],
+};
+const MOD_PATCHES = {
+  "neon-drift": (source) => source
+    .replace("function damage(){if(player.invuln>0)return;", "function damage(){if(window.__ppMods&&window.__ppMods.god)return;if(player.invuln>0)return;")
+    .replace("function update(dt){const accel=", "function update(dt){if(window.__ppMods&&window.__ppMods.maxPower){player.rapid=6500;player.spread=6500;player.shield=1;player.magnet=6500}const accel="),
+  "rift-frenzy": (source) => source
+    .replace("function moveTeam(team,dt){if(!team.alive)return;", "function moveTeam(team,dt){if(!team.alive)return;if(window.__ppMods&&team.human){if(window.__ppMods.god){team.hp=team.maxHp;team.invuln=1e9}if(window.__ppMods.noCooldown){team.absorbCd=0;team.dashCd=0}if(window.__ppMods.maxGrow)team.mass=Math.max(team.mass,400)}"),
+  "phantom-rumble": (source) => source
+    .replace("function step(f,dt){if(f.dead)return;", "function step(f,dt){if(f.dead)return;if(window.__ppMods&&f.human){if(window.__ppMods.god)f.invuln=1e9;if(window.__ppMods.noCooldown){f.attackCd=0;f.dodgeCd=0;f.parry=0}if(window.__ppMods.infiniteStocks)f.stocks=Math.max(f.stocks,99)}"),
+};
+
+// Applied every time a Dev Sandbox blob is (re)built — never applied to what
+// gets persisted via Save/Publish, which always read the plain textarea text.
+function injectModSupport(source, gameId) {
+  const patched = MOD_PATCHES[gameId] ? MOD_PATCHES[gameId](source) : source;
+  return patched.replace(/<head>/i, `<head>${modBootstrapScript()}`);
+}
+
+function modSectionMarkup(game) {
+  const d = ui.devSandbox;
+  const presets = MOD_PRESETS[game.id] || [];
+  const modState = d.modState || {};
+  const speed = d.speed || 1;
+  return `<div class="pp-devsandbox-mods">
+    <div class="pp-devsandbox-mod-row pp-devsandbox-speed-row">
+      <label>Game speed<select data-pp-devsandbox-speed>
+        <option value="0.25" ${speed === 0.25 ? "selected" : ""}>0.25x — slow-mo</option>
+        <option value="0.5" ${speed === 0.5 ? "selected" : ""}>0.5x</option>
+        <option value="1" ${speed === 1 ? "selected" : ""}>1x — normal</option>
+        <option value="2" ${speed === 2 ? "selected" : ""}>2x</option>
+        <option value="4" ${speed === 4 ? "selected" : ""}>4x — fast-forward</option>
+      </select></label>
+      <i>Works on any game — rewrites its own animation clock.</i>
+    </div>
+    ${presets.length ? presets.map((mod) => `
+    <label class="pp-switch pp-devsandbox-mod">
+      <input type="checkbox" data-pp-devsandbox-mod="${esc(mod.id)}" ${modState[mod.id] ? "checked" : ""}/><span></span>
+      <b>${esc(mod.label)}</b><i>${esc(mod.description)}</i>
+    </label>`).join("") : `<p class="pp-devsandbox-mod-empty">No game-specific mods built for ${esc(game.title)} yet — game speed above still works on it. Ask to add mods for this game.</p>`}
+  </div>`;
+}
+
 function devSandboxMarkup(game) {
   const d = ui.devSandbox;
   if (!d || d.gameId !== game.id) return "";
+  const section = d.section || "code";
   return `<div class="pp-devsandbox" role="complementary" aria-label="Dev Sandbox: live editor for ${esc(game.title)}">
     <header>
       <div><b>DEV SANDBOX</b><span>${esc(game.title)}</span></div>
       <button type="button" data-pp-devsandbox-close aria-label="Close Dev Sandbox">×</button>
     </header>
-    <p class="pp-devsandbox-note">Live-editing this exact running game. Edits hot-reload the game on the left as you type. Only visible to you.${d.hasOverride ? " A saved workspace override is currently active for this game." : ""}</p>
+    <label class="pp-devsandbox-section-picker">Section<select data-pp-devsandbox-section><option value="code" ${section === "code" ? "selected" : ""}>Live Code</option><option value="mods" ${section === "mods" ? "selected" : ""}>Mod Menu</option></select></label>
+    <p class="pp-devsandbox-note">${section === "mods" ? "Toggle mods on while you play — they apply instantly, no reload." : "Live-editing this exact running game. Edits hot-reload the game on the left as you type."} Only visible to you.${d.hasOverride ? " A saved workspace override is currently active for this game." : ""}</p>
     ${d.error ? `<div class="pp-devsandbox-error">${esc(d.error)}</div>` : ""}
-    ${d.loading ? `<div class="pp-devmode-loading"><i></i><b>Loading source…</b></div>` : `<textarea class="pp-devsandbox-source" data-pp-devsandbox-source spellcheck="false">${esc(d.editedSource)}</textarea>`}
+    ${d.loading
+      ? `<div class="pp-devmode-loading"><i></i><b>Loading source…</b></div>`
+      : section === "mods"
+        ? modSectionMarkup(game)
+        : `<textarea class="pp-devsandbox-source" data-pp-devsandbox-source spellcheck="false">${esc(d.editedSource)}</textarea>`}
     <p class="pp-devsandbox-status" data-pp-devsandbox-status>${esc(d.status || "")}</p>
     <footer>
       <button type="button" class="pp-devsandbox-save" data-pp-devsandbox-save ${d.saving ? "disabled" : ""}>${d.saving ? "Saving…" : "Save override"}</button>
@@ -878,13 +964,12 @@ function render() {
   const tabs = [["library", "Games"], ["together", "Multiplayer"], ["favorites", "Saved"], ["developer", "Developers"], ...(snapshot.access.canSubmitGames ? [["submit", "Become a developer"]] : []), ...(snapshot.access.canModerate ? [["admin", "Safety Review"]] : [])];
   const content = ui.tab === "together" ? renderTogether() : ui.tab === "favorites" ? renderFavorites() : ui.tab === "developer" ? renderDeveloper() : ui.tab === "submit" ? renderSubmit() : ui.tab === "admin" ? renderAdmin() : renderLibrary();
   mountedRoot.innerHTML = `<div class="pp-shell">
-    <header class="pp-top"><div><p class="pp-kicker">PHANTOMFORCE GAME SANDBOX</p><h1>PhantomPlay</h1><span>Play, build, test, and return to work sharper.</span></div><div><span class="pp-access ${snapshot.access.enabled ? "is-ready" : "is-blocked"}">${snapshot.access.enabled ? esc(playTimeLabel(snapshot.access.remainingMinutesToday)) : "Plan restricted"}</span><button class="pp-settings-button" data-pp-settings aria-label="Play settings">${icon("settings")}</button></div></header>
+    <header class="pp-top"><div class="pp-title"><p class="pp-kicker">PHANTOMFORCE GAME SANDBOX</p><h1>PhantomPlay</h1></div><nav class="pp-tabs" aria-label="PhantomPlay sections">${tabs.map(([id, label]) => `<button type="button" class="${ui.tab === id ? "is-active" : ""}" data-pp-tab="${id}">${esc(label)}</button>`).join("")}</nav><div class="pp-tools"><span class="pp-access ${snapshot.access.enabled ? "is-ready" : "is-blocked"}">${snapshot.access.enabled ? esc(playTimeLabel(snapshot.access.remainingMinutesToday)) : "Plan restricted"}</span><button class="pp-settings-button" data-pp-settings aria-label="Play settings">${icon("settings")}</button></div></header>
     ${ui.offline ? `<div class="pp-banner is-offline"><b>Offline mode</b><span>Built-in games still work. Favorites and progress will sync after the server returns.</span><button data-pp-retry>Retry</button></div>` : ""}
     ${ui.error && !ui.offline ? `<div class="pp-banner is-error"><b>PhantomPlay needs attention</b><span>${esc(ui.error)}</span><button data-pp-retry>Retry</button></div>` : ""}
     ${ui.notice ? `<div class="pp-banner is-notice"><b>Creator support</b><span>${esc(ui.notice)}</span><button data-pp-clear-notice>OK</button></div>` : ""}
-    <nav class="pp-tabs" aria-label="PhantomPlay sections">${tabs.map(([id, label]) => `<button type="button" class="${ui.tab === id ? "is-active" : ""}" data-pp-tab="${id}">${esc(label)}</button>`).join("")}</nav>
     <main class="pp-content">${snapshot.access.enabled ? content : empty("PhantomPlay is unavailable", "This optional workspace module is separate from core PhantomForce operations. Ask a workspace owner to enable access if your team uses it.")}</main>
-    ${settingsMarkup()}${playerMarkup()}${devModeMarkup()}
+    ${settingsMarkup()}${playerMarkup()}
   </div>`;
   bind();
   syncRoomPolling();
@@ -985,6 +1070,14 @@ async function launch(gameId, opts = {}) {
     startClock();
     armReadyWatchdog();
   } catch (error) { ui.error = error.message; render(); }
+}
+
+// Dev Sandbox's only entry point: the exact same launch as a normal Play
+// click, so it is never a second, differently-styled destination. Once the
+// game reports "ready" (see onGameMessage), Dev Sandbox opens automatically.
+function launchWithDevSandbox(gameId) {
+  pendingDevSandboxGameId = gameId;
+  launch(gameId);
 }
 
 // ---- Private rooms: live sync ----
@@ -1165,64 +1258,38 @@ async function closePlayer() {
   render();
 }
 
-// Dev Mode: a local, sandboxed hot-reload preview loop. See
-// docs/architecture/PHANTOMPLAY_DEV_MODE.md — the entry point only ever
-// renders when the server already said `devModeAvailable` for this exact
-// game (see `gameCard`), and every fetch below hits a route that re-checks
-// that server-side, so this is UX convenience, not the actual security
-// boundary. The preview iframe reuses the exact sandbox attribute the real
-// player iframe already uses in `playerMarkup()` (see the shared safety
-// assertion in scripts/test-phantomplay.mjs guarding against origin/form/
-// popup grants) — same opaque-origin isolation, just loading a blob: URL of
-// the developer's in-progress edit instead of the reviewed launchUrl.
-function revokeDevModePreview() {
-  if (ui.devMode?.previewUrl) URL.revokeObjectURL(ui.devMode.previewUrl);
-}
-
-async function openDevMode(gameId) {
-  ui.devMode = { gameId, title: gameId, source: "", editedSource: "", previewUrl: "", loading: true, error: "" };
-  render();
-  try {
-    const result = await api(`/api/phantomplay/dev-mode/${encodeURIComponent(gameId)}/source?tenant_id=${encodeURIComponent(currentTenantId())}`);
-    ui.devMode = { gameId, title: result.title || gameId, source: result.source, editedSource: result.source, previewUrl: "", loading: false, error: "" };
-  } catch (error) {
-    ui.devMode = { gameId, title: gameId, source: "", editedSource: "", previewUrl: "", loading: false, error: error instanceof Error ? error.message : "Dev Mode source could not be loaded." };
-  }
-  render();
-}
-
-function applyDevModeEdit() {
-  if (!ui.devMode) return;
-  const textarea = mountedRoot?.querySelector("[data-pp-devmode-source]");
-  const nextSource = typeof textarea?.value === "string" ? textarea.value : ui.devMode.editedSource;
-  revokeDevModePreview();
-  const blob = new Blob([nextSource], { type: "text/html" });
-  ui.devMode = { ...ui.devMode, editedSource: nextSource, previewUrl: URL.createObjectURL(blob) };
-  render();
-}
-
-function resetDevModeEdit() {
-  if (!ui.devMode) return;
-  revokeDevModePreview();
-  ui.devMode = { ...ui.devMode, editedSource: ui.devMode.source, previewUrl: "" };
-  render();
-}
-
-function closeDevMode() {
-  revokeDevModePreview();
-  ui.devMode = null;
-  render();
-}
-
-// Dev Sandbox: the in-player live editor. Distinct object/blob URL from
-// ui.devMode above — the two can never collide since only one modal-style
-// surface (Dev Mode) or docked panel (Dev Sandbox) is ever open at a time in
-// practice, but they intentionally don't share state so closing one never
-// disturbs the other.
+// Dev Sandbox: the in-player live editor. See docs/architecture/
+// PHANTOMPLAY_DEV_MODE.md — the entry point only ever renders when the
+// server already said `devModeAvailable` for this exact game (see
+// `gameCard`/`playerMarkup`), and every fetch below hits a route that
+// re-checks that server-side, so this is UX convenience, not the actual
+// security boundary. The panel's own preview reuses the real player iframe
+// (see the shared safety assertion in scripts/test-phantomplay.mjs guarding
+// against origin/form/popup grants) — same opaque-origin isolation, just
+// loading a blob: URL of the in-progress edit instead of the reviewed
+// launchUrl. This replaced an earlier separate full-screen Dev Mode modal
+// that duplicated the whole play surface — Dev Sandbox is just the normal
+// player with a sidebar, never a second, differently-styled destination.
 let devSandboxApplyTimer = null;
 
 function revokeDevSandboxBlob() {
   if (ui.devSandbox?.blobUrl) URL.revokeObjectURL(ui.devSandbox.blobUrl);
+}
+
+// Rebuilds the Dev Sandbox blob from `nextSource` with mod support injected,
+// and points the real player iframe at it. Every path that changes what's
+// shown (open, live edits, revert) goes through this so mods are always
+// present in whatever's currently loaded — never applied to the plain text
+// held in editedSource, which is exactly what Save/Publish read and send.
+function rebuildDevSandboxFrame(source) {
+  if (!ui.devSandbox) return;
+  const frame = mountedRoot?.querySelector("[data-pp-frame]");
+  revokeDevSandboxBlob();
+  const nextSource = injectModSupport(source, ui.devSandbox.gameId);
+  const blob = new Blob([nextSource], { type: "text/html" });
+  const blobUrl = URL.createObjectURL(blob);
+  ui.devSandbox = { ...ui.devSandbox, blobUrl };
+  if (frame) frame.src = blobUrl;
 }
 
 async function openDevSandbox() {
@@ -1230,7 +1297,7 @@ async function openDevSandbox() {
   const { game } = ui.player;
   if (!game.devModeAvailable) return;
   revokeDevSandboxBlob();
-  ui.devSandbox = { gameId: game.id, source: "", editedSource: "", blobUrl: "", hasOverride: false, overrideUpdatedAt: null, loading: true, error: "", status: "", saving: false, publishing: false };
+  ui.devSandbox = { gameId: game.id, source: "", editedSource: "", blobUrl: "", hasOverride: false, overrideUpdatedAt: null, loading: true, error: "", status: "", saving: false, publishing: false, section: "code", modState: {}, speed: 1 };
   render();
   try {
     const tenantQuery = `tenant_id=${encodeURIComponent(currentTenantId())}`;
@@ -1243,7 +1310,9 @@ async function openDevSandbox() {
       gameId: game.id, source: sourceResult.source, editedSource: startingSource, blobUrl: "",
       hasOverride: !!overrideResult.source, overrideUpdatedAt: overrideResult.updatedAt,
       loading: false, error: "", status: overrideResult.source ? "Resumed your saved workspace override." : "Loaded the shipped source.", saving: false, publishing: false,
+      section: "code", modState: {}, speed: 1,
     };
+    rebuildDevSandboxFrame(startingSource);
   } catch (error) {
     ui.devSandbox = { ...ui.devSandbox, loading: false, error: error instanceof Error ? error.message : "Dev Sandbox source could not be loaded." };
   }
@@ -1253,22 +1322,16 @@ async function openDevSandbox() {
 // Called on a debounced textarea input — this is the "see the code update in
 // front of your face" loop. Deliberately does NOT call render(): re-building
 // the whole panel's innerHTML on every keystroke would blow away the
-// textarea's cursor position and focus. Instead it reads the DOM directly,
-// swaps the running player iframe's src to a fresh blob: URL of the edited
-// text (same never-eval, sandboxed-iframe-only execution model as the
-// existing Dev Mode preview), and updates just the small status line in
-// place. State (ui.devSandbox.editedSource/blobUrl) is still kept in sync so
-// Save/Publish/Revert/close read the latest text correctly.
+// textarea's cursor position and focus. Instead it reads the DOM directly
+// and updates just the small status line in place. State
+// (ui.devSandbox.editedSource) is still kept in sync so Save/Publish/Revert/
+// close read the latest text correctly.
 function applyDevSandboxEditLive() {
   if (!ui.devSandbox) return;
   const textarea = mountedRoot?.querySelector("[data-pp-devsandbox-source]");
-  const frame = mountedRoot?.querySelector("[data-pp-frame]");
   const nextSource = typeof textarea?.value === "string" ? textarea.value : ui.devSandbox.editedSource;
-  revokeDevSandboxBlob();
-  const blob = new Blob([nextSource], { type: "text/html" });
-  const blobUrl = URL.createObjectURL(blob);
-  ui.devSandbox = { ...ui.devSandbox, editedSource: nextSource, blobUrl };
-  if (frame) frame.src = blobUrl;
+  ui.devSandbox = { ...ui.devSandbox, editedSource: nextSource };
+  rebuildDevSandboxFrame(nextSource);
   const status = mountedRoot?.querySelector("[data-pp-devsandbox-status]");
   if (status) status.textContent = "Live — showing your unsaved edit.";
 }
@@ -1276,6 +1339,22 @@ function applyDevSandboxEditLive() {
 function scheduleDevSandboxApply() {
   clearTimeout(devSandboxApplyTimer);
   devSandboxApplyTimer = setTimeout(applyDevSandboxEditLive, 350);
+}
+
+// Mods apply instantly with no reload — the running blob already has every
+// mod's patch baked in (inert until window.__ppMods[key] is true), so
+// toggling one is just a live postMessage. onGameMessage() re-sends the
+// current mod/speed state after any reload this panel triggers.
+function toggleDevSandboxMod(modId, checked) {
+  if (!ui.devSandbox) return;
+  ui.devSandbox = { ...ui.devSandbox, modState: { ...(ui.devSandbox.modState || {}), [modId]: checked } };
+  postToGame("mod", { key: modId, value: checked });
+}
+
+function setDevSandboxSpeed(speed) {
+  if (!ui.devSandbox) return;
+  ui.devSandbox = { ...ui.devSandbox, speed };
+  postToGame("modspeed", { value: speed });
 }
 
 async function saveDevSandboxOverride() {
@@ -1299,10 +1378,8 @@ async function revertDevSandboxToShipped() {
   if (hasOverride) {
     try { await api(`/api/phantomplay/dev-mode/${encodeURIComponent(gameId)}/override`, { method: "DELETE" }); } catch { /* best effort */ }
   }
-  revokeDevSandboxBlob();
-  const frame = mountedRoot?.querySelector("[data-pp-frame]");
-  if (frame) frame.src = ui.player?.game?.launchUrl || "";
-  ui.devSandbox = { ...ui.devSandbox, editedSource: source, blobUrl: "", hasOverride: false, overrideUpdatedAt: null, status: "Reverted to the shipped version.", error: "" };
+  ui.devSandbox = { ...ui.devSandbox, editedSource: source, hasOverride: false, overrideUpdatedAt: null, status: "Reverted to the shipped version.", error: "" };
+  rebuildDevSandboxFrame(source);
   render();
 }
 
@@ -1428,6 +1505,16 @@ function onGameMessage(event) {
       const room = ui.snapshot.rooms.find((item) => item.code === ui.player.roomCode);
       if (room) pushMatchStateToGame(room);
     }
+    if (pendingDevSandboxGameId === ui.player.game.id) {
+      pendingDevSandboxGameId = null;
+      openDevSandbox();
+    } else if (ui.devSandbox?.gameId === ui.player.game.id) {
+      // Any reload this panel triggered (a live edit, a revert) resets the
+      // modded page's own window.__ppMods to {} — restore whatever the
+      // sidebar's toggles/speed currently say so mods don't silently drop.
+      if (ui.devSandbox.speed && ui.devSandbox.speed !== 1) postToGame("modspeed", { value: ui.devSandbox.speed });
+      for (const [key, value] of Object.entries(ui.devSandbox.modState || {})) if (value) postToGame("mod", { key, value });
+    }
   }
   if (event.data.type === "paused") {
     ui.playerPaused = !!event.data.paused;
@@ -1532,22 +1619,21 @@ function bind() {
   mountedRoot.querySelectorAll("[data-pp-support]").forEach((button) => button.onclick = (event) => { event.stopPropagation(); ui.notice = `${button.dataset.ppSupport || "This creator"} support is queued for the creator profile/payments layer. For now, favorites and leaderboard plays help boost discovery.`; render(); });
   mountedRoot.querySelector("[data-pp-clear-notice]")?.addEventListener("click", () => { ui.notice = ""; render(); });
   mountedRoot.querySelectorAll("[data-pp-play]").forEach((button) => button.onclick = () => launch(button.dataset.ppPlay));
-  mountedRoot.querySelectorAll("[data-pp-devmode-open]").forEach((button) => button.onclick = (event) => { event.stopPropagation(); openDevMode(button.dataset.ppDevmodeOpen); });
-  mountedRoot.querySelector("[data-pp-devmode-close]")?.addEventListener("click", closeDevMode);
-  mountedRoot.querySelector("[data-pp-devmode-apply]")?.addEventListener("click", applyDevModeEdit);
-  mountedRoot.querySelector("[data-pp-devmode-reset]")?.addEventListener("click", resetDevModeEdit);
+  mountedRoot.querySelectorAll("[data-pp-devsandbox-card-open]").forEach((button) => button.onclick = (event) => { event.stopPropagation(); launchWithDevSandbox(button.dataset.ppDevsandboxCardOpen); });
   mountedRoot.querySelectorAll("[data-pp-devmode-toggle]").forEach((button) => button.onclick = (event) => { event.stopPropagation(); toggleGameDevMode(button.dataset.ppDevmodeToggle, button.dataset.ppDevmodeToggleNext === "on"); });
   mountedRoot.querySelector("[data-pp-devsandbox-open]")?.addEventListener("click", openDevSandbox);
   mountedRoot.querySelector("[data-pp-devsandbox-close]")?.addEventListener("click", closeDevSandbox);
+  mountedRoot.querySelector("[data-pp-devsandbox-section]")?.addEventListener("change", (event) => { ui.devSandbox = { ...ui.devSandbox, section: event.target.value }; render(); });
   mountedRoot.querySelector("[data-pp-devsandbox-source]")?.addEventListener("input", scheduleDevSandboxApply);
   mountedRoot.querySelector("[data-pp-devsandbox-save]")?.addEventListener("click", saveDevSandboxOverride);
   mountedRoot.querySelector("[data-pp-devsandbox-revert]")?.addEventListener("click", revertDevSandboxToShipped);
   mountedRoot.querySelector("[data-pp-devsandbox-publish]")?.addEventListener("click", publishDevSandboxLive);
+  mountedRoot.querySelector("[data-pp-devsandbox-speed]")?.addEventListener("change", (event) => setDevSandboxSpeed(Number(event.target.value) || 1));
+  mountedRoot.querySelectorAll("[data-pp-devsandbox-mod]").forEach((input) => input.addEventListener("change", () => toggleDevSandboxMod(input.dataset.ppDevsandboxMod, input.checked)));
   mountedRoot.querySelectorAll("[data-pp-favorite]").forEach((button) => button.onclick = (event) => { event.stopPropagation(); updateFavorite(button.dataset.ppFavorite); });
-  mountedRoot.querySelectorAll("[data-pp-category]").forEach((button) => button.onclick = () => { ui.category = button.dataset.ppCategory; render(); });
-  mountedRoot.querySelector("[data-pp-search]")?.addEventListener("input", (event) => { ui.query = event.target.value; const list = mountedRoot.querySelector(".pp-game-grid-full"); if (list) list.innerHTML = filteredCatalog().map((game) => gameCard(game)).join("") || empty("No matching builds", "Try a different search or category."); bind(); });
   mountedRoot.querySelector("[data-pp-settings]")?.addEventListener("click", () => { ui.settingsOpen = true; render(); });
   mountedRoot.querySelector("[data-pp-settings-close]")?.addEventListener("click", () => { ui.settingsOpen = false; render(); });
+  mountedRoot.querySelector("[data-pp-theme]")?.addEventListener("change", (event) => { applyColorMode(event.target.value); render(); });
   mountedRoot.querySelectorAll("[data-pp-pref]").forEach((input) => input.onchange = () => { ui.snapshot.preferences[input.dataset.ppPref] = input.type === "checkbox" ? input.checked : input.value; updatePreferences(); });
   mountedRoot.querySelector("[data-pp-retry]")?.addEventListener("click", hydrate);
   mountedRoot.querySelector("[data-pp-room-mode]")?.addEventListener("change", (event) => { ui.roomMode = event.target.value === "friends" ? "friends" : "classroom"; render(); });
