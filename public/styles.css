@@ -136,11 +136,17 @@ input {
   color: var(--soft);
   cursor: pointer;
   font-size: 13px;
+  transition: border-color 0.15s ease, color 0.15s ease, transform 0.12s ease, box-shadow 0.15s ease;
 }
 
 .ghost:hover {
   border-color: rgba(95, 213, 140, 0.5);
   color: var(--text);
+  transform: translateY(-1px);
+}
+
+.ghost:active {
+  transform: translateY(0) scale(0.98);
 }
 
 .primary {
@@ -152,11 +158,18 @@ input {
   font-weight: 600;
   font-size: 13px;
   cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.12s ease;
 }
 
 .primary:hover {
   background: linear-gradient(180deg, rgba(95, 213, 140, 0.32), rgba(95, 213, 140, 0.18));
   border-color: rgba(95, 213, 140, 0.85);
+  transform: translateY(-1px);
+  box-shadow: 0 0 18px rgba(95, 213, 140, 0.22);
+}
+
+.primary:active {
+  transform: translateY(0) scale(0.98);
 }
 
 .icon-btn {
@@ -228,11 +241,27 @@ input {
   background: linear-gradient(180deg, var(--panel), #0c1117);
   overflow: hidden;
   box-shadow: var(--shadow);
-  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+  animation: tile-in 0.26s cubic-bezier(0.2, 0.9, 0.3, 1) backwards;
 }
 
 .tile:hover {
   border-color: color-mix(in srgb, var(--card-color, var(--accent)) 45%, var(--line));
+  transform: translateY(-2px);
+  box-shadow:
+    0 14px 44px rgba(0, 0, 0, 0.55),
+    0 0 18px color-mix(in srgb, var(--card-color, var(--accent)) 10%, transparent);
+}
+
+@keyframes tile-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .tile.live {
@@ -250,13 +279,26 @@ input {
   opacity: 0.9;
 }
 
+/* Live tiles carry a slowly-drifting light along their top edge — a wall
+   of running terminals visibly hums instead of sitting static. */
 .tile.live::before {
   content: "";
   position: absolute;
   inset: 0 0 auto 0;
   height: 2px;
-  background: linear-gradient(90deg, transparent, var(--card-color, var(--accent)), transparent);
+  background: linear-gradient(90deg, transparent 20%, var(--card-color, var(--accent)) 50%, transparent 80%);
+  background-size: 220% 100%;
   opacity: 0.7;
+  animation: live-edge-drift 5.5s linear infinite;
+}
+
+@keyframes live-edge-drift {
+  0% {
+    background-position: 160% 0;
+  }
+  100% {
+    background-position: -160% 0;
+  }
 }
 
 .tile-head {
@@ -2051,4 +2093,370 @@ body.broadcast-mode .tile.linked {
   color: var(--muted);
   font-weight: 400;
   margin-top: 2px;
+}
+
+/* ============================================================= */
+/* Living UI — ambient motion & reactive life                     */
+/* (CSS-only: no app.js coupling; honors prefers-reduced-motion) */
+/* ============================================================= */
+
+/* ---- ambient drifting aurora behind everything ---- */
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: -20%;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(46% 34% at 78% 12%, rgba(95, 213, 140, 0.10), transparent 70%),
+    radial-gradient(38% 30% at 12% 22%, rgba(40, 196, 216, 0.08), transparent 65%),
+    radial-gradient(30% 26% at 55% 88%, rgba(95, 213, 140, 0.05), transparent 70%);
+  animation: aurora-drift 26s ease-in-out infinite alternate;
+}
+
+@keyframes aurora-drift {
+  0% {
+    transform: translate3d(-2%, -1%, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(1.5%, 1.5%, 0) scale(1.04);
+  }
+  100% {
+    transform: translate3d(3%, -1.5%, 0) scale(1.01);
+  }
+}
+
+/* Faint static scanline weave, only visible in background gaps. */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.012) 0 1px,
+    transparent 1px 4px
+  );
+}
+
+/* ---- topbar: drifting light along the bottom edge ---- */
+
+.topbar {
+  position: sticky;
+}
+
+.topbar::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent 15%, rgba(95, 213, 140, 0.55) 50%, transparent 85%);
+  background-size: 240% 100%;
+  animation: live-edge-drift 9s linear infinite;
+  pointer-events: none;
+}
+
+/* ---- brand: breathing mark + blinking cursor ---- */
+
+.brand-mark {
+  position: relative;
+  animation: brand-breathe 4.2s ease-in-out infinite;
+}
+
+@keyframes brand-breathe {
+  0%,
+  100% {
+    box-shadow: 0 0 22px rgba(95, 213, 140, 0.18) inset, 0 0 0 rgba(95, 213, 140, 0);
+  }
+  50% {
+    box-shadow: 0 0 26px rgba(95, 213, 140, 0.30) inset, 0 0 14px rgba(95, 213, 140, 0.16);
+  }
+}
+
+.brand-mark::after {
+  content: "";
+  position: absolute;
+  right: 9px;
+  bottom: 10px;
+  width: 7px;
+  height: 2.5px;
+  background: var(--accent-bright);
+  animation: caret-blink 1.15s steps(1) infinite;
+}
+
+@keyframes caret-blink {
+  0%,
+  55% {
+    opacity: 1;
+  }
+  56%,
+  100% {
+    opacity: 0;
+  }
+}
+
+.brand-text strong {
+  background: linear-gradient(90deg, var(--text) 30%, var(--accent-bright) 85%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* ---- status pill: tiny live dot per state ---- */
+
+.status-pill::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.9;
+}
+
+.status-pill[data-state="thinking"]::before,
+.status-pill[data-state="running"]::before {
+  animation: dot-pulse 1.5s ease-in-out infinite;
+}
+
+/* ---- whole-tile breathing while the agent works ---- */
+
+.tile:has(.status-pill[data-state="thinking"]) {
+  animation: tile-in 0.26s cubic-bezier(0.2, 0.9, 0.3, 1) backwards,
+    tile-breathe-thinking 2.6s ease-in-out infinite;
+}
+
+.tile:has(.status-pill[data-state="running"]) {
+  animation: tile-in 0.26s cubic-bezier(0.2, 0.9, 0.3, 1) backwards,
+    tile-breathe-running 2.6s ease-in-out infinite;
+}
+
+@keyframes tile-breathe-thinking {
+  0%,
+  100% {
+    box-shadow: var(--shadow);
+  }
+  50% {
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45), 0 0 22px rgba(185, 140, 232, 0.14);
+  }
+}
+
+@keyframes tile-breathe-running {
+  0%,
+  100% {
+    box-shadow: var(--shadow);
+  }
+  50% {
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45), 0 0 22px rgba(91, 157, 255, 0.14);
+  }
+}
+
+/* ---- placeholder: CCTV "standby channel" flicker ---- */
+
+.placeholder .big {
+  animation: standby-flicker 5s steps(20) infinite;
+}
+
+@keyframes standby-flicker {
+  0%,
+  92%,
+  96%,
+  100% {
+    opacity: 1;
+  }
+  93% {
+    opacity: 0.55;
+  }
+  94% {
+    opacity: 0.85;
+  }
+  95% {
+    opacity: 0.4;
+  }
+}
+
+/* ---- add-card: rotating plus + breathing ring ---- */
+
+.add-card .plus {
+  transition: transform 0.25s cubic-bezier(0.2, 0.9, 0.3, 1.4), border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.add-card:hover .plus {
+  transform: rotate(90deg);
+}
+
+/* Empty wall: radar rings ripple out from the big plus. */
+.wall.wall-empty .add-card {
+  position: relative;
+}
+
+.wall.wall-empty .add-card::before,
+.wall.wall-empty .add-card::after {
+  content: "";
+  position: absolute;
+  top: calc(50% - 26px);
+  left: 50%;
+  width: 74px;
+  height: 74px;
+  border-radius: 50%;
+  border: 1px solid rgba(95, 213, 140, 0.35);
+  transform: translate(-50%, -50%) scale(1);
+  opacity: 0;
+  pointer-events: none;
+  animation: radar-ring 3.4s ease-out infinite;
+}
+
+.wall.wall-empty .add-card::after {
+  animation-delay: 1.7s;
+}
+
+@keyframes radar-ring {
+  0% {
+    transform: translate(-50%, -50%) scale(0.9);
+    opacity: 0.55;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(2.6);
+    opacity: 0;
+  }
+}
+
+/* ---- overlays / popovers / palette: entrance motion ---- */
+
+.overlay:not(.hidden) {
+  animation: overlay-fade 0.18s ease-out;
+}
+
+.overlay:not(.hidden) .overlay-panel {
+  animation: panel-pop 0.22s cubic-bezier(0.2, 0.9, 0.3, 1.15);
+}
+
+@keyframes overlay-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes panel-pop {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.popover:not(.hidden) {
+  animation: popover-drop 0.16s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
+
+@keyframes popover-drop {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.su-palette:not(.hidden) {
+  animation: palette-rise 0.16s cubic-bezier(0.2, 0.9, 0.3, 1.15);
+}
+
+@keyframes palette-rise {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-8px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+}
+
+/* ---- status strip chips: lift on hover ---- */
+
+.su-status-chip {
+  transition: border-color 0.15s ease, color 0.15s ease, transform 0.12s ease;
+}
+
+.su-status-chip:hover {
+  transform: translateY(-1px);
+}
+
+/* ---- banners: slide in ---- */
+
+.limit-banner:not(.hidden),
+.broadcast-banner:not(.hidden) {
+  animation: popover-drop 0.2s ease-out;
+}
+
+/* ---- respect reduced-motion preferences ---- */
+
+@media (prefers-reduced-motion: reduce) {
+  body::before,
+  .topbar::after,
+  .brand-mark,
+  .brand-mark::after,
+  .tile,
+  .tile.live::before,
+  .status-pill::before,
+  .placeholder .big,
+  .wall.wall-empty .add-card::before,
+  .wall.wall-empty .add-card::after,
+  .overlay:not(.hidden),
+  .overlay:not(.hidden) .overlay-panel,
+  .popover:not(.hidden),
+  .su-palette:not(.hidden),
+  .limit-banner:not(.hidden),
+  .broadcast-banner:not(.hidden) {
+    animation: none !important;
+  }
+
+  .tile,
+  .ghost,
+  .primary,
+  .su-status-chip,
+  .add-card .plus {
+    transition: none !important;
+  }
+}
+
+/* ---- narrow-DIP screens (e.g. 1080p at 175% Windows scaling) ----
+   The full control row is wider than the ~1100 usable DIPs such displays
+   give; without this it clips off the right edge and hides the New button
+   behind a horizontal scrollbar. Wrap + tighten instead. */
+
+@media (max-width: 1280px) {
+  .topbar {
+    flex-wrap: wrap;
+    row-gap: 8px;
+    padding: 10px 14px;
+  }
+
+  .controls {
+    flex-wrap: wrap;
+    row-gap: 8px;
+    gap: 8px;
+  }
+
+  .ghost,
+  .primary {
+    padding: 7px 11px;
+    font-size: 12px;
+  }
+
+  .usage-totals {
+    font-size: 12px;
+  }
 }
