@@ -30,13 +30,15 @@
     background:transparent; font:700 10px/1 monospace; letter-spacing:.04em; }
   .vg-tool:hover { color:var(--dawn); border-color:rgba(143,233,255,.28); background:rgba(143,233,255,.08); }
   .vg-tool[data-vg-fullscreen] { min-width:96px; padding:0 12px; }
-  [data-vg-hint] { position:fixed; left:50%; bottom:max(14px,env(safe-area-inset-bottom)); transform:translateX(-50%); z-index:5;
+  body:not(.is-vg-overlay-visible) .vg-status, body:not(.is-vg-overlay-visible) .vg-toolbar { opacity:0; pointer-events:none; }
+  body:not([data-vg-overlay-kind="pause"]) [data-vg-pause] { display:none; }
+  [data-vg-hint] { position:fixed; right:max(14px,env(safe-area-inset-right)); bottom:max(14px,env(safe-area-inset-bottom)); z-index:5;
     font:600 12px/1.4 Georgia,serif; color:#c7d2ea; background:rgba(6,5,16,.84); padding:8px 14px;
-    border:1px solid rgba(143,233,255,.2); border-radius:7px; max-width:min(700px,82vw); text-align:center; box-shadow:0 12px 28px rgba(0,0,0,.28); }
+    border:1px solid rgba(143,233,255,.2); border-radius:7px; max-width:min(420px,42vw); text-align:left; box-shadow:0 12px 28px rgba(0,0,0,.28); }
   [data-vg-overlay] { position:fixed; inset:0; z-index:7; display:grid; align-items:center; justify-items:start; padding:clamp(28px,6vw,84px);
-    overflow:auto; background:linear-gradient(90deg,rgba(3,2,9,.97) 0%,rgba(3,2,9,.86) 40%,rgba(3,2,9,.22) 72%,rgba(3,2,9,.5) 100%); }
+    overflow-y:auto; overflow-x:hidden; background:linear-gradient(90deg,rgba(3,2,9,.97) 0%,rgba(3,2,9,.86) 40%,rgba(3,2,9,.22) 72%,rgba(3,2,9,.5) 100%); }
   [data-vg-overlay][hidden] { display:none; }
-  .vg-panel { width:min(650px,100%); text-align:left; }
+  .vg-panel { width:min(650px,100%); max-width:100%; min-width:0; text-align:left; }
   .vg-kick { margin:0 0 10px; letter-spacing:.34em; font:700 11px/1.2 monospace; color:var(--dawn); }
   .vg-panel h1 { margin:0 0 14px; max-width:100%; font-size:clamp(44px,7vw,86px); line-height:.92; letter-spacing:0;
     background:linear-gradient(180deg,#fff 0%,#d9e3ff 54%,#91a6d9 100%); -webkit-background-clip:text; background-clip:text; color:transparent;
@@ -66,7 +68,7 @@
   .vg-set input[type=checkbox] { accent-color:var(--dawn); width:19px; height:19px; }
   @media (max-width:700px) {
     [data-vg-overlay] { align-items:end; padding:72px 18px max(24px,env(safe-area-inset-bottom)); background:linear-gradient(0deg,rgba(3,2,9,.98),rgba(3,2,9,.72) 64%,rgba(3,2,9,.26)); }
-    .vg-panel h1 { font-size:clamp(42px,14vw,66px); }
+    .vg-panel h1 { font-size:clamp(38px,11.5vw,50px); overflow-wrap:anywhere; }
     .vg-sub { font-size:13px; }
     .vg-controls { grid-template-columns:repeat(2,minmax(0,1fr)); margin-top:16px; }
     .vg-control:nth-child(n+5) { display:none; }
@@ -74,6 +76,7 @@
     .vg-toolbar { top:max(8px,env(safe-area-inset-top)); }
     .vg-tool[data-vg-fullscreen] { min-width:82px; }
     .vg-settings { padding:20px; }
+    [data-vg-hint] { left:18px; right:18px; max-width:none; text-align:center; }
   }
 </style>
 </head>
@@ -89,10 +92,10 @@
 </div>
 <div data-vg-hint hidden></div>
 <div data-vg-overlay data-kind="title"></div>
-<script src="./engine.js?v=2.0.0"></script>
-<script src="./portal.js?v=2.0.0"></script>
-<script src="./world.js?v=2.0.0"></script>
-<script src="./rooms.js?v=2.0.0"></script>
-<script src="./game.js?v=2.0.0"></script>
+<script src="./engine.js?v=2.1.2"></script>
+<script src="./portal.js?v=2.1.2"></script>
+<script src="./world.js?v=2.1.2"></script>
+<script src="./rooms.js?v=2.1.2"></script>
+<script src="./game.js?v=2.1.2"></script>
 </body>
 </html>

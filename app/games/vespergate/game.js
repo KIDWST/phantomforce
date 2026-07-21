@@ -22,6 +22,8 @@
     quests: {}, flags: {}, shopBought: {},
     dialog: null, scene: null, banner: null,
     bossHp: 0, bossMax: 1, completeSent: false,
+    combo: 0, comboT: 0, bestCombo: 0,
+    damageFlash: 0, roomFade: 0,
   };
   VG.state = state;
   for (const q of Object.keys(D.QUESTS)) state.quests[q] = "locked";
@@ -116,16 +118,17 @@
       const a = VG.input.padAim, m = Math.hypot(a.x, a.y);
       if (m > 0.2) { player.aimx = a.x / m; player.aimy = a.y / m; }
     } else {
-      const wx = VG.camera.x + VG.input.mx, wy = VG.camera.y + VG.input.my;
-      const dx = wx - player.x, dy = wy - player.y, m = Math.hypot(dx, dy) || 1;
+      const w = VG.camera.screenToWorld(VG.input.mx, VG.input.my);
+      const dx = w.x - player.x, dy = w.y - player.y, m = Math.hypot(dx, dy) || 1;
       player.aimx = dx / m; player.aimy = dy / m;
     }
   }
   let placePreview = null;
   function updateGatePreview() {
     if (!state.flags.hasHand) { placePreview = null; return; }
-    const wx = VG.camera.x + (VG.input.usingPad ? player.x + player.aimx * 80 : VG.input.mx);
-    const wy = VG.camera.y + (VG.input.usingPad ? player.y + player.aimy * 80 : VG.input.my);
+    const sw = VG.camera.screenToWorld(VG.input.mx, VG.input.my);
+    const wx = VG.input.usingPad ? player.x + player.aimx * 80 : sw.x;
+    const wy = VG.input.usingPad ? player.y + player.aimy * 80 : sw.y;
     let cls = state.room.classifyPortal(wx, wy);
     if (!cls.valid && cls.reason === "open-air") {
       const dx = wx - player.x, dy = wy - player.y, m = Math.hypot(dx, dy) || 1;
@@ -197,8 +200,15 @@
     if (e.hp <= 0) killEnemy(e);
   }
   function killEnemy(e) {
-    e.dead = true; state.kills++; state.score += 100;
+    e.dead = true; state.kills++;
+    state.combo = state.comboT > 0 ? state.combo + 1 : 1;
+    state.comboT = 3.25;
+    state.bestCombo = Math.max(state.bestCombo, state.combo);
+    const multiplier = Math.min(4, 1 + Math.floor((state.combo - 1) / 2));
+    state.score += 100 * multiplier;
     spawnParticles(e.x, e.y, "#8fe9ff", 12);
+    VG.camera.jolt(0.09);
+    if (state.combo >= 2) toast(`${state.combo} SOUL CHAIN  ×${multiplier}`, e.x, e.y - 18, state.combo >= 6 ? "#ffcf6b" : "#8fe9ff");
     const val = e.type === "wolf" ? 4 : e.type === "guard" ? 6 : e.type === "mourner" ? 6 : 3;
     for (let i = 0; i < val; i++) pickups.push({ x: e.x, y: e.y, vx: (Math.random() - 0.5) * 90, vy: (Math.random() - 0.5) * 90, type: "ember", value: 1, bob: Math.random() * 6 });
     if (e.type === "wolf") player.materials.wolfshard++;
@@ -243,6 +253,7 @@
     if (player.iframe > 0 || player.dead || player.rollT > 0) return;
     player.hp -= Math.max(1, Math.round(dmg * VG.settings.damageTaken));
     player.iframe = 0.9;
+    state.damageFlash = 1;
     player.vx += kx * 140; player.vy += ky * 140;
     VG.camera.jolt(0.3); spawnParticles(player.x, player.y, "#ff5c74", 8);
     VG.sfx(140, 0.14, "sawtooth", 0.06);
@@ -543,6 +554,7 @@
       embers: player.embers, relics: player.relics, equipped: player.equipped,
       materials: player.materials, quests: state.quests, flags: state.flags,
       shopBought: state.shopBought, score: state.score, kills: state.kills,
+      bestCombo: state.bestCombo,
     });
   }
   function restoreSave(s) {
@@ -555,6 +567,7 @@
     state.flags = s.flags || {};
     state.shopBought = s.shopBought || {};
     state.score = s.score || 0; state.kills = s.kills || 0;
+    state.bestCombo = s.bestCombo || 0;
   }
 
   /* ================= room loading ================= */
@@ -562,7 +575,7 @@
     const def = VG.ROOMS[id];
     state.room = new VG.Room(def);
     state.roomId = id;
-    VG.camera.bounds = { x: 0, y: 0, w: Math.max(state.room.pxW, VG.W), h: Math.max(state.room.pxH, VG.H) };
+    VG.camera.setRoom(state.room.pxW, state.room.pxH);
     shots = []; bolts = []; rings = []; particles = []; floatText = [];
     enemies = (def.enemies || [])
       .filter((e) => !(e.tag === "q_wolves" && state.quests.q_wolves === "done"))
@@ -579,6 +592,7 @@
     player.x = sp.x * T + 8; player.y = sp.y * T + 8;
     player.vx = 0; player.vy = 0; player.dead = false;
     VG.camera.snapTo(player.x, player.y);
+    state.roomFade = 1;
     VG.setMusicState(boss ? "boss" : def.biome === "village" || def.biome === "interior" ? "shrine" : "explore");
     banner(def.name.toUpperCase());
     setHint(def.hint || "");
@@ -773,7 +787,8 @@
     const inCombat = enemies.some((e) => !e.dead && VG.dist(e.x, e.y, player.x, player.y) < 140);
     const def2 = VG.ROOMS[state.roomId];
     VG.setMusicState(boss && !boss.dead ? "boss" : inCombat ? "combat" : (def2.biome === "village" || def2.biome === "interior") ? "shrine" : "explore");
-    VG.camera.follow(player.x, player.y, VG.camera.x + VG.input.mx, VG.camera.y + VG.input.my, dt);
+    const look = VG.camera.screenToWorld(VG.input.mx, VG.input.my);
+    VG.camera.follow(player.x, player.y, look.x, look.y, dt);
     if (portals.strain >= 1) doCollapse();
   }
   function doCollapse() {
@@ -786,6 +801,53 @@
   }
 
   /* ================= rendering ================= */
+  function drawTitleBackdrop() {
+    const sky = ctx.createLinearGradient(0, 0, 0, VG.H);
+    sky.addColorStop(0, "#17112a"); sky.addColorStop(0.58, "#080716"); sky.addColorStop(1, "#030208");
+    ctx.fillStyle = sky; ctx.fillRect(0, 0, VG.W, VG.H);
+
+    // The title screen is a live glimpse of Duskhollow, built from the same
+    // light, bell, and linked-gate language as the playable world.
+    ctx.fillStyle = "rgba(197,214,255,0.08)";
+    ctx.beginPath(); ctx.arc(500, 78, 52, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "rgba(255,238,210,0.12)";
+    ctx.beginPath(); ctx.arc(500, 78, 37, 0, Math.PI * 2); ctx.fill();
+
+    ctx.fillStyle = "#070711";
+    ctx.fillRect(0, 272, VG.W, 88);
+    for (let i = 0; i < 13; i++) {
+      const x = 286 + i * 31, h = 25 + ((i * 17) % 54);
+      ctx.fillRect(x, 272 - h, 23, h);
+      ctx.beginPath(); ctx.moveTo(x - 4, 272 - h); ctx.lineTo(x + 11, 250 - h); ctx.lineTo(x + 27, 272 - h); ctx.fill();
+    }
+    ctx.fillRect(468, 128, 38, 144);
+    ctx.beginPath(); ctx.moveTo(462, 128); ctx.lineTo(487, 84); ctx.lineTo(512, 128); ctx.fill();
+    ctx.fillStyle = "rgba(255,207,107,0.22)"; ctx.fillRect(483, 143, 8, 13);
+
+    const pulse = 0.72 + Math.sin(state.t * 1.8) * 0.18;
+    const gates = [
+      { x: 424, y: 244, color: `rgba(143,233,255,${pulse})`, lean: -0.18 },
+      { x: 553, y: 234, color: `rgba(255,154,208,${pulse * 0.92})`, lean: 0.2 },
+    ];
+    for (const gate of gates) {
+      ctx.save(); ctx.translate(gate.x, gate.y); ctx.rotate(gate.lean);
+      ctx.shadowColor = gate.color; ctx.shadowBlur = 18;
+      ctx.strokeStyle = gate.color; ctx.lineWidth = 2.2;
+      ctx.beginPath(); ctx.ellipse(0, 0, 9, 34, 0, 0, Math.PI * 2); ctx.stroke();
+      ctx.globalAlpha = 0.3; ctx.lineWidth = 5;
+      ctx.beginPath(); ctx.ellipse(0, 0, 5, 29, 0, 0, Math.PI * 2); ctx.stroke();
+      ctx.restore();
+    }
+
+    ctx.globalAlpha = 0.12;
+    ctx.fillStyle = "#b8c9ef";
+    for (let i = 0; i < 4; i++) {
+      const x = ((state.t * (7 + i) + i * 180) % 820) - 90;
+      ctx.beginPath(); ctx.ellipse(x, 250 + i * 23, 120, 12 + i * 2, 0, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+
   function shadow(x, y, w2) {
     ctx.fillStyle = "rgba(0,0,0,0.28)";
     ctx.beginPath(); ctx.ellipse(x, y + 5, w2, w2 * 0.4, 0, 0, Math.PI * 2); ctx.fill();
@@ -867,6 +929,23 @@
       ctx.textAlign = "left";
     }
   }
+
+  function drawScreenFx() {
+    if (player.hp <= Math.max(1, Math.floor(player.maxHp * 0.25)) && state.phase === "playing") {
+      const low = 0.15 + Math.sin(state.t * 5) * 0.05;
+      const vignette = ctx.createRadialGradient(VG.W / 2, VG.H / 2, 80, VG.W / 2, VG.H / 2, 340);
+      vignette.addColorStop(0, "rgba(80,0,25,0)"); vignette.addColorStop(1, `rgba(130,12,45,${low})`);
+      ctx.fillStyle = vignette; ctx.fillRect(0, 0, VG.W, VG.H);
+    }
+    if (state.damageFlash > 0) {
+      ctx.fillStyle = `rgba(255,45,80,${state.damageFlash * 0.13})`;
+      ctx.fillRect(0, 0, VG.W, VG.H);
+    }
+    if (state.roomFade > 0) {
+      ctx.fillStyle = `rgba(3,2,9,${Math.min(1, state.roomFade)})`;
+      ctx.fillRect(0, 0, VG.W, VG.H);
+    }
+  }
   function drawPlayer() {
     const p = player;
     if (p.iframe > 0 && Math.floor(state.t * 30) % 2) return;
@@ -943,6 +1022,14 @@
       ctx.fillStyle = "#3a4a6a"; ctx.fillRect(-2 * sc, -4 * sc, 1.5, 2); ctx.fillRect(sc, -4 * sc, 1.5, 2);
       if (e.enrage) { ctx.strokeStyle = `rgba(255,120,150,${0.3 + e.enrage * 0.2})`; ctx.beginPath(); ctx.arc(0, 0, 10 * sc, 0, Math.PI * 2); ctx.stroke(); }
     }
+    if (e.type === "wolf" && e.lungeT > 0) {
+      ctx.strokeStyle = `rgba(255,207,107,${Math.min(1, e.lungeT * 3)})`; ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.arc(0, 0, 11 + (0.32 - e.lungeT) * 18, 0, Math.PI * 2); ctx.stroke();
+    }
+    if (e.hurt > 0) {
+      ctx.globalAlpha = Math.min(1, e.hurt * 7);
+      ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(0, 0, e.r + 3, 0, Math.PI * 2); ctx.stroke();
+    }
     if (e.hp < e.maxHp) {
       ctx.globalAlpha = 1;
       ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(-6, -13, 12, 2);
@@ -969,6 +1056,7 @@
       const half = g.half * g.open;
       const col = g.endpoint === 0 ? "#8fe9ff" : "#ff9ad0";
       ctx.save(); ctx.translate(g.x, g.y);
+      ctx.shadowColor = col; ctx.shadowBlur = 11 + Math.sin(g.glyphPhase * 2) * 3;
       // mouth: soft void into the linked space
       ctx.fillStyle = g.endpoint === 0 ? "rgba(40,90,140,0.55)" : "rgba(140,60,110,0.55)";
       ctx.beginPath();
@@ -976,6 +1064,7 @@
       ctx.fill();
       ctx.strokeStyle = col; ctx.lineWidth = 1.5;
       ctx.beginPath(); ctx.moveTo(g.tx * half, g.ty * half); ctx.lineTo(-g.tx * half, -g.ty * half); ctx.stroke();
+      ctx.shadowBlur = 0;
       for (let k = -2; k <= 2; k++) {
         const off = (k / 2) + Math.sin(g.glyphPhase + k) * 0.1;
         ctx.fillStyle = col; ctx.globalAlpha = 0.7 + Math.sin(g.glyphPhase * 2 + k) * 0.3;
@@ -1005,33 +1094,57 @@
     if (filled) { ctx.fillStyle = "rgba(255,255,255,0.55)"; ctx.fillRect(x + 1, y + 2, 1, 1); }
   }
   function drawHUD() {
+    ctx.fillStyle = "rgba(5,4,13,0.72)"; ctx.fillRect(5, 5, 96, 31);
+    ctx.strokeStyle = "rgba(143,233,255,0.16)"; ctx.strokeRect(5.5, 5.5, 95, 30);
     for (let i = 0; i < player.maxHp; i++) drawHeart(8 + i * 10, 7, i < player.hp);
     ctx.fillStyle = "rgba(0,0,0,0.4)"; ctx.fillRect(8, 18, 70, 4);
     ctx.fillStyle = "#ffcf6b"; ctx.fillRect(8, 18, 70 * (player.ash / player.maxAsh), 4);
+    ctx.fillStyle = "#8a9ac0"; ctx.font = "5px monospace"; ctx.fillText("CINDER", 81, 22);
     // embers
     ctx.fillStyle = "#ffcf6b"; ctx.fillRect(8, 27, 4, 4);
     ctx.fillStyle = "#eaf2ff"; ctx.font = "7px monospace"; ctx.fillText(String(player.embers), 15, 32);
+
+    const roomName = VG.ROOMS[state.roomId]?.name || "Duskhollow";
+    ctx.textAlign = "right";
+    ctx.fillStyle = "rgba(5,4,13,0.68)"; ctx.fillRect(VG.W - 176, 5, 171, 22);
+    ctx.fillStyle = "#eaf2ff"; ctx.font = "700 7px Georgia, serif"; ctx.fillText(roomName.toUpperCase(), VG.W - 10, 14);
+    ctx.fillStyle = "#8a9ac0"; ctx.font = "5px monospace";
+    ctx.fillText(`${enemies.filter((e) => !e.dead).length + (boss && !boss.dead ? 1 : 0)} THREATS · ${state.score} SCORE`, VG.W - 10, 22);
+    ctx.textAlign = "left";
     // gate strain (only when a gate is up)
     if (portals.gates.some((g) => g.active)) {
       const sw = 70;
-      ctx.fillStyle = "rgba(0,0,0,0.4)"; ctx.fillRect(VG.W - sw - 8, 8, sw, 5);
+      ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(VG.W - sw - 8, 30, sw, 5);
       const st = portals.strain;
       ctx.fillStyle = st > 0.8 ? "#ff5c74" : st > 0.5 ? "#ffcf6b" : "#8fe9ff";
-      ctx.fillRect(VG.W - sw - 8, 8, sw * st, 5);
-      ctx.textAlign = "right"; ctx.fillStyle = "#8a9ac0"; ctx.font = "6px monospace"; ctx.fillText("STRAIN", VG.W - 8, 20); ctx.textAlign = "left";
+      ctx.fillRect(VG.W - sw - 8, 30, sw * st, 5);
+      ctx.textAlign = "right"; ctx.fillStyle = "#8a9ac0"; ctx.font = "6px monospace"; ctx.fillText("STRAIN", VG.W - 8, 43); ctx.textAlign = "left";
     }
     if (state.flags.hasHand) {
       ctx.textAlign = "right"; ctx.font = "6px monospace";
       ctx.fillStyle = portals.selected === 0 ? "#8fe9ff" : "#ff9ad0";
-      ctx.fillText(portals.selected === 0 ? "NEXT GATE: DAWN" : "NEXT GATE: DUSK", VG.W - 8, 28);
+      ctx.fillText(portals.selected === 0 ? "NEXT GATE: DAWN" : "NEXT GATE: DUSK", VG.W - 8, portals.gates.some((g) => g.active) ? 52 : 36);
       ctx.textAlign = "left";
     }
     // quest tracker
     const tq = trackedQuest();
-    if (tq) {
-      ctx.font = "6px monospace";
-      ctx.fillStyle = "rgba(6,5,16,0.65)"; ctx.fillRect(6, VG.H - 16, 8 + tq.title.length * 4, 11);
-      ctx.fillStyle = "#ffcf6b"; ctx.fillText("◆ " + tq.title, 10, VG.H - 8);
+    if (tq && !(boss && !boss.dead)) {
+      const desc = tq.desc.length > 66 ? tq.desc.slice(0, 63) + "..." : tq.desc;
+      ctx.fillStyle = "rgba(5,4,13,0.78)"; ctx.fillRect(6, VG.H - 35, 272, 29);
+      ctx.strokeStyle = "rgba(255,207,107,0.2)"; ctx.strokeRect(6.5, VG.H - 34.5, 271, 28);
+      ctx.font = "700 6px monospace"; ctx.fillStyle = "#ffcf6b"; ctx.fillText("CURRENT QUEST  ·  " + tq.title.toUpperCase(), 12, VG.H - 23);
+      ctx.font = "6px Georgia, serif"; ctx.fillStyle = "#b7c2d9"; ctx.fillText(desc, 12, VG.H - 12);
+    }
+    if (state.combo >= 2 && state.comboT > 0) {
+      const multiplier = Math.min(4, 1 + Math.floor((state.combo - 1) / 2));
+      const fade = Math.min(1, state.comboT);
+      ctx.globalAlpha = fade;
+      ctx.textAlign = "center";
+      ctx.fillStyle = "rgba(5,4,13,0.68)"; ctx.fillRect(VG.W / 2 - 58, 7, 116, 23);
+      ctx.fillStyle = state.combo >= 6 ? "#ffcf6b" : "#8fe9ff"; ctx.font = "700 10px Georgia, serif";
+      ctx.fillText(`${state.combo} SOUL CHAIN`, VG.W / 2, 17);
+      ctx.fillStyle = "#eaf2ff"; ctx.font = "6px monospace"; ctx.fillText(`SCORE ×${multiplier}`, VG.W / 2, 26);
+      ctx.textAlign = "left"; ctx.globalAlpha = 1;
     }
     // boss bar
     if (boss && !boss.dead) {
@@ -1053,7 +1166,8 @@
     // crosshair (subtle, only with the Hand)
     if (state.flags.hasHand && !VG.input.usingPad) {
       const cx = VG.input.mx, cy = VG.input.my;
-      ctx.strokeStyle = "rgba(234,242,255,0.5)"; ctx.lineWidth = 1;
+      ctx.strokeStyle = portals.selected === 0 ? "rgba(143,233,255,0.72)" : "rgba(255,154,208,0.72)"; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(cx, cy, 5, 0, Math.PI * 2); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(cx - 3, cy); ctx.lineTo(cx + 3, cy); ctx.moveTo(cx, cy - 3); ctx.lineTo(cx, cy + 3); ctx.stroke();
     }
   }
@@ -1168,22 +1282,28 @@
   }
 
   /* ================= overlays (DOM) ================= */
-  function showOverlay(kind) { $("[data-vg-overlay]").dataset.kind = kind; $("[data-vg-overlay]").hidden = false; renderOverlay(kind); }
-  function hideOverlay() { $("[data-vg-overlay]").hidden = true; }
+  function showOverlay(kind) { document.body.classList.add("is-vg-overlay-visible"); document.body.dataset.vgOverlayKind = kind; $("[data-vg-overlay]").dataset.kind = kind; $("[data-vg-overlay]").hidden = false; renderOverlay(kind); }
+  function hideOverlay() { document.body.classList.remove("is-vg-overlay-visible"); delete document.body.dataset.vgOverlayKind; $("[data-vg-overlay]").hidden = true; }
   function renderOverlay(kind) {
     const el = $("[data-vg-overlay]");
     if (kind === "title") {
       const cont = VG.save.read();
       el.innerHTML = `<div class="vg-panel">
-        <p class="vg-kick">THE VESPER HAND</p>
+        <p class="vg-kick">A DUSKHOLLOW TALE · THE VESPER HAND</p>
         <h1>VESPERGATE</h1>
-        <p class="vg-sub">Seven bearers carried the Hand before you. Duskhollow's bell is silent, the lake sings back, and tonight your grandmother passes the gauntlet down. Village, vale, two dungeons below — and every wall that remembers being a door.</p>
+        <p class="vg-sub">The village bell is silent. The lake sings back. Tonight your grandmother passes down a gauntlet that folds space through every wall that remembers being a door.</p>
+        <div class="vg-campaign"><span>Open world</span><span>6 quests</span><span>2 dungeons</span><span>Linked portals</span></div>
         <div class="vg-btns">
-          ${cont ? `<button class="vg-btn" data-vg-continue>Continue — ${VG.ROOMS[cont.roomId] ? VG.ROOMS[cont.roomId].name : "Duskhollow"}</button>` : ""}
-          <button class="vg-btn vg-primary" data-vg-new>New Game</button>
+          ${cont ? `<button class="vg-btn vg-primary" data-vg-continue>Continue in ${VG.ROOMS[cont.roomId] ? VG.ROOMS[cont.roomId].name : "Duskhollow"}</button>` : `<button class="vg-btn vg-primary" data-vg-new>Begin the tale</button>`}
+          ${cont ? `<button class="vg-btn" data-vg-new>New tale</button>` : ""}
           <button class="vg-btn" data-vg-settings>Settings</button>
         </div>
-        <p class="vg-controls">Move WASD · Strike Left-click · Cinder bolt F · Gate Right-click · Swap gate Q · Vent R · Roll Shift · Talk/Interact E · Inventory TAB</p>
+        <div class="vg-controls" aria-label="Controls">
+          <span class="vg-control"><b>WASD</b>Move</span><span class="vg-control"><b>LEFT CLICK</b>Strike</span>
+          <span class="vg-control"><b>F</b>Cinder bolt</span><span class="vg-control"><b>RIGHT CLICK</b>Place gate</span>
+          <span class="vg-control"><b>Q / R</b>Swap / vent</span><span class="vg-control"><b>SHIFT</b>Roll</span>
+          <span class="vg-control"><b>E</b>Talk / use</span><span class="vg-control"><b>TAB</b>Inventory</span>
+        </div>
       </div>`;
     } else if (kind === "dead") {
       el.innerHTML = `<div class="vg-panel"><p class="vg-kick" style="color:#ff5c74">THE DUSK TOOK YOU</p><h1>COLLAPSED</h1><p class="vg-sub">You wake at home in Duskhollow. The Hand kept everything you carried.</p><div class="vg-btns"><button class="vg-btn vg-primary" data-vg-retry>Wake</button><button class="vg-btn" data-vg-title>Title</button></div></div>`;
@@ -1197,22 +1317,32 @@
         ${row("Volume", "volume", 0, 1, 0.05)}${row("Music", "music", 0, 1, 0.05)}
         ${row("Screenshake", "shake", 0, 1, 0.1)}${row("Motion", "motion", 0.3, 1, 0.1)}
         ${row("Damage taken", "damageTaken", 0.25, 1, 0.25)}
-        ${chk("Reduced effects", "reducedEffects")}${chk("Soft scaling", "softScale")}
+        ${chk("Reduced effects", "reducedEffects")}${chk("Crisp HD rendering", "sharpRender")}
         <div class="vg-btns"><button class="vg-btn vg-primary" data-vg-settings-back>Back</button></div></div>`;
     } else if (kind === "pause") {
-      el.innerHTML = `<div class="vg-panel"><h1>Paused</h1><div class="vg-btns"><button class="vg-btn vg-primary" data-vg-resume>Resume</button><button class="vg-btn" data-vg-settings>Settings</button><button class="vg-btn" data-vg-title>Title</button></div></div>`;
+      const quest = trackedQuest();
+      el.innerHTML = `<div class="vg-panel"><p class="vg-kick">${VG.ROOMS[state.roomId]?.name || "Duskhollow"}</p><h1>Paused</h1>
+        <p class="vg-sub">${quest ? `Current quest: ${quest.title}.` : "The road is quiet for a moment."} Score ${state.score} · Best chain ${state.bestCombo}.</p>
+        <div class="vg-btns"><button class="vg-btn vg-primary" data-vg-resume>Return to Duskhollow</button><button class="vg-btn" data-vg-settings>Settings</button><button class="vg-btn" data-vg-title>Title</button></div></div>`;
     }
   }
   document.addEventListener("click", (e) => {
     const b = e.target.closest("button"); if (!b) return;
     VG.unlockAudio();
+    if (b.dataset.vgFullscreen !== undefined) { VG.toggleFullscreen(); return; }
+    if (b.dataset.vgSound !== undefined) { VG.toggleMuted(); return; }
+    if (b.dataset.vgPause !== undefined) {
+      if (state.phase === "playing") { state.phase = "paused"; showOverlay("pause"); b.textContent = "RESUME"; }
+      else if (state.phase === "paused") { state.phase = "playing"; hideOverlay(); b.textContent = "PAUSE"; }
+      return;
+    }
     if (b.dataset.vgNew !== undefined) { VG.save.clear(); newGame(); }
     else if (b.dataset.vgContinue !== undefined) { const s = VG.save.read(); if (s) { restoreSave(s); startGame(VG.ROOMS[s.roomId] ? s.roomId : "village", null); } else newGame(); }
     else if (b.dataset.vgRetry !== undefined) { player.hp = player.maxHp; player.dead = false; startGame("village", null); }
     else if (b.dataset.vgTitle !== undefined) { state.phase = "title"; showOverlay("title"); }
     else if (b.dataset.vgSettings !== undefined) showOverlay("settings");
     else if (b.dataset.vgSettingsBack !== undefined) { VG.saveSettings(); showOverlay(state.phase === "paused" ? "pause" : state.phase === "win" ? "win" : "title"); }
-    else if (b.dataset.vgResume !== undefined) { state.phase = "playing"; hideOverlay(); }
+    else if (b.dataset.vgResume !== undefined) { state.phase = "playing"; hideOverlay(); const pause = $("[data-vg-pause]"); if (pause) pause.textContent = "PAUSE"; }
   });
   document.addEventListener("input", (e) => {
     const t2 = e.target;
@@ -1226,6 +1356,7 @@
     player.hp = 4; player.maxHp = 4; player.ash = 100; player.maxAsh = 100;
     player.embers = 0; player.relics = {}; player.equipped = []; player.materials = { wolfshard: 0, glassshard: 0 };
     state.score = 0; state.kills = 0; state.completeSent = false;
+    state.combo = 0; state.comboT = 0; state.bestCombo = 0; state.damageFlash = 0;
     startGame("maren", null);
   }
   function startGame(roomId, spawn) {
@@ -1250,8 +1381,8 @@
     const d2 = e.data; if (!d2 || d2.source !== "phantomplay-host") return;
     if (d2.type === "settings" && typeof d2.sound === "boolean") VG.setMuted(!d2.sound);
     if (d2.type === "settings" && d2.reducedMotion) { VG.settings.motion = 0.5; VG.settings.reducedEffects = true; VG.settings.shake = 0.3; }
-    if (d2.type === "pause" && state.phase === "playing") { state.phase = "paused"; showOverlay("pause"); }
-    if (d2.type === "resume" && state.phase === "paused") { state.phase = "playing"; hideOverlay(); }
+    if (d2.type === "pause" && state.phase === "playing") { state.phase = "paused"; showOverlay("pause"); const p = $("[data-vg-pause]"); if (p) p.textContent = "RESUME"; }
+    if (d2.type === "resume" && state.phase === "paused") { state.phase = "playing"; hideOverlay(); const p = $("[data-vg-pause]"); if (p) p.textContent = "PAUSE"; }
     if (d2.type === "restart") newGame();
   });
 
@@ -1260,11 +1391,18 @@
   function frame(now) {
     if (!last) last = now;
     const dt = Math.min(0.033, (now - last) / 1000); last = now;
+    state.damageFlash = Math.max(0, state.damageFlash - dt * 3.8);
+    state.roomFade = Math.max(0, state.roomFade - dt * 2.6);
+    if (state.comboT > 0) {
+      state.comboT = Math.max(0, state.comboT - dt);
+      if (state.comboT === 0) state.combo = 0;
+    }
     VG.pollPad();
     const pressed = VG.input.pressed;
     if (pressed.has("Escape") || pressed.has("PadStart")) {
-      if (state.phase === "playing") { state.phase = "paused"; showOverlay("pause"); }
-      else if (state.phase === "paused") { state.phase = "playing"; hideOverlay(); }
+      const pauseButton = $("[data-vg-pause]");
+      if (state.phase === "playing") { state.phase = "paused"; showOverlay("pause"); if (pauseButton) pauseButton.textContent = "RESUME"; }
+      else if (state.phase === "paused") { state.phase = "playing"; hideOverlay(); if (pauseButton) pauseButton.textContent = "PAUSE"; }
       else if (state.phase === "inventory" || state.phase === "shop") state.phase = "playing";
       pressed.delete("Escape");
     }
@@ -1279,19 +1417,23 @@
       state.t += dt;
       if (pressed.has("Tab") || pressed.has("KeyI") || pressed.has("PadBack")) state.phase = "playing";
       pressed.clear();
-    } else pressed.clear();
+    } else {
+      if (state.phase === "title" || state.phase === "dead" || state.phase === "win") state.t += dt;
+      pressed.clear();
+    }
 
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    VG.resetCanvasTransform();
     ctx.fillStyle = "#05040c"; ctx.fillRect(0, 0, VG.W, VG.H);
     if (state.room) {
       VG.camera.apply(ctx);
       drawScene();
       VG.camera.reset(ctx);
       drawHUD();
+      drawScreenFx();
       if (state.phase === "dialog" || state.phase === "scene") drawDialog();
       if (state.phase === "inventory") drawInventory();
       if (state.phase === "shop") drawShop();
-    }
+    } else drawTitleBackdrop();
     requestAnimationFrame(frame);
   }
 
@@ -1312,6 +1454,9 @@
       gates: portals.gates.map((g) => g.active), strain: +portals.strain.toFixed(2),
       enemies: enemies.filter((e) => !e.dead).length, npcs: npcs.map((n) => n.id),
       bossHp: boss ? boss.hp : null, score: state.score, kills: state.kills,
+      combo: state.combo, bestCombo: state.bestCombo,
+      renderScale: +(VG.renderScale || 1).toFixed(2),
+      fullscreen: !!document.fullscreenElement || document.body.classList.contains("is-vg-theater"),
     }),
     newGame: () => newGame(),
     warp: (room, gx, gy) => { loadRoom(room, gx != null ? { x: gx, y: gy } : null); state.phase = "playing"; hideOverlay(); },

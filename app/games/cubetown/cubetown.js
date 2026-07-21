@@ -44,6 +44,7 @@
     dlgBody: $('[data-ct-dlg-body]'),
     dlgQuest: $('[data-ct-dlg-quest]'),
     dlgTurnin: $('[data-ct-dlg-turnin]'),
+    dlgParty: $('[data-ct-dlg-party]'),
     fishZone: $('[data-ct-fish-zone]'),
     fishMarker: $('[data-ct-fish-marker]'),
     togetherSub: $('[data-ct-together-sub]'),
@@ -63,6 +64,8 @@
     tutSteps: $('[data-ct-tut-steps]'),
     tutDots: $('[data-ct-tut-dots]'),
     questLog: $('[data-ct-quest-log]'),
+    partySub: $('[data-ct-party-sub]'),
+    partyList: $('[data-ct-party-list]'),
     trialName: $('[data-ct-trial-name]'),
     trialBody: $('[data-ct-trial-body]'),
     trialSeq: $('[data-ct-trial-seq]'),
@@ -234,6 +237,23 @@
     { id: 'sage', name: 'Sage the Sower', hue: '#b6e26f', resourceType: 'grove', quest: { need: { sunberry: 3, moonwheat: 2 }, unlockHue: null, unlockTopper: null, reward: { glowgourdseed: 2, moonwheatseed: 1 }, text: 'A town grows best from its own soil. Till a plot, grow 3 Sunberries and 2 Moonwheat, and I’ll trade you my rare Glowgourd seeds — and teach you my stew.' } },
   ];
   const NPC_BY_ID = Object.fromEntries(NPC_DEFS.map((n) => [n.id, n]));
+
+  // RPG party layer: companions are not captured monsters. They are small
+  // town allies who join through friendship/quests and assist in Wilds fights.
+  const COMPANION_DEFS = [
+    { id: 'pebbleguard', npcId: 'miro', name: 'Pebbleguard', short: 'Peb', color: '#f2a65a', glyph: '◆', role: 'Shield mason', power: 1, guard: 3, trait: 'Blocks part of incoming Wilds damage and chips enemy armor.' },
+    { id: 'threadfox', npcId: 'tally', name: 'Threadfox', short: 'Fox', color: '#c792ea', glyph: '✦', role: 'Quick scout', power: 1, guard: 1, trait: 'Dashes in for fast follow-up hits.' },
+    { id: 'tideotter', npcId: 'bo', name: 'Tide Otter', short: 'Tide', color: '#4fd1e8', glyph: '≈', role: 'Field medic', power: 1, guard: 2, heal: 6, trait: 'Splashes enemies and restores Spark after wins.' },
+    { id: 'embercub', npcId: 'runa', name: 'Ember Cub', short: 'Cub', color: '#ff6b4a', glyph: '▲', role: 'Trail striker', power: 2, guard: 0, trait: 'Adds heavy strike damage in the Wilds.' },
+    { id: 'sprigdoe', npcId: 'ivy', name: 'Sprig Doe', short: 'Sprig', color: '#78d36f', glyph: '☘', role: 'Root healer', power: 1, guard: 2, heal: 8, trait: 'Roots danger and helps recover Spark.' },
+    { id: 'gatewisp', npcId: 'fenn', name: 'Gate Wisp', short: 'Wisp', color: '#9bb3d6', glyph: '◎', role: 'Ward guide', power: 1, guard: 4, trait: 'Raises party guard near guardian fights.' },
+    { id: 'mapmoth', npcId: 'nova', name: 'Map Moth', short: 'Moth', color: '#b8c8ff', glyph: '◇', role: 'Pathfinder', power: 1, guard: 1, trait: 'Finds weak points and keeps fights moving.' },
+    { id: 'relicowl', npcId: 'ori', name: 'Relic Owl', short: 'Owl', color: '#8f7fff', glyph: '◈', role: 'Arcane striker', power: 2, guard: 1, trait: 'Hits hard after relic bonds awaken.' },
+    { id: 'seedgolem', npcId: 'sage', name: 'Seed Golem', short: 'Seed', color: '#b6e26f', glyph: '●', role: 'Garden bruiser', power: 1, guard: 3, heal: 4, trait: 'Turns farm energy into steady battle support.' },
+  ];
+  const COMPANION_BY_ID = Object.fromEntries(COMPANION_DEFS.map((c) => [c.id, c]));
+  const COMPANION_BY_NPC = Object.fromEntries(COMPANION_DEFS.map((c) => [c.npcId, c]));
+  const PARTY_LIMIT = 3;
 
   // Harvest-Moon-style friendship: each resident also has a favorite gift —
   // giving it back a bonus over a generic resource or cooked dish.
@@ -690,6 +710,9 @@
   function defaultFriendshipState() {
     return Object.fromEntries(NPC_DEFS.map((npc) => [npc.id, { points: 0, lastChatDay: 0, claimed: [] }]));
   }
+  function defaultPartyState() {
+    return { recruited: [], active: [] };
+  }
   function defaultExplorationState() {
     return { discovered: ['hearthward'], biomes: ['hearthland'], cachesFound: [] };
   }
@@ -714,6 +737,7 @@
       quests: defaultQuestState(),
       adventure: defaultAdventureState(),
       friendship: defaultFriendshipState(), // per-NPC {points,lastChatDay,claimed[]} — local only, never host-synced
+      party: defaultPartyState(), // local RPG companions: recruited + active follower ids
       tools: { gatherTier: 1 }, // 1 = bare hands, 2 = Sturdy Tool, 3 = Masterwork Tool
       wilds: { treasuresFound: [], guardianDefeated: false }, // local only, never host-synced
       exploration: defaultExplorationState(),
@@ -724,6 +748,7 @@
         trialsCleared: 0, gatesOpened: 0, secondsPlayed: 0, cropsHarvested: 0,
         enemiesDefeated: 0, treasuresFound: 0, itemsCrafted: 0, eggsCollected: 0,
         regionsDiscovered: 1, cachesFound: 0,
+        companionsRecruited: 0,
       },
       completedMilestone: false,
     };
@@ -1385,6 +1410,7 @@
       el.dlgFriend.textContent = `Friendship: ${friendshipLabel(f.points)} (${f.points} pts) — gifts they especially love: ${RES_LABELS[GIFT_LOVED[npc.id]] || GIFT_LOVED[npc.id]}.`;
     }
     renderGiftList(npc.id);
+    renderDialoguePartyButton(npc.id);
     openPanel('dialogue');
   }
   function questReady(need) {
@@ -1453,6 +1479,145 @@
     updateHud();
     schedulePush();
   }
+
+  // ---------------------------------------------------------------------
+  // RPG party companions: Stardew/Animal-Crossing bonding feeds Zelda-style
+  // adventure support. Residents introduce companions; they are not captured.
+  // ---------------------------------------------------------------------
+  function ensurePartyState() {
+    if (!state.party || typeof state.party !== 'object') state.party = defaultPartyState();
+    if (!Array.isArray(state.party.recruited)) state.party.recruited = [];
+    if (!Array.isArray(state.party.active)) state.party.active = [];
+    state.party.recruited = Array.from(new Set(state.party.recruited.filter((id) => !!COMPANION_BY_ID[id])));
+    state.party.active = Array.from(new Set(state.party.active.filter((id) => state.party.recruited.includes(id) && !!COMPANION_BY_ID[id]))).slice(0, PARTY_LIMIT);
+    return state.party;
+  }
+  function activeCompanions() {
+    return ensurePartyState().active.map((id) => COMPANION_BY_ID[id]).filter(Boolean);
+  }
+  function companionForNpc(npcId) {
+    return COMPANION_BY_NPC[npcId] || null;
+  }
+  function companionReadyForNpc(npcId) {
+    const f = friendshipOf(npcId);
+    return !!(state.quests?.[npcId]?.done || f.points > 0);
+  }
+  function recruitCompanionForNpc(npcId, silent = false) {
+    const comp = companionForNpc(npcId);
+    if (!comp) return false;
+    const party = ensurePartyState();
+    const newlyRecruited = !party.recruited.includes(comp.id);
+    if (newlyRecruited) {
+      party.recruited.push(comp.id);
+      state.stats.companionsRecruited = Math.max(state.stats.companionsRecruited || 0, party.recruited.length);
+    }
+    if (!party.active.includes(comp.id) && party.active.length < PARTY_LIMIT) party.active.push(comp.id);
+    if (!silent) {
+      sfx.quest();
+      toast(newlyRecruited
+        ? `${comp.name} joined your party. It will help in Wilds fights.`
+        : `${comp.name} is traveling with you now.`);
+    }
+    updateHud();
+    schedulePush();
+    return newlyRecruited;
+  }
+  function toggleCompanionActive(id) {
+    const comp = COMPANION_BY_ID[id];
+    if (!comp) return;
+    const party = ensurePartyState();
+    if (!party.recruited.includes(id)) return;
+    if (party.active.includes(id)) {
+      party.active = party.active.filter((x) => x !== id);
+      toast(`${comp.name} is resting in town.`);
+    } else {
+      if (party.active.length >= PARTY_LIMIT) party.active.shift();
+      party.active.push(id);
+      toast(`${comp.name} joined the active party.`);
+    }
+    renderPartyPanel();
+    updateHud();
+    schedulePush();
+  }
+  function renderDialoguePartyButton(npcId) {
+    if (!el.dlgParty) return;
+    const comp = companionForNpc(npcId);
+    if (!comp) { el.dlgParty.hidden = true; return; }
+    const party = ensurePartyState();
+    const recruited = party.recruited.includes(comp.id);
+    const active = party.active.includes(comp.id);
+    if (!companionReadyForNpc(npcId) && !recruited) {
+      el.dlgParty.hidden = false;
+      el.dlgParty.disabled = true;
+      el.dlgParty.textContent = 'Bond first';
+      return;
+    }
+    el.dlgParty.hidden = false;
+    el.dlgParty.disabled = false;
+    el.dlgParty.textContent = recruited ? (active ? 'Rest companion' : 'Bring companion') : `Invite ${comp.name}`;
+  }
+  function renderPartyPanel() {
+    if (!el.partyList) return;
+    const party = ensurePartyState();
+    const active = new Set(party.active);
+    if (el.partySub) el.partySub.textContent = `${party.active.length}/${PARTY_LIMIT} active · ${party.recruited.length}/${COMPANION_DEFS.length} recruited. Companions assist in Wilds combat and follow you on screen.`;
+    el.partyList.innerHTML = COMPANION_DEFS.map((comp) => {
+      const npc = NPC_BY_ID[comp.npcId];
+      const recruited = party.recruited.includes(comp.id);
+      const canRecruit = companionReadyForNpc(comp.npcId);
+      const cls = recruited && active.has(comp.id) ? 'is-active' : !recruited ? 'is-locked' : '';
+      const button = recruited ? (active.has(comp.id) ? 'Rest' : 'Travel') : canRecruit ? 'Invite' : 'Meet';
+      const source = npc ? npc.name.split(' ')[0] : 'Town';
+      const status = recruited
+        ? `${active.has(comp.id) ? 'Active' : 'Resting'} · ${comp.role}`
+        : canRecruit ? `Ready through ${source}` : `Talk with ${source} to bond`;
+      return `<div class="party-card ${cls}">
+        <i class="party-orb" style="background:${comp.color};color:${comp.color}"></i>
+        <div><b>${escapeHtml(comp.name)} <small>by ${escapeHtml(source)}</small></b><span>${escapeHtml(status)} · ${escapeHtml(comp.trait)}</span></div>
+        <button type="button" data-ct-party-toggle="${comp.id}" ${(!recruited && !canRecruit) ? 'disabled' : ''}>${button}</button>
+      </div>`;
+    }).join('');
+    $all('[data-ct-party-toggle]').forEach((b) => b.onclick = () => {
+      const id = b.dataset.ctPartyToggle;
+      const comp = COMPANION_BY_ID[id];
+      if (!comp) return;
+      if (!ensurePartyState().recruited.includes(id)) recruitCompanionForNpc(comp.npcId);
+      else toggleCompanionActive(id);
+      renderPartyPanel();
+    });
+  }
+  function partyAssistDamage(enemy) {
+    const members = activeCompanions();
+    if (!members.length) return { damage: 0, names: [] };
+    const names = [];
+    let damage = 0;
+    for (const comp of members) {
+      const bossTaper = enemy.isGuardian && comp.power > 1 ? comp.power - 1 : comp.power;
+      damage += Math.max(1, bossTaper);
+      names.push(comp.short);
+      spawnParticles(enemy.gx, enemy.gy, comp.color);
+    }
+    return { damage, names };
+  }
+  function partyGuard(amount) {
+    const members = activeCompanions();
+    if (!members.length) return { amount, names: [] };
+    let block = 0;
+    const names = [];
+    for (const comp of members) {
+      if (!comp.guard) continue;
+      block += comp.guard;
+      names.push(comp.short);
+    }
+    return { amount: Math.max(1, amount - Math.min(amount - 1, block)), names };
+  }
+  function partyVictoryRecovery() {
+    const healers = activeCompanions().filter((comp) => comp.heal);
+    if (!healers.length) return '';
+    const total = healers.reduce((sum, comp) => sum + comp.heal, 0);
+    state.spark = clamp(state.spark + total, 0, 100);
+    return ` · ${healers.map((comp) => comp.short).join('/')} restored ${total} Spark`;
+  }
   el.dlgTurnin.onclick = () => {
     const npc = rt.dialogueNpc;
     if (!npc || npc.quest.done) return;
@@ -1468,11 +1633,21 @@
     state.stats.questsCompleted += 1;
     state.spark = clamp(state.spark + 15, 0, 100);
     sfx.quest();
-    toast(`${npc.name}’s quest complete!`);
+    const joined = recruitCompanionForNpc(npc.id, true);
+    toast(joined ? `${npc.name}’s quest complete — ${COMPANION_BY_NPC[npc.id].name} joined your party!` : `${npc.name}’s quest complete!`);
     checkAllQuestsMilestone();
     closePanels();
     updateHud();
     schedulePush();
+  };
+  if (el.dlgParty) el.dlgParty.onclick = () => {
+    const npc = rt.dialogueNpc;
+    if (!npc || rt.dialogueMode !== 'npc') return;
+    const comp = companionForNpc(npc.id);
+    if (!comp) return;
+    if (!ensurePartyState().recruited.includes(comp.id)) recruitCompanionForNpc(npc.id);
+    else toggleCompanionActive(comp.id);
+    renderDialoguePartyButton(npc.id);
   };
   function checkAllQuestsMilestone() {
     const done = Object.values(state.quests).every((q) => q.done);
@@ -1485,6 +1660,7 @@
     el.dlgName.textContent = 'Hearth';
     el.dlgQuest.hidden = true;
     el.dlgTurnin.hidden = true;
+    if (el.dlgParty) el.dlgParty.hidden = true;
     if (el.dlgFriend) el.dlgFriend.hidden = true;
     if (el.dlgGiftList) el.dlgGiftList.innerHTML = '';
     const rows = RECIPES.filter((r) => !r.requiresQuest || state.quests[r.requiresQuest].done).map((r) => {
@@ -1678,7 +1854,7 @@
     const s = state.stats;
     return s.built * 5 + questDoneCount() * 55 + trialDoneCount() * 35 + (s.gatesOpened || 0) * 180 + s.fishCaught * 4 + s.dishesCooked * 5 + (s.cropsHarvested || 0) * 4 + (state.day - 1) * 10
       + (s.enemiesDefeated || 0) * 8 + (s.treasuresFound || 0) * 12 + (s.itemsCrafted || 0) * 6 + (s.eggsCollected || 0) * 2
-      + (s.regionsDiscovered || 0) * 20 + (s.cachesFound || 0) * 9;
+      + (s.regionsDiscovered || 0) * 20 + (s.cachesFound || 0) * 9 + ensurePartyState().recruited.length * 14;
   }
   function computeProgress() {
     if (state.completedMilestone) return 100;
@@ -1691,8 +1867,9 @@
   function renderReportPanel(milestone) {
     const qDone = questDoneCount();
     const tDone = trialDoneCount();
+    const pDone = ensurePartyState().recruited.length;
     el.reportTitle.textContent = milestone ? 'Prism Gate Opened!' : 'Town Report';
-    el.reportSub.textContent = milestone ? 'The Prism story is complete, while the roads and settlements remain yours to explore and build.' : `Day ${state.day}, ${formatClock(state.minutes)} · ${qDone}/${NPC_DEFS.length} resident arcs · ${tDone}/${ALL_TRIAL_DEFS.length} shrine trials · ${state.exploration.discovered.length}/${WORLD_POIS.length} places.`;
+    el.reportSub.textContent = milestone ? 'The Prism story is complete, while the roads and settlements remain yours to explore and build.' : `Day ${state.day}, ${formatClock(state.minutes)} · ${qDone}/${NPC_DEFS.length} resident arcs · ${pDone}/${COMPANION_DEFS.length} companions · ${tDone}/${ALL_TRIAL_DEFS.length} shrine trials · ${state.exploration.discovered.length}/${WORLD_POIS.length} places.`;
     el.statDay.textContent = state.day;
     el.statBuilt.textContent = state.stats.built;
     el.statFish.textContent = state.stats.fishCaught;
@@ -1859,6 +2036,7 @@
     el.dlgBody.textContent = resident.line;
     el.dlgQuest.hidden = true;
     el.dlgTurnin.hidden = true;
+    if (el.dlgParty) el.dlgParty.hidden = true;
     if (el.dlgFriend) el.dlgFriend.hidden = true;
     if (el.dlgGiftList) el.dlgGiftList.innerHTML = '';
     openPanel('dialogue');
@@ -2023,6 +2201,7 @@
     'CubeTown’s seasons turn every few days, shifting the grass color and which crops grow fastest — plant with the season for a real bonus.',
     'Weather changes by day. Spring and summer rain water growing plots for you; mist, wind, and winter snow change the feel of the road.',
     'Talk to residents often and give them gifts from your Inventory to build real friendship over time — favorite gifts count double, and friendship milestones return the favor.',
+    'Invite resident companions into your Party. Up to three follow you and jump into Wilds fights with guard, healing, and strike assists — friends, not captured monsters.',
     'Follow the trailhead at the town’s west edge into the Wilds for real risk: hostile creatures, hidden treasure, and two tougher shrine trials guarding rare rewards. Spark doubles as your health out there, and you can retreat to town anytime from the HUD button.',
     'When four Keystones and a Relic are yours, walk to the north Prism Gate and open the finale.',
     'CubeTown saves through PhantomPlay automatically, and you can invite up to two friends to visit your town together from the Together panel.',
@@ -4218,8 +4397,8 @@
     if (s.stats && typeof s.stats === 'object') {
       for (const k of Object.keys(state.stats)) if (Number.isFinite(s.stats[k])) state.stats[k] = s.stats[k];
     }
-    // Tools/friendship/wilds are all brand-new top-level fields; state.tools /
-    // state.friendship / state.wilds already hold newGame()'s safe defaults at
+    // Tools/friendship/party/wilds are top-level fields; state.tools /
+    // state.friendship / state.party / state.wilds already hold newGame()'s safe defaults at
     // this point, so an old save (missing these entirely) simply keeps them.
     if (s.tools && typeof s.tools === 'object' && [1, 2, 3].includes(s.tools.gatherTier)) {
       state.tools.gatherTier = s.tools.gatherTier;

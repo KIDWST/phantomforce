@@ -25,6 +25,8 @@ const crownCircuitScript = crownCircuit.match(/<script>([\s\S]*)<\/script>/u)?.[
 const skyguardArena = read("../app/games/skyguard-arena/game.js");
 const vespergateGame = read("../app/games/vespergate/game.js");
 const vespergateRooms = read("../app/games/vespergate/rooms.js");
+const vespergateEngine = read("../app/games/vespergate/engine.js");
+const vespergateIndex = read("../app/games/vespergate/index.html");
 const tidefrontTactics = read("../app/games/tidefront-tactics.html");
 const appFiles = [index, main, module, v2Module, ...games];
 const kidsOnlyGameIds = [
@@ -264,10 +266,15 @@ assert.match(phantomStrike, /function castRay\([\s\S]*function renderView\(/u, "
 assert.match(phantomStrike, /if\(mode==='duel'\)\{renderView\(players\[0\][\s\S]*renderView\(players\[1\]/u, "Phantom Strike local duel must render genuine split-screen views.");
 assert.doesNotThrow(() => new Function(vespergateGame), "Vespergate game script must parse.");
 assert.doesNotThrow(() => new Function(vespergateRooms), "Vespergate room script must parse.");
-assert.match(vespergateRooms, /id:\s*"belfry"[\s\S]*Glass Ossuary — Upper Belfry/u, "Vespergate must include the new Upper Belfry room.");
-assert.match(vespergateRooms, /to:\s*"belfry"[\s\S]*complete:\s*true/u, "Vespergate must route through Upper Belfry to a real final exit.");
-assert.match(vespergateGame, /const order = \["fall", "teach", "bells", "boss", "ossuary1", "ossuary2", "belfry"\]/u, "Vespergate progress must cover the full expanded campaign.");
-assert.match(vespergateGame, /function onFinalWin\(\)[\s\S]*host\("complete"[\s\S]*upper-belfry/u, "Vespergate must report a true final completion from the Upper Belfry.");
+assert.doesNotThrow(() => new Function(vespergateEngine), "Vespergate engine script must parse.");
+assert.match(vespergateRooms, /id:\s*"hollow1"[\s\S]*Hollow Geometry/u, "Vespergate must retain the Hollow Geometry dungeon.");
+assert.match(vespergateRooms, /id:\s*"ossuary1"[\s\S]*Glass Ossuary/u, "Vespergate must retain the Glass Ossuary dungeon.");
+assert.match(vespergateGame, /const order = \["q_evensong", "q_glass", "q_bell", "q_lantern", "q_wolves", "q_hand"\]/u, "Vespergate progress must cover the current six-quest campaign.");
+assert.match(vespergateGame, /host\("complete", \{ score: state\.score, outcome: "evensong" \}\)/u, "Vespergate must report the evensong finale to PhantomPlay.");
+assert.match(vespergateIndex, /data-vg-fullscreen[\s\S]*data-vg-pause/u, "Vespergate must expose in-game fullscreen and pause controls.");
+assert.match(vespergateEngine, /devicePixelRatio[\s\S]*backingScale[\s\S]*VG\.renderScale/u, "Vespergate must render through a high-density backing canvas.");
+assert.match(vespergateEngine, /requestFullscreen[\s\S]*fullscreenchange/u, "Vespergate must implement and synchronize fullscreen mode.");
+assert.match(vespergateGame, /SOUL CHAIN[\s\S]*bestCombo/u, "Vespergate must expose Soul Chain combat scoring.");
 
 // Dev Mode (docs/architecture/PHANTOMPLAY_DEV_MODE.md): the entry point must
 // only ever render server-gated, and the preview iframe must always be as

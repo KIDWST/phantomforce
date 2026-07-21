@@ -8,20 +8,49 @@ window.VG = window.VG || {};
 (() => {
   const VG = window.VG;
 
-  /* ============ canvas: 640x360 internal, integer-scaled ============ */
+  /* ============ canvas: 640x360 logical space, high-density output ============ */
   VG.W = 640; VG.H = 360; VG.TILE = 16;
   const cv = document.getElementById("vg");
   const ctx = cv.getContext("2d", { alpha: false });
-  cv.width = VG.W; cv.height = VG.H;
-  ctx.imageSmoothingEnabled = false;
+  cv.tabIndex = 0;
+  VG.renderScale = 1;
   VG.cv = cv; VG.ctx = ctx;
+
+  function configureContext() {
+    ctx.imageSmoothingEnabled = false;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+  }
+  function setLogicalTransform(x = 0, y = 0) {
+    const rs = VG.renderScale || 1;
+    ctx.setTransform(rs, 0, 0, rs, x * rs, y * rs);
+  }
+  VG.resetCanvasTransform = () => setLogicalTransform();
+
   function fit() {
-    const scale = Math.max(1, Math.floor(Math.min(innerWidth / VG.W, innerHeight / VG.H)));
-    const soft = VG.settings.softScale && (innerWidth / VG.W) > scale + 0.4;
-    const s = soft ? Math.min(innerWidth / VG.W, innerHeight / VG.H) : scale;
-    cv.style.width = `${Math.round(VG.W * s)}px`;
-    cv.style.height = `${Math.round(VG.H * s)}px`;
-    cv.style.imageRendering = soft ? "auto" : "pixelated";
+    const viewportW = Math.max(1, document.documentElement.clientWidth || innerWidth);
+    const viewportH = Math.max(1, document.documentElement.clientHeight || innerHeight);
+    const cssScale = Math.max(0.35, Math.min(viewportW / VG.W, viewportH / VG.H));
+    const cssW = Math.max(1, Math.floor(VG.W * cssScale));
+    const cssH = Math.max(1, Math.floor(VG.H * cssScale));
+    const density = VG.settings?.sharpRender === false ? 1 : Math.min(2, devicePixelRatio || 1);
+    const backingScale = Math.max(1, Math.min(4, cssScale * density));
+    const backingW = Math.round(VG.W * backingScale);
+    const backingH = Math.round(VG.H * backingScale);
+
+    cv.style.width = `${cssW}px`;
+    cv.style.height = `${cssH}px`;
+    cv.style.imageRendering = "auto";
+    if (cv.width !== backingW || cv.height !== backingH) {
+      cv.width = backingW;
+      cv.height = backingH;
+      VG.renderScale = backingW / VG.W;
+      configureContext();
+      setLogicalTransform();
+    }
+
+    const status = document.querySelector("[data-vg-status]");
+    if (status) status.textContent = `Vespergate · ${VG.settings?.sharpRender === false ? "Classic" : "HD"} · ${Math.round(cssW)}×${Math.round(cssH)}`;
   }
   addEventListener("resize", () => fit());
   VG.fit = fit;
@@ -30,10 +59,41 @@ window.VG = window.VG || {};
   const SETTINGS_KEY = "vespergate.settings.v1";
   VG.settings = Object.assign({
     volume: 0.8, music: 0.7, shake: 1, flash: 1, motion: 1,
-    snapStrength: 1, aimAssist: 0.5, softScale: false,
+    snapStrength: 1, aimAssist: 0.5, softScale: false, sharpRender: true,
     reducedEffects: false, holdToCharge: true, damageTaken: 1, timingWindow: 1,
   }, (() => { try { return JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}"); } catch { return {}; } })());
   VG.saveSettings = () => { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(VG.settings)); } catch {} };
+
+  /* ============ fullscreen + lightweight game chrome ============ */
+  let theaterMode = false;
+  function syncFullscreenUi() {
+    const active = !!document.fullscreenElement || theaterMode;
+    const btn = document.querySelector("[data-vg-fullscreen]");
+    if (btn) {
+      btn.textContent = active ? "EXIT FULL" : "FULLSCREEN";
+      btn.setAttribute("aria-label", active ? "Exit fullscreen" : "Enter fullscreen");
+      btn.title = active ? "Exit fullscreen (Alt+Enter)" : "Enter fullscreen (Alt+Enter)";
+    }
+    document.body.classList.toggle("is-vg-theater", theaterMode);
+    requestAnimationFrame(fit);
+  }
+  VG.toggleFullscreen = async () => {
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else if (document.fullscreenEnabled && document.querySelector(".vg-app")?.requestFullscreen) {
+        await document.querySelector(".vg-app").requestFullscreen({ navigationUI: "hide" });
+      } else {
+        theaterMode = !theaterMode;
+      }
+    } catch {
+      theaterMode = !theaterMode;
+    }
+    syncFullscreenUi();
+    setTimeout(syncFullscreenUi, 300);
+    setTimeout(syncFullscreenUi, 1000);
+  };
+  addEventListener("fullscreenchange", syncFullscreenUi);
+  addEventListener("focus", syncFullscreenUi);
 
   /* ============ save (versioned, resumable) ============ */
   /* v2: the top-down Vesper Hand rebuild. v1 saves reference platformer rooms
@@ -55,6 +115,7 @@ window.VG = window.VG || {};
     pressed: new Set(),                     // edge-triggered this frame
   };
   addEventListener("keydown", (e) => {
+    if (e.altKey && e.code === "Enter") { e.preventDefault(); VG.toggleFullscreen(); return; }
     if (["Space", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Tab"].includes(e.code)) e.preventDefault();
     if (!keys.has(e.code)) VG.input.pressed.add(e.code);
     keys.add(e.code);
@@ -67,6 +128,7 @@ window.VG = window.VG || {};
   }
   addEventListener("pointermove", (e) => { const p = toInternal(e); VG.input.mx = p.x; VG.input.my = p.y; VG.input.usingPad = false; });
   addEventListener("pointerdown", (e) => {
+    if (e.target !== cv) return;
     const p = toInternal(e); VG.input.mx = p.x; VG.input.my = p.y;
     if (e.button === 0) { VG.input.fireHeld = true; VG.input.pressed.add("M1"); }
     if (e.button === 2) { VG.input.gateHeld = true; VG.input.pressed.add("M2"); }
@@ -218,18 +280,44 @@ window.VG = window.VG || {};
     else if (state === "boss") { set("drone", 1); set("veil", 0.1); set("threat", 1.4); }
     else if (state === "shrine") { set("drone", 0.8); set("veil", 1.2); set("threat", 0); }
   };
-  VG.setMuted = (m) => { A.muted = m; if (A.master) A.master.gain.value = m ? 0 : VG.settings.volume; };
+  function syncSoundUi() {
+    const btn = document.querySelector("[data-vg-sound]");
+    if (!btn) return;
+    btn.textContent = A.muted ? "MUTED" : "SOUND";
+    btn.setAttribute("aria-label", A.muted ? "Turn sound on" : "Mute sound");
+    btn.title = A.muted ? "Turn sound on" : "Mute sound";
+  }
+  VG.setMuted = (m) => { A.muted = m; if (A.master) A.master.gain.value = m ? 0 : VG.settings.volume; syncSoundUi(); };
+  VG.toggleMuted = () => VG.setMuted(!A.muted);
 
-  /* ============ camera ============ */
+  /* ============ camera ============
+     zoom lets a room that is SMALLER than the 640x360 logical viewport (e.g. a
+     house interior) fill the screen instead of rendering pinned to the corner.
+     zoom is a logical world->viewport scale; renderScale is the separate
+     logical->device HD scale, and camera.apply composes the two. Large rooms
+     stay at zoom 1 and scroll as before. */
   VG.camera = {
-    x: 0, y: 0, tx: 0, ty: 0, shake: 0,
+    x: 0, y: 0, tx: 0, ty: 0, shake: 0, zoom: 1,
     bounds: { x: 0, y: 0, w: VG.W, h: VG.H },
+    // set room bounds and pick a zoom that makes the room COVER the viewport
+    // (fills it; never zooms out for large rooms; capped so tiny rooms are sane)
+    setRoom(pxW, pxH) {
+      this.bounds = { x: 0, y: 0, w: pxW, h: pxH };
+      const cover = Math.max(VG.W / pxW, VG.H / pxH);
+      this.zoom = Math.min(3, Math.max(1, cover));
+    },
+    _clamp(target, min, size, view) {
+      const maxV = min + size - view;
+      if (maxV <= min) return min + (size - view) / 2;   // room <= view: center it
+      return Math.max(min, Math.min(maxV, target));
+    },
     follow(px, py, aimx, aimy, dt) {
-      const look = VG.settings.motion * 24;
-      this.tx = px + (aimx - px) / Math.max(1, VG.W) * look * 2 - VG.W / 2;
-      this.ty = py - VG.H / 2 - 8;
-      this.tx = Math.max(this.bounds.x, Math.min(this.bounds.x + this.bounds.w - VG.W, this.tx));
-      this.ty = Math.max(this.bounds.y, Math.min(this.bounds.y + this.bounds.h - VG.H, this.ty));
+      const look = VG.settings.motion * 24, z = this.zoom || 1;
+      const vw = VG.W / z, vh = VG.H / z;
+      this.tx = px + (aimx - px) / Math.max(1, vw) * look * 2 - vw / 2;
+      this.ty = py - vh / 2 - 8;
+      this.tx = this._clamp(this.tx, this.bounds.x, this.bounds.w, vw);
+      this.ty = this._clamp(this.ty, this.bounds.y, this.bounds.h, vh);
       const k = 1 - Math.pow(0.0001, dt);
       this.x += (this.tx - this.x) * k;
       this.y += (this.ty - this.y) * k;
@@ -238,17 +326,20 @@ window.VG = window.VG || {};
     jolt(v) { this.shake = Math.min(1, this.shake + v * VG.settings.shake); },
     apply(ctx2) {
       const s = this.shake > 0 ? this.shake * 3 : 0;
-      ctx2.setTransform(1, 0, 0, 1,
-        -Math.round(this.x + (s ? (Math.random() - 0.5) * s : 0)),
-        -Math.round(this.y + (s ? (Math.random() - 0.5) * s : 0)));
+      const k = (VG.renderScale || 1) * (this.zoom || 1);
+      const ox = -(this.x + (s ? (Math.random() - 0.5) * s : 0));
+      const oy = -(this.y + (s ? (Math.random() - 0.5) * s : 0));
+      ctx2.setTransform(k, 0, 0, k, Math.round(ox * k), Math.round(oy * k));
     },
-    reset(ctx2) { ctx2.setTransform(1, 0, 0, 1, 0, 0); },
+    reset(ctx2) { const rs = VG.renderScale || 1; ctx2.setTransform(rs, 0, 0, rs, 0, 0); },
     snapTo(px, py) {
-      this.tx = px - VG.W / 2; this.ty = py - VG.H / 2 - 8;
-      this.tx = Math.max(this.bounds.x, Math.min(this.bounds.x + this.bounds.w - VG.W, this.tx));
-      this.ty = Math.max(this.bounds.y, Math.min(this.bounds.y + this.bounds.h - VG.H, this.ty));
+      const z = this.zoom || 1, vw = VG.W / z, vh = VG.H / z;
+      this.tx = this._clamp(px - vw / 2, this.bounds.x, this.bounds.w, vw);
+      this.ty = this._clamp(py - vh / 2 - 8, this.bounds.y, this.bounds.h, vh);
       this.x = this.tx; this.y = this.ty;
     },
+    // logical screen coords (0..VG.W, 0..VG.H) -> world coords
+    screenToWorld(sx, sy) { const z = this.zoom || 1; return { x: this.x + sx / z, y: this.y + sy / z }; },
   };
 
   /* ============ math ============ */
