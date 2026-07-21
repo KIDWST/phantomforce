@@ -88,12 +88,26 @@ body::before {
   body::before { background: var(--uv); animation: none; }
 }
 
-/* ---------- void backdrop: faint grid + drifting spectral glow ---------- */
+/* ---------- void backdrop: starfield + faint grid + spectral glow ---------- */
 .bg-grid {
   opacity: 1;
   background:
+    radial-gradient(1px 1px at 12% 22%, rgba(241, 238, 252, 0.5), transparent 100%),
+    radial-gradient(1px 1px at 34% 74%, rgba(241, 238, 252, 0.32), transparent 100%),
+    radial-gradient(1.5px 1.5px at 56% 34%, rgba(190, 180, 255, 0.4), transparent 100%),
+    radial-gradient(1px 1px at 71% 62%, rgba(241, 238, 252, 0.36), transparent 100%),
+    radial-gradient(1px 1px at 88% 18%, rgba(190, 180, 255, 0.32), transparent 100%),
+    radial-gradient(1.5px 1.5px at 21% 51%, rgba(69, 230, 189, 0.24), transparent 100%),
+    radial-gradient(1px 1px at 44% 12%, rgba(241, 238, 252, 0.3), transparent 100%),
+    radial-gradient(1px 1px at 66% 87%, rgba(241, 238, 252, 0.28), transparent 100%),
+    radial-gradient(1.5px 1.5px at 93% 79%, rgba(190, 180, 255, 0.3), transparent 100%),
     linear-gradient(rgba(139, 122, 255, 0.05) 1px, transparent 1px),
     linear-gradient(90deg, rgba(139, 122, 255, 0.05) 1px, transparent 1px);
+  /* stars ride big offset tiles so the repeat never reads; grid stays 44px */
+  background-size:
+    610px 540px, 540px 630px, 670px 480px, 490px 590px, 580px 520px,
+    640px 610px, 520px 470px, 560px 660px, 470px 550px,
+    44px 44px, 44px 44px;
 }
 .bg-glow {
   background:
@@ -124,9 +138,25 @@ canvas[data-ghost],
   box-shadow: none;
   -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
 }
-.sidebar {
-  background: linear-gradient(180deg, rgba(16, 14, 26, 0.92), rgba(10, 9, 16, 0.88));
-  border-right: 1px solid var(--line);
+/* <=900px: the sidebar is the phone drawer — keep the dark drawer look.
+   >=901px: the same element is the horizontal command deck (see the
+   PHANTOM BRIDGE section at the end of phantom.css for its geometry);
+   this layer gives the deck its chassis — plating, scanlines, glass. */
+@media (max-width: 900px) {
+  .sidebar {
+    background: linear-gradient(180deg, rgba(16, 14, 26, 0.92), rgba(10, 9, 16, 0.88));
+    border-right: 1px solid var(--line);
+  }
+}
+@media (min-width: 901px) {
+  .sidebar {
+    border-right: 0;
+    background:
+      repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.016) 0 1px, transparent 1px 3px),
+      linear-gradient(90deg, rgba(124, 108, 255, 0.11), transparent 20%, transparent 78%, rgba(69, 230, 189, 0.06)),
+      linear-gradient(180deg, rgba(19, 16, 32, 0.95), rgba(9, 8, 15, 0.9));
+    -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+  }
 }
 .side-brand-text b { color: var(--ink); }
 .side-brand-text i { color: var(--dim-2); }

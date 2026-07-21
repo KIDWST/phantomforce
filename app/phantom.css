@@ -13849,3 +13849,305 @@ body .phantom .workspace-page :where(
 .brain-skill-add button { justify-self: start; }
 .brain-skill p b { font-size: 13.5px; }
 .brain-skill small { display: block; margin-top: 2px; color: var(--dim); }
+
+/* ============================================================= */
+/* ========  PHANTOM BRIDGE — full-width command deck  ========= */
+/* ============================================================= */
+/* Desktop (>=901px) only: the sidebar ELEMENT becomes the horizontal
+   command deck across the top of the viewport. Same DOM, same [data-nav]
+   mounts, same delegated click handling — main.js renderNav()/goNav()
+   never know the difference. Below 901px nothing here applies: the
+   phone keeps its homebar + drawer + bottom dock exactly as before.
+   The deck owns --deck-h; every viewport-height lock downstream
+   subtracts it so one-screen surfaces stay one screen. */
+
+.canopy { display: none; }
+
+@media (min-width: 901px) {
+  /* ---- shell: column stack — deck / instruments / wire / console ---- */
+  .phantom {
+    flex-direction: column;
+    gap: 0;
+    padding-left: 0;
+    --deck-h: 52px;
+  }
+
+  /* ---- the command deck (formerly the sidebar) ---- */
+  .sidebar {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    align-self: stretch;
+    flex: 0 0 auto;
+    width: 100%;
+    height: var(--deck-h);
+    min-height: var(--deck-h);
+    margin: 0;
+    padding: 0 clamp(14px, 1.8vw, 28px);
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: clamp(10px, 1.5vw, 22px);
+    border: 0;
+    border-bottom: 1px solid rgba(124, 108, 255, 0.34);
+    border-radius: 0;
+    box-shadow: 0 14px 44px -18px rgba(0, 0, 0, 0.7), 0 1px 0 rgba(124, 108, 255, 0.12);
+    background: linear-gradient(180deg, rgba(19, 16, 32, 0.94), rgba(9, 8, 15, 0.9));
+    overflow: visible;
+  }
+  /* energized seam: a light pulse travelling the deck's lower edge.
+     bottom:0 (not -1px): an inherited overflow-x:hidden !important on
+     .sidebar clips anything outside the border-box. */
+  .sidebar::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 1px;
+    pointer-events: none;
+    background: linear-gradient(90deg, transparent 0%, transparent 35%, rgba(124, 108, 255, 0.9) 46%, rgba(69, 230, 189, 0.9) 54%, transparent 65%, transparent 100%);
+    background-size: 280% 100%;
+    animation: deckSeam 11s linear infinite;
+    opacity: 0.8;
+  }
+
+  /* ---- ship sigil ---- */
+  .side-brand {
+    padding: 0 clamp(10px, 1.4vw, 20px) 0 0;
+    border-bottom: 0;
+    border-right: 1px solid rgba(124, 108, 255, 0.16);
+    align-self: stretch;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    flex: 0 0 auto;
+  }
+  .side-brand .brand-ghost { width: 25px; height: 25px; }
+  .side-brand-text b { font-size: 10.5px; letter-spacing: 0.16em; }
+  .side-brand-text i { letter-spacing: 0.18em; }
+
+  /* ---- nav: one horizontal rail of modules ---- */
+  .side-nav {
+    flex-direction: row;
+    align-items: center;
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+    gap: clamp(8px, 1.2vw, 16px);
+  }
+  .side-nav-main {
+    display: flex;
+    flex-flow: row nowrap;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    overflow-y: visible;
+    counter-reset: deckmod;
+  }
+  .side-nav-utility {
+    display: flex;
+    flex-flow: row nowrap;
+    align-items: center;
+    gap: 4px;
+    flex: 0 0 auto;
+    margin: 0 0 0 auto;
+    padding: 0 0 0 clamp(8px, 1.2vw, 14px);
+    border-top: 0;
+    border-left: 1px solid rgba(124, 108, 255, 0.16);
+  }
+
+  /* ---- nav modules: clipped plates, not website pills ---- */
+  .sidebar .nav-item {
+    width: auto;
+    flex: 0 0 auto;
+    min-height: 34px;
+    height: 34px;
+    padding: 0 12px 0 10px;
+    gap: 7px;
+    border: 0;
+    border-radius: 0;
+    clip-path: polygon(9px 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%, 0 9px);
+    background: rgba(124, 108, 255, 0.055);
+    box-shadow: inset 0 0 0 1px rgba(124, 108, 255, 0.15);
+    color: var(--dim);
+    font: 600 11.5px "Instrument Sans", sans-serif;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+  }
+  /* auto-numbered module designators: 01…07, straight off the flight deck */
+  .side-nav-main .nav-item::before {
+    counter-increment: deckmod;
+    content: "0" counter(deckmod);
+    font: 700 7.5px "Spline Sans Mono", monospace;
+    letter-spacing: 0.06em;
+    color: rgba(124, 108, 255, 0.75);
+    transform: translateY(-4px);
+  }
+  .sidebar .nav-item .ic { width: 14px; height: 14px; flex: 0 0 14px; }
+  .sidebar .nav-item:hover {
+    transform: translateY(-1px);
+    background: rgba(124, 108, 255, 0.12);
+    box-shadow: inset 0 0 0 1px rgba(124, 108, 255, 0.32);
+    color: var(--ink);
+  }
+  .sidebar .nav-item:active { transform: translateY(0) scale(0.985); }
+  /* powered module */
+  .phantom .sidebar .nav-item.is-active {
+    background: linear-gradient(180deg, rgba(124, 108, 255, 0.3), rgba(124, 108, 255, 0.08));
+    box-shadow: inset 0 0 0 1px rgba(124, 108, 255, 0.6), 0 0 22px rgba(124, 108, 255, 0.22);
+    color: #ffffff;
+  }
+  .phantom .sidebar .nav-item.is-active::after {
+    left: 10px;
+    right: 10px;
+    top: auto;
+    bottom: 2px;
+    width: auto;
+    height: 2px;
+    border-radius: 2px;
+    background: linear-gradient(90deg, var(--neon), var(--neon-2, #45e6bd));
+    box-shadow: 0 0 12px rgba(124, 108, 255, 0.85);
+  }
+  .sidebar .nav-item .nav-badge { margin-left: 3px; }
+
+  /* ---- utility cluster: icon plates, labels slide out on approach ---- */
+  .side-nav-utility .nav-item { padding: 0 9px; }
+  .side-nav-utility .nav-item span {
+    max-width: 0;
+    opacity: 0;
+    overflow: hidden;
+    transition: max-width 0.28s ease, opacity 0.22s ease, margin-left 0.28s ease;
+    margin-left: -7px;
+  }
+  .side-nav-utility .nav-item:hover span,
+  .side-nav-utility .nav-item:focus-visible span,
+  .side-nav-utility .nav-item.is-active span {
+    max-width: 120px;
+    opacity: 1;
+    margin-left: 0;
+  }
+  .side-nav-utility .nav-item .nav-pill { margin-left: 4px; }
+  .phantom .sidebar .nav-item[data-nav-id="adminos"]::before { margin-left: 4px; }
+  .sidebar .nav-item-bottom { min-height: 34px; padding-top: 0; padding-bottom: 0; background: rgba(124, 108, 255, 0.055); }
+  .sidebar .nav-item:not(.nav-item-bottom) + .nav-item-bottom { margin-top: 0; }
+  .sidebar .nav-item:not(.nav-item-bottom) + .nav-item-bottom::before { display: none; }
+
+  /* ---- instrument strip: the old topbar rides under the deck ----
+     top: 0, NOT var(--deck-h): .app-main is always its own scrollport
+     (overflow-x hidden forces overflow-y auto), so the strip's sticky inset
+     resolves against app-main's top edge — which already sits below the
+     deck. A --deck-h inset here would double-offset it into a dead band. */
+  .topbar2 {
+    position: sticky;
+    top: 0;
+    z-index: 24;
+    padding-top: 8px;
+    padding-bottom: 8px;
+  }
+
+  /* ---- canopy: HUD frame you look through, never touch ---- */
+  .canopy {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 5;
+    pointer-events: none;
+    opacity: 0.5;
+    background:
+      /* bottom-left corner bracket */
+      linear-gradient(rgba(124, 108, 255, 0.55), rgba(124, 108, 255, 0.55)) 12px calc(100% - 12px) / 24px 1px,
+      linear-gradient(rgba(124, 108, 255, 0.55), rgba(124, 108, 255, 0.55)) 12px calc(100% - 12px) / 1px 24px,
+      /* bottom-right corner bracket */
+      linear-gradient(rgba(124, 108, 255, 0.55), rgba(124, 108, 255, 0.55)) calc(100% - 12px) calc(100% - 12px) / 24px 1px,
+      linear-gradient(rgba(124, 108, 255, 0.55), rgba(124, 108, 255, 0.55)) calc(100% - 12px) calc(100% - 12px) / 1px 24px,
+      /* bottom edge tick ruler */
+      repeating-linear-gradient(90deg, rgba(124, 108, 255, 0.34) 0 1px, transparent 1px 42px) 50% calc(100% - 4px) / 42% 5px,
+      /* left + right edge tick rails */
+      repeating-linear-gradient(0deg, rgba(124, 108, 255, 0.26) 0 1px, transparent 1px 56px) 3px 50% / 5px 34%,
+      repeating-linear-gradient(0deg, rgba(124, 108, 255, 0.26) 0 1px, transparent 1px 56px) calc(100% - 3px) 50% / 5px 34%;
+    background-repeat: no-repeat;
+  }
+
+  /* ---- height budgets: everything one-screen subtracts the deck ---- */
+  .app-main:has(> .console:not(.console-workspace)) { height: calc(100dvh - var(--deck-h, 52px)); }
+  .app-main:has(.workspace-page-first) { height: calc(100dvh - var(--deck-h, 52px)); }
+  .app-main:has(.workspace-page[data-workspace-page="media"]) { height: calc(100dvh - var(--deck-h, 52px)); }
+  .app-main:has(.workspace-page[data-workspace-page="sites"]) { height: calc(100dvh - var(--deck-h, 52px)); }
+  .workspace-page { min-height: calc(100vh - 126px - var(--deck-h, 52px)); }
+  .console .hero2 { min-height: clamp(360px, calc(100vh - 345px - var(--deck-h, 52px)), 920px); }
+
+  /* ---- power-on: modules energize left to right ---- */
+  .phantom.booted .sidebar .nav-item { animation: deckPower 0.4s cubic-bezier(0.22, 1, 0.36, 1) backwards; }
+  .phantom.booted .side-nav-main .nav-item:nth-child(2) { animation-delay: 0.04s; }
+  .phantom.booted .side-nav-main .nav-item:nth-child(3) { animation-delay: 0.08s; }
+  .phantom.booted .side-nav-main .nav-item:nth-child(4) { animation-delay: 0.12s; }
+  .phantom.booted .side-nav-main .nav-item:nth-child(5) { animation-delay: 0.16s; }
+  .phantom.booted .side-nav-main .nav-item:nth-child(6) { animation-delay: 0.2s; }
+  .phantom.booted .side-nav-main .nav-item:nth-child(7) { animation-delay: 0.24s; }
+  .phantom.booted .side-nav-main .nav-item:nth-child(8) { animation-delay: 0.28s; }
+  .phantom.booted .side-nav-utility .nav-item { animation-delay: 0.32s; }
+
+  /* ---- dashboard panels: designation codes + status LEDs ---- */
+  .console:not(.console-workspace) .console-rail { counter-reset: deckpanel; }
+  .console:not(.console-workspace) .console-rail .section-head h2 { position: relative; }
+  .console:not(.console-workspace) .console-rail .section-head h2::before {
+    counter-increment: deckpanel;
+    content: "P·0" counter(deckpanel) "  ";
+    color: rgba(124, 108, 255, 0.8);
+    letter-spacing: 0.1em;
+  }
+  .console:not(.console-workspace) .quickwidget {
+    border-radius: 0;
+    clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+  }
+  .console:not(.console-workspace) .queue-item {
+    border-radius: 0;
+    clip-path: polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px);
+  }
+}
+
+/* tighter decks: shed ornament before shedding function */
+@media (min-width: 901px) and (max-width: 1499px) {
+  .side-brand-text i { display: none; }
+  .side-nav-main .nav-item::before { display: none; }
+  .sidebar .nav-item { padding: 0 10px; font-size: 11px; }
+}
+@media (min-width: 901px) and (max-width: 1279px) {
+  .side-brand-text { display: none; }
+  .side-nav-main .nav-item span {
+    max-width: 0;
+    opacity: 0;
+    overflow: hidden;
+    margin-left: -7px;
+    transition: max-width 0.28s ease, opacity 0.22s ease, margin-left 0.28s ease;
+  }
+  .side-nav-main .nav-item:hover span,
+  .side-nav-main .nav-item:focus-visible span,
+  .side-nav-main .nav-item.is-active span {
+    max-width: 120px;
+    opacity: 1;
+    margin-left: 0;
+  }
+}
+
+/* the 901-1200 hero keeps one-screen height now that the deck eats 52px */
+@media (max-width: 1200px) and (min-width: 901px) {
+  .console:not(.console-workspace) .hero2 { height: clamp(390px, calc(100dvh - 320px - var(--deck-h, 52px)), 560px); }
+}
+
+@keyframes deckSeam {
+  from { background-position: 140% 0; }
+  to { background-position: -140% 0; }
+}
+@keyframes deckPower {
+  from { opacity: 0; transform: translateY(-9px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar::after { animation: none; opacity: 0.4; }
+  .phantom.booted .sidebar .nav-item { animation: none; }
+  .side-nav-utility .nav-item span,
+  .side-nav-main .nav-item span { transition: none; }
+}
