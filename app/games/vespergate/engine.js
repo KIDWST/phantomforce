@@ -66,8 +66,9 @@ window.VG = window.VG || {};
 
   /* ============ fullscreen + lightweight game chrome ============ */
   let theaterMode = false;
+  let fullscreenIntent = false;
   function syncFullscreenUi() {
-    const active = !!document.fullscreenElement || theaterMode;
+    const active = fullscreenIntent || !!document.fullscreenElement || theaterMode;
     const btn = document.querySelector("[data-vg-fullscreen]");
     if (btn) {
       btn.textContent = active ? "EXIT FULL" : "FULLSCREEN";
@@ -78,21 +79,34 @@ window.VG = window.VG || {};
     requestAnimationFrame(fit);
   }
   VG.toggleFullscreen = async () => {
+    const active = fullscreenIntent || !!document.fullscreenElement || theaterMode;
     try {
-      if (document.fullscreenElement) await document.exitFullscreen();
-      else if (document.fullscreenEnabled && document.querySelector(".vg-app")?.requestFullscreen) {
-        await document.querySelector(".vg-app").requestFullscreen({ navigationUI: "hide" });
+      if (active) {
+        fullscreenIntent = false;
+        if (document.fullscreenElement) await document.exitFullscreen();
+        theaterMode = false;
       } else {
-        theaterMode = !theaterMode;
+        fullscreenIntent = true;
+        if (document.fullscreenEnabled && document.querySelector(".vg-app")?.requestFullscreen) {
+          await document.querySelector(".vg-app").requestFullscreen({ navigationUI: "hide" });
+          // Embedded browsers may resolve the request while declining native
+          // fullscreen. Fall back to the same distraction-free game view.
+          if (!document.fullscreenElement) theaterMode = true;
+        } else {
+          theaterMode = true;
+        }
       }
     } catch {
-      theaterMode = !theaterMode;
+      theaterMode = fullscreenIntent;
     }
     syncFullscreenUi();
     setTimeout(syncFullscreenUi, 300);
     setTimeout(syncFullscreenUi, 1000);
   };
-  addEventListener("fullscreenchange", syncFullscreenUi);
+  addEventListener("fullscreenchange", () => {
+    if (!document.fullscreenElement && !theaterMode) fullscreenIntent = false;
+    syncFullscreenUi();
+  });
   addEventListener("focus", syncFullscreenUi);
 
   /* ============ save (versioned, resumable) ============ */

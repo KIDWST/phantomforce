@@ -270,7 +270,7 @@ assert.doesNotThrow(() => new Function(vespergateEngine), "Vespergate engine scr
 assert.match(vespergateRooms, /id:\s*"hollow1"[\s\S]*Hollow Geometry/u, "Vespergate must retain the Hollow Geometry dungeon.");
 assert.match(vespergateRooms, /id:\s*"ossuary1"[\s\S]*Glass Ossuary/u, "Vespergate must retain the Glass Ossuary dungeon.");
 assert.match(vespergateGame, /const order = \["q_evensong", "q_glass", "q_bell", "q_lantern", "q_wolves", "q_hand"\]/u, "Vespergate progress must cover the current six-quest campaign.");
-assert.match(vespergateGame, /host\("complete", \{ score: state\.score, outcome: "evensong" \}\)/u, "Vespergate must report the evensong finale to PhantomPlay.");
+assert.match(vespergateGame, /state\.flags\.evensong = true[\s\S]*host\("complete", \{ score: state\.score, progress: 100/u, "Vespergate must report the evensong finale to PhantomPlay.");
 assert.match(vespergateIndex, /data-vg-fullscreen[\s\S]*data-vg-pause/u, "Vespergate must expose in-game fullscreen and pause controls.");
 assert.match(vespergateEngine, /devicePixelRatio[\s\S]*backingScale[\s\S]*VG\.renderScale/u, "Vespergate must render through a high-density backing canvas.");
 assert.match(vespergateEngine, /requestFullscreen[\s\S]*fullscreenchange/u, "Vespergate must implement and synchronize fullscreen mode.");
