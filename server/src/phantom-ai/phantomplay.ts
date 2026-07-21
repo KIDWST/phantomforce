@@ -929,20 +929,20 @@ export const PHANTOMPLAY_BUILT_IN_GAMES: PhantomPlayGame[] = [
   {
     id: "vespergate",
     title: "Vespergate: The Vesper Hand",
-    summary: "Top-down Zelda-like: a village to save, an open world to wander, and a portal gauntlet handed down for seven generations.",
+    summary: "A crisp top-down portal adventure with a village to save, two dungeons, stronger combat feedback, and true fullscreen play.",
     description: "An original top-down action-adventure. You're the eighth bearer of the Vesper Hand — a portal gauntlet passed down through seven generations. It opens two linked gates on any wall that remembers being a door (liminal stone, bell-brass, saint-glass — never null iron), with a real basis-transform where you, your shots, enemies, and bell shockwaves all keep momentum through the fold. Start at dusk in Duskhollow village as your grandmother hands the Hand down, then help the village: clear shard-wolves from the orchard, recover a lost lantern from a portal-sealed ruin, and descend into two dungeons — the Hollow Geometry (ring both bells, then face Bellmother) and the Glass Ossuary beneath the lake (bank shots off mirror-bone to wake the sigil, then silence the Choir of Glass). Strike, cinder bolt, and gates; hearts, embers, a shop, relics you equip, an inventory and quest log, and an evensong finale. Keyboard + mouse or gamepad, save/resume, and a synthesized dusk soundscape.",
     category: "Arcade",
-    tags: ["action-adventure", "portal", "zelda-like", "top-down", "open-world", "gamepad", "touch"],
+    tags: ["action-adventure", "portal", "zelda-like", "top-down", "open-world", "gamepad"],
     contentRating: "teen",
     contentDescriptors: ["fantasy_conflict", "intense_action"],
     developer: "Tak",
     developerAvatar: TAK_AVATAR,
     kind: "built_in",
-    launchUrl: "/app/games/vespergate/index.html?v=2.0.0",
+    launchUrl: "/app/games/vespergate/index.html?v=2.1.1",
     thumbnail: CATEGORY_ART["Arcade"],
     featured: true,
-    version: "2.0.0",
-    controls: "Move WASD. Left-click strikes; F fires a cinder bolt; right-click places a Vesper Gate (endpoints alternate automatically); Q swaps the next gate; R vents strain; Shift rolls; E talks/interacts; TAB opens inventory. Full gamepad support.",
+    version: "2.1.0",
+    controls: "WASD moves, left-click strikes, F fires, right-click places a gate, Q swaps, R vents, Shift rolls, E interacts, Tab opens inventory, and Alt+Enter toggles fullscreen. Full gamepad support.",
     progressSupport: true,
     scoreSupport: true,
     engine: { tier: "topdown-adventure", minVersion: PHANTOMPLAY_ENGINE.version },
@@ -1518,13 +1518,22 @@ export async function startPhantomPlaySession(session: AccessSession, input: Rec
   const gameId = clean(input.gameId, 180);
   const game = catalogFor(store, profile).find((item) => item.id === gameId);
   if (!game) throw new Error("This game is unavailable for this account or content setting.");
+  // Sessions are unshifted (newest first) in startPhantomPlaySession, so the
+  // first match for this exact gameId is this actor's most recent prior play
+  // of it — whatever persisted meta/progress state that game last reported
+  // via its own state:{} payload (score/complete). Handed back to the client
+  // as restoreState so it can relay a "restore" message once the game is
+  // ready — closing a real gap: games like Skyguard Arena already send meta
+  // progress (rank/XP/best-wave) via state, and already listen for an
+  // incoming "restore" message on boot, but nothing ever sent one back.
+  const restoreState = profile.sessions.find((item) => item.gameId === gameId)?.state ?? null;
   const stamp = now();
   const play: PlaySession = { id: `play-${randomUUID()}`, gameId, startedAt: stamp, updatedAt: stamp, endedAt: null, seconds: 0, score: null, progress: 0, state: {} };
   profile.sessions.unshift(play);
   profile.sessions = profile.sessions.slice(0, 120);
   profile.updatedAt = stamp;
   await writeStore(store);
-  return { play, game, remainingMinutesToday: dailyMinuteLimit - Math.ceil(todaySeconds(profile) / 60) };
+  return { play, game, restoreState, remainingMinutesToday: dailyMinuteLimit - Math.ceil(todaySeconds(profile) / 60) };
 }
 
 export async function updatePhantomPlaySession(session: AccessSession, playId: string, input: Record<string, unknown>) {

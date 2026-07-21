@@ -594,6 +594,136 @@ body[data-commander="vesper"] { --sg-command: #b792ff; --sg-command-soft: #eadcf
   .sg-dock { padding: 5px 8px; }
   .sg-def-card, .sg-ability-btn { min-height: 50px; }
 }
+
+/* ---- Command Tower Armory (permanent Core Shard progression) ---- */
+.sg-armory-open { display: inline-flex; align-items: center; gap: 8px; }
+.sg-armory-icon, .sg-shard-icon {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  background: radial-gradient(circle at 50% 30%, var(--sg-command-soft), var(--sg-command) 60%, var(--sg-command-deep) 100%);
+  clip-path: polygon(50% 0%, 90% 25%, 90% 75%, 50% 100%, 10% 75%, 10% 25%);
+}
+.sg-armory-overlay {
+  position: fixed;
+  z-index: 60;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: #05060488;
+  backdrop-filter: blur(6px);
+  padding: 18px;
+}
+.sg-armory-overlay[hidden] { display: none; }
+.sg-armory-panel {
+  width: min(880px, 100%);
+  max-height: min(720px, 92vh);
+  overflow: auto;
+  border: 1px solid color-mix(in srgb, var(--sg-command) 40%, transparent);
+  border-radius: 10px;
+  background: linear-gradient(160deg, #1c180fd8, #0d0e0bf5);
+  box-shadow: 0 40px 100px #000a, inset 0 1px #ffffff14;
+  padding: 20px;
+}
+.sg-armory-head { display: flex; align-items: start; gap: 16px; border-bottom: 1px solid var(--sg-line); padding-bottom: 14px; margin-bottom: 16px; }
+.sg-armory-head > div:first-child { flex: 1; min-width: 0; }
+.sg-armory-head h2 { margin: 0; font-size: clamp(20px, 4vw, 28px); }
+.sg-armory-head p { max-width: 460px; margin: 6px 0 0; color: var(--sg-muted); font-size: 12px; line-height: 1.45; }
+.sg-armory-shards {
+  display: grid;
+  justify-items: center;
+  flex: 0 0 auto;
+  border: 1px solid color-mix(in srgb, var(--sg-command) 40%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--sg-command) 8%, transparent);
+  padding: 10px 16px;
+  text-align: center;
+}
+.sg-armory-shards .sg-shard-icon { width: 22px; height: 22px; margin-bottom: 3px; }
+.sg-armory-shards b { font: 950 20px ui-monospace, monospace; color: var(--sg-command); }
+.sg-armory-shards span { color: var(--sg-muted); font: 800 9px ui-monospace, monospace; text-transform: uppercase; }
+.sg-armory-close {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--sg-line);
+  border-radius: 50%;
+  background: #131612;
+  color: var(--sg-ink);
+  font-size: 18px;
+  cursor: pointer;
+}
+.sg-armory-tower-card {
+  display: grid;
+  grid-template-columns: 130px 1fr;
+  gap: 16px;
+  align-items: start;
+  margin-bottom: 20px;
+  border: 1px solid color-mix(in srgb, var(--sg-command) 30%, transparent);
+  border-radius: 8px;
+  background: linear-gradient(160deg, #2a220fd0, #14120bf0);
+  padding: 16px;
+}
+.sg-armory-tower-portrait {
+  width: 130px;
+  height: 130px;
+  border-radius: 8px;
+  background: radial-gradient(circle at 50% 30%, #3a2c12, #100d08 78%);
+  border: 1px solid color-mix(in srgb, var(--sg-command) 30%, transparent);
+  overflow: hidden;
+}
+.sg-armory-tower-title { display: flex; align-items: baseline; gap: 10px; }
+.sg-armory-tower-title b { font-size: 16px; }
+.sg-armory-tower-title span { color: var(--sg-command); font: 900 11px ui-monospace, monospace; text-transform: uppercase; }
+.sg-armory-tower-card p { max-width: 440px; margin: 8px 0 0; color: var(--sg-muted); font-size: 12px; line-height: 1.45; }
+.sg-armory-tower-stats { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+.sg-armory-tower-stats span {
+  border: 1px solid var(--sg-line);
+  border-radius: 999px;
+  padding: 4px 10px;
+  color: var(--sg-command-soft);
+  font: 800 10px ui-monospace, monospace;
+}
+.sg-armory-upgrade-btn { min-height: 38px; padding: 8px 16px; font-size: 12px; }
+.sg-armory-sentinel-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
+.sg-armory-sentinel-card {
+  position: relative;
+  border: 1px solid var(--sg-line);
+  border-radius: 6px;
+  background: #14161388;
+  padding: 10px;
+}
+.sg-armory-sentinel-card::after { position: auto 0 0; height: 3px; background: var(--def-color); content: ""; position: absolute; inset: auto 0 0; }
+.sg-armory-sentinel-card b { display: block; padding-right: 30px; font-size: 12px; }
+.sg-armory-sentinel-card .sg-armory-pips { display: flex; gap: 3px; margin: 7px 0; }
+.sg-armory-sentinel-card .sg-armory-pips i { width: 10px; height: 10px; border-radius: 50%; border: 1px solid var(--def-color); background: transparent; }
+.sg-armory-sentinel-card .sg-armory-pips i.is-filled { background: var(--def-color); box-shadow: 0 0 6px var(--def-color); }
+.sg-armory-sentinel-card small { display: block; margin-bottom: 6px; color: var(--sg-muted); font: 800 9px ui-monospace, monospace; }
+.sg-armory-sentinel-upgrade {
+  width: 100%;
+  min-height: 30px;
+  border: 1px solid var(--sg-line);
+  border-radius: 5px;
+  background: #1c1d17;
+  color: var(--sg-ink);
+  font: 800 10px ui-monospace, monospace;
+  cursor: pointer;
+}
+.sg-armory-sentinel-upgrade:disabled { cursor: not-allowed; opacity: .4; }
+.sg-armory-sentinel-upgrade:not(:disabled):hover { border-color: var(--def-color); color: var(--def-color); }
+.sg-armory-sentinel-card.is-maxed .sg-armory-sentinel-upgrade { border-color: var(--sg-green); color: var(--sg-green); }
+@keyframes sgTowerPulse {
+  0% { transform: scale(1); filter: brightness(1); }
+  35% { transform: scale(1.16); filter: brightness(1.9); }
+  100% { transform: scale(1); filter: brightness(1); }
+}
+.sg-armory-tower-card.is-ascending { animation: sgTowerPulse .7s ease; }
+@media (max-width: 720px) {
+  .sg-armory-tower-card { grid-template-columns: 1fr; }
+  .sg-armory-tower-portrait { width: 100%; height: 150px; justify-self: center; }
+  .sg-armory-sentinel-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }

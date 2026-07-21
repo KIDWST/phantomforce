@@ -90,10 +90,40 @@
 
     <footer class="sg-loadout-actions">
       <button type="button" class="sg-secondary" data-loadout-back>Back</button>
+      <button type="button" class="sg-secondary sg-armory-open" data-armory-open><i class="sg-armory-icon"></i> Command Tower</button>
       <div class="sg-loadout-summary" data-loadout-summary></div>
       <button type="button" class="sg-primary" data-loadout-start>Launch defense</button>
     </footer>
   </section>
+
+  <div class="sg-armory-overlay" data-armory-overlay hidden>
+    <div class="sg-armory-panel">
+      <div class="sg-armory-head">
+        <div>
+          <p class="sg-kicker">Command Tower</p>
+          <h2>Ascend the Command Tower</h2>
+          <p>Spend Core Shards earned from runs to permanently strengthen every sentinel in your wing.</p>
+        </div>
+        <div class="sg-armory-shards"><i class="sg-shard-icon"></i><b data-armory-shards>0</b><span>Core Shards</span></div>
+        <button type="button" class="sg-armory-close" data-armory-close aria-label="Close Command Tower">×</button>
+      </div>
+      <div class="sg-armory-body">
+        <section class="sg-armory-tower-card" data-armory-tower-card>
+          <div class="sg-armory-tower-portrait" data-armory-tower-portrait></div>
+          <div class="sg-armory-tower-info">
+            <div class="sg-armory-tower-title"><b>Command Tower</b><span data-armory-tower-level>Level 1</span></div>
+            <p>Every sentinel in your wing grows stronger with each tower tier.</p>
+            <div class="sg-armory-tower-stats" data-armory-tower-stats></div>
+            <button type="button" class="sg-primary sg-armory-upgrade-btn" data-armory-tower-upgrade>Tower ascension — 8 Shards</button>
+          </div>
+        </section>
+        <section class="sg-armory-sentinels-section">
+          <div class="sg-section-head"><h3>Sentinel mastery</h3><b>Spend Shards to master individual sentinels</b></div>
+          <div class="sg-armory-sentinel-grid" data-armory-sentinel-grid></div>
+        </section>
+      </div>
+    </div>
+  </div>
 
   <section id="screenGame" class="sg-screen sg-game" hidden>
     <header class="sg-hud">

@@ -417,6 +417,8 @@ function sfx(name) {
 // ---------------------------------------------------------------------------
 // Persistent progression
 // ---------------------------------------------------------------------------
+const COMMAND_LEVEL_MAX = 8;
+const MASTERY_LEVEL_MAX = 5;
 const META_DEFAULT = {
   rank: 1,
   xp: 0,
@@ -431,7 +433,13 @@ const META_DEFAULT = {
   unlockedCsv: DEFENSE_ORDER.join(","),
   loadoutCsv: "glare,arc,frost,vane",
   commanderId: "astra",
-  mapId: "cloudbreak"
+  mapId: "cloudbreak",
+  // Command Tower — permanent Core Shard progression, distinct from Glint
+  // (which is purely in-match and resets every run). commandLevel buffs
+  // every sentinel in the wing at once; mastery is per-sentinel-type.
+  shards: 0,
+  commandLevel: 1,
+  ...Object.fromEntries(DEFENSE_ORDER.map((id) => ["mastery_" + id, 1]))
 };
 let meta = { ...META_DEFAULT };
 function applyMetaFromState(state) {
@@ -449,6 +457,11 @@ function applyMetaFromState(state) {
   if (typeof state.loadoutCsv === "string") meta.loadoutCsv = state.loadoutCsv.slice(0, 100);
   if (typeof state.commanderId === "string") meta.commanderId = state.commanderId.slice(0, 30);
   if (typeof state.mapId === "string") meta.mapId = state.mapId.slice(0, 30);
+  meta.shards = clampInt(state.shards, 0, 999999, meta.shards);
+  meta.commandLevel = clampInt(state.commandLevel, 1, COMMAND_LEVEL_MAX, meta.commandLevel);
+  DEFENSE_ORDER.forEach((id) => {
+    meta["mastery_" + id] = clampInt(state["mastery_" + id], 1, MASTERY_LEVEL_MAX, meta["mastery_" + id]);
+  });
   localVolume = meta.soundVol;
   localReducedMotion = meta.reducedMotion || matchMedia("(prefers-reduced-motion: reduce)").matches;
   selectedDefenses = safeDefenseLoadout(meta.loadoutCsv.split(","), ["glare", "arc", "frost", "vane"]);
@@ -458,7 +471,7 @@ function applyMetaFromState(state) {
   applyMotionClass();
 }
 function metaPayload() {
-  return {
+  const payload = {
     rank: meta.rank,
     xp: meta.xp,
     bestWaveCampaign: meta.bestWaveCampaign,
@@ -472,9 +485,20 @@ function metaPayload() {
     unlockedCsv: DEFENSE_ORDER.join(","),
     loadoutCsv: selectedDefenses.join(","),
     commanderId: selectedCommanderId,
-    mapId: selectedMapId
+    mapId: selectedMapId,
+    shards: meta.shards,
+    commandLevel: meta.commandLevel
   };
+  DEFENSE_ORDER.forEach((id) => { payload["mastery_" + id] = meta["mastery_" + id]; });
+  return payload;
 }
+function commandUpgradeCost(level) { return level >= COMMAND_LEVEL_MAX ? null : level * 8; }
+function masteryUpgradeCost(level) { return level >= MASTERY_LEVEL_MAX ? null : level * 4; }
+function commandTowerBonus() {
+  return { dmg: 1 + (meta.commandLevel - 1) * .04, range: 1 + (meta.commandLevel - 1) * .03 };
+}
+function masteryBonus(defId) { return 1 + ((meta["mastery_" + defId] || 1) - 1) * .06; }
+function commandTowerStage() { return meta.commandLevel >= 7 ? 3 : meta.commandLevel >= 5 ? 2 : meta.commandLevel >= 3 ? 1 : 0; }
 function grantRewards(reachedWave, won) {
   const xpGain = Math.max(0, reachedWave) * 14 + killCount + (won ? 120 : 0);
   meta.xp += xpGain;
@@ -484,7 +508,11 @@ function grantRewards(reachedWave, won) {
   meta.loadoutCsv = selectedDefenses.join(",");
   meta.commanderId = selectedCommanderId;
   meta.mapId = selectedMapId;
-  return { xpGain, rankedUp: meta.rank > oldRank };
+  // Core Shards: reward furthest wave reached, plus a real win bonus — a
+  // loss still earns something for showing up, never a setback.
+  const shardsGain = Math.max(1, Math.floor(Math.max(0, reachedWave) / 3)) + (won ? 5 : 0);
+  meta.shards += shardsGain;
+  return { xpGain, shardsGain, rankedUp: meta.rank > oldRank };
 }
 
 // ---------------------------------------------------------------------------
@@ -560,6 +588,134 @@ function openLoadout(nextMode) {
 }
 function modeLabel(value) {
   return ({ campaign: "Frontier Campaign", endless: "Century Watch", skirmish: "War Game vs AI", battle: "Private Room War" })[value] || "Battle";
+}
+
+// ---------------------------------------------------------------------------
+// Command Tower Armory (permanent Core Shard progression)
+// ---------------------------------------------------------------------------
+let armoryOpen = false;
+function commandTierName(level) {
+  return level >= 7 ? "Sovereign Spire" : level >= 5 ? "Aegis Command" : level >= 3 ? "Watch Command" : "Field Command";
+}
+function drawCommandTowerIcon(pctx, cx, cy, size, stage) {
+  pctx.save();
+  pctx.translate(cx, cy);
+  if (stage >= 1) {
+    pctx.fillStyle = "rgba(255,200,87,.14)";
+    pctx.beginPath();
+    pctx.arc(0, 0, size * 1.5, 0, Math.PI * 2);
+    pctx.fill();
+  }
+  pctx.fillStyle = "#100e08";
+  pctx.strokeStyle = stage >= 2 ? "#ffe9a8" : "#ffc857";
+  pctx.lineWidth = stage >= 3 ? 3 : 2;
+  if (stage >= 2) { pctx.shadowColor = "#ffc857"; pctx.shadowBlur = size * .9; }
+  pctx.beginPath();
+  pctx.moveTo(-size * .55, size * .8);
+  pctx.lineTo(-size * .4, -size * .3);
+  pctx.lineTo(-size * .2, -size * .3);
+  pctx.lineTo(-size * .2, -size * .9);
+  pctx.lineTo(size * .2, -size * .9);
+  pctx.lineTo(size * .2, -size * .3);
+  pctx.lineTo(size * .4, -size * .3);
+  pctx.lineTo(size * .55, size * .8);
+  pctx.closePath();
+  pctx.fill();
+  pctx.stroke();
+  pctx.shadowBlur = 0;
+  const stars = Math.max(1, stage + 1);
+  for (let i = 0; i < stars; i++) {
+    const sx = (i - (stars - 1) / 2) * size * .32;
+    pctx.fillStyle = "#ffe9a8";
+    pctx.beginPath();
+    pctx.arc(sx, -size * 1.05, size * .09, 0, Math.PI * 2);
+    pctx.fill();
+  }
+  pctx.restore();
+}
+function renderArmoryTowerPortrait() {
+  const portrait = $("[data-armory-tower-portrait]");
+  const stage = commandTowerStage();
+  portrait.innerHTML = "";
+  const canvas2 = document.createElement("canvas");
+  canvas2.width = 260;
+  canvas2.height = 260;
+  canvas2.style.width = "100%";
+  canvas2.style.height = "100%";
+  portrait.appendChild(canvas2);
+  const pctx = canvas2.getContext("2d");
+  drawCommandTowerIcon(pctx, 130, 158, 46, stage);
+  pctx.fillStyle = "#ffc857";
+  pctx.font = "900 13px ui-monospace, monospace";
+  pctx.textAlign = "center";
+  pctx.fillText(commandTierName(meta.commandLevel).toUpperCase(), 130, 232);
+}
+function renderArmory() {
+  $("[data-armory-shards]").textContent = String(meta.shards);
+  $("[data-armory-tower-level]").textContent = "Level " + meta.commandLevel + (meta.commandLevel >= COMMAND_LEVEL_MAX ? " · MAX" : "");
+  const bonus = commandTowerBonus();
+  $("[data-armory-tower-stats]").innerHTML = [
+    "+" + Math.round((bonus.dmg - 1) * 100) + "% sentinel damage",
+    "+" + Math.round((bonus.range - 1) * 100) + "% sentinel range"
+  ].map((s) => "<span>" + esc(s) + "</span>").join("");
+  const towerCost = commandUpgradeCost(meta.commandLevel);
+  const towerBtn = $("[data-armory-tower-upgrade]");
+  towerBtn.disabled = towerCost === null || meta.shards < towerCost;
+  towerBtn.textContent = towerCost === null ? "Command Tower ascended" : "Tower ascension — " + towerCost + " Shards";
+  renderArmoryTowerPortrait();
+  $("[data-armory-sentinel-grid]").innerHTML = DEFENSE_ORDER.map((id) => {
+    const def = DEFENSES[id];
+    const level = meta["mastery_" + id] || 1;
+    const cost = masteryUpgradeCost(level);
+    const maxed = cost === null;
+    const pips = Array.from({ length: MASTERY_LEVEL_MAX }, (_, i) => '<i class="' + (i < level ? "is-filled" : "") + '"></i>').join("");
+    return '<div class="sg-armory-sentinel-card ' + (maxed ? "is-maxed" : "") + '" style="--def-color:' + def.color + '">' +
+      "<b>" + esc(def.name) + "</b><small>Level " + level + (maxed ? " · MAX" : "") + "</small>" +
+      '<div class="sg-armory-pips">' + pips + "</div>" +
+      '<button type="button" class="sg-armory-sentinel-upgrade" data-armory-sentinel-upgrade="' + id + '" ' + (maxed || meta.shards < cost ? "disabled" : "") + ">" +
+      (maxed ? "Max level" : "Level up — " + cost) + "</button></div>";
+  }).join("");
+  $("[data-armory-sentinel-grid]").querySelectorAll("[data-armory-sentinel-upgrade]").forEach((button) => {
+    button.addEventListener("click", () => buyMasteryUpgrade(button.dataset.armorySentinelUpgrade));
+  });
+}
+function openArmory() {
+  armoryOpen = true;
+  $("[data-armory-overlay]").hidden = false;
+  renderArmory();
+}
+function closeArmory() {
+  armoryOpen = false;
+  $("[data-armory-overlay]").hidden = true;
+}
+function commandAscensionFlash() {
+  const card = $("[data-armory-tower-card]");
+  card.classList.remove("is-ascending");
+  void card.offsetWidth;
+  card.classList.add("is-ascending");
+  toast("Command Tower ascended — Level " + meta.commandLevel + "!");
+}
+function saveArmory() { host("progress", { state: metaPayload() }); }
+function buyCommandUpgrade() {
+  const cost = commandUpgradeCost(meta.commandLevel);
+  if (cost === null || meta.shards < cost) return;
+  meta.shards -= cost;
+  meta.commandLevel += 1;
+  saveArmory();
+  renderArmory();
+  commandAscensionFlash();
+}
+function buyMasteryUpgrade(defId) {
+  if (!DEFENSES[defId]) return;
+  const key = "mastery_" + defId;
+  const level = meta[key] || 1;
+  const cost = masteryUpgradeCost(level);
+  if (cost === null || meta.shards < cost) return;
+  meta.shards -= cost;
+  meta[key] = level + 1;
+  saveArmory();
+  renderArmory();
+  toast(DEFENSES[defId].name + " reached mastery level " + meta[key] + ".");
 }
 
 // ---------------------------------------------------------------------------
@@ -1023,6 +1179,12 @@ function currentStats(sentinel) {
   const boost = droneBoost(sentinel);
   stats.rof *= 1 + boost;
   if (abilityActive > 0 && commander.id === "astra") { stats.rof *= 1.55; stats.dmg *= 1.55; }
+  // Command Tower (global, every sentinel) + Sentinel Mastery (per-type),
+  // both permanent Core Shard progression stacking on top of the in-match
+  // Glint-paid tier the sentinel is currently placed at.
+  const tower = commandTowerBonus();
+  stats.dmg *= tower.dmg * masteryBonus(sentinel.defId);
+  stats.range *= tower.range;
   return stats;
 }
 function validDefenseTarget(defense, enemy) {
@@ -1744,7 +1906,8 @@ function showResults(kind, reward, surrendered) {
     [abilityUses, "Commander abilities"],
     [score, "Battle score"],
     ["+" + reward.xpGain, "Command XP"],
-    [meta.rank + (reward.rankedUp ? " UP" : ""), "Command rank"]
+    [meta.rank + (reward.rankedUp ? " UP" : ""), "Command rank"],
+    ["+" + reward.shardsGain, "Core Shards earned"]
   ];
   $("[data-results-grid]").innerHTML = stats.map((item) => '<div><b>' + esc(item[0]) + "</b><span>" + esc(item[1]) + "</span></div>").join("");
   $("[data-results-rematch]").hidden = mode !== "battle";
@@ -2472,6 +2635,10 @@ function renderMenuMeta() {
 document.querySelectorAll("[data-mode]").forEach((button) => button.addEventListener("click", () => openLoadout(button.dataset.mode)));
 $("[data-loadout-back]").addEventListener("click", () => showScreen("title"));
 $("[data-loadout-start]").addEventListener("click", () => pendingMode === "battle" ? startRoomBattle() : startRun(pendingMode));
+$("[data-armory-open]").addEventListener("click", openArmory);
+$("[data-armory-close]").addEventListener("click", closeArmory);
+$("[data-armory-overlay]").addEventListener("click", (event) => { if (event.target === $("[data-armory-overlay]")) closeArmory(); });
+$("[data-armory-tower-upgrade]").addEventListener("click", buyCommandUpgrade);
 $("[data-pause-btn]").addEventListener("click", () => setPaused(true));
 $("[data-exit-btn]").addEventListener("click", returnToMenu);
 $("[data-resume-btn]").addEventListener("click", () => setPaused(false));
