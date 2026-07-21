@@ -44,6 +44,11 @@ try {
   for (const gameId of ["neon-drift", "signal-match", "focus-stack", "word-weld", "reflex-grid", "penalty-kick", "rift-frenzy", "serpent-surge", "color-rush", "tile-flow", "tower-tactics", "breath-pacer", "court-vision", "pixel-bloom", "circuit-serpent", "echo-sequence", "signal-sweeper", "neon-breaker", "type-storm", "logic-lights", "phantom-rumble", "sudoku-signal", "cubetown", "skyguard-arena", "crown-circuit", "keyboardist-on-tour", "tidefront-tactics", "kingdom-breakers"]) {
     assert(builtInIds.has(gameId), `${gameId} should ship as an owned built-in game.`);
   }
+  const kidsOnlyIds = ["signal-match", "focus-stack", "reflex-grid", "penalty-kick", "rift-frenzy", "serpent-surge", "color-rush", "tile-flow", "tower-tactics", "breath-pacer", "court-vision", "pixel-bloom", "circuit-serpent", "echo-sequence", "signal-sweeper", "neon-breaker", "type-storm", "logic-lights", "sudoku-signal"];
+  for (const gameId of kidsOnlyIds) {
+    assert(initial.catalog.find((game) => game.id === gameId)?.category === "Kids", `${gameId} should live in the Kids-only catalog lane.`);
+  }
+  assert(initial.catalog.find((game) => game.id === "neon-drift")?.category !== "Kids", "Non-kids flagship games should stay in the main catalog lanes.");
   assert(initial.catalog.every((game) => game.kind === "built_in"), "No fake community releases should be seeded.");
   assert(initial.catalog.find((game) => game.id === "neon-drift")?.version === "1.2.3", "Neon Drift should ship the faster arcade tuning.");
   assert(initial.access.canSubmitGames === false, "The snapshot should honor the plan submission decision.");
