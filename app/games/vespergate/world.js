@@ -19,10 +19,14 @@
 
   const MAT = {
     OPEN: 0, LIMINAL: 1, NULL_IRON: 2, DEAD: 3, SPIKE: 4, BRASS: 5, PLATFORM: 6,
+    // Glass Ossuary materials:
+    MIRROR: 7,   // mirror-bone: solid, reflects shots, no portals
+    SAINTGLASS: 8, // saint-glass: carries light (Mercy beam), portalable, translucent
   };
-  const SOLID = new Set([MAT.LIMINAL, MAT.NULL_IRON, MAT.DEAD, MAT.BRASS]);
-  const PORTALABLE = new Set([MAT.LIMINAL, MAT.BRASS]);
-  const CHARMAT = { ".": 0, "#": 1, "X": 2, "=": 3, "^": 4, "~": 5, "_": 6, " ": 0 };
+  const SOLID = new Set([MAT.LIMINAL, MAT.NULL_IRON, MAT.DEAD, MAT.BRASS, MAT.MIRROR]);
+  const PORTALABLE = new Set([MAT.LIMINAL, MAT.BRASS, MAT.SAINTGLASS]);
+  const REFLECT = new Set([MAT.MIRROR]);
+  const CHARMAT = { ".": 0, "#": 1, "X": 2, "=": 3, "^": 4, "~": 5, "_": 6, "M": 7, "G": 8, " ": 0 };
 
   class Room {
     constructor(def) {
@@ -53,6 +57,7 @@
     solidAtPx(x, y) { return SOLID.has(this.matAtPx(x, y)); }
     platformAtPx(x, y) { return this.matAtPx(x, y) === MAT.PLATFORM; }
     spikeAtPx(x, y) { return this.matAtPx(x, y) === MAT.SPIKE; }
+    reflectAtPx(x, y) { return REFLECT.has(this.matAtPx(x, y)); }
     // classify a candidate portal placement: returns {valid, dir, x, y, reason}
     classifyPortal(px, py, half = 20) {
       const gx = Math.floor(px / T), gy = Math.floor(py / T);
@@ -128,6 +133,18 @@
       } else if (m === MAT.PLATFORM) {
         ctx.fillStyle = "rgb(46,40,58)"; ctx.fillRect(x, y, T, 4);
         ctx.fillStyle = "rgba(150,120,200,0.2)"; ctx.fillRect(x, y, T, 1);
+      } else if (m === MAT.MIRROR) {
+        // mirror-bone: pale, glassy, with a moving highlight
+        ctx.fillStyle = `rgb(${196 + (v >> 1)},${200 + (v >> 1)},${210 + (v >> 1)})`;
+        ctx.fillRect(x, y, T, T);
+        ctx.fillStyle = "rgba(255,255,255,0.35)";
+        const hl = ((gx * 3 + gy * 5 + Math.floor(t * 20)) % (T + 8)) - 4;
+        ctx.fillRect(x + hl, y, 2, T);
+        ctx.strokeStyle = "rgba(120,140,180,0.4)"; ctx.strokeRect(x + 0.5, y + 0.5, T - 1, T - 1);
+      } else if (m === MAT.SAINTGLASS) {
+        ctx.fillStyle = `rgba(${120 + v},${160 + v},${210 + v},0.55)`;
+        ctx.fillRect(x, y, T, T);
+        ctx.fillStyle = "rgba(200,230,255,0.25)"; ctx.fillRect(x + 3, y + 3, T - 6, T - 6);
       }
     }
   }
@@ -136,4 +153,5 @@
   VG.MAT = MAT;
   VG.SOLID = SOLID;
   VG.PORTALABLE = PORTALABLE;
+  VG.REFLECT = REFLECT;
 })();

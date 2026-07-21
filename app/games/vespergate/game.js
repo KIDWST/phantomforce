@@ -32,7 +32,7 @@
     hp: 6, maxHp: 6, iframe: 0, ash: 100, maxAsh: 100,
     shot: 0, cd: 0, charge: 0, charging: false,
     dashCd: 0, dashT: 0, dashDir: { x: 1, y: 0 },
-    wardT: 0, wardCd: 0, aimx: 1, aimy: 0, hasFoldstep: true, hasWard: true,
+    wardT: 0, wardCd: 0, aimx: 1, aimy: 0, hasFoldstep: true, hasWard: true, relics: {},
     _key: "player",
     dead: false,
   };
@@ -160,6 +160,7 @@
     if (def.type === "guard") return { ...base, hp: 34, maxHp: 34, shield: 1 };
     if (def.type === "sniper") return { ...base, hp: 16, maxHp: 16, aim: 0, aiming: 0 };
     if (def.type === "leech") return { ...base, hp: 10, maxHp: 10, w: 8, h: 8, r: 5, onGate: false };
+    if (def.type === "mourner") return { ...base, hp: 18, maxHp: 18, r: 7, blinkT: 1.5, ghost: 0.6, phase: Math.random() * 6 };
     return base;
   }
   function stepEnemy(e, dt) {
@@ -178,6 +179,19 @@
       if (solid(e.x, e.y + e.h / 2)) { e.y = Math.floor((e.y + e.h / 2) / T) * T - e.h / 2; e.vy = 0; }
       if (e.aiming > 0) { e.aiming -= dt; if (e.aiming <= 0) { shootBolt(e.x, e.y, dx / d, dy / d, 320, 10, "#ff5c74"); } }
       else { e.cd -= dt; if (e.cd <= 0 && d < 320) { e.cd = 2.4; e.aiming = 0.9; e.aimx = dx / d; e.aimy = dy / d; } }
+    } else if (e.type === "mourner") {
+      e.phase += dt;
+      e.x += (dx / (d || 1)) * 34 * dt;
+      e.y += (dy / (d || 1)) * 22 * dt + Math.sin(e.phase * 2) * 8 * dt;
+      e.blinkT -= dt;
+      if (e.blinkT <= 0) {
+        e.blinkT = 2 + Math.random() * 1.5;
+        e.x = VG.clamp(state.room.pxW - e.x, 20, state.room.pxW - 20);
+        e.ghost = 0.2; spawnParticles(e.x, e.y, "#c9d6e8", 5);
+      }
+      e.ghost = Math.min(1, e.ghost + dt * 1.5);
+      e.cd -= dt;
+      if (d < 200 && e.cd <= 0) { e.cd = 1.8; shootBolt(e.x, e.y, dx / d, dy / d, 130, 5, "#c9d6e8"); }
     } else if (e.type === "leech") {
       // drift toward nearest open gate; attach and add strain
       const g = portals.gates.find((gg) => gg.active);
@@ -239,7 +253,12 @@
     if (e.type === "guard" && e.shield && !fromBehind) { spawnParticles(e.x, e.y, "#8aa", 3, 30); VG.sfx(320, 0.04, "square", 0.03); return; }
     e.hp -= dmg; e.hurt = 0.12; spawnParticles(e.x, e.y, "#ffd166", 4);
     VG.sfx(500, 0.03, "triangle", 0.03);
-    if (e.hp <= 0) { e.dead = true; state.kills++; state.score += 100; spawnParticles(e.x, e.y, "#8fe9ff", 12); if (e.onGate) portals.strain = Math.max(0, portals.strain - 0.2); }
+    if (e.hp <= 0) {
+      e.dead = true; state.kills++; state.score += 100; spawnParticles(e.x, e.y, "#8fe9ff", 12);
+      if (e.onGate) portals.strain = Math.max(0, portals.strain - 0.2);
+      // Glass Mourner shatters into two fragment bolts
+      if (e.type === "mourner") { shootBolt(e.x, e.y, -0.7, -0.7, 160, 4, "#c9d6e8"); shootBolt(e.x, e.y, 0.7, -0.7, 160, 4, "#c9d6e8"); VG.sfx(900, 0.08, "triangle", 0.05); }
+    }
   }
   function damageBoss(dmg) {
     if (!boss || boss.dead) return;
@@ -270,7 +289,7 @@
     VG.camera.bounds = { x: 0, y: 0, w: state.room.pxW, h: state.room.pxH };
     shots = []; bolts = []; rings = []; particles = []; floatText = [];
     enemies = (def.enemies || []).map(makeEnemy);
-    pickups = (def.pickups || []).map((p) => ({ x: p.x * T + 8, y: p.y * T + 8, type: p.type, bob: Math.random() * 6 }));
+    pickups = (def.pickups || []).map((p) => ({ x: p.x * T + 8, y: p.y * T + 8, type: p.type, relic: p.relic, bob: Math.random() * 6 }));
     boss = def.boss ? makeBoss(def.boss) : null;
     portals.reset();
     const sp = spawn || def.spawn;
@@ -376,10 +395,20 @@
       if (tpz) { sh.foldshot = true; sh.dmg *= 1.25; sh.pierce += 1; spawnParticles(sh.x, sh.y, "#8fe9ff", 3); }
       // hit walls
       if (solid(sh.x, sh.y)) {
-        if (sh.blast) blast(sh.x, sh.y, sh.blast, sh.dmg);
-        // ring a bell if brass
-        if (state.room.matAtPx(sh.x, sh.y) === VG.MAT.BRASS) ringBell(Math.floor(sh.x / T) * T + 8, Math.floor(sh.y / T) * T + 8);
-        sh.life = 0; spawnParticles(sh.x, sh.y, "#ffcf6b", 3);
+        // mirror-bone reflects the shot instead of consuming it (bank shots)
+        if (state.room.reflectAtPx(sh.x, sh.y) && (sh._bounces || 0) < 3) {
+          sh._bounces = (sh._bounces || 0) + 1;
+          // reflect off the face we hit: undo the step, flip the dominant axis
+          sh.x = px; sh.y = py;
+          // flip the dominant travel axis (banks the shot off the mirror face)
+          if (Math.abs(sh.vx) >= Math.abs(sh.vy)) sh.vx = -sh.vx; else sh.vy = -sh.vy;
+          sh.foldshot = true; // banked shots gain penetration like foldshots
+          spawnParticles(sh.x, sh.y, "#c9d6e8", 4); VG.sfx(620, 0.04, "sine", 0.03);
+        } else {
+          if (sh.blast) blast(sh.x, sh.y, sh.blast, sh.dmg);
+          if (state.room.matAtPx(sh.x, sh.y) === VG.MAT.BRASS) ringBell(Math.floor(sh.x / T) * T + 8, Math.floor(sh.y / T) * T + 8);
+          sh.life = 0; spawnParticles(sh.x, sh.y, "#ffcf6b", 3);
+        }
       }
       // hit enemies
       for (const e of enemies) {
@@ -408,14 +437,16 @@
       const tpb = portals.tryTeleport(b, b.key, { strain: 0.03 });
       if (tpb) { b.hostileToEnemies = true; b.color = "#8fe9ff"; }
       if (solid(b.x, b.y)) { b.life = 0; continue; }
-      // ward deflect
+      // ward deflect — Mirror Litany relic makes deflected/redirected bolts
+      // strike far harder and pierce (member of the portal-combat capability set)
       if (player.wardT > 0 && VG.dist(b.x, b.y, player.x, player.y - 8) < 22) {
         b.vx = player.aimx * 300; b.vy = player.aimy * 300; b.hostileToEnemies = true; b.color = "#ffd166";
+        if (player.relics["mirror-litany"]) { b.dmg *= 2.2; b.color = "#8fe9ff"; b._pierce = 2; }
         VG.sfx(700, 0.05, "sine", 0.05); continue;
       }
       if (b.hostileToEnemies) {
-        for (const e of enemies) { if (!e.dead && VG.dist(b.x, b.y, e.x, e.y) < e.r + b.r) { damageEnemy(e, b.dmg, true); b.life = 0; break; } }
-        if (boss && !boss.dead && VG.dist(b.x, b.y, boss.x, boss.y) < boss.r) { damageBoss(b.dmg * 1.5); b.life = 0; }
+        for (const e of enemies) { if (!e.dead && VG.dist(b.x, b.y, e.x, e.y) < e.r + b.r) { damageEnemy(e, b.dmg, true); if (b._pierce > 0) b._pierce--; else b.life = 0; break; } }
+        if (boss && !boss.dead && VG.dist(b.x, b.y, boss.x, boss.y) < boss.r) { damageBoss(b.dmg * 1.5); if (b._pierce > 0) b._pierce--; else b.life = 0; }
       } else if (VG.dist(b.x, b.y, player.x, player.y - 8) < 12) { hurtPlayer(b.dmg / 4 || 1, Math.sign(b.vx), -0.3); b.life = 0; }
     }
     bolts = bolts.filter((b) => b.life > 0);
@@ -445,6 +476,7 @@
       if (VG.dist(p.x, p.y, player.x, player.y - 8) < 14) {
         if (p.type === "ash") { player.maxAsh += 20; player.ash = player.maxAsh; toast("+Ash Vessel", p.x, p.y - 10, "#ffcf6b"); }
         else if (p.type === "pulse") { player.maxHp += 1; player.hp = player.maxHp; toast("+Pulse Fragment", p.x, p.y - 10, "#ff9ad0"); }
+        else if (p.type === "relic") { player.relics[p.relic] = true; toast("RELIC: " + (p.relic === "mirror-litany" ? "Mirror Litany" : p.relic), p.x, p.y - 12, "#8fe9ff"); VG.sfxBell(200, 0.14); }
         p.dead = true; VG.sfx(660, 0.1, "triangle", 0.05); spawnParticles(p.x, p.y, "#fff", 8);
       }
     }
@@ -493,6 +525,7 @@
   function checkExits() {
     const def = VG.ROOMS[state.roomId];
     for (const ex of (def.exits || [])) {
+      if (ex.needBossDead && !(boss && boss.dead) && !state.completeSent) continue;
       const ex0 = ex.gx * T, ey0 = ex.gy * T;
       if (player.x > ex0 - 4 && player.x < ex0 + T + 4 && player.y > ey0 - 12 && player.y < ey0 + T + 12) {
         loadRoom(ex.to, ex.toSpawn); return;
@@ -502,10 +535,14 @@
 
   /* ================= win / dead ================= */
   function onWin() {
-    state.score += 1000; state.phase = "win";
+    // Bellmother's fall is the slice's completion milestone AND opens a route
+    // into the Glass Ossuary — play continues; walk to the shrine-side gate.
+    state.score += 1000;
     if (!state.completeSent) { state.completeSent = true; host("complete", { score: state.score, progress: 100, state: { kills: state.kills, boss: "bellmother" } }); }
-    VG.sfxBell(220, 0.2); VG.save.write({ roomId: "boss", hp: player.hp, ash: player.ash, score: state.score, kills: state.kills, won: true });
-    showOverlay("win");
+    VG.sfxBell(220, 0.2);
+    VG.save.write({ roomId: "boss", hp: player.hp, ash: player.ash, score: state.score, kills: state.kills, bossDead: true });
+    toast("THE BRONZE IS SILENT — a path opens east", player.x, player.y - 30, "#8fe9ff");
+    setHint("Bellmother has fallen. A route into the Glass Ossuary opens to the east.");
   }
   function onDead() {
     player.dead = true; state.phase = "dead"; VG.sfx(90, 0.4, "sawtooth", 0.06);
@@ -526,9 +563,14 @@
     // pickups
     for (const p of pickups) {
       const yy = p.y + Math.sin(p.bob * 2) * 2;
-      ctx.fillStyle = p.type === "ash" ? "#ffcf6b" : "#ff9ad0";
-      ctx.beginPath(); ctx.arc(p.x, yy, 4, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = "rgba(255,255,255,0.5)"; ctx.fillRect(p.x - 1, yy - 6, 2, 12);
+      if (p.type === "relic") {
+        ctx.fillStyle = "#8fe9ff"; ctx.save(); ctx.translate(p.x, yy); ctx.rotate(p.bob);
+        ctx.fillRect(-4, -4, 8, 8); ctx.fillStyle = "rgba(255,255,255,0.7)"; ctx.fillRect(-2, -2, 4, 4); ctx.restore();
+      } else {
+        ctx.fillStyle = p.type === "ash" ? "#ffcf6b" : "#ff9ad0";
+        ctx.beginPath(); ctx.arc(p.x, yy, 4, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = "rgba(255,255,255,0.5)"; ctx.fillRect(p.x - 1, yy - 6, 2, 12);
+      }
     }
     // rings
     for (const rg of rings) {
@@ -569,6 +611,12 @@
       ctx.fillStyle = "#ff5c74"; ctx.fillRect(-2, -2, 4, 4);
     } else if (e.type === "leech") {
       ctx.fillStyle = e.onGate ? "#ff9ad0" : "#4a3a5a"; ctx.beginPath(); ctx.arc(0, 0, 5, 0, Math.PI * 2); ctx.fill();
+    } else if (e.type === "mourner") {
+      ctx.globalAlpha *= VG.clamp(e.ghost, 0.25, 1);
+      // veiled glass figure
+      ctx.fillStyle = "#aeb8d0"; ctx.beginPath(); ctx.moveTo(0, -8); ctx.lineTo(6, 6); ctx.lineTo(-6, 6); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = "rgba(255,255,255,0.5)"; ctx.beginPath(); ctx.arc(0, -3, 2.5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#3a4a6a"; ctx.fillRect(-2, -4, 1.5, 2); ctx.fillRect(1, -4, 1.5, 2);
     }
     // hp bar
     if (e.hp < e.maxHp) { ctx.globalAlpha = 1; ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(-6, -13, 12, 2); ctx.fillStyle = "#ff5c74"; ctx.fillRect(-6, -13, 12 * Math.max(0, e.hp / e.maxHp), 2); }
@@ -771,7 +819,7 @@
     const b = e.target.closest("button"); if (!b) return;
     VG.unlockAudio();
     if (b.dataset.vgNew !== undefined) { VG.save.clear(); startGame("fall", null); }
-    else if (b.dataset.vgContinue !== undefined) { const s = VG.save.read(); player.hp = s.hp || 6; player.ash = s.ash || 100; state.score = s.score || 0; state.kills = s.kills || 0; startGame(s.roomId || "fall", null); }
+    else if (b.dataset.vgContinue !== undefined) { const s = VG.save.read(); player.hp = s.hp || 6; player.ash = s.ash || 100; state.score = s.score || 0; state.kills = s.kills || 0; startGame(s.bossDead ? "ossuary1" : (s.roomId || "fall"), null); }
     else if (b.dataset.vgRetry !== undefined) { const s = VG.save.read(); startGame(s ? s.roomId : "fall", null); }
     else if (b.dataset.vgTitle !== undefined) { state.phase = "title"; showOverlay("title"); }
     else if (b.dataset.vgSettings !== undefined) { showOverlay("settings"); }
