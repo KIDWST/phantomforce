@@ -21,6 +21,8 @@ const COMPARATIVE_REFERENCE = /\bhow many more\b|\bwho\b.{0,30}\b(?:more|most|le
 const ORDERED_EVENT_REFERENCE = /\b(?:immediately\s+)?(?:before|after)\b/i;
 const CONFIRMATION_REFERENCE = /\b(?:who|how\s+many|did)\b[^?]{0,80}\bconfirm(?:ed)?\b/i;
 const CONFIRMATION_BASE = /\b(?:everyone\s+except\s+.+?|only\s+.+?|neither\s+.+?\s+nor\s+.+?)\s+confirmed\b/i;
+const RULE_BASE = /^(?:rules?|correction)\s*:|^if\s+.+?,\s*.+|\b.+?\s+requires\s+.+|\b.+?\s+unless\s+.+/i;
+const RULE_REFERENCE = /^(?:can|does|did|will|is|was)\b|\b(?:what\s+(?:is\s+)?(?:blocking|required)|why\s+is|prerequisite|dependency|requirement)\b/i;
 const CONTEXT_STOP_WORDS = new Set([
   "about", "after", "again", "answer", "back", "before", "could", "current", "does", "explain", "favorite", "first", "from", "give", "have", "into", "just", "know", "latest", "make", "more", "next", "only", "please", "question", "recommend", "sentence", "should", "something", "stay", "tell", "that", "their", "then", "there", "these", "thing", "this", "those", "what", "when", "where", "which", "would", "write", "your",
 ]);
@@ -84,7 +86,9 @@ function hasTopicOverlap(turns: InstantConversationTurn[], userRequest: string) 
 export function needsInstantConversationContext(turns: InstantConversationTurn[], userRequest: string) {
   const text = userRequest.trim();
   if (!turns.length || !text || TOPIC_RESET.test(text)) return false;
-  return FOLLOW_UP_SIGNAL.test(text)
+  const hasRuleBase = turns.slice(-10).some((turn) => RULE_BASE.test(turn.user));
+  return (hasRuleBase && (RULE_BASE.test(text) || RULE_REFERENCE.test(text)))
+    || FOLLOW_UP_SIGNAL.test(text)
     || IMPLICIT_FOLLOW_UP.test(text)
     || CAUSAL_REFERENCE.test(text)
     || RESPECTIVELY_REFERENCE.test(text)
@@ -114,6 +118,27 @@ export function selectActiveInstantTopicTurns(turns: InstantConversationTurn[]) 
 export function selectRelevantInstantTurns(turns: InstantConversationTurn[], userRequest = "") {
   if (CROSS_ANSWER_REFERENCE.test(userRequest)) return turns.slice(-6);
   const activeTurns = selectActiveInstantTopicTurns(turns);
+  let ruleScopeStart = 0;
+  for (let index = turns.length - 1; index >= 0; index -= 1) {
+    if (TOPIC_RESET.test(turns[index].user)) {
+      ruleScopeStart = index + 1;
+      break;
+    }
+  }
+  const ruleScope = turns.slice(ruleScopeStart);
+  if (RULE_REFERENCE.test(userRequest) && ruleScope.some((turn) => RULE_BASE.test(turn.user))) {
+    const bounded = ruleScope.slice(-10);
+    const selected = bounded.filter((turn) => RULE_BASE.test(turn.user));
+    const ruleTerms = meaningfulTerms(`${selected.map((turn) => turn.user).join(" ")} ${userRequest}`);
+    for (const turn of bounded) {
+      const turnTerms = meaningfulTerms(turn.user);
+      if ([...turnTerms].some((term) => ruleTerms.has(term))) selected.push(turn);
+    }
+    return selected
+      .filter((turn, index, packet) => packet.indexOf(turn) === index)
+      .sort((left, right) => bounded.indexOf(left) - bounded.indexOf(right))
+      .slice(-10);
+  }
   if (CONFIRMATION_REFERENCE.test(userRequest)) {
     let baseIndex = -1;
     for (let index = activeTurns.length - 1; index >= 0; index -= 1) {

@@ -1030,6 +1030,43 @@ async function main() {
     continuityResults.push(browserPartialRollback);
     assert.match(browserPartialRollback.answer.trim(), /^navy\s*\|\s*white\s*\|\s*orange[.!]?$/i, "a partial rollback must restore only the named field");
     assert.doesNotMatch(browserPartialRollback.answer, /black|gold|green/i, "a partial rollback must not revive unrelated original values or the replaced field value");
+    continuityResults.push(await submitChat(cdp, "New topic: conditional rules.", diagnostics));
+    continuityResults.push(await submitChat(cdp, "Rule: If the badge is valid, the door opens.", diagnostics));
+    continuityResults.push(await submitChat(cdp, "The badge is valid.", diagnostics));
+    const browserSufficientRule = await submitChat(cdp, "Does the door open? Yes or no only.", diagnostics);
+    continuityResults.push(browserSufficientRule);
+    assert.equal(browserSufficientRule.answer, "Yes", "a satisfied if-condition must establish its stated outcome");
+    continuityResults.push(await submitChat(cdp, "New topic: converse check.", diagnostics));
+    continuityResults.push(await submitChat(cdp, "Rule: If the badge is valid, the door opens.", diagnostics));
+    continuityResults.push(await submitChat(cdp, "The door is open.", diagnostics));
+    const browserConverseRule = await submitChat(cdp, "Is the badge valid? Yes or no only.", diagnostics);
+    continuityResults.push(browserConverseRule);
+    assert.match(browserConverseRule.answer, /does not prove the converse/i, "an outcome must not be used to invent its sufficient condition");
+    continuityResults.push(await submitChat(cdp, "New topic: publishing prerequisites.", diagnostics));
+    continuityResults.push(await submitChat(cdp, "Rule: Publishing requires approval.", diagnostics));
+    continuityResults.push(await submitChat(cdp, "Approval is missing.", diagnostics));
+    const browserBlockedPublishing = await submitChat(cdp, "Can publishing happen?", diagnostics);
+    continuityResults.push(browserBlockedPublishing);
+    assert.equal(browserBlockedPublishing.answer, "No. Publishing is blocked because approval is missing.", "a missing necessary condition must block the governed outcome");
+    const browserBlockingRequirement = await submitChat(cdp, "What is blocking publishing? Requirement only.", diagnostics);
+    continuityResults.push(browserBlockingRequirement);
+    assert.equal(browserBlockingRequirement.answer, "Approval", "a blocking question must return the exact stated prerequisite");
+    continuityResults.push(await submitChat(cdp, "Correction: Publishing requires legal review instead of approval.", diagnostics));
+    continuityResults.push(await submitChat(cdp, "Approval is complete. Legal review is missing.", diagnostics));
+    const browserCorrectedPrerequisite = await submitChat(cdp, "Can publishing happen?", diagnostics);
+    continuityResults.push(browserCorrectedPrerequisite);
+    assert.equal(browserCorrectedPrerequisite.answer, "No. Publishing is blocked because legal review is missing.", "a corrected prerequisite must replace the old dependency without reviving it");
+    continuityResults.push(await submitChat(cdp, "New topic: exception rule.", diagnostics));
+    continuityResults.push(await submitChat(cdp, "Rule: The backup runs unless maintenance mode is active.", diagnostics));
+    continuityResults.push(await submitChat(cdp, "Maintenance mode is inactive.", diagnostics));
+    const browserUnlessRule = await submitChat(cdp, "Will the backup run? Yes or no only.", diagnostics);
+    continuityResults.push(browserUnlessRule);
+    assert.equal(browserUnlessRule.answer, "Yes", "unless must apply only after the exception status is known");
+    continuityResults.push(await submitChat(cdp, "New topic: dependency cycle.", diagnostics));
+    continuityResults.push(await submitChat(cdp, "Rules: Alpha requires Beta. Beta requires Alpha.", diagnostics));
+    const browserRuleCycle = await submitChat(cdp, "What is required before Alpha?", diagnostics);
+    continuityResults.push(browserRuleCycle);
+    assert.match(browserRuleCycle.answer, /cycle: Alpha > Beta > Alpha/i, "cyclic requirements must clarify the invalid dependency instead of looping or guessing");
     assert.equal(continuityResults.every((result) => result.cards === 0), true, "long conversation turns must stay in chat without business cards.");
     assert.equal(continuityResults.some((result) => /ledger|pipeline|actual cash|transaction reader/i.test(result.answer)), false, "long conversation must not leak accounting language.");
 
@@ -1141,7 +1178,7 @@ async function main() {
         "customer reasoning reaches the bounded local model lane without cards or business context",
         "customer planning and feedback use real model answers instead of canned intent copy",
         "organization advice remains action-free and excludes money, plan, asset, and pulse status",
-        "natural follow-ups, exact object/list/causal/respectively/comparative/event/membership references, scoped corrections, and useful ambiguity clarification stay coherent across 116 browser turns",
+        "natural follow-ups, exact object/list/causal/respectively/comparative/event/membership/rule references, scoped corrections, and useful ambiguity clarification stay coherent across 139 browser turns",
         "durable memory survives reload inside organization A",
         "organization B receives no A memory, history, request context, or visible chat",
         "organization A returns without organization B contamination",

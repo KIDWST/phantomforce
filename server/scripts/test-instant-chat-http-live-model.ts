@@ -785,6 +785,54 @@ assert.doesNotMatch(restoredOriginalPlan.answer, /Thursday|3 PM|Room 7/i);
 assert.match(partialRollbackFinal.answer.trim(), /^navy\s*\|\s*white\s*\|\s*orange[.!]?$/i);
 assert.doesNotMatch(partialRollbackFinal.answer, /black|gold|green/i);
 
+const sufficientRules: Turn[] = [];
+rows.push(await ask(adminToken, "Rule: If the badge is valid, the door opens.", sufficientRules));
+rows.push(await ask(adminToken, "The badge is valid.", sufficientRules));
+const sufficientOutcome = await ask(adminToken, "Does the door open? Yes or no only.", sufficientRules);
+rows.push(sufficientOutcome);
+assert.equal(sufficientOutcome.modelId, "phantom-reference-resolver");
+assert.equal(sufficientOutcome.answer, "Yes");
+const converseRules: Turn[] = [];
+rows.push(await ask(adminToken, "Rule: If the badge is valid, the door opens.", converseRules));
+rows.push(await ask(adminToken, "The door is open.", converseRules));
+const converseAnswer = await ask(adminToken, "Is the badge valid? Yes or no only.", converseRules);
+rows.push(converseAnswer);
+assert.equal(converseAnswer.modelId, "phantom-clarifier");
+assert.match(converseAnswer.answer, /does not prove the converse/i);
+
+const prerequisiteRules: Turn[] = [];
+rows.push(await ask(customerToken, "Rule: Publishing requires approval.", prerequisiteRules));
+rows.push(await ask(customerToken, "Approval is missing.", prerequisiteRules));
+const blockedPublishing = await ask(customerToken, "Can publishing happen?", prerequisiteRules);
+rows.push(blockedPublishing);
+assert.equal(blockedPublishing.modelId, "phantom-reference-resolver");
+assert.equal(blockedPublishing.answer, "No. Publishing is blocked because approval is missing.");
+const publishingRequirement = await ask(customerToken, "What is blocking publishing? Requirement only.", prerequisiteRules);
+rows.push(publishingRequirement);
+assert.equal(publishingRequirement.answer, "Approval");
+
+const correctedPrerequisites: Turn[] = [];
+rows.push(await ask(adminToken, "Rule: Publishing requires approval.", correctedPrerequisites));
+rows.push(await ask(adminToken, "Correction: Publishing requires legal review instead of approval.", correctedPrerequisites));
+rows.push(await ask(adminToken, "Approval is complete. Legal review is missing.", correctedPrerequisites));
+const correctedPrerequisiteAnswer = await ask(adminToken, "Can publishing happen?", correctedPrerequisites);
+rows.push(correctedPrerequisiteAnswer);
+assert.equal(correctedPrerequisiteAnswer.answer, "No. Publishing is blocked because legal review is missing.");
+
+const unlessRules: Turn[] = [];
+rows.push(await ask(customerToken, "Rule: The backup runs unless maintenance mode is active.", unlessRules));
+rows.push(await ask(customerToken, "Maintenance mode is inactive.", unlessRules));
+const unlessAnswer = await ask(customerToken, "Will the backup run? Yes or no only.", unlessRules);
+rows.push(unlessAnswer);
+assert.equal(unlessAnswer.answer, "Yes");
+
+const cyclicRules: Turn[] = [];
+rows.push(await ask(adminToken, "Rules: Alpha requires Beta. Beta requires Alpha.", cyclicRules));
+const cyclicAnswer = await ask(adminToken, "What is required before Alpha?", cyclicRules);
+rows.push(cyclicAnswer);
+assert.equal(cyclicAnswer.modelId, "phantom-clarifier");
+assert.match(cyclicAnswer.answer, /cycle: Alpha > Beta > Alpha/i);
+
   console.log(JSON.stringify({
     ok: true,
     model,
@@ -843,6 +891,10 @@ assert.doesNotMatch(partialRollbackFinal.answer, /black|gold|green/i);
     triStateMembershipVerified: true,
     splitRosterMembershipVerified: true,
     outsideRosterClarificationVerified: true,
+    conditionalRulesVerified: true,
+    necessaryVsSufficientVerified: true,
+    correctedPrerequisitesVerified: true,
+    ruleConflictCycleVerified: true,
   }, null, 2));
 } finally {
   ownedServer?.kill();

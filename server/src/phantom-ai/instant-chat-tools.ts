@@ -1,4 +1,5 @@
 import { selectRelevantInstantTurns } from "./instant-chat-context.js";
+import { buildConditionalRuleReply } from "./instant-chat-rules.js";
 
 export type InstantChatToolTurn = {
   user: string;
@@ -995,6 +996,7 @@ export function buildInstantChatToolReply(userRequest: string, turns: InstantCha
     || pairedReferenceReply(userRequest, turns)
     || respectivelyReferenceReply(userRequest, turns)
     || confirmationMembershipReply(userRequest, turns)
+    || buildConditionalRuleReply(userRequest, selectRelevantInstantTurns(turns, userRequest))
     || namedQuantityComparisonReply(userRequest, turns)
     || orderedEventReferenceReply(userRequest, turns)
     || namedPredicateReferenceReply(userRequest, turns)

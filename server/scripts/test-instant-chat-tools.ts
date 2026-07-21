@@ -381,6 +381,145 @@ assert.deepEqual(
   ]),
   { output_text: "Zara is not in the stated launch team. Should Zara join the group?", tool_id: "phantom-clarifier" },
 );
+
+const sufficientRuleTurns = [
+  { user: "Rule: If the badge is valid, the door opens.", assistant: "Rule noted." },
+  { user: "The badge is valid.", assistant: "The badge is valid." },
+];
+assert.deepEqual(
+  buildInstantChatToolReply("Does the door open? Yes or no only.", sufficientRuleTurns),
+  { output_text: "Yes", tool_id: "phantom-reference-resolver" },
+);
+assert.deepEqual(
+  buildInstantChatToolReply("Does the door open? Yes or no only.", sufficientRuleTurns.slice(0, 1)),
+  { output_text: "I know the door opens if the badge is valid, but I do not know whether the badge is valid. Is the badge valid?", tool_id: "phantom-clarifier" },
+);
+assert.deepEqual(
+  buildInstantChatToolReply("Is the badge valid? Yes or no only.", [
+    sufficientRuleTurns[0],
+    { user: "The door is open.", assistant: "The door is open." },
+  ]),
+  { output_text: "The rule only says: if the badge is valid, the door opens. It does not prove the converse. Is the badge valid?", tool_id: "phantom-clarifier" },
+);
+
+const requiredRuleTurns = [
+  { user: "Rule: Publishing requires approval.", assistant: "Rule noted." },
+  { user: "Approval is missing.", assistant: "Approval is missing." },
+];
+assert.deepEqual(
+  buildInstantChatToolReply("Can publishing happen?", requiredRuleTurns),
+  { output_text: "No. Publishing is blocked because approval is missing.", tool_id: "phantom-reference-resolver" },
+);
+assert.deepEqual(
+  buildInstantChatToolReply("What is blocking publishing? Requirement only.", requiredRuleTurns),
+  { output_text: "Approval", tool_id: "phantom-reference-resolver" },
+);
+assert.deepEqual(
+  buildInstantChatToolReply("Did publishing happen? Yes or no only.", [
+    requiredRuleTurns[0],
+    { user: "Approval is complete.", assistant: "Approval is complete." },
+  ]),
+  { output_text: "Approval is satisfied, but that does not prove publishing happened. Did publishing happen?", tool_id: "phantom-clarifier" },
+);
+assert.deepEqual(
+  buildInstantChatToolReply("Was approval complete? Yes or no only.", [
+    requiredRuleTurns[0],
+    { user: "Publishing happened.", assistant: "Publishing happened." },
+  ]),
+  { output_text: "Yes", tool_id: "phantom-reference-resolver" },
+);
+
+const unlessRuleTurns = [
+  { user: "Rule: The backup runs unless maintenance mode is active.", assistant: "Rule noted." },
+  { user: "Maintenance mode is active.", assistant: "Maintenance mode is active." },
+];
+assert.deepEqual(
+  buildInstantChatToolReply("Will the backup run? Yes or no only.", unlessRuleTurns),
+  { output_text: "No", tool_id: "phantom-reference-resolver" },
+);
+assert.deepEqual(
+  buildInstantChatToolReply("Will the backup run? Yes or no only.", [
+    unlessRuleTurns[0],
+    { user: "Maintenance mode is inactive.", assistant: "Maintenance mode is inactive." },
+  ]),
+  { output_text: "Yes", tool_id: "phantom-reference-resolver" },
+);
+assert.deepEqual(
+  buildInstantChatToolReply("Will the backup run? Yes or no only.", unlessRuleTurns.slice(0, 1)),
+  { output_text: "I know the backup runs unless maintenance mode is active, but I do not know whether maintenance mode is active. Is maintenance mode active?", tool_id: "phantom-clarifier" },
+);
+
+const dependencyTurns = [
+  { user: "Rules: Launch requires QA. QA requires the build.", assistant: "Rules noted." },
+  { user: "The build is ready. QA is not complete.", assistant: "Build ready; QA incomplete." },
+];
+assert.deepEqual(
+  buildInstantChatToolReply("What is blocking launch? Requirement only.", dependencyTurns),
+  { output_text: "QA", tool_id: "phantom-reference-resolver" },
+);
+assert.deepEqual(
+  buildInstantChatToolReply("What is required before launch? Use A > B.", dependencyTurns),
+  { output_text: "QA > Build", tool_id: "phantom-reference-resolver" },
+);
+
+const replacedRequirementTurns = [
+  { user: "Rule: Publishing requires approval.", assistant: "Rule noted." },
+  { user: "Correction: Publishing requires legal review instead of approval.", assistant: "Requirement replaced." },
+  { user: "Approval is complete. Legal review is missing.", assistant: "Statuses noted." },
+];
+assert.deepEqual(
+  buildInstantChatToolReply("Can publishing happen?", replacedRequirementTurns),
+  { output_text: "No. Publishing is blocked because legal review is missing.", tool_id: "phantom-reference-resolver" },
+);
+
+assert.deepEqual(
+  buildInstantChatToolReply("What is required before Alpha?", [{
+    user: "Rules: Alpha requires Beta. Beta requires Alpha.",
+    assistant: "Those rules form a cycle.",
+  }]),
+  { output_text: "The stated requirements contain a cycle: Alpha > Beta > Alpha. Which dependency should change?", tool_id: "phantom-clarifier" },
+);
+assert.deepEqual(
+  buildInstantChatToolReply("Does the door open? Yes or no only.", [
+    { user: "Rules: If the badge is valid, the door opens. If the badge is valid, the door does not open.", assistant: "Those rules conflict." },
+    { user: "The badge is valid.", assistant: "The badge is valid." },
+  ]),
+  { output_text: "The stated rules conflict about whether the door opens when the badge is valid. Which rule should I use?", tool_id: "phantom-clarifier" },
+);
+assert.deepEqual(
+  buildInstantChatToolReply("What does Gamma require?", dependencyTurns),
+  { output_text: "Gamma is not in the stated rules. What rule should connect Gamma?", tool_id: "phantom-clarifier" },
+);
+
+const longRuleContext = [
+  { user: "Rule: Publishing requires approval.", assistant: "Rule noted." },
+  { user: "Tell me a tiny joke.", assistant: "A byte walked into a bar." },
+  { user: "Name a color.", assistant: "Teal." },
+  { user: "What is seven plus five?", assistant: "12" },
+  { user: "Give me a short title.", assistant: "Clear Signal" },
+  { user: "Approval is missing.", assistant: "Approval is missing." },
+];
+assert.equal(needsInstantConversationContext(longRuleContext, "What is blocking publishing? Requirement only."), true);
+assert.equal(selectRelevantInstantTurns(longRuleContext, "What is blocking publishing? Requirement only.")[0].user, "Rule: Publishing requires approval.");
+assert.deepEqual(
+  buildInstantChatToolReply("What is blocking publishing? Requirement only.", longRuleContext),
+  { output_text: "Approval", tool_id: "phantom-reference-resolver" },
+);
+
+const correctedLongRuleContext = [
+  { user: "Rule: Publishing requires approval.", assistant: "Rule noted." },
+  { user: "Name a planet.", assistant: "Saturn." },
+  { user: "Correction: Publishing requires legal review instead of approval.", assistant: "Requirement replaced." },
+  { user: "Name a moon.", assistant: "Titan." },
+  { user: "Approval is complete. Legal review is missing.", assistant: "Statuses noted." },
+];
+const selectedCorrectedRules = selectRelevantInstantTurns(correctedLongRuleContext, "Can publishing happen?");
+assert.equal(selectedCorrectedRules[0].user, "Rule: Publishing requires approval.");
+assert.match(selectedCorrectedRules[2].user, /Legal review is missing/);
+assert.deepEqual(
+  buildInstantChatToolReply("Can publishing happen?", correctedLongRuleContext),
+  { output_text: "No. Publishing is blocked because legal review is missing.", tool_id: "phantom-reference-resolver" },
+);
 const overlappingMeetingTurns = [
   { user: "The meeting is Tuesday at 2 PM in Room 4.", assistant: "Tuesday at 2 PM in Room 4." },
   { user: "Correction: Thursday at 4 PM in Room 9.", assistant: "Thursday at 4 PM in Room 9." },
