@@ -24,6 +24,7 @@ const repoRoot = resolve(moduleDir, "../../..");
 
 export const DEFAULT_BRAIN_MEMORY_PATH = resolve(repoRoot, ".phantom", "brain-memory.jsonl");
 export const DEFAULT_BRAIN_EVENTS_PATH = resolve(repoRoot, ".phantom", "brain-events.jsonl");
+export const DEFAULT_BRAIN_SKILLS_PATH = resolve(repoRoot, ".phantom", "brain-skills.jsonl");
 
 const OWNER_TENANT_ID = "phantomforce-owner";
 const MAX_TEXT_CHARS = 1200;
@@ -97,6 +98,37 @@ export type BrainEventRecord = {
   metadata: Record<string, string | number | boolean | null>;
 };
 
+/* A Skill ("superpower") is an owner-editable playbook: a trigger description
+   for WHEN it applies and process instructions for HOW Phantom should work
+   the request. Skills are engaged by lexical trigger match at context-compose
+   time and injected into the micro-prompt VISIBLY — the chat response reports
+   which skills were engaged. Skills are procedures, not facts (facts live in
+   the Memory Vault) and they carry no execution authority of their own: every
+   approval gate and tool rule still applies to whatever the model does with
+   the playbook. */
+export type BrainSkillRecord = {
+  id: string;
+  scope: {
+    tenantId: string;
+    actorUserId: string;
+    sessionId: string;
+  };
+  name: string;
+  /* WHEN to engage — matched against the user's request. */
+  trigger: string;
+  /* HOW to work the request — the playbook injected into the micro-prompt. */
+  instructions: string;
+  enabled: boolean;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+  lastUsedAt: string | null;
+  useCount: number;
+  editable: boolean;
+  deletable: boolean;
+  source: string;
+};
+
 export type BrainBehavioralProfile = {
   tonePreference: string;
   detailDepthPreference: string;
@@ -117,6 +149,7 @@ export type BrainContextPack = {
   currentMessage: string;
   surface: BrainSurface;
   relevantMemories: Array<BrainMemoryRecord & { score: number; reason: string }>;
+  engagedSkills: Array<{ id: string; name: string; reason: string }>;
   activeRules: string[];
   systemState: Awaited<ReturnType<typeof getBrainSystemHealth>>;
   behavioralProfile: BrainBehavioralProfile;
@@ -129,6 +162,7 @@ export type BrainContextPack = {
     reasons: string[];
     memoryCandidates: number;
     injectedMemoryIds: string[];
+    injectedSkillIds: string[];
     noModelWeightClaims: true;
   };
 };
@@ -136,6 +170,7 @@ export type BrainContextPack = {
 export type BrainStoreOptions = {
   memoryPath?: string;
   eventsPath?: string;
+  skillsPath?: string;
   tenantId?: string | null;
   readOnly?: boolean;
 };
@@ -148,10 +183,15 @@ function resolveBrainEventsPath(pathFromEnv = process.env.PHANTOM_BRAIN_EVENTS_P
   return pathFromEnv?.trim() ? resolve(pathFromEnv) : DEFAULT_BRAIN_EVENTS_PATH;
 }
 
+function resolveBrainSkillsPath(pathFromEnv = process.env.PHANTOM_BRAIN_SKILLS_PATH) {
+  return pathFromEnv?.trim() ? resolve(pathFromEnv) : DEFAULT_BRAIN_SKILLS_PATH;
+}
+
 function storePaths(options: BrainStoreOptions = {}) {
   return {
     memoryPath: options.memoryPath ?? resolveBrainMemoryPath(),
     eventsPath: options.eventsPath ?? resolveBrainEventsPath(),
+    skillsPath: options.skillsPath ?? resolveBrainSkillsPath(),
   };
 }
 
@@ -243,6 +283,20 @@ function isEventRecord(value: unknown): value is BrainEventRecord {
       record.scope &&
       typeof record.scope.tenantId === "string" &&
       typeof record.summary === "string",
+  );
+}
+
+function isSkillRecord(value: unknown): value is BrainSkillRecord {
+  const record = value as Partial<BrainSkillRecord>;
+  return Boolean(
+    record &&
+      typeof record.id === "string" &&
+      record.scope &&
+      typeof record.scope.tenantId === "string" &&
+      typeof record.name === "string" &&
+      typeof record.trigger === "string" &&
+      typeof record.instructions === "string" &&
+      typeof record.createdAt === "string",
   );
 }
 
@@ -516,6 +570,213 @@ export async function updateBrainMemory(
 
 export async function forgetBrainMemory(session: AccessSession, id: string, options: BrainStoreOptions = {}) {
   return updateBrainMemory(session, id, { active: false }, options);
+}
+
+/* ---------------------------------------------------------------------------
+   Skills ("superpowers") — owner-editable playbooks engaged by trigger match.
+   Same jsonl append-with-latest-version-fold mechanics as the Memory Vault. */
+
+const MAX_SKILLS_RETURNED = 60;
+const MAX_SKILL_INSTRUCTION_CHARS = 2000;
+
+/* Seeded playbooks are honest process guidance only — no invented facts, no
+   fake capability claims. All are editable and deletable by the owner. */
+function bootstrapBrainSkills(scope: ReturnType<typeof scopeForSession>, now: string): BrainSkillRecord[] {
+  const seeds = [
+    {
+      name: "Client follow-up",
+      trigger: "Following up with a client, lead, or prospect; checking in; re-engaging someone who went quiet; overdue follow-ups.",
+      instructions:
+        "1) Pull what is actually known about this client from CRM records and prior conversation context before writing anything. 2) Reference one concrete, real detail from the relationship (last project, last message, open item) — never invent history. 3) Keep the draft short: two or three sentences, one clear next step, no filler. 4) Match the owner's direct, human tone; no corporate fluff. 5) Present it as a DRAFT — sending is approval-gated, so end by asking whether to queue it for approval, and never claim it was sent.",
+    },
+    {
+      name: "Content campaign",
+      trigger: "Planning content, a posting schedule, a campaign, social posts for the week, content ideas for a brand or client.",
+      instructions:
+        "1) Start from existing unused assets (Media Lab, Asset Cloud, Content Hub library) before proposing new production. 2) Propose a concrete slate: for each piece give platform, hook, format, and the asset it builds on. 3) Sequence it across real days rather than a vague list. 4) Flag which pieces need new generation (cost) versus reuse (free). 5) Publishing is approval-gated — plan and draft freely, but label every publish step as needing the owner's yes.",
+    },
+    {
+      name: "Proposal draft",
+      trigger: "Writing a proposal, quote, pitch, pricing an engagement, scoping work for a client.",
+      instructions:
+        "1) Ask for or confirm the three facts a proposal cannot be honest without: deliverable, timeline, and budget range — do not guess prices. 2) Structure: what they get, what it costs, when it lands, what happens next. 3) Use plain sentences a client can skim; no template boilerplate. 4) Reference actual prior work or assets where they genuinely exist. 5) Output is a draft for the Proposals surface — never claim it was sent.",
+    },
+    {
+      name: "Weekly business review",
+      trigger: "How is the business doing, weekly review, status of everything, what happened this week, business health check.",
+      instructions:
+        "1) Read real state only: approvals pending, agent runs, automations, CRM movement, finance transactions — never estimate a number that a store can answer exactly. 2) Lead with the three things that most need a decision, each with its evidence. 3) Separate what changed from what is standing. 4) End with one recommended next decision, not a list of ten. 5) If a domain is disconnected or empty, say so plainly instead of padding.",
+    },
+    {
+      name: "Debug my setup",
+      trigger: "Something is broken, not working, erroring, down, disconnected; debugging local services, providers, or integrations.",
+      instructions:
+        "1) Check reported system health first (providers, local model, media toolchain, rembg, automations) and cite what the status routes actually say. 2) Give exact PowerShell commands for this machine, one step at a time, in the order that isolates the failure fastest. 3) Distinguish service-down from intentionally-gated — fail-closed gates are features, not bugs. 4) After a fix, verify with a concrete probe before declaring it working.",
+    },
+  ];
+  return seeds.map((seed) => ({
+    id: `brain-skill-seed-${scope.tenantId}-${seed.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
+    scope: { ...scope, actorUserId: "bootstrap-superpowers" },
+    name: seed.name,
+    trigger: seed.trigger,
+    instructions: seed.instructions,
+    enabled: true,
+    active: true,
+    createdAt: now,
+    updatedAt: now,
+    lastUsedAt: null,
+    useCount: 0,
+    editable: true,
+    deletable: true,
+    source: "superpowers_seed",
+  }));
+}
+
+async function ensureBrainBootstrapSkills(session: AccessSession, options: BrainStoreOptions = {}) {
+  const { skillsPath } = storePaths(options);
+  const scope = scopeForSession(session, options);
+  const read = await readJsonl(skillsPath, isSkillRecord, 2000);
+  const hasTenantRecords = read.records.some((record) => record.scope.tenantId === scope.tenantId);
+  if (hasTenantRecords) return;
+  const now = new Date().toISOString();
+  for (const record of bootstrapBrainSkills(scope, now)) {
+    await appendJsonl(skillsPath, record);
+  }
+}
+
+export async function listBrainSkills(
+  session: AccessSession,
+  options: BrainStoreOptions & { includeInactive?: boolean; limit?: number } = {},
+) {
+  if (!options.readOnly) await ensureBrainBootstrapSkills(session, options);
+  const { skillsPath } = storePaths(options);
+  const scope = scopeForSession(session, options);
+  const read = await readJsonl(skillsPath, isSkillRecord, 2000);
+  const latest = new Map<string, BrainSkillRecord>();
+  for (const record of read.records) {
+    if (record.scope.tenantId !== scope.tenantId) continue;
+    if (record.scope.actorUserId !== scope.actorUserId && !record.scope.actorUserId.startsWith("bootstrap")) continue;
+    const previous = latest.get(record.id);
+    if (!previous || record.updatedAt.localeCompare(previous.updatedAt) >= 0) latest.set(record.id, record);
+  }
+  const limit = Math.min(Math.max(Math.floor(options.limit ?? MAX_SKILLS_RETURNED), 1), MAX_SKILLS_RETURNED);
+  return {
+    storePath: skillsPath,
+    malformed: read.malformed,
+    skills: [...latest.values()]
+      .filter((record) => options.includeInactive || record.active)
+      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+      .slice(0, limit),
+  };
+}
+
+export async function createBrainSkill(
+  session: AccessSession,
+  input: { name?: unknown; trigger?: unknown; instructions?: unknown; enabled?: unknown; source?: unknown },
+  options: BrainStoreOptions = {},
+) {
+  const name = sanitizeText(input.name, 80);
+  const trigger = sanitizeText(input.trigger, 300);
+  const instructions = sanitizeText(input.instructions, MAX_SKILL_INSTRUCTION_CHARS);
+  if (!name) throw new Error("skill_name_required");
+  if (!trigger) throw new Error("skill_trigger_required");
+  if (!instructions) throw new Error("skill_instructions_required");
+  const existing = await listBrainSkills(session, { ...options, includeInactive: true });
+  if (existing.skills.some((record) => record.active && record.name.toLowerCase() === name.toLowerCase())) {
+    throw new Error("skill_name_taken");
+  }
+  const now = new Date().toISOString();
+  const record: BrainSkillRecord = {
+    id: `brain-skill-${randomUUID()}`,
+    scope: scopeForSession(session, options),
+    name,
+    trigger,
+    instructions,
+    enabled: input.enabled === undefined ? true : Boolean(input.enabled),
+    active: true,
+    createdAt: now,
+    updatedAt: now,
+    lastUsedAt: null,
+    useCount: 0,
+    editable: true,
+    deletable: true,
+    source: sanitizeText(input.source || "owner", 80) || "owner",
+  };
+  await appendJsonl(storePaths(options).skillsPath, record);
+  await appendBrainEvent(
+    session,
+    {
+      surface: "brain",
+      type: "skill_created",
+      summary: `Skill created: ${record.name}`,
+      outcome: "saved",
+      importance: "medium",
+      safeForMemory: true,
+      source: "brain_skills",
+      metadata: { skillId: record.id },
+    },
+    options,
+  );
+  return record;
+}
+
+export async function updateBrainSkill(
+  session: AccessSession,
+  id: string,
+  patch: { name?: unknown; trigger?: unknown; instructions?: unknown; enabled?: unknown; active?: unknown },
+  options: BrainStoreOptions = {},
+) {
+  const current = (await listBrainSkills(session, { ...options, includeInactive: true })).skills.find((record) => record.id === id);
+  if (!current || !current.editable) throw new Error("skill_not_found");
+  const next: BrainSkillRecord = {
+    ...current,
+    name: patch.name === undefined ? current.name : sanitizeText(patch.name, 80) || current.name,
+    trigger: patch.trigger === undefined ? current.trigger : sanitizeText(patch.trigger, 300) || current.trigger,
+    instructions:
+      patch.instructions === undefined
+        ? current.instructions
+        : sanitizeText(patch.instructions, MAX_SKILL_INSTRUCTION_CHARS) || current.instructions,
+    enabled: patch.enabled === undefined ? current.enabled : Boolean(patch.enabled),
+    active: patch.active === undefined ? current.active : Boolean(patch.active),
+    updatedAt: new Date().toISOString(),
+  };
+  await appendJsonl(storePaths(options).skillsPath, next);
+  await appendBrainEvent(
+    session,
+    {
+      surface: "brain",
+      type: next.active ? "skill_updated" : "skill_deleted",
+      summary: next.active ? `Skill updated: ${next.name}` : `Skill deleted: ${current.name}`,
+      outcome: next.active ? "updated" : "deleted",
+      importance: "medium",
+      safeForMemory: next.active,
+      source: "brain_skills",
+      metadata: { skillId: next.id },
+    },
+    options,
+  );
+  return next;
+}
+
+export async function deleteBrainSkill(session: AccessSession, id: string, options: BrainStoreOptions = {}) {
+  return updateBrainSkill(session, id, { active: false }, options);
+}
+
+/* Trigger scoring mirrors scoreMemory's lexical approach: request tokens
+   matched against the skill's name + trigger text. Deliberately conservative
+   — a skill engages only on a real overlap, and at most two engage at once. */
+function scoreSkill(skill: BrainSkillRecord, message: string) {
+  const haystack = `${skill.name} ${skill.trigger}`.toLowerCase();
+  const tokens = tokenize(message);
+  let score = 0;
+  const reasons: string[] = [];
+  for (const token of tokens) {
+    if (haystack.includes(token)) {
+      score += 1.6;
+      if (reasons.length < 3) reasons.push(`matched "${token}"`);
+    }
+  }
+  return { score, reason: reasons.join("; ") };
 }
 
 export async function readBrainEvents(
@@ -858,6 +1119,13 @@ export async function composeBrainContext(
     .filter((memory) => memory.score >= 5.6)
     .sort((left, right) => right.score - left.score)
     .slice(0, 8);
+  const skillsResult = await listBrainSkills(session, { ...options });
+  const engagedSkillRecords = skillsResult.skills
+    .filter((skill) => skill.enabled && skill.active)
+    .map((skill) => ({ skill, ...scoreSkill(skill, message) }))
+    .filter((entry) => entry.score >= 3.2)
+    .sort((left, right) => right.score - left.score)
+    .slice(0, 2);
   const profile = deriveBehavioralProfile(memoriesResult.memories, eventsResult.events);
   const systemState = await getBrainSystemHealth();
   const intent = suggestIntent(message);
@@ -879,6 +1147,9 @@ export async function composeBrainContext(
     `Tone: ${profile.tonePreference}. Detail: ${profile.detailDepthPreference}.`,
     `Debug style: ${profile.preferredDebuggingStyle}.`,
     `Approval mode: ${profile.approvalStrictness}.`,
+    ...engagedSkillRecords.slice(0, 1).map((entry) =>
+      `Skill engaged - ${entry.skill.name}. Follow this playbook: ${entry.skill.instructions}`),
+    ...engagedSkillRecords.slice(1).map((entry) => `Also relevant skill: ${entry.skill.name} (${entry.skill.trigger})`),
     ...scored.slice(0, 6).map((memory) => `Memory: ${memory.text}`),
     needsApproval
       ? "This request touches an approval-gated action. Draft/queue/review only; do not execute outside-world work silently."
@@ -889,6 +1160,7 @@ export async function composeBrainContext(
     currentMessage: message,
     surface,
     relevantMemories: scored,
+    engagedSkills: engagedSkillRecords.map((entry) => ({ id: entry.skill.id, name: entry.skill.name, reason: entry.reason })),
     activeRules: [...new Set(activeRules)].slice(0, 12),
     systemState,
     behavioralProfile: profile,
@@ -896,7 +1168,7 @@ export async function composeBrainContext(
     riskLevel,
     needsApproval,
     proposedActionType: actionType,
-    microPrompt: redactSensitiveText(microPromptLines.join("\n")).slice(0, 2400),
+    microPrompt: redactSensitiveText(microPromptLines.join("\n")).slice(0, 3400),
     debug: {
       reasons: [
         `selected ${scored.length} of ${memoriesResult.memories.length} active memories`,
@@ -906,6 +1178,7 @@ export async function composeBrainContext(
       ],
       memoryCandidates: memoriesResult.memories.length,
       injectedMemoryIds: scored.map((memory) => memory.id),
+      injectedSkillIds: engagedSkillRecords.map((entry) => entry.skill.id),
       noModelWeightClaims: true,
     },
   };

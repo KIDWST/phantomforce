@@ -12,9 +12,9 @@ import {
   recentChatTurns, addMemory,
   ctx, session, loadPhantomLoop, savePhantomLoop, loopProviderName, modelDisplayLabel,
   getPhantomLaneTarget, loadPhantomLaneConfig, workspaceStorageGetItem, wsName,
-} from "./store.js?v=phantom-live-20260719-66";
-import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260719-66";
-import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260719-66";
+} from "./store.js?v=phantom-live-20260719-67";
+import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260719-67";
+import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260719-67";
 const classifyPhantomIntent = (text) => deriveActionContract(classifyRaw(text));
 
 /* Cross-surface handoff: chat tells the Websites page which project to focus
@@ -433,6 +433,9 @@ async function askHermesBrain(raw, intent, settings) {
       open: null,
       intent,
       hermes: payload.hermes || null,
+      /* Skills the brain visibly engaged for this reply (names only - the
+         playbook text stays server-side). Empty when none matched. */
+      skills: (payload.brain?.engaged_skills || []).map((skill) => skill?.name).filter(Boolean),
     };
   } catch {
     return null;

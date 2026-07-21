@@ -6,48 +6,48 @@ import {
   redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260719-66";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260719-66";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260719-66";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260719-66";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260719-66";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260719-66";
-import { mountManagedGrowthReport } from "./managedgrowth.js?v=phantom-live-20260719-66";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260719-66";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260719-66";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260719-66";
-import { mountPhantomAI } from "./phantomai.js?v=phantom-live-20260719-66";
-import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260719-66";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260719-66";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260719-66";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260719-66";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode, refreshCompanionCore } from "./companion.js?v=phantom-live-20260719-66";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260719-66";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260719-66";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260719-66";
-import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260719-66";
-import { mountAmbient } from "./ambient.js?v=phantom-live-20260719-66";
-import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260719-66";
+} from "./store.js?v=phantom-live-20260719-67";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260719-67";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260719-67";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260719-67";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260719-67";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260719-67";
+import { mountManagedGrowthReport } from "./managedgrowth.js?v=phantom-live-20260719-67";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260719-67";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260719-67";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260719-67";
+import { mountPhantomAI } from "./phantomai.js?v=phantom-live-20260719-67";
+import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260719-67";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260719-67";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260719-67";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260719-67";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode, refreshCompanionCore } from "./companion.js?v=phantom-live-20260719-67";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260719-67";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260719-67";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260719-67";
+import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260719-67";
+import { mountAmbient } from "./ambient.js?v=phantom-live-20260719-67";
+import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260719-67";
 import {
   fetchAuthConfig, databaseLogin, databaseLogout, databaseSignup, databaseForgotUsername, databaseForgotPassword,
   databaseResetPassword, databaseAcceptInvitation, databaseVerify2fa, databaseStart2faSetup, databaseConfirm2fa, databaseRegenerate2faBackupCodes, databaseDisable2fa,
   switchOrg, fetchAuthMe, fetchEntitlementsSummary,
-} from "./orgs.js?v=phantom-live-20260719-66";
-import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260719-66";
-import { assetsAvailable } from "./orgs.js?v=phantom-live-20260719-66";
-import { renderPhantomStore } from "./phantomstore.js?v=phantom-live-20260719-66";
-import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260719-66";
+} from "./orgs.js?v=phantom-live-20260719-67";
+import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260719-67";
+import { assetsAvailable } from "./orgs.js?v=phantom-live-20260719-67";
+import { renderPhantomStore } from "./phantomstore.js?v=phantom-live-20260719-67";
+import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260719-67";
 // PhantomPlay V2 platform shell (Home/Solo/Friends/Workspace/Dev Hub) - opt-in
 // while it hardens: set localStorage "pf.phantomplay.v2" = "1" (the V2 shell has
 // a "Classic view" button to switch back). Classic stays the default experience.
-import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260719-66";
+import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260719-67";
 const phantomPlayV2Opted = () => { try { return localStorage.getItem("pf.phantomplay.v2") === "1"; } catch { return false; } };
-import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260719-66";
+import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260719-67";
 import {
   customizeNavigation,
   loadOrganizationCustomization,
-} from "./customization.js?v=phantom-live-20260719-66";
-import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260719-66";
+} from "./customization.js?v=phantom-live-20260719-67";
+import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260719-67";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -1429,7 +1429,7 @@ const MODES = {
   admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260719-66";
+const POSE_VERSION = "phantom-live-20260719-67";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -2313,6 +2313,18 @@ function chatTypingOn(label = "") {
 function chatTypingOff() {
   chatLogEl()?.querySelector(".msg-typing")?.remove();
 }
+/* Visible skill engagement - the brain reports which owner playbooks shaped
+   this reply; showing them is part of the memory-used-visibly principle. */
+function chatAttachSkillChips(skillNames) {
+  const log = $("[data-chat-log]");
+  if (!log || !skillNames?.length) return;
+  const wrap = document.createElement("div");
+  wrap.className = "chat-skill-chips";
+  wrap.innerHTML = skillNames.slice(0, 2).map((name) => `<span>${esc(String(name))} skill engaged</span>`).join("");
+  log.appendChild(wrap);
+  log.scrollTop = log.scrollHeight;
+}
+
 function chatAttachCards(cards) {
   if (!cards?.length) return;
   for (let i = chatHistory.length - 1; i >= 0; i--) {
@@ -2493,6 +2505,7 @@ function runCommand(raw) {
       // never make a finished response feel slow.
       speak(r.say, "", null, { instant: true });
       if (r.cards?.length) chatAttachCards(r.cards);
+      if (r.skills?.length) chatAttachSkillChips(r.skills);
       rememberConversation({ prompt: raw, reply: r.say, mode: activeMode, route: r.open || "" });
       renderConsole();
       stageReact("answer", 1100);

@@ -13777,3 +13777,21 @@ body .phantom .workspace-page :where(
   .decision-card { padding: 12px 13px 11px 15px; }
   .decision-actions .btn { flex: 1 1 auto; }
 }
+
+/* ---------------- skills (superpowers) ---------------- */
+/* Chips under a chat reply naming the playbooks the brain visibly engaged. */
+.chat-skill-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 8px 2px; }
+.chat-skill-chips span {
+  padding: 2.5px 10px; border-radius: 999px;
+  font: 500 10px "Spline Sans Mono", monospace; letter-spacing: 0.05em; text-transform: uppercase;
+  color: var(--neon); border: 1px solid rgba(91, 76, 255, 0.32); background: rgba(91, 76, 255, 0.07);
+}
+.brain-skill-add { display: grid; gap: 8px; grid-template-columns: 1fr; }
+.brain-skill-add input, .brain-skill-add textarea {
+  width: 100%; padding: 9px 12px; border-radius: 10px;
+  border: 1px solid var(--line); background: rgba(255, 255, 255, 0.9); color: var(--ink);
+  font: inherit;
+}
+.brain-skill-add button { justify-self: start; }
+.brain-skill p b { font-size: 13.5px; }
+.brain-skill small { display: block; margin-top: 2px; color: var(--dim); }

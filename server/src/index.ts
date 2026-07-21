@@ -411,10 +411,14 @@ import {
   buildBrainStatus,
   composeBrainContext,
   createBrainMemory,
+  createBrainSkill,
+  deleteBrainSkill,
   forgetBrainMemory,
   listBrainMemories,
+  listBrainSkills,
   recordBrainFeedback,
   updateBrainMemory,
+  updateBrainSkill,
   type BrainStoreOptions,
 } from "./phantom-ai/neural-spine.js";
 import { detectRembg, runRembgRemoveBackground } from "./phantom-ai/rembg-bridge.js";
@@ -6854,6 +6858,67 @@ app.delete("/phantom-ai/brain/memories/:id", async (request, reply) => {
   };
 });
 
+/* Skills ("superpowers") — owner-editable playbooks the brain engages by
+   trigger match. Same auth + tenant scoping as the Memory Vault routes. */
+app.get("/phantom-ai/brain/skills", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const query = (request.query ?? {}) as { include_inactive?: unknown; tenant_id?: unknown };
+  const brainOptions = brainStoreOptionsForSession(session, query);
+  const skills = await listBrainSkills(session, { ...brainOptions, includeInactive: query.include_inactive === "true" });
+  return {
+    ok: true,
+    session,
+    skills,
+    brain_scope: brainScopeProofForSession(session, query),
+    provider_called: false,
+    network_call_performed: false,
+    approval_executed: false,
+    external_action_executed: false,
+  };
+});
+
+app.post("/phantom-ai/brain/skills", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const body = (request.body ?? {}) as Record<string, unknown>;
+  const brainOptions = brainStoreOptionsForSession(session, body);
+  try {
+    return { ok: true, session, skill: await createBrainSkill(session, body, brainOptions) };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "skill_create_failed";
+    return reply.code(message === "skill_name_taken" ? 409 : 400).send({ ok: false, error: message });
+  }
+});
+
+app.patch("/phantom-ai/brain/skills/:id", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const params = (request.params ?? {}) as { id?: string };
+  const body = (request.body ?? {}) as Record<string, unknown>;
+  const brainOptions = brainStoreOptionsForSession(session, body);
+  try {
+    return { ok: true, session, skill: await updateBrainSkill(session, String(params.id || ""), body, brainOptions) };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "skill_update_failed";
+    return reply.code(message === "skill_not_found" ? 404 : 400).send({ ok: false, error: message });
+  }
+});
+
+app.delete("/phantom-ai/brain/skills/:id", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const params = (request.params ?? {}) as { id?: string };
+  const query = (request.query ?? {}) as { tenant_id?: unknown };
+  const brainOptions = brainStoreOptionsForSession(session, query);
+  try {
+    return { ok: true, session, skill: await deleteBrainSkill(session, String(params.id || ""), brainOptions) };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "skill_delete_failed";
+    return reply.code(message === "skill_not_found" ? 404 : 400).send({ ok: false, error: message });
+  }
+});
+
 app.post("/phantom-ai/brain/feedback", async (request, reply) => {
   const session = requireAccessSession(request, reply);
 
@@ -9278,6 +9343,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
           risk_level: brainContext.riskLevel,
           needs_approval: brainContext.needsApproval,
           micro_prompt: brainContext.microPrompt,
+          engaged_skills: brainContext.engagedSkills,
           relevant_memory_count: brainContext.relevantMemories.length,
           used_memory_ids: brainContext.debug.injectedMemoryIds,
           active_rules: brainContext.activeRules,
@@ -9585,6 +9651,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
         risk_level: brainContext.riskLevel,
         needs_approval: brainContext.needsApproval,
         micro_prompt: brainContext.microPrompt,
+        engaged_skills: brainContext.engagedSkills,
         relevant_memory_count: brainContext.relevantMemories.length,
         used_memory_ids: brainContext.debug.injectedMemoryIds,
         active_rules: brainContext.activeRules,
@@ -9729,6 +9796,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
             risk_level: brainContext.riskLevel,
             needs_approval: brainContext.needsApproval,
             micro_prompt: session.canManageAccess ? brainContext.microPrompt : undefined,
+            engaged_skills: brainContext.engagedSkills,
             relevant_memory_count: brainContext.relevantMemories.length,
             used_memory_ids: session.canManageAccess ? brainContext.debug.injectedMemoryIds : [],
             active_rules: session.canManageAccess ? brainContext.activeRules : [],
@@ -9769,6 +9837,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
         risk_level: brainContext.riskLevel,
         needs_approval: brainContext.needsApproval,
         micro_prompt: session.canManageAccess ? brainContext.microPrompt : undefined,
+        engaged_skills: brainContext.engagedSkills,
         relevant_memory_count: brainContext.relevantMemories.length,
         used_memory_ids: session.canManageAccess ? brainContext.debug.injectedMemoryIds : [],
         active_rules: session.canManageAccess ? brainContext.activeRules : [],
@@ -9828,6 +9897,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
       risk_level: brainContext.riskLevel,
       needs_approval: brainContext.needsApproval,
       micro_prompt: session.canManageAccess ? brainContext.microPrompt : undefined,
+      engaged_skills: brainContext.engagedSkills,
       relevant_memory_count: brainContext.relevantMemories.length,
       used_memory_ids: session.canManageAccess ? brainContext.debug.injectedMemoryIds : [],
       active_rules: session.canManageAccess ? brainContext.activeRules : [],

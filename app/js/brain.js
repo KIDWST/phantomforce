@@ -1,11 +1,12 @@
-import { currentTenantId, currentWs, session, wsName } from "./store.js?v=phantom-live-20260719-66";
-import { esc } from "./workspaces.js?v=phantom-live-20260719-66";
-import { renderOrganizationGraph } from "./orggraph.js?v=phantom-live-20260719-66";
+import { currentTenantId, currentWs, session, wsName } from "./store.js?v=phantom-live-20260719-67";
+import { esc } from "./workspaces.js?v=phantom-live-20260719-67";
+import { renderOrganizationGraph } from "./orggraph.js?v=phantom-live-20260719-67";
 
 const state = {
   loading: true,
   error: "",
   brain: null,
+  skills: [],
   memoryType: "all",
   previewMessage: "",
   preview: null,
@@ -52,6 +53,12 @@ async function brainFetch(path, options = {}) {
 async function loadBrain() {
   const data = await brainFetch(tenantQuery("/phantom-ai/brain/status"));
   state.brain = data.brain;
+  try {
+    const skillsData = await brainFetch(tenantQuery("/phantom-ai/brain/skills"));
+    state.skills = skillsData.skills?.skills || [];
+  } catch {
+    state.skills = []; // skills panel degrades honestly; the rest of the page still works
+  }
   state.loading = false;
   state.error = "";
 }
@@ -79,6 +86,23 @@ function memoryRows(memories) {
         <button class="btn btn-quiet" data-brain-forget="${esc(memory.id)}">Forget</button>
       </div>
     </article>`).join("") || `<div class="ws-empty">No active memories in this filter.</div>`;
+}
+
+function skillRows(skills) {
+  return (skills || []).map((skill) => `
+    <article class="brain-memory brain-skill" data-skill-id="${esc(skill.id)}">
+      <div>
+        ${badge(skill.enabled ? "enabled" : "paused", skill.enabled ? "ok" : "")}
+        <p><b>${esc(skill.name)}</b></p>
+        <small>When: ${esc(skill.trigger)}</small>
+        <small>Used ${skill.useCount || 0}x · source ${esc(skill.source || "owner")}</small>
+      </div>
+      <div class="brain-memory-actions">
+        <button class="btn btn-quiet" data-skill-toggle="${esc(skill.id)}">${skill.enabled ? "Pause" : "Enable"}</button>
+        <button class="btn btn-quiet" data-skill-edit="${esc(skill.id)}">Edit</button>
+        <button class="btn btn-quiet" data-skill-delete="${esc(skill.id)}">Delete</button>
+      </div>
+    </article>`).join("") || `<div class="ws-empty">No skills yet. Add a playbook Phantom should follow for a kind of request.</div>`;
 }
 
 function profileList(profile) {
@@ -126,6 +150,7 @@ function contextPreviewHtml(preview) {
         ${badge(preview.riskLevel || "low", preview.needsApproval ? "warn" : "ok")}
         ${preview.needsApproval ? badge("approval required", "warn") : badge("local/chat safe", "ok")}
       </div>
+      ${(preview.engagedSkills || []).length ? `<div class="brain-chipline">${preview.engagedSkills.map((skill) => badge(`skill: ${skill.name}`, "ok")).join("")}</div>` : ""}
       <pre>${esc(preview.microPrompt || "")}</pre>
       <div class="brain-debug">
         ${(preview.relevantMemories || []).slice(0, 6).map((memory) => `<span>${esc(memory.type)} · ${esc(memory.text.slice(0, 80))}</span>`).join("")}
@@ -185,6 +210,22 @@ function renderShell(root) {
             <button class="btn btn-primary" type="submit">Remember</button>
           </form>
           <div class="brain-memory-list">${memoryRows(memories)}</div>
+        </article>
+
+        <article class="brain-card brain-card-large">
+          <div class="brain-card-head">
+            <div>
+              <p class="overlay-kicker">Skills — Phantom's superpowers</p>
+              <h4>Playbooks Phantom follows when a request matches</h4>
+            </div>
+          </div>
+          <form class="brain-add brain-skill-add" data-skill-add>
+            <input data-skill-new-name placeholder="Skill name (e.g. Client follow-up)" />
+            <input data-skill-new-trigger placeholder="When should this engage? Describe the kind of request." />
+            <textarea data-skill-new-instructions rows="3" placeholder="The playbook: numbered steps Phantom should follow."></textarea>
+            <button class="btn btn-primary" type="submit">Add skill</button>
+          </form>
+          <div class="brain-memory-list">${skillRows(state.skills)}</div>
         </article>
 
         <article class="brain-card">
@@ -284,6 +325,33 @@ async function forgetMemory(root, id) {
   await rerender(root);
 }
 
+async function addSkill(root, payload) {
+  await brainFetch("/phantom-ai/brain/skills", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(tenantPayload(payload)),
+  });
+  state.notice = "Skill added. Phantom engages it when a request matches.";
+  await rerender(root);
+}
+
+async function patchSkill(root, id, payload, notice) {
+  await brainFetch(`/phantom-ai/brain/skills/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(tenantPayload(payload)),
+  });
+  state.notice = notice;
+  await rerender(root);
+}
+
+async function removeSkill(root, id) {
+  if (!confirm("Delete this skill? Phantom will stop following its playbook.")) return;
+  await brainFetch(tenantQuery(`/phantom-ai/brain/skills/${encodeURIComponent(id)}`), { method: "DELETE" });
+  state.notice = "Skill deleted.";
+  await rerender(root);
+}
+
 function bind(root) {
   const graphMount = root.querySelector("[data-orggraph-mount]");
   if (graphMount) renderOrganizationGraph(graphMount);
@@ -300,6 +368,31 @@ function bind(root) {
     if (!text) return;
     await saveMemory(root, { text, type, source: "owner_brain_ui", confidence: 0.86, weight: 0.82 });
   });
+  root.querySelector("[data-skill-add]")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const name = root.querySelector("[data-skill-new-name]")?.value?.trim();
+    const trigger = root.querySelector("[data-skill-new-trigger]")?.value?.trim();
+    const instructions = root.querySelector("[data-skill-new-instructions]")?.value?.trim();
+    if (!name || !trigger || !instructions) { state.notice = "A skill needs a name, a trigger, and a playbook."; renderShell(root); bind(root); return; }
+    try { await addSkill(root, { name, trigger, instructions }); }
+    catch (error) { state.notice = error?.message === "skill_name_taken" ? "A skill with that name already exists." : (error?.message || "Skill could not be saved."); renderShell(root); bind(root); }
+  });
+  root.querySelectorAll("[data-skill-toggle]").forEach((button) => button.addEventListener("click", async () => {
+    const skill = state.skills.find((record) => record.id === button.dataset.skillToggle);
+    if (skill) await patchSkill(root, skill.id, { enabled: !skill.enabled }, skill.enabled ? "Skill paused." : "Skill enabled.");
+  }));
+  root.querySelectorAll("[data-skill-edit]").forEach((button) => button.addEventListener("click", async () => {
+    const skill = state.skills.find((record) => record.id === button.dataset.skillEdit);
+    if (!skill) return;
+    const trigger = prompt("When should this skill engage?", skill.trigger);
+    if (trigger === null) return;
+    const instructions = prompt("The playbook Phantom should follow:", skill.instructions);
+    if (instructions === null) return;
+    await patchSkill(root, skill.id, { trigger: trigger.trim() || skill.trigger, instructions: instructions.trim() || skill.instructions }, "Skill updated.");
+  }));
+  root.querySelectorAll("[data-skill-delete]").forEach((button) => button.addEventListener("click", async () => {
+    if (button.dataset.skillDelete) await removeSkill(root, button.dataset.skillDelete);
+  }));
   root.querySelectorAll("[data-brain-edit]").forEach((button) => button.addEventListener("click", async () => {
     const id = button.dataset.brainEdit;
     const current = state.brain?.memoryVault?.memories?.find((memory) => memory.id === id);
