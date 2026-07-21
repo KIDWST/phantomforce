@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 720" role="img" aria-labelledby="title desc">
+  <title id="title">Sudoku Signal cover art</title>
+  <desc id="desc">A nine by nine sudoku board with bold three by three subgrid divider lines and several glowing given numbers.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#0d2740"/><stop offset=".52" stop-color="#071722"/><stop offset="1" stop-color="#122a34"/>
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="7" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <rect width="1200" height="720" fill="url(#bg)"/>
+  <!-- board 486x486, origin 357,117, cell 54 -->
+  <rect x="357" y="117" width="486" height="486" rx="10" fill="#0a1f2c" stroke="#1d4a5e" stroke-width="4"/>
+  <!-- thin grid lines -->
+  <g stroke="#1a3d4d" stroke-width="2">
+    <path d="M411 117V603M465 117V603M573 117V603M627 117V603M735 117V603M789 117V603"/>
+    <path d="M357 171H843M357 225H843M357 333H843M357 387H843M357 495H843M357 549H843"/>
+  </g>
+  <!-- bold 3x3 subgrid divider lines -->
+  <g stroke="#41d9ff" stroke-width="5" filter="url(#glow)">
+    <path d="M519 117V603M681 117V603"/>
+    <path d="M357 279H843M357 441H843"/>
+  </g>
+  <!-- glowing given numbers -->
+  <g font-family="Arial Black,Arial,sans-serif" font-size="40" text-anchor="middle" filter="url(#glow)">
+    <text x="384" y="158" fill="#eafcff">5</text>
+    <text x="546" y="158" fill="#7cffc4">3</text>
+    <text x="762" y="158" fill="#eafcff">9</text>
+    <text x="438" y="266" fill="#eafcff">6</text>
+    <text x="708" y="266" fill="#7cffc4">1</text>
+    <text x="492" y="374" fill="#7cffc4">8</text>
+    <text x="654" y="374" fill="#eafcff">4</text>
+    <text x="384" y="482" fill="#eafcff">2</text>
+    <text x="600" y="482" fill="#7cffc4">7</text>
+    <text x="816" y="482" fill="#eafcff">5</text>
+    <text x="546" y="590" fill="#eafcff">6</text>
+    <text x="708" y="590" fill="#7cffc4">9</text>
+  </g>
+  <text x="55" y="95" fill="#eafcff" font-family="Arial Black,Arial,sans-serif" font-size="56" letter-spacing="3">SUDOKU SIGNAL</text>
+  <text x="60" y="146" fill="#41d9ff" font-family="ui-monospace,Menlo,monospace" font-size="24" font-weight="900" letter-spacing="5">CALM NUMBER LOGIC</text>
+</svg>

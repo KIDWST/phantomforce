@@ -73,7 +73,7 @@ export type PhantomPlayGame = {
   engine?: PhantomPlayEngineProfile;
 };
 
-const PHANTOMPLAY_ART_VERSION = "phantomplay-art-20260717";
+const PHANTOMPLAY_ART_VERSION = "phantomplay-art-20260721";
 export const PHANTOMPLAY_ENGINE = {
   version: "2.2-ascension",
   saveStateBytes: 262_144,
@@ -134,13 +134,36 @@ const GAME_ART_BY_SLUG: Record<string, string> = {
   "reflex-grid": artUrl("reflex-grid-cover.webp"),
   "penalty-kick": artUrl("penalty-kick-cover.webp"),
   "rift-frenzy": artUrl("rift-frenzy-cover.svg"),
-  "serpent-surge": artUrl("reflex-grid-cover.webp"),
+  "serpent-surge": artUrl("serpent-surge-cover.svg"),
   "crown-circuit": artUrl("crown-circuit-cover.svg"),
   "kingdom-breakers": artUrl("kingdom-breakers-cover.svg"),
   "tidefront-tactics": artUrl("tidefront-tactics-cover.svg"),
   "skyguard-arena": artUrl("skyguard-arena-cover.svg"),
   "im-baked": artUrl("im-baked-cover.svg"),
   "phantom-strike": artUrl("phantom-strike-cover.svg"),
+  "cubetown": artUrl("cubetown-cover.svg"),
+  "keyboardist-on-tour": artUrl("keyboardist-on-tour-cover.svg"),
+  "phantom-grand-prix": artUrl("phantom-grand-prix-cover.svg"),
+  "beat-strike": artUrl("beat-strike-cover.svg"),
+  "phantom-dash": artUrl("phantom-dash-cover.svg"),
+  "color-rush": artUrl("color-rush-cover.svg"),
+  "circuit-serpent": artUrl("circuit-serpent-cover.svg"),
+  "neon-breaker": artUrl("neon-breaker-cover.svg"),
+  "phantom-rumble": artUrl("phantom-rumble-cover.svg"),
+  "vespergate": artUrl("vespergate-cover.svg"),
+  "court-vision": artUrl("court-vision-cover.svg"),
+  "phantom-pizzeria": artUrl("phantom-pizzeria-cover.svg"),
+  "tower-tactics": artUrl("tower-tactics-cover.svg"),
+  "tile-flow": artUrl("tile-flow-cover.svg"),
+  "echo-sequence": artUrl("echo-sequence-cover.svg"),
+  "signal-sweeper": artUrl("signal-sweeper-cover.svg"),
+  "logic-lights": artUrl("logic-lights-cover.svg"),
+  "sudoku-signal": artUrl("sudoku-signal-cover.svg"),
+  "pixel-bloom": artUrl("pixel-bloom-cover.svg"),
+  "type-storm": artUrl("type-storm-cover.svg"),
+  "breath-pacer": artUrl("breath-pacer-cover.svg"),
+  "phantom-cube": artUrl("phantom-cube-cover.svg"),
+  "phantom-chess": artUrl("phantom-chess-cover.svg"),
 };
 const CATEGORY_ART: Record<string, string> = {
   Arcade: GAME_ART_BY_SLUG["neon-drift"],
@@ -307,7 +330,7 @@ export type PhantomPlayRatingChangeEntry = {
   ts: string;
   gameId?: string;
   profileId?: string;
-  field: "contentRating" | "contentDescriptors" | "allowedRatings" | "guardianLock" | "profileType";
+  field: "contentRating" | "contentDescriptors" | "allowedRatings" | "guardianLock" | "profileType" | "devModeEnabled";
   previousValue: unknown;
   newValue: unknown;
   reason: string;
@@ -323,7 +346,30 @@ export type PhantomPlayRatingChangeEntry = {
 export type PhantomPlayGameOverride = {
   contentRating?: PhantomPlayRating;
   contentDescriptors?: PhantomPlayContentDescriptor[];
+  // Per-game Dev Sandbox switch an admin sets explicitly (see
+  // phantomPlayDevModeAccessFromStore). Undefined means "not yet decided" and
+  // is treated as enabled, so every pre-existing built-in game keeps working
+  // for managers exactly as before this field existed — this is an opt-out
+  // lever, not an opt-in gate, to stay backward compatible.
+  devModeEnabled?: boolean;
+  // The workspace's own saved Dev Sandbox edit for this game. Persisted so a
+  // manager's in-player live edits survive a refresh/restart, but only ever
+  // read back for someone who already has Dev Mode access to this exact game
+  // (see getPhantomPlayDevModeOverride) — never shown to a regular player,
+  // who always gets the real shipped file via the game's normal launchUrl.
+  devSourceOverride?: string;
+  devSourceOverrideUpdatedAt?: string;
   updatedAt: string;
+};
+
+// Audit trail for the owner-only "Publish to live" action — never stores the
+// full source (that's the real game file on disk, which is the audit trail
+// for content); just who published what game and when, for accountability.
+export type PhantomPlayDevModePublishRecord = {
+  ts: string;
+  actorId: string;
+  gameId: string;
+  bytes: number;
 };
 
 // Pure merge helper, reusable outside this module's store shape.
@@ -353,6 +399,7 @@ type PhantomPlayStore = {
   submissions: PhantomPlaySubmission[];
   ratingChangeHistory: PhantomPlayRatingChangeEntry[];
   gameOverrides: Record<string, PhantomPlayGameOverride>;
+  devModePublishHistory: PhantomPlayDevModePublishRecord[];
 };
 
 const TAK_CREATOR = "Tak";
@@ -1076,9 +1123,10 @@ async function readStore(): Promise<PhantomPlayStore> {
       submissions: Array.isArray(parsed.submissions) ? parsed.submissions : [],
       ratingChangeHistory: Array.isArray(parsed.ratingChangeHistory) ? parsed.ratingChangeHistory : [],
       gameOverrides: parsed.gameOverrides && typeof parsed.gameOverrides === "object" ? parsed.gameOverrides : {},
+      devModePublishHistory: Array.isArray(parsed.devModePublishHistory) ? parsed.devModePublishHistory : [],
     };
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { version: 1, profiles: {}, rooms: [], submissions: [], ratingChangeHistory: [], gameOverrides: {} };
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { version: 1, profiles: {}, rooms: [], submissions: [], ratingChangeHistory: [], gameOverrides: {}, devModePublishHistory: [] };
     throw error;
   }
 }
@@ -1331,7 +1379,16 @@ export async function getPhantomPlaySnapshot(session: AccessSession, options: { 
       canSubmitGames: options.canSubmitGames ?? (session.canManageAccess || session.orgRole === "owner" || session.orgRole === "admin"),
       canModerate: session.canManageAccess || session.isSuperAdmin === true,
     },
-    catalog: catalog.map((game) => ({ ...game, devModeAvailable: phantomPlayDevModeAccessFromStore(store, session, game.id).allowed })),
+    catalog: catalog.map((game) => ({
+      ...game,
+      devModeAvailable: phantomPlayDevModeAccessFromStore(store, session, game.id).allowed,
+      // The raw admin switch (distinct from devModeAvailable, which also folds
+      // in the viewer's own role) — only meaningful to render a toggle control
+      // for someone who can already manage this workspace; a regular player
+      // never sees or needs it, but it costs nothing to include here since the
+      // client only renders it behind its own canModerate check.
+      devModeEnabled: devModeEnabledForGame(store, game.id),
+    })),
     leaderboards: phantomLeaderboards(store, catalog, actorId),
     favorites: profile.favorites,
     history: historySummary(profile),
@@ -1812,6 +1869,14 @@ export async function applyPhantomPlayRatingOverride(session: AccessSession, inp
       }
       nextOverride.contentDescriptors = newValue;
     }
+    if (input.devModeEnabled !== undefined) {
+      const newValue = input.devModeEnabled !== false;
+      const previousValue = devModeEnabledForGame(store, gameId);
+      if (newValue !== previousValue) {
+        appendRatingChangeHistory(store, { actorId, gameId, field: "devModeEnabled", previousValue, newValue, reason });
+      }
+      nextOverride.devModeEnabled = newValue;
+    }
     store.gameOverrides[gameId] = nextOverride;
     await writeStore(store);
     return { gameId, override: nextOverride };
@@ -1868,16 +1933,25 @@ export async function getPhantomPlayRatingChangeHistory(limit = 200) {
    `devModeAvailable` flag this produces in the snapshot catalog. */
 export type PhantomPlayDevModeAccess = { allowed: boolean; kind: "built_in" | "community" | "unknown" };
 
+// An admin's per-game Dev Sandbox switch, layered on top of the role check
+// below. Undefined (never touched by an admin) reads as enabled, so this is
+// purely an opt-out lever — it can only take access AWAY from a role that
+// would otherwise have it, never grant access a role wouldn't already have.
+function devModeEnabledForGame(store: PhantomPlayStore, gameId: string): boolean {
+  return store.gameOverrides[gameId]?.devModeEnabled !== false;
+}
+
 function phantomPlayDevModeAccessFromStore(store: PhantomPlayStore, session: AccessSession, gameId: string): PhantomPlayDevModeAccess {
   if (gameId.startsWith("community:")) {
     const submission = store.submissions.find((item) => item.id === gameId.slice("community:".length));
     if (!submission) return { allowed: false, kind: "unknown" };
-    return { allowed: session.canManageAccess === true || submission.developerId === actorIdFor(session), kind: "community" };
+    const roleAllowed = session.canManageAccess === true || submission.developerId === actorIdFor(session);
+    return { allowed: roleAllowed && devModeEnabledForGame(store, gameId), kind: "community" };
   }
   if (!PHANTOMPLAY_BUILT_IN_GAMES.some((game) => game.id === gameId)) return { allowed: false, kind: "unknown" };
   // Built-in games ship in this repo, not owned by any one tenant's developer account —
   // only a workspace manager may hot-edit them, matching registerPhantomPlayEdgeManifest's bar.
-  return { allowed: session.canManageAccess === true, kind: "built_in" };
+  return { allowed: session.canManageAccess === true && devModeEnabledForGame(store, gameId), kind: "built_in" };
 }
 
 export async function phantomPlayDevModeAccess(session: AccessSession, gameId: string) {
@@ -1904,6 +1978,97 @@ export async function getPhantomPlayDevModeSource(session: AccessSession, gameId
   return { gameId, title: game.title, launchUrl: game.launchUrl, source };
 }
 
+const DEV_SANDBOX_SOURCE_MAX_BYTES = 500_000;
+
+function resolveBuiltInGameFilePath(gameId: string): { game: PhantomPlayGame; filePath: string } {
+  const game = PHANTOMPLAY_BUILT_IN_GAMES.find((item) => item.id === gameId);
+  const launchPath = game?.launchUrl.split("?")[0] || "";
+  if (!game || !launchPath.startsWith("/app/games/")) throw new Error("This game has no editable source file.");
+  const gamesRoot = resolve(repoRoot, "app", "games");
+  const filePath = resolve(repoRoot, "app", launchPath.replace(/^\/app\//, ""));
+  if (!filePath.startsWith(gamesRoot)) throw new Error("Refusing to write outside the games directory.");
+  return { game, filePath };
+}
+
+function assertDevSandboxSource(source: unknown): string {
+  if (typeof source !== "string" || !source.trim()) throw new Error("Dev Sandbox edit must include source text.");
+  if (Buffer.byteLength(source, "utf8") > DEV_SANDBOX_SOURCE_MAX_BYTES) throw new Error("Dev Sandbox edit is too large to save.");
+  return source;
+}
+
+// Dev Sandbox "override" — the safe default save path. Persists a workspace's
+// in-progress edit to the JSON store only; it never touches the real game
+// file on disk, so regular players (whose iframe always loads the game's
+// real launchUrl) are completely unaffected. Returning admins/managers with
+// Dev Mode access to this exact game can fetch it back with
+// getPhantomPlayDevModeOverride to resume where they left off.
+export async function savePhantomPlayDevModeOverride(session: AccessSession, gameId: string, source: unknown) {
+  const access = await phantomPlayDevModeAccess(session, gameId);
+  if (!access.allowed) throw new Error("Dev Mode is not available for this game.");
+  const cleanSource = assertDevSandboxSource(source);
+  const store = await readStore();
+  const nextOverride: PhantomPlayGameOverride = {
+    ...(store.gameOverrides[gameId] || { updatedAt: now() }),
+    devSourceOverride: cleanSource,
+    devSourceOverrideUpdatedAt: now(),
+  };
+  store.gameOverrides[gameId] = nextOverride;
+  await writeStore(store);
+  return { gameId, updatedAt: nextOverride.devSourceOverrideUpdatedAt };
+}
+
+export async function getPhantomPlayDevModeOverride(session: AccessSession, gameId: string) {
+  const access = await phantomPlayDevModeAccess(session, gameId);
+  if (!access.allowed) throw new Error("Dev Mode is not available for this game.");
+  const store = await readStore();
+  const override = store.gameOverrides[gameId];
+  return { gameId, source: override?.devSourceOverride ?? null, updatedAt: override?.devSourceOverrideUpdatedAt ?? null };
+}
+
+export async function discardPhantomPlayDevModeOverride(session: AccessSession, gameId: string) {
+  const access = await phantomPlayDevModeAccess(session, gameId);
+  if (!access.allowed) throw new Error("Dev Mode is not available for this game.");
+  const store = await readStore();
+  const existing = store.gameOverrides[gameId];
+  if (existing) {
+    const { devSourceOverride, devSourceOverrideUpdatedAt, ...rest } = existing;
+    store.gameOverrides[gameId] = { ...rest, updatedAt: now() };
+    await writeStore(store);
+  }
+  return { gameId, discarded: true };
+}
+
+// Publish to live — the maximum-power, owner-gated path. Writes the edited
+// source directly to the real shipped game file every player's iframe loads,
+// atomically (temp file + rename, same pattern writeStore already uses for
+// the JSON store), then clears any pending override for this game since the
+// shipped file now IS that edit. The host never evals/executes this text —
+// it only ever persists bytes to disk; the sandboxed player iframe is what
+// later loads and runs the file, exactly as it does for every other game.
+export async function publishPhantomPlayDevModeSource(session: AccessSession, gameId: string, source: unknown) {
+  if (session.orgRole !== "owner") throw new Error("Only the workspace owner can publish a Dev Sandbox edit live.");
+  const access = await phantomPlayDevModeAccess(session, gameId);
+  if (!access.allowed || access.kind !== "built_in") throw new Error("Publishing live is only available for built-in games with Dev Mode enabled.");
+  const cleanSource = assertDevSandboxSource(source);
+  const { filePath } = resolveBuiltInGameFilePath(gameId);
+  const temp = `${filePath}.${process.pid}.${Date.now()}.${randomUUID()}.tmp`;
+  await writeFile(temp, cleanSource, "utf8");
+  await replaceStoreFile(temp, filePath);
+
+  const store = await readStore();
+  const existing = store.gameOverrides[gameId];
+  const { devSourceOverride, devSourceOverrideUpdatedAt, ...rest } = existing || { updatedAt: now() };
+  store.gameOverrides[gameId] = { ...rest, updatedAt: now() };
+  store.devModePublishHistory = [
+    { ts: now(), actorId: actorIdFor(session), gameId, bytes: Buffer.byteLength(cleanSource, "utf8") },
+    ...store.devModePublishHistory,
+  ].slice(0, 500);
+  await writeStore(store);
+
+  const game = PHANTOMPLAY_BUILT_IN_GAMES.find((item) => item.id === gameId);
+  return { gameId, publishedAt: now(), launchUrl: game?.launchUrl || "" };
+}
+
 export async function getPhantomPlayStoreStatus() {
   const store = await readStore();
   return {
@@ -1915,5 +2080,6 @@ export async function getPhantomPlayStoreStatus() {
     approvedCommunityGames: communityGames(store).length,
     ratingChangeHistoryEntries: store.ratingChangeHistory.length,
     gameOverrides: Object.keys(store.gameOverrides).length,
+    devModePublishes: store.devModePublishHistory.length,
   };
 }

@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 720" role="img" aria-labelledby="title desc">
+  <title id="title">Phantom Chess cover art</title>
+  <desc id="desc">A chessboard in perspective with a glowing knight and king piece and a subtle check-highlight square.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#241826"/><stop offset=".5" stop-color="#0f0d1a"/><stop offset="1" stop-color="#08131a"/>
+    </linearGradient>
+    <linearGradient id="piece" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#fff2c4"/><stop offset="1" stop-color="#e0a94a"/>
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="6" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <rect width="1200" height="720" fill="url(#bg)"/>
+  <!-- board in perspective (trapezoid), 8x8 -->
+  <g transform="translate(600 640)">
+    <g id="board">
+      <!-- rows from back(small) to front(large) via nested polygons approximated with a grid -->
+      <polygon points="-360,-360 360,-360 520,0 -520,0" fill="#1a1420"/>
+    </g>
+  </g>
+  <!-- checker squares drawn as perspective bands -->
+  <g opacity=".9">
+    <g fill="#e9dcc3">
+      <polygon points="240,280 320,280 356,340 250,340"/>
+      <polygon points="420,280 500,280 568,340 462,340"/>
+      <polygon points="690,280 770,280 780,340 674,340"/>
+      <polygon points="150,360 260,360 210,440 78,440"/>
+      <polygon points="470,360 580,360 690,440 558,440"/>
+      <polygon points="800,360 910,360 1042,440 910,440"/>
+    </g>
+  </g>
+  <!-- subtle check-highlight square -->
+  <polygon points="470,360 580,360 690,440 558,440" fill="#ff5a5a" opacity=".38" filter="url(#glow)"/>
+  <!-- glowing king -->
+  <g filter="url(#glow)" transform="translate(430 300)">
+    <rect x="-8" y="-96" width="16" height="20" fill="url(#piece)"/>
+    <rect x="-18" y="-84" width="36" height="10" fill="url(#piece)"/>
+    <path d="M -26 -70 Q 0 -50 26 -70 L 20 20 Q 0 34 -20 20 Z" fill="url(#piece)"/>
+    <ellipse cx="0" cy="30" rx="40" ry="14" fill="#c98f38"/>
+  </g>
+  <!-- glowing knight -->
+  <g filter="url(#glow)" transform="translate(720 320)">
+    <path d="M -30 34 L -30 4 Q -34 -40 -6 -78 L 6 -96 L 18 -80 Q 46 -70 46 -30 Q 30 -34 22 -22 L 34 -6 Q 26 6 8 4 L 8 34 Z" fill="url(#piece)"/>
+    <circle cx="10" cy="-64" r="5" fill="#3a2410"/>
+    <ellipse cx="0" cy="42" rx="42" ry="14" fill="#c98f38"/>
+  </g>
+  <text x="55" y="95" fill="#fff4e0" font-family="Arial Black,Arial,sans-serif" font-size="56" letter-spacing="3">PHANTOM CHESS</text>
+  <text x="60" y="146" fill="#e0a94a" font-family="ui-monospace,Menlo,monospace" font-size="24" font-weight="900" letter-spacing="4">FULL-RULES CHESS</text>
+</svg>

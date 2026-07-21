@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 720" role="img" aria-labelledby="title desc">
+  <title id="title">Vespergate cover art</title>
+  <desc id="desc">A gothic cathedral silhouette with two linked glowing portals, one amber and one violet, and a cinder projectile arcing between them.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#1a0b2e"/><stop offset=".55" stop-color="#0b0713"/><stop offset="1" stop-color="#2b1405"/>
+    </linearGradient>
+    <radialGradient id="amber" cx=".5" cy=".5" r=".5">
+      <stop offset="0" stop-color="#ffd27a"/><stop offset="1" stop-color="#c9700c"/>
+    </radialGradient>
+    <radialGradient id="violet" cx=".5" cy=".5" r=".5">
+      <stop offset="0" stop-color="#d8a6ff"/><stop offset="1" stop-color="#6a1bb0"/>
+    </radialGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="7" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <rect width="1200" height="720" fill="url(#bg)"/>
+  <!-- gothic cathedral silhouette -->
+  <g filter="url(#glow)">
+    <path d="M470 620 L470 340 L520 270 L520 200 L540 200 L540 250 L560 250 L560 180 L600 130 L640 180 L640 250 L660 250 L660 200 L680 200 L680 270 L730 340 L730 620 Z" fill="#241238" stroke="#8a5cc7" stroke-width="3"/>
+    <path d="M600 130 L600 96 M582 116 L618 116" stroke="#d8a6ff" stroke-width="4"/>
+    <path d="M600 300 a26 32 0 0 1 26 32 L574 332 a26 32 0 0 1 26 -32 Z" fill="#0b0713" stroke="#8a5cc7" stroke-width="2"/>
+    <!-- amber portal (left) -->
+    <ellipse cx="300" cy="470" rx="70" ry="110" fill="url(#amber)"/>
+    <ellipse cx="300" cy="470" rx="46" ry="80" fill="#0b0713"/>
+    <!-- violet portal (right) -->
+    <ellipse cx="900" cy="470" rx="70" ry="110" fill="url(#violet)"/>
+    <ellipse cx="900" cy="470" rx="46" ry="80" fill="#0b0713"/>
+    <!-- cinder projectile arc -->
+    <path d="M300 470 Q600 250 900 470" fill="none" stroke="#ff7a1a" stroke-width="4" stroke-dasharray="4 14" stroke-linecap="round"/>
+    <circle cx="600" cy="322" r="14" fill="#ffd27a"/>
+    <circle cx="600" cy="322" r="7" fill="#fff5d6"/>
+  </g>
+  <text x="55" y="95" fill="#f3e9ff" font-family="Arial Black,Arial,sans-serif" font-size="56" letter-spacing="3">VESPERGATE</text>
+  <text x="60" y="146" fill="#d8a6ff" font-family="ui-monospace,Menlo,monospace" font-size="24" font-weight="900" letter-spacing="5">FOLD SPACE · GOTHIC ACTION</text>
+</svg>

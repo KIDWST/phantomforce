@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 720" role="img" aria-labelledby="title desc">
+  <title id="title">Neon Breaker cover art</title>
+  <desc id="desc">A glowing ball with a motion trail rebounds off a paddle below rows of multicolor bricks, one cracking.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#0a1f3a"/>
+      <stop offset=".5" stop-color="#060812"/>
+      <stop offset="1" stop-color="#1a0630"/>
+    </linearGradient>
+    <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="7" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <rect width="1200" height="720" fill="url(#bg)"/>
+  <g filter="url(#glow)">
+    <rect x="300" y="190" width="120" height="44" rx="8" fill="#ff3b6b"/>
+    <rect x="432" y="190" width="120" height="44" rx="8" fill="#ff9e2c"/>
+    <rect x="564" y="190" width="120" height="44" rx="8" fill="#ffd23f"/>
+    <rect x="696" y="190" width="120" height="44" rx="8" fill="#3bff8f"/>
+    <rect x="828" y="190" width="120" height="44" rx="8" fill="#2ee6ff"/>
+    <rect x="300" y="248" width="120" height="44" rx="8" fill="#ff9e2c"/>
+    <rect x="432" y="248" width="120" height="44" rx="8" fill="#ffd23f"/>
+    <rect x="696" y="248" width="120" height="44" rx="8" fill="#2ee6ff"/>
+    <rect x="828" y="248" width="120" height="44" rx="8" fill="#b25cff"/>
+    <g fill="#ffd23f" opacity=".95">
+      <path d="M564 248h120v44H564z"/>
+    </g>
+    <path d="M600 248l14 22-10 22M636 248l-8 20 12 24M660 248l-6 24" stroke="#060812" stroke-width="5" fill="none"/>
+  </g>
+  <g filter="url(#glow)" stroke="#2ee6ff" stroke-width="7" stroke-linecap="round" opacity=".7" fill="none">
+    <path d="M470 560l180-160"/>
+    <path d="M510 590l150-130" opacity=".5"/>
+  </g>
+  <g filter="url(#glow)">
+    <circle cx="662" cy="392" r="30" fill="#eafcff" stroke="#2ee6ff" stroke-width="8"/>
+  </g>
+  <g filter="url(#glow)">
+    <rect x="360" y="612" width="260" height="34" rx="17" fill="#141c34" stroke="#2ee6ff" stroke-width="8"/>
+  </g>
+  <text x="54" y="95" fill="#eafcff" font-family="Arial Black,Arial,sans-serif" font-size="56" letter-spacing="3">NEON BREAKER</text>
+  <text x="58" y="146" fill="#2ee6ff" font-family="ui-monospace,Menlo,monospace" font-size="24" font-weight="900" letter-spacing="5">BREAK EVERY BRICK</text>
+</svg>

@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 720" role="img" aria-labelledby="title desc">
+  <title id="title">Type Storm cover art</title>
+  <desc id="desc">Letters and short words falling in vertical columns toward a glowing baseline, one target word highlighted.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#04121f"/><stop offset=".55" stop-color="#071b2e"/><stop offset="1" stop-color="#0a2c1e"/>
+    </linearGradient>
+    <linearGradient id="base" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#39f0ff"/><stop offset="1" stop-color="#39f0ff" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="6" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <rect width="1200" height="720" fill="url(#bg)"/>
+  <g filter="url(#glow)" font-family="ui-monospace,Menlo,monospace" font-weight="900" text-anchor="middle">
+    <!-- falling columns of letters -->
+    <g fill="#2fd6a6" opacity=".85">
+      <text x="180" y="260" font-size="40">T</text><text x="180" y="330" font-size="40">Y</text><text x="180" y="400" font-size="40">P</text><text x="180" y="470" font-size="40">E</text>
+      <text x="360" y="300" font-size="40">R</text><text x="360" y="380" font-size="40">A</text><text x="360" y="460" font-size="40">I</text><text x="360" y="540" font-size="40">N</text>
+      <text x="840" y="240" font-size="40">F</text><text x="840" y="320" font-size="40">A</text><text x="840" y="400" font-size="40">S</text><text x="840" y="480" font-size="40">T</text>
+      <text x="1020" y="290" font-size="40">K</text><text x="1020" y="370" font-size="40">E</text><text x="1020" y="450" font-size="40">Y</text><text x="1020" y="530" font-size="40">S</text>
+    </g>
+    <!-- highlighted target word column -->
+    <g fill="#ffe24a">
+      <rect x="560" y="380" width="90" height="240" rx="10" fill="#ffe24a" opacity=".12"/>
+      <text x="605" y="430" font-size="46">S</text><text x="605" y="500" font-size="46">T</text><text x="605" y="570" font-size="46">O</text>
+    </g>
+  </g>
+  <g filter="url(#glow)">
+    <rect x="80" y="612" width="1040" height="8" rx="4" fill="url(#base)"/>
+    <rect x="80" y="600" width="1040" height="4" rx="2" fill="#39f0ff"/>
+  </g>
+  <text x="55" y="95" fill="#eafeff" font-family="Arial Black,Arial,sans-serif" font-size="56" letter-spacing="3">TYPE STORM</text>
+  <text x="60" y="146" fill="#39f0ff" font-family="ui-monospace,Menlo,monospace" font-size="24" font-weight="900" letter-spacing="5">VERTICAL WORD RAIN</text>
+</svg>

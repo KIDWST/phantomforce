@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 720" role="img" aria-labelledby="title desc">
+  <title id="title">Echo Sequence cover art</title>
+  <desc id="desc">Four glowing quadrant pads in green, red, yellow and blue arranged in a circle with expanding concentric echo rings.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#241046"/><stop offset=".52" stop-color="#0b0718"/><stop offset="1" stop-color="#10233f"/>
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="7" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <rect width="1200" height="720" fill="url(#bg)"/>
+  <g transform="translate(720 400)">
+    <!-- expanding concentric echo rings -->
+    <g fill="none" filter="url(#glow)">
+      <circle r="215" stroke="#ffffff" stroke-width="3" opacity=".18"/>
+      <circle r="275" stroke="#ffffff" stroke-width="3" opacity=".10"/>
+      <circle r="335" stroke="#ffffff" stroke-width="2" opacity=".06"/>
+    </g>
+    <!-- four quadrant pads -->
+    <g filter="url(#glow)">
+      <path d="M-12 -12 A180 180 0 0 0 -180 -12 L-180 -12 A168 168 0 0 1 -12 -180 Z" fill="#25e06a"/>
+      <path d="M12 -12 A180 180 0 0 1 180 -12 L180 -12 A168 168 0 0 0 12 -180 Z" fill="#ff3b4e"/>
+      <path d="M-12 12 A180 180 0 0 1 -180 12 L-180 12 A168 168 0 0 0 -12 180 Z" fill="#ffd23b"/>
+      <path d="M12 12 A180 180 0 0 0 180 12 L180 12 A168 168 0 0 1 12 180 Z" fill="#2f9dff"/>
+    </g>
+    <!-- dark hub -->
+    <circle r="70" fill="#0b0718" stroke="#3a2a5e" stroke-width="6"/>
+    <circle r="22" fill="#f6f0ff" filter="url(#glow)"/>
+  </g>
+  <text x="55" y="95" fill="#f6f0ff" font-family="Arial Black,Arial,sans-serif" font-size="56" letter-spacing="3">ECHO SEQUENCE</text>
+  <text x="60" y="146" fill="#ffd23b" font-family="ui-monospace,Menlo,monospace" font-size="24" font-weight="900" letter-spacing="5">ECHO THE PATTERN</text>
+</svg>

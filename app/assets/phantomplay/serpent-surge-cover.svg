@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 720" role="img" aria-labelledby="title desc">
+  <title id="title">Serpent Surge cover art</title>
+  <desc id="desc">A long glowing serpent coils across a dark arena littered with energy orbs as a storm ring closes in.</desc>
+  <defs>
+    <radialGradient id="bg" cx="48%" cy="42%" r="75%">
+      <stop offset="0" stop-color="#1a2f52"/>
+      <stop offset=".55" stop-color="#0a1420"/>
+      <stop offset="1" stop-color="#050308"/>
+    </radialGradient>
+    <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="8" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <rect width="1200" height="720" fill="url(#bg)"/>
+  <g filter="url(#glow)" opacity=".55" fill="none" stroke="#7b5bff" stroke-width="6" stroke-dasharray="26 22">
+    <circle cx="640" cy="380" r="330"/>
+    <circle cx="640" cy="380" r="260" opacity=".6"/>
+  </g>
+  <g filter="url(#glow)">
+    <path d="M150 560c130-30 150-190 30-230-120-40-140-180 10-230 150-50 300 40 350 150 46 100 170 130 300 60"
+          fill="none" stroke="#0d5a3a" stroke-width="60" stroke-linecap="round"/>
+    <path d="M150 560c130-30 150-190 30-230-120-40-140-180 10-230 150-50 300 40 350 150 46 100 170 130 300 60"
+          fill="none" stroke="#37ff9d" stroke-width="40" stroke-linecap="round" stroke-dasharray="4 46"/>
+    <path d="M150 560c130-30 150-190 30-230-120-40-140-180 10-230 150-50 300 40 350 150 46 100 170 130 300 60"
+          fill="none" stroke="#c6ffe6" stroke-width="10" stroke-linecap="round"/>
+    <circle cx="850" cy="308" r="46" fill="#0d5a3a" stroke="#37ff9d" stroke-width="10"/>
+    <circle cx="838" cy="296" r="10" fill="#eafff5"/>
+    <circle cx="866" cy="300" r="10" fill="#eafff5"/>
+    <path d="M872 340l58 10-58 12z" fill="#ff5f7e"/>
+  </g>
+  <g filter="url(#glow)" fill="#ffe15a">
+    <circle cx="360" cy="250" r="16"/><circle cx="560" cy="500" r="13"/>
+    <circle cx="740" cy="470" r="18"/><circle cx="430" cy="440" r="11"/>
+    <circle cx="620" cy="230" r="14"/><circle cx="300" cy="470" r="12"/>
+  </g>
+  <g opacity=".85">
+    <rect x="1046" y="566" width="128" height="128" rx="10" fill="#081018" stroke="#37ff9d" stroke-width="3"/>
+    <path d="M1066 660c30-8 34-42 8-52 40-6 66 8 70 26" fill="none" stroke="#37ff9d" stroke-width="6" stroke-linecap="round"/>
+    <circle cx="1130" cy="600" r="6" fill="#ffe15a"/>
+  </g>
+  <text x="54" y="95" fill="#eafff5" font-family="Arial Black,Arial,sans-serif" font-size="56" letter-spacing="3">SERPENT SURGE</text>
+  <text x="58" y="146" fill="#37ff9d" font-family="ui-monospace,Menlo,monospace" font-size="24" font-weight="900" letter-spacing="5">SLITHER · GROW · OUTLAST THE STORM</text>
+</svg>

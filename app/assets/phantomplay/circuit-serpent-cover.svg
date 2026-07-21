@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 720" role="img" aria-labelledby="title desc">
+  <title id="title">Circuit Serpent cover art</title>
+  <desc id="desc">A segmented snake crawls across a green circuit board of glowing traces toward a bright data packet.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#04241a"/>
+      <stop offset=".5" stop-color="#02120c"/>
+      <stop offset="1" stop-color="#031f16"/>
+    </linearGradient>
+    <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="6" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <rect width="1200" height="720" fill="url(#bg)"/>
+  <g opacity=".22" fill="none" stroke="#1f8a5a" stroke-width="3">
+    <path d="M80 220h1040M80 380h1040M80 540h1040M300 120v520M600 120v520M900 120v520"/>
+  </g>
+  <g filter="url(#glow)" fill="none" stroke="#2bd679" stroke-width="6" opacity=".8">
+    <path d="M160 300h140v-120h200"/>
+    <path d="M980 260h-120v160h-160"/>
+    <path d="M240 560h180v-90h240"/>
+    <circle cx="300" cy="180" r="9" fill="#2bd679"/><circle cx="500" cy="180" r="9" fill="#2bd679"/>
+    <circle cx="980" cy="260" r="9" fill="#2bd679"/><circle cx="420" cy="470" r="9" fill="#2bd679"/>
+  </g>
+  <g filter="url(#glow)">
+    <rect x="300" y="360" width="72" height="72" rx="10" fill="#0d5a3a" stroke="#7dffb8" stroke-width="6"/>
+    <rect x="380" y="360" width="72" height="72" rx="10" fill="#0d5a3a" stroke="#7dffb8" stroke-width="6"/>
+    <rect x="460" y="360" width="72" height="72" rx="10" fill="#0d5a3a" stroke="#7dffb8" stroke-width="6"/>
+    <rect x="540" y="360" width="72" height="72" rx="10" fill="#0d5a3a" stroke="#7dffb8" stroke-width="6"/>
+    <rect x="620" y="360" width="82" height="82" rx="10" fill="#12724a" stroke="#c9ffe3" stroke-width="7"/>
+    <circle cx="648" cy="392" r="8" fill="#031f16"/><circle cx="678" cy="392" r="8" fill="#031f16"/>
+  </g>
+  <g filter="url(#glow)">
+    <rect x="800" y="358" width="86" height="86" rx="14" fill="#3a2f08" stroke="#ffd23f" stroke-width="8"/>
+    <path d="M843 372v58M814 401h58" stroke="#ffd23f" stroke-width="8"/>
+  </g>
+  <text x="54" y="95" fill="#eafff2" font-family="Arial Black,Arial,sans-serif" font-size="54" letter-spacing="3">CIRCUIT SERPENT</text>
+  <text x="58" y="146" fill="#2bd679" font-family="ui-monospace,Menlo,monospace" font-size="24" font-weight="900" letter-spacing="5">GROW THE SIGNAL</text>
+</svg>

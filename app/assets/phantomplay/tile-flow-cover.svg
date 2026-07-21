@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 720" role="img" aria-labelledby="title desc">
+  <title id="title">Tile Flow cover art</title>
+  <desc id="desc">Interlocking pipe segments carrying a glowing current along a connected path between pulsing endpoints.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#062033"/><stop offset=".52" stop-color="#04121b"/><stop offset="1" stop-color="#031b26"/>
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="7" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <rect width="1200" height="720" fill="url(#bg)"/>
+  <!-- faint tile grid -->
+  <g stroke="#0d3a4d" stroke-width="2" opacity=".5">
+    <path d="M360 250h480M360 370h480M360 490h480M360 250v240M480 250v240M600 250v240M720 250v240M840 250v240"/>
+  </g>
+  <!-- dark pipe casing (the routed path) -->
+  <path d="M360 310 H480 V430 H600 V310 H720 V430 H840" fill="none" stroke="#0a4256" stroke-width="34" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- glowing current flowing through the connected path -->
+  <path d="M360 310 H480 V430 H600 V310 H720 V430 H840" fill="none" stroke="#2ff6ff" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)"/>
+  <path d="M360 310 H480 V430 H600 V310 H720 V430 H840" fill="none" stroke="#eafcff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" opacity=".85"/>
+  <!-- pulsing endpoints -->
+  <circle cx="360" cy="310" r="26" fill="#04121b" stroke="#2ff6ff" stroke-width="9" filter="url(#glow)"/>
+  <circle cx="360" cy="310" r="10" fill="#eafcff"/>
+  <circle cx="840" cy="430" r="26" fill="#04121b" stroke="#57ffcf" stroke-width="9" filter="url(#glow)"/>
+  <circle cx="840" cy="430" r="10" fill="#eafcff"/>
+  <!-- unrouted rotation tile hint -->
+  <g transform="translate(960 300)" filter="url(#glow)">
+    <path d="M0 60 H60 V0" fill="none" stroke="#1d6b82" stroke-width="20" stroke-linecap="round"/>
+    <path d="M70 34 a30 30 0 1 1 -8 -20" fill="none" stroke="#57ffcf" stroke-width="6"/>
+    <path d="M62 6 l4 16 -16 -2z" fill="#57ffcf"/>
+  </g>
+  <text x="55" y="95" fill="#eafcff" font-family="Arial Black,Arial,sans-serif" font-size="56" letter-spacing="3">TILE FLOW</text>
+  <text x="60" y="146" fill="#2ff6ff" font-family="ui-monospace,Menlo,monospace" font-size="24" font-weight="900" letter-spacing="5">ROTATE THE CURRENT</text>
+</svg>

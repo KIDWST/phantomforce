@@ -8,8 +8,14 @@ const mobilePlaySurface = () => typeof window !== "undefined" && window.matchMed
 const controlsCopy = (game) => mobilePlaySurface() ? "" : String(game?.controls || "").trim();
 const FALLBACK_KEY = "pf.phantomplay.offline.v1";
 const DEV_SUPPORT_KEY = "pf.phantomplay.developerSupport.v1";
-const CATEGORIES = ["All", "Arcade", "Puzzle", "Focus", "Strategy", "Sports", "Creative"];
-const GAME_SORTS = ["All", "Solo", "Multiplayer", "Toddler", ...CATEGORIES.filter((category) => category !== "All")];
+const CATEGORIES = ["All", "Kids", "Arcade", "Puzzle", "Focus", "Strategy", "Sports", "Creative"];
+const GAME_SORTS = ["All", "Solo", "Multiplayer", "Kids", ...CATEGORIES.filter((category) => category !== "All" && category !== "Kids")];
+const KIDS_ONLY_GAME_IDS = new Set([
+  "signal-match", "focus-stack", "reflex-grid", "penalty-kick", "rift-frenzy", "serpent-surge",
+  "color-rush", "tile-flow", "tower-tactics", "breath-pacer", "court-vision", "pixel-bloom",
+  "circuit-serpent", "echo-sequence", "signal-sweeper", "neon-breaker", "type-storm", "logic-lights",
+  "sudoku-signal",
+]);
 const GAME_CONTROL_KEYS = new Set([
   "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight",
   " ", "Spacebar", "Space", "Enter",
@@ -61,7 +67,7 @@ const PHANTOMPLAY_ENGINE = {
   },
   protocols: ["ready", "score", "progress", "complete", "paused", "exit", "settings", "save-state", "load-state"],
 };
-const PHANTOMPLAY_ART_VERSION = "phantomplay-art-20260717";
+const PHANTOMPLAY_ART_VERSION = "phantomplay-art-20260721";
 const artUrl = (file) => `/app/assets/phantomplay/${file}?v=${PHANTOMPLAY_ART_VERSION}`;
 const TAK_AVATAR = artUrl("tak-avatar.webp");
 const GAME_ART_BY_SLUG = {
@@ -71,7 +77,7 @@ const GAME_ART_BY_SLUG = {
   "word-weld": artUrl("word-weld-cover.webp"),
   "reflex-grid": artUrl("reflex-grid-cover.webp"),
   "rift-frenzy": artUrl("rift-frenzy-cover.svg"),
-  "serpent-surge": artUrl("reflex-grid-cover.webp"),
+  "serpent-surge": artUrl("serpent-surge-cover.svg"),
   "crown-circuit": artUrl("crown-circuit-cover.svg"),
   "kingdom-breakers": artUrl("kingdom-breakers-cover.svg"),
   "tidefront-tactics": artUrl("tidefront-tactics-cover.svg"),
@@ -83,8 +89,28 @@ const GAME_ART_BY_SLUG = {
   "beat-strike": artUrl("beat-strike-cover.svg"),
   "im-baked": artUrl("im-baked-cover.svg"),
   "phantom-strike": artUrl("phantom-strike-cover.svg"),
+  "phantom-dash": artUrl("phantom-dash-cover.svg"),
+  "color-rush": artUrl("color-rush-cover.svg"),
+  "circuit-serpent": artUrl("circuit-serpent-cover.svg"),
+  "neon-breaker": artUrl("neon-breaker-cover.svg"),
+  "phantom-rumble": artUrl("phantom-rumble-cover.svg"),
+  "vespergate": artUrl("vespergate-cover.svg"),
+  "court-vision": artUrl("court-vision-cover.svg"),
+  "phantom-pizzeria": artUrl("phantom-pizzeria-cover.svg"),
+  "tower-tactics": artUrl("tower-tactics-cover.svg"),
+  "tile-flow": artUrl("tile-flow-cover.svg"),
+  "echo-sequence": artUrl("echo-sequence-cover.svg"),
+  "signal-sweeper": artUrl("signal-sweeper-cover.svg"),
+  "logic-lights": artUrl("logic-lights-cover.svg"),
+  "sudoku-signal": artUrl("sudoku-signal-cover.svg"),
+  "pixel-bloom": artUrl("pixel-bloom-cover.svg"),
+  "type-storm": artUrl("type-storm-cover.svg"),
+  "breath-pacer": artUrl("breath-pacer-cover.svg"),
+  "phantom-cube": artUrl("phantom-cube-cover.svg"),
+  "phantom-chess": artUrl("phantom-chess-cover.svg"),
 };
 const CATEGORY_ART = {
+  Kids: GAME_ART_BY_SLUG["signal-match"],
   Arcade: GAME_ART_BY_SLUG["neon-drift"],
   Puzzle: GAME_ART_BY_SLUG["signal-match"],
   Focus: GAME_ART_BY_SLUG["focus-stack"],
@@ -390,13 +416,15 @@ function savedDateLabel(value) {
 }
 
 const multiplayerGame = (game) => game.localMultiplayer || game.onlineMultiplayer || game.multiplayerDescriptor || game.tags?.some((tag) => /multiplayer|friends|party|duel|arena|io/i.test(tag)) || ["phantom-rumble"].includes(game.id);
-const toddlerPick = (game) => game.contentRating === "toddler" || ["focus-stack", "signal-match", "sudoku-signal", "pixel-bloom"].includes(game.id);
+const kidsPick = (game) => KIDS_ONLY_GAME_IDS.has(game.id) || String(game.category || "").toLowerCase() === "kids";
+const generalPlayGames = (games) => games.filter((game) => !kidsPick(game));
+const displayCategoryFor = (game) => kidsPick(game) ? "Kids" : game.category;
 function sortGames(games, sort = ui.category) {
-  if (sort === "Solo") return games.filter((game) => !multiplayerGame(game));
-  if (sort === "Multiplayer") return games.filter(multiplayerGame);
-  if (sort === "Toddler") return games.filter(toddlerPick);
-  if (CATEGORIES.includes(sort) && sort !== "All") return games.filter((game) => game.category === sort);
-  return games;
+  if (sort === "Kids") return games.filter(kidsPick);
+  if (sort === "Solo") return generalPlayGames(games).filter((game) => !multiplayerGame(game));
+  if (sort === "Multiplayer") return generalPlayGames(games).filter(multiplayerGame);
+  if (CATEGORIES.includes(sort) && sort !== "All") return generalPlayGames(games).filter((game) => game.category === sort);
+  return generalPlayGames(games);
 }
 
 function gameCard(game, variant = "") {
@@ -406,7 +434,7 @@ function gameCard(game, variant = "") {
   const developer = developerNameFor(game);
   const thumbnail = thumbnailFor(game);
   return `<article class="pp-game ${variant}" data-pp-game-card="${esc(game.id)}">
-    <div class="pp-game-art"><img src="${esc(thumbnail)}" alt="" loading="lazy"/><span>${esc(game.category)}</span>${game.kind === "community" ? "<em>Prototype</em>" : ""}</div>
+    <div class="pp-game-art"><img src="${esc(thumbnail)}" alt="" loading="lazy"/><span>${esc(displayCategoryFor(game))}</span>${game.kind === "community" ? "<em>Prototype</em>" : ""}</div>
     <div class="pp-game-body"><div class="pp-game-title"><p class="pp-game-developer">${developerAvatar ? `<img src="${esc(developerAvatar)}" alt="" loading="lazy"/>` : ""}<span>By ${esc(developer)}</span></p><h3>${esc(game.title)}</h3></div><button type="button" class="pp-favorite ${favorite ? "is-on" : ""}" data-pp-favorite="${esc(game.id)}" aria-label="${favorite ? "Remove from" : "Add to"} favorites">${icon("heart")}</button>
     <p>${esc(game.summary)}</p>
     <div class="pp-game-meta"><span>${esc(game.contentRating === "everyone" ? "Everyone" : game.contentRating)}</span><span>v${esc(game.version)}</span>${history?.score != null ? `<span>Best ${history.score}</span>` : ""}</div>
@@ -451,11 +479,12 @@ function gameRows(games, title, copy = "") {
 }
 
 function renderHome() {
-  const featured = ui.snapshot.catalog.filter((game) => game.featured);
-  const recent = ui.snapshot.history.map((item) => ui.snapshot.catalog.find((game) => game.id === item.gameId)).filter(Boolean).slice(0, 4);
-  const continuing = ui.snapshot.history.filter((item) => item.canContinue).map((item) => ui.snapshot.catalog.find((game) => game.id === item.gameId)).filter(Boolean).slice(0, 4);
-  const community = ui.snapshot.catalog.filter((game) => game.kind === "community").slice(0, 4);
-  const activeGameId = featured[0]?.id || ui.snapshot.catalog[0]?.id || "";
+  const visibleCatalog = generalPlayGames(ui.snapshot.catalog);
+  const featured = visibleCatalog.filter((game) => game.featured);
+  const recent = ui.snapshot.history.map((item) => visibleCatalog.find((game) => game.id === item.gameId)).filter(Boolean).slice(0, 4);
+  const continuing = ui.snapshot.history.filter((item) => item.canContinue).map((item) => visibleCatalog.find((game) => game.id === item.gameId)).filter(Boolean).slice(0, 4);
+  const community = visibleCatalog.filter((game) => game.kind === "community").slice(0, 4);
+  const activeGameId = featured[0]?.id || visibleCatalog[0]?.id || "";
   return `<div class="pp-home">
     <section class="pp-hero">
       <div class="pp-console-copy">

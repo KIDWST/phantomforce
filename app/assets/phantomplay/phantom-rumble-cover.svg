@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 720" role="img" aria-labelledby="title desc">
+  <title id="title">Phantom Rumble cover art</title>
+  <desc id="desc">Two neon fighter silhouettes clashing on a floating platform stage with an impact spark burst.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#2a0d3d"/><stop offset=".5" stop-color="#120820"/><stop offset="1" stop-color="#07222e"/>
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="7" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <rect width="1200" height="720" fill="url(#bg)"/>
+  <!-- floating platform stage -->
+  <g filter="url(#glow)">
+    <rect x="330" y="500" width="540" height="34" rx="12" fill="#00e5ff"/>
+    <path d="M360 534 L420 604 L780 604 L840 534 Z" fill="#0a3b47" stroke="#00e5ff" stroke-width="3"/>
+    <!-- left fighter silhouette (magenta) -->
+    <path d="M470 500 L470 400 L440 360 L470 330 L505 350 L520 300 L548 320 L540 380 L560 420 L540 500 L510 500 L508 440 L490 500 Z" fill="#ff2fb0"/>
+    <!-- left punching arm -->
+    <path d="M548 400 L620 380 L640 400 L575 425 Z" fill="#ff2fb0"/>
+    <!-- right fighter silhouette (green) -->
+    <path d="M730 500 L730 400 L760 360 L730 330 L695 350 L680 300 L652 320 L660 380 L640 420 L660 500 L690 500 L692 440 L710 500 Z" fill="#41ffa1"/>
+    <!-- right punching arm -->
+    <path d="M652 400 L580 380 L560 400 L625 425 Z" fill="#41ffa1"/>
+    <!-- impact spark burst -->
+    <polygon points="600,340 620,395 678,388 632,420 652,478 600,442 548,478 568,420 522,388 580,395" fill="#fff27a"/>
+    <circle cx="600" cy="408" r="20" fill="#ffffff"/>
+  </g>
+  <text x="55" y="95" fill="#ffffff" font-family="Arial Black,Arial,sans-serif" font-size="56" letter-spacing="3">PHANTOM RUMBLE</text>
+  <text x="60" y="146" fill="#ff2fb0" font-family="ui-monospace,Menlo,monospace" font-size="24" font-weight="900" letter-spacing="5">LOCAL PLATFORM BRAWLER</text>
+</svg>

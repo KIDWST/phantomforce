@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 720" role="img" aria-labelledby="title desc">
+  <title id="title">Tower Tactics cover art</title>
+  <desc id="desc">A 4x4 grid with glowing numbered tiles 2, 4, 8, 16 through 512 mid-merge in a 2048-style puzzle.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#0d2340"/><stop offset=".5" stop-color="#0a0f1e"/><stop offset="1" stop-color="#2a0f3a"/>
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="6" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <rect width="1200" height="720" fill="url(#bg)"/>
+  <!-- 4x4 grid board -->
+  <g filter="url(#glow)">
+    <rect x="405" y="185" width="390" height="390" rx="18" fill="#132a4d" stroke="#2f5c99" stroke-width="4"/>
+    <!-- tiles: gutter 10, cell 87, start 420/200 -->
+    <!-- row 1 -->
+    <rect x="420" y="200" width="87" height="87" rx="10" fill="#3fd0ff"/><text x="463" y="257" fill="#062033" font-family="Arial Black,Arial,sans-serif" font-size="34" text-anchor="middle">2</text>
+    <rect x="517" y="200" width="87" height="87" rx="10" fill="#41ffa1"/><text x="560" y="257" fill="#062033" font-family="Arial Black,Arial,sans-serif" font-size="34" text-anchor="middle">4</text>
+    <rect x="614" y="200" width="87" height="87" rx="10" fill="#ffd166"/><text x="657" y="257" fill="#3a2400" font-family="Arial Black,Arial,sans-serif" font-size="34" text-anchor="middle">8</text>
+    <rect x="711" y="200" width="87" height="87" rx="10" fill="#ff9f43"/><text x="754" y="257" fill="#3a2400" font-family="Arial Black,Arial,sans-serif" font-size="28" text-anchor="middle">16</text>
+    <!-- row 2 -->
+    <rect x="420" y="297" width="87" height="87" rx="10" fill="#ff7a90"/><text x="463" y="354" fill="#33000a" font-family="Arial Black,Arial,sans-serif" font-size="28" text-anchor="middle">32</text>
+    <rect x="517" y="297" width="87" height="87" rx="10" fill="#ff5ca0"/><text x="560" y="354" fill="#33000a" font-family="Arial Black,Arial,sans-serif" font-size="28" text-anchor="middle">64</text>
+    <rect x="614" y="297" width="87" height="87" rx="10" fill="#c86bff"/><text x="657" y="352" fill="#1a0033" font-family="Arial Black,Arial,sans-serif" font-size="24" text-anchor="middle">128</text>
+    <rect x="711" y="297" width="87" height="87" rx="10" fill="#8a6bff"/><text x="754" y="352" fill="#f0ecff" font-family="Arial Black,Arial,sans-serif" font-size="24" text-anchor="middle">256</text>
+    <!-- row 3: mid-merge pair sliding together -->
+    <rect x="470" y="394" width="87" height="87" rx="10" fill="#00e0b0"/><text x="513" y="446" fill="#003026" font-family="Arial Black,Arial,sans-serif" font-size="24" text-anchor="middle">512</text>
+    <rect x="562" y="394" width="87" height="87" rx="10" fill="#00e0b0" opacity=".55"/><text x="605" y="446" fill="#003026" font-family="Arial Black,Arial,sans-serif" font-size="24" text-anchor="middle">512</text>
+    <rect x="711" y="394" width="87" height="87" rx="10" fill="#132a4d" stroke="#2f5c99" stroke-width="2"/>
+    <!-- merge arrow -->
+    <path d="M655 505 L655 460 L640 460 L668 425 L696 460 L681 460 L681 505 Z" fill="#eafcff"/>
+    <!-- row 4 empty cells -->
+    <rect x="420" y="491" width="87" height="87" rx="10" fill="#132a4d" stroke="#2f5c99" stroke-width="2"/>
+    <rect x="517" y="491" width="87" height="87" rx="10" fill="#132a4d" stroke="#2f5c99" stroke-width="2"/>
+    <rect x="614" y="491" width="87" height="87" rx="10" fill="#132a4d" stroke="#2f5c99" stroke-width="2"/>
+    <rect x="711" y="491" width="87" height="87" rx="10" fill="#132a4d" stroke="#2f5c99" stroke-width="2"/>
+  </g>
+  <text x="55" y="95" fill="#eafcff" font-family="Arial Black,Arial,sans-serif" font-size="56" letter-spacing="3">TOWER TACTICS</text>
+  <text x="60" y="146" fill="#3fd0ff" font-family="ui-monospace,Menlo,monospace" font-size="24" font-weight="900" letter-spacing="5">SLIDE · MERGE · 2048</text>
+</svg>
