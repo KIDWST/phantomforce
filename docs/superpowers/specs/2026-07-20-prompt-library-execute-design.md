@@ -86,18 +86,24 @@ that read.
 
 - `GET /prompt-library` failure → show a "couldn't load, retry" empty state;
   never silently fall back to a stale hardcoded list.
-- Concurrent admin writes → checksum-conflict-refuse, same as CRM store
-  (reject the write, ask the admin to reload) rather than last-write-wins,
-  given multiple sessions sometimes touch this worktree concurrently.
+- Concurrent admin writes are serialized through the same in-process lock
+  pattern the CRM store uses (`withTenantLock`/`withGlobalLock`): each write
+  reads-mutates-writes atomically with respect to other writes in the same
+  server process. Correction from an earlier draft of this doc: neither this
+  store nor the CRM store it mirrors actually rejects on a stale
+  client-supplied checksum — the lock prevents corruption, not a losing
+  writer's edit being silently applied after a fresher one. That's the real,
+  existing behavior this feature matches, not a gap introduced here.
 - If the Chat workspace's `promptIntent` read races against mount (rare),
   fall back to switching tabs without auto-send rather than losing the prompt
   or throwing.
 
 ## Testing
 
-- Backend: CRUD + checksum-conflict unit tests for `prompt-library-store.ts`
-  (same shape as existing CRM store tests), plus a 403 test for non-admin
-  writes to the mutating routes.
+- Backend: CRUD unit tests for `prompt-library-store.ts` (create/update/delete,
+  checksum present on every read, version increments on write), same shape as
+  existing CRM store tests, plus a 403 test for non-admin writes to the
+  mutating routes.
 - Manual: launch the dev server and click through Send → Chat handoff, and
   Add/Edit/Delete as an admin, before calling this done.
 
