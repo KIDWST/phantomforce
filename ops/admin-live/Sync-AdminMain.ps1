@@ -69,7 +69,26 @@ try {
 
   $dirty = (Invoke-Git status --porcelain --untracked-files=no).Trim()
   if ($dirty) {
-    $summary = "skipped: tracked files are dirty; commit or stash before auto-sync"
+    $local = (Invoke-Git rev-parse HEAD).Trim()
+    Write-Manifest -Commit $local -Branch $branch
+
+    $uiStarted = $false
+    if (@(Get-ListeningPids -LocalPort $Port).Count -eq 0) {
+      & (Join-Path $PSScriptRoot "Start-AdminLive.ps1") -RepoRoot $RepoRoot -Port $Port -StopExisting
+      $uiStarted = $true
+    }
+
+    $hermesStarted = $false
+    if (-not $SkipHermes -and @(Get-ListeningPids -LocalPort $HermesPort).Count -eq 0) {
+      try {
+        & (Join-Path $PSScriptRoot "Start-Hermes.ps1") -RepoRoot $RepoRoot -Port $HermesPort -Commit $local -StopExisting
+        $hermesStarted = $true
+      } catch {
+        Write-SyncLog "Hermes dirty-tree start failed (non-fatal): $($_.Exception.Message)"
+      }
+    }
+
+    $summary = "skipped git pull: tracked files are dirty; local services checked$(if ($uiStarted) { ' (ui started)' } else { '' })$(if ($hermesStarted) { ' (hermes started)' } else { '' })"
     Write-SyncLog $summary
     Write-Output "PhantomForce admin main $summary."
     return
