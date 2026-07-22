@@ -1,7 +1,7 @@
 import {
   currentTenantId, isAdmin, isOwnerOperator, session,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260722-18";
+} from "./store.js?v=phantom-live-20260722-19";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 const mobilePlaySurface = () => typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;
@@ -364,7 +364,6 @@ async function hydrate() {
     } else {
       ui.snapshot = normalizeSnapshot(offlineState());
       ui.offline = true;
-      ui.notice = "Cloud sync is offline. Built-in games still launch locally; saves, rooms, submissions, and policies sync when the backend returns.";
     }
   } finally {
     ui.loading = false;
