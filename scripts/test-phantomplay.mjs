@@ -18,6 +18,7 @@ const cubeTownIndex = read("../app/games/cubetown/index.html");
 const flagshipCatalog = read("../server/src/phantom-ai/phantomplay-flagship.ts");
 const serverCatalog = read("../server/src/phantom-ai/phantomplay.ts");
 const serverV2Catalog = read("../server/src/phantom-ai/phantomplay-v2.ts");
+const serverIndex = read("../server/src/index.ts");
 const kingdomBreakers = read("../app/games/kingdom-breakers.html");
 const kingdomBreakersScript = kingdomBreakers.match(/<script>([\s\S]*)<\/script>/u)?.[1] || "";
 const crownCircuit = read("../app/games/crown-circuit.html");
@@ -96,7 +97,10 @@ assert.doesNotMatch(module + v2Module, /Sign in to play|Backend session required
 assert.match(module + v2Module, /local_play_fallback/u, "PhantomPlay fallback snapshots must allow signed-in workspace users to launch built-in games locally while sync is offline.");
 assert.match(module + v2Module, /function canLaunchGames[\s\S]*hasWorkspaceSession/u, "PhantomPlay launch gating must treat an existing workspace session as enough for local built-in play.");
 assert.match(module + v2Module, /Cloud sync is offline/u, "PhantomPlay offline copy must present backend loss as sync degradation, not a sign-in failure.");
-assert.match(module + v2Module, /ui\.error \? `<div class="pp2?-banner is-error|ui\.error \? `<div class="pp-banner is-error/u, "PhantomPlay must show launch/session errors even when backend sync is offline.");
+assert.match(module, /catch \(error\) \{[\s\S]*ui\.snapshot = normalizeSnapshot\(offlineState\(\)\);[\s\S]*ui\.offline = true;[\s\S]*ui\.notice = "Cloud sync is offline/u, "Classic PhantomPlay must treat initial backend loss as an offline-sync notice, not a red error.");
+assert.match(v2Module, /catch \(error\) \{[\s\S]*if \(error\?\.status === 403\)[\s\S]*ui\.error = error\.message;[\s\S]*ui\.snapshot = normalizeSnapshot\(offlineState\(\)\); ui\.offline = true;[\s\S]*ui\.error = ""/u, "V2 PhantomPlay must keep policy blocks red but treat initial backend loss as offline sync.");
+assert.match(module + v2Module, /ui\.error \? `<div class="pp2?-banner is-error|ui\.error \? `<div class="pp-banner is-error/u, "PhantomPlay must still show launch/session errors.");
+assert.match(serverIndex, /app\.get\("\/api\/phantomplay"[\s\S]*try \{[\s\S]*getPhantomPlaySnapshot[\s\S]*catch \(error\)[\s\S]*sync_unavailable/u, "The PhantomPlay snapshot route must fail soft instead of returning raw Internal Server Error.");
 assert.match(module, /No games ready/u, "The condensed library must retain a useful empty state.");
 assert.match(module, /not a marketplace/u, "PhantomPlay must be positioned as a sandbox, not a marketplace.");
 assert.match(module, /Play together with friends in this workspace\./u, "PhantomPlay must expose the private multiplayer room surface.");
@@ -229,6 +233,7 @@ assert.match(crownCircuit, /target\.slow = Math\.max\(target\.slow, projectile\.
 assert.match(crownCircuit, /\["ranger", "bombard", "sapper", "wisps", "medic", "charger", "oracle", "ram"\]/u, "Crown Circuit bot loadouts must know the new Oracle/Ram cards.");
 assert.match(crownCircuit, /const MAX_ELIXIR = 10[\s\S]*const HAND_SIZE = 4[\s\S]*const DECK_SIZE = 8/u, "Crown Circuit must use an 8-card deck, four-card hand, and 10 elixir cap.");
 assert.match(crownCircuit, /function cycleCard\(side, cardIndex\)[\s\S]*drawQueue\[side\][\s\S]*queue\.push\(used\)/u, "Crown Circuit must cycle played cards back through the draw queue.");
+assert.match(crownCircuit, /selectedTroops\.length !== DECK_SIZE[\s\S]*eight-card loadout/u, "Crown Circuit boot checks must validate the 8-card deck instead of crashing on the old 4-card assumption.");
 assert.doesNotThrow(() => new Function(crownCircuitScript), "Crown Circuit script must parse.");
 assert.doesNotThrow(() => new Function(skyguardArena), "Skyguard Arena script must parse.");
 assert.match(skyguardArena, /id:\s*"neontangle"[\s\S]*Neon Tangle[\s\S]*Braided relay race/u, "Skyguard Arena must include the new Neon Tangle map.");
@@ -242,13 +247,13 @@ assert.match(skyguardArena, /const PATH_KEYS = \["power", "reach", "tech"\][\s\S
 assert.match(skyguardArena, /function applySentinelPathStats\(stats, sentinel\)[\s\S]*tech >= 3 \? 1 : 0/u, "Skyguard Tech path must unlock a real chain effect at max tech.");
 assert.match(skyguardArena, /count:\s*1,\s*gap:\s*0,\s*formation:\s*1/u, "Skyguard campaign round one must start with a single enemy.");
 assert.match(skyguardArena, /if \(n >= 3\) entries\.push\(\{ type: "skiff"/u, "Skyguard Century Watch must delay surprise air units until after the opener.");
-assert.match(module, /id: "crown-circuit"[\s\S]*battle plans[\s\S]*launchUrl: "\/app\/games\/crown-circuit\.html\?v=1\.3\.2"[\s\S]*version: "1\.3\.2"/u, "Default catalog must launch and describe the upgraded Crown Circuit 1.3.2 build.");
+assert.match(module, /id: "crown-circuit"[\s\S]*battle plans[\s\S]*launchUrl: "\/app\/games\/crown-circuit\.html\?v=1\.3\.3"[\s\S]*version: "1\.3\.3"/u, "Default catalog must launch and describe the upgraded Crown Circuit 1.3.3 build.");
 assert.match(module, /id: "skyguard-arena"[\s\S]*three-path Sentinel upgrades[\s\S]*launchUrl: "\/app\/games\/skyguard-arena\/index\.html\?v=1\.3\.3"[\s\S]*version: "1\.3\.3"/u, "Default catalog must launch and describe the upgraded Skyguard Arena 1.3.3 build.");
-assert.match(v2Module, /\["crown-circuit", "Crown Circuit", "Strategy", "\/app\/games\/crown-circuit\.html\?v=1\.3\.2"\]/u, "V2 offline catalog must launch upgraded Crown Circuit.");
+assert.match(v2Module, /\["crown-circuit", "Crown Circuit", "Strategy", "\/app\/games\/crown-circuit\.html\?v=1\.3\.3"\]/u, "V2 offline catalog must launch upgraded Crown Circuit.");
 assert.match(v2Module, /\["skyguard-arena", "Skyguard Arena", "Strategy", "\/app\/games\/skyguard-arena\/index\.html\?v=1\.3\.3"\]/u, "V2 offline catalog must launch upgraded Skyguard Arena.");
-assert.match(v2Module, /id === "skyguard-arena" \? "1\.3\.3" : id === "crown-circuit" \? "1\.3\.2"/u, "V2 offline catalog must expose Skyguard 1.3.3 and Crown Circuit 1.3.2.");
+assert.match(v2Module, /id === "skyguard-arena" \? "1\.3\.3" : id === "crown-circuit" \? "1\.3\.3"/u, "V2 offline catalog must expose Skyguard 1.3.3 and Crown Circuit 1.3.3.");
 assert.match(flagshipCatalog, /id:\s*"skyguard-arena"[\s\S]*three-path upgrades[\s\S]*version:\s*"1\.3\.3"/u, "Server flagship catalog must describe the upgraded Skyguard Arena 1.3.3 build.");
-assert.match(flagshipCatalog, /id:\s*"crown-circuit"[\s\S]*battle plans[\s\S]*version:\s*"1\.3\.2"/u, "Server flagship catalog must describe the upgraded Crown Circuit 1.3.2 build.");
+assert.match(flagshipCatalog, /id:\s*"crown-circuit"[\s\S]*battle plans[\s\S]*version:\s*"1\.3\.3"/u, "Server flagship catalog must describe the upgraded Crown Circuit 1.3.3 build.");
 assert.match(tidefrontTactics, /Arrow keys to adjust angle\/power|Space to fire|Fleet Room/u, "Tidefront Tactics must remain the restored artillery battle.");
 assert.match(games[gameSlugs.indexOf("serpent-surge")], /storm|boost|rival|serpent|trail/u, "Serpent Surge must play as a modern snake arena, not a static old mini-game.");
 assert.match(phantomRumble, /shieldHeld|data-t="shield"|PARRY/u, "Phantom Rumble must have real guard and parry mechanics.");
@@ -303,5 +308,8 @@ assert.match(module, /game\.devModeAvailable \? `<button class="pp-devsandbox-op
 assert.match(module, /sandbox="allow-scripts allow-pointer-lock"[^>]*data-pp-frame/u, "The Dev Sandbox player iframe must remain opaque-origin sandboxed.");
 assert.match(module, /const blob = new Blob\(\[nextSource\], \{ type: "text\/html" \}\)/u, "Dev Mode edits must apply via a local blob URL, never a same-origin write.");
 assert.doesNotMatch(module, /devmode[\s\S]{0,200}(child_process|new Function|\.eval\()/iu, "The host page's Dev Mode code must never itself execute the edited source — only the sandboxed iframe does, by loading it as a document.");
+assert.match(module + v2Module, /section:\s*"mods"/u, "Dev Mode must open to useful controls first, not raw Live Code.");
+assert.doesNotMatch(css + v2Css, /\.pp2?-player\.is-devsandbox\{grid-template-columns:minmax\(0,1fr\) minmax/u, "Dev Mode must not squeeze the running game into a side-by-side editor.");
+assert.match(css, /\.pp-devsandbox\{position:absolute[\s\S]*width:min\(430px,calc\(100% - 28px\)\)/u, "Dev Mode must render as a polished drawer over the full-size game.");
 
 console.log("PhantomPlay frontend and game safety checks passed.");

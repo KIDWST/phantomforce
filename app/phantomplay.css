@@ -1182,14 +1182,11 @@ html[data-org-color-mode="light"] .pp-game-art img{
 .pp-devmode-toggle.is-off i{background:#ff6d83;box-shadow:0 0 0 2px var(--glass-2)}
 .pp-devsandbox-open{min-height:34px;border:1px solid #41ffa173;border-radius:9px;background:#41ffa112;color:#1f9e63;font-weight:800;cursor:pointer}
 .pp-devsandbox-open:hover,.pp-devsandbox-open:focus-visible{border-color:#41ffa1cc;color:#137a4b;outline:none}
-.pp-player.is-devsandbox{grid-template-columns:minmax(0,1fr) minmax(340px,420px)}
-.pp-player.is-devsandbox>header{grid-column:1/-1;grid-row:1}
+.pp-player.is-devsandbox{grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr) auto}
 .pp-player.is-devsandbox .pp-player-stage{grid-column:1;grid-row:2}
-.pp-player.is-devsandbox .pp-devsandbox{grid-row:2}
-.pp-player.is-devsandbox>footer{grid-column:1/-1;grid-row:3}
 .pp-devsandbox-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border:1px solid #41ffa173;border-radius:999px;background:#020907e8;color:#41ffa1;font:900 9px "Spline Sans Mono",monospace;letter-spacing:.1em;text-transform:uppercase}
 .pp-devsandbox-badge::before{content:"";width:6px;height:6px;border-radius:50%;background:#41ffa1;box-shadow:0 0 8px #41ffa1}
-.pp-devsandbox{grid-column:2;display:grid;grid-template-rows:auto minmax(0,1fr) auto;min-height:0;border-left:1px solid #41ffa13d;background:#03100c}
+.pp-devsandbox{position:absolute;z-index:12;top:68px;right:14px;bottom:54px;display:grid;grid-template-rows:auto auto auto minmax(0,1fr) auto auto;width:min(430px,calc(100% - 28px));min-height:0;overflow:hidden;border:1px solid #41ffa15c;border-radius:14px;background:#03100cf2;box-shadow:0 28px 90px #000c,0 0 0 1px #ffffff08 inset;backdrop-filter:blur(14px)}
 .pp-devsandbox>header{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 11px;border-bottom:1px solid #41ffa129}
 .pp-devsandbox>header b{color:#41ffa1;font:900 10px "Spline Sans Mono",monospace;letter-spacing:.12em}
 .pp-devsandbox>header span{color:#7fead0;font-size:10px}
@@ -1198,7 +1195,7 @@ html[data-org-color-mode="light"] .pp-game-art img{
 .pp-devsandbox-section-picker select{padding:6px 9px;border:1px solid #41ffa13d;border-radius:7px;background:#03100c;color:#d3ffe9;font-size:11px;text-transform:none}
 .pp-devsandbox-note{margin:0;padding:8px 11px;color:#5fbf9c;font-size:10.5px;border-bottom:1px solid #41ffa129}
 .pp-devsandbox-error{margin:9px 11px 0;padding:8px 10px;border:1px solid #ff6d8355;border-radius:8px;background:#ff6d830f;color:#ffc7d1;font-size:11px}
-.pp-devsandbox-source{width:100%;height:100%;min-height:0;padding:11px;border:0;background:#03100c;color:#d3ffe9;font:11px/1.55 "Spline Sans Mono",monospace;resize:none}
+.pp-devsandbox-source{width:100%;height:100%;min-height:0;padding:11px;border:0;background:#03100c;color:#d3ffe9;font:11px/1.55 "Spline Sans Mono",monospace;resize:none;scrollbar-color:#41ffa166 #03100c;scrollbar-width:thin}
 .pp-devsandbox-mods{display:grid;gap:10px;padding:11px;overflow-y:auto;min-height:0}
 .pp-devsandbox-speed-row{display:grid;gap:5px;padding-bottom:10px;border-bottom:1px solid #41ffa129}
 .pp-devsandbox-speed-row label{display:flex;align-items:center;justify-content:space-between;gap:8px;color:#d3ffe9;font-size:12px;font-weight:700}
@@ -1215,5 +1212,5 @@ html[data-org-color-mode="light"] .pp-game-art img{
 .pp-devsandbox>footer button:hover,.pp-devsandbox>footer button:focus-visible{border-color:#41ffa1cc;outline:none}
 .pp-devsandbox-save{background:#41ffa1!important;color:#03100c!important;border-color:#41ffa1!important}
 .pp-devsandbox-publish{background:#ff6d3d!important;color:#2a0e02!important;border-color:#ff6d3d!important}
-@media(max-width:980px){.pp-player.is-devsandbox{grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr) auto auto}.pp-player.is-devsandbox .pp-devsandbox{grid-column:1;grid-row:3;border-left:0;border-top:1px solid #41ffa13d;max-height:46vh}.pp-player.is-devsandbox>footer{grid-row:4}}
+@media(max-width:980px){.pp-player.is-devsandbox{grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr) auto}.pp-player.is-devsandbox .pp-devsandbox{top:auto;right:10px;bottom:44px;left:10px;width:auto;max-height:min(360px,46vh);border-radius:12px}}
 @media(max-width:900px){.pp-devmode-body{grid-template-columns:1fr;grid-template-rows:1fr 1fr}.pp-devmode-editor{border-right:0;border-bottom:1px solid var(--line)}}

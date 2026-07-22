@@ -9,7 +9,7 @@
 import {
   currentTenantId, isAdmin, session,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260722-14";
+} from "./store.js?v=phantom-live-20260722-16";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
 const mobilePlaySurface = () => typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;
@@ -86,7 +86,7 @@ const OFFLINE_GAMES = [
   ["focus-stack", "Focus Stack", "Focus", "/app/games/focus-stack.html"],
   ["phantom-rumble", "Phantom Rumble", "Arcade", "/app/games/phantom-rumble.html?v=2.2.4"],
   ["rift-frenzy", "Rift Frenzy", "Arcade", "/app/games/rift-frenzy.html?v=2.0.0"],
-  ["crown-circuit", "Crown Circuit", "Strategy", "/app/games/crown-circuit.html?v=1.3.2"],
+  ["crown-circuit", "Crown Circuit", "Strategy", "/app/games/crown-circuit.html?v=1.3.3"],
   ["kingdom-breakers", "Kingdom Breakers", "Strategy", "/app/games/kingdom-breakers.html?v=1.1.0"],
   ["tidefront-tactics", "Tidefront Tactics", "Strategy", "/app/games/tidefront-tactics.html?v=1.1.0"],
   ["skyguard-arena", "Skyguard Arena", "Strategy", "/app/games/skyguard-arena/index.html?v=1.3.3"],
@@ -94,7 +94,7 @@ const OFFLINE_GAMES = [
   ["phantom-cube", "PhantomCube", "Puzzle", "/app/games/phantom-cube/index.html?v=1.0.0"],
   ["phantom-chess", "Phantom Chess", "Strategy", "/app/games/phantom-chess/index.html?v=1.0.0"],
   ["phantom-pizzeria", "Phantom Pizzeria", "Creative", "/app/games/phantom-pizzeria/index.html?v=1.0.0"],
-].map(([id, title, category, launchUrl]) => ({ id, title, summary: id === "phantom-rumble" ? "Premium local platform fighter with guard, parry, dodge, ledge-save recovery, bots, and local multiplayer." : id === "rift-frenzy" ? "School-to-grow fish survival with rival steals, absorb cooldown, hazards, and bots." : id === "crown-circuit" ? "Solo bot training plus upgraded Oracle/Ram cards, battle plans, and Obsidian Relay duels." : id === "kingdom-breakers" ? "Physics castle siege with duel castles and wardens." : id === "tidefront-tactics" ? "Wind-read artillery tactics battle." : id === "skyguard-arena" ? "Sentinel defense with starter sentries, Century Watch bosses, Neon Tangle, and relay surges." : "Offline built-in game.", description: "", category, tags: [], contentRating: ["rift-frenzy", "crown-circuit", "kingdom-breakers", "tidefront-tactics", "skyguard-arena"].includes(id) ? "everyone10" : "everyone", developer: "Tak", kind: "built_in", launchUrl, thumbnail: "", featured: ["phantom-rumble", "rift-frenzy", "crown-circuit", "kingdom-breakers", "tidefront-tactics", "skyguard-arena"].includes(id), version: id === "phantom-rumble" ? "2.2.4" : id === "rift-frenzy" ? "2.0.0" : id === "skyguard-arena" ? "1.3.3" : id === "crown-circuit" ? "1.3.2" : ["kingdom-breakers", "tidefront-tactics"].includes(id) ? "1.1.0" : "1.0.0", controls: id === "phantom-rumble" ? "Keyboard controls." : "", progressSupport: true, scoreSupport: true, devModeAvailable: true }));
+].map(([id, title, category, launchUrl]) => ({ id, title, summary: id === "phantom-rumble" ? "Premium local platform fighter with guard, parry, dodge, ledge-save recovery, bots, and local multiplayer." : id === "rift-frenzy" ? "School-to-grow fish survival with rival steals, absorb cooldown, hazards, and bots." : id === "crown-circuit" ? "Solo bot training plus upgraded Oracle/Ram cards, battle plans, and Obsidian Relay duels." : id === "kingdom-breakers" ? "Physics castle siege with duel castles and wardens." : id === "tidefront-tactics" ? "Wind-read artillery tactics battle." : id === "skyguard-arena" ? "Sentinel defense with starter sentries, Century Watch bosses, Neon Tangle, and relay surges." : "Offline built-in game.", description: "", category, tags: [], contentRating: ["rift-frenzy", "crown-circuit", "kingdom-breakers", "tidefront-tactics", "skyguard-arena"].includes(id) ? "everyone10" : "everyone", developer: "Tak", kind: "built_in", launchUrl, thumbnail: "", featured: ["phantom-rumble", "rift-frenzy", "crown-circuit", "kingdom-breakers", "tidefront-tactics", "skyguard-arena"].includes(id), version: id === "phantom-rumble" ? "2.2.4" : id === "rift-frenzy" ? "2.0.0" : id === "skyguard-arena" ? "1.3.3" : id === "crown-circuit" ? "1.3.3" : ["kingdom-breakers", "tidefront-tactics"].includes(id) ? "1.1.0" : "1.0.0", controls: id === "phantom-rumble" ? "Keyboard controls." : "", progressSupport: true, scoreSupport: true, devModeAvailable: true }));
 
 function offlineState() {
   let saved = {};
@@ -136,7 +136,7 @@ async function hydrate() {
       ui.error = error.message;
     } else {
       ui.snapshot = normalizeSnapshot(offlineState()); ui.offline = true;
-      ui.error = error instanceof Error ? error.message : "PhantomPlay sync is unavailable.";
+      ui.error = "";
     }
   }
   try {
@@ -616,7 +616,7 @@ async function openDevSandbox() {
   const { game } = ui.player;
   if (!game.devModeAvailable) return;
   revokeDevSandboxBlob();
-  ui.devSandbox = { gameId: game.id, source: "", editedSource: "", blobUrl: "", hasOverride: false, overrideUpdatedAt: null, loading: true, error: "", status: "", saving: false, publishing: false, section: "code", modState: {}, speed: 1 };
+  ui.devSandbox = { gameId: game.id, source: "", editedSource: "", blobUrl: "", hasOverride: false, overrideUpdatedAt: null, loading: true, error: "", status: "", saving: false, publishing: false, section: "mods", modState: {}, speed: 1 };
   render();
   try {
     const [sourceResult, overrideResult] = await Promise.all([
@@ -628,7 +628,7 @@ async function openDevSandbox() {
       gameId: game.id, source: sourceResult.source, editedSource: startingSource, blobUrl: "",
       hasOverride: !!overrideResult.source, overrideUpdatedAt: overrideResult.updatedAt,
       loading: false, error: "", status: overrideResult.source ? "Resumed your saved workspace override." : "Loaded the shipped source.", saving: false, publishing: false,
-      section: "code", modState: {}, speed: 1,
+      section: "mods", modState: {}, speed: 1,
     };
     rebuildDevSandboxFrame(startingSource);
   } catch (error) {
@@ -640,7 +640,7 @@ async function openDevSandbox() {
         hasOverride: false, overrideUpdatedAt: null,
         loading: false, error: "", status: "Loaded the shipped game source locally. Save/publish needs backend sync.",
         saving: false, publishing: false,
-        section: "code", modState: {}, speed: 1,
+        section: "mods", modState: {}, speed: 1,
       };
       rebuildDevSandboxFrame(source);
     } catch {

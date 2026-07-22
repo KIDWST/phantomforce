@@ -1,7 +1,7 @@
 import {
   currentTenantId, isAdmin, isOwnerOperator, session,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260722-14";
+} from "./store.js?v=phantom-live-20260722-16";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 const mobilePlaySurface = () => typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;
@@ -135,7 +135,7 @@ const BUILT_INS = [
   { id: "word-weld", title: "Word Weld", summary: "Daily Wordle-inspired puzzle plus buddy-duel word runs for PhantomForce friends.", description: "A Wordle-inspired daily weld: everyone gets the same five-letter puzzle once per day on this workspace device, or you can start a pass-and-play buddy duel for private PhantomForce friends.", category: "Puzzle", tags: ["word", "daily", "puzzle", "multiplayer", "friends", "touch"], contentRating: "everyone", multiplayerDescriptor: "Buddy Duel is pass-and-play today; ready for private PhantomPlay room relay without public discovery.", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/word-weld.html?v=2.0.0", thumbnail: GAME_ART_BY_SLUG["word-weld"], featured: true, version: "2.0.0", controls: "Keyboard, tap letters, Enter to submit", progressSupport: true, scoreSupport: true },
   { id: "reflex-grid", title: "Reflex Grid", summary: "Hit the live cells before the grid burns out.", description: "A fast aim-and-reaction grid for short focus breaks, with mistakes, streaks, and a real finish.", category: "Strategy", tags: ["reaction", "strategy", "touch", "aim"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/reflex-grid.html?v=1.0.0", thumbnail: GAME_ART_BY_SLUG["reflex-grid"], featured: true, version: "1.0.0", controls: "Click, tap, or use number keys", progressSupport: true, scoreSupport: true },
   { id: "rift-frenzy", title: "Rift Frenzy", summary: "Carry a valuable fish school, steal from rivals, then absorb at the perfect moment to become enormous.", description: "A school-to-grow ocean survival arena: collect smaller neutral fish into a visible school, protect it from rival steals, dash through exposed schools, absorb the school on a 10-second cooldown, grow permanently, survive predators and hazards, and eliminate every rival until one fish remains.", category: "Arcade", tags: ["fish", "arena", "growth", "io", "multiplayer", "school"], contentRating: "everyone10", multiplayerDescriptor: "Solo fills rival slots with bots; local 1-4 player keyboard mode replaces bots with humans.", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/rift-frenzy.html?v=2.0.0", thumbnail: GAME_ART_BY_SLUG["rift-frenzy"], featured: true, version: "2.0.0", controls: "P1 WASD, Shift dash, Space absorb. P2 arrows, / dash, Enter absorb. P3 IJKL, O dash, U absorb. P4 TFGH, Y dash, R absorb.", progressSupport: true, scoreSupport: true, engine: { tier: "arena-large-map", minVersion: PHANTOMPLAY_ENGINE.version } },
-  { id: "crown-circuit", title: "Crown Circuit", summary: "Solo bot training plus 8-card/4-hand elixir lane duels with battle plans, Obsidian Relay, Oracle slows, Ram sieges, and room support.", description: "A royale-style lane battler: choose Balanced, Siege Push, Split Swarm, Control Lock, or Tempo Cycle before the match, then start Solo Training against Crown Bot to learn lane pressure, elixir timing, card cycling, and tower trades across multiple arenas including Obsidian Relay. Oracle cards apply real slows, Ram cards pressure towers, and Crown Bot cycles plan-biased decks.", category: "Strategy", tags: ["card", "lane", "royale", "solo", "bots", "training", "multiplayer", "pvp", "drag-and-drop", "touch"], contentRating: "everyone10", contentDescriptors: ["strategic_complexity", "competitive_play"], multiplayerDescriptor: "Solo Training fills the rival side with Crown Bot. Room mode supports a two-player private PhantomPlay duel, one device each, with no public matchmaking, chat, or voice.", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/crown-circuit.html?v=1.3.2", thumbnail: GAME_ART_BY_SLUG["crown-circuit"], featured: true, version: "1.3.2", controls: "Choose a battle plan, build an eight-card deck, drag from the four-card hand onto your side, and cycle back to the next card. Solo Training starts immediately against Crown Bot; Room mode waits for player two.", progressSupport: true, scoreSupport: true, engine: { tier: "arena-large-map", minVersion: PHANTOMPLAY_ENGINE.version } },
+  { id: "crown-circuit", title: "Crown Circuit", summary: "Solo bot training plus 8-card/4-hand elixir lane duels with battle plans, Obsidian Relay, Oracle slows, Ram sieges, and room support.", description: "A royale-style lane battler: choose Balanced, Siege Push, Split Swarm, Control Lock, or Tempo Cycle before the match, then start Solo Training against Crown Bot to learn lane pressure, elixir timing, card cycling, and tower trades across multiple arenas including Obsidian Relay. Oracle cards apply real slows, Ram cards pressure towers, and Crown Bot cycles plan-biased decks.", category: "Strategy", tags: ["card", "lane", "royale", "solo", "bots", "training", "multiplayer", "pvp", "drag-and-drop", "touch"], contentRating: "everyone10", contentDescriptors: ["strategic_complexity", "competitive_play"], multiplayerDescriptor: "Solo Training fills the rival side with Crown Bot. Room mode supports a two-player private PhantomPlay duel, one device each, with no public matchmaking, chat, or voice.", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/crown-circuit.html?v=1.3.3", thumbnail: GAME_ART_BY_SLUG["crown-circuit"], featured: true, version: "1.3.3", controls: "Choose a battle plan, build an eight-card deck, drag from the four-card hand onto your side, and cycle back to the next card. Solo Training starts immediately against Crown Bot; Room mode waits for player two.", progressSupport: true, scoreSupport: true, engine: { tier: "arena-large-map", minVersion: PHANTOMPLAY_ENGINE.version } },
   { id: "kingdom-breakers", title: "Kingdom Breakers", summary: "Physics siege duels with two castles, wardens, Stonefall Orbs, Splinter Lances, and Emberburst shots.", description: "A real castle-breaker: campaign holds, duel mode with one player castle and one bot castle, destructible blocks, ammo choice, and Warden defeat as the core win condition. This restores the hard-work siege game to the main PhantomPlay fallback catalog.", category: "Strategy", tags: ["siege", "destruction", "physics", "artillery", "campaign", "pvp"], contentRating: "everyone10", contentDescriptors: ["cartoon_action", "mild_destruction", "competitive_play"], developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/kingdom-breakers.html?v=1.1.0", thumbnail: GAME_ART_BY_SLUG["kingdom-breakers"], featured: true, version: "1.1.0", controls: "Drag to aim and release to fire. 1/2/3 switch ammo. Space or Enter fires while aiming.", progressSupport: true, scoreSupport: true, engine: { tier: "physics-siege", minVersion: PHANTOMPLAY_ENGINE.version } },
   { id: "tidefront-tactics", title: "Tidefront Tactics", summary: "Wind-read artillery battles with angle, power, weapons, skiffs, bots, and room duels.", description: "The spear-like artillery battle you remembered: set angle and power, fire tactical tools across a deformable sea, read wind, crater cover, and beat rival skiffs through campaign, skirmish, or Fleet Room play.", category: "Strategy", tags: ["artillery", "tactics", "turn-based", "battle", "pvp"], contentRating: "everyone10", contentDescriptors: ["strategic_complexity", "mild_destruction", "competitive_play"], developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/tidefront-tactics.html?v=1.1.0", thumbnail: GAME_ART_BY_SLUG["tidefront-tactics"], featured: true, version: "1.1.0", controls: "Arrow keys adjust angle and power. Space fires. 1/2/3 switch tools.", progressSupport: true, scoreSupport: true, engine: { tier: "artillery-large-map", minVersion: PHANTOMPLAY_ENGINE.version } },
   { id: "skyguard-arena", title: "Skyguard Arena", summary: "Bloons-style tower defense with free off-road Sentinel placement, one winding route, three-path Sentinel upgrades, starter sentries, and Century Watch bosses.", description: "A lane-based tower-defense game rebuilt closer to classic Bloons-style play: one big winding route instead of split lanes, free off-road Sentinel placement, starter sentries, and a first round with one Driftling before air pressure begins. Spend Glint to place Sentinels, then customize each tower through Power, Reach, and Tech upgrade paths with crosspath limits. Century Watch escalates toward round 100, boss mechanics rotate every 10 rounds, and Room Duel support stays network-silent through PhantomPlay rooms.", category: "Strategy", tags: ["tower-defense", "strategy", "endless", "bosses", "pvp", "waves"], contentRating: "everyone10", contentDescriptors: ["cartoon_action", "strategic_complexity", "competitive_play"], developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/skyguard-arena/index.html?v=1.3.3", thumbnail: GAME_ART_BY_SLUG["skyguard-arena"], featured: true, version: "1.3.3", controls: "Click/tap a Sentinel card, build anywhere off the road, then tune Power, Reach, and Tech upgrade paths. Q triggers Overcharge Pulse, P pauses, Escape deselects.", progressSupport: true, scoreSupport: true, engine: { tier: "arena-large-map", minVersion: PHANTOMPLAY_ENGINE.version } },
@@ -190,14 +190,14 @@ const ui = {
   developerMessage: "",
   guardianMessage: "",
   ratingBusy: false,
-  // In-player Dev Sandbox — a live, hot-reloading editor + mod menu docked
-  // beside the running game. See openDevSandbox/applyDevSandboxEditLive.
+  // In-player Dev Sandbox — a live, hot-reloading editor + mod menu drawer
+  // over the running game. See openDevSandbox/applyDevSandboxEditLive.
   devSandbox: null,
 };
 // Set by launchWithDevSandbox(); consumed once the launched game reports
 // "ready" (see onGameMessage) to auto-open Dev Sandbox after a normal launch,
 // so Dev Sandbox is never a separate, differently-styled experience — it's
-// the exact same player, just with the sidebar opened automatically.
+// the exact same player, just with the Dev Mode drawer opened automatically.
 let pendingDevSandboxGameId = null;
 
 let mountedRoot = null;
@@ -344,6 +344,7 @@ function saveDeveloperSupport(records) {
 async function hydrate() {
   ui.loading = true;
   ui.error = "";
+  ui.notice = "";
   render();
   try {
     const payload = await api(`/api/phantomplay?tenant_id=${encodeURIComponent(currentTenantId())}`);
@@ -352,7 +353,7 @@ async function hydrate() {
   } catch (error) {
     ui.snapshot = normalizeSnapshot(offlineState());
     ui.offline = true;
-    ui.error = error instanceof Error ? error.message : "PhantomPlay sync is unavailable.";
+    ui.notice = "Cloud sync is offline. Built-in games still launch locally; saves, rooms, submissions, and policies sync when the backend returns.";
   } finally {
     ui.loading = false;
     render();
@@ -1313,7 +1314,7 @@ async function closePlayer() {
 // loading a blob: URL of the in-progress edit instead of the reviewed
 // launchUrl. This replaced an earlier separate full-screen Dev Mode modal
 // that duplicated the whole play surface — Dev Sandbox is just the normal
-// player with a sidebar, never a second, differently-styled destination.
+// player with a drawer, never a second, differently-styled destination.
 let devSandboxApplyTimer = null;
 
 function revokeDevSandboxBlob() {
@@ -1341,7 +1342,7 @@ async function openDevSandbox() {
   const { game } = ui.player;
   if (!game.devModeAvailable) return;
   revokeDevSandboxBlob();
-  ui.devSandbox = { gameId: game.id, source: "", editedSource: "", blobUrl: "", hasOverride: false, overrideUpdatedAt: null, loading: true, error: "", status: "", saving: false, publishing: false, section: "code", modState: {}, speed: 1 };
+  ui.devSandbox = { gameId: game.id, source: "", editedSource: "", blobUrl: "", hasOverride: false, overrideUpdatedAt: null, loading: true, error: "", status: "", saving: false, publishing: false, section: "mods", modState: {}, speed: 1 };
   render();
   try {
     const tenantQuery = `tenant_id=${encodeURIComponent(currentTenantId())}`;
@@ -1354,7 +1355,7 @@ async function openDevSandbox() {
       gameId: game.id, source: sourceResult.source, editedSource: startingSource, blobUrl: "",
       hasOverride: !!overrideResult.source, overrideUpdatedAt: overrideResult.updatedAt,
       loading: false, error: "", status: overrideResult.source ? "Resumed your saved workspace override." : "Loaded the shipped source.", saving: false, publishing: false,
-      section: "code", modState: {}, speed: 1,
+      section: "mods", modState: {}, speed: 1,
     };
     rebuildDevSandboxFrame(startingSource);
   } catch (error) {
@@ -1365,7 +1366,7 @@ async function openDevSandbox() {
         gameId: game.id, source, editedSource: source, blobUrl: "",
         hasOverride: false, overrideUpdatedAt: null,
         loading: false, error: "", status: "Loaded the shipped game source locally. Save/publish needs backend sync.",
-        saving: false, publishing: false, section: "code", modState: {}, speed: 1,
+        saving: false, publishing: false, section: "mods", modState: {}, speed: 1,
       };
       rebuildDevSandboxFrame(source);
     } catch {
@@ -1574,7 +1575,7 @@ function onGameMessage(event) {
     } else if (ui.devSandbox?.gameId === ui.player.game.id) {
       // Any reload this panel triggered (a live edit, a revert) resets the
       // modded page's own window.__ppMods to {} — restore whatever the
-      // sidebar's toggles/speed currently say so mods don't silently drop.
+      // drawer's toggles/speed currently say so mods don't silently drop.
       if (ui.devSandbox.speed && ui.devSandbox.speed !== 1) postToGame("modspeed", { value: ui.devSandbox.speed });
       for (const [key, value] of Object.entries(ui.devSandbox.modState || {})) if (value) postToGame("mod", { key, value });
     }

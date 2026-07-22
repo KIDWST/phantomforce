@@ -2892,7 +2892,7 @@
       const errors = [];
       if (TROOPS.length < 8) errors.push("troop roster");
       if (HEROES.length < 3) errors.push("hero roster");
-      if (selectedTroops.length !== 4 || new Set(selectedTroops).size !== 4) errors.push("four-card loadout");
+      if (selectedTroops.length !== DECK_SIZE || new Set(selectedTroops).size !== DECK_SIZE) errors.push("eight-card loadout");
       MAPS.forEach((map) => {
         if (map.routes.length < 4 || ![0, 1, 2].every((lane) => map.routes.some((route) => route.lane === lane))) errors.push(map.id + " routes");
         map.routes.forEach((route) => {

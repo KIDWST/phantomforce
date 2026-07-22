@@ -5392,30 +5392,40 @@ async function phantomPlayAccess(session: AccessSession, requestedTenantId?: unk
 app.get("/api/phantomplay", async (request, reply) => {
   const session = requireAccessSession(request, reply);
   if (!session) return reply;
-  const query = (request.query ?? {}) as { tenant_id?: unknown };
-  const access = await phantomPlayAccess(session, query.tenant_id);
-  if (!access.entitled) {
-    return reply.code(403).send({
+  try {
+    const query = (request.query ?? {}) as { tenant_id?: unknown };
+    const access = await phantomPlayAccess(session, query.tenant_id);
+    if (!access.entitled) {
+      return reply.code(403).send({
+        ok: false,
+        error: access.reason === "module_disabled"
+          ? "PhantomPlay is not enabled for this workspace."
+          : "PhantomPlay is not available to this account.",
+        reason: access.reason,
+        tenant_id: access.moduleAccess.tenantId,
+        module: {
+          enabled: access.moduleAccess.module?.enabled ?? false,
+          accessMode: access.moduleAccess.module?.accessMode ?? "owner_only",
+        },
+        provider_called: false,
+      });
+    }
+    return {
+      ok: true,
+      session,
+      ...(await getPhantomPlaySnapshot(session, { tenantId: access.moduleAccess.tenantId, entitled: access.entitled, dailyMinuteLimit: access.dailyMinuteLimit, canSubmitGames: access.submissionLimit > 0 })),
+      subscription: access,
+      storage: session.canManageAccess ? await getPhantomPlayStoreStatus() : undefined,
+    };
+  } catch (error) {
+    request.log.error({ error }, "PhantomPlay snapshot failed; client may use local play fallback.");
+    return reply.code(503).send({
       ok: false,
-      error: access.reason === "module_disabled"
-        ? "PhantomPlay is not enabled for this workspace."
-        : "PhantomPlay is not available to this account.",
-      reason: access.reason,
-      tenant_id: access.moduleAccess.tenantId,
-      module: {
-        enabled: access.moduleAccess.module?.enabled ?? false,
-        accessMode: access.moduleAccess.module?.accessMode ?? "owner_only",
-      },
+      error: "PhantomPlay cloud sync is temporarily unavailable.",
+      reason: "sync_unavailable",
       provider_called: false,
     });
   }
-  return {
-    ok: true,
-    session,
-    ...(await getPhantomPlaySnapshot(session, { tenantId: access.moduleAccess.tenantId, entitled: access.entitled, dailyMinuteLimit: access.dailyMinuteLimit, canSubmitGames: access.submissionLimit > 0 })),
-    subscription: access,
-    storage: session.canManageAccess ? await getPhantomPlayStoreStatus() : undefined,
-  };
 });
 
 app.get("/api/phantomplay/dev-mode/:gameId/source", async (request, reply) => {

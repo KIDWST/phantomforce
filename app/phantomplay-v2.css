@@ -187,17 +187,11 @@
 .pp2-player footer{display:flex;gap:18px;justify-content:center;padding:8px;border-top:1px solid var(--pp2-line);color:var(--pp2-mut);font-size:12px}
 .pp2-player header em.pp-devsandbox-badge{margin-left:10px}
 
-/* Dev Mode dock — reuses .pp-devsandbox's own styling from phantomplay.css
-   (both stylesheets load on every page), just re-slotted into V2's grid. */
-.pp2-player.is-devsandbox{grid-template-columns:minmax(0,1fr) minmax(340px,420px)}
-.pp2-player.is-devsandbox>header{grid-column:1/-1;grid-row:1}
+/* Dev Mode is a drawer over the running game, not a second squeezed screen. */
+.pp2-player.is-devsandbox{grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr) auto}
 .pp2-player.is-devsandbox .pp2-stage{grid-column:1;grid-row:2}
-.pp2-player.is-devsandbox .pp-devsandbox{grid-row:2}
-.pp2-player.is-devsandbox>footer{grid-column:1/-1;grid-row:3}
 @media(max-width:980px){
-  .pp2-player.is-devsandbox{grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr) auto auto}
-  .pp2-player.is-devsandbox .pp-devsandbox{grid-column:1;grid-row:3;border-left:0;border-top:1px solid #41ffa13d;max-height:46vh}
-  .pp2-player.is-devsandbox>footer{grid-row:4}
+  .pp2-player.is-devsandbox{grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr) auto}
 }
 
 /* settings drawer */
