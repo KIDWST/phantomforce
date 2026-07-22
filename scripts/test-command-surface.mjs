@@ -30,6 +30,11 @@ assert.match(main, /const leads = visible\(store\.state\.leads \|\| \[\]\)/u, "D
 assert.match(main, /const accounting = moneyView\(\)/u, "Dashboard brief must use confirmed accounting state.");
 assert.match(main, /renderDashboardBrief\(\);/u, "Console render must refresh the dashboard brief.");
 assert.match(main, /setChatboxMinimized\(!chatbox\?\.classList\.contains\("is-minimized"\)\)/u, "Console minimize must toggle from the live DOM state.");
+assert.match(main, /CHATBOX_POSITION_KEY/u, "Console position must persist when the user drags it.");
+assert.match(main, /bindChatboxMobility\(\);/u, "Console must bind drag, hotkey, and right-click behavior.");
+assert.match(main, /event\.key === "`"/u, "Console must support the Ctrl-backtick summon hotkey.");
+assert.match(main, /data-chatbox-action="reset"/u, "Console right-click menu must include reset position.");
+assert.match(main, /classList\.toggle\("is-typing"/u, "Console must expose a subtle typing state for Phantom presence.");
 assert.match(main, /const bottomItems = items;/u, "The dedicated utility zone must remain the full navigation launcher while the main sidebar shows open tabs.");
 assert.match(main, /const MOBILE_DOCK_IDS = \["dashboard", "crm", "media", "sites", "money"\]/u, "Phone dock must keep the five core destinations stable.");
 assert.match(main, /data-mobile-more/u, "Phone dock must expose the complete navigation through More.");
@@ -40,7 +45,14 @@ assert.match(css, /\.dashboard-brief\s*\{/u, "Compact business brief must have d
 assert.match(css, /\.dashboard-brief-metrics\s*\{/u, "Business snapshot must have a stable responsive layout.");
 assert.match(css, /\.chatbox\.is-minimized\s*\{/u, "Phantom Console must have a real collapsed state.");
 assert.match(css, /\.pc-minimize/u, "Phantom Console minimize must share the header action styling.");
+assert.match(css, /\.pc-minimize\s*\{[\s\S]*?position:\s*absolute/u, "Console minimize control must be pinned to the panel corner, not the normal button row.");
+assert.match(css, /\.console \.chatbox\.is-floating\s*\{[\s\S]*?position:\s*fixed !important/u, "Dragged console must float above the dashboard layout.");
+assert.match(css, /\.console \.chatbox\.is-minimized\s*\{[\s\S]*?width:\s*min\(360px/u, "Minimized console must collapse into a compact dock pill.");
+assert.match(css, /\.chatbox-context-menu\s*\{/u, "Console must expose a right-click context menu.");
+assert.match(css, /\.chatbox\.is-typing::after/u, "Console must render a subtle Phantom presence while typing.");
 assert.doesNotMatch(commandOsCss, /data-chatbox-minimized="true"[\s\S]{0,220}\.chatbox-head \.pc-actions,[\s\S]{0,280}display:\s*none\s*!important/u, "Collapsed Command OS must keep the restore control clickable.");
 assert.match(commandOsCss, /\.chatbox-head \.pc-mode,[\s\S]*?\.chatbox-head \.pc-settings,[\s\S]*?\.chatbox-head \.pc-menu\s*\{[\s\S]*?display:\s*none\s*!important/u, "Collapsed Command OS should hide only non-restore header controls.");
+assert.match(commandOsCss, /@media \(max-width: 767px\)[\s\S]*?\.phantom\.command-os-enabled \.os-command-rail\s*\{[\s\S]*?display:\s*none\s*!important/u, "Phone Command OS must not render a duplicate top navigation rail.");
+assert.match(commandOsCss, /@media \(max-width: 767px\)[\s\S]*?\.phantom\.command-os-enabled \.mobile-admin-homebar\s*\{[\s\S]*?display:\s*flex\s*!important/u, "Phone Command OS must use the native mobile homebar.");
 
 console.log("Compact command surface checks passed.");

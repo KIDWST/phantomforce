@@ -2506,6 +2506,7 @@ function renderConsole() {
   renderChatLog();
   bindChatboxToggle();
   setChatboxMinimized(chatboxMinimized());
+  bindChatboxMobility();
   mountMissionControl($("[data-mission-control]"), {
     runBrain: (text) => handleSmartCommand(text),
   });
@@ -2515,6 +2516,9 @@ function renderConsole() {
 const chatHistory = [];
 const chatLogEl = () => $("[data-chat-log]");
 const CHATBOX_MINIMIZED_KEY = "pf.command.chatbox.minimized";
+const CHATBOX_POSITION_KEY = "pf.command.chatbox.position";
+let chatboxDrag = null;
+let chatboxTypingTimer = 0;
 
 function chatboxMinimized() {
   try { return localStorage.getItem(CHATBOX_MINIMIZED_KEY) === "1"; }
@@ -2538,6 +2542,77 @@ function setChatboxMinimized(minimized) {
   catch { /* localStorage can be blocked in hardened browser contexts */ }
 }
 
+function setChatboxFloatingPosition(left, top) {
+  const chatbox = $("[data-chatbox]");
+  if (!chatbox) return;
+  const width = Math.min(Math.max(chatbox.offsetWidth || 520, 320), window.innerWidth - 24);
+  const height = Math.min(Math.max(chatbox.offsetHeight || 80, 64), window.innerHeight - 24);
+  const x = Math.max(12, Math.min(Math.round(left), window.innerWidth - width - 12));
+  const y = Math.max(12, Math.min(Math.round(top), window.innerHeight - height - 12));
+  chatbox.classList.add("is-floating");
+  chatbox.style.left = `${x}px`;
+  chatbox.style.top = `${y}px`;
+  chatbox.style.right = "auto";
+  chatbox.style.bottom = "auto";
+  try { localStorage.setItem(CHATBOX_POSITION_KEY, JSON.stringify({ left: x, top: y })); }
+  catch { /* localStorage can be blocked in hardened browser contexts */ }
+}
+
+function restoreChatboxPosition() {
+  const chatbox = $("[data-chatbox]");
+  if (!chatbox) return;
+  let position = null;
+  try { position = JSON.parse(localStorage.getItem(CHATBOX_POSITION_KEY) || "null"); }
+  catch { position = null; }
+  if (position && Number.isFinite(position.left) && Number.isFinite(position.top)) {
+    setChatboxFloatingPosition(position.left, position.top);
+  }
+}
+
+function resetChatboxPosition() {
+  const chatbox = $("[data-chatbox]");
+  if (!chatbox) return;
+  chatbox.classList.remove("is-floating");
+  chatbox.style.left = "";
+  chatbox.style.top = "";
+  chatbox.style.right = "";
+  chatbox.style.bottom = "";
+  try { localStorage.removeItem(CHATBOX_POSITION_KEY); }
+  catch { /* localStorage can be blocked in hardened browser contexts */ }
+}
+
+function focusChatboxInput() {
+  const input = $("[data-command-input]");
+  setChatboxMinimized(false);
+  restoreChatboxPosition();
+  requestAnimationFrame(() => input?.focus({ preventScroll: true }));
+}
+
+function showChatboxContextMenu(x, y) {
+  let menu = $("[data-chatbox-context]");
+  if (!menu) {
+    menu = document.createElement("div");
+    menu.className = "chatbox-context-menu";
+    menu.dataset.chatboxContext = "true";
+    menu.innerHTML = `
+      <button type="button" data-chatbox-action="focus">Focus chat</button>
+      <button type="button" data-chatbox-action="toggle">Minimize / restore</button>
+      <button type="button" data-chatbox-action="settings">Open settings</button>
+      <button type="button" data-chatbox-action="reset">Reset position</button>`;
+    document.body.appendChild(menu);
+  }
+  menu.hidden = false;
+  const menuWidth = 190;
+  const menuHeight = 158;
+  menu.style.left = `${Math.max(10, Math.min(x, window.innerWidth - menuWidth - 10))}px`;
+  menu.style.top = `${Math.max(10, Math.min(y, window.innerHeight - menuHeight - 10))}px`;
+}
+
+function hideChatboxContextMenu() {
+  const menu = $("[data-chatbox-context]");
+  if (menu) menu.hidden = true;
+}
+
 function bindChatboxToggle() {
   const button = $("[data-chatbox-toggle]");
   if (!button || button.dataset.bound === "true") return;
@@ -2550,7 +2625,66 @@ function bindChatboxToggle() {
   });
 }
 
+function bindChatboxMobility() {
+  const chatbox = $("[data-chatbox]");
+  const head = $("[data-chatbox] .chatbox-head");
+  if (!chatbox || !head || chatbox.dataset.mobilityBound === "true") return;
+  chatbox.dataset.mobilityBound = "true";
+  restoreChatboxPosition();
+  head.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0 || event.target?.closest?.("button, a, input, select, textarea, [data-pc-menu]")) return;
+    const rect = chatbox.getBoundingClientRect();
+    chatboxDrag = { pointerId: event.pointerId, dx: event.clientX - rect.left, dy: event.clientY - rect.top };
+    head.setPointerCapture?.(event.pointerId);
+    chatbox.classList.add("is-dragging");
+    event.preventDefault();
+  });
+  head.addEventListener("pointermove", (event) => {
+    if (!chatboxDrag || chatboxDrag.pointerId !== event.pointerId) return;
+    setChatboxFloatingPosition(event.clientX - chatboxDrag.dx, event.clientY - chatboxDrag.dy);
+  });
+  const endDrag = (event) => {
+    if (!chatboxDrag || chatboxDrag.pointerId !== event.pointerId) return;
+    chatboxDrag = null;
+    chatbox.classList.remove("is-dragging");
+  };
+  head.addEventListener("pointerup", endDrag);
+  head.addEventListener("pointercancel", endDrag);
+  chatbox.addEventListener("contextmenu", (event) => {
+    event.preventDefault();
+    showChatboxContextMenu(event.clientX, event.clientY);
+  });
+  document.addEventListener("keydown", (event) => {
+    if ((event.ctrlKey || event.metaKey) && event.key === "`") {
+      event.preventDefault();
+      focusChatboxInput();
+    }
+    if (event.key === "Escape") hideChatboxContextMenu();
+  });
+  window.addEventListener("resize", () => {
+    const rect = chatbox.getBoundingClientRect();
+    if (chatbox.classList.contains("is-floating")) setChatboxFloatingPosition(rect.left, rect.top);
+  });
+  const input = $("[data-command-input]");
+  input?.addEventListener("input", () => {
+    chatbox.classList.toggle("is-typing", Boolean(input.value.trim()));
+    clearTimeout(chatboxTypingTimer);
+    chatboxTypingTimer = setTimeout(() => chatbox.classList.remove("is-typing"), 1200);
+  });
+}
+
 document.addEventListener("click", (event) => {
+  const action = event.target?.closest?.("[data-chatbox-action]")?.dataset?.chatboxAction;
+  if (action) {
+    event.preventDefault();
+    hideChatboxContextMenu();
+    if (action === "focus") focusChatboxInput();
+    if (action === "toggle") setChatboxMinimized(!$("[data-chatbox]")?.classList.contains("is-minimized"));
+    if (action === "settings") $("[data-pc-settings]")?.click();
+    if (action === "reset") resetChatboxPosition();
+    return;
+  }
+  hideChatboxContextMenu();
   const toggle = event.target?.closest?.("[data-chatbox-toggle]");
   if (toggle) {
     event.preventDefault();
@@ -2561,7 +2695,7 @@ document.addEventListener("click", (event) => {
   }
   if (event.target?.closest?.('[data-chatbox].is-minimized')) {
     event.preventDefault();
-    setChatboxMinimized(false);
+    focusChatboxInput();
   }
 });
 
