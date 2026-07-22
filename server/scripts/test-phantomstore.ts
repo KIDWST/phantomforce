@@ -41,6 +41,25 @@ try {
   assert(draft.tool.status === "draft", "Saving without submit:true should store a draft even though required fields are still missing.");
   assert(draft.issues.length > 0, "The draft should still report which fields are outstanding, for the UI to show before submit.");
 
+  const generated = store.generatePhantomStoreSubmissionDrafts({
+    sourceText: [
+      "Agent Brief Builder - Turns messy notes into clean operator briefs - https://github.com/example/agent-brief-builder - npm install -g agent-brief-builder",
+      "Caption Forge, Generates short-form caption options for sports clips, https://github.com/example/caption-forge",
+      "Mystery Tool - Needs a source before public review",
+    ].join("\n"),
+    defaultCategory: "AI Tool",
+  });
+  assert(generated.drafts.length === 3, "PhantomStore AI intake should draft multiple tools from pasted lines.");
+  assert(generated.providerCalled === false && generated.externalFetchPerformed === false, "Draft intake must stay local and deterministic by default.");
+  assert(generated.databaseWritten === false, "Draft generation alone must not write the store.");
+  assert(generated.drafts[0].installMethod === "npm", "Draft intake should infer npm install commands.");
+  assert(generated.drafts[1].repoUrl.includes("github.com/example/caption-forge"), "Draft intake should carry through source URLs.");
+  assert(generated.drafts[2].readiness === "missing_source", "Draft intake should flag missing source URLs instead of pretending the item is ready.");
+
+  const bulkDrafts = await store.saveGeneratedPhantomStoreDrafts(devA, { drafts: generated.drafts.slice(0, 2) });
+  assert(bulkDrafts.tools.length === 2, "Generated drafts should be saveable in bulk as drafts.");
+  assert(bulkDrafts.tools.every((tool) => tool.status === "draft"), "Bulk generated drafts must never auto-submit for public review.");
+
   const created = await store.submitPhantomStoreTool(devA, {
     name: "Repo Sync CLI",
     summary: "Keep two git repos in lockstep from a single command.",
@@ -119,11 +138,11 @@ try {
   assert(revised?.tool.summary === "Now finished and ready.", "The edit flow should persist revised fields.");
 
   const status = await store.getPhantomStoreStatus();
-  assert(status.tools === 2 && status.approvedTools === 0, "Status should reflect total tools written and current approved count (rejected submissions never get stored).");
+  assert(status.tools === 4 && status.approvedTools === 0, "Status should reflect total tools written and current approved count (rejected submissions never get stored).");
   assert(status.products >= 3 && status.sellers >= 1, "Status should include seeded product and seller counts.");
 
   const persisted = JSON.parse(await readFile(process.env.PHANTOMFORCE_PHANTOMSTORE_PATH, "utf8")) as { tools: unknown[] };
-  assert(persisted.tools.length === 2, "Tool submissions should be durable across process restarts.");
+  assert(persisted.tools.length === 4, "Tool submissions should be durable across process restarts.");
 
   const { app } = await import("../src/index.js");
   const unauthenticated = await app.inject({ method: "GET", url: "/api/phantomstore" });
@@ -149,6 +168,17 @@ try {
     payload: { name: "Route Tool", summary: "Submitted through the HTTP route.", description: "Proves the Fastify route wiring saves a tool end to end.", repoUrl: "https://example.test/route-tool", installMethod: "manual", submit: true },
   });
   assert(ownerSubmit.statusCode === 200 && ownerSubmit.json().tool.status === "submitted", "The submission route should accept a complete tool and enter review for a session with write access.");
+  const aiDraftRoute = await app.inject({
+    method: "POST", url: "/api/phantomstore/tools/ai-draft", headers: { Authorization: `Bearer ${ownerToken}` },
+    payload: { sourceText: "Route Draft Agent - Drafts listings from notes - https://github.com/example/route-draft-agent", defaultCategory: "Agent" },
+  });
+  assert(aiDraftRoute.statusCode === 200 && aiDraftRoute.json().drafts.length === 1, "The AI draft route should return generated drafts.");
+  assert(aiDraftRoute.json().providerCalled === false, "The AI draft route should not pretend it called an external AI provider.");
+  const bulkDraftRoute = await app.inject({
+    method: "POST", url: "/api/phantomstore/tools/bulk-drafts", headers: { Authorization: `Bearer ${ownerToken}` },
+    payload: { drafts: aiDraftRoute.json().drafts },
+  });
+  assert(bulkDraftRoute.statusCode === 200 && bulkDraftRoute.json().tools[0].status === "draft", "The bulk draft route should save generated listings as drafts only.");
   const routeToolId = ownerSubmit.json().tool.id as string;
   const ownerModeration = await app.inject({ method: "POST", url: `/api/phantomstore/tools/${routeToolId}/moderate`, headers: { Authorization: `Bearer ${ownerToken}` }, payload: { decision: "approved" } });
   assert(ownerModeration.statusCode === 200 && ownerModeration.json().tool.status === "approved", "The moderation route should approve a tool for an admin session.");

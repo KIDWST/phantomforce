@@ -29,6 +29,12 @@ const ui = {
   buyingProductId: "",
   buyMessage: "",
   editingToolId: "",
+  aiSourceText: "",
+  aiDefaultCategory: "AI Tool",
+  aiDefaultInstallMethod: "manual",
+  aiDrafts: [],
+  aiDraftMessage: "",
+  aiSavingDrafts: false,
 };
 
 // Local asset paths (e.g. /app/assets/...) are safe to render as-is; anything
@@ -207,6 +213,12 @@ function emptyState(title, copy) {
   return `<div class="ps-empty"><b>*</b><h3>${esc(title)}</h3><p>${esc(copy)}</p></div>`;
 }
 
+function draftReadinessLabel(draft) {
+  if (draft.readiness === "ready_for_review") return "review ready";
+  if (draft.readiness === "missing_source") return "needs source";
+  return "needs cleanup";
+}
+
 function renderDiscover() {
   const catalog = visibleCatalog();
   const products = visibleProducts();
@@ -266,11 +278,41 @@ function renderSubmit() {
   const remaining = Math.max(0, Number(ui.snapshot?.submissionLimit || 0) - Number((ui.snapshot?.submissions || []).length));
   const editing = ui.editingToolId ? (ui.snapshot?.submissions || []).find((tool) => tool.id === ui.editingToolId) : null;
   return `<section class="ps-submit-layout">
+    <div class="ps-submit-main">
+    <section class="ps-ai-intake">
+      <header>
+        <div>
+          <p class="ps-kicker">PHANTOM DRAFT INTAKE</p>
+          <h2>Paste once. Draft the whole batch.</h2>
+        </div>
+        <span>${remaining} draft slots</span>
+      </header>
+      <p>Drop a product list, repo links, CSV export, tool notes, or a messy backlog. Phantom turns it into reviewable store drafts locally. Nothing is submitted, installed, uploaded, fetched, or approved from this step.</p>
+      <label>Bulk source<textarea data-ps-ai-source rows="7" placeholder="Agent Brief Builder - Turns messy notes into clean operator briefs - https://github.com/example/agent-brief-builder&#10;Caption Forge, AI Tool, npm install -g caption-forge, https://github.com/example/caption-forge">${esc(ui.aiSourceText)}</textarea></label>
+      <div class="ps-row ps-row-small">
+        <label>Default category<select data-ps-ai-category>${CATEGORIES.filter((cat) => cat !== "All").map((cat) => `<option ${ui.aiDefaultCategory === cat ? "selected" : ""}>${esc(cat)}</option>`).join("")}</select></label>
+        <label>Default install<select data-ps-ai-install>${INSTALL_METHODS.map((method) => `<option ${ui.aiDefaultInstallMethod === method ? "selected" : ""}>${esc(method)}</option>`).join("")}</select></label>
+      </div>
+      <div class="ps-form-actions">
+        <button type="button" class="ps-primary" data-ps-ai-draft ${ui.busy ? "disabled" : ""}>Draft with Phantom</button>
+        <button type="button" class="ps-secondary" data-ps-ai-save ${ui.aiSavingDrafts || !ui.aiDrafts.length ? "disabled" : ""}>Save all as drafts</button>
+      </div>
+      <p class="ps-ai-message">${esc(ui.aiDraftMessage || "Best for 10, 50, or 100+ tools: paste the batch here, then review the generated drafts.")}</p>
+      ${ui.aiDrafts.length ? `<div class="ps-ai-drafts">
+        ${ui.aiDrafts.map((draft, index) => `<article>
+          <header><b>${esc(draft.name || `Draft ${index + 1}`)}</b><span>${esc(draftReadinessLabel(draft))} / ${Number(draft.confidence || 0)}%</span></header>
+          <p>${esc(draft.summary || "Summary needs review.")}</p>
+          <div class="ps-tags">${(draft.tags || []).map((tag) => `<em>${esc(tag)}</em>`).join("")}</div>
+          <small>${esc(draft.category || "AI Tool")} / ${esc(draft.installMethod || "manual")} ${draft.repoUrl ? `/ source linked` : `/ source missing`}</small>
+          ${(draft.missingFields || []).length ? `<ul>${draft.missingFields.slice(0, 3).map((issue) => `<li>${esc(issue)}</li>`).join("")}</ul>` : ""}
+        </article>`).join("")}
+      </div>` : ""}
+    </section>
     <form class="ps-form" data-ps-tool-form data-ps-editing="${esc(editing?.id || "")}">
       <header>
         <div>
-          <p class="ps-kicker">${editing ? "EDIT AI TOOL" : "SUBMIT AI TOOL"}</p>
-          <h2>${editing ? `Revise "${esc(editing.name || "Untitled tool")}"` : "Add to PhantomStore review"}</h2>
+          <p class="ps-kicker">${editing ? "EDIT AI TOOL" : "MANUAL SINGLE TOOL"}</p>
+          <h2>${editing ? `Revise "${esc(editing.name || "Untitled tool")}"` : "Add one tool by hand"}</h2>
         </div>
         <span>${editing ? esc(statusLabel(editing.status)) : `${remaining} slots left`}</span>
       </header>
@@ -297,6 +339,7 @@ function renderSubmit() {
       </div>
       <p data-ps-form-message>${esc(ui.message)}</p>
     </form>
+    </div>
     <aside class="ps-boundary">
       <p class="ps-kicker">HARD BOUNDARY</p>
       <h3>Marketplace, not malware launcher.</h3>
@@ -407,6 +450,55 @@ async function submitForm(form, submit) {
   }
 }
 
+async function draftWithPhantom() {
+  ui.busy = true;
+  ui.aiDraftMessage = "Phantom is structuring the batch...";
+  render();
+  try {
+    const result = await api("/api/phantomstore/tools/ai-draft", {
+      method: "POST",
+      body: JSON.stringify({
+        sourceText: ui.aiSourceText,
+        defaultCategory: ui.aiDefaultCategory,
+        defaultInstallMethod: ui.aiDefaultInstallMethod,
+        limit: 120,
+      }),
+    });
+    ui.aiDrafts = Array.isArray(result.drafts) ? result.drafts : [];
+    ui.aiDraftMessage = ui.aiDrafts.length
+      ? `Drafted ${ui.aiDrafts.length} items from ${Number(result.totalDetected || ui.aiDrafts.length)} detected entries. Review, then save as drafts.`
+      : "Paste a product list, links, CSV rows, or notes first.";
+  } catch (error) {
+    ui.aiDraftMessage = error instanceof Error ? error.message : "Phantom draft intake failed.";
+  } finally {
+    ui.busy = false;
+    render();
+  }
+}
+
+async function saveAiDrafts() {
+  if (!ui.aiDrafts.length) return;
+  ui.aiSavingDrafts = true;
+  ui.aiDraftMessage = "Saving generated drafts for review...";
+  render();
+  try {
+    const result = await api("/api/phantomstore/tools/bulk-drafts", {
+      method: "POST",
+      body: JSON.stringify({ drafts: ui.aiDrafts }),
+    });
+    ui.aiDraftMessage = `Saved ${Number(result.tools?.length || 0)} drafts. ${Number(result.skipped || 0) ? `${Number(result.skipped)} skipped by limit.` : "Nothing was submitted publicly."}`;
+    ui.aiDrafts = [];
+    await hydrate();
+    ui.tab = "review";
+  } catch (error) {
+    ui.aiDraftMessage = error instanceof Error ? error.message : "Generated drafts could not be saved.";
+    render();
+  } finally {
+    ui.aiSavingDrafts = false;
+    render();
+  }
+}
+
 async function recordInstall(id) {
   ui.installToolId = id;
   ui.installMessage = "Opening safe install details...";
@@ -481,6 +573,17 @@ function bind() {
     render();
   });
   mountedRoot.querySelector("[data-ps-refresh]")?.addEventListener("click", hydrate);
+  mountedRoot.querySelector("[data-ps-ai-source]")?.addEventListener("input", (event) => {
+    ui.aiSourceText = event.target.value || "";
+  });
+  mountedRoot.querySelector("[data-ps-ai-category]")?.addEventListener("change", (event) => {
+    ui.aiDefaultCategory = event.target.value || "AI Tool";
+  });
+  mountedRoot.querySelector("[data-ps-ai-install]")?.addEventListener("change", (event) => {
+    ui.aiDefaultInstallMethod = event.target.value || "manual";
+  });
+  mountedRoot.querySelector("[data-ps-ai-draft]")?.addEventListener("click", draftWithPhantom);
+  mountedRoot.querySelector("[data-ps-ai-save]")?.addEventListener("click", saveAiDrafts);
   mountedRoot.querySelector("[data-ps-search]")?.addEventListener("input", (event) => {
     ui.query = event.target.value || "";
     clearTimeout(searchTimer);

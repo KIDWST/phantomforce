@@ -324,10 +324,12 @@ import {
   updatePhantomPlayEdgeNode,
 } from "./phantom-ai/phantomplay-edge-network.js";
 import {
+  generatePhantomStoreSubmissionDrafts,
   getPhantomStoreSnapshot,
   moderatePhantomStoreTool,
   recordPhantomStoreInstallClick,
   recordPhantomStoreProductBuyClick,
+  saveGeneratedPhantomStoreDrafts,
   submitPhantomStoreTool,
   updatePhantomStoreTool,
 } from "./phantom-ai/phantomstore.js";
@@ -5435,6 +5437,26 @@ app.post("/api/phantomstore/tools", async (request, reply) => {
     return { ok: true, session, ...(await submitPhantomStoreTool(session, (request.body ?? {}) as Record<string, unknown>)) };
   } catch (error) {
     return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : "Tool submission could not be saved." });
+  }
+});
+
+app.post("/api/phantomstore/tools/ai-draft", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  try {
+    return { ok: true, session, ...generatePhantomStoreSubmissionDrafts((request.body ?? {}) as Record<string, unknown>) };
+  } catch (error) {
+    return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : "AI draft intake could not be prepared." });
+  }
+});
+
+app.post("/api/phantomstore/tools/bulk-drafts", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  try {
+    return { ok: true, session, ...(await saveGeneratedPhantomStoreDrafts(session, (request.body ?? {}) as Record<string, unknown>)) };
+  } catch (error) {
+    return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : "Generated drafts could not be saved." });
   }
 });
 

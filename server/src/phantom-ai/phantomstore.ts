@@ -83,6 +83,17 @@ export type PhantomStoreTool = {
   updatedAt: string;
 };
 
+export type PhantomStoreDraftReadiness = "ready_for_review" | "needs_review" | "missing_source";
+
+export type PhantomStoreGeneratedDraft = ReturnType<typeof toolInput> & {
+  sourceIndex: number;
+  sourceLine: string;
+  readiness: PhantomStoreDraftReadiness;
+  confidence: number;
+  missingFields: string[];
+  notes: string[];
+};
+
 export type PhantomStoreReview = {
   id: string;
   authorName: string;
@@ -397,7 +408,8 @@ function actorIdFor(session: AccessSession) {
 /* A fixed cap, not plan-tied -- PhantomStore is new and additive; wiring it
    into the entitlements engine's per-plan limits is a follow-up, not a
    blocker for a first version. */
-const MAX_SUBMISSIONS_PER_DEVELOPER = 20;
+const MAX_SUBMISSIONS_PER_DEVELOPER = 250;
+const MAX_AI_DRAFTS_PER_REQUEST = 120;
 
 function toolInput(input: Record<string, unknown>) {
   return {
@@ -423,6 +435,134 @@ function toolValidation(data: ReturnType<typeof toolInput>) {
   if (!data.repoUrl) issues.push("A real source/repo URL is required -- PhantomStore links out to the real thing, it doesn't host uploads.");
   if (!data.installCommand && data.installMethod !== "manual") issues.push("Add the exact install command (e.g. npm install ..., pip install ..., git clone ...).");
   return issues;
+}
+
+function titleCaseName(value: string) {
+  return value
+    .replace(/[-_]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 8)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+function slugFromName(value: string) {
+  return clean(value, 90).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "phantomstore-tool";
+}
+
+function inferCategory(text: string): PhantomStoreCategory {
+  const lower = text.toLowerCase();
+  if (/\b(agent|bot|workforce|operator)\b/.test(lower)) return "Agent";
+  if (/\b(cli|terminal|command line|powershell|bash)\b/.test(lower)) return "CLI";
+  if (/\b(sdk|library|package|npm|pip)\b/.test(lower)) return "Library";
+  if (/\b(extension|chrome|browser|vscode)\b/.test(lower)) return "Extension";
+  if (/\b(model|llm|lora|embedding|checkpoint)\b/.test(lower)) return "Model";
+  if (/\b(template|starter|boilerplate|prompt pack)\b/.test(lower)) return "Template";
+  if (/\b(dataset|data set|training data|csv)\b/.test(lower)) return "Dataset";
+  return "AI Tool";
+}
+
+function inferInstall(text: string, repoUrl: string, defaultMethod: PhantomStoreInstallMethod) {
+  const line = text.match(/\b(npm\s+(?:install|i)[^\n,;]*)/i)?.[1]
+    || text.match(/\b(pip\s+install[^\n,;]*)/i)?.[1]
+    || text.match(/\b(docker\s+(?:pull|run)[^\n,;]*)/i)?.[1]
+    || text.match(/\b(brew\s+install[^\n,;]*)/i)?.[1]
+    || text.match(/\b(git\s+clone[^\n,;]*)/i)?.[1]
+    || "";
+  const command = clean(line, 400);
+  if (/^npm\s/i.test(command)) return { installMethod: "npm" as const, installCommand: command };
+  if (/^pip\s/i.test(command)) return { installMethod: "pip" as const, installCommand: command };
+  if (/^docker\s/i.test(command)) return { installMethod: "docker" as const, installCommand: command };
+  if (/^brew\s/i.test(command)) return { installMethod: "brew" as const, installCommand: command };
+  if (/^git\s/i.test(command)) return { installMethod: "git" as const, installCommand: command };
+  if (repoUrl && /github\.com|gitlab\.com|bitbucket\.org/i.test(repoUrl)) return { installMethod: "git" as const, installCommand: `git clone ${repoUrl}` };
+  return { installMethod: defaultMethod, installCommand: defaultMethod === "manual" ? "" : `${defaultMethod} install ${slugFromName(text)}` };
+}
+
+function inferTags(text: string, category: PhantomStoreCategory) {
+  const lower = text.toLowerCase();
+  const tags = new Set<string>([category.toLowerCase().replace(/\s+/g, "-")]);
+  [
+    "crm", "sales", "content", "caption", "video", "workflow", "automation", "security", "dashboard",
+    "analytics", "voice", "music", "sports", "agent", "local", "privacy", "website", "store",
+  ].forEach((tag) => { if (lower.includes(tag)) tags.add(tag); });
+  return [...tags].slice(0, 8);
+}
+
+function splitDraftSource(sourceText: unknown) {
+  const source = String(sourceText ?? "")
+    .replace(new RegExp("[" + String.fromCharCode(0) + "-" + String.fromCharCode(8) + String.fromCharCode(11) + String.fromCharCode(12) + String.fromCharCode(14) + "-" + String.fromCharCode(31) + String.fromCharCode(127) + "]", "g"), " ")
+    .trim()
+    .slice(0, 60000);
+  const lines = source.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  if (!lines.length) return [];
+  if (lines.length >= 2) return lines.map((line) => line.replace(/^[-*•\d.)\s]+/, "").trim()).filter(Boolean);
+  const bulletLines = lines
+    .filter((line) => /^[-*•\d.)\s]+/.test(line) || /^https?:\/\//i.test(line) || line.includes(","))
+    .map((line) => line.replace(/^[-*•\d.)\s]+/, "").trim())
+    .filter(Boolean);
+  if (bulletLines.length >= 2) return bulletLines;
+  return source.split(/\n\s*\n/g).map((entry) => entry.trim()).filter(Boolean);
+}
+
+function generatedDraftFromEntry(entry: string, sourceIndex: number, input: Record<string, unknown>): PhantomStoreGeneratedDraft {
+  const urls = entry.match(/https?:\/\/[^\s,;)\]]+/gi) || [];
+  const repoUrl = safeUrl(urls.find((url) => /github\.com|gitlab\.com|bitbucket\.org/i.test(url)) || "");
+  const homepageUrl = safeUrl(urls.find((url) => url !== repoUrl) || "");
+  const withoutUrls = entry.replace(/https?:\/\/[^\s,;)\]]+/gi, " ").replace(/\s+/g, " ").trim();
+  const namePart = clean(withoutUrls.split(/\s[-–—:|]\s/)[0] || withoutUrls.split(",")[0], 90);
+  const inferredName = titleCaseName(namePart || repoUrl.split("/").filter(Boolean).pop() || "Untitled tool");
+  const summaryRaw = clean(withoutUrls.replace(namePart, "").replace(/^[-–—:|,\s]+/, ""), 220);
+  const category = safeCategory(input.defaultCategory || inferCategory(entry));
+  const install = inferInstall(entry, repoUrl, safeInstallMethod(input.defaultInstallMethod || "manual"));
+  const data = toolInput({
+    name: inferredName,
+    summary: summaryRaw || `AI marketplace draft for ${inferredName}.`,
+    description: withoutUrls || `Review ${inferredName}, confirm the source URL, and complete the marketplace notes before submission.`,
+    category,
+    tags: inferTags(entry, category),
+    repoUrl,
+    homepageUrl,
+    installMethod: install.installMethod,
+    installCommand: install.installCommand,
+    version: "1.0.0",
+    license: clean(input.defaultLicense, 60) || "MIT",
+  });
+  const missingFields = toolValidation(data);
+  const readiness: PhantomStoreDraftReadiness = data.repoUrl ? (missingFields.length ? "needs_review" : "ready_for_review") : "missing_source";
+  const confidence = Math.max(30, 95 - missingFields.length * 16 - (summaryRaw ? 0 : 10) - (repoUrl ? 0 : 22));
+  return {
+    ...data,
+    sourceIndex,
+    sourceLine: clean(entry, 700),
+    readiness,
+    confidence,
+    missingFields,
+    notes: [
+      "Generated from pasted local input only.",
+      "Draft only: nothing was submitted, installed, uploaded, or fetched externally.",
+      ...(readiness === "missing_source" ? ["Add a real source/repo URL before submitting for public review."] : []),
+    ],
+  };
+}
+
+export function generatePhantomStoreSubmissionDrafts(input: Record<string, unknown>) {
+  const limit = Math.min(Math.max(Number(input.limit || 40) || 40, 1), MAX_AI_DRAFTS_PER_REQUEST);
+  const entries = splitDraftSource(input.sourceText).slice(0, limit);
+  const drafts = entries.map((entry, index) => generatedDraftFromEntry(entry, index + 1, input));
+  return {
+    drafts,
+    totalDetected: splitDraftSource(input.sourceText).length,
+    cappedAt: limit,
+    provider: "phantom_deterministic_intake",
+    providerCalled: false,
+    externalFetchPerformed: false,
+    databaseWritten: false,
+    note: "Phantom drafted marketplace metadata from the pasted text only. Review before submitting anything publicly.",
+  };
 }
 
 function publicTool(tool: PhantomStoreTool) {
@@ -497,6 +637,43 @@ export async function submitPhantomStoreTool(session: AccessSession, input: Reco
   store.tools.unshift(tool);
   await writeStore(store);
   return { tool, issues };
+}
+
+export async function saveGeneratedPhantomStoreDrafts(session: AccessSession, input: Record<string, unknown>) {
+  const tenantId = tenantIdFor(session, input.tenantId);
+  const actorId = actorIdFor(session);
+  const store = await readStore();
+  const ownCount = store.tools.filter((tool) => tool.developerId === actorId).length;
+  const availableSlots = session.canManageAccess ? MAX_AI_DRAFTS_PER_REQUEST : Math.max(0, MAX_SUBMISSIONS_PER_DEVELOPER - ownCount);
+  const incoming = Array.isArray(input.drafts) ? input.drafts.slice(0, availableSlots) : [];
+  if (!incoming.length) {
+    return { tools: [], skipped: Array.isArray(input.drafts) ? input.drafts.length : 0, issues: ["No draft metadata was provided."] };
+  }
+  const timestamp = now();
+  const tools = incoming.map((draft) => {
+    const data = toolInput((draft || {}) as Record<string, unknown>);
+    const tool: PhantomStoreTool = {
+      id: `tool-${randomUUID()}`,
+      tenantId,
+      developerId: actorId,
+      developerName: clean(input.developerName || session.label, 90) || "Developer",
+      ...data,
+      status: "draft",
+      featured: false,
+      moderationNote: "",
+      installClicks: 0,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    };
+    return tool;
+  });
+  store.tools.unshift(...tools);
+  await writeStore(store);
+  return {
+    tools,
+    skipped: Array.isArray(input.drafts) ? Math.max(0, input.drafts.length - tools.length) : 0,
+    issues: tools.flatMap((tool) => toolValidation(toolInput(tool as unknown as Record<string, unknown>))).slice(0, 12),
+  };
 }
 
 export async function updatePhantomStoreTool(session: AccessSession, toolId: string, input: Record<string, unknown>) {

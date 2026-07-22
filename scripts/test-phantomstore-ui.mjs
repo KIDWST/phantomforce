@@ -30,6 +30,12 @@ assert.match(storeSource, /PhantomStore does not run this code/u, "Install panel
 assert.match(storeSource, /PhantomStore does not upload or host submitted code/u, "Submit panel must explain that code is not hosted or uploaded.");
 assert.match(storeSource, /Source \/ repo URL/u, "Submissions must require a source URL.");
 assert.match(storeSource, /Admin review before listing/u, "Discovery must communicate review before listing.");
+assert.match(storeSource, /PHANTOM DRAFT INTAKE/u, "Submit must start with the AI-assisted bulk draft intake.");
+assert.match(storeSource, /Draft with Phantom/u, "Submit must let users generate marketplace drafts from pasted batch input.");
+assert.match(storeSource, /Save all as drafts/u, "Generated marketplace submissions must be saved as drafts, not auto-submitted.");
+assert.match(storeSource, /Nothing is submitted, installed, uploaded, fetched, or approved/u, "AI intake must state its no-external-action boundary.");
+assert.match(storeSource, /\/api\/phantomstore\/tools\/ai-draft/u, "UI must call the PhantomStore AI draft endpoint.");
+assert.match(storeSource, /\/api\/phantomstore\/tools\/bulk-drafts/u, "UI must save generated submissions through the bulk draft endpoint.");
 assert.match(storeSource, /\["discover", "Discover"\][\s\S]*\["submit", "Submit"\][\s\S]*\["review"/u, "PhantomStore must provide discover, submit, and review sections.");
 assert.match(storeSource, /const safeHref[\s\S]*\^https\?:\\\/\\\//u, "Client links must refuse non-http(s) marketplace URLs.");
 assert.match(storeSource, /new URL\(url\)/u, "Client link safety must parse and normalize URLs before rendering hrefs.");
@@ -38,8 +44,13 @@ assert.match(backendTestSource, /repoUrl: "javascript:alert\(1\)"[\s\S]*non-http
 assert.match(backendSource, /const SEEDED_SELLERS/u, "Backend must seed seller profiles.");
 assert.match(backendSource, /const SEEDED_PRODUCTS/u, "Backend must seed product listings.");
 assert.match(backendSource, /recordPhantomStoreProductBuyClick/u, "Backend must track product buy intent.");
+assert.match(backendSource, /generatePhantomStoreSubmissionDrafts/u, "Backend must provide deterministic PhantomStore draft generation.");
+assert.match(backendSource, /providerCalled:\s*false/u, "Draft generation must not claim an external AI provider was called.");
+assert.match(backendSource, /externalFetchPerformed:\s*false/u, "Draft generation must not fetch external URLs.");
+assert.match(backendSource, /saveGeneratedPhantomStoreDrafts/u, "Backend must save generated submissions as drafts only.");
+assert.match(backendTestSource, /Bulk generated drafts must never auto-submit for public review/u, "Backend tests must protect generated drafts from auto-submission.");
 
-for (const selector of [".ps-shell", ".ps-market-hero", ".ps-tool", ".ps-product", ".ps-seller", ".ps-reviews", ".ps-submit-layout", ".ps-moderate"]) {
+for (const selector of [".ps-shell", ".ps-market-hero", ".ps-tool", ".ps-product", ".ps-seller", ".ps-reviews", ".ps-submit-layout", ".ps-ai-intake", ".ps-ai-drafts", ".ps-moderate"]) {
   assert.ok(storeCss.includes(selector), `${selector} style must be present.`);
 }
 
