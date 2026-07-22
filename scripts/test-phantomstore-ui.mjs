@@ -24,6 +24,9 @@ assert.match(storeSource, /\/api\/phantomstore\/products\/\$\{encodeURIComponent
 assert.match(storeSource, /This is not Site Builder\. This is not Store Builder\. PhantomStore is its own AI marketplace\./u, "UI must name PhantomStore as separate from Site Builder and Store Builder.");
 assert.match(storeSource, /Seller directory/u, "Discovery must include a seller directory.");
 assert.match(storeSource, /Ready to buy/u, "Discovery must expose ready-to-buy products before community tools.");
+assert.match(storeSource, /const PRODUCT_ART_FALLBACKS/u, "PhantomStore must provide product artwork fallbacks when listings are missing images.");
+assert.match(storeSource, /const artUrl = imageUrl \|\| fallbackImageUrl/u, "Product cards must choose uploaded art first and branded fallback art second.");
+assert.match(storeSource, /ps-product-media\$\{imageUrl \? "" : " is-fallback"\}/u, "Product cards must always render a media block, even for missing product pictures.");
 assert.match(storeSource, /seller reviews/u, "Seller cards must show seller reviews.");
 assert.match(storeSource, /product reviews/u, "Product cards must show product reviews.");
 assert.match(storeSource, /PhantomStore does not run this code/u, "Install panel must explain that marketplace listings do not execute code.");
@@ -53,6 +56,8 @@ assert.match(backendTestSource, /Bulk generated drafts must never auto-submit fo
 for (const selector of [".ps-shell", ".ps-market-hero", ".ps-tool", ".ps-product", ".ps-seller", ".ps-reviews", ".ps-submit-layout", ".ps-ai-intake", ".ps-ai-drafts", ".ps-moderate"]) {
   assert.ok(storeCss.includes(selector), `${selector} style must be present.`);
 }
+assert.match(storeCss, /\.ps-product-media img\{[^}]*object-fit:contain/u, "PhantomStore product images must show the full cover art instead of cropped/zoomed media.");
+assert.match(storeCss, /\.ps-product-fallback/u, "PhantomStore must style branded fallback product art.");
 
 assert.match(customizationSource, /\["phantomstore", "PhantomStore", false/u, "Workspace customization fallback must know PhantomStore is a protected platform tab.");
 assert.match(registrySource, /id:\s*"phantomstore"[\s\S]*displayName:\s*"PhantomStore"[\s\S]*route:\s*"phantomstore"[\s\S]*required:\s*true[\s\S]*customerConfigurable:\s*false/u, "Server module registry must expose PhantomStore as a required, non-hideable marketplace tab.");
