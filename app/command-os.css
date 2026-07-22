@@ -1729,9 +1729,10 @@ html[data-command-os="2040"] .phantom.command-os-enabled .phantomwire {
   }
 }
 
-/* Phone shell: use the native mobile homebar plus the fixed bottom dock.
-   The desktop Command OS rail becomes a duplicate nav strip on phones. */
-@media (max-width: 767px) {
+/* Compact shell: use the native mobile homebar plus the fixed bottom dock.
+   The desktop Command OS rail becomes a duplicate nav strip on phones and
+   small tablets, so the dock is the only section navigation below 900px. */
+@media (max-width: 900px) {
   html[data-command-os="2040"] .phantom.command-os-enabled {
     height: auto !important;
     min-height: 100dvh !important;
@@ -1748,6 +1749,44 @@ html[data-command-os="2040"] .phantom.command-os-enabled .phantomwire {
     background: rgba(4, 9, 15, 0.97) !important;
     border-bottom-color: rgba(133, 171, 198, 0.18) !important;
     box-shadow: 0 14px 38px rgba(0, 0, 0, 0.38) !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled > .sidebar:not(.is-expanded) {
+    display: none !important;
+    opacity: 0 !important;
+    visibility: hidden !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled > .sidebar.is-expanded {
+    display: flex !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .mobile-bottom-nav {
+    display: grid !important;
+    position: fixed !important;
+    left: 10px !important;
+    right: 10px !important;
+    bottom: calc(8px + env(safe-area-inset-bottom, 0px)) !important;
+    grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+    gap: 2px !important;
+    min-height: 64px !important;
+    padding: 7px 10px !important;
+    overflow: hidden !important;
+    border-radius: 22px !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .mobile-bottom-item {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    min-height: 50px !important;
+    flex: none !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .mobile-bottom-item span {
+    max-width: 100% !important;
   }
 
   html[data-command-os="2040"] .phantom.command-os-enabled .app-main {
@@ -2868,12 +2907,13 @@ html[data-command-os="2040"] .phantom.command-os-enabled .console[data-chatbox-m
   }
 }
 
-/* Phone layout ownership: the business brief, decisions and Phantom Console
+/* Compact layout ownership: the business brief, decisions and Phantom Console
    are siblings in the DOM, so they must remain siblings in the visual flow.
    Older viewport-locked rules absolutely layered all three into one short
    grid row, which clipped decision copy and parked the console over it on
-   real iPhones. Phones scroll naturally; only the bottom taskbar stays fixed. */
-@media (max-width: 767px) {
+   real phones and small tablets. Compact widths scroll naturally; only the
+   bottom taskbar stays fixed. */
+@media (max-width: 900px) {
   html[data-command-os="2040"] .phantom.command-os-enabled .app-main > .console:not(.console-workspace) {
     display: block !important;
     width: 100% !important;
@@ -3045,7 +3085,10 @@ html[data-command-os="2040"] .phantom.command-os-enabled .console[data-chatbox-m
 
   html[data-command-os="2040"] .phantom.command-os-enabled .console:not(.console-workspace) .os-execution-modes {
     position: relative !important;
+    inset: auto !important;
     z-index: 4 !important;
+    width: 100% !important;
+    transform: none !important;
     justify-content: stretch !important;
     margin: 0 !important;
     padding: 3px !important;
@@ -3062,7 +3105,7 @@ html[data-command-os="2040"] .phantom.command-os-enabled .console[data-chatbox-m
 
   html[data-command-os="2040"] .phantom.command-os-enabled .console:not(.console-workspace) .chatbox-head {
     min-height: 52px !important;
-    padding: 7px 50px 7px 10px !important;
+    padding: 7px 10px !important;
   }
 
   html[data-command-os="2040"] .phantom.command-os-enabled .chatbox-head .pc-avatar {
@@ -3095,5 +3138,16 @@ html[data-command-os="2040"] .phantom.command-os-enabled .console[data-chatbox-m
     bottom: 9px !important;
     width: 44px !important;
     height: 44px !important;
+  }
+}
+
+@media (max-width: 340px) {
+  html[data-command-os="2040"] .phantom.command-os-enabled .console:not(.console-workspace) .chatbox-head .pc-title b {
+    font-size: 0 !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .console:not(.console-workspace) .chatbox-head .pc-title b::before {
+    content: "Phantom";
+    font-size: 11.5px;
   }
 }

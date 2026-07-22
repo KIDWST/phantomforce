@@ -40,6 +40,7 @@
     "test:stripe-billing": "node scripts/test-stripe-billing.mjs && npm run test:stripe-billing --workspace @phantomforce/server",
     "test:change-memory": "node scripts/guard-change-memory.mjs",
     "test:command-surface": "node scripts/test-command-surface.mjs",
+    "test:game-visuals": "node scripts/test-game-runtime-visuals.mjs",
     "test:claude-live-ship": "node scripts/test-claude-live-ship.mjs",
     "security:secrets": "node scripts/secret-scan.mjs",
     "security:secrets:strict": "node scripts/secret-scan.mjs --results=verified,unknown",

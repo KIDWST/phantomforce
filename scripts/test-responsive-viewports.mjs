@@ -516,11 +516,11 @@ function assertCase(result) {
   assert.equal(audit.horizontalOverflow, false, `${label} ${viewport.width}: document has horizontal overflow (${audit.bodyScrollWidth}px > ${viewport.width}px).`);
   assert.deepEqual(audit.offenders, [], `${label} ${viewport.width}: visible elements escape the viewport.`);
   assert.deepEqual(audit.clippedText, [], `${label} ${viewport.width}: visible control text is clipped.`);
-  if (viewport.width < 768) {
-    assert.equal(audit.nav.mobileVisible, true, `${label} ${viewport.width}: mobile bottom nav must be visible.`);
-    assert.equal(audit.nav.mobileHomebarVisible, true, `${label} ${viewport.width}: mobile homebar must be visible on phone widths.`);
-    assert.equal(audit.nav.commandRailVisible, false, `${label} ${viewport.width}: Command OS rail must be hidden on phone widths to avoid duplicate nav.`);
-    assert.equal(audit.nav.desktopVisible, false, `${label} ${viewport.width}: desktop sidebar must be hidden on phone widths.`);
+  if (viewport.width <= 900) {
+    assert.equal(audit.nav.mobileVisible, true, `${label} ${viewport.width}: compact bottom nav must be visible.`);
+    assert.equal(audit.nav.mobileHomebarVisible, true, `${label} ${viewport.width}: compact homebar must be visible.`);
+    assert.equal(audit.nav.commandRailVisible, false, `${label} ${viewport.width}: Command OS rail must be hidden on compact widths to avoid duplicate nav.`);
+    assert.equal(audit.nav.desktopVisible, false, `${label} ${viewport.width}: desktop sidebar must be hidden on compact widths.`);
     if (page === "dashboard") {
       assert.deepEqual(audit.dashboardCollisions, [], `${label} ${viewport.width}: dashboard brief, decisions and console must remain separate in the mobile document flow.`);
     }
@@ -582,8 +582,8 @@ async function main() {
       checks: [
         "local admin QA session renders",
         "requested workspace page renders",
-        "phone bottom nav visible under 768px",
-        "phone Command OS rail hidden to prevent duplicate navigation",
+        "compact bottom nav visible through 900px",
+        "compact Command OS rail hidden to prevent duplicate navigation",
         "one desktop primary navigation surface visible above tablet widths",
         "document has no horizontal overflow",
         "visible elements do not escape viewport",

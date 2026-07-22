@@ -128,3 +128,28 @@ Side-by-side comparison: `docs/quality/command-os-comparison.png`
 - The command OS keeps the existing working app routes, login/session behavior, Media Lab, PhantomPlay, PhantomStore, analytics, accounting, and competitor intelligence surfaces intact.
 
 final result: passed
+
+## Mobile dashboard scaling follow-up - 2026-07-22
+
+- Source screenshot: `C:\Users\jorda\.codex\codex-remote-attachments\019f8846-e05f-76b3-8d34-eeb34265ae6d\72B6570D-39C0-4626-8C6E-6B3662E36018\1-Photo-1.jpg`
+- Final 320 x 780 screenshot: `C:\Users\jorda\Documents\Codex\deployments\phantomforce-live\tmp\responsive-viewports\2026-07-22T16-13-17-095Z\screenshots\dashboard-320x780.png`
+- Side-by-side comparison: `C:\Users\jorda\Documents\Codex\deployments\phantomforce-live\docs\quality\command-os-mobile-comparison.png`
+
+### Visible fixes
+
+- Replaced the phone dashboard's competing absolute layers with one natural vertical document flow.
+- Removed the collision that covered the active decision card with the Phantom Console.
+- Allowed the page to scroll normally instead of scaling the desktop canvas down inside the viewport.
+- Kept the command-state grid, execution controls, chat log, composer, and bottom navigation within the phone width.
+- Converted multiple decisions into one complete, horizontally swipeable card per view rather than clipped stacked content.
+- Reduced the narrow-phone console title to the complete label `Phantom` instead of showing a truncated product name.
+
+### Verification
+
+- Compact command-surface regression checks pass.
+- Responsive checks cover eight main surfaces at 320, 375, 768, 1024, 1440, and 1920 pixel widths.
+- The dashboard check now fails on any visible overlap among the business brief, decision deck, and Phantom Console.
+- No document-level horizontal overflow, off-screen visible elements, or clipped visible control labels were reported.
+- The final comparison was inspected for hierarchy, spacing, text wrapping, control sizing, and bottom-navigation clearance.
+
+final result: passed
