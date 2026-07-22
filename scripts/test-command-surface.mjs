@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 const main = readFileSync(new URL("../app/js/main.js", import.meta.url), "utf8");
 const index = readFileSync(new URL("../app/index.html", import.meta.url), "utf8");
 const css = readFileSync(new URL("../app/phantom.css", import.meta.url), "utf8");
+const commandOsCss = readFileSync(new URL("../app/command-os.css", import.meta.url), "utf8");
 const count = (source, pattern) => source.match(pattern)?.length || 0;
 
 assert.equal(count(index, /class="chatbox"/gu), 1, "Dashboard must have one primary Phantom chat surface.");
@@ -39,5 +40,7 @@ assert.match(css, /\.dashboard-brief\s*\{/u, "Compact business brief must have d
 assert.match(css, /\.dashboard-brief-metrics\s*\{/u, "Business snapshot must have a stable responsive layout.");
 assert.match(css, /\.chatbox\.is-minimized\s*\{/u, "Phantom Console must have a real collapsed state.");
 assert.match(css, /\.pc-minimize/u, "Phantom Console minimize must share the header action styling.");
+assert.doesNotMatch(commandOsCss, /data-chatbox-minimized="true"[\s\S]{0,220}\.chatbox-head \.pc-actions,[\s\S]{0,280}display:\s*none\s*!important/u, "Collapsed Command OS must keep the restore control clickable.");
+assert.match(commandOsCss, /\.chatbox-head \.pc-mode,[\s\S]*?\.chatbox-head \.pc-settings,[\s\S]*?\.chatbox-head \.pc-menu\s*\{[\s\S]*?display:\s*none\s*!important/u, "Collapsed Command OS should hide only non-restore header controls.");
 
 console.log("Compact command surface checks passed.");

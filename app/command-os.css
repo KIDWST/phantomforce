@@ -2786,7 +2786,6 @@ html[data-command-os="2040"] .phantom.command-os-enabled .console[data-chatbox-m
   font-weight: 500;
 }
 
-html[data-command-os="2040"] .phantom.command-os-enabled .console[data-chatbox-minimized="true"]:not(.console-workspace) .chatbox-head .pc-actions,
 html[data-command-os="2040"] .phantom.command-os-enabled .console[data-chatbox-minimized="true"]:not(.console-workspace) .chatbox-log,
 html[data-command-os="2040"] .phantom.command-os-enabled .console[data-chatbox-minimized="true"]:not(.console-workspace) .chatbox-composer,
 html[data-command-os="2040"] .phantom.command-os-enabled .console[data-chatbox-minimized="true"]:not(.console-workspace) .chatbox-tools,
@@ -2796,7 +2795,22 @@ html[data-command-os="2040"] .phantom.command-os-enabled .console[data-chatbox-m
   display: none !important;
 }
 
-html[data-command-os="2040"] .phantom.command-os-enabled .console[data-chatbox-minimized="true"] .chatbox-toggle {
+html[data-command-os="2040"] .phantom.command-os-enabled .console[data-chatbox-minimized="true"]:not(.console-workspace) .chatbox-head .pc-actions {
+  position: absolute !important;
+  top: 50% !important;
+  right: 10px !important;
+  z-index: 8 !important;
+  display: inline-flex !important;
+  transform: translateY(-50%) !important;
+}
+
+html[data-command-os="2040"] .phantom.command-os-enabled .console[data-chatbox-minimized="true"]:not(.console-workspace) .chatbox-head .pc-mode,
+html[data-command-os="2040"] .phantom.command-os-enabled .console[data-chatbox-minimized="true"]:not(.console-workspace) .chatbox-head .pc-settings,
+html[data-command-os="2040"] .phantom.command-os-enabled .console[data-chatbox-minimized="true"]:not(.console-workspace) .chatbox-head .pc-menu {
+  display: none !important;
+}
+
+html[data-command-os="2040"] .phantom.command-os-enabled .console[data-chatbox-minimized="true"] .pc-minimize {
   border-radius: 999px !important;
   color: #55e7a7 !important;
 }
