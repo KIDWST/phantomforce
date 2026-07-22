@@ -60,7 +60,7 @@
 .pp2-summary{margin:0 0 10px;color:#a49fc6;font-size:12px;line-height:1.45;min-height:34px}
 .pp2-progress{height:4px;border-radius:999px;background: var(--glass-2);margin-bottom:10px;overflow:hidden}
 .pp2-progress i{display:block;height:100%;background:var(--pp2-green);box-shadow:0 0 10px #3822c5}
-.pp2-card-actions{display:flex;justify-content:space-between;align-items:center;color:var(--pp2-mut);font-size:12px}
+.pp2-card-actions{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;color:var(--pp2-mut);font-size:12px}
 .pp2-play{border:0;border-radius:999px;background:var(--pp2-green);color:#ffffff;padding:9px 18px;font:800 12px ui-monospace;cursor:pointer;transition:box-shadow .15s,transform .15s}
 .pp2-play:hover{box-shadow:0 0 20px #22c55e77;transform:translateY(-1px)}
 .pp2-ghost{border:1px solid var(--pp2-line);border-radius:999px;background:transparent;color: var(--ink);padding:8px 16px;font:700 12px ui-monospace;cursor:pointer;transition:background .15s}
@@ -185,6 +185,20 @@
 .pp2-stage-loading i{display:block;width:34px;height:34px;margin:0 auto 12px;border-radius:50%;border:3px solid #211d3a;border-top-color:#5e4ade;animation:pp2spin .9s linear infinite}
 @keyframes pp2spin{to{transform:rotate(360deg)}}
 .pp2-player footer{display:flex;gap:18px;justify-content:center;padding:8px;border-top:1px solid var(--pp2-line);color:var(--pp2-mut);font-size:12px}
+.pp2-player header em.pp-devsandbox-badge{margin-left:10px}
+
+/* Dev Mode dock — reuses .pp-devsandbox's own styling from phantomplay.css
+   (both stylesheets load on every page), just re-slotted into V2's grid. */
+.pp2-player.is-devsandbox{grid-template-columns:minmax(0,1fr) minmax(340px,420px)}
+.pp2-player.is-devsandbox>header{grid-column:1/-1;grid-row:1}
+.pp2-player.is-devsandbox .pp2-stage{grid-column:1;grid-row:2}
+.pp2-player.is-devsandbox .pp-devsandbox{grid-row:2}
+.pp2-player.is-devsandbox>footer{grid-column:1/-1;grid-row:3}
+@media(max-width:980px){
+  .pp2-player.is-devsandbox{grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr) auto auto}
+  .pp2-player.is-devsandbox .pp-devsandbox{grid-column:1;grid-row:3;border-left:0;border-top:1px solid #41ffa13d;max-height:46vh}
+  .pp2-player.is-devsandbox>footer{grid-row:4}
+}
 
 /* settings drawer */
 .pp2-settings{position:fixed;top:0;right:0;bottom:0;width:min(360px,92vw);z-index:45;background: var(--glass-2);border-left:1px solid #2cff9b44;padding:20px;display:grid;gap:14px;align-content:start;box-shadow:-20px 0 60px #000000aa}
