@@ -253,6 +253,52 @@ async function requestSocialOAuthStart(platform) {
   if (!json?.oauth?.authorizationUrl) throw new Error("OAuth start did not return an authorization URL.");
   return json.oauth;
 }
+function openSocialAuthWindow(accountName = "account") {
+  const safeName = String(accountName || "account").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "account";
+  const popup = window.open("about:blank", `phantomforce-social-${safeName}-${Date.now()}`, "popup,width=820,height=860");
+  if (!popup) return null;
+  try {
+    popup.document.title = `Connecting ${accountName}`;
+    popup.document.body.style.cssText = "margin:0;display:grid;place-items:center;min-height:100vh;background:#05070d;color:#e9fff4;font:16px system-ui,sans-serif;";
+    popup.document.body.innerHTML = `<main style="text-align:center;max-width:420px;padding:28px;"><b>Opening ${accountName} sign-in...</b><p style="color:#9fb7aa;line-height:1.45;">Use the account you are already signed into and approve PhantomForce when the provider asks.</p></main>`;
+  } catch {}
+  return popup;
+}
+function routeSocialAuthWindow(popup, url) {
+  if (!url) return false;
+  if (popup && !popup.closed) {
+    try {
+      popup.opener = null;
+      popup.location.href = url;
+      return true;
+    } catch {}
+  }
+  const fallback = window.open(url, "_blank", "noopener,noreferrer");
+  return Boolean(fallback);
+}
+async function beginSocialAccountConnection(account, popup = null) {
+  if (!socialOAuthState.loaded) await refreshSocialOAuthStatus({ force: true });
+  const connector = socialConnectorFor(account.id);
+  if (connector?.oauthConfigured || connector?.configured) {
+    const oauth = await requestSocialOAuthStart(account.id);
+    const opened = routeSocialAuthWindow(popup, oauth.authorizationUrl);
+    account.connectMode = "oauth-started";
+    account.lastConnectAt = new Date().toISOString();
+    socialNotice = opened
+      ? `${account.name} authorization opened. Approve it once; PhantomForce refreshes this panel when the callback returns.`
+      : `${account.name} authorization is ready, but the browser blocked the popup. Allow popups for PhantomForce and click again.`;
+    startSocialOAuthAuthorizationPolling(account.id);
+    return { mode: "oauth", opened };
+  }
+  const opened = routeSocialAuthWindow(popup, socialLoginTarget(account));
+  account.connectMode = "pending";
+  account.lastConnectAt = new Date().toISOString();
+  startSocialBridgePolling(account.id);
+  socialNotice = opened
+    ? `${account.name} login opened. Save the public handle here after sign-in; live analytics and posting unlock only after the provider OAuth app is ready.`
+    : `${account.name} login was blocked by the browser. Allow popups for PhantomForce and click again.`;
+  return { mode: "public-login", opened };
+}
 async function refreshSocialOAuthStatus({ force = false } = {}) {
   if (socialOAuthState.loading || (socialOAuthState.loaded && !force)) return socialOAuthState;
   socialOAuthState = { ...socialOAuthState, loading: true, error: "" };
@@ -4396,6 +4442,10 @@ function socialOAuthManagedPanel(esc) {
       <b>${esc(String(authorizedCount))}/${esc(String(totalCount))} live connections</b>
       <p>${esc(nextLabel)} · ${esc(nextDetail)} ${readyCount ? `(${readyCount}/${totalCount} provider apps ready)` : ""}</p>
     </div>
+    <button class="set-social-bolt" data-social-quick-connect type="button" title="Connect every OAuth-ready account">
+      ${svgIc("spark")}
+      <span>Quick connect</span>
+    </button>
   </div>`;
 }
 
@@ -4484,6 +4534,40 @@ export function renderMediaSettings(el, opts = {}) {
     }
     renderMediaSettings(el, opts);
   };
+  const quickConnect = el.querySelector("[data-social-quick-connect]");
+  if (quickConnect) quickConnect.onclick = async () => {
+    quickConnect.disabled = true;
+    let readyAccounts = socialAccounts.filter((account) => {
+      const connector = socialConnectorFor(account.id);
+      return connector?.oauthConfigured && !connector?.configured;
+    });
+    if (!readyAccounts.length && !socialOAuthState.loading) {
+      await refreshSocialOAuthStatus({ force: true });
+      readyAccounts = socialAccounts.filter((account) => {
+        const connector = socialConnectorFor(account.id);
+        return connector?.oauthConfigured && !connector?.configured;
+      });
+    }
+    if (!readyAccounts.length) {
+      socialNotice = "No OAuth-ready provider apps are available yet. Open Developer provider setup once, save the provider app credentials, then Quick connect can authorize accounts.";
+      renderMediaSettings(el, opts);
+      return;
+    }
+    const popups = readyAccounts.map((account) => ({ account, popup: openSocialAuthWindow(account.name) }));
+    const blocked = popups.filter((item) => !item.popup).length;
+    let opened = 0;
+    for (const item of popups) {
+      try {
+        const result = await beginSocialAccountConnection(item.account, item.popup);
+        if (result.opened) opened += 1;
+      } catch (error) {
+        item.account.connectMode = item.account.handle ? "manual-confirmed" : "manual";
+      }
+    }
+    saveSocialAccounts(socialAccounts);
+    socialNotice = `Quick connect opened ${opened}/${readyAccounts.length} OAuth-ready account authorization ${readyAccounts.length === 1 ? "window" : "windows"}.${blocked ? ` ${blocked} popup ${blocked === 1 ? "was" : "were"} blocked by the browser.` : ""} Facebook/Instagram will ask which Meta Page assets to authorize; choose the exact Page you want PhantomForce to use.`;
+    renderMediaSettings(el, opts);
+  };
 
   // social account linking stays local and never reads browser cookies/tokens.
   // OAuth/API tokens must stay server-side; this UI only captures editable public identity.
@@ -4505,24 +4589,11 @@ export function renderMediaSettings(el, opts = {}) {
     const open = card.querySelector("[data-social-open]");
     if (open) open.onclick = async () => {
       open.disabled = true;
+      const popup = openSocialAuthWindow(account.name);
       try {
-        if (!socialOAuthState.loaded) await refreshSocialOAuthStatus({ force: true });
-        const connector = socialConnectorFor(account.id);
-        if (connector?.oauthConfigured || connector?.configured) {
-          const oauth = await requestSocialOAuthStart(account.id);
-          window.open(oauth.authorizationUrl, "_blank", "noopener,noreferrer");
-          account.connectMode = "oauth-started";
-          account.lastConnectAt = new Date().toISOString();
-          socialNotice = `${account.name} authorization opened. Approve it once; PhantomForce refreshes this panel when the callback returns.`;
-          startSocialOAuthAuthorizationPolling(account.id);
-        } else {
-          window.open(socialLoginTarget(account), "_blank", "noopener,noreferrer");
-          account.connectMode = "pending";
-          account.lastConnectAt = new Date().toISOString();
-          socialNotice = `${account.name} login opened. Save the public handle here after sign-in; live analytics unlock only after the provider OAuth app is ready.`;
-        }
+        await beginSocialAccountConnection(account, popup);
       } catch (error) {
-        window.open(socialLoginTarget(account), "_blank", "noopener,noreferrer");
+        routeSocialAuthWindow(popup, socialLoginTarget(account));
         account.connectMode = "pending";
         socialNotice = `${account.name} login opened. OAuth did not start yet, so this will only save the public handle until provider setup is ready.`;
       }
@@ -4567,6 +4638,11 @@ function socialCard(account, esc) {
   const oauthDetail = connector
     ? `<div class="set-social-hermes-proof">${svgIc(connector.configured ? "check" : connector.oauthConfigured ? "lock" : "spark")} ${esc(connector.configured ? "Connected" : connector.oauthConfigured ? "Ready to connect" : providerUnavailableCopy)}</div>`
     : socialOAuthState.loading ? `<div class="set-social-hermes-proof">${svgIc("refresh")} Checking…</div>` : "";
+  const targetHint = account.id === "facebook"
+    ? `<div class="set-social-hermes-proof">${svgIc("lock")} Facebook connects to a selected Page, not your personal profile. Reconnect to choose a different Page in Meta.</div>`
+    : account.id === "instagram"
+      ? `<div class="set-social-hermes-proof">${svgIc("lock")} Instagram connects through the Meta Page's business account. Select the matching Page during Meta authorization.</div>`
+      : "";
   const hermesProof = account.hermesProof
     ? `<div class="set-social-hermes-proof">${svgIc("spark")} Handle saved — not connected · ${esc(account.hermesProof.displayName || account.hermesProof.handle || account.name)}</div>`
     : "";
@@ -4581,6 +4657,7 @@ function socialCard(account, esc) {
       <b>${esc(socialPostingState(account))}</b>
     </div>
     ${oauthDetail}
+    ${targetHint}
     ${hermesProof}
     <div class="set-social-actions">
       <button class="set-social-open set-social-action set-social-signin" data-social-open type="button">${esc(socialActionLabel(account))}</button>
