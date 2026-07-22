@@ -8774,7 +8774,7 @@ body.phantomplay-playing .buddy-say {
   overflow: hidden; color: var(--ink); font: 600 10px "Instrument Sans", sans-serif; font-style: normal; line-height: 1.1;
   text-overflow: ellipsis; white-space: nowrap;
 }
-.pc-actions { position: relative; flex: 0 0 auto; display: inline-flex; align-items: center; gap: 8px; }
+.pc-actions { position: relative; flex: 0 0 auto; display: inline-flex; align-items: center; align-self: start; gap: 8px; }
 .pc-mode {
   flex: 0 0 auto; display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px; border-radius: 999px; cursor: pointer;
   border: 1px solid var(--line); background: rgba(255, 255, 255, 0.03); color: var(--dim);
@@ -8785,7 +8785,8 @@ body.phantomplay-playing .buddy-say {
 .pc-mode:hover { border-color: var(--line-strong); color: var(--ink); }
 .pc-mode.is-build { border-color: rgba(91, 76, 255, 0.55); background: rgba(91, 76, 255, 0.1); color: var(--neon); box-shadow: 0 0 16px rgba(91, 76, 255, 0.15); }
 .pc-mode.is-build b { color: var(--neon); }
-.pc-settings {
+.pc-settings,
+.pc-minimize {
   flex: 0 0 auto; width: 38px; height: 38px; min-height: 38px; padding: 0; border-radius: 999px; cursor: pointer;
   display: inline-grid; place-items: center;
   border: 1px solid var(--line); background: rgba(255, 255, 255, 0.025); color: var(--ink);
@@ -8794,10 +8795,33 @@ body.phantomplay-playing .buddy-say {
 }
 .pc-settings span { transform: translateY(-0.5px); }
 .pc-settings:hover,
-.pc-settings[aria-expanded="true"] {
+.pc-settings[aria-expanded="true"],
+.pc-minimize:hover,
+.pc-minimize[aria-expanded="false"] {
   border-color: rgba(91, 76, 255, 0.46);
   background: rgba(91, 76, 255, 0.075);
   color: var(--ink);
+}
+.pc-minimize span {
+  transform: translateY(-1px);
+  font: 900 18px/1 "Instrument Sans", sans-serif;
+}
+.chatbox.is-minimized {
+  flex: 0 0 auto !important;
+  min-height: 0 !important;
+  height: auto !important;
+  cursor: pointer;
+}
+.chatbox.is-minimized .chatbox-log,
+.chatbox.is-minimized .chatbox-composer,
+.chatbox.is-minimized .chatbox-tools,
+.chatbox.is-minimized .chatbox-trust,
+.chatbox.is-minimized .phantomai-tabs,
+.chatbox.is-minimized .hero2-stage {
+  display: none !important;
+}
+.chatbox.is-minimized .chatbox-head {
+  border-bottom: 0;
 }
 .pc-menu {
   position: absolute; top: calc(100% + 10px); right: 0; z-index: 60;

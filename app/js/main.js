@@ -2531,7 +2531,8 @@ function setChatboxMinimized(minimized) {
   if (button) {
     button.setAttribute("aria-expanded", value ? "false" : "true");
     button.setAttribute("aria-label", value ? "Restore Phantom Console" : "Minimize Phantom Console");
-    button.innerHTML = value ? `<span aria-hidden="true">↗</span>` : `<span aria-hidden="true">–</span>`;
+    button.setAttribute("title", value ? "Restore Phantom Console" : "Minimize Phantom Console");
+    button.innerHTML = value ? `<span aria-hidden="true">+</span>` : `<span aria-hidden="true">-</span>`;
   }
   try { localStorage.setItem(CHATBOX_MINIMIZED_KEY, value ? "1" : "0"); }
   catch { /* localStorage can be blocked in hardened browser contexts */ }
@@ -2544,7 +2545,8 @@ function bindChatboxToggle() {
   button.addEventListener("click", (event) => {
     event.preventDefault();
     event.stopPropagation();
-    setChatboxMinimized(!chatboxMinimized());
+    const chatbox = button.closest("[data-chatbox]") || $("[data-chatbox]");
+    setChatboxMinimized(!chatbox?.classList.contains("is-minimized"));
   });
 }
 
@@ -2553,7 +2555,8 @@ document.addEventListener("click", (event) => {
   if (toggle) {
     event.preventDefault();
     event.stopPropagation();
-    setChatboxMinimized(toggle.getAttribute("aria-expanded") !== "false");
+    const chatbox = toggle.closest("[data-chatbox]") || $("[data-chatbox]");
+    setChatboxMinimized(!chatbox?.classList.contains("is-minimized"));
     return;
   }
   if (event.target?.closest?.('[data-chatbox].is-minimized')) {
