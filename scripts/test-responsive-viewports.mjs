@@ -316,6 +316,8 @@ function auditPage() {
   const productCards = [...document.querySelectorAll(".ps-product")];
   const productMedia = [...document.querySelectorAll(".ps-product-media")];
   const phantomPlayActions = [...document.querySelectorAll(".pp-game-actions button")];
+  const pageWorker = document.querySelector(".page-worker");
+  const storeSearch = document.querySelector(".ps-search");
   const isVisible = (el) => {
     if (!el) return false;
     if (el.closest('[aria-hidden="true"]')) return false;
@@ -464,6 +466,9 @@ function auditPage() {
     phantomStore: {
       productCards: productCards.length,
       productMedia: productMedia.length,
+      pageWorkerVisible: isVisible(pageWorker),
+      searchVisible: isVisible(storeSearch),
+      firstProductMediaTop: productMedia[0] ? Math.round(productMedia[0].getBoundingClientRect().top) : null,
       brokenMedia: productMedia.filter((media) => {
         const rect = media.getBoundingClientRect();
         const img = media.querySelector("img");
@@ -543,6 +548,14 @@ function assertCase(result) {
     assert.ok(audit.phantomStore.productCards >= 3, `${label} ${viewport.width}: PhantomStore must render real product cards even if live sync is offline.`);
     assert.equal(audit.phantomStore.productMedia, audit.phantomStore.productCards, `${label} ${viewport.width}: every PhantomStore product needs a visible media block.`);
     assert.deepEqual(audit.phantomStore.brokenMedia, [], `${label} ${viewport.width}: PhantomStore product media must be full-frame, visible art or styled fallback.`);
+    if (viewport.width <= 640) {
+      assert.equal(audit.phantomStore.pageWorkerVisible, false, `${label} ${viewport.width}: Store phone view must not bury products under the global prompt panel.`);
+      assert.equal(audit.phantomStore.searchVisible, false, `${label} ${viewport.width}: Store phone view must put products before search controls.`);
+      assert.ok(
+        audit.phantomStore.firstProductMediaTop !== null && audit.phantomStore.firstProductMediaTop < audit.nav.mobileTop - 16,
+        `${label} ${viewport.width}: first Store product art must appear above the mobile dock.`
+      );
+    }
   }
   if (page === "phantomplay") {
     assert.deepEqual(audit.phantomPlay.clippedActions, [], `${label} ${viewport.width}: PhantomPlay card actions must not be clipped inside game cards.`);
@@ -602,6 +615,7 @@ async function main() {
         "visible elements do not escape viewport",
         "visible control text is not clipped",
         "PhantomPlay card actions stay fully visible inside game cards",
+        "PhantomStore phone view puts product art before prompt chrome",
         "PhantomStore products render with full-frame media blocks",
       ],
     };
