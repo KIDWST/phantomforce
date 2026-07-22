@@ -309,6 +309,7 @@ function auditPage() {
   const nav = document.querySelector("[data-nav]");
   const commandRail = document.querySelector("[data-os-command-rail]");
   const mobileHomebar = document.querySelector(".mobile-admin-homebar");
+  const stickyTopbar = document.querySelector(".topbar2");
   const mobileNav = document.querySelector("[data-mobile-bottom-nav]");
   const dashboardBrief = document.querySelector(".dashboard-brief");
   const decisionDeck = document.querySelector(".decision-deck");
@@ -464,6 +465,7 @@ function auditPage() {
     ["sidebar", nav],
     ["command-rail", commandRail],
     ["mobile-homebar", mobileHomebar],
+    ["topbar", stickyTopbar],
     ["bottom-dock", mobileNav],
   ].filter(([, el]) => isVisible(el));
   const navSurfaces = navSurfaceEntries.map(([name, el]) => {
@@ -506,6 +508,7 @@ function auditPage() {
       desktopVisible: isVisible(nav),
       commandRailVisible: isVisible(commandRail),
       mobileHomebarVisible: isVisible(mobileHomebar),
+      stickyTopbarVisible: isVisible(stickyTopbar),
       mobileVisible: isVisible(mobileNav),
       visibleSurfaces: navSurfaces,
       mobileTop: mobileRect ? Math.round(mobileRect.top) : null,

@@ -14602,3 +14602,28 @@ body .phantom .workspace-page :where(
   .side-nav-utility .nav-item span,
   .side-nav-main .nav-item span { transition: none; }
 }
+
+/* Final compact nav guard: phones and narrow tablets get exactly one nav bar. */
+@media (max-width: 900px) {
+  .phantom {
+    --mobile-admin-topbar: 0px !important;
+  }
+
+  .topbar2,
+  .os-command-rail,
+  .mobile-admin-homebar {
+    display: none !important;
+    opacity: 0 !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+  }
+
+  .app-main {
+    min-height: 100svh !important;
+    padding-top: 0 !important;
+  }
+
+  .mobile-bottom-nav {
+    display: grid !important;
+  }
+}
