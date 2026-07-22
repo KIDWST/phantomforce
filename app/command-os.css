@@ -1804,3 +1804,232 @@ html[data-command-os="2040"] .phantom.command-os-enabled .phantomwire {
   .os-division-strip button { animation: none; }
   .os-flow.is-live { opacity: 0; }
 }
+
+/* ============================================================= */
+/* ==== OS FEEL — power-on / HUD / ambient / keys / toasts ===== */
+/* ============================================================= */
+
+/* ---- power-on sequence ---- */
+.os-poweron {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: radial-gradient(120% 90% at 50% 42%, #071018, #02060b 70%);
+  animation: osPowerDim 2.2s ease forwards;
+}
+.os-poweron.is-gone { opacity: 0; transition: opacity 0.6s ease; pointer-events: none; }
+.os-poweron-scan {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 40%;
+  background: linear-gradient(180deg, transparent, rgba(85, 231, 167, 0.06) 60%, rgba(85, 231, 167, 0.14));
+  filter: blur(6px);
+  animation: osPowerScan 1.5s cubic-bezier(0.5, 0, 0.2, 1) 1;
+}
+.os-poweron-inner {
+  position: relative;
+  width: min(440px, 86vw);
+  padding: 0 6px;
+}
+.os-poweron-mark {
+  color: #eef6fb;
+  font: 700 26px "Instrument Sans", sans-serif;
+  letter-spacing: 0.22em;
+  animation: osPowerIn 0.5s ease both;
+}
+.os-poweron-mark em { color: #55e7a7; font-style: normal; }
+.os-poweron-tag {
+  margin: 6px 0 22px;
+  color: #6c7c88;
+  font: 500 9px "Spline Sans Mono", monospace;
+  letter-spacing: 0.32em;
+  animation: osPowerIn 0.5s ease 0.1s both;
+}
+.os-poweron-lines { margin: 0; padding: 0; list-style: none; display: grid; gap: 9px; }
+.os-poweron-lines li {
+  display: grid;
+  grid-template-columns: 130px 1fr auto;
+  align-items: center;
+  gap: 12px;
+  color: #aeb9c2;
+  font: 500 11px "Spline Sans Mono", monospace;
+  opacity: 0;
+  animation: osPowerLine 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: calc(0.28s + var(--i) * 0.19s);
+}
+.os-poweron-lines span { color: #66c1ff; letter-spacing: 0.12em; }
+.os-poweron-lines b { color: #dfe8ee; font-weight: 500; }
+.os-poweron-lines u {
+  color: #04140d;
+  background: #55e7a7;
+  border-radius: 3px;
+  padding: 1px 6px;
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-decoration: none;
+}
+.os-poweron-done {
+  margin-top: 20px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(133, 171, 198, 0.16);
+  color: #55e7a7;
+  font: 700 12px "Spline Sans Mono", monospace;
+  letter-spacing: 0.24em;
+  opacity: 0;
+  animation: osPowerIn 0.5s ease both;
+  animation-delay: calc(0.28s + var(--i) * 0.19s);
+}
+@keyframes osPowerDim { 0%, 78% { opacity: 1; } 100% { opacity: 1; } }
+@keyframes osPowerIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes osPowerLine { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: none; } }
+@keyframes osPowerScan { from { top: -40%; } to { top: 100%; } }
+
+/* ---- living HUD in the status bar ---- */
+.os-hud { display: inline-flex; align-items: center; gap: 9px; padding: 0 clamp(12px, 1.4vw, 24px); border-right: 1px solid rgba(133, 171, 198, 0.1); }
+.os-ecg { width: 62px; height: 15px; overflow: visible; }
+.os-ecg polyline {
+  fill: none;
+  stroke: #55e7a7;
+  stroke-width: 1.4;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 3px rgba(85, 231, 167, 0.6));
+  stroke-dasharray: 66 66;
+  animation: osEcg 2.4s linear infinite;
+}
+@keyframes osEcg { from { stroke-dashoffset: 66; } to { stroke-dashoffset: -66; } }
+.os-uptime { color: #9fb0bb !important; font: 500 10px "Spline Sans Mono", monospace !important; font-variant-numeric: tabular-nums; letter-spacing: 0.06em; }
+
+/* ---- ambient: faint scanlines + vignette, the console is never dead ---- */
+.os-ambient {
+  position: fixed;
+  inset: 0;
+  z-index: 8;
+  pointer-events: none;
+  background:
+    repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.16) 0 1px, transparent 1px 3px),
+    radial-gradient(130% 100% at 50% 45%, transparent 62%, rgba(2, 6, 11, 0.55) 100%);
+  opacity: 0.5;
+  mix-blend-mode: multiply;
+}
+
+/* ---- go-mode: the map arms for a keyboard jump ---- */
+.os-go-armed .os-command-rail::after {
+  content: "GO →";
+  position: absolute;
+  left: 50%;
+  bottom: -22px;
+  transform: translateX(-50%);
+  z-index: 90;
+  padding: 3px 10px;
+  border-radius: 4px;
+  background: rgba(85, 231, 167, 0.16);
+  color: #7defb8;
+  font: 700 9px "Spline Sans Mono", monospace;
+  letter-spacing: 0.18em;
+  box-shadow: 0 0 18px rgba(85, 231, 167, 0.25);
+  animation: osPowerIn 0.16s ease both;
+}
+
+/* ---- keyboard cheatsheet ---- */
+.os-keys {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(2, 6, 11, 0.7);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  animation: osPowerIn 0.18s ease both;
+}
+.os-keys-panel {
+  width: min(660px, 100%);
+  padding: 22px 24px 24px;
+  border: 1px solid rgba(133, 171, 198, 0.2);
+  border-radius: 12px;
+  background: linear-gradient(180deg, #0b141d, #060c13);
+  box-shadow: 0 40px 120px rgba(0, 0, 0, 0.6), 0 0 60px rgba(79, 141, 255, 0.08);
+}
+.os-keys-panel header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 18px; }
+.os-keys-panel header b { color: #eef4f7; font: 700 12px "Spline Sans Mono", monospace; letter-spacing: 0.2em; }
+.os-keys-panel header span { color: #63717c; font: 500 9px "Spline Sans Mono", monospace; letter-spacing: 0.14em; }
+.os-keys-grid { display: grid; grid-template-columns: 1fr 1.35fr; gap: 26px; }
+.os-keys-grid h4 { margin: 0 0 12px; color: #55e7a7; font: 700 9px "Spline Sans Mono", monospace; letter-spacing: 0.16em; text-transform: uppercase; }
+.os-keys-grid p { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; }
+.os-keys-grid kbd {
+  min-width: 20px;
+  padding: 3px 7px;
+  border: 1px solid rgba(133, 171, 198, 0.28);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: rgba(133, 171, 198, 0.08);
+  color: #cdd8df;
+  font: 600 10px "Spline Sans Mono", monospace;
+  text-align: center;
+}
+.os-keys-grid i { color: #97a5b0; font-size: 11.5px; font-style: normal; }
+@media (max-width: 720px) { .os-keys-grid { grid-template-columns: 1fr; gap: 18px; } }
+
+/* ---- ⌘K discoverability on the Search action ---- */
+.os-rail-action[data-cmdk-open]::after {
+  content: "⌘K";
+  margin-left: 7px;
+  padding: 1px 5px;
+  border: 1px solid rgba(133, 171, 198, 0.24);
+  border-radius: 4px;
+  color: #7c8994;
+  font: 600 8.5px "Spline Sans Mono", monospace;
+  vertical-align: middle;
+}
+
+/* ---- real-event toasts ---- */
+.os-toasts {
+  position: fixed;
+  right: 18px;
+  bottom: 52px;
+  z-index: 9990;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(320px, calc(100vw - 32px));
+  pointer-events: none;
+}
+.os-toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 13px 14px;
+  border: 1px solid rgba(133, 171, 198, 0.2);
+  border-left: 2px solid #4f8dff;
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(14, 22, 31, 0.98), rgba(8, 14, 20, 0.98));
+  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.55);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  cursor: pointer;
+  pointer-events: auto;
+  opacity: 0;
+  transform: translateX(28px);
+  transition: opacity 0.4s ease, transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.os-toast.is-in { opacity: 1; transform: none; }
+.os-toast-ok { border-left-color: #55e7a7; }
+.os-toast-warn { border-left-color: #e8b85a; }
+.os-toast-led { width: 7px; height: 7px; margin-top: 4px; border-radius: 50%; flex: 0 0 auto; background: #4f8dff; box-shadow: 0 0 10px currentColor; animation: osLedPulse 2s ease-in-out infinite; }
+.os-toast-ok .os-toast-led { background: #55e7a7; }
+.os-toast-warn .os-toast-led { background: #e8b85a; }
+.os-toast-body b { display: block; color: #eef4f7; font-size: 12.5px; font-weight: 600; }
+.os-toast-body i { display: block; margin-top: 2px; color: #8f9ca8; font-size: 10.5px; font-style: normal; }
+
+@media (prefers-reduced-motion: reduce) {
+  .os-poweron, .os-poweron-scan, .os-poweron-mark, .os-poweron-tag, .os-poweron-lines li, .os-poweron-done,
+  .os-ecg polyline, .os-toast-led { animation: none; }
+  .os-toast { transition: opacity 0.2s ease; transform: none; }
+}

@@ -6,8 +6,8 @@ import {
   moneyView,
   memoryStats,
   fmtMoney,
-} from "./store.js?v=phantom-live-20260722-2";
-import { loadSocialAccounts } from "./contenthub.js?v=phantom-live-20260722-2";
+} from "./store.js?v=phantom-live-20260722-3";
+import { loadSocialAccounts } from "./contenthub.js?v=phantom-live-20260722-3";
 
 let executionMode = "advise";
 let syncFrame = 0;
@@ -427,6 +427,9 @@ function syncCommandOS() {
   syncActiveNavigation();
   ensureDecisionObserver();
   syncDecisionOffset();
+  mountHud();
+  maybePowerOn();
+  checkOsEvents();
 }
 
 function scheduleSync() {
@@ -569,6 +572,167 @@ function bindCommandOS() {
   });
 }
 
+/* ============================================================= */
+/* ==== OS FEEL — power-on, living HUD, keyboard, real toasts === */
+/* ============================================================= */
+/* Everything here is view-layer only: reads real store/session state, never
+   writes it, and never touches routing or the brain. It's what makes the
+   console read as an operating system you drive rather than a page you visit. */
+
+const reduceMotionOS = () => { try { return window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch { return false; } };
+
+function osShellVisible() {
+  const shell = $("[data-phantom]");
+  return !!(shell && !shell.hidden && shell.classList.contains("booted"));
+}
+
+/* ---- power-on: the console BOOTS once per session with real telemetry ---- */
+const POWERON_KEY = "pf.os.poweron.v1";
+let poweredOn = false;
+function maybePowerOn() {
+  if (poweredOn || !osShellVisible()) return;
+  poweredOn = true;
+  let seen = false;
+  try { seen = sessionStorage.getItem(POWERON_KEY) === "1"; } catch {}
+  try { sessionStorage.setItem(POWERON_KEY, "1"); } catch {}
+  if (seen || reduceMotionOS()) return;
+  const bridge = liveBridgeState();
+  const lines = [
+    ["MEMORY SPINE", `${memoryStats().total} records indexed`],
+    ["WORKFORCE", `${liveWorkerCount()} agents online`],
+    ["LOCAL BRIDGE", bridge === "Connected" ? "handshake complete" : "standing by"],
+    ["POLICY GUARD", "external actions reviewed"],
+    ["PHANTOM CORE", "operating intelligence online"],
+  ];
+  const el = document.createElement("div");
+  el.className = "os-poweron";
+  el.setAttribute("aria-hidden", "true");
+  el.innerHTML = `
+    <div class="os-poweron-scan"></div>
+    <div class="os-poweron-inner">
+      <div class="os-poweron-mark">PHANTOMFORCE<em>OS</em></div>
+      <div class="os-poweron-tag">BUSINESS COMMAND · POWER-ON</div>
+      <ul class="os-poweron-lines">
+        ${lines.map(([k, v], i) => `<li style="--i:${i}"><span>${k}</span><b>${v}</b><u>OK</u></li>`).join("")}
+      </ul>
+      <div class="os-poweron-done" style="--i:${lines.length}">ALL SYSTEMS NOMINAL</div>
+    </div>`;
+  document.body.appendChild(el);
+  const kill = () => { if (!el.isConnected) return; el.classList.add("is-gone"); setTimeout(() => el.remove(), 640); };
+  setTimeout(kill, 2200);
+  el.addEventListener("click", kill);
+}
+
+/* ---- living HUD: a heartbeat + a session uptime that never stops ---- */
+let uptimeTimer = 0;
+function mountHud() {
+  const line = $(".os-system-line");
+  if (!line || line.querySelector(".os-hud")) return;
+  const hud = document.createElement("span");
+  hud.className = "os-hud";
+  hud.innerHTML = `
+    <svg class="os-ecg" viewBox="0 0 66 16" aria-hidden="true"><polyline points="0,8 22,8 27,8 31,2 35,14 39,8 46,8 51,8 55,5 59,8 66,8"/></svg>
+    <i class="os-uptime" data-os-uptime title="Session uptime">00:00:00</i>`;
+  line.insertBefore(hud, line.querySelector(".os-system-time"));
+  if (uptimeTimer) return;
+  let start = 0;
+  try { start = Number(sessionStorage.getItem("pf.os.session.start")) || 0; } catch {}
+  if (!start) { start = Date.now(); try { sessionStorage.setItem("pf.os.session.start", String(start)); } catch {} }
+  const tick = () => {
+    const el = $("[data-os-uptime]");
+    if (!el) return;
+    const s = Math.max(0, Math.floor((Date.now() - start) / 1000));
+    const pad = (n) => String(n).padStart(2, "0");
+    el.textContent = `${pad(Math.floor(s / 3600))}:${pad(Math.floor((s % 3600) / 60))}:${pad(s % 60)}`;
+  };
+  tick();
+  uptimeTimer = window.setInterval(tick, 1000);
+}
+
+function mountAmbientOS() {
+  if (document.querySelector(".os-ambient")) return;
+  const a = document.createElement("div");
+  a.className = "os-ambient";
+  a.setAttribute("aria-hidden", "true");
+  document.body.appendChild(a);
+}
+
+/* ---- keyboard command layer: g-chord navigation + a ? cheatsheet ---- */
+const GO_MAP = { d: "dashboard", p: "phantomplay", s: "phantomstore", m: "media", w: "sites", a: "analytics", i: "intelligence", $: "money" };
+let goMode = false;
+let goTimer = 0;
+function osIsTyping(t) { return !!(t && (/^(input|textarea|select)$/i.test(t.tagName) || t.isContentEditable)); }
+function paletteOpen() { const c = $("[data-cmdk]"); return !!(c && !c.hidden); }
+function setGoMode(on) {
+  goMode = on;
+  document.documentElement.classList.toggle("os-go-armed", on);
+  clearTimeout(goTimer);
+  if (on) goTimer = window.setTimeout(() => setGoMode(false), 1600);
+}
+function toggleCheatsheet(force) {
+  const existing = document.querySelector(".os-keys");
+  if (existing) { existing.remove(); return; }
+  if (force === false) return;
+  const rows = [
+    ["Launch", [["⌘ K", "Command palette"], ["/", "Talk to Phantom"], ["?", "This sheet"], ["Esc", "Close / back"]]],
+    ["Go to  ·  press g then", [["g d", "Dashboard"], ["g p", "PhantomPlay"], ["g s", "PhantomStore"], ["g m", "Media Lab"], ["g w", "Website Builder"], ["g a", "Analytics"], ["g i", "Competitor Intel"], ["g $", "Accounting"]]],
+  ];
+  const el = document.createElement("div");
+  el.className = "os-keys";
+  el.innerHTML = `<div class="os-keys-panel" role="dialog" aria-label="Keyboard shortcuts">
+    <header><b>COMMAND SHORTCUTS</b><span>? to close</span></header>
+    <div class="os-keys-grid">
+      ${rows.map(([title, items]) => `<section><h4>${title}</h4>${items.map(([k, label]) => `<p>${k.split(" ").map((key) => `<kbd>${key}</kbd>`).join("")}<i>${label}</i></p>`).join("")}</section>`).join("")}
+    </div></div>`;
+  el.addEventListener("click", (ev) => { if (ev.target === el) el.remove(); });
+  document.body.appendChild(el);
+}
+function bindKeyboard() {
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") { const k = document.querySelector(".os-keys"); if (k) { k.remove(); return; } if (goMode) setGoMode(false); return; }
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (!osShellVisible() || paletteOpen() || osIsTyping(e.target)) { if (goMode) setGoMode(false); return; }
+    if (goMode) {
+      const id = GO_MAP[e.key];
+      setGoMode(false);
+      if (id && typeof window.PHANTOM_GO_NAV === "function") { e.preventDefault(); window.PHANTOM_GO_NAV(id); scheduleSync(); }
+      return;
+    }
+    if (e.key === "g") { e.preventDefault(); setGoMode(true); return; }
+    if (e.key === "?") { e.preventDefault(); toggleCheatsheet(); }
+  });
+}
+
+/* ---- real-event toasts: the OS proactively surfaces genuine changes ---- */
+let toastBaseline = null;
+function osToast(title, sub, tone) {
+  let host = document.querySelector(".os-toasts");
+  if (!host) { host = document.createElement("div"); host.className = "os-toasts"; host.setAttribute("aria-live", "polite"); document.body.appendChild(host); }
+  const t = document.createElement("div");
+  t.className = `os-toast os-toast-${tone || "info"}`;
+  t.innerHTML = `<span class="os-toast-led"></span><div class="os-toast-body"><b>${title}</b>${sub ? `<i>${sub}</i>` : ""}</div>`;
+  host.appendChild(t);
+  requestAnimationFrame(() => t.classList.add("is-in"));
+  const kill = () => { t.classList.remove("is-in"); setTimeout(() => t.remove(), 420); };
+  const timer = window.setTimeout(kill, 5400);
+  t.addEventListener("click", () => { clearTimeout(timer); kill(); });
+}
+function checkOsEvents() {
+  const now = {
+    pending: visible(store.state.approvals || []).filter((a) => a.status === "pending").length,
+    agents: visible(store.state.agents || []).length,
+    leads: visible(store.state.leads || []).length,
+  };
+  /* First pass establishes the baseline silently — seed/boot data must never
+     toast. Skipping while hidden/reduced-motion also advances the baseline, so
+     nothing backlogs into a burst the moment the console appears. */
+  if (!toastBaseline || !osShellVisible() || reduceMotionOS()) { toastBaseline = now; return; }
+  if (now.pending > toastBaseline.pending) osToast("Approval needed", `${plural(now.pending - toastBaseline.pending, "decision")} waiting on you`, "warn");
+  if (now.agents > toastBaseline.agents) osToast("Agent deployed", `${plural(now.agents - toastBaseline.agents, "agent")} now in motion`, "ok");
+  if (now.leads > toastBaseline.leads) osToast("New lead captured", `${plural(now.leads - toastBaseline.leads, "organization record")} added`, "ok");
+  toastBaseline = now;
+}
+
 export function initCommandOS() {
   const shell = $("[data-phantom]");
   if (!shell || shell.dataset.commandOsBound === "true") return;
@@ -576,6 +740,8 @@ export function initCommandOS() {
   shell.classList.add("command-os-enabled");
   document.documentElement.dataset.commandOs = "2040";
   bindCommandOS();
+  bindKeyboard();
+  mountAmbientOS();
   setExecutionMode("advise");
   setFieldMode("executive");
   store.onChange(scheduleSync);
