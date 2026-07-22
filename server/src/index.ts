@@ -235,6 +235,9 @@ import {
   createSocialOAuthStart,
   getSocialAnalyticsConnectorStatus,
   getSocialOAuthSetupStatus,
+  getCustomerSocialConnectionStatus,
+  getSuperAdminSocialDiagnostics,
+  socialConnectV2Enabled,
   isSocialAnalyticsPlatform,
   saveSocialOAuthSetup,
   syncSocialAnalytics,
@@ -8010,13 +8013,40 @@ app.get("/phantom-ai/ops/social-analytics/status", async (request, reply) => {
   const session = requireAccessSession(request, reply);
   if (!session) return reply;
   const tenantId = customizationTenantForSession(session, (request.query as { tenant_id?: string } | undefined)?.tenant_id);
+  // Super-admins / access managers may still receive the operational status
+  // (redirect URIs, configured booleans) for the diagnostics panel. Ordinary
+  // workspace users receive ONLY the sanitized customer projection — no
+  // callback URLs, console URLs, env-var names, or redirect URIs.
+  const canManage = Boolean((session as { canManageAccess?: boolean; isSuperAdmin?: boolean }).canManageAccess
+    || (session as { isSuperAdmin?: boolean }).isSuperAdmin);
+  const customer = getCustomerSocialConnectionStatus(tenantId);
+  if (socialConnectV2Enabled() && !canManage) {
+    return {
+      ok: true,
+      session,
+      tenant_id: tenantId,
+      read_only: true,
+      social_connect_v2: true,
+      social_connections: customer, // sanitized, credential-free
+    };
+  }
   return {
     ok: true,
     session,
     tenant_id: tenantId,
     read_only: true,
+    social_connect_v2: socialConnectV2Enabled(),
+    social_connections: customer,
     social_analytics: getSocialAnalyticsConnectorStatus(tenantId),
   };
+});
+
+// Super-admin-only diagnostics. Returns configured/not-configured, redirect
+// URIs, and required env NAMES — never the secret values themselves.
+app.get("/phantom-ai/ops/social-oauth/diagnostics", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+  if (!session) return reply;
+  return { ok: true, session, diagnostics: getSuperAdminSocialDiagnostics() };
 });
 
 app.post("/phantom-ai/ops/social-oauth/start", async (request, reply) => {

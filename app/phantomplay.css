@@ -1085,10 +1085,14 @@ html[data-org-color-mode="light"] .pp-game-art img{
     display:none;
   }
   .pp-game{
-    grid-template-columns:minmax(108px,34%) minmax(0,1fr);
+    grid-template-columns:1fr;
   }
   .pp-game-art{
-    min-height:148px;
+    min-height:0;
+    height:auto;
+    aspect-ratio:16/9;
+    border-right:0;
+    border-bottom:1px solid rgba(91,76,255,.16);
   }
   .pp-game-body{
     gap:7px;
@@ -1109,17 +1113,26 @@ html[data-org-color-mode="light"] .pp-game-art img{
     padding-right:0;
   }
   .pp-game-actions{
+    display:grid;
+    grid-template-columns:minmax(0,1fr) auto auto;
     gap:6px;
   }
   .pp-game-actions .pp-support{
-    flex-basis:100%;
+    grid-column:1;
+    width:100%;
     min-height:32px;
     font-size:11px;
   }
+  .pp-game-actions .pp-play{grid-column:1/-1}
+  .pp-game-actions .pp-devsandbox-card-open{grid-column:2}
+  .pp-game-actions .pp-devsandbox-code-open{grid-column:3}
   .pp-game-art img{
+    width:100%;
+    height:100%;
     transform:none;
     object-fit:contain;
     object-position:center;
+    padding:4px;
   }
 }
 

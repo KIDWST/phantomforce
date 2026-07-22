@@ -147,6 +147,8 @@ assert.match(css, /@media\s*\(max-width:\s*767px\)/u, "Phone-specific responsive
 assert.match(css, /html\[data-org-color-mode="dark"\] \.pp-game-art img\{[\s\S]*?object-fit:contain[\s\S]*?transform:none/u, "Dark-mode PhantomPlay thumbnails must show the full game image instead of zoom-cropping it.");
 assert.match(css, /\.pp-game-grid:not\(\.pp-game-grid-full\) \.pp-game-art img\{[\s\S]*?object-fit:contain[\s\S]*?transform:none/u, "Compact PhantomPlay rows must not override thumbnails back to cropped art.");
 assert.match(css, /@media\(max-width:767px\)[\s\S]*?\.pp-game-body>p\{[\s\S]*?-webkit-line-clamp:3/u, "Phone game cards must clamp copy instead of forcing broken oversized cards.");
+assert.match(css, /@media\(max-width:767px\)[\s\S]*?\.pp-game\{[\s\S]*?grid-template-columns:1fr/u, "Phone game cards must stack artwork over copy instead of creating skinny text columns.");
+assert.match(css, /@media\(max-width:767px\)[\s\S]*?\.pp-game-art\{[\s\S]*?aspect-ratio:16\/9/u, "Phone game art must keep a stable widescreen stage.");
 assert.match(v2Css, /\.pp2-shell\{--pp2-bg:#050a10[\s\S]*?--pp2-panel:rgba\(6,13,20,\.94\)/u, "PhantomPlay V2 must default to a real dark theme.");
 assert.match(v2Css, /html\[data-org-color-mode="light"\] \.pp2-shell/u, "PhantomPlay V2 must keep light mode explicit and separate.");
 assert.match(v2Css, /\.pp2-art img\{[\s\S]*?object-fit:contain/u, "PhantomPlay V2 thumbnails must show full art instead of zoom-cropping covers.");

@@ -42,7 +42,10 @@ assert.match(main, /const MOBILE_DOCK_IDS = \["dashboard", "crm", "media", "site
 assert.match(main, /data-mobile-more/u, "Phone dock must expose the complete navigation through More.");
 assert.match(main, /setMobileNav\(!mobileNavOpen\)/u, "More must open and close the existing mobile drawer.");
 assert.match(css, /\.mobile-bottom-nav\s*\{[\s\S]*?grid-template-columns:\s*repeat\(6, minmax\(0, 1fr\)\)/u, "Phone dock must fit six controls without horizontal clipping.");
-assert.doesNotMatch(css, /\.sidebar\s*\{\s*display:\s*none\s*!important;\s*\}/u, "Phone CSS must not disable the complete navigation drawer.");
+assert.match(css, /@media \(max-width: 767px\)[\s\S]*?\.sidebar\s*\{[\s\S]*?display:\s*none\s*!important[\s\S]*?\.sidebar\.is-expanded\s*\{[\s\S]*?display:\s*flex\s*!important/u, "Phone sidebar must be drawer-only so it cannot duplicate the bottom nav.");
+assert.match(css, /\.sidebar:not\(\.is-expanded\)\s*\{\s*display:\s*none\s*!important;\s*\}/u, "Final phone chrome must keep the sidebar hidden until More opens it.");
+assert.match(css, /@media \(max-width: 640px\)[\s\S]*?\.ch-card-h\s*\{[\s\S]*?flex-direction:\s*column/u, "Content Hub mobile card headers must stack instead of squeezing copy into one-word columns.");
+assert.match(css, /@media \(max-width: 640px\)[\s\S]*?\.ch-card-h \.ch-src\s*\{[\s\S]*?white-space:\s*normal/u, "Content Hub mobile header copy must wrap naturally.");
 assert.match(css, /\.dashboard-brief\s*\{/u, "Compact business brief must have dashboard styling.");
 assert.match(css, /\.dashboard-brief-metrics\s*\{/u, "Business snapshot must have a stable responsive layout.");
 assert.match(css, /\.chatbox\.is-minimized\s*\{/u, "Phantom Console must have a real collapsed state.");

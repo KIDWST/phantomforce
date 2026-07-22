@@ -7378,13 +7378,35 @@ kbd { font: 600 10px "Spline Sans Mono", monospace; padding: 2px 6px; border-rad
   .an-channel-row, .an-channel-row.is-missing { padding: 12px; gap: 11px; }
   .ch-kpis { grid-template-columns: repeat(2, 1fr); }
   .ch-creator-head, .an-hero { flex-direction: column; align-items: stretch; }
-  .ch-tenant-actions { justify-content: flex-start; }
+  .ch-tenant-actions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr;
+    justify-content: stretch;
+  }
+  .ch-tenant-actions .btn,
+  .ch-tenant-actions .ch-tool { width: 100%; }
   .ch-draft, .ch-calendar-item { grid-template-columns: 1fr; }
   .ch-production, .an-trend-list, .an-reco-grid { grid-template-columns: 1fr; }
   .ch-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; overflow: visible; flex-wrap: nowrap; }
   .ch-chips { overflow: visible; flex-wrap: wrap; }
   .ch-tab { min-width: 0; padding: 9px 3px; text-align: center; font-size: 11px; white-space: nowrap; }
   .ch-tabs > .ch-src { grid-column: 1 / -1; width: 100%; line-height: 1.45; }
+  .ch-card-h { align-items: flex-start; flex-direction: column; gap: 8px; }
+  .ch-card-h > div { min-width: 0; }
+  .ch-card-h .ch-src {
+    display: block;
+    width: 100%;
+    line-height: 1.4;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+  }
+  .ch-card-h > .ch-tool,
+  .ch-card-h > .ch-pub-safe {
+    width: 100%;
+    justify-content: center;
+  }
   .ch-subtabs { overflow: visible; flex-wrap: wrap; margin-top: -8px; padding-bottom: 10px; scrollbar-width: none; }
   .ch-subtabs::-webkit-scrollbar { display: none; }
   .ch-subtab { flex: 1 1 calc(50% - 7px); min-height: 38px; text-align: center; }
@@ -7398,11 +7420,14 @@ kbd { font: 600 10px "Spline Sans Mono", monospace; padding: 2px 6px; border-rad
   .ch-creation-source { grid-template-columns: 82px minmax(0, 1fr); }
   .ch-creation-thumb { width: 82px; }
   .ch-creation-source > strong { grid-column: 1 / -1; min-height: 34px; border-left: 0; border-top: 1px solid rgba(91, 76, 255,.16); }
-  .ch-action-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ch-action-row { display: grid; grid-template-columns: 1fr; width: 100%; }
   .ch-tool { width: 100%; min-height: 40px; white-space: normal; }
   .ch-pub-source-head { align-items: stretch; flex-direction: column; }
   .ch-pub-platforms, .ch-pub-source-grid, .ch-pub-row, .ch-pub-queue-grid { grid-template-columns: 1fr; }
-  .ch-pub-tone-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ch-pub-presets,
+  .ch-pub-format-row,
+  .ch-pub-tone-row { display: grid; grid-template-columns: 1fr; }
+  .ch-chip { width: 100%; justify-content: center; white-space: normal; }
   .ch-pub-schedule { min-width: 0; margin-left: 0; grid-column: 1 / -1; }
   .ch-planner-hero { align-items: stretch; flex-direction: column; }
   .ch-planner-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -7942,13 +7967,14 @@ kbd { font: 600 10px "Spline Sans Mono", monospace; padding: 2px 6px; border-rad
   }
 
   .sidebar {
-    display: flex !important;
+    display: none !important;
     opacity: 0;
     visibility: hidden;
     pointer-events: none;
     transform: translateX(-12px);
   }
   .sidebar.is-expanded {
+    display: flex !important;
     opacity: 1;
     visibility: visible;
     pointer-events: auto;
@@ -8220,7 +8246,8 @@ body.phantomplay-playing .buddy-say {
 /* Final phone chrome: one clean top bar, one fixed taskbar. */
 @media (max-width: 767px) {
   .mobile-admin-homebar { display: flex !important; }
-  .sidebar { display: flex !important; }
+  .sidebar:not(.is-expanded) { display: none !important; }
+  .sidebar.is-expanded { display: flex !important; }
   .topbar2 { display: none !important; }
   .app-main { padding: 0 0 calc(82px + env(safe-area-inset-bottom, 0px)) !important; }
   .console {
@@ -8671,7 +8698,7 @@ body.phantomplay-playing .buddy-say {
   aspect-ratio: 1;
   pointer-events: none;
   opacity: 0;
-  background: url("/app/assets/brand-phantom.png?v=phantom-live-20260722-26") center / contain no-repeat;
+  background: url("/app/assets/brand-phantom.png?v=phantom-live-20260722-27") center / contain no-repeat;
   filter: saturate(1.2) drop-shadow(0 0 28px rgba(91, 76, 255, 0.28));
   transform: translateY(10px) scale(0.96);
   transition: opacity 0.28s ease, transform 0.28s ease;

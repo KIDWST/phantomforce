@@ -1,7 +1,7 @@
 import {
   currentTenantId, isAdmin, isOwnerOperator, session,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260722-26";
+} from "./store.js?v=phantom-live-20260722-27";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 const mobilePlaySurface = () => typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;
@@ -1012,12 +1012,15 @@ function devWorkbenchMarkup() {
     </header>
     <div class="pp-devworkbench-toolbar">
       <label>Section<select data-pp-devworkbench-section><option value="code" ${section === "code" ? "selected" : ""}>Full Source Code</option><option value="mods" ${section === "mods" ? "selected" : ""}>Mod Menu</option></select></label>
+      <button type="button" class="pp-secondary" data-pp-devworkbench-undo title="Undo (Ctrl+Z)" ${d.history?.undo?.length ? "" : "disabled"}>Undo</button>
+      <button type="button" class="pp-secondary" data-pp-devworkbench-redo title="Redo (Ctrl+Shift+Z)" ${d.history?.redo?.length ? "" : "disabled"}>Redo</button>
+      <button type="button" class="pp-secondary" data-pp-devworkbench-revert>Revert to last working</button>
       <button type="button" class="pp-secondary" data-pp-devworkbench-save>Save draft</button>
       <button type="button" class="pp-devworkbench-launch" data-pp-devworkbench-launch>${icon("dev")} Save & Launch Dev Mode</button>
       <button type="button" class="pp-secondary" data-pp-devworkbench-start>${icon("play")} Start normal</button>
       <button type="button" class="pp-devworkbench-close-inline" data-pp-devworkbench-close>Close</button>
     </div>
-    <p class="pp-devsandbox-note">${section === "mods" ? "Pick the mod menu you want available when the sandbox starts." : "Read or edit the bundled game source first. Nothing launches until you press Save & Launch or Start normal."}${d.hasOverride ? " Saved workspace override found." : ""}</p>
+    <p class="pp-devsandbox-note">${section === "mods" ? "Pick the mod menu you want available when the sandbox starts." : "Ctrl+Z / Ctrl+Shift+Z work here. Revert returns this editor to the last working code that loaded."}${d.hasOverride ? " Saved workspace override found." : ""}</p>
     ${d.error ? `<div class="pp-devsandbox-error">${esc(d.error)}</div>` : ""}
     ${d.loading
       ? `<div class="pp-devmode-loading"><i></i><b>Loading source…</b></div>`
@@ -1031,7 +1034,7 @@ function devWorkbenchMarkup() {
 async function openDevWorkbench(gameId, section = "code") {
   const game = ui.snapshot?.catalog?.find((item) => item.id === gameId);
   if (!game?.devModeAvailable) return;
-  ui.devWorkbench = { gameId: game.id, source: "", editedSource: "", hasOverride: false, overrideUpdatedAt: null, localUpdatedAt: null, loading: true, error: "", status: "", section, modState: {}, speed: 1 };
+  ui.devWorkbench = { gameId: game.id, source: "", editedSource: "", history: createEditorHistory(), hasOverride: false, overrideUpdatedAt: null, localUpdatedAt: null, loading: true, error: "", status: "", section, modState: {}, speed: 1 };
   render();
   try {
     const tenantQuery = `tenant_id=${encodeURIComponent(currentTenantId())}`;
@@ -1048,7 +1051,7 @@ async function openDevWorkbench(gameId, section = "code") {
       localUpdatedAt: localDraft?.updatedAt || null,
       loading: false, error: "",
       status: newestDraft ? (newestDraft === localDraft ? "Resumed your local autosave." : "Loaded your workspace override.") : "Loaded shipped source.",
-      section, modState: {}, speed: 1,
+      section, modState: {}, speed: 1, history: createEditorHistory(),
     };
   } catch (error) {
     try {
@@ -1059,7 +1062,7 @@ async function openDevWorkbench(gameId, section = "code") {
         gameId: game.id, source, editedSource: localDraft?.source || source,
         hasOverride: false, overrideUpdatedAt: null, localUpdatedAt: localDraft?.updatedAt || null,
         loading: false, error: "", status: localDraft ? "Resumed your local autosave. Backend sync is waiting." : "Loaded source locally. Dev Mode can still launch from here.",
-        section, modState: {}, speed: 1,
+        section, modState: {}, speed: 1, history: createEditorHistory(),
       };
     } catch {
       ui.devWorkbench = { ...ui.devWorkbench, loading: false, error: error instanceof Error ? error.message : "Code workbench source could not be loaded." };
@@ -1080,7 +1083,7 @@ function devSandboxMarkup(game) {
       <button type="button" data-pp-devsandbox-close aria-label="Close Dev Mode">×</button>
     </header>
     <label class="pp-devsandbox-section-picker">Section<select data-pp-devsandbox-section><option value="code" ${section === "code" ? "selected" : ""}>Full Source Code</option><option value="mods" ${section === "mods" ? "selected" : ""}>Mod Menu</option></select></label>
-    <p class="pp-devsandbox-note">${section === "mods" ? "Toggle mods on while you play — they apply instantly, no reload." : "Live-editing the full bundled source. Typing updates the private preview and local draft only; press Save & Resync when this edit is ready."} Only visible to you.${d.hasOverride ? " A saved workspace override is currently active for this game." : ""}</p>
+    <p class="pp-devsandbox-note">${section === "mods" ? "Toggle mods on while you play — they apply instantly, no reload." : "Ctrl+Z / Ctrl+Shift+Z work while you type. Preview changes stay private until you publish."} Only visible to you.${d.hasOverride ? " A saved workspace override is currently active for this game." : ""}</p>
     ${d.error ? `<div class="pp-devsandbox-error">${esc(d.error)}</div>` : ""}
     ${d.loading
       ? `<div class="pp-devmode-loading"><i></i><b>Loading source…</b></div>`
@@ -1089,8 +1092,10 @@ function devSandboxMarkup(game) {
         : `<textarea class="pp-devsandbox-source" data-pp-devsandbox-source spellcheck="false">${esc(d.editedSource)}</textarea>`}
     <p class="pp-devsandbox-status" data-pp-devsandbox-status>${esc(d.status || "")}</p>
     <footer>
+      <button type="button" data-pp-devsandbox-undo title="Undo (Ctrl+Z)" ${d.history?.undo?.length ? "" : "disabled"}>Undo</button>
+      <button type="button" data-pp-devsandbox-redo title="Redo (Ctrl+Shift+Z)" ${d.history?.redo?.length ? "" : "disabled"}>Redo</button>
       <button type="button" class="pp-devsandbox-save" data-pp-devsandbox-save ${d.saving ? "disabled" : ""}>${d.saving ? "Saving…" : "Save & Resync"}</button>
-      <button type="button" data-pp-devsandbox-revert>Revert to shipped</button>
+      <button type="button" data-pp-devsandbox-revert>Revert to last working</button>
       ${ui.snapshot.access.isOwner ? `<button type="button" class="pp-devsandbox-publish" data-pp-devsandbox-publish ${d.publishing ? "disabled" : ""}>${d.publishing ? "Publishing…" : "Publish to live"}</button>` : ""}
     </footer>
   </div>`;
@@ -1534,6 +1539,84 @@ function setDevSandboxStatus(message) {
   if (status) status.textContent = message;
 }
 
+// Keep a lightweight app-level editor history in addition to the browser's
+// textarea history. Rebuilding a live preview must never make Ctrl+Z lose the
+// user's prior code, and the bounded stack keeps even a large game source safe
+// to edit without unbounded memory growth.
+const EDITOR_HISTORY_LIMIT = 60;
+function createEditorHistory() {
+  return { undo: [], redo: [] };
+}
+
+function normalizedEditorHistory(history) {
+  return {
+    undo: Array.isArray(history?.undo) ? history.undo : [],
+    redo: Array.isArray(history?.redo) ? history.redo : [],
+  };
+}
+
+function recordEditorChange(editor, source) {
+  if (!editor || source === editor.editedSource) return editor;
+  const history = normalizedEditorHistory(editor.history);
+  return {
+    ...editor,
+    editedSource: source,
+    history: { undo: [...history.undo, editor.editedSource].slice(-EDITOR_HISTORY_LIMIT), redo: [] },
+  };
+}
+
+function replaceEditorText(selector, source) {
+  const textarea = mountedRoot?.querySelector(selector);
+  if (!textarea) return;
+  const cursor = Math.min(textarea.selectionStart ?? source.length, source.length);
+  textarea.value = source;
+  textarea.setSelectionRange?.(cursor, cursor);
+}
+
+function moveEditorHistory(target, direction) {
+  const editor = ui[target];
+  if (!editor) return false;
+  const history = normalizedEditorHistory(editor.history);
+  const from = direction === "undo" ? history.undo : history.redo;
+  if (!from.length) return false;
+  const source = from[from.length - 1];
+  const current = target === "devSandbox" ? devSandboxDomSource() : devWorkbenchDomSource();
+  const nextHistory = direction === "undo"
+    ? { undo: history.undo.slice(0, -1), redo: [...history.redo, current].slice(-EDITOR_HISTORY_LIMIT) }
+    : { undo: [...history.undo, current].slice(-EDITOR_HISTORY_LIMIT), redo: history.redo.slice(0, -1) };
+  ui[target] = { ...editor, editedSource: source, history: nextHistory, status: direction === "undo" ? "Undid the last code edit." : "Redid the code edit." };
+  if (target === "devSandbox") {
+    replaceEditorText("[data-pp-devsandbox-source]", source);
+    applyDevSandboxEditLive();
+    snapshotDevSandboxLocalDraft();
+  } else {
+    replaceEditorText("[data-pp-devworkbench-source]", source);
+    render();
+  }
+  return true;
+}
+
+function handleEditorShortcut(event, target) {
+  if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
+  const key = event.key.toLowerCase();
+  const direction = key === "y" || (key === "z" && event.shiftKey) ? "redo" : key === "z" ? "undo" : "";
+  if (!direction) return;
+  event.preventDefault();
+  moveEditorHistory(target, direction);
+}
+
+function trackDevSandboxEditorInput() {
+  if (!ui.devSandbox) return;
+  ui.devSandbox = recordEditorChange(ui.devSandbox, devSandboxDomSource());
+  scheduleDevSandboxApply();
+}
+
+function trackDevWorkbenchEditorInput() {
+  if (!ui.devWorkbench) return;
+  ui.devWorkbench = recordEditorChange(ui.devWorkbench, devWorkbenchDomSource());
+  ui.devWorkbench = { ...ui.devWorkbench, status: "Draft ready. Launch Dev Mode to run it." };
+}
+
 // Rebuilds the Dev Sandbox blob from `nextSource` with mod support injected,
 // and points the real player iframe at it. Every path that changes what's
 // shown (open, live edits, revert) goes through this so mods are always
@@ -1566,7 +1649,7 @@ async function openDevSandbox() {
     return;
   }
   revokeDevSandboxBlob();
-  ui.devSandbox = { gameId: game.id, source: "", editedSource: "", blobUrl: "", hasOverride: false, overrideUpdatedAt: null, localUpdatedAt: null, loading: true, error: "", status: "", saving: false, publishing: false, section: "code", modState: {}, speed: 1 };
+  ui.devSandbox = { gameId: game.id, source: "", editedSource: "", history: createEditorHistory(), blobUrl: "", hasOverride: false, overrideUpdatedAt: null, localUpdatedAt: null, loading: true, error: "", status: "", saving: false, publishing: false, section: "code", modState: {}, speed: 1 };
   render();
   try {
     const tenantQuery = `tenant_id=${encodeURIComponent(currentTenantId())}`;
@@ -1588,7 +1671,7 @@ async function openDevSandbox() {
       hasOverride: !!overrideResult.source, overrideUpdatedAt: overrideResult.updatedAt,
       localUpdatedAt: localDraft?.updatedAt || null,
       loading: false, error: "", status, saving: false, publishing: false,
-      section: "code", modState: {}, speed: 1,
+      section: "code", modState: {}, speed: 1, history: createEditorHistory(),
     };
   } catch (error) {
     try {
@@ -1600,7 +1683,7 @@ async function openDevSandbox() {
         gameId: game.id, source, editedSource: startingSource, blobUrl: "",
         hasOverride: false, overrideUpdatedAt: null, localUpdatedAt: localDraft?.updatedAt || null,
         loading: false, error: "", status: localDraft ? "Resumed your local draft. Backend sync is waiting." : "Loaded the full game source locally. Local draft autosave stays on this PC until you press Save & Resync.",
-        saving: false, publishing: false, section: "code", modState: {}, speed: 1,
+        saving: false, publishing: false, section: "code", modState: {}, speed: 1, history: createEditorHistory(),
       };
     } catch {
       ui.devSandbox = { ...ui.devSandbox, loading: false, error: error instanceof Error ? error.message : "Dev Sandbox source could not be loaded." };
@@ -1688,7 +1771,7 @@ async function revertDevSandboxToShipped() {
     try { await api(`/api/phantomplay/dev-mode/${encodeURIComponent(gameId)}/override`, { method: "DELETE" }); } catch { /* best effort */ }
   }
   clearDevSandboxAutosave(gameId);
-  ui.devSandbox = { ...ui.devSandbox, editedSource: source, hasOverride: false, overrideUpdatedAt: null, status: "Reverted to the shipped version.", error: "" };
+  ui.devSandbox = { ...ui.devSandbox, editedSource: source, history: createEditorHistory(), hasOverride: false, overrideUpdatedAt: null, status: "Reverted to last working code.", error: "" };
   rebuildDevSandboxFrame(source);
   render();
 }
@@ -1696,13 +1779,13 @@ async function revertDevSandboxToShipped() {
 async function publishDevSandboxLive() {
   if (!ui.devSandbox || ui.devSandbox.publishing) return;
   const source = devSandboxDomSource();
-  if (!window.confirm("Publish this edit LIVE? This immediately overwrites the real shipped game file for every player — there is no undo from here.")) return;
+  if (!window.confirm("Publish this edit LIVE? This immediately overwrites the real shipped game file for every player. Your local editor can still undo unpublished changes.")) return;
   ui.devSandbox = { ...ui.devSandbox, publishing: true };
   render();
   try {
     await api(`/api/phantomplay/dev-mode/${encodeURIComponent(ui.devSandbox.gameId)}/publish`, { method: "POST", body: JSON.stringify({ tenantId: currentTenantId(), source, confirm: true }) });
     clearDevSandboxAutosave(ui.devSandbox.gameId);
-    ui.devSandbox = { ...ui.devSandbox, source, editedSource: source, hasOverride: false, overrideUpdatedAt: null, publishing: false, status: "Published live. Every player now gets this version." };
+    ui.devSandbox = { ...ui.devSandbox, source, editedSource: source, history: createEditorHistory(), hasOverride: false, overrideUpdatedAt: null, publishing: false, status: "Published live. Every player now gets this version." };
   } catch (error) {
     ui.devSandbox = { ...ui.devSandbox, publishing: false, error: error instanceof Error ? error.message : "This edit could not be published live." };
   }
