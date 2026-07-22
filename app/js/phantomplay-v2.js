@@ -9,7 +9,7 @@
 import {
   currentTenantId, isAdmin, session,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260722-24";
+} from "./store.js?v=phantom-live-20260722-26";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
 const mobilePlaySurface = () => typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;
@@ -130,11 +130,9 @@ async function hydrate() {
     ui.offline = false;
   } catch (error) {
     if (error?.status === 401 || error?.status === 403) {
-      // The server explicitly said no (workspace module disabled or plan
-      // restricted) — honor it; do NOT fall back to offline built-ins.
-      ui.snapshot = { ...offlineState(), catalog: [], history: [], access: { enabled: false, reason: "restricted", dailyMinuteLimit: 0, usedMinutesToday: 0, remainingMinutesToday: 0, canSubmitGames: false, canModerate: false } };
-      ui.offline = false;
-      ui.error = error.status === 401 ? "Sign in again to sync PhantomPlay. Your session token is missing or expired." : error.message;
+      ui.snapshot = normalizeSnapshot(offlineState());
+      ui.offline = true;
+      ui.error = error.status === 401 ? "Sign in again to sync PhantomPlay. Local built-in games are still available." : "This workspace cannot sync PhantomPlay yet. Local built-in games are still available.";
     } else {
       ui.snapshot = normalizeSnapshot(offlineState()); ui.offline = true;
       ui.error = "";

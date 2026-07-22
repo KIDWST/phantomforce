@@ -237,15 +237,20 @@ async function waitForApp(cdp, expectedPage) {
   const expression = `(${(() => {
     const phantom = document.querySelector("[data-phantom]");
     const gate = document.querySelector("[data-gate]");
-    const gateVisible = !!gate && !gate.hidden && getComputedStyle(gate).display !== "none";
-    const phantomVisible = !!phantom && !phantom.hidden && getComputedStyle(phantom).display !== "none";
-    return { gateVisible, phantomVisible };
+    const boot = document.querySelector("[data-boot-fallback]");
+    const visible = (el) => {
+      if (!el || el.hidden) return false;
+      const style = getComputedStyle(el);
+      const rect = el.getBoundingClientRect();
+      return style.display !== "none" && style.visibility !== "hidden" && rect.width > 1 && rect.height > 1;
+    };
+    return { gateVisible: visible(gate), phantomVisible: visible(phantom), bootVisible: visible(boot) };
   }).toString()})()`;
 
   const started = Date.now();
   while (Date.now() - started < 12_000) {
     const state = await evaluate(cdp, expression).catch(() => null);
-    if (state?.phantomVisible) break;
+    if (state?.phantomVisible && !state?.bootVisible) break;
     if (state?.gateVisible) {
       await evaluate(cdp, `(() => {
         const button = document.querySelector('[data-enter="admin"]');
@@ -259,16 +264,25 @@ async function waitForApp(cdp, expectedPage) {
   const pageExpression = `(${((page) => {
     const phantom = document.querySelector("[data-phantom]");
     const gate = document.querySelector("[data-gate]");
-    const phantomVisible = !!phantom && !phantom.hidden && getComputedStyle(phantom).display !== "none";
-    const gateVisible = !!gate && !gate.hidden && getComputedStyle(gate).display !== "none";
+    const boot = document.querySelector("[data-boot-fallback]");
+    const visible = (el) => {
+      if (!el || el.hidden) return false;
+      const style = getComputedStyle(el);
+      const rect = el.getBoundingClientRect();
+      return style.display !== "none" && style.visibility !== "hidden" && rect.width > 1 && rect.height > 1;
+    };
+    const phantomVisible = visible(phantom);
+    const gateVisible = visible(gate);
+    const bootVisible = visible(boot);
     const workspace = document.querySelector("[data-workspace-page]");
     const consoleRoot = document.querySelector("[data-console]");
     return {
       phantomVisible,
       gateVisible,
+      bootVisible,
       workspacePage: workspace?.dataset.workspacePage || "",
       consoleVisible: !!consoleRoot && consoleRoot.getBoundingClientRect().width > 100 && consoleRoot.getBoundingClientRect().height > 100,
-      ready: phantomVisible && !gateVisible && (page === "dashboard" ? !!consoleRoot : workspace?.dataset.workspacePage === page),
+      ready: phantomVisible && !gateVisible && !bootVisible && (page === "dashboard" ? !!consoleRoot : workspace?.dataset.workspacePage === page),
       text: document.body.innerText.slice(0, 400),
     };
   }).toString()})(${JSON.stringify(expectedPage)})`;
@@ -289,6 +303,8 @@ function auditPage() {
   const workspace = document.querySelector("[data-workspace-page]");
   const consoleRoot = document.querySelector("[data-console]");
   const nav = document.querySelector("[data-nav]");
+  const commandRail = document.querySelector("[data-os-command-rail]");
+  const mobileHomebar = document.querySelector(".mobile-admin-homebar");
   const mobileNav = document.querySelector("[data-mobile-bottom-nav]");
   const isVisible = (el) => {
     if (!el) return false;
@@ -413,6 +429,8 @@ function auditPage() {
     clippedText,
     nav: {
       desktopVisible: isVisible(nav),
+      commandRailVisible: isVisible(commandRail),
+      mobileHomebarVisible: isVisible(mobileHomebar),
       mobileVisible: isVisible(mobileNav),
       mobileTop: mobileRect ? Math.round(mobileRect.top) : null,
       mobileBottom: mobileRect ? Math.round(mobileRect.bottom) : null,
@@ -451,6 +469,7 @@ async function runViewportCase(cdp, baseUrl, screenshotDir, page, viewport, { na
 function assertCase(result) {
   const { page, label, viewport, audit, appState } = result;
   assert.equal(appState?.gateVisible, false, `${label} ${viewport.width}: auth gate must not remain visible during local QA.`);
+  assert.equal(appState?.bootVisible, false, `${label} ${viewport.width}: boot screen must finish before responsive auditing.`);
   assert.equal(appState?.phantomVisible, true, `${label} ${viewport.width}: Phantom shell must be visible.`);
   if (page !== "dashboard") {
     assert.equal(audit.workspacePage, page, `${label} ${viewport.width}: expected workspace page ${page}, got ${audit.workspacePage || "none"}.`);
@@ -461,10 +480,13 @@ function assertCase(result) {
   assert.deepEqual(audit.clippedText, [], `${label} ${viewport.width}: visible control text is clipped.`);
   if (viewport.width < 768) {
     assert.equal(audit.nav.mobileVisible, true, `${label} ${viewport.width}: mobile bottom nav must be visible.`);
+    assert.equal(audit.nav.mobileHomebarVisible, true, `${label} ${viewport.width}: mobile homebar must be visible on phone widths.`);
+    assert.equal(audit.nav.commandRailVisible, false, `${label} ${viewport.width}: Command OS rail must be hidden on phone widths to avoid duplicate nav.`);
     assert.equal(audit.nav.desktopVisible, false, `${label} ${viewport.width}: desktop sidebar must be hidden on phone widths.`);
   }
   if (viewport.width > 900) {
-    assert.equal(audit.nav.desktopVisible, true, `${label} ${viewport.width}: desktop sidebar must be visible.`);
+    assert.equal(audit.nav.desktopVisible || audit.nav.commandRailVisible, true, `${label} ${viewport.width}: a desktop primary navigation surface must be visible.`);
+    assert.equal(audit.nav.mobileVisible, false, `${label} ${viewport.width}: mobile bottom nav must not appear on desktop widths.`);
   }
 }
 

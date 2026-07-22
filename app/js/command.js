@@ -12,9 +12,9 @@ import {
   recentChatTurns, addMemory,
   ctx, session, loadPhantomLoop, savePhantomLoop, loopProviderName, modelDisplayLabel,
   getPhantomLaneTarget, loadPhantomLaneConfig, workspaceStorageGetItem, wsName,
-} from "./store.js?v=phantom-live-20260722-24";
-import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260722-24";
-import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260722-24";
+} from "./store.js?v=phantom-live-20260722-26";
+import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260722-26";
+import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260722-26";
 const classifyPhantomIntent = (text) => deriveActionContract(classifyRaw(text));
 
 /* Cross-surface handoff: chat tells the Websites page which project to focus
@@ -54,7 +54,7 @@ function isDirectChatMediaRequest(text = "") {
 
 async function generateMediaFromChat(text, intent, settings) {
   try {
-    const mediaLab = await import("./medialab.js?v=phantom-live-20260722-24");
+    const mediaLab = await import("./medialab.js?v=phantom-live-20260722-26");
     const result = await mediaLab.generateMediaFromChat(text);
     if (!result?.handled) return null;
     const media = Array.isArray(result.media) ? result.media : [];
@@ -293,6 +293,10 @@ function chatRouteProfileForRequest(raw, intent, settings) {
 function canAskHermes(raw, intent, settings) {
   /* Every authenticated user gets action-free chat, reasoning, and scoped advice. Standard
      business lanes remain admin-only and keep their existing controls. */
+  // Decisions must always resolve against the real local approval records.
+  // Sending "we have two decisions" to fast chat is how a model timeout
+  // turned into the dead-end response reported by the owner.
+  if (intent.primaryIntent === "approval_request") return false;
   if (isActionFreeModelRequest(raw, intent)) return Boolean(ctx.session);
   return isAdmin()
     && settings.brainMode !== "local"

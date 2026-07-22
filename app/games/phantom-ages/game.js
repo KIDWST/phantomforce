@@ -13,6 +13,13 @@
 (function () {
   "use strict";
 
+  // PhantomPlay host protocol: every built_in game runs inside a sandboxed
+  // iframe and must tell the host it's alive, or the host's loading overlay
+  // (and its 12s ready-watchdog error) never clears. See phantom-chess's
+  // game.js / kingdom-breakers.html for the same pattern.
+  const host = (type, data = {}) => parent.postMessage({ source: "phantomplay-game", type, ...data }, "*");
+  let hostPaused = false;
+
   const LANE_LENGTH = 1200; // world units, player base at 0, enemy base at LANE_LENGTH
   const TICK_SECONDS = 1 / 60;
   const TURRET_RANGE = 220;
@@ -384,6 +391,13 @@
     $("[data-end-sub]").textContent = state.winner === "player"
       ? "The enemy Warden's base has fallen."
       : "Your base has fallen. Try a different path next time.";
+    const humanWon = state.winner === "player";
+    const score = Math.round((humanWon ? 1000 : 0) + Math.max(0, state.player.baseHp) + state.player.eraIndex * 150);
+    host("complete", {
+      score,
+      progress: 100,
+      state: { winner: state.winner, eraIndex: state.player.eraIndex, path: state.player.path, humanWon },
+    });
   }
 
   document.addEventListener("click", (e) => {
@@ -425,11 +439,13 @@
     let delta = (now - state.lastFrameTime) / 1000;
     state.lastFrameTime = now;
     delta = Math.min(delta, 0.25); // clamp huge gaps (tab was backgrounded)
-    state.accumulator += delta;
 
-    while (state.accumulator >= TICK_SECONDS) {
-      simulateTick(TICK_SECONDS);
-      state.accumulator -= TICK_SECONDS;
+    if (!hostPaused) {
+      state.accumulator += delta;
+      while (state.accumulator >= TICK_SECONDS) {
+        simulateTick(TICK_SECONDS);
+        state.accumulator -= TICK_SECONDS;
+      }
     }
 
     render();
@@ -440,6 +456,15 @@
   }
   requestAnimationFrame(frame);
   renderHud();
+
+  addEventListener("message", (e) => {
+    const d = e.data;
+    if (!d || d.source !== "phantomplay-host") return;
+    if (d.type === "pause") hostPaused = true;
+    else if (d.type === "resume") hostPaused = false;
+    else if (d.type === "restart") { resetGame(); endModal.hidden = true; hostPaused = false; }
+  });
+  host("ready");
 
   // ---------------------------------------------------------------------
   // Test/debug hook — NOT part of normal play, used for automated

@@ -6,22 +6,22 @@
  * instead of sending people out to another product.
  */
 
-import { currentTenantId, ctx, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260722-24";
+import { currentTenantId, ctx, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260722-26";
 import {
   PLATFORMS, registerContentAsset, loadSocialAccounts, saveSocialAccounts, socialStatus,
   loadContentAssets, saveContentAssets, contentAssetDisplayUrl, hydrateContentAssetUrl,
   loadRecycledContentAssets, recycleContentAssets, restoreRecycledContentAssets, purgeRecycledContentAssets,
-} from "./contenthub.js?v=phantom-live-20260722-24";
-import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260722-24";
+} from "./contenthub.js?v=phantom-live-20260722-26";
+import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260722-26";
 import {
   addImageLayer, addTextLayer, alignSelectedLayers, applyLayerDragWithSnap, cloneImageEditState, compositionSnapshot, distributeSelectedLayers, duplicateLayer,
   canvasPoint, drawCompositionOverlay, freshComposition, hitTestLayer, hitTestResizeHandle,
   loadCompositionImages, moveLayerOrder, moveLayerToIndex, pushEditorSnapshot, removeSelectedLayers,
   renderComposition, restoreComposition, selectAllLayers, selectLayer, selectedLayers,
-} from "./content-editor.js?v=phantom-live-20260722-24";
-import { loadImageForEditing, exportCanvas, requestAiEdit, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260722-24";
-import { mountVideoEditor } from "./videocut.js?v=phantom-live-20260722-24";
-import { assetsAvailable, assetBlobUrl, listAssets, recordAssetUsage, saveToAssetCloud, listLocalAssets, refreshLocalAssets, localAssetBlobUrl } from "./orgs.js?v=phantom-live-20260722-24";
+} from "./content-editor.js?v=phantom-live-20260722-26";
+import { loadImageForEditing, exportCanvas, requestAiEdit, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260722-26";
+import { mountVideoEditor } from "./videocut.js?v=phantom-live-20260722-26";
+import { assetsAvailable, assetBlobUrl, listAssets, recordAssetUsage, saveToAssetCloud, listLocalAssets, refreshLocalAssets, localAssetBlobUrl } from "./orgs.js?v=phantom-live-20260722-26";
 
 const CFG_KEY = "pf.medialab.v1";
 const EDIT_INTENT_KEY = "pf.medialab.editIntent.v1";
@@ -2199,7 +2199,10 @@ function chatMediaCardAsset(asset, plan, title, state) {
   if (!asset?.url) return null;
   return {
     id: asset.id,
-    type: asset.type === "video" ? "video" : "image",
+    // Offline/queued video previews are deliberately rendered as image data
+    // URLs by Media Lab. Present that as a still preview, never as a broken
+    // <video> element; a live video keeps its native player in chat.
+    type: asset.type === "video" && !/^data:image\//i.test(asset.url) ? "video" : "image",
     url: asset.url,
     title,
     status: state,

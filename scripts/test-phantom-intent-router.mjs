@@ -280,6 +280,7 @@ for (const text of cases.plan) {
   assert.equal(r.shouldCreateTask, false, `${text} should remain action-free`);
 }
 assert.equal(classifyPhantomIntent("What's in my approval queue?").primaryIntent, "approval_request");
+assert.equal(classifyPhantomIntent("WE HAVE 2 DECISIONS THAT NEED TO BE HANDLED. FIX THEM").primaryIntent, "approval_request", "decision handling must stay out of the fast-chat lane");
 assert.equal(classifyPhantomIntent("Show my sales pipeline.").primaryIntent, "status_check");
 assert.equal(classifyPhantomIntent("Give me my weekly report.").primaryIntent, "status_check");
 assert.equal(classifyPhantomIntent("Remind me tomorrow at 9 to call Sam.").primaryIntent, "reminder");
@@ -289,6 +290,20 @@ assert.equal(classifyPhantomIntent("Monitor my site daily.").primaryIntent, "rem
 assert.equal(shouldAiRemember("I remember my first bike."), false, "autobiographical conversation must not become saved memory");
 assert.equal(shouldAiRemember("Remember when we discussed pizza?"), false, "a recall question must not become saved memory");
 assert.equal(shouldAiRemember("Remember for later that my brand color is green."), true, "explicit future memory must remain durable");
+store.state.approvals = [
+  { id: "decision-1", status: "pending", title: "Approve campaign direction", detail: "Review the final creative direction.", requestedBy: "Media Lab" },
+  { id: "decision-2", status: "pending", title: "Approve campaign budget", detail: "Review the planned credit allocation.", requestedBy: "Media Lab" },
+];
+let decisionFetchCalled = false;
+globalThis.fetch = async () => {
+  decisionFetchCalled = true;
+  throw new Error("approval routing must not call chat");
+};
+const decisionHandling = await handleSmartCommand("WE HAVE 2 DECISIONS THAT NEED TO BE HANDLED. FIX THEM");
+globalThis.fetch = originalFetch;
+assert.equal(decisionFetchCalled, false, "decision handling must resolve from real approval state, not the chat provider");
+assert.match(decisionHandling.say, /2 decisions waiting/i, "decision handling should surface the real queue count");
+assert.equal(decisionHandling.open, "approvals", "decision handling should open the approval queue");
 store.state.memory = [];
 const durableMemory = handleCommand("Remember for later that my brand color is green.");
 assert.match(durableMemory.say, /Remembered: my brand color is green/i);

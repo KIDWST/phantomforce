@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { copyFile, mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { dirname, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import type { AccessSession } from "../access/session.js";
@@ -2017,8 +2017,54 @@ export async function getPhantomPlayDevModeSource(session: AccessSession, gameId
   const gamesRoot = resolve(repoRoot, "app", "games");
   const filePath = resolve(repoRoot, "app", launchPath.replace(/^\/app\//, ""));
   if (!filePath.startsWith(gamesRoot)) throw new Error("Refusing to read outside the games directory.");
-  const source = await readFile(filePath, "utf8");
+  const rawSource = await readFile(filePath, "utf8");
+  const source = await inlineDevModeGameAssets(rawSource, filePath);
   return { gameId, title: game.title, launchUrl: game.launchUrl, source };
+}
+
+async function inlineDevModeGameAssets(source: string, htmlFilePath: string): Promise<string> {
+  const baseDir = dirname(htmlFilePath);
+  const safeRelativeAssetPath = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed || /^(?:[a-z]+:)?\/\//iu.test(trimmed) || trimmed.startsWith("/") || trimmed.startsWith("#") || trimmed.startsWith("data:")) return "";
+    const clean = trimmed.split("#")[0]?.split("?")[0] || "";
+    const resolved = resolve(baseDir, clean);
+    return resolved === baseDir || resolved.startsWith(`${baseDir}${sep}`) ? resolved : "";
+  };
+  const replaceAsync = async (text: string, pattern: RegExp, replacer: (match: RegExpMatchArray) => Promise<string>) => {
+    const matches = [...text.matchAll(pattern)];
+    let next = "";
+    let last = 0;
+    for (const match of matches) {
+      next += text.slice(last, match.index || 0);
+      next += await replacer(match);
+      last = (match.index || 0) + match[0].length;
+    }
+    return next + text.slice(last);
+  };
+  let bundled = await replaceAsync(source, /<link\b[^>]*\bhref=["']([^"']+)["'][^>]*>/giu, async (match) => {
+    const tag = match[0];
+    if (!/\brel=["'][^"']*stylesheet/iu.test(tag) && !/\brel=stylesheet\b/iu.test(tag)) return tag;
+    const filePath = safeRelativeAssetPath(match[1] || "");
+    if (!filePath) return tag;
+    try {
+      const css = await readFile(filePath, "utf8");
+      return `<style data-phantomplay-dev-bundled="${match[1]}">\n${css}\n</style>`;
+    } catch {
+      return tag;
+    }
+  });
+  bundled = await replaceAsync(bundled, /<script\b([^>]*)\bsrc=["']([^"']+)["']([^>]*)>\s*<\/script>/giu, async (match) => {
+    const filePath = safeRelativeAssetPath(match[2] || "");
+    if (!filePath) return match[0];
+    try {
+      const js = await readFile(filePath, "utf8");
+      return `<script${match[1] || ""}${match[3] || ""} data-phantomplay-dev-bundled="${match[2]}">\n${js}\n</script>`;
+    } catch {
+      return match[0];
+    }
+  });
+  return bundled;
 }
 
 const DEV_SANDBOX_SOURCE_MAX_BYTES = 500_000;
