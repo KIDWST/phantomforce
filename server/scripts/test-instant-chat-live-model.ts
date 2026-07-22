@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { callLocalOllamaChat } from "../src/phantom-ai/providers/local-ollama-transport.js";
 
 const baseUrl = process.env.OLLAMA_BASE_URL?.trim() || "http://127.0.0.1:11434";
-const model = process.env.PHANTOM_INSTANT_CHAT_MODEL?.trim() || "qwen2.5:14b";
+const model = process.env.PHANTOM_INSTANT_CHAT_MODEL?.trim() || "qwen3:4b";
 const forbidden = /\b(?:ledger|pipeline|invoice|approval queue|workspace status|cashflow|action card)\b/i;
 
 type Turn = { user: string; assistant: string };
@@ -24,7 +24,7 @@ async function prewarm() {
       model,
       prompt: "Respond with ready.",
       stream: false,
-      keep_alive: "24h",
+      keep_alive: "90s",
       options: { num_predict: 2, temperature: 0, num_ctx: 2048 },
     }),
     signal: AbortSignal.timeout(120_000),

@@ -15,16 +15,12 @@
         that actually evaluated it, so "protected" is a verifiable claim
         rather than a marketing one.
 
-   Local-model tier notes: it runs against a small local Ollama model,
-   capped in concurrency and rate, and unloaded immediately after every call
-   (keep_alive: 0) so it never sits resident in memory while the owner is
-   working — mirroring the standing decision for this machine's Ollama
-   usage (idle GPU should hit ~0 fast; reload latency is an accepted
-   trade-off). Because that means the deep tier's availability is not
-   guaranteed at every moment, it fails open (passes) for chat/automation
-   continuity rather than blocking real user traffic whenever a cold model
-   load is slow — but that fact is recorded honestly in the tier field and
-   the audit trail, never hidden behind a blanket "protected" claim.
+   Local-model tier notes: the heuristic tier is always on. The optional
+   local Ollama tier is opt-in because Jordan's desktop should not cold-load
+   or park llama services during normal PhantomBot chat. When explicitly
+   enabled, it stays capped in concurrency/rate and unloads immediately after
+   every call (keep_alive: 0). If unavailable, it fails open and records that
+   fact honestly in the tier field and audit trail.
 
    This is a PhantomForce-native implementation, not a redistribution of
    any third-party vendor's models or code — a well-known vendor in this
@@ -78,7 +74,7 @@ function ollamaBaseUrl() {
 }
 
 function localModelEnabled() {
-  return process.env.PHANTOM_GUARD_LOCAL_MODEL_ENABLED !== "false";
+  return process.env.PHANTOM_GUARD_LOCAL_MODEL_ENABLED === "true";
 }
 
 function guardModel() {

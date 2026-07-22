@@ -66,7 +66,7 @@ try {
         provider: "ollama",
         admin_model: "local_ollama",
         model_lane: "local_ollama",
-        requested_model: "qwen2.5:14b",
+        requested_model: "qwen3:4b",
         route_tier: "instant",
         max_provider_ms: 300,
         allow_provider_fallback: false,

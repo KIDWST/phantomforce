@@ -96,16 +96,53 @@ const conversation = await callLocalOllamaChat(
 
 assert.equal(conversation.status, "called");
 assert.equal(conversation.model_id, "qwen2.5:7b");
-assert.equal(conversationBody.keep_alive, "24h");
+assert.equal(conversationBody.keep_alive, "90s");
 assert.equal(conversationBody.options.num_predict, 80);
 assert.equal(conversationBody.options.num_ctx, 2048);
 assert.match(conversationBody.messages[0].content, /general-purpose assistant/i);
 assert.match(conversationBody.messages[0].content, /preserve named subjects/i);
 assert.match(conversationBody.messages[0].content, /exact output constraints/i);
-assert.match(conversationBody.messages[0].content, /playful conversational choice/i);
+assert.match(conversationBody.messages[0].content, /real, specific conversational choice/i);
 assert.doesNotMatch(conversationBody.messages[0].content, /business operator|ChicagoShots|action lanes/i);
 assert.doesNotMatch(conversationBody.messages[1].content, /Execution mode|action cards|backend ops/i);
 assert.match(conversationBody.messages[1].content, /Why is the sky blue/);
+
+let unleashedBody: Record<string, any> = {};
+await callLocalOllamaChat(
+  {
+    ...baseInput,
+    taskType: "question",
+    userMessage: "Give me a faster follow-up.",
+    compactContext: "Fast casual chat. Recent conversation: none.",
+    conversationMode: true,
+    maxTokens: 80,
+  },
+  {
+    env: {
+      OLLAMA_BASE_URL: "http://127.0.0.1:11434",
+      PHANTOM_OLLAMA_MODEL: "qwen2.5:7b",
+      PHANTOM_OLLAMA_CONVERSATION_KEEP_ALIVE: "24h",
+    },
+    fetchImpl: async (url, init) => {
+      if (url.endsWith("/api/tags")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ models: [{ name: "qwen2.5:7b", model: "qwen2.5:7b" }] }),
+          text: async () => "",
+        };
+      }
+      unleashedBody = JSON.parse(init.body ?? "{}");
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ message: { role: "assistant", content: "Ready." } }),
+        text: async () => "",
+      };
+    },
+  },
+);
+assert.equal(unleashedBody.keep_alive, "24h");
 
 const remoteBlocked = await callLocalOllamaChat(baseInput, {
   env: {

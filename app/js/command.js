@@ -98,7 +98,7 @@ const PRIVATE_BACKEND_MODEL_BY_ALIAS = Object.freeze({
   "private-default": "gpt-5.5",
   "private-high": "gpt-5.6-sol",
 });
-const INSTANT_CHAT_MODEL = "qwen2.5:14b";
+const INSTANT_CHAT_MODEL = "qwen3:4b";
 const INSTANT_CHAT_MAX_PROVIDER_MS = 4500;
 const REASONING_CHAT_MAX_PROVIDER_MS = 12000;
 const INSTANT_CHAT_ALLOWED_INTENTS = new Set(["identity", "capability", "question", "chat"]);

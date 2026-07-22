@@ -780,7 +780,7 @@ async function main() {
     assert.equal(reasoningRequests.length, 2, "both customer reasoning prompts must reach the authenticated model endpoint.");
     for (const request of reasoningRequests) {
       assert.equal(request.route_tier, "reasoning");
-      assert.equal(request.requested_model, "qwen2.5:14b");
+      assert.equal(request.requested_model, "qwen3:4b");
       assert.deepEqual(request.allowed_providers, ["local_ollama"]);
       assert.equal(request.allow_provider_fallback, false);
       assert.equal(request.max_provider_ms, 12000);
@@ -806,7 +806,7 @@ async function main() {
     assert.equal(advisoryRequests.length, 2, "both scoped business-advice prompts must reach the model endpoint.");
     for (const request of advisoryRequests) {
       assert.equal(request.route_tier, "advisory");
-      assert.equal(request.requested_model, "qwen2.5:14b");
+      assert.equal(request.requested_model, "qwen3:4b");
       assert.deepEqual(request.allowed_providers, ["local_ollama"]);
       assert.equal(request.allow_provider_fallback, false);
       assert.match(request.business_summary || "", /Business Manager workspace/i);

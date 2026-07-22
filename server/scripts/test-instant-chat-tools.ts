@@ -584,15 +584,15 @@ assert.equal(
   "capitalized words from separate topics must not create false ambiguity",
 );
 assert.deepEqual(
-  buildInstantChatToolReply("Who are you?", [], "qwen2.5:14b"),
+  buildInstantChatToolReply("Who are you?", [], "qwen3:4b"),
   { output_text: "I'm Phantom AI, the general-purpose assistant inside PhantomForce.", tool_id: "phantom-identity" },
 );
 assert.deepEqual(
-  buildInstantChatToolReply("What model are you running for this conversation?", [], "qwen2.5:14b"),
-  { output_text: "Phantom's fast conversation lane is currently qwen2.5:14b.", tool_id: "phantom-identity" },
+  buildInstantChatToolReply("What model are you running for this conversation?", [], "qwen3:4b"),
+  { output_text: "Phantom's fast conversation lane is currently qwen3:4b.", tool_id: "phantom-identity" },
 );
 assert.deepEqual(
-  buildInstantChatToolReply("Are you ChatGPT?", [], "qwen2.5:14b"),
+  buildInstantChatToolReply("Are you ChatGPT?", [], "qwen3:4b"),
   { output_text: "No. I'm Phantom AI inside PhantomForce.", tool_id: "phantom-identity" },
 );
 assert.deepEqual(

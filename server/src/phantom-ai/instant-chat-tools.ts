@@ -900,7 +900,7 @@ function identityReply(userRequest: string, modelId: string): InstantChatToolRep
   }
   const asksRunningModel = /\b(?:what|which)\s+(?:ai\s+)?model\b.{0,40}\b(?:running|using|powering|for this conversation)\b|\bmodel\s+(?:are|is)\b.{0,24}\b(?:running|using)\b/i.test(text);
   if (asksRunningModel) {
-    const safeModel = /^[\w./:@+-]{1,100}$/.test(modelId) ? modelId : "qwen2.5:14b";
+    const safeModel = /^[\w./:@+-]{1,100}$/.test(modelId) ? modelId : "qwen3:4b";
     return {
       output_text: `Phantom's fast conversation lane is currently ${safeModel}.`,
       tool_id: "phantom-identity",
@@ -984,7 +984,7 @@ function ambiguityClarificationReply(userRequest: string, turns: InstantChatTool
   return null;
 }
 
-export function buildInstantChatToolReply(userRequest: string, turns: InstantChatToolTurn[] = [], modelId = "qwen2.5:14b") {
+export function buildInstantChatToolReply(userRequest: string, turns: InstantChatToolTurn[] = [], modelId = "qwen3:4b") {
   return identityReply(userRequest, modelId)
     || personalityReply(userRequest)
     || stableFactReply(userRequest)

@@ -135,7 +135,7 @@ for (const prompt of casualPrompts) {
 assert.equal(capturedBodies.length, casualPrompts.length, "all casual prompts must exercise the backend route");
 for (const body of capturedBodies) {
   assert.equal(body.route_tier, "instant");
-  assert.equal(body.requested_model, "qwen2.5:14b");
+  assert.equal(body.requested_model, "qwen3:4b");
   assert.equal(body.admin_model, "local_ollama");
   assert.deepEqual(body.allowed_providers, ["local_ollama"]);
   assert.equal(body.allow_provider_fallback, false);
@@ -211,7 +211,7 @@ for (const prompt of customerReasoningPrompts) {
   const body = capturedBodies.at(-1);
   assert.equal(result.hermes?.route_tier, "reasoning", `${prompt} must reach the reasoning model lane`);
   assert.equal(body.route_tier, "reasoning");
-  assert.equal(body.requested_model, "qwen2.5:14b");
+  assert.equal(body.requested_model, "qwen3:4b");
   assert.equal(body.admin_model, "local_ollama");
   assert.deepEqual(body.allowed_providers, ["local_ollama"]);
   assert.equal(body.allow_provider_fallback, false);
@@ -235,7 +235,7 @@ for (const prompt of customerCreativePrompts) {
   const body = capturedBodies.at(-1);
   assert.equal(result.hermes?.route_tier, "reasoning", `${prompt} must use a real model instead of canned intent copy`);
   assert.equal(body.route_tier, "reasoning");
-  assert.equal(body.requested_model, "qwen2.5:14b");
+  assert.equal(body.requested_model, "qwen3:4b");
   assert.deepEqual(body.allowed_providers, ["local_ollama"]);
   assert.equal(body.allow_provider_fallback, false);
   assert.doesNotMatch(body.business_summary, /Business Manager workspace/i);
@@ -255,7 +255,7 @@ for (const prompt of customerAdvisoryPrompts) {
   const body = capturedBodies.at(-1);
   assert.equal(result.hermes?.route_tier, "advisory", `${prompt} must use scoped business advice`);
   assert.equal(body.route_tier, "advisory");
-  assert.equal(body.requested_model, "qwen2.5:14b");
+  assert.equal(body.requested_model, "qwen3:4b");
   assert.deepEqual(body.allowed_providers, ["local_ollama"]);
   assert.equal(body.allow_provider_fallback, false);
   assert.match(body.business_summary, /Business Manager workspace/i);
@@ -342,7 +342,7 @@ assert.match(indexSrc, /data-dashboard-brief-metrics/);
 assert.match(indexSrc, /data-nav-bottom/);
 assert.doesNotMatch(indexSrc, /class="quick-card"/, "duplicate dashboard quick actions must stay removed");
 assert.doesNotMatch(indexSrc, /class="chatbox-tools"/, "duplicate chat utility row must stay removed");
-assert.match(mainSrc, /const bottomItems = items\.filter\(\(n\) => n\.navZone === "bottom"\)/);
+assert.match(mainSrc, /const bottomItems = items;/);
 assert.match(mainSrc, /options\.instant/);
 assert.match(
   mainSrc,

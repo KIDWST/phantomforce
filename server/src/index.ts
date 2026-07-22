@@ -3750,16 +3750,11 @@ const ADMIN_CHAT_INSTANT_TIMEOUT_MS = {
   codex_cli: 5000,
   claude_cli: 7000,
   openrouter_glm: 5000,
-  /* qwen2.5:14b requests keep_alive:"24h" on this call (see
-     local-ollama-transport.ts), so it stays resident across a normal
-     back-to-back chat session — but the GPU is shared with other local
-     models (vision, the prompt-injection guard, phantombot), any of which
-     can evict it to fit their own load. Measured directly on this machine:
-     a genuine cold load took 14.9s, a warm follow-up ~2.6s. A bare 5s
-     budget loses the cold-load race every time and always falls back to
-     canned text; 20s covers a real cold start (rare, once resident it
-     stays resident for 24h) while warm calls still return in ~2-3s. */
-  local_ollama: 20000,
+  /* Keep PhantomBot's local lane bounded. Heavy models can still be selected
+     explicitly, but the default qwen3:4b path should fail fast to the local
+     responder instead of cold-loading/parking llama services long enough to
+     drag the desktop down. */
+  local_ollama: 9000,
 } as const;
 
 const ADMIN_CHAT_REASONING_TIMEOUT_MS = {
@@ -9205,7 +9200,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
   }
 
   if (actionFreeConversation) {
-    const actionFreeModelId = process.env.PHANTOM_INSTANT_CHAT_MODEL || "qwen2.5:14b";
+    const actionFreeModelId = process.env.PHANTOM_INSTANT_CHAT_MODEL || "qwen3:4b";
     const toolReply = buildInstantChatToolReply(
       normalized.user_request,
       recentConversation,

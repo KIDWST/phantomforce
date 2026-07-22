@@ -240,7 +240,7 @@ globalThis.fetch = async (url, init) => {
 const instantQuestion = await handleSmartCommand("what's your favorite food?");
 assert.equal(instantQuestion.say, "I'd pick tacos.");
 assert.equal(capturedChatBody.route_tier, "instant");
-assert.equal(capturedChatBody.requested_model, "qwen2.5:14b");
+assert.equal(capturedChatBody.requested_model, "qwen3:4b");
 assert.equal(capturedChatBody.admin_model, "local_ollama");
 assert.deepEqual(capturedChatBody.allowed_providers, ["local_ollama"]);
 assert.equal(capturedChatBody.allow_provider_fallback, false);

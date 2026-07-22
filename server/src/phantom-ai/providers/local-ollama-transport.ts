@@ -30,7 +30,7 @@ export type LocalOllamaStatus = {
 };
 
 const DEFAULT_OLLAMA_PROBE_TIMEOUT_MS = 4000;
-const DEFAULT_OLLAMA_CHAT_TIMEOUT_MS = 60000;
+const DEFAULT_OLLAMA_CHAT_TIMEOUT_MS = 20000;
 
 export type LocalOllamaChatInput = {
   requestId: string;
@@ -82,14 +82,16 @@ export type LocalOllamaChatResult = {
 const DEFAULT_OLLAMA_BASE_URL = "http://127.0.0.1:11434";
 /* Must name a model actually pulled on the target machine - this is the
    last-resort default when no PHANTOM_LOCAL_GLM_MODEL/PHANTOM_OLLAMA_MODEL/
-   OLLAMA_MODEL override and no per-call requested model apply. The previous
-   default ("hf.co/unsloth/GLM-5.2-GGUF:UD-IQ1_S") was never pulled here, so
-   every call that reached this fallback was instantly blocked as
-   "not installed" and silently dropped to the canned instant-chat reply. */
-const DEFAULT_LOCAL_MODEL = "qwen2.5:14b";
+   OLLAMA_MODEL override and no per-call requested model apply. Keep the
+   default intentionally small: PhantomBot should stay fast and should not
+   park a large llama service on Jordan's PC unless an explicit model setting
+   opts into that heavier lane. */
+const DEFAULT_LOCAL_MODEL = "qwen3:4b";
 const MAX_CONTEXT_CHARS = 5000;
 const MAX_MESSAGE_CHARS = 1600;
 const MAX_RESPONSE_CHARS = 5000;
+const DEFAULT_CONVERSATION_KEEP_ALIVE = "90s";
+const DEFAULT_OPERATOR_KEEP_ALIVE = "30s";
 
 function normalizeBaseUrl(value: string | undefined) {
   return (value?.trim() || DEFAULT_OLLAMA_BASE_URL).replace(/\/+$/, "");
@@ -110,6 +112,16 @@ function resolveFallbackModel(env: NodeJS.ProcessEnv | Record<string, string | u
     env.PHANTOM_LOCAL_GLM_FALLBACK_MODEL?.trim() ||
     "";
   return explicit && explicit !== primaryModelId ? explicit : null;
+}
+
+function resolveKeepAlive(
+  env: NodeJS.ProcessEnv | Record<string, string | undefined>,
+  conversationMode: boolean,
+) {
+  const explicit = conversationMode
+    ? env.PHANTOM_OLLAMA_CONVERSATION_KEEP_ALIVE?.trim()
+    : env.PHANTOM_OLLAMA_KEEP_ALIVE?.trim();
+  return explicit || (conversationMode ? DEFAULT_CONVERSATION_KEEP_ALIVE : DEFAULT_OPERATOR_KEEP_ALIVE);
 }
 
 function isLocalOllamaBaseUrl(baseUrl: string) {
@@ -419,7 +431,7 @@ export async function callLocalOllamaChat(
     model: modelId,
     stream: false,
     think: false,
-    keep_alive: conversationMode ? "24h" : "5m",
+    keep_alive: resolveKeepAlive(env, conversationMode),
     options: {
       temperature: conversationMode ? 0.3 : 0.35,
       think: false,
