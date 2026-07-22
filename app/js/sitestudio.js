@@ -2,14 +2,14 @@
 
 import {
   store, uid, visible, currentWs, wsName, pushActivity, ago, fmtMoney,
-} from "./store.js?v=phantom-live-20260721-30";
+} from "./store.js?v=phantom-live-20260721-32";
 import {
   esc, baseSiteDraft, ensureSiteDesign, ensureSiteStore, applyWebsitePrompt, renderWebsitePreview,
   SITE_TEMPLATES, applySiteTemplate, cadenceSuffix,
-} from "./workspaces.js?v=phantom-live-20260721-30";
+} from "./workspaces.js?v=phantom-live-20260721-32";
 import {
   isDatabaseSession, requestServerPublish, fetchServerRun,
-} from "./orgs.js?v=phantom-live-20260721-30";
+} from "./orgs.js?v=phantom-live-20260721-32";
 
 const siteUi = {
   activeSiteId: null, device: "desktop", selectedSection: -1,
@@ -446,9 +446,30 @@ function shellMarkup(active, sites, products) {
     </section>`;
 }
 
+/* One-time repair: the phantomforce.online starter used to seed a fabricated
+   headline and a fictional 3-product store that never matched the real live
+   site. Sites already created with that exact old content get refreshed to
+   the corrected template (real headline, real sections, no invented store).
+   Matches on the EXACT old fake headline only, so a site the owner has since
+   actually edited is never touched. Safe to run every render — it's a no-op
+   once the stale string is gone. */
+const STALE_PHANTOMFORCE_HEADLINE = "Run your business with a phantom workforce.";
+function repairStalePhantomforceSites(sites) {
+  for (const site of sites) {
+    if (siteDomain(site) !== "phantomforce.online") continue;
+    if (site.design?.headline !== STALE_PHANTOMFORCE_HEADLINE) continue;
+    applySiteTemplate(site, "phantomforce");
+    setSiteDomain(site, "phantomforce.online");
+    site.updated = new Date().toISOString();
+    pushActivity("Websites", `refreshed ${site.title} to match the real live phantomforce.online copy.`, site.ws);
+    store.save();
+  }
+}
+
 export function renderSiteStudio(el) {
   const rerender = () => renderSiteStudio(el);
   let sites = visible(store.state.sites).map(normalizeSite);
+  repairStalePhantomforceSites(sites);
   if (!sites.length) {
     createWebsite("");
     sites = visible(store.state.sites).map(normalizeSite);
