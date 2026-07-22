@@ -44,12 +44,10 @@ const MAPS = [
     id: "cloudbreak",
     name: "Cloudbreak Pass",
     objectiveLabel: "Twin relay defense",
-    rule: "Three forked routes cross two relays. Crosswinds accelerate light aircraft and bend projectile timing.",
+    rule: "One winding sky road crosses two relays. Build freely off-road and stack overlapping ranges like classic tower defense.",
     objective: "relay",
     routes: [
-      [[.02,.52],[.16,.50],[.27,.28],[.45,.24],[.58,.36],[.76,.30],[.98,.47]],
-      [[.02,.52],[.18,.56],[.31,.49],[.47,.54],[.62,.47],[.79,.56],[.98,.47]],
-      [[.02,.52],[.16,.58],[.28,.77],[.44,.72],[.59,.62],[.76,.70],[.98,.47]]
+      [[.02,.53],[.12,.48],[.22,.27],[.36,.24],[.48,.42],[.61,.36],[.72,.58],[.84,.70],[.98,.48]]
     ],
     slots: [[.10,.35],[.12,.67],[.23,.42],[.29,.18],[.30,.62],[.37,.83],[.43,.39],[.52,.66],[.58,.27],[.65,.55],[.72,.21],[.76,.77],[.84,.40],[.88,.62]]
   },
@@ -57,12 +55,10 @@ const MAPS = [
     id: "stormring",
     name: "Stormglass Ring",
     objectiveLabel: "Shielded core hold",
-    rule: "Raiders orbit a fractured core. Lightning telegraphs before jamming defenses and damaging anything nearby.",
+    rule: "One looping storm road curls around the core. Lightning telegraphs before jamming defenses and damaging anything nearby.",
     objective: "shield",
     routes: [
-      [[.02,.50],[.17,.34],[.34,.20],[.55,.22],[.74,.37],[.66,.55],[.82,.70],[.98,.50]],
-      [[.02,.50],[.20,.55],[.34,.72],[.53,.76],[.70,.61],[.62,.43],[.80,.29],[.98,.50]],
-      [[.02,.50],[.20,.48],[.34,.34],[.51,.50],[.36,.64],[.57,.69],[.73,.51],[.98,.50]]
+      [[.02,.50],[.15,.28],[.30,.20],[.48,.28],[.56,.50],[.43,.72],[.62,.78],[.80,.62],[.98,.50]]
     ],
     slots: [[.10,.25],[.11,.72],[.23,.39],[.25,.63],[.38,.14],[.39,.84],[.46,.38],[.48,.63],[.60,.16],[.61,.82],[.70,.36],[.73,.66],[.84,.23],[.87,.76]]
   },
@@ -70,12 +66,10 @@ const MAPS = [
     id: "iron",
     name: "Iron Meridian",
     objectiveLabel: "Gate line defense",
-    rule: "Two armored gates create shared chokepoints. Ground raids must break them; air and phase units bypass the line.",
+    rule: "One iron road snakes through two armored gates. Ground raids must break them; air and phase units bypass the line.",
     objective: "gates",
     routes: [
-      [[.02,.50],[.18,.29],[.33,.29],[.40,.43],[.55,.43],[.66,.25],[.82,.25],[.98,.47]],
-      [[.02,.50],[.18,.50],[.35,.50],[.48,.50],[.65,.50],[.82,.50],[.98,.47]],
-      [[.02,.50],[.18,.71],[.33,.71],[.40,.57],[.55,.57],[.66,.75],[.82,.75],[.98,.47]]
+      [[.02,.50],[.15,.28],[.30,.28],[.40,.48],[.54,.48],[.64,.70],[.80,.70],[.90,.52],[.98,.47]]
     ],
     slots: [[.10,.19],[.10,.81],[.22,.40],[.22,.60],[.34,.20],[.34,.80],[.44,.36],[.44,.64],[.57,.34],[.57,.66],[.68,.15],[.68,.85],[.80,.39],[.82,.62]]
   },
@@ -83,13 +77,10 @@ const MAPS = [
     id: "neontangle",
     name: "Neon Tangle",
     objectiveLabel: "Braided relay race",
-    rule: "Four braided flight corridors cross one relay spine. Fast air raids arrive early, but the middle can be locked down by smart range overlap.",
+    rule: "One neon switchback route crosses one relay spine. The middle can be locked down by smart range overlap.",
     objective: "relay",
     routes: [
-      [[.02,.44],[.13,.25],[.30,.18],[.46,.34],[.58,.26],[.73,.31],[.98,.49]],
-      [[.02,.56],[.17,.45],[.30,.52],[.43,.47],[.56,.55],[.72,.46],[.98,.49]],
-      [[.02,.50],[.16,.66],[.34,.78],[.48,.62],[.62,.70],[.80,.72],[.98,.49]],
-      [[.02,.50],[.20,.50],[.36,.37],[.50,.50],[.64,.63],[.80,.50],[.98,.49]]
+      [[.02,.50],[.13,.25],[.29,.18],[.43,.38],[.55,.28],[.67,.50],[.56,.72],[.73,.78],[.86,.58],[.98,.49]]
     ],
     slots: [[.09,.29],[.10,.70],[.21,.20],[.23,.57],[.30,.82],[.38,.33],[.42,.66],[.50,.25],[.52,.75],[.60,.45],[.66,.60],[.72,.26],[.78,.73],[.88,.40],[.89,.62]]
   }
@@ -187,8 +178,9 @@ const ENEMIES = {
 };
 
 const CAMPAIGN_WAVES = [
-  [{ type: "driftling", count: 8, gap: 680, formation: 2 }],
-  [{ type: "skiff", count: 8, gap: 430, formation: 4 }, { type: "driftling", count: 8, gap: 520, delay: 1200 }],
+  [{ type: "driftling", count: 1, gap: 0, formation: 1 }],
+  [{ type: "driftling", count: 4, gap: 850, formation: 1 }],
+  [{ type: "skiff", count: 4, gap: 760, formation: 1 }, { type: "driftling", count: 5, gap: 720, delay: 1400 }],
   [{ type: "bulwark", count: 5, gap: 900 }, { type: "splitter", count: 6, gap: 620, delay: 700 }],
   [{ type: "phase", count: 7, gap: 620, formation: 2 }, { type: "skiff", count: 10, gap: 380, delay: 900 }],
   [{ type: "saboteur", count: 7, gap: 650 }, { type: "bulwark", count: 6, gap: 800, delay: 800 }, { type: "driftling", count: 12, gap: 350, delay: 1500 }],
@@ -227,9 +219,9 @@ function endlessWave(number) {
   const bountyMul = 1 + n * .02;
   const gapScale = Math.max(.42, 1 - n * .006);
   const entries = [
-    { type: "driftling", count: Math.min(26, n === 1 ? 7 : 8 + Math.floor(n * .45)), gap: Math.round((n === 1 ? 650 : 520) * gapScale), formation: n === 1 ? 2 : 3 }
+    { type: "driftling", count: n === 1 ? 1 : Math.min(26, 3 + Math.floor(n * .55)), gap: Math.round((n === 1 ? 0 : 700) * gapScale), formation: n === 1 ? 1 : 2 }
   ];
-  if (n >= 2) entries.push({ type: "skiff", count: Math.min(20, 3 + Math.floor(n * .35)), gap: Math.round(430 * gapScale), delay: n === 2 ? 1250 : 700, formation: 4 });
+  if (n >= 3) entries.push({ type: "skiff", count: Math.min(20, 2 + Math.floor(n * .32)), gap: Math.round(560 * gapScale), delay: 1250, formation: 2 });
   if (n >= 3) entries.push({ type: "bulwark", count: Math.min(12, 2 + Math.floor(n / 4)), gap: Math.round(820 * gapScale), delay: 1100 });
   if (n >= 5) entries.push({ type: "splitter", count: Math.min(9, 2 + Math.floor(n / 6)), gap: Math.round(600 * gapScale), delay: 1450 });
   if (n >= 9) entries.push({ type: "phase", count: Math.min(9, 2 + Math.floor(n / 6)), gap: Math.round(560 * gapScale), delay: 1700 });
@@ -811,6 +803,54 @@ function objectiveStart() {
   if (map.objective === "shield") return { shield: commander.id === "ilex" ? 12 : 8, maxShield: commander.id === "ilex" ? 12 : 8 };
   return { gates: [{ t: .39, hp: commander.id === "rook" ? 300 : 240, max: commander.id === "rook" ? 300 : 240 }, { t: .67, hp: commander.id === "rook" ? 270 : 215, max: commander.id === "rook" ? 270 : 215 }] };
 }
+function mainRoute() {
+  return currentMap().routes[0];
+}
+function distanceToSegment(point, a, b) {
+  const ax = a[0] * REF_W;
+  const ay = a[1] * REF_H;
+  const bx = b[0] * REF_W;
+  const by = b[1] * REF_H;
+  const dx = bx - ax;
+  const dy = by - ay;
+  const lenSq = dx * dx + dy * dy || 1;
+  const t = clamp(((point.x - ax) * dx + (point.y - ay) * dy) / lenSq, 0, 1);
+  const x = ax + dx * t;
+  const y = ay + dy * t;
+  return Math.hypot(point.x - x, point.y - y);
+}
+function distanceToRoute(point, route = mainRoute()) {
+  let best = Infinity;
+  for (let i = 1; i < route.points.length; i++) {
+    best = Math.min(best, distanceToSegment(point, route.points[i - 1], route.points[i]));
+  }
+  return best;
+}
+function buildBlockReason(point, ignoreSlotIndex = null) {
+  if (!point || point.x < 42 || point.x > REF_W - 42 || point.y < 48 || point.y > REF_H - 48) return "Build inside the arena.";
+  if (distanceToRoute(point) < 58) return "Can't build on the road.";
+  const crowded = sentinels.some((sentinel) => sentinel.slotIndex !== ignoreSlotIndex && Math.hypot(slotPoint(sentinel.slotIndex).x - point.x, slotPoint(sentinel.slotIndex).y - point.y) < 64);
+  return crowded ? "Too close to another Sentinel." : "";
+}
+function openingPointScore(point) {
+  let score = 0;
+  [.13, .20, .28, .36, .46, .58].forEach((t) => {
+    const routePoint = pointAt(mainRoute(), t);
+    const distance = Math.hypot(point.x - routePoint.x, point.y - routePoint.y);
+    if (distance <= 190) score += (190 - distance) / 190 + (t <= .36 ? .45 : 0);
+  });
+  return score;
+}
+function openingBuildCandidates() {
+  const points = [];
+  for (let y = 78; y <= REF_H - 78; y += 54) {
+    for (let x = 78; x <= REF_W - 78; x += 58) {
+      const point = { x, y };
+      if (!buildBlockReason(point)) points.push({ point, score: openingPointScore(point) });
+    }
+  }
+  return points.sort((a, b) => b.score - a.score);
+}
 function defenseOpeningScore(defId) {
   const def = DEFENSES[defId];
   if (!def) return 0;
@@ -827,47 +867,19 @@ function starterDefenseIds() {
     .sort((a, b) => defenseOpeningScore(b) - defenseOpeningScore(a))
     .slice(0, 2);
 }
-function openingSlotScore(slotIndex) {
-  const origin = slotPoint(slotIndex);
-  let score = 0;
-  currentMap().routes.forEach((route) => {
-    [.20, .28, .36, .44, .54, .64].forEach((t) => {
-      const point = pointAt(route, t);
-      const distance = Math.hypot(point.x - origin.x, point.y - origin.y);
-      if (distance <= 185) score += (185 - distance) / 185 + (t <= .44 ? .38 : 0);
-    });
-  });
-  return score;
+function makeSentinel(defId, point, spent, starter = false) {
+  const id = uid();
+  return { id, defId, tier: 0, slotIndex: -id, x: point.x, y: point.y, cooldown: 0, recoil: 0, jammed: 0, aim: 0, spent, starter };
 }
 function seedOpeningDefenses() {
   const starterIds = starterDefenseIds();
   const selected = [];
-  const rankedSlots = currentMap().slots
-    .map((_, index) => ({ index, score: openingSlotScore(index) }))
-    .sort((a, b) => b.score - a.score);
+  const candidates = openingBuildCandidates();
   starterIds.forEach((defId) => {
-    const pick = rankedSlots.find((candidate) => {
-      if (selected.includes(candidate.index)) return false;
-      const point = slotPoint(candidate.index);
-      return selected.every((slotIndex) => {
-        const other = slotPoint(slotIndex);
-        return Math.hypot(point.x - other.x, point.y - other.y) >= 170;
-      });
-    }) || rankedSlots.find((candidate) => !selected.includes(candidate.index));
+    const pick = candidates.find((candidate) => selected.every((point) => Math.hypot(point.x - candidate.point.x, point.y - candidate.point.y) >= 180));
     if (!pick) return;
-    selected.push(pick.index);
-    sentinels.push({
-      id: uid(),
-      defId,
-      tier: 0,
-      slotIndex: pick.index,
-      cooldown: 0,
-      recoil: 0,
-      jammed: 0,
-      aim: 0,
-      spent: 0,
-      starter: true
-    });
+    selected.push(pick.point);
+    sentinels.push(makeSentinel(defId, pick.point, 0, true));
   });
   if (sentinels.length) toast("Starter sentries are covering the first route.");
 }
@@ -1152,8 +1164,8 @@ function triggerStormStrike() {
   const targets = [];
   if (sentinels.length) {
     const sentinel = sentinels[Math.floor(Math.random() * sentinels.length)];
-    const slot = currentMap().slots[sentinel.slotIndex];
-    targets.push({ x: slot[0] * REF_W, y: slot[1] * REF_H, sentinel });
+    const slot = slotPoint(sentinel.slotIndex);
+    targets.push({ x: slot.x, y: slot.y, sentinel });
   }
   const alive = enemies.filter((enemy) => enemy.alive);
   if (alive.length) {
@@ -1164,7 +1176,7 @@ function triggerStormStrike() {
   announceMapEvent("Stormglass discharge telegraphed");
 }
 function triggerRelaySurge() {
-  const route = currentMap().routes[3] || currentMap().routes[1] || currentMap().routes[0];
+  const route = mainRoute();
   const point = pointAt(route, .5);
   effects.push({ type: "relay", x: point.x, y: point.y, color: "#35f7ff", life: .95, age: 0, struck: false, surge: true, size: 118 });
   announceMapEvent("Neon relay surge charging center lane");
@@ -1211,6 +1223,8 @@ function updateMapHazards(dt) {
 // Defense combat and projectiles
 // ---------------------------------------------------------------------------
 function slotPoint(slotIndex) {
+  const placed = sentinels.find((sentinel) => sentinel.slotIndex === slotIndex && Number.isFinite(sentinel.x) && Number.isFinite(sentinel.y));
+  if (placed) return { x: placed.x, y: placed.y };
   const slot = currentMap().slots[slotIndex] || currentMap().slots[0];
   return { x: slot[0] * REF_W, y: slot[1] * REF_H };
 }
@@ -1753,23 +1767,26 @@ function renderPressureDock() {
     '<button type="button" class="sg-pressure-btn" data-pressure="surrender">Surrender</button>';
   pressureDock.querySelectorAll("[data-pressure]").forEach((button) => button.addEventListener("click", () => onPressureClick(button.dataset.pressure)));
 }
-function tryPlace(slotIndex) {
-  if (!placingDefense || sentinels.some((sentinel) => sentinel.slotIndex === slotIndex)) return;
+function tryPlaceAt(point) {
+  if (!placingDefense) return;
   const def = DEFENSES[placingDefense];
   if (!def || !selectedDefenses.includes(def.id)) return;
   if (gold < def.cost) { toast("Not enough Glint."); return; }
+  const blocked = buildBlockReason(point);
+  if (blocked) { toast(blocked); return; }
   gold -= def.cost;
   glintSpent += def.cost;
-  sentinels.push({ id: uid(), defId: def.id, tier: 0, slotIndex, cooldown: 0, recoil: 0, jammed: 0, aim: 0, spent: def.cost });
+  const sentinel = makeSentinel(def.id, point, def.cost);
+  sentinels.push(sentinel);
   placingDefense = null;
   sfx("place");
   updateHud();
   renderDock();
-  selectSlot(slotIndex);
+  selectSlot(sentinel.slotIndex);
 }
 function selectSlot(slotIndex) {
   selectedSlot = slotIndex;
-  focusedSlot = slotIndex >= 0 ? slotIndex : focusedSlot;
+  focusedSlot = slotIndex;
   renderSelected();
 }
 function upgradeSelected() {
@@ -1803,21 +1820,22 @@ function refFromPointer(event) {
     y: (event.clientY - rect.top - offsetY) / worldScale
   };
 }
+function nearestSentinelAt(point, radius = 30) {
+  return sentinels
+    .map((sentinel) => ({ sentinel, distance: Math.hypot(slotPoint(sentinel.slotIndex).x - point.x, slotPoint(sentinel.slotIndex).y - point.y) }))
+    .filter((item) => item.distance <= radius)
+    .sort((a, b) => a.distance - b.distance)[0]?.sentinel || null;
+}
+function keyboardBuildPoint() {
+  return openingBuildCandidates().find((candidate) => !buildBlockReason(candidate.point))?.point || { x: REF_W * .5, y: REF_H * .5 };
+}
 canvas.addEventListener("pointerdown", (event) => {
   if (!running || paused) return;
   event.preventDefault();
   const point = refFromPointer(event);
-  let hit = -1;
-  let best = 34;
-  currentMap().slots.forEach((slot, index) => {
-    const distance = Math.hypot(point.x - slot[0] * REF_W, point.y - slot[1] * REF_H);
-    if (distance < best) { best = distance; hit = index; }
-  });
-  if (hit < 0) { selectSlot(-1); return; }
-  const occupied = sentinels.find((sentinel) => sentinel.slotIndex === hit);
-  if (occupied) selectSlot(hit);
-  else if (placingDefense) tryPlace(hit);
-  else { focusedSlot = hit; selectSlot(-1); }
+  if (placingDefense) { tryPlaceAt(point); return; }
+  const occupied = nearestSentinelAt(point);
+  selectSlot(occupied ? occupied.slotIndex : -1);
 });
 abilityBtn.addEventListener("click", activateCommander);
 addEventListener("keydown", (event) => {
@@ -1831,15 +1849,19 @@ addEventListener("keydown", (event) => {
     activateCommander();
     event.preventDefault();
   } else if (event.key === "ArrowRight" || event.key === "ArrowDown") {
-    focusedSlot = (focusedSlot + 1) % currentMap().slots.length;
-    selectSlot(sentinels.some((sentinel) => sentinel.slotIndex === focusedSlot) ? focusedSlot : -1);
+    if (sentinels.length) {
+      const current = Math.max(0, sentinels.findIndex((sentinel) => sentinel.slotIndex === selectedSlot));
+      selectSlot(sentinels[(current + 1) % sentinels.length].slotIndex);
+    }
     event.preventDefault();
   } else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
-    focusedSlot = (focusedSlot - 1 + currentMap().slots.length) % currentMap().slots.length;
-    selectSlot(sentinels.some((sentinel) => sentinel.slotIndex === focusedSlot) ? focusedSlot : -1);
+    if (sentinels.length) {
+      const current = Math.max(0, sentinels.findIndex((sentinel) => sentinel.slotIndex === selectedSlot));
+      selectSlot(sentinels[(current - 1 + sentinels.length) % sentinels.length].slotIndex);
+    }
     event.preventDefault();
   } else if (event.key === "Enter" && placingDefense) {
-    tryPlace(focusedSlot);
+    tryPlaceAt(keyboardBuildPoint());
     event.preventDefault();
   } else if (event.key === "Escape") {
     placingDefense = null;
@@ -2251,7 +2273,7 @@ function drawObjectives() {
   if (!mapObjective) return;
   if (currentMap().objective === "relay") {
     [.36, .68].forEach((t) => {
-      const point = pointAt(currentMap().routes[1], t);
+      const point = pointAt(mainRoute(), t);
       const screen = toScreen(point.x, point.y);
       ctx.fillStyle = "#0008";
       ctx.beginPath();
@@ -2275,7 +2297,7 @@ function drawObjectives() {
     ctx.stroke();
   } else {
     mapObjective.gates.forEach((gate) => {
-      const point = pointAt(currentMap().routes[1], gate.t);
+      const point = pointAt(mainRoute(), gate.t);
       const screen = toScreen(point.x, point.y);
       const ratio = gate.hp / gate.max;
       ctx.fillStyle = "#0008";
@@ -2289,7 +2311,7 @@ function drawObjectives() {
   }
 }
 function drawSpire() {
-  const point = pointAt(currentMap().routes[1], .985);
+  const point = pointAt(mainRoute(), .985);
   const screen = toScreen(point.x, point.y);
   const commander = currentCommander();
   ctx.save();
@@ -2320,20 +2342,20 @@ function drawSpire() {
   ctx.restore();
 }
 function drawSlots() {
-  currentMap().slots.forEach((slot, index) => {
-    const screen = toScreen(slot[0] * REF_W, slot[1] * REF_H);
-    const occupied = sentinels.some((sentinel) => sentinel.slotIndex === index);
-    const selected = index === selectedSlot || index === focusedSlot;
-    ctx.fillStyle = "#00000055";
-    ctx.beginPath();
-    ctx.ellipse(screen.x, screen.y + 5 * worldScale, 15 * worldScale, 7 * worldScale, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = selected ? currentCommander().color : placingDefense && !occupied ? "#65d8cf" : "#ffffff35";
-    ctx.lineWidth = (selected ? 2.4 : 1.3) * worldScale;
-    ctx.beginPath();
-    ctx.ellipse(screen.x, screen.y, 14 * worldScale, 9 * worldScale, 0, 0, Math.PI * 2);
-    ctx.stroke();
-  });
+  if (!placingDefense) return;
+  ctx.save();
+  ctx.globalAlpha = .72;
+  ctx.fillStyle = "#06150fbb";
+  ctx.strokeStyle = "#65d8cf66";
+  ctx.lineWidth = 1 * worldScale;
+  ctx.roundRect(offsetX + 18 * worldScale, offsetY + 18 * worldScale, 290 * worldScale, 38 * worldScale, 14 * worldScale);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = "#dffcf1";
+  ctx.font = "900 " + 12 * worldScale + "px ui-monospace,monospace";
+  ctx.textAlign = "left";
+  ctx.fillText("Click anywhere off the road to build", offsetX + 34 * worldScale, offsetY + 43 * worldScale);
+  ctx.restore();
 }
 function defenseShape(context, shape, radius) {
   context.beginPath();
@@ -2822,7 +2844,7 @@ function runInternalChecks() {
     if ((round % 10 === 0) !== !!generated.boss) errors.push("round " + round + " boss cadence");
   }
   MAPS.forEach((map) => {
-    if (map.routes.length < 2 || map.slots.length < 10) errors.push(map.id + " topology");
+    if (map.routes.length !== 1 || map.slots.length < 10) errors.push(map.id + " topology");
     map.routes.forEach((route) => {
       if (!Number.isFinite(route.length) || route.length < 450) errors.push(map.id + " route");
     });
