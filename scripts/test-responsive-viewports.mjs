@@ -460,6 +460,21 @@ function auditPage() {
   const mobileRect = mobileNav?.getBoundingClientRect();
   const consoleRect = consoleRoot?.getBoundingClientRect();
   const pageRect = workspace?.getBoundingClientRect();
+  const navSurfaceEntries = [
+    ["sidebar", nav],
+    ["command-rail", commandRail],
+    ["mobile-homebar", mobileHomebar],
+    ["bottom-dock", mobileNav],
+  ].filter(([, el]) => isVisible(el));
+  const navSurfaces = navSurfaceEntries.map(([name, el]) => {
+    const rect = el.getBoundingClientRect();
+    return {
+      name,
+      top: Math.round(rect.top),
+      bottom: Math.round(rect.bottom),
+      height: Math.round(rect.height),
+    };
+  });
   const dashboardSurfaces = [dashboardBrief, decisionDeck, dashboardHero].filter(isVisible);
   const dashboardCollisions = [];
   for (let index = 0; index < dashboardSurfaces.length; index += 1) {
@@ -492,6 +507,7 @@ function auditPage() {
       commandRailVisible: isVisible(commandRail),
       mobileHomebarVisible: isVisible(mobileHomebar),
       mobileVisible: isVisible(mobileNav),
+      visibleSurfaces: navSurfaces,
       mobileTop: mobileRect ? Math.round(mobileRect.top) : null,
       mobileBottom: mobileRect ? Math.round(mobileRect.bottom) : null,
     },
@@ -575,6 +591,7 @@ function assertCase(result) {
   assert.deepEqual(audit.clippedText, [], `${label} ${viewport.width}: visible control text is clipped.`);
   if (viewport.width <= 900) {
     assert.equal(audit.nav.mobileVisible, true, `${label} ${viewport.width}: compact bottom nav must be visible.`);
+    assert.deepEqual(audit.nav.visibleSurfaces.map((surface) => surface.name), ["bottom-dock"], `${label} ${viewport.width}: mobile must have exactly one visible nav surface.`);
     assert.equal(audit.nav.mobileHomebarVisible, false, `${label} ${viewport.width}: compact homebar must stay hidden so mobile has one nav bar.`);
     assert.equal(audit.nav.commandRailVisible, false, `${label} ${viewport.width}: Command OS rail must be hidden on compact widths to avoid duplicate nav.`);
     assert.equal(audit.nav.desktopVisible, false, `${label} ${viewport.width}: desktop sidebar must be hidden on compact widths.`);
@@ -655,7 +672,7 @@ async function main() {
       checks: [
         "local admin QA session renders",
         "requested workspace page renders",
-        "compact bottom nav visible through 900px",
+        "exactly one compact nav surface visible through 900px",
         "compact Command OS rail hidden to prevent duplicate navigation",
         "one desktop primary navigation surface visible above tablet widths",
         "document has no horizontal overflow",

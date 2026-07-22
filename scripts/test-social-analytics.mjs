@@ -80,5 +80,5 @@ assert.match(serverSource, /oauthPreflight/, "OAuth start conflicts must include
 assert.match(serverSource, /saveSocialOAuthSetup/, "Server must write OAuth app setup through the connector boundary.");
 assert.match(serverSource, /window\.opener.*postMessage/, "OAuth callback should notify the opener when available.");
 assert.match(serverSource, /pf\.social\.oauth\.last/, "OAuth callback should write a same-origin completion marker for noopener popups.");
-assert.match(phantomCss, /Mobile shell cleanup: collapsed launcher \+ vertical taskbar/, "Old horizontal mobile sidebar rules must stay disabled.");
+assert.match(phantomCss, /Mobile shell cleanup: bottom dock only\./, "Old horizontal mobile sidebar rules must stay disabled.");
 console.log("Social analytics live OAuth checks passed.");

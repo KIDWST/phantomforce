@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 
 const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
 const main = read("../app/js/main.js");
@@ -38,6 +38,9 @@ const coverArt = [
   "skyguard-arena",
   "tidefront-tactics",
 ].map((slug) => read(`../app/assets/phantomplay/${slug}-cover.svg`)).join("\n");
+const coverSlugs = readdirSync(new URL("../app/assets/phantomplay", import.meta.url))
+  .filter((name) => /-cover\.(svg|webp)$/u.test(name))
+  .map((name) => name.replace(/-cover\.(svg|webp)$/u, ""));
 const tidefrontTactics = read("../app/games/tidefront-tactics.html");
 const appFiles = [index, main, module, v2Module, ...games];
 const kidsOnlyGameIds = [
@@ -162,6 +165,16 @@ assert.match(css, /html\[data-org-color-mode="dark"\] \.pp-game-art img\{[\s\S]*
 assert.match(css, /html\[data-org-color-mode="light"\] \.pp-game-art img\{[\s\S]*?object-fit:contain[\s\S]*?transform:none/u, "Light-mode PhantomPlay thumbnails must also show the full game image instead of zoom-cropping it.");
 assert.match(css, /\.pp-game-grid:not\(\.pp-game-grid-full\) \.pp-game-art img\{[\s\S]*?object-fit:contain[\s\S]*?transform:none/u, "Compact PhantomPlay rows must not override thumbnails back to cropped art.");
 assert.doesNotMatch(coverArt, /cover placeholder|PhantomPlay cover placeholder/u, "Shipped PhantomPlay cover SVGs must not expose placeholder copy.");
+assert.doesNotMatch(module, /thumbnail:\s*CATEGORY_ART/u, "Frontend built-in PhantomPlay cards must use their game-specific cover art instead of generic category art.");
+for (const slug of coverSlugs) {
+  assert.match(module, new RegExp(`id:\\s*"${slug}"[\\s\\S]*?thumbnail:\\s*GAME_ART_BY_SLUG\\["${slug}"\\]`, "u"), `${slug} must use its own cover art in the frontend catalog.`);
+}
+for (const [sourceName, source] of [["frontend", module], ["server", serverCatalog]]) {
+  const mismatches = [...source.matchAll(/id:\s*"([^"]+)"[\s\S]*?thumbnail:\s*GAME_ART_BY_SLUG\["([^"]+)"\]/gu)]
+    .filter(([, id, artSlug]) => id !== artSlug)
+    .map(([, id, artSlug]) => `${id} -> ${artSlug}`);
+  assert.deepEqual(mismatches, [], `${sourceName} catalog thumbnail art keys must match their game ids.`);
+}
 assert.match(css, /@media\(max-width:767px\)[\s\S]*?\.pp-game-body>p\{[\s\S]*?-webkit-line-clamp:3/u, "Phone game cards must clamp copy instead of forcing broken oversized cards.");
 assert.match(css, /@media\(max-width:767px\)[\s\S]*?\.pp-game\{[\s\S]*?grid-template-columns:1fr/u, "Phone game cards must stack artwork over copy instead of creating skinny text columns.");
 assert.match(css, /@media\(max-width:767px\)[\s\S]*?\.pp-game-art\{[\s\S]*?aspect-ratio:16\/9/u, "Phone game art must keep a stable widescreen stage.");
