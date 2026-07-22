@@ -5,7 +5,8 @@
    prefers-reduced-motion and body.freeze by drawing the settled layout
    instantly. No fabricated data: gaps and disconnection reasons come straight
    from the server payload. */
-import { currentTenantId, session } from "./store.js?v=phantom-live-20260721-3";
+import { currentTenantId } from "./store.js?v=phantom-live-20260721-4";
+import { authHeaders } from "./api-client.js?v=phantom-live-20260721-4";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (ch) => (
   { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]
@@ -47,11 +48,6 @@ const truncate = (text, max = 18) => {
    re-simulating every time. Refresh always bypasses it. */
 const CACHE_TTL_MS = 45_000;
 const cache = new Map(); // tenantId -> { graph, positions, at }
-
-function authHeaders() {
-  const token = session.token();
-  return token ? { Authorization: `Bearer ${token}` } : {};
-}
 
 async function fetchGraph(tenant) {
   const response = await fetch(`/api/organization/graph?tenant_id=${encodeURIComponent(tenant)}`, {

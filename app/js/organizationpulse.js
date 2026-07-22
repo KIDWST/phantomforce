@@ -1,4 +1,5 @@
-import { currentTenantId, friendlyBackendError, session } from "./store.js?v=phantom-live-20260721-3";
+import { currentTenantId, friendlyBackendError, session } from "./store.js?v=phantom-live-20260721-4";
+import { authHeaders } from "./api-client.js?v=phantom-live-20260721-4";
 
 const PULSE_TTL_MS = 45_000;
 const BRAIN_CONTRACT_TTL_MS = 45_000;
@@ -27,11 +28,6 @@ function syncTenant() {
   state.brainContractError = "";
   state.loadedAt = 0;
   state.brainContractLoadedAt = 0;
-}
-
-function authHeaders(extra = {}) {
-  const token = typeof session?.token === "function" ? session.token() : "";
-  return { ...extra, ...(token ? { Authorization: `Bearer ${token}` } : {}) };
 }
 
 function plural(count, one, many = `${one}s`) {

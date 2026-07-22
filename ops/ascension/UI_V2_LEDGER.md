@@ -14,6 +14,7 @@
 ## Landed slices
 - Slice 1 (`a7d56ff3`): canonical token layer `app/phantom-tokens.css`; removed 3 competing :root blocks in phantom.css (AA contrast fixed, white rebrand shadows dead); build `phantom-live-20260721-1`. Gates: change-memory 202 ✓, release-critical 19/20 (phantomplay failure pre-existing at baseline — verified in live checkout).
 - Slice 2 (`6c70bcd3`): honest brain state — `app/js/brain-state.js`, command.js reports real fallback/provider metadata, Brain/Hands/Guard card shows live truth with warn/risk tones; build `phantom-live-20260721-2`. Gates: change-memory, command-surface, dashboard-chat, topbar-media, customization-ui, auth-boundaries ✓.
+- Slice 4: shared API client `app/js/api-client.js` — single `authHeaders(extra = {})` replaces the 19 byte-identical/algebraically-identical local copies across approvalpipeline, brain, brandops, clientsetup, competitor-intelligence, crmpipeline, customization, desktop-context, managedgrowth, mediabackend, organization, organizationpulse, orggraph, orgs, phantomplay-v2, phantomplay, phantomstore, proposalpipeline, vacation (19 files, -74/+39 lines). Each file's own `api()` error-handling body (5 distinct shapes: friendlyBackendError w/ authMessage, friendlyClientSetupError, zod-shape parsing, `.status`-tagged Error, 401-session-clear special case) was deliberately left untouched — those differ in real user-facing behavior and this branch has no way to browser-verify them, so only the truly duplicated header-building logic was extracted. Build `phantom-live-20260721-4`. Verified: `node --check` clean on all 20 touched files; grep confirms zero remaining local `authHeaders` definitions and zero stale `-3` build-id references.
 
 ## Route migration status
 Clusters (priority order from synthesis): 1 foundation/dashboard+gate, 2 AI core,
@@ -26,7 +27,7 @@ None migrated yet — shell v2 restyle is the next prerequisite.
 2. Sweep hardcoded rgba(91,76,255,...) accent literals → var() (file-by-file).
 3. ~~Overlay engine a11y~~ DONE — slice 3 (`387df784`): focus trap/restore, inert [data-phantom], skip link, panel initial focus. Build phantom-live-20260721-3.
 4. Replace fabricated PhantomWire/agentops telemetry with real activity + brain-state feed.
-5. Shared API client to replace 19 duplicated authHeaders()/api() wrappers.
+5. ~~Shared API client~~ DONE — slice 4: `app/js/api-client.js`, 19 files deduped. Build phantom-live-20260721-4.
 6. Route migrations per cluster order.
 
 ## Decisions

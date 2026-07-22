@@ -7,9 +7,10 @@
    flow (catalog, play, saves, submissions, moderation) keeps working. */
 
 import {
-  currentTenantId, isAdmin, session,
+  currentTenantId, isAdmin,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260721-3";
+} from "./store.js?v=phantom-live-20260721-4";
+import { authHeaders } from "./api-client.js?v=phantom-live-20260721-4";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
 const mobilePlaySurface = () => typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;
@@ -55,12 +56,8 @@ const ui = {
 
 let mountedRoot = null, playClock = null, playTickAt = 0, heartbeatClock = null, messageBound = false, keyboardBound = false;
 
-function authHeaders(json = false) {
-  const token = session.token();
-  return { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(json ? { "Content-Type": "application/json" } : {}) };
-}
 async function api(path, options = {}) {
-  const response = await fetch(path, { ...options, headers: { ...authHeaders(Boolean(options.body)), ...(options.headers || {}) } });
+  const response = await fetch(path, { ...options, headers: { ...authHeaders(options.body ? { "Content-Type": "application/json" } : {}), ...(options.headers || {}) } });
   const payload = await response.json().catch(() => null);
   if (!response.ok) { const err = new Error(typeof payload?.error === "string" ? payload.error : `PhantomPlay request failed (${response.status}).`); err.status = response.status; throw err; }
   return payload;

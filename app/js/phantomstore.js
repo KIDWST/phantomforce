@@ -1,4 +1,5 @@
-import { currentTenantId, friendlyBackendError, session } from "./store.js?v=phantom-live-20260721-3";
+import { currentTenantId, friendlyBackendError } from "./store.js?v=phantom-live-20260721-4";
+import { authHeaders } from "./api-client.js?v=phantom-live-20260721-4";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 const CATEGORIES = ["All", "AI Tool", "Agent", "CLI", "Library", "Extension", "Model", "Template", "Dataset"];
@@ -33,13 +34,8 @@ const ui = {
 let mountedRoot = null;
 let searchTimer = 0;
 
-function authHeaders(json = false) {
-  const token = session.token();
-  return { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(json ? { "Content-Type": "application/json" } : {}) };
-}
-
 async function api(path, options = {}) {
-  const response = await fetch(path, { ...options, headers: { ...authHeaders(Boolean(options.body)), ...(options.headers || {}) } });
+  const response = await fetch(path, { ...options, headers: { ...authHeaders(options.body ? { "Content-Type": "application/json" } : {}), ...(options.headers || {}) } });
   const payload = await response.json().catch(() => null);
   if (!response.ok) {
     throw new Error(friendlyBackendError(response.status, payload?.error, { authMessage: "Sign in to load PhantomStore.", fallbackPrefix: "PhantomStore request failed" }));

@@ -1,4 +1,4 @@
-import { session } from "./store.js?v=phantom-live-20260721-3";
+import { authHeaders } from "./api-client.js?v=phantom-live-20260721-4";
 
 const DESKTOP_PROTOCOL = "phantomforce.hermes.extension.v1";
 const BRIDGE_TIMEOUT_MS = 1800;
@@ -78,11 +78,6 @@ function focusDesktopTab(tabId) {
 
 function mediaControl(tabId, command) {
   return bridgeRequest("PF_HERMES_MEDIA_CONTROL_REQUEST", { tabId, command });
-}
-
-function authHeaders(extra = {}) {
-  const token = session.token();
-  return { ...extra, ...(token ? { Authorization: `Bearer ${token}` } : {}) };
 }
 
 function normalizeSystemSession(item = {}) {

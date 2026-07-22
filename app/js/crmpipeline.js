@@ -1,11 +1,7 @@
-import { currentTenantId, friendlyBackendError, session } from "./store.js?v=phantom-live-20260721-3";
+import { currentTenantId, friendlyBackendError, session } from "./store.js?v=phantom-live-20260721-4";
+import { authHeaders } from "./api-client.js?v=phantom-live-20260721-4";
 
 export const CRM_REFRESH_SIGNAL_KEY = "pf.crm.refresh.v1";
-
-const authHeaders = (json = false) => {
-  const token = session.token();
-  return { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(json ? { "Content-Type": "application/json" } : {}) };
-};
 
 export function signalCrmRefresh(reason = "crm-updated") {
   try { globalThis.sessionStorage?.setItem(CRM_REFRESH_SIGNAL_KEY, `${Date.now()}:${reason}`); } catch {}
@@ -16,7 +12,7 @@ export function crmRefreshSignal() {
 }
 
 async function api(path, options = {}) {
-  const response = await fetch(path, { ...options, headers: { ...authHeaders(Boolean(options.body)), ...(options.headers || {}) } });
+  const response = await fetch(path, { ...options, headers: { ...authHeaders(options.body ? { "Content-Type": "application/json" } : {}), ...(options.headers || {}) } });
   const payload = await response.json().catch(() => null);
   if (!response.ok) throw new Error(friendlyBackendError(response.status, payload?.error, { authMessage: "Sign in to load server-backed CRM." }));
   return payload;

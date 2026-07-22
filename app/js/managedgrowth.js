@@ -1,4 +1,5 @@
-import { currentTenantId, friendlyBackendError, session } from "./store.js?v=phantom-live-20260721-3";
+import { currentTenantId, friendlyBackendError, session } from "./store.js?v=phantom-live-20260721-4";
+import { authHeaders } from "./api-client.js?v=phantom-live-20260721-4";
 
 function esc(value = "") {
   return String(value)
@@ -6,11 +7,6 @@ function esc(value = "") {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
-}
-
-function authHeaders(extra = {}) {
-  const token = typeof session?.token === "function" ? session.token() : "";
-  return { ...extra, ...(token ? { Authorization: `Bearer ${token}` } : {}) };
 }
 
 async function api(path) {

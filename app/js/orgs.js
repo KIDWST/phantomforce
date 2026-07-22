@@ -6,7 +6,8 @@
    when the backend doesn't advertise database auth, none of these
    surfaces render and the app behaves exactly as before. */
 
-import { ctx, session } from "./store.js?v=phantom-live-20260721-3";
+import { ctx, session } from "./store.js?v=phantom-live-20260721-4";
+import { authHeaders } from "./api-client.js?v=phantom-live-20260721-4";
 
 export const isDatabaseSession = () => !!ctx.session?.database;
 export const isCustomerOrgSession = () => !!(ctx.session?.database || ctx.session?.localCustomer);
@@ -14,11 +15,6 @@ export const activeOrgId = () => (isCustomerOrgSession() ? ctx.session.orgId || 
 export const activeOrgRole = () => (isCustomerOrgSession() ? ctx.session.orgRole || null : null);
 export const canManageActiveOrg = () =>
   isCustomerOrgSession() && (ctx.session.isSuperAdmin || ["owner", "admin"].includes(ctx.session.orgRole || ""));
-
-function authHeaders(extra = {}) {
-  const token = typeof session?.token === "function" ? session.token() : "";
-  return { ...extra, ...(token ? { Authorization: `Bearer ${token}` } : {}) };
-}
 
 async function api(path, { method = "GET", body } = {}) {
   const headers = authHeaders(body !== undefined ? { "Content-Type": "application/json" } : {});

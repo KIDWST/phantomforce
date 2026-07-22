@@ -9,8 +9,9 @@
  * to a local mock.
  */
 
-import { currentTenantId, session, isAdmin, isOwnerOperator } from "./store.js?v=phantom-live-20260721-3";
-import { canManageActiveOrg } from "./orgs.js?v=phantom-live-20260721-3";
+import { currentTenantId, isAdmin, isOwnerOperator } from "./store.js?v=phantom-live-20260721-4";
+import { authHeaders } from "./api-client.js?v=phantom-live-20260721-4";
+import { canManageActiveOrg } from "./orgs.js?v=phantom-live-20260721-4";
 
 /* Owner/admin only — legacy local-admin sessions (isAdmin/isOwnerOperator)
    and real database org sessions (canManageActiveOrg) both count. */
@@ -67,13 +68,8 @@ function orgTypeMarkup(esc) {
     <p class="set-note">Switching to Dev Only or Full Force unlocks every module for this organization. It never turns modules off for you — switch back to Business and your setup stays as you left it.</p>`;
 }
 
-function authHeaders(json = false) {
-  const token = session.token();
-  return { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(json ? { "Content-Type": "application/json" } : {}) };
-}
-
 async function api(path, options = {}) {
-  const response = await fetch(path, { ...options, headers: { ...authHeaders(Boolean(options.body)), ...(options.headers || {}) } });
+  const response = await fetch(path, { ...options, headers: { ...authHeaders(options.body ? { "Content-Type": "application/json" } : {}), ...(options.headers || {}) } });
   const payload = await response.json().catch(() => null);
   if (!response.ok) {
     const error = new Error(typeof payload?.error === "string" ? payload.error : `Request failed (${response.status}).`);

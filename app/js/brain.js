@@ -1,6 +1,7 @@
-import { currentTenantId, currentWs, session, wsName } from "./store.js?v=phantom-live-20260721-3";
-import { esc } from "./workspaces.js?v=phantom-live-20260721-3";
-import { renderOrganizationGraph } from "./orggraph.js?v=phantom-live-20260721-3";
+import { currentTenantId, currentWs, wsName } from "./store.js?v=phantom-live-20260721-4";
+import { esc } from "./workspaces.js?v=phantom-live-20260721-4";
+import { renderOrganizationGraph } from "./orggraph.js?v=phantom-live-20260721-4";
+import { authHeaders } from "./api-client.js?v=phantom-live-20260721-4";
 
 const state = {
   loading: true,
@@ -35,10 +36,6 @@ function syncBrainTenant() {
   state.notice = "";
 }
 
-function authHeaders(extra = {}) {
-  const token = session.token();
-  return { ...extra, ...(token ? { Authorization: `Bearer ${token}` } : {}) };
-}
 
 async function brainFetch(path, options = {}) {
   const response = await fetch(path, {

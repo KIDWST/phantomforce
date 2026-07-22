@@ -1,15 +1,11 @@
-import { session as accessSession, ago } from "./store.js?v=phantom-live-20260721-3";
+import { ago } from "./store.js?v=phantom-live-20260721-4";
+import { authHeaders } from "./api-client.js?v=phantom-live-20260721-4";
 
 const esc = (value = "") => String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 const cacheKey = "pf.vacation.statusCache.v2";
 const taskLabels = { phone_call: "Take a call", attend_meeting: "Attend a meeting", lead_follow_up: "Follow up with a lead", booking_coordination: "Handle a booking", client_message: "Handle a client message", research: "Research something", exception_triage: "Handle an exception", other: "Other human work" };
 
 let state = { loading: true, error: "", authRequired: false, status: null, activity: [], approvals: [], tasks: [] };
-
-function authHeaders(extra = {}) {
-  const token = typeof accessSession?.token === "function" ? accessSession.token() : "";
-  return { ...extra, ...(token ? { Authorization: `Bearer ${token}` } : {}) };
-}
 
 async function api(path, options = {}) {
   const response = await fetch(path, { ...options, headers: authHeaders({ ...(options.body ? { "Content-Type": "application/json" } : {}), ...(options.headers || {}) }) });

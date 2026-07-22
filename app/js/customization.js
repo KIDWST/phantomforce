@@ -1,4 +1,5 @@
-import { currentTenantId, isLiveAdminHost, isLocalDevHost, session } from "./store.js?v=phantom-live-20260721-3";
+import { currentTenantId, isLiveAdminHost, isLocalDevHost, session } from "./store.js?v=phantom-live-20260721-4";
+import { authHeaders } from "./api-client.js?v=phantom-live-20260721-4";
 
 let activeConfiguration = null;
 let activeEntitlements = null;
@@ -49,13 +50,8 @@ const internalAdminSurface = () => {
   const active = session.get?.() || {};
   return isLiveAdminHost() || (isLocalDevHost() && active.role === "admin");
 };
-const authHeaders = (json = false) => {
-  const token = session.token();
-  return { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(json ? { "Content-Type": "application/json" } : {}) };
-};
-
 async function api(path, options = {}) {
-  const response = await fetch(path, { ...options, headers: { ...authHeaders(Boolean(options.body)), ...(options.headers || {}) } });
+  const response = await fetch(path, { ...options, headers: { ...authHeaders(options.body ? { "Content-Type": "application/json" } : {}), ...(options.headers || {}) } });
   const payload = await response.json().catch(() => null);
   if (!response.ok) {
     const message = typeof payload?.error === "string"

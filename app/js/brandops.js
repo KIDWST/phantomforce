@@ -8,11 +8,12 @@
    user-created automation records. No internal lanes or fabricated
    records are shown. */
 
-import { store, uid, visible, pushActivity, ago, currentWs, session, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260721-3";
+import { store, uid, visible, pushActivity, ago, currentWs, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260721-4";
 import {
   DAILY_IDEA_AUTOMATION_ID, dailyIdeaState, refreshDailyIdeas, saveDailyIdeaAutomation,
   DAILY_IDEA_CHANNELS, DAILY_IDEA_CONTENT_TYPES, DAILY_IDEA_FOCUS, DAILY_IDEA_STYLES,
-} from "./content-ideas.js?v=phantom-live-20260721-3";
+} from "./content-ideas.js?v=phantom-live-20260721-4";
+import { authHeaders } from "./api-client.js?v=phantom-live-20260721-4";
 
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
@@ -26,11 +27,6 @@ let autopilotJobs = null;
 let autopilotError = null;
 let autopilotLoading = false;
 let autopilotBusyIds = new Set();
-
-function authHeaders(extra = {}) {
-  const token = session.token();
-  return { ...extra, ...(token ? { Authorization: `Bearer ${token}` } : {}) };
-}
 
 async function fetchAutopilotJobs() {
   try {
