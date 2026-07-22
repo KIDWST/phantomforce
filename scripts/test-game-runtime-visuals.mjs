@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
@@ -19,15 +19,24 @@ const chromeCandidates = [
   "/usr/bin/chromium-browser",
 ].filter(Boolean);
 
-const games = [
-  { id: "neon-drift", path: "/app/games/neon-drift.html?v=visual-qa" },
-  { id: "phantom-rumble", path: "/app/games/phantom-rumble.html?v=visual-qa" },
-  { id: "crown-circuit", path: "/app/games/crown-circuit.html?v=visual-qa" },
-  { id: "rift-frenzy", path: "/app/games/rift-frenzy.html?v=visual-qa" },
-  { id: "serpent-surge", path: "/app/games/serpent-surge.html?v=visual-qa" },
-  { id: "logic-lights", path: "/app/games/logic-lights.html?v=visual-qa" },
-  { id: "signal-match", path: "/app/games/signal-match.html?v=visual-qa" },
-];
+function catalogGames() {
+  const source = readFileSync(path.join(repoRoot, "app", "js", "phantomplay.js"), "utf8");
+  const games = [];
+  const seen = new Set();
+  const pattern = /\{\s*id:\s*"([^"]+)"[\s\S]*?launchUrl:\s*"([^"]+)"/gu;
+  for (const match of source.matchAll(pattern)) {
+    const id = match[1];
+    const rawPath = match[2];
+    if (seen.has(id) || !rawPath.startsWith("/app/games/")) continue;
+    seen.add(id);
+    const barePath = rawPath.split("?")[0];
+    games.push({ id, path: `${barePath}?v=visual-qa` });
+  }
+  assert.ok(games.length >= 24, `Expected the full PhantomPlay catalog, found only ${games.length} games.`);
+  return games;
+}
+
+const games = catalogGames();
 
 const viewports = [
   { id: "phone", width: 375, height: 812 },
@@ -155,6 +164,25 @@ async function auditGame(cdp, url, viewport, screenshotPath) {
     await sleep(100);
   }
   await sleep(900);
+  await evaluate(cdp, `(${(() => {
+    const visible = (el) => {
+      const style = getComputedStyle(el);
+      const rect = el.getBoundingClientRect();
+      return style.display !== "none" && style.visibility !== "hidden" && rect.width > 8 && rect.height > 8;
+    };
+    const launchPattern = /^(play|start|begin|calm|easy|solo|continue|new)$/i;
+    const overlayButtons = [...document.querySelectorAll(".overlay:not([hidden]) button, [role='dialog'] button, dialog[open] button")];
+    const pageButtons = [...document.querySelectorAll("button")];
+    const button = [...overlayButtons, ...pageButtons]
+      .filter(visible)
+      .find((el) => launchPattern.test((el.textContent || "").trim().split(/\s+/)[0] || ""));
+    if (button) {
+      button.click();
+      return true;
+    }
+    return false;
+  }).toString()})()`);
+  await sleep(500);
   const audit = await evaluate(cdp, `(${(() => {
     const visible = (el) => {
       const style = getComputedStyle(el);
@@ -168,7 +196,15 @@ async function auditGame(cdp, url, viewport, screenshotPath) {
     const canvases = [...document.querySelectorAll("canvas")].filter(visible);
     const buttons = [...document.querySelectorAll("button")].filter(visible);
     const headings = [...document.querySelectorAll("h1,h2,.title,.logo")].filter(visible);
+    const gameSurface = [...document.querySelectorAll("canvas, main, .game, .screen, .arena, .stage, .app, #game, #app")]
+      .filter(visible)
+      .map((el) => {
+        const rect = el.getBoundingClientRect();
+        return { selector: el.id ? `#${el.id}` : el.className ? `.${String(el.className).trim().split(/\s+/).slice(0, 3).join(".")}` : el.tagName.toLowerCase(), area: Math.round(rect.width * rect.height), width: Math.round(rect.width), height: Math.round(rect.height) };
+      })
+      .sort((a, b) => b.area - a.area)[0] || null;
     const doc = document.documentElement;
+    const minSurfaceArea = innerWidth * innerHeight * 0.24;
     return {
       title: document.title,
       ready: document.readyState,
@@ -179,7 +215,9 @@ async function auditGame(cdp, url, viewport, screenshotPath) {
       visibleButtons: buttons.length,
       visibleHeadings: headings.length,
       visibleCanvases: canvases.length,
-      blankish: buttons.length + headings.length + canvases.length < 2,
+      gameSurface,
+      surfaceTooSmall: !gameSurface || gameSurface.area < minSurfaceArea,
+      blankish: !gameSurface && canvases.length === 0 && buttons.length + headings.length < 2,
     };
   }).toString()})()`);
   const capture = await cdp.send("Page.captureScreenshot", { format: "png", captureBeyondViewport: false });
@@ -215,6 +253,7 @@ try {
       assert.equal(audit.tooLight, false, `${game.id} ${viewport.id}: game must not boot into a plain light/white surface.`);
       assert.equal(audit.horizontalOverflow, false, `${game.id} ${viewport.id}: game must not horizontally overflow.`);
       assert.equal(audit.blankish, false, `${game.id} ${viewport.id}: game must render visible playable UI/canvas.`);
+      assert.equal(audit.surfaceTooSmall, false, `${game.id} ${viewport.id}: game surface is too small for a modern playable launch.`);
     }
   }
   const report = path.join(outDir, "report.json");
