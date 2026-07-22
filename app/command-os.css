@@ -1729,6 +1729,49 @@ html[data-command-os="2040"] .phantom.command-os-enabled .phantomwire {
   }
 }
 
+/* Phone shell: use the native mobile homebar plus the fixed bottom dock.
+   The desktop Command OS rail becomes a duplicate nav strip on phones. */
+@media (max-width: 767px) {
+  html[data-command-os="2040"] .phantom.command-os-enabled {
+    height: auto !important;
+    min-height: 100dvh !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .os-command-rail {
+    display: none !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .mobile-admin-homebar {
+    display: flex !important;
+    background: rgba(4, 9, 15, 0.97) !important;
+    border-bottom-color: rgba(133, 171, 198, 0.18) !important;
+    box-shadow: 0 14px 38px rgba(0, 0, 0, 0.38) !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .app-main {
+    height: auto !important;
+    min-height: calc(100dvh - var(--mobile-admin-topbar, 64px)) !important;
+    overflow: visible !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .phantomwire {
+    top: var(--mobile-admin-topbar, 64px) !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .app-main > .console:not(.console-workspace) {
+    height: auto !important;
+    min-height: calc(100dvh - var(--mobile-admin-topbar, 64px)) !important;
+    padding-bottom: calc(var(--mobile-admin-taskbar, 80px) + env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled > .sidebar {
+    top: calc(var(--mobile-admin-topbar, 64px) + 10px) !important;
+    bottom: calc(var(--mobile-admin-taskbar, 80px) + 10px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+}
+
 /* ============================================================= */
 /* ==== LIVE SIGNALS — instruments, not shortcuts ============== */
 /* ============================================================= */

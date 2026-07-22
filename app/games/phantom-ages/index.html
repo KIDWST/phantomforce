@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Phantom Ages</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="wrap">
+      <header class="hud">
+        <div class="hud-side hud-player">
+          <span class="hud-label">YOU</span>
+          <div class="hp-bar"><div class="hp-fill" data-player-hp-fill></div></div>
+          <span class="hp-text" data-player-hp-text>500 / 500</span>
+        </div>
+        <div class="hud-center">
+          <div class="gold" data-gold>💰 0</div>
+          <div class="era" data-era-name>Stone Age</div>
+        </div>
+        <div class="hud-side hud-enemy">
+          <span class="hud-label">ENEMY</span>
+          <div class="hp-bar"><div class="hp-fill hp-fill-enemy" data-enemy-hp-fill></div></div>
+          <span class="hp-text" data-enemy-hp-text>500 / 500</span>
+        </div>
+      </header>
+
+      <canvas id="battlefield" width="1280" height="360"></canvas>
+
+      <div class="controls">
+        <div class="unit-buttons" data-unit-buttons></div>
+        <div class="side-buttons">
+          <button class="btn btn-turret" data-turret-btn>🔫 Fire Turret (Space)</button>
+          <button class="btn btn-advance" data-advance-btn>⬆ Advance Era</button>
+        </div>
+      </div>
+
+      <p class="hint">Click a unit to spawn it. Space or the turret button fires your base turret at the nearest enemy in range. Advance eras to unlock stronger units.</p>
+    </div>
+
+    <div class="modal" data-branch-modal hidden>
+      <div class="modal-card">
+        <h2>Choose Your Path</h2>
+        <p>Entering the Industrial Age. This choice shapes every era after it.</p>
+        <div class="path-choices">
+          <button class="path-btn" data-path-choice="military">
+            <strong>⚔ Military</strong>
+            <span>Stronger frontline units, tougher base.</span>
+          </button>
+          <button class="path-btn" data-path-choice="tech">
+            <strong>⚙ Tech</strong>
+            <span>Faster turret, more gold income, longer-range units.</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal" data-end-modal hidden>
+      <div class="modal-card">
+        <h2 data-end-title>Victory</h2>
+        <p data-end-sub></p>
+        <button class="btn" data-restart-btn>Play Again</button>
+      </div>
+    </div>
+
+    <script src="../shared/objectPool.js"></script>
+    <script src="game.js"></script>
+  </body>
+</html>

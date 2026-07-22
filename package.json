@@ -36,6 +36,7 @@
     "test:release-full": "npm run test:release-critical && npm run test:database-auth && npm run test:easy-crm:postgres --workspace @phantomforce/server",
     "test:phantomstore": "node scripts/test-phantomstore-ui.mjs && npm run test:phantomstore --workspace @phantomforce/server",
     "test:customer-plan-switching": "node scripts/test-customer-plan-switching.mjs",
+    "test:seatbelt-posture": "node scripts/test-seatbelt-posture.mjs && npm run test:seatbelt-posture --workspace @phantomforce/server",
     "test:stripe-billing": "node scripts/test-stripe-billing.mjs && npm run test:stripe-billing --workspace @phantomforce/server",
     "test:change-memory": "node scripts/guard-change-memory.mjs",
     "test:command-surface": "node scripts/test-command-surface.mjs",

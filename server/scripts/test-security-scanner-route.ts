@@ -173,6 +173,22 @@ type ExternalMonitorRunResponse = {
   destructive_action: false;
 };
 
+type SeatbeltPostureStatusResponse = {
+  ok: boolean;
+  platform_operator_only: true;
+  host_posture: {
+    provider: "GhostPack Seatbelt";
+    state: string;
+    safety: {
+      remote_enumeration: false;
+      credential_collection: false;
+      browser_data_collection: false;
+      raw_output_returned: false;
+      raw_output_persisted: false;
+    };
+  };
+};
+
 try {
   const unauthStatus = await app.inject({
     method: "GET",
@@ -232,6 +248,37 @@ try {
     externalStatusBody.monitor.safety.plaintext_passwords_accepted === false,
     "External monitor must not accept plaintext passwords.",
   );
+
+  const seatbeltStatus = await app.inject({
+    method: "GET",
+    url: "/phantom-ai/security/host-posture/seatbelt/status",
+    headers: { Authorization: `Bearer ${adminToken}` },
+  });
+  assert(seatbeltStatus.statusCode === 200, "Platform admin may inspect Seatbelt defensive-posture readiness.");
+  const seatbeltStatusBody = parseJson<SeatbeltPostureStatusResponse>(seatbeltStatus.payload);
+  assert(seatbeltStatusBody.ok === true, "Seatbelt defensive-posture status should be available.");
+  assert(seatbeltStatusBody.platform_operator_only === true, "Seatbelt posture must be marked platform-operator-only.");
+  assert(seatbeltStatusBody.host_posture.provider === "GhostPack Seatbelt", "Seatbelt posture must identify its provider.");
+  assert(seatbeltStatusBody.host_posture.safety.remote_enumeration === false, "Seatbelt posture must never enumerate remote hosts.");
+  assert(seatbeltStatusBody.host_posture.safety.credential_collection === false, "Seatbelt posture must not collect credentials.");
+  assert(seatbeltStatusBody.host_posture.safety.browser_data_collection === false, "Seatbelt posture must not inspect browser data.");
+  assert(seatbeltStatusBody.host_posture.safety.raw_output_returned === false, "Seatbelt posture must not return raw output.");
+  assert(seatbeltStatusBody.host_posture.safety.raw_output_persisted === false, "Seatbelt posture must not persist raw output.");
+
+  const seatbeltMissingConfirmation = await app.inject({
+    method: "POST",
+    url: "/phantom-ai/security/host-posture/seatbelt/run",
+    headers: { Authorization: `Bearer ${adminToken}`, "Content-Type": "application/json" },
+    payload: JSON.stringify({}),
+  });
+  assert(seatbeltMissingConfirmation.statusCode === 400, "Seatbelt posture requires explicit per-run confirmation.");
+
+  const clientSeatbeltStatus = await app.inject({
+    method: "GET",
+    url: "/phantom-ai/security/host-posture/seatbelt/status",
+    headers: { Authorization: `Bearer ${clientToken}` },
+  });
+  assert(clientSeatbeltStatus.statusCode === 403, "Client users must never view platform host posture.");
 
   const autonomousStatus = await app.inject({
     method: "GET",
@@ -410,6 +457,9 @@ try {
         externalRunVerdict: externalRunBody.result.summary.verdict,
         externalRunAntivirus: externalRunBody.result.antivirus.engine,
         clientExternalRunStatus: clientExternalRun.statusCode,
+        seatbeltStatusCode: seatbeltStatus.statusCode,
+        seatbeltConfirmationRequired: seatbeltMissingConfirmation.statusCode === 400,
+        clientSeatbeltStatusCode: clientSeatbeltStatus.statusCode,
         localOnly: adminBody.result.safety_flags.local_only,
         providerCalled: adminBody.provider_called,
         externalApiCallPerformed: adminBody.external_api_call_performed,

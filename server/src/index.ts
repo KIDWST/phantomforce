@@ -273,6 +273,11 @@ import {
   runExternalSecurityMonitor,
 } from "./phantom-ai/external-security-monitor.js";
 import {
+  getSeatbeltDefensivePostureStatus,
+  runSeatbeltDefensivePosture,
+  SeatbeltPostureRunRequestSchema,
+} from "./phantom-ai/seatbelt-posture.js";
+import {
   activateVacationMode,
   cancelVacationOperatorTask,
   createVacationOperatorTask,
@@ -8219,6 +8224,42 @@ app.post("/phantom-ai/security/external-monitor/run", async (request, reply) => 
     upload_performed: false,
     destructive_action: false,
   };
+});
+
+/* Platform-host posture is intentionally separated from tenant-facing content
+   scans. It has an explicit confirmation phrase, an operator-only session
+   boundary, and never returns or persists Seatbelt's raw host-survey output. */
+app.get("/phantom-ai/security/host-posture/seatbelt/status", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+  if (!session) return reply;
+  return {
+    ok: true,
+    session,
+    platform_operator_only: true,
+    host_posture: getSeatbeltDefensivePostureStatus(),
+  };
+});
+
+app.post("/phantom-ai/security/host-posture/seatbelt/run", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+  if (!session) return reply;
+  const parsed = SeatbeltPostureRunRequestSchema.safeParse(request.body ?? {});
+  if (!parsed.success) {
+    return reply.code(400).send({
+      ok: false,
+      error: "explicit_local_posture_confirmation_required",
+      confirmation: "RUN_LOCAL_SEATBELT_POSTURE",
+      host_posture: getSeatbeltDefensivePostureStatus(),
+    });
+  }
+  const result = await runSeatbeltDefensivePosture();
+  const status = result.status === "already_running" ? 409 : result.ok ? 200 : 503;
+  return reply.code(status).send({
+    ok: result.ok,
+    session,
+    platform_operator_only: true,
+    result,
+  });
 });
 
 app.get("/phantom-ai/security/autonomous/status", async (request, reply) => {

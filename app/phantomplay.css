@@ -54,14 +54,16 @@ html[data-org-color-mode="dark"] .pp-game{
   border-color:rgba(129,74,247,.24);
 }
 html[data-org-color-mode="dark"] .pp-game-art{
-  background:#080611;
+  background:
+    radial-gradient(circle at 50% 38%,rgba(65,255,161,.18),transparent 44%),
+    linear-gradient(145deg,#090f16,#020407);
 }
 html[data-org-color-mode="dark"] .pp-game-art img{
-  width:140%;
-  max-width:none;
-  margin-left:-20%;
-  object-fit:cover;
-  transform:scale(1.24);
+  width:100%;
+  max-width:100%;
+  margin-left:0;
+  object-fit:contain;
+  transform:none;
 }
 html[data-org-color-mode="dark"] .pp-game-body,
 html[data-org-color-mode="dark"] .pp-library,
@@ -395,16 +397,18 @@ html[data-org-color-mode="light"] .pp-game-art img{
   height:100%;
   min-height:176px;
   border-right:1px solid rgba(91, 76, 255,.16);
-  background: var(--glass-2);
+  background:
+    radial-gradient(circle at 52% 42%,rgba(65,255,161,.16),transparent 45%),
+    linear-gradient(145deg,#07120f,#020807);
 }
 .pp-game-grid:not(.pp-game-grid-full) .pp-game-art::after{
   background:
-    linear-gradient(180deg,rgba(255, 255, 255,0) 34%,rgba(255, 255, 255,.72) 100%),
-    radial-gradient(circle at 50% 42%,rgba(91, 76, 255,.08),transparent 64%);
+    linear-gradient(180deg,rgba(0,0,0,0) 48%,rgba(2,8,7,.72) 100%),
+    radial-gradient(circle at 50% 42%,rgba(65,255,161,.08),transparent 64%);
 }
 .pp-game-grid:not(.pp-game-grid-full) .pp-game-art img{
-  object-fit:cover;
-  transform:scale(1.03);
+  object-fit:contain;
+  transform:none;
   opacity:.96;
   filter:saturate(1.12) contrast(1.05);
 }
@@ -1083,8 +1087,38 @@ html[data-org-color-mode="light"] .pp-game-art img{
   .pp-game{
     grid-template-columns:minmax(108px,34%) minmax(0,1fr);
   }
+  .pp-game-art{
+    min-height:148px;
+  }
+  .pp-game-body{
+    gap:7px;
+    padding:11px;
+  }
+  .pp-game-body h3{
+    font-size:16px;
+    line-height:1.12;
+  }
+  .pp-game-body>p{
+    display:-webkit-box;
+    -webkit-line-clamp:3;
+    -webkit-box-orient:vertical;
+    overflow:hidden;
+    font-size:11px;
+  }
+  .pp-game-meta{
+    padding-right:0;
+  }
+  .pp-game-actions{
+    gap:6px;
+  }
+  .pp-game-actions .pp-support{
+    flex-basis:100%;
+    min-height:32px;
+    font-size:11px;
+  }
   .pp-game-art img{
     transform:none;
+    object-fit:contain;
     object-position:center;
   }
 }
