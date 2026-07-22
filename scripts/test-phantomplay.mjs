@@ -41,7 +41,9 @@ const coverArt = [
   "tidefront-tactics",
 ].map((slug) => read(`../app/assets/phantomplay/${slug}-cover.svg`)).join("\n");
 const upgradedCoverArt = Object.fromEntries([
+  "breath-pacer",
   "cubetown",
+  "echo-sequence",
   "keyboardist-on-tour",
   "kingdom-breakers",
   "phantom-ages",
