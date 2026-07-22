@@ -12,9 +12,9 @@ import {
   recentChatTurns, addMemory,
   ctx, session, loadPhantomLoop, savePhantomLoop, loopProviderName, modelDisplayLabel,
   getPhantomLaneTarget, loadPhantomLaneConfig, workspaceStorageGetItem, wsName,
-} from "./store.js?v=phantom-live-20260722-29";
-import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260722-29";
-import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260722-29";
+} from "./store.js?v=phantom-live-20260722-30";
+import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260722-30";
+import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260722-30";
 const classifyPhantomIntent = (text) => deriveActionContract(classifyRaw(text));
 
 /* Cross-surface handoff: chat tells the Websites page which project to focus
@@ -60,7 +60,7 @@ function isDirectChatMediaRequest(text = "") {
 
 async function generateMediaFromChat(text, intent, settings) {
   try {
-    const mediaLab = await import("./medialab.js?v=phantom-live-20260722-29");
+    const mediaLab = await import("./medialab.js?v=phantom-live-20260722-30");
     const result = await mediaLab.generateMediaFromChat(text);
     if (!result?.handled) return null;
     const media = Array.isArray(result.media) ? result.media : [];

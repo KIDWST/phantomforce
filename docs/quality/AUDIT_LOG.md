@@ -2276,3 +2276,22 @@ Exercise negation, exceptions, and corrected group membership in Cycle 30.
 
 Exercise explicit conditions, prerequisites, and corrected dependency rules in
 Cycle 31.
+
+# 2026-07-22 - PhantomPlay resilient editor-save release
+
+## Release Scope
+
+- Ship the PhantomPlay developer workbench recovery changes from `cb501a40`:
+  validated source loading, poisoned-draft cleanup, iframe-load readiness,
+  transient workspace-sync retries, larger project limits, and specific
+  backend failure handling.
+- Preserve the editor's local working copy when backend synchronization is
+  temporarily unavailable so Save does not replace playable code with a raw
+  server error or strand the game behind its loading overlay.
+
+## Verification Before Ship
+
+- PASS: PhantomPlay frontend regression suite.
+- PASS: authenticated PhantomPlay developer-mode persistence test, including
+  byte-for-byte HTML/CSS/JavaScript project round-trip.
+- PASS: server typecheck and Git whitespace validation.
