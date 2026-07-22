@@ -203,6 +203,10 @@ import {
 import { buildHermesLiveCallReceiptContract } from "./phantom-ai/hermes-live-receipts.js";
 import { buildHermesInteractionMemoryPreview } from "./phantom-ai/hermes-interaction-memory.js";
 import { recallHermesInteractionMemory } from "./phantom-ai/hermes-interaction-recall.js";
+import {
+  getAgentAssistBridgeStatus,
+  requestAgentAssist,
+} from "./phantom-ai/agent-assist-bridge.js";
 import { buildInstantChatFallbackReply } from "./phantom-ai/instant-chat-fallback.js";
 import { buildInstantChatToolReply, enforceInstantOutputConstraints, instantResponseTokenBudget } from "./phantom-ai/instant-chat-tools.js";
 import { buildInstantConversationContext, buildInstantConversationUserMessage, type InstantConversationTurn } from "./phantom-ai/instant-chat-context.js";
@@ -4711,6 +4715,68 @@ app.get("/phantom-ai/provider-readiness/status", async (request, reply) => {
 
 app.get("/phantom-ai/provider-readiness", async (request, reply) => {
   return handleProviderReadinessStatus(request, reply);
+});
+
+const AgentAssistBridgeBodySchema = z.object({
+  caller: z.string().trim().max(80).optional(),
+  mode: z.string().trim().max(80).optional(),
+  task: z.string().trim().min(1).max(2200),
+  context: z.string().trim().max(5200).optional(),
+  constraints: z.array(z.string().trim().max(320)).max(20).optional(),
+  desired_output: z.string().trim().max(700).optional(),
+  execute_bridge: z.boolean().optional(),
+});
+
+app.get("/phantom-ai/agent-assist/status", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const status = getAgentAssistBridgeStatus();
+  return {
+    ok: true,
+    session,
+    status: {
+      ...status,
+      executable: status.executable && session.canManageAccess,
+    },
+    live_provider_called: false,
+    network_call_performed: false,
+    database_written: false,
+    external_action_executed: false,
+  };
+});
+
+app.post("/phantom-ai/agent-assist", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const parsed = AgentAssistBridgeBodySchema.safeParse(request.body ?? {});
+  if (!parsed.success) {
+    return reply.code(400).send({
+      ok: false,
+      error: parsed.error.flatten(),
+      status: getAgentAssistBridgeStatus(),
+    });
+  }
+
+  const result = await requestAgentAssist({
+    ...parsed.data,
+    execute_bridge: parsed.data.execute_bridge === true && session.canManageAccess,
+  });
+
+  return {
+    ...result,
+    session,
+    execution_denied_reason: parsed.data.execute_bridge === true && !session.canManageAccess
+      ? "Only admin sessions may execute a configured ChatGPT assist adapter. Relay packet returned instead."
+      : null,
+  };
 });
 
 app.post("/phantom-ai/provider-invocation/preview", async (request, reply) => {
