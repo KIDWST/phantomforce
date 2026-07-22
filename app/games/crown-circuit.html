@@ -151,6 +151,28 @@
       gap: 7px;
       transform: translateX(-50%);
     }
+    .cycle-preview {
+      position: fixed;
+      z-index: 7;
+      left: calc(50% + min(230px, 25vw));
+      bottom: max(16px, calc(env(safe-area-inset-bottom) + 16px));
+      min-width: 96px;
+      border: 1px solid color-mix(in srgb, var(--faction) 48%, transparent);
+      border-radius: 7px;
+      background: #090a08e8;
+      padding: 7px 9px;
+      color: var(--muted);
+      font: 850 9px ui-monospace, monospace;
+      box-shadow: 0 12px 32px #000a;
+      pointer-events: none;
+    }
+    .cycle-preview b {
+      display: block;
+      margin-top: 2px;
+      color: var(--ink);
+      font: 950 11px system-ui, sans-serif;
+      white-space: nowrap;
+    }
     .card {
       position: relative;
       min-height: 86px;
@@ -570,6 +592,7 @@
       .unit-option { min-height: 88px; }
       .hero-option { min-height: 62px; }
       .cards { left: 12px; transform: none; grid-template-columns: repeat(4, 68px); }
+      .cycle-preview { left: auto; right: 12px; bottom: 18px; }
       .battle-controls { bottom: 8px; }
       .objective { top: 54px; }
     }
@@ -604,7 +627,8 @@
         <i data-hero-power-fill></i>
       </button>
     </div>
-    <div class="cards" data-cards aria-label="Selected troop deck"></div>
+    <div class="cards" data-cards aria-label="Four-card battle hand"></div>
+    <div class="cycle-preview" data-cycle-preview hidden>NEXT<b>—</b></div>
     <div class="ghost" data-ghost></div>
   </div>
   <div class="toast" data-toast role="status"></div>
@@ -615,7 +639,7 @@
         <div>
           <p class="kicker">Solo Training + Room Multiplayer</p>
           <h1>Crown Circuit</h1>
-          <p>Command a four-unit warband, bind your crown to a hero, and fight across arenas where routes, hazards, and objectives change every battle.</p>
+          <p>Build an eight-card deck, fight with a four-card hand, manage elixir, and break the rival crown towers before they break yours.</p>
         </div>
         <div class="room-code" data-room-code hidden>PRIVATE ROOM</div>
       </div>
@@ -637,14 +661,14 @@
       <div class="topline">
         <div>
           <p class="kicker">Stage 2 · War Council</p>
-          <h2>Choose four troops and one hero</h2>
-          <p>Every troop has a counter. Your hero changes tower behavior, crown defenses, faction colors, and the ability you can call during battle.</p>
+          <h2>Choose eight cards and one hero</h2>
+          <p>Every card has a counter. Your hero changes tower behavior, crown defenses, faction colors, and the ability you can call during battle.</p>
         </div>
         <div class="room-code" data-loadout-mode>SOLO</div>
       </div>
       <div class="loadout-layout">
         <div class="roster-panel">
-          <div class="roster-head"><h3>Troop roster</h3><span data-pick-count>4 / 4 selected</span></div>
+          <div class="roster-head"><h3>Card roster</h3><span data-pick-count>8 / 8 deck</span></div>
           <div class="unit-grid" data-unit-grid></div>
         </div>
         <aside class="hero-panel">
@@ -727,6 +751,7 @@
       results: $("[data-stage-screen=results]")
     };
     const cardsEl = $("[data-cards]");
+    const cyclePreviewEl = $("[data-cycle-preview]");
     const ghostEl = $("[data-ghost]");
     const toastEl = $("[data-toast]");
     const mapGridEl = $("[data-title-maps]");
@@ -755,6 +780,11 @@
     const REF_W = 1000;
     const REF_H = 600;
     const MATCH_SECONDS = 180;
+    const MAX_ELIXIR = 10;
+    const HAND_SIZE = 4;
+    const DECK_SIZE = 8;
+    const ELIXIR_REGEN = .54;
+    const DOUBLE_ELIXIR_AT = 60;
     const ABILITY_COOLDOWN = 28;
     const MAX_UNITS = 160;
     const ALLOWED_ACTIONS = new Set(["hello", "start", "deploy", "ability"]);
@@ -774,6 +804,8 @@
       { id: "ram", name: "Castle Ram", role: "Siege tank", desc: "Slow armored objective crusher that only feels fair if answered early.", cost: 6, hp: 275, dmg: 34, speed: 31, range: 28, rate: .88, armor: 8, towerBonus: 2.65, buildingHunter: true, count: 1, heavy: true, color: "#d9b16f", dark: "#5f3b1f" }
     ];
     const TROOP_BY_ID = Object.fromEntries(TROOPS.map((troop) => [troop.id, troop]));
+    const DEFAULT_BLUE_DECK = ["vanguard", "ranger", "bombard", "wisps", "pike", "sapper", "oracle", "ram"];
+    const DEFAULT_RED_DECK = ["pike", "ranger", "warden", "sapper", "vanguard", "charger", "oracle", "ram"];
 
     const HEROES = [
       { id: "solara", name: "Solara, Dawn Regent", sigil: "S", tower: "sunburst", passive: "Tower shots splash; victories at the beacon charge faster.", ability: "Solar Salvo", abilityCopy: "Three crownfire impacts strike the deepest enemy formation.", color: "#ffc857", soft: "#fff0b3", deep: "#6b3412" },
@@ -944,7 +976,7 @@
     let currentStage = "title";
     let chosenMode = "solo";
     let selectedMapId = "ember";
-    let selectedTroops = ["vanguard", "ranger", "bombard", "wisps"];
+    let selectedTroops = DEFAULT_BLUE_DECK.slice();
     let selectedHeroId = "solara";
     let matchMode = "menu";
     let mySide = "blue";
@@ -964,7 +996,9 @@
     const effects = [];
     const floaters = [];
     const elixir = { blue: 5, red: 5 };
+    const battleDeck = { blue: [], red: [] };
     const activeDeck = { blue: [], red: [] };
+    const drawQueue = { blue: [], red: [] };
     const activeHero = { blue: "solara", red: "thorne" };
     const ability = { blue: { cooldown: 0, active: 0 }, red: { cooldown: 0, active: 0 } };
     const battleStats = {
@@ -1007,10 +1041,15 @@
     function enemySide(side) { return side === "blue" ? "red" : "blue"; }
     function safeMap(value) { return MAP_BY_ID[value] ? value : "ember"; }
     function safeHero(value) { return HERO_BY_ID[value] ? value : "solara"; }
-    function safeDeck(value, fallback) {
-      const list = Array.isArray(value) ? value.filter((id) => TROOP_BY_ID[id]) : [];
-      const unique = [...new Set(list)].slice(0, 4);
-      return unique.length === 4 ? unique : fallback.slice(0, 4);
+    function safeDeck(value, fallback = DEFAULT_BLUE_DECK) {
+      const deck = [];
+      const add = (id) => {
+        if (TROOP_BY_ID[id] && !deck.includes(id) && deck.length < DECK_SIZE) deck.push(id);
+      };
+      (Array.isArray(value) ? value : []).forEach(add);
+      fallback.forEach(add);
+      TROOPS.map((troop) => troop.id).forEach(add);
+      return deck.slice(0, DECK_SIZE);
     }
     function safeLane(value) {
       const lane = Math.round(Number(value));
@@ -1063,7 +1102,7 @@
         const selected = pickMap.has(troop.id);
         return '<button type="button" class="unit-option ' + (selected ? "is-selected" : "") + '" data-troop="' + troop.id + '" style="--unit-color:' + troop.color + '">' +
           (selected ? '<i class="pick-number">' + pickMap.get(troop.id) + "</i>" : "") +
-          "<b>" + esc(troop.name) + "</b><span>" + esc(troop.desc) + "</span><small>" + troop.cost + " spark · " + esc(troop.role) + "</small></button>";
+          "<b>" + esc(troop.name) + "</b><span>" + esc(troop.desc) + "</span><small>" + troop.cost + " elixir · " + esc(troop.role) + "</small></button>";
       }).join("");
       heroListEl.innerHTML = HEROES.map((hero) =>
         '<button type="button" class="hero-option ' + (hero.id === selectedHeroId ? "is-selected" : "") + '" data-hero="' + hero.id + '" style="--hero-color:' + hero.color + '">' +
@@ -1075,24 +1114,25 @@
         applyFaction(selectedHeroId);
         renderLoadout();
       }));
-      $("[data-pick-count]").textContent = selectedTroops.length + " / 4 selected";
+      $("[data-pick-count]").textContent = selectedTroops.length + " / " + DECK_SIZE + " deck";
       renderLoadoutSummary();
     }
     function chooseTroop(id) {
       if (!TROOP_BY_ID[id]) return;
       const at = selectedTroops.indexOf(id);
       if (at >= 0) {
-        show("Your warband must keep exactly four troops.");
+        show("Deck stays full. Pick a new card to replace the oldest slot.");
         return;
       }
-      selectedTroops = selectedTroops.slice(1).concat(id);
+      selectedTroops = selectedTroops.concat(id);
+      if (selectedTroops.length > DECK_SIZE) selectedTroops = selectedTroops.slice(selectedTroops.length - DECK_SIZE);
       renderLoadout();
     }
     function renderLoadoutSummary() {
       const map = currentMap();
       const hero = HERO_BY_ID[selectedHeroId];
       const names = selectedTroops.map((id) => TROOP_BY_ID[id].name).join(" · ");
-      $("[data-loadout-summary]").innerHTML = "<b>" + esc(map.name) + "</b> · " + esc(map.rule) + "<br><b>" + esc(hero.name) + "</b> commands " + esc(names) + ".";
+      $("[data-loadout-summary]").innerHTML = "<b>" + esc(map.name) + "</b> · " + esc(map.rule) + "<br><b>" + esc(hero.name) + "</b> cycles " + esc(names) + ".";
       loadoutModeEl.textContent = chosenMode === "solo" ? "SOLO · " + map.name.toUpperCase() : "ROOM · " + map.name.toUpperCase();
       loadoutStartBtn.textContent = chosenMode === "room" ? (roomState.amIHost ? "Start room match" : "Waiting for room host") : "Deploy to battle";
       loadoutStartBtn.disabled = chosenMode === "room" && (!roomState.ready || !roomState.amIHost);
@@ -1212,10 +1252,15 @@
       if (player.some((troop) => troop.range > 100)) picks.push("gryphon");
       if (!picks.includes("vanguard")) picks.push("vanguard");
       ["ranger", "bombard", "sapper", "wisps", "medic", "charger", "oracle", "ram"].forEach((id) => {
-        if (picks.length < 4 && !picks.includes(id)) picks.push(id);
+        if (picks.length < DECK_SIZE && !picks.includes(id)) picks.push(id);
       });
-      bot.deck = picks.slice(0, 4);
+      bot.deck = safeDeck(picks, DEFAULT_RED_DECK);
       bot.hero = currentMap().objective === "siege" ? "thorne" : currentMap().objective === "beacon" ? "mira" : (rand() < .5 ? "nyx" : "solara");
+    }
+    function prepareBattleDeck(side, deck, fallback) {
+      battleDeck[side] = safeDeck(deck, fallback);
+      activeDeck[side] = battleDeck[side].slice(0, HAND_SIZE);
+      drawQueue[side] = battleDeck[side].slice(HAND_SIZE);
     }
     function routeForLane(lane, branchHint) {
       const choices = currentMap().routes.map((route, index) => ({ route, index })).filter((item) => item.route.lane === lane);
@@ -1282,15 +1327,15 @@
       matchMode = mode === "room" ? "room" : "solo";
       mySide = matchMode === "solo" ? "blue" : (roomState.amIHost ? "blue" : "red");
       selectedMapId = safeMap(safeConfig.mapId || selectedMapId);
-      activeDeck.blue = safeDeck(safeConfig.blueDeck || (mySide === "blue" ? selectedTroops : ["vanguard", "ranger", "pike", "bombard"]), ["vanguard", "ranger", "bombard", "wisps"]);
       activeHero.blue = safeHero(safeConfig.blueHero || (mySide === "blue" ? selectedHeroId : "solara"));
+      prepareBattleDeck("blue", safeConfig.blueDeck || (mySide === "blue" ? selectedTroops : DEFAULT_BLUE_DECK), DEFAULT_BLUE_DECK);
       if (matchMode === "solo") {
         pickBotLoadout();
-        activeDeck.red = bot.deck.slice();
         activeHero.red = bot.hero;
+        prepareBattleDeck("red", bot.deck, DEFAULT_RED_DECK);
       } else {
-        activeDeck.red = safeDeck(safeConfig.redDeck || (mySide === "red" ? selectedTroops : ["pike", "ranger", "warden", "sapper"]), ["pike", "ranger", "warden", "sapper"]);
         activeHero.red = safeHero(safeConfig.redHero || (mySide === "red" ? selectedHeroId : "nyx"));
+        prepareBattleDeck("red", safeConfig.redDeck || (mySide === "red" ? selectedTroops : DEFAULT_RED_DECK), DEFAULT_RED_DECK);
       }
       applyFaction(activeHero[mySide]);
       resetBattle(safeConfig.seed || Date.now());
@@ -1310,20 +1355,20 @@
         mapId: selectedMapId,
         blueDeck: selectedTroops,
         blueHero: selectedHeroId,
-        redDeck: ["pike", "ranger", "warden", "sapper"],
+        redDeck: DEFAULT_RED_DECK,
         redHero: "nyx",
         seed: Date.now()
       });
     }
 
     function renderCards() {
-      const deck = activeDeck[mySide].length ? activeDeck[mySide] : selectedTroops;
+      const deck = activeDeck[mySide].length ? activeDeck[mySide] : selectedTroops.slice(0, HAND_SIZE);
       cardsEl.innerHTML = deck.map((id, index) => {
         const troop = TROOP_BY_ID[id];
         const affordable = elixir[mySide] >= troop.cost;
         return '<button type="button" class="card ' + (affordable ? "affordable" : "unaffordable") + (selectedCardIndex === index ? " is-keyed" : "") +
-          '" data-card-index="' + index + '" style="--unit-color:' + troop.color + '" aria-label="' + esc(troop.name + ", " + troop.cost + " spark") + '">' +
-          '<canvas class="glyph" width="70" height="70" data-glyph="' + index + '"></canvas><b>' + esc(troop.name) + "</b><span>" + troop.cost + " SPARK</span></button>";
+          '" data-card-index="' + index + '" style="--unit-color:' + troop.color + '" aria-label="' + esc(troop.name + ", " + troop.cost + " elixir") + '">' +
+          '<canvas class="glyph" width="70" height="70" data-glyph="' + index + '"></canvas><b>' + esc(troop.name) + "</b><span>" + troop.cost + " ELIXIR</span></button>";
       }).join("");
       cardsEl.querySelectorAll("[data-glyph]").forEach((glyph) => {
         drawCardGlyph(glyph.getContext("2d"), TROOP_BY_ID[deck[Number(glyph.dataset.glyph)]]);
@@ -1338,6 +1383,21 @@
           }
         });
       });
+      renderCyclePreview();
+    }
+    function renderCyclePreview() {
+      const next = TROOP_BY_ID[(drawQueue[mySide] || [])[0]];
+      cyclePreviewEl.hidden = !running || !next;
+      if (next) cyclePreviewEl.innerHTML = "NEXT<b>" + esc(next.name) + "</b>";
+    }
+    function cycleCard(side, cardIndex) {
+      const hand = activeDeck[side];
+      const queue = drawQueue[side];
+      if (!Array.isArray(hand) || !Array.isArray(queue) || !hand[cardIndex]) return;
+      const used = hand[cardIndex];
+      const next = queue.shift();
+      if (next) hand[cardIndex] = next;
+      queue.push(used);
     }
     function updateCardAffordability() {
       const deck = activeDeck[mySide];
@@ -1471,7 +1531,7 @@
     function deploy(side, lane, cardIndex, remote = false, dropT = null, routeIndex = null) {
       if (!running || paused || over || (side !== "blue" && side !== "red")) return false;
       const deck = activeDeck[side];
-      const safeIndex = clamp(Math.round(Number(cardIndex) || 0), 0, 3);
+      const safeIndex = clamp(Math.round(Number(cardIndex) || 0), 0, HAND_SIZE - 1);
       const troop = TROOP_BY_ID[deck[safeIndex]];
       if (!troop || elixir[side] + .001 < troop.cost) return false;
       const safeLaneValue = safeLane(lane);
@@ -1487,6 +1547,7 @@
       battleStats[side].deployed += troop.count;
       battleStats[side].spent += troop.cost;
       for (let i = 0; i < troop.count; i++) spawnTroop(side, safeLaneValue, troop, safeT, safeRouteIndex, i);
+      cycleCard(side, safeIndex);
       if (side === mySide) show(troop.name + " deployed.");
       renderCards();
       return true;
@@ -1916,15 +1977,16 @@
         const wards = towers.filter((tower) => tower.side === enemy && !tower.king && tower.alive).length;
         return wards ? "OUTER WARDS ACTIVE · BREAK " + wards + " KEEP" + (wards === 1 ? "" : "S") : "CROWN WARD DOWN · STRIKE THE KING";
       }
-      return "BREAK THE RIVAL CROWN · BRIDGE CHOKES SLOW GROUND FORMATIONS";
+      return "SPEND ELIXIR · CYCLE CARDS · BREAK OUTER TOWERS TO OPEN THE KING CROWN";
     }
     function updateHud() {
       const blueHero = HERO_BY_ID[activeHero.blue] || HEROES[0];
       const redHero = HERO_BY_ID[activeHero.red] || HEROES[2];
       hud.blueName.textContent = blueHero.name;
       hud.redName.textContent = redHero.name;
-      hud.blue.textContent = "Spark " + elixir.blue.toFixed(1) + " · Keeps " + towerCount("blue");
-      hud.red.textContent = "Spark " + elixir.red.toFixed(1) + " · Keeps " + towerCount("red");
+      const phase = state.time <= DOUBLE_ELIXIR_AT ? " · 2x" : "";
+      hud.blue.textContent = "Elixir " + elixir.blue.toFixed(1) + phase + " · Towers " + towerCount("blue");
+      hud.red.textContent = "Elixir " + elixir.red.toFixed(1) + phase + " · Towers " + towerCount("red");
       hud.blueBar.style.width = Math.round(hpPct("blue") * 100) + "%";
       hud.redBar.style.width = Math.round(hpPct("red") * 100) + "%";
       hud.score.textContent = (matchMode === "solo" ? "SOLO" : "ROOM") + " · " + currentMap().name.toUpperCase() + " · " + Math.max(0, Math.ceil(state.time));
@@ -1950,8 +2012,9 @@
         finishBattle(Math.abs(blueValue - redValue) < .005 ? "draw" : blueValue > redValue ? "blue" : "red");
         return;
       }
-      elixir.blue = clamp(elixir.blue + dt * (activeHero.blue === "solara" && currentMap().objective === "beacon" ? .59 : .52), 0, 10);
-      elixir.red = clamp(elixir.red + dt * (activeHero.red === "solara" && currentMap().objective === "beacon" ? .59 : .52), 0, 10);
+      const overtime = state.time <= DOUBLE_ELIXIR_AT ? 1.85 : 1;
+      elixir.blue = clamp(elixir.blue + dt * overtime * (activeHero.blue === "solara" && currentMap().objective === "beacon" ? ELIXIR_REGEN + .07 : ELIXIR_REGEN), 0, MAX_ELIXIR);
+      elixir.red = clamp(elixir.red + dt * overtime * (activeHero.red === "solara" && currentMap().objective === "beacon" ? ELIXIR_REGEN + .07 : ELIXIR_REGEN), 0, MAX_ELIXIR);
       thinkBot(dt);
       updateUnits(dt);
       updateTowers(dt);
@@ -2574,9 +2637,9 @@
         if (running) return;
         beginMatch("room", {
           mapId: safeMap(payload.mapId),
-          blueDeck: safeDeck(payload.blueDeck, ["vanguard", "ranger", "bombard", "wisps"]),
+          blueDeck: safeDeck(payload.blueDeck, DEFAULT_BLUE_DECK),
           blueHero: safeHero(payload.blueHero),
-          redDeck: roomState.amIHost ? safeDeck(payload.redDeck, ["pike", "ranger", "warden", "sapper"]) : selectedTroops,
+          redDeck: roomState.amIHost ? safeDeck(payload.redDeck, DEFAULT_RED_DECK) : selectedTroops,
           redHero: roomState.amIHost ? safeHero(payload.redHero) : selectedHeroId,
           seed: Number(payload.seed) || 1
         });

@@ -219,6 +219,8 @@ assert.match(crownCircuit, /id:\s*"ram"[\s\S]*towerBonus:\s*2\.65[\s\S]*building
 assert.match(crownCircuit, /launchProjectile\(unit, target,[\s\S]*slow:\s*troop\.slow[\s\S]*sourceTroop:\s*troop/u, "Crown Circuit projectile attacks must carry troop-specific control effects.");
 assert.match(crownCircuit, /target\.slow = Math\.max\(target\.slow, projectile\.slow\)/u, "Crown Circuit Oracle slow must actually apply to hit units.");
 assert.match(crownCircuit, /\["ranger", "bombard", "sapper", "wisps", "medic", "charger", "oracle", "ram"\]/u, "Crown Circuit bot loadouts must know the new Oracle/Ram cards.");
+assert.match(crownCircuit, /const MAX_ELIXIR = 10[\s\S]*const HAND_SIZE = 4[\s\S]*const DECK_SIZE = 8/u, "Crown Circuit must use an 8-card deck, four-card hand, and 10 elixir cap.");
+assert.match(crownCircuit, /function cycleCard\(side, cardIndex\)[\s\S]*drawQueue\[side\][\s\S]*queue\.push\(used\)/u, "Crown Circuit must cycle played cards back through the draw queue.");
 assert.doesNotThrow(() => new Function(crownCircuitScript), "Crown Circuit script must parse.");
 assert.doesNotThrow(() => new Function(skyguardArena), "Skyguard Arena script must parse.");
 assert.match(skyguardArena, /id:\s*"neontangle"[\s\S]*Neon Tangle[\s\S]*Braided relay race/u, "Skyguard Arena must include the new Neon Tangle map.");
@@ -230,13 +232,13 @@ assert.match(skyguardArena, /function seedOpeningDefenses\(\)[\s\S]*makeSentinel
 assert.match(skyguardArena, /function tryPlaceAt\(point\)[\s\S]*buildBlockReason\(point\)[\s\S]*makeSentinel\(def\.id, point/u, "Skyguard Arena must support free off-road Sentinel placement.");
 assert.match(skyguardArena, /count:\s*1,\s*gap:\s*0,\s*formation:\s*1/u, "Skyguard campaign round one must start with a single enemy.");
 assert.match(skyguardArena, /if \(n >= 3\) entries\.push\(\{ type: "skiff"/u, "Skyguard Century Watch must delay surprise air units until after the opener.");
-assert.match(module, /id: "crown-circuit"[\s\S]*Obsidian Relay[\s\S]*launchUrl: "\/app\/games\/crown-circuit\.html\?v=1\.3\.0"[\s\S]*version: "1\.3\.0"/u, "Default catalog must launch and describe the upgraded Crown Circuit 1.3.0 build.");
+assert.match(module, /id: "crown-circuit"[\s\S]*Obsidian Relay[\s\S]*launchUrl: "\/app\/games\/crown-circuit\.html\?v=1\.3\.1"[\s\S]*version: "1\.3\.1"/u, "Default catalog must launch and describe the upgraded Crown Circuit 1.3.1 build.");
 assert.match(module, /id: "skyguard-arena"[\s\S]*free off-road placement[\s\S]*launchUrl: "\/app\/games\/skyguard-arena\/index\.html\?v=1\.3\.2"[\s\S]*version: "1\.3\.2"/u, "Default catalog must launch and describe the upgraded Skyguard Arena 1.3.2 build.");
-assert.match(v2Module, /\["crown-circuit", "Crown Circuit", "Strategy", "\/app\/games\/crown-circuit\.html\?v=1\.3\.0"\]/u, "V2 offline catalog must launch upgraded Crown Circuit.");
+assert.match(v2Module, /\["crown-circuit", "Crown Circuit", "Strategy", "\/app\/games\/crown-circuit\.html\?v=1\.3\.1"\]/u, "V2 offline catalog must launch upgraded Crown Circuit.");
 assert.match(v2Module, /\["skyguard-arena", "Skyguard Arena", "Strategy", "\/app\/games\/skyguard-arena\/index\.html\?v=1\.3\.2"\]/u, "V2 offline catalog must launch upgraded Skyguard Arena.");
-assert.match(v2Module, /id === "skyguard-arena" \? "1\.3\.2" : id === "crown-circuit" \? "1\.3\.0"/u, "V2 offline catalog must expose Skyguard 1.3.2 without bumping Crown Circuit.");
+assert.match(v2Module, /id === "skyguard-arena" \? "1\.3\.2" : id === "crown-circuit" \? "1\.3\.1"/u, "V2 offline catalog must expose Skyguard 1.3.2 and Crown Circuit 1.3.1.");
 assert.match(flagshipCatalog, /id:\s*"skyguard-arena"[\s\S]*free off-road Sentinel placement[\s\S]*version:\s*"1\.3\.2"/u, "Server flagship catalog must describe the upgraded Skyguard Arena 1.3.2 build.");
-assert.match(flagshipCatalog, /id:\s*"crown-circuit"[\s\S]*Obsidian Relay[\s\S]*version:\s*"1\.3\.0"/u, "Server flagship catalog must describe the upgraded Crown Circuit 1.3.0 build.");
+assert.match(flagshipCatalog, /id:\s*"crown-circuit"[\s\S]*Obsidian Relay[\s\S]*version:\s*"1\.3\.1"/u, "Server flagship catalog must describe the upgraded Crown Circuit 1.3.1 build.");
 assert.match(tidefrontTactics, /Arrow keys to adjust angle\/power|Space to fire|Fleet Room/u, "Tidefront Tactics must remain the restored artillery battle.");
 assert.match(games[gameSlugs.indexOf("serpent-surge")], /storm|boost|rival|serpent|trail/u, "Serpent Surge must play as a modern snake arena, not a static old mini-game.");
 assert.match(phantomRumble, /shieldHeld|data-t="shield"|PARRY/u, "Phantom Rumble must have real guard and parry mechanics.");
