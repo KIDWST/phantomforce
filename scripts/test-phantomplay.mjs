@@ -311,6 +311,11 @@ assert.match(module, /sandbox="allow-scripts allow-pointer-lock"[^>]*data-pp-fra
 assert.match(module, /const blob = new Blob\(\[nextSource\], \{ type: "text\/html" \}\)/u, "Dev Mode edits must apply via a local blob URL, never a same-origin write.");
 assert.doesNotMatch(module, /devmode[\s\S]{0,200}(child_process|new Function|\.eval\()/iu, "The host page's Dev Mode code must never itself execute the edited source — only the sandboxed iframe does, by loading it as a document.");
 assert.match(module, /data-pp-devsandbox-code-open/u, "Game cards must expose the small code icon as the direct full-source editor entry point.");
+assert.match(module, /openDevWorkbench\(button\.dataset\.ppDevsandboxCodeOpen, "code"\)/u, "The small code icon must open the code/mod workbench without launching the game.");
+assert.match(module, /function launchDevSandboxFromWorkbench\(\)[\s\S]*pendingDevSandboxBootState/u, "The code workbench must be able to launch the game into sandboxed Dev Mode from the prepared source.");
+assert.match(module, /data-pp-devworkbench-launch/u, "The pre-launch workbench must expose a Dev Mode launch action.");
+assert.match(v2Module, /data-pp2-devsandbox-code-open/u, "PhantomPlay v2 game cards must expose the small code icon too.");
+assert.match(v2Module, /openDevWorkbench\(b\.dataset\.pp2DevsandboxCodeOpen, "code"\)/u, "PhantomPlay v2 code icon must open the workbench without launching the game.");
 assert.doesNotMatch(module, /data-pp-devmode-toggle/u, "The small code icon must not be a separate Dev Mode toggle.");
 assert.match(module, /section:\s*"code"/u, "Dev Mode must open directly to the full game source code.");
 assert.match(module, /DEV_SANDBOX_AUTOSAVE_KEY/u, "Dev Mode must keep a local autosave draft for full-source edits.");
@@ -318,5 +323,7 @@ assert.match(module, /setTimeout\(\(\) => persistDevSandboxOverride\(\{ silent: 
 assert.match(module, /snapshotDevSandboxLocalDraft\(\);[\s\S]*clearTimeout\(devSandboxAutosaveTimer\)/u, "Closing Dev Mode must snapshot the current source before clearing autosave timers.");
 assert.doesNotMatch(css + v2Css, /\.pp2?-player\.is-devsandbox\{grid-template-columns:minmax\(0,1fr\) minmax/u, "Dev Mode must not squeeze the running game into a side-by-side editor.");
 assert.match(css, /\.pp-devsandbox\{position:absolute[\s\S]*width:min\(760px,calc\(100% - 28px\)\)/u, "Dev Mode must render as a wide full-source drawer over the full-size game.");
+assert.match(css, /\.pp-devworkbench\{position:fixed[\s\S]*width:min\(1180px,calc\(100vw - 36px\)\)/u, "The code icon must open a pre-launch full-source workbench.");
+assert.match(css, /\.pp-devsandbox-minimized/u, "Dev Mode must support minimizing the code drawer while the sandboxed game keeps running.");
 
 console.log("PhantomPlay frontend and game safety checks passed.");

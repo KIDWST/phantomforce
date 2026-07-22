@@ -51,7 +51,7 @@ const ui = {
   snapshot: null, v2: null, v2Offline: false, discovery: null,
   query: "", category: "All",
   detailId: null, detail: null, detailBusy: false, reviewDraft: { rating: 0, text: "" },
-  player: null, playerReady: false, playerPaused: false, resume: null, devSandbox: null,
+  player: null, playerReady: false, playerPaused: false, resume: null, devSandbox: null, devWorkbench: null,
   settingsOpen: false, editingSubmissionId: null,
   statusChoice: "online", friendTarget: "",
   analytics: null, leaderboardGameId: "", leaderboard: null,
@@ -61,6 +61,7 @@ const ui = {
 
 let mountedRoot = null, playClock = null, playTickAt = 0, heartbeatClock = null, messageBound = false, keyboardBound = false;
 let pendingDevSandboxGameId = null;
+let pendingDevSandboxBootState = null;
 let devSandboxApplyTimer = null;
 
 function authHeaders(json = false) {
@@ -219,7 +220,7 @@ function card(game, opts = {}) {
       <p class="pp2-dev">by ${esc(game.developer)}${opts.note ? ` · <i>${esc(opts.note)}</i>` : ""}</p>
       <p class="pp2-summary">${esc(game.summary)}</p>
       ${history?.canContinue ? `<div class="pp2-progress"><i style="width:${Math.max(3, Math.min(100, history.progress))}%"></i></div>` : ""}
-      <div class="pp2-card-actions"><button type="button" class="pp2-play" ${launchable ? `data-pp2-play="${esc(game.id)}"` : `data-pp2-session-required="${esc(game.id)}"`}>${launchable ? playLabel : "Plan locked"}</button>${game.devModeAvailable ? `<button type="button" class="pp-devsandbox-card-open" ${launchable ? `data-pp2-devsandbox-card-open="${esc(game.id)}"` : `data-pp2-session-required="${esc(game.id)}"`} aria-label="Open Dev Mode for ${esc(game.title)}" title="Dev Mode — live-edit this game's code and assets while you play, sandboxed and visible only to you">⚡<b>Dev Mode</b></button>` : ""}${history?.score != null ? `<span>Best ${history.score}</span>` : ""}</div>
+      <div class="pp2-card-actions"><button type="button" class="pp2-play" ${launchable ? `data-pp2-play="${esc(game.id)}"` : `data-pp2-session-required="${esc(game.id)}"`}>${launchable ? playLabel : "Plan locked"}</button>${game.devModeAvailable ? `<button type="button" class="pp-devsandbox-card-open" ${launchable ? `data-pp2-devsandbox-card-open="${esc(game.id)}"` : `data-pp2-session-required="${esc(game.id)}"`} aria-label="Launch Dev Mode for ${esc(game.title)}" title="Launch this game in full sandboxed Dev Mode">⚡<b>Dev Mode</b></button><button type="button" class="pp-devsandbox-code-open" ${launchable ? `data-pp2-devsandbox-code-open="${esc(game.id)}"` : `data-pp2-session-required="${esc(game.id)}"`} aria-label="Open code workbench for ${esc(game.title)}" title="Open code and mod menu without launching the game">⌘<i></i></button>` : ""}${history?.score != null ? `<span>Best ${history.score}</span>` : ""}</div>
     </div>
   </article>`;
 }
@@ -573,13 +574,61 @@ function modSectionMarkup(game) {
     </label>`).join("") : `<p class="pp-devsandbox-mod-empty">No game-specific mods built for ${esc(game.title)} yet — game speed above still works on it. Ask to add mods for this game.</p>`}
   </div>`;
 }
+function devWorkbenchDomSource() {
+  const textarea = mountedRoot?.querySelector("[data-pp2-devworkbench-source]");
+  return typeof textarea?.value === "string" ? textarea.value : ui.devWorkbench?.editedSource || "";
+}
+function devWorkbenchModsMarkup(game) {
+  const d = ui.devWorkbench;
+  const presets = MOD_PRESETS[game.id] || [];
+  const modState = d?.modState || {};
+  const speed = d?.speed || 1;
+  return `<div class="pp-devsandbox-mods">
+    <div class="pp-devsandbox-mod-row pp-devsandbox-speed-row">
+      <label>Game speed<select data-pp2-devworkbench-speed>
+        <option value="0.25" ${speed === 0.25 ? "selected" : ""}>0.25x — slow-mo</option>
+        <option value="0.5" ${speed === 0.5 ? "selected" : ""}>0.5x</option>
+        <option value="1" ${speed === 1 ? "selected" : ""}>1x — normal</option>
+        <option value="2" ${speed === 2 ? "selected" : ""}>2x</option>
+        <option value="4" ${speed === 4 ? "selected" : ""}>4x — fast-forward</option>
+      </select></label>
+      <i>These mods activate when you launch Dev Mode.</i>
+    </div>
+    ${presets.length ? presets.map((mod) => `
+    <label class="pp-switch pp-devsandbox-mod">
+      <input type="checkbox" data-pp2-devworkbench-mod="${esc(mod.id)}" ${modState[mod.id] ? "checked" : ""}/><span></span>
+      <b>${esc(mod.label)}</b><i>${esc(mod.description)}</i>
+    </label>`).join("") : `<p class="pp-devsandbox-mod-empty">No game-specific mods built for ${esc(game.title)} yet — game speed above still works in Dev Mode.</p>`}
+  </div>`;
+}
+function devWorkbenchMarkup() {
+  const d = ui.devWorkbench;
+  if (!d) return "";
+  const game = gameById(d.gameId);
+  if (!game) return "";
+  const section = d.section || "code";
+  return `<div class="pp-devworkbench" role="dialog" aria-modal="true" aria-label="Configure Dev Mode for ${esc(game.title)}">
+    <header><div><b>Code workbench</b><span>${esc(game.title)} · configure before launch</span></div><button type="button" data-pp2-devworkbench-close aria-label="Close code workbench">×</button></header>
+    <div class="pp-devworkbench-toolbar">
+      <label>Section<select data-pp2-devworkbench-section><option value="code" ${section === "code" ? "selected" : ""}>Full Source Code</option><option value="mods" ${section === "mods" ? "selected" : ""}>Mod Menu</option></select></label>
+      <button type="button" class="pp-devworkbench-launch" data-pp2-devworkbench-launch>⚡ Launch Dev Mode</button>
+      <button type="button" class="pp2-play" data-pp2-devworkbench-start>Start normal</button>
+    </div>
+    <p class="pp-devsandbox-note">${section === "mods" ? "Pick the mod menu you want available when the sandbox starts." : "Read or edit the full game source first. Nothing launches until you press Dev Mode or Start normal."}${d.hasOverride ? " Saved workspace override found." : ""}</p>
+    ${d.error ? `<div class="pp-devsandbox-error">${esc(d.error)}</div>` : ""}
+    ${d.loading ? `<div class="pp-devmode-loading"><i></i><b>Loading source…</b></div>` : section === "mods" ? devWorkbenchModsMarkup(game) : `<textarea class="pp-devsandbox-source" data-pp2-devworkbench-source spellcheck="false">${esc(d.editedSource)}</textarea>`}
+    <p class="pp-devsandbox-status">${esc(d.status || "")}</p>
+  </div>`;
+}
 function devSandboxMarkup(game) {
   const d = ui.devSandbox;
   if (!d || d.gameId !== game.id) return "";
+  if (d.minimized) return `<button type="button" class="pp-devsandbox-minimized" data-pp2-devsandbox-restore>⚡ Dev Code</button>`;
   const section = d.section || "code";
   return `<div class="pp-devsandbox" role="complementary" aria-label="Dev Mode: live editor for ${esc(game.title)}">
     <header>
       <div><b>DEV MODE</b><span>${esc(game.title)}</span></div>
+      <button type="button" data-pp2-devsandbox-minimize aria-label="Minimize Dev Mode code">_</button>
       <button type="button" data-pp2-devsandbox-close aria-label="Close Dev Mode">×</button>
     </header>
     <label class="pp-devsandbox-section-picker">Section<select data-pp2-devsandbox-section><option value="code" ${section === "code" ? "selected" : ""}>Live Code</option><option value="mods" ${section === "mods" ? "selected" : ""}>Mod Menu</option></select></label>
@@ -615,6 +664,17 @@ async function openDevSandbox() {
   if (!ui.player) return;
   const { game } = ui.player;
   if (!game.devModeAvailable) return;
+  if (pendingDevSandboxBootState?.gameId === game.id) {
+    const boot = pendingDevSandboxBootState;
+    pendingDevSandboxBootState = null;
+    revokeDevSandboxBlob();
+    ui.devSandbox = { ...boot, blobUrl: "", saving: false, publishing: false };
+    render();
+    rebuildDevSandboxFrame(ui.devSandbox.editedSource);
+    if (ui.devSandbox.speed && ui.devSandbox.speed !== 1) postToGame("modspeed", { value: ui.devSandbox.speed });
+    for (const [key, value] of Object.entries(ui.devSandbox.modState || {})) if (value) postToGame("mod", { key, value });
+    return;
+  }
   revokeDevSandboxBlob();
   ui.devSandbox = { gameId: game.id, source: "", editedSource: "", blobUrl: "", hasOverride: false, overrideUpdatedAt: null, loading: true, error: "", status: "", saving: false, publishing: false, section: "mods", modState: {}, speed: 1 };
   render();
@@ -652,6 +712,47 @@ async function openDevSandbox() {
 function launchWithDevSandbox(gameId) {
   pendingDevSandboxGameId = gameId;
   launch(gameId);
+}
+async function openDevWorkbench(gameId, section = "code") {
+  const game = gameById(gameId);
+  if (!game?.devModeAvailable) return;
+  ui.devWorkbench = { gameId: game.id, source: "", editedSource: "", hasOverride: false, overrideUpdatedAt: null, loading: true, error: "", status: "", section, modState: {}, speed: 1 };
+  render();
+  try {
+    const [sourceResult, overrideResult] = await Promise.all([
+      api(`/api/phantomplay/dev-mode/${encodeURIComponent(game.id)}/source?${tenantQuery()}`),
+      api(`/api/phantomplay/dev-mode/${encodeURIComponent(game.id)}/override?${tenantQuery()}`).catch(() => ({ source: null, updatedAt: null })),
+    ]);
+    ui.devWorkbench = {
+      gameId: game.id, source: sourceResult.source, editedSource: overrideResult.source ?? sourceResult.source,
+      hasOverride: !!overrideResult.source, overrideUpdatedAt: overrideResult.updatedAt,
+      loading: false, error: "", status: overrideResult.source ? "Loaded your workspace override." : "Loaded shipped source.",
+      section, modState: {}, speed: 1,
+    };
+  } catch (error) {
+    try {
+      const response = await fetch(game.launchUrl, { cache: "no-store" });
+      const source = await response.text();
+      ui.devWorkbench = { gameId: game.id, source, editedSource: source, hasOverride: false, overrideUpdatedAt: null, loading: false, error: "", status: "Loaded source locally. Dev Mode can still launch from here.", section, modState: {}, speed: 1 };
+    } catch {
+      ui.devWorkbench = { ...ui.devWorkbench, loading: false, error: error instanceof Error ? error.message : "Code workbench source could not be loaded." };
+    }
+  }
+  render();
+}
+function launchDevSandboxFromWorkbench() {
+  if (!ui.devWorkbench || ui.devWorkbench.loading) return;
+  const source = devWorkbenchDomSource();
+  pendingDevSandboxBootState = { ...ui.devWorkbench, editedSource: source, loading: false, error: "", status: "Launched from the code workbench.", minimized: false };
+  const gameId = ui.devWorkbench.gameId;
+  ui.devWorkbench = null;
+  launchWithDevSandbox(gameId);
+}
+function launchNormalFromWorkbench() {
+  const gameId = ui.devWorkbench?.gameId;
+  ui.devWorkbench = null;
+  render();
+  if (gameId) launch(gameId);
 }
 function applyDevSandboxEditLive() {
   if (!ui.devSandbox) return;
@@ -717,10 +818,21 @@ async function publishDevSandboxLive() {
 }
 function closeDevSandbox() {
   clearTimeout(devSandboxApplyTimer);
+  pendingDevSandboxBootState = null;
   revokeDevSandboxBlob();
   const frame = mountedRoot?.querySelector("[data-pp2-frame]");
   if (frame && ui.player) frame.src = ui.player.game.launchUrl;
   ui.devSandbox = null;
+  render();
+}
+function minimizeDevSandbox() {
+  if (!ui.devSandbox) return;
+  ui.devSandbox = { ...ui.devSandbox, minimized: true };
+  render();
+}
+function restoreDevSandbox() {
+  if (!ui.devSandbox) return;
+  ui.devSandbox = { ...ui.devSandbox, minimized: false };
   render();
 }
 function playerMarkup() {
@@ -749,7 +861,7 @@ function render() {
     ${!ui.offline && ui.error ? `<div class="pp2-banner is-error"><b>PhantomPlay needs attention</b><span>${esc(ui.error)}</span><button data-pp2-retry>Retry</button></div>` : ""}
     <nav class="pp2-tabs" aria-label="PhantomPlay experiences">${tabs.map(([id, label]) => `<button type="button" class="${ui.tab === id ? "is-active" : ""}" data-pp2-tab="${id}">${esc(label)}</button>`).join("")}</nav>
     <main class="pp2-content">${view()}</main>
-    ${renderDetail()}${settingsMarkup()}${playerMarkup()}
+    ${renderDetail()}${settingsMarkup()}${playerMarkup()}${devWorkbenchMarkup()}
   </div>`;
   bind();
 }
@@ -1005,7 +1117,8 @@ function bind() {
     render();
   });
   mountedRoot.querySelectorAll("[data-pp2-devsandbox-card-open]").forEach((b) => b.onclick = (e) => { e.stopPropagation(); launchWithDevSandbox(b.dataset.pp2DevsandboxCardOpen); });
-  mountedRoot.querySelectorAll("[data-pp2-open]").forEach((b) => b.addEventListener("click", (e) => { if (e.target.closest("[data-pp2-play],[data-pp2-wish],[data-pp2-devsandbox-card-open]")) return; openDetail(b.dataset.pp2Open); }));
+  mountedRoot.querySelectorAll("[data-pp2-devsandbox-code-open]").forEach((b) => b.onclick = (e) => { e.stopPropagation(); openDevWorkbench(b.dataset.pp2DevsandboxCodeOpen, "code"); });
+  mountedRoot.querySelectorAll("[data-pp2-open]").forEach((b) => b.addEventListener("click", (e) => { if (e.target.closest("[data-pp2-play],[data-pp2-wish],[data-pp2-devsandbox-card-open],[data-pp2-devsandbox-code-open]")) return; openDetail(b.dataset.pp2Open); }));
   mountedRoot.querySelectorAll("[data-pp2-wish]").forEach((b) => b.onclick = (e) => { e.stopPropagation(); toggleWishlist(b.dataset.pp2Wish); });
   mountedRoot.querySelectorAll("[data-pp2-cat]").forEach((b) => b.onclick = () => { ui.category = b.dataset.pp2Cat; render(); });
   on("[data-pp2-search]", "input", (e) => { ui.query = e.target.value; const grid = mountedRoot.querySelector(".pp2-grid-wide"); if (grid) { grid.innerHTML = filteredCatalog().map((game) => card(game)).join("") || ""; bind(); } });
@@ -1054,6 +1167,8 @@ function bind() {
   on("[data-pp2-player-full]", "click", () => mountedRoot.querySelector(".pp2-stage")?.requestFullscreen?.());
   on("[data-pp2-devsandbox-open]", "click", openDevSandbox);
   on("[data-pp2-devsandbox-close]", "click", closeDevSandbox);
+  on("[data-pp2-devsandbox-minimize]", "click", minimizeDevSandbox);
+  on("[data-pp2-devsandbox-restore]", "click", restoreDevSandbox);
   on("[data-pp2-devsandbox-section]", "change", (e) => { ui.devSandbox = { ...ui.devSandbox, section: e.target.value }; render(); });
   on("[data-pp2-devsandbox-source]", "input", scheduleDevSandboxApply);
   on("[data-pp2-devsandbox-save]", "click", saveDevSandboxOverride);
@@ -1061,6 +1176,26 @@ function bind() {
   on("[data-pp2-devsandbox-publish]", "click", publishDevSandboxLive);
   on("[data-pp2-devsandbox-speed]", "change", (e) => setDevSandboxSpeed(Number(e.target.value) || 1));
   mountedRoot.querySelectorAll("[data-pp2-devsandbox-mod]").forEach((input) => input.addEventListener("change", () => toggleDevSandboxMod(input.dataset.pp2DevsandboxMod, input.checked)));
+  on("[data-pp2-devworkbench-close]", "click", () => { ui.devWorkbench = null; render(); });
+  on("[data-pp2-devworkbench-launch]", "click", launchDevSandboxFromWorkbench);
+  on("[data-pp2-devworkbench-start]", "click", launchNormalFromWorkbench);
+  on("[data-pp2-devworkbench-section]", "change", (e) => {
+    const source = devWorkbenchDomSource();
+    ui.devWorkbench = { ...ui.devWorkbench, editedSource: source, section: e.target.value === "mods" ? "mods" : "code" };
+    render();
+  });
+  on("[data-pp2-devworkbench-source]", "input", () => {
+    if (!ui.devWorkbench) return;
+    ui.devWorkbench = { ...ui.devWorkbench, editedSource: devWorkbenchDomSource(), status: "Draft ready. Launch Dev Mode to run it." };
+  });
+  on("[data-pp2-devworkbench-speed]", "change", (e) => {
+    if (!ui.devWorkbench) return;
+    ui.devWorkbench = { ...ui.devWorkbench, speed: Number(e.target.value) || 1 };
+  });
+  mountedRoot.querySelectorAll("[data-pp2-devworkbench-mod]").forEach((input) => input.addEventListener("change", () => {
+    if (!ui.devWorkbench) return;
+    ui.devWorkbench = { ...ui.devWorkbench, modState: { ...(ui.devWorkbench.modState || {}), [input.dataset.pp2DevworkbenchMod]: input.checked } };
+  }));
 }
 async function loadAnalytics() {
   if (ui.v2Offline) return;
