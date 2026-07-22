@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675">
-  <title>CubeTown — PhantomPlay cover placeholder</title>
+  <title>CubeTown cover art</title>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0%" stop-color="#180f28"/>
@@ -15,5 +15,5 @@
     <rect x="640" y="210" width="90" height="90" rx="8" fill="#4fd1e8"/>
   </g>
   <text x="600" y="560" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="56" font-weight="700" fill="#fbe9d8" letter-spacing="2">CubeTown</text>
-  <text x="600" y="605" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="20" fill="#c0addd" letter-spacing="1">PhantomPlay cover placeholder</text>
+  <text x="600" y="605" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="20" fill="#c0addd" letter-spacing="1">Build the block town</text>
 </svg>

@@ -28,6 +28,16 @@ const vespergateGame = read("../app/games/vespergate/game.js");
 const vespergateRooms = read("../app/games/vespergate/rooms.js");
 const vespergateEngine = read("../app/games/vespergate/engine.js");
 const vespergateIndex = read("../app/games/vespergate/index.html");
+const coverArt = [
+  "beat-strike",
+  "cubetown",
+  "keyboardist-on-tour",
+  "kingdom-breakers",
+  "phantom-ages",
+  "phantom-grand-prix",
+  "skyguard-arena",
+  "tidefront-tactics",
+].map((slug) => read(`../app/assets/phantomplay/${slug}-cover.svg`)).join("\n");
 const tidefrontTactics = read("../app/games/tidefront-tactics.html");
 const appFiles = [index, main, module, v2Module, ...games];
 const kidsOnlyGameIds = [
@@ -151,6 +161,7 @@ assert.match(css, /@media\s*\(max-width:\s*767px\)/u, "Phone-specific responsive
 assert.match(css, /html\[data-org-color-mode="dark"\] \.pp-game-art img\{[\s\S]*?object-fit:contain[\s\S]*?transform:none/u, "Dark-mode PhantomPlay thumbnails must show the full game image instead of zoom-cropping it.");
 assert.match(css, /html\[data-org-color-mode="light"\] \.pp-game-art img\{[\s\S]*?object-fit:contain[\s\S]*?transform:none/u, "Light-mode PhantomPlay thumbnails must also show the full game image instead of zoom-cropping it.");
 assert.match(css, /\.pp-game-grid:not\(\.pp-game-grid-full\) \.pp-game-art img\{[\s\S]*?object-fit:contain[\s\S]*?transform:none/u, "Compact PhantomPlay rows must not override thumbnails back to cropped art.");
+assert.doesNotMatch(coverArt, /cover placeholder|PhantomPlay cover placeholder/u, "Shipped PhantomPlay cover SVGs must not expose placeholder copy.");
 assert.match(css, /@media\(max-width:767px\)[\s\S]*?\.pp-game-body>p\{[\s\S]*?-webkit-line-clamp:3/u, "Phone game cards must clamp copy instead of forcing broken oversized cards.");
 assert.match(css, /@media\(max-width:767px\)[\s\S]*?\.pp-game\{[\s\S]*?grid-template-columns:1fr/u, "Phone game cards must stack artwork over copy instead of creating skinny text columns.");
 assert.match(css, /@media\(max-width:767px\)[\s\S]*?\.pp-game-art\{[\s\S]*?aspect-ratio:16\/9/u, "Phone game art must keep a stable widescreen stage.");

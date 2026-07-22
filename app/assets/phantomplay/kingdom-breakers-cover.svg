@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675">
-  <title>Kingdom Breakers — PhantomPlay cover placeholder</title>
+  <title>Kingdom Breakers cover art</title>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="#182238"/>
@@ -38,5 +38,5 @@
   <circle cx="460" cy="330" r="10" fill="#ff6a5d"/>
   <circle cx="460" cy="330" r="18" fill="#ff6a5d" opacity="0.25"/>
   <text x="600" y="560" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="50" font-weight="700" fill="#eef2fb" letter-spacing="2">Kingdom Breakers</text>
-  <text x="600" y="602" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="20" fill="#9aa7c7" letter-spacing="1">PhantomPlay cover placeholder</text>
+  <text x="600" y="602" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="20" fill="#9aa7c7" letter-spacing="1">Break the hold before dawn</text>
 </svg>

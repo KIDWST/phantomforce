@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675">
-  <title>Keyboardist On Tour — PhantomPlay cover placeholder</title>
+  <title>Keyboardist On Tour cover art</title>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0%" stop-color="#0b0716"/>
@@ -16,5 +16,5 @@
   </g>
   <line x1="340" y1="470" x2="820" y2="470" stroke="#eaf6f4" stroke-opacity="0.35" stroke-width="3"/>
   <text x="600" y="560" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="46" font-weight="700" fill="#f4eef9" letter-spacing="1">Keyboardist On Tour</text>
-  <text x="600" y="602" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="20" fill="#b7a9d1" letter-spacing="1">PhantomPlay cover placeholder</text>
+  <text x="600" y="602" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="20" fill="#b7a9d1" letter-spacing="1">Type the dungeon alive</text>
 </svg>

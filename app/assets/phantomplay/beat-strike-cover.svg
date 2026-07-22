@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675">
-  <title>BeatStrike — PhantomPlay cover placeholder</title>
+  <title>BeatStrike cover art</title>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="#1a0e24"/>
@@ -40,5 +40,5 @@
     <rect x="308" y="0" width="36" height="36" rx="6"/>
   </g>
   <text x="600" y="600" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="50" font-weight="700" fill="#eafff4" letter-spacing="2">BeatStrike</text>
-  <text x="600" y="640" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="20" fill="#c9a8e6" letter-spacing="1">PhantomPlay cover placeholder</text>
+  <text x="600" y="640" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="20" fill="#c9a8e6" letter-spacing="1">Full-key rhythm arena</text>
 </svg>

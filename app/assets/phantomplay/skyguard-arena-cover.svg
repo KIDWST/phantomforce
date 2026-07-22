@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675">
-  <title>Skyguard Arena — PhantomPlay cover placeholder</title>
+  <title>Skyguard Arena cover art</title>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="#05060f"/>
@@ -16,5 +16,5 @@
     <circle cx="700" cy="420" r="18" fill="#8a6bff"/>
   </g>
   <text x="600" y="560" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="52" font-weight="700" fill="#eef1ff" letter-spacing="2">Skyguard Arena</text>
-  <text x="600" y="602" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="20" fill="#9aa3d6" letter-spacing="1">PhantomPlay cover placeholder</text>
+  <text x="600" y="602" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="20" fill="#9aa3d6" letter-spacing="1">Hold the skyline route</text>
 </svg>
