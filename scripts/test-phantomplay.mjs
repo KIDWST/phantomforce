@@ -91,7 +91,10 @@ assert.match(module, /class="pp-game-art" style="--pp-game-art:url\('/u, "Defaul
 assert.match(css, /\.pp-library\{padding-top:10px\}/u, "Default PhantomPlay must keep the condensed game-first library spacing.");
 assert.match(css, /\.pp-game-art::before\{[\s\S]*?background-image:var\(--pp-game-art\)[\s\S]*?filter:blur/u, "Default PhantomPlay cards must use a premium blurred art backdrop instead of empty black bands.");
 assert.match(css, /\.pp-game-art img\{[\s\S]*?object-fit:contain[\s\S]*?transform:none/u, "Default PhantomPlay card thumbnails must show the full image, not zoom-crop it.");
-assert.match(css, /@media\(min-width:768px\)\{[\s\S]*?\.pp-game-grid-full \.pp-game\{[\s\S]*?grid-template-columns:minmax\(210px,\.38fr\) minmax\(0,1fr\)/u, "Desktop PhantomPlay library cards must use a stable split art/details layout.");
+assert.match(css, /@media\(min-width:768px\)\{[\s\S]*?\.pp-game-grid-full \.pp-game\{[\s\S]*?grid-template-columns:minmax\(300px,\.48fr\) minmax\(0,1fr\)[\s\S]*?min-height:236px/u, "Desktop PhantomPlay library cards must use a stable premium split art/details layout.");
+assert.match(css, /@media\(min-width:768px\)\{[\s\S]*?\.pp-game-grid-full \.pp-game-art\{[\s\S]*?width:calc\(100% - 14px\)[\s\S]*?aspect-ratio:16\/9/u, "Desktop PhantomPlay library art must render as a full framed widescreen cover.");
+assert.match(css, /\.pp-game-grid:not\(\.pp-game-grid-full\) \.pp-game\{[\s\S]*?grid-template-columns:minmax\(300px,\.48fr\) minmax\(0,1fr\)[\s\S]*?min-height:236px/u, "Desktop PhantomPlay compact rows must give game art a premium-sized lane instead of tiny thumbnails.");
+assert.match(css, /\.pp-game-grid:not\(\.pp-game-grid-full\) \.pp-game-art\{[\s\S]*?width:calc\(100% - 14px\)[\s\S]*?aspect-ratio:16\/9[\s\S]*?margin:14px 0 14px 14px/u, "Desktop PhantomPlay compact art must render as a framed widescreen cover, not a tall empty column.");
 assert.doesNotMatch(css, /Toddler Space|pp-toddler-space|pp-shell-toddler/u, "Default PhantomPlay stylesheet must not preserve a separate Toddler Space destination.");
 assert.match(v2Module, /tab:\s*"solo"/u, "PhantomPlay V2 must open straight to games, not a marketing/home screen.");
 assert.match(v2Module, /const GAME_SORTS = \["All", "Solo", "Multiplayer", "Kids"/u, "Kids must be a sort chip, not a separate destination.");
