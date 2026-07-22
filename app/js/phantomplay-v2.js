@@ -9,7 +9,7 @@
 import {
   currentTenantId, isAdmin, session,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260722-19";
+} from "./store.js?v=phantom-live-20260722-20";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
 const mobilePlaySurface = () => typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;
@@ -834,6 +834,15 @@ function isGameControlKey(event) {
   if (event.ctrlKey || event.metaKey || event.altKey) return false;
   return GAME_CONTROL_KEYS.has(event.key) || GAME_CONTROL_KEYS.has(event.code);
 }
+// See phantomplay.js's isEditableTarget for why this guard exists: game
+// control keys are common source-code characters and must never steal focus
+// while the user is typing in an editable field (e.g. a Dev Mode textarea).
+function isEditableTarget(event) {
+  const el = event.target;
+  if (!el || typeof el.closest !== "function") return false;
+  if (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable) return true;
+  return Boolean(el.closest("input, textarea, [contenteditable='true'], [contenteditable='']"));
+}
 function onGameMessage(event) {
   const frame = mountedRoot?.querySelector("[data-pp2-frame]");
   if (!ui.player || !frame || event.source !== frame.contentWindow || !event.data || event.data.source !== "phantomplay-game") return;
@@ -1066,6 +1075,7 @@ export function renderPhantomPlay(root) {
   if (!keyboardBound) {
     keyboardBound = true;
     window.addEventListener("keydown", (event) => {
+      if (isEditableTarget(event)) return;
       if (ui.player) {
         if (event.key === "Escape") { event.preventDefault(); closePlayer(); }
         if (isGameControlKey(event)) { event.preventDefault(); focusGameFrame(); }

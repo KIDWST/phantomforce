@@ -337,12 +337,71 @@ model Org {
   moduleEntitlements ModuleEntitlement[]
   invitations Invitation[]
   orgPlan     OrgPlan?
+  billingCustomer BillingCustomer?
+  billingSubscriptions BillingSubscription[]
+  billingWebhookEvents BillingWebhookEvent[]
   usageEvents UsageEvent[]
   crmSettings CrmSettings?
   sites       Site[]
   mediaAssets MediaAsset[]
   assetFolders AssetFolder[]
   assetCollections AssetCollection[]
+}
+
+/* Stripe is the authoritative payment provider when configured. These records
+   deliberately store provider IDs and redacted event hashes only: no card,
+   wallet, PayPal, checkout payload, or webhook secret ever enters our DB. */
+model BillingCustomer {
+  id               String   @id @default(uuid())
+  orgId            String   @unique
+  provider         String   @default("stripe")
+  providerCustomerId String @unique
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  org              Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  subscriptions    BillingSubscription[]
+
+  @@index([provider])
+}
+
+model BillingSubscription {
+  id                    String   @id @default(uuid())
+  orgId                 String
+  billingCustomerId     String
+  provider              String   @default("stripe")
+  providerSubscriptionId String  @unique
+  providerCheckoutSessionId String? @unique
+  planKey               String
+  status                String
+  currentPeriodEnd      DateTime?
+  cancelAtPeriodEnd     Boolean  @default(false)
+  lastEventCreatedAt    DateTime?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  org                   Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  billingCustomer       BillingCustomer @relation(fields: [billingCustomerId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, status])
+  @@index([billingCustomerId])
+}
+
+/* Idempotency/replay record for verified provider events. payloadHash is a
+   SHA-256 digest of the raw signed payload, never the payload itself. */
+model BillingWebhookEvent {
+  id              String   @id @default(uuid())
+  provider        String   @default("stripe")
+  providerEventId String   @unique
+  type            String
+  orgId           String?
+  payloadHash     String
+  status          String   @default("received")
+  errorCode       String?
+  receivedAt      DateTime @default(now())
+  processedAt     DateTime?
+  org             Org?     @relation(fields: [orgId], references: [id], onDelete: SetNull)
+
+  @@index([orgId, receivedAt])
+  @@index([provider, type])
 }
 
 /* ============================ ASSET CLOUD ============================

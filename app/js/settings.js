@@ -1,13 +1,13 @@
-/* PhantomForce admin settings.
-   Local UI preferences only: no provider calls, sends, uploads, or billing. */
+/* PhantomForce admin settings. Payment credential entry always stays in the
+   Stripe-hosted Checkout/Portal; this app only requests a server-created URL. */
 
-import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260722-17";
-import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260722-17";
-import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260722-17";
-import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260722-17";
-import { canManageActiveOrg, fetchCustomerPlanPreview, fetchEntitlementsSummary, switchCustomerPlan } from "./orgs.js?v=phantom-live-20260722-17";
-import { currentTenantId, ctx, isLiveAdminHost, isLocalDevHost, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260722-17";
-import { DEFAULT_COMPANION_PREFS, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260722-17";
+import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260722-20";
+import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260722-20";
+import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260722-20";
+import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260722-20";
+import { canManageActiveOrg, createStripeBillingPortal, createStripeCheckout, fetchCustomerPlanPreview, fetchEntitlementsSummary, fetchStripeBillingSummary, switchCustomerPlan } from "./orgs.js?v=phantom-live-20260722-20";
+import { currentTenantId, ctx, isLiveAdminHost, isLocalDevHost, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260722-20";
+import { DEFAULT_COMPANION_PREFS, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260722-20";
 
 const AI_SETTINGS_KEY = "pf.operator.settings.v1";
 const SETTINGS_TAB_KEY = "pf.settings.tab.v1";
@@ -813,7 +813,8 @@ function formatPlanLimit(key, value) {
   return String(value ?? "0");
 }
 
-function renderPlanCard(plan, currentKey, canSwitch) {
+function renderPlanCard(plan, currentKey, options = {}) {
+  const { localCustomer = false, canManage = false, billing = null, interval = "month" } = options;
   const current = plan.key === currentKey;
   const limits = Object.entries(PLAN_LIMIT_LABELS)
     .slice(0, 6)
@@ -828,35 +829,75 @@ function renderPlanCard(plan, currentKey, canSwitch) {
       <p>${esc(plan.description || "Customer operating tier")}</p>
       <div class="set-status-grid set-context-grid">${limits}</div>
       <div class="set-chip-row">${features}</div>
-      ${canSwitch ? `<button type="button" class="btn ${current ? "btn-quiet" : "btn-primary"}" data-plan-switch="${esc(plan.key)}" ${current ? "disabled" : ""}>${current ? "Using this tier" : `Switch to ${esc(plan.name || plan.key)}`}</button>` : ""}
+      ${localCustomer ? `<button type="button" class="btn ${current ? "btn-quiet" : "btn-primary"}" data-plan-switch="${esc(plan.key)}" ${current ? "disabled" : ""}>${current ? "Using this tier" : `Switch to ${esc(plan.name || plan.key)}`}</button>` : ""}
+      ${!localCustomer && canManage && !current && billing?.checkoutEnabled && !billing?.customerOnFile && plan.key !== "free" && plan.intervals?.[interval]
+        ? `<button type="button" class="btn btn-primary" data-billing-checkout="${esc(plan.key)}">Continue to secure checkout</button>`
+        : ""}
+      ${!localCustomer && !current && billing?.checkoutEnabled && !billing?.customerOnFile && plan.key !== "free" && !plan.intervals?.[interval]
+        ? `<span class="set-note">This billing interval is not configured yet.</span>`
+        : ""}
     </article>`;
 }
 
 async function renderPlanAccessTab(el, opts = {}) {
   const localCustomer = Boolean(ctx.session?.localCustomer);
+  const billingInterval = opts.billingInterval === "year" ? "year" : "month";
   el.innerHTML = `<div class="set-section"><div class="cust-empty"><b>Loading plan access...</b><span>Reading the backend entitlement truth for this workspace.</span></div></div>`;
   try {
-    const summary = localCustomer ? await fetchCustomerPlanPreview() : await fetchEntitlementsSummary();
+    const [summary, billing] = await Promise.all([
+      localCustomer ? fetchCustomerPlanPreview() : fetchEntitlementsSummary(),
+      localCustomer ? Promise.resolve(null) : fetchStripeBillingSummary(),
+    ]);
     const entitlements = summary?.entitlements || null;
     if (!entitlements) {
       el.innerHTML = `<div class="set-section"><div class="cust-empty"><b>Plan access is unavailable.</b><span>Reconnect the customer backend, then reopen this tab.</span></div></div>`;
       return;
     }
-    const plans = Array.isArray(summary.plans) && summary.plans.length
+    const entitlementPlans = Array.isArray(summary.plans) && summary.plans.length
       ? summary.plans
       : [{ key: entitlements.planKey, name: entitlements.planName, description: entitlements.note, features: entitlements.features, limits: entitlements.limits }];
-    const canSwitchPlan = localCustomer || canManageActiveOrg();
+    const plans = !localCustomer && Array.isArray(billing?.checkoutPlans) && billing.checkoutPlans.length
+      ? entitlementPlans.map((plan) => ({ ...plan, intervals: billing.checkoutPlans.find((item) => item.key === plan.key)?.intervals || {} }))
+      : entitlementPlans;
+    const canManagePlan = localCustomer || canManageActiveOrg();
+    const returnState = new URLSearchParams(location.search).get("billing");
+    const billingMessage = returnState === "success"
+      ? "Checkout returned successfully. PhantomForce will update access only after the signed Stripe webhook verifies the payment."
+      : returnState === "cancelled"
+        ? "Checkout was cancelled. No plan or access change was made."
+        : "";
+    const billingModeLabel = localCustomer
+      ? "Safe simulator"
+      : billing?.productionReady
+        ? "Stripe verified"
+        : "Setup required";
+    const planDescription = localCustomer
+      ? "Switch Free, Pro, Developer, Elite, and Developer + Elite instantly. This local simulator never charges a payment method."
+      : !canManagePlan
+        ? "This workspace plan and billing are managed by an owner or admin."
+        : billing?.productionReady
+          ? "Choose a plan with Stripe Checkout. Card, Apple Pay, and eligible PayPal options appear securely at checkout; access changes only after Stripe verifies payment."
+          : "Secure Stripe checkout is not connected yet. Your current access remains unchanged; an owner can finish the server-side Stripe setup without exposing payment credentials here.";
     el.innerHTML = `
       <div class="set-section">
         <div class="set-section-head">
-          <div><p class="set-eyebrow">Plan & access</p><h3>${esc(entitlements.planName || entitlements.planKey || "Current tier")}</h3><p class="set-note">${canSwitchPlan ? "Switch Free, Pro, Developer, Elite, and Developer + Elite instantly. Restrictions apply immediately; no charge or billing action runs." : "This workspace plan is managed by the owner or admin."}</p></div>
+          <div><p class="set-eyebrow">Plan & access</p><h3>${esc(entitlements.planName || entitlements.planKey || "Current tier")}</h3><p class="set-note">${esc(planDescription)}</p></div>
           <span class="set-status-pill ${entitlements.canWrite === false ? "" : "is-on"}">${entitlements.canWrite === false ? "View only" : "Write access"}</span>
         </div>
-        <p class="set-note" data-plan-message></p>
+        <p class="set-note" data-plan-message>${esc(billingMessage)}</p>
       </div>
+      ${!localCustomer ? `
+        <div class="set-section">
+          <div class="set-card-head"><span>Secure billing</span><b>${esc(billingModeLabel)}</b></div>
+          <p class="set-note">${esc(billing?.reason || "Billing state is unavailable. Reconnect the backend and try again.")}</p>
+          <div class="set-chip-row">${(billing?.paymentMethods?.supported || ["Card", "Apple Pay when eligible", "PayPal when eligible"]).map((method) => `<span class="set-chip is-on">${esc(method)}</span>`).join("")}</div>
+          ${canManagePlan && billing?.customerOnFile ? `<button type="button" class="btn btn-quiet" data-billing-portal>Manage payment method, invoices & subscription</button>` : ""}
+          ${canManagePlan && billing?.customerOnFile && !billing?.portalConfigured ? `<p class="set-note">The Stripe customer portal needs its Dashboard configuration before plan changes or payment-method updates can open.</p>` : ""}
+        </div>` : ""}
       <div class="set-section">
-        <div class="set-card-head"><span>Tier controls</span><b>${canSwitchPlan ? "Live switch" : "Read-only"}</b></div>
-        <div class="set-choice-grid set-plan-grid">${plans.map((plan) => renderPlanCard(plan, entitlements.planKey, canSwitchPlan)).join("")}</div>
+        <div class="set-card-head"><span>Tier controls</span><b>${localCustomer ? "Simulator" : canManagePlan ? "Secure checkout" : "Read-only"}</b></div>
+        ${!localCustomer && canManagePlan && billing?.checkoutEnabled && !billing?.customerOnFile ? `<div class="set-chip-row"><button type="button" class="btn ${billingInterval === "month" ? "btn-primary" : "btn-quiet"}" data-billing-interval="month">Monthly</button><button type="button" class="btn ${billingInterval === "year" ? "btn-primary" : "btn-quiet"}" data-billing-interval="year">Annual</button></div>` : ""}
+        <div class="set-choice-grid set-plan-grid">${plans.map((plan) => renderPlanCard(plan, entitlements.planKey, { localCustomer, canManage: canManagePlan, billing, interval: billingInterval })).join("")}</div>
       </div>`;
     const message = el.querySelector("[data-plan-message]");
     el.querySelectorAll("[data-plan-switch]").forEach((button) => {
@@ -876,6 +917,36 @@ async function renderPlanAccessTab(el, opts = {}) {
         await renderPlanAccessTab(el, opts);
       };
     });
+    el.querySelectorAll("[data-billing-interval]").forEach((button) => {
+      button.onclick = () => renderPlanAccessTab(el, { ...opts, billingInterval: button.dataset.billingInterval });
+    });
+    el.querySelectorAll("[data-billing-checkout]").forEach((button) => {
+      button.onclick = async () => {
+        button.disabled = true;
+        if (message) message.textContent = "Opening secure Stripe Checkout…";
+        const result = await createStripeCheckout(button.dataset.billingCheckout, billingInterval);
+        if (!result.ok || !result.checkoutUrl) {
+          button.disabled = false;
+          if (message) message.textContent = result.error === "billing_portal_required" ? "This workspace already has a subscription. Use the billing portal to manage it." : `Checkout could not start: ${result.message || result.error || "server refused the request"}.`;
+          return;
+        }
+        location.assign(result.checkoutUrl);
+      };
+    });
+    const portalButton = el.querySelector("[data-billing-portal]");
+    if (portalButton) {
+      portalButton.onclick = async () => {
+        portalButton.disabled = true;
+        if (message) message.textContent = "Opening the secure Stripe billing portal…";
+        const result = await createStripeBillingPortal();
+        if (!result.ok || !result.portalUrl) {
+          portalButton.disabled = false;
+          if (message) message.textContent = `Billing portal could not start: ${result.message || result.error || "server refused the request"}.`;
+          return;
+        }
+        location.assign(result.portalUrl);
+      };
+    }
   } catch (error) {
     el.innerHTML = `<div class="set-section"><div class="cust-empty"><b>Plan access could not load.</b><span>${esc(error instanceof Error ? error.message : "Check the backend connection and try again.")}</span></div></div>`;
   }

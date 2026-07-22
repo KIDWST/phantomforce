@@ -6,7 +6,7 @@
    when the backend doesn't advertise database auth, none of these
    surfaces render and the app behaves exactly as before. */
 
-import { ctx, session } from "./store.js?v=phantom-live-20260722-17";
+import { ctx, session } from "./store.js?v=phantom-live-20260722-20";
 
 export const isDatabaseSession = () => !!ctx.session?.database;
 export const isCustomerOrgSession = () => !!(ctx.session?.database || ctx.session?.localCustomer);
@@ -189,13 +189,11 @@ export async function fetchCustomerPlanPreview() {
 }
 
 export async function switchCustomerPlan(planKey) {
-  const orgId = activeOrgId();
-  const endpoint = ctx.session?.localCustomer
-    ? "/customer/plan-preview"
-    : canManageActiveOrg() && orgId
-      ? `/orgs/${encodeURIComponent(orgId)}/entitlements`
-      : null;
-  if (!endpoint) return { ok: false, status: 403, error: "owner_or_admin_required", available: [] };
+  /* The local-customer control is a deliberate plan simulator. Real database
+     organizations must use verified Stripe Checkout; never self-assign a paid
+     tier by calling the entitlement route. */
+  const endpoint = ctx.session?.localCustomer ? "/customer/plan-preview" : null;
+  if (!endpoint) return { ok: false, status: 409, error: "plan_change_requires_billing", available: [] };
   const { ok, status, json } = await api(endpoint, { method: "POST", body: { planKey } });
   return ok
     ? { ok: true, ...json }
@@ -224,6 +222,34 @@ export async function fetchEntitlementsSummary() {
   if (!orgId) return null;
   const { ok, json } = await api(`/orgs/${encodeURIComponent(orgId)}/entitlements`);
   return ok ? json : null;
+}
+
+export async function fetchStripeBillingSummary() {
+  const orgId = activeOrgId();
+  if (!orgId || !canManageActiveOrg()) return null;
+  const { ok, json } = await api(`/orgs/${encodeURIComponent(orgId)}/billing/stripe`);
+  return ok ? json?.billing || null : null;
+}
+
+export async function createStripeCheckout(planKey, interval = "month") {
+  const orgId = activeOrgId();
+  if (!orgId || !canManageActiveOrg()) return { ok: false, error: "owner_or_admin_required" };
+  const { ok, status, json } = await api(`/orgs/${encodeURIComponent(orgId)}/billing/stripe/checkout-session`, {
+    method: "POST",
+    body: { planKey, interval },
+  });
+  return ok
+    ? { ok: true, checkoutUrl: json?.checkoutUrl, sessionId: json?.sessionId }
+    : { ok: false, status, error: json?.error || "stripe_checkout_failed", message: json?.message || "Checkout could not start." };
+}
+
+export async function createStripeBillingPortal() {
+  const orgId = activeOrgId();
+  if (!orgId || !canManageActiveOrg()) return { ok: false, error: "owner_or_admin_required" };
+  const { ok, status, json } = await api(`/orgs/${encodeURIComponent(orgId)}/billing/stripe/portal`, { method: "POST", body: {} });
+  return ok
+    ? { ok: true, portalUrl: json?.portalUrl }
+    : { ok: false, status, error: json?.error || "stripe_portal_failed", message: json?.message || "Billing portal could not start." };
 }
 
 export async function fetchOrgCrm() {

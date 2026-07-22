@@ -1,15 +1,16 @@
 import type { PaymentStatus } from "./client-access-state.js";
+import { getStripeBillingStatus } from "./stripe-billing.js";
 
-export type BillingProviderId = "manual-json-file";
-export type BillingSourceOfTruth = "local-manual-provider";
+export type BillingProviderId = "manual-json-file" | "stripe";
+export type BillingSourceOfTruth = "local-manual-provider" | "stripe-verified-webhooks";
 
 export type BillingProviderStatus = {
   provider: BillingProviderId;
   providerLabel: string;
   sourceOfTruth: BillingSourceOfTruth;
-  status: "local_demo_only";
+  status: "local_demo_only" | "configuration_required" | "ready_for_live_activation";
   configured: boolean;
-  readOnly: true;
+  readOnly: boolean;
   productionReady: boolean;
   liveWebhooksAllowed: boolean;
   supportedPaymentStatuses: PaymentStatus[];
@@ -17,15 +18,31 @@ export type BillingProviderStatus = {
   reason: string;
 };
 
-const provider = "manual-json-file" satisfies BillingProviderId;
-const sourceOfTruth = "local-manual-provider" satisfies BillingSourceOfTruth;
+const manualProvider = "manual-json-file" satisfies BillingProviderId;
+const manualSourceOfTruth = "local-manual-provider" satisfies BillingSourceOfTruth;
 const supportedPaymentStatuses: PaymentStatus[] = ["paid", "due", "failed"];
 
 export function getBillingProviderStatus(): BillingProviderStatus {
+  const stripe = getStripeBillingStatus();
+  if (stripe.configured || stripe.liveWebhooksAllowed || stripe.status === "ready_for_live_activation") {
+    return {
+      provider: "stripe",
+      providerLabel: stripe.providerLabel,
+      sourceOfTruth: stripe.liveWebhooksAllowed ? "stripe-verified-webhooks" : "local-manual-provider",
+      status: stripe.status,
+      configured: stripe.configured,
+      readOnly: !stripe.checkoutEnabled,
+      productionReady: stripe.productionReady,
+      liveWebhooksAllowed: stripe.liveWebhooksAllowed,
+      supportedPaymentStatuses: ["paid", "due", "failed"],
+      checkedAt: stripe.checkedAt,
+      reason: stripe.reason,
+    };
+  }
   return {
-    provider,
+    provider: manualProvider,
     providerLabel: "Local manual JSON billing",
-    sourceOfTruth,
+    sourceOfTruth: manualSourceOfTruth,
     status: "local_demo_only",
     configured: true,
     readOnly: true,
@@ -42,9 +59,10 @@ export function getProvisioningBillingMetadata(): {
   billingProvider: BillingProviderId;
   billingSourceOfTruth: BillingSourceOfTruth;
 } {
+  const status = getBillingProviderStatus();
   return {
-    billingProvider: provider,
-    billingSourceOfTruth: sourceOfTruth,
+    billingProvider: status.provider,
+    billingSourceOfTruth: status.sourceOfTruth,
   };
 }
 
@@ -81,7 +99,21 @@ const manualAdapter: BillingProviderAdapter = {
   liveWebhooksAllowed: false,
 };
 
-const adapters = new Map<string, BillingProviderAdapter>([[manualAdapter.id, manualAdapter]]);
+const stripeAdapter: BillingProviderAdapter = {
+  id: "stripe",
+  label: "Stripe Checkout + verified webhooks",
+  get configured() {
+    return getStripeBillingStatus().configured;
+  },
+  get liveWebhooksAllowed() {
+    return getStripeBillingStatus().liveWebhooksAllowed;
+  },
+};
+
+const adapters = new Map<string, BillingProviderAdapter>([
+  [manualAdapter.id, manualAdapter],
+  [stripeAdapter.id, stripeAdapter],
+]);
 
 export function listBillingAdapters() {
   return [...adapters.values()].map((adapter) => ({

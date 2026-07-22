@@ -1,7 +1,7 @@
 import {
   currentTenantId, isAdmin, isOwnerOperator, session,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260722-19";
+} from "./store.js?v=phantom-live-20260722-20";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 const mobilePlaySurface = () => typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;
@@ -1583,6 +1583,18 @@ function isGameControlKey(event) {
   return GAME_CONTROL_KEYS.has(event.key) || GAME_CONTROL_KEYS.has(event.code);
 }
 
+// Global game-control keys (letters, space, arrows, enter, r-to-restart) are
+// deliberately common characters in source code, so this listener must never
+// fire while the user is typing somewhere editable (e.g. the Dev Mode source
+// textarea) — otherwise every "a"/"s"/"r"/space keystroke steals focus back
+// to the game iframe mid-edit, which is what breaks Ctrl+A/Backspace there.
+function isEditableTarget(event) {
+  const el = event.target;
+  if (!el || typeof el.closest !== "function") return false;
+  if (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable) return true;
+  return Boolean(el.closest("input, textarea, [contenteditable='true'], [contenteditable='']"));
+}
+
 // host -> game "match-state": the host pushes the latest polled matchState +
 // readyStates + botSlots (+ hostControls, for a game that wants to react to
 // bot-fill/maxHumans) down to the active iframe whenever the room changes.
@@ -1852,6 +1864,7 @@ export function renderPhantomPlay(root, opts = {}) {
     keyboardBound = true;
     window.addEventListener("keydown", (event) => {
       if (!ui.player) return;
+      if (isEditableTarget(event)) return;
       if (event.key === "Escape") { event.preventDefault(); closePlayer(); }
       if ((event.key === "r" || event.key === "R") && !event.ctrlKey && !event.metaKey) { event.preventDefault(); restartPlayer(); }
       if (isGameControlKey(event)) { event.preventDefault(); focusGameFrame(); }

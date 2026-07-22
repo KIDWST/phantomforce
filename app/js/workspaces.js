@@ -9,24 +9,24 @@ import {
   PACKAGES, RETAINERS, FINANCE_CATEGORIES, FINANCE_CONNECTORS, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS, CHAT_HISTORY_RETENTION_DAYS,
   addMemory, toggleMemoryRemember, forgetMemory, forgetChatHistory, memoryStats, memoryRetention, chatHistoryStats, chatHistoryRetention,
   session,
-} from "./store.js?v=phantom-live-20260722-17";
+} from "./store.js?v=phantom-live-20260722-20";
 import {
   isDatabaseSession, canManageActiveOrg, fetchServerApprovals, decideServerRun,
   activeOrgId,
   fetchOrgCrm, saveOrgCrmSettings, createOrgCrmContact, pullOrgCrmContacts, updateOrgCrmContact, deleteOrgCrmContact,
-} from "./orgs.js?v=phantom-live-20260722-17";
+} from "./orgs.js?v=phantom-live-20260722-20";
 import {
   proposalServerAvailable, loadProposals,
   createProposal as createServerProposal,
   updateProposal as updateServerProposal,
   deleteProposal as deleteServerProposal,
-} from "./proposalpipeline.js?v=phantom-live-20260722-17";
+} from "./proposalpipeline.js?v=phantom-live-20260722-20";
 import {
   approvalServerAvailable, loadWorkspaceApprovals,
   createWorkspaceApproval as createServerWorkspaceApproval,
   decideWorkspaceApproval as decideServerWorkspaceApproval,
   deleteWorkspaceApproval as deleteServerWorkspaceApproval,
-} from "./approvalpipeline.js?v=phantom-live-20260722-17";
+} from "./approvalpipeline.js?v=phantom-live-20260722-20";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -764,6 +764,9 @@ export function baseSiteDraft(title = "New website", kind = "Website") {
       style: "premium local",
       existingUrl: "",
       storeEnabled: isStore,
+      sourceKind: "",
+      sourceRoot: "",
+      sourceFiles: [],
     },
     catalog: [],
     store: {
@@ -791,6 +794,9 @@ export function ensureSiteDesign(site) {
     style: "premium local",
     existingUrl: site.url || "",
     storeEnabled: site.kind === "Store",
+    sourceKind: "",
+    sourceRoot: "",
+    sourceFiles: [],
     ...(site.design || {}),
   };
   return site.design;
@@ -899,6 +905,9 @@ export const SITE_TEMPLATES = {
       style: "product",
       storeEnabled: true,
       existingUrl: "phantomforce.online",
+      sourceKind: "phantomforce_public_source",
+      sourceRoot: "/",
+      sourceFiles: ["/index.html", "/void.css", "/void.js"],
     },
     copy: {
       platform: [
@@ -934,7 +943,7 @@ export const SITE_TEMPLATES = {
         "Can it publish or charge without approval?",
         "No. Risky actions stay approval-gated by design.",
         "Is this the same site editor used for phantomforce.online?",
-        "Yes. Site Studio edits the public PhantomForce site starter first, then every change continues from that draft.",
+        "Yes. Site Studio is anchored to the real phantomforce.online source files and uses the starter copy only as editable business context.",
       ].join("\n"),
     },
     products: [
@@ -1672,7 +1681,7 @@ function renderMemory(el, rerender) {
       if (!brainPanel.open || brainPanel.dataset.mounted) return;
       brainPanel.dataset.mounted = "1";
       const mount = brainPanel.querySelector("[data-memory-brain-mount]");
-      import("./brain.js?v=phantom-live-20260722-17")
+      import("./brain.js?v=phantom-live-20260722-20")
         .then((mod) => { if (mount && mount.isConnected) mod.renderPhantomBrain(mount); })
         .catch(() => { if (mount) mount.innerHTML = `<p class="ws-note">The brain panel could not load. Check that the backend on the admin PC is running, then reopen this section.</p>`; });
     });

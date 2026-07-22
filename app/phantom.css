@@ -1543,6 +1543,99 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 .ss-simple-main { min-height: 0; overflow: hidden; }
 .ss-simple-preview { height: 100%; min-height: 0; overflow: auto; border-radius: 18px; }
 .ss-simple-preview .site-live-preview { min-height: 100%; }
+.ss-public-source {
+  min-height: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 420px);
+  gap: 14px;
+  padding: 14px;
+  background: linear-gradient(135deg, rgba(4,12,16,0.96), rgba(8,27,21,0.86));
+  border: 1px solid rgba(47, 255, 149, 0.18);
+  border-radius: 18px;
+}
+.ss-public-source-frame,
+.ss-public-source-code {
+  min-width: 0;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  background: rgba(2, 8, 11, 0.72);
+  border-radius: 14px;
+  overflow: hidden;
+}
+.ss-public-source-frame {
+  display: grid;
+  grid-template-rows: auto minmax(540px, 1fr);
+}
+.ss-public-source-frame iframe {
+  width: 100%;
+  height: 100%;
+  min-height: 540px;
+  border: 0;
+  background: #02060a;
+}
+.ss-public-source-code {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 10px;
+  padding: 14px;
+}
+.ss-public-source-code > div:first-child {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 10px;
+}
+.ss-public-source-code p {
+  margin: 0;
+  color: var(--neon);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.ss-public-source-code b {
+  color: var(--muted);
+  font-size: 12px;
+}
+.ss-public-source-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.ss-public-source-tabs button {
+  border: 1px solid rgba(47, 255, 149, 0.18);
+  background: rgba(5, 19, 15, 0.82);
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 8px 10px;
+  font-size: 11px;
+  font-weight: 900;
+}
+.ss-public-source-tabs button.is-active {
+  border-color: rgba(47, 255, 149, 0.72);
+  color: var(--ink);
+  background: rgba(47, 255, 149, 0.14);
+}
+.ss-public-source-code textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 480px;
+  resize: vertical;
+  border: 1px solid rgba(47, 255, 149, 0.2);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.44);
+  color: #d8fff0;
+  padding: 12px;
+  font: 12px/1.55 var(--mono);
+  white-space: pre;
+  overflow: auto;
+}
+.ss-public-source-code > span,
+.ss-source-error {
+  color: var(--dim);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.ss-source-error { color: #ff8aa0; }
 .ss-simple-prompt {
   display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 9px; padding: 10px;
   align-items: stretch;

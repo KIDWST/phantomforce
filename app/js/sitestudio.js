@@ -2,18 +2,30 @@
 
 import {
   store, uid, visible, currentWs, wsName, pushActivity, ago, fmtMoney,
-} from "./store.js?v=phantom-live-20260722-17";
+} from "./store.js?v=phantom-live-20260722-20";
 import {
   esc, baseSiteDraft, ensureSiteDesign, ensureSiteStore, applyWebsitePrompt, renderWebsitePreview,
   SITE_TEMPLATES, applySiteTemplate, cadenceSuffix,
-} from "./workspaces.js?v=phantom-live-20260722-17";
+} from "./workspaces.js?v=phantom-live-20260722-20";
 import {
   isDatabaseSession, requestServerPublish, fetchServerRun,
-} from "./orgs.js?v=phantom-live-20260722-17";
+} from "./orgs.js?v=phantom-live-20260722-20";
 
 const siteUi = {
   activeSiteId: null, device: "desktop", selectedSection: -1,
   panel: "website", cartOpen: false, checkoutOpen: false, confirmation: null,
+};
+const PHANTOMFORCE_PUBLIC_SOURCE = {
+  domain: "phantomforce.online",
+  previewUrl: "https://phantomforce.online/",
+  files: ["/index.html", "/void.css", "/void.js"],
+};
+const publicSourceUi = {
+  loading: false,
+  loaded: false,
+  selected: "/index.html",
+  error: "",
+  files: {},
 };
 
 /* ---- version history: a real, persisted undo trail per site ----
@@ -138,6 +150,70 @@ function normalizeSite(site) {
   const domain = siteDomain(site);
   if (domain && !site.domains.includes(domain)) site.domains.unshift(domain);
   return site;
+}
+
+function isPhantomForcePublicSite(site) {
+  if (!site) return false;
+  const design = ensureSiteDesign(site);
+  return siteDomain(site) === PHANTOMFORCE_PUBLIC_SOURCE.domain
+    || design.sourceKind === "phantomforce_public_source";
+}
+
+async function loadPublicSiteSource(rerender) {
+  if (publicSourceUi.loading) return;
+  publicSourceUi.loading = true;
+  publicSourceUi.error = "";
+  try {
+    const pairs = await Promise.all(PHANTOMFORCE_PUBLIC_SOURCE.files.map(async (path) => {
+      const response = await fetch(`${path}?pf-site-source=${Date.now()}`, { cache: "no-store" });
+      if (!response.ok) throw new Error(`${path} returned ${response.status}`);
+      return [path, await response.text()];
+    }));
+    publicSourceUi.files = Object.fromEntries(pairs);
+    publicSourceUi.loaded = true;
+    if (!PHANTOMFORCE_PUBLIC_SOURCE.files.includes(publicSourceUi.selected)) {
+      publicSourceUi.selected = PHANTOMFORCE_PUBLIC_SOURCE.files[0];
+    }
+  } catch (error) {
+    publicSourceUi.error = error?.message || "Could not read the local public site source.";
+  } finally {
+    publicSourceUi.loading = false;
+    rerender?.();
+  }
+}
+
+function publicSourcePreviewMarkup(site) {
+  const design = ensureSiteDesign(site);
+  const files = Array.isArray(design.sourceFiles) && design.sourceFiles.length
+    ? design.sourceFiles
+    : PHANTOMFORCE_PUBLIC_SOURCE.files;
+  const selected = files.includes(publicSourceUi.selected) ? publicSourceUi.selected : files[0];
+  const code = publicSourceUi.files[selected] || "";
+  return `
+    <div class="ss-public-source">
+      <div class="ss-public-source-frame">
+        <div class="site-browser-bar">
+          <span></span><span></span><span></span>
+          <b>${esc(PHANTOMFORCE_PUBLIC_SOURCE.domain)}</b>
+          <small>Live public source</small>
+        </div>
+        <iframe src="${esc(PHANTOMFORCE_PUBLIC_SOURCE.previewUrl)}?pf-site-preview=${Date.now()}" title="Live PhantomForce public website preview" loading="lazy"></iframe>
+      </div>
+      <aside class="ss-public-source-code">
+        <div>
+          <p>Actual source</p>
+          <b>${esc(design.sourceRoot || "/")}</b>
+        </div>
+        <div class="ss-public-source-tabs">
+          ${files.map((path) => `<button type="button" class="${path === selected ? "is-active" : ""}" data-ss-source-file="${esc(path)}">${esc(path.replace(/^\//, ""))}</button>`).join("")}
+        </div>
+        ${publicSourceUi.error ? `<p class="ss-source-error">${esc(publicSourceUi.error)}</p>` : ""}
+        ${publicSourceUi.loaded
+          ? `<textarea readonly spellcheck="false">${esc(code)}</textarea>`
+          : `<button class="btn btn-primary" type="button" data-ss-source-load>${publicSourceUi.loading ? "Reading source..." : "Load current code"}</button>
+             <span>Preview is the live public site. Source reads from /index.html, /void.css, and /void.js so this is not a hallucinated generated mockup.</span>`}
+      </aside>
+    </div>`;
 }
 
 function productsFor(site) {
@@ -415,7 +491,7 @@ function shellMarkup(active, sites, products) {
       </div>
 
       <main class="ss-simple-main ${siteUi.panel === "store" ? "has-store-console" : ""}">
-        <div class="ss-simple-preview ss-device-${esc(siteUi.device)}" data-ss-preview>${renderWebsitePreview(active, products, { selected: siteUi.selectedSection, interactive: true, cart: ensureSiteStore(active).cart })}</div>
+        <div class="ss-simple-preview ss-device-${esc(siteUi.device)}" data-ss-preview>${isPhantomForcePublicSite(active) ? publicSourcePreviewMarkup(active) : renderWebsitePreview(active, products, { selected: siteUi.selectedSection, interactive: true, cart: ensureSiteStore(active).cart })}</div>
         ${siteUi.panel === "store" ? productEditorMarkup(active) : ""}
         ${siteUi.cartOpen ? cartMarkup(active) : ""}
       </main>
@@ -567,6 +643,16 @@ export function renderSiteStudio(el) {
 
   el.querySelectorAll("[data-ss-panel]").forEach((button) => {
     button.onclick = () => { siteUi.panel = button.dataset.ssPanel; siteUi.cartOpen = false; rerender(); };
+  });
+
+  el.querySelectorAll("[data-ss-source-file]").forEach((button) => {
+    button.onclick = () => {
+      publicSourceUi.selected = button.dataset.ssSourceFile || PHANTOMFORCE_PUBLIC_SOURCE.files[0];
+      rerender();
+    };
+  });
+  el.querySelectorAll("[data-ss-source-load]").forEach((button) => {
+    button.onclick = () => loadPublicSiteSource(rerender);
   });
 
   const productAdd = el.querySelector("[data-ss-product-add]");
@@ -829,7 +915,7 @@ export function renderSiteStudio(el) {
   }
 
   const promptInput = el.querySelector("[data-ss-prompt]");
-  if (promptInput && preview && active) {
+  if (promptInput && preview && active && !isPhantomForcePublicSite(active)) {
     promptInput.addEventListener("input", () => {
       const clone = JSON.parse(JSON.stringify(active));
       applyWebsiteChange(clone, promptInput.value, false);

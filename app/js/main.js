@@ -6,52 +6,52 @@ import {
   redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260722-19";
+} from "./store.js?v=phantom-live-20260722-20";
 import {
   loadOrganizationPulse, loadBrainContract, pulseAttentionItems, brainContractAttentionItems,
-} from "./organizationpulse.js?v=phantom-live-20260722-19";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260722-19";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260722-19";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260722-19";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260722-19";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260722-19";
-import { mountManagedGrowthReport } from "./managedgrowth.js?v=phantom-live-20260722-19";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260722-19";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260722-19";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260722-19";
-import { mountPhantomAI } from "./phantomai.js?v=phantom-live-20260722-19";
-import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260722-19";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260722-19";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260722-19";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260722-19";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode, refreshCompanionCore } from "./companion.js?v=phantom-live-20260722-19";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260722-19";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260722-19";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260722-19";
-import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260722-19";
-import { mountAmbient } from "./ambient.js?v=phantom-live-20260722-19";
-import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260722-19";
+} from "./organizationpulse.js?v=phantom-live-20260722-20";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260722-20";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260722-20";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260722-20";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260722-20";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260722-20";
+import { mountManagedGrowthReport } from "./managedgrowth.js?v=phantom-live-20260722-20";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260722-20";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260722-20";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260722-20";
+import { mountPhantomAI } from "./phantomai.js?v=phantom-live-20260722-20";
+import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260722-20";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260722-20";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260722-20";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260722-20";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode, refreshCompanionCore } from "./companion.js?v=phantom-live-20260722-20";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260722-20";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260722-20";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260722-20";
+import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260722-20";
+import { mountAmbient } from "./ambient.js?v=phantom-live-20260722-20";
+import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260722-20";
 import {
   fetchAuthConfig, databaseLogin, databaseLogout, databaseSignup, databaseForgotUsername, databaseForgotPassword,
   databaseResetPassword, databaseAcceptInvitation, databaseVerify2fa, databaseStart2faSetup, databaseConfirm2fa, databaseRegenerate2faBackupCodes, databaseDisable2fa,
   switchOrg, fetchAuthMe, fetchEntitlementsSummary,
-} from "./orgs.js?v=phantom-live-20260722-19";
-import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260722-19";
-import { assetsAvailable } from "./orgs.js?v=phantom-live-20260722-19";
-import { renderPhantomStore } from "./phantomstore.js?v=phantom-live-20260722-19";
-import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260722-19";
+} from "./orgs.js?v=phantom-live-20260722-20";
+import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260722-20";
+import { assetsAvailable } from "./orgs.js?v=phantom-live-20260722-20";
+import { renderPhantomStore } from "./phantomstore.js?v=phantom-live-20260722-20";
+import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260722-20";
 // PhantomPlay V2 platform shell (Home/Solo/Friends/Workspace/Dev Hub) - opt-in
 // while it hardens: set localStorage "pf.phantomplay.v2" = "1" (the V2 shell has
 // a "Classic view" button to switch back). Classic stays the default experience.
-import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260722-19";
+import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260722-20";
 const phantomPlayV2Opted = () => { try { return localStorage.getItem("pf.phantomplay.v2") === "1"; } catch { return false; } };
-import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260722-19";
+import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260722-20";
 import {
   customizeNavigation,
   loadOrganizationCustomization,
-} from "./customization.js?v=phantom-live-20260722-19";
-import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260722-19";
-import { initCommandOS, applyCommandExecutionMode } from "./command-os.js?v=phantom-live-20260722-19";
+} from "./customization.js?v=phantom-live-20260722-20";
+import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260722-20";
+import { initCommandOS, applyCommandExecutionMode } from "./command-os.js?v=phantom-live-20260722-20";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -492,6 +492,37 @@ const FEATURE_BY_NAV_ID = {
   vacation: "vacationMode",
   phantomplay: "phantomPlay",
 };
+const PLAN_NAV_WORKFLOWS = {
+  free: new Set(["dashboard", "phantomai", "media", "sites", "phantomplay", "settings"]),
+  starter: new Set(["dashboard", "phantomai", "crm", "media", "sites", "phantomplay", "settings"]),
+  professional: new Set(["dashboard", "phantomai", "crm", "media", "sites", "money", "intelligence", "analytics", "approvals", "phantomplay", "settings", "vacation"]),
+  developer: new Set(["dashboard", "phantomai", "media", "sites", "assets", "automation", "developer", "phantomplay", "phantomstore", "settings"]),
+  elite: new Set(["dashboard", "phantomai", "crm", "media", "assets", "sites", "money", "automation", "approvals", "workers", "intelligence", "analytics", "phantomplay", "phantomstore", "settings", "vacation"]),
+  developer_elite: new Set(["dashboard", "phantomai", "crm", "media", "assets", "sites", "money", "automation", "approvals", "workers", "intelligence", "analytics", "developer", "phantomplay", "phantomstore", "settings", "vacation"]),
+  enterprise: null,
+  internal: null,
+  phantom: null,
+};
+function ownerHasPhantomAccess() {
+  return isOwnerOperator() || isAdmin() || isLiveAdminHost();
+}
+function selectedPlanWorkflowKey() {
+  if (ownerHasPhantomAccess()) return "phantom";
+  return String(navEntitlements.entitlements?.planKey || "free").toLowerCase();
+}
+function isDeveloperTier() {
+  return /developer/.test(selectedPlanWorkflowKey());
+}
+function planAllowsNavItem(item) {
+  if (!item) return false;
+  if (ownerHasPhantomAccess()) return true;
+  if (item.internalOnly) return false;
+  const allowed = PLAN_NAV_WORKFLOWS[selectedPlanWorkflowKey()] ?? PLAN_NAV_WORKFLOWS.free;
+  return !allowed || allowed.has(item.id);
+}
+function canUseNavItem(item) {
+  return canAccessSurface(item) && planAllowsNavItem(item);
+}
 /* MOBILE_NAV remains a complete mirror of the desktop registry so access,
    entitlements, and routing have one source of truth. The phone dock renders
    only the frequent destinations; More summons the complete vertical list. */
@@ -544,7 +575,7 @@ function navFeatureDisabled(item) {
 
 function orderedNavItems() {
   return NAV
-    .filter(canAccessSurface)
+    .filter(canUseNavItem)
     /* dashboardWidget entries stay in NAV so navForWorkspace/routing still
        resolve them, but they render as Dashboard quick-widgets instead of
        their own sidebar tab — never as a sidebar or mobile-dock button. */
@@ -607,7 +638,7 @@ let activePageId = null;
    destinations only become tabs after somebody opens them. */
 const openNavTabs = new Set(["dashboard"]);
 function markNavTabOpen(id) {
-  if (NAV.some((item) => item.id === id && canAccessSurface(item))) openNavTabs.add(id);
+  if (NAV.some((item) => item.id === id && canUseNavItem(item))) openNavTabs.add(id);
 }
 /* which page last played its entrance animation — store-change rerenders
    rebuild the same page's DOM constantly, and replaying the transition on
@@ -646,7 +677,7 @@ function workspaceId(id) {
 
 function canAccessSurface(surface) {
   if (surface?.internalOnly && !(isLiveAdminHost() || (isLocalDevHost() && isAdmin()))) return false;
-  if (surface?.ownerOnly && !isOwnerOperator()) return false;
+  if (surface?.ownerOnly && !isOwnerOperator() && !(surface.id === "developer" && isDeveloperTier())) return false;
   if (surface?.adminOnly && !isAdmin()) return false;
   /* Asset Cloud is a real multi-tenant surface — only meaningful when the
      backend runs database auth with an active org */
@@ -734,6 +765,14 @@ function setMobileNav(open) {
 function goNav(id) {
   const item = NAV.find((n) => n.id === id);
   if (!item) return;
+  if (!canUseNavItem(item)) {
+    try { localStorage.setItem("pf.settings.tab.v1", "plan"); } catch {}
+    activeNav = "settings";
+    renderNav();
+    renderWorkspacePage("settings", true);
+    speak(`${item.label} is not part of this workspace version. Plan & access is open so you can switch tiers.`, "", "alert");
+    return;
+  }
   if (navFeatureDisabled(item)) {
     try { localStorage.setItem("pf.settings.tab.v1", "plan"); } catch {}
     activeNav = "settings";
@@ -1173,6 +1212,7 @@ function accountIdentityLine() {
   return ctx.session?.email || ctx.session?.label || `${accountRoleLabel()} - ${wsName(currentWs())}`;
 }
 function currentPlanKey() {
+  if (ownerHasPhantomAccess()) return "phantom";
   return navEntitlements.entitlements?.planKey || (isAdmin() ? "internal" : "free");
 }
 function currentPlanName() {
@@ -1287,6 +1327,23 @@ async function hydrateLivePlan(body) {
   if (!mount) return;
   const [me, summary] = await Promise.all([fetchAuthMe(), fetchEntitlementsSummary()]);
   if (!document.body.contains(mount)) return;
+  if (ownerHasPhantomAccess()) {
+    const chip = body.querySelector(".account-plan-chip");
+    if (chip) chip.innerHTML = `<span>Phantom</span><b>owner</b>`;
+    mount.innerHTML = `
+      <article class="account-card">
+        <p class="account-card-k">Hidden owner tier</p>
+        <h4>Phantom · owner mode</h4>
+        <p>This account is the PhantomForce owner account. It bypasses customer plan restrictions and keeps every module, developer surface, and live-ops control available.</p>
+        <div class="account-facts">
+          <span><b>access</b>all modules</span>
+          <span><b>guardrail</b>approval for risky actions</span>
+          <span><b>scope</b>admin + app</span>
+        </div>
+        <p class="set-note">Phantom is hidden from customer plan catalogs. Customers only see Free, Pro, Developer, Elite, and Developer + Elite.</p>
+      </article>`;
+    return;
+  }
   if (!me?.entitlements || !summary) {
     mount.innerHTML = `<p class="set-note">Live plan details are unavailable right now — the server did not answer.</p>`;
     return;
@@ -1518,7 +1575,7 @@ const MODES = {
   admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260722-19";
+const POSE_VERSION = "phantom-live-20260722-20";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -1808,6 +1865,9 @@ function renderDashboardBrief() {
 }
 
 function accessVersionCopy() {
+  if (ownerHasPhantomAccess()) {
+    return { label: "Phantom", detail: "Owner mode · all modules · safe self-editing", tone: "active" };
+  }
   const ent = navEntitlements.entitlements;
   if (ent) {
     const key = String(ent.planKey || "").toLowerCase();
@@ -1828,9 +1888,6 @@ function accessVersionCopy() {
       detail: included.join(" · ") || (ent.effectiveStatus || "active"),
       tone: ent.canWrite === false ? "limited" : "active",
     };
-  }
-  if (isOwnerOperator() || isAdmin()) {
-    return { label: "Full Force Admin", detail: "Owner controls · all modules · live ops", tone: "active" };
   }
   return { label: "Workspace Access", detail: navEntitlements.loaded ? "Plan details unavailable" : "Reading plan access", tone: "limited" };
 }
@@ -2143,7 +2200,7 @@ function renderDashWidgets() {
      plan-disabled feature) is simply omitted, never shown as a dead card. */
   const items = dashWidgetItems().filter((item) => {
     const navItem = NAV.find((n) => n.id === item.id);
-    return navItem ? canAccessSurface(navItem) && !navFeatureDisabled(navItem) : true;
+    return navItem ? canUseNavItem(navItem) && !navFeatureDisabled(navItem) : true;
   });
   host.innerHTML = items.map((item) => `
     <button class="quickwidget${item.alert ? " is-alert" : ""}" type="button" data-open-ws="${esc(item.ws)}">
@@ -2447,6 +2504,8 @@ function renderConsole() {
     renderCore: renderConsoleCoreStatus,
   });
   renderChatLog();
+  bindChatboxToggle();
+  setChatboxMinimized(chatboxMinimized());
   mountMissionControl($("[data-mission-control]"), {
     runBrain: (text) => handleSmartCommand(text),
   });
@@ -2455,6 +2514,40 @@ function renderConsole() {
 /* ============================ command run ============================ */
 const chatHistory = [];
 const chatLogEl = () => $("[data-chat-log]");
+const CHATBOX_MINIMIZED_KEY = "pf.command.chatbox.minimized";
+
+function chatboxMinimized() {
+  try { return localStorage.getItem(CHATBOX_MINIMIZED_KEY) === "1"; }
+  catch { return false; }
+}
+
+function setChatboxMinimized(minimized) {
+  const value = Boolean(minimized);
+  const root = $("[data-console]");
+  const chatbox = $("[data-chatbox]");
+  const button = $("[data-chatbox-toggle]");
+  if (root) root.dataset.chatboxMinimized = value ? "true" : "false";
+  chatbox?.classList.toggle("is-minimized", value);
+  if (button) {
+    button.setAttribute("aria-expanded", value ? "false" : "true");
+    button.setAttribute("aria-label", value ? "Restore Phantom Console" : "Minimize Phantom Console");
+    button.innerHTML = value ? `<span aria-hidden="true">↗</span>` : `<span aria-hidden="true">–</span>`;
+  }
+  try { localStorage.setItem(CHATBOX_MINIMIZED_KEY, value ? "1" : "0"); }
+  catch { /* localStorage can be blocked in hardened browser contexts */ }
+}
+
+function bindChatboxToggle() {
+  const button = $("[data-chatbox-toggle]");
+  if (!button || button.dataset.bound === "true") return;
+  button.dataset.bound = "true";
+  button.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setChatboxMinimized(!chatboxMinimized());
+  });
+}
+
 function msgHtml(m, i) {
   const cards = (m.cards || []).map((c, ci) => cardHtml(c, ci, i)).join("");
   return `<div class="msg msg-${m.who}" data-msg-i="${i}">

@@ -3,6 +3,7 @@ import "./load-env.js";
 import { execFileSync } from "node:child_process";
 
 import cors from "@fastify/cors";
+import fastifyRawBody from "fastify-raw-body";
 import { Prisma } from "@prisma/client";
 import {
   ACTION_SCHEMAS,
@@ -154,6 +155,13 @@ import { listPangolinDryRunPlan } from "./access/pangolin-reconciler.js";
 import { checkPangolinReadOnlyStatus } from "./access/pangolin-status.js";
 import { buildProductionReadinessReport } from "./access/production-readiness.js";
 import { getBillingProviderStatus } from "./access/billing-provider.js";
+import {
+  createStripeCheckoutSession,
+  createStripePortalSession,
+  getStripeBillingSummary,
+  processVerifiedStripeWebhook,
+  verifyStripeWebhook,
+} from "./access/stripe-billing.js";
 import { buildDeploymentModelStatus } from "./access/deployment-model.js";
 import { paywallPreHandler } from "./access/paywall-guard.js";
 import { getPaywallDecision } from "./access/paywall.js";
@@ -2881,23 +2889,88 @@ app.post("/orgs/:orgId/entitlements", async (request, reply) => {
   const { orgId } = request.params as { orgId: string };
   const dbSession = requireOrgManager(request, reply, orgId);
   if (!dbSession) return reply;
-  const parsed = CustomerPlanPreviewSchema.safeParse(request.body ?? {});
-  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
-  const allowedPlans = new Set(listCustomerPlanDefinitions().map((plan) => plan.key));
-  if (!allowedPlans.has(parsed.data.planKey)) {
-    return reply.code(400).send({ ok: false, error: "unknown_customer_plan", available: [...allowedPlans] });
-  }
-  const result = await assignOrgPlan({
-    orgId,
-    planKey: parsed.data.planKey,
-    status: "active",
-    overrides: null,
-    note: "Self-service tier switch. No billing action was run.",
-    assignedByUserId: dbSession.userId,
+  /* This endpoint used to let a workspace owner self-assign a paid plan with
+     no payment. That is never a billing path. Only the verified Stripe event
+     adapter or the explicitly-super-admin manual route may change OrgPlan. */
+  return reply.code(409).send({
+    ok: false,
+    error: "plan_change_requires_billing",
+    message: "Choose a plan through secure Stripe Checkout or manage an existing subscription in the billing portal.",
   });
-  if (!result.ok) return reply.code(400).send({ ok: false, error: result.error, available: result.available });
-  await recordPlanAssignmentAudit(orgId, dbSession.email, parsed.data.planKey, "active");
-  return { ok: true, ...(await getUsageSummary(orgId)), plans: listCustomerPlanDefinitions() };
+});
+
+const StripeCheckoutRequestSchema = z.object({
+  planKey: z.enum(["professional", "developer", "elite", "developer_elite"]),
+  interval: z.enum(["month", "year"]).default("month"),
+});
+
+/* Billing is organization-owned. Members may read entitlement summaries, but
+   only an owner/admin of the active organization may start Checkout or enter
+   the Stripe-hosted portal. */
+app.get("/orgs/:orgId/billing/stripe", async (request, reply) => {
+  const { orgId } = request.params as { orgId: string };
+  const dbSession = requireOrgManager(request, reply, orgId);
+  if (!dbSession) return reply;
+  try {
+    return { ok: true, billing: await getStripeBillingSummary(orgId) };
+  } catch (error) {
+    return reply.code(503).send({ ok: false, error: "billing_unavailable", detail: error instanceof Error ? error.message : "Billing is unavailable." });
+  }
+});
+
+app.post("/orgs/:orgId/billing/stripe/checkout-session", async (request, reply) => {
+  const { orgId } = request.params as { orgId: string };
+  const dbSession = requireOrgManager(request, reply, orgId);
+  if (!dbSession) return reply;
+  const parsed = StripeCheckoutRequestSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  try {
+    const result = await createStripeCheckoutSession({
+      orgId,
+      actorUserId: dbSession.userId,
+      actorEmail: dbSession.email,
+      planKey: parsed.data.planKey,
+      interval: parsed.data.interval,
+      headers: request.headers as Record<string, unknown>,
+    });
+    return { ok: true, ...result };
+  } catch (error) {
+    const code = typeof error === "object" && error && "code" in error ? String((error as { code?: unknown }).code || "stripe_checkout_failed") : "stripe_checkout_failed";
+    const status = code === "stripe_not_configured" || code === "billing_database_required" ? 503 : code === "billing_portal_required" ? 409 : 400;
+    return reply.code(status).send({ ok: false, error: code, message: error instanceof Error ? error.message : "Stripe Checkout could not start." });
+  }
+});
+
+app.post("/orgs/:orgId/billing/stripe/portal", async (request, reply) => {
+  const { orgId } = request.params as { orgId: string };
+  const dbSession = requireOrgManager(request, reply, orgId);
+  if (!dbSession) return reply;
+  try {
+    return { ok: true, ...(await createStripePortalSession({ orgId, headers: request.headers as Record<string, unknown> })) };
+  } catch (error) {
+    const code = typeof error === "object" && error && "code" in error ? String((error as { code?: unknown }).code || "stripe_portal_failed") : "stripe_portal_failed";
+    const status = code === "stripe_not_configured" || code === "billing_database_required" ? 503 : code === "stripe_customer_not_found" ? 404 : 400;
+    return reply.code(status).send({ ok: false, error: code, message: error instanceof Error ? error.message : "Stripe portal could not start." });
+  }
+});
+
+app.post("/billing/stripe/webhook", { config: { rawBody: true } }, async (request, reply) => {
+  const rawBody = request.rawBody;
+  const signatureHeader = request.headers["stripe-signature"];
+  const signature = Array.isArray(signatureHeader) ? signatureHeader[0] : signatureHeader;
+  if (!Buffer.isBuffer(rawBody)) return reply.code(400).send({ ok: false, error: "stripe_raw_body_missing" });
+  try {
+    const event = verifyStripeWebhook(rawBody, signature);
+    const result = await processVerifiedStripeWebhook(event, rawBody);
+    return reply.code(200).send(result);
+  } catch (error) {
+    const code = typeof error === "object" && error && "code" in error ? String((error as { code?: unknown }).code || "stripe_webhook_processing_failed") : "stripe_webhook_processing_failed";
+    if (code === "stripe_signature_missing" || /signature/i.test(String(error))) {
+      return reply.code(400).send({ ok: false, error: "stripe_signature_invalid" });
+    }
+    request.log.error({ code }, "Stripe webhook processing failed");
+    return reply.code(code === "stripe_webhook_not_configured" ? 503 : 500).send({ ok: false, error: code });
+  }
 });
 
 app.get("/admin/plans", async (request, reply) => {
@@ -5421,6 +5494,16 @@ app.get("/api/phantomplay", async (request, reply) => {
       provider_called: false,
     });
   }
+});
+
+/* Stripe signatures are calculated over the exact request bytes. Capture a
+   Buffer only on the dedicated webhook route; every other JSON route keeps
+   Fastify's normal parser and memory profile. */
+await app.register(fastifyRawBody, {
+  field: "rawBody",
+  global: false,
+  encoding: false,
+  runFirst: true,
 });
 
 app.get("/api/phantomplay/dev-mode/:gameId/source", async (request, reply) => {
