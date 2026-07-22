@@ -8,6 +8,7 @@ const mobilePlaySurface = () => typeof window !== "undefined" && window.matchMed
 const controlsCopy = (game) => mobilePlaySurface() ? "" : String(game?.controls || "").trim();
 const FALLBACK_KEY = "pf.phantomplay.offline.v1";
 const DEV_SUPPORT_KEY = "pf.phantomplay.developerSupport.v1";
+const DEV_SANDBOX_AUTOSAVE_KEY = "pf.phantomplay.devSandboxAutosave.v1";
 const COLOR_MODE_KEY = "pf.colorMode.v1";
 function currentColorMode() {
   const saved = workspaceStorageGetItem(COLOR_MODE_KEY);
@@ -496,7 +497,7 @@ function gameCard(game, variant = "") {
     <p>${esc(game.summary)}</p>
     <div class="pp-game-meta"><span>${esc(game.contentRating === "everyone" ? "Everyone" : game.contentRating)}</span><span>v${esc(game.version)}</span>${history?.score != null ? `<span>Best ${history.score}</span>` : ""}</div>
     ${history?.canContinue ? `<div class="pp-progress"><i style="width:${Math.max(3, Math.min(100, history.progress))}%"></i></div>` : ""}
-    <div class="pp-game-actions"><button class="pp-play" type="button" ${launchable ? `data-pp-play="${esc(game.id)}"` : `data-pp-session-required="${esc(game.id)}"`}>${icon("play")} ${launchable ? playLabel : "Plan locked"}</button><button class="pp-support" type="button" data-pp-support="${esc(game.developer)}">Support this creator</button>${game.devModeAvailable ? `<button class="pp-devsandbox-card-open" type="button" ${launchable ? `data-pp-devsandbox-card-open="${esc(game.id)}"` : `data-pp-session-required="${esc(game.id)}"`} aria-label="Open Dev Mode for ${esc(game.title)}" title="Dev Mode — live-edit this game's code and assets while you play, sandboxed and visible only to you">${icon("dev")}<b>Dev Mode</b></button>` : ""}${ui.snapshot.access.canModerate ? `<button class="pp-devmode-toggle ${game.devModeEnabled !== false ? "is-on" : "is-off"}" type="button" data-pp-devmode-toggle="${esc(game.id)}" data-pp-devmode-toggle-next="${game.devModeEnabled !== false ? "off" : "on"}" aria-label="Dev Mode is ${game.devModeEnabled !== false ? "on" : "off"} for this game" title="Turn Dev Mode ${game.devModeEnabled !== false ? "off" : "on"} for this specific game (currently ${game.devModeEnabled !== false ? "on" : "off"})">${icon("dev")}<i></i></button>` : ""}</div></div>
+    <div class="pp-game-actions"><button class="pp-play" type="button" ${launchable ? `data-pp-play="${esc(game.id)}"` : `data-pp-session-required="${esc(game.id)}"`}>${icon("play")} ${launchable ? playLabel : "Plan locked"}</button><button class="pp-support" type="button" data-pp-support="${esc(game.developer)}">Support this creator</button>${game.devModeAvailable ? `<button class="pp-devsandbox-card-open" type="button" ${launchable ? `data-pp-devsandbox-card-open="${esc(game.id)}"` : `data-pp-session-required="${esc(game.id)}"`} aria-label="Open Dev Mode for ${esc(game.title)}" title="Dev Mode — live-edit this game's code and assets while you play, sandboxed and visible only to you">${icon("dev")}<b>Dev Mode</b></button><button class="pp-devsandbox-code-open" type="button" ${launchable ? `data-pp-devsandbox-code-open="${esc(game.id)}"` : `data-pp-session-required="${esc(game.id)}"`} aria-label="Open full source code for ${esc(game.title)}" title="Open the full game source. Edits hot-reload and autosave.">${icon("dev")}<i></i></button>` : ""}</div></div>
   </article>`;
 }
 
@@ -965,8 +966,8 @@ function devSandboxMarkup(game) {
       <div><b>DEV MODE</b><span>${esc(game.title)}</span></div>
       <button type="button" data-pp-devsandbox-close aria-label="Close Dev Mode">×</button>
     </header>
-    <label class="pp-devsandbox-section-picker">Section<select data-pp-devsandbox-section><option value="code" ${section === "code" ? "selected" : ""}>Live Code</option><option value="mods" ${section === "mods" ? "selected" : ""}>Mod Menu</option></select></label>
-    <p class="pp-devsandbox-note">${section === "mods" ? "Toggle mods on while you play — they apply instantly, no reload." : "Live-editing this exact running game. Edits hot-reload the game on the left as you type."} Only visible to you.${d.hasOverride ? " A saved workspace override is currently active for this game." : ""}</p>
+    <label class="pp-devsandbox-section-picker">Section<select data-pp-devsandbox-section><option value="code" ${section === "code" ? "selected" : ""}>Full Source Code</option><option value="mods" ${section === "mods" ? "selected" : ""}>Mod Menu</option></select></label>
+    <p class="pp-devsandbox-note">${section === "mods" ? "Toggle mods on while you play — they apply instantly, no reload." : "Live-editing the full source for this running game. Edits hot-reload and autosave as you type."} Only visible to you.${d.hasOverride ? " A saved workspace override is currently active for this game." : ""}</p>
     ${d.error ? `<div class="pp-devsandbox-error">${esc(d.error)}</div>` : ""}
     ${d.loading
       ? `<div class="pp-devmode-loading"><i></i><b>Loading source…</b></div>`
@@ -975,7 +976,7 @@ function devSandboxMarkup(game) {
         : `<textarea class="pp-devsandbox-source" data-pp-devsandbox-source spellcheck="false">${esc(d.editedSource)}</textarea>`}
     <p class="pp-devsandbox-status" data-pp-devsandbox-status>${esc(d.status || "")}</p>
     <footer>
-      <button type="button" class="pp-devsandbox-save" data-pp-devsandbox-save ${d.saving ? "disabled" : ""}>${d.saving ? "Saving…" : "Save override"}</button>
+      <button type="button" class="pp-devsandbox-save" data-pp-devsandbox-save ${d.saving ? "disabled" : ""}>${d.saving ? "Syncing…" : "Sync now"}</button>
       <button type="button" data-pp-devsandbox-revert>Revert to shipped</button>
       ${ui.snapshot.access.isOwner ? `<button type="button" class="pp-devsandbox-publish" data-pp-devsandbox-publish ${d.publishing ? "disabled" : ""}>${d.publishing ? "Publishing…" : "Publish to live"}</button>` : ""}
     </footer>
@@ -988,7 +989,7 @@ function playerMarkup() {
   const engine = engineFor(game);
   const controls = controlsCopy(game);
   const sandboxActive = ui.devSandbox?.gameId === game.id;
-  return `<div class="pp-player ${sandboxActive ? "is-devsandbox" : ""}" role="dialog" aria-modal="true" aria-label="Playing ${esc(game.title)}"><header><div><img src="${esc(thumbnailFor(game))}" alt=""/><span><b>${esc(game.title)}</b>${controls ? `<i>${esc(controls)}</i>` : ""}</span>${sandboxActive ? `<em class="pp-devsandbox-badge">Dev Mode</em>` : ""}</div><div class="pp-player-actions">${game.devModeAvailable ? `<button class="pp-devsandbox-open" type="button" data-pp-devsandbox-open title="Live-edit this game's code while you play, hot-reloading in front of you">⚡ Dev Mode</button>` : ""}<button data-pp-player-restart title="Restart game">Restart</button><button data-pp-player-pause title="Pause game">${ui.playerPaused ? "Resume" : "Pause"}</button><button data-pp-player-fullscreen title="Full screen">Full screen</button><button data-pp-player-close aria-label="Close game">×</button></div></header><div class="pp-player-stage"><button class="pp-player-exit" data-pp-player-close type="button" aria-label="Exit game">Exit</button><div class="pp-player-loading" ${ui.playerReady ? "hidden" : ""}><i></i><b>Loading ${esc(game.title)}…</b><span>The game is opening in a private sandbox.</span></div><iframe src="${esc(game.launchUrl)}" title="${esc(game.title)}" sandbox="allow-scripts allow-pointer-lock" referrerpolicy="no-referrer" allow="fullscreen; gamepad" tabindex="0" data-pp-frame></iframe></div>${devSandboxMarkup(game)}<footer><span>Session <b>${esc(play.id.slice(-8))}</b></span><span data-pp-live-score>Score —</span><span data-pp-live-state>${ui.playerPaused ? "Paused" : "Playing"}</span><span>Engine ${esc(engine.version)}</span><span>Progress saves automatically</span></footer></div>`;
+  return `<div class="pp-player ${sandboxActive ? "is-devsandbox" : ""}" role="dialog" aria-modal="true" aria-label="Playing ${esc(game.title)}"><header><div><img src="${esc(thumbnailFor(game))}" alt=""/><span><b>${esc(game.title)}</b>${controls ? `<i>${esc(controls)}</i>` : ""}</span>${sandboxActive ? `<em class="pp-devsandbox-badge">Dev Mode</em>` : ""}</div><div class="pp-player-actions">${game.devModeAvailable ? `<button class="pp-devsandbox-open" type="button" data-pp-devsandbox-open title="Open the full game source. Edits hot-reload and autosave.">Code</button>` : ""}<button data-pp-player-restart title="Restart game">Restart</button><button data-pp-player-pause title="Pause game">${ui.playerPaused ? "Resume" : "Pause"}</button><button data-pp-player-fullscreen title="Full screen">Full screen</button><button data-pp-player-close aria-label="Close game">×</button></div></header><div class="pp-player-stage"><button class="pp-player-exit" data-pp-player-close type="button" aria-label="Exit game">Exit</button><div class="pp-player-loading" ${ui.playerReady ? "hidden" : ""}><i></i><b>Loading ${esc(game.title)}…</b><span>The game is opening in a private sandbox.</span></div><iframe src="${esc(game.launchUrl)}" title="${esc(game.title)}" sandbox="allow-scripts allow-pointer-lock" referrerpolicy="no-referrer" allow="fullscreen; gamepad" tabindex="0" data-pp-frame></iframe></div>${devSandboxMarkup(game)}<footer><span>Session <b>${esc(play.id.slice(-8))}</b></span><span data-pp-live-score>Score —</span><span data-pp-live-state>${ui.playerPaused ? "Paused" : "Playing"}</span><span>Engine ${esc(engine.version)}</span><span>Progress saves automatically</span></footer></div>`;
 }
 
 function render() {
@@ -1287,11 +1288,13 @@ async function persistPlay(ended, detail = {}) {
 async function closePlayer() {
   if (playerClosing) return;
   playerClosing = true;
+  snapshotDevSandboxLocalDraft();
   postToGame("exit", { focus: false });
   if (document.fullscreenElement) await document.exitFullscreen?.().catch(() => undefined);
   clearInterval(playClock);
   clearTimeout(readyWatchdog);
   clearTimeout(devSandboxApplyTimer);
+  clearTimeout(devSandboxAutosaveTimer);
   revokeDevSandboxBlob();
   ui.devSandbox = null;
   await persistPlay(true);
@@ -1316,9 +1319,65 @@ async function closePlayer() {
 // that duplicated the whole play surface — Dev Sandbox is just the normal
 // player with a drawer, never a second, differently-styled destination.
 let devSandboxApplyTimer = null;
+let devSandboxAutosaveTimer = null;
 
 function revokeDevSandboxBlob() {
   if (ui.devSandbox?.blobUrl) URL.revokeObjectURL(ui.devSandbox.blobUrl);
+}
+
+function loadDevSandboxAutosaves() {
+  try { return JSON.parse(workspaceStorageGetItem(DEV_SANDBOX_AUTOSAVE_KEY) || "{}") || {}; }
+  catch { return {}; }
+}
+
+function saveDevSandboxAutosaves(records) {
+  workspaceStorageSetItem(DEV_SANDBOX_AUTOSAVE_KEY, JSON.stringify(records || {}));
+}
+
+function localDevSandboxAutosave(gameId) {
+  const records = loadDevSandboxAutosaves();
+  const record = records?.[gameId];
+  return record && typeof record.source === "string" ? record : null;
+}
+
+function rememberDevSandboxAutosave(gameId, source) {
+  const records = loadDevSandboxAutosaves();
+  records[gameId] = { source, updatedAt: new Date().toISOString() };
+  saveDevSandboxAutosaves(records);
+  return records[gameId];
+}
+
+function clearDevSandboxAutosave(gameId) {
+  const records = loadDevSandboxAutosaves();
+  delete records[gameId];
+  saveDevSandboxAutosaves(records);
+}
+
+function newestDevSandboxSource(...candidates) {
+  const updatedMs = (item) => {
+    const parsed = Date.parse(item?.updatedAt || "");
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+  return candidates
+    .filter((item) => item && typeof item.source === "string")
+    .sort((a, b) => updatedMs(b) - updatedMs(a))[0] || null;
+}
+
+function devSandboxDomSource() {
+  const textarea = mountedRoot?.querySelector("[data-pp-devsandbox-source]");
+  return typeof textarea?.value === "string" ? textarea.value : ui.devSandbox?.editedSource || "";
+}
+
+function snapshotDevSandboxLocalDraft() {
+  if (!ui.devSandbox || ui.devSandbox.loading || ui.devSandbox.error) return;
+  const source = devSandboxDomSource();
+  ui.devSandbox = { ...ui.devSandbox, editedSource: source };
+  rememberDevSandboxAutosave(ui.devSandbox.gameId, source);
+}
+
+function setDevSandboxStatus(message) {
+  const status = mountedRoot?.querySelector("[data-pp-devsandbox-status]");
+  if (status) status.textContent = message;
 }
 
 // Rebuilds the Dev Sandbox blob from `nextSource` with mod support injected,
@@ -1342,7 +1401,7 @@ async function openDevSandbox() {
   const { game } = ui.player;
   if (!game.devModeAvailable) return;
   revokeDevSandboxBlob();
-  ui.devSandbox = { gameId: game.id, source: "", editedSource: "", blobUrl: "", hasOverride: false, overrideUpdatedAt: null, loading: true, error: "", status: "", saving: false, publishing: false, section: "mods", modState: {}, speed: 1 };
+  ui.devSandbox = { gameId: game.id, source: "", editedSource: "", blobUrl: "", hasOverride: false, overrideUpdatedAt: null, localUpdatedAt: null, loading: true, error: "", status: "", saving: false, publishing: false, section: "code", modState: {}, speed: 1 };
   render();
   try {
     const tenantQuery = `tenant_id=${encodeURIComponent(currentTenantId())}`;
@@ -1350,30 +1409,41 @@ async function openDevSandbox() {
       api(`/api/phantomplay/dev-mode/${encodeURIComponent(game.id)}/source?${tenantQuery}`),
       api(`/api/phantomplay/dev-mode/${encodeURIComponent(game.id)}/override?${tenantQuery}`).catch(() => ({ source: null, updatedAt: null })),
     ]);
-    const startingSource = overrideResult.source ?? sourceResult.source;
+    const localDraft = localDevSandboxAutosave(game.id);
+    const newestDraft = newestDevSandboxSource(
+      localDraft,
+      overrideResult.source ? { source: overrideResult.source, updatedAt: overrideResult.updatedAt } : null,
+    );
+    const startingSource = newestDraft?.source ?? sourceResult.source;
+    const status = newestDraft
+      ? (newestDraft === localDraft ? "Resumed your local autosave." : "Resumed your saved workspace override.")
+      : "Loaded the full shipped source. Changes autosave.";
     ui.devSandbox = {
       gameId: game.id, source: sourceResult.source, editedSource: startingSource, blobUrl: "",
       hasOverride: !!overrideResult.source, overrideUpdatedAt: overrideResult.updatedAt,
-      loading: false, error: "", status: overrideResult.source ? "Resumed your saved workspace override." : "Loaded the shipped source.", saving: false, publishing: false,
-      section: "mods", modState: {}, speed: 1,
+      localUpdatedAt: localDraft?.updatedAt || null,
+      loading: false, error: "", status, saving: false, publishing: false,
+      section: "code", modState: {}, speed: 1,
     };
-    rebuildDevSandboxFrame(startingSource);
   } catch (error) {
     try {
       const response = await fetch(game.launchUrl, { cache: "no-store" });
       const source = await response.text();
+      const localDraft = localDevSandboxAutosave(game.id);
+      const startingSource = localDraft?.source || source;
       ui.devSandbox = {
-        gameId: game.id, source, editedSource: source, blobUrl: "",
-        hasOverride: false, overrideUpdatedAt: null,
-        loading: false, error: "", status: "Loaded the shipped game source locally. Save/publish needs backend sync.",
-        saving: false, publishing: false, section: "mods", modState: {}, speed: 1,
+        gameId: game.id, source, editedSource: startingSource, blobUrl: "",
+        hasOverride: false, overrideUpdatedAt: null, localUpdatedAt: localDraft?.updatedAt || null,
+        loading: false, error: "", status: localDraft ? "Resumed your local autosave. Backend sync is offline." : "Loaded the full game source locally. Autosave will keep a local draft until backend sync returns.",
+        saving: false, publishing: false, section: "code", modState: {}, speed: 1,
       };
-      rebuildDevSandboxFrame(source);
     } catch {
       ui.devSandbox = { ...ui.devSandbox, loading: false, error: error instanceof Error ? error.message : "Dev Sandbox source could not be loaded." };
     }
   }
+  const sourceForFrame = ui.devSandbox && !ui.devSandbox.loading && !ui.devSandbox.error ? ui.devSandbox.editedSource : "";
   render();
+  if (sourceForFrame) rebuildDevSandboxFrame(sourceForFrame);
 }
 
 // Called on a debounced textarea input — this is the "see the code update in
@@ -1385,17 +1455,17 @@ async function openDevSandbox() {
 // close read the latest text correctly.
 function applyDevSandboxEditLive() {
   if (!ui.devSandbox) return;
-  const textarea = mountedRoot?.querySelector("[data-pp-devsandbox-source]");
-  const nextSource = typeof textarea?.value === "string" ? textarea.value : ui.devSandbox.editedSource;
+  const nextSource = devSandboxDomSource();
   ui.devSandbox = { ...ui.devSandbox, editedSource: nextSource };
   rebuildDevSandboxFrame(nextSource);
-  const status = mountedRoot?.querySelector("[data-pp-devsandbox-status]");
-  if (status) status.textContent = "Live — showing your unsaved edit.";
+  setDevSandboxStatus("Live preview updated. Autosaving…");
 }
 
 function scheduleDevSandboxApply() {
   clearTimeout(devSandboxApplyTimer);
+  clearTimeout(devSandboxAutosaveTimer);
   devSandboxApplyTimer = setTimeout(applyDevSandboxEditLive, 350);
+  devSandboxAutosaveTimer = setTimeout(() => persistDevSandboxOverride({ silent: true }), 1000);
 }
 
 // Mods apply instantly with no reload — the running blob already has every
@@ -1414,19 +1484,35 @@ function setDevSandboxSpeed(speed) {
   postToGame("modspeed", { value: speed });
 }
 
-async function saveDevSandboxOverride() {
+function setDevSandboxSection(section) {
+  if (!ui.devSandbox) return;
+  const source = devSandboxDomSource();
+  ui.devSandbox = { ...ui.devSandbox, section: section === "mods" ? "mods" : "code", editedSource: source };
+  render();
+  rebuildDevSandboxFrame(source);
+}
+
+async function persistDevSandboxOverride({ silent = false } = {}) {
   if (!ui.devSandbox || ui.devSandbox.saving) return;
-  const textarea = mountedRoot?.querySelector("[data-pp-devsandbox-source]");
-  const source = typeof textarea?.value === "string" ? textarea.value : ui.devSandbox.editedSource;
-  ui.devSandbox = { ...ui.devSandbox, saving: true };
-  render();
+  const gameId = ui.devSandbox.gameId;
+  const source = devSandboxDomSource();
+  const localDraft = rememberDevSandboxAutosave(gameId, source);
+  ui.devSandbox = { ...ui.devSandbox, editedSource: source, localUpdatedAt: localDraft.updatedAt, saving: true };
+  if (!silent) render();
+  else setDevSandboxStatus("Autosaved locally. Syncing workspace override…");
   try {
-    const result = await api(`/api/phantomplay/dev-mode/${encodeURIComponent(ui.devSandbox.gameId)}/override`, { method: "POST", body: JSON.stringify({ tenantId: currentTenantId(), source }) });
-    ui.devSandbox = { ...ui.devSandbox, editedSource: source, hasOverride: true, overrideUpdatedAt: result.updatedAt, saving: false, status: "Saved. Only visible to workspace managers — real players still see the shipped version.", error: "" };
+    const result = await api(`/api/phantomplay/dev-mode/${encodeURIComponent(gameId)}/override`, { method: "POST", body: JSON.stringify({ tenantId: currentTenantId(), source }) });
+    ui.devSandbox = { ...ui.devSandbox, editedSource: source, hasOverride: true, overrideUpdatedAt: result.updatedAt, saving: false, status: "Autosaved. Only visible to workspace managers until published live.", error: "" };
+    if (silent) setDevSandboxStatus("Autosaved. Only visible to workspace managers until published live.");
   } catch (error) {
-    ui.devSandbox = { ...ui.devSandbox, saving: false, error: error instanceof Error ? error.message : "Could not save this override." };
+    ui.devSandbox = { ...ui.devSandbox, saving: false, status: "Autosaved locally. Backend sync will retry when you edit again.", error: silent ? "" : (error instanceof Error ? error.message : "Could not save this override.") };
+    if (silent) setDevSandboxStatus("Autosaved locally. Backend sync will retry when you edit again.");
   }
-  render();
+  if (!silent) render();
+}
+
+async function saveDevSandboxOverride() {
+  await persistDevSandboxOverride({ silent: false });
 }
 
 async function revertDevSandboxToShipped() {
@@ -1435,6 +1521,7 @@ async function revertDevSandboxToShipped() {
   if (hasOverride) {
     try { await api(`/api/phantomplay/dev-mode/${encodeURIComponent(gameId)}/override`, { method: "DELETE" }); } catch { /* best effort */ }
   }
+  clearDevSandboxAutosave(gameId);
   ui.devSandbox = { ...ui.devSandbox, editedSource: source, hasOverride: false, overrideUpdatedAt: null, status: "Reverted to the shipped version.", error: "" };
   rebuildDevSandboxFrame(source);
   render();
@@ -1442,13 +1529,13 @@ async function revertDevSandboxToShipped() {
 
 async function publishDevSandboxLive() {
   if (!ui.devSandbox || ui.devSandbox.publishing) return;
-  const textarea = mountedRoot?.querySelector("[data-pp-devsandbox-source]");
-  const source = typeof textarea?.value === "string" ? textarea.value : ui.devSandbox.editedSource;
+  const source = devSandboxDomSource();
   if (!window.confirm("Publish this edit LIVE? This immediately overwrites the real shipped game file for every player — there is no undo from here.")) return;
   ui.devSandbox = { ...ui.devSandbox, publishing: true };
   render();
   try {
     await api(`/api/phantomplay/dev-mode/${encodeURIComponent(ui.devSandbox.gameId)}/publish`, { method: "POST", body: JSON.stringify({ tenantId: currentTenantId(), source, confirm: true }) });
+    clearDevSandboxAutosave(ui.devSandbox.gameId);
     ui.devSandbox = { ...ui.devSandbox, source, editedSource: source, hasOverride: false, overrideUpdatedAt: null, publishing: false, status: "Published live. Every player now gets this version." };
   } catch (error) {
     ui.devSandbox = { ...ui.devSandbox, publishing: false, error: error instanceof Error ? error.message : "This edit could not be published live." };
@@ -1457,7 +1544,9 @@ async function publishDevSandboxLive() {
 }
 
 function closeDevSandbox() {
+  snapshotDevSandboxLocalDraft();
   clearTimeout(devSandboxApplyTimer);
+  clearTimeout(devSandboxAutosaveTimer);
   revokeDevSandboxBlob();
   const frame = mountedRoot?.querySelector("[data-pp-frame]");
   if (frame && ui.player) frame.src = ui.player.game.launchUrl;
@@ -1688,10 +1777,10 @@ function bind() {
     render();
   });
   mountedRoot.querySelectorAll("[data-pp-devsandbox-card-open]").forEach((button) => button.onclick = (event) => { event.stopPropagation(); launchWithDevSandbox(button.dataset.ppDevsandboxCardOpen); });
-  mountedRoot.querySelectorAll("[data-pp-devmode-toggle]").forEach((button) => button.onclick = (event) => { event.stopPropagation(); toggleGameDevMode(button.dataset.ppDevmodeToggle, button.dataset.ppDevmodeToggleNext === "on"); });
+  mountedRoot.querySelectorAll("[data-pp-devsandbox-code-open]").forEach((button) => button.onclick = (event) => { event.stopPropagation(); launchWithDevSandbox(button.dataset.ppDevsandboxCodeOpen); });
   mountedRoot.querySelector("[data-pp-devsandbox-open]")?.addEventListener("click", openDevSandbox);
   mountedRoot.querySelector("[data-pp-devsandbox-close]")?.addEventListener("click", closeDevSandbox);
-  mountedRoot.querySelector("[data-pp-devsandbox-section]")?.addEventListener("change", (event) => { ui.devSandbox = { ...ui.devSandbox, section: event.target.value }; render(); });
+  mountedRoot.querySelector("[data-pp-devsandbox-section]")?.addEventListener("change", (event) => setDevSandboxSection(event.target.value));
   mountedRoot.querySelector("[data-pp-devsandbox-source]")?.addEventListener("input", scheduleDevSandboxApply);
   mountedRoot.querySelector("[data-pp-devsandbox-save]")?.addEventListener("click", saveDevSandboxOverride);
   mountedRoot.querySelector("[data-pp-devsandbox-revert]")?.addEventListener("click", revertDevSandboxToShipped);

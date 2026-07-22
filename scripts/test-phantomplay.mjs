@@ -308,8 +308,13 @@ assert.match(module, /game\.devModeAvailable \? `<button class="pp-devsandbox-op
 assert.match(module, /sandbox="allow-scripts allow-pointer-lock"[^>]*data-pp-frame/u, "The Dev Sandbox player iframe must remain opaque-origin sandboxed.");
 assert.match(module, /const blob = new Blob\(\[nextSource\], \{ type: "text\/html" \}\)/u, "Dev Mode edits must apply via a local blob URL, never a same-origin write.");
 assert.doesNotMatch(module, /devmode[\s\S]{0,200}(child_process|new Function|\.eval\()/iu, "The host page's Dev Mode code must never itself execute the edited source — only the sandboxed iframe does, by loading it as a document.");
-assert.match(module + v2Module, /section:\s*"mods"/u, "Dev Mode must open to useful controls first, not raw Live Code.");
+assert.match(module, /data-pp-devsandbox-code-open/u, "Game cards must expose the small code icon as the direct full-source editor entry point.");
+assert.doesNotMatch(module, /data-pp-devmode-toggle/u, "The small code icon must not be a separate Dev Mode toggle.");
+assert.match(module, /section:\s*"code"/u, "Dev Mode must open directly to the full game source code.");
+assert.match(module, /DEV_SANDBOX_AUTOSAVE_KEY/u, "Dev Mode must keep a local autosave draft for full-source edits.");
+assert.match(module, /setTimeout\(\(\) => persistDevSandboxOverride\(\{ silent: true \}\), 1000\)/u, "Dev Mode edits must autosave shortly after typing.");
+assert.match(module, /snapshotDevSandboxLocalDraft\(\);[\s\S]*clearTimeout\(devSandboxAutosaveTimer\)/u, "Closing Dev Mode must snapshot the current source before clearing autosave timers.");
 assert.doesNotMatch(css + v2Css, /\.pp2?-player\.is-devsandbox\{grid-template-columns:minmax\(0,1fr\) minmax/u, "Dev Mode must not squeeze the running game into a side-by-side editor.");
-assert.match(css, /\.pp-devsandbox\{position:absolute[\s\S]*width:min\(430px,calc\(100% - 28px\)\)/u, "Dev Mode must render as a polished drawer over the full-size game.");
+assert.match(css, /\.pp-devsandbox\{position:absolute[\s\S]*width:min\(760px,calc\(100% - 28px\)\)/u, "Dev Mode must render as a wide full-source drawer over the full-size game.");
 
 console.log("PhantomPlay frontend and game safety checks passed.");
