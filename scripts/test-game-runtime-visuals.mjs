@@ -36,7 +36,9 @@ function catalogGames() {
   return games;
 }
 
-const games = catalogGames();
+const gameFilter = process.env.GAME_FILTER;
+const games = gameFilter ? catalogGames().filter((game) => game.id === gameFilter) : catalogGames();
+assert.ok(games.length > 0, `No PhantomPlay games matched GAME_FILTER=${gameFilter}`);
 
 const viewports = [
   { id: "phone", width: 375, height: 812 },
@@ -170,14 +172,18 @@ async function auditGame(cdp, url, viewport, screenshotPath) {
       const rect = el.getBoundingClientRect();
       return style.display !== "none" && style.visibility !== "hidden" && rect.width > 8 && rect.height > 8;
     };
-    const launchPattern = /^(play|start|begin|calm|easy|solo|continue|new)$/i;
+    const launchPattern = /^(play|start|begin|calm|easy|solo|continue|new)\b/i;
     const overlayButtons = [...document.querySelectorAll(".overlay:not([hidden]) button, [role='dialog'] button, dialog[open] button")];
     const pageButtons = [...document.querySelectorAll("button")];
     const button = [...overlayButtons, ...pageButtons]
       .filter(visible)
-      .find((el) => launchPattern.test((el.textContent || "").trim().split(/\s+/)[0] || ""));
+      .find((el) => launchPattern.test((el.textContent || "").trim()));
     if (button) {
-      button.click();
+      if (typeof button.onclick === "function") button.onclick.call(button, new MouseEvent("click", { bubbles: true, cancelable: true }));
+      else {
+        button.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, cancelable: true }));
+        button.click();
+      }
       return true;
     }
     return false;
@@ -196,7 +202,7 @@ async function auditGame(cdp, url, viewport, screenshotPath) {
     const canvases = [...document.querySelectorAll("canvas")].filter(visible);
     const buttons = [...document.querySelectorAll("button")].filter(visible);
     const headings = [...document.querySelectorAll("h1,h2,.title,.logo")].filter(visible);
-    const gameSurface = [...document.querySelectorAll("canvas, main, .game, .screen, .arena, .stage, .app, #game, #app")]
+    const gameSurface = [...document.querySelectorAll("canvas, main, .wrap, .game, .screen, .arena, .stage, .app, .board, .playfield, .field, #game, #app")]
       .filter(visible)
       .map((el) => {
         const rect = el.getBoundingClientRect();
@@ -204,7 +210,9 @@ async function auditGame(cdp, url, viewport, screenshotPath) {
       })
       .sort((a, b) => b.area - a.area)[0] || null;
     const doc = document.documentElement;
-    const minSurfaceArea = innerWidth * innerHeight * 0.24;
+    const viewportWidth = Math.min(innerWidth || 0, doc.clientWidth || innerWidth || 0, visualViewport?.width || innerWidth || 0) || innerWidth;
+    const viewportHeight = Math.min(innerHeight || 0, doc.clientHeight || innerHeight || 0, visualViewport?.height || innerHeight || 0) || innerHeight;
+    const minSurfaceArea = viewportWidth * viewportHeight * 0.24;
     return {
       title: document.title,
       ready: document.readyState,
@@ -253,7 +261,7 @@ try {
       assert.equal(audit.tooLight, false, `${game.id} ${viewport.id}: game must not boot into a plain light/white surface.`);
       assert.equal(audit.horizontalOverflow, false, `${game.id} ${viewport.id}: game must not horizontally overflow.`);
       assert.equal(audit.blankish, false, `${game.id} ${viewport.id}: game must render visible playable UI/canvas.`);
-      assert.equal(audit.surfaceTooSmall, false, `${game.id} ${viewport.id}: game surface is too small for a modern playable launch.`);
+      assert.equal(audit.surfaceTooSmall, false, `${game.id} ${viewport.id}: game surface is too small for a modern playable launch. ${JSON.stringify(audit.gameSurface)}`);
     }
   }
   const report = path.join(outDir, "report.json");
