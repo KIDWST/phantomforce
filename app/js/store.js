@@ -1302,6 +1302,64 @@ export function resolveApproval(id, approved, opts = {}) {
   store.save();
 }
 
+// commandBriefing() — the decision briefing consumed by the PhantomOS shell
+// (app/js/os.js). Self-contained: reads the same core store collections the
+// rest of the app uses (leads/media/reviews/activity) and returns up to three
+// evidence-backed decisions plus an honest health line. Ported from the
+// PhantomOS experiment branch; main's own Command home uses a separate path,
+// so this is additive and does not shadow it.
+export function commandBriefing() {
+  const decisions = [];
+
+  const overdueLeads = visible(store.state.leads)
+    .filter((l) => ["new", "follow-up"].includes(l.status) && daysUntil(l.due) <= 0);
+  if (overdueLeads.length) {
+    decisions.push({
+      id: "cmd-leads",
+      dept: "Client Care",
+      headline: `${overdueLeads.length} client follow-up${overdueLeads.length === 1 ? "" : "s"} ${overdueLeads.length === 1 ? "is" : "are"} overdue`,
+      body: "Drafts are ready in Leads & Follow-Up using each client's history.",
+      evidence: overdueLeads.slice(0, 3).map((l) => `${l.name} (${l.company}) — ${l.next}`),
+      confidence: "high",
+      primary: { label: "Review messages", open: "leads" },
+    });
+  }
+
+  const readyMedia = visible(store.state.media).find((m) => m.status === "brief-ready");
+  if (readyMedia) {
+    decisions.push({
+      id: "cmd-media",
+      dept: "Creative",
+      headline: `${wsName(readyMedia.ws)} hasn't published in a while — a brief is ready`,
+      body: `Phantom prepared "${readyMedia.title}" with a full shot list. Needs your sign-off before any generation runs.`,
+      evidence: [`${readyMedia.shots.length}-shot list`, `Angle: ${readyMedia.angle}`],
+      confidence: "medium",
+      primary: { label: "Review campaign", open: "media" },
+    });
+  }
+
+  const readyReview = visible(store.state.reviews).find((r) => r.status === "publish-ready" && r.quote);
+  if (readyReview) {
+    decisions.push({
+      id: "cmd-review",
+      dept: "Growth",
+      headline: "A strong testimonial is approved but not live yet",
+      body: `${readyReview.client.split(" — ")[0]}'s quote is ready for the reviews wall.`,
+      evidence: [`"${readyReview.quote}"`],
+      confidence: "high",
+      primary: { label: "Review & publish", open: "reviews" },
+    });
+  }
+
+  const handledWhileAway = visible(store.state.activity).slice(0, 5).map((a) => `${a.who} ${a.text}`);
+
+  const healthLine = decisions.length === 0
+    ? "Your business is stable. Nothing needs attention right now."
+    : `Your business is stable. ${decisions.length} thing${decisions.length === 1 ? "" : "s"} need${decisions.length === 1 ? "s" : ""} attention.`;
+
+  return { healthLine, decisions: decisions.slice(0, 3), handledWhileAway };
+}
+
 export const STATUS_LABEL = {
   "new": "New", "follow-up": "Follow-up", "proposal": "Proposal out", "won": "Won", "lost": "Lost",
   "draft": "Draft", "sent-ready": "Send-ready", "sent": "Sent", "approved": "Approved",
