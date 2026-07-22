@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Phantom Ages</title>
-    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="style.css?v=2.0.0" />
   </head>
   <body>
     <div class="wrap">
@@ -12,30 +12,43 @@
         <div class="hud-side hud-player">
           <span class="hud-label">YOU</span>
           <div class="hp-bar"><div class="hp-fill" data-player-hp-fill></div></div>
-          <span class="hp-text" data-player-hp-text>500 / 500</span>
+          <span class="hp-text" data-player-hp-text>550 / 550</span>
         </div>
         <div class="hud-center">
-          <div class="gold" data-gold>💰 0</div>
+          <div class="gold-wrap">
+            <div class="gold" data-gold>💰 0</div>
+            <div class="income" data-income>+9/s</div>
+          </div>
           <div class="era" data-era-name>Stone Age</div>
         </div>
         <div class="hud-side hud-enemy">
           <span class="hud-label">ENEMY</span>
           <div class="hp-bar"><div class="hp-fill hp-fill-enemy" data-enemy-hp-fill></div></div>
-          <span class="hp-text" data-enemy-hp-text>500 / 500</span>
+          <span class="hp-text" data-enemy-hp-text>550 / 550</span>
         </div>
       </header>
 
-      <canvas id="battlefield" width="1280" height="360"></canvas>
+      <canvas id="battlefield" width="1280" height="420"></canvas>
 
       <div class="controls">
-        <div class="unit-buttons" data-unit-buttons></div>
-        <div class="side-buttons">
-          <button class="btn btn-turret" data-turret-btn>🔫 Fire Turret (Space)</button>
-          <button class="btn btn-advance" data-advance-btn>⬆ Advance Era</button>
+        <div class="control-col control-units">
+          <span class="col-label">Deploy units</span>
+          <div class="unit-buttons" data-unit-buttons></div>
+        </div>
+        <div class="control-col control-side">
+          <div class="side-buttons">
+            <button class="btn btn-turret" data-turret-btn>⚡ Overcharge (Space)</button>
+            <button class="btn btn-advance" data-advance-btn>⬆ Advance Era</button>
+          </div>
         </div>
       </div>
 
-      <p class="hint">Click a unit to spawn it. Space or the turret button fires your base turret at the nearest enemy in range. Advance eras to unlock stronger units.</p>
+      <div class="upgrades-wrap">
+        <span class="col-label">Upgrades — your cannon auto-fires. Spend gold to make it hurt.</span>
+        <div class="upgrades" data-upgrades></div>
+      </div>
+
+      <p class="hint">Deploy units, upgrade your cannon / economy / fortress, and advance through the ages. The base cannon fires on its own — Space triggers a bonus Overcharge volley.</p>
     </div>
 
     <div class="modal" data-branch-modal hidden>
@@ -45,11 +58,11 @@
         <div class="path-choices">
           <button class="path-btn" data-path-choice="military">
             <strong>⚔ Military</strong>
-            <span>Stronger frontline units, tougher base.</span>
+            <span>Heavier frontline units and a tougher fortress.</span>
           </button>
           <button class="path-btn" data-path-choice="tech">
             <strong>⚙ Tech</strong>
-            <span>Faster turret, more gold income, longer-range units.</span>
+            <span>Faster cannon, higher income, longer-range units.</span>
           </button>
         </div>
       </div>
@@ -63,7 +76,7 @@
       </div>
     </div>
 
-    <script src="../shared/objectPool.js"></script>
-    <script src="game.js"></script>
+    <script src="../shared/objectPool.js?v=2.0.0"></script>
+    <script src="game.js?v=2.0.0"></script>
   </body>
 </html>
