@@ -587,8 +587,8 @@
         },
         {
           "file": "server/src/access/entitlements.ts",
-          "pattern": "CUSTOMER_SWITCHABLE_PLAN_KEYS = new Set\\(\\[\"free\", \"professional\", \"elite\"\\]\\)",
-          "description": "Customer test mode exposes the actual Free, Pro, and Elite tiers, never the legacy Starter key."
+          "pattern": "CUSTOMER_SWITCHABLE_PLAN_KEYS = new Set\\(\\[\"free\", \"professional\", \"developer\", \"elite\", \"developer_elite\"\\]\\)",
+          "description": "Customer test mode exposes every public Free, Pro, Developer, Elite, and Developer + Elite tier, never the legacy Starter or internal key."
         },
         {
           "file": "server/scripts/test-local-customer-plan-preview.ts",
@@ -642,8 +642,8 @@
         },
         {
           "file": "app/js/command.js",
-          "pattern": "const INSTANT_CHAT_MODEL = \"qwen2\\.5:14b\";",
-          "description": "Smart casual chat uses the quality-tested local 14B model instead of the failed CLI alias or weaker arithmetic lane."
+          "pattern": "const INSTANT_CHAT_MODEL = \"qwen3:4b\";",
+          "description": "Smart casual chat uses the current latency-capped local Qwen 3 lane, with deterministic tools protecting arithmetic and exact-output work."
         },
         {
           "file": "app/js/command.js",

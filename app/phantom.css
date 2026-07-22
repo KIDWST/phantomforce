@@ -4882,7 +4882,7 @@ kbd { font: 600 10px "Spline Sans Mono", monospace; padding: 2px 6px; border-rad
 
 /* editor */
 .ml-editor { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 20px; align-items: start; min-height: 0; }
-.ml-canvas-wrap { position: relative; min-width: 0; display: grid; place-items: center; min-height: 360px; max-height: 62vh; padding: 14px; border: 1px solid var(--line); border-radius: 16px; background: radial-gradient(circle at 50% 40%, rgba(91, 76, 255,0.05), transparent 60%), #ffffff; overflow: hidden; }
+.ml-canvas-wrap { position: relative; min-width: 0; display: grid; place-items: center; min-height: 360px; max-height: 62vh; padding: 14px; border: 1px solid var(--line); border-radius: 16px; background: radial-gradient(circle at 50% 40%, rgba(91, 76, 255,0.05), transparent 60%), var(--glass); overflow: hidden; }
 .ml-canvas {
   max-width: 100%; max-height: 58vh; border-radius: 8px;
   background-color: var(--glass-2);
