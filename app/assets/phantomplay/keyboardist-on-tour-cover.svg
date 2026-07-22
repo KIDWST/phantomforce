@@ -1,20 +1,91 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675">
-  <title>Keyboardist On Tour cover art</title>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675" role="img" aria-labelledby="title desc">
+  <title id="title">Keyboardist On Tour cover art</title>
+  <desc id="desc">A neon concert stage where falling letter notes descend toward a glowing keyboard highway while synth towers and audience lights frame the arena.</desc>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#0b0716"/>
-      <stop offset="100%" stop-color="#1a1130"/>
+      <stop offset="0" stop-color="#090516"/>
+      <stop offset=".46" stop-color="#16102d"/>
+      <stop offset="1" stop-color="#041b24"/>
     </linearGradient>
+    <linearGradient id="floor" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#11213d" stop-opacity=".35"/>
+      <stop offset="1" stop-color="#02040a"/>
+    </linearGradient>
+    <linearGradient id="keyGlow" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ff2fb0"/>
+      <stop offset=".28" stop-color="#33e0ff"/>
+      <stop offset=".55" stop-color="#ffd23f"/>
+      <stop offset=".78" stop-color="#41ffa1"/>
+      <stop offset="1" stop-color="#b98bff"/>
+    </linearGradient>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="7" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <pattern id="scan" width="8" height="8" patternUnits="userSpaceOnUse">
+      <path d="M0 7H8" stroke="#ffffff" stroke-opacity=".04"/>
+    </pattern>
   </defs>
   <rect width="1200" height="675" fill="url(#bg)"/>
-  <g>
-    <rect x="380" y="200" width="60" height="260" rx="10" fill="#ff2fb0"/>
-    <rect x="460" y="240" width="60" height="220" rx="10" fill="#33e0ff"/>
-    <rect x="540" y="180" width="60" height="280" rx="10" fill="#ffd23f"/>
-    <rect x="620" y="230" width="60" height="230" rx="10" fill="#7cff6b"/>
-    <rect x="700" y="260" width="60" height="200" rx="10" fill="#b98bff"/>
+  <rect width="1200" height="675" fill="url(#scan)"/>
+  <path d="M0 675 L310 250 H890 L1200 675 Z" fill="url(#floor)"/>
+  <g stroke="#41ffa1" stroke-opacity=".18" stroke-width="2">
+    <path d="M600 250 L600 675"/>
+    <path d="M310 250 L0 675"/>
+    <path d="M890 250 L1200 675"/>
+    <path d="M385 250 L250 675"/>
+    <path d="M815 250 L950 675"/>
+    <path d="M0 610 H1200"/>
+    <path d="M85 550 H1115"/>
+    <path d="M170 490 H1030"/>
+    <path d="M250 430 H950"/>
+    <path d="M330 370 H870"/>
   </g>
-  <line x1="340" y1="470" x2="820" y2="470" stroke="#eaf6f4" stroke-opacity="0.35" stroke-width="3"/>
-  <text x="600" y="560" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="46" font-weight="700" fill="#f4eef9" letter-spacing="1">Keyboardist On Tour</text>
-  <text x="600" y="602" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="20" fill="#b7a9d1" letter-spacing="1">Type the dungeon alive</text>
+  <g opacity=".8">
+    <circle cx="145" cy="150" r="4" fill="#33e0ff"/>
+    <circle cx="205" cy="92" r="3" fill="#ffd23f"/>
+    <circle cx="955" cy="118" r="4" fill="#ff2fb0"/>
+    <circle cx="1038" cy="183" r="3" fill="#41ffa1"/>
+    <circle cx="744" cy="74" r="3" fill="#b98bff"/>
+  </g>
+  <g filter="url(#glow)">
+    <path d="M245 150 L330 395" stroke="#ff2fb0" stroke-width="8" stroke-linecap="round" opacity=".82"/>
+    <path d="M955 142 L840 395" stroke="#33e0ff" stroke-width="8" stroke-linecap="round" opacity=".78"/>
+    <path d="M600 76 L600 395" stroke="#ffd23f" stroke-width="6" stroke-linecap="round" opacity=".62"/>
+  </g>
+  <g filter="url(#glow)" font-family="ui-monospace,Menlo,Consolas,monospace" font-weight="900" text-anchor="middle">
+    <g transform="translate(385 212)">
+      <rect x="-32" y="-32" width="64" height="64" rx="12" fill="#ff2fb0" fill-opacity=".2" stroke="#ff2fb0" stroke-width="3"/>
+      <text y="13" font-size="38" fill="#fff">A</text>
+    </g>
+    <g transform="translate(520 226)">
+      <rect x="-29" y="-29" width="58" height="58" rx="12" fill="#33e0ff" fill-opacity=".18" stroke="#33e0ff" stroke-width="3"/>
+      <text y="12" font-size="35" fill="#fff">S</text>
+    </g>
+    <g transform="translate(675 244)">
+      <rect x="-31" y="-31" width="62" height="62" rx="12" fill="#ffd23f" fill-opacity=".18" stroke="#ffd23f" stroke-width="3"/>
+      <text y="12" font-size="36" fill="#fff">D</text>
+    </g>
+    <g transform="translate(805 130)">
+      <rect x="-28" y="-28" width="56" height="56" rx="12" fill="#41ffa1" fill-opacity=".2" stroke="#41ffa1" stroke-width="3"/>
+      <text y="11" font-size="34" fill="#06120b">F</text>
+    </g>
+  </g>
+  <g transform="translate(284 420)" filter="url(#glow)">
+    <rect x="0" y="0" width="632" height="98" rx="16" fill="#02040a" stroke="#41ffa1" stroke-opacity=".5" stroke-width="3"/>
+    <rect x="22" y="18" width="72" height="62" rx="8" fill="#ff2fb0"/>
+    <rect x="104" y="18" width="72" height="62" rx="8" fill="#33e0ff"/>
+    <rect x="186" y="18" width="72" height="62" rx="8" fill="#ffd23f"/>
+    <rect x="268" y="18" width="72" height="62" rx="8" fill="#41ffa1"/>
+    <rect x="350" y="18" width="72" height="62" rx="8" fill="#b98bff"/>
+    <rect x="432" y="18" width="72" height="62" rx="8" fill="#eaf6f4"/>
+    <rect x="514" y="18" width="72" height="62" rx="8" fill="#111828" stroke="#eaf6f4" stroke-opacity=".45"/>
+    <path d="M24 88 H608" stroke="url(#keyGlow)" stroke-width="6" stroke-linecap="round"/>
+  </g>
+  <g font-family="ui-monospace,Menlo,Consolas,monospace">
+    <text x="66" y="78" fill="#41ffa1" font-size="20" font-weight="900" letter-spacing="5">RHYTHM TOUR</text>
+    <text x="66" y="126" fill="#f4eef9" font-size="52" font-weight="900" letter-spacing="1">Keyboardist On Tour</text>
+    <text x="70" y="166" fill="#b7a9d1" font-size="20" font-weight="700" letter-spacing="1">Hit the pulses before the stage goes dark.</text>
+    <text x="70" y="612" fill="#41ffa1" font-size="17" font-weight="900" letter-spacing="3">FOCUS · TIMING · SYNTH ARENA</text>
+  </g>
 </svg>

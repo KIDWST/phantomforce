@@ -42,8 +42,10 @@ const coverArt = [
 ].map((slug) => read(`../app/assets/phantomplay/${slug}-cover.svg`)).join("\n");
 const upgradedCoverArt = Object.fromEntries([
   "cubetown",
+  "keyboardist-on-tour",
   "kingdom-breakers",
   "phantom-ages",
+  "phantom-grand-prix",
   "skyguard-arena",
   "tidefront-tactics",
 ].map((slug) => [slug, read(`../app/assets/phantomplay/${slug}-cover.svg`)]));
