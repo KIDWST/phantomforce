@@ -333,7 +333,7 @@ const SEEDED_PRODUCTS: PhantomStoreProduct[] = [
     version: "0.0.0-dev",
     status: "quality_hold",
     qualityNote: "In active development — not yet packaged for public release.",
-    imageUrl: "/app/assets/phantomstore/phantombot-cover.svg?v=20260722",
+    imageUrl: "/app/assets/phantomstore/phantombot-unleashed-cover.svg?v=20260722",
     referenceImageUrl: "",
     tags: ["self-hosted", "local ai", "advanced users", "privacy"],
     badges: ["Self-hosted", "Local-only", "In development"],

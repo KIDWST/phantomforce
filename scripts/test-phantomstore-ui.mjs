@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 
 const appHtml = readFileSync(new URL("../app/index.html", import.meta.url), "utf8");
 const mainSource = readFileSync(new URL("../app/js/main.js", import.meta.url), "utf8");
@@ -27,6 +27,13 @@ assert.match(storeSource, /Ready to buy/u, "Discovery must expose ready-to-buy p
 assert.match(storeSource, /const PRODUCT_ART_FALLBACKS/u, "PhantomStore must provide product artwork fallbacks when listings are missing images.");
 assert.match(storeSource, /beatforge-cover\.svg/u, "PhantomStore must have BeatForge product art instead of reusing PhantomForce OS art.");
 assert.match(storeSource + backendSource, /phantombot-cover\.svg/u, "PhantomStore must give Phantombot products real cover art instead of blank cards.");
+assert.match(storeSource + backendSource, /phantombot-unleashed-cover\.svg/u, "Phantombot Unleashed must have distinct self-hosted product art instead of duplicating Phantombot.");
+assert.match(storeSource, /unleashed\|self-hosted\|local-only\|fully local[\s\S]*phantombot-unleashed-cover\.svg/u, "Fallback product art must route local/self-hosted listings to the Unleashed cover first.");
+assert.match(storeSource, /id:\s*"product-phantombot"[\s\S]*imageUrl:\s*"\/app\/assets\/phantomstore\/phantombot-cover\.svg/u, "Offline Phantombot listing must use the regular Phantombot cover.");
+assert.match(storeSource, /id:\s*"product-phantombot-unleashed"[\s\S]*imageUrl:\s*"\/app\/assets\/phantomstore\/phantombot-unleashed-cover\.svg/u, "Offline Unleashed listing must use the distinct Unleashed cover.");
+assert.match(backendSource, /id:\s*"product-phantombot"[\s\S]*imageUrl:\s*"\/app\/assets\/phantomstore\/phantombot-cover\.svg/u, "Backend Phantombot listing must use the regular Phantombot cover.");
+assert.match(backendSource, /id:\s*"product-phantombot-unleashed"[\s\S]*imageUrl:\s*"\/app\/assets\/phantomstore\/phantombot-unleashed-cover\.svg/u, "Backend Unleashed listing must use the distinct Unleashed cover.");
+assert.ok(statSync(new URL("../app/assets/phantomstore/phantombot-unleashed-cover.svg", import.meta.url)).size > 3500, "Unleashed cover must stay scene-rich instead of reverting to a tiny placeholder.");
 assert.match(storeSource, /function localFallbackSnapshot\(\)/u, "PhantomStore must render a read-only local product catalog when live sync is offline.");
 assert.match(storeSource, /ui\.snapshot\?\.readOnlyFallback[\s\S]*Opening the product page from the local catalog/u, "PhantomStore offline fallback buy buttons must open product pages instead of becoming dead API actions.");
 assert.match(storeSource, /const artUrl = imageUrl \|\| fallbackImageUrl/u, "Product cards must choose uploaded art first and branded fallback art second.");

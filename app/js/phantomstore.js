@@ -122,7 +122,8 @@ function reviewList(reviews = []) {
 }
 
 const PRODUCT_ART_FALLBACKS = [
-  [/phantombot|falcon|agent|coding|self-hosted|unleashed/i, "/app/assets/phantomstore/phantombot-cover.svg"],
+  [/unleashed|self-hosted|local-only|fully local/i, "/app/assets/phantomstore/phantombot-unleashed-cover.svg"],
+  [/phantombot|falcon|agent|coding/i, "/app/assets/phantomstore/phantombot-cover.svg"],
   [/termina|terminal|cli|automation/i, "/app/assets/phantomstore/termina-cover-ai.webp"],
   [/beatforge|beat|drum|kit|midi|daw|producer/i, "/app/assets/phantomstore/beatforge-cover.svg"],
   [/vocal|vox|voice|autotune|pitch|song/i, "/app/assets/phantomstore/phantom-vocal-ai-cover-ai.webp"],
@@ -257,7 +258,7 @@ function localFallbackSnapshot() {
       version: "0.0.0-dev",
       status: "quality_hold",
       qualityNote: "In active development - not yet packaged for public release.",
-      imageUrl: "/app/assets/phantomstore/phantombot-cover.svg?v=20260722",
+      imageUrl: "/app/assets/phantomstore/phantombot-unleashed-cover.svg?v=20260722",
       referenceImageUrl: "",
       tags: ["self-hosted", "local ai", "advanced users", "privacy"],
       badges: ["Self-hosted", "Local-only", "In development"],
