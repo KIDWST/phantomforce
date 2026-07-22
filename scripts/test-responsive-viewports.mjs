@@ -384,6 +384,20 @@ function auditPage() {
     const style = getComputedStyle(el);
     return style.position === "fixed" && (el.closest("[data-mobile-bottom-nav]") || el.classList.contains("mobile-bottom-nav"));
   };
+  const parseRgb = (value = "") => {
+    const match = String(value).match(/rgba?\(([^)]+)\)/i);
+    if (!match) return null;
+    const parts = match[1].split(",").map((part) => Number.parseFloat(part.trim()));
+    if (parts.length < 3 || parts.slice(0, 3).some((part) => Number.isNaN(part))) return null;
+    return { r: parts[0], g: parts[1], b: parts[2], a: parts.length >= 4 && !Number.isNaN(parts[3]) ? parts[3] : 1 };
+  };
+  const luminance = ({ r, g, b }) => (0.2126 * r) + (0.7152 * g) + (0.0722 * b);
+  const isAllowedPaleSurface = (el) => {
+    if (el.closest("img, video, canvas, svg, picture")) return true;
+    if (el.matches("img, video, canvas, svg, path, circle, rect, line, polyline, polygon")) return true;
+    if (el.closest(".ps-product-media, .pp-game-art, .ml-stage-view, .ml-pool-thumb, .ch-pub-preview-media, .ch-asset-thumb, .site-preview-media")) return true;
+    return false;
+  };
 
   const offenders = [...document.body.querySelectorAll("*")]
     .filter(isVisible)
@@ -393,6 +407,21 @@ function auditPage() {
       const rect = visibleRect(el);
       if (rect.right <= rect.left || rect.bottom <= rect.top) return false;
       return rect.right > vw + 2 || rect.left < -2;
+    })
+    .slice(0, 10)
+    .map(elementSummary);
+
+  const paleSurfaces = [...document.body.querySelectorAll("*")]
+    .filter(isVisible)
+    .filter((el) => !isAllowedPaleSurface(el))
+    .filter((el) => {
+      const raw = el.getBoundingClientRect();
+      if (raw.width * raw.height < 2800) return false;
+      const color = parseRgb(getComputedStyle(el).backgroundColor);
+      if (!color || color.a < 0.68) return false;
+      const maxChannel = Math.max(color.r, color.g, color.b);
+      const minChannel = Math.min(color.r, color.g, color.b);
+      return luminance(color) > 218 && maxChannel - minChannel < 38;
     })
     .slice(0, 10)
     .map(elementSummary);
@@ -455,6 +484,7 @@ function auditPage() {
     bodyScrollWidth: Math.max(doc.scrollWidth, body?.scrollWidth || 0),
     horizontalOverflow: Math.max(doc.scrollWidth, body?.scrollWidth || 0) > vw + 2,
     offenders,
+    paleSurfaces,
     clippedText,
     dashboardCollisions,
     nav: {
@@ -541,6 +571,7 @@ function assertCase(result) {
   assert.equal(audit.pageVisible, true, `${label} ${viewport.width}: page body must be visible.`);
   assert.equal(audit.horizontalOverflow, false, `${label} ${viewport.width}: document has horizontal overflow (${audit.bodyScrollWidth}px > ${viewport.width}px).`);
   assert.deepEqual(audit.offenders, [], `${label} ${viewport.width}: visible elements escape the viewport.`);
+  assert.deepEqual(audit.paleSurfaces, [], `${label} ${viewport.width}: dark mode has large pale/white UI surfaces.`);
   assert.deepEqual(audit.clippedText, [], `${label} ${viewport.width}: visible control text is clipped.`);
   if (viewport.width <= 900) {
     assert.equal(audit.nav.mobileVisible, true, `${label} ${viewport.width}: compact bottom nav must be visible.`);
@@ -629,6 +660,7 @@ async function main() {
         "one desktop primary navigation surface visible above tablet widths",
         "document has no horizontal overflow",
         "visible elements do not escape viewport",
+        "dark mode has no large pale/white UI surfaces",
         "visible control text is not clipped",
         "PhantomPlay card actions stay fully visible inside game cards",
         "PhantomStore phone view puts product art before prompt chrome",
