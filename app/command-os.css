@@ -1729,11 +1729,12 @@ html[data-command-os="2040"] .phantom.command-os-enabled .phantomwire {
   }
 }
 
-/* Compact shell: use the native mobile homebar plus the fixed bottom dock.
-   The desktop Command OS rail becomes a duplicate nav strip on phones and
-   small tablets, so the dock is the only section navigation below 900px. */
+/* Compact shell: the fixed bottom dock is the only mobile navigation bar.
+   The desktop Command OS rail and the old phone homebar both duplicate it on
+   small screens, so content starts at the top and navigation lives below. */
 @media (max-width: 900px) {
   html[data-command-os="2040"] .phantom.command-os-enabled {
+    --mobile-admin-topbar: 0px !important;
     height: auto !important;
     min-height: 100dvh !important;
     overflow-x: hidden !important;
@@ -1745,10 +1746,10 @@ html[data-command-os="2040"] .phantom.command-os-enabled .phantomwire {
   }
 
   html[data-command-os="2040"] .phantom.command-os-enabled .mobile-admin-homebar {
-    display: flex !important;
-    background: rgba(4, 9, 15, 0.97) !important;
-    border-bottom-color: rgba(133, 171, 198, 0.18) !important;
-    box-shadow: 0 14px 38px rgba(0, 0, 0, 0.38) !important;
+    display: none !important;
+    opacity: 0 !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
   }
 
   html[data-command-os="2040"] .phantom.command-os-enabled > .sidebar:not(.is-expanded) {

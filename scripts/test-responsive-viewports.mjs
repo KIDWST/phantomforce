@@ -533,7 +533,7 @@ function assertCase(result) {
   assert.deepEqual(audit.clippedText, [], `${label} ${viewport.width}: visible control text is clipped.`);
   if (viewport.width <= 900) {
     assert.equal(audit.nav.mobileVisible, true, `${label} ${viewport.width}: compact bottom nav must be visible.`);
-    assert.equal(audit.nav.mobileHomebarVisible, true, `${label} ${viewport.width}: compact homebar must be visible.`);
+    assert.equal(audit.nav.mobileHomebarVisible, false, `${label} ${viewport.width}: compact homebar must stay hidden so mobile has one nav bar.`);
     assert.equal(audit.nav.commandRailVisible, false, `${label} ${viewport.width}: Command OS rail must be hidden on compact widths to avoid duplicate nav.`);
     assert.equal(audit.nav.desktopVisible, false, `${label} ${viewport.width}: desktop sidebar must be hidden on compact widths.`);
     if (page === "dashboard") {

@@ -20,7 +20,7 @@ assert.match(index, /data-plan/u, "Dashboard must retain the real owner-action s
 assert.match(index, /data-queue/u, "Dashboard must retain real work-in-motion status.");
 
 assert.doesNotMatch(index, /data-command-widgets/u, "Removed expandable command cards must not return.");
-assert.doesNotMatch(index, /data-mobile-command|data-mobile-bell|data-mobile-user-btn/u, "Mobile top chrome must be identity-only; the bottom dock owns mobile navigation.");
+assert.doesNotMatch(index, /data-mobile-command|data-mobile-bell|data-mobile-user-btn/u, "Mobile top chrome must not carry command, notification, or user navigation.");
 assert.doesNotMatch(index, /data-operating-spaces/u, "Dashboard must not duplicate navigation as operating-space cards.");
 assert.doesNotMatch(index, /data-command-snapshot/u, "Dashboard must not duplicate the business brief with another snapshot.");
 assert.doesNotMatch(index, /class="quick-card"/u, "Removed quick-action card must stay removed.");
@@ -62,7 +62,8 @@ assert.match(css, /\.chatbox\.is-typing::after/u, "Console must render a subtle 
 assert.doesNotMatch(commandOsCss, /data-chatbox-minimized="true"[\s\S]{0,220}\.chatbox-head \.pc-actions,[\s\S]{0,280}display:\s*none\s*!important/u, "Collapsed Command OS must keep the restore control clickable.");
 assert.match(commandOsCss, /\.chatbox-head \.pc-mode,[\s\S]*?\.chatbox-head \.pc-settings,[\s\S]*?\.chatbox-head \.pc-menu\s*\{[\s\S]*?display:\s*none\s*!important/u, "Collapsed Command OS should hide only non-restore header controls.");
 assert.match(commandOsCss, /@media \(max-width: 900px\)[\s\S]*?\.phantom\.command-os-enabled \.os-command-rail\s*\{[\s\S]*?display:\s*none\s*!important/u, "Compact Command OS must not render a duplicate top navigation rail.");
-assert.match(commandOsCss, /@media \(max-width: 900px\)[\s\S]*?\.phantom\.command-os-enabled \.mobile-admin-homebar\s*\{[\s\S]*?display:\s*flex\s*!important/u, "Compact Command OS must use the native mobile homebar.");
+assert.match(commandOsCss, /@media \(max-width: 900px\)[\s\S]*?--mobile-admin-topbar:\s*0px\s*!important/u, "Compact Command OS must not reserve height for a second mobile nav bar.");
+assert.match(commandOsCss, /@media \(max-width: 900px\)[\s\S]*?\.phantom\.command-os-enabled \.mobile-admin-homebar\s*\{[\s\S]*?display:\s*none\s*!important/u, "Compact Command OS must hide the old mobile homebar so only the bottom dock remains.");
 assert.match(commandOsCss, /@media \(max-width: 900px\)[\s\S]*?\.phantom\.command-os-enabled > \.sidebar:not\(\.is-expanded\)\s*\{[\s\S]*?display:\s*none\s*!important/u, "Compact Command OS must hide the desktop sidebar until More opens it.");
 assert.match(commandOsCss, /@media \(max-width: 900px\)[\s\S]*?\.phantom\.command-os-enabled \.mobile-bottom-nav\s*\{[\s\S]*?display:\s*grid\s*!important/u, "Compact Command OS must keep exactly one bottom dock visible.");
 assert.match(commandOsCss, /Compact layout ownership:[\s\S]*?\.phantom\.command-os-enabled \.console-center\s*\{[\s\S]*?flex-direction:\s*column\s*!important[\s\S]*?overflow:\s*visible\s*!important/u, "Compact dashboard surfaces must use one scrollable vertical flow.");

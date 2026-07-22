@@ -14101,8 +14101,19 @@ body .phantom .workspace-page :where(
 
 /* Phone navigation: five daily destinations stay one tap away. The sixth
    control opens the complete, permission-aware sidebar instead of clipping a
-   long horizontal list off-screen. */
+   long horizontal list off-screen. The bottom dock is the only mobile nav bar. */
 @media (max-width: 767px) {
+  .phantom {
+    --mobile-admin-topbar: 0px !important;
+  }
+
+  .mobile-admin-homebar {
+    display: none !important;
+    opacity: 0 !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+  }
+
   .sidebar {
     z-index: 110;
     transition:
