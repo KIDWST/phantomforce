@@ -1,7 +1,7 @@
 /* PhantomForce Websites -- one website preview, one prompt, unlimited domains. */
 
 import {
-  store, uid, visible, currentWs, wsName, pushActivity, ago, fmtMoney,
+  store, uid, visible, currentWs, wsName, pushActivity, ago, fmtMoney, workspaceStorageGetItem,
 } from "./store.js?v=phantom-live-20260722-29";
 import {
   esc, baseSiteDraft, ensureSiteDesign, ensureSiteStore, applyWebsitePrompt, renderWebsitePreview,
@@ -13,7 +13,8 @@ import {
 
 const siteUi = {
   activeSiteId: null, device: "desktop", selectedSection: -1,
-  panel: "website", cartOpen: false, checkoutOpen: false, confirmation: null,
+  panel: "website", editorMode: "easy", inspectTarget: "hero",
+  cartOpen: false, checkoutOpen: false, confirmation: null,
 };
 const PHANTOMFORCE_PUBLIC_SOURCE = {
   domain: "phantomforce.online",
@@ -27,6 +28,30 @@ const publicSourceUi = {
   error: "",
   files: {},
 };
+const CONTENT_ASSETS_KEY = "pf.contenthub.assets.v1";
+const SITE_INSPECT_TARGETS = [
+  { id: "hero", label: "Hero headline", top: 42, left: 50, prompt: "Rewrite the public homepage hero to be clearer, more premium, and more direct without changing the live site until approval." },
+  { id: "cta", label: "Primary CTA", top: 72, left: 50, prompt: "Improve the primary call-to-action button copy, spacing, and contrast so it feels obvious and owner-ready." },
+  { id: "prompt", label: "AI prompt bar", top: 66, left: 50, prompt: "Make the homepage AI prompt bar feel like a real Phantom web bot that can receive site changes, files, and owner requests." },
+  { id: "proof", label: "Proof cards", top: 35, left: 82, prompt: "Add sharper proof cards and social proof language while staying honest about what is live, drafted, or approval-gated." },
+  { id: "visual", label: "Hero visual", top: 30, left: 50, prompt: "Refresh the homepage visual treatment using PhantomForce Media Lab assets and a cleaner modern editing surface." },
+];
+const SITE_STYLE_ACTIONS = [
+  ["premium", "Make premium", "Make the selected website area cleaner, more premium, and less cluttered."],
+  ["direct", "Make direct", "Rewrite the selected area so a business owner instantly understands the offer and next step."],
+  ["contrast", "Fix contrast", "Improve spacing, contrast, and hierarchy for the selected area without changing the brand."],
+  ["cta", "Upgrade CTA", "Improve the selected call-to-action copy, hover state, and surrounding support text."],
+  ["mobile", "Mobile polish", "Tighten this area for mobile, with no overlapping text or oversized panels."],
+  ["fun", "Add Phantom play", "Add a subtle PhantomForce playful touch that keeps the business page professional."],
+];
+const SITE_QUICK_ELEMENTS = [
+  ["asset-hero", "Hero media slot", "Add a hero-ready Media Pool asset slot with alt text, crop controls, and approval before publish."],
+  ["proof-card", "Proof card", "Add an honest proof card for missed calls, replies, bookings, or approvals."],
+  ["offer-strip", "Offer strip", "Add a clean offer/package strip connected to the Store catalog."],
+  ["lead-bot", "Web bot prompt", "Add a Phantom web bot prompt that accepts requests, files, and page-change instructions."],
+  ["testimonial", "Review bubble", "Add a review/testimonial bubble placeholder that requires owner approval before publishing."],
+  ["section-template", "Section template", "Add a reusable section template from the current PhantomForce style system."],
+];
 
 /* ---- version history: a real, persisted undo trail per site ----
    Every mutation (prompt apply, section op, domain change, publish request)
@@ -182,13 +207,111 @@ async function loadPublicSiteSource(rerender) {
   }
 }
 
-function publicSourcePreviewMarkup(site) {
+function loadSiteMediaAssets() {
+  let raw = null;
+  try { raw = JSON.parse(workspaceStorageGetItem(CONTENT_ASSETS_KEY) || "null"); } catch {}
+  const list = Array.isArray(raw?.assets) ? raw.assets : Array.isArray(raw) ? raw : [];
+  return list
+    .filter((asset) => asset && asset.removed !== true)
+    .slice(0, 8)
+    .map((asset) => ({
+      id: asset.id || uid("asset"),
+      title: asset.title || asset.name || "Media Pool asset",
+      type: asset.type || asset.kind || "asset",
+      source: asset.source || "Media Pool",
+      url: asset.url || asset.previewUrl || asset.thumbnail || asset.thumbnailUrl || "",
+    }));
+}
+
+function selectedInspectTarget() {
+  return SITE_INSPECT_TARGETS.find((target) => target.id === siteUi.inspectTarget) || SITE_INSPECT_TARGETS[0];
+}
+
+function siteAssetRailMarkup() {
+  const assets = loadSiteMediaAssets();
+  const realAssets = assets.length ? assets : [];
+  return `
+    <section class="ss-asset-bank" aria-label="Media Lab assets and quick elements">
+      <div class="ss-editor-heading">
+        <p>Assets & quick elements</p>
+        <b>${realAssets.length ? `${realAssets.length} Media Pool item${realAssets.length === 1 ? "" : "s"}` : "Template presets"}</b>
+      </div>
+      ${realAssets.length ? `
+        <div class="ss-asset-grid">
+          ${realAssets.slice(0, 4).map((asset) => `
+            <button type="button" class="ss-asset-card" data-ss-asset-preset="Use the Media Pool asset named '${esc(asset.title)}' in the selected website area. Make it crop-safe, add alt text, and keep the change approval-gated.">
+              ${asset.url ? `<img src="${esc(asset.url)}" alt="">` : `<span>${esc(String(asset.type || "asset").slice(0, 1).toUpperCase())}</span>`}
+              <b>${esc(asset.title)}</b>
+              <small>${esc(asset.source)} · ${esc(asset.type)}</small>
+            </button>`).join("")}
+        </div>` : `
+        <div class="ss-quick-grid">
+          ${SITE_QUICK_ELEMENTS.map(([id, label, prompt]) => `
+            <button type="button" data-ss-asset-preset="${esc(prompt)}" aria-label="${esc(label)}">
+              <b>${esc(label)}</b><span>${esc(id.replace(/-/g, " "))}</span>
+            </button>`).join("")}
+        </div>`}
+    </section>`;
+}
+
+function siteEasyEditorMarkup(site) {
+  const target = selectedInspectTarget();
+  return `
+    <aside class="ss-site-editor-panel" aria-label="AI website editor">
+      <div class="ss-editor-tabs" role="tablist" aria-label="Website editor mode">
+        <button type="button" class="${siteUi.editorMode === "easy" ? "is-active" : ""}" data-ss-editor-mode="easy">Easy edit</button>
+        <button type="button" class="${siteUi.editorMode === "code" ? "is-active" : ""}" data-ss-editor-mode="code">Code</button>
+      </div>
+      ${siteUi.editorMode === "code" ? siteSourceCodeMarkup(site) : `
+        <div class="ss-editor-heading">
+          <p>AI Website Editor</p>
+          <h3>${esc(target.label)}</h3>
+          <span>Click a page region, choose a smart change, or type the exact outcome. Phantom drafts it first; publish still requires approval.</span>
+        </div>
+        <div class="ss-inspector-list" aria-label="Clickable page regions">
+          ${SITE_INSPECT_TARGETS.map((item) => `
+            <button type="button" class="${item.id === target.id ? "is-active" : ""}" data-ss-inspect-target="${esc(item.id)}">
+              <b>${esc(item.label)}</b><span>${esc(item.id)}</span>
+            </button>`).join("")}
+        </div>
+        <div class="ss-ai-option-grid" aria-label="AI edit suggestions">
+          ${SITE_STYLE_ACTIONS.map(([id, label, prompt]) => `
+            <button type="button" data-ss-ai-style="${esc(`${target.prompt} ${prompt}`)}">
+              <b>${esc(label)}</b><span>${esc(id)}</span>
+            </button>`).join("")}
+        </div>
+        ${siteAssetRailMarkup()}
+      `}
+    </aside>`;
+}
+
+function siteSourceCodeMarkup(site) {
   const design = ensureSiteDesign(site);
   const files = Array.isArray(design.sourceFiles) && design.sourceFiles.length
     ? design.sourceFiles
     : PHANTOMFORCE_PUBLIC_SOURCE.files;
   const selected = files.includes(publicSourceUi.selected) ? publicSourceUi.selected : files[0];
   const code = publicSourceUi.files[selected] || "";
+  return `
+    <div class="ss-public-source-code">
+      <div>
+        <p>Actual source</p>
+        <b>${esc(design.sourceRoot || "/")}</b>
+      </div>
+      <div class="ss-public-source-tabs">
+        ${files.map((path) => `<button type="button" class="${path === selected ? "is-active" : ""}" data-ss-source-file="${esc(path)}">${esc(path.replace(/^\//, ""))}</button>`).join("")}
+      </div>
+      ${publicSourceUi.error ? `<p class="ss-source-error">${esc(publicSourceUi.error)}</p>` : ""}
+      ${publicSourceUi.loaded
+        ? `<textarea readonly spellcheck="false">${esc(code)}</textarea>`
+        : `<div class="ss-source-quiet">
+             <button class="btn btn-ghost" type="button" data-ss-source-load>${publicSourceUi.loading ? "Reading source..." : "Read source files"}</button>
+             <span>Code is available when you need it. Easy edit stays first so owners can work visually.</span>
+           </div>`}
+    </div>`;
+}
+
+function publicSourcePreviewMarkup(site) {
   return `
     <div class="ss-public-source">
       <div class="ss-public-source-frame">
@@ -197,22 +320,17 @@ function publicSourcePreviewMarkup(site) {
           <b>${esc(PHANTOMFORCE_PUBLIC_SOURCE.domain)}</b>
           <small>Live public source</small>
         </div>
+        <div class="ss-frame-stage">
+          <div class="ss-live-hotspots" aria-label="Website click-to-edit regions">
+            ${SITE_INSPECT_TARGETS.map((target) => `
+              <button type="button" class="${target.id === siteUi.inspectTarget ? "is-active" : ""}" style="--top:${target.top}%;--left:${target.left}%;" data-ss-inspect-target="${esc(target.id)}">
+                <span>${esc(target.label)}</span>
+              </button>`).join("")}
+          </div>
         <iframe src="${esc(PHANTOMFORCE_PUBLIC_SOURCE.previewUrl)}?pf-site-preview=${Date.now()}" title="Live PhantomForce public website preview" loading="lazy"></iframe>
+        </div>
       </div>
-      <aside class="ss-public-source-code">
-        <div>
-          <p>Actual source</p>
-          <b>${esc(design.sourceRoot || "/")}</b>
-        </div>
-        <div class="ss-public-source-tabs">
-          ${files.map((path) => `<button type="button" class="${path === selected ? "is-active" : ""}" data-ss-source-file="${esc(path)}">${esc(path.replace(/^\//, ""))}</button>`).join("")}
-        </div>
-        ${publicSourceUi.error ? `<p class="ss-source-error">${esc(publicSourceUi.error)}</p>` : ""}
-        ${publicSourceUi.loaded
-          ? `<textarea readonly spellcheck="false">${esc(code)}</textarea>`
-          : `<button class="btn btn-primary" type="button" data-ss-source-load>${publicSourceUi.loading ? "Reading source..." : "Load current code"}</button>
-             <span>Preview is the live public site. Source reads from /index.html, /void.css, and /void.js so this is not a hallucinated generated mockup.</span>`}
-      </aside>
+      ${siteEasyEditorMarkup(site)}
     </div>`;
 }
 
@@ -643,6 +761,34 @@ export function renderSiteStudio(el) {
 
   el.querySelectorAll("[data-ss-panel]").forEach((button) => {
     button.onclick = () => { siteUi.panel = button.dataset.ssPanel; siteUi.cartOpen = false; rerender(); };
+  });
+
+  el.querySelectorAll("[data-ss-editor-mode]").forEach((button) => {
+    button.onclick = () => {
+      siteUi.editorMode = button.dataset.ssEditorMode === "code" ? "code" : "easy";
+      rerender();
+    };
+  });
+  el.querySelectorAll("[data-ss-inspect-target]").forEach((button) => {
+    button.onclick = () => {
+      siteUi.inspectTarget = button.dataset.ssInspectTarget || SITE_INSPECT_TARGETS[0].id;
+      rerender();
+    };
+  });
+  const applyPublicSitePrompt = (prompt, label = "AI website edit") => {
+    if (!active || !prompt) return;
+    snapshotSite(active, label);
+    applyWebsiteChange(active, prompt);
+    active.updated = new Date().toISOString();
+    pushActivity("Websites", `drafted ${label.toLowerCase()} for ${active.title}.`, active.ws);
+    store.save();
+    rerender();
+  };
+  el.querySelectorAll("[data-ss-ai-style]").forEach((button) => {
+    button.onclick = () => applyPublicSitePrompt(button.dataset.ssAiStyle || "", selectedInspectTarget().label);
+  });
+  el.querySelectorAll("[data-ss-asset-preset]").forEach((button) => {
+    button.onclick = () => applyPublicSitePrompt(`${selectedInspectTarget().prompt} ${button.dataset.ssAssetPreset || ""}`, "asset-assisted website edit");
   });
 
   el.querySelectorAll("[data-ss-source-file]").forEach((button) => {

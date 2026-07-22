@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 
 globalThis.localStorage = { getItem: () => null, setItem: () => {}, removeItem: () => {} };
 globalThis.window = { addEventListener: () => {} };
@@ -64,5 +65,18 @@ assert.equal(phantomForce.design.cta, "Book a call", "booking intent should beco
 assert.equal(phantomForce.design.existingUrl, "phantomforce.online", "official PhantomForce prompts should keep the real public domain.");
 assert.equal(phantomForce.store.checkoutMode, "test", "checkout must remain explicit test mode until payments are connected.");
 assert.equal(phantomForce.store.paymentsConnected, false, "the builder must never imply a payment connection.");
+
+const siteStudioSource = readFileSync(new URL("../app/js/sitestudio.js", import.meta.url), "utf8");
+const siteStudioCss = readFileSync(new URL("../app/phantom.css", import.meta.url), "utf8");
+assert.ok(siteStudioSource.includes("AI Website Editor"), "public site editor should default to an AI visual editor, not source loading.");
+assert.ok(siteStudioSource.includes("Easy edit") && siteStudioSource.includes("Code"), "code must remain available as the secondary editor mode.");
+assert.ok(siteStudioSource.includes("data-ss-inspect-target"), "public site preview must expose click-to-edit target controls.");
+assert.ok(siteStudioSource.includes("data-ss-ai-style"), "easy editor must offer AI style actions for selected regions.");
+assert.ok(siteStudioSource.includes("data-ss-asset-preset"), "easy editor must offer Media Pool asset and quick-element actions.");
+assert.ok(siteStudioSource.includes("workspaceStorageGetItem(CONTENT_ASSETS_KEY)"), "Site Studio should read real Media Pool assets from workspace storage.");
+assert.equal(siteStudioSource.includes("Load current code"), false, "the old oversized load-code affordance should not return.");
+assert.ok(siteStudioCss.includes(".ss-live-hotspots"), "click-to-edit hotspots must be styled.");
+assert.ok(siteStudioCss.includes(".ss-site-editor-panel"), "AI website editor panel must be styled.");
+assert.ok(siteStudioCss.includes(".ss-asset-bank"), "Media Pool and quick-element asset bank must be styled.");
 
 console.log("Workspace site builder prompt parsing checks passed.");
