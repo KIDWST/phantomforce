@@ -57,8 +57,15 @@ try {
   assert.equal(statusPayload.status.universal, true);
   assert.equal(statusPayload.status.session_scoped, false);
   assert.equal(statusPayload.status.transport, "relay_packet");
+  assert.equal(statusPayload.status.setup_required, true);
+  assert.match(statusPayload.status.subscription_billing_note, /API\/Codex automation requires an approved adapter/u);
+  assert.equal(statusPayload.status.env.openai_api_key, "OPENAI_API_KEY");
+  assert.equal(statusPayload.status.setup_options.some((item: Record<string, any>) => item.id === "relay_packet" && item.ready === true), true);
+  assert.equal(statusPayload.status.setup_options.some((item: Record<string, any>) => item.id === "local_chatgpt_adapter" && item.ready === false), true);
+  assert.equal(statusPayload.status.setup_options.some((item: Record<string, any>) => item.id === "openai_api_key"), true);
   assert.equal(statusPayload.live_provider_called, false);
   assert.equal(statusPayload.database_written, false);
+  assert.doesNotMatch(JSON.stringify(statusPayload), /sk-[A-Za-z0-9]/u);
 
   const assistResponse = await fetch(`${baseUrl}/phantom-ai/agent-assist`, {
     method: "POST",

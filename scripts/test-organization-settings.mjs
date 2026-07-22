@@ -23,6 +23,18 @@ assert.match(settings, /id: "plan", label: "Plan & access", category: "Workspace
   "Plan testing and entitlement restrictions must live under Settings, not Clients.");
 assert.match(settings, /id: "workspace", label: "Workspace Studio", category: "Workspace"/u,
   "Workspace Studio must remain in the same Settings category.");
+assert.match(settings, /id: "bridge", label: "ChatGPT Bridge", category: "AI Brain"/u,
+  "ChatGPT Bridge setup belongs in AI Brain settings.");
+assert.match(settings, /\/phantom-ai\/agent-assist\/status/u,
+  "Settings must read the universal agent assist bridge status.");
+assert.match(settings, /ChatGPT app subscriptions and OpenAI API usage are separate billing paths/u,
+  "Settings must explain that ChatGPT app subscriptions are not the API billing path.");
+assert.match(settings, /OPENAI_API_KEY/u,
+  "Settings must expose the OpenAI API key setup path without capturing secrets.");
+assert.match(settings, /Do not paste ChatGPT passwords here/u,
+  "Settings must forbid ChatGPT password capture.");
+assert.match(settings, /data-agent-assist-refresh/u,
+  "Settings must let the owner refresh bridge status.");
 assert.match(settings, /renderOrganizationPanel\(organizationMount, opts\)/u,
   "Settings must mount the real Organization panel.");
 assert.match(settings, /title: "Organization & access"/u,

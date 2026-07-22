@@ -5682,6 +5682,56 @@ kbd { font: 600 10px "Spline Sans Mono", monospace; padding: 2px 6px; border-rad
 .set-field.is-muted { opacity: .62; }
 .set-status-pill { align-self: flex-start; border: 1px solid rgba(199, 126, 0,.28); border-radius: 999px; padding: 8px 12px; color: var(--warn); background: rgba(199, 126, 0,.08); font: 700 10px "Spline Sans Mono", monospace; letter-spacing: .12em; text-transform: uppercase; }
 .set-status-pill.is-on { border-color: rgba(91, 76, 255,.35); color: var(--neon); background: rgba(91, 76, 255,.1); }
+.set-bridge-note {
+  display: grid;
+  gap: 5px;
+  margin: 12px 0 4px;
+  padding: 12px 13px;
+  border: 1px solid rgba(199, 126, 0,.26);
+  border-radius: 14px;
+  color: var(--dim);
+  background: rgba(199, 126, 0,.07);
+}
+.set-bridge-note.is-ready { border-color: rgba(91, 76, 255,.32); background: rgba(91, 76, 255,.08); }
+.set-bridge-note b { color: var(--ink); font-size: 13px; }
+.set-bridge-note span { font-size: 12px; line-height: 1.45; }
+.set-bridge-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px; margin: 8px 0 14px; }
+.set-bridge-card {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--glass);
+}
+.set-bridge-card.is-ready { border-color: rgba(91, 76, 255,.34); box-shadow: inset 3px 0 0 var(--neon); }
+.set-bridge-card b { color: var(--ink); font-size: 13px; }
+.set-bridge-card i {
+  width: max-content;
+  max-width: 100%;
+  border: 1px solid rgba(91, 76, 255,.18);
+  border-radius: 999px;
+  padding: 3px 7px;
+  color: var(--neon);
+  background: rgba(91, 76, 255,.08);
+  font: 800 9px "Spline Sans Mono", monospace;
+  font-style: normal;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+.set-bridge-card span { color: var(--dim); font-size: 11.5px; line-height: 1.45; }
+.set-code-list { display: grid; gap: 7px; margin: 8px 0 14px; }
+.set-code-list code {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  border: 1px solid rgba(91, 76, 255,.14);
+  border-radius: 10px;
+  padding: 9px 10px;
+  color: var(--ink);
+  background: rgba(0,0,0,.24);
+  font: 700 11px "Spline Sans Mono", monospace;
+}
 .set-module-card { display: grid; gap: 16px; border: 1px solid rgba(91, 76, 255,.18); border-radius: 16px; padding: 18px; background: var(--glass); }
 .set-module-card-main { display: grid; grid-template-columns: auto minmax(0,1fr); gap: 14px; align-items: start; }
 .set-module-card h3 { margin: 0 0 6px; }
