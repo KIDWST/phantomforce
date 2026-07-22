@@ -1533,7 +1533,13 @@ export async function startPhantomPlaySession(session: AccessSession, input: Rec
   profile.sessions = profile.sessions.slice(0, 120);
   profile.updatedAt = stamp;
   await writeStore(store);
-  return { play, game, restoreState, remainingMinutesToday: dailyMinuteLimit - Math.ceil(todaySeconds(profile) / 60) };
+  // catalogFor() returns the raw catalog entry, not the annotated shape the
+  // full snapshot builds (see getPhantomPlaySnapshot below) — without this,
+  // ui.player.game.devModeAvailable is always undefined here, so the
+  // in-player Dev Mode button and the auto-open-after-launch flow both
+  // silently no-op even for an account that genuinely has Dev Mode access.
+  const gameWithDevMode = { ...game, devModeAvailable: phantomPlayDevModeAccessFromStore(store, session, game.id).allowed };
+  return { play, game: gameWithDevMode, restoreState, remainingMinutesToday: dailyMinuteLimit - Math.ceil(todaySeconds(profile) / 60) };
 }
 
 export async function updatePhantomPlaySession(session: AccessSession, playId: string, input: Record<string, unknown>) {
