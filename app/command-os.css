@@ -1381,3 +1381,165 @@ html[data-command-os="2040"] .phantom.command-os-enabled .phantomwire {
     color: #dfe9ef !important;
   }
 }
+
+/* ============================================================= */
+/* ==== LIVE SIGNALS — instruments, not shortcuts ============== */
+/* ============================================================= */
+/* The rail's third panel and the division strip stopped being a second
+   navigation and became telemetry: every number here is real store/ledger/
+   analytics data or a truthful empty state — never a prop. */
+
+.command-os-enabled .signals-card {
+  padding: 18px 0 6px;
+  border: 0;
+  background: transparent;
+}
+
+.signals-grid { display: grid; gap: 4px; }
+
+.os-signal {
+  position: relative;
+  display: grid;
+  gap: 5px;
+  padding: 12px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 180ms ease, transform 180ms ease;
+}
+.os-signal:hover { background: rgba(255, 255, 255, 0.025); transform: translateY(-1px); }
+.os-signal:active { transform: translateY(0); }
+
+.os-signal-k {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #687783;
+  font: 500 8px "Spline Sans Mono", monospace;
+  letter-spacing: 0.17em;
+  text-transform: uppercase;
+}
+.os-signal-led {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(133, 171, 198, 0.3);
+  text-decoration: none;
+}
+.os-signal-led.is-on {
+  background: #55e7a7;
+  box-shadow: 0 0 9px rgba(85, 231, 167, 0.75);
+  animation: osLedPulse 2.6s ease-in-out infinite;
+}
+@keyframes osLedPulse {
+  50% { box-shadow: 0 0 3px rgba(85, 231, 167, 0.35); }
+}
+
+.os-signal-v {
+  color: #eef4f7;
+  font: 600 21px "Spline Sans Mono", monospace;
+  letter-spacing: -0.01em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.os-signal-v.is-empty { color: #4d5b66; }
+.os-signal-d {
+  overflow: hidden;
+  color: #75838e;
+  font-size: 9.5px;
+  font-style: normal;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* spark bars: series drawn as growing columns, newest on the right */
+.os-signal-spark {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 26px;
+  margin-top: 3px;
+  overflow: hidden;
+}
+.os-signal-spark i {
+  flex: 1 1 auto;
+  min-width: 2px;
+  height: var(--h, 4%);
+  border-radius: 1px 1px 0 0;
+  background: linear-gradient(180deg, #55e7a7, rgba(79, 141, 255, 0.55));
+  opacity: 0.85;
+  transform-origin: bottom;
+  animation: osSparkGrow 640ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+.os-signal-spark i:nth-child(-n + 30) { animation-delay: calc(var(--d, 0) * 1ms); }
+.os-signal-spark.is-ghost {
+  border-bottom: 1px dashed rgba(133, 171, 198, 0.25);
+}
+@keyframes osSparkGrow {
+  from { transform: scaleY(0); }
+}
+
+/* force-load meter: five cells that light with real activity */
+.os-signal-load { display: inline-flex; gap: 3px; margin-top: 4px; }
+.os-signal-load i {
+  width: 16px;
+  height: 4px;
+  border-radius: 1px;
+  background: rgba(133, 171, 198, 0.16);
+}
+.os-signal-load.is-on i:first-child,
+.os-signal-load.is-on i:nth-child(2) {
+  background: #55e7a7;
+  box-shadow: 0 0 7px rgba(85, 231, 167, 0.5);
+  animation: osLedPulse 2.2s ease-in-out infinite;
+}
+
+/* division strip instruments: real metric riding each plate */
+.os-division-metric {
+  position: absolute;
+  top: 15px;
+  right: 16px;
+  color: #63e2a9;
+  font: 600 11px "Spline Sans Mono", monospace;
+  font-style: normal;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.os-division-metric[data-empty="true"] { color: #4a5863; }
+
+/* The execution-mode tabs float over the chat card's bottom-right corner —
+   reserve that band inside the card so the send button never sits underneath
+   the Monitor tab (it was click-blocked there before this rule). */
+.command-os-enabled .hero2-copy .chatbox { padding-bottom: 38px; }
+
+/* The gravity map is an instrument, not a poster. phantom.css still carries
+   the legacy `.hero2-stage { pointer-events: none }` from when the stage was
+   pure decoration — the stage stays click-through, but the nodes and the
+   field-mode tabs inside it take the pointer back so every metric is a real
+   control (they were unclickable before this rule). */
+.command-os-enabled .hero2-stage .os-gravity-map .os-node,
+.command-os-enabled .hero2-stage .os-field-modes,
+.command-os-enabled .hero2-stage .os-field-modes button {
+  pointer-events: auto;
+}
+
+/* the gravity core now charges the chat instead of leaving the room */
+.os-node-core { cursor: pointer; }
+.os-chat-charged {
+  animation: osChatCharge 900ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes osChatCharge {
+  0% { box-shadow: 0 0 0 0 rgba(85, 231, 167, 0.55); }
+  100% { box-shadow: 0 0 0 26px rgba(85, 231, 167, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .os-signal-spark i { animation: none; }
+  .os-signal-led.is-on,
+  .os-signal-load.is-on i { animation: none; }
+  .os-chat-charged { animation: none; }
+}

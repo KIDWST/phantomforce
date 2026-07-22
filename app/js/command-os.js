@@ -6,17 +6,22 @@ import {
   moneyView,
   memoryStats,
   fmtMoney,
-} from "./store.js?v=phantom-live-20260721-25";
+} from "./store.js?v=phantom-live-20260721-26";
+import { loadSocialAccounts } from "./contenthub.js?v=phantom-live-20260721-26";
 
 let executionMode = "advise";
 let syncFrame = 0;
+let signalsSignature = "";
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
+/* Only write when the value actually changed: the shell MutationObserver
+   re-schedules a sync on every DOM write, so unconditional writes would keep
+   the sync loop hot every frame instead of settling after one pass. */
 function setText(selector, value) {
   const element = $(selector);
-  if (element) element.textContent = value;
+  if (element && element.textContent !== String(value)) element.textContent = String(value);
 }
 
 function plural(count, singular, pluralLabel = `${singular}s`) {
@@ -28,14 +33,185 @@ function setNode(id, value, detail) {
   if (!node) return;
   const valueElement = $("[data-os-node-value]", node);
   const detailElement = $("[data-os-node-detail]", node);
-  if (valueElement) valueElement.textContent = String(value);
-  if (detailElement) detailElement.textContent = detail;
+  if (valueElement && valueElement.textContent !== String(value)) valueElement.textContent = String(value);
+  if (detailElement && detailElement.textContent !== String(detail)) detailElement.textContent = detail;
   node.dataset.empty = String(value === 0 || value === "—" || value === "Checking");
 }
 
 function setDivision(id, value) {
   const target = $(`[data-os-division-status="${id}"]`);
-  if (target) target.textContent = value;
+  if (target && target.textContent !== String(value)) target.textContent = value;
+}
+
+function setDivisionMetric(id, value) {
+  const target = $(`[data-os-division-metric="${id}"]`);
+  if (!target) return;
+  if (target.textContent !== String(value)) target.textContent = String(value);
+  target.dataset.empty = String(value === "—");
+}
+
+function fmtCompact(n) {
+  const num = Number(n) || 0;
+  if (Math.abs(num) >= 1e6) return `${(num / 1e6).toFixed(num % 1e6 === 0 ? 0 : 1)}M`;
+  if (Math.abs(num) >= 1e3) return `${(num / 1e3).toFixed(num % 1e3 === 0 ? 0 : 1)}K`;
+  return String(num);
+}
+
+/* ---- live signals: real data or a truthful empty state, never a prop ---- */
+
+function audienceSignal() {
+  let accounts = [];
+  try { accounts = loadSocialAccounts(); } catch { accounts = []; }
+  const linked = (accounts || []).filter((account) => {
+    const report = account?.analytics;
+    return report && ((Number(report.impressions) || 0) > 0 || (Array.isArray(report.series) && report.series.length));
+  });
+  if (!linked.length) return { ready: false };
+  const impressions = linked.reduce((sum, account) => sum + (Number(account.analytics.impressions) || 0), 0);
+  const engagement = linked.reduce((sum, account) => sum + (Number(account.analytics.engagement) || 0), 0);
+  const len = Math.min(30, Math.max(0, ...linked.map((account) => (account.analytics.series || []).length)));
+  const series = [];
+  for (let i = 0; i < len; i += 1) {
+    series.push(linked.reduce((sum, account) => {
+      const arr = account.analytics.series || [];
+      const point = arr[arr.length - len + i];
+      return sum + (Number(point?.impressions) || Number(point?.reach) || 0);
+    }, 0));
+  }
+  const windowDays = len || 30;
+  return {
+    ready: true,
+    impressions,
+    engagement,
+    series,
+    windowDays,
+    platforms: linked.length,
+    avgPerDay: Math.round(impressions / Math.max(1, windowDays)),
+  };
+}
+
+function cashSignal() {
+  const money = moneyView();
+  const txs = money.transactions || [];
+  if (!txs.length) return { ready: false };
+  const DAY = 86400000;
+  const now = Date.now();
+  const days = Array.from({ length: 30 }, () => 0);
+  let in30 = 0;
+  let out30 = 0;
+  txs.forEach((tx) => {
+    const at = new Date(tx.date || tx.createdAt || 0).getTime();
+    const age = Math.floor((now - at) / DAY);
+    if (age < 0 || age > 29) return;
+    days[29 - age] += Number(tx.amount) || 0;
+    if (tx.amount > 0) in30 += tx.amount;
+    else out30 += Math.abs(tx.amount);
+  });
+  return { ready: true, netCash: money.netCash, in30, out30, series: days, count: txs.length };
+}
+
+function forceSignal() {
+  const agents = visible(store.state.agents || []);
+  const running = agents.filter((agent) => ["active", "working", "ready"].includes(agent.status)).length;
+  const pending = visible(store.state.approvals || []).filter((item) => item.status === "pending").length;
+  const memories = memoryStats().total;
+  return { agents: agents.length, running, pending, memories };
+}
+
+function sparkMarkup(series) {
+  const values = (series || []).map((value) => Math.max(0, Number(value) || 0));
+  const peak = Math.max(...values, 1);
+  const live = values.some((value) => value > 0);
+  if (!live) return `<span class="os-signal-spark is-ghost" aria-hidden="true"></span>`;
+  const bars = values
+    .map((value) => `<i style="--h:${Math.max(4, Math.round((value / peak) * 100))}%"></i>`)
+    .join("");
+  return `<span class="os-signal-spark" aria-hidden="true">${bars}</span>`;
+}
+
+function tweenValue(element, target, format) {
+  const to = Number(target);
+  if (!Number.isFinite(to)) {
+    if (element.textContent !== String(target)) element.textContent = String(target);
+    return;
+  }
+  const from = Number(element.dataset.tweenAt || 0);
+  if (from === to) {
+    const settled = format(to);
+    if (element.textContent !== settled) element.textContent = settled;
+    return;
+  }
+  element.dataset.tweenAt = String(to);
+  cancelAnimationFrame(Number(element.dataset.tweenFrame || 0));
+  const started = performance.now();
+  const duration = 620;
+  const step = (t) => {
+    const k = Math.min(1, (t - started) / duration);
+    const eased = 1 - Math.pow(1 - k, 3);
+    element.textContent = format(Math.round(from + (to - from) * eased));
+    if (k < 1) element.dataset.tweenFrame = String(requestAnimationFrame(step));
+  };
+  element.dataset.tweenFrame = String(requestAnimationFrame(step));
+}
+
+function renderSignals() {
+  const grid = $("[data-os-signal-grid]");
+  if (!grid) return;
+  const audience = audienceSignal();
+  const cash = cashSignal();
+  const force = forceSignal();
+  const signature = JSON.stringify([
+    audience.ready ? [audience.impressions, audience.platforms, audience.windowDays] : 0,
+    cash.ready ? [Math.round(cash.netCash), cash.count] : 0,
+    [force.agents, force.running, force.pending, force.memories],
+  ]);
+  /* The dashboard shell is rebuilt from a pristine innerHTML capture on every
+     view switch (ensureDashboardShell), which resets this grid to empty — so
+     an unchanged signature only skips the render when the grid is still
+     populated. */
+  if (signature === signalsSignature && grid.childElementCount) return;
+  signalsSignature = signature;
+
+  const audienceBody = audience.ready
+    ? `<b class="os-signal-v" data-signal-tween="${audience.impressions}" data-signal-fmt="compact">${fmtCompact(audience.impressions)}</b>
+       <i class="os-signal-d">≈ ${fmtCompact(audience.avgPerDay)} views/day · last ${audience.windowDays}d · ${plural(audience.platforms, "platform")}</i>
+       ${sparkMarkup(audience.series)}`
+    : `<b class="os-signal-v is-empty">—</b>
+       <i class="os-signal-d">No platforms linked. Connect one in Analytics.</i>
+       ${sparkMarkup([])}`;
+
+  const cashBody = cash.ready
+    ? `<b class="os-signal-v" data-signal-tween="${Math.round(cash.netCash)}" data-signal-fmt="money">${fmtMoney(cash.netCash)}</b>
+       <i class="os-signal-d">30d: +${fmtMoney(cash.in30)} / −${fmtMoney(cash.out30)} · ${plural(cash.count, "transaction")}</i>
+       ${sparkMarkup(cash.series.map(Math.abs))}`
+    : `<b class="os-signal-v is-empty">—</b>
+       <i class="os-signal-d">No ledger connected. Add transactions in Accounting.</i>
+       ${sparkMarkup([])}`;
+
+  const forceOn = force.agents > 0 || force.pending > 0;
+  const forceBody = `<b class="os-signal-v" data-signal-tween="${force.agents}" data-signal-fmt="plain">${force.agents}</b>
+     <i class="os-signal-d">${force.running} running · ${plural(force.pending, "approval")} waiting · ${plural(force.memories, "memory", "memories")}</i>
+     <span class="os-signal-load${forceOn ? " is-on" : ""}" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>`;
+
+  grid.innerHTML = `
+    <button class="os-signal" data-open-ws="analytics" type="button">
+      <span class="os-signal-k"><u class="os-signal-led${audience.ready ? " is-on" : ""}"></u>Audience</span>
+      ${audienceBody}
+    </button>
+    <button class="os-signal" data-open-ws="money" type="button">
+      <span class="os-signal-k"><u class="os-signal-led${cash.ready ? " is-on" : ""}"></u>Cash flow</span>
+      ${cashBody}
+    </button>
+    <button class="os-signal" data-open-ws="workforce" type="button">
+      <span class="os-signal-k"><u class="os-signal-led${forceOn ? " is-on" : ""}"></u>Force load</span>
+      ${forceBody}
+    </button>`;
+
+  $$("[data-signal-tween]", grid).forEach((element) => {
+    const fmt = element.dataset.signalFmt === "money" ? fmtMoney : element.dataset.signalFmt === "compact" ? fmtCompact : String;
+    element.dataset.tweenAt = "0";
+    tweenValue(element, Number(element.dataset.signalTween), fmt);
+  });
 }
 
 function visibleCount(list) {
@@ -106,13 +282,28 @@ function syncCommandOS() {
   setNode("risk", riskRecords, riskRecords ? plural(riskRecords, "recorded signal") : "No recorded alerts");
   setNode("health", health.short, health.detail);
 
+  const products = visibleCount(store.state.products);
+  const mediaItems = visibleCount(store.state.media);
+  const sites = visibleCount(store.state.sites);
+  const audience = audienceSignal();
+
   setDivision("phantomplay", "Open entertainment operations");
-  setDivision("phantomstore", visibleCount(store.state.products) ? plural(visibleCount(store.state.products), "product") : "No products loaded");
-  setDivision("media", visibleCount(store.state.media) ? plural(visibleCount(store.state.media), "media item") : "No media loaded");
-  setDivision("sites", visibleCount(store.state.sites) ? plural(visibleCount(store.state.sites), "site") : "No sites loaded");
-  setDivision("analytics", "Open live intelligence");
+  setDivision("phantomstore", products ? plural(products, "product") : "No products loaded");
+  setDivision("media", mediaItems ? plural(mediaItems, "media item") : "No media loaded");
+  setDivision("sites", sites ? plural(sites, "site") : "No sites loaded");
+  setDivision("analytics", audience.ready ? `${fmtCompact(audience.impressions)} impressions · last ${audience.windowDays}d` : "No platforms linked");
   setDivision("intelligence", "Open market watch");
   setDivision("money", money.transactions.length ? plural(money.transactions.length, "confirmed transaction") : "No transactions loaded");
+
+  setDivisionMetric("phantomplay", "LIVE");
+  setDivisionMetric("phantomstore", products ? fmtCompact(products) : "—");
+  setDivisionMetric("media", mediaItems ? fmtCompact(mediaItems) : "—");
+  setDivisionMetric("sites", sites ? fmtCompact(sites) : "—");
+  setDivisionMetric("analytics", audience.ready ? fmtCompact(audience.impressions) : "—");
+  setDivisionMetric("intelligence", "—");
+  setDivisionMetric("money", money.transactions.length ? fmtMoney(money.netCash) : "—");
+
+  renderSignals();
 
   setText("[data-os-user-name]", name.split(/\s+/)[0] || name);
   setText("[data-os-user-initial]", initial);
@@ -196,6 +387,19 @@ function bindCommandOS() {
         scheduleSync();
         return;
       }
+    }
+    const focusChat = event.target.closest("[data-os-focus-chat]");
+    if (focusChat) {
+      const chatbox = $("[data-chatbox]");
+      const input = $("[data-command-input]");
+      if (chatbox) {
+        chatbox.classList.remove("os-chat-charged");
+        void chatbox.offsetWidth;
+        chatbox.classList.add("os-chat-charged");
+      }
+      try { input?.scrollIntoView({ behavior: "smooth", block: "center" }); } catch {}
+      try { input?.focus({ preventScroll: true }); } catch { try { input?.focus(); } catch {} }
+      return;
     }
     const execution = event.target.closest("[data-os-execution]");
     if (execution) {

@@ -287,8 +287,8 @@
         },
         {
           "file": "app/js/main.js",
-          "pattern": "const bottomItems = items\\.filter\\(\\(n\\) => n\\.navZone === \"bottom\"\\)",
-          "description": "Main shell renders bottom-zone items separately."
+          "pattern": "if \\(bottomNav\\) bottomNav\\.innerHTML = bottomItems\\.map\\(\\(item\\) => itemHtml\\(item, true\\)\\)",
+          "description": "2040 command OS: [data-nav] carries open tabs; [data-nav-bottom] renders the full launcher drawer separately (supersedes the old navZone-bottom filter, same split-render guarantee)."
         }
       ]
     },
@@ -660,151 +660,151 @@
           "pattern": "phantom-calculator[\\s\\S]*phantom-reference-resolver",
           "description": "Deterministic micro-tools handle arithmetic chains and exact ordinal list selection instead of gambling on model output."
         },
-          {
-            "file": "server/scripts/test-instant-chat-http-live-model.ts",
-            "pattern": "contextRolloverVerified: true",
-            "description": "A self-starting authenticated HTTP gate exercises long conversation, topic switching, correction, arithmetic, exact output, and the bounded context rollover."
-          },
-          {
-            "file": "app/js/command.js",
-            "pattern": "if \\(isActionFreeModelRequest\\(raw, intent\\)\\) return false;",
-            "description": "Harmless informational and reasoning questions do not inherit business context merely because they mention a website, image, bank, invoice, contract, or post."
-          },
-          {
-            "file": "server/src/index.ts",
+        {
+          "file": "server/scripts/test-instant-chat-http-live-model.ts",
+          "pattern": "contextRolloverVerified: true",
+          "description": "A self-starting authenticated HTTP gate exercises long conversation, topic switching, correction, arithmetic, exact output, and the bounded context rollover."
+        },
+        {
+          "file": "app/js/command.js",
+          "pattern": "if \\(isActionFreeModelRequest\\(raw, intent\\)\\) return false;",
+          "description": "Harmless informational and reasoning questions do not inherit business context merely because they mention a website, image, bank, invoice, contract, or post."
+        },
+        {
+          "file": "server/src/index.ts",
           "pattern": "const actionFreeConversationTier = adminRouteTier === \"instant\"[\\s\\S]*isSafeReasoningConversationRequest\\(normalized\\)[\\s\\S]*isSafeAdvisoryConversationRequest\\(normalized\\)[\\s\\S]*const businessContextRelevant = \\(actionFreeConversationTier === \"advisory\" \\|\\| !actionFreeConversation\\)",
           "description": "The server independently validates instant, reasoning, and advisory conversation; only scoped advisory chat receives relevant business context."
-          },
-          {
-            "file": "server/src/phantom-ai/instant-chat-tools.ts",
-            "pattern": "export function instantResponseTokenBudget\\(userRequest: string\\)",
-            "description": "The fast model keeps a small default response budget but expands it when the user explicitly asks for more words, steps, bullets, examples, or long-form detail."
-          },
-          {
-            "file": "server/src/phantom-ai/providers/local-ollama-transport.ts",
-            "pattern": "Do not append a follow-up question unless missing information prevents a useful answer",
-            "description": "Ordinary acknowledgments and direct answers do not end with a needless engagement question."
-          },
-          {
-            "file": "server/scripts/test-instant-chat-http-live-model.ts",
-            "pattern": "rapidFireVerified: true,[\\s\\S]*uncertaintyVerified: true,[\\s\\S]*empathyVerified: true,[\\s\\S]*structuredOutputVerified: true,[\\s\\S]*adaptiveLengthVerified: true",
-            "description": "The authenticated real-model gate protects long mixed-topic threads, uncertainty, empathy, structured output, and adaptive answer length."
-          },
-          {
-            "file": "server/src/phantom-ai/instant-chat-tools.ts",
-            "pattern": "tool_id: \"phantom-identity\"[\\s\\S]*Phantom's fast conversation lane is currently \\${safeModel}",
-            "description": "Phantom identity and active fast-lane model disclosure come from route truth rather than model improvisation."
-          },
-          {
-            "file": "server/src/phantom-ai/instant-chat-tools.ts",
-            "pattern": "function enforceExactWordCount\\(userRequest: string, output: string\\)",
-            "description": "Explicit exact-word-count requests are corrected deterministically when the model miscounts."
-          },
-          {
-            "file": "server/src/phantom-ai/instant-chat-tools.ts",
-            "pattern": "function stripUnneededFollowUpQuestion\\(userRequest: string, output: string\\)",
-            "description": "Generic engagement questions are stripped from direct acknowledgments while user-requested questions remain intact."
-          },
-          {
-            "file": "server/scripts/test-instant-chat-http-live-model.ts",
-            "pattern": "identityTruthVerified: true,[\\s\\S]*practicalCodeVerified: true,[\\s\\S]*multilingualVerified: true,[\\s\\S]*sourceHonestyVerified: true",
-            "description": "The real-model gate protects branded identity, model truth, practical code help, multilingual continuity, and refusal to fabricate sources."
-          },
-          {
-            "file": "server/src/phantom-ai/instant-chat-context.ts",
-            "pattern": "export const MAX_INSTANT_CONTEXT_CHARS = 4800;[\\s\\S]*for \\(let index = activeTurns.length - 1; index >= 0 && remaining > 0; index -= 1\\)",
-            "description": "Instant context is packed newest-first inside a hard budget so old long replies cannot cut off the latest correction or final rules."
-          },
-          {
-            "file": "server/scripts/test-instant-chat-http-live-model.ts",
-            "pattern": "recencyPackingVerified: true",
-            "description": "The authenticated model gate proves a newest correction survives oversized prior turns."
-          },
-          {
-            "file": "server/src/phantom-ai/instant-chat-tools.ts",
-            "pattern": "function personalityReply\\(userRequest: string\\)[\\s\\S]*tool_id: \"phantom-personality\"",
-            "description": "Direct harmless personality questions receive an immediate Phantom-specific answer instead of an AI disclaimer or an expensive model call."
-          },
-          {
-            "file": "server/src/phantom-ai/instant-chat-tools.ts",
-            "pattern": "function enforceShortOnlyAnswer\\(userRequest: string, output: string\\)",
-            "description": "Short name, city, word, color, dessert, and similar only-requests deterministically remove explanatory tails."
-          },
-          {
-            "file": "server/scripts/test-instant-chat-http-live-model.ts",
-            "pattern": "factualReplacementVerified: true,[\\s\\S]*conversationalTasteVerified: true",
-            "description": "The authenticated real-model gate rejects a fabricated fact, protects replacement-only behavior, and proves a natural multi-turn taste conversation."
-          },
-          {
-            "file": "app/js/intent-router.js",
-            "pattern": "const CURRENT_INFO = /[\\s\\S]*stock\\|share\\|crypto\\|bitcoin\\|ethereum[\\s\\S]*price\\|quote\\|value\\|rate",
-            "description": "Browser routing requires live-data intent around market nouns instead of escalating every mention of current, latest, or stock."
-          },
-          {
-            "file": "server/scripts/test-instant-chat-fallback.ts",
-            "pattern": "what does electrical current mean[\\s\\S]*how do I make chicken stock[\\s\\S]*why do stock photos look fake[\\s\\S]*what is the current Bitcoin price",
-            "description": "Server policy tests protect both casual lexical uses and genuinely live market requests."
-          },
-          {
-            "file": "server/scripts/test-instant-chat-http-live-model.ts",
-            "pattern": "lexicalRoutingVerified: true",
-            "description": "The authenticated real-model gate proves electrical current and stock-photo questions remain fast, accurate, and free of business leakage."
-          },
-          {
-            "file": "server/src/phantom-ai/instant-chat-context.ts",
-            "pattern": "export function needsInstantConversationContext[\\s\\S]*export function selectActiveInstantTopicTurns[\\s\\S]*topicStart = index",
-            "description": "Temporary history is included only for genuine follow-ups or topic overlap, and standalone prompts automatically start a clean topic segment."
-          },
-          {
-            "file": "server/src/phantom-ai/instant-chat-fallback.ts",
+        },
+        {
+          "file": "server/src/phantom-ai/instant-chat-tools.ts",
+          "pattern": "export function instantResponseTokenBudget\\(userRequest: string\\)",
+          "description": "The fast model keeps a small default response budget but expands it when the user explicitly asks for more words, steps, bullets, examples, or long-form detail."
+        },
+        {
+          "file": "server/src/phantom-ai/providers/local-ollama-transport.ts",
+          "pattern": "Do not append a follow-up question unless missing information prevents a useful answer",
+          "description": "Ordinary acknowledgments and direct answers do not end with a needless engagement question."
+        },
+        {
+          "file": "server/scripts/test-instant-chat-http-live-model.ts",
+          "pattern": "rapidFireVerified: true,[\\s\\S]*uncertaintyVerified: true,[\\s\\S]*empathyVerified: true,[\\s\\S]*structuredOutputVerified: true,[\\s\\S]*adaptiveLengthVerified: true",
+          "description": "The authenticated real-model gate protects long mixed-topic threads, uncertainty, empathy, structured output, and adaptive answer length."
+        },
+        {
+          "file": "server/src/phantom-ai/instant-chat-tools.ts",
+          "pattern": "tool_id: \"phantom-identity\"[\\s\\S]*Phantom's fast conversation lane is currently \\${safeModel}",
+          "description": "Phantom identity and active fast-lane model disclosure come from route truth rather than model improvisation."
+        },
+        {
+          "file": "server/src/phantom-ai/instant-chat-tools.ts",
+          "pattern": "function enforceExactWordCount\\(userRequest: string, output: string\\)",
+          "description": "Explicit exact-word-count requests are corrected deterministically when the model miscounts."
+        },
+        {
+          "file": "server/src/phantom-ai/instant-chat-tools.ts",
+          "pattern": "function stripUnneededFollowUpQuestion\\(userRequest: string, output: string\\)",
+          "description": "Generic engagement questions are stripped from direct acknowledgments while user-requested questions remain intact."
+        },
+        {
+          "file": "server/scripts/test-instant-chat-http-live-model.ts",
+          "pattern": "identityTruthVerified: true,[\\s\\S]*practicalCodeVerified: true,[\\s\\S]*multilingualVerified: true,[\\s\\S]*sourceHonestyVerified: true",
+          "description": "The real-model gate protects branded identity, model truth, practical code help, multilingual continuity, and refusal to fabricate sources."
+        },
+        {
+          "file": "server/src/phantom-ai/instant-chat-context.ts",
+          "pattern": "export const MAX_INSTANT_CONTEXT_CHARS = 4800;[\\s\\S]*for \\(let index = activeTurns.length - 1; index >= 0 && remaining > 0; index -= 1\\)",
+          "description": "Instant context is packed newest-first inside a hard budget so old long replies cannot cut off the latest correction or final rules."
+        },
+        {
+          "file": "server/scripts/test-instant-chat-http-live-model.ts",
+          "pattern": "recencyPackingVerified: true",
+          "description": "The authenticated model gate proves a newest correction survives oversized prior turns."
+        },
+        {
+          "file": "server/src/phantom-ai/instant-chat-tools.ts",
+          "pattern": "function personalityReply\\(userRequest: string\\)[\\s\\S]*tool_id: \"phantom-personality\"",
+          "description": "Direct harmless personality questions receive an immediate Phantom-specific answer instead of an AI disclaimer or an expensive model call."
+        },
+        {
+          "file": "server/src/phantom-ai/instant-chat-tools.ts",
+          "pattern": "function enforceShortOnlyAnswer\\(userRequest: string, output: string\\)",
+          "description": "Short name, city, word, color, dessert, and similar only-requests deterministically remove explanatory tails."
+        },
+        {
+          "file": "server/scripts/test-instant-chat-http-live-model.ts",
+          "pattern": "factualReplacementVerified: true,[\\s\\S]*conversationalTasteVerified: true",
+          "description": "The authenticated real-model gate rejects a fabricated fact, protects replacement-only behavior, and proves a natural multi-turn taste conversation."
+        },
+        {
+          "file": "app/js/intent-router.js",
+          "pattern": "const CURRENT_INFO = /[\\s\\S]*stock\\|share\\|crypto\\|bitcoin\\|ethereum[\\s\\S]*price\\|quote\\|value\\|rate",
+          "description": "Browser routing requires live-data intent around market nouns instead of escalating every mention of current, latest, or stock."
+        },
+        {
+          "file": "server/scripts/test-instant-chat-fallback.ts",
+          "pattern": "what does electrical current mean[\\s\\S]*how do I make chicken stock[\\s\\S]*why do stock photos look fake[\\s\\S]*what is the current Bitcoin price",
+          "description": "Server policy tests protect both casual lexical uses and genuinely live market requests."
+        },
+        {
+          "file": "server/scripts/test-instant-chat-http-live-model.ts",
+          "pattern": "lexicalRoutingVerified: true",
+          "description": "The authenticated real-model gate proves electrical current and stock-photo questions remain fast, accurate, and free of business leakage."
+        },
+        {
+          "file": "server/src/phantom-ai/instant-chat-context.ts",
+          "pattern": "export function needsInstantConversationContext[\\s\\S]*export function selectActiveInstantTopicTurns[\\s\\S]*topicStart = index",
+          "description": "Temporary history is included only for genuine follow-ups or topic overlap, and standalone prompts automatically start a clean topic segment."
+        },
+        {
+          "file": "server/src/phantom-ai/instant-chat-fallback.ts",
           "pattern": "selectRelevantInstantTurns[\\s\\S]*buildInstantChatToolReply[\\s\\S]*enforceInstantOutputConstraints",
           "description": "Provider-outage replies retrieve the relevant recent topic, deterministic personality/tools, and output constraints instead of behaving like a separate chatbot."
-          },
-          {
-            "file": "server/scripts/test-instant-chat-http-fallback.ts",
-            "pattern": "OLLAMA_BASE_URL: \"http://127\\.0\\.0\\.1:9\"[\\s\\S]*fallback\\?\\.all_failed, true[\\s\\S]*instant chat HTTP forced-fallback checks passed",
-            "description": "An authenticated HTTP gate forces Ollama offline and proves useful topic-safe local degradation without business leakage."
-          },
-          {
-            "file": "app/js/intent-router.js",
-            "pattern": "INFORMATIONAL_CONCEPT_QUESTION[\\s\\S]*informational_concept_question",
-            "description": "Questions about approval, memory, pipeline, accounting, proposals, leads, automation, and similar concepts stay informational unless the user explicitly references private workspace state."
-          },
-          {
-            "file": "app/js/command.js",
-            "pattern": "const actionFreeConversation = isActionFreeModelRequest[\\s\\S]*if \\(actionFreeConversation && \\[\"question\", \"chat\", \"brainstorm\", \"feedback\", \"plan\"\\]\\.includes[\\s\\S]*localQuestionAnswer",
-            "description": "A failed instant, reasoning, or advisory browser request remains in the conversation fallback and cannot fall through into business command keyword cascades."
-          },
-          {
-            "file": "scripts/test-dashboard-chat-quality.mjs",
-            "pattern": "offlineGeneralQuestions[\\s\\S]*tell me about bank robberies in movies[\\s\\S]*explicitWorkspaceQuestion",
-            "description": "Offline browser tests prove business-adjacent concept questions remain text-only while an explicit workspace-state request still reaches the business surface."
-          },
-          {
-            "file": "scripts/test-phantom-intent-router.mjs",
-            "pattern": "Do you approve of pineapple on pizza[\\s\\S]*What do monitor lizards eat[\\s\\S]*Create an automation to scan my site weekly[\\s\\S]*explicit durable memory must create one real memory record",
-            "description": "Browser intent tests protect ordinary language from approval, reminder, automation, task, website, status, and memory keyword collisions while preserving explicit operations."
-          },
-          {
-            "file": "app/js/store.js",
-            "pattern": "EXPLICIT_MEMORY_SAVE_PATTERN = /\\^\\(\\?:please[\\s\\S]*export function shouldAiRemember",
-            "description": "Saved-memory detection requires an explicit forward-looking instruction and cannot pin autobiographical uses of the word remember."
-          },
-          {
-            "file": "app/js/command.js",
-            "pattern": "if \\(intent\\.primaryIntent === \"memory_update\"\\)[\\s\\S]*pinnedByUser: true[\\s\\S]*Remembered:",
-            "description": "An explicit durable-memory command creates a real pinned record and confirms the fact that was saved."
-          },
-          {
-            "file": "server/scripts/test-instant-chat-fallback.ts",
-            "pattern": "write a four-line poem about automation[\\s\\S]*what do monitor lizards eat[\\s\\S]*make this sentence grammatical",
-            "description": "Server instant-route policy stays aligned with browser semantic boundaries instead of blocking harmless creative and lexical prompts."
-          },
-          {
-            "file": "server/src/phantom-ai/instant-chat-tools.ts",
-            "pattern": "tool_id: \"phantom-stable-fact\"[\\s\\S]*function enforceCodeOnly",
-            "description": "Explicit verified octopus facts use a curated stable answer, and code-only responses deterministically remove Markdown fences."
-          },
+        },
+        {
+          "file": "server/scripts/test-instant-chat-http-fallback.ts",
+          "pattern": "OLLAMA_BASE_URL: \"http://127\\.0\\.0\\.1:9\"[\\s\\S]*fallback\\?\\.all_failed, true[\\s\\S]*instant chat HTTP forced-fallback checks passed",
+          "description": "An authenticated HTTP gate forces Ollama offline and proves useful topic-safe local degradation without business leakage."
+        },
+        {
+          "file": "app/js/intent-router.js",
+          "pattern": "INFORMATIONAL_CONCEPT_QUESTION[\\s\\S]*informational_concept_question",
+          "description": "Questions about approval, memory, pipeline, accounting, proposals, leads, automation, and similar concepts stay informational unless the user explicitly references private workspace state."
+        },
+        {
+          "file": "app/js/command.js",
+          "pattern": "const actionFreeConversation = isActionFreeModelRequest[\\s\\S]*if \\(actionFreeConversation && \\[\"question\", \"chat\", \"brainstorm\", \"feedback\", \"plan\"\\]\\.includes[\\s\\S]*localQuestionAnswer",
+          "description": "A failed instant, reasoning, or advisory browser request remains in the conversation fallback and cannot fall through into business command keyword cascades."
+        },
+        {
+          "file": "scripts/test-dashboard-chat-quality.mjs",
+          "pattern": "offlineGeneralQuestions[\\s\\S]*tell me about bank robberies in movies[\\s\\S]*explicitWorkspaceQuestion",
+          "description": "Offline browser tests prove business-adjacent concept questions remain text-only while an explicit workspace-state request still reaches the business surface."
+        },
+        {
+          "file": "scripts/test-phantom-intent-router.mjs",
+          "pattern": "Do you approve of pineapple on pizza[\\s\\S]*What do monitor lizards eat[\\s\\S]*Create an automation to scan my site weekly[\\s\\S]*explicit durable memory must create one real memory record",
+          "description": "Browser intent tests protect ordinary language from approval, reminder, automation, task, website, status, and memory keyword collisions while preserving explicit operations."
+        },
+        {
+          "file": "app/js/store.js",
+          "pattern": "EXPLICIT_MEMORY_SAVE_PATTERN = /\\^\\(\\?:please[\\s\\S]*export function shouldAiRemember",
+          "description": "Saved-memory detection requires an explicit forward-looking instruction and cannot pin autobiographical uses of the word remember."
+        },
+        {
+          "file": "app/js/command.js",
+          "pattern": "if \\(intent\\.primaryIntent === \"memory_update\"\\)[\\s\\S]*pinnedByUser: true[\\s\\S]*Remembered:",
+          "description": "An explicit durable-memory command creates a real pinned record and confirms the fact that was saved."
+        },
+        {
+          "file": "server/scripts/test-instant-chat-fallback.ts",
+          "pattern": "write a four-line poem about automation[\\s\\S]*what do monitor lizards eat[\\s\\S]*make this sentence grammatical",
+          "description": "Server instant-route policy stays aligned with browser semantic boundaries instead of blocking harmless creative and lexical prompts."
+        },
+        {
+          "file": "server/src/phantom-ai/instant-chat-tools.ts",
+          "pattern": "tool_id: \"phantom-stable-fact\"[\\s\\S]*function enforceCodeOnly",
+          "description": "Explicit verified octopus facts use a curated stable answer, and code-only responses deterministically remove Markdown fences."
+        },
         {
           "file": "server/scripts/test-instant-chat-http-live-model.ts",
           "pattern": "topicIsolationVerified: true",
@@ -872,8 +872,8 @@
         },
         {
           "file": "app/js/main.js",
-          "pattern": "const bottomItems = items\\.filter\\(\\(n\\) => n\\.navZone === \"bottom\"\\)",
-          "description": "Bottom-zone items render separately from business modules."
+          "pattern": "if \\(bottomNav\\) bottomNav\\.innerHTML = bottomItems\\.map\\(\\(item\\) => itemHtml\\(item, true\\)\\)",
+          "description": "2040 command OS: [data-nav] carries open tabs; [data-nav-bottom] renders the full launcher drawer separately (supersedes the old navZone-bottom filter, same split-render guarantee)."
         },
         {
           "file": "app/js/main.js",
