@@ -16,7 +16,7 @@ const skipPages = worker.match(/const SKIP_PAGES = new Set\(\[([\s\S]*?)\]\);/u)
 assert.match(worker, /automation:\s*\{[\s\S]*Enter your automation here and we’ll go through what we can do for you/u, "Automation page must have the requested worker prompt.");
 assert.match(worker, /Infer trigger, condition, action, review gate, and off switch/u, "Automation prompt must return plain-English steps.");
 assert.match(worker, /Do not send, post, deploy, delete, charge, or expose anything without approval/u, "Automation prompt must preserve safety boundaries.");
-assert.match(worker, /analytics:\s*\{/u, "Analytics should have a worker prompt.");
+assert.match(worker, /analytics:\s*\{/u, "Analytics can keep backend worker copy, but must not render the generic prompt above the graph.");
 assert.match(worker, /money:\s*\{[\s\S]*Prompt the money question/u, "Accounting should have a page-specific money prompter.");
 assert.match(worker, /memory:\s*\{[\s\S]*Prompt the memory check/u, "Memory should have a page-specific memory prompter.");
 assert.match(worker, /approvals:\s*\{[\s\S]*Prompt the risk review/u, "Approvals should have a page-specific risk prompter.");
@@ -36,7 +36,7 @@ assert.match(worker, /No fake contact details were generated/u, "Leads worker mu
 assert.match(command, /client\\s\+base[\s\S]*consider[\s\S]*could\\s\+use/u, "Client-base prospect phrasing must route into CRM prospect buildout.");
 assert.match(command, /find\|add\|search\|discover\|research\|scout\|source\|identify/u, "Global CRM prospect routing must understand find/add/discover client language.");
 assert.match(skipPages, /"settings"[\s\S]*"developer"[\s\S]*"activity"/u, "System/admin pages should skip page worker prompts.");
-assert.match(skipPages, /"sites"[\s\S]*"media"[\s\S]*"content"/u, "Native prompt-first surfaces must not duplicate the top page worker prompt.");
+assert.match(skipPages, /"sites"[\s\S]*"media"[\s\S]*"content"[\s\S]*"analytics"/u, "Native prompt-first surfaces and Analytics must not duplicate the top page worker prompt.");
 assert.doesNotMatch(skipPages, /"assets"|"intelligence"|"vacation"|"phantomplay"/u, "Pages without a main AI prompter should keep the page outcome prompt available.");
 assert.match(worker, /fetch\("\/phantom-ai\/chat"/u, "Page outcome prompts must call the Phantom AI backend.");
 assert.match(worker, /module_data: pageContextModules/u, "Backend page prompts must send page context modules.");

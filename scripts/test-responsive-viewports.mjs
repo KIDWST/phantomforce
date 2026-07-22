@@ -318,6 +318,8 @@ function auditPage() {
   const phantomPlayActions = [...document.querySelectorAll(".pp-game-actions button")];
   const pageWorker = document.querySelector(".page-worker");
   const storeSearch = document.querySelector(".ps-search");
+  const analyticsGraph = document.querySelector("[data-workspace-page='analytics'] .an-top-visual-grid");
+  const analyticsTrendCard = document.querySelector("[data-workspace-page='analytics'] .an-trend-card");
   const isVisible = (el) => {
     if (!el) return false;
     if (el.closest('[aria-hidden="true"]')) return false;
@@ -486,6 +488,15 @@ function auditPage() {
         return visible.right - visible.left < raw.width - 2 || visible.bottom - visible.top < raw.height - 2;
       }).map(elementSummary).slice(0, 8),
     },
+    analytics: {
+      pageWorkerVisible: isVisible(pageWorker),
+      graphTop: analyticsGraph ? Math.round(analyticsGraph.getBoundingClientRect().top) : null,
+      trendCardTop: analyticsTrendCard ? Math.round(analyticsTrendCard.getBoundingClientRect().top) : null,
+      firstVisibleLabel: [...document.querySelectorAll("[data-workspace-page='analytics'] .page-worker, [data-workspace-page='analytics'] .an-top-visual-grid, [data-workspace-page='analytics'] .an-kpis")]
+        .filter(isVisible)
+        .sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top)
+        .map((el) => el.classList.contains("page-worker") ? "page-worker" : el.classList.contains("an-top-visual-grid") ? "graph" : "kpis")[0] || "",
+    },
     textProbe: document.body.innerText.slice(0, 300),
   };
 }
@@ -559,6 +570,11 @@ function assertCase(result) {
   }
   if (page === "phantomplay") {
     assert.deepEqual(audit.phantomPlay.clippedActions, [], `${label} ${viewport.width}: PhantomPlay card actions must not be clipped inside game cards.`);
+  }
+  if (page === "analytics") {
+    assert.equal(audit.analytics.pageWorkerVisible, false, `${label} ${viewport.width}: Analytics must not render the generic prompt before the stats graph.`);
+    assert.equal(audit.analytics.firstVisibleLabel, "graph", `${label} ${viewport.width}: Analytics must start with the stats graph, not setup or prompt chrome.`);
+    assert.ok(audit.analytics.graphTop !== null && audit.analytics.graphTop >= -2, `${label} ${viewport.width}: Analytics graph must be mounted in the visible document flow.`);
   }
 }
 

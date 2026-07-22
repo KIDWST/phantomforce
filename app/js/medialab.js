@@ -4548,7 +4548,7 @@ function socialCard(account, esc) {
   const lastConnect = connector?.configured
     ? `Authorized account: ${connector.savedConnection?.accountHandle || connector.savedConnection?.accountName || connector.handle || account.name}`
     : connector?.oauthConfigured
-      ? "OAuth app ready. Connect the account once."
+      ? "OAuth app ready for authorization. Connect the account once."
       : status === "linked"
     ? (profile ? `Handle saved — not connected: ${profile}` : "Handle saved — not connected")
   : status === "pending"

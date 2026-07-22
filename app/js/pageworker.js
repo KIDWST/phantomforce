@@ -126,6 +126,7 @@ const SKIP_PAGES = new Set([
   "sites",
   "media",
   "content",
+  "analytics",
   "leads",
 ]);
 
