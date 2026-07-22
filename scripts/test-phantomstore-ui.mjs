@@ -69,6 +69,12 @@ for (const selector of [".ps-shell", ".ps-market-hero", ".ps-tool", ".ps-product
 }
 assert.match(storeCss, /\.ps-product-media img\{[^}]*object-fit:contain/u, "PhantomStore product images must show the full cover art instead of cropped/zoomed media.");
 assert.match(storeCss, /\.ps-product-media img\{[^}]*transform:none/u, "PhantomStore product images must not be zoomed with transforms.");
+assert.match(storeCss, /Product tile polish: keep PhantomStore feeling like a real marketplace/u, "PhantomStore product cards need a marketplace-grade visual layer.");
+assert.match(storeCss, /\.ps-product-grid\{[\s\S]*?minmax\(min\(360px,100%\),1fr\)/u, "PhantomStore product cards must keep stable responsive card widths.");
+assert.match(storeCss, /\.ps-product\{[\s\S]*?radial-gradient\(520px 240px/u, "PhantomStore product cards must use a richer product-tile surface.");
+assert.match(storeCss, /\.ps-product-media\{[\s\S]*?min-height:220px/u, "PhantomStore product art must get enough stage height on desktop.");
+assert.match(storeCss, /html\[data-org-color-mode="light"\] \.ps-shell/u, "PhantomStore must explicitly separate light-mode card surfaces from dark mode.");
+assert.match(storeCss, /workspace-page\[data-workspace-page="phantomstore"\] \.workspace-page-body\{[\s\S]*?padding-bottom:calc\(var\(--mobile-admin-taskbar,80px\) \+ 64px/u, "PhantomStore mobile pages need extra bottom runway above the fixed dock.");
 assert.match(storeCss, /@media\(max-width:640px\)[\s\S]*\.ps-product-grid,\s*\.ps-seller-grid,\s*\.ps-grid\{grid-template-columns:1fr/u, "PhantomStore must collapse product and seller grids on phones.");
 assert.match(storeCss, /\.ps-product-fallback/u, "PhantomStore must style branded fallback product art.");
 assert.match(storeCss, /\.ps-fallback-note/u, "PhantomStore must style the local read-only fallback notice.");

@@ -47,3 +47,154 @@
 .ps-fallback-note{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 12px;padding:11px 13px;border:1px solid rgba(199,126,0,.42);border-radius:9px;background:rgba(199,126,0,.08);color:var(--ink)}
 .ps-fallback-note b{color:var(--warn);white-space:nowrap}.ps-fallback-note span{color:var(--dim);font-size:12px;line-height:1.4}
 @media(max-width:640px){.ps-fallback-note{align-items:flex-start;flex-direction:column}.ps-fallback-note b{white-space:normal}}
+
+/* Product tile polish: keep PhantomStore feeling like a real marketplace, not a
+   stack of generic admin cards. These overrides intentionally sit after the
+   compact base sheet so dark/light mode can own the final surface treatment. */
+.ps-shell{
+  --ps-card-bg:linear-gradient(165deg,rgba(7,20,15,.96),rgba(2,8,7,.99) 68%);
+  --ps-card-border:rgba(65,255,161,.2);
+  --ps-card-glow:rgba(65,255,161,.12);
+  --ps-muted:#b6c8c1;
+  --ps-soft:#7f958d;
+  padding-bottom:24px;
+}
+html[data-org-color-mode="light"] .ps-shell{
+  --ps-card-bg:linear-gradient(165deg,rgba(255,255,255,.96),rgba(241,247,244,.98) 72%);
+  --ps-card-border:rgba(39,129,91,.22);
+  --ps-card-glow:rgba(35,185,120,.14);
+  --ps-muted:#445a52;
+  --ps-soft:#6d7d77;
+}
+.ps-product-grid{
+  grid-template-columns:repeat(auto-fit,minmax(min(360px,100%),1fr));
+  align-items:stretch;
+  gap:14px;
+}
+.ps-product{
+  position:relative;
+  overflow:hidden;
+  align-content:start;
+  gap:13px;
+  min-height:100%;
+  border-color:var(--ps-card-border);
+  border-radius:14px;
+  background:
+    radial-gradient(520px 240px at 50% -8%,var(--ps-card-glow),transparent 58%),
+    var(--ps-card-bg);
+  box-shadow:0 18px 54px rgba(0,0,0,.22),inset 0 1px rgba(255,255,255,.035);
+}
+.ps-product.is-featured{
+  border-color:rgba(66,233,255,.46);
+  box-shadow:0 18px 60px rgba(0,0,0,.28),0 0 0 1px rgba(66,233,255,.18),0 0 34px rgba(66,233,255,.08);
+}
+.ps-product-media{
+  display:grid;
+  place-items:center;
+  margin:-15px -15px 0;
+  min-height:220px;
+  border-bottom-color:rgba(65,255,161,.17);
+  border-radius:14px 14px 0 0;
+  background:
+    radial-gradient(circle at 50% 42%,rgba(65,255,161,.17),transparent 42%),
+    linear-gradient(145deg,#091713,#020807);
+}
+html[data-org-color-mode="light"] .ps-product-media{
+  background:
+    radial-gradient(circle at 50% 42%,rgba(35,185,120,.18),transparent 44%),
+    linear-gradient(145deg,#eef8f3,#dceae4);
+}
+.ps-product-media::before{
+  content:"";
+  position:absolute;
+  inset:10px;
+  z-index:0;
+  border:1px solid rgba(65,255,161,.08);
+  border-radius:10px;
+  pointer-events:none;
+}
+.ps-product-media img{
+  position:relative;
+  z-index:1;
+  max-width:100%;
+  max-height:100%;
+  padding:12px;
+  object-fit:contain;
+  transform:none;
+}
+.ps-product header{
+  align-items:start;
+}
+.ps-product h3{
+  font-size:clamp(21px,1.6vw,30px);
+  line-height:1.05;
+  letter-spacing:-.025em;
+}
+.ps-product>p{
+  color:var(--ps-muted);
+  font-size:13px;
+  line-height:1.55;
+}
+.ps-product small{
+  color:var(--ps-soft);
+  font-size:11px;
+  line-height:1.45;
+}
+.ps-product-proof{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+}
+.ps-product-proof b,
+.ps-product-proof span{
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  border-color:rgba(65,255,161,.22);
+  background:rgba(65,255,161,.07);
+}
+.ps-card-actions{
+  margin-top:auto;
+}
+.ps-primary,
+.ps-secondary{
+  border-radius:10px;
+}
+.ps-secondary{
+  background:rgba(255,255,255,.025);
+}
+html[data-org-color-mode="light"] .ps-secondary{
+  background:rgba(33,48,42,.035);
+}
+
+@media(max-width:900px){
+  .workspace-page[data-workspace-page="phantomstore"] .workspace-page-body{
+    padding-bottom:calc(var(--mobile-admin-taskbar,80px) + 64px + env(safe-area-inset-bottom,0px))!important;
+  }
+  .ps-shell{
+    padding-bottom:calc(var(--mobile-admin-taskbar,80px) + 58px + env(safe-area-inset-bottom,0px));
+  }
+  .ps-product-media{
+    min-height:clamp(190px,52vw,300px);
+  }
+}
+@media(max-width:640px){
+  .ps-product{
+    border-radius:14px;
+    padding:14px;
+  }
+  .ps-product-media{
+    margin:-14px -14px 0;
+    min-height:208px;
+  }
+  .ps-product h3{
+    font-size:24px;
+  }
+  .ps-product-proof{
+    grid-template-columns:1fr;
+  }
+  .ps-product-proof b,
+  .ps-product-proof span{
+    white-space:normal;
+  }
+}
