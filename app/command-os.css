@@ -2033,3 +2033,113 @@ html[data-command-os="2040"] .phantom.command-os-enabled .phantomwire {
   .os-ecg polyline, .os-toast-led { animation: none; }
   .os-toast { transition: opacity 0.2s ease; transform: none; }
 }
+
+/* ============================================================= */
+/* ==== INTERACTIVE DEPTH — the world responds to your hand ==== */
+/* ============================================================= */
+
+/* smooth parallax on the map's depth planes (driven by --px/--py on :root) */
+.os-gravity-beams,
+.os-flow,
+.os-node,
+.os-node-core {
+  translate: calc(var(--px, 0) * 8px) calc(var(--py, 0) * 8px);
+  transition: translate 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.os-orbit {
+  translate: calc(var(--px, 0) * 22px) calc(var(--py, 0) * 17px);
+  transition: translate 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.os-radar { transition: translate 0.6s cubic-bezier(0.22, 1, 0.36, 1); translate: calc(var(--px, 0) * 30px) calc(var(--py, 0) * 22px); }
+.os-earth-horizon { transition: scale 0.7s ease; scale: calc(1.015 + (var(--px, 0) * var(--px, 0) + var(--py, 0) * var(--py, 0)) * 0.01); }
+
+/* magnetic nodes: the nearest node lights and lifts toward the cursor */
+.os-node { scale: calc(1 + var(--mag, 0) * 0.13); transition: scale 0.25s ease, filter 0.25s ease; filter: brightness(calc(1 + var(--mag, 0) * 0.55)); }
+.os-node::before { transition: box-shadow 0.25s ease, border-color 0.25s ease; }
+.os-node[style*="--mag"]::before { box-shadow: 0 0 calc(12px + var(--mag, 0) * 20px) rgba(112, 182, 255, calc(0.6 + var(--mag, 0) * 0.4)); }
+.os-beam { transition: stroke-opacity 0.25s ease; }
+.os-beam[style*="--mag"] { stroke-opacity: calc(0.6 + var(--mag, 0) * 0.4); }
+.os-node:hover,
+.os-node:focus-visible { z-index: 8; scale: 1.12; filter: brightness(1.28); }
+
+/* real-event choreography: a node flares when its metric actually changes */
+.os-node.is-pinging { animation: osNodeFlare 1.4s cubic-bezier(0.22, 1, 0.36, 1); }
+.os-node.is-pinging::after {
+  content: "";
+  position: absolute;
+  top: 4px;
+  left: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(140, 210, 255, 0.9);
+  pointer-events: none;
+  animation: osNodeShock 1.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes osNodeFlare { 0%, 100% { filter: brightness(1); } 22% { filter: brightness(1.9) drop-shadow(0 0 10px rgba(120, 190, 255, 0.9)); } }
+@keyframes osNodeShock { 0% { transform: scale(1); opacity: 1; } 100% { transform: scale(9); opacity: 0; } }
+
+/* cursor spotlight — the room lights where you look */
+.os-cursor-glow {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 7;
+  width: 360px;
+  height: 360px;
+  margin: -180px 0 0 -180px;
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(circle, rgba(96, 165, 255, 0.09), rgba(85, 231, 167, 0.03) 42%, transparent 68%);
+  translate: var(--mx, -50vw) var(--my, -50vh);
+  transition: translate 0.12s linear, opacity 0.4s ease;
+  mix-blend-mode: screen;
+}
+
+/* ambient sky: an occasional streak across the field */
+.os-shooting-star {
+  position: absolute;
+  top: var(--y, 20%);
+  left: -8%;
+  width: 120px;
+  height: 1px;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, rgba(174, 221, 255, 0.9), #fff);
+  box-shadow: 0 0 6px rgba(174, 221, 255, 0.8);
+  opacity: 0;
+  transform: rotate(9deg);
+  animation: osShoot var(--d, 1.6s) ease-in forwards;
+  z-index: 3;
+}
+@keyframes osShoot {
+  0% { left: -8%; opacity: 0; }
+  8% { opacity: 1; }
+  70% { opacity: 1; }
+  100% { left: 108%; opacity: 0; }
+}
+
+/* sound toggle in the status bar */
+.os-sound {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 clamp(12px, 1.4vw, 22px);
+  border: 0;
+  border-right: 1px solid rgba(133, 171, 198, 0.1);
+  background: transparent;
+  color: #66727d;
+  cursor: pointer;
+  font: inherit;
+}
+.os-sound span { position: relative; width: 12px; height: 12px; border-radius: 50%; border: 1px solid currentColor; }
+.os-sound span::before { content: ""; position: absolute; inset: 3px; border-radius: 50%; background: currentColor; opacity: 0.3; }
+.os-sound i { font: 500 8px "Spline Sans Mono", monospace; font-style: normal; letter-spacing: 0.12em; }
+.os-sound:hover { color: #9fb0bb; }
+.os-sound.is-on { color: #55e7a7; }
+.os-sound.is-on span::before { opacity: 1; box-shadow: 0 0 8px rgba(85, 231, 167, 0.7); animation: osLedPulse 2s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .os-gravity-beams, .os-flow, .os-node, .os-node-core, .os-orbit, .os-radar, .os-earth-horizon { translate: none; scale: none; transition: none; }
+  .os-node { scale: none; }
+  .os-cursor-glow, .os-shooting-star, .os-node.is-pinging, .os-node.is-pinging::after { display: none; animation: none; }
+}

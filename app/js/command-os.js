@@ -6,8 +6,8 @@ import {
   moneyView,
   memoryStats,
   fmtMoney,
-} from "./store.js?v=phantom-live-20260722-6";
-import { loadSocialAccounts } from "./contenthub.js?v=phantom-live-20260722-6";
+} from "./store.js?v=phantom-live-20260722-7";
+import { loadSocialAccounts } from "./contenthub.js?v=phantom-live-20260722-7";
 
 let executionMode = "advise";
 let syncFrame = 0;
@@ -428,8 +428,10 @@ function syncCommandOS() {
   ensureDecisionObserver();
   syncDecisionOffset();
   mountHud();
+  mountSoundToggle();
   maybePowerOn();
   checkOsEvents();
+  refreshNodeCenters();
 }
 
 function scheduleSync() {
@@ -536,6 +538,7 @@ function bindCommandOS() {
       if (typeof window.PHANTOM_GO_NAV === "function") {
         event.preventDefault();
         window.PHANTOM_GO_NAV(navId);
+        osSound("nav");
         scheduleSync();
         return;
       }
@@ -618,6 +621,7 @@ function maybePowerOn() {
       <div class="os-poweron-done" style="--i:${lines.length}">ALL SYSTEMS NOMINAL</div>
     </div>`;
   document.body.appendChild(el);
+  osSound("power");
   const kill = () => { if (!el.isConnected) return; el.classList.add("is-gone"); setTimeout(() => el.remove(), 640); };
   setTimeout(kill, 2200);
   el.addEventListener("click", kill);
@@ -655,6 +659,12 @@ function mountAmbientOS() {
   a.className = "os-ambient";
   a.setAttribute("aria-hidden", "true");
   document.body.appendChild(a);
+  if (!reduceMotionOS()) {
+    const glow = document.createElement("div");
+    glow.className = "os-cursor-glow";
+    glow.setAttribute("aria-hidden", "true");
+    document.body.appendChild(glow);
+  }
 }
 
 /* ---- keyboard command layer: g-chord navigation + a ? cheatsheet ---- */
@@ -695,7 +705,7 @@ function bindKeyboard() {
     if (goMode) {
       const id = GO_MAP[e.key];
       setGoMode(false);
-      if (id && typeof window.PHANTOM_GO_NAV === "function") { e.preventDefault(); window.PHANTOM_GO_NAV(id); scheduleSync(); }
+      if (id && typeof window.PHANTOM_GO_NAV === "function") { e.preventDefault(); window.PHANTOM_GO_NAV(id); scheduleSync(); osSound("nav"); }
       return;
     }
     if (e.key === "g") { e.preventDefault(); setGoMode(true); return; }
@@ -717,6 +727,14 @@ function osToast(title, sub, tone) {
   const timer = window.setTimeout(kill, 5400);
   t.addEventListener("click", () => { clearTimeout(timer); kill(); });
 }
+function pingNode(id) {
+  const node = $(`[data-os-node="${id}"]`);
+  if (!node || reduceMotionOS()) return;
+  node.classList.remove("is-pinging");
+  void node.offsetWidth;
+  node.classList.add("is-pinging");
+  setTimeout(() => node.classList.remove("is-pinging"), 1500);
+}
 function checkOsEvents() {
   const now = {
     pending: visible(store.state.approvals || []).filter((a) => a.status === "pending").length,
@@ -727,10 +745,137 @@ function checkOsEvents() {
      toast. Skipping while hidden/reduced-motion also advances the baseline, so
      nothing backlogs into a burst the moment the console appears. */
   if (!toastBaseline || !osShellVisible() || reduceMotionOS()) { toastBaseline = now; return; }
-  if (now.pending > toastBaseline.pending) osToast("Approval needed", `${plural(now.pending - toastBaseline.pending, "decision")} waiting on you`, "warn");
-  if (now.agents > toastBaseline.agents) osToast("Agent deployed", `${plural(now.agents - toastBaseline.agents, "agent")} now in motion`, "ok");
-  if (now.leads > toastBaseline.leads) osToast("New lead captured", `${plural(now.leads - toastBaseline.leads, "organization record")} added`, "ok");
+  let fired = false;
+  if (now.pending > toastBaseline.pending) { osToast("Approval needed", `${plural(now.pending - toastBaseline.pending, "decision")} waiting on you`, "warn"); pingNode("approvals"); fired = true; }
+  if (now.agents > toastBaseline.agents) { osToast("Agent deployed", `${plural(now.agents - toastBaseline.agents, "agent")} now in motion`, "ok"); pingNode("missions"); fired = true; }
+  if (now.leads > toastBaseline.leads) { osToast("New lead captured", `${plural(now.leads - toastBaseline.leads, "organization record")} added`, "ok"); pingNode("clients"); fired = true; }
+  if (fired) osSound("toast");
   toastBaseline = now;
+}
+
+/* ---- pointer reactivity: the whole world tilts and lights toward your hand ---- */
+let pointerRaf = 0;
+let pointerXY = null;
+let nodeCenters = [];
+function refreshNodeCenters() {
+  nodeCenters = $$(".os-node").map((node) => {
+    const r = node.getBoundingClientRect();
+    return { node, id: node.dataset.osNode, cx: r.left + r.width / 2, cy: r.top + r.height / 2 };
+  });
+}
+function applyPointer() {
+  pointerRaf = 0;
+  const root = document.documentElement;
+  if (root.dataset.commandOs !== "2040") return;
+  if (!pointerXY) {
+    root.style.setProperty("--px", "0");
+    root.style.setProperty("--py", "0");
+    nodeCenters.forEach((n) => { n.node.style.setProperty("--mag", "0"); const b = $(`.os-beam[data-beam="${n.id}"]`); if (b) b.style.setProperty("--mag", "0"); });
+    return;
+  }
+  const w = window.innerWidth || 1;
+  const h = window.innerHeight || 1;
+  root.style.setProperty("--px", (((pointerXY.x / w) * 2 - 1)).toFixed(3));
+  root.style.setProperty("--py", (((pointerXY.y / h) * 2 - 1)).toFixed(3));
+  root.style.setProperty("--mx", `${pointerXY.x}px`);
+  root.style.setProperty("--my", `${pointerXY.y}px`);
+  const R = 230;
+  nodeCenters.forEach((n) => {
+    const d = Math.hypot(pointerXY.x - n.cx, pointerXY.y - n.cy);
+    const mag = Math.max(0, 1 - d / R).toFixed(3);
+    n.node.style.setProperty("--mag", mag);
+    const beam = $(`.os-beam[data-beam="${n.id}"]`);
+    if (beam) beam.style.setProperty("--mag", mag);
+  });
+}
+function bindPointer() {
+  if (reduceMotionOS()) return;
+  window.addEventListener("pointermove", (e) => {
+    if (e.pointerType === "touch") return;
+    pointerXY = { x: e.clientX, y: e.clientY };
+    if (!pointerRaf) pointerRaf = requestAnimationFrame(applyPointer);
+  }, { passive: true });
+  document.addEventListener("pointerleave", () => { pointerXY = null; if (!pointerRaf) pointerRaf = requestAnimationFrame(applyPointer); });
+  window.addEventListener("resize", refreshNodeCenters, { passive: true });
+  window.setInterval(refreshNodeCenters, 3000);
+}
+
+/* ---- ambient sky: an occasional streak crosses the field ---- */
+let starTimer = 0;
+function scheduleShootingStar() {
+  if (starTimer) return;
+  const spawn = () => {
+    starTimer = 0;
+    if (osShellVisible() && !reduceMotionOS() && !document.hidden) {
+      const stage = $(".hero2-stage");
+      if (stage) {
+        const star = document.createElement("span");
+        star.className = "os-shooting-star";
+        star.style.setProperty("--y", `${8 + Math.random() * 46}%`);
+        star.style.setProperty("--d", `${1.1 + Math.random() * 0.9}s`);
+        stage.appendChild(star);
+        star.addEventListener("animationend", () => star.remove());
+      }
+    }
+    starTimer = window.setTimeout(spawn, 5200 + Math.random() * 8000);
+  };
+  starTimer = window.setTimeout(spawn, 3200);
+}
+
+/* ---- opt-in sound: synthesized, no assets, off by default ---- */
+let audioCtx = null;
+let soundOn = false;
+let lastHoverBlip = 0;
+try { soundOn = localStorage.getItem("pf.os.sound.v1") === "1"; } catch {}
+function ensureAudio() {
+  if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch {} }
+  if (audioCtx && audioCtx.state === "suspended") { try { audioCtx.resume(); } catch {} }
+  return audioCtx;
+}
+function blip(freq, dur, type, gain, when) {
+  const ac = audioCtx;
+  if (!ac) return;
+  const t = ac.currentTime + (when || 0);
+  const osc = ac.createOscillator();
+  const g = ac.createGain();
+  osc.type = type || "sine";
+  osc.frequency.setValueAtTime(freq, t);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(gain || 0.05, t + 0.012);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  osc.connect(g).connect(ac.destination);
+  osc.start(t);
+  osc.stop(t + dur + 0.03);
+}
+function osSound(kind) {
+  if (!soundOn || !ensureAudio()) return;
+  if (kind === "power") [523, 659, 784, 1047].forEach((f, i) => blip(f, 0.5, "sine", 0.05, i * 0.085));
+  else if (kind === "nav") { blip(660, 0.13, "triangle", 0.045); blip(990, 0.1, "sine", 0.028, 0.05); }
+  else if (kind === "toast") { blip(784, 0.16, "sine", 0.045); blip(1047, 0.14, "sine", 0.026, 0.07); }
+  else if (kind === "hover") { const now = Date.now(); if (now - lastHoverBlip < 90) return; lastHoverBlip = now; blip(1280, 0.04, "sine", 0.016); }
+}
+function mountSoundToggle() {
+  const line = $(".os-system-line");
+  if (!line || line.querySelector(".os-sound")) return;
+  const btn = document.createElement("button");
+  btn.className = `os-sound${soundOn ? " is-on" : ""}`;
+  btn.type = "button";
+  btn.setAttribute("aria-label", "Toggle interface sound");
+  btn.innerHTML = `<span aria-hidden="true"></span><i>SOUND ${soundOn ? "ON" : "OFF"}</i>`;
+  btn.addEventListener("click", () => {
+    soundOn = !soundOn;
+    try { localStorage.setItem("pf.os.sound.v1", soundOn ? "1" : "0"); } catch {}
+    btn.classList.toggle("is-on", soundOn);
+    btn.querySelector("i").textContent = `SOUND ${soundOn ? "ON" : "OFF"}`;
+    if (soundOn) { ensureAudio(); osSound("nav"); }
+  });
+  line.insertBefore(btn, line.querySelector(".os-system-time"));
+}
+function bindHoverSound() {
+  document.addEventListener("pointerover", (e) => {
+    if (!soundOn) return;
+    if (e.target.closest(".os-command-rail [data-nav-id], .os-division-strip button, .os-signal, .os-node")) osSound("hover");
+  }, { passive: true });
 }
 
 export function initCommandOS() {
@@ -741,7 +886,10 @@ export function initCommandOS() {
   document.documentElement.dataset.commandOs = "2040";
   bindCommandOS();
   bindKeyboard();
+  bindPointer();
+  bindHoverSound();
   mountAmbientOS();
+  scheduleShootingStar();
   setExecutionMode("advise");
   setFieldMode("executive");
   store.onChange(scheduleSync);
