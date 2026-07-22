@@ -6,52 +6,52 @@ import {
   redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260722-21";
+} from "./store.js?v=phantom-live-20260722-22";
 import {
   loadOrganizationPulse, loadBrainContract, pulseAttentionItems, brainContractAttentionItems,
-} from "./organizationpulse.js?v=phantom-live-20260722-21";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260722-21";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260722-21";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260722-21";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260722-21";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260722-21";
-import { mountManagedGrowthReport } from "./managedgrowth.js?v=phantom-live-20260722-21";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260722-21";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260722-21";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260722-21";
-import { mountPhantomAI } from "./phantomai.js?v=phantom-live-20260722-21";
-import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260722-21";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260722-21";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260722-21";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260722-21";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode, refreshCompanionCore } from "./companion.js?v=phantom-live-20260722-21";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260722-21";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260722-21";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260722-21";
-import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260722-21";
-import { mountAmbient } from "./ambient.js?v=phantom-live-20260722-21";
-import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260722-21";
+} from "./organizationpulse.js?v=phantom-live-20260722-22";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260722-22";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260722-22";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260722-22";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260722-22";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260722-22";
+import { mountManagedGrowthReport } from "./managedgrowth.js?v=phantom-live-20260722-22";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260722-22";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260722-22";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260722-22";
+import { mountPhantomAI } from "./phantomai.js?v=phantom-live-20260722-22";
+import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260722-22";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260722-22";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260722-22";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260722-22";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode, refreshCompanionCore } from "./companion.js?v=phantom-live-20260722-22";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260722-22";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260722-22";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260722-22";
+import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260722-22";
+import { mountAmbient } from "./ambient.js?v=phantom-live-20260722-22";
+import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260722-22";
 import {
   fetchAuthConfig, databaseLogin, databaseLogout, databaseSignup, databaseForgotUsername, databaseForgotPassword,
   databaseResetPassword, databaseAcceptInvitation, databaseVerify2fa, databaseStart2faSetup, databaseConfirm2fa, databaseRegenerate2faBackupCodes, databaseDisable2fa,
   switchOrg, fetchAuthMe, fetchEntitlementsSummary,
-} from "./orgs.js?v=phantom-live-20260722-21";
-import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260722-21";
-import { assetsAvailable } from "./orgs.js?v=phantom-live-20260722-21";
-import { renderPhantomStore } from "./phantomstore.js?v=phantom-live-20260722-21";
-import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260722-21";
+} from "./orgs.js?v=phantom-live-20260722-22";
+import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260722-22";
+import { assetsAvailable } from "./orgs.js?v=phantom-live-20260722-22";
+import { renderPhantomStore } from "./phantomstore.js?v=phantom-live-20260722-22";
+import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260722-22";
 // PhantomPlay V2 platform shell (Home/Solo/Friends/Workspace/Dev Hub) - opt-in
 // while it hardens: set localStorage "pf.phantomplay.v2" = "1" (the V2 shell has
 // a "Classic view" button to switch back). Classic stays the default experience.
-import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260722-21";
+import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260722-22";
 const phantomPlayV2Opted = () => { try { return localStorage.getItem("pf.phantomplay.v2") === "1"; } catch { return false; } };
-import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260722-21";
+import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260722-22";
 import {
   customizeNavigation,
   loadOrganizationCustomization,
-} from "./customization.js?v=phantom-live-20260722-21";
-import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260722-21";
-import { initCommandOS, applyCommandExecutionMode } from "./command-os.js?v=phantom-live-20260722-21";
+} from "./customization.js?v=phantom-live-20260722-22";
+import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260722-22";
+import { initCommandOS, applyCommandExecutionMode } from "./command-os.js?v=phantom-live-20260722-22";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -1522,7 +1522,7 @@ const MODES = {
   admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260722-21";
+const POSE_VERSION = "phantom-live-20260722-22";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -1809,6 +1809,99 @@ function renderDashboardBrief() {
     <button class="dashboard-brief-metric" type="button" data-open-ws="${item.open}">
       <span>${esc(item.label)}</span><b>${esc(item.value)}</b><i>${esc(item.detail)}</i>
     </button>`).join("");
+}
+
+/* Real calendar events — aggregated from dated records already in the store.
+   Nothing invented: a day only lights up if a real lead follow-up, booking,
+   task, or media deadline actually falls on it. */
+function calendarEvents() {
+  const out = [];
+  const push = (raw, title, kind, open) => {
+    if (!raw) return;
+    const d = new Date(raw);
+    if (Number.isNaN(d.getTime())) return;
+    out.push({ date: d, day: d.toISOString().slice(0, 10), title, kind, open });
+  };
+  visible(store.state.leads || []).forEach((l) => {
+    if (["new", "follow-up"].includes(l.status)) push(l.due, `Follow up: ${l.name || l.company || "lead"}`, "lead", "leads");
+  });
+  visible(store.state.bookings || []).forEach((b) => push(b.date || b.when || b.at || b.scheduledAt, `${b.type || "Booking"} — ${b.client || b.name || ""}`.trim(), "booking", "planner"));
+  visible(store.state.tasks || []).forEach((t) => { if (["new", "working"].includes(t.status || "new")) push(t.due || t.date, `Task: ${t.title || "work item"}`, "task", "workforce"); });
+  visible(store.state.media || []).forEach((m) => push(m.deadline || m.dueAt, `Media due: ${m.title || "asset"}`, "media", "media"));
+  return out.sort((a, b) => a.date - b.date);
+}
+
+function renderCalendarWidget() {
+  const host = $("[data-os-calendar]");
+  if (!host) return;
+  const now = new Date();
+  const events = calendarEvents();
+  const byDay = new Map();
+  events.forEach((e) => byDay.set(e.day, (byDay.get(e.day) || 0) + 1));
+  // week strip: 7 days starting Monday of the current week
+  const start = new Date(now);
+  const dow = (start.getDay() + 6) % 7; // 0 = Monday
+  start.setDate(start.getDate() - dow);
+  start.setHours(0, 0, 0, 0);
+  const todayKey = now.toISOString().slice(0, 10);
+  const dayLetters = ["M", "T", "W", "T", "F", "S", "S"];
+  let strip = "";
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(start); d.setDate(start.getDate() + i);
+    const key = d.toISOString().slice(0, 10);
+    const count = byDay.get(key) || 0;
+    strip += `<button class="cal-day${key === todayKey ? " is-today" : ""}${count ? " has-events" : ""}" type="button" data-open-ws="planner" aria-label="${d.toDateString()}${count ? `, ${count} item${count === 1 ? "" : "s"}` : ""}">
+      <span>${dayLetters[i]}</span><b>${d.getDate()}</b>${count ? `<i class="cal-dot" aria-hidden="true"></i>` : ""}</button>`;
+  }
+  const upcoming = events.filter((e) => e.date >= new Date(todayKey)).slice(0, 4);
+  const monthLabel = now.toLocaleDateString([], { month: "long", year: "numeric" });
+  host.innerHTML = `
+    <div class="section-head">
+      <h2>Calendar</h2>
+      <button class="cal-open" type="button" data-open-ws="planner">Open planner <span aria-hidden="true">→</span></button>
+    </div>
+    <p class="cal-month">${esc(monthLabel)}</p>
+    <div class="cal-week" role="group" aria-label="This week">${strip}</div>
+    <div class="cal-agenda">
+      ${upcoming.length
+        ? upcoming.map((e) => `<button class="cal-event is-${esc(e.kind)}" type="button" data-open-ws="${esc(e.open)}">
+            <time>${e.date.toLocaleDateString([], { weekday: "short", day: "numeric" })}</time><span>${esc(e.title)}</span></button>`).join("")
+        : `<p class="cal-empty">Nothing scheduled. Follow-ups, bookings, and deadlines land here as they come in.</p>`}
+    </div>`;
+}
+
+/* Honest presence — you are genuinely online (this is your live session). We do
+   NOT invent a peer count: there is no real-time multi-user presence feed, so
+   fabricating "N online" would be fake data. We show your real presence plus the
+   real workspaces you command, and invite the team in. */
+function renderPresenceWidget() {
+  const host = $("[data-os-presence]");
+  if (!host) return;
+  const name = (ctx.session?.name || "You").trim();
+  const first = name.split(/\s+/)[0];
+  const initial = (first[0] || "Y").toUpperCase();
+  const roleLabel = isAdmin() || isOwnerOperator() ? "Owner" : (ctx.session?.role || "Member");
+  let spaces = [];
+  try {
+    spaces = ctx.session?.database
+      ? databaseOrgMemberships().map((m) => ({ id: m.orgId, name: m.orgName }))
+      : (store.state.workspaces || []).map((w) => ({ id: w.id, name: w.name }));
+  } catch { spaces = []; }
+  const activeWs = currentWs();
+  const spaceChips = spaces.slice(0, 4).map((s) => `<span class="pres-space${s.id === activeWs ? " is-active" : ""}">${esc(s.name)}</span>`).join("");
+  host.innerHTML = `
+    <div class="section-head">
+      <h2>In the command center</h2>
+      <span class="pres-live" aria-label="1 person online">1 online</span>
+    </div>
+    <div class="pres-me">
+      <span class="pres-avatar" aria-hidden="true">${esc(initial)}<i class="pres-dot"></i></span>
+      <div class="pres-id"><b>${esc(name)}</b><i>${esc(roleLabel)} · online now</i></div>
+    </div>
+    ${spaces.length
+      ? `<div class="pres-spaces" aria-label="Your workspaces">${spaceChips}</div>`
+      : ""}
+    <button class="pres-invite" type="button" data-open-ws="clients">Invite your team <span aria-hidden="true">→</span></button>`;
 }
 
 function accessVersionCopy() {
@@ -2423,6 +2516,8 @@ function renderConsole() {
   fetchServerAttention().then(() => { if (serverPulseAt !== pulseBefore) renderNotifs(); }).catch(() => {});
   renderHero();
   renderDashboardBrief();
+  renderCalendarWidget();
+  renderPresenceWidget();
   renderDecisions();
   fetchDecisions().then(() => renderDecisions()).catch(() => {});
   renderChips();
