@@ -71,9 +71,10 @@
         place-items: center;
         padding: 24px;
         background:
-          radial-gradient(circle at 50% 56%, rgba(91, 76, 255, 0.14), transparent 30%),
-          radial-gradient(circle at 50% 80%, rgba(180, 75, 240, 0.1), transparent 34%),
-          #f3f2fa;
+          linear-gradient(180deg, rgba(139, 103, 255, 0.72) 0 3px, transparent 3px),
+          radial-gradient(circle at 50% 56%, rgba(126, 103, 255, 0.18), transparent 30%),
+          radial-gradient(circle at 50% 76%, rgba(199, 153, 255, 0.13), transparent 36%),
+          #f5f4fb;
       }
 
       .boot-fallback { align-content: center; justify-items: center; row-gap: 18px; }
@@ -84,16 +85,17 @@
         display: grid;
         place-items: center;
         border-radius: 50%;
-        border: 1px solid rgba(91, 76, 255, 0.3);
-        background: radial-gradient(circle at 50% 42%, rgba(91, 76, 255, 0.16), rgba(255, 255, 255, 0.94));
+        border: 1px solid rgba(130, 112, 255, 0.34);
+        background:
+          radial-gradient(circle at 50% 46%, rgba(246, 244, 255, 0.98), rgba(238, 235, 255, 0.94) 58%, rgba(255, 255, 255, 0.88));
         box-shadow:
-          0 0 44px rgba(91, 76, 255, 0.2),
-          inset 0 0 24px rgba(91, 76, 255, 0.08),
-          0 24px 80px rgba(36, 31, 63, 0.14);
+          0 0 54px rgba(128, 109, 255, 0.24),
+          inset 0 0 28px rgba(138, 119, 255, 0.12),
+          0 26px 90px rgba(120, 96, 210, 0.18);
         overflow: hidden;
       }
 
-      .boot-mark { width: 100%; height: 100%; display: block; filter: hue-rotate(115deg) saturate(0.9); }
+      .boot-mark { width: 100%; height: 100%; display: block; }
 
       .boot-word {
         margin: 0;
@@ -462,11 +464,9 @@
       <p class="boot-word" aria-hidden="true">PHANTOMFORCE</p>
     </div>
     <script type="module">
-      // the boot logo is the phantom HIMSELF. A hand-drawn phantom paints from
-      // the VERY FIRST frame with zero imports (nothing that can fail), then the
-      // real character engine takes over the moment it loads. If the engine
-      // module or its draw ever breaks on this machine, the hand-drawn phantom
-      // simply keeps the stage — the boot mark can never be an empty ring.
+      // First-frame boot mark: a tiny ghost waking inside a soft projector orb.
+      // It has no image dependency and intentionally does not hand off to the
+      // larger character engine, so this nicer boot logo stays consistent.
       (() => {
         const canvas = document.querySelector("[data-boot-mark]");
         const wrap = canvas && canvas.closest(".boot-fallback");
@@ -474,10 +474,8 @@
         const ctx = canvas.getContext("2d");
         const S = canvas.width;
         const t0 = performance.now();
-        let engine = null, engineAt = 0, engineDead = false;
-
         const drawPhantom = (t, alpha) => {
-          const s = S * 0.30, cx = S / 2, cy = S * 0.54;
+          const s = S * 0.26, cx = S / 2, cy = S * 0.51;
           const a = Math.min(1, t / 0.8) * alpha;
           if (a <= 0) return;
           const bob = Math.sin(t * 1.9) * s * 0.04;
@@ -496,41 +494,47 @@
             }
             ctx.closePath();
           };
-          // floor puddle — the projector he lives over
+          // soft red projector glow behind the little ghost
           ctx.globalCompositeOperation = "lighter";
-          const pg = ctx.createRadialGradient(0, 0.62 * s, 0, 0, 0.62 * s, 0.72 * s);
-          pg.addColorStop(0, "rgba(91,76,255,0.30)");
-          pg.addColorStop(1, "rgba(91,76,255,0)");
+          const pg = ctx.createRadialGradient(0, 0, 0, 0, 0, 1.05 * s);
+          pg.addColorStop(0, "rgba(255,72,64,0.44)");
+          pg.addColorStop(0.46, "rgba(255,86,76,0.20)");
+          pg.addColorStop(1, "rgba(255,86,76,0)");
           ctx.fillStyle = pg;
-          ctx.beginPath(); ctx.ellipse(0, 0.62 * s, 0.72 * s, 0.20 * s, 0, 0, Math.PI * 2); ctx.fill();
-          // void body with mint rim glow
+          ctx.beginPath(); ctx.arc(0, 0, 1.08 * s, 0, Math.PI * 2); ctx.fill();
+          const halo = ctx.createRadialGradient(0, 0, 0.4 * s, 0, 0, 1.9 * s);
+          halo.addColorStop(0, "rgba(136,118,255,0.10)");
+          halo.addColorStop(1, "rgba(136,118,255,0)");
+          ctx.fillStyle = halo;
+          ctx.beginPath(); ctx.arc(0, 0, 1.9 * s, 0, Math.PI * 2); ctx.fill();
+          // black ghost body with warm rim glow
           ctx.globalCompositeOperation = "source-over";
           body();
-          ctx.fillStyle = "rgba(30,26,58,0.94)";
-          ctx.shadowColor = "rgba(122,110,255,0.85)";
-          ctx.shadowBlur = s * 0.20;
+          ctx.fillStyle = "rgba(45,18,17,0.96)";
+          ctx.shadowColor = "rgba(255,80,74,0.82)";
+          ctx.shadowBlur = s * 0.18;
           ctx.fill();
           ctx.shadowBlur = 0;
           ctx.globalCompositeOperation = "lighter";
           body();
-          ctx.strokeStyle = "rgba(140,130,255,0.5)";
-          ctx.lineWidth = Math.max(1, s * 0.02);
+          ctx.strokeStyle = "rgba(255,122,112,0.38)";
+          ctx.lineWidth = Math.max(1, s * 0.018);
           ctx.stroke();
           // spirit particles drifting through the body
           for (let i = 0; i < 44; i++) {
             const rx = Math.sin(i * 12.9898) * 0.56, ry = Math.sin(i * 78.233) * 0.6 - 0.34;
             const tw = 0.35 + 0.55 * Math.abs(Math.sin(t * 2.1 + i * 1.7));
-            ctx.fillStyle = `rgba(160,150,255,${0.16 + tw * 0.4})`;
-            const d = 1 + tw * 1.6;
+            ctx.fillStyle = `rgba(255,198,188,${0.12 + tw * 0.30})`;
+            const d = 0.8 + tw * 1.35;
             ctx.fillRect(rx * s + Math.sin(t * 1.3 + i) * 2, ry * s + Math.cos(t * 1.1 + i * 2) * 2, d, d);
           }
-          // eyes: bright mint leaves, dark pupils, tiny glints
+          // sleepy peach eyes, dark pupils, tiny glints
           for (const side of [-1, 1]) {
             const ex = side * 0.24 * s, ey = -0.08 * s, ew = 0.15 * s, eh2 = 0.105 * s;
             const eg = ctx.createRadialGradient(ex, ey, 0, ex, ey, ew);
-            eg.addColorStop(0, "rgba(244,242,255,0.96)");
-            eg.addColorStop(0.6, "rgba(170,160,255,0.85)");
-            eg.addColorStop(1, "rgba(170,160,255,0.1)");
+            eg.addColorStop(0, "rgba(255,242,235,0.98)");
+            eg.addColorStop(0.6, "rgba(255,174,164,0.88)");
+            eg.addColorStop(1, "rgba(255,174,164,0.12)");
             ctx.fillStyle = eg;
             ctx.beginPath();
             ctx.moveTo(ex - ew, ey);
@@ -538,9 +542,9 @@
             ctx.quadraticCurveTo(ex, ey + eh2 * 1.15, ex - ew, ey);
             ctx.fill();
             ctx.globalCompositeOperation = "source-over";
-            ctx.fillStyle = "rgba(24,20,48,0.9)";
+            ctx.fillStyle = "rgba(45,18,17,0.9)";
             ctx.beginPath(); ctx.ellipse(ex, ey, eh2 * 0.55, eh2 * 0.65, 0, 0, Math.PI * 2); ctx.fill();
-            ctx.fillStyle = "rgba(250,249,255,0.95)";
+            ctx.fillStyle = "rgba(255,250,247,0.96)";
             ctx.beginPath(); ctx.arc(ex - eh2 * 0.18, ey - eh2 * 0.22, Math.max(0.7, eh2 * 0.14), 0, Math.PI * 2); ctx.fill();
             ctx.globalCompositeOperation = "lighter";
           }
@@ -552,47 +556,10 @@
           const t = (now - t0) * 0.001;
           ctx.setTransform(1, 0, 0, 1, 0, 0);
           ctx.clearRect(0, 0, S, S);
-          let live = false;
-          if (engine && !engineDead) {
-            const et = t - engineAt;
-            if (et < 0.5) drawPhantom(t, 1 - et / 0.5);   // crossfade into the engine
-            try {
-              engine.draw(ctx, {
-                t: et, dt: 0.016, cx: S / 2, cy: S * 0.56, scale: S * 0.27,
-                mood: "idle", emotion: "content", startupOnly: et < 2.4,
-                pulse: 0, px: 0, py: 0, moodAge: 2,
-              });
-              live = true;
-            } catch { engineDead = true; ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, S, S); }
-          }
-          if (!live) drawPhantom(t, 1);
+          drawPhantom(t, 1);
           requestAnimationFrame(frame);
         };
         requestAnimationFrame(frame);
-
-        // load the real engine with whatever build id THIS page shipped with —
-        // never a hardcoded version that can drift out of sync with the box
-        (async () => {
-          try {
-            const src = document.querySelector('script[src*="js/main.js"]')?.getAttribute("src") || "";
-            const q = window.PHANTOM_BUILD ? `?v=${window.PHANTOM_BUILD}`
-              : src.includes("?") ? src.slice(src.indexOf("?")) : "";
-            // derive the engine path from wherever main.js is actually mounted —
-            // the admin box serves this page at "/" while the files live under /app/
-            const base = src.includes("js/main.js") ? src.slice(0, src.indexOf("main.js")) + "character.js" : "./js/character.js";
-            const mod = await import(`${base}${q}`).catch(() => import(base));
-            const chr = mod.createPhantomCharacter({ small: true });
-            // dry-run off-screen: a broken engine must never blank a visible frame
-            const probe = document.createElement("canvas");
-            probe.width = probe.height = 64;
-            chr.draw(probe.getContext("2d"), {
-              t: 0.01, dt: 0.016, cx: 32, cy: 36, scale: 17,
-              mood: "idle", emotion: "content", startupOnly: true, pulse: 0, px: 0, py: 0, moodAge: 2,
-            });
-            engineAt = (performance.now() - t0) * 0.001;
-            engine = chr;
-          } catch { /* hand-drawn phantom keeps the stage */ }
-        })();
       })();
     </script>
 
