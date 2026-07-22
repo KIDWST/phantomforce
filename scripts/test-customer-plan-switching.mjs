@@ -64,6 +64,18 @@ assert.match(settings, /Switch Free, Pro, Developer, Elite, and Developer \+ Eli
 
 assert.match(main, /const FEATURE_BY_NAV_ID = \{/u,
   "Navigation must know which workspace features are plan-gated.");
+assert.match(main, /const PLAN_NAV_WORKFLOWS = \{/u,
+  "Navigation must define tier-specific workspace workflows.");
+assert.match(main, /free: new Set\(\["dashboard", "phantomai", "media", "sites", "phantomplay", "settings"\]\)/u,
+  "Free users must get a smaller, focused workflow instead of the whole business command sidebar.");
+assert.match(main, /developer: new Set\([\s\S]*"developer"[\s\S]*"phantomstore"[\s\S]*\)/u,
+  "Developer users must get builder and PhantomPlay/Store workflows.");
+assert.match(main, /developer_elite: new Set\([\s\S]*"developer"[\s\S]*"intelligence"[\s\S]*\)/u,
+  "Developer + Elite must combine builder and business workflows.");
+assert.match(main, /return \{ label: "Phantom", detail: "Owner mode · all modules · safe self-editing", tone: "active" \};/u,
+  "Owner/admin access must display the hidden Phantom tier, not a customer plan.");
+assert.match(main, /surface\.id === "developer" && isDeveloperTier\(\)/u,
+  "Developer-tier customers must be able to see the Developer workflow without owner status.");
 assert.match(main, /!ctx\.session\?\.database && !ctx\.session\?\.localCustomer/u,
   "Plan gating must include local customer sessions.");
 assert.match(main, /localStorage\.setItem\("pf\.settings\.tab\.v1", "plan"\)/u,

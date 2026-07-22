@@ -13130,6 +13130,10 @@ body .phantom .workspace-page :where(
   .ss-store-console { max-height: none; overflow: visible; }
   .ss-editbar-actions { margin-left: 0; width: 100%; }
   .ss-cart { position: fixed; top: max(14px, env(safe-area-inset-top)); right: 12px; bottom: max(14px, env(safe-area-inset-bottom)); width: calc(100% - 24px); max-height: none; }
+  .ss-public-source { grid-template-columns: 1fr; padding: 10px; }
+  .ss-public-source-frame { grid-template-rows: auto minmax(420px, 58dvh); }
+  .ss-public-source-frame iframe { min-height: 420px; }
+  .ss-public-source-code textarea { min-height: 360px; }
 }
 @media (max-width: 620px) {
   .ss-modebar, .ss-devbar { width: 100%; }

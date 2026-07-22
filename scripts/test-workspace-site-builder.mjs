@@ -13,6 +13,8 @@ assert.equal(applySiteTemplate(starter, "phantomforce"), true, "PhantomForce sta
 assert.equal(starter.title, "PhantomForce — public site", "starter should identify the public PhantomForce site.");
 assert.equal(starter.design.brand, "PhantomForce", "starter should use the PhantomForce brand.");
 assert.equal(starter.design.existingUrl, "phantomforce.online", "starter should be anchored to phantomforce.online.");
+assert.equal(starter.design.sourceKind, "phantomforce_public_source", "starter must identify the real public-site source instead of a generated mock.");
+assert.deepEqual(starter.design.sourceFiles, ["/index.html", "/void.css", "/void.js"], "starter must point at the real public website source files.");
 assert.equal(starter.store.checkoutMode, "test", "public site starter must still use test checkout until payments are connected.");
 assert.ok(starter.sections.includes("Media Lab"), "public site starter should include real product sections.");
 assert.ok(starter.catalog.some((product) => product.name === "Free Plan" && product.price === 0), "free plan should be visible in the public-site catalog.");
