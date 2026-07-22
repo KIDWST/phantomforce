@@ -42,6 +42,7 @@
     "test:agent-runs-business-snapshot-redaction": "tsx scripts/test-agent-runs-business-snapshot-redaction.ts",
     "test:termina-bridge": "tsx scripts/test-termina-bridge.ts",
     "test:local-customer-plan": "tsx scripts/test-local-customer-plan-preview.ts",
+    "test:stripe-billing": "tsx scripts/test-stripe-billing.ts",
     "test:site-store-render": "tsx scripts/test-site-store-render.ts",
     "test:auth:prisma-dev": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-auth-prisma-dev.ps1",
     "test:auth:production-fail-closed": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-auth-production-fail-closed.ps1",

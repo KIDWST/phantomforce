@@ -106,7 +106,10 @@ export function getStripeBillingStatus() {
     checkoutEnabled: checkoutReady,
     liveWebhooksAllowed: webhookReady,
     productionReady: checkoutReady && webhookReady,
-    portalConfigured: Boolean(config.portalConfigurationId),
+    // A configuration ID is optional: Stripe can use its Dashboard-managed
+    // default customer portal configuration when this is blank.
+    portalConfigurationIdConfigured: Boolean(config.portalConfigurationId),
+    portalUsesDashboardDefault: !config.portalConfigurationId,
     automaticTax: config.automaticTax,
     taxIdCollection: config.taxIdCollection,
     pricePlans,
@@ -251,7 +254,7 @@ async function activeSubscriptionForOrg(orgId: string) {
 
 export async function getStripeBillingSummary(orgId: string) {
   const db = await requireDb();
-  const [customer, subscriptions] = await Promise.all([
+  const [customer, subscriptions, openSubscription] = await Promise.all([
     db.billingCustomer.findUnique({ where: { orgId } }),
     db.billingSubscription.findMany({
       where: { orgId },
@@ -259,12 +262,17 @@ export async function getStripeBillingSummary(orgId: string) {
       take: 4,
       select: { planKey: true, status: true, currentPeriodEnd: true, cancelAtPeriodEnd: true, updatedAt: true },
     }),
+    db.billingSubscription.findFirst({
+      where: { orgId, status: { in: ["checkout_completed", "trialing", "active", "past_due", "requires_action"] } },
+      select: { id: true },
+    }),
   ]);
   const status = getStripeBillingStatus();
   return {
     ...status,
     checkoutPlans: listStripeCheckoutPlans(),
     customerOnFile: Boolean(customer),
+    hasOpenSubscription: Boolean(openSubscription),
     subscriptions: subscriptions.map((subscription) => ({
       ...subscription,
       currentPeriodEnd: subscription.currentPeriodEnd?.toISOString() ?? null,
@@ -469,6 +477,16 @@ async function beginWebhookEvent(event: Stripe.Event, rawBody: Buffer) {
   }
 }
 
+async function recoverSubscriptionFromStripe(subscriptionId: string) {
+  // Stripe does not promise ordering across distinct event types. In
+  // particular, an invoice.paid delivery can reach us before the corresponding
+  // Checkout/session or subscription event. Retrieve only the provider
+  // subscription reference in that narrow case, then establish the local map
+  // before deciding the entitlement. A retrieval failure bubbles so Stripe
+  // retries the signed event instead of silently losing a paid invoice.
+  return requireStripeClient().subscriptions.retrieve(subscriptionId);
+}
+
 export async function processVerifiedStripeWebhook(event: Stripe.Event, rawBody: Buffer) {
   const received = await beginWebhookEvent(event, rawBody);
   if (received.duplicate) return { ok: true as const, duplicate: true, outcome: "already_processed" };
@@ -547,17 +565,23 @@ export async function processVerifiedStripeWebhook(event: Stripe.Event, rawBody:
       const subscriptionId = invoiceSubscriptionId(invoice);
       const db = await requireDb();
       const knownSubscription = subscriptionId ? await db.billingSubscription.findUnique({ where: { providerSubscriptionId: subscriptionId } }) : null;
-      const orgId = await resolveWebhookOrg({ orgId: knownSubscription?.orgId, customerId });
-      const planKey = knownSubscription?.planKey || invoicePlanKey(invoice);
-      if (!orgId || !planKey || !subscriptionId) {
+      const recoveredSubscription = !knownSubscription && subscriptionId ? await recoverSubscriptionFromStripe(subscriptionId) : null;
+      const providerCustomerId = customerId || asProviderId(recoveredSubscription?.customer);
+      const orgId = await resolveWebhookOrg({
+        orgId: knownSubscription?.orgId || metadataOrgId(recoveredSubscription?.metadata),
+        customerId: providerCustomerId,
+      });
+      const planKey = knownSubscription?.planKey || (recoveredSubscription ? subscriptionPlanKey(recoveredSubscription) : null) || invoicePlanKey(invoice);
+      if (!orgId || !planKey || !subscriptionId || !providerCustomerId) {
         await markWebhookEvent(event.id, "ignored", { errorCode: "invoice_mapping_missing" });
         return { ok: true as const, duplicate: false, outcome: "ignored" };
       }
-      const customer = await customerForOrg(orgId);
-      if (!customer) {
-        await markWebhookEvent(event.id, "ignored", { errorCode: "billing_customer_missing" });
+      const existingCustomer = await customerForOrg(orgId);
+      if (existingCustomer && existingCustomer.providerCustomerId !== providerCustomerId) {
+        await markWebhookEvent(event.id, "ignored", { errorCode: "invoice_customer_mismatch" });
         return { ok: true as const, duplicate: false, outcome: "ignored" };
       }
+      const customer = existingCustomer || await upsertBillingCustomer(orgId, providerCustomerId);
       const status = event.type === "invoice.paid" ? "active" : event.type === "invoice.payment_failed" ? "past_due" : event.type === "invoice.payment_action_required" ? "requires_action" : "finalization_failed";
       await upsertBillingSubscription({
         orgId,
@@ -565,6 +589,8 @@ export async function processVerifiedStripeWebhook(event: Stripe.Event, rawBody:
         providerSubscriptionId: subscriptionId,
         planKey,
         status,
+        currentPeriodEnd: secondsToDate((recoveredSubscription as unknown as { current_period_end?: number } | null)?.current_period_end),
+        cancelAtPeriodEnd: Boolean(recoveredSubscription?.cancel_at_period_end),
         eventCreatedAt,
       });
       if (event.type === "invoice.paid") {

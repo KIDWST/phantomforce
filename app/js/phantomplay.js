@@ -655,7 +655,7 @@ function renderTogether() {
     </section>
     <section class="pp-room-layout">
       <form class="pp-room-card" data-pp-create-room-form>
-        <header><div><p class="pp-kicker">CREATE</p><h3>Start a private room</h3></div><span>${ui.offline ? "Server needed" : "Ready"}</span></header>
+        <header><div><p class="pp-kicker">CREATE</p><h3>Start a private room</h3></div><span>${ui.offline ? "Sync needed" : "Ready"}</span></header>
         <label>Mode<select data-pp-room-mode name="mode"><option value="classroom" ${ui.roomMode === "classroom" ? "selected" : ""}>Classroom</option><option value="friends" ${ui.roomMode === "friends" ? "selected" : ""}>Friends</option></select></label>
         <label>Game<select data-pp-room-game name="gameId" ${classroomGames.length ? "" : "disabled"}>${classroomGames.map((game) => `<option value="${esc(game.id)}" ${game.id === selectedGameId ? "selected" : ""}>${esc(game.title)} · ${esc(game.contentRating === "everyone" ? "Everyone" : game.contentRating)}</option>`).join("")}</select></label>
         <label>Room size<input name="maxPlayers" type="number" min="2" max="${ui.roomMode === "classroom" ? "30" : "8"}" value="${ui.roomMode === "classroom" ? "12" : "6"}"/></label>
@@ -1014,8 +1014,8 @@ function render() {
   const content = ui.tab === "together" ? renderTogether() : ui.tab === "favorites" ? renderFavorites() : ui.tab === "developer" ? renderDeveloper() : ui.tab === "submit" ? renderSubmit() : ui.tab === "admin" ? renderAdmin() : renderLibrary();
   mountedRoot.innerHTML = `<div class="pp-shell">
     <header class="pp-top"><div class="pp-title"><p class="pp-kicker">PHANTOMFORCE GAME SANDBOX</p><h1>PhantomPlay</h1></div><nav class="pp-tabs" aria-label="PhantomPlay sections">${tabs.map(([id, label]) => `<button type="button" class="${ui.tab === id ? "is-active" : ""}" data-pp-tab="${id}">${esc(label)}</button>`).join("")}</nav><div class="pp-tools"><span class="pp-access ${snapshot.access.enabled ? "is-ready" : "is-blocked"}">${snapshot.access.enabled ? esc(playTimeLabel(snapshot.access.remainingMinutesToday)) : "Plan restricted"}</span><button class="pp-settings-button" data-pp-settings aria-label="Play settings">${icon("settings")}</button></div></header>
-    ${ui.offline ? `<div class="pp-banner is-offline"><b>Cloud sync is offline</b><span>Signed-in workspace users can still launch built-in games locally. Saves, analytics, rooms, submissions, and policies sync when the backend returns.</span><button data-pp-retry>Retry</button></div>` : ""}
-    ${ui.error ? `<div class="pp-banner is-error"><b>PhantomPlay needs attention</b><span>${esc(ui.error)}</span><button data-pp-retry>Retry</button></div>` : ""}
+      ${ui.offline ? `<div class="pp-banner"><b>Local Play mode</b><span>Games are available locally right now. Cloud saves, rooms, submissions, and analytics will reconnect when the PhantomPlay sync lane answers.</span><button data-pp-retry>Re-check sync</button></div>` : ""}
+    ${!ui.offline && ui.error ? `<div class="pp-banner is-error"><b>PhantomPlay needs attention</b><span>${esc(ui.error)}</span><button data-pp-retry>Retry</button></div>` : ""}
     ${ui.notice ? `<div class="pp-banner is-notice"><b>Creator support</b><span>${esc(ui.notice)}</span><button data-pp-clear-notice>OK</button></div>` : ""}
     <main class="pp-content">${content}</main>
     ${settingsMarkup()}${playerMarkup()}
@@ -1444,7 +1444,7 @@ async function openDevSandbox() {
       ui.devSandbox = {
         gameId: game.id, source, editedSource: startingSource, blobUrl: "",
         hasOverride: false, overrideUpdatedAt: null, localUpdatedAt: localDraft?.updatedAt || null,
-        loading: false, error: "", status: localDraft ? "Resumed your local autosave. Backend sync is offline." : "Loaded the full game source locally. Autosave will keep a local draft until backend sync returns.",
+        loading: false, error: "", status: localDraft ? "Resumed your local autosave. Backend sync is waiting." : "Loaded the full game source locally. Autosave will keep a local draft until backend sync returns.",
         saving: false, publishing: false, section: "code", modState: {}, speed: 1,
       };
     } catch {

@@ -234,7 +234,7 @@ function empty(title, copy) {
   return `<div class="pp2-empty"><h3>${esc(title)}</h3><p>${esc(copy)}</p></div>`;
 }
 function v2Note(copy) {
-  return `<div class="pp2-banner"><b>Social is offline</b><span>${esc(copy)}</span></div>`;
+  return `<div class="pp2-banner"><b>Social sync waiting</b><span>${esc(copy)}</span></div>`;
 }
 
 /* ---- HOME ---- */
@@ -745,8 +745,8 @@ function render() {
   mountedRoot.innerHTML = `<div class="pp2-shell">
     <header class="pp2-top"><div><p class="pp2-kicker">PHANTOMFORCE ENTERTAINMENT</p><h1>PhantomPlay</h1><span>Work hard. Take a real break. Come back sharper.</span></div>
       <div class="pp2-top-right"><span class="pp2-access ${snapshot.access.enabled ? "is-on" : "is-off"}">${snapshot.access.enabled ? esc(playTimeLabel(snapshot.access.remainingMinutesToday)) : "Plan restricted"}</span><button class="pp2-ghost" data-pp2-settings aria-label="Play settings">Settings</button><button class="pp2-ghost" data-pp2-classic title="Return to the classic PhantomPlay experience">Classic view</button></div></header>
-    ${ui.offline ? `<div class="pp2-banner"><b>Cloud sync is offline</b><span>Signed-in workspace users can still launch built-in games locally. Saves, analytics, rooms, submissions, and policies sync when the backend returns.</span><button data-pp2-retry>Retry</button></div>` : ""}
-    ${ui.error ? `<div class="pp2-banner is-error"><b>PhantomPlay needs attention</b><span>${esc(ui.error)}</span><button data-pp2-retry>Retry</button></div>` : ""}
+    ${ui.offline ? `<div class="pp2-banner"><b>Local Play mode</b><span>Games are available locally right now. Cloud saves, rooms, submissions, reviews, and analytics will reconnect when the PhantomPlay sync lane answers.</span><button data-pp2-retry>Re-check sync</button></div>` : ""}
+    ${!ui.offline && ui.error ? `<div class="pp2-banner is-error"><b>PhantomPlay needs attention</b><span>${esc(ui.error)}</span><button data-pp2-retry>Retry</button></div>` : ""}
     <nav class="pp2-tabs" aria-label="PhantomPlay experiences">${tabs.map(([id, label]) => `<button type="button" class="${ui.tab === id ? "is-active" : ""}" data-pp2-tab="${id}">${esc(label)}</button>`).join("")}</nav>
     <main class="pp2-content">${view()}</main>
     ${renderDetail()}${settingsMarkup()}${playerMarkup()}

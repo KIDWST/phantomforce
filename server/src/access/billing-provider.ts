@@ -68,12 +68,11 @@ export function getProvisioningBillingMetadata(): {
 
 /* ============================================================================
    Billing provider adapter boundary.
-   The entitlement engine (entitlements.ts) is deliberately billing-agnostic:
-   plans are assigned by the super-admin (or, later, by a billing adapter
-   translating provider webhooks into these neutral events). Integrating
-   Stripe/another provider means adding ONE adapter here — the product's
-   permission logic never changes. No adapter is integrated today, no
-   checkout exists, and nothing below pretends a payment happened. */
+   The entitlement engine (entitlements.ts) is deliberately billing-agnostic.
+   Stripe Checkout and its signed-event adapter live in stripe-billing.ts;
+   this file exposes only provider-readiness metadata to the rest of the
+   product. Manual super-admin entitlement assignment remains a separate,
+   audited administrative capability. */
 
 export type BillingEvent =
   | { type: "subscription_activated"; orgId: string; planKey: string; provider: string }

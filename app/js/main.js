@@ -2548,6 +2548,20 @@ function bindChatboxToggle() {
   });
 }
 
+document.addEventListener("click", (event) => {
+  const toggle = event.target?.closest?.("[data-chatbox-toggle]");
+  if (toggle) {
+    event.preventDefault();
+    event.stopPropagation();
+    setChatboxMinimized(toggle.getAttribute("aria-expanded") !== "false");
+    return;
+  }
+  if (event.target?.closest?.('[data-chatbox].is-minimized')) {
+    event.preventDefault();
+    setChatboxMinimized(false);
+  }
+});
+
 function msgHtml(m, i) {
   const cards = (m.cards || []).map((c, ci) => cardHtml(c, ci, i)).join("");
   return `<div class="msg msg-${m.who}" data-msg-i="${i}">

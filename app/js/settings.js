@@ -830,10 +830,10 @@ function renderPlanCard(plan, currentKey, options = {}) {
       <div class="set-status-grid set-context-grid">${limits}</div>
       <div class="set-chip-row">${features}</div>
       ${localCustomer ? `<button type="button" class="btn ${current ? "btn-quiet" : "btn-primary"}" data-plan-switch="${esc(plan.key)}" ${current ? "disabled" : ""}>${current ? "Using this tier" : `Switch to ${esc(plan.name || plan.key)}`}</button>` : ""}
-      ${!localCustomer && canManage && !current && billing?.checkoutEnabled && !billing?.customerOnFile && plan.key !== "free" && plan.intervals?.[interval]
+      ${!localCustomer && canManage && !current && billing?.checkoutEnabled && !billing?.hasOpenSubscription && plan.key !== "free" && plan.intervals?.[interval]
         ? `<button type="button" class="btn btn-primary" data-billing-checkout="${esc(plan.key)}">Continue to secure checkout</button>`
         : ""}
-      ${!localCustomer && !current && billing?.checkoutEnabled && !billing?.customerOnFile && plan.key !== "free" && !plan.intervals?.[interval]
+      ${!localCustomer && !current && billing?.checkoutEnabled && !billing?.hasOpenSubscription && plan.key !== "free" && !plan.intervals?.[interval]
         ? `<span class="set-note">This billing interval is not configured yet.</span>`
         : ""}
     </article>`;
@@ -892,11 +892,11 @@ async function renderPlanAccessTab(el, opts = {}) {
           <p class="set-note">${esc(billing?.reason || "Billing state is unavailable. Reconnect the backend and try again.")}</p>
           <div class="set-chip-row">${(billing?.paymentMethods?.supported || ["Card", "Apple Pay when eligible", "PayPal when eligible"]).map((method) => `<span class="set-chip is-on">${esc(method)}</span>`).join("")}</div>
           ${canManagePlan && billing?.customerOnFile ? `<button type="button" class="btn btn-quiet" data-billing-portal>Manage payment method, invoices & subscription</button>` : ""}
-          ${canManagePlan && billing?.customerOnFile && !billing?.portalConfigured ? `<p class="set-note">The Stripe customer portal needs its Dashboard configuration before plan changes or payment-method updates can open.</p>` : ""}
+          ${canManagePlan && billing?.customerOnFile && billing?.portalUsesDashboardDefault ? `<p class="set-note">Billing uses Stripe’s Dashboard-managed customer portal configuration.</p>` : ""}
         </div>` : ""}
       <div class="set-section">
         <div class="set-card-head"><span>Tier controls</span><b>${localCustomer ? "Simulator" : canManagePlan ? "Secure checkout" : "Read-only"}</b></div>
-        ${!localCustomer && canManagePlan && billing?.checkoutEnabled && !billing?.customerOnFile ? `<div class="set-chip-row"><button type="button" class="btn ${billingInterval === "month" ? "btn-primary" : "btn-quiet"}" data-billing-interval="month">Monthly</button><button type="button" class="btn ${billingInterval === "year" ? "btn-primary" : "btn-quiet"}" data-billing-interval="year">Annual</button></div>` : ""}
+        ${!localCustomer && canManagePlan && billing?.checkoutEnabled && !billing?.hasOpenSubscription ? `<div class="set-chip-row"><button type="button" class="btn ${billingInterval === "month" ? "btn-primary" : "btn-quiet"}" data-billing-interval="month">Monthly</button><button type="button" class="btn ${billingInterval === "year" ? "btn-primary" : "btn-quiet"}" data-billing-interval="year">Annual</button></div>` : ""}
         <div class="set-choice-grid set-plan-grid">${plans.map((plan) => renderPlanCard(plan, entitlements.planKey, { localCustomer, canManage: canManagePlan, billing, interval: billingInterval })).join("")}</div>
       </div>`;
     const message = el.querySelector("[data-plan-message]");
