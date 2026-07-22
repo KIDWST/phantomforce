@@ -2555,3 +2555,54 @@ html[data-command-os="2040"] .phantom.command-os-enabled .console:not(.console-w
   html[data-command-os="2040"] .phantom.command-os-enabled .console:not(.console-workspace) .phantom-mode-stage { animation: none !important; }
   .command-os-enabled .chatbox-head .pc-avatar.pc-pop { animation: none !important; }
 }
+
+/* ============================================================= */
+/* ==== UI REPAIR — declutter + de-overlap the dashboard ====== */
+/* ============================================================= */
+
+/* 1. kill the floating "Here's what I'd do." caption bubble — phantom.css
+      absolutely-positions .pc-caption at the chat-head's top-left corner
+      (spec 0,4,1); beat it with a higher-specificity hide. */
+html[data-command-os="2040"] .phantom.command-os-enabled .chatbox-head .pc-caption,
+html[data-command-os="2040"] .phantom.command-os-enabled .console .chatbox-head .pc-caption,
+html[data-command-os="2040"] .phantom.command-os-enabled .pc .pc-caption {
+  display: none !important;
+}
+
+/* 2. retire the floating SELECTED VERSION plate — it hovered centre-top over
+      the chat; the plan tier already lives in the account menu. */
+html[data-command-os="2040"] .phantom.command-os-enabled .console:not(.console-workspace) .os-access-version {
+  display: none !important;
+}
+
+/* 3. rail cards must never overlap: fixed-flow items in a scrolling column,
+      regardless of how many widgets (Need-from-you, Work-in-motion, Live
+      signals, Needs-attention) are present. */
+html[data-command-os="2040"] .phantom.command-os-enabled .console:not(.console-workspace) .console-rail {
+  display: flex !important;
+  flex-direction: column !important;
+  grid-template-rows: none !important;
+  gap: 0 !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+}
+html[data-command-os="2040"] .phantom.command-os-enabled .console:not(.console-workspace) .console-rail > * {
+  flex: 0 0 auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+/* 4. the big painted Phantom is retired on the dashboard — with real data the
+      greeting + decision deck fill the left column and it collided with them.
+      The living mini-Phantom stays in the chat header (it IS the character,
+      gesture engine and all), a touch larger and brighter. */
+html[data-command-os="2040"] .phantom.command-os-enabled .console:not(.console-workspace) .phantom-mode-stage {
+  display: none !important;
+}
+html[data-command-os="2040"] .phantom.command-os-enabled .chatbox-head .pc-avatar {
+  width: 50px !important;
+  height: 50px !important;
+  flex: 0 0 50px !important;
+}
