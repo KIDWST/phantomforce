@@ -92,8 +92,10 @@ assert.match(module, /sandbox="allow-scripts allow-pointer-lock"/u, "Games must 
 assert.doesNotMatch(module, /allow-same-origin|allow-forms|allow-popups/u, "The player must not grant origin, form, or popup powers.");
 assert.match(module, /event\.source !== frame\.contentWindow/u, "Game messages must be bound to the active frame.");
 assert.match(module, /data\.source !== "phantomplay-game"/u, "Game messages must use the PhantomPlay protocol marker.");
-assert.match(module + v2Module, /Backend session required/u, "PhantomPlay must require the backend session instead of presenting local-only play as acceptable.");
-assert.match(module + v2Module, /reason: "backend_session_required"[\s\S]*remainingMinutesToday: 0/u, "PhantomPlay fallback snapshots must not grant playable local access.");
+assert.doesNotMatch(module + v2Module, /Sign in to play|Backend session required|backend_session_required/u, "PhantomPlay must not show a sign-in/session gate inside an already signed-in workspace.");
+assert.match(module + v2Module, /local_play_fallback/u, "PhantomPlay fallback snapshots must allow signed-in workspace users to launch built-in games locally while sync is offline.");
+assert.match(module + v2Module, /function canLaunchGames[\s\S]*hasWorkspaceSession/u, "PhantomPlay launch gating must treat an existing workspace session as enough for local built-in play.");
+assert.match(module + v2Module, /Cloud sync is offline/u, "PhantomPlay offline copy must present backend loss as sync degradation, not a sign-in failure.");
 assert.match(module + v2Module, /ui\.error \? `<div class="pp2?-banner is-error|ui\.error \? `<div class="pp-banner is-error/u, "PhantomPlay must show launch/session errors even when backend sync is offline.");
 assert.match(module, /No games ready/u, "The condensed library must retain a useful empty state.");
 assert.match(module, /not a marketplace/u, "PhantomPlay must be positioned as a sandbox, not a marketplace.");

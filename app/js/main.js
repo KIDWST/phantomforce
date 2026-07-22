@@ -680,6 +680,7 @@ function renderNav() {
     </button>`;
   nav.innerHTML = mainItems.map((item) => itemHtml(item)).join("");
   if (bottomNav) bottomNav.innerHTML = bottomItems.map((item) => itemHtml(item, true)).join("");
+  if (osMenuOpen) renderOsMenu();
   renderMobileBottomNav();
 }
 
@@ -1089,6 +1090,7 @@ function renderOsMenu() {
 async function signOut() {
   const databaseSession = !!ctx.session?.database;
   accountMenuOpen = false;
+  osMenuOpen = false;
   setMobileNav(false);
   closeOverlay(true);
   try {
@@ -2846,13 +2848,31 @@ function wireDeck() {
     }
     if (e.target.closest("[data-mobile-bell]")) { routeWorkspace("approvals"); return; }
     if (e.target.closest("[data-mobile-user-btn]")) { routeWorkspace("account"); return; }
+    if (e.target.closest("[data-os-menu-btn]")) {
+      osMenuOpen = !osMenuOpen;
+      accountMenuOpen = false;
+      setMobileNav(false);
+      renderAccountMenu();
+      renderOsMenu();
+      return;
+    }
     const accountAction = e.target.closest("[data-user-menu-action]");
     if (accountAction) {
       const action = accountAction.dataset.userMenuAction;
       accountMenuOpen = false;
+      osMenuOpen = false;
       renderAccountMenu();
+      renderOsMenu();
       if (action === "account") routeWorkspace("account");
       if (action === "signout") signOut();
+      return;
+    }
+    const osMenuNav = e.target.closest("[data-os-menu-nav]");
+    if (osMenuNav) {
+      osMenuOpen = false;
+      renderOsMenu();
+      goNav(osMenuNav.dataset.osMenuNav);
+      setMobileNav(false);
       return;
     }
     const mobileNav = e.target.closest("[data-mobile-nav]");
@@ -2906,6 +2926,7 @@ function wireDeck() {
     if (opener) { if (notifOpen) { notifOpen = false; renderNotifs(); } routeWorkspace(opener.dataset.openWs); return; }
     if (mobileNavOpen && window.matchMedia("(max-width: 900px)").matches && !e.target.closest(".sidebar")) { setMobileNav(false); return; }
     if (accountMenuOpen && !e.target.closest(".user-menu-wrap")) { accountMenuOpen = false; renderAccountMenu(); }
+    if (osMenuOpen && !e.target.closest(".os-menu-wrap")) { osMenuOpen = false; renderOsMenu(); }
     // click outside notif menu closes it
     if (notifOpen && !e.target.closest(".notif-wrap")) { notifOpen = false; renderNotifs(); }
   });
@@ -2927,6 +2948,7 @@ function wireDeck() {
     if (e.key === "/" && !typing) { e.preventDefault(); focusCommandInput(); }
     else if (e.key === "Escape" && openId === "operations-map") { closeOperationsMap(); }
     else if (e.key === "Escape" && mobileNavOpen) { setMobileNav(false); }
+    else if (e.key === "Escape" && osMenuOpen) { osMenuOpen = false; renderOsMenu(); }
     else if (e.key === "Escape" && notifOpen) { notifOpen = false; renderNotifs(); }
   });
 }
