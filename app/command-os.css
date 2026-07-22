@@ -2655,3 +2655,38 @@ html[data-command-os="2040"] .phantom.command-os-enabled .chatbox-head .pc-avata
   height: 50px !important;
   flex: 0 0 50px !important;
 }
+
+/* ==== REDUCED-MOTION SAFETY NET (authoritative, last in cascade) ====
+ * The earlier per-feature reduced-motion blocks miss several infinite
+ * ambient loops because their neutralizers are LESS specific than the
+ * rules that set the animation (e.g. `.os-flow.is-live` [0,2,0] loses to
+ * `.os-flow.is-live[data-flow="health"]` [0,3,0], and the phantom float
+ * carries `!important`). Media queries add no specificity, so the only
+ * robust fix is `!important` here, placed last. This stops every looping
+ * decorative animation while leaving each element in its final, readable
+ * resting state — comprehension is preserved, motion is not required. */
+@media (prefers-reduced-motion: reduce) {
+  html[data-command-os="2040"] .os-flow,
+  html[data-command-os="2040"] .os-flow.is-live,
+  html[data-command-os="2040"] .os-flow[data-flow],
+  html[data-command-os="2040"] .os-flow.is-live[data-flow],
+  html[data-command-os="2040"] .os-beam,
+  html[data-command-os="2040"] .os-radar,
+  html[data-command-os="2040"] .os-core-ring,
+  html[data-command-os="2040"] .os-node-core::after,
+  html[data-command-os="2040"] .os-eq i,
+  html[data-command-os="2040"] .os-ecg polyline,
+  html[data-command-os="2040"] .os-signal-led.is-on,
+  html[data-command-os="2040"] .os-signal-load.is-on i,
+  html[data-command-os="2040"] .os-toast-led,
+  html[data-command-os="2040"] .os-sound.is-on span::before,
+  html[data-command-os="2040"] .phantom.command-os-enabled .console:not(.console-workspace) .phantom-mode-stage,
+  html[data-command-os="2040"] .command-os-enabled .chatbox-head .pc-avatar {
+    animation: none !important;
+  }
+  /* Frozen in-flight packets read as clutter — hide rather than pin. */
+  html[data-command-os="2040"] .os-flow,
+  html[data-command-os="2040"] .os-flow.is-live {
+    opacity: 0 !important;
+  }
+}
