@@ -800,7 +800,7 @@ function renderSubmit() {
       <label>Player data handling<textarea name="dataHandling" rows="2" required placeholder="What player data does this game read or store?">${esc(editing?.dataHandling || "")}</textarea></label>
       <p data-pp-form-message></p>
       <div class="pp-form-actions">
-        <button type="submit" value="draft" class="pp-secondary">Save draft</button>
+        <button type="submit" value="draft" class="pp-secondary">Save</button>
         <button type="submit" value="submit" class="pp-primary">Submit for review</button>
       </div>
     </form>
@@ -987,7 +987,7 @@ function modSectionMarkup(game) {
         <option value="2" ${speed === 2 ? "selected" : ""}>2x</option>
         <option value="4" ${speed === 4 ? "selected" : ""}>4x — fast-forward</option>
       </select></label>
-      <i>Live now. No Save & Resync needed for speed/testing mods.</i>
+      <i>Live now. No save is needed for temporary speed/testing mods.</i>
     </div>
     ${presets.map((mod) => `
     <label class="pp-switch pp-devsandbox-mod">
@@ -997,9 +997,128 @@ function modSectionMarkup(game) {
   </div>`;
 }
 
+function safeDevProjectFileName(value, fallback = "file.txt") {
+  const clean = String(value || "").replaceAll("\\", "/").split("/").pop()?.trim() || fallback;
+  return /^[a-z0-9][a-z0-9._-]*\.(?:html?|css|m?js)$/iu.test(clean) ? clean : fallback;
+}
+
+function devProjectFromSource(source) {
+  const files = {};
+  let html = String(source || "");
+  html = html.replace(/<style\b[^>]*data-phantomplay-dev-bundled=["']([^"']+)["'][^>]*>([\s\S]*?)<\/style>/giu, (_tag, name, css) => {
+    const fileName = safeDevProjectFileName(name, "style.css");
+    files[fileName] = css.replace(/^\s*\n/u, "").replace(/\n\s*$/u, "");
+    return `<link rel="stylesheet" href="${fileName}">`;
+  });
+  html = html.replace(/<script\b[^>]*data-phantomplay-dev-bundled=["']([^"']+)["'][^>]*>([\s\S]*?)<\/script>/giu, (_tag, name, js) => {
+    const fileName = safeDevProjectFileName(name, "game.js");
+    files[fileName] = js.replace(/^\s*\n/u, "").replace(/\n\s*$/u, "");
+    return `<script src="${fileName}"></script>`;
+  });
+  files["index.html"] = html;
+  return files;
+}
+
+function devProjectSource(files = {}) {
+  let html = String(files["index.html"] || "");
+  const entries = Object.entries(files).filter(([name]) => name !== "index.html");
+  for (const [name, content] of entries) {
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+    if (/\.css$/iu.test(name)) {
+      const tag = `<style data-phantomplay-dev-bundled="${name}">\n${content}\n</style>`;
+      const link = new RegExp(`<link\\b[^>]*\\bhref=["'](?:\\.?\\/)?${escaped}(?:[?#][^"']*)?["'][^>]*>`, "iu");
+      html = link.test(html) ? html.replace(link, tag) : html.replace(/<\/head>/iu, `${tag}\n</head>`);
+    } else if (/\.m?js$/iu.test(name)) {
+      const tag = `<script data-phantomplay-dev-bundled="${name}">\n${content}\n<\/script>`;
+      const script = new RegExp(`<script\\b[^>]*\\bsrc=["'](?:\\.?\\/)?${escaped}(?:[?#][^"']*)?["'][^>]*>\\s*<\\/script>`, "iu");
+      html = script.test(html) ? html.replace(script, tag) : html.replace(/<\/body>/iu, `${tag}\n</body>`);
+    }
+  }
+  return html;
+}
+
+function missingDevProjectFiles(files = {}) {
+  const html = String(files["index.html"] || "");
+  const referenced = [
+    ...[...html.matchAll(/<link\b[^>]*\bhref=["']([^"']+\.css(?:[?#][^"']*)?)["'][^>]*>/giu)].map((match) => match[1]),
+    ...[...html.matchAll(/<script\b[^>]*\bsrc=["']([^"']+\.m?js(?:[?#][^"']*)?)["'][^>]*>/giu)].map((match) => match[1]),
+  ];
+  return [...new Set(referenced
+    .filter((name) => !/^(?:[a-z]+:)?\/\//iu.test(name) && !name.startsWith("/") && !name.startsWith("data:"))
+    .map((name) => safeDevProjectFileName(name.split(/[?#]/u)[0], ""))
+    .filter((name) => name && files[name] === undefined))];
+}
+
+function devProjectProblem(files = {}) {
+  const html = String(files["index.html"] || "");
+  if (!/<html\b|<!doctype\s+html/iu.test(html)) return "index.html must contain a complete HTML document.";
+  const missing = missingDevProjectFiles(files);
+  if (missing.length) return `Add the referenced file${missing.length === 1 ? "" : "s"}: ${missing.join(", ")}.`;
+  const bytes = new TextEncoder().encode(devProjectSource(files)).byteLength;
+  if (bytes > 500_000) return "This project is over the 500 KB safe-save limit.";
+  return "";
+}
+
+function devWorkbenchFileSource(editor = ui.devWorkbench) {
+  const active = editor?.activeFile || "index.html";
+  return editor?.files?.[active] ?? "";
+}
+
 function devWorkbenchDomSource() {
+  const editor = ui.devWorkbench;
+  if (!editor) return "";
   const textarea = mountedRoot?.querySelector("[data-pp-devworkbench-source]");
-  return typeof textarea?.value === "string" ? textarea.value : ui.devWorkbench?.editedSource || "";
+  const files = { ...(editor.files || devProjectFromSource(editor.editedSource || "")) };
+  const active = editor.activeFile || "index.html";
+  if (typeof textarea?.value === "string") files[active] = textarea.value;
+  return devProjectSource(files);
+}
+
+function devWorkbenchWithSource(editor, source, activeFile = editor?.activeFile || "index.html") {
+  const files = devProjectFromSource(source);
+  return { ...editor, editedSource: source, files, activeFile: files[activeFile] !== undefined ? activeFile : "index.html" };
+}
+
+async function importDevWorkbenchFiles(fileList) {
+  if (!ui.devWorkbench || ui.devWorkbench.loading) return;
+  const gameId = ui.devWorkbench.gameId;
+  const incoming = [...(fileList || [])].filter((file) => /\.(?:html?|css|m?js)$/iu.test(file?.name || ""));
+  if (!incoming.length) {
+    ui.devWorkbench = { ...ui.devWorkbench, error: "Drop HTML, CSS, or JavaScript files only.", status: "No project files were changed." };
+    render();
+    return;
+  }
+  const currentSource = devWorkbenchDomSource();
+  const current = devProjectFromSource(currentSource);
+  const imported = [];
+  for (const file of incoming) {
+    const content = await file.text();
+    const name = /\.html?$/iu.test(file.name) ? "index.html" : safeDevProjectFileName(file.name);
+    current[name] = content;
+    imported.push(name);
+  }
+  if (ui.devWorkbench?.gameId !== gameId) return;
+  const source = devProjectSource(current);
+  const next = recordEditorChange(ui.devWorkbench, source);
+  const problem = devProjectProblem(current);
+  ui.devWorkbench = {
+    ...next,
+    editedSource: source,
+    files: current,
+    activeFile: imported[0] || "index.html",
+    error: problem,
+    status: problem ? `${imported.join(", ")} imported. Complete the project before saving.` : `${imported.join(", ")} replaced. Save when the project is ready.`,
+  };
+  render();
+}
+
+function selectDevWorkbenchFile(fileName) {
+  if (!ui.devWorkbench) return;
+  const source = devWorkbenchDomSource();
+  const files = devProjectFromSource(source);
+  if (files[fileName] === undefined) return;
+  ui.devWorkbench = { ...ui.devWorkbench, editedSource: source, files, activeFile: fileName, error: "" };
+  render();
 }
 
 function devWorkbenchModsMarkup(game) {
@@ -1038,28 +1157,36 @@ function devWorkbenchMarkup() {
   const game = ui.snapshot?.catalog?.find((item) => item.id === d.gameId);
   if (!game) return "";
   const section = d.section || "code";
+  const projectFiles = Object.keys(d.files || {}).sort((a, b) => a === "index.html" ? -1 : b === "index.html" ? 1 : a.localeCompare(b));
   return `<div class="pp-devworkbench" role="dialog" aria-modal="true" aria-label="Configure Dev Mode for ${esc(game.title)}">
     <header>
       <div><b>Code workbench</b><span>${esc(game.title)} · configure before launch</span></div>
       <button type="button" data-pp-devworkbench-close aria-label="Close code workbench">×</button>
     </header>
     <div class="pp-devworkbench-toolbar">
-      <label>Section<select data-pp-devworkbench-section><option value="code" ${section === "code" ? "selected" : ""}>Full Source Code</option><option value="mods" ${section === "mods" ? "selected" : ""}>Mod Menu</option></select></label>
+      <label>Section<select data-pp-devworkbench-section><option value="code" ${section === "code" ? "selected" : ""}>Project files</option><option value="mods" ${section === "mods" ? "selected" : ""}>Mod Menu</option></select></label>
       <button type="button" class="pp-secondary" data-pp-devworkbench-undo title="Undo (Ctrl+Z)" ${d.history?.undo?.length ? "" : "disabled"}>Undo</button>
       <button type="button" class="pp-secondary" data-pp-devworkbench-redo title="Redo (Ctrl+Shift+Z)" ${d.history?.redo?.length ? "" : "disabled"}>Redo</button>
       <button type="button" class="pp-secondary" data-pp-devworkbench-revert>Revert to last working</button>
-      <button type="button" class="pp-secondary" data-pp-devworkbench-save>Save draft</button>
-      <button type="button" class="pp-devworkbench-launch" data-pp-devworkbench-launch>${icon("dev")} Save & Launch Dev Mode</button>
+      <button type="button" class="pp-secondary" data-pp-devworkbench-save ${d.saving ? "disabled" : ""}>${d.saving ? "Saving…" : "Save"}</button>
+      <button type="button" class="pp-devworkbench-launch" data-pp-devworkbench-launch>${icon("dev")} Launch Dev Mode</button>
       <button type="button" class="pp-secondary" data-pp-devworkbench-start>${icon("play")} Start normal</button>
       <button type="button" class="pp-devworkbench-close-inline" data-pp-devworkbench-close>Close</button>
     </div>
-    <p class="pp-devsandbox-note">${section === "mods" ? "Pick the mod menu you want available when the sandbox starts." : "Ctrl+Z / Ctrl+Shift+Z work here. Revert returns this editor to the last working code that loaded."}${d.hasOverride ? " Saved workspace override found." : ""}</p>
+    <p class="pp-devsandbox-note">${section === "mods" ? "Pick the mod menu you want available when the sandbox starts." : "Drop HTML, CSS, and JavaScript together or replace one file at a time. Manual edits, Ctrl+Z, and Ctrl+Shift+Z work in every file."}${d.hasOverride ? " Saved workspace override found." : ""}</p>
     ${d.error ? `<div class="pp-devsandbox-error">${esc(d.error)}</div>` : ""}
     ${d.loading
       ? `<div class="pp-devmode-loading"><i></i><b>Loading source…</b></div>`
       : section === "mods"
         ? devWorkbenchModsMarkup(game)
-        : `<textarea class="pp-devsandbox-source" data-pp-devworkbench-source spellcheck="false">${esc(d.editedSource)}</textarea>`}
+        : `<div class="pp-devproject">
+            <label class="pp-devproject-drop" data-pp-devworkbench-drop>
+              <input type="file" data-pp-devworkbench-files accept=".html,.htm,.css,.js,.mjs" multiple/>
+              <b>Drop project files here</b><span>or choose files · HTML, CSS, JavaScript · matching files are replaced completely</span>
+            </label>
+            <nav class="pp-devproject-tabs" aria-label="Game project files">${projectFiles.map((name) => `<button type="button" data-pp-devworkbench-file="${esc(name)}" class="${name === (d.activeFile || "index.html") ? "is-active" : ""}">${esc(name)}</button>`).join("")}</nav>
+            <textarea class="pp-devsandbox-source" data-pp-devworkbench-source spellcheck="false" aria-label="Edit ${esc(d.activeFile || "index.html")}">${esc(devWorkbenchFileSource(d))}</textarea>
+          </div>`}
     <p class="pp-devsandbox-status">${esc(d.status || "")}</p>
   </div>`;
 }
@@ -1067,7 +1194,7 @@ function devWorkbenchMarkup() {
 async function openDevWorkbench(gameId, section = "code") {
   const game = ui.snapshot?.catalog?.find((item) => item.id === gameId);
   if (!game?.devModeAvailable) return;
-  ui.devWorkbench = { gameId: game.id, source: "", editedSource: "", history: createEditorHistory(), hasOverride: false, overrideUpdatedAt: null, localUpdatedAt: null, loading: true, error: "", status: "", section, modState: {}, speed: 1 };
+  ui.devWorkbench = { gameId: game.id, source: "", editedSource: "", files: {}, activeFile: "index.html", history: createEditorHistory(), hasOverride: false, overrideUpdatedAt: null, localUpdatedAt: null, loading: true, saving: false, error: "", status: "", section, modState: {}, speed: 1 };
   render();
   try {
     const tenantQuery = `tenant_id=${encodeURIComponent(currentTenantId())}`;
@@ -1078,25 +1205,25 @@ async function openDevWorkbench(gameId, section = "code") {
     const localDraft = localDevSandboxAutosave(game.id);
     const newestDraft = newestDevSandboxSource(localDraft, overrideResult.source ? { source: overrideResult.source, updatedAt: overrideResult.updatedAt } : null);
     const startingSource = newestDraft?.source ?? sourceResult.source;
-    ui.devWorkbench = {
+    ui.devWorkbench = devWorkbenchWithSource({
       gameId: game.id, source: sourceResult.source, editedSource: startingSource,
       hasOverride: !!overrideResult.source, overrideUpdatedAt: overrideResult.updatedAt,
       localUpdatedAt: localDraft?.updatedAt || null,
-      loading: false, error: "",
+      loading: false, saving: false, error: "",
       status: newestDraft ? (newestDraft === localDraft ? "Resumed your local autosave." : "Loaded your workspace override.") : "Loaded shipped source.",
       section, modState: {}, speed: 1, history: createEditorHistory(),
-    };
+    }, startingSource);
   } catch (error) {
     try {
       const response = await fetch(game.launchUrl, { cache: "no-store" });
       const source = await response.text();
       const localDraft = localDevSandboxAutosave(game.id);
-      ui.devWorkbench = {
+      ui.devWorkbench = devWorkbenchWithSource({
         gameId: game.id, source, editedSource: localDraft?.source || source,
         hasOverride: false, overrideUpdatedAt: null, localUpdatedAt: localDraft?.updatedAt || null,
-        loading: false, error: "", status: localDraft ? "Resumed your local autosave. Backend sync is waiting." : "Loaded source locally. Dev Mode can still launch from here.",
+        loading: false, saving: false, error: "", status: localDraft ? "Resumed your local autosave. Backend sync is waiting." : "Loaded source locally. Dev Mode can still launch from here.",
         section, modState: {}, speed: 1, history: createEditorHistory(),
-      };
+      }, localDraft?.source || source);
     } catch {
       ui.devWorkbench = { ...ui.devWorkbench, loading: false, error: error instanceof Error ? error.message : "Code workbench source could not be loaded." };
     }
@@ -1118,7 +1245,7 @@ function devSandboxMarkup(game) {
       </div>
     </header>
     <label class="pp-devsandbox-section-picker">Section<select data-pp-devsandbox-section><option value="code" ${section === "code" ? "selected" : ""}>Full Source Code</option><option value="mods" ${section === "mods" ? "selected" : ""}>Mod Menu</option></select></label>
-    <p class="pp-devsandbox-note">${section === "mods" ? "These are live testing mods. Use the in-game Mods dock for fast toggles; Save & Resync is only for source code." : "Ctrl+Z / Ctrl+Shift+Z work while you type. Preview changes stay private until you publish."} Only visible to you.${d.hasOverride ? " A saved workspace override is currently active for this game." : ""}</p>
+    <p class="pp-devsandbox-note">${section === "mods" ? "These are live testing mods. Use the in-game Mods dock for fast toggles; Save applies to source code." : "Ctrl+Z / Ctrl+Shift+Z work while you type. Preview changes stay private until you publish."} Only visible to you.${d.hasOverride ? " A saved workspace override is currently active for this game." : ""}</p>
     ${d.error ? `<div class="pp-devsandbox-error">${esc(d.error)}</div>` : ""}
     ${d.loading
       ? `<div class="pp-devmode-loading"><i></i><b>Loading source…</b></div>`
@@ -1129,7 +1256,7 @@ function devSandboxMarkup(game) {
     <footer>
       <button type="button" data-pp-devsandbox-undo title="Undo (Ctrl+Z)" ${d.history?.undo?.length ? "" : "disabled"}>Undo</button>
       <button type="button" data-pp-devsandbox-redo title="Redo (Ctrl+Shift+Z)" ${d.history?.redo?.length ? "" : "disabled"}>Redo</button>
-      <button type="button" class="pp-devsandbox-save" data-pp-devsandbox-save ${d.saving ? "disabled" : ""}>${d.saving ? "Saving…" : "Save & Resync"}</button>
+      <button type="button" class="pp-devsandbox-save" data-pp-devsandbox-save ${d.saving ? "disabled" : ""}>${d.saving ? "Saving…" : "Save"}</button>
       <button type="button" data-pp-devsandbox-revert>Revert to last working</button>
       ${ui.snapshot.access.isOwner ? `<button type="button" class="pp-devsandbox-publish" data-pp-devsandbox-publish ${d.publishing ? "disabled" : ""}>${d.publishing ? "Publishing…" : "Publish to live"}</button>` : ""}
     </footer>
@@ -1169,7 +1296,7 @@ function playerMarkup() {
   const controls = controlsCopy(game);
   const sandboxActive = ui.devSandbox?.gameId === game.id;
   const frameSrc = sandboxActive && ui.devSandbox?.blobUrl ? ui.devSandbox.blobUrl : game.launchUrl;
-  return `<div class="pp-player ${sandboxActive ? "is-devsandbox" : ""}" role="dialog" aria-modal="true" aria-label="Playing ${esc(game.title)}"><header><div><img src="${esc(thumbnailFor(game))}" alt=""/><span><b>${esc(game.title)}</b>${controls ? `<i>${esc(controls)}</i>` : ""}</span>${sandboxActive ? `<em class="pp-devsandbox-badge">Dev Mode</em>` : ""}</div><div class="pp-player-actions">${game.devModeAvailable ? `<button class="pp-devsandbox-open" type="button" data-pp-devsandbox-open title="Open the full bundled source. Edits preview live; Save & Resync when done.">Code drawer</button>` : ""}<button data-pp-player-restart title="Restart game">Restart</button><button data-pp-player-pause title="Pause game">${ui.playerPaused ? "Resume" : "Pause"}</button><button data-pp-player-fullscreen title="Full screen">Full screen</button><button class="pp-player-close-game" data-pp-player-close title="Exit the game">Exit game</button></div></header><div class="pp-player-stage"><button class="pp-player-exit" data-pp-player-close type="button" aria-label="Exit game">Exit</button><div class="pp-player-loading" ${ui.playerReady ? "hidden" : ""}><i></i><b>Loading ${esc(game.title)}…</b><span>${sandboxActive ? "Dev Mode is opening your saved draft in a private sandbox." : "The game is opening in a private sandbox."}</span></div><iframe src="${esc(frameSrc)}" title="${esc(game.title)}" sandbox="allow-scripts allow-pointer-lock" referrerpolicy="no-referrer" allow="fullscreen; gamepad" tabindex="0" data-pp-frame></iframe></div>${sandboxActive ? devModDockMarkup(game) : ""}${devSandboxMarkup(game)}<footer><span>Session <b>${esc(play.id.slice(-8))}</b></span><span data-pp-live-score>Score —</span><span data-pp-live-state>${ui.playerPaused ? "Paused" : "Playing"}</span><span>Engine ${esc(engine.version)}</span><span>Progress saves automatically</span></footer></div>`;
+  return `<div class="pp-player ${sandboxActive ? "is-devsandbox" : ""}" role="dialog" aria-modal="true" aria-label="Playing ${esc(game.title)}"><header><div><img src="${esc(thumbnailFor(game))}" alt=""/><span><b>${esc(game.title)}</b>${controls ? `<i>${esc(controls)}</i>` : ""}</span>${sandboxActive ? `<em class="pp-devsandbox-badge">Dev Mode</em>` : ""}</div><div class="pp-player-actions">${game.devModeAvailable ? `<button class="pp-devsandbox-open" type="button" data-pp-devsandbox-open title="Open the full bundled source. Edits preview live; press Save when done.">Code drawer</button>` : ""}<button data-pp-player-restart title="Restart game">Restart</button><button data-pp-player-pause title="Pause game">${ui.playerPaused ? "Resume" : "Pause"}</button><button data-pp-player-fullscreen title="Full screen">Full screen</button><button class="pp-player-close-game" data-pp-player-close title="Exit the game">Exit game</button></div></header><div class="pp-player-stage"><button class="pp-player-exit" data-pp-player-close type="button" aria-label="Exit game">Exit</button><div class="pp-player-loading" ${ui.playerReady ? "hidden" : ""}><i></i><b>Loading ${esc(game.title)}…</b><span>${sandboxActive ? "Dev Mode is opening your saved project in a private sandbox." : "The game is opening in a private sandbox."}</span></div><iframe src="${esc(frameSrc)}" title="${esc(game.title)}" sandbox="allow-scripts allow-pointer-lock" referrerpolicy="no-referrer" allow="fullscreen; gamepad" tabindex="0" data-pp-frame></iframe></div>${sandboxActive ? devModDockMarkup(game) : ""}${devSandboxMarkup(game)}<footer><span>Session <b>${esc(play.id.slice(-8))}</b></span><span data-pp-live-score>Score —</span><span data-pp-live-state>${ui.playerPaused ? "Paused" : "Playing"}</span><span>Engine ${esc(engine.version)}</span><span>Progress saves automatically</span></footer></div>`;
 }
 
 function render() {
@@ -1310,12 +1437,19 @@ function launchDevSandboxFromWorkbench() {
   if (!ui.devWorkbench || ui.devWorkbench.loading) return;
   const gameId = ui.devWorkbench.gameId;
   const source = devWorkbenchDomSource();
+  const files = devProjectFromSource(source);
+  const problem = devProjectProblem(files);
+  if (problem) {
+    ui.devWorkbench = { ...ui.devWorkbench, editedSource: source, files, error: problem, status: "Project needs attention before it can launch." };
+    render();
+    return;
+  }
   const localDraft = rememberDevSandboxAutosave(gameId, source);
   revokeDevSandboxBlob();
   const nextSource = injectModSupport(source, gameId);
   const blob = new Blob([nextSource], { type: "text/html" });
   const blobUrl = URL.createObjectURL(blob);
-  ui.devSandbox = { ...ui.devWorkbench, editedSource: source, localUpdatedAt: localDraft.updatedAt, blobUrl, loading: false, error: "", status: "Running your saved draft. Press Save & Resync when this edit is ready.", minimized: false, saving: false, publishing: false };
+  ui.devSandbox = { ...ui.devWorkbench, editedSource: source, localUpdatedAt: localDraft.updatedAt, blobUrl, loading: false, error: "", status: "Running your project in Dev Mode. Press Save when this edit is ready.", minimized: false, saving: false, publishing: false };
   pendingDevSandboxBootState = null;
   pendingDevSandboxGameId = null;
   ui.devWorkbench = null;
@@ -1329,11 +1463,28 @@ function launchNormalFromWorkbench() {
   if (gameId) launch(gameId);
 }
 
-function saveDevWorkbenchLocalDraft() {
-  if (!ui.devWorkbench || ui.devWorkbench.loading || ui.devWorkbench.error) return;
+async function saveDevWorkbench() {
+  if (!ui.devWorkbench || ui.devWorkbench.loading || ui.devWorkbench.saving) return;
+  const gameId = ui.devWorkbench.gameId;
   const source = devWorkbenchDomSource();
-  const localDraft = rememberDevSandboxAutosave(ui.devWorkbench.gameId, source);
-  ui.devWorkbench = { ...ui.devWorkbench, editedSource: source, localUpdatedAt: localDraft.updatedAt, status: "Local draft saved. Use Save & Launch Dev Mode to run it." };
+  const project = devProjectFromSource(source);
+  const problem = devProjectProblem(project);
+  if (problem) {
+    ui.devWorkbench = { ...ui.devWorkbench, editedSource: source, files: project, error: problem, status: "Project needs attention before it can save." };
+    render();
+    return;
+  }
+  const localDraft = rememberDevSandboxAutosave(gameId, source);
+  ui.devWorkbench = { ...ui.devWorkbench, editedSource: source, files: project, localUpdatedAt: localDraft.updatedAt, saving: true, error: "", status: "Saving…" };
+  render();
+  try {
+    const result = await api(`/api/phantomplay/dev-mode/${encodeURIComponent(gameId)}/override`, { method: "POST", body: JSON.stringify({ tenantId: currentTenantId(), source }) });
+    if (ui.devWorkbench?.gameId !== gameId) return;
+    ui.devWorkbench = { ...ui.devWorkbench, saving: false, hasOverride: true, overrideUpdatedAt: result.updatedAt, status: "Saved. This complete project will reopen here and launch in Dev Mode.", error: "" };
+  } catch (error) {
+    if (ui.devWorkbench?.gameId !== gameId) return;
+    ui.devWorkbench = { ...ui.devWorkbench, saving: false, status: "Saved on this device. Workspace sync is waiting.", error: error instanceof Error ? error.message : "Workspace sync did not complete." };
+  }
   render();
 }
 
@@ -1344,7 +1495,7 @@ async function revertDevWorkbenchToLastWorking() {
     try { await api(`/api/phantomplay/dev-mode/${encodeURIComponent(gameId)}/override`, { method: "DELETE" }); } catch { /* local recovery still wins */ }
   }
   clearDevSandboxAutosave(gameId);
-  ui.devWorkbench = {
+  ui.devWorkbench = devWorkbenchWithSource({
     ...ui.devWorkbench,
     editedSource: ui.devWorkbench.source,
     history: createEditorHistory(),
@@ -1352,7 +1503,7 @@ async function revertDevWorkbenchToLastWorking() {
     localUpdatedAt: null,
     status: "Reverted to last working code.",
     error: "",
-  };
+  }, ui.devWorkbench.source);
   render();
 }
 
@@ -1680,7 +1831,7 @@ function moveEditorHistory(target, direction) {
     snapshotDevSandboxLocalDraft();
     syncEditorHistoryControls(target);
   } else {
-    replaceEditorText("[data-pp-devworkbench-source]", source);
+    ui.devWorkbench = devWorkbenchWithSource(ui.devWorkbench, source, ui.devWorkbench.activeFile);
     render();
   }
   return true;
@@ -1704,8 +1855,9 @@ function trackDevSandboxEditorInput() {
 
 function trackDevWorkbenchEditorInput() {
   if (!ui.devWorkbench) return;
-  ui.devWorkbench = recordEditorChange(ui.devWorkbench, devWorkbenchDomSource());
-  ui.devWorkbench = { ...ui.devWorkbench, status: "Draft ready. Launch Dev Mode to run it." };
+  const source = devWorkbenchDomSource();
+  const next = recordEditorChange(ui.devWorkbench, source);
+  ui.devWorkbench = { ...next, editedSource: source, files: devProjectFromSource(source), status: "Unsaved changes. Press Save when ready." };
   syncEditorHistoryControls("devWorkbench");
 }
 
@@ -1764,7 +1916,7 @@ async function openDevSandbox() {
     const startingSource = newestDraft?.source ?? sourceResult.source;
     const status = newestDraft
       ? (newestDraft === localDraft ? "Resumed your local autosave." : "Resumed your saved workspace override.")
-      : "Loaded the full shipped source. Edits preview live; press Save & Resync when done.";
+      : "Loaded the full shipped project. Edits preview live; press Save when done.";
     ui.devSandbox = {
       gameId: game.id, source: sourceResult.source, editedSource: startingSource, blobUrl: "",
       hasOverride: !!overrideResult.source, overrideUpdatedAt: overrideResult.updatedAt,
@@ -1781,7 +1933,7 @@ async function openDevSandbox() {
       ui.devSandbox = {
         gameId: game.id, source, editedSource: startingSource, blobUrl: "",
         hasOverride: false, overrideUpdatedAt: null, localUpdatedAt: localDraft?.updatedAt || null,
-        loading: false, error: "", status: localDraft ? "Resumed your local draft. Backend sync is waiting." : "Loaded the full game source locally. Local draft autosave stays on this PC until you press Save & Resync.",
+        loading: false, error: "", status: localDraft ? "Resumed your local project. Workspace sync is waiting." : "Loaded the complete game project locally. Autosave stays on this PC until you press Save.",
         saving: false, publishing: false, section: "code", modState: {}, speed: 1, history: createEditorHistory(),
       };
     } catch {
@@ -1805,7 +1957,7 @@ function applyDevSandboxEditLive() {
   const nextSource = devSandboxDomSource();
   ui.devSandbox = { ...ui.devSandbox, editedSource: nextSource };
   rebuildDevSandboxFrame(nextSource);
-  setDevSandboxStatus("Live preview updated. Local draft will autosave; press Save & Resync when done.");
+  setDevSandboxStatus("Live preview updated. Your project will autosave locally; press Save when done.");
 }
 
 function scheduleDevSandboxApply() {
@@ -2226,12 +2378,21 @@ function bind() {
   mountedRoot.querySelector("[data-pp-devworkbench-undo]")?.addEventListener("click", () => moveEditorHistory("devWorkbench", "undo"));
   mountedRoot.querySelector("[data-pp-devworkbench-redo]")?.addEventListener("click", () => moveEditorHistory("devWorkbench", "redo"));
   mountedRoot.querySelector("[data-pp-devworkbench-revert]")?.addEventListener("click", revertDevWorkbenchToLastWorking);
-  mountedRoot.querySelector("[data-pp-devworkbench-save]")?.addEventListener("click", saveDevWorkbenchLocalDraft);
+  mountedRoot.querySelector("[data-pp-devworkbench-save]")?.addEventListener("click", saveDevWorkbench);
   mountedRoot.querySelector("[data-pp-devworkbench-launch]")?.addEventListener("click", launchDevSandboxFromWorkbench);
   mountedRoot.querySelector("[data-pp-devworkbench-start]")?.addEventListener("click", launchNormalFromWorkbench);
+  mountedRoot.querySelectorAll("[data-pp-devworkbench-file]").forEach((button) => button.addEventListener("click", () => selectDevWorkbenchFile(button.dataset.ppDevworkbenchFile)));
+  mountedRoot.querySelector("[data-pp-devworkbench-files]")?.addEventListener("change", (event) => importDevWorkbenchFiles(event.target.files));
+  const projectDrop = mountedRoot.querySelector("[data-pp-devworkbench-drop]");
+  if (projectDrop) {
+    projectDrop.addEventListener("dragenter", (event) => { event.preventDefault(); projectDrop.classList.add("is-dragging"); });
+    projectDrop.addEventListener("dragover", (event) => { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; projectDrop.classList.add("is-dragging"); });
+    projectDrop.addEventListener("dragleave", (event) => { if (!projectDrop.contains(event.relatedTarget)) projectDrop.classList.remove("is-dragging"); });
+    projectDrop.addEventListener("drop", (event) => { event.preventDefault(); projectDrop.classList.remove("is-dragging"); importDevWorkbenchFiles(event.dataTransfer.files); });
+  }
   mountedRoot.querySelector("[data-pp-devworkbench-section]")?.addEventListener("change", (event) => {
     const source = devWorkbenchDomSource();
-    ui.devWorkbench = { ...ui.devWorkbench, editedSource: source, section: event.target.value === "mods" ? "mods" : "code" };
+    ui.devWorkbench = { ...ui.devWorkbench, editedSource: source, files: devProjectFromSource(source), section: event.target.value === "mods" ? "mods" : "code" };
     render();
   });
   mountedRoot.querySelector("[data-pp-devworkbench-source]")?.addEventListener("input", trackDevWorkbenchEditorInput);

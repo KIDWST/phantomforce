@@ -351,7 +351,7 @@ assert.match(module, /data-pp-devsandbox-code-open/u, "Game cards must expose th
 assert.match(module, /openDevWorkbench\(button\.dataset\.ppDevsandboxCodeOpen, "code"\)/u, "The small code icon must open the code/mod workbench without launching the game.");
 assert.match(module, /function launchDevSandboxFromWorkbench\(\)[\s\S]*pendingDevSandboxBootState/u, "The code workbench must be able to launch the game into sandboxed Dev Mode from the prepared source.");
 assert.match(module, /data-pp-devworkbench-launch/u, "The pre-launch workbench must expose a Dev Mode launch action.");
-assert.match(module, /data-pp-devworkbench-save/u, "The pre-launch workbench must expose an explicit local draft save action.");
+assert.match(module, /data-pp-devworkbench-save/u, "The pre-launch workbench must expose an explicit project save action.");
 assert.match(module, /data-pp-devworkbench-close/u, "The pre-launch workbench must expose a clear close action.");
 assert.match(module, /function launchDevSandboxFromWorkbench\(\)[\s\S]*new Blob\(\[nextSource\][\s\S]*ui\.devSandbox[\s\S]*launch\(gameId\)/u, "Launching from the workbench must boot the edited blob immediately instead of flashing the shipped game first.");
 assert.match(v2Module, /data-pp2-devsandbox-code-open/u, "PhantomPlay v2 game cards must expose the small code icon too.");
@@ -361,7 +361,14 @@ assert.match(module, /section:\s*"code"/u, "Dev Mode must open directly to the f
 assert.match(module, /DEV_SANDBOX_AUTOSAVE_KEY/u, "Dev Mode must keep a local autosave draft for full-source edits.");
 assert.match(module, /devSandboxAutosaveTimer = setTimeout\(snapshotDevSandboxLocalDraft, 1000\)/u, "Dev Mode edits must autosave only to the local draft while typing.");
 assert.doesNotMatch(module, /setTimeout\(\(\) => persistDevSandboxOverride\(\{ silent: true \}\), 1000\)/u, "Dev Mode typing must not silently sync workspace overrides mid-gameplay.");
-assert.match(module, /Save & Resync/u, "Dev Mode must require an explicit Save & Resync trigger before syncing code.");
+assert.match(module, /data-pp-devworkbench-save[\s\S]{0,120}(?:Saving…|Save)/u, "The code workbench must expose one plain Save action.");
+assert.doesNotMatch(module, />Save draft</u, "PhantomPlay must not label project persistence as Save draft.");
+assert.match(module, /data-pp-devworkbench-drop/u, "The code workbench must expose a project file drop zone.");
+assert.match(module, /accept="\.html,\.htm,\.css,\.js,\.mjs" multiple/u, "The project picker must accept HTML, CSS, and JavaScript together.");
+assert.match(module, /function importDevWorkbenchFiles[\s\S]*file\.text\(\)[\s\S]*devProjectSource/u, "Dropped project files must replace their matching editable file and rebuild one safe sandbox source.");
+assert.match(module, /function devProjectFromSource[\s\S]*data-phantomplay-dev-bundled[\s\S]*index\.html/u, "Bundled game source must split back into individually editable project files.");
+assert.match(module, /async function saveDevWorkbench[\s\S]*\/override[\s\S]*method: "POST"/u, "The plain Save action must persist the complete workspace project, not only a browser-local draft.");
+assert.match(module, /function devProjectProblem[\s\S]*500_000/u, "Project saves must validate missing referenced files and enforce the server's safe size limit before launch or save.");
 assert.match(module, /snapshotDevSandboxLocalDraft\(\);[\s\S]*clearTimeout\(devSandboxAutosaveTimer\)/u, "Closing Dev Mode must snapshot the current source before clearing autosave timers.");
 assert.match(serverCatalog, /function inlineDevModeGameAssets[\s\S]*<style data-phantomplay-dev-bundled[\s\S]*<script[\s\S]*data-phantomplay-dev-bundled/u, "Dev Mode source must inline same-folder CSS/JS so multi-file games run as a standalone editable blob.");
 assert.doesNotMatch(css + v2Css, /\.pp2?-player\.is-devsandbox\{grid-template-columns:minmax\(0,1fr\) minmax/u, "Dev Mode must not squeeze the running game into a side-by-side editor.");
