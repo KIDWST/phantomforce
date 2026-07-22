@@ -39,6 +39,8 @@
     "test:change-memory": "node scripts/guard-change-memory.mjs",
     "test:command-surface": "node scripts/test-command-surface.mjs",
     "test:claude-live-ship": "node scripts/test-claude-live-ship.mjs",
+    "security:secrets": "node scripts/secret-scan.mjs",
+    "security:secrets:strict": "node scripts/secret-scan.mjs --results=verified,unknown",
     "verify:live-admin": "node scripts/ship-live-admin.mjs --verify-only",
     "ship:live-admin": "node scripts/ship-live-admin.mjs",
     "test:sites": "npm run test:workspace-site-builder && npm run test:site-store-render --workspace @phantomforce/server",

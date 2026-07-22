@@ -92,7 +92,9 @@ assert.match(module, /sandbox="allow-scripts allow-pointer-lock"/u, "Games must 
 assert.doesNotMatch(module, /allow-same-origin|allow-forms|allow-popups/u, "The player must not grant origin, form, or popup powers.");
 assert.match(module, /event\.source !== frame\.contentWindow/u, "Game messages must be bound to the active frame.");
 assert.match(module, /data\.source !== "phantomplay-game"/u, "Game messages must use the PhantomPlay protocol marker.");
-assert.match(module, /Offline mode/u, "An honest offline state must exist.");
+assert.match(module + v2Module, /Backend session required/u, "PhantomPlay must require the backend session instead of presenting local-only play as acceptable.");
+assert.match(module + v2Module, /reason: "backend_session_required"[\s\S]*remainingMinutesToday: 0/u, "PhantomPlay fallback snapshots must not grant playable local access.");
+assert.match(module + v2Module, /ui\.error \? `<div class="pp2?-banner is-error|ui\.error \? `<div class="pp-banner is-error/u, "PhantomPlay must show launch/session errors even when backend sync is offline.");
 assert.match(module, /No games ready/u, "The condensed library must retain a useful empty state.");
 assert.match(module, /not a marketplace/u, "PhantomPlay must be positioned as a sandbox, not a marketplace.");
 assert.match(module, /Play together with friends in this workspace\./u, "PhantomPlay must expose the private multiplayer room surface.");
@@ -152,6 +154,8 @@ assert.match(flagshipCatalog, /id:\s*"cubetown"[\s\S]*version:\s*"1\.3\.0"/u, "C
 
 const buildIds = new Set(appFiles.flatMap((source) => source.match(/phantom-live-\d{8}-\d+/gu) || []));
 assert.equal(buildIds.size, 1, `The PhantomPlay module graph must use one build ID, found: ${[...buildIds].join(", ")}`);
+assert.doesNotMatch(module + v2Module, /id:\s*`offline-\$\{Date\.now\(\)\}`|offlinePlay\(/u, "PhantomPlay must not create local-only play sessions; launches require the backend play-session route.");
+assert.match(module + v2Module, /\/api\/phantomplay\/plays/u, "PhantomPlay launches must call the backend play-session route.");
 
 for (const game of games) {
   assert.match(game, /Content-Security-Policy/u, "Every built-in game must set a CSP.");

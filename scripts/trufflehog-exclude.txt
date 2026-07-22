@@ -1,0 +1,5 @@
+(\.git|node_modules|dist|\.tools|run-evidence|\.phantom|\.local|server[/\\]\.local)([/\\]|$)
+(^|[/\\])\.env(\..*)?$
+server[/\\]\.env(\..*)?$
+package-lock\.json$
+trufflehog_[0-9.]+_(checksums\.txt|windows_amd64\.tar\.gz)$

@@ -9,20 +9,20 @@ import {
   freshEditState, applyFilterPreset, renderBaseFrame,
   addBokehSpot, removeBokehSpotNear, removeBokehSpotAt, nearestBokehSpot, moveBokehSpot, resizeBokehSpot,
   setBokehMask, freshTextStyle, TEXT_FONTS, TEXT_PRESETS, applyTextPreset,
-} from "./imagefilters.js?v=phantom-live-20260722-8";
-import { getRembgStatus, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260722-8";
-import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260722-8";
-import { parseAnalyticsReport } from "./social-analytics.js?v=phantom-live-20260722-8";
+} from "./imagefilters.js?v=phantom-live-20260722-13";
+import { getRembgStatus, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260722-13";
+import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260722-13";
+import { parseAnalyticsReport } from "./social-analytics.js?v=phantom-live-20260722-13";
 import {
   freshComposition, compositionSnapshot, restoreComposition, addImageLayer, replaceImageLayerSource, addTextLayer, addColorLayer,
   duplicateLayer, removeSelectedLayers, moveLayerOrder, selectedLayers, selectLayer, selectAllLayers,
   loadCompositionImages, renderComposition, drawCompositionOverlay, drawDetectedSubjectOverlay, canvasPoint, hitTestLayer, hitTestResizeHandle,
   setCanvasPreset, zoomComposition, canvasPointToLayer, layerPointToCanvas,
   imageEditSnapshot, restoreImageEditSnapshot, pushEditorSnapshot,
-} from "./content-editor.js?v=phantom-live-20260722-8";
+} from "./content-editor.js?v=phantom-live-20260722-13";
 import {
   currentTenantId, currentWs, ctx, session, store, visible, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem, wsName,
-} from "./store.js?v=phantom-live-20260722-8";
+} from "./store.js?v=phantom-live-20260722-13";
 
 const CH_KEY = "pf.contenthub.v2";
 const CH_REMOVED_KEY = "pf.contenthub.removed.v1";
@@ -140,6 +140,7 @@ function defaultPublishState() {
     tone: "clean",
     cta: "Book a 15-minute setup call",
     caption: "",
+    thumbnailKey: "",
     scheduleAt: localDateTimeValue(),
     updatedAt: Date.now(),
   };
@@ -627,6 +628,8 @@ function compactPostForExport(post) {
     caption: post.caption,
     status: post.status,
     publishedAt: post.publishedAt,
+    thumbnailTitle: post.thumbnailTitle || "",
+    hasCustomThumbnail: !!post.thumbnailUrl,
     hashtags: post.hashtags,
     metrics: post.metrics,
   };
@@ -764,8 +767,19 @@ export function analyze(posts) {
 const K = (n) => n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1e3 ? (n / 1e3).toFixed(1) + "K" : String(n || 0);
 function ago(iso) { const s = (Date.now() - Date.parse(iso)) / 1000; if (s < 0) return "in " + rel(-s); return rel(s) + " ago"; }
 function rel(s) { if (s < 3600) return Math.max(1, Math.round(s / 60)) + "m"; if (s < 86400) return Math.round(s / 3600) + "h"; return Math.round(s / 86400) + "d"; }
+function cssUrl(value = "") {
+  return String(value || "").replace(/[\n\r"'\\)]/g, "");
+}
 function thumb(post) {
   const c = plat(post.platform).color;
+  const imageUrl = post.thumbnailUrl || post.imageUrl || post.mediaUrl || "";
+  if (imageUrl) {
+    return `background-image:
+      linear-gradient(180deg, rgba(4,8,12,.08), rgba(4,8,12,.38)),
+      url("${cssUrl(imageUrl)}");
+      background-size: cover;
+      background-position: center;`;
+  }
   return `background:
     radial-gradient(80% 90% at 25% 15%, hsla(${post.hue},70%,55%,0.5), transparent 60%),
     radial-gradient(70% 80% at 85% 90%, ${c}55, transparent 60%),
@@ -1077,6 +1091,7 @@ function publishSources(data, assets) {
     sub: `${asset.source || "Media Lab"} · ${asset.type}`,
     copy: asset.prompt || "Generated media ready for a caption.",
     type: asset.type,
+    url: contentAssetDisplayUrl(asset),
     hue: asset.hue || 155,
   }));
   const postRows = data.posts
@@ -1090,6 +1105,7 @@ function publishSources(data, assets) {
       sub: `${plat(post.platform).name} · ${TYPES[post.type] || post.type}`,
       copy: post.caption,
       type: post.type,
+      url: post.thumbnailUrl || "",
       hue: post.hue || 155,
     }));
   return [...assetRows, ...postRows];
@@ -1097,6 +1113,38 @@ function publishSources(data, assets) {
 function publishSourceFromState(data, assets, state) {
   const sources = publishSources(data, assets);
   return sources.find((source) => source.key === state.sourceKey) || sources[0] || null;
+}
+function publishThumbnailSources(assets) {
+  return assets
+    .filter((asset) => asset.type === "image" && contentAssetDisplayUrl(asset))
+    .slice(0, 18)
+    .map((asset) => ({
+      key: `asset:${asset.id}`,
+      kind: "asset",
+      asset,
+      title: asset.title || "Thumbnail image",
+      sub: `${asset.source || "Media Pool"} · thumbnail`,
+      type: "image",
+      url: contentAssetDisplayUrl(asset),
+      hue: asset.hue || 155,
+    }));
+}
+function publishThumbnailFromState(assets, state) {
+  if (!state?.thumbnailKey) return null;
+  return publishThumbnailSources(assets).find((source) => source.key === state.thumbnailKey) || null;
+}
+function publishThumbnailRail(rows, state, esc) {
+  const active = state.thumbnailKey || "source";
+  return `<div class="ch-pub-source-grid ch-pub-thumb-grid">
+    <button type="button" class="ch-pub-source ${active === "source" ? "is-on" : ""}" data-ch-pub-thumb="source">
+      <span class="ch-pub-source-thumb is-auto">${svgIc("eye")}</span>
+      <span><b>Use source frame</b><i>default thumbnail</i></span>
+    </button>
+    ${rows.map((source) => `<button type="button" class="ch-pub-source ${active === source.key ? "is-on" : ""}" data-ch-pub-thumb="${esc(source.key)}">
+      <span class="ch-pub-source-thumb">${sourceMediaMarkup(source, esc, "tiny")}</span>
+      <span><b>${esc(source.title.slice(0, 54))}${source.title.length > 54 ? "..." : ""}</b><i>${esc(source.sub)}</i></span>
+    </button>`).join("")}
+  </div>`;
 }
 function sourceMediaMarkup(source, esc, size = "large") {
   if (!source) return `<span class="ch-pub-media-empty">Choose or upload media</span>`;
@@ -1172,7 +1220,7 @@ function publishSourceRail(sources, state, esc) {
     <span><b>${esc(source.title.slice(0, 54))}${source.title.length > 54 ? "..." : ""}</b><i>${esc(source.sub)}</i></span>
   </button>`).join("");
 }
-function publishUnifiedPreview(platformIds, state, source, accounts, esc) {
+function publishUnifiedPreview(platformIds, state, source, accounts, esc, thumbnailSource = null) {
   const ids = normalizePlatformIds(platformIds, ["instagram"]);
   const primary = plat(ids[0]);
   const linked = ids.filter((id) => socialStatus(accounts[id] || {}) === "linked").length;
@@ -1184,10 +1232,10 @@ function publishUnifiedPreview(platformIds, state, source, accounts, esc) {
       <span><b>Universal post preview</b><i>${ids.map((id) => esc(plat(id).name)).join(" · ")}</i></span>
       <em>${linked}/${ids.length} ready</em>
     </div>
-    <div class="ch-pub-preview-media">${sourceMediaMarkup(source, esc)}</div>
+    <div class="ch-pub-preview-media">${sourceMediaMarkup(thumbnailSource || source, esc)}</div>
     <div class="ch-pub-preview-actions"><span>${svgIc("heart")}</span><span>${svgIc("chat")}</span><span>${svgIc("share")}</span><span>${svgIc("save")}</span></div>
     <p class="ch-pub-preview-caption">${esc(caption)}</p>
-    <div class="ch-pub-preview-foot">${esc(formats.join(" / "))} · one preview for every selected channel · final crop may vary</div>
+    <div class="ch-pub-preview-foot">${esc(formats.join(" / "))} · ${thumbnailSource ? "custom thumbnail" : "source thumbnail"} · final crop may vary</div>
   </article>`;
 }
 function draftStatusLabel(status) {
@@ -1211,8 +1259,10 @@ function enhancedPublishBrief(state, source) {
     `CTA: ${(state.cta || "Book a 15-minute setup call").trim()}`,
   ].join("\n");
 }
-function buildPublishDraft(state, source, status) {
+function buildPublishDraft(state, source, status, thumbnailSource = null) {
   const createdAt = Date.now();
+  const defaultSourceUrl = source?.kind === "asset" && source?.type === "image" ? contentAssetDisplayUrl(source.asset) : "";
+  const thumbnailUrl = thumbnailSource?.url || defaultSourceUrl || "";
   return {
     id: `publish-${createdAt}-${Math.random().toString(36).slice(2, 7)}`,
     status,
@@ -1227,6 +1277,9 @@ function buildPublishDraft(state, source, status) {
     postType: state.postType || "auto",
     sourceType: state.postType && state.postType !== "auto" ? state.postType : (source?.type || "text"),
     sourceHue: source?.hue || 155,
+    thumbnailKey: thumbnailSource?.key || state.thumbnailKey || "",
+    thumbnailUrl,
+    thumbnailTitle: thumbnailSource?.title || (thumbnailUrl ? (source?.title || "Source thumbnail") : ""),
     scheduleAt: state.scheduleAt,
     scheduledFor: publishScheduleIso(state.scheduleAt),
     localOnly: true,
@@ -1254,6 +1307,8 @@ function addPublishPosts(data, draft, status) {
       publishedAt,
       status,
       hue: draft.sourceHue || 155,
+      thumbnailUrl: draft.thumbnailUrl || "",
+      thumbnailTitle: draft.thumbnailTitle || "",
       hashtags: (draft.caption.match(/#[A-Za-z0-9_]+/g) || ["#PhantomForce"]).slice(0, 6),
       mentions: [],
       metrics: blankMetrics(),
@@ -1283,6 +1338,8 @@ function renderPostPublish(body, data, esc, root, opts) {
   state.platforms = selectedPlatforms;
   const sources = publishSources(data, assets);
   const source = publishSourceFromState(data, assets, state);
+  const thumbnailRows = publishThumbnailSources(assets);
+  const thumbnailSource = publishThumbnailFromState(assets, state);
   const drafts = loadPublishDrafts();
   const linkedCount = enabledPlatformIds(accounts).length;
   const selectedPostType = state.postType || "auto";
@@ -1339,6 +1396,11 @@ function renderPostPublish(body, data, esc, root, opts) {
           </div>
           <div class="ch-pub-source-grid">${publishSourceRail(sources, state, esc)}</div>
         </div>
+        <div class="ch-pub-section ch-pub-thumb-section">
+          <b class="ch-pub-label">Thumbnail</b>
+          <span class="ch-src">Choose a separate thumbnail. It does not have to be the same as the source.</span>
+          ${publishThumbnailRail(thumbnailRows, state, esc)}
+        </div>
         <div class="ch-pub-section ch-pub-ai-box">
           <div class="ch-pub-row">
             <label class="ch-pub-brief-field"><span>What do you want to post? <button type="button" data-ch-pub-enhance-brief>AI enhance</button></span><textarea data-ch-pub-brief data-ch-pub-field rows="4" placeholder="Describe the offer, clip, image, campaign, customer, or angle...">${esc(state.brief || "")}</textarea></label>
@@ -1360,9 +1422,9 @@ function renderPostPublish(body, data, esc, root, opts) {
         </div>
       </div>
       <aside class="ch-card ch-pub-preview">
-        <div class="ch-card-h"><h3>Post preview</h3><span class="ch-src">One clean preview · ${selectedPlatforms.length} destinations</span></div>
-        <div class="ch-pub-preview-stack">
-          ${publishUnifiedPreview(selectedPlatforms, state, source, accountById, esc)}
+        <div class="ch-card-h"><h3>Post preview</h3><span class="ch-src" data-ch-pub-preview-count>One clean preview · ${selectedPlatforms.length} destinations</span></div>
+        <div class="ch-pub-preview-stack" data-ch-pub-preview-stack>
+          ${publishUnifiedPreview(selectedPlatforms, state, source, accountById, esc, thumbnailSource)}
         </div>
       </aside>
     </section>
@@ -1377,17 +1439,32 @@ function readPublishForm(body, fallback = loadPublishState()) {
   const source = body.querySelector("[data-ch-pub-source].is-on")?.dataset.chPubSource || fallback.sourceKey || "";
   const postType = body.querySelector("[data-ch-pub-format].is-on")?.dataset.chPubFormat || fallback.postType || "auto";
   const tone = body.querySelector("[data-ch-pub-tone].is-on")?.dataset.chPubTone || fallback.tone || "clean";
+  const thumbKey = body.querySelector("[data-ch-pub-thumb].is-on")?.dataset.chPubThumb || fallback.thumbnailKey || "";
   return savePublishState({
     ...fallback,
     platforms: normalizePlatformIds(selected, fallback.platforms || ["instagram"]),
     sourceKey: source,
     postType,
+    thumbnailKey: thumbKey === "source" ? "" : thumbKey,
     brief: body.querySelector("[data-ch-pub-brief]")?.value || "",
     tone,
     cta: body.querySelector("[data-ch-pub-cta]")?.value || "",
     caption: body.querySelector("[data-ch-pub-caption]")?.value || "",
     scheduleAt: body.querySelector("[data-ch-pub-schedule]")?.value || localDateTimeValue(),
   });
+}
+function refreshPublishPreview(body, data, assets, esc) {
+  const state = readPublishForm(body);
+  const accounts = loadSocialAccounts();
+  const accountById = Object.fromEntries(accounts.map((account) => [account.id, account]));
+  const platforms = normalizePlatformIds(state.platforms, defaultPublishPlatforms(accounts));
+  const source = publishSourceFromState(data, assets, state);
+  const thumbnailSource = publishThumbnailFromState(assets, state);
+  const preview = body.querySelector("[data-ch-pub-preview-stack]");
+  if (preview) preview.innerHTML = publishUnifiedPreview(platforms, state, source, accountById, esc, thumbnailSource);
+  const count = body.querySelector("[data-ch-pub-preview-count]");
+  if (count) count.textContent = `One clean preview · ${platforms.length} destination${platforms.length === 1 ? "" : "s"}`;
+  return state;
 }
 function wirePostPublish(body, data, assets, esc, root, opts) {
   const notify = (msg) => opts.notify?.("Creator Hub", msg);
@@ -1427,8 +1504,8 @@ function wirePostPublish(body, data, assets, esc, root, opts) {
     renderContentHub(root, opts);
   };
   body.querySelectorAll("[data-ch-pub-field]").forEach((field) => {
-    field.oninput = () => readPublishForm(body);
-    field.onchange = () => readPublishForm(body);
+    field.oninput = () => refreshPublishPreview(body, data, assets, esc);
+    field.onchange = () => refreshPublishPreview(body, data, assets, esc);
   });
   body.querySelectorAll("[data-ch-pub-platform]").forEach((button) => {
     button.onclick = () => {
@@ -1461,6 +1538,13 @@ function wirePostPublish(body, data, assets, esc, root, opts) {
     button.onclick = () => {
       const state = readPublishForm(body);
       savePublishState({ ...state, sourceKey: button.dataset.chPubSource });
+      renderContentHub(root, opts);
+    };
+  });
+  body.querySelectorAll("[data-ch-pub-thumb]").forEach((button) => {
+    button.onclick = () => {
+      const state = readPublishForm(body);
+      savePublishState({ ...state, thumbnailKey: button.dataset.chPubThumb === "source" ? "" : button.dataset.chPubThumb });
       renderContentHub(root, opts);
     };
   });
@@ -1515,8 +1599,9 @@ function wirePostPublish(body, data, assets, esc, root, opts) {
   const saveDraft = (status) => {
     let state = readPublishForm(body);
     const source = publishSourceFromState(data, assets, state);
+    const thumbnailSource = publishThumbnailFromState(assets, state);
     if (!state.caption.trim()) state = savePublishState({ ...state, caption: suggestPublishCaption(state, source, state.platforms) });
-    const draft = buildPublishDraft(state, source, status);
+    const draft = buildPublishDraft(state, source, status, thumbnailSource);
     savePublishDrafts([draft, ...loadPublishDrafts()]);
     if (status === "scheduled") addPublishPosts(data, draft, "scheduled");
     if (status === "posted") addPublishPosts(data, draft, "published");
@@ -3983,6 +4068,21 @@ export function renderAnalytics(el, opts = {}, renderOptions = {}) {
   const maxEngagement = Math.max(1, ...feedRows.map((row) => row.feed?.engagement || 0));
   el.innerHTML = `
     <div class="an">
+      <div class="an-visual-grid an-top-visual-grid">
+        <section class="ch-card an-trend-card">
+          <div class="ch-card-h"><div><p class="ch-eyebrow">Performance trend</p><h3>Reach and views</h3></div><span class="an-live-label">${hasLiveMetrics ? "Platform data" : "Waiting for social data"}</span></div>
+          ${analyticsChart(chartRows, { title: "No social analytics connected yet", body: "Connect a social account and live platform data will fill this chart. Local uploads are not counted here." })}
+        </section>
+        <section class="ch-card an-coverage-card">
+          <p class="ch-eyebrow">Data coverage</p>
+          ${analyticsCoverage(feedRows)}
+        </section>
+      </div>
+      <div class="ch-kpis an-kpis">
+        ${hasLiveMetrics
+          ? `${kpi("Reach", K(totals.reach), "reported reach")}${kpi("Views", K(totals.impressions), "views + impressions")}${kpi("Engagement", K(totals.engagement), "likes + comments + shares")}${kpi("Followers", K(totals.followers), "latest reported total")}`
+          : `${kpi("Live channels", `0/${displayAccounts.length}`, "official OAuth reporting")}${kpi("OAuth apps", K(oauthReadyCount), "server apps ready")}${kpi("Authorized", K(configuredCount), "accounts connected")}${kpi("Next step", "Connect", "choose a platform below")}`}
+      </div>
       <section class="an-hero">
         <div>
           <p class="ch-eyebrow">Social media analytics</p>
@@ -3998,21 +4098,6 @@ export function renderAnalytics(el, opts = {}, renderOptions = {}) {
       </section>
       ${analyticsNotice || analyticsConnectorState.error ? `<div class="an-flash">${esc(analyticsNotice || analyticsConnectorState.error)}</div>` : ""}
       ${analyticsReadinessPanel({ displayAccounts, liveApiRows, configuredCount, oauthReadyCount, hasLiveMetrics, esc })}
-      <div class="ch-kpis an-kpis">
-        ${hasLiveMetrics
-          ? `${kpi("Reach", K(totals.reach), "reported reach")}${kpi("Views", K(totals.impressions), "views + impressions")}${kpi("Engagement", K(totals.engagement), "likes + comments + shares")}${kpi("Followers", K(totals.followers), "latest reported total")}`
-          : `${kpi("Live channels", `0/${displayAccounts.length}`, "official OAuth reporting")}${kpi("OAuth apps", K(oauthReadyCount), "server apps ready")}${kpi("Authorized", K(configuredCount), "accounts connected")}${kpi("Next step", "Connect", "choose a platform below")}`}
-      </div>
-      <div class="an-visual-grid">
-        <section class="ch-card an-trend-card">
-          <div class="ch-card-h"><div><p class="ch-eyebrow">Performance trend</p><h3>Reach and views</h3></div><span class="an-live-label">${hasLiveMetrics ? "Platform data" : "Waiting for social data"}</span></div>
-          ${analyticsChart(chartRows, { title: "No social analytics connected yet", body: "Connect a social account and live platform data will fill this chart. Local uploads are not counted here." })}
-        </section>
-        <section class="ch-card an-coverage-card">
-          <p class="ch-eyebrow">Data coverage</p>
-          ${analyticsCoverage(feedRows)}
-        </section>
-      </div>
       <section class="ch-card an-engagement-card">
         <div class="ch-card-h"><div><p class="ch-eyebrow">Channel comparison</p><h3>Engagement by platform</h3></div></div>
         <div class="ch-bars">${hasLiveMetrics ? feedRows.map((row) => `<div class="ch-bar-row"><span class="ch-bar-lab"><i class="ch-dot" style="background:${row.account.color}"></i>${esc(row.account.name)}</span><span class="ch-bar-track"><span class="ch-bar-fill" style="width:${Math.round((row.feed?.engagement || 0) / maxEngagement * 100)}%;background:${row.account.color}"></span></span><b class="ch-bar-val">${K(row.feed?.engagement || 0)}</b></div>`).join("") : `<div class="an-empty-note"><b>No platform engagement yet.</b><span>Once a channel is connected, this becomes your clean cross-platform comparison.</span></div>`}</div>

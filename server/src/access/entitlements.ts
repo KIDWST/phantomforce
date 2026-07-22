@@ -120,6 +120,22 @@ export const PLAN_DEFINITIONS: PlanDefinition[] = [
     },
   },
   {
+    key: "developer",
+    name: "Developer",
+    description: "Builder-focused workspace for product/game/plugin development without Elite business-ops limits.",
+    isInternal: false,
+    trialDays: 14,
+    graceDays: 7,
+    features: {
+      chat: true, mediaLab: true, websites: true, websitePublishing: true, customDomains: false,
+      vacationMode: false, phantomPlay: true, competitorIntelligence: false, aggressiveIntelligence: false, advancedWorkflows: true, assetPacks: true, agentRuns: true, modelTier: "advanced",
+    },
+    limits: {
+      seats: 5, businesses: 1, mediaCreditsPerMonth: 150, chatRequestsPerDay: 750,
+      agentRunsPerDay: 150, storageMb: 8192, sitesPerOrg: 10, phantomPlayMinutesPerDay: 240, gameSubmissions: 25, competitorProfiles: 0, competitorSignals: 0,
+    },
+  },
+  {
     key: "elite",
     name: "Elite",
     description: "Multi-business operators: custom domains, advanced workflows, advanced models.",
@@ -133,6 +149,22 @@ export const PLAN_DEFINITIONS: PlanDefinition[] = [
     limits: {
       seats: 25, businesses: 5, mediaCreditsPerMonth: 1000, chatRequestsPerDay: 2000,
       agentRunsPerDay: 200, storageMb: 20480, sitesPerOrg: 20, phantomPlayMinutesPerDay: 240, gameSubmissions: 5, competitorProfiles: 25, competitorSignals: 5000,
+    },
+  },
+  {
+    key: "developer_elite",
+    name: "Developer + Elite",
+    description: "Full Elite operator access plus the expanded developer/game submission envelope for builders.",
+    isInternal: false,
+    trialDays: 14,
+    graceDays: 14,
+    features: {
+      chat: true, mediaLab: true, websites: true, websitePublishing: true, customDomains: true,
+      vacationMode: true, phantomPlay: true, competitorIntelligence: true, aggressiveIntelligence: true, advancedWorkflows: true, assetPacks: true, agentRuns: true, modelTier: "advanced",
+    },
+    limits: {
+      seats: 25, businesses: 5, mediaCreditsPerMonth: 1200, chatRequestsPerDay: 2500,
+      agentRunsPerDay: 350, storageMb: 32768, sitesPerOrg: 30, phantomPlayMinutesPerDay: 480, gameSubmissions: 50, competitorProfiles: 25, competitorSignals: 5000,
     },
   },
   {
@@ -170,9 +202,9 @@ export const PLAN_DEFINITIONS: PlanDefinition[] = [
 ];
 
 const DEFAULT_PLAN_KEY = "starter";
-const CUSTOMER_SWITCHABLE_PLAN_KEYS = new Set(["free", "professional", "elite"]);
+const CUSTOMER_SWITCHABLE_PLAN_KEYS = new Set(["free", "professional", "developer", "elite", "developer_elite"]);
 const FREE_VIEW_ONLY_PLAN_KEYS = new Set(["free", "starter"]);
-const FULL_ACCESS_PLAN_KEYS = new Set(["elite", "enterprise", "internal"]);
+const FULL_ACCESS_PLAN_KEYS = new Set(["elite", "developer_elite", "enterprise", "internal"]);
 
 function forceFullAccessFeatures(features: PlanFeatures): PlanFeatures {
   return {

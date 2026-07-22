@@ -7,7 +7,7 @@
       if (location.protocol === "http:" && location.hostname.indexOf("phantomforce.online") !== -1) {
         location.replace("https://" + location.host + location.pathname + location.search + location.hash);
       }
-      window.PHANTOM_BUILD = "phantom-live-20260722-8";
+      window.PHANTOM_BUILD = "phantom-live-20260722-13";
       if ("serviceWorker" in navigator) {
         navigator.serviceWorker
           .getRegistrations()
@@ -44,7 +44,7 @@
     </script>
     <title>PhantomForce — AI Operations Console</title>
     <meta name="description" content="PhantomForce — your AI business operating system." />
-    <meta name="phantom-build" content="phantom-live-20260722-8" />
+    <meta name="phantom-build" content="phantom-live-20260722-13" />
     <meta name="robots" content="noindex" />
     <meta name="theme-color" content="#f3f2fa" />
     <style>
@@ -123,18 +123,18 @@
 
 
     </style>
-    <link rel="icon" type="image/png" href="/app/assets/brand-phantom-favicon.png?v=phantom-live-20260722-8" />
+    <link rel="icon" type="image/png" href="/app/assets/brand-phantom-favicon.png?v=phantom-live-20260722-13" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700;12..96,800&family=Instrument+Sans:wght@400;500;600;700&family=Spline+Sans+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/app/phantom.css?v=phantom-live-20260722-8" />
-    <link rel="stylesheet" href="/app/phantomplay.css?v=phantom-live-20260722-8" />
-    <link rel="stylesheet" href="/app/phantomplay-v2.css?v=phantom-live-20260722-8" />
-    <link rel="stylesheet" href="/app/phantomstore.css?v=phantom-live-20260722-8" />
-    <link rel="stylesheet" href="/app/competitor-intelligence.css?v=phantom-live-20260722-8" />
-    <link rel="stylesheet" href="/app/orggraph.css?v=phantom-live-20260722-8" />
-    <link rel="stylesheet" href="/app/phantom-skin.css?v=phantom-live-20260722-8" />
-    <link rel="stylesheet" href="/app/command-os.css?v=phantom-live-20260722-8" />
+    <link rel="stylesheet" href="/app/phantom.css?v=phantom-live-20260722-13" />
+    <link rel="stylesheet" href="/app/phantomplay.css?v=phantom-live-20260722-13" />
+    <link rel="stylesheet" href="/app/phantomplay-v2.css?v=phantom-live-20260722-13" />
+    <link rel="stylesheet" href="/app/phantomstore.css?v=phantom-live-20260722-13" />
+    <link rel="stylesheet" href="/app/competitor-intelligence.css?v=phantom-live-20260722-13" />
+    <link rel="stylesheet" href="/app/orggraph.css?v=phantom-live-20260722-13" />
+    <link rel="stylesheet" href="/app/phantom-skin.css?v=phantom-live-20260722-13" />
+    <link rel="stylesheet" href="/app/command-os.css?v=phantom-live-20260722-13" />
   </head>
   <body>
     <div class="bg-grid" aria-hidden="true"></div>
@@ -187,13 +187,16 @@
             <span data-os-user-initial>PF</span>
             <b data-os-user-name>Operator</b>
           </button>
-          <button class="os-more" data-side-toggle type="button" aria-label="Open all sections" aria-expanded="false">Menu</button>
+          <div class="os-menu-wrap">
+            <button class="os-more" data-os-menu-btn type="button" aria-haspopup="menu" aria-expanded="false">Menu</button>
+            <div class="os-menu-popover" data-os-menu hidden></div>
+          </div>
         </div>
       </header>
 
       <header class="mobile-admin-homebar" aria-label="Mobile admin home">
         <button class="mobile-admin-brand" data-mobile-home type="button" aria-label="Open Dashboard">
-          <img class="brand-ghost" src="/app/assets/brand-phantom.png?v=phantom-live-20260722-8" alt="" aria-hidden="true" />
+          <img class="brand-ghost" src="/app/assets/brand-phantom.png?v=phantom-live-20260722-13" alt="" aria-hidden="true" />
           <span>
             <b>PhantomForce</b>
             <i>Business</i>
@@ -216,7 +219,7 @@
       <!-- ---------- sidebar ---------- -->
       <aside class="sidebar" aria-label="Primary">
         <div class="side-brand">
-          <img class="brand-ghost" src="/app/assets/brand-phantom.png?v=phantom-live-20260722-8" alt="" aria-hidden="true" />
+          <img class="brand-ghost" src="/app/assets/brand-phantom.png?v=phantom-live-20260722-13" alt="" aria-hidden="true" />
           <span class="side-brand-text">
             <b>PHANTOMFORCE</b>
             <i>BUSINESS MANAGER</i>
@@ -232,6 +235,24 @@
           <div class="side-nav-main" data-nav></div>
           <div class="side-nav-utility" data-nav-bottom aria-label="Utilities"></div>
         </nav>
+        <section class="side-plan" aria-label="Account and access">
+          <div class="side-account-card">
+            <div class="side-profile-row">
+              <span class="side-profile-avatar" data-profile-avatar>PF</span>
+              <span class="side-profile-main">
+                <p class="side-plan-kicker">Signed in as</p>
+                <b class="side-profile-name" data-profile-name>Operator</b>
+                <i class="side-profile-status" data-account-status><span class="side-profile-dot" aria-hidden="true"></span>Checking</i>
+              </span>
+            </div>
+            <div class="side-plan-meta">
+              <span data-plan-name>PhantomForce</span>
+              <span data-plan-renew>Access ready</span>
+            </div>
+            <button class="side-plan-btn" data-open-ws="account" type="button">Open account</button>
+            <button class="side-plan-btn side-plan-signout" data-user-menu-action="signout" type="button">Sign out</button>
+          </div>
+        </section>
 
       </aside>
 
@@ -323,7 +344,7 @@
               </div>
 
               <div class="hero2-stage">
-                <img class="os-earth-horizon" src="/app/assets/command-earth-horizon.png?v=phantom-live-20260722-8" alt="" aria-hidden="true" />
+                <img class="os-earth-horizon" src="/app/assets/command-earth-horizon.png?v=phantom-live-20260722-13" alt="" aria-hidden="true" />
                 <div class="os-gravity-map" data-os-gravity-map aria-label="Business gravity map">
                   <span class="os-radar" aria-hidden="true"></span>
                   <span class="os-orbit os-orbit-a" aria-hidden="true"></span>
@@ -366,18 +387,17 @@
                     <span>System health</span><b data-os-node-value>Checking</b><i data-os-node-detail>Reading live status</i>
                   </button>
                 </div>
-                <div class="os-field-modes" role="group" aria-label="Business gravity map mode">
-                  <button class="is-active" data-os-field-mode="executive" type="button">Executive</button>
-                  <button data-os-field-mode="growth" type="button">Growth</button>
-                  <button data-os-field-mode="operations" type="button">Operations</button>
-                  <button data-os-field-mode="threat" type="button">Threat</button>
+                <div class="os-access-version" data-os-access-version aria-label="Selected PhantomForce version">
+                  <span>Selected version</span>
+                  <b data-access-version-name>Loading tier</b>
+                  <i data-access-version-detail>Reading account access</i>
                 </div>
                 <canvas class="phantom-webgl" data-phantom-3d aria-hidden="true"></canvas>
                 <figure class="phantom-mode-stage" data-mode-stage data-pose="ask" data-mood="idle">
                   <img
                     class="phantom-mode-pose"
                     data-mode-pose
-                    src="/app/assets/poses/chin.webp?v=phantom-live-20260722-8"
+                    src="/app/assets/poses/chin.webp?v=phantom-live-20260722-13"
                     alt="Phantom listening"
                     decoding="async"
                     fetchpriority="high"
@@ -388,15 +408,7 @@
               </div>
             </section>
 
-            <nav class="os-division-strip" data-os-division-strip aria-label="Division instruments">
-              <button data-nav-id="phantomplay" type="button"><span class="os-division-tag">01</span><em class="os-division-metric" data-os-division-metric="phantomplay">—</em><b>PhantomPlay</b><i data-os-division-status="phantomplay">Open entertainment operations</i><span class="os-division-viz" data-os-division-viz="phantomplay" aria-hidden="true"></span></button>
-              <button data-nav-id="phantomstore" type="button"><span class="os-division-tag">02</span><em class="os-division-metric" data-os-division-metric="phantomstore">—</em><b>PhantomStore</b><i data-os-division-status="phantomstore">No products loaded</i><span class="os-division-viz" data-os-division-viz="phantomstore" aria-hidden="true"></span></button>
-              <button data-nav-id="media" type="button"><span class="os-division-tag">03</span><em class="os-division-metric" data-os-division-metric="media">—</em><b>Media Lab</b><i data-os-division-status="media">No media loaded</i><span class="os-division-viz" data-os-division-viz="media" aria-hidden="true"></span></button>
-              <button data-nav-id="sites" type="button"><span class="os-division-tag">04</span><em class="os-division-metric" data-os-division-metric="sites">—</em><b>Website Builder</b><i data-os-division-status="sites">No sites loaded</i><span class="os-division-viz" data-os-division-viz="sites" aria-hidden="true"></span></button>
-              <button data-nav-id="analytics" type="button"><span class="os-division-tag">05</span><em class="os-division-metric" data-os-division-metric="analytics">—</em><b>Analytics</b><i data-os-division-status="analytics">Open live intelligence</i><span class="os-division-viz" data-os-division-viz="analytics" aria-hidden="true"></span></button>
-              <button data-nav-id="intelligence" type="button"><span class="os-division-tag">06</span><em class="os-division-metric" data-os-division-metric="intelligence">—</em><b>Competitor Intel</b><i data-os-division-status="intelligence">Open market watch</i><span class="os-division-viz" data-os-division-viz="intelligence" aria-hidden="true"></span></button>
-              <button data-nav-id="money" type="button"><span class="os-division-tag">07</span><em class="os-division-metric" data-os-division-metric="money">—</em><b>Accounting</b><i data-os-division-status="money">No transactions loaded</i><span class="os-division-viz" data-os-division-viz="money" aria-hidden="true"></span></button>
-            </nav>
+            <section class="dashboard-intel-band" data-dashboard-intel aria-label="Customer intelligence snapshot"></section>
 
           </div>
 
@@ -419,6 +431,14 @@
                 <h2>Live signals</h2>
               </div>
               <div class="signals-grid" data-os-signal-grid></div>
+            </div>
+
+            <div class="queue-card" data-org-pulse-card>
+              <div class="section-head">
+                <h2>Needs attention</h2>
+                <span class="queue-count" data-org-pulse-count>0</span>
+              </div>
+              <div class="queue-list" data-org-pulse></div>
             </div>
           </aside>
         </main>
@@ -598,6 +618,6 @@
     <!-- workspace overlays mount here, above the blurred console -->
     <div class="overlay-root" data-overlay-root></div>
 
-    <script type="module" src="/app/js/main.js?v=phantom-live-20260722-8"></script>
+    <script type="module" src="/app/js/main.js?v=phantom-live-20260722-13"></script>
   </body>
 </html>

@@ -7841,10 +7841,15 @@ app.post("/phantom-ai/ops/social-oauth/start", async (request, reply) => {
       oauth: createSocialOAuthStart(body.platform, tenantId),
     };
   } catch (error) {
+    const socialAnalytics = getSocialAnalyticsConnectorStatus(tenantId);
+    const connector = socialAnalytics.connectors.find((item) => item.id === body.platform);
     return reply.code(409).send({
       ok: false,
       error: error instanceof Error ? error.message.slice(0, 400) : "OAuth start is not configured.",
-      connector: getSocialAnalyticsConnectorStatus(tenantId).connectors.find((item) => item.id === body.platform),
+      setupRequired: !connector?.oauthConfigured,
+      oauthPreflight: socialAnalytics.oauthPreflight,
+      connector,
+      social_analytics: socialAnalytics,
     });
   }
 });

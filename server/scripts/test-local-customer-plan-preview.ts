@@ -30,7 +30,10 @@ assert(session, "customer1 can log in");
 let summary = await accounts.getLocalCustomerPlanSummary(session!);
 assert(summary?.entitlements.planKey === "free", "seed starts on Free Preview");
 assert(summary?.entitlements.canWrite === false, "Free Preview is view-only");
-assert(summary?.plans.map((plan) => plan.key).join(",") === "free,professional,elite", "customer can inspect exactly Free, Pro, and Elite");
+assert(
+  summary?.plans.map((plan) => plan.key).join(",") === "free,professional,developer,elite,developer_elite",
+  "customer can inspect Free, Pro, Developer, Elite, and Developer + Elite",
+);
 
 const pro = await accounts.assignLocalCustomerPlan(session!, "professional");
 assert(pro.ok === true, "customer1 can switch to Pro");
@@ -38,6 +41,13 @@ assert(pro.ok && pro.entitlements.planKey === "professional", "Pro is current af
 assert(pro.ok && pro.entitlements.canWrite === true, "Pro allows writes");
 assert(pro.ok && pro.entitlements.features.competitorIntelligence === true, "Pro unlocks competitor intelligence");
 assert(pro.ok && pro.entitlements.features.customDomains === false, "Pro keeps custom domains restricted");
+
+const developer = await accounts.assignLocalCustomerPlan(session!, "developer");
+assert(developer.ok === true, "customer1 can switch to Developer");
+assert(developer.ok && developer.entitlements.planKey === "developer", "Developer is current after switch");
+assert(developer.ok && developer.entitlements.canWrite === true, "Developer allows writes");
+assert(developer.ok && developer.entitlements.features.advancedWorkflows === true, "Developer unlocks advanced workflows");
+assert(developer.ok && developer.entitlements.features.competitorIntelligence === false, "Developer stays separate from Elite customer intelligence");
 
 const elite = await accounts.assignLocalCustomerPlan(session!, "elite");
 assert(elite.ok === true, "customer1 can switch to Elite");
@@ -49,6 +59,18 @@ assert(
       key === "modelTier" ? value === "advanced" : value === true,
     ),
   "Elite has no locked feature flags",
+);
+
+const developerElite = await accounts.assignLocalCustomerPlan(session!, "developer_elite");
+assert(developerElite.ok === true, "customer1 can switch to Developer + Elite");
+assert(developerElite.ok && developerElite.entitlements.planKey === "developer_elite", "Developer + Elite is current after switch");
+assert(developerElite.ok && developerElite.entitlements.canWrite === true, "Developer + Elite allows writes");
+assert(
+  developerElite.ok &&
+    Object.entries(developerElite.entitlements.features).every(([key, value]) =>
+      key === "modelTier" ? value === "advanced" : value === true,
+    ),
+  "Developer + Elite has no locked feature flags",
 );
 
 const free = await accounts.assignLocalCustomerPlan(session!, "free");
@@ -63,7 +85,9 @@ console.log(
       customer1Login: true,
       freeViewOnly: true,
       proUnlocksWrites: true,
+      developerUnlocksWrites: true,
       eliteUnlocksWrites: true,
+      developerEliteUnlocksWrites: true,
       eliteHasNoLockedFeatures: true,
       switchBackRestricts: true,
       store: process.env.PHANTOMFORCE_LOCAL_CUSTOMER_STORE,

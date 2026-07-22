@@ -15,12 +15,16 @@ assert.match(entitlements, /key: "free"[\s\S]*name: "Free Preview"[\s\S]*website
   "Free Preview must clearly restrict publishing and custom domains.");
 assert.match(entitlements, /name: "Pro"[\s\S]*competitorIntelligence: true[\s\S]*aggressiveIntelligence: false/u,
   "Pro must expose useful business intelligence without aggressive intelligence.");
+assert.match(entitlements, /name: "Developer"[\s\S]*gameSubmissions: 25/u,
+  "Developer must expose a builder-focused tier for product, game, and plugin testing.");
 assert.match(entitlements, /name: "Elite"[\s\S]*customDomains: true[\s\S]*advancedWorkflows: true/u,
   "Elite must unlock the advanced operator tier.");
+assert.match(entitlements, /name: "Developer \+ Elite"[\s\S]*gameSubmissions: 50/u,
+  "Developer + Elite must combine Elite operations with the expanded developer envelope.");
 assert.match(entitlements, /name: "Enterprise"[\s\S]*businesses: 25/u,
   "Enterprise must stay available for full-access customer testing.");
-assert.match(entitlements, /CUSTOMER_SWITCHABLE_PLAN_KEYS = new Set\(\["free", "professional", "elite"\]\)/u,
-  "Customer tier switching must expose exactly Free, Pro, and Elite.");
+assert.match(entitlements, /CUSTOMER_SWITCHABLE_PLAN_KEYS = new Set\(\["free", "professional", "developer", "elite", "developer_elite"\]\)/u,
+  "Customer tier switching must expose Free, Pro, Developer, Elite, and Developer + Elite.");
 
 assert.match(localCustomers, /listCustomerPlanDefinitions\(\)/u,
   "Customer tier switching must expose public plans only.");
@@ -55,7 +59,7 @@ assert.match(settings, /id: "plan", label: "Plan & access", category: "Workspace
   "Settings must own plan and entitlement testing.");
 assert.match(settings, /data-plan-switch="\$\{esc\(plan\.key\)\}"/u,
   "Settings must render public tier switch controls.");
-assert.match(settings, /Switch Free, Pro, and Elite instantly/u,
+assert.match(settings, /Switch Free, Pro, Developer, Elite, and Developer \+ Elite instantly/u,
   "Settings must make clear this is a safe customer tier simulator.");
 
 assert.match(main, /const FEATURE_BY_NAV_ID = \{/u,

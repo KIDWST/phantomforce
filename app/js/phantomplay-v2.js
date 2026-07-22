@@ -9,7 +9,7 @@
 import {
   currentTenantId, isAdmin, session,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260722-8";
+} from "./store.js?v=phantom-live-20260722-13";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
 const mobilePlaySurface = () => typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;
@@ -74,6 +74,10 @@ async function api(path, options = {}) {
   return payload;
 }
 const tenantQuery = () => `tenant_id=${encodeURIComponent(currentTenantId())}`;
+function hasWorkspaceSession() {
+  const saved = typeof session.get === "function" ? session.get() : null;
+  return !!(session.token() || saved?.sessionId || saved?.email || saved?.role || saved?.name || saved?.id);
+}
 
 /* ---- offline fallback (built-ins only, local saves) ---- */
 const OFFLINE_GAMES = [
@@ -82,22 +86,23 @@ const OFFLINE_GAMES = [
   ["focus-stack", "Focus Stack", "Focus", "/app/games/focus-stack.html"],
   ["phantom-rumble", "Phantom Rumble", "Arcade", "/app/games/phantom-rumble.html?v=2.2.4"],
   ["rift-frenzy", "Rift Frenzy", "Arcade", "/app/games/rift-frenzy.html?v=2.0.0"],
-  ["crown-circuit", "Crown Circuit", "Strategy", "/app/games/crown-circuit.html?v=1.3.0"],
+  ["crown-circuit", "Crown Circuit", "Strategy", "/app/games/crown-circuit.html?v=1.3.2"],
   ["kingdom-breakers", "Kingdom Breakers", "Strategy", "/app/games/kingdom-breakers.html?v=1.1.0"],
   ["tidefront-tactics", "Tidefront Tactics", "Strategy", "/app/games/tidefront-tactics.html?v=1.1.0"],
-  ["skyguard-arena", "Skyguard Arena", "Strategy", "/app/games/skyguard-arena/index.html?v=1.3.1"],
+  ["skyguard-arena", "Skyguard Arena", "Strategy", "/app/games/skyguard-arena/index.html?v=1.3.3"],
   ["sudoku-signal", "Sudoku Signal", "Focus", "/app/games/sudoku-signal.html"],
   ["phantom-cube", "PhantomCube", "Puzzle", "/app/games/phantom-cube/index.html?v=1.0.0"],
   ["phantom-chess", "Phantom Chess", "Strategy", "/app/games/phantom-chess/index.html?v=1.0.0"],
   ["phantom-pizzeria", "Phantom Pizzeria", "Creative", "/app/games/phantom-pizzeria/index.html?v=1.0.0"],
-].map(([id, title, category, launchUrl]) => ({ id, title, summary: id === "phantom-rumble" ? "Premium local platform fighter with guard, parry, dodge, ledge-save recovery, bots, and local multiplayer." : id === "rift-frenzy" ? "School-to-grow fish survival with rival steals, absorb cooldown, hazards, and bots." : id === "crown-circuit" ? "Solo bot training plus upgraded Oracle/Ram cards and Obsidian Relay duels." : id === "kingdom-breakers" ? "Physics castle siege with duel castles and wardens." : id === "tidefront-tactics" ? "Wind-read artillery tactics battle." : id === "skyguard-arena" ? "Sentinel defense with starter sentries, Century Watch bosses, Neon Tangle, and relay surges." : "Offline built-in game.", description: "", category, tags: [], contentRating: ["rift-frenzy", "crown-circuit", "kingdom-breakers", "tidefront-tactics", "skyguard-arena"].includes(id) ? "everyone10" : "everyone", developer: "Tak", kind: "built_in", launchUrl, thumbnail: "", featured: ["phantom-rumble", "rift-frenzy", "crown-circuit", "kingdom-breakers", "tidefront-tactics", "skyguard-arena"].includes(id), version: id === "phantom-rumble" ? "2.2.4" : id === "rift-frenzy" ? "2.0.0" : id === "skyguard-arena" ? "1.3.1" : id === "crown-circuit" ? "1.3.0" : ["kingdom-breakers", "tidefront-tactics"].includes(id) ? "1.1.0" : "1.0.0", controls: id === "phantom-rumble" ? "Keyboard controls." : "", progressSupport: true, scoreSupport: true }));
+].map(([id, title, category, launchUrl]) => ({ id, title, summary: id === "phantom-rumble" ? "Premium local platform fighter with guard, parry, dodge, ledge-save recovery, bots, and local multiplayer." : id === "rift-frenzy" ? "School-to-grow fish survival with rival steals, absorb cooldown, hazards, and bots." : id === "crown-circuit" ? "Solo bot training plus upgraded Oracle/Ram cards, battle plans, and Obsidian Relay duels." : id === "kingdom-breakers" ? "Physics castle siege with duel castles and wardens." : id === "tidefront-tactics" ? "Wind-read artillery tactics battle." : id === "skyguard-arena" ? "Sentinel defense with starter sentries, Century Watch bosses, Neon Tangle, and relay surges." : "Offline built-in game.", description: "", category, tags: [], contentRating: ["rift-frenzy", "crown-circuit", "kingdom-breakers", "tidefront-tactics", "skyguard-arena"].includes(id) ? "everyone10" : "everyone", developer: "Tak", kind: "built_in", launchUrl, thumbnail: "", featured: ["phantom-rumble", "rift-frenzy", "crown-circuit", "kingdom-breakers", "tidefront-tactics", "skyguard-arena"].includes(id), version: id === "phantom-rumble" ? "2.2.4" : id === "rift-frenzy" ? "2.0.0" : id === "skyguard-arena" ? "1.3.3" : id === "crown-circuit" ? "1.3.2" : ["kingdom-breakers", "tidefront-tactics"].includes(id) ? "1.1.0" : "1.0.0", controls: id === "phantom-rumble" ? "Keyboard controls." : "", progressSupport: true, scoreSupport: true, devModeAvailable: true }));
 
 function offlineState() {
   let saved = {};
   try { saved = JSON.parse(workspaceStorageGetItem(FALLBACK_KEY) || "{}"); } catch {}
+  const signedInWorkspace = hasWorkspaceSession();
   return {
     tenantId: currentTenantId(), actorId: "offline",
-    access: { enabled: true, reason: "offline_built_ins", dailyMinuteLimit: 60, usedMinutesToday: 0, remainingMinutesToday: 60, canSubmitGames: false, canModerate: false },
+    access: { enabled: signedInWorkspace, reason: signedInWorkspace ? "local_play_fallback" : "workspace_session_required", dailyMinuteLimit: 100000, usedMinutesToday: 0, remainingMinutesToday: 100000, canSubmitGames: signedInWorkspace, canModerate: isAdmin(), isOwner: isAdmin() },
     catalog: OFFLINE_GAMES, favorites: Array.isArray(saved.favorites) ? saved.favorites : [], history: Array.isArray(saved.history) ? saved.history : [],
     preferences: { contentRating: "teen", allowedRatings: [...ALL_RATING_VALUES], sound: saved.sound !== false, reducedMotion: !!saved.reducedMotion, allowCommunityGames: true },
     profileType: "adult", guardianLock: { enabled: false },
@@ -108,12 +113,19 @@ function saveOffline(snapshot = ui.snapshot) {
   if (!snapshot) return;
   workspaceStorageSetItem(FALLBACK_KEY, JSON.stringify({ favorites: snapshot.favorites, history: snapshot.history, sound: snapshot.preferences.sound, reducedMotion: !!snapshot.preferences.reducedMotion }));
 }
+function normalizeGame(game) {
+  return { ...game, developer: game.developer || "Tak", devModeAvailable: game.devModeAvailable !== false };
+}
+function normalizeSnapshot(snapshot) {
+  if (!snapshot) return snapshot;
+  return { ...snapshot, catalog: Array.isArray(snapshot.catalog) ? snapshot.catalog.map(normalizeGame) : [] };
+}
 
 /* ---- hydrate ---- */
 async function hydrate() {
   ui.loading = true; ui.error = ""; render();
   try {
-    ui.snapshot = await api(`/api/phantomplay?${tenantQuery()}`);
+    ui.snapshot = normalizeSnapshot(await api(`/api/phantomplay?${tenantQuery()}`));
     ui.offline = false;
   } catch (error) {
     if (error?.status === 403) {
@@ -123,7 +135,7 @@ async function hydrate() {
       ui.offline = false;
       ui.error = error.message;
     } else {
-      ui.snapshot = offlineState(); ui.offline = true;
+      ui.snapshot = normalizeSnapshot(offlineState()); ui.offline = true;
       ui.error = error instanceof Error ? error.message : "PhantomPlay sync is unavailable.";
     }
   }
@@ -171,11 +183,35 @@ function art(game) {
   if (game.thumbnail) return `<img src="${esc(game.thumbnail)}" alt="" loading="lazy"/>`;
   return `<span class="pp2-art-fallback">${esc((game.title || "?").slice(0, 1))}</span>`;
 }
+function canLaunchGames(snapshot = ui.snapshot) {
+  return !!snapshot?.access?.enabled || (ui.offline && hasWorkspaceSession());
+}
+function localPlay(game) {
+  const existing = historyFor(game.id);
+  ui.detailId = null; ui.detail = null;
+  ui.player = {
+    game,
+    play: {
+      id: `local-${game.id}-${Date.now()}`,
+      gameId: game.id,
+      seconds: 0,
+      score: Number(existing?.score) || 0,
+      progress: Number(existing?.progress) || 0,
+      startedAt: new Date().toISOString(),
+    },
+  };
+  ui.resume = existing?.state ? { state: existing.state } : null;
+  ui.error = "";
+  ui.playerReady = false; ui.playerPaused = false; playTickAt = Date.now();
+  render(); startClock(); heartbeat();
+}
 
 /* ---- cards & rows ---- */
 function card(game, opts = {}) {
   const history = historyFor(game.id);
   const heart = wishlisted(game.id);
+  const launchable = canLaunchGames();
+  const playLabel = history?.canContinue ? "Continue" : "Play";
   return `<article class="pp2-card ${opts.variant || ""}" data-pp2-open="${esc(game.id)}">
     <div class="pp2-art">${art(game)}<span class="pp2-cat">${esc(displayCategoryFor(game))}</span>${game.kind === "community" ? '<em class="pp2-community">Community</em>' : ""}</div>
     <div class="pp2-card-body">
@@ -183,7 +219,7 @@ function card(game, opts = {}) {
       <p class="pp2-dev">by ${esc(game.developer)}${opts.note ? ` · <i>${esc(opts.note)}</i>` : ""}</p>
       <p class="pp2-summary">${esc(game.summary)}</p>
       ${history?.canContinue ? `<div class="pp2-progress"><i style="width:${Math.max(3, Math.min(100, history.progress))}%"></i></div>` : ""}
-      <div class="pp2-card-actions"><button type="button" class="pp2-play" data-pp2-play="${esc(game.id)}">${history?.canContinue ? "Continue" : "Play"}</button>${game.devModeAvailable ? `<button type="button" class="pp-devsandbox-card-open" data-pp2-devsandbox-card-open="${esc(game.id)}" aria-label="Open Dev Mode for ${esc(game.title)}" title="Dev Mode — live-edit this game's code and assets while you play, sandboxed and visible only to you">⚡<b>Dev Mode</b></button>` : ""}${history?.score != null ? `<span>Best ${history.score}</span>` : ""}</div>
+      <div class="pp2-card-actions"><button type="button" class="pp2-play" ${launchable ? `data-pp2-play="${esc(game.id)}"` : `data-pp2-session-required="${esc(game.id)}"`}>${launchable ? playLabel : "Plan locked"}</button>${game.devModeAvailable ? `<button type="button" class="pp-devsandbox-card-open" ${launchable ? `data-pp2-devsandbox-card-open="${esc(game.id)}"` : `data-pp2-session-required="${esc(game.id)}"`} aria-label="Open Dev Mode for ${esc(game.title)}" title="Dev Mode — live-edit this game's code and assets while you play, sandboxed and visible only to you">⚡<b>Dev Mode</b></button>` : ""}${history?.score != null ? `<span>Best ${history.score}</span>` : ""}</div>
     </div>
   </article>`;
 }
@@ -215,7 +251,7 @@ function renderHome() {
   const friendNotes = {};
   for (const item of d?.friendsPlaying || []) friendNotes[item.gameId] = `${item.label} is playing`;
   return `<div class="pp2-home">
-    ${hero ? `<section class="pp2-hero"><div class="pp2-hero-art">${art(hero)}</div><div class="pp2-hero-copy"><p class="pp2-kicker">FEATURED</p><h1>${esc(hero.title)}</h1><p>${esc(hero.summary)}</p><div><button class="pp2-play" data-pp2-play="${esc(hero.id)}">Play now</button><button class="pp2-ghost" data-pp2-open="${esc(hero.id)}">Game page</button></div></div></section>` : ""}
+    ${hero ? `<section class="pp2-hero"><div class="pp2-hero-art">${art(hero)}</div><div class="pp2-hero-copy"><p class="pp2-kicker">FEATURED</p><h1>${esc(hero.title)}</h1><p>${esc(hero.summary)}</p><div><button class="pp2-play" ${canLaunchGames() ? `data-pp2-play="${esc(hero.id)}"` : `data-pp2-session-required="${esc(hero.id)}"`}>${canLaunchGames() ? "Play now" : "Plan locked"}</button><button class="pp2-ghost" data-pp2-open="${esc(hero.id)}">Game page</button></div></div></section>` : ""}
     ${row("Continue playing", continuing, "Pick up exactly where you left off — saves follow your profile.")}
     ${d ? row("Friends playing now", generalPlayGames(mapIds(d.friendsPlaying)), "", friendNotes) : ""}
     ${d ? row("Trending this week", generalPlayGames(mapIds(d.trending)), "Ranked by real plays across this workspace.") : ""}
@@ -326,7 +362,6 @@ const ASSIST_BRIEFS = {
 };
 function renderDeveloper() {
   const snapshot = ui.snapshot;
-  if (!snapshot.access.canSubmitGames) return empty("Dev Hub is plan-gated", "This account can play games but cannot publish releases. Owners can enable game submissions per plan.");
   const editing = snapshot.submissions.find((item) => item.id === ui.editingSubmissionId) || null;
   const analytics = ui.analytics;
   const assistGames = [...snapshot.submissions.map((s) => ({ id: `community:${s.id}`, title: s.title, summary: s.summary, category: s.category })), ...(isAdmin() ? snapshot.catalog.filter((g) => g.kind === "built_in") : [])];
@@ -597,7 +632,20 @@ async function openDevSandbox() {
     };
     rebuildDevSandboxFrame(startingSource);
   } catch (error) {
-    ui.devSandbox = { ...ui.devSandbox, loading: false, error: error instanceof Error ? error.message : "Dev Sandbox source could not be loaded." };
+    try {
+      const response = await fetch(game.launchUrl, { cache: "no-store" });
+      const source = await response.text();
+      ui.devSandbox = {
+        gameId: game.id, source, editedSource: source, blobUrl: "",
+        hasOverride: false, overrideUpdatedAt: null,
+        loading: false, error: "", status: "Loaded the shipped game source locally. Save/publish needs backend sync.",
+        saving: false, publishing: false,
+        section: "code", modState: {}, speed: 1,
+      };
+      rebuildDevSandboxFrame(source);
+    } catch {
+      ui.devSandbox = { ...ui.devSandbox, loading: false, error: error instanceof Error ? error.message : "Dev Sandbox source could not be loaded." };
+    }
   }
   render();
 }
@@ -692,15 +740,15 @@ function render() {
   document.body.classList.toggle("phantomplay-playing", !!ui.player);
   if (ui.loading && !ui.snapshot) { mountedRoot.innerHTML = `<div class="pp2-shell">${skeletonRow("PhantomPlay")}</div>`; return; }
   const snapshot = ui.snapshot || offlineState();
-  const tabs = [["solo", "Games"], ["friends", "Multiplayer"], ["library", "Library"], ["workspace", "Rules"], ["developer", "Developers"], ...(snapshot.access.canModerate ? [["admin", "Admin"]] : [])];
-  const view = { home: renderHome, solo: renderSolo, friends: renderFriends, workspace: renderWorkspace, library: renderLibrary, developer: renderDeveloper, admin: renderAdmin }[ui.tab] || renderSolo;
+  const tabs = [["solo", "Games"], ["friends", "Multiplayer"], ["library", "Library"], ["workspace", "Rules"], ["developer", "Dev Mode"], ["submit", "Submit your game"], ...(snapshot.access.canModerate ? [["admin", "Admin"]] : [])];
+  const view = { home: renderHome, solo: renderSolo, friends: renderFriends, workspace: renderWorkspace, library: renderLibrary, developer: renderDeveloper, submit: renderDeveloper, admin: renderAdmin }[ui.tab] || renderSolo;
   mountedRoot.innerHTML = `<div class="pp2-shell">
     <header class="pp2-top"><div><p class="pp2-kicker">PHANTOMFORCE ENTERTAINMENT</p><h1>PhantomPlay</h1><span>Work hard. Take a real break. Come back sharper.</span></div>
       <div class="pp2-top-right"><span class="pp2-access ${snapshot.access.enabled ? "is-on" : "is-off"}">${snapshot.access.enabled ? esc(playTimeLabel(snapshot.access.remainingMinutesToday)) : "Plan restricted"}</span><button class="pp2-ghost" data-pp2-settings aria-label="Play settings">Settings</button><button class="pp2-ghost" data-pp2-classic title="Return to the classic PhantomPlay experience">Classic view</button></div></header>
-    ${ui.offline ? `<div class="pp2-banner"><b>Offline mode</b><span>Built-in games still work; saves sync when the server returns.</span><button data-pp2-retry>Retry</button></div>` : ""}
-    ${ui.error && !ui.offline ? `<div class="pp2-banner is-error"><b>PhantomPlay needs attention</b><span>${esc(ui.error)}</span><button data-pp2-retry>Retry</button></div>` : ""}
+    ${ui.offline ? `<div class="pp2-banner"><b>Cloud sync is offline</b><span>Signed-in workspace users can still launch built-in games locally. Saves, analytics, rooms, submissions, and policies sync when the backend returns.</span><button data-pp2-retry>Retry</button></div>` : ""}
+    ${ui.error ? `<div class="pp2-banner is-error"><b>PhantomPlay needs attention</b><span>${esc(ui.error)}</span><button data-pp2-retry>Retry</button></div>` : ""}
     <nav class="pp2-tabs" aria-label="PhantomPlay experiences">${tabs.map(([id, label]) => `<button type="button" class="${ui.tab === id ? "is-active" : ""}" data-pp2-tab="${id}">${esc(label)}</button>`).join("")}</nav>
-    <main class="pp2-content">${snapshot.access.enabled ? view() : empty("PhantomPlay is unavailable", "Ask your business owner to enable PhantomPlay for this plan.")}</main>
+    <main class="pp2-content">${view()}</main>
     ${renderDetail()}${settingsMarkup()}${playerMarkup()}
   </div>`;
   bind();
@@ -724,19 +772,31 @@ async function toggleWishlist(gameId) {
   } catch (error) { ui.error = error.message; render(); }
 }
 async function launch(gameId) {
+  if (!canLaunchGames()) {
+    ui.error = "PhantomPlay is blocked by this workspace plan or policy.";
+    render();
+    return;
+  }
   const game = gameById(gameId);
   if (!game?.launchUrl) { ui.error = "This game is not available to play yet."; render(); return; }
+  if (ui.offline) {
+    localPlay(game);
+    return;
+  }
   ui.detailId = null; ui.detail = null;
   try {
     const [result, resume] = await Promise.all([
-      ui.offline ? Promise.resolve({ game, play: { id: `offline-${Date.now()}`, gameId, seconds: 0, score: null, progress: historyFor(gameId)?.progress || 0 } }) : api("/api/phantomplay/plays", { method: "POST", body: JSON.stringify({ tenantId: currentTenantId(), gameId }) }),
+      api("/api/phantomplay/plays", { method: "POST", body: JSON.stringify({ tenantId: currentTenantId(), gameId }) }),
       ui.v2Offline ? Promise.resolve(null) : api(`/api/phantomplay/v2/resume/${encodeURIComponent(gameId)}?${tenantQuery()}`).catch(() => null),
     ]);
     ui.player = { game: result.game || game, play: result.play };
     ui.resume = resume;
     ui.playerReady = false; ui.playerPaused = false; playTickAt = Date.now();
     render(); startClock(); heartbeat();
-  } catch (error) { ui.error = error.message; render(); }
+  } catch (error) {
+    ui.offline = true;
+    localPlay(game);
+  }
 }
 function startClock() { clearInterval(playClock); playClock = setInterval(() => persistPlay(false), 15000); }
 async function persistPlay(ended, detail = {}) {
@@ -930,6 +990,11 @@ function bind() {
   const on = (selector, event, handler) => mountedRoot.querySelectorAll(selector).forEach((el) => el.addEventListener(event, handler));
   mountedRoot.querySelectorAll("[data-pp2-tab]").forEach((b) => b.onclick = () => { ui.tab = b.dataset.pp2Tab; if (ui.tab === "developer" && !ui.analytics && !ui.v2Offline) loadAnalytics(); render(); });
   mountedRoot.querySelectorAll("[data-pp2-play]").forEach((b) => b.onclick = (e) => { e.stopPropagation(); launch(b.dataset.pp2Play); });
+  mountedRoot.querySelectorAll("[data-pp2-session-required]").forEach((b) => b.onclick = (e) => {
+    e.stopPropagation();
+    ui.error = "This workspace plan or policy is blocking play.";
+    render();
+  });
   mountedRoot.querySelectorAll("[data-pp2-devsandbox-card-open]").forEach((b) => b.onclick = (e) => { e.stopPropagation(); launchWithDevSandbox(b.dataset.pp2DevsandboxCardOpen); });
   mountedRoot.querySelectorAll("[data-pp2-open]").forEach((b) => b.addEventListener("click", (e) => { if (e.target.closest("[data-pp2-play],[data-pp2-wish],[data-pp2-devsandbox-card-open]")) return; openDetail(b.dataset.pp2Open); }));
   mountedRoot.querySelectorAll("[data-pp2-wish]").forEach((b) => b.onclick = (e) => { e.stopPropagation(); toggleWishlist(b.dataset.pp2Wish); });

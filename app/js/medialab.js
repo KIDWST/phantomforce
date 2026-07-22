@@ -6,22 +6,22 @@
  * instead of sending people out to another product.
  */
 
-import { currentTenantId, ctx, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260722-8";
+import { currentTenantId, ctx, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260722-13";
 import {
   PLATFORMS, registerContentAsset, loadSocialAccounts, saveSocialAccounts, socialStatus,
   loadContentAssets, saveContentAssets, contentAssetDisplayUrl, hydrateContentAssetUrl,
   loadRecycledContentAssets, recycleContentAssets, restoreRecycledContentAssets, purgeRecycledContentAssets,
-} from "./contenthub.js?v=phantom-live-20260722-8";
-import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260722-8";
+} from "./contenthub.js?v=phantom-live-20260722-13";
+import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260722-13";
 import {
   addImageLayer, addTextLayer, alignSelectedLayers, applyLayerDragWithSnap, cloneImageEditState, compositionSnapshot, distributeSelectedLayers, duplicateLayer,
   canvasPoint, drawCompositionOverlay, freshComposition, hitTestLayer, hitTestResizeHandle,
   loadCompositionImages, moveLayerOrder, moveLayerToIndex, pushEditorSnapshot, removeSelectedLayers,
   renderComposition, restoreComposition, selectAllLayers, selectLayer, selectedLayers,
-} from "./content-editor.js?v=phantom-live-20260722-8";
-import { loadImageForEditing, exportCanvas, requestAiEdit, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260722-8";
-import { mountVideoEditor } from "./videocut.js?v=phantom-live-20260722-8";
-import { assetsAvailable, assetBlobUrl, listAssets, recordAssetUsage, saveToAssetCloud, listLocalAssets, refreshLocalAssets, localAssetBlobUrl } from "./orgs.js?v=phantom-live-20260722-8";
+} from "./content-editor.js?v=phantom-live-20260722-13";
+import { loadImageForEditing, exportCanvas, requestAiEdit, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260722-13";
+import { mountVideoEditor } from "./videocut.js?v=phantom-live-20260722-13";
+import { assetsAvailable, assetBlobUrl, listAssets, recordAssetUsage, saveToAssetCloud, listLocalAssets, refreshLocalAssets, localAssetBlobUrl } from "./orgs.js?v=phantom-live-20260722-13";
 
 const CFG_KEY = "pf.medialab.v1";
 const EDIT_INTENT_KEY = "pf.medialab.editIntent.v1";
@@ -2501,7 +2501,17 @@ function tileAction(act, id, cfg, opts, root, esc, body) {
   if (act === "regen") { runGenerate(body, cfg, opts, root, esc); return; }
   if (act === "ref") { genState.ref = a.url; session.tab = "generate"; renderMediaStudio(root, opts); return; }
   if (act === "save") { a.saved = true; saveMediaPoolSource(a); if (opts.notify) opts.notify("Media Factory", "saved a generation to Media Pool."); renderMediaStudio(root, opts); return; }
-  if (act === "edit") { session.edit = { url: a.url, type: a.type, id: a.id }; session.tab = "edit"; renderMediaStudio(root, opts); return; }
+  if (act === "edit") {
+    session.edit = { url: a.url, type: a.type, id: a.id };
+    session.tab = "edit";
+    session.editMode = a.type === "video" ? "video" : "photo";
+    if (a.type !== "video") {
+      resetEdit();
+      editState.loadedUrl = null;
+    }
+    renderMediaStudio(root, opts);
+    return;
+  }
   if (act === "remove") {
     session.assets = session.assets.filter((x) => x.id !== id);
     if (session.edit?.id === id) session.edit = null;
@@ -2573,7 +2583,7 @@ function poolTileHtml(asset, esc) {
       : `<img src="${esc(url)}" alt="${esc(asset.title)}" loading="lazy"/>`)
     : `<span class="ml-pool-thumb-empty">${asset.syncedId ? "Loading preview…" : "Preview unavailable"}</span>`;
   return `<article class="ml-pool-card" data-pool-id="${esc(asset.id)}">
-    <figure class="ml-pool-thumb" data-pool-media="${esc(asset.id)}">${media}</figure>
+    <figure class="ml-pool-thumb" data-pool-media="${esc(asset.id)}" role="button" tabindex="0" title="Open in editor">${media}</figure>
     <div class="ml-pool-meta">
       <b>${esc(asset.title.slice(0, 60))}</b>
       <i>${esc(asset.source || "Media Lab")} · ${esc(asset.type)} · ${poolAgeLabel(asset.createdAt)} · ${asset.syncedId ? "backed up" : "this device"}</i>
@@ -2603,6 +2613,31 @@ function renderMediaPool(body, cfg, opts, root) {
       ? `<div class="ml-pool-grid">${assets.map((a) => poolTileHtml(a, esc)).join("")}</div>`
       : `<div class="ml-empty" data-ml-dropzone="edit" data-ml-dropzone-label="Drop to add media">${svgIc("image")}<b>Media Pool is empty</b><i>Generate in Create — finished renders land here automatically and stay for ${30} days. Publish, edit, or reuse them any time.</i></div>`}
     ${poolRecycleBinHtml(recycled, esc)}`;
+  const openPoolAssetForEdit = async (asset) => {
+    const url = await poolAssetUrl(asset, opts);
+    if (!url) return;
+    session.edit = { url, type: asset.type, id: asset.id };
+    session.tab = "edit";
+    session.editMode = asset.type === "video" ? "video" : "photo";
+    if (asset.type !== "video") {
+      resetEdit();
+      editState.loadedUrl = null;
+    }
+    renderMediaStudio(root, opts);
+  };
+  body.querySelectorAll("[data-pool-media]").forEach((tile) => {
+    const open = () => {
+      const asset = loadContentAssets().find((item) => item.id === tile.dataset.poolMedia);
+      if (asset) openPoolAssetForEdit(asset);
+    };
+    tile.onclick = open;
+    tile.onkeydown = (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        open();
+      }
+    };
+  });
   body.querySelectorAll("[data-pool-act]").forEach((btn) => btn.onclick = async () => {
     const asset = loadContentAssets().find((item) => item.id === btn.dataset.id);
     if (!asset) return;
@@ -2621,11 +2656,7 @@ function renderMediaPool(body, cfg, opts, root) {
       return;
     }
     if (act === "edit") {
-      const url = await poolAssetUrl(asset, opts);
-      if (!url) return;
-      session.edit = { url, type: asset.type, id: asset.id };
-      session.tab = "edit";
-      renderMediaStudio(root, opts);
+      await openPoolAssetForEdit(asset);
       return;
     }
     if (act === "ref") {
@@ -3050,7 +3081,7 @@ function assetCachePanelHtml(esc) {
         </div>
         <p class="ml-hint">${esc(cloudState)}${localCount ? ` · ${localCount} Media Pool image${localCount === 1 ? "" : "s"}` : ""}</p>
         ${rows.length ? `<div class="ml-asset-cache-grid">
-          ${rows.map((row) => `<button type="button" class="ml-asset-cache-card" data-ml-use-asset="${esc(row.id)}" title="Edit ${esc(row.title)}">
+          ${rows.map((row) => `<button type="button" class="ml-asset-cache-card" data-ml-use-asset="${esc(row.id)}" title="Open ${esc(row.title)} as the main image. Hold Shift/Ctrl to add it as a layer.">
             <img src="${esc(row.url)}" alt="${esc(row.title)}"/>
             <span><b>${esc(row.title)}</b><i>${esc(row.source)}</i></span>
           </button>`).join("")}
@@ -3548,6 +3579,7 @@ function renderEdit(body, cfg, opts, root) {
       .then((img) => {
         if (session.edit?.url !== targetUrl) return; // user picked a different image while this was loading
         mlEditLoadError = null;
+        canvas._img = img;
         editState.loadedUrl = targetUrl;
         mlLayerEffects.base = editState;
         repaint();
@@ -3700,10 +3732,23 @@ function renderEdit(body, cfg, opts, root) {
     mlAssetCache = { tenant: "", loading: false, loaded: false, assets: [], error: "" };
     renderMediaStudio(root, opts);
   });
-  body.querySelectorAll("[data-ml-use-asset]").forEach((button) => button.onclick = async () => {
+  body.querySelectorAll("[data-ml-use-asset]").forEach((button) => button.onclick = async (event) => {
     const row = editorAssetRows().find((item) => item.id === button.dataset.mlUseAsset);
     if (!row?.url) return;
     rememberEdit();
+    if (!(event.shiftKey || event.ctrlKey || event.metaKey)) {
+      session.tab = "edit";
+      session.editMode = "photo";
+      session.edit = { url: row.url, type: "image", id: row.id };
+      resetEdit();
+      editState.loadedUrl = null;
+      if (row.assetId) {
+        recordAssetUsage(row.assetId, "media-lab-editor-main", "base", row.title || "Media Lab edit").catch(() => {});
+      }
+      opts.notify?.("Media Lab", `opened ${row.title || "asset"} from ${row.source || "Media Pool"} as the main image.`);
+      renderMediaStudio(root, opts);
+      return;
+    }
     const layer = addImageLayer(mlComposition, row.url, row.title || "Asset layer");
     mlLayerEffects[layer.id] = freshEditState();
     if (row.assetId) {

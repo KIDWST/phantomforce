@@ -6,49 +6,52 @@ import {
   redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260722-8";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260722-8";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260722-8";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260722-8";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260722-8";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260722-8";
-import { mountManagedGrowthReport } from "./managedgrowth.js?v=phantom-live-20260722-8";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260722-8";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260722-8";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260722-8";
-import { mountPhantomAI } from "./phantomai.js?v=phantom-live-20260722-8";
-import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260722-8";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260722-8";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260722-8";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260722-8";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode, refreshCompanionCore } from "./companion.js?v=phantom-live-20260722-8";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260722-8";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260722-8";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260722-8";
-import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260722-8";
-import { mountAmbient } from "./ambient.js?v=phantom-live-20260722-8";
-import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260722-8";
+} from "./store.js?v=phantom-live-20260722-13";
+import {
+  loadOrganizationPulse, loadBrainContract, pulseAttentionItems, brainContractAttentionItems,
+} from "./organizationpulse.js?v=phantom-live-20260722-13";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260722-13";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260722-13";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260722-13";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260722-13";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260722-13";
+import { mountManagedGrowthReport } from "./managedgrowth.js?v=phantom-live-20260722-13";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260722-13";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260722-13";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260722-13";
+import { mountPhantomAI } from "./phantomai.js?v=phantom-live-20260722-13";
+import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260722-13";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260722-13";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260722-13";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260722-13";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode, refreshCompanionCore } from "./companion.js?v=phantom-live-20260722-13";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260722-13";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260722-13";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260722-13";
+import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260722-13";
+import { mountAmbient } from "./ambient.js?v=phantom-live-20260722-13";
+import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260722-13";
 import {
   fetchAuthConfig, databaseLogin, databaseLogout, databaseSignup, databaseForgotUsername, databaseForgotPassword,
   databaseResetPassword, databaseAcceptInvitation, databaseVerify2fa, databaseStart2faSetup, databaseConfirm2fa, databaseRegenerate2faBackupCodes, databaseDisable2fa,
   switchOrg, fetchAuthMe, fetchEntitlementsSummary,
-} from "./orgs.js?v=phantom-live-20260722-8";
-import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260722-8";
-import { assetsAvailable } from "./orgs.js?v=phantom-live-20260722-8";
-import { renderPhantomStore } from "./phantomstore.js?v=phantom-live-20260722-8";
-import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260722-8";
+} from "./orgs.js?v=phantom-live-20260722-13";
+import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260722-13";
+import { assetsAvailable } from "./orgs.js?v=phantom-live-20260722-13";
+import { renderPhantomStore } from "./phantomstore.js?v=phantom-live-20260722-13";
+import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260722-13";
 // PhantomPlay V2 platform shell (Home/Solo/Friends/Workspace/Dev Hub) - opt-in
 // while it hardens: set localStorage "pf.phantomplay.v2" = "1" (the V2 shell has
 // a "Classic view" button to switch back). Classic stays the default experience.
-import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260722-8";
+import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260722-13";
 const phantomPlayV2Opted = () => { try { return localStorage.getItem("pf.phantomplay.v2") === "1"; } catch { return false; } };
-import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260722-8";
+import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260722-13";
 import {
   customizeNavigation,
   loadOrganizationCustomization,
-} from "./customization.js?v=phantom-live-20260722-8";
-import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260722-8";
-import { initCommandOS, applyCommandExecutionMode } from "./command-os.js?v=phantom-live-20260722-8";
+} from "./customization.js?v=phantom-live-20260722-13";
+import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260722-13";
+import { initCommandOS, applyCommandExecutionMode } from "./command-os.js?v=phantom-live-20260722-13";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -478,7 +481,7 @@ const BASE_NAV = [
   { id: "phantomstore", label: "PhantomStore", icon: "spark", ws: "phantomstore" },
 ];
 let NAV = customizeNavigation(BASE_NAV, isAdmin() ? "owner" : "client");
-let navEntitlements = { loaded: false, features: null, limits: null };
+let navEntitlements = { loaded: false, features: null, limits: null, entitlements: null };
 const FEATURE_BY_NAV_ID = {
   media: "mediaLab",
   assets: "assetPacks",
@@ -577,7 +580,7 @@ function refreshCustomizedNavigation() {
 
 async function refreshNavEntitlements({ rerender = true } = {}) {
   if (!(ctx.session?.database || ctx.session?.localCustomer)) {
-    navEntitlements = { loaded: true, features: null, limits: null };
+    navEntitlements = { loaded: true, features: null, limits: null, entitlements: null };
   } else {
     try {
       const summary = await fetchEntitlementsSummary();
@@ -585,13 +588,18 @@ async function refreshNavEntitlements({ rerender = true } = {}) {
         loaded: true,
         features: summary?.entitlements?.features || null,
         limits: summary?.entitlements?.limits || null,
+        entitlements: summary?.entitlements || null,
       };
     } catch {
-      navEntitlements = { loaded: true, features: null, limits: null };
+      navEntitlements = { loaded: true, features: null, limits: null, entitlements: null };
     }
   }
   MOBILE_NAV = mobileItemsFromNav();
-  if (rerender) renderNav();
+  if (rerender) {
+    renderNav();
+    renderAccessVersion();
+    renderDashboardIntel();
+  }
 }
 let activeNav = "dashboard";
 let activePageId = null;
@@ -718,6 +726,7 @@ function setMobileNav(open) {
     toggle.setAttribute("aria-expanded", String(mobileNavOpen));
     toggle.setAttribute("aria-label", mobileNavOpen ? "Close all sections" : "Open all sections");
   });
+  if (mobileNavOpen) renderPlanMeta();
   renderMobileBottomNav();
 }
 
@@ -1005,6 +1014,7 @@ function setDatabaseOrganizationSwitching(active) {
 }
 let clockTimer = 0;
 let accountMenuOpen = false;
+let osMenuOpen = false;
 function startClock() {
   const paint = () => {
     const now = new Date();
@@ -1020,6 +1030,10 @@ function renderUser() {
   const name = ctx.session?.name || "Phantom";
   const initials = name.split(/\s+/).map((p) => p[0]).slice(0, 2).join("").toUpperCase();
   $("[data-user-avatar]").textContent = initials || "PF";
+  const osInitial = $("[data-os-user-initial]");
+  const osName = $("[data-os-user-name]");
+  if (osInitial) osInitial.textContent = initials || "PF";
+  if (osName) osName.textContent = name;
   const mobileAvatar = $("[data-mobile-user-avatar]");
   if (mobileAvatar) mobileAvatar.textContent = initials || "PF";
   $("[data-user-name]").textContent = name;
@@ -1036,12 +1050,46 @@ function renderUser() {
     };
   }
   renderAccountMenu();
+  renderOsMenu();
+}
+
+function renderOsMenu() {
+  const menu = $("[data-os-menu]");
+  const btn = $("[data-os-menu-btn]");
+  if (!menu) return;
+  if (btn) {
+    btn.classList.toggle("is-open", osMenuOpen);
+    btn.setAttribute("aria-expanded", osMenuOpen ? "true" : "false");
+  }
+  menu.hidden = !osMenuOpen;
+  if (!osMenuOpen) return;
+  const primaryIds = ["dashboard", "clients", "media", "sites", "phantomplay", "phantomstore", "analytics", "intelligence", "money", "approvals"];
+  const items = orderedNavItems()
+    .filter((item) => primaryIds.includes(item.id))
+    .sort((a, b) => primaryIds.indexOf(a.id) - primaryIds.indexOf(b.id));
+  menu.innerHTML = `
+    <div class="os-menu-head">
+      <span>${esc(accountInitials(accountOwnerName()))}</span>
+      <b>${esc(accountOwnerName())}</b>
+      <i>${esc(accountRoleLabel())}</i>
+    </div>
+    <div class="os-menu-list" role="menu" aria-label="Open PhantomForce section">
+      ${items.map((item) => `
+        <button class="${activeNav === item.id ? "is-active" : ""}" data-os-menu-nav="${esc(item.id)}" type="button" role="menuitem">
+          ${svg(item.icon)}
+          <span>${esc(item.label)}</span>
+        </button>`).join("")}
+    </div>
+    <div class="os-menu-actions">
+      <button data-user-menu-action="account" type="button">Account and access</button>
+      <button class="is-danger" data-user-menu-action="signout" type="button">Sign out</button>
+    </div>`;
 }
 
 async function signOut() {
-  if (!confirm("Sign out of PhantomForce?")) return;
   const databaseSession = !!ctx.session?.database;
   accountMenuOpen = false;
+  setMobileNav(false);
   closeOverlay(true);
   try {
     if (databaseSession) await databaseLogout();
@@ -1067,29 +1115,44 @@ const ACCOUNT_PLAN = {
 };
 const ACCOUNT_TIERS = [
   {
-    id: "starter",
-    name: "Starter",
-    price: "$750/mo",
-    badge: "Launch",
-    copy: "Business Manager foundation: command surface, approvals, and one focused workspace.",
-    features: ["Business command center", "Client pipeline", "Manual offer workflow"],
+    id: "free",
+    name: "Free Preview",
+    price: "$0",
+    badge: "Preview",
+    copy: "Small limits for trying the workspace before picking a paid operating tier.",
+    features: ["Command center preview", "Small media allowance", "One business workspace"],
   },
   {
-    id: "pro",
-    name: "Pro Plan",
+    id: "professional",
+    name: "Pro",
     price: "$2,500/mo",
     badge: "Growth",
     copy: "Operator-grade system for growth: creator workflow, Media Lab, accounting visibility, and owner controls.",
     features: ["Phantom AI operator", "Content Hub + Media Lab", "Accounting-aware ops"],
   },
   {
+    id: "developer",
+    name: "Developer",
+    price: "Builder",
+    badge: "Dev",
+    copy: "Developer-focused access for building products, games, plugins, and test releases.",
+    features: ["Developer workflows", "PhantomPlay submissions", "Advanced model lane"],
+  },
+  {
     id: "elite",
     name: "Elite Plan",
     price: "Custom",
     badge: "Current",
-    current: true,
     copy: "The full business operating suite: deeper loop routing, multi-workspace control, automations, and launch support.",
     features: ["Advanced loop routing", "Multi-workspace command", "Business automation planning", "Launch support"],
+  },
+  {
+    id: "developer_elite",
+    name: "Developer + Elite",
+    price: "Full stack",
+    badge: "Dev+Elite",
+    copy: "Elite business operations plus expanded developer/game submission limits.",
+    features: ["Elite operations", "Developer envelope", "Advanced workflows"],
   },
 ];
 let accountNotice = "";
@@ -1106,6 +1169,12 @@ function accountRoleLabel() {
 }
 function accountIdentityLine() {
   return ctx.session?.email || ctx.session?.label || `${accountRoleLabel()} - ${wsName(currentWs())}`;
+}
+function currentPlanKey() {
+  return navEntitlements.entitlements?.planKey || (isAdmin() ? "internal" : "free");
+}
+function currentPlanName() {
+  return accessVersionCopy().label || ACCOUNT_PLAN.name;
 }
 function canUsePhantomLoop() {
   return true;
@@ -1164,6 +1233,7 @@ function renderAccountMenu() {
   const owner = accountOwnerName();
   const status = accountStatusMeta();
   const renewal = accountRenewalLabel();
+  const planName = currentPlanName();
   if (btn) {
     btn.classList.toggle("is-open", accountMenuOpen);
     btn.setAttribute("aria-expanded", accountMenuOpen ? "true" : "false");
@@ -1181,7 +1251,7 @@ function renderAccountMenu() {
     <button class="user-menu-plan" data-user-menu-action="account" type="button">
       <span>
         <i>Current plan</i>
-        <b>${esc(ACCOUNT_PLAN.name)}</b>
+        <b>${esc(planName)}</b>
         <em>Renewal: ${esc(renewal)}</em>
       </span>
       <strong>Manage →</strong>
@@ -1239,10 +1309,12 @@ function renderAccountPlan(body) {
   const owner = accountOwnerName();
   const status = accountStatusMeta();
   const renewal = accountRenewalLabel();
+  const planName = currentPlanName();
+  const planKey = currentPlanKey();
   body.innerHTML = `
     <div class="account-plan">
       ${accountNotice ? `<div class="account-notice">${esc(accountNotice)}</div>` : ""}
-      ${ctx.session?.database ? `<div data-live-plan><p class="set-note">Loading live plan from the server…</p></div>` : ""}
+      ${ctx.session?.database || ctx.session?.localCustomer ? `<div data-live-plan><p class="set-note">Loading live plan from the server…</p></div>` : ""}
       <section class="account-hero">
         <div class="account-avatar" aria-label="Profile picture">${esc(accountInitials(owner))}</div>
         <div class="account-hero-main">
@@ -1252,14 +1324,14 @@ function renderAccountPlan(body) {
           <p class="account-status account-status-${status.tone}"><span aria-hidden="true"></span>${esc(status.label)}</p>
         </div>
         <div class="account-plan-chip">
-          <span>${esc(ACCOUNT_PLAN.name)}</span>
+          <span>${esc(planName)}</span>
           <b>${esc(ACCOUNT_PLAN.price)}</b>
         </div>
       </section>
       <section class="account-grid">
         <article class="account-card account-current">
           <p class="account-card-k">Current plan</p>
-          <h4>${esc(ACCOUNT_PLAN.name)}</h4>
+          <h4>${esc(planName)}</h4>
           <p>${esc(status.detail)}</p>
           <div class="account-facts">
             <span><b>Renewal</b>${esc(renewal)}</span>
@@ -1322,17 +1394,19 @@ function renderAccountPlan(body) {
           </div>
         </div>
         <div class="account-tiers">
-          ${ACCOUNT_TIERS.map((tier) => `
-            <article class="account-tier ${tier.current ? "is-current" : ""}">
+          ${ACCOUNT_TIERS.map((tier) => {
+            const current = tier.id === planKey;
+            return `
+            <article class="account-tier ${current ? "is-current" : ""}">
               <span class="account-tier-badge">${esc(tier.badge)}</span>
               <h4>${esc(tier.name)}</h4>
               <b>${esc(tier.price)}</b>
               <p>${esc(tier.copy)}</p>
               <ul>${tier.features.map((feature) => `<li>${esc(feature)}</li>`).join("")}</ul>
-              <button class="btn ${tier.current ? "btn-good" : "btn-primary"}" data-account-action="${tier.current ? "current" : `plan-${tier.id}`}">
-                ${tier.current ? "Current plan" : `Request ${esc(tier.name)}`}
+              <button class="btn ${current ? "btn-good" : "btn-primary"}" data-account-action="${current ? "current" : `plan-${tier.id}`}">
+                ${current ? "Current plan" : `Request ${esc(tier.name)}`}
               </button>
-            </article>`).join("")}
+            </article>`; }).join("")}
         </div>
       </section>
       <section class="account-section account-cancel">
@@ -1360,7 +1434,7 @@ function renderAccountPlan(body) {
     });
   });
   wireAccountSecurity(body);
-  if (ctx.session?.database) hydrateLivePlan(body);
+  if (ctx.session?.database || ctx.session?.localCustomer) hydrateLivePlan(body);
 }
 
 async function wireAccountSecurity(body) {
@@ -1442,7 +1516,7 @@ const MODES = {
   admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260722-8";
+const POSE_VERSION = "phantom-live-20260722-13";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -1731,6 +1805,113 @@ function renderDashboardBrief() {
     </button>`).join("");
 }
 
+function accessVersionCopy() {
+  const ent = navEntitlements.entitlements;
+  if (ent) {
+    const key = String(ent.planKey || "").toLowerCase();
+    const dev = key.includes("developer");
+    const label = dev && key.includes("elite")
+      ? "Developer + Elite"
+      : dev
+        ? "Developer"
+        : ent.planName || ent.planKey || "Selected tier";
+    const included = [
+      ent.canWrite === false ? "view-only" : "write access",
+      ent.features?.modelTier === "advanced" ? "advanced model" : "standard model",
+      ent.features?.advancedWorkflows ? "automations" : "",
+      ent.features?.competitorIntelligence ? "customer intel" : "",
+    ].filter(Boolean);
+    return {
+      label,
+      detail: included.join(" · ") || (ent.effectiveStatus || "active"),
+      tone: ent.canWrite === false ? "limited" : "active",
+    };
+  }
+  if (isOwnerOperator() || isAdmin()) {
+    return { label: "Full Force Admin", detail: "Owner controls · all modules · live ops", tone: "active" };
+  }
+  return { label: "Workspace Access", detail: navEntitlements.loaded ? "Plan details unavailable" : "Reading plan access", tone: "limited" };
+}
+
+function renderAccessVersion() {
+  const root = $("[data-os-access-version]");
+  if (!root) return;
+  const name = $("[data-access-version-name]", root);
+  const detail = $("[data-access-version-detail]", root);
+  const copy = accessVersionCopy();
+  root.dataset.tone = copy.tone;
+  if (name) name.textContent = copy.label;
+  if (detail) detail.textContent = copy.detail;
+}
+
+function connectedSocialCount() {
+  try {
+    const raw = JSON.parse(localStorage.getItem("pf.social.accounts.v1") || "{}") || {};
+    return Object.values(raw).filter((account) => {
+      const status = String(account?.status || "").toLowerCase();
+      return status === "linked" || status === "connected" || account?.profileUrl || account?.handle;
+    }).length;
+  } catch {
+    return 0;
+  }
+}
+
+function renderDashboardIntel() {
+  const host = $("[data-dashboard-intel]");
+  if (!host) return;
+  const leads = visible(store.state.leads || []);
+  const media = visible(store.state.media || []);
+  const sites = visible(store.state.sites || []);
+  const approvals = visible(store.state.approvals || []).filter((item) => item.status === "pending");
+  const accounting = moneyView();
+  const socialCount = connectedSocialCount();
+  const competitorLimit = Number(navEntitlements.limits?.competitorProfiles || 0);
+  const pendingMedia = media.filter((item) => ["pending", "draft", "brief-ready", "generation-approved"].includes(item.status)).length;
+  const cards = [
+    {
+      label: "Analytics",
+      value: socialCount ? `${socialCount} linked` : "Connect",
+      detail: socialCount ? "live profiles ready for reporting" : "social stats are waiting on OAuth",
+      open: "analytics",
+      tone: socialCount ? "good" : "warn",
+    },
+    {
+      label: "Customer intel",
+      value: competitorLimit ? `${competitorLimit} lanes` : "Locked",
+      detail: competitorLimit ? "competitor profiles available in this tier" : "upgrade to unlock competitor coverage",
+      open: "intelligence",
+      tone: competitorLimit ? "good" : "warn",
+    },
+    {
+      label: "Content readiness",
+      value: `${media.length} media`,
+      detail: pendingMedia ? `${pendingMedia} pending item${pendingMedia === 1 ? "" : "s"}` : `${sites.length} site${sites.length === 1 ? "" : "s"} available`,
+      open: pendingMedia ? "media" : "content",
+      tone: media.length || sites.length ? "good" : "idle",
+    },
+    {
+      label: "Business health",
+      value: leads.length ? `${leads.length} clients` : "No clients",
+      detail: approvals.length ? `${approvals.length} approval${approvals.length === 1 ? "" : "s"} waiting` : accounting.transactions.length ? `${signedMoney(accounting.netCash)} net cash` : "add clients or connect accounting",
+      open: approvals.length ? "approvals" : leads.length ? "leads" : "money",
+      tone: approvals.length ? "warn" : leads.length || accounting.transactions.length ? "good" : "idle",
+    },
+  ];
+  host.innerHTML = `
+    <div class="dashboard-intel-head">
+      <span>Customer intelligence</span>
+      <b>Live workspace signals</b>
+    </div>
+    <div class="dashboard-intel-grid">
+      ${cards.map((card) => `
+        <button class="dashboard-intel-card is-${card.tone}" type="button" data-open-ws="${esc(card.open)}">
+          <span>${esc(card.label)}</span>
+          <b>${esc(card.value)}</b>
+          <i>${esc(card.detail)}</i>
+        </button>`).join("")}
+    </div>`;
+}
+
 /* ============================ decision cards ============================ */
 /* Decision Cards are the owner-state layer over the server's cross-department
    Signal feed (/phantom-ai/decisions). Server truth only: on fetch failure we
@@ -1898,6 +2079,36 @@ function renderQueue() {
       <span class="queue-badge q-${st.cls}">${st.label}</span>
     </button>`;
   }).join("") || `<p class="empty-line">No work running.</p>`;
+}
+
+/* ============================ organization pulse ============================
+   Real server-computed cross-department attention feed (pending approvals,
+   follow-ups due, proposal review ready, incomplete client setup, failed
+   agent runs, failing automations) plus the Brain Contract's recommended
+   actions — organizationpulse.js already wrapped /api/organization/pulse and
+   /api/brain/contract with caching and honest empty/error states, it just
+   never had anywhere to render. Renders from cache immediately (empty on
+   first load), then a fire-and-forget refresh repaints once server truth
+   lands — same pattern as renderNotifs/renderDecisions above. */
+const PULSE_TONE_BADGE = { warn: "q-wait", ok: "q-run", neutral: "q-queue" };
+const PULSE_TONE_LABEL = { warn: "Attention", ok: "Ready", neutral: "Signal" };
+function renderOrganizationPulse() {
+  const host = $("[data-org-pulse]");
+  if (!host) return;
+  const items = [...pulseAttentionItems(), ...brainContractAttentionItems()].slice(0, 6);
+  const countEl = $("[data-org-pulse-count]");
+  if (countEl) countEl.textContent = items.length;
+  host.innerHTML = items.map((item) => `
+    <button class="queue-item" type="button" data-open-ws="${esc(item.open || "dashboard")}">
+      <span class="queue-ic">${svg(item.icon || "brain")}</span>
+      <span class="queue-meta"><b>${esc(item.title)}</b><i>${esc(item.sub || "")}</i></span>
+      <span class="queue-badge ${PULSE_TONE_BADGE[item.tone] || "q-queue"}">${PULSE_TONE_LABEL[item.tone] || "Signal"}</span>
+    </button>`).join("") || `<p class="empty-line">Nothing needs attention right now.</p>`;
+}
+function refreshOrganizationPulse() {
+  return Promise.all([loadOrganizationPulse().catch(() => null), loadBrainContract().catch(() => null)])
+    .then(() => renderOrganizationPulse())
+    .catch(() => {});
 }
 
 /* ============================ dashboard quick-widgets ============================ */
@@ -2161,7 +2372,7 @@ function renderPlanMeta() {
     statusEl.className = `side-profile-status is-${status.tone}`;
     statusEl.innerHTML = `<span class="side-profile-dot" aria-hidden="true"></span>${esc(status.label)}`;
   }
-  if (planEl) planEl.textContent = ACCOUNT_PLAN.name;
+  if (planEl) planEl.textContent = currentPlanName();
   if (el) el.textContent = `Renewal: ${renew}`;
 }
 
@@ -2197,6 +2408,7 @@ function renderConsole() {
   renderNav();
   renderStatusPills();
   renderPlanMeta();
+  renderAccessVersion();
   renderUser();
   renderNotifs();
   /* Fire-and-forget: pull server truth for the bell, then repaint the badge
@@ -2214,6 +2426,9 @@ function renderConsole() {
   renderPlan();
   renderQueue();
   renderDashWidgets();
+  renderDashboardIntel();
+  renderOrganizationPulse();
+  refreshOrganizationPulse();
   const openIc = $("[data-cmdk-open-ic]"); if (openIc && !openIc.innerHTML) openIc.innerHTML = svg("search");
   mountPhantomWire($("[data-phantomwire]") || $("[data-agent-ticker]"));
   mountDesktopContextWidget($("[data-desktop-context]"), {
@@ -3390,11 +3605,11 @@ function renderMediaLabSuite(body) {
 function renderAnalyticsSuite(body) {
   body.innerHTML = `
     <div class="analytics-stack">
-      <section data-managed-growth-report></section>
       <section data-social-analytics-report></section>
+      <section data-managed-growth-report></section>
     </div>`;
-  mountManagedGrowthReport(body.querySelector("[data-managed-growth-report]"));
   renderAnalytics(body.querySelector("[data-social-analytics-report]"), mediaOpts());
+  mountManagedGrowthReport(body.querySelector("[data-managed-growth-report]"));
 }
 
 const CUSTOM = {
@@ -3818,7 +4033,7 @@ async function boot() {
     if (!phantom.hidden) {
       if (activePageId) { renderConsole(); return; }
       renderNav(); renderStatusPills(); renderNotifs();
-      renderFlowMap(); renderFlowCompactSummary(); renderPlan(); renderQueue(); renderDashWidgets();
+      renderFlowMap(); renderFlowCompactSummary(); renderPlan(); renderQueue(); renderDashWidgets(); renderOrganizationPulse();
     }
   });
   if (ctx.session) enterPhantom();

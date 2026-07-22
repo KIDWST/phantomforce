@@ -152,6 +152,12 @@ assert.match(mediaSrc, /let fieldRemembered = false[\s\S]*const rememberLayerFie
 assert.match(mediaSrc, /field\.onfocus = rememberLayerFieldEdit[\s\S]*field\.onpointerdown = rememberLayerFieldEdit/u, "Layer field edits must remember history before typing, selecting, or color picking.");
 assert.match(mediaSrc, /if \(!layer \|\| layer\.locked\) return;[\s\S]*layer\[field\.dataset\.mlLayerField\] = field\.value/u, "Layer field handlers must not mutate locked layers.");
 assert.match(mediaSrc, /renderComposition\(canvas,\s*canvas\._img,\s*editState,\s*mlComposition,\s*mlLayerEffects\)/u, "Save/download canvas must render the composed layer stack");
+assert.match(mediaSrc, /loadImageForEditing\(targetUrl\)[\s\S]*?canvas\._img = img[\s\S]*?repaint\(\)/u, "Media Lab image loader must assign the loaded image to the visible canvas before repainting.");
+assert.match(mediaSrc, /act === "edit"[\s\S]*?session\.editMode = a\.type === "video" \? "video" : "photo"[\s\S]*?resetEdit\(\)[\s\S]*?editState\.loadedUrl = null/u, "Latest generation Edit must force a fresh photo editor state before rendering.");
+assert.match(mediaSrc, /data-pool-media="\$\{esc\(asset\.id\)\}" role="button" tabindex="0" title="Open in editor"/u, "Media Pool thumbnails must be clickable editor launch targets.");
+assert.match(mediaSrc, /const openPoolAssetForEdit = async \(asset\) =>[\s\S]*?poolAssetUrl\(asset,\s*opts\)[\s\S]*?session\.editMode = asset\.type === "video" \? "video" : "photo"[\s\S]*?resetEdit\(\)[\s\S]*?editState\.loadedUrl = null/u, "Media Pool open/edit paths must force a fresh editor state before rendering.");
+assert.match(mediaSrc, /body\.querySelectorAll\("\[data-pool-media\]"\)[\s\S]*?tile\.onclick = open[\s\S]*?event\.key === "Enter" \|\| event\.key === " "/u, "Media Pool image thumbnails must open the editor by click and keyboard.");
+assert.match(mediaSrc, /if \(act === "edit"\) \{[\s\S]*?await openPoolAssetForEdit\(asset\)/u, "Media Pool Edit button must use the same verified open path as thumbnail clicks.");
 assert.doesNotMatch(mediaSrc, /data-ml-duplicate-edit>Duplicate image/, "Media Lab should not show a flattened duplicate-image action in the editor footer");
 assert.match(cssSrc, /\.ml-canvas\s*\{[\s\S]*background-image:/, "transparent erased pixels need a visible checkerboard backdrop");
 assert.match(cssSrc, /\.ml-layer-overlay\.is-active\s*\{[\s\S]*pointer-events:\s*auto/u, "Media Lab transform overlay must receive pointer events in Select mode");

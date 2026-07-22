@@ -1,7 +1,7 @@
 import {
   currentTenantId, isAdmin, isOwnerOperator, session,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260722-8";
+} from "./store.js?v=phantom-live-20260722-13";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 const mobilePlaySurface = () => typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;
@@ -135,10 +135,10 @@ const BUILT_INS = [
   { id: "word-weld", title: "Word Weld", summary: "Daily Wordle-inspired puzzle plus buddy-duel word runs for PhantomForce friends.", description: "A Wordle-inspired daily weld: everyone gets the same five-letter puzzle once per day on this workspace device, or you can start a pass-and-play buddy duel for private PhantomForce friends.", category: "Puzzle", tags: ["word", "daily", "puzzle", "multiplayer", "friends", "touch"], contentRating: "everyone", multiplayerDescriptor: "Buddy Duel is pass-and-play today; ready for private PhantomPlay room relay without public discovery.", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/word-weld.html?v=2.0.0", thumbnail: GAME_ART_BY_SLUG["word-weld"], featured: true, version: "2.0.0", controls: "Keyboard, tap letters, Enter to submit", progressSupport: true, scoreSupport: true },
   { id: "reflex-grid", title: "Reflex Grid", summary: "Hit the live cells before the grid burns out.", description: "A fast aim-and-reaction grid for short focus breaks, with mistakes, streaks, and a real finish.", category: "Strategy", tags: ["reaction", "strategy", "touch", "aim"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/reflex-grid.html?v=1.0.0", thumbnail: GAME_ART_BY_SLUG["reflex-grid"], featured: true, version: "1.0.0", controls: "Click, tap, or use number keys", progressSupport: true, scoreSupport: true },
   { id: "rift-frenzy", title: "Rift Frenzy", summary: "Carry a valuable fish school, steal from rivals, then absorb at the perfect moment to become enormous.", description: "A school-to-grow ocean survival arena: collect smaller neutral fish into a visible school, protect it from rival steals, dash through exposed schools, absorb the school on a 10-second cooldown, grow permanently, survive predators and hazards, and eliminate every rival until one fish remains.", category: "Arcade", tags: ["fish", "arena", "growth", "io", "multiplayer", "school"], contentRating: "everyone10", multiplayerDescriptor: "Solo fills rival slots with bots; local 1-4 player keyboard mode replaces bots with humans.", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/rift-frenzy.html?v=2.0.0", thumbnail: GAME_ART_BY_SLUG["rift-frenzy"], featured: true, version: "2.0.0", controls: "P1 WASD, Shift dash, Space absorb. P2 arrows, / dash, Enter absorb. P3 IJKL, O dash, U absorb. P4 TFGH, Y dash, R absorb.", progressSupport: true, scoreSupport: true, engine: { tier: "arena-large-map", minVersion: PHANTOMPLAY_ENGINE.version } },
-  { id: "crown-circuit", title: "Crown Circuit", summary: "Solo bot training plus 1v1 lane-card crown duels with Obsidian Relay, Oracle slows, Ram sieges, and drag-and-drop deploy.", description: "A royale-style lane battler you can actually learn alone: start Solo Training against Crown Bot, practice lane pressure and elixir timing on multiple arenas including Obsidian Relay, then take the same drag-and-drop troop duel into a private PhantomPlay room. Oracle cards now slow threats, Ram cards actually pressure towers, and bots know the upgraded deck.", category: "Strategy", tags: ["card", "lane", "royale", "solo", "bots", "training", "multiplayer", "pvp", "drag-and-drop", "touch"], contentRating: "everyone10", contentDescriptors: ["strategic_complexity", "competitive_play"], multiplayerDescriptor: "Solo Training fills the rival side with Crown Bot. Room mode supports a two-player private PhantomPlay duel, one device each, with no public matchmaking, chat, or voice.", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/crown-circuit.html?v=1.3.0", thumbnail: GAME_ART_BY_SLUG["crown-circuit"], featured: true, version: "1.3.0", controls: "Drag a card from your hand onto your side of the field to deploy that troop. Touch or mouse.", progressSupport: true, scoreSupport: true, engine: { tier: "arena-large-map", minVersion: PHANTOMPLAY_ENGINE.version } },
+  { id: "crown-circuit", title: "Crown Circuit", summary: "Solo bot training plus 8-card/4-hand elixir lane duels with battle plans, Obsidian Relay, Oracle slows, Ram sieges, and room support.", description: "A royale-style lane battler: choose Balanced, Siege Push, Split Swarm, Control Lock, or Tempo Cycle before the match, then start Solo Training against Crown Bot to learn lane pressure, elixir timing, card cycling, and tower trades across multiple arenas including Obsidian Relay. Oracle cards apply real slows, Ram cards pressure towers, and Crown Bot cycles plan-biased decks.", category: "Strategy", tags: ["card", "lane", "royale", "solo", "bots", "training", "multiplayer", "pvp", "drag-and-drop", "touch"], contentRating: "everyone10", contentDescriptors: ["strategic_complexity", "competitive_play"], multiplayerDescriptor: "Solo Training fills the rival side with Crown Bot. Room mode supports a two-player private PhantomPlay duel, one device each, with no public matchmaking, chat, or voice.", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/crown-circuit.html?v=1.3.2", thumbnail: GAME_ART_BY_SLUG["crown-circuit"], featured: true, version: "1.3.2", controls: "Choose a battle plan, build an eight-card deck, drag from the four-card hand onto your side, and cycle back to the next card. Solo Training starts immediately against Crown Bot; Room mode waits for player two.", progressSupport: true, scoreSupport: true, engine: { tier: "arena-large-map", minVersion: PHANTOMPLAY_ENGINE.version } },
   { id: "kingdom-breakers", title: "Kingdom Breakers", summary: "Physics siege duels with two castles, wardens, Stonefall Orbs, Splinter Lances, and Emberburst shots.", description: "A real castle-breaker: campaign holds, duel mode with one player castle and one bot castle, destructible blocks, ammo choice, and Warden defeat as the core win condition. This restores the hard-work siege game to the main PhantomPlay fallback catalog.", category: "Strategy", tags: ["siege", "destruction", "physics", "artillery", "campaign", "pvp"], contentRating: "everyone10", contentDescriptors: ["cartoon_action", "mild_destruction", "competitive_play"], developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/kingdom-breakers.html?v=1.1.0", thumbnail: GAME_ART_BY_SLUG["kingdom-breakers"], featured: true, version: "1.1.0", controls: "Drag to aim and release to fire. 1/2/3 switch ammo. Space or Enter fires while aiming.", progressSupport: true, scoreSupport: true, engine: { tier: "physics-siege", minVersion: PHANTOMPLAY_ENGINE.version } },
   { id: "tidefront-tactics", title: "Tidefront Tactics", summary: "Wind-read artillery battles with angle, power, weapons, skiffs, bots, and room duels.", description: "The spear-like artillery battle you remembered: set angle and power, fire tactical tools across a deformable sea, read wind, crater cover, and beat rival skiffs through campaign, skirmish, or Fleet Room play.", category: "Strategy", tags: ["artillery", "tactics", "turn-based", "battle", "pvp"], contentRating: "everyone10", contentDescriptors: ["strategic_complexity", "mild_destruction", "competitive_play"], developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/tidefront-tactics.html?v=1.1.0", thumbnail: GAME_ART_BY_SLUG["tidefront-tactics"], featured: true, version: "1.1.0", controls: "Arrow keys adjust angle and power. Space fires. 1/2/3 switch tools.", progressSupport: true, scoreSupport: true, engine: { tier: "artillery-large-map", minVersion: PHANTOMPLAY_ENGINE.version } },
-  { id: "skyguard-arena", title: "Skyguard Arena", summary: "Sentinel defense with starter sentries, 3-tier towers, Century Watch bosses, Neon Tangle, relay surges, and Overcharge.", description: "A tower-defense battle rebuilt around the Century Watch: every run now opens with starter sentries covering the first route, more setup Glint, and a first round that teaches defense before throwing air pressure at you. Rounds keep escalating all the way to 100, with new enemy types unlocking as you climb and a boss mechanic every 10 rounds. The Neon Tangle arena adds a braided relay route and timed relay surges that punish clustered enemies, while all nine Sentinels upgrade through three visible tiers with heavier hits, Glint interest, Overcharge, and private room duels.", category: "Strategy", tags: ["tower-defense", "strategy", "endless", "bosses", "pvp", "waves"], contentRating: "everyone10", contentDescriptors: ["cartoon_action", "strategic_complexity", "competitive_play"], developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/skyguard-arena/index.html?v=1.3.1", thumbnail: GAME_ART_BY_SLUG["skyguard-arena"], featured: true, version: "1.3.1", controls: "Choose Sentinel cards, place on lane slots, upgrade, and trigger Overcharge with Q.", progressSupport: true, scoreSupport: true, engine: { tier: "arena-large-map", minVersion: PHANTOMPLAY_ENGINE.version } },
+  { id: "skyguard-arena", title: "Skyguard Arena", summary: "Bloons-style tower defense with free off-road Sentinel placement, one winding route, three-path Sentinel upgrades, starter sentries, and Century Watch bosses.", description: "A lane-based tower-defense game rebuilt closer to classic Bloons-style play: one big winding route instead of split lanes, free off-road Sentinel placement, starter sentries, and a first round with one Driftling before air pressure begins. Spend Glint to place Sentinels, then customize each tower through Power, Reach, and Tech upgrade paths with crosspath limits. Century Watch escalates toward round 100, boss mechanics rotate every 10 rounds, and Room Duel support stays network-silent through PhantomPlay rooms.", category: "Strategy", tags: ["tower-defense", "strategy", "endless", "bosses", "pvp", "waves"], contentRating: "everyone10", contentDescriptors: ["cartoon_action", "strategic_complexity", "competitive_play"], developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/skyguard-arena/index.html?v=1.3.3", thumbnail: GAME_ART_BY_SLUG["skyguard-arena"], featured: true, version: "1.3.3", controls: "Click/tap a Sentinel card, build anywhere off the road, then tune Power, Reach, and Tech upgrade paths. Q triggers Overcharge Pulse, P pauses, Escape deselects.", progressSupport: true, scoreSupport: true, engine: { tier: "arena-large-map", minVersion: PHANTOMPLAY_ENGINE.version } },
   { id: "serpent-surge", title: "Serpent Surge", summary: "A fast snake arena with rivals, pickups, cutoffs, boost trails, and storm pressure across a sprawling scrollable map.", description: "A PhantomPlay take on snake arena games: orbit energy, grow long, bait rival serpents, use boost carefully, and survive a closing storm ring across a map many times bigger than the screen, with a camera that follows and zooms as you grow, plus a corner minimap.", category: "Strategy", tags: ["snake", "arena", "io", "survival", "touch"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/serpent-surge.html?v=1.1.0", thumbnail: GAME_ART_BY_SLUG["serpent-surge"], featured: true, version: "1.1.0", controls: "Steer with mouse, WASD, or arrows. Hold Space to boost.", progressSupport: true, scoreSupport: true, engine: { tier: "arena-large-map", minVersion: PHANTOMPLAY_ENGINE.version } },
   { id: "pixel-bloom", title: "Pixel Bloom", summary: "Toddler-friendly neon bloom toy — no timer, no pressure, just gentle pattern play.", description: "A calm toddler-friendly creative toy with mirrored petals, no reading pressure, no timer, and no failure state.", category: "Creative", tags: ["toddler", "calm", "creative", "relax", "touch"], contentRating: "toddler", contentDescriptors: ["no_reading_required"], developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/pixel-bloom.html", thumbnail: CATEGORY_ART["Creative"], featured: false, version: "1.0.0", controls: "Tap cells or arrows + Space", progressSupport: true, scoreSupport: true },
   { id: "type-storm", title: "Type Storm", summary: "Vertical word-rain typing: words actually fall, streaks glow, and the ramp stays readable.", description: "A revamped typing storm where words rain downward in vertical columns. Type the highlighted letters, chase combos, and survive a readable-but-serious speed ramp.", category: "Focus", tags: ["typing", "word-rain", "speed", "keyboard", "words"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/type-storm.html?v=1.1.0", thumbnail: CATEGORY_ART["Focus"], featured: false, version: "1.1.0", controls: "Just type — tap first on mobile", progressSupport: true, scoreSupport: true },
@@ -267,6 +267,7 @@ function normalizeGame(game) {
   return {
     ...game,
     developer,
+    devModeAvailable: game.devModeAvailable !== false,
     developerAvatar: developer === "Tak" ? (game.developerAvatar || TAK_AVATAR) : game.developerAvatar,
     thumbnail: thumbnailFor(game),
   };
@@ -290,17 +291,23 @@ function authHeaders(json = false) {
 async function api(path, options = {}) {
   const response = await fetch(path, { ...options, headers: { ...authHeaders(Boolean(options.body)), ...(options.headers || {}) } });
   const payload = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(typeof payload?.error === "string" ? payload.error : `PhantomPlay request failed (${response.status}).`);
+  if (!response.ok) { const err = new Error(typeof payload?.error === "string" ? payload.error : `PhantomPlay request failed (${response.status}).`); err.status = response.status; throw err; }
   return payload;
+}
+
+function hasWorkspaceSession() {
+  const saved = typeof session.get === "function" ? session.get() : null;
+  return !!(session.token() || saved?.sessionId || saved?.email || saved?.role || saved?.name || saved?.id);
 }
 
 function offlineState() {
   let saved = {};
   try { saved = JSON.parse(workspaceStorageGetItem(FALLBACK_KEY) || "{}"); } catch {}
+  const signedInWorkspace = hasWorkspaceSession();
   return {
     tenantId: currentTenantId(),
     actorId: "offline",
-    access: { enabled: true, reason: "offline_built_ins", dailyMinuteLimit: 60, usedMinutesToday: 0, remainingMinutesToday: 60, canSubmitGames: false, canModerate: false, isOwner: false },
+    access: { enabled: signedInWorkspace, reason: signedInWorkspace ? "local_play_fallback" : "workspace_session_required", dailyMinuteLimit: 100000, usedMinutesToday: 0, remainingMinutesToday: 100000, canSubmitGames: signedInWorkspace, canModerate: isAdmin() || isOwnerOperator(), isOwner: isOwnerOperator() },
     catalog: BUILT_INS.map(normalizeGame),
     favorites: Array.isArray(saved.favorites) ? saved.favorites : [],
     history: Array.isArray(saved.history) ? saved.history : [],
@@ -446,19 +453,49 @@ function sortGames(games, sort = ui.category) {
   return generalPlayGames(games);
 }
 
+function canLaunchGames(snapshot = ui.snapshot) {
+  return !!snapshot?.access?.enabled || (ui.offline && hasWorkspaceSession());
+}
+
+function localPlay(game, opts = {}) {
+  const existing = historyFor(game.id);
+  ui.player = {
+    game,
+    play: {
+      id: `local-${game.id}-${Date.now()}`,
+      gameId: game.id,
+      seconds: 0,
+      score: Number(existing?.score) || 0,
+      progress: Number(existing?.progress) || 0,
+      startedAt: new Date().toISOString(),
+    },
+    roomCode: opts.roomCode || null,
+    restoreState: existing?.state || null,
+  };
+  ui.error = "";
+  ui.playerReady = false;
+  ui.playerPaused = false;
+  playTickAt = Date.now();
+  render();
+  startClock();
+  armReadyWatchdog();
+}
+
 function gameCard(game, variant = "") {
   const favorite = ui.snapshot.favorites.includes(game.id);
   const history = historyFor(game.id);
   const developerAvatar = developerAvatarFor(game);
   const developer = developerNameFor(game);
   const thumbnail = thumbnailFor(game);
+  const launchable = canLaunchGames();
+  const playLabel = history?.canContinue ? "Continue" : "Play now";
   return `<article class="pp-game ${variant}" data-pp-game-card="${esc(game.id)}">
     <div class="pp-game-art"><img src="${esc(thumbnail)}" alt="" loading="lazy"/><span>${esc(displayCategoryFor(game))}</span>${game.kind === "community" ? "<em>Prototype</em>" : ""}</div>
     <div class="pp-game-body"><div class="pp-game-title"><p class="pp-game-developer">${developerAvatar ? `<img src="${esc(developerAvatar)}" alt="" loading="lazy"/>` : ""}<span>By ${esc(developer)}</span></p><h3>${esc(game.title)}</h3></div><button type="button" class="pp-favorite ${favorite ? "is-on" : ""}" data-pp-favorite="${esc(game.id)}" aria-label="${favorite ? "Remove from" : "Add to"} favorites">${icon("heart")}</button>
     <p>${esc(game.summary)}</p>
     <div class="pp-game-meta"><span>${esc(game.contentRating === "everyone" ? "Everyone" : game.contentRating)}</span><span>v${esc(game.version)}</span>${history?.score != null ? `<span>Best ${history.score}</span>` : ""}</div>
     ${history?.canContinue ? `<div class="pp-progress"><i style="width:${Math.max(3, Math.min(100, history.progress))}%"></i></div>` : ""}
-    <div class="pp-game-actions"><button class="pp-play" type="button" data-pp-play="${esc(game.id)}">${icon("play")} ${history?.canContinue ? "Continue" : "Play now"}</button><button class="pp-support" type="button" data-pp-support="${esc(game.developer)}">Support this creator</button>${game.devModeAvailable ? `<button class="pp-devsandbox-card-open" type="button" data-pp-devsandbox-card-open="${esc(game.id)}" aria-label="Open Dev Mode for ${esc(game.title)}" title="Dev Mode — live-edit this game's code and assets while you play, sandboxed and visible only to you">${icon("dev")}<b>Dev Mode</b></button>` : ""}${ui.snapshot.access.canModerate ? `<button class="pp-devmode-toggle ${game.devModeEnabled !== false ? "is-on" : "is-off"}" type="button" data-pp-devmode-toggle="${esc(game.id)}" data-pp-devmode-toggle-next="${game.devModeEnabled !== false ? "off" : "on"}" aria-label="Dev Mode is ${game.devModeEnabled !== false ? "on" : "off"} for this game" title="Turn Dev Mode ${game.devModeEnabled !== false ? "off" : "on"} for this specific game (currently ${game.devModeEnabled !== false ? "on" : "off"})">${icon("dev")}<i></i></button>` : ""}</div></div>
+    <div class="pp-game-actions"><button class="pp-play" type="button" ${launchable ? `data-pp-play="${esc(game.id)}"` : `data-pp-session-required="${esc(game.id)}"`}>${icon("play")} ${launchable ? playLabel : "Plan locked"}</button><button class="pp-support" type="button" data-pp-support="${esc(game.developer)}">Support this creator</button>${game.devModeAvailable ? `<button class="pp-devsandbox-card-open" type="button" ${launchable ? `data-pp-devsandbox-card-open="${esc(game.id)}"` : `data-pp-session-required="${esc(game.id)}"`} aria-label="Open Dev Mode for ${esc(game.title)}" title="Dev Mode — live-edit this game's code and assets while you play, sandboxed and visible only to you">${icon("dev")}<b>Dev Mode</b></button>` : ""}${ui.snapshot.access.canModerate ? `<button class="pp-devmode-toggle ${game.devModeEnabled !== false ? "is-on" : "is-off"}" type="button" data-pp-devmode-toggle="${esc(game.id)}" data-pp-devmode-toggle-next="${game.devModeEnabled !== false ? "off" : "on"}" aria-label="Dev Mode is ${game.devModeEnabled !== false ? "on" : "off"} for this game" title="Turn Dev Mode ${game.devModeEnabled !== false ? "off" : "on"} for this specific game (currently ${game.devModeEnabled !== false ? "on" : "off"})">${icon("dev")}<i></i></button>` : ""}</div></div>
   </article>`;
 }
 
@@ -484,7 +521,7 @@ function renderHome() {
         <h1>Build, playtest, and tune games here.</h1>
         <p>PhantomPlay is not a marketplace. It is a sandbox where indie devs make playable builds, invite feedback, test with people, and export when the game is ready.</p>
         <div class="pp-console-actions">
-          <button class="pp-primary" data-pp-play="${esc(activeGameId)}">${icon("play")} Run quick session</button>
+          <button class="pp-primary" ${canLaunchGames() ? `data-pp-play="${esc(activeGameId)}"` : `data-pp-session-required="${esc(activeGameId)}"`}>${icon("play")} ${canLaunchGames() ? "Run quick session" : "Plan locked"}</button>
           <button class="pp-secondary" data-pp-tab="library">Open play lab</button>
           <button class="pp-secondary" data-pp-tab="together">Play with friends</button>
         </div>
@@ -961,14 +998,14 @@ function render() {
     return;
   }
   const snapshot = ui.snapshot || offlineState();
-  const tabs = [["library", "Games"], ["together", "Multiplayer"], ["favorites", "Saved"], ["developer", "Developers"], ...(snapshot.access.canSubmitGames ? [["submit", "Become a developer"]] : []), ...(snapshot.access.canModerate ? [["admin", "Safety Review"]] : [])];
+  const tabs = [["library", "Games"], ["together", "Multiplayer"], ["favorites", "Saved"], ["developer", "Developers"], ["submit", "Submit your game"], ...(snapshot.access.canModerate ? [["admin", "Safety Review"]] : [])];
   const content = ui.tab === "together" ? renderTogether() : ui.tab === "favorites" ? renderFavorites() : ui.tab === "developer" ? renderDeveloper() : ui.tab === "submit" ? renderSubmit() : ui.tab === "admin" ? renderAdmin() : renderLibrary();
   mountedRoot.innerHTML = `<div class="pp-shell">
     <header class="pp-top"><div class="pp-title"><p class="pp-kicker">PHANTOMFORCE GAME SANDBOX</p><h1>PhantomPlay</h1></div><nav class="pp-tabs" aria-label="PhantomPlay sections">${tabs.map(([id, label]) => `<button type="button" class="${ui.tab === id ? "is-active" : ""}" data-pp-tab="${id}">${esc(label)}</button>`).join("")}</nav><div class="pp-tools"><span class="pp-access ${snapshot.access.enabled ? "is-ready" : "is-blocked"}">${snapshot.access.enabled ? esc(playTimeLabel(snapshot.access.remainingMinutesToday)) : "Plan restricted"}</span><button class="pp-settings-button" data-pp-settings aria-label="Play settings">${icon("settings")}</button></div></header>
-    ${ui.offline ? `<div class="pp-banner is-offline"><b>Offline mode</b><span>Built-in games still work. Favorites and progress will sync after the server returns.</span><button data-pp-retry>Retry</button></div>` : ""}
-    ${ui.error && !ui.offline ? `<div class="pp-banner is-error"><b>PhantomPlay needs attention</b><span>${esc(ui.error)}</span><button data-pp-retry>Retry</button></div>` : ""}
+    ${ui.offline ? `<div class="pp-banner is-offline"><b>Cloud sync is offline</b><span>Signed-in workspace users can still launch built-in games locally. Saves, analytics, rooms, submissions, and policies sync when the backend returns.</span><button data-pp-retry>Retry</button></div>` : ""}
+    ${ui.error ? `<div class="pp-banner is-error"><b>PhantomPlay needs attention</b><span>${esc(ui.error)}</span><button data-pp-retry>Retry</button></div>` : ""}
     ${ui.notice ? `<div class="pp-banner is-notice"><b>Creator support</b><span>${esc(ui.notice)}</span><button data-pp-clear-notice>OK</button></div>` : ""}
-    <main class="pp-content">${snapshot.access.enabled ? content : empty("PhantomPlay is unavailable", "This optional workspace module is separate from core PhantomForce operations. Ask a workspace owner to enable access if your team uses it.")}</main>
+    <main class="pp-content">${content}</main>
     ${settingsMarkup()}${playerMarkup()}
   </div>`;
   bind();
@@ -1051,17 +1088,21 @@ async function saveGuardianLock() {
   render();
 }
 
-function offlinePlay(game) {
-  const play = { id: `offline-${Date.now()}`, gameId: game.id, startedAt: new Date().toISOString(), seconds: 0, score: null, progress: historyFor(game.id)?.progress || 0 };
-  return { game, play };
-}
-
 async function launch(gameId, opts = {}) {
   if (!gameId) return;
+  if (!canLaunchGames()) {
+    ui.error = "PhantomPlay is blocked by this workspace plan or policy.";
+    render();
+    return;
+  }
   const game = ui.snapshot.catalog.find((item) => item.id === gameId);
   if (!game?.launchUrl) { ui.error = "This game is not available to play yet."; render(); return; }
+  if (ui.offline) {
+    localPlay(game, opts);
+    return;
+  }
   try {
-    const result = ui.offline ? offlinePlay(game) : await api("/api/phantomplay/plays", { method: "POST", body: JSON.stringify({ tenantId: currentTenantId(), gameId }) });
+    const result = await api("/api/phantomplay/plays", { method: "POST", body: JSON.stringify({ tenantId: currentTenantId(), gameId }) });
     ui.player = { game: result.game || game, play: result.play, roomCode: opts.roomCode || null, restoreState: result.restoreState || null };
     ui.playerReady = false;
     ui.playerPaused = false;
@@ -1069,7 +1110,10 @@ async function launch(gameId, opts = {}) {
     render();
     startClock();
     armReadyWatchdog();
-  } catch (error) { ui.error = error.message; render(); }
+  } catch (error) {
+    ui.offline = true;
+    localPlay(game, opts);
+  }
 }
 
 // Dev Sandbox's only entry point: the exact same launch as a normal Play
@@ -1314,7 +1358,19 @@ async function openDevSandbox() {
     };
     rebuildDevSandboxFrame(startingSource);
   } catch (error) {
-    ui.devSandbox = { ...ui.devSandbox, loading: false, error: error instanceof Error ? error.message : "Dev Sandbox source could not be loaded." };
+    try {
+      const response = await fetch(game.launchUrl, { cache: "no-store" });
+      const source = await response.text();
+      ui.devSandbox = {
+        gameId: game.id, source, editedSource: source, blobUrl: "",
+        hasOverride: false, overrideUpdatedAt: null,
+        loading: false, error: "", status: "Loaded the shipped game source locally. Save/publish needs backend sync.",
+        saving: false, publishing: false, section: "code", modState: {}, speed: 1,
+      };
+      rebuildDevSandboxFrame(source);
+    } catch {
+      ui.devSandbox = { ...ui.devSandbox, loading: false, error: error instanceof Error ? error.message : "Dev Sandbox source could not be loaded." };
+    }
   }
   render();
 }
@@ -1626,6 +1682,10 @@ function bind() {
   mountedRoot.querySelectorAll("[data-pp-support]").forEach((button) => button.onclick = (event) => { event.stopPropagation(); ui.notice = `${button.dataset.ppSupport || "This creator"} support is queued for the creator profile/payments layer. For now, favorites and leaderboard plays help boost discovery.`; render(); });
   mountedRoot.querySelector("[data-pp-clear-notice]")?.addEventListener("click", () => { ui.notice = ""; render(); });
   mountedRoot.querySelectorAll("[data-pp-play]").forEach((button) => button.onclick = () => launch(button.dataset.ppPlay));
+  mountedRoot.querySelectorAll("[data-pp-session-required]").forEach((button) => button.onclick = () => {
+    ui.error = "This workspace plan or policy is blocking play.";
+    render();
+  });
   mountedRoot.querySelectorAll("[data-pp-devsandbox-card-open]").forEach((button) => button.onclick = (event) => { event.stopPropagation(); launchWithDevSandbox(button.dataset.ppDevsandboxCardOpen); });
   mountedRoot.querySelectorAll("[data-pp-devmode-toggle]").forEach((button) => button.onclick = (event) => { event.stopPropagation(); toggleGameDevMode(button.dataset.ppDevmodeToggle, button.dataset.ppDevmodeToggleNext === "on"); });
   mountedRoot.querySelector("[data-pp-devsandbox-open]")?.addEventListener("click", openDevSandbox);

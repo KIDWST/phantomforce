@@ -38,6 +38,10 @@ assert.doesNotMatch(contentHubSource, /Import platform report/);
 assert.doesNotMatch(contentHubSource, /Manual fallback · CSV · TSV · JSON/);
 assert.match(contentHubSource, /an-channel-line/);
 assert.match(contentHubSource, /an-coverage-ring/);
+assert.ok(
+  contentHubSource.indexOf("an-top-visual-grid") < contentHubSource.indexOf("${analyticsReadinessPanel"),
+  "Analytics must lead with the performance graph before readiness/setup cards.",
+);
 assert.match(contentHubSource, /officialchicagoshots/, "Social handles should default to Jordan's ChicagoShots handle.");
 assert.match(contentHubSource, /LIVE_ANALYTICS_PLATFORMS = new Set\(PLATFORMS\.map/, "Analytics should show every social channel, not only the original four.");
 assert.match(contentHubSource, /data-an-oauth/, "Analytics rows should start official account authorization when OAuth is ready.");
@@ -46,6 +50,10 @@ assert.doesNotMatch(contentHubSource, /data-an-show-oauth-setup/, "Analytics mus
 assert.doesNotMatch(contentHubSource, /data-an-oauth-setup/, "Analytics must not render the owner-only provider credentials form.");
 assert.doesNotMatch(contentHubSource, /data-an-oauth-launchpad/, "Analytics must not show a bulky OAuth launchpad.");
 assert.match(mainSource, /pf\.settings\.tab\.v1/, "Settings shortcuts must be able to open the Media & social tab directly.");
+assert.ok(
+  mainSource.indexOf("data-social-analytics-report") < mainSource.indexOf("data-managed-growth-report"),
+  "Analytics page must show social stats before Managed Growth Ops.",
+);
 assert.match(contentHubSource, /phantomforce\.social-oauth\.v1/, "Analytics must listen for OAuth callback completion.");
 assert.match(contentHubSource, /pf\.social\.oauth\.last/, "Analytics must support the isolated popup storage completion path.");
 assert.doesNotMatch(contentHubSource, /Workspace analytics are live\. Platform APIs are optional/, "Analytics must not present local workspace activity as social analytics.");
@@ -72,5 +80,5 @@ assert.match(serverSource, /oauthPreflight/, "OAuth start conflicts must include
 assert.match(serverSource, /saveSocialOAuthSetup/, "Server must write OAuth app setup through the connector boundary.");
 assert.match(serverSource, /window\.opener.*postMessage/, "OAuth callback should notify the opener when available.");
 assert.match(serverSource, /pf\.social\.oauth\.last/, "OAuth callback should write a same-origin completion marker for noopener popups.");
-assert.match(phantomCss, /Mobile navigation is owned by the "Mobile shell cleanup" block below/, "Old horizontal mobile sidebar rules must stay disabled.");
+assert.match(phantomCss, /Mobile shell cleanup: collapsed launcher \+ vertical taskbar/, "Old horizontal mobile sidebar rules must stay disabled.");
 console.log("Social analytics live OAuth checks passed.");
