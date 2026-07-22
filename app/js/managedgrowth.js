@@ -1,5 +1,5 @@
-import { currentTenantId, friendlyBackendError, session } from "./store.js?v=phantom-live-20260721-4";
-import { authHeaders } from "./api-client.js?v=phantom-live-20260721-4";
+import { currentTenantId, friendlyBackendError, session } from "./store.js?v=phantom-live-20260721-5";
+import { authHeaders } from "./api-client.js?v=phantom-live-20260721-5";
 
 function esc(value = "") {
   return String(value)

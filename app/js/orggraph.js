@@ -5,8 +5,8 @@
    prefers-reduced-motion and body.freeze by drawing the settled layout
    instantly. No fabricated data: gaps and disconnection reasons come straight
    from the server payload. */
-import { currentTenantId } from "./store.js?v=phantom-live-20260721-4";
-import { authHeaders } from "./api-client.js?v=phantom-live-20260721-4";
+import { currentTenantId } from "./store.js?v=phantom-live-20260721-5";
+import { authHeaders } from "./api-client.js?v=phantom-live-20260721-5";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (ch) => (
   { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]

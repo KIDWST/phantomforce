@@ -9,9 +9,9 @@
  * to a local mock.
  */
 
-import { currentTenantId, isAdmin, isOwnerOperator } from "./store.js?v=phantom-live-20260721-4";
-import { authHeaders } from "./api-client.js?v=phantom-live-20260721-4";
-import { canManageActiveOrg } from "./orgs.js?v=phantom-live-20260721-4";
+import { currentTenantId, isAdmin, isOwnerOperator } from "./store.js?v=phantom-live-20260721-5";
+import { authHeaders } from "./api-client.js?v=phantom-live-20260721-5";
+import { canManageActiveOrg } from "./orgs.js?v=phantom-live-20260721-5";
 
 /* Owner/admin only — legacy local-admin sessions (isAdmin/isOwnerOperator)
    and real database org sessions (canManageActiveOrg) both count. */

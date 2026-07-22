@@ -11,10 +11,11 @@
 :root {
   /* ---- brand accent (violet identity) ---- */
   --neon: #5b4cff;            /* primary accent; legacy name kept — used everywhere */
+  --neon-rgb: 91, 76, 255;    /* same color as --neon, comma-triplet form for rgba(var(--neon-rgb), alpha) call sites */
   --neon-2: #b44bf0;          /* orchid companion accent */
   --accent: var(--neon);
   --accent-deep: #3f30d9;
-  --accent-soft: rgba(91, 76, 255, 0.10);
+  --accent-soft: rgba(var(--neon-rgb), 0.10);
 
   /* ---- semantic status families ---- */
   --risk: #e0345e;            /* destructive / error */

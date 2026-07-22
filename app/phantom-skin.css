@@ -4,7 +4,7 @@
    carry layout; this layer carries the look. */
 
 :root {
-  --uv: #5b4cff;
+  --uv: var(--neon);
   --uv-deep: #3f30d9;
   --orchid: #b44bf0;
   --ember: #ff7a45;
@@ -46,7 +46,7 @@ body::before {
 /* ---------- ghost goes ultraviolet ---------- */
 img.brand-ghost,
 img[src*="brand-phantom"] {
-  filter: hue-rotate(115deg) saturate(0.85) drop-shadow(0 0 10px rgba(91, 76, 255, 0.35));
+  filter: hue-rotate(115deg) saturate(0.85) drop-shadow(0 0 10px rgba(var(--neon-rgb), 0.35));
 }
 canvas[data-ghost],
 .ghost-canvas {
@@ -66,12 +66,12 @@ canvas[data-ghost],
 .nav-item { border-radius: 12px; }
 .nav-item.is-active {
   background: linear-gradient(120deg, var(--uv), var(--uv-deep));
-  box-shadow: 0 8px 22px rgba(91, 76, 255, 0.3);
+  box-shadow: 0 8px 22px rgba(var(--neon-rgb), 0.3);
 }
 .nav-item-bottom { background: transparent; color: var(--dim); }
 
 .gate-card {
-  box-shadow: 0 30px 90px rgba(36, 31, 63, 0.18), 0 0 90px rgba(91, 76, 255, 0.1);
+  box-shadow: 0 30px 90px rgba(36, 31, 63, 0.18), 0 0 90px rgba(var(--neon-rgb), 0.1);
 }
 
 /* Cards and consoles: soft porcelain, roomier corners, gentle depth */
@@ -85,12 +85,12 @@ canvas[data-ghost],
 .btn-primary {
   background: linear-gradient(120deg, var(--uv), var(--uv-deep));
   color: #ffffff;
-  box-shadow: 0 6px 20px rgba(91, 76, 255, 0.32);
+  box-shadow: 0 6px 20px rgba(var(--neon-rgb), 0.32);
 }
 .btn-primary:hover {
   background: linear-gradient(120deg, #6c5eff, var(--uv));
   color: #ffffff;
-  box-shadow: 0 8px 26px rgba(91, 76, 255, 0.4);
+  box-shadow: 0 8px 26px rgba(var(--neon-rgb), 0.4);
 }
 
 input, select, textarea {
@@ -104,20 +104,20 @@ input, select, textarea {
 /* ---------- scrollbars ---------- */
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(91, 76, 255, 0.35) transparent;
+  scrollbar-color: rgba(var(--neon-rgb), 0.35) transparent;
 }
 *::-webkit-scrollbar { width: 9px; height: 9px; }
 *::-webkit-scrollbar-thumb {
-  background: rgba(91, 76, 255, 0.28);
+  background: rgba(var(--neon-rgb), 0.28);
   border-radius: 99px;
   border: 2px solid transparent;
   background-clip: content-box;
 }
-*::-webkit-scrollbar-thumb:hover { background-color: rgba(91, 76, 255, 0.45); }
+*::-webkit-scrollbar-thumb:hover { background-color: rgba(var(--neon-rgb), 0.45); }
 *::-webkit-scrollbar-track { background: transparent; }
 
 /* ---------- selection ---------- */
-::selection { background: rgba(91, 76, 255, 0.22); color: var(--ink); }
+::selection { background: rgba(var(--neon-rgb), 0.22); color: var(--ink); }
 
 @media (prefers-reduced-motion: reduce) {
   body::before { background: var(--uv); }

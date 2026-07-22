@@ -1,5 +1,5 @@
-import { currentTenantId } from "./store.js?v=phantom-live-20260721-4";
-import { authHeaders } from "./api-client.js?v=phantom-live-20260721-4";
+import { currentTenantId } from "./store.js?v=phantom-live-20260721-5";
+import { authHeaders } from "./api-client.js?v=phantom-live-20260721-5";
 
 const SLOT_IDS = ["active-1", "active-2", "pending-1"];
 const SLOT_META = {

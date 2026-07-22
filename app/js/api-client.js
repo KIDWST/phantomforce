@@ -1,4 +1,4 @@
-import { session } from "./store.js?v=phantom-live-20260721-4";
+import { session } from "./store.js?v=phantom-live-20260721-5";
 
 export function authHeaders(extra = {}) {
   const token = session.token();

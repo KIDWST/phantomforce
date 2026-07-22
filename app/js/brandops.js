@@ -8,12 +8,12 @@
    user-created automation records. No internal lanes or fabricated
    records are shown. */
 
-import { store, uid, visible, pushActivity, ago, currentWs, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260721-4";
+import { store, uid, visible, pushActivity, ago, currentWs, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260721-5";
 import {
   DAILY_IDEA_AUTOMATION_ID, dailyIdeaState, refreshDailyIdeas, saveDailyIdeaAutomation,
   DAILY_IDEA_CHANNELS, DAILY_IDEA_CONTENT_TYPES, DAILY_IDEA_FOCUS, DAILY_IDEA_STYLES,
-} from "./content-ideas.js?v=phantom-live-20260721-4";
-import { authHeaders } from "./api-client.js?v=phantom-live-20260721-4";
+} from "./content-ideas.js?v=phantom-live-20260721-5";
+import { authHeaders } from "./api-client.js?v=phantom-live-20260721-5";
 
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
