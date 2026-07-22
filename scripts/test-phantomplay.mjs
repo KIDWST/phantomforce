@@ -70,6 +70,8 @@ assert.match(main, /sessionId:\s*kind === "admin" \? "admin-jordan" : "client-sp
 assert.match(index, /phantomplay\.css\?v=phantom-live-/u, "The dedicated PhantomPlay stylesheet must be loaded.");
 assert.match(index, /phantomplay-v2\.css\?v=phantom-live-/u, "The PhantomPlay V2 stylesheet must be loaded.");
 assert.match(module, /tab:\s*"library"/u, "Default PhantomPlay must open straight to the game library.");
+assert.match(serverCatalog, /"phantom-ages":\s*artUrl\("phantom-ages-cover\.svg"\)/u, "Server catalog must map Phantom Ages cover art.");
+assert.match(serverCatalog, /id:\s*"phantom-ages"[\s\S]*title:\s*"Phantom Ages"[\s\S]*launchUrl:\s*"\/app\/games\/phantom-ages\/index\.html/u, "Server catalog must expose Phantom Ages to signed-in live users.");
 assert.match(module, /const mobilePlaySurface/u, "Default PhantomPlay must detect mobile play surfaces.");
 assert.match(module, /const controlsCopy[\s\S]*mobilePlaySurface\(\) \? ""/u, "Default PhantomPlay must hide redundant controls copy on touch-first play surfaces.");
 assert.match(v2Module, /const mobilePlaySurface/u, "PhantomPlay V2 must detect mobile play surfaces.");
