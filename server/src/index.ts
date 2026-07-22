@@ -5620,11 +5620,11 @@ await app.register(fastifyRawBody, {
 app.get("/api/phantomplay/dev-mode/:gameId/source", async (request, reply) => {
   const session = requireAccessSession(request, reply);
   if (!session) return reply;
-  const query = (request.query ?? {}) as { tenant_id?: unknown };
-  const access = await phantomPlayAccess(session, query.tenant_id);
-  if (!access.entitled) return reply.code(403).send({ ok: false, error: "PhantomPlay is not available to this account.", reason: access.reason });
-  const params = request.params as { gameId?: string };
   try {
+    const query = (request.query ?? {}) as { tenant_id?: unknown };
+    const access = await phantomPlayAccess(session, query.tenant_id);
+    if (!access.entitled) return reply.code(403).send({ ok: false, error: "PhantomPlay is not available to this account.", reason: access.reason });
+    const params = request.params as { gameId?: string };
     return { ok: true, ...(await getPhantomPlayDevModeSource(session, String(params.gameId || "").slice(0, 180))) };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Dev Mode source could not be loaded.";
@@ -5639,11 +5639,11 @@ app.get("/api/phantomplay/dev-mode/:gameId/source", async (request, reply) => {
 app.get("/api/phantomplay/dev-mode/:gameId/override", async (request, reply) => {
   const session = requireAccessSession(request, reply);
   if (!session) return reply;
-  const query = (request.query ?? {}) as { tenant_id?: unknown };
-  const access = await phantomPlayAccess(session, query.tenant_id);
-  if (!access.entitled) return reply.code(403).send({ ok: false, error: "PhantomPlay is not available to this account.", reason: access.reason });
-  const params = request.params as { gameId?: string };
   try {
+    const query = (request.query ?? {}) as { tenant_id?: unknown };
+    const access = await phantomPlayAccess(session, query.tenant_id);
+    if (!access.entitled) return reply.code(403).send({ ok: false, error: "PhantomPlay is not available to this account.", reason: access.reason });
+    const params = request.params as { gameId?: string };
     return { ok: true, ...(await getPhantomPlayDevModeOverride(session, String(params.gameId || "").slice(0, 180))) };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Dev Sandbox override could not be loaded.";
@@ -5651,18 +5651,20 @@ app.get("/api/phantomplay/dev-mode/:gameId/override", async (request, reply) => 
   }
 });
 
-app.post("/api/phantomplay/dev-mode/:gameId/override", async (request, reply) => {
+app.post("/api/phantomplay/dev-mode/:gameId/override", { bodyLimit: 6 * 1024 * 1024 }, async (request, reply) => {
   const session = requireAccessSession(request, reply);
   if (!session) return reply;
-  const body = (request.body ?? {}) as { tenantId?: unknown; source?: unknown };
-  const access = await phantomPlayAccess(session, body.tenantId);
-  if (!access.entitled) return reply.code(403).send({ ok: false, error: "PhantomPlay is not available to this account.", reason: access.reason });
-  const params = request.params as { gameId?: string };
   try {
+    const body = (request.body ?? {}) as { tenantId?: unknown; source?: unknown };
+    const access = await phantomPlayAccess(session, body.tenantId);
+    if (!access.entitled) return reply.code(403).send({ ok: false, error: "PhantomPlay is not available to this account.", reason: access.reason });
+    const params = request.params as { gameId?: string };
     return { ok: true, ...(await savePhantomPlayDevModeOverride(session, String(params.gameId || "").slice(0, 180), body.source)) };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Dev Sandbox edit could not be saved.";
-    return reply.code(/Dev Mode is not available/i.test(message) ? 403 : 400).send({ ok: false, error: message });
+    request.log.error({ err: error }, "PhantomPlay Dev Mode save failed");
+    const storageUnavailable = /EACCES|EROFS|ENOSPC|permission|read-only|database|timed out|unavailable/iu.test(message);
+    return reply.code(/Dev Mode is not available/i.test(message) ? 403 : storageUnavailable ? 503 : 400).send({ ok: false, error: storageUnavailable ? "Workspace storage is temporarily unavailable. Your browser copy is safe and sync will retry." : message });
   }
 });
 

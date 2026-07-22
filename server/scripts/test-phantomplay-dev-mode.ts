@@ -37,6 +37,12 @@ try {
   assert(source.source.includes("<canvas"), "The fetched source should be the game's real HTML/JS, not a stub.");
   assert(source.launchUrl.startsWith("/app/games/pixel-bloom.html"), "The source route should report the game's real launch URL.");
 
+  const uploadedProject = `<!doctype html><html><head><style data-phantomplay-dev-bundled="style.css">body{background:#000}</style></head><body><canvas></canvas><script data-phantomplay-dev-bundled="game.js">parent.postMessage({source:"phantomplay-game",type:"ready"},"*")<\/script></body></html>`;
+  const savedProject = await play.savePhantomPlayDevModeOverride(manager, BUILT_IN_ID, uploadedProject);
+  assert(Boolean(savedProject.updatedAt), "Saving a complete uploaded HTML/CSS/JS project should return a durable timestamp.");
+  const loadedProject = await play.getPhantomPlayDevModeOverride(manager, BUILT_IN_ID);
+  assert(loadedProject.source === uploadedProject, "The saved project must reopen byte-for-byte instead of becoming an error page.");
+
   let traversalBlocked = false;
   try { await play.getPhantomPlayDevModeSource(manager, "../../../etc/passwd"); }
   catch { traversalBlocked = true; }
@@ -85,6 +91,7 @@ try {
     unknownGameBlocked: true,
     communitySourceFailsClosed: true,
     snapshotReflectsServerGate: true,
+    uploadedProjectRoundTrip: true,
   }, null, 2));
 } finally {
   await rm(root, { recursive: true, force: true });

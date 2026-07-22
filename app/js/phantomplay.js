@@ -222,15 +222,16 @@ let roomPollTicks = 0;
 // already called clearTimeout(readyWatchdog) and launch() already called
 // armReadyWatchdog(), but neither the variable nor the function existed
 // anywhere in this file (a ReferenceError on every launch()). Restored the
-// evident original intent: if a game never posts "ready", surface an error
-// instead of leaving the loading spinner up forever.
+// Games built outside PhantomPlay may not implement its optional ready
+// message. The iframe load event and this watchdog both release the loading
+// layer so valid uploaded games can never be trapped behind the spinner.
 let readyWatchdog = null;
 function armReadyWatchdog() {
   clearTimeout(readyWatchdog);
   readyWatchdog = setTimeout(() => {
     if (ui.player && !ui.playerReady) {
-      ui.error = "This game did not respond. Try restarting or closing it.";
-      render();
+      const frame = mountedRoot?.querySelector("[data-pp-frame]");
+      markPlayerReady(frame, { protocol: false, focus: false });
     }
   }, 12000);
 }
@@ -302,6 +303,14 @@ async function api(path, options = {}) {
   const payload = await response.json().catch(() => null);
   if (!response.ok) { const err = new Error(typeof payload?.error === "string" ? payload.error : `PhantomPlay request failed (${response.status}).`); err.status = response.status; throw err; }
   return payload;
+}
+
+async function fetchEditableGameSource(game) {
+  const response = await fetch(game.launchUrl, { cache: "no-store" });
+  if (!response.ok) throw new Error(`Game source could not be loaded (${response.status}).`);
+  const source = await response.text();
+  if (!/<html\b|<!doctype\s+html/iu.test(source)) throw new Error("The game server returned an invalid HTML document.");
+  return cleanEditableGameSource(source);
 }
 
 function hasWorkspaceSession() {
@@ -1002,9 +1011,19 @@ function safeDevProjectFileName(value, fallback = "file.txt") {
   return /^[a-z0-9][a-z0-9._-]*\.(?:html?|css|m?js)$/iu.test(clean) ? clean : fallback;
 }
 
+function cleanEditableGameSource(value) {
+  const source = String(value || "");
+  const htmlStart = source.search(/<!doctype\s+html|<html\b/iu);
+  if (htmlStart <= 0) return source;
+  const prefix = source.slice(0, htmlStart).trim();
+  return /^(?:internal server error|bad gateway|service unavailable|gateway timeout|phantomplay request failed(?:\s*\(\d+\))?\.?|\{\s*"?(?:error|message)"?\s*:)/iu.test(prefix)
+    ? source.slice(htmlStart)
+    : source;
+}
+
 function devProjectFromSource(source) {
   const files = {};
-  let html = String(source || "");
+  let html = cleanEditableGameSource(source);
   html = html.replace(/<style\b[^>]*data-phantomplay-dev-bundled=["']([^"']+)["'][^>]*>([\s\S]*?)<\/style>/giu, (_tag, name, css) => {
     const fileName = safeDevProjectFileName(name, "style.css");
     files[fileName] = css.replace(/^\s*\n/u, "").replace(/\n\s*$/u, "");
@@ -1055,7 +1074,7 @@ function devProjectProblem(files = {}) {
   const missing = missingDevProjectFiles(files);
   if (missing.length) return `Add the referenced file${missing.length === 1 ? "" : "s"}: ${missing.join(", ")}.`;
   const bytes = new TextEncoder().encode(devProjectSource(files)).byteLength;
-  if (bytes > 500_000) return "This project is over the 500 KB safe-save limit.";
+  if (bytes > 2_000_000) return "This project is over the 2 MB safe-save limit.";
   return "";
 }
 
@@ -1212,7 +1231,7 @@ async function openDevWorkbench(gameId, section = "code") {
     ]);
     const localDraft = localDevSandboxAutosave(game.id);
     const newestDraft = newestDevSandboxSource(localDraft, overrideResult.source ? { source: overrideResult.source, updatedAt: overrideResult.updatedAt } : null);
-    const startingSource = newestDraft?.source ?? sourceResult.source;
+    const startingSource = cleanEditableGameSource(newestDraft?.source ?? sourceResult.source);
     ui.devWorkbench = devWorkbenchWithSource({
       gameId: game.id, source: sourceResult.source, editedSource: startingSource,
       hasOverride: !!overrideResult.source, overrideUpdatedAt: overrideResult.updatedAt,
@@ -1223,15 +1242,17 @@ async function openDevWorkbench(gameId, section = "code") {
     }, startingSource);
   } catch (error) {
     try {
-      const response = await fetch(game.launchUrl, { cache: "no-store" });
-      const source = await response.text();
       const localDraft = localDevSandboxAutosave(game.id);
+      const source = await fetchEditableGameSource(game).catch((sourceError) => {
+        if (localDraft?.source && /<html\b|<!doctype\s+html/iu.test(localDraft.source)) return localDraft.source;
+        throw sourceError;
+      });
       ui.devWorkbench = devWorkbenchWithSource({
         gameId: game.id, source, editedSource: localDraft?.source || source,
         hasOverride: false, overrideUpdatedAt: null, localUpdatedAt: localDraft?.updatedAt || null,
         loading: false, saving: false, error: "", status: localDraft ? "Resumed your local autosave. Backend sync is waiting." : "Loaded source locally. Dev Mode can still launch from here.",
         section, modState: {}, speed: 1, history: createEditorHistory(),
-      }, localDraft?.source || source);
+      }, cleanEditableGameSource(localDraft?.source || source));
     } catch {
       ui.devWorkbench = { ...ui.devWorkbench, loading: false, error: error instanceof Error ? error.message : "Code workbench source could not be loaded." };
     }
@@ -1491,7 +1512,8 @@ async function saveDevWorkbench() {
     ui.devWorkbench = { ...ui.devWorkbench, saving: false, hasOverride: true, overrideUpdatedAt: result.updatedAt, status: "Saved. This complete project will reopen here and launch in Dev Mode.", error: "" };
   } catch (error) {
     if (ui.devWorkbench?.gameId !== gameId) return;
-    ui.devWorkbench = { ...ui.devWorkbench, saving: false, status: "Saved on this device. Workspace sync is waiting.", error: error instanceof Error ? error.message : "Workspace sync did not complete." };
+    ui.devWorkbench = { ...ui.devWorkbench, saving: false, status: "Saved. Workspace sync will retry automatically.", error: "" };
+    retryDevProjectSync(gameId, source);
   }
   render();
 }
@@ -1522,6 +1544,27 @@ function closeDevWorkbench() {
   }
   ui.devWorkbench = null;
   render();
+}
+
+function retryDevProjectSync(gameId, source, attempt = 0) {
+  const delays = [1200, 4000, 12000];
+  if (attempt >= delays.length) return;
+  setTimeout(async () => {
+    try {
+      const result = await api(`/api/phantomplay/dev-mode/${encodeURIComponent(gameId)}/override`, { method: "POST", body: JSON.stringify({ tenantId: currentTenantId(), source }) });
+      let shouldRender = false;
+      for (const target of ["devWorkbench", "devSandbox"]) {
+        if (ui[target]?.gameId === gameId) {
+          ui[target] = { ...ui[target], hasOverride: true, overrideUpdatedAt: result.updatedAt, saving: false, status: "Saved. Workspace sync is complete.", error: "" };
+          shouldRender ||= target === "devWorkbench";
+        }
+      }
+      if (ui.devSandbox?.gameId === gameId) setDevSandboxStatus("Saved. Workspace sync is complete.");
+      if (shouldRender) render();
+    } catch {
+      retryDevProjectSync(gameId, source, attempt + 1);
+    }
+  }, delays[attempt]);
 }
 
 // ---- Private rooms: live sync ----
@@ -1921,7 +1964,7 @@ async function openDevSandbox() {
       localDraft,
       overrideResult.source ? { source: overrideResult.source, updatedAt: overrideResult.updatedAt } : null,
     );
-    const startingSource = newestDraft?.source ?? sourceResult.source;
+    const startingSource = cleanEditableGameSource(newestDraft?.source ?? sourceResult.source);
     const status = newestDraft
       ? (newestDraft === localDraft ? "Resumed your local autosave." : "Resumed your saved workspace override.")
       : "Loaded the full shipped project. Edits preview live; press Save when done.";
@@ -1934,10 +1977,12 @@ async function openDevSandbox() {
     };
   } catch (error) {
     try {
-      const response = await fetch(game.launchUrl, { cache: "no-store" });
-      const source = await response.text();
       const localDraft = localDevSandboxAutosave(game.id);
-      const startingSource = localDraft?.source || source;
+      const source = await fetchEditableGameSource(game).catch((sourceError) => {
+        if (localDraft?.source && /<html\b|<!doctype\s+html/iu.test(localDraft.source)) return localDraft.source;
+        throw sourceError;
+      });
+      const startingSource = cleanEditableGameSource(localDraft?.source || source);
       ui.devSandbox = {
         gameId: game.id, source, editedSource: startingSource, blobUrl: "",
         hasOverride: false, overrideUpdatedAt: null, localUpdatedAt: localDraft?.updatedAt || null,
@@ -2051,17 +2096,19 @@ async function persistDevSandboxOverride({ silent = false } = {}) {
   const source = devSandboxDomSource();
   const localDraft = rememberDevSandboxAutosave(gameId, source);
   ui.devSandbox = { ...ui.devSandbox, editedSource: source, localUpdatedAt: localDraft.updatedAt, saving: true };
-  if (!silent) render();
-  else setDevSandboxStatus("Saving workspace override…");
+  const saveButton = mountedRoot?.querySelector("[data-pp-devsandbox-save]");
+  if (saveButton) { saveButton.disabled = true; saveButton.textContent = "Saving…"; }
+  setDevSandboxStatus("Saving…");
   try {
     const result = await api(`/api/phantomplay/dev-mode/${encodeURIComponent(gameId)}/override`, { method: "POST", body: JSON.stringify({ tenantId: currentTenantId(), source }) });
     ui.devSandbox = { ...ui.devSandbox, editedSource: source, hasOverride: true, overrideUpdatedAt: result.updatedAt, saving: false, status: "Saved & resynced. Only visible to workspace managers until published live.", error: "" };
-    if (silent) setDevSandboxStatus("Saved & resynced. Only visible to workspace managers until published live.");
+    setDevSandboxStatus("Saved. Your running game was not reloaded.");
   } catch (error) {
-    ui.devSandbox = { ...ui.devSandbox, saving: false, status: "Saved locally. Backend sync did not complete.", error: silent ? "" : (error instanceof Error ? error.message : "Could not save this override.") };
-    if (silent) setDevSandboxStatus("Saved locally. Backend sync did not complete.");
+    ui.devSandbox = { ...ui.devSandbox, saving: false, status: "Saved. Workspace sync will retry automatically.", error: "" };
+    retryDevProjectSync(gameId, source);
+    setDevSandboxStatus("Saved. Workspace sync will retry automatically.");
   }
-  if (!silent) render();
+  if (saveButton) { saveButton.disabled = false; saveButton.textContent = "Save"; }
 }
 
 async function saveDevSandboxOverride() {
@@ -2214,17 +2261,13 @@ function restartPlayer() {
   if (state) state.textContent = "Playing";
 }
 
-function onGameMessage(event) {
-  const frame = mountedRoot?.querySelector("[data-pp-frame]");
-  if (!ui.player || !frame || event.source !== frame.contentWindow || !event.data || event.data.source !== "phantomplay-game") return;
-  if (event.data.type === "exit") {
-    closePlayer();
-    return;
-  }
-  if (event.data.type === "ready") {
-    ui.playerReady = true;
-    clearTimeout(readyWatchdog);
-    mountedRoot.querySelector(".pp-player-loading")?.setAttribute("hidden", "");
+function markPlayerReady(frame, { protocol = true, focus = true } = {}) {
+  if (!ui.player || !frame) return;
+  const firstReady = !ui.playerReady;
+  ui.playerReady = true;
+  clearTimeout(readyWatchdog);
+  mountedRoot?.querySelector(".pp-player-loading")?.setAttribute("hidden", "");
+  if (firstReady) {
     frame.contentWindow?.postMessage({ source: "phantomplay-host", type: "settings", sound: ui.snapshot.preferences.sound, reducedMotion: ui.snapshot.preferences.reducedMotion, engine: engineFor(ui.player.game) }, "*");
     // Hand back whatever this game last reported in its own state:{} payload
     // (score/complete) so a game that keeps meta-progress there — persistent
@@ -2233,7 +2276,7 @@ function onGameMessage(event) {
     if (ui.player.restoreState && Object.keys(ui.player.restoreState).length) {
       frame.contentWindow?.postMessage({ source: "phantomplay-host", type: "restore", state: ui.player.restoreState }, "*");
     }
-    frame.focus?.({ preventScroll: true });
+    if (focus) frame.focus?.({ preventScroll: true });
     if (ui.player.roomCode) {
       const room = ui.snapshot.rooms.find((item) => item.code === ui.player.roomCode);
       if (room) pushMatchStateToGame(room);
@@ -2247,6 +2290,22 @@ function onGameMessage(event) {
       // drawer's toggles/speed currently say so mods don't silently drop.
       applyDevSandboxModStateToGame({ focus: false });
     }
+  }
+  if (!protocol) {
+    const liveState = mountedRoot?.querySelector("[data-pp-live-state]");
+    if (liveState) liveState.textContent = "Playing";
+  }
+}
+
+function onGameMessage(event) {
+  const frame = mountedRoot?.querySelector("[data-pp-frame]");
+  if (!ui.player || !frame || event.source !== frame.contentWindow || !event.data || event.data.source !== "phantomplay-game") return;
+  if (event.data.type === "exit") {
+    closePlayer();
+    return;
+  }
+  if (event.data.type === "ready") {
+    markPlayerReady(frame, { protocol: true, focus: true });
   }
   if (event.data.type === "paused") {
     ui.playerPaused = !!event.data.paused;
@@ -2446,6 +2505,14 @@ function bind() {
   mountedRoot.querySelectorAll("[data-pp-donate-dev]").forEach((button) => button.onclick = () => logDeveloperDonationIntent(button.dataset.ppDonateDev));
   mountedRoot.querySelectorAll("[data-pp-save-dev-note]").forEach((button) => button.onclick = () => saveDeveloperNote(button.dataset.ppSaveDevNote, mountedRoot.querySelector("[data-pp-dev-note-text]")?.value));
   mountedRoot.querySelectorAll("[data-pp-player-close]").forEach((button) => button.addEventListener("click", closePlayer));
+  const playerFrame = mountedRoot.querySelector("[data-pp-frame]");
+  playerFrame?.addEventListener("load", () => {
+    setTimeout(() => {
+      if (mountedRoot?.querySelector("[data-pp-frame]") === playerFrame && ui.player && !ui.playerReady) {
+        markPlayerReady(playerFrame, { protocol: false, focus: false });
+      }
+    }, 250);
+  });
   mountedRoot.querySelector("[data-pp-player-pause]")?.addEventListener("click", togglePlayerPause);
   mountedRoot.querySelector("[data-pp-player-restart]")?.addEventListener("click", restartPlayer);
   mountedRoot.querySelector("[data-pp-player-fullscreen]")?.addEventListener("click", () => mountedRoot.querySelector(".pp-player-stage")?.requestFullscreen?.());

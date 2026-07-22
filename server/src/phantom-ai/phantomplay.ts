@@ -2067,7 +2067,7 @@ async function inlineDevModeGameAssets(source: string, htmlFilePath: string): Pr
   return bundled;
 }
 
-const DEV_SANDBOX_SOURCE_MAX_BYTES = 500_000;
+const DEV_SANDBOX_SOURCE_MAX_BYTES = 2_000_000;
 
 function resolveBuiltInGameFilePath(gameId: string): { game: PhantomPlayGame; filePath: string } {
   const game = PHANTOMPLAY_BUILT_IN_GAMES.find((item) => item.id === gameId);
