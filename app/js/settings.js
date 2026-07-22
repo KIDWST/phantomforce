@@ -1,13 +1,13 @@
 /* PhantomForce admin settings. Payment credential entry always stays in the
    Stripe-hosted Checkout/Portal; this app only requests a server-created URL. */
 
-import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260722-22";
-import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260722-22";
-import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260722-22";
-import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260722-22";
-import { canManageActiveOrg, createStripeBillingPortal, createStripeCheckout, fetchCustomerPlanPreview, fetchEntitlementsSummary, fetchStripeBillingSummary, switchCustomerPlan } from "./orgs.js?v=phantom-live-20260722-22";
-import { currentTenantId, ctx, isLiveAdminHost, isLocalDevHost, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260722-22";
-import { DEFAULT_COMPANION_PREFS, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260722-22";
+import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260722-23";
+import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260722-23";
+import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260722-23";
+import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260722-23";
+import { canManageActiveOrg, createStripeBillingPortal, createStripeCheckout, fetchCustomerPlanPreview, fetchEntitlementsSummary, fetchStripeBillingSummary, switchCustomerPlan } from "./orgs.js?v=phantom-live-20260722-23";
+import { currentTenantId, ctx, isLiveAdminHost, isLocalDevHost, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260722-23";
+import { DEFAULT_COMPANION_PREFS, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260722-23";
 
 const AI_SETTINGS_KEY = "pf.operator.settings.v1";
 const SETTINGS_TAB_KEY = "pf.settings.tab.v1";
@@ -16,6 +16,7 @@ const SETTINGS_TABS = [
   { id: "model", label: "Model", category: "AI Brain" },
   { id: "loop", label: "Loop routing", category: "AI Brain" },
   { id: "chat", label: "Chat behavior", category: "AI Brain" },
+  { id: "bridge", label: "ChatGPT Bridge", category: "AI Brain" },
   { id: "clientsetup", label: "Workspace setup", category: "Workspace" },
   { id: "organization", label: "Organization", category: "Workspace" },
   { id: "plan", label: "Plan & access", category: "Workspace" },
@@ -90,6 +91,13 @@ let ghostModeStatus = {
   loading: false,
   enabled: false,
   detail: "",
+};
+
+let agentAssistBridgeStatus = {
+  loaded: false,
+  loading: false,
+  error: null,
+  status: null,
 };
 
 const PROVIDER_MODES = [
@@ -234,6 +242,35 @@ async function moduleApi(path, options = {}) {
   const payload = await response.json().catch(() => null);
   if (!response.ok) throw new Error(typeof payload?.error === "string" ? payload.error : `Workspace module request failed (${response.status}).`);
   return payload;
+}
+
+async function refreshAgentAssistBridge(el, opts, rerender = true) {
+  if (agentAssistBridgeStatus.loading) return;
+  agentAssistBridgeStatus = { ...agentAssistBridgeStatus, loading: true, error: null };
+  try {
+    const payload = await moduleApi("/phantom-ai/agent-assist/status");
+    agentAssistBridgeStatus = {
+      loaded: true,
+      loading: false,
+      error: null,
+      status: payload?.status || null,
+    };
+  } catch (error) {
+    agentAssistBridgeStatus = {
+      ...agentAssistBridgeStatus,
+      loaded: true,
+      loading: false,
+      error: error instanceof Error ? error.message : "Could not read ChatGPT bridge status.",
+    };
+  }
+  if (rerender && el?.isConnected) renderOperatorSettings(el, opts);
+}
+
+function bridgeStatusLabel(status) {
+  if (agentAssistBridgeStatus.loading) return "Checking";
+  if (agentAssistBridgeStatus.error) return "Needs setup";
+  if (status?.executable) return "Adapter callable";
+  return "Relay only";
 }
 
 function renderProviderCards(settings) {

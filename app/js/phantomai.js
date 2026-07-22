@@ -6,10 +6,10 @@
    vault, agentops.js's console) so they read as one product. It does not
    re-implement any of them. */
 
-import { isOwnerOperator, rememberConversation } from "./store.js?v=phantom-live-20260722-22";
-import { mountAgentConsole } from "./agentops.js?v=phantom-live-20260722-22";
-import { handleCommand, handleSmartCommand } from "./command.js?v=phantom-live-20260722-22";
-import { esc } from "./workspaces.js?v=phantom-live-20260722-22";
+import { isOwnerOperator, rememberConversation } from "./store.js?v=phantom-live-20260722-23";
+import { mountAgentConsole } from "./agentops.js?v=phantom-live-20260722-23";
+import { handleCommand, handleSmartCommand } from "./command.js?v=phantom-live-20260722-23";
+import { esc } from "./workspaces.js?v=phantom-live-20260722-23";
 
 const TABS = ["chat", "memory", "activity"];
 let rootEl = null;
@@ -66,6 +66,22 @@ function backgroundNoteFor(r) {
   return !!(h.mission_id || h.missionId || h.background || h.running_in_background || h.route_tier === "mission");
 }
 
+function chatMediaHtml(media = {}) {
+  const url = String(media.url || "");
+  const safeUrl = /^(?:data:(?:image|video)\/(?:png|jpe?g|webp|gif|mp4|webm);base64,|https?:\/\/|\/|blob:)/i.test(url) ? url : "";
+  if (!safeUrl) return "";
+  const title = esc(String(media.title || "Generated media"));
+  const status = esc(String(media.status || "saved"));
+  const type = media.type === "video" ? "video" : "image";
+  const preview = type === "video"
+    ? `<video src="${esc(safeUrl)}" controls playsinline preload="metadata" aria-label="${title}"></video>`
+    : `<img src="${esc(safeUrl)}" alt="${title}" loading="lazy"/>`;
+  return `<figure class="chat-media chat-media-${type}" data-chat-media-status="${status}">
+    <div class="chat-media-frame">${preview}</div>
+    <figcaption><span>${title}</span><b>${status === "saved" ? "Saved to Media Pool" : status === "queued" ? "Queued preview" : "Preview — not saved"}</b></figcaption>
+  </figure>`;
+}
+
 function mountChatTab() {
   const mount = pane("chat")?.querySelector("[data-phantomai-chat-mount]");
   if (!mount || mount.dataset.mounted) return;
@@ -81,6 +97,7 @@ function mountChatTab() {
         <p class="phantomai-chat-user">› ${esc(h.q)}</p>
         <p class="phantomai-chat-reply">${esc(h.say)}</p>
         ${h.background ? `<p class="phantomai-chat-status">Running a longer task in the background...</p>` : ""}
+        ${(h.media || []).map(chatMediaHtml).join("")}
         ${(h.cards || []).map((c, cardIndex) => chatCardHtml(c, cardIndex, entryIndex)).join("")}
       </div>`).join("") || `<p class="phantomai-chat-hello">Ask Phantom anything — questions get answered, commands become guarded work, and anything external stays approval-gated.</p>`;
     bindChatCardRemovers(log, (entryIndex, cardIndex) => {
@@ -99,7 +116,7 @@ function mountChatTab() {
     if (!v) return;
     input.value = "";
     const r = await handleSmartCommand(v).catch(() => handleCommand(v));
-    chatHistory.push({ q: v, say: r.say, cards: r.cards, background: backgroundNoteFor(r) });
+    chatHistory.push({ q: v, say: r.say, cards: r.cards, media: r.media, background: backgroundNoteFor(r) });
     rememberConversation({ prompt: v, reply: r.say, mode: "phantom-ai-chat", route: r.open || "" });
     paint();
   });
@@ -113,7 +130,7 @@ function mountMemoryTab() {
   const mount = pane("memory")?.querySelector("[data-phantomai-memory-mount]");
   if (!mount || mount.dataset.mounted) return;
   mount.dataset.mounted = "1";
-  import("./brain.js?v=phantom-live-20260722-22")
+  import("./brain.js?v=phantom-live-20260722-23")
     .then((mod) => { if (mount.isConnected) mod.renderPhantomBrain(mount); })
     .catch(() => { mount.innerHTML = `<p class="ws-note">This panel could not load. Try again in a moment.</p>`; });
 }

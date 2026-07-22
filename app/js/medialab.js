@@ -6,22 +6,22 @@
  * instead of sending people out to another product.
  */
 
-import { currentTenantId, ctx, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260722-22";
+import { currentTenantId, ctx, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260722-23";
 import {
   PLATFORMS, registerContentAsset, loadSocialAccounts, saveSocialAccounts, socialStatus,
   loadContentAssets, saveContentAssets, contentAssetDisplayUrl, hydrateContentAssetUrl,
   loadRecycledContentAssets, recycleContentAssets, restoreRecycledContentAssets, purgeRecycledContentAssets,
-} from "./contenthub.js?v=phantom-live-20260722-22";
-import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260722-22";
+} from "./contenthub.js?v=phantom-live-20260722-23";
+import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260722-23";
 import {
   addImageLayer, addTextLayer, alignSelectedLayers, applyLayerDragWithSnap, cloneImageEditState, compositionSnapshot, distributeSelectedLayers, duplicateLayer,
   canvasPoint, drawCompositionOverlay, freshComposition, hitTestLayer, hitTestResizeHandle,
   loadCompositionImages, moveLayerOrder, moveLayerToIndex, pushEditorSnapshot, removeSelectedLayers,
   renderComposition, restoreComposition, selectAllLayers, selectLayer, selectedLayers,
-} from "./content-editor.js?v=phantom-live-20260722-22";
-import { loadImageForEditing, exportCanvas, requestAiEdit, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260722-22";
-import { mountVideoEditor } from "./videocut.js?v=phantom-live-20260722-22";
-import { assetsAvailable, assetBlobUrl, listAssets, recordAssetUsage, saveToAssetCloud, listLocalAssets, refreshLocalAssets, localAssetBlobUrl } from "./orgs.js?v=phantom-live-20260722-22";
+} from "./content-editor.js?v=phantom-live-20260722-23";
+import { loadImageForEditing, exportCanvas, requestAiEdit, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260722-23";
+import { mountVideoEditor } from "./videocut.js?v=phantom-live-20260722-23";
+import { assetsAvailable, assetBlobUrl, listAssets, recordAssetUsage, saveToAssetCloud, listLocalAssets, refreshLocalAssets, localAssetBlobUrl } from "./orgs.js?v=phantom-live-20260722-23";
 
 const CFG_KEY = "pf.medialab.v1";
 const EDIT_INTENT_KEY = "pf.medialab.editIntent.v1";
@@ -2146,6 +2146,184 @@ function saveMediaPoolSource(asset, extra = {}) {
     return result.stats;
   } catch {
     return null;
+  }
+}
+
+/* Chat is another door into Media Lab, not a second image/video provider.
+   Keep the request preparation, entitlement checks, job polling, honest
+   preview state, and Media Pool registration in this module so a user can
+   type a creative brief anywhere in PhantomForce and get the same result
+   they would get from the Create tab. */
+function chatMediaPlan(raw = "") {
+  const text = cleanBrief(raw, 2200);
+  if (!text) return null;
+  const lower = text.toLowerCase();
+  const artifact = /\b(?:image|photo|picture|portrait|graphic|illustration|artwork|art|thumbnail|cover|poster|banner|video|reel|clip|short|film|animation|motion|tiktok|story)\b/i;
+  const create = /\b(?:create|make|generate|produce|design|shoot|render|animate)\b/i;
+  const directAsk = /\b(?:i\s+(?:want|need)|give\s+me|show\s+me)\s+(?:an?\s+)?(?:image|photo|picture|portrait|graphic|illustration|artwork|art|thumbnail|cover|poster|banner|video|reel|clip|short|film|animation|motion|tiktok|story)\b/i;
+  // "How do I make a video?" is a question about the product, not a spend.
+  const howTo = /^\s*(?:how|what|why|when|where)\b/i.test(text);
+  if ((!create.test(text) && !directAsk.test(text)) || !artifact.test(text) || howTo) return null;
+
+  const modality = /\b(?:video|reel|clip|short|film|animation|animate|motion|tiktok|story)\b/i.test(text) ? "video" : "image";
+  const aspect = /\b(?:vertical|portrait|reel|tiktok|short|story)\b/i.test(text)
+    ? "9:16"
+    : /\b(?:instagram|feed|social|portrait ad)\b/i.test(text)
+      ? "4:5"
+      : modality === "video" ? "16:9" : "1:1";
+  const durationMatch = text.match(/\b(\d{1,2})\s*(?:seconds?|secs?|s)\b/i);
+  const duration = Math.max(2, Math.min(30, Number(durationMatch?.[1] || 6)));
+  const style = /\b(?:product|ecommerce|packshot)\b/i.test(lower)
+    ? "Product"
+    : /\b(?:portrait|headshot)\b/i.test(lower)
+      ? "Portrait"
+      : /\b(?:neon|cyber|futuristic|sci[ -]?fi)\b/i.test(lower)
+        ? "Neon"
+        : /\b(?:editorial|magazine)\b/i.test(lower)
+          ? "Editorial"
+          : "Cinematic";
+  // Remove only the command shell. The artistic brief remains literal.
+  const prompt = cleanBrief(text
+    .replace(/^(?:please\s+)?(?:(?:can|could|would|will)\s+you\s+)?(?:create|make|generate|produce|design|shoot|render|animate)\s+(?:me\s+)?(?:an?\s+)?(?:image|photo|picture|portrait|graphic|illustration|artwork|art|thumbnail|cover|poster|banner|video|reel|clip|short|film|animation|motion|tiktok|story)\s*(?:of|for|showing)?\s*/i, "")
+    .replace(/^(?:i\s+(?:want|need)|give\s+me|show\s+me)\s+(?:an?\s+)?(?:image|photo|picture|portrait|graphic|illustration|artwork|art|thumbnail|cover|poster|banner|video|reel|clip|short|film|animation|motion|tiktok|story)\s*(?:of|for|showing)?\s*/i, "")) || text;
+  return { text, prompt, modality, aspect, duration, style };
+}
+
+function chatMediaTitle(plan) {
+  const subject = cleanBrief(plan?.prompt || "", 58).replace(/[.?!]+$/, "");
+  const kind = plan?.modality === "video" ? "Video" : "Image";
+  return subject ? `${kind} · ${subject}` : `Generated ${kind.toLowerCase()}`;
+}
+
+function chatMediaCardAsset(asset, plan, title, state) {
+  if (!asset?.url) return null;
+  return {
+    id: asset.id,
+    type: asset.type === "video" ? "video" : "image",
+    url: asset.url,
+    title,
+    status: state,
+    prompt: plan.prompt,
+    saved: state === "saved",
+  };
+}
+
+export async function generateMediaFromChat(raw = "") {
+  const plan = chatMediaPlan(raw);
+  if (!plan) return { handled: false };
+
+  try {
+    const cfg = loadCfg();
+    const requestedLane = normalizeLaneId(cfg.routing?.[plan.modality] || PRIMARY_MEDIA_LANE);
+    const enabledLane = provider(cfg, requestedLane)?.enabled
+      ? requestedLane
+      : providersFor(cfg, plan.modality)[0]?.id || "";
+    if (!enabledLane) {
+      return {
+        handled: true,
+        state: "unavailable",
+        say: "Media Lab is not enabled for this workspace, so I did not send the brief anywhere.",
+      };
+    }
+    const lane = normalizeLaneId(enabledLane);
+    const laneConfig = provider(cfg, lane) || {};
+    const model = laneConfig.defaultModel?.[plan.modality] || laneConfig.models?.[plan.modality]?.[0] || "";
+    const health = await checkEngineHealth(cfg).catch(() => engineHealth);
+    const spendLane = !!(health.media?.[lane] || health.engine?.cliFallbackEnabled);
+    const out = await generate(cfg, {
+      modality: plan.modality,
+      provider: lane,
+      model,
+      prompt: plan.prompt,
+      negative: "",
+      style: plan.style,
+      preset: "Chat brief",
+      // Pressing Enter on an explicit creative request is the direct render
+      // instruction. The backend remains the final entitlement/policy gate.
+      approved: true,
+      creditWarningShown: spendLane,
+      ref: null,
+      params: { aspect: plan.aspect, count: 1, quality: "standard", duration: plan.duration },
+    });
+    if (out.approvalRequired) {
+      return {
+        handled: true,
+        state: "approval_required",
+        say: out.message || "Media Lab requires an approval before it can render this brief. Nothing was generated or charged.",
+      };
+    }
+    const title = chatMediaTitle(plan);
+    const stamp = Date.now();
+    const assets = (out.assets || []).map((asset, index) => ({
+      id: `chat-gen-${stamp}-${index}`,
+      ...asset,
+      fromGen: true,
+      at: stamp,
+      meta: {
+        ...(asset.meta || {}),
+        title,
+        prompt: out.spec?.original_prompt || plan.prompt,
+        provider: lane,
+        model: out.spec?.model || model,
+        style: plan.style,
+        aspect: plan.aspect,
+        duration: plan.duration,
+        live: !!out.live,
+      },
+    }));
+    if (!assets.length) {
+      return {
+        handled: true,
+        state: "failed",
+        say: "Media Lab did not return a file for that brief, so I did not create a fake result. Try a more specific visual description in chat or open Media Lab to inspect the engine.",
+      };
+    }
+
+    if (out.live) {
+      assets.forEach((asset) => {
+        asset.saved = true;
+        saveMediaPoolSource(asset, {
+          title,
+          prompt: plan.prompt,
+          provider: lane,
+          model: out.spec?.model || model,
+          style: plan.style,
+          aspect: plan.aspect,
+          duration: plan.duration,
+          live: true,
+        });
+      });
+      cfg.credits = Math.max(0, cfg.credits - (plan.modality === "video" ? plan.duration * 4 : 3));
+      saveCfg(cfg);
+      logJob("ok", `Chat generated and saved a ${plan.modality}`);
+      return {
+        handled: true,
+        state: "saved",
+        say: `Done — the ${plan.modality} is right here and saved to Media Pool. I kept your original brief as the source prompt.`,
+        media: assets.map((asset) => chatMediaCardAsset(asset, plan, title, "saved")).filter(Boolean),
+        title,
+      };
+    }
+
+    const previewState = out.queued ? "queued" : "preview";
+    const detail = explainMediaFailure(out.fallbackReason, out.fallbackDetail, out.fallbackLane);
+    const reason = out.queued
+      ? "Media Lab has the draft in its review lane, so this is a clearly labeled preview rather than a finished render."
+      : `Media Lab could not finish the render${detail ? ` — ${detail}` : ""}.`;
+    logJob(out.queued ? "ok" : "warn", out.queued ? "Chat brief queued for Media Lab review" : "Chat render fell back to an honest preview");
+    return {
+      handled: true,
+      state: previewState,
+      say: `${reason} I have not saved it to Media Pool as a completed asset.`,
+      media: assets.map((asset) => chatMediaCardAsset(asset, plan, title, previewState)).filter(Boolean),
+      title,
+    };
+  } catch (error) {
+    return {
+      handled: true,
+      state: "failed",
+      say: `Media Lab could not start that render: ${cleanBrief(error?.message || "the media connection was unavailable", 160)}. Nothing was saved to Media Pool.`,
+    };
   }
 }
 function refreshGeneratePanel(body, cfg, opts, root) {

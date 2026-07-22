@@ -12,9 +12,9 @@ import {
   recentChatTurns, addMemory,
   ctx, session, loadPhantomLoop, savePhantomLoop, loopProviderName, modelDisplayLabel,
   getPhantomLaneTarget, loadPhantomLaneConfig, workspaceStorageGetItem, wsName,
-} from "./store.js?v=phantom-live-20260722-22";
-import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260722-22";
-import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260722-22";
+} from "./store.js?v=phantom-live-20260722-23";
+import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260722-23";
+import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260722-23";
 const classifyPhantomIntent = (text) => deriveActionContract(classifyRaw(text));
 
 /* Cross-surface handoff: chat tells the Websites page which project to focus
@@ -38,6 +38,43 @@ const LOCAL_FIRST_INTENTS = new Set([
   "looper_build", "approval_request",
 ]);
 const PROVIDER_FAILURE_MESSAGE = "I couldn't complete that just now. Your request is still here";
+
+/* A visual request is an immediate, explicitly authorized Media Lab job.
+   It must not become a placeholder card or take a detour through a chat
+   model before the user sees their media. */
+const CHAT_MEDIA_ARTIFACT = /\b(?:image|photo|picture|portrait|graphic|illustration|artwork|art|thumbnail|cover|poster|banner|video|reel|clip|short|film|animation|motion|tiktok|story)\b/i;
+const CHAT_MEDIA_CREATE = /\b(?:create|make|generate|produce|design|shoot|render|animate)\b/i;
+const CHAT_MEDIA_DIRECT_ASK = /\b(?:i\s+(?:want|need)|give\s+me|show\s+me)\s+(?:an?\s+)?(?:image|photo|picture|portrait|graphic|illustration|artwork|art|thumbnail|cover|poster|banner|video|reel|clip|short|film|animation|motion|tiktok|story)\b/i;
+
+function isDirectChatMediaRequest(text = "") {
+  const value = String(text || "").trim();
+  if (/^(?:how|what|why|when|where)\b/i.test(value)) return false;
+  return CHAT_MEDIA_ARTIFACT.test(value) && (CHAT_MEDIA_CREATE.test(value) || CHAT_MEDIA_DIRECT_ASK.test(value));
+}
+
+async function generateMediaFromChat(text, intent, settings) {
+  try {
+    const mediaLab = await import("./medialab.js?v=phantom-live-20260722-23");
+    const result = await mediaLab.generateMediaFromChat(text);
+    if (!result?.handled) return null;
+    const media = Array.isArray(result.media) ? result.media : [];
+    const cards = result.state === "saved"
+      ? [card("Media Pool", result.title || "Generated media", "Saved from this chat and ready to reuse in Content Hub or Publish.", [openAction("Open Media Pool", "content")], "Generated through Media Lab")]
+      : result.state === "queued"
+        ? [card("Media Lab draft", result.title || "Creative brief", "The preview is visible here. Final rendering remains in Media Lab's review lane.", [openAction("Open Media Lab", "media")], "Not yet saved")]
+        : result.state === "preview"
+          ? [card("Media Lab preview", result.title || "Creative brief", "This is an honest local preview, not a completed render. Open Media Lab to check the engine.", [openAction("Open Media Lab", "media")], "Not saved")]
+          : [];
+    return shapeResponse({ say: result.say, cards, media, intent }, settings);
+  } catch {
+    return shapeResponse({
+      say: "Media Lab could not load for that request, so no render was started and nothing was saved.",
+      cards: [card("Media Lab", "Render not started", "The generation path was unavailable. Open Media Lab to inspect the connection.", [openAction("Open Media Lab", "media")], "No credits spent")],
+      media: [],
+      intent,
+    }, settings);
+  }
+}
 
 /* Pull a subject out of phrases like "draft a proposal for Sarah's gym". */
 function subjectOf(text) {
@@ -1173,6 +1210,22 @@ function intentResponse(intent, text, settings = null) {
       open: null,
     };
   }
+  if (intent.primaryIntent === "approval_request") {
+    const pending = visible(store.state.approvals).filter((item) => item.status === "pending");
+    return {
+      say: pending.length
+        ? `I found ${pending.length} decision${pending.length === 1 ? "" : "s"} waiting. I opened the real queue so each one can be handled with its context instead of guessing in chat.`
+        : "The decision queue is clear. There is nothing pending for me to change.",
+      cards: pending.slice(0, 3).map((item) => card(
+        "Needs your call",
+        item.title,
+        item.detail,
+        [openAction("Review in Approvals", "approvals")],
+        `Requested by ${item.requestedBy}`,
+      )),
+      open: pending.length ? "approvals" : null,
+    };
+  }
   if (intent.primaryIntent === "termina_parallel") {
     return {
       say: "Termina lane: I'd split this across planner, builder, and reviewer workers. The multi-agent wall isn't wired on this box yet, so nothing launched — I can stage it as a guarded plan in Workers instead.",
@@ -1657,6 +1710,11 @@ export async function handleSmartCommand(raw) {
 
   if (isCrmProspectBuildout(text)) {
     return handleCommand(text);
+  }
+
+  if (isDirectChatMediaRequest(text)) {
+    const media = await generateMediaFromChat(text, intent, settings);
+    if (media) return media;
   }
 
   const actionFreeConversation = isActionFreeModelRequest(text, intent);

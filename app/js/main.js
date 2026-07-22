@@ -6,52 +6,52 @@ import {
   redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260722-22";
+} from "./store.js?v=phantom-live-20260722-23";
 import {
   loadOrganizationPulse, loadBrainContract, pulseAttentionItems, brainContractAttentionItems,
-} from "./organizationpulse.js?v=phantom-live-20260722-22";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260722-22";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260722-22";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260722-22";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260722-22";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260722-22";
-import { mountManagedGrowthReport } from "./managedgrowth.js?v=phantom-live-20260722-22";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260722-22";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260722-22";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260722-22";
-import { mountPhantomAI } from "./phantomai.js?v=phantom-live-20260722-22";
-import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260722-22";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260722-22";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260722-22";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260722-22";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode, refreshCompanionCore } from "./companion.js?v=phantom-live-20260722-22";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260722-22";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260722-22";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260722-22";
-import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260722-22";
-import { mountAmbient } from "./ambient.js?v=phantom-live-20260722-22";
-import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260722-22";
+} from "./organizationpulse.js?v=phantom-live-20260722-23";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260722-23";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260722-23";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260722-23";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260722-23";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260722-23";
+import { mountManagedGrowthReport } from "./managedgrowth.js?v=phantom-live-20260722-23";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260722-23";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260722-23";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260722-23";
+import { mountPhantomAI } from "./phantomai.js?v=phantom-live-20260722-23";
+import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260722-23";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260722-23";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260722-23";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260722-23";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode, refreshCompanionCore } from "./companion.js?v=phantom-live-20260722-23";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260722-23";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260722-23";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260722-23";
+import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260722-23";
+import { mountAmbient } from "./ambient.js?v=phantom-live-20260722-23";
+import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260722-23";
 import {
   fetchAuthConfig, databaseLogin, databaseLogout, databaseSignup, databaseForgotUsername, databaseForgotPassword,
   databaseResetPassword, databaseAcceptInvitation, databaseVerify2fa, databaseStart2faSetup, databaseConfirm2fa, databaseRegenerate2faBackupCodes, databaseDisable2fa,
   switchOrg, fetchAuthMe, fetchEntitlementsSummary,
-} from "./orgs.js?v=phantom-live-20260722-22";
-import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260722-22";
-import { assetsAvailable } from "./orgs.js?v=phantom-live-20260722-22";
-import { renderPhantomStore } from "./phantomstore.js?v=phantom-live-20260722-22";
-import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260722-22";
+} from "./orgs.js?v=phantom-live-20260722-23";
+import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260722-23";
+import { assetsAvailable } from "./orgs.js?v=phantom-live-20260722-23";
+import { renderPhantomStore } from "./phantomstore.js?v=phantom-live-20260722-23";
+import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260722-23";
 // PhantomPlay V2 platform shell (Home/Solo/Friends/Workspace/Dev Hub) - opt-in
 // while it hardens: set localStorage "pf.phantomplay.v2" = "1" (the V2 shell has
 // a "Classic view" button to switch back). Classic stays the default experience.
-import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260722-22";
+import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260722-23";
 const phantomPlayV2Opted = () => { try { return localStorage.getItem("pf.phantomplay.v2") === "1"; } catch { return false; } };
-import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260722-22";
+import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260722-23";
 import {
   customizeNavigation,
   loadOrganizationCustomization,
-} from "./customization.js?v=phantom-live-20260722-22";
-import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260722-22";
-import { initCommandOS, applyCommandExecutionMode } from "./command-os.js?v=phantom-live-20260722-22";
+} from "./customization.js?v=phantom-live-20260722-23";
+import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260722-23";
+import { initCommandOS, applyCommandExecutionMode } from "./command-os.js?v=phantom-live-20260722-23";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -1575,7 +1575,7 @@ const MODES = {
   admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260722-22";
+const POSE_VERSION = "phantom-live-20260722-23";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -2701,10 +2701,26 @@ document.addEventListener("click", (event) => {
 
 function msgHtml(m, i) {
   const cards = (m.cards || []).map((c, ci) => cardHtml(c, ci, i)).join("");
+  const media = (m.media || []).map(chatMediaHtml).join("");
   return `<div class="msg msg-${m.who}" data-msg-i="${i}">
     ${m.who === "phantom" ? `<span class="msg-avatar" aria-hidden="true"></span>` : ""}
-    <div class="msg-body"><p class="msg-text"></p>${cards ? `<div class="msg-cards">${cards}</div>` : ""}</div>
+    <div class="msg-body"><p class="msg-text"></p>${media}${cards ? `<div class="msg-cards">${cards}</div>` : ""}</div>
   </div>`;
+}
+function chatMediaHtml(media = {}) {
+  const url = String(media.url || "");
+  const safeUrl = /^(?:data:(?:image|video)\/(?:png|jpe?g|webp|gif|mp4|webm);base64,|https?:\/\/|\/|blob:)/i.test(url) ? url : "";
+  if (!safeUrl) return "";
+  const title = esc(String(media.title || "Generated media"));
+  const status = esc(String(media.status || "saved"));
+  const type = media.type === "video" ? "video" : "image";
+  const preview = type === "video"
+    ? `<video src="${esc(safeUrl)}" controls playsinline preload="metadata" aria-label="${title}"></video>`
+    : `<img src="${esc(safeUrl)}" alt="${title}" loading="lazy"/>`;
+  return `<figure class="chat-media chat-media-${type}" data-chat-media-status="${status}">
+    <div class="chat-media-frame">${preview}</div>
+    <figcaption><span>${title}</span><b>${status === "saved" ? "Saved to Media Pool" : status === "queued" ? "Queued preview" : "Preview — not saved"}</b></figcaption>
+  </figure>`;
 }
 function renderChatLog() {
   const log = chatLogEl();
@@ -2790,7 +2806,13 @@ function bindStarters(log) {
 function progressStepsForCommand(text = "") {
   const value = String(text).toLowerCase();
   if (/\b(image|video|media|photo|content|asset|thumbnail|reel)\b/.test(value)) {
-    return ["Understanding the creative brief...", "Checking your workspace...", "Preparing the result..."];
+    if (/\b(venus|planet|space|orbit|cosmic)\b/.test(value)) {
+      return ["Routing through Venus' cloud deck…", "Bending light and motion into the frame…", "Landing it in chat and Media Pool…"];
+    }
+    if (/\b(cyber|chip|circuit|neon|futur)\b/.test(value)) {
+      return ["Byting cyberchips into the frame…", "Giving the signal a little velocity…", "Landing it in chat and Media Pool…"];
+    }
+    return ["Setting the frame from your brief…", "Rendering through Media Lab…", "Landing it in chat and Media Pool…"];
   }
   if (/\b(build|create|draft|plan|proposal|campaign|site|page|workflow)\b/.test(value)) {
     return ["Understanding the outcome...", "Checking related work...", "Building the response..."];
@@ -2845,6 +2867,16 @@ function chatAttachCards(cards) {
   for (let i = chatHistory.length - 1; i >= 0; i--) {
     if (chatHistory[i].who === "phantom") {
       chatHistory[i].cards = cards;
+      break;
+    }
+  }
+  renderChatLog();
+}
+function chatAttachMedia(media) {
+  if (!media?.length) return;
+  for (let i = chatHistory.length - 1; i >= 0; i--) {
+    if (chatHistory[i].who === "phantom") {
+      chatHistory[i].media = media;
       break;
     }
   }
@@ -3020,6 +3052,7 @@ function runCommand(raw) {
       // complete, show it immediately so intent labels or answer length can
       // never make a finished response feel slow.
       speak(r.say, "", null, { instant: true });
+      if (r.media?.length) chatAttachMedia(r.media);
       if (r.cards?.length) chatAttachCards(r.cards);
       if (r.skills?.length) chatAttachSkillChips(r.skills);
       rememberConversation({ prompt: raw, reply: r.say, mode: activeMode, route: r.open || "" });
@@ -4144,6 +4177,7 @@ function wirePhantomConsole(body) {
       <div class="phantom-entry">
         <p class="phantom-user">› ${esc(h.q)}</p>
         <p class="phantom-reply">${esc(h.say)}</p>
+        ${(h.media || []).map(chatMediaHtml).join("")}
         ${(h.cards || []).map((c, cardIndex) => cardHtml(c, cardIndex, entryIndex)).join("")}
       </div>`).join("") || `<p class="phantom-hello">This is the full command console. Everything you ask is classified first: answers stay answers, commands become guarded work, and external actions stay approval-gated.</p>`;
     bindCardRemovers(log, (entryIndex, cardIndex) => {
@@ -4161,7 +4195,7 @@ function wirePhantomConsole(body) {
     if (!v) return;
     input.value = "";
     const r = await handleSmartCommand(v).catch(() => handleCommand(v));
-    phantomHistory.push({ q: v, say: r.say, cards: r.cards });
+    phantomHistory.push({ q: v, say: r.say, cards: r.cards, media: r.media });
     rememberConversation({ prompt: v, reply: r.say, mode: "phantom-console", route: r.open || "" });
     paint();
     renderConsole();

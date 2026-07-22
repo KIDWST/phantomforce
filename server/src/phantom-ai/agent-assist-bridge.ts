@@ -31,6 +31,20 @@ export type AgentAssistStatus = {
   executable: boolean;
   transport: "http" | "relay_packet";
   bridge_url_configured: boolean;
+  setup_required: boolean;
+  subscription_billing_note: string;
+  setup_options: Array<{
+    id: "relay_packet" | "local_chatgpt_adapter" | "openai_api_key";
+    label: string;
+    ready: boolean;
+    note: string;
+  }>;
+  env: {
+    bridge_enabled: "PHANTOM_AGENT_ASSIST_BRIDGE_ENABLED";
+    bridge_url: "PHANTOM_AGENT_ASSIST_BRIDGE_URL";
+    bridge_token: "PHANTOM_AGENT_ASSIST_BRIDGE_TOKEN";
+    openai_api_key: "OPENAI_API_KEY";
+  };
   callable_by: AgentAssistCaller[];
   safety: {
     stores_secrets: false;
@@ -134,6 +148,34 @@ export function getAgentAssistBridgeStatus(): AgentAssistStatus {
     executable,
     transport: executable ? "http" : "relay_packet",
     bridge_url_configured: !!url,
+    setup_required: !executable,
+    subscription_billing_note: "ChatGPT Plus/Pro subscriptions are for ChatGPT apps. OpenAI API/Codex automation requires an approved adapter or API key billing path; PhantomForce never stores a ChatGPT password.",
+    setup_options: [
+      {
+        id: "relay_packet",
+        label: "Relay packet",
+        ready: true,
+        note: "Always available. PhantomForce prepares a bounded prompt for a human or browser assistant to review.",
+      },
+      {
+        id: "local_chatgpt_adapter",
+        label: "Local ChatGPT adapter",
+        ready: executable,
+        note: "Requires PHANTOM_AGENT_ASSIST_BRIDGE_ENABLED=true and PHANTOM_AGENT_ASSIST_BRIDGE_URL pointing at an approved local/HTTP adapter.",
+      },
+      {
+        id: "openai_api_key",
+        label: "OpenAI API key",
+        ready: Boolean(process.env.OPENAI_API_KEY),
+        note: "Best for Codex/OpenAI capabilities. API usage is billed separately from ChatGPT Plus/Pro.",
+      },
+    ],
+    env: {
+      bridge_enabled: "PHANTOM_AGENT_ASSIST_BRIDGE_ENABLED",
+      bridge_url: "PHANTOM_AGENT_ASSIST_BRIDGE_URL",
+      bridge_token: "PHANTOM_AGENT_ASSIST_BRIDGE_TOKEN",
+      openai_api_key: "OPENAI_API_KEY",
+    },
     callable_by: [...VALID_CALLERS.filter((caller) => caller !== "unknown")],
     safety: {
       stores_secrets: false,
