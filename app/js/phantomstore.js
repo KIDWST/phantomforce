@@ -118,15 +118,33 @@ function reviewList(reviews = []) {
     </blockquote>`).join("")}</div>` : "";
 }
 
+const PRODUCT_ART_FALLBACKS = [
+  [/termina|terminal|cli|automation/i, "/app/assets/phantomstore/termina-cover-ai.webp"],
+  [/vocal|vox|voice|autotune|pitch|song/i, "/app/assets/phantomstore/phantom-vocal-ai-cover-ai.webp"],
+  [/phantomforce|business|os|command|admin|workspace/i, "/app/assets/phantomstore/phantomforce-os-cover-ai.webp"],
+];
+
+function fallbackProductImage(product = {}) {
+  const haystack = `${product.name || ""} ${product.summary || ""} ${product.description || ""} ${product.category || ""}`.trim();
+  return PRODUCT_ART_FALLBACKS.find(([pattern]) => pattern.test(haystack))?.[1] || "";
+}
+
+function productInitials(product = {}) {
+  const name = String(product.name || product.category || "PF").trim();
+  return name.split(/\s+/u).slice(0, 2).map((part) => part[0] || "").join("").toUpperCase() || "PF";
+}
+
 function productCard(product) {
   const seller = product.seller || {};
   const buyUrl = safeHref(product.buyUrl);
   const isBuying = ui.buyingProductId === product.id;
   const available = product.status === "available";
   const imageUrl = safeAssetHref(product.imageUrl);
+  const fallbackImageUrl = fallbackProductImage(product);
+  const artUrl = imageUrl || fallbackImageUrl;
   const referenceUrl = safeAssetHref(product.referenceImageUrl);
   return `<article class="ps-product ${product.featured ? "is-featured" : ""}">
-    ${imageUrl ? `<div class="ps-product-media"><img src="${esc(imageUrl)}" alt="${esc(product.name)} key art" loading="lazy" />${referenceUrl ? `<span class="ps-media-note">AI key art from the real product UI · <a href="${esc(referenceUrl)}" target="_blank" rel="noopener noreferrer">View real UI</a></span>` : ""}</div>` : ""}
+    <div class="ps-product-media${imageUrl ? "" : " is-fallback"}">${artUrl ? `<img src="${esc(artUrl)}" alt="${esc(product.name)} key art" loading="lazy" />` : `<div class="ps-product-fallback"><span>${esc(productInitials(product))}</span><b>${esc(product.category || "PhantomStore")}</b></div>`}${referenceUrl ? `<span class="ps-media-note">${imageUrl ? "AI key art from the real product UI" : "Branded fallback until product art is connected"} · <a href="${esc(referenceUrl)}" target="_blank" rel="noopener noreferrer">View real UI</a></span>` : ""}</div>
     <header>
       <div>
         <p class="ps-kicker">${esc(product.category)} / ${esc(product.delivery || "Digital delivery")}</p>
