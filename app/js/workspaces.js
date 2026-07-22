@@ -9,24 +9,24 @@ import {
   PACKAGES, RETAINERS, FINANCE_CATEGORIES, FINANCE_CONNECTORS, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS, CHAT_HISTORY_RETENTION_DAYS,
   addMemory, toggleMemoryRemember, forgetMemory, forgetChatHistory, memoryStats, memoryRetention, chatHistoryStats, chatHistoryRetention,
   session,
-} from "./store.js?v=phantom-live-20260721-32";
+} from "./store.js?v=phantom-live-20260722-2";
 import {
   isDatabaseSession, canManageActiveOrg, fetchServerApprovals, decideServerRun,
   activeOrgId,
   fetchOrgCrm, saveOrgCrmSettings, createOrgCrmContact, pullOrgCrmContacts, updateOrgCrmContact, deleteOrgCrmContact,
-} from "./orgs.js?v=phantom-live-20260721-32";
+} from "./orgs.js?v=phantom-live-20260722-2";
 import {
   proposalServerAvailable, loadProposals,
   createProposal as createServerProposal,
   updateProposal as updateServerProposal,
   deleteProposal as deleteServerProposal,
-} from "./proposalpipeline.js?v=phantom-live-20260721-32";
+} from "./proposalpipeline.js?v=phantom-live-20260722-2";
 import {
   approvalServerAvailable, loadWorkspaceApprovals,
   createWorkspaceApproval as createServerWorkspaceApproval,
   decideWorkspaceApproval as decideServerWorkspaceApproval,
   deleteWorkspaceApproval as deleteServerWorkspaceApproval,
-} from "./approvalpipeline.js?v=phantom-live-20260721-32";
+} from "./approvalpipeline.js?v=phantom-live-20260722-2";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -883,62 +883,89 @@ export function cadenceSuffix(cadence) {
    studio is for PhantomForce first: the default starter is the public
    phantomforce.online site, with test checkout until payments are connected. */
 export const SITE_TEMPLATES = {
-  /* This starter mirrors the REAL live phantomforce.online (repo-root
-     index.html, GitHub Pages) word for word: headline, section titles, and
-     section copy are pulled verbatim from that file, not invented. That site
-     is a lead-capture marketing page with a single "Start with PhantomForce"
-     signup CTA — it has no pricing tiers, no store, and no checkout, so this
-     starter doesn't invent any. Keep this in sync by hand if the real
-     index.html copy changes; there is no automated pull between them. */
   phantomforce: {
     id: "phantomforce",
     label: "PhantomForce public site",
     title: "PhantomForce — public site",
-    kind: "Website",
-    sections: ["Home", "What PhantomForce Handles", "Meet Your AI Workforce", "How It Works", "Built For Your Business", "Approval-First Operations"],
+    kind: "Store",
+    sections: ["Home", "Platform", "Media Lab", "Websites", "Analytics", "PhantomPlay", "Pricing", "Store", "FAQ", "Contact", "Privacy", "Refunds", "Checkout"],
     design: {
       brand: "PhantomForce",
-      headline: "AI-assisted operations, media, and backend execution for small business.",
-      subhead: "PhantomForce gives small businesses AI-assisted operations, media, websites, follow-up, approvals, and backend execution.",
-      offer: "PhantomForce helps capture leads, prepare replies, organize work, coordinate content, and keep the business moving under approval.",
-      cta: "Start with PhantomForce",
+      headline: "Run your business with a phantom workforce.",
+      subhead: "Leads, content, websites, media, analytics, approvals, and delivery in one private command center.",
+      offer: "Start free, then upgrade when PhantomForce is ready to run more of the business with you.",
+      cta: "Start free",
       theme: "neon",
       style: "product",
-      storeEnabled: false,
+      storeEnabled: true,
       existingUrl: "phantomforce.online",
     },
     copy: {
-      "what phantomforce handles": [
-        "One system covering the work that eats your week — organized, drafted, and routed through clear approval.",
-        "Lead Capture — catches new inquiries, organizes them, and prepares replies.",
-        "Smart Follow-Up — drafts fast, brand-aware responses for review and safe repeat-work rules.",
-        "Bookings — turns conversations into scheduled jobs and next steps.",
-        "Quotes & Money — prepares estimates, invoices, reminders, and payment follow-up.",
-        "Content & Media — helps plan, draft, package, and coordinate content with ChicagoShots support.",
-        "Sites & Stores — helps maintain pages, offers, service info, product flows, and client updates.",
-        "Follow-Up — keeps old leads, clients, and prospects from going cold.",
-        "Risk Watch — flags sensitive items, access issues, overdue work, and automation boundaries.",
+      platform: [
+        "PhantomForce gives each business one operating layer: intake, memory, client work, approvals, automation, and delivery stay connected instead of scattered across tools.",
+        "Every action is approval-gated where it matters. Phantom can draft, organize, review, and prepare work without silently publishing, charging, or changing anything risky.",
       ].join("\n"),
-      "meet your ai workforce": [
-        "Behind PhantomForce is a routed AI workforce plus real operator support.",
-        "You ask once; PhantomForce assigns the right specialists, prepares the work, and brings the final action back for approval.",
+      "media lab": [
+        "Generate images, videos, and voice assets from the same workspace where the campaign will be edited and published.",
+        "Long-running media jobs move into Pending, finished assets land in Media Pool, and the editor keeps the customer creating instead of staring at a loading screen.",
       ].join("\n"),
-      "how it works": [
-        "1. Tell PhantomForce what you need — one command, message, or request.",
-        "2. Your workforce prepares the work — leads, replies, quotes, content, bookings, and updates get organized.",
-        "3. Approve the action path — sensitive actions wait for you; safe repeat work follows the rules you set.",
-        "4. Nothing slips — work is tracked, followed up, and surfaced when it matters.",
+      websites: [
+        "Describe the site once, then keep refining the live draft from the same prompt-driven editor.",
+        "PhantomForce keeps store products, checkout proof, public copy, and publishing approvals together so the site can keep improving without a second CMS.",
       ].join("\n"),
-      "built for your business": [
-        "Missed DMs. Forgotten follow-ups. Slow quotes. Content backlog. Too many tabs, no backend team. PhantomForce is your operations and media layer.",
-        "Built for: media teams, coaches & trainers, contractors, local services, creators, event companies, consultants, and small agencies.",
+      analytics: [
+        "Connect social and web channels once, then let PhantomForce summarize what is working, what changed, and where attention is leaking.",
+        "The analytics view is built to become a combined command center, not a pile of disconnected platform screenshots.",
       ].join("\n"),
-      "approval-first operations": [
-        "You stay in control. PhantomForce prepares the work, surfaces the risk, and only lets safe repeat work run under rules you approve.",
-        "Set rules before repeat work. Review sensitive posts. Approve uploads and charges. Let safe repeat work follow rules. Track every action.",
+      phantomplay: [
+        "PhantomPlay gives the team a real break without leaving the workspace. Built-in games save progress, work offline, and stay separate from business execution.",
+        "The public site can show PhantomPlay as part of the product story while the app controls what modules each customer sees.",
+      ].join("\n"),
+      pricing: [
+        "Free Plan — see what PhantomForce looks like before committing.",
+        "Launch Sprint — hands-on setup for a serious first workspace.",
+        "Operator Support — monthly help keeping the system sharp, connected, and improving.",
+      ].join("\n"),
+      faq: [
+        "Can I try it first?",
+        "Yes. The public site keeps the free plan visible so new customers can see the product before choosing a paid path.",
+        "Does PhantomForce replace my team?",
+        "No. It gives the business a smarter operating layer so people spend less time hunting, copying, waiting, and repeating.",
+        "Can it publish or charge without approval?",
+        "No. Risky actions stay approval-gated by design.",
+        "Is this the same site editor used for phantomforce.online?",
+        "Yes. Site Studio edits the public PhantomForce site starter first, then every change continues from that draft.",
       ].join("\n"),
     },
-    products: [],
+    products: [
+      {
+        name: "Free Plan",
+        price: 0,
+        cadence: "monthly",
+        type: "digital",
+        desc: "Explore PhantomForce with a lightweight workspace before choosing a paid plan.",
+        delivery_url: "",
+        delivery_note: "Account access is created in app.phantomforce.online after signup.",
+      },
+      {
+        name: "Launch Sprint",
+        price: 750,
+        cadence: "one_time",
+        type: "digital",
+        desc: "Guided first setup for brand identity, workspace structure, modules, and launch-ready workflows.",
+        delivery_url: "",
+        delivery_note: "Delivery is scheduled after intake. PhantomForce support coordinates onboarding by email.",
+      },
+      {
+        name: "Operator Support",
+        price: 775,
+        cadence: "monthly",
+        type: "digital",
+        desc: "Monthly support to keep automations, content, analytics, websites, and delivery improving.",
+        delivery_url: "",
+        delivery_note: "Support access is confirmed after checkout and handled through the customer workspace.",
+      },
+    ],
   },
 };
 
@@ -1645,7 +1672,7 @@ function renderMemory(el, rerender) {
       if (!brainPanel.open || brainPanel.dataset.mounted) return;
       brainPanel.dataset.mounted = "1";
       const mount = brainPanel.querySelector("[data-memory-brain-mount]");
-      import("./brain.js?v=phantom-live-20260721-32")
+      import("./brain.js?v=phantom-live-20260722-2")
         .then((mod) => { if (mount && mount.isConnected) mod.renderPhantomBrain(mount); })
         .catch(() => { if (mount) mount.innerHTML = `<p class="ws-note">The brain panel could not load. Check that the backend on the admin PC is running, then reopen this section.</p>`; });
     });

@@ -6,8 +6,8 @@ import {
   moneyView,
   memoryStats,
   fmtMoney,
-} from "./store.js?v=phantom-live-20260721-32";
-import { loadSocialAccounts } from "./contenthub.js?v=phantom-live-20260721-32";
+} from "./store.js?v=phantom-live-20260722-2";
+import { loadSocialAccounts } from "./contenthub.js?v=phantom-live-20260722-2";
 
 let executionMode = "advise";
 let syncFrame = 0;
@@ -129,6 +129,65 @@ function sparkMarkup(series) {
   return `<span class="os-signal-spark" aria-hidden="true">${bars}</span>`;
 }
 
+function pipelineSignal() {
+  const money = moneyView();
+  const openCount = (money.open || []).length;
+  const wonCount = (money.won || []).length;
+  if (!openCount && !wonCount) return { ready: false };
+  return { ready: true, pipeline: money.pipeline, wonValue: money.wonValue, openCount, wonCount };
+}
+
+/* ---- division instrument micro-viz: a small live read on each module ---- */
+
+function miniSparkMarkup(series) {
+  const values = (series || []).map((value) => Math.max(0, Number(value) || 0));
+  const peak = Math.max(...values, 1);
+  if (!values.some((value) => value > 0)) return `<span class="os-mini-spark is-ghost"></span>`;
+  const bars = values.slice(-16).map((value) => `<i style="--h:${Math.max(8, Math.round((value / peak) * 100))}%"></i>`).join("");
+  return `<span class="os-mini-spark">${bars}</span>`;
+}
+
+function cellRowMarkup(count, max = 9) {
+  const filled = Math.min(Math.max(0, Number(count) || 0), max);
+  let cells = "";
+  for (let i = 0; i < max; i += 1) cells += `<i${i < filled ? ' class="is-on"' : ""}></i>`;
+  return `<span class="os-cells">${cells}</span>`;
+}
+
+function divisionVizMarkup(id) {
+  switch (id) {
+    case "analytics": { const a = audienceSignal(); return miniSparkMarkup(a.ready ? a.series : []); }
+    case "money": { const c = cashSignal(); return miniSparkMarkup(c.ready ? c.series.map(Math.abs) : []); }
+    case "phantomstore": return cellRowMarkup(visibleCount(store.state.products));
+    case "media": return cellRowMarkup(visibleCount(store.state.media));
+    case "sites": return cellRowMarkup(visibleCount(store.state.sites));
+    case "phantomplay": return `<span class="os-eq"><i></i><i></i><i></i><i></i><i></i></span>`;
+    case "intelligence": return `<span class="os-ping"></span>`;
+    default: return "";
+  }
+}
+
+let divisionVizSignature = "";
+function renderDivisionViz() {
+  const hosts = $$("[data-os-division-viz]");
+  if (!hosts.length) return;
+  const audience = audienceSignal();
+  const cash = cashSignal();
+  const signature = JSON.stringify([
+    audience.ready ? audience.impressions : 0,
+    cash.ready ? Math.round(cash.netCash) : 0,
+    visibleCount(store.state.products),
+    visibleCount(store.state.media),
+    visibleCount(store.state.sites),
+  ]);
+  /* Same defence as renderSignals: skip only when unchanged AND the deck is
+     still populated (ensureDashboardShell rebuilds the DOM from a pristine
+     capture on every view switch, emptying these hosts). */
+  if (signature === divisionVizSignature && hosts.every((host) => host.childElementCount)) return;
+  divisionVizSignature = signature;
+  hosts.forEach((host) => { host.innerHTML = divisionVizMarkup(host.dataset.osDivisionViz); });
+}
+
 function tweenValue(element, target, format) {
   const to = Number(target);
   if (!Number.isFinite(to)) {
@@ -160,10 +219,12 @@ function renderSignals() {
   const audience = audienceSignal();
   const cash = cashSignal();
   const force = forceSignal();
+  const pipe = pipelineSignal();
   const signature = JSON.stringify([
     audience.ready ? [audience.impressions, audience.platforms, audience.windowDays] : 0,
     cash.ready ? [Math.round(cash.netCash), cash.count] : 0,
     [force.agents, force.running, force.pending, force.memories],
+    pipe.ready ? [Math.round(pipe.pipeline), Math.round(pipe.wonValue), pipe.openCount] : 0,
   ]);
   /* The dashboard shell is rebuilt from a pristine innerHTML capture on every
      view switch (ensureDashboardShell), which resets this grid to empty — so
@@ -193,6 +254,17 @@ function renderSignals() {
      <i class="os-signal-d">${force.running} running · ${plural(force.pending, "approval")} waiting · ${plural(force.memories, "memory", "memories")}</i>
      <span class="os-signal-load${forceOn ? " is-on" : ""}" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>`;
 
+  const wonShare = pipe.ready && pipe.pipeline + pipe.wonValue > 0
+    ? Math.round((pipe.wonValue / (pipe.pipeline + pipe.wonValue)) * 100)
+    : 0;
+  const pipeBody = pipe.ready
+    ? `<b class="os-signal-v" data-signal-tween="${Math.round(pipe.pipeline)}" data-signal-fmt="money">${fmtMoney(pipe.pipeline)}</b>
+       <i class="os-signal-d">${plural(pipe.openCount, "open deal")} · ${fmtMoney(pipe.wonValue)} won</i>
+       <span class="os-signal-prop" style="--won:${wonShare}%" aria-hidden="true"></span>`
+    : `<b class="os-signal-v is-empty">—</b>
+       <i class="os-signal-d">No proposals yet. Draft one in Accounting.</i>
+       <span class="os-signal-prop is-ghost" aria-hidden="true"></span>`;
+
   grid.innerHTML = `
     <button class="os-signal" data-open-ws="analytics" type="button">
       <span class="os-signal-k"><u class="os-signal-led${audience.ready ? " is-on" : ""}"></u>Audience</span>
@@ -201,6 +273,10 @@ function renderSignals() {
     <button class="os-signal" data-open-ws="money" type="button">
       <span class="os-signal-k"><u class="os-signal-led${cash.ready ? " is-on" : ""}"></u>Cash flow</span>
       ${cashBody}
+    </button>
+    <button class="os-signal" data-open-ws="proposals" type="button">
+      <span class="os-signal-k"><u class="os-signal-led${pipe.ready ? " is-on" : ""}"></u>Pipeline</span>
+      ${pipeBody}
     </button>
     <button class="os-signal" data-open-ws="workforce" type="button">
       <span class="os-signal-k"><u class="os-signal-led${forceOn ? " is-on" : ""}"></u>Force load</span>
@@ -303,7 +379,29 @@ function syncCommandOS() {
   setDivisionMetric("intelligence", "—");
   setDivisionMetric("money", money.transactions.length ? fmtMoney(money.netCash) : "—");
 
+  /* Reactive gravity map: a node (and its beam of data flowing into the core)
+     energizes only when that metric is real. classList.toggle with the same
+     state is a no-op on the attribute, so once data settles this stops firing
+     the MutationObserver and the sync loop goes quiet. */
+  const liveMap = {
+    revenue: money.transactions.length > 0,
+    clients: leads > 0,
+    missions: agents.length > 0,
+    approvals: pendingApprovals > 0,
+    risk: riskRecords > 0,
+    health: health.short !== "Checking",
+  };
+  Object.keys(liveMap).forEach((key) => {
+    const node = $(`[data-os-node="${key}"]`);
+    if (node) node.classList.toggle("is-live", liveMap[key]);
+    const flow = $(`.os-flow[data-flow="${key}"]`);
+    if (flow) flow.classList.toggle("is-live", liveMap[key]);
+    const beam = $(`.os-beam[data-beam="${key}"]`);
+    if (beam) beam.classList.toggle("is-live", liveMap[key]);
+  });
+
   renderSignals();
+  renderDivisionViz();
 
   setText("[data-os-user-name]", name.split(/\s+/)[0] || name);
   setText("[data-os-user-initial]", initial);

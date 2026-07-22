@@ -7,7 +7,7 @@
       if (location.protocol === "http:" && location.hostname.indexOf("phantomforce.online") !== -1) {
         location.replace("https://" + location.host + location.pathname + location.search + location.hash);
       }
-      window.PHANTOM_BUILD = "phantom-live-20260721-32";
+      window.PHANTOM_BUILD = "phantom-live-20260722-2";
       if ("serviceWorker" in navigator) {
         navigator.serviceWorker
           .getRegistrations()
@@ -44,7 +44,7 @@
     </script>
     <title>PhantomForce — AI Operations Console</title>
     <meta name="description" content="PhantomForce — your AI business operating system." />
-    <meta name="phantom-build" content="phantom-live-20260721-32" />
+    <meta name="phantom-build" content="phantom-live-20260722-2" />
     <meta name="robots" content="noindex" />
     <meta name="theme-color" content="#f3f2fa" />
     <style>
@@ -123,18 +123,18 @@
 
 
     </style>
-    <link rel="icon" type="image/png" href="/app/assets/brand-phantom-favicon.png?v=phantom-live-20260721-32" />
+    <link rel="icon" type="image/png" href="/app/assets/brand-phantom-favicon.png?v=phantom-live-20260722-2" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700;12..96,800&family=Instrument+Sans:wght@400;500;600;700&family=Spline+Sans+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/app/phantom.css?v=phantom-live-20260721-32" />
-    <link rel="stylesheet" href="/app/phantomplay.css?v=phantom-live-20260721-32" />
-    <link rel="stylesheet" href="/app/phantomplay-v2.css?v=phantom-live-20260721-32" />
-    <link rel="stylesheet" href="/app/phantomstore.css?v=phantom-live-20260721-32" />
-    <link rel="stylesheet" href="/app/competitor-intelligence.css?v=phantom-live-20260721-32" />
-    <link rel="stylesheet" href="/app/orggraph.css?v=phantom-live-20260721-32" />
-    <link rel="stylesheet" href="/app/phantom-skin.css?v=phantom-live-20260721-32" />
-    <link rel="stylesheet" href="/app/command-os.css?v=phantom-live-20260721-32" />
+    <link rel="stylesheet" href="/app/phantom.css?v=phantom-live-20260722-2" />
+    <link rel="stylesheet" href="/app/phantomplay.css?v=phantom-live-20260722-2" />
+    <link rel="stylesheet" href="/app/phantomplay-v2.css?v=phantom-live-20260722-2" />
+    <link rel="stylesheet" href="/app/phantomstore.css?v=phantom-live-20260722-2" />
+    <link rel="stylesheet" href="/app/competitor-intelligence.css?v=phantom-live-20260722-2" />
+    <link rel="stylesheet" href="/app/orggraph.css?v=phantom-live-20260722-2" />
+    <link rel="stylesheet" href="/app/phantom-skin.css?v=phantom-live-20260722-2" />
+    <link rel="stylesheet" href="/app/command-os.css?v=phantom-live-20260722-2" />
   </head>
   <body>
     <div class="bg-grid" aria-hidden="true"></div>
@@ -193,7 +193,7 @@
 
       <header class="mobile-admin-homebar" aria-label="Mobile admin home">
         <button class="mobile-admin-brand" data-mobile-home type="button" aria-label="Open Dashboard">
-          <img class="brand-ghost" src="/app/assets/brand-phantom.png?v=phantom-live-20260721-32" alt="" aria-hidden="true" />
+          <img class="brand-ghost" src="/app/assets/brand-phantom.png?v=phantom-live-20260722-2" alt="" aria-hidden="true" />
           <span>
             <b>PhantomForce</b>
             <i>Business</i>
@@ -216,7 +216,7 @@
       <!-- ---------- sidebar ---------- -->
       <aside class="sidebar" aria-label="Primary">
         <div class="side-brand">
-          <img class="brand-ghost" src="/app/assets/brand-phantom.png?v=phantom-live-20260721-32" alt="" aria-hidden="true" />
+          <img class="brand-ghost" src="/app/assets/brand-phantom.png?v=phantom-live-20260722-2" alt="" aria-hidden="true" />
           <span class="side-brand-text">
             <b>PHANTOMFORCE</b>
             <i>BUSINESS MANAGER</i>
@@ -323,12 +323,28 @@
               </div>
 
               <div class="hero2-stage">
-                <img class="os-earth-horizon" src="/app/assets/command-earth-horizon.png?v=phantom-live-20260721-32" alt="" aria-hidden="true" />
+                <img class="os-earth-horizon" src="/app/assets/command-earth-horizon.png?v=phantom-live-20260722-2" alt="" aria-hidden="true" />
                 <div class="os-gravity-map" data-os-gravity-map aria-label="Business gravity map">
+                  <span class="os-radar" aria-hidden="true"></span>
                   <span class="os-orbit os-orbit-a" aria-hidden="true"></span>
                   <span class="os-orbit os-orbit-b" aria-hidden="true"></span>
                   <span class="os-orbit os-orbit-c" aria-hidden="true"></span>
+                  <svg class="os-gravity-beams" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+                    <line class="os-beam" data-beam="revenue" x1="58" y1="58" x2="33" y2="38" />
+                    <line class="os-beam" data-beam="clients" x1="58" y1="58" x2="45" y2="30" />
+                    <line class="os-beam" data-beam="missions" x1="58" y1="58" x2="58" y2="27" />
+                    <line class="os-beam" data-beam="approvals" x1="58" y1="58" x2="71" y2="35" />
+                    <line class="os-beam" data-beam="risk" x1="58" y1="58" x2="81" y2="48" />
+                    <line class="os-beam" data-beam="health" x1="58" y1="58" x2="72" y2="56" />
+                  </svg>
+                  <span class="os-flow" data-flow="revenue" aria-hidden="true"></span>
+                  <span class="os-flow" data-flow="clients" aria-hidden="true"></span>
+                  <span class="os-flow" data-flow="missions" aria-hidden="true"></span>
+                  <span class="os-flow" data-flow="approvals" aria-hidden="true"></span>
+                  <span class="os-flow" data-flow="risk" aria-hidden="true"></span>
+                  <span class="os-flow" data-flow="health" aria-hidden="true"></span>
                   <button class="os-node os-node-core" data-os-focus-chat type="button" aria-label="Talk to Phantom">
+                    <span class="os-core-ring" aria-hidden="true"></span>
                     <span>PHANTOM</span><b>Ready</b><i>Operating intelligence</i>
                   </button>
                   <button class="os-node" data-os-node="revenue" data-open-ws="money" type="button">
@@ -361,7 +377,7 @@
                   <img
                     class="phantom-mode-pose"
                     data-mode-pose
-                    src="/app/assets/poses/chin.webp?v=phantom-live-20260721-32"
+                    src="/app/assets/poses/chin.webp?v=phantom-live-20260722-2"
                     alt="Phantom listening"
                     decoding="async"
                     fetchpriority="high"
@@ -373,13 +389,13 @@
             </section>
 
             <nav class="os-division-strip" data-os-division-strip aria-label="Division instruments">
-              <button data-nav-id="phantomplay" type="button"><span>01</span><em class="os-division-metric" data-os-division-metric="phantomplay">—</em><b>PhantomPlay</b><i data-os-division-status="phantomplay">Open entertainment operations</i></button>
-              <button data-nav-id="phantomstore" type="button"><span>02</span><em class="os-division-metric" data-os-division-metric="phantomstore">—</em><b>PhantomStore</b><i data-os-division-status="phantomstore">No products loaded</i></button>
-              <button data-nav-id="media" type="button"><span>03</span><em class="os-division-metric" data-os-division-metric="media">—</em><b>Media Lab</b><i data-os-division-status="media">No media loaded</i></button>
-              <button data-nav-id="sites" type="button"><span>04</span><em class="os-division-metric" data-os-division-metric="sites">—</em><b>Website Builder</b><i data-os-division-status="sites">No sites loaded</i></button>
-              <button data-nav-id="analytics" type="button"><span>05</span><em class="os-division-metric" data-os-division-metric="analytics">—</em><b>Analytics</b><i data-os-division-status="analytics">Open live intelligence</i></button>
-              <button data-nav-id="intelligence" type="button"><span>06</span><em class="os-division-metric" data-os-division-metric="intelligence">—</em><b>Competitor Intel</b><i data-os-division-status="intelligence">Open market watch</i></button>
-              <button data-nav-id="money" type="button"><span>07</span><em class="os-division-metric" data-os-division-metric="money">—</em><b>Accounting</b><i data-os-division-status="money">No transactions loaded</i></button>
+              <button data-nav-id="phantomplay" type="button"><span class="os-division-tag">01</span><em class="os-division-metric" data-os-division-metric="phantomplay">—</em><b>PhantomPlay</b><i data-os-division-status="phantomplay">Open entertainment operations</i><span class="os-division-viz" data-os-division-viz="phantomplay" aria-hidden="true"></span></button>
+              <button data-nav-id="phantomstore" type="button"><span class="os-division-tag">02</span><em class="os-division-metric" data-os-division-metric="phantomstore">—</em><b>PhantomStore</b><i data-os-division-status="phantomstore">No products loaded</i><span class="os-division-viz" data-os-division-viz="phantomstore" aria-hidden="true"></span></button>
+              <button data-nav-id="media" type="button"><span class="os-division-tag">03</span><em class="os-division-metric" data-os-division-metric="media">—</em><b>Media Lab</b><i data-os-division-status="media">No media loaded</i><span class="os-division-viz" data-os-division-viz="media" aria-hidden="true"></span></button>
+              <button data-nav-id="sites" type="button"><span class="os-division-tag">04</span><em class="os-division-metric" data-os-division-metric="sites">—</em><b>Website Builder</b><i data-os-division-status="sites">No sites loaded</i><span class="os-division-viz" data-os-division-viz="sites" aria-hidden="true"></span></button>
+              <button data-nav-id="analytics" type="button"><span class="os-division-tag">05</span><em class="os-division-metric" data-os-division-metric="analytics">—</em><b>Analytics</b><i data-os-division-status="analytics">Open live intelligence</i><span class="os-division-viz" data-os-division-viz="analytics" aria-hidden="true"></span></button>
+              <button data-nav-id="intelligence" type="button"><span class="os-division-tag">06</span><em class="os-division-metric" data-os-division-metric="intelligence">—</em><b>Competitor Intel</b><i data-os-division-status="intelligence">Open market watch</i><span class="os-division-viz" data-os-division-viz="intelligence" aria-hidden="true"></span></button>
+              <button data-nav-id="money" type="button"><span class="os-division-tag">07</span><em class="os-division-metric" data-os-division-metric="money">—</em><b>Accounting</b><i data-os-division-status="money">No transactions loaded</i><span class="os-division-viz" data-os-division-viz="money" aria-hidden="true"></span></button>
             </nav>
 
           </div>
@@ -582,6 +598,6 @@
     <!-- workspace overlays mount here, above the blurred console -->
     <div class="overlay-root" data-overlay-root></div>
 
-    <script type="module" src="/app/js/main.js?v=phantom-live-20260721-32"></script>
+    <script type="module" src="/app/js/main.js?v=phantom-live-20260722-2"></script>
   </body>
 </html>
