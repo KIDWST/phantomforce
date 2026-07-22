@@ -1079,10 +1079,11 @@ function devWorkbenchWithSource(editor, source, activeFile = editor?.activeFile 
   return { ...editor, editedSource: source, files, activeFile: files[activeFile] !== undefined ? activeFile : "index.html" };
 }
 
-async function importDevWorkbenchFiles(fileList) {
+async function importDevWorkbenchFiles(fileList, forcedName = "") {
   if (!ui.devWorkbench || ui.devWorkbench.loading) return;
   const gameId = ui.devWorkbench.gameId;
-  const incoming = [...(fileList || [])].filter((file) => /\.(?:html?|css|m?js)$/iu.test(file?.name || ""));
+  const selected = [...(fileList || [])];
+  const incoming = forcedName ? selected.slice(0, 1) : selected.filter((file) => /\.(?:html?|css|m?js)$/iu.test(file?.name || ""));
   if (!incoming.length) {
     ui.devWorkbench = { ...ui.devWorkbench, error: "Drop HTML, CSS, or JavaScript files only.", status: "No project files were changed." };
     render();
@@ -1091,9 +1092,11 @@ async function importDevWorkbenchFiles(fileList) {
   const currentSource = devWorkbenchDomSource();
   const current = devProjectFromSource(currentSource);
   const imported = [];
-  for (const file of incoming) {
+  for (const [index, file] of incoming.entries()) {
     const content = await file.text();
-    const name = /\.html?$/iu.test(file.name) ? "index.html" : safeDevProjectFileName(file.name);
+    const name = index === 0 && forcedName
+      ? safeDevProjectFileName(forcedName)
+      : /\.html?$/iu.test(file.name) ? "index.html" : safeDevProjectFileName(file.name);
     current[name] = content;
     imported.push(name);
   }
@@ -1180,9 +1183,14 @@ function devWorkbenchMarkup() {
       : section === "mods"
         ? devWorkbenchModsMarkup(game)
         : `<div class="pp-devproject">
+            <div class="pp-devproject-slots" aria-label="Replace individual game files">
+              <label class="pp-devfile-slot is-html"><input type="file" data-pp-devworkbench-file-upload="index.html" accept=".html,.htm"/><span><b>HTML</b><i>index.html</i></span><strong>Choose or replace</strong></label>
+              <label class="pp-devfile-slot is-css"><input type="file" data-pp-devworkbench-file-upload="style.css" accept=".css"/><span><b>STYLE</b><i>style.css</i></span><strong>Choose or replace</strong></label>
+              <label class="pp-devfile-slot is-js"><input type="file" data-pp-devworkbench-file-upload="game.js" accept=".js,.mjs"/><span><b>GAME</b><i>game.js</i></span><strong>Choose or replace</strong></label>
+            </div>
             <label class="pp-devproject-drop" data-pp-devworkbench-drop>
               <input type="file" data-pp-devworkbench-files accept=".html,.htm,.css,.js,.mjs" multiple/>
-              <b>Drop project files here</b><span>or choose files · HTML, CSS, JavaScript · matching files are replaced completely</span>
+              <b>Drop the whole game here</b><span>or choose all files at once · HTML, CSS, JavaScript</span>
             </label>
             <nav class="pp-devproject-tabs" aria-label="Game project files">${projectFiles.map((name) => `<button type="button" data-pp-devworkbench-file="${esc(name)}" class="${name === (d.activeFile || "index.html") ? "is-active" : ""}">${esc(name)}</button>`).join("")}</nav>
             <textarea class="pp-devsandbox-source" data-pp-devworkbench-source spellcheck="false" aria-label="Edit ${esc(d.activeFile || "index.html")}">${esc(devWorkbenchFileSource(d))}</textarea>
@@ -2383,6 +2391,7 @@ function bind() {
   mountedRoot.querySelector("[data-pp-devworkbench-start]")?.addEventListener("click", launchNormalFromWorkbench);
   mountedRoot.querySelectorAll("[data-pp-devworkbench-file]").forEach((button) => button.addEventListener("click", () => selectDevWorkbenchFile(button.dataset.ppDevworkbenchFile)));
   mountedRoot.querySelector("[data-pp-devworkbench-files]")?.addEventListener("change", (event) => importDevWorkbenchFiles(event.target.files));
+  mountedRoot.querySelectorAll("[data-pp-devworkbench-file-upload]").forEach((input) => input.addEventListener("change", () => importDevWorkbenchFiles(input.files, input.dataset.ppDevworkbenchFileUpload)));
   const projectDrop = mountedRoot.querySelector("[data-pp-devworkbench-drop]");
   if (projectDrop) {
     projectDrop.addEventListener("dragenter", (event) => { event.preventDefault(); projectDrop.classList.add("is-dragging"); });

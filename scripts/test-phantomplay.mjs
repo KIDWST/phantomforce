@@ -365,6 +365,10 @@ assert.match(module, /data-pp-devworkbench-save[\s\S]{0,120}(?:Saving…|Save)/u
 assert.doesNotMatch(module, />Save draft</u, "PhantomPlay must not label project persistence as Save draft.");
 assert.match(module, /data-pp-devworkbench-drop/u, "The code workbench must expose a project file drop zone.");
 assert.match(module, /accept="\.html,\.htm,\.css,\.js,\.mjs" multiple/u, "The project picker must accept HTML, CSS, and JavaScript together.");
+for (const fileName of ["index.html", "style.css", "game.js"]) {
+  assert.match(module, new RegExp(`data-pp-devworkbench-file-upload=${JSON.stringify(fileName).replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")}`, "u"), `The workbench must expose one obvious ${fileName} replacement slot.`);
+}
+assert.match(module, /importDevWorkbenchFiles\(input\.files, input\.dataset\.ppDevworkbenchFileUpload\)/u, "Each individual upload slot must overwrite its canonical project file regardless of the uploaded filename.");
 assert.match(module, /function importDevWorkbenchFiles[\s\S]*file\.text\(\)[\s\S]*devProjectSource/u, "Dropped project files must replace their matching editable file and rebuild one safe sandbox source.");
 assert.match(module, /function devProjectFromSource[\s\S]*data-phantomplay-dev-bundled[\s\S]*index\.html/u, "Bundled game source must split back into individually editable project files.");
 assert.match(module, /async function saveDevWorkbench[\s\S]*\/override[\s\S]*method: "POST"/u, "The plain Save action must persist the complete workspace project, not only a browser-local draft.");

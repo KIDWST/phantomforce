@@ -1310,7 +1310,13 @@ html[data-org-color-mode="light"] .pp-game-art img{
 .pp-devworkbench-close-inline{min-height:38px;padding:0 14px;border:1px solid #ff6d8355;border-radius:10px;background:#1c070bcc;color:#ffc7d1;font-weight:900;cursor:pointer}
 .pp-devworkbench-close-inline:hover,.pp-devworkbench-close-inline:focus-visible{border-color:#ff6d83;color:#fff;outline:none}
 .pp-devworkbench .pp-devsandbox-source{border-top:1px solid #41ffa129}
-.pp-devproject{display:grid;grid-template-rows:auto auto minmax(0,1fr);min-height:0;overflow:hidden;background:#020906}
+.pp-devproject{display:grid;grid-template-rows:auto auto auto minmax(0,1fr);min-height:0;overflow:hidden;background:#020906}
+.pp-devproject-slots{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;padding:10px;border-bottom:1px solid #41ffa129;background:#030d0b}
+.pp-devfile-slot{position:relative;display:flex;align-items:center;justify-content:space-between;gap:10px;min-width:0;min-height:54px;padding:9px 11px;border:1px solid #41ffa133;border-radius:10px;background:#071712;color:#d3ffe9;cursor:pointer;transition:border-color .16s ease,background .16s ease,transform .16s ease}
+.pp-devfile-slot:hover,.pp-devfile-slot:focus-within{border-color:#41ffa1;background:#0a251c;transform:translateY(-1px)}
+.pp-devfile-slot input{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap}
+.pp-devfile-slot span{display:grid;gap:2px;min-width:0}.pp-devfile-slot b{color:#41ffa1;font:900 10px "Spline Sans Mono",monospace;letter-spacing:.1em}.pp-devfile-slot i{overflow:hidden;color:#b5d6c9;font:10px "Spline Sans Mono",monospace;text-overflow:ellipsis;white-space:nowrap}
+.pp-devfile-slot strong{flex:0 0 auto;padding:5px 8px;border-radius:6px;background:#41ffa114;color:#7fead0;font-size:9px;text-transform:uppercase}
 .pp-devproject-drop{position:relative;display:flex;align-items:center;justify-content:center;gap:10px;min-height:58px;padding:10px 16px;border:1px dashed #41ffa14d;border-width:0 0 1px;background:linear-gradient(90deg,#071b15,#06120f);color:#bfffe0;cursor:pointer;text-align:center;transition:border-color .16s ease,background .16s ease,box-shadow .16s ease}
 .pp-devproject-drop:hover,.pp-devproject-drop:focus-within,.pp-devproject-drop.is-dragging{border-color:#41ffa1;background:#0a251c;box-shadow:inset 0 0 28px #41ffa112}
 .pp-devproject-drop input{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap}
@@ -1322,5 +1328,5 @@ html[data-org-color-mode="light"] .pp-game-art img{
 .pp-devproject-tabs button.is-active{border-color:#41ffa16b;background:#0b291f;color:#41ffa1}
 .pp-devproject>.pp-devsandbox-source{min-height:0;border-top:0}
 @media(max-width:980px){.pp-player.is-devsandbox{grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr) auto}.pp-player.is-devsandbox .pp-devsandbox{top:auto;right:10px;bottom:44px;left:10px;width:auto;max-height:min(360px,46vh);border-radius:12px}}
-@media(max-width:767px){.pp-devworkbench{inset:0;width:100%;border-radius:0}.pp-devworkbench-toolbar{align-items:stretch;max-height:188px;overflow-y:auto}.pp-devworkbench-toolbar label,.pp-devworkbench-toolbar button{width:100%;justify-content:center}.pp-devproject-drop{display:grid;gap:3px;min-height:64px}.pp-devproject-drop span{font-size:9px}.pp-devsandbox-minimized{right:12px;bottom:calc(58px + env(safe-area-inset-bottom))}}
+@media(max-width:767px){.pp-devworkbench{inset:0;width:100%;border-radius:0}.pp-devworkbench-toolbar{align-items:stretch;max-height:150px;overflow-y:auto}.pp-devworkbench-toolbar label,.pp-devworkbench-toolbar button{width:100%;justify-content:center}.pp-devproject-slots{grid-template-columns:1fr;padding:7px;max-height:178px;overflow-y:auto}.pp-devfile-slot{min-height:46px}.pp-devproject-drop{display:grid;gap:3px;min-height:58px}.pp-devproject-drop span{font-size:9px}.pp-devsandbox-minimized{right:12px;bottom:calc(58px + env(safe-area-inset-bottom))}}
 @media(max-width:900px){.pp-devmode-body{grid-template-columns:1fr;grid-template-rows:1fr 1fr}.pp-devmode-editor{border-right:0;border-bottom:1px solid var(--line)}}
