@@ -96,11 +96,12 @@ assert.match(module, /data\.source !== "phantomplay-game"/u, "Game messages must
 assert.doesNotMatch(module + v2Module, /Sign in to play|Backend session required|backend_session_required/u, "PhantomPlay must not show a sign-in/session gate inside an already signed-in workspace.");
 assert.match(module + v2Module, /local_play_fallback/u, "PhantomPlay fallback snapshots must allow signed-in workspace users to launch built-in games locally while sync is offline.");
 assert.match(module + v2Module, /function canLaunchGames[\s\S]*hasWorkspaceSession/u, "PhantomPlay launch gating must treat an existing workspace session as enough for local built-in play.");
-assert.match(module + v2Module, /Cloud sync is offline/u, "PhantomPlay offline copy must present backend loss as sync degradation, not a sign-in failure.");
+assert.match(module + v2Module, /Local Play mode/u, "PhantomPlay offline copy must present backend loss as sync degradation, not a sign-in failure.");
+assert.match(module + v2Module, /!\s*ui\.offline && ui\.error/u, "PhantomPlay must not stack a raw backend error banner over playable local mode.");
 assert.match(module, /if \(error\?\.status === 401 \|\| error\?\.status === 403\)[\s\S]*ui\.offline = false;[\s\S]*Sign in again to sync PhantomPlay[\s\S]*ui\.snapshot = normalizeSnapshot\(offlineState\(\)\);[\s\S]*ui\.offline = true/u, "Classic PhantomPlay must show auth/access failures as attention-needed, reserving offline fallback for real backend loss.");
 assert.doesNotMatch(module, /ui\.notice = "Cloud sync is offline/u, "Classic PhantomPlay must not duplicate offline sync copy inside the Creator support notice banner.");
 assert.match(v2Module, /if \(error\?\.status === 401 \|\| error\?\.status === 403\)[\s\S]*ui\.offline = false;[\s\S]*Sign in again to sync PhantomPlay[\s\S]*ui\.snapshot = normalizeSnapshot\(offlineState\(\)\); ui\.offline = true;[\s\S]*ui\.error = ""/u, "V2 PhantomPlay must show auth/access failures as attention-needed, reserving offline fallback for real backend loss.");
-assert.match(module + v2Module, /ui\.error \? `<div class="pp2?-banner is-error|ui\.error \? `<div class="pp-banner is-error/u, "PhantomPlay must still show launch/session errors.");
+assert.match(module + v2Module, /!\s*ui\.offline && ui\.error \? `<div class="pp2?-banner is-error|!\s*ui\.offline && ui\.error \? `<div class="pp-banner is-error/u, "PhantomPlay must still show launch/session errors when play is genuinely blocked.");
 assert.match(serverIndex, /app\.get\("\/api\/phantomplay"[\s\S]*try \{[\s\S]*getPhantomPlaySnapshot[\s\S]*catch \(error\)[\s\S]*sync_unavailable/u, "The PhantomPlay snapshot route must fail soft instead of returning raw Internal Server Error.");
 assert.match(module, /No games ready/u, "The condensed library must retain a useful empty state.");
 assert.match(module, /not a marketplace/u, "PhantomPlay must be positioned as a sandbox, not a marketplace.");
