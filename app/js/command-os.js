@@ -6,8 +6,8 @@ import {
   moneyView,
   memoryStats,
   fmtMoney,
-} from "./store.js?v=phantom-live-20260721-26";
-import { loadSocialAccounts } from "./contenthub.js?v=phantom-live-20260721-26";
+} from "./store.js?v=phantom-live-20260721-30";
+import { loadSocialAccounts } from "./contenthub.js?v=phantom-live-20260721-30";
 
 let executionMode = "advise";
 let syncFrame = 0;
@@ -327,6 +327,8 @@ function syncCommandOS() {
   const time = new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
   setText("[data-os-live-time]", time);
   syncActiveNavigation();
+  ensureDecisionObserver();
+  syncDecisionOffset();
 }
 
 function scheduleSync() {
@@ -374,6 +376,55 @@ export function applyCommandExecutionMode(raw = "") {
     monitor: "Monitor this and report changes without taking external action: ",
   };
   return `${directives[executionMode] || ""}${text}`;
+}
+
+/* .dashboard-brief floats over the gravity map with a real height that
+   depends on the greeting's line-wrap (name length) and status text length —
+   .decision-deck below it used a fixed CSS top offset, which the greeting
+   reliably overflowed into for longer names ("Decisions" overlapping "...next
+   outcome."). Measure the actual box instead of assuming its height. The
+   deck's own height is capped the same way: a fixed 220px ran into the
+   division strip below once the top offset grew to clear a taller greeting,
+   so the cap shrinks to whatever room is actually left above the strip. */
+let decisionObserverAttached = false;
+/* initCommandOS runs exactly once, early in boot() — .dashboard-brief and
+   .decision-deck are static markup so they normally exist by then, but
+   nothing guarantees it (session verification, gate timing), and a
+   ResizeObserver attached to a null target never gets a second chance since
+   commandOsBound blocks initCommandOS from ever running again. Retrying this
+   from inside syncCommandOS — which already runs repeatedly via store
+   changes, the DOM MutationObserver, and a 15s interval — means the observer
+   attaches on whichever pass first finds real elements, instead of silently
+   never attaching at all. */
+function ensureDecisionObserver() {
+  if (decisionObserverAttached || !("ResizeObserver" in window)) return;
+  const brief = $(".dashboard-brief");
+  const strip = $(".os-division-strip");
+  if (!brief) return;
+  const layoutObserver = new ResizeObserver(syncDecisionOffset);
+  layoutObserver.observe(brief);
+  if (strip) layoutObserver.observe(strip);
+  decisionObserverAttached = true;
+}
+
+function syncDecisionOffset() {
+  const brief = $(".dashboard-brief");
+  const deck = $(".decision-deck");
+  if (!brief || !deck) return;
+  const top = brief.offsetTop + brief.offsetHeight + 24; // 24px clearance below the greeting
+  const parentTop = (deck.offsetParent || deck.parentElement).getBoundingClientRect().top;
+  const strip = $(".os-division-strip");
+  const stripTop = strip ? strip.getBoundingClientRect().top : Infinity;
+  const available = stripTop - (parentTop + top) - 16; // 16px clearance above the strip
+  const maxHeight = Math.max(120, Math.min(220, available));
+  const nextTop = `${Math.round(top)}px`;
+  const nextMax = `${Math.round(maxHeight)}px`;
+  if (deck.style.getPropertyValue("--os-decision-top") !== nextTop) {
+    deck.style.setProperty("--os-decision-top", nextTop);
+  }
+  if (deck.style.getPropertyValue("--os-decision-max-height") !== nextMax) {
+    deck.style.setProperty("--os-decision-max-height", nextMax);
+  }
 }
 
 function bindCommandOS() {
@@ -435,7 +486,11 @@ export function initCommandOS() {
   window.addEventListener("resize", () => {
     if (window.innerWidth > 1280) shell.classList.remove("os-mission-open");
     scheduleSync();
+    syncDecisionOffset();
   }, { passive: true });
   window.setInterval(scheduleSync, 15000);
+  if (!("ResizeObserver" in window)) window.addEventListener("resize", syncDecisionOffset, { passive: true });
+  ensureDecisionObserver();
+  syncDecisionOffset();
   scheduleSync();
 }

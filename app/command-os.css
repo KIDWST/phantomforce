@@ -369,11 +369,18 @@ html[data-command-os="2040"] .bg-glow {
 
 .command-os-enabled .decision-deck {
   position: absolute;
-  top: 188px;
+  /* --os-decision-top is measured live off .dashboard-brief's real rendered
+     height (command-os.js) — the greeting wraps to 2-3 lines depending on
+     name length, so a fixed offset here reliably overlapped it for longer
+     names ("Decisions" printing over "...next outcome."). 188px is only the
+     pre-JS fallback for the first paint. */
+  top: var(--os-decision-top, 188px);
   left: clamp(26px, 3vw, 52px);
   z-index: 21;
   width: min(280px, 28%);
-  max-height: 220px;
+  /* also measured live — a fixed 220px reliably ran into the division strip
+     below once --os-decision-top grew to clear a taller greeting above. */
+  max-height: var(--os-decision-max-height, 220px);
   overflow: auto;
 }
 

@@ -38,6 +38,16 @@ const REF_H = 600;
 const ABILITY_COOLDOWN = 26;
 const MAX_ENEMIES = 220;
 const PRESSURE_TYPES = new Set(["swarm", "armor", "blackout"]);
+const PATH_KEYS = ["power", "reach", "tech"];
+const PATH_MAX_LEVEL = 3;
+const PATH_TOTAL_CAP = 6;
+const PATH_PRIMARY_CAP = 3;
+const PATH_SECONDARY_CAP = 2;
+const PATHS = {
+  power: { id: "power", name: "Power Path", tag: "damage + pierce", color: "#ffc857", costs: [45, 95, 185] },
+  reach: { id: "reach", name: "Reach Path", tag: "range + speed", color: "#65d8cf", costs: [40, 85, 165] },
+  tech: { id: "tech", name: "Tech Path", tag: "special effects", color: "#b792ff", costs: [50, 105, 205] }
+};
 
 const MAPS = [
   {
@@ -869,7 +879,7 @@ function starterDefenseIds() {
 }
 function makeSentinel(defId, point, spent, starter = false) {
   const id = uid();
-  return { id, defId, tier: 0, slotIndex: -id, x: point.x, y: point.y, cooldown: 0, recoil: 0, jammed: 0, aim: 0, spent, starter };
+  return { id, defId, tier: 0, paths: { power: 0, reach: 0, tech: 0 }, slotIndex: -id, x: point.x, y: point.y, cooldown: 0, recoil: 0, jammed: 0, aim: 0, spent, starter };
 }
 function seedOpeningDefenses() {
   const starterIds = starterDefenseIds();
@@ -1243,6 +1253,56 @@ function droneBoost(sentinel) {
   });
   return boost;
 }
+function sentinelPaths(sentinel) {
+  if (!sentinel.paths) sentinel.paths = { power: 0, reach: 0, tech: 0 };
+  PATH_KEYS.forEach((key) => { sentinel.paths[key] = clampInt(sentinel.paths[key], 0, PATH_MAX_LEVEL, 0); });
+  return sentinel.paths;
+}
+function pathTotal(sentinel) {
+  const paths = sentinelPaths(sentinel);
+  return PATH_KEYS.reduce((sum, key) => sum + paths[key], 0);
+}
+function pathUpgradeCost(sentinel, pathId) {
+  const path = PATHS[pathId];
+  if (!path) return Infinity;
+  const level = sentinelPaths(sentinel)[pathId] || 0;
+  return path.costs[level] || Infinity;
+}
+function pathUpgradeBlocked(sentinel, pathId) {
+  const level = sentinelPaths(sentinel)[pathId] || 0;
+  if (!PATHS[pathId]) return "Unknown path";
+  if (level >= PATH_MAX_LEVEL) return "Max path";
+  if (pathTotal(sentinel) >= PATH_TOTAL_CAP) return "Crosspath cap";
+  const otherMax = Math.max(...PATH_KEYS.filter((key) => key !== pathId).map((key) => sentinel.paths[key] || 0));
+  if (otherMax >= PATH_PRIMARY_CAP && level >= PATH_SECONDARY_CAP) return "Secondary cap";
+  return "";
+}
+function applySentinelPathStats(stats, sentinel) {
+  const paths = sentinelPaths(sentinel);
+  const power = paths.power || 0;
+  const reach = paths.reach || 0;
+  const tech = paths.tech || 0;
+  if (power) {
+    stats.dmg *= 1 + power * .24;
+    stats.pierce = (stats.pierce || 0) + Math.floor(power * 1.5);
+  }
+  if (reach) {
+    stats.range *= 1 + reach * .13;
+    stats.rof *= 1 + reach * .07;
+    if (stats.minRange) stats.minRange = Math.max(20, stats.minRange - reach * 11);
+  }
+  if (tech) {
+    stats.splash = stats.splash ? stats.splash * (1 + tech * .16) : stats.splash;
+    stats.slow = stats.slow ? Math.min(.78, stats.slow + tech * .06) : stats.slow;
+    stats.slowDur = stats.slowDur ? stats.slowDur * (1 + tech * .22) : stats.slowDur;
+    stats.shieldDamage = stats.shieldDamage ? stats.shieldDamage + tech * 1.15 : stats.shieldDamage;
+    stats.reveal = stats.reveal ? stats.reveal * (1 + tech * .25) : stats.reveal;
+    stats.pull = stats.pull ? stats.pull * (1 + tech * .18) : stats.pull;
+    stats.boost = stats.boost ? stats.boost + tech * .07 : stats.boost;
+    stats.chain = Math.max(stats.chain || 0, tech >= 3 ? 1 : 0);
+  }
+  return stats;
+}
 function currentStats(sentinel) {
   const base = DEFENSES[sentinel.defId].tiers[sentinel.tier];
   const commander = currentCommander();
@@ -1260,7 +1320,7 @@ function currentStats(sentinel) {
   const tower = commandTowerBonus();
   stats.dmg *= tower.dmg * masteryBonus(sentinel.defId);
   stats.range *= tower.range;
-  return stats;
+  return applySentinelPathStats(stats, sentinel);
 }
 function validDefenseTarget(defense, enemy) {
   const base = ENEMIES[enemy.type];
@@ -1314,6 +1374,7 @@ function fireSentinel(sentinel, stats, target) {
     shieldDamage: stats.shieldDamage || 0,
     reveal: stats.reveal || 0,
     pull: stats.pull || 0,
+    chain: stats.chain || 0,
     arc: stats.arc || 0,
     color: def.color,
     defId: def.id,
@@ -1366,6 +1427,15 @@ function applyProjectileImpact(projectile) {
       const enemy = enemies[i];
       if (!enemy.alive || enemy === target || Math.hypot(enemy.x - impact.x, enemy.y - impact.y) > projectile.splash) continue;
       dealDamage(enemy, projectile.damage * .62, projectile);
+    }
+  }
+  if (projectile.chain > 0 && target) {
+    const next = enemies
+      .filter((enemy) => enemy.alive && enemy !== target && Math.hypot(enemy.x - impact.x, enemy.y - impact.y) <= 120)
+      .sort((a, b) => Math.hypot(a.x - impact.x, a.y - impact.y) - Math.hypot(b.x - impact.x, b.y - impact.y))[0];
+    if (next) {
+      dealDamage(next, projectile.damage * .46, { ...projectile, splash: 0, chain: 0, color: shade(projectile.color, .28) });
+      if (effects.length < 160) effects.push({ type: "beam", x: impact.x, y: impact.y, tx: next.x, ty: next.y, color: projectile.color, life: .18, age: 0 });
     }
   }
   projectile.alive = false;
@@ -1748,12 +1818,24 @@ function renderSelected() {
   const def = DEFENSES[sentinel.defId];
   const maxTier = def.tiers.length - 1;
   const nextCost = sentinel.tier < maxTier ? def.upgradeCosts[sentinel.tier] : 0;
+  const paths = sentinelPaths(sentinel);
+  const pathButtons = PATH_KEYS.map((pathId) => {
+    const path = PATHS[pathId];
+    const cost = pathUpgradeCost(sentinel, pathId);
+    const blocked = pathUpgradeBlocked(sentinel, pathId);
+    const disabled = blocked || gold < cost;
+    return '<button type="button" class="sg-path-btn" data-path-upgrade="' + pathId + '" style="--path-color:' + path.color + '" ' + (disabled ? "disabled" : "") + ' title="' + esc(path.tag) + '">' +
+      esc(path.name.replace(" Path", "")) + " " + paths[pathId] + "/" + PATH_MAX_LEVEL + (blocked ? "" : " · " + cost) + "</button>";
+  }).join("");
   dockSelected.hidden = false;
   dockSelected.innerHTML = "<b>" + esc(def.name) + " T" + (sentinel.tier + 1) + "/" + def.tiers.length + "</b>" +
     (sentinel.jammed > 0 ? "<span>JAMMED " + sentinel.jammed.toFixed(1) + "s</span>" : "") +
-    (sentinel.tier < maxTier ? '<button type="button" data-upgrade ' + (gold < nextCost ? "disabled" : "") + ">Upgrade " + nextCost + "</button>" : "<span>Max tier</span>") +
+    (sentinel.tier < maxTier ? '<button type="button" data-upgrade ' + (gold < nextCost ? "disabled" : "") + ">Core " + nextCost + "</button>" : "<span>Core max</span>") +
+    '<span class="sg-path-readout">Paths ' + pathTotal(sentinel) + "/" + PATH_TOTAL_CAP + "</span>" +
+    pathButtons +
     '<button type="button" data-sell>Sell +' + Math.round(sentinel.spent * .6) + '</button><button type="button" data-close-selection>Close</button>';
   dockSelected.querySelector("[data-upgrade]")?.addEventListener("click", upgradeSelected);
+  dockSelected.querySelectorAll("[data-path-upgrade]").forEach((button) => button.addEventListener("click", () => upgradePathSelected(button.dataset.pathUpgrade)));
   dockSelected.querySelector("[data-sell]").addEventListener("click", sellSelected);
   dockSelected.querySelector("[data-close-selection]").addEventListener("click", () => selectSlot(-1));
 }
@@ -1801,6 +1883,22 @@ function upgradeSelected() {
   sentinel.spent += cost;
   sentinel.tier += 1;
   sfx("upgrade");
+  updateHud();
+  renderSelected();
+}
+function upgradePathSelected(pathId) {
+  const sentinel = sentinels.find((item) => item.slotIndex === selectedSlot);
+  if (!sentinel || !PATHS[pathId]) return;
+  const blocked = pathUpgradeBlocked(sentinel, pathId);
+  if (blocked) { toast(blocked); return; }
+  const cost = pathUpgradeCost(sentinel, pathId);
+  if (gold < cost) return;
+  gold -= cost;
+  glintSpent += cost;
+  sentinel.spent += cost;
+  sentinelPaths(sentinel)[pathId] += 1;
+  sfx("upgrade");
+  toast(PATHS[pathId].name + " upgraded.");
   updateHud();
   renderSelected();
 }
@@ -2448,6 +2546,15 @@ function drawSentinel(sentinel) {
   for (let pip = 0; pip <= sentinel.tier; pip++) {
     ctx.fillRect((pip * 5 - sentinel.tier * 2.5 - 1.5) * worldScale, 12 * worldScale, 3 * worldScale, 3 * worldScale);
   }
+  const paths = sentinelPaths(sentinel);
+  PATH_KEYS.forEach((pathId, pathIndex) => {
+    const level = paths[pathId] || 0;
+    if (!level) return;
+    ctx.fillStyle = PATHS[pathId].color;
+    for (let pip = 0; pip < level; pip++) {
+      ctx.fillRect((-15 + pathIndex * 12 + pip * 3) * worldScale, 17 * worldScale, 2.3 * worldScale, 3 * worldScale);
+    }
+  });
   ctx.restore();
   if (sentinel.jammed > 0) {
     ctx.strokeStyle = "#ff7165";
@@ -2586,6 +2693,16 @@ function drawEffects() {
       ctx.beginPath();
       ctx.moveTo(screen.x + Math.cos(effect.angle) * 12 * worldScale, screen.y + Math.sin(effect.angle) * 12 * worldScale);
       ctx.lineTo(screen.x + Math.cos(effect.angle) * (12 + effect.size) * worldScale, screen.y + Math.sin(effect.angle) * (12 + effect.size) * worldScale);
+      ctx.stroke();
+    } else if (effect.type === "beam") {
+      const target = toScreen(effect.tx, effect.ty);
+      ctx.globalCompositeOperation = "screen";
+      ctx.strokeStyle = effect.color;
+      ctx.lineWidth = 3 * worldScale;
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(screen.x, screen.y);
+      ctx.lineTo(target.x, target.y);
       ctx.stroke();
     } else if (effect.type === "impact" || effect.type === "relay" || effect.type === "jam") {
       ctx.strokeStyle = effect.color;

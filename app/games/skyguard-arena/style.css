@@ -416,6 +416,13 @@ button { color: inherit; }
   font-size: 9px;
 }
 .sg-dock-selected b { color: var(--sg-ink); }
+.sg-path-readout {
+  border: 1px solid #ffffff16;
+  border-radius: 4px;
+  padding: 5px 7px;
+  color: var(--sg-muted);
+  font: 850 9px ui-monospace, monospace;
+}
 .sg-dock-selected button {
   border: 1px solid var(--sg-line);
   border-radius: 4px;
@@ -423,6 +430,11 @@ button { color: inherit; }
   padding: 5px 7px;
   cursor: pointer;
   font-size: 9px;
+}
+.sg-dock-selected .sg-path-btn {
+  border-color: color-mix(in srgb, var(--path-color) 55%, transparent);
+  color: var(--path-color);
+  background: linear-gradient(145deg, color-mix(in srgb, var(--path-color) 14%, #12140f), #11140f);
 }
 .sg-dock-selected button:disabled { cursor: not-allowed; opacity: .42; }
 .sg-ability-btn {
