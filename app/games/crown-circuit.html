@@ -1076,6 +1076,41 @@
     function safeMap(value) { return MAP_BY_ID[value] ? value : "ember"; }
     function safeHero(value) { return HERO_BY_ID[value] ? value : "solara"; }
     function safePlan(value) { return PLAN_BY_ID[value] ? value : "balanced"; }
+    function activeBattlePlan(side) { return PLAN_BY_ID[activePlan[side]] || PLAN_BY_ID.balanced; }
+    function troopPlanStats(side, troop) {
+      const plan = activeBattlePlan(side);
+      const stats = { hp: 1, dmg: 1, speed: 1, tower: 1, control: 1, splash: 1, haste: 0 };
+      if (!troop || !plan) return stats;
+      if (plan.id === "siege" && (troop.buildingHunter || troop.towerBonus || troop.id === "bombard")) {
+        stats.hp *= 1.1;
+        stats.dmg *= 1.08;
+        stats.tower *= 1.28;
+      }
+      if (plan.id === "swarm" && (troop.count > 1 || troop.swarm)) {
+        stats.hp *= 1.06;
+        stats.dmg *= 1.07;
+        stats.speed *= 1.13;
+      }
+      if (plan.id === "control" && (troop.slow || troop.splash || troop.chain || troop.shieldBreak || troop.antiHeavy || troop.antiRanged)) {
+        stats.dmg *= 1.04;
+        stats.control *= 1.32;
+        stats.splash *= 1.12;
+      }
+      if (plan.id === "tempo" && troop.cost <= 3) {
+        stats.speed *= 1.12;
+        stats.haste = 2.2;
+      }
+      return stats;
+    }
+    function troopWithPlan(side, troop) {
+      const stats = troopPlanStats(side, troop);
+      const tuned = { ...troop };
+      if (tuned.towerBonus) tuned.towerBonus *= stats.tower;
+      if (tuned.slow) tuned.slow *= stats.control;
+      if (tuned.splash) tuned.splash *= stats.splash;
+      if (tuned.chain && activeBattlePlan(side).id === "control") tuned.chain += 1;
+      return tuned;
+    }
     function safeDeck(value, fallback = DEFAULT_BLUE_DECK) {
       const deck = [];
       const add = (id) => {
@@ -1550,7 +1585,9 @@
       const hero = HERO_BY_ID[activeHero[side]];
       const veilShield = hero.id === "nyx" ? 18 : 0;
       const mine = side === mySide;
-      const powerMul = mine ? kingTowerBonus().aura * troopLevelBonus(troop.id) : 1;
+      const planStats = troopPlanStats(side, troop);
+      const powerMul = (mine ? kingTowerBonus().aura * troopLevelBonus(troop.id) : 1) * planStats.dmg;
+      const healthMul = (mine ? kingTowerBonus().aura * troopLevelBonus(troop.id) : 1) * planStats.hp;
       const unit = {
         id: side + "-" + Math.floor(simTime * 1000) + "-" + formationIndex + "-" + Math.floor(rand() * 99999),
         side,
@@ -1561,9 +1598,10 @@
         x: 0,
         y: 0,
         lateral: (formationIndex - (troop.count - 1) / 2) * (troop.count > 3 ? 7 : 11),
-        hp: troop.hp * powerMul,
-        maxHp: troop.hp * powerMul,
+        hp: troop.hp * healthMul,
+        maxHp: troop.hp * healthMul,
         dmgMul: powerMul,
+        speedMul: planStats.speed,
         shield: veilShield,
         cooldown: rand() * .25,
         phase: rand() * 8,
@@ -1571,7 +1609,7 @@
         attackFlash: 0,
         hitFlash: 0,
         slow: 0,
-        haste: 0,
+        haste: planStats.haste,
         chargeReady: !!troop.charge,
         alive: true,
         death: 0
@@ -1764,17 +1802,18 @@
       projectile.alive = false;
     }
     function performAttack(unit, target, troop) {
+      const planTroop = troopWithPlan(unit.side, troop);
       unit.attackFlash = .22;
       unit.moving = false;
-      unit.cooldown = troop.rate;
-      if (troop.charge && unit.chargeReady) unit.chargeReady = false;
-      const dmg = troop.dmg * (unit.dmgMul || 1);
-      if (troop.range > 60 || troop.projectile) {
-        launchProjectile(unit, target, { damage: dmg, color: troop.color, speed: troop.projectile || 520, splash: troop.splash, chain: troop.chain, slow: troop.slow, slowAmount: troop.slowAmount, sourceTroop: troop, arc: troop.id === "bombard" ? .08 : 0 });
+      unit.cooldown = planTroop.rate;
+      if (planTroop.charge && unit.chargeReady) unit.chargeReady = false;
+      const dmg = planTroop.dmg * (unit.dmgMul || 1);
+      if (planTroop.range > 60 || planTroop.projectile) {
+        launchProjectile(unit, target, { damage: dmg, color: planTroop.color, speed: planTroop.projectile || 520, splash: planTroop.splash, chain: planTroop.chain, slow: planTroop.slow, slowAmount: planTroop.slowAmount, sourceTroop: planTroop, arc: planTroop.id === "bombard" ? .08 : 0 });
       } else {
-        applyDamage(target, dmg, unit.side, { color: troop.color, sourceTroop: troop, splash: troop.splash });
-        if (troop.splash) units.forEach((other) => {
-          if (other !== target && other.alive && other.side !== unit.side && worldDistance(other, target) < troop.splash) applyDamage(other, dmg * .5, unit.side, { color: troop.color, sourceTroop: troop });
+        applyDamage(target, dmg, unit.side, { color: planTroop.color, sourceTroop: planTroop, splash: planTroop.splash });
+        if (planTroop.splash) units.forEach((other) => {
+          if (other !== target && other.alive && other.side !== unit.side && worldDistance(other, target) < planTroop.splash) applyDamage(other, dmg * .5, unit.side, { color: planTroop.color, sourceTroop: planTroop });
         });
       }
     }
@@ -1789,6 +1828,7 @@
       let multiplier = 1;
       if (unit.slow > 0) multiplier *= .62;
       if (unit.haste > 0) multiplier *= 1.32;
+      multiplier *= unit.speedMul || 1;
       if (HERO_BY_ID[activeHero[unit.side]].id === "nyx" && (unit.side === "blue" ? unit.t < .5 : unit.t > .5)) multiplier *= 1.1;
       if (currentMap().id === "ember" && !troop.flying && unit.t > .44 && unit.t < .56) multiplier *= .72;
       if (currentMap().id === "shard" && troop.flying) multiplier *= 1.08;
@@ -1821,7 +1861,8 @@
         updateUnitPosition(unit);
         if (unit.t <= .005 || unit.t >= .995) {
           const king = towers.find((tower) => tower.side !== unit.side && tower.king && tower.alive);
-          if (king) applyDamage(king, troop.dmg * (unit.dmgMul || 1) * (troop.towerBonus || 1), unit.side, { color: troop.color, sourceTroop: troop });
+          const planTroop = troopWithPlan(unit.side, troop);
+          if (king) applyDamage(king, planTroop.dmg * (unit.dmgMul || 1) * (planTroop.towerBonus || 1), unit.side, { color: planTroop.color, sourceTroop: planTroop });
           killTarget(unit, enemySide(unit.side));
         }
       });
@@ -2040,7 +2081,7 @@
       hud.red.textContent = "Elixir " + elixir.red.toFixed(1) + phase + " · Towers " + towerCount("red");
       hud.blueBar.style.width = Math.round(hpPct("blue") * 100) + "%";
       hud.redBar.style.width = Math.round(hpPct("red") * 100) + "%";
-      hud.score.textContent = (matchMode === "solo" ? "SOLO" : "ROOM") + " · " + currentMap().name.toUpperCase() + " · " + Math.max(0, Math.ceil(state.time));
+      hud.score.textContent = (matchMode === "solo" ? "SOLO" : "ROOM") + " · " + activeBattlePlan(mySide).name.toUpperCase() + " · " + currentMap().name.toUpperCase() + " · " + Math.max(0, Math.ceil(state.time));
       hud.objective.textContent = objectiveText();
       const hero = HERO_BY_ID[activeHero[mySide]] || HEROES[0];
       const cooldown = ability[mySide].cooldown;
@@ -2690,8 +2731,10 @@
           mapId: safeMap(payload.mapId),
           blueDeck: safeDeck(payload.blueDeck, DEFAULT_BLUE_DECK),
           blueHero: safeHero(payload.blueHero),
+          bluePlan: safePlan(payload.bluePlan),
           redDeck: roomState.amIHost ? safeDeck(payload.redDeck, DEFAULT_RED_DECK) : selectedTroops,
           redHero: roomState.amIHost ? safeHero(payload.redHero) : selectedHeroId,
+          redPlan: roomState.amIHost ? safePlan(payload.redPlan) : selectedPlanId,
           seed: Number(payload.seed) || 1
         });
         return;
