@@ -315,6 +315,7 @@ function auditPage() {
   const dashboardHero = consoleRoot?.querySelector(".hero2");
   const productCards = [...document.querySelectorAll(".ps-product")];
   const productMedia = [...document.querySelectorAll(".ps-product-media")];
+  const phantomPlayActions = [...document.querySelectorAll(".pp-game-actions button")];
   const isVisible = (el) => {
     if (!el) return false;
     if (el.closest('[aria-hidden="true"]')) return false;
@@ -471,6 +472,15 @@ function auditPage() {
         return rect.width < 120 || rect.height < 60 || (!img && !fallback) || (style && (style.objectFit !== "contain" || style.transform !== "none"));
       }).map(elementSummary).slice(0, 5),
     },
+    phantomPlay: {
+      clippedActions: phantomPlayActions.filter((button) => {
+        if (!isVisible(button)) return false;
+        const raw = button.getBoundingClientRect();
+        if (raw.top < 0 || raw.bottom > vh) return false;
+        const visible = visibleRect(button);
+        return visible.right - visible.left < raw.width - 2 || visible.bottom - visible.top < raw.height - 2;
+      }).map(elementSummary).slice(0, 8),
+    },
     textProbe: document.body.innerText.slice(0, 300),
   };
 }
@@ -534,6 +544,9 @@ function assertCase(result) {
     assert.equal(audit.phantomStore.productMedia, audit.phantomStore.productCards, `${label} ${viewport.width}: every PhantomStore product needs a visible media block.`);
     assert.deepEqual(audit.phantomStore.brokenMedia, [], `${label} ${viewport.width}: PhantomStore product media must be full-frame, visible art or styled fallback.`);
   }
+  if (page === "phantomplay") {
+    assert.deepEqual(audit.phantomPlay.clippedActions, [], `${label} ${viewport.width}: PhantomPlay card actions must not be clipped inside game cards.`);
+  }
 }
 
 async function main() {
@@ -588,6 +601,7 @@ async function main() {
         "document has no horizontal overflow",
         "visible elements do not escape viewport",
         "visible control text is not clipped",
+        "PhantomPlay card actions stay fully visible inside game cards",
         "PhantomStore products render with full-frame media blocks",
       ],
     };
