@@ -2867,3 +2867,233 @@ html[data-command-os="2040"] .phantom.command-os-enabled .console[data-chatbox-m
     max-width: none !important;
   }
 }
+
+/* Phone layout ownership: the business brief, decisions and Phantom Console
+   are siblings in the DOM, so they must remain siblings in the visual flow.
+   Older viewport-locked rules absolutely layered all three into one short
+   grid row, which clipped decision copy and parked the console over it on
+   real iPhones. Phones scroll naturally; only the bottom taskbar stays fixed. */
+@media (max-width: 767px) {
+  html[data-command-os="2040"] .phantom.command-os-enabled .app-main > .console:not(.console-workspace) {
+    display: block !important;
+    width: 100% !important;
+    min-height: calc(100svh - var(--mobile-admin-topbar, 64px)) !important;
+    padding: 0 0 calc(var(--mobile-admin-taskbar, 80px) + 18px + env(safe-area-inset-bottom, 0px)) !important;
+    overflow: visible !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .console-center {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    border-right: 0 !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .os-mission-peek {
+    display: none !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .dashboard-brief {
+    position: relative !important;
+    inset: auto !important;
+    order: 1 !important;
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 24px 18px 16px !important;
+    pointer-events: auto !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .dashboard-brief-kicker {
+    margin-bottom: 7px !important;
+    font-size: 8px !important;
+    letter-spacing: .2em !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .dashboard-brief h1 {
+    max-width: none !important;
+    margin-bottom: 7px !important;
+    font-size: clamp(26px, 8.2vw, 32px) !important;
+    line-height: 1.05 !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .dashboard-brief-copy > p:last-child {
+    max-width: 38ch !important;
+    font-size: 12px !important;
+    line-height: 1.45 !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .decision-deck {
+    position: relative !important;
+    inset: auto !important;
+    order: 2 !important;
+    width: auto !important;
+    max-width: none !important;
+    max-height: none !important;
+    margin: 8px 16px 16px !important;
+    overflow: visible !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .decision-deck[hidden] {
+    display: none !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .decision-head {
+    padding: 0 2px !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .decision-head h2 {
+    font-size: 16px !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .decision-head i {
+    display: none !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .decision-list {
+    display: grid !important;
+    grid-auto-flow: column !important;
+    grid-auto-columns: min(86vw, 350px) !important;
+    gap: 10px !important;
+    width: 100% !important;
+    padding: 0 2px 5px !important;
+    overflow-x: auto !important;
+    overflow-y: visible !important;
+    scroll-snap-type: x mandatory !important;
+    scrollbar-width: thin !important;
+    overscroll-behavior-inline: contain !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .decision-card {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    min-height: 0 !important;
+    padding: 12px 13px 12px 16px !important;
+    overflow: visible !important;
+    scroll-snap-align: start !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .decision-card h3,
+  html[data-command-os="2040"] .phantom.command-os-enabled .decision-card p {
+    max-width: 100% !important;
+    overflow: visible !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere !important;
+    text-overflow: clip !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .console:not(.console-workspace) .hero2 {
+    position: relative !important;
+    order: 3 !important;
+    display: block !important;
+    width: auto !important;
+    height: auto !important;
+    min-height: 0 !important;
+    margin: 0 12px 18px !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    border: 1px solid rgba(85, 231, 167, .16) !important;
+    border-radius: 14px !important;
+    background: #03090d !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .console:not(.console-workspace) .hero2-copy {
+    position: relative !important;
+    inset: auto !important;
+    z-index: 8 !important;
+    display: block !important;
+    width: 100% !important;
+    max-width: none !important;
+    height: auto !important;
+    min-height: 0 !important;
+    padding: 0 !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .console:not(.console-workspace) .hero2-stage {
+    position: absolute !important;
+    inset: 0 !important;
+    z-index: 1 !important;
+    display: block !important;
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    opacity: .42 !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .console:not(.console-workspace) .os-earth-horizon {
+    object-position: 50% 100% !important;
+    filter: saturate(.92) brightness(.7) contrast(1.08) !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .console:not(.console-workspace) .os-command-state {
+    position: relative !important;
+    z-index: 4 !important;
+    margin: 0 !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .console:not(.console-workspace) .os-command-state span {
+    min-height: 43px !important;
+    padding: 7px 10px !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .console:not(.console-workspace) .os-execution-modes {
+    position: relative !important;
+    z-index: 4 !important;
+    justify-content: stretch !important;
+    margin: 0 !important;
+    padding: 3px !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .console:not(.console-workspace) .chatbox {
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    border-width: 1px 0 0 !important;
+    border-radius: 0 !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .console:not(.console-workspace) .chatbox-head {
+    min-height: 52px !important;
+    padding: 7px 50px 7px 10px !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .chatbox-head .pc-avatar {
+    width: 40px !important;
+    height: 40px !important;
+    flex: 0 0 40px !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .console:not(.console-workspace) .chatbox-log {
+    min-height: 68px !important;
+    max-height: 180px !important;
+    padding: 12px 10px 8px !important;
+    overflow-y: auto !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .console:not(.console-workspace) .chatbox-composer {
+    min-height: 62px !important;
+    margin: 0 !important;
+    padding: 8px 62px 9px 12px !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .console:not(.console-workspace) .chatbox-composer input {
+    height: 42px !important;
+    min-width: 0 !important;
+    font-size: 16px !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .console:not(.console-workspace) .chatbox .cmd-send {
+    right: 10px !important;
+    bottom: 9px !important;
+    width: 44px !important;
+    height: 44px !important;
+  }
+}

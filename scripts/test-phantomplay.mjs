@@ -65,7 +65,11 @@ assert.match(module, /const classroomGames = generalPlayGames\(ui\.snapshot\.cat
 assert.match(module, /return sortGames\(ui\.snapshot\.catalog, "All"\)/u, "Default PhantomPlay must render the full general catalog without search/filter chrome.");
 assert.doesNotMatch(module, /data-pp-search|Search games, modes, categories, creators/u, "Default PhantomPlay must not restore the redundant game search bar.");
 assert.doesNotMatch(module, /renderToddlerSpace|pp-shell-toddler|pp-toddler-space|data-pp-toddler-play/u, "Default PhantomPlay must not keep a separate Toddler Space page.");
+assert.match(module, /class="pp-game-art" style="--pp-game-art:url\('/u, "Default PhantomPlay cards must expose their art to the CSS backdrop.");
 assert.match(css, /\.pp-library\{padding-top:10px\}/u, "Default PhantomPlay must keep the condensed game-first library spacing.");
+assert.match(css, /\.pp-game-art::before\{[\s\S]*?background-image:var\(--pp-game-art\)[\s\S]*?filter:blur/u, "Default PhantomPlay cards must use a premium blurred art backdrop instead of empty black bands.");
+assert.match(css, /\.pp-game-art img\{[\s\S]*?object-fit:contain[\s\S]*?transform:none/u, "Default PhantomPlay card thumbnails must show the full image, not zoom-crop it.");
+assert.match(css, /@media\(min-width:768px\)\{[\s\S]*?\.pp-game-grid-full \.pp-game\{[\s\S]*?grid-template-columns:minmax\(210px,\.38fr\) minmax\(0,1fr\)/u, "Desktop PhantomPlay library cards must use a stable split art/details layout.");
 assert.doesNotMatch(css, /Toddler Space|pp-toddler-space|pp-shell-toddler/u, "Default PhantomPlay stylesheet must not preserve a separate Toddler Space destination.");
 assert.match(v2Module, /tab:\s*"solo"/u, "PhantomPlay V2 must open straight to games, not a marketing/home screen.");
 assert.match(v2Module, /const GAME_SORTS = \["All", "Solo", "Multiplayer", "Kids"/u, "Kids must be a sort chip, not a separate destination.");

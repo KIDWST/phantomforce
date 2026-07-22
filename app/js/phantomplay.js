@@ -506,7 +506,7 @@ function gameCard(game, variant = "") {
   const launchable = canLaunchGames();
   const playLabel = history?.canContinue ? "Continue" : "Play now";
   return `<article class="pp-game ${variant}" data-pp-game-card="${esc(game.id)}">
-    <div class="pp-game-art"><img src="${esc(thumbnail)}" alt="" loading="lazy"/><span>${esc(displayCategoryFor(game))}</span>${game.kind === "community" ? "<em>Prototype</em>" : ""}</div>
+    <div class="pp-game-art" style="--pp-game-art:url('${esc(thumbnail)}')"><img src="${esc(thumbnail)}" alt="" loading="lazy"/><span>${esc(displayCategoryFor(game))}</span>${game.kind === "community" ? "<em>Prototype</em>" : ""}</div>
     <div class="pp-game-body"><div class="pp-game-title"><p class="pp-game-developer">${developerAvatar ? `<img src="${esc(developerAvatar)}" alt="" loading="lazy"/>` : ""}<span>By ${esc(developer)}</span></p><h3>${esc(game.title)}</h3></div><button type="button" class="pp-favorite ${favorite ? "is-on" : ""}" data-pp-favorite="${esc(game.id)}" aria-label="${favorite ? "Remove from" : "Add to"} favorites">${icon("heart")}</button>
     <p>${esc(game.summary)}</p>
     <div class="pp-game-meta"><span>${esc(game.contentRating === "everyone" ? "Everyone" : game.contentRating)}</span><span>v${esc(game.version)}</span>${history?.score != null ? `<span>Best ${history.score}</span>` : ""}</div>

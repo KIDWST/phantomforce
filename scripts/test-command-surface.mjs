@@ -63,6 +63,9 @@ assert.doesNotMatch(commandOsCss, /data-chatbox-minimized="true"[\s\S]{0,220}\.c
 assert.match(commandOsCss, /\.chatbox-head \.pc-mode,[\s\S]*?\.chatbox-head \.pc-settings,[\s\S]*?\.chatbox-head \.pc-menu\s*\{[\s\S]*?display:\s*none\s*!important/u, "Collapsed Command OS should hide only non-restore header controls.");
 assert.match(commandOsCss, /@media \(max-width: 767px\)[\s\S]*?\.phantom\.command-os-enabled \.os-command-rail\s*\{[\s\S]*?display:\s*none\s*!important/u, "Phone Command OS must not render a duplicate top navigation rail.");
 assert.match(commandOsCss, /@media \(max-width: 767px\)[\s\S]*?\.phantom\.command-os-enabled \.mobile-admin-homebar\s*\{[\s\S]*?display:\s*flex\s*!important/u, "Phone Command OS must use the native mobile homebar.");
+assert.match(commandOsCss, /Phone layout ownership:[\s\S]*?\.phantom\.command-os-enabled \.console-center\s*\{[\s\S]*?flex-direction:\s*column\s*!important[\s\S]*?overflow:\s*visible\s*!important/u, "Phone dashboard surfaces must use one scrollable vertical flow.");
+assert.match(commandOsCss, /Phone layout ownership:[\s\S]*?\.phantom\.command-os-enabled \.decision-deck\s*\{[\s\S]*?position:\s*relative\s*!important[\s\S]*?max-height:\s*none\s*!important/u, "Phone decisions must not be absolutely layered or vertically clipped.");
+assert.match(commandOsCss, /Phone layout ownership:[\s\S]*?\.phantom\.command-os-enabled \.console:not\(\.console-workspace\) \.hero2-copy\s*\{[\s\S]*?position:\s*relative\s*!important/u, "Phone Phantom Console must participate in document flow instead of covering decisions.");
 assert.match(command, /isDirectChatMediaRequest/u, "Explicit image and video briefs must bypass the conversational model.");
 assert.match(command, /generateMediaFromChat\(text, intent, settings\)/u, "Chat must use the shared Media Lab generation entry point.");
 assert.match(mediaLab, /export async function generateMediaFromChat/u, "Media Lab must expose one shared chat generation path.");

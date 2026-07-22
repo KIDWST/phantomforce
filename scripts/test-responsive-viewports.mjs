@@ -310,6 +310,9 @@ function auditPage() {
   const commandRail = document.querySelector("[data-os-command-rail]");
   const mobileHomebar = document.querySelector(".mobile-admin-homebar");
   const mobileNav = document.querySelector("[data-mobile-bottom-nav]");
+  const dashboardBrief = document.querySelector(".dashboard-brief");
+  const decisionDeck = document.querySelector(".decision-deck");
+  const dashboardHero = consoleRoot?.querySelector(".hero2");
   const productCards = [...document.querySelectorAll(".ps-product")];
   const productMedia = [...document.querySelectorAll(".ps-product-media")];
   const isVisible = (el) => {
@@ -423,6 +426,21 @@ function auditPage() {
   const mobileRect = mobileNav?.getBoundingClientRect();
   const consoleRect = consoleRoot?.getBoundingClientRect();
   const pageRect = workspace?.getBoundingClientRect();
+  const dashboardSurfaces = [dashboardBrief, decisionDeck, dashboardHero].filter(isVisible);
+  const dashboardCollisions = [];
+  for (let index = 0; index < dashboardSurfaces.length; index += 1) {
+    for (let next = index + 1; next < dashboardSurfaces.length; next += 1) {
+      const first = dashboardSurfaces[index];
+      const second = dashboardSurfaces[next];
+      const a = first.getBoundingClientRect();
+      const b = second.getBoundingClientRect();
+      const overlapWidth = Math.min(a.right, b.right) - Math.max(a.left, b.left);
+      const overlapHeight = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+      if (overlapWidth > 2 && overlapHeight > 2) {
+        dashboardCollisions.push(`${selectorName(first)} overlaps ${selectorName(second)}`);
+      }
+    }
+  }
   return {
     title: document.title,
     hash: location.hash,
@@ -433,6 +451,7 @@ function auditPage() {
     horizontalOverflow: Math.max(doc.scrollWidth, body?.scrollWidth || 0) > vw + 2,
     offenders,
     clippedText,
+    dashboardCollisions,
     nav: {
       desktopVisible: isVisible(nav),
       commandRailVisible: isVisible(commandRail),
@@ -502,6 +521,9 @@ function assertCase(result) {
     assert.equal(audit.nav.mobileHomebarVisible, true, `${label} ${viewport.width}: mobile homebar must be visible on phone widths.`);
     assert.equal(audit.nav.commandRailVisible, false, `${label} ${viewport.width}: Command OS rail must be hidden on phone widths to avoid duplicate nav.`);
     assert.equal(audit.nav.desktopVisible, false, `${label} ${viewport.width}: desktop sidebar must be hidden on phone widths.`);
+    if (page === "dashboard") {
+      assert.deepEqual(audit.dashboardCollisions, [], `${label} ${viewport.width}: dashboard brief, decisions and console must remain separate in the mobile document flow.`);
+    }
   }
   if (viewport.width > 900) {
     assert.equal(audit.nav.desktopVisible || audit.nav.commandRailVisible, true, `${label} ${viewport.width}: a desktop primary navigation surface must be visible.`);
