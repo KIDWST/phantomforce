@@ -1,42 +1,71 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675">
-  <title>Phantom Ages cover art</title>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675" role="img" aria-labelledby="title desc">
+  <title id="title">Phantom Ages cover art</title>
+  <desc id="desc">Four eras of a city advance from ancient torches to a neon spire battlefield.</desc>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#26331f"/>
-      <stop offset="60%" stop-color="#16201a"/>
-      <stop offset="100%" stop-color="#0a0d0a"/>
+      <stop offset="0" stop-color="#202b22"/>
+      <stop offset=".48" stop-color="#111d1b"/>
+      <stop offset="1" stop-color="#050807"/>
     </linearGradient>
+    <linearGradient id="ageLine" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#d7ff72"/>
+      <stop offset=".33" stop-color="#ffd45f"/>
+      <stop offset=".66" stop-color="#70c2ff"/>
+      <stop offset="1" stop-color="#57ffc0"/>
+    </linearGradient>
+    <radialGradient id="portal" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#faffd1"/>
+      <stop offset=".34" stop-color="#75ffc5"/>
+      <stop offset="1" stop-color="#75ffc5" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="13"/>
+    </filter>
   </defs>
   <rect width="1200" height="675" fill="url(#bg)"/>
-  <circle cx="180" cy="120" r="2.4" fill="#ffffff" opacity="0.5"/>
-  <circle cx="360" cy="90" r="2" fill="#ffffff" opacity="0.4"/>
-  <circle cx="540" cy="140" r="2.2" fill="#ffffff" opacity="0.45"/>
-  <circle cx="900" cy="100" r="2" fill="#ffffff" opacity="0.4"/>
-  <!-- ground -->
-  <rect x="0" y="470" width="1200" height="205" fill="#1b2318"/>
-  <rect x="0" y="470" width="1200" height="5" fill="#2b3a24"/>
-  <!-- era progression: club, spear, cannon, tower silhouettes left to right -->
-  <g fill="#6f8a5a">
-    <rect x="120" y="430" width="18" height="40" rx="3"/>
-    <circle cx="129" cy="418" r="12"/>
+  <g opacity=".2" stroke="#a5d19d" stroke-width="2">
+    <path d="M0 474 H1200"/><path d="M0 398 H1200"/><path d="M0 322 H1200"/>
+    <path d="M180 100 V675"/><path d="M420 60 V675"/><path d="M660 20 V675"/><path d="M900 60 V675"/>
   </g>
-  <g fill="#8fae6f">
-    <rect x="330" y="380" width="10" height="90" rx="3" transform="rotate(20 335 425)"/>
-    <polygon points="373,352 385,372 361,372" transform="rotate(20 373 362)"/>
+  <path d="M0 516 C170 460 306 492 474 444 S760 392 1200 430 V675 H0Z" fill="#12190f"/>
+  <path d="M110 470 C265 372 430 488 594 372 S880 278 1092 338" fill="none" stroke="url(#ageLine)" stroke-width="9" stroke-linecap="round" opacity=".9"/>
+  <g transform="translate(92 358)">
+    <circle cx="50" cy="78" r="60" fill="#d7ff72" opacity=".12" filter="url(#glow)"/>
+    <path d="M40 22 h24 v106 h-24z" fill="#6f8a5a"/>
+    <circle cx="52" cy="6" r="24" fill="#8cad61"/>
+    <path d="M0 128 h116" stroke="#d7ff72" stroke-width="4" opacity=".6"/>
+    <text x="4" y="166" fill="#d7ff72" font-family="Spline Sans Mono, ui-monospace, monospace" font-size="18" font-weight="700" letter-spacing="3">STONE</text>
   </g>
-  <g fill="#b9803f">
-    <rect x="560" y="410" width="70" height="34" rx="6"/>
-    <circle cx="560" cy="427" r="16"/>
-    <circle cx="630" cy="427" r="16"/>
-    <rect x="600" y="398" width="46" height="12" rx="4"/>
+  <g transform="translate(326 290)">
+    <circle cx="58" cy="92" r="72" fill="#ffd45f" opacity=".14" filter="url(#glow)"/>
+    <path d="M58 8 L108 128 H8Z" fill="#b7823d"/>
+    <path d="M58 8 L58 128" stroke="#ffe0a1" stroke-width="6" opacity=".7"/>
+    <circle cx="58" cy="4" r="18" fill="#ffdf7a"/>
+    <path d="M-20 128 h156" stroke="#ffd45f" stroke-width="4" opacity=".62"/>
+    <text x="-4" y="168" fill="#ffd45f" font-family="Spline Sans Mono, ui-monospace, monospace" font-size="18" font-weight="700" letter-spacing="3">SPEAR</text>
   </g>
-  <g>
-    <rect x="820" y="300" width="90" height="170" fill="#5c7fa8"/>
-    <rect x="820" y="300" width="90" height="170" fill="none" stroke="#33445e" stroke-width="3"/>
-    <rect x="845" y="245" width="40" height="55" fill="#8a93ab"/>
-    <circle cx="865" cy="230" r="9" fill="#ffe9a8"/>
-    <circle cx="865" cy="230" r="16" fill="#ffe9a8" opacity="0.25"/>
+  <g transform="translate(554 334)">
+    <circle cx="76" cy="70" r="78" fill="#70c2ff" opacity=".16" filter="url(#glow)"/>
+    <rect x="8" y="72" width="126" height="50" rx="10" fill="#c08a44"/>
+    <circle cx="28" cy="124" r="24" fill="#151b1c" stroke="#8b673c" stroke-width="8"/>
+    <circle cx="116" cy="124" r="24" fill="#151b1c" stroke="#8b673c" stroke-width="8"/>
+    <rect x="84" y="48" width="84" height="20" rx="10" fill="#d2b07a"/>
+    <path d="M154 50 C214 10 278 -8 348 6" fill="none" stroke="#70c2ff" stroke-width="5" stroke-dasharray="10 12"/>
+    <path d="M-16 148 h206" stroke="#70c2ff" stroke-width="4" opacity=".62"/>
+    <text x="0" y="188" fill="#70c2ff" font-family="Spline Sans Mono, ui-monospace, monospace" font-size="18" font-weight="700" letter-spacing="3">CANNON</text>
   </g>
-  <text x="600" y="560" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="50" font-weight="700" fill="#eef2fb" letter-spacing="2">Phantom Ages</text>
-  <text x="600" y="602" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="20" fill="#9aa7c7" letter-spacing="1">Raise the city through eras</text>
+  <g transform="translate(824 218)">
+    <circle cx="116" cy="126" r="108" fill="url(#portal)" filter="url(#glow)" opacity=".7"/>
+    <rect x="58" y="118" width="116" height="236" rx="8" fill="#597fae"/>
+    <rect x="82" y="42" width="68" height="76" rx="6" fill="#8aa3c3"/>
+    <circle cx="116" cy="24" r="18" fill="#fff0a4"/>
+    <path d="M66 178 h100 M66 238 h100 M66 298 h100" stroke="#bde5ff" stroke-width="5" opacity=".38"/>
+    <path d="M8 354 h220" stroke="#57ffc0" stroke-width="5" opacity=".72"/>
+    <text x="6" y="394" fill="#57ffc0" font-family="Spline Sans Mono, ui-monospace, monospace" font-size="18" font-weight="700" letter-spacing="3">NEON</text>
+  </g>
+  <g transform="translate(58 56)">
+    <text x="0" y="0" fill="#53f0a7" font-family="Spline Sans Mono, ui-monospace, monospace" font-size="24" font-weight="700" letter-spacing="6">STRATEGY</text>
+    <text x="0" y="54" fill="#f4fff0" font-family="Instrument Sans, system-ui, sans-serif" font-size="64" font-weight="900">Phantom Ages</text>
+    <text x="2" y="92" fill="#afbea7" font-family="Instrument Sans, system-ui, sans-serif" font-size="24" font-weight="600">Advance eras, branch tech, and break the rival city.</text>
+  </g>
 </svg>

@@ -1,20 +1,68 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675">
-  <title>Tidefront Tactics cover art</title>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675" role="img" aria-labelledby="title desc">
+  <title id="title">Tidefront Tactics cover art</title>
+  <desc id="desc">Two neon skiffs trade artillery across a windy ocean battlefield.</desc>
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#03080f"/>
-      <stop offset="100%" stop-color="#0e1c2a"/>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#061627"/>
+      <stop offset=".55" stop-color="#062030"/>
+      <stop offset="1" stop-color="#02080d"/>
     </linearGradient>
+    <linearGradient id="sea" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0b3b4a"/>
+      <stop offset=".55" stop-color="#072333"/>
+      <stop offset="1" stop-color="#031018"/>
+    </linearGradient>
+    <radialGradient id="sun" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#fff0a7"/>
+      <stop offset=".3" stop-color="#ff9466"/>
+      <stop offset="1" stop-color="#ff4b6d" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="blast" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset=".25" stop-color="#62ffe3"/>
+      <stop offset=".64" stop-color="#45a3ff"/>
+      <stop offset="1" stop-color="#45a3ff" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="10"/>
+    </filter>
   </defs>
-  <rect width="1200" height="675" fill="url(#bg)"/>
-  <path d="M0 480 Q 300 440 600 480 T 1200 480 V 675 H 0 Z" fill="#0b1420"/>
-  <path d="M0 480 Q 300 440 600 480 T 1200 480" stroke="#39d8c0" stroke-width="3" fill="none" opacity="0.7"/>
-  <g>
-    <ellipse cx="420" cy="440" rx="46" ry="16" fill="#f6ad3c"/>
-    <polygon points="420,400 420,440 460,440" fill="#a685ff"/>
-    <ellipse cx="760" cy="450" rx="46" ry="16" fill="#ff6f91"/>
-    <polygon points="760,410 760,450 800,450" fill="#39d8c0"/>
+  <rect width="1200" height="675" fill="url(#sky)"/>
+  <circle cx="988" cy="132" r="106" fill="url(#sun)" opacity=".75"/>
+  <g opacity=".23" stroke="#7edfff" stroke-width="2" fill="none">
+    <path d="M-80 170 C160 104 328 228 548 166 S920 68 1280 150"/>
+    <path d="M-80 228 C180 172 342 286 590 222 S938 140 1280 210"/>
+    <path d="M-80 286 C172 240 420 334 630 278 S972 212 1280 278"/>
   </g>
-  <text x="600" y="560" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="50" font-weight="700" fill="#eaf6f4" letter-spacing="2">Tidefront Tactics</text>
-  <text x="600" y="602" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="20" fill="#7fa39a" letter-spacing="1">Wind, waves, and one last fleet</text>
+  <path d="M0 342 C154 310 276 374 432 340 C610 300 768 390 942 342 C1064 308 1142 316 1200 334 V675 H0Z" fill="url(#sea)"/>
+  <g stroke="#48f5d2" stroke-width="3" fill="none" opacity=".58">
+    <path d="M0 406 C150 382 278 438 430 410 S732 384 900 412 S1088 434 1200 408"/>
+    <path d="M0 486 C180 456 310 514 496 482 S770 462 948 492 S1102 520 1200 486"/>
+    <path d="M0 572 C212 538 348 604 548 566 S848 548 1060 578 S1160 596 1200 572"/>
+  </g>
+  <g transform="translate(170 392)">
+    <ellipse cx="108" cy="86" rx="130" ry="28" fill="#0b1419" opacity=".5"/>
+    <path d="M0 58 C78 30 166 32 250 58 C222 106 54 112 0 58Z" fill="#f3a33e"/>
+    <path d="M28 58 C94 44 168 46 226 60" stroke="#ffe3a0" stroke-width="5" fill="none" opacity=".58"/>
+    <path d="M110 8 V54 H188Z" fill="#9b88ff"/>
+    <path d="M110 8 C84 38 66 68 48 102" stroke="#77ffe0" stroke-width="3" fill="none"/>
+    <rect x="66" y="48" width="52" height="18" rx="9" fill="#282131"/>
+  </g>
+  <g transform="translate(800 414) scale(-1 1)">
+    <ellipse cx="108" cy="86" rx="130" ry="28" fill="#0b1419" opacity=".5"/>
+    <path d="M0 58 C78 30 166 32 250 58 C222 106 54 112 0 58Z" fill="#ff5f82"/>
+    <path d="M28 58 C94 44 168 46 226 60" stroke="#ffd5df" stroke-width="5" fill="none" opacity=".58"/>
+    <path d="M110 8 V54 H188Z" fill="#49f2d8"/>
+    <path d="M110 8 C84 38 66 68 48 102" stroke="#ffe17a" stroke-width="3" fill="none"/>
+    <rect x="66" y="48" width="52" height="18" rx="9" fill="#1b2631"/>
+  </g>
+  <path d="M382 386 C478 294 602 246 742 304" stroke="#ffd45f" stroke-width="5" stroke-linecap="round" fill="none" stroke-dasharray="11 14" opacity=".9"/>
+  <circle cx="608" cy="306" r="74" fill="url(#blast)" filter="url(#glow)" opacity=".8"/>
+  <circle cx="608" cy="306" r="23" fill="#eaffff"/>
+  <path d="M604 164 c38 68 36 112 0 166 c-38 -58 -36 -102 0 -166Z" fill="#dffcff" opacity=".12"/>
+  <g transform="translate(58 56)">
+    <text x="0" y="0" fill="#53f0d3" font-family="Spline Sans Mono, ui-monospace, monospace" font-size="24" font-weight="700" letter-spacing="6">TACTICS</text>
+    <text x="0" y="54" fill="#f6fffb" font-family="Instrument Sans, system-ui, sans-serif" font-size="64" font-weight="900">Tidefront Tactics</text>
+    <text x="2" y="92" fill="#a4c3c8" font-family="Instrument Sans, system-ui, sans-serif" font-size="24" font-weight="600">Read the wind, bank the shot, sink the last fleet.</text>
+  </g>
 </svg>

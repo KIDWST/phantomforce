@@ -1,42 +1,72 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675">
-  <title>Kingdom Breakers cover art</title>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675" role="img" aria-labelledby="title desc">
+  <title id="title">Kingdom Breakers cover art</title>
+  <desc id="desc">A moonlit siege engine firing ember shots at a glowing fortress.</desc>
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#182238"/>
-      <stop offset="60%" stop-color="#101828"/>
-      <stop offset="100%" stop-color="#0a0d13"/>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#10192b"/>
+      <stop offset=".48" stop-color="#08111f"/>
+      <stop offset="1" stop-color="#030608"/>
     </linearGradient>
+    <radialGradient id="moon" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#fff2bf"/>
+      <stop offset=".38" stop-color="#ffd275" stop-opacity=".9"/>
+      <stop offset="1" stop-color="#ffb446" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="ember" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#fff1a8"/>
+      <stop offset=".42" stop-color="#ff7d4d"/>
+      <stop offset="1" stop-color="#ff3d5b" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="stone" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#a8b0c4"/>
+      <stop offset=".52" stop-color="#52627f"/>
+      <stop offset="1" stop-color="#27324a"/>
+    </linearGradient>
+    <filter id="softGlow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="12"/>
+    </filter>
   </defs>
-  <rect width="1200" height="675" fill="url(#bg)"/>
-  <circle cx="180" cy="120" r="2.4" fill="#ffffff" opacity="0.5"/>
-  <circle cx="360" cy="90" r="2" fill="#ffffff" opacity="0.4"/>
-  <circle cx="540" cy="140" r="2.2" fill="#ffffff" opacity="0.45"/>
-  <circle cx="900" cy="100" r="2" fill="#ffffff" opacity="0.4"/>
-  <!-- ground -->
-  <rect x="0" y="470" width="1200" height="205" fill="#161c2c"/>
-  <rect x="0" y="470" width="1200" height="5" fill="#20293e"/>
-  <!-- siege engine, left -->
-  <g>
-    <polygon points="150,470 200,470 182,420 168,420" fill="#3a2a18"/>
-    <rect x="176" y="330" width="10" height="72" rx="4" fill="#c97f2f" transform="rotate(-38 181 402)"/>
-    <circle cx="152" cy="352" r="9" fill="#ffb454"/>
+  <rect width="1200" height="675" fill="url(#sky)"/>
+  <g opacity=".32">
+    <path d="M0 180 C180 132 296 204 472 148 S790 72 1200 158" fill="none" stroke="#415782" stroke-width="2"/>
+    <path d="M0 252 C220 212 372 272 584 218 S884 168 1200 230" fill="none" stroke="#23364f" stroke-width="2"/>
   </g>
-  <!-- fortress hold -->
-  <g>
-    <rect x="640" y="330" width="90" height="140" fill="#8a93ab"/>
-    <rect x="640" y="330" width="90" height="140" fill="none" stroke="#5c6480" stroke-width="3"/>
-    <rect x="750" y="260" width="90" height="210" fill="#5c7fa8"/>
-    <rect x="750" y="260" width="90" height="210" fill="none" stroke="#33445e" stroke-width="3"/>
-    <rect x="860" y="360" width="90" height="110" fill="#8a93ab"/>
-    <rect x="860" y="360" width="90" height="110" fill="none" stroke="#5c6480" stroke-width="3"/>
-    <rect x="770" y="205" width="50" height="55" fill="#b9803f"/>
-    <rect x="770" y="205" width="50" height="55" fill="none" stroke="#7d5527" stroke-width="3"/>
-    <circle cx="795" cy="190" r="9" fill="#ffe9a8"/>
-    <circle cx="795" cy="190" r="16" fill="#ffe9a8" opacity="0.25"/>
+  <circle cx="932" cy="106" r="78" fill="url(#moon)" opacity=".9"/>
+  <g fill="#e9f8ff" opacity=".72">
+    <circle cx="132" cy="94" r="2.5"/><circle cx="246" cy="142" r="1.7"/><circle cx="418" cy="86" r="2"/>
+    <circle cx="676" cy="122" r="2.2"/><circle cx="784" cy="72" r="1.8"/><circle cx="1058" cy="168" r="2"/>
   </g>
-  <!-- ember charge in flight -->
-  <circle cx="460" cy="330" r="10" fill="#ff6a5d"/>
-  <circle cx="460" cy="330" r="18" fill="#ff6a5d" opacity="0.25"/>
-  <text x="600" y="560" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="50" font-weight="700" fill="#eef2fb" letter-spacing="2">Kingdom Breakers</text>
-  <text x="600" y="602" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="20" fill="#9aa7c7" letter-spacing="1">Break the hold before dawn</text>
+  <path d="M0 458 C134 418 236 442 354 408 C472 374 616 426 742 386 C894 338 1024 386 1200 342 V675 H0Z" fill="#0b1018"/>
+  <path d="M0 490 C164 454 294 466 424 438 C606 400 810 440 980 398 C1064 378 1132 372 1200 380 V675 H0Z" fill="#121a27"/>
+  <g transform="translate(668 190)">
+    <rect x="48" y="140" width="95" height="185" rx="4" fill="url(#stone)"/>
+    <rect x="178" y="76" width="124" height="249" rx="4" fill="url(#stone)"/>
+    <rect x="332" y="156" width="102" height="169" rx="4" fill="url(#stone)"/>
+    <path d="M24 325 H470 V368 H24Z" fill="#1e2a3e"/>
+    <path d="M52 128 h90 v22 h-90zM178 62 h124 v24h-124zM332 144h102v24H332z" fill="#d0d7e8" opacity=".56"/>
+    <rect x="212" y="242" width="52" height="83" rx="22" fill="#121727"/>
+    <g fill="#ffd470">
+      <rect x="72" y="182" width="14" height="30" rx="7"/><rect x="108" y="182" width="14" height="30" rx="7"/>
+      <rect x="202" y="124" width="16" height="36" rx="8"/><rect x="258" y="124" width="16" height="36" rx="8"/>
+      <rect x="356" y="202" width="14" height="30" rx="7"/><rect x="398" y="202" width="14" height="30" rx="7"/>
+    </g>
+    <path d="M-18 369 H510" stroke="#ffcd70" stroke-width="3" opacity=".32"/>
+    <path d="M20 380 C118 354 240 352 340 380 S480 392 540 374" fill="none" stroke="#364867" stroke-width="5" opacity=".7"/>
+  </g>
+  <g transform="translate(110 354)">
+    <path d="M0 92 h210 l-42 70 h-126z" fill="#2d2116"/>
+    <circle cx="48" cy="164" r="24" fill="#0b0b0d" stroke="#b07135" stroke-width="8"/>
+    <circle cx="168" cy="164" r="24" fill="#0b0b0d" stroke="#b07135" stroke-width="8"/>
+    <path d="M72 86 L178 8" stroke="#d19b58" stroke-width="16" stroke-linecap="round"/>
+    <path d="M164 20 l54 -34 18 30 -58 28z" fill="#5a3920"/>
+    <path d="M202 0 C286 -54 378 -80 488 -88" fill="none" stroke="#ff8b4f" stroke-width="5" stroke-dasharray="12 16" opacity=".9"/>
+  </g>
+  <circle cx="610" cy="248" r="78" fill="url(#ember)" filter="url(#softGlow)" opacity=".92"/>
+  <circle cx="610" cy="248" r="24" fill="#fff0a0"/>
+  <path d="M462 306 C520 270 568 254 610 248" fill="none" stroke="#ff7349" stroke-width="9" stroke-linecap="round" opacity=".55"/>
+  <g transform="translate(58 56)">
+    <text x="0" y="0" fill="#53f0a7" font-family="Spline Sans Mono, ui-monospace, monospace" font-size="24" font-weight="700" letter-spacing="6">STRATEGY</text>
+    <text x="0" y="54" fill="#f8fff9" font-family="Instrument Sans, system-ui, sans-serif" font-size="64" font-weight="900">Kingdom Breakers</text>
+    <text x="2" y="92" fill="#a6b6c4" font-family="Instrument Sans, system-ui, sans-serif" font-size="24" font-weight="600">Aim the siege, crack the hold, protect the Warden.</text>
+  </g>
 </svg>

@@ -79,7 +79,7 @@ const PHANTOMPLAY_ENGINE = {
   },
   protocols: ["ready", "score", "progress", "complete", "paused", "exit", "settings", "save-state", "load-state"],
 };
-const PHANTOMPLAY_ART_VERSION = "phantomplay-art-20260721";
+const PHANTOMPLAY_ART_VERSION = "phantomplay-art-20260722";
 const artUrl = (file) => `/app/assets/phantomplay/${file}?v=${PHANTOMPLAY_ART_VERSION}`;
 const TAK_AVATAR = artUrl("tak-avatar.webp");
 const GAME_ART_BY_SLUG = {

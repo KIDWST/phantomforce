@@ -1,19 +1,61 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675">
-  <title>CubeTown cover art</title>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675" role="img" aria-labelledby="title desc">
+  <title id="title">CubeTown cover art</title>
+  <desc id="desc">A cozy block town with glowing houses, gardens, residents, birds, and dusk lights.</desc>
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#180f28"/>
-      <stop offset="100%" stop-color="#241a3a"/>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#21123f"/>
+      <stop offset=".55" stop-color="#132738"/>
+      <stop offset="1" stop-color="#06100e"/>
     </linearGradient>
+    <linearGradient id="grass" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#266b52"/>
+      <stop offset="1" stop-color="#0a231a"/>
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="12"/>
+    </filter>
   </defs>
-  <rect width="1200" height="675" fill="url(#bg)"/>
-  <g opacity="0.9">
-    <rect x="430" y="330" width="120" height="120" rx="10" fill="#5be3b5"/>
-    <rect x="560" y="290" width="120" height="160" rx="10" fill="#ff9466"/>
-    <rect x="690" y="350" width="120" height="100" rx="10" fill="#ffcf6b"/>
-    <rect x="490" y="230" width="90" height="90" rx="8" fill="#c792ea"/>
-    <rect x="640" y="210" width="90" height="90" rx="8" fill="#4fd1e8"/>
+  <rect width="1200" height="675" fill="url(#sky)"/>
+  <circle cx="962" cy="110" r="88" fill="#ffd58a" opacity=".16" filter="url(#glow)"/>
+  <g opacity=".22" stroke="#8fd4ff" fill="none" stroke-width="2">
+    <path d="M120 158 q34 -30 68 0 q34 -30 68 0"/>
+    <path d="M786 116 q28 -24 56 0 q28 -24 56 0"/>
   </g>
-  <text x="600" y="560" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="56" font-weight="700" fill="#fbe9d8" letter-spacing="2">CubeTown</text>
-  <text x="600" y="605" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="20" fill="#c0addd" letter-spacing="1">Build the block town</text>
+  <path d="M0 458 C176 390 350 418 512 364 C720 296 892 384 1200 310 V675 H0Z" fill="url(#grass)"/>
+  <path d="M0 520 C220 462 392 488 548 442 C756 382 944 452 1200 390 V675 H0Z" fill="#092119"/>
+  <g transform="translate(260 250)">
+    <path d="M208 142 l126 -58 126 58 -126 62z" fill="#36c992"/>
+    <path d="M334 204 v108 l-126 -62 V142z" fill="#23906b"/>
+    <path d="M334 204 v108 l126 -62 V142z" fill="#17654f"/>
+    <path d="M208 142 l126 -58 126 58 -126 62z" fill="none" stroke="#7affc6" stroke-width="4" opacity=".75"/>
+    <path d="M300 220 h64 v78 h-64z" fill="#0b1f21"/>
+    <rect x="238" y="184" width="34" height="32" rx="4" fill="#ffe07e"/>
+    <rect x="396" y="184" width="34" height="32" rx="4" fill="#ffe07e"/>
+    <path d="M126 220 l88 -42 88 42 -88 44z" fill="#c996ff"/>
+    <path d="M214 264 v82 l-88 -44 v-82z" fill="#8f61d2"/>
+    <path d="M214 264 v82 l88 -44 v-82z" fill="#6240a5"/>
+    <path d="M456 206 l96 -44 96 44 -96 48z" fill="#55d8ff"/>
+    <path d="M552 254 v92 l-96 -48 v-92z" fill="#2b9dbd"/>
+    <path d="M552 254 v92 l96 -48 v-92z" fill="#176e8d"/>
+    <path d="M36 292 l96 -44 96 44 -96 48z" fill="#ffb067"/>
+    <path d="M132 340 v78 l-96 -48v-78z" fill="#c66c42"/>
+    <path d="M132 340 v78 l96 -48v-78z" fill="#8d442d"/>
+    <path d="M610 326 l84 -38 84 38 -84 42z" fill="#ffd15c"/>
+    <path d="M694 368 v66 l-84 -42v-66z" fill="#c49a36"/>
+    <path d="M694 368 v66 l84 -42v-66z" fill="#806126"/>
+  </g>
+  <g transform="translate(318 536)" opacity=".9">
+    <circle cx="0" cy="0" r="12" fill="#ffd15c"/><rect x="-5" y="8" width="10" height="24" rx="5" fill="#4ff0b2"/>
+    <circle cx="150" cy="-38" r="11" fill="#8bdcff"/><rect x="145" y="-30" width="10" height="22" rx="5" fill="#ff8aa8"/>
+    <circle cx="470" cy="-18" r="12" fill="#f5a6ff"/><rect x="465" y="-10" width="10" height="24" rx="5" fill="#62ffd0"/>
+  </g>
+  <g stroke="#53f0a7" stroke-width="4" opacity=".28">
+    <path d="M168 560 C310 490 438 536 600 468 S910 420 1060 352" fill="none"/>
+    <path d="M250 602 C404 544 520 582 686 512 S920 486 1110 418" fill="none"/>
+  </g>
+  <g transform="translate(58 56)">
+    <text x="0" y="0" fill="#53f0a7" font-family="Spline Sans Mono, ui-monospace, monospace" font-size="24" font-weight="700" letter-spacing="6">CREATIVE</text>
+    <text x="0" y="54" fill="#fff5e8" font-family="Instrument Sans, system-ui, sans-serif" font-size="64" font-weight="900">CubeTown</text>
+    <text x="2" y="92" fill="#c7bbdd" font-family="Instrument Sans, system-ui, sans-serif" font-size="24" font-weight="600">Build, gather, fish, and watch the town breathe.</text>
+  </g>
 </svg>

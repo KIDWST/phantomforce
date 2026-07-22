@@ -1,20 +1,59 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675">
-  <title>Skyguard Arena cover art</title>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675" role="img" aria-labelledby="title desc">
+  <title id="title">Skyguard Arena cover art</title>
+  <desc id="desc">Floating skyline route defended by neon sentinels against incoming raid waves.</desc>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#05060f"/>
-      <stop offset="100%" stop-color="#121737"/>
+      <stop offset="0" stop-color="#07091a"/>
+      <stop offset=".55" stop-color="#08162b"/>
+      <stop offset="1" stop-color="#020609"/>
     </linearGradient>
+    <radialGradient id="core" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset=".25" stop-color="#65ffe1"/>
+      <stop offset=".62" stop-color="#48a8ff"/>
+      <stop offset="1" stop-color="#48a8ff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="path" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#16233d" stop-opacity=".35"/>
+      <stop offset=".5" stop-color="#6affc7" stop-opacity=".68"/>
+      <stop offset="1" stop-color="#16233d" stop-opacity=".35"/>
+    </linearGradient>
+    <filter id="blur" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="14"/>
+    </filter>
   </defs>
   <rect width="1200" height="675" fill="url(#bg)"/>
-  <path d="M0 470 L1200 470" stroke="#2b3372" stroke-width="2"/>
-  <g>
-    <polygon points="600,300 640,360 560,360" fill="#ffb84d"/>
-    <circle cx="420" cy="380" r="26" fill="#ff4d8d"/>
-    <circle cx="780" cy="380" r="26" fill="#4ddbff"/>
-    <circle cx="500" cy="420" r="18" fill="#8a6bff"/>
-    <circle cx="700" cy="420" r="18" fill="#8a6bff"/>
+  <g opacity=".24" stroke="#4e77aa" stroke-width="2">
+    <path d="M0 520 H1200"/><path d="M0 445 H1200"/><path d="M0 370 H1200"/>
+    <path d="M120 675 V120"/><path d="M360 675 V60"/><path d="M600 675 V0"/><path d="M840 675 V60"/><path d="M1080 675 V120"/>
   </g>
-  <text x="600" y="560" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="52" font-weight="700" fill="#eef1ff" letter-spacing="2">Skyguard Arena</text>
-  <text x="600" y="602" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="20" fill="#9aa3d6" letter-spacing="1">Hold the skyline route</text>
+  <path d="M70 438 C210 378 324 404 464 352 S734 280 902 334 S1082 418 1160 360" fill="none" stroke="url(#path)" stroke-width="24" stroke-linecap="round"/>
+  <path d="M70 438 C210 378 324 404 464 352 S734 280 902 334 S1082 418 1160 360" fill="none" stroke="#79ffd6" stroke-width="4" stroke-linecap="round" opacity=".8"/>
+  <g fill="#0c1423" stroke="#5bdab4" stroke-width="3">
+    <path d="M142 430 l90 -42 90 42 -90 42z"/>
+    <path d="M478 348 l96 -44 96 44 -96 46z"/>
+    <path d="M824 330 l106 -48 106 48 -106 50z"/>
+  </g>
+  <g>
+    <circle cx="232" cy="390" r="58" fill="url(#core)" filter="url(#blur)" opacity=".55"/>
+    <circle cx="232" cy="390" r="34" fill="#061119" stroke="#65ffe1" stroke-width="5"/>
+    <path d="M232 328 V452 M170 390 H294" stroke="#65ffe1" stroke-width="6" stroke-linecap="round"/>
+    <circle cx="574" cy="306" r="72" fill="url(#core)" filter="url(#blur)" opacity=".65"/>
+    <polygon points="574,238 632,362 516,362" fill="#ffcb58"/>
+    <polygon points="574,264 608,346 540,346" fill="#fff1a6" opacity=".55"/>
+    <circle cx="930" cy="282" r="70" fill="url(#core)" filter="url(#blur)" opacity=".58"/>
+    <rect x="888" y="240" width="84" height="84" rx="22" fill="#091423" stroke="#68ffe0" stroke-width="5"/>
+    <path d="M908 282 h44 M930 260 v44" stroke="#68ffe0" stroke-width="6" stroke-linecap="round"/>
+  </g>
+  <g opacity=".9">
+    <circle cx="368" cy="294" r="22" fill="#ff4d82"/><circle cx="368" cy="294" r="54" fill="#ff4d82" opacity=".12"/>
+    <circle cx="718" cy="238" r="20" fill="#a686ff"/><circle cx="718" cy="238" r="48" fill="#a686ff" opacity=".14"/>
+    <circle cx="1076" cy="308" r="24" fill="#4edbff"/><circle cx="1076" cy="308" r="58" fill="#4edbff" opacity=".12"/>
+  </g>
+  <path d="M358 294 C436 272 500 282 558 306 M700 240 C762 236 828 248 906 282 M1048 308 C1008 296 972 292 936 282" fill="none" stroke="#ff6e9b" stroke-width="3" stroke-dasharray="9 11" opacity=".7"/>
+  <g transform="translate(58 56)">
+    <text x="0" y="0" fill="#53f0a7" font-family="Spline Sans Mono, ui-monospace, monospace" font-size="24" font-weight="700" letter-spacing="6">DEFENSE</text>
+    <text x="0" y="54" fill="#f8fff9" font-family="Instrument Sans, system-ui, sans-serif" font-size="64" font-weight="900">Skyguard Arena</text>
+    <text x="2" y="92" fill="#aab8cf" font-family="Instrument Sans, system-ui, sans-serif" font-size="24" font-weight="600">Place sentinels, hold the route, survive the raid.</text>
+  </g>
 </svg>

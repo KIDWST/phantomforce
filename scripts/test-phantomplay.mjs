@@ -40,6 +40,13 @@ const coverArt = [
   "skyguard-arena",
   "tidefront-tactics",
 ].map((slug) => read(`../app/assets/phantomplay/${slug}-cover.svg`)).join("\n");
+const upgradedCoverArt = Object.fromEntries([
+  "cubetown",
+  "kingdom-breakers",
+  "phantom-ages",
+  "skyguard-arena",
+  "tidefront-tactics",
+].map((slug) => [slug, read(`../app/assets/phantomplay/${slug}-cover.svg`)]));
 const coverSlugs = readdirSync(new URL("../app/assets/phantomplay", import.meta.url))
   .filter((name) => /-cover\.(svg|webp)$/u.test(name))
   .map((name) => name.replace(/-cover\.(svg|webp)$/u, ""));
@@ -167,6 +174,10 @@ assert.match(css, /html\[data-org-color-mode="dark"\] \.pp-game-art img\{[\s\S]*
 assert.match(css, /html\[data-org-color-mode="light"\] \.pp-game-art img\{[\s\S]*?object-fit:contain[\s\S]*?transform:none/u, "Light-mode PhantomPlay thumbnails must also show the full game image instead of zoom-cropping it.");
 assert.match(css, /\.pp-game-grid:not\(\.pp-game-grid-full\) \.pp-game-art img\{[\s\S]*?object-fit:contain[\s\S]*?transform:none/u, "Compact PhantomPlay rows must not override thumbnails back to cropped art.");
 assert.doesNotMatch(coverArt, /cover placeholder|PhantomPlay cover placeholder/u, "Shipped PhantomPlay cover SVGs must not expose placeholder copy.");
+for (const [slug, art] of Object.entries(upgradedCoverArt)) {
+  assert.ok(art.length >= 3500, `${slug} cover art must stay scene-rich instead of reverting to a tiny placeholder SVG.`);
+  assert.match(art, /<desc /u, `${slug} cover art must include accessible scene description copy.`);
+}
 assert.doesNotMatch(module, /thumbnail:\s*CATEGORY_ART/u, "Frontend built-in PhantomPlay cards must use their game-specific cover art instead of generic category art.");
 for (const slug of coverSlugs) {
   assert.match(module, new RegExp(`id:\\s*"${slug}"[\\s\\S]*?thumbnail:\\s*GAME_ART_BY_SLUG\\["${slug}"\\]`, "u"), `${slug} must use its own cover art in the frontend catalog.`);
