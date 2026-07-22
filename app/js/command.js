@@ -12,9 +12,9 @@ import {
   recentChatTurns, addMemory,
   ctx, session, loadPhantomLoop, savePhantomLoop, loopProviderName, modelDisplayLabel,
   getPhantomLaneTarget, loadPhantomLaneConfig, workspaceStorageGetItem, wsName,
-} from "./store.js?v=phantom-live-20260722-20";
-import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260722-20";
-import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260722-20";
+} from "./store.js?v=phantom-live-20260722-21";
+import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260722-21";
+import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260722-21";
 const classifyPhantomIntent = (text) => deriveActionContract(classifyRaw(text));
 
 /* Cross-surface handoff: chat tells the Websites page which project to focus
@@ -1004,8 +1004,25 @@ function localQuestionAnswer(text, settings = null) {
     };
   }
 
+  // Warm local safety net for pure small talk / greetings / affection.
+  // Every business intent is handled above, so reaching here with a greeting
+  // means it is genuinely just casual. When the whole model chain
+  // (Codex -> Claude -> OpenRouter -> local) comes up empty, a friendly hello
+  // must still get a human reply, never a cold "no model answer" error.
+  const smallTalk = /^(?:yo+|hey+|hi+|hello+|sup|wass?up|what'?s up|howdy|heya|hiya|good (?:morning|afternoon|evening|night)|p ?dawg|dawg|bro|bruh|homie|buddy|pal|mate|fam|thanks?|thank you|ty|gm|gn)\b/i;
+  const affection = /\b(?:miss(?:ed)?|love|appreciate)\s+(?:you|u|ya)\b/i;
+  if (smallTalk.test(text.trim()) || affection.test(s)) {
+    const lines = [
+      "Missed you too - I'm here and wired in. What are we getting into?",
+      "Hey, good to have you back. Say the word and I'll start moving on something.",
+      "Right here with you. Want to knock out a lead, a draft, or just talk it through?",
+      "I'm up and listening. Point me at anything - clients, content, sites, money.",
+    ];
+    return { say: lines[text.length % lines.length], cards: [], open: null };
+  }
+
   return {
-    say: "I didn't get a clean model answer in time. Your question is still the active thread. Try it once more or add one detail.",
+    say: "I'm here - I just didn't get a clean model answer for that one. Say it once more or add a detail, and I'll take it from there.",
     cards: [],
     open: null,
   };
