@@ -1170,18 +1170,16 @@ html[data-org-color-mode="light"] .pp-game-art img{
 @media(max-width:767px){.pp-rating-toggles{grid-template-columns:1fr}.pp-play-header{align-items:flex-start}.pp-play-header h2{font-size:20px}.pp-categories{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.pp-categories button{min-height:38px}}
 .pp-devmode-loading{display:grid;place-content:center;justify-items:center;gap:8px}
 .pp-devmode-error{margin:10px 12px;padding:9px 11px;border:1px solid #ff6d8355;border-radius:8px;background:#ff6d830f;color:#ffc7d1;font-size:12px}
-/* Subtle, icon-only entry points — no "giant words" competing with a game's
-   own thumbnail/title. Sized and positioned like .pp-favorite so a card with
-   Dev Sandbox available reads as a small extra affordance, not a second
-   destination. */
-.pp-devsandbox-card-open{display:grid;place-items:center;width:34px;height:34px;flex:0 0 auto;border:1px solid #41ffa14d;border-radius:50%;background:#41ffa112;color:#1f9e63;cursor:pointer}
+/* Labeled pill entry point — Dev Mode must read as a clear, named
+   destination on the card, not a bare icon a player has to guess at. */
+.pp-devsandbox-card-open{display:flex;align-items:center;gap:6px;height:34px;flex:0 0 auto;padding:0 12px;border:1px solid #41ffa14d;border-radius:9px;background:#41ffa112;color:#1f9e63;font-weight:800;font-size:12px;white-space:nowrap;cursor:pointer}
 .pp-devsandbox-card-open:hover,.pp-devsandbox-card-open:focus-visible{border-color:#41ffa1cc;background:#41ffa11f;outline:none}
 .pp-devsandbox-card-open svg{width:15px;height:15px}
 .pp-devmode-toggle{position:relative;display:grid;place-items:center;width:34px;height:34px;flex:0 0 auto;border:1px solid var(--line);border-radius:50%;background: var(--glass-2);color:var(--dim);cursor:pointer}
 .pp-devmode-toggle svg{width:15px;height:15px}
-.pp-devmode-toggle i{position:absolute;right:3px;top:3px;width:7px;height:7px;border-radius:50%;background:#8a8698;box-shadow:0 0 0 2px #ffffff}
-.pp-devmode-toggle.is-on i{background:#41ffa1;box-shadow:0 0 0 2px #ffffff,0 0 6px #41ffa1}
-.pp-devmode-toggle.is-off i{background:#ff6d83;box-shadow:0 0 0 2px #ffffff}
+.pp-devmode-toggle i{position:absolute;right:3px;top:3px;width:7px;height:7px;border-radius:50%;background:#8a8698;box-shadow:0 0 0 2px var(--glass-2)}
+.pp-devmode-toggle.is-on i{background:#41ffa1;box-shadow:0 0 0 2px var(--glass-2),0 0 6px #41ffa1}
+.pp-devmode-toggle.is-off i{background:#ff6d83;box-shadow:0 0 0 2px var(--glass-2)}
 .pp-devsandbox-open{min-height:34px;border:1px solid #41ffa173;border-radius:9px;background:#41ffa112;color:#1f9e63;font-weight:800;cursor:pointer}
 .pp-devsandbox-open:hover,.pp-devsandbox-open:focus-visible{border-color:#41ffa1cc;color:#137a4b;outline:none}
 .pp-player.is-devsandbox{grid-template-columns:minmax(0,1fr) minmax(340px,420px)}
