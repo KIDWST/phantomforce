@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="720" viewBox="0 0 1200 720" role="img" aria-label="BeatForge product cover">
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#05070d"/>
+      <stop offset="0.48" stop-color="#091812"/>
+      <stop offset="1" stop-color="#020405"/>
+    </linearGradient>
+    <linearGradient id="neon" x1="0" x2="1">
+      <stop offset="0" stop-color="#41ffa1"/>
+      <stop offset="1" stop-color="#42e9ff"/>
+    </linearGradient>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="7" result="blur"/>
+      <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0.22 0 0 0 0 1 0 0 0 0 0.72 0 0 0 0.9 0"/>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <rect width="1200" height="720" fill="url(#bg)"/>
+  <path d="M0 528 C172 462 305 452 470 491 C660 536 788 440 1200 386 L1200 720 L0 720 Z" fill="#07120f"/>
+  <g opacity=".22" stroke="#41ffa1" stroke-width="1">
+    <path d="M92 150 H1108"/>
+    <path d="M92 210 H1108"/>
+    <path d="M92 270 H1108"/>
+    <path d="M92 330 H1108"/>
+    <path d="M92 390 H1108"/>
+    <path d="M92 450 H1108"/>
+  </g>
+  <g filter="url(#glow)" fill="none" stroke="url(#neon)" stroke-linecap="round">
+    <path d="M96 362 C147 331 184 331 229 362 C285 401 318 399 365 360 C418 317 460 318 510 364 C562 410 603 404 651 357 C704 307 757 311 804 364 C852 417 910 407 955 360 C1003 310 1056 324 1101 372" stroke-width="7"/>
+    <path d="M96 362 C147 331 184 331 229 362 C285 401 318 399 365 360 C418 317 460 318 510 364 C562 410 603 404 651 357 C704 307 757 311 804 364 C852 417 910 407 955 360 C1003 310 1056 324 1101 372" stroke-width="2" opacity=".65"/>
+  </g>
+  <g transform="translate(112 92)">
+    <text x="0" y="0" fill="#eafff5" font-family="Arial, Helvetica, sans-serif" font-size="74" font-weight="900" letter-spacing="5">BEAT<tspan fill="#41ffa1">FORGE</tspan></text>
+    <text x="3" y="42" fill="#8fb5aa" font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="700" letter-spacing="4">REFERENCE BEAT TO YOUR KIT</text>
+  </g>
+  <g transform="translate(110 505)">
+    <rect width="980" height="92" rx="20" fill="#07120f" stroke="#41ffa1" stroke-opacity=".38"/>
+    <g fill="#41ffa1">
+      <circle cx="48" cy="46" r="13"/>
+      <circle cx="120" cy="46" r="10"/>
+      <circle cx="190" cy="46" r="7"/>
+      <circle cx="262" cy="46" r="12"/>
+      <circle cx="334" cy="46" r="8"/>
+      <circle cx="406" cy="46" r="12"/>
+      <circle cx="478" cy="46" r="6"/>
+      <circle cx="550" cy="46" r="10"/>
+      <circle cx="622" cy="46" r="8"/>
+      <circle cx="694" cy="46" r="13"/>
+      <circle cx="766" cy="46" r="8"/>
+      <circle cx="838" cy="46" r="11"/>
+      <circle cx="910" cy="46" r="7"/>
+    </g>
+    <g stroke="#42e9ff" stroke-width="2" opacity=".6">
+      <path d="M48 46 H120 H190 H262 H334 H406 H478 H550 H622 H694 H766 H838 H910"/>
+    </g>
+  </g>
+  <g transform="translate(735 96)">
+    <rect width="355" height="180" rx="22" fill="#07110f" stroke="#42e9ff" stroke-opacity=".35"/>
+    <text x="28" y="48" fill="#42e9ff" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="900" letter-spacing="3">DAW PLAN</text>
+    <text x="28" y="88" fill="#eafff5" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="900">MIDI lanes</text>
+    <text x="28" y="124" fill="#b9d8cd" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700">Kit mapping</text>
+    <text x="28" y="158" fill="#b9d8cd" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700">Arrangement rebuild</text>
+  </g>
+</svg>

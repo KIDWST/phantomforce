@@ -338,6 +338,7 @@ import {
   submitPhantomStoreTool,
   updatePhantomStoreTool,
 } from "./phantom-ai/phantomstore.js";
+import { buildBeatForgePreview } from "./phantom-ai/beatforge.js";
 import { registerPhantomPlayFlagshipGames } from "./phantom-ai/phantomplay-flagship.js";
 import {
   getPhantomPlayDeveloperAnalytics,
@@ -5505,6 +5506,20 @@ app.post("/api/phantomstore/products/:id/buy", async (request, reply) => {
   const params = request.params as { id?: string };
   const result = params.id ? await recordPhantomStoreProductBuyClick(session, params.id.slice(0, 180)) : null;
   return result ? { ok: true, session, ...result } : reply.code(404).send({ ok: false, error: "Product listing was not found." });
+});
+
+app.post("/api/beatforge/preview", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  return {
+    ok: true,
+    session,
+    preview: buildBeatForgePreview((request.body ?? {}) as Record<string, unknown>),
+    files_written: false,
+    daw_mutated: false,
+    audio_uploaded: false,
+    plugin_started: false,
+  };
 });
 
 /* ============================================================================

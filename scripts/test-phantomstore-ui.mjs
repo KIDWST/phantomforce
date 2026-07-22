@@ -25,6 +25,7 @@ assert.match(storeSource, /This is not Site Builder\. This is not Store Builder\
 assert.match(storeSource, /Seller directory/u, "Discovery must include a seller directory.");
 assert.match(storeSource, /Ready to buy/u, "Discovery must expose ready-to-buy products before community tools.");
 assert.match(storeSource, /const PRODUCT_ART_FALLBACKS/u, "PhantomStore must provide product artwork fallbacks when listings are missing images.");
+assert.match(storeSource, /beatforge-cover\.svg/u, "PhantomStore must have BeatForge product art instead of reusing PhantomForce OS art.");
 assert.match(storeSource, /const artUrl = imageUrl \|\| fallbackImageUrl/u, "Product cards must choose uploaded art first and branded fallback art second.");
 assert.match(storeSource, /ps-product-media\$\{imageUrl \? "" : " is-fallback"\}/u, "Product cards must always render a media block, even for missing product pictures.");
 assert.match(storeSource, /seller reviews/u, "Seller cards must show seller reviews.");
@@ -46,12 +47,19 @@ assert.match(backendSource, /function safeUrl[\s\S]*parsed\.protocol === "https:
 assert.match(backendTestSource, /repoUrl: "javascript:alert\(1\)"[\s\S]*non-http\(s\) repo URL must be sanitized away and fail submission/u, "Backend PhantomStore tests must reject javascript URLs.");
 assert.match(backendSource, /const SEEDED_SELLERS/u, "Backend must seed seller profiles.");
 assert.match(backendSource, /const SEEDED_PRODUCTS/u, "Backend must seed product listings.");
+assert.match(backendSource, /id:\s*"product-beatforge"[\s\S]*name:\s*"BeatForge"/u, "Backend must seed BeatForge as a real product listing.");
+assert.doesNotMatch(backendSource, /id:\s*"product-phantomforce-os"/u, "PhantomForce OS must not be sold in the store users are already using.");
+assert.match(backendSource, /Drop in a beat, attach your own kit/u, "BeatForge listing must clearly describe the beat + kit workflow.");
+assert.match(backendSource, /review-beatforge-rebuild-plan/u, "BeatForge listing must use producer-specific review proof.");
+assert.doesNotMatch(backendSource, /review-phantomforce-os/u, "Old PhantomForce OS product reviews must not remain attached to BeatForge.");
 assert.match(backendSource, /recordPhantomStoreProductBuyClick/u, "Backend must track product buy intent.");
 assert.match(backendSource, /generatePhantomStoreSubmissionDrafts/u, "Backend must provide deterministic PhantomStore draft generation.");
 assert.match(backendSource, /providerCalled:\s*false/u, "Draft generation must not claim an external AI provider was called.");
 assert.match(backendSource, /externalFetchPerformed:\s*false/u, "Draft generation must not fetch external URLs.");
 assert.match(backendSource, /saveGeneratedPhantomStoreDrafts/u, "Backend must save generated submissions as drafts only.");
 assert.match(backendTestSource, /Bulk generated drafts must never auto-submit for public review/u, "Backend tests must protect generated drafts from auto-submission.");
+assert.match(readFileSync(new URL("../server/src/index.ts", import.meta.url), "utf8"), /\/api\/beatforge\/preview[\s\S]*files_written:\s*false[\s\S]*daw_mutated:\s*false[\s\S]*audio_uploaded:\s*false/u,
+  "BeatForge preview route must be explicit that it does not write files, mutate a DAW, or upload audio.");
 
 for (const selector of [".ps-shell", ".ps-market-hero", ".ps-tool", ".ps-product", ".ps-seller", ".ps-reviews", ".ps-submit-layout", ".ps-ai-intake", ".ps-ai-drafts", ".ps-moderate"]) {
   assert.ok(storeCss.includes(selector), `${selector} style must be present.`);

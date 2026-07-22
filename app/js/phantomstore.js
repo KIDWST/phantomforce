@@ -120,6 +120,7 @@ function reviewList(reviews = []) {
 
 const PRODUCT_ART_FALLBACKS = [
   [/termina|terminal|cli|automation/i, "/app/assets/phantomstore/termina-cover-ai.webp"],
+  [/beatforge|beat|drum|kit|midi|daw|producer/i, "/app/assets/phantomstore/beatforge-cover.svg"],
   [/vocal|vox|voice|autotune|pitch|song/i, "/app/assets/phantomstore/phantom-vocal-ai-cover-ai.webp"],
   [/phantomforce|business|os|command|admin|workspace/i, "/app/assets/phantomstore/phantomforce-os-cover-ai.webp"],
 ];

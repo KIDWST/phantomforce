@@ -27,6 +27,8 @@ try {
   const initial = await store.getPhantomStoreSnapshot(devA);
   assert(initial.catalog.length === 0, "A fresh store should ship no seeded tools.");
   assert(initial.products.some((product: { name?: string }) => product.name === "Termina"), "PhantomStore should ship PhantomForce products, including Termina.");
+  assert(initial.products.some((product: { name?: string }) => product.name === "BeatForge"), "PhantomStore should list BeatForge instead of the internal PhantomForce OS workspace.");
+  assert(!initial.products.some((product: { id?: string }) => product.id === "product-phantomforce-os"), "PhantomForce OS must not be sold inside the store users are already using.");
   assert(initial.sellers.some((seller: { name?: string }) => seller.name === "PhantomForce"), "PhantomStore should include a PhantomForce seller profile.");
   assert(initial.products.every((product: { reviews?: unknown[] }) => Array.isArray(product.reviews)), "Product listings should carry product reviews.");
   assert(initial.sellers.every((seller: { reviews?: unknown[] }) => Array.isArray(seller.reviews)), "Seller listings should carry seller reviews.");
@@ -111,6 +113,8 @@ try {
   const buyClick = await store.recordPhantomStoreProductBuyClick(devB, "product-termina");
   assert(buyClick?.buyClicks === 1, "Product buy intent clicks should be tracked.");
   assert(buyClick?.checkout?.url.includes("termina"), "Termina buy intent should point at the Termina product page.");
+  const beatForgeClick = await store.recordPhantomStoreProductBuyClick(devB, "product-beatforge");
+  assert(beatForgeClick?.checkout?.url.includes("beatforge"), "BeatForge buy intent should point at the BeatForge product page.");
 
   const draftClick = await store.recordPhantomStoreInstallClick(devB, draft.tool.id);
   assert(draftClick === null, "Install clicks must not count against tools that were never approved.");
@@ -190,6 +194,21 @@ try {
   assert(routeEditMissing.statusCode === 404, "The update route should 404 for unknown tools.");
   const productBuyRoute = await app.inject({ method: "POST", url: "/api/phantomstore/products/product-termina/buy", headers: { Authorization: `Bearer ${ownerToken}` } });
   assert(productBuyRoute.statusCode === 200 && productBuyRoute.json().checkout.url.includes("termina"), "The product buy route should prepare the Termina checkout target.");
+  const beatForgePreview = await app.inject({
+    method: "POST",
+    url: "/api/beatforge/preview",
+    headers: { Authorization: `Bearer ${ownerToken}` },
+    payload: {
+      beatName: "Store Route Beat",
+      beatPath: "C:\\Users\\jorda\\Music\\owned\\store-route-beat.wav",
+      bpm: 143,
+      daw: "reaper",
+      kitName: "Route Kit",
+      kitSounds: [{ name: "Route Kick", role: "kick" }, { name: "Route Snare", role: "snare" }],
+    },
+  });
+  assert(beatForgePreview.statusCode === 200 && beatForgePreview.json().preview.product === "BeatForge", "BeatForge preview route should return a deterministic product plan.");
+  assert(beatForgePreview.json().files_written === false && beatForgePreview.json().daw_mutated === false && beatForgePreview.json().audio_uploaded === false, "BeatForge preview must not write files, mutate the DAW, or upload audio.");
   await app.close();
 
   console.log(JSON.stringify({ ok: true, tenantIsolation: true, validationEnforced: true, moderationGated: true, catalogFiltered: true, installClicksTracked: true, moderationNoteHidden: true, routeAuth: true }));
