@@ -42,6 +42,34 @@ const viewports = [
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+function injectDashboardDecisionFixture() {
+  const deck = document.querySelector("[data-decisions]");
+  if (!deck) return;
+  deck.hidden = false;
+  deck.innerHTML = `
+    <div class="decision-head">
+      <h2>Decisions</h2><span class="decision-count">13</span>
+      <i>Signals packaged for one motion — approve, adjust, or dismiss.</i>
+      <button class="decision-review-all" type="button" data-open-ws="approvals">Review all 13</button>
+    </div>
+    <div class="decision-list">
+      ${[1, 2, 3, 4].map((index) => `
+        <article class="decision-card dc-high" data-decision-id="responsive-${index}">
+          <header class="decision-meta">
+            <span class="decision-dept">Technology</span><span class="decision-impact di-high">high impact</span><span class="decision-conf">confidence: high</span>
+          </header>
+          <h3>Platform automation failing: PhantomCut Lane Health Check</h3>
+          <p>PhantomCut media lane unreachable at http://127.0.0.1:8787. This is a platform-level job and affects the whole installation.</p>
+          <p class="decision-evidence">Evidence: automation-engine</p>
+          <footer class="decision-actions">
+            <button class="btn btn-primary" type="button">Approve · Open automations</button>
+            <button class="btn" type="button">Adjust</button>
+            <button class="btn btn-quiet" type="button">Dismiss</button>
+          </footer>
+        </article>`).join("")}
+    </div>`;
+}
+
 async function stopProcess(child, timeoutMs = 3000) {
   if (!child || child.killed || child.exitCode !== null) return;
   const stopped = new Promise((resolve) => {
@@ -310,10 +338,12 @@ function auditPage() {
   const commandRail = document.querySelector("[data-os-command-rail]");
   const mobileHomebar = document.querySelector(".mobile-admin-homebar");
   const stickyTopbar = document.querySelector(".topbar2");
+  const systemLine = document.querySelector(".os-system-line");
   const mobileNav = document.querySelector("[data-mobile-bottom-nav]");
   const dashboardBrief = document.querySelector(".dashboard-brief");
   const decisionDeck = document.querySelector(".decision-deck");
   const dashboardHero = consoleRoot?.querySelector(".hero2");
+  const dashboardComposer = consoleRoot?.querySelector(".chatbox-composer");
   const productCards = [...document.querySelectorAll(".ps-product")];
   const productMedia = [...document.querySelectorAll(".ps-product-media")];
   const phantomPlayActions = [...document.querySelectorAll(".pp-game-actions button")];
@@ -467,6 +497,7 @@ function auditPage() {
     ["command-rail", commandRail],
     ["mobile-homebar", mobileHomebar],
     ["topbar", stickyTopbar],
+    ["system-line", systemLine],
     ["bottom-dock", mobileNav],
   ].filter(([, el]) => isVisible(el));
   const navSurfaces = navSurfaceEntries.map(([name, el]) => {
@@ -479,6 +510,9 @@ function auditPage() {
     };
   });
   const dashboardSurfaces = [dashboardBrief, decisionDeck, dashboardHero].filter(isVisible);
+  const decisionList = document.querySelector(".decision-list");
+  const decisionCards = [...document.querySelectorAll(".decision-card")];
+  const decisionReviewAll = document.querySelector(".decision-review-all");
   const dashboardCollisions = [];
   for (let index = 0; index < dashboardSurfaces.length; index += 1) {
     for (let next = index + 1; next < dashboardSurfaces.length; next += 1) {
@@ -510,6 +544,7 @@ function auditPage() {
       commandRailVisible: isVisible(commandRail),
       mobileHomebarVisible: isVisible(mobileHomebar),
       stickyTopbarVisible: isVisible(stickyTopbar),
+      systemLineVisible: isVisible(systemLine),
       mobileVisible: isVisible(mobileNav),
       visibleSurfaces: navSurfaces,
       mobileTop: mobileRect ? Math.round(mobileRect.top) : null,
@@ -551,6 +586,10 @@ function auditPage() {
       briefTop: dashboardBrief ? Math.round(dashboardBrief.getBoundingClientRect().top) : null,
       heroTop: dashboardHero ? Math.round(dashboardHero.getBoundingClientRect().top) : null,
       intelTop: dashboardIntel ? Math.round(dashboardIntel.getBoundingClientRect().top) : null,
+      visibleDecisionCards: decisionCards.filter(isVisible).length,
+      decisionListHorizontalOverflow: decisionList ? decisionList.scrollWidth > decisionList.clientWidth + 2 : false,
+      reviewAllVisible: isVisible(decisionReviewAll),
+      composerBottom: dashboardComposer && isVisible(dashboardComposer) ? Math.round(dashboardComposer.getBoundingClientRect().bottom) : null,
     },
     textProbe: document.body.innerText.slice(0, 300),
   };
@@ -573,6 +612,9 @@ async function runViewportCase(cdp, baseUrl, screenshotDir, page, viewport, { na
     await sleep(250);
   }
   const appState = await waitForApp(cdp, page.id);
+  if (page.id === "dashboard") {
+    await evaluate(cdp, `(${injectDashboardDecisionFixture.toString()})()`);
+  }
   const audit = await evaluate(cdp, `(${auditPage.toString()})()`);
   const png = await cdp.send("Page.captureScreenshot", {
     format: "png",
@@ -603,9 +645,19 @@ function assertCase(result) {
     assert.deepEqual(audit.nav.visibleSurfaces.map((surface) => surface.name), ["bottom-dock"], `${label} ${viewport.width}: mobile must have exactly one visible nav surface.`);
     assert.equal(audit.nav.mobileHomebarVisible, false, `${label} ${viewport.width}: compact homebar must stay hidden so mobile has one nav bar.`);
     assert.equal(audit.nav.commandRailVisible, false, `${label} ${viewport.width}: Command OS rail must be hidden on compact widths to avoid duplicate nav.`);
+    assert.equal(audit.nav.systemLineVisible, false, `${label} ${viewport.width}: system status line must stay hidden so the bottom dock is the only mobile bar.`);
     assert.equal(audit.nav.desktopVisible, false, `${label} ${viewport.width}: desktop sidebar must be hidden on compact widths.`);
     if (page === "dashboard") {
       assert.deepEqual(audit.dashboardCollisions, [], `${label} ${viewport.width}: dashboard brief, decisions and console must remain separate in the mobile document flow.`);
+      assert.equal(audit.dashboard.reviewAllVisible, true, `${label} ${viewport.width}: decision preview must link to the complete queue.`);
+      if (viewport.width <= 680) {
+        assert.equal(audit.dashboard.decisionListHorizontalOverflow, false, `${label} ${viewport.width}: decision preview must not create a sideways phone scroller.`);
+        assert.equal(audit.dashboard.visibleDecisionCards, 1, `${label} ${viewport.width}: phone home must show one priority decision before Phantom.`);
+        assert.ok(
+          audit.dashboard.composerBottom !== null && audit.nav.mobileTop !== null && audit.dashboard.composerBottom <= audit.nav.mobileTop + 2,
+          `${label} ${viewport.width}: Phantom composer must be fully tappable above the fixed mobile dock on initial load.`
+        );
+      }
       assert.ok(
         audit.dashboard.intelTop === null || (audit.dashboard.heroTop !== null && audit.dashboard.intelTop > audit.dashboard.heroTop + 20),
         `${label} ${viewport.width}: dashboard intelligence cards must not sit above the brief like a second mobile nav bar.`

@@ -3193,7 +3193,8 @@ html[data-command-os="2040"] .phantom.command-os-enabled .console[data-chatbox-m
 
   .phantom .topbar2,
   .phantom .os-command-rail,
-  .phantom .mobile-admin-homebar {
+  .phantom .mobile-admin-homebar,
+  .phantom .os-system-line {
     display: none !important;
     opacity: 0 !important;
     visibility: hidden !important;
@@ -3233,5 +3234,130 @@ html[data-command-os="2040"] .phantom.command-os-enabled .console[data-chatbox-m
 @media (max-width: 520px) {
   .phantom .dashboard-intel-grid {
     grid-template-columns: 1fr !important;
+  }
+}
+
+/* Phone command surface: one priority decision, then the actual command box.
+   The previous 86vw horizontal decision rail made the page feel wider than
+   the phone and let a long alert push Phantom below the fold. The complete
+   queue remains one tap away in Approvals. */
+@media (max-width: 680px) {
+  html,
+  body,
+  .phantom.command-os-enabled,
+  html[data-command-os="2040"] .phantom.command-os-enabled .app-main,
+  html[data-command-os="2040"] .phantom.command-os-enabled .console-center {
+    max-width: 100% !important;
+    overflow-x: clip !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .dashboard-brief {
+    padding: 20px 16px 12px !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .dashboard-brief h1 {
+    font-size: clamp(25px, 7.7vw, 30px) !important;
+    line-height: 1.03 !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .decision-deck {
+    width: calc(100% - 24px) !important;
+    margin: 6px 12px 12px !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .decision-head {
+    display: grid !important;
+    grid-template-columns: auto auto minmax(0, 1fr) !important;
+    align-items: center !important;
+    gap: 8px !important;
+    padding: 0 2px !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .decision-review-all {
+    justify-self: end !important;
+    min-height: 36px !important;
+    padding: 6px 10px !important;
+    border: 1px solid rgba(85, 231, 167, .28) !important;
+    border-radius: 999px !important;
+    background: rgba(85, 231, 167, .07) !important;
+    color: #75edb5 !important;
+    font: 650 10px "Instrument Sans", sans-serif !important;
+    white-space: nowrap !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .decision-list {
+    display: grid !important;
+    grid-auto-flow: row !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-auto-columns: auto !important;
+    gap: 0 !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    scroll-snap-type: none !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .decision-card {
+    gap: 6px !important;
+    width: 100% !important;
+    padding: 11px 12px 11px 15px !important;
+    scroll-snap-align: none !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .decision-card:nth-child(n + 2) {
+    display: none !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .decision-meta {
+    gap: 6px 9px !important;
+    font-size: 8.5px !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .decision-card h3 {
+    font-size: 14px !important;
+    line-height: 1.25 !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .decision-card > p:not(.decision-evidence) {
+    display: none !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .decision-evidence {
+    display: none !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .decision-actions {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) minmax(92px, .55fr) !important;
+    gap: 7px !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .decision-actions .btn {
+    min-width: 0 !important;
+    min-height: 40px !important;
+    padding: 7px 9px !important;
+    overflow: hidden !important;
+    font-size: 10.5px !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .decision-actions .btn-quiet {
+    grid-column: 1 / -1 !important;
+    min-height: 36px !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .console:not(.console-workspace) .hero2 {
+    margin: 0 10px 14px !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .console:not(.console-workspace) .hero2-stage {
+    display: none !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .console:not(.console-workspace) .chatbox-log {
+    min-height: 58px !important;
+    max-height: 132px !important;
   }
 }
