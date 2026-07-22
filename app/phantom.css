@@ -12577,8 +12577,8 @@ body .phantom .workspace-page :where(
   border: 1px solid rgba(91, 76, 255,.32);
   border-radius: 18px;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255,.86), rgba(36, 31, 63, 0.064)),
-    radial-gradient(circle at 8% 0%, rgba(91, 76, 255,.12), transparent 36%);
+    radial-gradient(circle at 8% 0%, rgba(91, 76, 255,.18), transparent 38%),
+    linear-gradient(180deg, rgba(15, 18, 34,.96), rgba(5, 8, 16,.94));
   color: var(--ink);
   font: 700 14px/1.35 "Instrument Sans", system-ui, sans-serif;
   outline: none;
@@ -12588,7 +12588,7 @@ body .phantom .workspace-page :where(
     0 0 0 1px rgba(0,0,0,.14);
 }
 .page-worker-form textarea::placeholder {
-  color: var(--ink);
+  color: rgba(238, 244, 247,.64);
 }
 .page-worker-form textarea:focus {
   border-color: rgba(91, 76, 255,.78);

@@ -37,6 +37,8 @@ assert.match(css, /ci-auto-scout|ci-auto-bars|ciBarLoad/u, "Automatic market int
 assert.match(css, /ci-market-map|ci-map-node|ciMapSpin|ci-sparkline/u, "The competitor map must be graphic, animated, and trend-oriented.");
 assert.match(css, /ci-map-stage\{[^}]*overflow:hidden/u, "The competitor map stage must clip internally instead of hanging off the page.");
 assert.match(css, /ci-map-heat|is-threat-direct|rgba\(255,84,95/u, "The competitor map must use red heat styling for direct competitors.");
+assert.match(css, /html\[data-command-os="2040"\]\s+\.ci-shell\{[\s\S]*--ci-panel:rgba\(7,10,20,\.82\)/u, "Competitor Intel must override legacy light panels in the Command OS shell.");
+assert.match(css, /html\[data-command-os="2040"\]\s+\.ci-shell\s+\.ci-metrics article[\s\S]*background:linear-gradient\(180deg,rgba\(10,15,28,\.94\),rgba\(5,8,16,\.92\)\)/u, "Competitor Intel metrics must render as dark cards, not unreadable white boxes.");
 assert.doesNotMatch(service, /from\s+["'](?:puppeteer|playwright)|child_process|execFile|spawn\(/iu, "The service must not implement scraping or bypass tooling.");
 assert.doesNotMatch(module, /fetch\([^)]*https?:\/\//u, "The UI must not call competitor sites directly.");
 assert.doesNotMatch(module, /\bqueued\b|Ready to run|ready_to_run|No market board yet|Discovery queue ready/iu, "Customer Intelligence must not present confusing queue/readiness language or dead empty states.");

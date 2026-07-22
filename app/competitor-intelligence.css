@@ -128,3 +128,83 @@
 .ci-stream-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:18px 0 10px;flex-wrap:wrap}
 .ci-stream-head .ci-sub{margin:0}
 @media(max-width:1050px){.ci-comp-layout{grid-template-columns:1fr}.ci-comp-detail-head{flex-direction:column}.ci-discover-cta{flex-direction:column;align-items:flex-start}}
+
+/* Command OS dark-material guardrail: prevents legacy light theme cards from
+   punching white boxes through the admin/app shell. */
+html[data-command-os="2040"] .ci-shell{
+  --ci-line:rgba(129,98,255,.26);
+  --ci-panel:rgba(7,10,20,.82);
+  color:#eef4f7;
+  background:radial-gradient(circle at 72% 18%,rgba(121,82,255,.12),transparent 32%),linear-gradient(180deg,rgba(7,10,20,.92),rgba(4,7,13,.96));
+}
+html[data-command-os="2040"] .ci-shell .ci-metrics article,
+html[data-command-os="2040"] .ci-shell .ci-boundaries,
+html[data-command-os="2040"] .ci-shell .ci-builder,
+html[data-command-os="2040"] .ci-shell .ci-card-list>article,
+html[data-command-os="2040"] .ci-shell .ci-inference,
+html[data-command-os="2040"] .ci-shell .ci-competitor-strip article,
+html[data-command-os="2040"] .ci-shell .ci-profile-card,
+html[data-command-os="2040"] .ci-shell .ci-discovery,
+html[data-command-os="2040"] .ci-shell .ci-dossier,
+html[data-command-os="2040"] .ci-shell .ci-dossier-launch article,
+html[data-command-os="2040"] .ci-shell .ci-tips article,
+html[data-command-os="2040"] .ci-shell .ci-comp-row,
+html[data-command-os="2040"] .ci-shell .ci-comp-detail,
+html[data-command-os="2040"] .ci-shell .ci-settings-card{
+  border-color:rgba(129,98,255,.24);
+  background:linear-gradient(180deg,rgba(10,15,28,.94),rgba(5,8,16,.92));
+  color:#eef4f7;
+  box-shadow:inset 0 1px rgba(255,255,255,.035),0 18px 46px rgba(0,0,0,.22);
+}
+html[data-command-os="2040"] .ci-shell .ci-metrics b,
+html[data-command-os="2040"] .ci-shell .ci-market-board header b,
+html[data-command-os="2040"] .ci-shell .ci-auto-bars b,
+html[data-command-os="2040"] .ci-shell .ci-auto-compare h4,
+html[data-command-os="2040"] .ci-shell .ci-auto-actions h4,
+html[data-command-os="2040"] .ci-shell .ci-comp-detail-head b{
+  color:#f6fbff;
+}
+html[data-command-os="2040"] .ci-shell .ci-metrics span,
+html[data-command-os="2040"] .ci-shell .ci-mode p:not(.ci-kicker),
+html[data-command-os="2040"] .ci-shell .ci-boundaries p,
+html[data-command-os="2040"] .ci-shell .ci-view-head p,
+html[data-command-os="2040"] .ci-shell .ci-signal-list p,
+html[data-command-os="2040"] .ci-shell .ci-card-list p,
+html[data-command-os="2040"] .ci-shell .ci-market-board header p,
+html[data-command-os="2040"] .ci-shell .ci-market-board dt,
+html[data-command-os="2040"] .ci-shell .ci-auto-bars span,
+html[data-command-os="2040"] .ci-shell .ci-auto-compare small,
+html[data-command-os="2040"] .ci-shell .ci-comp-open small,
+html[data-command-os="2040"] .ci-shell .ci-proof{
+  color:#98a6b5;
+}
+html[data-command-os="2040"] .ci-shell .ci-context,
+html[data-command-os="2040"] .ci-shell .ci-scout,
+html[data-command-os="2040"] .ci-shell .ci-market-board article,
+html[data-command-os="2040"] .ci-shell .ci-scout-lanes article,
+html[data-command-os="2040"] .ci-shell .ci-auto-scout>header,
+html[data-command-os="2040"] .ci-shell .ci-auto-bars article,
+html[data-command-os="2040"] .ci-shell .ci-auto-compare article,
+html[data-command-os="2040"] .ci-shell .ci-auto-actions article,
+html[data-command-os="2040"] .ci-shell .ci-market-map,
+html[data-command-os="2040"] .ci-shell .ci-source-drawer,
+html[data-command-os="2040"] .ci-shell .ci-market-leaders button{
+  border-color:rgba(129,98,255,.22);
+  background:linear-gradient(180deg,rgba(8,13,25,.88),rgba(4,8,15,.9));
+  color:#eef4f7;
+}
+html[data-command-os="2040"] .ci-shell .ci-map-node{
+  background:radial-gradient(circle,rgba(129,98,255,.42),rgba(13,18,34,.96) 64%);
+}
+html[data-command-os="2040"] .ci-shell .ci-map-node.is-phantom{
+  background:radial-gradient(circle,#55e7a7,rgba(30,155,104,.72) 46%,rgba(8,14,24,.98) 69%);
+}
+html[data-command-os="2040"] .ci-shell .ci-map-node.is-direct,
+html[data-command-os="2040"] .ci-shell .ci-map-node.is-threat-direct{
+  background:radial-gradient(circle,rgba(255,84,95,.72),rgba(73,12,22,.96) 68%);
+}
+html[data-command-os="2040"] .ci-shell .ci-secondary,
+html[data-command-os="2040"] .ci-shell .ci-radar-widgets button{
+  background:rgba(10,16,28,.84);
+  color:#dce8f0;
+}
