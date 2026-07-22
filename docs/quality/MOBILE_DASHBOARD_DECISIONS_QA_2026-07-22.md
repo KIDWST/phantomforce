@@ -42,4 +42,10 @@ The combined comparison focuses on the above-the-fold decision-to-composer path 
 
 No actionable P0, P1, or P2 findings remain. No focused-region follow-up is required beyond the recorded comparison.
 
+## Live-release evidence
+
+- The canonical admin ship workflow committed and pushed the responsive fix to `origin/main`.
+- Local static, local API, and public admin hosts all returned the same cache-busted application build.
+- Public artifact verification checks the served mobile CSS and decision-queue JavaScript rather than assuming a Git push changed the running service.
+
 final result: passed
