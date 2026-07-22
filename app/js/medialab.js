@@ -429,9 +429,7 @@ function socialActionLabel(account) {
   if (connector?.configured) return `Reconnect ${account.name}`;
   if (connector?.oauthConfigured) return `Connect ${account.name}`;
   if (socialOAuthState.loading) return "Checking…";
-  // Non-managers must never see "OAuth setup needed" — for them a provider
-  // that is not globally configured is simply temporarily unavailable.
-  return canManageSocialOAuthApps() ? "Provider app setup needed" : "Temporarily unavailable";
+  return `Open ${account.name} login`;
 }
 function clampHermesText(value = "", limit = 180) {
   const text = String(value || "").replace(/\s+/g, " ").trim();
@@ -4354,12 +4352,12 @@ function socialOAuthSetupPanel(esc) {
   const providerRows = providers.length
     ? providers.map((provider) => `<span class="${provider.oauthConfigured ? "is-ready" : "is-missing"}">${esc(provider.name)}${provider.id === "instagram" ? " + Facebook" : ""} · ${provider.oauthConfigured ? "ready" : "needs app"}</span>`).join("")
     : `<span>Checking provider app setup…</span>`;
-  return `<details class="set-oauth-apps" open>
+  return `<details class="set-oauth-apps">
     <summary>
-      <span>OAuth apps</span>
+      <span>Developer provider setup</span>
       <b>${esc(String(setup?.readyCount ?? 0))}/${esc(String(setup?.totalCount ?? (providers.length || PLATFORMS.length)))} ready</b>
     </summary>
-    <p>Set each platform app once. After this, any business user just clicks Connect account and approves in their signed-in browser. Secrets stay server-side.</p>
+    <p>This is the one-time developer setup for official OAuth/API access. Keep it collapsed unless you are adding provider app credentials. Normal account sign-in happens on the cards above.</p>
     <p class="set-social-next"><b>Next:</b> ${esc(nextLabel)} · ${esc(nextDetail)}</p>
     ${socialOAuthSetupState.error ? `<div class="set-social-notice">${esc(socialOAuthSetupState.error)}</div>` : ""}
     <label class="set-oauth-callback">
@@ -4392,14 +4390,13 @@ function socialOAuthManagedPanel(esc) {
     : preflight.nextGlobalAction === "connect_signed_in_account"
       ? "Use the browser account you are already signed into; PhantomForce stores the resulting token server-side."
       : "The platform app must be configured by the owner before account OAuth can begin.";
-  return `<details class="set-oauth-apps set-oauth-managed" open>
-    <summary>
-      <span>Account connection</span>
-      <b>${esc(String(authorizedCount))}/${esc(String(totalCount))} accounts authorized</b>
-    </summary>
-    <p>Choose a channel below and connect it with the signed-in browser. PhantomForce keeps the platform app credentials server-side, stores account tokens server-side, and keeps posting approval-gated.</p>
-    <p class="set-social-next"><b>Next:</b> ${esc(nextLabel)} · ${esc(nextDetail)} ${readyCount ? `(${readyCount}/${totalCount} provider apps ready)` : ""}</p>
-  </details>`;
+  return `<div class="set-social-command">
+    <div>
+      <span>Account sign-in</span>
+      <b>${esc(String(authorizedCount))}/${esc(String(totalCount))} live connections</b>
+      <p>${esc(nextLabel)} · ${esc(nextDetail)} ${readyCount ? `(${readyCount}/${totalCount} provider apps ready)` : ""}</p>
+    </div>
+  </div>`;
 }
 
 export function renderMediaSettings(el, opts = {}) {
@@ -4445,17 +4442,18 @@ export function renderMediaSettings(el, opts = {}) {
       <div class="set-section set-social-section">
         <div class="set-sec-head">
           <div>
-            <h3>Social profiles</h3>
-            <p class="set-note">Every channel defaults to officialchicagoshots and stays editable. Real analytics and cross-posting require OAuth/API authorization; profile handles alone never create fake stats or external posts.</p>
+            <h3>Connect accounts</h3>
+            <p class="set-note">Pick a channel and sign in. If a provider app is ready, PhantomForce can connect with official OAuth. If it is not ready yet, you can still open the platform login and save the public handle without pretending it is live.</p>
           </div>
           <span class="set-safe-pill">${authorizedCount}/${socialAccounts.length} live · ${oauthReadyCount}/${socialAccounts.length} ready</span>
         </div>
         ${socialNotice ? `<div class="set-social-notice">${esc(socialNotice)}</div>` : ""}
         ${socialOAuthState.error ? `<div class="set-social-notice">OAuth status check: ${esc(socialOAuthState.error)}</div>` : ""}
-        ${canManageApps ? socialOAuthSetupPanel(esc) : socialOAuthManagedPanel(esc)}
+        ${socialOAuthManagedPanel(esc)}
         <div class="set-social-grid">
           ${socialAccounts.map((account) => socialCard(account, esc)).join("")}
         </div>
+        ${canManageApps ? socialOAuthSetupPanel(esc) : ""}
       </div>
     </div>`;
 
@@ -4509,15 +4507,24 @@ export function renderMediaSettings(el, opts = {}) {
       open.disabled = true;
       try {
         if (!socialOAuthState.loaded) await refreshSocialOAuthStatus({ force: true });
-        const oauth = await requestSocialOAuthStart(account.id);
-        window.open(oauth.authorizationUrl, "_blank", "noopener,noreferrer");
-        account.connectMode = "oauth-started";
-        account.lastConnectAt = new Date().toISOString();
-        socialNotice = `${account.name} authorization opened. Approve it once; PhantomForce refreshes this panel when the callback returns.`;
-        startSocialOAuthAuthorizationPolling(account.id);
+        const connector = socialConnectorFor(account.id);
+        if (connector?.oauthConfigured || connector?.configured) {
+          const oauth = await requestSocialOAuthStart(account.id);
+          window.open(oauth.authorizationUrl, "_blank", "noopener,noreferrer");
+          account.connectMode = "oauth-started";
+          account.lastConnectAt = new Date().toISOString();
+          socialNotice = `${account.name} authorization opened. Approve it once; PhantomForce refreshes this panel when the callback returns.`;
+          startSocialOAuthAuthorizationPolling(account.id);
+        } else {
+          window.open(socialLoginTarget(account), "_blank", "noopener,noreferrer");
+          account.connectMode = "pending";
+          account.lastConnectAt = new Date().toISOString();
+          socialNotice = `${account.name} login opened. Save the public handle here after sign-in; live analytics unlock only after the provider OAuth app is ready.`;
+        }
       } catch (error) {
-        account.connectMode = account.handle ? "manual-confirmed" : "manual";
-        socialNotice = `${account.name} needs the PhantomForce OAuth app configured before account authorization can start. A normal browser login is not enough for analytics or posting.`;
+        window.open(socialLoginTarget(account), "_blank", "noopener,noreferrer");
+        account.connectMode = "pending";
+        socialNotice = `${account.name} login opened. OAuth did not start yet, so this will only save the public handle until provider setup is ready.`;
       }
       saveAndRender();
     };
@@ -4548,15 +4555,15 @@ function socialCard(account, esc) {
   const lastConnect = connector?.configured
     ? `Authorized account: ${connector.savedConnection?.accountHandle || connector.savedConnection?.accountName || connector.handle || account.name}`
     : connector?.oauthConfigured
-      ? "OAuth app ready for authorization. Connect the account once."
+      ? "OAuth app ready. Click connect and approve once."
       : status === "linked"
-    ? (profile ? `Handle saved — not connected: ${profile}` : "Handle saved — not connected")
+    ? (profile ? `Public handle saved: ${profile}` : "Public handle saved")
   : status === "pending"
-      ? "Confirm your handle below once you're signed in, or clear this to start over."
+      ? "Sign-in page opened. Save the visible handle below."
       : account.handle
-        ? `Default handle ready: ${account.handle}`
-        : "Save a public handle or profile URL";
-  const providerUnavailableCopy = canManageSocialOAuthApps() ? "Provider app setup needed" : "Temporarily unavailable";
+        ? `Public handle ready: ${account.handle}`
+        : "Open login, then save the public handle";
+  const providerUnavailableCopy = "Public login only";
   const oauthDetail = connector
     ? `<div class="set-social-hermes-proof">${svgIc(connector.configured ? "check" : connector.oauthConfigured ? "lock" : "spark")} ${esc(connector.configured ? "Connected" : connector.oauthConfigured ? "Ready to connect" : providerUnavailableCopy)}</div>`
     : socialOAuthState.loading ? `<div class="set-social-hermes-proof">${svgIc("refresh")} Checking…</div>` : "";
