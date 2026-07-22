@@ -45,10 +45,16 @@ const PROVIDER_FAILURE_MESSAGE = "I couldn't complete that just now. Your reques
 const CHAT_MEDIA_ARTIFACT = /\b(?:image|photo|picture|portrait|graphic|illustration|artwork|art|thumbnail|cover|poster|banner|video|reel|clip|short|film|animation|motion|tiktok|story)\b/i;
 const CHAT_MEDIA_CREATE = /\b(?:create|make|generate|produce|design|shoot|render|animate)\b/i;
 const CHAT_MEDIA_DIRECT_ASK = /\b(?:i\s+(?:want|need)|give\s+me|show\s+me)\s+(?:an?\s+)?(?:image|photo|picture|portrait|graphic|illustration|artwork|art|thumbnail|cover|poster|banner|video|reel|clip|short|film|animation|motion|tiktok|story)\b/i;
+/* "story" is ambiguous: a social Story asset (Media Lab) vs. a narrative
+   ("tell me a story about..."). Only the narrative reading has "story about/of/
+   regarding/where/in which" with no platform or ad-format qualifier nearby. */
+const CHAT_NARRATIVE_STORY = /\bstory\s+(?:about|of|regarding|around|where|in which)\b/i;
+const CHAT_MEDIA_STORY_QUALIFIER = /\b(?:instagram|ig|insta|tiktok|facebook|fb|snapchat|snap|social|post|ad|poster|reel|banner|cover|vertical|9:16)\b/i;
 
 function isDirectChatMediaRequest(text = "") {
   const value = String(text || "").trim();
   if (/^(?:how|what|why|when|where)\b/i.test(value)) return false;
+  if (CHAT_NARRATIVE_STORY.test(value) && !CHAT_MEDIA_STORY_QUALIFIER.test(value)) return false;
   return CHAT_MEDIA_ARTIFACT.test(value) && (CHAT_MEDIA_CREATE.test(value) || CHAT_MEDIA_DIRECT_ASK.test(value));
 }
 

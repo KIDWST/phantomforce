@@ -46,6 +46,8 @@ assert.match(css, /@media \(max-width: 767px\)[\s\S]*?\.sidebar\s*\{[\s\S]*?disp
 assert.match(css, /\.sidebar:not\(\.is-expanded\)\s*\{\s*display:\s*none\s*!important;\s*\}/u, "Final phone chrome must keep the sidebar hidden until More opens it.");
 assert.match(css, /@media \(max-width: 640px\)[\s\S]*?\.ch-card-h\s*\{[\s\S]*?flex-direction:\s*column/u, "Content Hub mobile card headers must stack instead of squeezing copy into one-word columns.");
 assert.match(css, /@media \(max-width: 640px\)[\s\S]*?\.ch-card-h \.ch-src\s*\{[\s\S]*?white-space:\s*normal/u, "Content Hub mobile header copy must wrap naturally.");
+assert.match(css, /@media \(max-width: 720px\)[\s\S]*?\.buddy\s*\{[\s\S]*?opacity:\s*0;[\s\S]*?pointer-events:\s*none/u, "Phone companion must not sit on top of mobile controls.");
+assert.match(css, /html\[data-org-color-mode="dark"\] \.ml-field-brief \.ml-prompt\s*\{[\s\S]*?rgba\(4, 10, 15, 0\.94\)[\s\S]*?color:\s*#eef8f5/u, "Media Lab prompt field must stay dark in dark mode.");
 assert.match(css, /\.dashboard-brief\s*\{/u, "Compact business brief must have dashboard styling.");
 assert.match(css, /\.dashboard-brief-metrics\s*\{/u, "Business snapshot must have a stable responsive layout.");
 assert.match(css, /\.chatbox\.is-minimized\s*\{/u, "Phantom Console must have a real collapsed state.");

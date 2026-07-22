@@ -1,7 +1,7 @@
 import {
   currentTenantId, isAdmin, isOwnerOperator, session,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260722-27";
+} from "./store.js?v=phantom-live-20260722-28";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 const mobilePlaySurface = () => typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;
@@ -200,6 +200,7 @@ const ui = {
   // the game; Launch Dev Mode then boots the normal player and hydrates the
   // sandbox from this draft.
   devWorkbench: null,
+  devModDockOpen: false,
 };
 // Set by launchWithDevSandbox(); consumed once the launched game reports
 // "ready" (see onGameMessage) to auto-open Dev Sandbox after a normal launch,
@@ -889,6 +890,13 @@ function modBootstrapScript() {
   return `<script>(function(){
 window.__ppMods = window.__ppMods || {};
 window.__ppSpeed = 1;
+function applyPPUniversalMods(){
+  var mods = window.__ppMods || {};
+  document.documentElement.style.filter = mods.highContrast ? 'contrast(1.18) saturate(1.25)' : '';
+  document.body.style.boxShadow = mods.cinematicGlow ? 'inset 0 0 90px rgba(65,255,161,.28)' : '';
+  document.body.style.outline = mods.focusOverlay ? '4px solid rgba(65,255,161,.55)' : '';
+  document.body.style.outlineOffset = mods.focusOverlay ? '-4px' : '';
+}
 var _raf = window.requestAnimationFrame.bind(window);
 var _virtualT = null, _lastReal = null;
 window.requestAnimationFrame = function(cb){
@@ -902,7 +910,7 @@ window.requestAnimationFrame = function(cb){
 };
 window.addEventListener('message', function(e){
   if (!e.data || e.data.source !== 'phantomplay-host') return;
-  if (e.data.type === 'mod') window.__ppMods[e.data.key] = e.data.value;
+  if (e.data.type === 'mod') { window.__ppMods[e.data.key] = e.data.value; applyPPUniversalMods(); }
   if (e.data.type === 'modspeed') window.__ppSpeed = Number(e.data.value) || 1;
 });
 })();<\/script>`;
@@ -929,6 +937,11 @@ const MOD_PRESETS = {
     { id: "infiniteStocks", label: "Infinite Stocks", description: "Stocks never run out." },
   ],
 };
+const UNIVERSAL_MOD_PRESETS = [
+  { id: "cinematicGlow", label: "Cinematic Glow", description: "Adds an in-game neon glow layer without touching source code.", universal: true },
+  { id: "highContrast", label: "High Contrast", description: "Boosts visibility while testing tiny sprites, balls, and hazards.", universal: true },
+  { id: "focusOverlay", label: "Focus Frame", description: "Adds a bright playfield border so the active sandbox is obvious.", universal: true },
+];
 const MOD_PATCHES = {
   "neon-drift": (source) => source
     .replace("function damage(){if(player.invuln>0)return;", "function damage(){if(window.__ppMods&&window.__ppMods.god)return;if(player.invuln>0)return;")
@@ -939,6 +952,14 @@ const MOD_PATCHES = {
     .replace("function step(f,dt){if(f.dead)return;", "function step(f,dt){if(f.dead)return;if(window.__ppMods&&f.human){if(window.__ppMods.god)f.invuln=1e9;if(window.__ppMods.noCooldown){f.attackCd=0;f.dodgeCd=0;f.parry=0}if(window.__ppMods.infiniteStocks)f.stocks=Math.max(f.stocks,99)}"),
 };
 
+function modsForGame(game) {
+  return [...UNIVERSAL_MOD_PRESETS, ...(MOD_PRESETS[game.id] || [])];
+}
+
+function speedLabel(speed = 1) {
+  return speed === 0.25 ? "¼x" : speed === 0.5 ? "½x" : speed === 2 ? "2x" : speed === 4 ? "4x" : "1x";
+}
+
 // Applied every time a Dev Sandbox blob is (re)built — never applied to what
 // gets persisted via Save/Publish, which always read the plain textarea text.
 function injectModSupport(source, gameId) {
@@ -948,10 +969,16 @@ function injectModSupport(source, gameId) {
 
 function modSectionMarkup(game) {
   const d = ui.devSandbox;
-  const presets = MOD_PRESETS[game.id] || [];
+  const presets = modsForGame(game);
   const modState = d.modState || {};
   const speed = d.speed || 1;
   return `<div class="pp-devsandbox-mods">
+    <div class="pp-devmod-ai">
+      <b>Phantom mod prompt</b>
+      <p>Describe the test mod you want. This creates a local starter kit first; code/save/publish stays under your control.</p>
+      <div><input data-pp-devsandbox-modprompt value="${esc(d.aiModPrompt || "")}" placeholder="ex: make this easier, brighter, faster, no cooldowns..."/><button type="button" data-pp-devsandbox-modprompt-generate>Build kit</button></div>
+      ${d.aiModNote ? `<small>${esc(d.aiModNote)}</small>` : ""}
+    </div>
     <div class="pp-devsandbox-mod-row pp-devsandbox-speed-row">
       <label>Game speed<select data-pp-devsandbox-speed>
         <option value="0.25" ${speed === 0.25 ? "selected" : ""}>0.25x — slow-mo</option>
@@ -960,13 +987,13 @@ function modSectionMarkup(game) {
         <option value="2" ${speed === 2 ? "selected" : ""}>2x</option>
         <option value="4" ${speed === 4 ? "selected" : ""}>4x — fast-forward</option>
       </select></label>
-      <i>Works on any game — rewrites its own animation clock.</i>
+      <i>Live now. No Save & Resync needed for speed/testing mods.</i>
     </div>
-    ${presets.length ? presets.map((mod) => `
+    ${presets.map((mod) => `
     <label class="pp-switch pp-devsandbox-mod">
       <input type="checkbox" data-pp-devsandbox-mod="${esc(mod.id)}" ${modState[mod.id] ? "checked" : ""}/><span></span>
-      <b>${esc(mod.label)}</b><i>${esc(mod.description)}</i>
-    </label>`).join("") : `<p class="pp-devsandbox-mod-empty">No game-specific mods built for ${esc(game.title)} yet — game speed above still works on it. Ask to add mods for this game.</p>`}
+      <b>${esc(mod.label)}${mod.universal ? " · universal" : ""}</b><i>${esc(mod.description)}</i>
+    </label>`).join("")}
   </div>`;
 }
 
@@ -977,10 +1004,16 @@ function devWorkbenchDomSource() {
 
 function devWorkbenchModsMarkup(game) {
   const d = ui.devWorkbench;
-  const presets = MOD_PRESETS[game.id] || [];
+  const presets = modsForGame(game);
   const modState = d?.modState || {};
   const speed = d?.speed || 1;
   return `<div class="pp-devsandbox-mods">
+    <div class="pp-devmod-ai">
+      <b>Phantom mod prompt</b>
+      <p>Build a starter mod kit before launch. These activate the second you enter Dev Mode.</p>
+      <div><input data-pp-devworkbench-modprompt value="${esc(d?.aiModPrompt || "")}" placeholder="ex: make this harder, add glow, slow motion..."/><button type="button" data-pp-devworkbench-modprompt-generate>Build kit</button></div>
+      ${d?.aiModNote ? `<small>${esc(d.aiModNote)}</small>` : ""}
+    </div>
     <div class="pp-devsandbox-mod-row pp-devsandbox-speed-row">
       <label>Game speed<select data-pp-devworkbench-speed>
         <option value="0.25" ${speed === 0.25 ? "selected" : ""}>0.25x — slow-mo</option>
@@ -989,13 +1022,13 @@ function devWorkbenchModsMarkup(game) {
         <option value="2" ${speed === 2 ? "selected" : ""}>2x</option>
         <option value="4" ${speed === 4 ? "selected" : ""}>4x — fast-forward</option>
       </select></label>
-      <i>These mods activate when you launch Dev Mode.</i>
+      <i>Saved in this workbench. Launch Dev Mode to use it in-game.</i>
     </div>
-    ${presets.length ? presets.map((mod) => `
+    ${presets.map((mod) => `
     <label class="pp-switch pp-devsandbox-mod">
       <input type="checkbox" data-pp-devworkbench-mod="${esc(mod.id)}" ${modState[mod.id] ? "checked" : ""}/><span></span>
-      <b>${esc(mod.label)}</b><i>${esc(mod.description)}</i>
-    </label>`).join("") : `<p class="pp-devsandbox-mod-empty">No game-specific mods built for ${esc(game.title)} yet — game speed above still works in Dev Mode.</p>`}
+      <b>${esc(mod.label)}${mod.universal ? " · universal" : ""}</b><i>${esc(mod.description)}</i>
+    </label>`).join("")}
   </div>`;
 }
 
@@ -1079,11 +1112,13 @@ function devSandboxMarkup(game) {
   return `<div class="pp-devsandbox" role="complementary" aria-label="Dev Mode: live editor for ${esc(game.title)}">
     <header>
       <div><b>DEV MODE</b><span>${esc(game.title)}</span></div>
-      <button type="button" data-pp-devsandbox-minimize aria-label="Minimize Dev Mode code">_</button>
-      <button type="button" data-pp-devsandbox-close aria-label="Close Dev Mode">×</button>
+      <div class="pp-devsandbox-window-actions">
+        <button type="button" data-pp-devsandbox-minimize aria-label="Minimize Dev Mode code">–</button>
+        <button type="button" data-pp-devsandbox-close aria-label="Close Dev Mode code">×</button>
+      </div>
     </header>
     <label class="pp-devsandbox-section-picker">Section<select data-pp-devsandbox-section><option value="code" ${section === "code" ? "selected" : ""}>Full Source Code</option><option value="mods" ${section === "mods" ? "selected" : ""}>Mod Menu</option></select></label>
-    <p class="pp-devsandbox-note">${section === "mods" ? "Toggle mods on while you play — they apply instantly, no reload." : "Ctrl+Z / Ctrl+Shift+Z work while you type. Preview changes stay private until you publish."} Only visible to you.${d.hasOverride ? " A saved workspace override is currently active for this game." : ""}</p>
+    <p class="pp-devsandbox-note">${section === "mods" ? "These are live testing mods. Use the in-game Mods dock for fast toggles; Save & Resync is only for source code." : "Ctrl+Z / Ctrl+Shift+Z work while you type. Preview changes stay private until you publish."} Only visible to you.${d.hasOverride ? " A saved workspace override is currently active for this game." : ""}</p>
     ${d.error ? `<div class="pp-devsandbox-error">${esc(d.error)}</div>` : ""}
     ${d.loading
       ? `<div class="pp-devmode-loading"><i></i><b>Loading source…</b></div>`
@@ -1101,6 +1136,32 @@ function devSandboxMarkup(game) {
   </div>`;
 }
 
+function devModDockMarkup(game) {
+  const d = ui.devSandbox;
+  if (!d || d.gameId !== game.id) return "";
+  const presets = modsForGame(game);
+  const modState = d.modState || {};
+  const open = !!ui.devModDockOpen;
+  const activeCount = Object.values(modState).filter(Boolean).length + ((d.speed || 1) === 1 ? 0 : 1);
+  return `<div class="pp-devmod-dock ${open ? "is-open" : ""}">
+    <button type="button" class="pp-devmod-toggle" data-pp-devmod-dock-toggle>${icon("dev")} Mods <b>${activeCount || "live"}</b></button>
+    <div class="pp-devmod-panel" role="complementary" aria-label="Live game mods">
+      <div class="pp-devmod-head"><b>Live mod controls</b><button type="button" data-pp-devmod-dock-toggle aria-label="Close mod controls">×</button></div>
+      <label>Speed<select data-pp-devdock-speed>
+        <option value="0.25" ${(d.speed || 1) === 0.25 ? "selected" : ""}>0.25x slow</option>
+        <option value="0.5" ${(d.speed || 1) === 0.5 ? "selected" : ""}>0.5x</option>
+        <option value="1" ${(d.speed || 1) === 1 ? "selected" : ""}>1x normal</option>
+        <option value="2" ${(d.speed || 1) === 2 ? "selected" : ""}>2x fast</option>
+        <option value="4" ${(d.speed || 1) === 4 ? "selected" : ""}>4x turbo</option>
+      </select></label>
+      <div class="pp-devmod-pills">${presets.map((mod) => `<button type="button" class="${modState[mod.id] ? "is-on" : ""}" data-pp-devdock-mod="${esc(mod.id)}">${esc(mod.label)}</button>`).join("")}</div>
+      <div class="pp-devmod-prompt"><input data-pp-devdock-modprompt value="${esc(d.aiModPrompt || "")}" placeholder="Ask for a quick mod idea..."/><button type="button" data-pp-devdock-modprompt-generate>Build</button></div>
+      ${d.aiModNote ? `<small>${esc(d.aiModNote)}</small>` : `<small>Live mods never publish until you edit code and explicitly save.</small>`}
+      <div class="pp-devmod-links"><button type="button" data-pp-devsandbox-open-code>Open code</button><button type="button" data-pp-devsandbox-open-mods>Full mod menu</button></div>
+    </div>
+  </div>`;
+}
+
 function playerMarkup() {
   if (!ui.player) return "";
   const { game, play } = ui.player;
@@ -1108,7 +1169,7 @@ function playerMarkup() {
   const controls = controlsCopy(game);
   const sandboxActive = ui.devSandbox?.gameId === game.id;
   const frameSrc = sandboxActive && ui.devSandbox?.blobUrl ? ui.devSandbox.blobUrl : game.launchUrl;
-  return `<div class="pp-player ${sandboxActive ? "is-devsandbox" : ""}" role="dialog" aria-modal="true" aria-label="Playing ${esc(game.title)}"><header><div><img src="${esc(thumbnailFor(game))}" alt=""/><span><b>${esc(game.title)}</b>${controls ? `<i>${esc(controls)}</i>` : ""}</span>${sandboxActive ? `<em class="pp-devsandbox-badge">Dev Mode</em>` : ""}</div><div class="pp-player-actions">${game.devModeAvailable ? `<button class="pp-devsandbox-open" type="button" data-pp-devsandbox-open title="Open the full bundled source. Edits preview live; Save & Resync when done.">Code</button>` : ""}<button data-pp-player-restart title="Restart game">Restart</button><button data-pp-player-pause title="Pause game">${ui.playerPaused ? "Resume" : "Pause"}</button><button data-pp-player-fullscreen title="Full screen">Full screen</button><button data-pp-player-close aria-label="Close game">×</button></div></header><div class="pp-player-stage"><button class="pp-player-exit" data-pp-player-close type="button" aria-label="Exit game">Exit</button><div class="pp-player-loading" ${ui.playerReady ? "hidden" : ""}><i></i><b>Loading ${esc(game.title)}…</b><span>${sandboxActive ? "Dev Mode is opening your saved draft in a private sandbox." : "The game is opening in a private sandbox."}</span></div><iframe src="${esc(frameSrc)}" title="${esc(game.title)}" sandbox="allow-scripts allow-pointer-lock" referrerpolicy="no-referrer" allow="fullscreen; gamepad" tabindex="0" data-pp-frame></iframe></div>${devSandboxMarkup(game)}<footer><span>Session <b>${esc(play.id.slice(-8))}</b></span><span data-pp-live-score>Score —</span><span data-pp-live-state>${ui.playerPaused ? "Paused" : "Playing"}</span><span>Engine ${esc(engine.version)}</span><span>Progress saves automatically</span></footer></div>`;
+  return `<div class="pp-player ${sandboxActive ? "is-devsandbox" : ""}" role="dialog" aria-modal="true" aria-label="Playing ${esc(game.title)}"><header><div><img src="${esc(thumbnailFor(game))}" alt=""/><span><b>${esc(game.title)}</b>${controls ? `<i>${esc(controls)}</i>` : ""}</span>${sandboxActive ? `<em class="pp-devsandbox-badge">Dev Mode</em>` : ""}</div><div class="pp-player-actions">${game.devModeAvailable ? `<button class="pp-devsandbox-open" type="button" data-pp-devsandbox-open title="Open the full bundled source. Edits preview live; Save & Resync when done.">Code drawer</button>` : ""}<button data-pp-player-restart title="Restart game">Restart</button><button data-pp-player-pause title="Pause game">${ui.playerPaused ? "Resume" : "Pause"}</button><button data-pp-player-fullscreen title="Full screen">Full screen</button><button class="pp-player-close-game" data-pp-player-close title="Exit the game">Exit game</button></div></header><div class="pp-player-stage"><button class="pp-player-exit" data-pp-player-close type="button" aria-label="Exit game">Exit</button><div class="pp-player-loading" ${ui.playerReady ? "hidden" : ""}><i></i><b>Loading ${esc(game.title)}…</b><span>${sandboxActive ? "Dev Mode is opening your saved draft in a private sandbox." : "The game is opening in a private sandbox."}</span></div><iframe src="${esc(frameSrc)}" title="${esc(game.title)}" sandbox="allow-scripts allow-pointer-lock" referrerpolicy="no-referrer" allow="fullscreen; gamepad" tabindex="0" data-pp-frame></iframe></div>${sandboxActive ? devModDockMarkup(game) : ""}${devSandboxMarkup(game)}<footer><span>Session <b>${esc(play.id.slice(-8))}</b></span><span data-pp-live-score>Score —</span><span data-pp-live-state>${ui.playerPaused ? "Paused" : "Playing"}</span><span>Engine ${esc(engine.version)}</span><span>Progress saves automatically</span></footer></div>`;
 }
 
 function render() {
@@ -1273,6 +1334,25 @@ function saveDevWorkbenchLocalDraft() {
   const source = devWorkbenchDomSource();
   const localDraft = rememberDevSandboxAutosave(ui.devWorkbench.gameId, source);
   ui.devWorkbench = { ...ui.devWorkbench, editedSource: source, localUpdatedAt: localDraft.updatedAt, status: "Local draft saved. Use Save & Launch Dev Mode to run it." };
+  render();
+}
+
+async function revertDevWorkbenchToLastWorking() {
+  if (!ui.devWorkbench || ui.devWorkbench.loading || ui.devWorkbench.error) return;
+  const { gameId, hasOverride } = ui.devWorkbench;
+  if (hasOverride) {
+    try { await api(`/api/phantomplay/dev-mode/${encodeURIComponent(gameId)}/override`, { method: "DELETE" }); } catch { /* local recovery still wins */ }
+  }
+  clearDevSandboxAutosave(gameId);
+  ui.devWorkbench = {
+    ...ui.devWorkbench,
+    editedSource: ui.devWorkbench.source,
+    history: createEditorHistory(),
+    hasOverride: false,
+    localUpdatedAt: null,
+    status: "Reverted to last working code.",
+    error: "",
+  };
   render();
 }
 
@@ -1573,6 +1653,15 @@ function replaceEditorText(selector, source) {
   textarea.setSelectionRange?.(cursor, cursor);
 }
 
+function syncEditorHistoryControls(target) {
+  const history = normalizedEditorHistory(ui[target]?.history);
+  const prefix = target === "devSandbox" ? "[data-pp-devsandbox" : "[data-pp-devworkbench";
+  const undo = mountedRoot?.querySelector(`${prefix}-undo]`);
+  const redo = mountedRoot?.querySelector(`${prefix}-redo]`);
+  if (undo) undo.disabled = !history.undo.length;
+  if (redo) redo.disabled = !history.redo.length;
+}
+
 function moveEditorHistory(target, direction) {
   const editor = ui[target];
   if (!editor) return false;
@@ -1589,6 +1678,7 @@ function moveEditorHistory(target, direction) {
     replaceEditorText("[data-pp-devsandbox-source]", source);
     applyDevSandboxEditLive();
     snapshotDevSandboxLocalDraft();
+    syncEditorHistoryControls(target);
   } else {
     replaceEditorText("[data-pp-devworkbench-source]", source);
     render();
@@ -1608,6 +1698,7 @@ function handleEditorShortcut(event, target) {
 function trackDevSandboxEditorInput() {
   if (!ui.devSandbox) return;
   ui.devSandbox = recordEditorChange(ui.devSandbox, devSandboxDomSource());
+  syncEditorHistoryControls("devSandbox");
   scheduleDevSandboxApply();
 }
 
@@ -1615,6 +1706,15 @@ function trackDevWorkbenchEditorInput() {
   if (!ui.devWorkbench) return;
   ui.devWorkbench = recordEditorChange(ui.devWorkbench, devWorkbenchDomSource());
   ui.devWorkbench = { ...ui.devWorkbench, status: "Draft ready. Launch Dev Mode to run it." };
+  syncEditorHistoryControls("devWorkbench");
+}
+
+function applyDevSandboxModStateToGame({ focus = false } = {}) {
+  if (!ui.devSandbox) return;
+  postToGame("modspeed", { value: ui.devSandbox.speed || 1, focus });
+  for (const [key, value] of Object.entries(ui.devSandbox.modState || {})) {
+    postToGame("mod", { key, value: !!value, focus: false });
+  }
 }
 
 // Rebuilds the Dev Sandbox blob from `nextSource` with mod support injected,
@@ -1644,8 +1744,7 @@ async function openDevSandbox() {
     ui.devSandbox = { ...boot, blobUrl: "", saving: false, publishing: false };
     render();
     rebuildDevSandboxFrame(ui.devSandbox.editedSource);
-    if (ui.devSandbox.speed && ui.devSandbox.speed !== 1) postToGame("modspeed", { value: ui.devSandbox.speed });
-    for (const [key, value] of Object.entries(ui.devSandbox.modState || {})) if (value) postToGame("mod", { key, value });
+    applyDevSandboxModStateToGame({ focus: false });
     return;
   }
   revokeDevSandboxBlob();
@@ -1722,14 +1821,60 @@ function scheduleDevSandboxApply() {
 // current mod/speed state after any reload this panel triggers.
 function toggleDevSandboxMod(modId, checked) {
   if (!ui.devSandbox) return;
-  ui.devSandbox = { ...ui.devSandbox, modState: { ...(ui.devSandbox.modState || {}), [modId]: checked } };
-  postToGame("mod", { key: modId, value: checked });
+  ui.devSandbox = { ...ui.devSandbox, modState: { ...(ui.devSandbox.modState || {}), [modId]: checked }, status: `${checked ? "Enabled" : "Disabled"} ${modId}. Live in this sandbox only.` };
+  postToGame("mod", { key: modId, value: checked, focus: false });
+  setDevSandboxStatus(ui.devSandbox.status);
 }
 
 function setDevSandboxSpeed(speed) {
   if (!ui.devSandbox) return;
-  ui.devSandbox = { ...ui.devSandbox, speed };
-  postToGame("modspeed", { value: speed });
+  ui.devSandbox = { ...ui.devSandbox, speed, status: `Speed set to ${speedLabel(speed)} live. No resync needed.` };
+  postToGame("modspeed", { value: speed, focus: false });
+  setDevSandboxStatus(ui.devSandbox.status);
+}
+
+function generateDevModPlan(target) {
+  const editor = ui[target];
+  if (!editor) return;
+  const selector = target === "devSandbox" ? "[data-pp-devsandbox-modprompt], [data-pp-devdock-modprompt]" : "[data-pp-devworkbench-modprompt]";
+  const prompt = String(mountedRoot?.querySelector(selector)?.value || editor.aiModPrompt || "").trim();
+  const lower = prompt.toLowerCase();
+  const modState = { ...(editor.modState || {}) };
+  let speed = editor.speed || 1;
+  if (/turbo|super fast|4x|very fast/.test(lower)) speed = 4;
+  else if (/fast|speed|quick/.test(lower)) speed = 2;
+  else if (/slow|easy|assist/.test(lower)) speed = 0.5;
+  if (/glow|neon|cool|pretty|visual/.test(lower)) modState.cinematicGlow = true;
+  if (/bright|contrast|visible|see|paddle|ball/.test(lower)) modState.highContrast = true;
+  if (/focus|border|frame/.test(lower)) modState.focusOverlay = true;
+  const game = ui.snapshot?.catalog?.find((item) => item.id === editor.gameId) || BUILT_IN_GAMES.find((item) => item.id === editor.gameId) || { id: editor.gameId };
+  const available = new Set(modsForGame(game).map((mod) => mod.id));
+  if (/god|invincible|no damage|easy/.test(lower) && available.has("god")) modState.god = true;
+  if (/cooldown|spam|rapid/.test(lower) && available.has("noCooldown")) modState.noCooldown = true;
+  if (/power|weapon|max/.test(lower) && available.has("maxPower")) modState.maxPower = true;
+  if (/stock|lives/.test(lower) && available.has("infiniteStocks")) modState.infiniteStocks = true;
+  if (/grow|huge|size/.test(lower) && available.has("maxGrow")) modState.maxGrow = true;
+  const note = prompt ? `Starter kit built from: “${prompt.slice(0, 90)}”.` : "Starter visibility kit built. Add a prompt for deeper game-specific ideas.";
+  ui[target] = { ...editor, aiModPrompt: prompt, aiModNote: note, speed, modState, section: "mods" };
+  if (target === "devSandbox") {
+    render();
+    applyDevSandboxModStateToGame({ focus: false });
+  } else {
+    render();
+  }
+}
+
+function toggleDevModDock() {
+  ui.devModDockOpen = !ui.devModDockOpen;
+  mountedRoot?.querySelector(".pp-devmod-dock")?.classList.toggle("is-open", ui.devModDockOpen);
+}
+
+function openDevSandboxSection(section) {
+  if (!ui.devSandbox) return;
+  const source = devSandboxDomSource();
+  ui.devSandbox = { ...ui.devSandbox, minimized: false, section: section === "mods" ? "mods" : "code", editedSource: source };
+  render();
+  rebuildDevSandboxFrame(source);
 }
 
 function setDevSandboxSection(section) {
@@ -1940,8 +2085,7 @@ function onGameMessage(event) {
       // Any reload this panel triggered (a live edit, a revert) resets the
       // modded page's own window.__ppMods to {} — restore whatever the
       // drawer's toggles/speed currently say so mods don't silently drop.
-      if (ui.devSandbox.speed && ui.devSandbox.speed !== 1) postToGame("modspeed", { value: ui.devSandbox.speed });
-      for (const [key, value] of Object.entries(ui.devSandbox.modState || {})) if (value) postToGame("mod", { key, value });
+      applyDevSandboxModStateToGame({ focus: false });
     }
   }
   if (event.data.type === "paused") {
@@ -2058,13 +2202,30 @@ function bind() {
   mountedRoot.querySelector("[data-pp-devsandbox-minimize]")?.addEventListener("click", minimizeDevSandbox);
   mountedRoot.querySelector("[data-pp-devsandbox-restore]")?.addEventListener("click", restoreDevSandbox);
   mountedRoot.querySelector("[data-pp-devsandbox-section]")?.addEventListener("change", (event) => setDevSandboxSection(event.target.value));
-  mountedRoot.querySelector("[data-pp-devsandbox-source]")?.addEventListener("input", scheduleDevSandboxApply);
+  mountedRoot.querySelector("[data-pp-devsandbox-source]")?.addEventListener("input", trackDevSandboxEditorInput);
+  mountedRoot.querySelector("[data-pp-devsandbox-source]")?.addEventListener("keydown", (event) => handleEditorShortcut(event, "devSandbox"));
+  mountedRoot.querySelector("[data-pp-devsandbox-undo]")?.addEventListener("click", () => moveEditorHistory("devSandbox", "undo"));
+  mountedRoot.querySelector("[data-pp-devsandbox-redo]")?.addEventListener("click", () => moveEditorHistory("devSandbox", "redo"));
   mountedRoot.querySelector("[data-pp-devsandbox-save]")?.addEventListener("click", saveDevSandboxOverride);
   mountedRoot.querySelector("[data-pp-devsandbox-revert]")?.addEventListener("click", revertDevSandboxToShipped);
   mountedRoot.querySelector("[data-pp-devsandbox-publish]")?.addEventListener("click", publishDevSandboxLive);
   mountedRoot.querySelector("[data-pp-devsandbox-speed]")?.addEventListener("change", (event) => setDevSandboxSpeed(Number(event.target.value) || 1));
   mountedRoot.querySelectorAll("[data-pp-devsandbox-mod]").forEach((input) => input.addEventListener("change", () => toggleDevSandboxMod(input.dataset.ppDevsandboxMod, input.checked)));
+  mountedRoot.querySelector("[data-pp-devsandbox-modprompt-generate]")?.addEventListener("click", () => generateDevModPlan("devSandbox"));
+  mountedRoot.querySelectorAll("[data-pp-devmod-dock-toggle]").forEach((button) => button.addEventListener("click", toggleDevModDock));
+  mountedRoot.querySelector("[data-pp-devdock-speed]")?.addEventListener("change", (event) => setDevSandboxSpeed(Number(event.target.value) || 1));
+  mountedRoot.querySelectorAll("[data-pp-devdock-mod]").forEach((button) => button.addEventListener("click", () => {
+    const next = !(ui.devSandbox?.modState || {})[button.dataset.ppDevdockMod];
+    toggleDevSandboxMod(button.dataset.ppDevdockMod, next);
+    button.classList.toggle("is-on", next);
+  }));
+  mountedRoot.querySelector("[data-pp-devdock-modprompt-generate]")?.addEventListener("click", () => generateDevModPlan("devSandbox"));
+  mountedRoot.querySelector("[data-pp-devsandbox-open-code]")?.addEventListener("click", () => openDevSandboxSection("code"));
+  mountedRoot.querySelector("[data-pp-devsandbox-open-mods]")?.addEventListener("click", () => openDevSandboxSection("mods"));
   mountedRoot.querySelectorAll("[data-pp-devworkbench-close]").forEach((button) => button.addEventListener("click", closeDevWorkbench));
+  mountedRoot.querySelector("[data-pp-devworkbench-undo]")?.addEventListener("click", () => moveEditorHistory("devWorkbench", "undo"));
+  mountedRoot.querySelector("[data-pp-devworkbench-redo]")?.addEventListener("click", () => moveEditorHistory("devWorkbench", "redo"));
+  mountedRoot.querySelector("[data-pp-devworkbench-revert]")?.addEventListener("click", revertDevWorkbenchToLastWorking);
   mountedRoot.querySelector("[data-pp-devworkbench-save]")?.addEventListener("click", saveDevWorkbenchLocalDraft);
   mountedRoot.querySelector("[data-pp-devworkbench-launch]")?.addEventListener("click", launchDevSandboxFromWorkbench);
   mountedRoot.querySelector("[data-pp-devworkbench-start]")?.addEventListener("click", launchNormalFromWorkbench);
@@ -2073,18 +2234,17 @@ function bind() {
     ui.devWorkbench = { ...ui.devWorkbench, editedSource: source, section: event.target.value === "mods" ? "mods" : "code" };
     render();
   });
-  mountedRoot.querySelector("[data-pp-devworkbench-source]")?.addEventListener("input", () => {
-    if (!ui.devWorkbench) return;
-    ui.devWorkbench = { ...ui.devWorkbench, editedSource: devWorkbenchDomSource(), status: "Draft ready. Launch Dev Mode to run it." };
-  });
+  mountedRoot.querySelector("[data-pp-devworkbench-source]")?.addEventListener("input", trackDevWorkbenchEditorInput);
+  mountedRoot.querySelector("[data-pp-devworkbench-source]")?.addEventListener("keydown", (event) => handleEditorShortcut(event, "devWorkbench"));
   mountedRoot.querySelector("[data-pp-devworkbench-speed]")?.addEventListener("change", (event) => {
     if (!ui.devWorkbench) return;
-    ui.devWorkbench = { ...ui.devWorkbench, speed: Number(event.target.value) || 1 };
+    ui.devWorkbench = { ...ui.devWorkbench, speed: Number(event.target.value) || 1, status: "Mod kit updated. Launch Dev Mode to test it live." };
   });
   mountedRoot.querySelectorAll("[data-pp-devworkbench-mod]").forEach((input) => input.addEventListener("change", () => {
     if (!ui.devWorkbench) return;
-    ui.devWorkbench = { ...ui.devWorkbench, modState: { ...(ui.devWorkbench.modState || {}), [input.dataset.ppDevworkbenchMod]: input.checked } };
+    ui.devWorkbench = { ...ui.devWorkbench, modState: { ...(ui.devWorkbench.modState || {}), [input.dataset.ppDevworkbenchMod]: input.checked }, status: "Mod kit updated. Launch Dev Mode to test it live." };
   }));
+  mountedRoot.querySelector("[data-pp-devworkbench-modprompt-generate]")?.addEventListener("click", () => generateDevModPlan("devWorkbench"));
   mountedRoot.querySelectorAll("[data-pp-favorite]").forEach((button) => button.onclick = (event) => { event.stopPropagation(); updateFavorite(button.dataset.ppFavorite); });
   mountedRoot.querySelector("[data-pp-settings]")?.addEventListener("click", () => { ui.settingsOpen = true; render(); });
   mountedRoot.querySelector("[data-pp-settings-close]")?.addEventListener("click", () => { ui.settingsOpen = false; render(); });

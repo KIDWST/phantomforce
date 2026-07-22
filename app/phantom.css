@@ -4572,6 +4572,17 @@ kbd { font: 600 10px "Spline Sans Mono", monospace; padding: 2px 6px; border-rad
 .ml-field-brief > span { color: var(--ink); }
 .ml-field-brief .ml-prompt { min-height: 60px; font-size: 14.5px; line-height: 1.5; border-color: rgba(91, 76, 255,0.26); background: linear-gradient(180deg, rgba(255, 255, 255,0.85), rgba(36, 31, 63, 0.07)); box-shadow: 0 0 0 1px rgba(91, 76, 255,0.05), 0 12px 30px rgba(0,0,0,0.22); }
 .ml-field-brief .ml-prompt:focus { border-color: var(--neon); box-shadow: 0 0 0 1px var(--neon), 0 12px 34px rgba(91, 76, 255,0.12); }
+html[data-org-color-mode="dark"] .ml-field-brief .ml-prompt {
+  background:
+    linear-gradient(180deg, rgba(11, 24, 31, 0.96), rgba(4, 10, 15, 0.94)),
+    rgba(4, 10, 15, 0.94);
+  color: #eef8f5;
+  border-color: rgba(51, 255, 161, 0.32);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 12px 30px rgba(0,0,0,0.28);
+}
+html[data-org-color-mode="dark"] .ml-field-brief .ml-prompt::placeholder {
+  color: rgba(210, 230, 226, 0.58);
+}
 @keyframes mlShake { 0%,100%{transform:translateX(0)} 20%,60%{transform:translateX(-5px)} 40%,80%{transform:translateX(5px)} }
 .ml-enhance { position: absolute; right: 8px; bottom: 8px; display: inline-flex; align-items: center; gap: 5px; padding: 6px 11px; border: 1px solid var(--line-strong); border-radius: 9px; background: rgba(91, 76, 255,0.08); color: var(--neon); cursor: pointer; font: 600 11px "Spline Sans Mono", monospace; }
 .ml-enhance:hover { background: rgba(91, 76, 255,0.16); }
@@ -11980,18 +11991,33 @@ body:has(.phantom .app-main > .console:not(.console-workspace)) .buddy-canvas {
 
 @media (max-width: 720px) {
   .buddy {
+    opacity: 0;
+    pointer-events: none;
     z-index: 44;
   }
+  .buddy-canvas {
+    pointer-events: none !important;
+  }
   .buddy-say {
+    left: auto;
+    right: 0;
     bottom: calc(100% - 18px);
+    transform: none;
+    max-width: min(210px, calc(100vw - 24px));
     font-size: 11px;
     padding: 7px 10px;
   }
+  .buddy-say.pop { animation-name: buddyMobilePop; }
   .buddy-menu {
     left: 10px !important;
     right: 10px;
     width: auto;
   }
+}
+
+@keyframes buddyMobilePop {
+  0% { opacity: 0; transform: translateY(6px) scale(0.92); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 /* Final mobile dashboard fit: the home screen is the command console, not a

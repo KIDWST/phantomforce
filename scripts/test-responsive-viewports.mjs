@@ -180,7 +180,7 @@ function createCdpClient(webSocketUrl) {
     eventListeners.slice().forEach((listener) => listener(message));
   });
 
-  const send = async (method, params = {}, timeoutMs = 20_000) => {
+  const send = async (method, params = {}, timeoutMs = 45_000) => {
     await opened;
     const id = ++nextId;
     const payload = JSON.stringify({ id, method, params });
@@ -276,13 +276,16 @@ async function waitForApp(cdp, expectedPage) {
     const bootVisible = visible(boot);
     const workspace = document.querySelector("[data-workspace-page]");
     const consoleRoot = document.querySelector("[data-console]");
+    const dashboardBrief = document.querySelector("[data-dashboard-brief-title]");
+    const dashboardReady = visible(consoleRoot) && visible(dashboardBrief) && !/POWER-ON|MEMORY SPINE|records indexed/u.test(document.body.innerText || "");
     return {
       phantomVisible,
       gateVisible,
       bootVisible,
       workspacePage: workspace?.dataset.workspacePage || "",
-      consoleVisible: !!consoleRoot && consoleRoot.getBoundingClientRect().width > 100 && consoleRoot.getBoundingClientRect().height > 100,
-      ready: phantomVisible && !gateVisible && !bootVisible && (page === "dashboard" ? !!consoleRoot : workspace?.dataset.workspacePage === page),
+      consoleVisible: visible(consoleRoot),
+      dashboardReady,
+      ready: phantomVisible && !gateVisible && !bootVisible && (page === "dashboard" ? dashboardReady : workspace?.dataset.workspacePage === page),
       text: document.body.innerText.slice(0, 400),
     };
   }).toString()})(${JSON.stringify(expectedPage)})`;
@@ -473,6 +476,8 @@ function assertCase(result) {
   assert.equal(appState?.phantomVisible, true, `${label} ${viewport.width}: Phantom shell must be visible.`);
   if (page !== "dashboard") {
     assert.equal(audit.workspacePage, page, `${label} ${viewport.width}: expected workspace page ${page}, got ${audit.workspacePage || "none"}.`);
+  } else {
+    assert.equal(appState?.dashboardReady, true, `${label} ${viewport.width}: dashboard must render the real business brief, not the startup status panel.`);
   }
   assert.equal(audit.pageVisible, true, `${label} ${viewport.width}: page body must be visible.`);
   assert.equal(audit.horizontalOverflow, false, `${label} ${viewport.width}: document has horizontal overflow (${audit.bodyScrollWidth}px > ${viewport.width}px).`);
