@@ -90,9 +90,9 @@ function followUpReply(request: string, recentConversation: RecentChatTurn[]) {
   // memory malfunction (owner-reported: a CRM request got a stale reply
   // about an old software thread).
   if (!sharesTopic(request, `${topicContext}`)) {
-    return "The instant model timed out before I could answer that accurately, so I won't invent one. Ask again in a moment and I'll take it fresh.";
+    return "The fast answer lane is unavailable, and this is a new topic, so I won't borrow an unrelated answer or make one up. Your request is still intact and can continue in the right work lane.";
   }
-  return `I'm still with this thread: ${firstSentence(previous)} The instant model timed out before I could answer the new part accurately, so I won't invent one.`;
+  return `I'm still with this thread: ${firstSentence(previous)} The fast answer lane is unavailable for the new part, so I'm keeping the context intact rather than guessing.`;
 }
 
 /* Cheap lexical topic check: does the new request share any meaningful term
@@ -127,7 +127,7 @@ function directAnswer(request: string, businessName: string) {
   if (/\bwhat are you thinking\b/i.test(lower)) return "That a good answer should feel obvious after you hear it, even if it took real work to make it that clean.";
   if (/\btell me something interesting\b/i.test(lower)) return "Octopuses have neurons in their arms, so a surprising amount of their sensing and movement is handled away from the central brain.";
   if (/\b(?:favorite|favourite|prefer|would you rather)\b/i.test(lower)) return "I'd choose the option that creates the better story without creating a maintenance problem tomorrow.";
-  return "The instant model timed out before I could answer that accurately. Retry once and I'll answer the same question directly.";
+  return "The fast answer lane is unavailable, so I won't manufacture an answer. I can still help turn this into a concrete next step with the right context.";
 }
 
 export function buildInstantChatFallbackReply(
@@ -145,7 +145,7 @@ export function buildInstantChatFallbackReply(
     return {
       status: "local_fallback" as const,
       model_id: "phantom-instant-local-fallback",
-      output_text: "That's real business work, not quick chat — I won't guess at records or actions from this lane. Ask me again and the operational brain will take it, with your actual data in front of it.",
+      output_text: "That's real business work, not quick chat — I won't guess at records or actions from this lane. The request belongs with the operational brain, where it can use the right workspace context instead of inventing an answer.",
       provider_called: false as const,
       network_call_performed: false as const,
       provider_request_body_created: false as const,

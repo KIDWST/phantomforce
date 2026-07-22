@@ -2727,6 +2727,14 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 .phantom-user { margin: 0; font: 500 13px "Spline Sans Mono", monospace; color: var(--dim); }
 .phantom-reply { margin: 0; font-size: 15.5px; line-height: 1.5; color: var(--ink); max-width: 720px; }
 .phantom-entry .rcard { max-width: 460px; }
+.chat-media { width: min(100%, 520px); margin: 2px 0 0; overflow: hidden; border: 1px solid var(--line-strong); border-radius: 14px; background: rgba(36, 31, 63, 0.08); }
+.chat-media-frame { position: relative; overflow: hidden; background: rgba(8, 6, 18, 0.72); }
+.chat-media img, .chat-media video { display: block; width: 100%; max-height: min(54vh, 440px); object-fit: contain; background: #090711; }
+.chat-media figcaption { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 11px; color: var(--ink); font: 600 11px "Spline Sans Mono", monospace; }
+.chat-media figcaption span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat-media figcaption b { flex: 0 0 auto; color: var(--neon-2); font-size: 9.5px; letter-spacing: 0.04em; text-transform: uppercase; }
+.chat-media[data-chat-media-status="preview"] figcaption b { color: var(--warn); }
+.chat-media[data-chat-media-status="queued"] figcaption b { color: var(--neon); }
 
 /* ---------------- phantom ai (chat / memory / activity tabs) ---------------- */
 /* Base styling for the previously-orphaned phantomai.js panel. The narrow
@@ -8613,7 +8621,7 @@ body.phantomplay-playing .buddy-say {
   aspect-ratio: 1;
   pointer-events: none;
   opacity: 0;
-  background: url("/app/assets/brand-phantom.png?v=phantom-live-20260722-23") center / contain no-repeat;
+  background: url("/app/assets/brand-phantom.png?v=phantom-live-20260722-24") center / contain no-repeat;
   filter: saturate(1.2) drop-shadow(0 0 28px rgba(91, 76, 255, 0.28));
   transform: translateY(10px) scale(0.96);
   transition: opacity 0.28s ease, transform 0.28s ease;

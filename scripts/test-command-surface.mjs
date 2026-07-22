@@ -4,6 +4,8 @@ import { readFileSync } from "node:fs";
 const main = readFileSync(new URL("../app/js/main.js", import.meta.url), "utf8");
 const index = readFileSync(new URL("../app/index.html", import.meta.url), "utf8");
 const css = readFileSync(new URL("../app/phantom.css", import.meta.url), "utf8");
+const command = readFileSync(new URL("../app/js/command.js", import.meta.url), "utf8");
+const mediaLab = readFileSync(new URL("../app/js/medialab.js", import.meta.url), "utf8");
 const commandOsCss = readFileSync(new URL("../app/command-os.css", import.meta.url), "utf8");
 const count = (source, pattern) => source.match(pattern)?.length || 0;
 
@@ -54,5 +56,12 @@ assert.doesNotMatch(commandOsCss, /data-chatbox-minimized="true"[\s\S]{0,220}\.c
 assert.match(commandOsCss, /\.chatbox-head \.pc-mode,[\s\S]*?\.chatbox-head \.pc-settings,[\s\S]*?\.chatbox-head \.pc-menu\s*\{[\s\S]*?display:\s*none\s*!important/u, "Collapsed Command OS should hide only non-restore header controls.");
 assert.match(commandOsCss, /@media \(max-width: 767px\)[\s\S]*?\.phantom\.command-os-enabled \.os-command-rail\s*\{[\s\S]*?display:\s*none\s*!important/u, "Phone Command OS must not render a duplicate top navigation rail.");
 assert.match(commandOsCss, /@media \(max-width: 767px\)[\s\S]*?\.phantom\.command-os-enabled \.mobile-admin-homebar\s*\{[\s\S]*?display:\s*flex\s*!important/u, "Phone Command OS must use the native mobile homebar.");
+assert.match(command, /isDirectChatMediaRequest/u, "Explicit image and video briefs must bypass the conversational model.");
+assert.match(command, /generateMediaFromChat\(text, intent, settings\)/u, "Chat must use the shared Media Lab generation entry point.");
+assert.match(mediaLab, /export async function generateMediaFromChat/u, "Media Lab must expose one shared chat generation path.");
+assert.match(mediaLab, /saveMediaPoolSource\(asset, \{/u, "Live chat media must save through the same Media Pool path.");
+assert.match(main, /chatAttachMedia\(r\.media\)/u, "Completed media must render inline in the dashboard chat.");
+assert.match(main, /Byting cyberchips into the frame/u, "Creative render progress should have a specific Phantom voice.");
+assert.match(css, /\.chat-media\s*\{/u, "Inline chat media needs a stable media card treatment.");
 
 console.log("Compact command surface checks passed.");

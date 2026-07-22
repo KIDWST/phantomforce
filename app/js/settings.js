@@ -1,13 +1,13 @@
 /* PhantomForce admin settings. Payment credential entry always stays in the
    Stripe-hosted Checkout/Portal; this app only requests a server-created URL. */
 
-import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260722-23";
-import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260722-23";
-import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260722-23";
-import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260722-23";
-import { canManageActiveOrg, createStripeBillingPortal, createStripeCheckout, fetchCustomerPlanPreview, fetchEntitlementsSummary, fetchStripeBillingSummary, switchCustomerPlan } from "./orgs.js?v=phantom-live-20260722-23";
-import { currentTenantId, ctx, isLiveAdminHost, isLocalDevHost, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260722-23";
-import { DEFAULT_COMPANION_PREFS, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260722-23";
+import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260722-24";
+import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260722-24";
+import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260722-24";
+import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260722-24";
+import { canManageActiveOrg, createStripeBillingPortal, createStripeCheckout, fetchCustomerPlanPreview, fetchEntitlementsSummary, fetchStripeBillingSummary, switchCustomerPlan } from "./orgs.js?v=phantom-live-20260722-24";
+import { currentTenantId, ctx, isLiveAdminHost, isLocalDevHost, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260722-24";
+import { DEFAULT_COMPANION_PREFS, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260722-24";
 
 const AI_SETTINGS_KEY = "pf.operator.settings.v1";
 const SETTINGS_TAB_KEY = "pf.settings.tab.v1";
@@ -746,6 +746,65 @@ function renderChatBehaviorTab(settings) {
       </div>`;
 }
 
+function renderChatGptBridgeTab() {
+  const status = agentAssistBridgeStatus.status || {};
+  const options = Array.isArray(status.setup_options) ? status.setup_options : [];
+  const optionById = (id) => options.find((item) => item.id === id) || {};
+  const env = status.env || {};
+  const error = agentAssistBridgeStatus.error;
+  const setupRequired = status.setup_required !== false;
+  return `
+      <div class="set-section">
+        <div class="set-sec-head">
+          <div>
+            <h3>ChatGPT Bridge</h3>
+            <p class="set-note">Universal assist layer for Codex, PhantomBot, Phantom AI, and agent workforce reviews. Current build can always prepare a relay packet; live ChatGPT/OpenAI calls require an approved local adapter or API key path.</p>
+          </div>
+          <button class="btn btn-quiet" type="button" data-agent-assist-refresh>${agentAssistBridgeStatus.loading ? "Checking..." : "Refresh bridge"}</button>
+        </div>
+        ${error ? `<p class="set-status-pill">${esc(error)}</p>` : ""}
+        <div class="set-status-grid">
+          <span><b>Status</b><i>${esc(bridgeStatusLabel(status))}</i></span>
+          <span><b>Adapter URL</b><i>${status.bridge_url_configured ? "Configured" : "Missing"}</i></span>
+          <span><b>OpenAI API key</b><i>${optionById("openai_api_key").ready ? "Configured" : "Not configured"}</i></span>
+          <span><b>Credential safety</b><i>No ChatGPT password stored</i></span>
+        </div>
+        <div class="set-bridge-note ${setupRequired ? "is-warning" : "is-ready"}">
+          <b>${setupRequired ? "Bridge is not executable yet" : "Bridge adapter is callable"}</b>
+          <span>${esc(status.subscription_billing_note || "ChatGPT app subscriptions and OpenAI API usage are separate billing paths. PhantomForce never stores a ChatGPT password.")}</span>
+        </div>
+        <p class="set-label">Setup options</p>
+        <div class="set-bridge-grid">
+          ${options.map((item) => `
+            <article class="set-bridge-card ${item.ready ? "is-ready" : ""}">
+              <b>${esc(item.label)}</b>
+              <i>${item.ready ? "Ready" : "Needs setup"}</i>
+              <span>${esc(item.note)}</span>
+            </article>
+          `).join("") || `
+            <article class="set-bridge-card">
+              <b>Relay packet</b>
+              <i>Ready</i>
+              <span>PhantomForce can prepare a bounded review packet for a human or browser assistant.</span>
+            </article>
+          `}
+        </div>
+        <p class="set-label">Universal agent bridge env</p>
+        <div class="set-code-list">
+          <code>${esc(env.bridge_enabled || "PHANTOM_AGENT_ASSIST_BRIDGE_ENABLED")}=true</code>
+          <code>${esc(env.bridge_url || "PHANTOM_AGENT_ASSIST_BRIDGE_URL")}=http://127.0.0.1:&lt;adapter-port&gt;/assist</code>
+          <code>${esc(env.bridge_token || "PHANTOM_AGENT_ASSIST_BRIDGE_TOKEN")}=&lt;optional local token&gt;</code>
+          <code>${esc(env.openai_api_key || "OPENAI_API_KEY")}=&lt;OpenAI Platform API key&gt;</code>
+        </div>
+        <div class="set-rule-list">
+          <span>Do not paste ChatGPT passwords here</span>
+          <span>Plus/Pro does not include API billing</span>
+          <span>Relay packets remain available offline</span>
+          <span>Agents must still obey approval/autopilot rules</span>
+        </div>
+      </div>`;
+}
+
 function renderCompanionTab() {
   const companion = loadCompanionPrefs();
   return `
@@ -1126,6 +1185,7 @@ export function renderOperatorSettings(el, opts = {}) {
     model: () => renderModelTab(settings, activeProvider, activeModel),
     loop: () => renderLoopAdvancedSection(),
     chat: () => renderChatBehaviorTab(settings),
+    bridge: () => renderChatGptBridgeTab(),
     clientsetup: () => `<div id="${clientSetupMountId}" class="set-client-setup-mount"></div>`,
     organization: () => `<div id="${organizationMountId}" class="set-workspace-mount"></div>`,
     plan: () => `<div id="${planMountId}" class="set-workspace-mount"></div>`,
@@ -1212,6 +1272,9 @@ export function renderOperatorSettings(el, opts = {}) {
 
   const localRefresh = el.querySelector("[data-local-model-refresh]");
   if (localRefresh) localRefresh.onclick = () => refreshLocalModels(el, opts);
+
+  const bridgeRefresh = el.querySelector("[data-agent-assist-refresh]");
+  if (bridgeRefresh) bridgeRefresh.onclick = () => refreshAgentAssistBridge(el, opts);
 
   el.querySelectorAll("[data-ai-field]").forEach((field) => {
     field.onchange = () => {
@@ -1341,5 +1404,8 @@ export function renderOperatorSettings(el, opts = {}) {
 
   if (activeTab === "model" && settings.selectedProviders.includes("local") && !localModelStatus.loaded && !localModelStatus.loading) {
     refreshLocalModels(el, opts);
+  }
+  if (activeTab === "bridge" && !agentAssistBridgeStatus.loaded && !agentAssistBridgeStatus.loading) {
+    refreshAgentAssistBridge(el, opts);
   }
 }
