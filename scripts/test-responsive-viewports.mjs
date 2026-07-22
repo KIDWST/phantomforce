@@ -27,6 +27,7 @@ const pages = [
   { id: "content", label: "content-hub" },
   { id: "analytics", label: "analytics" },
   { id: "phantomplay", label: "phantomplay" },
+  { id: "phantomstore", label: "phantomstore" },
   { id: "settings", label: "settings" },
 ];
 
@@ -309,6 +310,8 @@ function auditPage() {
   const commandRail = document.querySelector("[data-os-command-rail]");
   const mobileHomebar = document.querySelector(".mobile-admin-homebar");
   const mobileNav = document.querySelector("[data-mobile-bottom-nav]");
+  const productCards = [...document.querySelectorAll(".ps-product")];
+  const productMedia = [...document.querySelectorAll(".ps-product-media")];
   const isVisible = (el) => {
     if (!el) return false;
     if (el.closest('[aria-hidden="true"]')) return false;
@@ -438,6 +441,17 @@ function auditPage() {
       mobileTop: mobileRect ? Math.round(mobileRect.top) : null,
       mobileBottom: mobileRect ? Math.round(mobileRect.bottom) : null,
     },
+    phantomStore: {
+      productCards: productCards.length,
+      productMedia: productMedia.length,
+      brokenMedia: productMedia.filter((media) => {
+        const rect = media.getBoundingClientRect();
+        const img = media.querySelector("img");
+        const fallback = media.querySelector(".ps-product-fallback");
+        const style = img ? getComputedStyle(img) : null;
+        return rect.width < 120 || rect.height < 60 || (!img && !fallback) || (style && (style.objectFit !== "contain" || style.transform !== "none"));
+      }).map(elementSummary).slice(0, 5),
+    },
     textProbe: document.body.innerText.slice(0, 300),
   };
 }
@@ -493,6 +507,11 @@ function assertCase(result) {
     assert.equal(audit.nav.desktopVisible || audit.nav.commandRailVisible, true, `${label} ${viewport.width}: a desktop primary navigation surface must be visible.`);
     assert.equal(audit.nav.mobileVisible, false, `${label} ${viewport.width}: mobile bottom nav must not appear on desktop widths.`);
   }
+  if (page === "phantomstore") {
+    assert.ok(audit.phantomStore.productCards >= 3, `${label} ${viewport.width}: PhantomStore must render real product cards even if live sync is offline.`);
+    assert.equal(audit.phantomStore.productMedia, audit.phantomStore.productCards, `${label} ${viewport.width}: every PhantomStore product needs a visible media block.`);
+    assert.deepEqual(audit.phantomStore.brokenMedia, [], `${label} ${viewport.width}: PhantomStore product media must be full-frame, visible art or styled fallback.`);
+  }
 }
 
 async function main() {
@@ -547,6 +566,7 @@ async function main() {
         "document has no horizontal overflow",
         "visible elements do not escape viewport",
         "visible control text is not clipped",
+        "PhantomStore products render with full-frame media blocks",
       ],
     };
     writeFileSync(summary.report, JSON.stringify({ ...summary, results }, null, 2));

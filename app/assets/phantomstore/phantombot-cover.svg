@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="720" viewBox="0 0 1200 720" role="img" aria-label="Phantombot product cover">
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#050a10"/>
+      <stop offset=".55" stop-color="#071411"/>
+      <stop offset="1" stop-color="#12091f"/>
+    </linearGradient>
+    <linearGradient id="panel" x1="0" x2="1">
+      <stop offset="0" stop-color="#41ffa1" stop-opacity=".95"/>
+      <stop offset="1" stop-color="#814af7" stop-opacity=".88"/>
+    </linearGradient>
+    <radialGradient id="core" cx="50%" cy="45%" r="58%">
+      <stop offset="0" stop-color="#41ffa1" stop-opacity=".9"/>
+      <stop offset=".3" stop-color="#41ffa1" stop-opacity=".22"/>
+      <stop offset="1" stop-color="#41ffa1" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="7" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <rect width="1200" height="720" fill="url(#bg)"/>
+  <rect x="56" y="52" width="1088" height="616" rx="34" fill="#020807" opacity=".72" stroke="#41ffa1" stroke-opacity=".32"/>
+  <g opacity=".23" stroke="#41ffa1" stroke-width="1">
+    <path d="M118 160h964M118 244h964M118 328h964M118 412h964M118 496h964M118 580h964"/>
+    <path d="M176 112v496M286 112v496M396 112v496M506 112v496M616 112v496M726 112v496M836 112v496M946 112v496M1056 112v496"/>
+  </g>
+  <circle cx="804" cy="350" r="226" fill="url(#core)"/>
+  <g filter="url(#glow)">
+    <path d="M757 210c78-38 174 14 188 101 8 50-11 91-43 122l37 82-85-36c-49 18-104 5-141-33-68-70-44-190 44-236z" fill="#04130e" stroke="#41ffa1" stroke-width="7"/>
+    <path d="M746 367c47 46 125 49 176 6" fill="none" stroke="#41ffa1" stroke-width="14" stroke-linecap="round"/>
+    <circle cx="775" cy="313" r="15" fill="#41ffa1"/>
+    <circle cx="886" cy="313" r="15" fill="#41ffa1"/>
+    <path d="M782 260c30-22 73-28 113-8" fill="none" stroke="#814af7" stroke-width="10" stroke-linecap="round"/>
+  </g>
+  <g transform="translate(98 138)">
+    <text x="0" y="0" fill="#41ffa1" font-family="Arial, sans-serif" font-size="24" font-weight="800" letter-spacing="8">PHANTOMSTORE</text>
+    <text x="0" y="82" fill="#f1fff9" font-family="Arial, sans-serif" font-size="78" font-weight="900">Phantombot</text>
+    <text x="0" y="132" fill="#a8bdb7" font-family="Arial, sans-serif" font-size="28" font-weight="600">Cloud preferred. Local guaranteed.</text>
+    <g transform="translate(0 188)" fill="none" stroke="url(#panel)" stroke-width="3">
+      <rect x="0" y="0" width="316" height="56" rx="16"/>
+      <rect x="0" y="78" width="408" height="56" rx="16"/>
+      <rect x="0" y="156" width="268" height="56" rx="16"/>
+    </g>
+    <g fill="#d9fff0" font-family="Arial, sans-serif" font-size="22" font-weight="800">
+      <text x="24" y="225">Mission controller</text>
+      <text x="24" y="303">Unlimited usage routing</text>
+      <text x="24" y="381">Local privacy mode</text>
+    </g>
+  </g>
+</svg>

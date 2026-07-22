@@ -145,6 +145,7 @@ for (const slug of gameSlugs) {
 }
 assert.match(css, /@media\s*\(max-width:\s*767px\)/u, "Phone-specific responsive layout must exist.");
 assert.match(css, /html\[data-org-color-mode="dark"\] \.pp-game-art img\{[\s\S]*?object-fit:contain[\s\S]*?transform:none/u, "Dark-mode PhantomPlay thumbnails must show the full game image instead of zoom-cropping it.");
+assert.match(css, /html\[data-org-color-mode="light"\] \.pp-game-art img\{[\s\S]*?object-fit:contain[\s\S]*?transform:none/u, "Light-mode PhantomPlay thumbnails must also show the full game image instead of zoom-cropping it.");
 assert.match(css, /\.pp-game-grid:not\(\.pp-game-grid-full\) \.pp-game-art img\{[\s\S]*?object-fit:contain[\s\S]*?transform:none/u, "Compact PhantomPlay rows must not override thumbnails back to cropped art.");
 assert.match(css, /@media\(max-width:767px\)[\s\S]*?\.pp-game-body>p\{[\s\S]*?-webkit-line-clamp:3/u, "Phone game cards must clamp copy instead of forcing broken oversized cards.");
 assert.match(css, /@media\(max-width:767px\)[\s\S]*?\.pp-game\{[\s\S]*?grid-template-columns:1fr/u, "Phone game cards must stack artwork over copy instead of creating skinny text columns.");

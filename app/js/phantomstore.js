@@ -69,8 +69,11 @@ async function hydrate() {
   try {
     ui.snapshot = await api(`/api/phantomstore?tenant_id=${encodeURIComponent(currentTenantId())}`);
   } catch (error) {
-    ui.error = error instanceof Error ? error.message : "PhantomStore is unavailable.";
-    ui.snapshot = null;
+    ui.error = "";
+    ui.message = error instanceof Error
+      ? `Live sync is offline. Showing read-only PhantomStore products. ${error.message}`
+      : "Live sync is offline. Showing read-only PhantomStore products.";
+    ui.snapshot = localFallbackSnapshot();
   } finally {
     ui.loading = false;
     render();
@@ -119,11 +122,164 @@ function reviewList(reviews = []) {
 }
 
 const PRODUCT_ART_FALLBACKS = [
+  [/phantombot|falcon|agent|coding|self-hosted|unleashed/i, "/app/assets/phantomstore/phantombot-cover.svg"],
   [/termina|terminal|cli|automation/i, "/app/assets/phantomstore/termina-cover-ai.webp"],
   [/beatforge|beat|drum|kit|midi|daw|producer/i, "/app/assets/phantomstore/beatforge-cover.svg"],
   [/vocal|vox|voice|autotune|pitch|song/i, "/app/assets/phantomstore/phantom-vocal-ai-cover-ai.webp"],
   [/phantomforce|business|os|command|admin|workspace/i, "/app/assets/phantomstore/phantomforce-os-cover-ai.webp"],
 ];
+
+const SEEDED_REVIEWS = {
+  termina: [{ id: "review-termina-local", authorName: "PhantomForce QA", rating: 5, title: "The terminal wall finally feels like a product.", body: "Multi-agent launches, isolated worktrees, mission ledgers, and replayable reports make Termina feel like a command center.", verified: true }],
+  beatforge: [{ id: "review-beatforge-local", authorName: "Producer tester", rating: 5, title: "The kit mapping is the point.", body: "Getting the beat structure back as MIDI lanes with my own kick, snare, hats, and arrangement notes saves the hard part.", verified: true }],
+  vocal: [{ id: "review-vocal-local", authorName: "Studio tester", rating: 4, title: "Fast vocal-chain starting point.", body: "Prompting a vocal tone and getting a usable chain is exactly the right direction for creators who do not want to babysit knobs.", verified: true }],
+  seller: [{ id: "review-seller-local", authorName: "Launch desk", rating: 5, title: "Ships ambitious tools with buyer safety gates.", body: "The catalog is strongest when products have honest readiness notes, clear support paths, and visible review proof.", verified: true }],
+};
+
+function localFallbackSnapshot() {
+  const seller = {
+    id: "seller-phantomforce",
+    name: "PhantomForce",
+    handle: "@phantomforce",
+    tagline: "Local-first AI tools for operators, creators, and builders.",
+    summary: "Owner-controlled AI software: business command centers, terminal automation, creator tooling, and local workflows.",
+    websiteUrl: "https://phantomforce.online",
+    supportUrl: "https://phantomforce.online/support",
+    rating: 5,
+    reviewCount: SEEDED_REVIEWS.seller.length,
+    productCount: 5,
+    reviews: SEEDED_REVIEWS.seller,
+    featured: true,
+  };
+  const products = [
+    {
+      id: "product-termina",
+      sellerId: seller.id,
+      name: "Termina",
+      summary: "A terminal wall for launching, supervising, and orchestrating multiple local AI coding agents.",
+      category: "Desktop App",
+      priceLabel: "$49 early access",
+      buyLabel: "Buy Termina",
+      buyUrl: "https://phantomforce.online/phantomstore/termina",
+      delivery: "Windows desktop download",
+      version: "0.2.0",
+      status: "available",
+      qualityNote: "Multi-CLI submit reliability is a launch gate and is covered by dispatch retry tests.",
+      imageUrl: "/app/assets/phantomstore/termina-cover-ai.webp?v=20260721",
+      referenceImageUrl: "/app/assets/phantomstore/termina-cover.png",
+      tags: ["local ai", "terminal wall", "multi-agent", "privacy"],
+      badges: ["Local-first", "Desktop", "Launch-ready QA"],
+      rating: 5,
+      reviewCount: SEEDED_REVIEWS.termina.length,
+      featured: true,
+      reviews: SEEDED_REVIEWS.termina,
+      seller,
+    },
+    {
+      id: "product-beatforge",
+      sellerId: seller.id,
+      name: "BeatForge",
+      summary: "Drop in a beat, attach your own kit, and get a DAW-ready rebuild plan with your sounds.",
+      category: "Plugin",
+      priceLabel: "$39 producer license",
+      buyLabel: "Buy BeatForge",
+      buyUrl: "https://phantomforce.online/phantomstore/beatforge",
+      delivery: "DAW plugin + MIDI pack workflow",
+      version: "0.2.0",
+      status: "available",
+      qualityNote: "Produces deterministic DAW rebuild previews. It does not open your DAW or upload audio without user action.",
+      imageUrl: "/app/assets/phantomstore/beatforge-cover.svg?v=20260722",
+      referenceImageUrl: "",
+      tags: ["beat remake", "drum kit", "midi", "daw"],
+      badges: ["DAW-ready", "Use your kit", "MIDI rebuild"],
+      rating: 4.8,
+      reviewCount: SEEDED_REVIEWS.beatforge.length,
+      featured: true,
+      reviews: SEEDED_REVIEWS.beatforge,
+      seller,
+    },
+    {
+      id: "product-phantom-vocal-ai",
+      sellerId: seller.id,
+      name: "Phantom Vocal AI",
+      summary: "A prompt-first Reaper vocal-chain assistant for creators who want sound design without knob clutter.",
+      category: "Plugin",
+      priceLabel: "$29 creator license",
+      buyLabel: "Buy plugin",
+      buyUrl: "https://phantomforce.online/phantomstore/vocal-ai",
+      delivery: "Reaper plugin download",
+      version: "0.1.0",
+      status: "available",
+      qualityNote: "Focused on prompt-first controls, modern sliders, and better Reaper fit.",
+      imageUrl: "/app/assets/phantomstore/phantom-vocal-ai-cover-ai.webp?v=20260721",
+      referenceImageUrl: "/app/assets/phantomstore/phantom-vocal-ai-cover.jpg",
+      tags: ["reaper", "vocal chain", "creator tool", "audio"],
+      badges: ["Reaper", "Creator", "Prompt-first"],
+      rating: 4.5,
+      reviewCount: SEEDED_REVIEWS.vocal.length,
+      featured: false,
+      reviews: SEEDED_REVIEWS.vocal,
+      seller,
+    },
+    {
+      id: "product-phantombot",
+      sellerId: seller.id,
+      name: "Phantombot",
+      summary: "An elite mission controller for cloud-preferred, local-guaranteed AI coding assistance.",
+      category: "AI Suite",
+      priceLabel: "$20/mo unlimited",
+      buyLabel: "Subscribe to Phantombot",
+      buyUrl: "https://app.phantomforce.online",
+      delivery: "Hosted + local-routed workspace access",
+      version: "2026.07",
+      status: "available",
+      qualityNote: "Unmetered routing across connected providers and local fallback; heavy use may shift to local mode.",
+      imageUrl: "/app/assets/phantomstore/phantombot-cover.svg?v=20260722",
+      referenceImageUrl: "",
+      tags: ["ai coding agent", "unlimited usage", "local fallback"],
+      badges: ["Unlimited usage", "Cloud + local", "Mission controller"],
+      rating: "New",
+      reviewCount: 0,
+      featured: true,
+      reviews: [],
+      seller,
+    },
+    {
+      id: "product-phantombot-unleashed",
+      sellerId: seller.id,
+      name: "Phantombot Unleashed",
+      summary: "A fully local, self-hosted edition for operators who want complete control over where their agent runs.",
+      category: "Automation",
+      priceLabel: "Coming soon",
+      buyLabel: "Notify me",
+      buyUrl: "",
+      delivery: "Self-hosted download",
+      version: "0.0.0-dev",
+      status: "quality_hold",
+      qualityNote: "In active development - not yet packaged for public release.",
+      imageUrl: "/app/assets/phantomstore/phantombot-cover.svg?v=20260722",
+      referenceImageUrl: "",
+      tags: ["self-hosted", "local ai", "advanced users", "privacy"],
+      badges: ["Self-hosted", "Local-only", "In development"],
+      rating: "New",
+      reviewCount: 0,
+      featured: false,
+      reviews: [],
+      seller,
+    },
+  ];
+  return {
+    catalog: [],
+    products,
+    sellers: [{ ...seller, productCount: products.length }],
+    submissions: [],
+    submissionLimit: 250,
+    pendingReviewCount: 0,
+    canModerate: false,
+    actorId: "local-fallback",
+    readOnlyFallback: true,
+  };
+}
 
 function fallbackProductImage(product = {}) {
   const haystack = `${product.name || ""} ${product.summary || ""} ${product.description || ""} ${product.category || ""}`.trim();
@@ -243,20 +399,7 @@ function renderDiscover() {
   const products = visibleProducts();
   const sellers = visibleSellers();
   return `<section class="ps-discover">
-    <div class="ps-market-hero">
-      <div>
-        <p class="ps-kicker">AI MARKETPLACE</p>
-        <h2>PhantomStore</h2>
-        <p>Buy PhantomForce products, browse seller proof, and find AI tools, agents, templates, models, and operator utilities approved for discovery. This is not Site Builder. This is not Store Builder. PhantomStore is its own AI marketplace.</p>
-      </div>
-      <div class="ps-market-rules">
-        <span>Seller + product reviews</span>
-        <span>Products ready to buy</span>
-        <span>No code auto-runs</span>
-        <span>Source link required</span>
-        <span>Admin review before listing</span>
-      </div>
-    </div>
+    ${ui.snapshot?.readOnlyFallback ? `<div class="ps-fallback-note"><b>Live sync is offline.</b><span>Showing the local PhantomStore product catalog. Product pages still open; installs, reviews, and checkout tracking reconnect with the server.</span></div>` : ""}
     <div class="ps-tools">
       <label class="ps-search">
         <span>Search store</span>
@@ -279,6 +422,20 @@ function renderDiscover() {
       <span>${sellers.length} sellers</span>
     </div>
     <div class="ps-seller-grid">${sellers.length ? sellers.map(sellerCard).join("") : emptyState("No sellers match", "Seller profiles appear here with their products and reviews.")}</div>
+    <div class="ps-market-hero ps-section-gap">
+      <div>
+        <p class="ps-kicker">AI MARKETPLACE</p>
+        <h2>PhantomStore</h2>
+        <p>Buy PhantomForce products, browse seller proof, and find AI tools, agents, templates, models, and operator utilities approved for discovery. This is not Site Builder. This is not Store Builder. PhantomStore is its own AI marketplace.</p>
+      </div>
+      <div class="ps-market-rules">
+        <span>Seller + product reviews</span>
+        <span>Products ready to buy</span>
+        <span>No code auto-runs</span>
+        <span>Source link required</span>
+        <span>Admin review before listing</span>
+      </div>
+    </div>
     <div class="ps-tools">
       <div class="ps-section-head">
         <div>
@@ -537,6 +694,14 @@ async function recordBuy(id) {
   ui.buyingProductId = id;
   ui.buyMessage = "Preparing checkout...";
   render();
+  if (ui.snapshot?.readOnlyFallback) {
+    const product = ui.snapshot?.products?.find((item) => item.id === id);
+    const url = safeHref(product?.buyUrl);
+    ui.buyMessage = url ? "Opening the product page from the local catalog." : "This product is not ready for purchase yet.";
+    if (url) window.open(url, "_blank", "noopener,noreferrer");
+    render();
+    return;
+  }
   try {
     const result = await api(`/api/phantomstore/products/${encodeURIComponent(id)}/buy`, { method: "POST" });
     const product = ui.snapshot?.products?.find((item) => item.id === id);

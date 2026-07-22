@@ -20,6 +20,7 @@ assert.match(index, /data-plan/u, "Dashboard must retain the real owner-action s
 assert.match(index, /data-queue/u, "Dashboard must retain real work-in-motion status.");
 
 assert.doesNotMatch(index, /data-command-widgets/u, "Removed expandable command cards must not return.");
+assert.doesNotMatch(index, /data-mobile-command|data-mobile-bell|data-mobile-user-btn/u, "Mobile top chrome must be identity-only; the bottom dock owns mobile navigation.");
 assert.doesNotMatch(index, /data-operating-spaces/u, "Dashboard must not duplicate navigation as operating-space cards.");
 assert.doesNotMatch(index, /data-command-snapshot/u, "Dashboard must not duplicate the business brief with another snapshot.");
 assert.doesNotMatch(index, /class="quick-card"/u, "Removed quick-action card must stay removed.");
@@ -47,6 +48,7 @@ assert.match(css, /\.sidebar:not\(\.is-expanded\)\s*\{\s*display:\s*none\s*!impo
 assert.match(css, /@media \(max-width: 640px\)[\s\S]*?\.ch-card-h\s*\{[\s\S]*?flex-direction:\s*column/u, "Content Hub mobile card headers must stack instead of squeezing copy into one-word columns.");
 assert.match(css, /@media \(max-width: 640px\)[\s\S]*?\.ch-card-h \.ch-src\s*\{[\s\S]*?white-space:\s*normal/u, "Content Hub mobile header copy must wrap naturally.");
 assert.match(css, /@media \(max-width: 720px\)[\s\S]*?\.buddy\s*\{[\s\S]*?opacity:\s*0;[\s\S]*?pointer-events:\s*none/u, "Phone companion must not sit on top of mobile controls.");
+assert.match(css, /@media \(max-width: 720px\)[\s\S]*?\.buddy-say\s*\{[\s\S]*?display:\s*none/u, "Phone companion speech must not create off-screen overflow.");
 assert.match(css, /html\[data-org-color-mode="dark"\] \.ml-field-brief \.ml-prompt\s*\{[\s\S]*?rgba\(4, 10, 15, 0\.94\)[\s\S]*?color:\s*#eef8f5/u, "Media Lab prompt field must stay dark in dark mode.");
 assert.match(css, /\.dashboard-brief\s*\{/u, "Compact business brief must have dashboard styling.");
 assert.match(css, /\.dashboard-brief-metrics\s*\{/u, "Business snapshot must have a stable responsive layout.");

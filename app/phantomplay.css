@@ -99,7 +99,7 @@ html[data-org-color-mode="light"] .pp-game-art img{
   width:100%;
   margin-left:0;
   object-fit:contain;
-  transform:scale(1.16);
+  transform:none;
 }
 
 /* PhantomPlay console skin */

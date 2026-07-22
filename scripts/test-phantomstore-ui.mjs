@@ -26,6 +26,9 @@ assert.match(storeSource, /Seller directory/u, "Discovery must include a seller 
 assert.match(storeSource, /Ready to buy/u, "Discovery must expose ready-to-buy products before community tools.");
 assert.match(storeSource, /const PRODUCT_ART_FALLBACKS/u, "PhantomStore must provide product artwork fallbacks when listings are missing images.");
 assert.match(storeSource, /beatforge-cover\.svg/u, "PhantomStore must have BeatForge product art instead of reusing PhantomForce OS art.");
+assert.match(storeSource + backendSource, /phantombot-cover\.svg/u, "PhantomStore must give Phantombot products real cover art instead of blank cards.");
+assert.match(storeSource, /function localFallbackSnapshot\(\)/u, "PhantomStore must render a read-only local product catalog when live sync is offline.");
+assert.match(storeSource, /ui\.snapshot\?\.readOnlyFallback[\s\S]*Opening the product page from the local catalog/u, "PhantomStore offline fallback buy buttons must open product pages instead of becoming dead API actions.");
 assert.match(storeSource, /const artUrl = imageUrl \|\| fallbackImageUrl/u, "Product cards must choose uploaded art first and branded fallback art second.");
 assert.match(storeSource, /ps-product-media\$\{imageUrl \? "" : " is-fallback"\}/u, "Product cards must always render a media block, even for missing product pictures.");
 assert.match(storeSource, /seller reviews/u, "Seller cards must show seller reviews.");
@@ -65,7 +68,10 @@ for (const selector of [".ps-shell", ".ps-market-hero", ".ps-tool", ".ps-product
   assert.ok(storeCss.includes(selector), `${selector} style must be present.`);
 }
 assert.match(storeCss, /\.ps-product-media img\{[^}]*object-fit:contain/u, "PhantomStore product images must show the full cover art instead of cropped/zoomed media.");
+assert.match(storeCss, /\.ps-product-media img\{[^}]*transform:none/u, "PhantomStore product images must not be zoomed with transforms.");
+assert.match(storeCss, /@media\(max-width:640px\)[\s\S]*\.ps-product-grid,\s*\.ps-seller-grid,\s*\.ps-grid\{grid-template-columns:1fr/u, "PhantomStore must collapse product and seller grids on phones.");
 assert.match(storeCss, /\.ps-product-fallback/u, "PhantomStore must style branded fallback product art.");
+assert.match(storeCss, /\.ps-fallback-note/u, "PhantomStore must style the local read-only fallback notice.");
 
 assert.match(customizationSource, /\["phantomstore", "PhantomStore", false/u, "Workspace customization fallback must know PhantomStore is a protected platform tab.");
 assert.match(registrySource, /id:\s*"phantomstore"[\s\S]*displayName:\s*"PhantomStore"[\s\S]*route:\s*"phantomstore"[\s\S]*required:\s*true[\s\S]*customerConfigurable:\s*false/u, "Server module registry must expose PhantomStore as a required, non-hideable marketplace tab.");
