@@ -1,7 +1,7 @@
 import {
   currentTenantId, isAdmin, isOwnerOperator, session,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260722-17";
+} from "./store.js?v=phantom-live-20260722-18";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 const mobilePlaySurface = () => typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;
@@ -352,9 +352,20 @@ async function hydrate() {
     ui.snapshot = normalizeSnapshot(payload);
     ui.offline = false;
   } catch (error) {
-    ui.snapshot = normalizeSnapshot(offlineState());
-    ui.offline = true;
-    ui.notice = "Cloud sync is offline. Built-in games still launch locally; saves, rooms, submissions, and policies sync when the backend returns.";
+    if (error?.status === 401 || error?.status === 403) {
+      ui.snapshot = normalizeSnapshot({
+        ...offlineState(),
+        catalog: [],
+        history: [],
+        access: { enabled: false, reason: error.status === 401 ? "auth_required" : "restricted", dailyMinuteLimit: 0, usedMinutesToday: 0, remainingMinutesToday: 0, canSubmitGames: false, canModerate: false, isOwner: false },
+      });
+      ui.offline = false;
+      ui.error = error.status === 401 ? "Sign in again to sync PhantomPlay. Your session token is missing or expired." : error.message;
+    } else {
+      ui.snapshot = normalizeSnapshot(offlineState());
+      ui.offline = true;
+      ui.notice = "Cloud sync is offline. Built-in games still launch locally; saves, rooms, submissions, and policies sync when the backend returns.";
+    }
   } finally {
     ui.loading = false;
     render();
