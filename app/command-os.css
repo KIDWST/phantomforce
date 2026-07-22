@@ -3140,6 +3140,35 @@ html[data-command-os="2040"] .phantom.command-os-enabled .console[data-chatbox-m
     width: 44px !important;
     height: 44px !important;
   }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .dashboard-intel-band {
+    order: 4 !important;
+    grid-template-columns: 1fr !important;
+    width: auto !important;
+    margin: 0 12px 18px !important;
+    overflow: hidden !important;
+    border: 1px solid rgba(133, 171, 198, 0.12) !important;
+    border-radius: 14px !important;
+    background: rgba(4, 9, 14, 0.76) !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .dashboard-intel-head {
+    display: grid !important;
+    padding: 12px 13px 0 !important;
+    border-right: 0 !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .dashboard-intel-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    min-width: 0 !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .dashboard-intel-card {
+    min-height: 82px !important;
+    border-right: 0 !important;
+    border-top: 1px solid rgba(133, 171, 198, 0.08) !important;
+  }
 }
 
 @media (max-width: 340px) {
@@ -3150,5 +3179,59 @@ html[data-command-os="2040"] .phantom.command-os-enabled .console[data-chatbox-m
   html[data-command-os="2040"] .phantom.command-os-enabled .console:not(.console-workspace) .chatbox-head .pc-title b::before {
     content: "Phantom";
     font-size: 11.5px;
+  }
+}
+
+/* Final loaded mobile nav kill switch: this stylesheet is loaded after the
+   base shell, so it owns the last word. Compact screens get one navigation
+   surface: the fixed bottom dock. More opens the drawer when needed. */
+@media (max-width: 900px) {
+  :root,
+  .phantom {
+    --mobile-admin-topbar: 0px !important;
+  }
+
+  .phantom .topbar2,
+  .phantom .os-command-rail,
+  .phantom .mobile-admin-homebar {
+    display: none !important;
+    opacity: 0 !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+  }
+
+  .phantom > .sidebar:not(.is-expanded) {
+    display: none !important;
+    opacity: 0 !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+  }
+
+  .phantom .app-main {
+    min-height: 100svh !important;
+    padding-top: 0 !important;
+  }
+
+  .phantom .mobile-bottom-nav {
+    display: grid !important;
+    grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+  }
+
+  .phantom .dashboard-intel-band {
+    order: 4 !important;
+    width: auto !important;
+    margin: 0 12px 18px !important;
+  }
+
+  .phantom .dashboard-intel-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    min-width: 0 !important;
+  }
+}
+
+@media (max-width: 520px) {
+  .phantom .dashboard-intel-grid {
+    grid-template-columns: 1fr !important;
   }
 }

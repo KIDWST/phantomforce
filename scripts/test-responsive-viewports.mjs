@@ -321,6 +321,7 @@ function auditPage() {
   const storeSearch = document.querySelector(".ps-search");
   const analyticsGraph = document.querySelector("[data-workspace-page='analytics'] .an-top-visual-grid");
   const analyticsTrendCard = document.querySelector("[data-workspace-page='analytics'] .an-trend-card");
+  const dashboardIntel = document.querySelector("[data-dashboard-intel]");
   const isVisible = (el) => {
     if (!el) return false;
     if (el.closest('[aria-hidden="true"]')) return false;
@@ -546,6 +547,11 @@ function auditPage() {
         .sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top)
         .map((el) => el.classList.contains("page-worker") ? "page-worker" : el.classList.contains("an-top-visual-grid") ? "graph" : "kpis")[0] || "",
     },
+    dashboard: {
+      briefTop: dashboardBrief ? Math.round(dashboardBrief.getBoundingClientRect().top) : null,
+      heroTop: dashboardHero ? Math.round(dashboardHero.getBoundingClientRect().top) : null,
+      intelTop: dashboardIntel ? Math.round(dashboardIntel.getBoundingClientRect().top) : null,
+    },
     textProbe: document.body.innerText.slice(0, 300),
   };
 }
@@ -600,6 +606,10 @@ function assertCase(result) {
     assert.equal(audit.nav.desktopVisible, false, `${label} ${viewport.width}: desktop sidebar must be hidden on compact widths.`);
     if (page === "dashboard") {
       assert.deepEqual(audit.dashboardCollisions, [], `${label} ${viewport.width}: dashboard brief, decisions and console must remain separate in the mobile document flow.`);
+      assert.ok(
+        audit.dashboard.intelTop === null || (audit.dashboard.heroTop !== null && audit.dashboard.intelTop > audit.dashboard.heroTop + 20),
+        `${label} ${viewport.width}: dashboard intelligence cards must not sit above the brief like a second mobile nav bar.`
+      );
     }
   }
   if (viewport.width > 900) {
