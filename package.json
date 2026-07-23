@@ -32,6 +32,7 @@
     "test:crm-pipeline": "node scripts/test-crm-pipeline.mjs",
     "test:proposal-pipeline": "node scripts/test-proposal-pipeline.mjs",
     "test:workspace-approvals": "node scripts/test-workspace-approvals.mjs",
+    "test:agent-run-lifecycle": "npm run test:agent-run-lifecycle --workspace @phantomforce/server",
     "test:managed-growth-report": "node scripts/test-managed-growth-report.mjs && npm run test:managed-growth-report --workspace @phantomforce/server",
     "test:database-auth": "powershell -NoProfile -ExecutionPolicy Bypass -File server/scripts/test-auth-database-live.ps1",
     "test:release-critical": "node scripts/test-release-critical.mjs",

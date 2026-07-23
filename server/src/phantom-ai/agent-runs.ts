@@ -17,6 +17,7 @@
    simulates success or calls paid providers. */
 
 import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -26,8 +27,12 @@ import { appendHermesLedgerRecord, readHermesLedgerRecords, redactSensitiveText,
 
 const moduleDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(moduleDir, "../../..");
-const RUNS_LOG_PATH = resolve(repoRoot, ".phantom", "agent-runs.jsonl");
-const ARTIFACTS_DIR = resolve(repoRoot, ".phantom", "artifacts");
+const RUNS_LOG_PATH = process.env.PHANTOM_AGENT_RUNS_LOG_PATH
+  ? resolve(process.env.PHANTOM_AGENT_RUNS_LOG_PATH)
+  : resolve(repoRoot, ".phantom", "agent-runs.jsonl");
+const ARTIFACTS_DIR = process.env.PHANTOM_AGENT_RUN_ARTIFACTS_DIR
+  ? resolve(process.env.PHANTOM_AGENT_RUN_ARTIFACTS_DIR)
+  : resolve(repoRoot, ".phantom", "artifacts");
 
 const DEFAULT_APPROVAL_DEADLINE_MS = Number(process.env.PHANTOM_RUN_APPROVAL_DEADLINE_MS ?? 24 * 60 * 60 * 1000);
 
@@ -66,6 +71,18 @@ export type AgentRunArtifact = {
 };
 
 export type AgentRunReceipt = {
+  receipt_id: string;
+  run_id: string;
+  actor_user_id: string;
+  organization_id: string;
+  workspace: string;
+  module: string;
+  object_type: "agent_run";
+  object_id: string;
+  action: string;
+  payload_hash: string;
+  previous_state: AgentRunState;
+  next_state: AgentRunState;
   operation: string;
   requested_by: string;
   approved_by: string | null;
@@ -77,6 +94,12 @@ export type AgentRunReceipt = {
   actual_effect: string;
   cost_estimate_usd: number | null;
   rollback_guidance: string | null;
+  verification: {
+    ok: true;
+    detail: string;
+    verified_at: string;
+  };
+  human_summary: string;
 };
 
 export type AgentRun = {
@@ -84,12 +107,19 @@ export type AgentRun = {
   operation: string;
   title: string;
   workspace: string;
+  organization_id: string;
+  module: string;
   session_id: string;
   request: string;
   state: AgentRunState;
   risk: AgentRunRiskClass;
   required_role: "org_manager" | "super_admin";
   inputs: Record<string, unknown>;
+  idempotency_key: string;
+  payload_hash: string;
+  approval_payload_hash: string | null;
+  retry_of_run_id: string | null;
+  attempt: number;
   scope: string;
   expected_effect: string;
   cost_estimate_usd: number | null;
@@ -136,6 +166,50 @@ export type AgentRunExecutor = {
 
 const runs = new Map<string, AgentRun>();
 
+export const AGENT_RUN_TRANSITIONS: Readonly<Record<AgentRunState, ReadonlySet<AgentRunState>>> = {
+  draft: new Set(["planned", "cancelled"]),
+  planned: new Set(["awaiting_approval", "queued", "cancelled"]),
+  awaiting_approval: new Set(["approved", "rejected", "expired", "cancelled"]),
+  approved: new Set(["queued", "failed", "cancelled"]),
+  rejected: new Set(),
+  expired: new Set(),
+  queued: new Set(["executing", "failed", "cancelled"]),
+  executing: new Set(["verifying", "failed", "cancelled"]),
+  verifying: new Set(["completed", "succeeded", "partially_succeeded", "failed", "cancelled"]),
+  completed: new Set(),
+  succeeded: new Set(),
+  partially_succeeded: new Set(),
+  failed: new Set(),
+  cancelled: new Set(),
+};
+
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, entry]) => `${JSON.stringify(key)}:${canonicalJson(entry)}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value) ?? "null";
+}
+
+export function hashAgentRunPayload(input: {
+  operation: string;
+  organizationId: string;
+  workspace: string;
+  request: string;
+  inputs: Record<string, unknown>;
+}) {
+  return createHash("sha256").update(canonicalJson({
+    operation: input.operation,
+    organization_id: input.organizationId,
+    workspace: input.workspace,
+    request: input.request,
+    inputs: input.inputs,
+  })).digest("hex");
+}
+
 function nowIso() {
   return new Date().toISOString();
 }
@@ -150,6 +224,9 @@ async function persistRun(run: AgentRun) {
 }
 
 async function transition(run: AgentRun, state: AgentRunState, note: string) {
+  if (run.state !== state && !AGENT_RUN_TRANSITIONS[run.state].has(state)) {
+    throw new Error(`invalid_agent_run_transition:${run.state}->${state}`);
+  }
   run.state = state;
   run.updated_at = nowIso();
   run.events.push({ at: run.updated_at, state, note });
@@ -202,6 +279,19 @@ async function rehydrateAgentRunsOnce() {
       run.risk = run.risk ?? "low_internal";
       run.required_role = run.required_role ?? "super_admin";
       run.inputs = run.inputs ?? {};
+      run.organization_id = run.organization_id ?? run.workspace;
+      run.module = run.module ?? "phantom_ai";
+      run.idempotency_key = run.idempotency_key ?? `legacy:${run.id}`;
+      run.payload_hash = run.payload_hash ?? hashAgentRunPayload({
+        operation: run.operation,
+        organizationId: run.organization_id,
+        workspace: run.workspace,
+        request: run.request ?? "",
+        inputs: run.inputs,
+      });
+      run.approval_payload_hash = run.approval_payload_hash ?? (run.risk === "low_internal" ? null : run.payload_hash);
+      run.retry_of_run_id = run.retry_of_run_id ?? null;
+      run.attempt = run.attempt ?? 1;
       run.scope = run.scope ?? "server";
       run.expected_effect = run.expected_effect ?? "";
       run.cost_estimate_usd = run.cost_estimate_usd ?? null;
@@ -370,19 +460,34 @@ export function getAgentRun(id: string) {
   return run ? applyExpiry(run) : null;
 }
 
+export function serializeAgentRun(run: AgentRun) {
+  return {
+    ...run,
+    artifacts: run.artifacts.map((artifact, index) => ({
+      id: `artifact-${index + 1}`,
+      kind: artifact.kind,
+      summary: artifact.summary,
+    })),
+  };
+}
+
 export function getAgentRunExecutor(operation: string) {
   return EXECUTORS[operation];
 }
 
-export function requestAgentRunCancel(id: string) {
+export async function requestAgentRunCancel(id: string) {
   const run = runs.get(id);
   if (!run) return null;
   if (TERMINAL_AGENT_RUN_STATES.has(run.state)) return run;
   if (run.state === "awaiting_approval") {
-    void transition(run, "cancelled", "Cancelled while awaiting approval; nothing executed.");
+    await transition(run, "cancelled", "Cancelled while awaiting approval; nothing executed.");
     return run;
   }
+  if (run.cancel_requested) return run;
   run.cancel_requested = true;
+  run.updated_at = nowIso();
+  run.events.push({ at: run.updated_at, note: "Cancellation requested; the executor will stop at its next cancellation point." });
+  await persistRun(run);
   return run;
 }
 
@@ -417,20 +522,45 @@ async function executeRun(run: AgentRun, executor: AgentRunExecutor, proof: {
       await transition(run, "failed", `Verification failed: ${verdict.detail}`);
       return;
     }
+    if (run.cancel_requested) {
+      await transition(run, "cancelled", "Cancelled after verification and before completion was recorded.");
+      return;
+    }
 
     /* execution receipt — who asked, who approved, what actually happened */
+    const successState: AgentRunState =
+      run.risk === "low_internal" ? "completed" : result.partial ? "partially_succeeded" : "succeeded";
+    const executedAt = nowIso();
     run.receipt = {
+      receipt_id: `receipt-${run.id}`,
+      run_id: run.id,
+      actor_user_id: run.requested_by,
+      organization_id: run.organization_id,
+      workspace: run.workspace,
+      module: run.module,
+      object_type: "agent_run",
+      object_id: run.id,
+      action: run.operation,
+      payload_hash: run.payload_hash,
+      previous_state: "verifying",
+      next_state: successState,
       operation: run.operation,
       requested_by: run.requested_by,
       approved_by: run.approved_by,
       approved_at: run.approved_at,
-      executed_at: nowIso(),
+      executed_at: executedAt,
       inputs: run.inputs,
       scope: run.scope,
       expected_effect: run.expected_effect,
       actual_effect: result.actualEffect ?? result.summary,
       cost_estimate_usd: run.cost_estimate_usd,
       rollback_guidance: executor.rollbackGuidance ?? null,
+      verification: {
+        ok: true,
+        detail: verdict.detail,
+        verified_at: executedAt,
+      },
+      human_summary: redactSensitiveText(result.summary).slice(0, 240),
     };
 
     /* proof: a real Hermes ledger record referencing this run */
@@ -459,8 +589,6 @@ async function executeRun(run: AgentRun, executor: AgentRunExecutor, proof: {
     await appendHermesLedgerRecord(ledgerRecord as any);
     run.proof_request_id = run.id;
 
-    const successState: AgentRunState =
-      run.risk === "low_internal" ? "completed" : result.partial ? "partially_succeeded" : "succeeded";
     await transition(run, successState, `${verdict.detail} Proof recorded in the Hermes ledger (request ${run.id}).`);
   } catch (error) {
     const message = String((error as Error)?.message || error);
@@ -482,6 +610,11 @@ export async function startAgentRun(input: {
   businessName: string;
   requestedBy?: string;
   inputs?: Record<string, unknown>;
+  idempotencyKey?: string;
+  organizationId?: string;
+  module?: string;
+  retryOfRunId?: string | null;
+  attempt?: number;
 }): Promise<AgentRun | { error: string; available: ReturnType<typeof listAgentRunOperations> }> {
   const executor = EXECUTORS[input.operation];
   if (!executor) {
@@ -489,17 +622,41 @@ export async function startAgentRun(input: {
   }
 
   const requiresApproval = executor.risk !== "low_internal";
+  const inputs = input.inputs ?? {};
+  const organizationId = input.organizationId ?? input.workspace;
+  const request = String(input.request || "").slice(0, 300);
+  const idempotencyKey = String(input.idempotencyKey || `run:${runId()}`).slice(0, 180);
+  const duplicate = [...runs.values()].find((candidate) =>
+    candidate.organization_id === organizationId
+    && candidate.operation === input.operation
+    && candidate.idempotency_key === idempotencyKey
+  );
+  if (duplicate) return applyExpiry(duplicate);
+  const payloadHash = hashAgentRunPayload({
+    operation: input.operation,
+    organizationId,
+    workspace: input.workspace,
+    request,
+    inputs,
+  });
   const run: AgentRun = {
     id: runId(),
     operation: input.operation,
     title: executor.title,
     workspace: input.workspace,
+    organization_id: organizationId,
+    module: String(input.module || "phantom_ai").slice(0, 80),
     session_id: input.sessionId,
-    request: String(input.request || "").slice(0, 300),
+    request,
     state: requiresApproval ? "awaiting_approval" : "queued",
     risk: executor.risk,
     required_role: executor.requiredRole,
-    inputs: input.inputs ?? {},
+    inputs,
+    idempotency_key: idempotencyKey,
+    payload_hash: payloadHash,
+    approval_payload_hash: requiresApproval ? payloadHash : null,
+    retry_of_run_id: input.retryOfRunId ?? null,
+    attempt: Math.max(1, input.attempt ?? 1),
     scope: executor.scope,
     expected_effect: executor.expectedEffect,
     cost_estimate_usd: executor.costEstimateUsd ?? null,
@@ -548,6 +705,16 @@ export async function approveAgentRun(id: string, approver: { id: string; email?
   if (run.state !== "awaiting_approval") return { ok: false as const, error: `not_awaiting_approval:${run.state}` };
   const executor = EXECUTORS[run.operation];
   if (!executor) return { ok: false as const, error: "executor_missing" };
+  const currentPayloadHash = hashAgentRunPayload({
+    operation: run.operation,
+    organizationId: run.organization_id,
+    workspace: run.workspace,
+    request: run.request,
+    inputs: run.inputs,
+  });
+  if (!run.approval_payload_hash || currentPayloadHash !== run.approval_payload_hash) {
+    return { ok: false as const, error: "approval_payload_changed" };
+  }
 
   run.approved_by = approver.email ?? approver.id;
   run.approved_at = nowIso();
@@ -566,4 +733,35 @@ export async function rejectAgentRun(id: string, approver: { id: string; email?:
   run.rejection_reason = reason?.slice(0, 300) ?? null;
   await transition(run, "rejected", `Rejected by ${run.rejected_by}${reason ? `: ${reason.slice(0, 200)}` : "."}`);
   return { ok: true as const, run };
+}
+
+export async function retryAgentRun(id: string, input: {
+  sessionId: string;
+  tenantId: string;
+  businessName: string;
+  requestedBy?: string;
+}) {
+  const prior = getAgentRun(id);
+  if (!prior) return { ok: false as const, error: "run_not_found" };
+  if (!new Set<AgentRunState>(["failed", "cancelled", "expired", "rejected"]).has(prior.state)) {
+    return { ok: false as const, error: `run_not_retryable:${prior.state}` };
+  }
+  const nextAttempt = prior.attempt + 1;
+  const retried = await startAgentRun({
+    operation: prior.operation,
+    workspace: prior.workspace,
+    organizationId: prior.organization_id,
+    module: prior.module,
+    sessionId: input.sessionId,
+    request: prior.request,
+    tenantId: input.tenantId,
+    businessName: input.businessName,
+    requestedBy: input.requestedBy,
+    inputs: structuredClone(prior.inputs),
+    idempotencyKey: `retry:${prior.id}:${nextAttempt}`,
+    retryOfRunId: prior.id,
+    attempt: nextAttempt,
+  });
+  if (!("id" in retried)) return { ok: false as const, error: retried.error };
+  return { ok: true as const, run: retried };
 }

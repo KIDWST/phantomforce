@@ -408,6 +408,8 @@ import {
   rehydrateAgentRuns,
   rejectAgentRun,
   requestAgentRunCancel,
+  retryAgentRun,
+  serializeAgentRun,
   startAgentRun,
   type AgentRun,
 } from "./phantom-ai/agent-runs.js";
@@ -7424,6 +7426,7 @@ const AgentRunStartSchema = z.object({
   operation: z.string().min(1).max(60),
   request: z.string().max(400).optional(),
   workspace: z.string().max(60).optional(),
+  idempotency_key: z.string().min(8).max(180).optional(),
 });
 
 app.get("/phantom-ai/runs/operations", async (request, reply) => {
@@ -7435,7 +7438,7 @@ app.get("/phantom-ai/runs/operations", async (request, reply) => {
 app.get("/phantom-ai/runs", async (request, reply) => {
   const session = requireAdminAccessSession(request, reply);
   if (!session) return reply;
-  return { ok: true, runs: listAgentRuns({ limit: 20 }) };
+  return { ok: true, runs: listAgentRuns({ limit: 20 }).map(serializeAgentRun) };
 });
 
 app.get("/phantom-ai/runs/:id", async (request, reply) => {
@@ -7450,7 +7453,7 @@ app.get("/phantom-ai/runs/:id", async (request, reply) => {
   if (!session.canManageAccess && !isMember) {
     return reply.code(403).send({ ok: false, error: "This session cannot view runs for that workspace." });
   }
-  return { ok: true, run };
+  return { ok: true, run: serializeAgentRun(run) };
 });
 
 app.post("/phantom-ai/runs", async (request, reply) => {
@@ -7494,21 +7497,29 @@ app.post("/phantom-ai/runs", async (request, reply) => {
     request: parsed.data.request || "",
     tenantId: `${parsed.data.workspace || "phantomforce"}-owner`,
     businessName: parsed.data.workspace || "PhantomForce",
+    idempotencyKey: parsed.data.idempotency_key
+      || String(request.headers["idempotency-key"] || "").slice(0, 180)
+      || undefined,
   });
   /* AgentRun itself carries an `error: string|null` field, so discriminate on
      the run id — only the unknown-operation branch lacks one */
   if (!("id" in result)) {
     return reply.code(400).send({ ok: false, ...result });
   }
-  return { ok: true, run: result };
+  return { ok: true, run: serializeAgentRun(result) };
 });
 
 app.post("/phantom-ai/runs/:id/cancel", async (request, reply) => {
-  const session = requireAdminAccessSession(request, reply);
+  const session = requireAccessSession(request, reply);
   if (!session) return reply;
-  const run = requestAgentRunCancel((request.params as { id: string }).id);
+  const existing = getAgentRun((request.params as { id: string }).id);
+  if (!existing) return reply.code(404).send({ ok: false, error: "run_not_found" });
+  if (!canDecideRun(session, existing)) {
+    return reply.code(403).send({ ok: false, error: "This session cannot cancel runs for that workspace." });
+  }
+  const run = await requestAgentRunCancel(existing.id);
   if (!run) return reply.code(404).send({ ok: false, error: "run_not_found" });
-  return { ok: true, run };
+  return { ok: true, run: serializeAgentRun(run) };
 });
 
 /* ---- approval-gated external execution (same run engine, no second one) ----
@@ -7567,7 +7578,7 @@ app.post("/phantom-ai/runs/:id/approve", async (request, reply) => {
     { tenantId: `${run.workspace}-owner`, businessName: run.workspace },
   );
   if (!result.ok) return reply.code(409).send({ ok: false, error: result.error });
-  return { ok: true, run: result.run };
+  return { ok: true, run: serializeAgentRun(result.run) };
 });
 
 const RunRejectSchema = z.object({ reason: z.string().max(300).optional() });
@@ -7583,7 +7594,25 @@ app.post("/phantom-ai/runs/:id/reject", async (request, reply) => {
   const parsed = RunRejectSchema.safeParse(request.body ?? {});
   const result = await rejectAgentRun(run.id, { id: session.id, email: session.email ?? session.label }, parsed.success ? parsed.data.reason : undefined);
   if (!result.ok) return reply.code(409).send({ ok: false, error: result.error });
-  return { ok: true, run: result.run };
+  return { ok: true, run: serializeAgentRun(result.run) };
+});
+
+app.post("/phantom-ai/runs/:id/retry", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const run = getAgentRun((request.params as { id: string }).id);
+  if (!run) return reply.code(404).send({ ok: false, error: "run_not_found" });
+  if (!canDecideRun(session, run)) {
+    return reply.code(403).send({ ok: false, error: "This session cannot retry runs for that workspace." });
+  }
+  const result = await retryAgentRun(run.id, {
+    sessionId: session.id,
+    tenantId: `${run.organization_id}-owner`,
+    businessName: run.workspace,
+    requestedBy: session.email ?? session.label,
+  });
+  if (!result.ok) return reply.code(409).send({ ok: false, error: result.error });
+  return { ok: true, run: serializeAgentRun(result.run) };
 });
 
 /* Org-scoped run list — the approval queue for org owners/admins. Members
@@ -7593,7 +7622,7 @@ app.get("/orgs/:orgId/runs", async (request, reply) => {
   const dbSession = requireOrgMember(request, reply, orgId);
   if (!dbSession) return reply;
   const state = (request.query as { state?: string }).state as NonNullable<Parameters<typeof listAgentRuns>[0]>["state"];
-  return { ok: true, runs: listAgentRuns({ workspace: orgId, state, limit: 30 }) };
+  return { ok: true, runs: listAgentRuns({ workspace: orgId, state, limit: 30 }).map(serializeAgentRun) };
 });
 
 /* ---- website publishing pipeline (builds → approval → deploy → verify) ---- */
@@ -7694,9 +7723,12 @@ app.post("/orgs/:orgId/sites/:siteId/publish-request", async (request, reply) =>
     businessName: orgId,
     requestedBy: dbSession.email,
     inputs: { siteId, buildId: parsed.data.buildId },
+    organizationId: orgId,
+    module: "website_builder",
+    idempotencyKey: `publish:${orgId}:${siteId}:${parsed.data.buildId}`,
   });
   if (!("id" in result)) return reply.code(400).send({ ok: false, ...result });
-  return { ok: true, run: result, note: "Awaiting approval — nothing is live until an org owner/admin approves this run." };
+  return { ok: true, run: serializeAgentRun(result), note: "Awaiting approval — nothing is live until an org owner/admin approves this run." };
 });
 
 app.post("/orgs/:orgId/sites/:siteId/rollback", async (request, reply) => {

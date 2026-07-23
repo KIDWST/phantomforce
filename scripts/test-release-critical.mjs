@@ -22,6 +22,7 @@ const checks = [
   "test:crm-pipeline",
   "test:proposal-pipeline",
   "test:workspace-approvals",
+  "test:agent-run-lifecycle",
   "test:managed-growth-report",
   "test:phantomplay",
 ];
