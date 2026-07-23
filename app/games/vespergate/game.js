@@ -31,7 +31,7 @@
   VG.portals = portals;
 
   const player = {
-    x: 0, y: 0, vx: 0, vy: 0, r: 6, w: 10,
+    x: 0, y: 0, vx: 0, vy: 0, kx: 0, ky: 0, r: 6, w: 10,
     fx: 0, fy: 1,                     // facing
     hp: 4, maxHp: 4, ash: 100, maxAsh: 100, embers: 0,
     iframe: 0, strikeCd: 0, strikeT: 0, boltCd: 0,
@@ -39,6 +39,7 @@
     relics: {}, equipped: [],          // owned map, equipped ids (max 2)
     materials: { wolfshard: 0, glassshard: 0 },
     aimx: 0, aimy: 1, dead: false, _key: "player",
+    _trail: [], _stepT: 0,             // roll afterimage samples; footstep-dust timer
   };
   VG.player = player;
   const relicOn = (id) => player.equipped.includes(id);
@@ -157,6 +158,7 @@
     VG.sfxCinder("needle"); VG.camera.jolt(0.05);
     const reach = 20, arc = 1.15;
     const fa = Math.atan2(player.fy, player.fx);
+    spawnParticles(player.x + player.fx * 12, player.y + player.fy * 12, "#ffd166", 5, 55);
     for (const e of enemies) {
       if (e.dead) continue;
       const d = VG.dist(player.x, player.y, e.x, e.y);
@@ -165,7 +167,10 @@
       if (da > arc) continue;
       const fromBehind = e.facing ? (Math.cos(e.facing) * (e.x - player.x) + Math.sin(e.facing) * (e.y - player.y)) > 0 : true;
       damageEnemy(e, 10, fromBehind);
-      e.x += player.fx * 6; e.y += player.fy * 6;
+      // Knockback impulse, not an instant position nudge: applied/decayed in
+      // stepEnemy so it survives that enemy's own AI movement this frame
+      // instead of being immediately overwritten by it.
+      e.kx = (e.kx || 0) + player.fx * 210; e.ky = (e.ky || 0) + player.fy * 210;
     }
     if (boss && !boss.dead && VG.dist(player.x, player.y, boss.x, boss.y) < reach + boss.r) damageBoss(8);
     // deflect bolts
@@ -198,7 +203,7 @@
   function damageEnemy(e, dmg, fromBehind) {
     if (e.dead) return;
     if (e.type === "guard" && e.shield && !fromBehind) { spawnParticles(e.x, e.y, "#8aa", 3, 30); VG.sfx(320, 0.04, "square", 0.03); return; }
-    e.hp -= dmg; e.hurt = 0.12; spawnParticles(e.x, e.y, "#ffd166", 4);
+    e.hp -= dmg; e.hurt = 0.12; spawnParticles(e.x, e.y, "#ffd166", 6, 70);
     VG.sfx(500, 0.03, "triangle", 0.03);
     if (e.hp <= 0) killEnemy(e);
   }
@@ -234,6 +239,7 @@
         completeQuest("q_glass");
         player.relics.mirrorlitany = true;
         banner("RELIC — Mirror Litany");
+        toast("Owning it isn't enough — open TAB and equip it (max 2)", player.x, player.y - 28, "#c9d6e8");
         VG.sfxBell(240, 0.16);
       }
     }
@@ -256,6 +262,7 @@
       player.relics.bellsigil = true;
       banner("RELIC — Bell Sigil");
       toast("THE BRONZE REMEMBERS ITS SONG", boss.x, boss.y - 24, "#8fe9ff");
+      toast("Owning it isn't enough — open TAB and equip it (max 2)", player.x, player.y - 28, "#c9d6e8");
       VG.sfxBell(220, 0.2);
       VG.fx.hitStop(0.14); VG.camera.jolt(0.5);
       VG.fx.spawnShockwave(boss.x, boss.y, { maxR: 420, speed: 210, color: "143,233,255" });
@@ -269,7 +276,13 @@
     player.hp -= Math.max(1, Math.round(dmg * VG.settings.damageTaken));
     player.iframe = 0.9;
     state.damageFlash = 1;
-    player.vx += kx * 140; player.vy += ky * 140;
+    // Knockback lives in kx/ky, not vx/vy directly: the movement block below
+    // reassigns vx/vy from input every frame ("vx = mx * speed"), which used
+    // to erase any impulse added here before it ever moved the player — kx/ky
+    // is a separate decaying push the movement block adds on top of input,
+    // so getting hit actually creates distance instead of leaving the player
+    // glued to whatever hit them.
+    player.kx += kx * 170; player.ky += ky * 170;
     VG.camera.jolt(0.3); spawnParticles(player.x, player.y, "#ff5c74", 8);
     VG.sfx(140, 0.14, "sawtooth", 0.06);
     if (player.hp <= 0) { player.dead = true; state.phase = "dead"; showOverlay("dead"); }
@@ -304,7 +317,7 @@
   /* ================= enemies ================= */
   function makeEnemy(def) {
     const base = {
-      x: def.x * T + 8, y: def.y * T + 8, vx: 0, vy: 0, hp: 14, maxHp: 14, r: 7,
+      x: def.x * T + 8, y: def.y * T + 8, vx: 0, vy: 0, kx: 0, ky: 0, hp: 14, maxHp: 14, r: 7,
       type: def.type, tag: def.tag, elite: !!def.elite, cd: 1 + Math.random(), hurt: 0, dead: false,
       homeX: def.x * T + 8, homeY: def.y * T + 8, wanderT: 0, wx: 0, wy: 0, facing: 0, _key: "e" + Math.random(),
     };
@@ -320,6 +333,16 @@
   function stepEnemy(e, dt) {
     if (e.dead) return;
     e.hurt = Math.max(0, e.hurt - dt);
+    // Strike knockback: a decaying position push applied here, ahead of the
+    // AI branches below, so a hit visibly shoves the enemy before its own
+    // chase logic resumes — instead of the impulse being invisible because
+    // the AI's own movement this same frame overwrote it.
+    if (e.kx || e.ky) {
+      e.x += e.kx * dt; e.y += e.ky * dt;
+      e.kx *= 0.85; e.ky *= 0.85;
+      if (Math.abs(e.kx) < 1) e.kx = 0;
+      if (Math.abs(e.ky) < 1) e.ky = 0;
+    }
     const dx = player.x - e.x, dy = player.y - e.y, d = Math.hypot(dx, dy) || 1;
     e.facing = Math.atan2(dy, dx);
     if (e.type === "wolf") {
@@ -564,7 +587,7 @@
     state.shopBought[item.id] = bought + 1;
     if (item.id === "heart") { player.maxHp++; player.hp = player.maxHp; }
     if (item.id === "ashvessel") { player.maxAsh += 25; player.ash = player.maxAsh; }
-    if (item.relic) { player.relics[item.relic] = true; banner("RELIC — " + D.RELICS[item.relic].name); }
+    if (item.relic) { player.relics[item.relic] = true; banner("RELIC — " + D.RELICS[item.relic].name); toast("Owning it isn't enough — open TAB and equip it (max 2)", player.x, player.y - 28, "#c9d6e8"); }
     VG.sfx(660, 0.1, "triangle", 0.05);
     saveGame();
   }
@@ -698,8 +721,9 @@
       player.rollT -= dt;
       player.vx = player.rollDir.x * 195; player.vy = player.rollDir.y * 195;
     } else {
-      player.vx = mx * speed; player.vy = my * speed;
+      player.vx = mx * speed + player.kx; player.vy = my * speed + player.ky;
     }
+    player.kx *= 0.85; player.ky *= 0.85;
     // teleport BEFORE collision so inward velocity survives (the order bug fix)
     const tp = portals.tryTeleport(player, "player", { strain: 0.05 });
     if (tp === "critical") doCollapse();
@@ -708,6 +732,26 @@
     if (state.room.spikeAtPx(player.x, player.y) && player.iframe <= 0) hurtPlayer(1, 0, 0);
     if (state.room.tallGrassAtPx(player.x, player.y) && (mx || my) && Math.random() < dt * 6) {
       particles.push({ x: player.x + (Math.random() - 0.5) * 8, y: player.y + 4, vx: (Math.random() - 0.5) * 30, vy: -20, life: 0.4, max: 0.4, color: "#6aa050" });
+    }
+    // roll afterimage: a handful of fading ghost silhouettes trailing the dash,
+    // sampled at a fixed cadence (not every frame) so they read as discrete
+    // frames rather than a smear.
+    if (player.rollT > 0) {
+      player._stepT -= dt;
+      if (player._stepT <= 0) {
+        player._stepT = 0.03;
+        player._trail.push({ x: player.x, y: player.y, fx: player.fx, fy: player.fy, life: 0.22, max: 0.22 });
+        if (player._trail.length > 6) player._trail.shift();
+      }
+    } else if (mx || my) {
+      // footstep dust: only on floor-ish ground, gated like the tall-grass rustle above
+      player._stepT -= dt;
+      if (player._stepT <= 0 && Math.random() < 0.6) {
+        player._stepT = 0.16;
+        particles.push({ x: player.x - player.fx * 3 + (Math.random() - 0.5) * 3, y: player.y + 4, vx: (Math.random() - 0.5) * 10, vy: -6, life: 0.3, max: 0.3, color: "rgba(180,170,200,0.4)" });
+      }
+    } else {
+      player._stepT = 0;
     }
 
     /* actions */
@@ -829,6 +873,8 @@
     /* particles / text */
     for (const pt of particles) { pt.life -= dt; pt.x += pt.vx * dt; pt.y += pt.vy * dt; }
     particles = particles.filter((p) => p.life > 0);
+    for (const tr of player._trail) tr.life -= dt;
+    player._trail = player._trail.filter((tr) => tr.life > 0);
     for (const f of floatText) { f.life -= dt; f.y -= 14 * dt; }
     floatText = floatText.filter((f) => f.life > 0);
     if (state.banner) { state.banner.t -= dt; if (state.banner.t <= 0) state.banner = null; }
@@ -901,6 +947,16 @@
   function shadow(x, y, w2) {
     ctx.fillStyle = "rgba(0,0,0,0.28)";
     ctx.beginPath(); ctx.ellipse(x, y + 5, w2, w2 * 0.4, 0, 0, Math.PI * 2); ctx.fill();
+  }
+  /* rim-light: everything in this game is flat canvas primitives, no sprites —
+     a soft colored shadowBlur around a silhouette is what stands in for
+     cel-shaded rim lighting. Cheap, and reads at this pixel scale where
+     actual normal-mapped lighting wouldn't. */
+  function glow(color, blur, fn) {
+    ctx.save();
+    ctx.shadowColor = color; ctx.shadowBlur = blur;
+    fn();
+    ctx.restore();
   }
   /* the ossuary's mirror-bone banks shots — and, up close, throws back a
      silhouette that doesn't quite keep time with you. Presence system:
@@ -1053,7 +1109,19 @@
     }
   }
 
+  // permanent, subtle cool-dark vignette + grade — the constant "dark
+  // fairytale" frame that sits under every other screen effect. Cheap
+  // (two radial fills), always on unless the player turned effects down.
+  function drawAtmosphereGrade() {
+    if (!state.room || VG.settings.reducedEffects) return;
+    const vig = ctx.createRadialGradient(VG.W / 2, VG.H / 2, VG.H * 0.35, VG.W / 2, VG.H / 2, VG.H * 0.85);
+    vig.addColorStop(0, "rgba(4,3,10,0)"); vig.addColorStop(1, "rgba(3,2,9,0.4)");
+    ctx.fillStyle = vig; ctx.fillRect(0, 0, VG.W, VG.H);
+    ctx.fillStyle = "rgba(70,60,140,0.035)";
+    ctx.fillRect(0, 0, VG.W, VG.H);
+  }
   function drawScreenFx() {
+    drawAtmosphereGrade();
     if (player.hp <= Math.max(1, Math.floor(player.maxHp * 0.25)) && state.phase === "playing") {
       const low = 0.15 + Math.sin(state.t * 5) * 0.05;
       const vignette = ctx.createRadialGradient(VG.W / 2, VG.H / 2, 80, VG.W / 2, VG.H / 2, 340);
@@ -1069,22 +1137,63 @@
       ctx.fillRect(0, 0, VG.W, VG.H);
     }
   }
+  function drawTrailGhost(tr) {
+    ctx.save();
+    ctx.globalAlpha = (tr.life / tr.max) * 0.35;
+    ctx.translate(tr.x, tr.y);
+    ctx.fillStyle = "#c9c2ff";
+    ctx.beginPath(); ctx.ellipse(0, -1, 4, 5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
   function drawPlayer() {
     const p = player;
     if (p.iframe > 0 && Math.floor(state.t * 30) % 2) return;
+    for (const tr of p._trail) drawTrailGhost(tr);
     shadow(p.x, p.y, 6);
     const fa = Math.atan2(p.fy, p.fx);
-    ctx.save(); ctx.translate(p.x, p.y);
+    // strikeT counts down from 0.14 -> 0; strikeK is the inverse (1 at swing
+    // start), driving a brief forward lunge + squash-stretch punch-through.
+    const strikeK = p.strikeT > 0 ? p.strikeT / 0.14 : 0;
+    const lunge = strikeK * 2.2;
+    const rimColor = state.flags.hasHand && p.ash > 10
+      ? (portals.selected === 0 ? "rgba(143,233,255,0.85)" : "rgba(255,154,208,0.85)")
+      : "rgba(201,190,255,0.55)";
+    const rimBlur = 5 + strikeK * 6 + (p.rollT > 0 ? 4 : 0);
+    ctx.save(); ctx.translate(p.x + p.fx * lunge, p.y + p.fy * lunge);
     const rollSquash = p.rollT > 0 ? 0.7 : 1;
-    // cloak (mourning violet, swings against facing)
-    ctx.fillStyle = "#241a38";
-    ctx.beginPath(); ctx.ellipse(-p.fx * 2, -p.fy * 2 + 1, 6, 7 * rollSquash, fa, 0, Math.PI * 2); ctx.fill();
-    // body
-    ctx.fillStyle = "#3a2c50";
-    ctx.beginPath(); ctx.ellipse(0, -1, 4.5, 5.5 * rollSquash, 0, 0, Math.PI * 2); ctx.fill();
-    // head + hood
-    ctx.fillStyle = "#1a1226"; ctx.beginPath(); ctx.arc(p.fx * 1.5, -5 + p.fy * 1.2, 4, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = "#d8c8d8"; ctx.beginPath(); ctx.arc(p.fx * 2.4, -5 + p.fy * 1.8, 2.2, 0, Math.PI * 2); ctx.fill();
+    const punchStretch = 1 + strikeK * 0.18;
+
+    // trailing shroud tendrils, echoing the boss's shroud language at hero scale
+    ctx.strokeStyle = "rgba(36,26,56,0.55)"; ctx.lineWidth = 1.4;
+    for (let i = -1; i <= 1; i++) {
+      const sway = Math.sin(state.t * 5 + i * 1.7) * 1.6 - p.fx * 3;
+      ctx.beginPath();
+      ctx.moveTo(-p.fx * 2 + i * 2, 1);
+      ctx.quadraticCurveTo(-p.fx * 4 + sway + i * 2, 5, -p.fx * 6 + sway * 1.4 + i * 2, 9);
+      ctx.stroke();
+    }
+
+    // cloak + body, rim-lit against the dark
+    glow(rimColor, rimBlur, () => {
+      ctx.fillStyle = "#241a38";
+      ctx.beginPath(); ctx.ellipse(-p.fx * 2, -p.fy * 2 + 1, 6 * punchStretch, 7 * rollSquash, fa, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#3a2c50";
+      ctx.beginPath(); ctx.ellipse(0, -1, 4.5 * punchStretch, 5.5 * rollSquash, 0, 0, Math.PI * 2); ctx.fill();
+    });
+
+    // head + hood — chibi-scaled up against the body for readability
+    glow(rimColor, rimBlur * 0.6, () => {
+      ctx.fillStyle = "#1a1226"; ctx.beginPath(); ctx.arc(p.fx * 1.7, -5.5 + p.fy * 1.3, 5, 0, Math.PI * 2); ctx.fill();
+    });
+    ctx.fillStyle = "#d8c8d8"; ctx.beginPath(); ctx.arc(p.fx * 2.7, -5.5 + p.fy * 2, 2.6, 0, Math.PI * 2); ctx.fill();
+
+    // a bare blade sliver on the leading hand, always visible — the Hand's
+    // gauntlet (below) replaces it once acquired rather than adding to it
+    ctx.save(); ctx.rotate(fa);
+    ctx.fillStyle = "#c9d6e8";
+    ctx.beginPath(); ctx.moveTo(5, -0.6); ctx.lineTo(9 + strikeK * 3, 0); ctx.lineTo(5, 0.6); ctx.closePath(); ctx.fill();
+    ctx.restore();
+
     // THE VESPER HAND — gauntlet on the leading arm, glowing by ash
     if (state.flags.hasHand) {
       ctx.save(); ctx.rotate(fa);
@@ -1093,13 +1202,15 @@
       ctx.fillRect(8, -1.5, 2.5, 3);
       ctx.restore();
     }
-    // strike arc flash
+    // strike flourish: thicker glowing blade-sweep arcs with a bright core + soft outer bloom
     if (p.strikeT > 0) {
-      ctx.strokeStyle = `rgba(255,240,200,${p.strikeT / 0.14})`;
-      ctx.lineWidth = 3;
-      ctx.beginPath(); ctx.arc(0, 0, 15, fa - 0.9, fa + 0.9); ctx.stroke();
-      ctx.strokeStyle = `rgba(143,233,255,${p.strikeT / 0.2 * 0.5})`;
-      ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(0, 0, 18, fa - 0.7, fa + 0.7); ctx.stroke();
+      glow(rimColor, 10, () => {
+        ctx.strokeStyle = `rgba(255,240,200,${strikeK})`;
+        ctx.lineWidth = 3.5;
+        ctx.beginPath(); ctx.arc(0, 0, 15, fa - 0.9, fa + 0.9); ctx.stroke();
+      });
+      ctx.strokeStyle = `rgba(143,233,255,${strikeK * 0.5})`;
+      ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(0, 0, 19, fa - 0.7, fa + 0.7); ctx.stroke();
     }
     ctx.restore();
   }
@@ -1116,10 +1227,15 @@
     }
     ctx.save(); ctx.translate(n.px + jx, n.py + bob + jy);
     const s = n.small ? 0.75 : 1;
-    ctx.fillStyle = n.body;
-    ctx.beginPath(); ctx.ellipse(0, -1, 4.5 * s, 6 * s, 0, 0, Math.PI * 2); ctx.fill();
+    glow("rgba(255,224,170,0.4)", 4, () => {
+      ctx.fillStyle = n.body;
+      ctx.beginPath(); ctx.ellipse(0, -1, 4.5 * s, 6 * s, 0, 0, Math.PI * 2); ctx.fill();
+    });
     ctx.fillStyle = n.trim; ctx.fillRect(-3 * s, -3 * s, 6 * s, 1.5);
-    ctx.fillStyle = "#e8d8c8"; ctx.beginPath(); ctx.arc(0, -7 * s, 3 * s, 0, Math.PI * 2); ctx.fill();
+    // chibi head: a touch bigger than the old flat circle, warm-lit like a lantern
+    glow("rgba(255,224,170,0.5)", 3, () => {
+      ctx.fillStyle = "#e8d8c8"; ctx.beginPath(); ctx.arc(0, -7.4 * s, 3.4 * s, 0, Math.PI * 2); ctx.fill();
+    });
     let ex = 0, ey = 0;
     if (tier >= 1) {
       const dx = player.x - n.px, dy = player.y - n.py, dlen = Math.hypot(dx, dy) || 1;
@@ -1137,25 +1253,35 @@
     if (e.type === "wolf") {
       const a = e.facing;
       ctx.rotate(a);
-      ctx.fillStyle = "#3c3448"; ctx.beginPath(); ctx.ellipse(0, 0, 8, 4.5, 0, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = "#54486a"; ctx.beginPath(); ctx.arc(6, 0, 3.4, 0, Math.PI * 2); ctx.fill();
+      const bob = Math.sin(state.t * 6 + e.homeX) * 0.5; // idle prowl bob
+      glow("rgba(140,160,255,0.55)", 4, () => {
+        ctx.fillStyle = "#3c3448"; ctx.beginPath(); ctx.ellipse(0, bob, 8, 4.5, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = "#54486a"; ctx.beginPath(); ctx.arc(6, bob, 3.4, 0, Math.PI * 2); ctx.fill();
+      });
       ctx.fillStyle = "#c9d6e8"; // shard spines
-      ctx.beginPath(); ctx.moveTo(-2, -3); ctx.lineTo(0, -7); ctx.lineTo(2, -3); ctx.fill();
-      ctx.beginPath(); ctx.moveTo(-5, -2); ctx.lineTo(-3.6, -5.4); ctx.lineTo(-2, -2); ctx.fill();
-      ctx.fillStyle = "#ff8095"; ctx.fillRect(7, -1.6, 1.4, 1.2); ctx.fillRect(7, 0.6, 1.4, 1.2);
+      ctx.beginPath(); ctx.moveTo(-2, bob - 3); ctx.lineTo(0, bob - 7); ctx.lineTo(2, bob - 3); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(-5, bob - 2); ctx.lineTo(-3.6, bob - 5.4); ctx.lineTo(-2, bob - 2); ctx.fill();
+      ctx.fillStyle = "#ff8095"; ctx.fillRect(7, bob - 1.6, 1.4, 1.2); ctx.fillRect(7, bob + 0.6, 1.4, 1.2);
     } else if (e.type === "guard") {
-      ctx.fillStyle = "#2a2438"; ctx.beginPath(); ctx.ellipse(0, 0, 6, 7, 0, 0, Math.PI * 2); ctx.fill();
+      glow("rgba(255,90,90,0.45)", 4, () => {
+        ctx.fillStyle = "#2a2438"; ctx.beginPath(); ctx.ellipse(0, 0, 6, 7, 0, 0, Math.PI * 2); ctx.fill();
+      });
       ctx.save(); ctx.rotate(e.facing);
       ctx.fillStyle = "#5a6a8a"; ctx.fillRect(5, -6, 3, 12);   // tower shield
       ctx.restore();
       ctx.fillStyle = "#8a3a3a"; ctx.fillRect(-2, -3, 4, 2);
     } else if (e.type === "leech") {
-      ctx.fillStyle = "#4a3a5a"; ctx.beginPath(); ctx.arc(0, Math.sin(state.t * 4 + e.homeX) * 2, 5, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = "#ff9ad0"; ctx.beginPath(); ctx.arc(0, Math.sin(state.t * 4 + e.homeX) * 2, 2, 0, Math.PI * 2); ctx.fill();
+      const bob = Math.sin(state.t * 4 + e.homeX) * 2;
+      glow("rgba(255,154,208,0.65)", 5, () => {
+        ctx.fillStyle = "#4a3a5a"; ctx.beginPath(); ctx.arc(0, bob, 5, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = "#ff9ad0"; ctx.beginPath(); ctx.arc(0, bob, 2, 0, Math.PI * 2); ctx.fill();
+      });
     } else if (e.type === "mourner") {
       const sc = e.elite ? 1.4 : 1;
-      ctx.fillStyle = e.elite ? "#c8d4ea" : "#aeb8d0";
-      ctx.beginPath(); ctx.moveTo(0, -9 * sc); ctx.lineTo(6 * sc, 7 * sc); ctx.lineTo(-6 * sc, 7 * sc); ctx.closePath(); ctx.fill();
+      glow(e.elite ? "rgba(255,120,150,0.5)" : "rgba(220,225,255,0.4)", 4, () => {
+        ctx.fillStyle = e.elite ? "#c8d4ea" : "#aeb8d0";
+        ctx.beginPath(); ctx.moveTo(0, -9 * sc); ctx.lineTo(6 * sc, 7 * sc); ctx.lineTo(-6 * sc, 7 * sc); ctx.closePath(); ctx.fill();
+      });
       ctx.fillStyle = "rgba(255,255,255,0.5)"; ctx.beginPath(); ctx.arc(0, -3 * sc, 2.5 * sc, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = "#3a4a6a"; ctx.fillRect(-2 * sc, -4 * sc, 1.5, 2); ctx.fillRect(sc, -4 * sc, 1.5, 2);
       if (e.enrage) {
@@ -1202,16 +1328,21 @@
       ctx.stroke();
     }
 
-    // bell-shaped body — a hooded matron cast in bronze
-    ctx.fillStyle = bodyA;
-    ctx.beginPath();
-    ctx.moveTo(-20, 14);
-    ctx.quadraticCurveTo(-22, -4, -8, -18);
-    ctx.quadraticCurveTo(0, -24, 8, -18);
-    ctx.quadraticCurveTo(22, -4, 20, 14);
-    ctx.closePath(); ctx.fill();
-    ctx.fillStyle = bodyB;
-    ctx.beginPath(); ctx.ellipse(0, -6, 12, 14, 0, 0, Math.PI * 2); ctx.fill();
+    // bell-shaped body — a hooded matron cast in bronze, rim-lit with a slow
+    // heartbeat pulse (synced to her tolling sweep) that intensifies with heat
+    const heartbeat = 0.6 + Math.sin(b.sweep * 1.4) * 0.4;
+    const rimColor = `rgba(${Math.round(255)},${Math.round(140 - heat * 60)},${Math.round(90 - heat * 40)},${0.35 + heat * 0.25})`;
+    glow(rimColor, 6 + heartbeat * 5 + heat * 6, () => {
+      ctx.fillStyle = bodyA;
+      ctx.beginPath();
+      ctx.moveTo(-20, 14);
+      ctx.quadraticCurveTo(-22, -4, -8, -18);
+      ctx.quadraticCurveTo(0, -24, 8, -18);
+      ctx.quadraticCurveTo(22, -4, 20, 14);
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = bodyB;
+      ctx.beginPath(); ctx.ellipse(0, -6, 12, 14, 0, 0, Math.PI * 2); ctx.fill();
+    });
 
     // torn opening over the swinging clapper — her "heart"
     const swing = Math.sin(b.sweep * 1.4) * 6;
@@ -1292,9 +1423,12 @@
     ctx.closePath();
     ctx.fillStyle = opts.fill || "rgba(5,4,13,0.72)";
     ctx.fill();
-    ctx.strokeStyle = opts.stroke || "rgba(143,233,255,0.16)";
-    ctx.lineWidth = opts.lineWidth || 1;
-    ctx.stroke();
+    const strokeColor = opts.stroke || "rgba(143,233,255,0.16)";
+    glow(strokeColor, 3.5, () => {
+      ctx.strokeStyle = strokeColor;
+      ctx.lineWidth = opts.lineWidth || 1;
+      ctx.stroke();
+    });
   }
   /* hearts render as guttering candles: a lit flame per point of health,
      a snuffed stub per point lost. Presence system: the flame gutters
@@ -1309,9 +1443,11 @@
     ctx.fillStyle = "#2a2018"; ctx.fillRect(x + 3, y + 2, 1, 3);
     if (filled) {
       const h = Math.max(1, 3 + flick);
-      ctx.fillStyle = "rgba(255,170,80,0.35)"; ctx.beginPath(); ctx.ellipse(x + 3.5, y + 1, 3, h + 1.5, 0, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = "#ffcf6b"; ctx.beginPath(); ctx.ellipse(x + 3.5, y + 1.5, 1.4, h, 0, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = "#fff4d8"; ctx.beginPath(); ctx.ellipse(x + 3.5, y + 2, 0.6, h * 0.5, 0, 0, Math.PI * 2); ctx.fill();
+      glow("rgba(255,180,90,0.7)", 4, () => {
+        ctx.fillStyle = "rgba(255,170,80,0.35)"; ctx.beginPath(); ctx.ellipse(x + 3.5, y + 1, 3, h + 1.5, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = "#ffcf6b"; ctx.beginPath(); ctx.ellipse(x + 3.5, y + 1.5, 1.4, h, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = "#fff4d8"; ctx.beginPath(); ctx.ellipse(x + 3.5, y + 2, 0.6, h * 0.5, 0, 0, Math.PI * 2); ctx.fill();
+      });
     } else {
       ctx.fillStyle = "rgba(150,150,160,0.4)"; ctx.beginPath(); ctx.ellipse(x + 3.5, y + 2, 0.8, 1.2, 0, 0, Math.PI * 2); ctx.fill();
     }
@@ -1320,7 +1456,18 @@
     parchmentPanel(5, 5, 96, 31, { seed: 1 });
     for (let i = 0; i < player.maxHp; i++) drawHeart(8 + i * 10, 7, i < player.hp);
     ctx.fillStyle = "rgba(0,0,0,0.4)"; ctx.fillRect(8, 18, 70, 4);
-    ctx.fillStyle = "#ffcf6b"; ctx.fillRect(8, 18, 70 * (player.ash / player.maxAsh), 4);
+    const ashW = 70 * (player.ash / player.maxAsh);
+    ctx.fillStyle = "#ffcf6b"; ctx.fillRect(8, 18, ashW, 4);
+    if (ashW > 1) {
+      // a slow highlight streak sliding across the filled cinder bar
+      ctx.save();
+      ctx.beginPath(); ctx.rect(8, 18, ashW, 4); ctx.clip();
+      const sx = 8 + ((state.t * 26) % (ashW + 14)) - 10;
+      const shimmer = ctx.createLinearGradient(sx, 0, sx + 10, 0);
+      shimmer.addColorStop(0, "rgba(255,255,255,0)"); shimmer.addColorStop(0.5, "rgba(255,255,255,0.55)"); shimmer.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = shimmer; ctx.fillRect(8, 18, ashW, 4);
+      ctx.restore();
+    }
     ctx.fillStyle = "#8a9ac0"; ctx.font = "5px monospace"; ctx.fillText("CINDER", 81, 22);
     // embers
     ctx.fillStyle = "#ffcf6b"; ctx.fillRect(8, 27, 4, 4);
@@ -1366,13 +1513,21 @@
     if (state.combo >= 2 && state.comboT > 0) {
       const multiplier = Math.min(4, 1 + Math.floor((state.combo - 1) / 2));
       const fade = Math.min(1, state.comboT);
+      // punch-in: comboT resets to 3.25 on every fresh kill, so time-since-
+      // last-kill is derived for free without any new state to track.
+      const elapsed = 3.25 - state.comboT;
+      const punch = 1 + Math.max(0, (0.18 - elapsed) / 0.18) * 0.4;
       ctx.globalAlpha = fade;
+      ctx.save();
+      ctx.translate(VG.W / 2, 18); ctx.scale(punch, punch); ctx.translate(-VG.W / 2, -18);
       parchmentPanel(VG.W / 2 - 58, 7, 116, 23, { seed: 4, fill: "rgba(5,4,13,0.68)" });
       ctx.textAlign = "center";
       ctx.fillStyle = state.combo >= 6 ? "#ffcf6b" : "#8fe9ff"; ctx.font = "700 10px Georgia, serif";
       ctx.fillText(`${state.combo} SOUL CHAIN`, VG.W / 2, 17);
       ctx.fillStyle = "#eaf2ff"; ctx.font = "6px monospace"; ctx.fillText(`SCORE ×${multiplier}`, VG.W / 2, 26);
-      ctx.textAlign = "left"; ctx.globalAlpha = 1;
+      ctx.textAlign = "left";
+      ctx.restore();
+      ctx.globalAlpha = 1;
     }
     // boss bar
     if (boss && !boss.dead) {
