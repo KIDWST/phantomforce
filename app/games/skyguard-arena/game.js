@@ -7,6 +7,18 @@
 // Host bridge and helpers
 // ---------------------------------------------------------------------------
 const host = (type, data = {}) => parent.postMessage({ source: "phantomplay-game", type, ...data }, "*");
+
+// Theme music -- PhantomScore (app/games/shared/phantomScore.js), driven by
+// theme.js's GAME_THEME. Real composition, zero audio files, zero CSP change
+// (see app/games/shared/phantomScore.schema.md). Named themeMusic, not score --
+// this file already uses `score` for the player's battle score.
+const themeMusic = (window.PhantomScore && window.GAME_THEME)
+  ? window.PhantomScore.create(window.GAME_THEME) : null;
+addEventListener("message", (e) => {
+  if (e.data?.source !== "phantomplay-host" || e.data.type !== "settings" || !themeMusic) return;
+  if (e.data.sound !== false) themeMusic.unmute(); else themeMusic.mute();
+});
+addEventListener("pointerdown", () => { if (themeMusic) themeMusic.start(); }, { once: true });
 function matchAction(action, mode) {
   host("match-action", { action, mode: mode === "replace" ? "replace" : "merge" });
 }

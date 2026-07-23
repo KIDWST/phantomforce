@@ -283,9 +283,46 @@ window.VG = window.VG || {};
       A.layers.drone = makeLayer(c, [49, 98, 147], "sine", 0.05);          // organ pedal
       A.layers.veil = makeLayer(c, [196, 246.9, 293.7], "triangle", 0.028); // exploration veil
       A.layers.threat = makeLayer(c, [58.3, 116.5, 174.6], "sawtooth", 0.02); // combat/boss
+      A.layers.dread = makeLayer(c, [51.9, 52.3, 155.1], "sawtooth", 0.03); // near-unison beating — the Presence
       A.layers.drone.gain.gain.value = 1;
+      A.layers.dread.gain.gain.value = 0;
     } catch { A.started = false; }
   }
+  // Presence system: continuous fade (not a discrete state), so the drone
+  // creeps in rather than snapping — 0..1 in, mapped to a subtler 0..0.8 out.
+  VG.setDreadLevel = (v) => {
+    if (!A.started || !A.ctx || !A.layers.dread) return;
+    const t = A.ctx.currentTime;
+    try { A.layers.dread.gain.gain.setTargetAtTime(Math.max(0, Math.min(1, v)) * 0.8, t, 2.5); } catch {}
+  };
+  // "held breath" cue on a dread tier-up: a brief hard duck, then recover.
+  VG.duckMusic = (ms = 200) => {
+    if (!A.started || !A.ctx || !A.musicBus) return;
+    const t = A.ctx.currentTime, base = VG.settings.music * 0.5;
+    try {
+      A.musicBus.gain.cancelScheduledValues(t);
+      A.musicBus.gain.setValueAtTime(A.musicBus.gain.value, t);
+      A.musicBus.gain.linearRampToValueAtTime(0.02, t + 0.05);
+      A.musicBus.gain.linearRampToValueAtTime(base, t + 0.05 + ms / 1000);
+    } catch {}
+  };
+  // Rare non-diegetic footstep/breath, gated by the Presence system to high
+  // dread + player standing still. Filtered noise burst, no melodic content.
+  VG.sfxDreadStep = () => {
+    const c = actx(); if (!c) return;
+    try {
+      const t0 = c.currentTime;
+      const src = c.createBufferSource(); src.buffer = noise(c);
+      const f = c.createBiquadFilter(); f.type = "lowpass";
+      f.frequency.setValueAtTime(340, t0); f.frequency.exponentialRampToValueAtTime(120, t0 + 0.5);
+      const g = c.createGain();
+      g.gain.setValueAtTime(0.001, t0);
+      g.gain.linearRampToValueAtTime(0.05, t0 + 0.08);
+      g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.6);
+      src.connect(f).connect(g).connect(A.master);
+      src.start(t0); src.stop(t0 + 0.65);
+    } catch {}
+  };
   VG.setMusicState = (state) => {
     if (!A.started || !A.ctx) return;
     const t = A.ctx.currentTime;

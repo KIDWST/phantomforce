@@ -44,6 +44,8 @@
   const relicOn = (id) => player.equipped.includes(id);
 
   let shots = [], bolts = [], enemies = [], pickups = [], rings = [], particles = [], floatText = [], npcs = [], boss = null;
+  let wrongVisitRoomId = null; // Presence system: this room-visit carries a "moved without you" tell
+  let wasStill = false, stillSince = 0; // Presence system: "don't look back" still->moving transition
 
   /* ================= helpers ================= */
   function spawnParticles(x, y, color, n, spd = 60) {
@@ -73,6 +75,7 @@
   function completeQuest(id) {
     if (state.quests[id] === "done") return;
     state.quests[id] = "done";
+    VG.dread.notifyQuestProgress();
     const q = D.QUESTS[id];
     if (q.reward) { player.embers += q.reward; toast("+" + q.reward + " embers", player.x, player.y - 16, "#ffcf6b"); }
     banner("QUEST COMPLETE — " + q.title);
@@ -422,12 +425,26 @@
     if (when.notQuestDone && state.quests[when.notQuestDone] === "done") return false;
     return true;
   }
+  /* Presence system: at higher dread, a real dialogue line can be swapped
+   * for a flat, context-blind one — the quest/flag actions still fire as
+   * normal underneath, only the displayed text is wrong. Never twice in a
+   * row for the same NPC, so it reads as a glitch, not a broken NPC. */
+  let lastFlatNpc = null;
+  function pickDialoguePages(npc, rule) {
+    const pool = D.FLATLINES[npc.id];
+    if (npc.id === lastFlatNpc) { lastFlatNpc = null; return rule.pages.slice(); }
+    if (VG.dread.tier() >= 2 && pool && pool.length && Math.random() < 0.16) {
+      lastFlatNpc = npc.id;
+      return [pool[Math.floor(Math.random() * pool.length)]];
+    }
+    return rule.pages.slice();
+  }
   function talkTo(npc) {
     const rules = D.DIALOG[npc.id] || [];
     for (const rule of rules) {
       if (!condOk(rule.when)) continue;
       if (rule.scene) { startScene(rule.scene); return; }
-      state.dialog = { npc, pages: rule.pages.slice(), page: 0, actions: rule.do || null };
+      state.dialog = { npc, pages: pickDialoguePages(npc, rule), page: 0, actions: rule.do || null };
       state.phase = "dialog";
       return;
     }
@@ -588,6 +605,8 @@
     const def = VG.ROOMS[id];
     state.room = new VG.Room(def);
     state.roomId = id;
+    VG.dread.onRoomEnter(id, (VG.BIOMES[def.biome] || {}).warm !== false);
+    wrongVisitRoomId = (VG.dread.consumeBacktrack() && Math.random() < 0.45) ? id : null;
     VG.camera.setRoom(state.room.pxW, state.room.pxH);
     shots = []; bolts = []; rings = []; particles = []; floatText = [];
     enemies = (def.enemies || [])
@@ -606,6 +625,10 @@
     player.vx = 0; player.vy = 0; player.dead = false;
     VG.camera.snapTo(player.x, player.y);
     state.roomFade = 1;
+    if (wrongVisitRoomId === id) {
+      spawnParticles(player.x, player.y - 6, "#c9d6e8", 5, 20);
+      VG.sfxBell(83, 0.05);
+    }
     VG.setMusicState(boss ? "boss" : def.biome === "village" || def.biome === "interior" ? "shrine" : "explore");
     banner(def.name.toUpperCase());
     setHint(def.hint || "");
@@ -650,6 +673,19 @@
     let mx = (right ? 1 : 0) - (left ? 1 : 0), my = (down ? 1 : 0) - (up ? 1 : 0);
     const mlen = Math.hypot(mx, my) || 1; mx /= mlen; my /= mlen;
     if (mx || my) { player.fx = mx; player.fy = my; }
+    const roomWarm = (VG.BIOMES[state.room.biome] || {}).warm !== false;
+    const stillNow = !mx && !my && player.rollT <= 0;
+    VG.dread.tick(dt, { warm: roomWarm, still: stillNow });
+    // "don't look back": lingering somewhere, then walking away, can trail
+    // a footstep/breath cue a beat later — audio only, nothing is ever
+    // actually there when you turn around. Never in warm/home biomes.
+    if (stillNow) { if (!wasStill) stillSince = state.t; wasStill = true; }
+    else {
+      if (wasStill && !roomWarm && state.t - stillSince > 2.2 && VG.dread.tier() >= 1 && Math.random() < 0.35) {
+        setTimeout(() => { if (state.phase === "playing" && VG.sfxDreadStep) VG.sfxDreadStep(); }, 380 + Math.random() * 220);
+      }
+      wasStill = false;
+    }
 
     player.rollCd = Math.max(0, player.rollCd - dt);
     if ((pressed.has("ShiftLeft") || pressed.has("ShiftRight") || pressed.has("PadB")) && player.rollCd <= 0 && (mx || my)) {
@@ -867,24 +903,33 @@
     ctx.beginPath(); ctx.ellipse(x, y + 5, w2, w2 * 0.4, 0, 0, Math.PI * 2); ctx.fill();
   }
   /* the ossuary's mirror-bone banks shots — and, up close, throws back a
-     silhouette that doesn't quite keep time with you. */
+     silhouette that doesn't quite keep time with you. Presence system:
+     desync gets more frequent as dread rises, and water surfaces join in
+     (rare, since water reflecting anything at all is itself the wrongness). */
+  function drawGhostAt(m, opts = {}) {
+    const dx = m.x - player.x, dy = m.y - player.y;
+    const tier = VG.dread.tier();
+    const desyncMod = tier >= 3 ? 2 : tier === 2 ? 3 : 5;
+    const desync = Math.floor(state.t * 0.7 + m.x * 0.13) % desyncMod === 0;
+    ctx.save();
+    ctx.translate(m.x, m.y);
+    ctx.scale(-1, 1);
+    ctx.translate(-dx * 0.15, -dy * 0.15 - 2);
+    ctx.globalAlpha = (opts.alpha ?? 0.32) + Math.sin(state.t * 2 + m.x) * 0.06;
+    ctx.rotate(desync ? -Math.atan2(player.fy, player.fx) : Math.atan2(player.fy, player.fx));
+    ctx.fillStyle = "#1c1830";
+    ctx.beginPath(); ctx.ellipse(0, 0, 5, 6, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = desync ? "rgba(255,120,140,0.55)" : "rgba(143,233,255,0.35)";
+    ctx.beginPath(); ctx.arc(3, 0, 1.4, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
   function drawMirrorGhosts() {
-    const tiles = state.room.mirrorTilesNear(player.x, player.y, 90);
-    if (!tiles.length) return;
-    for (const m of tiles) {
-      const dx = m.x - player.x, dy = m.y - player.y;
-      const desync = Math.floor(state.t * 0.7 + m.x * 0.13) % 5 === 0;
-      ctx.save();
-      ctx.translate(m.x, m.y);
-      ctx.scale(-1, 1);
-      ctx.translate(-dx * 0.15, -dy * 0.15 - 2);
-      ctx.globalAlpha = 0.32 + Math.sin(state.t * 2 + m.x) * 0.06;
-      ctx.rotate(desync ? -Math.atan2(player.fy, player.fx) : Math.atan2(player.fy, player.fx));
-      ctx.fillStyle = "#1c1830";
-      ctx.beginPath(); ctx.ellipse(0, 0, 5, 6, 0, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = desync ? "rgba(255,120,140,0.55)" : "rgba(143,233,255,0.35)";
-      ctx.beginPath(); ctx.arc(3, 0, 1.4, 0, Math.PI * 2); ctx.fill();
-      ctx.restore();
+    for (const m of state.room.mirrorTilesNear(player.x, player.y, 90)) drawGhostAt(m);
+    // water only joins in while dread is still elevated (e.g. carried in
+    // from a dungeon) — normal calm water never reflects a ghost.
+    if (VG.dread.tier() >= 2 && (state.room.biome === "vale" || state.room.biome === "lake")) {
+      const wet = state.room.mirrorTilesNear(player.x, player.y, 50, [VG.MAT.WATER]);
+      if (wet.length && Math.random() < 0.01) drawGhostAt(wet[Math.floor(Math.random() * wet.length)], { alpha: 0.16 });
     }
   }
   /* ---------------- Living Darkness: mood + per-frame light gather ---------------- */
@@ -893,9 +938,13 @@
       const heat = boss ? (boss.phase - 1) / 2 : 0;
       return [10 + heat * 40, 6 + heat * 4, 10 + heat * 6, 0.84];
     }
-    if (state.roomId === "ossuary1") return [8, 16, 10, 0.86];
+    // Presence system: a slow cold/violet drift and a heavier mask as dread
+    // rises — only in the two "explore" dark rooms, so it never competes
+    // with the boss rooms' own phase-driven heat tint.
+    const dv = state.roomId === "hollow1" || state.roomId === "ossuary1" ? VG.dread.value() : 0;
+    if (state.roomId === "ossuary1") return [8 - dv * 4, 16 - dv * 10, 10 + dv * 8, 0.86 + dv * 0.06];
     if (state.roomId === "ossuaryboss") return [10, 10, 26, 0.87];
-    return [6, 6, 12, 0.8];
+    return [6 + dv * 6, 6 - dv * 3, 12 + dv * 6, 0.8 + dv * 0.08];
   }
   function applyLighting() {
     const biome = state.room && state.room.biome;
@@ -912,6 +961,16 @@
     for (let i = 0; i < 2; i++) { const g = portals.gates[i]; if (g.active) VG.fx.pushLight(g.x, g.y, 26, { seed: 500 + i, flicker: false }); }
     const [r, g, b, a] = moodColorAlpha();
     VG.fx.renderDarkness(ctx, VG.camera, `rgba(${Math.round(r)},${Math.round(g)},${Math.round(b)},${(a * intensity).toFixed(3)})`);
+    // Presence system: a subliminal glimpse, tier 3 only, rare — gone almost
+    // as soon as it registers. Never the boss rooms; that's their own beat.
+    if (!boss && VG.dread.tier() >= 3 && Math.random() < 0.0025) {
+      const onX = Math.random() < 0.5;
+      const ex = onX ? Math.random() * VG.W : (Math.random() < 0.5 ? -4 : VG.W + 4);
+      const ey = onX ? (Math.random() < 0.5 ? -4 : VG.H + 4) : Math.random() * VG.H;
+      const w = VG.camera.screenToWorld(ex, ey);
+      VG.fx.spawnGlimpse(w.x, w.y);
+    }
+    VG.fx.drawGlimpses(ctx, VG.camera);
   }
   function drawScene() {
     const flags = roomFlags();
@@ -1044,16 +1103,31 @@
     }
     ctx.restore();
   }
+  /* Presence system: NPCs go stiller, jitter in short stutters instead of
+     smooth motion, and their eyes drift to track the player, as dread rises. */
   function drawNpc(n) {
     shadow(n.px, n.py, n.small ? 4 : 5);
-    const bob = Math.sin(state.t * 2 + n.bob) * 0.8;
-    ctx.save(); ctx.translate(n.px, n.py + bob);
+    const tier = VG.dread.tier();
+    const bob = Math.sin(state.t * 2 + n.bob) * (tier >= 2 ? 0.15 : 0.8);
+    let jx = 0, jy = 0;
+    if (tier >= 2) {
+      const stutter = Math.floor(state.t * 1.3 + n.px * 0.07);
+      if (stutter % 7 === 0) { jx = ((stutter * 928371 + n.py) % 5 - 2) * 0.4; jy = ((stutter * 1299721) % 5 - 2) * 0.3; }
+    }
+    ctx.save(); ctx.translate(n.px + jx, n.py + bob + jy);
     const s = n.small ? 0.75 : 1;
     ctx.fillStyle = n.body;
     ctx.beginPath(); ctx.ellipse(0, -1, 4.5 * s, 6 * s, 0, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = n.trim; ctx.fillRect(-3 * s, -3 * s, 6 * s, 1.5);
     ctx.fillStyle = "#e8d8c8"; ctx.beginPath(); ctx.arc(0, -7 * s, 3 * s, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = "#241a20"; ctx.fillRect(-1.5 * s, -8 * s, 1, 1.4); ctx.fillRect(0.7 * s, -8 * s, 1, 1.4);
+    let ex = 0, ey = 0;
+    if (tier >= 1) {
+      const dx = player.x - n.px, dy = player.y - n.py, dlen = Math.hypot(dx, dy) || 1;
+      const pull = Math.min(0.7, tier * 0.25);
+      ex = (dx / dlen) * pull; ey = (dy / dlen) * pull * 0.5;
+    }
+    ctx.fillStyle = "#241a20";
+    ctx.fillRect(-1.5 * s + ex, -8 * s + ey, 1, 1.4); ctx.fillRect(0.7 * s + ex, -8 * s + ey, 1, 1.4);
     ctx.restore();
   }
   function drawEnemy(e) {
@@ -1198,15 +1272,52 @@
   }
 
   /* ================= HUD & panels ================= */
+  /* Presence system: HUD panels get torn, uneven edges instead of clean
+     rectangles — same footprint/readability, just not a machined box. */
+  function jaggedOffset(seed, i, edge) {
+    const h = ((seed + i * 928371 + edge * 1299721) >>> 0) % 100;
+    return (h / 100 - 0.5) * 3;
+  }
+  function parchmentPanel(x, y, w, h, opts = {}) {
+    const seed = opts.seed ?? Math.round(x * 7 + y * 13);
+    const steps = 5;
+    const pts = [];
+    for (let i = 0; i <= steps; i++) pts.push([x + (w * i) / steps, y + jaggedOffset(seed, i, 0)]);
+    for (let i = 0; i <= steps; i++) pts.push([x + w + jaggedOffset(seed, i, 1), y + (h * i) / steps]);
+    for (let i = steps; i >= 0; i--) pts.push([x + (w * i) / steps, y + h + jaggedOffset(seed, i, 2)]);
+    for (let i = steps; i >= 0; i--) pts.push([x + jaggedOffset(seed, i, 3), y + (h * i) / steps]);
+    ctx.beginPath();
+    ctx.moveTo(pts[0][0], pts[0][1]);
+    for (const p of pts.slice(1)) ctx.lineTo(p[0], p[1]);
+    ctx.closePath();
+    ctx.fillStyle = opts.fill || "rgba(5,4,13,0.72)";
+    ctx.fill();
+    ctx.strokeStyle = opts.stroke || "rgba(143,233,255,0.16)";
+    ctx.lineWidth = opts.lineWidth || 1;
+    ctx.stroke();
+  }
+  /* hearts render as guttering candles: a lit flame per point of health,
+     a snuffed stub per point lost. Presence system: the flame gutters
+     harder — shorter, jumpier — as dread rises. Same 7x9 footprint as the
+     old heart icon, so HUD/inventory spacing is untouched. */
   function drawHeart(x, y, filled) {
-    ctx.fillStyle = filled ? "#ff5c74" : "rgba(120,60,80,0.4)";
-    ctx.fillRect(x, y + 1, 3, 3); ctx.fillRect(x + 4, y + 1, 3, 3);
-    ctx.fillRect(x, y + 3, 7, 3); ctx.fillRect(x + 1, y + 6, 5, 1); ctx.fillRect(x + 2, y + 7, 3, 1);
-    if (filled) { ctx.fillStyle = "rgba(255,255,255,0.55)"; ctx.fillRect(x + 1, y + 2, 1, 1); }
+    const gutter = filled ? VG.dread.tier() * 0.6 : 0;
+    const flick = Math.sin(state.t * 9 + x) * (0.5 + gutter) + (gutter > 1 ? (Math.random() - 0.5) * gutter : 0);
+    ctx.fillStyle = filled ? "#e8dcc0" : "#4a4030";
+    ctx.fillRect(x + 1, y + 5, 5, 4);
+    ctx.fillStyle = "rgba(0,0,0,0.25)"; ctx.fillRect(x + 1, y + 8, 5, 1);
+    ctx.fillStyle = "#2a2018"; ctx.fillRect(x + 3, y + 2, 1, 3);
+    if (filled) {
+      const h = Math.max(1, 3 + flick);
+      ctx.fillStyle = "rgba(255,170,80,0.35)"; ctx.beginPath(); ctx.ellipse(x + 3.5, y + 1, 3, h + 1.5, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#ffcf6b"; ctx.beginPath(); ctx.ellipse(x + 3.5, y + 1.5, 1.4, h, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#fff4d8"; ctx.beginPath(); ctx.ellipse(x + 3.5, y + 2, 0.6, h * 0.5, 0, 0, Math.PI * 2); ctx.fill();
+    } else {
+      ctx.fillStyle = "rgba(150,150,160,0.4)"; ctx.beginPath(); ctx.ellipse(x + 3.5, y + 2, 0.8, 1.2, 0, 0, Math.PI * 2); ctx.fill();
+    }
   }
   function drawHUD() {
-    ctx.fillStyle = "rgba(5,4,13,0.72)"; ctx.fillRect(5, 5, 96, 31);
-    ctx.strokeStyle = "rgba(143,233,255,0.16)"; ctx.strokeRect(5.5, 5.5, 95, 30);
+    parchmentPanel(5, 5, 96, 31, { seed: 1 });
     for (let i = 0; i < player.maxHp; i++) drawHeart(8 + i * 10, 7, i < player.hp);
     ctx.fillStyle = "rgba(0,0,0,0.4)"; ctx.fillRect(8, 18, 70, 4);
     ctx.fillStyle = "#ffcf6b"; ctx.fillRect(8, 18, 70 * (player.ash / player.maxAsh), 4);
@@ -1216,8 +1327,8 @@
     ctx.fillStyle = "#eaf2ff"; ctx.font = "7px monospace"; ctx.fillText(String(player.embers), 15, 32);
 
     const roomName = VG.ROOMS[state.roomId]?.name || "Duskhollow";
+    parchmentPanel(VG.W - 176, 5, 171, 22, { seed: 2, fill: "rgba(5,4,13,0.68)" });
     ctx.textAlign = "right";
-    ctx.fillStyle = "rgba(5,4,13,0.68)"; ctx.fillRect(VG.W - 176, 5, 171, 22);
     ctx.fillStyle = "#eaf2ff"; ctx.font = "700 7px Georgia, serif"; ctx.fillText(roomName.toUpperCase(), VG.W - 10, 14);
     ctx.fillStyle = "#8a9ac0"; ctx.font = "5px monospace";
     ctx.fillText(`${enemies.filter((e) => !e.dead).length + (boss && !boss.dead ? 1 : 0)} THREATS · ${state.score} SCORE`, VG.W - 10, 22);
@@ -1240,9 +1351,15 @@
     // quest tracker
     const tq = trackedQuest();
     if (tq && !(boss && !boss.dead)) {
-      const desc = tq.desc.length > 66 ? tq.desc.slice(0, 63) + "..." : tq.desc;
-      ctx.fillStyle = "rgba(5,4,13,0.78)"; ctx.fillRect(6, VG.H - 35, 272, 29);
-      ctx.strokeStyle = "rgba(255,207,107,0.2)"; ctx.strokeRect(6.5, VG.H - 34.5, 271, 28);
+      let desc = tq.desc.length > 66 ? tq.desc.slice(0, 63) + "..." : tq.desc;
+      // Presence system: at max dread, a single glyph can misrender for one
+      // frame — easy to miss, unsettling on the replay where you catch it.
+      if (VG.dread.tier() >= 3 && Math.random() < 0.004) {
+        const glyphs = "†ø§‡Ω";
+        const idx = Math.floor(Math.random() * desc.length);
+        desc = desc.slice(0, idx) + glyphs[Math.floor(Math.random() * glyphs.length)] + desc.slice(idx + 1);
+      }
+      parchmentPanel(6, VG.H - 35, 272, 29, { seed: 3, fill: "rgba(5,4,13,0.78)", stroke: "rgba(255,207,107,0.2)" });
       ctx.font = "700 6px monospace"; ctx.fillStyle = "#ffcf6b"; ctx.fillText("CURRENT QUEST  ·  " + tq.title.toUpperCase(), 12, VG.H - 23);
       ctx.font = "6px Georgia, serif"; ctx.fillStyle = "#b7c2d9"; ctx.fillText(desc, 12, VG.H - 12);
     }
@@ -1250,8 +1367,8 @@
       const multiplier = Math.min(4, 1 + Math.floor((state.combo - 1) / 2));
       const fade = Math.min(1, state.comboT);
       ctx.globalAlpha = fade;
+      parchmentPanel(VG.W / 2 - 58, 7, 116, 23, { seed: 4, fill: "rgba(5,4,13,0.68)" });
       ctx.textAlign = "center";
-      ctx.fillStyle = "rgba(5,4,13,0.68)"; ctx.fillRect(VG.W / 2 - 58, 7, 116, 23);
       ctx.fillStyle = state.combo >= 6 ? "#ffcf6b" : "#8fe9ff"; ctx.font = "700 10px Georgia, serif";
       ctx.fillText(`${state.combo} SOUL CHAIN`, VG.W / 2, 17);
       ctx.fillStyle = "#eaf2ff"; ctx.font = "6px monospace"; ctx.fillText(`SCORE ×${multiplier}`, VG.W / 2, 26);
@@ -1287,8 +1404,7 @@
     if (!dlg) return;
     const pages = dlg.pages, page = pages[Math.min(dlg.page, pages.length - 1)];
     const x = 20, w = VG.W - 40, h = 64, y = VG.H - h - 12;
-    ctx.fillStyle = "rgba(6,5,16,0.92)"; ctx.fillRect(x, y, w, h);
-    ctx.strokeStyle = "rgba(143,233,255,0.35)"; ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+    parchmentPanel(x, y, w, h, { seed: 5, fill: "rgba(6,5,16,0.92)", stroke: "rgba(143,233,255,0.35)" });
     if (state.dialog) {
       ctx.fillStyle = "#8fe9ff"; ctx.font = "700 8px Georgia, serif";
       ctx.fillText(state.dialog.npc.name.toUpperCase() + (state.dialog.npc.title ? " — " + state.dialog.npc.title : ""), x + 10, y + 13);
@@ -1462,6 +1578,7 @@
     if (t2.dataset && t2.dataset.vgChk) { VG.settings[t2.dataset.vgChk] = t2.checked; VG.saveSettings(); VG.fit(); }
   });
   function newGame() {
+    VG.dread.reset();
     for (const q of Object.keys(D.QUESTS)) state.quests[q] = "locked";
     state.quests.q_hand = "active";
     state.flags = {}; state.shopBought = {};

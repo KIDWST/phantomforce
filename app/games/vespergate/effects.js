@@ -49,6 +49,7 @@ window.VG = window.VG || {};
       t += dt;
       fx._updateShockwaves(dt);
       fx._updateAtmosphere(dt);
+      fx._updateGlimpses(dt);
       fx._hitStopT = Math.max(0, fx._hitStopT - dt);
     },
 
@@ -95,6 +96,28 @@ window.VG = window.VG || {};
         ctx.strokeStyle = `rgba(${s.color},${Math.max(0, s.life * 0.6)})`;
         ctx.lineWidth = 2 + s.life * 3;
         ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2); ctx.stroke();
+      }
+    },
+
+    /* ---------------- glimpses: a subliminal figure, gone almost as soon as
+       it's there. Presence-system only — caller (game.js) gates the roll to
+       high dread tier and low probability so it stays rare/unsettling. ---- */
+    _glimpses: [],
+    spawnGlimpse(wx, wy, opts = {}) {
+      const life = opts.life || 0.09;
+      fx._glimpses.push({ x: wx, y: wy, life, max: life });
+    },
+    _updateGlimpses(dt) {
+      for (const g of fx._glimpses) g.life -= dt;
+      fx._glimpses = fx._glimpses.filter((g) => g.life > 0);
+    },
+    drawGlimpses(ctx, cam) {
+      const z = cam.zoom || 1;
+      for (const g of fx._glimpses) {
+        const sx = (g.x - cam.x) * z, sy = (g.y - cam.y) * z;
+        const a = (g.life / g.max) * 0.5;
+        ctx.fillStyle = `rgba(3,2,8,${a})`;
+        ctx.beginPath(); ctx.ellipse(sx, sy - 6, 4 * z, 9 * z, 0, 0, Math.PI * 2); ctx.fill();
       }
     },
 

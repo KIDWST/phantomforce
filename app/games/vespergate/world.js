@@ -345,12 +345,14 @@
       }
       return out;
     }
-    mirrorTilesNear(x, y, range) {
+    // mats defaults to mirror-bone only; the Presence system also passes
+    // MAT.WATER so lake/vale surfaces can throw a rare wrong reflection.
+    mirrorTilesNear(x, y, range, mats = [MAT.MIRROR]) {
       const gx0 = Math.max(0, Math.floor((x - range) / T)), gx1 = Math.min(this.w - 1, Math.floor((x + range) / T));
       const gy0 = Math.max(0, Math.floor((y - range) / T)), gy1 = Math.min(this.h - 1, Math.floor((y + range) / T));
       const out = [];
       for (let gy = gy0; gy <= gy1; gy++) for (let gx = gx0; gx <= gx1; gx++) {
-        if (this.grid[gy][gx] === MAT.MIRROR) {
+        if (mats.includes(this.grid[gy][gx])) {
           const cx = gx * T + T / 2, cy = gy * T + T / 2;
           if (VG.dist(cx, cy, x, y) <= range) out.push({ x: cx, y: cy });
         }

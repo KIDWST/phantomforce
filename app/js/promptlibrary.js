@@ -5,7 +5,7 @@
    the PhantomForce team, and "Use in Media Lab" only ever hands a prompt
    string to the Shot Builder, never runs anything on its own. */
 
-import { workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260723-48";
+import { workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260723-49";
 
 const LIB_KEY = "pf.promptlibrary.v1";
 const MEDIA_INTENT_KEY = "pf.medialab.promptIntent.v1";

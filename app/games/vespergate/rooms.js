@@ -425,6 +425,21 @@
     ],
   };
 
+  /* Presence system: at higher dread tiers, a dialogue attempt can surface
+   * one of these instead of the real context-tracked line — flat, slightly
+   * self-aware, never referencing quest state. Never repeats on the very
+   * next visit to the same NPC (see talkTo() in game.js). Pure flavor: no
+   * quest/flag effects ever come from a flat line. */
+  const FLATLINES = {
+    maren: ["...seven bearers before you.", "The door was always this color.", "You're back. You're always back."],
+    maren_plaza: ["Evensong sounds different from the plaza. Better.", "The bell rings whether or not anyone rings it."],
+    bram: ["Embers for goods, goods for embers.", "I don't remember when I opened this shop."],
+    odile: ["A silent bell makes for quiet business.", "Nobody lingers where dusk has no voice. You shouldn't either."],
+    pip: ["When I grow up I'm going to have a portal arm too.", "I dropped it in the old ruins. I always drop it."],
+    el: ["The rope remembers my hands.", "I've been ringing this bell longer than the village has existed."],
+    vey: ["I sell rumours, but the first one's free.", "You already bought this one from me. Didn't you?"],
+  };
+
   const SHOP = [
     { id: "heart", name: "Heart Vessel", desc: "+1 max heart, fully healed", cost: 60, max: 3 },
     { id: "ashvessel", name: "Ash Vessel", desc: "+25 max ash", cost: 35, max: 3 },
@@ -440,5 +455,5 @@
   };
 
   VG.ROOMS = ROOMS;
-  VG.DATA = { NPCS, QUESTS, DIALOG, SHOP, RELICS };
+  VG.DATA = { NPCS, QUESTS, DIALOG, SHOP, RELICS, FLATLINES };
 })();
