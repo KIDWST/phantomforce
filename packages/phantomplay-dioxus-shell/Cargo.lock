@@ -2960,7 +2960,6 @@ name = "phantomplay_dioxus_shell"
 version = "0.1.0"
 dependencies = [
  "dioxus",
- "tokio",
 ]
 
 [[package]]
