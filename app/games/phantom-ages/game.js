@@ -15,6 +15,17 @@
 (function () {
   "use strict";
 
+  // Theme music — PhantomScore (app/games/shared/phantomScore.js), driven by
+  // theme.js's GAME_THEME. Real composition, zero audio files, zero CSP
+  // change (see app/games/shared/phantomScore.schema.md).
+  const score = (window.PhantomScore && window.GAME_THEME)
+    ? window.PhantomScore.create(window.GAME_THEME) : null;
+  addEventListener("message", (e) => {
+    if (e.data?.source !== "phantomplay-host" || e.data.type !== "settings" || !score) return;
+    if (e.data.sound !== false) score.unmute(); else score.mute();
+  });
+  addEventListener("pointerdown", () => { if (score) score.start(); }, { once: true });
+
   const LANE_LENGTH = 620;    // world units, player base at 0, enemy base at LANE_LENGTH
   const SPEED_SCALE = 1.5;    // units march faster so the first clash lands in ~5s, not 30s
   const TICK_SECONDS = 1 / 60;

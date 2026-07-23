@@ -11,6 +11,17 @@
   "use strict";
 
   const host = (type, data = {}) => parent.postMessage({ source: "phantomplay-game", type, ...data }, "*");
+
+  // Theme music — PhantomScore (app/games/shared/phantomScore.js), driven by
+  // theme.js's GAME_THEME. Real composition, zero audio files, zero CSP
+  // change (see app/games/shared/phantomScore.schema.md).
+  const score = (window.PhantomScore && window.GAME_THEME)
+    ? window.PhantomScore.create(window.GAME_THEME) : null;
+  addEventListener("message", (e) => {
+    if (e.data?.source !== "phantomplay-host" || e.data.type !== "settings" || !score) return;
+    if (e.data.sound !== false) score.unmute(); else score.mute();
+  });
+  addEventListener("pointerdown", () => { if (score) score.start(); }, { once: true });
   const { LEVELS, createSim } = window.PhantomCubeCore;
   /* Solver-verified minimum moves per level (scratch solver run, BFS
      over the same createSim rules — not hand-guessed). */
